@@ -316,11 +316,17 @@ export default async function AdminBooksPage({
               <ExportRange
                 status={status}
                 tabLabel={TAB_LABEL[status]}
-                /* Exactly the rows that render a checkbox below — anything else
-                   would let the button select a row the batch can only skip. */
-                selectable={rows
-                  .filter((row) => row.status === 'paid' || row.status === 'shipped')
-                  .map((row) => ({ id: row.id, createdAt: row.createdAt }))}
+                /* The three filters the toolbar above is showing. Without
+                   them the file is a different set of orders than the list —
+                   «جالب إن واحد ناقص» — and nobody can tell which is right. */
+                filters={{ stream, year, q: query || undefined }}
+                /* The TAB's total, not this page's fifty. See `ExportRange`:
+                   the select button counted rendered rows, so a tab of 52 read
+                   «(50)» beside a sidebar badge saying «52». */
+                rowCount={rowCount}
+                /* «اتشحن» / «وصل» apply to these two states only — every other
+                   tab would select rows the batch can only skip. */
+                batchable={status === 'paid' || status === 'shipped'}
               />
             ) : null}
           </div>

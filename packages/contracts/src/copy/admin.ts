@@ -2156,9 +2156,19 @@ const admin = {
      * checks against the sheet in his hand before he presses ship, and a button
      * that just says «حدّد المدى» would move that check to after the batch ran.
      */
-    bulkSelectRange: 'حدّد اللي في المدى ({n})',
+    bulkSelectRange: 'حدّد الكل ({n})',
+    /**
+     * With dates set, the count is NOT known before asking: the screen holds
+     * one page and the range can span many. Naming the page's number here is
+     * exactly the bug this button had — «(50)» beside a badge saying «52» —
+     * so it names the ACTION instead, and the bar that appears says how many
+     * were actually selected.
+     */
+    bulkSelectRangeDates: 'حدّد اللي في المدى',
+    bulkSelectRangeWorking: 'بيحدّد…',
+    bulkSelectRangeEmpty: 'مفيش طلبات في المدى ده.',
     bulkSelectRangeHint:
-      'بيحدّد نفس الطلبات اللي في ملف التصدير بالتواريخ دي — عشان تشحنهم مرة واحدة.',
+      'بيحدّد نفس الطلبات اللي في ملف التصدير بالظبط — كل اللستة مش الصفحة اللي قدامك بس.',
     bulkSelect: 'حدّد',
     /** The checkbox's accessible name — «حدّد {name}» — because a column of
      *  identical «حدّد» labels tells a screen reader nothing. `{name}` */
@@ -2249,10 +2259,58 @@ const admin = {
     /** The `sr-only` sentence beside the sidebar's «الكتب» badge. `{n}` is the
      *  number of paid orders that have not shipped yet. */
     unshippedBadgeLabel: '{n} طلب كتاب متشحنش لسه',
-    exportHint: 'بيصدّر كل الطلبات في التبويب المفتوح دلوقتي — جاهز يتبعت لشركة الشحن والمطبعة.',
+    exportHint:
+      'بيصدّر الطلبات اللي ظاهرة قدامك دلوقتي بالظبط — نفس التبويب ونفس الفلاتر — جاهز يتبعت لشركة الشحن والمطبعة.',
     /** `{tab}` — the currently open tab's own label, so the button names
      *  exactly what it will export rather than a hidden default. */
     exportButton: 'تصدير: {tab}',
+
+    /* ── الـ PDF ───────────────────────────────────────────────────────────
+       «وانا بعمل تحميل يتعمل PDF أحسن بشكل كويس كده». Same list as the Excel
+       file, متصفّحة على A4 وجاهزة للطباعة — the browser's own print dialog is
+       what writes the file, which is the only way Arabic comes out joined and
+       in the right direction. */
+    exportPdf: 'تحميل PDF',
+    exportPdfHint: 'نفس اللستة دي مظبوطة على A4 — تفتح وتطبع أو تحفظها PDF.',
+
+    /* ── صفحة الطباعة ─────────────────────────────────────────────────────── */
+    printTitle: 'طلبات الكتب — لستة الشحن',
+    printButton: 'اطبع / احفظ PDF',
+    printBack: 'رجوع للطلبات',
+    /** The counts above the table — «الطلبات» is the ONE number that can be
+     *  compared with the screen, because the screen counts orders. */
+    printOrders: '{n} طلب',
+    printBooks: '{n} كتاب',
+    printCopies: '{n} نسخة',
+    /** The three cards at the top — the number alone, with the word under it.
+     *  «الطلبات» is the one that can be compared with the screen. */
+    printOrdersLabel: 'طلبات',
+    printBooksLabel: 'كتب',
+    printCopiesLabel: 'نسخ',
+    printNoStream: 'من غير طبعة محددة',
+    printNoYear: 'من غير صف',
+    printYear: 'الصف {n}',
+    printGeneratedAt: 'اتطبعت في {date}',
+    printRange: 'من {from} لـ {to}',
+    printFrom: 'من {from}',
+    printTo: 'لغاية {to}',
+    printSearch: 'بحث: {q}',
+    printEmpty: 'مفيش طلبات في اللستة دي.',
+    printColumns: {
+      seq: '#',
+      bookTitle: 'اسم الكتاب',
+      quantity: 'العدد',
+      stream: 'عربي / لغات',
+      year: 'الصف',
+      fullName: 'الاسم بالكامل',
+      phone: 'الموبايل',
+      altPhone: 'موبايل تاني',
+      address: 'العنوان',
+      createdAt: 'تاريخ الطلب',
+      /** خانة فاضية الشغّال يعلّم فيها بالقلم لما يحطّ الطرد في الكرتونة —
+       *  لستة من أربعين من غير علامة هي لستة بتتعاد من الأول. */
+      tick: 'اتشحن',
+    },
     /*
      * ════════════════════════════════════════════════════════════════════
      * «أضف طلب كتاب» — an admin entering a customer's order directly,

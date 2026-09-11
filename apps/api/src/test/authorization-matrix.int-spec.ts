@@ -1730,6 +1730,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       actor: 'admin',
       status: 400,
     },
+    // ── The same list as JSON, for the printable A4 page the browser turns
+    // into a PDF. Same permission and same required `status` as the
+    // spreadsheet, because it is the same list. ──
+    { label: 'admin book orders packing list: anonymous', method: 'get', path: () => '/api/admin/book-orders/packing-list', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders packing list: student', method: 'get', path: () => '/api/admin/book-orders/packing-list', actor: 'student', status: 403 },
+    { label: 'admin book orders packing list: admin, no status', method: 'get', path: () => '/api/admin/book-orders/packing-list', actor: 'admin', status: 400 },
+    { label: 'admin book orders packing list: admin', method: 'get', path: () => '/api/admin/book-orders/packing-list?status=paid', actor: 'admin', status: 200 },
     // ── الشحن بالجملة. Same `book-order:ship` authority as the per-row
     // routes above; a batch is not a different permission, it is the same
     // decision taken ten times. The admin case sends a syntactically valid

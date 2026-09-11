@@ -11,6 +11,9 @@ import type {
   BulkBookOrderResult,
   BulkBookOrderResultRow,
   DeleteBookOrderResult,
+  ExportBookOrdersQuery,
+  PackingList,
+  PackingListLine,
   MarkBookOrderDeliveredResult,
   MarkBookOrderShippedResult,
   RejectBookOrderResult,
@@ -2083,12 +2086,107 @@ export class BookOrdersService {
    * the export is to see what was removed. Every other value excludes deleted
    * rows through the same `liveOrDeletedWhere` the screen uses: a spreadsheet
    * handed to a courier must not contain a parcel nobody is sending.
+   *
+   * ⚠️ It reads the SCREEN's filters — `stream`, `year` and `q` — and not only
+   * the tab and the dates. See `ExportBookOrdersQuerySchema`'s own note: the
+   * file has to be the list the admin was looking at, or counting it against
+   * the screen is the admin's problem rather than the code's.
    */
-  async exportXlsx(
-    status: AdminBookOrderFilter,
-    from: string | null,
-    to: string | null,
-  ): Promise<Buffer> {
+  async exportXlsx(query: ExportBookOrdersQuery): Promise<Buffer> {
+    const list = await this.packingList(query);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('طلبات الكتب');
+    // `views` sets right-to-left so an Arabic spreadsheet actually reads
+    // right-to-left when opened, rather than mirrored column order in an
+    // LTR grid.
+    sheet.views = [{ rightToLeft: true }];
+    sheet.columns = [
+      { header: '#', key: 'seq', width: 6 },
+      { header: 'اسم الكتاب', key: 'bookTitle', width: 28 },
+      { header: 'العدد', key: 'quantity', width: 8 },
+      { header: 'الكورس', key: 'courseTitle', width: 28 },
+      { header: 'الصف', key: 'year', width: 8 },
+      /* «عربي», not «عام». The VALUES here come from `copy.stream.*` and
+         `copy.stream.general` is «عربي» — the header used to say «عام» while
+         the cells under it said «عربي», on the one column a print shop reads to
+         decide which edition to pack. */
+      { header: 'عربي / لغات', key: 'stream', width: 14 },
+      { header: 'الاسم بالكامل', key: 'fullName', width: 24 },
+      { header: 'الموبايل', key: 'phone', width: 16 },
+      { header: 'موبايل تاني', key: 'altPhone', width: 16 },
+      { header: 'المحافظة', key: 'governorate', width: 16 },
+      { header: 'المدينة', key: 'city', width: 18 },
+      { header: 'الشارع', key: 'street', width: 28 },
+      { header: 'رقم العمارة', key: 'building', width: 14 },
+      { header: 'تفاصيل إضافية', key: 'note', width: 28 },
+      { header: 'تاريخ الطلب', key: 'createdAt', width: 18 },
+    ];
+
+    /*
+     * ── The summary block, above the table ────────────────────────────────
+     *
+     * Written with `spliceRows` AFTER the columns are declared, because
+     * `sheet.columns` binds the header to row 1 — inserting above it moves the
+     * header down and keeps every `addRow({key})` below working on the same
+     * keys. Two counts per line and never one: «كام كتاب» is what to print and
+     * «كام نسخة» is what to pack, and they differ the moment anybody orders two.
+     */
+    const summary: string[][] = [['طلبات الكتب — ملخص']];
+    for (const group of list.groups) {
+      const label = group.label || 'من غير طبعة محددة';
+      summary.push([`${label}: ${group.books} كتاب · ${group.copies} نسخة`]);
+      for (const year of group.years) {
+        const name = year.year === null ? 'من غير صف' : `الصف ${year.year}`;
+        summary.push([`   ${name}: ${year.books} كتاب · ${year.copies} نسخة`]);
+      }
+    }
+    /* الطلبات first, and on its own line. It is the ONLY number on this sheet
+       that can be compared with the screen the admin pressed the button on —
+       the screen counts ORDERS and the rest of this block counts BOOKS, and an
+       order holding two titles is what «واحد ناقص» looks like when the two are
+       read as the same number. */
+    summary.push([`الطلبات: ${list.orders} طلب`]);
+    summary.push([`الإجمالي: ${list.books} كتاب · ${list.copies} نسخة`]);
+    summary.push([]);
+
+    sheet.spliceRows(1, 0, ...summary);
+    for (let i = 1; i <= summary.length; i += 1) {
+      sheet.getRow(i).font = { bold: i === 1 || i === summary.length - 1 };
+    }
+    sheet.getRow(summary.length + 1).font = { bold: true };
+
+    list.groups.forEach((group, index) => {
+      if (index > 0) {
+        /* The rule between the editions. A BORDERED row, not a blank one — a
+           blank row vanishes the first time anybody sorts the sheet, and this
+           line is the whole reason the grouping is legible. */
+        const divider = sheet.addRow({});
+        divider.height = 6;
+        divider.eachCell({ includeEmpty: true }, (cell) => {
+          cell.border = { top: { style: 'medium' } };
+        });
+      }
+      for (const line of group.lines) {
+        sheet.addRow({ ...line, year: line.year ?? '' });
+      }
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  /**
+   * The packing list itself — the rows, the grouping and the counts, with no
+   * file format attached.
+   *
+   * Both downloads are built from THIS: `exportXlsx` renders it into a
+   * workbook, and `/admin/books/print` renders it into an A4 page the browser
+   * turns into a PDF. One query and one set of counts, so the spreadsheet and
+   * the PDF cannot say different things about the same day's orders.
+   */
+  async packingList(query: ExportBookOrdersQuery): Promise<PackingList> {
+    const { status, from, to } = query;
     /*
      * «هتقول انت عايز من يوم كام لـ يوم كام» — the packing list for one run
      * to the printer, not the whole history.
@@ -2110,9 +2208,20 @@ export class BookOrdersService {
         : undefined;
 
     const rows = await this.prisma.bookOrder.findMany({
-      where: { ...liveOrDeletedWhere(status), ...(createdAt ? { createdAt } : {}) },
+      /* THE SAME three filter helpers `adminList` builds its own WHERE from,
+         in the same order — the export is the list, and the only way to keep
+         that true is to share the code that decides it rather than to write a
+         second version of it here that drifts. */
+      where: {
+        ...liveOrDeletedWhere(status),
+        ...this.adminSearchWhere(query.q ?? ''),
+        ...streamAndYearWhere(query.stream, query.year),
+        ...(createdAt ? { createdAt } : {}),
+      },
       orderBy: [{ createdAt: 'asc' }],
       select: {
+        /* For «حدّد اللي في المدى» — see `PackingListSchema.orderIds`. */
+        id: true,
         fullName: true,
         phone: true,
         altPhone: true,
@@ -2166,25 +2275,7 @@ export class BookOrdersService {
      * for one title is one thing to print and twenty things to pack.
      * ═══════════════════════════════════════════════════════════════════════
      */
-    interface SheetLine {
-      seq: number;
-      bookTitle: string;
-      quantity: number;
-      courseTitle: string;
-      year: number | '';
-      stream: string;
-      fullName: string;
-      phone: string;
-      altPhone: string;
-      governorate: string;
-      city: string;
-      street: string;
-      building: string | null;
-      note: string;
-      createdAt: string;
-    }
-
-    const lines: Array<Omit<SheetLine, 'seq'>> = [];
+    const lines: Array<Omit<PackingListLine, 'seq'>> = [];
     for (const row of rows) {
       /*
        * ONE ROW PER BOOK, not per order. A courier packs titles, and an order
@@ -2202,22 +2293,47 @@ export class BookOrdersService {
        * catalogue; blank when neither exists, which is honest.
        */
       const courseStream = row.course ? streamLabel[streamChoiceOf(row.course)] : '';
+      const address = {
+        courseTitle: row.course?.title ?? '',
+        year: row.course?.year ?? null,
+        fullName: row.fullName,
+        phone: row.phone,
+        altPhone: row.altPhone,
+        governorate: row.governorate.nameAr,
+        city: row.city,
+        street: row.addressStreet,
+        building: row.addressBuilding,
+        note: row.addressNote ?? '',
+        createdAt: row.createdAt.toISOString().slice(0, 10),
+      };
+
+      /*
+       * ⚠️ AN ORDER WITH NO LINES STILL GETS A ROW.
+       *
+       * `for (item of row.items)` on its own drops such an order from the file
+       * ENTIRELY and silently — the screen counts it, the sheet does not, and
+       * the only symptom is «واحد ناقص» after somebody counts both by hand. It
+       * is rare (a hand-edited order whose last line was removed) and it is
+       * exactly the kind of row that must not vanish: the address is real and
+       * somebody is waiting for a parcel. Named rather than blank, so the desk
+       * can see what to fix.
+       */
+      if (row.items.length === 0) {
+        lines.push({
+          ...address,
+          bookTitle: row.course?.bookTitle ?? row.course?.title ?? 'طلب من غير كتاب مسجّل',
+          quantity: 1,
+          stream: courseStream,
+        });
+        continue;
+      }
+
       for (const item of row.items) {
         lines.push({
+          ...address,
           bookTitle: item.titleAr,
           quantity: item.quantity,
-          courseTitle: row.course?.title ?? '',
-          year: row.course?.year ?? '',
           stream: item.book ? streamLabel[streamChoiceOf(item.book)] : courseStream,
-          fullName: row.fullName,
-          phone: row.phone,
-          altPhone: row.altPhone,
-          governorate: row.governorate.nameAr,
-          city: row.city,
-          street: row.addressStreet,
-          building: row.addressBuilding,
-          note: row.addressNote ?? '',
-          createdAt: row.createdAt.toISOString().slice(0, 10),
         });
       }
     }
@@ -2227,100 +2343,57 @@ export class BookOrdersService {
        under one. Within a group the original order (oldest first) survives,
        because that is the queue the desk works through. */
     const groupsInOrder = [copy.stream.general, copy.stream.languages, copy.stream.both] as const;
-    const grouped = [
-      ...groupsInOrder.map((label) => ({ label, rows: lines.filter((l) => l.stream === label) })),
-      { label: '', rows: lines.filter((l) => !groupsInOrder.includes(l.stream as never)) },
-    ].filter((group) => group.rows.length > 0);
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('طلبات الكتب');
-    // `views` sets right-to-left so an Arabic spreadsheet actually reads
-    // right-to-left when opened, rather than mirrored column order in an
-    // LTR grid.
-    sheet.views = [{ rightToLeft: true }];
-    sheet.columns = [
-      { header: '#', key: 'seq', width: 6 },
-      { header: 'اسم الكتاب', key: 'bookTitle', width: 28 },
-      { header: 'العدد', key: 'quantity', width: 8 },
-      { header: 'الكورس', key: 'courseTitle', width: 28 },
-      { header: 'الصف', key: 'year', width: 8 },
-      /* «عربي», not «عام». The VALUES here come from `copy.stream.*` and
-         `copy.stream.general` is «عربي» — the header used to say «عام» while
-         the cells under it said «عربي», on the one column a print shop reads to
-         decide which edition to pack. */
-      { header: 'عربي / لغات', key: 'stream', width: 14 },
-      { header: 'الاسم بالكامل', key: 'fullName', width: 24 },
-      { header: 'الموبايل', key: 'phone', width: 16 },
-      { header: 'موبايل تاني', key: 'altPhone', width: 16 },
-      { header: 'المحافظة', key: 'governorate', width: 16 },
-      { header: 'المدينة', key: 'city', width: 18 },
-      { header: 'الشارع', key: 'street', width: 28 },
-      { header: 'رقم العمارة', key: 'building', width: 14 },
-      { header: 'تفاصيل إضافية', key: 'note', width: 28 },
-      { header: 'تاريخ الطلب', key: 'createdAt', width: 18 },
-    ];
-
-    /*
-     * ── The summary block, above the table ────────────────────────────────
-     *
-     * Written with `spliceRows` AFTER the columns are declared, because
-     * `sheet.columns` binds the header to row 1 — inserting above it moves the
-     * header down and keeps every `addRow({key})` below working on the same
-     * keys. Two counts per line and never one: «كام كتاب» is what to print and
-     * «كام نسخة» is what to pack, and they differ the moment anybody orders two.
-     */
-    const copies = (rows_: Array<Omit<SheetLine, 'seq'>>) =>
-      rows_.reduce((n, l) => n + l.quantity, 0);
-
-    const summary: string[][] = [['طلبات الكتب — ملخص']];
-    for (const group of grouped) {
-      const label = group.label || 'من غير طبعة محددة';
-      summary.push([`${label}: ${group.rows.length} كتاب · ${copies(group.rows)} نسخة`]);
-      /* Per YEAR inside each edition — «سنة أولى كام كتاب وكام نسخة عربي». The
-         years present are read from the data rather than assumed 1..3, so a
-         sheet with nothing in a year does not print an empty line for it. */
-      const years = [...new Set(group.rows.map((l) => l.year).filter((y): y is number => y !== ''))].sort();
-      for (const year of years) {
-        const inYear = group.rows.filter((l) => l.year === year);
-        summary.push([`   الصف ${year}: ${inYear.length} كتاب · ${copies(inYear)} نسخة`]);
-      }
-      const noYear = group.rows.filter((l) => l.year === '');
-      if (noYear.length > 0) {
-        summary.push([`   من غير صف: ${noYear.length} كتاب · ${copies(noYear)} نسخة`]);
-      }
-    }
-    summary.push([`الإجمالي: ${lines.length} كتاب · ${copies(lines)} نسخة`]);
-    summary.push([]);
-
-    sheet.spliceRows(1, 0, ...summary);
-    for (let i = 1; i <= summary.length; i += 1) {
-      sheet.getRow(i).font = { bold: i === 1 || i === summary.length - 1 };
-    }
-    sheet.getRow(summary.length + 1).font = { bold: true };
+    const copiesIn = (group: Array<Omit<PackingListLine, 'seq'>>) =>
+      group.reduce((n, l) => n + l.quantity, 0);
 
     /* The numbering restarts nowhere: «١، ٢، ٣» down the whole sheet is what a
        packer counts against, and a per-group restart would make «رقم ١٢» mean
-       two different rows. */
+       two different rows. It is assigned HERE, on the grouped order, so the
+       spreadsheet and the printed page number the same row the same way. */
     let seq = 0;
-    grouped.forEach((group, index) => {
-      if (index > 0) {
-        /* The rule between the editions. A BORDERED row, not a blank one — a
-           blank row vanishes the first time anybody sorts the sheet, and this
-           line is the whole reason the grouping is legible. */
-        const divider = sheet.addRow({});
-        divider.height = 6;
-        divider.eachCell({ includeEmpty: true }, (cell) => {
-          cell.border = { top: { style: 'medium' } };
-        });
-      }
-      for (const line of group.rows) {
-        seq += 1;
-        sheet.addRow({ ...line, seq });
-      }
-    });
+    const groups = [
+      ...groupsInOrder.map((label) => ({ label, rows: lines.filter((l) => l.stream === label) })),
+      { label: '', rows: lines.filter((l) => !groupsInOrder.includes(l.stream as never)) },
+    ]
+      .filter((group) => group.rows.length > 0)
+      .map((group) => {
+        /* Per YEAR inside each edition — «سنة أولى كام كتاب وكام نسخة عربي».
+           The years present are read from the data rather than assumed 1..3, so
+           a sheet with nothing in a year does not print an empty line for it,
+           and «من غير صف» (null) sorts last rather than becoming a zero. */
+        const years = [...new Set(group.rows.map((l) => l.year))].sort(
+          (a, b) => (a ?? 99) - (b ?? 99),
+        );
+        return {
+          label: group.label,
+          books: group.rows.length,
+          copies: copiesIn(group.rows),
+          years: years.map((year) => {
+            const inYear = group.rows.filter((l) => l.year === year);
+            return { year, books: inYear.length, copies: copiesIn(inYear) };
+          }),
+          lines: group.rows.map((line) => {
+            seq += 1;
+            return { ...line, seq };
+          }),
+        };
+      });
 
-    const buffer = await workbook.xlsx.writeBuffer();
-    return Buffer.from(buffer);
+    return {
+      groups,
+      orderIds: rows.map((row) => row.id),
+      orders: rows.length,
+      books: lines.length,
+      copies: copiesIn(lines),
+      filters: {
+        status,
+        from,
+        to,
+        stream: query.stream ?? null,
+        year: query.year ?? null,
+        q: query.q?.trim() ? query.q.trim() : null,
+      },
+    };
   }
 
   /**

@@ -1,0 +1,329 @@
+/*
+ * لستة الشحن على ورق — «عاوز PDF يبقى شكله حلو كده».
+ *
+ * ## Why every colour here is a literal
+ *
+ * The admin runs dark, and the theme tokens follow it. A packing list painted
+ * in tokens either prints a black page or — with «طباعة الخلفيات» off, which is
+ * the default — prints white on white, and nobody finds out until the printer
+ * has finished. So this sheet carries its own palette: paper is paper.
+ *
+ * The gold is the platform's own accent (`--a-9`, oklch(0.770 0.152 72)) written
+ * out as hex, because that is the one colour Ayman's material is recognisable
+ * by and this page ends up in a print shop's hands.
+ *
+ * ## Why `visibility` and not `display`
+ *
+ * The page renders inside the admin shell (sidebar, header, alert providers).
+ * Hiding that shell by name means reaching for its class names from here and
+ * breaking the day somebody renames one. Hiding EVERYTHING and un-hiding this
+ * subtree needs no knowledge of what else is on the page, which is the only
+ * version of this rule that keeps working.
+ */
+
+.packing-sheet {
+  --ink: #16130d;
+  --ink-soft: #5b554a;
+  --gold: #eaa33c;
+  --gold-deep: #b9761a;
+  --gold-wash: #fdf4e3;
+  --rule: #d8d2c6;
+
+  background: #fff;
+  color: var(--ink);
+  /* A4 minus the printer's own margin, so the on-screen preview is the width
+     the paper actually gives you. */
+  max-width: 190mm;
+  margin-inline: auto;
+  padding: 6mm;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+/* ── The masthead ──────────────────────────────────────────────────────── */
+
+.packing-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 6px;
+  border-bottom: 3px solid var(--gold);
+}
+
+.packing-head .packing-brand {
+  margin: 0 0 1px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--gold-deep);
+}
+
+.packing-head h1 {
+  font-size: 19px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.packing-head .packing-filters {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.packing-head .packing-stamp {
+  font-size: 10px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  text-align: end;
+}
+
+/* ── The counts ────────────────────────────────────────────────────────── */
+
+.packing-totals {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 8px;
+}
+
+.packing-card {
+  flex: 1;
+  border: 1px solid var(--rule);
+  border-top: 3px solid var(--gold);
+  border-radius: 5px;
+  background: var(--gold-wash);
+  padding: 6px 10px;
+  text-align: center;
+}
+
+.packing-card b {
+  display: block;
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1.1;
+  /* Latin digits inside an Arabic paragraph are a bidi run of their own; the
+     isolate keeps «61» from swapping sides with the label under it. */
+  unicode-bidi: isolate;
+}
+
+.packing-card span {
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+/* The per-edition, per-year breakdown — «أولى سنة كام كتاب وكام نسخة». */
+.packing-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.packing-breakdown li {
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 10px;
+  background: #fafaf8;
+}
+
+.packing-breakdown li.packing-edition {
+  border-color: var(--gold-deep);
+  background: var(--gold-wash);
+  font-weight: 700;
+}
+
+/* ── One stack of paper per section ────────────────────────────────────── */
+
+.packing-group {
+  margin-top: 12px;
+}
+
+.packing-group > h2 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  margin: 0 0 4px;
+  padding: 4px 8px;
+  color: #fff;
+  background: var(--ink);
+  border-inline-start: 5px solid var(--gold);
+  border-radius: 4px 4px 0 0;
+  /* A heading is never the last thing on a page. */
+  break-after: avoid;
+}
+
+.packing-group > h2 small {
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--gold);
+}
+
+.packing-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.packing-table th,
+.packing-table td {
+  border: 1px solid var(--rule);
+  padding: 4px 6px;
+  text-align: start;
+  vertical-align: top;
+  word-wrap: break-word;
+}
+
+.packing-table thead th {
+  background: var(--gold);
+  color: #2a1c05;
+  font-weight: 800;
+  font-size: 10.5px;
+  border-color: var(--gold-deep);
+}
+
+/* Zebra light enough to photocopy, dark enough to follow with a finger across
+   a sheet of forty. */
+.packing-table tbody tr:nth-child(even) td {
+  background: #faf8f4;
+}
+
+.packing-table td.packing-seq {
+  font-weight: 800;
+  text-align: center;
+  color: var(--gold-deep);
+}
+
+.packing-table td.packing-qty {
+  text-align: center;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+/* «اتشحن؟» — an empty box the packer ticks with a pen. The one column that is
+   not data: this sheet is worked THROUGH, and a list of forty with no way to
+   mark where you stopped is a list somebody restarts. */
+.packing-table td.packing-tick {
+  text-align: center;
+}
+
+.packing-table td.packing-tick span {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--ink-soft);
+  border-radius: 2px;
+}
+
+.packing-title {
+  font-weight: 700;
+}
+
+/* Phone numbers and the address: both are read aloud off the page while
+   somebody dials. `isolate` keeps a leading «+20» on the correct side of the
+   Arabic around it. */
+.packing-phone {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+
+/* The order date. It is short, it is digits, and it must never wrap: «6/9/2026»
+   broken across two lines reads as a different number entirely — the first
+   render of this sheet printed «28202/08/6» in a column 8% wide. */
+.packing-date {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+}
+
+.packing-address {
+  color: #34302a;
+  font-size: 10.5px;
+}
+
+.packing-note {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 9.5px;
+}
+
+.packing-empty {
+  padding: 26px;
+  text-align: center;
+  border: 1px dashed var(--rule);
+  border-radius: 6px;
+  color: var(--ink-soft);
+}
+
+@media print {
+  /* Portrait A4 with a real margin — `@page`'s margin is where the browser
+     stamps its own header and footer, and zeroing it is how a packing list
+     loses its last column to an unprintable edge. */
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  /* See the note at the top: hide the world, then un-hide the sheet. */
+  body * {
+    visibility: hidden !important;
+  }
+
+  .packing-sheet,
+  .packing-sheet * {
+    visibility: visible !important;
+  }
+
+  .packing-sheet {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    max-width: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* The button that opened the dialog must not appear in the file it printed. */
+  .packing-no-print,
+  .packing-no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* A row split across two pages is a row somebody packs twice. */
+  .packing-table tr {
+    break-inside: avoid;
+  }
+
+  /* The header again at the top of every page — a table whose columns are
+     named only on page one is a table read by guesswork from page two. */
+  .packing-table thead {
+    display: table-header-group;
+  }
+
+  .packing-summary,
+  .packing-totals,
+  .packing-card {
+    break-inside: avoid;
+  }
+
+  /* Backgrounds are not decoration here: the gold header row and the dark
+     band are what separate the two editions at a glance. Chrome still asks
+     for «طباعة الخلفيات», and this is what makes it obey when it is on. */
+  .packing-sheet * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

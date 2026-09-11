@@ -444,12 +444,109 @@ export type BulkBookOrderResult = z.infer<typeof BulkBookOrderResultSchema>;
  *
  * Both optional and independent — `from` alone is «من التاريخ ده لغاية
  * دلوقتي», which is the common case when he is catching up.
+ *
+ * ## Why `stream`/`year`/`q` are here too
+ *
+ * «جالب إن واحد ناقص». The export used to take ONLY the tab and the dates,
+ * while the screen above it was also filtering on «عربي / لغات», «الصف» and
+ * the search box — so the file could never be the list the admin was looking
+ * at when they pressed the button. Every one of those three is a filter he can
+ * SEE is on, and a spreadsheet that silently ignores a visible filter is a
+ * spreadsheet he has to re-count by hand. The rule this locks in: the sheet is
+ * the screen, always, and there is no way to press export and get a different
+ * set of orders than the one on display.
  */
 export const ExportBookOrdersQuerySchema = z
   .object({
     status: AdminBookOrderFilterSchema,
     from: z.iso.date().nullable().default(null),
     to: z.iso.date().nullable().default(null),
+    stream: AdminBookOrderStreamSchema.optional(),
+    year: z.coerce.number().int().min(1).max(3).optional(),
+    q: z.string().trim().max(200).optional(),
   })
   .strict();
 export type ExportBookOrdersQuery = z.infer<typeof ExportBookOrdersQuerySchema>;
+
+/**
+ * The same packing list as JSON — what `/admin/books/print` renders into an
+ * A4 PDF.
+ *
+ * ## Why the PDF is rendered by the BROWSER and not by the API
+ *
+ * «وانا بعمل تحميل يتعمل PDF أحسن». A PDF of an Arabic packing list needs
+ * bidi + shaping, and no Node PDF library on npm does Arabic properly —
+ * pdfkit/pdfmake both emit reversed, unjoined letters, which on a sheet handed
+ * to a print shop is worse than no sheet. A browser already shapes Arabic
+ * perfectly, so the print page IS the renderer: same rows, same grouping, same
+ * summary as the `.xlsx`, laid out for A4 and printed with Ctrl+P → «حفظ
+ * كـ PDF». No Chromium in the API container, and what he sees on screen is
+ * byte-for-byte what lands in the file.
+ *
+ * It is the SAME computed list the workbook is built from — one query, one
+ * grouping, one set of counts — so the two files can never disagree.
+ */
+export const PackingListLineSchema = z.object({
+  seq: z.number().int(),
+  bookTitle: z.string(),
+  quantity: z.number().int(),
+  courseTitle: z.string(),
+  year: z.number().int().nullable(),
+  stream: z.string(),
+  fullName: z.string(),
+  phone: z.string(),
+  altPhone: z.string(),
+  governorate: z.string(),
+  city: z.string(),
+  street: z.string(),
+  building: z.string().nullable(),
+  note: z.string(),
+  createdAt: z.string(),
+});
+export type PackingListLine = z.infer<typeof PackingListLineSchema>;
+
+export const PackingListGroupSchema = z.object({
+  /** «عربي» / «لغات» / «عربي ولغات», or empty for a line with no edition. */
+  label: z.string(),
+  books: z.number().int(),
+  copies: z.number().int(),
+  /** Per-صف inside the edition — «سنة أولى كام كتاب وكام نسخة». */
+  years: z.array(z.object({ year: z.number().int().nullable(), books: z.number().int(), copies: z.number().int() })),
+  lines: z.array(PackingListLineSchema),
+});
+export type PackingListGroup = z.infer<typeof PackingListGroupSchema>;
+
+export const PackingListSchema = z.object({
+  groups: z.array(PackingListGroupSchema),
+  /**
+   * The ORDERS behind those lines, in the same order the sheet prints them.
+   *
+   * «حدّد اللي في المدى» reads this and selects exactly what the file
+   * contains. It used to tick the rows RENDERED on the page instead, which is
+   * one page of fifty — on a tab of fifty-two the button said «(50)» while the
+   * sidebar badge said «52», and a batch «اتشحن» silently left the last two
+   * behind. Ids and not a count, because the batch endpoint takes ids and the
+   * point is that the selection and the spreadsheet are the same set.
+   */
+  orderIds: z.array(z.uuid()),
+  /**
+   * ORDERS, not lines. The number the admin checks the sheet against is the
+   * one on the screen, and the screen counts orders while the sheet counts
+   * books — «واحد ناقص» is what that difference looks like from the outside,
+   * on an order that happens to contain two titles. Printing both makes the
+   * comparison possible instead of a guess.
+   */
+  orders: z.number().int(),
+  books: z.number().int(),
+  copies: z.number().int(),
+  /** Echoed back so the printed page can say what it is a list OF. */
+  filters: z.object({
+    status: z.string(),
+    from: z.string().nullable(),
+    to: z.string().nullable(),
+    stream: z.string().nullable(),
+    year: z.number().int().nullable(),
+    q: z.string().nullable(),
+  }),
+});
+export type PackingList = z.infer<typeof PackingListSchema>;
