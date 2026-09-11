@@ -128,13 +128,28 @@ export class AdminBookOrdersController {
   @Get('export')
   @UsePipes(ZodValidationPipe)
   async export(@Query() query: ExportBookOrdersQueryDto, @Res() response: Response): Promise<void> {
-    const buffer = await this.bookOrders.exportXlsx(query.status, query.from, query.to);
+    const buffer = await this.bookOrders.exportXlsx(query);
     response.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="book-orders-${query.status}.xlsx"`,
       'Cache-Control': 'private, no-store',
     });
     response.send(buffer);
+  }
+
+  /**
+   * The same packing list as JSON — what `/admin/books/print` lays out on A4
+   * for «حفظ كـ PDF».
+   *
+   * Same query, same permission and same service call as the spreadsheet
+   * above, so the PDF and the `.xlsx` are two renderings of ONE list rather
+   * than two lists that have to be kept in agreement.
+   */
+  @RequirePermission('book-order:read')
+  @Get('packing-list')
+  @UsePipes(ZodValidationPipe)
+  packingList(@Query() query: ExportBookOrdersQueryDto) {
+    return this.bookOrders.packingList(query);
   }
 
   /**

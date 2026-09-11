@@ -2249,10 +2249,50 @@ const admin = {
     /** The `sr-only` sentence beside the sidebar's «الكتب» badge. `{n}` is the
      *  number of paid orders that have not shipped yet. */
     unshippedBadgeLabel: '{n} طلب كتاب متشحنش لسه',
-    exportHint: 'بيصدّر كل الطلبات في التبويب المفتوح دلوقتي — جاهز يتبعت لشركة الشحن والمطبعة.',
+    exportHint:
+      'بيصدّر الطلبات اللي ظاهرة قدامك دلوقتي بالظبط — نفس التبويب ونفس الفلاتر — جاهز يتبعت لشركة الشحن والمطبعة.',
     /** `{tab}` — the currently open tab's own label, so the button names
      *  exactly what it will export rather than a hidden default. */
     exportButton: 'تصدير: {tab}',
+
+    /* ── الـ PDF ───────────────────────────────────────────────────────────
+       «وانا بعمل تحميل يتعمل PDF أحسن بشكل كويس كده». Same list as the Excel
+       file, متصفّحة على A4 وجاهزة للطباعة — the browser's own print dialog is
+       what writes the file, which is the only way Arabic comes out joined and
+       in the right direction. */
+    exportPdf: 'تحميل PDF',
+    exportPdfHint: 'نفس اللستة دي مظبوطة على A4 — تفتح وتطبع أو تحفظها PDF.',
+
+    /* ── صفحة الطباعة ─────────────────────────────────────────────────────── */
+    printTitle: 'طلبات الكتب — لستة الشحن',
+    printButton: 'اطبع / احفظ PDF',
+    printBack: 'رجوع للطلبات',
+    /** The counts above the table — «الطلبات» is the ONE number that can be
+     *  compared with the screen, because the screen counts orders. */
+    printOrders: '{n} طلب',
+    printBooks: '{n} كتاب',
+    printCopies: '{n} نسخة',
+    printNoStream: 'من غير طبعة محددة',
+    printNoYear: 'من غير صف',
+    printYear: 'الصف {n}',
+    printGeneratedAt: 'اتطبعت في {date}',
+    printRange: 'من {from} لـ {to}',
+    printFrom: 'من {from}',
+    printTo: 'لغاية {to}',
+    printSearch: 'بحث: {q}',
+    printEmpty: 'مفيش طلبات في اللستة دي.',
+    printColumns: {
+      seq: '#',
+      bookTitle: 'اسم الكتاب',
+      quantity: 'العدد',
+      stream: 'عربي / لغات',
+      year: 'الصف',
+      fullName: 'الاسم بالكامل',
+      phone: 'الموبايل',
+      altPhone: 'موبايل تاني',
+      address: 'العنوان',
+      createdAt: 'تاريخ الطلب',
+    },
     /*
      * ════════════════════════════════════════════════════════════════════
      * «أضف طلب كتاب» — an admin entering a customer's order directly,

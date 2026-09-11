@@ -37,10 +37,20 @@ const c = copy.admin.books;
 export function ExportRange({
   status,
   tabLabel,
+  filters,
   selectable = [],
 }: {
   status: string;
   tabLabel: string;
+  /**
+   * The OTHER filters the screen is showing — «عربي / لغات», «الصف» and the
+   * search box.
+   *
+   * «جالب إن واحد ناقص»: the file used to carry only the tab and the dates
+   * while the list above it was also filtered by these three, so the two could
+   * never be counted against each other. They ride along on both downloads.
+   */
+  filters?: { stream?: string; year?: number; q?: string };
   /**
    * Every row on screen a batch action can apply to, with the date the export
    * filters on. Empty on tabs that have no such rows, which is what makes the
@@ -55,6 +65,9 @@ export function ExportRange({
   const params = new URLSearchParams({ status });
   if (from) params.set('from', from);
   if (to) params.set('to', to);
+  if (filters?.stream) params.set('stream', filters.stream);
+  if (filters?.year !== undefined) params.set('year', String(filters.year));
+  if (filters?.q) params.set('q', filters.q);
 
   /*
    * The SAME predicate the export runs, on the rows already rendered.
@@ -121,6 +134,25 @@ export function ExportRange({
         title={c.exportHint}
       >
         {formatCopy(c.exportButton, { tab: tabLabel })}
+      </a>
+      {/*
+        «وانا بعمل تحميل يتعمل PDF أحسن بشكل كويس كده» — the same list, laid
+        out on A4.
+
+        A new TAB and not a download: the page prints itself, and the file the
+        admin keeps comes out of the browser's own «حفظ كـ PDF». That is what
+        makes the Arabic correct — an Arabic PDF needs bidi and letter joining,
+        and every Node PDF library would hand the print shop reversed, unjoined
+        letters. The browser already does it perfectly.
+      */}
+      <a
+        href={`/admin/books/print?${params.toString()}`}
+        target="_blank"
+        rel="noopener"
+        className="rounded-full border border-accent/40 bg-accent/10 px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-accent-text transition-colors duration-[160ms] ease-out hover:bg-accent/20"
+        title={c.exportPdfHint}
+      >
+        {c.exportPdf}
       </a>
     </div>
   );

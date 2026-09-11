@@ -316,6 +316,10 @@ export default async function AdminBooksPage({
               <ExportRange
                 status={status}
                 tabLabel={TAB_LABEL[status]}
+                /* The three filters the toolbar above is showing. Without
+                   them the file is a different set of orders than the list —
+                   «جالب إن واحد ناقص» — and nobody can tell which is right. */
+                filters={{ stream, year, q: query || undefined }}
                 /* Exactly the rows that render a checkbox below — anything else
                    would let the button select a row the batch can only skip. */
                 selectable={rows

@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { copy } from '@ayman/contracts/copy';
+import type { ExportBookOrdersQuery } from '@ayman/contracts/admin/book-orders';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
@@ -77,6 +78,10 @@ describe('BookOrdersService', () => {
    *  defaults to «الاتنين», which cannot distinguish "read off the book" from
    *  "fell back to the course". */
   let languagesBook = '';
+  /** Its opposite, «عربي» only. Needed to prove a stream FILTER excludes
+   *  anything: a default «الاتنين» book matches both filters by design, so a
+   *  test built on one can never see the filter work. */
+  let generalBook = '';
 
   beforeAll(async () => {
     await prisma.$connect();
@@ -208,6 +213,20 @@ describe('BookOrdersService', () => {
         },
       })
     ).id;
+    generalBook = (
+      await prisma.book.create({
+        data: {
+          slug: `book-general-${stamp}`,
+          titleAr: 'كتاب عربي',
+          subjectId: subject.id,
+          year: 1,
+          term: 'first',
+          priceCents: 30_000,
+          forGeneral: true,
+          forLanguages: false,
+        },
+      })
+    ).id;
   });
 
   beforeEach(async () => {
@@ -221,7 +240,7 @@ describe('BookOrdersService', () => {
     /* A CART order has no `courseId` at all, so neither filter above reaches
        it. Scoped to this spec's own books so nothing shared is touched. */
     await prisma.bookOrder.deleteMany({
-      where: { items: { some: { bookId: { in: [bookA, bookB, soldOutBook, languagesBook] } } } },
+      where: { items: { some: { bookId: { in: [bookA, bookB, soldOutBook, languagesBook, generalBook] } } } },
     });
   });
 
@@ -233,10 +252,10 @@ describe('BookOrdersService', () => {
     /* A CART order has no `courseId` at all, so neither filter above reaches
        it. Scoped to this spec's own books so nothing shared is touched. */
     await prisma.bookOrder.deleteMany({
-      where: { items: { some: { bookId: { in: [bookA, bookB, soldOutBook, languagesBook] } } } },
+      where: { items: { some: { bookId: { in: [bookA, bookB, soldOutBook, languagesBook, generalBook] } } } },
     });
     // Never `deleteMany` on `audit_log` — INSERT-only at the database level.
-    await prisma.book.deleteMany({ where: { id: { in: [bookA, bookB, soldOutBook, languagesBook] } } });
+    await prisma.book.deleteMany({ where: { id: { in: [bookA, bookB, soldOutBook, languagesBook, generalBook] } } });
     await prisma.course.deleteMany({ where: { id: { in: [bookedCourseId, noBookCourseId] } } });
     await prisma.user.deleteMany({ where: { id: { in: [studentId, strangerId, linkedStudentId, adminId] } } });
     await prisma.$disconnect();
@@ -547,7 +566,7 @@ describe('BookOrdersService', () => {
     it('shows up in the Excel export, same shape as a real customer row', async () => {
       await service.adminCreate(adminId, adminAddress({ paid: true, fullName: 'عميل التصدير' }));
 
-      const buffer = await service.exportXlsx('paid');
+      const buffer = await service.exportXlsx({ status: 'paid', from: null, to: null });
       const ExcelJS = await import('exceljs');
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(buffer);
@@ -1362,7 +1381,7 @@ describe('BookOrdersService', () => {
       });
       await service.create(strangerId, address()); // stays address_only
 
-      const buffer = await service.exportXlsx('paid');
+      const buffer = await service.exportXlsx({ status: 'paid', from: null, to: null });
       expect(buffer.length).toBeGreaterThan(0);
 
       const ExcelJS = await import('exceljs');
@@ -1415,6 +1434,90 @@ describe('BookOrdersService', () => {
       expect(fullNames.length).toBeGreaterThan(0);
     });
   });
+
+  /**
+   * «جالب إن واحد ناقص» — the file and the screen disagreeing about how many
+   * orders there are.
+   *
+   * Two causes, and both are here: the export ignored the filters the admin
+   * could SEE were on (so the file was a different, larger set than the list),
+   * and an order carrying no lines fell out of the loop that builds the rows
+   * without leaving a trace. Each case below scopes itself with `q` — the
+   * shared dev database holds thousands of real paid orders, and an assertion
+   * on a total across all of them is an assertion on other people's data.
+   */
+  describe('packingList', () => {
+    it('applies the screen’s stream filter, so the file is the list', async () => {
+      const stamp = `تصدير-${Date.now()}`;
+      await paidOrder(studentId, {
+        courseId: undefined,
+        items: [{ bookId: languagesBook, quantity: 1 }],
+        fullName: `${stamp} لغات`,
+      });
+      await paidOrder(strangerId, {
+        courseId: undefined,
+        /* «عربي» ONLY — `bookA` defaults to «الاتنين», which matches the
+           languages filter by design and would make this assertion pass on a
+           broken filter. */
+        items: [{ bookId: generalBook, quantity: 1 }],
+        fullName: `${stamp} عربي`,
+      });
+
+      const all = await service.packingList({ status: 'paid', from: null, to: null, q: stamp });
+      expect(all.orders).toBe(2);
+
+      const languagesOnly = await service.packingList({
+        status: 'paid',
+        from: null,
+        to: null,
+        q: stamp,
+        stream: 'languages',
+      });
+      expect(languagesOnly.orders).toBe(1);
+      expect(languagesOnly.groups.flatMap((group) => group.lines).map((line) => line.fullName)).toEqual([
+        `${stamp} لغات`,
+      ]);
+      /* The shared dev database is a real cohort — thousands of orders — and
+         `q` spans a `contains` across the address columns and the joined
+         account. Two of those scans plus two orders does not fit in the 5s
+         default on this machine. */
+    }, 20_000);
+
+    it('counts ORDERS separately from books, so the two numbers can be compared', async () => {
+      const stamp = `عداد-${Date.now()}`;
+      await paidOrder(studentId, {
+        courseId: undefined,
+        items: [
+          { bookId: bookA, quantity: 2 },
+          { bookId: languagesBook, quantity: 1 },
+        ],
+        fullName: stamp,
+      });
+
+      const list = await service.packingList({ status: 'paid', from: null, to: null, q: stamp });
+      // ONE order on the screen, TWO rows in the file, THREE books to pack —
+      // the three numbers the admin was previously left to reconcile by hand.
+      expect(list.orders).toBe(1);
+      expect(list.books).toBe(2);
+      expect(list.copies).toBe(3);
+    }, 20_000);
+
+    it('still prints an order whose lines were all removed', async () => {
+      const stamp = `بدون-سطور-${Date.now()}`;
+      const order = await paidOrder(studentId, {
+        courseId: undefined,
+        items: [{ bookId: bookA, quantity: 1 }],
+        fullName: stamp,
+      });
+      await prisma.bookOrderItem.deleteMany({ where: { orderId: order.id } });
+
+      const list = await service.packingList({ status: 'paid', from: null, to: null, q: stamp });
+      expect(list.orders).toBe(1);
+      // The address is real and somebody is waiting for it: it gets a row,
+      // named so the desk can see what to fix, never a silent disappearance.
+      expect(list.groups.flatMap((group) => group.lines).map((line) => line.fullName)).toEqual([stamp]);
+    }, 20_000);
+  });
   /*
    * ═════════════════════════════════════════════════════════════════════════
    * دورة حياة الطلب — «وصل»، «اترفض»، «اتشال»، «رجع».
@@ -1441,9 +1544,9 @@ describe('BookOrdersService', () => {
 
   /** Every body row of one export, as raw cell values. */
   const exportRows = async (
-    status: Parameters<typeof service.exportXlsx>[0],
+    status: ExportBookOrdersQuery['status'],
   ): Promise<unknown[][]> => {
-    const buffer = await service.exportXlsx(status);
+    const buffer = await service.exportXlsx({ status, from: null, to: null });
     const ExcelJS = await import('exceljs');
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
