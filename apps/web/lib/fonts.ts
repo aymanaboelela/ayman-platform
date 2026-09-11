@@ -217,3 +217,78 @@ export const plexMono = localFont({
    */
   adjustFontFallback: false,
 });
+
+/**
+ * Cairo — the SHIPPING LABELS only, and nothing else in the product.
+ *
+ * «يبقى فونت كايرو». The rest of the platform is IBM Plex Sans Arabic and
+ * stays that way; this is one print route whose output leaves the product
+ * entirely and gets taped to a box, read at arm's length by somebody who has
+ * never seen the site. Cairo's Arabic is wider-apertured and heavier at small
+ * sizes than Plex's, which is the whole argument for it on a label and no
+ * argument at all for it on a screen.
+ *
+ * ## Why it costs the app nothing
+ *
+ * `preload: false`, same as the other two and for the same measured reason
+ * (see the section above): a face is fetched only when a run matching it is
+ * actually painted. Nothing outside `/admin/books/labels` names
+ * `--font-cairo`, so no student and no other admin screen ever downloads it.
+ *
+ * ## Why the Latin faces are here
+ *
+ * Every number on the card — the phone, the reference, the copy count, the
+ * date — is Latin digits, deliberately (an Arabic-Indic phone number on a
+ * waybill is a phone number the courier re-types wrong). Arabic-only would
+ * leave all of them to fall out of the family, which is exactly the failure
+ * `plexMono`'s own warning below documents.
+ *
+ * 400/600/700 and no 500: the card uses regular, semibold for the labels, and
+ * bold for the name and the address — there is no medium on it.
+ */
+export const cairo = localFont({
+  src: [
+    {
+      path: '../node_modules/@fontsource/cairo/files/cairo-arabic-400-normal.woff2',
+      weight: '400',
+      style: 'normal',
+    },
+    {
+      path: '../node_modules/@fontsource/cairo/files/cairo-arabic-600-normal.woff2',
+      weight: '600',
+      style: 'normal',
+    },
+    {
+      path: '../node_modules/@fontsource/cairo/files/cairo-arabic-700-normal.woff2',
+      weight: '700',
+      style: 'normal',
+    },
+    {
+      path: '../node_modules/@fontsource/cairo/files/cairo-latin-400-normal.woff2',
+      weight: '400',
+      style: 'normal',
+    },
+    {
+      path: '../node_modules/@fontsource/cairo/files/cairo-latin-600-normal.woff2',
+      weight: '600',
+      style: 'normal',
+    },
+    {
+      path: '../node_modules/@fontsource/cairo/files/cairo-latin-700-normal.woff2',
+      weight: '700',
+      style: 'normal',
+    },
+  ],
+  variable: '--font-cairo',
+  display: 'swap',
+  preload: false,
+  /**
+   * ⚠️ OFF, for the reason `plexMono` below spells out in full: `next/font`
+   * generates a metric-matched `local(Arial)` fallback with NO `unicode-range`,
+   * which then wins every Arabic codepoint before the real family is reached —
+   * and applies a `size-adjust` derived from LATIN metrics to Arabic glyphs,
+   * rendering them about a third oversized. On a screen that is ugly; on a
+   * shipping label it is an address that no longer fits its box.
+   */
+  adjustFontFallback: false,
+});

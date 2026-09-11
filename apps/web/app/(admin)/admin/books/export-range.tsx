@@ -190,6 +190,30 @@ export function ExportRange({
       >
         {c.exportPdf}
       </a>
+      {/*
+        «هخده نص بس الكرت وتحطه على الشحنة» — the same run again, as cut-out
+        cards rather than as a table.
+
+        A SECOND button and not a mode on the first: the packing sheet is the
+        desk's paper (ticked once while the boxes are filled) and this is the
+        box's paper. Both get printed on the same day for the same run, so
+        replacing one with the other would just mean visiting the screen twice.
+
+        Only on the tabs a parcel can actually be shipped from — printing
+        address cards for a REJECTED order is printing a label for a box nobody
+        is sending. `batchable` is already exactly that set.
+      */}
+      {batchable ? (
+        <a
+          href={`/admin/books/labels?${params.toString()}`}
+          target="_blank"
+          rel="noopener"
+          className="rounded-full border border-accent/40 bg-accent/10 px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-accent-text transition-colors duration-[160ms] ease-out hover:bg-accent/20"
+          title={c.labelsHint}
+        >
+          {c.labelsButton}
+        </a>
+      ) : null}
     </div>
   );
 }

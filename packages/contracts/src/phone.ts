@@ -186,3 +186,48 @@ export function isPlaceholderEmail(email: string | null | undefined): boolean {
   if (!email) return false;
   return email.toLowerCase().endsWith(`@${PLACEHOLDER_EMAIL_DOMAIN}`);
 }
+
+/**
+ * An Egyptian mobile as a COURIER reads it off a box: `01012345678`.
+ *
+ * ## Why the label cannot just print the stored string
+ *
+ * `book_orders.phone` is whatever the order was placed with, and the table
+ * genuinely holds both shapes — `+201012345678` from a signed-in student whose
+ * account went through `normalizeEgyptianPhone`, and `01012345678` typed into
+ * the guest form. Printed side by side on a stack of cards the two look like
+ * two different KINDS of number, and the `+20` form is the one a delivery
+ * driver has to convert in their head before dialling.
+ *
+ * So this normalises to the national form Egyptians actually dial.
+ *
+ * ## Why there is no grouping
+ *
+ * An earlier version cut it `010 1234 5678`, on the theory that groups are
+ * easier to transcribe. Ayman's own correction, looking at the printed sheet:
+ * «ما يكونش فيه مسافات ما بين الأرقام». The number gets copied into a courier's
+ * waybill field as one string, and a space inside it is a character somebody
+ * either types or drops — either way the two copies of the number no longer
+ * match. Eleven digits, unbroken, is what goes in the box.
+ *
+ * ## Why it falls back rather than throwing
+ *
+ * A number this cannot parse is still the only contact detail on that card.
+ * Printing it exactly as stored is strictly better than printing nothing, and
+ * far better than a card the page refused to render — the parcel exists
+ * either way.
+ */
+export function egyptianPhoneForLabel(value: string): string {
+  const raw = toAsciiDigits(value).trim();
+  if (!raw) return "";
+
+  const normalized = normalizeEgyptianPhone(raw);
+  /* `normalizeEgyptianPhone` returns E.164 (`+201012345678`). The national
+     form is that with the `+20` swapped back for the leading zero — which is
+     the 10 digits after the country code, prefixed. */
+  if (normalized) return `0${normalized.slice(3)}`;
+
+  /* Unparseable: hand back what was stored, minus any spacing it arrived with,
+     so at least the card is internally consistent about not having any. */
+  return raw.replace(/\s+/g, "");
+}

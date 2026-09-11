@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   egyptianPhone,
+  egyptianPhoneForLabel,
   isPlaceholderEmail,
   normalizeEgyptianPhone,
   placeholderEmailForPhone,
@@ -311,5 +312,44 @@ describe("toAsciiDigits", () => {
   it("hands the schema a value it already accepted, unchanged in meaning", () => {
     const typed = "٠١٠١٢٣٤٥٦٧٨";
     expect(schema.safeParse(toAsciiDigits(typed))).toEqual(schema.safeParse(typed));
+  });
+});
+
+/**
+ * The number a delivery driver dials off a box. `book_orders.phone` genuinely
+ * holds both shapes — see the function's own note — and a card is the one
+ * place the difference costs somebody a phone call.
+ */
+describe("egyptianPhoneForLabel", () => {
+  it("prints the same national number whichever shape it was stored in", () => {
+    // The exact pair production has side by side: a signed-in student's
+    // normalised E.164 and a guest form's local digits.
+    expect(egyptianPhoneForLabel("+201012345678")).toBe("01012345678");
+    expect(egyptianPhoneForLabel("01012345678")).toBe("01012345678");
+  });
+
+  it("leaves NO spaces in the digits", () => {
+    // «ما يكونش فيه مسافات ما بين الأرقام» — the number is copied into a
+    // courier's waybill field as one string, and a space inside it is a
+    // character somebody either types or drops.
+    expect(egyptianPhoneForLabel("+201211874668")).toBe("01211874668");
+    expect(egyptianPhoneForLabel("012 1187 4668")).toBe("01211874668");
+    expect(egyptianPhoneForLabel("0221 234 567")).not.toMatch(/\s/);
+  });
+
+  it("reads Arabic-Indic digits, which is how some of these were typed", () => {
+    expect(egyptianPhoneForLabel("٠١٠١٢٣٤٥٦٧٨")).toBe("01012345678");
+  });
+
+  it("prints an unparseable number as stored rather than nothing", () => {
+    // It is still the only contact detail on that card, and the parcel exists
+    // either way — a blank line is strictly worse than an odd one.
+    expect(egyptianPhoneForLabel("0221234567")).toBe("0221234567");
+    expect(egyptianPhoneForLabel("مش رقم")).toBe("مشرقم");
+  });
+
+  it("is empty for an empty field, so the card can drop the whole line", () => {
+    expect(egyptianPhoneForLabel("")).toBe("");
+    expect(egyptianPhoneForLabel("   ")).toBe("");
   });
 });

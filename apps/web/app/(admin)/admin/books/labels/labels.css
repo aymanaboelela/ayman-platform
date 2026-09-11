@@ -1,0 +1,371 @@
+/*
+ * كروت الشحن — «هخده نص بس الكرت وتحطه على الشحنة».
+ *
+ * ## Why the colours are literals
+ *
+ * Same reason `print.css` gives: the admin runs dark and the theme tokens
+ * follow it, so a card painted in tokens prints either a black rectangle or —
+ * with «طباعة الخلفيات» off, which is the browser default — white on white.
+ * Paper is paper. The gold is the platform's accent (`--a-9`) written out as
+ * hex, because that is what makes the card recognisably ours on a courier's
+ * counter.
+ *
+ * ## Why ONE card per row, full bleed
+ *
+ * It was two columns of three, and Ayman's verdict on the printed sheet was
+ * «مش هينفع كده». A card cut out of a two-column sheet is 95mm wide, and what
+ * it has to survive is being read off a waybill pouch by somebody standing at
+ * a van: a long Egyptian address at 95mm wraps to four lines and the name
+ * competes with the phone for the same inch. Full width gives the address one
+ * line per part, which is the shape a waybill is filled in from.
+ *
+ * FOUR to an A4 page, so a 53-parcel run is fourteen sheets, and the cuts are
+ * four straight passes with nothing to measure across.
+ *
+ * Five was tried first and clipped: a real Egyptian address is three lines
+ * («المحافظة — المدينة», the street and building, then the floor-and-flat
+ * note), and at 55mm the last two were cut through the middle by the card's
+ * own `overflow: hidden`. Half a street name on a parcel is worse than a
+ * fourteenth sheet of paper.
+ *
+ * ## Why the font is Cairo and only here
+ *
+ * «يبقى فونت كايرو». See `lib/fonts.ts` — the rest of the product is IBM Plex
+ * Sans Arabic and stays that way; this is the one page whose output leaves the
+ * product entirely and gets taped to a box.
+ */
+
+.label-sheet {
+  /* Cairo, declared on the sheet rather than globally: nothing else in the
+     product uses it, and `preload: false` means the faces are fetched only
+     because this page paints them. Plex stays behind it so a glyph Cairo
+     lacks falls back inside a family the product already ships. */
+  font-family: var(--font-cairo), var(--font-plex-arabic), system-ui, sans-serif;
+
+  --ink: #16130d;
+  --ink-soft: #5b554a;
+  --gold: #eaa33c;
+  --gold-deep: #b9761a;
+  --gold-wash: #fdf4e3;
+  --rule: #c9c2b4;
+
+  background: #fff;
+  color: var(--ink);
+  /* A4 minus the printer's own margin, so the preview is the width the paper
+     actually gives you. */
+  max-width: 190mm;
+  margin-inline: auto;
+  padding: 6mm;
+}
+
+.label-empty {
+  padding: 16mm 0;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.label-grid {
+  display: grid;
+  /* ONE column. See the note at the top — this is the change Ayman asked for
+     by name, and every size below is derived from the card being 190mm wide
+     rather than 95. */
+  grid-template-columns: 1fr;
+  /* No gap: adjacent cards share their cut line, so one cut separates two
+     cards instead of leaving a strip of waste between them. */
+  gap: 0;
+}
+
+.label-card {
+  display: flex;
+  flex-direction: column;
+  /* Four of these clear A4's 281mm of printable height, with the room a
+     three-line address actually needs. `block-size` and not `min-`: a card
+     that grows to fit a long one pushes its neighbour off the cut line and
+     every card below it onto the wrong part of the page. */
+  block-size: 68mm;
+  padding: 3.5mm 5mm;
+  /* Dashed on all four sides — the cut guide. Adjacent cards double the line
+     up, which is what you want to line a blade against. */
+  border: 1px dashed var(--rule);
+  break-inside: avoid;
+}
+
+/* ── The head: who it is from, and the reference ────────────────────────── */
+
+.label-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 2mm;
+  border-bottom: 2px solid var(--gold);
+}
+
+.label-card__brand {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--gold-deep);
+}
+
+/* The one string a courier reads back down a phone. Boxed so it is findable
+   on a card lying face-up in a pile.
+
+   It WAS monospace, for the usual O-versus-0 argument. That argument does not
+   apply here: the code is hex, so the only letters it can contain are A-F and
+   there is no O in it to confuse. «يبقى فونت كايرو» — the whole card is one
+   family, and the odd Menlo box was the only thing on it that was not. */
+.label-card__ref {
+  padding: 1px 6px;
+  border: 1px solid var(--gold-deep);
+  border-radius: 3px;
+  background: var(--gold-wash);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--gold-deep);
+  /* `dir="ltr"` on the element is what orders the glyphs; this keeps the box
+     itself out of the surrounding RTL run's reordering. */
+  unicode-bidi: isolate;
+}
+
+/* ── The rows: caption on the start edge, value filling the rest ───────── */
+
+.label-card__rows {
+  flex: 1;
+  min-block-size: 0;
+  margin: 0;
+  padding-block: 2mm 0;
+  overflow: hidden;
+}
+
+/* A two-column grid whose FIRST column is the caption at a fixed width — so
+   every caption on every card lines up and the values start at the same place
+   down the sheet. That alignment is the whole reason this is a `<dl>` and not
+   three stacked paragraphs: a waybill is filled in field by field, and a form
+   whose fields do not line up is a form somebody fills in out of order. */
+.label-card__row {
+  display: grid;
+  grid-template-columns: 18mm 1fr;
+  align-items: baseline;
+  gap: 0 3mm;
+  margin-block-end: 1.5mm;
+}
+
+.label-card__row dt {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.label-card__row dd {
+  margin: 0;
+  min-inline-size: 0;
+}
+
+/* The biggest thing on the card. On a stack seen edge-on, the name is what
+   you are looking for. */
+.label-card__name {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.2;
+  /* Wraps rather than clips: a courier can work with a name on two lines and
+     cannot work with half of one. */
+  overflow-wrap: anywhere;
+}
+
+.label-card__phones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6mm;
+}
+
+/* Unbroken digits — «ما يكونش فيه مسافات ما بين الأرقام». The number is copied
+   into a courier's field as one string; a space inside it is a character
+   somebody either types or drops. `egyptianPhoneForLabel` guarantees there is
+   none, and `letter-spacing: 0` keeps CSS from putting one back. */
+.label-card__phones b {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0;
+  unicode-bidi: isolate;
+}
+
+.label-card__alt {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2mm;
+}
+
+/* The spare number is a fallback and reads as one — a second number in the
+   same weight as the first is a second number somebody dials first. */
+.label-card__alt-field {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.label-card__alt b {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+/* The address is the whole reason the card exists — «العنوان بيّنه أكتر». */
+.label-card__row--where dd {
+  padding: 1.5mm 2.5mm;
+  border-inline-start: 2.5px solid var(--gold);
+  background: var(--gold-wash);
+  border-radius: 0 3px 3px 0;
+}
+
+.label-card__address {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* «المحافظة — المدينة»: the line that sorts the parcel into a van, and the
+   only one that has to be readable off a stack without picking it up. */
+.label-card__address--wide {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+/* The delivery note is an instruction, not part of the address — «يفضل
+   الاتصال قبل التسليم» read as another street line is a street nobody finds. */
+.label-card__address--note {
+  font-size: 10.5px;
+  color: var(--ink-soft);
+}
+
+/* ── The foot: the count, what is in the box, where it sits in the run ──── */
+
+.label-card__foot {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+  padding-top: 2mm;
+  border-top: 1px solid var(--rule);
+}
+
+.label-card__count {
+  display: flex;
+  flex-shrink: 0;
+  align-items: baseline;
+  gap: 4px;
+  padding: 1mm 3mm;
+  border-radius: 4px;
+  background: var(--gold-wash);
+  border: 1px solid var(--gold);
+}
+
+.label-card__count b {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--gold-deep);
+}
+
+.label-card__count small {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+/* «كتاب عربي» / «كتاب لغات» — at most two of these, so they sit in a row and
+   never need to wrap or clip the way a list of titles did. */
+.label-card__streams {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.label-card__stream {
+  padding: 0.8mm 2.5mm;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/*
+  The «مش محددة» chip. Dashed and lighter, so it reads at a glance as an
+  ANSWER that needs checking rather than as an edition called «مش محددة» —
+  and deliberately not red: this is a normal consequence of an order typed
+  over the phone, not an error somebody made.
+
+  It must survive printing, where colour usually does not: the border style
+  carries the meaning, so a black-and-white laser still shows it.
+*/
+.label-card__stream--unknown {
+  border-style: dashed;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.label-card__date {
+  flex-shrink: 0;
+  font-size: 9px;
+  color: var(--ink-soft);
+}
+
+/* ── Print ──────────────────────────────────────────────────────────────── */
+
+@media print {
+  @page {
+    size: A4;
+    /* The cards carry their own 5mm of padding, so the page margin only has to
+       clear the printer's unprintable edge. Bigger than the packing sheet's
+       because a card cut flush to the paper edge has no bleed to cut into. */
+    margin: 8mm;
+  }
+
+  /* Same trick as the packing sheet, and for the same reason: hide the world,
+     then un-hide this subtree. Naming the admin shell's classes from here
+     breaks the day one of them is renamed. */
+  body * {
+    visibility: hidden !important;
+  }
+
+  .label-sheet,
+  .label-sheet * {
+    visibility: visible !important;
+  }
+
+  .label-sheet {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    max-width: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* The toolbar must not appear in the file it printed. */
+  .label-no-print,
+  .label-no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* The gold band and the reference box are the two things this card is
+     recognised by. Without this they print as white rectangles on every
+     browser whose «طباعة الخلفيات» is off — which is all of them, by default. */
+  .label-card__ref,
+  .label-card__count,
+  .label-card__row--where dd {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* A card split across two pages is a card nobody can cut out. */
+  .label-card {
+    break-inside: avoid;
+  }
+}
