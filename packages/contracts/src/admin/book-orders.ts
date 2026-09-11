@@ -516,6 +516,76 @@ export const PackingListGroupSchema = z.object({
 });
 export type PackingListGroup = z.infer<typeof PackingListGroupSchema>;
 
+/**
+ * The short human reference a courier writes on a waybill and reads back down
+ * the phone — «ك-A3F92C».
+ *
+ * `book_orders.id` is a uuid7: thirty-six characters, mostly a timestamp, and
+ * nobody is transcribing that onto a box. There is no order NUMBER column to
+ * use instead, and adding one would be a sequence to backfill and keep unique
+ * across a table that already has a perfectly good unique key — so this is
+ * derived from the id, deterministically, and the same order therefore carries
+ * the same reference on every reprint.
+ *
+ * The LAST six hex characters, not the first: a uuid7 begins with the
+ * millisecond it was created, so two orders placed in the same second share
+ * their opening characters and the reference would not distinguish the very
+ * rows most likely to be confused — the ones packed back to back.
+ *
+ * ⚠️ The prefix is ASCII `BK-`, and an Arabic one is NOT an option here — this
+ * was `ك-` for exactly one render. A single Arabic letter in front of Latin hex
+ * is a right-to-left run glued to a left-to-right one, and the bidi algorithm
+ * reorders the pair no matter which direction the element declares: `ك-D9A721`
+ * came out on the card as «721-كD9A». Isolation cannot fix it, because the
+ * string is genuinely bidirectional; the fix is for it not to be. A reference
+ * is a code, codes are transcribed character by character onto a waybill, and
+ * this one is now unambiguous in either direction.
+ */
+export function bookOrderRef(orderId: string): string {
+  return `BK-${orderId.replace(/-/g, '').slice(-6).toUpperCase()}`;
+}
+
+/**
+ * ONE PARCEL — the card that gets cut out and stuck on the box.
+ *
+ * Deliberately NOT `PackingListLine`: that one is per BOOK, because a desk
+ * sorting a spreadsheet needs a row per title. A label is per ORDER, because
+ * an order is what goes in one box — printing a separate card for each title
+ * in a three-book order produces three labels for one parcel and two of them
+ * end up on the wrong box or in the bin.
+ *
+ * It carries no money. Same reason the packing sheet dropped its price
+ * columns: this goes to a courier, and a number on a box is a number somebody
+ * reads as what they are owed.
+ */
+export const PackingLabelSchema = z.object({
+  orderId: z.uuid(),
+  /** See `bookOrderRef`. Precomputed server-side so the sheet, the screen and
+   *  anything that ever reads this back agree on one spelling. */
+  ref: z.string(),
+  /** Its place in the run — the same numbering the packing sheet counts by, so
+   *  «الكرت رقم ١٢» and «السطر رقم ١٢» are the same parcel. */
+  seq: z.number().int(),
+  fullName: z.string(),
+  phone: z.string(),
+  /** Empty string when none was given — «اللي بيمنع الطرد يرجع» is exactly the
+   *  field that is often blank, and the card says so rather than drawing an
+   *  empty labelled row. */
+  altPhone: z.string(),
+  governorate: z.string(),
+  city: z.string(),
+  street: z.string(),
+  building: z.string().nullable(),
+  note: z.string(),
+  /** Every title in this parcel with its quantity — what the packer puts IN
+   *  the box, printed on the box. */
+  items: z.array(z.object({ title: z.string(), quantity: z.number().int() })),
+  /** Total copies in this one parcel. The number the courier counts. */
+  copies: z.number().int(),
+  createdAt: z.string(),
+});
+export type PackingLabel = z.infer<typeof PackingLabelSchema>;
+
 export const PackingListSchema = z.object({
   groups: z.array(PackingListGroupSchema),
   /**
@@ -529,6 +599,17 @@ export const PackingListSchema = z.object({
    * point is that the selection and the spreadsheet are the same set.
    */
   orderIds: z.array(z.uuid()),
+  /**
+   * The same orders again, one entry each, shaped for `/admin/books/labels` —
+   * the cut-out cards that go on the parcels.
+   *
+   * A second view of `rows` rather than a second endpoint: the sheet, the
+   * spreadsheet and the cards must be the same set of parcels, and the way to
+   * guarantee that is for one query to produce all three. A `/labels` route of
+   * its own is how the cards would one day print an order the sheet had
+   * already dropped.
+   */
+  labels: z.array(PackingLabelSchema),
   /**
    * ORDERS, not lines. The number the admin checks the sheet against is the
    * one on the screen, and the screen counts orders while the sheet counts

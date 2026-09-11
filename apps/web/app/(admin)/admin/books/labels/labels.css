@@ -1,0 +1,303 @@
+/*
+ * كروت الشحن — «هخده نص بس الكرت وتحطه على الشحنة».
+ *
+ * ## Why the colours are literals, again
+ *
+ * Same reason `print.css` gives: the admin runs dark and the theme tokens
+ * follow it, so a card painted in tokens prints either a black rectangle or —
+ * with «طباعة الخلفيات» off, which is the browser default — white on white.
+ * Paper is paper. The gold is the platform's accent (`--a-9`) written out as
+ * hex, because that is what makes the card recognisably ours on a courier's
+ * counter.
+ *
+ * ## Why 95×87mm and six to a page
+ *
+ * Two columns of three on A4 (190×281mm of printable area). Six to a sheet
+ * turns a 53-parcel run into nine sheets, and the card is still wider than a
+ * standard courier pouch, so nothing has to be folded to fit one.
+ *
+ * The height is FIXED rather than `min-`: a card that grows to fit a long
+ * address pushes its neighbour off the cut line and every card below it onto
+ * the wrong part of the page. An address too long for the box is clipped,
+ * which is a card that needed shortening — the alternative is a sheet that
+ * cannot be cut at all.
+ *
+ * ## Why the grid is fixed and not `auto-fit`
+ *
+ * A responsive card grid reflows between the screen and the printer, and the
+ * cut lines then fall where the paper is not folded. Two columns, always,
+ * screen and print alike: what he lines the guillotine up against on screen is
+ * where the cut actually lands.
+ */
+
+.label-sheet {
+  --ink: #16130d;
+  --ink-soft: #5b554a;
+  --gold: #eaa33c;
+  --gold-deep: #b9761a;
+  --gold-wash: #fdf4e3;
+  --rule: #c9c2b4;
+
+  background: #fff;
+  color: var(--ink);
+  /* A4 minus the printer's own margin, so the preview is the width the paper
+     actually gives you. */
+  max-width: 190mm;
+  margin-inline: auto;
+  padding: 6mm;
+}
+
+.label-empty {
+  padding: 16mm 0;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.label-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  /* No gap: the cards share their cut lines, so one cut separates two cards
+     instead of leaving a strip of waste between them. */
+  gap: 0;
+}
+
+.label-card {
+  display: flex;
+  flex-direction: column;
+  /* Three of these clear A4's 281mm of printable height with room to spare.
+     See the note at the top for why it is `block-size` and not `min-`. */
+  block-size: 87mm;
+  padding: 5mm;
+  /* Dashed on all four sides — the cut guide. Adjacent cards double the line
+     up, which is what you want to line a blade against. */
+  border: 1px dashed var(--rule);
+  break-inside: avoid;
+}
+
+/* ── The head: who it is from, and the reference ────────────────────────── */
+
+.label-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 2mm;
+  border-bottom: 2px solid var(--gold);
+}
+
+.label-card__brand {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--gold-deep);
+}
+
+/* The one string a courier reads back down a phone. Monospace so O and 0
+   cannot be confused on a hand-written waybill, and boxed so it is findable on
+   a card lying face-up in a pile. */
+.label-card__ref {
+  padding: 1px 6px;
+  border: 1px solid var(--gold-deep);
+  border-radius: 3px;
+  background: var(--gold-wash);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--gold-deep);
+  /* `dir="ltr"` on the element is what orders the glyphs; this keeps the box
+     itself out of the surrounding RTL run's reordering. */
+  unicode-bidi: isolate;
+}
+
+/* ── The body: name, phones, address ────────────────────────────────────── */
+
+.label-card__body {
+  flex: 1;
+  min-block-size: 0;
+  padding-block: 2.5mm;
+  overflow: hidden;
+}
+
+/* The small caption over each block. Recessive on purpose: on a label the
+   VALUES are what gets read and the captions are only there so nobody guesses
+   which number is the spare one. */
+.label-card__field {
+  margin: 0;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+
+.label-card__name {
+  margin: 0 0 2mm;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.label-card__phones {
+  margin-bottom: 2mm;
+}
+
+.label-card__phone {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+}
+
+.label-card__phone b {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  unicode-bidi: isolate;
+}
+
+/* The spare number is a fallback, and it reads as one — a second number in the
+   same weight as the first is a second number somebody dials first. */
+.label-card__phone--alt b {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.label-card__address {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* «المحافظة — المدينة»: the line that sorts the parcel into a van, and the
+   only one that has to be readable off a stack without picking it up. */
+.label-card__address--wide {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ── The foot: the count, what is in the box, where it sits in the run ──── */
+
+.label-card__foot {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+  padding-top: 2mm;
+  border-top: 1px solid var(--rule);
+}
+
+.label-card__count {
+  display: flex;
+  flex-shrink: 0;
+  align-items: baseline;
+  gap: 4px;
+  padding: 1mm 3mm;
+  border-radius: 4px;
+  background: var(--gold-wash);
+  border: 1px solid var(--gold);
+}
+
+.label-card__count b {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--gold-deep);
+}
+
+.label-card__count small {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.label-card__items {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-inline-size: 0;
+  flex: 1;
+  font-size: 9.5px;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+
+/* Two lines, then clipped. A parcel of eight titles is rare and its card must
+   still cut on the line; the packing sheet upstairs is where the full contents
+   are read. */
+.label-card__item {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.label-card__seq {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.label-card__seq small {
+  font-size: 8.5px;
+  font-weight: 400;
+}
+
+/* ── Print ──────────────────────────────────────────────────────────────── */
+
+@media print {
+  @page {
+    size: A4;
+    /* The cards carry their own 5mm of padding, so the page margin only has to
+       clear the printer's unprintable edge. Bigger than the packing sheet's
+       because a card cut flush to the paper edge has no bleed to cut into. */
+    margin: 8mm;
+  }
+
+  /* Same trick as the packing sheet, and for the same reason: hide the world,
+     then un-hide this subtree. Naming the admin shell's classes from here
+     breaks the day one of them is renamed. */
+  body * {
+    visibility: hidden !important;
+  }
+
+  .label-sheet,
+  .label-sheet * {
+    visibility: visible !important;
+  }
+
+  .label-sheet {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    max-width: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* The toolbar must not appear in the file it printed. */
+  .label-no-print,
+  .label-no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* The gold band and the reference box are the two things this card is
+     recognised by. Without this they print as white rectangles on every
+     browser whose «طباعة الخلفيات» is off — which is all of them, by default. */
+  .label-card__ref,
+  .label-card__count {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* A card split across two pages is a card nobody can cut out. */
+  .label-card {
+    break-inside: avoid;
+  }
+}

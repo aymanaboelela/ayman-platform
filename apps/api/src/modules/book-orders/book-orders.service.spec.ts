@@ -1541,6 +1541,65 @@ describe('BookOrdersService', () => {
       expect(sheet.copies).toBe(5);
     }, 20_000);
 
+    it('builds ONE card per order, whatever the order holds', async () => {
+      /*
+       * A label goes on a BOX. The sheet above deliberately prints a row per
+       * book — a desk sorting by title needs that — and the cards must not,
+       * because three labels for a three-book order is two labels for two
+       * boxes that do not exist.
+       */
+      const stamp = `كروت-${Date.now()}`;
+      await paidOrder(studentId, {
+        courseId: undefined,
+        items: [{ bookId: bookA, quantity: 1 }],
+        fullName: `${stamp} واحد`,
+      });
+      await paidOrder(strangerId, {
+        courseId: undefined,
+        items: [
+          { bookId: bookA, quantity: 1 },
+          { bookId: languagesBook, quantity: 3 },
+        ],
+        fullName: `${stamp} اتنين`,
+      });
+
+      const sheet = await service.packingList({ status: 'paid', from: null, to: null, q: stamp });
+
+      // Two orders, three LINES on the sheet, two CARDS.
+      expect(sheet.orders).toBe(2);
+      expect(sheet.books).toBe(3);
+      expect(sheet.labels).toHaveLength(2);
+      // The cards and the sheet describe the same parcels, in the same order —
+      // «طرد ٢ من ٥٣» on a card has to mean the same box as row 2 upstairs.
+      expect(sheet.labels.map((label) => label.orderId)).toEqual(sheet.orderIds);
+      expect(sheet.labels.map((label) => label.seq)).toEqual([1, 2]);
+
+      const multi = sheet.labels.find((label) => label.fullName === `${stamp} اتنين`);
+      // The COUNT on the card is copies in that one box, not books and not the
+      // run's total — it is what the courier counts against what they are
+      // handed. 1 + 3.
+      expect(multi?.copies).toBe(4);
+      expect(multi?.items).toHaveLength(2);
+      expect(multi?.ref).toMatch(/^BK-[0-9A-F]{6}$/);
+    }, 20_000);
+
+    it('still gives a card to an order whose lines were all removed', async () => {
+      const stamp = `كرت-بدون-سطور-${Date.now()}`;
+      const order = await paidOrder(studentId, {
+        courseId: undefined,
+        items: [{ bookId: bookA, quantity: 1 }],
+        fullName: stamp,
+      });
+      await prisma.bookOrderItem.deleteMany({ where: { orderId: order.id } });
+
+      const sheet = await service.packingList({ status: 'paid', from: null, to: null, q: stamp });
+
+      // A real address with somebody waiting behind it. A box with no label is
+      // worse than a box with an odd one.
+      expect(sheet.labels).toHaveLength(1);
+      expect(sheet.labels[0]?.copies).toBe(1);
+    }, 20_000);
+
     it('still prints an order whose lines were all removed', async () => {
       const stamp = `بدون-سطور-${Date.now()}`;
       const order = await paidOrder(studentId, {

@@ -12,6 +12,7 @@ import type {
   BulkBookOrderResultRow,
   DeleteBookOrderResult,
   ExportBookOrdersQuery,
+  PackingLabel,
   PackingList,
   PackingListLine,
   MarkBookOrderDeliveredResult,
@@ -20,6 +21,7 @@ import type {
   RestoreBookOrderResult,
 } from '@ayman/contracts/admin/book-orders';
 import type { AdminBookOrderPatchInput } from '@ayman/contracts/admin/books';
+import { bookOrderRef } from '@ayman/contracts/admin/book-orders';
 import { bookOrderTotals } from '@ayman/contracts/books';
 import { toAsciiDigits } from '@ayman/contracts/phone';
 import { streamChoiceOf } from '@ayman/contracts/content';
@@ -2276,6 +2278,17 @@ export class BookOrdersService {
      * ═══════════════════════════════════════════════════════════════════════
      */
     const lines: Array<Omit<PackingListLine, 'seq'>> = [];
+    /*
+     * ONE CARD PER ORDER, built in the SAME loop as the per-book lines.
+     *
+     * Not a second pass over `rows`: the two views have to describe the same
+     * parcels, and the only way that stays true as this method grows is for a
+     * row to produce its line(s) and its card in one place. `seq` here is the
+     * ORDER's place in the run (1..N over `rows`), which is deliberately not
+     * the line `seq` further down — the sheet numbers books and the cards
+     * number boxes, and an order with two titles is one box.
+     */
+    const labels: PackingLabel[] = [];
     for (const row of rows) {
       /*
        * ONE ROW PER BOOK, not per order. A courier packs titles, and an order
@@ -2318,10 +2331,40 @@ export class BookOrdersService {
        * somebody is waiting for a parcel. Named rather than blank, so the desk
        * can see what to fix.
        */
+      /* The card is pushed for EVERY order, including the line-less one below
+         — a parcel with a real address is a parcel somebody is waiting for,
+         and a box with no label is worse than a box with an odd one. */
+      const parcelItems =
+        row.items.length === 0
+          ? [
+              {
+                title: row.course?.bookTitle ?? row.course?.title ?? 'طلب من غير كتاب مسجّل',
+                quantity: 1,
+              },
+            ]
+          : row.items.map((item) => ({ title: item.titleAr, quantity: item.quantity }));
+
+      labels.push({
+        orderId: row.id,
+        ref: bookOrderRef(row.id),
+        seq: labels.length + 1,
+        fullName: address.fullName,
+        phone: address.phone,
+        altPhone: address.altPhone,
+        governorate: address.governorate,
+        city: address.city,
+        street: address.street,
+        building: address.building,
+        note: address.note,
+        items: parcelItems,
+        copies: parcelItems.reduce((n, item) => n + item.quantity, 0),
+        createdAt: address.createdAt,
+      });
+
       if (row.items.length === 0) {
         lines.push({
           ...address,
-          bookTitle: row.course?.bookTitle ?? row.course?.title ?? 'طلب من غير كتاب مسجّل',
+          bookTitle: parcelItems[0]!.title,
           quantity: 1,
           stream: courseStream,
         });
@@ -2382,6 +2425,7 @@ export class BookOrdersService {
     return {
       groups,
       orderIds: rows.map((row) => row.id),
+      labels,
       orders: rows.length,
       books: lines.length,
       copies: copiesIn(lines),
