@@ -42,6 +42,14 @@ const ReviewPayloadSchema = z.discriminatedUnion('locked', [
     sumMarks: z.number(),
     passPercent: z.number(),
     passed: z.boolean().nullable(),
+    /* Marks still with the instructor, out of `gradeOutOf`. `.catch(0)` and
+       not merely `.default(0)`: this page is served by whichever API
+       container answers, and during a rolling deploy that is briefly one
+       without the field. A missing value degrades to the old undivided
+       screen (`needsGrading` still drives the softer copy); it must never
+       fail the parse and take the student's result page down with it. */
+    pendingOutOf: z.number().catch(0),
+    gradedOutOf: z.number().catch(0),
     questions: z.array(ReviewQuestionSchema),
   }),
 ]);
@@ -101,6 +109,10 @@ export default async function QuizReviewPage({
     <main className="mx-auto max-w-[var(--w-prose)] px-6 py-10">
       <h1 className="mb-6 text-[length:var(--fs-title-2)] font-semibold">{copy.quiz.reviewTitle}</h1>
 
+      {/* `gradedOutOf || gradeOutOf`: a payload from an API container that
+          predates the split carries 0, and falling back to the quiz's own
+          total renders exactly the screen this page always did rather than
+          «٤٨٫٥ / ٠». */}
       {review.locked ? (
         <ReviewLocked reason={review.reason} />
       ) : (
@@ -111,6 +123,8 @@ export default async function QuizReviewPage({
             passPercent={review.passPercent}
             passed={review.passed}
             needsGrading={review.questions.some((question) => question.correctness === 'needsGrading')}
+            pendingOutOf={review.pendingOutOf}
+            gradedOutOf={review.gradedOutOf || review.gradeOutOf}
           />
 
           {/* Sanitized HERE, once, rather than inside `<ReviewQuestion>` on

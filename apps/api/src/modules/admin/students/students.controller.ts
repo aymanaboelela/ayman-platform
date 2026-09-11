@@ -65,6 +65,21 @@ export class StudentsController {
    * can lock every admin out of the platform. Granting a course is an
    * ordinary teaching decision and is fully reversible.
    */
+  /**
+   * «المحادثة» on the record — the thread with this student, resolved from
+   * their account rather than from a conversation id nobody holds.
+   *
+   * `conversation:read`, not `student:read`: the payload is message bodies,
+   * and what governs reading those is the inbox's own permission. Gating it on
+   * the profile's permission instead would let anyone who can edit a phone
+   * number read every private thread on the platform.
+   */
+  @RequirePermission('conversation:read')
+  @Get(':userId/conversation')
+  conversation(@Param('userId') userId: string) {
+    return this.students.conversation(userId);
+  }
+
   @RequirePermission('student:read')
   @Get(':userId/grants')
   listGrants(@Param('userId') userId: string) {

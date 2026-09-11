@@ -343,6 +343,9 @@ describe('quiz module authorization matrix', () => {
     { label: 'admin grading queue: anonymous', method: 'GET', path: () => `/api/admin/grading-queue`, role: 'anonymous', status: 401 },
     { label: 'admin grading queue: student', method: 'GET', path: () => `/api/admin/grading-queue`, role: 'student', status: 403 },
     { label: 'admin grading queue: admin', method: 'GET', path: () => `/api/admin/grading-queue`, role: 'admin', status: 200 },
+    { label: 'admin grading results: anonymous', method: 'GET', path: () => `/api/admin/grading-results`, role: 'anonymous', status: 401 },
+    { label: 'admin grading results: student', method: 'GET', path: () => `/api/admin/grading-results`, role: 'student', status: 403 },
+    { label: 'admin grading results: admin', method: 'GET', path: () => `/api/admin/grading-results`, role: 'admin', status: 200 },
 
     { label: 'admin grading for attempt: student', method: 'GET', path: (c) => `/api/admin/attempts/${c.submittedAttemptId}/grading`, role: 'student', status: 403 },
     { label: 'admin grading for attempt: admin', method: 'GET', path: (c) => `/api/admin/attempts/${c.submittedAttemptId}/grading`, role: 'admin', status: 200 },

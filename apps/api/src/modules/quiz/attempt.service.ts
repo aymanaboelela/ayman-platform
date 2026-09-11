@@ -27,6 +27,7 @@ import {
   type LearnerQuestion,
 } from './serializers/learner.serializer';
 import { resolveReviewFlags, resolveReviewWindow, toReviewQuestion } from './serializers/review.serializer';
+import { splitMarks } from './grading/mark-split';
 
 export interface SaveResult {
   savedSlots: number[];
@@ -52,6 +53,10 @@ export interface RecomputeResult {
   lessonId: string;
   courseId: string;
   userId: string;
+  /** What the attempt became. `submitted` means nothing is left ungraded —
+   *  which is how `ManualGradingService` knows the mark it just saved was the
+   *  LAST one, and that the student can finally be told their real total. */
+  attemptState: 'submitted' | 'pending_review';
 }
 
 interface DescribableOption {
@@ -757,6 +762,14 @@ export class AttemptService {
       sumMarks: Number(attempt.sumMarks),
       passPercent: Number(attempt.passPercent),
       passed: attempt.passed,
+      // Derived from the rows already loaded above, never from a second query
+      // and never from `attempt.state` alone: the screen needs the AMOUNT
+      // still outstanding, not the fact that something is. See
+      // `mark-split.ts` for why the marked part gets its own denominator.
+      ...splitMarks(attempt.questions.map((row) => ({ state: row.state, maxMark: Number(row.maxMark) })), {
+        sumMarks: Number(attempt.sumMarks),
+        gradeOutOf: Number(attempt.gradeOutOf),
+      }),
       questions: attempt.questions.map((row) => toReviewQuestion(row, flags)),
     };
   }
@@ -833,6 +846,7 @@ export class AttemptService {
       lessonId: attempt.quiz.lessonId,
       courseId: attempt.quiz.lesson.courseId,
       userId: attempt.userId,
+      attemptState: summary.attemptState,
     };
   }
 
@@ -1029,9 +1043,15 @@ export class AttemptService {
     // It fires for an auto-graded paper too, whose score is already on screen
     // at submit. That is deliberate: the list is a record of what happened,
     // not a push, and a history with holes in it is harder to trust than one
-    // that occasionally tells you something you already knew. The case it
-    // exists FOR is `pending_review` — an attempt with an essay in it, which a
-    // student otherwise has no way to learn was marked.
+    // that occasionally tells you something you already knew.
+    //
+    // ⚠️ It is NOT, despite what this comment used to claim, how a student
+    // learns their essay was marked. It fires at SUBMIT, which is before any
+    // human has seen the paper — so on a midterm it announced «اتصحّحت ورقتك
+    // — الدرجة ٤٨٪» about fifty marks nobody had opened. `pendingOutOf` is
+    // what lets the feed say what actually happened («الاختياري اتصحّح»), and
+    // `ManualGradingService.grade` emits the row this one was pretending to
+    // be once the last answer is marked.
     await this.notifications.emit(tx, {
       userId: attempt.userId,
       kind: 'quiz_graded',
@@ -1042,6 +1062,10 @@ export class AttemptService {
           ? Math.round((summary.scaledScore / Number(attempt.gradeOutOf)) * 100)
           : 0,
       passed: summary.passed,
+      pendingOutOf: splitMarks(graded, {
+        sumMarks: Number(attempt.sumMarks),
+        gradeOutOf: Number(attempt.gradeOutOf),
+      }).pendingOutOf,
     });
 
     return { attemptId, ...summary };

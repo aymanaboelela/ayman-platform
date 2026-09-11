@@ -293,6 +293,18 @@ function AttemptRow({
   const running = attempt.state === 'in_progress';
   const marked = showPaper && attempt.counts;
 
+  /*
+   * Half this sitting is still on the instructor's desk.
+   *
+   * The row used to render the provisional total over the quiz's own — «٤٨٫٥
+   * من ١٠٠» — beside a red «محتاجة مراجعة», about a midterm whose 50 marks of
+   * essay nobody had opened. Same correction the results screen makes: the
+   * mark goes over what has actually been marked, the outstanding amount is
+   * named, and the verdict waits until there is one. See
+   * `AttemptHistoryRowSchema.pendingOutOf`.
+   */
+  const pending = attempt.pendingOutOf > 0 && attempt.scaledScore !== null;
+
   return (
     <div className={`attempt-row${marked ? ' attempt-row--counts' : ''}`}>
       <span className="attempt-row__well" aria-hidden="true">
@@ -309,15 +321,23 @@ function AttemptRow({
         <span className="attempt-row__meta">
           {attempt.scaledScore === null
             ? c.essayPending
-            : formatCopy(c.marksEarned, {
-                earned: formatMark(attempt.scaledScore),
-                max: formatMark(gradeOutOf),
-              })}
+            : pending
+              ? formatCopy(c.pendingRowMeta, {
+                  earned: formatMark(attempt.scaledScore),
+                  max: formatMark(attempt.gradedOutOf),
+                  rest: formatMark(attempt.pendingOutOf),
+                })
+              : formatCopy(c.marksEarned, {
+                  earned: formatMark(attempt.scaledScore),
+                  max: formatMark(gradeOutOf),
+                })}
           {marked ? ` · ${c.counts}` : ''}
         </span>
       </span>
 
-      {attempt.passed !== null ? (
+      {pending ? (
+        <span className="verdict verdict--pending">{c.pendingNotFinal}</span>
+      ) : attempt.passed !== null ? (
         <span className={`verdict verdict--${attempt.passed ? 'pass' : 'fail'}`}>
           {attempt.passed ? c.passed : c.failed}
         </span>

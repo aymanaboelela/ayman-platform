@@ -47,6 +47,9 @@ import { AssistantAskController } from '../modules/assistant/ai/assistant-ask.co
 import { OutreachModule } from '../modules/outreach/outreach.module';
 import { MarketingController } from '../modules/marketing/marketing.controller';
 import { WhatsappInboundController } from '../modules/marketing/whatsapp-inbound.controller';
+import { WhatsappReceiptController } from '../modules/marketing/whatsapp-receipt.controller';
+import { AdminBroadcastController } from '../modules/outreach/admin-broadcast.controller';
+import { BroadcastService } from '../modules/outreach/broadcast.service';
 import { CampaignService } from '../modules/marketing/campaign.service';
 import { AudienceService } from '../modules/marketing/audience.service';
 import { WhatsappDeviceService } from '../modules/marketing/whatsapp-device.service';
@@ -178,6 +181,16 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         AdminErrorsController,
         MarketingController,
         WhatsappInboundController,
+        // ⚠️ THIS FIXTURE IS AN EXPLICIT LIST, NOT `AppModule`.
+        //
+        // A controller that exists in production and is missing here is not
+        // "untested" — it is invisible: `enumerateRoutes()` never sees it, so
+        // the coverage assertions below pass while saying nothing, and any
+        // MATRIX row aimed at it answers 404 instead of the 401/403 it claims
+        // to be checking. Both of these were added to the product without
+        // being added here.
+        WhatsappReceiptController,
+        AdminBroadcastController,
         // Listed directly, like `ConversationAttachmentService` below, rather
         // than imported via `PaymentsModule` — that module also imports
         // `NotificationsModule`, which brings `NotificationsController` in
@@ -320,6 +333,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         FinanceService,
         BookOrdersService,
         BooksService,
+        // `AdminBroadcastController`'s dependency. Listed for the reason the
+        // block above gives: a provider a registered controller needs and
+        // that this fixture does not supply makes the module fail to compile.
+        BroadcastService,
         ExpensesService,
         FinanceOverviewService,
       ],
@@ -977,6 +994,14 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'marketing device unlink: anonymous', method: 'post', path: () => '/api/admin/marketing/device/unlink', actor: 'anonymous', status: 401 },
     { label: 'marketing device unlink: student', method: 'post', path: () => '/api/admin/marketing/device/unlink', actor: 'student', status: 403 },
 
+    // «رسالة تجربة» — `marketing:send`, the same authority as starting a
+    // campaign, because it puts a real message on a real phone. The receipt
+    // read beside it is `marketing:read`: it sends nothing.
+    { label: 'marketing test-send: anonymous', method: 'post', path: () => '/api/admin/marketing/device/test-send', actor: 'anonymous', status: 401, body: () => ({ phone: '+201000000000' }) },
+    { label: 'marketing test-send: student', method: 'post', path: () => '/api/admin/marketing/device/test-send', actor: 'student', status: 403, body: () => ({ phone: '+201000000000' }) },
+    { label: 'marketing test-send receipt: anonymous', method: 'get', path: () => '/api/admin/marketing/device/test-send/ABC123', actor: 'anonymous', status: 401 },
+    { label: 'marketing test-send receipt: student', method: 'get', path: () => '/api/admin/marketing/device/test-send/ABC123', actor: 'student', status: 403 },
+
     { label: 'marketing opt-outs: anonymous', method: 'get', path: () => '/api/admin/marketing/opt-outs', actor: 'anonymous', status: 401 },
     { label: 'marketing opt-outs: student', method: 'get', path: () => '/api/admin/marketing/opt-outs', actor: 'student', status: 403 },
     { label: 'marketing opt-outs: admin', method: 'get', path: () => '/api/admin/marketing/opt-outs', actor: 'admin', status: 200 },
@@ -1007,6 +1032,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'marketing campaign cancel: student', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}/cancel`, actor: 'student', status: 403 },
     { label: 'marketing campaign delete: anonymous', method: 'delete', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'anonymous', status: 401 },
     { label: 'marketing campaign delete: student', method: 'delete', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'student', status: 403 },
+
+    // ── «/admin/broadcast»: the instructor's own words, sent on purpose —
+    // deliberately `conversation:reply`, not `outreach:read` (see the
+    // controller's own header for why this is a separate screen from the
+    // read-only log above it, and the same permission `AdminInboxController`
+    // guards its own reply route with).
+    { label: 'broadcast recipient count: anonymous', method: 'get', path: () => '/api/admin/broadcast/recipient-count?type=all', actor: 'anonymous', status: 401 },
+    { label: 'broadcast recipient count: student', method: 'get', path: () => '/api/admin/broadcast/recipient-count?type=all', actor: 'student', status: 403 },
+    { label: 'broadcast recipient count: admin', method: 'get', path: () => '/api/admin/broadcast/recipient-count?type=all', actor: 'admin', status: 200 },
+    { label: 'broadcast send: anonymous', method: 'post', path: () => '/api/admin/broadcast', actor: 'anonymous', status: 401, body: () => ({ body: 'أهلاً', target: { type: 'all' } }) },
+    { label: 'broadcast send: student', method: 'post', path: () => '/api/admin/broadcast', actor: 'student', status: 403, body: () => ({ body: 'أهلاً', target: { type: 'all' } }) },
 
     // ── Content admin: course/section/lesson — admin-only CRUD, no per-
     // resource ownership dimension (any admin may touch any course). ──
@@ -1221,6 +1257,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'students list: admin', method: 'get', path: () => '/api/admin/students', actor: 'admin', status: 200 },
     { label: 'student detail: student', method: 'get', path: () => `/api/admin/students/${studentId}`, actor: 'student', status: 403 },
     { label: 'student detail: admin', method: 'get', path: () => `/api/admin/students/${studentId}`, actor: 'admin', status: 200 },
+    // `conversation:read`, NOT `student:read` — the payload is message bodies.
+    { label: 'student conversation: anonymous', method: 'get', path: () => `/api/admin/students/${studentId}/conversation`, actor: 'anonymous', status: 401 },
+    { label: 'student conversation: student', method: 'get', path: () => `/api/admin/students/${studentId}/conversation`, actor: 'student', status: 403 },
+    { label: 'student conversation: admin', method: 'get', path: () => `/api/admin/students/${studentId}/conversation`, actor: 'admin', status: 200 },
     { label: 'student patch: anonymous', method: 'patch', path: () => `/api/admin/students/${studentId}`, actor: 'anonymous', status: 401 },
     { label: 'student patch: student', method: 'patch', path: () => `/api/admin/students/${studentId}`, actor: 'student', status: 403 },
     { label: 'student role change: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/role`, actor: 'anonymous', status: 401 },
@@ -1970,6 +2010,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // be swallowed as an attempt id — the matrix covers both, which is what
       // makes that ordering a tested property rather than a comment.
       'GET /api/admin/grading-queue',
+      'GET /api/admin/grading-results',
       'GET /api/admin/attempts/:attemptId/grading',
       'PATCH /api/admin/attempts/:attemptId/questions/:attemptQuestionId/grade',
     ]);
@@ -2023,6 +2064,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // own shared-secret check is exercised directly in
       // `whatsapp-inbound.controller.spec.ts`.
       'POST /api/marketing/wa/inbound',
+      // The delivery-receipt relay, same actor and same shared secret — a
+      // container on the compose network, so none of anonymous/student/admin
+      // is the caller and there is no row in this file to write. Its token
+      // check and every status branch are exercised directly in
+      // `whatsapp-receipt.controller.spec.ts`.
+      'POST /api/marketing/wa/receipt',
     ]);
 
     /**
@@ -2158,6 +2205,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           // session; `x-wa-token` is the actual gate, checked inside the
           // handler rather than by a guard `enumerateRoutes()` can see.
           'POST /api/marketing/wa/inbound',
+          // The receipt relay, and public for the identical reason — same
+          // caller, same `x-wa-token`, same absence of a session. It carries
+          // less authority than the inbound route, not more: the worst a
+          // forged call achieves is stamping `deliveredAt` on a row whose
+          // WhatsApp message id the caller already had to know.
+          'POST /api/marketing/wa/receipt',
           /*
            * «التحويلات الواردة» — the Android handset that received the money,
            * forwarding each InstaPay push as it appears. Public for exactly the

@@ -36,6 +36,21 @@ export const AttemptHistoryRowSchema = z.object({
    * the two scores is null.
    */
   counts: z.boolean(),
+  /**
+   * What is still with the instructor on THIS sitting, out of `gradeOutOf` —
+   * `0` on every fully-marked one.
+   *
+   * The row read «٤٨٫٥ من ١٠٠ · محتاجة مراجعة» about a midterm whose 50 marks
+   * of essay nobody had opened yet. Same fix as the results screen: non-zero
+   * means the mark belongs over `gradedOutOf`, not over the quiz's total, and
+   * the verdict is not a verdict yet. `state === 'pending_review'` says THAT
+   * something is outstanding; this says HOW MUCH, which is the half a student
+   * actually needs in order not to read a provisional total as a near-fail.
+   */
+  pendingOutOf: z.number(),
+  /** What the marked part of this sitting is worth. Sums with `pendingOutOf`
+   *  to the quiz's `gradeOutOf`, exactly. */
+  gradedOutOf: z.number(),
 });
 
 export const BLOCKED_REASONS = ['quiz_not_open_yet', 'quiz_closed', 'no_attempts_left'] as const;

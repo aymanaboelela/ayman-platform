@@ -3,6 +3,8 @@ import {
   AdminExamDuplicateSchema,
   AdminExamPatchSchema,
   AdminGradeAnswerSchema,
+  GradingScopeSchema,
+  GradingSortSchema,
 } from '@ayman/contracts/admin/exams';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
@@ -27,3 +29,31 @@ export class AdminGradeAnswerDto extends createZodDto(AdminGradeAnswerSchema) {}
  *  PATCH settings and hit this route gets a 400 rather than an unpublish. */
 export const ExamPublishSchema = z.object({ published: z.boolean() }).strict();
 export class ExamPublishDto extends createZodDto(ExamPublishSchema) {}
+
+/**
+ * `GET /api/admin/grading-results` — «اتصحّح خلاص» و«الأوائل».
+ *
+ * Every field has a default, so the bare URL is a valid request: the screen's
+ * first load asks for nothing and gets the ranking it should open on.
+ *
+ * NOT `.strict()`, unlike every write schema here. A query string is a place
+ * where an unrelated parameter legitimately rides along (a `?tab=` the server
+ * does not care about, anything a link carries), and 400-ing a READ over one
+ * would break a bookmark rather than catch a bug.
+ *
+ * ⚠️ `sort` reaches an ORDER BY through a fixed map in the service. The enum
+ * IS the sanitisation — nothing downstream re-validates it, and nothing may be
+ * added to that map that is not in this enum.
+ */
+export const AdminGradingResultsQuerySchema = z.object({
+  scope: GradingScopeSchema.default('all'),
+  sort: GradingSortSchema.default('score'),
+  /** Narrow to one exam. `uuid()` rather than a bare string: it goes into the
+   *  query as a `::uuid` parameter, and a non-uuid would be a 500 from
+   *  Postgres rather than the 400 a bad filter deserves. */
+  lessonId: z.uuid().optional(),
+  /** `coerce`, because a query string is always text. The service clamps it
+   *  again — this bound is the contract, that one is the protection. */
+  limit: z.coerce.number().int().min(1).max(300).optional(),
+});
+export class AdminGradingResultsQueryDto extends createZodDto(AdminGradingResultsQuerySchema) {}

@@ -87,6 +87,11 @@ const admin = {
     // ── قسم التسويق — واتساب برة المنصة، لأول مرة. غير من «رسايلي للطلبة»
     // (outreach) اللي بتتبعت جوه المنصة نفسها لكل طالب بمناسبة حصلت له.
     marketing: 'التسويق',
+
+    /** The one deliberate exception to «مفيش زرار إرسال للكل» in
+     *  `outreach.settingsNote` — its own screen, so the two are never read as
+     *  the same feature. See `AdminBroadcastController`'s header. */
+    broadcast: 'رسالة للطلبة',
     // ── Sidebar group headings. The nav is eleven links long; ungrouped,
     //    it reads as one undifferentiated list and nobody scans it.
     groupTeaching: 'التدريس',
@@ -819,6 +824,49 @@ const admin = {
      *  whole point is that marking one answer moves the paper's total. */
     totalNow: 'المجموع دلوقتي {score} من {outOf}',
     open: 'صحّح',
+
+    /* ── الشاشة بقت تلات أقسام ──────────────────────────────────────────────
+     *
+     * الطابور لوحده كان بيجاوب سؤال واحد: «مين مستني؟». وبعد ما تصحّح الورقة
+     * كانت بتختفي من على الشاشة وما بتظهرش في أي مكان تاني — فمفيش طريقة
+     * تراجع درجة إديتها، ولا تشوف الفصل عمل إيه.
+     */
+    /** التبويبات. أسماء قصيرة عشان تعدّي على موبايل من غير ما تلف. */
+    tabQueue: 'محتاج تصحيح',
+    tabMarked: 'اتصحّح خلاص',
+    tabTop: 'الأوائل',
+    /** تحت كل تبويب — بيقول التبويب ده بيجاوب على إيه. */
+    leadMarked: 'الورق اللي صحّحته بإيدك. اضغط على أي ورقة تعدّل درجتها.',
+    leadTop: 'ترتيب الطلبة على الامتحانات اللي اتصحّحت. الترتيب بالنسبة المئوية عشان الامتحانات المختلفة تتقارن صح.',
+    emptyMarked: 'لسه مصحّحتش ورق.',
+    emptyTop: 'مفيش امتحانات متصحّحة لسه.',
+
+    /* ── الفلاتر ───────────────────────────────────────────────────────── */
+    filterExam: 'الامتحان',
+    filterExamAll: 'كل الامتحانات',
+    filterSort: 'الترتيب',
+    sortScore: 'الأعلى درجة',
+    sortFastest: 'الأسرع تسليم',
+    sortLatest: 'آخر واحد سلّم',
+    sortEarliest: 'أول واحد سلّم',
+    sortName: 'بالاسم',
+    filterApply: 'رتّب',
+
+    /* ── الصفوف ───────────────────────────────────────────────────────── */
+    /** `{marks}` `{outOf}` — على الطابور، جنب عدد الأسئلة. «٢ سؤال» مش بيقول
+     *  ده تقيل ولا خفيف؛ ده اللي بيقول. */
+    pendingMarks: '{marks} درجة معلّقة من {outOf}',
+    /** `{score}` `{outOf}` على صف نتيجة. */
+    rowScore: '{score} من {outOf}',
+    /** `{n}` بالدقايق. */
+    rowDuration: 'خلّص في {n} دقيقة',
+    /** `{n}` بالتواني — لأقل من دقيقة. */
+    rowDurationSeconds: 'خلّص في {n} ثانية',
+    rowHandMarked: 'صحّحتها بإيدك',
+    rowRank: '#{n}',
+    /** على اسم الطالب في أي صف — بيروح لملفه، واللي فيه المحادثة معاه. */
+    openProfile: 'ملف الطالب',
+    openPaper: 'شوف الورقة',
   },
 
   resource: {
@@ -1267,6 +1315,51 @@ const admin = {
     /** The line under the whole switch block. */
     settingsNote: 'مفيش زرار «إرسال للكل» هنا، وده مقصود: كل رسالة سببها حاجة عملها الطالب نفسه.',
   },
+  /**
+   * `/admin/broadcast` — the instructor writes the words himself, and this is
+   * the one screen where «إرسال للكل» does exist. See `outreach.settingsNote`
+   * for why it does not live there, and the controller's own header for the
+   * full reasoning.
+   */
+  broadcast: {
+    eyebrow: 'رسالة مباشرة',
+    title: 'رسالة للطلبة',
+    lead: 'اكتب رسالة بصوتك وابعتها لطالب واحد، أو لكل الطلبة دفعة واحدة. الرسالة بتوصل في نفس مكان «رسايلي للطلبة»، وبيقدر يردّ عليها.',
+
+    body: 'الرسالة',
+    bodyPlaceholder: 'اكتب اللي عايز تقوله…',
+
+    targetAll: 'كل الطلبة',
+    targetOne: 'طالب واحد',
+    /** The field label when «طالب واحد» is selected. */
+    targetSearchLabel: 'البريد الإلكتروني أو رقم الهاتف',
+    targetSearchPlaceholder: 'ابحث بالبريد أو رقم الهاتف',
+    targetSearchButton: 'دوّر',
+    targetNotFound: 'مفيش طالب بالبيانات دي.',
+    /** `{n}` — more than one match; the admin has to narrow it. */
+    targetAmbiguous: 'فيه {n} نتيجة — اكتب بريد إلكتروني كامل عشان نحدده.',
+    /** The resolved student, shown before send so a typo is caught early. */
+    targetFound: 'هيوصل لـ: {name} ({email})',
+
+    /** `{count}` — read before the confirm dialog is even pressable. */
+    recipientCountAll: 'هيوصل لـ {count} طالب.',
+    countLoading: 'بنحسب العدد…',
+
+    send: 'إرسال',
+    sending: 'بيتبعت…',
+    sentOne: 'اتبعتت.',
+    /** `{count}` — for the «كل الطلبة» path, which returns before delivery finishes. */
+    sentAll: 'جاري الإرسال لـ {count} طالب.',
+    sendFailed: 'الرسالة ما اتبعتتش. جرّب تاني.',
+
+    /** The confirm dialog before an «كل الطلبة» send — the one press this
+     *  screen exists to make sure is never an accident. */
+    confirmTitle: 'هتبعت لكل الطلبة؟',
+    /** `{count}` */
+    confirmBody: 'الرسالة هتوصل لـ {count} طالب دلوقتي. الخطوة دي مش هترجع.',
+    confirmCancel: 'رجوع',
+    confirmSend: 'أيوه، ابعت',
+  },
   branding: {
     title: 'الهوية البصرية',
     lead: 'الألوان بتتختار من مجموعة جاهزة — مفيش كتابة ألوان بإيدك.',
@@ -1298,6 +1391,24 @@ const admin = {
     clearSelection: 'إلغاء التحديد',
   },
   students: {
+    /* ── المحادثة على ملف الطالب ─────────────────────────────────────────
+     *
+     * «يبقى في البروفايل يبقى في محادثة أقدر أكلمها». الوصول للطالب من ملفه
+     * كان يعني تقرا رقمه وتفتح واتساب؛ ده القناة بتاعة المنصة نفسها — الطالب
+     * بيشوفها في نفس بانل المساعد وبيقدر يرد.
+     */
+    conversationTitle: 'المحادثة',
+    conversationEmpty: 'مفيش محادثة مع الطالب ده لسه. أول رسالة هتفتح واحدة.',
+    conversationTruncated: 'دي آخر الرسائل بس — افتح المحادثة كاملة',
+    conversationOpenFull: 'المحادثة كاملة',
+    conversationYou: 'إنت',
+    conversationStudent: 'الطالب',
+    messagePlaceholder: 'اكتب رسالتك للطالب…',
+    messageSend: 'ابعت',
+    messageSending: 'بيتبعت…',
+    messageSent: 'اتبعتت',
+    messageEmpty: 'اكتب رسالة الأول.',
+    messageFailed: 'مقدرناش نبعت — نجرّب تاني',
     columnName: 'الاسم',
     columnEmail: 'البريد الإلكتروني',
     columnPhone: 'رقم الهاتف',
@@ -3671,11 +3782,58 @@ const marketing = {
   recipientFilterSent: 'اتبعت',
   recipientFilterFailed: 'فشل',
   recipientFilterSkipped: 'اتجاهل',
+  /**
+   * The filter that would have caught 2026-09. Not a status — these rows ARE
+   * `sent`, and that is what makes them alarming.
+   */
+  recipientFilterUndelivered: 'اتبعتت وماوصلتش',
   colPhone: 'الرقم',
   colRecipientStatus: 'الحالة',
   colSentAt: 'وقت الإرسال',
+  colDeliveredAt: 'وقت الوصول',
   colError: 'السبب',
   noName: 'من غير اسم',
+
+  /**
+   * `{n}` — how many of the sent messages a DEVICE actually acknowledged.
+   *
+   * Shown beside «اتبعت» and never instead of it, because the gap between the
+   * two is the whole point: «٧٤ من ٧٤» said nothing about whether anybody got
+   * anything, and for one campaign the honest reading of it was «صفر».
+   */
+  deliveredLabel: 'وصلت {n}',
+  /** Shown when a campaign has sent messages and not one has been acknowledged. */
+  deliveredNone: '⚠️ ولا رسالة وصلت لحد',
+  /** `paused_reason` — why the runner stopped on its own. */
+  pausedReasonTitle: 'الحملة وقفت لوحدها',
+
+  // ── «رسالة تجربة» ──────────────────────────────────────────────────────
+  testSendTitle: 'رسالة تجربة',
+  testSendLead:
+    'ابعت رسالة واحدة لرقم انت مختاره قبل ما تشغّل حملة على آلاف. لو الرسالة مستقرة على صح واحدة، الحملة كلها هتعمل نفس الحاجة.',
+  testSendPhone: 'الرقم',
+  testSendText: 'نص الرسالة (اختياري)',
+  testSendButton: 'ابعت التجربة',
+  testSendSending: 'بيبعت…',
+  testSendNotOnWhatsapp: 'الرقم ده مش على واتساب أصلاً — مابعتناش حاجة.',
+  testSendQueued: 'الرسالة اتبعتت. واتساب استلمها — وبنستنى دلوقتي نعرف وصلت لحد ولا لأ.',
+  /** The answer everybody is here for. */
+  testSendDelivered: '✅ وصلت للجهاز. الإرسال شغال.',
+  testSendRead: '✅ وصلت واتقرت.',
+  testSendRefused: '❌ واتساب رفض الرسالة.',
+  /**
+   * Deliberately NOT «فشلت». No receipt yet is the correct state for hours if
+   * the phone is off, and calling it failure is the same mistake as calling
+   * «اتبعت» delivery.
+   */
+  testSendPending: 'لسه ماجاش خبر. لو الرقم مقفول ده طبيعي — استنى وجرب تعرف تاني.',
+  testSendCheckAgain: 'اعرف وصلت ولا لأ',
+  /**
+   * The LID line. Shown only when WhatsApp hands one back, because when it
+   * does AND the message stays on one tick, that is the diagnosis.
+   */
+  testSendLid: 'الرقم ده عنده LID: {lid}',
+  testSendNoLid: 'الرقم ده لسه على العنونة بالرقم (من غير LID).',
 
   // ── opt-outs ──────────────────────────────────────────────────────────
   optOutsTitle: 'طلبوا الإيقاف',

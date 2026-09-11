@@ -11,6 +11,7 @@ import makeWASocket, {
 import pino from 'pino';
 import QRCode from 'qrcode';
 import { ConnectWatchdog } from './connect-watchdog.mjs';
+import { ERROR_CODES, ReceiptStore, STATUS, statusFromReceipt } from './receipt-store.mjs';
 import { waitForLinkProgress } from './link-wait.mjs';
 
 /**
@@ -26,13 +27,40 @@ const PORT = Number(process.env.WA_PORT ?? 3400);
 const TOKEN = process.env.WA_TOKEN ?? '';
 const AUTH_DIR = process.env.WA_AUTH_DIR ?? './.wa-auth';
 const INBOUND_URL = process.env.WA_INBOUND_URL ?? '';
+/**
+ * Where delivery receipts go. Optional in the same way `WA_INBOUND_URL` is —
+ * an unset one leaves the sidecar sending exactly as before, it does not
+ * break it.
+ *
+ * ⚠️ Unset in production is the state this whole file exists to escape: with
+ * nothing here, `sendMessage` resolving is again the only signal, the API
+ * again records `sent` for a message WhatsApp accepted and never delivered,
+ * and the campaign screen again reports «٧٤ من ٧٤» for a run that reached
+ * nobody. Set it.
+ */
+const RECEIPT_URL = process.env.WA_RECEIPT_URL ?? '';
 
 if (!TOKEN) {
   console.error('WA_TOKEN is required — refusing to start an unauthenticated sender');
   process.exit(1);
 }
 
-const logger = pino({ level: process.env.WA_LOG_LEVEL ?? 'warn' });
+/**
+ * Two levels, deliberately, and `info` is the default for OURS.
+ *
+ * This service sends at most a couple of hundred messages a day, and the
+ * lesson of 2026-09 is that its logs were the only place the truth could have
+ * been and nobody had written anything there. One line per send costs nothing
+ * and is the first thing anybody will look for after the next silent failure.
+ *
+ * Baileys keeps `warn`: at `info` the library narrates every handshake, every
+ * app-state sync and every receipt, which would bury our own lines in exactly
+ * the log somebody is grepping. `warn` still carries the one Baileys line that
+ * matters most — `handleBadAck`'s «received error in ack», which is where
+ * WhatsApp's refusal codes come out.
+ */
+const logger = pino({ level: process.env.WA_LOG_LEVEL ?? 'info' });
+const baileysLogger = logger.child({}, { level: process.env.WA_BAILEYS_LOG_LEVEL ?? 'warn' });
 
 /** `disconnected` | `linking` | `connected`. Mirrors the contract's enum. */
 let state = 'disconnected';
@@ -172,6 +200,21 @@ function forceReset(reason) {
 const sent = new SentStore();
 
 /**
+ * The highest status WhatsApp has reported for each message we sent.
+ *
+ * Outside `connect()` for the same reason `sent` is: receipts for a message
+ * keep arriving across a reconnect — a recipient whose phone was off when we
+ * sent acks hours later, through whatever socket is current by then — and a
+ * map that forgot on every reconnect would relay those as if they were new,
+ * or lose the ordering that stops a late receipt walking a row backwards.
+ *
+ * Not durable, and deliberately so: the API is the record. A receipt that
+ * arrives after a restart is simply relayed again, and the API's
+ * highest-status-wins makes that a no-op.
+ */
+const receipts = new ReceiptStore();
+
+/**
  * A single in-flight send at a time.
  *
  * The API already serialises campaigns, but nothing stops an operator from
@@ -216,7 +259,7 @@ async function connect() {
     sock = makeWASocket({
       version,
       auth,
-      logger,
+      logger: baileysLogger,
       // Never true: this process has no terminal anybody is reading, and the
       // QR is served over HTTP to the admin screen instead.
       printQRInTerminal: false,
@@ -321,6 +364,19 @@ async function connect() {
     });
 
     if (INBOUND_URL) sock.ev.on('messages.upsert', onIncoming);
+
+    // ⚠️ THE SECOND TICK. Registered per socket, because `connect()` builds a
+    // new one on every reconnect and a listener bound to a dead socket hears
+    // nothing — which is precisely how this could have been "added" and still
+    // report nothing after the first drop.
+    //
+    // Baileys has always parsed these; nothing was subscribed to them. See
+    // `receipt-store.mjs` for why they are deduplicated before being relayed
+    // rather than forwarded one for one.
+    if (RECEIPT_URL) {
+      sock.ev.on('messages.update', onStatusUpdates);
+      sock.ev.on('message-receipt.update', onReceiptUpdates);
+    }
   })();
 
   try {
@@ -373,6 +429,92 @@ async function onIncoming({ messages, type }) {
   }
 }
 
+/**
+ * Tells the API what actually happened to a message after it left.
+ *
+ * ## Why this is the most important listener in the file
+ *
+ * Without it the only success signal this service produces is
+ * `sendMessage()` resolving — which means WhatsApp's servers took custody of
+ * the stanza and nothing more. ONE GREY TICK. For as long as that was the
+ * only signal, the API wrote `status: 'sent'` for messages that were accepted
+ * by WhatsApp and delivered to nobody, and the campaign screen reported those
+ * runs as «٧٤ من ٧٤ · اتبعت · ٠ فشل» — indistinguishable from a perfect one.
+ * The failure was eventually found by a human looking at his own phone.
+ *
+ * ## Best effort, and that is deliberate
+ *
+ * A receipt that fails to relay is logged and dropped, exactly like the
+ * inbound relay above: the next receipt for the same message carries the same
+ * information, the API's own merge is highest-status-wins so a repeat is
+ * harmless, and a retry storm against the API is worse than a missed tick.
+ *
+ * @param {number} status a `STATUS` value
+ */
+async function relayReceipt(id, status, code = null) {
+  const news = receipts.observe(id, status);
+  if (news === null) return;
+
+  // ⚠️ A refusal without its code is barely better than no refusal at all.
+  // «واتساب رفضها» leaves whoever reads the campaign screen exactly as stuck
+  // as «اتبعت» did; `463` tells them the account is blocked from starting new
+  // chats, which is an answer. Logged at warn as well as relayed, because this
+  // is also the line somebody will go looking for in `docker logs`.
+  if (news === STATUS.ERROR) {
+    logger.warn({ messageId: id, code }, 'whatsapp refused a message');
+  }
+
+  try {
+    await fetch(RECEIPT_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-wa-token': TOKEN },
+      body: JSON.stringify({
+        messageId: id,
+        status: news,
+        code,
+        // Translated here rather than in the API: this file is where the
+        // library's own vocabulary lives, and the API should not have to know
+        // what a Baileys stub parameter is.
+        detail: code ? (ERROR_CODES[code] ?? `واتساب رفض الرسالة (${code}).`) : null,
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch (error) {
+    logger.warn({ err: error, messageId: id, status: news }, 'receipt relay failed');
+  }
+}
+
+/**
+ * `messages.update` — a numeric status, and on a refusal the code that says why.
+ *
+ * `handleBadAck` puts WhatsApp's literal error code into
+ * `messageStubParameters`. It is the one field that names the failure, and
+ * dropping it would have shipped a fix that changed «٧٤ من ٧٤ · اتبعت» into
+ * «٧٤ فشل» without ever saying the word 463.
+ */
+async function onStatusUpdates(updates) {
+  for (const entry of updates ?? []) {
+    // Only our own messages have a delivery status worth reporting; an update
+    // on an inbound message is somebody else's read receipt, not ours.
+    if (entry?.key?.fromMe === false) continue;
+    const code = entry?.update?.messageStubParameters?.[0];
+    await relayReceipt(entry?.key?.id, entry?.update?.status, code ? String(code) : null);
+  }
+}
+
+/**
+ * `message-receipt.update` — timestamps rather than a status, and the event
+ * that actually fires for a 1:1 recipient's own devices.
+ */
+async function onReceiptUpdates(updates) {
+  for (const entry of updates ?? []) {
+    if (entry?.key?.fromMe === false) continue;
+    const status = statusFromReceipt(entry?.receipt);
+    if (status === null) continue;
+    await relayReceipt(entry?.key?.id, status);
+  }
+}
+
 async function send({ phone: to, text, imageUrl }) {
   if (state !== 'connected' || !sock) throw new Error('device is not connected');
 
@@ -381,8 +523,30 @@ async function send({ phone: to, text, imageUrl }) {
   // Ask WhatsApp whether the number has an account before composing anything
   // at it. A send to a non-existent number is not merely wasted — repeated
   // ones are one of the signals that get a number flagged.
-  const [check] = await sock.onWhatsApp(jid);
+  //
+  // `?? []` is not defensive dressing: this query returns an EMPTY list when
+  // WhatsApp answers nothing at all — a momentary server-side hiccup, not a
+  // verdict about the number — and destructuring that bare used to throw a
+  // TypeError out of `/send`, which the API reports to the operator as a
+  // device fault.
+  const [check] = (await sock.onWhatsApp(jid)) ?? [];
   if (!check?.exists) return { messageId: null, onWhatsApp: false };
+
+  // ⚠️ KEEP THE WHOLE ANSWER. `check` is `{ jid, exists, lid }`, and all three
+  // were being thrown away here for as long as this function existed.
+  //
+  // The `lid` is WhatsApp's Linked Identity for the account. It is REPORTED,
+  // never addressed — sending to a `@lid` from a 6.x client, which has no
+  // LID↔PN mapping of its own, is not a fix but a different guess.
+  //
+  // It is kept because it costs nothing and it is the kind of fact that is
+  // impossible to obtain retroactively. It is NOT the leading explanation for
+  // «الرسايل بتتبعت وماحدش بيستلمها»: LID migration is per-account and
+  // gradual, so it would break delivery for SOME recipients, and what was
+  // actually observed was every single one. The explanation that fits a
+  // uniform failure is in `receipt-store.mjs`'s `ERROR_CODES` — a `463` nack,
+  // which is about this account's permission to start new chats and has
+  // nothing to do with who the recipient is.
 
   // Two small human tells, in the right order: read the chat, then appear to
   // type for a moment proportional to the message. Cheap, and the alternative
@@ -397,10 +561,28 @@ async function send({ phone: to, text, imageUrl }) {
     : { text };
 
   const message = await sock.sendMessage(jid, payload);
+
+  // Info, not debug: the container runs at `warn` by default, and these three
+  // fields are the ones somebody reading `docker logs` after the next silent
+  // failure will wish had been written down. They are cheap — one line per
+  // message, on a service that sends at most a couple of hundred a day.
+  logger.info(
+    { messageId: message?.key?.id ?? null, jid, serverJid: check.jid ?? null, lid: check.lid ?? null },
+    'sent',
+  );
   // Recorded before returning, not after: the caller logs the send and moves
   // on, and a retry receipt can land while it is still doing that.
   sent.remember(message?.key?.id, message?.message);
-  return { messageId: message?.key?.id ?? null, onWhatsApp: true };
+  return {
+    messageId: message?.key?.id ?? null,
+    onWhatsApp: true,
+    /** What we addressed. */
+    jid,
+    /** What WhatsApp says the canonical address is — normally the same. */
+    serverJid: check.jid ?? null,
+    /** Non-null means this account has migrated to LID addressing. */
+    lid: check.lid ?? null,
+  };
 }
 
 // ── HTTP ─────────────────────────────────────────────────────────────────
@@ -516,6 +698,21 @@ const server = createServer((request, response) => {
           return;
         }
         json(response, 200, { ok: true });
+        return;
+      }
+
+      case 'GET /receipt': {
+        // What WhatsApp has said about ONE message so far — the endpoint that
+        // makes a test send conclusive instead of a thing somebody has to
+        // squint at on a phone. `null` means nothing has come back yet, which
+        // for a recipient who is online resolves within seconds and for one
+        // whose phone is off can legitimately take hours.
+        const id = url.searchParams.get('id') ?? '';
+        if (!id) {
+          json(response, 400, { error: 'id is required' });
+          return;
+        }
+        json(response, 200, { messageId: id, status: receipts.get(id) ?? null });
         return;
       }
 

@@ -22,7 +22,8 @@ import {
 import { formatCopy } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
 import { z } from 'zod';
-import { AdminApiError, adminSend } from '@/lib/admin-api';
+import { BroadcastResponseSchema } from '@ayman/contracts/outreach/broadcast';
+import { AdminApiError, adminSend, adminSendVoid } from '@/lib/admin-api';
 
 export type ActionResult = { ok: true } | { ok: false; message: string };
 
@@ -432,4 +433,59 @@ function describeBlockers(payload: unknown): string {
   if (newsPosts > 0) parts.push(formatCopy(c.deleteBlockedNews, { n: String(newsPosts) }));
 
   return formatCopy(c.deleteBlocked, { items: parts.join(' و') });
+}
+
+/**
+ * «ابعت رسالة» from a student's own record.
+ *
+ * ## Two endpoints, one control
+ *
+ * A thread this student already has is replied to through the inbox's own
+ * route, so the message lands in the conversation they are actually reading
+ * — the one where their question is. When there is no thread,
+ * `/api/admin/broadcast` with a `user` target creates one
+ * (`OutreachService.sendManual`), which is the same path «رسايلي للطلبة»
+ * uses and the only one that can.
+ *
+ * Sending the first message through `reply` is not an option (there is no id
+ * to reply to) and sending every message through `broadcast` is not either:
+ * `threadFor` only ever resolves the `outreach` thread, so a student who had
+ * asked المساعد a question would get his answer in a SECOND conversation
+ * beside the one they asked in.
+ *
+ * Both emit the notification the student needs to know it arrived — that is
+ * the point of using the platform's channel rather than WhatsApp.
+ */
+export async function messageStudentAction(
+  userId: string,
+  conversationId: string | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const body = String(formData.get('body') ?? '').trim();
+  if (body.length === 0) return { ok: false, message: copy.admin.students.messageEmpty };
+
+  try {
+    if (conversationId) {
+      // ⚠️ `{ message }`, not `{ body }` — the two endpoints disagree and
+      // `ReplySchema` is `.strict()`, so the wrong key is a 400 that surfaces
+      // as «مقدرناش نبعت» with nothing on the screen to explain it.
+      await adminSendVoid('POST', `/api/admin/conversations/${conversationId}/reply`, {
+        message: body,
+      });
+    } else {
+      await adminSend(
+        'POST',
+        '/api/admin/broadcast',
+        { body, target: { type: 'user', userId } },
+        BroadcastResponseSchema,
+      );
+    }
+    revalidatePath(`/admin/students/${userId}`);
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof AdminApiError ? error.message : copy.admin.students.messageFailed,
+    };
+  }
 }

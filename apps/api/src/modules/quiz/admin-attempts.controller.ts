@@ -5,7 +5,7 @@ import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/curre
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { ATTEMPT_SORTS, type AdminAttemptSort, AttemptAdminService } from './attempt-admin.service';
 import { GrantExtraTimeDto, ReopenAttemptDto } from './dto/attempt-admin.dto';
-import { AdminGradeAnswerDto } from './dto/exam.dto';
+import { AdminGradeAnswerDto, AdminGradingResultsQueryDto } from './dto/exam.dto';
 import { ManualGradingService } from './manual-grading.service';
 
 /**
@@ -149,6 +149,29 @@ export class AdminAttemptsController {
   @Get('grading-queue')
   gradingQueue() {
     return this.grading.queue();
+  }
+
+  /**
+   * «اتصحّح خلاص» و«الأوائل» — the two sections the grading screen was missing.
+   *
+   * Another literal segment, and it is registered here beside `grading-queue`
+   * for the same reason: both must be matched before anything shaped like
+   * `attempts/:id`.
+   *
+   * The three query parameters are parsed by Zod rather than read as raw
+   * strings — `sort` in particular reaches an ORDER BY, and the service keys a
+   * fixed map with it. A value that has not been through the enum must never
+   * get that far, so the validation is the DTO's job and not a cast.
+   */
+  @RequirePermission('attempt:grade')
+  @Get('grading-results')
+  gradingResults(@Query() query: AdminGradingResultsQueryDto) {
+    return this.grading.results({
+      scope: query.scope,
+      sort: query.sort,
+      lessonId: query.lessonId,
+      limit: query.limit,
+    });
   }
 
   @RequirePermission('attempt:grade')

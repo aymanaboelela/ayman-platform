@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 // `/copy/admin`, never the root barrel — this only renders inside /admin.
 import { copy } from '@ayman/contracts/copy/admin';
 import type { AdminGradingAttempt } from '@ayman/contracts/admin/exams';
@@ -57,8 +58,18 @@ export function GradingPaper({ attempt, submittedAtLabel }: GradingPaperProps) {
   return (
     <>
       <header className="rounded-xl border border-line bg-surface-2 p-4 sm:p-5">
+        {/* The name is the way into the student's record — which is where
+            the conversation with them is. A marking screen is exactly where
+            "who is this, and can I say something to them" comes up, and the
+            answer used to be "copy the name into /admin/students". */}
         <h1 className="text-[length:var(--fs-title-3)] font-semibold text-fg">
-          {attempt.studentName}
+          <Link
+            href={`/admin/students/${attempt.studentUserId}`}
+            title={c.openProfile}
+            className="underline-offset-4 hover:underline"
+          >
+            {attempt.studentName}
+          </Link>
         </h1>
         <p className="mt-0.5 text-[length:var(--fs-text-sm)] text-fg">{attempt.quizTitle}</p>
         {submittedAtLabel ? (

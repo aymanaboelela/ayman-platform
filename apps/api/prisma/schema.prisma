@@ -4088,6 +4088,14 @@ model MarketingCampaign {
 
   startedAt   DateTime? @map("started_at")
   finishedAt  DateTime? @map("finished_at")
+  /// Why the runner paused this campaign on its own, when it did.
+  ///
+  /// NULL for a campaign a human paused — that needs no explanation, they
+  /// pressed the button. This exists for the pauses nobody asked for, and
+  /// above all for the one that matters: «بعتنا كذا رسالة ومحدش استلم ولا
+  /// واحدة». A campaign that stops itself and cannot say why reads as a bug
+  /// in the runner, which is how an operator learns to press resume.
+  pausedReason String?  @map("paused_reason") @db.VarChar(200)
   createdById String?   @map("created_by_id")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
@@ -4127,6 +4135,21 @@ model MarketingRecipient {
   /// Truncated device error, for the failures list. Never shown to a student.
   error      String?                 @db.VarChar(300)
 
+  /// WhatsApp's own id for the message, so a delivery receipt arriving later —
+  /// out of band, on its own connection — can find the row that sent it. The
+  /// sidecar has always returned this and the runner used to drop it.
+  messageId   String?   @map("message_id") @db.VarChar(64)
+  /// When WhatsApp said the message reached a DEVICE, not merely its servers.
+  ///
+  /// ⚠️ `status = 'sent'` IS NOT DELIVERY, and reading it as such is the bug
+  /// this column exists to make impossible. `sent` records that
+  /// `sock.sendMessage` resolved — which is one grey tick, the server taking
+  /// custody. A campaign in which WhatsApp accepted every message and
+  /// delivered none looked byte-identical to a perfect run: «٧٤ من ٧٤ · اتبعت،
+  /// ٠ فشل». This is the second tick, and it is the only column that can tell
+  /// the two apart.
+  deliveredAt DateTime? @map("delivered_at")
+
   campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   user     User?             @relation("MarketingRecipientUser", fields: [userId], references: [id], onDelete: SetNull)
 
@@ -4136,6 +4159,8 @@ model MarketingRecipient {
   @@unique([campaignId, phone])
   /// The runner's only query: the next pending row of a running campaign.
   @@index([campaignId, status, position])
+  /// The receipt route's only query: which row sent this WhatsApp message id.
+  @@index([messageId])
   @@map("marketing_recipients")
   @@schema("app")
 }

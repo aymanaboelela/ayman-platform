@@ -87,6 +87,21 @@ export interface ReviewUnlocked {
   /** So the results screen can render "درجة النجاح X%" (the pass line). */
   passPercent: number;
   passed: boolean | null;
+  /**
+   * What is still with the instructor, out of `gradeOutOf` — `0` on a paper
+   * with nothing left to mark, which is every auto-marked quiz.
+   *
+   * Non-zero means `scaledScore` is PROVISIONAL and `gradeOutOf` is the wrong
+   * denominator to put it over: the marked part is worth `gradedOutOf`, and
+   * the rest is an amount still coming rather than marks the student lost.
+   * See `mark-split.ts` (API) for why it is derived rather than stored, and
+   * `<ResultHeader>` for what it renders as.
+   */
+  pendingOutOf: number;
+  /** What the already-marked part is worth. `gradedOutOf + pendingOutOf`
+   *  equals `gradeOutOf` exactly — the pending share is rounded and this is
+   *  the remainder, never a second independent rounding. */
+  gradedOutOf: number;
   questions: ReviewQuestion[];
 }
 

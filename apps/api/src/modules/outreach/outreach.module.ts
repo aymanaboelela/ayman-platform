@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { SettingsModule } from '../admin/settings/settings.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { AdminBroadcastController } from './admin-broadcast.controller';
 import { AdminOutreachController } from './admin-outreach.controller';
+import { BroadcastService } from './broadcast.service';
 import { OutreachLogService } from './outreach-log.service';
 import { OutreachSweeper } from './outreach-sweeper.service';
 import { OutreachService } from './outreach.service';
@@ -17,11 +19,11 @@ import { OutreachService } from './outreach.service';
  */
 @Module({
   imports: [NotificationsModule, SettingsModule],
-  controllers: [AdminOutreachController],
+  controllers: [AdminOutreachController, AdminBroadcastController],
   // `OutreachSweeper` is injected into `OutreachLogService` as well as being
   // a cron host: the admin screen shows the activation floor, and that rule
   // lives with the sweeps it constrains rather than being restated here.
-  providers: [OutreachService, OutreachLogService, OutreachSweeper],
+  providers: [OutreachService, OutreachLogService, OutreachSweeper, BroadcastService],
   exports: [OutreachService],
 })
 export class OutreachModule {}

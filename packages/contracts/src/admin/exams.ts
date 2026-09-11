@@ -243,6 +243,10 @@ export const AdminGradingRowSchema = z.object({
 
 export const AdminGradingAttemptSchema = z.object({
   attemptId: z.uuid(),
+  /** Whose paper it is, as an ACCOUNT — so the name at the top of the marking
+   *  screen is a way into their record, which is where the conversation with
+   *  them lives. «أضغط عليها أروح البروفايل بتاعها». */
+  studentUserId: z.string(),
   studentName: z.string(),
   quizTitle: z.string(),
   submittedAt: z.iso.datetime().nullable(),
@@ -259,12 +263,85 @@ export const AdminGradingQueueSchema = z.object({
   rows: z.array(
     z.object({
       attemptId: z.uuid(),
+      /**
+       * Who wrote it, as an ACCOUNT and not only a name.
+       *
+       * The queue named the student and stopped there, so the one question the
+       * screen provokes — "who is this, and can I say something to them" — had
+       * no answer on it: the name had to be copied into `/admin/students`
+       * and searched for. Every row is now a link to that person's record,
+       * which is where the conversation with them lives.
+       */
+      studentUserId: z.string(),
       studentName: z.string(),
       quizTitle: z.string(),
       lessonId: z.uuid(),
       submittedAt: z.iso.datetime().nullable(),
       pendingCount: z.number().int().positive(),
+      /** How many MARKS are riding on those questions, out of the paper's
+       *  total. «٢ سؤال» does not say whether this is worth two marks or
+       *  fifty, and on a midterm it is fifty. */
+      pendingMarks: z.number(),
+      gradeOutOf: z.number(),
     }),
   ),
 });
 export type AdminGradingQueue = z.infer<typeof AdminGradingQueueSchema>;
+
+/**
+ * ── «اتصحّح خلاص» و«الأوائل» ─────────────────────────────────────────────────
+ *
+ * The two sections the grading screen was missing. Marking a paper made it
+ * vanish off the queue and turn up nowhere — «تروح التصحيح بتاعته لمكان تاني
+ * للناس اللي تصحح لهم ودرجات كل الناس» — so there was no way to check a mark
+ * you had just given, revise it, or see how the cohort actually did.
+ *
+ * One row shape serves both, because they are the same fact ordered two ways:
+ * a finished sitting, who sat it, and what it came to.
+ */
+export const GRADING_SORTS = ['score', 'fastest', 'latest', 'earliest', 'name'] as const;
+export const GradingSortSchema = z.enum(GRADING_SORTS);
+export type GradingSort = (typeof GRADING_SORTS)[number];
+
+/** `marked` — papers a human actually marked. `all` — every finished sitting,
+ *  which is what a ranking has to be drawn from. */
+export const GRADING_SCOPES = ['marked', 'all'] as const;
+export const GradingScopeSchema = z.enum(GRADING_SCOPES);
+export type GradingScope = (typeof GRADING_SCOPES)[number];
+
+export const AdminGradedRowSchema = z.object({
+  attemptId: z.uuid(),
+  studentUserId: z.string(),
+  studentName: z.string(),
+  quizTitle: z.string(),
+  lessonId: z.uuid(),
+  submittedAt: z.iso.datetime().nullable(),
+  /**
+   * Start to submit, in seconds — «أشوف مين أسرع حد».
+   *
+   * Computed from the attempt's OWN `started_at`/`submitted_at` and not from
+   * the quiz's duration: a paper can be resumed, and the figure that means
+   * something is how long this person actually took. Null on a sitting with no
+   * submission stamp (an abandoned one), which is also why it is nullable
+   * rather than 0 — «٠ ثانية» would sort to the top of «الأسرع».
+   */
+  durationSeconds: z.number().int().nonnegative().nullable(),
+  scaledScore: z.number().nullable(),
+  gradeOutOf: z.number(),
+  /** `scaledScore / gradeOutOf`, server-side, so the ranking compares two
+   *  papers marked out of different totals correctly. */
+  percent: z.number().min(0).max(100).nullable(),
+  passed: z.boolean().nullable(),
+  /** Whether a human marked at least one answer on this paper — what puts it
+   *  in «اتصحّح خلاص» rather than merely in the ranking. */
+  handMarked: z.boolean(),
+});
+export type AdminGradedRow = z.infer<typeof AdminGradedRowSchema>;
+
+export const AdminGradingResultsSchema = z.object({
+  rows: z.array(AdminGradedRowSchema),
+  /** Every exam with at least one finished sitting — the filter's options,
+   *  sent with the rows so the control never needs a second request. */
+  exams: z.array(z.object({ lessonId: z.uuid(), title: z.string() })),
+});
+export type AdminGradingResults = z.infer<typeof AdminGradingResultsSchema>;

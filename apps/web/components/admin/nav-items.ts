@@ -20,6 +20,7 @@ import {
   Users,
   type LucideIcon,
   Megaphone,
+  MessagesSquare,
   Newspaper,
   NotebookPen,
   PackageOpen,
@@ -201,6 +202,22 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.outreach,
     icon: Send,
     permission: 'outreach:read',
+    group: 'teaching',
+  },
+  {
+    // The one deliberate exception to «مفيش زرار إرسال للكل» — its own link,
+    // its own icon, right beside the automated log so the two are never
+    // mistaken for one feature. `conversation:reply`, the same authority
+    // `AdminInboxController` already guards a reply with.
+    //
+    // NOT `Megaphone`: «التسويق» below already owns that icon, and these two
+    // are the pair most worth telling apart at a glance — one writes into a
+    // conversation the student already has with the instructor, the other
+    // sends a message out to a phone.
+    href: '/admin/broadcast',
+    labelAr: copy.admin.nav.broadcast,
+    icon: MessagesSquare,
+    permission: 'conversation:reply',
     group: 'teaching',
   },
   {

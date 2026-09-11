@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UsePipes } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import type {
   AudiencePreview,
@@ -6,21 +17,33 @@ import type {
   CampaignRow,
   OptOutRow,
   RecipientRow,
+  TestSendReceipt,
+  TestSendResult,
   WhatsappDevice,
 } from '@ayman/contracts/marketing/campaign';
-import { RECIPIENT_STATUSES, type RecipientStatus } from '@ayman/contracts/marketing/campaign';
+import { RECIPIENT_FILTERS, type RecipientFilter } from '@ayman/contracts/marketing/campaign';
+import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { RequireCsrf } from '../security/require-csrf.decorator';
 import { AuditService } from '../../audit/audit.service';
 import { CampaignService } from './campaign.service';
-import { WhatsappDeviceService } from './whatsapp-device.service';
+import { NotOnWhatsAppError, WhatsappDeviceService, type SendResult } from './whatsapp-device.service';
 import {
   AudiencePreviewDto,
   CampaignCreateDto,
   CampaignPatchDto,
   OptOutCreateDto,
+  TestSendDto,
 } from './marketing.dto';
+
+/**
+ * What a test message says when the operator does not write one.
+ *
+ * It names the platform and says it is a test, because the recipient is a real
+ * person whose phone just buzzed for the instructor's debugging.
+ */
+const DEFAULT_TEST_TEXT = 'رسالة تجربة من منصة م. أيمن أبو العلا — لو وصلتك، الرسايل شغالة تمام ✅';
 
 /**
  * `/api/admin/marketing` — the only way into the campaign machinery.
@@ -81,6 +104,82 @@ export class MarketingController {
       metadata: { state: status.state },
     });
     return status;
+  }
+
+  /**
+   * «ابعت رسالة تجربة» — one message to one number, and the truth about it.
+   *
+   * `marketing:send`, the permission that already gates starting a campaign,
+   * because this puts a real message on a real stranger's phone. NOT
+   * `marketing:read`.
+   *
+   * The number is normalised through the same parser the audience uses, so a
+   * test cannot accidentally exercise a code path campaigns never take — that
+   * would make a green test meaningless.
+   *
+   * Deliberately NOT opt-out-checked: «قف» means stop marketing to me, and a
+   * test send is the instructor diagnosing his own sender against a number he
+   * chose. It IS audited, for exactly that reason.
+   */
+  @RequirePermission('marketing:send')
+  @RequireCsrf()
+  @Post('device/test-send')
+  async testSend(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: TestSendDto,
+  ): Promise<TestSendResult> {
+    const phone = normalizeEgyptianPhone(body.phone);
+    if (!phone) throw new BadRequestException('الرقم ده مش رقم مصري صحيح');
+
+    let result: SendResult;
+    try {
+      result = await this.device.send({ phone, text: body.text ?? DEFAULT_TEST_TEXT });
+    } catch (error) {
+      if (error instanceof NotOnWhatsAppError) {
+        await this.audit.record({
+          action: 'whatsapp:test-send',
+          resourceType: 'whatsapp_device',
+          resourceId: null,
+          outcome: 'failure',
+          actorUserId: user.id,
+          metadata: { phone, reason: 'not-on-whatsapp' },
+        });
+        return { messageId: null, onWhatsApp: false, jid: null, serverJid: null, lid: null };
+      }
+      throw error;
+    }
+
+    await this.audit.record({
+      action: 'whatsapp:test-send',
+      resourceType: 'whatsapp_device',
+      resourceId: null,
+      outcome: 'success',
+      actorUserId: user.id,
+      // `lid` is recorded because it is the whole point of the exercise: a
+      // week from now, "did that number have a LID" is the question somebody
+      // will wish had been written down.
+      metadata: { phone, messageId: result.messageId, lid: result.lid ?? null },
+    });
+
+    return {
+      messageId: result.messageId,
+      onWhatsApp: true,
+      jid: result.jid ?? null,
+      serverJid: result.serverJid ?? null,
+      lid: result.lid ?? null,
+    };
+  }
+
+  /**
+   * Has that test message reached a device yet?
+   *
+   * `marketing:read` — this reads a status, it does not send anything. Polled
+   * by the device screen for a short while after a test send.
+   */
+  @RequirePermission('marketing:read')
+  @Get('device/test-send/:messageId')
+  testSendReceipt(@Param('messageId') messageId: string): Promise<TestSendReceipt> {
+    return this.device.receipt(messageId);
   }
 
   @RequirePermission('marketing:device')
@@ -154,8 +253,8 @@ export class MarketingController {
   @RequirePermission('marketing:read')
   @Get('campaigns/:id/recipients')
   recipients(@Param('id') id: string, @Query('status') status?: string): Promise<RecipientRow[]> {
-    const parsed = RECIPIENT_STATUSES.includes(status as RecipientStatus)
-      ? (status as RecipientStatus)
+    const parsed = RECIPIENT_FILTERS.includes(status as RecipientFilter)
+      ? (status as RecipientFilter)
       : 'all';
     return this.campaigns.recipients(id, parsed);
   }

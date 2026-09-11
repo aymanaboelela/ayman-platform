@@ -225,7 +225,12 @@ services:
       WA_AUTH_DIR: /var/lib/ayman/wa
       # الردود الواردة بتترمي هنا عشان «قف» توقّف الحملة فعلاً. داخلي.
       WA_INBOUND_URL: http://api:3300/api/marketing/wa/inbound # gitleaks:allow — an internal route path, not a secret
-      WA_LOG_LEVEL: ${WA_LOG_LEVEL:-warn}
+      # ⚠️ إيصالات التسليم. من غير السطر ده الخدمة بترجع تقول «اتبعتت» أول ما
+      # سيرفرات واتساب تستلم الرسالة — صح واحدة — وده بالظبط اللي خلّى حملة
+      # ماوصلتش لحد تتقري «٧٤ من ٧٤ · اتبعت · ٠ فشل». داخلي.
+      WA_RECEIPT_URL: http://api:3300/api/marketing/wa/receipt # gitleaks:allow — an internal route path, not a secret
+      WA_LOG_LEVEL: ${WA_LOG_LEVEL:-info}
+      WA_BAILEYS_LOG_LEVEL: ${WA_BAILEYS_LOG_LEVEL:-warn}
     volumes:
       # ⚠️ الأهم في الملف ده. بيانات الاقتران هنا — من غير الـ volume كل نشرة
       # بتفصل الرقم وتطلب مسح QR من تاني.

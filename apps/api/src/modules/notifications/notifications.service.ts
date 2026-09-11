@@ -23,7 +23,17 @@ import { deliveryDaysFor } from '../book-orders/delivery-days';
  * for something that has no lesson.
  */
 export type EmitInput =
-  | { userId: string; kind: 'quiz_graded'; lessonId: string; attemptId: string; scorePercent: number; passed: boolean | null }
+  | {
+      userId: string;
+      kind: 'quiz_graded';
+      lessonId: string;
+      attemptId: string;
+      scorePercent: number;
+      passed: boolean | null;
+      /** Marks still awaiting a human, out of the quiz's total — `0` on a
+       *  finished paper. See the field's own note in `notifications.ts`. */
+      pendingOutOf: number;
+    }
   | { userId: string; kind: 'extra_attempt_granted'; lessonId: string }
   | { userId: string; kind: 'conversation_reply'; conversationId: string }
   | {
@@ -841,6 +851,11 @@ function toEntry(
         attemptId,
         scorePercent: Math.round(Math.min(Math.max(scorePercent, 0), 100)),
         passed: payloadBoolean(row.payload, 'passed'),
+        // `?? 0` and not a required read: every row written before the field
+        // existed is a finished paper, and dropping those rows out of the
+        // feed (which is what returning `null` here does) would blank the
+        // notification history of every student on the platform.
+        pendingOutOf: Math.max(payloadNumber(row.payload, 'pendingOutOf') ?? 0, 0),
       };
     }
     case 'extra_attempt_granted':

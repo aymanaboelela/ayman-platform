@@ -188,6 +188,11 @@ export const AUDIT_ACTIONS = [
   'campaign:delete',
   'whatsapp:link',
   'whatsapp:unlink',
+  // One message to one number, to find out what the sender is actually doing.
+  // Audited because it puts a real message on a real stranger's phone outside
+  // any campaign, and because the `lid` it records is the one fact anybody
+  // will want back when asking why a campaign delivered to nobody.
+  'whatsapp:test-send',
   // Vodafone Cash course subscriptions. `payment:submit` is written by the
   // STUDENT — the one auditable action in this list an admin never takes —
   // because a rejected claim's whole value is a durable record of exactly
