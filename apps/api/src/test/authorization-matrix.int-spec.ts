@@ -977,6 +977,14 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'marketing device unlink: anonymous', method: 'post', path: () => '/api/admin/marketing/device/unlink', actor: 'anonymous', status: 401 },
     { label: 'marketing device unlink: student', method: 'post', path: () => '/api/admin/marketing/device/unlink', actor: 'student', status: 403 },
 
+    // «رسالة تجربة» — `marketing:send`, the same authority as starting a
+    // campaign, because it puts a real message on a real phone. The receipt
+    // read beside it is `marketing:read`: it sends nothing.
+    { label: 'marketing test-send: anonymous', method: 'post', path: () => '/api/admin/marketing/device/test-send', actor: 'anonymous', status: 401, body: () => ({ phone: '+201000000000' }) },
+    { label: 'marketing test-send: student', method: 'post', path: () => '/api/admin/marketing/device/test-send', actor: 'student', status: 403, body: () => ({ phone: '+201000000000' }) },
+    { label: 'marketing test-send receipt: anonymous', method: 'get', path: () => '/api/admin/marketing/device/test-send/ABC123', actor: 'anonymous', status: 401 },
+    { label: 'marketing test-send receipt: student', method: 'get', path: () => '/api/admin/marketing/device/test-send/ABC123', actor: 'student', status: 403 },
+
     { label: 'marketing opt-outs: anonymous', method: 'get', path: () => '/api/admin/marketing/opt-outs', actor: 'anonymous', status: 401 },
     { label: 'marketing opt-outs: student', method: 'get', path: () => '/api/admin/marketing/opt-outs', actor: 'student', status: 403 },
     { label: 'marketing opt-outs: admin', method: 'get', path: () => '/api/admin/marketing/opt-outs', actor: 'admin', status: 200 },
@@ -2169,6 +2177,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           // session; `x-wa-token` is the actual gate, checked inside the
           // handler rather than by a guard `enumerateRoutes()` can see.
           'POST /api/marketing/wa/inbound',
+          // The receipt relay, and public for the identical reason — same
+          // caller, same `x-wa-token`, same absence of a session. It carries
+          // less authority than the inbound route, not more: the worst a
+          // forged call achieves is stamping `deliveredAt` on a row whose
+          // WhatsApp message id the caller already had to know.
+          'POST /api/marketing/wa/receipt',
           /*
            * «التحويلات الواردة» — the Android handset that received the money,
            * forwarding each InstaPay push as it appears. Public for exactly the

@@ -34,6 +34,7 @@ It sends one message when told to, and reports whether it worked.
 | `WA_TOKEN`        | Shared secret. Every request must carry it as `x-wa-token`.     |
 | `WA_AUTH_DIR`     | Where the pairing credentials live. **Must be a volume.**       |
 | `WA_INBOUND_URL`  | Optional. Incoming messages are POSTed here (for «قف»).         |
+| `WA_RECEIPT_URL`  | **Set this.** Delivery receipts are POSTed here. Unset, the service goes back to reporting a send as successful the moment WhatsApp's servers take custody — one grey tick — which is how a campaign that reached nobody reported «٧٤ من ٧٤ · اتبعت». |
 | `WA_CONNECT_TIMEOUT_MS` | Optional, default `30000`. How long a single connect attempt may go with zero progress (no `open`, no `close`, not even a QR refresh) before it is declared wedged and reset — see `src/connect-watchdog.mjs`. |
 
 ## Pairing
@@ -52,4 +53,21 @@ All except `/health` require `x-wa-token`.
 - `GET /status` → `{ state, phone, qr, detail }`
 - `POST /link` → begins pairing
 - `POST /unlink` → forgets the device
-- `POST /send` `{ phone, text, imageUrl? }` → `{ messageId, onWhatsApp }`
+- `POST /send` `{ phone, text, imageUrl? }` → `{ messageId, onWhatsApp, jid, serverJid, lid }`
+  - `lid` is WhatsApp's Linked Identity for the recipient, non-null once their
+    account has migrated to LID addressing. It is reported, never addressed:
+    the 6.x line has no LID↔PN mapping, and this field is how you find out
+    whether that is why a message was accepted and never delivered.
+
+## Receipts
+
+The one thing `POST /send` cannot tell you is whether the message arrived.
+`sendMessage()` resolving means WhatsApp's servers accepted the stanza — the
+first tick — and for months that was the only signal this service produced, so
+the API recorded «اتبعت» for messages delivered to nobody.
+
+`messages.update` and `message-receipt.update` are now subscribed per socket
+(they must be re-registered on every reconnect, which is why they sit inside
+`connect()`) and relayed to `WA_RECEIPT_URL` as `{ messageId, status }`,
+deduplicated highest-status-wins by `src/receipt-store.mjs` so a late receipt
+can never walk a row backwards. `3` is delivered, `4` read, `0` a refusal.

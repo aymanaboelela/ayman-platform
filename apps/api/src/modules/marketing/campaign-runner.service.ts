@@ -15,7 +15,7 @@ import { renderCampaignBody } from '@ayman/contracts/marketing/render';
 import { PrismaService } from '../../prisma/prisma.service';
 import { REDIS } from '../../redis/redis.module';
 import { InjectMediaUrl, type MediaUrlResolver } from '../../common/media/media-url';
-import { NotOnWhatsAppError, WhatsappDeviceService } from './whatsapp-device.service';
+import { NotOnWhatsAppError, WhatsappDeviceService, type SendResult } from './whatsapp-device.service';
 import { pacingOf } from './campaign.service';
 import type { MarketingCampaign } from '../../generated/prisma/client';
 
@@ -64,6 +64,44 @@ const MAX_ATTEMPTS = 3;
 
 /** A skipped recipient costs a short pause, not a full gap — nothing was sent. */
 const SKIP_DELAY_MS = 5_000;
+
+/**
+ * ⚠️ THE DEAD-MAN'S SWITCH. Read this before touching either constant.
+ *
+ * WhatsApp accepting a message and never delivering it is a real failure mode
+ * and it is completely silent: `send()` resolves, the row goes `sent`, the
+ * screen says «اتبعت», and nothing anywhere is red. It ran that way through an
+ * entire seventy-four-recipient campaign in 2026-09 — every message accepted,
+ * none delivered — and was found by the instructor noticing one grey tick on
+ * his own phone, not by the platform.
+ *
+ * Now that receipts are recorded (`WhatsappReceiptController`), their ABSENCE
+ * is evidence. If the first `BLIND_SEND_PROBE` messages of a run have all been
+ * sitting sent for longer than `BLIND_SEND_GRACE_MS` with no device ever
+ * acknowledging one, something is wrong with sending itself and the remaining
+ * four thousand recipients must not be spent proving it again.
+ *
+ * The two numbers are a trade between a false pause and a wasted campaign:
+ *
+ *   · FIVE, because one or two recipients with their phones off is ordinary
+ *     and five simultaneously is not — and because five is small enough that
+ *     a caught failure costs almost nothing.
+ *   · FIFTEEN MINUTES, because a delivery receipt for a phone that is on
+ *     arrives in seconds, and the grace is sized for a phone that is off, in a
+ *     tunnel, or out of credit. It is deliberately far longer than delivery
+ *     takes and far shorter than a campaign.
+ *
+ * It only ever PAUSES. Nothing is marked failed, no recipient is consumed, and
+ * «كمّل» resumes exactly where it stopped once the sender is fixed.
+ */
+const BLIND_SEND_PROBE = 5;
+const BLIND_SEND_GRACE_MS = 15 * 60_000;
+/**
+ * Shown on the campaign screen. Arabic, and specific about what to check:
+ * an operator who reads «اتوقفت» with no reason presses resume.
+ */
+const BLIND_SEND_REASON =
+  'اتوقفت لوحدها: أول رسايل اتبعتت وواتساب استلمها بس ماوصلتش لحد أصلاً. اتأكد إن الجهاز مربوط صح قبل ما تكمّل.';
 
 @Injectable()
 export class CampaignRunner {
@@ -124,6 +162,21 @@ export class CampaignRunner {
       return;
     }
 
+    // Before spending another recipient, check the ones already spent. See
+    // `BLIND_SEND_PROBE` — this is the only thing standing between a broken
+    // sender and a whole audience burned proving it.
+    if (await this.sendingBlind(campaign.id, now)) {
+      await this.prisma.marketingCampaign.update({
+        where: { id: campaign.id },
+        data: { status: 'paused', nextSendAt: null, pausedReason: BLIND_SEND_REASON },
+      });
+      this.logger.error(
+        { campaign: campaign.id, probe: BLIND_SEND_PROBE },
+        'campaign paused — messages are being accepted by WhatsApp and delivered to nobody',
+      );
+      return;
+    }
+
     const recipient = await this.prisma.marketingRecipient.findFirst({
       where: { campaignId: campaign.id, status: 'pending' },
       orderBy: { position: 'asc' },
@@ -162,8 +215,9 @@ export class CampaignRunner {
       linkUrl: campaign.linkUrl,
     });
 
+    let sendResult: SendResult;
     try {
-      await this.device.send({
+      sendResult = await this.device.send({
         phone: recipient.phone,
         text,
         imageUrl: image ? this.mediaUrl.resolve(image.storageKey) : null,
@@ -173,7 +227,23 @@ export class CampaignRunner {
       return;
     }
 
-    await this.settle(recipient.id, { status: 'sent', sentAt: now });
+    // ⚠️ `sent` IS NOT DELIVERED, and the id is what lets us find out.
+    //
+    // This returning without throwing means `sock.sendMessage()` resolved —
+    // WhatsApp's servers took custody of the stanza. ONE GREY TICK. Whether it
+    // reached a device is answered minutes later, out of band, by a receipt
+    // arriving at `WhatsappReceiptController`, and the only thing that can
+    // match that receipt to this row is the message id.
+    //
+    // It used to be discarded on this line — `await this.device.send(...)`
+    // with the result unassigned — which is why a campaign WhatsApp accepted
+    // in full and delivered to nobody was indistinguishable from a perfect
+    // one on every screen the platform has.
+    await this.settle(recipient.id, {
+      status: 'sent',
+      sentAt: now,
+      messageId: sendResult.messageId,
+    });
 
     const next = nextSend(now, pacing, state, Math.random());
     await this.prisma.marketingCampaign.update({
@@ -185,6 +255,51 @@ export class CampaignRunner {
         dayKey: next.state.dayKey,
       },
     });
+  }
+
+  /**
+   * Has everything sent so far vanished?
+   *
+   * True when the first `BLIND_SEND_PROBE` messages of this campaign have all
+   * been `sent` for longer than the grace period and NOT ONE of them was ever
+   * acknowledged by a device. That is not a recipient with their phone off —
+   * it is the sender failing in the one way it fails silently.
+   *
+   * Three deliberate properties:
+   *
+   *   · **The oldest rows, not the newest.** `position` order, so the probe is
+   *     a fixed set that either resolves or does not. Sampling the most recent
+   *     sends would re-arm the grace period with every message and a campaign
+   *     could run forever without ever completing the check.
+   *   · **Fewer than the probe count is not a verdict.** A campaign three
+   *     messages in has not yet produced enough evidence to stop on, and
+   *     `< BLIND_SEND_PROBE` returning false is what makes the first few sends
+   *     the experiment rather than the casualty.
+   *   · **One delivery clears it, permanently.** The check asks whether ANY of
+   *     the probe was delivered. If sending works at all, this never fires
+   *     again for this campaign — a student who blocks the number later cannot
+   *     accumulate into a false pause.
+   *
+   * A row sent before the receipt listener shipped has no `deliveredAt` and
+   * never will, which would read here as a blind send. That is why the window
+   * is bounded by `sentAt` recency as well: rows older than the grace are
+   * eligible, but a campaign whose probe predates the deploy is one nobody
+   * should resume blind anyway — it stops, says why, and a human looks.
+   */
+  private async sendingBlind(campaignId: string, now: Date): Promise<boolean> {
+    const probe = await this.prisma.marketingRecipient.findMany({
+      where: { campaignId, status: 'sent' },
+      orderBy: { position: 'asc' },
+      take: BLIND_SEND_PROBE,
+      select: { sentAt: true, deliveredAt: true },
+    });
+
+    if (probe.length < BLIND_SEND_PROBE) return false;
+    // One arrival is proof the sender works. Nothing else matters.
+    if (probe.some((row) => row.deliveredAt !== null)) return false;
+
+    const deadline = new Date(now.getTime() - BLIND_SEND_GRACE_MS);
+    return probe.every((row) => row.sentAt !== null && row.sentAt <= deadline);
   }
 
   /**
@@ -221,7 +336,11 @@ export class CampaignRunner {
     if (device.state !== 'connected') {
       await this.prisma.marketingCampaign.update({
         where: { id: campaign.id },
-        data: { status: 'paused', nextSendAt: null },
+        data: {
+          status: 'paused',
+          nextSendAt: null,
+          pausedReason: `اتوقفت لوحدها: جهاز الواتساب مش متوصّل (${device.state}). اربطه تاني وكمّل.`,
+        },
       });
       this.logger.error(
         { campaign: campaign.id, device: device.state },
@@ -252,7 +371,7 @@ export class CampaignRunner {
 
   private settle(
     recipientId: string,
-    data: { status: 'sent' | 'skipped'; sentAt?: Date; error?: string },
+    data: { status: 'sent' | 'skipped'; sentAt?: Date; error?: string; messageId?: string | null },
   ): Promise<unknown> {
     return this.prisma.marketingRecipient.update({ where: { id: recipientId }, data });
   }
