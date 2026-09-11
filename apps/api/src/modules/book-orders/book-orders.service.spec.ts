@@ -1581,6 +1581,15 @@ describe('BookOrdersService', () => {
       expect(multi?.copies).toBe(4);
       expect(multi?.items).toHaveLength(2);
       expect(multi?.ref).toMatch(/^BK-[0-9A-F]{6}$/);
+      /* The card prints the EDITION, not the titles, and a parcel that really
+         holds two of them says two — picking either would be wrong on the box
+         that most needs to be right.
+
+         `bookA` sets neither flag, so it carries the schema's `@default(true)`
+         on both and reads «عربي ولغات»; `languagesBook` sets them explicitly
+         and reads «لغات». Deduplicated, and ordered عربي → لغات → both, so two
+         cards never disagree about which comes first. */
+      expect(multi?.streams).toEqual(['لغات', 'عربي ولغات']);
     }, 20_000);
 
     it('still gives a card to an order whose lines were all removed', async () => {

@@ -2245,6 +2245,10 @@ export class BookOrdersService {
       languages: copy.stream.languages,
       both: copy.stream.both,
     };
+    /* `string[]`, not the literal union: this is only ever used to ORDER
+       labels that came out of `streamLabel`, and typing it as the union makes
+       `indexOf` refuse the very strings it is meant to rank. */
+    const STREAM_ORDER: string[] = [copy.stream.general, copy.stream.languages, copy.stream.both];
 
     /*
      * ═══════════════════════════════════════════════════════════════════════
@@ -2344,6 +2348,18 @@ export class BookOrdersService {
             ]
           : row.items.map((item) => ({ title: item.titleAr, quantity: item.quantity }));
 
+      /* The editions in the box, deduplicated and in the sheet's own order
+         (عربي, then لغات) so two cards never disagree about which comes first.
+         A line whose book is not in the catalogue falls back to the ORDER's
+         course, exactly like the sheet's own stream column — and contributes
+         nothing when neither exists, rather than inventing an edition. */
+      const parcelStreams = [...new Set(
+        (row.items.length === 0
+          ? [courseStream]
+          : row.items.map((item) => (item.book ? streamLabel[streamChoiceOf(item.book)] : courseStream))
+        ).filter((label) => label !== ''),
+      )].sort((a, b) => STREAM_ORDER.indexOf(a) - STREAM_ORDER.indexOf(b));
+
       labels.push({
         orderId: row.id,
         ref: bookOrderRef(row.id),
@@ -2357,6 +2373,7 @@ export class BookOrdersService {
         building: address.building,
         note: address.note,
         items: parcelItems,
+        streams: parcelStreams,
         copies: parcelItems.reduce((n, item) => n + item.quantity, 0),
         createdAt: address.createdAt,
       });

@@ -3,6 +3,7 @@ import './labels.css';
 import { copy } from '@ayman/contracts/copy/admin';
 import { copy as site } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
+import { egyptianPhoneForLabel } from '@ayman/contracts/phone';
 import {
   AdminBookOrderFilterSchema,
   AdminBookOrderStreamSchema,
@@ -159,57 +160,67 @@ export default async function BookOrderLabelsPage({
               {/* Both numbers, each on its own labelled line and each isolated
                   LTR. One line holding two numbers is the line a courier dials
                   half of — and in an RTL paragraph the bidi algorithm is
-                  entitled to swap them. */}
+                  entitled to swap them.
+
+                  Formatted, never printed as stored: the table holds both
+                  `+201012345678` and `01012345678` and a driver has to convert
+                  the first one in their head. See `egyptianPhoneForLabel`. */}
               <div className="label-card__phones">
                 <p className="label-card__phone">
                   <span className="label-card__field">{c.labelsPhone}</span>
-                  <b dir="ltr">{label.phone}</b>
+                  <b dir="ltr">{egyptianPhoneForLabel(label.phone)}</b>
                 </p>
                 {label.altPhone ? (
                   <p className="label-card__phone label-card__phone--alt">
                     <span className="label-card__field">{c.labelsAltPhone}</span>
-                    <b dir="ltr">{label.altPhone}</b>
+                    <b dir="ltr">{egyptianPhoneForLabel(label.altPhone)}</b>
                   </p>
                 ) : null}
               </div>
 
-              <p className="label-card__field">{c.labelsAddress}</p>
-              {/* Widest first, narrowing down — «المحافظة — المدينة» is what
-                  sorts the parcel into a van, the street is what finds the
-                  door, and the note is what gets it up the stairs. Three lines
-                  rather than one comma-joined sentence, because a courier reads
-                  the first line off a stack without unpacking it. */}
-              <p className="label-card__address label-card__address--wide">
-                {addressLine([label.governorate, label.city], ' — ')}
-              </p>
-              {addressLine([label.street, label.building], '، ') ? (
-                <p className="label-card__address">
-                  {addressLine([label.street, label.building], '، ')}
+              {/* The address is the whole reason the card exists, so it is set
+                  in a boxed block of its own rather than as three more lines in
+                  the same column as everything else — «العنوان بيّنه أكتر». */}
+              <div className="label-card__where">
+                <p className="label-card__field">{c.labelsAddress}</p>
+                {/* Widest first, narrowing down — «المحافظة — المدينة» is what
+                    sorts the parcel into a van, the street is what finds the
+                    door, and the note is what gets it up the stairs. */}
+                <p className="label-card__address label-card__address--wide">
+                  {addressLine([label.governorate, label.city], ' — ')}
                 </p>
-              ) : null}
-              {addressLine([label.note], '') ? (
-                <p className="label-card__address">{label.note}</p>
-              ) : null}
+                {addressLine([label.street, label.building], '، ') ? (
+                  <p className="label-card__address">
+                    {addressLine([label.street, label.building], '، ')}
+                  </p>
+                ) : null}
+                {addressLine([label.note], '') ? (
+                  <p className="label-card__address label-card__address--note">{label.note}</p>
+                ) : null}
+              </div>
             </div>
 
             {/* «العدد تحت كده عشان يبقى باين» — the number the courier counts
-                against what they were handed, readable off a stack. */}
+                against what they were handed, readable off a stack.
+
+                Beside it the EDITION and not the book titles. «كتاب البرمجة
+                وعلوم الحاسب — تانية بكالوريا (لغات)» wrapped to three lines on
+                a card, and the only part of it the person filling the box acts
+                on is the last word. The titles stay on the packing sheet, which
+                has a column for them and a desk to read them at. */}
             <footer className="label-card__foot">
               <span className="label-card__count">
                 <b>{label.copies}</b>
                 <small>{c.labelsCopies}</small>
               </span>
-              <span className="label-card__items">
-                {label.items.map((item) => (
-                  <span key={item.title} className="label-card__item">
-                    {item.quantity > 1 ? `${item.title} ×${item.quantity}` : item.title}
+              <span className="label-card__streams">
+                {label.streams.map((stream) => (
+                  <span key={stream} className="label-card__stream">
+                    {formatCopy(c.labelsStream, { stream })}
                   </span>
                 ))}
               </span>
-              <span className="label-card__seq">
-                {formatCopy(c.labelsSeq, { n: String(label.seq), total: String(list.labels.length) })}
-                <small>{shipDate(label.createdAt)}</small>
-              </span>
+              <span className="label-card__date">{shipDate(label.createdAt)}</span>
             </footer>
           </article>
         ))}

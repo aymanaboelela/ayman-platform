@@ -130,11 +130,19 @@
   color: var(--ink-soft);
 }
 
+/* The name takes the WHOLE width of the card and is the biggest thing on it.
+   It was a 15px line sitting in a column with half the card empty beside it —
+   on a stack of cards seen edge-on, the name is what you are looking for. */
 .label-card__name {
-  margin: 0 0 2mm;
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.25;
+  display: block;
+  inline-size: 100%;
+  margin: 0 0 2.5mm;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+  /* Long enough names wrap rather than clip: a courier can work with a name on
+     two lines and cannot work with half of one. */
+  overflow-wrap: anywhere;
 }
 
 .label-card__phones {
@@ -164,17 +172,37 @@
   color: var(--ink-soft);
 }
 
+/* The address gets a block of its own — «العنوان بيّنه أكتر». Three more
+   lines in the same column as everything else made the one thing the card
+   exists for look like a footnote under the phone numbers. */
+.label-card__where {
+  margin-block-start: 2mm;
+  padding: 2mm 2.5mm;
+  border-inline-start: 2.5px solid var(--gold);
+  background: var(--gold-wash);
+  border-radius: 0 3px 3px 0;
+}
+
 .label-card__address {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.5;
 }
 
 /* «المحافظة — المدينة»: the line that sorts the parcel into a van, and the
    only one that has to be readable off a stack without picking it up. */
 .label-card__address--wide {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+/* The delivery note is an instruction, not part of the address — «يفضل
+   الاتصال قبل التسليم» read as another street line is a street nobody finds. */
+.label-card__address--note {
+  margin-block-start: 0.5mm;
+  font-size: 11px;
+  color: var(--ink-soft);
 }
 
 /* ── The foot: the count, what is in the box, where it sits in the run ──── */
@@ -211,41 +239,28 @@
   color: var(--ink-soft);
 }
 
-.label-card__items {
+/* «كتاب عربي» / «كتاب لغات» — at most two of these, so they sit in a row and
+   never need to wrap or clip the way a list of titles did. */
+.label-card__streams {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-inline-size: 0;
+  flex-wrap: wrap;
+  gap: 4px;
   flex: 1;
-  font-size: 9.5px;
-  line-height: 1.35;
-  color: var(--ink-soft);
+  min-inline-size: 0;
 }
 
-/* Two lines, then clipped. A parcel of eight titles is rare and its card must
-   still cut on the line; the packing sheet upstairs is where the full contents
-   are read. */
-.label-card__item {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.label-card__stream {
+  padding: 0.8mm 2.5mm;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 700;
 }
 
-.label-card__seq {
-  display: flex;
+.label-card__date {
   flex-shrink: 0;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
   font-size: 9px;
-  font-weight: 600;
   color: var(--ink-soft);
-}
-
-.label-card__seq small {
-  font-size: 8.5px;
-  font-weight: 400;
 }
 
 /* ── Print ──────────────────────────────────────────────────────────────── */
@@ -291,7 +306,8 @@
      recognised by. Without this they print as white rectangles on every
      browser whose «طباعة الخلفيات» is off — which is all of them, by default. */
   .label-card__ref,
-  .label-card__count {
+  .label-card__count,
+  .label-card__where {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

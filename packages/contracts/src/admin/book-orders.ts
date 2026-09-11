@@ -577,9 +577,22 @@ export const PackingLabelSchema = z.object({
   street: z.string(),
   building: z.string().nullable(),
   note: z.string(),
-  /** Every title in this parcel with its quantity — what the packer puts IN
-   *  the box, printed on the box. */
+  /** Every title in this parcel with its quantity. Read by the packing SHEET's
+   *  own reconciliation, and deliberately not by the card — see `streams`. */
   items: z.array(z.object({ title: z.string(), quantity: z.number().int() })),
+  /**
+   * The EDITIONS in this parcel — «عربي», «لغات», or both.
+   *
+   * This is what the card prints where the book titles used to go. «كتاب
+   * البرمجة وعلوم الحاسب — تانية بكالوريا (لغات)» on a shipping label is a
+   * long string that wraps, and the only part of it the person filling the box
+   * actually acts on is the last word. The title stays on the packing sheet,
+   * where there is a column for it and a desk to read it at.
+   *
+   * An array and not one string: a parcel really can hold one of each, and
+   * picking either would be wrong on the box that most needs to be right.
+   */
+  streams: z.array(z.string()),
   /** Total copies in this one parcel. The number the courier counts. */
   copies: z.number().int(),
   createdAt: z.string(),
