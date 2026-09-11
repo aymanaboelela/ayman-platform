@@ -28,7 +28,7 @@ import {
   RestoreOrderAction,
 } from './order-actions';
 import { ShipAction } from './ship-action';
-import { BulkShipProvider, OrderCheckbox } from './bulk-ship';
+import { BulkShipProvider, BulkToolbarActions, OrderCheckbox } from './bulk-ship';
 import { ExportRange } from './export-range';
 import { BookOrderScreenshotThumbnail } from './screenshot-thumbnail';
 import { CreateBookOrderDialog } from './create-book-order-dialog';
@@ -331,6 +331,15 @@ export default async function AdminBooksPage({
             ) : null}
           </div>
         </div>
+
+        {/*
+          The batch actions, HERE as well as in the sticky bar at the foot of
+          the list. «حدّد الكل» is pressed in the row above this one, and until
+          now the only thing that answered it was pinned to the far edge of a
+          fifty-three-row screen — so «اشحن المحدد» read as missing. It renders
+          nothing while nothing is selected. See `BulkActions`.
+        */}
+        <BulkToolbarActions />
 
       {query && rowCount > 0 ? (
         <p className="mt-4 text-[length:var(--fs-text-sm)] text-fg-muted" role="status">
