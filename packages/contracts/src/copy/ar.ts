@@ -3181,6 +3181,21 @@ export const copy = {
      * not.
      */
     instructorMessage: 'مهندس أيمن بعتلك رسالة',
+    /**
+     * The second line of the PUSH only — the in-app row has no body at all.
+     * Says where to read it without repeating it, because the message itself
+     * is read in the conversation where it can be answered.
+     */
+    instructorMessagePushDetail: 'افتح المنصة تقراها وترد عليه',
+    // ── «خلي الموبايل ينبهني» — the student's push opt-in. ───────────────
+    //
+    // The wording sells the thing the student wants (not missing a lecture or
+    // a quiz), not the mechanism. Nobody has ever enabled a notification
+    // because they were told about Web Push.
+    pushOptInTitle: 'خلي الموبايل ينبهك',
+    pushOptInLead: 'يوصلك تنبيه على الموبايل أول ما م. أيمن يبعت حاجة أو ينزل محاضرة — من غير ما تفتح الموقع.',
+    pushOptInButton: 'فعّل التنبيهات',
+    pushOptInWorking: 'بيفعّل…',
     instructorMessageQuizResult: 'مهندس أيمن شاف نتيجتك',
     instructorMessageQuizNudge: 'مهندس أيمن فاكرك بالكويز',
     instructorMessageLessonPraise: 'مهندس أيمن بعتلك كلمتين',

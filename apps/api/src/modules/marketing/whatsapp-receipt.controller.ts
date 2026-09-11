@@ -43,6 +43,7 @@ import { CampaignService } from './campaign.service';
  */
 
 /** `proto.WebMessageInfo.Status`. Mirrors `services/wa/src/receipt-store.mjs`. */
+const REFUSED = 0;
 const DELIVERY_ACK = 3;
 
 @Controller('marketing/wa')
@@ -53,28 +54,44 @@ export class WhatsappReceiptController {
   @Post('receipt')
   async receipt(
     @Headers('x-wa-token') token: string | undefined,
-    @Body() body: { messageId?: unknown; status?: unknown },
+    @Body() body: { messageId?: unknown; status?: unknown; code?: unknown; detail?: unknown },
   ): Promise<{ ok: true }> {
     const expected = loadEnv(process.env).WA_SERVICE_TOKEN;
     if (!expected || !token || token !== expected) throw new UnauthorizedException();
 
     const messageId = typeof body.messageId === 'string' ? body.messageId : null;
     const status = typeof body.status === 'number' ? body.status : null;
+    const detail = typeof body.detail === 'string' ? body.detail : null;
     if (!messageId || status === null) throw new BadRequestException('messageId and status are required');
 
     // Anything at or above DELIVERY_ACK means a device has it — READ (4) and
     // PLAYED (5) both imply delivery, and a read receipt can be parsed before
-    // the delivery receipt that logically preceded it.
-    //
-    // Everything below is deliberately ignored rather than recorded. SERVER_ACK
-    // is the tick we already assume, and ERROR (0) is NOT written as a failure
-    // here: a refusal arrives for reasons that resolve themselves, the runner
-    // owns the retry/attempts machinery, and a route that could mark rows
-    // failed from an unauthenticated-by-cookie endpoint is a bigger surface
-    // than the information is worth. An undelivered row is already visible as
-    // `sent` with no `deliveredAt` — which is the honest reading.
+    // the delivery receipt that logically preceded it. SERVER_ACK is the tick
+    // already assumed and is ignored.
     if (status >= DELIVERY_ACK) {
       await this.campaigns.markDelivered(messageId).catch(() => undefined);
+      return { ok: true };
+    }
+
+    /*
+      ⚠️ A REFUSAL, AND ITS REASON. This is the line the whole exercise was for.
+     
+      The status is NOT changed to `failed`: the runner owns attempts and
+      retries, and a route reachable without a session must not be able to
+      settle rows. What it does is write down WHAT WhatsApp said, on the row
+      that said it, where the campaign screen already renders `error`.
+     
+      The one that matters is 463 — `MessageAccountRestriction`: a 1:1 message
+      with no privacy token, which means WhatsApp is blocking this account from
+      STARTING new chats while leaving existing conversations alone. A campaign
+      is nothing but new chats, which is why every message failed identically
+      and a reply typed by hand into an open chat went through seconds later.
+     
+      Without this, the fix built to explain the failure would have turned
+      «٧٤ من ٧٤ · اتبعت» into «٧٤ فشل» and still never said the number.
+    */
+    if (status === REFUSED && detail) {
+      await this.campaigns.markRefused(messageId, detail).catch(() => undefined);
     }
 
     return { ok: true };

@@ -158,6 +158,26 @@ export class CampaignService {
     });
   }
 
+  /**
+   * WhatsApp refused a message, and said why.
+   *
+   * The status is left alone — `CampaignRunner` owns `attempts` and the
+   * pending/sent/failed machine, and a receipt arriving from an endpoint with
+   * no session behind it must not be able to settle a row. All this writes is
+   * the reason, onto the row that already has a column for one.
+   *
+   * `deliveredAt: null` in the guard, not `error: null`: a message that was
+   * refused after it had already been delivered is a story about a duplicate
+   * ack, not about a failure, and overwriting a successful delivery with a
+   * refusal would be the one way this route could make things worse.
+   */
+  async markRefused(messageId: string, detail: string): Promise<void> {
+    await this.prisma.marketingRecipient.updateMany({
+      where: { messageId, deliveredAt: null },
+      data: { error: detail.slice(0, 300) },
+    });
+  }
+
   /** What the audience picker shows before anything exists. */
   async preview(audience: Audience, pacing: Pacing): Promise<AudiencePreview> {
     const resolved = await this.audience.resolve(audience);

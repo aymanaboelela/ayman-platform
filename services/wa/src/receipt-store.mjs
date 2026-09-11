@@ -112,6 +112,34 @@ export class ReceiptStore {
 }
 
 /**
+ * What WhatsApp's own refusal codes mean, for the ones worth naming.
+ *
+ * `handleBadAck` puts the literal code string into `messageStubParameters` on
+ * the `messages.update` it emits, and it is the single most informative thing
+ * this whole service can learn — an ERROR with no code says «واتساب رفضها» and
+ * leaves everybody exactly as stuck as «اتبعت» did.
+ *
+ * `463` is the one that matters here. Baileys 7.x names it
+ * `MessageAccountRestriction` and documents it as: a 1:1 message missing its
+ * privacy token (`tctoken`), which usually means the account is restricted —
+ * WhatsApp blocks it from STARTING new chats while leaving existing
+ * conversations working, because an established chat already carries a token.
+ *
+ * That is the shape of a marketing campaign exactly: every message is a new
+ * chat, so every one is refused identically, while a reply typed by hand into
+ * a chat that already exists goes through instantly. And the 6.x line this
+ * service runs on never attaches a `tctoken` to anything — `getPrivacyTokens`
+ * is defined in the library and called from nowhere inside it.
+ *
+ * An unknown code is passed through verbatim rather than dropped. A number
+ * nobody has a sentence for is still the thing to search for.
+ */
+export const ERROR_CODES = {
+  '463': 'واتساب رافض يبدأ محادثات جديدة من الرقم ده (463). المحادثات المفتوحة شغالة عادي.',
+  '479': 'واتساب رفض الرسالة (479) — على الأغلب جلسة جهاز قديمة محتاجة ربط من جديد.',
+};
+
+/**
  * The status a `message-receipt.update` event implies.
  *
  * This event carries timestamps rather than a status number, and it is the

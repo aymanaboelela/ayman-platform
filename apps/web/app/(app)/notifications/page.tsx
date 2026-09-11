@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { NotificationFeedSchema, copy } from '@ayman/contracts';
 import { apiGetAuthed } from '@/lib/api-server';
 import { NotificationList } from '@/components/notifications/notification-list';
+import { PushOptIn } from '@/components/notifications/push-opt-in';
 
 export const metadata: Metadata = { title: copy.notifications.title };
 
@@ -26,6 +27,13 @@ export default async function NotificationsPage() {
         <h1 className="text-[length:var(--fs-title-1)] font-semibold text-fg">{c.title}</h1>
         <p className="mt-2 text-fg-muted">{c.subtitle}</p>
       </header>
+
+      {/*
+        Above the feed, not below it: a student who scrolls a long history and
+        never reaches the bottom is exactly the student this is for. It renders
+        nothing once the question has been answered either way.
+      */}
+      <PushOptIn />
 
       <NotificationList initialEntries={feed.entries} initialCursor={feed.nextCursor} />
     </main>

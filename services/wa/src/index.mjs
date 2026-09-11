@@ -11,7 +11,7 @@ import makeWASocket, {
 import pino from 'pino';
 import QRCode from 'qrcode';
 import { ConnectWatchdog } from './connect-watchdog.mjs';
-import { ReceiptStore, STATUS, statusFromReceipt } from './receipt-store.mjs';
+import { ERROR_CODES, ReceiptStore, STATUS, statusFromReceipt } from './receipt-store.mjs';
 import { waitForLinkProgress } from './link-wait.mjs';
 
 /**
@@ -45,7 +45,22 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-const logger = pino({ level: process.env.WA_LOG_LEVEL ?? 'warn' });
+/**
+ * Two levels, deliberately, and `info` is the default for OURS.
+ *
+ * This service sends at most a couple of hundred messages a day, and the
+ * lesson of 2026-09 is that its logs were the only place the truth could have
+ * been and nobody had written anything there. One line per send costs nothing
+ * and is the first thing anybody will look for after the next silent failure.
+ *
+ * Baileys keeps `warn`: at `info` the library narrates every handshake, every
+ * app-state sync and every receipt, which would bury our own lines in exactly
+ * the log somebody is grepping. `warn` still carries the one Baileys line that
+ * matters most — `handleBadAck`'s «received error in ack», which is where
+ * WhatsApp's refusal codes come out.
+ */
+const logger = pino({ level: process.env.WA_LOG_LEVEL ?? 'info' });
+const baileysLogger = logger.child({}, { level: process.env.WA_BAILEYS_LOG_LEVEL ?? 'warn' });
 
 /** `disconnected` | `linking` | `connected`. Mirrors the contract's enum. */
 let state = 'disconnected';
@@ -244,7 +259,7 @@ async function connect() {
     sock = makeWASocket({
       version,
       auth,
-      logger,
+      logger: baileysLogger,
       // Never true: this process has no terminal anybody is reading, and the
       // QR is served over HTTP to the admin screen instead.
       printQRInTerminal: false,
@@ -436,15 +451,32 @@ async function onIncoming({ messages, type }) {
  *
  * @param {number} status a `STATUS` value
  */
-async function relayReceipt(id, status) {
+async function relayReceipt(id, status, code = null) {
   const news = receipts.observe(id, status);
   if (news === null) return;
+
+  // ⚠️ A refusal without its code is barely better than no refusal at all.
+  // «واتساب رفضها» leaves whoever reads the campaign screen exactly as stuck
+  // as «اتبعت» did; `463` tells them the account is blocked from starting new
+  // chats, which is an answer. Logged at warn as well as relayed, because this
+  // is also the line somebody will go looking for in `docker logs`.
+  if (news === STATUS.ERROR) {
+    logger.warn({ messageId: id, code }, 'whatsapp refused a message');
+  }
 
   try {
     await fetch(RECEIPT_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-wa-token': TOKEN },
-      body: JSON.stringify({ messageId: id, status: news }),
+      body: JSON.stringify({
+        messageId: id,
+        status: news,
+        code,
+        // Translated here rather than in the API: this file is where the
+        // library's own vocabulary lives, and the API should not have to know
+        // what a Baileys stub parameter is.
+        detail: code ? (ERROR_CODES[code] ?? `واتساب رفض الرسالة (${code}).`) : null,
+      }),
       signal: AbortSignal.timeout(8000),
     });
   } catch (error) {
@@ -452,13 +484,21 @@ async function relayReceipt(id, status) {
   }
 }
 
-/** `messages.update` — carries a numeric status, including WhatsApp's refusals. */
+/**
+ * `messages.update` — a numeric status, and on a refusal the code that says why.
+ *
+ * `handleBadAck` puts WhatsApp's literal error code into
+ * `messageStubParameters`. It is the one field that names the failure, and
+ * dropping it would have shipped a fix that changed «٧٤ من ٧٤ · اتبعت» into
+ * «٧٤ فشل» without ever saying the word 463.
+ */
 async function onStatusUpdates(updates) {
   for (const entry of updates ?? []) {
     // Only our own messages have a delivery status worth reporting; an update
     // on an inbound message is somebody else's read receipt, not ours.
     if (entry?.key?.fromMe === false) continue;
-    await relayReceipt(entry?.key?.id, entry?.update?.status);
+    const code = entry?.update?.messageStubParameters?.[0];
+    await relayReceipt(entry?.key?.id, entry?.update?.status, code ? String(code) : null);
   }
 }
 
@@ -492,21 +532,21 @@ async function send({ phone: to, text, imageUrl }) {
   const [check] = (await sock.onWhatsApp(jid)) ?? [];
   if (!check?.exists) return { messageId: null, onWhatsApp: false };
 
-  // ⚠️ KEEP THE WHOLE ANSWER. `check` is `{ jid, exists, lid }`, and the
-  // `lid` — WhatsApp's Linked Identity for this account — was being thrown
-  // away here for as long as this function existed.
+  // ⚠️ KEEP THE WHOLE ANSWER. `check` is `{ jid, exists, lid }`, and all three
+  // were being thrown away here for as long as this function existed.
   //
-  // That matters because WhatsApp has been migrating user identity from the
-  // phone number to the LID, and the 6.x line of Baileys has no LID↔PN
-  // mapping at all: it addresses and encrypts to the phone-number JID only.
-  // A stanza addressed that way to a migrated recipient is ACCEPTED by
-  // WhatsApp's servers — one grey tick — and never routed to their devices.
-  // That is the leading explanation for «الرسايل بتتبعت وماحدش بيستلمها»، and
-  // it is untestable while the one field that would prove it is discarded.
+  // The `lid` is WhatsApp's Linked Identity for the account. It is REPORTED,
+  // never addressed — sending to a `@lid` from a 6.x client, which has no
+  // LID↔PN mapping of its own, is not a fix but a different guess.
   //
-  // It is reported, not acted on: sending to a `@lid` from a client with no
-  // LID session machinery is not a fix, it is a different guess. What this
-  // does is let `POST /send` answer the question in one call.
+  // It is kept because it costs nothing and it is the kind of fact that is
+  // impossible to obtain retroactively. It is NOT the leading explanation for
+  // «الرسايل بتتبعت وماحدش بيستلمها»: LID migration is per-account and
+  // gradual, so it would break delivery for SOME recipients, and what was
+  // actually observed was every single one. The explanation that fits a
+  // uniform failure is in `receipt-store.mjs`'s `ERROR_CODES` — a `463` nack,
+  // which is about this account's permission to start new chats and has
+  // nothing to do with who the recipient is.
 
   // Two small human tells, in the right order: read the chat, then appear to
   // type for a moment proportional to the message. Cheap, and the alternative
@@ -521,6 +561,15 @@ async function send({ phone: to, text, imageUrl }) {
     : { text };
 
   const message = await sock.sendMessage(jid, payload);
+
+  // Info, not debug: the container runs at `warn` by default, and these three
+  // fields are the ones somebody reading `docker logs` after the next silent
+  // failure will wish had been written down. They are cheap — one line per
+  // message, on a service that sends at most a couple of hundred a day.
+  logger.info(
+    { messageId: message?.key?.id ?? null, jid, serverJid: check.jid ?? null, lid: check.lid ?? null },
+    'sent',
+  );
   // Recorded before returning, not after: the caller logs the send and moves
   // on, and a retry receipt can land while it is still doing that.
   sent.remember(message?.key?.id, message?.message);

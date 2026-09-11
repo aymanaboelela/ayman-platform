@@ -35,6 +35,8 @@ It sends one message when told to, and reports whether it worked.
 | `WA_AUTH_DIR`     | Where the pairing credentials live. **Must be a volume.**       |
 | `WA_INBOUND_URL`  | Optional. Incoming messages are POSTed here (for «قف»).         |
 | `WA_RECEIPT_URL`  | **Set this.** Delivery receipts are POSTed here. Unset, the service goes back to reporting a send as successful the moment WhatsApp's servers take custody — one grey tick — which is how a campaign that reached nobody reported «٧٤ من ٧٤ · اتبعت». |
+| `WA_LOG_LEVEL`    | Optional, default `info` — OUR lines, one per send. It used to default to `warn`, and the logs being empty is why a campaign that delivered nothing could not be diagnosed after the fact. |
+| `WA_BAILEYS_LOG_LEVEL` | Optional, default `warn`. The library's own noise, kept separate so `info` on ours does not bury them. `warn` still carries «received error in ack» — where WhatsApp's refusal codes appear. |
 | `WA_CONNECT_TIMEOUT_MS` | Optional, default `30000`. How long a single connect attempt may go with zero progress (no `open`, no `close`, not even a QR refresh) before it is declared wedged and reset — see `src/connect-watchdog.mjs`. |
 
 ## Pairing
@@ -71,3 +73,19 @@ the API recorded «اتبعت» for messages delivered to nobody.
 `connect()`) and relayed to `WA_RECEIPT_URL` as `{ messageId, status }`,
 deduplicated highest-status-wins by `src/receipt-store.mjs` so a late receipt
 can never walk a row backwards. `3` is delivered, `4` read, `0` a refusal.
+
+A refusal carries WhatsApp's own error code, lifted from `messageStubParameters`
+and translated by `ERROR_CODES`. The one to know is **463**
+(`MessageAccountRestriction`): a 1:1 message with no privacy token, which means
+WhatsApp is blocking this account from STARTING new chats while leaving existing
+conversations alone. A marketing campaign is nothing BUT new chats, so it fails
+for every recipient identically — while a reply typed by hand into an open chat
+goes through instantly. The 6.x line here never attaches a `tctoken` to
+anything; `getPrivacyTokens` exists in the library and is called from nowhere
+inside it. Baileys 7.x is where that machinery lives.
+
+To read it off the running container directly:
+
+```
+docker logs --since 336h <wa> 2>&1 | grep -E 'received error in ack|whatsapp refused' | tail -40
+```
