@@ -16,6 +16,7 @@ import {
   type AdminStudentBulkDeleteResult,
   type AdminStudentDeleteBlocker,
   type AdminStudentDetail,
+  type AdminStudentConversation,
   type AdminStudentPatch,
   type AdminStudentRow,
   expectedDeleteIdentity,
@@ -156,6 +157,11 @@ function accessFilter(access: StudentListQuery['access']): Prisma.StudentProfile
     },
   };
 }
+
+/** How much of a thread the profile panel shows before it defers to
+ *  `/admin/inbox/:id`. A number, not a scroll: this is a panel in a column of
+ *  other panels on a record page, not an inbox. */
+const CONVERSATION_PREVIEW_MAX = 30;
 
 @Injectable()
 export class StudentsService {
@@ -1012,6 +1018,68 @@ export class StudentsService {
 
     return { ok: true, name: target.name };
   }
+
+  /**
+   * «المحادثة» on a student's record — the thread, and the way into it.
+   *
+   * ## Why the thread is resolved here rather than passed in
+   *
+   * A conversation is keyed on the student, not on a URL anyone holds: from
+   * their record, or from a row on the grading queue, the only id in hand is
+   * theirs. `/admin/inbox` can find a thread by name; nothing could find one
+   * by account.
+   *
+   * ## Which thread, when there is more than one
+   *
+   * The most recent one that is still open, whatever its origin — a student
+   * who asked المساعد something (`origin: 'visitor'`) and a student he
+   * messaged first (`origin: 'outreach'`) are the same conversation as far as
+   * this screen is concerned, and showing the outreach thread while an unread
+   * question sits in the other one is how a question goes unanswered. Closed
+   * threads are excluded from the pick but are still reachable at
+   * `/admin/inbox`; reopening a closed thread from a profile composer would be
+   * a decision made by accident.
+   *
+   * ## The cap
+   *
+   * The last 30 messages, returned oldest-first so it reads as a transcript.
+   * A thread with a year of المساعد history in it would otherwise put a
+   * hundred bubbles above the one control on this panel — and `truncated`
+   * says so rather than the panel quietly showing a fragment.
+   */
+  async conversation(userId: string): Promise<AdminStudentConversation> {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { userId, status: { not: 'closed' } },
+      orderBy: { lastMessageAt: 'desc' },
+      select: { id: true },
+    });
+    if (!conversation) return { conversationId: null, messages: [], truncated: false };
+
+    // `desc` + `take` + reverse, not `asc` + `take`: the newest messages are
+    // the ones worth keeping, and an ascending take would return the OLDEST
+    // thirty — the wrong end of a long thread.
+    const rows = await this.prisma.conversationMessage.findMany({
+      where: { conversationId: conversation.id },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: CONVERSATION_PREVIEW_MAX + 1,
+      select: { id: true, author: true, body: true, createdAt: true },
+    });
+
+    const truncated = rows.length > CONVERSATION_PREVIEW_MAX;
+    const kept = truncated ? rows.slice(0, CONVERSATION_PREVIEW_MAX) : rows;
+
+    return {
+      conversationId: conversation.id,
+      messages: kept.reverse().map((row) => ({
+        id: row.id,
+        author: row.author,
+        body: row.body,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      truncated,
+    };
+  }
+
 }
 
 /**

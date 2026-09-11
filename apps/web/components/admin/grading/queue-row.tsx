@@ -4,7 +4,7 @@ import { PenLine } from 'lucide-react';
 // admin layout, and `copy.admin.*` lives in that module.
 import { copy } from '@ayman/contracts/copy/admin';
 import type { AdminGradingQueue } from '@ayman/contracts/admin/exams';
-import { formatCopy } from '@ayman/contracts/format';
+import { formatCopy, formatMark } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
 
 const c = copy.admin.grading;
@@ -37,16 +37,19 @@ const submittedAtFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
  * student ZERO in a total the platform already believes. So the whole row reads
  * as actionable — amber is action here, and the action is «صحّح».
  *
- * ## The whole row is the link, and nothing inside it is
+ * ## Two destinations, so no stretched link
  *
- * `/admin/homework`'s row makes the student's NAME its own link into their
- * record, so the card has to be a plain container with a stretched `<a>` over
- * it. This queue's contract carries no `studentId` (see `AdminGradingQueue`),
- * there is no second destination to protect, and an `<a>` inside an `<a>` is
- * invalid HTML browsers resolve by silently dropping one of them. So the shape
- * stays the same — a container plus `after:absolute after:inset-0` on the chip
- * — because it is the shape the admin already reads, not because a nested link
- * needs escaping.
+ * This row used to put `after:absolute after:inset-0` on the «صحّح» chip and
+ * make the whole card one hit area, on the stated grounds that the queue's
+ * contract carried no student id and there was therefore no second place to
+ * go. It carries one now: «أضغط عليها أروح البروفايل بتاعها»، and the profile
+ * is where the conversation with that student lives.
+ *
+ * So the shape reverts to `/admin/homework`'s — a plain container with two
+ * ordinary links inside it. A stretched pseudo-element would sit ON TOP of the
+ * name and swallow its clicks, and nesting one `<a>` inside another is invalid
+ * HTML that browsers resolve by silently dropping one. The card is no longer
+ * clickable as a whole; the two things worth pressing are.
  */
 export function GradingQueueRow({ row }: { row: GradingQueueRowData }) {
   return (
@@ -64,7 +67,13 @@ export function GradingQueueRow({ row }: { row: GradingQueueRowData }) {
       </span>
 
       <div className="min-w-0 flex-1">
-        <p className="text-[length:var(--fs-text-base)] font-semibold text-fg">{row.studentName}</p>
+        <Link
+          href={`/admin/students/${row.studentUserId}`}
+          title={c.openProfile}
+          className="text-[length:var(--fs-text-base)] font-semibold text-fg underline-offset-4 hover:underline"
+        >
+          {row.studentName}
+        </Link>
         <p className="mt-0.5 truncate text-[length:var(--fs-text-sm)] text-fg">{row.quizTitle}</p>
 
         <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--fs-text-xs)] text-fg-muted">
@@ -77,13 +86,22 @@ export function GradingQueueRow({ row }: { row: GradingQueueRowData }) {
             </span>
           ) : null}
           <span className="tabular-nums">{formatCopy(c.pending, { n: row.pendingCount })}</span>
+          {/* What is actually at stake. «٢ سؤال» reads the same whether the two
+              questions are worth two marks or fifty, and on a midterm they are
+              fifty — the student is looking at a provisional near-fail until
+              this row is cleared. */}
+          {row.pendingMarks > 0 ? (
+            <span className="tabular-nums text-accent-text">
+              {formatCopy(c.pendingMarks, {
+                marks: formatMark(row.pendingMarks),
+                outOf: formatMark(row.gradeOutOf),
+              })}
+            </span>
+          ) : null}
         </p>
       </div>
 
-      <Link
-        href={`/admin/grading/${row.attemptId}`}
-        className="chip chip--solid shrink-0 after:absolute after:inset-0 after:content-['']"
-      >
+      <Link href={`/admin/grading/${row.attemptId}`} className="chip chip--solid shrink-0">
         {c.open}
       </Link>
     </div>

@@ -19,12 +19,34 @@ describe('describeNotification', () => {
       attemptId: 'attempt-1',
       scorePercent: 85,
       passed: true,
+      pendingOutOf: 0,
     };
 
     const view = describeNotification(entry);
 
     expect(view.title).toContain('85');
     expect(view.detail).toBe(copy.notifications.quizGradedPassed);
+    expect(view.href).toBe('/quizzes/lesson-1/attempt/attempt-1/review');
+  });
+
+  it('does not call a half-marked paper graded, and names what is still coming', () => {
+    // The kind fires at SUBMIT, before a human has read the essays — so on a
+    // midterm with 50 marks outstanding the old card said «اتصحّحت ورقتك —
+    // الدرجة ٤٨٪» about work nobody had marked, quoting a provisional total as
+    // a final one. The percentage must not appear at all here.
+    const view = describeNotification({
+      ...BASE,
+      kind: 'quiz_graded',
+      attemptId: 'attempt-1',
+      scorePercent: 48,
+      passed: false,
+      pendingOutOf: 50,
+    });
+
+    expect(view.title).toBe(copy.notifications.quizGradedPartial);
+    expect(view.title).not.toContain('48');
+    expect(view.detail).toContain('50');
+    // Still the review screen: that is where the split total is explained.
     expect(view.href).toBe('/quizzes/lesson-1/attempt/attempt-1/review');
   });
 
@@ -37,6 +59,7 @@ describe('describeNotification', () => {
       attemptId: 'attempt-1',
       scorePercent: 85,
       passed: null,
+      pendingOutOf: 0,
     });
 
     expect(view.detail).toBeNull();

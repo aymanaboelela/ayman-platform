@@ -1240,6 +1240,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'students list: admin', method: 'get', path: () => '/api/admin/students', actor: 'admin', status: 200 },
     { label: 'student detail: student', method: 'get', path: () => `/api/admin/students/${studentId}`, actor: 'student', status: 403 },
     { label: 'student detail: admin', method: 'get', path: () => `/api/admin/students/${studentId}`, actor: 'admin', status: 200 },
+    // `conversation:read`, NOT `student:read` — the payload is message bodies.
+    { label: 'student conversation: anonymous', method: 'get', path: () => `/api/admin/students/${studentId}/conversation`, actor: 'anonymous', status: 401 },
+    { label: 'student conversation: student', method: 'get', path: () => `/api/admin/students/${studentId}/conversation`, actor: 'student', status: 403 },
+    { label: 'student conversation: admin', method: 'get', path: () => `/api/admin/students/${studentId}/conversation`, actor: 'admin', status: 200 },
     { label: 'student patch: anonymous', method: 'patch', path: () => `/api/admin/students/${studentId}`, actor: 'anonymous', status: 401 },
     { label: 'student patch: student', method: 'patch', path: () => `/api/admin/students/${studentId}`, actor: 'student', status: 403 },
     { label: 'student role change: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/role`, actor: 'anonymous', status: 401 },
@@ -1989,6 +1993,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // be swallowed as an attempt id — the matrix covers both, which is what
       // makes that ordering a tested property rather than a comment.
       'GET /api/admin/grading-queue',
+      'GET /api/admin/grading-results',
       'GET /api/admin/attempts/:attemptId/grading',
       'PATCH /api/admin/attempts/:attemptId/questions/:attemptQuestionId/grade',
     ]);

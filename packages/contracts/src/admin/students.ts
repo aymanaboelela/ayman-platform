@@ -87,6 +87,53 @@ export const AdminStudentDetailSchema = AdminStudentRowSchema.extend({
 export type AdminStudentDetail = z.infer<typeof AdminStudentDetailSchema>;
 
 /**
+ * `GET /api/admin/students/:userId/conversation` — the thread with this
+ * student, on their own record.
+ *
+ * ## Why it is here and not only in the inbox
+ *
+ * «يبقى في البروفايل يبقى في محادثة أقدر أكلمها». Reaching a student from
+ * their record meant reading their phone number off the screen and opening
+ * WhatsApp, or going to `/admin/inbox` and finding them by name — and from the
+ * grading queue, where the question "who is this and can I say something to
+ * them" actually comes up, neither was one click away. The conversation is the
+ * platform's own channel: the student sees it in the same المساعد panel and
+ * can reply, which a WhatsApp message out of the blue cannot promise.
+ *
+ * ## `conversationId` is nullable, and that is the ordinary case
+ *
+ * Most students have never opened a thread. `null` is "there is nothing to
+ * show yet", not an error — the section renders its composer and the first
+ * message CREATES the thread (`OutreachService.sendManual`, the same path
+ * «رسايلي للطلبة» uses, which also emits the `instructor_message`
+ * notification).
+ */
+export const AdminStudentMessageSchema = z.object({
+  id: z.string(),
+  /** `visitor` is the student. The enum is the one `conversation.ts` owns;
+   *  it is re-stated as a literal union here for the same local-copy reason
+   *  `GenderSchema` above is — a runtime value must come from one leaf's own
+   *  subpath export, never by hopping through another leaf's relative
+   *  import. Keep in sync with `MESSAGE_AUTHORS`. */
+  author: z.enum(['visitor', 'admin']),
+  body: z.string(),
+  createdAt: z.string(),
+});
+
+export const AdminStudentConversationSchema = z.object({
+  conversationId: z.string().nullable(),
+  /** Oldest first — this renders as a transcript, and a transcript reads down.
+   *  Capped server-side; the whole thread lives at `/admin/inbox/:id`. */
+  messages: z.array(AdminStudentMessageSchema),
+  /** True when older messages were trimmed, so the section can say so and
+   *  point at the full thread rather than silently showing half of it. */
+  truncated: z.boolean(),
+});
+
+export type AdminStudentMessage = z.infer<typeof AdminStudentMessageSchema>;
+export type AdminStudentConversation = z.infer<typeof AdminStudentConversationSchema>;
+
+/**
  * A4: the admin-writable field set, and nothing else. `role` is ABSENT on
  * purpose — it has its own endpoint, so a role escalation can never ride
  * along inside a routine profile correction, and its audit entry is
