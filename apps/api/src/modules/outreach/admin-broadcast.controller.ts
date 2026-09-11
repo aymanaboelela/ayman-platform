@@ -6,6 +6,7 @@ import {
   type BroadcastTarget,
   type RecipientCount,
 } from '@ayman/contracts/outreach/broadcast';
+import { parseRequest } from '../../common/http/parse-request';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { BroadcastService } from './broadcast.service';
 
@@ -52,14 +53,22 @@ export class AdminBroadcastController {
     @Query('type') type?: string,
     @Query('userId') userId?: string,
   ): Promise<RecipientCount> {
-    const target = TargetQuerySchema.parse({ type, userId });
+    // `parseRequest`, never a bare `.parse()`: `AllExceptionsFilter` fails
+    // closed, a `ZodError` is not an `HttpException`, and a typo in the query
+    // string would come back as a 500 and file an error-log entry blaming the
+    // server for the caller's input. `query-parse-validation.spec.ts` is the
+    // gate, and it postdates the commit this screen was written in.
+    const target = parseRequest(TargetQuerySchema, { type, userId }, 'target');
     return { count: await this.broadcast.recipientCount(target) };
   }
 
   @RequirePermission('conversation:reply')
   @Post()
   async send(@Body() body: unknown): Promise<BroadcastResponse> {
-    const parsed = BroadcastRequestSchema.parse(body);
+    // Same rule as above, and it bites harder here: a broadcast body that
+    // fails the contract is almost always an admin who typed nothing, and
+    // «حصل خطأ» is a worse answer to that than «الرسالة فاضية».
+    const parsed = parseRequest(BroadcastRequestSchema, body, 'broadcast');
     return this.broadcast.send(parsed.target, parsed.body);
   }
 }
