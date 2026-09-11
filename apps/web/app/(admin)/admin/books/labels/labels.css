@@ -294,6 +294,21 @@
   font-weight: 700;
 }
 
+/*
+  The «مش محددة» chip. Dashed and lighter, so it reads at a glance as an
+  ANSWER that needs checking rather than as an edition called «مش محددة» —
+  and deliberately not red: this is a normal consequence of an order typed
+  over the phone, not an error somebody made.
+
+  It must survive printing, where colour usually does not: the border style
+  carries the meaning, so a black-and-white laser still shows it.
+*/
+.label-card__stream--unknown {
+  border-style: dashed;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
 .label-card__date {
   flex-shrink: 0;
   font-size: 9px;

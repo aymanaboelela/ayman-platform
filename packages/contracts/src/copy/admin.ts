@@ -2297,11 +2297,11 @@ const admin = {
 
     /* ── كروت الشحن ───────────────────────────────────────────────────────── */
     /** «هخده نص بس الكرت وتحطه على الشحنة» — كرت لكل طرد، أربعة في الورقة،
-     *  بيتقصّوا ويتلزقوا على الكرتونة. غير لستة الشحن: دي ورقة المكتب، ودي
-     *  ورقة الصندوق. */
+     *  بيتلزقوا على الكرتونة. غير لستة الشحن: دي ورقة المكتب، ودي ورقة
+     *  الصندوق. */
     labelsTitle: 'كروت الشحن',
     labelsButton: 'كروت الشحن (PDF)',
-    labelsHint: 'كرت لكل طرد — الاسم والعنوان والموبايلين والعدد، جاهز يتقص ويتلزق على الشحنة.',
+    labelsHint: 'كرت لكل طرد — الاسم والعنوان والموبايلين والطبعة والعدد، جاهز يتلزق على الشحنة.',
     labelsCount: '{n} كرت',
     /** العناوين الصغيرة جوّه الكرت. */
     labelsTo: 'الطرد لـ',
@@ -2313,6 +2313,18 @@ const admin = {
      *  للكتاب بيلفّ على تلات سطور في الكرت، واللي بيملا الصندوق مش بيعمل
      *  حاجة غير إنه يبص على آخر كلمة فيه. الاسم فاضل في لستة الشحن. */
     labelsStream: 'كتاب {stream}',
+    /**
+     * When no edition can be worked out at all.
+     *
+     * A card that simply prints NOTHING in this slot is the worst of the three
+     * outcomes: the person filling the box cannot tell «مفيش طبعة محددة» from
+     * «الكرت باظ» from «نسيت تبص», so they guess. It happens for a real
+     * reason — an order typed over the phone can carry a hand-written title
+     * with no catalogue book behind it (`bookId: null`), and then there is no
+     * edition to read — so the honest answer is to say so on the card and let
+     * the packer check, not to leave a blank or invent «عربي».
+     */
+    labelsStreamUnknown: 'الطبعة مش محددة — راجعها',
 
     /* ── صفحة الطباعة ─────────────────────────────────────────────────────── */
     printTitle: 'طلبات الكتب — لستة الشحن',

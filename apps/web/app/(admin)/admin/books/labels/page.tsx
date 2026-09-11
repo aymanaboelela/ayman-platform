@@ -211,11 +211,21 @@ export default async function BookOrderLabelsPage({
                 <small>{c.labelsCopies}</small>
               </span>
               <span className="label-card__streams">
-                {label.streams.map((stream) => (
-                  <span key={stream} className="label-card__stream">
-                    {formatCopy(c.labelsStream, { stream })}
+                {/* NEVER blank. A line typed over the phone carries no
+                    catalogue book (`bookId: null`), so no edition can be
+                    derived — and an empty slot reads identically to a broken
+                    card. Say which it is. */}
+                {label.streams.length === 0 ? (
+                  <span className="label-card__stream label-card__stream--unknown">
+                    {c.labelsStreamUnknown}
                   </span>
-                ))}
+                ) : (
+                  label.streams.map((stream) => (
+                    <span key={stream} className="label-card__stream">
+                      {formatCopy(c.labelsStream, { stream })}
+                    </span>
+                  ))
+                )}
               </span>
               <span className="label-card__date">{shipDate(label.createdAt)}</span>
             </footer>
