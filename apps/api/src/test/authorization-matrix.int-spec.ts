@@ -47,6 +47,9 @@ import { AssistantAskController } from '../modules/assistant/ai/assistant-ask.co
 import { OutreachModule } from '../modules/outreach/outreach.module';
 import { MarketingController } from '../modules/marketing/marketing.controller';
 import { WhatsappInboundController } from '../modules/marketing/whatsapp-inbound.controller';
+import { WhatsappReceiptController } from '../modules/marketing/whatsapp-receipt.controller';
+import { AdminBroadcastController } from '../modules/outreach/admin-broadcast.controller';
+import { BroadcastService } from '../modules/outreach/broadcast.service';
 import { CampaignService } from '../modules/marketing/campaign.service';
 import { AudienceService } from '../modules/marketing/audience.service';
 import { WhatsappDeviceService } from '../modules/marketing/whatsapp-device.service';
@@ -178,6 +181,16 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         AdminErrorsController,
         MarketingController,
         WhatsappInboundController,
+        // ⚠️ THIS FIXTURE IS AN EXPLICIT LIST, NOT `AppModule`.
+        //
+        // A controller that exists in production and is missing here is not
+        // "untested" — it is invisible: `enumerateRoutes()` never sees it, so
+        // the coverage assertions below pass while saying nothing, and any
+        // MATRIX row aimed at it answers 404 instead of the 401/403 it claims
+        // to be checking. Both of these were added to the product without
+        // being added here.
+        WhatsappReceiptController,
+        AdminBroadcastController,
         // Listed directly, like `ConversationAttachmentService` below, rather
         // than imported via `PaymentsModule` — that module also imports
         // `NotificationsModule`, which brings `NotificationsController` in
@@ -320,6 +333,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         FinanceService,
         BookOrdersService,
         BooksService,
+        // `AdminBroadcastController`'s dependency. Listed for the reason the
+        // block above gives: a provider a registered controller needs and
+        // that this fixture does not supply makes the module fail to compile.
+        BroadcastService,
         ExpensesService,
         FinanceOverviewService,
       ],
@@ -2047,6 +2064,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // own shared-secret check is exercised directly in
       // `whatsapp-inbound.controller.spec.ts`.
       'POST /api/marketing/wa/inbound',
+      // The delivery-receipt relay, same actor and same shared secret — a
+      // container on the compose network, so none of anonymous/student/admin
+      // is the caller and there is no row in this file to write. Its token
+      // check and every status branch are exercised directly in
+      // `whatsapp-receipt.controller.spec.ts`.
+      'POST /api/marketing/wa/receipt',
     ]);
 
     /**
