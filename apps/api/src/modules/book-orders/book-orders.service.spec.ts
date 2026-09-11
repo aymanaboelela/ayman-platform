@@ -1502,6 +1502,45 @@ describe('BookOrdersService', () => {
       expect(list.copies).toBe(3);
     }, 20_000);
 
+    it('holds exactly the orders the LIST says the tab holds', async () => {
+      /*
+       * The invariant the whole complaint reduces to: «الناس دي دفعت». Every
+       * order the screen counts is an order the file carries, and the ids are
+       * the same ids — not a count that happens to agree, which is what «(50)»
+       * beside a badge reading «52» looked like from the outside.
+       */
+      const stamp = `مطابقة-${Date.now()}`;
+      await paidOrder(studentId, {
+        courseId: undefined,
+        items: [{ bookId: bookA, quantity: 1 }],
+        fullName: `${stamp} واحد`,
+      });
+      await paidOrder(strangerId, {
+        courseId: undefined,
+        items: [
+          { bookId: bookA, quantity: 1 },
+          { bookId: languagesBook, quantity: 3 },
+        ],
+        fullName: `${stamp} اتنين`,
+      });
+      // Never paid — on its own tab, and on neither of these two numbers.
+      await service.create(linkedStudentId, {
+        ...cartAddress(),
+        items: [{ bookId: bookA, quantity: 1 }],
+        fullName: `${stamp} تلاتة`,
+      });
+
+      const list = await service.adminList({ status: 'paid', page: 1, perPage: 50, q: stamp });
+      const sheet = await service.packingList({ status: 'paid', from: null, to: null, q: stamp });
+
+      expect(sheet.orders).toBe(list.rowCount);
+      expect([...sheet.orderIds].sort()).toEqual(list.rows.map((row) => row.id).sort());
+      // …and the file still carries a LINE per book, which is the difference
+      // the summary block now names instead of leaving to be discovered.
+      expect(sheet.books).toBe(3);
+      expect(sheet.copies).toBe(5);
+    }, 20_000);
+
     it('still prints an order whose lines were all removed', async () => {
       const stamp = `بدون-سطور-${Date.now()}`;
       const order = await paidOrder(studentId, {

@@ -2220,6 +2220,8 @@ export class BookOrdersService {
       },
       orderBy: [{ createdAt: 'asc' }],
       select: {
+        /* For «حدّد اللي في المدى» — see `PackingListSchema.orderIds`. */
+        id: true,
         fullName: true,
         phone: true,
         altPhone: true,
@@ -2379,6 +2381,7 @@ export class BookOrdersService {
 
     return {
       groups,
+      orderIds: rows.map((row) => row.id),
       orders: rows.length,
       books: lines.length,
       copies: copiesIn(lines),

@@ -2156,9 +2156,19 @@ const admin = {
      * checks against the sheet in his hand before he presses ship, and a button
      * that just says «حدّد المدى» would move that check to after the batch ran.
      */
-    bulkSelectRange: 'حدّد اللي في المدى ({n})',
+    bulkSelectRange: 'حدّد الكل ({n})',
+    /**
+     * With dates set, the count is NOT known before asking: the screen holds
+     * one page and the range can span many. Naming the page's number here is
+     * exactly the bug this button had — «(50)» beside a badge saying «52» —
+     * so it names the ACTION instead, and the bar that appears says how many
+     * were actually selected.
+     */
+    bulkSelectRangeDates: 'حدّد اللي في المدى',
+    bulkSelectRangeWorking: 'بيحدّد…',
+    bulkSelectRangeEmpty: 'مفيش طلبات في المدى ده.',
     bulkSelectRangeHint:
-      'بيحدّد نفس الطلبات اللي في ملف التصدير بالتواريخ دي — عشان تشحنهم مرة واحدة.',
+      'بيحدّد نفس الطلبات اللي في ملف التصدير بالظبط — كل اللستة مش الصفحة اللي قدامك بس.',
     bulkSelect: 'حدّد',
     /** The checkbox's accessible name — «حدّد {name}» — because a column of
      *  identical «حدّد» labels tells a screen reader nothing. `{name}` */

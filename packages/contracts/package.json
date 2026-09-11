@@ -37,6 +37,7 @@
     "./admin/book-orders": "./src/admin/book-orders.ts",
     "./admin/payments-pending-count": "./src/admin/payments-pending-count.ts",
     "./admin/book-orders-unshipped-count": "./src/admin/book-orders-unshipped-count.ts",
+    "./admin/book-orders-packing-ids": "./src/admin/book-orders-packing-ids.ts",
     "./admin/homework-pending-count": "./src/admin/homework-pending-count.ts",
     "./admin/finance": "./src/admin/finance.ts",
     "./admin/expenses": "./src/admin/expenses.ts",

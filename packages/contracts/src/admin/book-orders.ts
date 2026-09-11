@@ -519,6 +519,17 @@ export type PackingListGroup = z.infer<typeof PackingListGroupSchema>;
 export const PackingListSchema = z.object({
   groups: z.array(PackingListGroupSchema),
   /**
+   * The ORDERS behind those lines, in the same order the sheet prints them.
+   *
+   * «حدّد اللي في المدى» reads this and selects exactly what the file
+   * contains. It used to tick the rows RENDERED on the page instead, which is
+   * one page of fifty — on a tab of fifty-two the button said «(50)» while the
+   * sidebar badge said «52», and a batch «اتشحن» silently left the last two
+   * behind. Ids and not a count, because the batch endpoint takes ids and the
+   * point is that the selection and the spreadsheet are the same set.
+   */
+  orderIds: z.array(z.uuid()),
+  /**
    * ORDERS, not lines. The number the admin checks the sheet against is the
    * one on the screen, and the screen counts orders while the sheet counts
    * books — «واحد ناقص» is what that difference looks like from the outside,
