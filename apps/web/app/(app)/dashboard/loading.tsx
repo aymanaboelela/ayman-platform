@@ -53,7 +53,20 @@ export default function Loading() {
   return (
     <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
       {/* `.dash-hero` without `__art`: the band's own gradient and hairline,
-          with placeholder bars where the greeting and the dial will be. */}
+          with placeholder bars where the greeting and the dial will be.
+
+          ⚠️ THIS CLASS IS SHARED WITH THE REAL COMPONENT ON PURPOSE, and that
+          makes it useless as an end-to-end gate. `cacheComponents` sends this
+          page as a prerendered shell, so `.dash-hero` is in the document
+          before any of the real text is — a Playwright
+          `expect(page.locator('.dash-hero')).toBeVisible()` passes here and
+          then measures nothing. That flaked `study-surface-a11y.e2e.ts` on
+          main roughly every other run for days before anybody read the base
+          rate. A test that wants the real band must name a child THIS file
+          does not render: `__eyebrow` or `__aside-label`.
+
+          `.exam-band` below carries the identical hazard and is currently
+          unarmed — no test gates on it. Keep it that way. */}
       <div className="dash-hero mb-6">
         <div className="dash-hero__id">
           <span
