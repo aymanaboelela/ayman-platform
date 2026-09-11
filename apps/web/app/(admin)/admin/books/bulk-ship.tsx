@@ -38,12 +38,35 @@ interface BulkContext {
   toggle: (id: string) => void;
   /** REPLACE the selection with exactly these ids — see `useBulkSelectMany`. */
   selectMany: (ids: string[]) => void;
+  clear: () => void;
+  /**
+   * ## Why `busy` and `alsoWhatsapp` live up here and not in the bar
+   *
+   * The batch actions are now rendered in TWO places (see `BulkActions`), and
+   * the two must be one control, not two: a «ابعت واتساب كمان» ticked at the
+   * top of the list and a Ship pressed at the bottom have to agree, and a
+   * request in flight has to disable both. Per-view `useState` would give the
+   * admin two independent copies of the same decision, forty phones apart.
+   */
+  busy: boolean;
+  setBusy: (value: boolean) => void;
+  alsoWhatsapp: boolean;
+  setAlsoWhatsapp: (value: boolean) => void;
 }
 
 const Ctx = createContext<BulkContext | null>(null);
 
 export function BulkShipProvider({ children }: { children: ReactNode }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const [busy, setBusy] = useState(false);
+  /*
+   * OFF by default — the notice itself goes into the student's thread on the
+   * platform every time (see `markShippedMany`). This is a second copy for
+   * students who do not open the site often, and it leaves through Ayman's
+   * own linked device, so it is a decision he takes per batch rather than a
+   * default that quietly messages forty phones.
+   */
+  const [alsoWhatsapp, setAlsoWhatsapp] = useState(false);
 
   const value = useMemo<BulkContext>(
     () => ({
@@ -56,14 +79,19 @@ export function BulkShipProvider({ children }: { children: ReactNode }) {
           return next;
         }),
       selectMany: (ids) => setSelected(new Set(ids)),
+      clear: () => setSelected(new Set()),
+      busy,
+      setBusy,
+      alsoWhatsapp,
+      setAlsoWhatsapp,
     }),
-    [selected],
+    [selected, busy, alsoWhatsapp],
   );
 
   return (
     <Ctx.Provider value={value}>
       {children}
-      <BulkBar onCleared={() => setSelected(new Set())} />
+      <BulkBar />
     </Ctx.Provider>
   );
 }
@@ -135,22 +163,36 @@ function report(result: BulkBookOrderResult): void {
   }
 }
 
-function BulkBar({ onCleared }: { onCleared: () => void }) {
+/**
+ * The batch controls themselves, rendered in TWO places.
+ *
+ * ## Why twice
+ *
+ * The bar was `sticky bottom-0` and nothing else, and it was reported missing:
+ * «لما أحدد ناس أو كلهم يبقى فيه زرار إن أشحن ليهم». It was there — but on a
+ * tab of fifty-three orders the admin presses «حدّد الكل» in the TOOLBAR, and
+ * the only thing that then changes is pinned to the far edge of the screen,
+ * away from the button just pressed and away from where he is reading. A
+ * control nobody finds is a control that does not exist.
+ *
+ * So the same actions now also sit inline beside «حدّد الكل», appearing the
+ * instant a selection does. The bottom bar stays for the other half of the
+ * job — ticking rows one at a time halfway down a long list, where the toolbar
+ * has scrolled away.
+ *
+ * They are ONE control in two positions, not two: every piece of state they
+ * touch (`selected`, `busy`, `alsoWhatsapp`) lives in the provider, so the
+ * WhatsApp box ticked at the top is the box the bottom button reads, and a
+ * batch in flight disables both.
+ */
+function BulkActions({ variant }: { variant: 'bar' | 'inline' }) {
   const ctx = useContext(Ctx);
   const router = useRouter();
   const refreshUnshippedCount = useRefreshBookOrdersUnshippedCount();
-  const [busy, setBusy] = useState(false);
-  /*
-   * OFF by default — the notice itself goes into the student's thread on the
-   * platform every time (see `markShippedMany`). This is a second copy for
-   * students who do not open the site often, and it leaves through Ayman's
-   * own linked device, so it is a decision he takes per batch rather than a
-   * default that quietly messages forty phones.
-   */
-  const [alsoWhatsapp, setAlsoWhatsapp] = useState(false);
 
   if (!ctx || ctx.selected.size === 0) return null;
   const ids = [...ctx.selected];
+  const { busy, setBusy, alsoWhatsapp, setAlsoWhatsapp, clear } = ctx;
 
   async function run(
     action: (ids: string[], whatsapp?: boolean) => Promise<BulkBookOrderResult | null>,
@@ -163,14 +205,20 @@ function BulkBar({ onCleared }: { onCleared: () => void }) {
       return;
     }
     report(result);
-    onCleared();
+    clear();
     refreshUnshippedCount();
     router.refresh();
   }
 
   return (
-    <div className="sticky bottom-0 z-20 -mx-1 mt-3 flex flex-wrap items-center gap-2 rounded-t-lg border border-line bg-surface-3 px-3 py-2 shadow-lg">
-      <span className="text-[length:var(--fs-text-sm)] font-medium text-fg">
+    <>
+      <span
+        className={
+          variant === 'bar'
+            ? 'text-[length:var(--fs-text-sm)] font-medium text-fg'
+            : 'text-[length:var(--fs-text-xs)] font-medium text-accent-text'
+        }
+      >
         {formatCopy(c.bulkSelected, { count: String(ids.length) })}
       </span>
       <label className="flex cursor-pointer items-center gap-1.5 text-[length:var(--fs-text-xs)] text-fg-muted">
@@ -182,7 +230,7 @@ function BulkBar({ onCleared }: { onCleared: () => void }) {
         />
         {c.bulkAlsoWhatsapp}
       </label>
-      <div className="ms-auto flex flex-wrap items-center gap-2">
+      <div className={variant === 'bar' ? 'ms-auto flex flex-wrap items-center gap-2' : 'flex flex-wrap items-center gap-2'}>
         <Button
           size="sm"
           disabled={busy}
@@ -211,10 +259,39 @@ function BulkBar({ onCleared }: { onCleared: () => void }) {
         >
           {c.bulkDeliverButton}
         </Button>
-        <Button size="sm" variant="ghost" disabled={busy} onClick={onCleared}>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={clear}>
           {c.bulkClear}
         </Button>
       </div>
+    </>
+  );
+}
+
+/**
+ * Beside «حدّد الكل», in the toolbar — the copy that appears where the
+ * selection was made. Renders nothing at all while nothing is selected, so the
+ * toolbar keeps its usual shape until there is something to do.
+ *
+ * Amber-bordered rather than plain: it appears and disappears with the
+ * selection, and an ember outline is how the rest of this product says "this
+ * is the thing to press".
+ */
+export function BulkToolbarActions() {
+  const ctx = useContext(Ctx);
+  if (!ctx || ctx.selected.size === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2">
+      <BulkActions variant="inline" />
+    </div>
+  );
+}
+
+function BulkBar() {
+  const ctx = useContext(Ctx);
+  if (!ctx || ctx.selected.size === 0) return null;
+  return (
+    <div className="sticky bottom-0 z-20 -mx-1 mt-3 flex flex-wrap items-center gap-2 rounded-t-lg border border-line bg-surface-3 px-3 py-2 shadow-lg">
+      <BulkActions variant="bar" />
     </div>
   );
 }
