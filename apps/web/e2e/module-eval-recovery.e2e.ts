@@ -29,9 +29,29 @@ test('reloads once when a module fails to evaluate, then stops', async ({ page }
     if (message.type() === 'error') errors.push(message.text().slice(0, 200));
   });
 
+  /*
+   * ⚠️ NOT `page.on('load')`, which is what this counted first and is a race
+   * it can never win.
+   *
+   * `load` only fires once a document has finished fetching every subresource.
+   * The recovery runs from a `useEffect` the moment the error boundary mounts —
+   * roughly 190ms in, routinely BEFORE `load` — and `location.reload()` then
+   * ABORTS the first document, so its `load` never fires at all. The counter
+   * reads 1 for a recovery that worked perfectly, and the test fails on a
+   * success.
+   *
+   * It only shows up when the runner is slow enough to widen that window,
+   * which is why it sat green for weeks and then failed twice in one evening
+   * on CI (run 34633191088 — two `POST /api/errors` 188ms apart, i.e. two
+   * boundary renders and therefore two documents, against one `load` event).
+   *
+   * `framenavigated` on the MAIN frame fires when a navigation COMMITS, which
+   * is exactly the event being counted here: it cannot be cancelled by the
+   * reload it is measuring, and it does not wait on subresources.
+   */
   let documentLoads = 0;
-  page.on('load', () => {
-    documentLoads += 1;
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) documentLoads += 1;
   });
 
   await page.goto('/admin/courses/new');
@@ -44,7 +64,8 @@ test('reloads once when a module fails to evaluate, then stops', async ({ page }
     'the stale registration never broke the page, so this test proves nothing',
   ).toContain('is not a function');
 
-  // The `goto` itself, plus exactly one automatic recovery attempt.
+  // The `goto` itself, plus exactly one automatic recovery attempt. See the
+  // counter above for why this is commits and not `load` events.
   expect(documentLoads).toBe(2);
 
   // And it settled on the error screen rather than reloading forever.
