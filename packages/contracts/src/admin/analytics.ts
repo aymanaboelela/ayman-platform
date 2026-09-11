@@ -444,3 +444,46 @@ export const StudentAnalyticsDetailSchema = z.object({
   daily: z.array(DailyPointSchema),
 });
 export type StudentAnalyticsDetail = z.infer<typeof StudentAnalyticsDetailSchema>;
+
+// ── per-course headcount ───────────────────────────────────────────────────
+
+/**
+ * One published course and how many people are actually in it — «كام واحد
+ * مشترك في الكورس ده».
+ *
+ * ## Two numbers, because they answer two different questions
+ *
+ * `enrolled` is the platform's ONE definition of a student in a course: a
+ * `role = 'student'` account with a `student_profiles` row (the population
+ * `/admin/students` lists) holding an **active** enrollment. It is the same
+ * integer `AnalyticsOverview.students.enrolled` reports when the overview is
+ * filtered to this course, and that is the point — the dashboard's per-course
+ * line and the analytics screen it links to must never disagree.
+ *
+ * `subscribed` counts distinct students holding a LIVE grant naming this
+ * course (`scope` `course` or `term`, never revoked, not past `validUntil`) —
+ * regardless of `source`, so a hand-issued grant is counted here even though
+ * every money screen filters it out (`FinanceService.list` is `source:
+ * 'purchase'` only). For a free course it is 0 and means nothing: access there
+ * comes from the platform-wide grant every registered student gets, so a
+ * «مشترك» count on a free course would just be the student total again.
+ * `requiresGrant` is what tells a renderer which of the two to lead with.
+ *
+ * The two are independent on purpose and neither bounds the other: an
+ * enrollment survives its grant expiring (`enrolled > subscribed`), and a
+ * student can be sold a course before they ever open it (`subscribed >
+ * enrolled`).
+ */
+export const CourseHeadcountRowSchema = z.object({
+  courseId: z.string(),
+  title: z.string(),
+  /** `true` = the course is closed and needs a grant of its own, so
+   *  `subscribed` is the meaningful number. `false` = free to every registered
+   *  student, and only `enrolled` says anything. */
+  requiresGrant: z.boolean(),
+  enrolled: z.number().int().min(0),
+  subscribed: z.number().int().min(0),
+});
+export type CourseHeadcountRow = z.infer<typeof CourseHeadcountRowSchema>;
+
+export const CourseHeadcountSchema = z.array(CourseHeadcountRowSchema);

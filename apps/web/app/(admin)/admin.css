@@ -529,6 +529,102 @@
   color: var(--a-11);
 }
 
+/* ---------------------------------------------------------------------------
+   .course-count — one course on the overview's headcount strip.
+
+   A row, not a tile: the strip is read DOWN, comparing one bar against the
+   next, and a grid of cards puts the bars on different baselines where they
+   cannot be compared at all. The bar is the only saturated thing in the row;
+   the title, the badge and the button all stay recessive, because the whole
+   point of the strip is that the biggest course is obvious before any of them
+   are read.
+   --------------------------------------------------------------------------- */
+.course-count {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  padding: var(--s-12) var(--s-16);
+}
+
+.course-count__track {
+  margin-block-start: var(--s-8);
+  block-size: 0.5rem;
+  inline-size: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--viz-track);
+}
+
+/* Grows from the INLINE start, so in this RTL document it grows leftward from
+   the right edge — the direction the reader's eye already travels. */
+.course-count__fill {
+  display: block;
+  block-size: 100%;
+  border-radius: 999px;
+  background: var(--viz-2);
+  transition: inline-size 320ms var(--ease);
+}
+
+/* Amber is the money hue everywhere else in this admin, and a closed course's
+   bar is a count of subscriptions. Two hues so «مقفول» and «مفتوح للكل» are
+   separable down the strip without reading either badge. */
+.course-count__fill--paid {
+  background: var(--viz-1);
+}
+
+.course-count__figures {
+  margin-block-start: var(--s-4);
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.course-count__value {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.course-count__badge {
+  flex-shrink: 0;
+  padding: 0.1rem var(--s-8);
+  border-radius: 999px;
+  border: var(--hairline) solid color-mix(in oklch, var(--viz-2), transparent 65%);
+  background: color-mix(in oklch, var(--viz-2), transparent 88%);
+  font-size: var(--fs-mono-label);
+  color: var(--n-11);
+}
+
+.course-count__badge--paid {
+  border-color: color-mix(in oklch, var(--a-9), transparent 62%);
+  background: color-mix(in oklch, var(--a-9), transparent 88%);
+  color: var(--a-11);
+}
+
+/* Ayman asks for the button ON the row rather than the row being one big
+   link: a row whose title is also a link is a row you cannot select the title
+   of, and the destination («تحليلات الكورس») is not what the row is about. */
+.course-count__go {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-8) var(--s-12);
+  border-radius: var(--r-md);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-2);
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+  transition:
+    background-color var(--d-hover) var(--ease),
+    border-color var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease);
+}
+
+.course-count__go:hover {
+  border-color: color-mix(in oklch, var(--a-9), transparent 55%);
+  color: var(--a-11);
+}
+
 /* One section of the admin, as a destination rather than as a menu row. */
 .section-tile {
   display: flex;
