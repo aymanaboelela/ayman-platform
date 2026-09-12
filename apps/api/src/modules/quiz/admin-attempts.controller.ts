@@ -5,7 +5,11 @@ import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/curre
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { ATTEMPT_SORTS, type AdminAttemptSort, AttemptAdminService } from './attempt-admin.service';
 import { GrantExtraTimeDto, ReopenAttemptDto } from './dto/attempt-admin.dto';
-import { AdminGradeAnswerDto, AdminGradingResultsQueryDto } from './dto/exam.dto';
+import {
+  AdminAttemptMarkDto,
+  AdminGradeAnswerDto,
+  AdminGradingResultsQueryDto,
+} from './dto/exam.dto';
 import { ManualGradingService } from './manual-grading.service';
 
 /**
@@ -170,8 +174,29 @@ export class AdminAttemptsController {
       scope: query.scope,
       sort: query.sort,
       lessonId: query.lessonId,
+      day: query.day,
       limit: query.limit,
     });
+  }
+
+  /**
+   * «أقيّمه» و«حطه في لوحة الشرف».
+   *
+   * `attempt:grade`, the same permission as marking an answer: both are the
+   * instructor's judgement of a paper, and a role allowed to set a mark is
+   * exactly the one allowed to say the paper was outstanding.
+   *
+   * ⚠️ This route can publish a student's name and avatar on the public
+   * landing page. The audit row names the actor for that reason.
+   */
+  @RequirePermission('attempt:grade')
+  @Patch('attempts/:attemptId/mark')
+  markAttempt(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('attemptId') attemptId: string,
+    @Body() body: AdminAttemptMarkDto,
+  ) {
+    return this.grading.mark(attemptId, body, user.id);
   }
 
   @RequirePermission('attempt:grade')

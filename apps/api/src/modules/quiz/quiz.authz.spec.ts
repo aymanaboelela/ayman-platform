@@ -346,6 +346,10 @@ describe('quiz module authorization matrix', () => {
     { label: 'admin grading results: anonymous', method: 'GET', path: () => `/api/admin/grading-results`, role: 'anonymous', status: 401 },
     { label: 'admin grading results: student', method: 'GET', path: () => `/api/admin/grading-results`, role: 'student', status: 403 },
     { label: 'admin grading results: admin', method: 'GET', path: () => `/api/admin/grading-results`, role: 'admin', status: 200 },
+    // ⚠️ This route can publish a student's name and photo on the public
+    // landing page, so its refusals matter more than most.
+    { label: 'attempt mark: anonymous', method: 'PATCH', path: () => `/api/admin/attempts/${attemptId}/mark`, role: 'anonymous', status: 401 },
+    { label: 'attempt mark: student', method: 'PATCH', path: () => `/api/admin/attempts/${attemptId}/mark`, role: 'student', status: 403 },
 
     { label: 'admin grading for attempt: student', method: 'GET', path: (c) => `/api/admin/attempts/${c.submittedAttemptId}/grading`, role: 'student', status: 403 },
     { label: 'admin grading for attempt: admin', method: 'GET', path: (c) => `/api/admin/attempts/${c.submittedAttemptId}/grading`, role: 'admin', status: 200 },

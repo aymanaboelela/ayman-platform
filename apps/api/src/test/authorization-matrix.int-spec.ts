@@ -2011,6 +2011,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // makes that ordering a tested property rather than a comment.
       'GET /api/admin/grading-queue',
       'GET /api/admin/grading-results',
+      'PATCH /api/admin/attempts/:attemptId/mark',
       'GET /api/admin/attempts/:attemptId/grading',
       'PATCH /api/admin/attempts/:attemptId/questions/:attemptQuestionId/grade',
     ]);

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type {
+  AdminAttemptMarkInput,
   AdminGradeAnswerInput,
   AdminGradedRow,
   AdminGradingAttempt,
@@ -35,6 +36,8 @@ interface GradingResultRow {
   percent: number | null;
   duration_seconds: number | null;
   hand_marked: boolean;
+  instructor_rating: number | null;
+  honor_board_at: Date | null;
 }
 
 function toGradedRow(row: GradingResultRow): AdminGradedRow {
@@ -54,6 +57,8 @@ function toGradedRow(row: GradingResultRow): AdminGradedRow {
     percent: row.percent === null ? null : Math.min(Math.max(row.percent, 0), 100),
     passed: row.passed,
     handMarked: row.hand_marked,
+    instructorRating: row.instructor_rating,
+    onHonorBoard: row.honor_board_at !== null,
   };
 }
 
@@ -181,6 +186,7 @@ export class ManualGradingService {
     scope: GradingScope;
     sort: GradingSort;
     lessonId?: string;
+    day?: string;
     limit?: number;
   }): Promise<AdminGradingResults> {
     const limit = Math.min(Math.max(options.limit ?? 100, 1), 300);
@@ -197,7 +203,17 @@ export class ManualGradingService {
      * page of equal scores can duplicate and drop rows.
      */
     const ORDER_BY: Record<GradingSort, Prisma.Sql> = {
-      score: Prisma.sql`percent DESC NULLS LAST, a."id" ASC`,
+      /*
+       * «عندك عشرة أوائل، وأنا عايز أطلّع الأول» — the rating leads, and the
+       * percentage breaks its ties.
+       *
+       * That order is the whole point of the rating: ten students on 100/100
+       * are indistinguishable by score, and the thing that separates them is
+       * the instructor's own read of the paper. An unrated paper sorts BELOW a
+       * rated one of the same score (NULLS LAST), because "I have not looked
+       * at this one yet" is not a claim to be first.
+       */
+      score: Prisma.sql`a."instructor_rating" DESC NULLS LAST, percent DESC NULLS LAST, a."id" ASC`,
       fastest: Prisma.sql`duration_seconds ASC NULLS LAST, a."id" ASC`,
       latest: Prisma.sql`a."submitted_at" DESC NULLS LAST, a."id" DESC`,
       earliest: Prisma.sql`a."submitted_at" ASC NULLS LAST, a."id" ASC`,
@@ -221,6 +237,19 @@ export class ManualGradingService {
       ? Prisma.sql`AND q."lesson_id" = ${options.lessonId}::uuid`
       : Prisma.empty;
 
+    /*
+     * «النهاردة بس حط امتحان واحد» — one day's sittings.
+     *
+     * Bucketed in CAIRO, not UTC. A paper submitted at 00:30 Cairo belongs to
+     * that night in every sentence anyone says about it; bucketing on UTC
+     * would file it under the previous day and the instructor would look for
+     * it on the wrong date. The same expression is used for the day LIST
+     * below, so the filter and its options can never disagree.
+     */
+    const dayFilter = options.day
+      ? Prisma.sql`AND (a."submitted_at" AT TIME ZONE 'Africa/Cairo')::date = ${options.day}::date`
+      : Prisma.empty;
+
     const rows = await this.prisma.$queryRaw<GradingResultRow[]>`
       SELECT
         a."id"            AS attempt_id,
@@ -238,6 +267,8 @@ export class ManualGradingService {
         CASE WHEN a."submitted_at" IS NOT NULL
              THEN greatest(0, extract(epoch FROM a."submitted_at" - a."started_at"))::int
              ELSE NULL END AS duration_seconds,
+        a."instructor_rating" AS instructor_rating,
+        a."honor_board_at"    AS honor_board_at,
         EXISTS (
           SELECT 1 FROM "app"."attempt_questions" hq
           WHERE hq."attempt_id" = a."id" AND hq."graded_by" IS NOT NULL
@@ -254,6 +285,7 @@ export class ManualGradingService {
         AND a."submitted_at" IS NOT NULL
         ${scopeFilter}
         ${lessonFilter}
+        ${dayFilter}
       ORDER BY ${ORDER_BY[options.sort]}
       LIMIT ${limit}
     `;
@@ -270,9 +302,148 @@ export class ManualGradingService {
       take: 200,
     });
 
+    /*
+     * The day list — every date that actually HAS sittings, newest first.
+     *
+     * Offered rather than a free date picker, and for one reason: a picker
+     * lets the instructor choose a day with nothing on it, and an empty screen
+     * after a deliberate choice reads as a broken filter. A list of days that
+     * exist cannot do that.
+     *
+     * Bucketed in Cairo by the same expression the filter uses, so a day that
+     * appears here always matches something when it is pressed.
+     */
+    const days = await this.prisma.$queryRaw<{ day: Date; count: bigint }[]>`
+      SELECT (a."submitted_at" AT TIME ZONE 'Africa/Cairo')::date AS day, count(*) AS count
+      FROM "app"."quiz_attempts" a
+      JOIN "app"."quizzes" q ON q."id" = a."quiz_id"
+      WHERE a."state" = 'submitted'
+        AND a."submitted_at" IS NOT NULL
+        ${lessonFilter}
+      GROUP BY 1
+      ORDER BY 1 DESC
+      LIMIT 60
+    `;
+
+    /*
+     * «كام واحد دخل، كام جاب ١٠٠، كام رسب» — over the SAME filtered set the
+     * rows come from, day filter included. A summary describing the whole
+     * platform while the list under it shows one day would be worse than no
+     * summary at all.
+     *
+     * ⚠️ NOT computed from `rows`: that array is capped by `limit`, so on a
+     * cohort larger than the page the counts would silently describe the first
+     * hundred papers and call it the class. This is its own aggregate with no
+     * LIMIT on it.
+     *
+     * `perfect` counts on the MARK (`scaled_score >= grade_out_of`), not on
+     * percent = 100: a paper marked out of 50 that scored 50 is full marks
+     * too, and rounding a ratio to 100 would also swallow a 99.6.
+     */
+    const [totals] = await this.prisma.$queryRaw<
+      { sat: bigint; perfect: bigint; failed: bigint; average: number | null }[]
+    >`
+      SELECT
+        count(*)                                        AS sat,
+        count(*) FILTER (
+          WHERE a."grade_out_of" > 0 AND a."scaled_score" >= a."grade_out_of"
+        )                                               AS perfect,
+        count(*) FILTER (WHERE a."passed" IS FALSE)     AS failed,
+        round(avg(
+          CASE WHEN a."grade_out_of" > 0
+               THEN a."scaled_score" / a."grade_out_of" * 100
+               ELSE NULL END
+        ))::int                                         AS average
+      FROM "app"."quiz_attempts" a
+      JOIN "app"."quizzes" q ON q."id" = a."quiz_id"
+      WHERE a."state" = 'submitted'
+        AND a."submitted_at" IS NOT NULL
+        ${scopeFilter}
+        ${lessonFilter}
+        ${dayFilter}
+    `;
+
     return {
       rows: rows.map(toGradedRow),
       exams: exams.map((exam) => ({ lessonId: exam.id, title: exam.title })),
+      days: days.map((row) => ({
+        // `toISOString().slice(0, 10)` would re-apply a UTC shift to a value
+        // that is already a Cairo calendar date — the date is formatted from
+        // its own parts instead.
+        day: `${row.day.getFullYear()}-${String(row.day.getMonth() + 1).padStart(2, '0')}-${String(row.day.getDate()).padStart(2, '0')}`,
+        count: Number(row.count),
+      })),
+      stats: {
+        sat: Number(totals?.sat ?? 0),
+        perfect: Number(totals?.perfect ?? 0),
+        failed: Number(totals?.failed ?? 0),
+        // Null rather than 0 on an empty filter — «٠٪» would say the class
+        // scored nothing, which is a different and alarming claim.
+        averagePercent:
+          totals?.average === null || totals?.average === undefined
+            ? null
+            : Math.min(Math.max(totals.average, 0), 100),
+      },
+    };
+  }
+
+  /**
+   * «أقيّمه» و«حطه في لوحة الشرف» — the instructor's own judgement of a paper.
+   *
+   * Two independent fields on one route because they are pressed from the same
+   * row, one after the other: a rating is how ten full-mark papers become an
+   * order, and the board is what that order is FOR.
+   *
+   * ⚠️ `onHonorBoard: true` publishes this student's NAME AND AVATAR on the
+   * public landing page. The server stamps the time itself rather than
+   * accepting one, so the board cannot be backdated, and the audit row names
+   * the actor — this is a publication, and it should be possible to answer
+   * "who put this child's photo on the internet, and when".
+   */
+  async mark(
+    attemptId: string,
+    input: AdminAttemptMarkInput,
+    actorUserId: string,
+  ): Promise<{ instructorRating: number | null; onHonorBoard: boolean }> {
+    const existing = await this.prisma.quizAttempt.findUnique({
+      where: { id: attemptId },
+      select: { id: true, state: true },
+    });
+    if (!existing) throw new NotFoundException({ code: 'attempt_not_found' });
+    // A paper with an answer still unmarked has a provisional total, and a
+    // provisional total has no business on a board of the best in the class.
+    if (existing.state !== 'submitted') {
+      throw new BadRequestException({ code: 'attempt_not_finished' });
+    }
+
+    const updated = await this.prisma.quizAttempt.update({
+      where: { id: attemptId },
+      data: {
+        ...(input.instructorRating !== undefined && {
+          instructorRating: input.instructorRating,
+        }),
+        ...(input.onHonorBoard !== undefined && {
+          honorBoardAt: input.onHonorBoard ? new Date() : null,
+        }),
+      },
+      select: { instructorRating: true, honorBoardAt: true },
+    });
+
+    await this.audit.record({
+      action: 'attempt:grade',
+      resourceType: AUDIT_RESOURCES.quizAttempt,
+      resourceId: attemptId,
+      outcome: 'success',
+      actorUserId,
+      metadata: {
+        instructorRating: updated.instructorRating,
+        onHonorBoard: updated.honorBoardAt !== null,
+      },
+    });
+
+    return {
+      instructorRating: updated.instructorRating,
+      onHonorBoard: updated.honorBoardAt !== null,
     };
   }
 

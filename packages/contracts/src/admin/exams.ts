@@ -335,13 +335,112 @@ export const AdminGradedRowSchema = z.object({
   /** Whether a human marked at least one answer on this paper — what puts it
    *  in «اتصحّح خلاص» rather than merely in the ranking. */
   handMarked: z.boolean(),
+  /** The instructor's own 1..5 on this paper, or null. The tiebreak between
+   *  ten students who all scored full marks. */
+  instructorRating: z.number().int().min(1).max(5).nullable(),
+  /** Whether this paper is on «لوحة الشرف» — and so whether this student's
+   *  name and photo are on the public landing page right now. */
+  onHonorBoard: z.boolean(),
 });
 export type AdminGradedRow = z.infer<typeof AdminGradedRowSchema>;
+
+/**
+ * «كام واحد دخل، كام جاب ١٠٠، كام رسب» — the four numbers above the list.
+ *
+ * Computed over the SAME filtered set the rows come from, so switching to one
+ * exam or one day changes them. A summary that silently described the whole
+ * platform while the list below it showed one day would be worse than none.
+ */
+export const AdminGradingStatsSchema = z.object({
+  /** Finished sittings in the current filter — «كام واحد دخل الامتحان». */
+  sat: z.number().int().nonnegative(),
+  /** Full marks. Counted on the MARK, not on 100% — a paper marked out of 50
+   *  that scored 50 is a full mark too. */
+  perfect: z.number().int().nonnegative(),
+  /** Below the paper's own pass mark. `passed` is null on nothing here: the
+   *  list is `submitted` only, so every row has a verdict. */
+  failed: z.number().int().nonnegative(),
+  /** Mean percentage, rounded. `null` when nothing is in the filter — never 0,
+   *  which would read as "everyone scored zero". */
+  averagePercent: z.number().min(0).max(100).nullable(),
+});
+export type AdminGradingStats = z.infer<typeof AdminGradingStatsSchema>;
+
+/** One day that has finished sittings on it — «النهاردة بس حط امتحان واحد».
+ *  Days with nothing in them are not offered, so the filter can never lead to
+ *  an empty screen. */
+export const AdminGradingDaySchema = z.object({
+  /** `YYYY-MM-DD` in CAIRO, not UTC. A paper submitted at 00:30 Cairo belongs
+   *  to that night in every sentence anyone says about it, and bucketing on
+   *  UTC would file it under the previous day. */
+  day: z.string(),
+  count: z.number().int().positive(),
+});
+export type AdminGradingDay = z.infer<typeof AdminGradingDaySchema>;
 
 export const AdminGradingResultsSchema = z.object({
   rows: z.array(AdminGradedRowSchema),
   /** Every exam with at least one finished sitting — the filter's options,
    *  sent with the rows so the control never needs a second request. */
   exams: z.array(z.object({ lessonId: z.uuid(), title: z.string() })),
+  /** The days that have sittings, newest first — the left-hand filter. */
+  days: z.array(AdminGradingDaySchema),
+  stats: AdminGradingStatsSchema,
 });
 export type AdminGradingResults = z.infer<typeof AdminGradingResultsSchema>;
+
+/**
+ * `PATCH /api/admin/attempts/:attemptId/mark` — «أقيّمه» و«حطه في لوحة الشرف».
+ *
+ * Both fields are optional and independent: rating a paper does not put it on
+ * the board, and putting it on the board does not require a rating. Sending
+ * neither is a 400 rather than a silent no-op.
+ */
+export const AdminAttemptMarkSchema = z
+  .object({
+    /** 1..5, or null to clear. Matches the CHECK on the column. */
+    instructorRating: z.number().int().min(1).max(5).nullable().optional(),
+    /** ⚠️ True publishes this student's NAME AND AVATAR on the public landing
+     *  page. It is a boolean here rather than a timestamp so the caller cannot
+     *  backdate the board; the server stamps `now()`. */
+    onHonorBoard: z.boolean().optional(),
+  })
+  .strict()
+  .refine(
+    (value) => value.instructorRating !== undefined || value.onHonorBoard !== undefined,
+    { message: 'مفيش حاجة تتغيّر' },
+  );
+export type AdminAttemptMarkInput = z.infer<typeof AdminAttemptMarkSchema>;
+
+/**
+ * لوحة الشرف — the public board on the landing page.
+ *
+ * ## What is and is not on the wire
+ *
+ * A name, a photograph, the exam, and the mark. NOTHING that identifies the
+ * account behind it: no user id, no attempt id, no slug. This is the one
+ * payload on the platform that is read by anyone on the internet and describes
+ * a named minor, so it carries the least that still makes a board — and an id
+ * on it would let a stranger enumerate students from the landing page.
+ *
+ * ## Why the board is stored, not derived
+ *
+ * Every entry is here because an instructor put it here (`honor_board_at`).
+ * A board that filled itself from the top scores would publish a child's
+ * photograph because they did well on a quiz — see the column's own note.
+ */
+export const HonorBoardEntrySchema = z.object({
+  studentName: z.string(),
+  /** The avatar's storage key, or null — the board draws initials for a
+   *  student who never uploaded one, which is most of them. */
+  avatarKey: z.string().nullable(),
+  quizTitle: z.string(),
+  scaledScore: z.number(),
+  gradeOutOf: z.number(),
+  percent: z.number().min(0).max(100),
+});
+export type HonorBoardEntry = z.infer<typeof HonorBoardEntrySchema>;
+
+export const HonorBoardSchema = z.object({ entries: z.array(HonorBoardEntrySchema) });
+export type HonorBoard = z.infer<typeof HonorBoardSchema>;
+

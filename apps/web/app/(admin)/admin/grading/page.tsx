@@ -2,6 +2,7 @@ import Link from 'next/link';
 // `/copy/admin`, never the root barrel: these screens only ever render inside
 // the admin layout, and `copy.admin.*` lives in that module.
 import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
 import {
   AdminGradingQueueSchema,
   AdminGradingResultsSchema,
@@ -13,6 +14,38 @@ import { cn } from '@ayman/ui/lib/cn';
 import { adminGet } from '@/lib/admin-api';
 import { GradingQueueRow } from '@/components/admin/grading/queue-row';
 import { ResultRow } from '@/components/admin/grading/result-row';
+
+/** Day and month, Western digits — the same rule every date here follows. No
+ *  year: the list is the last sixty days of sittings. */
+const dayFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
+  day: '2-digit',
+  month: '2-digit',
+  weekday: 'short',
+});
+
+const dayClass =
+  'flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ' +
+  'text-[length:var(--fs-text-sm)] transition-colors duration-[160ms] ease-out lg:w-full';
+const dayActive = 'border-accent bg-accent/15 text-accent-text';
+const dayIdle = 'border-line text-fg-muted hover:border-accent/40 hover:text-fg';
+
+/** Every filter lives in the URL, so each control has to rebuild the whole
+ *  query rather than append to it — a day link that dropped the exam filter
+ *  would silently widen the view it was meant to narrow. */
+function hrefFor(state: {
+  tab: string;
+  sort?: string;
+  exam?: string;
+  day?: string;
+}): string {
+  const params = new URLSearchParams();
+  if (state.tab !== 'queue') params.set('tab', state.tab);
+  if (state.sort) params.set('sort', state.sort);
+  if (state.exam) params.set('exam', state.exam);
+  if (state.day) params.set('day', state.day);
+  const query = params.toString();
+  return query ? `/admin/grading?${query}` : '/admin/grading';
+}
 
 const c = copy.admin.grading;
 
@@ -80,7 +113,7 @@ const SORT_LABEL: Record<GradingSort, string> = {
 export default async function AdminGradingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; sort?: string; exam?: string }>;
+  searchParams: Promise<{ tab?: string; sort?: string; exam?: string; day?: string }>;
 }) {
   const query = await searchParams;
 
@@ -95,6 +128,10 @@ export default async function AdminGradingPage({
   // An empty `?exam=` is what the «كل الامتحانات» option submits, and it means
   // "no filter" — never a lesson id of the empty string.
   const exam = query.exam && query.exam.length > 0 ? query.exam : undefined;
+  // Shape-checked here as well as at the API: this ends up as a `::date`
+  // parameter, and a value that is not a date is a 500 from Postgres rather
+  // than the empty list a bad filter deserves.
+  const day = query.day && /^\d{4}-\d{2}-\d{2}$/.test(query.day) ? query.day : undefined;
 
   const { rows: queue } = await adminGet('/api/admin/grading-queue', AdminGradingQueueSchema);
 
@@ -114,6 +151,7 @@ export default async function AdminGradingPage({
     sort: activeSort,
   });
   if (exam) params.set('lessonId', exam);
+  if (day) params.set('day', day);
 
   /*
    * Issued ONLY for the tab that renders it. It is the expensive half of this
@@ -241,6 +279,95 @@ export default async function AdminGradingPage({
             </button>
           </form>
 
+          {/*
+            «كام واحد دخل، كام جاب ١٠٠، كام رسب» — over the SAME filter as the
+            list, so narrowing to one exam or one day moves these numbers too.
+            Computed server-side over the whole set, never from the rows on
+            screen: the list is capped, and counting it would describe the
+            first hundred papers and call it the class.
+          */}
+          {results ? (
+            <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {(
+                [
+                  [c.statSat, String(results.stats.sat), false],
+                  [c.statPerfect, String(results.stats.perfect), true],
+                  [c.statFailed, String(results.stats.failed), false],
+                  [
+                    c.statAverage,
+                    results.stats.averagePercent === null
+                      ? '—'
+                      : `${results.stats.averagePercent}%`,
+                    false,
+                  ],
+                ] as const
+              ).map(([label, value, accent]) => (
+                <div
+                  key={label}
+                  className={cn(
+                    'rounded-lg border p-3',
+                    accent ? 'border-accent/40 bg-accent/10' : 'border-line bg-surface-2',
+                  )}
+                >
+                  <dt className="text-[length:var(--fs-text-xs)] text-fg-muted">{label}</dt>
+                  <dd
+                    className={cn(
+                      'mono mt-0.5 text-[length:var(--fs-title-3)] font-semibold tabular-nums',
+                      accent ? 'text-accent-text' : 'text-fg',
+                    )}
+                  >
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+
+          {/*
+            Two columns on a desktop: the days down one side, the list beside
+            them. `lg:` and not `md:` — the admin shell already takes a sidebar
+            out of the viewport, so a `md` breakpoint here measures a width
+            this column never has (see the note in `truncate-blows-out-grid-track`).
+            On a phone the day strip scrolls horizontally above the list.
+          */}
+          <div className="mt-5 gap-5 lg:grid lg:grid-cols-[200px_minmax(0,1fr)]">
+            <aside className="mb-4 lg:mb-0">
+              <h2 className="mb-2 text-[length:var(--fs-text-xs)] font-medium text-fg-muted">
+                {c.dayFilterTitle}
+              </h2>
+              {/*
+                Days that HAVE papers, never a calendar. A picker lets him
+                choose an empty day, and an empty screen after a deliberate
+                choice reads as a broken filter rather than as a quiet night.
+              */}
+              <ul className="flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0">
+                <li className="shrink-0">
+                  <Link
+                    href={hrefFor({ tab, sort: query.sort, exam, day: undefined })}
+                    aria-current={day === undefined ? 'true' : undefined}
+                    className={cn(dayClass, day === undefined ? dayActive : dayIdle)}
+                  >
+                    {c.dayFilterAll}
+                  </Link>
+                </li>
+                {results?.days.map((option) => (
+                  <li key={option.day} className="shrink-0">
+                    <Link
+                      href={hrefFor({ tab, sort: query.sort, exam, day: option.day })}
+                      aria-current={day === option.day ? 'true' : undefined}
+                      className={cn(dayClass, day === option.day ? dayActive : dayIdle)}
+                    >
+                      <span className="tabular-nums">{dayFormatter.format(new Date(option.day))}</span>
+                      <span className="mono text-[length:var(--fs-text-xs)] opacity-70">
+                        {formatCopy(c.dayFilterCount, { n: option.count })}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </aside>
+
+            <div className="min-w-0">
           {results && results.rows.length > 0 ? (
             <ol className="mt-5 flex flex-col gap-2.5">
               {results.rows.map((row, index) => (
@@ -251,6 +378,9 @@ export default async function AdminGradingPage({
                        خلاص», and on any list he has re-sorted by date or by
                        name, a «#1» would be a standing nobody earned. */
                     rank={tab === 'top' && activeSort === 'score' ? index + 1 : null}
+                    /* The stars stay available whatever the order — re-sorting
+                       is how you go looking for the paper you meant to rate. */
+                    canMark={tab === 'top'}
                   />
                 </li>
               ))}
@@ -262,6 +392,8 @@ export default async function AdminGradingPage({
               </p>
             </div>
           )}
+            </div>
+          </div>
         </>
       )}
     </>

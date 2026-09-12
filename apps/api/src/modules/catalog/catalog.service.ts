@@ -1,3 +1,4 @@
+import type { HonorBoard } from '@ayman/contracts/admin/exams';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import type {
@@ -286,4 +287,74 @@ export class CatalogService {
       })),
     };
   }
+
+  /**
+   * لوحة الشرف — the named students on the landing page.
+   *
+   * ## Ordered the way the instructor decides, not the way the score does
+   *
+   * `instructor_rating` first, then the percentage, then who was added first.
+   * That order is the feature: ten students reach full marks on a monthly exam
+   * and only one can be الأول, and the thing that separates them is his own
+   * read of the papers — not a tiebreak the database invents.
+   *
+   * ## Only what an instructor put here
+   *
+   * `honor_board_at IS NOT NULL` is the entire membership rule. Nothing here
+   * derives from the score, and that is deliberate: a board that filled itself
+   * would publish a child's name and photograph on the public internet because
+   * they did well on a quiz.
+   *
+   * ## No ids on the wire
+   *
+   * This is the only public payload on the platform that describes a named
+   * minor. A user id or an attempt id on it would let a stranger enumerate
+   * students straight from the landing page, so the projection carries a name,
+   * a photo key, the exam and the mark, and stops.
+   *
+   * Twelve rows. The board has four visible places and the section is not a
+   * leaderboard — a cap keeps a forgotten toggle from turning the landing page
+   * into a class list.
+   */
+  async honorBoard(): Promise<HonorBoard> {
+    const rows = await this.prisma.quizAttempt.findMany({
+      where: { honorBoardAt: { not: null }, state: 'submitted' },
+      orderBy: [
+        { instructorRating: 'desc' },
+        { scaledScore: 'desc' },
+        { honorBoardAt: 'asc' },
+      ],
+      take: 12,
+      select: {
+        scaledScore: true,
+        gradeOutOf: true,
+        user: {
+          select: { image: true, studentProfile: { select: { fullName: true } } },
+        },
+        quiz: { select: { lesson: { select: { title: true } } } },
+      },
+    });
+
+    return {
+      entries: rows.map((row) => {
+        const scaledScore = Number(row.scaledScore ?? 0);
+        const gradeOutOf = Number(row.gradeOutOf);
+        return {
+          studentName: row.user.studentProfile?.fullName ?? '—',
+          avatarKey: row.user.image,
+          quizTitle: row.quiz.lesson.title,
+          scaledScore,
+          gradeOutOf,
+          // Clamped: a paper whose slots were edited after it was sat can
+          // score above its own total, and the contract caps this at 100 —
+          // an uncaught 104 would fail the parse and blank the landing page.
+          percent:
+            gradeOutOf > 0
+              ? Math.min(Math.max(Math.round((scaledScore / gradeOutOf) * 100), 0), 100)
+              : 0,
+        };
+      }),
+    };
+  }
+
 }

@@ -3571,6 +3571,46 @@
   border: 1px dashed var(--site-line-strong);
 }
 
+/* ---------------------------------------------------------------------------
+   A place with somebody IN it.
+
+   The dashed outline is the one declaration that has to go. It is the drawing
+   convention for "kept for something not here yet", and leaving it under a
+   student's name and photograph would say the name is a placeholder — which
+   is the precise opposite of what a board of honour is for. A solid border and
+   the card fill say "this is the content", which by then it is.
+
+   Everything else — the radius, the padding, the medal disc, the rank chip —
+   is inherited unchanged from the empty slot, so a board that fills in
+   overnight is recognisably the same object in the same place.
+   --------------------------------------------------------------------------- */
+.honor-board__slot--filled {
+  border-style: solid;
+  border-color: color-mix(in oklch, var(--a-9) 35%, transparent);
+  background: color-mix(in oklch, var(--a-9) 6%, var(--site-card-2));
+}
+
+.honor-board__slot-name {
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-semibold);
+  color: var(--site-fg);
+  /* `balance`, not `truncate`: an Egyptian full name is four or five words and
+     cutting it with an ellipsis on a board of honour is the one place that is
+     genuinely rude. It wraps onto two lines instead, and the slot has no fixed
+     height to fight about it. */
+  text-wrap: balance;
+}
+
+.honor-board__slot-score {
+  font-size: var(--fs-text-sm);
+  color: var(--a-11);
+}
+
+.honor-board__slot-quiz {
+  font-size: var(--fs-text-xs);
+  color: var(--site-fg-muted);
+}
+
 .honor-board__slot-mark {
   display: inline-flex;
   align-items: center;
