@@ -3608,7 +3608,7 @@
 
 .honor-board__slot-quiz {
   font-size: var(--fs-text-xs);
-  color: var(--site-fg-muted);
+  color: var(--site-fg-2);
 }
 
 .honor-board__slot-mark {
