@@ -673,6 +673,16 @@ export type UpdateLessonInput = {
   completionMode?: 'none' | 'manual' | 'on_view' | 'on_grade' | 'on_pass';
   completionMinViewSeconds?: number | null;
   completionPassGrade?: number | null;
+  /**
+   * «ينزل الساعة ٨» — an ISO instant WITH an offset, or `null` to cancel.
+   *
+   * An instant, never the `2026-09-12T20:00` a `datetime-local` input hands
+   * back: a zoneless string is read as UTC by every parser downstream, which
+   * publishes a Cairo 8pm lecture at 11pm. `lesson-settings-form.tsx`'s
+   * `toInstant` is where that conversion happens and why.
+   */
+  publishAt?: string | null;
+  description?: string | null;
 };
 
 export async function updateLessonAction(

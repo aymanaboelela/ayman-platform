@@ -8,6 +8,7 @@ import { sanitizeRichText } from '@/lib/sanitize-html';
 import { CourseHelpCard } from '@/components/player/course-help-card';
 import { CourseGroupCard } from '@/components/player/course-group-card';
 import { LessonHomework } from '@/components/player/lesson-homework';
+import { LessonDescription } from '@/components/player/lesson-description';
 import { CourseOutlineSidebar } from '@/components/player/course-outline';
 import { LessonPlayerView } from '@/components/player/lesson-player';
 
@@ -177,6 +178,16 @@ export default async function LessonPage({
             after the video. Putting it in the rail would file it beside the
             table of contents at a third of the width.
           */}
+          {/*
+            الملخص — closed, and ABOVE the homework rather than below it.
+
+            It is the thing to read once the video is finished and before the
+            exercise is attempted, so it sits in that order on the page. It
+            renders nothing at all on a lecture with no summary, which is most
+            of them.
+          */}
+          <LessonDescription description={payload.lesson.description} />
+
           {payload.homework ? (
             <LessonHomework lessonId={payload.lesson.id} homework={payload.homework} />
           ) : null}

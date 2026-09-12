@@ -420,6 +420,16 @@ export const LessonPlayerSchema = z.object({
     title: z.string(),
     kind: lessonKindSchema,
     estimatedSeconds: z.number().int().nullable(),
+    /**
+     * A short summary of the lecture, written to be read AFTER watching it.
+     *
+     * `null` on every lecture that has none, which today is most of them.
+     * `.catch(null)` rather than `.nullable()` alone: during a rolling deploy
+     * this page can be served by an API container that predates the column,
+     * and a missing field must degrade to "no summary" rather than fail the
+     * parse and take the whole lesson page down with it.
+     */
+    description: z.string().nullable().catch(null),
   }),
   video: PlayerVideoSchema.nullable(),
   text: z.object({ bodyHtml: z.string() }).nullable(),

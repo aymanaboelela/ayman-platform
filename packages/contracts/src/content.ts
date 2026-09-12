@@ -432,12 +432,32 @@ export type TermSetOpenResult = z.infer<typeof TermSetOpenResultSchema>;
  * Constraint 17). `.strict()` means sending one is a 400 — an admin cannot come
  * away believing they scheduled a lesson that nothing will actually hide.
  */
+/** A lecture summary. Plain text — see the column's own note in schema.prisma
+ *  for why it is not rich text, and why the student UI hides it by default. */
+export const MAX_LESSON_DESCRIPTION_CHARS = 2_000;
+
 const lessonWritableShape = {
   title: z.string().min(2).max(200),
   kind: LessonKindSchema,
   isPublished: z.boolean().default(false),
   isFreePreview: z.boolean().default(false),
   estimatedSeconds: z.number().int().min(0).max(24 * 60 * 60).default(0),
+  /**
+   * «ينزل الساعة ٨» — when this lecture should publish itself, or `null` for
+   * no schedule.
+   *
+   * ISO 8601 WITH an offset, and the client sends the instructor's own local
+   * moment: «٨ مساءً السبت» is a wall-clock time in Cairo, and a bare
+   * `2026-09-12T20:00` with no zone is read as UTC by every parser in the
+   * stack — three hours late, silently, and only visibly wrong on the night
+   * it matters.
+   *
+   * `.nullable()` is how a schedule is CANCELLED, so it has to survive a
+   * PATCH that sets it to null (`partialWithoutDefaults` keeps that).
+   */
+  publishAt: z.iso.datetime({ offset: true }).nullable().default(null),
+  /** The summary the student reads AFTER the lecture. `null` clears it. */
+  description: z.string().max(MAX_LESSON_DESCRIPTION_CHARS).nullable().default(null),
   completionMode: CompletionModeSchema.default('manual'),
   completionMinViewSeconds: z.number().int().min(0).nullable().default(null),
   completionPassGrade: z.number().min(0).max(100).nullable().default(null),

@@ -213,6 +213,7 @@ export class PlayerService {
           kind: true,
           courseId: true,
           estimatedSeconds: true,
+          description: true,
           course: { select: { slug: true, title: true } },
           section: { select: { title: true } },
           video: {
@@ -303,6 +304,14 @@ export class PlayerService {
         title: lesson.title,
         kind: lesson.kind as LessonKind,
         estimatedSeconds: lesson.estimatedSeconds,
+        /*
+         * The summary, written to be read AFTER the lecture — «قوله متشوفش
+         * الوصف إلا لما يشوف الدرس كله». It is shipped to the page but the
+         * page renders it collapsed; the instruction is about reading order,
+         * not secrecy, and a student who has finished and wants to check
+         * themselves against it should not have to load anything.
+         */
+        description: lesson.description,
       },
       video: lesson.video
         ? {
