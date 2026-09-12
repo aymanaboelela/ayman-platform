@@ -2,10 +2,11 @@ import { Fragment } from 'react';
 import type { Metadata } from 'next';
 import { copy } from '@ayman/contracts';
 import type { HomeBlock } from '@ayman/contracts/admin/home-blocks';
+import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
 import { JsonLd } from '@/components/seo/json-ld';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { faqPageJsonLd } from '@/lib/seo/jsonld';
-import { getHomeBlocks } from '@/lib/home-blocks';
+import { getHomeBlocks, getHonorBoard } from '@/lib/home-blocks';
 import { SiteHero } from '@/components/site/site-hero';
 import { WhyRail } from '@/components/site/why-rail';
 import { FeaturedCourses } from '@/components/site/featured-courses';
@@ -55,12 +56,18 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function HomePage() {
-  const blocks = await getHomeBlocks();
+  /*
+   * Both reads, together. `getHonorBoard` fails soft to an empty array and the
+   * board renders its reserved places for that, so there is nothing to guard
+   * here — and issuing it in parallel keeps a board nobody has filled yet from
+   * adding a round trip to the landing page's LCP path.
+   */
+  const [blocks, honorBoard] = await Promise.all([getHomeBlocks(), getHonorBoard()]);
 
-  return <main>{blocks.map((block) => renderBlock(block))}</main>;
+  return <main>{blocks.map((block) => renderBlock(block, honorBoard))}</main>;
 }
 
-function renderBlock(block: HomeBlock) {
+function renderBlock(block: HomeBlock, honorBoard: HonorBoardEntry[]) {
   const { props } = block;
 
   switch (props.type) {
@@ -127,8 +134,12 @@ function renderBlock(block: HomeBlock) {
        It takes no props today and will take none when the real standings land
        — see `<HonorBoardSection>` for why that is what lets the later slice
        replace it without touching a stored row. */
+    /* The one block that now takes data. It stays placement-only in the
+       STORED row — `{ type: 'honorBoard' }` and nothing else — so a row an
+       admin positioned months ago keeps working; the names are fetched by the
+       page and handed down, never stored in the block's props. */
     case 'honorBoard':
-      return <HonorBoardSection key={block.id} />;
+      return <HonorBoardSection key={block.id} entries={honorBoard} />;
 
     case 'about':
       return (

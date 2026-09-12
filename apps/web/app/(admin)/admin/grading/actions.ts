@@ -76,3 +76,45 @@ export async function gradeAnswerAction(
     return { ok: false };
   }
 }
+
+/**
+ * «أقيّمه» و«حطه في لوحة الشرف».
+ *
+ * ⚠️ `onHonorBoard: true` publishes the student's name and avatar on the
+ * public landing page. The confirmation lives at the call site
+ * (`AttemptMark`), where the student's name is in hand to put in the sentence
+ * — a server action cannot ask, and a confirm that says «متأكد؟» without
+ * naming what becomes public is not a confirmation.
+ *
+ * `revalidatePath` on both grading views, because a rating changes the ORDER
+ * of «الأوائل» and not just one row: the ranking sorts on the rating before
+ * the percentage, so a five-star paper moves to the top the moment it is
+ * rated. Refreshing one row would leave the list in an order the server no
+ * longer agrees with.
+ */
+export async function markAttemptAction(
+  attemptId: string,
+  input: { instructorRating?: number | null; onHonorBoard?: boolean },
+): Promise<{ ok: true } | { ok: false }> {
+  try {
+    // ⚠️ `(method, path, BODY, SCHEMA)` — the body comes third here and the
+    // schema fourth, the opposite way round from `apiSend`. Swapping them
+    // typechecks against `unknown` on the body parameter and fails at runtime
+    // as a validation error on the response.
+    await adminSend(
+      'PATCH',
+      `/api/admin/attempts/${attemptId}/mark`,
+      input,
+      z.object({
+        instructorRating: z.number().nullable(),
+        onHonorBoard: z.boolean(),
+      }),
+    );
+    revalidatePath('/admin/grading');
+    revalidatePath(`/admin/grading/${attemptId}`);
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
+

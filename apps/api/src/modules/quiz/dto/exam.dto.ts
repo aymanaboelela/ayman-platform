@@ -2,6 +2,7 @@ import {
   AdminExamCreateSchema,
   AdminExamDuplicateSchema,
   AdminExamPatchSchema,
+  AdminAttemptMarkSchema,
   AdminGradeAnswerSchema,
   GradingScopeSchema,
   GradingSortSchema,
@@ -52,8 +53,15 @@ export const AdminGradingResultsQuerySchema = z.object({
    *  query as a `::uuid` parameter, and a non-uuid would be a 500 from
    *  Postgres rather than the 400 a bad filter deserves. */
   lessonId: z.uuid().optional(),
+  /** One CAIRO calendar day, `YYYY-MM-DD`. Validated by shape here and used
+   *  as a `::date` parameter, never spliced into the SQL. */
+  day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   /** `coerce`, because a query string is always text. The service clamps it
    *  again — this bound is the contract, that one is the protection. */
   limit: z.coerce.number().int().min(1).max(300).optional(),
 });
 export class AdminGradingResultsQueryDto extends createZodDto(AdminGradingResultsQuerySchema) {}
+
+/** «أقيّمه» و«حطه في لوحة الشرف». See `AdminAttemptMarkSchema` for why the two
+ *  live on one route and why the timestamp is the server's to write. */
+export class AdminAttemptMarkDto extends createZodDto(AdminAttemptMarkSchema) {}

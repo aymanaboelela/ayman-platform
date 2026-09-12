@@ -5,6 +5,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import type { AdminGradedRow } from '@ayman/contracts/admin/exams';
 import { formatCopy, formatMark } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
+import { AttemptMark } from './attempt-mark';
 
 const c = copy.admin.grading;
 
@@ -36,6 +37,15 @@ export interface ResultRowProps {
    * sorted by date would read as a standing nobody earned.
    */
   rank: number | null;
+  /**
+   * Whether this row carries the rating and the board toggle.
+   *
+   * SEPARATE from `rank`, which is only shown when the list is actually
+   * ordered as a ranking. Tying the two together meant that re-sorting
+   * «الأوائل» by date took the star controls away — and re-sorting is exactly
+   * how you go looking for the paper you meant to rate.
+   */
+  canMark?: boolean;
 }
 
 /**
@@ -62,7 +72,7 @@ export interface ResultRowProps {
  * Same rule as the queue row beside it: two destinations (the student's record,
  * and the paper), so no stretched pseudo-element over the card.
  */
-export function ResultRow({ row, rank }: ResultRowProps) {
+export function ResultRow({ row, rank, canMark = false }: ResultRowProps) {
   const scored = row.scaledScore !== null;
 
   return (
@@ -154,6 +164,29 @@ export function ResultRow({ row, rank }: ResultRowProps) {
       <Link href={`/admin/grading/${row.attemptId}`} className="chip chip--quiet shrink-0">
         {c.openPaper}
       </Link>
+
+      {/*
+        The two judgements, on their own line below the row.
+
+        `basis-full` so they wrap to a full-width line of their own rather than
+        squeezing the name and the score on a phone: five stars and a pill need
+        about 280px, and taking that out of the identity column is what turns
+        an Arabic full name into one word and an ellipsis.
+
+        Only on «الأوائل». On «اتصحّح خلاص» the question is "did I mark this",
+        not "is this the best in the class", and a star control on a record of
+        work done is a second meaning for a screen that has one.
+      */}
+      {canMark ? (
+        <div className="basis-full border-t border-line-subtle pt-2">
+          <AttemptMark
+            attemptId={row.attemptId}
+            studentName={row.studentName}
+            instructorRating={row.instructorRating}
+            onHonorBoard={row.onHonorBoard}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

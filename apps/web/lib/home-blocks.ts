@@ -1,3 +1,4 @@
+import { HonorBoardSchema, type HonorBoardEntry } from '@ayman/contracts/admin/exams';
 import { cacheLife, cacheTag } from 'next/cache';
 import {
   HomeBlockListSchema,
@@ -199,3 +200,26 @@ export async function getHomeBlocks(): Promise<HomeBlockList> {
     return FALLBACK;
   }
 }
+
+/**
+ * لوحة الشرف — the names on the public board.
+ *
+ * Cached like every other landing read, and it fails SOFT to an empty board:
+ * `<HonorBoardSection>` renders its reserved places when there is nothing on
+ * it, so an API blip costs the page a board with no names rather than a
+ * section that 500s. The empty render is the one this component was written
+ * for in the first place.
+ */
+export async function getHonorBoard(): Promise<HonorBoardEntry[]> {
+  'use cache';
+  cacheLife('minutes');
+  cacheTag(tags.honorBoard());
+
+  try {
+    const board = await apiGet('/api/catalog/honor-board', HonorBoardSchema);
+    return board.entries;
+  } catch {
+    return [];
+  }
+}
+

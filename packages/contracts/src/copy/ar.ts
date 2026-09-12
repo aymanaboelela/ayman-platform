@@ -1355,6 +1355,8 @@ export const copy = {
        * going, which is what it will be.
        */
       ranks: ['المركز الأول', 'المركز التاني', 'المركز التالت', 'المركز الرابع'],
+      /** `{score}` من `{outOf}` — على كرت الطالب اللي على اللوحة. */
+      entryScore: '{score} من {outOf}',
       /**
        * Under the four places. Said ONCE, not repeated inside every card:
        * four cards each carrying the same apology is how an empty section

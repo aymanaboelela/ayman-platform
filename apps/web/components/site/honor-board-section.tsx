@@ -1,5 +1,8 @@
 import { Medal, Trophy } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
+import { formatCopy, formatMark } from '@ayman/contracts/format';
+import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
+import { UserAvatar } from '@/components/app/user-avatar';
 
 const c = copy.landing.honorBoard;
 
@@ -49,7 +52,7 @@ const c = copy.landing.honorBoard;
  * kilobyte of JavaScript — which is also why the disclosure below is a
  * `<details>` rather than a toggle (see it for the rest of that argument).
  */
-export function HonorBoardSection() {
+export function HonorBoardSection({ entries = [] }: { entries?: HonorBoardEntry[] }) {
   return (
     <section className="site-section" id="honor-board">
       <div className="site-shell">
@@ -106,6 +109,42 @@ export function HonorBoardSection() {
         {/* A list, not a row of divs: four reserved places ARE a list, and the
             later slice replaces its items with the real standings without
             changing what this element is. */}
+        {/*
+          The board, once there are names on it.
+
+          Every entry is here because an instructor put it here — never because
+          a score crossed a line. That is the whole membership rule (see
+          `quiz_attempts.honor_board_at`), and it is why this list can carry a
+          child's name and photograph on a public page at all: a board that
+          filled itself would publish them automatically.
+
+          The empty places below are NOT a loading state and are still the
+          honest render when the board is empty — see this component's header.
+        */}
+        {entries.length > 0 ? (
+          <ul className="honor-board__slots">
+            {entries.map((entry, index) => (
+              <li className="honor-board__slot honor-board__slot--filled" key={`${entry.studentName}-${index}`}>
+                <span className="honor-board__slot-mark" aria-hidden="true">
+                  <Medal size={22} strokeWidth={1.5} />
+                </span>
+                {/* The rank word only exists for the first four places; past
+                    that the list simply continues, which is what the fourth
+                    place was written to promise. */}
+                <span className="honor-board__slot-rank">{c.ranks[index] ?? ''}</span>
+                <UserAvatar name={entry.studentName} image={entry.avatarKey} size={56} />
+                <span className="honor-board__slot-name">{entry.studentName}</span>
+                <span className="honor-board__slot-score mono tabular-nums">
+                  {formatCopy(c.entryScore, {
+                    score: formatMark(entry.scaledScore),
+                    outOf: formatMark(entry.gradeOutOf),
+                  })}
+                </span>
+                <span className="honor-board__slot-quiz">{entry.quizTitle}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
         <ul className="honor-board__slots">
           {c.ranks.map((rank, index) => (
             <li className="honor-board__slot" key={rank}>
@@ -132,8 +171,11 @@ export function HonorBoardSection() {
             </li>
           ))}
         </ul>
+        )}
 
-        <p className="honor-board__waiting">{c.waiting}</p>
+        {/* The «لسه» line belongs to the empty board only. Leaving it under a
+            board with four names on it would say the names have not arrived. */}
+        {entries.length === 0 ? <p className="honor-board__waiting">{c.waiting}</p> : null}
       </div>
     </section>
   );
