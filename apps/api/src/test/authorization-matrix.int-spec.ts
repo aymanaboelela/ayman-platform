@@ -571,6 +571,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'health', method: 'get', path: () => '/api/health', actor: 'anonymous', status: 200 },
     { label: 'taxonomy', method: 'get', path: () => '/api/taxonomy', actor: 'anonymous', status: 200 },
     { label: 'catalog list', method: 'get', path: () => '/api/catalog/courses', actor: 'anonymous', status: 200 },
+    // Anonymous and 200: the board is on the landing page. It answers with an
+    // empty list until an instructor puts someone on it.
+    { label: 'honor board', method: 'get', path: () => '/api/catalog/honor-board', actor: 'anonymous', status: 200 },
     { label: 'catalog course', method: 'get', path: () => `/api/catalog/courses/${courseId}`, actor: 'anonymous', status: 404 },
 
     // ── Session echo — authenticated only, no permission string ──
@@ -2011,6 +2014,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // makes that ordering a tested property rather than a comment.
       'GET /api/admin/grading-queue',
       'GET /api/admin/grading-results',
+      'PATCH /api/admin/attempts/:attemptId/mark',
       'GET /api/admin/attempts/:attemptId/grading',
       'PATCH /api/admin/attempts/:attemptId/questions/:attemptQuestionId/grade',
     ]);
@@ -2136,6 +2140,22 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           'GET /api/taxonomy',
           'GET /api/catalog/courses',
           'GET /api/catalog/courses/:slug',
+          /*
+           * لوحة الشرف. PUBLIC on purpose — it is drawn on the landing page,
+           * before anyone signs in.
+           *
+           * ⚠️ It is also the ONLY public payload on this platform that
+           * describes a named minor: a student's full name and their photo.
+           * Two things keep that deliberate rather than accidental, and both
+           * are worth re-reading before this line is ever widened:
+           *
+           *   · membership is `honor_board_at IS NOT NULL`, which only an
+           *     instructor's own press sets. Nothing derives it from a score.
+           *   · the projection carries NO ids — not the user's, not the
+           *     attempt's — so the board cannot be used to enumerate students
+           *     from an unauthenticated page.
+           */
+          'GET /api/catalog/honor-board',
           'GET /api/settings/branding',
           'GET /api/settings/public',
           'GET /api/flags',

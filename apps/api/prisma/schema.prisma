@@ -2995,6 +2995,34 @@ model QuizAttempt {
   gradeOutOf       Decimal      @map("grade_out_of") @db.Decimal(10, 4)
   passPercent      Decimal      @map("pass_percent") @db.Decimal(5, 2)
 
+  /// «أقيّم كل واحد عشان أطلّع الأول» — the instructor's own 1..5 judgement of
+  /// this paper, beyond what the score says.
+  ///
+  /// It exists because the score cannot settle the question he actually asks:
+  /// ten students reach 100/100 on a monthly exam and only one of them can be
+  /// الأول. The mark measures whether the answers were right; this measures
+  /// how they were written, and it is the tiebreak the honour board orders on.
+  ///
+  /// Nullable, and null is the ordinary state: most papers are never rated.
+  /// CHECKed 1..5 in the migration rather than left open, so a stray 50 from a
+  /// mistyped field cannot silently outrank every real rating.
+  instructorRating Int? @map("instructor_rating") @db.SmallInt
+
+  /// When this paper was put on «لوحة الشرف», or null for the papers that are
+  /// not on it — which is almost all of them.
+  ///
+  /// A TIMESTAMP, not a boolean, for two things a boolean cannot give: the
+  /// board has a stable secondary order (who was added first) without a second
+  /// column, and "when did this student go up" is answerable later without an
+  /// audit-log crawl.
+  ///
+  /// ⚠️ Putting a paper here publishes the student's NAME AND AVATAR on the
+  /// public landing page. That is why it is an explicit act with its own
+  /// column and its own admin control, and never derived from the score: a
+  /// board that filled itself would publish a child's photo because they did
+  /// well on a quiz, which is not a decision code gets to make.
+  honorBoardAt DateTime? @map("honor_board_at") @db.Timestamptz(3)
+
   quiz      Quiz              @relation(fields: [quizId], references: [id], onDelete: Cascade)
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   questions AttemptQuestion[]
