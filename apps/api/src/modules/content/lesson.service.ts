@@ -30,6 +30,33 @@ function isUniqueViolation(error: unknown): boolean {
   );
 }
 
+/**
+ * What `publish_at` should be, given the two things that decide it.
+ *
+ * ## Publishing by hand cancels the schedule
+ *
+ * They are one decision wearing two controls. A lecture switched live now has
+ * nothing left to wait for, and a leftover timestamp means the sweeper later
+ * finds a row that is "due", publishes what is already published, and writes
+ * an audit entry for a change nobody made — noise that reads, in the audit
+ * log, exactly like a lecture that published itself unexpectedly.
+ *
+ * Unpublishing does NOT invent a schedule: `undefined` in means `undefined`
+ * out, so a PATCH that only renames a lecture leaves its schedule alone.
+ *
+ * ⚠️ Returns `undefined` — not `null` — when there is nothing to say, because
+ * the caller spreads it into a Prisma `data` object where `null` is a WRITE
+ * (clear the column) and `undefined` is an omission.
+ */
+export function scheduleFor(
+  isPublished: boolean | undefined,
+  publishAt: string | null | undefined,
+): Date | null | undefined {
+  if (isPublished === true) return null;
+  if (publishAt === undefined) return undefined;
+  return publishAt === null ? null : new Date(publishAt);
+}
+
 @Injectable()
 export class LessonService {
   constructor(
@@ -71,6 +98,8 @@ export class LessonService {
         completionMode: input.completionMode,
         completionMinViewSeconds: input.completionMinViewSeconds,
         completionPassGrade: input.completionPassGrade,
+        publishAt: scheduleFor(input.isPublished, input.publishAt),
+        description: input.description,
         position: last === null ? 0 : last.position + 1,
       },
     });
@@ -105,6 +134,20 @@ export class LessonService {
         }),
         ...(input.completionPassGrade !== undefined && {
           completionPassGrade: input.completionPassGrade,
+        }),
+        ...(input.description !== undefined && { description: input.description }),
+        /*
+         * The schedule and the switch are ONE decision, so they are resolved
+         * together rather than written independently.
+         *
+         * Publishing by hand cancels the schedule: a lecture that is already
+         * live has nothing left to wait for, and leaving the timestamp behind
+         * means the sweeper finds a row that is due, publishes what is already
+         * published, and writes an audit entry for a change nobody made. That
+         * is what `scheduleFor` settles — see its own note.
+         */
+        ...((input.publishAt !== undefined || input.isPublished !== undefined) && {
+          publishAt: scheduleFor(input.isPublished, input.publishAt),
         }),
       },
     });

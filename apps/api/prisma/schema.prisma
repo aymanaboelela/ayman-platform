@@ -1051,6 +1051,39 @@ model Lesson {
   isFreePreview    Boolean @default(false) @map("is_free_preview")
   estimatedSeconds Int     @default(0) @map("estimated_seconds")
 
+  /// «ينزل الساعة ٨» — when this lecture should publish ITSELF.
+  ///
+  /// A SCHEDULE, not an access gate. `LessonPublishSweeper` reads it once a
+  /// minute and flips `isPublished` to true when the moment passes, then
+  /// clears it. Nothing on any read path consults this column, which is the
+  /// whole reason it is shaped this way: `isPublished` stays the single fact
+  /// every catalogue query, outline, player and access check already tests,
+  /// so scheduling adds no second answer to "may this student see it" and no
+  /// new row to the authorization matrix.
+  ///
+  /// ⚠️ Deliberately NOT `visibleFrom`, which sits a few lines below and is
+  /// reserved for a real read-time gate (Global Constraint 17). Overloading
+  /// it would mean that when that gate is finally switched on, every lecture
+  /// this sweeper ever published carries a stale value the gate would then
+  /// start enforcing.
+  ///
+  /// `timestamptz`, unlike `quiz_attempts.deadline_at` — a publish time is a
+  /// wall-clock moment in Cairo that an instructor typed, and storing it with
+  /// its offset is what makes "8pm" mean 8pm after a DST change.
+  publishAt DateTime? @map("publish_at") @db.Timestamptz(3)
+
+  /// A short plain-text summary of the lecture, shown on the lesson page.
+  ///
+  /// Written for AFTER the video: «قوله متشوفش الوصف إلا لما تشوف الدرس كله».
+  /// The student UI renders it collapsed behind a disclosure for that reason —
+  /// it is a recap to check yourself against, and reading it first is reading
+  /// the answers first.
+  ///
+  /// PLAIN TEXT with newlines, exactly like `LessonHomework.body` and for the
+  /// same reason: a paragraph needs no headings, and a rich-text column here
+  /// would add an HTML sink to a field with no use for one.
+  description String? @db.Text
+
   /// Per-lesson stream, same two flags as the course — a course can serve both
   /// and still teach one lecture only to لغات.
   ///

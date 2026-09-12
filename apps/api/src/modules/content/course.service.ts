@@ -940,6 +940,13 @@ export class CourseService {
                 completionMode: true,
                 completionMinViewSeconds: true,
                 completionPassGrade: true,
+                // «ينزل الساعة ٨» and the after-the-lecture summary. Both are
+                // edited in the same panel this payload feeds, so a lecture
+                // whose schedule is not selected here would show an empty
+                // date box every time the page reloads — and the next save
+                // would quietly look like the instructor had cleared it.
+                publishAt: true,
+                description: true,
                 video: {
                   select: {
                     externalId: true,

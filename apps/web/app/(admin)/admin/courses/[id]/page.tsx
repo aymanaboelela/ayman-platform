@@ -77,6 +77,14 @@ const AdminCourseDetailSchema = z.object({
           completionMinViewSeconds: z.number().int().nullable(),
           // Decimal(6,3) on the wire — a JSON number here, not a string.
           completionPassGrade: z.coerce.number().nullable(),
+          /* «ينزل الساعة ٨» and the after-the-lecture summary. `.catch(null)`
+             on both, not `.nullable()` alone: this page is served by whichever
+             API container answers, and during a rolling deploy that is briefly
+             one that predates the columns. A missing field must degrade to "no
+             schedule / no summary" rather than fail the parse and blank the
+             whole course editor. */
+          publishAt: z.string().nullable().catch(null),
+          description: z.string().nullable().catch(null),
           video: z
             .object({
               externalId: z.string(),
