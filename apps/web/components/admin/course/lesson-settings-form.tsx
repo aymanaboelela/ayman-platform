@@ -10,6 +10,7 @@ import { Switch } from '@ayman/ui/components/switch';
 import type { ActionResult, UpdateLessonInput } from '@/app/(admin)/admin/courses/actions';
 import { StreamChoiceField } from '@/components/admin/stream-choice';
 import { useAutosave } from './autosave';
+import { PublishCountdown } from './publish-countdown';
 
 const c = copy.admin.lesson;
 
@@ -246,6 +247,21 @@ export function LessonSettingsForm({
               ? c.publishAtHint
               : c.publishAtEmpty}
         </p>
+
+        {/*
+          «فاضل كام ساعة وتتنشر». Reads the SAVED value, not the draft: a
+          countdown on a half-typed date counts down to 2026-09-01T02 while the
+          year is still being typed. `useAutosave` writes on every change, so
+          the saved value is a moment behind at worst.
+
+          Only on a draft with a schedule — a published lecture has nothing to
+          count down to, and the line above already says so.
+        */}
+        {!lesson.isPublished && lesson.publishAt ? (
+          <p className="text-[length:var(--fs-text-sm)]">
+            <PublishCountdown publishAt={lesson.publishAt} />
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-1">
