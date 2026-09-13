@@ -62,6 +62,11 @@ interface ListRow {
   publishedAt: Date | null;
   updatedAt: Date;
   body: string;
+  /**
+   * Present on every read now, because `NewsListItem` carries the course slug.
+   * `status` comes with it so `toListItem` can drop a draft course — see there.
+   */
+  relatedCourse: { slug: string; title: string; status: string } | null;
 }
 
 /**
@@ -79,6 +84,13 @@ function toListItem(row: ListRow): NewsListItem {
     publishedAt: (row.publishedAt as Date).toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     readingMinutes: readingMinutes(row.body),
+    /*
+     * ⚠️ Only a PUBLISHED course may be named. An article pointing at a draft
+     * course would send a reader to a 404 on our own site — the same rule
+     * `findPublicBySlug` has always applied to the CTA, moved here so the list
+     * cannot forget it.
+     */
+    relatedCourseSlug: row.relatedCourse?.status === 'published' ? row.relatedCourse.slug : null,
   };
 }
 
@@ -94,7 +106,7 @@ export class NewsService {
     const rows = await this.prisma.newsPost.findMany({
       where: { status: 'published' },
       orderBy: { publishedAt: 'desc' },
-      select: LIST_SELECT,
+      select: { ...LIST_SELECT, relatedCourse: { select: { slug: true, title: true, status: true } } },
     });
 
     return { posts: rows.map(toListItem), total: rows.length };
@@ -126,7 +138,6 @@ export class NewsService {
     return {
       ...toListItem(row),
       body: row.body,
-      relatedCourseSlug: course?.slug ?? null,
       relatedCourseTitle: course?.title ?? null,
     };
   }

@@ -2098,6 +2098,19 @@ export const copy = {
     lessonOutsideCourse: 'المحاضرة دي متعلّمة لمدارس الكورس نفسه مش بيخدمها',
   },
   course: {
+    /**
+     * The free written explanations, surfaced on the course page they were
+     * written for.
+     *
+     * ⚠️ The lead says «من غير حساب ومن غير اشتراك» on purpose. This section's
+     * whole job is to give a visitor who is not ready to pay something real,
+     * and a reader who cannot tell the articles are free will assume they are
+     * behind the same door as the videos and not click.
+     */
+    articlesEyebrow: 'مفتوح للكل',
+    articlesTitle: 'الشرح المكتوب للمنهج ده',
+    articlesLead:
+      'كل درس في المنهج مشروح كتابة على الموقع — تقراه دلوقتي من غير حساب ومن غير اشتراك، وتحكم بنفسك على الشرح قبل ما تقرر.',
     back: 'رجوع',
     lessons: 'الدروس',
     freeBanner: 'الكورس ده مفتوح مجانًا',
