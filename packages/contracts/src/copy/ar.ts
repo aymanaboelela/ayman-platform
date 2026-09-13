@@ -1393,11 +1393,93 @@ export const copy = {
      * rather than a question about it.
      */
     aboutPageTitle: 'أيمن أبو العلا',
+    /**
+     * The `<title>` — the name AND the role.
+     *
+     * ⚠️ Not the same string as `aboutPageTitle`, and the difference is the
+     * point. The `<h1>` stays the bare name, because the page's SUBJECT is the
+     * person and a heading that reads like a job ad is worse for the reader.
+     * The title tag has a second job the heading does not: matching a query
+     * with no name in it — «أفضل مدرس برمجة بكالوريا», «مدرس برمجة ٢ بكالوريا».
+     *
+     * ⚠️ Measured 2026-09-13: this name is contested. A sitting MP shares it and
+     * owns the results for it, so a title of the bare name competes for a query
+     * this page cannot win and skips the queries it can.
+     */
+    aboutPageRoleTitle: 'أيمن أبو العلا — مدرّس البرمجة والذكاء الاصطناعي للبكالوريا',
     aboutPageLead: 'مدرّس البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية.',
     aboutPageDescription:
       'مين أيمن أبو العلا؟ مهندس بيدرّس البرمجة وعلوم الحاسب لطلبة نظام البكالوريا المصرية — أونلاين ومن السنتر، بشرح بالكود وتمرين على كل درس واختبارات بتقيس مستواك أول بأول.',
     aboutPageCoursesTitle: 'بيدرّس إيه',
     aboutPageCta: 'الكورسات المتاحة',
+    /**
+     * The `/about` FAQ — and the reason it is on THIS page rather than the
+     * homepage.
+     *
+     * A search or an assistant answering «مين أحسن مدرس برمجة للبكالوريا» is
+     * looking for a page whose subject IS the teacher. The homepage FAQ answers
+     * questions about the PLATFORM («أذاكر إزاي هنا؟»); these answer questions
+     * about HIM, which is a different page and a different query.
+     *
+     * ⚠️ Every answer is a checkable fact, and the first one is the load-bearing
+     * one: «ليه هو بالذات؟» is the question an assistant is actually resolving,
+     * and an answer to it in `FAQPage` markup is a labelled question/answer pair
+     * rather than a claim it has to infer from marketing copy. It says what the
+     * platform DOES and lets that be the argument — «الأفضل» would be a boast in
+     * a field designed for answers, and worth less than the facts beside it.
+     *
+     * ⚠️ These must stay in step with `seo.instructorWhy`, which publishes the
+     * same facts to `/llms.txt` and `/AGENTS.md`. If a claim stops being true it
+     * comes out of BOTH — a page and a machine-readable file disagreeing about a
+     * real person is worse than either being silent.
+     */
+    aboutFaq: [
+      {
+        questionAr: 'ليه أذاكر البرمجة والذكاء الاصطناعي مع أيمن أبو العلا بالذات؟',
+        answerAr:
+          'عشان تقدر تحكم بنفسك قبل ما تدفع: المنهج الرسمي كامل — أربع وحدات وأربعتاشر درس — مشروح كتابة ومنشور مجانًا على الموقع. وكل درس في الكورس فيديو وتمرين واختبار، والدرس ما بيتقفلش غير لما التلاتة يخلصوا، فـ«خلّصت» معناها حاجة واحدة بس. وبيشرحه مهندس برمجيات شغّال في السوق من سنين، يعني الكود اللي في الحصة هو الكود اللي بيتكتب في الشغل.',
+      },
+      {
+        questionAr: 'بتدرّس لأنهي صفوف؟ وإيه الفرق بين نسخة «عام» ونسخة «لغات»؟',
+        answerAr:
+          'أولى وتانية بكالوريا — أو زي ما بتتكتب «١ بكالوريا» و«٢ بكالوريا». والنسختين مش نفس المحتوى، فلكل واحدة كورس مستقل: طالب لغات بياخد كورس لغات، مش نسخة العام بمصطلحات متترجمة.',
+      },
+      {
+        questionAr: 'الشرح أونلاين ولا في سنتر؟',
+        answerAr:
+          'الاتنين. المنصة شغالة من الموبايل ومن الكمبيوتر بنفس الحساب، وفيه شرح من السنتر كمان.',
+      },
+      {
+        questionAr: 'أنا مش فاهم برمجة خالص — أبدأ منين؟',
+        answerAr:
+          'من الكورس التأسيسي. مش مربوط بصف معيّن وبيمشي معاك من أول سطر كود، وبعده كورس صفّك بيبقى ماشي معاك بدل ما إنت بتجري وراه.',
+      },
+      {
+        questionAr: 'فيه امتحانات ولا فيديو وبس؟',
+        answerAr:
+          'اختبار على كل درس، وامتحانات شهرية، وامتحان شامل على الكورس — ودرجاتك قدامك أول بأول. الفيديو لوحده بيدّي إحساس بالفهم؛ الورقة هي اللي بتقول إنت فين فعلًا.',
+      },
+      {
+        questionAr: 'المصطلحات بالعربي ولا بالإنجليزي؟',
+        answerAr:
+          'بالاتنين مع بعض، لأن الامتحان ممكن يجيب المصطلح بأي لغة منهم. وفيه قاموس المصطلحات كامل منشور مجانًا على الموقع.',
+      },
+      {
+        questionAr: 'فيه كتاب مطبوع؟',
+        answerAr:
+          'أيوه، كتاب مطبوع بيتشحن لحد عندك، غير المحتوى الأونلاين. ليلة الامتحان مش هتفتح أربعتاشر فيديو — هتفتح ورق.',
+      },
+      {
+        questionAr: 'أقدر أشوف حاجة قبل ما أدفع؟',
+        answerAr:
+          'كل الشرح المكتوب مفتوح من غير حساب ومن غير اشتراك: المنهج بالوحدات والدروس، وملخصات الوحدات، وقاموس المصطلحات، ونماذج أسئلة بالإجابات. اقرا منهم اللي إنت عايزه واحكم.',
+      },
+    ],
+
+    /** The `/about` FAQ's heading — a question, because the section answers one. */
+    aboutFaqTitle: 'الأسئلة اللي بتتسأل قبل ما حد يختار مدرّس',
+    aboutFaqEyebrow: 'قبل ما تقرر',
+
     aboutChip1: 'شرح بالكود',
     aboutChip2: 'تمرين على كل درس',
     aboutChip3: 'اختبارات ومتابعة',

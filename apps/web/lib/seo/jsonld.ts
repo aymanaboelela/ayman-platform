@@ -1,4 +1,7 @@
 import { copy, youTubeEmbedUrl, youTubeThumbnailUrl } from '@ayman/contracts';
+// The SUBPATH, not the root barrel — importing a runtime value through the
+// barrel is what stops the API booting. Same import the footer uses.
+import { waMeHref } from '@ayman/contracts/whatsapp';
 import { SAME_AS } from '@ayman/contracts/site-profiles';
 import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
 
@@ -174,8 +177,69 @@ export function personJsonLd() {
  * it is what makes the entity eligible to be understood as a school rather
  * than a company that happens to have a website.
  */
-export function organizationJsonLd() {
+export function organizationJsonLd(
+  /**
+   * The public contact row, when there is one.
+   *
+   * ⚠️ Optional, and the default is "publish nothing" rather than "publish
+   * empty". `getPublicSettingsOrDefaults` returns `contact: {}` during
+   * `next build` — the API is unreachable in the image build — so for the
+   * first minutes after a deploy this is called with nothing. A missing
+   * optional field for a few minutes is fine; `telephone: null` in a knowledge
+   * graph is a claim that there is no phone.
+   */
+  contact?: { whatsapp?: string | null; phone?: string | null; email?: string | null },
+) {
+  /**
+   * `telephone` and `email` — the two fields a competitor ranking for
+   * «أفضل مدرس برمجة بكالوريا» had on this node and this site did not
+   * (measured 2026-09-13).
+   *
+   * ⚠️ WhatsApp before the landline-shaped `phone`, because WhatsApp is how a
+   * parent on this platform actually makes contact — it is the number in the
+   * footer and on every CTA. Publishing a second, unanswered number instead
+   * would be accurate and useless.
+   *
+   * Nothing here is new information: both values are already rendered in the
+   * site footer. This states them in the field a crawler reads.
+   */
+  const telephone = contact?.whatsapp ?? contact?.phone ?? null;
+
+  /**
+   * `contactPoint` beside the bare `telephone`, carrying the `wa.me` URL.
+   *
+   * A phone number in a knowledge graph is a string to display. A
+   * `ContactPoint` with a `url` is a door an assistant can hand a student —
+   * «كلّمه هنا» with a link — which is the difference between being listed and
+   * being reachable, and reaching him on WhatsApp is how every enrolment on
+   * this platform actually starts.
+   *
+   * ⚠️ `waMeHref` returns null for anything that is not E.164, so a badly
+   * typed number in `/admin/settings` drops the whole node rather than
+   * publishing a link that opens WhatsApp on nobody. `telephone` above still
+   * ships in that case — a wrong-looking number is still the number he gave.
+   *
+   * `availableLanguage: ar` is not decoration: it is the one field that tells
+   * an assistant answering in English that the person on the other end will
+   * reply in Arabic.
+   */
+  const whatsappUrl = waMeHref(contact?.whatsapp ?? null);
+
   return withSameAs({
+    ...(telephone ? { telephone } : {}),
+    ...(contact?.email ? { email: contact.email } : {}),
+    ...(whatsappUrl
+      ? {
+          contactPoint: {
+            '@type': 'ContactPoint',
+            contactType: 'customer support',
+            url: whatsappUrl,
+            ...(telephone ? { telephone } : {}),
+            availableLanguage: ['ar'],
+            areaServed: 'EG',
+          },
+        }
+      : {}),
     '@context': 'https://schema.org',
     '@type': 'EducationalOrganization',
     '@id': ORGANIZATION_ID,
