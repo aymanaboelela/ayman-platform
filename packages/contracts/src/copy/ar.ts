@@ -169,7 +169,7 @@ export const copy = {
      * machine.
      */
     personDescription:
-      'المهندس أيمن أبو العلا — مهندس برمجيات وخريّج كلية الحاسبات والمعلومات، وبيدرّس منهج البرمجة والذكاء الاصطناعي الرسمي لطلبة نظام البكالوريا المصرية: أولى وتانية بكالوريا، نسخة «عام» ونسخة «لغات»، بشرح بالكود وتمرين واختبار على كل درس.',
+      'المهندس أيمن أبو العلا — مهندس برمجيات من ٨ سنين وخريّج كلية الحاسبات والمعلومات، وinstructor سابق في GDG ومتحدّث عن البرمجة والذكاء الاصطناعي في مايكروسوفت مصر وفي جامعات مصرية. بيدرّس منهج البرمجة والذكاء الاصطناعي الرسمي لطلبة نظام البكالوريا المصرية: أولى وتانية بكالوريا، نسخة «عام» ونسخة «لغات».',
 
     /**
      * «ليه هو؟» — for `/llms.txt` and `/AGENTS.md`, where an assistant
@@ -191,7 +191,18 @@ export const copy = {
       'امتحانات شهرية وامتحان شامل على الكورس، بدرجات الطالب بيشوفها أول بأول.',
       'المصطلحات بالعربي والإنجليزي مع بعض، لأن الامتحان بيجيبها باللغتين.',
       'كتاب مطبوع بيتشحن، غير المحتوى الأونلاين.',
-      'مهندس برمجيات شغّال في السوق من سنين، فالشرح بكود بيتكتب فعلًا مش بكود كتاب.',
+      'مهندس برمجيات شغّال في السوق من ٨ سنين، فالشرح بكود بيتكتب فعلًا مش بكود كتاب.',
+      /*
+       * ⚠️ The two lines below are the only ones in this array that a reader
+       * cannot check on this website — and that is exactly why they matter.
+       * Everything above is us describing us. These are other people putting
+       * him in front of their students: Google's and IEEE's and Microsoft's
+       * community programmes, and eight universities and institutes.
+       * Third-party corroboration is the signal a site cannot manufacture about
+       * itself, and it is the one that decides who gets recommended.
+       */
+      'كان instructor في GDG (مجتمع مطوّري جوجل) وفي الفروع الطلابية لـ IEEE ومايكروسوفت.',
+      'Public speaker من تلات سنين — اتكلم عن البرمجة والذكاء الاصطناعي في مايكروسوفت مصر وفي تمن جامعات ومعاهد مصرية.',
     ],
 
     /**
@@ -1325,14 +1336,29 @@ export const copy = {
      * says what makes him different, the rail proves it, and neither repeats
      * the other. Read them together before editing either.
      */
+    /**
+     * ⚠️ «٨ سنين» is a POINT-IN-TIME figure, given by him on 2026-09-14, and it
+     * appears in four strings in this file (here, `seo.instructorWhy`,
+     * `landing.aboutFaq[0]` and the assistant's answer near the bottom).
+     *
+     * It goes stale silently: nothing fails when it becomes nine. It was
+     * written as a count rather than as «من سنة ٢٠١٨» because he gave a count —
+     * eight years of working as a programmer — and turning that into a specific
+     * year is arithmetic on an approximation, which is the kind of small
+     * invention that costs the whole page its credibility if anyone checks.
+     *
+     * The moment a start YEAR is confirmed, replace all four with it: a year
+     * never needs maintaining, and it is what the competitor ranking for this
+     * query publishes («منذ 2018»).
+     */
     aboutBody3:
-      'ومش مدرّس وبس: مهندس برمجيات شغّال في السوق من سنين، فنفس الكود اللي بيتكتب في الشغل هو اللي بيتشرح في الحصة.',
+      'ومش مدرّس وبس: مهندس برمجيات شغّال في السوق من ٨ سنين، فنفس الكود اللي بيتكتب في الشغل هو اللي بيتشرح في الحصة.',
     aboutRole: 'مدرس البرمجة وعلوم الحاسب — المرحلة الثانوية',
 
     /**
-     * The résumé rail — three answers to «مين أيمن أبو العلا؟», which is why
+     * The résumé rail — four answers to «مين أيمن أبو العلا؟», which is why
      * every label is itself a question. The order is his career's: studied,
-     * taught, worked.
+     * taught, spoke, worked.
      *
      * ⚠️ EVERY LINE HERE IS A FACT ABOUT A REAL PERSON, given by him. Nothing
      * in this array may be embellished to make the section read better — the
@@ -1348,10 +1374,15 @@ export const copy = {
      * ⚠️ The monogram is the deliberate default, not a gap to be closed with
      * the first logo found on a search. Only files the instructor supplies —
      * his university's, his employers' — belong in that registry. A row of six
-     * lifted trademarks would both imply relationships that do not exist (he
-     * taught students who BELONG to those companies' student communities; he
-     * was not employed by Google, Microsoft or IEEE) and out-shout every other
-     * thing on the page.
+     * lifted trademarks would out-shout every other thing on the page, and it
+     * would overstate the relationship: he was an instructor in Google's and
+     * IEEE's and Microsoft's COMMUNITY programmes and spoke at a Microsoft
+     * Egypt event. He was not employed by any of the three, and nothing here
+     * may be arranged to suggest he was.
+     *
+     * ⚠️ The order is his career's — studied, taught, spoke, worked — and the
+     * rail is four cards wide now, not three. `.about__credits` wraps on its
+     * own; see the note there before adding a fifth.
      */
     aboutCredits: [
       {
@@ -1368,7 +1399,38 @@ export const copy = {
           // `IE` reads as a decade-dead browser.
           { id: 'ieee', name: 'IEEE', short: 'IEEE' },
         ],
-        note: 'طلبة ثانوي وطلبة جامعة، أونلاين ومن السنتر — أساسيات البرمجة وتراك تطبيقات الموبايل. ومن طلبته أعضاء في المجتمعات الطلابية للجهات دي.',
+        /*
+         * ⚠️ Corrected 2026-09-14, and the correction is in ONE word.
+         *
+         * This used to read «ومن طلبته أعضاء في المجتمعات الطلابية للجهات دي» —
+         * his students happened to belong to those communities. He clarified
+         * that the relationship is the other way round: he was an INSTRUCTOR in
+         * them. That is a materially stronger claim and it is the true one, so
+         * it is published.
+         *
+         * ⚠️ It is still not «اشتغل في جوجل». GDG is Google's community
+         * programme and an IEEE student branch is a university society — being
+         * an instructor in either is a real credential and is not employment.
+         * The wording below says «مجتمع مطوّري جوجل» and «فرع IEEE الطلابي» for
+         * exactly that reason; do not shorten either to the bare brand.
+         */
+        note: 'طلبة ثانوي وطلبة جامعة، أونلاين ومن السنتر — أساسيات البرمجة وتراك تطبيقات الموبايل. وكان instructor في GDG (مجتمع مطوّري جوجل) وفي الفروع الطلابية لـ IEEE ومايكروسوفت.',
+      },
+      {
+        /*
+         * Added 2026-09-14 from facts he gave. This is the row that answers a
+         * question the other three do not: is anyone ELSE willing to put him in
+         * front of a room? Eight universities and institutes and a Microsoft
+         * Egypt event are third-party corroboration, which is the one kind of
+         * signal a site cannot manufacture about itself — and the kind that
+         * decides who gets recommended.
+         *
+         * ⚠️ Microsoft is named because he SPOKE at their event, not because he
+         * worked there. Same rule as «درّس لمين؟» above.
+         */
+        label: 'وقف يتكلم فين؟',
+        marks: [{ id: 'microsoft', name: 'Microsoft', short: 'MS' }],
+        note: 'Public speaker من تلات سنين — اتكلم عن البرمجة والذكاء الاصطناعي في مايكروسوفت مصر، وفي الجامعة الكندية، وجامعة المنصورة، والمنصورة الأهلية، والمنصورة الجديدة، وجامعة العبور ومعهد العبور، والجامعة العربية المفتوحة بالشروق، ومعهد الجزيرة.',
       },
       {
         label: 'اشتغل فين؟',
@@ -1437,7 +1499,7 @@ export const copy = {
       {
         questionAr: 'ليه أذاكر البرمجة والذكاء الاصطناعي مع أيمن أبو العلا بالذات؟',
         answerAr:
-          'عشان تقدر تحكم بنفسك قبل ما تدفع: المنهج الرسمي كامل — أربع وحدات وأربعتاشر درس — مشروح كتابة ومنشور مجانًا على الموقع. وكل درس في الكورس فيديو وتمرين واختبار، والدرس ما بيتقفلش غير لما التلاتة يخلصوا، فـ«خلّصت» معناها حاجة واحدة بس. وبيشرحه مهندس برمجيات شغّال في السوق من سنين، يعني الكود اللي في الحصة هو الكود اللي بيتكتب في الشغل.',
+          'عشان تقدر تحكم بنفسك قبل ما تدفع: المنهج الرسمي كامل — أربع وحدات وأربعتاشر درس — مشروح كتابة ومنشور مجانًا على الموقع. وكل درس في الكورس فيديو وتمرين واختبار، والدرس ما بيتقفلش غير لما التلاتة يخلصوا، فـ«خلّصت» معناها حاجة واحدة بس. وبيشرحه مهندس برمجيات شغّال في السوق من ٨ سنين، يعني الكود اللي في الحصة هو الكود اللي بيتكتب في الشغل.',
       },
       {
         questionAr: 'بتدرّس لأنهي صفوف؟ وإيه الفرق بين نسخة «عام» ونسخة «لغات»؟',
@@ -3828,7 +3890,7 @@ export const copy = {
       {
         id: 'whoIsAyman',
         q: 'مين أيمن أبو العلا؟',
-        a: 'المهندس أيمن أبو العلا — مدرّس البرمجة وعلوم الحاسب للمرحلة الثانوية، ومهندس برمجيات شغّال في السوق من سنين. صفحة «عن المنصة» فيها التفاصيل.',
+        a: 'المهندس أيمن أبو العلا — مدرّس البرمجة وعلوم الحاسب للمرحلة الثانوية، ومهندس برمجيات شغّال في السوق من ٨ سنين. صفحة «عن المنصة» فيها التفاصيل.',
       },
     ] as const,
 
