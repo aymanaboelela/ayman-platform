@@ -139,6 +139,32 @@ describe('the entity graph', () => {
     }
   });
 
+  it('publishes a contact only when there is one', () => {
+    /*
+     * ⚠️ The default must be ABSENT, not null. `getPublicSettingsOrDefaults`
+     * returns `contact: {}` throughout `next build` — the API is unreachable
+     * inside the image build — so for the first minutes after every deploy this
+     * builder runs with nothing ([[build-bakes-empty-settings-cache]] is the
+     * same mechanism). A missing optional field for those minutes is harmless;
+     * `telephone: null` in a knowledge graph is an assertion that the school
+     * has no phone.
+     */
+    expect(organizationJsonLd()).not.toHaveProperty('telephone');
+    expect(organizationJsonLd({})).not.toHaveProperty('telephone');
+    expect(organizationJsonLd({ whatsapp: null, phone: null, email: null })).not.toHaveProperty(
+      'email',
+    );
+
+    // WhatsApp wins over `phone`: it is the number the footer shows and the one
+    // a parent actually reaches him on.
+    expect(organizationJsonLd({ whatsapp: '+201021196367', phone: '+20222222222' })).toMatchObject({
+      telephone: '+201021196367',
+    });
+    expect(organizationJsonLd({ phone: '+20222222222' })).toMatchObject({
+      telephone: '+20222222222',
+    });
+  });
+
   it('never claims a `sameAs` it cannot back up', () => {
     // The footer links to `https://www.youtube.com/` and
     // `https://www.facebook.com/` — bare platform homepages, not this

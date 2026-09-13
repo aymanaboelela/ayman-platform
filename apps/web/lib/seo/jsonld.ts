@@ -174,8 +174,37 @@ export function personJsonLd() {
  * it is what makes the entity eligible to be understood as a school rather
  * than a company that happens to have a website.
  */
-export function organizationJsonLd() {
+export function organizationJsonLd(
+  /**
+   * The public contact row, when there is one.
+   *
+   * ⚠️ Optional, and the default is "publish nothing" rather than "publish
+   * empty". `getPublicSettingsOrDefaults` returns `contact: {}` during
+   * `next build` — the API is unreachable in the image build — so for the
+   * first minutes after a deploy this is called with nothing. A missing
+   * optional field for a few minutes is fine; `telephone: null` in a knowledge
+   * graph is a claim that there is no phone.
+   */
+  contact?: { whatsapp?: string | null; phone?: string | null; email?: string | null },
+) {
+  /**
+   * `telephone` and `email` — the two fields a competitor ranking for
+   * «أفضل مدرس برمجة بكالوريا» had on this node and this site did not
+   * (measured 2026-09-13).
+   *
+   * ⚠️ WhatsApp before the landline-shaped `phone`, because WhatsApp is how a
+   * parent on this platform actually makes contact — it is the number in the
+   * footer and on every CTA. Publishing a second, unanswered number instead
+   * would be accurate and useless.
+   *
+   * Nothing here is new information: both values are already rendered in the
+   * site footer. This states them in the field a crawler reads.
+   */
+  const telephone = contact?.whatsapp ?? contact?.phone ?? null;
+
   return withSameAs({
+    ...(telephone ? { telephone } : {}),
+    ...(contact?.email ? { email: contact.email } : {}),
     '@context': 'https://schema.org',
     '@type': 'EducationalOrganization',
     '@id': ORGANIZATION_ID,
