@@ -265,6 +265,32 @@ export function groupIntoEntries<T extends { kind: string; isExam: boolean }>(
   return entries;
 }
 
+/**
+ * The ids of the rows that are a lecture's quiz, for a flat admin lesson list.
+ *
+ * The admin editor stores no parent on a quiz and must not start: ownership is
+ * `groupIntoEntries`' adjacency rule, which is the same rule `resolveGate` uses
+ * to decide when a quiz opens. Deriving the indent from position means dragging
+ * a quiz above a different lecture re-parents it in the editor, in the student
+ * outline and in the gate at once, with nothing to keep in sync — a stored flag
+ * would be a second answer that could disagree with the gate a student hits.
+ *
+ * ⚠️ `examLessonId` is passed in rather than read off the lesson, because the
+ * admin's row shape has no `isExam` — the course carries the id. The course
+ * exam must never nest: it belongs to the course, not to the lecture that
+ * happens to precede it.
+ */
+export function nestedQuizIds(
+  lessons: readonly { id: string; kind: string }[],
+  examLessonId: string | null,
+): Set<string> {
+  return new Set(
+    groupIntoEntries(lessons.map((lesson) => ({ ...lesson, isExam: lesson.id === examLessonId })))
+      .flatMap((entry) => entry.quizzes)
+      .map((quiz) => quiz.id),
+  );
+}
+
 export function buildCourseOutline({
   course,
   path,
