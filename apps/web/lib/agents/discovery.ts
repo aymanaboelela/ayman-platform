@@ -40,6 +40,26 @@ export const AGENT_DISCOVERY_PATHS = {
   authDoc: '/auth.md',
   /** llmstxt.org — the plain-text map an assistant reads first. */
   llms: '/llms.txt',
+  /**
+   * ARD (agenticresourcediscovery.org) — one JSON manifest that names every
+   * other document in this object, with a few representative queries per entry
+   * so a registry can embed them.
+   *
+   * ⚠️ It INDEXES what already exists and invents nothing. Two agent-readiness
+   * scans on 2026-09-13 also asked for `/.well-known/openid-configuration`,
+   * `/.well-known/oauth-protected-resource` and `/.well-known/mcp/server-card.json`;
+   * all three are deliberately absent and must stay absent. This site runs no
+   * OAuth authorization server, issues no agent credentials and hosts no MCP
+   * server — publishing those documents would be a machine-readable claim that
+   * an agent would act on and that nothing here can honour. `/auth.md` says the
+   * same thing in prose and is the honest answer to that question.
+   */
+  aiCatalog: '/.well-known/ai-catalog.json',
+  /**
+   * agentsmd.net — the prose guide, for an agent that landed on the site
+   * without reading any of the machine-readable documents first.
+   */
+  agentsGuide: '/AGENTS.md',
   sitemap: '/sitemap.xml',
   /**
    * RFC 8631 `status`. This is the API's own health route, reachable through

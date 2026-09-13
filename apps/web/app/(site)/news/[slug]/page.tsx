@@ -9,6 +9,7 @@ import { JsonLd } from '@/components/seo/json-ld';
 import { getNewsPost } from '@/lib/news';
 import { parseMarkdown, tableOfContents } from '@/lib/news/markdown';
 import { articleJsonLd, breadcrumbJsonLd } from '@/lib/seo/jsonld';
+import { formatArticleDate } from '@/lib/format';
 import { buildMetadata } from '@/lib/seo/metadata';
 
 /**
@@ -89,7 +90,9 @@ export default async function NewsArticlePage({ params }: { params: Promise<{ sl
           <h1 className="article__title">{post.title}</h1>
           <p className="article__lead">{post.excerpt}</p>
           <p className="article__meta">
-            <time dateTime={post.publishedAt}>{copy.news.published}</time>
+            <time dateTime={post.publishedAt}>
+              {copy.news.published} {formatArticleDate(post.publishedAt)}
+            </time>
             {' · '}
             {formatCopy(copy.news.readingTime, { n: String(post.readingMinutes) })}
           </p>

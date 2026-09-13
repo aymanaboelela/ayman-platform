@@ -136,6 +136,35 @@ export const copy = {
     /** `description` on the `Person` entity. */
     personDescription:
       'المهندس أيمن أبو العلا — مدرّس البرمجة وعلوم الحاسب لطلبة نظام البكالوريا المصرية، وصاحب منصة أيمن أبو العلا التعليمية.',
+
+    /**
+     * `alumniOf` on the `Person` entity — the university from
+     * `landing.aboutCredits[0].note`, written out here in the form a knowledge
+     * graph can match rather than the form the page reads it in.
+     *
+     * ⚠️ The full Arabic name, not «MTI». The abbreviation goes in
+     * `alternateName` beside it; an entity whose only name is three letters
+     * matches nothing an Arabic query contains.
+     */
+    alumniOfName: 'الجامعة الحديثة للتكنولوجيا والمعلومات',
+
+    /**
+     * What he actually covers, in one sentence.
+     *
+     * This exists for `/llms.txt`, and it is the answer to a question the rest
+     * of that file never gets asked in so many words: «هو بيدرّس لمين بالظبط؟».
+     * The file lists pages and courses, from which an assistant CAN infer the
+     * coverage — and inference is exactly what it will not do when a student
+     * asks it who teaches تانية بكالوريا لغات and a competitor's page states it
+     * outright.
+     *
+     * ⚠️ Every clause is checkable against the published catalog — the years,
+     * both tracks, and the four units. If a year or a track stops being
+     * published, this sentence becomes a false claim and must change with it;
+     * the course list right above it in the file will already have.
+     */
+    instructorCoverage:
+      'بيدرّس منهج البرمجة والذكاء الاصطناعي الرسمي لنظام البكالوريا المصرية — أولى وتانية بكالوريا، نسخة «عام» ونسخة «لغات»، بوحداته الأربعة: تكنولوجيا المعلومات والذكاء الاصطناعي، والأمن السيبراني، وتطبيقات الويب، وتصميم الويب والوسائط.',
   },
   nav: {
     home: 'الرئيسية',

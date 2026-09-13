@@ -144,7 +144,30 @@ export async function SiteFooter() {
 
       <div className="site-shell site-footer__inner">
         <section className="footer-cta">
-          <h2 className="footer-cta__title">{c.finalTitle}</h2>
+          {/*
+            ⚠️ `<p>`, not `<h2>` — and every heading was taken out of this
+            footer for the same reason on 2026-09-13.
+
+            The footer is rendered in the shell; the page's own content is
+            streamed in after it. So in the HTML as delivered — which is what a
+            crawler that does not run JavaScript parses, and that is most of the
+            AI ones — this line came BEFORE the page's `<h1>`, followed by three
+            `<h3>` column labels. A document whose first four headings are an h2
+            and three h3s, with the h1 arriving fifth, fails every heading-order
+            check there is; an AI-readiness scan scored the site 0/20 on it.
+
+            Nothing was lost by demoting them. A CTA is not a section of the
+            document, and each column below is a `<nav>` with an `aria-label`
+            already carrying the same words — the heading was a second, weaker
+            copy of a label the landmark states properly. Styling is by class in
+            `sections.css`, and Tailwind's preflight zeroes the margins on both
+            elements, so the rendering is byte-identical.
+
+            Do not reintroduce a heading here. If the footer ever needs one, it
+            has to come after the page content in SOURCE order, which is a
+            layout change, not a tag change.
+          */}
+          <p className="footer-cta__title">{c.finalTitle}</p>
           <p className="footer-cta__lead">{c.finalLead}</p>
           <div className="footer-cta__actions">
             <Link className="site-btn site-btn--solid" href="/register">
@@ -191,7 +214,7 @@ export async function SiteFooter() {
           </div>
 
           <nav className="site-footer__col" aria-label={c.footerPages}>
-            <h3 className="site-footer__h">{c.footerPages}</h3>
+            <p className="site-footer__h">{c.footerPages}</p>
             {PAGE_LINKS.map((link) => (
               <Link href={link.href} key={link.href}>
                 {link.label}
@@ -200,7 +223,7 @@ export async function SiteFooter() {
           </nav>
 
           <nav className="site-footer__col" aria-label={c.tracksSelectTitle}>
-            <h3 className="site-footer__h">{copy.onboarding.year}</h3>
+            <p className="site-footer__h">{copy.onboarding.year}</p>
             {YEAR_LINKS.map((link) => (
               <Link href={link.href} key={link.href}>
                 {link.label}
@@ -209,7 +232,7 @@ export async function SiteFooter() {
           </nav>
 
           <nav className="site-footer__col" aria-label={copy.nav.dashboard}>
-            <h3 className="site-footer__h">{copy.nav.dashboard}</h3>
+            <p className="site-footer__h">{copy.nav.dashboard}</p>
             {ACCOUNT_LINKS.map((link) => (
               <Link href={link.href} key={link.href}>
                 {link.label}

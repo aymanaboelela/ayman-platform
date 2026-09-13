@@ -10,6 +10,7 @@ import { ESSENTIAL_TERMS } from '@/lib/essentials-terms';
 import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
 import { formatDuration } from '@/lib/format';
 import { SITE_URL } from '@/lib/seo/jsonld';
+import { yearLabelAr } from '@/lib/year-label';
 
 /**
  * The markdown rendering of every public page.
@@ -62,7 +63,7 @@ function footer(canonicalPath: string): string {
 function courseMeta(course: CatalogCourse): string {
   const a = copy.agents;
   return [
-    `- **${a.metaYear}:** ${yearLabel(course.year)}`,
+    `- **${a.metaYear}:** ${yearLabelAr(course.year)}`,
     `- **${a.metaSubject}:** ${course.subjectNameAr}`,
     course.trackLabelAr ? `- **${a.metaTrack}:** ${course.trackLabelAr}` : null,
     `- **${a.metaSystem}:** ${course.systemNameAr}`,
@@ -73,16 +74,10 @@ function courseMeta(course: CatalogCourse): string {
     .join('\n');
 }
 
-function yearLabel(year: number): string {
-  if (year === 1) return copy.years.year1;
-  if (year === 2) return copy.years.year2;
-  return copy.years.year3;
-}
-
 /** One line per course — enough for an agent to choose, short enough to list 40. */
 function courseLine(course: CatalogCourse): string {
   const facts = [
-    yearLabel(course.year),
+    yearLabelAr(course.year),
     course.subjectNameAr,
     course.trackLabelAr,
     `${course.lessonCount} ${copy.catalog.lessonCount}`,
@@ -177,7 +172,7 @@ export function renderYearMarkdown(year: 1 | 2 | 3, courses: readonly CatalogCou
     ...courses.filter((course) => course.year === year),
   ];
   return join([
-    `# ${yearLabel(year)}`,
+    `# ${yearLabelAr(year)}`,
     `> ${copy.catalog.subtitle}`,
     listed.length > 0 ? listed.map(courseLine).join('\n') : copy.years.empty,
     footer(`/years/${year}`),

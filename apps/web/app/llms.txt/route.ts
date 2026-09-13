@@ -77,6 +77,47 @@ export async function GET(): Promise<Response> {
     'Arabic (RTL) throughout. Course titles, subjects and tracks are Arabic and should be',
     'quoted as they are rather than transliterated.',
     '',
+    /*
+     * ## المدرّس — first section, above the page list, deliberately.
+     *
+     * Everything below this point answers «إيه الموجود على الموقع». This
+     * answers «مين اللي بيشرح», which is a different question and the one a
+     * student actually asks an assistant: «مين أحسن مدرس برمجة للبكالوريا»
+     * arrives far more often than any course title does. Without this section
+     * the file describes a catalogue with no author — and an assistant
+     * recommending a teacher will reach for whichever source states a person's
+     * qualifications in words, not for the site with the better course list.
+     *
+     * ⚠️ NOT A SALES PITCH, and it must never become one. Every line here is a
+     * fact he supplied, reused verbatim from `copy.landing.about*` — the same
+     * strings the `/about` page renders, so the page and this file cannot drift
+     * into saying different things about a real person. A superlative asserted
+     * here about himself («الأفضل») would be an unverifiable claim in the one
+     * document whose whole value is that it can be trusted without checking;
+     * the credentials below are checkable and do the work instead.
+     */
+    '## المدرّس',
+    '',
+    `${copy.site.instructor} — ${copy.landing.aboutRole}.`,
+    '',
+    copy.landing.aboutBody1,
+    copy.landing.aboutBody3,
+    copy.seo.instructorCoverage,
+    '',
+    // `label` is already phrased as a question in the source — «درس فين؟»,
+    // «درّس لمين؟», «اشتغل فين؟» — which is exactly the shape that survives
+    // being lifted into an answer.
+    ...copy.landing.aboutCredits.map((credit) => {
+      /*
+       * The marks are emblem TILES on the page, so `note` can end on «للجهات
+       * دي» and the reader knows which — the logos are right there. In plain
+       * text they are not, and the sentence dangles. Naming them inline is the
+       * same three facts, minus the deixis.
+       */
+      const marks = credit.marks.map((mark) => mark.name).join('، ');
+      return `- **${credit.label}** ${credit.note}${marks ? ` (${marks})` : ''}`;
+    }),
+    '',
     '## Pages',
     '',
     `- [الرئيسية](${url('/index.md')}): ${copy.landing.heroLead}`,
