@@ -24,6 +24,7 @@ import { RichText } from '@/components/content/rich-text';
 import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd, courseJsonLd } from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
+import { yearLabelAr } from '@/lib/year-label';
 import { formatDuration } from '@/components/site/course-card';
 import { CourseCover } from '@/components/site/course-cover';
 import { CourseStartButton } from '@/components/site/course-start-button';
@@ -100,7 +101,26 @@ export async function generateMetadata({
 
   return buildMetadata({
     title: course.title,
-    description: course.subtitle ?? course.description ?? copy.site.tagline,
+    /*
+     * ⚠️ NOT `course.subtitle`, and that is the point of this change.
+     *
+     * The subtitle is a catalogue label — «المنهج الرسمي كامل — مسار الهندسة
+     * وعلوم الحاسب — دفعة 2027» — correct, 55 characters, and no reason to
+     * click. Search Console on 2026-09-14: this page was shown 133 times for
+     * «منهج البرمجه تانيه بكالوريا» and clicked 14 times. 10%, against 93% on
+     * the branded queries. It ranks; it just loses the choice.
+     *
+     * `copy.seo.courseDescription` is built from the course's own numbers, so
+     * it cannot drift from the page. The subtitle stays the fallback for a
+     * course with no lessons yet, where the count would read «0 محاضرة».
+     */
+    description:
+      course.lessonCount > 0
+        ? formatCopy(copy.seo.courseDescription, {
+            n: String(course.lessonCount),
+            year: yearLabelAr(course.year),
+          })
+        : (course.subtitle ?? course.description ?? copy.site.tagline),
     path: `/courses/${course.slug}`,
     // A course IS an article-like object with a subject and an author, and
     // `article` is what makes Facebook/WhatsApp render the large card rather
