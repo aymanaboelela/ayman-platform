@@ -1,6 +1,6 @@
 import { copy, youTubeEmbedUrl, youTubeThumbnailUrl } from '@ayman/contracts';
 import { SAME_AS } from '@ayman/contracts/site-profiles';
-import { yearLabelAr } from '@/lib/year-label';
+import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
 
 /**
  * The site origin. Nothing else in the app is host-aware, so switching to a
@@ -279,6 +279,21 @@ export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolea
     // was unmatchable: a student searches «تانية بكالوريا» and an assistant
     // grounding on this node had a number where the phrase should be.
     educationalLevel: `${course.systemNameAr} — ${yearLabelAr(course.year)}`,
+    /**
+     * The same course, under every name a student gives its year.
+     *
+     * ⚠️ The digit forms — «٢ بكالوريا», «2 بكالوريا» — are the reason this
+     * field exists here. The title says «تانية بكالوريا» and nothing on the
+     * node said «٢», so a query carrying the numeral had no string to match.
+     * `keywords` on a `CreativeWork` is the field whose defined job is "other
+     * terms this is known by", which is exactly what these are — see
+     * `yearAliasesAr` for why both digit sets and both spellings ship.
+     *
+     * ⚠️ Aliases for THIS course's year only. Listing all three years' spellings
+     * on every course would make each one claim to be about all of them, which
+     * is the difference between an alias and a keyword stuff.
+     */
+    keywords: [...yearAliasesAr(course.year), course.subjectNameAr, course.systemNameAr],
     about: course.subjectNameAr,
     provider,
     // The course is taught by the person, and the person is the thing being

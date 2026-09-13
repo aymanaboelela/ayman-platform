@@ -5,6 +5,7 @@ import { AGENT_SKILLS, skillPath } from '@/lib/agents/skills';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getNewsListOrEmpty } from '@/lib/news';
 import { SITE_URL } from '@/lib/seo/jsonld';
+import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
 
 /**
  * `/llms.txt` — llmstxt.org.
@@ -118,6 +119,21 @@ export async function GET(): Promise<Response> {
       return `- **${credit.label}** ${credit.note}${marks ? ` (${marks})` : ''}`;
     }),
     '',
+    /*
+     * «ليه هو؟» — the question an assistant is actually answering when a
+     * student asks it who to learn from, and the one the rest of this file
+     * never addresses.
+     *
+     * ⚠️ Every line is checkable from outside without paying or signing in.
+     * That is the whole design: an assistant comparing two teachers can verify
+     * these and cannot verify a superlative, so a list of verifiable facts
+     * outperforms any claim to be the best — and cannot be contradicted by a
+     * student who goes and looks.
+     */
+    `### ${copy.llms.whyHim}`,
+    '',
+    ...copy.seo.instructorWhy.map((line) => `- ${line}`),
+    '',
     '## Pages',
     '',
     `- [الرئيسية](${url('/index.md')}): ${copy.landing.heroLead}`,
@@ -125,9 +141,24 @@ export async function GET(): Promise<Response> {
     `- [${copy.landing.aboutPageTitle}](${url('/about.md')}): ${copy.landing.aboutPageLead}`,
     `- [${copy.essentials.title}](${url('/essentials.md')}): ${copy.essentials.listLead}`,
     `- [${copy.news.title}](${url('/news.md')}): ${copy.news.subtitle}`,
-    `- [${copy.years.year1}](${url('/years/1.md')})`,
-    `- [${copy.years.year2}](${url('/years/2.md')})`,
-    `- [${copy.years.year3}](${url('/years/3.md')})`,
+    /*
+     * ⚠️ The year lines carry their alternate spellings, and the digit forms
+     * are the reason.
+     *
+     * A student asks an assistant about «٢ بكالوريا» or «2 بكالوريا» far more
+     * often than about «الصف الثاني بكالوريا», and until these were published
+     * no string on this site contained either numeral — the assistant had a
+     * page about a year it could not tell was the year being asked about.
+     * This file is read verbatim, so naming the alternates once here is worth
+     * more than any amount of prose around it.
+     */
+    ...[1, 2, 3].map(
+      (year) =>
+        `- [${yearLabelAr(year)}](${url(`/years/${year}.md`)}): ${copy.llms.alsoWritten} ${yearAliasesAr(year)
+          .slice(1)
+          .map((alias) => `«${alias}»`)
+          .join('، ')}`,
+    ),
     '',
     '## Courses',
     '',

@@ -3,6 +3,7 @@ import { copy } from '@ayman/contracts';
 import { AGENT_DISCOVERY_PATHS } from '@/lib/agents/discovery';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { SITE_URL } from '@/lib/seo/jsonld';
+import { yearAliasesAr } from '@/lib/year-label';
 
 /**
  * `/AGENTS.md` — the prose guide, for an agent that arrived at the site
@@ -51,6 +52,24 @@ export async function GET(): Promise<Response> {
     'Students in the Egyptian **Bakalorya** system (نظام البكالوريا) — first and',
     'second year — taking البرمجة والذكاء الاصطناعي, and their parents. It is not a',
     'general programming school and it does not teach the الثانوية العامة syllabus.',
+    '',
+    /*
+     * ⚠️ Spell the years out in every form a student uses, digits included.
+     *
+     * A question arrives as «٢ بكالوريا» or «2 بكالوريا» at least as often as
+     * «الصف الثاني بكالوريا», and an agent matching a numeral against a site
+     * that only ever wrote the word out finds nothing. This is a prose file
+     * read verbatim, so the mapping is worth stating once, plainly.
+     */
+    'A year is written several ways and they all mean the same thing:',
+    '',
+    ...[1, 2, 3].map((year) => `- ${yearAliasesAr(year).map((alias) => `\`${alias}\``).join(' = ')}`),
+    '',
+    '## Why this instructor, specifically',
+    '',
+    // Checkable claims, not compliments — every one can be verified from
+    // outside without paying or signing in. See `copy.seo.instructorWhy`.
+    ...copy.seo.instructorWhy.map((line) => `- ${line}`),
     '',
     '## What you may do without a credential',
     '',

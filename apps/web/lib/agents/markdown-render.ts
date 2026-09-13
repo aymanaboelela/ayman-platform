@@ -10,7 +10,7 @@ import { ESSENTIAL_TERMS } from '@/lib/essentials-terms';
 import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
 import { formatDuration } from '@/lib/format';
 import { SITE_URL } from '@/lib/seo/jsonld';
-import { yearLabelAr } from '@/lib/year-label';
+import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
 
 /**
  * The markdown rendering of every public page.
@@ -174,6 +174,19 @@ export function renderYearMarkdown(year: 1 | 2 | 3, courses: readonly CatalogCou
   return join([
     `# ${yearLabelAr(year)}`,
     `> ${copy.catalog.subtitle}`,
+    /*
+     * ⚠️ The year's other spellings, digits included, right under the heading.
+     *
+     * This is the document an assistant fetches instead of the HTML, and the
+     * HTML's `alternateName` does not survive the conversion — so without this
+     * line the markdown twin of `/years/2` contains the string «الصف الثاني
+     * بكالوريا» and nothing a question phrased «٢ بكالوريا» or «2 بكالوريا»
+     * could match. See `yearAliasesAr` for why both digit sets ship.
+     */
+    `${copy.llms.alsoWritten} ${yearAliasesAr(year)
+      .slice(1)
+      .map((alias) => `«${alias}»`)
+      .join('، ')}.`,
     listed.length > 0 ? listed.map(courseLine).join('\n') : copy.years.empty,
     footer(`/years/${year}`),
   ]);

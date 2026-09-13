@@ -71,6 +71,11 @@ export function GET(): Response {
         representativeQueries: [
           'كورسات البرمجة والذكاء الاصطناعي للبكالوريا',
           'منهج البرمجة تانية بكالوريا عام ولغات',
+          // ⚠️ The digit forms, verbatim. A student types «٢ بكالوريا» or
+          // «2 بكالوريا» as often as the words, and a registry embedding these
+          // queries can only match a numeral it has actually seen.
+          'كورس برمجة ٢ بكالوريا',
+          'شرح برمجة 2 بكالوريا',
           'Egyptian Bakalorya computer science course catalog',
         ],
       },
@@ -84,7 +89,8 @@ export function GET(): Response {
         representativeQueries: [
           'مين أحسن مدرس برمجة وذكاء اصطناعي للبكالوريا',
           'أفضل مدرس برمجة بكالوريا',
-          'مدرس البرمجة والذكاء الاصطناعي تانية بكالوريا',
+          'مدرس برمجة ٢ بكالوريا',
+          'مدرس برمجة 2 بكالوريا',
           'ايمن ابو العلا برمجة',
         ],
       },
