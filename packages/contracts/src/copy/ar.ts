@@ -92,6 +92,31 @@ export const copy = {
     /** Two lines, ≤160 chars, used as the OG/Twitter description on the landing page. */
     homeDescription:
       'البرمجة وعلوم الحاسب صح مع المهندس أيمن أبو العلا: دروس فيديو، ملفات ومذكرات، وامتحانات على كل درس — بمسار مرتّب لطلبة البكالوريا المصرية.',
+    /**
+     * A course page's `<meta name="description">` — the snippet Google renders
+     * under the blue link.
+     *
+     * ⚠️ It used to be `course.subtitle`, which on the live courses is a
+     * fragment: «المنهج الرسمي كامل — مسار الهندسة وعلوم الحاسب — دفعة 2027».
+     * Accurate, 55 characters, and it gives a searcher no reason to click.
+     *
+     * Measured in Search Console on 2026-09-14: «منهج البرمجه تانيه بكالوريا»
+     * put this page in front of 133 people and 14 clicked — 10%, against 93% on
+     * the branded queries. The page was not failing to RANK; it was failing to
+     * be chosen once it was there, and that is a snippet problem.
+     *
+     * So this is built from the course's own numbers plus the three things
+     * every course here genuinely does. `{n}` is the lesson count and `{year}`
+     * the year label.
+     *
+     * ⚠️ Nothing in it may become untrue for a future course. «فيديو وتمرين
+     * واختبار على كل درس» holds because the lesson gate enforces it — see
+     * `resolveGate`. Do not add «أول محاضرة مجانية» here: free previews are a
+     * per-lesson flag and not every course has one.
+     */
+    courseDescription:
+      'المنهج الرسمي للبرمجة والذكاء الاصطناعي لـ{year} — {n} محاضرة، فيديو وتمرين واختبار على كل درس، وامتحانات شهرية بدرجات تشوفها أول بأول. مع المهندس أيمن أبو العلا.',
+
     catalogDescription:
       'كل كورسات البرمجة وعلوم الحاسب على منصة أيمن أبو العلا — مرتّبة بالصف الدراسي والنظام والمادة، بشرح فيديو وملفات وامتحانات.',
     /**
@@ -2073,6 +2098,19 @@ export const copy = {
     lessonOutsideCourse: 'المحاضرة دي متعلّمة لمدارس الكورس نفسه مش بيخدمها',
   },
   course: {
+    /**
+     * The free written explanations, surfaced on the course page they were
+     * written for.
+     *
+     * ⚠️ The lead says «من غير حساب ومن غير اشتراك» on purpose. This section's
+     * whole job is to give a visitor who is not ready to pay something real,
+     * and a reader who cannot tell the articles are free will assume they are
+     * behind the same door as the videos and not click.
+     */
+    articlesEyebrow: 'مفتوح للكل',
+    articlesTitle: 'الشرح المكتوب للمنهج ده',
+    articlesLead:
+      'كل درس في المنهج مشروح كتابة على الموقع — تقراه دلوقتي من غير حساب ومن غير اشتراك، وتحكم بنفسك على الشرح قبل ما تقرر.',
     back: 'رجوع',
     lessons: 'الدروس',
     freeBanner: 'الكورس ده مفتوح مجانًا',
