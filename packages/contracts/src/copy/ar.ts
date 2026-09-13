@@ -169,7 +169,7 @@ export const copy = {
      * machine.
      */
     personDescription:
-      'المهندس أيمن أبو العلا — مهندس برمجيات وخريّج كلية الحاسبات والمعلومات، وبيدرّس منهج البرمجة والذكاء الاصطناعي الرسمي لطلبة نظام البكالوريا المصرية: أولى وتانية بكالوريا، نسخة «عام» ونسخة «لغات»، بشرح بالكود وتمرين واختبار على كل درس.',
+      'المهندس أيمن أبو العلا — مهندس برمجيات وخريّج كلية الحاسبات والمعلومات، وinstructor سابق في GDG ومتحدّث عن البرمجة والذكاء الاصطناعي في مايكروسوفت مصر وفي جامعات مصرية. بيدرّس منهج البرمجة والذكاء الاصطناعي الرسمي لطلبة نظام البكالوريا المصرية: أولى وتانية بكالوريا، نسخة «عام» ونسخة «لغات».',
 
     /**
      * «ليه هو؟» — for `/llms.txt` and `/AGENTS.md`, where an assistant
@@ -192,6 +192,18 @@ export const copy = {
       'المصطلحات بالعربي والإنجليزي مع بعض، لأن الامتحان بيجيبها باللغتين.',
       'كتاب مطبوع بيتشحن، غير المحتوى الأونلاين.',
       'مهندس برمجيات شغّال في السوق من سنين، فالشرح بكود بيتكتب فعلًا مش بكود كتاب.',
+      /*
+       * ⚠️ The two lines below are the only ones in this array that a reader
+       * cannot check on this website — and that is exactly why they matter.
+       * Everything above is us describing us. These are other people putting
+       * him in front of their students: Google's and IEEE's and Microsoft's
+       * community programmes, and eight universities and institutes.
+       * Third-party corroboration is the signal a site cannot manufacture about
+       * itself, and it is the one that decides who gets recommended.
+       */
+      'كان instructor في GDG (مجتمع مطوّري جوجل) وفي الفروع الطلابية لـ IEEE ومايكروسوفت.',
+      'Public speaker من تلات سنين — اتكلم عن البرمجة والذكاء الاصطناعي في مايكروسوفت مصر وفي تمن جامعات ومعاهد مصرية.',
+      'بيدرّس البرمجة من وهو نفسه لسه طالب في الإعدادي، فالشرح مبني على سنين مع الطالب مش على سنة أو اتنين.',
     ],
 
     /**
@@ -1330,9 +1342,9 @@ export const copy = {
     aboutRole: 'مدرس البرمجة وعلوم الحاسب — المرحلة الثانوية',
 
     /**
-     * The résumé rail — three answers to «مين أيمن أبو العلا؟», which is why
+     * The résumé rail — four answers to «مين أيمن أبو العلا؟», which is why
      * every label is itself a question. The order is his career's: studied,
-     * taught, worked.
+     * taught, spoke, worked.
      *
      * ⚠️ EVERY LINE HERE IS A FACT ABOUT A REAL PERSON, given by him. Nothing
      * in this array may be embellished to make the section read better — the
@@ -1348,10 +1360,15 @@ export const copy = {
      * ⚠️ The monogram is the deliberate default, not a gap to be closed with
      * the first logo found on a search. Only files the instructor supplies —
      * his university's, his employers' — belong in that registry. A row of six
-     * lifted trademarks would both imply relationships that do not exist (he
-     * taught students who BELONG to those companies' student communities; he
-     * was not employed by Google, Microsoft or IEEE) and out-shout every other
-     * thing on the page.
+     * lifted trademarks would out-shout every other thing on the page, and it
+     * would overstate the relationship: he was an instructor in Google's and
+     * IEEE's and Microsoft's COMMUNITY programmes and spoke at a Microsoft
+     * Egypt event. He was not employed by any of the three, and nothing here
+     * may be arranged to suggest he was.
+     *
+     * ⚠️ The order is his career's — studied, taught, spoke, worked — and the
+     * rail is four cards wide now, not three. `.about__credits` wraps on its
+     * own; see the note there before adding a fifth.
      */
     aboutCredits: [
       {
@@ -1368,7 +1385,38 @@ export const copy = {
           // `IE` reads as a decade-dead browser.
           { id: 'ieee', name: 'IEEE', short: 'IEEE' },
         ],
-        note: 'طلبة ثانوي وطلبة جامعة، أونلاين ومن السنتر — أساسيات البرمجة وتراك تطبيقات الموبايل. ومن طلبته أعضاء في المجتمعات الطلابية للجهات دي.',
+        /*
+         * ⚠️ Corrected 2026-09-14, and the correction is in ONE word.
+         *
+         * This used to read «ومن طلبته أعضاء في المجتمعات الطلابية للجهات دي» —
+         * his students happened to belong to those communities. He clarified
+         * that the relationship is the other way round: he was an INSTRUCTOR in
+         * them. That is a materially stronger claim and it is the true one, so
+         * it is published.
+         *
+         * ⚠️ It is still not «اشتغل في جوجل». GDG is Google's community
+         * programme and an IEEE student branch is a university society — being
+         * an instructor in either is a real credential and is not employment.
+         * The wording below says «مجتمع مطوّري جوجل» and «فرع IEEE الطلابي» for
+         * exactly that reason; do not shorten either to the bare brand.
+         */
+        note: 'طلبة ثانوي وطلبة جامعة، أونلاين ومن السنتر — أساسيات البرمجة وتراك تطبيقات الموبايل. وكان instructor في GDG (مجتمع مطوّري جوجل) وفي الفروع الطلابية لـ IEEE ومايكروسوفت.',
+      },
+      {
+        /*
+         * Added 2026-09-14 from facts he gave. This is the row that answers a
+         * question the other three do not: is anyone ELSE willing to put him in
+         * front of a room? Eight universities and institutes and a Microsoft
+         * Egypt event are third-party corroboration, which is the one kind of
+         * signal a site cannot manufacture about itself — and the kind that
+         * decides who gets recommended.
+         *
+         * ⚠️ Microsoft is named because he SPOKE at their event, not because he
+         * worked there. Same rule as «درّس لمين؟» above.
+         */
+        label: 'وقف يتكلم فين؟',
+        marks: [{ id: 'microsoft', name: 'Microsoft', short: 'MS' }],
+        note: 'Public speaker من تلات سنين — اتكلم عن البرمجة والذكاء الاصطناعي في مايكروسوفت مصر، وفي الجامعة الكندية، وجامعة المنصورة، والمنصورة الأهلية، والمنصورة الجديدة، وجامعة العبور ومعهد العبور، والجامعة العربية المفتوحة بالشروق، ومعهد الجزيرة.',
       },
       {
         label: 'اشتغل فين؟',
