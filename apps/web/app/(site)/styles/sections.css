@@ -2185,9 +2185,26 @@
    portrait is a fixed 3:4 box; every line added beside it makes the two
    halves less equal, and the credentials' longest note wants more width than
    half a shell anyway. */
+/* ---------------------------------------------------------------------------
+   ⚠️ `auto-fit`, not `repeat(3, …)` — the rail is four cards now.
+
+   It was a hard three columns, which was right while there were exactly three
+   answers to «مين أيمن أبو العلا؟». A fourth («وقف يتكلم فين؟», added
+   2026-09-14) under that rule lands alone on a second row at a third of the
+   width, and an orphan card reads as a layout bug rather than as a fourth fact.
+
+   `min(100%, 15rem)` is the part that matters: a bare `minmax(15rem, 1fr)`
+   overflows the shell on a phone narrower than 15rem plus its padding, because
+   a grid track cannot shrink below its own minimum. The `min()` lets the track
+   collapse to the container instead — which is also why the one-column override
+   in the narrow media query below is now belt-and-braces rather than the thing
+   holding the phone layout up.
+
+   Adding a fifth card needs no change here; it wraps. Check it at 390px first.
+   --------------------------------------------------------------------------- */
 .about__credits {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
   gap: clamp(1rem, 2vw, 1.5rem);
   margin-top: clamp(2.5rem, 5vw, 4rem);
 }
