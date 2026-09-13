@@ -702,3 +702,50 @@
   font-weight: var(--fw-medium);
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------------------------------------------------------------------------
+   .admin-lesson--nested — a lecture's quiz, drawn under the lecture it checks.
+
+   The course editor listed every lesson as an equal row, so a five-row section
+   was «three lectures and two quizzes» only if you read the titles. Reported
+   as «كده مش مظبوطة — يبقى في الكويز تحتها». The student's outline has never
+   looked like that: `.lesson-row--quiz` in `study.css` has indented a quiz
+   under its lecture since the outline was built, and an instructor arranging
+   the course was the one person looking at a flatter picture than the one
+   being arranged.
+
+   Same two tokens as that rule, deliberately — `--s-24` of indent and a
+   hairline on the inline start tying the quiz back up to its parent — so the
+   two surfaces read as the same object at the same depth rather than as two
+   designers' guesses.
+
+   ⚠️ On the CARD, not on `.lesson-row`. In the student outline the row is the
+   outermost object; here it sits inside a bordered card, so the student's rule
+   applied to the row would indent it INSIDE its own border and leave the
+   border itself aligned with the lecture. Logical properties throughout: the
+   panel is RTL and the indent has to fall on the correct side without a
+   second rule.
+
+   ⚠️ This is presentation only, and it must stay that way. Ownership is
+   adjacency — `groupIntoEntries`, the same function the student outline and
+   the lesson gate use — so dragging a quiz above a different lecture re-parents
+   it here, in the outline and in the gate at once. Nothing is stored; there is
+   nothing to fall out of sync, and there must not be.
+   --------------------------------------------------------------------------- */
+.admin-lesson--nested {
+  margin-inline-start: var(--s-24);
+  border-inline-start: var(--hairline) solid var(--n-5);
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+}
+
+/* Subordinate, and it has to look it: at the lecture's 2.25rem well and full
+   title size the two read as siblings again, which is the whole complaint. */
+.admin-lesson--nested .lesson-row__well {
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+}
+
+.admin-lesson--nested .lesson-row__title {
+  font-size: var(--fs-text-sm);
+}

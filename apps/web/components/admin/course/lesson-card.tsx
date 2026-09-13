@@ -52,12 +52,20 @@ export function LessonCard({
   courseId,
   lesson,
   isExam,
+  isNested = false,
   handleProps,
   courseStream,
 }: {
   courseId: string;
   lesson: Lesson;
   isExam: boolean;
+  /**
+   * This row is the quiz of the lecture above it, so it is drawn under that
+   * lecture rather than beside it. Decided by `SortableLessonList`, which is
+   * the component that knows a row's position — see the note there on why
+   * ownership is adjacency and not a stored field.
+   */
+  isNested?: boolean;
   handleProps: SortableHandleProps;
   /** The course's pair, so a lesson labelled outside it can be flagged. */
   courseStream?: { forGeneral: boolean; forLanguages: boolean };
@@ -71,7 +79,17 @@ export function LessonCard({
   const quizIsEmpty = lesson.kind === 'quiz' && (lesson.quiz?._count.slots ?? 0) === 0;
 
   return (
-    <div className="rounded-md border border-line bg-surface-3">
+    <div
+      className={cn(
+        'rounded-md border border-line bg-surface-3',
+        // The indent goes on the CARD, not on the `.lesson-row` inside it —
+        // the student's `.lesson-row--quiz` puts it on the row because there
+        // the row IS the outermost object. Here the row sits inside a bordered
+        // card, so indenting the row would move it inside its own border and
+        // leave the card lined up with the lecture it belongs to.
+        isNested && 'admin-lesson--nested',
+      )}
+    >
       <div
         className="lesson-row cursor-pointer"
         onClick={(event) => {
