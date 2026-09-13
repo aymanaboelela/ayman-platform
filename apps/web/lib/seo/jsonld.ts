@@ -1,4 +1,7 @@
 import { copy, youTubeEmbedUrl, youTubeThumbnailUrl } from '@ayman/contracts';
+// The SUBPATH, not the root barrel — importing a runtime value through the
+// barrel is what stops the API booting. Same import the footer uses.
+import { waMeHref } from '@ayman/contracts/whatsapp';
 import { SAME_AS } from '@ayman/contracts/site-profiles';
 import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
 
@@ -202,9 +205,41 @@ export function organizationJsonLd(
    */
   const telephone = contact?.whatsapp ?? contact?.phone ?? null;
 
+  /**
+   * `contactPoint` beside the bare `telephone`, carrying the `wa.me` URL.
+   *
+   * A phone number in a knowledge graph is a string to display. A
+   * `ContactPoint` with a `url` is a door an assistant can hand a student —
+   * «كلّمه هنا» with a link — which is the difference between being listed and
+   * being reachable, and reaching him on WhatsApp is how every enrolment on
+   * this platform actually starts.
+   *
+   * ⚠️ `waMeHref` returns null for anything that is not E.164, so a badly
+   * typed number in `/admin/settings` drops the whole node rather than
+   * publishing a link that opens WhatsApp on nobody. `telephone` above still
+   * ships in that case — a wrong-looking number is still the number he gave.
+   *
+   * `availableLanguage: ar` is not decoration: it is the one field that tells
+   * an assistant answering in English that the person on the other end will
+   * reply in Arabic.
+   */
+  const whatsappUrl = waMeHref(contact?.whatsapp ?? null);
+
   return withSameAs({
     ...(telephone ? { telephone } : {}),
     ...(contact?.email ? { email: contact.email } : {}),
+    ...(whatsappUrl
+      ? {
+          contactPoint: {
+            '@type': 'ContactPoint',
+            contactType: 'customer support',
+            url: whatsappUrl,
+            ...(telephone ? { telephone } : {}),
+            availableLanguage: ['ar'],
+            areaServed: 'EG',
+          },
+        }
+      : {}),
     '@context': 'https://schema.org',
     '@type': 'EducationalOrganization',
     '@id': ORGANIZATION_ID,

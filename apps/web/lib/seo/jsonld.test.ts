@@ -165,6 +165,29 @@ describe('the entity graph', () => {
     });
   });
 
+  it('turns the WhatsApp number into a door, not just a string', () => {
+    // A `telephone` is something to display; a `ContactPoint` with a `url` is
+    // something an assistant can hand a student. Every enrolment here starts on
+    // WhatsApp, so this is the one contact field that does real work.
+    expect(organizationJsonLd({ whatsapp: '+201021196367' })).toMatchObject({
+      contactPoint: { '@type': 'ContactPoint', url: 'https://wa.me/201021196367' },
+    });
+
+    /*
+     * ⚠️ And it must vanish rather than degrade. `waMeHref` answers null for
+     * anything that is not E.164, so a number typed wrong in /admin/settings
+     * publishes no link at all instead of one that opens WhatsApp on nobody —
+     * while `telephone` still ships, because a wrong-looking number is still
+     * the number the admin entered.
+     */
+    const typo = organizationJsonLd({ whatsapp: '01021196367' });
+    expect(typo).not.toHaveProperty('contactPoint');
+    expect(typo).toMatchObject({ telephone: '01021196367' });
+
+    // `phone` alone is a landline-shaped number, not a WhatsApp account.
+    expect(organizationJsonLd({ phone: '+20222222222' })).not.toHaveProperty('contactPoint');
+  });
+
   it('never claims a `sameAs` it cannot back up', () => {
     // The footer links to `https://www.youtube.com/` and
     // `https://www.facebook.com/` — bare platform homepages, not this
