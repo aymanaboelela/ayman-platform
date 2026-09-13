@@ -559,7 +559,6 @@ export const copy = {
       point1: 'كل كورساتك في صفحة واحدة',
       point2: 'المشغّل بيفتكر آخر ثانية في الفيديو',
       point3: 'كل درجاتك ومراجعاتك متسجّلة',
-      codeCaption: 'welcome.js',
     },
     errors: {
       // One generic message per form, shown for EVERY failure reason on that
