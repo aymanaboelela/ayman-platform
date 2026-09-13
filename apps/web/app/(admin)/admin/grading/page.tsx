@@ -51,13 +51,14 @@ const c = copy.admin.grading;
 
 export const metadata = { title: c.title };
 
-const TABS = ['queue', 'marked', 'top'] as const;
+const TABS = ['queue', 'marked', 'top', 'late'] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABEL: Record<Tab, string> = {
   queue: c.tabQueue,
   marked: c.tabMarked,
   top: c.tabTop,
+  late: c.tabLate,
 };
 
 const SORT_LABEL: Record<GradingSort, string> = {
@@ -147,7 +148,9 @@ export default async function AdminGradingPage({
   // value from the database going into a query string, and it is the one part
   // of this URL that is not a literal.
   const params = new URLSearchParams({
-    scope: tab === 'marked' ? 'marked' : 'all',
+    // `late` and `marked` are their own scopes; everything else reads `all`,
+    // which now EXCLUDES late sittings — see `GRADING_SCOPES`.
+    scope: tab === 'marked' ? 'marked' : tab === 'late' ? 'late' : 'all',
     sort: activeSort,
   });
   if (exam) params.set('lessonId', exam);
@@ -169,7 +172,13 @@ export default async function AdminGradingPage({
       <div>
         <h1 className="text-[length:var(--fs-title-2)] font-semibold text-fg">{c.title}</h1>
         <p className="mt-1 max-w-[44rem] text-[length:var(--fs-text-sm)] text-fg-muted">
-          {tab === 'queue' ? c.lead : tab === 'marked' ? c.leadMarked : c.leadTop}
+          {tab === 'queue'
+            ? c.lead
+            : tab === 'marked'
+              ? c.leadMarked
+              : tab === 'late'
+                ? c.leadLate
+                : c.leadTop}
         </p>
       </div>
 
@@ -380,7 +389,9 @@ export default async function AdminGradingPage({
                     rank={tab === 'top' && activeSort === 'score' ? index + 1 : null}
                     /* The stars stay available whatever the order — re-sorting
                        is how you go looking for the paper you meant to rate. */
-                    canMark={tab === 'top'}
+                    /* Rateable on both — a late paper still gets marked and
+                       judged; it simply cannot go on the board. */
+                    canMark={tab === 'top' || tab === 'late'}
                   />
                 </li>
               ))}
@@ -388,7 +399,7 @@ export default async function AdminGradingPage({
           ) : (
             <div className="mt-5 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-12 text-center">
               <p className="text-[length:var(--fs-title-4)] font-medium text-fg">
-                {tab === 'marked' ? c.emptyMarked : c.emptyTop}
+                {tab === 'marked' ? c.emptyMarked : tab === 'late' ? c.emptyLate : c.emptyTop}
               </p>
             </div>
           )}

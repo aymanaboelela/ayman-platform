@@ -139,6 +139,8 @@ export function ResultRow({ row, rank, canMark = false }: ResultRowProps) {
               a paper he marked from one the engine did. On «اتصحّح خلاص» every
               row is hand-marked by definition, and a badge that is always
               present is not a badge. */}
+          {/* On the late tab this is the one thing the row has to say. */}
+          {row.isLate ? <span className="text-[color:var(--warn)]">{c.rowLate}</span> : null}
           {rank !== null && row.handMarked ? (
             <span className="text-accent-text">{c.rowHandMarked}</span>
           ) : null}
@@ -184,6 +186,7 @@ export function ResultRow({ row, rank, canMark = false }: ResultRowProps) {
             studentName={row.studentName}
             instructorRating={row.instructorRating}
             onHonorBoard={row.onHonorBoard}
+            isLate={row.isLate}
           />
         </div>
       ) : null}
