@@ -324,19 +324,38 @@ export class CatalogService {
         { scaledScore: 'desc' },
         { honorBoardAt: 'asc' },
       ],
-      take: 12,
+      /*
+       * 24 read, 12 kept. A late sitting is filtered out BELOW rather than in
+       * the WHERE, because «late» compares two COLUMNS — `started_at` against
+       * its quiz's `late_after` — and Prisma's `where` cannot express a
+       * column-to-column comparison. Over-fetching by one page and trimming
+       * keeps the board full even when some pinned papers are filtered, and 24
+       * rows is nothing.
+       */
+      take: 24,
       select: {
+        startedAt: true,
         scaledScore: true,
         gradeOutOf: true,
         user: {
           select: { image: true, studentProfile: { select: { fullName: true } } },
         },
-        quiz: { select: { lesson: { select: { title: true } } } },
+        quiz: { select: { lateAfter: true, lesson: { select: { title: true } } } },
       },
     });
 
     return {
-      entries: rows.map((row) => {
+      entries: rows
+        /*
+         * Belt and braces with `ManualGradingService.mark`, which already
+         * refuses to pin a late sitting. This is the READ side of the same
+         * rule, and it covers the one case the write cannot: a paper pinned
+         * BEFORE `lateAfter` was set on its exam. The board is public and it
+         * is about children — it is worth being sure twice.
+         */
+        .filter((row) => row.quiz.lateAfter === null || row.startedAt <= row.quiz.lateAfter)
+        .slice(0, 12)
+        .map((row) => {
         const scaledScore = Number(row.scaledScore ?? 0);
         const gradeOutOf = Number(row.gradeOutOf);
         return {

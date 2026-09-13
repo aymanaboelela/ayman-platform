@@ -305,7 +305,11 @@ export type GradingSort = (typeof GRADING_SORTS)[number];
 
 /** `marked` — papers a human actually marked. `all` — every finished sitting,
  *  which is what a ranking has to be drawn from. */
-export const GRADING_SCOPES = ['marked', 'all'] as const;
+/** `late` — «اللي امتحنوا بعد الميعاد», on their own. They are graded like
+ *  anybody else and they are not in the running, so they get their own view
+ *  rather than a badge inside a ranking they do not belong to — and `all`
+ *  EXCLUDES them for the same reason. */
+export const GRADING_SCOPES = ['marked', 'all', 'late'] as const;
 export const GradingScopeSchema = z.enum(GRADING_SCOPES);
 export type GradingScope = (typeof GRADING_SCOPES)[number];
 
@@ -341,6 +345,15 @@ export const AdminGradedRowSchema = z.object({
   /** Whether this paper is on «لوحة الشرف» — and so whether this student's
    *  name and photo are on the public landing page right now. */
   onHonorBoard: z.boolean(),
+  /**
+   * Whether this sitting STARTED after the exam's real deadline
+   * (`quizzes.late_after`).
+   *
+   * «هنصحّح بس مش هياخد جايزة»: a late paper is marked like any other and the
+   * student sees their grade, but it is kept out of «الأوائل» and refused a
+   * place on the honour board.
+   */
+  isLate: z.boolean(),
 });
 export type AdminGradedRow = z.infer<typeof AdminGradedRowSchema>;
 

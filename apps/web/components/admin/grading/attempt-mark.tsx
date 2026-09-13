@@ -16,6 +16,9 @@ export interface AttemptMarkProps {
   studentName: string;
   instructorRating: number | null;
   onHonorBoard: boolean;
+  /** A paper sat after the deadline. Still rateable — «هنصحّح» — but the board
+   *  is refused, by the API as well as here. */
+  isLate?: boolean;
 }
 
 /**
@@ -48,6 +51,7 @@ export function AttemptMark({
   studentName,
   instructorRating,
   onHonorBoard,
+  isLate = false,
 }: AttemptMarkProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -107,6 +111,13 @@ export function AttemptMark({
         ))}
       </div>
 
+      {/*
+        No board button on a late paper. `ManualGradingService.mark` refuses it
+        with `attempt_is_late` regardless — this just stops the instructor
+        pressing something that can only fail. The STARS stay: «هنصحّح بس مش
+        هياخد جايزة» is about the prize, not about the marking.
+      */}
+      {isLate ? null : (
       <button
         type="button"
         disabled={pending}
@@ -129,6 +140,7 @@ export function AttemptMark({
       >
         {onBoard ? c.honorOn : c.honorAdd}
       </button>
+      )}
 
       {failed ? (
         <span role="status" className="text-[length:var(--fs-text-xs)] text-[color:var(--err)]">

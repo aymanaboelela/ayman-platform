@@ -38,6 +38,7 @@ interface GradingResultRow {
   hand_marked: boolean;
   instructor_rating: number | null;
   honor_board_at: Date | null;
+  is_late: boolean;
 }
 
 function toGradedRow(row: GradingResultRow): AdminGradedRow {
@@ -59,6 +60,7 @@ function toGradedRow(row: GradingResultRow): AdminGradedRow {
     handMarked: row.hand_marked,
     instructorRating: row.instructor_rating,
     onHonorBoard: row.honor_board_at !== null,
+    isLate: row.is_late,
   };
 }
 
@@ -225,13 +227,26 @@ export class ManualGradingService {
     // mark this". «الأوائل» draws on every finished sitting instead, because a
     // ranking that silently omitted the all-MCQ papers would be a ranking of
     // who happened to write an essay.
+    /*
+     * `late` is its own scope, and `all` EXCLUDES it.
+     *
+     * «هنصحّح بس مش هياخد جايزة»: a paper sat after the deadline is marked like
+     * any other and the student sees their grade, but it is not in the running.
+     * Leaving it in a list headed «الأوائل» would say that it is, and a badge
+     * on the row would not change what the heading claims.
+     *
+     * `marked` is deliberately NOT filtered by lateness — that tab answers
+     * «did I mark this», and a late paper still has to be marked.
+     */
     const scopeFilter =
       options.scope === 'marked'
         ? Prisma.sql`AND EXISTS (
             SELECT 1 FROM "app"."attempt_questions" gq
             WHERE gq."attempt_id" = a."id" AND gq."graded_by" IS NOT NULL
           )`
-        : Prisma.empty;
+        : options.scope === 'late'
+          ? Prisma.sql`AND q."late_after" IS NOT NULL AND a."started_at" > q."late_after"`
+          : Prisma.sql`AND (q."late_after" IS NULL OR a."started_at" <= q."late_after")`;
 
     const lessonFilter = options.lessonId
       ? Prisma.sql`AND q."lesson_id" = ${options.lessonId}::uuid`
@@ -269,6 +284,11 @@ export class ManualGradingService {
              ELSE NULL END AS duration_seconds,
         a."instructor_rating" AS instructor_rating,
         a."honor_board_at"    AS honor_board_at,
+        -- «امتحن بعد الميعاد». Derived, never stored: the sittings that need
+        -- this flag were sat before the flag existed, and only a rule computed
+        -- at read time reaches backwards over them. started_at, not
+        -- submitted_at -- walking in late is the thing being measured.
+        (q."late_after" IS NOT NULL AND a."started_at" > q."late_after") AS is_late,
         EXISTS (
           SELECT 1 FROM "app"."attempt_questions" hq
           WHERE hq."attempt_id" = a."id" AND hq."graded_by" IS NOT NULL
@@ -407,9 +427,29 @@ export class ManualGradingService {
   ): Promise<{ instructorRating: number | null; onHonorBoard: boolean }> {
     const existing = await this.prisma.quizAttempt.findUnique({
       where: { id: attemptId },
-      select: { id: true, state: true },
+      select: {
+        id: true,
+        state: true,
+        startedAt: true,
+        quiz: { select: { lateAfter: true } },
+      },
     });
     if (!existing) throw new NotFoundException({ code: 'attempt_not_found' });
+
+    /*
+     * «هنصحّح بس مش هياخد جايزة» — a paper sat after the deadline can be marked
+     * and rated, but it cannot go on the board.
+     *
+     * Refused HERE, not merely hidden in the UI. The board is the one thing on
+     * this platform that publishes a student's name and face, and a rule that
+     * only a button enforces is a rule that holds until somebody calls the API
+     * directly.
+     */
+    const isLate =
+      existing.quiz.lateAfter !== null && existing.startedAt > existing.quiz.lateAfter;
+    if (isLate && input.onHonorBoard === true) {
+      throw new BadRequestException({ code: 'attempt_is_late' });
+    }
     // A paper with an answer still unmarked has a provisional total, and a
     // provisional total has no business on a board of the best in the class.
     if (existing.state !== 'submitted') {

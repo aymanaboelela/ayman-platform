@@ -2812,6 +2812,33 @@ model Quiz {
   openFrom        DateTime? @map("open_from")
   openUntil       DateTime? @map("open_until")
 
+  /// «اللي امتحنوا بعد الوقت المسموح بيه» — the deadline that MATTERED, kept
+  /// after the window itself is reopened.
+  ///
+  /// A monthly exam closes, and then the students who missed it need to sit
+  /// it. The only way to let them is to reopen the window — which erases the
+  /// one fact that separates them from everyone who sat it on time. This
+  /// column is that fact, preserved: `openUntil` goes back to null so the
+  /// paper is sittable, and this keeps the original closing instant so a
+  /// sitting started after it can still be told apart.
+  ///
+  /// ## Derived, never snapshotted onto the attempt
+  ///
+  /// «late» is `attempt.startedAt > lateAfter`, computed at read time. A
+  /// boolean on `quiz_attempts` would be the usual choice here — B7 snapshots
+  /// nearly everything else onto the attempt — and it is wrong for this one:
+  /// the papers that need flagging were sat BEFORE the flag existed, and only
+  /// a derived rule reaches backwards over them. Correcting the date later
+  /// re-files every affected paper too, which is what an instructor expects a
+  /// date field to do.
+  ///
+  /// ## startedAt, not submittedAt
+  ///
+  /// A student who opened the paper at 19:50 and handed it in at 21:20 sat it
+  /// on time and used their ninety minutes. Lateness is about when you walked
+  /// in.
+  lateAfter DateTime? @map("late_after") @db.Timestamptz(3)
+
   /// Offers ONE extra sitting, drawn from the `improvement` paper, with the
   /// HIGHER of the two scores counting. Only ever true on a course's final
   /// exam — `QuizBuilderService` refuses to set it on any other lesson.
