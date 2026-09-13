@@ -1,5 +1,6 @@
 import { copy, youTubeEmbedUrl, youTubeThumbnailUrl } from '@ayman/contracts';
 import { SAME_AS } from '@ayman/contracts/site-profiles';
+import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
 
 /**
  * The site origin. Nothing else in the app is host-aware, so switching to a
@@ -107,8 +108,62 @@ export function personJsonLd() {
     jobTitle: copy.seo.jobTitle,
     description: copy.seo.personDescription,
     knowsLanguage: ['ar', 'en'],
-    knowsAbout: ['البرمجة', 'علوم الحاسب', 'الخوارزميات', 'قواعد البيانات'],
+    /**
+     * ⚠️ This list used to be the four topics a programming teacher generically
+     * knows — «البرمجة، علوم الحاسب، الخوارزميات، قواعد البيانات» — and three of
+     * the four appear nowhere in the syllabus he actually teaches. The Bakalorya
+     * subject is «البرمجة والذكاء الاصطناعي», and its four units are AI,
+     * cybersecurity, web applications and web/UX design. A student — or an
+     * assistant answering for one — asking who teaches الذكاء الاصطناعي for
+     * البكالوريا was matching against a `knowsAbout` that did not contain the
+     * phrase at all.
+     *
+     * So this is the unit list, not a résumé of everything he can do. Keep it
+     * that way: a topic belongs here when a course on this site teaches it.
+     * See `copy.seo.instructorCoverage` for the prose form of the same claim.
+     */
+    knowsAbout: [
+      'البرمجة',
+      'الذكاء الاصطناعي',
+      'علوم الحاسب',
+      'الأمن السيبراني',
+      'تطبيقات الويب',
+      'تصميم تجربة المستخدم',
+      'الخوارزميات',
+      'قواعد البيانات',
+      'تطبيقات الموبايل',
+    ],
+    /**
+     * `hasOccupation` and `alumniOf` — the two facts that separate «a person
+     * who has a website about teaching» from «a person who teaches this».
+     *
+     * ⚠️ Both come from `copy.landing.aboutCredits`, which he supplied, and the
+     * same rule applies here as there: nothing in this block may be embellished.
+     * The university is the one he graduated from; the occupation is the one he
+     * holds. There is no `award`, no `hasCredential` and no student count,
+     * because no verified one was given — an unverifiable claim in structured
+     * data is worth less than its absence and risks the entity being discounted
+     * wholesale.
+     */
+    hasOccupation: {
+      '@type': 'Occupation',
+      name: copy.seo.jobTitle,
+      occupationalCategory: '25-2031.00',
+      occupationLocation: { '@type': 'Country', name: 'Egypt' },
+    },
+    alumniOf: {
+      '@type': 'CollegeOrUniversity',
+      name: copy.seo.alumniOfName,
+      alternateName: 'MTI University',
+    },
     worksFor: { '@id': ORGANIZATION_ID },
+    /**
+     * Which page is ABOUT him. `/about` already declares the inverse with
+     * `ProfilePage.mainEntity`; stating both directions is what lets a consumer
+     * that meets the Person node first (on any page — the layout emits it
+     * everywhere) know where to go for the long form.
+     */
+    mainEntityOfPage: absolute('/about'),
     nationality: { '@type': 'Country', name: 'Egypt' },
   });
 }
@@ -220,7 +275,25 @@ export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolea
     url: absolute(`/courses/${course.slug}`),
     inLanguage: 'ar',
     isAccessibleForFree: true,
-    educationalLevel: `${course.systemNameAr} — ${course.year}`,
+    // «البكالوريا — الصف الثاني بكالوريا», not «البكالوريا — 2». The bare digit
+    // was unmatchable: a student searches «تانية بكالوريا» and an assistant
+    // grounding on this node had a number where the phrase should be.
+    educationalLevel: `${course.systemNameAr} — ${yearLabelAr(course.year)}`,
+    /**
+     * The same course, under every name a student gives its year.
+     *
+     * ⚠️ The digit forms — «٢ بكالوريا», «2 بكالوريا» — are the reason this
+     * field exists here. The title says «تانية بكالوريا» and nothing on the
+     * node said «٢», so a query carrying the numeral had no string to match.
+     * `keywords` on a `CreativeWork` is the field whose defined job is "other
+     * terms this is known by", which is exactly what these are — see
+     * `yearAliasesAr` for why both digit sets and both spellings ship.
+     *
+     * ⚠️ Aliases for THIS course's year only. Listing all three years' spellings
+     * on every course would make each one claim to be about all of them, which
+     * is the difference between an alias and a keyword stuff.
+     */
+    keywords: [...yearAliasesAr(course.year), course.subjectNameAr, course.systemNameAr],
     about: course.subjectNameAr,
     provider,
     // The course is taught by the person, and the person is the thing being

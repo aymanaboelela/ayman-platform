@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { copy } from '@ayman/contracts';
 import {
   ORGANIZATION_ID,
   PERSON_ID,
@@ -100,6 +101,31 @@ describe('the entity graph', () => {
     expect(personJsonLd().worksFor).toEqual({ '@id': ORGANIZATION_ID });
     expect(organizationJsonLd().founder).toEqual({ '@id': PERSON_ID });
     expect(webSiteJsonLd().publisher).toEqual({ '@id': ORGANIZATION_ID });
+  });
+
+  it('knows about the subject it actually teaches', () => {
+    // The regression this replaces: `knowsAbout` listed «الخوارزميات» and
+    // «قواعد البيانات» — neither is a Bakalorya unit — and did NOT list
+    // «الذكاء الاصطناعي», which is half the subject's official name. A student
+    // asking who teaches الذكاء الاصطناعي for البكالوريا matched nothing.
+    const knowsAbout = personJsonLd().knowsAbout;
+    expect(knowsAbout).toContain('الذكاء الاصطناعي');
+    expect(knowsAbout).toContain('الأمن السيبراني');
+    expect(knowsAbout).toContain('تطبيقات الويب');
+  });
+
+  it('states the credentials as facts, and states them once', () => {
+    // `hasOccupation` and `alumniOf` are what make this a person who teaches
+    // the subject rather than a person with a site about it. The university
+    // must carry its Arabic name — an entity called only «MTI» matches nothing
+    // in an Arabic query.
+    const person = personJsonLd();
+    expect(person.hasOccupation.name).toBe(copy.seo.jobTitle);
+    expect(person.alumniOf.name).toBe(copy.seo.alumniOfName);
+    expect(person.alumniOf.name).toMatch(/[\u0600-\u06FF]/);
+    // No unverifiable boast in the one node a consumer trusts without checking.
+    expect(person).not.toHaveProperty('award');
+    expect(person).not.toHaveProperty('hasCredential');
   });
 
   it('carries the hamza-less spellings students actually type', () => {

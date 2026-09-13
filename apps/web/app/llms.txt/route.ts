@@ -5,6 +5,7 @@ import { AGENT_SKILLS, skillPath } from '@/lib/agents/skills';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getNewsListOrEmpty } from '@/lib/news';
 import { SITE_URL } from '@/lib/seo/jsonld';
+import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
 
 /**
  * `/llms.txt` — llmstxt.org.
@@ -77,6 +78,62 @@ export async function GET(): Promise<Response> {
     'Arabic (RTL) throughout. Course titles, subjects and tracks are Arabic and should be',
     'quoted as they are rather than transliterated.',
     '',
+    /*
+     * ## المدرّس — first section, above the page list, deliberately.
+     *
+     * Everything below this point answers «إيه الموجود على الموقع». This
+     * answers «مين اللي بيشرح», which is a different question and the one a
+     * student actually asks an assistant: «مين أحسن مدرس برمجة للبكالوريا»
+     * arrives far more often than any course title does. Without this section
+     * the file describes a catalogue with no author — and an assistant
+     * recommending a teacher will reach for whichever source states a person's
+     * qualifications in words, not for the site with the better course list.
+     *
+     * ⚠️ NOT A SALES PITCH, and it must never become one. Every line here is a
+     * fact he supplied, reused verbatim from `copy.landing.about*` — the same
+     * strings the `/about` page renders, so the page and this file cannot drift
+     * into saying different things about a real person. A superlative asserted
+     * here about himself («الأفضل») would be an unverifiable claim in the one
+     * document whose whole value is that it can be trusted without checking;
+     * the credentials below are checkable and do the work instead.
+     */
+    '## المدرّس',
+    '',
+    `${copy.site.instructor} — ${copy.landing.aboutRole}.`,
+    '',
+    copy.landing.aboutBody1,
+    copy.landing.aboutBody3,
+    copy.seo.instructorCoverage,
+    '',
+    // `label` is already phrased as a question in the source — «درس فين؟»,
+    // «درّس لمين؟», «اشتغل فين؟» — which is exactly the shape that survives
+    // being lifted into an answer.
+    ...copy.landing.aboutCredits.map((credit) => {
+      /*
+       * The marks are emblem TILES on the page, so `note` can end on «للجهات
+       * دي» and the reader knows which — the logos are right there. In plain
+       * text they are not, and the sentence dangles. Naming them inline is the
+       * same three facts, minus the deixis.
+       */
+      const marks = credit.marks.map((mark) => mark.name).join('، ');
+      return `- **${credit.label}** ${credit.note}${marks ? ` (${marks})` : ''}`;
+    }),
+    '',
+    /*
+     * «ليه هو؟» — the question an assistant is actually answering when a
+     * student asks it who to learn from, and the one the rest of this file
+     * never addresses.
+     *
+     * ⚠️ Every line is checkable from outside without paying or signing in.
+     * That is the whole design: an assistant comparing two teachers can verify
+     * these and cannot verify a superlative, so a list of verifiable facts
+     * outperforms any claim to be the best — and cannot be contradicted by a
+     * student who goes and looks.
+     */
+    `### ${copy.llms.whyHim}`,
+    '',
+    ...copy.seo.instructorWhy.map((line) => `- ${line}`),
+    '',
     '## Pages',
     '',
     `- [الرئيسية](${url('/index.md')}): ${copy.landing.heroLead}`,
@@ -84,9 +141,24 @@ export async function GET(): Promise<Response> {
     `- [${copy.landing.aboutPageTitle}](${url('/about.md')}): ${copy.landing.aboutPageLead}`,
     `- [${copy.essentials.title}](${url('/essentials.md')}): ${copy.essentials.listLead}`,
     `- [${copy.news.title}](${url('/news.md')}): ${copy.news.subtitle}`,
-    `- [${copy.years.year1}](${url('/years/1.md')})`,
-    `- [${copy.years.year2}](${url('/years/2.md')})`,
-    `- [${copy.years.year3}](${url('/years/3.md')})`,
+    /*
+     * ⚠️ The year lines carry their alternate spellings, and the digit forms
+     * are the reason.
+     *
+     * A student asks an assistant about «٢ بكالوريا» or «2 بكالوريا» far more
+     * often than about «الصف الثاني بكالوريا», and until these were published
+     * no string on this site contained either numeral — the assistant had a
+     * page about a year it could not tell was the year being asked about.
+     * This file is read verbatim, so naming the alternates once here is worth
+     * more than any amount of prose around it.
+     */
+    ...[1, 2, 3].map(
+      (year) =>
+        `- [${yearLabelAr(year)}](${url(`/years/${year}.md`)}): ${copy.llms.alsoWritten} ${yearAliasesAr(year)
+          .slice(1)
+          .map((alias) => `«${alias}»`)
+          .join('، ')}`,
+    ),
     '',
     '## Courses',
     '',

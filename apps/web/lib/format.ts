@@ -58,3 +58,25 @@ export function formatHoursMinutes(totalSeconds: number): string {
   const rest = minutes % 60;
   return rest === 0 ? `${hours} س` : `${hours} س ${rest} د`;
 }
+
+/**
+ * An article's date, as a reader sees it — «13 سبتمبر 2026».
+ *
+ * ⚠️ Added 2026-09-13 because the article header had a `<time>` whose ATTRIBUTE
+ * carried the date and whose TEXT was the word «اتنشر» and nothing else. A
+ * parser that reads `dateTime` was fine; a reader was not, and neither was any
+ * consumer that reads the rendered text — an AI-readiness scan reported the
+ * site had no editorial freshness signal at all while every article had a
+ * correct `datePublished` in its JSON-LD.
+ *
+ * `ar-EG-u-nu-latn` — Arabic month names, LATIN digits, the same locale every
+ * other formatter in this app uses. See `lib/fonts.ts` for why the digits are
+ * Latin: the Arabic-Indic ones fall back to a different face mid-sentence.
+ */
+const articleDateFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', { dateStyle: 'long' });
+
+export function formatArticleDate(iso: string): string {
+  const date = new Date(iso);
+  // An unparseable timestamp must not take the page down over a byline.
+  return Number.isNaN(date.getTime()) ? '' : articleDateFormatter.format(date);
+}

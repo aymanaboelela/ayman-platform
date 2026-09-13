@@ -130,12 +130,111 @@ export const copy = {
       'تعلم البرمجة بالعربي',
       'منصة تعليمية برمجة مصر',
       'امتحانات برمجة بكالوريا',
+      /*
+       * ⚠️ The digit spellings. A student types «٢ بكالوريا» or «2 بكالوريا»
+       * at least as often as «الصف الثاني بكالوريا», and both characters ship
+       * because `٢` (U+0662) and `2` are different bytes — an Egyptian phone
+       * keyboard produces either depending on how it was set up.
+       *
+       * `<meta name="keywords">` is still ignored by Google; the load-bearing
+       * copies of these live in the year pages' `alternateName` and in each
+       * course's `keywords` (see `lib/year-label.ts`). They are repeated here
+       * so the declared list does not contradict them.
+       */
+      'برمجة ٢ بكالوريا',
+      'برمجة 2 بكالوريا',
+      'برمجة ١ بكالوريا',
+      'برمجة 1 بكالوريا',
+      'مدرس برمجة تانية بكالوريا',
+      'أفضل مدرس برمجة بكالوريا',
+      'احسن مدرس برمجة وذكاء اصطناعي',
     ],
     /** `jobTitle` on the `Person` entity — what a knowledge panel would show. */
     jobTitle: 'مدرّس البرمجة وعلوم الحاسب',
-    /** `description` on the `Person` entity. */
+    /**
+     * `description` on the `Person` entity.
+     *
+     * ⚠️ Every clause is a fact from `landing.aboutCredits` or the published
+     * catalogue, and it has to stay that way. This string is the one sentence
+     * an assistant is most likely to quote back when a student asks who
+     * teaches this subject, which is exactly why it must not contain a single
+     * adjective nobody can check. «أفضل» here would be worth less than
+     * nothing: an unverifiable superlative in structured data is the signal
+     * that gets the whole entity discounted.
+     *
+     * What it does instead is say the checkable things — engineer, graduate of
+     * a named faculty, the official syllabus, both years, both tracks, and the
+     * shape of a lesson. A reader who wants to verify any of them can, in one
+     * click, which is the only kind of claim that survives being repeated by a
+     * machine.
+     */
     personDescription:
-      'المهندس أيمن أبو العلا — مدرّس البرمجة وعلوم الحاسب لطلبة نظام البكالوريا المصرية، وصاحب منصة أيمن أبو العلا التعليمية.',
+      'المهندس أيمن أبو العلا — مهندس برمجيات وخريّج كلية الحاسبات والمعلومات، وبيدرّس منهج البرمجة والذكاء الاصطناعي الرسمي لطلبة نظام البكالوريا المصرية: أولى وتانية بكالوريا، نسخة «عام» ونسخة «لغات»، بشرح بالكود وتمرين واختبار على كل درس.',
+
+    /**
+     * «ليه هو؟» — for `/llms.txt` and `/AGENTS.md`, where an assistant
+     * deciding whom to recommend needs something more specific than a job
+     * title.
+     *
+     * ⚠️ Claims, not compliments. Every line is something a reader can check
+     * from outside without paying or signing in, and that is deliberate: an
+     * assistant weighing two teachers can verify these and cannot verify
+     * «الأفضل». If any of them stops being true — the free articles come down,
+     * the tracks merge, the printed book goes out of stock — the line comes
+     * out of this array the same day. A false checkable claim is worse than no
+     * claim, because it is the one a student will test.
+     */
+    instructorWhy: [
+      'المنهج الرسمي كامل — أربع وحدات وأربعتاشر درس — مشروح كتابة ومنشور مجانًا على الموقع، يتقرا من غير حساب ومن غير اشتراك.',
+      'كورس منفصل لنسخة «عام» وكورس لنسخة «لغات»، مش كورس واحد للاتنين.',
+      'كل درس فيديو وتمرين واختبار، والدرس ما بيتقفلش غير لما التلاتة يخلصوا.',
+      'امتحانات شهرية وامتحان شامل على الكورس، بدرجات الطالب بيشوفها أول بأول.',
+      'المصطلحات بالعربي والإنجليزي مع بعض، لأن الامتحان بيجيبها باللغتين.',
+      'كتاب مطبوع بيتشحن، غير المحتوى الأونلاين.',
+      'مهندس برمجيات شغّال في السوق من سنين، فالشرح بكود بيتكتب فعلًا مش بكود كتاب.',
+    ],
+
+    /**
+     * `alumniOf` on the `Person` entity — the university from
+     * `landing.aboutCredits[0].note`, written out here in the form a knowledge
+     * graph can match rather than the form the page reads it in.
+     *
+     * ⚠️ The full Arabic name, not «MTI». The abbreviation goes in
+     * `alternateName` beside it; an entity whose only name is three letters
+     * matches nothing an Arabic query contains.
+     */
+    alumniOfName: 'الجامعة الحديثة للتكنولوجيا والمعلومات',
+
+    /**
+     * What he actually covers, in one sentence.
+     *
+     * This exists for `/llms.txt`, and it is the answer to a question the rest
+     * of that file never gets asked in so many words: «هو بيدرّس لمين بالظبط؟».
+     * The file lists pages and courses, from which an assistant CAN infer the
+     * coverage — and inference is exactly what it will not do when a student
+     * asks it who teaches تانية بكالوريا لغات and a competitor's page states it
+     * outright.
+     *
+     * ⚠️ Every clause is checkable against the published catalog — the years,
+     * both tracks, and the four units. If a year or a track stops being
+     * published, this sentence becomes a false claim and must change with it;
+     * the course list right above it in the file will already have.
+     */
+    instructorCoverage:
+      'بيدرّس منهج البرمجة والذكاء الاصطناعي الرسمي لنظام البكالوريا المصرية — أولى وتانية بكالوريا، نسخة «عام» ونسخة «لغات»، بوحداته الأربعة: تكنولوجيا المعلومات والذكاء الاصطناعي، والأمن السيبراني، وتطبيقات الويب، وتصميم الويب والوسائط.',
+  },
+  /**
+   * Strings that only ever appear in `/llms.txt` and `/AGENTS.md` — files a
+   * person never opens. They live in `copy` anyway because they are Arabic
+   * prose about a real person and a real syllabus, and the rule that such
+   * words are edited in one place does not stop applying because the reader
+   * is a machine.
+   */
+  llms: {
+    /** Introduces a year's other spellings: «كمان بيتكتب «تانية بكالوريا»، «٢ بكالوريا»». */
+    alsoWritten: 'كمان بيتكتب',
+    /** The heading over `seo.instructorWhy`. A question, because that is the shape an answer gets lifted out of. */
+    whyHim: 'ليه هو بالذات؟',
   },
   nav: {
     home: 'الرئيسية',

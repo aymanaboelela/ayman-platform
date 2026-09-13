@@ -1,4 +1,5 @@
 import { Fragment } from 'react';
+import { cacheLife } from 'next/cache';
 import type { Metadata } from 'next';
 import { copy } from '@ayman/contracts';
 import type { HomeBlock } from '@ayman/contracts/admin/home-blocks';
@@ -55,7 +56,33 @@ export async function generateMetadata(): Promise<Metadata> {
   return buildMetadata({ path: '/', description: copy.seo.homeDescription });
 }
 
+/**
+ * ⚠️ `'use cache'` on the page itself, and it is load-bearing for more than
+ * speed.
+ *
+ * Without it this component is dynamic — it awaits two loaders — so Next
+ * prerendered only the shell and streamed the whole page in afterwards. In a
+ * browser that is invisible. In the HTML as delivered, it meant the skeleton
+ * came first, the FOOTER came second, and the page's `<h1>` arrived last,
+ * about 31 KB in. Every crawler that does not execute JavaScript — which is
+ * most of the AI ones — read the document in that order, and an AI-readiness
+ * scan on 2026-09-13 reported it could not tell what the site was for.
+ *
+ * Both loaders are already `'use cache'` with `cacheLife('minutes')`, and both
+ * call `cacheTag` — tags from a nested cache entry propagate to the one that
+ * contains it, so `updateTag(tags.homeBlocks())` from the admin still lands
+ * here immediately. This adds no new staleness; it only lets the render itself
+ * be reused instead of repeated.
+ *
+ * ⚠️ Nothing in this tree may read `cookies()`, `headers()` or `connection()`.
+ * The landing page is the same page for everyone — it has no signed-in variant
+ * — and the day one of these sections needs a per-request value, it goes in its
+ * own `<Suspense>` rather than this directive coming off.
+ */
 export default async function HomePage() {
+  'use cache';
+  cacheLife('minutes');
+
   /*
    * Both reads, together. `getHonorBoard` fails soft to an empty array and the
    * board renders its reserved places for that, so there is nothing to guard
