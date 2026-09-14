@@ -79,7 +79,7 @@ export default async function StorePage() {
             prices «٦٥ جنيه شحن» is not fine print. */}
         <BooksShippingChip shippingCents={catalog.shippingCents} />
 
-        <BooksShop catalog={catalog} instapay={contact.instapay} />
+        <BooksShop catalog={catalog} instapay={contact.instapay} vodafoneCash={contact.vodafoneCash} />
       </div>
     </main>
   );

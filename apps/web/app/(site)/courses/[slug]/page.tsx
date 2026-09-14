@@ -339,6 +339,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                 bookPriceCents={course.bookPriceCents as number}
                 shippingCents={shippingCents}
                 instapay={contact.instapay}
+                vodafoneCash={contact.vodafoneCash}
               />
             </div>
           ) : null}

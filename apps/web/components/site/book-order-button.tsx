@@ -32,6 +32,7 @@ export function BookOrderButton({
   bookPriceCents,
   shippingCents,
   instapay,
+  vodafoneCash,
 }: {
   courseId: string;
   bookTitle: string;
@@ -48,6 +49,8 @@ export function BookOrderButton({
    */
   shippingCents: number;
   instapay: string | null;
+  /** The wallet number, threaded beside `instapay` — see `ContactSchema`. */
+  vodafoneCash: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const totalCents = bookPriceCents + shippingCents;
@@ -80,6 +83,7 @@ export function BookOrderButton({
             courseId={courseId}
             amountCents={totalCents}
             instapay={instapay}
+            vodafoneCash={vodafoneCash}
             onCancel={() => setOpen(false)}
           />
         </DialogContent>

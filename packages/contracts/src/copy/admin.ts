@@ -1183,12 +1183,20 @@ const admin = {
     seoDescriptionHint: 'حتى 160 حرف — الوصف اللي بيظهر تحت العنوان في نتائج البحث',
     phoneHint: 'بصيغة دولية، يعني +20 وبعدها الرقم',
     urlHttpsOnly: 'لازم يبدأ بـ https://',
-    /** ⚠️ The Vodafone field is gone from the form — `contact.vodafoneCash` is
-     *  a dead key kept only so the stored settings row still parses. See its
-     *  note in `ContactSchema`. */
+    /**
+     * The two payment destinations. Both are on the form again — checkout asks
+     * the student which rail they want, so both numbers are live.
+     *
+     * ⚠️ They are DIFFERENT numbers and the hints say so. The wallet number and
+     * the InstaPay address are not interchangeable, and a student who picks one
+     * and is shown the other sends money to a rail nothing is reconciling.
+     */
     instapay: 'رقم إنستاباي',
     instapayHint:
-      'الرقم اللي الطلبة هيحوّلوا عليه — اشتراكات الكورسات المدفوعة وطلبات الكتب، الاتنين. بصيغة دولية زي رقم الهاتف فوق.',
+      'الرقم اللي الطلبة هيحوّلوا عليه لما يختاروا إنستاباي — اشتراكات الكورسات وطلبات الكتب. بصيغة دولية زي رقم الهاتف فوق.',
+    vodafoneCash: 'رقم فودافون كاش',
+    vodafoneCashHint:
+      'رقم محفظة فودافون كاش — غير رقم إنستاباي. سيبه فاضي لو مش عايز تستقبل على فودافون كاش، والاختيار ده هيتقفل قدام الطالب.',
     accentPreviewLabel: 'معاينة اللون',
 
     /**

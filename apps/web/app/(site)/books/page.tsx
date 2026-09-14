@@ -92,7 +92,7 @@ export default async function BooksPage() {
         </div>
       </section>
 
-      <BooksShop catalog={catalog} instapay={contact.instapay} />
+      <BooksShop catalog={catalog} instapay={contact.instapay} vodafoneCash={contact.vodafoneCash} />
     </main>
   );
 }

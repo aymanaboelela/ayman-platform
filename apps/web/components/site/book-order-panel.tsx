@@ -22,7 +22,8 @@ import {
   readInProgressBookOrder,
   saveInProgressBookOrder,
 } from '@/lib/book-order-storage';
-import { PaymentBrand } from './payment-brand';
+import { PaymentBrand, type PaymentRail } from './payment-brand';
+import { PaymentMethodChoice } from './payment-method-choice';
 
 const c = copy.bookOrder;
 
@@ -39,7 +40,8 @@ type Step = 'checking' | 'address' | 'payment' | 'submitting' | 'success' | 'alr
  *
  * Two steps: an ADDRESS form, saved to the database the moment it is
  * submitted (before any payment exists — see `BookOrdersService.create`),
- * then the exact same Vodafone Cash payment UI `SubscribePanel` uses. A
+ * then the exact same payment UI `SubscribePanel` uses — the rail question
+ * and the transfer details behind it. A
  * student who abandons after step one already left a real, visible row for
  * an admin — see the `BookOrder` model doc for why that is the point.
  *
@@ -72,6 +74,7 @@ export function BookOrderPanel({
   items,
   amountCents,
   instapay,
+  vodafoneCash,
   onCancel,
 }: {
   /**
@@ -97,6 +100,8 @@ export function BookOrderPanel({
   amountCents: number;
   /** E.164, or `null` when the admin has not configured one yet. */
   instapay: string | null;
+  /** The wallet number — a second live destination, see `ContactSchema`. */
+  vodafoneCash: string | null;
   onCancel: () => void;
 }) {
   /*
@@ -118,6 +123,14 @@ export function BookOrderPanel({
   const [order, setOrder] = useState<BookOrder | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  /**
+   * «هتحوّل بإيه؟» — same two-state shape as the course panel. Nothing is
+   * preselected: a default is a choice the student did not make, and this one
+   * decides where their money goes. `railConfirmed` is separate from
+   * `rail !== null` so going back keeps the previous answer lit.
+   */
+  const [rail, setRail] = useState<PaymentRail | null>(null);
+  const [railConfirmed, setRailConfirmed] = useState(false);
 
   // Address fields.
   const [fullName, setFullName] = useState('');
@@ -239,11 +252,21 @@ export function BookOrderPanel({
     setFile(next);
   }
 
-  if (!instapay) {
+  // ⚠️ EITHER rail sells a book. Keeping this on InstaPay alone would close the
+  // shop on a platform that takes Vodafone Cash and nothing else.
+  if (!instapay && !vodafoneCash) {
     return <p className="course-subscribe__error">{c.noNumber}</p>;
   }
 
-  const localNumber = localEgyptianDigits(instapay);
+  /**
+   * ⚠️ The number FOLLOWS the rail, with no fallback between them. A Vodafone
+   * heading over an InstaPay number sends the money somewhere nothing
+   * reconciles it — see the same note in `subscribe-panel.tsx`.
+   */
+  const railNumber = rail === 'vodafoneCash' ? vodafoneCash : rail === 'instapay' ? instapay : null;
+  const localNumber = railNumber ? localEgyptianDigits(railNumber) : '';
+  const railName =
+    rail === 'vodafoneCash' ? copy.subscribe.railVodafoneCash : copy.subscribe.railInstapay;
 
   async function copyNumber() {
     try {
@@ -567,11 +590,26 @@ export function BookOrderPanel({
         {(order?.items ?? []).map((line) => line.titleAr).join(c.itemSeparator)}
       </p>
 
-      <p className="course-subscribe__instructions">
-        {formatCopy(c.instructions, { number: localNumber })}
-      </p>
+      {/* The rail question comes before anything carrying a number — see the
+          note in `subscribe-panel.tsx`. */}
+      {!railConfirmed ? (
+        <PaymentMethodChoice
+          value={rail}
+          onChange={setRail}
+          onNext={() => setRailConfirmed(true)}
+          available={{ instapay: Boolean(instapay), vodafoneCash: Boolean(vodafoneCash) }}
+        />
+      ) : (
+        <>
+          <button type="button" onClick={() => setRailConfirmed(false)} className="pay-choice__back">
+            {copy.subscribe.railChange}
+          </button>
 
-      <PaymentBrand className="course-subscribe__brand" />
+          <p className="course-subscribe__instructions">
+            {formatCopy(c.instructions, { number: localNumber, rail: railName })}
+          </p>
+
+          <PaymentBrand rail={rail ?? 'instapay'} className="course-subscribe__brand" />
 
       <div className="course-subscribe__number-row">
         <span dir="ltr" className="course-subscribe__number">
@@ -670,6 +708,8 @@ export function BookOrderPanel({
           {c.back}
         </button>
       </div>
+        </>
+      )}
     </div>
   );
 }

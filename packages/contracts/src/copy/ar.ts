@@ -2287,6 +2287,25 @@ export const copy = {
    * learned is closed also turns out to be a PRICED one.
    */
   subscribe: {
+    /**
+     * «هتدفع إزاي؟» — the payment-rail question, and the copy for the two
+     * answers.
+     *
+     * ⚠️ The question is the shortest sentence on the screen on purpose. This
+     * step sits between a student and paying; anything that reads like a form
+     * loses people who were ready. Two words, two logos, one button.
+     *
+     * ⚠️ `railUnavailable` is on the CARD, never a footnote. A greyed-out
+     * option with no reason beside it reads as a broken screen, and a student
+     * who thinks the site is broken does not send money.
+     */
+    railQuestion: 'هتحوّل بإيه؟',
+    railInstapay: 'إنستاباي',
+    railVodafoneCash: 'فودافون كاش',
+    railUnavailable: 'مش متاح دلوقتي',
+    railNext: 'التالي',
+    /** Back to the question, from the screen that shows the number. */
+    railChange: 'غيّر طريقة التحويل',
     cta: 'اشترك دلوقتي',
     title: 'اشتراك الكورس',
     choosePlan: 'اختار الباقة',
@@ -2320,7 +2339,14 @@ export const copy = {
      *  from one card to the next. */
     priceLine: '{price} جنيه',
     /** `{number}` is the Vodafone Cash number in local format (٠١٠…). */
-    instructions: 'حوّل المبلغ على رقم إنستاباي {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
+    /**
+     * ⚠️ `{rail}` — «إنستاباي» or «فودافون كاش» — is interpolated, not written
+     * in. The line used to say «رقم إنستاباي» whatever the student had chosen,
+     * and a sentence naming one rail over a number belonging to another is the
+     * single most expensive mistake this screen can make: the money leaves and
+     * nothing reconciles it.
+     */
+    instructions: 'حوّل المبلغ على رقم {rail} {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
     copyNumber: 'نسخ الرقم',
     copied: 'اتنسخ',
     /** Replaces the old «المبلغ اللي حوّلته» field — the plan already fixes
@@ -2479,7 +2505,14 @@ export const copy = {
     addressBuildingRequired: 'رقم العمارة مطلوب',
     /** Reused verbatim from `subscribe.*` for the payment step — same UI,
      *  same copy tone, so the flow reads as one product. */
-    instructions: 'حوّل المبلغ على رقم إنستاباي {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
+    /**
+     * ⚠️ `{rail}` — «إنستاباي» or «فودافون كاش» — is interpolated, not written
+     * in. The line used to say «رقم إنستاباي» whatever the student had chosen,
+     * and a sentence naming one rail over a number belonging to another is the
+     * single most expensive mistake this screen can make: the money leaves and
+     * nothing reconciles it.
+     */
+    instructions: 'حوّل المبلغ على رقم {rail} {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
     submit: 'إرسال الطلب',
     submitting: 'بنبعت الطلب…',
     /**

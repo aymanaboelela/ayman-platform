@@ -57,10 +57,13 @@ const TERMS: readonly { key: BookTerm; label: string }[] = [
 export function BooksShop({
   catalog,
   instapay,
+  vodafoneCash,
 }: {
   catalog: BookCatalog;
   /** E.164, or `null` when the admin has not configured one yet. */
   instapay: string | null;
+  /** The wallet number, threaded beside `instapay` — see `ContactSchema`. */
+  vodafoneCash: string | null;
 }) {
   /*
     Land on the right book when the URL carries one.
@@ -292,6 +295,7 @@ export function BooksShop({
               items={lines.map((line) => ({ bookId: line.book.id, quantity: line.quantity }))}
               amountCents={totals.totalCents}
               instapay={instapay}
+              vodafoneCash={vodafoneCash}
               onCancel={() => setCheckingOut(false)}
             />
           </div>
