@@ -8,7 +8,6 @@ import { auth } from './auth.config';
 import { BETTER_AUTH } from './better-auth.token';
 import { AuthGuard } from './guards/auth.guard';
 import { OptionalSessionService } from './optional-session.service';
-import { PermissionGrantsService } from './permission-grants.service';
 import { SessionController } from './session.controller';
 
 @Module({
@@ -32,7 +31,6 @@ import { SessionController } from './session.controller';
     }),
   ],
   providers: [
-    PermissionGrantsService,
     { provide: BETTER_AUTH, useValue: auth },
     { provide: APP_GUARD, useClass: AuthGuard },
     OptionalSessionService,
@@ -40,6 +38,6 @@ import { SessionController } from './session.controller';
   // `OptionalSessionService` is exported for المساعد's public routes, which
   // have to work signed-in OR signed-out. It answers "is anyone here?" and is
   // never an authorization decision — see the service's own header.
-  exports: [BETTER_AUTH, OptionalSessionService, PermissionGrantsService],
+  exports: [BETTER_AUTH, OptionalSessionService],
 })
 export class AuthModule {}
