@@ -2,7 +2,7 @@
 // (main.ts), so DATABASE_URL must be loaded explicitly before anything reads it.
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { copy } from '@ayman/contracts/copy';
 import type { ExportBookOrdersQuery } from '@ayman/contracts/admin/book-orders';
@@ -280,6 +280,90 @@ describe('BookOrdersService', () => {
     const { courseId: _courseId, ...rest } = address();
     return rest;
   };
+
+  /**
+   * ⚠️ Measured on production, 2026-09-14, and the reason this block exists:
+   * **95 of 192 live orders were sitting at `address_only`** — an address given
+   * and no payment ever made — across 44 phones with more than one order.
+   * Almost every pair was the same books, the same amount, six minutes apart.
+   *
+   * They were not people ordering twice. The panel resumed an in-progress order
+   * from `localStorage`, so a second browser, a private window or cleared site
+   * data posted a brand-new row — and half the admin's queue became one
+   * person's abandoned first attempt, which is why it stopped being reviewable.
+   */
+  describe('duplicate orders', () => {
+    it('reuses the same phone\'s own unpaid order instead of making a second', async () => {
+      const first = await service.create(studentId, address());
+      const second = await service.create(studentId, {
+        ...address(),
+        // The address may legitimately have changed — that is often exactly why
+        // they started over — and it must land on the SAME row.
+        addressStreet: 'شارع آخر',
+      });
+
+      expect(second.id).toBe(first.id);
+      expect(second.addressStreet).toBe('شارع آخر');
+      expect(await prisma.bookOrder.count({ where: { phone: address().phone } })).toBe(1);
+    });
+
+    it('never rewrites an order that is already paid', async () => {
+      // The danger of reusing by phone: silently editing the shipping address
+      // of a parcel already on its way. Only `address_only` may be touched.
+      const paid = await service.create(studentId, address());
+      await prisma.bookOrder.update({
+        where: { id: paid.id },
+        data: { status: 'paid', paidAt: new Date(), addressStreet: 'العنوان المشحون' },
+      });
+
+      const next = await service.create(studentId, {
+        ...address(),
+        addressStreet: 'عنوان جديد',
+        confirmDuplicate: true,
+      });
+
+      expect(next.id).not.toBe(paid.id);
+      const untouched = await prisma.bookOrder.findUniqueOrThrow({ where: { id: paid.id } });
+      expect(untouched.addressStreet).toBe('العنوان المشحون');
+    });
+
+    it('asks before a second FINISHED order for the same books', async () => {
+      const first = await service.create(studentId, address());
+      await prisma.bookOrder.update({
+        where: { id: first.id },
+        data: { status: 'paid', paidAt: new Date() },
+      });
+
+      /*
+       * ⚠️ 409, not 400 — the request is valid and the answer is a question.
+       * And the check looks at every non-open status rather than «paid»,
+       * because this platform verifies no transfer: «مدفوع» is a claim made
+       * with a screenshot.
+       */
+      await expect(service.create(studentId, address())).rejects.toThrow(ConflictException);
+
+      const confirmed = await service.create(studentId, {
+        ...address(),
+        confirmDuplicate: true,
+      });
+      expect(confirmed.id).not.toBe(first.id);
+    });
+
+    it('lets a different basket through without a question', async () => {
+      // Ordering a SECOND, different book is not a duplicate of anything.
+      const first = await service.create(studentId, address());
+      await prisma.bookOrder.update({
+        where: { id: first.id },
+        data: { status: 'paid', paidAt: new Date() },
+      });
+
+      const other = await service.create(studentId, {
+        ...cartAddress(),
+        items: [{ bookId: bookA, quantity: 1 }],
+      });
+      expect(other.id).not.toBe(first.id);
+    });
+  });
 
   describe('create', () => {
     it('saves the address as address_only, BEFORE any payment', async () => {

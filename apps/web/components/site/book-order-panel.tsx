@@ -13,7 +13,7 @@ import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
-import { apiGet, apiPost } from '@/lib/api';
+import { ApiRequestError, apiGet, apiPost } from '@/lib/api';
 import { uploadBookOrderScreenshot } from '@/lib/upload-client';
 import { formatEGP } from '@/lib/price';
 import {
@@ -142,6 +142,8 @@ export function BookOrderPanel({
   const [addressBuilding, setAddressBuilding] = useState('');
   const [addressNote, setAddressNote] = useState('');
   const [savingAddress, setSavingAddress] = useState(false);
+  /** The server said this phone already has a finished order for these books. */
+  const [duplicatePrompt, setDuplicatePrompt] = useState(false);
 
   // Payment fields — identical shape to `SubscribePanel`.
   const [senderPhone, setSenderPhone] = useState('');
@@ -225,7 +227,24 @@ export function BookOrderPanel({
           setAddressStreet(fetched.addressStreet);
           setAddressBuilding(fetched.addressBuilding ?? '');
           setAddressNote(fetched.addressNote ?? '');
-          setStep('address');
+          /*
+           * ⚠️ PAYMENT, not the address form — and the summary line on that
+           * screen is what makes it affordable.
+           *
+           * The history here runs both ways and both complaints are real. It
+           * resumed at payment once, and a student landed on a transfer number
+           * with nothing saying WHERE the parcel was going: «المفروض لما أضغط
+           * على طلب الكتاب الأول أكتب العنوان بتاعي وكده». So it was moved to
+           * the prefilled address form — and then «هو مش عايز يقعد يكتب العنوان
+           * مرة تانية»: a student who already gave the address is made to walk
+           * through it again before they can pay.
+           *
+           * Neither screen was wrong; the missing piece was that the address
+           * was invisible on the payment step. It is now printed there with
+           * «تعديل العنوان» beside it, so the parcel's destination is on screen
+           * AND nobody retypes it.
+           */
+          setStep('payment');
         } else {
           // Already `paid`/`shipped` — nothing left to resume.
           clearInProgressBookOrder(storageKey);
@@ -368,30 +387,73 @@ export function BookOrderPanel({
 
     setSavingAddress(true);
     try {
-      const created = await apiPost('/api/book-orders', BookOrderSchema, {
+      const created = await postOrder(false);
+      if (created) finishAddress(created);
+    } catch (cause) {
+      /*
+       * ⚠️ ONE code, and it is not an error: the server has seen a FINISHED
+       * order for this phone with the same books inside the last week, and is
+       * asking rather than refusing.
+       *
+       * It cannot be "did they already pay", because this platform has no
+       * payment gateway and nobody verifies the transfer — «مدفوع» is a claim
+       * made with a screenshot. So the question is «are you sure», and the
+       * student answers it.
+       */
+      if (cause instanceof ApiRequestError && cause.status === 409) {
+        setDuplicatePrompt(true);
+      } else {
+        // No `onUnauthorized` branch — this endpoint is `@Public()`, so a
+        // signed-out visitor's submit never 401s.
+        setError(c.genericError);
+      }
+    } finally {
+      setSavingAddress(false);
+    }
+  }
+
+  /**
+   * The POST itself, lifted out of `submitAddress` so the confirm path can
+   * repeat it verbatim with the flag set. Re-normalising the phones here rather
+   * than passing them in keeps the two calls provably identical — the whole
+   * point is that the second request differs from the first in ONE field.
+   */
+  async function postOrder(confirmDuplicate: boolean) {
+    return apiPost('/api/book-orders', BookOrderSchema, {
         /* Exactly one of the two reaches the wire — `CreateBookOrderSchema` is
            `.strict()` AND refines on "one, never both", so spreading whichever
            this panel was given is the only spelling that satisfies it. */
         ...(items ? { items } : { courseId }),
         fullName: fullName.trim(),
-        phone: normalizedPhone,
-        altPhone: normalizedAltPhone,
+        phone: normalizeEgyptianPhone(phone),
+        altPhone: normalizeEgyptianPhone(altPhone),
         governorateCode,
         city: city.trim(),
         addressStreet: addressStreet.trim(),
         addressBuilding: addressBuilding.trim() === '' ? null : addressBuilding.trim(),
         addressNote: addressNote.trim() === '' ? null : addressNote.trim(),
+        confirmDuplicate,
       });
-      setOrder(created);
-      // Remembered on THIS browser so closing the tab before paying does not
-      // lose the order — see the panel's own docblock and
-      // `lib/book-order-storage.ts`.
-      saveInProgressBookOrder(storageKey, created.id);
-      setStep('payment');
+  }
+
+  function finishAddress(created: BookOrder) {
+    setOrder(created);
+    // Remembered on THIS browser so closing the tab before paying does not
+    // lose the order. ⚠️ It is no longer the only thing stopping a duplicate:
+    // the SERVER now reuses this phone's own unpaid order, because this key
+    // lives in one browser and half the production queue was the same person
+    // starting over somewhere else.
+    saveInProgressBookOrder(storageKey, created.id);
+    setStep('payment');
+  }
+
+  /** «أيوه، عايز نسخة كمان» — the same POST, with the student's answer. */
+  async function confirmDuplicateOrder() {
+    setDuplicatePrompt(false);
+    setSavingAddress(true);
+    try {
+      finishAddress(await postOrder(true));
     } catch {
-      // No `onUnauthorized` branch any more — this endpoint is `@Public()`,
-      // so a signed-out visitor's submit never 401s. Anything else thrown
-      // here is a genuine failure.
       setError(c.genericError);
     } finally {
       setSavingAddress(false);
@@ -470,6 +532,36 @@ export function BookOrderPanel({
       (g) => !(taxonomy?.pinnedGovernorateCodes ?? []).includes(g.code),
     );
     const governorateOptions = [...pinned, ...rest];
+
+    /*
+     * ⚠️ The question REPLACES the form rather than sitting over it as a modal.
+     *
+     * This is the one screen where a student is deciding whether to spend money
+     * twice, and a dialog floating over a filled-in form invites the reflex
+     * that dismisses dialogs. One screen, one question, two answers — and the
+     * safe one is first and plain, so doing nothing costs nothing.
+     */
+    if (duplicatePrompt) {
+      return (
+        <div className="course-subscribe">
+          <p className="course-subscribe__title">{c.duplicateTitle}</p>
+          <p className="course-subscribe__instructions">{c.duplicateBody}</p>
+          <div className="course-subscribe__actions">
+            <Button type="button" onClick={onCancel}>
+              {c.duplicateCancel}
+            </Button>
+            <button
+              type="button"
+              className="course-subscribe__cancel"
+              onClick={() => void confirmDuplicateOrder()}
+              disabled={savingAddress}
+            >
+              {c.duplicateConfirm}
+            </button>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="course-subscribe">
@@ -589,6 +681,44 @@ export function BookOrderPanel({
       <p className="course-subscribe__title">
         {(order?.items ?? []).map((line) => line.titleAr).join(c.itemSeparator)}
       </p>
+
+      {/*
+        ⚠️ WHERE THE PARCEL IS GOING, on the screen that asks for money.
+
+        This line is the reason resuming can land here instead of on the address
+        form. Without it a student arrived at a transfer number with no sign
+        that an address had ever been given — «المفروض لما أضغط على طلب الكتاب
+        الأول أكتب العنوان بتاعي وكده» — and the way back existed but was
+        labelled «رجوع», which reads as "undo", not as "check your address".
+
+        It renders from `order`, not from the form state, so it shows what the
+        SERVER has: after a resume those can differ, and the parcel follows the
+        server's copy.
+      */}
+      {order ? (
+        <p className="course-subscribe__hint">
+          {/* `governorateCode` is what the order row carries; the readable name
+              lives on the taxonomy this panel already loaded. Falling back to
+              the code rather than dropping the field keeps the line honest when
+              the taxonomy has not arrived yet. */}
+          {[
+            order.fullName,
+            taxonomy?.governorates.find((g) => g.code === order.governorateCode)?.nameAr ??
+              order.governorateCode,
+            order.city,
+            order.addressStreet,
+          ]
+            .filter(Boolean)
+            .join(c.itemSeparator)}{' '}
+          <button
+            type="button"
+            className="pay-choice__back"
+            onClick={() => setStep('address')}
+          >
+            {c.editAddress}
+          </button>
+        </p>
+      ) : null}
 
       {/* The rail question comes before anything carrying a number — see the
           note in `subscribe-panel.tsx`. */}

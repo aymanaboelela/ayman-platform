@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import type { BookOrder, BookOrderStatus, CreateBookOrderInput, SubmitBookOrderPaymentInput } from '@ayman/contracts/book-orders';
 import type {
@@ -344,6 +349,17 @@ interface OrderRow {
   items: OrderLineRow[];
 }
 
+/**
+ * How far back a finished order still counts as "you already ordered this".
+ *
+ * Seven days rather than a day: the two real double-payments on production were
+ * 38 and 48 hours apart, and a window that misses them is a window that does
+ * nothing. Longer than a week starts catching the honest second copy — a
+ * sibling, a lost parcel — which the student can still place, but should not
+ * have to argue with a dialog about.
+ */
+const DUPLICATE_WINDOW_DAYS = 7;
+
 @Injectable()
 export class BookOrdersService {
   constructor(
@@ -480,6 +496,109 @@ export class BookOrdersService {
         : await this.priceCourseBook(input.courseId as string);
 
     const totals = bookOrderTotals(priced.lines, await this.books.shippingCents());
+
+    /**
+     * ⚠️ THE SAME PHONE'S OWN UNPAID ORDER IS REUSED, NOT DUPLICATED.
+     *
+     * Measured on production 2026-09-14: **95 of 192 live orders were sitting
+     * at `address_only`** — an address filled in and no payment ever made — and
+     * 44 phones had more than one order. Almost every pair was the same books,
+     * the same amount, and **six minutes apart**.
+     *
+     * They were not students ordering twice. `BookOrderPanel` resumes an
+     * in-progress order from `localStorage`, so the resume works on ONE browser
+     * — open the shop on a second phone, in a private window, or after clearing
+     * site data, and the address form posts a brand-new row. Half the admin's
+     * queue was one person's abandoned first attempt, which is why the queue
+     * stopped being reviewable at all.
+     *
+     * So the identity of an in-progress order is the PHONE, server-side, not a
+     * key in one browser's storage. Same phone, same lines, still unpaid ⇒ the
+     * address is updated on the row that already exists.
+     *
+     * ⚠️ `status: 'address_only'` only. A paid, shipped, rejected or deleted
+     * order is finished business and must never be silently rewritten by a new
+     * submission — that would edit the shipping address of a parcel already on
+     * its way.
+     *
+     * ⚠️ And the student is told NOTHING about this. They did not order twice;
+     * they filled a form twice. A confirmation here would be asking someone to
+     * approve a mistake they did not make.
+     */
+    /*
+     * ⚠️ `bookId` is NULLABLE on an order line — a course-page order predating
+     * the shop names a course, not a catalogue book. Two such lines with a null
+     * id are NOT interchangeable, so a null key falls back to the course, and
+     * an order whose course is also null can never match anything (`''`
+     * compares equal to nothing else here because `priced.courseId` is the same
+     * value on both sides only when both came from the same course).
+     */
+    const lineKey = (r: { bookId: string | null; quantity: number }) =>
+      `${r.bookId ?? `course:${priced.courseId ?? ''}`}:${r.quantity}`;
+
+    const sameLines = (rows: { bookId: string | null; quantity: number }[]): boolean => {
+      if (rows.length !== priced.lines.length) return false;
+      const mine = new Set(priced.lines.map(lineKey));
+      return rows.every((row) => mine.has(lineKey(row)));
+    };
+
+    const open = await this.prisma.bookOrder.findMany({
+      where: { phone: input.phone, status: 'address_only', deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, items: { select: { bookId: true, quantity: true } } },
+    });
+    const reusable = open.find((row) => sameLines(row.items));
+
+    if (reusable) {
+      await this.prisma.bookOrder.update({
+        where: { id: reusable.id },
+        data: {
+          // The ADDRESS may legitimately have changed between attempts — that is
+          // often exactly why they started over. Prices are not touched: they
+          // were read from the catalogue moments ago either way.
+          fullName: input.fullName,
+          phone: input.phone,
+          altPhone: input.altPhone,
+          governorateCode: input.governorateCode,
+          city: input.city,
+          addressStreet: input.addressStreet,
+          addressBuilding: input.addressBuilding,
+          addressNote: input.addressNote,
+        },
+      });
+      return this.byId(reusable.id);
+    }
+
+    /**
+     * A GENUINE repeat — the phone has a FINISHED order for the same books in
+     * the last week — is a question, not a refusal.
+     *
+     * ⚠️ The window looks at every non-open status, not just «paid». This
+     * platform has no payment gateway and nobody verifies the transfer: «مدفوع»
+     * is a claim a student made with a screenshot. A check that trusted it
+     * would miss exactly the case that cost money — two phones paid 250 EGP
+     * twice, 38 and 48 hours apart, for the same book.
+     *
+     * ⚠️ 409, not 400. The panel turns this one code into «إنت طلبت الكتاب
+     * قبل كده — عايز واحد كمان؟» and re-posts with `confirmDuplicate`. A 400
+     * would be rendered as a validation failure on a form that is perfectly
+     * valid.
+     */
+    if (!input.confirmDuplicate) {
+      const since = new Date(Date.now() - DUPLICATE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+      const recent = await this.prisma.bookOrder.findMany({
+        where: {
+          phone: input.phone,
+          status: { not: 'address_only' },
+          deletedAt: null,
+          createdAt: { gte: since },
+        },
+        select: { items: { select: { bookId: true, quantity: true } } },
+      });
+      if (recent.some((row) => sameLines(row.items))) {
+        throw new ConflictException('DUPLICATE_RECENT_BOOK_ORDER');
+      }
+    }
 
     const order = await this.prisma.bookOrder.create({
       data: {

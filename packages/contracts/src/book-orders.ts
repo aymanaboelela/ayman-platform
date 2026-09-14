@@ -96,6 +96,23 @@ export const CreateBookOrderSchema = z
     addressBuilding: z.string().trim().max(60).nullable().default(null),
     /** Free text — apartment number, floor, a landmark. `''` → `null`. */
     addressNote: z.string().trim().max(300).nullable().default(null),
+    /**
+     * «أيوه، عايز نسخة كمان» — the student has been told they already ordered
+     * these books recently and said to place another one anyway.
+     *
+     * ⚠️ Default FALSE, and the server refuses the duplicate without it. The
+     * flag exists because the platform has no payment gateway and does not
+     * verify transfers: «مدفوع» is a claim, so the check cannot be "did they
+     * really pay" and has to be "are they sure". Measured on 2026-09-14: 44 of
+     * 192 live orders shared a phone with another, and two phones had paid
+     * twice for the same 250 EGP book days apart.
+     *
+     * ⚠️ It is NOT what stops the abandoned-cart duplicates. Those are handled
+     * silently in the service by reusing the caller's own unpaid order — a
+     * student who never paid is not "ordering twice" and must never be asked
+     * anything. This flag only ever appears after a COMPLETED order.
+     */
+    confirmDuplicate: z.boolean().default(false),
   })
   .strict()
   /*

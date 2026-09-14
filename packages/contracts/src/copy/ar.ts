@@ -2480,6 +2480,28 @@ export const copy = {
      *  punctuation, so it lives here rather than as a literal in a component. */
     itemSeparator: '، ',
     addressTitle: 'بيانات الاستلام',
+    /**
+     * «إنت طلبت ده قبل كده» — shown when the server finds a FINISHED order for
+     * this phone with the same books in the last week.
+     *
+     * ⚠️ The safe answer is the FIRST and the plain one; «أيوه عايز واحد كمان»
+     * is the one that costs money, so it does not look like the button to press.
+     * This is the whole point of the dialog: the student who is here by accident
+     * has to do nothing, and the student who means it presses once.
+     *
+     * ⚠️ It never appears for an unpaid order of their own — that one is reused
+     * silently. Being asked «are you sure» about a form you merely refilled is
+     * how a real customer gets talked out of buying.
+     */
+    /** Beside the address summary on the payment screen — «رجوع» read as
+     *  "undo", which is why the saved address used to be invisible. */
+    editAddress: 'تعديل العنوان',
+    duplicateTitle: 'إنت طلبت الكتاب ده قبل كده',
+    duplicateBody:
+      'فيه طلب بنفس الكتب على نفس رقم الموبايل من أقل من أسبوع. لو ده هو نفس الطلب، مش محتاج تعمل حاجة — هيوصلك زي ما هو.',
+    duplicateCancel: 'تمام، سيبه زي ما هو',
+    duplicateConfirm: 'لأ، عايز نسخة كمان',
+
     fullNameLabel: 'الاسم بالكامل',
     phoneLabel: 'رقم الموبايل',
     altPhoneLabel: 'رقم موبايل تاني للتواصل',
