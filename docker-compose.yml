@@ -296,6 +296,16 @@ services:
         # أول دقايق بعد النشر — وللمدرّس الجديد دي لحظة الإطلاق بالظبط.
         TENANT_KEY: ${TENANT_KEY:-}
         TENANT_DISPLAY_NAME: ${TENANT_DISPLAY_NAME:-}
+        # ⚠️ وقت البناء كمان، وللسبب اللي فوق نفسه: الفوتر و`/links` صفحات
+        # prerendered، و`next build` بيشتغل من غير API فبيخبز `contact` فاضي.
+        # القيم دي هي اللي بتترسم في الشباك ده — من غيرها أول زائر بعد كل نشر
+        # بيلاقي «تابعني» و«كلّمنا» عناوين فوق قوايم فاضية.
+        TENANT_YOUTUBE: ${TENANT_YOUTUBE:-}
+        TENANT_INSTAGRAM: ${TENANT_INSTAGRAM:-}
+        TENANT_TIKTOK: ${TENANT_TIKTOK:-}
+        TENANT_FACEBOOK: ${TENANT_FACEBOOK:-}
+        TENANT_WHATSAPP_CHANNEL: ${TENANT_WHATSAPP_CHANNEL:-}
+        TENANT_WHATSAPP: ${TENANT_WHATSAPP:-}
     restart: unless-stopped
     depends_on:
       api: { condition: service_healthy }
@@ -340,6 +350,12 @@ services:
       # ووقت أي عطل في الـAPI بعد كده.
       TENANT_KEY: ${TENANT_KEY:-}
       TENANT_DISPLAY_NAME: ${TENANT_DISPLAY_NAME:-}
+      TENANT_YOUTUBE: ${TENANT_YOUTUBE:-}
+      TENANT_INSTAGRAM: ${TENANT_INSTAGRAM:-}
+      TENANT_TIKTOK: ${TENANT_TIKTOK:-}
+      TENANT_FACEBOOK: ${TENANT_FACEBOOK:-}
+      TENANT_WHATSAPP_CHANNEL: ${TENANT_WHATSAPP_CHANNEL:-}
+      TENANT_WHATSAPP: ${TENANT_WHATSAPP:-}
     networks: [dokploy-network, default]
 
 # ⚠️ شبكة Traefik بتاعت Dokploy. من غيرها الحاويات بتشتغل تمام بس Traefik
