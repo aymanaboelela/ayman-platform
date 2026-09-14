@@ -32,6 +32,35 @@ import { describe, expect, it } from 'vitest';
  */
 
 /** Real-world identity that must never be a fallback in shipped code. */
+/**
+ * Files that still carry the instructor's NAME in shipped strings.
+ *
+ * Recorded rather than asserted away, the same shape as the clipping colours
+ * in `packages/ui/src/lib/oklch.test.ts`. The string tables under `copy/` are
+ * Ayman's copy by design — de-Aymanizing them is its own piece of work, and
+ * doing it badly is worse than not yet doing it. The assistant files now
+ * interpolate `copy.site.instructor` rather than the bare name, so they carry
+ * it only through that table.
+ *
+ * What the list buys is that a TENTH file fails this test. The name is the one
+ * leak that needs no configuration to reach a student — it is simply printed.
+ */
+const KNOWN_NAME_FILES = [
+  // A GATED fallback, not a hardcoded identity: the snippet reads
+  // `TENANT_DISPLAY_NAME` and only falls back to the name when this deployment
+  // has not been given one — the same rule `TENANT_CONTACT_SEED` follows. The
+  // file is listed because the literal is still present, which is what this
+  // test measures.
+  'apps/web/components/site/code-lab.tsx',
+  'apps/api/src/modules/assistant/ai/assistant-knowledge.ts',
+  'apps/api/src/modules/marketing/marketing.controller.ts',
+  'apps/api/src/scripts/create-admin.ts',
+  'apps/api/src/scripts/finance-reconcile.ts',
+  'packages/contracts/src/copy/admin.ts',
+  'packages/contracts/src/copy/ar.ts',
+  'packages/contracts/src/copy/outreach.ts',
+];
+
 const FORBIDDEN: readonly { literal: string; what: string }[] = [
   { literal: '+201021196367', what: "Ayman's personal WhatsApp number" },
   { literal: '201021196367', what: "Ayman's WhatsApp number without the +" },
@@ -119,11 +148,13 @@ function stripComments(source: string): string {
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
 
+/** Every shipped source file under the roots above — shared by both suites. */
+const files = ROOTS.flatMap((root) => walk(join(REPO_ROOT, root), []))
+  .map((absolute) => relative(REPO_ROOT, absolute))
+  .filter((path) => !isTestFile(path))
+  .filter((path) => !ALLOWED_FILES.has(path));
+
 describe('no shipped default carries one instructor’s identity', () => {
-  const files = ROOTS.flatMap((root) => walk(join(REPO_ROOT, root), []))
-    .map((absolute) => relative(REPO_ROOT, absolute))
-    .filter((path) => !isTestFile(path))
-    .filter((path) => !ALLOWED_FILES.has(path));
 
   it('finds source files to check at all', () => {
     // Without this the suite passes vacuously the day a directory is renamed.
@@ -144,4 +175,17 @@ describe('no shipped default carries one instructor’s identity', () => {
       ).toEqual([]);
     });
   }
+});
+
+describe('the instructor’s name', () => {
+  it('appears in exactly the files already known, and no new one', () => {
+    // Unlike the phone and the domain, a NAME needs no configuration to reach
+    // a student — it is printed. `code-lab.tsx` was the last file outside the
+    // string tables to hardcode it.
+    const carrying = files.filter((path) =>
+      stripComments(readFileSync(join(REPO_ROOT, path), 'utf8')).includes('أيمن'),
+    );
+
+    expect(carrying.sort()).toEqual([...KNOWN_NAME_FILES].sort());
+  });
 });
