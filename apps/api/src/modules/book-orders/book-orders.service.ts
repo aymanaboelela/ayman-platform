@@ -563,11 +563,18 @@ export class BookOrdersService {
         ? { userId: ownerId }
         : { userId: null, phone: input.phone, fullName: input.fullName };
 
-    const open = await this.prisma.bookOrder.findMany({
-      where: { ...owner, status: 'address_only', deletedAt: null },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, items: { select: { bookId: true, quantity: true } } },
-    });
+    /*
+     * ⚠️ Only for a CHECKOUT submission. `create()` keeps its plain meaning for
+     * every other caller — see `reuseOpenOrder` in the contract for the fifteen
+     * specs that proved why.
+     */
+    const open = input.reuseOpenOrder
+      ? await this.prisma.bookOrder.findMany({
+          where: { ...owner, status: 'address_only', deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, items: { select: { bookId: true, quantity: true } } },
+        })
+      : [];
     const reusable = open.find((row) => sameLines(row.items));
 
     if (reusable) {
@@ -605,7 +612,7 @@ export class BookOrdersService {
      * would be rendered as a validation failure on a form that is perfectly
      * valid.
      */
-    if (!input.confirmDuplicate) {
+    if (input.reuseOpenOrder && !input.confirmDuplicate) {
       const since = new Date(Date.now() - DUPLICATE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
       const recent = await this.prisma.bookOrder.findMany({
         where: {

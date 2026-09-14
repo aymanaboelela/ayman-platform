@@ -433,6 +433,8 @@ export function BookOrderPanel({
         addressBuilding: addressBuilding.trim() === '' ? null : addressBuilding.trim(),
         addressNote: addressNote.trim() === '' ? null : addressNote.trim(),
         confirmDuplicate,
+        // This IS the checkout — see `reuseOpenOrder` in the contract.
+        reuseOpenOrder: true,
       });
   }
 

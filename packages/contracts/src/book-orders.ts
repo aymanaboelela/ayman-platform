@@ -113,6 +113,22 @@ export const CreateBookOrderSchema = z
      * anything. This flag only ever appears after a COMPLETED order.
      */
     confirmDuplicate: z.boolean().default(false),
+    /**
+     * «ده تشيك-أوت من طالب» — the caller is `BookOrderPanel`, so the two
+     * duplicate protections apply. Default FALSE: everything else that creates
+     * an order (an admin, a fixture, a migration) keeps the plain "always make
+     * a row" behaviour it has always had.
+     *
+     * ⚠️ This flag exists because the first attempt made reuse UNCONDITIONAL in
+     * `create()`, and it broke fifteen specs that legitimately build fixtures
+     * out of several orders for one student — `previousOrdersFromPhone` counts
+     * them, the export and packing-list cases need more than one row, and
+     * «allows a second order for the same course» is a product rule in its own
+     * right. Silently changing what `create()` means for every caller in order
+     * to fix one caller's problem was the wrong shape; the checkout says it is
+     * the checkout instead.
+     */
+    reuseOpenOrder: z.boolean().default(false),
   })
   .strict()
   /*
