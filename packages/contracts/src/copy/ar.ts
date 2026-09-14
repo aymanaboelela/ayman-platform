@@ -114,8 +114,21 @@ export const copy = {
      * `resolveGate`. Do not add «أول محاضرة مجانية» here: free previews are a
      * per-lesson flag and not every course has one.
      */
+    /*
+     * ⚠️ Two Arabic bugs shipped in the first version of this string and both
+     * were visible in the live Google snippet within the hour:
+     *
+     * · «لـ{year}» rendered «لـالصف الثاني بكالوريا». The لام يقترن with ال to
+     *   make «للصف»; it cannot sit in front of it. The fix is not a smarter
+     *   template — it is not putting a preposition in front of an interpolated
+     *   noun phrase at all. Hence the dash.
+     * · «{n} محاضرة» rendered «3 محاضرة». Arabic has four plural forms and
+     *   3–10 takes «محاضرات». `lessonCountLabel` in `lib/course-groups.ts` is
+     *   the one place that rule lives — `{lessons}` below is already formatted
+     *   by it, so this string must NOT add the word itself.
+     */
     courseDescription:
-      'المنهج الرسمي للبرمجة والذكاء الاصطناعي لـ{year} — {n} محاضرة، فيديو وتمرين واختبار على كل درس، وامتحانات شهرية بدرجات تشوفها أول بأول. مع المهندس أيمن أبو العلا.',
+      'المنهج الرسمي للبرمجة والذكاء الاصطناعي — {year} — {lessons}، فيديو وتمرين واختبار على كل درس، وامتحانات شهرية بدرجات تشوفها أول بأول. مع المهندس أيمن أبو العلا.',
 
     catalogDescription:
       'كل كورسات البرمجة وعلوم الحاسب على منصة أيمن أبو العلا — مرتّبة بالصف الدراسي والنظام والمادة، بشرح فيديو وملفات وامتحانات.',
@@ -1667,6 +1680,17 @@ export const copy = {
      * `apps/web/lib/course-groups.ts`, which is where the rule lives and is
      * tested.
      */
+    /**
+     * The same four forms for a LESSON count, because «٣ محاضرة» is the same
+     * mistake as «١ كورسات» one noun over — and a snippet in a search result
+     * is a worse place to make it than a heading, because it is the copy a
+     * parent reads before deciding the site is careless.
+     */
+    lessonCountOne: 'محاضرة واحدة',
+    lessonCountTwo: 'محاضرتين',
+    lessonCountFew: 'محاضرات',
+    lessonCountMany: 'محاضرة',
+
     countOne: 'كورس واحد',
     countTwo: 'كورسين',
     countFew: 'كورسات',
