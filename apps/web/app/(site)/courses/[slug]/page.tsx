@@ -26,6 +26,7 @@ import { breadcrumbJsonLd, courseJsonLd } from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { CourseArticles } from '@/components/site/course-articles';
 import { yearLabelAr } from '@/lib/year-label';
+import { lessonCountLabel } from '@/lib/course-groups';
 import { formatDuration } from '@/components/site/course-card';
 import { CourseCover } from '@/components/site/course-cover';
 import { CourseStartButton } from '@/components/site/course-start-button';
@@ -118,7 +119,9 @@ export async function generateMetadata({
     description:
       course.lessonCount > 0
         ? formatCopy(copy.seo.courseDescription, {
-            n: String(course.lessonCount),
+            // `lessonCountLabel` carries the NUMBER and the noun in the right
+            // Arabic plural — the template must not add «محاضرة» itself.
+            lessons: lessonCountLabel(course.lessonCount),
             year: yearLabelAr(course.year),
           })
         : (course.subtitle ?? course.description ?? copy.site.tagline),

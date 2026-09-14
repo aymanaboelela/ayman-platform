@@ -60,6 +60,26 @@ export function groupBySubject(courses: readonly CatalogCourse[]): CourseGroup[]
  * دقيقة»). Mixing Arabic-Indic numerals into one card and Western into the
  * next is more jarring than either choice on its own.
  */
+/**
+ * «محاضرة واحدة» · «محاضرتين» · «3 محاضرات» · «11 محاضرة».
+ *
+ * The same four Arabic plural forms `courseCountLabel` below implements, one
+ * noun over. Added 2026-09-14 after «3 محاضرة» shipped in a course page's
+ * `<meta name="description">` — a search snippet is the worst place to get this
+ * wrong, because it is the sentence a parent reads before deciding whether the
+ * site was built carefully.
+ *
+ * ⚠️ It returns the number AND the noun. A caller must not add «محاضرة» itself;
+ * that is how the bug got in.
+ */
+export function lessonCountLabel(count: number): string {
+  const c = copy.years;
+  if (count === 1) return c.lessonCountOne;
+  if (count === 2) return c.lessonCountTwo;
+  if (count >= 3 && count <= 10) return `${count} ${c.lessonCountFew}`;
+  return `${count} ${c.lessonCountMany}`;
+}
+
 export function courseCountLabel(count: number): string {
   const c = copy.years;
   if (count === 1) return c.countOne;
