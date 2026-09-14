@@ -2359,7 +2359,17 @@ export const copy = {
     screenshotLabel: 'صورة إثبات التحويل',
     screenshotPlaceholder: 'اضغط هنا وارفع صورة السكرين شوت',
     screenshotChange: 'تغيير الصورة',
-    screenshotHint: 'سكرين شوت واضح من تطبيق إنستاباي بيوضّح المبلغ والتاريخ.',
+    /**
+     * ⚠️ `{rail}` — same reason as `instructions` above, and this one was
+     * MISSED when that fix went in.
+     *
+     * Caught by opening the real checkout on production: the student picks
+     * «فودافون كاش», sees the Vodafone number and the Vodafone mark, and then
+     * this line under the uploader tells them to screenshot InstaPay. A
+     * sentence naming the wrong app is how a correct transfer arrives with
+     * proof nobody can match to it.
+     */
+    screenshotHint: 'سكرين شوت واضح من تطبيق {rail} بيوضّح المبلغ والتاريخ.',
     back: 'رجوع',
     submit: 'إرسال الطلب',
     submitting: 'بنبعت الطلب…',

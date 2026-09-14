@@ -745,7 +745,9 @@ export function SubscribePanel({
             <span className="course-subscribe__upload-change">{copy.subscribe.screenshotChange}</span>
           ) : null}
         </button>
-        <p className="course-subscribe__hint">{copy.subscribe.screenshotHint}</p>
+        <p className="course-subscribe__hint">
+          {formatCopy(copy.subscribe.screenshotHint, { rail: railName })}
+        </p>
       </div>
 
       {error ? (

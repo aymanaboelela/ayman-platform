@@ -274,6 +274,18 @@ describe('the payment rail', () => {
     await waitFor(() => expect(screen.getAllByText(/1555555555/).length).toBeGreaterThan(0));
     // ⚠️ And NOT the other one, anywhere. There is no fallback between rails.
     expect(screen.queryAllByText(/1021196367/)).toHaveLength(0);
+
+    /*
+     * ⚠️ And every SENTENCE names the chosen rail too, not just the number.
+     * The screenshot hint under the uploader was missed by the first pass and
+     * still said «من تطبيق إنستاباي» to a student paying by wallet — caught by
+     * opening the real checkout on production, not by any test, which is why
+     * there is one now.
+     */
+    expect(screen.queryAllByText(new RegExp(copy.subscribe.railInstapay))).toHaveLength(0);
+    expect(
+      screen.getAllByText(new RegExp(copy.subscribe.railVodafoneCash)).length,
+    ).toBeGreaterThan(1);
   });
 
   it('offers an unconfigured rail as unavailable rather than hiding it', async () => {
