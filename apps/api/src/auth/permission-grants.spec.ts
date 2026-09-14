@@ -232,3 +232,39 @@ describe('grantablePermissions', () => {
     }
   });
 });
+
+describe('the two escalation paths are not offered at all', () => {
+  /**
+   * These are different in kind from the other destructive permissions, and
+   * the difference is the whole reason they are listed separately: banning or
+   * deleting a student is a bad day; either of these hands over the platform.
+   */
+  it('never offers student:role-change — a second account promoted to admin', () => {
+    // `changeRole` refuses to change your OWN role, so it cannot be turned on
+    // yourself. It does not stop promoting another account you control.
+    expect(grantablePermissions('owner')).not.toContain('student:role-change');
+  });
+
+  it('never offers student:set-password — the operator account taken over', () => {
+    expect(grantablePermissions('owner')).not.toContain('student:set-password');
+  });
+
+  it('still offers the merely-destructive ones, which are a real decision', () => {
+    // Ban and delete stay grantable on purpose: an operator who ticks them has
+    // decided a support desk may use them, and neither yields a credential.
+    const grantable = grantablePermissions('owner');
+
+    expect(grantable).toContain('student:ban');
+    expect(grantable).toContain('student:delete');
+  });
+
+  it('cannot be reached by writing them through the API either', () => {
+    // `PermissionGrantsService.replace` validates against this same list, so
+    // the endpoint refuses them even if somebody hand-crafts the request.
+    const allowed = new Set(grantablePermissions('owner'));
+
+    for (const escalation of ['student:role-change', 'student:set-password', 'role:grant'] as const) {
+      expectFor(escalation, allowed.has(escalation), false);
+    }
+  });
+});

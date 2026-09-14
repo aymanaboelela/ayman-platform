@@ -385,6 +385,27 @@ const KNOWN_ROLES = new Set<string>(Object.keys(ROLE_PERMISSIONS));
 const NEVER_GRANTABLE = new Set<Permission>([
   'role:read',
   'role:grant',
+  // ── The two that are privilege ESCALATION, not merely dangerous ──────
+  //
+  // Every other destructive permission on a student account is destructive
+  // and nothing more: a banned or deleted student is a bad day, and an
+  // operator who ticks it has decided to accept that. These two are different
+  // in kind, because either one hands the whole platform over:
+  //
+  //   · `student:role-change` — `changeRole` refuses to change your OWN role,
+  //     so it cannot be turned on yourself. It does not stop you promoting a
+  //     SECOND account you control (a student you registered with your own
+  //     number) to `admin`, and then signing in as that.
+  //   · `student:set-password` — `setPassword` is now refused on any target
+  //     that is not a student, but that guard lives in one service method. A
+  //     permission that grants "rewrite an arbitrary account's credential"
+  //     should not be one code path away from the operator's own account in
+  //     the first place.
+  //
+  // So they are not offered on the grants screen at all, whatever an operator
+  // ticks. Both are still held by `admin`, which already holds everything.
+  'student:role-change',
+  'student:set-password',
   'profile:read',
   'profile:write',
   'progress:write',
