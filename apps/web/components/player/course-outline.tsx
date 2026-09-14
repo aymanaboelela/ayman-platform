@@ -32,6 +32,8 @@ export interface CourseOutlineSidebarProps {
   /** `contact.instapay`, E.164 or `null` — same prop `BookOrderButton`
    *  takes everywhere else it appears. */
   instapay: string | null;
+  /** `contact.vodafoneCash` — the second payment rail, threaded the same way. */
+  vodafoneCash: string | null;
 }
 
 /**
@@ -247,6 +249,7 @@ export function CourseOutlineSidebar({
   activeLessonId,
   shippingCents,
   instapay,
+  vodafoneCash,
 }: CourseOutlineSidebarProps) {
   const remaining = Math.max(0, outline.totalLessons - outline.completedLessons);
   // Same list the library outline builds, off the flat payload this screen
@@ -307,6 +310,7 @@ export function CourseOutlineSidebar({
             bookPriceCents={outline.course.bookPriceCents as number}
             shippingCents={shippingCents}
             instapay={instapay}
+            vodafoneCash={vodafoneCash}
           />
         ) : null}
       </div>

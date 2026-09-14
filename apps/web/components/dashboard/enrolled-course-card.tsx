@@ -58,6 +58,7 @@ export function EnrolledCourseCard({
   course,
   shippingCents,
   instapay,
+  vodafoneCash,
 }: {
   course: EnrolledCourse;
   /** The delivery fee, from `getBookShippingCents()` — see `BookOrderButton`. */
@@ -65,6 +66,8 @@ export function EnrolledCourseCard({
   /** `contact.instapay`, E.164 or `null` — same prop `BookOrderButton`
    *  takes on the public course page. */
   instapay: string | null;
+  /** `contact.vodafoneCash` — the second payment rail, threaded the same way. */
+  vodafoneCash: string | null;
 }) {
   // Shared with the rail's «كورساتي» list — see `lib/course-href.ts`. The
   // local copy this replaced fell back to the PUBLIC course page, so a student
@@ -232,6 +235,7 @@ export function EnrolledCourseCard({
                 bookPriceCents={course.bookPriceCents as number}
                 shippingCents={shippingCents}
                 instapay={instapay}
+                vodafoneCash={vodafoneCash}
               />
             </div>
           ) : null}
