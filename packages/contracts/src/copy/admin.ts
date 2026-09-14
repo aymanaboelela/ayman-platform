@@ -1198,6 +1198,11 @@ const admin = {
     vodafoneCashHint:
       'رقم محفظة فودافون كاش — غير رقم إنستاباي. سيبه فاضي لو مش عايز تستقبل على فودافون كاش، والاختيار ده هيتقفل قدام الطالب.',
     accentPreviewLabel: 'معاينة اللون',
+    /** The seventh option in the accent picker: this instructor's own hue. */
+    accentCustom: 'لون خاص',
+    accentHue: 'درجة اللون',
+    accentHueHint:
+      'حرّك الشريط لحد ما توصل للون بتاعك. السكيمة كلها بتتولّد منه — الأزرار والخلفيات والنص — والدرجات القريبة من لون «إجابة صح» أو «إجابة غلط» مرفوضة عشان الطالب مايتلخبطش.',
 
     /**
      * The four channels the site footer renders that the dashboard could not
