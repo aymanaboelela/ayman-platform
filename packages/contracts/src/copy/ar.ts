@@ -2303,7 +2303,6 @@ export const copy = {
     railInstapay: 'إنستاباي',
     railVodafoneCash: 'فودافون كاش',
     railUnavailable: 'مش متاح دلوقتي',
-    railNext: 'التالي',
     /** Back to the question, from the screen that shows the number. */
     railChange: 'غيّر طريقة التحويل',
     cta: 'اشترك دلوقتي',

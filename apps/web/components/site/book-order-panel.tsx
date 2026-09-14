@@ -727,8 +727,12 @@ export function BookOrderPanel({
       {!railConfirmed ? (
         <PaymentMethodChoice
           value={rail}
-          onChange={setRail}
-          onNext={() => setRailConfirmed(true)}
+          // One tap: pick the rail AND move on. There is no confirm button —
+          // see `PaymentMethodChoice`.
+          onChange={(next) => {
+            setRail(next);
+            setRailConfirmed(true);
+          }}
           available={{ instapay: Boolean(instapay), vodafoneCash: Boolean(vodafoneCash) }}
         />
       ) : (
