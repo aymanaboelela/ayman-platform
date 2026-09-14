@@ -4,6 +4,7 @@ import { copy } from '@ayman/contracts';
 import { SOCIAL_MARKS, SocialIcon, type SocialKey } from '@/components/site/social-icons';
 import { FooterDragons } from '@/components/site/footer-dragons';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 
 const c = copy.landing;
@@ -20,17 +21,21 @@ const c = copy.landing;
  * are one entity, and a footer that links somewhere else quietly contradicts
  * the claim.
  *
- * ## Why there is no longer a shipped fallback
+ * ## The fallback is per-DEPLOYMENT, not shipped
  *
- * There used to be: `SOCIAL_FALLBACK = OFFICIAL_PROFILES`, on the reasoning
- * that an empty `site_settings.data` should still render the four icons rather
- * than none. That reasoning holds for exactly one deployment. On any other
- * one it publishes AYMAN'S YouTube, Instagram, TikTok and Facebook on somebody
- * else's domain, and nothing looks broken — four working links to the wrong
- * person. `seed.ts` fills these in on first boot from `TENANT_CONTACT_SEED`,
- * so this deployment's settings are populated and the fallback never fired
- * here anyway; a deployment that has not been given its own profiles renders
- * no icon, which is the same rule `whatsappChannel` below has always used.
+ * There used to be `SOCIAL_FALLBACK = OFFICIAL_PROFILES` — Ayman's accounts,
+ * shipped in the image. That is correct for exactly one deployment; on anybody
+ * else's it publishes HIS four accounts on their domain, and nothing looks
+ * broken, which is the worst kind of wrong.
+ *
+ * Removing it outright was also wrong, and shipped: `getPublicSettingsOrDefaults()`
+ * answers `contact: {}` when the API is unreachable, `next build` runs with no
+ * API, and this footer is prerendered — so the first request after every deploy
+ * got an `<h2>تابعني</h2>` above an EMPTY list on every marketing page.
+ *
+ * `TENANT_CONTACT_FALLBACK` is the version that is right in both directions:
+ * Ayman's stack still renders his accounts during that window, and any other
+ * stack renders its own or nothing at all. See its own header.
  */
 
 const PAGE_LINKS = [
@@ -111,11 +116,11 @@ export async function SiteFooter() {
    */
   const social = (
     [
-      { key: 'youtube', href: contact.youtube, label: c.footerYoutube },
-      { key: 'instagram', href: contact.instagram, label: c.footerInstagram },
-      { key: 'facebook', href: contact.facebook, label: c.footerFacebook },
-      { key: 'tiktok', href: contact.tiktok, label: c.footerTiktok },
-      { key: 'whatsapp', href: contact.whatsappChannel, label: c.footerWhatsappChannel },
+      { key: 'youtube', href: contact.youtube ?? TENANT_CONTACT_FALLBACK.youtube, label: c.footerYoutube },
+      { key: 'instagram', href: contact.instagram ?? TENANT_CONTACT_FALLBACK.instagram, label: c.footerInstagram },
+      { key: 'facebook', href: contact.facebook ?? TENANT_CONTACT_FALLBACK.facebook, label: c.footerFacebook },
+      { key: 'tiktok', href: contact.tiktok ?? TENANT_CONTACT_FALLBACK.tiktok, label: c.footerTiktok },
+      { key: 'whatsapp', href: contact.whatsappChannel ?? TENANT_CONTACT_FALLBACK.whatsappChannel, label: c.footerWhatsappChannel },
     ] satisfies { key: SocialKey; href: string | null; label: string }[]
   ).flatMap(({ key, href, label }) => (href ? [{ key, href, label }] : []));
 
