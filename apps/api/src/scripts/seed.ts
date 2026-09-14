@@ -2,15 +2,11 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { FLAG_DECLARATIONS } from '@ayman/contracts/admin/flags';
 import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
-import {
-  OFFICIAL_PROFILES,
-  OFFICIAL_WHATSAPP_CHANNEL,
-  OFFICIAL_WHATSAPP_E164,
-} from '@ayman/contracts/site-profiles';
 import { copy } from '@ayman/contracts/copy';
 import { PrismaClient, type Region } from '../generated/prisma/client';
 import { GOVERNORATES } from './seed-data/governorates';
 import { SITE_SETTINGS_ID } from '../modules/admin/admin.constants';
+import { TENANT_CONTACT_SEED } from './seed-data/tenant-contact';
 
 // Prisma 7 requires a driver adapter at construction time (see Task 8's
 // prisma.service.ts) — bare `new PrismaClient()` throws. Seeding is pure DML
@@ -467,16 +463,16 @@ async function main(): Promise<void> {
 
     const contact = {
       ...current.contact,
-      youtube: current.contact.youtube ?? OFFICIAL_PROFILES.youtube,
-      instagram: current.contact.instagram ?? OFFICIAL_PROFILES.instagram,
-      tiktok: current.contact.tiktok ?? OFFICIAL_PROFILES.tiktok,
-      facebook: current.contact.facebook ?? OFFICIAL_PROFILES.facebook,
+      youtube: current.contact.youtube ?? TENANT_CONTACT_SEED.youtube,
+      instagram: current.contact.instagram ?? TENANT_CONTACT_SEED.instagram,
+      tiktok: current.contact.tiktok ?? TENANT_CONTACT_SEED.tiktok,
+      facebook: current.contact.facebook ?? TENANT_CONTACT_SEED.facebook,
       // Supplied 2026-08-16, so no longer in the "cannot be guessed" list two
       // paragraphs up. Same fill-if-empty rule as the four above: an admin who
       // edits either one in /admin/settings keeps their value through every
       // subsequent boot.
-      whatsappChannel: current.contact.whatsappChannel ?? OFFICIAL_WHATSAPP_CHANNEL,
-      whatsapp: current.contact.whatsapp ?? OFFICIAL_WHATSAPP_E164,
+      whatsappChannel: current.contact.whatsappChannel ?? TENANT_CONTACT_SEED.whatsappChannel,
+      whatsapp: current.contact.whatsapp ?? TENANT_CONTACT_SEED.whatsapp,
     };
 
     const next = SiteSettingsSchema.parse({ ...current, seo, contact });

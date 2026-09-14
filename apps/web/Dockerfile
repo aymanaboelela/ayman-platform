@@ -54,6 +54,33 @@ ARG NEXT_PUBLIC_CLARITY_PROJECT_ID
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_MEDIA_ORIGIN=$NEXT_PUBLIC_MEDIA_ORIGIN
 ENV NEXT_PUBLIC_CLARITY_PROJECT_ID=$NEXT_PUBLIC_CLARITY_PROJECT_ID
+
+# ── Tenant identity, at BUILD time as well as run time ───────────────────
+#
+# These two are NOT `NEXT_PUBLIC_` and are read only in server code
+# (`lib/home-blocks.ts`), so it is tempting to pass them at run time alone and
+# keep one image for every instructor. That does not work, and the reason is
+# `next build`, not the bundler:
+#
+#   `/` is PRERENDERED (it appears in `.next/prerender-manifest.json`). During
+#   the build the page is rendered once, `getHomeBlocks()` runs, the API is
+#   unreachable, and the `catch` returns the FALLBACK — which is chosen from
+#   `TENANT_KEY`. With no value at build time that resolves to `ayman`, so
+#   AYMAN'S LANDING PAGE gets baked into the static shell of every image,
+#   including a second instructor's.
+#
+#   `cacheLife('minutes')` does re-render it correctly once the container is
+#   up, so it self-corrects — but the window is the first minutes after a
+#   deploy, which for a new tenant is launch, the one moment everybody looks.
+#
+# The web image is per-instructor regardless: `NEXT_PUBLIC_APP_URL` and
+# `NEXT_PUBLIC_MEDIA_ORIGIN` above are inlined into the bundle at build time
+# too. So this costs nothing that was not already true.
+ARG TENANT_KEY
+ARG TENANT_DISPLAY_NAME
+ENV TENANT_KEY=$TENANT_KEY
+ENV TENANT_DISPLAY_NAME=$TENANT_DISPLAY_NAME
+
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # ── رمز البناء ────────────────────────────────────────────────────────

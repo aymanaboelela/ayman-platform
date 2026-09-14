@@ -46,13 +46,28 @@ for (const key of ['EP', 'AK', 'SK'] as const) {
  */
 if (process.env.MIRROR_TMPDIR) process.env.TMPDIR = process.env.MIRROR_TMPDIR;
 
+/** First non-empty of `names`, or a fatal error naming all of them. */
+function requiredEnv(...names: string[]): string {
+  for (const name of names) {
+    const value = (process.env[name] ?? '').trim();
+    if (value !== '') return value;
+  }
+  throw new Error(`set one of ${names.join(' or ')} — the mirror's public URL is written into every playlist it uploads`);
+}
+
 async function main(): Promise<void> {
   const storage = new MirrorStorage({
     endpoint: process.env.EP as string,
-    bucket: process.env.BUCKET ?? 'ayman-video',
+    bucket: process.env.BUCKET ?? process.env.VIDEO_MIRROR_BUCKET ?? 'ayman-video',
     accessKeyId: process.env.AK as string,
     secretAccessKey: process.env.SK as string,
-    publicUrl: process.env.PUBLIC_URL ?? 'https://video.aymanaboelela.com',
+    /* No hardcoded host. This used to default to Ayman's video origin, which
+       on any other stack would have written that origin into another
+       instructor's playlists — the mirror's public URL is baked into the
+       manifests it uploads, so a wrong value here is not a wrong link, it is
+       a lecture that plays from somebody else's bucket. `VIDEO_ORIGIN` is
+       already the compose variable that carries it. */
+    publicUrl: requiredEnv('PUBLIC_URL', 'VIDEO_ORIGIN'),
     concurrency: 1,
   });
 

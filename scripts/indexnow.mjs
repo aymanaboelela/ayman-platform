@@ -45,8 +45,45 @@ if (keyFiles.length !== 1) {
 }
 const INDEXNOW_KEY = keyFiles[0].replace(/\.txt$/, '');
 
-const HOST = 'aymanaboelela.com';
-const ORIGIN = `https://${HOST}`;
+/**
+ * The host whose URLs get submitted — REQUIRED, with no default.
+ *
+ * ⚠️ Was the literal `aymanaboelela.com`, and this script now ships in an image
+ * that more than one instructor runs. IndexNow submits a list of URLs FOR A
+ * HOST and verifies the key by fetching it from that host, so a hardcoded
+ * value here does not fail loudly on somebody else's stack — it quietly
+ * submits Ayman's sitemap under their key, and their own pages never get
+ * pushed to any engine.
+ *
+ * There is deliberately NO fallback, unlike `TENANT_CONTACT_SEED` and
+ * `STARTER_HOME_BLOCKS` which default to Ayman so his stack is unchanged.
+ * Those two run automatically on every boot, so they need a default; this is
+ * run by hand and nothing invokes it (no workflow, no cron, no package
+ * script). A default here would buy one saved keystroke and cost the one
+ * mistake nobody can see from the outside.
+ *
+ *   APP_URL=https://example.com node scripts/indexnow.mjs
+ *   node scripts/indexnow.mjs https://example.com
+ */
+const originArg = process.argv.slice(2).find((arg) => !arg.startsWith('--'));
+const ORIGIN = (originArg ?? process.env.APP_URL ?? '').trim().replace(/\/$/, '');
+
+if (ORIGIN === '') {
+  console.error(
+    'set APP_URL, or pass the origin as an argument:\n' +
+      '  APP_URL=https://example.com node scripts/indexnow.mjs\n' +
+      '  node scripts/indexnow.mjs https://example.com',
+  );
+  process.exit(1);
+}
+
+let HOST;
+try {
+  HOST = new URL(ORIGIN).host;
+} catch {
+  console.error(`"${ORIGIN}" is not a valid origin.`);
+  process.exit(1);
+}
 
 /**
  * ⚠️ A browser user-agent, not the default.

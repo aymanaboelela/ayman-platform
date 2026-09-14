@@ -13,9 +13,6 @@ import {
 } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import {
-  OFFICIAL_PROFILES,
-  OFFICIAL_WHATSAPP_CHANNEL,
-  OFFICIAL_WHATSAPP_E164,
 } from '@ayman/contracts/site-profiles';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 import {
@@ -87,27 +84,33 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function LinksPage() {
   const { contact } = await getPublicSettingsOrDefaults();
 
-  const profiles = {
-    youtube: contact.youtube ?? OFFICIAL_PROFILES.youtube,
-    instagram: contact.instagram ?? OFFICIAL_PROFILES.instagram,
-    tiktok: contact.tiktok ?? OFFICIAL_PROFILES.tiktok,
-    facebook: contact.facebook ?? OFFICIAL_PROFILES.facebook,
-  };
-
-  const whatsappChannel = contact.whatsappChannel ?? OFFICIAL_WHATSAPP_CHANNEL;
+  /*
+   * Straight from the setting, with NO shipped fallback. There used to be one
+   * (`?? OFFICIAL_PROFILES.youtube` and friends), which meant a deployment
+   * whose `site_settings.contact` was empty published Ayman's four accounts —
+   * and, worse, `?? OFFICIAL_WHATSAPP_E164` put his personal number behind the
+   * «كلّمنا» button. On his own domain that is invisible, because `seed.ts`
+   * fills the settings in on first boot; on anybody else's it silently routes
+   * their students to him. A row with no destination is dropped instead, which
+   * is what `telegram`, `facebookGroup`, `whatsappGroup` and `email` in the
+   * docblock above have always done.
+   */
+  const whatsappChannel = contact.whatsappChannel;
   /* `waMeHref` strips the leading `+` and changes nothing else — `wa.me`
-     rejects the E.164 form. Nullable, because a stored number that is somehow
-     not E.164 must drop the row rather than render a link to WhatsApp's
-     marketing page; `OFFICIAL_WHATSAPP_E164` means that in practice never
-     happens. */
-  const whatsappChat = waMeHref(contact.whatsapp ?? OFFICIAL_WHATSAPP_E164);
+     rejects the E.164 form. Nullable, and now genuinely so: it answers `null`
+     both for a stored number that is not E.164 and for a deployment that has
+     not been given a number at all, and either way the row is dropped rather
+     than rendered as a link to WhatsApp's marketing page. */
+  const whatsappChat = waMeHref(contact.whatsapp);
 
-  const social: SocialRow[] = [
-    { key: 'youtube', href: profiles.youtube, label: copy.landing.footerYoutube },
-    { key: 'instagram', href: profiles.instagram, label: copy.landing.footerInstagram },
-    { key: 'tiktok', href: profiles.tiktok, label: copy.landing.footerTiktok },
-    { key: 'facebook', href: profiles.facebook, label: copy.landing.footerFacebook },
-  ];
+  const social: SocialRow[] = (
+    [
+      { key: 'youtube', href: contact.youtube, label: copy.landing.footerYoutube },
+      { key: 'instagram', href: contact.instagram, label: copy.landing.footerInstagram },
+      { key: 'tiktok', href: contact.tiktok, label: copy.landing.footerTiktok },
+      { key: 'facebook', href: contact.facebook, label: copy.landing.footerFacebook },
+    ] satisfies { key: SocialRow['key']; href: string | null; label: string }[]
+  ).flatMap(({ key, href, label }) => (href ? [{ key, href, label }] : []));
 
   const avatar = getBrandAsset('mark');
 
@@ -270,13 +273,18 @@ export default async function LinksPage() {
           {c.groupTalk}
         </h2>
         <ul className="linkhub__list">
-          <Row
-            href={whatsappChannel}
-            brand={inkBrand(SOCIAL_MARKS.whatsapp)}
-            icon={<SocialIcon mark={SOCIAL_MARKS.whatsapp} />}
-            title={c.whatsappChannelTitle}
-            note={c.whatsappChannelNote}
-          />
+          {/* Conditional since the shipped fallback went away: a deployment
+              with no channel of its own renders no row, rather than a row
+              pointing at Ayman's. */}
+          {whatsappChannel ? (
+            <Row
+              href={whatsappChannel}
+              brand={inkBrand(SOCIAL_MARKS.whatsapp)}
+              icon={<SocialIcon mark={SOCIAL_MARKS.whatsapp} />}
+              title={c.whatsappChannelTitle}
+              note={c.whatsappChannelNote}
+            />
+          ) : null}
           {whatsappChat ? (
             <Row
               href={whatsappChat}
