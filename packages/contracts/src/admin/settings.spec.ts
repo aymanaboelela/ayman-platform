@@ -73,11 +73,16 @@ describe('SiteSettingsSchema', () => {
     const parsed = SiteSettingsSchema.parse({});
     expect(Object.keys(parsed.branding).sort()).toEqual([
       'accent',
+      'accentHue',
       'faviconAssetId',
       'logoDarkAssetId',
       'logoLightAssetId',
       'radius',
     ]);
+    // A stored row written before `accentHue` existed must keep its slot, so
+    // the default has to be null rather than a hue — otherwise every existing
+    // platform would silently switch to a generated scheme on first parse.
+    expect(parsed.branding.accentHue).toBeNull();
   });
 
   it('merges a partially-written blob without dropping the untouched sections', () => {
