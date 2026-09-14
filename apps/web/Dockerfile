@@ -51,9 +51,11 @@ ARG NEXT_PUBLIC_MEDIA_ORIGIN
 # زائر — بس لازم يكون موجود وقت **البناء**، زي إخواته فوق: لو فاضي، الـ tag
 # ما بيتشحنش خالص، وضبطه في Dokploy بعد كده ما بيرجّعوش من غير إعادة بناء.
 ARG NEXT_PUBLIC_CLARITY_PROJECT_ID
+ARG NEXT_PUBLIC_GOOGLE_ENABLED
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_MEDIA_ORIGIN=$NEXT_PUBLIC_MEDIA_ORIGIN
 ENV NEXT_PUBLIC_CLARITY_PROJECT_ID=$NEXT_PUBLIC_CLARITY_PROJECT_ID
+ENV NEXT_PUBLIC_GOOGLE_ENABLED=$NEXT_PUBLIC_GOOGLE_ENABLED
 
 # ── Tenant identity, at BUILD time as well as run time ───────────────────
 #
