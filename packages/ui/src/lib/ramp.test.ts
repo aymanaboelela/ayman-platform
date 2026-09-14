@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contrastRatio, isInGamut, oklchToRgb } from './oklch';
+import { contrastRatio, isInGamut, oklchToRgb, readableInk } from './oklch';
 import {
   PRIMARY_STEPS,
   accentRamp,
@@ -154,6 +154,43 @@ describe('describeRamp', () => {
         // unreadable is the failure the fixed ink literal already ships on two
         // of the six accents.
         expect(report.inkContrast[theme], `hue ${hue} ${theme}`).toBeGreaterThan(3);
+      }
+    }
+  });
+});
+
+describe('the fixed ink on the accent fill stays readable', () => {
+  /**
+   * `button.tsx` pairs `bg-accent` with the literal `#1A1206`, and
+   * `globals.css` repeats it in three more places, on the stated assumption
+   * that "the accent is bright in both themes".
+   *
+   * That assumption was FALSE while `solveForContrast` returned the threshold:
+   * the dark fill collapsed to about L 0.48 and the near-black ink measured
+   * 2.78:1 on it — button labels a reader could not make out. Fixing the ramp
+   * fixed the ink, which is why there is no `--a-ink` token here.
+   *
+   * This test is what keeps that true. If the ramp ever darkens again, this
+   * fails before anybody ships unreadable buttons, and THEN the ink has to
+   * become a generated token.
+   */
+  const INK = { l: 0.167, c: 0.035, h: 70 } as const; // #1a1206 in OKLCH
+
+  it.each(ALL_HUES)('hue %i keeps label text over 4.5:1 in both themes', (hue) => {
+    for (const theme of THEMES) {
+      const [fill] = accentRamp(hue, theme);
+
+      expect(contrastRatio(oklchToRgb(fill), oklchToRgb(INK)), `${theme} hue ${hue}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('agrees with readableInk — the fixed literal is the right family', () => {
+    // If `readableInk` ever preferred white on a generated fill, the fixed
+    // near-black would be the wrong choice even where it technically passes.
+    for (const hue of ALL_HUES) {
+      for (const theme of THEMES) {
+        const [fill] = accentRamp(hue, theme);
+        expect({ hue, theme, ink: readableInk(fill) }).toEqual({ hue, theme, ink: 'black' });
       }
     }
   });
