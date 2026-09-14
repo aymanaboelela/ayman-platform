@@ -1200,6 +1200,16 @@ const admin = {
     accentPreviewLabel: 'معاينة اللون',
     /** The seventh option in the accent picker: this instructor's own hue. */
     accentCustom: 'لون خاص',
+    /** The landing page's shape — a different page, not the same page recoloured. */
+    landingLayout: 'شكل الصفحة الرئيسية',
+    landingLayoutHint:
+      'ده شكل الصفحة نفسها مش لونها — طول أول شاشة، والعناوين في النص ولا على الجنب، والمحتوى في كروت ولا بين خطوط. اللون بيتظبط فوق ومستقل عن ده تمامًا.',
+    landingLayoutClassic: 'كلاسيك',
+    landingLayoutClassicHint: 'شاشة أولى كاملة غامقة، الكلام على الجنب، المحتوى في كروت بارزة.',
+    landingLayoutEditorial: 'مقالي',
+    landingLayoutEditorialHint: 'من غير شاشة غامقة. عناوين كبيرة في النص، وأقسام مفصولة بخطوط رفيعة بدل الكروت.',
+    landingLayoutCompact: 'مضغوط',
+    landingLayoutCompactHint: 'شاشة أولى قصيرة والكلام في النص، وأقسام أكتف وكروت بحدود واضحة.',
     accentHue: 'درجة اللون',
     accentHueHint:
       'حرّك الشريط لحد ما توصل للون بتاعك. السكيمة كلها بتتولّد منه — الأزرار والخلفيات والنص — والدرجات القريبة من لون «إجابة صح» أو «إجابة غلط» مرفوضة عشان الطالب مايتلخبطش.',
