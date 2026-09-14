@@ -206,7 +206,14 @@ export type AdminStudentSetPassword = z.infer<typeof AdminStudentSetPasswordSche
 
 export const AdminRoleChangeSchema = z
   .object({
-    role: z.enum(['admin', 'student']),
+    /**
+     * `owner` is the instructor this deployment belongs to — see the role's
+     * note in `apps/api/src/auth/permissions.ts`. It is mintable here because
+     * otherwise there is no way to CREATE one: the platform ships with an
+     * admin and students, and «make this account the instructor» is the step
+     * that turns a fresh stack into somebody's platform.
+     */
+    role: z.enum(['admin', 'owner', 'student']),
     /** Forces the operator to say why; it lands in the audit metadata. */
     reason: z.string().min(8).max(500),
   })
