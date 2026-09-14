@@ -12,6 +12,63 @@ export const ACCENT_SLOTS = ['amber', 'cyan', 'blue', 'violet', 'magenta', 'slat
 export const AccentSlotSchema = z.enum(ACCENT_SLOTS);
 export type AccentSlot = z.infer<typeof AccentSlotSchema>;
 
+/**
+ * Hues a brand may never take, because they already mean something.
+ *
+ * `--ok` is hue 150 and `--err` is 25, and they are how a student is told
+ * whether an answer was right. The docblock on `ACCENT_SLOTS` above has always
+ * said green and red can never be the brand; with a free hue that stops being
+ * a matter of which six values got listed and has to be enforced.
+ *
+ * ±20° each, which is wide enough that "nearly the correct-answer green" is
+ * also out. Amber (72) and blue (258) sit outside both bands, so the six
+ * shipped slots are unaffected — as does `--warn` at 85 and `--info` at 245,
+ * which are close to two of them and deliberately tolerated: a warning banner
+ * looking brand-adjacent costs nothing, a wrong answer looking correct does.
+ */
+export const RESERVED_HUES = [
+  { center: 150, meaning: 'إجابة صح' },
+  { center: 25, meaning: 'إجابة غلط' },
+] as const;
+
+const RESERVED_HUE_RADIUS = 20;
+
+/** Angular distance between two hues, 0–180. */
+function hueDistance(a: number, b: number): number {
+  const raw = Math.abs(((a - b) % 360) + 360) % 360;
+  return raw > 180 ? 360 - raw : raw;
+}
+
+export function reservedHueConflict(hue: number): string | null {
+  for (const { center, meaning } of RESERVED_HUES) {
+    if (hueDistance(hue, center) <= RESERVED_HUE_RADIUS) return meaning;
+  }
+  return null;
+}
+
+/**
+ * A tenant's own brand hue, which OVERRIDES `accent` when set.
+ *
+ * A NUMBER, not a colour string — the editor still never types CSS (Global
+ * Constraint 18 / A12). The server turns this into the whole scheme through
+ * `generateRamps` in `@ayman/ui`, which solves each step for its contrast
+ * target and clamps every value into sRGB.
+ *
+ * `null` means "use the `accent` slot", which is what every existing row says
+ * and what Ayman's platform keeps saying — his amber is hand-tuned and is not
+ * regenerated.
+ */
+export const AccentHueSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(359)
+  .nullable()
+  .default(null)
+  .refine((hue) => hue === null || reservedHueConflict(hue) === null, {
+    message: 'اللون ده قريب أوي من لون «إجابة صح» أو «إجابة غلط» — اختار درجة تانية',
+  });
+
 /** Radius presets. Every preset keeps the card ceiling at ≤ 8px. */
 export const RADIUS_SLOTS = ['sharp', 'default', 'soft'] as const;
 export const RadiusSlotSchema = z.enum(RADIUS_SLOTS);
@@ -23,6 +80,8 @@ const assetId = z.uuid().nullable().default(null);
 export const BrandingSchema = z
   .object({
     accent: AccentSlotSchema.default('amber'),
+    /** Overrides `accent` when set. See `AccentHueSchema`. */
+    accentHue: AccentHueSchema,
     radius: RadiusSlotSchema.default('default'),
     logoLightAssetId: assetId,
     logoDarkAssetId: assetId,
