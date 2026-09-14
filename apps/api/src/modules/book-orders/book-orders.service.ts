@@ -542,8 +542,29 @@ export class BookOrdersService {
       return rows.every((row) => mine.has(lineKey(row)));
     };
 
+    /**
+     * ⚠️ WHO the open order has to belong to, and why it is not just the phone.
+     *
+     * The phone alone merges two people. One number is routinely a PARENT's —
+     * two siblings ordering their own year's book on mum's phone are two
+     * orders, and collapsing them would ship one book for two paid children.
+     * The existing spec that caught this seeds two different users from one
+     * address fixture, and it was right to fail.
+     *
+     * · Signed in ⇒ the account. Unambiguous, and it survives the student
+     *   switching phone number mid-flow.
+     * · Guest ⇒ phone AND name, both, on an unclaimed row. A guest has no
+     *   identity beyond what they typed; the name is what separates the two
+     *   siblings, and matching a guest's order to an account-placed one would
+     *   also hand a stranger the ability to edit it.
+     */
+    const owner =
+      ownerId !== null
+        ? { userId: ownerId }
+        : { userId: null, phone: input.phone, fullName: input.fullName };
+
     const open = await this.prisma.bookOrder.findMany({
-      where: { phone: input.phone, status: 'address_only', deletedAt: null },
+      where: { ...owner, status: 'address_only', deletedAt: null },
       orderBy: { createdAt: 'desc' },
       select: { id: true, items: { select: { bookId: true, quantity: true } } },
     });
@@ -588,6 +609,11 @@ export class BookOrdersService {
       const since = new Date(Date.now() - DUPLICATE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
       const recent = await this.prisma.bookOrder.findMany({
         where: {
+          // ⚠️ The PHONE here, deliberately wider than the reuse match above.
+          // Reuse rewrites a row and must be sure whose it is; this only asks a
+          // question, and the case worth catching is the same human coming back
+          // on a different device with no session. A sibling on the same number
+          // answers «لأ، عايز نسخة كمان» once and is through.
           phone: input.phone,
           status: { not: 'address_only' },
           deletedAt: null,

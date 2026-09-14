@@ -293,7 +293,7 @@ describe('BookOrdersService', () => {
    * person's abandoned first attempt, which is why it stopped being reviewable.
    */
   describe('duplicate orders', () => {
-    it('reuses the same phone\'s own unpaid order instead of making a second', async () => {
+    it('reuses the same student\'s own unpaid order instead of making a second', async () => {
       const first = await service.create(studentId, address());
       const second = await service.create(studentId, {
         ...address(),
@@ -305,6 +305,30 @@ describe('BookOrdersService', () => {
       expect(second.id).toBe(first.id);
       expect(second.addressStreet).toBe('شارع آخر');
       expect(await prisma.bookOrder.count({ where: { phone: address().phone } })).toBe(1);
+    });
+
+    it('reuses a GUEST\'s unpaid order, matched on phone AND name', async () => {
+      // A guest has no identity beyond what they typed, so both fields have to
+      // agree before a row is rewritten.
+      const first = await service.create(null, address());
+      const again = await service.create(null, { ...address(), city: 'الجيزة' });
+
+      expect(again.id).toBe(first.id);
+      expect(again.city).toBe('الجيزة');
+    });
+
+    it('never merges two people who share one phone number', async () => {
+      /*
+       * ⚠️ The reason the reuse match is not the phone alone. One number is
+       * routinely a PARENT's — two siblings ordering their own year's book on
+       * mum's phone are two orders, and merging them ships one book for two
+       * paid children.
+       */
+      const sister = await service.create(null, address());
+      const brother = await service.create(null, { ...address(), fullName: 'سارة محمد' });
+
+      expect(brother.id).not.toBe(sister.id);
+      expect(await prisma.bookOrder.count({ where: { phone: address().phone } })).toBe(2);
     });
 
     it('never rewrites an order that is already paid', async () => {
@@ -498,9 +522,28 @@ describe('BookOrdersService', () => {
     });
 
     it('allows a second order for the same course (a lost book is a real reason)', async () => {
-      await service.create(studentId, address());
-      const second = await service.create(studentId, address());
+      /*
+       * ⚠️ The first order is PAID here, and it was not before.
+       *
+       * The old body created two `address_only` rows back to back and asserted
+       * both survived — which is the shape production turned out to be drowning
+       * in: 95 of 192 live orders were an unpaid first attempt, six minutes
+       * before the real one. Two identical unpaid rows are one person filling a
+       * form twice, and the service now reuses the row rather than duplicating.
+       *
+       * The case this test is NAMED for is untouched and still passes: a second
+       * order after a completed one is allowed. It just has to say so — the
+       * first one has to be finished, and the student has to confirm.
+       */
+      const first = await service.create(studentId, address());
+      await prisma.bookOrder.update({
+        where: { id: first.id },
+        data: { status: 'paid', paidAt: new Date() },
+      });
+
+      const second = await service.create(studentId, { ...address(), confirmDuplicate: true });
       expect(second.status).toBe('address_only');
+      expect(second.id).not.toBe(first.id);
 
       const count = await prisma.bookOrder.count({ where: { userId: studentId, courseId: bookedCourseId } });
       expect(count).toBe(2);
