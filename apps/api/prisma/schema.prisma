@@ -198,6 +198,8 @@ model User {
   /// Refunds this account issued — see `Refund.createdBy`. `SetNull` there,
   /// so deleting the admin keeps the money correction and loses only the name.
   refundsIssued              Refund[]
+  /// Permissions this account opened up to a role — see `RolePermissionGrant`.
+  permissionGrantsIssued     RolePermissionGrant[]   @relation("RolePermissionGrantIssuer")
 
   @@unique([email])
   @@map("users")
@@ -3168,6 +3170,57 @@ model AttemptEvent {
 /// packages/contracts on the way in and on the way out; keeping it as jsonb
 /// means adding a settings field is a schema change in TypeScript, not a
 /// migration.
+/// A permission opened up to a role at runtime, on top of the baseline in
+/// `apps/api/src/auth/permissions.ts`.
+///
+/// ## Why a table and not a bigger constant
+///
+/// `ROLE_PERMISSIONS.owner` is a fixed list compiled into the image, and it has
+/// to be: it is what an instructor can do before anybody decides anything, and
+/// a default that lives in the database cannot exist on the first boot that
+/// creates the database. But «this feature is ready, open it for him» is a
+/// decision made months after that image shipped, by a person, on one
+/// deployment — which is a row, not a release.
+///
+/// ## Additive only, by construction
+///
+/// There is no `revoked` column and no way to express "take this away". A row
+/// here can only ADD to the baseline (`roleHasPermission` checks the baseline
+/// first and returns early). Subtraction was left out deliberately: a row that
+/// silently removed `course:read` from an instructor would present as a broken
+/// platform, and the person debugging it would be looking at the code.
+///
+/// To close a feature again, delete the row.
+///
+/// ## Not scoped to a tenant, because the database already is
+///
+/// Every instructor runs their own deployment against their own database (see
+/// `docs/runbooks/new-tenant.md`), so «this stack's owner may now see payments»
+/// is one row in that stack's database and reaches nobody else. A `tenantId`
+/// here would be a column that is the same value in every row of every
+/// database.
+model RolePermissionGrant {
+  /// The role being opened up. A plain string, matching `users.role` — see the
+  /// note there for why the role column is not an enum.
+  role       String
+  /// A `resource:action` string from the catalogue. Validated against
+  /// `grantablePermissions()` before it is written, never on read: a
+  /// permission that is retired from the catalogue must not stop the API from
+  /// booting, and `roleHasPermission` simply never matches it.
+  permission String
+
+  grantedAt       DateTime @default(now()) @map("granted_at")
+  /// `SetNull`: deleting the operator who opened a feature must not silently
+  /// close it again. The grant outlives its issuer, same rule as `AccessGrant`.
+  grantedByUserId String?  @map("granted_by_user_id")
+  grantedBy       User?    @relation("RolePermissionGrantIssuer", fields: [grantedByUserId], references: [id], onDelete: SetNull)
+
+  @@id([role, permission])
+  @@index([role])
+  @@map("role_permission_grants")
+  @@schema("app")
+}
+
 model SiteSetting {
   id        Int      @id @default(1)
   data      Json

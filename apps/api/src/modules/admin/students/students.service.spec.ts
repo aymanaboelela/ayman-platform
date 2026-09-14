@@ -199,7 +199,7 @@ describe('StudentsService.setPassword', () => {
 
   it('upserts the credential account on (providerId, accountId), keyed by userId', async () => {
     const { service, prisma } = makeService();
-    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u1' });
+    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u1', role: 'student' });
 
     const result = await service.setPassword('u1', 'a-real-password', 'actor');
 
@@ -223,7 +223,7 @@ describe('StudentsService.setPassword', () => {
 
   it('writes one audit entry naming the actor, never the password', async () => {
     const { service, prisma, audit } = makeService();
-    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u1' });
+    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u1', role: 'student' });
 
     await service.setPassword('u1', 'a-real-password', 'actor');
 
@@ -254,6 +254,8 @@ describe('StudentsService.setPassword', () => {
     const { service, prisma } = makeService();
     prisma.user.findUnique.mockResolvedValueOnce({
       id: 'u1',
+      // `role` is read by the guard that refuses a non-student target.
+      role: 'student',
       // Mixed case on purpose — `emailIdentifier` folds it, and the key this
       // clears has to be the one a failed attempt actually wrote.
       email: 'Shrouk@Example.com',
@@ -282,6 +284,7 @@ describe('StudentsService.setPassword', () => {
     const { service, prisma } = makeService();
     prisma.user.findUnique.mockResolvedValueOnce({
       id: 'u1',
+      role: 'student',
       email: null,
       phoneNumber: '+201010000001',
     });
