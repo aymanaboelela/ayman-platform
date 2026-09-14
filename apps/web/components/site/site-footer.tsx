@@ -4,7 +4,6 @@ import { copy } from '@ayman/contracts';
 import { SOCIAL_MARKS, SocialIcon, type SocialKey } from '@/components/site/social-icons';
 import { FooterDragons } from '@/components/site/footer-dragons';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
-import { OFFICIAL_PROFILES } from '@ayman/contracts/site-profiles';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 
 const c = copy.landing;
@@ -21,16 +20,18 @@ const c = copy.landing;
  * are one entity, and a footer that links somewhere else quietly contradicts
  * the claim.
  *
- * ## Why these are still here now that `ContactSchema` holds them
+ * ## Why there is no longer a shipped fallback
  *
- * A default, not a duplicate. `site_settings.data` starts empty and every
- * contact field defaults to `null`, so a footer that read ONLY from settings
- * would ship with no social links at all until someone typed five URLs into
- * the dashboard — replacing "links to the wrong place" with "links nowhere",
- * which is not an improvement. Whatever the admin saves wins; this is what the
- * site says about itself in the meantime.
+ * There used to be: `SOCIAL_FALLBACK = OFFICIAL_PROFILES`, on the reasoning
+ * that an empty `site_settings.data` should still render the four icons rather
+ * than none. That reasoning holds for exactly one deployment. On any other
+ * one it publishes AYMAN'S YouTube, Instagram, TikTok and Facebook on somebody
+ * else's domain, and nothing looks broken — four working links to the wrong
+ * person. `seed.ts` fills these in on first boot from `TENANT_CONTACT_SEED`,
+ * so this deployment's settings are populated and the fallback never fired
+ * here anyway; a deployment that has not been given its own profiles renders
+ * no icon, which is the same rule `whatsappChannel` below has always used.
  */
-const SOCIAL_FALLBACK = OFFICIAL_PROFILES;
 
 const PAGE_LINKS = [
   { href: '/', label: c.footerHome },
@@ -101,33 +102,22 @@ export async function SiteFooter() {
   const { contact } = await getPublicSettingsOrDefaults();
 
   /*
-   * Dashboard value first, shipped profile second, and the entry DROPPED if
-   * neither exists — never a bare platform root. An icon that links to
+   * Every row comes from the setting, and a row with no destination is
+   * DROPPED — never a bare platform root. An icon that links to
    * `https://www.tiktok.com/` is worse than no icon: it looks like a working
-   * link, and the student who taps it lands on a stranger's feed.
+   * link, and the student who taps it lands on a stranger's feed. The WhatsApp
+   * channel has always been in this list; the other four joined it when the
+   * shipped fallback was removed, for the reason in the docblock above.
    */
-  const social: { key: SocialKey; href: string; label: string }[] = [
-    { key: 'youtube', href: contact.youtube ?? SOCIAL_FALLBACK.youtube, label: c.footerYoutube },
-    {
-      key: 'instagram',
-      href: contact.instagram ?? SOCIAL_FALLBACK.instagram,
-      label: c.footerInstagram,
-    },
-    { key: 'facebook', href: contact.facebook ?? SOCIAL_FALLBACK.facebook, label: c.footerFacebook },
-    { key: 'tiktok', href: contact.tiktok ?? SOCIAL_FALLBACK.tiktok, label: c.footerTiktok },
-    // No fallback: a WhatsApp CHANNEL is not something this repo knows the URL
-    // of, and the placeholder it used to carry (`https://www.whatsapp.com/`)
-    // was the exact failure described above.
-    ...(contact.whatsappChannel
-      ? [
-          {
-            key: 'whatsapp' as SocialKey,
-            href: contact.whatsappChannel,
-            label: c.footerWhatsappChannel,
-          },
-        ]
-      : []),
-  ];
+  const social = (
+    [
+      { key: 'youtube', href: contact.youtube, label: c.footerYoutube },
+      { key: 'instagram', href: contact.instagram, label: c.footerInstagram },
+      { key: 'facebook', href: contact.facebook, label: c.footerFacebook },
+      { key: 'tiktok', href: contact.tiktok, label: c.footerTiktok },
+      { key: 'whatsapp', href: contact.whatsappChannel, label: c.footerWhatsappChannel },
+    ] satisfies { key: SocialKey; href: string | null; label: string }[]
+  ).flatMap(({ key, href, label }) => (href ? [{ key, href, label }] : []));
 
   /*
    * `wa.me/<number>` built from the stored phone. This link was

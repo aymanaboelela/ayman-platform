@@ -26,6 +26,25 @@ import { waitForLinkProgress } from './link-wait.mjs';
 const PORT = Number(process.env.WA_PORT ?? 3400);
 const TOKEN = process.env.WA_TOKEN ?? '';
 const AUTH_DIR = process.env.WA_AUTH_DIR ?? './.wa-auth';
+
+/**
+ * The name this pairing shows up as in the phone's «الأجهزة المرتبطة» list.
+ *
+ * Was the literal 'Ayman Platform'. Every stack runs this same image, so on a
+ * second instructor's handset that string named the wrong person — and this is
+ * the one label the phone's OWNER reads when deciding whether a linked device
+ * is legitimate. An entry nobody recognises is one that eventually gets
+ * revoked, which silently stops that tenant's WhatsApp.
+ *
+ * Falls back to Ayman's name only when this stack has not been told it is
+ * somebody else, the same rule as `TENANT_CONTACT_SEED` in the API: a stack
+ * that identifies itself as another tenant and forgets `WA_DEVICE_NAME` gets
+ * its own key, never his name.
+ */
+const TENANT_KEY = (process.env.TENANT_KEY ?? '').trim() || 'ayman';
+const DEVICE_NAME =
+  (process.env.WA_DEVICE_NAME ?? '').trim() ||
+  (TENANT_KEY === 'ayman' ? 'Ayman Platform' : `${TENANT_KEY} Platform`);
 const INBOUND_URL = process.env.WA_INBOUND_URL ?? '';
 /**
  * Where delivery receipts go. Optional in the same way `WA_INBOUND_URL` is —
@@ -266,7 +285,7 @@ async function connect() {
       // How the pairing shows up in the phone's «الأجهزة المرتبطة» list. A
       // recognisable name matters — an entry nobody can identify is one that
       // eventually gets revoked by a cautious owner.
-      browser: Browsers.ubuntu('Ayman Platform'),
+      browser: Browsers.ubuntu(DEVICE_NAME),
       // Presence is not broadcast. A sender that appears permanently online
       // is a bot tell, and there is nobody on this end to be online.
       markOnlineOnConnect: false,
