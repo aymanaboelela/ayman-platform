@@ -1,4 +1,5 @@
 import type { AccentSlot, RadiusSlot } from '@ayman/contracts/admin/settings';
+import { rampDeclarations } from './ramp';
 
 /** The four accent steps: 9 solid, 10 solid-hover, 11 low-contrast text, 12 high-contrast. */
 export type AccentRamp = readonly [string, string, string, string];
@@ -169,7 +170,23 @@ function declarations(pairs: ReadonlyArray<readonly [string, string]>): string {
  * theme-independent and re-declaring it per theme would make a radius change
  * silently theme-dependent.
  */
-export function renderBrandingStyle(branding: { accent: AccentSlot; radius: RadiusSlot }): string {
+export function renderBrandingStyle(branding: {
+  accent: AccentSlot;
+  /**
+   * A tenant's own hue, 0–359. When set it OVERRIDES `accent` and the whole
+   * scheme is generated — including the eleven `--p-*` steps, which the slot
+   * path cannot reach.
+   *
+   * That gap is the reason this exists. `--p-50…--p-950` is a hand-tuned amber
+   * in `../tokens/color.css` that nothing has ever rewritten, so choosing
+   * `blue` turns 145 usages blue and leaves 116 amber — and the heaviest of
+   * those 116 are the landing page's own stylesheets. The slot path still
+   * behaves exactly that way, deliberately: changing it would change Ayman's
+   * live site. A hue is the opt-in to the whole scheme moving together.
+   */
+  accentHue?: number | null;
+  radius: RadiusSlot;
+}): string {
   const accent = ACCENT_RAMPS[branding.accent] as
     | { light: AccentRamp; dark: AccentRamp }
     | undefined;
@@ -194,8 +211,14 @@ export function renderBrandingStyle(branding: { accent: AccentSlot; radius: Radi
     ['--a-12', values[3]],
   ];
 
-  const light = declarations([...ramp(accent.light), ...radiusPairs]);
-  const dark = declarations(ramp(accent.dark));
+  const hue = branding.accentHue;
+  const generated = typeof hue === 'number' && Number.isFinite(hue);
+
+  const light = declarations([
+    ...(generated ? rampDeclarations(hue, 'light') : ramp(accent.light)),
+    ...radiusPairs,
+  ]);
+  const dark = declarations(generated ? rampDeclarations(hue, 'dark') : ramp(accent.dark));
 
   return (
     `:root:root{${light}}` +
