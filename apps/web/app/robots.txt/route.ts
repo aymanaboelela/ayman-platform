@@ -127,6 +127,33 @@ const RETRIEVAL_AGENTS = [
  * ⚠️ If a vendor ever merges its training crawler into its search crawler,
  * this list starts costing retrieval traffic and the entry for that vendor has
  * to be revisited — it cannot be detected from here.
+ *
+ * ⚠️ `Google-Extended` is the one entry where that cost is ALREADY real, and it
+ * is recorded here rather than left to be rediscovered. Checked 2026-09-15
+ * against Google's own crawler documentation
+ * (developers.google.com/search/docs/crawling-indexing/google-common-crawlers),
+ * not against an SEO blog:
+ *
+ *   · It is NOT a crawler. "Google-Extended doesn't have a separate HTTP
+ *     request user agent string. Crawling is done with existing Google user
+ *     agent strings; the robots.txt user-agent token is used in a control
+ *     capacity."
+ *   · It controls two things at once: training future Gemini models, AND
+ *     "grounding in Gemini Apps and Vertex AI".
+ *   · It does not touch Search: "Google-Extended does not impact a site's
+ *     inclusion in Google Search nor is it used as a ranking signal."
+ *
+ * So the entry costs nothing in Search — including AI Overviews, which are a
+ * Search feature — and it costs this site the ability to be the source a
+ * Gemini answer is grounded in. That is precisely the `ai-input=yes` half of
+ * the instructor's decision, forfeited for Google alone, because Google bundles
+ * it with the `ai-train=no` half behind ONE token and offers no way to split
+ * them.
+ *
+ * ⚠️ It stays blocked. `ai-train=no` is the instructor's decision and this is
+ * the only lever that enforces it against Google; trading it for Gemini
+ * grounding is his call to make, not a maintenance one. Do not flip it without
+ * asking him — and if you do, this note is the thing that has to change with it.
  */
 const TRAINING_AGENTS = [
   'GPTBot',

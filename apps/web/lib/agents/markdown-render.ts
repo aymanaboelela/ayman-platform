@@ -129,16 +129,40 @@ function courseLine(course: CatalogCourse): string {
   return `- [${course.title}](${url(`/courses/${course.slug}`)}) — ${facts.join(' · ')}`;
 }
 
-export function renderHomeMarkdown(courses: readonly CatalogCourse[]): string {
-  const faq = [
-    [copy.landing.faq1Q, copy.landing.faq1A],
-    [copy.landing.faq2Q, copy.landing.faq2A],
-    [copy.landing.faq3Q, copy.landing.faq3A],
-    [copy.landing.faq4Q, copy.landing.faq4A],
-    [copy.landing.faq6Q, copy.landing.faq6A],
-    [copy.landing.faq7Q, copy.landing.faq7A],
-  ]
-    .map(([question, answer]) => `### ${question}\n\n${answer}`)
+/**
+ * The landing FAQ as the PAGE renders it, not as `ar.ts` seeds it.
+ *
+ * ⚠️ The homepage FAQ is a `home_blocks` row an admin edits — see
+ * `lib/home-blocks.ts`. The seed in `copy.landing.faq*` is the row's STARTING
+ * value and stops being the truth the first time anyone touches it. Measured
+ * on production 2026-09-15: the page rendered seven questions including «لو
+ * حصلت مشكلة في حسابي؟» and in a different order, while `/index.md` published
+ * six from this file. The HTML's own `FAQPage` graph is built from
+ * `props.items` for exactly this reason — see the note on the `faq` case in
+ * `(site)/page.tsx` — and the markdown twin was the one surface still reading
+ * the constant.
+ *
+ * The seed stays as the fallback and nothing more: an API blip, or a brand-new
+ * stack whose blocks have never been written, gets the shipped questions
+ * rather than a heading with nothing under it.
+ */
+const SEEDED_FAQ: ReadonlyArray<{ questionAr: string; answerAr: string }> = [
+  { questionAr: copy.landing.faq1Q, answerAr: copy.landing.faq1A },
+  { questionAr: copy.landing.faq2Q, answerAr: copy.landing.faq2A },
+  { questionAr: copy.landing.faq3Q, answerAr: copy.landing.faq3A },
+  { questionAr: copy.landing.faq4Q, answerAr: copy.landing.faq4A },
+  { questionAr: copy.landing.faq6Q, answerAr: copy.landing.faq6A },
+  { questionAr: copy.landing.faq7Q, answerAr: copy.landing.faq7A },
+];
+
+export function renderHomeMarkdown(
+  courses: readonly CatalogCourse[],
+  /** The rows the live `faq` block renders. Omitted → the shipped seed. */
+  faqRows: ReadonlyArray<{ questionAr: string; answerAr: string }> = SEEDED_FAQ,
+): string {
+  const rows = faqRows.length > 0 ? faqRows : SEEDED_FAQ;
+  const faq = rows
+    .map((row) => `### ${row.questionAr}\n\n${row.answerAr}`)
     .join('\n\n');
 
   return join([
@@ -412,6 +436,32 @@ export function renderNewsPostMarkdown(post: NewsPostDetail): string {
   return join([
     `# ${post.title}`,
     `> ${post.excerpt}`,
+    /*
+     * The byline and the dates — who wrote this and when it last moved.
+     *
+     * ⚠️ The HTML page has shown both since the section shipped; the markdown
+     * twin, which is the format an assistant actually reads, showed neither. An
+     * engine weighing whether to cite a page weighs its author and its
+     * freshness, and a document with no date reads as a document of unknown
+     * age — the worst of the three states it could be in.
+     *
+     * ISO, not the Arabic rendering `formatArticleDate` produces for the page.
+     * This line is read by a machine; «١٣ سبتمبر ٢٠٢٦» is a string it has to
+     * guess a calendar for, and `2026-09-13` is not.
+     *
+     * `dateModified` only when it actually differs — restating the publish date
+     * under a second label tells a reader the article was edited on the day it
+     * went out, which is a fact about nothing.
+     */
+    [
+      `**${copy.agents.metaAuthor}:** ${copy.site.instructor}`,
+      `**${copy.news.published}:** ${post.publishedAt.slice(0, 10)}`,
+      post.updatedAt.slice(0, 10) !== post.publishedAt.slice(0, 10)
+        ? `**${copy.agents.metaUpdated}:** ${post.updatedAt.slice(0, 10)}`
+        : null,
+    ]
+      .filter((row): row is string => row !== null)
+      .join('  \n'),
     post.body,
     post.relatedCourseSlug && post.relatedCourseTitle
       ? `**${copy.news.relatedTitle}** [${post.relatedCourseTitle}](${url(`/courses/${post.relatedCourseSlug}`)})`

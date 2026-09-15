@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { copy } from '@ayman/contracts';
+import { SAME_AS } from '@ayman/contracts/site-profiles';
 import {
   ORGANIZATION_ID,
   PERSON_ID,
@@ -195,6 +196,42 @@ describe('references to the site-wide entities', () => {
  * exists. It used to answer with «المهندس أيمن أبو العلا», a title glued to a
  * name in the one field whose job is to be the name.
  */
+/**
+ * ⚠️ `SAME_AS` is Ayman's accounts COMPILED IN, and this image runs for more
+ * than one instructor. Unconditionally, it asserts in machine-readable form
+ * that another instructor's site and his YouTube channel are one entity — and
+ * on his own stack it goes stale the first time a channel moves, because the
+ * footer reads the settings row and this did not.
+ */
+describe('sameAs', () => {
+  it('prefers the live settings row over the shipped constant', () => {
+    const contact = {
+      youtube: 'https://youtube.com/@someone-else',
+      facebook: 'https://facebook.com/someone-else',
+    };
+
+    expect(personJsonLd(contact).sameAs).toEqual([
+      'https://facebook.com/someone-else',
+      'https://youtube.com/@someone-else',
+    ]);
+    expect(organizationJsonLd(contact).sameAs).toEqual([
+      'https://facebook.com/someone-else',
+      'https://youtube.com/@someone-else',
+    ]);
+  });
+
+  /**
+   * `next build` runs where the API is unreachable, so the row arrives empty
+   * for the first minutes after a deploy. The seed it was deployed with beats
+   * no `sameAs` at all — and `sameAs: []` would be a claim of "no profiles".
+   */
+  it('falls back to the shipped profiles when the row is empty', () => {
+    expect(personJsonLd({}).sameAs).toEqual(SAME_AS);
+    expect(personJsonLd({ youtube: '  ' }).sameAs).toEqual(SAME_AS);
+    expect(personJsonLd().sameAs).toEqual(SAME_AS);
+  });
+});
+
 describe('personJsonLd name parts', () => {
   it('carries the bare name, with the title in honorificPrefix', () => {
     const data = personJsonLd();

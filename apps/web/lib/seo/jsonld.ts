@@ -170,9 +170,52 @@ export const WEBSITE_ID = `${SITE_URL}/#website`;
  * contradicts. One list — see `@ayman/contracts/site-profiles`.
  */
 
-/** `sameAs: []` is not the same as no `sameAs` — an empty array is a claim of "none". */
-function withSameAs<T extends object>(entity: T): T & { sameAs?: readonly string[] } {
-  return SAME_AS.length > 0 ? { ...entity, sameAs: SAME_AS } : entity;
+/**
+ * The profiles this site claims to BE, read from the live settings row and
+ * falling back to the shipped constant.
+ *
+ * ⚠️ It used to be `SAME_AS` unconditionally, and that is wrong in two
+ * directions at once.
+ *
+ * · **Stale.** The four URLs are editable at `/admin/settings` and seeded from
+ *   `SAME_AS`. An instructor who moves a channel updates the footer — which
+ *   reads the settings row — and `sameAs` keeps naming the old one. Two lists
+ *   that must agree are one list, which is the argument `site-profiles.ts`
+ *   already makes about the footer; the settings row is simply the newer
+ *   copy.
+ * · **Wrong on another stack.** This image runs for more than one instructor
+ *   (`TENANT_KEY`), and `SAME_AS` is Ayman's accounts compiled in. On a tenant
+ *   deployment the constant asserts, in machine-readable form, that their site
+ *   and his YouTube channel are one entity.
+ *
+ * The constant stays as the fallback and nothing more: during `next build` the
+ * API is unreachable and the settings row arrives empty, and a Person with no
+ * `sameAs` for the first minutes after a deploy is worse than one carrying the
+ * seed it was deployed with.
+ *
+ * ⚠️ `sameAs: []` is not the same as no `sameAs` — an empty array is a claim
+ * of "none", so an empty list omits the field entirely.
+ */
+export interface ProfilesForJsonLd {
+  facebook?: string | null;
+  youtube?: string | null;
+  instagram?: string | null;
+  tiktok?: string | null;
+}
+
+function sameAsFrom(contact?: ProfilesForJsonLd): readonly string[] {
+  const live = [contact?.facebook, contact?.youtube, contact?.instagram, contact?.tiktok].filter(
+    (url): url is string => typeof url === 'string' && url.trim().length > 0,
+  );
+  return live.length > 0 ? live : SAME_AS;
+}
+
+function withSameAs<T extends object>(
+  entity: T,
+  contact?: ProfilesForJsonLd,
+): T & { sameAs?: readonly string[] } {
+  const sameAs = sameAsFrom(contact);
+  return sameAs.length > 0 ? { ...entity, sameAs } : entity;
 }
 
 /**
@@ -185,8 +228,9 @@ function withSameAs<T extends object>(entity: T): T & { sameAs?: readonly string
  * students type. See `copy.seo` for why the misspellings live in metadata and
  * never in visible copy.
  */
-export function personJsonLd() {
-  return withSameAs({
+export function personJsonLd(contact?: ProfilesForJsonLd) {
+  return withSameAs(
+    {
     '@context': 'https://schema.org',
     '@type': 'Person',
     '@id': PERSON_ID,
@@ -269,7 +313,7 @@ export function personJsonLd() {
      */
     mainEntityOfPage: absolute('/about'),
     nationality: { '@type': 'Country', name: 'Egypt' },
-  });
+  }, contact);
 }
 
 /**
@@ -289,7 +333,11 @@ export function organizationJsonLd(
    * optional field for a few minutes is fine; `telephone: null` in a knowledge
    * graph is a claim that there is no phone.
    */
-  contact?: { whatsapp?: string | null; phone?: string | null; email?: string | null },
+  contact?: {
+    whatsapp?: string | null;
+    phone?: string | null;
+    email?: string | null;
+  } & ProfilesForJsonLd,
 ) {
   /**
    * `telephone` and `email` — the two fields a competitor ranking for
@@ -355,7 +403,7 @@ export function organizationJsonLd(
     inLanguage: 'ar',
     areaServed: { '@type': 'Country', name: 'Egypt' },
     address: { '@type': 'PostalAddress', addressCountry: 'EG' },
-  });
+  }, contact);
 }
 
 /**

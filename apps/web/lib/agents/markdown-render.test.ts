@@ -9,6 +9,7 @@ import {
   renderCoursesMarkdown,
   renderEssentialsMarkdown,
   renderHomeMarkdown,
+  renderNewsPostMarkdown,
   renderYearMarkdown,
 } from './markdown-render';
 
@@ -146,6 +147,70 @@ const bookCatalog = (overrides: Partial<BookCatalog> = {}): BookCatalog => ({
  * own note records that `curl /books` returns zero rendered cards. This twin is
  * one of the only two server-rendered descriptions of the shop that exist.
  */
+/**
+ * ⚠️ The homepage FAQ is a `home_blocks` row an admin edits; `copy.landing.faq*`
+ * is only its starting value. Measured on production 2026-09-15: the page
+ * rendered seven questions in one order and `/index.md` published six from the
+ * seed, so the two surfaces answered different questions.
+ */
+describe('renderHomeMarkdown FAQ', () => {
+  it('publishes the rows the live block renders', () => {
+    const markdown = renderHomeMarkdown(
+      [course()],
+      [{ questionAr: 'لو حصلت مشكلة في حسابي؟', answerAr: 'كلّمنا على واتساب.' }],
+    );
+
+    expect(markdown).toContain('لو حصلت مشكلة في حسابي؟');
+    expect(markdown).toContain('كلّمنا على واتساب.');
+    // The seeded question is NOT published beside it — the block replaced it.
+    expect(markdown).not.toContain(copy.landing.faq1Q);
+  });
+
+  /** A brand-new stack, or an API blip, gets the shipped questions rather than an empty heading. */
+  it('falls back to the shipped seed when the block is missing or empty', () => {
+    expect(renderHomeMarkdown([course()])).toContain(copy.landing.faq1Q);
+    expect(renderHomeMarkdown([course()], [])).toContain(copy.landing.faq1Q);
+  });
+});
+
+/**
+ * An engine deciding whether to cite a page weighs its author and its
+ * freshness. The HTML has shown both since the section shipped; the format an
+ * assistant actually reads showed neither.
+ */
+describe('renderNewsPostMarkdown byline', () => {
+  const post = (overrides = {}) => ({
+    id: '00000000-0000-4000-8000-0000000000n1',
+    slug: 'مقال',
+    title: 'عنوان',
+    excerpt: 'وصف',
+    body: 'نص',
+    coverKey: null,
+    publishedAt: '2026-09-13T16:10:33.148Z',
+    updatedAt: '2026-09-13T16:10:33.149Z',
+    readingMinutes: 3,
+    relatedCourseSlug: null,
+    relatedCourseTitle: null,
+    ...overrides,
+  });
+
+  it('names the author and the publish date in ISO', () => {
+    const markdown = renderNewsPostMarkdown(post() as never);
+
+    expect(markdown).toContain(`**${copy.agents.metaAuthor}:** ${copy.site.instructor}`);
+    // ISO, not «١٣ سبتمبر ٢٠٢٦»: this line is read by a machine.
+    expect(markdown).toContain('2026-09-13');
+  });
+
+  /** Restating the publish date under a second label is a fact about nothing. */
+  it('adds the modified date only when it differs from the publish date', () => {
+    expect(renderNewsPostMarkdown(post() as never)).not.toContain(copy.agents.metaUpdated);
+    expect(
+      renderNewsPostMarkdown(post({ updatedAt: '2026-09-20T00:00:00.000Z' }) as never),
+    ).toContain(`**${copy.agents.metaUpdated}:** 2026-09-20`);
+  });
+});
+
 describe('renderBooksMarkdown', () => {
   it('quotes the price, the stream and the delivery fee', () => {
     const markdown = renderBooksMarkdown(bookCatalog());
