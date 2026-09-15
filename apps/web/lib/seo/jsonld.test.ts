@@ -91,6 +91,56 @@ describe('courseListJsonLd', () => {
   });
 });
 
+/**
+ * `json-ld.tsx` emits ONE `<script>` per call, so on an article page the
+ * `Person` node the `author` points at is in a different block entirely. A
+ * consumer that does not walk `@id`s across blocks — most of them, and every
+ * assistant reading the raw HTML — saw an author with no name.
+ */
+describe('references to the site-wide entities', () => {
+  it('names the instructor on a standalone course and keeps the @id', () => {
+    const instructor = courseJsonLd(course()).instructor;
+    expect(instructor).toMatchObject({ '@id': PERSON_ID, '@type': 'Person' });
+    expect(instructor?.name).toBe(copy.site.name);
+  });
+
+  it('leaves a nested catalog item bare — the list names him per row already', () => {
+    expect(courseJsonLd(course(), { nested: true }).instructor).toEqual({ '@id': PERSON_ID });
+  });
+
+  it('names the author and the publisher on an article', () => {
+    const data = articleJsonLd({
+      slug: 'a',
+      title: 'ت',
+      excerpt: 'و',
+      publishedAt: '2026-07-01T00:00:00.000Z',
+      updatedAt: '2026-07-01T00:00:00.000Z',
+    });
+    expect(data.author).toMatchObject({ '@id': PERSON_ID, name: copy.site.name });
+    expect(data.publisher).toMatchObject({ '@id': ORGANIZATION_ID });
+  });
+});
+
+/**
+ * The name query — «أيمن أبو العلا» — is the whole reason the `Person` node
+ * exists. It used to answer with «المهندس أيمن أبو العلا», a title glued to a
+ * name in the one field whose job is to be the name.
+ */
+describe('personJsonLd name parts', () => {
+  it('carries the bare name, with the title in honorificPrefix', () => {
+    const data = personJsonLd();
+    expect(data.name).toBe(copy.site.name);
+    expect(data.name).not.toContain(copy.seo.personHonorific);
+    expect(data.honorificPrefix).toBe(copy.seo.personHonorific);
+  });
+
+  /** «أبو العلا» is ONE family name of two words; every whitespace split gets it wrong. */
+  it('states both words of the family name rather than leaving it to be split', () => {
+    expect(personJsonLd().familyName).toBe('أبو العلا');
+    expect(personJsonLd().givenName).toBe('أيمن');
+  });
+});
+
 describe('courseJsonLd', () => {
   /**
    * ⚠️ The order and the membership must match the price block on
@@ -122,6 +172,13 @@ describe('courseJsonLd', () => {
     const data = courseJsonLd(freeCourse());
     expect(data.isAccessibleForFree).toBe(true);
     expect(data.offers).toMatchObject({ price: '0', priceCurrency: 'EGP', category: 'Free' });
+  });
+
+  it('prefers the instructor description over the repeated subtitle', () => {
+    expect(courseJsonLd(course({ description: 'شرح المنهج الرسمي' })).description).toBe(
+      'شرح المنهج الرسمي',
+    );
+    expect(courseJsonLd(course({ description: null })).description).toBe('الصف الثاني الثانوي');
   });
 
   it('is Arabic, with an absolute URL', () => {

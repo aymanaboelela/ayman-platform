@@ -162,8 +162,25 @@ export function renderHomeMarkdown(courses: readonly CatalogCourse[]): string {
 }
 
 export function renderAboutMarkdown(): string {
+  /*
+   * ⚠️ `mark.name`, not `mark`. `aboutCredits[].marks` used to be an array of
+   * strings and became `{ id, name, short }` when the credits section grew its
+   * logo chips; this line was not updated, and `Array.prototype.join` on
+   * objects does not throw — it calls `toString`. So `/about.md` published four
+   * headings reading «[object Object] · [object Object] · [object Object]»,
+   * live and uncaught, in the one document written specifically for the
+   * assistants this section exists to convince. Measured on production
+   * 2026-09-15: four occurrences.
+   *
+   * Nothing in CI could see it: the twin's own test asserted on `copy.landing`
+   * strings that this line never touched, and `[object Object]` is a valid
+   * string. The test below now names the literal.
+   */
   const credits = copy.landing.aboutCredits
-    .map((credit) => `### ${credit.label}\n\n${credit.marks.join(' · ')}\n\n${credit.note}`)
+    .map(
+      (credit) =>
+        `### ${credit.label}\n\n${credit.marks.map((mark) => mark.name).join(' · ')}\n\n${credit.note}`,
+    )
     .join('\n\n');
 
   return join([

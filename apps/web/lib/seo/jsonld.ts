@@ -3,6 +3,7 @@ import { copy, youTubeEmbedUrl, youTubeThumbnailUrl } from '@ayman/contracts';
 // barrel is what stops the API booting. Same import the footer uses.
 import { waMeHref } from '@ayman/contracts/whatsapp';
 import { SAME_AS } from '@ayman/contracts/site-profiles';
+import { mediaUrl } from '@ayman/ui/branding';
 import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
 
 /**
@@ -55,6 +56,35 @@ export interface CourseForJsonLd {
    * reach here; see `CatalogCourseTermSchema`.
    */
   terms?: readonly { title: string; priceCents: number }[];
+  /** The cover the card and the course page both render. On the list too. */
+  coverKey?: string | null;
+  /**
+   * The instructor's own description of the course, which only the DETAIL read
+   * carries. The list falls back to the subtitle, as it always has.
+   */
+  description?: string | null;
+  /**
+   * ⚠️ There is deliberately NO `syllabusSections` / `teaches` on this node,
+   * and it was tried and removed on 2026-09-15 rather than never considered.
+   *
+   * Two independent reasons, either one sufficient:
+   *
+   * · `(site)/courses/[slug]/page.tsx` REPLACES the lesson list with
+   *   `copy.course.lessonsLockedNote` for every priced course — see the note
+   *   there. Publishing those titles as structured data would announce to a
+   *   crawler exactly what the page withholds from the reader, which is a
+   *   worse version of the mismatch this whole file exists to avoid.
+   * · The section titles are not yet content. Read off production on
+   *   2026-09-15, the complete set across all five published courses is
+   *   «الوحدة الأولى» ×2, «الوحده الاولي » ×2 (misspelled, trailing space),
+   *   «كورس تأسيسي برمجة بكالوريا 2027» and «الامتحان النهائي», with zero
+   *   section summaries. `teaches: ['الوحدة الأولى']` asserts the course
+   *   teaches a chapter number, and the misspelling would go into a knowledge
+   *   graph — the exact failure `knowsAbout` above was already fixed for once.
+   *
+   * Both are content problems, not code ones. When the outlines carry real
+   * unit names AND the page stops hiding them, this is worth revisiting.
+   */
 }
 
 /** `PT1H1M1S`. Zero is `PT0S`, not the empty `PT`, which validators reject. */
@@ -128,7 +158,22 @@ export function personJsonLd() {
     '@context': 'https://schema.org',
     '@type': 'Person',
     '@id': PERSON_ID,
-    name: copy.site.instructor,
+    /*
+     * ⚠️ `site.name`, NOT `site.instructor`. This was «المهندس أيمن أبو العلا»
+     * — a title glued to a name — in the one field whose job is to BE the
+     * name, while `site.name`'s own note in `copy/ar.ts` had said for months
+     * that the JSON-LD Person takes the bare form. An engine resolving
+     * «أيمن أبو العلا» against a name that opens with «المهندس» is matching a
+     * substring, not an entity.
+     *
+     * The title is not lost: `honorificPrefix` is the field for it, and the
+     * name parts below are stated rather than derived because «أبو العلا» is
+     * two words of one family name and every whitespace split gets it wrong.
+     */
+    name: copy.site.name,
+    honorificPrefix: copy.seo.personHonorific,
+    givenName: copy.seo.personGivenName,
+    familyName: copy.seo.personFamilyName,
     alternateName: copy.seo.alternateNames,
     url: SITE_URL,
     image: absolute('/team/ayman.jpg'),
@@ -394,6 +439,44 @@ const freeOffer = {
   availability: 'https://schema.org/InStock',
 };
 
+/**
+ * A reference to one of the site-wide entities, carrying the one field that
+ * makes the node readable without resolving the `@id`.
+ *
+ * ⚠️ The bare `{ '@id': … }` these replace was inherited from the NESTED
+ * catalog shape, where dropping the name is right because the surrounding
+ * document states it up to 86 times. Standalone it is stated ZERO times in the
+ * same `<script>` — `json-ld.tsx` emits one script per call, so on an article
+ * page the `Person` node the `author` points at is in a different block
+ * entirely. A consumer that does not walk `@id`s across blocks — which is most
+ * of them, and every LLM reading the raw HTML — saw an author with no name.
+ *
+ * The `@id` still does the joining work for consumers that do resolve it; the
+ * `name` is what the rest read.
+ */
+interface EntityRef {
+  '@id': string;
+  /**
+   * Optional for the same reason `CourseProvider`'s fields are: the nested
+   * catalog shape drops both, and no consumer should have to narrow a union to
+   * read a name that is simply absent there.
+   */
+  '@type'?: 'Person' | 'EducationalOrganization';
+  name?: string;
+}
+
+const personRef = (): EntityRef => ({
+  '@id': PERSON_ID,
+  '@type': 'Person',
+  name: copy.site.name,
+});
+
+const organizationRef = (): EntityRef => ({
+  '@id': ORGANIZATION_ID,
+  '@type': 'EducationalOrganization',
+  name: copy.site.platformName,
+});
+
 export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolean } = {}) {
   // `@id` ties this back to the one organisation the root layout emits on
   // every page, instead of minting an anonymous second one per course.
@@ -414,6 +497,10 @@ export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolea
         url: SITE_URL,
       };
 
+  // Typed like `provider` above, and for the identical reason: without the
+  // annotation the two branches infer a union and every reader has to narrow
+  // it to ask for a name.
+  const instructor: EntityRef = options.nested ? { '@id': PERSON_ID } : personRef();
   const offers = courseOffers(course);
 
   return {
@@ -423,9 +510,41 @@ export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolea
     // without it the document has no vocabulary and every type is meaningless.
     ...(options.nested ? {} : { '@context': 'https://schema.org' }),
     '@type': 'Course',
+    /*
+     * ⚠️ The `#course` fragment, not the bare URL. `mainEntityOfPage` below
+     * declares a `WebPage` node whose `@id` IS the bare `/courses/<slug>`, and
+     * two nodes cannot share one identifier — `articleJsonLd` and the year
+     * page's `CollectionPage` both use a fragment for the same reason.
+     *
+     * ⚠️ `@id` is emitted on the NESTED shape too, and does not join the list
+     * of things `options.nested` drops. The bytes it saves are nothing; what
+     * it buys is that the `Course` in the catalog's `ItemList` and the `Course`
+     * on that course's own page are ONE entity rather than two that happen to
+     * share a URL.
+     */
+    '@id': absolute(`/courses/${course.slug}#course`),
     name: course.title,
-    description: course.subtitle ?? copy.site.tagline,
+    /*
+     * ⚠️ The instructor's own description when the read carries one — the
+     * paragraph the page renders — and the subtitle otherwise. It used to be
+     * the subtitle always, which on every live course is the same fragment
+     * («المنهج الرسمي كامل — مسار الهندسة وعلوم الحاسب — دفعة 2027»): accurate,
+     * identical across four of the five courses, and telling an assistant
+     * nothing that would let it choose between them.
+     */
+    description: course.description ?? course.subtitle ?? copy.site.tagline,
     url: absolute(`/courses/${course.slug}`),
+    // Standalone only: a catalog row claiming `/courses` is its own page would
+    // put eighty-six courses on one WebPage.
+    ...(options.nested
+      ? {}
+      : {
+          mainEntityOfPage: {
+            '@type': 'WebPage',
+            '@id': absolute(`/courses/${course.slug}`),
+          },
+        }),
+    ...(course.coverKey ? { image: mediaUrl(course.coverKey) } : {}),
     inLanguage: 'ar',
     // «البكالوريا — الصف الثاني بكالوريا», not «البكالوريا — 2». The bare digit
     // was unmatchable: a student searches «تانية بكالوريا» and an assistant
@@ -451,7 +570,9 @@ export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolea
     // The course is taught by the person, and the person is the thing being
     // searched for — this is what carries a course page's authority back to
     // the name query.
-    instructor: { '@id': PERSON_ID },
+    // Nested in the catalog list the surrounding document names him once per
+    // item already; standalone it names him nowhere else in this script.
+    instructor,
     isAccessibleForFree: offers.length === 0,
     offers: offers.length > 0 ? offers : freeOffer,
     hasCourseInstance: {
@@ -542,15 +663,28 @@ export function breadcrumbJsonLd(trail: ReadonlyArray<{ name: string; path: stri
  * so every article accrues signal to the one Person and Organisation rather
  * than minting a new pair per page.
  */
-export function articleJsonLd(post: {
-  slug: string;
-  title: string;
-  excerpt: string;
-  publishedAt: string;
-  updatedAt: string;
-  /** Absolute, already through `mediaUrl()`. Null for an article with no cover. */
-  image?: string | null;
-}) {
+export function articleJsonLd(
+  post: {
+    slug: string;
+    title: string;
+    excerpt: string;
+    publishedAt: string;
+    updatedAt: string;
+    /** Absolute, already through `mediaUrl()`. Null for an article with no cover. */
+    image?: string | null;
+  },
+  /**
+   * The course the article was written for, when it declares one — the same
+   * `relatedCourseSlug` the page's own CTA reads. Null for a general article.
+   */
+  course?: {
+    slug: string;
+    title: string;
+    systemNameAr: string;
+    subjectNameAr: string;
+    year: number;
+  } | null,
+) {
   const url = absolute(`/news/${post.slug}`);
   return {
     '@context': 'https://schema.org',
@@ -574,9 +708,40 @@ export function articleJsonLd(post: {
      * missing.
      */
     ...(post.image ? { image: [post.image] } : {}),
-    author: { '@id': PERSON_ID },
-    publisher: { '@id': ORGANIZATION_ID },
+    author: personRef(),
+    publisher: organizationRef(),
     isAccessibleForFree: true,
+    /*
+     * The curriculum anchor — WHICH subject, WHICH year, WHICH course.
+     *
+     * Without it an article is a dated page by a named author about nothing in
+     * particular: «شرح درس 1-2: كيف يعمل الذكاء الاصطناعي» is a title, and a
+     * title is what an engine has to infer the topic from. The three fields
+     * below state it. `keywords` carries the year aliases for the same reason
+     * `courseJsonLd`'s does — a student types «٢ بكالوريا» and «2 بكالوريا» as
+     * often as the words, and both byte sequences have to appear somewhere.
+     *
+     * ⚠️ `isPartOf` names the course INLINE rather than by `@id`. The Course
+     * node lives on `/courses/<slug>`, not on this page, so an `@id` here
+     * would point at a node that appears nowhere in this document — a real
+     * three-key claim beats a dangling reference.
+     *
+     * ⚠️ All of it or none of it. An article with no related course emits no
+     * key at all, rather than `about: null` — the same rule the `image`
+     * comment above states, and for the same reason.
+     */
+    ...(course
+      ? {
+          about: course.subjectNameAr,
+          educationalLevel: `${course.systemNameAr} — ${yearLabelAr(course.year)}`,
+          isPartOf: {
+            '@type': 'Course',
+            name: course.title,
+            url: absolute(`/courses/${course.slug}`),
+          },
+          keywords: [...yearAliasesAr(course.year), course.subjectNameAr],
+        }
+      : {}),
   };
 }
 
@@ -667,7 +832,7 @@ export function definedTermSetJsonLd<T extends { en: string; ar: string; body: s
     name: options.name ?? copy.essentials.listTitle,
     description: options.description ?? copy.essentials.listLead,
     inLanguage: 'ar',
-    publisher: { '@id': ORGANIZATION_ID },
+    publisher: organizationRef(),
     hasDefinedTerm: terms.map((term) => ({
       '@type': 'DefinedTerm',
       name: term.ar,
@@ -725,7 +890,7 @@ export function quizJsonLd(
     // to a topic on, and «البرمجة» inferred from a title is not a topic the
     // article asserted.
     ...(options.about ? { about: { '@type': 'Thing', name: options.about } } : {}),
-    publisher: { '@id': ORGANIZATION_ID },
+    publisher: organizationRef(),
     hasPart: questions.map((row) => ({
       '@type': 'Question',
       // `learningResourceType` is what separates a practice problem from a

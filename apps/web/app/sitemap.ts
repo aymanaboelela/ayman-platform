@@ -3,6 +3,7 @@ import { connection } from 'next/server';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getNewsListOrEmpty } from '@/lib/news';
 import { SITE_URL } from '@/lib/seo/jsonld';
+import { sitemapLoc } from '@/lib/seo/sitemap-url';
 import { isYearIndexable } from '@/lib/seo/year-visibility';
 
 /**
@@ -144,8 +145,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Only PUBLISHED articles reach this list — `GET /api/news` filters on
     // status in SQL, so a draft can never be announced here. That is the usual
     // way an unreleased URL leaks.
+    /*
+     * ⚠️ `sitemapLoc` on the two entries built from a DATABASE string. Next
+     * writes `<loc>` unescaped and an article slug may legally contain `&` —
+     * see `lib/seo/sitemap-url.ts` for why one such slug would take the whole
+     * document down rather than its own row. The static entries above are
+     * literals in this file and need nothing.
+     */
     ...posts.map((post) => ({
-      url: `${SITE_URL}/news/${post.slug}`,
+      url: sitemapLoc(`${SITE_URL}/news/${post.slug}`),
       // `updatedAt`, not `publishedAt`: <lastmod> means "last modified", and
       // an article edited last week should be recrawled.
       lastModified: new Date(post.updatedAt),
@@ -153,7 +161,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.6,
     })),
     ...courses.map((course) => ({
-      url: `${SITE_URL}/courses/${course.slug}`,
+      url: sitemapLoc(`${SITE_URL}/courses/${course.slug}`),
       // updatedAt, not publishedAt: <lastmod> means "last modified".
       lastModified: new Date(course.updatedAt),
       changeFrequency: 'weekly' as const,

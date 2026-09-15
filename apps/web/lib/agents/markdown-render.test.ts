@@ -98,6 +98,28 @@ describe('every markdown document', () => {
   });
 });
 
+/**
+ * ⚠️ The literal, named. `[object Object]` is a valid string, so nothing —
+ * not the type checker, not a snapshot of `copy.landing` strings — could see
+ * that `/about.md` had been serving four headings of it since `marks` became
+ * objects. The only test that catches this is one that says the words.
+ */
+describe('every markdown twin', () => {
+  it.each(ALL_RENDERERS)('%s renders no stringified object', (_name, render) => {
+    expect(render()).not.toContain('[object Object]');
+  });
+});
+
+describe('renderAboutMarkdown', () => {
+  it('names the institutions behind the credits', () => {
+    const markdown = renderAboutMarkdown();
+
+    for (const credit of copy.landing.aboutCredits) {
+      for (const mark of credit.marks) expect(markdown).toContain(mark.name);
+    }
+  });
+});
+
 describe('renderCourseMarkdown', () => {
   it('renders the outline down to lesson titles', () => {
     const markdown = renderCourseMarkdown(detail());
