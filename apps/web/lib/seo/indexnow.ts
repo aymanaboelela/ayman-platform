@@ -74,7 +74,7 @@ export async function submitToIndexNow(paths: readonly string[]): Promise<boolea
   const urlList = [...new Set(paths)].map((path) => `${SITE_URL}${path}`);
 
   try {
-    await fetch(ENDPOINT, {
+    const response = await fetch(ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: JSON.stringify({
@@ -90,7 +90,20 @@ export async function submitToIndexNow(paths: readonly string[]): Promise<boolea
       // answered in ten seconds the publish is long since done.
       signal: AbortSignal.timeout(10_000),
     });
-    return true;
+    /*
+     * ⚠️ `fetch` rejects on a NETWORK failure and resolves on an HTTP error, so
+     * without this check a 403 «key not valid», a 422 «URLs don't belong to the
+     * host» and a 429 were all indistinguishable from an accepted 200 — and the
+     * one failure mode that actually happens here is the silent one: a renamed
+     * key route makes every submission 403 while the key file still serves 200
+     * and this function still reports success.
+     *
+     * Still not thrown, and still not surfaced to the editor — publishing is
+     * their work and a search engine's mood is not their problem. The value is
+     * that the return is now TRUE only when the engine accepted, which is what
+     * the test asserts and what a future caller can act on.
+     */
+    return response.ok;
   } catch {
     // Deliberately silent — see the header. A rejected or unreachable
     // submission costs a slower first crawl and nothing else, and the article

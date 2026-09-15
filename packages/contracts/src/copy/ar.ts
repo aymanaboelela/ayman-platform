@@ -4898,8 +4898,45 @@ export const copy = {
     sourcePage: 'الصفحة الأصلية',
     agentIndex: 'فهرس الوكلاء',
     publicApi: 'واجهة البيانات العامة',
+    /**
+     * ⚠️ THREE notes, not one, and picking the wrong one is the failure this
+     * split exists to stop.
+     *
+     * `contentNote` used to close EVERY markdown twin — including the thirty-two
+     * free articles, whose whole body is teaching material that needs no
+     * account, and `/books.md`, whose printed books are sold through a guest
+     * checkout (`create`/`submitPayment`/`uploadScreenshot` are `@Public()` on
+     * the API). So the document written for assistants ended every free page by
+     * telling the assistant the page was paid. That is the exact mirror of the
+     * `price: '0'` falsehood on the course graph, pointing the other way: there
+     * a paid thing was published as free, here free things are published as
+     * gated — and this one suppresses the only long-form free teaching corpus
+     * the site has.
+     */
     contentNote:
       'اللي معروض هنا هو الفهرس العام للكورسات. الدروس نفسها — الفيديو والملفات والاختبارات — محتاجة حساب طالب واشتراك في الكورس.',
+    /**
+     * For the pages that are genuinely open: `/about`, `/essentials`, `/news`
+     * and every article.
+     *
+     * ⚠️ The second sentence is not padding — it is `contentNote`'s guard,
+     * restated. Without it an assistant reads «مفتوحة» and generalises it to
+     * the lessons, which is the falsehood this whole split is correcting,
+     * inverted.
+     */
+    openNote:
+      'الصفحة دي منشورة كاملة ومفتوحة للقراءة من غير حساب ومن غير اشتراك. اللي محتاج حساب واشتراك هو دروس الكورسات نفسها — الفيديو والملفات والاختبارات.',
+    /**
+     * For `/books.md`. Says the one thing an assistant needs and a student
+     * asks: that ordering needs no account.
+     *
+     * ⚠️ Says nothing about the delivery FEE. `renderBooksMarkdown` already
+     * prints `books.shippingOnce`/`shippingFreeOnce` from the live setting two
+     * blocks above this line, and a second statement of a number that can
+     * change in the admin panel is a number that will disagree with itself.
+     */
+    booksNote:
+      'الكتب دي مطبوعة وبتتشحن لحد باب البيت. الطلب مابيحتاجش حساب — بتكتب العنوان، بتحوّل، وبتبعت صورة التحويل.',
   },
 
   /**

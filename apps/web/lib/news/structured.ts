@@ -343,13 +343,37 @@ export function questionsFromBlocks(blocks: readonly MarkdownBlock[]): DerivedQu
 
     if (block.kind !== 'list' || !block.ordered) return;
 
-    // The key for THIS list: the next paragraph before the next heading whose
-    // bold head is «الإجابات». Scoped that way so two question blocks under
-    // two headings cannot borrow each other's answers.
+    /*
+     * ⚠️ One key belongs to exactly ONE ordered list inside one `##` section,
+     * and anything ambiguous emits nothing.
+     *
+     * The key is numbered across the SECTION («1-ج · 2-ب · 3-ب · 4-أ») and the
+     * list is indexed per BLOCK, so `position + 1` is only the key's numbering
+     * while the section holds a single list. `parseMarkdown` ends a list at the
+     * first line that does not match `ORDERED_ITEM` — a blank line between two
+     * groups of questions, or one question wrapped onto a second line, splits
+     * one authored list into two `list` blocks while the rendered page looks
+     * exactly the same. The second block then starts counting at 1 again and
+     * publishes its questions carrying the FIRST block's answers.
+     *
+     * Hence two guards, the same rule from both sides. A forward break alone
+     * does not fix it: the first list would go silent and the second would
+     * still be wrong.
+     */
+    for (let back = index - 1; back >= 0; back -= 1) {
+      const previous = blocks[back];
+      if (!previous || previous.kind === 'heading') break;
+      // A continuation list: its numbering no longer starts at 1, so nothing
+      // here can be matched against the section's key.
+      if (previous.kind === 'list' && previous.ordered) return;
+    }
+
     let key: Map<number, number> | null = null;
     for (let cursor = index + 1; cursor < blocks.length; cursor += 1) {
       const next = blocks[cursor];
       if (!next || next.kind === 'heading') break;
+      // A key sitting behind another question list is not this list's key.
+      if (next.kind === 'list' && next.ordered) break;
       if (next.kind !== 'paragraph') continue;
       const [head, ...rest] = next.text;
       if (head?.kind === 'strong' && head.value.includes(ANSWER_KEY_LABEL)) {

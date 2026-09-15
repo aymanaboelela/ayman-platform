@@ -53,13 +53,23 @@ const join = (blocks: readonly (string | null | undefined)[]): string =>
  * everywhere, is what stops an assistant confidently telling a student the
  * lessons are free to read.
  */
-function footer(canonicalPath: string): string {
+/**
+ * ⚠️ `note` is a REQUIRED argument, with no default, and that is the point.
+ *
+ * This function used to append `copy.agents.contentNote` — «الدروس محتاجة حساب
+ * طالب واشتراك» — to all nine twins unconditionally, which made every free
+ * article and the book shop end by telling an assistant they were paywalled.
+ * A default would hand the next twin whichever of the three sentences happens
+ * to be wrong for it, silently, which is exactly how that shipped. Adding a
+ * twin should not compile until somebody has decided what its content costs.
+ */
+function footer(canonicalPath: string, note: string): string {
   const a = copy.agents;
   return join([
     '---',
     `**${a.sourcePage}:** ${url(canonicalPath)}`,
     `**${a.agentIndex}:** ${url(AGENT_DISCOVERY_PATHS.llms)} · **${a.publicApi}:** ${url(AGENT_DISCOVERY_PATHS.serviceDesc)}`,
-    a.contentNote,
+    note,
   ]);
 }
 
@@ -130,40 +140,42 @@ function courseLine(course: CatalogCourse): string {
 }
 
 /**
- * The landing FAQ as the PAGE renders it, not as `ar.ts` seeds it.
+ * The landing FAQ as the PAGE renders it, and ONLY as the page renders it.
  *
- * ⚠️ The homepage FAQ is a `home_blocks` row an admin edits — see
- * `lib/home-blocks.ts`. The seed in `copy.landing.faq*` is the row's STARTING
- * value and stops being the truth the first time anyone touches it. Measured
- * on production 2026-09-15: the page rendered seven questions including «لو
- * حصلت مشكلة في حسابي؟» and in a different order, while `/index.md` published
- * six from this file. The HTML's own `FAQPage` graph is built from
- * `props.items` for exactly this reason — see the note on the `faq` case in
- * `(site)/page.tsx` — and the markdown twin was the one surface still reading
- * the constant.
+ * ⚠️ There is deliberately no seeded fallback here, and the seed that was here
+ * until 2026-09-15 was removed rather than never written. It looked prudent and
+ * was wrong twice:
  *
- * The seed stays as the fallback and nothing more: an API blip, or a brand-new
- * stack whose blocks have never been written, gets the shipped questions
- * rather than a heading with nothing under it.
+ * · The outage case it claimed to cover cannot reach this function.
+ *   `getHomeBlocks()` already falls back to `STARTER_HOME_BLOCKS` with every
+ *   block `isPublished` — for an empty table AND for a caught API error — so
+ *   the caller never has "no rows because the API blipped". It has "no rows"
+ *   for exactly one reason.
+ * · That reason is that the instructor TOOK THE SECTION DOWN. Republishing the
+ *   shipped questions then contradicts the page, which is the whole defect this
+ *   parameter was added to fix — and on another instructor's stack it publishes
+ *   AYMAN's FAQ under their name.
+ *
+ * So no rows means no section, exactly as `(site)/page.tsx` drops the
+ * `FAQPage` graph with the block it describes. The heading and the body are
+ * emitted as ONE entry because `join` drops empty entries individually and
+ * would otherwise leave a heading with nothing under it.
+ *
+ * `FaqPropsSchema.items` is `.min(1)`, so "published but empty" is not a state
+ * that exists and there is no third case to handle.
  */
-const SEEDED_FAQ: ReadonlyArray<{ questionAr: string; answerAr: string }> = [
-  { questionAr: copy.landing.faq1Q, answerAr: copy.landing.faq1A },
-  { questionAr: copy.landing.faq2Q, answerAr: copy.landing.faq2A },
-  { questionAr: copy.landing.faq3Q, answerAr: copy.landing.faq3A },
-  { questionAr: copy.landing.faq4Q, answerAr: copy.landing.faq4A },
-  { questionAr: copy.landing.faq6Q, answerAr: copy.landing.faq6A },
-  { questionAr: copy.landing.faq7Q, answerAr: copy.landing.faq7A },
-];
-
 export function renderHomeMarkdown(
   courses: readonly CatalogCourse[],
-  /** The rows the live `faq` block renders. Omitted → the shipped seed. */
-  faqRows: ReadonlyArray<{ questionAr: string; answerAr: string }> = SEEDED_FAQ,
+  /** The rows the live `faq` block renders. None → the section is not published. */
+  faqRows: ReadonlyArray<{ questionAr: string; answerAr: string }> = [],
 ): string {
-  const rows = faqRows.length > 0 ? faqRows : SEEDED_FAQ;
-  const faq = rows
-    .map((row) => `### ${row.questionAr}\n\n${row.answerAr}`)
-    .join('\n\n');
+  const faq =
+    faqRows.length > 0
+      ? join([
+          `## ${copy.agents.faqTitle}`,
+          faqRows.map((row) => `### ${row.questionAr}\n\n${row.answerAr}`).join('\n\n'),
+        ])
+      : null;
 
   return join([
     `# ${copy.site.platformName}`,
@@ -189,9 +201,8 @@ export function renderHomeMarkdown(
     `## ${copy.landing.instructorTitle}`,
     `**${copy.landing.instructorName}** — ${copy.landing.instructorBody}`,
     `[${copy.landing.aboutTitle}](${url('/about')})`,
-    `## ${copy.agents.faqTitle}`,
     faq,
-    footer('/'),
+    footer('/', copy.agents.contentNote),
   ]);
 }
 
@@ -227,7 +238,7 @@ export function renderAboutMarkdown(): string {
     credits,
     `## ${copy.landing.aboutPageCoursesTitle}`,
     `[${copy.landing.aboutPageCta}](${url('/courses')})`,
-    footer('/about'),
+    footer('/about', copy.agents.openNote),
   ]);
 }
 
@@ -236,7 +247,7 @@ export function renderCoursesMarkdown(courses: readonly CatalogCourse[]): string
     `# ${copy.catalog.title}`,
     `> ${copy.catalog.subtitle}`,
     courses.length > 0 ? courses.map(courseLine).join('\n') : copy.catalog.empty,
-    footer('/courses'),
+    footer('/courses', copy.agents.contentNote),
   ]);
 }
 
@@ -272,7 +283,7 @@ export function renderYearMarkdown(year: 1 | 2 | 3, courses: readonly CatalogCou
       .map((alias) => `«${alias}»`)
       .join('، ')}.`,
     listed.length > 0 ? listed.map(courseLine).join('\n') : copy.years.empty,
-    footer(`/years/${year}`),
+    footer(`/years/${year}`, copy.agents.contentNote),
   ]);
 }
 
@@ -287,7 +298,7 @@ export function renderEssentialsMarkdown(): string {
     `## ${copy.essentials.listTitle}`,
     copy.essentials.listLead,
     terms,
-    footer('/essentials'),
+    footer('/essentials', copy.agents.openNote),
   ]);
 }
 
@@ -315,7 +326,7 @@ export function renderCourseMarkdown(course: CatalogCourseDetail): string {
     course.description,
     course.sections.length > 0 ? `## ${copy.agents.courseOutline}` : null,
     course.sections.length > 0 ? outline : null,
-    footer(`/courses/${course.slug}`),
+    footer(`/courses/${course.slug}`, copy.agents.contentNote),
   ]);
 }
 
@@ -406,7 +417,7 @@ export function renderBooksMarkdown(catalog: BookCatalog): string {
       // price breakdown («مجانًا»), not a sentence.
       : b.shippingFreeOnce,
     catalog.total > 0 ? shelves : b.empty,
-    footer('/books'),
+    footer('/books', copy.agents.booksNote),
   ]);
 }
 
@@ -419,7 +430,7 @@ export function renderNewsIndexMarkdown(posts: readonly NewsListItem[]): string 
     `# ${copy.news.heading}`,
     `> ${copy.news.subtitle}`,
     posts.length > 0 ? list : copy.news.empty,
-    footer('/news'),
+    footer('/news', copy.agents.openNote),
   ]);
 }
 
@@ -466,6 +477,6 @@ export function renderNewsPostMarkdown(post: NewsPostDetail): string {
     post.relatedCourseSlug && post.relatedCourseTitle
       ? `**${copy.news.relatedTitle}** [${post.relatedCourseTitle}](${url(`/courses/${post.relatedCourseSlug}`)})`
       : `[${copy.news.fallbackCta}](${url('/courses')})`,
-    footer(`/news/${post.slug}`),
+    footer(`/news/${post.slug}`, copy.agents.openNote),
   ]);
 }

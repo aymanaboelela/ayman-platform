@@ -108,6 +108,19 @@ describe('submitToIndexNow on a public https origin', () => {
   });
 
   /**
+   * ⚠️ `fetch` resolves on an HTTP error, so a 403 «key not valid» used to be
+   * indistinguishable from an accepted 200. The failure that actually happens
+   * here is exactly that one: renaming the key route makes every submission 403
+   * while the key file still serves 200.
+   */
+  it('does not report success for a submission the engine rejected', async () => {
+    fetchMock.mockResolvedValue(new Response('key not valid', { status: 403 }));
+    const { submitToIndexNow: submit } = await import('./indexnow');
+
+    await expect(submit(['/news/a'])).resolves.toBe(false);
+  });
+
+  /**
    * ⚠️ The rule the whole module is shaped around. Publishing is the user's
    * work; a search engine being unreachable is not their problem and must never
    * surface as a save that appears to have failed.

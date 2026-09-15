@@ -302,6 +302,50 @@ describe('courseJsonLd', () => {
   });
 
   /**
+   * ⚠️ The field is a bare `<Textarea>` with no validation, and every live
+   * course's value is a hand-typed paragraph. On a computer-science platform a
+   * `<` between two spaces is the most ordinary character there is — the first
+   * version of `plainText` ate «< 5 و ص >» and published «لو س 2 يبقى تمام».
+   * `MARKUP` in `@ayman/contracts/quiz/rich-text` had already settled this.
+   */
+  it('keeps a comparison sign that is not a tag', () => {
+    expect(courseJsonLd(course({ description: 'لو س < 5 و ص > 2 يبقى تمام' })).description).toBe(
+      'لو س < 5 و ص > 2 يبقى تمام',
+    );
+  });
+
+  /**
+   * ⚠️ `String.fromCodePoint` THREW here — `RangeError: Invalid code point` —
+   * inside a builder that renders synchronously on the course page. One pasted
+   * entity would have 500'd the page that sells the course.
+   */
+  it('does not throw on a numeric entity outside Unicode', () => {
+    expect(() => courseJsonLd(course({ description: '&#1114112;' }))).not.toThrow();
+    expect(courseJsonLd(course({ description: '&#1114112;' })).description).toBe('\uFFFD');
+  });
+
+  /** A lone surrogate does not throw, but `JSON.stringify` emits ill-formed JSON for it. */
+  it('replaces a lone surrogate rather than emitting it', () => {
+    const data = courseJsonLd(course({ description: '&#55296;' }));
+    expect(data.description).toBe('\uFFFD');
+    expect(() => JSON.parse(JSON.stringify(data))).not.toThrow();
+  });
+
+  it('decodes an in-range numeric entity', () => {
+    expect(courseJsonLd(course({ description: '&#1575;&#1604;&#1576;' })).description).toBe('الب');
+  });
+
+  /**
+   * `&amp;lt;` is a literal `&lt;` an instructor typed — they wanted the
+   * characters shown. Decoding `&amp;` first turned it into a tag.
+   */
+  it('does not turn a doubly-escaped entity into markup', () => {
+    expect(courseJsonLd(course({ description: '&amp;lt;script&amp;gt;' })).description).toBe(
+      '&lt;script&gt;',
+    );
+  });
+
+  /**
    * Two published courses carry the same title and differ only in this word.
    * Without it the node an assistant matches is a coin flip between a
    * student's edition and the other one.
