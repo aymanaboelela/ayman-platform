@@ -251,6 +251,20 @@ describe('courseJsonLd', () => {
   });
 
   /**
+   * ⚠️ `CatalogCourseDetail.description` is HTML — the page renders it through
+   * `<RichText>`. Unflattened it puts `<p>` and `<li>` into the knowledge graph,
+   * and a block tag dropped to nothing runs two sentences into one word.
+   */
+  it('flattens the rich-text description instead of publishing its markup', () => {
+    const data = courseJsonLd(
+      course({ description: '<p>سطر أول</p><ul><li>نقطة &amp; تانية</li></ul>' }),
+    );
+
+    expect(data.description).toBe('سطر أول نقطة & تانية');
+    expect(data.description).not.toContain('<');
+  });
+
+  /**
    * Two published courses carry the same title and differ only in this word.
    * Without it the node an assistant matches is a coin flip between a
    * student's edition and the other one.

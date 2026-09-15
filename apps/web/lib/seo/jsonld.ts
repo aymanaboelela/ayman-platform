@@ -427,6 +427,38 @@ interface CourseProvider {
  * ever moves, this line becomes a claim nothing checks.
  */
 /**
+ * A rich-text field, flattened to the plain sentence a `description` is
+ * supposed to be.
+ *
+ * ⚠️ `CatalogCourseDetail.description` is HTML — the course page renders it
+ * through `<RichText>`, which sanitises and injects it. Putting it into
+ * `description` unflattened publishes `<p>` and `<li>` into the knowledge
+ * graph; a consumer shows the markup to a reader, and it is not what the page
+ * says either, because the page shows the rendered text.
+ *
+ * ⚠️ This is NOT a sanitiser and must never be used as one. Nothing here
+ * defends against anything: the value goes through `JSON.stringify` and then
+ * through `JsonLd`'s `<` escape, which is what makes it safe. This only makes
+ * it READ correctly. `sanitizeRichText` is the security boundary and it lives
+ * on the rendering path.
+ *
+ * Block-level tags become a space rather than nothing, or «سطر</p><p>تاني»
+ * would come out as one run-on word.
+ */
+function plainText(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * «عربي» / «لغات» / «عربي ولغات» — the same three strings the `<StreamBadge>`
  * chip renders, so the graph and the card cannot describe one course
  * differently.
@@ -576,7 +608,9 @@ export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolea
      * identical across four of the five courses, and telling an assistant
      * nothing that would let it choose between them.
      */
-    description: course.description ?? course.subtitle ?? copy.site.tagline,
+    description: course.description
+      ? plainText(course.description)
+      : (course.subtitle ?? copy.site.tagline),
     url: absolute(`/courses/${course.slug}`),
     // Standalone only: a catalog row claiming `/courses` is its own page would
     // put eighty-six courses on one WebPage.
