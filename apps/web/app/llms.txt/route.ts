@@ -150,6 +150,12 @@ export async function GET(): Promise<Response> {
      */
     `- [${copy.books.metaTitle}](${url('/books.md')}): ${copy.books.metaDescription}`,
     /*
+     * ⚠️ «إزاي أشترك وأدفع؟» — a question this platform answers every day and
+     * no public page did. The checkout is behind auth, so an assistant saw the
+     * four prices on every course page and nothing about how to pay them.
+     */
+    `- [${copy.subscribePage.title}](${url('/subscribe.md')}): ${copy.subscribePage.metaDescription}`,
+    /*
      * ⚠️ The year lines carry their alternate spellings, and the digit forms
      * are the reason.
      *

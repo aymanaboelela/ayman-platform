@@ -12,6 +12,7 @@ import { AGENT_DISCOVERY_PATHS } from '@/lib/agents/discovery';
 import { ESSENTIAL_TERMS } from '@/lib/essentials-terms';
 import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
 import { formatDuration } from '@/lib/format';
+import { subscribeRails, subscribeSteps } from '@/lib/subscribe-steps';
 import { coursePriceBadge, formatEGP } from '@/lib/price';
 import { SITE_URL } from '@/lib/seo/jsonld';
 import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
@@ -35,9 +36,30 @@ import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
  * ⚠️ Nothing here may render lesson CONTENT. The catalog contract is already
  * the allowlist for what a stranger may see (no `videoExternalId`, see
  * `packages/contracts/src/catalog.ts`), and this file must not widen it — the
- * outline below lists lesson TITLES, which the public course page already
- * shows, and stops there. Markdown that is easier to scrape is not a licence
- * to publish more.
+ * outline below lists lesson TITLES and stops there. Markdown that is easier to
+ * scrape is not a licence to publish more.
+ *
+ * ⚠️ That paragraph used to end «…which the public course page already shows».
+ * That was true when it was written and stopped being true on 2026-08-26, when
+ * the course page began replacing the outline with `copy.course.lessonsLockedNote`
+ * for PRICED courses. The titles are still published here, and the decision to
+ * keep them is deliberate — recorded in `docs/runbooks/agent-discovery.md`:
+ *
+ *   · The allowlist is `CatalogService.findBySlug`, not the page. The same
+ *     titles, plus lesson ids and durations, come back from
+ *     `GET /api/catalog/courses/<slug>` — public, unauthenticated, documented
+ *     in `/openapi.json` and linked from this document's own footer. Gating the
+ *     twin would hide from a polite agent exactly what an impolite one reads
+ *     from the API two lines below.
+ *   · The page's gate is a UI decision, not a disclosure rule. Every outline
+ *     row there is a `CourseEntry` — a button — so a priced course rendered a
+ *     screen of controls that all led to the same subscribe error. See the note
+ *     at that branch.
+ *
+ * ⚠️ If that ever becomes a disclosure rule, the fix is `findBySlug`'s
+ * `sections.lessons.select` — the one source all three surfaces read — never
+ * this file alone. Gating the twin by itself leaves three surfaces disagreeing,
+ * which is strictly worse than either answer.
  */
 
 /** Absolute, because a markdown document travels — it gets pasted, quoted, cached. */
@@ -119,6 +141,9 @@ function courseMeta(course: CatalogCourse): string {
     `- **${a.metaSystem}:** ${course.systemNameAr}`,
     `- **${a.metaLessons}:** ${course.lessonCount} ${copy.catalog.lessonCount}`,
     `- **${copy.catalog.duration}:** ${formatDuration(course.totalSeconds)}`,
+    // The machine-readable «قريبًا». See `isComingSoon`: a placeholder row
+    // makes the lesson count 1 while there is still nothing to watch.
+    course.totalSeconds === 0 ? `- **${copy.agents.metaContentPending}**` : null,
   ]
     .filter((row): row is string => row !== null)
     .join('\n');
@@ -151,6 +176,7 @@ function courseLine(course: CatalogCourse, options: { omitYear?: boolean } = {})
      * function, `coursePriceBadge`, so the badge and these rows cannot drift.
      */
     coursePriceBadge(course),
+    course.totalSeconds === 0 ? copy.agents.metaContentPending : null,
   ].filter(Boolean);
   return `- [${course.title}](${url(`/courses/${course.slug}`)}) — ${facts.join(' · ')}`;
 }
@@ -456,6 +482,41 @@ export function renderBooksMarkdown(catalog: BookCatalog): string {
       : b.shippingFreeOnce,
     catalog.total > 0 ? shelves : b.empty,
     footer('/books', copy.agents.booksNote),
+  ]);
+}
+
+/**
+ * «إزاي أشترك؟» as markdown.
+ *
+ * ⚠️ The steps and the rails come from `lib/subscribe-steps.ts`, the same
+ * module the HTML page and its `FAQPage` graph read. Three surfaces describing
+ * one flow from three hand-written copies is how «[object Object]» reached
+ * `/about.md` and how every free article twin ended up claiming it was
+ * paywalled.
+ *
+ * ⚠️ The destination number is NOT here, deliberately, and the step that would
+ * carry it says why in its own body — see the note on `copy.subscribePage`. A
+ * markdown document travels further than the page: it gets pasted, quoted and
+ * cached, which makes it the worst possible place to publish a wallet number.
+ */
+export function renderSubscribeMarkdown(contact: {
+  instapay?: string | null;
+  vodafoneCash?: string | null;
+}): string {
+  const c = copy.subscribePage;
+  const rails = subscribeRails(contact);
+
+  return join([
+    `# ${c.title}`,
+    `> ${c.metaDescription}`,
+    c.lead,
+    subscribeSteps()
+      .map((step, index) => `${index + 1}. **${step.title}** — ${step.body}`)
+      .join('\n'),
+    `## ${c.railsTitle}`,
+    rails.length > 0 ? rails.map((rail) => `- ${rail}`).join('\n') : c.railsNone,
+    c.booksNote,
+    footer('/subscribe', copy.agents.openNote),
   ]);
 }
 

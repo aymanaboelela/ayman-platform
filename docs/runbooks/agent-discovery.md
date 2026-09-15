@@ -381,6 +381,28 @@ Three surfaces published the shipped constant where the page reads a row:
 The constants remain as fallbacks only, because `next build` runs where the API
 is unreachable.
 
+### The paid lesson outline: three surfaces, one decision
+
+The HTML course page hides the lesson list for a PRICED course
+(`copy.course.lessonsLockedNote`). `/courses/<slug>.md`, the WebMCP `get_course`
+tool and `GET /api/catalog/courses/<slug>` all still publish the titles — and
+the API publishes strictly more (ids, `isFreePreview`, durations).
+
+**They stay published.** The allowlist is `CatalogService.findBySlug`, not the
+page: the API is public, unauthenticated, documented in `/openapi.json` and
+linked from every twin's own footer, so gating the twin would hide from a polite
+agent exactly what an impolite one reads two lines below. And the page's gate is
+a UI decision rather than a disclosure rule — every outline row there is a
+`CourseEntry`, i.e. a button, so a priced course rendered a screen of controls
+that all led to the same subscribe error.
+
+⚠️ If it ever becomes a disclosure rule, the change is the
+`sections.lessons.select` in `findBySlug` — the one source all three surfaces
+read. Gating the twin alone leaves three surfaces disagreeing, which is worse
+than either answer. Two comments used to assert the opposite of the current
+behaviour and have been corrected; they are named here so the next reader does
+not re-derive this from scratch.
+
 ### IndexNow fires on publish
 
 `scripts/indexnow.mjs` still exists for a full resubmission, and nobody ran it.

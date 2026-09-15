@@ -270,6 +270,34 @@ describe('courseJsonLd', () => {
    * wrong answer an assistant gives in its own voice, and the student finds out
    * at the paywall.
    */
+  /**
+   * ⚠️ Two live courses carry a single placeholder row with zero duration, so
+   * `lessonCount` is 1 and there is nothing to watch — and they published four
+   * purchasable `InStock` offers beside a description promising recorded
+   * lectures.
+   */
+  it('offers a course with nothing to watch as PreOrder, every plan', () => {
+    const offers = courseJsonLd(course({ totalSeconds: 0 })).offers;
+
+    expect(Array.isArray(offers)).toBe(true);
+    for (const offer of offers as { availability: string }[]) {
+      expect(offer.availability).toBe('https://schema.org/PreOrder');
+    }
+  });
+
+  /**
+   * ⚠️ The guard against the tempting wrong fix: `contentComplete` is false on
+   * EVERY live course, so gating availability on it would mark the whole
+   * catalogue unreleased — the `price: '0'` mistake pointed the other way.
+   */
+  it('keeps InStock for a course still filling up that has real lectures', () => {
+    const offers = courseJsonLd(course({ totalSeconds: 11656, contentComplete: false })).offers;
+
+    for (const offer of offers as { availability: string }[]) {
+      expect(offer.availability).toBe('https://schema.org/InStock');
+    }
+  });
+
   it('never calls a priced course free', () => {
     expect(courseJsonLd(course()).isAccessibleForFree).toBe(false);
   });

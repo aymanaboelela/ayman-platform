@@ -11,6 +11,7 @@ import {
   renderHomeMarkdown,
   renderNewsIndexMarkdown,
   renderNewsPostMarkdown,
+  renderSubscribeMarkdown,
   renderYearMarkdown,
 } from './markdown-render';
 
@@ -91,6 +92,7 @@ const GATED_RENDERERS: [name: string, render: () => string][] = [
  */
 const OPEN_RENDERERS: [name: string, render: () => string][] = [
   ['about', () => renderAboutMarkdown()],
+  ['subscribe', () => renderSubscribeMarkdown({ instapay: 'x@instapay', vodafoneCash: null })],
   ['essentials', () => renderEssentialsMarkdown()],
   ['news', () => renderNewsIndexMarkdown([])],
   ['article', () => renderNewsPostMarkdown(post() as never)],
@@ -343,6 +345,57 @@ describe('the price on the index documents', () => {
 
     expect(markdown).toContain('150');
     expect(markdown).toContain(copy.landing.courseFree);
+  });
+});
+
+describe('renderSubscribeMarkdown', () => {
+  it('renders the steps in order and only the configured rails', () => {
+    const markdown = renderSubscribeMarkdown({ instapay: 'x@instapay', vodafoneCash: null });
+
+    expect(markdown).toContain(copy.subscribePage.step1Title);
+    expect(markdown).toContain(copy.subscribePage.step7Title);
+    // The LIST, not the prose. `step4Body` names both rails because it is
+    // describing the choice screen, and it says in the same breath that an
+    // unavailable one is labelled as such — that sentence is honest whichever
+    // rails are configured. The list underneath is the claim about THIS site.
+    expect(markdown).toContain(`- ${copy.subscribe.railInstapay}`);
+    expect(markdown).not.toContain(`- ${copy.subscribe.railVodafoneCash}`);
+  });
+
+  /**
+   * ⚠️ A markdown document travels — it gets pasted, quoted and cached — which
+   * makes it the worst place to publish a payment destination.
+   */
+  it('publishes no destination number', () => {
+    const markdown = renderSubscribeMarkdown({
+      instapay: 'ayman@instapay',
+      vodafoneCash: '+201021196367',
+    });
+
+    expect(markdown).not.toContain('201021196367');
+    expect(markdown).not.toContain('ayman@instapay');
+  });
+
+  it('says the rails are unconfigured rather than listing none', () => {
+    expect(renderSubscribeMarkdown({})).toContain(copy.subscribePage.railsNone);
+  });
+});
+
+/**
+ * ⚠️ Two live courses carry a placeholder row with zero duration, so the lesson
+ * count says 1 while there is nothing to watch — and the agent documents listed
+ * them beside «0:00» and four purchasable plans.
+ */
+describe('a course with nothing to watch yet', () => {
+  it('marks the meta block and the listing row', () => {
+    const empty = { lessonCount: 1, totalSeconds: 0 };
+
+    expect(renderCourseMarkdown(detail(empty))).toContain(copy.agents.metaContentPending);
+    expect(renderCoursesMarkdown([course(empty)])).toContain(copy.agents.metaContentPending);
+  });
+
+  it('leaves a course with real lectures unmarked', () => {
+    expect(renderCoursesMarkdown([course()])).not.toContain(copy.agents.metaContentPending);
   });
 });
 

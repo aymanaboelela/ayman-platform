@@ -172,3 +172,16 @@ describe('estimateMarkdownTokens', () => {
     expect(estimateMarkdownTokens('a'.repeat(300))).toBe(100);
   });
 });
+
+/**
+ * «إزاي أشترك؟» — the page added because the checkout is behind auth, so the
+ * four prices on every course page were public and the way to pay them was not.
+ */
+describe('/subscribe', () => {
+  it('has a markdown twin that round-trips', () => {
+    expect(isMarkdownablePath('/subscribe')).toBe(true);
+    expect(markdownTwinPath('/subscribe')).toBe('/subscribe.md');
+    expect(pathFromMarkdownSuffix('/subscribe.md')).toBe('/subscribe');
+    expect(resolveMarkdownRoute(['subscribe'])).toEqual({ kind: 'subscribe' });
+  });
+});
