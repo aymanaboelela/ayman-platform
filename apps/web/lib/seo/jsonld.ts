@@ -478,11 +478,14 @@ interface CourseProvider {
  * A rich-text field, flattened to the plain sentence a `description` is
  * supposed to be.
  *
- * ⚠️ `CatalogCourseDetail.description` is HTML — the course page renders it
- * through `<RichText>`, which sanitises and injects it. Putting it into
- * `description` unflattened publishes `<p>` and `<li>` into the knowledge
- * graph; a consumer shows the markup to a reader, and it is not what the page
- * says either, because the page shows the rendered text.
+ * ⚠️ The field is plain text on the way IN and HTML on the way OUT, and that
+ * asymmetry is the whole difficulty. `CatalogCourseDetail.description` is
+ * authored in a bare `<Textarea>` (`course-form.tsx`) with no rich-text editor
+ * and no validation (`description: z.string().nullable()`), and every live
+ * course's value is a typed paragraph with `\r\n` in it — but the page renders
+ * it through `<RichText>`, so markup, if an instructor ever pastes some, would
+ * render. So this has to flatten tags AND leave a hand-typed sentence intact,
+ * and the common case is the sentence.
  *
  * ⚠️ This is NOT a sanitiser and must never be used as one. Nothing here
  * defends against anything: the value goes through `JSON.stringify` and then
@@ -490,20 +493,73 @@ interface CourseProvider {
  * it READ correctly. `sanitizeRichText` is the security boundary and it lives
  * on the rendering path.
  *
+ * Three bugs shipped in the first version of this function, all three from
+ * treating the value as HTML rather than as prose that MIGHT carry HTML:
+ *
+ *  · `/<[^>]*>/g` ate a comparison. «لو س < 5 و ص > 2 يبقى تمام» came out as
+ *    «لو س 2 يبقى تمام» — on a computer-science platform, where a `<` between
+ *    two spaces is the most ordinary character there is. `MARKUP` in
+ *    `@ayman/contracts/quiz/rich-text` had already settled this exact question
+ *    for quiz bodies, with this exact example in its comment; `HTML_TAG` below
+ *    is that rule with the closing bracket added.
+ *  · `String.fromCodePoint` THREW on `&#1114112;` — `RangeError: Invalid code
+ *    point` — inside `courseJsonLd`, which renders synchronously on the course
+ *    page. One pasted entity would have 500'd the page that sells the course.
+ *  · `&amp;` decoded FIRST, so `&amp;lt;script&amp;gt;` — a literal `&lt;` an
+ *    instructor typed, meaning they wanted to SHOW the characters — became
+ *    `<script>`. The ampersand has to decode LAST for the same reason
+ *    `sitemap-url.ts` escapes it first: it is the one that introduces the
+ *    others.
+ *
  * Block-level tags become a space rather than nothing, or «سطر</p><p>تاني»
- * would come out as one run-on word.
+ * would come out as one run-on word. `htmlToPlainText` in contracts drops them
+ * to `''` instead, which is right for its own caller and wrong here.
  */
+
+/**
+ * A `<` that opens a tag: one followed by a letter, a slash or a bang. Same
+ * rule as `MARKUP` in `@ayman/contracts/quiz/rich-text`, which is where the
+ * reasoning lives — a bare `<` with a space or a digit after it is a
+ * comparison sign and ordinary content.
+ */
+const HTML_TAG = /<[a-z!/][^>]*>/gi;
+
+/**
+ * One numeric character reference, or U+FFFD when it names nothing.
+ *
+ * ⚠️ Returns the replacement character rather than throwing OR passing the
+ * entity through. A lone surrogate (`&#55296;`) does not throw, but
+ * `JSON.stringify` emits it unpaired and that is ill-formed JSON — a whole
+ * `<script type="application/ld+json">` a parser rejects. U+FFFD is also what
+ * a browser puts there, so the graph says what the page says.
+ */
+function codePoint(raw: string): string {
+  const value = Number(raw);
+  if (
+    !Number.isInteger(value) ||
+    value <= 0 ||
+    value > 0x10ffff ||
+    (value >= 0xd800 && value <= 0xdfff)
+  ) {
+    return '\uFFFD';
+  }
+  return String.fromCodePoint(value);
+}
+
 function plainText(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-    .replace(/\s+/g, ' ')
-    .trim();
+  return (
+    html
+      .replace(HTML_TAG, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#(\d+);/g, (_, code: string) => codePoint(code))
+      // LAST — see the note above.
+      .replace(/&amp;/g, '&')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 }
 
 /**

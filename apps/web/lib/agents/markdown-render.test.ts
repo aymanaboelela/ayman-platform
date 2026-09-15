@@ -9,6 +9,7 @@ import {
   renderCoursesMarkdown,
   renderEssentialsMarkdown,
   renderHomeMarkdown,
+  renderNewsIndexMarkdown,
   renderNewsPostMarkdown,
   renderYearMarkdown,
 } from './markdown-render';
@@ -60,15 +61,84 @@ const detail = (overrides: Partial<CatalogCourseDetail> = {}): CatalogCourseDeta
     ...overrides,
   }) as CatalogCourseDetail;
 
-const ALL_RENDERERS: [name: string, render: () => string][] = [
+const post = (overrides = {}) => ({
+  id: '00000000-0000-4000-8000-0000000000n1',
+  slug: 'مقال',
+  title: 'عنوان',
+  excerpt: 'وصف',
+  body: 'نص',
+  coverKey: null,
+  publishedAt: '2026-09-13T16:10:33.148Z',
+  updatedAt: '2026-09-13T16:10:33.149Z',
+  readingMinutes: 3,
+  relatedCourseSlug: null,
+  relatedCourseTitle: null,
+  ...overrides,
+});
+
+/** Course-catalog documents: the lessons behind them really are gated. */
+const GATED_RENDERERS: [name: string, render: () => string][] = [
   ['home', () => renderHomeMarkdown([course()])],
-  ['about', () => renderAboutMarkdown()],
   ['courses', () => renderCoursesMarkdown([course()])],
-  ['essentials', () => renderEssentialsMarkdown()],
-  ['books', () => renderBooksMarkdown(bookCatalog())],
   ['year', () => renderYearMarkdown(1, [course()])],
   ['course', () => renderCourseMarkdown(detail())],
 ];
+
+/**
+ * Documents whose whole body is free to read with no account — the thirty-two
+ * articles above all. Every one of these used to end by telling an assistant
+ * it was behind a subscription.
+ */
+const OPEN_RENDERERS: [name: string, render: () => string][] = [
+  ['about', () => renderAboutMarkdown()],
+  ['essentials', () => renderEssentialsMarkdown()],
+  ['news', () => renderNewsIndexMarkdown([])],
+  ['article', () => renderNewsPostMarkdown(post() as never)],
+];
+
+const BOOKS_RENDERERS: [name: string, render: () => string][] = [
+  ['books', () => renderBooksMarkdown(bookCatalog())],
+];
+
+const ALL_RENDERERS: [name: string, render: () => string][] = [
+  ...GATED_RENDERERS,
+  ...OPEN_RENDERERS,
+  ...BOOKS_RENDERERS,
+];
+
+/**
+ * ⚠️ The falsehood this table exists to stop, and the mirror of the one
+ * `courseJsonLd` had: there a PAID course was published as free; here every
+ * FREE page was published as gated. `footer()` appended one note to all nine
+ * twins, so the thirty-two articles — the only long-form free teaching corpus
+ * on the site — and `/books.md`, whose checkout is `@Public()` and needs no
+ * account at all, both ended by telling an assistant the content was paid.
+ */
+describe('what each twin says the content costs', () => {
+  it.each(GATED_RENDERERS)('%s says the lessons need a subscription', (_name, render) => {
+    expect(render()).toContain(copy.agents.contentNote);
+  });
+
+  it.each(OPEN_RENDERERS)('%s says it is open to read', (_name, render) => {
+    const markdown = render();
+    expect(markdown).toContain(copy.agents.openNote);
+    expect(markdown).not.toContain(copy.agents.contentNote);
+  });
+
+  /** Ordering a printed book is `@Public()` — no account, no subscription. */
+  it.each(BOOKS_RENDERERS)('%s does not invent a sign-up wall', (_name, render) => {
+    const markdown = render();
+    expect(markdown).toContain(copy.agents.booksNote);
+    expect(markdown).not.toContain(copy.agents.contentNote);
+  });
+
+  /** A new twin cannot ship without one, which is what the required argument buys. */
+  it.each(ALL_RENDERERS)('%s carries exactly one of the three notes', (_name, render) => {
+    const markdown = render();
+    const notes = [copy.agents.contentNote, copy.agents.openNote, copy.agents.booksNote];
+    expect(notes.filter((note) => markdown.includes(note))).toHaveLength(1);
+  });
+});
 
 describe('every markdown document', () => {
   it('starts with a single h1', () => {
@@ -79,15 +149,14 @@ describe('every markdown document', () => {
     }
   });
 
-  /**
-   * The one an assistant will quote back to a parent. Without it, a summary of
-   * a course outline reads exactly like a summary of the course.
+  /*
+   * ⚠️ This used to assert `contentNote` on EVERY renderer, and that assertion
+   * is what locked the falsehood in: it made «الدروس محتاجة اشتراك» a
+   * requirement of the free article twins and of the book shop. The rule it was
+   * protecting is real — a summary of a course outline must not read like a
+   * summary of the course — but it is a rule about the CATALOG documents, and
+   * it now lives in «what each twin says the content costs» above, per table.
    */
-  it('states that lesson content needs an account', () => {
-    for (const [name, render] of ALL_RENDERERS) {
-      expect(render(), name).toContain(copy.agents.contentNote);
-    }
-  });
 
   it('links back to the canonical page it mirrors', () => {
     for (const [name, render] of ALL_RENDERERS) {
@@ -166,10 +235,23 @@ describe('renderHomeMarkdown FAQ', () => {
     expect(markdown).not.toContain(copy.landing.faq1Q);
   });
 
-  /** A brand-new stack, or an API blip, gets the shipped questions rather than an empty heading. */
-  it('falls back to the shipped seed when the block is missing or empty', () => {
-    expect(renderHomeMarkdown([course()])).toContain(copy.landing.faq1Q);
-    expect(renderHomeMarkdown([course()], [])).toContain(copy.landing.faq1Q);
+  /**
+   * ⚠️ This case used to assert the opposite, and asserting it was the defect.
+   * `getHomeBlocks()` already falls back to `STARTER_HOME_BLOCKS` with every
+   * block published — for an empty table and for a caught API error alike — so
+   * "no rows" reaching this function means exactly one thing: the instructor
+   * took the section down. Republishing the shipped questions then contradicts
+   * the page, and on another instructor's stack publishes Ayman's FAQ under
+   * their name.
+   */
+  it('omits the whole section when no block is published', () => {
+    const markdown = renderHomeMarkdown([course()]);
+
+    expect(markdown).not.toContain(copy.agents.faqTitle);
+    expect(markdown).not.toContain(copy.landing.faq1Q);
+    expect(markdown).not.toContain(copy.landing.faq4Q);
+    // No dangling heading: the document still ends where it should.
+    expect(markdown).toContain(copy.agents.contentNote);
   });
 });
 
@@ -179,21 +261,6 @@ describe('renderHomeMarkdown FAQ', () => {
  * assistant actually reads showed neither.
  */
 describe('renderNewsPostMarkdown byline', () => {
-  const post = (overrides = {}) => ({
-    id: '00000000-0000-4000-8000-0000000000n1',
-    slug: 'مقال',
-    title: 'عنوان',
-    excerpt: 'وصف',
-    body: 'نص',
-    coverKey: null,
-    publishedAt: '2026-09-13T16:10:33.148Z',
-    updatedAt: '2026-09-13T16:10:33.149Z',
-    readingMinutes: 3,
-    relatedCourseSlug: null,
-    relatedCourseTitle: null,
-    ...overrides,
-  });
-
   it('names the author and the publish date in ISO', () => {
     const markdown = renderNewsPostMarkdown(post() as never);
 

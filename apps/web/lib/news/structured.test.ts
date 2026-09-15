@@ -285,6 +285,51 @@ describe('questionsFromBlocks', () => {
   });
 
   /**
+   * ⚠️ The defect this pair exists for, and the worst one this file could have:
+   * a question published with ANOTHER question's answer. A blank line between
+   * two groups splits one authored list into two `list` blocks — the page looks
+   * identical — and the second block restarts its own numbering at 1 while the
+   * key is numbered across the section.
+   */
+  it('drops both lists when one heading holds two numbered lists', () => {
+    const questions = questionsFromBlocks(
+      parse(`
+## أسئلة
+
+1. سؤال أ؟ (أ) واحد (ب) اتنين (ج) تلاتة (د) أربعة
+2. سؤال ب؟ (أ) واحد (ب) اتنين (ج) تلاتة (د) أربعة
+
+3. سؤال ج؟ (أ) واحد (ب) اتنين (ج) تلاتة (د) أربعة
+4. سؤال د؟ (أ) واحد (ب) اتنين (ج) تلاتة (د) أربعة
+
+**الإجابات**: 1-أ · 2-ب · 3-ج · 4-د
+`),
+    );
+
+    // Asserted on the ANSWERS, not just the count: before the fix «سؤال ج»
+    // published «واحد» — the answer to «سؤال أ».
+    expect(questions).toEqual([]);
+  });
+
+  /** The same split, caused by a question wrapped onto a second line. */
+  it('drops a list broken by a wrapped question line', () => {
+    const questions = questionsFromBlocks(
+      parse(`
+## أسئلة
+
+1. سؤال أ؟ (أ) واحد (ب) اتنين (ج) تلاتة (د) أربعة
+2. سؤال ب؟ (أ) واحد (ب) اتنين (ج) تلاتة (د) أربعة
+   وبقية السؤال على سطر تاني
+3. سؤال ج؟ (أ) واحد (ب) اتنين (ج) تلاتة (د) أربعة
+
+**الإجابات**: 1-أ · 2-ب · 3-ج
+`),
+    );
+
+    expect(questions).toEqual([]);
+  });
+
+  /**
    * Two question blocks under two headings must not borrow each other's key —
    * the answer search stops at the next heading for exactly this reason.
    */
