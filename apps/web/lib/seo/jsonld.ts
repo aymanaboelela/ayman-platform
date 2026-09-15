@@ -31,6 +31,30 @@ export interface CourseForJsonLd {
   trackLabelAr: string | null;
   year: number;
   totalSeconds: number;
+  /**
+   * EGP cents, `null` when that plan is not for sale.
+   *
+   * ⚠️ REQUIRED, not optional, and that is the whole point of the field. Until
+   * 2026-09-15 this node published `offers: { price: '0', category: 'Free' }`
+   * and `isAccessibleForFree: true` on every course — including the ones whose
+   * own page renders «١٥٠ ج / الشهر» three lines away. Structured data that
+   * contradicts the page is bad; structured data that tells an assistant a paid
+   * course is free is a wrong answer given to a student in the assistant's own
+   * voice, and the student finds out at the paywall.
+   *
+   * Optional fields would have let the next call site reintroduce it silently.
+   * These three are required so that adding a surface means deciding what it
+   * costs.
+   */
+  monthlyPriceCents: number | null;
+  quarterlyPriceCents: number | null;
+  yearlyPriceCents: number | null;
+  /**
+   * الترم الأول / الترم الثاني — only on the DETAIL read (`CatalogCourseDetail`),
+   * so the catalog list legitimately has none. Only open, priced terms ever
+   * reach here; see `CatalogCourseTermSchema`.
+   */
+  terms?: readonly { title: string; priceCents: number }[];
 }
 
 /** `PT1H1M1S`. Zero is `PT0S`, not the empty `PT`, which validators reject. */
@@ -307,6 +331,69 @@ interface CourseProvider {
  * page where they are stated up to 86 times. See `courseListJsonLd` for the
  * measurement that motivated it.
  */
+/**
+ * What a course costs, as `Offer` nodes — one per plan the page actually shows.
+ *
+ * ⚠️ The order and the membership mirror `(site)/courses/[slug]/page.tsx`'s
+ * price block exactly: monthly, quarterly, each open term, yearly. Structured
+ * data is a machine-readable copy of the page, so a plan listed here that the
+ * page does not render — or a price that rounds differently — is a
+ * contradiction a validator cannot see and an assistant will quote.
+ *
+ * `priceCents / 100`, formatted to two decimals: schema.org wants a number in
+ * the currency's major unit, and `'150.00'` is unambiguous where `15000` reads
+ * as fifteen thousand pounds.
+ *
+ * ⚠️ `availability: InStock` is honest here and would not be on a course with
+ * a closed term — `CatalogService.findBySlug` filters those out before they
+ * reach this function, which is why it can be stated flatly. If that filter
+ * ever moves, this line becomes a claim nothing checks.
+ */
+const egp = (cents: number): string => (cents / 100).toFixed(2);
+
+function courseOffers(course: CourseForJsonLd) {
+  const plans: Array<{ name: string; cents: number }> = [];
+  if (course.monthlyPriceCents !== null) {
+    plans.push({ name: copy.subscribe.planMonthlyLabel, cents: course.monthlyPriceCents });
+  }
+  if (course.quarterlyPriceCents !== null) {
+    plans.push({ name: copy.subscribe.planQuarterlyLabel, cents: course.quarterlyPriceCents });
+  }
+  for (const term of course.terms ?? []) {
+    plans.push({ name: term.title, cents: term.priceCents });
+  }
+  if (course.yearlyPriceCents !== null) {
+    plans.push({ name: copy.subscribe.planYearlyLabel, cents: course.yearlyPriceCents });
+  }
+
+  return plans.map((plan) => ({
+    '@type': 'Offer',
+    name: plan.name,
+    // `category: 'Subscription'` on every one of them, including the term
+    // plans: all four are time-limited access to the same course, not a
+    // one-off purchase of a copy. The plan's own name is in `name`.
+    category: 'Subscription',
+    price: egp(plan.cents),
+    priceCurrency: 'EGP',
+    availability: 'https://schema.org/InStock',
+    url: absolute(`/courses/${course.slug}`),
+  }));
+}
+
+/**
+ * The free case, stated rather than left out. A `Course` with no `offers` is a
+ * course whose price is unknown; «الكورس ده مفتوح مجانًا» — which is what the
+ * page renders when no plan is priced — is a different and much more useful
+ * claim, and the one the foundation course needs.
+ */
+const freeOffer = {
+  '@type': 'Offer',
+  price: '0',
+  priceCurrency: 'EGP',
+  category: 'Free',
+  availability: 'https://schema.org/InStock',
+};
+
 export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolean } = {}) {
   // `@id` ties this back to the one organisation the root layout emits on
   // every page, instead of minting an anonymous second one per course.
@@ -327,6 +414,8 @@ export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolea
         url: SITE_URL,
       };
 
+  const offers = courseOffers(course);
+
   return {
     // JSON-LD scopes `@context` to the node tree it is declared on, so a Course
     // inside the `ItemList` inherits the list's. Repeating it per item is 33
@@ -338,7 +427,6 @@ export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolea
     description: course.subtitle ?? copy.site.tagline,
     url: absolute(`/courses/${course.slug}`),
     inLanguage: 'ar',
-    isAccessibleForFree: true,
     // «البكالوريا — الصف الثاني بكالوريا», not «البكالوريا — 2». The bare digit
     // was unmatchable: a student searches «تانية بكالوريا» and an assistant
     // grounding on this node had a number where the phrase should be.
@@ -364,7 +452,8 @@ export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolea
     // searched for — this is what carries a course page's authority back to
     // the name query.
     instructor: { '@id': PERSON_ID },
-    offers: { '@type': 'Offer', price: '0', priceCurrency: 'EGP', category: 'Free' },
+    isAccessibleForFree: offers.length === 0,
+    offers: offers.length > 0 ? offers : freeOffer,
     hasCourseInstance: {
       '@type': 'CourseInstance',
       courseMode: 'online',
@@ -552,19 +641,31 @@ export function articleListJsonLd(posts: readonly { slug: string; title: string 
  * from `termSlug` in `essentials-terms.ts` and read here through the same
  * function — do not inline the slugging in either place.
  */
-export function definedTermSetJsonLd(
-  terms: ReadonlyArray<{ en: string; ar: string; body: string }>,
-  termUrl: (term: { en: string; ar: string; body: string }) => string,
+/**
+ * ⚠️ `options` exists because a second glossary turned up, not to make the
+ * builder configurable. `/news/قاموس-مصطلحات-…` carries a hundred-odd terms in
+ * the article body — see `lib/news/structured.ts` — and it is a different SET
+ * from the twelve on `/essentials`, so it needs its own `@id`, its own name
+ * and its own `inDefinedTermSet` back-reference. Publishing both under
+ * `/essentials#glossary` would merge a hundred curriculum terms into the
+ * twelve-term beginner list and make both nodes describe neither.
+ *
+ * The defaults are the `/essentials` set, so its call site is unchanged.
+ */
+export function definedTermSetJsonLd<T extends { en: string; ar: string; body: string }>(
+  terms: readonly T[],
+  termUrl: (term: T) => string,
+  options: { id?: string; name?: string; description?: string } = {},
 ) {
   if (terms.length === 0) return null;
 
-  const setId = absolute('/essentials#glossary');
+  const setId = options.id ?? absolute('/essentials#glossary');
   return {
     '@context': 'https://schema.org',
     '@type': 'DefinedTermSet',
     '@id': setId,
-    name: copy.essentials.listTitle,
-    description: copy.essentials.listLead,
+    name: options.name ?? copy.essentials.listTitle,
+    description: options.description ?? copy.essentials.listLead,
     inLanguage: 'ar',
     publisher: { '@id': ORGANIZATION_ID },
     hasDefinedTerm: terms.map((term) => ({
@@ -574,6 +675,83 @@ export function definedTermSetJsonLd(
       description: term.body,
       inDefinedTermSet: { '@id': setId },
       url: termUrl(term),
+    })),
+  };
+}
+
+/**
+ * `Quiz` — the practice questions an article publishes, with their answers.
+ *
+ * ## Why a Quiz and not an FAQPage
+ *
+ * «نماذج أسئلة بالإجابات» is twenty multiple-choice questions and six essay
+ * ones, and an `FAQPage` would describe every one of them as a question the
+ * SITE is answering about itself. `Quiz`/`Question` is the vocabulary that says
+ * what these actually are — a practice set on a named subject, where each item
+ * has options and exactly one of them is right. It is also the shape Google's
+ * education "practice problems" result reads, though that is a bonus rather
+ * than the point: the point is that an assistant asked «نماذج أسئلة على منهج
+ * البرمجة بكالوريا» gets labelled questions with labelled answers instead of a
+ * numbered list it has to parse and an answer key it has to correlate.
+ *
+ * ⚠️ `acceptedAnswer` is REQUIRED on every question this emits, and
+ * `questionsFromBlocks` drops any question whose key entry is missing for
+ * exactly that reason. A `Question` with no accepted answer invites an
+ * assistant to supply one and attribute it here.
+ *
+ * ⚠️ `suggestedAnswer` is emitted ONLY for multiple choice. On an essay
+ * question there are no options, and an empty `suggestedAnswer: []` is a claim
+ * that the question has no possible answers rather than no enumerated ones.
+ */
+export function quizJsonLd(
+  questions: ReadonlyArray<{
+    question: string;
+    options: readonly string[];
+    answerIndex: number;
+    answer: string;
+  }>,
+  options: { id: string; name: string; about?: string | null },
+) {
+  if (questions.length === 0) return null;
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Quiz',
+    '@id': options.id,
+    name: options.name,
+    inLanguage: 'ar',
+    // The course the questions are drawn from, when the article names one.
+    // Omitted rather than guessed: `about` is what an engine matches the quiz
+    // to a topic on, and «البرمجة» inferred from a title is not a topic the
+    // article asserted.
+    ...(options.about ? { about: { '@type': 'Thing', name: options.about } } : {}),
+    publisher: { '@id': ORGANIZATION_ID },
+    hasPart: questions.map((row) => ({
+      '@type': 'Question',
+      // `learningResourceType` is what separates a practice problem from a
+      // support FAQ for every consumer of this markup.
+      learningResourceType: 'Practice problem',
+      ...(row.options.length > 0 ? { eduQuestionType: 'Multiple choice' } : {}),
+      // `name` and `text` carry the same string deliberately — Google reads
+      // `name`, schema.org's own definition puts the question body in `text`,
+      // and there is only one question here to put in both.
+      name: row.question,
+      text: row.question,
+      inLanguage: 'ar',
+      ...(row.options.length > 0
+        ? {
+            suggestedAnswer: row.options.map((option, index) => ({
+              '@type': 'Answer',
+              position: index,
+              text: option,
+            })),
+          }
+        : {}),
+      acceptedAnswer: {
+        '@type': 'Answer',
+        ...(row.answerIndex >= 0 ? { position: row.answerIndex } : {}),
+        text: row.answer,
+      },
     })),
   };
 }

@@ -24,6 +24,9 @@ const course = (overrides: Partial<CatalogCourse> = {}): CatalogCourse =>
     coverKey: null,
     lessonCount: 12,
     totalSeconds: 3600,
+    monthlyPriceCents: 15000,
+    quarterlyPriceCents: null,
+    yearlyPriceCents: null,
     publishedAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -33,6 +36,7 @@ const detail = (overrides: Partial<CatalogCourseDetail> = {}): CatalogCourseDeta
   ({
     ...course(),
     description: 'وصف الكورس',
+    terms: [],
     sections: [
       {
         id: '00000000-0000-4000-8000-0000000000s1',
@@ -118,6 +122,36 @@ describe('renderCourseMarkdown', () => {
     expect(markdown).not.toContain('isFreePreview');
     expect(markdown).not.toContain('freePreview');
     expect(markdown).not.toContain(copy.catalog.freePreview);
+  });
+
+  /**
+   * «الكورس بكام؟». The visible page has always carried the price block; the
+   * markdown twin — the document an assistant actually reads — did not, so the
+   * one document written for machines was the only one that could not answer
+   * the question.
+   */
+  it('quotes every plan the course sells, in the page order', () => {
+    const markdown = renderCourseMarkdown(
+      detail({
+        monthlyPriceCents: 15000,
+        quarterlyPriceCents: 30000,
+        yearlyPriceCents: 95000,
+        terms: [{ id: '00000000-0000-4000-8000-0000000000t1', title: 'الترم الأول', priceCents: 45000 }],
+      }),
+    );
+    const line = markdown.split('\n').find((row) => row.includes(copy.agents.metaPrice));
+
+    expect(line).toBeDefined();
+    // The order is the page's: monthly, quarterly, term, yearly.
+    expect(line).toMatch(/150.+300.+الترم الأول.+950/u);
+  });
+
+  it('says the free course is free rather than leaving the row out', () => {
+    const markdown = renderCourseMarkdown(
+      detail({ monthlyPriceCents: null, quarterlyPriceCents: null, yearlyPriceCents: null, terms: [] }),
+    );
+
+    expect(markdown).toContain(`**${copy.agents.metaPrice}:** ${copy.course.freeBanner}`);
   });
 
   it('omits the outline heading entirely for a course with no sections', () => {

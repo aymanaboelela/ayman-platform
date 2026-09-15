@@ -4861,6 +4861,13 @@ export const copy = {
     metaTrack: 'المسار',
     metaSystem: 'النظام',
     metaLessons: 'عدد المحاضرات',
+    /**
+     * «الكورس بكام؟» is one of the three things anybody asks about a course,
+     * and until 2026-09-15 the markdown twin — the document an assistant
+     * actually reads — was the only surface on the site that did not answer it.
+     * The visible page has carried the price block all along.
+     */
+    metaPrice: 'السعر',
     sourcePage: 'الصفحة الأصلية',
     agentIndex: 'فهرس الوكلاء',
     publicApi: 'واجهة البيانات العامة',

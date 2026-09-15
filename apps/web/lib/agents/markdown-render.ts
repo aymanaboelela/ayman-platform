@@ -1,4 +1,4 @@
-import { copy } from '@ayman/contracts';
+import { copy, formatCopy } from '@ayman/contracts';
 import type {
   CatalogCourse,
   CatalogCourseDetail,
@@ -9,6 +9,7 @@ import { AGENT_DISCOVERY_PATHS } from '@/lib/agents/discovery';
 import { ESSENTIAL_TERMS } from '@/lib/essentials-terms';
 import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
 import { formatDuration } from '@/lib/format';
+import { formatEGP } from '@/lib/price';
 import { SITE_URL } from '@/lib/seo/jsonld';
 import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
 
@@ -57,6 +58,38 @@ function footer(canonicalPath: string): string {
     `**${a.agentIndex}:** ${url(AGENT_DISCOVERY_PATHS.llms)} · **${a.publicApi}:** ${url(AGENT_DISCOVERY_PATHS.serviceDesc)}`,
     a.contentNote,
   ]);
+}
+
+/**
+ * What the course costs, in the SAME words and the same order the course page
+ * renders — monthly, quarterly, each open term, yearly — or «مفتوح مجانًا» when
+ * nothing is priced.
+ *
+ * ⚠️ `copy.course.price*` and not a second set of strings. The markdown twin is
+ * a rendering of the page, and a price line phrased differently here is a
+ * second wording of the same fact that will drift the first time either is
+ * edited. The terms only exist on the DETAIL read, which is why this takes the
+ * detail type rather than `CatalogCourse`.
+ */
+function coursePrice(course: CatalogCourseDetail): string {
+  const plans = [
+    course.monthlyPriceCents !== null
+      ? formatCopy(copy.course.priceMonthly, { price: formatEGP(course.monthlyPriceCents) })
+      : null,
+    course.quarterlyPriceCents !== null
+      ? formatCopy(copy.course.priceQuarterly, { price: formatEGP(course.quarterlyPriceCents) })
+      : null,
+    ...course.terms.map((term) =>
+      formatCopy(copy.course.priceTerm, { price: formatEGP(term.priceCents), term: term.title }),
+    ),
+    course.yearlyPriceCents !== null
+      ? formatCopy(copy.course.priceYearly, { price: formatEGP(course.yearlyPriceCents) })
+      : null,
+  ].filter((plan): plan is string => plan !== null);
+
+  return `- **${copy.agents.metaPrice}:** ${
+    plans.length > 0 ? plans.join(' · ') : copy.course.freeBanner
+  }`;
 }
 
 /** A definition list, one fact per line — `join` is for BLOCKS, not rows. */
@@ -226,7 +259,8 @@ export function renderCourseMarkdown(course: CatalogCourseDetail): string {
   return join([
     `# ${course.title}`,
     course.subtitle ? `> ${course.subtitle}` : null,
-    courseMeta(course),
+    // ROWS of one definition list, so `\n` — `join` above is for blocks.
+    `${courseMeta(course)}\n${coursePrice(course)}`,
     course.description,
     course.sections.length > 0 ? `## ${copy.agents.courseOutline}` : null,
     course.sections.length > 0 ? outline : null,

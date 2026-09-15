@@ -18,6 +18,13 @@ import {
   webSiteJsonLd,
 } from './jsonld';
 
+/**
+ * ⚠️ The fixture is PRICED, like every course actually published. It used to
+ * carry no price fields at all, which is how `courseJsonLd` shipped
+ * `isAccessibleForFree: true` on a course whose own page renders «١٥٠ ج /
+ * الشهر» — the assertion below said "free" and agreed with the code, and both
+ * were wrong about the site. A free course is the `freeCourse()` case.
+ */
 const course = (overrides = {}) => ({
   id: '0192f000-0000-7000-8000-000000000001',
   slug: 'programming-year-2',
@@ -30,10 +37,25 @@ const course = (overrides = {}) => ({
   year: 2,
   lessonCount: 12,
   totalSeconds: 7200,
+  monthlyPriceCents: 15000,
+  quarterlyPriceCents: 30000,
+  yearlyPriceCents: 95000,
+  terms: [{ title: 'الترم الأول', priceCents: 45000 }],
   publishedAt: '2026-07-01T00:00:00.000Z',
   updatedAt: '2026-07-20T00:00:00.000Z',
   ...overrides,
 });
+
+/** The foundation course: nothing priced, so «الكورس ده مفتوح مجانًا» is true. */
+const freeCourse = (overrides = {}) =>
+  course({
+    slug: 'programming-foundation',
+    monthlyPriceCents: null,
+    quarterlyPriceCents: null,
+    yearlyPriceCents: null,
+    terms: [],
+    ...overrides,
+  });
 
 describe('secondsToIso8601Duration', () => {
   it.each([
@@ -70,12 +92,42 @@ describe('courseListJsonLd', () => {
 });
 
 describe('courseJsonLd', () => {
-  it('marks the course free and Arabic, with an absolute URL', () => {
+  /**
+   * ⚠️ The order and the membership must match the price block on
+   * `(site)/courses/[slug]/page.tsx` — monthly, quarterly, each term, yearly.
+   * Structured data is a machine-readable copy of the page; a plan here that is
+   * not there is a contradiction no validator can see.
+   */
+  it('publishes one Offer per plan the page renders, in the page order', () => {
+    const offers = courseJsonLd(course()).offers;
+    expect(Array.isArray(offers)).toBe(true);
+    expect(offers).toEqual([
+      expect.objectContaining({ price: '150.00', priceCurrency: 'EGP' }),
+      expect.objectContaining({ price: '300.00', priceCurrency: 'EGP' }),
+      expect.objectContaining({ price: '450.00', name: 'الترم الأول' }),
+      expect.objectContaining({ price: '950.00', priceCurrency: 'EGP' }),
+    ]);
+  });
+
+  /**
+   * The regression this pair exists for: a paid course published as free is a
+   * wrong answer an assistant gives in its own voice, and the student finds out
+   * at the paywall.
+   */
+  it('never calls a priced course free', () => {
+    expect(courseJsonLd(course()).isAccessibleForFree).toBe(false);
+  });
+
+  it('states the free case rather than omitting it', () => {
+    const data = courseJsonLd(freeCourse());
+    expect(data.isAccessibleForFree).toBe(true);
+    expect(data.offers).toMatchObject({ price: '0', priceCurrency: 'EGP', category: 'Free' });
+  });
+
+  it('is Arabic, with an absolute URL', () => {
     const data = courseJsonLd(course());
     expect(data['@type']).toBe('Course');
     expect(data.inLanguage).toBe('ar');
-    expect(data.isAccessibleForFree).toBe(true);
-    expect(data.offers?.price).toBe('0');
     expect(data.url).toMatch(/^https?:\/\/.+\/courses\/programming-year-2$/);
     // `EducationalOrganization`, a strict subtype of `Organization` — it is
     // what tells a crawler this is a school rather than a company with a site.

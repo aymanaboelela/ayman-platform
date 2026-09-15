@@ -8,7 +8,15 @@ import { MarkdownBody } from '@/components/news/markdown-body';
 import { JsonLd } from '@/components/seo/json-ld';
 import { getNewsPost } from '@/lib/news';
 import { parseMarkdown, tableOfContents } from '@/lib/news/markdown';
-import { articleJsonLd, breadcrumbJsonLd } from '@/lib/seo/jsonld';
+import { faqRowsFromBlocks, questionsFromBlocks, termsFromBlocks } from '@/lib/news/structured';
+import {
+  SITE_URL,
+  articleJsonLd,
+  breadcrumbJsonLd,
+  definedTermSetJsonLd,
+  faqPageJsonLd,
+  quizJsonLd,
+} from '@/lib/seo/jsonld';
 import { formatArticleDate } from '@/lib/format';
 import { buildMetadata } from '@/lib/seo/metadata';
 
@@ -70,6 +78,19 @@ export default async function NewsArticlePage({ params }: { params: Promise<{ sl
   const blocks = parseMarkdown(post.body);
   const toc = tableOfContents(blocks);
 
+  /*
+   * The three graphs an assistant can actually quote, read out of the body the
+   * page is about to render — see `lib/news/structured.ts` for why they are
+   * derived rather than authored, and for the thresholds that keep an ordinary
+   * article from publishing an empty FAQ or a fake glossary. Both builders
+   * return null for an empty list and `JsonLd` renders nothing for null, so an
+   * article with neither shape emits neither script.
+   */
+  const faqRows = faqRowsFromBlocks(blocks);
+  const terms = termsFromBlocks(blocks, `/news/${post.slug}`);
+  const questions = questionsFromBlocks(blocks);
+  const articleUrl = `${SITE_URL}/news/${post.slug}`;
+
   return (
     <main>
       <JsonLd data={articleJsonLd({ ...post, image: post.coverKey ? mediaUrl(post.coverKey) : null })} />
@@ -78,6 +99,26 @@ export default async function NewsArticlePage({ params }: { params: Promise<{ sl
           { name: copy.news.title, path: '/news' },
           { name: post.title, path: `/news/${post.slug}` },
         ])}
+      />
+      <JsonLd data={faqPageJsonLd(faqRows)} />
+      {/* Its own `@id`, name and description — this is a different set from the
+          twelve terms on `/essentials`, not a second copy of them. */}
+      <JsonLd
+        data={definedTermSetJsonLd(terms, (term) => `${SITE_URL}${term.url}`, {
+          id: `${articleUrl}#glossary`,
+          name: post.title,
+          description: post.excerpt,
+        })}
+      />
+      {/* `about` is the related course when the article declares one — the same
+          field the CTA below already reads, so the quiz cannot claim a subject
+          the page does not link to. */}
+      <JsonLd
+        data={quizJsonLd(questions, {
+          id: `${articleUrl}#quiz`,
+          name: post.title,
+          about: post.relatedCourseTitle,
+        })}
       />
 
       <article className="site-shell article">
