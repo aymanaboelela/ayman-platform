@@ -8,6 +8,7 @@ import {
   DRAGON_RIDE,
   type DragonVideo,
 } from '@/lib/brand-assets';
+import { IS_AYMAN } from '@/lib/tenant';
 import { useMediaQuery } from '@/lib/use-media-query';
 
 /**
@@ -129,6 +130,21 @@ const REWIND_RATE = 2;
  * Below 64rem and under `prefers-reduced-motion` this returns `null`, so nothing
  * is fetched — not merely hidden. `display: none` would not help: the request
  * comes from the element existing, not from CSS.
+ *
+ * ## And not on anybody else's stack
+ *
+ * ⚠️ THIS IS NOT GENERIC ARTWORK. At frame 140 of `dragon-ride-2.webm` the
+ * instructor is on the creature's back with a laptop open — his likeness is
+ * INSIDE the video, not composited over it, so there is no crop or filter that
+ * makes this clip reusable. A second instructor's landing page showing a man
+ * riding a dragon is showing Ayman.
+ *
+ * `IS_AYMAN` joins the same `active` flag the breakpoint and the motion query
+ * already use, which is the whole point of putting it there: the existing
+ * "nothing is rendered" path is also the path that leaves both files unfetched.
+ * Gating with `display: none`, or dropping the clips and letting the `<video>`
+ * elements render empty, would still put two requests for his face into a
+ * stranger's network log.
  */
 export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | null> }) {
   const wide = useMediaQuery('(min-width: 64rem)', false);
@@ -139,7 +155,8 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
 
   const rideRef = useRef<HTMLVideoElement>(null);
   const blazeRef = useRef<HTMLVideoElement>(null);
-  const active = wide && !reducedMotion && Boolean(DRAGON_RIDE) && Boolean(DRAGON_BLAZE);
+  const active =
+    IS_AYMAN && wide && !reducedMotion && Boolean(DRAGON_RIDE) && Boolean(DRAGON_BLAZE);
 
   useEffect(() => {
     if (!active || !DRAGON_RIDE) return;

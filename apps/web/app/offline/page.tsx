@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { copy } from '@ayman/contracts';
+import { IS_AYMAN } from '@/lib/tenant';
 import { OfflineMessage } from './offline-message';
 import { RetryButton } from './retry-button';
 
@@ -40,14 +41,33 @@ export default function OfflinePage() {
         is not among the rules this repo registers, and disabling a rule that
         does not exist is itself a lint error.)
       */}
-      <img
-        src="/icons/icon-192.png"
-        alt=""
-        width={72}
-        height={72}
-        className="rounded-full"
-        aria-hidden="true"
-      />
+      {/*
+        ⚠️ `/icons/icon-192.png` is a CROP OF AYMAN'S FACE — the PWA icon,
+        generated from `public/team/ayman.jpg` by `scripts/build-mobile-icons
+        .mjs`. On another instructor's stack it is his photograph on the one
+        screen a student is guaranteed to see when the network drops.
+
+        Nothing generic can be swapped in: this page must work with no server,
+        so the file has to be one `sw.js` precached, and the only
+        per-deployment brand value (the accent) lives in the database rather
+        than in `public/` where a precached URL has to resolve.
+
+        So a non-Ayman stack shows no mark at all. The page is a heading, a
+        line of body and a retry button — it reads as finished without it,
+        because the `gap-6` column simply closes up. An empty circle where a
+        logo should be would look like an asset that failed to load, which on
+        an offline screen is precisely the wrong thing to suggest.
+      */}
+      {IS_AYMAN ? (
+        <img
+          src="/icons/icon-192.png"
+          alt=""
+          width={72}
+          height={72}
+          className="rounded-full"
+          aria-hidden="true"
+        />
+      ) : null}
 
       {/*
         The heading and the body are a Client Component because they depend on

@@ -35,6 +35,8 @@
  * also how you recover a locked-out admin.
  */
 import 'dotenv/config';
+import { copy } from '@ayman/contracts/copy';
+import { tenantName } from '../common/tenant';
 import { randomUUID } from 'node:crypto';
 import { hash } from 'argon2';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -43,7 +45,10 @@ import { PrismaClient } from '../generated/prisma/client';
 
 const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
 const password = process.env.ADMIN_PASSWORD;
-const name = process.env.ADMIN_NAME?.trim() || 'أيمن أبو العلا';
+// A stack that sets no `ADMIN_NAME` gets its own display name, not his — the
+// first account on a second instructor's platform was being created called
+// «أيمن أبو العلا», and it is the account that then signs every audit row.
+const name = process.env.ADMIN_NAME?.trim() || tenantName(copy.site.name);
 
 /**
  * Bootstrap mode: leave THIS EMAIL's account alone if it already exists.

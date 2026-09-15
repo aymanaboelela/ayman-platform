@@ -76,6 +76,7 @@ describe('SiteSettingsSchema', () => {
       'accentHue',
       'faviconAssetId',
       'landingLayout',
+      'landingPreset',
       'logoDarkAssetId',
       'logoLightAssetId',
       'radius',
@@ -83,6 +84,15 @@ describe('SiteSettingsSchema', () => {
     // A row written before this field existed must keep Ayman's page, so the
     // default has to be `classic` rather than one of the new shapes.
     expect(parsed.branding.landingLayout).toBe('classic');
+    /*
+     * The same guarantee one level up, and a stricter one. `landingLayout`
+     * only ever chose which CSS overrides applied to Ayman's page;
+     * `landingPreset` chooses whether his page renders AT ALL. A row written
+     * before this field existed — which is every row — has to come back
+     * `classic`, or the first deploy after this lands quietly replaces the
+     * live landing page of a platform with real students on it.
+     */
+    expect(parsed.branding.landingPreset).toBe('classic');
     // A stored row written before `accentHue` existed must keep its slot, so
     // the default has to be null rather than a hue — otherwise every existing
     // platform would silently switch to a generated scheme on first parse.

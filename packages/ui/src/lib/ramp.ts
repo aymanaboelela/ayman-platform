@@ -114,13 +114,26 @@ function chromaAt(lightness: number, hue: number, shape: number, peak: number): 
 }
 
 /**
- * Moves a step's lightness until it clears `target` against the page.
+ * Keeps a step where the ladder puts it, and moves it ONLY as far as the
+ * contrast target requires.
  *
- * Bisection on lightness, in whichever direction the theme darkens text: on a
- * light page contrast rises as the colour darkens, on a dark page as it
- * lightens. Chroma is recomputed at every candidate, because the ceiling moves
- * with lightness — holding chroma fixed while searching is how a solver
- * returns a colour that is out of gamut.
+ * ## The bug this shape exists to avoid
+ *
+ * The first version bisected between the two theme extremes and returned the
+ * threshold — the exact lightness at which the target is first met. That does
+ * meet the target, and it throws the designed ladder away: every hue landed on
+ * precisely 3.00:1 and 4.50:1, and in the dark theme step 9 fell from the
+ * ladder's L 0.78 to about L 0.48, which is a dark fill on a dark page where a
+ * bright one was intended. The ramp reads as collapsed rather than dark.
+ *
+ * So `preferred` is tried FIRST and kept whenever it already clears the
+ * target. The search only runs when it does not, and then it runs between the
+ * preferred lightness and the readable extreme — returning the value CLOSEST
+ * to where the ladder wanted it that still clears.
+ *
+ * Chroma is recomputed at every candidate, because the gamut ceiling moves
+ * with lightness; holding it fixed while searching is how a solver returns a
+ * colour that is out of gamut.
  *
  * Returns the best it can reach. On a hue that cannot make the target at any
  * lightness the caller still gets a usable colour and `describeRamp` reports
@@ -132,6 +145,7 @@ function solveForContrast(
   shape: number,
   peak: number,
   target: number,
+  preferred: number,
 ): Oklch {
   const background = PAGE_BACKGROUND[theme];
   const contrastAt = (lightness: number) => {
@@ -139,12 +153,20 @@ function solveForContrast(
     return { color, ratio: contrastRatio(oklchToRgb(color), background) };
   };
 
-  // On a light page the readable direction is darker (towards 0); on a dark
-  // page it is lighter (towards 1).
-  let low = theme === 'light' ? 0 : 1;
-  let high = theme === 'light' ? 1 : 0;
+  // Where the ladder wanted it. Most hues clear the target here and never move.
+  const atPreferred = contrastAt(preferred);
+  if (atPreferred.ratio >= target) return atPreferred.color;
 
-  if (contrastAt(low).ratio < target) return contrastAt(low).color;
+  // It does not clear. On a light page the readable direction is darker
+  // (towards 0); on a dark page it is lighter (towards 1).
+  const extreme = theme === 'light' ? 0 : 1;
+  if (contrastAt(extreme).ratio < target) return contrastAt(extreme).color;
+
+  // `low` is the end that is known to clear, `high` the one that is known not
+  // to — so the bisection converges on the point closest to `preferred` that
+  // still clears, rather than on the far side of the range.
+  let low = extreme;
+  let high = preferred;
 
   for (let step = 0; step < 20; step += 1) {
     const middle = (low + high) / 2;
@@ -167,8 +189,22 @@ export function accentRamp(hue: number, theme: Theme): readonly [Oklch, Oklch, O
 
   // Solved, not placed — see the module note on why a fixed ladder cannot hold
   // a contrast across hues.
-  const nine = solveForContrast(hue, theme, shape[0] as number, peak, FILL_CONTRAST_TARGET);
-  const eleven = solveForContrast(hue, theme, shape[2] as number, peak, TEXT_CONTRAST_TARGET);
+  const nine = solveForContrast(
+    hue,
+    theme,
+    shape[0] as number,
+    peak,
+    FILL_CONTRAST_TARGET,
+    lightness[0] as number,
+  );
+  const eleven = solveForContrast(
+    hue,
+    theme,
+    shape[2] as number,
+    peak,
+    TEXT_CONTRAST_TARGET,
+    lightness[2] as number,
+  );
 
   // Hover sits one rung from the fill in the direction the ladder already
   // moves, rather than at its own absolute lightness: once step 9 has been
@@ -310,9 +346,34 @@ export function rampDeclarations(
   // The `--p-*` ramp is theme-independent today, so it is emitted with the
   // light block only — writing it twice would be two chances to drift.
   if (theme === 'light') {
-    primaryRamp(hue).forEach((color, index) => {
+    const ramp = primaryRamp(hue);
+    ramp.forEach((color, index) => {
       pairs.push([`--p-${PRIMARY_STEPS[index]}`, formatOklch(quantize(color))]);
     });
+
+    /**
+     * `--p-rgb` — the same colour again as a bare `R G B` triplet.
+     *
+     * `tokens/color.css` declares it once as `214 96 22` (amber `--p-600`) for
+     * the `rgb(var(--p-rgb) / alpha)` washes: the glows, the tinted shadows and
+     * the soft fills across the landing page and the link hub. It is the one
+     * brand value that is not an `oklch()` string, because a CSS custom
+     * property cannot be given an alpha without being decomposed first.
+     *
+     * Not emitting it was the bug: a tenant on a blue hue got blue everywhere
+     * the ramp reaches and ORANGE glows everywhere the washes do. Nothing
+     * errors; the page is simply two brands at once.
+     *
+     * Step 600 to match what the file already ships, and the QUANTIZED colour
+     * so this triplet and `--p-600` are the same colour rather than two
+     * roundings of one.
+     */
+    const washSource = quantize(ramp[6] as Oklch);
+    const { r, g, b } = oklchToRgb(washSource);
+    pairs.push([
+      '--p-rgb',
+      `${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)}`,
+    ]);
   }
   return pairs;
 }

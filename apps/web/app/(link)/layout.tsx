@@ -1,4 +1,5 @@
 import './styles/linkhub.css';
+import { IS_AYMAN } from '@/lib/tenant';
 
 /**
  * The bio-link shell — one page, `/links`, and deliberately almost nothing else.
@@ -55,7 +56,25 @@ export default function LinkLayout({ children }: { children: React.ReactNode }) 
 
         See `styles/linkhub.css` §1 for what they are made of.
       */}
-      <div className="linkhub__stage" aria-hidden="true" />
+      {/*
+        ⚠️ `.linkhub__stage` is a PHOTOGRAPH OF AYMAN, not an abstract wash:
+        `linkhub.css:108` sets `background-image: url('/brand/hero-ai-dragon-2
+        .webp')` — the hero composite, him at a microphone with the dragon
+        behind him — blurred and darkened into the page's atmosphere.
+
+        Because it arrives through a CSS `url()` it is reachable by none of the
+        gates that cover the rest of his imagery: not `getBrandAsset`, and not
+        the identity spec, which scans `.ts/.tsx/.mjs/.js` and never opened a
+        stylesheet. It survived every pass until a second instructor's stack
+        was actually run.
+
+        Gated at the element rather than in the stylesheet so the file is never
+        requested at all on another stack. `.linkhub__bloom` stays: it is a
+        radial gradient built from the accent tokens, so it is already that
+        deployment's own colour, and it is what the page falls back to — the
+        glow alone still reads as a finished background rather than a hole.
+      */}
+      {IS_AYMAN ? <div className="linkhub__stage" aria-hidden="true" /> : null}
       <div className="linkhub__bloom" aria-hidden="true" />
       {children}
     </div>

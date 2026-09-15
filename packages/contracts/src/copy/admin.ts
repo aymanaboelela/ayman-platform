@@ -1200,6 +1200,27 @@ const admin = {
     accentPreviewLabel: 'معاينة اللون',
     /** The seventh option in the accent picker: this instructor's own hue. */
     accentCustom: 'لون خاص',
+    /**
+     * WHICH landing page renders — the picker that sits above the shape one.
+     *
+     * The two labels have to be told apart at a glance by someone who has read
+     * neither docblock, so «نسخة» (which page) and «شكل» (how that page is
+     * arranged) carry the whole distinction. The hint spends its one line
+     * saying the thing an instructor would otherwise discover the slow way:
+     * that the shape picker underneath does nothing unless they are on
+     * «كلاسيك» — on «الترمينال» or «اللوح» it is a control that silently
+     * changes nothing, which reads as a broken setting rather than an
+     * inapplicable one.
+     */
+    landingPreset: 'نسخة الصفحة الرئيسية',
+    landingPresetHint:
+      'دي صفحة رئيسية تانية خالص، مش نفس الصفحة بلون مختلف. «شكل الصفحة الرئيسية» اللي تحت بيشتغل مع «كلاسيك» بس.',
+    landingPresetClassic: 'كلاسيك',
+    landingPresetClassicHint: 'الصفحة الشغالة دلوقتي زي ما هي بالظبط — شاشة أولى غامقة وكروت.',
+    landingPresetNeon: 'الترمينال',
+    landingPresetNeonHint: 'صفحة غامقة على طول، ما بتفتحش مع الوضع الفاتح، بخط كمبيوتر وسطور مضيّة.',
+    landingPresetBoard: 'اللوح',
+    landingPresetBoardHint: 'بلوكات لون صريحة ورا بعض، الكلام كله في النص، ألوان فاقعة وخط كبير.',
     /** The landing page's shape — a different page, not the same page recoloured. */
     landingLayout: 'شكل الصفحة الرئيسية',
     landingLayoutHint:

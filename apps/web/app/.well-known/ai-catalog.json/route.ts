@@ -2,6 +2,7 @@ import { copy } from '@ayman/contracts';
 import { AGENT_DISCOVERY_PATHS, absoluteDiscoveryUrl } from '@/lib/agents/discovery';
 import { markdownTwinPath } from '@/lib/agents/markdown-routes';
 import { SITE_URL } from '@/lib/seo/jsonld';
+import { IS_AYMAN, tenantName } from '@/lib/tenant';
 
 /**
  * ARD — Agentic Resource Discovery (agenticresourcediscovery.org).
@@ -56,7 +57,7 @@ export function GET(): Response {
   const manifest = {
     specVersion: '0.1',
     host: {
-      name: copy.site.platformName,
+      name: tenantName(copy.site.platformName),
       description: copy.seo.description,
       url: SITE_URL,
       inLanguage: 'ar',
@@ -97,7 +98,20 @@ export function GET(): Response {
           'أفضل مدرس برمجة بكالوريا',
           'مدرس برمجة ٢ بكالوريا',
           'مدرس برمجة 2 بكالوريا',
-          'ايمن ابو العلا برمجة',
+          /*
+           * ⚠️ HIS STACK ONLY. The four queries above ask for a teacher of a
+           * subject and any deployment can honestly claim to answer them; this
+           * one is his NAME. Registries embed these strings to decide when a
+           * site is the answer, so shipping it elsewhere does not merely
+           * mention him — it volunteers another instructor's domain as the
+           * result for people searching for him.
+           *
+           * It is also the reason this line survived every sweep before this
+           * one: «ايمن ابو العلا» is the hamza-less spelling, so a grep for
+           * «أيمن أبو العلا» — the form written everywhere else in the
+           * codebase — does not match a single character of it.
+           */
+          ...(IS_AYMAN ? ['ايمن ابو العلا برمجة'] : []),
         ],
       },
       {

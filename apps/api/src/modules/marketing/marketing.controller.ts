@@ -10,6 +10,8 @@ import {
   Query,
   UsePipes,
 } from '@nestjs/common';
+import { copy } from '@ayman/contracts/copy';
+import { tenantName } from '../../common/tenant';
 import { ZodValidationPipe } from 'nestjs-zod';
 import type {
   AudiencePreview,
@@ -43,7 +45,14 @@ import {
  * It names the platform and says it is a test, because the recipient is a real
  * person whose phone just buzzed for the instructor's debugging.
  */
-const DEFAULT_TEST_TEXT = 'رسالة تجربة من منصة م. أيمن أبو العلا — لو وصلتك، الرسايل شغالة تمام ✅';
+/**
+ * ⚠️ `tenantName`, because this message LEAVES THE BUILDING. It is sent from
+ * the deployment's own WhatsApp number to whoever the admin is testing with,
+ * and it was signing itself «منصة م. أيمن أبو العلا» on every stack — a second
+ * instructor's first test message introduced itself as somebody else's
+ * platform, from their number, to their own phone.
+ */
+const DEFAULT_TEST_TEXT = `رسالة تجربة من ${tenantName(copy.site.platformName)} — لو وصلتك، الرسايل شغالة تمام ✅`;
 
 /**
  * `/api/admin/marketing` — the only way into the campaign machinery.

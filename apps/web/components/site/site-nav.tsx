@@ -5,9 +5,40 @@ import { usePathname } from 'next/navigation';
 import { useRef, useState, type ReactNode } from 'react';
 import { copy } from '@ayman/contracts/copy';
 import { ScrollTrigger } from '@/lib/gsap';
+import { tenantName } from '@/lib/tenant';
 import { useGsap } from '@/components/motion/use-gsap';
 import { MediaSlot } from '@/components/site/media-slot';
 import { ThemeToggle } from '@/components/theme-toggle';
+
+/**
+ * The name this header says out loud.
+ *
+ * It is read twice — as the logo link's `aria-label`, and as the wordmark's
+ * `alt` when `<MediaSlot>` has no registered logo — so it is resolved once
+ * here rather than pulled from `copy` at both call sites and gated at neither.
+ *
+ * `tenantName`, not `copy.site.name`: this header is mounted by
+ * `(site)/layout.tsx` on EVERY public page, which makes it the first thing a
+ * crawler and a screen reader meet on a second instructor's site. «أيمن أبو
+ * العلا» in that position is not a cosmetic leak.
+ *
+ * ⚠️ This is the one `'use client'` file in the name gate, and the gate is
+ * only as strong as the SERVER render. `TENANT_KEY` carries no `NEXT_PUBLIC_`
+ * prefix, so it is present while the RSC payload is produced and absent from
+ * the browser bundle, where `IS_AYMAN` falls back OPEN to `true`. What that
+ * leaves correct is the thing that matters most here: the HTML that actually
+ * ships — what a crawler reads, what a screen reader announces on first paint
+ * — is built on the server. Both values also land on ATTRIBUTES rather than
+ * text content, and React does not re-patch attribute mismatches during
+ * hydration.
+ *
+ * The airtight fix is to resolve the name on the server and hand it to this
+ * component as a PROP, which is an edit to `(site)/layout.tsx`. Until that
+ * happens: do not move this read into anything that renders text on the
+ * client, and do not copy this pattern into a client component whose output is
+ * a visible string.
+ */
+const SITE_NAME = tenantName(copy.site.name);
 
 /**
  * The marketing header. Two states:
@@ -109,7 +140,7 @@ export function SiteNav({ accountSlot }: { accountSlot: ReactNode }) {
     >
       <div className="site-nav__inner">
         <div className="site-nav__start">
-          <Link href="/" className="site-nav__logo" aria-label={copy.site.name}>
+          <Link href="/" className="site-nav__logo" aria-label={SITE_NAME}>
             {/*
               The portrait is decorative here, not informative: the wordmark
               immediately after it states the name, and the Link already carries
@@ -121,7 +152,7 @@ export function SiteNav({ accountSlot }: { accountSlot: ReactNode }) {
               the largest one for a 36px circle.
             */}
             <MediaSlot kind="mark" alt="" className="site-mark" sizes="36px" />
-            <MediaSlot kind="logo" alt={copy.site.name} />
+            <MediaSlot kind="logo" alt={SITE_NAME} />
           </Link>
           <ThemeToggle />
         </div>

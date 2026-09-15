@@ -10,6 +10,7 @@ import {
   ACCENT_SLOTS,
   BrandingSchema,
   LANDING_LAYOUTS,
+  LANDING_PRESETS,
   RADIUS_SLOTS,
   type Branding,
 } from '@ayman/contracts/admin/settings';
@@ -75,6 +76,34 @@ const HUE_STOPS = Array.from({ length: 25 }, (_, index) => {
  * `accentHue`'s job right above it, and tinting these would suggest the two
  * settings are one.
  */
+/**
+ * WHICH page, as opposed to what shape that page takes.
+ *
+ * Deliberately NOT given a `LayoutPreview`-style drawing. Those three previews
+ * work because the thing they draw is a shape and nothing else — monochrome on
+ * purpose, so an admin cannot read a colour into a control that does not set
+ * one. A preset is a whole page: its colour, its typeface and its structure all
+ * move together, and a 66px monochrome sketch of «الترمينال» next to one of
+ * «اللوح» would be two near-identical grey rectangles claiming to show the
+ * difference between them. A wrong drawing is worse than none, so this picker
+ * is the label and the one-line hint, in the same `SettingsField` +
+ * `RadioGroup` shape as every other control on this form.
+ */
+const PRESET_LABEL: Record<(typeof LANDING_PRESETS)[number], { name: string; hint: string }> = {
+  classic: {
+    name: copy.admin.settings.landingPresetClassic,
+    hint: copy.admin.settings.landingPresetClassicHint,
+  },
+  neon: {
+    name: copy.admin.settings.landingPresetNeon,
+    hint: copy.admin.settings.landingPresetNeonHint,
+  },
+  board: {
+    name: copy.admin.settings.landingPresetBoard,
+    hint: copy.admin.settings.landingPresetBoardHint,
+  },
+};
+
 const LAYOUT_LABEL: Record<(typeof LANDING_LAYOUTS)[number], { name: string; hint: string }> = {
   classic: {
     name: copy.admin.settings.landingLayoutClassic,
@@ -293,6 +322,45 @@ export function BrandingForm({ defaultValues, assets }: BrandingFormProps) {
           )}
         />
       ) : null}
+
+      {/*
+        ⚠️ ABOVE the shape picker, and the order is the meaning: this control
+        decides which page renders, and the one under it only has an effect
+        once that answer is «كلاسيك». Reading them the other way round — shape
+        first, then page — is how an instructor ends up choosing a shape, then
+        a preset that discards it, and reporting that the shape setting does
+        not save.
+      */}
+      <SettingsField
+        name="landingPreset"
+        label={copy.admin.settings.landingPreset}
+        description={copy.admin.settings.landingPresetHint}
+        issues={issues}
+        render={(controlProps) => (
+          <RadioGroup
+            {...controlProps}
+            value={form.watch('landingPreset') ?? defaultValues.landingPreset}
+            onValueChange={(value) =>
+              form.setValue('landingPreset', value as Branding['landingPreset'], {
+                shouldValidate: true,
+              })
+            }
+            aria-label={copy.admin.settings.landingPreset}
+          >
+            {LANDING_PRESETS.map((preset) => (
+              <label key={preset} className="flex items-start gap-3 py-1">
+                <RadioGroupItem value={preset} />
+                <span className="flex flex-col">
+                  <span className="text-fg">{PRESET_LABEL[preset].name}</span>
+                  <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
+                    {PRESET_LABEL[preset].hint}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </RadioGroup>
+        )}
+      />
 
       <SettingsField
         name="landingLayout"

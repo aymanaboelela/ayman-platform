@@ -1,0 +1,2827 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   LANDING PRESETS — the stylesheets for the pages that are NOT Ayman's.
+
+   `branding.landingPreset` (see `LandingPresetSchema` in
+   `packages/contracts/src/admin/settings.ts`) chooses which page component
+   `app/(site)/page.tsx` renders. `classic` renders the page that ships;
+   `neon` («الترمينال») and `board` («اللوح») render their own components
+   under `components/site/presets/`. This file is where those two components'
+   CSS lives — appended below, one section per preset, by the agent that
+   builds each page.
+
+   ── WHY ONE SHARED FILE AND NOT AN IMPORT PER COMPONENT ──────────────────
+   A `import './neon.css'` inside `neon-landing.tsx` would be hoisted into
+   this route's stylesheet by the bundler ANYWAY — the component is a server
+   component on the landing route — so the choice is not "scoped vs global",
+   it is "global from a place you can see, or global from a place you cannot".
+   Collecting them here means one file to read when a rule on the landing page
+   comes from somewhere unexpected, and one place where the scoping rule below
+   can be stated once and checked.
+
+   ── ⚠️ THE RULE EVERY SECTION BELOW MUST OBEY ────────────────────────────
+   EVERY selector must be scoped to its own preset's root. Ayman's landing
+   page renders from this same route and therefore downloads this same
+   stylesheet: a bare `.site h1`, a `.hero { … }`, or anything else that can
+   match outside a preset root changes HIS page — the one with real students
+   and real money on it — and it will do so silently, because nothing in the
+   type system or the test suite notices a CSS rule that matched one element
+   too many. «منصتي زي ما هي بالظبط» is the standing instruction, and on this
+   file it means: if a selector could match on `classic`, it is wrong.
+
+   There is deliberately NO `classic` section and there must never be one.
+   `classic` is what `theme.css`, `sections.css` and `layouts.css` already
+   describe; a rule for it here would be a second place his page is defined
+   and the two would drift. (`layouts.css` carries the same prohibition for
+   the same reason.)
+
+   ── HOUSE RULES, SAME AS EVERY STYLESHEET ON THIS SURFACE ────────────────
+   · No hex literals. Colours come from the token layer only — `--site-*`
+     (`theme.css`), `--p-*` / `--a-*` / `--n-*` (`packages/ui/src/tokens/`),
+     `--r-*` (`packages/ui/src/tokens/space.css`).
+     `lib/css-token-coverage.test.ts` fails the build on a `var(--x)` that
+     nothing declares, so check before inventing a name.
+   · No `!important`. This file is imported LAST from `(site)/layout.tsx` —
+     after `layouts.css` AND after `books.css`, so a preset can restyle the
+     book strip it renders — which makes source order enough on its own.
+   · RTL: the document is `dir="rtl"`. `inset-inline-*`, `margin-inline-*`,
+     `padding-inline-*` — never `left` / `right`.
+   · Responsive to ~390px, and the body must never scroll horizontally.
+
+   ── THE FILE IS EMPTY ON PURPOSE ─────────────────────────────────────────
+   Nothing here yet but this header. `neon` appends its section first, `board`
+   after it; neither touches the other's, and neither touches this comment.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ═══ BOARD ═══   «اللوح» — `branding.landingPreset === 'board'`
+
+   Rendered by `components/site/presets/board/board-landing.tsx`, which puts
+   `data-preset="board"` on its own `<main>` and nowhere else in the repo.
+   EVERY selector below is scoped under that attribute. Nothing here can match
+   on `classic`, on `neon`, or on any other route in this group — see the
+   header of this file for why one unscoped selector would silently change a
+   live landing page with real students on it.
+
+   ── WHAT THE LOOK IS ─────────────────────────────────────────────────────
+   Solid blocks of the brand colour, everything centred, bright between them.
+   The opener is one filled panel with a curved bottom edge; the year tiles
+   are the loudest object on the page; the closer is the same block coming
+   back with the curve on the other edge. No gradients standing in for depth,
+   no glass, no glow — a poster, not a product site.
+
+   ── THE ONE COLOUR DECISION WORTH READING ────────────────────────────────
+   The deep blocks do NOT follow `data-theme`. They are `--p-900` / `--p-800`,
+   and the eleven `--p-*` steps are declared once at `:root` in
+   `packages/ui/src/tokens/color.css` and are NOT redeclared in either dark
+   block — the ramp is theme-independent by construction, including when it is
+   generated from a tenant's own `accentHue` (`rampDeclarations` emits `--p-*`
+   on the light pass only; see `packages/ui/src/lib/ramp.ts`).
+
+   That is deliberate and it is the same argument `classic`'s hero makes for
+   staying dark in both themes: the block is the BRAND, not a surface. A navy
+   panel that turned pale in light mode and bright in dark mode would be three
+   different brands depending on a system setting.
+
+   It is also what fixes the contrast without a second palette. The `--p-*`
+   ladder pins LIGHTNESS per step whatever hue is generated into it, and Oklab
+   lightness cubes to relative luminance, so these numbers hold for every
+   accent an admin can choose — nothing below needs re-measuring after a hue
+   change:
+
+     `--site-ink-fg` (L 0.965) on `--p-800` (L 0.445)   ≈ 6.9:1
+     `--site-ink-fg` on `--p-900` (L 0.360)             ≈ 9.8:1
+     `--site-ink-fg` on `--p-950` (L 0.235)             ≈ 15:1
+     `--board-on-slab-2` (82% white) on `--p-900`       ≈ 8.2:1
+
+   ⚠️ `--site-ink-fg-2` is the token that does NOT survive the move, and it is
+   the obvious one to reach for because `classic` uses it for exactly this job.
+   It was tuned against `--ink` (L 0.155), which is far deeper than any of
+   these: on `--p-800` it measures ≈3.8:1, under the bar for body text. That is
+   the whole reason `--board-on-slab-2` exists as its own value rather than as
+   an alias of it.
+
+   The TILES carry no secondary text at all regardless — everything on a tile
+   is full-strength white and the hierarchy is size and weight. That is a
+   design call, not a contrast one: a poster does not whisper.
+
+   What DOES follow the theme is the page around the blocks — the white/near
+   black ground, the card fills, the pale accent bands. Those are three token
+   overrides at the bottom of the block below and nothing else.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-preset='board'] {
+  /* ---- the deep blocks (theme-independent — see the banner) ---- */
+  /** The opener panel and the closer. */
+  --board-slab: var(--p-900);
+  /** One step brighter: the year tiles, the small filled discs (feature
+      badges, medals, quote avatars). Bright enough that a tile pops off the
+      panel above it instead of reading as more of the same block. */
+  --board-tile: var(--p-800);
+  /** One step deeper: the plate inside the panel, which has to sit BEHIND the
+      copy without competing with it. */
+  --board-plate: var(--p-950);
+  --board-on-slab: var(--site-ink-fg);
+  /** ~82% white — secondary text on a deep block. ≈8.2:1 on `--p-900` and
+      ≈5.8:1 on `--p-800`, so it is safe on either; it exists because
+      `--site-ink-fg-2`, which is what `classic` uses for this job, is not
+      (≈3.8:1 on `--p-800`). See the banner. */
+  --board-on-slab-2: color-mix(in oklch, var(--site-ink-fg), transparent 18%);
+  --board-rule: var(--site-ink-line);
+  /** A white pill on a deep block, with deep text on it. Both halves are
+      theme-independent tokens for the same reason the blocks are: this pill
+      only ever appears ON a block. */
+  --board-pill: var(--site-ink-fg);
+  --board-pill-ink: var(--site-ink);
+
+  /* ---- the bright page between the blocks (follows the theme) ---- */
+  --board-page: var(--site-bg);
+  --board-ink: var(--site-fg);
+  --board-ink-2: var(--site-fg-2);
+  --board-line: var(--site-line);
+  --board-accent-ink: var(--site-accent-text);
+  /** The alternating band. Overridden for dark at the bottom of this section:
+      `--p-50` on a `#08090A` page is a white flash, not a tint. */
+  --board-tint: var(--p-50);
+  --board-tint-line: var(--p-100);
+  /**
+   * The card fill, and it is NOT `--site-card`.
+   *
+   * `--site-card` resolves to `--n-1` in light and `--n-2` in dark, which is
+   * the same value as `--site-bg` in light and the same value as this
+   * preset's dark `--board-tint` in dark. Cards would be invisible against
+   * one ground or the other in both themes. `--n-1` over the tint and `--n-3`
+   * over the near-black page are a real step in each.
+   */
+  --board-card: var(--n-1);
+
+  /* ---- geometry ---- */
+  /** The vertical reach of the panel's arc. The horizontal half is 50%, so
+      the curve spans the whole edge rather than rounding two corners. */
+  --board-curve: clamp(1.5rem, 5vw, 3.5rem);
+  --board-gap: clamp(0.875rem, 2.2vw, 1.5rem);
+}
+
+/* Dark: only what genuinely cannot survive the near-black page. The deep
+   blocks, the white-on-block text and the pill are all absent from this list
+   on purpose — see the banner.
+
+   Selector shape copied from `theme.css` and it is load-bearing:
+   `:root:not([data-theme='light'])` matches when NO attribute is stamped,
+   which is every visitor who has never touched the toggle, so this block is
+   the default and the media query below re-asserts light for a
+   light-preferring system before the theme script runs. */
+:root[data-theme='dark'] [data-preset='board'],
+:root:not([data-theme='light']) [data-preset='board'] {
+  --board-tint: var(--n-2);
+  --board-tint-line: var(--border);
+  --board-card: var(--n-3);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) [data-preset='board'] {
+    --board-tint: var(--p-50);
+    --board-tint-line: var(--p-100);
+    --board-card: var(--n-1);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Shell and bands
+   --------------------------------------------------------------------------- */
+
+/* Narrower than `.site-shell`'s 1440px on purpose: this page is one centred
+   column of headings and a few grids, and a centred 46rem heading stranded in
+   the middle of a 1440px band reads as a page that failed to lay out. 68rem is
+   about 100 characters of Arabic body text at the sizes below.
+
+   It is its own class rather than an override of `.site-shell`, which would
+   work (scoped) and would be the wrong shape: a reader debugging a width would
+   have to know that this page redefines a class the rest of the surface shares. */
+[data-preset='board'] .board-shell {
+  inline-size: 100%;
+  max-inline-size: 68rem;
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 2.5rem);
+}
+
+[data-preset='board'] .board-band {
+  padding-block: clamp(3rem, 7vw, 5.5rem);
+  background: var(--board-page);
+}
+
+/* EVERY OTHER BAND takes the pale accent tint, counted rather than assigned.
+   «الصفحة بيضة، ويتبادل معاها لون فاتح من لون البراند».
+
+   ## Why `:nth-of-type` and not a `--tint` modifier per block type
+
+   The block list is composed by the tenant: order is theirs, and so is which
+   blocks exist at all. A per-type table («the feature grid is tinted, the year
+   tiles are not») produces two identical bands in a row for any order it was
+   not written against, which is most of them — the shipped neutral fallback is
+   hero → courses → years, and two of those three would have landed on the same
+   ground.
+
+   The counted version cannot get that wrong, and it survives the one thing a
+   type table cannot: `<BoardBooks>` renders NOTHING on an empty shop. A null
+   render produces no element, so the count simply closes up and the bands after
+   it keep alternating. A modifier baked into the markup would instead leave the
+   rhythm inverted from that point down, only on shops with no stock — which is
+   a bug nobody would ever reproduce deliberately.
+
+   Every section on this page is a `<section>`; `<JsonLd>` emits a `<script>`
+   and the fallback heading is an `<h1>`, so neither is counted. `.board-panel`
+   and `.board-closer` ARE counted — correctly, since they are bands too, just
+   solid ones.
+
+   ⚠️ `:not(.board-band--slab)` is load-bearing and not tidiness.
+   `.board-band--slab` is (0,2,0) and this selector without the `:not()` would
+   be (0,3,0) — so a `stats` block landing on an even count would have its solid
+   fill repainted with the tint, and the white text on it would be white on
+   near-white. */
+[data-preset='board'] .board-band:not(.board-band--slab):nth-of-type(even) {
+  background: var(--board-tint);
+}
+
+/* A whole band as one solid block — the `stats` figures.
+
+   `--board-slab` and not `--board-tile`, even though the brighter step is the
+   more poster-ish of the two: the labels under those figures are small text in
+   `--board-on-slab-2`, which clears the bar comfortably on `--p-900` and does
+   not on `--p-800`. The band also reads correctly as the opening block coming
+   back, which is what the closer does at the foot of the page.
+
+   `color-scheme: dark` so a scrollbar or a form control that ever lands inside
+   it is painted for a dark ground rather than as a white slot in a navy
+   panel. */
+[data-preset='board'] .board-band--slab {
+  background: var(--board-slab);
+  color: var(--board-on-slab);
+  color-scheme: dark;
+}
+
+[data-preset='board'] .board-band__foot {
+  display: flex;
+  justify-content: center;
+  margin-block-start: clamp(1.75rem, 4vw, 2.5rem);
+}
+
+/* ---------------------------------------------------------------------------
+   Heading
+   --------------------------------------------------------------------------- */
+
+[data-preset='board'] .board-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  max-inline-size: 46rem;
+  margin-inline: auto;
+  margin-block-end: clamp(2rem, 5vw, 3rem);
+  text-align: center;
+}
+
+[data-preset='board'] .board-head__title {
+  margin: 0;
+  font-size: clamp(1.75rem, 4.6vw, 2.875rem);
+  line-height: 1.2;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--board-ink);
+}
+
+[data-preset='board'] .board-head__lead {
+  margin: 0;
+  font-size: clamp(1rem, 1.5vw, 1.125rem);
+  line-height: 1.8;
+  color: var(--board-ink-2);
+}
+
+/* The `whyRail` block's second paragraph. One step down so the two read as a
+   lead and its footnote rather than as two competing sentences. */
+[data-preset='board'] .board-head__lead--2 {
+  font-size: var(--fs-text-sm);
+  line-height: 1.75;
+}
+
+/* Inside a solid band the heading inherits the band's own foreground instead
+   of the page ink, which would be near-black on navy. */
+[data-preset='board'] .board-band--slab .board-head__title,
+[data-preset='board'] .board-band--slab .board-head__lead {
+  color: inherit;
+}
+
+/* ---------------------------------------------------------------------------
+   Chip
+   --------------------------------------------------------------------------- */
+
+/* Not `.site-badge`: that one is a mono, uppercase, `direction: ltr` pill
+   built for Latin eyebrows («02 / المنهج»), and every chip on this page is a
+   plain Arabic word. Forcing LTR on «الكورسات» is how a chip's punctuation
+   ends up on the wrong side. */
+[data-preset='board'] .board-chip {
+  display: inline-flex;
+  align-items: center;
+  padding-block: 0.3125rem;
+  padding-inline: 0.875rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--board-tint-line);
+  background: color-mix(in oklch, var(--p-500), transparent 88%);
+  color: var(--board-accent-ink);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+
+[data-preset='board'] .board-chip--on-slab {
+  border-color: var(--board-rule);
+  background: color-mix(in oklch, var(--site-ink-fg), transparent 88%);
+  color: var(--board-on-slab);
+}
+
+/* ---------------------------------------------------------------------------
+   The opener panel
+   --------------------------------------------------------------------------- */
+
+[data-preset='board'] .board-panel {
+  position: relative;
+  isolation: isolate;
+  background: var(--board-slab);
+  color: var(--board-on-slab);
+  color-scheme: dark;
+  text-align: center;
+  /* `<SiteNav>` is `position: fixed` at `--site-nav-h`, so the panel owes it
+     that much clearance before its own top padding starts. Everything under
+     the fold is the second value. */
+  padding-block: calc(var(--site-nav-h) + clamp(2.25rem, 6vw, 4rem)) clamp(2.75rem, 7vw, 4.5rem);
+  /* THE CURVED BOTTOM EDGE. Two logical corner properties rather than the
+     `border-radius` shorthand — the shorthand is physical (top-left,
+     top-right, …) and this document is RTL, so a reader would have to hold the
+     mirroring in their head to check it. A 50% horizontal radius makes the two
+     corners meet in the middle, which is one arc across the whole edge instead
+     of two rounded corners; `--board-curve` is how far it reaches down. */
+  border-end-start-radius: 50% var(--board-curve);
+  border-end-end-radius: 50% var(--board-curve);
+  /* The plate inside can reach the panel's own edge; the arc has to clip it. */
+  overflow: hidden;
+}
+
+[data-preset='board'] .board-panel__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  inline-size: 100%;
+  max-inline-size: 46rem;
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 2.5rem);
+  /* Clear of the arc, so a long name never lands in the clipped corner. */
+  padding-block-end: var(--board-curve);
+}
+
+[data-preset='board'] .board-panel__title {
+  margin: 0;
+  font-size: clamp(2rem, 7vw, 3.75rem);
+  line-height: 1.12;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+}
+
+[data-preset='board'] .board-panel__role {
+  margin: 0;
+  font-size: clamp(1.0625rem, 2.4vw, 1.375rem);
+  font-weight: var(--fw-semibold);
+  color: var(--board-on-slab-2);
+}
+
+[data-preset='board'] .board-panel__lead {
+  margin: 0;
+  max-inline-size: 38rem;
+  font-size: var(--fs-text-base);
+  line-height: 1.85;
+  color: var(--board-on-slab-2);
+}
+
+[data-preset='board'] .board-panel__cta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-block-start: 0.5rem;
+}
+
+/* The hero block's optional row of figures. Empty on both shipped block lists
+   — see `DEFAULT_HOME_BLOCKS` — so this normally matches nothing. */
+[data-preset='board'] .board-panel__figures {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem 0;
+  margin-block: 0.5rem 0;
+  margin-inline: 0;
+}
+
+[data-preset='board'] .board-panel__figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  /* Logical, so the hairline sits on the reading-start side of each cell and
+     the `:first-child` reset takes it off the first one in RTL as in LTR. */
+  padding-inline: clamp(1rem, 3.5vw, 2rem);
+  border-inline-start: 1px solid var(--board-rule);
+}
+
+[data-preset='board'] .board-panel__figure:first-child {
+  border-inline-start: 0;
+}
+
+[data-preset='board'] .board-panel__figure-n {
+  font-size: clamp(1.375rem, 3vw, 1.875rem);
+  font-weight: var(--fw-bold);
+  line-height: 1.1;
+}
+
+[data-preset='board'] .board-panel__figure-l {
+  margin: 0;
+  font-size: var(--fs-text-sm);
+  color: var(--board-on-slab-2);
+}
+
+/* ---------------------------------------------------------------------------
+   The mark, and the board it is written on while there is none
+   --------------------------------------------------------------------------- */
+
+[data-preset='board'] .board-mark {
+  display: flex;
+  justify-content: center;
+  inline-size: 100%;
+  margin-block-start: clamp(1.25rem, 3.5vw, 2rem);
+}
+
+/* BOTH axes `auto`, which is the documented way to override `next/image`'s
+   intrinsic box without tripping its "either width or height modified, but not
+   the other" warning. A branding asset's real dimensions are not in the
+   settings payload, so the component passes a placeholder ratio and these two
+   caps are what actually decide the size — a square mark and a wide lockup
+   both land correctly without anyone declaring which it was. */
+[data-preset='board'] .board-mark__img {
+  inline-size: auto;
+  block-size: auto;
+  max-inline-size: min(100%, 22rem);
+  max-block-size: clamp(4.5rem, 13vw, 8rem);
+  object-fit: contain;
+}
+
+/* The designed empty state. An outlined rectangle here would read as an image
+   that failed to load, on the first screen of the first page, for the weeks
+   before a new instructor uploads a logo. This is a slab: deeper than the
+   panel, edge-lit along its top, with the deployment's initial written on it
+   and a rule drawn underneath. */
+[data-preset='board'] .board-mark__slab {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: min(100%, 22rem);
+  aspect-ratio: 16 / 7;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--board-rule);
+  background: var(--board-plate);
+  /* The edge light: a hairline of the panel's own foreground along the top,
+     which is what makes a flat rectangle read as a surface catching light
+     rather than as a hole cut in the panel. */
+  box-shadow: inset 0 1px 0 0 color-mix(in oklch, var(--site-ink-fg), transparent 84%);
+  overflow: hidden;
+}
+
+/* A soft pool above the glyph, so the slab has a light source instead of being
+   uniformly filled. `z-index` is unnecessary — it is painted before the
+   grid items in source order and the glyph sits above it. */
+[data-preset='board'] .board-mark__slab::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    62% 80% at 50% 26%,
+    color-mix(in oklch, var(--site-ink-fg), transparent 90%),
+    transparent 72%
+  );
+}
+
+[data-preset='board'] .board-mark__glyph {
+  position: relative;
+  font-size: clamp(2.75rem, 11vw, 4.5rem);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  color: var(--board-on-slab-2);
+}
+
+[data-preset='board'] .board-mark__rule {
+  position: absolute;
+  inset-inline: 26%;
+  inset-block-end: 17%;
+  block-size: 2px;
+  border-radius: var(--r-full);
+  background: color-mix(in oklch, var(--site-ink-fg), transparent 72%);
+}
+
+/* ---------------------------------------------------------------------------
+   Feature cards — `whyRail`
+   --------------------------------------------------------------------------- */
+
+[data-preset='board'] .board-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  gap: var(--board-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A ROW card: the badge on the leading edge, the words beside it. The section
+   heading above is centred and these are not, deliberately — a circular badge
+   centred over a centred title over centred body text is three centred things
+   in a 19rem box with no edge to read from, and eight of them in a grid read
+   as wallpaper. Named grid areas rather than two nested flex rows so the badge
+   spans both text rows and stays top-aligned to the title whatever the body
+   wraps to. */
+[data-preset='board'] .board-feature {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'badge title'
+    'badge body';
+  align-items: start;
+  column-gap: 0.875rem;
+  row-gap: 0.25rem;
+  padding: clamp(1.125rem, 2.5vw, 1.5rem);
+  border: 1px solid var(--board-line);
+  border-radius: var(--r-lg);
+  background: var(--board-card);
+  box-shadow: var(--site-shadow-sm);
+}
+
+[data-preset='board'] .board-feature__badge {
+  grid-area: badge;
+  display: grid;
+  place-items: center;
+  inline-size: 3rem;
+  block-size: 3rem;
+  border-radius: 50%;
+  background: var(--board-tile);
+  color: var(--board-on-slab);
+}
+
+[data-preset='board'] .board-feature__title {
+  grid-area: title;
+  margin: 0;
+  font-size: var(--fs-text-lg);
+  line-height: var(--lh-text-lg);
+  font-weight: var(--fw-bold);
+  color: var(--board-ink);
+}
+
+[data-preset='board'] .board-feature__body {
+  grid-area: body;
+  margin: 0;
+  font-size: var(--fs-text-sm);
+  line-height: 1.75;
+  color: var(--board-ink-2);
+}
+
+/* ---------------------------------------------------------------------------
+   Year tiles — the loudest object on the page
+   --------------------------------------------------------------------------- */
+
+[data-preset='board'] .board-years {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--board-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The `<li>` is a flex box only so the anchor inside it can stretch to the
+   grid track's full height — two tiles side by side must be the same height
+   whether or not one of them carries a course count. */
+[data-preset='board'] .board-tile {
+  display: flex;
+}
+
+[data-preset='board'] .board-tile__link {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  padding-block: clamp(1.75rem, 4.5vw, 2.5rem) clamp(1.25rem, 3vw, 1.75rem);
+  padding-inline: 1.25rem;
+  border-radius: var(--r-lg);
+  background: var(--board-tile);
+  color: var(--board-on-slab);
+  text-align: center;
+  text-decoration: none;
+  transition:
+    transform var(--d-hover) var(--ease-pop),
+    box-shadow var(--d-hover) var(--ease);
+}
+
+[data-preset='board'] .board-tile__link:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--site-shadow-lg);
+}
+
+/* The global ring is `--a-9` on the root; pushed out so it traces the tile's
+   edge rather than sitting on the fill, where a bright amber line on a deep
+   block reads as part of the artwork. */
+[data-preset='board'] .board-tile__link:focus-visible {
+  outline-offset: 3px;
+}
+
+[data-preset='board'] .board-tile__eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  letter-spacing: var(--tracking-label);
+}
+
+/* ⚠️ `direction: ltr; unicode-bidi: isolate` — not optional.
+
+   The document is `dir="rtl"` and a Western digit is bidi-weak: on its own it
+   is fine, but in a run with Arabic around it the resolution can reorder a
+   two-digit value. Isolating makes the numeral its own run whatever ends up
+   beside it. Western digits and not Arabic-Indic because that is what every
+   number on this platform uses — `formatEGP` pins `-u-nu-latn` deliberately,
+   and a page that prints «٢» here and «250» on a price card one scroll away is
+   printing two number systems. */
+[data-preset='board'] .board-tile__n {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-size: clamp(3.25rem, 11vw, 5rem);
+  font-weight: var(--fw-bold);
+  line-height: 0.95;
+  letter-spacing: var(--tracking-tight);
+  font-variant-numeric: tabular-nums;
+}
+
+[data-preset='board'] .board-tile__name {
+  font-size: clamp(1.0625rem, 2.2vw, 1.25rem);
+  font-weight: var(--fw-semibold);
+}
+
+/* Full strength, like everything else on a tile — see the banner for why
+   nothing here is allowed to be a dimmed white. */
+[data-preset='board'] .board-tile__count {
+  font-size: var(--fs-text-sm);
+}
+
+/* The pill at the foot. A SOLID white fill with deep text, and NOT the
+   lightened wash of the tile that a pill on a dark panel usually is: a
+   14%-white pill on `--p-800` puts its own white label at ≈3.8:1, under the
+   bar. Filled, it is 17:1 — and it is the louder object, which is what this
+   tile is for. Both tokens are theme-independent, like the tile under them. */
+[data-preset='board'] .board-tile__go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--min-tap-size);
+  margin-block-start: 0.625rem;
+  padding-inline: 1.25rem;
+  border-radius: var(--r-full);
+  background: var(--board-pill);
+  color: var(--board-pill-ink);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+
+/* ---------------------------------------------------------------------------
+   Course cards
+   --------------------------------------------------------------------------- */
+
+[data-preset='board'] .board-courses {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--board-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-preset='board'] .board-course {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--board-line);
+  border-radius: var(--r-lg);
+  background: var(--board-card);
+  box-shadow: var(--site-shadow-sm);
+  overflow: hidden;
+  transition:
+    transform var(--d-hover) var(--ease-pop),
+    box-shadow var(--d-hover) var(--ease);
+}
+
+[data-preset='board'] .board-course:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--site-shadow-md);
+}
+
+/* `position: relative` and a height, because `<CourseArt>` with no cover
+   returns an element that is `block-size: 100%` and needs a parent that has
+   one. The `--bleed` modifier drops the ratio for the branch that returns a
+   natural-height photograph instead — see the note at the call site. */
+[data-preset='board'] .board-course__art {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--board-tint);
+  overflow: hidden;
+}
+
+[data-preset='board'] .board-course__art--bleed {
+  aspect-ratio: auto;
+}
+
+[data-preset='board'] .board-course__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 0.625rem;
+  padding: clamp(1rem, 2.5vw, 1.25rem);
+}
+
+[data-preset='board'] .board-course__title {
+  margin: 0;
+  font-size: var(--fs-text-lg);
+  line-height: var(--lh-text-lg);
+  font-weight: var(--fw-bold);
+  color: var(--board-ink);
+}
+
+/* THE STRETCHED LINK. One anchor covers the whole card, so the pill at the
+   foot can be a `<span>` and the card is clickable everywhere without a second
+   tab stop or a second identical announcement for the same destination.
+
+   The ring then has to be moved with it: the anchor itself is only as big as
+   its text, so a focus outline on it would trace the title while the card it
+   activates sits unhighlighted around it. `:has()` puts the ring on the card.
+   Browsers without `:has()` fall back to the default outline on the title —
+   still visible, just tighter — so this degrades rather than disappears. */
+[data-preset='board'] .board-course__link {
+  color: inherit;
+  text-decoration: none;
+}
+
+[data-preset='board'] .board-course__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+[data-preset='board'] .board-course:has(.board-course__link:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--a-9);
+  outline-offset: var(--focus-ring-offset);
+}
+
+[data-preset='board'] .board-course:has(.board-course__link:focus-visible) .board-course__link {
+  outline: none;
+}
+
+[data-preset='board'] .board-course__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+  margin: 0;
+  font-size: var(--fs-text-sm);
+  color: var(--board-ink-2);
+}
+
+[data-preset='board'] .board-course__meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  /* ⚠️ `min-inline-size: 0` and NOT `white-space: nowrap`. A nowrap meta line
+     is what made a lesson page wider than the phone once already: the row
+     cannot shrink, so it blows out its grid track and the whole page gains a
+     horizontal scroll. This one wraps. */
+  min-inline-size: 0;
+}
+
+/* The price, and it is the loudest thing in the card. Pushed to the bottom by
+   `margin-block-start: auto` so every card in a row lines its price up
+   whatever the titles wrapped to. */
+[data-preset='board'] .board-course__price {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  /* Logical, like every other box rule on this surface — and `auto` on the
+     block-start edge is what pushes the price to the foot of the card, so
+     every card in a row lines its price up whatever the titles wrapped to. */
+  margin-block: auto 0;
+  margin-inline: 0;
+}
+
+[data-preset='board'] .board-course__price-from {
+  font-size: var(--fs-text-xs);
+  color: var(--board-ink-2);
+}
+
+[data-preset='board'] .board-course__price-n {
+  font-size: clamp(1.375rem, 3vw, 1.75rem);
+  font-weight: var(--fw-bold);
+  line-height: 1.15;
+  color: var(--board-accent-ink);
+}
+
+[data-preset='board'] .board-course__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--min-tap-size);
+  padding-inline: 1.25rem;
+  border-radius: var(--r-full);
+  background: var(--site-accent-solid);
+  color: var(--site-on-accent);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+}
+
+/* The card is one link, so the pill follows the card's own hover rather than
+   having a hover of its own — a pill that lit up only when the cursor was on
+   the pill would imply the rest of the card was not clickable. */
+[data-preset='board'] .board-course:hover .board-course__cta {
+  background: var(--site-accent-solid-hover);
+}
+
+/* ---------------------------------------------------------------------------
+   The designed empty states — no courses, and an honour board with no names
+   --------------------------------------------------------------------------- */
+
+/* A SOLID PLATE, not a pale outlined box waiting for content.
+
+   Two reasons, and the first is the one that decided it. This plate has to be
+   legible on EITHER ground: the bands alternate by count (see
+   `:nth-of-type(even)` above), so the course grid lands on the white page for
+   one tenant and on the pale tint for the next, and a pale plate would vanish
+   into the second of those. A block of the brand colour cannot be confused
+   with any ground this page has.
+
+   The second is that on a brand-new platform this IS the section — the course
+   grid with no courses in it is the thing a first visitor reads and the only
+   place the page asks them for anything. An apologetic grey panel would be the
+   quietest object on a page whose whole language is loud. */
+[data-preset='board'] .board-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  max-inline-size: 38rem;
+  margin-inline: auto;
+  padding: clamp(1.75rem, 5vw, 2.75rem) clamp(1.25rem, 4vw, 2.25rem);
+  border-radius: var(--r-lg);
+  background: var(--board-tile);
+  color: var(--board-on-slab);
+  color-scheme: dark;
+  text-align: center;
+}
+
+[data-preset='board'] .board-empty__title {
+  margin: 0;
+  font-size: clamp(1.125rem, 2.4vw, 1.375rem);
+  font-weight: var(--fw-bold);
+}
+
+/* ≈5.8:1 on `--p-800`. `--site-ink-fg-2` would be ≈3.8:1 here — see the
+   banner for why that token does not survive the move to this ramp. */
+[data-preset='board'] .board-empty__body {
+  margin: 0;
+  font-size: var(--fs-text-base);
+  line-height: 1.8;
+  color: var(--board-on-slab-2);
+}
+
+[data-preset='board'] .board-empty .site-btn {
+  margin-block-start: 0.375rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Books
+   --------------------------------------------------------------------------- */
+
+[data-preset='board'] .board-books {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: var(--board-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-preset='board'] .board-book {
+  display: flex;
+}
+
+[data-preset='board'] .board-book__link {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--board-line);
+  border-radius: var(--r-lg);
+  background: var(--board-card);
+  box-shadow: var(--site-shadow-sm);
+  color: inherit;
+  text-decoration: none;
+  overflow: hidden;
+  transition:
+    transform var(--d-hover) var(--ease-pop),
+    box-shadow var(--d-hover) var(--ease);
+}
+
+[data-preset='board'] .board-book__link:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--site-shadow-md);
+}
+
+/* The jacket. `display: block` because it is a `<span>` inside an anchor, and
+   positioned with a ratio because `<CourseArt compact>` renders `fill` +
+   `object-fit: cover` and would otherwise escape to whatever ancestor happens
+   to be positioned. 3:4 is a printed book's own shape. */
+[data-preset='board'] .board-book__art {
+  display: block;
+  position: relative;
+  aspect-ratio: 3 / 4;
+  background: var(--board-tint);
+  overflow: hidden;
+}
+
+[data-preset='board'] .board-book__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 0.375rem;
+  padding: clamp(0.875rem, 2.2vw, 1.125rem);
+}
+
+[data-preset='board'] .board-book__title {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  line-height: 1.5;
+  color: var(--board-ink);
+}
+
+[data-preset='board'] .board-book__subtitle {
+  font-size: var(--fs-text-sm);
+  line-height: 1.6;
+  color: var(--board-ink-2);
+}
+
+[data-preset='board'] .board-book__price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-block-start: auto;
+  padding-block-start: 0.5rem;
+}
+
+[data-preset='board'] .board-book__price {
+  font-size: clamp(1.125rem, 2.4vw, 1.375rem);
+  font-weight: var(--fw-bold);
+  color: var(--board-accent-ink);
+}
+
+[data-preset='board'] .board-book__was {
+  font-size: var(--fs-text-sm);
+  color: var(--board-ink-2);
+  text-decoration: line-through;
+}
+
+[data-preset='board'] .board-book__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--min-tap-size);
+  margin-block-start: 0.5rem;
+  padding-inline: 1rem;
+  border-radius: var(--r-full);
+  background: var(--site-accent-solid);
+  color: var(--site-on-accent);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+
+[data-preset='board'] .board-book__link:hover .board-book__cta {
+  background: var(--site-accent-solid-hover);
+}
+
+/* ---------------------------------------------------------------------------
+   The instructor identity band
+   --------------------------------------------------------------------------- */
+
+[data-preset='board'] .board-id {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  max-inline-size: 42rem;
+  margin-inline: auto;
+  text-align: center;
+}
+
+[data-preset='board'] .board-id__name {
+  margin: 0;
+  font-size: clamp(1.5rem, 3.6vw, 2.25rem);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--board-ink);
+}
+
+[data-preset='board'] .board-id__starting {
+  margin: 0;
+  font-size: var(--fs-text-base);
+  line-height: 1.85;
+  color: var(--board-ink-2);
+}
+
+[data-preset='board'] .board-id__figures {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem 0;
+  margin: 0;
+}
+
+[data-preset='board'] .board-id__figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  padding-inline: clamp(1rem, 3.5vw, 2rem);
+  border-inline-start: 1px solid var(--board-line);
+}
+
+[data-preset='board'] .board-id__figure:first-child {
+  border-inline-start: 0;
+}
+
+[data-preset='board'] .board-id__n {
+  font-size: clamp(1.5rem, 3.2vw, 2rem);
+  font-weight: var(--fw-bold);
+  line-height: 1.1;
+  color: var(--board-accent-ink);
+}
+
+[data-preset='board'] .board-id__l {
+  margin: 0;
+  font-size: var(--fs-text-sm);
+  color: var(--board-ink-2);
+}
+
+/* ---------------------------------------------------------------------------
+   The figures band — `stats`
+   --------------------------------------------------------------------------- */
+
+[data-preset='board'] .board-figures {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.25rem 0;
+  margin: 0;
+}
+
+[data-preset='board'] .board-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding-inline: clamp(1.25rem, 5vw, 3rem);
+  border-inline-start: 1px solid var(--board-rule);
+}
+
+[data-preset='board'] .board-figure:first-child {
+  border-inline-start: 0;
+}
+
+[data-preset='board'] .board-figure__n {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: var(--fw-bold);
+  line-height: 1.05;
+  letter-spacing: var(--tracking-tight);
+}
+
+[data-preset='board'] .board-figure__l {
+  margin: 0;
+  font-size: var(--fs-text-sm);
+  color: var(--board-on-slab-2);
+}
+
+/* ---------------------------------------------------------------------------
+   Honour board
+   --------------------------------------------------------------------------- */
+
+[data-preset='board'] .board-honors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: var(--board-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-preset='board'] .board-honor {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  padding: clamp(1.25rem, 3vw, 1.75rem) 1rem;
+  border: 1px solid var(--board-line);
+  border-radius: var(--r-lg);
+  background: var(--board-card);
+  box-shadow: var(--site-shadow-sm);
+  text-align: center;
+}
+
+[data-preset='board'] .board-honor__mark {
+  display: grid;
+  place-items: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: 50%;
+  background: var(--board-tile);
+  color: var(--board-on-slab);
+}
+
+[data-preset='board'] .board-honor__rank {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--board-accent-ink);
+}
+
+[data-preset='board'] .board-honor__name {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  color: var(--board-ink);
+}
+
+/* «85 من 100» — a Latin-digit run inside an Arabic sentence. Without the
+   isolate the two numbers can swap sides around the «من», which turns a mark
+   out of a hundred into a hundred out of a mark. */
+[data-preset='board'] .board-honor__score {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-size: var(--fs-text-sm);
+  color: var(--board-ink-2);
+}
+
+[data-preset='board'] .board-honor__quiz {
+  font-size: var(--fs-text-xs);
+  color: var(--board-ink-2);
+}
+
+/* ---------------------------------------------------------------------------
+   About
+   --------------------------------------------------------------------------- */
+
+[data-preset='board'] .board-about {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  max-inline-size: 44rem;
+  margin-inline: auto;
+  text-align: center;
+}
+
+[data-preset='board'] .board-about__p {
+  margin: 0;
+  font-size: var(--fs-text-base);
+  line-height: 1.9;
+  color: var(--board-ink-2);
+}
+
+[data-preset='board'] .board-about__chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-block: 0.25rem 0;
+  margin-inline: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-preset='board'] .board-about__chip {
+  padding-block: 0.4375rem;
+  padding-inline: 0.9375rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--board-tint-line);
+  background: color-mix(in oklch, var(--p-500), transparent 90%);
+  color: var(--board-ink);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+
+/* ---------------------------------------------------------------------------
+   Quotes
+   --------------------------------------------------------------------------- */
+
+[data-preset='board'] .board-quotes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  gap: var(--board-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-preset='board'] .board-quote {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  block-size: 100%;
+  margin: 0;
+  padding: clamp(1.25rem, 3vw, 1.75rem);
+  border: 1px solid var(--board-line);
+  border-radius: var(--r-lg);
+  background: var(--board-card);
+  box-shadow: var(--site-shadow-sm);
+}
+
+/* The quotation mark sits in the card's leading top corner. `inset-inline-end`
+   rather than `right`, so under `dir="rtl"` it lands where a reader's eye
+   enters the card instead of on the far side of it. */
+[data-preset='board'] .board-quote__mark {
+  position: absolute;
+  inset-block-start: 0.25rem;
+  inset-inline-end: 0.875rem;
+  font-size: 3.5rem;
+  line-height: 1;
+  color: color-mix(in oklch, var(--p-500), transparent 82%);
+}
+
+[data-preset='board'] .board-quote__body {
+  position: relative;
+  margin: 0;
+  font-size: var(--fs-text-base);
+  line-height: 1.85;
+  color: var(--board-ink);
+}
+
+[data-preset='board'] .board-quote__who {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-block-start: auto;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--board-ink-2);
+}
+
+[data-preset='board'] .board-quote__avatar {
+  display: grid;
+  place-items: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  flex: none;
+  border-radius: 50%;
+  background: var(--board-tile);
+  color: var(--board-on-slab);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+}
+
+/* ---------------------------------------------------------------------------
+   FAQ — the native accordion, no JavaScript anywhere near it
+   --------------------------------------------------------------------------- */
+
+[data-preset='board'] .board-faq {
+  max-inline-size: 48rem;
+  margin-inline: auto;
+  border: 1px solid var(--board-line);
+  border-radius: var(--r-lg);
+  background: var(--board-card);
+  overflow: hidden;
+}
+
+[data-preset='board'] .board-faq__item + .board-faq__item {
+  border-block-start: 1px solid var(--board-line);
+}
+
+[data-preset='board'] .board-faq__q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-block-size: var(--min-tap-size);
+  padding: 1rem clamp(1rem, 3vw, 1.5rem);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  color: var(--board-ink);
+  cursor: pointer;
+  /* The default disclosure triangle is removed in favour of the drawn mark
+     below. `::-webkit-details-marker` is the Safari spelling and `list-style`
+     the standard one; both are needed. */
+  list-style: none;
+}
+
+[data-preset='board'] .board-faq__q::-webkit-details-marker {
+  display: none;
+}
+
+[data-preset='board'] .board-faq__q:focus-visible {
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
+
+/* A + that becomes a −, drawn in two pseudo-elements so it can react to
+   `[open]` with nothing watching it. An icon component could not: this has to
+   work in the server HTML, before hydration and without it, which is the whole
+   reason this section is a bare `<details>`. */
+[data-preset='board'] .board-faq__mark {
+  position: relative;
+  flex: none;
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+}
+
+[data-preset='board'] .board-faq__mark::before,
+[data-preset='board'] .board-faq__mark::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline: 0;
+  block-size: 2px;
+  border-radius: var(--r-full);
+  background: var(--board-accent-ink);
+  transform: translateY(-50%);
+  transition: transform var(--d-hover) var(--ease);
+}
+
+[data-preset='board'] .board-faq__mark::after {
+  transform: translateY(-50%) rotate(90deg);
+}
+
+[data-preset='board'] .board-faq__item[open] .board-faq__mark::after {
+  transform: translateY(-50%) rotate(0deg);
+}
+
+[data-preset='board'] .board-faq__a {
+  margin: 0;
+  padding: 0 clamp(1rem, 3vw, 1.5rem) 1.125rem;
+  font-size: var(--fs-text-base);
+  line-height: 1.9;
+  color: var(--board-ink-2);
+}
+
+/* ---------------------------------------------------------------------------
+   The closer — the opening block, coming back
+   --------------------------------------------------------------------------- */
+
+[data-preset='board'] .board-closer {
+  background: var(--board-slab);
+  color: var(--board-on-slab);
+  color-scheme: dark;
+  text-align: center;
+  padding-block: clamp(3rem, 8vw, 5rem);
+  /* The arc is on the TOP edge here, so the page opens with a block curving
+     away from the reader and ends with one curving back. Logical corners for
+     the same reason the panel uses them. */
+  border-start-start-radius: 50% var(--board-curve);
+  border-start-end-radius: 50% var(--board-curve);
+  overflow: hidden;
+}
+
+[data-preset='board'] .board-closer .board-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.875rem;
+  /* Clear of the arc at the top, as the panel's inner is clear of its own. */
+  padding-block-start: var(--board-curve);
+}
+
+[data-preset='board'] .board-closer__title {
+  margin: 0;
+  max-inline-size: 34rem;
+  font-size: clamp(1.625rem, 4.4vw, 2.5rem);
+  line-height: 1.25;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+}
+
+[data-preset='board'] .board-closer__lead {
+  margin: 0;
+  max-inline-size: 36rem;
+  font-size: var(--fs-text-base);
+  line-height: 1.85;
+  color: var(--board-on-slab-2);
+}
+
+[data-preset='board'] .board-closer .site-btn {
+  margin-block-start: 0.5rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Reduced motion
+   --------------------------------------------------------------------------- */
+
+/* `.site`'s own reduced-motion block already collapses every transition on
+   this surface to 0.01ms with `!important`, which this cannot and must not try
+   to beat. What it does not do is stop the element MOVING — an instant 3px
+   jump under the cursor is still motion, and it is the only motion this page
+   has. Removing the transform is a different property, so no `!important` is
+   needed to win. */
+@media (prefers-reduced-motion: reduce) {
+  [data-preset='board'] .board-tile__link:hover,
+  [data-preset='board'] .board-course:hover,
+  [data-preset='board'] .board-book__link:hover {
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Narrow — down to ~390px, and the body must never scroll sideways
+   --------------------------------------------------------------------------- */
+
+/* Every grid above is `repeat(auto-fit, minmax(min(100%, …), 1fr))`, so they
+   all collapse to one column on their own — `min(100%, …)` is what stops a
+   16rem track from being wider than a 390px viewport, which is the usual way a
+   card grid puts a horizontal scrollbar on a phone. What is left for this
+   breakpoint is the type, which is clamped on viewport width and lands at its
+   floor here, and the two flex rows of figures, which wrap rather than
+   overflow but need their dividers taken off once they have. */
+@media (max-width: 30rem) {
+  /* A divider that has WRAPPED reads as a rule through the middle of a stack
+     of figures rather than between two of them, and `:first-child` only clears
+     the first cell of the first line. Below this width the rows are always at
+     least two lines, so the dividers come off entirely and the gap does the
+     separating. */
+  [data-preset='board'] .board-panel__figure,
+  [data-preset='board'] .board-id__figure,
+  [data-preset='board'] .board-figure {
+    border-inline-start: 0;
+  }
+}
+
+/* ═══ NEON ════════════════════════════════════════════════════════════════
+   «الترمينال» — `branding.landingPreset === 'neon'`.
+   Component tree: `components/site/presets/neon/`, rooted on
+   `<main class="neon" data-preset="neon">` (`neon-landing.tsx`).
+
+   ── THE DESIGN, IN ONE PARAGRAPH ─────────────────────────────────────────
+   A page that never turns light. There is no light section, no tinted band
+   and no stage — one dark ground from the header to the footer, with sections
+   separated by GLOWING HAIRLINES rather than by a change of background.
+   Arabic carries every word; the monospace face carries every number, key and
+   marker, each of them bidi-isolated. Cards are code windows with a title bar
+   and a real filename. Buttons read like commands.
+
+   ── WHY IT IS THEME-INDEPENDENT, AND HOW THAT SATISFIES «BOTH THEMES» ────
+   Every colour below resolves from tokens that `packages/ui/src/tokens/
+   color.css` declares at `:root` ONLY and never re-declares in either dark
+   block:
+
+     --ink --ink-2 --ink-line --ink-fg --ink-fg-2   the permanently-dark panel
+     --p-50 … --p-950                              the brand ramp
+
+   So this page renders identically under `data-theme="light"`, under
+   `data-theme="dark"`, and under a system preference with no attribute at
+   all. That is the strongest form of "works in both themes" available to a
+   design that deliberately has one look: not two palettes that each hold up,
+   but one palette that cannot be switched out from under it. It is also why
+   there is no `@media (prefers-color-scheme)` block anywhere in this section
+   and must not be one — a rule that fired under one theme only would
+   reintroduce exactly the light variant the preset exists to not have.
+
+   ── THE COLOURS ARE MEASURED, NOT PICKED ─────────────────────────────────
+   Computed OKLCH → sRGB → WCAG 2.x, with the repo's own `packages/ui/src/
+   lib/oklch.ts` arithmetic, against `--ink` (`oklch(0.155 0.008 65)`):
+
+     --p-300 on --ink            12.70:1     accent text, headings' tail
+     --p-400 on --ink            10.07:1     markers, glyphs, figures
+     --p-500 on --ink             7.59:1     the darkest end of the CTA fill
+     --p-600 on --ink             5.45:1     the dimmest accent that is text
+     --ink   on --p-500           7.59:1     the CTA's own label, worst case
+     --ink-fg on --ink           17.66:1     body
+     --ink-fg-2 on --ink          9.75:1     secondary body
+     --ink-fg-2 on --ink-2        8.94:1     secondary body inside a window
+
+   ⚠️ Those numbers hold for EVERY TENANT, not just for the one this preset
+   was drawn for. `--p-*` is regenerated from `branding.accentHue` by
+   `rampDeclarations()` (`packages/ui/src/lib/ramp.ts`), which keeps the
+   shipped lightness ladder and only moves the hue, clamping chroma to the
+   sRGB ceiling at each step. Measured across hues the ratios move by under
+   0.1 — hue 285 (the brand this was drawn for) gives 10.07:1 at step 400
+   where the shipped amber gives 10.01:1. A tenant who picks a different
+   colour gets a different page and the same contrast.
+
+   ── SCOPE ────────────────────────────────────────────────────────────────
+   Every selector is prefixed `[data-preset='neon']`, except the one `:has()`
+   block at the end of this section, which is scoped BY that attribute rather
+   than under it and carries its own long note explaining why it has to be.
+   Ayman's `<main>` never has this attribute — `lib/landing-preset.test.ts`
+   asserts `page.tsx` contains the string `data-preset` nowhere at all — so no
+   rule here can reach his page.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* ---------- the preset's own tokens ---------- */
+
+[data-preset='neon'] {
+  --neon-ground: var(--ink);
+  --neon-panel: var(--ink-2);
+  --neon-fg: var(--ink-fg);
+  --neon-fg-2: var(--ink-fg-2);
+
+  /* The structural hairline: white at 10%, which is what `--ink-line` already
+     is. Used for every border that is not meant to be noticed. */
+  --neon-line: var(--ink-line);
+  /* The lit hairline: the same job, brand-tinted, for the edges that ARE the
+     decoration — the grid between the «ليه» cells, a window that is asking
+     for something. */
+  --neon-line-lit: color-mix(in oklch, var(--p-600), transparent 72%);
+
+  /* The glow, in three strengths. See the measured table in the banner. */
+  --neon-glow: var(--p-400);
+  --neon-glow-2: var(--p-300);
+  --neon-trace: var(--p-600);
+  /* A wash barely above the ground (1.16:1) — fills and insets ONLY, never
+     anything with text on it. */
+  --neon-deep: var(--p-950);
+  /* The label on a lit fill. Near-black on brand, 7.59:1 at the fill's
+     darkest stop. */
+  --neon-on-glow: var(--ink);
+
+  --neon-shell: 1120px;
+
+  position: relative;
+  /* A new stacking context, so the circuit traces below can sit at z-index 0
+     under every section without competing with anything the layout stacks
+     around this element. */
+  isolation: isolate;
+  background: var(--neon-ground);
+  color: var(--neon-fg);
+  /* Native widgets — scrollbars inside an overflowing block, the focus ring's
+     default, a `<details>` marker on a browser that keeps one — are told the
+     surface is dark, in every theme. Without this a light-theme reader gets
+     light-scheme UA chrome on a black page. */
+  color-scheme: dark;
+}
+
+/* The circuit traces: a dim grid, fading out down the page.
+
+   An absolutely positioned pseudo-element on `<main>`, not `position: fixed`.
+   `.site` carries `overflow-x: clip` (see `theme.css` for why — the landing
+   page scrolled sideways on a phone without it), and whether a clipped
+   ancestor also clips a FIXED descendant is exactly the kind of thing engines
+   have disagreed about. An absolute layer inside the page cannot be caught by
+   that, and it is the better design anyway: the traces belong to the document
+   and scroll with it, rather than sitting still while the page moves over
+   them. */
+[data-preset='neon']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to left, color-mix(in oklch, var(--neon-trace), transparent 93%) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklch, var(--neon-trace), transparent 93%) 1px, transparent 1px);
+  background-size: 64px 64px;
+  /* Strongest at the top, gone by two-thirds down. A uniform grid over the
+     whole page reads as a texture someone forgot to turn off; a grid that
+     fades reads as light falling on one. */
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.9), rgb(0 0 0 / 0.25) 45%, transparent 75%);
+}
+
+/* ---------- reset, scoped ---------- */
+
+/* The UA margins on these would fight every `margin-block-start` below, and
+   `<dd>`'s 40px inline indent would push every meta value off its leader.
+   Scoped to the preset root, so nothing outside this page is touched. */
+[data-preset='neon'] :is(h1, h2, h3, p, dl, dd, figure, blockquote, ol, ul) {
+  margin: 0;
+  padding: 0;
+}
+
+[data-preset='neon'] :is(ol, ul) {
+  list-style: none;
+}
+
+/* ---------- the bidi-safe mono run ---------- */
+
+/* ⚠️ Every Latin or numeric run on this page goes through `<Mono>` and lands
+   here. The document is `dir="rtl"`: without the isolate, `// courses`
+   renders as `courses //`, `+1200` as `1200+`, and `95/100` as `100/95` — a
+   different and much better mark than the student got. Nothing about it looks
+   broken, which is what makes it dangerous. */
+[data-preset='neon'] .neon-mono {
+  font-family: var(--font-mono);
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- layout ---------- */
+
+[data-preset='neon'] .neon-shell {
+  width: 100%;
+  max-width: var(--neon-shell);
+  margin-inline: auto;
+  /* One declaration, both sides, and never a `padding` shorthand that could
+     zero them: at 390px this is the only thing between the content and the
+     edge of the screen. */
+  padding-inline: clamp(1rem, 4vw, 3rem);
+}
+
+[data-preset='neon'] .neon-section {
+  position: relative;
+  z-index: 1;
+  padding-block: clamp(3rem, 6vw, 5.5rem);
+}
+
+/* THE SEPARATOR — the preset's whole structural idea in six lines.
+
+   A section boundary is a line of light, not a change of ground. It is a
+   gradient rather than a flat border so it reads as a filament that is lit in
+   the middle and dark at the ends, which is what makes the page look like a
+   sign rather than like a table. `to left` is the physical direction of the
+   gradient and is deliberate: the stop order is symmetric, so this renders
+   identically either way and needs no RTL variant. */
+[data-preset='neon'] .neon-section::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 1px;
+  pointer-events: none;
+  background-image: linear-gradient(
+    to left,
+    transparent,
+    color-mix(in oklch, var(--neon-glow), transparent 62%),
+    transparent
+  );
+}
+
+/* The page's last section gets the extra air under it that the footer's own
+   top border otherwise has to provide. */
+[data-preset='neon'] .neon-section--closer {
+  padding-block-end: clamp(4rem, 8vw, 6.5rem);
+}
+
+[data-preset='neon'] .neon-section__foot {
+  display: flex;
+  justify-content: center;
+  margin-block-start: clamp(1.5rem, 3vw, 2.25rem);
+}
+
+/* ---------- section heads ---------- */
+
+[data-preset='neon'] .neon-head {
+  max-width: 46rem;
+  margin-block-end: clamp(1.75rem, 3.5vw, 2.75rem);
+}
+
+[data-preset='neon'] .neon-head[data-align='center'] {
+  margin-inline: auto;
+  text-align: center;
+}
+
+[data-preset='neon'] .neon-marker {
+  font-size: var(--fs-mono-label);
+  line-height: var(--lh-mono-label);
+  color: var(--neon-glow);
+  margin-block-end: 0.75rem;
+}
+
+/* No `letter-spacing` anywhere on this page, and that is not an oversight.
+   Arabic is a connected script and tracking breaks the joins;
+   `packages/ui/src/tokens/typography.css` enforces zero on every Arabic
+   element with `!important`, so a value set here would be dead code that
+   reads like a decision. */
+[data-preset='neon'] .neon-h {
+  font-size: clamp(1.6rem, 3.4vw, 2.5rem);
+  line-height: 1.3;
+  font-weight: var(--fw-bold);
+  color: var(--neon-fg);
+}
+
+[data-preset='neon'] .neon-h__accent {
+  color: var(--neon-glow-2);
+}
+
+[data-preset='neon'] .neon-lead {
+  margin-block-start: 0.75rem;
+  font-size: clamp(1rem, 1.3vw, 1.0625rem);
+  line-height: 1.85;
+  color: var(--neon-fg-2);
+}
+
+[data-preset='neon'] .neon-lead + .neon-lead {
+  margin-block-start: 0.6rem;
+}
+
+/* ---------- the code window ---------- */
+
+[data-preset='neon'] .neon-win {
+  display: flex;
+  flex-direction: column;
+  /* `flex: 1` because the window is usually the only child of a `<li>` that is
+     itself `display: flex` (see `.neon-grid > li`) — without it the window is
+     sized by its content and a short card sits narrower than its own grid
+     track. `min-width: 0` is the other half: a flex item's default minimum is
+     its content, so one long unbroken slug in the title bar would push the
+     track wider than the row and take the whole page with it. */
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--neon-line);
+  border-radius: var(--r-lg);
+  background: var(--neon-panel);
+  /* The title bar's fill runs to the rounded corners; without this it squares
+     them off and the window reads as a rectangle with a stripe on it. */
+  overflow: hidden;
+  transition:
+    border-color var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease);
+}
+
+[data-preset='neon'] .neon-win__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.875rem;
+  border-block-end: 1px solid var(--neon-line);
+  background: color-mix(in oklch, var(--neon-ground), transparent 20%);
+}
+
+[data-preset='neon'] .neon-win__dots {
+  display: inline-flex;
+  gap: 0.3125rem;
+  flex: none;
+}
+
+[data-preset='neon'] .neon-win__dots span {
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklch, var(--neon-fg-2), transparent 80%);
+}
+
+/* One lit dot, the way a window with unsaved work has one. Purely a place for
+   the eye to land on a page of otherwise identical chrome. */
+[data-preset='neon'] .neon-win__dots span:first-child {
+  background: color-mix(in oklch, var(--neon-glow), transparent 45%);
+}
+
+[data-preset='neon'] .neon-win__file {
+  font-size: var(--fs-mono-label);
+  line-height: var(--lh-mono-label);
+  color: var(--neon-fg-2);
+  /* A long slug must not push the bar wider than its card — that is how one
+     `white-space: nowrap` made a whole lesson page wider than the phone it was
+     on. It wraps or it clips; it never grows the track. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-preset='neon'] .neon-win__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: clamp(1rem, 2.4vw, 1.5rem);
+}
+
+/* `lit` — the two moments the page is asking for something: the empty-
+   catalogue panel and the closing CTA. Nothing else carries a glow at rest,
+   which is what keeps the glow meaning anything. */
+[data-preset='neon'] .neon-win[data-lit='true'] {
+  border-color: color-mix(in oklch, var(--neon-glow), transparent 58%);
+  box-shadow: 0 0 48px -18px color-mix(in oklch, var(--neon-glow), transparent 30%);
+}
+
+/* ---------- commands ---------- */
+
+[data-preset='neon'] .neon-cmd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  position: relative;
+  min-height: var(--min-tap-size);
+  padding-inline: 1.15rem;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  text-decoration: none;
+  transition:
+    box-shadow var(--d-hover) var(--ease),
+    border-color var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease);
+}
+
+/* The bracket and the `./`. Mono, so they read as syntax rather than as
+   punctuation somebody typed into the label. */
+[data-preset='neon'] .neon-cmd__mark {
+  font-family: var(--font-mono);
+  opacity: 0.75;
+}
+
+/* PRIMARY — a filled gradient with a glow.
+
+   `to bottom` rather than an angle: a diagonal gradient has a direction, and a
+   direction has to be mirrored for RTL. A vertical one is the same button in
+   both, so there is no second rule to forget. The fill runs --p-300 → --p-500,
+   and `--ink` on its DARKEST stop still measures 7.59:1. */
+[data-preset='neon'] .neon-cmd--run {
+  background-image: linear-gradient(to bottom, var(--p-300), var(--p-500));
+  color: var(--neon-on-glow);
+  box-shadow: 0 0 28px -8px color-mix(in oklch, var(--neon-glow), transparent 30%);
+}
+
+[data-preset='neon'] .neon-cmd--run:hover {
+  box-shadow: 0 0 36px -6px color-mix(in oklch, var(--neon-glow), transparent 15%);
+}
+
+/* SECONDARY — a bracketed outline: a hairline box with a lit tick at two
+   opposite corners, so it reads as `[ … ]` drawn around the label rather than
+   as a second, quieter button. */
+[data-preset='neon'] .neon-cmd--path {
+  color: var(--neon-glow-2);
+  border-color: color-mix(in oklch, var(--neon-glow), transparent 66%);
+  background-color: transparent;
+}
+
+[data-preset='neon'] .neon-cmd--path::before,
+[data-preset='neon'] .neon-cmd--path::after {
+  content: '';
+  position: absolute;
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 1px solid var(--neon-glow);
+  pointer-events: none;
+}
+
+[data-preset='neon'] .neon-cmd--path::before {
+  top: -1px;
+  inset-inline-start: -1px;
+  border-inline-end: 0;
+  border-block-end: 0;
+}
+
+[data-preset='neon'] .neon-cmd--path::after {
+  bottom: -1px;
+  inset-inline-end: -1px;
+  border-inline-start: 0;
+  border-block-start: 0;
+}
+
+[data-preset='neon'] .neon-cmd--path:hover {
+  border-color: color-mix(in oklch, var(--neon-glow), transparent 30%);
+  background-color: color-mix(in oklch, var(--neon-deep), transparent 55%);
+}
+
+/* ---------- focus ---------- */
+
+/* Every interactive thing on this page: the commands, the card titles, the
+   route rows, the FAQ summaries. `--p-300` at 12.70:1 on the ground, so the
+   ring is visible against the panel AND against a lit fill. */
+[data-preset='neon'] :is(a, summary, [tabindex]):focus-visible {
+  outline: var(--focus-ring-width) solid var(--neon-glow-2);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--r-sm);
+}
+
+/* ---------- aligned meta rows ---------- */
+
+[data-preset='neon'] .neon-meta {
+  display: grid;
+  gap: 0.4rem;
+  margin-block-start: 1rem;
+}
+
+[data-preset='neon'] .neon-meta__row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: var(--fs-text-sm);
+}
+
+[data-preset='neon'] .neon-meta__key {
+  flex: none;
+  font-size: var(--fs-mono-label);
+  color: var(--neon-fg-2);
+}
+
+/* The dotted leader. A border on a flex spacer rather than a repeating `···`
+   text run, so it stretches to whatever is left and never wraps to its own
+   line. Lifted off the baseline so the dots sit mid-x-height instead of
+   underlining the row. */
+[data-preset='neon'] .neon-meta__leader,
+[data-preset='neon'] .neon-route__leader,
+[data-preset='neon'] .neon-board__leader {
+  flex: 1 1 auto;
+  min-width: 1rem;
+  align-self: center;
+  border-block-end: 1px dotted color-mix(in oklch, var(--neon-fg-2), transparent 72%);
+}
+
+[data-preset='neon'] .neon-meta__value {
+  flex: none;
+  color: var(--neon-fg);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- hero ---------- */
+
+[data-preset='neon'] .neon-hero {
+  position: relative;
+  z-index: 1;
+  padding-block: clamp(3.5rem, 9vw, 7rem) clamp(2.5rem, 5vw, 4.5rem);
+}
+
+/* The lamp behind the opener. It is the only radial light on the page and it
+   is centred on the mark, so the whole first screen reads as one object lit
+   from inside rather than as text on black. */
+[data-preset='neon'] .neon-hero::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 80%;
+  pointer-events: none;
+  background-image: radial-gradient(
+    60% 65% at 50% 30%,
+    color-mix(in oklch, var(--neon-glow), transparent 86%),
+    transparent 70%
+  );
+}
+
+[data-preset='neon'] .neon-hero__inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1rem;
+  max-width: 46rem;
+  margin-inline: auto;
+}
+
+[data-preset='neon'] .neon-hero__mark {
+  display: grid;
+  place-items: center;
+  width: 6rem;
+  height: 6rem;
+  /* The box is reserved before the logo's bytes land, which is the whole
+     reason it is a fixed square: the intrinsic ratio of an uploaded file is
+     unknowable at render time, and a mark that resizes when it loads pushes
+     the headline down the screen. */
+  flex: none;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklch, var(--neon-glow), transparent 58%);
+  background-color: color-mix(in oklch, var(--neon-deep), transparent 25%);
+  box-shadow:
+    0 0 56px -18px color-mix(in oklch, var(--neon-glow), transparent 25%),
+    inset 0 0 28px -14px color-mix(in oklch, var(--neon-glow), transparent 20%);
+  overflow: hidden;
+}
+
+[data-preset='neon'] .neon-hero__mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 0.75rem;
+}
+
+/* The drawn `</>` monogram — the designed answer for a tenant who has not
+   uploaded a logo, which on day one is every tenant. Not a placeholder: it is
+   the same box, the same glow and the same weight as the real mark, so a page
+   without a logo looks finished rather than unfilled. */
+[data-preset='neon'] .neon-hero__mark[data-drawn='true'],
+[data-preset='neon'] .neon-who__mark[data-drawn='true'] {
+  font-family: var(--font-mono);
+  font-weight: var(--fw-bold);
+  color: var(--neon-glow-2);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+[data-preset='neon'] .neon-hero__mark[data-drawn='true'] {
+  font-size: 1.75rem;
+}
+
+[data-preset='neon'] .neon-hero__prompt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--neon-line);
+  border-radius: var(--r-full);
+  background-color: color-mix(in oklch, var(--neon-panel), transparent 25%);
+  font-size: var(--fs-text-sm);
+  color: var(--neon-fg-2);
+}
+
+[data-preset='neon'] .neon-hero__sigil,
+[data-preset='neon'] .neon-hero__caret {
+  color: var(--neon-glow);
+}
+
+/* The blinking caret — the one animation on the page.
+
+   ⚠️ The keyframes rest at FULL opacity at both 0% and 100%, and that is
+   load-bearing rather than tidy. `theme.css` already caps every animation
+   inside `.site` at `0.01ms` with `iteration-count: 1` under
+   `prefers-reduced-motion`, which means a reduced-motion reader sees the
+   animation's FINAL frame and nothing else. Written the obvious way — `0%
+   { opacity: 1 } 100% { opacity: 0 }` — that final frame is an invisible
+   caret, so the character would silently vanish for exactly the readers who
+   asked for less motion. Dipping in the middle and returning makes the
+   end state the visible one. The explicit `animation: none` below says the
+   same thing a second time, for a stylesheet load order that ever changes. */
+@keyframes neon-caret {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.12;
+  }
+}
+
+[data-preset='neon'] .neon-hero__caret {
+  animation: neon-caret 1.15s steps(1, end) infinite;
+}
+
+[data-preset='neon'] .neon-hero__title {
+  font-size: clamp(2rem, 6.4vw, 3.5rem);
+  line-height: 1.2;
+  font-weight: var(--fw-bold);
+  color: var(--neon-fg);
+}
+
+[data-preset='neon'] .neon-hero__second {
+  font-size: clamp(1.05rem, 2.4vw, 1.5rem);
+  line-height: 1.6;
+  color: var(--neon-glow-2);
+}
+
+[data-preset='neon'] .neon-hero__lead {
+  max-width: 38rem;
+  line-height: 1.9;
+  color: var(--neon-fg-2);
+}
+
+[data-preset='neon'] .neon-hero__cmds {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-block-start: 0.5rem;
+}
+
+[data-preset='neon'] .neon-hero__stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(1.25rem, 5vw, 3rem);
+  width: 100%;
+  margin-block-start: 1.5rem;
+  padding-block-start: 1.5rem;
+  border-block-start: 1px solid var(--neon-line);
+}
+
+[data-preset='neon'] .neon-hero__stats li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+[data-preset='neon'] .neon-hero__stat-value {
+  font-size: clamp(1.4rem, 3.4vw, 2rem);
+  font-weight: var(--fw-bold);
+  color: var(--neon-glow);
+}
+
+[data-preset='neon'] .neon-hero__stat-label {
+  font-size: var(--fs-text-xs);
+  color: var(--neon-fg-2);
+}
+
+[data-preset='neon'] .neon-hero__who {
+  margin-block-start: 1.25rem;
+  font-size: var(--fs-text-sm);
+  color: var(--neon-fg-2);
+}
+
+/* ---------- card grids ---------- */
+
+[data-preset='neon'] .neon-grid {
+  display: grid;
+  gap: clamp(0.875rem, 2vw, 1.25rem);
+  /* `min(100%, 18rem)` rather than a bare `18rem`: at 390px the viewport is
+     narrower than the track, and a bare minimum makes the grid wider than the
+     screen — a horizontal scroll on the one page every visitor lands on. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+}
+
+[data-preset='neon'] .neon-grid > li {
+  display: flex;
+}
+
+[data-preset='neon'] .neon-course__title {
+  font-size: var(--fs-title-4);
+  line-height: 1.55;
+  font-weight: var(--fw-semibold);
+}
+
+[data-preset='neon'] .neon-course__title a {
+  color: var(--neon-fg);
+  text-decoration: none;
+  transition: color var(--d-hover) var(--ease);
+}
+
+[data-preset='neon'] .neon-course__title a:hover {
+  color: var(--neon-glow-2);
+}
+
+[data-preset='neon'] .neon-course__sub {
+  margin-block-start: 0.35rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+  color: var(--neon-fg-2);
+}
+
+/* `margin-block-start: auto` pushes every card's command to the bottom of its
+   own window, so a row of cards with different amounts of text still lines its
+   buttons up. */
+[data-preset='neon'] .neon-course__cmd {
+  display: flex;
+  margin-block-start: auto;
+  padding-block-start: 1.1rem;
+}
+
+[data-preset='neon'] .neon-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.7rem;
+  border: 1px dashed color-mix(in oklch, var(--neon-fg-2), transparent 55%);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-text-xs);
+  color: var(--neon-fg-2);
+}
+
+/* ---------- the empty catalogue ---------- */
+
+/* This is the first screen a brand-new instructor's students see, so it is
+   composed rather than defaulted: a shell command that returns nothing, the
+   count in words, then what happens next and the one action still worth
+   taking. See `<NeonCoursesEmpty>` for why the classic strip's `null` is the
+   wrong answer on a stack that has published nothing yet. */
+[data-preset='neon'] .neon-empty {
+  max-width: 40rem;
+  margin-inline: auto;
+}
+
+[data-preset='neon'] .neon-empty__line,
+[data-preset='neon'] .neon-empty__out,
+[data-preset='neon'] .neon-board__empty {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.8;
+}
+
+[data-preset='neon'] .neon-empty__sigil,
+[data-preset='neon'] .neon-board__hash {
+  flex: none;
+  color: var(--neon-glow);
+}
+
+[data-preset='neon'] .neon-empty__cmd {
+  color: var(--neon-fg);
+}
+
+[data-preset='neon'] .neon-empty__hash {
+  flex: none;
+  color: var(--neon-fg-2);
+}
+
+[data-preset='neon'] .neon-empty__out {
+  margin-block-start: 0.3rem;
+  padding-block-end: 1.25rem;
+  border-block-end: 1px solid var(--neon-line);
+  color: var(--neon-fg-2);
+}
+
+[data-preset='neon'] .neon-empty__title {
+  margin-block-start: 1.25rem;
+  font-size: var(--fs-title-3);
+  line-height: 1.45;
+  font-weight: var(--fw-semibold);
+  color: var(--neon-fg);
+}
+
+[data-preset='neon'] .neon-empty__body {
+  margin-block-start: 0.5rem;
+  line-height: 1.9;
+  color: var(--neon-fg-2);
+}
+
+[data-preset='neon'] .neon-empty__cmds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block-start: 1.5rem;
+}
+
+/* ---------- the route table (yearTracks) ---------- */
+
+[data-preset='neon'] .neon-routes {
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* The whole row is the target, not a chevron at the end of it: 44px tall and
+   the full width of the shell is what a thumb on a 390px screen actually
+   gets. */
+[data-preset='neon'] .neon-route {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-height: var(--min-tap-size);
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--neon-line);
+  border-radius: var(--r-md);
+  background-color: color-mix(in oklch, var(--neon-panel), transparent 45%);
+  color: var(--neon-fg);
+  text-decoration: none;
+  transition:
+    border-color var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease);
+}
+
+[data-preset='neon'] .neon-route:hover {
+  border-color: color-mix(in oklch, var(--neon-glow), transparent 55%);
+  background-color: var(--neon-panel);
+}
+
+[data-preset='neon'] .neon-route__index {
+  flex: none;
+  font-size: var(--fs-mono-label);
+  color: var(--neon-glow);
+}
+
+[data-preset='neon'] .neon-route__label {
+  flex: none;
+  font-weight: var(--fw-medium);
+}
+
+[data-preset='neon'] .neon-route__count {
+  flex: none;
+  font-size: var(--fs-text-sm);
+  color: var(--neon-fg-2);
+}
+
+/* ---------- the «ليه» grid ---------- */
+
+/* Cells defined by the rules BETWEEN them rather than by boxes around them:
+   the container draws the top and inline-start edges, each cell draws its own
+   block-end and inline-end, and the result closes into a grid at any column
+   count without a single rule being drawn twice. Logical properties
+   throughout, so it closes the same way in an RTL document. */
+[data-preset='neon'] .neon-why {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  border-block-start: 1px solid var(--neon-line-lit);
+  border-inline-start: 1px solid var(--neon-line-lit);
+}
+
+[data-preset='neon'] .neon-why__cell {
+  padding: clamp(1rem, 2.4vw, 1.5rem);
+  border-block-end: 1px solid var(--neon-line-lit);
+  border-inline-end: 1px solid var(--neon-line-lit);
+}
+
+[data-preset='neon'] .neon-why__index {
+  font-size: var(--fs-mono-label);
+  color: var(--neon-glow);
+}
+
+[data-preset='neon'] .neon-why__title {
+  margin-block-start: 0.5rem;
+  font-size: var(--fs-title-4);
+  line-height: 1.55;
+  font-weight: var(--fw-semibold);
+  color: var(--neon-fg);
+}
+
+[data-preset='neon'] .neon-why__body {
+  margin-block-start: 0.4rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.8;
+  color: var(--neon-fg-2);
+}
+
+/* ---------- the steps ---------- */
+
+/* Stacked on a phone with a dashed rule BETWEEN the items, in three columns
+   from 50rem up with the rule turned on its side. The rule is dashed and
+   every other separator on this page is solid — a dashed line reads as a
+   continuation, a solid one as a boundary, and these three are a sequence. */
+[data-preset='neon'] .neon-steps {
+  display: grid;
+  gap: 0;
+}
+
+[data-preset='neon'] .neon-steps__item {
+  padding-block: clamp(1.25rem, 3vw, 1.75rem);
+  text-align: center;
+}
+
+[data-preset='neon'] .neon-steps__item + .neon-steps__item {
+  border-block-start: 1px dashed color-mix(in oklch, var(--neon-glow), transparent 72%);
+}
+
+@media (min-width: 50rem) {
+  [data-preset='neon'] .neon-steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  [data-preset='neon'] .neon-steps__item {
+    padding-block: 0;
+    padding-inline: clamp(1rem, 2.4vw, 2rem);
+  }
+
+  [data-preset='neon'] .neon-steps__item + .neon-steps__item {
+    border-block-start: 0;
+    border-inline-start: 1px dashed color-mix(in oklch, var(--neon-glow), transparent 72%);
+  }
+}
+
+[data-preset='neon'] .neon-steps__num {
+  display: block;
+  font-size: clamp(2.5rem, 7vw, 4rem);
+  line-height: 1;
+  font-weight: var(--fw-bold);
+  color: var(--neon-glow);
+  text-shadow: 0 0 28px color-mix(in oklch, var(--neon-glow), transparent 55%);
+}
+
+[data-preset='neon'] .neon-steps__title {
+  margin-block-start: 0.6rem;
+  font-size: var(--fs-title-3);
+  line-height: 1.45;
+  font-weight: var(--fw-semibold);
+  color: var(--neon-fg);
+}
+
+[data-preset='neon'] .neon-steps__body {
+  margin-block-start: 0.4rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.85;
+  color: var(--neon-fg-2);
+}
+
+/* ---------- whoami ---------- */
+
+[data-preset='neon'] .neon-who,
+[data-preset='neon'] .neon-about,
+[data-preset='neon'] .neon-board {
+  max-width: 46rem;
+}
+
+[data-preset='neon'] .neon-who__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: clamp(1rem, 2.5vw, 1.75rem);
+}
+
+[data-preset='neon'] .neon-who__mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklch, var(--neon-glow), transparent 62%);
+  background-color: color-mix(in oklch, var(--neon-deep), transparent 35%);
+  overflow: hidden;
+  font-size: 1.4rem;
+}
+
+[data-preset='neon'] .neon-who__mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 0.625rem;
+}
+
+/* `flex: 1 1 16rem` with `min-width: 0` — the column wraps under the mark on a
+   phone instead of squeezing to nothing, and a long unbroken word inside it
+   cannot push the window wider than the shell. */
+[data-preset='neon'] .neon-who__text {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+[data-preset='neon'] .neon-who__name {
+  font-size: var(--fs-title-3);
+  line-height: 1.45;
+  font-weight: var(--fw-semibold);
+  color: var(--neon-fg);
+}
+
+[data-preset='neon'] .neon-who__pending {
+  margin-block-start: 0.5rem;
+  line-height: 1.85;
+  color: var(--neon-fg-2);
+}
+
+[data-preset='neon'] .neon-who__cmd {
+  display: flex;
+  margin-block-start: 1.1rem;
+}
+
+/* ---------- about ---------- */
+
+[data-preset='neon'] .neon-about__role {
+  margin-block-end: 0.75rem;
+  font-size: var(--fs-text-sm);
+  color: var(--neon-glow-2);
+}
+
+[data-preset='neon'] .neon-about__body {
+  line-height: 1.95;
+  color: var(--neon-fg-2);
+}
+
+[data-preset='neon'] .neon-about__body + .neon-about__body {
+  margin-block-start: 0.9rem;
+}
+
+[data-preset='neon'] .neon-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block-start: 1.25rem;
+}
+
+[data-preset='neon'] .neon-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--neon-line);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-text-xs);
+  color: var(--neon-fg-2);
+}
+
+[data-preset='neon'] .neon-tag__sigil {
+  color: var(--neon-glow);
+}
+
+/* ---------- honour board ---------- */
+
+[data-preset='neon'] .neon-board__list {
+  display: grid;
+}
+
+[data-preset='neon'] .neon-board__row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-block: 0.7rem;
+}
+
+[data-preset='neon'] .neon-board__row + .neon-board__row {
+  border-block-start: 1px solid var(--neon-line);
+}
+
+[data-preset='neon'] .neon-board__rank {
+  flex: none;
+  font-size: var(--fs-mono-label);
+  color: var(--neon-glow);
+}
+
+[data-preset='neon'] .neon-board__initial,
+[data-preset='neon'] .neon-quote__initial {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--r-full);
+  border: 1px solid color-mix(in oklch, var(--neon-glow), transparent 62%);
+  background-color: color-mix(in oklch, var(--neon-deep), transparent 40%);
+  font-size: var(--fs-text-sm);
+  color: var(--neon-glow-2);
+}
+
+[data-preset='neon'] .neon-board__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+[data-preset='neon'] .neon-board__name {
+  color: var(--neon-fg);
+  font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
+}
+
+[data-preset='neon'] .neon-board__quiz {
+  font-size: var(--fs-text-xs);
+  color: var(--neon-fg-2);
+  overflow-wrap: anywhere;
+}
+
+[data-preset='neon'] .neon-board__score {
+  flex: none;
+  font-size: var(--fs-text-sm);
+  color: var(--neon-glow);
+}
+
+/* The leader has nowhere to go once a name and a mark fill the row, so it is
+   dropped below the first breakpoint rather than squeezed to two dots. */
+@media (max-width: 30rem) {
+  [data-preset='neon'] .neon-board__leader {
+    display: none;
+  }
+}
+
+/* ---------- stats ---------- */
+
+/* The 1px grid gap IS the divider: the container's own background shows
+   through it. One declaration instead of a border on every cell but the
+   last, and it stays correct at any column count the grid resolves to. */
+[data-preset='neon'] .neon-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: 1px;
+  border: 1px solid var(--neon-line);
+  border-radius: var(--r-lg);
+  background-color: var(--neon-line);
+  overflow: hidden;
+}
+
+[data-preset='neon'] .neon-stats__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: clamp(1rem, 2.4vw, 1.5rem);
+  text-align: center;
+  background-color: var(--neon-panel);
+}
+
+[data-preset='neon'] .neon-stats__value {
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+  line-height: 1.15;
+  font-weight: var(--fw-bold);
+  color: var(--neon-glow);
+}
+
+[data-preset='neon'] .neon-stats__label {
+  font-size: var(--fs-text-sm);
+  color: var(--neon-fg-2);
+}
+
+/* ---------- quotes ---------- */
+
+/* `flex: 1` and not `height: 100%`: the figure is a flex item of
+   `.neon-win__body`, whose main axis is vertical, so a percentage height
+   resolves against an auto-sized parent and does nothing. Filling the body is
+   what lets `margin-block-start: auto` on the attribution pin it to the bottom
+   of every card in the row. */
+[data-preset='neon'] .neon-quote__fig {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 1rem;
+}
+
+[data-preset='neon'] .neon-quote__body {
+  line-height: 1.9;
+  color: var(--neon-fg);
+}
+
+[data-preset='neon'] .neon-quote__who {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-block-start: auto;
+  font-size: var(--fs-text-sm);
+  color: var(--neon-fg-2);
+}
+
+/* ---------- faq ---------- */
+
+[data-preset='neon'] .neon-faq {
+  display: grid;
+  border-block-start: 1px solid var(--neon-line);
+}
+
+[data-preset='neon'] .neon-faq__row {
+  border-block-end: 1px solid var(--neon-line);
+}
+
+[data-preset='neon'] .neon-faq__q {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: var(--min-tap-size);
+  padding-block: 1rem;
+  cursor: pointer;
+  color: var(--neon-fg);
+  font-weight: var(--fw-medium);
+  line-height: 1.6;
+  /* The disclosure triangle, removed twice: `list-style` is what Chrome and
+     Firefox honour on a `<summary>`, the `::-webkit-details-marker` pseudo is
+     what Safari still needs. Dropping either leaves a stray triangle on one
+     engine only, which is the kind of thing nobody sees until it ships. */
+  list-style: none;
+}
+
+[data-preset='neon'] .neon-faq__q::-webkit-details-marker {
+  display: none;
+}
+
+[data-preset='neon'] .neon-faq__sigil {
+  flex: none;
+  color: var(--neon-glow);
+}
+
+[data-preset='neon'] .neon-faq__q-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* A `+` that becomes a `−`. Two absolutely positioned bars rather than a glyph,
+   so it is a shape and not a character an Arabic font might render with its
+   own metrics — and so the state change is one `opacity`, with nothing to
+   animate and nothing to translate for RTL. */
+[data-preset='neon'] .neon-faq__toggle {
+  position: relative;
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+[data-preset='neon'] .neon-faq__toggle::before,
+[data-preset='neon'] .neon-faq__toggle::after {
+  content: '';
+  position: absolute;
+  background-color: var(--neon-glow);
+}
+
+[data-preset='neon'] .neon-faq__toggle::before {
+  inset-inline: 0;
+  top: 50%;
+  height: 1px;
+  margin-block-start: -0.5px;
+}
+
+[data-preset='neon'] .neon-faq__toggle::after {
+  inset-block: 0;
+  inset-inline-start: 50%;
+  width: 1px;
+  margin-inline-start: -0.5px;
+}
+
+[data-preset='neon'] .neon-faq__row[open] .neon-faq__toggle::after {
+  opacity: 0;
+}
+
+[data-preset='neon'] .neon-faq__a {
+  padding-block-end: 1.1rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.95;
+  color: var(--neon-fg-2);
+}
+
+/* ---------- the closer ---------- */
+
+[data-preset='neon'] .neon-closer {
+  max-width: 40rem;
+  margin-inline: auto;
+  text-align: center;
+}
+
+[data-preset='neon'] .neon-closer__title {
+  font-size: clamp(1.5rem, 3.6vw, 2.25rem);
+  line-height: 1.35;
+  font-weight: var(--fw-bold);
+  color: var(--neon-fg);
+}
+
+[data-preset='neon'] .neon-closer__lead {
+  margin-block-start: 0.75rem;
+  line-height: 1.9;
+  color: var(--neon-fg-2);
+}
+
+[data-preset='neon'] .neon-closer__cmd {
+  display: flex;
+  justify-content: center;
+  margin-block-start: 1.5rem;
+}
+
+/* ---------- reduced motion ---------- */
+
+/* Belt and braces over `theme.css`'s blanket `.site *` cap — see the caret's
+   own note for why that cap alone is not a safe design, and why these
+   keyframes are written to rest visible. Nothing else on this page moves:
+   the glow is static light, not an animation, which is the reason this
+   section is three lines long. */
+@media (prefers-reduced-motion: reduce) {
+  [data-preset='neon'] .neon-hero__caret {
+    animation: none;
+  }
+}
+
+/* ═══ NEON — the shell around the page ════════════════════════════════════
+   THE ONE BLOCK IN THIS SECTION NOT WRITTEN AS `[data-preset='neon'] …`, and
+   the reason has to be stated because the rule at the top of this file says
+   there must not be one.
+
+   ── The failure ──────────────────────────────────────────────────────────
+   `<main>` is not the whole page. `app/(site)/layout.tsx` wraps it in
+   `<div class="site">` with `<SiteNav>` above and `<SiteFooter>` below, and
+   both of those read `--site-bg` / `--site-card` / `--site-fg`, which FOLLOW
+   `data-theme`. So on a light-theme reader the neon page renders a white
+   header, then an unbroken black page, then a white footer — on the preset
+   whose single defining claim is that it never turns light. It is worst at
+   the very top of the first screen, which is the one part of it nobody can
+   miss.
+
+   ── Why it cannot be fixed from inside `[data-preset='neon']` ────────────
+   The nav and the footer are SIBLINGS of `<main>`, not descendants. No
+   selector rooted at the preset root can reach them. Editing `site-nav.tsx`
+   or `theme.css` was the alternative and is worse: those are Ayman's files on
+   his live page, and a preset must not need a change in them to exist.
+
+   ── What this does instead ───────────────────────────────────────────────
+   It re-points the `.site` surface's own SEMANTIC tokens — the ones
+   `theme.css` declares and the nav and footer already read — at the
+   permanently-dark `--ink*` panel and the brand ramp. No selector here names
+   a nav or footer class, so nothing is restyled: the same components render,
+   reading the same token names, which now resolve to dark values. A future
+   change to the header cannot break this because this does not know the
+   header exists.
+
+   ── Why it cannot match the classic page ─────────────────────────────────
+   `:has([data-preset='neon'])` matches only a `.site` that CONTAINS the neon
+   `<main>`. Ayman's `<main>` carries `data-layout` and nothing else, and
+   `lib/landing-preset.test.ts` asserts that the string `data-preset` appears
+   nowhere in `page.tsx` at all — so on `classic` this selector has nothing to
+   match and the block is inert. It is also scoped to the LANDING page by
+   construction: `/courses`, `/books` and every other route in the group has
+   no preset root in it, so they keep the theme they have.
+
+   ── Why `:root:root` ─────────────────────────────────────────────────────
+   Specificity, not superstition. `theme.css` declares the dark surface at
+   `:root[data-theme='dark'] .site` and `:root:not([data-theme='light']) .site`
+   — both (0,3,0) — and the light one inside a media query at (0,3,0) as well.
+   A plain `.site:has([data-preset='neon'])` is (0,2,0) and LOSES to all three.
+   Doubling `:root` lifts this to (0,4,0), which wins regardless of source
+   order — the same trick `renderBrandingStyle()` uses in
+   `packages/ui/src/lib/branding.ts`, and for the same reason: relying on this
+   file being imported last is relying on a line in a layout nobody will
+   re-read before moving it.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+:root:root .site:has([data-preset='neon']) {
+  --site-bg: var(--ink);
+  --site-bg-tint: var(--ink-2);
+  --site-card: var(--ink-2);
+  --site-card-2: var(--ink);
+  --site-nav-card: var(--ink-2);
+  --site-line: var(--ink-line);
+  --site-line-strong: color-mix(in oklch, var(--p-400), transparent 66%);
+  --site-fg: var(--ink-fg);
+  --site-fg-2: var(--ink-fg-2);
+  /* 12.70:1 and 15.24:1 on this ground — see the measured table in the
+     banner. The strong step exists for small bold labels on a tinted fill,
+     which is exactly where the nav puts its account chip. */
+  --site-accent-text: var(--p-300);
+  --site-accent-text-strong: var(--p-200);
+  /* The solid CTA the header and footer render. `--ink` on `--p-500` measures
+     7.59:1, well clear of AA for the 15px semibold label these buttons use.
+     The hover step is LIGHTER rather than darker, because on a dark ground a
+     button that darkens on hover reads as being disabled. */
+  --site-accent-solid: var(--p-500);
+  --site-accent-solid-hover: var(--p-400);
+  --site-on-accent: var(--ink);
+  /* `theme.css`'s light shadows are `rgb(var(--p-rgb) / …)`, and `--p-rgb` is
+     the one part of the brand ramp `rampDeclarations()` does NOT regenerate
+     per hue — it stays the shipped amber triplet forever. An orange-tinted
+     shadow under a violet tenant's header is a colour nobody chose, so these
+     become plain black, which is what a dark surface wants anyway. */
+  --site-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --site-shadow-md: 0 8px 24px rgb(0 0 0 / 0.45);
+  --site-shadow-lg: 0 24px 60px rgb(0 0 0 / 0.55);
+  color-scheme: dark;
+}

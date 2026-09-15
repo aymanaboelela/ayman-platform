@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { DRAGON_BLAZE } from '@/lib/brand-assets';
+import { IS_AYMAN } from '@/lib/tenant';
 import { useMediaQuery } from '@/lib/use-media-query';
 
 /**
@@ -26,6 +27,21 @@ import { useMediaQuery } from '@/lib/use-media-query';
  *
  * The clip is a palindrome, so `loop` alone is seamless (see `DRAGON_BLAZE`).
  * The mirroring is CSS on the right-hand element.
+ *
+ * ## Ayman's stack only
+ *
+ * ⚠️ AND THIS IS THE WIDEST-REACHING OF THE TWO DRAGONS, because `<SiteFooter>`
+ * closes EVERY marketing page — so where `<TracksDragon>` would leak his
+ * likeness on one section of one page, this pair would put it under the
+ * wordmark of every page a second instructor has.
+ *
+ * `IS_AYMAN` goes into `active` beside the breakpoint and the motion query for
+ * the reason those two are there: `active` is the flag that decides whether the
+ * elements EXIST, and an element that does not exist is the only kind that does
+ * not fetch. `.footer-dragons` is `position: absolute` inside
+ * `.site-footer__signoff`, so removing it takes no space with it and the
+ * wordmark closes the page exactly as it does under 64rem today, where the pair
+ * is already absent.
  */
 export function FooterDragons() {
   const ref = useRef<HTMLDivElement>(null);
@@ -34,7 +50,7 @@ export function FooterDragons() {
 
   const wide = useMediaQuery('(min-width: 64rem)', false);
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)', true);
-  const active = wide && !reducedMotion && Boolean(DRAGON_BLAZE);
+  const active = IS_AYMAN && wide && !reducedMotion && Boolean(DRAGON_BLAZE);
 
   useEffect(() => {
     const root = ref.current;

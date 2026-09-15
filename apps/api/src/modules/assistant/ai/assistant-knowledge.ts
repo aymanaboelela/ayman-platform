@@ -1,4 +1,5 @@
 import { copy } from '@ayman/contracts/copy';
+import { tenantName } from '../../../common/tenant';
 import {
   ASSISTANT_NODES,
   ASSISTANT_ROOT,
@@ -38,7 +39,7 @@ import type { AssistantFacts, BookFact, CourseFact } from './assistant-facts.ser
  * Dates, offers, and anything about a specific student. The first changes
  * without anyone touching this repo, and the second is not knowledge, it is a
  * database read this module has no session to authorise. Both roads end at the
- * same place: «أوصّلك لأيمن».
+ * same place: «أوصّلك للمدرّس».
  *
  * ## PRICES are not here either — and that is now a statement about SHAPE
  *
@@ -105,15 +106,16 @@ function platformFacts(): KnowledgeEntry[] {
       id: 'human',
       question: 'أقدر أكلّم حد؟',
       answer:
-        'أيوة. من زرار «أكلّم م. أيمن» اللي تحت خالص في المساعد — السؤال بيوصله هو شخصياً، ' +
-        'والرد بيرجع في نفس المكان ومعاه إشعار. وفيه كمان قناة واتساب للملفات والمراجعات.',
+        `أيوة. من زرار «أكلّم ${tenantName(copy.site.instructor)}» اللي تحت خالص في المساعد — ` +
+        'السؤال بيوصله هو شخصياً، والرد بيرجع في نفس المكان ومعاه إشعار. ' +
+        'وفيه كمان قناة واتساب للملفات والمراجعات.',
     },
     {
       id: 'assistantItself',
       question: 'إنت مين؟',
       answer:
         'أنا مساعد المنصة — رد آلي بيجاوب من نفس المعلومات المكتوبة في المنصة. ' +
-        'مش أيمن، ولما السؤال يبقى محتاجه بوصّله ليه على طول.',
+        `مش ${tenantName(copy.site.name)}، ولما السؤال يبقى محتاجه بوصّله ليه على طول.`,
     },
   ];
 }
@@ -271,7 +273,7 @@ function bookLine(book: BookFact): string {
  *
  * The third state is real and must not be smoothed over: a course that DOES
  * need its own grant and has no plan priced is one whose arrangement is not on
- * the platform yet. The honest line is that أيمن settles it — not a guess, and
+ * the platform yet. The honest line is that the INSTRUCTOR settles it — not a guess, and
  * not silence that reads as "free".
  *
  * ## ⚠️ NO BOOK IS NAMED HERE, AND THAT IS THE FIX FOR A REAL BUG
@@ -302,7 +304,8 @@ function courseLine(course: CourseFact): string {
   }
   if (course.yearlyPriceCents !== null) plans.push(`سنة كاملة ${egp(course.yearlyPriceCents)}`);
 
-  const price = plans.length > 0 ? plans.join(' · ') : 'الاشتراك بيتظبط مع أيمن نفسه';
+  const price =
+    plans.length > 0 ? plans.join(' · ') : `الاشتراك بيتظبط مع ${tenantName(copy.site.name)} نفسه`;
   return `- «${course.title}» (${course.slug}) — ${price}`;
 }
 
@@ -369,7 +372,14 @@ export function pricingBlock(facts: AssistantFacts | null): string {
     return [
       'Prices could NOT be read for this request. Right now you know NO price on this platform.',
       '- Do not state, estimate, round or recall any figure for a book, a subscription, or delivery — not from earlier in this conversation, not from the KNOWLEDGE block, and not from anything you believe you know.',
-      '- Say in ONE short sentence that the current price needs checking with أيمن, and end the message with the escalation marker described under «When you do not know» above. Wording along the lines of «الأسعار بتتغيّر وأنا مش شايف الرقم الحالي دلوقتي — أوصّل السؤال لأيمن وهو اللي يقول بالظبط.»',
+      /*
+       * ⚠️ The instructor's name reaches the MODEL here, not just the page —
+       * this line is an instruction in the system prompt, and the example
+       * wording is what the model paraphrases back to a student. Left
+       * ungated it taught a second instructor's assistant to promise that
+       * «أيمن» would settle the price.
+       */
+      `- Say in ONE short sentence that the current price needs checking with ${tenantName(copy.site.name)}, and end the message with the escalation marker described under «When you do not know» above. Wording along the lines of «الأسعار بتتغيّر وأنا مش شايف الرقم الحالي دلوقتي — أوصّل السؤال لـ${tenantName(copy.site.name)} وهو اللي يقول بالظبط.»`,
     ].join('\n');
   }
 

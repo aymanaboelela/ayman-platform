@@ -3,7 +3,8 @@ import { copy } from '@ayman/contracts';
 import { mediaUrl } from '@ayman/ui/branding';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { markdownTwinPath } from '@/lib/agents/markdown-routes';
-import { SITE_URL } from './jsonld';
+import { aymanOnly, IS_AYMAN, tenantName } from '@/lib/tenant';
+import { SITE_URL } from './site-url';
 
 /**
  * Every page's `<head>`, in one place.
@@ -33,8 +34,62 @@ import { SITE_URL } from './jsonld';
  * the cache expires — showing the previous card. Changing the path is what
  * makes a redesign actually reach the people the link is sent to; if this card
  * is ever redesigned again, change the filename again.
+ *
+ * ⚠️ HIS CARD, not a blank one — which is why it is wrapped in `aymanOnly()`
+ * below rather than shipped to every deployment. The screenshot is his face
+ * beside «منصة أيمن أبو العلا» with `aymanaboelela.com` printed along the
+ * bottom, and this is the `og:image` on EVERY page: a stack that is not his
+ * would put that card on every link its students paste into a WhatsApp group —
+ * the single most-shared surface the platform has, carrying another man's name
+ * and another site's domain. A share with no picture at all is a smaller link
+ * preview; a share with the wrong picture is an advert for somebody else.
+ *
+ * A non-Ayman deployment gets its own card the moment an admin uploads one in
+ * `/admin/settings` — `seo.ogImageKey` is read first and is untouched by this
+ * gate — so this is a missing default, not a missing feature.
  */
 const FALLBACK_OG_IMAGE = '/og.jpg';
+
+/**
+ * The three names this file prints, resolved once through the tenant gate.
+ *
+ * `copy/ar.ts` is written around him — `platformName` is «منصة أيمن أبو
+ * العلا», `shortName` is «منصة أيمن», `instructor` is «المهندس أيمن أبو
+ * العلا» — and rewriting that table is a separate piece of work. So the gate
+ * sits at the point of USE instead: his stack reads exactly what it always
+ * read, and any other `TENANT_KEY` gets `TENANT_DISPLAY_NAME`, or «المنصة»
+ * when that deployment has not set one.
+ *
+ * These are the highest-leverage name reads in the app and that is why they
+ * are gated first. `<title>` and `og:site_name` are on EVERY page: they are
+ * the blue link in a search result and the bold line in a WhatsApp preview.
+ * `appleWebApp.title` is narrower and more permanent — it is what an iPhone
+ * writes under the home-screen icon, which outlives the tab, the session and
+ * the browser.
+ */
+const PLATFORM_NAME = tenantName(copy.site.platformName);
+const INSTRUCTOR_NAME = tenantName(copy.site.instructor);
+export const SITE_SHORT_NAME = tenantName(copy.site.shortName);
+
+/**
+ * The full site title — the landing page's `<title>`, `title.default` wherever
+ * a page supplies none, and `name` in the web app manifest, which imports it
+ * from here rather than keeping a second copy. Two copies of a name that must
+ * match is how they stop matching; `copy.site.shortName` carries the same note
+ * for the same reason.
+ *
+ * ⚠️ COMPOSED on a non-Ayman stack rather than substituted, because
+ * `copy.seo.defaultTitle` is one string with his name welded into the middle
+ * of it — «منصة أيمن أبو العلا — البرمجة وعلوم الحاسب للبكالوريا المصرية».
+ * `tenantName()` cannot reach inside a sentence, and omitting the title is not
+ * an option: a page with no title is a worse failure than a generic one. So
+ * his stack returns that literal byte for byte, and every other stack gets the
+ * gated platform name joined to the tagline — which says what the site teaches
+ * without saying whose face is on it.
+ */
+export const SITE_TITLE = IS_AYMAN
+  ? copy.seo.defaultTitle
+  : `${PLATFORM_NAME} — ${copy.site.tagline}`;
 
 export interface PageMetaInput {
   /** Page title, WITHOUT the site suffix — the template appends it. */
@@ -74,10 +129,10 @@ export async function buildMetadata(input: PageMetaInput): Promise<Metadata> {
    * that repeat themselves, which throws away the exact-phrase match this
    * whole file exists to earn. `{ absolute }` opts that one case out.
    */
-  const siteTitle = adminTitle || copy.seo.defaultTitle;
+  const siteTitle = adminTitle || SITE_TITLE;
   const title = input.title !== undefined ? input.title : { absolute: siteTitle };
   /** Flattened for OG/Twitter, which take a string and know nothing of templates. */
-  const flatTitle = input.title !== undefined ? `${input.title} | ${copy.site.platformName}` : siteTitle;
+  const flatTitle = input.title !== undefined ? `${input.title} | ${PLATFORM_NAME}` : siteTitle;
   const description = input.description ?? (adminDescription || copy.seo.description);
   const url = `${SITE_URL}${input.path}`;
   const markdownTwin = markdownTwinPath(input.path);
@@ -90,7 +145,7 @@ export async function buildMetadata(input: PageMetaInput): Promise<Metadata> {
    */
   const image =
     input.image ??
-    (seo.ogImageKey ? mediaUrl(seo.ogImageKey) : `${SITE_URL}${FALLBACK_OG_IMAGE}`);
+    (seo.ogImageKey ? mediaUrl(seo.ogImageKey) : aymanOnly(`${SITE_URL}${FALLBACK_OG_IMAGE}`));
 
   return {
     title,
@@ -121,17 +176,38 @@ export async function buildMetadata(input: PageMetaInput): Promise<Metadata> {
       // `ar_EG`, not `ar`: the audience is specifically Egyptian, and the
       // locale is one of the few OG fields Facebook actually acts on.
       locale: 'ar_EG',
-      siteName: copy.site.platformName,
+      siteName: PLATFORM_NAME,
       title: flatTitle,
       description,
       url,
-      images: [{ url: image, width: 1200, height: 630, alt: copy.site.platformName }],
+      /*
+       * SPREAD AWAY, not emitted empty. `image` is now optional — a stack that
+       * is not Ayman's and whose admin has not uploaded a card has nothing to
+       * put here (see `FALLBACK_OG_IMAGE`) — and the two wrong ways to say that
+       * both ship a broken tag: `images: [{ url: undefined }]` renders
+       * `<meta property="og:image" content="undefined">`, which scrapers fetch
+       * as a relative path and resolve to a 404 on this origin, and `images: []`
+       * is a claim of "no image" that some scrapers cache as hard as a real one.
+       * The tag being absent is the only state that lets a crawler fall back to
+       * the first suitable image in the document.
+       *
+       * `width`/`height` stay inside the branch: they describe THIS card, and a
+       * 1200×630 declaration attached to a course cover of another shape is a
+       * lie about bytes the scraper has already downloaded.
+       */
+      ...(image
+        ? { images: [{ url: image, width: 1200, height: 630, alt: PLATFORM_NAME }] }
+        : {}),
     },
     twitter: {
+      // Left as `summary_large_image` even when there is no image: the card type
+      // is a request, and Twitter/X renders a plain summary when no picture
+      // resolves. Flipping it would also flip it back the day the admin uploads
+      // one, and that is a decision this function should not be making twice.
       card: 'summary_large_image',
       title: flatTitle,
       description,
-      images: [image],
+      ...(image ? { images: [image] } : {}),
     },
     /*
      * iOS installs from Safari's share sheet and reads NONE of the web app
@@ -151,7 +227,7 @@ export async function buildMetadata(input: PageMetaInput): Promise<Metadata> {
      */
     appleWebApp: {
       capable: true,
-      title: copy.site.shortName,
+      title: SITE_SHORT_NAME,
       statusBarStyle: 'default',
     },
   };
@@ -168,19 +244,31 @@ export const rootMetadata: Metadata = {
   // relative metadata URL — canonical, OG image, manifest — against it.
   metadataBase: new URL(SITE_URL),
   title: {
-    default: copy.seo.defaultTitle,
+    default: SITE_TITLE,
     // Puts "منصة أيمن أبو العلا" — the exact phrase people search — in the
     // title of every single page, not just the landing one.
-    template: `%s | ${copy.site.platformName}`,
+    template: `%s | ${PLATFORM_NAME}`,
   },
   description: copy.seo.description,
-  applicationName: copy.site.platformName,
-  // Ignored by Google, weighted lightly by Bing and Yandex, free to ship. The
-  // real work is `alternateName` in the JSON-LD — see `copy.seo`.
-  keywords: [...copy.seo.keywords],
-  authors: [{ name: copy.site.instructor, url: SITE_URL }],
-  creator: copy.site.instructor,
-  publisher: copy.site.platformName,
+  applicationName: PLATFORM_NAME,
+  /*
+   * Ignored by Google, weighted lightly by Bing and Yandex, free to ship. The
+   * real work is `alternateName` in the JSON-LD — see `copy.seo`.
+   *
+   * ⚠️ HIS STACK ONLY, and dropped whole rather than filtered. Eight of the
+   * twenty-three entries are spellings of his name — «منصة أيمن أبو العلا»,
+   * «ايمن ابو العلا», «Ayman Abo El Ela» — and a keywords tag exists precisely
+   * so a search engine reads it. The other fifteen are subject terms that
+   * would be honest on any stack, but nothing in the list says which entry is
+   * which, and inventing that split here means a new personal keyword added to
+   * `copy/ar.ts` next year ships to every deployment by default. The tag earns
+   * nothing on Google to begin with, so omitting it costs another stack almost
+   * nothing and costs his stack nothing at all.
+   */
+  ...(IS_AYMAN ? { keywords: [...copy.seo.keywords] } : {}),
+  authors: [{ name: INSTRUCTOR_NAME, url: SITE_URL }],
+  creator: INSTRUCTOR_NAME,
+  publisher: PLATFORM_NAME,
   // Arabic phone numbers in course copy would otherwise be auto-linked by iOS
   // Safari, which rewrites the DOM under RTL text and breaks the layout.
   formatDetection: { telephone: false, address: false, email: false },

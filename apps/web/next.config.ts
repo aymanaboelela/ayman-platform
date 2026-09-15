@@ -6,6 +6,42 @@ const MEDIA_ORIGIN = process.env.NEXT_PUBLIC_MEDIA_ORIGIN ?? 'http://localhost:3
 const mediaOriginUrl = new URL(MEDIA_ORIGIN);
 
 const nextConfig: NextConfig = {
+  /**
+   * `TENANT_KEY` and `TENANT_DISPLAY_NAME`, inlined into the CLIENT bundle.
+   *
+   * `lib/tenant.ts` reads both with a plain `process.env`, and on the server
+   * that is exactly right. In the browser it is not: Next replaces only
+   * `NEXT_PUBLIC_*` reads and whatever is listed here, so an unprefixed
+   * `process.env.TENANT_KEY` compiles to `undefined` — and `?? '' || 'ayman'`
+   * then makes `IS_AYMAN` **true on every tenant's stack**.
+   *
+   * That is not a cosmetic gap. A name gate lands on an attribute and React
+   * leaves those alone, so the server HTML survives — but an ASSET gate
+   * decides which element exists at all (`<Image src="/brand/hero-ai-dragon-2
+   * .webp">` versus `<HeroFallback>`). A structural mismatch makes React throw
+   * the server subtree away and re-render from the client, so Ayman's
+   * photograph would appear on somebody else's landing page a few hundred
+   * milliseconds after first paint. Three `'use client'` components reach
+   * `getBrandAsset`: `site-hero.tsx` (hero), `site-nav.tsx` (mark) and
+   * `year-tracks.tsx` (the three track posters).
+   *
+   * `env` rather than renaming them `NEXT_PUBLIC_*`: the names are already
+   * written into `docker-compose.yml`, the Dockerfile build args, every
+   * `deploy/tenants/*.env`, `scripts/check-tenant-env.mjs` and the API — which
+   * reads the same `TENANT_KEY` server-side, where a `NEXT_PUBLIC_` prefix
+   * would be meaningless. One config entry beats renaming the variable in
+   * eight places and leaving the API's copy spelled differently.
+   *
+   * ⚠️ Inlined at BUILD time, like every other `env` entry. The web image is
+   * already per-instructor (`NEXT_PUBLIC_APP_URL` is baked in the same way),
+   * so this costs nothing that was not already true — but it does mean a
+   * container cannot be re-pointed at another tenant by changing the runtime
+   * environment. It never could.
+   */
+  env: {
+    TENANT_KEY: process.env.TENANT_KEY ?? '',
+    TENANT_DISPLAY_NAME: process.env.TENANT_DISPLAY_NAME ?? '',
+  },
   // Emits .next/standalone with a self-contained server.js and only the
   // node_modules actually reached — the runtime image copies that instead of
   // the whole pnpm workspace.
