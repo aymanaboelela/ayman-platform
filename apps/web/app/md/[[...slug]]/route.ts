@@ -3,6 +3,7 @@ import { getNewsListOrEmpty, getNewsPost } from '@/lib/news';
 import { estimateMarkdownTokens, resolveMarkdownRoute } from '@/lib/agents/markdown-routes';
 import {
   renderAboutMarkdown,
+  renderBooksMarkdown,
   renderCourseMarkdown,
   renderCoursesMarkdown,
   renderEssentialsMarkdown,
@@ -11,6 +12,7 @@ import {
   renderNewsPostMarkdown,
   renderYearMarkdown,
 } from '@/lib/agents/markdown-render';
+import { getBookCatalogOrEmpty } from '@/lib/books';
 
 /**
  * Markdown for Agents.
@@ -74,6 +76,13 @@ export async function GET(
       return markdownResponse(renderAboutMarkdown());
     case 'essentials':
       return markdownResponse(renderEssentialsMarkdown());
+    case 'books': {
+      // `getBookCatalogOrEmpty`, like every other loader here: this route is
+      // reachable during a build where no API answers, and an empty shop is a
+      // document that recovers on the next revalidation.
+      const catalog = await getBookCatalogOrEmpty();
+      return markdownResponse(renderBooksMarkdown(catalog));
+    }
     case 'courses': {
       const { courses } = await getCatalogOrEmpty();
       return markdownResponse(renderCoursesMarkdown(courses));

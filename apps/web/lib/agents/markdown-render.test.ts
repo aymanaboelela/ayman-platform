@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { copy } from '@ayman/contracts';
 import type { CatalogCourse, CatalogCourseDetail } from '@ayman/contracts';
+import type { BookCatalog } from '@ayman/contracts/books';
 import {
   renderAboutMarkdown,
+  renderBooksMarkdown,
   renderCourseMarkdown,
   renderCoursesMarkdown,
   renderEssentialsMarkdown,
@@ -24,6 +26,9 @@ const course = (overrides: Partial<CatalogCourse> = {}): CatalogCourse =>
     coverKey: null,
     lessonCount: 12,
     totalSeconds: 3600,
+    monthlyPriceCents: 15000,
+    quarterlyPriceCents: null,
+    yearlyPriceCents: null,
     publishedAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -33,6 +38,7 @@ const detail = (overrides: Partial<CatalogCourseDetail> = {}): CatalogCourseDeta
   ({
     ...course(),
     description: 'وصف الكورس',
+    terms: [],
     sections: [
       {
         id: '00000000-0000-4000-8000-0000000000s1',
@@ -58,6 +64,7 @@ const ALL_RENDERERS: [name: string, render: () => string][] = [
   ['about', () => renderAboutMarkdown()],
   ['courses', () => renderCoursesMarkdown([course()])],
   ['essentials', () => renderEssentialsMarkdown()],
+  ['books', () => renderBooksMarkdown(bookCatalog())],
   ['year', () => renderYearMarkdown(1, [course()])],
   ['course', () => renderCourseMarkdown(detail())],
 ];
@@ -94,6 +101,103 @@ describe('every markdown document', () => {
   });
 });
 
+/**
+ * ⚠️ The literal, named. `[object Object]` is a valid string, so nothing —
+ * not the type checker, not a snapshot of `copy.landing` strings — could see
+ * that `/about.md` had been serving four headings of it since `marks` became
+ * objects. The only test that catches this is one that says the words.
+ */
+const bookCatalog = (overrides: Partial<BookCatalog> = {}): BookCatalog => ({
+  shippingCents: 6500,
+  total: 1,
+  shelves: [
+    {
+      subjectId: '00000000-0000-4000-8000-0000000000b1',
+      subjectNameAr: 'البرمجة وعلوم الحاسب',
+      subjectSlug: 'programming_cs',
+      first: [
+        {
+          id: '00000000-0000-4000-8000-0000000000b2',
+          slug: 'y2-general',
+          titleAr: 'كتاب تانية بكالوريا برمجة عربي',
+          subtitleAr: null,
+          coverKey: null,
+          descriptionAr: null,
+          priceCents: 25000,
+          comparePriceCents: null,
+          pageCount: 180,
+          term: 'first' as const,
+          year: 2,
+          inStock: true,
+          forGeneral: true,
+          forLanguages: false,
+          showOnLanding: true,
+        },
+      ],
+      second: [],
+      full: [],
+    },
+  ],
+  ...overrides,
+});
+
+/**
+ * ⚠️ `/books` renders its shelves from a CLIENT component — `books-shop.tsx`'s
+ * own note records that `curl /books` returns zero rendered cards. This twin is
+ * one of the only two server-rendered descriptions of the shop that exist.
+ */
+describe('renderBooksMarkdown', () => {
+  it('quotes the price, the stream and the delivery fee', () => {
+    const markdown = renderBooksMarkdown(bookCatalog());
+
+    expect(markdown).toContain('كتاب تانية بكالوريا برمجة عربي');
+    expect(markdown).toContain('250');
+    // «عربي» — the one word that separates two identically-titled books.
+    expect(markdown).toContain(copy.stream.general);
+    // The fee is stated once, on the shelf, because a book price with no
+    // delivery fee beside it is a number an agent quotes as the total.
+    expect(markdown).toContain('65');
+  });
+
+  it('says a withdrawn title cannot be bought', () => {
+    const catalog = bookCatalog();
+    // `noUncheckedIndexedAccess` is on — assert the fixture's own shape rather
+    // than asserting past it with a `!`.
+    const shelf = catalog.shelves[0];
+    const first = shelf?.first[0];
+    expect(first).toBeDefined();
+    if (!shelf || !first) throw new Error('fixture lost its shelf');
+
+    const withdrawn: BookCatalog = {
+      ...catalog,
+      shelves: [{ ...shelf, first: [{ ...first, inStock: false }] }],
+    };
+
+    expect(renderBooksMarkdown(withdrawn)).toContain(copy.books.outOfStock);
+  });
+
+  it('renders the empty shop rather than an empty heading', () => {
+    const markdown = renderBooksMarkdown({ shelves: [], shippingCents: 6500, total: 0 });
+    expect(markdown).toContain(copy.books.empty);
+  });
+});
+
+describe('every markdown twin', () => {
+  it.each(ALL_RENDERERS)('%s renders no stringified object', (_name, render) => {
+    expect(render()).not.toContain('[object Object]');
+  });
+});
+
+describe('renderAboutMarkdown', () => {
+  it('names the institutions behind the credits', () => {
+    const markdown = renderAboutMarkdown();
+
+    for (const credit of copy.landing.aboutCredits) {
+      for (const mark of credit.marks) expect(markdown).toContain(mark.name);
+    }
+  });
+});
+
 describe('renderCourseMarkdown', () => {
   it('renders the outline down to lesson titles', () => {
     const markdown = renderCourseMarkdown(detail());
@@ -118,6 +222,44 @@ describe('renderCourseMarkdown', () => {
     expect(markdown).not.toContain('isFreePreview');
     expect(markdown).not.toContain('freePreview');
     expect(markdown).not.toContain(copy.catalog.freePreview);
+  });
+
+  /**
+   * «الكورس بكام؟». The visible page has always carried the price block; the
+   * markdown twin — the document an assistant actually reads — did not, so the
+   * one document written for machines was the only one that could not answer
+   * the question.
+   */
+  it('quotes every plan the course sells, in the page order', () => {
+    const markdown = renderCourseMarkdown(
+      detail({
+        monthlyPriceCents: 15000,
+        quarterlyPriceCents: 30000,
+        yearlyPriceCents: 95000,
+        terms: [{ id: '00000000-0000-4000-8000-0000000000t1', title: 'الترم الأول', priceCents: 45000 }],
+      }),
+    );
+    const line = markdown.split('\n').find((row) => row.includes(copy.agents.metaPrice));
+
+    expect(line).toBeDefined();
+    // The order is the page's: monthly, quarterly, term, yearly.
+    expect(line).toMatch(/150.+300.+الترم الأول.+950/u);
+  });
+
+  it('says the free course is free rather than leaving the row out', () => {
+    const markdown = renderCourseMarkdown(
+      detail({ monthlyPriceCents: null, quarterlyPriceCents: null, yearlyPriceCents: null, terms: [] }),
+    );
+
+    expect(markdown).toContain(`**${copy.agents.metaPrice}:** ${copy.course.freeBanner}`);
+  });
+
+  it('names the stream, the one word that tells the two editions apart', () => {
+    const general = renderCourseMarkdown(detail({ forGeneral: true, forLanguages: false }));
+    const languages = renderCourseMarkdown(detail({ forGeneral: false, forLanguages: true }));
+
+    expect(general).toContain(`**${copy.stream.label}:** ${copy.stream.general}`);
+    expect(languages).toContain(`**${copy.stream.label}:** ${copy.stream.languages}`);
   });
 
   it('omits the outline heading entirely for a course with no sections', () => {

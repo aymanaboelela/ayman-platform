@@ -187,6 +187,25 @@ export const copy = {
       'أفضل مدرس برمجة بكالوريا',
       'احسن مدرس برمجة وذكاء اصطناعي',
     ],
+    /**
+     * The `Person` name, decomposed.
+     *
+     * ⚠️ `site.instructor` («المهندس أيمن أبو العلا») is a TITLE plus a name and
+     * must not be the `Person`'s `name` — `site.name`'s own note already says
+     * the JSON-LD `Person` wants the bare name, and `jsonld.ts` had been
+     * passing the honorific form anyway. schema.org has `honorificPrefix` for
+     * exactly this, and an engine matching «أيمن أبو العلا» against a `name`
+     * that opens with «المهندس» is matching a substring rather than an entity.
+     *
+     * ⚠️ «أبو العلا» is the family name, BOTH words. A consumer splitting the
+     * full name on whitespace gets «أبو» as the family name and «العلا» as a
+     * middle name, which matches nothing — which is the whole reason these are
+     * stated here rather than derived.
+     */
+    personHonorific: 'المهندس',
+    personGivenName: 'أيمن',
+    personFamilyName: 'أبو العلا',
+
     /** `jobTitle` on the `Person` entity — what a knowledge panel would show. */
     jobTitle: 'مدرّس البرمجة وعلوم الحاسب',
     /**
@@ -4861,6 +4880,13 @@ export const copy = {
     metaTrack: 'المسار',
     metaSystem: 'النظام',
     metaLessons: 'عدد المحاضرات',
+    /**
+     * «الكورس بكام؟» is one of the three things anybody asks about a course,
+     * and until 2026-09-15 the markdown twin — the document an assistant
+     * actually reads — was the only surface on the site that did not answer it.
+     * The visible page has carried the price block all along.
+     */
+    metaPrice: 'السعر',
     sourcePage: 'الصفحة الأصلية',
     agentIndex: 'فهرس الوكلاء',
     publicApi: 'واجهة البيانات العامة',
@@ -4940,8 +4966,19 @@ export const copy = {
       'الأجهزة اللي الحساب دخل منها عشان تبان وتتقفل من الإعدادات، وسجلّ للعمليات الإدارية على المنصة.',
 
     neverTitle: 'حاجات مابنجمعهاش',
+    /*
+     * ⚠️ The last sentence used to read «المنصة مجانية ومفيش أي مدفوعات فيها
+     * أصلاً», and it stayed on the live privacy page for months after checkout
+     * shipped — the platform takes InstaPay and Vodafone Cash transfers and
+     * sells a printed book. A false statement on a legal page is the worst
+     * place to leave one, and an assistant quoting «المنصة مجانية» to a parent
+     * is quoting it from here.
+     *
+     * The reassuring half is true and is kept: no card data is stored, because
+     * no card is ever entered — the student transfers and uploads a receipt.
+     */
     neverBody:
-      'مابنطلبش الرقم القومي، ولا أي بيانات بنكية أو أرقام كروت، ولا صور مستندات رسمية. المنصة مجانية ومفيش أي مدفوعات فيها أصلاً.',
+      'مابنطلبش الرقم القومي، ولا أرقام كروت، ولا صور مستندات رسمية. الاشتراك بيتدفع بتحويل على إنستاباي أو فودافون كاش وإنت بترفع صورة التحويل، فمفيش بيانات كروت بتتكتب على المنصة أصلاً ولا بتتخزّن عندنا.',
 
     shareTitle: 'مين تاني بيشوف البيانات',
     shareBody: 'مابنبيعش بياناتك ومابنأجرهاش لحد، ومابنستخدمهاش في إعلانات. الأطراف التانية الوحيدة اللي ليها علاقة بالموقع:',

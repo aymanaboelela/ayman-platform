@@ -6,6 +6,7 @@ import {
   SITE_URL,
   WEBSITE_ID,
   articleJsonLd,
+  bookListJsonLd,
   breadcrumbJsonLd,
   courseJsonLd,
   courseListJsonLd,
@@ -18,6 +19,13 @@ import {
   webSiteJsonLd,
 } from './jsonld';
 
+/**
+ * ⚠️ The fixture is PRICED, like every course actually published. It used to
+ * carry no price fields at all, which is how `courseJsonLd` shipped
+ * `isAccessibleForFree: true` on a course whose own page renders «١٥٠ ج /
+ * الشهر» — the assertion below said "free" and agreed with the code, and both
+ * were wrong about the site. A free course is the `freeCourse()` case.
+ */
 const course = (overrides = {}) => ({
   id: '0192f000-0000-7000-8000-000000000001',
   slug: 'programming-year-2',
@@ -27,13 +35,30 @@ const course = (overrides = {}) => ({
   systemNameAr: 'البكالوريا المصرية',
   subjectNameAr: 'البرمجة وعلوم الحاسب',
   trackLabelAr: 'الهندسة وعلوم الحاسب',
+  forGeneral: true,
+  forLanguages: false,
   year: 2,
   lessonCount: 12,
   totalSeconds: 7200,
+  monthlyPriceCents: 15000,
+  quarterlyPriceCents: 30000,
+  yearlyPriceCents: 95000,
+  terms: [{ title: 'الترم الأول', priceCents: 45000 }],
   publishedAt: '2026-07-01T00:00:00.000Z',
   updatedAt: '2026-07-20T00:00:00.000Z',
   ...overrides,
 });
+
+/** The foundation course: nothing priced, so «الكورس ده مفتوح مجانًا» is true. */
+const freeCourse = (overrides = {}) =>
+  course({
+    slug: 'programming-foundation',
+    monthlyPriceCents: null,
+    quarterlyPriceCents: null,
+    yearlyPriceCents: null,
+    terms: [],
+    ...overrides,
+  });
 
 describe('secondsToIso8601Duration', () => {
   it.each([
@@ -69,13 +94,192 @@ describe('courseListJsonLd', () => {
   });
 });
 
+/**
+ * `json-ld.tsx` emits ONE `<script>` per call, so on an article page the
+ * `Person` node the `author` points at is in a different block entirely. A
+ * consumer that does not walk `@id`s across blocks — most of them, and every
+ * assistant reading the raw HTML — saw an author with no name.
+ */
+/**
+ * ⚠️ `/books` renders its shelves from a CLIENT component on the RSC stream —
+ * `curl /books` returns zero rendered cards. This graph and `/books.md` are the
+ * only server-rendered description of the shop that exists.
+ */
+describe('bookListJsonLd', () => {
+  const book = (overrides = {}) => ({
+    slug: 'programming-y2-general',
+    titleAr: 'كتاب تانية بكالوريا برمجة عربي',
+    subtitleAr: null,
+    descriptionAr: null,
+    coverKey: null,
+    priceCents: 25000,
+    pageCount: 180,
+    inStock: true,
+    ...overrides,
+  });
+  const shelf = (books: ReturnType<typeof book>[]) => ({
+    subjectNameAr: 'البرمجة وعلوم الحاسب',
+    first: books,
+    second: [],
+    full: [],
+  });
+
+  it('returns null for an empty shop rather than an empty list', () => {
+    expect(bookListJsonLd([], 6500)).toBeNull();
+    expect(bookListJsonLd([shelf([])], 6500)).toBeNull();
+  });
+
+  it('publishes the price, the format and the per-book anchor', () => {
+    const data = bookListJsonLd([shelf([book()])], 6500);
+    const item = data?.itemListElement[0]?.item;
+
+    expect(item).toMatchObject({
+      '@type': 'Book',
+      name: 'كتاب تانية بكالوريا برمجة عربي',
+      bookFormat: 'https://schema.org/Paperback',
+      numberOfPages: 180,
+    });
+    // The same fragment the card's own `id` uses, so the node points at the
+    // element rather than at the top of a long shop.
+    expect(item?.['@id']).toBe(`${SITE_URL}/books#book-programming-y2-general`);
+    expect(item?.offers).toMatchObject({ price: '250.00', priceCurrency: 'EGP' });
+  });
+
+  /** A withdrawn book still renders a card — publishing it InStock advertises stock nobody can buy. */
+  it('marks an out-of-stock title OutOfStock', () => {
+    const data = bookListJsonLd([shelf([book({ inStock: false })])], 6500);
+    expect(data?.itemListElement[0]?.item.offers.availability).toBe(
+      'https://schema.org/OutOfStock',
+    );
+  });
+
+  /**
+   * ⚠️ The fee is charged ONCE per order however many books are in it, so
+   * folding it into a per-book price overstates a two-book order by one fee.
+   */
+  it('carries the delivery fee as shippingDetails, not inside the price', () => {
+    const data = bookListJsonLd([shelf([book()])], 6500);
+    const offer = data?.itemListElement[0]?.item.offers;
+
+    expect(offer?.price).toBe('250.00');
+    expect(offer?.shippingDetails?.shippingRate).toMatchObject({ value: '65.00', currency: 'EGP' });
+  });
+});
+
+describe('references to the site-wide entities', () => {
+  it('names the instructor on a standalone course and keeps the @id', () => {
+    const instructor = courseJsonLd(course()).instructor;
+    expect(instructor).toMatchObject({ '@id': PERSON_ID, '@type': 'Person' });
+    expect(instructor?.name).toBe(copy.site.name);
+  });
+
+  it('leaves a nested catalog item bare — the list names him per row already', () => {
+    expect(courseJsonLd(course(), { nested: true }).instructor).toEqual({ '@id': PERSON_ID });
+  });
+
+  it('names the author and the publisher on an article', () => {
+    const data = articleJsonLd({
+      slug: 'a',
+      title: 'ت',
+      excerpt: 'و',
+      publishedAt: '2026-07-01T00:00:00.000Z',
+      updatedAt: '2026-07-01T00:00:00.000Z',
+    });
+    expect(data.author).toMatchObject({ '@id': PERSON_ID, name: copy.site.name });
+    expect(data.publisher).toMatchObject({ '@id': ORGANIZATION_ID });
+  });
+});
+
+/**
+ * The name query — «أيمن أبو العلا» — is the whole reason the `Person` node
+ * exists. It used to answer with «المهندس أيمن أبو العلا», a title glued to a
+ * name in the one field whose job is to be the name.
+ */
+describe('personJsonLd name parts', () => {
+  it('carries the bare name, with the title in honorificPrefix', () => {
+    const data = personJsonLd();
+    expect(data.name).toBe(copy.site.name);
+    expect(data.name).not.toContain(copy.seo.personHonorific);
+    expect(data.honorificPrefix).toBe(copy.seo.personHonorific);
+  });
+
+  /** «أبو العلا» is ONE family name of two words; every whitespace split gets it wrong. */
+  it('states both words of the family name rather than leaving it to be split', () => {
+    expect(personJsonLd().familyName).toBe('أبو العلا');
+    expect(personJsonLd().givenName).toBe('أيمن');
+  });
+});
+
 describe('courseJsonLd', () => {
-  it('marks the course free and Arabic, with an absolute URL', () => {
+  /**
+   * ⚠️ The order and the membership must match the price block on
+   * `(site)/courses/[slug]/page.tsx` — monthly, quarterly, each term, yearly.
+   * Structured data is a machine-readable copy of the page; a plan here that is
+   * not there is a contradiction no validator can see.
+   */
+  it('publishes one Offer per plan the page renders, in the page order', () => {
+    const offers = courseJsonLd(course()).offers;
+    expect(Array.isArray(offers)).toBe(true);
+    expect(offers).toEqual([
+      expect.objectContaining({ price: '150.00', priceCurrency: 'EGP' }),
+      expect.objectContaining({ price: '300.00', priceCurrency: 'EGP' }),
+      expect.objectContaining({ price: '450.00', name: 'الترم الأول' }),
+      expect.objectContaining({ price: '950.00', priceCurrency: 'EGP' }),
+    ]);
+  });
+
+  /**
+   * The regression this pair exists for: a paid course published as free is a
+   * wrong answer an assistant gives in its own voice, and the student finds out
+   * at the paywall.
+   */
+  it('never calls a priced course free', () => {
+    expect(courseJsonLd(course()).isAccessibleForFree).toBe(false);
+  });
+
+  it('states the free case rather than omitting it', () => {
+    const data = courseJsonLd(freeCourse());
+    expect(data.isAccessibleForFree).toBe(true);
+    expect(data.offers).toMatchObject({ price: '0', priceCurrency: 'EGP', category: 'Free' });
+  });
+
+  it('prefers the instructor description over the repeated subtitle', () => {
+    expect(courseJsonLd(course({ description: 'شرح المنهج الرسمي' })).description).toBe(
+      'شرح المنهج الرسمي',
+    );
+    expect(courseJsonLd(course({ description: null })).description).toBe('الصف الثاني الثانوي');
+  });
+
+  /**
+   * ⚠️ `CatalogCourseDetail.description` is HTML — the page renders it through
+   * `<RichText>`. Unflattened it puts `<p>` and `<li>` into the knowledge graph,
+   * and a block tag dropped to nothing runs two sentences into one word.
+   */
+  it('flattens the rich-text description instead of publishing its markup', () => {
+    const data = courseJsonLd(
+      course({ description: '<p>سطر أول</p><ul><li>نقطة &amp; تانية</li></ul>' }),
+    );
+
+    expect(data.description).toBe('سطر أول نقطة & تانية');
+    expect(data.description).not.toContain('<');
+  });
+
+  /**
+   * Two published courses carry the same title and differ only in this word.
+   * Without it the node an assistant matches is a coin flip between a
+   * student's edition and the other one.
+   */
+  it('carries the stream among the keywords', () => {
+    expect(courseJsonLd(course()).keywords).toContain(copy.stream.general);
+    expect(courseJsonLd(course({ forGeneral: false, forLanguages: true })).keywords).toContain(
+      copy.stream.languages,
+    );
+  });
+
+  it('is Arabic, with an absolute URL', () => {
     const data = courseJsonLd(course());
     expect(data['@type']).toBe('Course');
     expect(data.inLanguage).toBe('ar');
-    expect(data.isAccessibleForFree).toBe(true);
-    expect(data.offers?.price).toBe('0');
     expect(data.url).toMatch(/^https?:\/\/.+\/courses\/programming-year-2$/);
     // `EducationalOrganization`, a strict subtype of `Organization` — it is
     // what tells a crawler this is a school rather than a company with a site.

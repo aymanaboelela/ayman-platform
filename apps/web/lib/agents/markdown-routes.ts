@@ -38,7 +38,14 @@ const HOME_MARKDOWN_PATH = '/index.md';
  * `markdown-routes.test.ts` asserts the two lists cannot overlap, because
  * "someone will remember" is not a control.
  */
-const STATIC_MARKDOWN_ROUTES = ['/', '/about', '/courses', '/essentials', '/news'] as const;
+const STATIC_MARKDOWN_ROUTES = [
+  '/',
+  '/about',
+  '/books',
+  '/courses',
+  '/essentials',
+  '/news',
+] as const;
 
 /** `/years/1`, `/years/2`, `/years/3` — `parseYear` on the page rejects the rest. */
 const YEAR_PATTERN = /^\/years\/([123])$/;
@@ -59,6 +66,7 @@ export type MarkdownRoute =
   | { kind: 'about' }
   | { kind: 'courses' }
   | { kind: 'essentials' }
+  | { kind: 'books' }
   | { kind: 'news' }
   | { kind: 'year'; year: 1 | 2 | 3 }
   | { kind: 'course'; slug: string }
@@ -109,6 +117,12 @@ export function resolveMarkdownRoute(slug: readonly string[] | undefined): Markd
   if (pathname === '/about') return { kind: 'about' };
   if (pathname === '/courses') return { kind: 'courses' };
   if (pathname === '/essentials') return { kind: 'essentials' };
+  /*
+   * ⚠️ `/books` and nothing under it. There is no `/books/<slug>` route at all
+   * — the shop is deliberately one page (see its own note) — so a twin for a
+   * per-book URL would be a document for a page that does not exist.
+   */
+  if (pathname === '/books') return { kind: 'books' };
   if (pathname === '/news') return { kind: 'news' };
 
   // `?.[1]` rather than `[1]!` throughout: the capture group is guaranteed by
