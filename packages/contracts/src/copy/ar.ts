@@ -4887,6 +4887,14 @@ export const copy = {
      * The visible page has carried the price block all along.
      */
     metaPrice: 'السعر',
+    /**
+     * The byline and the dates on a markdown twin. The HTML page has shown both
+     * since the «نيوز» section shipped; the document written for machines
+     * showed neither, and an engine deciding whether to cite a page weighs
+     * exactly these two.
+     */
+    metaAuthor: 'الكاتب',
+    metaUpdated: 'آخر تعديل',
     sourcePage: 'الصفحة الأصلية',
     agentIndex: 'فهرس الوكلاء',
     publicApi: 'واجهة البيانات العامة',
