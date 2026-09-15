@@ -278,6 +278,74 @@ describe('renderNewsPostMarkdown byline', () => {
   });
 });
 
+/**
+ * ⚠️ `/years/3.md` was headed «الصف الثالث بكالوريا» with a single row reading
+ * «الصف الثاني بكالوريا» — `courseLine` leads with the COURSE's year and the
+ * shared foundation course is stored under year 2, so the document contradicted
+ * its own title. The HTML says this by being visibly empty under the foundation
+ * section; markdown has no empty space and has to say it in words.
+ */
+describe('renderYearMarkdown and the shared foundation course', () => {
+  const foundation = course({
+    slug: 'programming-foundation-2027',
+    title: 'الكورس التأسيسي لمادة البرمجة',
+    year: 2,
+    monthlyPriceCents: null,
+    quarterlyPriceCents: null,
+    yearlyPriceCents: null,
+  });
+
+  it('does not stamp another year on the foundation row', () => {
+    const markdown = renderYearMarkdown(3, [foundation]);
+
+    expect(markdown.split('\n')[0]).toContain(copy.years.year3);
+    expect(markdown).toContain(copy.years.foundationTitle);
+    // The lie: the row used to carry «الصف الثاني بكالوريا» under that H1.
+    expect(markdown).not.toContain(copy.years.year2);
+  });
+
+  it('says the year has nothing of its own rather than calling it empty', () => {
+    const markdown = renderYearMarkdown(3, [foundation]);
+
+    expect(markdown).toContain(copy.years.foundationOnlyNote);
+    expect(markdown).not.toContain(copy.years.empty);
+  });
+
+  it('keeps the year fact on the year own courses', () => {
+    const markdown = renderYearMarkdown(2, [course({ year: 2 })]);
+
+    expect(markdown).toContain(copy.years.year2);
+    expect(markdown).not.toContain(copy.years.foundationOnlyNote);
+  });
+
+  /** A year with neither is genuinely empty and still says so. */
+  it('still reports a year with nothing at all', () => {
+    expect(renderYearMarkdown(3, [])).toContain(copy.years.empty);
+  });
+});
+
+/**
+ * «الكورس بكام؟» from an index document. The card has carried this badge all
+ * along and no machine-readable index did, so the free foundation course was
+ * rendered in exactly the same shape as the paid ones.
+ */
+describe('the price on the index documents', () => {
+  it('tells the free course from the paid ones in a listing', () => {
+    const markdown = renderCoursesMarkdown([
+      course({ slug: 'paid' }),
+      course({
+        slug: 'free',
+        monthlyPriceCents: null,
+        quarterlyPriceCents: null,
+        yearlyPriceCents: null,
+      }),
+    ]);
+
+    expect(markdown).toContain('150');
+    expect(markdown).toContain(copy.landing.courseFree);
+  });
+});
+
 describe('renderBooksMarkdown', () => {
   it('quotes the price, the stream and the delivery fee', () => {
     const markdown = renderBooksMarkdown(bookCatalog());

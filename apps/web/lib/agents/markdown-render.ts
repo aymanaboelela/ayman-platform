@@ -12,7 +12,7 @@ import { AGENT_DISCOVERY_PATHS } from '@/lib/agents/discovery';
 import { ESSENTIAL_TERMS } from '@/lib/essentials-terms';
 import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
 import { formatDuration } from '@/lib/format';
-import { formatEGP } from '@/lib/price';
+import { coursePriceBadge, formatEGP } from '@/lib/price';
 import { SITE_URL } from '@/lib/seo/jsonld';
 import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
 
@@ -125,9 +125,16 @@ function courseMeta(course: CatalogCourse): string {
 }
 
 /** One line per course — enough for an agent to choose, short enough to list 40. */
-function courseLine(course: CatalogCourse): string {
+function courseLine(course: CatalogCourse, options: { omitYear?: boolean } = {}): string {
   const facts = [
-    yearLabelAr(course.year),
+    /*
+     * ⚠️ The year is a fact about the COURSE and a lie about the ROW when the
+     * row sits under a block whose lead says the course belongs to no year.
+     * The foundation course is stored under year 2, so `/years/3.md` listed it
+     * as «الصف الثاني بكالوريا» beneath an H1 reading «الصف الثالث بكالوريا».
+     * `.filter(Boolean)` below drops it.
+     */
+    options.omitYear ? null : yearLabelAr(course.year),
     course.subjectNameAr,
     course.trackLabelAr,
     // The one word that tells «منهج البرمجة — تانية بكالوريا (عربي)» from the
@@ -135,6 +142,15 @@ function courseLine(course: CatalogCourse): string {
     streamLabel(course),
     `${course.lessonCount} ${copy.catalog.lessonCount}`,
     formatDuration(course.totalSeconds),
+    /*
+     * ⚠️ LAST, and on every index document. The card has carried this badge all
+     * along and none of the machine-readable indexes did, so the free
+     * foundation course was rendered in exactly the same shape as the 150
+     * ج/شهر ones — «الكورس بكام؟» and «فيه حاجة أجربها من غير فلوس؟»
+     * unanswerable from `/courses.md`, `/years/*.md` or `/llms.txt`. One
+     * function, `coursePriceBadge`, so the badge and these rows cannot drift.
+     */
+    coursePriceBadge(course),
   ].filter(Boolean);
   return `- [${course.title}](${url(`/courses/${course.slug}`)}) — ${facts.join(' · ')}`;
 }
@@ -196,7 +212,7 @@ export function renderHomeMarkdown(
     ].join('\n'),
     `## ${copy.catalog.title}`,
     courses.length > 0
-      ? courses.map(courseLine).join('\n')
+      ? courses.map((course) => courseLine(course)).join('\n')
       : `${copy.catalog.empty} — ${url('/courses')}`,
     `## ${copy.landing.instructorTitle}`,
     `**${copy.landing.instructorName}** — ${copy.landing.instructorBody}`,
@@ -246,7 +262,7 @@ export function renderCoursesMarkdown(courses: readonly CatalogCourse[]): string
   return join([
     `# ${copy.catalog.title}`,
     `> ${copy.catalog.subtitle}`,
-    courses.length > 0 ? courses.map(courseLine).join('\n') : copy.catalog.empty,
+    courses.length > 0 ? courses.map((course) => courseLine(course)).join('\n') : copy.catalog.empty,
     footer('/courses', copy.agents.contentNote),
   ]);
 }
@@ -262,10 +278,8 @@ export function renderCoursesMarkdown(courses: readonly CatalogCourse[]): string
  * not belong to at all.
  */
 export function renderYearMarkdown(year: 1 | 2 | 3, courses: readonly CatalogCourse[]): string {
-  const listed = [
-    ...foundationCoursesOutsideYear(courses, year),
-    ...courses.filter((course) => course.year === year),
-  ];
+  const foundation = foundationCoursesOutsideYear(courses, year);
+  const forYear = courses.filter((course) => course.year === year);
   return join([
     `# ${yearLabelAr(year)}`,
     `> ${copy.catalog.subtitle}`,
@@ -282,7 +296,28 @@ export function renderYearMarkdown(year: 1 | 2 | 3, courses: readonly CatalogCou
       .slice(1)
       .map((alias) => `«${alias}»`)
       .join('، ')}.`,
-    listed.length > 0 ? listed.map(courseLine).join('\n') : copy.years.empty,
+    /*
+     * The shared foundation course, under its own heading and WITHOUT a year
+     * fact — the same shape the HTML gives it, which is a separate section with
+     * its own lead rather than one more row in the year's list. `##`, not `#`:
+     * a document has exactly one h1 and the test asserts it.
+     */
+    foundation.length > 0 ? `## ${copy.years.foundationTitle}` : null,
+    foundation.length > 0 ? copy.years.foundationLead : null,
+    foundation.length > 0
+      ? foundation.map((course) => courseLine(course, { omitYear: true })).join('\n')
+      : null,
+    forYear.length > 0 ? forYear.map((course) => courseLine(course)).join('\n') : null,
+    /*
+     * Three states, not two. A year with only the shared course is NOT empty —
+     * it has something to offer — and it is not stocked either, and saying
+     * neither is what made `/years/3.md` read as a year-2 listing.
+     */
+    forYear.length === 0
+      ? foundation.length > 0
+        ? copy.years.foundationOnlyNote
+        : copy.years.empty
+      : null,
     footer(`/years/${year}`, copy.agents.contentNote),
   ]);
 }
@@ -375,7 +410,10 @@ function streamLabel(item: { forGeneral: boolean; forLanguages: boolean }): stri
 function bookLine(book: BookCard): string {
   const b = copy.books;
   const facts = [
-    formatEGP(book.priceCents),
+    // `bookOrder.priceLine` («{price} جنيه»), not a bare `formatEGP`. On the
+    // card the layout says what the number is; in a `·`-joined markdown row
+    // «250 · الصف 2 · عربي» is three numbers and no unit.
+    formatCopy(copy.bookOrder.priceLine, { price: formatEGP(book.priceCents) }),
     book.year !== null ? formatCopy(b.yearChip, { n: String(book.year) }) : null,
     book.pageCount !== null ? formatCopy(b.pages, { n: String(book.pageCount) }) : null,
     streamLabel(book),

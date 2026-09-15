@@ -1,5 +1,6 @@
 import { copy } from '@ayman/contracts';
 import { AGENT_DISCOVERY_PATHS, absoluteDiscoveryUrl } from '@/lib/agents/discovery';
+import { markdownTwinPath } from '@/lib/agents/markdown-routes';
 import { SITE_URL } from '@/lib/seo/jsonld';
 
 /**
@@ -65,10 +66,15 @@ export function GET(): Response {
         id: urn('api', 'catalog-openapi'),
         displayName: 'OpenAPI 3.1 — the public course catalog API',
         description:
-          'Read-only, unauthenticated JSON: every published course, one course in full with its lesson outline, and the curriculum taxonomy.',
+          'Read-only, unauthenticated JSON: every published course with its subscription prices in Egyptian piastres, one course in full with its lesson outline and per-term prices, and the curriculum taxonomy.',
         type: 'application/vnd.oai.openapi+json;version=3.1',
         url: absoluteDiscoveryUrl('serviceDesc'),
         representativeQueries: [
+          // The prices ride on every catalog row, and no query here said so —
+          // «الكورس بكام» is the highest-intent question this site gets.
+          'الكورس بكام',
+          'سعر كورس البرمجة والذكاء الاصطناعي بكالوريا',
+          'اشتراك شهري ولا سنوي',
           'كورسات البرمجة والذكاء الاصطناعي للبكالوريا',
           'منهج البرمجة تانية بكالوريا عام ولغات',
           // ⚠️ The digit forms, verbatim. A student types «٢ بكالوريا» or
@@ -136,6 +142,50 @@ export function GET(): Response {
         representativeQueries: [
           'what is this website for',
           'إيه الموقع ده وبيقدّم إيه',
+        ],
+      },
+      /*
+       * ⚠️ These two were the hole this manifest's own promise — that it names
+       * every machine-readable document this site publishes — had opened.
+       * `renderBooksMarkdown`'s docblock named it in writing when it shipped:
+       * «no markdown twin, no line in /llms.txt, no entry in the ARD manifest,
+       * no structured data beyond a breadcrumb». Three of those four were
+       * closed and this one was not, and none of the eighteen queries above
+       * was about a price, a book, the glossary or the question bank — which
+       * is most of what this site can now actually answer.
+       *
+       * ⚠️ Both URLs come through `markdownTwinPath`, never a `/books.md`
+       * literal. A twin path hand-written in a seventh file drifts silently,
+       * and an agent that follows it to a 404 concludes the document does not
+       * exist. That module is dependency-free by design, so importing it here
+       * costs nothing.
+       */
+      {
+        id: urn('docs', 'books'),
+        displayName: 'books.md — the printed books, with prices and delivery',
+        description:
+          'The printed textbooks by term and subject: each title with its price, its year and stream, whether it is in stock, and the one-off delivery fee. Ordering needs no account.',
+        type: 'text/markdown',
+        url: `${SITE_URL}${markdownTwinPath('/books')}`,
+        representativeQueries: [
+          'كتاب أيمن أبو العلا بكام',
+          'كتاب برمجة وذكاء اصطناعي بكالوريا',
+          'كتاب برمجة تانية بكالوريا لغات',
+          'اطلب كتاب البرمجة أونلاين ويوصل البيت',
+        ],
+      },
+      {
+        id: urn('docs', 'news-index'),
+        displayName: 'news.md — the written curriculum: lessons, glossary and answered exam questions',
+        description:
+          'Every lesson of the official syllabus explained in writing, unit summaries, the full Arabic/English glossary, and sample exam questions with their model answers. Open to read with no account.',
+        type: 'text/markdown',
+        url: `${SITE_URL}${markdownTwinPath('/news')}`,
+        representativeQueries: [
+          'قاموس مصطلحات البرمجة والذكاء الاصطناعي بكالوريا',
+          'مصطلحات منهج البرمجة بالعربي والانجليزي',
+          'نماذج أسئلة البرمجة والذكاء الاصطناعي بكالوريا بالاجابات',
+          'ملخص منهج البرمجة بكالوريا',
         ],
       },
     ],

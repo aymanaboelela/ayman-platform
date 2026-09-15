@@ -1689,6 +1689,19 @@ export const copy = {
     foundationTitle: 'الكورس التأسيسي',
     foundationLead:
       'الكورس ده مش لصف معيّن — أي حد لسه بادئ يبدأ منه، وبعده كورسات الصف بتبقى ماشية معاك.',
+    /**
+     * For the MARKDOWN twin of a year page that has the shared foundation
+     * course on it and nothing of its own.
+     *
+     * ⚠️ The HTML says this by being visibly empty under the foundation
+     * section — a reader sees one card and no shelf beneath it. Markdown has no
+     * empty space, so it has to say it in words: `/years/3.md` was headed
+     * «الصف الثالث بكالوريا» with a single row reading «الصف الثاني بكالوريا»,
+     * because `courseLine` leads with the COURSE's year and the foundation
+     * course is stored under year 2. The document contradicted its own title.
+     */
+    foundationOnlyNote:
+      'لسه مفيش كورس من كورسات الصف ده نفسه — اللي فوق هو الكورس التأسيسي المشترك.',
 
     /**
      * The count beside each subject heading on `/years/[year]`.
