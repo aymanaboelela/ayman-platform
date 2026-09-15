@@ -91,6 +91,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Static, entirely self-contained, and the natural landing page for
     // "تعلم البرمجة" style queries that are not brand searches.
     { url: `${SITE_URL}/essentials`, lastModified: EDITORIAL_LAST_MODIFIED, changeFrequency: 'monthly', priority: 0.6 },
+    // «إزاي أشترك؟» — the answer to a high-intent question that had no public
+    // page at all. `monthly`: the steps change when the checkout does, which is
+    // rarely, and the rails it names are read live rather than written here.
+    { url: `${SITE_URL}/subscribe`, lastModified: EDITORIAL_LAST_MODIFIED, changeFrequency: 'monthly', priority: 0.6 },
     // «قسم الكتب» — a real commercial page and the answer to «كتاب أيمن أبو
     // العلا», so it sits with the catalogue rather than with the hub pages
     // below. `weekly`, not `monthly`: prices and stock move, and a crawler that

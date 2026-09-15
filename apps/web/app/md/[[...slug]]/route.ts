@@ -10,9 +10,11 @@ import {
   renderHomeMarkdown,
   renderNewsIndexMarkdown,
   renderNewsPostMarkdown,
+  renderSubscribeMarkdown,
   renderYearMarkdown,
 } from '@/lib/agents/markdown-render';
 import { getBookCatalogOrEmpty } from '@/lib/books';
+import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getHomeBlocks } from '@/lib/home-blocks';
 
 /**
@@ -91,6 +93,13 @@ export async function GET(
       return markdownResponse(renderAboutMarkdown());
     case 'essentials':
       return markdownResponse(renderEssentialsMarkdown());
+    case 'subscribe': {
+      // The rails are admin-configured and this route is reachable during a
+      // build where no API answers, so the defaults variant — an unconfigured
+      // page recovers on the next revalidation.
+      const { contact } = await getPublicSettingsOrDefaults();
+      return markdownResponse(renderSubscribeMarkdown(contact));
+    }
     case 'books': {
       // `getBookCatalogOrEmpty`, like every other loader here: this route is
       // reachable during a build where no API answers, and an empty shop is a

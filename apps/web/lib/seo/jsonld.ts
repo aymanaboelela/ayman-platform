@@ -448,33 +448,6 @@ interface CourseProvider {
 }
 
 /**
- * One course.
- *
- * `options.nested` is for a `Course` emitted INSIDE another node in the same
- * script — today only the catalog's `ItemList`. It changes nothing a crawler
- * reads; it drops the two pieces the surrounding document already states, on a
- * page where they are stated up to 86 times. See `courseListJsonLd` for the
- * measurement that motivated it.
- */
-/**
- * What a course costs, as `Offer` nodes — one per plan the page actually shows.
- *
- * ⚠️ The order and the membership mirror `(site)/courses/[slug]/page.tsx`'s
- * price block exactly: monthly, quarterly, each open term, yearly. Structured
- * data is a machine-readable copy of the page, so a plan listed here that the
- * page does not render — or a price that rounds differently — is a
- * contradiction a validator cannot see and an assistant will quote.
- *
- * `priceCents / 100`, formatted to two decimals: schema.org wants a number in
- * the currency's major unit, and `'150.00'` is unambiguous where `15000` reads
- * as fifteen thousand pounds.
- *
- * ⚠️ `availability: InStock` is honest here and would not be on a course with
- * a closed term — `CatalogService.findBySlug` filters those out before they
- * reach this function, which is why it can be stated flatly. If that filter
- * ever moves, this line becomes a claim nothing checks.
- */
-/**
  * A rich-text field, flattened to the plain sentence a `description` is
  * supposed to be.
  *
@@ -576,6 +549,24 @@ function streamLabel(item: { forGeneral: boolean; forLanguages: boolean }): stri
   return null;
 }
 
+/**
+ * What a course costs, as `Offer` nodes — one per plan the page actually shows.
+ *
+ * ⚠️ The order and the membership mirror `(site)/courses/[slug]/page.tsx`'s
+ * price block exactly: monthly, quarterly, each open term, yearly. Structured
+ * data is a machine-readable copy of the page, so a plan listed here that the
+ * page does not render — or a price that rounds differently — is a
+ * contradiction a validator cannot see and an assistant will quote.
+ *
+ * `priceCents / 100`, formatted to two decimals: schema.org wants a number in
+ * the currency's major unit, and `'150.00'` is unambiguous where `15000` reads
+ * as fifteen thousand pounds.
+ *
+ * ⚠️ `availability: InStock` is honest here and would not be on a course with
+ * a closed term — `CatalogService.findBySlug` filters those out before they
+ * reach this function, which is why it can be stated flatly. If that filter
+ * ever moves, this line becomes a claim nothing checks.
+ */
 function courseOffers(course: CourseForJsonLd) {
   const plans: Array<{ name: string; cents: number }> = [];
   if (course.monthlyPriceCents !== null) {
@@ -591,6 +582,20 @@ function courseOffers(course: CourseForJsonLd) {
     plans.push({ name: copy.subscribe.planYearlyLabel, cents: course.yearlyPriceCents });
   }
 
+  /*
+   * ⚠️ `PreOrder` when there is nothing to watch yet. Two live courses carry a
+   * single placeholder row («لسه اول محاضره هتنزل قريب جداً») with zero
+   * duration, and they were publishing four `InStock` offers beside a
+   * description promising recorded lectures. `InStock` on a course with no
+   * content is the same class of falsehood as `price: '0'` on a paid one.
+   *
+   * `totalSeconds`, never `contentComplete` — that flag is false on every live
+   * course including the four-hour foundation one, so it would mark the whole
+   * catalogue as unreleased. Same rule as `isComingSoon`.
+   */
+  const availability =
+    course.totalSeconds === 0 ? 'https://schema.org/PreOrder' : 'https://schema.org/InStock';
+
   return plans.map((plan) => ({
     '@type': 'Offer',
     name: plan.name,
@@ -600,7 +605,7 @@ function courseOffers(course: CourseForJsonLd) {
     category: 'Subscription',
     price: egpPrice(plan.cents),
     priceCurrency: 'EGP',
-    availability: 'https://schema.org/InStock',
+    availability,
     url: absolute(`/courses/${course.slug}`),
   }));
 }
@@ -657,6 +662,15 @@ const organizationRef = (): EntityRef => ({
   name: copy.site.platformName,
 });
 
+/**
+ * One course.
+ *
+ * `options.nested` is for a `Course` emitted INSIDE another node in the same
+ * script — today only the catalog's `ItemList`. It changes nothing a crawler
+ * reads; it drops the two pieces the surrounding document already states, on a
+ * page where they are stated up to 86 times. See `courseListJsonLd` for the
+ * measurement that motivated it.
+ */
 export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolean } = {}) {
   // `@id` ties this back to the one organisation the root layout emits on
   // every page, instead of minting an anonymous second one per course.

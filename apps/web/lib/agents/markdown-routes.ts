@@ -51,6 +51,7 @@ export const STATIC_MARKDOWN_ROUTES = [
   '/courses',
   '/essentials',
   '/news',
+  '/subscribe',
 ] as const;
 
 /** `/years/1`, `/years/2`, `/years/3` — `parseYear` on the page rejects the rest. */
@@ -89,6 +90,7 @@ export type MarkdownRoute =
   | { kind: 'essentials' }
   | { kind: 'books' }
   | { kind: 'news' }
+  | { kind: 'subscribe' }
   | { kind: 'year'; year: 1 | 2 | 3 }
   | { kind: 'course'; slug: string }
   | { kind: 'article'; slug: string };
@@ -144,6 +146,7 @@ export function resolveMarkdownRoute(slug: readonly string[] | undefined): Markd
    * per-book URL would be a document for a page that does not exist.
    */
   if (pathname === '/books') return { kind: 'books' };
+  if (pathname === '/subscribe') return { kind: 'subscribe' };
   if (pathname === '/news') return { kind: 'news' };
 
   // `?.[1]` rather than `[1]!` throughout: the capture group is guaranteed by

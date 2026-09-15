@@ -4906,6 +4906,14 @@ export const copy = {
      * showed neither, and an engine deciding whether to cite a page weighs
      * exactly these two.
      */
+    /**
+     * On a course whose lessons have not gone up yet — the machine-readable
+     * counterpart of the «قريبًا» panel the HTML page renders. Without it the
+     * agent documents listed a course with four purchasable plans and «0:00»
+     * beside a description promising recorded lectures, and an assistant
+     * recommending it was recommending an empty shelf.
+     */
+    metaContentPending: 'المحتوى لسه بينزل',
     metaAuthor: 'الكاتب',
     metaUpdated: 'آخر تعديل',
     sourcePage: 'الصفحة الأصلية',
@@ -5205,6 +5213,83 @@ export const copy = {
    * of the product uses, because this platform never asks whether the student is
    * a boy or a girl and copy that guesses would be wrong for half of them.
    */
+  /**
+   * «إزاي أشترك؟» — the one question with a definite published answer and no
+   * public page.
+   *
+   * ## Why this exists
+   *
+   * Verified 2026-09-15: `/checkout`, `/pricing`, `/payment`, `/faq` and
+   * `/help` all 404. Every course page publishes its prices and then says the
+   * lessons need «حساب طالب واشتراك» — and stops. The checkout that shipped
+   * InstaPay and Vodafone Cash is behind auth, so a visitor who has not signed
+   * in sees none of it, and neither does an assistant. The one public sentence
+   * naming both rails sits inside `/privacy`'s «حاجات مابنجمعهاش», where it
+   * exists to say no card data is stored — not to tell anyone how to pay.
+   *
+   * ## Three things this page must never say
+   *
+   * ⚠️ NO turnaround window. `subscribe.success` deliberately says «هيوصلك
+   * إشعار أول ما يتم» and names no hours, for the reason recorded there: a
+   * stated window becomes a complaint the moment it slips.
+   *
+   * ⚠️ NO refund or cancellation policy. Nothing public states one and
+   * `/terms` is silent, so writing one here would be inventing policy on the
+   * instructor's behalf.
+   *
+   * ⚠️ NO destination number. It is his personal wallet, and an indexed page
+   * carrying a payment destination is the template every scam clone wants. It
+   * is not needed to answer the question either — the checkout shows it live,
+   * at the step where it is used.
+   *
+   * ⚠️ The rail NAMES come from `subscribe.railInstapay`/`railVodafoneCash`,
+   * never retyped. The screenshot-hint bug was exactly a second hand-written
+   * copy of a rail name drifting from the first.
+   */
+  subscribePage: {
+    title: 'إزاي تشترك في الكورس',
+    lead: 'الاشتراك بيتم من على المنصة نفسها، والدفع تحويل — إنستاباي أو فودافون كاش. الخطوات بالترتيب:',
+    metaTitle: 'إزاي تشترك في كورسات أيمن أبو العلا — الخطوات وطرق الدفع',
+    metaDescription:
+      'خطوات الاشتراك في كورسات البرمجة والذكاء الاصطناعي: تعمل حساب، تختار الباقة، تحوّل بإنستاباي أو فودافون كاش، وترفع صورة التحويل.',
+    eyebrow: 'قبل ما تبدأ',
+
+    step1Title: 'اعمل حساب',
+    step1Body: 'الاشتراك بيتربط بحسابك، فلازم تسجّل الأول. التسجيل مجاني ومش بيتطلب أي بيانات دفع.',
+    step2Title: 'افتح الكورس واضغط «اشترك دلوقتي»',
+    step2Body: 'كل كورس ليه صفحته، وأسعار الباقات مكتوبة عليها قبل ما تضغط أي حاجة.',
+    step3Title: 'اختار الباقة',
+    step3Body: 'شهر، ٣ شهور، ترم، أو سنة كاملة — بيختلفوا من كورس لكورس، واللي متاح بيبان قدامك.',
+    step4Title: 'اختار هتحوّل بإيه',
+    step4Body: 'إنستاباي ولا فودافون كاش. لو واحدة منهم مش متاحة دلوقتي هتلاقيها مكتوبة كده قدامك.',
+    step5Title: 'حوّل على الرقم اللي بيظهرلك',
+    step5Body:
+      'الرقم بيتعرض في الخطوة دي نفسها بعد ما تختار طريقة التحويل. مابنعرضهوش هنا عشان الرقم بيتقرا من الإعدادات وقت الطلب، والصفحة دي ممكن تكون متخزّنة عند حد من فترة.',
+    step6Title: 'ارفع صورة التحويل',
+    step6Body:
+      'اكتب رقم الموبايل اللي حوّلت منه، وارفع سكرين شوت واضح بيوضّح المبلغ والتاريخ.',
+    step7Title: 'استنى التفعيل',
+    step7Body: 'الطلب بيتراجع، وهيوصلك إشعار على المنصة أول ما الاشتراك يتفعّل.',
+
+    /** The rails, as a list under the steps — the answer to «بتقبلوا إيه؟». */
+    railsTitle: 'طرق الدفع المتاحة',
+    railsNone: 'طرق الدفع بتتظبط من لوحة التحكم، وبتبان لك وقت الاشتراك.',
+
+    /**
+     * ⚠️ The answers are the SAME sentences the steps above render — a FAQ
+     * that paraphrases its own page is two wordings of one fact, and
+     * `faqPageJsonLd` requires the answer text to be the text on the page.
+     */
+    faqQ1: 'إزاي أشترك في كورس؟',
+    faqQ2: 'بتقبلوا إيه في الدفع؟',
+    faqQ3: 'دفعت، وبعدين؟',
+
+    booksNote:
+      'الكتب المطبوعة حاجة تانية خالص: بتتطلب من صفحة الكتب من غير حساب أصلاً، وبتتشحن لحد باب البيت.',
+    booksCta: 'صفحة الكتب',
+    coursesCta: 'شوف الكورسات وأسعارها',
+  },
+
   books: {
     badge: 'كتب المنهج',
     pageTitle: 'الكتب',
