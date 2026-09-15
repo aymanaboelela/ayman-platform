@@ -5,6 +5,9 @@ import type {
   NewsListItem,
   NewsPostDetail,
 } from '@ayman/contracts';
+// The SUBPATH — `books` is not on the root barrel, and the barrel is what
+// stops the API booting when a runtime value comes through it.
+import type { BookCard, BookCatalog } from '@ayman/contracts/books';
 import { AGENT_DISCOVERY_PATHS } from '@/lib/agents/discovery';
 import { ESSENTIAL_TERMS } from '@/lib/essentials-terms';
 import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
@@ -95,10 +98,14 @@ function coursePrice(course: CatalogCourseDetail): string {
 /** A definition list, one fact per line — `join` is for BLOCKS, not rows. */
 function courseMeta(course: CatalogCourse): string {
   const a = copy.agents;
+  const stream = streamLabel(course);
   return [
     `- **${a.metaYear}:** ${yearLabelAr(course.year)}`,
     `- **${a.metaSubject}:** ${course.subjectNameAr}`,
     course.trackLabelAr ? `- **${a.metaTrack}:** ${course.trackLabelAr}` : null,
+    // «عربي» / «لغات» — see `streamLabel`. The HTML has shown this as a chip on
+    // every card since the two editions split; no agent surface carried it.
+    stream ? `- **${copy.stream.label}:** ${stream}` : null,
     `- **${a.metaSystem}:** ${course.systemNameAr}`,
     `- **${a.metaLessons}:** ${course.lessonCount} ${copy.catalog.lessonCount}`,
     `- **${copy.catalog.duration}:** ${formatDuration(course.totalSeconds)}`,
@@ -113,6 +120,9 @@ function courseLine(course: CatalogCourse): string {
     yearLabelAr(course.year),
     course.subjectNameAr,
     course.trackLabelAr,
+    // The one word that tells «منهج البرمجة — تانية بكالوريا (عربي)» from the
+    // لغات row beside it. An agent choosing between them could not see it.
+    streamLabel(course),
     `${course.lessonCount} ${copy.catalog.lessonCount}`,
     formatDuration(course.totalSeconds),
   ].filter(Boolean);
@@ -282,6 +292,97 @@ export function renderCourseMarkdown(course: CatalogCourseDetail): string {
     course.sections.length > 0 ? `## ${copy.agents.courseOutline}` : null,
     course.sections.length > 0 ? outline : null,
     footer(`/courses/${course.slug}`),
+  ]);
+}
+
+/**
+ * «عام» / «لغات» / «عام ولغات» — the primary disambiguator for a Bakalorya
+ * student, and the one fact that decides which of two identically-titled
+ * products is theirs.
+ *
+ * ⚠️ It appeared on NO agent surface. The HTML renders it as a `<StreamBadge>`
+ * chip on every course and book card; `/llms.txt`, every markdown twin and the
+ * course JSON-LD all omitted it, so an assistant recommending «كتاب تانية
+ * بكالوريا برمجة» had two rows differing in one word it could not see. Same
+ * strings as the chip — `copy.stream` — so the two cannot describe one product
+ * differently.
+ */
+function streamLabel(item: { forGeneral: boolean; forLanguages: boolean }): string | null {
+  if (item.forGeneral && item.forLanguages) return copy.stream.both;
+  if (item.forGeneral) return copy.stream.general;
+  if (item.forLanguages) return copy.stream.languages;
+  // The database CHECK makes "neither" unrepresentable; a stale payload from
+  // before that migration says nothing rather than saying something wrong.
+  return null;
+}
+
+/**
+ * «قسم الكتب» as markdown.
+ *
+ * ## Why this document had to exist
+ *
+ * `/books` is the only page on the site that states a price a stranger can act
+ * on, and it was absent from EVERY agent channel at once: no markdown twin, no
+ * line in `/llms.txt`, no entry in the ARD manifest, no structured data beyond
+ * a breadcrumb. So «كتاب أيمن أبو العلا بكام؟» — a question with a definite
+ * published answer — was one an assistant had to decline or guess.
+ *
+ * ⚠️ The prices here come from the same `getBookCatalogOrEmpty` payload the
+ * shelves render from, and the shipping line uses the same `copy.books`
+ * template the page prints. There is no second source and there must not be
+ * one: a markdown twin quoting a stale price is worse than a twin that quotes
+ * none, because the reader acts on it.
+ *
+ * ⚠️ `inStock` is stated per title. A book the shop shows but cannot sell is
+ * still on the page — see `BookCardSchema.inStock` — and an agent that reads
+ * only the price would recommend ordering it.
+ */
+function bookLine(book: BookCard): string {
+  const b = copy.books;
+  const facts = [
+    formatEGP(book.priceCents),
+    book.year !== null ? formatCopy(b.yearChip, { n: String(book.year) }) : null,
+    book.pageCount !== null ? formatCopy(b.pages, { n: String(book.pageCount) }) : null,
+    streamLabel(book),
+    book.inStock ? null : b.outOfStock,
+  ].filter((fact): fact is string => Boolean(fact));
+
+  return `- **${book.titleAr}** — ${facts.join(' · ')}${
+    book.subtitleAr ? `\n   ${book.subtitleAr}` : ''
+  }`;
+}
+
+export function renderBooksMarkdown(catalog: BookCatalog): string {
+  const b = copy.books;
+  const shelves = catalog.shelves
+    .map((shelf: BookCatalog['shelves'][number]) => {
+      const terms = [
+        [b.termFirst, shelf.first],
+        [b.termSecond, shelf.second],
+        [b.termFull, shelf.full],
+      ] as const;
+      const body = terms
+        .filter(([, books]) => books.length > 0)
+        .map(([label, books]) => `### ${label}\n\n${books.map(bookLine).join('\n')}`)
+        .join('\n\n');
+      return join([`## ${shelf.subjectNameAr}`, body]);
+    })
+    .join('\n\n');
+
+  return join([
+    `# ${b.metaTitle}`,
+    `> ${b.metaDescription}`,
+    b.lead,
+    // The delivery fee, stated once, exactly as the shelf states it — «الشحن
+    // ٦٥ ج مرة واحدة على الطلب كله». A book price with no delivery fee beside
+    // it is a number an agent will quote as the total.
+    catalog.shippingCents > 0
+      ? formatCopy(b.shippingOnce, { price: formatEGP(catalog.shippingCents) })
+      // `shippingFreeOnce`, not `shippingFree` — the latter is the VALUE in a
+      // price breakdown («مجانًا»), not a sentence.
+      : b.shippingFreeOnce,
+    catalog.total > 0 ? shelves : b.empty,
+    footer('/books'),
   ]);
 }
 

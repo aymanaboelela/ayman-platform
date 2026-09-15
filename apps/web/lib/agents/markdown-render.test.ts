@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { copy } from '@ayman/contracts';
 import type { CatalogCourse, CatalogCourseDetail } from '@ayman/contracts';
+import type { BookCatalog } from '@ayman/contracts/books';
 import {
   renderAboutMarkdown,
+  renderBooksMarkdown,
   renderCourseMarkdown,
   renderCoursesMarkdown,
   renderEssentialsMarkdown,
@@ -62,6 +64,7 @@ const ALL_RENDERERS: [name: string, render: () => string][] = [
   ['about', () => renderAboutMarkdown()],
   ['courses', () => renderCoursesMarkdown([course()])],
   ['essentials', () => renderEssentialsMarkdown()],
+  ['books', () => renderBooksMarkdown(bookCatalog())],
   ['year', () => renderYearMarkdown(1, [course()])],
   ['course', () => renderCourseMarkdown(detail())],
 ];
@@ -104,6 +107,81 @@ describe('every markdown document', () => {
  * that `/about.md` had been serving four headings of it since `marks` became
  * objects. The only test that catches this is one that says the words.
  */
+const bookCatalog = (overrides: Partial<BookCatalog> = {}): BookCatalog => ({
+  shippingCents: 6500,
+  total: 1,
+  shelves: [
+    {
+      subjectId: '00000000-0000-4000-8000-0000000000b1',
+      subjectNameAr: 'البرمجة وعلوم الحاسب',
+      subjectSlug: 'programming_cs',
+      first: [
+        {
+          id: '00000000-0000-4000-8000-0000000000b2',
+          slug: 'y2-general',
+          titleAr: 'كتاب تانية بكالوريا برمجة عربي',
+          subtitleAr: null,
+          coverKey: null,
+          descriptionAr: null,
+          priceCents: 25000,
+          comparePriceCents: null,
+          pageCount: 180,
+          term: 'first' as const,
+          year: 2,
+          inStock: true,
+          forGeneral: true,
+          forLanguages: false,
+          showOnLanding: true,
+        },
+      ],
+      second: [],
+      full: [],
+    },
+  ],
+  ...overrides,
+});
+
+/**
+ * ⚠️ `/books` renders its shelves from a CLIENT component — `books-shop.tsx`'s
+ * own note records that `curl /books` returns zero rendered cards. This twin is
+ * one of the only two server-rendered descriptions of the shop that exist.
+ */
+describe('renderBooksMarkdown', () => {
+  it('quotes the price, the stream and the delivery fee', () => {
+    const markdown = renderBooksMarkdown(bookCatalog());
+
+    expect(markdown).toContain('كتاب تانية بكالوريا برمجة عربي');
+    expect(markdown).toContain('250');
+    // «عربي» — the one word that separates two identically-titled books.
+    expect(markdown).toContain(copy.stream.general);
+    // The fee is stated once, on the shelf, because a book price with no
+    // delivery fee beside it is a number an agent quotes as the total.
+    expect(markdown).toContain('65');
+  });
+
+  it('says a withdrawn title cannot be bought', () => {
+    const catalog = bookCatalog();
+    // `noUncheckedIndexedAccess` is on — assert the fixture's own shape rather
+    // than asserting past it with a `!`.
+    const shelf = catalog.shelves[0];
+    const first = shelf?.first[0];
+    expect(first).toBeDefined();
+    if (!shelf || !first) throw new Error('fixture lost its shelf');
+
+    const withdrawn: BookCatalog = {
+      ...catalog,
+      shelves: [{ ...shelf, first: [{ ...first, inStock: false }] }],
+    };
+
+    expect(renderBooksMarkdown(withdrawn)).toContain(copy.books.outOfStock);
+  });
+
+  it('renders the empty shop rather than an empty heading', () => {
+    const markdown = renderBooksMarkdown({ shelves: [], shippingCents: 6500, total: 0 });
+    expect(markdown).toContain(copy.books.empty);
+  });
+});
+
 describe('every markdown twin', () => {
   it.each(ALL_RENDERERS)('%s renders no stringified object', (_name, render) => {
     expect(render()).not.toContain('[object Object]');
@@ -174,6 +252,14 @@ describe('renderCourseMarkdown', () => {
     );
 
     expect(markdown).toContain(`**${copy.agents.metaPrice}:** ${copy.course.freeBanner}`);
+  });
+
+  it('names the stream, the one word that tells the two editions apart', () => {
+    const general = renderCourseMarkdown(detail({ forGeneral: true, forLanguages: false }));
+    const languages = renderCourseMarkdown(detail({ forGeneral: false, forLanguages: true }));
+
+    expect(general).toContain(`**${copy.stream.label}:** ${copy.stream.general}`);
+    expect(languages).toContain(`**${copy.stream.label}:** ${copy.stream.languages}`);
   });
 
   it('omits the outline heading entirely for a course with no sections', () => {

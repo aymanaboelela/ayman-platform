@@ -30,6 +30,13 @@ export interface CourseForJsonLd {
   systemNameAr: string;
   subjectNameAr: string;
   trackLabelAr: string | null;
+  /**
+   * مدارس عربي / مدارس لغات — the pair every card renders as a `<StreamBadge>`
+   * chip, and the primary disambiguator for a Bakalorya student: two courses
+   * can share a title and differ only in this.
+   */
+  forGeneral: boolean;
+  forLanguages: boolean;
   year: number;
   totalSeconds: number;
   /**
@@ -86,6 +93,31 @@ export interface CourseForJsonLd {
    * unit names AND the page stops hiding them, this is worth revisiting.
    */
 }
+
+/**
+ * One printed book, as the shop's payload carries it — the fields
+ * `bookListJsonLd` reads and no more, for the same reason `CourseForJsonLd` is
+ * narrower than the catalog contract.
+ */
+export interface BookForJsonLd {
+  slug: string;
+  titleAr: string;
+  subtitleAr: string | null;
+  descriptionAr: string | null;
+  coverKey: string | null;
+  priceCents: number;
+  pageCount: number | null;
+  inStock: boolean;
+}
+
+/**
+ * EGP cents → the bare decimal schema.org's `price` wants.
+ *
+ * ⚠️ NOT `formatEGP`. That one is `Intl.NumberFormat('ar-EG-u-nu-latn')` — it
+ * groups thousands and exists to be READ. «1,250» is not a number to a
+ * validator, and a price it cannot parse is an offer it drops.
+ */
+const egpPrice = (cents: number): string => (cents / 100).toFixed(2);
 
 /** `PT1H1M1S`. Zero is `PT0S`, not the empty `PT`, which validators reject. */
 export function secondsToIso8601Duration(totalSeconds: number): string {
@@ -394,7 +426,19 @@ interface CourseProvider {
  * reach this function, which is why it can be stated flatly. If that filter
  * ever moves, this line becomes a claim nothing checks.
  */
-const egp = (cents: number): string => (cents / 100).toFixed(2);
+/**
+ * «عربي» / «لغات» / «عربي ولغات» — the same three strings the `<StreamBadge>`
+ * chip renders, so the graph and the card cannot describe one course
+ * differently.
+ */
+function streamLabel(item: { forGeneral: boolean; forLanguages: boolean }): string | null {
+  if (item.forGeneral && item.forLanguages) return copy.stream.both;
+  if (item.forGeneral) return copy.stream.general;
+  if (item.forLanguages) return copy.stream.languages;
+  // The database CHECK makes "neither" unrepresentable; a payload from before
+  // that migration says nothing rather than something wrong.
+  return null;
+}
 
 function courseOffers(course: CourseForJsonLd) {
   const plans: Array<{ name: string; cents: number }> = [];
@@ -418,7 +462,7 @@ function courseOffers(course: CourseForJsonLd) {
     // plans: all four are time-limited access to the same course, not a
     // one-off purchase of a copy. The plan's own name is in `name`.
     category: 'Subscription',
-    price: egp(plan.cents),
+    price: egpPrice(plan.cents),
     priceCurrency: 'EGP',
     availability: 'https://schema.org/InStock',
     url: absolute(`/courses/${course.slug}`),
@@ -564,7 +608,15 @@ export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolea
      * on every course would make each one claim to be about all of them, which
      * is the difference between an alias and a keyword stuff.
      */
-    keywords: [...yearAliasesAr(course.year), course.subjectNameAr, course.systemNameAr],
+    keywords: [
+      ...yearAliasesAr(course.year),
+      course.subjectNameAr,
+      course.systemNameAr,
+      // «عربي» or «لغات». Two courses on this site carry the same title and
+      // differ ONLY in this word; without it the node a student's assistant
+      // matches is a coin flip between their edition and the other one.
+      ...(streamLabel(course) === null ? [] : [streamLabel(course) as string]),
+    ],
     about: course.subjectNameAr,
     provider,
     // The course is taught by the person, and the person is the thing being
@@ -612,6 +664,90 @@ export function courseListJsonLd(courses: readonly CourseForJsonLd[]) {
       '@type': 'ListItem',
       position: index + 1,
       item: courseJsonLd(course, { nested: true }),
+    })),
+  };
+}
+
+/**
+ * «قسم الكتب» — the printed books, as an `ItemList` of `Book` with real offers.
+ *
+ * ## Why `Book` and not `Product`
+ *
+ * `Book` IS a `Product` in schema.org's hierarchy, so nothing is lost, and it
+ * carries `numberOfPages`, `bookFormat` and `inLanguage` — the three facts
+ * that distinguish «كتاب تانية بكالوريا برمجة عربي» from a course with the
+ * same name. `bookFormat: Paperback` is the one that answers the question a
+ * parent actually asks, which is whether the thing is printed and shipped.
+ *
+ * ## Why this page and not one node per book
+ *
+ * There is no `/books/<slug>` route — the shop is deliberately one page, see
+ * its own note — so each `Book` is identified by the fragment its card already
+ * anchors to (`/books#book-<slug>`), and the list is what the page IS.
+ *
+ * ⚠️ `availability` is read from `inStock`, per title. A withdrawn book still
+ * renders a card — see `BookCardSchema.inStock` — so publishing every book as
+ * `InStock` would advertise stock that cannot be sold.
+ *
+ * ⚠️ The delivery fee is NOT folded into `price`. It is charged once per order
+ * however many books are in it, so adding it to a per-book price would
+ * overstate a two-book order by 65 EGP. It rides as `shippingDetails` instead,
+ * which is where a consumer expects to find it.
+ */
+export function bookListJsonLd(
+  shelves: ReadonlyArray<{
+    subjectNameAr: string;
+    first: readonly BookForJsonLd[];
+    second: readonly BookForJsonLd[];
+    full: readonly BookForJsonLd[];
+  }>,
+  shippingCents: number,
+) {
+  const books = shelves.flatMap((shelf) => [...shelf.first, ...shelf.second, ...shelf.full]);
+  if (books.length === 0) return null;
+
+  const shipping = {
+    '@type': 'OfferShippingDetails',
+    shippingRate: {
+      '@type': 'MonetaryAmount',
+      value: egpPrice(shippingCents),
+      currency: 'EGP',
+    },
+    shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'EG' },
+  };
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    '@id': absolute('/books#books'),
+    name: copy.books.metaTitle,
+    itemListElement: books.map((book, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      item: {
+        '@type': 'Book',
+        '@id': absolute(`/books#book-${book.slug}`),
+        name: book.titleAr,
+        ...(book.subtitleAr ? { alternativeHeadline: book.subtitleAr } : {}),
+        ...(book.descriptionAr ? { description: book.descriptionAr } : {}),
+        ...(book.coverKey ? { image: mediaUrl(book.coverKey) } : {}),
+        ...(book.pageCount !== null ? { numberOfPages: book.pageCount } : {}),
+        bookFormat: 'https://schema.org/Paperback',
+        inLanguage: 'ar',
+        author: personRef(),
+        publisher: organizationRef(),
+        url: absolute(`/books#book-${book.slug}`),
+        offers: {
+          '@type': 'Offer',
+          price: egpPrice(book.priceCents),
+          priceCurrency: 'EGP',
+          availability: book.inStock
+            ? 'https://schema.org/InStock'
+            : 'https://schema.org/OutOfStock',
+          url: absolute('/books'),
+          shippingDetails: shipping,
+        },
+      },
     })),
   };
 }

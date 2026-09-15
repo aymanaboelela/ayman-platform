@@ -6,6 +6,7 @@ import {
   SITE_URL,
   WEBSITE_ID,
   articleJsonLd,
+  bookListJsonLd,
   breadcrumbJsonLd,
   courseJsonLd,
   courseListJsonLd,
@@ -34,6 +35,8 @@ const course = (overrides = {}) => ({
   systemNameAr: 'البكالوريا المصرية',
   subjectNameAr: 'البرمجة وعلوم الحاسب',
   trackLabelAr: 'الهندسة وعلوم الحاسب',
+  forGeneral: true,
+  forLanguages: false,
   year: 2,
   lessonCount: 12,
   totalSeconds: 7200,
@@ -97,6 +100,72 @@ describe('courseListJsonLd', () => {
  * consumer that does not walk `@id`s across blocks — most of them, and every
  * assistant reading the raw HTML — saw an author with no name.
  */
+/**
+ * ⚠️ `/books` renders its shelves from a CLIENT component on the RSC stream —
+ * `curl /books` returns zero rendered cards. This graph and `/books.md` are the
+ * only server-rendered description of the shop that exists.
+ */
+describe('bookListJsonLd', () => {
+  const book = (overrides = {}) => ({
+    slug: 'programming-y2-general',
+    titleAr: 'كتاب تانية بكالوريا برمجة عربي',
+    subtitleAr: null,
+    descriptionAr: null,
+    coverKey: null,
+    priceCents: 25000,
+    pageCount: 180,
+    inStock: true,
+    ...overrides,
+  });
+  const shelf = (books: ReturnType<typeof book>[]) => ({
+    subjectNameAr: 'البرمجة وعلوم الحاسب',
+    first: books,
+    second: [],
+    full: [],
+  });
+
+  it('returns null for an empty shop rather than an empty list', () => {
+    expect(bookListJsonLd([], 6500)).toBeNull();
+    expect(bookListJsonLd([shelf([])], 6500)).toBeNull();
+  });
+
+  it('publishes the price, the format and the per-book anchor', () => {
+    const data = bookListJsonLd([shelf([book()])], 6500);
+    const item = data?.itemListElement[0]?.item;
+
+    expect(item).toMatchObject({
+      '@type': 'Book',
+      name: 'كتاب تانية بكالوريا برمجة عربي',
+      bookFormat: 'https://schema.org/Paperback',
+      numberOfPages: 180,
+    });
+    // The same fragment the card's own `id` uses, so the node points at the
+    // element rather than at the top of a long shop.
+    expect(item?.['@id']).toBe(`${SITE_URL}/books#book-programming-y2-general`);
+    expect(item?.offers).toMatchObject({ price: '250.00', priceCurrency: 'EGP' });
+  });
+
+  /** A withdrawn book still renders a card — publishing it InStock advertises stock nobody can buy. */
+  it('marks an out-of-stock title OutOfStock', () => {
+    const data = bookListJsonLd([shelf([book({ inStock: false })])], 6500);
+    expect(data?.itemListElement[0]?.item.offers.availability).toBe(
+      'https://schema.org/OutOfStock',
+    );
+  });
+
+  /**
+   * ⚠️ The fee is charged ONCE per order however many books are in it, so
+   * folding it into a per-book price overstates a two-book order by one fee.
+   */
+  it('carries the delivery fee as shippingDetails, not inside the price', () => {
+    const data = bookListJsonLd([shelf([book()])], 6500);
+    const offer = data?.itemListElement[0]?.item.offers;
+
+    expect(offer?.price).toBe('250.00');
+    expect(offer?.shippingDetails?.shippingRate).toMatchObject({ value: '65.00', currency: 'EGP' });
+  });
+});
+
 describe('references to the site-wide entities', () => {
   it('names the instructor on a standalone course and keeps the @id', () => {
     const instructor = courseJsonLd(course()).instructor;
@@ -179,6 +248,18 @@ describe('courseJsonLd', () => {
       'شرح المنهج الرسمي',
     );
     expect(courseJsonLd(course({ description: null })).description).toBe('الصف الثاني الثانوي');
+  });
+
+  /**
+   * Two published courses carry the same title and differ only in this word.
+   * Without it the node an assistant matches is a coin flip between a
+   * student's edition and the other one.
+   */
+  it('carries the stream among the keywords', () => {
+    expect(courseJsonLd(course()).keywords).toContain(copy.stream.general);
+    expect(courseJsonLd(course({ forGeneral: false, forLanguages: true })).keywords).toContain(
+      copy.stream.languages,
+    );
   });
 
   it('is Arabic, with an absolute URL', () => {
