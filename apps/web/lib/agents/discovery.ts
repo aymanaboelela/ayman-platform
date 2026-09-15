@@ -100,12 +100,14 @@ export const PUBLIC_API_ENDPOINTS: readonly PublicApiEndpoint[] = [
   {
     path: '/api/catalog/courses',
     operationId: 'listCourses',
-    summary: 'Every published course: title, slug, year, subject, track, duration and lesson count.',
+    summary:
+      'Every published course: title, slug, year, subject, track, duration, lesson count, and its subscription prices in Egyptian piastres (15000 = 150 EGP).',
   },
   {
     path: '/api/catalog/courses/{slug}',
     operationId: 'getCourse',
-    summary: 'One published course in full, including its section and lesson outline.',
+    summary:
+      'One published course in full, including its section and lesson outline and the per-term prices in Egyptian piastres.',
   },
   {
     path: '/api/taxonomy',

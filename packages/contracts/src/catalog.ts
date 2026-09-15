@@ -95,11 +95,33 @@ export const CatalogCourseSchema = z.object({
    * a visitor with no session can see what a course costs before signing up.
    * Never used to decide access; see `Course.monthlyPriceCents`'s own note.
    */
-  monthlyPriceCents: z.number().int().nullable(),
-  quarterlyPriceCents: z.number().int().nullable(),
+  /*
+   * ⚠️ `.describe()` beside a JSDoc block that already says «EGP cents», and it
+   * is not a duplicate. `z.toJSONSchema` reads Zod METADATA, not JSDoc, so this
+   * sentence is the only copy of the unit that reaches `/openapi.json` — which
+   * publishes these fields as a bare unbounded integer. Measured 2026-09-15:
+   * the live 22 KB document contains zero occurrences of «EGP» and zero of
+   * «currenc», so an agent reading it sees `15000` and has to guess whether
+   * that is 150 pounds, 15000 pounds, or dollars. The ARD manifest points price
+   * questions at this very document.
+   */
+  monthlyPriceCents: z
+    .number()
+    .int()
+    .nullable()
+    .describe('Egyptian piastres. 15000 is 150 EGP (ج.م). null when this plan is not for sale.'),
+  quarterlyPriceCents: z
+    .number()
+    .int()
+    .nullable()
+    .describe('Egyptian piastres. 30000 is 300 EGP (ج.م). null when this plan is not for sale.'),
   /** EGP cents, `null` when this plan is not for sale — a full-year
    *  subscription, same public-pricing reasoning as the two above. */
-  yearlyPriceCents: z.number().int().nullable(),
+  yearlyPriceCents: z
+    .number()
+    .int()
+    .nullable()
+    .describe('Egyptian piastres. 95000 is 950 EGP (ج.م). null when this plan is not for sale.'),
   /**
    * الكتاب الورقي — `null` when this course has no printed textbook to
    * order, which is what gates «اطلب الكتاب» everywhere it can appear: the
@@ -111,7 +133,11 @@ export const CatalogCourseSchema = z.object({
    * of `monthlyPriceCents`/etc — a free course can still sell a book.
    */
   bookTitle: z.string().nullable(),
-  bookPriceCents: z.number().int().nullable(),
+  bookPriceCents: z
+    .number()
+    .int()
+    .nullable()
+    .describe('Egyptian piastres. 25000 is 250 EGP (ج.م). null when this course has no printed book.'),
   publishedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
@@ -136,7 +162,7 @@ export type CatalogStreamFilter = z.infer<typeof CatalogStreamFilterSchema>;
 export const CatalogCourseTermSchema = z.object({
   id: z.uuid(),
   title: z.string(),
-  priceCents: z.number().int(),
+  priceCents: z.number().int().describe('Egyptian piastres. 45000 is 450 EGP (ج.م).'),
 });
 export type CatalogCourseTerm = z.infer<typeof CatalogCourseTermSchema>;
 

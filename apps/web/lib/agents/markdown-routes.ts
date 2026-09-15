@@ -37,8 +37,14 @@ const HOME_MARKDOWN_PATH = '/index.md';
  * without a session, exactly the content the redirect matrix exists to gate.
  * `markdown-routes.test.ts` asserts the two lists cannot overlap, because
  * "someone will remember" is not a control.
+ *
+ * ⚠️ EXPORTED so `lib/agents/skills.ts` can render the twin table from it
+ * rather than hand-copying it. It was hand-copied, and `/books.md`, `/news.md`
+ * and `/news/{slug}.md` went unlisted in the published skill for a release —
+ * three live documents an agent reading that file would conclude do not
+ * exist.
  */
-const STATIC_MARKDOWN_ROUTES = [
+export const STATIC_MARKDOWN_ROUTES = [
   '/',
   '/about',
   '/books',
@@ -60,6 +66,21 @@ const COURSE_PATTERN = /^\/courses\/([^/]+)$/;
 
 /** `/news/<slug>` and nothing deeper. Arabic slugs are normal here. */
 const ARTICLE_PATTERN = /^\/news\/([^/]+)$/;
+
+/**
+ * The PATTERN routes, labelled — the ones that cannot be listed because they
+ * take a parameter.
+ *
+ * Colocated with the regexes above on purpose: adding a pattern and forgetting
+ * its human label is then one diff rather than two files. The regexes
+ * themselves cannot be rendered into a table, and a separately hand-written
+ * list is the drift this is fixing.
+ */
+export const MARKDOWN_ROUTE_PATTERNS = [
+  '/years/{1,2,3}',
+  '/courses/{slug}',
+  '/news/{slug}',
+] as const;
 
 export type MarkdownRoute =
   | { kind: 'home' }
