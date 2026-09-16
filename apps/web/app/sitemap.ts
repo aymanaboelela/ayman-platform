@@ -16,7 +16,19 @@ import { isYearIndexable } from '@/lib/seo/year-visibility';
  * this file no test can verify — a wrong date here is a claim to every crawler
  * that a page it already has is unchanged.
  */
-const EDITORIAL_LAST_MODIFIED = new Date('2026-09-13T00:00:00.000Z');
+/*
+ * 2026-09-16 — `/privacy` («المنصة مجانية ومفيش أي مدفوعات» came out, it had
+ * been false since checkout shipped) and the new `/subscribe`.
+ *
+ * ⚠️ It was missed on the day those shipped, which is the exact failure the
+ * warning above describes: for a day the sitemap told every crawler that a page
+ * whose copy had just been corrected — and a page that had not existed at
+ * all — were both unchanged since the 13th. A new URL carrying a `lastmod`
+ * from before it existed is the worst version of this: there is no cached copy
+ * for the date to be compared against, so the only thing it can do is make the
+ * URL look stale on arrival.
+ */
+const EDITORIAL_LAST_MODIFIED = new Date('2026-09-16T00:00:00.000Z');
 
 /**
  * Every URL a crawler should know about, and no others.
