@@ -41,14 +41,27 @@ WebMCP tools (`search_courses`, `get_course`, `get_study_path`) are registered f
 
 `robots.txt` carries `Content-Signal: search=yes, ai-input=yes, ai-train=no`.
 
-⚠️ **`Google-Extended` is where those three collide, and the cost is already
-being paid.** Checked 2026-09-15 against Google's own crawler doc: the token is
-not a crawler, it controls *both* Gemini training *and* "grounding in Gemini
-Apps and Vertex AI", and it has no effect on Google Search — so blocking it
-costs nothing in Search or AI Overviews and costs this site the ability to be
-the source a Gemini answer is grounded in. Google offers no way to keep the
-`ai-input=yes` half while refusing the `ai-train=no` half. It stays blocked;
-changing that is Ayman's call, not a maintenance one.
+⚠️ **`Google-Extended` is the one named exception, and it is allowed.**
+
+Checked 2026-09-15 against Google's own crawler doc: the token is not a crawler,
+it controls *both* Gemini training *and* "grounding in Gemini Apps and Vertex
+AI", and it has no effect on Google Search or AI Overviews. Google offers no way
+to keep the grounding and refuse the training.
+
+**Ayman decided on 2026-09-16 to allow it**, told the cost of both sides: being
+citable inside Gemini is worth letting Google train on the material. Every other
+training crawler stays `Disallow: /` — the decision was about Gemini, not about
+training in general.
+
+So `robots.txt` now carries a second signal for that one group,
+`search=yes, ai-input=yes, ai-train=yes`, beside its `Allow: /`. The wildcard
+group is unchanged. ⚠️ Do not "restore" the block from memory of the old rule,
+and do not flip the group's `Allow` without flipping its `Content-Signal` with
+it — a group granting access under a signal refusing it is a contradiction a
+reverting reader produces by touching one line of two.
+
+⚠️ It is one-way in practice: what has already entered a model's weights does
+not come back if this is reverted later.
 
 Decided by Ayman on 2026-08-05: index it, let assistants read and cite it, do **not** let
 it become training data. Changing any of the three is his call, not a maintenance
