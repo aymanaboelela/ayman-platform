@@ -27,12 +27,28 @@ import { BookCartSchema, BookOrderLineSchema } from '@ayman/contracts/books';
  */
 
 /**
- * The five states an order can be in, in the order it moves through them.
+ * The six states an order can be in, in the order it moves through them.
  *
- * `address_only → paid` (the student uploads the transfer) `→ shipped` (the
- * admin hands it to the courier) `→ delivered` (the admin confirms it arrived).
- * `rejected` is the branch off the side: the admin turned the order down and
- * owes the student a reason.
+ * `address_only → paid` (the student uploads the transfer) `→ printing` (the
+ * admin sent the run to the print shop) `→ shipped` (handed to the courier)
+ * `→ delivered` (the admin confirms it arrived). `rejected` is the branch off
+ * the side: the admin turned the order down and owes the student a reason.
+ *
+ * ## Why `printing` is a STATE and not a flag
+ *
+ * «أنزّلهم PDF وأحدد عليهم وأضغط الطباعة، وبعدين لما أتأكد إنه هيشحن أضغط
+ * الشحن.» The day has two distinct hand-offs — paper leaves for the printer,
+ * and boxes leave for the courier — and until now both collapsed into «اتشحن».
+ * The cost of collapsing them is that the «مدفوعة» tab could not answer the
+ * only question asked of it every morning: which of these have I already sent
+ * to be printed. A boolean beside `shippedAt` would have left that question to
+ * a filter nobody built; a state puts it in the tab bar where the work is.
+ *
+ * ⚠️ It is NOT a required stop. `markShipped` still accepts `paid` directly —
+ * a single reprint handed over the counter never goes near a print run, and
+ * forcing a fake «راح للمطبعة» to unlock «اتشحن» would put a lie in the audit
+ * trail to satisfy a state machine. Same argument `markDelivered` already makes
+ * for accepting `paid` as well as `shipped`.
  *
  * ⚠️ Deleting is deliberately NOT in here. An order can be deleted from any of
  * these, and a `deleted` member would erase the state it was deleted FROM —
@@ -42,6 +58,7 @@ import { BookCartSchema, BookOrderLineSchema } from '@ayman/contracts/books';
 export const BookOrderStatusSchema = z.enum([
   'address_only',
   'paid',
+  'printing',
   'shipped',
   'delivered',
   'rejected',
@@ -202,6 +219,9 @@ const base = {
   /** `null` until step two. */
   senderPhone: z.string().nullable(),
   paidAt: z.iso.datetime().nullable(),
+  /** «راح للمطبعة» — when the copy for this order went into a print run. `null`
+   *  on an order that skipped the printer, which is a real and normal path. */
+  printedAt: z.iso.datetime().nullable(),
   shippedAt: z.iso.datetime().nullable(),
   /** Set when the admin confirmed the book ARRIVED — not when it was handed to
    *  the courier. `shippedAt` is what the platform did; this is what happened. */

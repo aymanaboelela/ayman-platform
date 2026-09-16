@@ -1,4 +1,5 @@
 import { z } from '@ayman/contracts/zod';
+import { BookShippingRatesSchema } from '@ayman/contracts/books';
 
 /**
  * TOKEN SLOTS, not colours. The admin picks one of these; the mapping from a
@@ -338,7 +339,28 @@ export type OutreachSettings = z.infer<typeof OutreachSettingsSchema>;
  */
 export const StoreSettingsSchema = z
   .object({
+    /**
+     * ⚠️ LEGACY — the old FLAT fee. Parsed and IGNORED.
+     *
+     * Delivery is priced per zone now (`shippingRates` below). This key is kept
+     * because a settings row already written on production carries it and this
+     * schema is `.strict()`: removing the field would make every settings read
+     * on the live row throw, which on this platform is the whole site rather
+     * than one screen. See `BOOK_SHIPPING_CENTS`.
+     */
     shippingCents: z.number().int().min(0).max(50_000).default(6_500),
+    /**
+     * «قاهرة وجيزة ٨٠، وجه بحري ١٠٠، صعيد وسينا وبحر أحمر ١٥٠» — the three
+     * rates, editable without a deploy for exactly the reason the single fee
+     * was: the courier's price moves and a deploy is the wrong unit of work
+     * for it.
+     *
+     * `.prefault({})` and not `.default({})` — see `SiteSettingsSchema`'s own
+     * note. With `.default({})` a never-written key would read as a literal
+     * `{}` typed as `BookShippingRates`, i.e. three `undefined` fees, and the
+     * cart would quote `NaN`.
+     */
+    shippingRates: BookShippingRatesSchema.prefault({}),
   })
   .strict();
 

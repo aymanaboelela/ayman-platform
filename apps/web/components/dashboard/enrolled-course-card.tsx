@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { copy, type EnrolledCourse } from '@ayman/contracts';
+import type { BookShippingRates } from '@ayman/contracts/books';
 import { cn } from '@ayman/ui';
 import { enrolledCourseHref } from '@/lib/course-href';
 import { subscriptionExpiryLabel } from '@/lib/subscription-expiry';
@@ -56,13 +57,13 @@ import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
  */
 export function EnrolledCourseCard({
   course,
-  shippingCents,
+  shippingRates,
   instapay,
   vodafoneCash,
 }: {
   course: EnrolledCourse;
-  /** The delivery fee, from `getBookShippingCents()` — see `BookOrderButton`. */
-  shippingCents: number;
+  /** The three delivery rates, from `getBookShippingRates()` — see `BookOrderButton`. */
+  shippingRates: BookShippingRates;
   /** `contact.instapay`, E.164 or `null` — same prop `BookOrderButton`
    *  takes on the public course page. */
   instapay: string | null;
@@ -233,7 +234,7 @@ export function EnrolledCourseCard({
                 courseId={course.id}
                 bookTitle={course.bookTitle as string}
                 bookPriceCents={course.bookPriceCents as number}
-                shippingCents={shippingCents}
+                shippingRates={shippingRates}
                 instapay={instapay}
                 vodafoneCash={vodafoneCash}
               />

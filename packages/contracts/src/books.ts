@@ -48,14 +48,131 @@ export const BookTermSchema = z.enum(['first', 'second', 'full']);
 export type BookTerm = z.infer<typeof BookTermSchema>;
 
 /**
- * The flat delivery fee, in piastres — 65 EGP.
+ * ⚠️ LEGACY — the old FLAT delivery fee, 65 EGP, charged to every address in
+ * Egypt.
  *
- * A DEFAULT, not the law: `SiteSettings.store.shippingCents` is what the
- * catalogue reports and what checkout charges, so the price can move without a
- * deploy. This constant is what that setting falls back to on a settings row
- * written before it existed, and it is the one place the number is written.
+ * It is not what checkout quotes any more: delivery is priced per ZONE now (see
+ * `BookShippingRatesSchema` below). The constant survives because
+ * `StoreSettings.shippingCents` survives — a settings row already written on
+ * production carries that key, `StoreSettingsSchema` is `.strict()`, and
+ * deleting the field would make every settings read throw on the live row. It
+ * is parsed and ignored.
+ *
+ * Nothing new should read it. `bookShippingCentsFor()` is the answer to «الشحن
+ * كام».
  */
 export const BOOK_SHIPPING_CENTS = 6_500;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * الشحن بقى على حسب المحافظة.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * «قاهرة وجيزة ٨٠، وجه بحري ١٠٠، صعيد وسينا وبحر أحمر ١٥٠.»
+ *
+ * Three zones, because that is how the courier actually prices the country and
+ * how the owner quoted it. One flat fee was wrong in both directions at once:
+ * it over-charged the two cities that get same-week delivery and under-charged
+ * every address the courier has to drive a day to reach.
+ *
+ * ## Still charged ONCE per order
+ *
+ * Unchanged and load-bearing — «لو حد طلب أكتر من كتاب هيبقى نفس الشحن، متزودش
+ * شحن». One courier trip carries the whole basket, so the fee is a field on the
+ * ORDER and never on a line, and `bookOrderTotals` adds it exactly once. Making
+ * it depend on the address changes WHICH number is added, not how many times.
+ *
+ * ## Keyed on the CODE, never on `governorates.region`
+ *
+ * The same trap `deliveryDaysFor` documents, and it bites harder here because
+ * this one moves money. Egypt's official classification files الجيزة under
+ * `upper` and الإسكندرية under `urban`: a region test would put Giza — half of
+ * Cairo, and the cheapest address the courier has — in the 150 EGP tier, and it
+ * would leave الإسكندرية and بورسعيد in a tier with القاهرة. Both are wrong on
+ * the rows that occur most.
+ *
+ * ## The unknown case charges the MOST, and is unreachable
+ *
+ * `book_orders.governorate_code` is `NOT NULL` with a foreign key, and the
+ * checkout form makes the field required, so no real order reaches the
+ * fallback. If one ever does, the address is somewhere this table does not
+ * describe — which is not an address the cheap tier was written for. A default
+ * that under-charges is a default that silently eats the difference on exactly
+ * the deliveries that cost most.
+ */
+export const BookShippingZoneSchema = z.enum(['cairo_giza', 'delta', 'far']);
+export type BookShippingZone = z.infer<typeof BookShippingZoneSchema>;
+
+/**
+ * Which governorate codes sit in which zone.
+ *
+ * `far` is deliberately NOT listed: it is everything else, so a governorate
+ * added to the taxonomy later lands in the tier that cannot under-charge rather
+ * than silently joining القاهرة. مطروح and الوادي الجديد are in it for the same
+ * reason — he named صعيد, سينا and البحر الأحمر, and those two are further from
+ * a depot than any of them.
+ */
+const SHIPPING_ZONE_CODES: Readonly<Record<'cairo_giza' | 'delta', ReadonlySet<string>>> = {
+  /** القاهرة, الجيزة. */
+  cairo_giza: new Set(['01', '21']),
+  /**
+   * وجه بحري — the Delta proper plus the canal and coastal cities that are
+   * reached on the same runs: الإسكندرية، بورسعيد، السويس، الإسماعيلية.
+   */
+  delta: new Set(['02', '03', '04', '11', '12', '13', '14', '15', '16', '17', '18', '19']),
+};
+
+export function bookShippingZoneOf(governorateCode: string | null | undefined): BookShippingZone {
+  if (!governorateCode) return 'far';
+  if (SHIPPING_ZONE_CODES.cairo_giza.has(governorateCode)) return 'cairo_giza';
+  if (SHIPPING_ZONE_CODES.delta.has(governorateCode)) return 'delta';
+  return 'far';
+}
+
+/**
+ * The three prices, in piastres — editable from `/admin/books/catalog` so the
+ * courier raising his rate is a form field rather than a deploy, exactly the
+ * argument the single fee was a setting for.
+ *
+ * Every zone has a `.default()`, so a settings row written before this existed
+ * reads as the three numbers he quoted rather than as zero — and a zero fee
+ * would be a real shipment quoted free.
+ */
+export const BookShippingRatesSchema = z.object({
+  cairo_giza: z.number().int().min(0).max(50_000).default(8_000),
+  delta: z.number().int().min(0).max(50_000).default(10_000),
+  far: z.number().int().min(0).max(50_000).default(15_000),
+});
+export type BookShippingRates = z.infer<typeof BookShippingRatesSchema>;
+
+/** The quoted numbers, as the one place they are written down. */
+export const DEFAULT_BOOK_SHIPPING_RATES: BookShippingRates = {
+  cairo_giza: 8_000,
+  delta: 10_000,
+  far: 15_000,
+};
+
+/**
+ * «الشحن كام» — THE answer, for the cart, the checkout, the API and the admin
+ * editor.
+ *
+ * A function over (address, rates) and not a lookup at render time on either
+ * side: the amount actually charged is still frozen onto
+ * `book_orders.shipping_cents` when the order is placed, so raising a rate
+ * never rewrites what an old order says it cost.
+ */
+export function bookShippingCentsFor(
+  governorateCode: string | null | undefined,
+  rates: BookShippingRates,
+): number {
+  return rates[bookShippingZoneOf(governorateCode)];
+}
+
+/** The cheapest zone — what «الشحن يبدأ من ٨٠ ج» quotes on a page that has not
+ *  been told an address yet. Derived, never a fourth stored number. */
+export function minBookShippingCents(rates: BookShippingRates): number {
+  return Math.min(rates.cairo_giza, rates.delta, rates.far);
+}
 
 /**
  * The most copies of one book a single order may ask for.
@@ -150,15 +267,27 @@ export type BookShelf = z.infer<typeof BookShelfSchema>;
 /**
  * `GET /api/books` — the whole shop in one payload.
  *
- * `shippingCents` rides along rather than being read from public settings, for
- * two reasons: the cart needs it on the very first render (a total that appears
- * a beat after the books did looks like a bug), and it keeps the fee out of
- * `PublicSettingsSchema`, which every page on the site parses — adding a
+ * The delivery rates ride along rather than being read from public settings,
+ * for two reasons: the cart needs them on the very first render (a total that
+ * appears a beat after the books did looks like a bug), and it keeps them out
+ * of `PublicSettingsSchema`, which every page on the site parses — adding a
  * required key there is a change with a blast radius this does not need.
  */
 export const BookCatalogSchema = z.object({
   shelves: z.array(BookShelfSchema),
+  /**
+   * ⚠️ The CHEAPEST zone, not the fee. It is what a page that has not been told
+   * an address yet may quote — «الشحن يبدأ من ٨٠ ج» — and it keeps every
+   * existing reader of this field rendering a true number instead of breaking.
+   *
+   * Nothing may CHARGE it. The amount owed depends on the governorate and is
+   * computed by `bookShippingCentsFor` from `shippingRates` below, server-side,
+   * at the moment the order is written.
+   */
   shippingCents: z.number().int().min(0),
+  /** The three zone rates, so the cart can re-quote the total the instant the
+   *  student picks a governorate rather than after a round trip. */
+  shippingRates: BookShippingRatesSchema,
   total: z.number().int().min(0),
 });
 export type BookCatalog = z.infer<typeof BookCatalogSchema>;
