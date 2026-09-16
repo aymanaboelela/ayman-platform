@@ -298,7 +298,13 @@ export function BooksShop({
                   <span>{formatEGP(line.book.priceCents * line.quantity)}</span>
                 </div>
               ))}
-              <Totals totals={totals} fromShippingCents={fromShippingCents} />
+              {/* ⚠️ NO `<Totals>` here. It would be a SECOND, frozen answer to
+                  the question the panel below answers live: this copy is stuck
+                  on «من ٢٣٠» (the cheapest zone) while the panel's own total
+                  becomes ٢٥٠ the moment a وجه-بحري address is picked, and the
+                  reader gets two different totals stacked on top of each other.
+                  The panel owns the breakdown — same reason `BookOrderButton`
+                  keeps its breakdown inside rather than above. */}
             </div>
 
             {/*
