@@ -1,6 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { EnrollmentDto } from '@ayman/contracts';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  courseAccessScopes,
+  hasLiveCourseAccess,
+  type ScopedGrant,
+} from '../entitlement/grant-liveness';
 
 /**
  * Statuses that still grant access. `completed` is included because finishing
@@ -19,7 +24,10 @@ const ENROLLMENT_SELECT = {
   lastLessonId: true,
   enrolledAt: true,
   completedAt: true,
-  course: { select: { slug: true } },
+  // `subjectId`/`requiresGrant` are here for `accessActive` alone — they are
+  // what `courseAccessScopes` needs to know which grants could open this
+  // course. Not sent to the client; `toDto` drops them.
+  course: { select: { slug: true, subjectId: true, requiresGrant: true } },
 } as const;
 
 interface EnrollmentRow {
@@ -30,10 +38,10 @@ interface EnrollmentRow {
   lastLessonId: string | null;
   enrolledAt: Date;
   completedAt: Date | null;
-  course: { slug: string };
+  course: { slug: string; subjectId: string; requiresGrant: boolean };
 }
 
-function toDto(row: EnrollmentRow): EnrollmentDto {
+function toDto(row: EnrollmentRow, accessActive: boolean): EnrollmentDto {
   return {
     id: row.id,
     courseId: row.courseId,
@@ -44,6 +52,7 @@ function toDto(row: EnrollmentRow): EnrollmentDto {
     lastLessonId: row.lastLessonId,
     enrolledAt: row.enrolledAt.toISOString(),
     completedAt: row.completedAt?.toISOString() ?? null,
+    accessActive,
   };
 }
 
@@ -72,7 +81,58 @@ export class EnrollmentService {
       orderBy: [{ enrolledAt: 'desc' }, { id: 'desc' }],
       select: ENROLLMENT_SELECT,
     });
-    return rows.map((row) => toDto(row));
+    if (rows.length === 0) return [];
+
+    /*
+     * WHY THE GRANTS ARE READ HERE AT ALL — «الطالب اللي اشتراكه خلص مش قادر
+     * يدفع».
+     *
+     * The enrollment row and the grant behind it are two different facts, and
+     * they diverge the moment a subscription lapses. Nothing ever writes
+     * `EnrollmentStatus.expired` — not the expiry sweeper (it only sends the
+     * three-day notice), not `TermService.setOpen` (it bulk-stamps
+     * `revokedAt` on every term grant and leaves the enrollments alone). So a
+     * lapsed student's row stays `active` forever, and every consumer that
+     * treated «has a row» as «has access» sent them somewhere they could not
+     * buy their way out of:
+     *
+     *   `proxy.ts` 307s /courses/:slug — the ONLY page that sells — to
+     *   /library/:slug, which shows no price and no button; the lesson gate
+     *   then 403s and redirects back to /courses/:slug, which 307s again.
+     *   A closed loop with the checkout on the outside of it.
+     *
+     * `accessActive` is what breaks that loop, so the two consumers of this
+     * list can ask the question they actually meant. The row is still
+     * RETURNED when access has lapsed — the course is still the student's,
+     * their progress is still theirs, and /library must keep showing it.
+     *
+     * ONE extra query for the whole list, never one per course: the scopes
+     * are unioned across every enrolled course and the windows are then
+     * evaluated in memory by the same `./grant-liveness` helpers
+     * `EntitlementService.resolveCourseAccess` decides a single course with.
+     */
+    const courses = rows.map((row) => ({
+      id: row.courseId,
+      subjectId: row.course.subjectId,
+      requiresGrant: row.course.requiresGrant,
+    }));
+
+    const grants: ScopedGrant[] = await this.prisma.accessGrant.findMany({
+      where: { userId, OR: courses.flatMap(courseAccessScopes) },
+      select: {
+        scope: true,
+        courseId: true,
+        subjectId: true,
+        validFrom: true,
+        validUntil: true,
+        revokedAt: true,
+      },
+    });
+
+    const now = new Date();
+    return rows.map((row, index) =>
+      toDto(row, hasLiveCourseAccess(grants, courses[index]!, now)),
+    );
   }
 
   /**
