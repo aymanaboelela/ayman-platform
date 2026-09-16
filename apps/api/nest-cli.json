@@ -7,8 +7,16 @@
     "builder": {
       "type": "swc",
       "options": {
-        "ignore": ["**/*.spec.ts"]
+        "ignore": [
+          "**/*.spec.ts"
+        ]
       }
-    }
+    },
+    "assets": [
+      {
+        "include": "scripts/seed-data/**/*.webp",
+        "outDir": "dist"
+      }
+    ]
   }
 }
