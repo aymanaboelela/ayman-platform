@@ -9,6 +9,7 @@ import {
   buildAuthenticatedCsp,
   buildPublicCsp,
   courseSlugFromPath,
+  enrollmentOpensCourse,
   decideRedirect,
   isAdminRoute,
   isDevOnlyRoute,
@@ -164,6 +165,47 @@ describe('courseSlugFromPath — which URLs the enrolled-student redirect may fi
       expect(courseSlugFromPath(path)).not.toBeNull();
       expect(isProtectedRoute(path)).toBe(false);
     }
+  });
+});
+
+describe('enrollmentOpensCourse — who gets sent to /library instead of the sales page', () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    courseSlug: 'python-basics',
+    accessActive: true,
+    ...over,
+  });
+
+  it('redirects a student whose subscription is live', () => {
+    expect(enrollmentOpensCourse(row(), 'python-basics')).toBe(true);
+  });
+
+  it('LEAVES a student whose subscription lapsed on the public course page', () => {
+    // The whole point. Their enrollment row stays `active` forever — nothing
+    // writes `EnrollmentStatus.expired` — and /courses/:slug is the only page
+    // that can sell them a renewal. Redirecting them here closed a loop they
+    // could not pay their way out of.
+    expect(enrollmentOpensCourse(row({ accessActive: false }), 'python-basics')).toBe(false);
+  });
+
+  it('treats a missing accessActive as no access, never as permission to redirect', () => {
+    const { accessActive: _dropped, ...withoutFlag } = row();
+    expect(enrollmentOpensCourse(withoutFlag, 'python-basics')).toBe(false);
+  });
+
+  it('still matches an Arabic slug across the encoded path and the decoded API value', () => {
+    expect(enrollmentOpensCourse(row({ courseSlug: 'علوم' }), '%d8%b9%d9%84%d9%88%d9%85')).toBe(
+      true,
+    );
+  });
+
+  it('ignores another course’s enrollment, live or not', () => {
+    expect(enrollmentOpensCourse(row({ courseSlug: 'other' }), 'python-basics')).toBe(false);
+  });
+
+  it('ignores junk rows rather than throwing', () => {
+    expect(enrollmentOpensCourse(null, 'python-basics')).toBe(false);
+    expect(enrollmentOpensCourse('nope', 'python-basics')).toBe(false);
+    expect(enrollmentOpensCourse(row({ courseSlug: 42 }), 'python-basics')).toBe(false);
   });
 });
 
