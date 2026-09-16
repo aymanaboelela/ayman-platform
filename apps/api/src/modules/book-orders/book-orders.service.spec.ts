@@ -254,6 +254,9 @@ describe('BookOrdersService', () => {
     ).id;
   });
 
+  /** Every phone this spec ever books with — see the note in `beforeEach`. */
+  const FIXTURE_PHONES = ['01012345678', '+201555000111', '01555000222', '01555000444'];
+
   beforeEach(async () => {
     await prisma.bookOrder.deleteMany({ where: { userId: { in: [studentId, strangerId, linkedStudentId] } } });
     // Guest orders carry `userId: null`, so the filter above never catches
@@ -266,6 +269,31 @@ describe('BookOrdersService', () => {
        it. Scoped to this spec's own books so nothing shared is touched. */
     await prisma.bookOrder.deleteMany({
       where: { items: { some: { bookId: { in: [bookA, bookB, soldOutBook, languagesBook, generalBook] } } } },
+    });
+
+    /*
+     * And by PHONE — the one key that survives.
+     *
+     * Every filter above is scoped to a fixture id, and `afterAll` deletes the
+     * users, books and courses those ids name. So the instant a run ends, any
+     * order it left behind becomes unreachable by its own cleanup: the next
+     * run's `beforeEach` looks for books that no longer exist and matches
+     * nothing. The rows accumulate, permanently, one failed run at a time.
+     *
+     * That is not a tidiness problem, because `create()`'s duplicate guard
+     * matches on PHONE within `DUPLICATE_WINDOW_DAYS` — deliberately wider
+     * than the reuse match, so it catches the same human on a new device. A
+     * leftover row on this number is therefore a real prior order as far as
+     * the service is concerned, and every duplicate test starts failing with
+     * `DUPLICATE_RECENT_BOOK_ORDER`.
+     *
+     * Found at 514 orders on `01012345678`, dating back three weeks — enough
+     * to fail twelve tests in this file and read as a broken service.
+     *
+     * The numbers below are this spec's own fixtures and appear nowhere else.
+     */
+    await prisma.bookOrder.deleteMany({
+      where: { phone: { in: FIXTURE_PHONES } },
     });
   });
 
@@ -2186,12 +2214,32 @@ describe('BookOrdersService', () => {
   /** Notifications are matched on the ORDER ID inside the payload, never on
    *  «the newest row»: this database is a real cohort and other suites write
    *  notifications of their own while this one runs. */
+  /*
+   * ⚠️ `userId` is in the filter for SPEED, and leaving it out is what made
+   * five tests in this file time out rather than fail.
+   *
+   * `notifications` is indexed on `(user_id, created_at)` and
+   * `(user_id, read_at)` — nothing on `kind`, and nothing on the JSON payload.
+   * So a lookup by kind + `payload->>'orderId'` is a sequential scan of the
+   * whole table. On the dev database that is 14.1M rows across 4.6 GB, timed
+   * at 13.8 s against Jest's 5 s ceiling. On CI's empty database it is
+   * instant, which is why this only ever failed on a real machine.
+   *
+   * Scoping to this spec's own accounts costs nothing in meaning: a book-order
+   * notification is always written against the order's owner, and these are
+   * the only owners this file creates. The guest case still asserts zero —
+   * correctly, because a wrongly-written row would have to name one of them.
+   */
   const notificationsFor = (
     kind: 'book_order_shipped' | 'book_order_delivered' | 'book_order_rejected',
     orderId: string,
   ) =>
     prisma.notification.findMany({
-      where: { kind, payload: { path: ['orderId'], equals: orderId } },
+      where: {
+        kind,
+        userId: { in: [studentId, strangerId, linkedStudentId] },
+        payload: { path: ['orderId'], equals: orderId },
+      },
     });
 
   describe('markShipped notifies the student', () => {

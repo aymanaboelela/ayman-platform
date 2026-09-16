@@ -30,6 +30,19 @@ describe('audit retrofit (content services)', () => {
   let sections: SectionService;
   let lessons: LessonService;
   let adminId: string;
+  /**
+   * The highest audit id that existed BEFORE this suite wrote anything.
+   *
+   * The chain assertion at the bottom used to walk the whole table, and on a
+   * database where any link has ever been broken that can never pass again —
+   * which the dev machine is, permanently: `audit.service.spec.ts` asserts
+   * that `UPDATE app.audit_log SET outcome = 'tampered'` is REJECTED, and on a
+   * machine where the runtime role still held UPDATE it was not, taking
+   * 135,603 rows with it. Nothing recomputes those back.
+   *
+   * So the suite verifies the range it is responsible for.
+   */
+  let auditFloor: bigint;
   let suffix: string;
   let systemId: string;
   let trackId: string;
@@ -42,6 +55,12 @@ describe('audit retrofit (content services)', () => {
     await prisma.$connect();
 
     audit = new AuditService(prisma);
+
+    const newest = await prisma.auditLog.findFirst({
+      orderBy: { id: 'desc' },
+      select: { id: true },
+    });
+    auditFloor = newest?.id ?? 0n;
     courses = new CourseService(prisma, audit, new YouTubeDurationService());
     sections = new SectionService(prisma, audit);
     lessons = new LessonService(prisma, audit, new YouTubeDurationService());
@@ -139,6 +158,18 @@ describe('audit retrofit (content services)', () => {
   });
 
   it('leaves the chain verifiable after the retrofitted writes', async () => {
-    await expect(audit.verifyChain()).resolves.toEqual({ ok: true });
+    // The first row this suite wrote — the anchor for the range it owns.
+    const first = await prisma.auditLog.findFirst({
+      where: { id: { gt: auditFloor } },
+      orderBy: { id: 'asc' },
+      select: { id: true },
+    });
+
+    // The previous test asserts six rows exist, so this is a real anchor and
+    // not a vacuous pass — but say so, rather than let an empty range read as
+    // a verified one.
+    expect(first).not.toBeNull();
+
+    await expect(audit.verifyChain({ fromId: first!.id })).resolves.toEqual({ ok: true });
   });
 });
