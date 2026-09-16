@@ -45,6 +45,7 @@ function order(overrides: Partial<BookOrder> = {}): BookOrder {
     addressBuilding: null,
     addressNote: null,
     senderPhone: null,
+    printedAt: null,
     paidAt: null,
     shippedAt: null,
     deliveredAt: null,
@@ -84,6 +85,7 @@ describe('MyBookOrdersSection — the reassurance line', () => {
   const statuses: BookOrderStatus[] = [
     'address_only',
     'paid',
+    'printing',
     'shipped',
     'delivered',
     'rejected',
@@ -91,6 +93,7 @@ describe('MyBookOrdersSection — the reassurance line', () => {
   const notes: Record<BookOrderStatus, string> = {
     address_only: c.noteAddressOnly,
     paid: c.notePaid,
+    printing: c.notePrinting,
     shipped: c.noteShipped,
     delivered: c.noteDelivered,
     rejected: c.noteRejected,

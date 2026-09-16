@@ -5330,7 +5330,9 @@ export const copy = {
     cartEmpty: 'لسه مختارتش أي كتاب',
     /** The line that does the most work on this page. Stated on the shelf, not
      *  only at checkout, so nobody meets it as a surprise. */
-    shippingOnce: 'الشحن {price} مرة واحدة على الطلب كله — مهما كان عدد الكتب',
+    shippingOnce: 'الشحن من {price} على حسب المحافظة — مرة واحدة على الطلب كله مهما كان عدد الكتب',
+    /** The zones spelled out, under the line above — «الرقم ده جه منين». */
+    shippingZones: 'القاهرة والجيزة {near} · وجه بحري {delta} · الصعيد وسيناء والبحر الأحمر {far}',
     /**
      * The same shelf line when the fee is ZERO, and it has to be its own
      * sentence rather than `shippingOnce` with «٠ ج» in the slot.
@@ -5354,7 +5356,29 @@ export const copy = {
      * — or than «٠ ج», which reads as a number that failed to load.
      */
     shippingFree: 'مجانًا',
+    /**
+     * The VALUE in the shipping row BEFORE a governorate has been chosen.
+     *
+     * A third state, never a zero and never the cheapest zone: «٨٠ ج» shown to
+     * somebody in أسوان and then replaced by «١٥٠ ج» one field later is a price
+     * that went up on them, which is the single commonest reason a cart is
+     * abandoned at the address step. Naming the rule instead is honest and
+     * turns the change that follows into an answer rather than a surprise.
+     */
+    shippingByGovernorate: 'على حسب المحافظة',
     total: 'الإجمالي',
+    /** The TOTAL row in the same "no address yet" state — the lowest it can
+     *  possibly be, said as a floor rather than as a price. `{price}` */
+    totalFrom: 'من {price}',
+    /**
+     * The shelf line, and the CTA on a course page's «اطلب الكتاب», now that
+     * delivery depends on where the parcel is going.
+     *
+     * It quotes the book and the CHEAPEST zone, and says «من» out loud. The
+     * previous wording added one fee to one price and promised a single total,
+     * which is now only true for القاهرة والجيزة.
+     */
+    shippingFromByGovernorate: 'والشحن من {price} على حسب المحافظة',
     quantity: 'العدد',
     /** The per-book line inside the basket — «٢ × ٢٥٠ جنيه»: how many, at what
      *  each. The title is already the line above it. */
@@ -5402,6 +5426,9 @@ export const copy = {
        *  it is where the explaining happens. */
       statusAddressOnly: 'مكمّلتش',
       statusPaid: 'بنجهّزه',
+      /** «في المطبعة» داخليًا — بس الطالب بيشوف «بنطبعه»، لأن ده اللي بيحصل
+       *  فعلًا وهو أوضح من اسم محطة إدارية مش بتاعته. */
+      statusPrinting: 'بنطبعه',
       statusShipped: 'في الطريق',
       statusDelivered: 'وصلك',
       statusRejected: 'اترفض',
@@ -5412,6 +5439,9 @@ export const copy = {
          what happens next. */
       noteAddressOnly: 'الطلب اتسجّل بس لسه ماتدفعش. كمّل الدفع وهنجهّزه على طول.',
       notePaid: 'استلمنا طلبك وبنجهّزه للشحن. ما تقلقش — أول ما يتشحن هتلاقي هنا إنه في الطريق.',
+      /** ما بيوعدش بيوم — الطبعة بترجع لما ترجع — بس بيقول الخطوة اللي بعدها،
+       *  زي باقي السطور هنا. */
+      notePrinting: 'نسختك دخلت المطبعة مع طبعة جديدة. أول ما تخرج وتتشحن هتلاقي هنا إنها في الطريق.',
       noteShipped: 'الكتاب خرج ليك وفي الطريق. ساعات بيتأخر يوم أو اتنين، وده عادي — أول ما يوصلك هتلاقي هنا إنه اتسلّم.',
       noteDelivered: 'الكتاب وصلك. لو في أي مشكلة فيه كلّم الدعم وإحنا نظبّطها.',
       /** The rejection line. The admin's own words follow it verbatim, exactly

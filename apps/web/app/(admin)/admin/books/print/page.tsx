@@ -8,6 +8,7 @@ import {
   AdminBookOrderFilterSchema,
   AdminBookOrderStreamSchema,
   PackingListSchema,
+  bookOrderYearWord,
 } from '@ayman/contracts/admin/book-orders';
 import { z } from 'zod';
 import { adminGet } from '@/lib/admin-api';
@@ -24,6 +25,7 @@ const YearFilterSchema = z.coerce.number().int().min(1).max(3);
  *  way the screen it came from does. */
 const STATUS_LABEL: Record<string, string> = {
   paid: c.filterPaid,
+  printing: c.filterPrinting,
   shipped: c.filterShipped,
   delivered: c.filterDelivered,
   address_only: c.filterAddressOnly,
@@ -184,6 +186,53 @@ export default async function BookOrdersPrintPage({
             <span>{c.printCopiesLabel}</span>
           </div>
         </div>
+
+      {/*
+        ── الصفوف الأول ────────────────────────────────────────────────────
+        «لو حمّلت الاتنين تقولي كام كتاب سنة أولى وكام كتاب سنة تانية، وتقسمهم
+         بشكل كويس — جزء يمين وجزء شمال.»
+
+        Side by side, and ABOVE the edition breakdown, because the decision
+        taken off this sheet before anything is printed is a decision about a
+        YEAR: two different books and two different print orders. The edition
+        blocks stay underneath — the paper is still stacked عربي then لغات, and
+        that is the walk the packer does.
+
+        Reading it used to mean adding one line out of the عربي block to one
+        line out of the لغات block, which is exactly the arithmetic that
+        produces «واحد ناقص».
+      */}
+      {list.years.length > 1 ? (
+        <section className="packing-years">
+          <h3>{c.printYearsTitle}</h3>
+          <div className="packing-years-grid">
+            {list.years.map((year) => (
+              <div key={year.year ?? 'no-year'} className="packing-year">
+                <b>
+                  {year.year === null
+                    ? c.printYearsNone
+                    : formatCopy(c.printYearName, { year: bookOrderYearWord(year.year) ?? '' })}
+                </b>
+                <span>
+                  {[
+                    formatCopy(c.printOrders, { n: String(year.orders) }),
+                    formatCopy(c.printBooks, { n: String(year.books) }),
+                    formatCopy(c.printCopies, { n: String(year.copies) }),
+                  ].join(' · ')}
+                </span>
+                <small>
+                  {year.streams
+                    .map(
+                      (entry) =>
+                        `${entry.label || c.printNoStream}: ${entry.books} / ${entry.copies}`,
+                    )
+                    .join(' · ')}
+                </small>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
         <ul className="packing-breakdown">
           {list.groups.map((group) => (

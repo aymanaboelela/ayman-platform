@@ -8,7 +8,11 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import { useRefreshBookOrdersUnshippedCount } from '@/components/admin/book-orders-alerts';
-import { shipBookOrdersAction, deliverBookOrdersAction } from './actions';
+import {
+  shipBookOrdersAction,
+  deliverBookOrdersAction,
+  printBookOrdersAction,
+} from './actions';
 
 const c = copy.admin.books;
 
@@ -144,9 +148,9 @@ export function OrderCheckbox({ id, label }: { id: string; label: string }) {
  * `notice_failed` in particular means "the book left but the student was not
  * told", which is a phone call he has to make.
  */
-function report(result: BulkBookOrderResult): void {
+function report(result: BulkBookOrderResult, done: string): void {
   if (result.succeeded > 0) {
-    toast.success(formatCopy(c.bulkShipped, { count: String(result.succeeded) }));
+    toast.success(formatCopy(done, { count: String(result.succeeded) }));
   }
   for (const row of result.rows) {
     if (row.outcome === 'notice_failed') {
@@ -194,8 +198,13 @@ function BulkActions({ variant }: { variant: 'bar' | 'inline' }) {
   const ids = [...ctx.selected];
   const { busy, setBusy, alsoWhatsapp, setAlsoWhatsapp, clear } = ctx;
 
+  /** `done` is the success toast's template, because the three batches are
+   *  three different things to have succeeded at — «اتشحن ١٢» for a run that
+   *  left the building, «راحوا للمطبعة ١٢» for one that has not. One shared
+   *  wording made the print batch report itself as a shipment. */
   async function run(
     action: (ids: string[], whatsapp?: boolean) => Promise<BulkBookOrderResult | null>,
+    done: string,
   ) {
     setBusy(true);
     const result = await action(ids, alsoWhatsapp);
@@ -204,7 +213,7 @@ function BulkActions({ variant }: { variant: 'bar' | 'inline' }) {
       toast.error(c.actionFailed);
       return;
     }
-    report(result);
+    report(result, done);
     clear();
     refreshUnshippedCount();
     router.refresh();
@@ -243,10 +252,31 @@ function BulkActions({ variant }: { variant: 'bar' | 'inline' }) {
               )
             )
               return;
-            void run(shipBookOrdersAction);
+            void run(shipBookOrdersAction, c.bulkShipped);
           }}
         >
           {busy ? c.bulkWorking : c.bulkShipButton}
+        </Button>
+        {/*
+          «أحدد على الناس كلهم وأضغط الطباعة» — the batch this screen is
+          actually driven by. It sits BEFORE «اشحن المحدد» because that is the
+          order the day runs in: the PDF comes down, the rows go to the
+          printer, and shipping happens when the boxes come back.
+
+          No WhatsApp box and no mention of messages in its confirm — nothing is
+          sent. It reads the same selection the other two do, so the run picked
+          with «حدّد اللي في المدى» is exactly the run that goes.
+        */}
+        <Button
+          size="sm"
+          disabled={busy}
+          onClick={() => {
+            if (!window.confirm(formatCopy(c.bulkPrintConfirm, { count: String(ids.length) }))) return;
+            void run(printBookOrdersAction, c.bulkPrinted);
+          }}
+          className="!bg-[oklch(0.55_0.16_300)] !text-white hover:!bg-[oklch(0.50_0.16_300)]"
+        >
+          {c.bulkPrintButton}
         </Button>
         <Button
           size="sm"
@@ -254,7 +284,7 @@ function BulkActions({ variant }: { variant: 'bar' | 'inline' }) {
           disabled={busy}
           onClick={() => {
             if (!window.confirm(formatCopy(c.bulkDeliverConfirm, { count: String(ids.length) }))) return;
-            void run(deliverBookOrdersAction);
+            void run(deliverBookOrdersAction, c.bulkShipped);
           }}
         >
           {c.bulkDeliverButton}

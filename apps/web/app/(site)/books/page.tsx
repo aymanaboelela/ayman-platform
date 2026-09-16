@@ -98,7 +98,7 @@ export default async function BooksPage() {
             prices «٦٥ جنيه شحن» is not fine print, and meeting it for the first
             time on the last screen is how a basket gets abandoned.
           */}
-          <BooksShippingChip shippingCents={catalog.shippingCents} />
+          <BooksShippingChip rates={catalog.shippingRates} />
         </div>
       </section>
 

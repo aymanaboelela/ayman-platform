@@ -36,6 +36,7 @@ const order = (id: string, createdAt: string): BookOrder =>
     addressBuilding: null,
     addressNote: null,
     senderPhone: null,
+    printedAt: null,
     paidAt: null,
     shippedAt: null,
     deliveredAt: null,

@@ -180,7 +180,8 @@ describe('every markdown document', () => {
  * objects. The only test that catches this is one that says the words.
  */
 const bookCatalog = (overrides: Partial<BookCatalog> = {}): BookCatalog => ({
-  shippingCents: 6500,
+  shippingCents: 8000,
+  shippingRates: { cairo_giza: 8_000, delta: 10_000, far: 15_000 },
   total: 1,
   shelves: [
     {
@@ -407,9 +408,18 @@ describe('renderBooksMarkdown', () => {
     expect(markdown).toContain('250');
     // «عربي» — the one word that separates two identically-titled books.
     expect(markdown).toContain(copy.stream.general);
-    // The fee is stated once, on the shelf, because a book price with no
-    // delivery fee beside it is a number an agent quotes as the total.
-    expect(markdown).toContain('65');
+    /*
+     * The fee is stated once, on the shelf, because a book price with no
+     * delivery fee beside it is a number an agent quotes as the total.
+     *
+     * ⚠️ And all THREE zones, not just the floor. This output is read verbatim
+     * by third-party agents we cannot correct afterwards, so «الشحن ٨٠ ج» alone
+     * would be repeated as the price to somebody in أسوان — the one surface
+     * where a partially-true number cannot be walked back.
+     */
+    expect(markdown).toContain('80');
+    expect(markdown).toContain('100');
+    expect(markdown).toContain('150');
   });
 
   it('says a withdrawn title cannot be bought', () => {
@@ -430,7 +440,12 @@ describe('renderBooksMarkdown', () => {
   });
 
   it('renders the empty shop rather than an empty heading', () => {
-    const markdown = renderBooksMarkdown({ shelves: [], shippingCents: 6500, total: 0 });
+    const markdown = renderBooksMarkdown({
+      shelves: [],
+      shippingCents: 8_000,
+      shippingRates: { cairo_giza: 8_000, delta: 10_000, far: 15_000 },
+      total: 0,
+    });
     expect(markdown).toContain(copy.books.empty);
   });
 });

@@ -6,6 +6,7 @@ import type { BookOrder } from '@ayman/contracts/book-orders';
 import type {
   DeleteBookOrderResult,
   MarkBookOrderDeliveredResult,
+  MarkBookOrderPrintingResult,
   RejectBookOrderResult,
   RestoreBookOrderResult,
 } from '@ayman/contracts/admin/book-orders';
@@ -58,6 +59,22 @@ export class AdminBookOrdersController {
   @Get('summary')
   summary() {
     return this.bookOrders.adminRevenueSummary();
+  }
+
+  /**
+   * «كام نسخة، كام كتاب، كام طالب، كام عربي، كام لغات» — the header on
+   * `/admin/books`.
+   *
+   * Takes the SAME query as `list` above and ignores its paging, which is the
+   * whole point: the header describes the tab, not the fifty rows under it. See
+   * `BookOrdersService.adminOverview` for why counting the rendered page is the
+   * one implementation that must not ship.
+   */
+  @RequirePermission('book-order:read')
+  @Get('overview')
+  @UsePipes(ZodValidationPipe)
+  overview(@Query() query: AdminBookOrderQueryDto) {
+    return this.bookOrders.adminOverview(query);
   }
 
   /**
@@ -175,11 +192,44 @@ export class AdminBookOrdersController {
     return this.bookOrders.markDeliveredMany(user.id, body.ids);
   }
 
+  /**
+   * «راح للمطبعة» in bulk — the way this is actually used. A print run is
+   * thirty orders selected off the packing list, not one row.
+   *
+   * ⚠️ Declared BEFORE `@Post(':id/printing')`, like `ship` and `deliver` above
+   * — Nest matches in declaration order within a method, so a literal path
+   * registered after a parameterised one of the same shape is unreachable.
+   *
+   * `book-order:ship`, not a permission of its own: this is the same desk
+   * moving the same parcel one step earlier, and a clerk who may record that a
+   * box left may certainly record that paper went to the printer. It takes no
+   * `whatsapp` flag because nothing is sent — see `markPrinting`.
+   */
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post('printing')
+  @UsePipes(ZodValidationPipe)
+  printMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
+    return this.bookOrders.markPrintingMany(user.id, body.ids);
+  }
+
   @RequirePermission('book-order:ship')
   @RequireCsrf()
   @Post(':id/ship')
   markShipped(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.bookOrders.markShipped(user.id, id);
+  }
+
+  /** «راح للمطبعة» for one row. No body: there is nothing to say about paper
+   *  going to a printer beyond that it went, and the WHO is the session. */
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post(':id/printing')
+  markPrinting(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<MarkBookOrderPrintingResult> {
+    return this.bookOrders.markPrinting(user.id, id);
   }
 
   /**

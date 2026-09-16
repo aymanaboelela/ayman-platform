@@ -7,7 +7,7 @@ import type {
 } from '@ayman/contracts';
 // The SUBPATH — `books` is not on the root barrel, and the barrel is what
 // stops the API booting when a runtime value comes through it.
-import type { BookCard, BookCatalog } from '@ayman/contracts/books';
+import { minBookShippingCents, type BookCard, type BookCatalog } from '@ayman/contracts/books';
 import { AGENT_DISCOVERY_PATHS } from '@/lib/agents/discovery';
 import { ESSENTIAL_TERMS } from '@/lib/essentials-terms';
 import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
@@ -472,14 +472,33 @@ export function renderBooksMarkdown(catalog: BookCatalog): string {
     `# ${b.metaTitle}`,
     `> ${b.metaDescription}`,
     b.lead,
-    // The delivery fee, stated once, exactly as the shelf states it — «الشحن
-    // ٦٥ ج مرة واحدة على الطلب كله». A book price with no delivery fee beside
-    // it is a number an agent will quote as the total.
-    catalog.shippingCents > 0
-      ? formatCopy(b.shippingOnce, { price: formatEGP(catalog.shippingCents) })
-      // `shippingFreeOnce`, not `shippingFree` — the latter is the VALUE in a
-      // price breakdown («مجانًا»), not a sentence.
-      : b.shippingFreeOnce,
+    /*
+     * The delivery fee, stated once, exactly as the shelf states it. A book
+     * price with no delivery fee beside it is a number an agent will quote as
+     * the total.
+     *
+     * ⚠️ Delivery is ZONED now, so the floor alone is not enough here. An agent
+     * reading «الشحن ٨٠ ج» will repeat it to somebody in أسوان as if it were
+     * the price — this is the one surface whose output is quoted verbatim by a
+     * third party we cannot correct afterwards. `shippingOnce` says «من … على
+     * حسب المحافظة» and the line under it names all three zones.
+     */
+    ...(catalog.shippingRates.cairo_giza > 0 ||
+    catalog.shippingRates.delta > 0 ||
+    catalog.shippingRates.far > 0
+      ? [
+          formatCopy(b.shippingOnce, {
+            price: formatEGP(minBookShippingCents(catalog.shippingRates)),
+          }),
+          formatCopy(b.shippingZones, {
+            near: formatEGP(catalog.shippingRates.cairo_giza),
+            delta: formatEGP(catalog.shippingRates.delta),
+            far: formatEGP(catalog.shippingRates.far),
+          }),
+        ]
+      : // `shippingFreeOnce`, not `shippingFree` — the latter is the VALUE in a
+        // price breakdown («مجانًا»), not a sentence.
+        [b.shippingFreeOnce]),
     catalog.total > 0 ? shelves : b.empty,
     footer('/books', copy.agents.booksNote),
   ]);

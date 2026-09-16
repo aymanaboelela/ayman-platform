@@ -49,6 +49,7 @@ function catalogOf(...books: BookCard[]): BookCatalog {
       },
     ],
     shippingCents: 0,
+    shippingRates: { cairo_giza: 0, delta: 0, far: 0 },
     total: books.length,
   };
 }
