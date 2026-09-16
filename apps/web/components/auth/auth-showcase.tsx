@@ -1,8 +1,26 @@
 import Image from 'next/image';
 import { copy } from '@ayman/contracts';
-import { IS_AYMAN } from '@/lib/tenant';
+import { IS_AYMAN, tenantName } from '@/lib/tenant';
 
 const c = copy.auth.aside;
+
+/**
+ * The panel's eyebrow — «منصة أ. أيمن أبو العلا» on his stack — resolved once.
+ *
+ * ⚠️ `tenantName()` and NOT the sentence-level swap in `lib/tenant-copy.ts`,
+ * because this string is a brand lockup written in words rather than a sentence
+ * with a name in it. Replacing the name inside it would leave the «منصة أ.»
+ * standing in front of a `TENANT_DISPLAY_NAME` that almost always starts with
+ * «منصة» itself — «منصة أ. منصة محمد صبري» — and the honorific «أ.» belongs to
+ * a person this deployment has never heard of. The whole string is the brand,
+ * so the whole string is what gets replaced.
+ *
+ * Read twice below, from one const: once as the `aria-label` naming this
+ * landmark and once as the visible eyebrow. They are the same fact, and a
+ * landmark announcing a different name from the one printed inside it is the
+ * kind of split nobody sees until a screen reader reads it out.
+ */
+const EYEBROW = tenantName(c.eyebrow);
 
 const POINTS = [c.point1, c.point2, c.point3] as const;
 
@@ -57,7 +75,7 @@ const POINTS = [c.point1, c.point2, c.point3] as const;
  */
 export function AuthShowcase() {
   return (
-    <aside className="auth-aside" aria-label={c.eyebrow}>
+    <aside className="auth-aside" aria-label={EYEBROW}>
       {/*
         The scrim is INSIDE this branch, not beside it, and that pairing is the
         one thing worth being careful about here. It exists to make white copy
@@ -93,7 +111,7 @@ export function AuthShowcase() {
 
       <div className="auth-aside__inner">
         <div className="auth-aside__copy">
-          <p className="auth-aside__eyebrow">{c.eyebrow}</p>
+          <p className="auth-aside__eyebrow">{EYEBROW}</p>
           <h2 className="auth-aside__title">{c.title}</h2>
           <p className="auth-aside__body">{c.body}</p>
         </div>

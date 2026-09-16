@@ -1,9 +1,42 @@
 import type { StudentNotification } from '@ayman/contracts/notifications';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
+import { IS_AYMAN } from '../../common/tenant';
 import type { PushPayload } from './push.service';
 
 const c = copy.notifications;
+
+/**
+ * What a message from the instructor is called on a stack that is not his.
+ *
+ * ## Why `IS_AYMAN` here and `tenantName()` everywhere else
+ *
+ * `tenantName(fallback)` swaps a NAME, and it cannot reach inside a sentence.
+ * Every string this file had to gate has the name welded into the middle of
+ * one — «مهندس أيمن بعتلك رسالة», «مهندس أيمن راجع الحل وكتب لك رد.» — so
+ * there is nothing for it to swap. Substitution would not be grammatical even
+ * if it could: a stack that set no `TENANT_DISPLAY_NAME` gets «المنصة», and
+ * «المنصة بعتلك رسالة» inflects the verb for a masculine person.
+ * `lib/seo/metadata.ts` hit this same wall on `copy.seo.defaultTitle` and
+ * answered it the same way — his stack returns the literal byte for byte, and
+ * any other stack gets a different string entirely.
+ *
+ * ## Why this is an existing copy entry and not a sentence written here
+ *
+ * Global Constraint 4 keeps Arabic prose out of modules so the voice has one
+ * place to be edited, and «رسالة جديدة» already exists for exactly this
+ * feature: it is the eyebrow on the dashboard card that announces the very
+ * same message. It says less than his line does — that is the honest cost of a
+ * platform not knowing whose name to sign with, and it is the cost `manifest
+ * .ts` already pays by shipping no icons rather than the wrong face.
+ *
+ * ## Why a push is the worst place to have leaked it
+ *
+ * Every other leak in this product is on a page somebody opens, and a page is
+ * proof-read by whoever opens it. This one is on a LOCK SCREEN: a student who
+ * never unlocks the phone has still been told, by name, who wrote to them.
+ */
+const NEW_MESSAGE = copy.dashboard.instructorMessage.eyebrow;
 
 /**
  * «كتبي» — where all three book-order pushes land.
@@ -161,12 +194,31 @@ export function pushPayloadFor(entry: StudentNotification): PushPayload | null {
         // The mark when there is one, and the reason to open the message when
         // there is not. Never both — a two-line tray entry that repeats itself
         // reads as a bug, same note `course_completed` carries.
+        /*
+         * ⚠️ Both detail lines name the instructor, and on a stack that is not
+         * his the push goes out with the title alone.
+         *
+         * Nothing generic can replace them without lying about who marked the
+         * work — «مهندس أيمن راجع الحل وكتب لك رد.» has exactly one fact in it
+         * beyond what the title already says, and that fact is WHO. The mark,
+         * which is the half a student actually wants, is unaffected: it comes
+         * from `homeworkAcceptedGrade` above and carries no name.
+         *
+         * What is lost on a tenant stack is «والواجب مفتوح تاني» on the
+         * needs-work branch. The title «واجب {lesson} فيه ملاحظات» still says
+         * there are notes, and tapping the push lands on the lesson page where
+         * the upload box is open and `copy.homework.reopened` says so in
+         * place. Saying less in the tray is the price; saying a stranger's
+         * name is not a price this platform pays.
+         */
         body:
           accepted && entry.grade !== null
             ? formatCopy(c.homeworkAcceptedGrade, { grade: entry.grade })
-            : accepted
-              ? c.homeworkAcceptedDetail
-              : c.homeworkNeedsWorkDetail,
+            : !IS_AYMAN
+              ? ''
+              : accepted
+                ? c.homeworkAcceptedDetail
+                : c.homeworkNeedsWorkDetail,
         url: `/courses/${entry.courseSlug}/lessons/${entry.lessonId}`,
         tag: `ayman-homework-${entry.submissionId}`,
       };
@@ -195,7 +247,11 @@ export function pushPayloadFor(entry: StudentNotification): PushPayload | null {
     */
     case 'instructor_message':
       return {
-        title: c.instructorMessage,
+        // ⚠️ The ONE kind on this list whose title is a person's name, and the
+        // one that reaches a locked phone by design — see `NEW_MESSAGE`.
+        // `instructorMessagePushDetail` below («افتح المنصة تقراها وترد عليه»)
+        // names nobody and is shipped unchanged on every stack.
+        title: IS_AYMAN ? c.instructorMessage : NEW_MESSAGE,
         body: c.instructorMessagePushDetail,
         // The thread lives in the assistant widget — a `/conversations/:id`
         // route would give the student two inboxes for one conversation, the

@@ -286,8 +286,38 @@ export const credentialLogos: Record<string, BrandAsset | undefined> = {
   avnology: { src: '/brand/logos/avnology.webp', width: 395, height: 96 },
 };
 
+/**
+ * ⚠️ `aymanOnly()`, for the same reason `getBrandAsset()` higher up this file
+ * has one — this is the registry's OTHER reader, and it was a bare lookup.
+ *
+ * These six marks are not the platform's furniture. They are HIS CV: the
+ * university that taught him, the two companies that employed him, and the
+ * student communities his university students came from. A logo is a claim of
+ * relationship, and it is a stronger claim than a sentence is — `MTI`,
+ * `Avnology` and `CCR` assert an employment history that belongs to one man,
+ * and Google's, Microsoft's and IEEE's registered marks assert an association
+ * with organisations that have never heard of this deployment. Rendered under
+ * «درّس لمين؟» on a second instructor's `/about`, every one of them is a
+ * statement about that instructor which is not true, made in somebody else's
+ * trademark.
+ *
+ * `undefined` is a state this file's one consumer has always handled:
+ * `<CredentialMark>` in `about-instructor.tsx` draws the monogram tile it
+ * already ships for an id with no file — same height, same plate, set in the
+ * platform's own type. Nothing else had to change, exactly as with
+ * `getBrandAsset()`.
+ *
+ * ⚠️ AND THAT IS ONLY HALF THE LEAK. The monogram tile prints `mark.short` and
+ * `mark.name`, which come from `copy.landing.aboutCredits` and are the
+ * organisations' NAMES — so a non-Ayman stack stops showing Google's logo and
+ * starts showing the word "Google" in a résumé rail that is still his. This
+ * gate removes the trademark, not the claim; the rail itself has to be gated
+ * where it is rendered, in `components/site/about-instructor.tsx`, which is
+ * outside this file and is recorded here so the next reader does not mistake
+ * a half-closed leak for a closed one.
+ */
 export function getCredentialLogo(id: string): BrandAsset | undefined {
-  return credentialLogos[id];
+  return aymanOnly(credentialLogos[id]);
 }
 
 /* -------------------------------------------------------------------------- */

@@ -7,8 +7,38 @@ import { SiteFaq } from '@/components/site/site-faq';
 import { JsonLd } from '@/components/seo/json-ld';
 import { PERSON_ID, SITE_URL, breadcrumbJsonLd, faqPageJsonLd } from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
+import { tenantName } from '@/lib/tenant';
+import { tenantFaq, tenantSentence } from '@/lib/tenant-copy';
 
 const c = copy.landing;
+
+/**
+ * The page's subject, resolved ONCE through the tenant gate.
+ *
+ * `aboutPageTitle` is the bare name — the one string on this page `tenantName()`
+ * can swap whole — and it is printed three times: as the `<h1>`, as the
+ * `ProfilePage`'s `name`, and as the last crumb in the breadcrumb. Those three
+ * are read by a person, by a crawler and by a rich result respectively, and a
+ * page whose heading and whose structured data disagree about who it is about
+ * is worse than either being wrong on its own. One const, three reads, the same
+ * reasoning `lib/seo/metadata.ts` gives for `SITE_SHORT_NAME`.
+ */
+const ABOUT_TITLE = tenantName(c.aboutPageTitle);
+
+/**
+ * The FAQ, with the name swapped out of the questions, mapped ONCE.
+ *
+ * ⚠️ It is deliberately not mapped twice. The `<JsonLd>` below and `<SiteFaq>`
+ * beside it must be handed the SAME rows — the warning further down says so in
+ * as many words, because `FAQPage` markup describing a question the page does
+ * not ask is the one failure here worse than shipping no structured data at
+ * all. Two `tenantFaq()` calls would be two lists that only happen to match.
+ *
+ * Only the first row names him («ليه أذاكر … مع أيمن أبو العلا بالذات؟») today;
+ * the mapping covers every row and both fields so that a future edit to any
+ * answer cannot reintroduce the leak silently.
+ */
+const ABOUT_FAQ = tenantFaq(c.aboutFaq);
 
 export async function generateMetadata(): Promise<Metadata> {
   return buildMetadata({
@@ -26,9 +56,18 @@ export async function generateMetadata(): Promise<Metadata> {
      * an MP shares it and dominates the results — so the role is what tells a
      * searcher and a crawler which أيمن أبو العلا this page is about, and it is
      * the half that matches an unbranded query.
+     *
+     * Both lines go through `tenantSentence()`, because neither IS the name —
+     * both weld it into a sentence: «أيمن أبو العلا — مدرّس البرمجة والذكاء
+     * الاصطناعي للبكالوريا» and «مين أيمن أبو العلا؟ مهندس بيدرّس…». Everything
+     * above stays true of the swapped version: the name still leads and the
+     * role still follows, so the half that matches an unbranded query survives
+     * the gate untouched. Only WHOSE name leads changes — which on a second
+     * instructor's domain is the whole point, because this page exists to be
+     * the one that ranks for the person whose deployment it is.
      */
-    title: c.aboutPageRoleTitle,
-    description: c.aboutPageDescription,
+    title: tenantSentence(c.aboutPageRoleTitle),
+    description: tenantSentence(c.aboutPageDescription),
     path: '/about',
   });
 }
@@ -78,8 +117,8 @@ export default function AboutPage() {
           '@type': 'ProfilePage',
           '@id': `${SITE_URL}/about#webpage`,
           url: `${SITE_URL}/about`,
-          name: c.aboutPageTitle,
-          description: c.aboutPageDescription,
+          name: ABOUT_TITLE,
+          description: tenantSentence(c.aboutPageDescription),
           inLanguage: 'ar',
           mainEntity: { '@id': PERSON_ID },
         }}
@@ -87,14 +126,14 @@ export default function AboutPage() {
       <JsonLd
         data={breadcrumbJsonLd([
           { name: copy.course.breadcrumbHome, path: '/' },
-          { name: c.aboutPageTitle, path: '/about' },
+          { name: ABOUT_TITLE, path: '/about' },
         ])}
       />
 
       <header className="page-head site-shell">
         {/* The `<h1>` is the name alone. Everything a crawler weighs most —
             title, h1, first paragraph — says the same thing the query does. */}
-        <h1 className="page-title">{c.aboutPageTitle}</h1>
+        <h1 className="page-title">{ABOUT_TITLE}</h1>
         <p className="site-lead">{c.aboutPageLead}</p>
       </header>
 
@@ -123,8 +162,8 @@ export default function AboutPage() {
         is ever filtered or truncated, the markup has to take the same list, not
         `aboutFaq` again.
       */}
-      <JsonLd data={faqPageJsonLd(c.aboutFaq)} />
-      <SiteFaq title={c.aboutFaqTitle} eyebrow={c.aboutFaqEyebrow} rows={[...c.aboutFaq]} />
+      <JsonLd data={faqPageJsonLd(ABOUT_FAQ)} />
+      <SiteFaq title={c.aboutFaqTitle} eyebrow={c.aboutFaqEyebrow} rows={ABOUT_FAQ} />
 
       <section className="site-section">
         <div className="site-shell" style={{ textAlign: 'center' }}>

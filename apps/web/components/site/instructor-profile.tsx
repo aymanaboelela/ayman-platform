@@ -4,8 +4,28 @@ import { getCatalogOrEmpty } from '@/lib/catalog';
 import { MediaSlot } from '@/components/site/media-slot';
 import { ProfileCourses } from '@/components/site/instructor-profile-courses';
 import { DEMO_COURSES } from '@/lib/demo-courses';
+import { tenantName } from '@/lib/tenant';
 
 const c = copy.landing;
+
+/**
+ * Whose profile this is, through the gate, read once for both places it shows.
+ *
+ * The section is a profile CARD — the face, the name, the counts, the work
+ * below — and `<MediaSlot kind="portrait">` already drops the photograph on any
+ * stack but his, because `getBrandAsset()` answers `undefined` for a personal
+ * kind and the slot draws its composed stand-in instead. That made this the
+ * worst-shaped leak left on the landing page: the picture was gone, so the
+ * section looked de-Aymanized, and the `<h2>` under the empty plate went on
+ * printing «المهندس أيمن أبو العلا» over another instructor's course grid and
+ * another instructor's student count.
+ *
+ * The `alt` takes the same const rather than the raw copy string: the slot's
+ * fallback is rendered with it too, so leaving it raw would have kept his name
+ * in the accessibility tree of the very element whose whole job here is to not
+ * be him.
+ */
+const INSTRUCTOR_NAME = tenantName(copy.site.instructor);
 
 /**
  * The instructor as a PROFILE — avatar, tier, a row of counts, and his courses
@@ -71,10 +91,10 @@ export async function InstructorProfile() {
           </div>
 
           <div className="profile__avatar">
-            <MediaSlot kind="portrait" alt={copy.site.instructor} sizes="10rem" />
+            <MediaSlot kind="portrait" alt={INSTRUCTOR_NAME} sizes="10rem" />
           </div>
 
-          <h2 className="profile__name">{copy.site.instructor}</h2>
+          <h2 className="profile__name">{INSTRUCTOR_NAME}</h2>
           <p className="profile__role">{c.profileRole}</p>
 
           <dl className="profile__stats">

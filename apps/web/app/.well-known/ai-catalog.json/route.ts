@@ -2,6 +2,7 @@ import { copy } from '@ayman/contracts';
 import { AGENT_DISCOVERY_PATHS, absoluteDiscoveryUrl } from '@/lib/agents/discovery';
 import { markdownTwinPath } from '@/lib/agents/markdown-routes';
 import { SITE_URL } from '@/lib/seo/jsonld';
+import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { IS_AYMAN, tenantName } from '@/lib/tenant';
 
 /**
@@ -58,7 +59,23 @@ export function GET(): Response {
     specVersion: '0.1',
     host: {
       name: tenantName(copy.site.platformName),
-      description: copy.seo.description,
+      /*
+       * ⚠️ `SITE_DESCRIPTION`, not `copy.seo.description` — the line above was
+       * gated and this one was not, which is the whole shape of the bug: the
+       * two sit in the same object literal, are read by the same registry, and
+       * one of them said «منصة أيمن أبو العلا» while the other said «منصة
+       * المهندس أيمن أبو العلا لتعليم…». A reviewer's eye stops at the gated
+       * call.
+       *
+       * It is imported rather than re-composed because `host.description` and
+       * the `<meta name="description">` are the same claim about the same site,
+       * made to a crawler and to an agent registry: two independently written
+       * versions is how they start disagreeing, and this one is the copy that
+       * gets EMBEDDED — a registry turns it into a vector and answers questions
+       * with it, so a wrong name here is not read once and forgotten, it is
+       * what the model recalls about this domain.
+       */
+      description: SITE_DESCRIPTION,
       url: SITE_URL,
       inLanguage: 'ar',
     },

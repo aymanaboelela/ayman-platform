@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { copy } from '@ayman/contracts';
 import { buildMetadata } from '@/lib/seo/metadata';
+import { tenantName } from '@/lib/tenant';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { isFreeCourse } from '@/lib/price';
 import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
@@ -106,7 +107,21 @@ export async function generateMetadata({
      * like a machine wrote it. They go in the page's `alternateName` instead —
      * see the `CollectionPage` node below.
      */
-    description: `كورسات ${YEAR_TITLES[year]} — ${yearAliasesAr(year)[1] ?? YEAR_TITLES[year]} — في البرمجة والذكاء الاصطناعي على ${copy.site.platformName}: شرح بالفيديو، تمرين واختبار على كل درس.`,
+    /*
+     * ⚠️ `tenantName()` on the platform name. Everything else in this sentence
+     * is the curriculum — a year label and the way students spell it — and is
+     * true of any deployment teaching it; the last clause named HIS platform,
+     * and Google renders a description verbatim, so a second instructor's year
+     * pages advertised «منصة أيمن أبو العلا» in the snippet under their own
+     * blue link. Three pages, one per year, on the highest-intent queries the
+     * catalogue has.
+     *
+     * Interpolated rather than swapped whole: the platform name is one clause
+     * of a composed sentence, so the gate goes around the clause. See
+     * `lib/seo/metadata.ts` for why `copy.seo.description` could not be done
+     * this way and had to be rebuilt instead.
+     */
+    description: `كورسات ${YEAR_TITLES[year]} — ${yearAliasesAr(year)[1] ?? YEAR_TITLES[year]} — في البرمجة والذكاء الاصطناعي على ${tenantName(copy.site.platformName)}: شرح بالفيديو، تمرين واختبار على كل درس.`,
     path: `/years/${year}`,
   });
 }

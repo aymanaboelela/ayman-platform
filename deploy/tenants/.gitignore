@@ -1,0 +1,29 @@
+# ⚠️ EVERY FILE IN THIS DIRECTORY IS A LIVE TENANT'S SECRETS. NONE OF THEM
+# MAY EVER BE COMMITTED.
+#
+# `docs/runbooks/new-tenant.md` §6 tells the operator to run the preflight
+# against `deploy/tenants/<slug>.env`, and the directory did not exist — so the
+# documented command failed with "cannot read", and an operator who created the
+# file to make it work was creating an UNIGNORED file inside the repository.
+#
+# The repository root `.gitignore` does not save them, and it is worth being
+# precise about why, because it looks like it should: it ignores `.env` (that
+# exact name) and `.env.*` (names STARTING with `.env.`). `mohamed-hassan.env`
+# matches neither pattern. So `git add -A` would have staged POSTGRES_PASSWORD,
+# RUNTIME_PASSWORD, BETTER_AUTH_SECRET, WA_TOKEN and the first admin's password
+# for a live platform, and `gitleaks` — which scans every branch of this repo on
+# every open PR — would then fail the check on all of them until the history was
+# rewritten.
+#
+# `*` then `!.gitignore` rather than a root-level rule: the guard lives in the
+# directory it guards, so it travels with the path the runbook prints and a
+# reader who opens the folder sees the rule. It is also what makes the empty
+# directory exist in git at all — this file is the only thing in it that is
+# tracked.
+#
+# The file itself is still a scratch copy of what goes into Dokploy's
+# Environment tab, not a source of truth. Delete it once the stack is up; the
+# values live in Dokploy, and a second copy of a password on a laptop is a
+# second place it can leak from.
+*
+!.gitignore

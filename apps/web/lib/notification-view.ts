@@ -4,6 +4,7 @@ import type { StudentNotification } from '@ayman/contracts/notifications';
 import { ASSISTANT_OPEN_PARAM } from './assistant-mount';
 import { MY_BOOK_ORDERS_HREF } from './book-order-view';
 import { reviewHref } from './quiz-links';
+import { IS_AYMAN } from './tenant';
 
 /**
  * Turning a notification row into a sentence and a destination.
@@ -33,6 +34,40 @@ export interface NotificationView {
 
 const c = copy.notifications;
 
+/**
+ * What a message from the instructor is called on a stack that is not his —
+ * the gate for every row in this file that names him.
+ *
+ * ## Why `IS_AYMAN` and not `tenantName()`
+ *
+ * `tenantName(fallback)` swaps a NAME and cannot reach inside a sentence.
+ * Every line gated below has the name welded into the middle of one —
+ * «مهندس أيمن ردّ على سؤالك», «مهندس أيمن شاف نتيجتك», «باقي {marks} درجة عند
+ * مهندس أيمن» — so there is nothing for it to substitute, and a stack with no
+ * `TENANT_DISPLAY_NAME` would in any case be putting «المنصة» in front of a
+ * verb inflected for a masculine person. `lib/seo/metadata.ts` hit the same
+ * wall on `copy.seo.defaultTitle` and answered it the same way: his stack
+ * returns the literal byte for byte, any other stack gets a different string.
+ *
+ * ## Why it is an existing copy entry
+ *
+ * «رسالة جديدة» is already the eyebrow on the dashboard card that announces
+ * this very message (`copy.dashboard.instructorMessage`), so nothing new is
+ * written here — Global Constraint 4 keeps the voice in one place, and a
+ * sentence invented in a lib module is a second place.
+ *
+ * ⚠️ WHAT IT COSTS, stated plainly: a tenant's four per-kind lead-ins («شاف
+ * نتيجتك», «فاكرك بالكويز», «بعتلك كلمتين», «عازمك على جروب الواتساب») all
+ * collapse to this one line, and the per-kind distinction — which exists so a
+ * student can tell at a glance whether a message is worth opening now — is
+ * gone on their stack. The fix that would restore it is not available from
+ * here: it needs `{instructor}` placeholders in `copy/ar.ts`, the way
+ * `copy/outreach.ts` now carries one, plus a `tenant.ts` that can say whether
+ * this deployment has a REAL name rather than the «المنصة» placeholder. Until
+ * then, less is the safe direction.
+ */
+const NEW_MESSAGE = copy.dashboard.instructorMessage.eyebrow;
+
 export function describeNotification(entry: StudentNotification): NotificationView {
   switch (entry.kind) {
     case 'quiz_graded':
@@ -55,9 +90,24 @@ export function describeNotification(entry: StudentNotification): NotificationVi
       if (entry.pendingOutOf > 0) {
         return {
           title: c.quizGradedPartial,
-          detail: formatCopy(c.quizGradedPartialDetail, {
-            marks: formatMark(entry.pendingOutOf),
-          }),
+          /*
+           * ⚠️ «باقي {marks} درجة عند مهندس أيمن» — the name is the last word
+           * of the sentence, and dropping the qualifier drops the outstanding
+           * mark count with it on a tenant's stack.
+           *
+           * Accepted, because the title above («سلّمت الامتحان — الاختياري
+           * اتصحّح») already says the essay half is still coming, and the
+           * results screen states the exact number where the student acts on
+           * it — `copy.quiz.pendingRowMeta` and `pendingWillArrive`, neither
+           * of which names anyone. A row that said «باقي ٥٠ درجة عند مهندس
+           * أيمن» to another instructor's student is a receipt for a paper
+           * marked by someone who has never seen it.
+           */
+          detail: IS_AYMAN
+            ? formatCopy(c.quizGradedPartialDetail, {
+                marks: formatMark(entry.pendingOutOf),
+              })
+            : null,
           subtitle: entry.lessonTitle,
           href: reviewHref(entry.lessonId, entry.attemptId),
         };
@@ -85,7 +135,11 @@ export function describeNotification(entry: StudentNotification): NotificationVi
 
     case 'conversation_reply':
       return {
-        title: c.conversationReply,
+        // «مهندس أيمن ردّ على سؤالك» — a name and a verb inflected for him.
+        // The subtitle below is `copy.assistant.title` («مساعد المنصة»), which
+        // names nobody, so a tenant's row still reads as "a new message, in
+        // the assistant" and the thread behind the tap is the reply itself.
+        title: IS_AYMAN ? c.conversationReply : NEW_MESSAGE,
         detail: null,
         subtitle: copy.assistant.title,
         /*
@@ -104,9 +158,19 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         // An unknown kind — a row written by a newer deployment mid-release —
         // falls back to the generic line rather than being dropped: a message
         // from the instructor is the last thing this feed should swallow.
-        title: INSTRUCTOR_LEAD_INS[entry.outreachKind] ?? c.instructorMessage,
+        // ⚠️ All five of these name him — the four per-kind lead-ins and the
+        // generic fallback alike — so the whole lookup is behind the gate
+        // rather than each entry of it. See `NEW_MESSAGE` for what a tenant
+        // loses and why the alternative is worse.
+        title: IS_AYMAN
+          ? (INSTRUCTOR_LEAD_INS[entry.outreachKind] ?? c.instructorMessage)
+          : NEW_MESSAGE,
         detail: null,
-        subtitle: copy.assistant.thread.title,
+        // «محادثتك مع مهندس أيمن» names him too. `copy.assistant.title`
+        // («مساعد المنصة») is where the thread lives on any stack and is what
+        // the `conversation_reply` row above already uses as its subtitle, so
+        // a tenant's two message rows stay consistent with each other.
+        subtitle: IS_AYMAN ? copy.assistant.thread.title : copy.assistant.title,
         // Same destination as a reply, and for the same reason: the thread
         // lives in the widget, and a `/conversations/:id` route would give the
         // student two inboxes showing one conversation.
@@ -295,12 +359,20 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         }),
         // The mark when there is one — «مقبول من غير درجة» is the ordinary
         // case, and then the qualifier says what to do instead.
+        //
+        // ⚠️ Both of those qualifiers open with his name, and the one fact
+        // they add beyond the title is WHO marked the work — which is exactly
+        // what a tenant's stack cannot say. Gated to `null` there, the same
+        // way `push-text.ts` drops the push body; the mark itself comes from
+        // `homeworkAcceptedGrade` and names nobody.
         detail:
           accepted && entry.grade !== null
             ? formatCopy(c.homeworkAcceptedGrade, { grade: entry.grade })
-            : accepted
-              ? c.homeworkAcceptedDetail
-              : c.homeworkNeedsWorkDetail,
+            : !IS_AYMAN
+              ? null
+              : accepted
+                ? c.homeworkAcceptedDetail
+                : c.homeworkNeedsWorkDetail,
         subtitle: entry.lessonTitle,
         href: `/courses/${entry.courseSlug}/lessons/${entry.lessonId}`,
       };

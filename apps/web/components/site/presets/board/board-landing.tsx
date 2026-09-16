@@ -173,6 +173,24 @@ export default async function BoardLanding({
  * so they qualify only when the admin actually wrote one. The three
  * placement-only types always qualify: their headings come from the shared
  * copy table, so they cannot be blank.
+ *
+ * ## ⚠️ `yearTracks` qualifies HERE and does not on «الترمينال»
+ *
+ * The two presets answer this question differently about the same block, and
+ * that is a fact about the components rather than an oversight in one of the
+ * predicates. `<BoardYears>` falls back to `FALLBACK_YEARS` and always draws
+ * its `<BoardHeading>`, so an empty catalogue is an empty BODY under a heading
+ * that is already on the page. `<NeonTracks>` returns `null` outright on an
+ * empty catalogue — deliberately, so a new stack never shows two «لسه فاضي»
+ * panels in a row — which is why `hasHeading` in `neon-landing.tsx` refuses
+ * it, and why that preset could render a page with no `<h1>` at all until it
+ * did.
+ *
+ * The rule both files follow: this may only say `true` about a section that
+ * CANNOT stand down. `board-landing.test.tsx` renders every type trusted here
+ * with empty data and asserts an `<h1>` actually comes out, so the claim is
+ * checked rather than believed — asserting which section was handed `level={1}`
+ * is not the same assertion and would have passed either way.
  */
 function ownsPageHeading(block: HomeBlock): boolean {
   const { props } = block;

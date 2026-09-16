@@ -5,6 +5,7 @@ import { copy } from '@ayman/contracts';
 import { BrandLockup } from '@/components/brand-lockup';
 import { AuthShowcase } from '@/components/auth/auth-showcase';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
+import { tenantName } from '@/lib/tenant';
 import './auth.css';
 import { AssistantSlot } from '@/components/assistant/assistant-slot';
 
@@ -45,7 +46,21 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     <div className="auth-shell">
       <main className="auth-pane">
         <div className="auth-pane__inner">
-          <Link href="/" className="auth-brand-link" aria-label={copy.site.name}>
+          {/*
+            `tenantName()`. The lockup inside this link already gates itself —
+            `<BrandLockup>` reads the name through the same call and falls back
+            to a monogram when `getBrandAsset('mark')` hands it nothing — but the
+            LABEL on the link wrapping it did not, and an `aria-label` is the
+            one piece of a page that never shows up in a screenshot review.
+
+            So /login and /register, the two screens every student on every
+            deployment sees before they know whose platform they are on, read
+            correctly to a sighted visitor and announced «أيمن أبو العلا» to a
+            screen-reader user. That is also why this is a NAME gate and not an
+            asset one: React does not re-patch attribute mismatches during
+            hydration, so an attribute is safe to decide at module load.
+          */}
+          <Link href="/" className="auth-brand-link" aria-label={tenantName(copy.site.name)}>
             <BrandLockup />
           </Link>
           {children}

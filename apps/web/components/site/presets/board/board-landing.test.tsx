@@ -269,6 +269,70 @@ describe('BoardLanding — the page heading', () => {
     expect(heading).toBeTruthy();
     expect((heading!.props as { className?: string }).className).toBe('sr-only');
   });
+
+  /**
+   * ⚠️ THE EFFECT, NOT THE MECHANISM — and the reason this block exists.
+   *
+   * Every case above asserts which section was HANDED `level={1}`. That is a
+   * property of the element tree and it is exactly as true when the section
+   * hands `level` straight to a component that renders nothing: the page then
+   * has a heading owner and no `<h1>`, and the `sr-only` fallback above does
+   * not fire, because a candidate was found.
+   *
+   * «الترمينال» shipped with precisely that hole. Its `hasHeading` returned
+   * `true` for `books` (`titleAr` is `.min(2)`, so always) and for
+   * `yearTracks` (placement-only, so unconditionally), while `<NeonBooks>`
+   * stands down on an empty shop and `<NeonTracks>` stands down on an empty
+   * catalogue — the day-one state of every new stack. Nothing caught it,
+   * because nothing asked whether an `<h1>` came out.
+   *
+   * So: every type `ownsPageHeading` trusts is rendered here at `level={1}`
+   * with the EMPTIEST data it can be given, and asked for its `<h1>`. The four
+   * below are the ones whose output depends on a loader; the rest build their
+   * heading from props this function has already checked are non-empty.
+   */
+  describe('every type it trusts really does produce an h1 when the data is empty', () => {
+    it('BoardCourses — an empty catalogue keeps the heading above the empty state', async () => {
+      const { container } = render(
+        await BoardCourses({ title: 'الكورسات', lead: '', ctaLabel: '', limit: 3, courseIds: [], level: 1 }),
+      );
+
+      expect(container.querySelector('h1')?.textContent).toBe('الكورسات');
+    });
+
+    /** `<BoardYears>` falls back to `FALLBACK_YEARS`, so it never stands down
+     *  — which is the single fact that lets `ownsPageHeading` trust
+     *  `yearTracks` where «الترمينال» must not. Pinned here so removing that
+     *  fallback fails a test instead of deleting the page's heading. */
+    it('BoardYears — the two fallback tiles still come under an h1', async () => {
+      const { container } = render(await BoardYears({ level: 1 }));
+
+      expect(container.querySelector('h1')).toBeTruthy();
+    });
+
+    it('BoardHonors — an empty board still has its heading', () => {
+      const { container } = render(<BoardHonors entries={[]} level={1} />);
+
+      expect(container.querySelector('h1')).toBeTruthy();
+    });
+
+    it('BoardInstructor — no catalogue, still an h1', async () => {
+      const { container } = render(await BoardInstructor({ level: 1 }));
+
+      expect(container.querySelector('h1')).toBeTruthy();
+    });
+
+    /** The counterexample, and the reason `books` is excluded: this renders
+     *  nothing at all, so a page that gave it the h1 would have none. */
+    it('BoardBooks — renders nothing on an empty shop, which is why it may not own the h1', async () => {
+      const { container } = render(
+        await BoardBooks({ title: 'الكتب', lead: '', ctaLabel: '', limit: 3, level: 1 }),
+      );
+
+      expect(container.querySelector('h1')).toBeNull();
+      expect(container.firstChild).toBeNull();
+    });
+  });
 });
 
 describe('BoardCourses — the empty catalogue', () => {

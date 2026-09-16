@@ -1,6 +1,5 @@
 import type { MetadataRoute } from 'next';
-import { copy } from '@ayman/contracts';
-import { SITE_SHORT_NAME, SITE_TITLE } from '@/lib/seo/metadata';
+import { SITE_DESCRIPTION, SITE_SHORT_NAME, SITE_TITLE } from '@/lib/seo/metadata';
 import { IS_AYMAN } from '@/lib/tenant';
 
 /**
@@ -51,7 +50,19 @@ export default function manifest(): MetadataRoute.Manifest {
      */
     name: SITE_TITLE,
     short_name: SITE_SHORT_NAME,
-    description: copy.seo.description,
+    /*
+     * ⚠️ `SITE_DESCRIPTION` — the same import as the two lines above it, and
+     * for the third time the same reason. `description` was the one field in
+     * this object still reading `copy` directly, so a second deployment's
+     * manifest carried its own name, its own short name, and «منصة المهندس
+     * أيمن أبو العلا لتعليم…» underneath them.
+     *
+     * Not cosmetic on this surface in particular: Chrome shows the manifest
+     * description in the install prompt and Play's "install app" sheet reads
+     * it, so it is the sentence a student sees at the exact moment they decide
+     * to put the icon on their home screen.
+     */
+    description: SITE_DESCRIPTION,
     start_url: '/',
     display: 'standalone',
     // Matches the `viewport.themeColor` light value in the root layout. A

@@ -44,6 +44,11 @@
  * him everywhere else on the platform, and a message signed with the bare
  * first name reads like it came from a system that only has a database column.
  *
+ * ⚠️ That spelling now lives in `OUTREACH_SIGNATURE` below and reaches a
+ * message through the `{instructor}` placeholder, never as a literal inside a
+ * pool entry — because this file is read by EVERY instructor's stack. See the
+ * docblock on that constant.
+ *
  * **4. Nothing here knows whether it is talking to a boy or a girl.** The
  * platform never asks, so every line that inflected — «عامل إيه»، «إنت فاهم»،
  * «متقلقش»، «راجع الحاجات دي» — was addressing a male student and telling
@@ -75,7 +80,8 @@
  * ## Placeholders
  *
  * `{name}` first name · `{quiz}` quiz title · `{lesson}` lesson title
- * `{score}` integer percent · `{topics}` an already-joined Arabic list.
+ * `{score}` integer percent · `{topics}` an already-joined Arabic list ·
+ * `{instructor}` whoever is sending, see `OUTREACH_SIGNATURE`.
  * Filled by `formatCopy`, never by concatenation.
  */
 
@@ -84,12 +90,62 @@ export const OUTREACH_BANDS = ['excellent', 'strong', 'fair', 'weak'] as const;
 export type OutreachBand = (typeof OUTREACH_BANDS)[number];
 
 /**
+ * How the sender introduces himself in the ONE greeting that names him —
+ * «إزيك يا {name}، أنا مهندس أيمن» — and the FALLBACK the caller hands
+ * `tenantName()`, never the value a message actually uses.
+ *
+ * ## The bug this constant exists to close
+ *
+ * This string used to sit inside `OUTREACH_GREETINGS` as a literal, and
+ * `compose.ts` had no gate of any kind. `OutreachService.deliver` and the
+ * admin preview both call the composer, both persist and send what comes back,
+ * and the greeting pool is drawn from uniformly — so roughly ONE AUTOMATED
+ * MESSAGE IN EIGHT from every instructor's platform introduced itself to their
+ * student as Ayman. Not a link to the wrong person, not a photograph a reader
+ * might not recognise: a first-person claim, in a chat thread, signed.
+ *
+ * ## Why it is the short «مهندس أيمن» and not `copy.site.instructor`
+ *
+ * `copy.site.instructor` is «المهندس أيمن أبو العلا» — the form the JSON-LD
+ * `Person` node and the page titles want. Substituting THAT here would change
+ * what his live students read, from «أنا مهندس أيمن» to «أنا المهندس أيمن أبو
+ * العلا», which is a three-word self-introduction turning into a byline. His
+ * stack has to stay byte-identical, so the fallback is the exact spelling that
+ * shipped, kept in the copy table where rule 3 in the header already governs
+ * it, rather than a near-miss borrowed from another block.
+ *
+ * ## Why the value is passed IN rather than read here
+ *
+ * `packages/contracts` is imported by the browser bundle as well as the API,
+ * and the two gate modules (`apps/web/lib/tenant.ts`, `apps/api/src/common/
+ * tenant.ts`) are deliberately outside it. A `process.env.TENANT_KEY` read
+ * inside this package would be the worst possible place for one: it would have
+ * to fail OPEN in any context where the variable is not inlined (`TENANT_KEY`
+ * is only inlined into web client code because `next.config.ts` lists it under
+ * `env:`, and nothing guarantees that for the next consumer), and failing open
+ * here means printing his name. It would also cost `composeOutreach` its
+ * purity, which its own header argues is what makes the admin preview honest
+ * and a retried delivery idempotent — a composer that reads the environment
+ * composes a different message in a different process.
+ *
+ * So `compose.ts` takes `instructorName` as an ordinary input and the two API
+ * callers, which CAN import the gate, pass `tenantName(OUTREACH_SIGNATURE)`.
+ *
+ * ⚠️ A stack that set no `TENANT_DISPLAY_NAME` gets «المنصة» here, so this one
+ * greeting reads «إزيك يا محمد، أنا المنصة» — stilted, and deliberately
+ * preferred to the alternative. `scripts/check-tenant-env.mjs` already warns on
+ * exactly that unset variable, so a stilted sentence is a bug report somebody
+ * files; his name on a stranger's platform is not.
+ */
+export const OUTREACH_SIGNATURE = 'مهندس أيمن';
+
+/**
  * Opens every message, whatever the kind.
  *
  * Deliberately short and deliberately varied in FORM, not just wording — some
- * lead with the name, some end with it, one names him. A pool where every
- * entry is «إزيك يا {name}» with a different emoji is not variety, it is the
- * same sentence wearing hats.
+ * lead with the name, some end with it, one introduces the sender. A pool
+ * where every entry is «إزيك يا {name}» with a different emoji is not variety,
+ * it is the same sentence wearing hats.
  *
  * Two entries that were here are gone and both for reasons worth keeping:
  *
@@ -104,7 +160,9 @@ export const OUTREACH_GREETINGS = [
   'إزيك يا {name} 👋',
   'أهلاً يا {name}',
   'السلام عليكم ورحمة الله وبركاته يا {name}، أخبارك إيه؟',
-  'إزيك يا {name}، أنا مهندس أيمن',
+  // `{instructor}`, not a literal: on Ayman's stack `formatCopy` puts
+  // `OUTREACH_SIGNATURE` back and this is the same sentence it always was.
+  'إزيك يا {name}، أنا {instructor}',
   '{name}، أخبارك إيه؟',
   'يا {name}، إزيك؟',
   '{name}، إزي حالك؟',

@@ -6,6 +6,7 @@ import { SAME_AS } from '@ayman/contracts/site-profiles';
 import { mediaUrl } from '@ayman/ui/branding';
 import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
 import { aymanOnly, IS_AYMAN, tenantName } from '@/lib/tenant';
+import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 
 /*
@@ -513,7 +514,7 @@ export function organizationJsonLd(
     name: tenantName(copy.site.platformName),
     ...(ALTERNATE_NAMES ? { alternateName: ALTERNATE_NAMES } : {}),
     url: SITE_URL,
-    description: copy.seo.description,
+    description: SITE_DESCRIPTION,
     slogan: copy.site.tagline,
     ...(INSTRUCTOR_IMAGE ? { image: INSTRUCTOR_IMAGE, logo: INSTRUCTOR_IMAGE } : {}),
     founder: { '@id': PERSON_ID },
@@ -543,7 +544,7 @@ export function webSiteJsonLd() {
     name: tenantName(copy.site.platformName),
     ...(ALTERNATE_NAMES ? { alternateName: ALTERNATE_NAMES } : {}),
     url: SITE_URL,
-    description: copy.seo.description,
+    description: SITE_DESCRIPTION,
     inLanguage: 'ar',
     publisher: { '@id': ORGANIZATION_ID },
   } as const;

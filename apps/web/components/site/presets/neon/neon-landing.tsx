@@ -101,10 +101,13 @@ export default async function NeonLanding({
    *
    * So the level is decided once, here, and passed down. The hero owns the h1
    * whenever a hero exists (it is the page's title either way). Otherwise the
-   * first block that renders a heading takes it. And if the tenant has
-   * published a page of nothing but placement blocks with no heading of their
-   * own — possible, if unlikely — `<NeonSteps>` at the foot takes it, which is
-   * why `stepsLevel` is computed rather than hardcoded to 2.
+   * first block that will CERTAINLY render a heading takes it — «certainly» is
+   * the load-bearing word and `hasHeading` is where it is argued, because two
+   * types used to say yes here and then render nothing at all on a stack with
+   * an empty catalogue or an empty shop. And if no block qualifies,
+   * `<NeonSteps>` at the foot takes it, which is why `stepsLevel` is computed
+   * rather than hardcoded to 2: it is the only section on this page that is
+   * rendered unconditionally, so it is the only honest backstop.
    *
    * A section is NOT trusted to work this out from its own props: two `hero`
    * blocks would then be two `<h1>`s, and every one of them would be sure it
@@ -152,32 +155,88 @@ export default async function NeonLanding({
 }
 
 /**
- * Does this block render a heading a reader could hang the page's title on?
+ * Will this block CERTAINLY render a heading?
  *
- * Only asked when there is no `hero`. The three placement blocks always do —
- * their headings are this preset's own (`«اختار صفّك»`, `«مين اللي بيشرح؟»`,
- * `«لوحة الشرف»`) and cannot be blank. The content blocks depend on what an
- * editor typed: `StatsPropsSchema.titleAr`, `TestimonialsPropsSchema.titleAr`
- * and `FaqPropsSchema.titleAr` all default to `''`, and a section whose title
- * is empty renders no heading element at all, so it cannot be the h1.
+ * Only asked when there is no `hero`, and it has to be pessimistic: a `true`
+ * that turns out to be wrong is a landing page with no `<h1>` at all, which is
+ * the one failure this whole mechanism exists to prevent. `<NeonSteps>` at the
+ * foot is the backstop — it always renders and it takes `level={1}` when
+ * nothing here says yes — so being wrong in the cautious direction costs a
+ * slightly flatter outline, and being wrong in the confident direction costs
+ * the page its heading.
+ *
+ * ## ⚠️ «renders a section» and «renders a heading» are not the same question
+ *
+ * Two types said `true` here and then rendered NOTHING, and both are states a
+ * brand-new instructor is in on day one:
+ *
+ * · **`books`** — `BooksPropsSchema.titleAr` is `.min(2)`, so the title is
+ *   never blank and this returned `true` every single time. `<NeonBooks>`
+ *   returns `null` when the shop is empty, when every title has been taken off
+ *   the landing page, or when the API could not be reached. Most instructors
+ *   never sell a book at all, so «the h1 lives in the books strip» meant «the
+ *   page has no h1» for most of them.
+ *
+ * · **`yearTracks`** — placement-only, so there was nothing to check and this
+ *   returned `true` unconditionally. `<NeonTracks>` stands down entirely on an
+ *   empty catalogue, which is deliberate (see its own file: two «لسه فاضي»
+ *   panels in a row read as a broken site) and which is EXACTLY the day-one
+ *   state. `NEUTRAL_FALLBACK_BLOCKS` is hero + courseGrid + yearTracks, so an
+ *   admin who deletes the hero from the starter page lands on this.
+ *
+ * Neither is visible from reading this function, which is why the argument for
+ * each type is written next to its arm rather than summarised here.
+ *
+ * `<BoardLanding>`'s `ownsPageHeading` answers the same question for «اللوح»
+ * and reaches a DIFFERENT answer for `yearTracks` — `<BoardYears>` falls back
+ * to `FALLBACK_YEARS` and always draws its header. The two are allowed to
+ * disagree because the components disagree; they are not allowed to disagree
+ * by accident, so each one states what it is relying on.
  */
 function hasHeading(block: HomeBlock): boolean {
   const { props } = block;
 
   switch (props.type) {
+    /* Placement-only AND unconditional: both sections render `<NeonHead>` with
+       a title out of `neonCopy` before they look at any data, so an empty
+       catalogue and an empty honour board are empty BODIES under a heading
+       that is already on the page. `yearTracks` is deliberately not here. */
     case 'instructor':
-    case 'yearTracks':
     case 'honorBoard':
       return true;
+
+    /* `<NeonTracks>` returns `null` when the catalogue has no published years
+       — the day-one state of every new stack. It can never own the h1. */
+    case 'yearTracks':
+      return false;
+
+    /* `<NeonBooks>` returns `null` on an empty shop, which is the normal state
+       for an instructor who does not sell books. Same rule as `board`. */
+    case 'books':
+      return false;
+
+    /* `headlineAr` is `.min(4)` in the contract, and `<NeonHero>`/`<NeonCta>`
+       render the heading element unconditionally — but the length check stays,
+       because the schema minimum is the contract's promise and not this file's,
+       and an empty `<h1></h1>` is a page with no heading as far as a screen
+       reader or a search snippet is concerned. */
     case 'hero':
-      return props.headlineAr.length > 0;
     case 'cta':
       return props.headlineAr.length > 0;
+
+    /* `.min(2)` titles, and all three sections draw `<NeonHead>` before any
+       loader runs. The check is kept for the same reason as above. */
     case 'whyRail':
     case 'courseGrid':
-    case 'books':
     case 'about':
       return props.titleAr.length > 0;
+
+    /* These three carry an OPTIONAL title (`.default('')`) so they qualify
+       only when an admin actually wrote one — a section whose title is empty
+       renders no heading element at all. Their `items` arrays are `.min(1)` in
+       the contract, so the defensive `length === 0` guards in each component
+       cannot fire on a stored row; if that minimum is ever relaxed, these three
+       move down to `false` with `books`. */
     case 'stats':
     case 'testimonials':
     case 'faq':
@@ -304,12 +363,17 @@ function renderNeonBlock(block: HomeBlock, honorBoard: HonorBoardEntry[], level:
       return (
         <Fragment key={block.id}>
           <JsonLd data={faqPageJsonLd(props.items)} />
-          <NeonFaq
-            title={props.titleAr}
-            eyebrow={props.eyebrowAr}
-            rows={props.items}
-            level={level}
-          />
+          {/*
+            `props.eyebrowAr` is deliberately NOT forwarded, and this is the
+            only block whose props are not passed through wholesale. The only
+            label above the heading on this preset is `<NeonHead>`'s `// faq`
+            marker, which is `aria-hidden`, LTR-isolated and set in the Latin
+            monospace face — an Arabic eyebrow pushed through it would be
+            announced to nobody and rendered in the wrong script. `<NeonFaq>`
+            argues it at length; it used to REQUIRE the prop and then ignore
+            it, which is how the value came to be passed here at all.
+          */}
+          <NeonFaq title={props.titleAr} rows={props.items} level={level} />
         </Fragment>
       );
 

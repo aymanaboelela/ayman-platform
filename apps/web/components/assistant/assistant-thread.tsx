@@ -10,6 +10,7 @@ import {
 } from '@ayman/contracts/assistant/conversation';
 import { cn } from '@ayman/ui/lib/cn';
 import { apiPost, apiPostVoid } from '@/lib/api';
+import { tenantName } from '@/lib/tenant';
 import { AymanAvatar } from './ayman-avatar';
 import { MessageBody } from './message-body';
 import { MessageAttachmentView } from './message-attachment';
@@ -123,7 +124,25 @@ export function AssistantThread({
                   of the panel already says who they are.
                 */}
                 {fromVisitor ? null : <AymanAvatar size="sm" />}
-                {fromVisitor ? c.you : c.ayman}
+                {/*
+                  `c.ayman` is «مهندس أيمن», and it is the BYLINE — the line
+                  that claims who wrote the words underneath it. Ungated, a
+                  second instructor's student opens her thread, reads a reply
+                  she typed herself, and is told by name that a man she has
+                  never heard of sent it. Of the two halves of this row the
+                  avatar was the obvious leak and this was the louder one: a
+                  photograph is only recognised by people who already know the
+                  face, a name is read by everyone.
+
+                  `tenantName()` returns «مهندس أيمن» unchanged on his stack —
+                  same string, same width, same line breaks — and
+                  `TENANT_DISPLAY_NAME` anywhere else. The honorific does not
+                  survive the swap on purpose: we do not know another
+                  instructor's title, and «مهندس <somebody else>» would be an
+                  invented credential. Same call the brand lockup makes, for
+                  the same reason.
+                */}
+                {fromVisitor ? c.you : tenantName(c.ayman)}
               </span>
               <div
                 className={cn(

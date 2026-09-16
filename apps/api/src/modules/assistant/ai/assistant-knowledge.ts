@@ -92,6 +92,15 @@ function writtenFacts(): KnowledgeEntry[] {
  * answers — the tree starts from "you already know where you are". Sourced
  * from `copy.site`, so the subject line and the instructor's name stay in the
  * one place that already owns them.
+ *
+ * ⚠️ EVERY `copy.site` name here goes through `tenantName()`. Two of the three
+ * entries below already did and the first did not, which is the worst possible
+ * split: `platform` is the entry a student reaches by asking who runs the
+ * place, it is the FIRST line of `knowledgeBlock()`, and on a corpus-only
+ * deployment (no model key — see `assistant-ai.service.ts`) `matchKnowledge`
+ * hands it back verbatim. So a second instructor's assistant answered «المنصة
+ * دي بتاعة إيه؟» with «منصة أيمن أبو العلا … المدرّس هو المهندس أيمن أبو
+ * العلا» while the two entries beside it correctly said theirs.
  */
 function platformFacts(): KnowledgeEntry[] {
   return [
@@ -99,7 +108,8 @@ function platformFacts(): KnowledgeEntry[] {
       id: 'platform',
       question: 'المنصة دي بتاعة إيه؟',
       answer:
-        `${copy.site.platformName} — ${copy.site.tagline}. المدرّس هو ${copy.site.instructor}، ` +
+        `${tenantName(copy.site.platformName)} — ${copy.site.tagline}. ` +
+        `المدرّس هو ${tenantName(copy.site.instructor)}، ` +
         'وكل الكورسات والامتحانات والمتابعة بتحصل من على المنصة نفسها.',
     },
     {

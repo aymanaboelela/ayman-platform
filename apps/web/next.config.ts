@@ -1,5 +1,14 @@
 import path from 'node:path';
 import type { NextConfig } from 'next';
+/*
+ * The tenant gate itself, imported rather than re-derived from
+ * `process.env.TENANT_KEY` here. `lib/tenant.ts` is the one place the rule
+ * "`ayman` or unset means his stack, everything else inherits nothing" is
+ * written down, and a config file that re-implemented the same `?? '' ||
+ * 'ayman'` would be a second copy free to drift from it — which is exactly the
+ * failure mode the `env` block below exists to document.
+ */
+import { IS_AYMAN } from './lib/tenant';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://localhost:3300';
 const MEDIA_ORIGIN = process.env.NEXT_PUBLIC_MEDIA_ORIGIN ?? 'http://localhost:3300';
@@ -435,9 +444,45 @@ const nextConfig: NextConfig = {
    * Single origin: the browser only ever sees `/api/...` on the web origin.
    * This is what makes __Host- cookies, SameSite=Strict, and zero CORS possible
    * simultaneously. Never call the API host directly from client code.
+   *
+   * ## The second rule, and why it is here rather than in a component
+   *
+   * `app/favicon.ico`, `app/icon.png` and `app/apple-icon.png` are three crops
+   * of Ayman's face. They are Next FILE CONVENTIONS — matched by filename,
+   * compiled into routes, linked into every page's head — so unlike every other
+   * piece of his identity there is no module to put `IS_AYMAN` inside. The leak
+   * is the URLs themselves, which is why the gate is a ROUTING rule: on any
+   * stack that is not his, those three paths resolve to `/tenant-icon`, which
+   * answers `204 No Content`. That file carries the full reasoning, including
+   * the three fixes that look right and do not work.
+   *
+   * `beforeFiles` is load-bearing and is the whole reason this is not a
+   * one-liner added to the array below. The array form of `rewrites()` is
+   * `afterFiles`, which runs AFTER filesystem and app routes have had their
+   * chance — and these three ARE app routes, so an `afterFiles` rule would
+   * never be reached. `beforeFiles` runs ahead of them.
+   *
+   * ⚠️ HIS STACK RETURNS THE ARRAY, unchanged and on its own line, rather than
+   * an object with an empty `beforeFiles`. The two are equivalent by Next's
+   * documentation, and equivalent-by-documentation is not the standard this
+   * work runs under: his deployment is live, and the one thing it must not do
+   * is take a different code path through the router than it took yesterday.
    */
   async rewrites() {
-    return [{ source: '/api/:path*', destination: `${API_ORIGIN}/api/:path*` }];
+    const api = { source: '/api/:path*', destination: `${API_ORIGIN}/api/:path*` };
+    if (IS_AYMAN) return [api];
+    return {
+      /*
+       * The same three paths the `Cache-Control` rule above matches, written
+       * the same way on purpose — if one list ever grows an icon the other does
+       * not, the mismatch is visible from one screen to the other.
+       */
+      beforeFiles: [
+        { source: '/:icon(favicon\\.ico|icon\\.png|apple-icon\\.png)', destination: '/tenant-icon' },
+      ],
+      afterFiles: [api],
+      fallback: [],
+    };
   },
 };
 

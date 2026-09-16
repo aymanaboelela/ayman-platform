@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from 'react';
 import { BellRing } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { Button } from '@ayman/ui/components/button';
+import { IS_AYMAN } from '@/lib/tenant';
 
 const c = copy.notifications;
 
@@ -79,7 +80,24 @@ export function PushOptIn() {
         <BellRing className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden="true" />
         <div>
           <p className="text-[length:var(--fs-text-sm)] font-medium text-fg">{c.pushOptInTitle}</p>
-          <p className="mt-0.5 text-[length:var(--fs-text-sm)] text-fg-muted">{c.pushOptInLead}</p>
+          {/*
+            ⚠️ The LEAD names him — «يوصلك تنبيه على الموبايل أول ما م. أيمن
+            يبعت حاجة أو ينزل محاضرة» — with the name sitting in front of a
+            verb inflected for him, so `tenantName()` has nothing to swap and
+            «المنصة يبعت» would not be a sentence. The whole line is dropped on
+            a stack that is not his.
+
+            Dropping it is safe in a way substituting is not: the title above
+            («خلي الموبايل ينبهك») is the offer, the button below is the
+            action, and the copy note on that pair records the rule this
+            follows — the wording sells the thing the student wants, not the
+            mechanism. What the lead adds is WHOSE announcements these are,
+            which is precisely the part a tenant's build cannot say, and the
+            row still reads as finished with the two lines that remain.
+          */}
+          {IS_AYMAN ? (
+            <p className="mt-0.5 text-[length:var(--fs-text-sm)] text-fg-muted">{c.pushOptInLead}</p>
+          ) : null}
         </div>
       </div>
 

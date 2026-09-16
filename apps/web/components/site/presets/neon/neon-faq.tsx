@@ -3,7 +3,6 @@ import { MARKERS } from './neon-copy';
 
 export interface NeonFaqProps {
   title: string;
-  eyebrow: string;
   rows: readonly { questionAr: string; answerAr: string }[];
   level: 1 | 2;
 }
@@ -35,13 +34,31 @@ export interface NeonFaqProps {
  * takes the structured data with it instead of leaving markup advertising
  * answers the page no longer shows.
  *
- * ## `eyebrowAr` is dropped
+ * ## ⚠️ `faq.eyebrowAr` does not reach this section, and the TYPE now says so
  *
- * The section already has a marker above its heading — `// faq` — and that
- * marker IS the eyebrow on this preset. Printing the block's own eyebrow as
- * well would put two labels above one `<h2>`, which is the shape the classic
- * page uses and the shape this one deliberately does not. Nothing is lost that
- * the heading beneath it does not already say.
+ * This interface used to declare `eyebrow: string` as a REQUIRED prop,
+ * `<NeonLanding>` dutifully passed `props.eyebrowAr`, and the component never
+ * destructured it. Nothing anywhere said that: the call site read as a section
+ * that renders the admin's eyebrow, the type read as a section that requires
+ * it, and the value went nowhere. A required prop that is ignored is worse
+ * than a dropped feature — it is a promise in the signature that the body does
+ * not keep, and the next reader "fixes" it by rendering the eyebrow into the
+ * first slot that will take it.
+ *
+ * Dropping the eyebrow on this preset IS the right call, and that is why the
+ * fix is to remove the prop rather than to start printing it. The only label
+ * above the heading here is `<NeonHead>`'s marker — `// faq` — and that marker
+ * is CHROME: `<Mono hidden>` makes it `aria-hidden`, it is LTR-isolated, and it
+ * is set in the Latin monospace face. Arabic pushed through it would be
+ * announced to nobody, rendered in the wrong face, and prefixed with `//`.
+ * There is no second slot: printing it as its own element would put two labels
+ * above one `<h2>`, which is the classic page's shape and deliberately not
+ * this one's.
+ *
+ * `board` reaches the opposite conclusion — `<BoardFaq>` renders
+ * `chip={eyebrow || boardCopy.faq.chip}` — because its chip is a real,
+ * announced Arabic pill rather than a hidden Latin comment. Same block, two
+ * presets, two honest answers.
  */
 export function NeonFaq({ title, rows, level }: NeonFaqProps) {
   if (rows.length === 0) return null;

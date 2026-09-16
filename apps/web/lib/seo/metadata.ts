@@ -87,6 +87,25 @@ export const SITE_SHORT_NAME = tenantName(copy.site.shortName);
  * gated platform name joined to the tagline — which says what the site teaches
  * without saying whose face is on it.
  */
+/**
+ * The site description, gated the same way `SITE_TITLE` is and for the same
+ * reason: `copy.seo.description` and `copy.seo.homeDescription` both weld his
+ * name into the MIDDLE of a sentence («منصة المهندس أيمن أبو العلا لتعليم…»),
+ * so `tenantName()` has nothing to swap — the whole sentence has to go.
+ *
+ * Caught by running a second stack: the title read «منصة المهندس محمد صبري»
+ * while `<meta name="description">`, `og:description`, `twitter:description`
+ * and the JSON-LD `WebSite.description` all still read his name. A title is
+ * proof-read by whoever opens the tab; a description is read by Google.
+ *
+ * The replacement is built from the tenant's own name and the platform's
+ * tagline, which is neutral — it names the subject and the exam system,
+ * nobody's person.
+ */
+export const SITE_DESCRIPTION = IS_AYMAN
+  ? copy.seo.description
+  : `${PLATFORM_NAME} — ${copy.site.tagline}.`;
+
 export const SITE_TITLE = IS_AYMAN
   ? copy.seo.defaultTitle
   : `${PLATFORM_NAME} — ${copy.site.tagline}`;
@@ -249,7 +268,7 @@ export const rootMetadata: Metadata = {
     // title of every single page, not just the landing one.
     template: `%s | ${PLATFORM_NAME}`,
   },
-  description: copy.seo.description,
+  description: SITE_DESCRIPTION,
   applicationName: PLATFORM_NAME,
   /*
    * Ignored by Google, weighted lightly by Bing and Yandex, free to ship. The

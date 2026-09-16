@@ -132,6 +132,50 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
+
+      # ── The tenant preflight, actually executed ──────────────────────────
+      #
+      # `scripts/check-tenant-env.mjs` is the one gate between "forgot a
+      # variable" and either a second instructor's students messaging Ayman on
+      # his personal number, or an API that will not boot and a domain where
+      # every page answers 404. Until now `grep -rn check-tenant-env .github
+      # package.json turbo.json` returned NOTHING: it was an honour-system
+      # check, named in a runbook, run by whoever remembered.
+      #
+      # This step runs it for real, against the template the runbook tells the
+      # operator to copy, and asserts the unedited template is REJECTED — plus
+      # that every placeholder in it is named in the output. That is the exact
+      # regression that shipped: the sweep covered seven keys while the
+      # template carried sixteen placeholders, so eight of them (WA_DEVICE_NAME
+      # among them) deployed verbatim.
+      #
+      # Deliberately BEFORE `pnpm install`: the script has no dependencies
+      # precisely so it can run on a bare server before anything is installed,
+      # and a step that needed a node_modules would quietly stop being true.
+      # The behavioural coverage — every cross-field rule against the boot
+      # schema — lives in `packages/contracts/src/check-tenant-env.spec.ts` and
+      # runs in the `unit` job via `pnpm test`.
+      - name: Tenant preflight rejects the unedited template
+        run: |
+          set -uo pipefail
+          # `code`, not `status`: the latter is a read-only builtin in zsh, and
+          # this block gets copy-pasted into a local shell more often than it
+          # gets run here.
+          out=$(node scripts/check-tenant-env.mjs deploy/tenant.env.example 2>&1) && code=0 || code=$?
+          echo "$out"
+          if [ "$code" -eq 0 ]; then
+            echo "::error file=scripts/check-tenant-env.mjs::the preflight accepted deploy/tenant.env.example with every value still CHANGE_ME"
+            exit 1
+          fi
+          rc=0
+          for key in $(grep -E '^[A-Z0-9_]+=.*CHANGE_ME' deploy/tenant.env.example | cut -d= -f1); do
+            echo "$out" | grep -q "$key still says CHANGE_ME" || {
+              echo "::error file=deploy/tenant.env.example::$key ships a CHANGE_ME placeholder that the preflight does not reject"
+              rc=1
+            }
+          done
+          exit $rc
+
       - run: pnpm install --frozen-lockfile
       # Prisma's client is generated, not committed, and typecheck imports it.
       - run: pnpm --filter @ayman/api run db:generate

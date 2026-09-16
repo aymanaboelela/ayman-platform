@@ -10,7 +10,7 @@ import {
 import { composeOutreach, type OutreachFacts } from '@ayman/contracts/outreach/compose';
 import { OUTREACH_KINDS } from '@ayman/contracts/outreach/kinds';
 import { PrismaService } from '../../prisma/prisma.service';
-import { OutreachService } from './outreach.service';
+import { OUTREACH_INSTRUCTOR_NAME, OutreachService } from './outreach.service';
 import { OutreachSweeper } from './outreach-sweeper.service';
 import type { Prisma } from '../../generated/prisma/client';
 
@@ -154,6 +154,16 @@ export class OutreachLogService {
       for (let index = 0; index < SAMPLES_PER_KIND; index += 1) {
         const composed = composeOutreach({
           firstName: 'محمد',
+          /*
+           * The SAME gated name the sweeper sends under, imported rather than
+           * resolved again here — «هي فعلاً بتتغيّر؟» is the question this
+           * screen answers, and it can only answer it by being the real thing.
+           * A preview that resolved its own name would be free to disagree
+           * with delivery, and the one deployment where that disagreement
+           * matters — a tenant reading their own preview — is exactly the one
+           * nobody proof-reads.
+           */
+          instructorName: OUTREACH_INSTRUCTOR_NAME,
           facts: PREVIEW_FACTS[kind]!,
           recentVariantKeys: [...history],
           whatsappUrl,

@@ -16,6 +16,8 @@ import {
 } from '@ayman/contracts/site-profiles';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
+import { tenantName } from '@/lib/tenant';
+import { tenantSentence } from '@/lib/tenant-copy';
 import {
   SOCIAL_MARKS,
   SocialIcon,
@@ -41,7 +43,17 @@ export async function generateMetadata(): Promise<Metadata> {
      * is not a profile card — but the SERP entry says what the page is for.
      */
     title: c.pageTitle,
-    description: c.description,
+    /*
+     * ⚠️ `tenantSentence()`. `c.pageTitle` above is «كل اللينكات» and carries no
+     * name, which is exactly what made this one survive every sweep: the title
+     * is clean, so the page looked done. The DESCRIPTION opens «كل حسابات
+     * ولينكات المهندس أيمن أبو العلا في مكان واحد» — and a description is the
+     * grey line under the blue one in a search result, and the body text of the
+     * preview card every one of these links generates when it is pasted into
+     * WhatsApp. This URL exists to be pasted into bios, so it is the single
+     * most-shared string on the deployment.
+     */
+    description: tenantSentence(c.description),
     path: '/links',
   });
 }
@@ -157,12 +169,19 @@ export default async function LinksPage() {
               128×128, so a 2× phone gets the file as-is and nothing is
               upscaled; asking for more than the box would fetch bytes no
               screen can show.
+
+              The `alt` is unreachable on another stack — `avatar` is
+              `getBrandAsset('mark')`, which answers `undefined` there, so this
+              element does not exist at all. It goes through `tenantName()`
+              anyway: the day an admin-uploaded avatar fills this slot the
+              branch stops being dead, and an `alt` is the one piece of a
+              picture a screen-reader user hears in full.
             */}
             <Image
               src={avatar.src}
               width={avatar.width}
               height={avatar.height}
-              alt={copy.site.instructor}
+              alt={tenantName(copy.site.instructor)}
               priority
               fetchPriority="high"
               sizes="112px"
@@ -170,7 +189,20 @@ export default async function LinksPage() {
           </div>
         ) : null}
 
-        <h1 className="linkhub__name">{c.title}</h1>
+        {/*
+          ⚠️ `tenantName()`, and this is the leak the gated image beside it made
+          invisible. The stage behind this header is already behind `IS_AYMAN`
+          in `(link)/layout.tsx` and the avatar above comes through
+          `getBrandAsset('mark')`, so a non-Ayman `/links` dropped both pictures
+          and then printed his NAME as the `<h1>`, with `c.verified` —
+          «الحسابات الرسمية» — sitting directly under it as a verification
+          badge. On a URL whose entire purpose is to say «ده هو حسابه الرسمي»,
+          that is the platform certifying the wrong person.
+
+          The two gates above it are why nobody caught it: the page LOOKED
+          de-Aymanized, because the two things a reviewer looks for were gone.
+        */}
+        <h1 className="linkhub__name">{tenantName(c.title)}</h1>
         <p className="linkhub__role">{c.role}</p>
 
         <span className="linkhub__verified">
@@ -236,7 +268,11 @@ export default async function LinksPage() {
             href="/about"
             internal
             icon={<UserRound size={20} aria-hidden="true" />}
-            title={c.aboutTitle}
+            /* «مين أيمن أبو العلا؟» — the name is inside the question, so this
+               is `tenantSentence()` rather than `tenantName()`. `aboutNote`
+               below says «الحكاية كاملة، والكورسات اللي بيدرّسها» and names
+               nobody, so it is left exactly as it is. */
+            title={tenantSentence(c.aboutTitle)}
             note={c.aboutNote}
           />
         </ul>

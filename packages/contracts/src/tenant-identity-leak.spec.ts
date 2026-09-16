@@ -92,6 +92,25 @@ const repoPath = (path: string): string => path.split('/').join(sep);
  * only, while 28KB of it shipped on the quiz routes for months. Before leaving
  * an entry in, open the file and find the gate. A comment is not a guard.
  *
+ * ## And the promise HAS been false here, which is why the list is now split
+ *
+ * `copy/outreach.ts` sat on this list carrying «إزيك يا {name}، أنا مهندس
+ * أيمن» as entry 4 of 8 in `OUTREACH_GREETINGS`. There was no gate. Not a weak
+ * one — none: `outreach/compose.ts` drew that pool uniformly and contained no
+ * reference to a tenant module of any kind, and both callers
+ * (`OutreachService.deliver`, `OutreachLogService.preview`) persisted and sent
+ * what came back. Roughly one automated message in eight from EVERY
+ * instructor's platform introduced itself to their student as Ayman, in the
+ * first person, in a thread the student could reply to. The entry read as
+ * reassuring for as long as nobody opened the file.
+ *
+ * A gate exists now (`ComposeInput.instructorName`, threaded from
+ * `tenantName(OUTREACH_SIGNATURE)`), so the entry is TRUE and stays. The two
+ * string tables it sat beside are a different thing entirely and have been
+ * moved to `IDENTITY_SOURCE_TABLES` below, because "the consumers are supposed
+ * to gate this" is not the same claim as "this file's literal is gated", and
+ * filing them under one heading is how the false one hid next to the true ones.
+ *
  * The rest of the in-flight de-Aymanizing — `lib/seo/metadata.ts`,
  * `app/manifest.ts`, `components/site/site-nav.tsx`, `site-footer.tsx`,
  * `brand-lockup.tsx`, `auth-showcase.tsx`, `tracks-dragon.tsx`,
@@ -99,27 +118,65 @@ const repoPath = (path: string): string => path.split('/').join(sep);
  * `getBrandAsset()` and his name through `copy`, and carry no literal of their
  * own for this check to find.
  */
-const GATED_AT_POINT_OF_USE = [
+const GATED_AT_POINT_OF_USE: readonly { path: string; gate: string }[] = [
   // The image registry. `/brand/ayman-mark-2.webp`, `hero-ai-dragon-2.webp` and
   // `portrait-baron-dragon.webp` are all photographs of him; the gate is in
   // `getBrandAsset()`, which hands a non-`ayman` stack `undefined` and lets
   // every call site's existing "no asset" branch draw the designed fallback.
-  'apps/web/lib/brand-assets.ts',
+  // Verified: `aymanOnly(asset)` for every kind outside `GENERIC_ASSET_KINDS`,
+  // which is an allowlist of one (`logo`) written that way round on purpose.
+  { path: 'apps/web/lib/brand-assets.ts', gate: 'aymanOnly' },
   // `/team/ayman.jpg` as the `image`/`logo` of the Person and Organization
   // nodes. Gated where the node is built, not where the path is written.
-  'apps/web/lib/seo/jsonld.ts',
+  // Verified: `INSTRUCTOR_IMAGE = aymanOnly(absolute('/team/ayman.jpg'))`.
+  { path: 'apps/web/lib/seo/jsonld.ts', gate: 'aymanOnly' },
   // The agent skill descriptions — English prose naming him as the instructor,
-  // served at `/.well-known/agent-skills/`.
-  'apps/web/lib/agents/skills.ts',
+  // served at `/.well-known/agent-skills/`. Verified: the literal is one arm of
+  // an `IS_AYMAN ?` on `description`, swapped whole rather than interpolated
+  // because `tenantName()` returns an Arabic name and this sentence is English.
+  { path: 'apps/web/lib/agents/skills.ts', gate: 'IS_AYMAN' },
   // `representativeQueries` — the search phrases the catalog claims to answer.
-  // Hamza-less on purpose: it is how students actually type it.
-  'apps/web/app/.well-known/ai-catalog.json/route.ts',
-  // The string tables. De-Aymanizing these is its own piece of work and doing
-  // it badly is worse than not yet doing it — `copy.site.name` is the one
-  // source every other file now interpolates instead of hardcoding.
+  // Hamza-less on purpose: it is how students actually type it. Verified:
+  // `...(IS_AYMAN ? ['ايمن ابو العلا برمجة'] : [])`, and the `name` beside it
+  // goes through `tenantName(copy.site.platformName)`.
+  { path: 'apps/web/app/.well-known/ai-catalog.json/route.ts', gate: 'IS_AYMAN' },
+  // `OUTREACH_SIGNATURE` — «مهندس أيمن», the short form he signs the one
+  // self-introducing greeting with. Verified: it is the FALLBACK ARGUMENT and
+  // never the value. No pool entry carries a name; the greeting carries
+  // `{instructor}`, `composeOutreach` fills it from `ComposeInput
+  // .instructorName`, and both callers pass `tenantName(OUTREACH_SIGNATURE)`
+  // from `apps/api/src/common/tenant.ts`. `compose.spec.ts` asserts both ends
+  // — that no pool line contains the name, and that a body composed for a
+  // different instructor never does either.
+  { path: 'packages/contracts/src/copy/outreach.ts', gate: 'OUTREACH_SIGNATURE' },
+];
+
+/**
+ * The string tables — NOT gated, and listed here so that nobody reads them as
+ * if they were.
+ *
+ * These three hold his name as ordinary copy: `copy.site.name`,
+ * `copy.site.instructor`, `copy.seo.*`, and several dozen sentences with it
+ * welded into the middle. Nothing inside them is behind anything. What is true
+ * of them is a weaker and different statement: they are the SOURCE every other
+ * file is supposed to read through `tenantName()` instead of hardcoding, and
+ * the gating work happens at each consumer, one at a time.
+ *
+ * ⚠️ So an entry here says only "this file is exempt from the scan". It makes
+ * NO claim about any particular consumer. Several are gated today — `lib/seo/
+ * metadata.ts`, `app/manifest.ts`, `lib/agents/skills.ts`, `lib/notification
+ * -view.ts`, `assistant-ai.service.ts`, `push-text.ts` — and many are not. A
+ * consumer is safe when you have read it, not because these paths are on a
+ * list.
+ *
+ * The exemption is kept rather than removed because the alternative is a
+ * permanently red suite: the tables are the de-Aymanizing work itself, not a
+ * leak that can be closed in one edit, and a check nobody can make green is a
+ * check people learn to skip.
+ */
+const IDENTITY_SOURCE_TABLES = [
   'packages/contracts/src/copy/admin.ts',
   'packages/contracts/src/copy/ar.ts',
-  'packages/contracts/src/copy/outreach.ts',
 ].map(repoPath);
 
 /** Real-world identity that must never be a fallback in shipped code. */
@@ -418,9 +475,18 @@ const files = [
   .filter((path) => !isTestFile(path))
   .filter((path) => !ALLOWED_FILES.has(path));
 
-/** The files this suite actually asserts over. */
-const gated = new Set(GATED_AT_POINT_OF_USE);
-const scanned = files.filter((path) => !gated.has(path));
+/**
+ * The files this suite actually asserts over.
+ *
+ * Both exemption lists are excluded, and they are kept as two lists rather than
+ * one union because only the FIRST makes a claim a reader can check — see the
+ * two docblocks. The behaviour is identical; the honesty is not.
+ */
+const exempt = new Set([
+  ...GATED_AT_POINT_OF_USE.map((entry) => repoPath(entry.path)),
+  ...IDENTITY_SOURCE_TABLES,
+]);
+const scanned = files.filter((path) => !exempt.has(path));
 
 /**
  * Read once, strip once.
@@ -444,6 +510,42 @@ describe('no shipped default carries one instructor’s identity', () => {
   it('finds source files to check at all', () => {
     // Without this the suite passes vacuously the day a directory is renamed.
     expect(files.length).toBeGreaterThan(1000);
+  });
+
+  it('every allow-listed file still names the gate it is exempt for', () => {
+    /*
+     * The list's own warning, made mechanical.
+     *
+     * «A comment is not a guard» was written at the top of `GATED_AT_POINT_OF
+     * _USE` and was, at that moment, describing one of its own entries:
+     * `copy/outreach.ts` was exempt on the strength of a gate that did not
+     * exist anywhere, and one automated message in eight from every tenant's
+     * platform introduced itself as Ayman for as long as that stood.
+     *
+     * This cannot prove a gate is CORRECT — only a reader can do that, which
+     * is what each entry's comment is for. What it does catch is the failure
+     * that actually happened: a gate that is removed, renamed or never written
+     * while the exemption stays behind. The file must at least still contain
+     * the symbol its entry claims, in code rather than in prose (`sourceOf`
+     * has stripped the comments, so a docblock mentioning `IS_AYMAN` does not
+     * count — which is the entire point).
+     *
+     * `copy/outreach.ts` names `OUTREACH_SIGNATURE` rather than a gate symbol
+     * because `packages/contracts` cannot import either tenant module and must
+     * not read the environment (see that constant's docblock). The export IS
+     * the seam: the literal lives under that name and nowhere else, the
+     * greeting carries `{instructor}`, and `outreach/compose.spec.ts` asserts
+     * from both ends that no pool line and no composed body carries the name.
+     */
+    for (const { path, gate } of GATED_AT_POINT_OF_USE) {
+      expect(
+        sourceOf(repoPath(path)),
+        `${path} is exempt from this scan because of \`${gate}\`, and \`${gate}\` ` +
+          `is no longer in its code. Either the gate moved — update the entry — ` +
+          `or it is gone and the literal is shipping. Do not delete this ` +
+          `assertion to make the suite green.`,
+      ).toContain(gate);
+    }
   });
 
   for (const { literal, what } of FORBIDDEN) {

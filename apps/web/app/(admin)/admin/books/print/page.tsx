@@ -12,6 +12,7 @@ import {
 } from '@ayman/contracts/admin/book-orders';
 import { z } from 'zod';
 import { adminGet } from '@/lib/admin-api';
+import { tenantName } from '@/lib/tenant';
 import { PrintButton } from './print-button';
 
 const c = copy.admin.books;
@@ -143,8 +144,17 @@ export default async function BookOrdersPrintPage({
 
       <header className="packing-head">
         <div>
-          {/* The lockup a print shop recognises the paper by. */}
-          <p className="packing-brand">{brand.name}</p>
+          {/* The lockup a print shop recognises the paper by — and the reason
+              it is gated exactly like the shipping cards next door. This sheet
+              is printed and read at the packing desk, and a second instructor's
+              packer would be filling their own boxes off a list headed «أيمن
+              أبو العلا». Paper that has left the building cannot be recalled,
+              and this one names the wrong person on every page of the run.
+
+              `tenantName()` returns the copy table's own string on his stack,
+              so his sheet does not change; everywhere else it is
+              `TENANT_DISPLAY_NAME`. */}
+          <p className="packing-brand">{tenantName(brand.name)}</p>
           <h1>{c.printTitle}</h1>
           <p className="packing-filters">
             {[

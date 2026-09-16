@@ -5,8 +5,10 @@ import {
   firstNameOf,
   type OutreachFacts,
 } from '@ayman/contracts/outreach/compose';
+import { OUTREACH_SIGNATURE } from '@ayman/contracts/copy/outreach';
 import type { OutreachKind } from '@ayman/contracts/outreach/kinds';
 import { PrismaService } from '../../prisma/prisma.service';
+import { tenantName } from '../../common/tenant';
 import { isUniqueViolation } from '../../common/prisma/prisma-errors';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../admin/settings/settings.service';
@@ -49,6 +51,32 @@ import type { Prisma } from '../../generated/prisma/client';
 
 /** How much history the composer is shown. Comfortably past every pool size. */
 const HISTORY_DEPTH = 12;
+
+/**
+ * Who these messages come FROM, resolved once — the gate for the whole
+ * «رسايل م. أيمن» path.
+ *
+ * `composeOutreach` is in `packages/contracts` and cannot import
+ * `common/tenant.ts` (nor should it: see the long note on `ComposeInput
+ * .instructorName` for why an env read inside a package the browser bundles
+ * would fail open and would cost the composer its purity). This module is the
+ * nearest place that CAN, and it is also the one write path for a message sent
+ * in the instructor's name — so the name is decided here and threaded in.
+ *
+ * `tenantName(OUTREACH_SIGNATURE)` returns «مهندس أيمن» unchanged on his
+ * stack, so every greeting his students read is the sentence it has always
+ * been, and `TENANT_DISPLAY_NAME` (or «المنصة») anywhere else. The fallback is
+ * read from the copy table rather than written here as a literal, because a
+ * literal in this file would be his name shipped in the API source with a
+ * gate in front of it — which `tenant-identity-leak.spec.ts` fails on, and
+ * rightly: the next person to touch the line is one careless edit from
+ * dropping the call and keeping the argument.
+ *
+ * Module load, not per delivery. The value cannot change without a restart,
+ * the sweeper runs this sixty times an hour, and `SYSTEM` in
+ * `assistant-ai.service.ts` resolves its own names the same way.
+ */
+export const OUTREACH_INSTRUCTOR_NAME = tenantName(OUTREACH_SIGNATURE);
 
 export interface DeliverInput {
   userId: string;
@@ -131,6 +159,7 @@ export class OutreachService {
 
     const composed = composeOutreach({
       firstName: firstNameOf(user.name),
+      instructorName: OUTREACH_INSTRUCTOR_NAME,
       facts: input.facts,
       recentVariantKeys: recent.map((row) => row.variantKey),
       whatsappUrl: context.whatsappUrl,
