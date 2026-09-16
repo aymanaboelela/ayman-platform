@@ -66,7 +66,14 @@ const { default: NeonLanding } = await import('./neon-landing');
 
 beforeEach(() => {
   getCatalogOrEmpty.mockResolvedValue({ courses: [], total: 0 });
-  getBookCatalogOrEmpty.mockResolvedValue({ shelves: [], shippingCents: 0, total: 0 });
+  getBookCatalogOrEmpty.mockResolvedValue({
+    shelves: [],
+    shippingCents: 0,
+    // Added to the contract by #390 (shipping by governorate). Zeroes, not
+    // real rates: this fixture is the EMPTY shop.
+    shippingRates: { cairo_giza: 0, delta: 0, far: 0 },
+    total: 0,
+  });
 });
 
 /* ---------------------------------------------------------------- fixtures */
