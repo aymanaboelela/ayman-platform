@@ -252,6 +252,13 @@ export const AUDIT_ACTIONS = [
   // between submitting the screenshot and shipping.
   'book-order:submit',
   'book-order:pay',
+  // «راح للمطبعة» — its own row and not a `metadata` flag on `ship`, for the
+  // same reason `deliver` is separate: «الطلب ده راح للمطبعة إمتى» is a
+  // question asked about a run that came back short, and an action whose name
+  // says «اتشحن» cannot answer it. Nothing is sent to the student here, so this
+  // is also the one book-order transition whose trail is the ONLY record it
+  // happened.
+  'book-order:printing',
   'book-order:ship',
   // The rest of the courier leg and the two judgements about an order.
   //
