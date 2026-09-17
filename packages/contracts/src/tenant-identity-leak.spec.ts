@@ -52,6 +52,13 @@ const KNOWN_NAME_FILES = [
   // file is listed because the literal is still present, which is what this
   // test measures.
   'apps/web/components/site/code-lab.tsx',
+  // The same GATED shape, found by this very test. Two `representativeQueries`
+  // in the ARD manifest were the name written out, on the one document the
+  // site publishes specifically to be believed by assistants — so another
+  // instructor's stack was claiming Ayman's books and Ayman's teaching. Both
+  // now read `TENANT_DISPLAY_NAME` and fall back to the name, which is why the
+  // literal is still here and why the file is listed rather than cleared.
+  'apps/web/app/.well-known/ai-catalog.json/route.ts',
   'apps/api/src/modules/assistant/ai/assistant-knowledge.ts',
   'apps/api/src/modules/marketing/marketing.controller.ts',
   'apps/api/src/scripts/create-admin.ts',
