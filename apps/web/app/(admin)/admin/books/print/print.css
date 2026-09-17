@@ -112,6 +112,66 @@
   color: var(--ink-soft);
 }
 
+/*
+ * ── الصفوف، جنب بعض ───────────────────────────────────────────────────────
+ *
+ * «كام كتاب سنة أولى وكام كتاب سنة تانية، وتقسمهم بشكل كويس.»
+ *
+ * A GRID and not the pill row below it: this block is read as a comparison
+ * between two columns, and two numbers that have to be compared must be on one
+ * line at the same size. `break-inside: avoid` because a صف split across a page
+ * break is a print run ordered off half a number.
+ */
+.packing-years {
+  margin: 0 0 10px;
+  break-inside: avoid;
+}
+
+.packing-years h3 {
+  margin: 0 0 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.packing-years-grid {
+  display: grid;
+  /* `auto-fit` rather than a fixed two: a sheet with a «من غير صف» bucket has
+     three, and a hard-coded pair would drop the third below the fold of the
+     block instead of narrowing all of them. */
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.packing-year {
+  border: 1px solid var(--rule);
+  border-inline-start: 3px solid var(--gold-deep);
+  border-radius: 5px;
+  padding: 5px 9px;
+  background: #fafaf8;
+}
+
+.packing-year b {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.packing-year span {
+  display: block;
+  font-size: 11px;
+  /* Latin digits inside Arabic are their own bidi run — the isolate is what
+     keeps «12 كتاب · 30 نسخة» from reordering into nonsense. */
+  unicode-bidi: isolate;
+}
+
+.packing-year small {
+  display: block;
+  font-size: 9.5px;
+  color: var(--ink-soft);
+  unicode-bidi: isolate;
+}
+
 /* The per-edition, per-year breakdown — «أولى سنة كام كتاب وكام نسخة». */
 .packing-breakdown {
   display: flex;

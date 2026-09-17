@@ -46,6 +46,7 @@ export function ExportRange({
   filters,
   rowCount,
   batchable,
+  compact = false,
 }: {
   status: string;
   tabLabel: string;
@@ -70,6 +71,20 @@ export function ExportRange({
    * rather than selecting rows every batch would skip.
    */
   batchable: boolean;
+  /**
+   * The صف-section variant — «تحميل الصف ده».
+   *
+   * Same three downloads, same filters, no date inputs: a section header has
+   * room for two buttons and not for a range picker, and the range belongs to
+   * the WHOLE run rather than to one year of it — the dates are set once in the
+   * toolbar above and every per-year link inherits them through `filters`.
+   *
+   * ⚠️ It also drops «حدّد اللي في المدى». A select button per section would
+   * REPLACE the selection each time it is pressed (see `useBulkSelectMany`), so
+   * ticking سنة أولى and then سنة تانية would silently leave only the second —
+   * on the control whose entire job is making sure no parcel is missed.
+   */
+  compact?: boolean;
 }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -110,6 +125,40 @@ export function ExportRange({
     } finally {
       setSelecting(false);
     }
+  }
+
+  if (compact) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <a
+          href={`/admin/books/print?${params.toString()}`}
+          target="_blank"
+          rel="noopener"
+          className="rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-[length:var(--fs-text-xs)] text-accent-text transition-colors duration-[160ms] ease-out hover:bg-accent/20"
+          title={c.exportPdfHint}
+        >
+          {c.exportPdf}
+        </a>
+        {batchable ? (
+          <a
+            href={`/admin/books/labels?${params.toString()}`}
+            target="_blank"
+            rel="noopener"
+            className="rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-[length:var(--fs-text-xs)] text-accent-text transition-colors duration-[160ms] ease-out hover:bg-accent/20"
+            title={c.labelsHint}
+          >
+            {c.labelsButton}
+          </a>
+        ) : null}
+        <a
+          href={`/api/admin/book-orders/export?${params.toString()}`}
+          className="rounded-full border border-line px-3 py-1 text-[length:var(--fs-text-xs)] text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg"
+          title={c.exportHint}
+        >
+          {formatCopy(c.exportButton, { tab: tabLabel })}
+        </a>
+      </div>
+    );
   }
 
   return (

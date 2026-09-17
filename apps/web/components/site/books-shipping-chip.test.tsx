@@ -22,8 +22,8 @@ afterEach(() => {
  * defect was never in the number — it was in the words around it.
  */
 describe('BooksShippingChip', () => {
-  it('says delivery is free, and says nothing about «مرة واحدة», at zero', () => {
-    render(<BooksShippingChip shippingCents={0} />);
+  it('says delivery is free, and says nothing about «مرة واحدة», when EVERY zone is zero', () => {
+    render(<BooksShippingChip rates={{ cairo_giza: 0, delta: 0, far: 0 }} />);
 
     expect(screen.getByText(copy.books.shippingFreeOnce)).toBeTruthy();
     // The old template must not survive anywhere in the rendered line: its
@@ -33,13 +33,29 @@ describe('BooksShippingChip', () => {
     expect(document.body.textContent).not.toMatch(/(^|\D)0(\D|$)/);
   });
 
-  it('still quotes a real fee with the «مرة واحدة» promise intact', () => {
-    render(<BooksShippingChip shippingCents={6_500} />);
+  it('quotes the CHEAPEST zone as a floor, and names all three under it', () => {
+    render(<BooksShippingChip rates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }} />);
 
     const text = document.body.textContent ?? '';
-    expect(text).toContain('65');
+    // The floor — «من ٨٠» — and never الـ١٥٠ as the headline number.
+    expect(text).toContain('80');
     // The clause earns its place when there IS a fee: it is what tells a
     // reader that a second book does not cost a second delivery.
     expect(text).toContain('مهما كان عدد الكتب');
+    /*
+     * THE regression this file now guards. A hero line that quotes one number
+     * for a fee that has three is a price two thirds of the country meets as a
+     * surprise at the address form — so the other two zones have to be on the
+     * same line as the one it leads with.
+     */
+    expect(text).toContain('100');
+    expect(text).toContain('150');
+  });
+
+  it('does not lead with a zone the reader might not be in', () => {
+    render(<BooksShippingChip rates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }} />);
+
+    // «من» — stated as a floor. Without it the line promises ٨٠ ج to أسوان.
+    expect(document.body.textContent ?? '').toContain('من');
   });
 });

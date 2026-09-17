@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ChevronDown } from 'lucide-react';
 import { copy, type CourseOutline } from '@ayman/contracts';
+import type { BookShippingRates } from '@ayman/contracts/books';
 import { Badge, cn } from '@ayman/ui';
 import { formatDuration } from '@/lib/format';
 import {
@@ -26,9 +27,9 @@ type Entry = { lecture: Lesson; quizzes: Lesson[] };
 export interface CourseOutlineSidebarProps {
   outline: CourseOutline;
   activeLessonId: string;
-  /** The delivery fee, from `getBookShippingCents()`. Quoted on the CTA so
+  /** The three delivery rates, from `getBookShippingRates()`. Quoted on the CTA so
    *  «اطلب الكتاب» names the total the form will ask for. */
-  shippingCents: number;
+  shippingRates: BookShippingRates;
   /** `contact.instapay`, E.164 or `null` — same prop `BookOrderButton`
    *  takes everywhere else it appears. */
   instapay: string | null;
@@ -247,7 +248,7 @@ function LectureEntry({
 export function CourseOutlineSidebar({
   outline,
   activeLessonId,
-  shippingCents,
+  shippingRates,
   instapay,
   vodafoneCash,
 }: CourseOutlineSidebarProps) {
@@ -308,7 +309,7 @@ export function CourseOutlineSidebar({
             courseId={outline.course.id}
             bookTitle={outline.course.bookTitle as string}
             bookPriceCents={outline.course.bookPriceCents as number}
-            shippingCents={shippingCents}
+            shippingRates={shippingRates}
             instapay={instapay}
             vodafoneCash={vodafoneCash}
           />
