@@ -1,4 +1,6 @@
+import type { HonorBoard } from '@ayman/contracts/admin/exams';
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import type {
   CatalogCourseDetail,
   CatalogList,
@@ -180,7 +182,11 @@ export class CatalogService {
           select: { id: true, title: true, priceCents: true },
         },
         sections: {
-          where: { isPublished: true },
+          // ⚠️ Excluded from the PUBLIC outline. A monthly exam's title is
+          // «امتحان نص شهر سبتمبر» — a fact about this month's cohort, on a
+          // marketing page nobody asked to change, that would also tell a
+          // stranger the exam schedule.
+          where: { isPublished: true, title: { not: EXAM_SHELF_TITLE } },
           orderBy: [{ position: 'asc' }, { id: 'asc' }],
           select: {
             id: true,
@@ -281,4 +287,93 @@ export class CatalogService {
       })),
     };
   }
+
+  /**
+   * لوحة الشرف — the named students on the landing page.
+   *
+   * ## Ordered the way the instructor decides, not the way the score does
+   *
+   * `instructor_rating` first, then the percentage, then who was added first.
+   * That order is the feature: ten students reach full marks on a monthly exam
+   * and only one can be الأول, and the thing that separates them is his own
+   * read of the papers — not a tiebreak the database invents.
+   *
+   * ## Only what an instructor put here
+   *
+   * `honor_board_at IS NOT NULL` is the entire membership rule. Nothing here
+   * derives from the score, and that is deliberate: a board that filled itself
+   * would publish a child's name and photograph on the public internet because
+   * they did well on a quiz.
+   *
+   * ## No ids on the wire
+   *
+   * This is the only public payload on the platform that describes a named
+   * minor. A user id or an attempt id on it would let a stranger enumerate
+   * students straight from the landing page, so the projection carries a name,
+   * a photo key, the exam and the mark, and stops.
+   *
+   * Twelve rows. The board has four visible places and the section is not a
+   * leaderboard — a cap keeps a forgotten toggle from turning the landing page
+   * into a class list.
+   */
+  async honorBoard(): Promise<HonorBoard> {
+    const rows = await this.prisma.quizAttempt.findMany({
+      where: { honorBoardAt: { not: null }, state: 'submitted' },
+      orderBy: [
+        { instructorRating: 'desc' },
+        { scaledScore: 'desc' },
+        { honorBoardAt: 'asc' },
+      ],
+      /*
+       * 24 read, 12 kept. A late sitting is filtered out BELOW rather than in
+       * the WHERE, because «late» compares two COLUMNS — `started_at` against
+       * its quiz's `late_after` — and Prisma's `where` cannot express a
+       * column-to-column comparison. Over-fetching by one page and trimming
+       * keeps the board full even when some pinned papers are filtered, and 24
+       * rows is nothing.
+       */
+      take: 24,
+      select: {
+        startedAt: true,
+        scaledScore: true,
+        gradeOutOf: true,
+        user: {
+          select: { image: true, studentProfile: { select: { fullName: true } } },
+        },
+        quiz: { select: { lateAfter: true, lesson: { select: { title: true } } } },
+      },
+    });
+
+    return {
+      entries: rows
+        /*
+         * Belt and braces with `ManualGradingService.mark`, which already
+         * refuses to pin a late sitting. This is the READ side of the same
+         * rule, and it covers the one case the write cannot: a paper pinned
+         * BEFORE `lateAfter` was set on its exam. The board is public and it
+         * is about children — it is worth being sure twice.
+         */
+        .filter((row) => row.quiz.lateAfter === null || row.startedAt <= row.quiz.lateAfter)
+        .slice(0, 12)
+        .map((row) => {
+        const scaledScore = Number(row.scaledScore ?? 0);
+        const gradeOutOf = Number(row.gradeOutOf);
+        return {
+          studentName: row.user.studentProfile?.fullName ?? '—',
+          avatarKey: row.user.image,
+          quizTitle: row.quiz.lesson.title,
+          scaledScore,
+          gradeOutOf,
+          // Clamped: a paper whose slots were edited after it was sat can
+          // score above its own total, and the contract caps this at 100 —
+          // an uncaught 104 would fail the parse and blank the landing page.
+          percent:
+            gradeOutOf > 0
+              ? Math.min(Math.max(Math.round((scaledScore / gradeOutOf) * 100), 0), 100)
+              : 0,
+        };
+      }),
+    };
+  }
+
 }

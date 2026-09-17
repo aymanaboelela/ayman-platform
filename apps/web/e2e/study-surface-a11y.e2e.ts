@@ -165,17 +165,38 @@ test.describe('the study surface', () => {
 
     await page.goto('/dashboard');
     /*
-     * `.first()`, exactly as the stage test above does, and for the reason
-     * `fixtures.ts` documents at length: the App Router keeps the OUTGOING
-     * segment in the document inside a `display: none` container, so arriving
-     * at /dashboard from the onboarding redirect leaves two `.dash-hero`
-     * elements mounted and a bare locator is a strict-mode violation.
+     * ⚠️ GATES ON `__eyebrow`, NOT ON `.dash-hero` ITSELF — and that is the
+     * difference between this test measuring something and measuring nothing.
      *
-     * The measurement below is unaffected — it reads `getComputedStyle`, which
-     * resolves colours inside a hidden subtree just as well — but the
-     * visibility gate has to name which one it means.
+     * `app/(app)/dashboard/loading.tsx:57` renders its skeleton as
+     * `<div className="dash-hero mb-6">`, deliberately: that file's own note
+     * explains the band is a filled ember surface rather than three grey bars,
+     * so the skeleton wears the real class. With `cacheComponents` on
+     * (`next.config.ts:53`) the dashboard document is a prerendered shell and
+     * the real hero resumes on the client AFTER `load` — so a gate on
+     * `.dash-hero` is satisfied by the SKELETON, and the `page.evaluate`
+     * below then runs against a DOM that has no `__eyebrow` in it at all and
+     * reports an empty object.
+     *
+     * That is exactly how it failed on `main` (run 34633191088): the gate
+     * passed 25 ms after `load` and the real hero painted 314 ms later. The
+     * margin had been under 25 ms for as long as this test had existed, so it
+     * had always been one slow runner away from this. `__eyebrow` exists only
+     * in `dashboard-hero.tsx`, never in the skeleton, so waiting for it waits
+     * for the thing being measured.
+     *
+     * `.first()` stays, and for the original reason `fixtures.ts` documents at
+     * length: the App Router keeps the OUTGOING segment in the document inside
+     * a `display: none` container, so arriving at /dashboard from the
+     * onboarding redirect leaves two of these mounted and a bare locator is a
+     * strict-mode violation. `toBeVisible` is still right on it — the outgoing
+     * copy is hidden, the incoming one is not.
+     *
+     * The measurement itself is unaffected either way: it reads
+     * `getComputedStyle`, which resolves colours inside a hidden subtree just
+     * as well.
      */
-    await expect(page.locator('.dash-hero').first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('.dash-hero__eyebrow').first()).toBeVisible({ timeout: 30_000 });
 
     const report = await page.evaluate(() => {
       const channels = (css: string) => css.match(/[\d.]+/g)!.map(Number);

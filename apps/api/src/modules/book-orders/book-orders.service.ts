@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import type { BookOrder, BookOrderStatus, CreateBookOrderInput, SubmitBookOrderPaymentInput } from '@ayman/contracts/book-orders';
 import type {
@@ -7,17 +12,26 @@ import type {
   AdminBookOrderSort,
   AdminBookOrderStream,
   AdminBookOrderRow,
+  AdminBookOrderOverview,
+  AdminBookOrderYearOverview,
   AdminCreateBookOrderInput,
   BulkBookOrderResult,
   BulkBookOrderResultRow,
   DeleteBookOrderResult,
+  ExportBookOrdersQuery,
+  PackingLabel,
+  PackingList,
+  PackingListLine,
   MarkBookOrderDeliveredResult,
+  MarkBookOrderPrintingResult,
   MarkBookOrderShippedResult,
+  PackingListYear,
   RejectBookOrderResult,
   RestoreBookOrderResult,
 } from '@ayman/contracts/admin/book-orders';
 import type { AdminBookOrderPatchInput } from '@ayman/contracts/admin/books';
-import { bookOrderTotals } from '@ayman/contracts/books';
+import { bookOrderRef, bookOrderYearWord } from '@ayman/contracts/admin/book-orders';
+import { bookOrderTotals, bookShippingCentsFor } from '@ayman/contracts/books';
 import { toAsciiDigits } from '@ayman/contracts/phone';
 import { streamChoiceOf } from '@ayman/contracts/content';
 import { copy } from '@ayman/contracts/copy';
@@ -188,6 +202,126 @@ function streamAndYearWhere(
 }
 
 /**
+ * ONE ORDER, reduced to exactly what the header counts.
+ *
+ * Declared here rather than inlined in the select so `summariseOrders` below is
+ * a pure function over a shape a test can construct by hand — the arithmetic it
+ * does is the part worth pinning, and it needs no database to be wrong.
+ */
+interface CountableOrder {
+  phone: string;
+  items: Array<{
+    quantity: number;
+    book: { year: number | null; forGeneral: boolean; forLanguages: boolean } | null;
+  }>;
+  course: { year: number | null; forGeneral: boolean; forLanguages: boolean } | null;
+}
+
+/** One line's answer to «أولى ولا تانية» and «عربي ولا لغات», with the order's
+ *  course as the fallback for a line whose book is not in the catalogue —
+ *  exactly the chain `packingList` and the admin row already walk. */
+function lineFacts(item: CountableOrder['items'][number], order: CountableOrder) {
+  const source = item.book ?? order.course;
+  return {
+    year: item.book?.year ?? order.course?.year ?? null,
+    forGeneral: source?.forGeneral ?? false,
+    forLanguages: source?.forLanguages ?? false,
+    quantity: item.quantity,
+  };
+}
+
+/**
+ * The header's arithmetic, in one place and with no database in it.
+ *
+ * ## An order with no lines still counts as one book
+ *
+ * Same rule the packing sheet follows, and for the same reason: a hand-edited
+ * order whose last line was removed is rare, real, and has an address somebody
+ * is waiting at. Dropping it here would make the header disagree with both the
+ * list above it and the spreadsheet below it — and «واحد ناقص» is precisely the
+ * complaint these numbers exist to prevent. It contributes no edition, because
+ * there is nothing to read one from.
+ *
+ * ## `general` + `languages` may exceed `copies`, and that is correct
+ *
+ * A book flagged for BOTH streams is genuinely on sale to both, so it is
+ * counted in both — «كام نسخة عربي؟» and «كام نسخة لغات؟» are two questions,
+ * not one partition. Dropping such a book from both lists to make the two sum
+ * would be the only arrangement that is wrong twice.
+ *
+ * ## The year buckets do not partition the orders either
+ *
+ * An order holding a first-year book and a second-year book is one order in
+ * `orders` and one order in EACH year's `orders`. The question a year bucket
+ * answers is «كام طلب فيه كتاب أولى», which is what a print run is decided on.
+ */
+function summariseOrders(rows: CountableOrder[]): AdminBookOrderOverview {
+  const totals = { orders: rows.length, books: 0, copies: 0, general: 0, languages: 0 };
+  const phones = new Set<string>();
+  /* Keyed by the year as a string so `null` («من غير صف») is a bucket like any
+     other rather than a value a `Map<number|null>` sorts unpredictably. */
+  const byYear = new Map<
+    string,
+    { year: number | null; books: number; copies: number; general: number; languages: number; phones: Set<string>; orders: Set<number> }
+  >();
+
+  rows.forEach((order, orderIndex) => {
+    phones.add(order.phone);
+
+    const facts =
+      order.items.length === 0
+        ? [{ year: order.course?.year ?? null, forGeneral: false, forLanguages: false, quantity: 1 }]
+        : order.items.map((item) => lineFacts(item, order));
+
+    for (const line of facts) {
+      totals.books += 1;
+      totals.copies += line.quantity;
+      if (line.forGeneral) totals.general += line.quantity;
+      if (line.forLanguages) totals.languages += line.quantity;
+
+      const key = String(line.year);
+      let bucket = byYear.get(key);
+      if (!bucket) {
+        bucket = { year: line.year, books: 0, copies: 0, general: 0, languages: 0, phones: new Set(), orders: new Set() };
+        byYear.set(key, bucket);
+      }
+      bucket.books += 1;
+      bucket.copies += line.quantity;
+      if (line.forGeneral) bucket.general += line.quantity;
+      if (line.forLanguages) bucket.languages += line.quantity;
+      bucket.phones.add(order.phone);
+      /* The ROW's index, not its id — two lines of the same order must count as
+         one order in this bucket, and the index is already unique per row here
+         and costs nothing to carry. */
+      bucket.orders.add(orderIndex);
+    }
+  });
+
+  /* Ascending, with «من غير صف» last rather than sorted as a zero — it is the
+     bucket nobody chose, and putting it above «سنة أولى» would read as the
+     first column of the screen. */
+  const years: AdminBookOrderYearOverview[] = [...byYear.values()]
+    .sort((a, b) => (a.year ?? 99) - (b.year ?? 99))
+    .map((bucket) => ({
+      year: bucket.year,
+      orders: bucket.orders.size,
+      students: bucket.phones.size,
+      books: bucket.books,
+      copies: bucket.copies,
+      streams: { general: bucket.general, languages: bucket.languages },
+    }));
+
+  return {
+    orders: totals.orders,
+    students: phones.size,
+    books: totals.books,
+    copies: totals.copies,
+    streams: { general: totals.general, languages: totals.languages },
+    years,
+  };
+}
+
+/**
  * كل قراءة بتخفي المحذوف — إلا تبويب «المحذوفة».
  *
  * The one place the soft-delete rule is spelled out, because it is a rule that
@@ -273,6 +407,9 @@ const ORDER_SELECT = {
   addressNote: true,
   senderPhone: true,
   paidAt: true,
+  /* «راح للمطبعة» — rendered on the student's card as «بنطبعه», and null on
+     every order that skipped the printer. See the column's own model note. */
+  printedAt: true,
   shippedAt: true,
   /* The three lifecycle stamps the student's own screen renders. `rejectedAt`
      and `rejectionReason` are inseparable at the database
@@ -330,6 +467,7 @@ interface OrderRow {
   addressNote: string | null;
   senderPhone: string | null;
   paidAt: Date | null;
+  printedAt: Date | null;
   shippedAt: Date | null;
   deliveredAt: Date | null;
   rejectedAt: Date | null;
@@ -338,6 +476,17 @@ interface OrderRow {
   course: { title: string; bookTitle: string | null } | null;
   items: OrderLineRow[];
 }
+
+/**
+ * How far back a finished order still counts as "you already ordered this".
+ *
+ * Seven days rather than a day: the two real double-payments on production were
+ * 38 and 48 hours apart, and a window that misses them is a window that does
+ * nothing. Longer than a week starts catching the honest second copy — a
+ * sibling, a lost parcel — which the student can still place, but should not
+ * have to argue with a dialog about.
+ */
+const DUPLICATE_WINDOW_DAYS = 7;
 
 @Injectable()
 export class BookOrdersService {
@@ -395,6 +544,7 @@ export class BookOrdersService {
       addressNote: row.addressNote,
       senderPhone: row.senderPhone,
       paidAt: row.paidAt?.toISOString() ?? null,
+      printedAt: row.printedAt?.toISOString() ?? null,
       shippedAt: row.shippedAt?.toISOString() ?? null,
       deliveredAt: row.deliveredAt?.toISOString() ?? null,
       rejectedAt: row.rejectedAt?.toISOString() ?? null,
@@ -474,7 +624,151 @@ export class BookOrdersService {
         ? await this.priceCart(input.items)
         : await this.priceCourseBook(input.courseId as string);
 
-    const totals = bookOrderTotals(priced.lines, await this.books.shippingCents());
+    /* ⚠️ Priced off the ADDRESS, and off the address on THIS order — «الشحن على
+       حسب المحافظة». Read here rather than posted from the form, for the same
+       reason the book prices are: a fee a browser can choose is a fee a browser
+       will choose. It is still added exactly ONCE by `bookOrderTotals`, however
+       many books are in the basket. */
+    const totals = bookOrderTotals(
+      priced.lines,
+      bookShippingCentsFor(input.governorateCode, await this.books.shippingRates()),
+    );
+
+    /**
+     * ⚠️ THE SAME PHONE'S OWN UNPAID ORDER IS REUSED, NOT DUPLICATED.
+     *
+     * Measured on production 2026-09-14: **95 of 192 live orders were sitting
+     * at `address_only`** — an address filled in and no payment ever made — and
+     * 44 phones had more than one order. Almost every pair was the same books,
+     * the same amount, and **six minutes apart**.
+     *
+     * They were not students ordering twice. `BookOrderPanel` resumes an
+     * in-progress order from `localStorage`, so the resume works on ONE browser
+     * — open the shop on a second phone, in a private window, or after clearing
+     * site data, and the address form posts a brand-new row. Half the admin's
+     * queue was one person's abandoned first attempt, which is why the queue
+     * stopped being reviewable at all.
+     *
+     * So the identity of an in-progress order is the PHONE, server-side, not a
+     * key in one browser's storage. Same phone, same lines, still unpaid ⇒ the
+     * address is updated on the row that already exists.
+     *
+     * ⚠️ `status: 'address_only'` only. A paid, shipped, rejected or deleted
+     * order is finished business and must never be silently rewritten by a new
+     * submission — that would edit the shipping address of a parcel already on
+     * its way.
+     *
+     * ⚠️ And the student is told NOTHING about this. They did not order twice;
+     * they filled a form twice. A confirmation here would be asking someone to
+     * approve a mistake they did not make.
+     */
+    /*
+     * ⚠️ `bookId` is NULLABLE on an order line — a course-page order predating
+     * the shop names a course, not a catalogue book. Two such lines with a null
+     * id are NOT interchangeable, so a null key falls back to the course, and
+     * an order whose course is also null can never match anything (`''`
+     * compares equal to nothing else here because `priced.courseId` is the same
+     * value on both sides only when both came from the same course).
+     */
+    const lineKey = (r: { bookId: string | null; quantity: number }) =>
+      `${r.bookId ?? `course:${priced.courseId ?? ''}`}:${r.quantity}`;
+
+    const sameLines = (rows: { bookId: string | null; quantity: number }[]): boolean => {
+      if (rows.length !== priced.lines.length) return false;
+      const mine = new Set(priced.lines.map(lineKey));
+      return rows.every((row) => mine.has(lineKey(row)));
+    };
+
+    /**
+     * ⚠️ WHO the open order has to belong to, and why it is not just the phone.
+     *
+     * The phone alone merges two people. One number is routinely a PARENT's —
+     * two siblings ordering their own year's book on mum's phone are two
+     * orders, and collapsing them would ship one book for two paid children.
+     * The existing spec that caught this seeds two different users from one
+     * address fixture, and it was right to fail.
+     *
+     * · Signed in ⇒ the account. Unambiguous, and it survives the student
+     *   switching phone number mid-flow.
+     * · Guest ⇒ phone AND name, both, on an unclaimed row. A guest has no
+     *   identity beyond what they typed; the name is what separates the two
+     *   siblings, and matching a guest's order to an account-placed one would
+     *   also hand a stranger the ability to edit it.
+     */
+    const owner =
+      ownerId !== null
+        ? { userId: ownerId }
+        : { userId: null, phone: input.phone, fullName: input.fullName };
+
+    /*
+     * ⚠️ Only for a CHECKOUT submission. `create()` keeps its plain meaning for
+     * every other caller — see `reuseOpenOrder` in the contract for the fifteen
+     * specs that proved why.
+     */
+    const open = input.reuseOpenOrder
+      ? await this.prisma.bookOrder.findMany({
+          where: { ...owner, status: 'address_only', deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, items: { select: { bookId: true, quantity: true } } },
+        })
+      : [];
+    const reusable = open.find((row) => sameLines(row.items));
+
+    if (reusable) {
+      await this.prisma.bookOrder.update({
+        where: { id: reusable.id },
+        data: {
+          // The ADDRESS may legitimately have changed between attempts — that is
+          // often exactly why they started over. Prices are not touched: they
+          // were read from the catalogue moments ago either way.
+          fullName: input.fullName,
+          phone: input.phone,
+          altPhone: input.altPhone,
+          governorateCode: input.governorateCode,
+          city: input.city,
+          addressStreet: input.addressStreet,
+          addressBuilding: input.addressBuilding,
+          addressNote: input.addressNote,
+        },
+      });
+      return this.byId(reusable.id);
+    }
+
+    /**
+     * A GENUINE repeat — the phone has a FINISHED order for the same books in
+     * the last week — is a question, not a refusal.
+     *
+     * ⚠️ The window looks at every non-open status, not just «paid». This
+     * platform has no payment gateway and nobody verifies the transfer: «مدفوع»
+     * is a claim a student made with a screenshot. A check that trusted it
+     * would miss exactly the case that cost money — two phones paid 250 EGP
+     * twice, 38 and 48 hours apart, for the same book.
+     *
+     * ⚠️ 409, not 400. The panel turns this one code into «إنت طلبت الكتاب
+     * قبل كده — عايز واحد كمان؟» and re-posts with `confirmDuplicate`. A 400
+     * would be rendered as a validation failure on a form that is perfectly
+     * valid.
+     */
+    if (input.reuseOpenOrder && !input.confirmDuplicate) {
+      const since = new Date(Date.now() - DUPLICATE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+      const recent = await this.prisma.bookOrder.findMany({
+        where: {
+          // ⚠️ The PHONE here, deliberately wider than the reuse match above.
+          // Reuse rewrites a row and must be sure whose it is; this only asks a
+          // question, and the case worth catching is the same human coming back
+          // on a different device with no session. A sibling on the same number
+          // answers «لأ، عايز نسخة كمان» once and is through.
+          phone: input.phone,
+          status: { not: 'address_only' },
+          deletedAt: null,
+          createdAt: { gte: since },
+        },
+        select: { items: { select: { bookId: true, quantity: true } } },
+      });
+      if (recent.some((row) => sameLines(row.items))) {
+        throw new ConflictException('DUPLICATE_RECENT_BOOK_ORDER');
+      }
+    }
 
     const order = await this.prisma.bookOrder.create({
       data: {
@@ -748,6 +1042,11 @@ export class BookOrdersService {
    * `paidAt: now` and moves `status` to `'paid'` — in the SAME write, since
    * there is no separate row to update here. `senderPhone`/`screenshotKey`
    * are carried through only when `paid`, same as a genuine payment step.
+   *
+   * `input.isFree` decides it too, and overrides a `paid: false`: a giveaway
+   * has nothing left to collect, so it is settled by definition. See the
+   * `status` line below, and `markFree` for the same rule applied to an order
+   * labelled after it was already in the table.
    */
   async adminCreate(adminId: string, input: AdminCreateBookOrderInput): Promise<BookOrder> {
     if (input.screenshotKey !== null && !input.screenshotKey.startsWith(`${SCREENSHOT_PREFIX}/`)) {
@@ -787,7 +1086,14 @@ export class BookOrdersService {
      * on. `book_orders_free_collects_nothing` then holds `amountCents` at 0,
      * which is what keeps it out of revenue.
      */
-    const requestedShipping = input.shippingCents ?? (await this.books.shippingCents());
+    /* The admin MAY type a fee — waiving it, or quoting one agreed on the phone
+       — and that override is the whole reason this is `??` and not the zone
+       lookup outright. With nothing typed it falls to the same zone rate the
+       public checkout would have charged for this address, rather than to a
+       flat number that has not been the price since delivery became zoned. */
+    const requestedShipping =
+      input.shippingCents ??
+      bookShippingCentsFor(input.governorateCode, await this.books.shippingRates());
     const grossCents = bookOrderTotals(priced.lines, requestedShipping, 0).totalCents;
     const totals = bookOrderTotals(
       priced.lines,
@@ -817,8 +1123,14 @@ export class BookOrdersService {
         senderPhone: input.paid ? input.senderPhone : null,
         screenshotKey: input.paid ? input.screenshotKey : null,
         isFree: input.isFree,
-        status: input.paid ? 'paid' : 'address_only',
-        paidAt: input.paid ? now : null,
+        /* «مجاني» settles the order on its own — there is nothing left to
+           collect, so it is `paid` whatever the caller said. The dialog already
+           sends `paid: true` alongside the switch; this is the same rule stated
+           where it cannot be forgotten, and it is the invariant `markFree`
+           upholds for a row that is labelled after the fact: a free order that
+           stayed `address_only` is an order no ship route will touch. */
+        status: input.paid || input.isFree ? 'paid' : 'address_only',
+        paidAt: input.paid || input.isFree ? now : null,
       },
       select: { id: true },
     });
@@ -884,6 +1196,10 @@ export class BookOrdersService {
         amountCents: true,
         shippingCents: true,
         discountCents: true,
+        /* For the re-quote below: «اتغيّرت المحافظة ولا لأ» has to be answered
+           against what the row SAYS, not against whether the field was sent —
+           re-saving the same governorate is not an address change. */
+        governorateCode: true,
         items: { select: { titleAr: true, unitPriceCents: true, quantity: true, bookId: true } },
       },
     });
@@ -941,9 +1257,36 @@ export class BookOrdersService {
     const patchedLines = input.items === undefined ? null : await this.withFrozenCost(input.items);
 
     const lines = input.items ?? existing.items;
+    /*
+     * ── Moving the address re-quotes the delivery, unless it is settled ──
+     *
+     * «الشحن على حسب المحافظة»: an order corrected from القاهرة to أسوان is an
+     * eighty-pound fee on a hundred-and-fifty-pound delivery, and leaving it
+     * would make the address edit quietly eat the difference on exactly the
+     * parcels that cost most.
+     *
+     * Three conditions, and each one is load-bearing:
+     *
+     *   · a governorate was actually SENT — this PATCH is partial, and
+     *     `undefined` means "not touched", never "clear it";
+     *   · no fee was typed — an admin who wrote a number was negotiating, and a
+     *     lookup must never overwrite a decision;
+     *   · the order is not `delivered` — the guard above lets an address be
+     *     corrected on a completed sale precisely because that is NOT a money
+     *     change, and re-quoting there would restate revenue `/admin/finance`
+     *     has already reported. The frozen fee stands.
+     */
+    const reQuoteShipping =
+      input.shippingCents === undefined &&
+      input.governorateCode !== undefined &&
+      input.governorateCode !== existing.governorateCode &&
+      existing.status !== 'delivered';
     const totals = bookOrderTotals(
       lines,
-      input.shippingCents ?? existing.shippingCents,
+      input.shippingCents ??
+        (reQuoteShipping
+          ? bookShippingCentsFor(input.governorateCode, await this.books.shippingRates())
+          : existing.shippingCents),
       input.discountCents ?? existing.discountCents,
     );
 
@@ -1247,6 +1590,7 @@ export class BookOrdersService {
           status: true,
           createdAt: true,
           paidAt: true,
+          printedAt: true,
           shippedAt: true,
           deliveredAt: true,
           rejectedAt: true,
@@ -1333,6 +1677,7 @@ export class BookOrdersService {
         status: row.status,
         createdAt: row.createdAt.toISOString(),
         paidAt: row.paidAt?.toISOString() ?? null,
+        printedAt: row.printedAt?.toISOString() ?? null,
         shippedAt: row.shippedAt?.toISOString() ?? null,
         deliveredAt: row.deliveredAt?.toISOString() ?? null,
         rejectedAt: row.rejectedAt?.toISOString() ?? null,
@@ -1351,6 +1696,67 @@ export class BookOrdersService {
         ),
       })),
     };
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * «كام نسخة، كام كتاب، كام طالب، كام عربي، كام لغات» — الأرقام فوق الشاشة.
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * The header on `/admin/books`, computed over the WHOLE filtered set — the
+   * open tab plus every dropdown the screen is showing — and never over the
+   * page.
+   *
+   * ## Why it does not count the rendered rows
+   *
+   * The list is fifty per page. «حدّد اللي في المدى» already made this exact
+   * mistake once: it ticked the fifty rows on screen while the tab held
+   * fifty-two, so the button read «(50)» beside a sidebar badge reading «52»
+   * and a batch «اتشحن» silently left two parcels behind. A header that
+   * counted the page would be the same bug with no button to press — the
+   * number would simply be wrong, and nothing on the screen would say so.
+   *
+   * ## Why it re-reads rows instead of running five `COUNT`s
+   *
+   * Every number here except `orders` is a property of the ORDER LINES, not of
+   * the order: copies are quantities, the edition is a pair of booleans on the
+   * book, and الصف is the book's year with the order's course as the fallback.
+   * Five aggregates over `book_order_items` joined back to `book_orders` would
+   * each need that same fallback re-expressed in SQL, and the first one to
+   * spell it differently would produce a header whose parts disagree.
+   *
+   * The select is deliberately narrower than the one `packingList` already runs
+   * over the same set — no addresses, no governorate join — so this is the
+   * cheaper of the two reads this screen was already making.
+   *
+   * ## «كام طالب» counts PHONE NUMBERS
+   *
+   * Most rows on this table are guests (`userId: null`). Counting distinct
+   * `userId` would report one student for a hundred guest orders; counting rows
+   * would report the same person once per order. The number they typed is the
+   * only identifier every order has and the same person reuses — which is
+   * already why `previousOrdersFromPhone` counts on it.
+   */
+  async adminOverview(query: AdminBookOrderQuery): Promise<AdminBookOrderOverview> {
+    const rows = await this.prisma.bookOrder.findMany({
+      where: {
+        ...liveOrDeletedWhere(query.status),
+        ...this.adminSearchWhere(query.q),
+        ...streamAndYearWhere(query.stream, query.year),
+      },
+      select: {
+        phone: true,
+        items: {
+          select: {
+            quantity: true,
+            book: { select: { year: true, forGeneral: true, forLanguages: true } },
+          },
+        },
+        course: { select: { year: true, forGeneral: true, forLanguages: true } },
+      },
+    });
+
+    return summariseOrders(rows);
   }
 
   /**
@@ -1456,21 +1862,48 @@ export class BookOrdersService {
    * the row back in the state the badge complains about, and the way to fix a
    * wrong label is the edit dialog that can also fix the price it should have
    * had.
+   *
+   * ## It also SETTLES the order — «يروح للمدفوع عشان يتشحنله»
+   *
+   * A free order is `paid: true` AND `isFree: true`, which is exactly what
+   * `adminCreate` writes for the «مجاني» switch on the create dialog: there is
+   * nothing left to collect, so the row belongs in the shipping queue and is
+   * handled «زي أي طلب» from there on. This method used to flip the flag and
+   * leave `status` at `address_only`, which produced the one order shape the
+   * platform could not ship at all — `markShipped` and `markShippedMany` both
+   * take only `paid` rows, so the parcel had no way out of the «بدأ ومكملش
+   * الدفع» tab short of an edit that gave it a price it was never charged.
+   *
+   * `paidAt` is stamped for the same reason `adminCreate` stamps it: the
+   * shipping desk sorts and exports on it, and a `paid` row with no date is a
+   * hole in every one of those lists. It moves no money — revenue reads
+   * `BOOK_REVENUE_WHERE`, which excludes `isFree` rows by name.
+   *
+   * Only `address_only` moves. A row that already shipped, arrived or was
+   * rejected keeps the state it reached; re-labelling what it collected must
+   * not rewind where the parcel got to.
    */
   async markFree(adminId: string, orderId: string): Promise<{ id: string; isFree: boolean }> {
     const order = await this.orderForAdminAction(orderId);
     this.assertNotDeleted(order);
 
-    if (order.isFree) return { id: order.id, isFree: true };
-    if (order.amountCents !== 0) {
+    if (!order.isFree && order.amountCents !== 0) {
       throw new BadRequestException(
         'الطلب ده اتحصّل منه فلوس — عدّل قيمته من «تعديل» لو عايز تخليه مجاني',
       );
     }
 
+    /* Re-running this on a row that is already free is a no-op UNLESS it is one
+       of the rows stranded in `address_only` by the version that only wrote the
+       flag — those it finishes, rather than returning "already done" to an
+       order that still cannot be shipped. */
+    const settles = order.status === 'address_only';
+    if (order.isFree && !settles) return { id: order.id, isFree: true };
+
+    const now = new Date();
     await this.prisma.bookOrder.update({
       where: { id: order.id },
-      data: { isFree: true },
+      data: settles ? { isFree: true, status: 'paid', paidAt: now } : { isFree: true },
     });
 
     await this.audit.record({
@@ -1478,7 +1911,15 @@ export class BookOrdersService {
       resourceType: AUDIT_RESOURCES.bookOrder,
       resourceId: order.id,
       outcome: 'success',
-      metadata: { adminId, userId: order.userId, courseId: order.courseId, status: order.status },
+      metadata: {
+        adminId,
+        userId: order.userId,
+        courseId: order.courseId,
+        status: order.status,
+        /* «راح للمدفوع؟» — the one part of this action that changes which tab
+           the row is on, and the only way to tell the two shapes apart later. */
+        settled: settles,
+      },
     });
 
     return { id: order.id, isFree: true };
@@ -1505,10 +1946,148 @@ export class BookOrdersService {
    * on a registered student's own number still reaches their bell — without the
    * row ever being claimed. See `create` for why claiming it is the wrong fix.
    */
-  async markShipped(adminId: string, orderId: string): Promise<MarkBookOrderShippedResult> {
+  /**
+   * «راح للمطبعة» — the hand-off BEFORE the courier's.
+   *
+   * ## The loop this closes
+   *
+   * «الراجل بيقولي هاتلي الكتب، فأنزّله PDF وأحدد على الناس كلهم، وبعدين أضغط
+   * الطباعة. ولما أتأكد إنه فعلاً هيشحن أضغط الشحن.» Two hand-offs, one day,
+   * and until now both collapsed into «اتشحن» — so the «مدفوعة» tab could not
+   * answer the one question it is opened for every morning: which of these have
+   * already gone to the printer. The packing list is downloaded, the rows are
+   * selected, and this is the button that records what happened to them.
+   *
+   * ## Nothing is sent to the student
+   *
+   * Deliberately, and it is the only transition on this model that tells nobody.
+   * Paper entering a print shop is not news to a student, and a message about
+   * it would promise a date the run itself cannot keep — `book_order_shipped`
+   * stays the first thing they hear. That also makes the audit row the ONLY
+   * record this happened, which is why `book-order:printing` is an action of its
+   * own rather than a flag on `book-order:ship`.
+   *
+   * ## Only from `paid`
+   *
+   * Not from `shipped` or `delivered` — sending a parcel that has already left
+   * back to the printer is not a correction, it is two different facts about one
+   * row, and the way to undo a wrong click is the edit dialog. Not from
+   * `address_only` either: nothing is printed for an order nobody has paid for.
+   * Each refusal names its own case, so the admin never has to guess which of
+   * the three it was.
+   */
+  async markPrinting(adminId: string, orderId: string): Promise<MarkBookOrderPrintingResult> {
     const order = await this.orderForAdminAction(orderId);
     this.assertNotDeleted(order);
     if (order.status !== 'paid') {
+      throw new BadRequestException(
+        order.status === 'printing'
+          ? 'this order is already at the printer'
+          : order.status === 'shipped' || order.status === 'delivered'
+            ? 'this order has already left — it cannot go back to the printer'
+            : order.status === 'rejected'
+              ? 'this order was rejected — restore it to a live status first'
+              : 'this order has not been paid yet',
+      );
+    }
+
+    const now = new Date();
+    /* One statement, because `book_orders_printing_status_has_a_stamp` will not
+       accept the status without the timestamp — so the constraint can only ever
+       fire on a bug in this method, which is what a constraint is for. */
+    await this.prisma.bookOrder.update({
+      where: { id: order.id },
+      data: { status: 'printing', printedAt: now, printedByUserId: adminId },
+    });
+
+    await this.audit.record({
+      action: 'book-order:printing',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      metadata: { userId: order.userId, courseId: order.courseId, adminId },
+    });
+
+    return { id: order.id, status: 'printing', printedAt: now.toISOString() };
+  }
+
+  /**
+   * «أحدد على الناس كلهم وأضغط الطباعة» — the batch, which is the ONLY way this
+   * is ever really used: a print run is thirty orders, not one.
+   *
+   * ## Why this one CAN be a loop of simple updates
+   *
+   * Unlike `markShippedMany`, nothing here is sent anywhere. There is no
+   * WhatsApp socket to half-succeed against, so the only failure mode is a row
+   * that was not `paid`, and that is reported per id exactly the way the other
+   * batches report theirs — `skipped`, with the reason named, so the admin can
+   * see WHICH three of thirty did not move instead of re-reading thirty rows.
+   *
+   * It still does not wrap the batch in one transaction. Thirty orders going to
+   * one printer is thirty independent facts; rolling back twenty-nine because
+   * the thirtieth had already shipped would undo work that really happened.
+   */
+  async markPrintingMany(adminId: string, ids: string[]): Promise<BulkBookOrderResult> {
+    const rows: BulkBookOrderResultRow[] = [];
+    for (const id of ids) {
+      const order = await this.prisma.bookOrder.findUnique({
+        where: { id },
+        select: { id: true, status: true, fullName: true, deletedAt: true },
+      });
+
+      if (!order || order.deletedAt !== null) {
+        rows.push({ id, outcome: 'skipped', fullName: '', reason: 'الطلب مش موجود' });
+        continue;
+      }
+      if (order.status !== 'paid') {
+        rows.push({
+          id,
+          outcome: 'skipped',
+          fullName: order.fullName,
+          reason:
+            order.status === 'printing'
+              ? 'راح للمطبعة قبل كده'
+              : order.status === 'shipped' || order.status === 'delivered'
+                ? 'اتشحن خلاص'
+                : 'لسه مادفعش',
+        });
+        continue;
+      }
+
+      try {
+        await this.markPrinting(adminId, id);
+        rows.push({ id, outcome: 'printing', fullName: order.fullName, reason: null });
+      } catch (error) {
+        /* The status was checked a moment ago, so this is a genuine race or a
+           deleted row — reported rather than swallowed, for the same reason
+           `markDeliveredMany` reports its own. */
+        rows.push({
+          id,
+          outcome: 'skipped',
+          fullName: order.fullName,
+          reason: error instanceof BadRequestException ? error.message : 'مقدرناش نسجّله',
+        });
+      }
+    }
+
+    return {
+      rows,
+      succeeded: rows.filter((row) => row.outcome === 'printing').length,
+      noticeFailed: 0,
+      skipped: rows.filter((row) => row.outcome === 'skipped').length,
+    };
+  }
+
+  async markShipped(adminId: string, orderId: string): Promise<MarkBookOrderShippedResult> {
+    const order = await this.orderForAdminAction(orderId);
+    this.assertNotDeleted(order);
+    /* `printing` ships for the same reason `paid` does — it IS `paid`, one
+       hand-off later. And `paid` still ships directly, because «راح للمطبعة»
+       is a step the work takes, not a gate the state machine imposes: a single
+       reprint handed over the counter never sees a print run, and demanding a
+       fake one to unlock this button would put a lie in the audit trail. Same
+       argument `markDelivered` has always made for accepting `paid`. */
+    if (order.status !== 'paid' && order.status !== 'printing') {
       throw new BadRequestException(
         order.status === 'shipped' ? 'this order already shipped' : 'this order has not been paid yet',
       );
@@ -1603,7 +2182,11 @@ export class BookOrdersService {
         rows.push({ id, outcome: 'skipped', fullName: '', reason: 'الطلب مش موجود' });
         continue;
       }
-      if (order.status !== 'paid') {
+      /* `printing` is shippable — see `markShipped`. A row that went to the
+         printer this morning is exactly the row this batch runs on when the
+         boxes come back in the afternoon, and skipping it here would make the
+         new state a dead end reachable only one row at a time. */
+      if (order.status !== 'paid' && order.status !== 'printing') {
         rows.push({
           id,
           outcome: 'skipped',
@@ -1778,7 +2361,7 @@ export class BookOrdersService {
   async markDelivered(adminId: string, orderId: string): Promise<MarkBookOrderDeliveredResult> {
     const order = await this.orderForAdminAction(orderId);
     this.assertNotDeleted(order);
-    if (order.status !== 'paid' && order.status !== 'shipped') {
+    if (order.status !== 'paid' && order.status !== 'printing' && order.status !== 'shipped') {
       throw new BadRequestException(
         order.status === 'delivered'
           ? 'this order was already marked delivered'
@@ -2037,154 +2620,14 @@ export class BookOrdersService {
    * the export is to see what was removed. Every other value excludes deleted
    * rows through the same `liveOrDeletedWhere` the screen uses: a spreadsheet
    * handed to a courier must not contain a parcel nobody is sending.
+   *
+   * ⚠️ It reads the SCREEN's filters — `stream`, `year` and `q` — and not only
+   * the tab and the dates. See `ExportBookOrdersQuerySchema`'s own note: the
+   * file has to be the list the admin was looking at, or counting it against
+   * the screen is the admin's problem rather than the code's.
    */
-  async exportXlsx(
-    status: AdminBookOrderFilter,
-    from: string | null,
-    to: string | null,
-  ): Promise<Buffer> {
-    /*
-     * «هتقول انت عايز من يوم كام لـ يوم كام» — the packing list for one run
-     * to the printer, not the whole history.
-     *
-     * Both ends are widened to the FULL day. `from` is that date at 00:00 and
-     * `to` is the day AFTER at 00:00 with a `lt` — an inclusive `lte` on the
-     * bare date would silently drop every order placed after midnight on the
-     * last day, which is most of them, and the admin would only notice when
-     * the printer came up short.
-     */
-    const createdAt =
-      from || to
-        ? {
-            ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
-            ...(to
-              ? { lt: new Date(new Date(`${to}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000) }
-              : {}),
-          }
-        : undefined;
-
-    const rows = await this.prisma.bookOrder.findMany({
-      where: { ...liveOrDeletedWhere(status), ...(createdAt ? { createdAt } : {}) },
-      orderBy: [{ createdAt: 'asc' }],
-      select: {
-        fullName: true,
-        phone: true,
-        altPhone: true,
-        city: true,
-        addressStreet: true,
-        addressBuilding: true,
-        addressNote: true,
-        amountCents: true,
-        shippingCents: true,
-        createdAt: true,
-        items: ORDER_ITEM_SELECT,
-        course: { select: { title: true, year: true, forGeneral: true, forLanguages: true, bookTitle: true } },
-        governorate: { select: { nameAr: true } },
-      },
-    });
-
-    const streamLabel = {
-      general: copy.stream.general,
-      languages: copy.stream.languages,
-      both: copy.stream.both,
-    };
-
-    /*
-     * ═══════════════════════════════════════════════════════════════════════
-     * THE SHIPPING SHEET IS A PACKING LIST, NOT AN INVOICE.
-     *
-     * «وأنا بصدّر متحطش السعر… يبقى العربي فوق وتحته اللغات، وبينهم خط،
-     *  واكتب أرقام ١ و ٢ و ٣، وفوق اكتب عدد العربي كام واللغات كام.»
-     *
-     * ## Why the money is gone
-     *
-     * Three columns used to carry it — سعر النسخة، الشحن، إجمالي الطلب — and
-     * this file goes to a print shop and a courier. Neither is owed what a
-     * student paid, every one of those numbers is a number somebody can
-     * mis-read as what they are owed, and the revenue figures live on
-     * `/admin/finance` where they belong. A packing list that quotes prices is
-     * a packing list that gets quoted back.
-     *
-     * ## Why it is grouped and ruled
-     *
-     * The two editions are physically different stacks of paper. A sheet that
-     * interleaves them makes the packer decide per row which pile to reach
-     * into; grouping makes it two passes with a line between them. The rule is
-     * drawn as a real bordered row rather than a blank one, because a blank row
-     * disappears the moment anyone sorts — and somebody always sorts.
-     *
-     * ## Why the counts are at the TOP
-     *
-     * They are what he checks BEFORE printing: «أولى سنة كام كتاب وكام نسخة».
-     * Books and COPIES are counted separately and on purpose — twenty orders
-     * for one title is one thing to print and twenty things to pack.
-     * ═══════════════════════════════════════════════════════════════════════
-     */
-    interface SheetLine {
-      seq: number;
-      bookTitle: string;
-      quantity: number;
-      courseTitle: string;
-      year: number | '';
-      stream: string;
-      fullName: string;
-      phone: string;
-      altPhone: string;
-      governorate: string;
-      city: string;
-      street: string;
-      building: string | null;
-      note: string;
-      createdAt: string;
-    }
-
-    const lines: Array<Omit<SheetLine, 'seq'>> = [];
-    for (const row of rows) {
-      /*
-       * ONE ROW PER BOOK, not per order. A courier packs titles, and an order
-       * with three of them collapsed onto one line is a line somebody has to
-       * phone about. The address is repeated on each — spreadsheets are read by
-       * sorting and filtering, and a blank address on the second line of a
-       * group disappears the moment anyone does either.
-       *
-       * ⚠️ The stream is per LINE, and the order's course is only the fallback.
-       * This column was blank on nearly every row until `books.for_general` /
-       * `for_languages` existed: it read `order.course`, and a cart order has
-       * no course at all — so the one thing the print shop needs was missing on
-       * exactly the orders that make up most of the list. The course fallback
-       * stays for a course-page order whose book was never mirrored into the
-       * catalogue; blank when neither exists, which is honest.
-       */
-      const courseStream = row.course ? streamLabel[streamChoiceOf(row.course)] : '';
-      for (const item of row.items) {
-        lines.push({
-          bookTitle: item.titleAr,
-          quantity: item.quantity,
-          courseTitle: row.course?.title ?? '',
-          year: row.course?.year ?? '',
-          stream: item.book ? streamLabel[streamChoiceOf(item.book)] : courseStream,
-          fullName: row.fullName,
-          phone: row.phone,
-          altPhone: row.altPhone,
-          governorate: row.governorate.nameAr,
-          city: row.city,
-          street: row.addressStreet,
-          building: row.addressBuilding,
-          note: row.addressNote ?? '',
-          createdAt: row.createdAt.toISOString().slice(0, 10),
-        });
-      }
-    }
-
-    /* عربي first, then لغات, then anything with no edition at all — a
-       hand-typed «ملزمة مراجعة» has no stream and must not be silently filed
-       under one. Within a group the original order (oldest first) survives,
-       because that is the queue the desk works through. */
-    const groupsInOrder = [copy.stream.general, copy.stream.languages, copy.stream.both] as const;
-    const grouped = [
-      ...groupsInOrder.map((label) => ({ label, rows: lines.filter((l) => l.stream === label) })),
-      { label: '', rows: lines.filter((l) => !groupsInOrder.includes(l.stream as never)) },
-    ].filter((group) => group.rows.length > 0);
+  async exportXlsx(query: ExportBookOrdersQuery): Promise<Buffer> {
+    const list = await this.packingList(query);
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('طلبات الكتب');
@@ -2223,40 +2666,60 @@ export class BookOrdersService {
      * keys. Two counts per line and never one: «كام كتاب» is what to print and
      * «كام نسخة» is what to pack, and they differ the moment anybody orders two.
      */
-    const copies = (rows_: Array<Omit<SheetLine, 'seq'>>) =>
-      rows_.reduce((n, l) => n + l.quantity, 0);
-
     const summary: string[][] = [['طلبات الكتب — ملخص']];
-    for (const group of grouped) {
-      const label = group.label || 'من غير طبعة محددة';
-      summary.push([`${label}: ${group.rows.length} كتاب · ${copies(group.rows)} نسخة`]);
-      /* Per YEAR inside each edition — «سنة أولى كام كتاب وكام نسخة عربي». The
-         years present are read from the data rather than assumed 1..3, so a
-         sheet with nothing in a year does not print an empty line for it. */
-      const years = [...new Set(group.rows.map((l) => l.year).filter((y): y is number => y !== ''))].sort();
-      for (const year of years) {
-        const inYear = group.rows.filter((l) => l.year === year);
-        summary.push([`   الصف ${year}: ${inYear.length} كتاب · ${copies(inYear)} نسخة`]);
+    /*
+     * الصفوف الأول، قبل الطبعات.
+     *
+     * «لو حمّلت الاتنين تقولي كام كتاب سنة أولى وكام كتاب سنة تانية» — that is
+     * the first thing read off this file, and it used to be reachable only by
+     * adding one line from the عربي block to one line from the لغات block. The
+     * edition breakdown stays underneath, because the paper is still stacked by
+     * edition and the packer still walks it that way.
+     */
+    if (list.years.length > 0) {
+      summary.push(['الصفوف']);
+      for (const year of list.years) {
+        const name = year.year === null ? 'من غير صف' : `سنة ${bookOrderYearWord(year.year)}`;
+        const streams = year.streams
+          .map((entry) => `${entry.label || 'من غير طبعة'} ${entry.copies}`)
+          .join(' · ');
+        summary.push([
+          `${name}: ${year.orders} طلب · ${year.books} كتاب · ${year.copies} نسخة${streams ? ` (${streams})` : ''}`,
+        ]);
       }
-      const noYear = group.rows.filter((l) => l.year === '');
-      if (noYear.length > 0) {
-        summary.push([`   من غير صف: ${noYear.length} كتاب · ${copies(noYear)} نسخة`]);
+      summary.push([]);
+      summary.push(['الطبعات']);
+    }
+    for (const group of list.groups) {
+      const label = group.label || 'من غير طبعة محددة';
+      summary.push([`${label}: ${group.books} كتاب · ${group.copies} نسخة`]);
+      for (const year of group.years) {
+        const name = year.year === null ? 'من غير صف' : `الصف ${year.year}`;
+        summary.push([`   ${name}: ${year.books} كتاب · ${year.copies} نسخة`]);
       }
     }
-    summary.push([`الإجمالي: ${lines.length} كتاب · ${copies(lines)} نسخة`]);
+    /* الطلبات first, and on its own line. It is the ONLY number on this sheet
+       that can be compared with the screen the admin pressed the button on —
+       the screen counts ORDERS and the rest of this block counts BOOKS, and an
+       order holding two titles is what «واحد ناقص» looks like when the two are
+       read as the same number. */
+    summary.push([`الطلبات: ${list.orders} طلب`]);
+    summary.push([`الإجمالي: ${list.books} كتاب · ${list.copies} نسخة`]);
     summary.push([]);
 
     sheet.spliceRows(1, 0, ...summary);
+    /* Bold: the sheet's own title, the two section headers («الصفوف» /
+       «الطبعات» — matched by VALUE rather than by index, because the year block
+       is conditional and an index arithmetic that has to know whether it ran is
+       an index arithmetic that stops being right), and the grand total. */
+    const SECTION_HEADERS = new Set(['الصفوف', 'الطبعات']);
     for (let i = 1; i <= summary.length; i += 1) {
-      sheet.getRow(i).font = { bold: i === 1 || i === summary.length - 1 };
+      const text = summary[i - 1]?.[0] ?? '';
+      sheet.getRow(i).font = { bold: i === 1 || i === summary.length - 1 || SECTION_HEADERS.has(text) };
     }
     sheet.getRow(summary.length + 1).font = { bold: true };
 
-    /* The numbering restarts nowhere: «١، ٢، ٣» down the whole sheet is what a
-       packer counts against, and a per-group restart would make «رقم ١٢» mean
-       two different rows. */
-    let seq = 0;
-    grouped.forEach((group, index) => {
+    list.groups.forEach((group, index) => {
       if (index > 0) {
         /* The rule between the editions. A BORDERED row, not a blank one — a
            blank row vanishes the first time anybody sorts the sheet, and this
@@ -2267,13 +2730,428 @@ export class BookOrdersService {
           cell.border = { top: { style: 'medium' } };
         });
       }
-      for (const line of group.rows) {
-        seq += 1;
-        sheet.addRow({ ...line, seq });
+      for (const line of group.lines) {
+        sheet.addRow({ ...line, year: line.year ?? '' });
       }
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
   }
+
+  /**
+   * The packing list itself — the rows, the grouping and the counts, with no
+   * file format attached.
+   *
+   * Both downloads are built from THIS: `exportXlsx` renders it into a
+   * workbook, and `/admin/books/print` renders it into an A4 page the browser
+   * turns into a PDF. One query and one set of counts, so the spreadsheet and
+   * the PDF cannot say different things about the same day's orders.
+   */
+  async packingList(query: ExportBookOrdersQuery): Promise<PackingList> {
+    const { status, from, to } = query;
+    /*
+     * «هتقول انت عايز من يوم كام لـ يوم كام» — the packing list for one run
+     * to the printer, not the whole history.
+     *
+     * Both ends are widened to the FULL day. `from` is that date at 00:00 and
+     * `to` is the day AFTER at 00:00 with a `lt` — an inclusive `lte` on the
+     * bare date would silently drop every order placed after midnight on the
+     * last day, which is most of them, and the admin would only notice when
+     * the printer came up short.
+     */
+    const createdAt =
+      from || to
+        ? {
+            ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
+            ...(to
+              ? { lt: new Date(new Date(`${to}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000) }
+              : {}),
+          }
+        : undefined;
+
+    const rows = await this.prisma.bookOrder.findMany({
+      /* THE SAME three filter helpers `adminList` builds its own WHERE from,
+         in the same order — the export is the list, and the only way to keep
+         that true is to share the code that decides it rather than to write a
+         second version of it here that drifts. */
+      where: {
+        ...liveOrDeletedWhere(status),
+        ...this.adminSearchWhere(query.q ?? ''),
+        ...streamAndYearWhere(query.stream, query.year),
+        ...(createdAt ? { createdAt } : {}),
+      },
+      orderBy: [{ createdAt: 'asc' }],
+      select: {
+        /* For «حدّد اللي في المدى» — see `PackingListSchema.orderIds`. */
+        id: true,
+        fullName: true,
+        phone: true,
+        altPhone: true,
+        city: true,
+        addressStreet: true,
+        addressBuilding: true,
+        addressNote: true,
+        amountCents: true,
+        shippingCents: true,
+        createdAt: true,
+        items: ORDER_ITEM_SELECT,
+        course: { select: { title: true, year: true, forGeneral: true, forLanguages: true, bookTitle: true } },
+        governorate: { select: { nameAr: true } },
+      },
+    });
+
+    const streamLabel = {
+      general: copy.stream.general,
+      languages: copy.stream.languages,
+      both: copy.stream.both,
+    };
+    /* `string[]`, not the literal union: this is only ever used to ORDER
+       labels that came out of `streamLabel`, and typing it as the union makes
+       `indexOf` refuse the very strings it is meant to rank. */
+    const STREAM_ORDER: string[] = [copy.stream.general, copy.stream.languages, copy.stream.both];
+
+    /*
+     * ═══════════════════════════════════════════════════════════════════════
+     * THE SHIPPING SHEET IS A PACKING LIST, NOT AN INVOICE.
+     *
+     * «وأنا بصدّر متحطش السعر… يبقى العربي فوق وتحته اللغات، وبينهم خط،
+     *  واكتب أرقام ١ و ٢ و ٣، وفوق اكتب عدد العربي كام واللغات كام.»
+     *
+     * ## Why the money is gone
+     *
+     * Three columns used to carry it — سعر النسخة، الشحن، إجمالي الطلب — and
+     * this file goes to a print shop and a courier. Neither is owed what a
+     * student paid, every one of those numbers is a number somebody can
+     * mis-read as what they are owed, and the revenue figures live on
+     * `/admin/finance` where they belong. A packing list that quotes prices is
+     * a packing list that gets quoted back.
+     *
+     * ## Why it is grouped and ruled
+     *
+     * The two editions are physically different stacks of paper. A sheet that
+     * interleaves them makes the packer decide per row which pile to reach
+     * into; grouping makes it two passes with a line between them. The rule is
+     * drawn as a real bordered row rather than a blank one, because a blank row
+     * disappears the moment anyone sorts — and somebody always sorts.
+     *
+     * ## Why the counts are at the TOP
+     *
+     * They are what he checks BEFORE printing: «أولى سنة كام كتاب وكام نسخة».
+     * Books and COPIES are counted separately and on purpose — twenty orders
+     * for one title is one thing to print and twenty things to pack.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    const lines: Array<Omit<PackingListLine, 'seq'>> = [];
+    /*
+     * ONE CARD PER ORDER, built in the SAME loop as the per-book lines.
+     *
+     * Not a second pass over `rows`: the two views have to describe the same
+     * parcels, and the only way that stays true as this method grows is for a
+     * row to produce its line(s) and its card in one place. `seq` here is the
+     * ORDER's place in the run (1..N over `rows`), which is deliberately not
+     * the line `seq` further down — the sheet numbers books and the cards
+     * number boxes, and an order with two titles is one box.
+     */
+    const labels: PackingLabel[] = [];
+    for (const row of rows) {
+      /*
+       * ONE ROW PER BOOK, not per order. A courier packs titles, and an order
+       * with three of them collapsed onto one line is a line somebody has to
+       * phone about. The address is repeated on each — spreadsheets are read by
+       * sorting and filtering, and a blank address on the second line of a
+       * group disappears the moment anyone does either.
+       *
+       * ⚠️ The stream is per LINE, and the order's course is only the fallback.
+       * This column was blank on nearly every row until `books.for_general` /
+       * `for_languages` existed: it read `order.course`, and a cart order has
+       * no course at all — so the one thing the print shop needs was missing on
+       * exactly the orders that make up most of the list. The course fallback
+       * stays for a course-page order whose book was never mirrored into the
+       * catalogue; blank when neither exists, which is honest.
+       */
+      const courseStream = row.course ? streamLabel[streamChoiceOf(row.course)] : '';
+      const address = {
+        courseTitle: row.course?.title ?? '',
+        /* ⚠️ The ORDER's fallback only. The real answer is per LINE and is
+           applied below — a cart order has no course at all, so this alone was
+           `null` on nearly every row, which is the same hole `stream` had
+           before `books.for_general` existed. */
+        year: row.course?.year ?? null,
+        fullName: row.fullName,
+        phone: row.phone,
+        altPhone: row.altPhone,
+        governorate: row.governorate.nameAr,
+        city: row.city,
+        street: row.addressStreet,
+        building: row.addressBuilding,
+        note: row.addressNote ?? '',
+        createdAt: row.createdAt.toISOString().slice(0, 10),
+      };
+
+      /*
+       * ⚠️ AN ORDER WITH NO LINES STILL GETS A ROW.
+       *
+       * `for (item of row.items)` on its own drops such an order from the file
+       * ENTIRELY and silently — the screen counts it, the sheet does not, and
+       * the only symptom is «واحد ناقص» after somebody counts both by hand. It
+       * is rare (a hand-edited order whose last line was removed) and it is
+       * exactly the kind of row that must not vanish: the address is real and
+       * somebody is waiting for a parcel. Named rather than blank, so the desk
+       * can see what to fix.
+       */
+      /* The card is pushed for EVERY order, including the line-less one below
+         — a parcel with a real address is a parcel somebody is waiting for,
+         and a box with no label is worse than a box with an odd one. */
+      const parcelItems =
+        row.items.length === 0
+          ? [
+              {
+                title: row.course?.bookTitle ?? row.course?.title ?? 'طلب من غير كتاب مسجّل',
+                quantity: 1,
+              },
+            ]
+          : row.items.map((item) => ({ title: item.titleAr, quantity: item.quantity }));
+
+      /* The editions in the box, deduplicated and in the sheet's own order
+         (عربي, then لغات) so two cards never disagree about which comes first.
+         A line whose book is not in the catalogue falls back to the ORDER's
+         course, exactly like the sheet's own stream column — and contributes
+         nothing when neither exists, rather than inventing an edition. */
+      const parcelStreams = [...new Set(
+        (row.items.length === 0
+          ? [courseStream]
+          : row.items.map((item) => (item.book ? streamLabel[streamChoiceOf(item.book)] : courseStream))
+        ).filter((label) => label !== ''),
+      )].sort((a, b) => STREAM_ORDER.indexOf(a) - STREAM_ORDER.indexOf(b));
+
+      labels.push({
+        orderId: row.id,
+        ref: bookOrderRef(row.id),
+        seq: labels.length + 1,
+        fullName: address.fullName,
+        phone: address.phone,
+        altPhone: address.altPhone,
+        governorate: address.governorate,
+        city: address.city,
+        street: address.street,
+        building: address.building,
+        note: address.note,
+        items: parcelItems,
+        streams: parcelStreams,
+        copies: parcelItems.reduce((n, item) => n + item.quantity, 0),
+        createdAt: address.createdAt,
+      });
+
+      if (row.items.length === 0) {
+        lines.push({
+          ...address,
+          bookTitle: parcelItems[0]!.title,
+          quantity: 1,
+          stream: courseStream,
+        });
+        continue;
+      }
+
+      for (const item of row.items) {
+        lines.push({
+          ...address,
+          /*
+           * ⚠️ الصف is the BOOK's, with the order's course as the fallback —
+           * the same chain the admin row and the stream column already walk,
+           * and it must be spelled the same way in all three.
+           *
+           * Spreading `address` alone left this at the COURSE's year, and an
+           * order placed from `/books` has no course: «كام كتاب سنة أولى» on
+           * the sheet a print run is ordered from therefore read «من غير صف»
+           * for the majority of orders, which is the one number on that page
+           * that is acted on before anything is printed.
+           */
+          year: item.book?.year ?? address.year,
+          bookTitle: item.titleAr,
+          quantity: item.quantity,
+          stream: item.book ? streamLabel[streamChoiceOf(item.book)] : courseStream,
+        });
+      }
+    }
+
+    /* عربي first, then لغات, then anything with no edition at all — a
+       hand-typed «ملزمة مراجعة» has no stream and must not be silently filed
+       under one. Within a group the original order (oldest first) survives,
+       because that is the queue the desk works through. */
+    const groupsInOrder = [copy.stream.general, copy.stream.languages, copy.stream.both] as const;
+    const copiesIn = (group: Array<Omit<PackingListLine, 'seq'>>) =>
+      group.reduce((n, l) => n + l.quantity, 0);
+
+    /* The numbering restarts nowhere: «١، ٢، ٣» down the whole sheet is what a
+       packer counts against, and a per-group restart would make «رقم ١٢» mean
+       two different rows. It is assigned HERE, on the grouped order, so the
+       spreadsheet and the printed page number the same row the same way. */
+    let seq = 0;
+    const groups = [
+      ...groupsInOrder.map((label) => ({ label, rows: lines.filter((l) => l.stream === label) })),
+      { label: '', rows: lines.filter((l) => !groupsInOrder.includes(l.stream as never)) },
+    ]
+      .filter((group) => group.rows.length > 0)
+      .map((group) => {
+        /* Per YEAR inside each edition — «سنة أولى كام كتاب وكام نسخة عربي».
+           The years present are read from the data rather than assumed 1..3, so
+           a sheet with nothing in a year does not print an empty line for it,
+           and «من غير صف» (null) sorts last rather than becoming a zero. */
+        const years = [...new Set(group.rows.map((l) => l.year))].sort(
+          (a, b) => (a ?? 99) - (b ?? 99),
+        );
+        return {
+          label: group.label,
+          books: group.rows.length,
+          copies: copiesIn(group.rows),
+          years: years.map((year) => {
+            const inYear = group.rows.filter((l) => l.year === year);
+            return { year, books: inYear.length, copies: copiesIn(inYear) };
+          }),
+          lines: group.rows.map((line) => {
+            seq += 1;
+            return { ...line, seq };
+          }),
+        };
+      });
+
+    /*
+     * ═══════════════════════════════════════════════════════════════════════
+     * ونفس السطور مقسومة بالصف الأول — «كام كتاب سنة أولى وكام سنة تانية».
+     *
+     * `groups` above is edition-first because that is how the PAPER is stacked:
+     * عربي in one pile, لغات in another, which is the walk the packer does.
+     * This is the same lines counted the other way round, because the decision
+     * being taken before a run is a decision about a YEAR — two different
+     * books, two different print orders — and answering it by adding one number
+     * from each edition block is the arithmetic that produces «واحد ناقص».
+     *
+     * Computed from `lines` rather than from `groups`, so the two orderings are
+     * siblings over one set rather than one derived from the other: a bug in
+     * the edition grouping cannot silently propagate into the year totals, and
+     * either can be read against the other.
+     *
+     * The `orders` count per year is DISTINCT orders, and an order holding a
+     * first-year book and a second-year book counts in both — see
+     * `PackingListYearSchema`. That is why these deliberately do not sum to
+     * `orders` below, and why the screen says so out loud.
+     */
+    const years: PackingListYear[] = [...new Set(lines.map((line) => line.year))]
+      .sort((a, b) => (a ?? 99) - (b ?? 99))
+      .map((year) => {
+        const inYear = lines.filter((line) => line.year === year);
+        return {
+          year,
+          /* Identity is the name + both phone numbers, which is what one parcel
+             is: `lines` carries no order id (it is a per-BOOK view), and a
+             second copy of the same person's name on a different phone really
+             is a different delivery. */
+          orders: new Set(inYear.map((line) => `${line.fullName}\u0000${line.phone}\u0000${line.altPhone}`)).size,
+          books: inYear.length,
+          copies: copiesIn(inYear),
+          streams: [...groupsInOrder, '']
+            .map((label) => {
+              const inStream = inYear.filter((line) => (line.stream || '') === label);
+              return { label, books: inStream.length, copies: copiesIn(inStream) };
+            })
+            .filter((entry) => entry.books > 0),
+        };
+      });
+
+    return {
+      groups,
+      years,
+      orderIds: rows.map((row) => row.id),
+      labels,
+      orders: rows.length,
+      books: lines.length,
+      copies: copiesIn(lines),
+      filters: {
+        status,
+        from,
+        to,
+        stream: query.stream ?? null,
+        year: query.year ?? null,
+        q: query.q?.trim() ? query.q.trim() : null,
+      },
+    };
+  }
+
+  /**
+   * Marks an order paid because the money for it actually arrived — «التحويلات
+   * الواردة» settling a book the same way it settles a subscription.
+   *
+   * `TransfersService` has matched an incoming InstaPay transfer to this
+   * order: the sender's address belongs to the student who placed it, and the
+   * amount is the order's own total. No screenshot is attached because none
+   * exists — the platform saw the money itself, which is stronger evidence
+   * than the picture `submitPayment` collects.
+   *
+   * Deliberately `address_only` only. An order already `paid` or `shipped` is
+   * settled, and a second transfer at the same total is a different payment
+   * that must reach a human rather than be silently absorbed. The `updateMany`
+   * guard is what enforces that under concurrency, and returns `false` when it
+   * loses the race — see `PaymentsService.approveFromTransfer` for the same
+   * pattern on the subscription side.
+   */
+  async markPaidFromTransfer(orderId: string, transferId: string): Promise<boolean> {
+    const now = new Date();
+
+    const { settled, admins } = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.incomingTransfer.updateMany({
+        where: { id: transferId, matchedSubmissionId: null, matchedBookOrderId: null },
+        data: { matchedBookOrderId: orderId },
+      });
+      if (claimed.count === 0) return { settled: false, admins: [] as string[] };
+
+      const paid = await tx.bookOrder.updateMany({
+        where: { id: orderId, status: 'address_only', deletedAt: null },
+        // No `screenshotKey` and no `senderPhone`: nobody uploaded anything.
+        // The `IncomingTransfer` row is the evidence, and it points back here.
+        data: { paidAt: now, status: 'paid' },
+      });
+      if (paid.count === 0) throw new TransferSettleAborted();
+
+      const recipients = await this.notifications.emitToPermission(
+        tx,
+        // Same alert `submitPayment` raises, for the same reason: `paid` is a
+        // parcel owed, and an order that reached it with nobody told is the
+        // silent queue this whole feature exists to close.
+        'book-order:read',
+        'book_order_placed',
+        { orderId },
+      );
+
+      return { settled: true, admins: recipients };
+    }).catch((error: unknown) => {
+      // The transfer was claimed but the order was not payable — roll the
+      // claim back by aborting, and report it as "nothing settled" so the
+      // money stays visible in «محتاجة مراجعة».
+      if (error instanceof TransferSettleAborted) return { settled: false, admins: [] as string[] };
+      throw error;
+    });
+
+    if (!settled) return false;
+
+    // After the commit. See `NotificationsService.announce`.
+    await this.notifications.announceAll(admins);
+
+    await this.audit.record({
+      action: 'book-order:auto-pay',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: orderId,
+      // No actor: nobody clicked anything.
+      actorUserId: null,
+      outcome: 'success',
+      metadata: { transferId },
+    });
+
+    return true;
+  }
+
 }
+
+/** Rolls back `markPaidFromTransfer`'s transaction when the transfer was
+ *  claimable but the order was not — never escapes the method. */
+class TransferSettleAborted extends Error {}

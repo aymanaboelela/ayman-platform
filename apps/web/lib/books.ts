@@ -1,5 +1,11 @@
 import { cacheLife, cacheTag } from 'next/cache';
-import { BookCatalogSchema, BOOK_SHIPPING_CENTS, type BookCatalog } from '@ayman/contracts/books';
+import {
+  BookCatalogSchema,
+  DEFAULT_BOOK_SHIPPING_RATES,
+  minBookShippingCents,
+  type BookCatalog,
+  type BookShippingRates,
+} from '@ayman/contracts/books';
 import { apiGet } from '@/lib/api';
 import { TAG_BOOKS } from '@/lib/cache-tags';
 
@@ -29,8 +35,13 @@ import { TAG_BOOKS } from '@/lib/cache-tags';
  * not the one anybody will be charged.
  */
 /**
- * Just the delivery fee, for the three surfaces that show a course's own book
+ * Just the delivery RATES, for the three surfaces that show a course's own book
  * («اطلب الكتاب» on the course page, the dashboard card, the player outline).
+ *
+ * ⚠️ Three numbers and not one since delivery became zoned. It used to return
+ * `catalog.shippingCents`, which now means «the cheapest zone» — a floor to
+ * quote, never a fee to charge — and handing that to a checkout would under-bill
+ * every address outside القاهرة والجيزة.
  *
  * Reads the whole catalogue and throws the shelves away, which sounds wasteful
  * and is not: `getBookCatalogOrEmpty` is `'use cache'` on one coarse tag, so
@@ -39,9 +50,9 @@ import { TAG_BOOKS } from '@/lib/cache-tags';
  * the fee on `PublicSettingsSchema` where every page on the site would parse a
  * number three of them use. Both cost more than this does.
  */
-export async function getBookShippingCents(): Promise<number> {
+export async function getBookShippingRates(): Promise<BookShippingRates> {
   const catalog = await getBookCatalogOrEmpty();
-  return catalog.shippingCents;
+  return catalog.shippingRates;
 }
 
 export async function getBookCatalogOrEmpty(): Promise<BookCatalog> {
@@ -52,6 +63,15 @@ export async function getBookCatalogOrEmpty(): Promise<BookCatalog> {
   try {
     return await apiGet('/api/books', BookCatalogSchema);
   } catch {
-    return { shelves: [], shippingCents: BOOK_SHIPPING_CENTS, total: 0 };
+    /* The shelves are empty, so nothing on this payload is ever CHARGED — but
+       the rates still have to parse and still have to be the real ones, because
+       a cart restored from `localStorage` renders its total against them. See
+       `DEFAULT_BOOK_SHIPPING_RATES`: the quoted numbers, written once. */
+    return {
+      shelves: [],
+      shippingCents: minBookShippingCents(DEFAULT_BOOK_SHIPPING_RATES),
+      shippingRates: DEFAULT_BOOK_SHIPPING_RATES,
+      total: 0,
+    };
   }
 }

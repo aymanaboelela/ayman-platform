@@ -84,15 +84,30 @@ export const NewsListItemSchema = z.object({
   updatedAt: z.iso.datetime(),
   /** Minutes, computed from the body server-side — see `readingMinutes`. */
   readingMinutes: z.number().int().min(1),
+  /**
+   * The course this article was written for, when it has one and that course
+   * is published.
+   *
+   * Added 2026-09-14 so a COURSE page can list its own articles. Before it, the
+   * relation existed only on the detail shape, which meant the link ran one way:
+   * every article pointed at its course and no course pointed back. The pages
+   * that earn the impressions were linking to none of the free explanations
+   * written for them.
+   *
+   * ⚠️ Same rule as the detail shape — `null` unless the course is PUBLISHED.
+   * A slug naming a draft course would be a link to a 404 on our own site.
+   */
+  relatedCourseSlug: z.string().nullable(),
 });
 
 export const NewsPostDetailSchema = NewsListItemSchema.extend({
   body: z.string(),
   /**
-   * The call to action. `null` when the article has no course yet, or when the
-   * course it pointed at was unpublished — the article survives either way.
+   * The call to action's LABEL. The slug itself now lives on the list shape
+   * above — the detail adds the title so the CTA can name the course without a
+   * second request. `null` when the article has no course yet, or when the
+   * course it pointed at was unpublished; the article survives either way.
    */
-  relatedCourseSlug: z.string().nullable(),
   relatedCourseTitle: z.string().nullable(),
 });
 

@@ -64,6 +64,8 @@ export class QuizHistoryService {
         scaledScore: true,
         gradeOutOf: true,
         passed: true,
+        // Read only to suppress the verdict below — see `AttemptRow.passed`.
+        state: true,
         paper: true,
         quiz: {
           select: {
@@ -87,7 +89,23 @@ export class QuizHistoryService {
       // retroactively change what a student scored — see the column's own
       // comment in schema.prisma.
       gradeOutOf: Number(attempt.gradeOutOf),
-      passed: attempt.passed,
+      /*
+       * No verdict on a paper nobody has finished marking.
+       *
+       * `QuizHistoryPointSchema.passed` has always documented this — «`null`
+       * while an essay question on the attempt is still awaiting grading» —
+       * and it was never true: `gradeAttempt` counts an ungraded answer as
+       * zero and sets `passed` from the provisional total, so a midterm with
+       * 50 marks of essay outstanding arrived here as a FAIL and the results
+       * page tinted it red. `pending_review` is exactly "a human has not
+       * finished with this", so it is the condition the comment described.
+       *
+       * The percentage is left as it is: it is a point on a trend line, the
+       * exam's own screen now explains what it is a percentage OF, and
+       * dropping the sitting out of the series entirely would make a paper
+       * the student sat look like one they never took.
+       */
+      passed: attempt.state === 'pending_review' ? null : attempt.passed,
       lessonId: attempt.quiz.lesson.id,
       quizTitle: attempt.quiz.lesson.title,
       courseTitle: attempt.quiz.lesson.course.title,

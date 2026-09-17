@@ -56,8 +56,8 @@ import { AdminAssistantQuestionsController } from './ai/admin-questions.controll
  * prompt — that number outlives the admin form that set it. It is not right
  * now that the figures are read off `books` and `courses` at answer time.
  *
- * `BooksModule` is imported for ONE method, `BooksService.shippingCents()`,
- * which resolves the delivery fee out of `SiteSettings.store.shippingCents`
+ * `BooksModule` is imported for ONE method, `BooksService.shippingRates()`,
+ * which resolves the three delivery rates out of `SiteSettings.store.shippingRates`
  * with its default. Reading that setting here instead would be a second copy
  * of the expression that prices a real basket, and the day the two drift is
  * the day المساعد quotes a delivery fee the checkout does not charge.

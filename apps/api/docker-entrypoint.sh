@@ -67,6 +67,27 @@ echo "entrypoint: applying migrations…"
 cat > /tmp/grants.sql <<'SQL'
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app TO ayman_runtime;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app TO ayman_runtime;
+
+-- ⚠️ والسطرين دول لازم يفضلوا آخر حاجة في الملف ده، وسبب وجودهم إن
+-- المنحة اللي فوق بتلغي حاجة قصدها يفضل ملغي.
+--
+-- `ON ALL TABLES IN SCHEMA app` معناها الجداول **كلها**، من غير استثناء —
+-- بما فيها الاتنين اللي الميجريشن سحب منهم UPDATE و DELETE عن قصد:
+--
+--   · `attempt_events`  — 20260726150111_attempt_constraints/migration.sql:11
+--   · `audit_log`       — 20260727024705_platform_config/migration.sql:144
+--
+-- والملف ده بيشتغل **بعد** `migrate deploy`، يعني كل إقلاع للحاوية كان
+-- بيرجّع الصلاحيتين تاني. `attempt_events` نجى لأن عنده كمان تريجر
+-- بيرفض التعديل والحذف، فالمنحة عليه بتبقى ورق. `audit_log` **مالوش
+-- تريجر** — فالسجل اللي المفروض مايتمسحش كان قابل للمسح على الإنتاج من
+-- ساعة ما الميجريشن ده اتطبّق. الاختبارات مشافتش الحاجة دي لأن الـCI
+-- بيبني داتابيز من الميجريشن على طول من غير ما يعدّي على السكريبت ده.
+--
+-- الاسم متأهّل بالسكيما هنا، مش زي الميجريشن اللي كاتبه مجرّد — لأن ده
+-- بيتنفّذ عن طريق `prisma db execute` واللي مايضمنش نفس الـsearch_path.
+REVOKE UPDATE, DELETE ON "app"."attempt_events" FROM "ayman_runtime";
+REVOKE UPDATE, DELETE, TRUNCATE ON "app"."audit_log" FROM "ayman_runtime";
 SQL
 "$PRISMA" db execute --file /tmp/grants.sql
 

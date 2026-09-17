@@ -142,6 +142,23 @@ const schema = z
      */
     WA_SERVICE_TOKEN: optionalSecret,
 
+    /**
+     * The shared secret the Android handset sends with «التحويلات الواردة» —
+     * `POST /api/ingest/transfers`.
+     *
+     * Same shape and same reasoning as `WA_SERVICE_TOKEN` above: the caller is
+     * a device, not a browser, so a session cookie is the wrong question to
+     * ask and a header token is the right one. Unlike that one this endpoint
+     * IS reachable from the internet — the handset is on wifi, not on the
+     * compose network — which makes the token the only thing standing between
+     * a stranger and a request that can open a paid course.
+     *
+     * Unset disables ingest entirely (the route rejects every call), which is
+     * the correct default: a deployment that has not been given a token has
+     * not been configured for this feature.
+     */
+    INSTAPAY_INGEST_TOKEN: optionalSecret,
+
     /** Where uploaded, re-encoded bytes live on disk (Task 13). */
     MEDIA_ROOT: z.string().min(1).default('./.media'),
 

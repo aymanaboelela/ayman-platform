@@ -15,6 +15,7 @@ import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { formatEGP } from '@/lib/price';
 import { StatTile } from '@/components/admin/charts/stat-tile';
+import { SelectionSummary } from '@/components/admin/finance/selection-summary';
 import { ListControl } from '@/components/admin/list-controls';
 import { FinanceTabs } from '../finance-tabs';
 import { FinanceRowActions } from '../finance-row-actions';
@@ -189,6 +190,18 @@ export default async function AdminFinancePage({
           href="/admin/finance/subscriptions?status=expiring_soon"
         />
       </div>
+
+      {/*
+        «لما أحدد فلتر، عايز أعرف الأرقام». The three tiles above are the
+        PLATFORM's totals and stay that way — that was a decision, and the money
+        one in particular is the only place «المنصة عاملة إيه» is answered. This
+        strip is the SELECTION's, in its own register and its own words, so the
+        two can sit on one screen without either being mistaken for the other.
+      */}
+      <SelectionSummary
+        selection={summary.selection}
+        filtered={status !== 'all' || plan !== 'all' || year !== undefined || stream !== 'all'}
+      />
 
       {/* الكتاب الورقي's own money — a physical good with no platform access
           behind it, deliberately never summed into the tiles above. */}

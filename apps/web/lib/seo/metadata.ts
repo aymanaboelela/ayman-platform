@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { copy } from '@ayman/contracts';
 import { mediaUrl } from '@ayman/ui/branding';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { markdownTwinPath } from '@/lib/agents/markdown-routes';
 import { SITE_URL } from './jsonld';
 
 /**
@@ -79,6 +80,7 @@ export async function buildMetadata(input: PageMetaInput): Promise<Metadata> {
   const flatTitle = input.title !== undefined ? `${input.title} | ${copy.site.platformName}` : siteTitle;
   const description = input.description ?? (adminDescription || copy.seo.description);
   const url = `${SITE_URL}${input.path}`;
+  const markdownTwin = markdownTwinPath(input.path);
   /*
    * `ogImageKey`, NOT `ogImageAssetId` — the same confusion that 404'd every
    * favicon (see the note in `app/layout.tsx`). Here it was worse than a
@@ -93,7 +95,27 @@ export async function buildMetadata(input: PageMetaInput): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: url },
+    /*
+     * `types['text/markdown']` — the per-page pointer at this page's markdown
+     * twin.
+     *
+     * ⚠️ This is the relation that did NOT survive the move out of the `Link`
+     * response header, and `components/agents/agent-discovery-links.tsx` says
+     * so at the bottom of its own note: the shared `<head>` component cannot
+     * know the path, so the hint had to come back per route. `metadata.alternates.types`
+     * is where Next puts it, and this function is the one place every public
+     * page already passes its path through.
+     *
+     * ⚠️ Via `markdownTwinPath`, never a `${path}.md` template. That function
+     * is the SAME allowlist `proxy.ts` rewrites on, so a page with no twin
+     * advertises none — a `rel="alternate"` pointing at a 404 is worse than
+     * silence, because an agent that follows it concludes the site has no
+     * markdown at all rather than that this one page has none.
+     */
+    alternates: {
+      canonical: url,
+      ...(markdownTwin ? { types: { 'text/markdown': `${SITE_URL}${markdownTwin}` } } : {}),
+    },
     openGraph: {
       type: input.type ?? 'website',
       // `ar_EG`, not `ar`: the audience is specifically Egyptian, and the

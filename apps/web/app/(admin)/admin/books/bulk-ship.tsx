@@ -8,7 +8,11 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import { useRefreshBookOrdersUnshippedCount } from '@/components/admin/book-orders-alerts';
-import { shipBookOrdersAction, deliverBookOrdersAction } from './actions';
+import {
+  shipBookOrdersAction,
+  deliverBookOrdersAction,
+  printBookOrdersAction,
+} from './actions';
 
 const c = copy.admin.books;
 
@@ -38,12 +42,35 @@ interface BulkContext {
   toggle: (id: string) => void;
   /** REPLACE the selection with exactly these ids — see `useBulkSelectMany`. */
   selectMany: (ids: string[]) => void;
+  clear: () => void;
+  /**
+   * ## Why `busy` and `alsoWhatsapp` live up here and not in the bar
+   *
+   * The batch actions are now rendered in TWO places (see `BulkActions`), and
+   * the two must be one control, not two: a «ابعت واتساب كمان» ticked at the
+   * top of the list and a Ship pressed at the bottom have to agree, and a
+   * request in flight has to disable both. Per-view `useState` would give the
+   * admin two independent copies of the same decision, forty phones apart.
+   */
+  busy: boolean;
+  setBusy: (value: boolean) => void;
+  alsoWhatsapp: boolean;
+  setAlsoWhatsapp: (value: boolean) => void;
 }
 
 const Ctx = createContext<BulkContext | null>(null);
 
 export function BulkShipProvider({ children }: { children: ReactNode }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const [busy, setBusy] = useState(false);
+  /*
+   * OFF by default — the notice itself goes into the student's thread on the
+   * platform every time (see `markShippedMany`). This is a second copy for
+   * students who do not open the site often, and it leaves through Ayman's
+   * own linked device, so it is a decision he takes per batch rather than a
+   * default that quietly messages forty phones.
+   */
+  const [alsoWhatsapp, setAlsoWhatsapp] = useState(false);
 
   const value = useMemo<BulkContext>(
     () => ({
@@ -56,14 +83,19 @@ export function BulkShipProvider({ children }: { children: ReactNode }) {
           return next;
         }),
       selectMany: (ids) => setSelected(new Set(ids)),
+      clear: () => setSelected(new Set()),
+      busy,
+      setBusy,
+      alsoWhatsapp,
+      setAlsoWhatsapp,
     }),
-    [selected],
+    [selected, busy, alsoWhatsapp],
   );
 
   return (
     <Ctx.Provider value={value}>
       {children}
-      <BulkBar onCleared={() => setSelected(new Set())} />
+      <BulkBar />
     </Ctx.Provider>
   );
 }
@@ -116,9 +148,9 @@ export function OrderCheckbox({ id, label }: { id: string; label: string }) {
  * `notice_failed` in particular means "the book left but the student was not
  * told", which is a phone call he has to make.
  */
-function report(result: BulkBookOrderResult): void {
+function report(result: BulkBookOrderResult, done: string): void {
   if (result.succeeded > 0) {
-    toast.success(formatCopy(c.bulkShipped, { count: String(result.succeeded) }));
+    toast.success(formatCopy(done, { count: String(result.succeeded) }));
   }
   for (const row of result.rows) {
     if (row.outcome === 'notice_failed') {
@@ -135,25 +167,44 @@ function report(result: BulkBookOrderResult): void {
   }
 }
 
-function BulkBar({ onCleared }: { onCleared: () => void }) {
+/**
+ * The batch controls themselves, rendered in TWO places.
+ *
+ * ## Why twice
+ *
+ * The bar was `sticky bottom-0` and nothing else, and it was reported missing:
+ * «لما أحدد ناس أو كلهم يبقى فيه زرار إن أشحن ليهم». It was there — but on a
+ * tab of fifty-three orders the admin presses «حدّد الكل» in the TOOLBAR, and
+ * the only thing that then changes is pinned to the far edge of the screen,
+ * away from the button just pressed and away from where he is reading. A
+ * control nobody finds is a control that does not exist.
+ *
+ * So the same actions now also sit inline beside «حدّد الكل», appearing the
+ * instant a selection does. The bottom bar stays for the other half of the
+ * job — ticking rows one at a time halfway down a long list, where the toolbar
+ * has scrolled away.
+ *
+ * They are ONE control in two positions, not two: every piece of state they
+ * touch (`selected`, `busy`, `alsoWhatsapp`) lives in the provider, so the
+ * WhatsApp box ticked at the top is the box the bottom button reads, and a
+ * batch in flight disables both.
+ */
+function BulkActions({ variant }: { variant: 'bar' | 'inline' }) {
   const ctx = useContext(Ctx);
   const router = useRouter();
   const refreshUnshippedCount = useRefreshBookOrdersUnshippedCount();
-  const [busy, setBusy] = useState(false);
-  /*
-   * OFF by default — the notice itself goes into the student's thread on the
-   * platform every time (see `markShippedMany`). This is a second copy for
-   * students who do not open the site often, and it leaves through Ayman's
-   * own linked device, so it is a decision he takes per batch rather than a
-   * default that quietly messages forty phones.
-   */
-  const [alsoWhatsapp, setAlsoWhatsapp] = useState(false);
 
   if (!ctx || ctx.selected.size === 0) return null;
   const ids = [...ctx.selected];
+  const { busy, setBusy, alsoWhatsapp, setAlsoWhatsapp, clear } = ctx;
 
+  /** `done` is the success toast's template, because the three batches are
+   *  three different things to have succeeded at — «اتشحن ١٢» for a run that
+   *  left the building, «راحوا للمطبعة ١٢» for one that has not. One shared
+   *  wording made the print batch report itself as a shipment. */
   async function run(
     action: (ids: string[], whatsapp?: boolean) => Promise<BulkBookOrderResult | null>,
+    done: string,
   ) {
     setBusy(true);
     const result = await action(ids, alsoWhatsapp);
@@ -162,15 +213,21 @@ function BulkBar({ onCleared }: { onCleared: () => void }) {
       toast.error(c.actionFailed);
       return;
     }
-    report(result);
-    onCleared();
+    report(result, done);
+    clear();
     refreshUnshippedCount();
     router.refresh();
   }
 
   return (
-    <div className="sticky bottom-0 z-20 -mx-1 mt-3 flex flex-wrap items-center gap-2 rounded-t-lg border border-line bg-surface-3 px-3 py-2 shadow-lg">
-      <span className="text-[length:var(--fs-text-sm)] font-medium text-fg">
+    <>
+      <span
+        className={
+          variant === 'bar'
+            ? 'text-[length:var(--fs-text-sm)] font-medium text-fg'
+            : 'text-[length:var(--fs-text-xs)] font-medium text-accent-text'
+        }
+      >
         {formatCopy(c.bulkSelected, { count: String(ids.length) })}
       </span>
       <label className="flex cursor-pointer items-center gap-1.5 text-[length:var(--fs-text-xs)] text-fg-muted">
@@ -182,7 +239,7 @@ function BulkBar({ onCleared }: { onCleared: () => void }) {
         />
         {c.bulkAlsoWhatsapp}
       </label>
-      <div className="ms-auto flex flex-wrap items-center gap-2">
+      <div className={variant === 'bar' ? 'ms-auto flex flex-wrap items-center gap-2' : 'flex flex-wrap items-center gap-2'}>
         <Button
           size="sm"
           disabled={busy}
@@ -195,10 +252,31 @@ function BulkBar({ onCleared }: { onCleared: () => void }) {
               )
             )
               return;
-            void run(shipBookOrdersAction);
+            void run(shipBookOrdersAction, c.bulkShipped);
           }}
         >
           {busy ? c.bulkWorking : c.bulkShipButton}
+        </Button>
+        {/*
+          «أحدد على الناس كلهم وأضغط الطباعة» — the batch this screen is
+          actually driven by. It sits BEFORE «اشحن المحدد» because that is the
+          order the day runs in: the PDF comes down, the rows go to the
+          printer, and shipping happens when the boxes come back.
+
+          No WhatsApp box and no mention of messages in its confirm — nothing is
+          sent. It reads the same selection the other two do, so the run picked
+          with «حدّد اللي في المدى» is exactly the run that goes.
+        */}
+        <Button
+          size="sm"
+          disabled={busy}
+          onClick={() => {
+            if (!window.confirm(formatCopy(c.bulkPrintConfirm, { count: String(ids.length) }))) return;
+            void run(printBookOrdersAction, c.bulkPrinted);
+          }}
+          className="!bg-[oklch(0.55_0.16_300)] !text-white hover:!bg-[oklch(0.50_0.16_300)]"
+        >
+          {c.bulkPrintButton}
         </Button>
         <Button
           size="sm"
@@ -206,15 +284,44 @@ function BulkBar({ onCleared }: { onCleared: () => void }) {
           disabled={busy}
           onClick={() => {
             if (!window.confirm(formatCopy(c.bulkDeliverConfirm, { count: String(ids.length) }))) return;
-            void run(deliverBookOrdersAction);
+            void run(deliverBookOrdersAction, c.bulkShipped);
           }}
         >
           {c.bulkDeliverButton}
         </Button>
-        <Button size="sm" variant="ghost" disabled={busy} onClick={onCleared}>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={clear}>
           {c.bulkClear}
         </Button>
       </div>
+    </>
+  );
+}
+
+/**
+ * Beside «حدّد الكل», in the toolbar — the copy that appears where the
+ * selection was made. Renders nothing at all while nothing is selected, so the
+ * toolbar keeps its usual shape until there is something to do.
+ *
+ * Amber-bordered rather than plain: it appears and disappears with the
+ * selection, and an ember outline is how the rest of this product says "this
+ * is the thing to press".
+ */
+export function BulkToolbarActions() {
+  const ctx = useContext(Ctx);
+  if (!ctx || ctx.selected.size === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2">
+      <BulkActions variant="inline" />
+    </div>
+  );
+}
+
+function BulkBar() {
+  const ctx = useContext(Ctx);
+  if (!ctx || ctx.selected.size === 0) return null;
+  return (
+    <div className="sticky bottom-0 z-20 -mx-1 mt-3 flex flex-wrap items-center gap-2 rounded-t-lg border border-line bg-surface-3 px-3 py-2 shadow-lg">
+      <BulkActions variant="bar" />
     </div>
   );
 }

@@ -89,6 +89,11 @@ export const tags = {
   flags: (): string => tag('flags'),
   nav: (): string => tag('nav'),
   homeBlocks: (): string => tag('home-blocks'),
+  /** لوحة الشرف on the landing page. Its own tag rather than `homeBlocks`:
+   *  the board changes when an instructor stars a paper, which is a different
+   *  event from an admin rearranging the home page, and sharing a tag would
+   *  drop the whole landing cache on every rating. */
+  honorBoard: (): string => tag('honor-board'),
   media: (id: string): string => tag('media', id),
   taxonomy: (): string => tag('taxonomy'),
 } as const;

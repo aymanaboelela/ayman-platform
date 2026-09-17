@@ -27,12 +27,28 @@ import { BookCartSchema, BookOrderLineSchema } from '@ayman/contracts/books';
  */
 
 /**
- * The five states an order can be in, in the order it moves through them.
+ * The six states an order can be in, in the order it moves through them.
  *
- * `address_only → paid` (the student uploads the transfer) `→ shipped` (the
- * admin hands it to the courier) `→ delivered` (the admin confirms it arrived).
- * `rejected` is the branch off the side: the admin turned the order down and
- * owes the student a reason.
+ * `address_only → paid` (the student uploads the transfer) `→ printing` (the
+ * admin sent the run to the print shop) `→ shipped` (handed to the courier)
+ * `→ delivered` (the admin confirms it arrived). `rejected` is the branch off
+ * the side: the admin turned the order down and owes the student a reason.
+ *
+ * ## Why `printing` is a STATE and not a flag
+ *
+ * «أنزّلهم PDF وأحدد عليهم وأضغط الطباعة، وبعدين لما أتأكد إنه هيشحن أضغط
+ * الشحن.» The day has two distinct hand-offs — paper leaves for the printer,
+ * and boxes leave for the courier — and until now both collapsed into «اتشحن».
+ * The cost of collapsing them is that the «مدفوعة» tab could not answer the
+ * only question asked of it every morning: which of these have I already sent
+ * to be printed. A boolean beside `shippedAt` would have left that question to
+ * a filter nobody built; a state puts it in the tab bar where the work is.
+ *
+ * ⚠️ It is NOT a required stop. `markShipped` still accepts `paid` directly —
+ * a single reprint handed over the counter never goes near a print run, and
+ * forcing a fake «راح للمطبعة» to unlock «اتشحن» would put a lie in the audit
+ * trail to satisfy a state machine. Same argument `markDelivered` already makes
+ * for accepting `paid` as well as `shipped`.
  *
  * ⚠️ Deleting is deliberately NOT in here. An order can be deleted from any of
  * these, and a `deleted` member would erase the state it was deleted FROM —
@@ -42,6 +58,7 @@ import { BookCartSchema, BookOrderLineSchema } from '@ayman/contracts/books';
 export const BookOrderStatusSchema = z.enum([
   'address_only',
   'paid',
+  'printing',
   'shipped',
   'delivered',
   'rejected',
@@ -96,6 +113,39 @@ export const CreateBookOrderSchema = z
     addressBuilding: z.string().trim().max(60).nullable().default(null),
     /** Free text — apartment number, floor, a landmark. `''` → `null`. */
     addressNote: z.string().trim().max(300).nullable().default(null),
+    /**
+     * «أيوه، عايز نسخة كمان» — the student has been told they already ordered
+     * these books recently and said to place another one anyway.
+     *
+     * ⚠️ Default FALSE, and the server refuses the duplicate without it. The
+     * flag exists because the platform has no payment gateway and does not
+     * verify transfers: «مدفوع» is a claim, so the check cannot be "did they
+     * really pay" and has to be "are they sure". Measured on 2026-09-14: 44 of
+     * 192 live orders shared a phone with another, and two phones had paid
+     * twice for the same 250 EGP book days apart.
+     *
+     * ⚠️ It is NOT what stops the abandoned-cart duplicates. Those are handled
+     * silently in the service by reusing the caller's own unpaid order — a
+     * student who never paid is not "ordering twice" and must never be asked
+     * anything. This flag only ever appears after a COMPLETED order.
+     */
+    confirmDuplicate: z.boolean().default(false),
+    /**
+     * «ده تشيك-أوت من طالب» — the caller is `BookOrderPanel`, so the two
+     * duplicate protections apply. Default FALSE: everything else that creates
+     * an order (an admin, a fixture, a migration) keeps the plain "always make
+     * a row" behaviour it has always had.
+     *
+     * ⚠️ This flag exists because the first attempt made reuse UNCONDITIONAL in
+     * `create()`, and it broke fifteen specs that legitimately build fixtures
+     * out of several orders for one student — `previousOrdersFromPhone` counts
+     * them, the export and packing-list cases need more than one row, and
+     * «allows a second order for the same course» is a product rule in its own
+     * right. Silently changing what `create()` means for every caller in order
+     * to fix one caller's problem was the wrong shape; the checkout says it is
+     * the checkout instead.
+     */
+    reuseOpenOrder: z.boolean().default(false),
   })
   .strict()
   /*
@@ -169,6 +219,9 @@ const base = {
   /** `null` until step two. */
   senderPhone: z.string().nullable(),
   paidAt: z.iso.datetime().nullable(),
+  /** «راح للمطبعة» — when the copy for this order went into a print run. `null`
+   *  on an order that skipped the printer, which is a real and normal path. */
+  printedAt: z.iso.datetime().nullable(),
   shippedAt: z.iso.datetime().nullable(),
   /** Set when the admin confirmed the book ARRIVED — not when it was handed to
    *  the courier. `shippedAt` is what the platform did; this is what happened. */

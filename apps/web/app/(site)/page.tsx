@@ -1,17 +1,20 @@
 import { Fragment } from 'react';
+import { cacheLife } from 'next/cache';
 import type { Metadata } from 'next';
 import { copy } from '@ayman/contracts';
 import type { HomeBlock } from '@ayman/contracts/admin/home-blocks';
+import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
 import { JsonLd } from '@/components/seo/json-ld';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { faqPageJsonLd } from '@/lib/seo/jsonld';
-import { getHomeBlocks } from '@/lib/home-blocks';
+import { getHomeBlocks, getHonorBoard } from '@/lib/home-blocks';
 import { SiteHero } from '@/components/site/site-hero';
 import { WhyRail } from '@/components/site/why-rail';
 import { FeaturedCourses } from '@/components/site/featured-courses';
 import { BooksStrip } from '@/components/site/books-strip';
 import { InstructorProfile } from '@/components/site/instructor-profile';
 import { YearTracks } from '@/components/site/year-tracks';
+import { HonorBoardSection } from '@/components/site/honor-board-section';
 import { AboutInstructor } from '@/components/site/about-instructor';
 import { SiteStats } from '@/components/site/site-stats';
 import { SiteTestimonials } from '@/components/site/site-testimonials';
@@ -31,9 +34,10 @@ import { SiteFaq } from '@/components/site/site-faq';
  * · **The section components.** A block chooses which component renders and
  *   what it says; it does not describe layout. There is no generic block
  *   renderer here that could ever produce an unstyled page.
- * · **`instructor` and `yearTracks`.** Those build themselves from the
- *   catalogue and the taxonomy, so their blocks carry no props at all — the
- *   admin decides where they sit and whether they run, nothing else. See
+ * · **`instructor`, `yearTracks` and `honorBoard`.** Those build themselves —
+ *   from the catalogue, the taxonomy, and the monthly exam's results — so
+ *   their blocks carry no props at all: the admin decides where they sit and
+ *   whether they run, nothing else. See
  *   `packages/contracts/src/admin/home-blocks.ts`.
  *
  * `getHomeBlocks()` never throws and never returns an empty list: an empty
@@ -52,13 +56,45 @@ export async function generateMetadata(): Promise<Metadata> {
   return buildMetadata({ path: '/', description: copy.seo.homeDescription });
 }
 
+/**
+ * ⚠️ `'use cache'` on the page itself, and it is load-bearing for more than
+ * speed.
+ *
+ * Without it this component is dynamic — it awaits two loaders — so Next
+ * prerendered only the shell and streamed the whole page in afterwards. In a
+ * browser that is invisible. In the HTML as delivered, it meant the skeleton
+ * came first, the FOOTER came second, and the page's `<h1>` arrived last,
+ * about 31 KB in. Every crawler that does not execute JavaScript — which is
+ * most of the AI ones — read the document in that order, and an AI-readiness
+ * scan on 2026-09-13 reported it could not tell what the site was for.
+ *
+ * Both loaders are already `'use cache'` with `cacheLife('minutes')`, and both
+ * call `cacheTag` — tags from a nested cache entry propagate to the one that
+ * contains it, so `updateTag(tags.homeBlocks())` from the admin still lands
+ * here immediately. This adds no new staleness; it only lets the render itself
+ * be reused instead of repeated.
+ *
+ * ⚠️ Nothing in this tree may read `cookies()`, `headers()` or `connection()`.
+ * The landing page is the same page for everyone — it has no signed-in variant
+ * — and the day one of these sections needs a per-request value, it goes in its
+ * own `<Suspense>` rather than this directive coming off.
+ */
 export default async function HomePage() {
-  const blocks = await getHomeBlocks();
+  'use cache';
+  cacheLife('minutes');
 
-  return <main>{blocks.map((block) => renderBlock(block))}</main>;
+  /*
+   * Both reads, together. `getHonorBoard` fails soft to an empty array and the
+   * board renders its reserved places for that, so there is nothing to guard
+   * here — and issuing it in parallel keeps a board nobody has filled yet from
+   * adding a round trip to the landing page's LCP path.
+   */
+  const [blocks, honorBoard] = await Promise.all([getHomeBlocks(), getHonorBoard()]);
+
+  return <main>{blocks.map((block) => renderBlock(block, honorBoard))}</main>;
 }
 
-function renderBlock(block: HomeBlock) {
+function renderBlock(block: HomeBlock, honorBoard: HonorBoardEntry[]) {
   const { props } = block;
 
   switch (props.type) {
@@ -119,6 +155,18 @@ function renderBlock(block: HomeBlock) {
 
     case 'yearTracks':
       return <YearTracks key={block.id} />;
+
+    /* Placement-only like the two above, and currently a placeholder: the
+       board fills from the monthly exam and the first paper has not been sat.
+       It takes no props today and will take none when the real standings land
+       — see `<HonorBoardSection>` for why that is what lets the later slice
+       replace it without touching a stored row. */
+    /* The one block that now takes data. It stays placement-only in the
+       STORED row — `{ type: 'honorBoard' }` and nothing else — so a row an
+       admin positioned months ago keeps working; the names are fetched by the
+       page and handed down, never stored in the block's props. */
+    case 'honorBoard':
+      return <HonorBoardSection key={block.id} entries={honorBoard} />;
 
     case 'about':
       return (

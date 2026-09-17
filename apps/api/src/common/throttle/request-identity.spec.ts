@@ -59,6 +59,95 @@ describe('trackerFromRequest', () => {
     });
     expect(decoy).toBe('ip:41.33.0.1');
   });
+
+  /**
+   * The Flutter apps send `Authorization: Bearer <token>` and NO cookie.
+   *
+   * Without this branch every signed-in mobile student fell through to the IP
+   * bucket, and Egyptian mobile data is carrier-NATed hard enough that one
+   * operator's students would have shared a single 10/s allowance.
+   */
+  describe('bearer sessions (the native apps)', () => {
+    it('gives a bearer token its own bucket instead of the shared IP one', () => {
+      const key = trackerFromRequest({
+        ip: '41.35.1.2',
+        headers: { authorization: 'Bearer abc.def' },
+      });
+
+      expect(key.startsWith('sess:')).toBe(true);
+      expect(key).not.toBe('ip:41.35.1.2');
+    });
+
+    it('separates two students behind the same carrier NAT', () => {
+      const one = trackerFromRequest({
+        ip: '41.35.1.2',
+        headers: { authorization: 'Bearer student-one' },
+      });
+      const two = trackerFromRequest({
+        ip: '41.35.1.2',
+        headers: { authorization: 'Bearer student-two' },
+      });
+
+      expect(one).not.toBe(two);
+    });
+
+    it('is stable for the same token', () => {
+      const headers = { authorization: 'Bearer abc.def' };
+
+      expect(trackerFromRequest({ ip: '1.1.1.1', headers })).toBe(
+        trackerFromRequest({ ip: '2.2.2.2', headers }),
+      );
+    });
+
+    it('accepts a lowercase scheme', () => {
+      // RFC 9110 §11.1 makes the scheme token case-insensitive. A
+      // `startsWith('Bearer ')` would pass every test written against Dio and
+      // then silently drop a client that spells it `bearer`.
+      expect(
+        trackerFromRequest({ ip: '1.1.1.1', headers: { authorization: 'bearer abc.def' } }),
+      ).toBe(trackerFromRequest({ ip: '1.1.1.1', headers: { authorization: 'Bearer abc.def' } }));
+    });
+
+    it('never puts the raw token in the key', () => {
+      const key = trackerFromRequest({
+        ip: '1.1.1.1',
+        headers: { authorization: 'Bearer super-secret-session-token' },
+      });
+
+      // Tracker keys reach the throttler store and, on a miss, the logs.
+      expect(key).not.toContain('super-secret-session-token');
+    });
+
+    it('prefers the cookie when a client somehow sends both', () => {
+      // Only a browser-shaped client can produce this, and for that client the
+      // cookie is the identity the rest of the stack already agreed on.
+      expect(
+        trackerFromRequest({
+          ip: '1.1.1.1',
+          headers: {
+            cookie: '__Host-session_token=from-cookie',
+            authorization: 'Bearer from-header',
+          },
+        }),
+      ).toBe(
+        trackerFromRequest({
+          ip: '1.1.1.1',
+          headers: { cookie: '__Host-session_token=from-cookie' },
+        }),
+      );
+    });
+
+    it('ignores a header that is not a bearer credential', () => {
+      // `Basic` and a bare `Bearer` with nothing after it are not sessions;
+      // hashing them would mint one shared bucket for every malformed request.
+      expect(
+        trackerFromRequest({ ip: '41.35.1.2', headers: { authorization: 'Basic dXNlcjpwdw==' } }),
+      ).toBe('ip:41.35.1.2');
+      expect(trackerFromRequest({ ip: '41.35.1.2', headers: { authorization: 'Bearer ' } })).toBe(
+        'ip:41.35.1.2',
+      );
+    });
+  });
 });
 
 /**

@@ -24,9 +24,30 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
  * (`tailwind-merge` — 67 KB of the same chunk — still arrives via `cn`, which
  * is genuinely used everywhere. Separate, larger decision.)
  */
+/**
+ * ⚠️ The root element is a `<div aria-hidden>`, NOT a `<main>`, and that is not
+ * cosmetic.
+ *
+ * A streamed response carries the Suspense FALLBACK and the real content in the
+ * same HTML document — the fallback in the prerendered shell, the content in the
+ * tail that an inline script swaps in. A browser ends up with one `<main>`. A
+ * crawler that does not run JS — which is most of the AI ones — parses the whole
+ * document and sees every `<main>` in it. With this skeleton and the segment
+ * skeleton both claiming the landmark, `/` served THREE `<main>` elements, the
+ * first two full of shimmer bars, and the page's real `<h1>` arrived after the
+ * footer. An AI-readiness scan on 2026-09-13 scored the site 0/20 on heading
+ * hierarchy, 0/20 on semantic elements and 0/10 on landmarks because of it.
+ *
+ * A loading placeholder is not a landmark and has no accessible name worth
+ * exposing, so `aria-hidden` is the honest markup here as well as the one that
+ * leaves exactly one `<main>` in the document.
+ *
+ * Do not put an `<h1>`…`<h6>` in a skeleton for the same reason — an empty
+ * heading in the shell outranks the real one in source order.
+ */
 export default function Loading() {
   return (
-    <main className="mx-auto max-w-[var(--w-shell)] px-6 py-10">
+    <div aria-hidden="true" className="mx-auto max-w-[var(--w-shell)] px-6 py-10">
       <div className="mb-8 space-y-3">
         <Skeleton width="narrow" className="h-3" />
         <Skeleton width="wide" className="h-8" />
@@ -39,6 +60,6 @@ export default function Loading() {
           </div>
         ))}
       </div>
-    </main>
+    </div>
   );
 }

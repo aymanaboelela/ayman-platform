@@ -35,3 +35,10 @@ apps/web/test-results/
 # Playwright writes here when its output path env var is unset — see
 # chore/drop-stray-screenshots. Never a real artefact.
 undefined/
+
+# ── ملفات إعدادات المدرّسين ───────────────────────────────────────────
+# كل واحد فيهم فيه باسوردات الداتابيز و`BETTER_AUTH_SECRET` وتوكن الواتساب
+# بتاع ستاك حقيقي. القالب في `deploy/tenant.env.example` هو اللي بيتكوميت؛
+# الملف المتعبّى مابيدخلش الريبو أبدًا — مكانه لوحة Dokploy ونسخة في مدير
+# أسرار، مش git.
+deploy/tenants/

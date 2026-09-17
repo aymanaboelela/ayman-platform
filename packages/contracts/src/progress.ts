@@ -199,6 +199,21 @@ export const EnrollmentSchema = z.object({
   lastLessonId: z.string().nullable(),
   enrolledAt: z.iso.datetime(),
   completedAt: z.iso.datetime().nullable(),
+  /**
+   * Whether a LIVE `AccessGrant` stands behind this enrollment right now —
+   * the question `status` looks like it answers and does not.
+   *
+   * Nothing ever writes `status: 'expired'`. A lapsed subscription is a
+   * revoked or elapsed grant; the enrollment row stays `active`, which is
+   * correct (the course is still the student's, and so is their progress) but
+   * made every reader that treated «has a row» as «has access» send a lapsed
+   * student away from the one page that sells them a renewal. See
+   * `EnrollmentService.listOwn` for the loop that caused.
+   *
+   * `false` means: still theirs, cannot open a lesson, needs to pay. Show the
+   * course; do NOT route them into it.
+   */
+  accessActive: z.boolean(),
 });
 
 /**
@@ -365,8 +380,26 @@ export const PlayerResourceSchema = z.object({
 });
 
 export const PlayerVideoSchema = z.object({
-  /** The 11-char id only — spec §7 P3. A URL here would reintroduce the SSRF class. */
-  youtubeId: z.string().regex(/^[A-Za-z0-9_-]{11}$/),
+  /**
+   * Which pipeline this lecture came from, and therefore what the player is
+   * allowed to fall back to.
+   *
+   * `upload` means the video exists NOWHERE ELSE. There is no YouTube page to
+   * open, no embed to try, and offering one would be a link to a 404 — so the
+   * component must not have a fallback path at all for these, and this field
+   * is how it knows.
+   */
+  provider: z.enum(['youtube', 'upload']),
+  /**
+   * The 11-char id only — spec §7 P3. A URL here would reintroduce the SSRF
+   * class.
+   *
+   * `null` for an uploaded lecture: there is no YouTube id, and the previous
+   * shape (a required id) is exactly the sort of field a component reads
+   * without checking. Making it nullable is what forces every consumer to
+   * decide what it does for a video YouTube has never heard of.
+   */
+  youtubeId: z.string().regex(/^[A-Za-z0-9_-]{11}$/).nullable(),
   durationSeconds: z.number().int().min(0),
   posterUrl: z.string().nullable(),
 
@@ -402,6 +435,16 @@ export const LessonPlayerSchema = z.object({
     title: z.string(),
     kind: lessonKindSchema,
     estimatedSeconds: z.number().int().nullable(),
+    /**
+     * A short summary of the lecture, written to be read AFTER watching it.
+     *
+     * `null` on every lecture that has none, which today is most of them.
+     * `.catch(null)` rather than `.nullable()` alone: during a rolling deploy
+     * this page can be served by an API container that predates the column,
+     * and a missing field must degrade to "no summary" rather than fail the
+     * parse and take the whole lesson page down with it.
+     */
+    description: z.string().nullable().catch(null),
   }),
   video: PlayerVideoSchema.nullable(),
   text: z.object({ bodyHtml: z.string() }).nullable(),

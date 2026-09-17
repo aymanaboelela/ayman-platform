@@ -1,13 +1,24 @@
-import { createReadStream } from 'node:fs';
+import { createReadStream, createWriteStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { pipeline } from 'node:stream/promises';
+import type { Readable } from 'node:stream';
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
+  DeleteObjectCommand,
   DeleteObjectsCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
+  UploadPartCommand,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { MirrorConfig } from './mirror-config';
+import { adoptableLadder } from './mirror-pipeline';
 
 /**
  * Content types for the three extensions an HLS ladder is made of.
@@ -22,6 +33,7 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
   '.m3u8': 'application/vnd.apple.mpegurl',
   '.m4s': 'video/iso.segment',
   '.mp4': 'video/mp4',
+  '.jpg': 'image/jpeg',
 };
 
 function contentTypeOf(path: string): string {
@@ -43,6 +55,11 @@ function contentTypeOf(path: string): string {
  * times and served from the edge cache after that.
  */
 const CACHE_CONTROL = 'public, max-age=31536000, immutable';
+
+/** Attempts per object, and the step between them. Linear: the failure being
+ *  ridden out is a dropped connection on a long upload, not a busy service. */
+const PUT_ATTEMPTS = 4;
+const PUT_BACKOFF_MS = 2_000;
 
 export class MirrorStorage {
   private readonly s3: S3Client;
@@ -81,20 +98,45 @@ export class MirrorStorage {
     const full = join(dir, file);
     const { size } = await stat(full);
 
-    await this.s3.send(
-      new PutObjectCommand({
-        Bucket: this.config.bucket,
-        // Object keys use forward slashes on every platform; `file` comes
-        // from `relative()` and would carry backslashes on Windows.
-        Key: `${prefix}/${file.split(/[\\/]/).join('/')}`,
-        Body: createReadStream(full),
-        // A stream body has no length the SDK can infer, and R2 rejects an
-        // unsigned-length upload.
-        ContentLength: size,
-        ContentType: contentTypeOf(file),
-        CacheControl: CACHE_CONTROL,
-      }),
-    );
+    // Object keys use forward slashes on every platform; `file` comes from
+    // `relative()` and would carry backslashes on Windows.
+    const key = `${prefix}/${file.split(/[\\/]/).join('/')}`;
+
+    /*
+     * Retried HERE, not by the SDK.
+     *
+     * The SDK does retry — but not a streaming body: once the read stream has
+     * been consumed there is nothing left to send again, and it gives up with
+     * «An error was encountered in a non-retryable streaming request». A
+     * ladder is well over a thousand of these uploads back to back, so a
+     * single dropped connection two thirds of the way through threw away the
+     * whole lecture: the download, the packaging and every file already
+     * uploaded. That happened twice in one backfill.
+     *
+     * Opening a FRESH stream per attempt is the entire fix — the file is
+     * still on disk, and the object is content-addressed by its key, so
+     * re-sending it is safe however far the previous attempt got.
+     */
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        await this.s3.send(
+          new PutObjectCommand({
+            Bucket: this.config.bucket,
+            Key: key,
+            Body: createReadStream(full),
+            // A stream body has no length the SDK can infer, and R2 rejects
+            // an unsigned-length upload.
+            ContentLength: size,
+            ContentType: contentTypeOf(file),
+            CacheControl: CACHE_CONTROL,
+          }),
+        );
+        return;
+      } catch (error) {
+        if (attempt >= PUT_ATTEMPTS) throw error;
+        await new Promise((resolve) => setTimeout(resolve, attempt * PUT_BACKOFF_MS));
+      }
+    }
   }
 
   /**
@@ -130,5 +172,238 @@ export class MirrorStorage {
 
       token = listed.IsTruncated === true ? listed.NextContinuationToken : undefined;
     } while (token !== undefined);
+  }
+
+  /**
+   * Every video id the bucket holds a folder for.
+   *
+   * One listing with a delimiter, not one per row: the sweep that uses this
+   * runs on a schedule against every lecture on the platform, and asking the
+   * bucket per row would be hundreds of calls a minute to answer "no" almost
+   * every time.
+   */
+  async listMirroredIds(): Promise<Set<string>> {
+    const ids = new Set<string>();
+    let token: string | undefined;
+
+    do {
+      const listed = await this.s3.send(
+        new ListObjectsV2Command({
+          Bucket: this.config.bucket,
+          Prefix: 'v/',
+          Delimiter: '/',
+          ContinuationToken: token,
+        }),
+      );
+      for (const entry of listed.CommonPrefixes ?? []) {
+        const id = entry.Prefix?.slice('v/'.length).replace(/\/$/, '');
+        if (id !== undefined && id.length > 0) ids.add(id);
+      }
+      token = listed.IsTruncated === true ? listed.NextContinuationToken : undefined;
+    } while (token !== undefined);
+
+    return ids;
+  }
+
+  /**
+   * What the bucket ALREADY holds for one video, or `null`.
+   *
+   * This exists because the worker cannot always be the thing that fills the
+   * bucket. YouTube refuses a data-centre IP outright — «Sign in to confirm
+   * you're not a bot», every client, every video — so the backfill is run
+   * from a machine on a residential connection (`scripts/mirror-local.ts`)
+   * and the objects land here without any row ever changing.
+   *
+   * Reading them back is what turns those objects into a `ready` lecture.
+   * The alternative was a hand-written UPDATE against production, which is
+   * both unrepeatable and a claim no one can check: this asks the bucket.
+   *
+   * ⚠️ The completeness test is the MASTER PLAYLIST PLUS ITS VARIANTS, not
+   * "some objects exist". An interrupted upload leaves a prefix full of
+   * segments, and adopting that marks a lecture `ready` whose player stalls
+   * partway through a rung — a failure no status anywhere would show.
+   */
+  async describeLadder(prefix: string): Promise<{ maxHeight: number; bytes: number } | null> {
+    const sizes = new Map<string, number>();
+    let token: string | undefined;
+
+    do {
+      const listed = await this.s3.send(
+        new ListObjectsV2Command({
+          Bucket: this.config.bucket,
+          Prefix: `${prefix}/`,
+          ContinuationToken: token,
+        }),
+      );
+      for (const object of listed.Contents ?? []) {
+        if (object.Key !== undefined) sizes.set(object.Key, object.Size ?? 0);
+      }
+      token = listed.IsTruncated === true ? listed.NextContinuationToken : undefined;
+    } while (token !== undefined);
+
+    const masterKey = `${prefix}/master.m3u8`;
+    if (!sizes.has(masterKey)) return null;
+
+    const master = await this.s3.send(
+      new GetObjectCommand({ Bucket: this.config.bucket, Key: masterKey }),
+    );
+    // Small by construction — a handful of lines, one per rung.
+    const text = (await master.Body?.transformToString()) ?? '';
+
+    const maxHeight = adoptableLadder(prefix, text, new Set(sizes.keys()));
+    if (maxHeight === null) return null;
+
+    let bytes = 0;
+    for (const size of sizes.values()) bytes += size;
+
+    return { maxHeight, bytes };
+  }
+
+  /* ── الرفع المباشر ───────────────────────────────────────────────────────
+   *
+   * The API signs; the BROWSER sends. Not an optimisation — the alternative
+   * puts an hour-long multi-gigabyte transfer through the Node process and
+   * the reverse proxy, where a dropped connection at minute fifty starts
+   * again from zero and a second admin uploading at the same time competes
+   * for the same memory the site is served from.
+   *
+   * Nothing here ever takes a key from a caller. Every key is built from an
+   * upload id that has already been matched against `UPLOAD_ID_RE`.
+   */
+
+  /** Open a multipart upload and return S3's id for it. */
+  async createMultipart(key: string, contentType: string): Promise<string> {
+    const created = await this.s3.send(
+      new CreateMultipartUploadCommand({
+        Bucket: this.config.bucket,
+        Key: key,
+        ContentType: contentType,
+      }),
+    );
+    if (created.UploadId === undefined) {
+      throw new Error('التخزين مرجّعش رقم للرفع — جرّب تاني');
+    }
+    return created.UploadId;
+  }
+
+  /**
+   * A pre-signed PUT per part.
+   *
+   * Signed UP FRONT rather than one at a time: a round trip to us before each
+   * part would add a second of latency to every 21 MB, and the browser is
+   * uploading four parts at once precisely so it never waits.
+   *
+   * The expiry is the real constraint. It has to outlast the slowest upload
+   * anyone will actually attempt — 8 GB on a 5 Mbit ADSL line is over three
+   * hours — while staying far below SigV4's seven-day maximum, because these
+   * URLs are write access to our bucket in a browser's memory.
+   */
+  async presignParts(
+    key: string,
+    uploadId: string,
+    partCount: number,
+    expiresInSeconds: number,
+  ): Promise<{ partNumber: number; url: string }[]> {
+    const parts: { partNumber: number; url: string }[] = [];
+    for (let partNumber = 1; partNumber <= partCount; partNumber += 1) {
+      const url = await getSignedUrl(
+        this.s3,
+        new UploadPartCommand({
+          Bucket: this.config.bucket,
+          Key: key,
+          UploadId: uploadId,
+          PartNumber: partNumber,
+        }),
+        { expiresIn: expiresInSeconds },
+      );
+      parts.push({ partNumber, url });
+    }
+    return parts;
+  }
+
+  /**
+   * Seal the upload. S3 needs every part's ETag, in order, and rejects the
+   * whole thing otherwise — which is the property that makes this the moment
+   * the object becomes real. Until it succeeds there is no source file, so a
+   * browser that closed mid-upload leaves parts that expire rather than a
+   * truncated video the transcoder would faithfully encode.
+   */
+  async completeMultipart(
+    key: string,
+    uploadId: string,
+    parts: readonly { partNumber: number; etag: string }[],
+  ): Promise<void> {
+    await this.s3.send(
+      new CompleteMultipartUploadCommand({
+        Bucket: this.config.bucket,
+        Key: key,
+        UploadId: uploadId,
+        MultipartUpload: {
+          Parts: [...parts]
+            .sort((a, b) => a.partNumber - b.partNumber)
+            .map((part) => ({
+              PartNumber: part.partNumber,
+              // Browsers hand back the ETag header with its quotes; the SDK
+              // wants it either way, and normalising here means one shape in
+              // the logs.
+              ETag: part.etag.replaceAll('"', ''),
+            })),
+        },
+      }),
+    );
+  }
+
+  /**
+   * Throw the parts away.
+   *
+   * Called when the admin cancels and when a session is replaced. Worth doing
+   * explicitly: incomplete multipart parts are STORED and BILLED, and they are
+   * invisible to every listing — a bucket can quietly hold hundreds of
+   * gigabytes of them with nothing in the console to show for it.
+   */
+  async abortMultipart(key: string, uploadId: string): Promise<void> {
+    await this.s3
+      .send(
+        new AbortMultipartUploadCommand({
+          Bucket: this.config.bucket,
+          Key: key,
+          UploadId: uploadId,
+        }),
+      )
+      .catch(() => undefined);
+  }
+
+  /** Size of an object, or null when it is not there. */
+  async sizeOf(key: string): Promise<number | null> {
+    try {
+      const head = await this.s3.send(
+        new HeadObjectCommand({ Bucket: this.config.bucket, Key: key }),
+      );
+      return head.ContentLength ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Stream an object to a local file.
+   *
+   * To DISK, not to memory. The source of a two-hour lecture is gigabytes and
+   * `transformToByteArray()` on it is an out-of-memory kill of the API
+   * container — which, on a single-container deployment, is the whole site
+   * going down because someone uploaded a long lesson.
+   */
+  async downloadTo(key: string, file: string): Promise<void> {
+    const object = await this.s3.send(
+      new GetObjectCommand({ Bucket: this.config.bucket, Key: key }),
+    );
+    if (object.Body === undefined) throw new Error('الملف اللي اترفع مش موجود في التخزين');
+    await pipeline(object.Body as Readable, createWriteStream(file));
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    await this.s3
+      .send(new DeleteObjectCommand({ Bucket: this.config.bucket, Key: key }))
+      .catch(() => undefined);
   }
 }

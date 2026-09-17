@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AccessGrant, AccessScope } from '../../generated/prisma/client';
+import { courseAccessScopes, grantLiveness } from './grant-liveness';
 
 /**
  * The return type is an OBJECT in both directions. A `boolean` here is the seed
@@ -95,37 +96,18 @@ export class EntitlementService {
     }
 
     /*
-     * WHICH SCOPES COUNT — the whole of what `requiresGrant` changes.
-     *
-     * A free course is satisfied by any of the four, including the
-     * platform-wide "v1 is free for everyone" grant. A closed one drops
-     * `platform` from the list, so it takes a grant naming this course (or its
-     * subject, or one of its terms) specifically.
-     *
-     * `term` is included in BOTH branches, matched on `courseId` alone (never
-     * `termId` here) — this method answers "does this student have SOME
-     * access to this course at all" (the enroll-time question), not "which
-     * term". A term-only buyer must still be able to enrol; the per-lesson
-     * "is it THIS term" question is `resolveTermAccess`'s alone, and
-     * `LessonAccessService.require` is the only caller that asks it.
+     * WHICH SCOPES COUNT — the whole of what `requiresGrant` changes — is
+     * `courseAccessScopes`, in `./grant-liveness`, and it is shared with
+     * `EnrollmentService.listOwn`. That sharing is the point: the list and
+     * this method must never disagree about which grants open a course, or a
+     * student reads as «enrolled» in a list after the grant behind it lapsed.
      *
      * Note what does NOT change: access is still decided by reading grants,
      * with their scopes and validity windows, and never by a column on the
      * course. The schema's warning against a boolean `isFree` is about exactly
      * that shortcut, and this is not it.
      */
-    const scopes = course.requiresGrant
-      ? [
-          { scope: 'course' as const, courseId },
-          { scope: 'subject_teacher' as const, subjectId: course.subjectId },
-          { scope: 'term' as const, courseId },
-        ]
-      : [
-          { scope: 'platform' as const },
-          { scope: 'course' as const, courseId },
-          { scope: 'subject_teacher' as const, subjectId: course.subjectId },
-          { scope: 'term' as const, courseId },
-        ];
+    const scopes = courseAccessScopes(course);
 
     const grants = await this.prisma.accessGrant.findMany({
       where: { userId, OR: scopes },
@@ -152,16 +134,9 @@ export class EntitlementService {
     };
 
     for (const grant of grants) {
-      if (grant.revokedAt !== null) {
-        fallback = { allowed: false, reason: 'revoked' };
-        continue;
-      }
-      if (grant.validFrom > now) {
-        fallback = { allowed: false, reason: 'not_yet_valid' };
-        continue;
-      }
-      if (grant.validUntil !== null && grant.validUntil <= now) {
-        fallback = { allowed: false, reason: 'expired' };
+      const liveness = grantLiveness(grant, now);
+      if (liveness !== 'live') {
+        fallback = { allowed: false, reason: liveness };
         continue;
       }
       return {
@@ -229,24 +204,15 @@ export class EntitlementService {
     let fallback: CourseAccess = { allowed: false, reason: 'needs_term_grant' };
 
     for (const grant of grants) {
-      if (grant.revokedAt !== null) {
-        // The bulk-revoke-on-close outcome, seen from the lesson side: the
-        // same `revoked` reason `LessonAccessService.require`'s existing
-        // lapsed-grant check already throws on for a cancelled course
-        // subscription.
-        fallback = { allowed: false, reason: 'revoked' };
-        continue;
-      }
-      if (grant.validFrom > now) {
-        fallback = { allowed: false, reason: 'not_yet_valid' };
-        continue;
-      }
-      // A term grant's `validUntil` is always `null` (see the model doc), so
-      // this branch is unreachable for one in practice — kept for symmetry
-      // with `resolveCourseAccess` and so a future change to that invariant
-      // does not silently stop being checked here.
-      if (grant.validUntil !== null && grant.validUntil <= now) {
-        fallback = { allowed: false, reason: 'expired' };
+      // `revoked` here is the bulk-revoke-on-close outcome seen from the
+      // lesson side — the same reason `LessonAccessService.require`'s
+      // lapsed-grant check already throws on for a cancelled subscription.
+      // `expired` is unreachable for a term grant (its `validUntil` is always
+      // `null`; see the model doc) and is covered anyway, so a future change
+      // to that invariant does not silently stop being checked.
+      const liveness = grantLiveness(grant, now);
+      if (liveness !== 'live') {
+        fallback = { allowed: false, reason: liveness };
         continue;
       }
       return { allowed: true, grantId: grant.id, scope: 'term', validUntil: grant.validUntil };
