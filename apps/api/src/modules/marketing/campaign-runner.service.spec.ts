@@ -63,8 +63,9 @@ describe('CampaignRunner — the blind-send breaker', () => {
     const findFirstRecipient = jest.fn().mockResolvedValue(null);
     const send = jest.fn().mockResolvedValue({ messageId: 'M1' });
 
+    const findFirstCampaign = jest.fn().mockResolvedValue(campaign);
     const prisma = {
-      marketingCampaign: { findFirst: jest.fn().mockResolvedValue(campaign), update: updateCampaign },
+      marketingCampaign: { findFirst: findFirstCampaign, update: updateCampaign },
       marketingRecipient: {
         findMany: jest.fn().mockResolvedValue(probe),
         findFirst: findFirstRecipient,
@@ -89,7 +90,7 @@ describe('CampaignRunner — the blind-send breaker', () => {
     const mediaUrl = { resolve: (key: string) => `https://media/${key}` } as MediaUrlResolver;
 
     const runner = new CampaignRunner(prisma, device, redis, mediaUrl);
-    return { runner, updateCampaign, findFirstRecipient, send };
+    return { runner, updateCampaign, findFirstRecipient, findFirstCampaign, send };
   }
 
   beforeAll(() => {
@@ -155,13 +156,27 @@ describe('CampaignRunner — the blind-send breaker', () => {
     );
   });
 
-  it('does nothing at all when the device is not configured', async () => {
-    const { runner, updateCampaign } = harness(blindProbe(20));
+  it('still ticks with no linked device, but only a platform campaign is eligible', async () => {
+    /*
+     * This used to assert «does nothing at all», and that stopped being true
+     * when the `platform` channel landed. The early `if (!device.enabled)
+     * return` was removed on purpose: a platform campaign writes into our own
+     * database and has no opinion about whether a phone is awake, so the old
+     * guard made the one channel that cannot fail silently refuse to start
+     * whenever the channel that can was offline.
+     *
+     * The check moved rather than vanished — it is now the query's own
+     * `where`, which is what this asserts. `both` is excluded there too,
+     * because it promises a WhatsApp copy the device could not send.
+     */
+    const { runner, findFirstCampaign } = harness(blindProbe(20));
     // @ts-expect-error — overriding the getter on the mock for this case only.
     runner['device'].enabled = false;
 
     await runner.tick();
 
-    expect(updateCampaign).not.toHaveBeenCalled();
+    expect(findFirstCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ channel: 'platform' }) }),
+    );
   });
 });
