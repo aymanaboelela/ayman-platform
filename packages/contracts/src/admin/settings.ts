@@ -70,6 +70,46 @@ export const AccentHueSchema = z
     message: 'اللون ده قريب أوي من لون «إجابة صح» أو «إجابة غلط» — اختار درجة تانية',
   });
 
+/**
+ * The landing page's SHAPE — a different page, not the same page recoloured.
+ *
+ * ## Why this exists and the colour setting was not enough
+ *
+ * `accentHue` changes what the page is coloured. It does not change the page:
+ * every instructor still gets the same full-bleed dark hero at `100svh`, the
+ * same two-column copy grid, the same card rhythm — Ayman's page, tinted. Two
+ * instructors sharing a market and a curriculum end up with two sites that are
+ * recognisably one site, which is the opposite of what a separate brand is for.
+ *
+ * ## Why a page-level enum and not a variant on every block
+ *
+ * A `variant` prop on each of the twelve block types would be twelve decisions
+ * per tenant and twelve components to keep in step. This is ONE decision that
+ * moves the whole page, because what actually distinguishes these looks is not
+ * any single section — it is the rhythm they share: how tall the opener is,
+ * whether headings sit centred or ranged, whether content sits in cards or
+ * between rules, how much air runs between sections.
+ *
+ * So the value lands as `data-layout` on the page's `<main>` and the section
+ * stylesheets answer it. No block changes, no component takes a new prop, and
+ * a tenant switches their whole page in one save.
+ *
+ *   · `classic`   — what the platform ships: a full-height dark stage, the
+ *                   copy ranged right over it, content in raised cards. This
+ *                   is Ayman's page and stays the default, so no stored row
+ *                   changes meaning.
+ *   · `editorial` — no dark stage. A light opener sized to its own content,
+ *                   one centred column, much larger headings, and sections
+ *                   separated by hairlines instead of cards. Reads like a
+ *                   long-form page rather than a product site.
+ *   · `compact`   — a short opener, centred copy, tighter type and denser
+ *                   sections with bordered cards. Reads like an app's
+ *                   marketing page: more on the first screen, less air.
+ */
+export const LANDING_LAYOUTS = ['classic', 'editorial', 'compact'] as const;
+export const LandingLayoutSchema = z.enum(LANDING_LAYOUTS);
+export type LandingLayout = z.infer<typeof LandingLayoutSchema>;
+
 /** Radius presets. Every preset keeps the card ceiling at ≤ 8px. */
 export const RADIUS_SLOTS = ['sharp', 'default', 'soft'] as const;
 export const RadiusSlotSchema = z.enum(RADIUS_SLOTS);
@@ -83,6 +123,8 @@ export const BrandingSchema = z
     accent: AccentSlotSchema.default('amber'),
     /** Overrides `accent` when set. See `AccentHueSchema`. */
     accentHue: AccentHueSchema,
+    /** The landing page's shape. See `LandingLayoutSchema`. */
+    landingLayout: LandingLayoutSchema.default('classic'),
     radius: RadiusSlotSchema.default('default'),
     logoLightAssetId: assetId,
     logoDarkAssetId: assetId,

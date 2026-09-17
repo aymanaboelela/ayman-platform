@@ -9,6 +9,7 @@ import { z } from 'zod';
 import {
   ACCENT_SLOTS,
   BrandingSchema,
+  LANDING_LAYOUTS,
   RADIUS_SLOTS,
   type Branding,
 } from '@ayman/contracts/admin/settings';
@@ -60,6 +61,81 @@ const HUE_STOPS = Array.from({ length: 25 }, (_, index) => {
   const stop = index * 15;
   return { hue: stop, css: formatOklch(accentRamp(stop % 360, 'light')[0]) };
 });
+
+/**
+ * A drawing of each shape, not a word for it.
+ *
+ * «مقالي» and «مضغوط» mean nothing until you have seen them, and a radio list
+ * of three Arabic adjectives is a choice made blind. Each preview is three
+ * divs — the opener, then two content rows — sized and aligned the way that
+ * layout actually renders, so the difference an admin is picking between is
+ * the difference they can see.
+ *
+ * Deliberately monochrome: this control chooses a SHAPE. The colour is
+ * `accentHue`'s job right above it, and tinting these would suggest the two
+ * settings are one.
+ */
+const LAYOUT_LABEL: Record<(typeof LANDING_LAYOUTS)[number], { name: string; hint: string }> = {
+  classic: {
+    name: copy.admin.settings.landingLayoutClassic,
+    hint: copy.admin.settings.landingLayoutClassicHint,
+  },
+  editorial: {
+    name: copy.admin.settings.landingLayoutEditorial,
+    hint: copy.admin.settings.landingLayoutEditorialHint,
+  },
+  compact: {
+    name: copy.admin.settings.landingLayoutCompact,
+    hint: copy.admin.settings.landingLayoutCompactHint,
+  },
+};
+
+function LayoutPreview({ layout }: { layout: (typeof LANDING_LAYOUTS)[number] }) {
+  const stageHeight = layout === 'classic' ? 34 : layout === 'editorial' ? 26 : 18;
+  const rowGap = layout === 'compact' ? 2 : layout === 'editorial' ? 7 : 4;
+  const darkStage = layout !== 'editorial';
+
+  return (
+    <span
+      aria-hidden="true"
+      className="flex w-[66px] shrink-0 flex-col overflow-hidden rounded-[3px] border border-line bg-bg text-fg"
+      style={{ gap: rowGap }}
+    >
+      {/* The opener. Dark and ranged for classic, dark and short for compact,
+          light and centred for editorial — the three differences an admin is
+          actually choosing between. `currentColor` throughout, so the preview
+          needs no colour token of its own and reads in either theme. */}
+      <span
+        className={`flex items-end px-1.5 pb-1 ${darkStage ? 'bg-fg' : 'border-b border-line'}`}
+        style={{
+          height: stageHeight,
+          justifyContent: layout === 'classic' ? 'flex-start' : 'center',
+        }}
+      >
+        <span
+          className={`block rounded-[1px] ${darkStage ? 'bg-bg' : 'bg-fg'}`}
+          style={{ height: layout === 'editorial' ? 5 : 3, width: layout === 'editorial' ? 34 : 26 }}
+        />
+      </span>
+
+      {/* Three content cells: filled for classic and compact, outlined for
+          editorial, where content sits on the page rather than on a card. */}
+      <span className="flex gap-1 px-1.5" style={{ paddingBottom: rowGap }}>
+        {[0, 1, 2].map((cell) => (
+          <span
+            key={cell}
+            className={
+              layout === 'editorial'
+                ? 'flex-1 rounded-[2px] border border-line'
+                : 'flex-1 rounded-[2px] bg-fg/12'
+            }
+            style={{ height: layout === 'compact' ? 9 : 12 }}
+          />
+        ))}
+      </span>
+    </span>
+  );
+}
 
 export interface BrandingFormProps {
   defaultValues: Branding;
@@ -217,6 +293,38 @@ export function BrandingForm({ defaultValues, assets }: BrandingFormProps) {
           )}
         />
       ) : null}
+
+      <SettingsField
+        name="landingLayout"
+        label={copy.admin.settings.landingLayout}
+        description={copy.admin.settings.landingLayoutHint}
+        issues={issues}
+        render={(controlProps) => (
+          <RadioGroup
+            {...controlProps}
+            value={form.watch('landingLayout') ?? defaultValues.landingLayout}
+            onValueChange={(value) =>
+              form.setValue('landingLayout', value as Branding['landingLayout'], {
+                shouldValidate: true,
+              })
+            }
+            aria-label={copy.admin.settings.landingLayout}
+          >
+            {LANDING_LAYOUTS.map((layout) => (
+              <label key={layout} className="flex items-start gap-3 py-1">
+                <RadioGroupItem value={layout} />
+                <LayoutPreview layout={layout} />
+                <span className="flex flex-col">
+                  <span className="text-fg">{LAYOUT_LABEL[layout].name}</span>
+                  <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
+                    {LAYOUT_LABEL[layout].hint}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </RadioGroup>
+        )}
+      />
 
       <SettingsField
         name="radius"
