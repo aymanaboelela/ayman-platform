@@ -1,4 +1,18 @@
-node_modules/
+# NO trailing slash, and that is the whole point of this line.
+#
+# `node_modules/` matches a DIRECTORY only. A SYMLINK named `node_modules` is a
+# FILE to git, so it sails straight past that pattern — and borrowing another
+# worktree's `node_modules` by symlink is the documented way to work in a fresh
+# worktree here, because `pnpm install` in one takes 30+ minutes and times out.
+#
+# On 2026-09-03 a `git add -A packages` committed three of those links. CI then
+# failed EVERY job at `pnpm install`: `packages/config/node_modules` existed as
+# a link to a path no runner has, so pnpm's own mkdir hit ENOENT and the whole
+# install exited 254. Nothing about the change under review was wrong.
+#
+# `apps/web/.gitignore` already used the slash-less spelling, which is exactly
+# why only `packages/*` was hit.
+node_modules
 .next/
 dist/
 .turbo/
@@ -17,3 +31,14 @@ coverage/
 apps/web/playwright-report/
 apps/web/test-results/
 .claude/worktrees/
+
+# Playwright writes here when its output path env var is unset — see
+# chore/drop-stray-screenshots. Never a real artefact.
+undefined/
+
+# ── ملفات إعدادات المدرّسين ───────────────────────────────────────────
+# كل واحد فيهم فيه باسوردات الداتابيز و`BETTER_AUTH_SECRET` وتوكن الواتساب
+# بتاع ستاك حقيقي. القالب في `deploy/tenant.env.example` هو اللي بيتكوميت؛
+# الملف المتعبّى مابيدخلش الريبو أبدًا — مكانه لوحة Dokploy ونسخة في مدير
+# أسرار، مش git.
+deploy/tenants/

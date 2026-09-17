@@ -52,6 +52,132 @@ const nextConfig: NextConfig = {
   // is the expensive path, so it is on from day one.
   cacheComponents: true,
 
+  /*
+   * ⚠️ There is deliberately NO `deploymentId` here, and it was tried.
+   *
+   * The per-build token this app needs — `NEXT_PUBLIC_BUILD_ID`, computed in
+   * the same `apps/web/Dockerfile` layer that runs `next build`, so it changes
+   * exactly when the code does — is a plain `NEXT_PUBLIC_*` variable and
+   * reaches the browser as an inlined string on its own. That is all
+   * `components/pwa/service-worker-register.tsx` needs in order to register
+   * `/sw.js?v=<token>`, which is what makes every deploy look like a new
+   * service worker and lets `activate` drop the previous build's cached
+   * chunks. Setting `deploymentId` to the same value looked like tidy
+   * reinforcement of that and is not:
+   *
+   *   · It appends `?dpl=<token>` to EVERY `/_next/static/*` URL. Those
+   *     filenames are already content-hashed, so the query adds no correctness
+   *     and changes the URL of every asset on every deploy even when not one
+   *     byte of it moved. `public/sw.js` caches those cache-first, keyed on the
+   *     full URL — `ignoreSearch` defaults to false — so a returning student
+   *     re-downloads the entire JS and CSS payload after each deploy, on
+   *     Egyptian mobile data, several times an evening. It also puts two
+   *     byte-identical copies of every shared chunk in the cache while a device
+   *     spans two builds, against `MAX_ASSET_ENTRIES`.
+   *   · It falsifies the premise sw.js's own cache-first branch rests on and
+   *     states out loud: "a changed file is a changed URL".
+   *   · The one thing it does buy — the client comparing a build id against
+   *     every RSC response and answering a mismatch with a full page load —
+   *     already happens without it. `app-index.js` calls `setNavigationBuildId`
+   *     with the flight payload's own build id when no deployment id is
+   *     configured, and `fetch-server-response.js` compares that.
+   *
+   * If it is ever reintroduced, `experimental.immutableAssetToken` is the knob
+   * that separates the two concerns — and the asset re-download above is the
+   * number to measure first.
+   */
+
+  experimental: {
+    /**
+     * How long the CLIENT router may reuse a page it already has before it
+     * refetches it — Next's default is `dynamic: 0`, i.e. never.
+     *
+     * Every signed-in route in this app is dynamic, so with the default in
+     * force, LEAVING a page and coming back to it thirty seconds later threw
+     * away everything the router was holding and re-rendered the route from
+     * scratch on the server. `/dashboard` alone is ten parallel API calls (its
+     * own comments count them down against the `short` throttle); the student
+     * sits on `loading.tsx` for every one of those round trips, every time.
+     *
+     * That is the reported bug, and it is worth being precise about why a
+     * RELOAD of the same page felt instant while the soft navigation did not —
+     * «بيدخل على صفحة ويجي يرجع لها تاني، بتقعد تلود، بس أول ما أعمل refresh
+     * في ثانية تروح». A document request is served the prerendered PPR shell
+     * immediately and streams the dynamic holes into it. A soft navigation has
+     * no shell to paint: the router has to have the RSC payload before it can
+     * commit the route, so the whole dynamic render is on the critical path.
+     * Refreshing was not faster than navigating — it was a different code path
+     * that had something to paint first.
+     *
+     * ⚠️ This governs LINK navigations, and only those. The browser's own
+     * back/forward is already exempt and always was: `readFromBFCache` passes
+     * `-1` where the current time goes, "during a back/forward navigation, it
+     * doesn't matter how stale the data might be" (segment-cache/bfcache.js).
+     * The regular-navigation twin of that read, `readFromBFCacheDuringRegular-
+     * Navigation`, is the one that takes a real clock and is therefore the one
+     * this number moves. Which is the case that matters here: this app is
+     * installed as a PWA with no browser chrome, so "going back to a page" is
+     * a tap on the rail, the topbar or a breadcrumb — a link — essentially
+     * every time.
+     *
+     * 30 seconds, not more: this is a cache the student cannot see and did not
+     * ask for, so the number is set by how long a stale figure may sit on a
+     * screen, not by how much traffic it saves. Long enough to make going back
+     * and forth feel instant, short enough that nobody reads a wrong number
+     * twice.
+     *
+     * ⚠️ WRITES HAVE TO CLEAR IT, and this is the part that is not free.
+     *
+     * `router.refresh()` is the only call that empties the client router cache,
+     * and a Server Action does it wholesale — which covers every admin screen
+     * and most of the app, because those are Server Actions or already call
+     * `refresh()`. It did NOT cover the one path that matters most: completing
+     * a lesson is a plain `apiPost` straight to Nest, and `LessonNav.finish()`
+     * then pushed to the next lesson without refreshing anything. With a stale
+     * time in force that push could replay a CACHED render of a lesson that was
+     * still gated — the course refusing to advance — and `/library` and
+     * `/dashboard` would keep showing the lesson unfinished. That call site now
+     * refreshes; see the ⚠️ in `components/player/lesson-nav.tsx` for the whole
+     * argument.
+     *
+     * So the rule for anything added later: a browser-side write whose result
+     * another ROUTE renders has to call `router.refresh()`. Inside one route it
+     * does not matter — the component already has the answer in its own state.
+     *
+     * ⚠️ ONE DOCUMENTED EXCEPTION, and it is worth knowing before adding a
+     * refresh anywhere: `refresh()` re-requests the CURRENT route, so it is
+     * unsafe on a route the write itself makes redirect. Enrolling is exactly
+     * that — `proxy.ts` sends an enrolled student off `(site)/courses/:slug` to
+     * `/library/:slug`, so refreshing there navigates instead of refreshing and
+     * races the push into the lesson. It cost two red Playwright shards before
+     * it was understood. See the ⚠️ in `components/site/course-start-button.tsx`.
+     *
+     * ## The residue, stated rather than glossed
+     *
+     * One write cannot use `router.refresh()` at all: submitting a quiz. The
+     * refresh would re-render the ATTEMPT route, whose server render posts
+     * `resume` (see `components/quiz/quiz-runner.tsx`). Two pages answer that
+     * with `unstable_dynamicStaleTime` instead — `quizzes/[lessonId]` takes 0,
+     * because a reused copy of it can cost a student a whole sitting, and
+     * `library/[slug]` takes 5, because that is where a lesson is drawn locked
+     * or open.
+     *
+     * What is left after all that: `/dashboard` and the `/library` LIST can lag
+     * a passed quiz by up to thirty seconds — a percentage and a count, on the
+     * two screens this whole setting exists to stop re-rendering. Trading a
+     * cosmetic half-minute on a number for the reported «بتقعد تلود» on the
+     * app's two most-revisited pages is the deal being made here, deliberately
+     * and in that direction.
+     *
+     * `static` is deliberately NOT set. It is not the prefetch knob it looks
+     * like: `next/dist/server/config.js` reads `experimental.staleTimes.static`
+     * to seed `cacheLife.default.stale`, so a value here would quietly change
+     * SERVER cache behaviour for every `'use cache'` entry that does not name
+     * its own profile. Leaving it undefined keeps Next's 300.
+     */
+    staleTimes: { dynamic: 30 },
+  },
+
   /**
    * Where every `'use cache'` entry is stored. Next's built-in handler is an
    * LRU inside the process, so a deploy or a restart empties the cache — and

@@ -209,6 +209,66 @@ export class ProfileService {
 
     const { systemId, year, trackId, electiveSubjectId } = await this.resolveSection(input);
 
+    /*
+      When they FIRST finished onboarding, kept.
+
+      This route is no longer only the wizard's submit: `/settings/section` is
+      now the student's own «بياناتك» editor and posts here every time they
+      change a school name. Stamping `new Date()` on each save would rewrite
+      the day every returning student joined — a column the admin list sorts
+      by and the outreach sweeper reads — with the day they last edited a
+      field. Nothing else about the write changes: a profile that has never
+      completed onboarding still gets the timestamp it is owed.
+    */
+    const existing = await this.prisma.studentProfile.findUnique({
+      where: { userId },
+      select: { onboardingCompletedAt: true },
+    });
+
+    /**
+     * ONCE ONBOARDING IS DONE, THE PHONE IS PINNED — server-side, not by a
+     * `readOnly` attribute on an input.
+     *
+     * `users.phone_number` is the login identity: `/sign-in/phone-number`
+     * matches against it, it is UNIQUE, and for a phone-only account the only
+     * other identifier is the synthesised `…@phone.invalid` address, which the
+     * student has never seen. There is no OTP on this platform
+     * (`auth.config.ts`'s `sendOTP` throws `OTP_NOT_CONFIGURED`) and no
+     * password reset by phone, so a number changed here — by a typo, or by
+     * somebody on a borrowed session — locks the owner out with no route back.
+     *
+     * It is not only a login identifier either. `BookOrdersService.listMine`
+     * unions in every UNCLAIMED guest order whose `book_orders.phone` equals
+     * the caller's number, deliberately, so that a student who ordered before
+     * signing up finds their order waiting. Whoever holds the number holds
+     * those orders — and the home address on them. The UNIQUE index stops a
+     * number that belongs to an ACCOUNT being taken; a guest checkout leaves
+     * `user_id` NULL forever, so its number is not protected by that at all.
+     *
+     * This became reachable in the ordinary course of things when
+     * `/settings/section` grew into the student's «بياناتك» editor and started
+     * posting the whole set here on every save. The form sends the stored
+     * number back unchanged, so a payload that disagrees did not come from the
+     * form — which is why this REFUSES rather than quietly ignoring the field:
+     * a silent no-op would hide the one case worth seeing.
+     *
+     * Keyed on `onboardingCompletedAt`, not on the row existing: before the
+     * wizard is finished the number is still being established, and a Google
+     * account genuinely arrives here with none (this write is the only place
+     * one ever gets a phone). Changing a number afterwards is an admin action
+     * — `PATCH /admin/students/:id` — until there is a flow that can prove the
+     * new number belongs to the person typing it.
+     */
+    if (existing?.onboardingCompletedAt != null) {
+      const account = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { phoneNumber: true },
+      });
+      if (account?.phoneNumber != null && account.phoneNumber !== input.phone) {
+        throw new BadRequestException('phone cannot be changed here');
+      }
+    }
+
     const data = {
       fullName: input.fullName,
       gender: input.gender,
@@ -225,7 +285,7 @@ export class ProfileService {
       year,
       trackId,
       electiveSubjectId,
-      onboardingCompletedAt: new Date(),
+      onboardingCompletedAt: existing?.onboardingCompletedAt ?? new Date(),
     };
 
     try {

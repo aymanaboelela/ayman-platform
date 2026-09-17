@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isModuleEvaluationError, isStaleDeployError } from './stale-deploy';
+import { isModuleEvaluationError, isStaleChunkError, isStaleDeployError } from './stale-deploy';
 
 /**
  * The predicate decides two behaviours that are invisible when it is wrong:
@@ -72,5 +72,66 @@ describe('isModuleEvaluationError', () => {
     server.stack = undefined;
 
     expect(isModuleEvaluationError(server)).toBe(false);
+  });
+});
+
+/**
+ * The third deploy shape, and the one the service worker's new per-build cache
+ * version makes reachable: a chunk that is not on the server any more and is no
+ * longer on the device either.
+ *
+ * Same two silent failure directions as the predicates above. Too narrow and a
+ * student sits on an error screen for a file a reload would have fetched; too
+ * broad and an ordinary failure hard-reloads the page under someone.
+ */
+describe('isStaleChunkError', () => {
+  /** Turbopack's own construction, from this app's shipped `turbopack-*.js`:
+   *  `Error(\`Failed to load chunk ${url} ${source}${cause}\`)` then
+   *  `err.name = 'ChunkLoadError'`. */
+  function chunkLoadError(message: string): Error {
+    const error = new Error(message);
+    error.name = 'ChunkLoadError';
+    return error;
+  }
+
+  it('matches on the name, whatever the message says', () => {
+    // Every part of the message varies — the URL, the source phrase ("from
+    // module X" / "as a runtime dependency of chunk Y" / "from an HMR update"),
+    // and the appended cause. The name does not.
+    for (const message of [
+      'Failed to load chunk /_next/static/chunks/1n-wn64nqsgu1.js from module 44811',
+      'Failed to load chunk static/chunks/0r.js as a runtime dependency of chunk 12: TypeError: Failed to fetch',
+      '',
+    ]) {
+      expect(isStaleChunkError(chunkLoadError(message))).toBe(true);
+    }
+  });
+
+  it('does not match an ordinary error that merely mentions loading a chunk', () => {
+    // Matching the message instead would fire on an app-level sentence, and
+    // the consequence is a page that reloads itself under someone.
+    for (const message of [
+      'Failed to load chunk /_next/static/chunks/1n-wn64nqsgu1.js from module 44811',
+      'Failed to load the lesson',
+      'Failed to fetch',
+    ]) {
+      expect(isStaleChunkError(new Error(message))).toBe(false);
+    }
+  });
+
+  it('does not match the other two deploy shapes', () => {
+    // The three predicates drive different recoveries; overlapping them would
+    // make which one wins depend on the order of the `if`s in the hook.
+    const staleAction = new Error(
+      'Server Action "70674c275044efa878d1f18e7c30cc06df93a1365f" was not found on the server.',
+    );
+    expect(isStaleChunkError(staleAction)).toBe(false);
+
+    const moduleEval = new Error('(0 , t.partialWithoutDefaults) is not a function');
+    moduleEval.stack = [
+      '    at module evaluation (https://aymanaboelela.com/_next/static/chunks/1n.js:1:1)',
+      '    at W (https://aymanaboelela.com/_next/static/chunks/turbopack-2mmb.js:1:1)',
+    ].join('\n');
+    expect(isStaleChunkError(moduleEval)).toBe(false);
   });
 });

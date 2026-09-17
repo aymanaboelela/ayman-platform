@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { EntitlementModule } from '../entitlement/entitlement.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { CourseProgressService } from './course-progress.service';
 import { HeartbeatService } from './heartbeat.service';
 import { LessonAccessService } from './lesson-access.service';
@@ -16,7 +17,14 @@ import { ViewSessionService } from './view-session.service';
   // enrollment on every lesson open — see the comment on that check. No
   // cycle: `EntitlementModule` (and the `EnrollmentModule` it imports) never
   // imports `ProgressModule`.
-  imports: [EntitlementModule],
+  //
+  // `NotificationsModule` is imported for «مبروك، خلصت الكورس»:
+  // `CourseProgressService` writes the row from inside the caller's
+  // transaction, and `HeartbeatService`/`LessonProgressService` announce it
+  // once that transaction has committed. Also no cycle — `NotificationsModule`
+  // imports nothing but `PrismaModule`, and notifications never reach back
+  // into progress to ask what happened; they are told.
+  imports: [EntitlementModule, NotificationsModule],
   controllers: [ProgressController, ActivityController],
   providers: [
     LessonAccessService,

@@ -3,10 +3,12 @@
 import { useState } from 'react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
+import { minBookShippingCents, type BookShippingRates } from '@ayman/contracts/books';
 import { Button } from '@ayman/ui/components/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ayman/ui/components/dialog';
-import { formatEGP, formatShipping } from '@/lib/price';
+import { formatEGP } from '@/lib/price';
 import { BookOrderPanel } from './book-order-panel';
+
 
 /**
  * «اطلب الكتاب» — the entry point into the book-order flow from the public
@@ -29,30 +31,32 @@ export function BookOrderButton({
   courseId,
   bookTitle,
   bookPriceCents,
-  shippingCents,
+  shippingRates,
+  instapay,
   vodafoneCash,
 }: {
   courseId: string;
   bookTitle: string;
   bookPriceCents: number;
   /**
-   * The delivery fee, from `GET /api/books`.
+   * The three delivery rates, from `GET /api/books`.
    *
-   * ⚠️ This flow did not charge one before «قسم الكتب» shipped, and now it does.
-   * Deliberate: it is the same parcel to the same address as a shop order, and
-   * one path quietly shipping for free was the inconsistency.
-   *
-   * The button quotes the BOOK's price and names delivery beside it, rather
-   * than quoting the total. That is Ayman's call and it is the right one: the
-   * book costs 250, a CTA reading «٣١٥ جنيه» prices the parcel rather than the
-   * product, and the surprise it was guarding against is answered instead by
-   * the breakdown below — which appears before the address form, not after it.
+   * ⚠️ This flow did not charge delivery at all before «قسم الكتب» shipped, and
+   * now it does, and since 2026-09-16 the amount depends on the governorate.
+   * The CTA therefore quotes «الكتاب + الشحن من …» rather than one total: a
+   * button that promised ٢٣٠ and a form that then asked for ٣٠٠ is exactly the
+   * surprise the breakdown exists to remove, and a single total became a
+   * promise this button cannot keep the moment delivery became zoned.
    */
-  shippingCents: number;
+  shippingRates: BookShippingRates;
+  instapay: string | null;
+  /** The wallet number, threaded beside `instapay` — see `ContactSchema`. */
   vodafoneCash: string | null;
 }) {
   const [open, setOpen] = useState(false);
-  const totalCents = bookPriceCents + shippingCents;
+  /* The FLOOR, not the price — القاهرة والجيزة. The dialog's own breakdown
+     turns it into a real number the instant a governorate is picked. */
+  const fromShippingCents = minBookShippingCents(shippingRates);
 
   return (
     <div className="course-start">
@@ -61,26 +65,15 @@ export function BookOrderButton({
           <DialogHeader>
             <DialogTitle>{bookTitle}</DialogTitle>
           </DialogHeader>
-          {/* The breakdown, stated before the address form rather than as a
-              total the reader has to take on trust. Same three rows the shop's
-              basket shows, for the same reason. */}
-          <div className="books-checkout__summary">
-            <div className="books-cart__row">
-              <span>{copy.books.subtotal}</span>
-              <span>{formatEGP(bookPriceCents)}</span>
-            </div>
-            <div className="books-cart__row">
-              <span>{copy.books.shipping}</span>
-              <span>{formatShipping(shippingCents, copy.books.shippingFree)}</span>
-            </div>
-            <div className="books-cart__row books-cart__row--total">
-              <span>{copy.books.total}</span>
-              <span>{formatEGP(totalCents)}</span>
-            </div>
-          </div>
+          {/* ⚠️ The breakdown MOVED INTO the panel. It has to update when the
+              governorate select changes, and that select is inside the panel —
+              a copy out here would be a second, frozen answer to the same
+              question, sitting directly above the live one. */}
           <BookOrderPanel
             courseId={courseId}
-            amountCents={totalCents}
+            itemsCents={bookPriceCents}
+            shippingRates={shippingRates}
+            instapay={instapay}
             vodafoneCash={vodafoneCash}
             onCancel={() => setOpen(false)}
           />
@@ -88,16 +81,12 @@ export function BookOrderButton({
       </Dialog>
 
       <Button type="button" onClick={() => setOpen(true)} variant="secondary" className="w-full">
-        {/* The BOOK's price, not the order total — delivery is named beside it
-            rather than folded in. At a ZERO fee the suffix would be a false
-            claim that 250 is not the whole price, so it becomes «شامل الشحن»;
-            same split as `shippingFreeOnce` on the shop's own hero line. */}
-        {formatCopy(
-          shippingCents === 0
-            ? copy.bookOrder.ctaWithPriceFreeShipping
-            : copy.bookOrder.ctaWithPrice,
-          { cta: copy.bookOrder.cta, price: formatEGP(bookPriceCents) },
-        )}
+        {`${formatCopy(copy.bookOrder.ctaWithPrice, {
+          cta: copy.bookOrder.cta,
+          price: formatEGP(bookPriceCents),
+        })} ${formatCopy(copy.books.shippingFromByGovernorate, {
+          price: formatEGP(fromShippingCents),
+        })}`}
       </Button>
     </div>
   );

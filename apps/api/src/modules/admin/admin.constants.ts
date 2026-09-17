@@ -47,12 +47,26 @@ export const AUDIT_RESOURCES = {
   quizAttempt: 'quiz_attempts',
   taxonomy: 'taxonomy',
   paymentSubmission: 'payment_submissions',
+  /// «التحويلات الواردة» — money that landed, as read off the receiving
+  /// phone. Its own resource type and not `payment_submissions`, because the
+  /// audit viewer's filter is how "what did the platform believe arrived" gets
+  /// answered, and an ingest that matched NOTHING has no submission to hang off.
+  incomingTransfer: 'incoming_transfers',
   bookOrder: 'book_orders',
+  /// المصروفات. Its own resource type for the reason `book` below has one: the
+  /// audit viewer's filter is how "who wrote this number into the books" gets
+  /// answered, and folding spend in with orders would bury it.
+  expense: 'expenses',
   /// «قسم الكتب» — the catalogue. Its own resource type and not `book_orders`,
   /// because the audit viewer's filter is how "who changed a price" is answered,
   /// and folding the two together would bury every catalogue edit inside a list
   /// of shipping actions.
   book: 'books',
+  /// الواجب — a student's answer to a lecture's exercise. Its own resource type
+  /// because the two entries that matter about one are «اتصحّح» and «الصور
+  /// اتمسحت», and a deletion of somebody's uploaded work is exactly the kind of
+  /// irreversible act the audit filter exists to be able to answer for.
+  homeworkSubmission: 'homework_submissions',
 } as const;
 
 export type AuditResource = (typeof AUDIT_RESOURCES)[keyof typeof AUDIT_RESOURCES];

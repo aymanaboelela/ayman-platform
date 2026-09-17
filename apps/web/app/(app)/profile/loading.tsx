@@ -11,7 +11,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
  */
 export default function Loading() {
   return (
-    <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
+    <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
       <div className="mb-6 space-y-3">
         <Skeleton width="narrow" className="h-3" />
         <Skeleton width="wide" className="h-8" />

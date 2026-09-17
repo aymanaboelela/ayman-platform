@@ -51,12 +51,77 @@ ARG NEXT_PUBLIC_MEDIA_ORIGIN
 # زائر — بس لازم يكون موجود وقت **البناء**، زي إخواته فوق: لو فاضي، الـ tag
 # ما بيتشحنش خالص، وضبطه في Dokploy بعد كده ما بيرجّعوش من غير إعادة بناء.
 ARG NEXT_PUBLIC_CLARITY_PROJECT_ID
+ARG NEXT_PUBLIC_GOOGLE_ENABLED
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_MEDIA_ORIGIN=$NEXT_PUBLIC_MEDIA_ORIGIN
 ENV NEXT_PUBLIC_CLARITY_PROJECT_ID=$NEXT_PUBLIC_CLARITY_PROJECT_ID
+ENV NEXT_PUBLIC_GOOGLE_ENABLED=$NEXT_PUBLIC_GOOGLE_ENABLED
+
+# ── Tenant identity, at BUILD time as well as run time ───────────────────
+#
+# These two are NOT `NEXT_PUBLIC_` and are read only in server code
+# (`lib/home-blocks.ts`), so it is tempting to pass them at run time alone and
+# keep one image for every instructor. That does not work, and the reason is
+# `next build`, not the bundler:
+#
+#   `/` is PRERENDERED (it appears in `.next/prerender-manifest.json`). During
+#   the build the page is rendered once, `getHomeBlocks()` runs, the API is
+#   unreachable, and the `catch` returns the FALLBACK — which is chosen from
+#   `TENANT_KEY`. With no value at build time that resolves to `ayman`, so
+#   AYMAN'S LANDING PAGE gets baked into the static shell of every image,
+#   including a second instructor's.
+#
+#   `cacheLife('minutes')` does re-render it correctly once the container is
+#   up, so it self-corrects — but the window is the first minutes after a
+#   deploy, which for a new tenant is launch, the one moment everybody looks.
+#
+# The web image is per-instructor regardless: `NEXT_PUBLIC_APP_URL` and
+# `NEXT_PUBLIC_MEDIA_ORIGIN` above are inlined into the bundle at build time
+# too. So this costs nothing that was not already true.
+ARG TENANT_KEY
+ARG TENANT_DISPLAY_NAME
+ARG TENANT_YOUTUBE
+ARG TENANT_INSTAGRAM
+ARG TENANT_TIKTOK
+ARG TENANT_FACEBOOK
+ARG TENANT_WHATSAPP_CHANNEL
+ARG TENANT_WHATSAPP
+ENV TENANT_KEY=$TENANT_KEY
+ENV TENANT_DISPLAY_NAME=$TENANT_DISPLAY_NAME
+ENV TENANT_YOUTUBE=$TENANT_YOUTUBE
+ENV TENANT_INSTAGRAM=$TENANT_INSTAGRAM
+ENV TENANT_TIKTOK=$TENANT_TIKTOK
+ENV TENANT_FACEBOOK=$TENANT_FACEBOOK
+ENV TENANT_WHATSAPP_CHANNEL=$TENANT_WHATSAPP_CHANNEL
+ENV TENANT_WHATSAPP=$TENANT_WHATSAPP
+
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN pnpm --filter @ayman/web run build
+# ── رمز البناء ────────────────────────────────────────────────────────
+#
+# قيمة بتتغيّر مع كل بناء فيه كود جديد، وبتفضل زي ما هي لو الكود ما اتغيّرش.
+#
+# ليه جوه نفس الـ RUN بتاع البناء مش `ARG`: أي `ARG` لازم يتبعت من
+# docker-compose، يعني لازم حد يعدّل ملف `.env` كل نشرة — وده مش هيحصل. الطبقة
+# دي مفتاحها فيه `COPY . .` اللي فوقها، فلو الكود اتغيّر الطبقة بتتبني من أول
+# وجديد و`date` بترجّع رقم جديد، ولو ما اتغيّرش الطبقة بتتكاش والرقم يفضل هو
+# هو. وده بالظبط الدلالة المطلوبة: رمز جديد لما يكون فيه بناء جديد فعلاً.
+#
+# `NEXT_PUBLIC_BUILD_ID` بيتحرق جوه الـ bundle كسترينج عادي، وبيقراه
+# `service-worker-register.tsx` عشان يسجّل `/sw.js?v=<الرقم>` — وده اللي
+# بيخلي كل نشرة تبان للمتصفح على إنها service worker جديد، فيتنفّذ `activate`
+# ويمسح شنكات البناء القديم من الجهاز.
+#
+# ⚠️ ومش بيتحط في `deploymentId` بتاع Next، وده اتجرّب واتشال: كان بيحط
+# `?dpl=` على كل أصل ثابت، يعني كل نشرة بتغيّر لينك كل ملف حتى لو ما اتغيّرش
+# فيه بايت — والـ service worker بيكاش باللينك الكامل، فالطالب كان هيعيد
+# تنزيل كل الـ JS والـ CSS بعد كل نشرة. التفاصيل في `next.config.ts`.
+#
+# ⚠️ الـ runtime مش محتاجه ومش المفروض يتحط في `environment:` بتاع compose —
+# القيمة اتحرقت في الـ bundle وقت البناء خلاص، وقيمة تانية وقت التشغيل مش
+# هتغيّر أي حاجة وصلت للمتصفح.
+RUN NEXT_PUBLIC_BUILD_ID="b$(date -u +%Y%m%d%H%M%S)" \
+    pnpm --filter @ayman/web run build
 
 # ── runtime ───────────────────────────────────────────────────────────
 FROM base AS runtime

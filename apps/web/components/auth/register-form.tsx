@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { RegisterSchema, type Register } from '@ayman/contracts/auth';
 import { copy } from '@ayman/contracts/copy';
 import { Button } from '@ayman/ui/components/button';
-import { signUpWithPhone } from '@/lib/auth-client';
+import { AuthRequestError, PHONE_TAKEN_CODE, signUpWithPhone } from '@/lib/auth-client';
 import { withNext } from '@/lib/safe-next';
 import { FormField } from './form-field';
 import { AuthProviders } from './auth-providers';
@@ -15,6 +15,8 @@ import { AuthProviders } from './auth-providers';
 /** `next` comes from the page's Server Component — see `LoginForm`'s note. */
 export function RegisterForm({ next }: { next?: string | null }) {
   const [formError, setFormError] = useState<string | null>(null);
+  /** Set alongside the «الرقم ده ليه حساب» message — it renders a link, not text. */
+  const [offerLogin, setOfferLogin] = useState(false);
   const {
     register,
     handleSubmit,
@@ -23,6 +25,7 @@ export function RegisterForm({ next }: { next?: string | null }) {
 
   async function onSubmit(values: Register) {
     setFormError(null);
+    setOfferLogin(false);
     try {
       // `confirmPassword` exists only to drive the client-side match check
       // in `RegisterSchema` — Better Auth's `/sign-up/email` route has no
@@ -45,12 +48,33 @@ export function RegisterForm({ next }: { next?: string | null }) {
         password: values.password,
         phoneNumber: values.phone,
       });
-    } catch {
-      // One generic message for every registration failure (duplicate
-      // email, a rejected password, a network error) — the same principle
-      // Task 3 applies to login (S1): no raw API error text reaches the
-      // user, and the UI never becomes the place that spells out which
-      // specific thing was wrong.
+    } catch (error) {
+      /**
+       * ⚠️ ONE failure is named, and it is named on purpose.
+       *
+       * A number that already has an account is by far the commonest way this
+       * form fails, and it was indistinguishable from every other: production
+       * answered `FAILED_TO_CREATE_USER` and this printed «البيانات محتاجة
+       * مراجعة», which is true of nothing the student can act on. They retry,
+       * it fails identically, and the account they already have is invisible
+       * from here.
+       *
+       * This does NOT weaken the login rule below it. That rule protects
+       * sign-IN, where a distinguishable answer turns the form into a way to
+       * ask whether a number is registered. A sign-up form answers that by
+       * refusing to create the account, whatever words are on it — so being
+       * vague costs the student everything and the attacker nothing.
+       */
+      if (error instanceof AuthRequestError && error.code === PHONE_TAKEN_CODE) {
+        setFormError(copy.auth.errors.registerPhoneTaken);
+        setOfferLogin(true);
+        return;
+      }
+
+      // Everything else keeps one generic message (a rejected password, a
+      // network error, a dead database) — no raw API text reaches the user,
+      // and the UI never becomes the place that spells out which of those
+      // it was.
       setFormError(copy.auth.errors.register);
       return;
     }
@@ -131,7 +155,16 @@ export function RegisterForm({ next }: { next?: string | null }) {
 
       {formError && (
         <p role="alert" className="text-[length:var(--fs-text-sm)] text-[color:var(--err)]">
-          {formError}
+          {formError}{' '}
+          {/* The way out, inside the same alert so a screen reader hears the
+              problem and the remedy as one announcement. `next` rides along:
+              somebody who clicked a course, tried to register and turns out to
+              already have an account still owes us that destination. */}
+          {offerLogin && (
+            <Link href={withNext('/login', next)} className="underline hover:text-accent-text">
+              {copy.auth.errors.registerPhoneTakenAction}
+            </Link>
+          )}
         </p>
       )}
 

@@ -6,6 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { copy } from '@ayman/contracts/copy/admin';
+import type { HomeworkWriteInput } from '@ayman/contracts/homework';
 import type {
   LessonCreateInput,
   LessonResourceInput,
@@ -20,6 +21,7 @@ import { sanitizeRichText } from '../../common/sanitize/rich-text';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildReorderSql } from './reorder.sql';
 import { YouTubeDurationService } from './youtube-duration.service';
+import { VideoMirrorService } from '../video-mirror/video-mirror.service';
 
 /** Prisma's code for a unique constraint or partial unique index violation. */
 function isUniqueViolation(error: unknown): boolean {
@@ -28,12 +30,42 @@ function isUniqueViolation(error: unknown): boolean {
   );
 }
 
+/**
+ * What `publish_at` should be, given the two things that decide it.
+ *
+ * ## Publishing by hand cancels the schedule
+ *
+ * They are one decision wearing two controls. A lecture switched live now has
+ * nothing left to wait for, and a leftover timestamp means the sweeper later
+ * finds a row that is "due", publishes what is already published, and writes
+ * an audit entry for a change nobody made — noise that reads, in the audit
+ * log, exactly like a lecture that published itself unexpectedly.
+ *
+ * Unpublishing does NOT invent a schedule: `undefined` in means `undefined`
+ * out, so a PATCH that only renames a lecture leaves its schedule alone.
+ *
+ * ⚠️ Returns `undefined` — not `null` — when there is nothing to say, because
+ * the caller spreads it into a Prisma `data` object where `null` is a WRITE
+ * (clear the column) and `undefined` is an omission.
+ */
+export function scheduleFor(
+  isPublished: boolean | undefined,
+  publishAt: string | null | undefined,
+): Date | null | undefined {
+  if (isPublished === true) return null;
+  if (publishAt === undefined) return undefined;
+  return publishAt === null ? null : new Date(publishAt);
+}
+
 @Injectable()
 export class LessonService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly youtube: YouTubeDurationService,
+    // «النسخة اللي عندنا». Used for two things and nothing else: re-queuing a
+    // video whose id changed, and answering «حاول تاني».
+    private readonly mirror: VideoMirrorService,
   ) {}
 
   async create(sectionId: string, input: LessonCreateInput) {
@@ -66,6 +98,8 @@ export class LessonService {
         completionMode: input.completionMode,
         completionMinViewSeconds: input.completionMinViewSeconds,
         completionPassGrade: input.completionPassGrade,
+        publishAt: scheduleFor(input.isPublished, input.publishAt),
+        description: input.description,
         position: last === null ? 0 : last.position + 1,
       },
     });
@@ -100,6 +134,20 @@ export class LessonService {
         }),
         ...(input.completionPassGrade !== undefined && {
           completionPassGrade: input.completionPassGrade,
+        }),
+        ...(input.description !== undefined && { description: input.description }),
+        /*
+         * The schedule and the switch are ONE decision, so they are resolved
+         * together rather than written independently.
+         *
+         * Publishing by hand cancels the schedule: a lecture that is already
+         * live has nothing left to wait for, and leaving the timestamp behind
+         * means the sweeper finds a row that is due, publishes what is already
+         * published, and writes an audit entry for a change nobody made. That
+         * is what `scheduleFor` settles — see its own note.
+         */
+        ...((input.publishAt !== undefined || input.isPublished !== undefined) && {
+          publishAt: scheduleFor(input.isPublished, input.publishAt),
         }),
       },
     });
@@ -161,15 +209,44 @@ export class LessonService {
     // `== null`, covering BOTH — `LessonVideoInputSchema` normalises an absent
     // duration to `null` (video.ts: `value.durationSeconds ?? null`), so an
     // `=== undefined` test here would never once have fired.
-    const stored =
-      input.durationSeconds == null
-        ? await this.prisma.lessonVideo.findUnique({
-            where: { lessonId },
-            select: { externalId: true, durationSeconds: true },
-          })
-        : null;
-    const keptDuration =
-      stored !== null && stored.externalId === input.externalId ? stored.durationSeconds : null;
+    //
+    // Read UNCONDITIONALLY now, where it used to be skipped whenever a
+    // duration was supplied. The row answers a second question the mirror
+    // added — «هو ده نفس الفيديو؟» — and that one has to be asked on every
+    // write, including the ones that carry a duration. It is a primary-key
+    // lookup; the reason it was conditional was never its cost, it was the
+    // YouTube call it used to guard.
+    const stored = await this.prisma.lessonVideo.findUnique({
+      where: { lessonId },
+      select: { externalId: true, durationSeconds: true },
+    });
+    const sameVideo = stored !== null && stored.externalId === input.externalId;
+    const keptDuration = sameVideo ? stored.durationSeconds : null;
+
+    /*
+     * A new id means our copy is a copy of something else.
+     *
+     * `mirrorStatus` lives on the LESSON's video row while the bytes in the
+     * bucket are keyed by the YOUTUBE ID, so an instructor swapping in a
+     * re-cut lecture would otherwise leave a row saying `ready` and a player
+     * building a playlist URL for an id nothing was ever uploaded under. The
+     * student's request 404s, hls.js reports fatal, and the component falls
+     * back to YouTube — so it self-heals, and self-heals into exactly the
+     * blocked-tablet failure this feature was built to end.
+     *
+     * Re-queuing instead costs one more pass of a worker that is idle almost
+     * all the time.
+     */
+    const mirrorReset = sameVideo
+      ? {}
+      : {
+          mirrorStatus: 'pending' as const,
+          mirrorHeight: null,
+          mirrorBytes: null,
+          mirrorError: null,
+          mirrorAttempts: 0,
+          mirrorAt: null,
+        };
 
     const durationSeconds =
       input.durationSeconds ?? keptDuration ?? (await this.youtube.durationOf(input.externalId));
@@ -193,8 +270,24 @@ export class LessonService {
         externalId: input.externalId,
         durationSeconds,
         posterKey: input.posterKey,
+        ...mirrorReset,
       },
     });
+  }
+
+  /**
+   * Reset the mirror state so the worker picks this video up again.
+   *
+   * Returns the status it has been set to rather than a bare 204, so the admin
+   * screen can render the change without a second request — and so a caller
+   * on a deployment with no bucket gets `disabled` back and an honest answer
+   * instead of a queued job nothing will ever run.
+   */
+  async remirrorVideo(lessonId: string): Promise<{ lessonId: string; mirrorStatus: string }> {
+    await this.assertKind(lessonId, 'video');
+    if (!this.mirror.enabled) return { lessonId, mirrorStatus: 'disabled' };
+    await this.mirror.requeue(lessonId);
+    return { lessonId, mirrorStatus: 'pending' };
   }
 
   async removeVideo(lessonId: string): Promise<{ lessonId: string }> {
@@ -219,6 +312,79 @@ export class LessonService {
       create: { lessonId, bodyHtml },
       update: { bodyHtml },
     });
+  }
+
+  /**
+   * الواجب — set or rewrite the exercise on this lecture.
+   *
+   * ⚠️ NOT `assertKind`-gated, and for the same reason `addResource` below is
+   * not: homework hangs off ANY lesson kind, and the common case is a VIDEO
+   * lecture that also asks for a worked solution. A kind gate here would
+   * recreate exactly the mistake `LessonResource`'s model comment records.
+   *
+   * An upsert rather than create/update, so the autosaving editor does not have
+   * to know whether it is writing the first version — the same shape `setText`
+   * uses one method up.
+   */
+  async setHomework(lessonId: string, input: HomeworkWriteInput) {
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      select: { id: true },
+    });
+    if (!lesson) throw new NotFoundException();
+
+    const homework = await this.prisma.lessonHomework.upsert({
+      where: { lessonId },
+      create: {
+        lessonId,
+        body: input.body,
+        maxImages: input.maxImages,
+        isPublished: input.isPublished,
+      },
+      update: {
+        body: input.body,
+        maxImages: input.maxImages,
+        isPublished: input.isPublished,
+      },
+    });
+
+    await this.audit.record({
+      action: 'lesson:set-homework',
+      resourceType: AUDIT_RESOURCES.lesson,
+      resourceId: lessonId,
+      outcome: 'success',
+      // The questions themselves are not recorded: they are the lecture's
+      // content and they live on the row, which the editor reads back.
+      metadata: { isPublished: input.isPublished, maxImages: input.maxImages },
+    });
+
+    return homework;
+  }
+
+  /**
+   * «شيل الواجب».
+   *
+   * ⚠️ Submissions are NOT touched. They hang off the LESSON, not off
+   * `lesson_homework`, so removing the exercise leaves every answer standing —
+   * which is the point: what a student handed in is a record of something they
+   * did, and it survives the instructor changing his mind about the question.
+   * The 30-day sweep is what eventually takes the photographs, as it does for
+   * everything else.
+   *
+   * Idempotent: removing an exercise that is not there answers the same 204 as
+   * removing one that is, so a double-tap on a slow connection is not an error.
+   */
+  async removeHomework(lessonId: string): Promise<{ lessonId: string }> {
+    await this.prisma.lessonHomework.deleteMany({ where: { lessonId } });
+
+    await this.audit.record({
+      action: 'lesson:remove-homework',
+      resourceType: AUDIT_RESOURCES.lesson,
+      resourceId: lessonId,
+      outcome: 'success',
+    });
+
+    return { lessonId };
   }
 
   /**

@@ -12,14 +12,17 @@ import type {
 // cannot resolve an extensionless barrel re-export at real runtime, even
 // though tests/build stay green). Every other apps/api module follows this
 // same rule for `@ayman/contracts/content`, `/catalog`, `/video`.
-import { youTubeThumbnailUrl } from '@ayman/contracts/video';
+import { mirrorPlaylistUrl, mirrorPosterUrl, youTubeThumbnailUrl } from '@ayman/contracts/video';
+import { VideoMirrorService } from '../video-mirror/video-mirror.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { HomeworkService } from '../homework/homework.service';
 import { InjectMediaUrl, type MediaUrlResolver } from '../../common/media/media-url';
 import { MEDIA_STORAGE, type MediaStorage } from '../media/storage/media-storage';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
 import { toProgressDto, type ProgressRow } from '../progress/progress.mapper';
+import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
 
 interface FlatLesson {
   id: string;
@@ -35,6 +38,14 @@ export class PlayerService {
     private readonly gate: LessonGateService,
     @InjectMediaUrl() private readonly media: MediaUrlResolver,
     @Inject(MEDIA_STORAGE) private readonly storage: MediaStorage,
+    // الواجب. Injected rather than re-queried here so the "is it published,
+    // and where does this student's answer stand" rule lives in one place —
+    // the same reason the gate and the entitlement check are services too.
+    private readonly homework: HomeworkService,
+    // Read-only here: the player asks it for the public origin and nothing
+    // else. The worker that fills the bucket runs on its own cron in the same
+    // service, and neither half knows about the other.
+    private readonly mirror: VideoMirrorService,
   ) {}
 
   /**
@@ -54,14 +65,24 @@ export class PlayerService {
         slug: true,
         title: true,
         examLessonId: true,
-        // Gates `CourseOutlineSidebar`'s own «اطلب الكتاب» link — same pair
-        // the catalog and the dashboard read.
+        contentComplete: true,
+        // Gates `CourseOutlineSidebar`'s own «اطلب الكتاب» link. Same three
+        // fields the catalog and the dashboard read, resolved by the same
+        // `courseBook()` — the catalogue row when it is live, the legacy pair
+        // while it is not. Three surfaces quoting one price is the whole point
+        // of that helper existing.
         bookTitle: true,
         bookPriceCents: true,
+        book: { select: COURSE_BOOK_SELECT },
         // `CourseDetailsCard`'s thumbnail and subject tag — the only reason
         // this endpoint reaches for either.
         coverKey: true,
         subject: { select: { nameAr: true } },
+        // «جروب الدفعة». On the OUTLINE rather than on the lesson payload
+        // because the outline is what both surfaces that show it already
+        // fetch — the player's sidebar and `/library/[slug]` — and it is
+        // stable across lesson navigations, which the lesson body is not.
+        whatsappGroupUrl: true,
         enrollments: {
           where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] } },
           select: { id: true, progressPercent: true, lastLessonId: true },
@@ -153,10 +174,12 @@ export class PlayerService {
         id: course.id,
         slug: course.slug,
         title: course.title,
-        bookTitle: course.bookTitle,
-        bookPriceCents: course.bookPriceCents,
+        bookTitle: courseBook(course).bookTitle,
+        bookPriceCents: courseBook(course).bookPriceCents,
         coverKey: course.coverKey,
         subjectNameAr: course.subject.nameAr,
+        contentComplete: course.contentComplete,
+        whatsappGroupUrl: course.whatsappGroupUrl,
       },
       sections,
       enrollmentId: enrollment.id,
@@ -177,7 +200,7 @@ export class PlayerService {
   async lesson(userId: string, lessonId: string): Promise<LessonPlayer> {
     const context = await this.access.require(userId, lessonId);
 
-    const [lesson, ordered, progress] = await Promise.all([
+    const [lesson, ordered, progress, homework] = await Promise.all([
       this.prisma.lesson.findUniqueOrThrow({
         where: { id: context.lessonId },
         // Explicit select, never include — spec §7 P2. Nothing that is not
@@ -190,9 +213,24 @@ export class PlayerService {
           kind: true,
           courseId: true,
           estimatedSeconds: true,
+          description: true,
           course: { select: { slug: true, title: true } },
           section: { select: { title: true } },
-          video: { select: { externalId: true, durationSeconds: true, posterKey: true } },
+          video: {
+            select: {
+              externalId: true,
+              // Which pipeline filled this row, and so what the player may
+              // fall back to. An uploaded lecture has no YouTube page behind
+              // it and must never be offered one.
+              provider: true,
+              durationSeconds: true,
+              posterKey: true,
+              // The mirror, so the player can prefer our own copy over
+              // YouTube. Two columns and no join — see `mirror` below.
+              mirrorStatus: true,
+              mirrorHeight: true,
+            },
+          },
           text: { select: { bodyHtml: true } },
           // `Quiz.lessonId` is 1:1 with ANY lesson, not just `kind: 'quiz'` —
           // see `LessonPanel`'s admin-side comment. Selected here so a quiz
@@ -234,10 +272,27 @@ export class PlayerService {
           completedVia: true,
         },
       }),
+      /*
+       * الواجب, on the same payload as the lesson body.
+       *
+       * A second endpoint would mean the card either renders empty and fills
+       * in — a layout shift on the page a student has open longest — or blocks
+       * the whole page on a request most lectures do not even have an answer
+       * for. `forStudent` returns `null` for a lecture with no PUBLISHED
+       * homework, which is most of them, and the client renders nothing.
+       *
+       * Access was already settled by `require()` above; this call re-reads
+       * nothing about entitlement, so the fourth query costs one index hit.
+       */
+      this.homework.forStudent(userId, lessonId),
     ]);
 
     const index = ordered.findIndex((entry) => entry.id === context.lessonId);
     const duration = lesson.video?.durationSeconds ?? 0;
+    // `null` on any deployment without a bucket, which is what makes the
+    // whole feature additive: no origin, no mirror, and the player is
+    // exactly the component it was before.
+    const base = this.mirror.publicUrl;
 
     return {
       lesson: {
@@ -249,24 +304,68 @@ export class PlayerService {
         title: lesson.title,
         kind: lesson.kind as LessonKind,
         estimatedSeconds: lesson.estimatedSeconds,
+        /*
+         * The summary, written to be read AFTER the lecture — «قوله متشوفش
+         * الوصف إلا لما يشوف الدرس كله». It is shipped to the page but the
+         * page renders it collapsed; the instruction is about reading order,
+         * not secrecy, and a student who has finished and wants to check
+         * themselves against it should not have to load anything.
+         */
+        description: lesson.description,
       },
       video: lesson.video
         ? {
             // §7 P3: the 11-char id is what the database holds and what we
             // emit. The embed URL is reconstructed on the client from this id
             // — a stored URL would reintroduce the whole SSRF class.
-            youtubeId: lesson.video.externalId,
+            provider: lesson.video.provider === 'upload' ? ('upload' as const) : ('youtube' as const),
+            // Null for an uploaded lecture — there is no YouTube id, and a
+            // player that assumed one would build an embed URL for a video
+            // that does not exist on YouTube.
+            youtubeId: lesson.video.provider === 'youtube' ? lesson.video.externalId : null,
             durationSeconds: duration,
             posterUrl: lesson.video.posterKey
               ? this.media.resolve(lesson.video.posterKey)
-              : // No uploaded poster yet: fall back to YouTube's own thumbnail,
-                // built from the id we already hold rather than stored as a
-                // URL. `i.ytimg.com` is the one remote host the CSP's
-                // `img-src` allows for exactly this reason.
-                youTubeThumbnailUrl(lesson.video.externalId),
+              : lesson.video.provider === 'youtube'
+                ? // No uploaded poster yet: fall back to YouTube's own
+                  // thumbnail, built from the id we already hold rather than
+                  // stored as a URL. `i.ytimg.com` is the one remote host the
+                  // CSP's `img-src` allows for exactly this reason.
+                  youTubeThumbnailUrl(lesson.video.externalId)
+                : // An uploaded lecture has no thumbnail to borrow, so the
+                  // encoder grabbed a frame and put it beside the ladder. Only
+                  // once the ladder is `ready` — before that the object is not
+                  // there and the poster would be a broken image on the
+                  // course page.
+                  base !== null && lesson.video.mirrorStatus === 'ready'
+                  ? mirrorPosterUrl(base, lesson.video.externalId)
+                  : null,
+            /*
+             * «النسخة اللي عندنا» — ours if we have it, YouTube otherwise.
+             *
+             * The URL is BUILT from the id and the configured public origin,
+             * never read out of a column. That keeps the §7 P3 rule intact
+             * for the mirror too: there is no stored string a compromised
+             * admin row could turn into a URL pointing somewhere else, and
+             * the origin students fetch from is whatever the deployment was
+             * configured with, decided in one place.
+             *
+             * Gated on `ready` alone. A `mirroring` row has a prefix in the
+             * bucket with segments in it and no master playlist yet, so a
+             * player handed that URL would spin — the state exists precisely
+             * so that this line can refuse it.
+             */
+            mirror:
+              base !== null && lesson.video.mirrorStatus === 'ready' && lesson.video.mirrorHeight
+                ? {
+                    hlsUrl: mirrorPlaylistUrl(base, lesson.video.externalId),
+                    maxHeight: lesson.video.mirrorHeight,
+                  }
+                : null,
           }
         : null,
       text: lesson.text ? { bodyHtml: lesson.text.bodyHtml } : null,
+      homework,
       // Draft quizzes stay invisible to students, same gate `lessonIsReady`
       // applies when deciding a `kind: 'quiz'` lesson is publishable.
       quiz: lesson.quiz?.isPublished ? { id: lesson.quiz.id } : null,

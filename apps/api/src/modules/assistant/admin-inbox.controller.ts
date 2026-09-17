@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -20,17 +21,19 @@ import type { Response } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
 import {
   InboxFilterSchema,
+  InboxSortSchema,
   type AdminConversationDetail,
   type AdminConversationRow,
   type MessageAttachmentInput,
 } from '@ayman/contracts/assistant/conversation';
 import { MAX_DOCUMENT_BYTES } from '@ayman/contracts/admin/media';
 import { ListQuerySchema, type ListResponse } from '@ayman/contracts/admin/list';
+import { parseRequest } from '../../common/http/parse-request';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { AssistantService } from './assistant.service';
 import { ConversationAttachmentService } from './conversation-attachment.service';
 import { sendAttachment } from './serve-attachment';
-import { ReplyDto, SetReactionDto, SetStatusDto } from './assistant.dto';
+import { EditMessageDto, ReplyDto, SetReactionDto, SetStatusDto } from './assistant.dto';
 import type { UploadFile } from '../media/media.service';
 
 /**
@@ -58,6 +61,7 @@ export class AdminInboxController {
     @Query('filter') filter?: string,
     @Query('page') page?: string,
     @Query('perPage') perPage?: string,
+    @Query('sort') sort?: string,
   ): Promise<ListResponse<AdminConversationRow>> {
     /*
      * Parsed through the shared schemas rather than `Number(page)`.
@@ -67,11 +71,22 @@ export class AdminInboxController {
      * an unbounded `perPage` is a free full-table read on a public-facing
      * admin screen. `ListQuerySchema` already clamps both, and it is the same
      * one every other admin list uses.
+     *
+     * `parseRequest` rather than `.parse()`: a ZodError is not an HttpException,
+     * so the fail-closed filter turns bad CLIENT input into a 500 — which is
+     * both the wrong status and a line in the error log nobody can act on. See
+     * `common/http/parse-request.ts`.
      */
-    const parsedFilter = InboxFilterSchema.parse(filter);
-    const list = ListQuerySchema.parse({ page, perPage });
+    const parsedFilter = parseRequest(InboxFilterSchema, filter, 'filter');
+    const parsedSort = parseRequest(InboxSortSchema, sort, 'sort');
+    const list = parseRequest(ListQuerySchema, { page, perPage }, 'list query');
 
-    return this.assistant.list(parsedFilter, list.perPage, (list.page - 1) * list.perPage);
+    return this.assistant.list(
+      parsedFilter,
+      list.perPage,
+      (list.page - 1) * list.perPage,
+      parsedSort,
+    );
   }
 
   /**
@@ -198,6 +213,44 @@ export class AdminInboxController {
     @Body() body: SetReactionDto,
   ): Promise<void> {
     await this.assistant.setReaction(id, messageId, body.reaction);
+  }
+
+  /**
+   * «أعدل عليها» — rewriting the words of a message HE sent.
+   *
+   * `conversation:reply` and not a permission of its own, for the same reason
+   * the reaction route uses it: an edit lands on the student's screen under his
+   * name exactly as the original did. A role trusted to write words there is
+   * trusted to correct them; a role that is not must not get the edit as a
+   * loophole.
+   *
+   * `author: 'admin'` is enforced in the WHERE inside the service, not here —
+   * so a student's message is a 404 rather than a 403, and the route never
+   * confirms that a message it will not touch exists.
+   */
+  @RequirePermission('conversation:reply')
+  @UsePipes(ZodValidationPipe)
+  @Patch(':id/messages/:messageId')
+  @HttpCode(204)
+  async editMessage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+    @Body() body: EditMessageDto,
+  ): Promise<void> {
+    await this.assistant.editMessage(id, messageId, body.message);
+  }
+
+  /** «أمسحها». Same permission and the same ownership rule as the edit above;
+   *  see `AssistantService.deleteMessage` for why there is no tombstone and why
+   *  the attachment's bytes are left behind. */
+  @RequirePermission('conversation:reply')
+  @Delete(':id/messages/:messageId')
+  @HttpCode(204)
+  async deleteMessage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('messageId', ParseUUIDPipe) messageId: string,
+  ): Promise<void> {
+    await this.assistant.deleteMessage(id, messageId);
   }
 
   @RequirePermission('conversation:close')

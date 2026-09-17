@@ -13,19 +13,40 @@ import { CatalogCourseDetailSchema, CatalogCourseSchema, isComingSoon } from './
  */
 describe('isComingSoon', () => {
   it('is true at zero real lectures', () => {
-    expect(isComingSoon(0)).toBe(true);
+    expect(isComingSoon({ lessonCount: 0, totalSeconds: 0 })).toBe(true);
   });
 
   it('is false the moment there is one real lecture', () => {
-    expect(isComingSoon(1)).toBe(false);
+    expect(isComingSoon({ lessonCount: 1, totalSeconds: 600 })).toBe(false);
   });
 
   it('is false for a course with a full outline', () => {
-    expect(isComingSoon(12)).toBe(false);
+    expect(isComingSoon({ lessonCount: 12, totalSeconds: 7200 })).toBe(false);
+  });
+
+  /**
+   * ⚠️ `programming-cs-year1-2027-general` on production, 2026-09-15: one
+   * `kind: 'text'` row titled «لسه اول محاضره هتنزل قريب جداً». The count says
+   * one lesson and there is nothing to watch, so the «قريبًا» panel did not
+   * render and the course published four purchasable Offers.
+   */
+  it('is true for a placeholder row with no playable duration', () => {
+    expect(isComingSoon({ lessonCount: 1, totalSeconds: 0 })).toBe(true);
+  });
+
+  /**
+   * ⚠️ The guard against the tempting wrong fix. `contentComplete` is the
+   * instructor's manual flag and it is false on every live course, the
+   * four-hour foundation one included — gating on it would mark the whole
+   * catalogue "coming soon".
+   */
+  it('is false for a course still filling up that has real lectures', () => {
+    expect(isComingSoon({ lessonCount: 3, totalSeconds: 11656 })).toBe(false);
   });
 });
 
 const baseCourse = () => ({
+  contentComplete: false,
   id: crypto.randomUUID(),
   slug: 'programming-year-2',
   title: 'البرمجة وعلوم الحاسب',

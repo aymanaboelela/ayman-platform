@@ -19,12 +19,34 @@ describe('describeNotification', () => {
       attemptId: 'attempt-1',
       scorePercent: 85,
       passed: true,
+      pendingOutOf: 0,
     };
 
     const view = describeNotification(entry);
 
     expect(view.title).toContain('85');
     expect(view.detail).toBe(copy.notifications.quizGradedPassed);
+    expect(view.href).toBe('/quizzes/lesson-1/attempt/attempt-1/review');
+  });
+
+  it('does not call a half-marked paper graded, and names what is still coming', () => {
+    // The kind fires at SUBMIT, before a human has read the essays — so on a
+    // midterm with 50 marks outstanding the old card said «اتصحّحت ورقتك —
+    // الدرجة ٤٨٪» about work nobody had marked, quoting a provisional total as
+    // a final one. The percentage must not appear at all here.
+    const view = describeNotification({
+      ...BASE,
+      kind: 'quiz_graded',
+      attemptId: 'attempt-1',
+      scorePercent: 48,
+      passed: false,
+      pendingOutOf: 50,
+    });
+
+    expect(view.title).toBe(copy.notifications.quizGradedPartial);
+    expect(view.title).not.toContain('48');
+    expect(view.detail).toContain('50');
+    // Still the review screen: that is where the split total is explained.
     expect(view.href).toBe('/quizzes/lesson-1/attempt/attempt-1/review');
   });
 
@@ -37,6 +59,7 @@ describe('describeNotification', () => {
       attemptId: 'attempt-1',
       scorePercent: 85,
       passed: null,
+      pendingOutOf: 0,
     });
 
     expect(view.detail).toBeNull();
@@ -130,6 +153,151 @@ describe('describeNotification — subscription_cancelled', () => {
   it('links to the course', () => {
     const view = describeNotification(entry);
     expect(view.href).toBe('/courses/programming');
+  });
+});
+
+describe('describeNotification — assistant_question_received', () => {
+  const entry = {
+    id: 'n1',
+    createdAt: '2026-03-01T10:00:00.000Z',
+    readAt: null,
+    kind: 'assistant_question_received',
+    conversationId: 'c1',
+    preview: 'الدرس ده هيتشرح إمتى؟',
+    studentName: 'محمد',
+  } as const;
+
+  it('names the student and shows the question preview as the detail', () => {
+    const view = describeNotification(entry);
+    expect(view.title).toContain('محمد');
+    expect(view.detail).toBe('الدرس ده هيتشرح إمتى؟');
+    expect(view.subtitle).toBe(copy.notifications.assistantQuestionQueue);
+  });
+
+  it('links straight to the thread in the inbox', () => {
+    const view = describeNotification(entry);
+    expect(view.href).toBe('/admin/inbox/c1');
+  });
+
+  it('renders no detail when the preview is empty, rather than an empty line', () => {
+    const view = describeNotification({ ...entry, preview: '' });
+    expect(view.detail).toBeNull();
+  });
+});
+
+/**
+ * The three STUDENT book-order kinds — the half of «الطالب يعرف إن الكتاب جاي
+ * له» that reaches a student who is not looking at the dashboard.
+ *
+ * The destination is the assertion that matters. Being told «كتابك خرج ليك» and
+ * landing on a page selling books is answering a worried student with an
+ * advertisement, and `/store` (the shop) is one segment away from `/store/orders`
+ * (their own history) — close enough that a typo would never look wrong.
+ */
+describe('describeNotification — the student book-order kinds', () => {
+  const entry = {
+    id: 'n1',
+    createdAt: '2026-03-01T10:00:00.000Z',
+    readAt: null,
+    orderId: '0198c3a2-0000-7000-8000-000000000001',
+    bookTitle: 'كتاب البرمجة',
+  } as const;
+
+  it('names the book in a shipped notification and points at «كتبي»', () => {
+    const view = describeNotification({
+      ...entry,
+      kind: 'book_order_shipped',
+      deliveryDays: 3,
+    });
+
+    expect(view.title).toContain('كتاب البرمجة');
+    expect(view.subtitle).toBe(copy.notifications.bookOrderMineQueue);
+    expect(view.href).toBe('/store/orders');
+  });
+
+  it('promises the delivery window on the shipped card, and only there', () => {
+    // The order confirmation deliberately promises nothing — a clock started
+    // when the screenshot was uploaded is already late by the time the parcel
+    // exists. This card is the ONE place a date is given, counted from the day
+    // the courier took it.
+    const cairo = describeNotification({ ...entry, kind: 'book_order_shipped', deliveryDays: 3 });
+    const aswan = describeNotification({ ...entry, kind: 'book_order_shipped', deliveryDays: 4 });
+
+    expect(cairo.detail).toContain('3');
+    expect(aswan.detail).toContain('4');
+    // «وصل» needs no estimate — the parcel is already there.
+    expect(describeNotification({ ...entry, kind: 'book_order_delivered' }).detail).toBeNull();
+  });
+
+  it('names the book in a delivered notification', () => {
+    const view = describeNotification({ ...entry, kind: 'book_order_delivered' });
+
+    expect(view.title).toContain('كتاب البرمجة');
+    expect(view.href).toBe('/store/orders');
+  });
+
+  it("carries the admin's own reason on a rejection, verbatim", () => {
+    // Same slot, and the same rule, as `payment_rejected`: a reason paraphrased
+    // by the platform is a reason the student argues with instead of acting on.
+    const view = describeNotification({
+      ...entry,
+      kind: 'book_order_rejected',
+      reason: 'العنوان مش مكتمل',
+    });
+
+    expect(view.detail).toBe('العنوان مش مكتمل');
+    expect(view.title).toContain('كتاب البرمجة');
+    expect(view.href).toBe('/store/orders');
+  });
+
+  it('never sends a student to the shop instead of their own orders', () => {
+    expect(
+      describeNotification({ ...entry, kind: 'book_order_shipped', deliveryDays: 3 }).href,
+    ).not.toBe('/books');
+    expect(describeNotification({ ...entry, kind: 'book_order_delivered' }).href).not.toBe(
+      '/books',
+    );
+  });
+});
+
+describe('describeNotification — course_completed', () => {
+  const entry = {
+    id: 'n1',
+    createdAt: '2026-03-01T10:00:00.000Z',
+    readAt: null,
+    kind: 'course_completed',
+    courseId: '01990000-0000-7000-8000-0000000000c1',
+    courseTitle: 'اللغة العربية — الصف الثالث',
+    courseSlug: 'arabic-3',
+  } as const;
+
+  it('congratulates by name and carries the encouragement as the detail', () => {
+    const view = describeNotification(entry);
+
+    expect(view.title).toContain('اللغة العربية — الصف الثالث');
+    // The encouragement is the reason the notification exists — «تشجّعه
+    // وتحسّسه إنه شاطر» — so it must not be the thing that gets dropped.
+    expect(view.detail).toBe(copy.notifications.courseCompletedDetail);
+    expect(view.subtitle).toBe('اللغة العربية — الصف الثالث');
+  });
+
+  it('links to the course it is about, not to the dashboard', () => {
+    // The dashboard's own won-state is about ALL of a student's courses being
+    // finished, so a student who just closed their first of three would land
+    // on a card that is not celebrating anything.
+    const view = describeNotification(entry);
+    expect(view.href).toBe('/courses/arabic-3');
+  });
+
+  it('addresses a reader of either gender', () => {
+    // The account form never asks, so no masculine adjective may appear —
+    // «إنت شاطر» is what the ask literally says and exactly what cannot be
+    // written. The pride is in the first person instead.
+    const view = describeNotification(entry);
+    const sentence = `${view.title} ${view.detail ?? ''}`;
+    for (const masculine of ['شاطر', 'بطل', 'جدع', 'بيك', 'معاك', 'ليك']) {
+      expect(sentence).not.toContain(masculine);
+    }
   });
 });
 

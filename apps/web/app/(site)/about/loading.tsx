@@ -3,7 +3,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 /** Header, then the reused instructor section's two-column shape. */
 export default function Loading() {
   return (
-    <main>
+    <div aria-hidden="true">
       <div className="page-head site-shell">
         <Skeleton width="wide" className="h-10" />
         <Skeleton width="narrow" className="mt-3 h-5" />
@@ -14,6 +14,6 @@ export default function Loading() {
         <Skeleton width="wide" className="mb-6 h-4" />
         <Skeleton className="h-56 rounded-lg" />
       </div>
-    </main>
+    </div>
   );
 }

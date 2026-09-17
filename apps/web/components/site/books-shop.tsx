@@ -1,15 +1,17 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Layers, Minus, Plus, ShoppingBag, Truck } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import {
   MAX_BOOK_QUANTITY,
   bookOrderTotals,
+  minBookShippingCents,
   type BookCard,
   type BookCatalog,
   type BookShelf,
+  type BookShippingRates,
   type BookTerm,
 } from '@ayman/contracts/books';
 import {
@@ -19,9 +21,10 @@ import {
   DialogTitle,
 } from '@ayman/ui/components/dialog';
 import { CourseArt } from '@/components/course-art';
+import { StreamBadge } from '@/components/stream-badge';
 import { BookOrderPanel } from '@/components/site/book-order-panel';
 import { subjectArt } from '@/lib/subject-art';
-import { formatEGP, formatShipping } from '@/lib/price';
+import { formatEGP } from '@/lib/price';
 
 const c = copy.books;
 
@@ -55,12 +58,44 @@ const TERMS: readonly { key: BookTerm; label: string }[] = [
  */
 export function BooksShop({
   catalog,
+  instapay,
   vodafoneCash,
 }: {
   catalog: BookCatalog;
   /** E.164, or `null` when the admin has not configured one yet. */
+  instapay: string | null;
+  /** The wallet number, threaded beside `instapay` — see `ContactSchema`. */
   vodafoneCash: string | null;
 }) {
+  /*
+    Land on the right book when the URL carries one.
+
+    The landing strip and the dashboard both link `/books#book-{slug}`, and on a
+    COLD load that hash does nothing on its own: this page's shelves are not in
+    the initial HTML — they arrive on the RSC stream — so the browser processes
+    the fragment while `#book-{slug}` does not exist yet and gives up. Verified
+    against production: `curl /books` returns one `book-card` string in a flight
+    payload and zero rendered cards.
+
+    This effect runs after THIS component has painted the shelves, which is by
+    definition after the target exists. `'auto'` rather than `'smooth'`: the
+    reader arrived by pressing «اشتري الآن» on another page and is expecting to
+    be there, not to watch a journey — and a smooth scroll from the top of a
+    long shop is a second of nothing happening.
+
+    `[]` — mount only. A hash change while the page is already open is the
+    browser's own job and it can do it, because the anchors are in the DOM by
+    then.
+  */
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (!id.startsWith('book-')) return;
+    // `getElementById` and not `querySelector('#' + id)`: a slug is
+    // author-controlled and can carry characters that are not a valid CSS
+    // identifier, which would throw rather than miss.
+    document.getElementById(id)?.scrollIntoView({ behavior: 'auto', block: 'start' });
+  }, []);
+
   /** `bookId → quantity`. Absent means "not in the basket"; a quantity is never 0. */
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [checkingOut, setCheckingOut] = useState(false);
@@ -87,9 +122,23 @@ export function BooksShop({
     [quantities, booksById],
   );
 
+  /** The cheapest zone — what the basket may quote as a FLOOR before it knows
+   *  an address. Never what it charges. */
+  const fromShippingCents = minBookShippingCents(catalog.shippingRates);
+
+  /*
+   * ⚠️ Shipping is `0` HERE, and the basket's own «الشحن» row says «على حسب
+   * المحافظة» rather than a number.
+   *
+   * The fee depends on where the parcel is going and nothing on this page knows
+   * that yet — the governorate is chosen inside `BookOrderPanel`, which quotes
+   * the real number the instant it is. Adding the cheapest zone here instead
+   * would show «٨٠ ج» to a reader in أسوان and then replace it with «١٥٠ ج» one
+   * screen later, which is a price that went up on them.
+   */
   const totals = bookOrderTotals(
     lines.map((line) => ({ unitPriceCents: line.book.priceCents, quantity: line.quantity })),
-    catalog.shippingCents,
+    0,
   );
 
   const bookCount = lines.reduce((sum, line) => sum + line.quantity, 0);
@@ -121,6 +170,44 @@ export function BooksShop({
 
   return (
     <>
+      {/*
+        The phone basket — ABOVE the shelves, not across the bottom of them.
+
+        It was a bar fixed to the bottom edge, which is the conventional place
+        for one and was the wrong place here for two reasons that only show up
+        on a real phone: the assistant's floating button sits in that same
+        corner and covered «كمّل الطلب», and a total pinned to the bottom of a
+        page whose content scrolls under it reads as part of the browser chrome
+        rather than as the basket. Reported as «هي تحت ومستخبية».
+
+        So: sticky, under the site header, in normal flow. It clears the pinned
+        nav card (`--site-nav-h` plus the 0.75rem margin that card carries), it
+        is the first thing under the hero, and it stays in view for the whole
+        page because `.books-page` is its containing block.
+
+        Rendered only when there is something in it — an empty bar pinned over
+        every scroll would be a permanent strip of nothing on the smallest
+        screen this page is read on. The cost is a one-time downward shift of
+        the shelves when the first book is added, which is the direction that
+        keeps the card under the reader's finger on screen.
+      */}
+      {lines.length > 0 ? (
+        <div className="books-bar">
+          <div className="books-bar__totals">
+            <span className="books-bar__total">{formatEGP(totals.totalCents)}</span>
+            <span className="books-bar__detail">
+              {formatCopy(c.cartAnnounce, {
+                n: bookCount,
+                price: formatEGP(totals.totalCents),
+              })}
+            </span>
+          </div>
+          <button type="button" className="books-bar__cta" onClick={() => setCheckingOut(true)}>
+            {c.checkout}
+          </button>
+        </div>
+      ) : null}
+
       <div className="site-shell books-shelves">
         <div className="books-layout">
           <div className="books-shelves">
@@ -166,7 +253,7 @@ export function BooksShop({
                   ))}
                 </ul>
 
-                <Totals totals={totals} />
+                <Totals totals={totals} fromShippingCents={fromShippingCents} />
 
                 <button
                   type="button"
@@ -183,36 +270,14 @@ export function BooksShop({
       </div>
 
       {/*
-        The phone basket. Rendered only when there is something in it — an empty
-        bar pinned over every scroll would be a permanent strip of nothing on the
-        smallest screen this page is read on.
-      */}
-      {lines.length > 0 ? (
-        <div className="books-bar">
-          <div className="books-bar__totals">
-            <span className="books-bar__total">{formatEGP(totals.totalCents)}</span>
-            <span className="books-bar__detail">
-              {formatCopy(c.cartAnnounce, {
-                n: bookCount,
-                price: formatEGP(totals.totalCents),
-              })}
-            </span>
-          </div>
-          <button type="button" className="books-bar__cta" onClick={() => setCheckingOut(true)}>
-            {c.checkout}
-          </button>
-        </div>
-      ) : null}
-
-      {/*
-        `role="status"` and off-screen: on a phone the basket that just changed
-        is behind the reader's thumb or off the bottom of the page, so the only
-        feedback a screen reader gets from pressing «ضيفه» is this line.
+        `role="status"` and off-screen: the bar that just changed is at the top
+        of the page and the reader's finger is on a card somewhere below it, so
+        the only feedback a screen reader gets from pressing «ضيفه» is this line.
       */}
       <p role="status" aria-live="polite" className="sr-only">
         {lines.length === 0
           ? c.cartEmpty
-          : formatCopy(c.cartAnnounce, { n: bookCount, price: formatEGP(totals.totalCents) })}
+          : formatCopy(c.cartAnnounce, { n: bookCount, price: formatEGP(totals.itemsCents) })}
       </p>
 
       <Dialog open={checkingOut} onOpenChange={setCheckingOut}>
@@ -233,7 +298,13 @@ export function BooksShop({
                   <span>{formatEGP(line.book.priceCents * line.quantity)}</span>
                 </div>
               ))}
-              <Totals totals={totals} />
+              {/* ⚠️ NO `<Totals>` here. It would be a SECOND, frozen answer to
+                  the question the panel below answers live: this copy is stuck
+                  on «من ٢٣٠» (the cheapest zone) while the panel's own total
+                  becomes ٢٥٠ the moment a وجه-بحري address is picked, and the
+                  reader gets two different totals stacked on top of each other.
+                  The panel owns the breakdown — same reason `BookOrderButton`
+                  keeps its breakdown inside rather than above. */}
             </div>
 
             {/*
@@ -244,7 +315,9 @@ export function BooksShop({
             */}
             <BookOrderPanel
               items={lines.map((line) => ({ bookId: line.book.id, quantity: line.quantity }))}
-              amountCents={totals.totalCents}
+              itemsCents={totals.itemsCents}
+              shippingRates={catalog.shippingRates}
+              instapay={instapay}
               vodafoneCash={vodafoneCash}
               onCancel={() => setCheckingOut(false)}
             />
@@ -255,7 +328,22 @@ export function BooksShop({
   );
 }
 
-function Totals({ totals }: { totals: ReturnType<typeof bookOrderTotals> }) {
+/**
+ * The basket's three rows, BEFORE an address exists.
+ *
+ * «الشحن» names the rule instead of a number, and «الإجمالي» is a floor rather
+ * than a price — see `copy.books.shippingByGovernorate`. Both become real
+ * figures inside `BookOrderPanel` the moment a governorate is picked, and the
+ * rows keep their labels and their order so the reader watches two values
+ * change rather than a layout.
+ */
+function Totals({
+  totals,
+  fromShippingCents,
+}: {
+  totals: ReturnType<typeof bookOrderTotals>;
+  fromShippingCents: number;
+}) {
   return (
     <div className="books-cart__totals">
       <div className="books-cart__row">
@@ -264,11 +352,15 @@ function Totals({ totals }: { totals: ReturnType<typeof bookOrderTotals> }) {
       </div>
       <div className="books-cart__row">
         <span>{c.shipping}</span>
-        <span>{formatShipping(totals.shippingCents, c.shippingFree)}</span>
+        <span>{c.shippingByGovernorate}</span>
       </div>
       <div className="books-cart__row books-cart__row--total">
         <span>{c.total}</span>
-        <span>{formatEGP(totals.totalCents)}</span>
+        <span>
+          {formatCopy(c.totalFrom, {
+            price: formatEGP(totals.itemsCents + fromShippingCents),
+          })}
+        </span>
       </div>
     </div>
   );
@@ -345,7 +437,18 @@ function BookTile({
   onSetQuantity: (bookId: string, next: number) => void;
 }) {
   return (
-    <article className="book-card">
+    /*
+      `id` is the LANDING STRIP'S and the dashboard's anchor target: both link
+      «اشتري الآن» at `/books#book-{slug}` so a press lands on this exact
+      title's card with its stepper, rather than at the top of a shop the
+      reader then has to search. `.book-card` carries a `scroll-margin` for it
+      so the card does not arrive tucked under the sticky site header.
+
+      Keyed on the SLUG and not the id: the slug is the stable, human-readable
+      handle the two callers already hold, and it is what survives a book being
+      re-seeded.
+    */
+    <article className="book-card" id={`book-${book.slug}`}>
       <div className="book-card__art">
         {/*
           The same generated art the course cards use when nothing is uploaded.
@@ -359,6 +462,14 @@ function BookTile({
           subjectNameAr={subjectNameAr}
           seed={book.slug}
           compact
+          /*
+            `compact` for the CROP — a 3/4 jacket has to fill this box and the
+            title is printed in the card below it — but NOT for its size: that
+            default is `128px`, written for two thumbnails, and this card is a
+            `.books-grid` track, which caps at 20rem. A 128px file stretched
+            over 320px is what «الكواليتي وحشة جدا» was.
+          */
+          sizes="20rem"
         />
       </div>
 
@@ -367,6 +478,29 @@ function BookTile({
         {book.subtitleAr ? <p className="book-card__subtitle">{book.subtitleAr}</p> : null}
 
         <div className="book-card__meta">
+          {/*
+            عام / لغات, FIRST in the row and before the year.
+
+            The شرح book and the لغات edition of the same subject are two rows
+            in this shelf with almost the same title, the same cover art and
+            often the same price — «كتاب تانية بكالوريا برمجة» twice. Without
+            this chip the only thing telling them apart is a word buried in the
+            title, and the failure mode is a student paying ٦٥ جنيه of shipping
+            for the wrong edition, which is exactly the mistake the course cards
+            carry the same chip to prevent (`CourseCard`, under the title).
+
+            `<StreamBadge>` and never a hand-rolled pill: the words «عام» and
+            «لغات», their two colours and their order are decided in ONE place
+            for the admin form, the course card and this card together — see
+            its docblock. It renders nothing when both flags are false, which is
+            a state the database makes unreachable and a stale cached payload
+            can still produce.
+
+            Before the year and the page count because the stream decides
+            whether this book is for you AT ALL; how many pages it runs to is
+            only worth reading once it is.
+          */}
+          <StreamBadge forGeneral={book.forGeneral} forLanguages={book.forLanguages} />
           {book.year !== null ? (
             <span className="book-chip">{formatCopy(c.yearChip, { n: book.year })}</span>
           ) : null}
@@ -431,21 +565,36 @@ function BookTile({
 }
 
 /**
- * The hero's shipping line — exported so the page can render it server-side.
+ * The hero's shipping chip — exported so the page can render it server-side.
  *
- * It no longer PRINTS the amount (see `copy.books.shippingOnce`) but still
- * takes it, because zero and non-zero are two different promises and only the
- * number can tell them apart.
+ * It states the FLOOR and then the three zones under it. «الشحن ٨٠ ج» alone
+ * would be a number two thirds of the country is not charged, and this line is
+ * read on the shelf precisely so nobody meets the real figure as a surprise at
+ * the address form.
  */
-export function BooksShippingChip({ shippingCents }: { shippingCents: number }) {
+export function BooksShippingChip({ rates }: { rates: BookShippingRates }) {
+  const free = rates.cairo_giza === 0 && rates.delta === 0 && rates.far === 0;
   return (
     <p className="books-hero__shipping">
       <Truck size={16} aria-hidden="true" />
-      {/* Two different sentences, not one with a number swapped in. At zero the
-          paid line is not merely awkward, it is FALSE — it says prices exclude
-          delivery — so `shippingCents` is still needed here even though the
-          paid line no longer prints it. */}
-      {shippingCents === 0 ? c.shippingFreeOnce : c.shippingOnce}
+      {/* A whole different sentence when delivery is free everywhere, not the
+          same one with «٠ ج» in its slot — see `shippingFreeOnce`. The zoned
+          wording spends its second half promising the fee is charged once,
+          which is nonsense about a fee that is not charged at all. */}
+      {free ? (
+        c.shippingFreeOnce
+      ) : (
+        <span>
+          {formatCopy(c.shippingOnce, { price: formatEGP(minBookShippingCents(rates)) })}
+          <small className="books-hero__zones">
+            {formatCopy(c.shippingZones, {
+              near: formatEGP(rates.cairo_giza),
+              delta: formatEGP(rates.delta),
+              far: formatEGP(rates.far),
+            })}
+          </small>
+        </span>
+      )}
     </p>
   );
 }

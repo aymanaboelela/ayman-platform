@@ -1,6 +1,8 @@
 import {
+  ArrowDownLeft,
   AlertTriangle,
   BookMarked,
+  CalendarClock,
   ChartColumn,
   ClipboardList,
   Coins,
@@ -14,11 +16,13 @@ import {
   ScrollText,
   Send,
   Settings,
+  SquarePen,
   Users,
   type LucideIcon,
-  MessageCircleQuestion,
   Megaphone,
+  MessagesSquare,
   Newspaper,
+  NotebookPen,
   PackageOpen,
   Wallet,
 } from 'lucide-react';
@@ -89,6 +93,18 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     group: 'teaching',
   },
   {
+    // «التحويلات الواردة» — the evidence behind the queue above it. Its own
+    // entry rather than a tab inside `/admin/payments` because it answers a
+    // different question: that screen is "who is asking", this is "what
+    // actually arrived", and most of the time the two are matched by the
+    // piastre code with nobody reading either.
+    href: '/admin/transfers',
+    labelAr: copy.admin.nav.transfers,
+    icon: ArrowDownLeft,
+    permission: 'payment:read',
+    group: 'teaching',
+  },
+  {
     // «الاشتراكات والإيرادات» — directly under the review queue: `payments`
     // decides a CLAIM, this reports the subscriptions those decisions
     // produced. Same `payment:read`, deliberately — see the controller's own
@@ -107,6 +123,46 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.books,
     icon: PackageOpen,
     permission: 'book-order:read',
+    group: 'teaching',
+  },
+  {
+    // الواجب — the review queue. Beside «أوراق الامتحانات» because the two are
+    // the same act on two kinds of work: something a student handed in that is
+    // waiting on a mark. Its own permission, so a role that may look at exam
+    // papers does not silently gain the ability to delete a student's uploads.
+    href: '/admin/homework',
+    labelAr: copy.admin.nav.homework,
+    icon: NotebookPen,
+    permission: 'homework:read',
+    group: 'teaching',
+  },
+  {
+    // امتحانات الشهر — and the ONLY door to a monthly exam. `LESSON_KINDS` in
+    // the lesson panel is `['video','text','attachment']` on purpose, so there
+    // is no path through the course editor that can author one; without this
+    // row the screen exists and cannot be reached.
+    //
+    // ⚠️ `quiz:write`, NOT `quiz:read`. `quiz:read` is in the STUDENT
+    // permission set (`apps/api/src/auth/permissions.ts`), so gating this on it
+    // would render an admin link for every signed-in student whose session
+    // reached the sidebar — the exact bug the courses row above documents for
+    // `course:read` vs `course:read-admin`. `AdminExamsController` carries
+    // `quiz:write`; the sidebar asks for the same thing.
+    href: '/admin/exams',
+    labelAr: copy.admin.nav.monthlyExams,
+    icon: CalendarClock,
+    permission: 'quiz:write',
+    group: 'teaching',
+  },
+  {
+    // تصحيح الورق — the essay queue. Directly under «امتحانات الشهر» because it
+    // is the other half of one paper: what he sets, and what comes back needing
+    // a human. Its own permission, `attempt:grade`, so a role that may author a
+    // paper does not automatically hold the pen that moves a student's score.
+    href: '/admin/grading',
+    labelAr: copy.admin.nav.grading,
+    icon: SquarePen,
+    permission: 'attempt:grade',
     group: 'teaching',
   },
   {
@@ -149,15 +205,19 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     group: 'teaching',
   },
   {
-    // «أسئلة الطلبة» — the open chat's log. Beside the inbox and the outreach
-    // log because the three are one subject read three ways: what a student
-    // asked a PERSON, what the platform said to them unprompted, and what they
-    // asked the MACHINE. `conversation:read` for the same reason the inbox
-    // uses it — same authority, same material, and only the answerer differs.
-    href: '/admin/assistant',
-    labelAr: copy.admin.nav.assistantQuestions,
-    icon: MessageCircleQuestion,
-    permission: 'conversation:read',
+    // The one deliberate exception to «مفيش زرار إرسال للكل» — its own link,
+    // its own icon, right beside the automated log so the two are never
+    // mistaken for one feature. `conversation:reply`, the same authority
+    // `AdminInboxController` already guards a reply with.
+    //
+    // NOT `Megaphone`: «التسويق» below already owns that icon, and these two
+    // are the pair most worth telling apart at a glance — one writes into a
+    // conversation the student already has with the instructor, the other
+    // sends a message out to a phone.
+    href: '/admin/broadcast',
+    labelAr: copy.admin.nav.broadcast,
+    icon: MessagesSquare,
+    permission: 'conversation:reply',
     group: 'teaching',
   },
   {

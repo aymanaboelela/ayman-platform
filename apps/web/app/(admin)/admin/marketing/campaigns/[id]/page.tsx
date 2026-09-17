@@ -3,9 +3,9 @@ import { z } from 'zod';
 import { ArrowRight } from 'lucide-react';
 import {
   CampaignDetailSchema,
-  RECIPIENT_STATUSES,
+  RECIPIENT_FILTERS,
   RecipientRowSchema,
-  type RecipientStatus,
+  type RecipientFilter,
 } from '@ayman/contracts/marketing/campaign';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminGetOrNotFound } from '@/lib/admin-api';
@@ -24,8 +24,8 @@ export default async function CampaignDetailPage({
 }) {
   const { id } = await params;
   const { status: rawStatus } = await searchParams;
-  const status: RecipientStatus | 'all' = RECIPIENT_STATUSES.includes(rawStatus as RecipientStatus)
-    ? (rawStatus as RecipientStatus)
+  const status: RecipientFilter = RECIPIENT_FILTERS.includes(rawStatus as RecipientFilter)
+    ? (rawStatus as RecipientFilter)
     : 'all';
 
   const campaign = await adminGetOrNotFound(`/api/admin/marketing/campaigns/${id}`, CampaignDetailSchema);

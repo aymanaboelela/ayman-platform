@@ -1,5 +1,5 @@
 import { z } from '@ayman/contracts/zod';
-import { egyptianPhone, isPlaceholderEmail } from '@ayman/contracts/phone';
+import { egyptianPhone, isPlaceholderEmail, normalizeEgyptianPhone } from '@ayman/contracts/phone';
 
 /**
  * A local copy of `onboarding.ts`'s `GenderSchema` — deliberately NOT a
@@ -38,6 +38,18 @@ export const AdminStudentRowSchema = z.object({
   governorateNameAr: z.string(),
   systemSlug: z.string().nullable(),
   year: z.number().int().nullable(),
+  /**
+   * عربي / لغات.
+   *
+   * On the LIST, not only the detail. It was on `AdminStudentDetailSchema`
+   * alone, so the one screen that shows every student at once could neither
+   * show it nor filter by it — and «أقدر أشوف اللغات لوحدهم» is the ask that
+   * comes back on every screen.
+   *
+   * `null` for every profile onboarded before the question existed — «مش
+   * متسجّل», never a guess, which is why the filter has a bucket for it.
+   */
+  schoolStream: SchoolStreamSchema.nullable(),
   trackLabelAr: z.string().nullable(),
   onboardingCompleted: z.boolean(),
   createdAt: z.string(),
@@ -73,6 +85,53 @@ export const AdminStudentDetailSchema = AdminStudentRowSchema.extend({
 });
 
 export type AdminStudentDetail = z.infer<typeof AdminStudentDetailSchema>;
+
+/**
+ * `GET /api/admin/students/:userId/conversation` — the thread with this
+ * student, on their own record.
+ *
+ * ## Why it is here and not only in the inbox
+ *
+ * «يبقى في البروفايل يبقى في محادثة أقدر أكلمها». Reaching a student from
+ * their record meant reading their phone number off the screen and opening
+ * WhatsApp, or going to `/admin/inbox` and finding them by name — and from the
+ * grading queue, where the question "who is this and can I say something to
+ * them" actually comes up, neither was one click away. The conversation is the
+ * platform's own channel: the student sees it in the same المساعد panel and
+ * can reply, which a WhatsApp message out of the blue cannot promise.
+ *
+ * ## `conversationId` is nullable, and that is the ordinary case
+ *
+ * Most students have never opened a thread. `null` is "there is nothing to
+ * show yet", not an error — the section renders its composer and the first
+ * message CREATES the thread (`OutreachService.sendManual`, the same path
+ * «رسايلي للطلبة» uses, which also emits the `instructor_message`
+ * notification).
+ */
+export const AdminStudentMessageSchema = z.object({
+  id: z.string(),
+  /** `visitor` is the student. The enum is the one `conversation.ts` owns;
+   *  it is re-stated as a literal union here for the same local-copy reason
+   *  `GenderSchema` above is — a runtime value must come from one leaf's own
+   *  subpath export, never by hopping through another leaf's relative
+   *  import. Keep in sync with `MESSAGE_AUTHORS`. */
+  author: z.enum(['visitor', 'admin']),
+  body: z.string(),
+  createdAt: z.string(),
+});
+
+export const AdminStudentConversationSchema = z.object({
+  conversationId: z.string().nullable(),
+  /** Oldest first — this renders as a transcript, and a transcript reads down.
+   *  Capped server-side; the whole thread lives at `/admin/inbox/:id`. */
+  messages: z.array(AdminStudentMessageSchema),
+  /** True when older messages were trimmed, so the section can say so and
+   *  point at the full thread rather than silently showing half of it. */
+  truncated: z.boolean(),
+});
+
+export type AdminStudentMessage = z.infer<typeof AdminStudentMessageSchema>;
+export type AdminStudentConversation = z.infer<typeof AdminStudentConversationSchema>;
 
 /**
  * A4: the admin-writable field set, and nothing else. `role` is ABSENT on
@@ -147,7 +206,14 @@ export type AdminStudentSetPassword = z.infer<typeof AdminStudentSetPasswordSche
 
 export const AdminRoleChangeSchema = z
   .object({
-    role: z.enum(['admin', 'student']),
+    /**
+     * `owner` is the instructor this deployment belongs to — see the role's
+     * note in `apps/api/src/auth/permissions.ts`. It is mintable here because
+     * otherwise there is no way to CREATE one: the platform ships with an
+     * admin and students, and «make this account the instructor» is the step
+     * that turns a fresh stack into somebody's platform.
+     */
+    role: z.enum(['admin', 'owner', 'student']),
     /** Forces the operator to say why; it lands in the audit metadata. */
     reason: z.string().min(8).max(500),
   })
@@ -230,6 +296,89 @@ export function expectedDeleteIdentity(account: {
   if (account.phone) return account.phone;
   if (account.email) return account.email;
   return null;
+}
+
+/**
+ * The ten digits of an Egyptian mobile, with every way of writing the country
+ * off the front: `+201223334567`, `00201223334567`, `201223334567`,
+ * `01223334567`, `+01223334567`, and any of those with spaces or dashes in
+ * them, all reduce to `1223334567`.
+ *
+ * `null` for anything that is not a number long enough to be one — which is
+ * what an email address reduces to, and the reason the caller can hand this
+ * arbitrary typed text without it quietly matching on a stray digit.
+ */
+function egyptianNationalDigits(value: string): string | null {
+  // The value has to LOOK like a bare number before its digits are read out of
+  // it — digits, spaces, dashes, brackets and at most a leading `+`.
+  //
+  // Without this the folding is not a phone comparison at all, it is a
+  // "contains these digits" comparison: `libphonenumber-js` deliberately
+  // extracts a number out of surrounding text (`phone.ts` says so), so
+  // `01223334567@example.test` parses as a valid Egyptian mobile. An account
+  // confirmed by an address that happened to start with its owner's number
+  // would then be deletable by typing the number — the exact substring match
+  // this function is written not to be.
+  if (!/^\+?[\d\s()-]+$/.test(value.trim())) return null;
+
+  const digits = value.replace(/\D/g, '');
+  // `00` is the international prefix as dialled from a phone; `20` is Egypt.
+  // Stripped in that order, because `0020…` carries both.
+  const withoutIdd = digits.startsWith('00') ? digits.slice(2) : digits;
+  const national = withoutIdd.startsWith('20') ? withoutIdd.slice(2) : withoutIdd;
+  // The trunk zero an Egyptian writes and a stored E.164 number does not have.
+  const local = national.replace(/^0+/, '');
+  return local.length >= 9 ? local : null;
+}
+
+/**
+ * Whether what the admin typed into the delete confirmation identifies the
+ * account it is about to destroy.
+ *
+ * Shared by the dialog and the service for the same reason
+ * `expectedDeleteIdentity` is: two sides deriving "does this match" separately
+ * can disagree, and the disagreement presents as a box that cannot be passed
+ * with no error saying why.
+ *
+ * ## Why an exact string compare was wrong
+ *
+ * The stored identity is E.164 — `+201223334567` — and that is the ONLY form
+ * this used to accept. Every other screen in the admin (the students table,
+ * the student header, the shipping sheet) prints the number the way Egyptians
+ * write it, `01223334567`, so the operator retyped what they had just been
+ * looking at and was refused. Measured on production: `+01223334567`, the
+ * number typed under a hint that starts with a `+`, was rejected.
+ *
+ * ## Why this does not weaken the confirmation
+ *
+ * The point of the field is that the admin cannot pass it by accident on the
+ * wrong row, and that still holds: this compares the WHOLE national number,
+ * ten digits of it, just without caring how the country code was written. Two
+ * different students never share those digits — `users.phone_number` is
+ * UNIQUE. Nothing here matches a prefix, a suffix or a substring.
+ *
+ * Folding is attempted ONLY when the expected identity is itself a valid
+ * Egyptian number. For an account confirmed by email (those predating the
+ * phone column, and admins) this is a trimmed, case-insensitive string compare
+ * and nothing else — so an address that happens to contain digits cannot be
+ * passed by typing a phone number.
+ */
+export function deleteIdentityMatches(typed: string, expected: string | null): boolean {
+  // `expected === null` is an account with no human-readable identifier at
+  // all. It stays permanently false, which fails closed — the same thing the
+  // service does with it.
+  if (expected === null) return false;
+
+  // Trimmed and case-insensitive: the admin is retyping an identifier, not a
+  // password, and rejecting «Ahmed@X.com» for «ahmed@x.com» would only teach
+  // them to paste the value, which defeats the point of asking for it.
+  if (typed.trim().toLowerCase() === expected.trim().toLowerCase()) return true;
+
+  const b = egyptianNationalDigits(expected);
+  if (b === null || normalizeEgyptianPhone(expected) === null) return false;
+
+  const a = egyptianNationalDigits(typed);
+  return a !== null && a === b;
 }
 
 export type AdminStudentDelete = z.infer<typeof AdminStudentDeleteSchema>;
@@ -363,6 +512,16 @@ function toArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [value];
 }
 
+/** The `access` filter's values, exported for the URL parser the way
+ *  `STUDENT_LIST_QUERY_SORT_KEYS` already is — one definition, so a new
+ *  bucket cannot exist in the API and be unreachable from the UI. */
+export const STUDENT_ACCESS_FILTERS = ['hand_opened', 'comped', 'paid'] as const;
+
+/** عربي / لغات / مش متسجّل — exported for the URL parser and the filter's own
+ *  option list, the same way `STUDENT_ACCESS_FILTERS` is, so a value cannot
+ *  exist in the API and be unreachable from the screen. */
+export const STUDENT_STREAM_FILTERS = ['general', 'languages', 'unset'] as const;
+
 export const StudentListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   perPage: z.coerce.number().int().min(1).max(100).default(20),
@@ -372,6 +531,34 @@ export const StudentListQuerySchema = z.object({
   track: z.preprocess(toArray, z.array(z.string())).default([]),
   sort: z.enum(['createdAt', 'fullName', 'governorate']).default('createdAt'),
   dir: z.enum(['asc', 'desc']).default('desc'),
+  /**
+   * How this student came to hold access to a PAID course — the filter that
+   * answers «مين الّي مسجّلهم مجاني؟».
+   *
+   * - `hand_opened` — holds a live `source: 'admin'` grant. Somebody opened a
+   *   closed course for them; no money passed through the platform, and
+   *   NEITHER money screen shows it (both filter `source: 'purchase'`, see
+   *   `StudentHistoryService`), which is why it needs a filter of its own.
+   * - `comped` — holds a live `purchase` grant whose approved submission is
+   *   `isFree`: a subscription recorded deliberately as a منحة. It went
+   *   through the review flow, so it IS on the subscription panel, but it is
+   *   still «مجاني» and belongs in the same answer.
+   * - `paid` — holds a live `purchase` grant that was actually paid for.
+   *
+   * ⚠️ Scoped to `scope: 'course'` grants only. The automatic `platform`
+   * grant is held by every student who ever enrolled in anything and says
+   * nothing about a paid course; including it would put all 500 accounts in
+   * the "free" bucket and make the filter useless.
+   */
+  access: z.enum(STUDENT_ACCESS_FILTERS).nullable().default(null),
+  /**
+   * عربي / لغات — plus «مش متسجّل» for the profiles that predate the question.
+   *
+   * A THREE-value filter and not two: `school_stream` is nullable, and a
+   * two-value filter would make those students unreachable from this screen
+   * while quietly implying they are one or the other.
+   */
+  stream: z.enum(STUDENT_STREAM_FILTERS).nullable().default(null),
 });
 
 export type StudentListQuery = z.infer<typeof StudentListQuerySchema>;
@@ -414,3 +601,80 @@ export const AdminGrantRowSchema = z.object({
 });
 
 export type AdminGrantRow = z.infer<typeof AdminGrantRowSchema>;
+
+/**
+ * ## سجل الحساب — what was DONE to this student, in order
+ *
+ * «عايز في بروفايل الشخص اللي اتعمل: أنا عملته ولا هو اشترك؟»
+ *
+ * The profile already answered "what does this student have RIGHT NOW"
+ * (`AdminGrantRow`, `AdminSubscriptionRow`) and "how are they doing"
+ * (`StudentAnalyticsDetail`). Neither answers "how did they come to have it",
+ * which is the question actually asked when a paid course turns out to be
+ * open for somebody: a hand-issued grant and a purchased one are the same
+ * green row on the access panel, and the difference is the whole point.
+ *
+ * ⚠️ The two panels that DO show money both filter `source: 'purchase'`
+ * (`PaymentsService.adminListSubscriptions`, `FinanceService.list`), so a
+ * grant an admin opened by hand appears on NEITHER — the reason this exists
+ * as its own read rather than another column on one of them.
+ *
+ * One flat, newest-first list rather than per-source sections: the answer is
+ * almost always in the ORDER (a grant dated eleven days before the book order
+ * beside it settles what did not cause what), and sections are exactly what
+ * hides that.
+ */
+export const STUDENT_HISTORY_KINDS = [
+  'account_created',
+  /** A grant appeared. `actorName` is the admin for `source: 'admin'`, null
+   *  for `purchase` (the approval event carries the reviewer) and for the
+   *  automatic platform grant. */
+  'grant_created',
+  'grant_revoked',
+  'payment_submitted',
+  'payment_approved',
+  'payment_rejected',
+  'book_order_placed',
+  'book_order_paid',
+  'book_order_shipped',
+  'book_order_delivered',
+  'book_order_rejected',
+  'banned',
+  'unbanned',
+] as const;
+
+export const StudentHistoryKindSchema = z.enum(STUDENT_HISTORY_KINDS);
+export type StudentHistoryKind = z.infer<typeof StudentHistoryKindSchema>;
+
+export const StudentHistoryEntrySchema = z.object({
+  /** Stable within one response — `<kind>:<row id>`; the row id alone is not
+   *  unique across kinds, and two events can share a millisecond. */
+  key: z.string(),
+  kind: StudentHistoryKindSchema,
+  at: z.iso.datetime(),
+  /** Which course this concerns, when it concerns one. */
+  courseId: z.string().nullable(),
+  courseTitle: z.string().nullable(),
+  /**
+   * Who DID it, by name — the field the whole panel exists for. Null when
+   * the student themselves did it (registering, submitting a payment,
+   * placing an order) or when the actor's account has since been deleted.
+   */
+  actorName: z.string().nullable(),
+  /** `admin` / `purchase` / `auto_free` on grant rows; null elsewhere. */
+  source: z.string().nullable(),
+  /** Piastres. Null on events that are not about money. */
+  amountCents: z.number().int().nullable(),
+  /** True for a comped subscription — `PaymentSubmission.isFree`. */
+  isFree: z.boolean().nullable(),
+  /** `monthly` / `quarterly` / `yearly` / `term` on subscription events. */
+  plan: z.string().nullable(),
+  /** A grant's expiry. `null` on a grant row means it NEVER expires, which
+   *  is a materially different thing from a dated one and is why the panel
+   *  spells it out rather than leaving the cell empty. */
+  validUntil: z.iso.datetime().nullable(),
+  /** The admin's own words: a grant note, a rejection reason, a ban reason. */
+  detail: z.string().nullable(),
+});
+
+export type StudentHistoryEntry = z.infer<typeof StudentHistoryEntrySchema>;

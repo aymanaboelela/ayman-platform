@@ -26,6 +26,7 @@ export class QuizBuilderService {
       durationSeconds: settings.durationSeconds,
       openFrom: settings.openFrom,
       openUntil: settings.openUntil,
+      lateAfter: settings.lateAfter,
       allowsImprovement: settings.allowsImprovement,
       passPercent: settings.passPercent,
       shuffleQuestions: settings.shuffleQuestions,
@@ -48,6 +49,28 @@ export class QuizBuilderService {
    * stated here from the builder side.
    */
   async upsertForLesson(lessonId: string, settings: QuizSettings): Promise<string> {
+    // ⚠️ `allowsImprovement` is the ONLY thing that grants a second sitting
+    // (تحسين), and `assertPaperAllowed` reads nothing but this boolean. The
+    // "course exams only" rule everyone assumes exists was, until now, a UI
+    // convention plus a publish-time check — `settingsData` below writes the
+    // flag unconditionally, so any caller of this method could flip it on any
+    // quiz and hand every student a free retake.
+    //
+    // Harmless while the only quizzes were lesson quizzes nobody re-sat. Not
+    // harmless for a monthly exam: a second sitting on a scheduled paper is a
+    // student who saw the questions once already, and it silently feeds the
+    // honor board. So the rule becomes a check, in the one place a quiz's
+    // settings can be written.
+    if (settings.allowsImprovement) {
+      const course = await this.prisma.course.findFirst({
+        where: { examLessonId: lessonId },
+        select: { id: true },
+      });
+      if (!course) {
+        throw new BadRequestException({ code: 'improvement_is_course_exam_only' });
+      }
+    }
+
     const existing = await this.prisma.quiz.findUnique({
       where: { lessonId },
       select: { id: true },
@@ -63,6 +86,80 @@ export class QuizBuilderService {
       select: { id: true },
     });
     return created.id;
+  }
+
+  /**
+   * Re-points an existing quiz at a DIFFERENT lesson of the same course.
+   *
+   * A quiz is 1:1 with a lesson, and `upsertForLesson` can only ever create
+   * one where none exists — so a quiz attached to a video lecture (the
+   * API-only shape; the admin panel offers the builder on `kind: 'quiz'`
+   * lessons only) could never afterwards be given the standalone outline row
+   * the rest of the course structure is built around. Rebuilding it on a new
+   * lesson is NOT the same operation: `quiz_attempts.quiz_id` is the only
+   * link a sitting has to its paper, so a rebuild abandons every grade
+   * already earned while looking, in the admin panel, like it worked. Moving
+   * the row keeps the attempts, the slots and the publication state.
+   *
+   * Same course only. `lesson_progress` is per LESSON, not per quiz, so a
+   * move across courses would silently strip a cohort of the enrollment gate
+   * their attempts were taken under; within one course the gate is unchanged.
+   */
+  async moveToLesson(quizId: string, lessonId: string): Promise<void> {
+    const quiz = await this.prisma.quiz.findUnique({
+      where: { id: quizId },
+      select: {
+        lessonId: true,
+        lesson: {
+          select: { courseId: true, course: { select: { examLessonId: true } } },
+        },
+      },
+    });
+    if (!quiz) throw new NotFoundException();
+
+    // Idempotent: re-sending the move a quiz already satisfies is a success,
+    // not a conflict, so a retried request cannot fail on its own first try.
+    if (quiz.lessonId === lessonId) return;
+
+    /* The course exam is addressed by `courses.exam_lesson_id`, not by the
+     * quiz — moving the quiz alone would leave that column pointing at a
+     * lesson with no paper on it, and the exam would vanish from every
+     * student's course page. Refused rather than silently repointed: an exam
+     * has one lesson by design and nothing here should be inventing a new
+     * one. */
+    if (quiz.lesson.course.examLessonId === quiz.lessonId) {
+      throw new BadRequestException({ code: 'course_exam_cannot_move' });
+    }
+
+    const target = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      select: { courseId: true, quiz: { select: { id: true } } },
+    });
+    if (!target) throw new NotFoundException();
+    if (target.courseId !== quiz.lesson.courseId) {
+      throw new BadRequestException({ code: 'lesson_not_in_same_course' });
+    }
+    if (target.quiz) throw new BadRequestException({ code: 'lesson_already_has_quiz' });
+
+    /* An in-flight sitting is addressed as `/quizzes/:lessonId/attempt/:id`.
+     * Moving underneath it 404s the student mid-exam with their answers
+     * already saved — the one failure here that cannot be undone by moving
+     * the quiz back. Submitted attempts are unaffected: review is resolved
+     * through the attempt, which travels with the quiz. */
+    const inFlight = await this.prisma.quizAttempt.count({
+      where: { quizId, state: 'in_progress' },
+    });
+    if (inFlight > 0) throw new BadRequestException({ code: 'attempt_in_progress' });
+
+    await this.prisma.quiz.update({ where: { id: quizId }, data: { lessonId } });
+
+    await this.audit.record({
+      action: 'quiz:move',
+      resourceType: AUDIT_RESOURCES.quiz,
+      resourceId: quizId,
+      outcome: 'success',
+      metadata: { fromLessonId: quiz.lessonId, toLessonId: lessonId },
+    });
   }
 
   /** Existence check ONLY — never mutates. The builder's lesson entry point
@@ -91,6 +188,7 @@ export class QuizBuilderService {
         durationSeconds: true,
         openFrom: true,
         openUntil: true,
+        lateAfter: true,
         allowsImprovement: true,
         passPercent: true,
         shuffleQuestions: true,
@@ -138,6 +236,7 @@ export class QuizBuilderService {
         durationSeconds: quiz.durationSeconds,
         openFrom: quiz.openFrom,
         openUntil: quiz.openUntil,
+        lateAfter: quiz.lateAfter,
         allowsImprovement: quiz.allowsImprovement,
         passPercent: Number(quiz.passPercent),
         shuffleQuestions: quiz.shuffleQuestions,

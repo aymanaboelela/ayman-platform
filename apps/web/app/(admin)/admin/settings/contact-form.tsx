@@ -124,6 +124,22 @@ export function ContactForm({ defaultValues }: ContactFormProps) {
       />
 
       <SettingsField
+        name="instapay"
+        label={copy.admin.settings.instapay}
+        description={copy.admin.settings.instapayHint}
+        issues={issues}
+        render={(controlProps) => (
+          <Input
+            {...controlProps}
+            type="tel"
+            dir="ltr"
+            value={form.watch('instapay') ?? ''}
+            onChange={(event) => setNullable('instapay', event.target.value)}
+          />
+        )}
+      />
+
+      <SettingsField
         name="vodafoneCash"
         label={copy.admin.settings.vodafoneCash}
         description={copy.admin.settings.vodafoneCashHint}

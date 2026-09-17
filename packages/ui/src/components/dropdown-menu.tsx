@@ -6,6 +6,35 @@ import type { ComponentProps } from 'react';
 import { cn } from '../lib/cn';
 
 /**
+ * ## ⚠️ `modal={false}` is a DEFAULT here, and it is a bug fix
+ *
+ * Radix's own default is `modal={true}`, which wraps the open menu in
+ * `<RemoveScroll>`. That library locks the page by writing
+ * `body { overflow: hidden !important }`.
+ *
+ * On a normal document that is harmless: the root element's overflow is
+ * `visible`, so the BODY's overflow is the value the UA propagates to the
+ * viewport, the viewport stops scrolling, and the body itself is used as
+ * `visible`. This product is not a normal document. `globals.css` sets
+ * `html, body { overflow-x: clip }` to stop the sideways drag on phones, and
+ * a root element that is not `visible` in both axes cancels that propagation
+ * entirely — so `overflow: hidden` lands on `<body>` and means what it says:
+ * body becomes its own scroll container.
+ *
+ * Every `position: sticky` element in the student shell is then sticking to a
+ * container whose scroll offset is 0 instead of to the viewport. Measured in
+ * Chromium at `scrollY: 1500`, the topbar and the rail both jumped from
+ * `top: 0` to `top: -1500` the instant the menu opened — i.e. off the top of
+ * the screen — and the menu, anchored to a trigger that had just left the
+ * viewport, went with them. Reported as «أضغط على أيمن ألاقي الحاجات بتختفي من
+ * على اليمين… لازم أطلع فوق خالص عشان تظهرلي».
+ *
+ * Non-modal is also simply the right behaviour for a menu: no scroll lock, no
+ * `pointer-events: none` on the body, and the panel tracks its trigger while
+ * the page scrolls. Outside clicks and Escape still close it — that is the
+ * dismissable layer, which both modes have. Pass `modal` explicitly if a call
+ * site ever genuinely needs the page frozen underneath.
+ *
  * `dir` lives on the ROOT for this primitive, not on `Content` — Radix's
  * Menu context reads it once, at the top, and every descendant (including the
  * portal-rendered Content) consumes it from there. A thin wrapper that
@@ -14,9 +43,10 @@ import { cn } from '../lib/cn';
  */
 export function DropdownMenu({
   dir = 'rtl',
+  modal = false,
   ...props
 }: ComponentProps<typeof DropdownMenuPrimitive.Root>) {
-  return <DropdownMenuPrimitive.Root dir={dir} {...props} />;
+  return <DropdownMenuPrimitive.Root dir={dir} modal={modal} {...props} />;
 }
 
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;

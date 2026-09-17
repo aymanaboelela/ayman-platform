@@ -9,6 +9,7 @@ import { MotionProvider } from '@/components/motion/motion-provider';
 import { RouteProgress } from '@/components/motion/route-progress';
 import { JsonLd } from '@/components/seo/json-ld';
 import { organizationJsonLd, personJsonLd, webSiteJsonLd } from '@/lib/seo/jsonld';
+import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { rootMetadata } from '@/lib/seo/metadata';
 import { Toaster } from '@/components/toaster';
 import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
@@ -52,6 +53,14 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const branding = await getBranding();
+  /*
+   * The public contact row, for the organisation's `telephone`/`email`.
+   * `getPublicSettingsOrDefaults` is `'use cache'`d and cannot throw, so this
+   * adds a cache read and no failure mode — and during `next build`, where the
+   * API is unreachable, it returns empty and the two fields are simply omitted
+   * rather than published as null. See the note in `organizationJsonLd`.
+   */
+  const { contact } = await getPublicSettingsOrDefaults();
 
   return (
     /*
@@ -179,8 +188,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           never sees.
         */}
         <JsonLd data={webSiteJsonLd()} />
-        <JsonLd data={organizationJsonLd()} />
-        <JsonLd data={personJsonLd()} />
+        <JsonLd data={organizationJsonLd(contact)} />
+        <JsonLd data={personJsonLd(contact)} />
         {/*
           nuqs needs its adapter above every `useQueryState` in the tree. It is
           mounted once, at the root, rather than per route group: a second

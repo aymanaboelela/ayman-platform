@@ -4,10 +4,10 @@ import {
   CourseEmphasisSchema,
   LessonKindSchema,
   LessonResourceKindSchema,
-  TaxonomySchema,
 } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
-import { apiGet } from '@/lib/api';
+import { VideoMirrorStatusSchema, VideoProviderSchema } from '@ayman/contracts/video';
+import { getTaxonomyLiveOrNull, getTaxonomyOrNull } from '@/lib/taxonomy';
 import { apiGetAuthedOrNotFound } from '@/lib/api-server';
 import { CourseEditor } from '@/components/admin/course/course-editor';
 
@@ -26,6 +26,13 @@ const AdminCourseDetailSchema = z.object({
   emphasis: CourseEmphasisSchema.nullable(),
   emphasisNote: z.string().nullable(),
   comingSoonNote: z.string().nullable(),
+  /** «ميعاد المحاضرة» — free text, `null` when unset. Must be parsed here or
+   *  the editor's draft opens empty and its next autosave clears the column. */
+  scheduleNote: z.string().nullable(),
+  /** «جروب الدفعة» — same reason as the line above: parsed here or the
+   *  editor's field opens empty and its next autosave clears the column. */
+  whatsappGroupUrl: z.string().nullable(),
+  contentComplete: z.boolean(),
   monthlyPriceCents: z.number().int().nullable(),
   quarterlyPriceCents: z.number().int().nullable(),
   yearlyPriceCents: z.number().int().nullable(),
@@ -70,6 +77,14 @@ const AdminCourseDetailSchema = z.object({
           completionMinViewSeconds: z.number().int().nullable(),
           // Decimal(6,3) on the wire — a JSON number here, not a string.
           completionPassGrade: z.coerce.number().nullable(),
+          /* «ينزل الساعة ٨» and the after-the-lecture summary. `.catch(null)`
+             on both, not `.nullable()` alone: this page is served by whichever
+             API container answers, and during a rolling deploy that is briefly
+             one that predates the columns. A missing field must degrade to "no
+             schedule / no summary" rather than fail the parse and blank the
+             whole course editor. */
+          publishAt: z.string().nullable().catch(null),
+          description: z.string().nullable().catch(null),
           video: z
             .object({
               externalId: z.string(),
@@ -77,6 +92,17 @@ const AdminCourseDetailSchema = z.object({
               // The thumbnail. Present here so the video form can prefill it —
               // it was a column the admin could never see, let alone set.
               posterKey: z.string().nullable(),
+              /*
+               * «الرفع المباشر». Which source the lecture came from decides
+               * which form the panel shows — an uploaded lecture has no URL
+               * to prefill and prefilling `https://youtu.be/<32 hex>` is a
+               * link to nothing.
+               */
+              provider: VideoProviderSchema,
+              /** Whether our copy is ready, still encoding, or failed. */
+              mirrorStatus: VideoMirrorStatusSchema,
+              /** The instructor's own filename, shown back to them. */
+              sourceName: z.string().nullable(),
             })
             .nullable(),
           // Prefills the body editor. See `findForAdmin` for why its absence
@@ -84,7 +110,22 @@ const AdminCourseDetailSchema = z.object({
           text: z.object({ bodyHtml: z.string() }).nullable(),
           // `progress` counts students, one row each — the delete
           // confirmation names the number when it is not zero.
-          _count: z.object({ progress: z.number().int() }),
+          _count: z.object({
+            progress: z.number().int(),
+            /** «فيه X مستنيين» on the homework block — a filtered relation
+             *  count, so the panel needs no second request to know there is
+             *  work waiting on this lecture. */
+            homeworkSubmissions: z.number().int(),
+          }),
+          /** الواجب — the questions he set, so the field opens filled rather
+           *  than blank over content the next autosave would overwrite. */
+          homework: z
+            .object({
+              body: z.string(),
+              maxImages: z.number().int(),
+              isPublished: z.boolean(),
+            })
+            .nullable(),
           quiz: z
             .object({
               id: z.uuid(),
@@ -118,10 +159,19 @@ export const metadata = { title: copy.admin.course.edit };
 
 export default async function EditCoursePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  /* Cache first, live only on a miss — the shape `/onboarding` uses, and for the
+     same reason it uses it: taxonomy is load-bearing on this screen (the form's
+     system / year / track selects are built from it), so a cached `null` cannot
+     be shrugged off the way `/admin/students` shrugs off an empty filter.
+     What the cache buys even so is the common case: a hit makes no API call at
+     all, which is the whole point after a restart emptied the shared
+     rate-limit bucket and the bare `apiGet` here would have thrown. See
+     `lib/taxonomy.ts` and `admin/students/page.tsx`. */
   const [course, taxonomy] = await Promise.all([
     apiGetAuthedOrNotFound(`/api/admin/courses/${id}`, AdminCourseDetailSchema),
-    apiGet('/api/taxonomy', TaxonomySchema),
+    getTaxonomyOrNull().then((t) => t ?? getTaxonomyLiveOrNull()),
   ]);
+  if (!taxonomy) throw new Error('GET /api/taxonomy is unavailable');
 
   return <CourseEditor course={course} taxonomy={taxonomy} />;
 }

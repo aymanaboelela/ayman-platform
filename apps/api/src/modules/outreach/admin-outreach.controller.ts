@@ -1,5 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ListQuerySchema, type ListResponse } from '@ayman/contracts/admin/list';
+import { parseRequest } from '../../common/http/parse-request';
 import {
   OutreachLogFilterSchema,
   type OutreachLogRow,
@@ -40,8 +41,12 @@ export class AdminOutreachController {
     // Through the shared schemas, never `Number(page)` — these land in Prisma's
     // `take`/`skip`, where a NaN is a driver-level error and an unbounded
     // `perPage` is a free full-table read. Same note as `AdminInboxController`.
-    const parsedFilter = OutreachLogFilterSchema.parse(filter);
-    const list = ListQuerySchema.parse({ page, perPage });
+    //
+    // `parseRequest` rather than `.parse()`: a ZodError is not an
+    // HttpException, so the fail-closed filter turns bad CLIENT input into a
+    // 500. See `common/http/parse-request.ts`.
+    const parsedFilter = parseRequest(OutreachLogFilterSchema, filter, 'filter');
+    const list = parseRequest(ListQuerySchema, { page, perPage }, 'list query');
 
     return this.log.list(parsedFilter, list.perPage, (list.page - 1) * list.perPage);
   }

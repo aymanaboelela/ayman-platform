@@ -20,14 +20,10 @@ afterEach(() => {
  *
  * `lib/price.test.ts` covers the helper; this covers the sentence, because the
  * defect was never in the number — it was in the words around it.
- *
- * That framing outlived the change that prompted it: the paid line no longer
- * carries a number either, so BOTH cases here are now assertions about wording
- * alone.
  */
 describe('BooksShippingChip', () => {
-  it('says delivery is free, and says nothing about «مرة واحدة», at zero', () => {
-    render(<BooksShippingChip shippingCents={0} />);
+  it('says delivery is free, and says nothing about «مرة واحدة», when EVERY zone is zero', () => {
+    render(<BooksShippingChip rates={{ cairo_giza: 0, delta: 0, far: 0 }} />);
 
     expect(screen.getByText(copy.books.shippingFreeOnce)).toBeTruthy();
     // The old template must not survive anywhere in the rendered line: its
@@ -37,26 +33,29 @@ describe('BooksShippingChip', () => {
     expect(document.body.textContent).not.toMatch(/(^|\D)0(\D|$)/);
   });
 
-  /*
-   * ⚠️ This assertion was inverted on purpose, and it is worth saying why.
-   *
-   * It used to require the fee's NUMBER in the line («65»). Ayman took the
-   * figure out of the shelf copy — the fee is a setting, the courier's price
-   * moves, and a number printed across the top of the shop is where a stale one
-   * reads as a promise. So the line now names delivery without pricing it, and
-   * this test guards the new rule instead: no digits at all.
-   *
-   * What survives from the original intent is the half that was never about the
-   * number — that the paid line still promises delivery is charged ONCE, which
-   * is what tells a reader a second book does not cost a second delivery.
-   */
-  it('names delivery without pricing it, and keeps the «مرة واحدة» promise', () => {
-    render(<BooksShippingChip shippingCents={6_500} />);
+  it('quotes the CHEAPEST zone as a floor, and names all three under it', () => {
+    render(<BooksShippingChip rates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }} />);
 
     const text = document.body.textContent ?? '';
-    expect(text).toContain('مرة واحدة');
-    // No figure anywhere — not the fee, not a stale one, not any digit. The
-    // basket is where the amount is quoted.
-    expect(text).not.toMatch(/\d/);
+    // The floor — «من ٨٠» — and never الـ١٥٠ as the headline number.
+    expect(text).toContain('80');
+    // The clause earns its place when there IS a fee: it is what tells a
+    // reader that a second book does not cost a second delivery.
+    expect(text).toContain('مهما كان عدد الكتب');
+    /*
+     * THE regression this file now guards. A hero line that quotes one number
+     * for a fee that has three is a price two thirds of the country meets as a
+     * surprise at the address form — so the other two zones have to be on the
+     * same line as the one it leads with.
+     */
+    expect(text).toContain('100');
+    expect(text).toContain('150');
+  });
+
+  it('does not lead with a zone the reader might not be in', () => {
+    render(<BooksShippingChip rates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }} />);
+
+    // «من» — stated as a floor. Without it the line promises ٨٠ ج to أسوان.
+    expect(document.body.textContent ?? '').toContain('من');
   });
 });

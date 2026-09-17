@@ -2,6 +2,7 @@
 
 import { revalidatePath, updateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { after } from 'next/server';
 import { z } from 'zod';
 import {
   CourseCreateSchema,
@@ -22,9 +23,16 @@ import {
   TermSetOpenResultSchema,
 } from '@ayman/contracts';
 import { VideoEmbedStatusSchema, type VideoEmbedStatus } from '@ayman/contracts/video';
+import {
+  VideoUploadSessionSchema,
+  VideoUploadStatusSchema,
+  type VideoUploadSession,
+  type VideoUploadStatus,
+} from '@ayman/contracts/admin/video-upload';
 import { copy } from '@ayman/contracts/copy/admin';
 import { apiGetAuthed, apiSend } from '@/lib/api-server';
 import { TAG_COURSES, courseTag } from '@/lib/cache-tags';
+import { submitToIndexNow } from '@/lib/seo/indexnow';
 
 /** The API's course row, as much of it as the admin UI needs back. */
 const CourseRowSchema = z.object({
@@ -81,6 +89,17 @@ function readStream(formData: FormData): { forGeneral: boolean; forLanguages: bo
  */
 function readRequiresGrant(formData: FormData): boolean {
   const values = formData.getAll('requiresGrant');
+  return values[values.length - 1] === 'true';
+}
+
+/**
+ * اكتمل نزول المحتوى. Same hidden-false pair as `requiresGrant` above, and
+ * `false` is the safe fallback for the same shape of reason: a course wrongly
+ * marked unfinished understates itself, where one wrongly marked finished
+ * tells a student they are done with a course that is still being uploaded.
+ */
+function readContentComplete(formData: FormData): boolean {
+  const values = formData.getAll('contentComplete');
   return values[values.length - 1] === 'true';
 }
 
@@ -152,6 +171,13 @@ export async function createCourseAction(formData: FormData): Promise<void> {
     // Independent of `emphasis` — unlike `emphasisNote` there is no badge to
     // clear it alongside.
     comingSoonNote: readOptionalText(formData, 'comingSoonNote'),
+    // «ميعاد المحاضرة». `readOptionalText` is what makes a cleared input mean
+    // «مفيش ميعاد معلن»: it turns `''` into `null`, and `null` is the only
+    // value that removes the line from the student's band. Sending `''` would
+    // be a 400 — the schema trims and refuses an empty string.
+    scheduleNote: readOptionalText(formData, 'scheduleNote'),
+    whatsappGroupUrl: readOptionalText(formData, 'whatsappGroupUrl'),
+    contentComplete: readContentComplete(formData),
     coverKey: readOptionalText(formData, 'coverKey'),
     requiresGrant: readRequiresGrant(formData),
     monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
@@ -231,6 +257,11 @@ export async function updateCourseAction(
       // Independent of `emphasis` — unlike `emphasisNote` there is no badge to
       // clear it alongside.
       comingSoonNote: readOptionalText(formData, 'comingSoonNote'),
+      // Same as the create above — `''` becomes `null`, which is how the
+      // instructor clears a schedule that no longer applies.
+      scheduleNote: readOptionalText(formData, 'scheduleNote'),
+      whatsappGroupUrl: readOptionalText(formData, 'whatsappGroupUrl'),
+      contentComplete: readContentComplete(formData),
       coverKey: readOptionalText(formData, 'coverKey'),
       requiresGrant: readRequiresGrant(formData),
       monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
@@ -282,7 +313,30 @@ export async function setCourseStatusAction(
 ): Promise<ActionResult> {
   try {
     const body = CourseStatusPatchSchema.parse({ status });
-    await apiSend('PATCH', `/api/admin/courses/${courseId}/status`, CourseRowSchema, body);
+    const row = await apiSend(
+      'PATCH',
+      `/api/admin/courses/${courseId}/status`,
+      CourseRowSchema,
+      body,
+    );
+
+    /*
+     * Push the new URL to Bing rather than waiting for a crawl — this is the
+     * press that puts a course on the public internet, and `/courses` changes
+     * with it because the catalog is a list this course just joined.
+     *
+     * ⚠️ Only on the way IN. Unpublishing must not submit: IndexNow is an
+     * assertion that a URL belongs in an index, and announcing one that now
+     * 404s is the fastest way to get a host's submissions distrusted. The
+     * removal happens through the sitemap, which no longer lists it.
+     *
+     * `row.slug`, from the API's response — the action is handed an id, and
+     * the slug is the only thing either URL can be built from. See
+     * `submitToIndexNow` for why this can never fail the publish.
+     */
+    if (row.status === 'published') {
+      after(() => submitToIndexNow([`/courses/${row.slug}`, '/courses']));
+    }
 
     // Publishing changes LIST MEMBERSHIP rather than a field on the card. It
     // was once the only operation that touched the catalog tag; it is now one
@@ -644,6 +698,16 @@ export type UpdateLessonInput = {
   completionMode?: 'none' | 'manual' | 'on_view' | 'on_grade' | 'on_pass';
   completionMinViewSeconds?: number | null;
   completionPassGrade?: number | null;
+  /**
+   * «ينزل الساعة ٨» — an ISO instant WITH an offset, or `null` to cancel.
+   *
+   * An instant, never the `2026-09-12T20:00` a `datetime-local` input hands
+   * back: a zoneless string is read as UTC by every parser downstream, which
+   * publishes a Cairo 8pm lecture at 11pm. `lesson-settings-form.tsx`'s
+   * `toInstant` is where that conversion happens and why.
+   */
+  publishAt?: string | null;
+  description?: string | null;
 };
 
 export async function updateLessonAction(
@@ -729,6 +793,98 @@ export async function probeVideoDurationAction(
   }
 }
 
+/* ── الرفع المباشر ─────────────────────────────────────────────────────────
+ *
+ * Three actions around a transfer that goes NOWHERE NEAR a Server Action.
+ *
+ * ⚠️ That is the whole design and it is worth stating loudly, because the
+ * obvious implementation is the broken one: a Server Action body is capped at
+ * 1 MB by default, silently, and this platform has already spent a session
+ * discovering that every upload died at exactly that size with a small test
+ * file passing happily. A two-hour lecture is three thousand times the cap.
+ *
+ * So these actions carry JSON only. The bytes go from the browser straight to
+ * the bucket with pre-signed URLs the API signs — see
+ * `video-upload.service.ts`.
+ */
+
+export async function startVideoUploadAction(
+  lessonId: string,
+  input: { fileName: string; sizeBytes: number; contentType: string },
+): Promise<{ ok: true; session: VideoUploadSession } | { ok: false; message: string }> {
+  try {
+    const session = await apiSend(
+      'POST',
+      `/api/admin/lessons/${lessonId}/video/upload`,
+      VideoUploadSessionSchema,
+      input,
+    );
+    return { ok: true, session };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+export async function completeVideoUploadAction(
+  courseId: string,
+  lessonId: string,
+  input: { videoId: string; uploadId: string; parts: { partNumber: number; etag: string }[] },
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'POST',
+      `/api/admin/lessons/${lessonId}/video/upload/complete`,
+      z.object({ status: z.string() }),
+      input,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+export async function abortVideoUploadAction(
+  courseId: string,
+  lessonId: string,
+  input: { videoId: string; uploadId: string },
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'POST',
+      `/api/admin/lessons/${lessonId}/video/upload/abort`,
+      z.object({ status: z.string() }),
+      input,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * Polled while the encoder works.
+ *
+ * Returns `null` rather than throwing on any failure: this runs on a timer
+ * behind a progress bar, and one bad poll must not replace a working screen
+ * with an error. The next tick is a second away.
+ */
+export async function videoUploadStatusAction(
+  lessonId: string,
+): Promise<VideoUploadStatus | null> {
+  try {
+    return await apiGetAuthed(
+      `/api/admin/lessons/${lessonId}/video/upload/status`,
+      VideoUploadStatusSchema,
+    );
+  } catch {
+    return null;
+  }
+}
+
 export async function setLessonVideoAction(
   courseId: string,
   lessonId: string,
@@ -777,6 +933,59 @@ export async function setLessonTextAction(
     await apiSend('PUT', `/api/admin/lessons/${lessonId}/text`, z.object({ lessonId: z.uuid() }), {
       bodyHtml,
     });
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * الواجب — the exercise on a lecture.
+ *
+ * `lesson:write`, like the video and the text: this is authoring the lecture's
+ * own content. Reading and DECIDING what students hand back is `homework:*`,
+ * at `/admin/homework`, and deliberately a different permission.
+ *
+ * Autosaved from the panel, which is why the whole triple is sent on every
+ * write: a PUT that carried only the changed field would need the endpoint to
+ * be a PATCH, and `HomeworkWriteSchema`'s defaults would then fill the two it
+ * did not mention — the exact failure `partialWithoutDefaults` exists to stop
+ * elsewhere in this codebase.
+ */
+export async function setLessonHomeworkAction(
+  courseId: string,
+  lessonId: string,
+  input: { body: string; maxImages: number; isPublished: boolean },
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'PUT',
+      `/api/admin/lessons/${lessonId}/homework`,
+      z.object({ lessonId: z.uuid() }),
+      input,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/** «شيل الواجب». Submissions already handed in are untouched — see
+ *  `LessonService.removeHomework`. */
+export async function removeLessonHomeworkAction(
+  courseId: string,
+  lessonId: string,
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'DELETE',
+      `/api/admin/lessons/${lessonId}/homework`,
+      z.object({ lessonId: z.uuid() }),
+    );
     invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };

@@ -11,6 +11,7 @@ import { buildCourseOutline } from '@/lib/course-outline';
 import { CourseCover } from '@/components/library/course-cover';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { CourseOutlineView } from '@/components/library/course-outline';
+import { CourseGroupCard } from '@/components/player/course-group-card';
 import { CourseStartButton } from '@/components/site/course-start-button';
 import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
 import { formatDuration } from '@/components/site/course-card';
@@ -66,6 +67,24 @@ export async function generateMetadata({
  * is identical for everyone. `/api/me/path` is the per-student half. They are
  * parallel, and the join is `buildCourseOutline`, which is unit-tested.
  */
+/**
+ * Five seconds, not the thirty `next.config.ts` gives every other dynamic route.
+ *
+ * This is the outline, and the outline is where a lesson is drawn as locked or
+ * open. Two things unlock one: finishing the lesson before it, and passing its
+ * quiz. The first calls `router.refresh()` (`components/player/lesson-nav.tsx`);
+ * the second cannot, because the submit happens on the attempt route and
+ * refreshing THAT re-posts `resume` — see `quiz-runner.tsx`. So a passing grade
+ * would leave the next lesson drawn as locked for up to half a minute, on the
+ * screen the student goes to precisely in order to see it open.
+ *
+ * Five seconds keeps almost all of the win — the complaint is a student
+ * bouncing between the outline and a lesson, which is a two-second round trip —
+ * while making the gate feel immediate. Not `0`: this page is a real read, and
+ * it is one of the two most revisited screens in the app.
+ */
+export const unstable_dynamicStaleTime = 5;
+
 export default async function LibraryCoursePage({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
 
@@ -77,10 +96,8 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
 
   if (!course) notFound();
 
-  const outline = buildCourseOutline({
-    course,
-    path: path.courses.find((entry) => entry.id === course.id) ?? null,
-  });
+  const pathCourse = path.courses.find((entry) => entry.id === course.id) ?? null;
+  const outline = buildCourseOutline({ course, path: pathCourse });
 
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
@@ -174,8 +191,13 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
         <section className="panel mb-8 p-5">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-[length:var(--fs-title-4)] font-medium text-fg">
+              {/* «خلصت الكورس» only when the instructor says the syllabus is
+                  all up. Otherwise the same 100% reads «خلّصت اللي نزل» — see
+                  `Course.contentComplete`. */}
               {outline.progressPercent === 100
-                ? c.courseDone
+                ? course.contentComplete
+                  ? c.courseDone
+                  : c.courseUpToDate
                 : c.percentDone.replace('{percent}', String(outline.progressPercent))}
             </p>
             <p className="mono tabular text-[length:var(--fs-mono-label)] text-accent-text">
@@ -227,11 +249,27 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
               quarterlyPriceCents={course.quarterlyPriceCents}
               yearlyPriceCents={course.yearlyPriceCents}
               terms={course.terms}
-              vodafoneCash={contact.vodafoneCash}
+              instapay={contact.instapay}
             />
           </div>
         </section>
       )}
+
+      {/*
+        «جروب الدفعة» — read off `/api/me/path`, which is the ONLY course
+        payload on this page behind an enrolment. `course` here is the shared,
+        hours-cached catalog detail served to anybody, and putting a cohort's
+        invite on it would publish the link on the marketing page.
+
+        Above the description and the outline: a student arriving at their own
+        course page is more often looking for «فين الجروب» than for the syllabus
+        they have already read. Renders nothing for a course with no group.
+      */}
+      {pathCourse?.whatsappGroupUrl ? (
+        <div className="mb-8 max-w-[28rem]">
+          <CourseGroupCard url={pathCourse.whatsappGroupUrl} />
+        </div>
+      ) : null}
 
       {course.description ? (
         <div className="mb-8 max-w-[var(--w-prose)]">

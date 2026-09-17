@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { ProfileMeSchema, copy } from '@ayman/contracts';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
-import { SectionForm } from '@/components/settings/section-form';
+import { ProfileForm } from '@/components/settings/profile-form';
 
 const c = copy.section;
 
@@ -47,11 +47,28 @@ export default async function SectionSettingsPage() {
       {taxonomy === null ? (
         <TaxonomyUnavailable />
       ) : (
-        /* Only the year is prefilled, because only the year is asked — the
-           system/track/elective the profile also stores are resolved from the
-           taxonomy on submit (`@/lib/section-defaults`), so there is nothing
-           left here to translate from a per-environment uuid back to a slug. */
-        <SectionForm taxonomy={taxonomy} currentYear={me.profile.year ?? undefined} />
+        /* Everything the wizard asked for, prefilled — the endpoint behind
+           this form is an UPSERT of the whole set, so a field left out would
+           blank a column the student never touched. `ProfileForm` has the
+           reasoning.
+
+           The system, the track and the elective are still NOT here: this
+           platform has one answer for each, they are resolved from the
+           taxonomy on submit (`@/lib/section-defaults`), and there is nothing
+           to translate back from a per-environment uuid to a slug. */
+        <ProfileForm
+          taxonomy={taxonomy}
+          defaults={{
+            fullName: me.profile.fullName,
+            gender: me.profile.gender,
+            phone: me.profile.phone,
+            governorateCode: me.profile.governorateCode,
+            schoolName: me.profile.schoolName,
+            schoolStream: me.profile.schoolStream,
+            year: me.profile.year,
+            fatherPhone: me.profile.fatherPhone,
+          }}
+        />
       )}
 
       <p className="mt-8">

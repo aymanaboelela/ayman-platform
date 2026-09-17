@@ -51,7 +51,8 @@ export const DEMO_COURSES: CatalogCourse[] = [
     yearlyPriceCents: null,
     bookTitle: null,
     bookPriceCents: null,
-    publishedAt: '2026-01-05T00:00:00.000Z',
+    contentComplete: false,
+  publishedAt: '2026-01-05T00:00:00.000Z',
     updatedAt: '2026-01-05T00:00:00.000Z',
   },
   {
@@ -76,7 +77,8 @@ export const DEMO_COURSES: CatalogCourse[] = [
     yearlyPriceCents: null,
     bookTitle: null,
     bookPriceCents: null,
-    publishedAt: '2026-01-12T00:00:00.000Z',
+    contentComplete: false,
+  publishedAt: '2026-01-12T00:00:00.000Z',
     updatedAt: '2026-01-12T00:00:00.000Z',
   },
   {
@@ -101,7 +103,8 @@ export const DEMO_COURSES: CatalogCourse[] = [
     yearlyPriceCents: null,
     bookTitle: null,
     bookPriceCents: null,
-    publishedAt: '2026-02-02T00:00:00.000Z',
+    contentComplete: false,
+  publishedAt: '2026-02-02T00:00:00.000Z',
     updatedAt: '2026-02-02T00:00:00.000Z',
   },
   {
@@ -126,7 +129,8 @@ export const DEMO_COURSES: CatalogCourse[] = [
     yearlyPriceCents: null,
     bookTitle: null,
     bookPriceCents: null,
-    publishedAt: '2026-02-18T00:00:00.000Z',
+    contentComplete: false,
+  publishedAt: '2026-02-18T00:00:00.000Z',
     updatedAt: '2026-02-18T00:00:00.000Z',
   },
   {
@@ -151,7 +155,8 @@ export const DEMO_COURSES: CatalogCourse[] = [
     yearlyPriceCents: null,
     bookTitle: null,
     bookPriceCents: null,
-    publishedAt: '2026-03-01T00:00:00.000Z',
+    contentComplete: false,
+  publishedAt: '2026-03-01T00:00:00.000Z',
     updatedAt: '2026-03-01T00:00:00.000Z',
   },
   {
@@ -176,7 +181,8 @@ export const DEMO_COURSES: CatalogCourse[] = [
     yearlyPriceCents: null,
     bookTitle: null,
     bookPriceCents: null,
-    publishedAt: '2026-03-20T00:00:00.000Z',
+    contentComplete: false,
+  publishedAt: '2026-03-20T00:00:00.000Z',
     updatedAt: '2026-03-20T00:00:00.000Z',
   },
 ];

@@ -1,7 +1,8 @@
 import { copy } from '@ayman/contracts/copy';
-import { formatCopy } from '@ayman/contracts/format';
+import { formatCopy, formatMark } from '@ayman/contracts/format';
 import type { StudentNotification } from '@ayman/contracts/notifications';
 import { ASSISTANT_OPEN_PARAM } from './assistant-mount';
+import { MY_BOOK_ORDERS_HREF } from './book-order-view';
 import { reviewHref } from './quiz-links';
 
 /**
@@ -35,6 +36,32 @@ const c = copy.notifications;
 export function describeNotification(entry: StudentNotification): NotificationView {
   switch (entry.kind) {
     case 'quiz_graded':
+      /*
+       * Two rows, one kind, told apart by `pendingOutOf`.
+       *
+       * The kind fires at SUBMIT, before any human has read the paper — so on
+       * a midterm with 50 marks of essay outstanding this card said «اتصحّحت
+       * ورقتك — الدرجة ٤٨٪» about work nobody had marked, quoting a
+       * provisional total (`gradeAttempt` scores an ungraded answer zero) as
+       * a final one. A student who opens the bell and reads that has already
+       * had the fright the results screen was fixed to prevent.
+       *
+       * So a row with marks outstanding is a RECEIPT: what was marked, and
+       * how much is still coming. `ManualGradingService.grade` emits the
+       * second row — this same kind with `pendingOutOf: 0` and the real
+       * percentage — the moment the last answer is marked, which is where the
+       * «هيتبعتلك» on the results screen lands.
+       */
+      if (entry.pendingOutOf > 0) {
+        return {
+          title: c.quizGradedPartial,
+          detail: formatCopy(c.quizGradedPartialDetail, {
+            marks: formatMark(entry.pendingOutOf),
+          }),
+          subtitle: entry.lessonTitle,
+          href: reviewHref(entry.lessonId, entry.attemptId),
+        };
+      }
       return {
         title: formatCopy(c.quizGraded, { score: entry.scorePercent }),
         // `passed` is nullable on the wire; a missing verdict renders no
@@ -130,6 +157,154 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         subtitle: entry.courseTitle,
         href: `/courses/${entry.courseSlug}`,
       };
+
+    /*
+      «مبروك، خلصت الكورس» — the travelling half of the dashboard's own 100%
+      celebration (`next-up-block.tsx`, `copy.dashboard.nextUp.won*`). That
+      card only ever congratulates a student who came back to the dashboard,
+      and a course is finished on the last lesson's player.
+    */
+    case 'course_completed':
+      return {
+        title: formatCopy(c.courseCompleted, { course: entry.courseTitle }),
+        // Fixed copy, not a per-student sentence — the encouragement is the
+        // point of the row, and burying it in the title would make the title
+        // two lines on a phone.
+        detail: c.courseCompletedDetail,
+        subtitle: entry.courseTitle,
+        // The COURSE, not `/dashboard`. Two reasons: it is what the row is
+        // about, the same destination every other course-carrying kind here
+        // uses; and the dashboard's own won-state is about ALL of a student's
+        // courses being finished, so a student who has just closed their
+        // first of three would land on a card that is not celebrating
+        // anything. What they get instead is the course they just finished,
+        // open to revise.
+        href: `/courses/${entry.courseSlug}`,
+      };
+
+    /*
+      The two ADMIN kinds, rendered by the same function as every student one.
+
+      They land in the same feed and the same bell on purpose — an instructor
+      who has to check a second place for «فيه حاجة مستنياني» checks neither.
+      The hrefs point at the QUEUE rather than at the individual row: the
+      decision is made in a list, beside the others waiting, and deep-linking
+      to one submission hides the fact that four more arrived with it.
+    */
+    case 'payment_submitted':
+      return {
+        title: formatCopy(c.paymentSubmitted, { name: entry.studentName }),
+        detail: null,
+        subtitle: entry.courseTitle,
+        href: '/admin/payments',
+      };
+
+    case 'book_order_placed':
+      return {
+        title: formatCopy(c.bookOrderPlaced, { name: entry.studentName }),
+        detail: null,
+        // A book order is not attached to a course — the shop sells from its
+        // own catalogue — so the only thing left to name is the queue itself.
+        // From `copy.notifications`, NOT the admin table: this module is
+        // imported by the student's bell, and reaching into `copy/admin` here
+        // would pull the whole admin copy set onto every signed-in page.
+        subtitle: c.bookOrderQueue,
+        href: '/admin/books',
+      };
+
+    /*
+      The three STUDENT book-order kinds — `book_order_placed` above is the
+      admin's alert about the same object, seen from the other side.
+
+      All three land on `/store/orders` rather than on the shop, and that is the
+      whole point of them: a student who is told «كتابك خرج ليك» and lands on a
+      page selling books has been answered with an advertisement. `{book}` is
+      resolved at read time off the order's first line, so a title renamed after
+      shipping reads as its current name — and an order whose lines were all
+      removed simply has an empty slot rather than a row that fails to parse.
+    */
+    case 'book_order_shipped':
+      return {
+        title: formatCopy(c.bookOrderShipped, { book: entry.bookTitle }),
+        /* The one place the platform promises a date, counted from the day the
+           courier actually took the parcel. The order confirmation promises
+           nothing — see `books.bookOrder.success` for why a clock started at
+           payment time is already late by the time the parcel exists. */
+        detail: formatCopy(c.bookOrderShippedDetail, { days: entry.deliveryDays }),
+        // `copy.notifications`, NOT `copy.books.mine.title` — the two say the
+        // same word today and this module is imported by the student's bell, so
+        // the subtitle is kept in the same table as every other row's.
+        subtitle: c.bookOrderMineQueue,
+        href: MY_BOOK_ORDERS_HREF,
+      };
+
+    case 'book_order_delivered':
+      return {
+        title: formatCopy(c.bookOrderDelivered, { book: entry.bookTitle }),
+        detail: null,
+        subtitle: c.bookOrderMineQueue,
+        href: MY_BOOK_ORDERS_HREF,
+      };
+
+    case 'book_order_rejected':
+      return {
+        title: formatCopy(c.bookOrderRejected, { book: entry.bookTitle }),
+        // The admin's own words, verbatim, in the same slot `payment_rejected`
+        // puts its `reason` — and for the same reason: a reason paraphrased by
+        // the platform is a reason the student argues with instead of acting
+        // on. The card on `/store/orders` prints it a second time under «السبب:»,
+        // which is deliberate: the feed is where it is seen, that page is where
+        // it stays.
+        detail: entry.reason,
+        subtitle: c.bookOrderMineQueue,
+        href: MY_BOOK_ORDERS_HREF,
+      };
+
+    // A third ADMIN kind, same discipline as the two above.
+    case 'assistant_question_received':
+      return {
+        title: formatCopy(c.assistantQuestionReceived, { name: entry.studentName }),
+        // The snapshot of what was asked, not a fixed qualifier — same slot
+        // `payment_rejected`'s `reason` occupies for the same reason: this is
+        // free text, not a fixed vocabulary this feed picks from.
+        detail: entry.preview || null,
+        subtitle: c.assistantQuestionQueue,
+        href: `/admin/inbox/${entry.conversationId}`,
+      };
+
+    // الواجب — the fourth ADMIN kind. Straight to the ONE submission rather
+    // than to the queue, unlike `payment_submitted` above: a payment is decided
+    // from a list of otherwise-identical rows, and a homework answer is a
+    // specific set of photographs he has to look at before he can say anything.
+    case 'homework_submitted':
+      return {
+        title: formatCopy(c.homeworkSubmitted, { name: entry.studentName }),
+        detail: c.homeworkSubmittedDetail,
+        subtitle: entry.lessonTitle,
+        href: `/admin/homework/${entry.submissionId}`,
+      };
+
+    // …and the student's side of it. Back to the LECTURE, because that is
+    // where the homework card lives — with the verdict on it, the note he
+    // wrote, and (when it came back) the upload box open again.
+    case 'homework_reviewed': {
+      const accepted = entry.homeworkStatus === 'accepted';
+      return {
+        title: formatCopy(accepted ? c.homeworkAccepted : c.homeworkNeedsWork, {
+          lesson: entry.lessonTitle,
+        }),
+        // The mark when there is one — «مقبول من غير درجة» is the ordinary
+        // case, and then the qualifier says what to do instead.
+        detail:
+          accepted && entry.grade !== null
+            ? formatCopy(c.homeworkAcceptedGrade, { grade: entry.grade })
+            : accepted
+              ? c.homeworkAcceptedDetail
+              : c.homeworkNeedsWorkDetail,
+        subtitle: entry.lessonTitle,
+        href: `/courses/${entry.courseSlug}/lessons/${entry.lessonId}`,
+      };
+    }
   }
 }
 

@@ -15,7 +15,8 @@ const base: EnrolledCourse = {
   slug: 'cs-y2',
   title: 'البرمجة وعلوم الحاسب',
   coverKey: null,
-  subjectNameAr: 'البرمجة',
+  subjectNameAr: 'البرمجة', whatsappGroupUrl: null,
+  contentComplete: false,
   published: true,
   progressPercent: 40,
   completedLessons: 2,
@@ -23,6 +24,7 @@ const base: EnrolledCourse = {
   lastLessonId: '0198c3a2-0000-7000-8000-000000000002',
   subscriptionValidUntil: null,
   comingSoonNote: null,
+  scheduleNote: null,
   bookTitle: null,
   bookPriceCents: null,
 };
@@ -39,8 +41,8 @@ const base: EnrolledCourse = {
  */
 describe('EnrolledCourseCard — book CTA', () => {
   it('shows no book CTA when the course has no book configured', () => {
-    render(<EnrolledCourseCard course={base} shippingCents={6500}
-        vodafoneCash="+201021196367" />);
+    render(<EnrolledCourseCard course={base} shippingRates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }}
+        instapay="+201021196367" vodafoneCash="+201555555555" />);
     expect(screen.queryByRole('button', { name: new RegExp(copy.bookOrder.cta) })).not.toBeInTheDocument();
   });
 
@@ -48,8 +50,8 @@ describe('EnrolledCourseCard — book CTA', () => {
     render(
       <EnrolledCourseCard
         course={{ ...base, bookTitle: 'كتاب البرمجة', bookPriceCents: 25000 }}
-        shippingCents={6500}
-        vodafoneCash="+201021196367"
+        shippingRates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }}
+        instapay="+201021196367" vodafoneCash="+201555555555"
       />,
     );
     expect(screen.getByRole('button', { name: new RegExp(copy.bookOrder.cta) })).toBeInTheDocument();
@@ -62,8 +64,8 @@ describe('EnrolledCourseCard — book CTA', () => {
     render(
       <EnrolledCourseCard
         course={{ ...base, published: false, bookTitle: 'كتاب البرمجة', bookPriceCents: 25000 }}
-        shippingCents={6500}
-        vodafoneCash="+201021196367"
+        shippingRates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }}
+        instapay="+201021196367" vodafoneCash="+201555555555"
       />,
     );
     expect(screen.queryByRole('button', { name: new RegExp(copy.bookOrder.cta) })).not.toBeInTheDocument();

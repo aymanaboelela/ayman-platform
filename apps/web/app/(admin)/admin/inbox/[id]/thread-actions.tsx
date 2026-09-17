@@ -15,6 +15,7 @@ import { Field, FieldLabel } from '@ayman/ui/components/field';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { formatBytes } from '@/components/assistant/message-attachment';
 import { uploadConversationAttachment, type UploadFailure } from '@/lib/upload-client';
+import { VoiceRecorder } from '@/components/assistant/voice-recorder';
 import { replyAction, setStatusAction } from '../actions';
 
 const c = copy.assistant.inbox;
@@ -89,6 +90,28 @@ export function ThreadActions({ id, status }: { id: string; status: Conversation
     // Replaces rather than appends: one file per message, which is what the
     // three columns on `conversation_messages` say.
     setAttachment(result.value);
+  }
+
+  /**
+   * A finished recording, through the SAME upload endpoint every attachment
+   * uses — the server routes it to the audio pipeline off the extension, and
+   * then sniffs the container to make sure the extension was telling the truth.
+   *
+   * The duration is carried alongside because it cannot be recovered from the
+   * bytes: `MediaRecorder` writes no length into a live WebM header. See
+   * `VoiceRecorder`.
+   */
+  async function recorded(file: File, durationSeconds: number) {
+    setUploading(true);
+    setProgress(0);
+    const result = await uploadConversationAttachment(file, setProgress);
+    setUploading(false);
+
+    if (!result.ok) {
+      toast.error(UPLOAD_MESSAGE[result.reason]);
+      return;
+    }
+    setAttachment({ ...result.value, durationSeconds });
   }
 
   function submit(event: FormEvent) {
@@ -227,6 +250,12 @@ export function ThreadActions({ id, status }: { id: string; status: Conversation
                 <Paperclip className="size-4" aria-hidden="true" />
                 {c.attach}
               </Button>
+
+              {/* Beside the paperclip, because it is the same gesture: another
+                  way to put something on this one message. Disabled while an
+                  upload is in flight for the same reason the file button is —
+                  one file per message. */}
+              <VoiceRecorder onRecorded={recorded} disabled={pending || uploading} />
             </div>
 
             <Button type="button" variant="ghost" disabled={pending} onClick={toggleStatus}>

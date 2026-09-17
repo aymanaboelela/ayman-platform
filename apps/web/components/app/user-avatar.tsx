@@ -1,6 +1,6 @@
-import Image from 'next/image';
 import { cn } from '@ayman/ui/lib/cn';
 import { mediaUrl } from '@ayman/ui/branding';
+import { AvatarImage } from './avatar-image';
 
 /**
  * The photo when there is one, initials when there isn't — an email/password
@@ -34,23 +34,14 @@ export function UserAvatar({
   const shared = 'shrink-0 rounded-full border border-line object-cover';
   const src = image ? resolveAvatarSrc(image) : null;
 
-  if (src) {
-    return (
-      <Image
-        src={src}
-        // Empty alt on purpose: every call site renders the name as text
-        // beside this, so describing the photo would announce the same person
-        // twice.
-        alt=""
-        width={size}
-        height={size}
-        style={{ width: size, height: size }}
-        className={cn(shared, className)}
-      />
-    );
-  }
-
-  return (
+  /*
+    Built once and used twice — as the no-photo case AND as what
+    `<AvatarImage>` swaps in when a photo turns out not to load. A dead
+    Google URL and a missing one look identical to a student, so they must
+    render identically: before this, the second case drew the browser's own
+    broken-image glyph.
+  */
+  const monogram = (
     <span
       aria-hidden="true"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.36) }}
@@ -63,6 +54,14 @@ export function UserAvatar({
       {initials(name)}
     </span>
   );
+
+  if (src) {
+    return (
+      <AvatarImage src={src} size={size} className={cn(shared, className)} fallback={monogram} />
+    );
+  }
+
+  return monogram;
 }
 
 /**

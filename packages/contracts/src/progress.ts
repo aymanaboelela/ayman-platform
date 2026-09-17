@@ -1,4 +1,11 @@
 import { z } from '@ayman/contracts/zod';
+// The PACKAGE SUBPATH, never `./homework` — hazard H3. `apps/api` imports this
+// module for a runtime value, so a relative extensionless specifier
+// typechecks, lints, passes every test and then throws ERR_MODULE_NOT_FOUND
+// the moment the API boots. See `content.ts`'s own note at length.
+import { StudentHomeworkSchema } from '@ayman/contracts/homework';
+// Same rule, same reason — the subpath, not `./video`.
+import { PlayerVideoMirrorSchema } from '@ayman/contracts/video';
 
 /* ────────────────────────────────────────────────────────────────────────
  * The completion rule.
@@ -192,6 +199,21 @@ export const EnrollmentSchema = z.object({
   lastLessonId: z.string().nullable(),
   enrolledAt: z.iso.datetime(),
   completedAt: z.iso.datetime().nullable(),
+  /**
+   * Whether a LIVE `AccessGrant` stands behind this enrollment right now —
+   * the question `status` looks like it answers and does not.
+   *
+   * Nothing ever writes `status: 'expired'`. A lapsed subscription is a
+   * revoked or elapsed grant; the enrollment row stays `active`, which is
+   * correct (the course is still the student's, and so is their progress) but
+   * made every reader that treated «has a row» as «has access» send a lapsed
+   * student away from the one page that sells them a renewal. See
+   * `EnrollmentService.listOwn` for the loop that caused.
+   *
+   * `false` means: still theirs, cannot open a lesson, needs to pay. Show the
+   * course; do NOT route them into it.
+   */
+  accessActive: z.boolean(),
 });
 
 /**
@@ -266,6 +288,36 @@ export const CourseOutlineSchema = z.object({
     /** Labels the coverless fallback and the details card's subject tag,
      *  exactly as `CatalogCourse.subjectNameAr` does everywhere else. */
     subjectNameAr: z.string(),
+    /**
+     * اكتمل نزول المحتوى — the instructor's own statement that the syllabus is
+     * fully uploaded, NOT anything derived from the lesson count.
+     *
+     * Every «خلصت الكورس» on the platform used to mean `clearedLessons ===
+     * totalLessons`, and `totalLessons` is only what has been published so far.
+     * A student who watched the one lecture of a course still being recorded was
+     * told they had finished it. So the word is gated on this, and a course that
+     * is still filling up says «خلّصت اللي نزل» instead — true either way.
+     *
+     * ⚠️ Never an access decision, and it does not move the exam gate: the gate
+     * asks whether the student cleared the lectures that EXIST, which is a
+     * different question and stays answered the same way.
+     */
+      contentComplete: z.boolean(),
+    /**
+     * «جروب الدفعة» — this cohort's own WhatsApp group, or `null` when the
+     * course has none (which is the default, and stays the default:
+     * «أوقات برضه ممكن أنا ما أعملش جروب أصلاً»).
+     *
+     * Carried on the OUTLINE rather than on the lesson payload because both
+     * surfaces that show it — the player's sidebar and `/library/[slug]` —
+     * already fetch this, and because it is stable across lesson navigations
+     * while the lesson body is not.
+     *
+     * NEVER on the public catalog DTO. A cohort group whose invite is readable
+     * by anyone who can load the marketing page is not a cohort group; this
+     * endpoint is behind an active enrolment, which is exactly the audience.
+     */
+    whatsappGroupUrl: z.string().nullable(),
   }),
   sections: z.array(OutlineSectionSchema),
   enrollmentId: z.string(),
@@ -328,10 +380,45 @@ export const PlayerResourceSchema = z.object({
 });
 
 export const PlayerVideoSchema = z.object({
-  /** The 11-char id only — spec §7 P3. A URL here would reintroduce the SSRF class. */
-  youtubeId: z.string().regex(/^[A-Za-z0-9_-]{11}$/),
+  /**
+   * Which pipeline this lecture came from, and therefore what the player is
+   * allowed to fall back to.
+   *
+   * `upload` means the video exists NOWHERE ELSE. There is no YouTube page to
+   * open, no embed to try, and offering one would be a link to a 404 — so the
+   * component must not have a fallback path at all for these, and this field
+   * is how it knows.
+   */
+  provider: z.enum(['youtube', 'upload']),
+  /**
+   * The 11-char id only — spec §7 P3. A URL here would reintroduce the SSRF
+   * class.
+   *
+   * `null` for an uploaded lecture: there is no YouTube id, and the previous
+   * shape (a required id) is exactly the sort of field a component reads
+   * without checking. Making it nullable is what forces every consumer to
+   * decide what it does for a video YouTube has never heard of.
+   */
+  youtubeId: z.string().regex(/^[A-Za-z0-9_-]{11}$/).nullable(),
   durationSeconds: z.number().int().min(0),
   posterUrl: z.string().nullable(),
+
+  /**
+   * «النسخة اللي عندنا» — our own copy, when one exists.
+   *
+   * Present means the player should load THIS and treat YouTube as the
+   * fallback, which is the inverse of how this component behaved for its
+   * first year. The reason is a population it could never have served: on a
+   * ministry tablet YouTube is blocked at the network, so the nocookie embed,
+   * the youtube.com embed and the «افتحه على يوتيوب» link are three doors
+   * into one building that is shut.
+   *
+   * `null` for a video that has not been mirrored yet, that failed, or on any
+   * deployment with no bucket configured — and every one of those is just the
+   * player as it was, so nothing here is load-bearing for the students who
+   * were always fine.
+   */
+  mirror: PlayerVideoMirrorSchema.nullable(),
 });
 
 export const LessonNeighbourSchema = z
@@ -348,9 +435,32 @@ export const LessonPlayerSchema = z.object({
     title: z.string(),
     kind: lessonKindSchema,
     estimatedSeconds: z.number().int().nullable(),
+    /**
+     * A short summary of the lecture, written to be read AFTER watching it.
+     *
+     * `null` on every lecture that has none, which today is most of them.
+     * `.catch(null)` rather than `.nullable()` alone: during a rolling deploy
+     * this page can be served by an API container that predates the column,
+     * and a missing field must degrade to "no summary" rather than fail the
+     * parse and take the whole lesson page down with it.
+     */
+    description: z.string().nullable().catch(null),
   }),
   video: PlayerVideoSchema.nullable(),
   text: z.object({ bodyHtml: z.string() }).nullable(),
+  /**
+   * الواجب on this lecture, or `null` — which is most lectures.
+   *
+   * On the player payload rather than behind its own endpoint so the card is
+   * there in the first paint: a second request would either shift the layout
+   * as it lands, on the page a student has open longest, or block the whole
+   * page on something most lectures do not have.
+   *
+   * `null` also covers a homework that exists but is still a DRAFT — the same
+   * gate `quiz` above applies, and for the same reason: an exercise the
+   * instructor is still typing must not be visible to anybody.
+   */
+  homework: StudentHomeworkSchema.nullable(),
   /**
    * A quiz attached to THIS lesson, published and ready to sit — regardless of
    * `lesson.kind`. `Quiz.lessonId` is 1:1 with any lesson kind, so a video
@@ -404,6 +514,21 @@ export const EnrolledCourseSchema = z.object({
   /** Labels the coverless fallback, exactly as the library card does. */
   subjectNameAr: z.string(),
   /**
+   * «جروب الدفعة» — the WhatsApp group for THIS course's cohort.
+   *
+   * Already rendered by `CourseGroupCard` in the lesson player and on the
+   * library page; the dashboard is the one signed-in surface that could not
+   * offer it, because this field was simply not on its payload. That left the
+   * dashboard showing only the platform-wide broadcast CHANNEL — which nobody
+   * can reply into — as if it were the group.
+   *
+   * `null` for most courses and that is the steady state, not a gap: «أوقات
+   * برضه ممكن أنا ما أعملش جروب أصلاً». The card renders nothing rather than
+   * falling back to the official group, which would put every course's students
+   * in one room — the exact situation the per-course field exists to end.
+   */
+  whatsappGroupUrl: z.string().nullable(),
+  /**
    * Is the course still published?
    *
    * `false` means the instructor has taken it down to edit it while this
@@ -446,6 +571,21 @@ export const EnrolledCourseSchema = z.object({
    */
   comingSoonNote: z.string().nullable(),
   /**
+   * اكتمل نزول المحتوى — the instructor's own statement that the syllabus is
+   * fully uploaded, NOT anything derived from the lesson count.
+   *
+   * Every «خلصت الكورس» on the platform used to mean `clearedLessons ===
+   * totalLessons`, and `totalLessons` is only what has been published so far.
+   * A student who watched the one lecture of a course still being recorded was
+   * told they had finished it. So the word is gated on this, and a course that
+   * is still filling up says «خلّصت اللي نزل» instead — true either way.
+   *
+   * ⚠️ Never an access decision, and it does not move the exam gate: the gate
+   * asks whether the student cleared the lectures that EXIST, which is a
+   * different question and stays answered the same way.
+   */
+  contentComplete: z.boolean(),
+  /**
    * الكتاب الورقي — same pair `CatalogCourseSchema` carries, `null` when this
    * course has no printed textbook to order. Lets `EnrolledCourseCard` show
    * an «اطلب الكتاب» CTA of its own for a student who is already enrolled —
@@ -454,6 +594,23 @@ export const EnrolledCourseSchema = z.object({
    */
   bookTitle: z.string().nullable(),
   bookPriceCents: z.number().int().nullable(),
+  /**
+   * «ميعاد المحاضرة» — the one line the instructor wrote for THIS course, as
+   * they wrote it. `null` for every course nobody has written one for, which
+   * is most of them.
+   *
+   * It is on the enrolled course rather than anywhere global because عربي and
+   * لغات are two separate courses with two different nights, and a student is
+   * enrolled in one of them — one platform-wide setting would print both times
+   * to everybody, which is exactly the confusion the line exists to remove.
+   *
+   * ⚠️ Nothing PARSES this. It is not a date, it is not a timestamp and no
+   * reminder can be scheduled off it — see `Course.scheduleNote` in
+   * schema.prisma. `DashboardHero` prints it verbatim; a `null` contributes no
+   * row at all, so a student with no scheduled course sees nothing extra
+   * rather than an empty one.
+   */
+  scheduleNote: z.string().nullable(),
 });
 
 /**

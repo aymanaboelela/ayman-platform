@@ -1,9 +1,11 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
+import type { RemainingLecture } from '@/lib/course-outline';
 import {
   Dialog,
   DialogClose,
@@ -61,6 +63,8 @@ const c = copy.library;
 export function ExamLockedDialog({
   remaining,
   total,
+  left = [],
+  courseSlug,
   children,
   triggerClassName,
   triggerLabel,
@@ -78,6 +82,26 @@ export function ExamLockedDialog({
    */
   remaining: number | null;
   total: number | null;
+  /**
+   * WHICH lectures are still open, in course order.
+   *
+   * This file used to argue that the count was enough. It is not: «متسيبش حاجة
+   * مشفتهاش» — a student with three lectures outstanding in a forty-row outline
+   * can read «باقي ٣» and still not know where they are. So the count stays
+   * (it is the headline) and the names sit under it, each one a link.
+   *
+   * This does NOT reintroduce the «نفتحها دلوقتي» button this dialog lost. That
+   * button offered ONE destination, computed to be the nearest unfinished
+   * lesson above — which on the player is the page the student is already on,
+   * so pressing it did nothing. These are every remaining lecture, by name, and
+   * none of them is the row that opened the dialog.
+   *
+   * Empty (the default) → the dialog is exactly what it was: a count and a
+   * dismiss. That is the honest shape for a screen that does not hold the list.
+   */
+  left?: readonly RemainingLecture[];
+  /** Only needed to build the lesson links; omit it and the names render flat. */
+  courseSlug?: string;
   /**
    * What the trigger looks like. Each screen draws its lock in its own
    * vocabulary — a `.chip` at the end of an outline row, a disc on the path
@@ -99,6 +123,12 @@ export function ExamLockedDialog({
       ? formatCopy(c.lockedExamBody, { remaining, total })
       : c.lockedExamBodyPlain;
 
+  // Long courses: the point is to name what is left, not to reprint the
+  // outline the student is already looking at. Past this many the dialog says
+  // how many more there are and lets the page itself do the rest.
+  const shown = left.slice(0, 8);
+  const hidden = left.length - shown.length;
+
   return (
     <Dialog>
       {/* `DialogTrigger` renders a real `<button>`, which is what makes every
@@ -117,6 +147,53 @@ export function ExamLockedDialog({
           <DialogTitle>{c.lockedExamTitle}</DialogTitle>
           <DialogDescription>{body}</DialogDescription>
         </DialogHeader>
+
+        {shown.length > 0 ? (
+          <div className="mt-2">
+            <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.lockedExamLeftTitle}</p>
+            <ul className="mt-2 space-y-1">
+              {shown.map((lecture) => {
+                const meta = [
+                  c.lessonIndex.replace('{n}', String(lecture.index)),
+                  lecture.started ? c.lessonStarted : c.lessonNew,
+                ].join(' · ');
+                // A link only when the screen knows the course it is on. The
+                // player's sidebar does; a card that only holds counts does
+                // not, and a dead `<a>` is worse than a line of text.
+                const row = (
+                  <>
+                    <span className="block truncate text-fg">{lecture.title}</span>
+                    <span className="mono block text-[length:var(--fs-mono-label)] text-fg-muted">
+                      {meta}
+                    </span>
+                  </>
+                );
+                return (
+                  <li key={lecture.id}>
+                    {courseSlug ? (
+                      <Link
+                        href={`/courses/${courseSlug}/lessons/${lecture.id}`}
+                        className="block rounded-[var(--r-md)] border border-line-subtle bg-surface-2 px-3 py-2 transition-colors hover:border-line-strong hover:bg-surface-3"
+                      >
+                        {row}
+                      </Link>
+                    ) : (
+                      <div className="rounded-[var(--r-md)] border border-line-subtle bg-surface-2 px-3 py-2">
+                        {row}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {hidden > 0 ? (
+              <p className="mt-2 text-[length:var(--fs-text-sm)] text-fg-muted">
+                {c.lockedExamLeftMore.replace('{n}', String(hidden))}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         <DialogFooter>
           <DialogClose asChild>
             <Button variant="secondary">{c.lockedClose}</Button>

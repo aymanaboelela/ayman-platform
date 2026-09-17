@@ -3,7 +3,7 @@ import { copy } from '@ayman/contracts';
 import { JsonLd } from '@/components/seo/json-ld';
 import { BooksShippingChip, BooksShop } from '@/components/site/books-shop';
 import { getBookCatalogOrEmpty } from '@/lib/books';
-import { breadcrumbJsonLd } from '@/lib/seo/jsonld';
+import { bookListJsonLd, breadcrumbJsonLd } from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 
@@ -44,6 +44,15 @@ export async function generateMetadata(): Promise<Metadata> {
  * student buying next year's book early is a sale, not a mistake to prevent.
  * The year chip on each card is what tells them apart.
  *
+ * ## And every book, advertised or not
+ *
+ * `showOnLanding` is read by `<BooksStrip>` and by nothing here. Placement is
+ * not visibility: taking a title off the landing page is the instructor saying
+ * «مش عايزه في الواجهة», not «مش للبيع» — the switch for that is `isActive`,
+ * which the API applies before this payload is built. A shop that hid its own
+ * unadvertised stock would break every `/books#book-{slug}` link ever shared
+ * for one, which is the one place those links are guaranteed to point.
+ *
  * ## Failure containment
  *
  * `getBookCatalogOrEmpty` and `getPublicSettingsOrDefaults`, never their
@@ -66,6 +75,16 @@ export default async function BooksPage() {
           { name: c.pageTitle, path: '/books' },
         ])}
       />
+      {/*
+        ⚠️ This is the ONLY server-rendered description of the shop.
+        `<BooksShop>` is a client component and its shelves arrive on the RSC
+        stream — `books-shop.tsx`'s own scroll note records the measurement:
+        `curl /books` returns zero rendered cards. So a crawler that does not
+        run JavaScript saw a hero, a heading and nothing for sale, on the one
+        page that states a price a stranger can act on. The markdown twin
+        (`/books.md`) is the other half of the same fix.
+      */}
+      <JsonLd data={bookListJsonLd(catalog.shelves, catalog.shippingCents)} />
 
       <section className="books-hero">
         <div className="site-shell">
@@ -82,11 +101,11 @@ export default async function BooksPage() {
             zero the line becomes a different sentence entirely, and only the
             number can decide that. See `copy.books.shippingOnce`.
           */}
-          <BooksShippingChip shippingCents={catalog.shippingCents} />
+          <BooksShippingChip rates={catalog.shippingRates} />
         </div>
       </section>
 
-      <BooksShop catalog={catalog} vodafoneCash={contact.vodafoneCash} />
+      <BooksShop catalog={catalog} instapay={contact.instapay} vodafoneCash={contact.vodafoneCash} />
     </main>
   );
 }

@@ -17,7 +17,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
  */
 export default function Loading() {
   return (
-    <main className="books-page">
+    <div aria-hidden="true" className="books-page">
       <section className="books-hero">
         <div className="site-shell">
           <Skeleton width="narrow" className="mb-4 h-6" />
@@ -55,6 +55,6 @@ export default function Loading() {
           </div>
         ))}
       </div>
-    </main>
+    </div>
   );
 }

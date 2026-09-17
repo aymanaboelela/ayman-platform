@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import type { LearningPath, PathCourse, PathNode } from '@ayman/contracts/path';
 import type { LessonProgressState } from '@ayman/contracts/progress';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -81,8 +82,18 @@ export class PathService {
             // The instructor's own artwork, which beats the generated scene
             // wherever it exists. Nullable: most courses have none.
             coverKey: true,
+            // Gates the word «خلصت الكورس» on the rail — see `Course.contentComplete`.
+            contentComplete: true,
+            // «جروب الدفعة» — `/library/[slug]` renders its card straight from
+            // this, and never fetches the outline.
+            whatsappGroupUrl: true,
             sections: {
-              where: { isPublished: true },
+              // The «امتحانات الشهر» shelf is excluded here, not filtered out
+              // downstream: a monthly exam is not a step on the learning path.
+              // Left in, it would appear as a node between the lectures, be
+              // counted in «فاضل كام», and be reached from a rail that has no
+              // idea it is closed until 8pm Friday.
+              where: { isPublished: true, title: { not: EXAM_SHELF_TITLE } },
               orderBy: [{ position: 'asc' }, { id: 'asc' }],
               select: {
                 lessons: {
@@ -212,6 +223,8 @@ export class PathService {
         published,
         progressPercent: Number(enrollment.progressPercent),
         clearedLessons: cleared,
+        contentComplete: enrollment.course.contentComplete,
+        whatsappGroupUrl: enrollment.course.whatsappGroupUrl,
         totalLessons: lectures.length,
         // The first thing they can actually open. Null when the course holds
         // nothing available — finished, or entirely locked.

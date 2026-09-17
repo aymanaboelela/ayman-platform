@@ -43,6 +43,23 @@ export const AUDIT_ACTIONS = [
   'question:publish',
   'quiz:publish',
   'quiz:answer-edit',
+  // Re-points an existing quiz at another lesson. Logged because it moves
+  // every attempt already sat on it to a different row of the outline, and
+  // «الكويز راح فين» has no other answer once the old lesson no longer has one.
+  'quiz:move',
+  // امتحانات نص/آخر الشهر. Their own actions rather than `quiz:*`, because the
+  // question an audit of one answers is «الامتحان اتفتح إمتى وعلى إيه» — the
+  // window and the syllabus — and folding them into quiz edits would bury that
+  // inside every slot save the builder makes.
+  'exam:create',
+  'exam:update',
+  'exam:publish',
+  'exam:unpublish',
+  'exam:delete',
+  // التصحيح اليدوي — a human writing the mark on an answer no grader can score.
+  // Recorded because it is the one place a person, not the engine, decides a
+  // number that becomes the student's grade.
+  'attempt:grade',
   // platform configuration (Plan 6)
   'settings:update',
   'branding:update',
@@ -171,6 +188,11 @@ export const AUDIT_ACTIONS = [
   'campaign:delete',
   'whatsapp:link',
   'whatsapp:unlink',
+  // One message to one number, to find out what the sender is actually doing.
+  // Audited because it puts a real message on a real stranger's phone outside
+  // any campaign, and because the `lid` it records is the one fact anybody
+  // will want back when asking why a campaign delivered to nobody.
+  'whatsapp:test-send',
   // Vodafone Cash course subscriptions. `payment:submit` is written by the
   // STUDENT — the one auditable action in this list an admin never takes —
   // because a rejected claim's whole value is a durable record of exactly
@@ -179,6 +201,30 @@ export const AUDIT_ACTIONS = [
   'payment:submit',
   'payment:approve',
   'payment:reject',
+  // The subscription NOBODY approved: an InstaPay transfer whose amount
+  // matched a reserved piastre code to the piastre, granting access with no
+  // human in the loop — see `PaymentsService.grantFromMatchedTransfer`. Its
+  // own action rather than a flavour of `payment:approve` precisely because
+  // the log's job here is to answer "who decided this", and the honest answer
+  // is nobody: the row carries a null actor and the transfer id instead.
+  'payment:auto-approve',
+  // «التحويلات الواردة» — text captured off the receiving phone and posted by
+  // an iOS Shortcut (`transfer:ingest`), and an admin marking an unexplained
+  // transfer as needing no action (`transfer:dismiss`). The ingest is written
+  // by a token-authenticated request with no session behind it, so it is the
+  // second action in this list with no admin actor.
+  'transfer:ingest',
+  'transfer:dismiss',
+  // The platform binding an InstaPay address to a student for the first time
+  // — see `StudentPaymentAddress`. Its own action because it is the one event
+  // here with consequences for FUTURE money: every later transfer from that
+  // address approves a claim without a human, so "when did we start believing
+  // this address is his" has to be answerable.
+  'transfer:learn-address',
+  // A book order that marked itself paid because the money arrived from an
+  // address the platform recognises — the `book-order:pay` a student's own
+  // screenshot upload writes, with no student and no screenshot behind it.
+  'book-order:auto-pay',
   // The admin student page's own entry point into the same subscription
   // machinery — recording a payment that happened outside this review flow,
   // or comping a term for free (`payment:admin-subscribe`), and closing one
@@ -206,7 +252,37 @@ export const AUDIT_ACTIONS = [
   // between submitting the screenshot and shipping.
   'book-order:submit',
   'book-order:pay',
+  // «راح للمطبعة» — its own row and not a `metadata` flag on `ship`, for the
+  // same reason `deliver` is separate: «الطلب ده راح للمطبعة إمتى» is a
+  // question asked about a run that came back short, and an action whose name
+  // says «اتشحن» cannot answer it. Nothing is sent to the student here, so this
+  // is also the one book-order transition whose trail is the ONLY record it
+  // happened.
+  'book-order:printing',
   'book-order:ship',
+  // The rest of the courier leg and the two judgements about an order.
+  //
+  // `book-order:deliver` is split from `ship` even though the same desk presses
+  // both: «مين قال إنه وصل» is the first question on the day it turns out it
+  // did not, and folding arrival into the shipping action would answer it with
+  // a row that says something else happened.
+  //
+  // `reject` / `delete` / `restore` are three actions and not one with a flag,
+  // because they are three different facts to go looking for. Rejecting is a
+  // decision the STUDENT was told about, and its metadata carries the reason
+  // verbatim — the same sentence they read. Deleting hides the row from every
+  // working list, so its metadata carries the status the order was deleted FROM,
+  // which is what the «المحذوفة» tab shows and what a restore has to put back.
+  // Restoring records the reason it had been deleted for, because the column
+  // holding it is cleared by the same write.
+  'book-order:deliver',
+  'book-order:reject',
+  'book-order:delete',
+  'book-order:restore',
+  /** «ده كان مجاني» — re-labelling a zero-total order that predates the free
+   *  switch. Never moves money: the endpoint refuses any order that collected
+   *  any, so this row can only ever mean a label changed. */
+  'book-order:mark-free',
   // «أضف طلب كتاب» — the admin student-page-style entry point into the same
   // `BookOrder` model, recording a customer's order directly rather than
   // reviewing one the customer submitted themselves. Split from
@@ -227,6 +303,24 @@ export const AUDIT_ACTIONS = [
   'book:create',
   'book:update',
   'book:delete',
+  // المصروفات. Its own `resourceType` (`expenses`) for the same reason the
+  // three above have one: «مين كتب الرقم ده في الحسابات» has to be one filter
+  // on the audit viewer. `expense:delete` carries the title and the amount in
+  // its metadata, because after a delete the audit row is the only remaining
+  // record of what the row said.
+  'expense:create',
+  'expense:update',
+  'expense:delete',
+  // الواجب. The first two are AUTHORING (the questions on a lecture) and sit on
+  // the `lessons` resource with every other edit to a lecture's content; the
+  // last two are MARKING and sit on `homework_submissions`, because the
+  // question the trail has to answer about those is «مين مسح صور الطالب» —
+  // accepting an answer deletes the photographs, and after that this row is the
+  // only record that they existed.
+  'lesson:set-homework',
+  'lesson:remove-homework',
+  'homework:accept',
+  'homework:return',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);

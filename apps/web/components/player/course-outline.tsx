@@ -1,11 +1,20 @@
 import Link from 'next/link';
 import { ChevronDown } from 'lucide-react';
 import { copy, type CourseOutline } from '@ayman/contracts';
+import type { BookShippingRates } from '@ayman/contracts/books';
 import { Badge, cn } from '@ayman/ui';
 import { formatDuration } from '@/lib/format';
-import { groupIntoEntries, isLessonFinished, lessonStateLabel, lessonStateMark } from '@/lib/course-outline';
+import {
+  groupIntoEntries,
+  isLessonFinished,
+  lessonStateLabel,
+  lessonStateMark,
+  remainingLectures,
+  type RemainingLecture,
+} from '@/lib/course-outline';
 import { LockedExam } from '@/components/library/locked-exam';
 import { BookOrderButton } from '@/components/site/book-order-button';
+import { courseBookCtaVisible } from '@/lib/course-book';
 import { LessonKindIcon } from './lesson-kind-icon';
 import { OutlineScrollToCurrent } from './outline-scroll-to-current';
 import { LessonProgressBar } from './lesson-progress-bar';
@@ -18,11 +27,13 @@ type Entry = { lecture: Lesson; quizzes: Lesson[] };
 export interface CourseOutlineSidebarProps {
   outline: CourseOutline;
   activeLessonId: string;
-  /** The delivery fee, from `getBookShippingCents()`. Quoted on the CTA so
+  /** The three delivery rates, from `getBookShippingRates()`. Quoted on the CTA so
    *  «اطلب الكتاب» names the total the form will ask for. */
-  shippingCents: number;
-  /** `contact.vodafoneCash`, E.164 or `null` — same prop `BookOrderButton`
+  shippingRates: BookShippingRates;
+  /** `contact.instapay`, E.164 or `null` — same prop `BookOrderButton`
    *  takes everywhere else it appears. */
+  instapay: string | null;
+  /** `contact.vodafoneCash` — the second payment rail, threaded the same way. */
   vodafoneCash: string | null;
 }
 
@@ -138,6 +149,7 @@ function LectureEntry({
   activeLessonId,
   remaining,
   totalLessons,
+  left,
 }: {
   entry: Entry;
   courseSlug: string;
@@ -145,6 +157,8 @@ function LectureEntry({
   /** What the locked exam is still waiting on — course-wide, not this entry's. */
   remaining: number;
   totalLessons: number;
+  /** The same waiting-on, by name — the dialog lists them. */
+  left: readonly RemainingLecture[];
 }) {
   const { lecture, quizzes } = entry;
 
@@ -162,7 +176,12 @@ function LectureEntry({
           <div className="lesson-row__text">
             <p className="lesson-row__title">{lecture.title}</p>
           </div>
-          <LockedExam remaining={remaining} total={totalLessons} />
+          <LockedExam
+            remaining={remaining}
+            total={totalLessons}
+            left={left}
+            courseSlug={courseSlug}
+          />
         </div>
       </li>
     );
@@ -229,14 +248,18 @@ function LectureEntry({
 export function CourseOutlineSidebar({
   outline,
   activeLessonId,
-  shippingCents,
+  shippingRates,
+  instapay,
   vodafoneCash,
 }: CourseOutlineSidebarProps) {
   const remaining = Math.max(0, outline.totalLessons - outline.completedLessons);
-  // Both set together or not at all — `courses_book_needs_price_and_title`
-  // on `Course`, same rule the public course page and `EnrolledCourseCard`
-  // read.
-  const hasBook = outline.course.bookTitle !== null && outline.course.bookPriceCents !== null;
+  // Same list the library outline builds, off the flat payload this screen
+  // already has — the locked exam explains itself identically in both places.
+  const left = remainingLectures(outline.sections.flatMap((section) => section.lessons));
+  // Title, price and placement — the same predicate the public course page and
+  // `EnrolledCourseCard` read, so the linked book's `showOnCourse` cannot end
+  // up honoured on two surfaces out of three.
+  const hasBook = courseBookCtaVisible(outline.course);
 
   return (
     <nav
@@ -244,6 +267,24 @@ export function CourseOutlineSidebar({
       data-course-outline=""
       className={cn(
         'rounded-lg border border-line bg-surface-2',
+        /*
+          `w-full min-w-0` is what keeps this panel inside its own column, and
+          both halves are needed.
+
+          `lg:self-start` is `align-self: flex-start`, which is what lets the
+          sticky offset work — but it also takes the panel OUT of the flex
+          container's stretch, so its width falls back to `fit-content`. And
+          `fit-content` is floored at min-content, which here is the widest
+          `.lesson-row__meta`: those are `truncate`, i.e. `white-space: nowrap`,
+          so a long «الامتحان النهائي · 45:00 · لسه ما خلصتهاش» sized the whole
+          panel. Measured at 1280: a 473px card in a 380px track, hanging 93px
+          past the page and clipping every chip in the column.
+
+          `w-full` puts the width back on the track; `min-w-0` stops the
+          automatic minimum size from overriding it again. The rows then do
+          what `truncate` says instead of pushing.
+        */
+        'w-full min-w-0',
         'max-h-[60dvh] overflow-y-auto',
         'lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start',
       )}
@@ -268,7 +309,8 @@ export function CourseOutlineSidebar({
             courseId={outline.course.id}
             bookTitle={outline.course.bookTitle as string}
             bookPriceCents={outline.course.bookPriceCents as number}
-            shippingCents={shippingCents}
+            shippingRates={shippingRates}
+            instapay={instapay}
             vodafoneCash={vodafoneCash}
           />
         ) : null}
@@ -292,6 +334,7 @@ export function CourseOutlineSidebar({
                   activeLessonId={activeLessonId}
                   remaining={remaining}
                   totalLessons={outline.totalLessons}
+                  left={left}
                   key={entry.lecture.id}
                 />
               ))}

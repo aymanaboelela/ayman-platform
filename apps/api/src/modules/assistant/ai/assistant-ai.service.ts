@@ -1,10 +1,30 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { AskEvent, AskTurn } from '@ayman/contracts/assistant/ask';
+/*
+ * SUBPATHS, never the root barrel — `@ayman/contracts` re-exports through a
+ * barrel whose side effects Turbopack drops and whose runtime values the API
+ * cannot resolve at boot. Everything below is a runtime value (`askActions`,
+ * `askActionMenu`, `ASK_GO_PATTERN`), not just a type, so this matters here.
+ */
+import {
+  ASK_ACTIONS_MAX,
+  ASK_GO_OPEN,
+  ASK_GO_PATTERN,
+  askActionMenu,
+  askActions,
+  type AskEvent,
+  type AskTurn,
+} from '@ayman/contracts/assistant/ask';
 import { copy } from '@ayman/contracts/copy';
 import type { CatalogCourse } from '@ayman/contracts/catalog';
 import { loadEnv } from '../../../config/env';
 import { CatalogService } from '../../catalog/catalog.service';
-import { catalogBlock, knowledgeBlock, matchKnowledge } from './assistant-knowledge';
+import { AssistantFactsService, type AssistantFacts } from './assistant-facts.service';
+import {
+  catalogBlock,
+  knowledgeBlock,
+  matchKnowledge,
+  pricingBlock,
+} from './assistant-knowledge';
 import type { AnswerProvider } from './providers/answer-provider';
 import { GeminiProvider } from './providers/gemini.provider';
 import { AnthropicProvider } from './providers/anthropic.provider';
@@ -133,51 +153,152 @@ Say so in one short sentence, WITHOUT guessing, and end the message with exactly
 ${ASK_AYMAN}
 The marker is stripped before the student sees it; it is what raises the «أكلّم م. أيمن» card. Emit it whenever the answer is not in the blocks below, whenever the question needs a human decision, and whenever you were about to write "probably". Do not emit it on a question you answered well — a card on every message is a card nobody reads.
 
+# WHERE THE ANSWER POINTS
+An answer that names a page should also POINT at it, so that the person who asked because they could not find something is not handed a second search. To do that, put markers of this exact shape at the END of the message, one per destination, each on its own:
+${ASK_GO_OPEN}<id>]]
+- The id must be one of the ids in the table below, spelled exactly. An id that is not in the table is DROPPED and the answer simply loses its button, so never invent one.
+- Never write a URL, a path, a markdown link, or the word for one. You do not know this site's routes; the ids are how you name a place.
+- A course page is written course:<slug>, where <slug> is a slug from the CATALOG block below, copied character for character. A slug that is not in that block produces nothing.
+- At most ${ASK_ACTIONS_MAX}, and one is the normal number. No marker at all is the right answer to a question that is not about a page — a concept explained in three sentences points nowhere.
+- Two of the pairs below are the SAME page in two different shells. books/store is one shop and essentials/foundations is one set of lessons: use books and essentials when there is no «# THIS STUDENT» block (the reader has no account and the in-app route would bounce them to a login form), and store and foundations when there is (the public copy would throw them out of the app they are inside).
+- The markers are stripped before the student sees them and become buttons under the answer, so the words of the answer must never refer to them. Write the sentence as if there were no buttons: «الأسعار كلها في صفحة الكتب.» followed by a marker, and never a sentence about pressing anything.
+
+${askActionMenu()}
+
 # KNOWLEDGE
 ${knowledgeBlock()}`;
 
 /**
- * Holds back the tail of a stream until it cannot become the marker.
+ * `ASK_GO_PATTERN` without the `/g`, built once.
+ *
+ * The exported constant is global so `readGoMarkers` can strip every marker in
+ * one `replace`, and a `/g` regex carries `lastIndex` between calls — which
+ * against the mutating buffer below would skip markers at random and let one
+ * through into a student's bubble. Same source, no state, and the pattern is
+ * still written in exactly one place.
+ */
+const GO_MARKER = new RegExp(ASK_GO_PATTERN.source);
+
+/** The id charset of `ASK_GO_PATTERN`, for deciding whether a TAIL could grow into one. */
+const GO_ID_CHARS = /^[a-z0-9:_-]*$/;
+
+/** …and its ceiling, from the same pattern. */
+const GO_ID_MAX = 120;
+
+/**
+ * The longest tail that could still turn into either marker.
+ *
+ * `[[GO:` plus a full-length id plus the first of the two closing brackets is
+ * far longer than `[[ASK_AYMAN]]`, so it is what bounds the search below.
+ */
+const LONGEST_PARTIAL = Math.max(ASK_AYMAN.length - 1, ASK_GO_OPEN.length + GO_ID_MAX + 1);
+
+/**
+ * Whether a tail could still GROW into a `[[GO:…]]` marker.
+ *
+ * Three shapes qualify: a prefix of `[[GO:` itself, `[[GO:` followed by id
+ * characters that have not closed yet, and the same with the FIRST of the two
+ * closing brackets already arrived. Anything else — an Arabic letter after the
+ * colon, an over-long id, a stray `]x` — can never match, and is released
+ * immediately rather than sat on until the stream ends.
+ */
+function partialGoMarker(tail: string): boolean {
+  if (tail.length < ASK_GO_OPEN.length) return ASK_GO_OPEN.startsWith(tail);
+  if (!tail.startsWith(ASK_GO_OPEN)) return false;
+  const rest = tail.slice(ASK_GO_OPEN.length);
+  // `]` is not an id character, so a single trailing one can only be the first
+  // half of the closing `]]`.
+  const id = rest.endsWith(']') ? rest.slice(0, -1) : rest;
+  return id.length <= GO_ID_MAX && GO_ID_CHARS.test(id);
+}
+
+/** The first complete `[[GO:…]]` in a string, or `null`. */
+function firstGoMarker(text: string): { at: number; length: number; id: string } | null {
+  const found = GO_MARKER.exec(text);
+  return found ? { at: found.index, length: found[0].length, id: found[1]! } : null;
+}
+
+/**
+ * Holds back the tail of a stream until it cannot become a marker.
  *
  * Tokens arrive in arbitrary slices, so `[[ASK_AYMAN]]` can and does land
  * split across two of them — `…محتاج أيمن. [[ASK` then `_AYMAN]]`. Filtering
  * each chunk on its own would ship the first half to the browser, where it
  * reads as garbage in the middle of an answer.
  *
- * So text is emitted only up to the last index that cannot be the start of the
+ * So text is emitted only up to the last index that cannot be the start of a
  * marker, and whatever might be is kept for the next chunk. `flush()` releases
  * the remainder once the stream ends — a message that genuinely ended in `[[`
  * still gets its `[[`.
+ *
+ * ## TWO markers, not one
+ *
+ * `[[ASK_AYMAN]]` says "this needs a person" and `[[GO:<id>]]` says "and the
+ * answer is over there". They are filtered together and deliberately so: they
+ * share the `[[` opener, so a filter that watched for only one of them would
+ * hold back a tail that the other could complete and then ship `[[GO:bo` into
+ * a chat bubble on the next chunk. The `GO` ids are collected in the order the
+ * model named them and read back through `destinations`; NOTHING here decides
+ * whether an id is real — that is `askActions`, which is the only place
+ * holding the catalog.
  */
 export class SentinelFilter {
   private buffer = '';
   private seen = false;
+  private readonly ids: string[] = [];
 
-  /** Whether the marker has appeared. Meaningful only after `flush()`. */
+  /** Whether the escalation marker has appeared. Meaningful only after `flush()`. */
   get found(): boolean {
     return this.seen;
+  }
+
+  /**
+   * The destination ids the answer named, in the order it named them —
+   * unvalidated, because validating them needs the catalog.
+   */
+  get destinations(): readonly string[] {
+    return this.ids;
   }
 
   push(chunk: string): string {
     this.buffer += chunk;
 
     let out = '';
+    /*
+     * Whichever complete marker comes FIRST each pass, so an answer carrying
+     * both keeps the text between them. Consuming all of one kind and then all
+     * of the other would work on the text too, but only because both are
+     * removed entirely; taking them in order is what makes that not a
+     * coincidence.
+     */
     for (;;) {
-      const at = this.buffer.indexOf(ASK_AYMAN);
-      if (at === -1) break;
-      this.seen = true;
-      out += this.buffer.slice(0, at);
-      this.buffer = this.buffer.slice(at + ASK_AYMAN.length);
+      const ask = this.buffer.indexOf(ASK_AYMAN);
+      const go = firstGoMarker(this.buffer);
+
+      if (ask !== -1 && (go === null || ask < go.at)) {
+        this.seen = true;
+        out += this.buffer.slice(0, ask);
+        this.buffer = this.buffer.slice(ask + ASK_AYMAN.length);
+        continue;
+      }
+      if (go) {
+        this.ids.push(go.id);
+        out += this.buffer.slice(0, go.at);
+        this.buffer = this.buffer.slice(go.at + go.length);
+        continue;
+      }
+      break;
     }
 
     /*
-     * The longest suffix of what is left that is also a PREFIX of the marker.
-     * That, and only that, has to wait for the next chunk.
+     * The longest suffix of what is left that could still become either
+     * marker. That, and only that, has to wait for the next chunk.
      */
     let held = 0;
-    const limit = Math.min(this.buffer.length, ASK_AYMAN.length - 1);
+    const limit = Math.min(this.buffer.length, LONGEST_PARTIAL);
     for (let length = limit; length > 0; length -= 1) {
-      if (ASK_AYMAN.startsWith(this.buffer.slice(this.buffer.length - length))) {
+      const tail = this.buffer.slice(this.buffer.length - length);
+      if (ASK_AYMAN.startsWith(tail) || partialGoMarker(tail)) {
         held = length;
         break;
       }
@@ -223,7 +344,21 @@ export class AssistantAiService {
   private readonly provider: AnswerProvider | null;
   private catalog: { courses: CatalogCourse[]; at: number } | null = null;
 
-  constructor(private readonly catalogService: CatalogService) {
+  constructor(
+    private readonly catalogService: CatalogService,
+    /**
+     * The money, read off the rows at the moment it is asked for.
+     *
+     * ⚠️ This was BUILT and never injected — `AssistantFactsService` and
+     * `pricingBlock()` both existed, the provider was registered in
+     * `AssistantModule`, and not one line of this file consumed either. So
+     * «الكتاب بكام؟» went on being answered by `joinPrice`'s «الأسعار
+     * بتتغيّر، مش عايز أقولك رقم قديم» while the current number sat one
+     * `await` away. Nothing failed, nothing logged, and the feature was
+     * invisible from the outside.
+     */
+    private readonly facts: AssistantFactsService,
+  ) {
     this.provider = selectProvider();
     if (this.provider) {
       // The provider's ID and never the key. «ليه الردود وحشة؟» and «هو أصلاً
@@ -281,10 +416,26 @@ export class AssistantAiService {
      */
     meta?: { provider: string | null },
   ): AsyncGenerator<AskEvent> {
+    /*
+     * ── THE PRICES, ONCE PER REQUEST AND BEFORE THE BRANCH ───────────────
+     *
+     * Read here rather than inside either branch for two reasons. `scripted()`
+     * is a SYNC generator and `read()` is async, so the await has to happen
+     * out here anyway; and both paths must quote the same numbers — a
+     * deployment with a key and one without are two ways of answering «الكتاب
+     * بكام؟», not two prices.
+     *
+     * `null` is a real answer and means "no price may be stated" — see
+     * `AssistantFactsService`, which drops its snapshot rather than serve a
+     * stale figure, and `pricingBlock(null)`, which turns that into an
+     * instruction to name no number and escalate.
+     */
+    const money = await this.facts.read();
+
     const provider = this.provider;
     if (!provider) {
       // `meta.provider` stays null: nothing but the written corpus ran.
-      yield* this.scripted(question);
+      yield* this.scripted(question, money);
       return;
     }
 
@@ -293,6 +444,19 @@ export class AssistantAiService {
     let refused = false;
 
     try {
+      /*
+       * Read once and used twice — for the CATALOG block, and to prove any
+       * `course:<slug>` the model names against the courses that actually
+       * exist. Two calls would be two snapshots and a button for a course the
+       * block never listed.
+       *
+       * Inside the `try` on purpose. `courses()` swallows its own failure and
+       * serves the previous list, so it cannot throw today — and if it ever
+       * does, the catch below answers from the written corpus instead of
+       * letting the request die with nothing written.
+       */
+      const courses = await this.courses();
+
       const stream = provider.answer({
         system: SYSTEM,
         /*
@@ -302,9 +466,17 @@ export class AssistantAiService {
          * on the platform, which is what makes it cheap. One student's grades
          * in there would be one student's grades served to the next reader's
          * cache hit. This half is rebuilt per request and cached by nobody.
+         *
+         * ⚠️ AND SO DO THE PRICES, for a second, independent reason. A figure
+         * in `SYSTEM` would not merely invalidate the cached prefix on every
+         * change — it is built once at module load, so it would FREEZE that
+         * number for the life of the process. An admin could lower a book and
+         * المساعد would go on quoting the old price until somebody restarted
+         * the API. Here it is re-read at most a minute old, per request.
          */
         context: [
-          `# CATALOG\n${catalogBlock(await this.courses())}`,
+          `# CATALOG\n${catalogBlock(courses)}`,
+          `# PRICES\n${pricingBlock(money)}`,
           student ? `# THIS STUDENT (the one asking, and the only one you can see)\n${student}` : '',
         ]
           .filter(Boolean)
@@ -349,15 +521,30 @@ export class AssistantAiService {
       /*
        * Nothing at all came back — an empty completion, or a marker-only
        * answer. Either way the student is looking at an empty bubble, so the
-       * script answers instead and the card goes up.
+       * script answers instead and the card goes up. Whatever destinations the
+       * markers named go with it: there is no answer left for them to sit
+       * under.
        */
       if (!wrote) {
-        yield* this.scripted(question);
+        yield* this.scripted(question, money);
         return;
       }
 
       if (meta) meta.provider = provider.id;
-      yield { t: 'done', escalate: filter.found };
+      /*
+       * ⚠️ THE VALIDATION BOUNDARY, and it is `askActions` and not this line.
+       *
+       * The model named ids; every href and every label on the wire is built
+       * from `ASK_ACTION_HREFS` and `copy.assistant.ai.actions`, or — for a
+       * course — from a slug this snapshot confirms and a title it wrote. An
+       * id nobody recognises is dropped silently, so the worst a hallucination
+       * can do is cost the answer a button.
+       */
+      yield {
+        t: 'done',
+        escalate: filter.found,
+        actions: askActions(filter.destinations, courses),
+      };
     } catch (error) {
       /*
        * The reader left. Nothing is written back — the socket is already gone
@@ -390,7 +577,7 @@ export class AssistantAiService {
         yield { t: 'error', code: 'failed' };
         return;
       }
-      yield* this.scripted(question);
+      yield* this.scripted(question, money);
     }
   }
 
@@ -414,9 +601,23 @@ export class AssistantAiService {
    * way to a person is permanently in the panel's footer regardless. The card
    * is reserved for `matchKnowledge` returning `null`, which is this path
    * saying «مش عارف» in the only way it can.
+   *
+   * ## The same numbers the model path gets
+   *
+   * `facts` is the snapshot `answer()` already read, threaded through rather
+   * than re-read: this is a SYNC generator and could not await one anyway.
+   * With it, «الكتاب بكام؟» is answered from today's shelf and `joinPrice`
+   * steps aside; with `null` — a failed read, and on any deployment where the
+   * database is unhappy — `joinPrice` answers and says أيمن has the current
+   * number, which is true.
+   *
+   * ⚠️ No `actions` here, and that is a gap rather than a decision: buttons
+   * are chosen by a model naming an id, and this path has no model. A written
+   * entry knows which paragraph it is, not which page it points at, and
+   * inventing that mapping is a table nobody has written yet.
    */
-  private *scripted(question: string): Generator<AskEvent> {
-    const match = matchKnowledge(question);
+  private *scripted(question: string, facts: AssistantFacts | null): Generator<AskEvent> {
+    const match = matchKnowledge(question, facts);
     yield { t: 'delta', text: match ? match.answer : copy.assistant.ai.unknown };
     yield { t: 'done', escalate: match === null };
   }

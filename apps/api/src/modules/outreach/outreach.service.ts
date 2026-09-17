@@ -160,6 +160,21 @@ export class OutreachService {
              */
             status: 'answered',
             lastMessageAt: new Date(),
+            /**
+             * ⚠️ THE ONE THAT CAUSED IT.
+             *
+             * `status: 'answered'` above was already saying "he spoke last",
+             * and the inbox agreed — until it computed «غير مقروءة» from
+             * `lastMessageAt > adminReadAt`, which this line had just made
+             * true. So «رسايل للطلبة» — him writing TO a student — landed the
+             * thread back on his own unread tab with his own words as the
+             * preview, and the sidebar badge counted it. Reported with a
+             * screenshot: «هنا بييجي له رسالة واردة، وأصلاً أنا اللي بعتها».
+             *
+             * The status and the author now say the same thing in the same
+             * write, and the inbox reads the author.
+             */
+            lastMessageAuthor: 'admin',
             // `visitorReadAt` untouched: the student has not read this yet, and
             // that is what lights the dot on the launcher.
           },
@@ -227,6 +242,43 @@ export class OutreachService {
    * is not reused: he closed it deliberately, and appending to it would give
    * the student a message with no reply box under it.
    */
+  /**
+   * Post ONE exact message into a student's own thread, as him.
+   *
+   * ## Why this is not `send()`
+   *
+   * `send()` composes from the greeting/body pools and de-duplicates variants
+   * against the student's history — that is the right machine for «رسايل م.
+   * أيمن», where the whole point is that two students never get the identical
+   * sentence. A shipping notice is the opposite: it is one fact, worded once,
+   * and varying it would make «كتابك سلّمناه لشركة الشحن» read differently to two
+   * people who ordered the same day. Same thread, same write, supplied body.
+   *
+   * Deliberately no `OutreachMessage` history row either: that table exists so
+   * the composer can avoid repeating itself, and a transactional notice has
+   * nothing to teach it.
+   */
+  async postAdminMessage(userId: string, body: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const conversationId = await this.threadFor(tx, userId);
+      await tx.conversationMessage.create({
+        data: { conversationId, author: 'admin', body },
+        select: { id: true },
+      });
+      await tx.conversation.update({
+        where: { id: conversationId },
+        data: {
+          // `answered` and `adminReadAt` together — see the long note in
+          // `send()` on why writing `lastMessageAt` alone put his own
+          // outgoing message back on his unread tab.
+          status: 'answered',
+          lastMessageAt: new Date(),
+          adminReadAt: new Date(),
+        },
+      });
+    });
+  }
+
   private async threadFor(
     tx: Parameters<Parameters<PrismaService['$transaction']>[0]>[0],
     userId: string,
@@ -250,6 +302,54 @@ export class OutreachService {
       select: { id: true },
     });
     return created.id;
+  }
+
+  /**
+   * `/admin/broadcast` — a message the instructor wrote himself, sent on
+   * purpose, one student at a time (called once per recipient even when the
+   * caller is broadcasting to everyone — see `BroadcastService`).
+   *
+   * Same delivery as `deliver` — the same `threadFor`, the same `admin` row,
+   * the same `instructor_message` notification — and deliberately none of its
+   * guards. The cap and the dedupe key both exist to bound the SWEEPER: a
+   * quiz result composed four different ways cannot accidentally read as four
+   * messages in an hour, and a cron tick that runs twice must not double-send.
+   * Neither risk exists here. A human pressed a button once, wrote the exact
+   * words themselves, and gating that identically would let the sweeper's own
+   * daily cap silently swallow the instructor's own broadcast — the message
+   * he watched himself send would simply not arrive, with nothing on screen
+   * to explain why.
+   *
+   * `outreachKind: 'admin_broadcast'` is not one of `OUTREACH_KINDS` — it
+   * never enters `composeOutreach`, which only the sweeper's four templated
+   * kinds go through. It is carried on the notification only, where the
+   * field is a bare string by design (see `notifications.ts`), and it falls
+   * back to the generic «مهندس أيمن بعتلك رسالة» lead-in on the client.
+   */
+  async sendManual(
+    tx: Prisma.TransactionClient,
+    input: { userId: string; body: string },
+  ): Promise<{ conversationId: string; messageId: string }> {
+    const conversationId = await this.threadFor(tx, input.userId);
+
+    const message = await tx.conversationMessage.create({
+      data: { conversationId, author: 'admin', body: input.body },
+      select: { id: true },
+    });
+
+    await tx.conversation.update({
+      where: { id: conversationId },
+      data: { status: 'answered', lastMessageAt: new Date() },
+    });
+
+    await this.notifications.emit(tx, {
+      userId: input.userId,
+      kind: 'instructor_message',
+      conversationId,
+      outreachKind: 'admin_broadcast',
+    });
+
+    return { conversationId, messageId: message.id };
   }
 }
 

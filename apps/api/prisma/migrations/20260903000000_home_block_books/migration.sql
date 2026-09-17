@@ -1,0 +1,33 @@
+-- «قسم الكتب» as a landing-page block.
+--
+-- The shop shipped with one entrance: somebody had to already know `/books`
+-- existed and type it. It is now a section the admin can drag into the home
+-- page like any other, which is the whole point of `home_blocks` — the landing
+-- is the published block list, so a section that cannot be a block cannot be on
+-- the page at all.
+--
+-- WHY A NEW ENUM MEMBER AND NOT A `courseGrid` VARIANT
+--
+-- `HomeBlocksService.create` writes `props.type` straight into this column, so
+-- the enum is the list of blocks that can exist. Reusing `courseGrid` with a
+-- flag would put two different sections behind one name in every query, every
+-- admin dropdown and every `renderBlock` case — and the props genuinely differ
+-- (a books strip curates nothing; see `BooksPropsSchema` for why it has no
+-- id list).
+--
+-- ⚠️ ADD VALUE, NOT A NEW TYPE. Rewriting the enum would mean dropping and
+-- recreating it with the column depending on it, which is a table rewrite on
+-- live rows for one added label.
+--
+-- ⚠️ `ADD VALUE` cannot run inside a transaction block on PostgreSQL < 12, and
+-- Prisma wraps each migration in one. This targets 16, where it is allowed —
+-- but the value still cannot be USED in the same transaction that adds it,
+-- which is why no seed row is inserted here. The block is shipped as part of
+-- `DEFAULT_HOME_BLOCKS` instead, so a database with an empty `home_blocks`
+-- table renders it without any row at all, and an admin adds it to a populated
+-- table from `/admin/home`.
+--
+-- IF_NOT_EXISTS so re-running against a database that already has it is a
+-- no-op rather than an error.
+
+ALTER TYPE "app"."home_block_type" ADD VALUE IF NOT EXISTS 'books' AFTER 'courseGrid';

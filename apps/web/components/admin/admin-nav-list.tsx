@@ -9,26 +9,45 @@ import { usePathname } from 'next/navigation';
 // for why the same import would be wrong on a student route.
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
-import { cn } from '@ayman/ui/lib/cn';
 import { useInboxCount } from './inbox-alerts';
 import { usePaymentsPendingCount } from './payments-alerts';
+import { useBookOrdersUnshippedCount } from './book-orders-alerts';
+import { useHomeworkPendingCount } from './homework-alerts';
 import { ADMIN_NAV, ADMIN_NAV_GROUPS, activeNavItem } from './nav-items';
 
 /** `href` → the live count to badge it with, or `null` for every other link.
  *  One lookup, so a third badge is one more entry here rather than a second
  *  ternary chain next to this one. */
-function badgeCountFor(href: string, inboxCount: number | null, paymentsCount: number | null): number | null {
+function badgeCountFor(
+  href: string,
+  inboxCount: number | null,
+  paymentsCount: number | null,
+  bookOrdersCount: number | null,
+  homeworkCount: number | null,
+): number | null {
   if (href === '/admin/inbox') return inboxCount;
   if (href === '/admin/payments') return paymentsCount;
+  // Parcels that are paid for and not yet shipped — somebody is waiting on the
+  // other end of this one too, which is the rule this list's badges follow.
+  if (href === '/admin/books') return bookOrdersCount;
+  // Answers waiting on a mark — a student is on the other end of this one too.
+  if (href === '/admin/homework') return homeworkCount;
   return null;
 }
 
 /** The `sr-only` sentence beside a badge — worded per screen, same as the
  *  count itself. */
 function badgeLabelFor(href: string, n: number): string {
-  return href === '/admin/payments'
-    ? formatCopy(copy.admin.payments.pendingBadgeLabel, { n })
-    : formatCopy(copy.assistant.inbox.badgeLabel, { n });
+  if (href === '/admin/payments') {
+    return formatCopy(copy.admin.payments.pendingBadgeLabel, { n });
+  }
+  if (href === '/admin/books') {
+    return formatCopy(copy.admin.books.unshippedBadgeLabel, { n });
+  }
+  if (href === '/admin/homework') {
+    return formatCopy(copy.admin.homework.pendingBadgeLabel, { n });
+  }
+  return formatCopy(copy.assistant.inbox.badgeLabel, { n });
 }
 
 /**
@@ -54,6 +73,11 @@ export function AdminNavList({
   // Same shape, for the payments review queue — `null` on any session
   // without `payment:read`.
   const paymentsCount = usePaymentsPendingCount();
+  // And for parcels owed — `null` on any session without `book-order:read`.
+  const bookOrdersCount = useBookOrdersUnshippedCount();
+  // And for answers awaiting a mark — `null` on any session without
+  // `homework:read`.
+  const homeworkCount = useHomeworkPendingCount();
 
   return (
     <div className="flex flex-col gap-5">
@@ -63,13 +87,9 @@ export function AdminNavList({
 
         return (
           <div key={group.id} className="flex flex-col gap-1">
-            {group.labelAr ? (
-              <p className="px-3 pb-1 text-[length:var(--fs-text-xs)] font-medium text-fg-muted">
-                {group.labelAr}
-              </p>
-            ) : null}
+            {group.labelAr ? <p className="nav-group__head">{group.labelAr}</p> : null}
 
-            <ul className="flex flex-col gap-0.5">
+            <ul className="flex flex-col gap-1">
               {items.map((item) => {
                 const isActive = active?.href === item.href;
                 const Icon = item.icon;
@@ -79,7 +99,13 @@ export function AdminNavList({
                  * null`: a زيرو badge is a permanent «٠» that trains the eye
                  * to stop reading the number.
                  */
-                const rawCount = badgeCountFor(item.href, inboxCount, paymentsCount);
+                const rawCount = badgeCountFor(
+                  item.href,
+                  inboxCount,
+                  paymentsCount,
+                  bookOrdersCount,
+                  homeworkCount,
+                );
                 const badge = rawCount !== null && rawCount > 0 ? rawCount : null;
                 return (
                   <li key={item.href}>
@@ -87,33 +113,24 @@ export function AdminNavList({
                       href={item.href}
                       onClick={onNavigate}
                       aria-current={isActive ? 'page' : undefined}
-                      className={cn(
-                        'relative flex items-center gap-2.5 rounded-md px-3 py-2',
-                        'text-[length:var(--fs-text-sm)]',
-                        'transition-colors duration-[160ms] ease-out',
-                        isActive
-                          ? 'bg-[color-mix(in_oklch,var(--a-9),transparent_88%)] font-medium text-accent-text'
-                          : 'text-fg-muted hover:bg-surface-3 hover:text-fg',
-                      )}
+                      // `.nav-pill` — the same object the student rail wears.
+                      // The active state, the start marker and the badge all
+                      // live in globals.css now: two lists drawing one state
+                      // two ways was how the admin ended up amber-tinted and
+                      // the student flat grey for the identical "you are here".
+                      className="nav-pill"
                     >
-                      {/* The active marker is on the inline START — the right
-                          edge in this RTL document — so it reads as a tab
-                          pulled out of the sidebar's own border. */}
-                      {isActive ? (
-                        <span
-                          aria-hidden="true"
-                          className="absolute inset-y-1.5 start-0 w-0.5 rounded-full bg-accent"
-                        />
-                      ) : null}
-                      <Icon className="size-4 shrink-0" aria-hidden="true" />
-                      <span className="truncate">{item.labelAr}</span>
+                      <span className="nav-pill__well" aria-hidden="true">
+                        <Icon className="size-4" />
+                      </span>
+                      <span className="nav-pill__label">{item.labelAr}</span>
 
                       {badge !== null ? (
                         <span
                           // The number is decorative to a screen reader — the
                           // sentence beside it is what gets announced, so «الوارد
                           // ٣» does not read as one word.
-                          className="ms-auto grid min-w-5 shrink-0 place-items-center rounded-[var(--r-full)] bg-accent px-1.5 py-0.5 text-[length:var(--fs-text-xs)] font-medium tabular-nums text-[#1A1206]"
+                          className="nav-pill__badge"
                         >
                           <span aria-hidden="true">{badge}</span>
                           <span className="sr-only">{badgeLabelFor(item.href, badge)}</span>

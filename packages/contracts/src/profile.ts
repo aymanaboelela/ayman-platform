@@ -61,6 +61,20 @@ export const ProfileMeSchema = z.object({
        * response that predates this field still parses.
        */
       schoolStream: z.enum(['general', 'languages']).nullable().optional(),
+      /**
+       * Named by `/settings/section`, which stopped being a one-select page
+       * and became the student's own «بياناتك» editor. The endpoint behind it
+       * (`PATCH /profile/onboarding`) upserts the whole set of columns, so the
+       * form has to be able to PREFILL every one of them — a field it could
+       * not read is a field it would blank on the next save.
+       *
+       * Both were already on the wire (`profile` is the whole row); naming
+       * them only makes them typed. `.nullable().optional()` in the same shape
+       * as the columns, so a profile that predates either question still
+       * parses and the form simply shows an unanswered field.
+       */
+      gender: z.enum(['male', 'female']).nullable().optional(),
+      fatherPhone: z.string().nullable().optional(),
     })
     .nullable(),
 });

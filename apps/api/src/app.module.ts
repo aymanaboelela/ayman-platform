@@ -31,6 +31,7 @@ import { StudentsModule } from './modules/admin/students/students.module';
 import { AdminTaxonomyModule } from './modules/admin/taxonomy/admin-taxonomy.module';
 import { MediaModule } from './modules/media/media.module';
 import { FlagsModule } from './modules/admin/flags/flags.module';
+import { RolesModule } from './modules/admin/roles/roles.module';
 import { NavigationModule } from './modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from './modules/admin/home-blocks/home-blocks.module';
 import { MarketingModule } from './modules/marketing/marketing.module';
@@ -43,6 +44,8 @@ import { CohortAnalyticsModule } from './modules/analytics/analytics.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { BookOrdersModule } from './modules/book-orders/book-orders.module';
 import { BooksModule } from './modules/books/books.module';
+import { ExpensesModule } from './modules/expenses/expenses.module';
+import { HomeworkModule } from './modules/homework/homework.module';
 
 @Module({
   imports: [
@@ -140,6 +143,7 @@ import { BooksModule } from './modules/books/books.module';
     AdminTaxonomyModule,
     MediaModule,
     FlagsModule,
+    RolesModule,
     NavigationModule,
     HomeBlocksModule,
     MarketingModule,
@@ -151,7 +155,10 @@ import { BooksModule } from './modules/books/books.module';
     CohortAnalyticsModule,
     PaymentsModule,
     BooksModule,
+    ExpensesModule,
     BookOrdersModule,
+    // الواجب — the exercise on a lecture, and the photographs of the answer.
+    HomeworkModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -2,6 +2,7 @@ import { ArrowLeft } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { SOCIAL_MARKS, SocialIcon } from '@/components/site/social-icons';
+import { CardArt } from './card-art';
 import { WhatsappChannelLink } from './whatsapp-channel-link';
 
 const c = copy.dashboard.whatsappChannel;
@@ -35,6 +36,7 @@ const c = copy.dashboard.whatsappChannel;
 export function WhatsappChannelCard({
   href,
   flush = false,
+  variant = 'row',
 }: {
   href: string | null;
   /**
@@ -50,8 +52,53 @@ export function WhatsappChannelCard({
    * this in three places and every one of them relies on it.
    */
   flush?: boolean;
+  /**
+   * `'row'` is the original: a wide green bar with the mark, two lines and the
+   * CTA all on one line. It is still what `/welcome` renders, where the card is
+   * one of four things on the screen and has the full width to itself.
+   *
+   * `'aside'` is the dashboard's, and it is a different shape because it now
+   * lives in a 23rem column — «قناة الواتساب دي حطها في جنب في بوكس لوحدها فوق
+   * كده بشكل حلو». The row layout at that width put a 44px mark, a title, a
+   * subtitle and a button into 368px and the CTA wrapped under the text with
+   * the arrow on its own line. The aside form stacks them instead, and opens
+   * with the banner drawing the same way its two neighbours in that column do.
+   */
+  variant?: 'row' | 'aside';
 }) {
   if (!href) return null;
+
+  if (variant === 'aside') {
+    return (
+      <WhatsappChannelLink
+        href={href}
+        className={cn('aside-card block', !flush && 'mb-4')}
+        style={{ '--wa': SOCIAL_MARKS.whatsapp.hex, '--wa-ink': '#0A2E1C' } as React.CSSProperties}
+      >
+        <CardArt name="channel" />
+        <span className="aside-card__body block">
+          <span className="flex items-center gap-2.5">
+            <span
+              aria-hidden="true"
+              className="grid size-9 shrink-0 place-items-center rounded-[var(--r-md)] bg-[var(--wa)] text-white"
+            >
+              <SocialIcon mark={SOCIAL_MARKS.whatsapp} size={18} />
+            </span>
+            <span className="aside-card__title min-w-0 flex-1">{c.title}</span>
+          </span>
+          <span className="aside-card__note block">{c.lead}</span>
+          {/* Full width down here rather than a chip at the end of a row: it
+              is the only pressable thing in the card and the card is the
+              width of a phone button. Dark ink on the green for the contrast
+              reason the row variant's own comment sets out at length. */}
+          <span className="mt-3 flex items-center justify-center gap-1.5 rounded-[var(--r-sm)] bg-[var(--wa)] px-3 py-2.5 text-[length:var(--fs-text-base)] font-semibold text-[color:var(--wa-ink)]">
+            <ArrowLeft className="size-4" aria-hidden="true" />
+            {c.cta}
+          </span>
+        </span>
+      </WhatsappChannelLink>
+    );
+  }
 
   return (
     /*

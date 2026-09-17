@@ -27,6 +27,7 @@ import { BlockPreview } from './block-preview';
 import {
   AboutForm,
   CourseGridForm,
+  BooksForm,
   CtaForm,
   FaqForm,
   HeroForm,
@@ -51,8 +52,10 @@ const TYPE_LABEL: Record<BlockType, string> = {
   hero: copy.admin.home.blockTypeHero,
   whyRail: copy.admin.home.blockTypeWhyRail,
   courseGrid: copy.admin.home.blockTypeCourseGrid,
+  books: copy.admin.home.blockTypeBooks,
   instructor: copy.admin.home.blockTypeInstructor,
   yearTracks: copy.admin.home.blockTypeYearTracks,
+  honorBoard: copy.admin.home.blockTypeHonorBoard,
   about: copy.admin.home.blockTypeAbout,
   stats: copy.admin.home.blockTypeStats,
   testimonials: copy.admin.home.blockTypeTestimonials,
@@ -87,8 +90,10 @@ const DEFAULT_PROPS: Record<BlockType, HomeBlockProps> = {
     ],
   },
   courseGrid: { type: 'courseGrid', titleAr: '', leadAr: '', ctaLabelAr: '', courseIds: [], limit: 6 },
+  books: { type: 'books', titleAr: '', leadAr: '', ctaLabelAr: '', limit: 3 },
   instructor: { type: 'instructor' },
   yearTracks: { type: 'yearTracks' },
+  honorBoard: { type: 'honorBoard' },
   about: { type: 'about', titleAr: '', body1Ar: '', body2Ar: '', roleAr: '', chipsAr: [] },
   stats: { type: 'stats', titleAr: '', items: [{ labelAr: '', value: '' }] },
   testimonials: { type: 'testimonials', titleAr: '', items: [{ nameAr: '', bodyAr: '', avatarAssetId: null }] },
@@ -104,8 +109,11 @@ function PropsForm({ props, onSubmit }: { props: HomeBlockProps; onSubmit: (next
       return <WhyRailForm defaultValues={props} onSubmit={onSubmit} />;
     case 'courseGrid':
       return <CourseGridForm defaultValues={props} onSubmit={onSubmit} />;
+    case 'books':
+      return <BooksForm defaultValues={props} onSubmit={onSubmit} />;
     case 'instructor':
     case 'yearTracks':
+    case 'honorBoard':
       return <PlacementOnlyForm defaultValues={props} onSubmit={onSubmit} />;
     case 'about':
       return <AboutForm defaultValues={props} onSubmit={onSubmit} />;

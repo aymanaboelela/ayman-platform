@@ -1,21 +1,378 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import type { BookOrder, BookOrderStatus, CreateBookOrderInput, SubmitBookOrderPaymentInput } from '@ayman/contracts/book-orders';
-import type { AdminBookOrderQuery, AdminBookOrderRow, AdminCreateBookOrderInput } from '@ayman/contracts/admin/book-orders';
+import type {
+  AdminBookOrderFilter,
+  AdminBookOrderQuery,
+  AdminBookOrderSort,
+  AdminBookOrderStream,
+  AdminBookOrderRow,
+  AdminBookOrderOverview,
+  AdminBookOrderYearOverview,
+  AdminCreateBookOrderInput,
+  BulkBookOrderResult,
+  BulkBookOrderResultRow,
+  DeleteBookOrderResult,
+  ExportBookOrdersQuery,
+  PackingLabel,
+  PackingList,
+  PackingListLine,
+  MarkBookOrderDeliveredResult,
+  MarkBookOrderPrintingResult,
+  MarkBookOrderShippedResult,
+  PackingListYear,
+  RejectBookOrderResult,
+  RestoreBookOrderResult,
+} from '@ayman/contracts/admin/book-orders';
 import type { AdminBookOrderPatchInput } from '@ayman/contracts/admin/books';
-import { bookOrderTotals } from '@ayman/contracts/books';
+import { bookOrderRef, bookOrderYearWord } from '@ayman/contracts/admin/book-orders';
+import { bookOrderTotals, bookShippingCentsFor } from '@ayman/contracts/books';
+import { toAsciiDigits } from '@ayman/contracts/phone';
 import { streamChoiceOf } from '@ayman/contracts/content';
 import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
+import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { BooksService } from '../books/books.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { MediaService, type UploadFile } from '../media/media.service';
+import { NotOnWhatsAppError, WhatsappDeviceService } from '../marketing/whatsapp-device.service';
+import { OutreachService } from '../outreach/outreach.service';
+import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
+import { BOOK_REVENUE_WHERE } from './book-revenue';
+import { deliveryDaysFor } from './delivery-days';
+
+
 
 /** The prefix `POST /book-orders/screenshot` stores under — same reasoning
  *  as `PaymentsService`'s own `SCREENSHOT_PREFIX`: never served through the
  *  public `/media/:prefix/:name` route. */
 const SCREENSHOT_PREFIX = 'book-order-proof';
+
+/**
+ * The digits of a PARTIAL phone number, in the form they are stored in.
+ *
+ * `normalizeEgyptianPhone` is the wrong tool here: it parses a WHOLE number
+ * and answers `null` for anything shorter, so every search typed one digit at
+ * a time would match nothing until the last keystroke. This keeps only the
+ * digits, then drops the country code or the trunk zero the caller may or may
+ * not have typed — `01015186`, `+201015186` and `201015186` all become
+ * `1015186`, which is a substring of the stored `+201015186...` in all three
+ * cases. Arabic-Indic digits go through `toAsciiDigits` first: a phone typed
+ * on an Egyptian keyboard is «٠١٠١٥١٨٦», and comparing that to ASCII would
+ * silently match nothing.
+ *
+ * Returns `null` below three digits — one or two digits appear inside every
+ * number in the table, so the "phone" leg of the search would add every row
+ * to a result set the admin is trying to narrow.
+ */
+function phoneSearchDigits(value: string): string | null {
+  const digits = toAsciiDigits(value).replace(/\D/g, '');
+  const local = digits.startsWith('20') ? digits.slice(2) : digits.replace(/^0+/, '');
+  return local.length >= 3 ? local : null;
+}
+
+/**
+ * عام ولا لغات، على السطر نفسه.
+ *
+ * The two booleans are read LIVE off the linked book rather than frozen onto
+ * the line, and `BookOrderLineSchema` says at length why: the title and the
+ * price are what the customer AGREED TO and must never be rewritten, but which
+ * school the printed book is for is a fact about the OBJECT — if the admin
+ * corrects it, the person packing the box should read the correction.
+ *
+ * ONE select shared by every place a line is read, for the same reason
+ * `ORDER_SELECT` below is one constant: the admin list, the export and the
+ * student's own confirmation must not be able to disagree about what a line is.
+ */
+const ORDER_ITEM_SELECT = {
+  orderBy: { titleAr: 'asc' },
+  select: {
+    bookId: true,
+    titleAr: true,
+    unitPriceCents: true,
+    quantity: true,
+    /* `null` for a line with no `bookId` — one the admin typed by hand, or one
+       whose book row has since been deleted. Both flags fall to `null`
+       together; see the contract's own note on why that is honest rather than
+       a default of «الاتنين». */
+    /* `year` alongside the two stream flags, and for the same reason: the
+       owner asked to SEE «أولى/تانية» beside each line, and on a cart order the
+       order's own course is null so there is nowhere else it could come from. */
+    book: { select: { forGeneral: true, forLanguages: true, year: true } },
+  },
+} as const;
+
+/** One line as the API hands it back, stream included. */
+interface OrderLineRow {
+  bookId: string | null;
+  titleAr: string;
+  unitPriceCents: number;
+  quantity: number;
+  book: { forGeneral: boolean; forLanguages: boolean; year: number | null } | null;
+}
+
+/** `ORDER_ITEM_SELECT` → the wire shape, in one place. */
+function toOrderLine(item: OrderLineRow) {
+  return {
+    bookId: item.bookId,
+    titleAr: item.titleAr,
+    unitPriceCents: item.unitPriceCents,
+    quantity: item.quantity,
+    forGeneral: item.book?.forGeneral ?? null,
+    forLanguages: item.book?.forLanguages ?? null,
+    year: item.book?.year ?? null,
+  };
+}
+
+/**
+ * `sort` → a real `ORDER BY`.
+ *
+ * Every branch ends with a tiebreak on `id`. Postgres does not promise a
+ * stable order for rows that tie on the sort key, and an unstable order under
+ * pagination silently DUPLICATES some rows onto page two while dropping
+ * others — on a list whose job is making sure every parcel gets packed exactly
+ * once. `id` is uuid(7), so the tiebreak is also chronological.
+ */
+function orderByFor(sort: AdminBookOrderSort): Prisma.BookOrderOrderByWithRelationInput[] {
+  switch (sort) {
+    case 'newest':
+      return [{ createdAt: 'desc' }, { id: 'desc' }];
+    case 'amount_desc':
+      return [{ amountCents: 'desc' }, { id: 'desc' }];
+    case 'amount_asc':
+      return [{ amountCents: 'asc' }, { id: 'asc' }];
+    case 'name_asc':
+      return [{ fullName: 'asc' }, { id: 'asc' }];
+    case 'governorate':
+      // By NAME, not by code: the codes are arbitrary and the admin reads the
+      // Arabic. Then oldest-first inside each governorate, so a courier route
+      // is still packed in the order the orders arrived.
+      return [{ governorate: { nameAr: 'asc' } }, { createdAt: 'asc' }, { id: 'asc' }];
+    case 'oldest':
+    default:
+      return [{ createdAt: 'asc' }, { id: 'asc' }];
+  }
+}
+
+/**
+ * «ورّيني اللغات بس» and «أولى بس», on a table that stores neither.
+ *
+ * A stream and a year belong to the BOOK, and an order is a basket of books —
+ * so the filter is "has at least one line whose book matches". The order's own
+ * course is the fallback for a row that came from a course page's button and
+ * whose line may have no catalogue row behind it at all.
+ *
+ * ⚠️ The two clauses are ANDed but each is an OR across the same two sources,
+ * which is deliberate and not the same as one combined OR: «لغات أولى» must
+ * mean "a languages book AND a first-year book", and on a mixed basket those
+ * can legitimately be two different lines. Collapsing them into one predicate
+ * would demand a single line be both, and would hide baskets the owner asked to
+ * see.
+ *
+ * `forGeneral`/`forLanguages` are two booleans, not an enum, so «عام ولغات»
+ * (a book serving both) matches EITHER filter — which is right: it really is
+ * on sale to both, and dropping it from both lists would lose it entirely.
+ */
+function streamAndYearWhere(
+  stream: AdminBookOrderStream | undefined,
+  year: number | undefined,
+): Prisma.BookOrderWhereInput {
+  const clauses: Prisma.BookOrderWhereInput[] = [];
+
+  if (stream !== undefined) {
+    const flag = stream === 'general' ? 'forGeneral' : 'forLanguages';
+    clauses.push({
+      OR: [{ items: { some: { book: { [flag]: true } } } }, { course: { [flag]: true } }],
+    });
+  }
+
+  if (year !== undefined) {
+    clauses.push({ OR: [{ items: { some: { book: { year } } } }, { course: { year } }] });
+  }
+
+  return clauses.length === 0 ? {} : { AND: clauses };
+}
+
+/**
+ * ONE ORDER, reduced to exactly what the header counts.
+ *
+ * Declared here rather than inlined in the select so `summariseOrders` below is
+ * a pure function over a shape a test can construct by hand — the arithmetic it
+ * does is the part worth pinning, and it needs no database to be wrong.
+ */
+interface CountableOrder {
+  phone: string;
+  items: Array<{
+    quantity: number;
+    book: { year: number | null; forGeneral: boolean; forLanguages: boolean } | null;
+  }>;
+  course: { year: number | null; forGeneral: boolean; forLanguages: boolean } | null;
+}
+
+/** One line's answer to «أولى ولا تانية» and «عربي ولا لغات», with the order's
+ *  course as the fallback for a line whose book is not in the catalogue —
+ *  exactly the chain `packingList` and the admin row already walk. */
+function lineFacts(item: CountableOrder['items'][number], order: CountableOrder) {
+  const source = item.book ?? order.course;
+  return {
+    year: item.book?.year ?? order.course?.year ?? null,
+    forGeneral: source?.forGeneral ?? false,
+    forLanguages: source?.forLanguages ?? false,
+    quantity: item.quantity,
+  };
+}
+
+/**
+ * The header's arithmetic, in one place and with no database in it.
+ *
+ * ## An order with no lines still counts as one book
+ *
+ * Same rule the packing sheet follows, and for the same reason: a hand-edited
+ * order whose last line was removed is rare, real, and has an address somebody
+ * is waiting at. Dropping it here would make the header disagree with both the
+ * list above it and the spreadsheet below it — and «واحد ناقص» is precisely the
+ * complaint these numbers exist to prevent. It contributes no edition, because
+ * there is nothing to read one from.
+ *
+ * ## `general` + `languages` may exceed `copies`, and that is correct
+ *
+ * A book flagged for BOTH streams is genuinely on sale to both, so it is
+ * counted in both — «كام نسخة عربي؟» and «كام نسخة لغات؟» are two questions,
+ * not one partition. Dropping such a book from both lists to make the two sum
+ * would be the only arrangement that is wrong twice.
+ *
+ * ## The year buckets do not partition the orders either
+ *
+ * An order holding a first-year book and a second-year book is one order in
+ * `orders` and one order in EACH year's `orders`. The question a year bucket
+ * answers is «كام طلب فيه كتاب أولى», which is what a print run is decided on.
+ */
+function summariseOrders(rows: CountableOrder[]): AdminBookOrderOverview {
+  const totals = { orders: rows.length, books: 0, copies: 0, general: 0, languages: 0 };
+  const phones = new Set<string>();
+  /* Keyed by the year as a string so `null` («من غير صف») is a bucket like any
+     other rather than a value a `Map<number|null>` sorts unpredictably. */
+  const byYear = new Map<
+    string,
+    { year: number | null; books: number; copies: number; general: number; languages: number; phones: Set<string>; orders: Set<number> }
+  >();
+
+  rows.forEach((order, orderIndex) => {
+    phones.add(order.phone);
+
+    const facts =
+      order.items.length === 0
+        ? [{ year: order.course?.year ?? null, forGeneral: false, forLanguages: false, quantity: 1 }]
+        : order.items.map((item) => lineFacts(item, order));
+
+    for (const line of facts) {
+      totals.books += 1;
+      totals.copies += line.quantity;
+      if (line.forGeneral) totals.general += line.quantity;
+      if (line.forLanguages) totals.languages += line.quantity;
+
+      const key = String(line.year);
+      let bucket = byYear.get(key);
+      if (!bucket) {
+        bucket = { year: line.year, books: 0, copies: 0, general: 0, languages: 0, phones: new Set(), orders: new Set() };
+        byYear.set(key, bucket);
+      }
+      bucket.books += 1;
+      bucket.copies += line.quantity;
+      if (line.forGeneral) bucket.general += line.quantity;
+      if (line.forLanguages) bucket.languages += line.quantity;
+      bucket.phones.add(order.phone);
+      /* The ROW's index, not its id — two lines of the same order must count as
+         one order in this bucket, and the index is already unique per row here
+         and costs nothing to carry. */
+      bucket.orders.add(orderIndex);
+    }
+  });
+
+  /* Ascending, with «من غير صف» last rather than sorted as a zero — it is the
+     bucket nobody chose, and putting it above «سنة أولى» would read as the
+     first column of the screen. */
+  const years: AdminBookOrderYearOverview[] = [...byYear.values()]
+    .sort((a, b) => (a.year ?? 99) - (b.year ?? 99))
+    .map((bucket) => ({
+      year: bucket.year,
+      orders: bucket.orders.size,
+      students: bucket.phones.size,
+      books: bucket.books,
+      copies: bucket.copies,
+      streams: { general: bucket.general, languages: bucket.languages },
+    }));
+
+  return {
+    orders: totals.orders,
+    students: phones.size,
+    books: totals.books,
+    copies: totals.copies,
+    streams: { general: totals.general, languages: totals.languages },
+    years,
+  };
+}
+
+/**
+ * كل قراءة بتخفي المحذوف — إلا تبويب «المحذوفة».
+ *
+ * The one place the soft-delete rule is spelled out, because it is a rule that
+ * fails SILENTLY: a read that forgets `deletedAt: null` does not throw, it just
+ * keeps counting an order the admin decided did not happen — in the revenue
+ * tile, in the sidebar badge, in the shipping spreadsheet. Every one of those
+ * is a number somebody acts on.
+ *
+ * `'deleted'` is a VIEW and not a status (see `AdminBookOrderFilterSchema`), so
+ * it drops the status filter entirely: a deleted row KEEPS the status it was
+ * deleted from, and that is exactly what the admin looking at the tab needs to
+ * see. Every other value, and no value at all, means «مش محذوف».
+ */
+function liveOrDeletedWhere(status: AdminBookOrderFilter | undefined): Prisma.BookOrderWhereInput {
+  if (status === 'deleted') return { deletedAt: { not: null } };
+  return { deletedAt: null, ...(status ? { status } : {}) };
+}
+
+/**
+ * مين يقدر يفتح الطلب ده — the ownership half of `getById`/`submitPayment`.
+ *
+ * ## A SIGNED-IN caller: their own rows, and nothing else
+ *
+ * `userId` goes into the WHERE, so another account's order — or a guest order
+ * nobody owns — is a 404 through this session.
+ *
+ * ## An ANONYMOUS caller: unclaimed rows only, with the id as the credential
+ *
+ * `userId: null` is doing two jobs and both matter. It is what lets guest
+ * checkout work at all: the confirmation panel resumes from `localStorage` and
+ * the payment step runs with no session, and a UUIDv7 handed back only to
+ * whoever created the order is the sole proof either of them has. And it is
+ * what keeps an ACCOUNT-placed order behind its account — that order carries a
+ * student's full name, both phone numbers and their home address, and none of
+ * that should be reachable by holding an id.
+ *
+ * ⚠️ Do not widen this to «match on the id alone». It is tempting the moment
+ * anything starts writing `userId` onto a guest row, because then the browser
+ * that placed the order 404s on its own read — and the fix is to stop writing
+ * it (see `create`), not to open the anonymous branch. The read-time link in
+ * `listMine` and `studentIdForOrder` gives the student their order without
+ * either cost.
+ *
+ * ⚠️ Both branches are ADDITIONALLY narrowed by `deletedAt: null` at every call
+ * site. It is not folded in here on purpose — the admin restore path reads a
+ * deleted row by id and must not inherit a filter from a helper whose name is
+ * about ownership.
+ */
+function ownershipWhere(userId: string | null): Prisma.BookOrderWhereInput {
+  return { userId };
+}
 
 /**
  * ONE select for every read that returns a `BookOrder`, replacing the five
@@ -50,13 +407,21 @@ const ORDER_SELECT = {
   addressNote: true,
   senderPhone: true,
   paidAt: true,
+  /* «راح للمطبعة» — rendered on the student's card as «بنطبعه», and null on
+     every order that skipped the printer. See the column's own model note. */
+  printedAt: true,
   shippedAt: true,
+  /* The three lifecycle stamps the student's own screen renders. `rejectedAt`
+     and `rejectionReason` are inseparable at the database
+     (`book_orders_rejection_has_a_reason`), so a row that carries one always
+     carries the other and the card never has to render «مرفوض» with nothing
+     after it. */
+  deliveredAt: true,
+  rejectedAt: true,
+  rejectionReason: true,
   createdAt: true,
   course: { select: { title: true, bookTitle: true } },
-  items: {
-    orderBy: { titleAr: 'asc' },
-    select: { bookId: true, titleAr: true, unitPriceCents: true, quantity: true },
-  },
+  items: ORDER_ITEM_SELECT,
 } as const;
 
 /** One line as it is written — the shape both pricing paths return. */
@@ -65,6 +430,22 @@ interface OrderLineWrite {
   titleAr: string;
   unitPriceCents: number;
   quantity: number;
+  /**
+   * What ONE copy costs ME, snapshotted here at order time — the cost twin of
+   * `unitPriceCents` beside it, and frozen for the same reason.
+   *
+   * `/admin/finance` used to compute cost of sales by joining sold lines back
+   * to the LIVE `books.unit_cost_cents`, which made two ordinary admin actions
+   * rewrite closed months: deleting a retired title (the line's `bookId` is
+   * `SetNull`) erased the cost of every copy ever sold under it and raised the
+   * reported margin across all history, and editing what a copy costs restated
+   * the profit of every past sale.
+   *
+   * `null` is «مش معروف» and never «مجاني» — a hand-typed «كتاب خاص» line with
+   * no catalogue row, or a title whose cost has never been filled in. Those are
+   * counted and reported by the overview rather than treated as zero.
+   */
+  unitCostCents: number | null;
 }
 
 /** What `ORDER_SELECT` returns, as one name the mappers below can share. */
@@ -75,7 +456,7 @@ interface OrderRow {
   itemsCents: number;
   shippingCents: number;
   discountCents: number;
-  status: 'address_only' | 'paid' | 'shipped';
+  status: BookOrderStatus;
   fullName: string;
   phone: string;
   altPhone: string;
@@ -86,11 +467,26 @@ interface OrderRow {
   addressNote: string | null;
   senderPhone: string | null;
   paidAt: Date | null;
+  printedAt: Date | null;
   shippedAt: Date | null;
+  deliveredAt: Date | null;
+  rejectedAt: Date | null;
+  rejectionReason: string | null;
   createdAt: Date;
   course: { title: string; bookTitle: string | null } | null;
-  items: { bookId: string | null; titleAr: string; unitPriceCents: number; quantity: number }[];
+  items: OrderLineRow[];
 }
+
+/**
+ * How far back a finished order still counts as "you already ordered this".
+ *
+ * Seven days rather than a day: the two real double-payments on production were
+ * 38 and 48 hours apart, and a window that misses them is a window that does
+ * nothing. Longer than a week starts catching the honest second copy — a
+ * sibling, a lost parcel — which the student can still place, but should not
+ * have to argue with a dialog about.
+ */
+const DUPLICATE_WINDOW_DAYS = 7;
 
 @Injectable()
 export class BookOrdersService {
@@ -101,6 +497,15 @@ export class BookOrdersService {
     /** For the catalogue's prices and the current delivery fee — one
      *  direction only; nothing in `BooksService` reads an order. */
     private readonly books: BooksService,
+    /** Tells whoever ships parcels that one is waiting. One direction only —
+     *  nothing in notifications reads an order. */
+    private readonly notifications: NotificationsService,
+    /** The instructor's own linked WhatsApp, for the «الكتاب اتشحن» notice.
+     *  One direction only — nothing in the sidecar reads an order. */
+     private readonly whatsapp: WhatsappDeviceService,
+    /** The student's own thread on the platform — where the shipping notice
+     *  actually goes. One direction only. */
+    private readonly outreach: OutreachService,
   ) {}
 
   /** The screenshot upload — identical shape to `PaymentsService.uploadScreenshot`. */
@@ -123,12 +528,7 @@ export class BookOrdersService {
        * strictly better than the empty string it would otherwise get.
        */
       bookTitle: row.course?.bookTitle ?? row.items[0]?.titleAr ?? '',
-      items: row.items.map((item) => ({
-        bookId: item.bookId,
-        titleAr: item.titleAr,
-        unitPriceCents: item.unitPriceCents,
-        quantity: item.quantity,
-      })),
+      items: row.items.map(toOrderLine),
       amountCents: row.amountCents,
       itemsCents: row.itemsCents,
       shippingCents: row.shippingCents,
@@ -144,7 +544,11 @@ export class BookOrdersService {
       addressNote: row.addressNote,
       senderPhone: row.senderPhone,
       paidAt: row.paidAt?.toISOString() ?? null,
+      printedAt: row.printedAt?.toISOString() ?? null,
       shippedAt: row.shippedAt?.toISOString() ?? null,
+      deliveredAt: row.deliveredAt?.toISOString() ?? null,
+      rejectedAt: row.rejectedAt?.toISOString() ?? null,
+      rejectionReason: row.rejectionReason,
       createdAt: row.createdAt.toISOString(),
     };
   }
@@ -157,8 +561,49 @@ export class BookOrdersService {
    * `userId` is `null` for a GUEST — ordering a book never requires an
    * account (see the controller's own note). A signed-in caller still gets
    * it attached; this is purely additive.
+   *
+   * ## اللي طلب من غير حساب وهو أصلاً مسجّل
+   *
+   * A guest order whose phone number belongs to a registered student is
+   * ATTACHED to that student here, at write time. «فيه ناس اشترت فعلاً، شوف هل
+   * دول متسجلين — لو متسجلين يبقى الكتاب موجود عنده إنه خلاص اشتراه»: the
+   * platform knew the student had bought the book and could not tell them so,
+   * because guest checkout left the column null.
+   *
+   * `20260904120100_books_stream_placement_and_order_lifecycle` back-fills the
+   * history; this is what stops the problem growing, so that backfill stays a
+   * one-off rather than a job somebody has to remember to re-run.
+   *
+   * ⚠️ On `phone` ONLY, never `altPhone`. The alternate number is routinely a
+   * parent's — that is the case the second field exists for — and matching on
+   * it would file a child's order under a parent's account, or under a sibling
+   * who happens to have signed up with the same household number.
+   *
+   * The match is exact rather than fuzzy and needs no normalisation of its own:
+   * `users.phone_number` is UNIQUE and stored in E.164, and `input.phone` has
+   * already been through `egyptianPhone()` by the time it reaches here, so both
+   * sides are the same canonical string. A number that matches nobody stays a
+   * guest order and behaves exactly as it did before — see `getById` for the
+   * access rule that keeps the placing browser's own read working either way.
    */
   async create(userId: string | null, input: CreateBookOrderInput): Promise<BookOrder> {
+    /* ⚠️ The session's id, or NULL — never a phone lookup.
+       The obvious «اربطه بالحساب» is to fill `userId` in from
+       `users.phone_number` here. It was written that way first, and it takes
+       something away from the person it is meant to help: `getById` treats the
+       order id as the bearer token for an UNCLAIMED row, which is how the
+       confirmation panel resumes from `localStorage` and how the payment step
+       works with no session at all. Stamping an account onto the row turns the
+       browser's very next read into a 404 — a stranger who is registered gets
+       locked out of paying for the book they are mid-way through buying, and
+       only them. The alternative fix, widening the anonymous branch to match on
+       the id alone, buys that back by letting anybody holding an id read an
+       account-placed order's home address.
+       Neither is necessary. The link is made at READ time — `listMine` unions
+       on the phone, and `studentIdForOrder` resolves the notification's
+       recipient the same way — so the row is never claimed, the guest keeps the
+       access they had, and the student still sees the order. */
+    const ownerId = userId;
     // Same check `ProfileService.completeOnboarding` runs on the identical
     // field — `CreateBookOrderSchema` only proves SHAPE (two characters), not
     // that the code names a real governorate. Without this, a bad code would
@@ -179,11 +624,155 @@ export class BookOrdersService {
         ? await this.priceCart(input.items)
         : await this.priceCourseBook(input.courseId as string);
 
-    const totals = bookOrderTotals(priced.lines, await this.books.shippingCents());
+    /* ⚠️ Priced off the ADDRESS, and off the address on THIS order — «الشحن على
+       حسب المحافظة». Read here rather than posted from the form, for the same
+       reason the book prices are: a fee a browser can choose is a fee a browser
+       will choose. It is still added exactly ONCE by `bookOrderTotals`, however
+       many books are in the basket. */
+    const totals = bookOrderTotals(
+      priced.lines,
+      bookShippingCentsFor(input.governorateCode, await this.books.shippingRates()),
+    );
+
+    /**
+     * ⚠️ THE SAME PHONE'S OWN UNPAID ORDER IS REUSED, NOT DUPLICATED.
+     *
+     * Measured on production 2026-09-14: **95 of 192 live orders were sitting
+     * at `address_only`** — an address filled in and no payment ever made — and
+     * 44 phones had more than one order. Almost every pair was the same books,
+     * the same amount, and **six minutes apart**.
+     *
+     * They were not students ordering twice. `BookOrderPanel` resumes an
+     * in-progress order from `localStorage`, so the resume works on ONE browser
+     * — open the shop on a second phone, in a private window, or after clearing
+     * site data, and the address form posts a brand-new row. Half the admin's
+     * queue was one person's abandoned first attempt, which is why the queue
+     * stopped being reviewable at all.
+     *
+     * So the identity of an in-progress order is the PHONE, server-side, not a
+     * key in one browser's storage. Same phone, same lines, still unpaid ⇒ the
+     * address is updated on the row that already exists.
+     *
+     * ⚠️ `status: 'address_only'` only. A paid, shipped, rejected or deleted
+     * order is finished business and must never be silently rewritten by a new
+     * submission — that would edit the shipping address of a parcel already on
+     * its way.
+     *
+     * ⚠️ And the student is told NOTHING about this. They did not order twice;
+     * they filled a form twice. A confirmation here would be asking someone to
+     * approve a mistake they did not make.
+     */
+    /*
+     * ⚠️ `bookId` is NULLABLE on an order line — a course-page order predating
+     * the shop names a course, not a catalogue book. Two such lines with a null
+     * id are NOT interchangeable, so a null key falls back to the course, and
+     * an order whose course is also null can never match anything (`''`
+     * compares equal to nothing else here because `priced.courseId` is the same
+     * value on both sides only when both came from the same course).
+     */
+    const lineKey = (r: { bookId: string | null; quantity: number }) =>
+      `${r.bookId ?? `course:${priced.courseId ?? ''}`}:${r.quantity}`;
+
+    const sameLines = (rows: { bookId: string | null; quantity: number }[]): boolean => {
+      if (rows.length !== priced.lines.length) return false;
+      const mine = new Set(priced.lines.map(lineKey));
+      return rows.every((row) => mine.has(lineKey(row)));
+    };
+
+    /**
+     * ⚠️ WHO the open order has to belong to, and why it is not just the phone.
+     *
+     * The phone alone merges two people. One number is routinely a PARENT's —
+     * two siblings ordering their own year's book on mum's phone are two
+     * orders, and collapsing them would ship one book for two paid children.
+     * The existing spec that caught this seeds two different users from one
+     * address fixture, and it was right to fail.
+     *
+     * · Signed in ⇒ the account. Unambiguous, and it survives the student
+     *   switching phone number mid-flow.
+     * · Guest ⇒ phone AND name, both, on an unclaimed row. A guest has no
+     *   identity beyond what they typed; the name is what separates the two
+     *   siblings, and matching a guest's order to an account-placed one would
+     *   also hand a stranger the ability to edit it.
+     */
+    const owner =
+      ownerId !== null
+        ? { userId: ownerId }
+        : { userId: null, phone: input.phone, fullName: input.fullName };
+
+    /*
+     * ⚠️ Only for a CHECKOUT submission. `create()` keeps its plain meaning for
+     * every other caller — see `reuseOpenOrder` in the contract for the fifteen
+     * specs that proved why.
+     */
+    const open = input.reuseOpenOrder
+      ? await this.prisma.bookOrder.findMany({
+          where: { ...owner, status: 'address_only', deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, items: { select: { bookId: true, quantity: true } } },
+        })
+      : [];
+    const reusable = open.find((row) => sameLines(row.items));
+
+    if (reusable) {
+      await this.prisma.bookOrder.update({
+        where: { id: reusable.id },
+        data: {
+          // The ADDRESS may legitimately have changed between attempts — that is
+          // often exactly why they started over. Prices are not touched: they
+          // were read from the catalogue moments ago either way.
+          fullName: input.fullName,
+          phone: input.phone,
+          altPhone: input.altPhone,
+          governorateCode: input.governorateCode,
+          city: input.city,
+          addressStreet: input.addressStreet,
+          addressBuilding: input.addressBuilding,
+          addressNote: input.addressNote,
+        },
+      });
+      return this.byId(reusable.id);
+    }
+
+    /**
+     * A GENUINE repeat — the phone has a FINISHED order for the same books in
+     * the last week — is a question, not a refusal.
+     *
+     * ⚠️ The window looks at every non-open status, not just «paid». This
+     * platform has no payment gateway and nobody verifies the transfer: «مدفوع»
+     * is a claim a student made with a screenshot. A check that trusted it
+     * would miss exactly the case that cost money — two phones paid 250 EGP
+     * twice, 38 and 48 hours apart, for the same book.
+     *
+     * ⚠️ 409, not 400. The panel turns this one code into «إنت طلبت الكتاب
+     * قبل كده — عايز واحد كمان؟» and re-posts with `confirmDuplicate`. A 400
+     * would be rendered as a validation failure on a form that is perfectly
+     * valid.
+     */
+    if (input.reuseOpenOrder && !input.confirmDuplicate) {
+      const since = new Date(Date.now() - DUPLICATE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+      const recent = await this.prisma.bookOrder.findMany({
+        where: {
+          // ⚠️ The PHONE here, deliberately wider than the reuse match above.
+          // Reuse rewrites a row and must be sure whose it is; this only asks a
+          // question, and the case worth catching is the same human coming back
+          // on a different device with no session. A sibling on the same number
+          // answers «لأ، عايز نسخة كمان» once and is through.
+          phone: input.phone,
+          status: { not: 'address_only' },
+          deletedAt: null,
+          createdAt: { gte: since },
+        },
+        select: { items: { select: { bookId: true, quantity: true } } },
+      });
+      if (recent.some((row) => sameLines(row.items))) {
+        throw new ConflictException('DUPLICATE_RECENT_BOOK_ORDER');
+      }
+    }
 
     const order = await this.prisma.bookOrder.create({
       data: {
-        userId,
+        userId: ownerId,
         courseId: priced.courseId,
         // Every price here came from `books.price_cents` or
         // `courses.book_price_cents` moments ago — never from the request. Same
@@ -214,14 +803,55 @@ export class BookOrdersService {
       resourceId: order.id,
       outcome: 'success',
       metadata: {
-        userId,
+        userId: ownerId,
         courseId: priced.courseId,
         amountCents: totals.totalCents,
         lineCount: priced.lines.length,
+        /* Whether anybody was signed in when this was placed. A guest row is
+           never claimed afterwards, so this stays true for its whole life and
+           is the only record that the order arrived without a session. */
+        guest: userId === null,
       },
     });
 
     return this.byId(order.id);
+  }
+
+  /**
+   * The account behind a phone number, or `null` — the whole of the guest→
+   * student link.
+   *
+   * `findUnique` and not `findFirst`: `users.phone_number` is UNIQUE, so a
+   * number matches at most one account and there is no "which one" to decide.
+   * `null` phone numbers cannot collide either — a `null` argument would be a
+   * `WHERE phone_number IS NULL` that Prisma refuses on a unique lookup, and
+   * `input.phone` is required by the contract, so it never happens.
+   */
+  /**
+   * Who to notify about an order — «الطالب» even when the row says nobody.
+   *
+   * `order.userId` when a session placed it. Otherwise the account whose
+   * `phone_number` the order carries, which is the same read-time link
+   * `listMine` makes and the reason `create` never writes the column: a guest
+   * row stays a guest row, and its owner is worked out fresh each time.
+   *
+   * `null` when the number belongs to nobody — a real stranger with no account,
+   * which is what guest checkout is for. That is not a degraded case to work
+   * around; there is simply no bell to ring, and the admin tells them himself.
+   */
+  private async studentIdForOrder(order: {
+    userId: string | null;
+    phone: string;
+  }): Promise<string | null> {
+    return order.userId ?? (await this.userIdForPhone(order.phone));
+  }
+
+  private async userIdForPhone(phone: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { phoneNumber: phone },
+      select: { id: true },
+    });
+    return user?.id ?? null;
   }
 
   /**
@@ -242,12 +872,49 @@ export class BookOrdersService {
    * asked for three and is charged for two without being told has been
    * short-changed by software.
    */
+  /**
+   * Fills in `unitCostCents` on lines an ADMIN typed.
+   *
+   * The price on these lines is deliberately the admin's own — `adminCreate`
+   * exists to record what a human agreed to on the phone, and forcing it back
+   * through `books.price_cents` would mean changing the shop for everyone to
+   * give one customer a discount. The COST is not like that: it is not part of
+   * the negotiation, he is not typing it, and the catalogue is the only thing
+   * that knows it. So the price stays his and the cost is looked up and frozen,
+   * exactly as it would be on a shop order.
+   *
+   * A line with no `bookId` — a hand-written «كتاب خاص» — keeps `null`, which
+   * is «مش معروف» and is counted as such by the finance overview rather than
+   * being treated as free.
+   */
+  private async withFrozenCost<T extends { bookId: string | null }>(
+    lines: readonly T[],
+  ): Promise<(T & { unitCostCents: number | null })[]> {
+    const bookIds = lines
+      .map((line) => line.bookId)
+      .filter((bookId): bookId is string => bookId !== null);
+
+    const costs =
+      bookIds.length === 0
+        ? []
+        : await this.prisma.book.findMany({
+            where: { id: { in: bookIds } },
+            select: { id: true, unitCostCents: true },
+          });
+    const byId = new Map(costs.map((book) => [book.id, book.unitCostCents]));
+
+    return lines.map((line) => ({
+      ...line,
+      unitCostCents: line.bookId === null ? null : (byId.get(line.bookId) ?? null),
+    }));
+  }
+
   private async priceCart(
     lines: readonly { bookId: string; quantity: number }[],
   ): Promise<{ courseId: null; lines: OrderLineWrite[] }> {
     const books = await this.prisma.book.findMany({
       where: { id: { in: lines.map((line) => line.bookId) }, isActive: true },
-      select: { id: true, titleAr: true, priceCents: true, stock: true },
+      select: { id: true, titleAr: true, priceCents: true, stock: true, unitCostCents: true },
     });
     const byId = new Map(books.map((book) => [book.id, book]));
 
@@ -265,6 +932,8 @@ export class BookOrdersService {
         titleAr: book.titleAr,
         unitPriceCents: book.priceCents,
         quantity: line.quantity,
+        // Frozen now, beside the price — see `OrderLineWrite.unitCostCents`.
+        unitCostCents: book.unitCostCents,
       };
     });
 
@@ -274,10 +943,23 @@ export class BookOrdersService {
   /**
    * The course-page flow, expressed as a one-line cart.
    *
-   * Same checks as before the shop existed — published course, book actually on
-   * sale — and the same price source. What changed is only the SHAPE it returns:
-   * folding it into a line means everything downstream (totals, storage, the
-   * admin editor, the export) has exactly one kind of order to handle.
+   * ## ⚠️ The price here is the price the student was SHOWN
+   *
+   * This method used to read `course.bookPriceCents` while the course page read
+   * the catalogue, and that was the whole «توحدلي» bug: an admin repricing a
+   * book in `/admin/books/catalog` changed the number on the button and not the
+   * number charged when it was pressed. Nothing surfaced the difference — the
+   * order simply recorded the old amount, and the student's screenshot was for
+   * the new one.
+   *
+   * `courseBook()` is now the only answer to «الكتاب بتاع الكورس ده», and both
+   * sides call it. It must stay that way: a second copy of the predicate here
+   * reopens the gap from the pricing side, which is the side that costs money.
+   *
+   * It also settles what «مفيش كتاب» means. A live catalogue row with
+   * `showOnCourse: false` returns nothing — «الكتاب ده يتباع من قسم الكتب بس» —
+   * so this 400s rather than quietly selling it at the legacy price, and the
+   * button the student would have needed is not on the page either.
    */
   private async priceCourseBook(
     courseId: string,
@@ -290,26 +972,42 @@ export class BookOrdersService {
         status: true,
         bookTitle: true,
         bookPriceCents: true,
-        book: { select: { id: true } },
+        /* `stock` on top of the shared select: `courseBook` does not need it,
+           the availability check below does, and the shop path has always made
+           it. */
+        book: { select: { ...COURSE_BOOK_SELECT, stock: true } },
       },
     });
     if (!course || course.status !== 'published') throw new NotFoundException();
-    if (course.bookTitle === null || course.bookPriceCents === null) {
+
+    const { bookTitle, bookPriceCents, bookId, bookUnitCostCents } = courseBook(course);
+    if (bookTitle === null || bookPriceCents === null) {
       throw new BadRequestException('this course has no book to order');
+    }
+
+    /* `null` stock means «مش بنعد»; only a real number is a limit. The shop
+       path checks this per line and this one did not, so a course button could
+       sell the last copy twice. */
+    if (bookId !== null && course.book!.stock !== null && course.book!.stock < 1) {
+      throw new BadRequestException(`«${bookTitle}» مفيش منه العدد ده دلوقتي`);
     }
 
     return {
       courseId: course.id,
       lines: [
         {
-          /* Linked to the catalogue entry when there is one — the migration
-             created one per course that sells a book — so the admin screen and
-             the per-title order count see this exactly like a shop order. `null`
-             for a course whose book was never mirrored into the catalogue. */
-          bookId: course.book?.id ?? null,
-          titleAr: course.bookTitle,
-          unitPriceCents: course.bookPriceCents,
+          /* The catalogue row the price came FROM, so the admin screen and the
+             per-title order count see this exactly like a shop order. `null` on
+             the legacy branch — see `courseBook`: there is no row that priced
+             it, and pointing at one would attach the order to a book it was not
+             sold at. */
+          bookId,
+          titleAr: bookTitle,
+          unitPriceCents: bookPriceCents,
           quantity: 1,
+          // `null` on the legacy branch, which is the honest answer — see
+          // `CourseBook.bookUnitCostCents`.
+          unitCostCents: bookUnitCostCents,
         },
       ],
     };
@@ -344,6 +1042,11 @@ export class BookOrdersService {
    * `paidAt: now` and moves `status` to `'paid'` — in the SAME write, since
    * there is no separate row to update here. `senderPhone`/`screenshotKey`
    * are carried through only when `paid`, same as a genuine payment step.
+   *
+   * `input.isFree` decides it too, and overrides a `paid: false`: a giveaway
+   * has nothing left to collect, so it is settled by definition. See the
+   * `status` line below, and `markFree` for the same rule applied to an order
+   * labelled after it was already in the table.
    */
   async adminCreate(adminId: string, input: AdminCreateBookOrderInput): Promise<BookOrder> {
     if (input.screenshotKey !== null && !input.screenshotKey.startsWith(`${SCREENSHOT_PREFIX}/`)) {
@@ -372,13 +1075,30 @@ export class BookOrdersService {
      */
     const priced =
       input.items !== undefined
-        ? { courseId: null, lines: input.items.map((line) => ({ ...line })) }
+        ? { courseId: null, lines: await this.withFrozenCost(input.items) }
         : await this.priceCourseBook(input.courseId as string);
 
+    /*
+     * «مجاني» discounts the whole basket rather than zeroing the prices.
+     *
+     * The row keeps saying what the book was WORTH — 250 ج given away reads
+     * differently from a 0 ج book, and only the first is a number he can act
+     * on. `book_orders_free_collects_nothing` then holds `amountCents` at 0,
+     * which is what keeps it out of revenue.
+     */
+    /* The admin MAY type a fee — waiving it, or quoting one agreed on the phone
+       — and that override is the whole reason this is `??` and not the zone
+       lookup outright. With nothing typed it falls to the same zone rate the
+       public checkout would have charged for this address, rather than to a
+       flat number that has not been the price since delivery became zoned. */
+    const requestedShipping =
+      input.shippingCents ??
+      bookShippingCentsFor(input.governorateCode, await this.books.shippingRates());
+    const grossCents = bookOrderTotals(priced.lines, requestedShipping, 0).totalCents;
     const totals = bookOrderTotals(
       priced.lines,
-      input.shippingCents ?? (await this.books.shippingCents()),
-      input.discountCents ?? 0,
+      requestedShipping,
+      input.isFree ? grossCents : (input.discountCents ?? 0),
     );
 
     const now = new Date();
@@ -402,8 +1122,15 @@ export class BookOrdersService {
         addressNote: input.addressNote,
         senderPhone: input.paid ? input.senderPhone : null,
         screenshotKey: input.paid ? input.screenshotKey : null,
-        status: input.paid ? 'paid' : 'address_only',
-        paidAt: input.paid ? now : null,
+        isFree: input.isFree,
+        /* «مجاني» settles the order on its own — there is nothing left to
+           collect, so it is `paid` whatever the caller said. The dialog already
+           sends `paid: true` alongside the switch; this is the same rule stated
+           where it cannot be forgotten, and it is the invariant `markFree`
+           upholds for a row that is labelled after the fact: a free order that
+           stayed `address_only` is an order no ship route will touch. */
+        status: input.paid || input.isFree ? 'paid' : 'address_only',
+        paidAt: input.paid || input.isFree ? now : null,
       },
       select: { id: true },
     });
@@ -464,12 +1191,54 @@ export class BookOrdersService {
       where: { id: orderId },
       select: {
         id: true,
+        status: true,
+        deletedAt: true,
+        amountCents: true,
         shippingCents: true,
         discountCents: true,
+        /* For the re-quote below: «اتغيّرت المحافظة ولا لأ» has to be answered
+           against what the row SAYS, not against whether the field was sent —
+           re-saving the same governorate is not an address change. */
+        governorateCode: true,
         items: { select: { titleAr: true, unitPriceCents: true, quantity: true, bookId: true } },
       },
     });
     if (!existing) throw new NotFoundException();
+
+    /*
+     * A DELETED order is not editable.
+     *
+     * This method had no `deletedAt` guard at all, so a soft-deleted row could
+     * have its money rewritten from the restore screen — and because the total
+     * is RECOMPUTED from the lines, the CHECK that keeps the four columns
+     * consistent stays satisfied and the change leaves no error anywhere. The
+     * row is hidden from the working list, so nobody would see it again either.
+     * «رجّعه» first, edit second: an edit worth making is worth making on a row
+     * that is back in the list.
+     */
+    if (existing.deletedAt !== null) {
+      throw new BadRequestException('الطلب ده متشال — رجّعه الأول لو عايز تعدّله');
+    }
+
+    /*
+     * The MONEY on a delivered order is not editable; its address still is.
+     *
+     * Once a parcel has arrived, what it was worth is settled history that
+     * `/admin/finance` has already reported and that the owner may have closed
+     * a month on. Correcting a typo in a street name afterwards is routine;
+     * restating the revenue of a completed sale is not, and if it genuinely has
+     * to happen it should be a refund — a dated, explained row — rather than a
+     * silent overwrite of what the sale was.
+     */
+    const touchesMoney =
+      input.items !== undefined ||
+      input.shippingCents !== undefined ||
+      input.discountCents !== undefined;
+    if (touchesMoney && existing.status === 'delivered') {
+      throw new BadRequestException(
+        'الطلب ده وصل خلاص — لو الفلوس اتغيّرت سجّل مرتجع بدل ما تعدّل قيمة الطلب',
+      );
+    }
 
     if (input.governorateCode !== undefined) {
       // Same check both create paths run — a code that names nothing would
@@ -483,18 +1252,49 @@ export class BookOrdersService {
       }
     }
 
+    // Resolved before the transaction — a lookup inside one holds the row lock
+    // for the length of a second query for no reason.
+    const patchedLines = input.items === undefined ? null : await this.withFrozenCost(input.items);
+
     const lines = input.items ?? existing.items;
+    /*
+     * ── Moving the address re-quotes the delivery, unless it is settled ──
+     *
+     * «الشحن على حسب المحافظة»: an order corrected from القاهرة to أسوان is an
+     * eighty-pound fee on a hundred-and-fifty-pound delivery, and leaving it
+     * would make the address edit quietly eat the difference on exactly the
+     * parcels that cost most.
+     *
+     * Three conditions, and each one is load-bearing:
+     *
+     *   · a governorate was actually SENT — this PATCH is partial, and
+     *     `undefined` means "not touched", never "clear it";
+     *   · no fee was typed — an admin who wrote a number was negotiating, and a
+     *     lookup must never overwrite a decision;
+     *   · the order is not `delivered` — the guard above lets an address be
+     *     corrected on a completed sale precisely because that is NOT a money
+     *     change, and re-quoting there would restate revenue `/admin/finance`
+     *     has already reported. The frozen fee stands.
+     */
+    const reQuoteShipping =
+      input.shippingCents === undefined &&
+      input.governorateCode !== undefined &&
+      input.governorateCode !== existing.governorateCode &&
+      existing.status !== 'delivered';
     const totals = bookOrderTotals(
       lines,
-      input.shippingCents ?? existing.shippingCents,
+      input.shippingCents ??
+        (reQuoteShipping
+          ? bookShippingCentsFor(input.governorateCode, await this.books.shippingRates())
+          : existing.shippingCents),
       input.discountCents ?? existing.discountCents,
     );
 
     await this.prisma.$transaction(async (tx) => {
-      if (input.items !== undefined) {
+      if (patchedLines !== null) {
         await tx.bookOrderItem.deleteMany({ where: { orderId } });
         await tx.bookOrderItem.createMany({
-          data: input.items.map((line) => ({ ...line, orderId })),
+          data: patchedLines.map((line) => ({ ...line, orderId })),
         });
       }
       await tx.bookOrder.update({
@@ -520,12 +1320,17 @@ export class BookOrdersService {
       resourceType: AUDIT_RESOURCES.bookOrder,
       resourceId: orderId,
       outcome: 'success',
+      // `amountCentsBefore` is the answer to «كانت كام قبل التعديل», which this
+      // trail could not give: it recorded the new total and the field names and
+      // nothing about what was replaced, so a revenue restatement left no diff
+      // anywhere on the platform.
       /* The field names and the money, never the address text. What an order is
          worth is the number anyone auditing this would come looking for; a
          street name in an audit row is a copy of personal data with no reader. */
       metadata: {
         adminId,
         fields: Object.keys(input),
+        amountCentsBefore: existing.amountCents,
         amountCents: totals.totalCents,
         lineCount: lines.length,
       },
@@ -538,14 +1343,9 @@ export class BookOrdersService {
    * Step two — the payment. Moves the SAME row from `address_only` to
    * `paid`; no separate admin-approval step. See the model doc for why.
    *
-   * `userId` partitions ownership even for a guest: `null` matches only a
-   * GUEST order (`userId IS NULL` in the WHERE below), so a signed-in caller
-   * can never take over a guest's order by guessing its id, and a guest can
-   * never take over a signed-in student's order the same way — the two
-   * populations simply do not intersect in this WHERE clause. Knowing the
-   * order's id (a UUIDv7, handed back only to whoever created it, and the
-   * same id a guest's browser remembers in `localStorage` to resume this
-   * exact step) is what stands in for a session here.
+   * Ownership is `ownershipWhere` — see that helper for why the anonymous half
+   * of it is "the id alone" now that a guest's order can be attached to an
+   * account it was never placed from.
    */
   async submitPayment(
     userId: string | null,
@@ -560,9 +1360,11 @@ export class BookOrdersService {
     }
 
     const existing = await this.prisma.bookOrder.findFirst({
-      // `userId` in the WHERE — an order id from another student's account
-      // cannot be paid through this student's session.
-      where: { id: orderId, userId },
+      // A deleted order is not payable — «الطلب ده اتشال» — and a 404 is the
+      // honest answer to a browser resuming a `localStorage` id for a row the
+      // admin removed. Restoring it is the admin's own action, not a side
+      // effect of somebody uploading a screenshot at it.
+      where: { id: orderId, deletedAt: null, ...ownershipWhere(userId) },
       select: { id: true, status: true, courseId: true },
     });
     if (!existing) throw new NotFoundException();
@@ -571,16 +1373,39 @@ export class BookOrdersService {
     }
 
     const now = new Date();
-    const order = await this.prisma.bookOrder.update({
-      where: { id: existing.id },
-      data: {
-        senderPhone: input.senderPhone,
-        screenshotKey: input.screenshotKey,
-        paidAt: now,
-        status: 'paid',
-      },
-      select: ORDER_SELECT,
+    /*
+      Paying is the moment this becomes somebody's job — `address_only` is a
+      basket, `paid` is a parcel owed. So the alert is written in the SAME
+      transaction as the status change: an order that reached `paid` with
+      nobody told about it is exactly the silent queue this feature exists to
+      close.
+    */
+    const { order, admins } = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.bookOrder.update({
+        where: { id: existing.id },
+        data: {
+          senderPhone: input.senderPhone,
+          screenshotKey: input.screenshotKey,
+          paidAt: now,
+          status: 'paid',
+        },
+        select: ORDER_SELECT,
+      });
+
+      const recipients = await this.notifications.emitToPermission(
+        tx,
+        // The permission that opens the shipping queue — the same authority
+        // that decides who may act on this decides who hears about it.
+        'book-order:read',
+        'book_order_placed',
+        { orderId: updated.id },
+      );
+
+      return { order: updated, admins: recipients };
     });
+
+    // After the commit. See `NotificationsService.announce`.
+    await this.notifications.announceAll(admins);
 
     await this.audit.record({
       action: 'book-order:pay',
@@ -600,23 +1425,46 @@ export class BookOrdersService {
    * and this is what turns that id back into "is this still address_only,
    * or already paid?" without ever needing a session to ask the question.
    *
-   * Same partition as `submitPayment`: `userId: null` matches only a GUEST
-   * order, so a signed-in caller cannot read a guest's order by guessing its
-   * id and a guest cannot read a signed-in student's order the same way.
+   * `deletedAt: null` for the same reason `submitPayment` carries it: a row
+   * the admin removed from every working list must not still answer a public
+   * route with a name, a phone number and a street address on it.
    */
   async getById(userId: string | null, orderId: string): Promise<BookOrder> {
     const row = await this.prisma.bookOrder.findFirst({
-      where: { id: orderId, userId },
+      where: { id: orderId, deletedAt: null, ...ownershipWhere(userId) },
       select: ORDER_SELECT,
     });
     if (!row) throw new NotFoundException();
     return this.toBookOrder(row);
   }
 
-  /** The caller's own orders, newest first. `userId` from the session, never the URL. */
+  /** The caller's own orders, newest first. `userId` from the session, never
+   *  the URL, and never a row the admin deleted — «اتشال» has to mean gone
+   *  from the student's history too, or the one screen the deletion was
+   *  supposed to clean up is the one that still shows it. */
   async listMine(userId: string): Promise<BookOrder[]> {
+    const phone = await this.phoneOf(userId);
+
     const rows = await this.prisma.bookOrder.findMany({
-      where: { userId },
+      where: {
+        deletedAt: null,
+        OR: [
+          { userId },
+          /* «اللي اشتروا قبل ما يسجّلوا» — the read-time half of the guest link.
+             Guest checkout leaves `userId` NULL forever (see `create`), so a
+             student who ordered signed-out, or ordered before they had an
+             account at all, owns rows this query would otherwise never see.
+             The number is what connects them: `users.phone_number` is UNIQUE
+             and E.164, and `book_orders.phone` goes through `egyptianPhone()`,
+             which normalises to the same form before it is written — so this is
+             an equality on two canonical strings, not a fuzzy match.
+             `phone`, never `altPhone`: the second number is routinely a
+             parent's, and matching on it would put one sibling's order in
+             another's history. And only rows still UNCLAIMED — `userId: null`
+             — so this can never reach into another account's orders. */
+          ...(phone ? [{ userId: null, phone }] : []),
+        ],
+      },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       select: ORDER_SELECT,
     });
@@ -624,19 +1472,100 @@ export class BookOrdersService {
   }
 
   /**
+   * The student's own number, for the guest-order union above.
+   *
+   * `null` for an account that has none — and the caller drops the whole OR arm
+   * rather than passing it through, because `{ userId: null, phone: null }`
+   * would be a `WHERE phone IS NULL` against a NOT NULL column: harmless today,
+   * and exactly the shape that silently matches everything the day somebody
+   * makes the column nullable.
+   */
+  private async phoneOf(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { phoneNumber: true },
+    });
+    return user?.phoneNumber ?? null;
+  }
+
+  /**
+   * «أوصل للطالب» — the free-text leg of the admin list.
+   *
+   * One box, three kinds of answer, because that is how the caller identifies
+   * themselves on the phone: a NAME (the order's own `fullName`, which is the
+   * shipping name and may differ from the account's, plus the linked account's
+   * `name`/`email` when there is one), a NUMBER (any of the three the order
+   * carries — the contact number, the second number «حول من», and the
+   * Vodafone Cash number the transfer came from, since a parent transferring
+   * for their child is the case the second number exists for), or a PLACE (the
+   * governorate as it is written on the row, the city, and the street line).
+   * Book titles are in as well: «مين طلب كتاب البرمجة» is the same question
+   * asked from the other side.
+   *
+   * The phone leg goes through `phoneSearchDigits` rather than matching the
+   * typed string — see that function for why a raw `contains` on `01015186`
+   * finds nothing against a stored `+201015186...`.
+   *
+   * `mode: 'insensitive'` on the text legs only. It is what makes an English
+   * name typed in lower case match one saved capitalised; on the phone
+   * columns it would be a per-row `LOWER()` over digits for no benefit.
+   */
+  private adminSearchWhere(q: string): Prisma.BookOrderWhereInput {
+    const term = q.trim();
+    if (!term) return {};
+
+    const text = { contains: term, mode: 'insensitive' as const };
+    const digits = phoneSearchDigits(term);
+
+    return {
+      OR: [
+        { fullName: text },
+        { city: text },
+        { addressStreet: text },
+        { addressBuilding: text },
+        { addressNote: text },
+        { governorate: { nameAr: text } },
+        { items: { some: { titleAr: text } } },
+        { course: { title: text } },
+        { user: { OR: [{ name: text }, { email: text }] } },
+        ...(digits
+          ? [
+              { phone: { contains: digits } },
+              { altPhone: { contains: digits } },
+              { senderPhone: { contains: digits } },
+            ]
+          : []),
+      ],
+    };
+  }
+
+  /**
    * The admin list — paid-vs-incomplete is a `status` filter, not two
    * endpoints, same convention as `PaymentsService.adminList`.
+   *
+   * The sidebar's «الكتب» badge is this same query with `status=paid`
+   * (`book-orders-alerts.tsx` polls the route rather than a count of its own),
+   * so `liveOrDeletedWhere` below is what keeps a deleted order off the badge
+   * as well — one filter, not two that can drift apart.
    */
   async adminList(query: AdminBookOrderQuery): Promise<{ rows: AdminBookOrderRow[]; rowCount: number }> {
-    const where = query.status ? { status: query.status } : {};
+    const where: Prisma.BookOrderWhereInput = {
+      ...liveOrDeletedWhere(query.status),
+      ...this.adminSearchWhere(query.q),
+      ...streamAndYearWhere(query.stream, query.year),
+    };
 
     const [rowCount, rows] = await this.prisma.$transaction([
       this.prisma.bookOrder.count({ where }),
       this.prisma.bookOrder.findMany({
         where,
-        // Oldest first — a shipping queue is a support ticket queue, same
-        // convention as the payment review queue.
-        orderBy: [{ createdAt: 'asc' }],
+        // Oldest first REMAINS the default — a shipping queue is a support
+        // ticket queue, same convention as the payment review queue — but it is
+        // now a choice rather than the only possibility. See
+        // `AdminBookOrderSortSchema` for what the hard-coded version cost:
+        // combined with a screen that sent no `page`, the newest order on a
+        // busy tab was the one guaranteed to be unreachable.
+        orderBy: orderByFor(query.sort),
         skip: (query.page - 1) * query.perPage,
         take: query.perPage,
         select: {
@@ -657,15 +1586,21 @@ export class BookOrdersService {
           adminNote: true,
           senderPhone: true,
           screenshotKey: true,
+          isFree: true,
           status: true,
           createdAt: true,
           paidAt: true,
+          printedAt: true,
           shippedAt: true,
-          // «كل واحد عايز كام كتاب» is read straight off this.
-          items: {
-            orderBy: { titleAr: 'asc' as const },
-            select: { bookId: true, titleAr: true, unitPriceCents: true, quantity: true },
-          },
+          deliveredAt: true,
+          rejectedAt: true,
+          rejectionReason: true,
+          deletedAt: true,
+          deletionReason: true,
+          // «كل واحد عايز كام كتاب» is read straight off this — with the
+          // line's own «عربي / لغات» beside it, which is what the packing list
+          // could never say for a cart order.
+          items: ORDER_ITEM_SELECT,
           course: {
             select: { id: true, title: true, year: true, forGeneral: true, forLanguages: true, bookTitle: true },
           },
@@ -674,6 +1609,31 @@ export class BookOrdersService {
         },
       }),
     ]);
+
+    /*
+     * «أعرف إن الراجل ده طلب كتاب قبل كده ولا لأ» — ONE grouped count for the
+     * whole page, keyed by phone number.
+     *
+     * The same trick `BooksService.adminList` uses for `orderedCount`, and for
+     * the same reason: a per-row `_count` would be a correlated subquery
+     * executed once per row on a screen whose whole purpose is comparing rows.
+     *
+     * Counted on `phone` and NOT on `userId`, which is the entire point —
+     * guest checkout means one person is several unlinked rows, and the number
+     * they typed is the only thing all of them share. Soft-deleted orders are
+     * excluded: «طلب قبل كده» is a claim about a real history, and a row the
+     * admin hid is one they decided did not happen.
+     */
+    const phones = [...new Set(rows.map((row) => row.phone))];
+    const grouped =
+      phones.length === 0
+        ? []
+        : await this.prisma.bookOrder.groupBy({
+            by: ['phone'],
+            where: { phone: { in: phones }, deletedAt: null },
+            _count: { _all: true },
+          });
+    const ordersByPhone = new Map(grouped.map((entry) => [entry.phone, entry._count._all]));
 
     return {
       rowCount,
@@ -696,12 +1656,7 @@ export class BookOrdersService {
         courseForGeneral: row.course?.forGeneral ?? null,
         courseForLanguages: row.course?.forLanguages ?? null,
         bookTitle: row.course?.bookTitle ?? row.items[0]?.titleAr ?? '',
-        items: row.items.map((item) => ({
-          bookId: item.bookId,
-          titleAr: item.titleAr,
-          unitPriceCents: item.unitPriceCents,
-          quantity: item.quantity,
-        })),
+        items: row.items.map(toOrderLine),
         amountCents: row.amountCents,
         itemsCents: row.itemsCents,
         shippingCents: row.shippingCents,
@@ -718,12 +1673,90 @@ export class BookOrdersService {
         addressNote: row.addressNote,
         senderPhone: row.senderPhone,
         hasScreenshot: row.screenshotKey !== null,
+        isFree: row.isFree,
         status: row.status,
         createdAt: row.createdAt.toISOString(),
         paidAt: row.paidAt?.toISOString() ?? null,
+        printedAt: row.printedAt?.toISOString() ?? null,
         shippedAt: row.shippedAt?.toISOString() ?? null,
+        deliveredAt: row.deliveredAt?.toISOString() ?? null,
+        rejectedAt: row.rejectedAt?.toISOString() ?? null,
+        rejectionReason: row.rejectionReason,
+        deletedAt: row.deletedAt?.toISOString() ?? null,
+        deletionReason: row.deletionReason,
+        /* «كام طلب TANI» — the row itself is subtracted, so `0` is the common
+           case and the badge is simply absent for it. The subtraction is
+           conditional because a row on the «المحذوفة» tab was never in the
+           grouped count above, and taking one off anyway would report `-1`
+           worth of history as `0` on the very screen that shows deleted rows
+           beside live ones. */
+        previousOrdersFromPhone: Math.max(
+          (ordersByPhone.get(row.phone) ?? 0) - (row.deletedAt === null ? 1 : 0),
+          0,
+        ),
       })),
     };
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * «كام نسخة، كام كتاب، كام طالب، كام عربي، كام لغات» — الأرقام فوق الشاشة.
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * The header on `/admin/books`, computed over the WHOLE filtered set — the
+   * open tab plus every dropdown the screen is showing — and never over the
+   * page.
+   *
+   * ## Why it does not count the rendered rows
+   *
+   * The list is fifty per page. «حدّد اللي في المدى» already made this exact
+   * mistake once: it ticked the fifty rows on screen while the tab held
+   * fifty-two, so the button read «(50)» beside a sidebar badge reading «52»
+   * and a batch «اتشحن» silently left two parcels behind. A header that
+   * counted the page would be the same bug with no button to press — the
+   * number would simply be wrong, and nothing on the screen would say so.
+   *
+   * ## Why it re-reads rows instead of running five `COUNT`s
+   *
+   * Every number here except `orders` is a property of the ORDER LINES, not of
+   * the order: copies are quantities, the edition is a pair of booleans on the
+   * book, and الصف is the book's year with the order's course as the fallback.
+   * Five aggregates over `book_order_items` joined back to `book_orders` would
+   * each need that same fallback re-expressed in SQL, and the first one to
+   * spell it differently would produce a header whose parts disagree.
+   *
+   * The select is deliberately narrower than the one `packingList` already runs
+   * over the same set — no addresses, no governorate join — so this is the
+   * cheaper of the two reads this screen was already making.
+   *
+   * ## «كام طالب» counts PHONE NUMBERS
+   *
+   * Most rows on this table are guests (`userId: null`). Counting distinct
+   * `userId` would report one student for a hundred guest orders; counting rows
+   * would report the same person once per order. The number they typed is the
+   * only identifier every order has and the same person reuses — which is
+   * already why `previousOrdersFromPhone` counts on it.
+   */
+  async adminOverview(query: AdminBookOrderQuery): Promise<AdminBookOrderOverview> {
+    const rows = await this.prisma.bookOrder.findMany({
+      where: {
+        ...liveOrDeletedWhere(query.status),
+        ...this.adminSearchWhere(query.q),
+        ...streamAndYearWhere(query.stream, query.year),
+      },
+      select: {
+        phone: true,
+        items: {
+          select: {
+            quantity: true,
+            book: { select: { year: true, forGeneral: true, forLanguages: true } },
+          },
+        },
+        course: { select: { year: true, forGeneral: true, forLanguages: true } },
+      },
+    });
+
+    return summariseOrders(rows);
   }
 
   /**
@@ -741,12 +1774,27 @@ export class BookOrdersService {
    * starting over.
    */
   async adminRevenueSummary(): Promise<{ revenueTotalCents: number; paidCount: number }> {
+    /*
+     * `delivered` counts as money received — it is `shipped` one step later,
+     * not a different kind of sale — and `rejected` never does: the whole
+     * meaning of turning an order down is that it is not owed and not paid.
+     *
+     * `deletedAt: null` is the one that is easy to leave out and the one that
+     * matters most here. «واحد دفع فلوس» is exactly why deletion is soft: the
+     * row survives, so a read that forgets this filter keeps a hidden order in
+     * a total nobody can trace back to it.
+     */
+    /* `BOOK_REVENUE_WHERE`, not a local copy of it. This clause WAS written
+       out here, which is how it drifted from the finance overview's in the
+       first place — and it also predates «مجاني», so a giveaway was counted
+       among the paid orders and contributed its zero to the total. The zero
+       made the money look right by coincidence while `paidCount` was visibly
+       wrong; both are excluded now, by the same constant the overview reads. */
+    const counted = BOOK_REVENUE_WHERE;
+
     const [paidCount, revenue] = await this.prisma.$transaction([
-      this.prisma.bookOrder.count({ where: { status: { in: ['paid', 'shipped'] } } }),
-      this.prisma.bookOrder.aggregate({
-        where: { status: { in: ['paid', 'shipped'] } },
-        _sum: { amountCents: true },
-      }),
+      this.prisma.bookOrder.count({ where: counted }),
+      this.prisma.bookOrder.aggregate({ where: counted, _sum: { amountCents: true } }),
     ]);
 
     return { revenueTotalCents: revenue._sum.amountCents ?? 0, paidCount };
@@ -763,26 +1811,306 @@ export class BookOrdersService {
   }
 
   /**
-   * «اتشحن» — records ONLY that the order shipped. No notification is sent
-   * to the student; see the model doc on `BookOrder.shippedAt`.
+   * The row an admin action is about, loaded once with everything the four
+   * transitions below need to decide and to record.
+   *
+   * `deletedAt` is selected rather than filtered on, because "this order is
+   * deleted" is a different answer from "there is no such order": `restore`
+   * needs the deleted row, and the other three need to say «رجّعه الأول»
+   * instead of a 404 that reads as a bad id.
    */
-  async markShipped(adminId: string, orderId: string): Promise<{ id: string; status: 'shipped'; shippedAt: string }> {
+  private async orderForAdminAction(orderId: string) {
     const order = await this.prisma.bookOrder.findUnique({
       where: { id: orderId },
-      select: { id: true, status: true, userId: true, courseId: true },
+      select: {
+        id: true,
+        status: true,
+        userId: true,
+        /* For `studentIdForOrder`: a guest row's `userId` is NULL forever, and
+           the number is what finds the account to notify. */
+        phone: true,
+        courseId: true,
+        deletedAt: true,
+        deletionReason: true,
+        /* For `markFree`, which refuses anything that collected money. */
+        amountCents: true,
+        isFree: true,
+      },
     });
     if (!order) throw new NotFoundException();
+    return order;
+  }
+
+  /**
+   * «ده كان مجاني» — labelling a ZERO-total order that predates the switch.
+   *
+   * `unit_price_cents` allows 0, and before «مجاني» existed typing zeroes was
+   * the only way to record a book handed over for nothing. Those rows are real
+   * and already in the table, and they are indistinguishable from an order
+   * whose price was left blank by mistake — the screen cannot tell a gift from
+   * a slip, so it flags them and this is how he answers.
+   *
+   * ## It refuses anything that collected money
+   *
+   * `amountCents !== 0` is rejected outright. Turning a PAID order into a free
+   * one is a money change — it would move revenue — and money changes belong in
+   * the edit dialog where the four columns are recomputed together and the
+   * audit row carries the before value. This endpoint only ever re-labels a row
+   * that already collected nothing, so it cannot move a single pound.
+   *
+   * Deliberately one-way: there is no «مش مجاني» twin. Un-labelling would put
+   * the row back in the state the badge complains about, and the way to fix a
+   * wrong label is the edit dialog that can also fix the price it should have
+   * had.
+   *
+   * ## It also SETTLES the order — «يروح للمدفوع عشان يتشحنله»
+   *
+   * A free order is `paid: true` AND `isFree: true`, which is exactly what
+   * `adminCreate` writes for the «مجاني» switch on the create dialog: there is
+   * nothing left to collect, so the row belongs in the shipping queue and is
+   * handled «زي أي طلب» from there on. This method used to flip the flag and
+   * leave `status` at `address_only`, which produced the one order shape the
+   * platform could not ship at all — `markShipped` and `markShippedMany` both
+   * take only `paid` rows, so the parcel had no way out of the «بدأ ومكملش
+   * الدفع» tab short of an edit that gave it a price it was never charged.
+   *
+   * `paidAt` is stamped for the same reason `adminCreate` stamps it: the
+   * shipping desk sorts and exports on it, and a `paid` row with no date is a
+   * hole in every one of those lists. It moves no money — revenue reads
+   * `BOOK_REVENUE_WHERE`, which excludes `isFree` rows by name.
+   *
+   * Only `address_only` moves. A row that already shipped, arrived or was
+   * rejected keeps the state it reached; re-labelling what it collected must
+   * not rewind where the parcel got to.
+   */
+  async markFree(adminId: string, orderId: string): Promise<{ id: string; isFree: boolean }> {
+    const order = await this.orderForAdminAction(orderId);
+    this.assertNotDeleted(order);
+
+    if (!order.isFree && order.amountCents !== 0) {
+      throw new BadRequestException(
+        'الطلب ده اتحصّل منه فلوس — عدّل قيمته من «تعديل» لو عايز تخليه مجاني',
+      );
+    }
+
+    /* Re-running this on a row that is already free is a no-op UNLESS it is one
+       of the rows stranded in `address_only` by the version that only wrote the
+       flag — those it finishes, rather than returning "already done" to an
+       order that still cannot be shipped. */
+    const settles = order.status === 'address_only';
+    if (order.isFree && !settles) return { id: order.id, isFree: true };
+
+    const now = new Date();
+    await this.prisma.bookOrder.update({
+      where: { id: order.id },
+      data: settles ? { isFree: true, status: 'paid', paidAt: now } : { isFree: true },
+    });
+
+    await this.audit.record({
+      action: 'book-order:mark-free',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      metadata: {
+        adminId,
+        userId: order.userId,
+        courseId: order.courseId,
+        status: order.status,
+        /* «راح للمدفوع؟» — the one part of this action that changes which tab
+           the row is on, and the only way to tell the two shapes apart later. */
+        settled: settles,
+      },
+    });
+
+    return { id: order.id, isFree: true };
+  }
+
+  /**
+   * «اتشحن» — the parcel left the office.
+   *
+   * ## The student IS told, as of 2026-09-04
+   *
+   * This method's own docblock used to say the opposite, and so did the model
+   * comment beside `BookOrder.shippedAt`: shipping recorded a timestamp and
+   * deliberately sent nothing, on the reasoning that Ayman told people himself,
+   * outside the platform. That decision was reversed — «الطالب يعرف إن الكتاب
+   * في الطريق، وبعدين يعرف إنه وصل» — so the notification is written HERE, in
+   * the same transaction as the status change, exactly the way `submitPayment`
+   * writes the admin's alert. A stamped `shippedAt` with nobody told about it
+   * is the silent state this pair of transitions exists to remove.
+   *
+   * ⚠️ Only when `userId` is non-null. Most rows in this table are guests, and
+   * there is no account to write a notification row against; that is not a
+   * degraded case to work around, it is what guest checkout means. The
+   * recipient is resolved through `studentIdForOrder`, so a guest order placed
+   * on a registered student's own number still reaches their bell — without the
+   * row ever being claimed. See `create` for why claiming it is the wrong fix.
+   */
+  /**
+   * «راح للمطبعة» — the hand-off BEFORE the courier's.
+   *
+   * ## The loop this closes
+   *
+   * «الراجل بيقولي هاتلي الكتب، فأنزّله PDF وأحدد على الناس كلهم، وبعدين أضغط
+   * الطباعة. ولما أتأكد إنه فعلاً هيشحن أضغط الشحن.» Two hand-offs, one day,
+   * and until now both collapsed into «اتشحن» — so the «مدفوعة» tab could not
+   * answer the one question it is opened for every morning: which of these have
+   * already gone to the printer. The packing list is downloaded, the rows are
+   * selected, and this is the button that records what happened to them.
+   *
+   * ## Nothing is sent to the student
+   *
+   * Deliberately, and it is the only transition on this model that tells nobody.
+   * Paper entering a print shop is not news to a student, and a message about
+   * it would promise a date the run itself cannot keep — `book_order_shipped`
+   * stays the first thing they hear. That also makes the audit row the ONLY
+   * record this happened, which is why `book-order:printing` is an action of its
+   * own rather than a flag on `book-order:ship`.
+   *
+   * ## Only from `paid`
+   *
+   * Not from `shipped` or `delivered` — sending a parcel that has already left
+   * back to the printer is not a correction, it is two different facts about one
+   * row, and the way to undo a wrong click is the edit dialog. Not from
+   * `address_only` either: nothing is printed for an order nobody has paid for.
+   * Each refusal names its own case, so the admin never has to guess which of
+   * the three it was.
+   */
+  async markPrinting(adminId: string, orderId: string): Promise<MarkBookOrderPrintingResult> {
+    const order = await this.orderForAdminAction(orderId);
+    this.assertNotDeleted(order);
     if (order.status !== 'paid') {
+      throw new BadRequestException(
+        order.status === 'printing'
+          ? 'this order is already at the printer'
+          : order.status === 'shipped' || order.status === 'delivered'
+            ? 'this order has already left — it cannot go back to the printer'
+            : order.status === 'rejected'
+              ? 'this order was rejected — restore it to a live status first'
+              : 'this order has not been paid yet',
+      );
+    }
+
+    const now = new Date();
+    /* One statement, because `book_orders_printing_status_has_a_stamp` will not
+       accept the status without the timestamp — so the constraint can only ever
+       fire on a bug in this method, which is what a constraint is for. */
+    await this.prisma.bookOrder.update({
+      where: { id: order.id },
+      data: { status: 'printing', printedAt: now, printedByUserId: adminId },
+    });
+
+    await this.audit.record({
+      action: 'book-order:printing',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      metadata: { userId: order.userId, courseId: order.courseId, adminId },
+    });
+
+    return { id: order.id, status: 'printing', printedAt: now.toISOString() };
+  }
+
+  /**
+   * «أحدد على الناس كلهم وأضغط الطباعة» — the batch, which is the ONLY way this
+   * is ever really used: a print run is thirty orders, not one.
+   *
+   * ## Why this one CAN be a loop of simple updates
+   *
+   * Unlike `markShippedMany`, nothing here is sent anywhere. There is no
+   * WhatsApp socket to half-succeed against, so the only failure mode is a row
+   * that was not `paid`, and that is reported per id exactly the way the other
+   * batches report theirs — `skipped`, with the reason named, so the admin can
+   * see WHICH three of thirty did not move instead of re-reading thirty rows.
+   *
+   * It still does not wrap the batch in one transaction. Thirty orders going to
+   * one printer is thirty independent facts; rolling back twenty-nine because
+   * the thirtieth had already shipped would undo work that really happened.
+   */
+  async markPrintingMany(adminId: string, ids: string[]): Promise<BulkBookOrderResult> {
+    const rows: BulkBookOrderResultRow[] = [];
+    for (const id of ids) {
+      const order = await this.prisma.bookOrder.findUnique({
+        where: { id },
+        select: { id: true, status: true, fullName: true, deletedAt: true },
+      });
+
+      if (!order || order.deletedAt !== null) {
+        rows.push({ id, outcome: 'skipped', fullName: '', reason: 'الطلب مش موجود' });
+        continue;
+      }
+      if (order.status !== 'paid') {
+        rows.push({
+          id,
+          outcome: 'skipped',
+          fullName: order.fullName,
+          reason:
+            order.status === 'printing'
+              ? 'راح للمطبعة قبل كده'
+              : order.status === 'shipped' || order.status === 'delivered'
+                ? 'اتشحن خلاص'
+                : 'لسه مادفعش',
+        });
+        continue;
+      }
+
+      try {
+        await this.markPrinting(adminId, id);
+        rows.push({ id, outcome: 'printing', fullName: order.fullName, reason: null });
+      } catch (error) {
+        /* The status was checked a moment ago, so this is a genuine race or a
+           deleted row — reported rather than swallowed, for the same reason
+           `markDeliveredMany` reports its own. */
+        rows.push({
+          id,
+          outcome: 'skipped',
+          fullName: order.fullName,
+          reason: error instanceof BadRequestException ? error.message : 'مقدرناش نسجّله',
+        });
+      }
+    }
+
+    return {
+      rows,
+      succeeded: rows.filter((row) => row.outcome === 'printing').length,
+      noticeFailed: 0,
+      skipped: rows.filter((row) => row.outcome === 'skipped').length,
+    };
+  }
+
+  async markShipped(adminId: string, orderId: string): Promise<MarkBookOrderShippedResult> {
+    const order = await this.orderForAdminAction(orderId);
+    this.assertNotDeleted(order);
+    /* `printing` ships for the same reason `paid` does — it IS `paid`, one
+       hand-off later. And `paid` still ships directly, because «راح للمطبعة»
+       is a step the work takes, not a gate the state machine imposes: a single
+       reprint handed over the counter never sees a print run, and demanding a
+       fake one to unlock this button would put a lie in the audit trail. Same
+       argument `markDelivered` has always made for accepting `paid`. */
+    if (order.status !== 'paid' && order.status !== 'printing') {
       throw new BadRequestException(
         order.status === 'shipped' ? 'this order already shipped' : 'this order has not been paid yet',
       );
     }
 
     const now = new Date();
-    await this.prisma.bookOrder.update({
-      where: { id: order.id },
-      data: { status: 'shipped', shippedAt: now, shippedByUserId: adminId },
+    const studentId = await this.studentIdForOrder(order);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.bookOrder.update({
+        where: { id: order.id },
+        data: { status: 'shipped', shippedAt: now, shippedByUserId: adminId },
+      });
+      if (studentId !== null) {
+        await this.notifications.emit(tx, {
+          userId: studentId,
+          kind: 'book_order_shipped',
+          orderId: order.id,
+        });
+      }
     });
+
+    // After the commit, never inside it. See `NotificationsService.announce`.
+    if (studentId !== null) await this.notifications.announce(studentId);
 
     await this.audit.record({
       action: 'book-order:ship',
@@ -796,6 +2124,485 @@ export class BookOrdersService {
   }
 
   /**
+   * ## الشحن بالجملة — «طلب ١٠ كتب النهاردة، أضغط شحن مرة واحدة»
+   *
+   * Ships every id that is currently `paid`, and sends each of those students
+   * the «الكتاب اتشحن» WhatsApp message.
+   *
+   * ## Why one row at a time, not one transaction
+   *
+   * Because sending is an I/O call to a device that can be offline, slow, or
+   * refuse a number — and an outbound WhatsApp message is NOT rollback-able.
+   * A single transaction wrapping ten sends would either hold a DB
+   * transaction open across ten network calls, or roll back ten `shipped`
+   * rows because the eleventh number was not on WhatsApp, after the messages
+   * for the first ten had already been delivered. The parcels are genuinely
+   * gone; the database must say so even when the notice fails.
+   *
+   * ## Why the send failure does not undo the ship
+   *
+   * `notice_failed` is a REAL and expected outcome — a student who gave a
+   * landline, a device that lost its pairing. The book still left. Marking it
+   * unshipped to keep the two in sync would lose the fact that actually
+   * matters, and the admin would ship it a second time. The pair of columns
+   * (`shipNoticeSentAt` / `shipNoticeError`) is what carries the difference.
+   *
+   * ## The double-send guard
+   *
+   * «الهكس إن ممكن أبعت الواتساب مرتين للشخص». Two independent locks:
+   * the status check (only `paid` ships, so a re-selected `shipped` row is
+   * `skipped` before any send is attempted) and `shipNoticeSentAt` (never
+   * re-sent once stamped, even if the row somehow returns to `paid`).
+   */
+  async markShippedMany(
+    adminId: string,
+    ids: string[],
+    alsoWhatsapp: boolean,
+  ): Promise<BulkBookOrderResult> {
+    const rows: BulkBookOrderResultRow[] = [];
+
+    for (const id of ids) {
+      const order = await this.prisma.bookOrder.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          status: true,
+          userId: true,
+          courseId: true,
+          fullName: true,
+          phone: true,
+          deletedAt: true,
+          shipNoticeSentAt: true,
+          // The CODE, not the region — see `deliveryDaysFor`.
+          governorateCode: true,
+        },
+      });
+
+      if (!order || order.deletedAt !== null) {
+        rows.push({ id, outcome: 'skipped', fullName: '', reason: 'الطلب مش موجود' });
+        continue;
+      }
+      /* `printing` is shippable — see `markShipped`. A row that went to the
+         printer this morning is exactly the row this batch runs on when the
+         boxes come back in the afternoon, and skipping it here would make the
+         new state a dead end reachable only one row at a time. */
+      if (order.status !== 'paid' && order.status !== 'printing') {
+        rows.push({
+          id,
+          outcome: 'skipped',
+          fullName: order.fullName,
+          reason: order.status === 'shipped' ? 'اتشحن قبل كده' : 'لسه مادفعش',
+        });
+        continue;
+      }
+
+      const now = new Date();
+      const studentId = await this.studentIdForOrder(order);
+      await this.prisma.$transaction(async (tx) => {
+        await tx.bookOrder.update({
+          where: { id: order.id },
+          data: { status: 'shipped', shippedAt: now, shippedByUserId: adminId },
+        });
+        if (studentId !== null) {
+          await this.notifications.emit(tx, {
+            userId: studentId,
+            kind: 'book_order_shipped',
+            orderId: order.id,
+          });
+        }
+      });
+      if (studentId !== null) await this.notifications.announce(studentId);
+
+      await this.audit.record({
+        action: 'book-order:ship',
+        resourceType: AUDIT_RESOURCES.bookOrder,
+        resourceId: order.id,
+        outcome: 'success',
+        metadata: { userId: order.userId, courseId: order.courseId, adminId, bulk: true },
+      });
+
+      // Already notified — the guard, and it runs AFTER the ship so a retry
+      // of a row whose notice failed still gets its message.
+      if (order.shipNoticeSentAt !== null) {
+        rows.push({ id, outcome: 'shipped', fullName: order.fullName, reason: null });
+        continue;
+      }
+
+      const text = formatCopy(copy.bookShipNotice, {
+        name: order.fullName,
+        days: String(deliveryDaysFor(order.governorateCode)),
+      });
+
+      /*
+       * THE NOTICE IS THE PLATFORM MESSAGE. «عايز تتبعت في الشات على المنصة
+       * أصلاً، مش واتساب.»
+       *
+       * It lands in the student's own thread — the one «رسايل م. أيمن» uses —
+       * so a reply comes back to the inbox instead of to a phone, and it
+       * cannot fail for a reason outside our control: no linked device, no
+       * third-party rate limit, no "this number is not registered".
+       *
+       * WhatsApp is a SECOND copy and it is opt-in, because it leaves the
+       * platform through a personal, ban-able socket. Its failure is reported
+       * but never decides whether the student was told.
+       *
+       * ⚠️ A guest order has no account and therefore no thread. There,
+       * WhatsApp is the only channel that exists, so it runs regardless of the
+       * flag — the alternative is telling nobody.
+       */
+      let noticeError: string | null = null;
+
+      if (studentId !== null) {
+        await this.outreach.postAdminMessage(studentId, text);
+      }
+
+      if (alsoWhatsapp || studentId === null) {
+        try {
+          await this.whatsapp.send({ phone: order.phone, text, imageUrl: null });
+        } catch (error) {
+          // A number that is not on WhatsApp is a FACT about the number, not a
+          // fault to retry — worded so the admin phones instead.
+          noticeError =
+            error instanceof NotOnWhatsAppError
+              ? 'الرقم ده مش على واتساب'
+              : 'الواتساب مش متوصّل — جرّب تبعت تاني';
+        }
+      }
+
+      /*
+       * Stamped whenever the student was actually REACHED. The platform
+       * message counts, and for an account holder it is guaranteed — so only a
+       * GUEST whose WhatsApp bounced was told nothing, and only that row stays
+       * un-stamped so a retry can still reach them.
+       */
+      const reached = studentId !== null || noticeError === null;
+      await this.prisma.bookOrder.update({
+        where: { id: order.id },
+        data: {
+          ...(reached ? { shipNoticeSentAt: new Date() } : {}),
+          shipNoticeError: noticeError,
+        },
+      });
+
+      rows.push({
+        id,
+        // Still `shipped` when the platform message landed — the student WAS
+        // told; only the optional WhatsApp copy did not go.
+        outcome: reached ? 'shipped' : 'notice_failed',
+        fullName: order.fullName,
+        reason: noticeError,
+      });
+    }
+
+    return {
+      rows,
+      succeeded: rows.filter((row) => row.outcome === 'shipped').length,
+      noticeFailed: rows.filter((row) => row.outcome === 'notice_failed').length,
+      skipped: rows.filter((row) => row.outcome === 'skipped').length,
+    };
+  }
+
+  /**
+   * «وصل» in bulk — the same batching argument as `markShippedMany`, with no
+   * message of its own: the student already knows the book arrived, he is
+   * holding it. This exists so the admin can clear a day's confirmations in
+   * one action, which is the whole «عشان ما يتلخبطش» ask.
+   */
+  async markDeliveredMany(adminId: string, ids: string[]): Promise<BulkBookOrderResult> {
+    const rows: BulkBookOrderResultRow[] = [];
+    for (const id of ids) {
+      try {
+        const order = await this.prisma.bookOrder.findUnique({
+          where: { id },
+          select: { fullName: true },
+        });
+        await this.markDelivered(adminId, id);
+        rows.push({ id, outcome: 'delivered', fullName: order?.fullName ?? '', reason: null });
+      } catch (error) {
+        rows.push({
+          id,
+          outcome: 'skipped',
+          fullName: '',
+          reason: error instanceof BadRequestException ? error.message : 'مقدرناش نسجّله',
+        });
+      }
+    }
+    return {
+      rows,
+      succeeded: rows.filter((row) => row.outcome === 'delivered').length,
+      noticeFailed: 0,
+      skipped: rows.filter((row) => row.outcome === 'skipped').length,
+    };
+  }
+
+  /**
+   * «وصل» — the student has the book in their hands.
+   *
+   * ## Why `paid` OR `shipped`, and not just `shipped`
+   *
+   * The obvious lifecycle is paid → shipped → delivered, and most orders walk
+   * it. But Ayman hands books over himself — at the centre, to a student who
+   * came to collect — and that parcel was never given to a courier. Forcing
+   * «اتشحن» first to unlock «وصل» would make the admin record a shipment that
+   * did not happen, i.e. put a lie in the audit trail to satisfy a state
+   * machine. Two entry points, one destination.
+   *
+   * `shippedAt` is deliberately NOT back-filled on that path: it means "handed
+   * to the courier", and inventing a time for it would be the same lie one
+   * column over. A delivered order with `shippedAt: null` reads correctly —
+   * «اتسلّم باليد».
+   *
+   * ## Every refusal says which case it is
+   *
+   * A single «مش ينفع» would leave the admin guessing between "you have not
+   * recorded the payment yet", "somebody already pressed this" and "this order
+   * was turned down". They are three different next actions.
+   */
+  async markDelivered(adminId: string, orderId: string): Promise<MarkBookOrderDeliveredResult> {
+    const order = await this.orderForAdminAction(orderId);
+    this.assertNotDeleted(order);
+    if (order.status !== 'paid' && order.status !== 'printing' && order.status !== 'shipped') {
+      throw new BadRequestException(
+        order.status === 'delivered'
+          ? 'this order was already marked delivered'
+          : order.status === 'rejected'
+            ? 'this order was rejected — restore it to a live status first'
+            : 'this order has not been paid yet',
+      );
+    }
+
+    const now = new Date();
+    const studentId = await this.studentIdForOrder(order);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.bookOrder.update({
+        where: { id: order.id },
+        data: { status: 'delivered', deliveredAt: now, deliveredByUserId: adminId },
+      });
+      if (studentId !== null) {
+        await this.notifications.emit(tx, {
+          userId: studentId,
+          kind: 'book_order_delivered',
+          orderId: order.id,
+        });
+      }
+    });
+
+    if (studentId !== null) await this.notifications.announce(studentId);
+
+    await this.audit.record({
+      action: 'book-order:deliver',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      /* `from` and not just the new state: «كان مدفوع وبعتّه» and «سلّمته
+         باليد من غير شحن» end in the same row and are different facts. */
+      metadata: { userId: order.userId, courseId: order.courseId, adminId, from: order.status },
+    });
+
+    return { id: order.id, status: 'delivered', deliveredAt: now.toISOString() };
+  }
+
+  /**
+   * «أرفضه» — the order is turned down, and the student is told why.
+   *
+   * ## Rejecting is not deleting
+   *
+   * The row STAYS in the list, keeps its money on the screen and stays visible
+   * to the student with the reason on it. `softDelete` below is the other
+   * thing: gone from every working list, and the student is told nothing. The
+   * two are one click apart in the admin and must never be one method with a
+   * flag — «التحويل ما وصلش» is a decision about the CUSTOMER, and «طلب مكرر»
+   * is a decision about the LIST.
+   *
+   * ## Allowed from every live status
+   *
+   * Including `shipped` and `delivered`, deliberately: a parcel that came back,
+   * or a transfer that turned out to be someone else's, is discovered after the
+   * fact more often than before it. The only refusals are an order that is
+   * already rejected (nothing to decide twice) and one that is deleted (put it
+   * back first — an admin acting on a hidden row cannot see what they are
+   * acting on).
+   *
+   * `rejectionReason` is written in the same statement as `rejectedAt` because
+   * `book_orders_rejection_has_a_reason` will not accept them apart, and
+   * `book_orders_rejected_status_matches` will not accept the status without
+   * the timestamp. All three in one `update` means the constraints can only
+   * ever fire on a bug in this method — which is what a constraint is for.
+   */
+  async reject(adminId: string, orderId: string, reason: string): Promise<RejectBookOrderResult> {
+    const order = await this.orderForAdminAction(orderId);
+    this.assertNotDeleted(order);
+    if (order.status === 'rejected') {
+      throw new BadRequestException('this order was already rejected');
+    }
+
+    const now = new Date();
+    const studentId = await this.studentIdForOrder(order);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.bookOrder.update({
+        where: { id: order.id },
+        data: {
+          status: 'rejected',
+          rejectedAt: now,
+          rejectedByUserId: adminId,
+          rejectionReason: reason,
+        },
+      });
+      if (studentId !== null) {
+        await this.notifications.emit(tx, {
+          userId: studentId,
+          kind: 'book_order_rejected',
+          orderId: order.id,
+          /* The admin's own words, carried through and shown verbatim — the
+             same rule `payment_rejected` follows. A reason the platform
+             paraphrases is a reason the student argues with instead of acting
+             on. */
+          reason,
+        });
+      }
+    });
+
+    if (studentId !== null) await this.notifications.announce(studentId);
+
+    await this.audit.record({
+      action: 'book-order:reject',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      /* The reason IS in the trail here, unlike the address text `adminPatch`
+         withholds: it is the admin's own sentence about their own decision, it
+         was shown to the student, and «قاله إيه» is the first question if the
+         student disputes it. */
+      metadata: { userId: order.userId, courseId: order.courseId, adminId, from: order.status, reason },
+    });
+
+    return {
+      id: order.id,
+      status: 'rejected',
+      rejectedAt: now.toISOString(),
+      rejectionReason: reason,
+    };
+  }
+
+  /**
+   * «أحذفه وأكتب سبب الحذف» — gone from every working list, still in the table.
+   *
+   * ## `status` is deliberately NOT touched
+   *
+   * An order can be deleted from any state, and writing `status: 'deleted'`
+   * would erase the state it was deleted FROM — which is the one thing the
+   * admin looking at «المحذوفة» needs to see, and the reason the enum has no
+   * such member (see `BookOrderStatusSchema`'s own warning). `restore` below
+   * therefore has nothing to put back except the three deletion columns.
+   *
+   * ## No notification, and that is not an oversight
+   *
+   * Most of these rows are guests with no account to notify, and the ones that
+   * are not are still the wrong audience: deleting is an administrative tidy-up
+   * of a list — a duplicate, a test row, an order cancelled on the phone — not
+   * a decision ABOUT the customer. The decision about the customer is `reject`,
+   * and it does notify. Sending «طلبك اتشال» for a duplicate somebody placed
+   * twice would be the platform reporting its own housekeeping as bad news.
+   *
+   * Soft, because «واحد دفع فلوس»: the row is money that was received and is
+   * counted in «إيرادات الكتب». A real DELETE would restate a month's revenue
+   * with nothing left to explain the difference, and could not be undone by
+   * whoever clicked the wrong row.
+   */
+  async softDelete(adminId: string, orderId: string, reason: string): Promise<DeleteBookOrderResult> {
+    const order = await this.orderForAdminAction(orderId);
+    /* Refused rather than treated as a re-delete: the second reason would
+       silently replace the first, and the first is the one that explains why
+       the row is where the admin found it. */
+    if (order.deletedAt !== null) {
+      throw new BadRequestException('this order was already deleted');
+    }
+
+    const now = new Date();
+    await this.prisma.bookOrder.update({
+      where: { id: order.id },
+      data: { deletedAt: now, deletedByUserId: adminId, deletionReason: reason },
+    });
+
+    await this.audit.record({
+      action: 'book-order:delete',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      // `status` is what it was deleted FROM, and it is the field the row keeps
+      // — recording it here means the trail says the same thing the «المحذوفة»
+      // tab does.
+      metadata: { userId: order.userId, courseId: order.courseId, adminId, status: order.status, reason },
+    });
+
+    return { id: order.id, deletedAt: now.toISOString(), deletionReason: reason };
+  }
+
+  /**
+   * «رجّعه» — undo a deletion.
+   *
+   * All three deletion columns are cleared together;
+   * `book_orders_deletion_has_a_reason` would reject any other combination, and
+   * a restored order carrying the reason it was once deleted for is a row that
+   * lies about its own state.
+   *
+   * No reason is asked for. Putting something back is not a decision anybody
+   * has to justify, and the audit row already records who did it. `status` is
+   * untouched for the same reason `softDelete` never wrote it — the order comes
+   * back exactly as it went: a paid order returns paid, a rejected one returns
+   * rejected.
+   *
+   * A 400 and not a silent success on a row that is not deleted: «رجّعته» on an
+   * order that was never hidden means the admin is looking at a stale screen,
+   * and answering "done" would confirm a belief that is wrong.
+   */
+  async restore(adminId: string, orderId: string): Promise<RestoreBookOrderResult> {
+    const order = await this.orderForAdminAction(orderId);
+    if (order.deletedAt === null) {
+      throw new BadRequestException('this order is not deleted');
+    }
+
+    await this.prisma.bookOrder.update({
+      where: { id: order.id },
+      data: { deletedAt: null, deletedByUserId: null, deletionReason: null },
+    });
+
+    await this.audit.record({
+      action: 'book-order:restore',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      /* The reason it HAD been deleted for, carried into the restore row: the
+         `book_orders` column is about to be null, so this is the only place
+         that pairing survives. */
+      metadata: {
+        userId: order.userId,
+        courseId: order.courseId,
+        adminId,
+        status: order.status,
+        deletionReason: order.deletionReason,
+      },
+    });
+
+    return { id: order.id, status: order.status };
+  }
+
+  /**
+   * «رجّعه الأول» — the shared refusal for the three transitions that act on a
+   * LIVE order.
+   *
+   * A 400 rather than pretending the row is not there, because it is: the admin
+   * is looking at it on the «المحذوفة» tab, and a 404 would read as a broken id
+   * on a row they can see. Restoring is one click away and is the correct next
+   * action, so the message names it.
+   */
+  private assertNotDeleted(order: { deletedAt: Date | null }): void {
+    if (order.deletedAt !== null) {
+      throw new BadRequestException('this order was deleted — restore it first');
+    }
+  }
+
+  /**
    * The shipping-desk spreadsheet — handed directly to a shipping company
    * and a print shop, so every column is something one of them needs and
    * nothing is a platform-internal id.
@@ -806,12 +2613,178 @@ export class BookOrdersService {
    * than a silently baked-in one. Exporting `shipped` orders (a reprint
    * request) or `address_only` ones (chasing up abandoned carts) are both
    * legitimate, rarer uses of the same button.
+   *
+   * It takes the LIST's own filter (`AdminBookOrderFilter`) and not a bare
+   * `BookOrderStatus`, so the button exports exactly the tab the admin is
+   * looking at — «المحذوفة» included, which is the one case where the point of
+   * the export is to see what was removed. Every other value excludes deleted
+   * rows through the same `liveOrDeletedWhere` the screen uses: a spreadsheet
+   * handed to a courier must not contain a parcel nobody is sending.
+   *
+   * ⚠️ It reads the SCREEN's filters — `stream`, `year` and `q` — and not only
+   * the tab and the dates. See `ExportBookOrdersQuerySchema`'s own note: the
+   * file has to be the list the admin was looking at, or counting it against
+   * the screen is the admin's problem rather than the code's.
    */
-  async exportXlsx(status: BookOrderStatus): Promise<Buffer> {
+  async exportXlsx(query: ExportBookOrdersQuery): Promise<Buffer> {
+    const list = await this.packingList(query);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('طلبات الكتب');
+    // `views` sets right-to-left so an Arabic spreadsheet actually reads
+    // right-to-left when opened, rather than mirrored column order in an
+    // LTR grid.
+    sheet.views = [{ rightToLeft: true }];
+    sheet.columns = [
+      { header: '#', key: 'seq', width: 6 },
+      { header: 'اسم الكتاب', key: 'bookTitle', width: 28 },
+      { header: 'العدد', key: 'quantity', width: 8 },
+      { header: 'الكورس', key: 'courseTitle', width: 28 },
+      { header: 'الصف', key: 'year', width: 8 },
+      /* «عربي», not «عام». The VALUES here come from `copy.stream.*` and
+         `copy.stream.general` is «عربي» — the header used to say «عام» while
+         the cells under it said «عربي», on the one column a print shop reads to
+         decide which edition to pack. */
+      { header: 'عربي / لغات', key: 'stream', width: 14 },
+      { header: 'الاسم بالكامل', key: 'fullName', width: 24 },
+      { header: 'الموبايل', key: 'phone', width: 16 },
+      { header: 'موبايل تاني', key: 'altPhone', width: 16 },
+      { header: 'المحافظة', key: 'governorate', width: 16 },
+      { header: 'المدينة', key: 'city', width: 18 },
+      { header: 'الشارع', key: 'street', width: 28 },
+      { header: 'رقم العمارة', key: 'building', width: 14 },
+      { header: 'تفاصيل إضافية', key: 'note', width: 28 },
+      { header: 'تاريخ الطلب', key: 'createdAt', width: 18 },
+    ];
+
+    /*
+     * ── The summary block, above the table ────────────────────────────────
+     *
+     * Written with `spliceRows` AFTER the columns are declared, because
+     * `sheet.columns` binds the header to row 1 — inserting above it moves the
+     * header down and keeps every `addRow({key})` below working on the same
+     * keys. Two counts per line and never one: «كام كتاب» is what to print and
+     * «كام نسخة» is what to pack, and they differ the moment anybody orders two.
+     */
+    const summary: string[][] = [['طلبات الكتب — ملخص']];
+    /*
+     * الصفوف الأول، قبل الطبعات.
+     *
+     * «لو حمّلت الاتنين تقولي كام كتاب سنة أولى وكام كتاب سنة تانية» — that is
+     * the first thing read off this file, and it used to be reachable only by
+     * adding one line from the عربي block to one line from the لغات block. The
+     * edition breakdown stays underneath, because the paper is still stacked by
+     * edition and the packer still walks it that way.
+     */
+    if (list.years.length > 0) {
+      summary.push(['الصفوف']);
+      for (const year of list.years) {
+        const name = year.year === null ? 'من غير صف' : `سنة ${bookOrderYearWord(year.year)}`;
+        const streams = year.streams
+          .map((entry) => `${entry.label || 'من غير طبعة'} ${entry.copies}`)
+          .join(' · ');
+        summary.push([
+          `${name}: ${year.orders} طلب · ${year.books} كتاب · ${year.copies} نسخة${streams ? ` (${streams})` : ''}`,
+        ]);
+      }
+      summary.push([]);
+      summary.push(['الطبعات']);
+    }
+    for (const group of list.groups) {
+      const label = group.label || 'من غير طبعة محددة';
+      summary.push([`${label}: ${group.books} كتاب · ${group.copies} نسخة`]);
+      for (const year of group.years) {
+        const name = year.year === null ? 'من غير صف' : `الصف ${year.year}`;
+        summary.push([`   ${name}: ${year.books} كتاب · ${year.copies} نسخة`]);
+      }
+    }
+    /* الطلبات first, and on its own line. It is the ONLY number on this sheet
+       that can be compared with the screen the admin pressed the button on —
+       the screen counts ORDERS and the rest of this block counts BOOKS, and an
+       order holding two titles is what «واحد ناقص» looks like when the two are
+       read as the same number. */
+    summary.push([`الطلبات: ${list.orders} طلب`]);
+    summary.push([`الإجمالي: ${list.books} كتاب · ${list.copies} نسخة`]);
+    summary.push([]);
+
+    sheet.spliceRows(1, 0, ...summary);
+    /* Bold: the sheet's own title, the two section headers («الصفوف» /
+       «الطبعات» — matched by VALUE rather than by index, because the year block
+       is conditional and an index arithmetic that has to know whether it ran is
+       an index arithmetic that stops being right), and the grand total. */
+    const SECTION_HEADERS = new Set(['الصفوف', 'الطبعات']);
+    for (let i = 1; i <= summary.length; i += 1) {
+      const text = summary[i - 1]?.[0] ?? '';
+      sheet.getRow(i).font = { bold: i === 1 || i === summary.length - 1 || SECTION_HEADERS.has(text) };
+    }
+    sheet.getRow(summary.length + 1).font = { bold: true };
+
+    list.groups.forEach((group, index) => {
+      if (index > 0) {
+        /* The rule between the editions. A BORDERED row, not a blank one — a
+           blank row vanishes the first time anybody sorts the sheet, and this
+           line is the whole reason the grouping is legible. */
+        const divider = sheet.addRow({});
+        divider.height = 6;
+        divider.eachCell({ includeEmpty: true }, (cell) => {
+          cell.border = { top: { style: 'medium' } };
+        });
+      }
+      for (const line of group.lines) {
+        sheet.addRow({ ...line, year: line.year ?? '' });
+      }
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  /**
+   * The packing list itself — the rows, the grouping and the counts, with no
+   * file format attached.
+   *
+   * Both downloads are built from THIS: `exportXlsx` renders it into a
+   * workbook, and `/admin/books/print` renders it into an A4 page the browser
+   * turns into a PDF. One query and one set of counts, so the spreadsheet and
+   * the PDF cannot say different things about the same day's orders.
+   */
+  async packingList(query: ExportBookOrdersQuery): Promise<PackingList> {
+    const { status, from, to } = query;
+    /*
+     * «هتقول انت عايز من يوم كام لـ يوم كام» — the packing list for one run
+     * to the printer, not the whole history.
+     *
+     * Both ends are widened to the FULL day. `from` is that date at 00:00 and
+     * `to` is the day AFTER at 00:00 with a `lt` — an inclusive `lte` on the
+     * bare date would silently drop every order placed after midnight on the
+     * last day, which is most of them, and the admin would only notice when
+     * the printer came up short.
+     */
+    const createdAt =
+      from || to
+        ? {
+            ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
+            ...(to
+              ? { lt: new Date(new Date(`${to}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000) }
+              : {}),
+          }
+        : undefined;
+
     const rows = await this.prisma.bookOrder.findMany({
-      where: { status },
+      /* THE SAME three filter helpers `adminList` builds its own WHERE from,
+         in the same order — the export is the list, and the only way to keep
+         that true is to share the code that decides it rather than to write a
+         second version of it here that drifts. */
+      where: {
+        ...liveOrDeletedWhere(status),
+        ...this.adminSearchWhere(query.q ?? ''),
+        ...streamAndYearWhere(query.stream, query.year),
+        ...(createdAt ? { createdAt } : {}),
+      },
       orderBy: [{ createdAt: 'asc' }],
       select: {
+        /* For «حدّد اللي في المدى» — see `PackingListSchema.orderIds`. */
+        id: true,
         fullName: true,
         phone: true,
         altPhone: true,
@@ -822,10 +2795,7 @@ export class BookOrdersService {
         amountCents: true,
         shippingCents: true,
         createdAt: true,
-        items: {
-          orderBy: { titleAr: 'asc' as const },
-          select: { titleAr: true, unitPriceCents: true, quantity: true },
-        },
+        items: ORDER_ITEM_SELECT,
         course: { select: { title: true, year: true, forGeneral: true, forLanguages: true, bookTitle: true } },
         governorate: { select: { nameAr: true } },
       },
@@ -836,78 +2806,352 @@ export class BookOrdersService {
       languages: copy.stream.languages,
       both: copy.stream.both,
     };
+    /* `string[]`, not the literal union: this is only ever used to ORDER
+       labels that came out of `streamLabel`, and typing it as the union makes
+       `indexOf` refuse the very strings it is meant to rank. */
+    const STREAM_ORDER: string[] = [copy.stream.general, copy.stream.languages, copy.stream.both];
 
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('طلبات الكتب');
-    // `views` sets right-to-left so an Arabic spreadsheet actually reads
-    // right-to-left when opened, rather than mirrored column order in an
-    // LTR grid.
-    sheet.views = [{ rightToLeft: true }];
-    sheet.columns = [
-      { header: 'اسم الكتاب', key: 'bookTitle', width: 28 },
-      // The two columns the print shop actually packs from. They are NEW, and
-      // they are why an order with three titles is now three rows instead of
-      // one line reading «كتاب» with no count — a packing list that does not say
-      // how many is a packing list somebody has to phone about.
-      { header: 'العدد', key: 'quantity', width: 8 },
-      { header: 'سعر النسخة (جنيه)', key: 'unitPrice', width: 16 },
-      { header: 'الكورس', key: 'courseTitle', width: 28 },
-      { header: 'الصف', key: 'year', width: 8 },
-      { header: 'عام / لغات', key: 'stream', width: 14 },
-      { header: 'الاسم بالكامل', key: 'fullName', width: 24 },
-      { header: 'الموبايل', key: 'phone', width: 16 },
-      { header: 'موبايل تاني', key: 'altPhone', width: 16 },
-      { header: 'المحافظة', key: 'governorate', width: 16 },
-      { header: 'المدينة', key: 'city', width: 18 },
-      { header: 'الشارع', key: 'street', width: 28 },
-      { header: 'رقم العمارة', key: 'building', width: 14 },
-      { header: 'تفاصيل إضافية', key: 'note', width: 28 },
-      { header: 'الشحن (جنيه)', key: 'shipping', width: 12 },
-      { header: 'إجمالي الطلب (جنيه)', key: 'amount', width: 18 },
-      { header: 'تاريخ الطلب', key: 'createdAt', width: 18 },
-    ];
-    sheet.getRow(1).font = { bold: true };
-
+    /*
+     * ═══════════════════════════════════════════════════════════════════════
+     * THE SHIPPING SHEET IS A PACKING LIST, NOT AN INVOICE.
+     *
+     * «وأنا بصدّر متحطش السعر… يبقى العربي فوق وتحته اللغات، وبينهم خط،
+     *  واكتب أرقام ١ و ٢ و ٣، وفوق اكتب عدد العربي كام واللغات كام.»
+     *
+     * ## Why the money is gone
+     *
+     * Three columns used to carry it — سعر النسخة، الشحن، إجمالي الطلب — and
+     * this file goes to a print shop and a courier. Neither is owed what a
+     * student paid, every one of those numbers is a number somebody can
+     * mis-read as what they are owed, and the revenue figures live on
+     * `/admin/finance` where they belong. A packing list that quotes prices is
+     * a packing list that gets quoted back.
+     *
+     * ## Why it is grouped and ruled
+     *
+     * The two editions are physically different stacks of paper. A sheet that
+     * interleaves them makes the packer decide per row which pile to reach
+     * into; grouping makes it two passes with a line between them. The rule is
+     * drawn as a real bordered row rather than a blank one, because a blank row
+     * disappears the moment anyone sorts — and somebody always sorts.
+     *
+     * ## Why the counts are at the TOP
+     *
+     * They are what he checks BEFORE printing: «أولى سنة كام كتاب وكام نسخة».
+     * Books and COPIES are counted separately and on purpose — twenty orders
+     * for one title is one thing to print and twenty things to pack.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    const lines: Array<Omit<PackingListLine, 'seq'>> = [];
+    /*
+     * ONE CARD PER ORDER, built in the SAME loop as the per-book lines.
+     *
+     * Not a second pass over `rows`: the two views have to describe the same
+     * parcels, and the only way that stays true as this method grows is for a
+     * row to produce its line(s) and its card in one place. `seq` here is the
+     * ORDER's place in the run (1..N over `rows`), which is deliberately not
+     * the line `seq` further down — the sheet numbers books and the cards
+     * number boxes, and an order with two titles is one box.
+     */
+    const labels: PackingLabel[] = [];
     for (const row of rows) {
       /*
-       * ONE ROW PER BOOK, not per order.
+       * ONE ROW PER BOOK, not per order. A courier packs titles, and an order
+       * with three of them collapsed onto one line is a line somebody has to
+       * phone about. The address is repeated on each — spreadsheets are read by
+       * sorting and filtering, and a blank address on the second line of a
+       * group disappears the moment anyone does either.
        *
-       * A courier packs titles, and an order with three of them collapsed onto
-       * one line is a line somebody has to phone about. The address is repeated
-       * on each — spreadsheets are read by sorting and filtering, and a blank
-       * address on the second line of a group disappears the moment anyone does
-       * either.
-       *
-       * ⚠️ `shipping` and `amount` are the ORDER's, so they are written on the
-       * FIRST line only and left blank on the rest. Repeating them would make a
-       * SUM over the column count one delivery three times, and that column is
-       * the one somebody will total.
+       * ⚠️ The stream is per LINE, and the order's course is only the fallback.
+       * This column was blank on nearly every row until `books.for_general` /
+       * `for_languages` existed: it read `order.course`, and a cart order has
+       * no course at all — so the one thing the print shop needs was missing on
+       * exactly the orders that make up most of the list. The course fallback
+       * stays for a course-page order whose book was never mirrored into the
+       * catalogue; blank when neither exists, which is honest.
        */
-      const stream = row.course ? streamLabel[streamChoiceOf(row.course)] : '';
-      row.items.forEach((item, index) => {
-        sheet.addRow({
+      const courseStream = row.course ? streamLabel[streamChoiceOf(row.course)] : '';
+      const address = {
+        courseTitle: row.course?.title ?? '',
+        /* ⚠️ The ORDER's fallback only. The real answer is per LINE and is
+           applied below — a cart order has no course at all, so this alone was
+           `null` on nearly every row, which is the same hole `stream` had
+           before `books.for_general` existed. */
+        year: row.course?.year ?? null,
+        fullName: row.fullName,
+        phone: row.phone,
+        altPhone: row.altPhone,
+        governorate: row.governorate.nameAr,
+        city: row.city,
+        street: row.addressStreet,
+        building: row.addressBuilding,
+        note: row.addressNote ?? '',
+        createdAt: row.createdAt.toISOString().slice(0, 10),
+      };
+
+      /*
+       * ⚠️ AN ORDER WITH NO LINES STILL GETS A ROW.
+       *
+       * `for (item of row.items)` on its own drops such an order from the file
+       * ENTIRELY and silently — the screen counts it, the sheet does not, and
+       * the only symptom is «واحد ناقص» after somebody counts both by hand. It
+       * is rare (a hand-edited order whose last line was removed) and it is
+       * exactly the kind of row that must not vanish: the address is real and
+       * somebody is waiting for a parcel. Named rather than blank, so the desk
+       * can see what to fix.
+       */
+      /* The card is pushed for EVERY order, including the line-less one below
+         — a parcel with a real address is a parcel somebody is waiting for,
+         and a box with no label is worse than a box with an odd one. */
+      const parcelItems =
+        row.items.length === 0
+          ? [
+              {
+                title: row.course?.bookTitle ?? row.course?.title ?? 'طلب من غير كتاب مسجّل',
+                quantity: 1,
+              },
+            ]
+          : row.items.map((item) => ({ title: item.titleAr, quantity: item.quantity }));
+
+      /* The editions in the box, deduplicated and in the sheet's own order
+         (عربي, then لغات) so two cards never disagree about which comes first.
+         A line whose book is not in the catalogue falls back to the ORDER's
+         course, exactly like the sheet's own stream column — and contributes
+         nothing when neither exists, rather than inventing an edition. */
+      const parcelStreams = [...new Set(
+        (row.items.length === 0
+          ? [courseStream]
+          : row.items.map((item) => (item.book ? streamLabel[streamChoiceOf(item.book)] : courseStream))
+        ).filter((label) => label !== ''),
+      )].sort((a, b) => STREAM_ORDER.indexOf(a) - STREAM_ORDER.indexOf(b));
+
+      labels.push({
+        orderId: row.id,
+        ref: bookOrderRef(row.id),
+        seq: labels.length + 1,
+        fullName: address.fullName,
+        phone: address.phone,
+        altPhone: address.altPhone,
+        governorate: address.governorate,
+        city: address.city,
+        street: address.street,
+        building: address.building,
+        note: address.note,
+        items: parcelItems,
+        streams: parcelStreams,
+        copies: parcelItems.reduce((n, item) => n + item.quantity, 0),
+        createdAt: address.createdAt,
+      });
+
+      if (row.items.length === 0) {
+        lines.push({
+          ...address,
+          bookTitle: parcelItems[0]!.title,
+          quantity: 1,
+          stream: courseStream,
+        });
+        continue;
+      }
+
+      for (const item of row.items) {
+        lines.push({
+          ...address,
+          /*
+           * ⚠️ الصف is the BOOK's, with the order's course as the fallback —
+           * the same chain the admin row and the stream column already walk,
+           * and it must be spelled the same way in all three.
+           *
+           * Spreading `address` alone left this at the COURSE's year, and an
+           * order placed from `/books` has no course: «كام كتاب سنة أولى» on
+           * the sheet a print run is ordered from therefore read «من غير صف»
+           * for the majority of orders, which is the one number on that page
+           * that is acted on before anything is printed.
+           */
+          year: item.book?.year ?? address.year,
           bookTitle: item.titleAr,
           quantity: item.quantity,
-          unitPrice: item.unitPriceCents / 100,
-          courseTitle: row.course?.title ?? '',
-          year: row.course?.year ?? '',
-          stream,
-          fullName: row.fullName,
-          phone: row.phone,
-          altPhone: row.altPhone,
-          governorate: row.governorate.nameAr,
-          city: row.city,
-          street: row.addressStreet,
-          building: row.addressBuilding,
-          note: row.addressNote ?? '',
-          shipping: index === 0 ? row.shippingCents / 100 : '',
-          amount: index === 0 ? row.amountCents / 100 : '',
-          createdAt: index === 0 ? row.createdAt.toISOString().slice(0, 10) : '',
+          stream: item.book ? streamLabel[streamChoiceOf(item.book)] : courseStream,
         });
-      });
+      }
     }
 
-    const buffer = await workbook.xlsx.writeBuffer();
-    return Buffer.from(buffer);
+    /* عربي first, then لغات, then anything with no edition at all — a
+       hand-typed «ملزمة مراجعة» has no stream and must not be silently filed
+       under one. Within a group the original order (oldest first) survives,
+       because that is the queue the desk works through. */
+    const groupsInOrder = [copy.stream.general, copy.stream.languages, copy.stream.both] as const;
+    const copiesIn = (group: Array<Omit<PackingListLine, 'seq'>>) =>
+      group.reduce((n, l) => n + l.quantity, 0);
+
+    /* The numbering restarts nowhere: «١، ٢، ٣» down the whole sheet is what a
+       packer counts against, and a per-group restart would make «رقم ١٢» mean
+       two different rows. It is assigned HERE, on the grouped order, so the
+       spreadsheet and the printed page number the same row the same way. */
+    let seq = 0;
+    const groups = [
+      ...groupsInOrder.map((label) => ({ label, rows: lines.filter((l) => l.stream === label) })),
+      { label: '', rows: lines.filter((l) => !groupsInOrder.includes(l.stream as never)) },
+    ]
+      .filter((group) => group.rows.length > 0)
+      .map((group) => {
+        /* Per YEAR inside each edition — «سنة أولى كام كتاب وكام نسخة عربي».
+           The years present are read from the data rather than assumed 1..3, so
+           a sheet with nothing in a year does not print an empty line for it,
+           and «من غير صف» (null) sorts last rather than becoming a zero. */
+        const years = [...new Set(group.rows.map((l) => l.year))].sort(
+          (a, b) => (a ?? 99) - (b ?? 99),
+        );
+        return {
+          label: group.label,
+          books: group.rows.length,
+          copies: copiesIn(group.rows),
+          years: years.map((year) => {
+            const inYear = group.rows.filter((l) => l.year === year);
+            return { year, books: inYear.length, copies: copiesIn(inYear) };
+          }),
+          lines: group.rows.map((line) => {
+            seq += 1;
+            return { ...line, seq };
+          }),
+        };
+      });
+
+    /*
+     * ═══════════════════════════════════════════════════════════════════════
+     * ونفس السطور مقسومة بالصف الأول — «كام كتاب سنة أولى وكام سنة تانية».
+     *
+     * `groups` above is edition-first because that is how the PAPER is stacked:
+     * عربي in one pile, لغات in another, which is the walk the packer does.
+     * This is the same lines counted the other way round, because the decision
+     * being taken before a run is a decision about a YEAR — two different
+     * books, two different print orders — and answering it by adding one number
+     * from each edition block is the arithmetic that produces «واحد ناقص».
+     *
+     * Computed from `lines` rather than from `groups`, so the two orderings are
+     * siblings over one set rather than one derived from the other: a bug in
+     * the edition grouping cannot silently propagate into the year totals, and
+     * either can be read against the other.
+     *
+     * The `orders` count per year is DISTINCT orders, and an order holding a
+     * first-year book and a second-year book counts in both — see
+     * `PackingListYearSchema`. That is why these deliberately do not sum to
+     * `orders` below, and why the screen says so out loud.
+     */
+    const years: PackingListYear[] = [...new Set(lines.map((line) => line.year))]
+      .sort((a, b) => (a ?? 99) - (b ?? 99))
+      .map((year) => {
+        const inYear = lines.filter((line) => line.year === year);
+        return {
+          year,
+          /* Identity is the name + both phone numbers, which is what one parcel
+             is: `lines` carries no order id (it is a per-BOOK view), and a
+             second copy of the same person's name on a different phone really
+             is a different delivery. */
+          orders: new Set(inYear.map((line) => `${line.fullName}\u0000${line.phone}\u0000${line.altPhone}`)).size,
+          books: inYear.length,
+          copies: copiesIn(inYear),
+          streams: [...groupsInOrder, '']
+            .map((label) => {
+              const inStream = inYear.filter((line) => (line.stream || '') === label);
+              return { label, books: inStream.length, copies: copiesIn(inStream) };
+            })
+            .filter((entry) => entry.books > 0),
+        };
+      });
+
+    return {
+      groups,
+      years,
+      orderIds: rows.map((row) => row.id),
+      labels,
+      orders: rows.length,
+      books: lines.length,
+      copies: copiesIn(lines),
+      filters: {
+        status,
+        from,
+        to,
+        stream: query.stream ?? null,
+        year: query.year ?? null,
+        q: query.q?.trim() ? query.q.trim() : null,
+      },
+    };
   }
+
+  /**
+   * Marks an order paid because the money for it actually arrived — «التحويلات
+   * الواردة» settling a book the same way it settles a subscription.
+   *
+   * `TransfersService` has matched an incoming InstaPay transfer to this
+   * order: the sender's address belongs to the student who placed it, and the
+   * amount is the order's own total. No screenshot is attached because none
+   * exists — the platform saw the money itself, which is stronger evidence
+   * than the picture `submitPayment` collects.
+   *
+   * Deliberately `address_only` only. An order already `paid` or `shipped` is
+   * settled, and a second transfer at the same total is a different payment
+   * that must reach a human rather than be silently absorbed. The `updateMany`
+   * guard is what enforces that under concurrency, and returns `false` when it
+   * loses the race — see `PaymentsService.approveFromTransfer` for the same
+   * pattern on the subscription side.
+   */
+  async markPaidFromTransfer(orderId: string, transferId: string): Promise<boolean> {
+    const now = new Date();
+
+    const { settled, admins } = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.incomingTransfer.updateMany({
+        where: { id: transferId, matchedSubmissionId: null, matchedBookOrderId: null },
+        data: { matchedBookOrderId: orderId },
+      });
+      if (claimed.count === 0) return { settled: false, admins: [] as string[] };
+
+      const paid = await tx.bookOrder.updateMany({
+        where: { id: orderId, status: 'address_only', deletedAt: null },
+        // No `screenshotKey` and no `senderPhone`: nobody uploaded anything.
+        // The `IncomingTransfer` row is the evidence, and it points back here.
+        data: { paidAt: now, status: 'paid' },
+      });
+      if (paid.count === 0) throw new TransferSettleAborted();
+
+      const recipients = await this.notifications.emitToPermission(
+        tx,
+        // Same alert `submitPayment` raises, for the same reason: `paid` is a
+        // parcel owed, and an order that reached it with nobody told is the
+        // silent queue this whole feature exists to close.
+        'book-order:read',
+        'book_order_placed',
+        { orderId },
+      );
+
+      return { settled: true, admins: recipients };
+    }).catch((error: unknown) => {
+      // The transfer was claimed but the order was not payable — roll the
+      // claim back by aborting, and report it as "nothing settled" so the
+      // money stays visible in «محتاجة مراجعة».
+      if (error instanceof TransferSettleAborted) return { settled: false, admins: [] as string[] };
+      throw error;
+    });
+
+    if (!settled) return false;
+
+    // After the commit. See `NotificationsService.announce`.
+    await this.notifications.announceAll(admins);
+
+    await this.audit.record({
+      action: 'book-order:auto-pay',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: orderId,
+      // No actor: nobody clicked anything.
+      actorUserId: null,
+      outcome: 'success',
+      metadata: { transferId },
+    });
+
+    return true;
+  }
+
 }
+
+/** Rolls back `markPaidFromTransfer`'s transaction when the transfer was
+ *  claimable but the order was not — never escapes the method. */
+class TransferSettleAborted extends Error {}

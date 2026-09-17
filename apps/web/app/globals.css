@@ -962,7 +962,13 @@
    there is no `left`/`right` here and none is needed.
    --------------------------------------------------------------------------- */
 :root {
-  --rail-w: 248px;
+  /* 248 → 280. The rail carries the student's own course titles, and at 248
+     «منهج البرمجة وعلوم الحاسب — تانية بكالوريا (عربي)» truncated to
+     «منهج البرمجة وعلوم الحاسب — تا…» — the half that identifies WHICH course
+     is the half that was cut. Widening the track is what buys those characters
+     back; shrinking the type to fit would have been the wrong trade on the one
+     surface a student reads on a phone. */
+  --rail-w: 296px;
   --rail-w-collapsed: 76px;
   --topbar-h: 56px;
 
@@ -1175,9 +1181,10 @@
 
    Below `md` only, which is where the collision is: the content column is the
    whole viewport there, so the launcher's corner IS content. Above it the
-   column is `--w-shell` (1152px) centred beside the rail with a gutter of its
-   own, and a fixed 88px reserve would mostly buy a hole under every short
-   desktop page.
+   column is a centred measure beside the rail with a gutter of its own —
+   `--w-app` (1600px) on the app's grid screens, `--w-shell` (1152px) on the
+   ones you read — and a fixed 88px reserve would mostly buy a hole under every
+   short desktop page.
 
    NOT hide-on-scroll. `components/assistant/assistant-widget.tsx` records that
    the launcher used to ride up out of the way and that this was reverted by
@@ -2050,6 +2057,15 @@
   color: var(--n-11);
 }
 
+/* The provider mark, directly above the number it belongs to. Height-capped
+   rather than width-capped so swapping in an official asset with different
+   proportions cannot change the panel's rhythm. */
+.course-subscribe__brand {
+  height: 1.75rem;
+  width: auto;
+  margin-bottom: 0.5rem;
+}
+
 .course-subscribe__number-row {
   display: flex;
   align-items: center;
@@ -2245,3 +2261,279 @@
   font-size: var(--fs-text-sm);
 }
 
+
+/* ---------------------------------------------------------------------------
+   THE PRODUCT TYPE SCALE — one step up from the marketing site's.
+
+   `packages/ui/tokens/typography.css` is built on a 15px base, «denser, more
+   tool-like». That is the right call for the landing page, where the type is
+   set large by hand anyway, and the wrong one for the two surfaces people
+   actually WORK in: a student reading a lesson list on a phone and an
+   instructor filling in a form both reported the same thing — «كبّر الخطوط في
+   الداشبورد بتاع الطالب والأدمن».
+
+   So the ramp is lifted here rather than at the root. The token names do not
+   change, so every component keeps referring to `--fs-text-sm` and simply
+   resolves it to a bigger number inside the shell. Roughly one step (+7–9%)
+   on each rung; the display sizes are untouched because nothing in the
+   product uses them.
+
+   ⚠️ NOT `html { font-size }`. That overrides the reader's own browser
+   setting (WCAG 1.4.4) — the rem scale is the whole reason these are rem.
+   --------------------------------------------------------------------------- */
+.product-type {
+  --fs-title-1: 2.125rem;
+  --fs-title-2: 1.625rem;
+  --fs-title-3: 1.375rem;
+  --fs-title-4: 1.125rem;
+  --fs-text-lg: 1.1875rem;
+  --fs-text-base: 1rem;
+  --fs-text-sm: 0.9375rem;
+  --fs-text-xs: 0.875rem;
+  --fs-mono-label: 0.8125rem;
+}
+
+/* ---------------------------------------------------------------------------
+   .nav-pill — one navigation row, shared by the student rail, the admin
+   sidebar and both mobile sheets.
+
+   Four lists were each carrying their own Tailwind cluster for "icon, label,
+   rounded, goes amber when current", and they had already drifted: the admin's
+   active row was amber-tinted with a start bar, the student's was a flat grey
+   fill with no marker at all — the same state, drawn two ways, on two halves
+   of one product.
+
+   The icon sits in a WELL rather than floating beside the text. At the sizes
+   this rail runs at, a bare 16px glyph next to a 15px label reads as a bullet;
+   a filled 28px tile reads as an object, gives the active state something to
+   colour that is not the text, and is what makes a collapsed rail (icon only)
+   still look deliberate.
+   --------------------------------------------------------------------------- */
+.nav-pill {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  min-block-size: 3.25rem;
+  padding-inline: var(--s-12);
+  border-radius: var(--r-lg);
+  color: var(--n-11);
+  /* `--fs-text-lg`, i.e. ONE STEP ABOVE the body copy beside it — not `-base`,
+     and certainly not the `-sm` this started at.
+
+     Twice now the answer to «الساد مينو… بجد صغير قوي» has been half a step.
+     The reasoning that got it to `-base` still holds and is the reason it goes
+     further: a rail label is not secondary text, it is the primary way anyone
+     moves around the product, and inside `.product-type` (which already lifts
+     the whole signed-in ramp) that lands at 19px. A navigation list is one of
+     the few places where being the largest text in its own column is correct —
+     nothing else in the rail competes with it. */
+  font-size: var(--fs-text-lg);
+  transition:
+    background-color var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease);
+}
+
+.nav-pill:hover {
+  background: var(--n-3);
+  color: var(--n-12);
+}
+
+.nav-pill__well {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-md);
+  border: var(--hairline) solid var(--border-subtle);
+  background: var(--n-3);
+  color: inherit;
+  transition:
+    background-color var(--d-hover) var(--ease),
+    border-color var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease);
+}
+
+/* The glyph, sized HERE rather than at the four call sites that render one.
+   `size-4` is written into `student-nav-list.tsx` (twice), `admin-nav-list.tsx`
+   and both mobile sheets; a 16px icon inside a 36px well under 19px text reads
+   as a speck. One rule keeps the four lists from drifting the way their
+   active states already did once — which is the whole reason `.nav-pill`
+   exists. Specificity 0,1,1 beats Tailwind's single-class `.size-4`. */
+.nav-pill__well svg {
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+}
+
+.nav-pill__label {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The current page. Amber, because navigating IS the action this rail exists
+   for — the one place in the shell where amber marks a state rather than a
+   control, and it earns it: this is the answer to "where am I". */
+.nav-pill[aria-current='page'] {
+  background: color-mix(in oklch, var(--a-9), transparent 88%);
+  color: var(--a-11);
+  font-weight: var(--fw-medium);
+}
+
+.nav-pill[aria-current='page'] .nav-pill__well {
+  border-color: color-mix(in oklch, var(--a-9), transparent 62%);
+  background: color-mix(in oklch, var(--a-9), transparent 80%);
+  color: var(--a-11);
+}
+
+/* The marker is on the inline START — the right edge in this RTL document —
+   so it reads as a tab pulled out of the rail's own border. */
+.nav-pill[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  inset-block: 0.5rem;
+  inset-inline-start: -0.75rem;
+  inline-size: 3px;
+  border-radius: 999px;
+  background: var(--a-9);
+}
+
+/* The count on «الوارد» / «المدفوعات» / «الكتب». Pushed to the far end, and
+   it keeps its amber fill in every state — a badge that changes colour with
+   the row would read as part of the row rather than as a number owed. */
+.nav-pill__badge {
+  margin-inline-start: auto;
+  display: grid;
+  place-items: center;
+  min-inline-size: 1.25rem;
+  flex-shrink: 0;
+  padding-inline: 0.375rem;
+  padding-block: 0.0625rem;
+  border-radius: 999px;
+  background: var(--a-9);
+  color: #1a1206;
+  font-size: var(--fs-mono-label);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A group heading in the rail. */
+.nav-group__head {
+  padding-inline: var(--s-12);
+  padding-block-end: var(--s-4);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-medium);
+  color: var(--n-10);
+}
+
+/* Collapsing is NOT re-implemented here. Every rail link keeps `.rail__item`
+   alongside `.nav-pill`, so the existing `html[data-rail='collapsed']` rules —
+   which are guarded by `@media (min-width: 48rem)` for a reason documented at
+   length up there — keep owning that state. A second, unguarded copy of them
+   is exactly the bug that shipped a phone drawer with six icons and no words.
+   The pill only has to make sure the icon well survives losing the label,
+   which it does: it is the one child that is not `.rail__label`. */
+
+/* ---------------------------------------------------------------------------
+   .pay-choice — «هتحوّل بإيه؟», the first step of every checkout.
+
+   Two rails, two marks, one «التالي». See
+   `components/site/payment-method-choice.tsx` for why this is a step of its own
+   rather than a dropdown over a number that rewrites itself.
+
+   The cards are deliberately LARGE. This is the screen where a student decides
+   whether to send money at all, most of them on a phone, and the two targets
+   have to be unmissable and impossible to hit by accident — 44px is the floor
+   for a tap target and these are several times that.
+   --------------------------------------------------------------------------- */
+.pay-choice__question {
+  font-size: var(--fs-text-lg);
+  font-weight: var(--fw-semibold);
+  margin-bottom: 0.75rem;
+}
+
+/* `auto-fit` with a `min()` floor rather than a media query: two cards side by
+   side wherever there is room for them, one above the other when there is not,
+   and the `min(100%, …)` stops the track from overflowing a narrow phone —
+   a grid track cannot shrink below its own minimum. */
+.pay-choice__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+  gap: 0.75rem;
+}
+
+.pay-choice__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  min-block-size: 7.5rem;
+  padding: 1rem 0.75rem;
+  border-radius: var(--r-lg);
+  border: 2px solid var(--border);
+  background: var(--n-1);
+  cursor: pointer;
+  transition:
+    border-color var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease);
+}
+
+.pay-choice__card:hover:not(:disabled) {
+  border-color: var(--a-9);
+}
+
+/* ⚠️ The selected state is THREE signals, not one: a 2px amber edge, a warm
+   fill, and a ring. On a phone in daylight a border colour alone is not a
+   reliable answer to «انا ضغطت على انهي واحدة؟», and this is the question whose
+   wrong answer sends money to the wrong rail.
+
+   `--a-9` is the file's own rule for it — amber is ACTION and the current
+   position, which is exactly what a chosen payment method is. */
+.pay-choice__card--on {
+  border-color: var(--a-9);
+  background: color-mix(in oklch, var(--a-9), transparent 88%);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--a-9), transparent 78%);
+}
+
+.pay-choice__card:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Sized by HEIGHT, so two wordmarks with different aspect ratios sit on the
+   same optical line — the InstaPay mark is 5:1 and the Vodafone one 4:1. */
+.pay-choice__logo {
+  block-size: 1.5rem;
+  inline-size: auto;
+  max-inline-size: 100%;
+  object-fit: contain;
+}
+
+.pay-choice__label {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.pay-choice__off {
+  font-size: var(--fs-text-xs);
+  color: var(--n-10);
+}
+
+.pay-choice__next {
+  margin-top: 1rem;
+}
+
+/* The way back, from the number screen to the question. Quiet on purpose: it
+   must be findable by the student who picked wrong and invisible to the one who
+   did not — the primary action on that screen is sending the money. */
+.pay-choice__back {
+  font-size: var(--fs-text-sm);
+  color: var(--a-9);
+  font-weight: var(--fw-semibold);
+  align-self: flex-start;
+}

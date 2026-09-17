@@ -1,7 +1,7 @@
 import { z } from '@ayman/contracts/zod';
 import { egyptianPhone } from '@ayman/contracts/phone';
 import { isAssistantNodeId } from '@ayman/contracts/assistant/script';
-import { MAX_DOCUMENT_BYTES, isValidStorageKey } from '@ayman/contracts/admin/media';
+import { MAX_DOCUMENT_BYTES, MAX_VOICE_SECONDS, isValidStorageKey } from '@ayman/contracts/admin/media';
 
 /**
  * The conversation المساعد escalates into, on the wire.
@@ -68,6 +68,228 @@ export const EntryPathSchema = z
   .array(z.string().refine(isAssistantNodeId, 'خطوة مش معروفة'))
   .max(24);
 
+// ── the assistant transcript that rides into the thread ──────────────────
+
+/**
+ * What المساعد and the student said to each other before a person was asked
+ * for — carried into the conversation أيمن answers in.
+ *
+ * ## «محتاج أشوف الشات كامل عشان أعرف هو سأل على إيه»
+ *
+ * The handoff used to arrive as one sentence: the last thing typed into a box
+ * that could not answer it. That is the question WITHOUT the three turns that
+ * made it mean something — «وده بكام؟» reaches the inbox with no «ده» in it,
+ * and answering it starts with asking the student to repeat themselves.
+ *
+ * ## Why this is TEXT in a message and not rows in a table
+ *
+ * `message_author` is a Postgres enum of exactly two members, `visitor` and
+ * `admin`, and a third one is a migration. This shape needs no schema change
+ * at all: the transcript is one ordinary message written by the SAME
+ * transaction that opens the thread, and these two functions are the whole
+ * format.
+ *
+ * The consequence is deliberate and has to be stated plainly: the row is
+ * authored `visitor`, because it belongs to the student's side of the thread
+ * and because `hasVisitorReply` must stay true. So the marks below are the
+ * ONLY thing distinguishing «كلام المساعد» from «كلام الطالب», and every
+ * renderer that draws a thread is expected to parse before it prints. The
+ * admin thread does (`assistant-transcript.tsx`); the inbox LIST's preview
+ * does (`preview` in `assistant.service.ts`).
+ *
+ * ## The marks are STRUCTURE, not copy
+ *
+ * They are not in `copy.assistant.*` and must not move there. Copy is
+ * re-worded whenever a sentence reads badly, and a re-worded mark makes every
+ * row already in the table unparseable — the exact drift `entryPath` stores
+ * node ids to avoid. Same precedent as `📎` in `preview()`: a serializer
+ * emits symbols, and the Arabic words («الطالب», «المساعد») are put on at
+ * RENDER time by whoever draws it.
+ *
+ * A body that does not parse is not an error anywhere. It renders as the
+ * plain text it is, which is exactly what every message written before this
+ * existed already does.
+ */
+
+/**
+ * How many turns travel. Twelve is the model's own window
+ * (`ASK_HISTORY_MAX`, eight) plus the exchange that triggered the handoff,
+ * plus slack — so what he reads is what المساعد was working from, and not a
+ * fuller record المساعد never had.
+ */
+export const TRANSCRIPT_TURNS_MAX = 12;
+
+/**
+ * How much of ONE turn survives.
+ *
+ * Long enough for a real question and for the paragraph that answered it;
+ * short enough that six of them fit in the budget below. A cut turn ends in an
+ * ellipsis rather than stopping mid-word in silence.
+ */
+export const TRANSCRIPT_TURN_MAX = 300;
+
+/**
+ * The ceiling on the whole block — and it is NOT a taste decision.
+ *
+ * ⚠️ `conversation_messages_body_length` is a CHECK in the database:
+ * `char_length(body) <= 2000`. A transcript over it does not truncate, it
+ * ABORTS the transaction that was opening the thread — so a student المساعد
+ * had just promised «هبعت الرسالة للمهندس أيمن» would get a 500 and no
+ * message would exist anywhere. Derived from `MESSAGE_MAX` rather than typed
+ * again so the two cannot drift apart, because only one of them is enforced by
+ * anything.
+ *
+ * The measurement is deliberately conservative: this counts UTF-16 units and
+ * Postgres counts characters, so an emoji is 2 here and 1 there. It can only
+ * ever cut MORE than the constraint demands, never less.
+ *
+ * Oldest turns go first. The handoff happened at the END of the conversation,
+ * so the last exchange is the one he is being asked to answer — and
+ * `assistantTranscriptTrimmed` is what puts «أول المحادثة اتشال» on the card
+ * rather than letting a cut record pass for a whole one.
+ */
+export const TRANSCRIPT_BODY_MAX = MESSAGE_MAX;
+
+/** First line, alone: «the rest of this message is a transcript». */
+const TRANSCRIPT_MARK = '🤖💬';
+/** Line prefixes. Never `TRANSCRIPT_MARK`, so a first line is unambiguous. */
+const TURN_MARK = { user: '🙋', assistant: '🤖' } as const;
+/** Stands where older turns were dropped. */
+const TRIMMED_MARK = '⋯';
+
+export interface AssistantTranscriptTurn {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
+/**
+ * The ceiling on ONE turn as it travels — not as it is stored.
+ *
+ * ⚠️ EXPORTED, and that is the point rather than tidiness. `TRANSCRIPT_TURNS_MAX`
+ * and this number are both enforced by Zod BEFORE `serializeAssistantTranscript`
+ * gets anywhere near the data, so "the server trims it" was never true: an
+ * over-long chat was a 400, on exactly the conversations that had gone on long
+ * enough to need a person. The client has to cut to these two numbers before it
+ * posts, and it reads them from here so there is one copy of each.
+ */
+export const TRANSCRIPT_TURN_WIRE_MAX = 1000;
+
+/**
+ * One turn on the wire.
+ *
+ * Mirrors `AskTurn` from `@ayman/contracts/assistant/ask` on purpose rather
+ * than importing it: that schema describes what goes UP to a model and its
+ * ceiling is sized for that. This one describes what gets STORED, and the two
+ * are free to move apart. `text` is capped generously here and truncated for
+ * real by the serializer — validation refuses the absurd, the serializer
+ * decides the shape.
+ */
+export const AssistantTranscriptTurnSchema = z
+  .object({
+    role: z.enum(['user', 'assistant']),
+    text: z.string().trim().min(1).max(TRANSCRIPT_TURN_WIRE_MAX),
+  })
+  .strict();
+
+/**
+ * The turns, as one message body — or `null` when there is nothing to carry.
+ *
+ * ## Every turn is collapsed to ONE line
+ *
+ * Not to save bytes: it is what makes `parseAssistantTranscript` exact. With
+ * newlines inside a turn, a student who types a line beginning «🤖 » writes a
+ * turn into the record that المساعد never said. Collapsed, every line in the
+ * block starts with a mark this file emitted, and anything else means the
+ * body is not a transcript at all.
+ *
+ * The marks are also stripped from the turn text itself before it is written,
+ * for the same reason and as the second half of the same guarantee.
+ */
+export function serializeAssistantTranscript(
+  turns: readonly AssistantTranscriptTurn[],
+): string | null {
+  const tidied = turns
+    .map((turn) => ({ role: turn.role, text: oneLine(turn.text) }))
+    .filter((turn) => turn.text.length > 0);
+  if (tidied.length === 0) return null;
+
+  // Oldest first out. The handoff is at the end of the conversation.
+  let kept = tidied.slice(-TRANSCRIPT_TURNS_MAX);
+  let trimmed = kept.length < tidied.length;
+
+  const line = (turn: AssistantTranscriptTurn) =>
+    `${TURN_MARK[turn.role]} ${clip(turn.text, TRANSCRIPT_TURN_MAX)}`;
+
+  let lines = kept.map(line);
+  // The budget counts the mark line and the newlines, because the ceiling is
+  // about the COLUMN, not about the words.
+  while (kept.length > 1 && joinTranscript(lines, trimmed).length > TRANSCRIPT_BODY_MAX) {
+    kept = kept.slice(1);
+    trimmed = true;
+    lines = kept.map(line);
+  }
+
+  // One turn that is still over budget is cut rather than dropped: a thread
+  // whose only content is «اتشال جزء» tells him nothing at all.
+  return clip(joinTranscript(lines, trimmed), TRANSCRIPT_BODY_MAX);
+}
+
+function joinTranscript(lines: readonly string[], trimmed: boolean): string {
+  return [TRANSCRIPT_MARK, ...(trimmed ? [TRIMMED_MARK] : []), ...lines].join('\n');
+}
+
+/**
+ * The turns back out of a stored body, or `null` when it is not one.
+ *
+ * `null` — not an empty array and never a throw. Every message written before
+ * this format existed lands here, and the answer for all of them is «this is
+ * ordinary text, draw it as a bubble».
+ */
+export function parseAssistantTranscript(body: string): AssistantTranscriptTurn[] | null {
+  const lines = body.split('\n');
+  if (lines[0] !== TRANSCRIPT_MARK) return null;
+
+  const turns: AssistantTranscriptTurn[] = [];
+  for (const raw of lines.slice(1)) {
+    if (raw === TRIMMED_MARK || raw.length === 0) continue;
+    if (raw.startsWith(`${TURN_MARK.user} `)) {
+      turns.push({ role: 'user', text: raw.slice(TURN_MARK.user.length + 1) });
+    } else if (raw.startsWith(`${TURN_MARK.assistant} `)) {
+      turns.push({ role: 'assistant', text: raw.slice(TURN_MARK.assistant.length + 1) });
+    } else {
+      // A line this file did not emit. The body is not a transcript — or it is
+      // a corrupted one, and half a transcript read as the student's own words
+      // is worse than the raw text.
+      return null;
+    }
+  }
+  return turns.length > 0 ? turns : null;
+}
+
+/** Whether older turns were dropped — drives one line of «مش من الأول». */
+export function assistantTranscriptTrimmed(body: string): boolean {
+  return body.split('\n')[1] === TRIMMED_MARK;
+}
+
+function oneLine(text: string): string {
+  return text
+    .replace(/\s+/gu, ' ')
+    .trim()
+    // Defence in depth against a turn that starts with a mark this format
+    // owns. `parseAssistantTranscript` would still be correct without it —
+    // the mark can only appear at the start of a LINE, and there is one line
+    // per turn — but a student quoting المساعد should not read back as المساعد.
+    .replace(
+      new RegExp(`^(?:${TRANSCRIPT_MARK}|${TURN_MARK.user}|${TURN_MARK.assistant}|${TRIMMED_MARK})\\s*`, 'u'),
+      '',
+    )
+    .trim();
+}
+
+function clip(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+}
+
 /** `POST /api/assistant/conversations` — opening one. */
 export const OpenConversationSchema = z
   .object({
@@ -81,11 +303,41 @@ export const OpenConversationSchema = z
      */
     name: z.string().trim().min(2, 'الاسم لسه فاضي').max(120).optional(),
     phone: egyptianPhone('رقم الواتساب مطلوب').optional(),
+    /**
+     * What المساعد and the student already said to each other, oldest first.
+     *
+     * Optional, because the handoff form is still reachable from the footer
+     * and from an error page, where there is no chat to carry. Present it and
+     * the thread opens with the exchange in it — see
+     * `serializeAssistantTranscript` above, which is what decides how much of
+     * it survives.
+     *
+     * It is NOT trusted as a record of anything: it is attacker-controlled
+     * text posted by a browser, stored verbatim under a mark that says «a
+     * machine said this», and read by one person. Nothing gates on it and
+     * nothing else ever reads it back.
+     */
+    transcript: z.array(AssistantTranscriptTurnSchema).max(TRANSCRIPT_TURNS_MAX).optional(),
   })
   .strict();
 
 /** `POST /api/assistant/conversations/:id/messages` — a follow-up. */
-export const PostMessageSchema = z.object({ message: messageBody }).strict();
+export const PostMessageSchema = z
+  .object({
+    message: messageBody,
+    /**
+     * The chat since the LAST handoff, when المساعد gives up a second time.
+     *
+     * A student who has already been handed over once has a thread, and a
+     * second «ده لأيمن» has to land IN it — a new conversation for every
+     * question المساعد cannot answer would be three rows in his inbox from one
+     * afternoon, and would hit `MAX_OPEN_PER_IDENTITY` on the third. So the
+     * follow-up path carries a transcript exactly like the opening one, and
+     * the service writes it the same way.
+     */
+    transcript: z.array(AssistantTranscriptTurnSchema).max(TRANSCRIPT_TURNS_MAX).optional(),
+  })
+  .strict();
 
 // ── attachments ──────────────────────────────────────────────────────────
 
@@ -122,6 +374,18 @@ export const MessageAttachmentInputSchema = z
     /** Display only. Never used to build a path — see `DocumentService`. */
     filename: z.string().trim().min(1).max(200),
     sizeBytes: z.number().int().positive().max(MAX_DOCUMENT_BYTES),
+    /**
+     * VOICE NOTES ONLY, in whole seconds, and absent for every other kind.
+     *
+     * It comes from the RECORDER because it cannot be read back off the bytes:
+     * `MediaRecorder` writes no duration into a live WebM header, so the
+     * browser reports `Infinity` until the file has been seeked end to end. See
+     * `ConversationMessage.attachmentDurationSeconds`.
+     *
+     * Bounded here as well as by the CHECK, so a bad number is a 400 with a
+     * sentence rather than a 500 from Postgres.
+     */
+    durationSeconds: z.number().int().min(1).max(MAX_VOICE_SECONDS).nullish(),
   })
   .strict();
 
@@ -139,10 +403,18 @@ export const MessageAttachmentInputSchema = z
  * ever handed a URL it is not allowed to follow.
  */
 export const MessageAttachmentSchema = z.object({
-  /** `image` renders inline in the bubble; `document` renders as a file card. */
-  kind: z.enum(['image', 'document']),
+  /**
+   * `image` renders inline in the bubble, `document` as a file card, and
+   * `voice` as a player.
+   *
+   * Derived from the stored extension by the serializer, never stored: the key
+   * is the only honest record of what the bytes are.
+   */
+  kind: z.enum(['image', 'document', 'voice']),
   filename: z.string(),
   sizeBytes: z.number().int().positive(),
+  /** Whole seconds, `voice` only. `null` on the other two kinds. */
+  durationSeconds: z.number().int().positive().nullable(),
   /** Inline: an `<img src>` or an iframe. */
   path: z.string().startsWith('/api/'),
   /** The same bytes with `Content-Disposition: attachment`. */
@@ -228,7 +500,39 @@ export const ConversationMessageSchema = z.object({
   adminReaction: z.string().nullable(),
   /** The file on this message, or `null` — see `MessageAttachmentSchema`. */
   attachment: MessageAttachmentSchema.nullable(),
+  /**
+   * When the instructor last rewrote this message, or `null` for never.
+   *
+   * Rendered as «معدّلة» beside the time. Silently changing what somebody has
+   * already read is the one thing an edit must not do, so the fact that it
+   * happened travels with the text.
+   */
+  editedAt: z.iso.datetime().nullable(),
 });
+
+/**
+ * `PATCH /api/admin/conversations/:conversationId/messages/:id` — rewriting
+ * the WORDS of a message the instructor sent.
+ *
+ * Text only, and deliberately: an edit that could also swap the attachment
+ * would let one message id mean two different files to two people who read the
+ * thread an hour apart. Replacing a file is a delete and a new message, which
+ * is what «مسح» is for.
+ *
+ * The floor is the same `MESSAGE_MIN` a new reply has to clear — an edit that
+ * empties a message is a delete wearing an edit's clothes, and the delete
+ * endpoint is one route over.
+ */
+export const EditMessageSchema = z
+  .object({
+    message: z
+      .string()
+      .trim()
+      .min(MESSAGE_MIN, 'اكتب رسالة')
+      .max(MESSAGE_MAX, `الرسالة طويلة أوي — الحد ${MESSAGE_MAX} حرف`),
+  })
+  .strict();
+export type EditMessageInput = z.infer<typeof EditMessageSchema>;
 
 /** What the widget renders for the visitor's own thread. */
 export const ConversationThreadSchema = z.object({
@@ -365,11 +669,48 @@ export const AdminConversationDetailSchema = AdminConversationRowSchema.extend({
    *
    * `null` for a guest (`userId === null`): there is no account to check, and
    * `false` would misreport "definitely unsubscribed" for someone who might
-   * already be a paying student under a different contact detail. The lookup
-   * itself is a boolean existence check, not the finance table — this badge
-   * answers "مشترك ولا لأ", nothing about which course or when it lapses.
+   * already be a paying student under a different contact detail.
+   *
+   * ⚠️ Derived from `courses` below — `courses.length > 0` — never queried
+   * separately. It used to be its own existence check and drifted twice over:
+   * see `courses` for both bugs.
    */
   hasActiveSubscription: z.boolean().nullable(),
+  /**
+   * WHICH courses this student can open right now — «هنا يبقى قايل هو مشترك
+   * في إيه».
+   *
+   * A badge that only says «مشترك» is unactionable in the one place it is
+   * read: he is answering a question ABOUT a course, and whether this student
+   * holds THAT course is the entire point. Two students both reading «مشترك»
+   * can need opposite answers.
+   *
+   * ⚠️ Two bugs this replaced, both of which showed «مش مشترك» to a student
+   * who was very much subscribed:
+   *
+   *   · it filtered `source: 'purchase'`, so every course an admin opened by
+   *     hand (`source: 'admin'`) counted as nothing — the same blind spot
+   *     `/admin/finance` and the profile's subscription panel had.
+   *   · it required `validUntil: { gt: now }`, which in Prisma is FALSE for
+   *     `null` — so a grant that NEVER EXPIRES, the most generous kind there
+   *     is, read as expired.
+   *
+   * Empty array for a student with no live access; `null` only for a guest,
+   * matching `hasActiveSubscription`'s own null.
+   */
+  courses: z
+    .array(
+      z.object({
+        courseId: z.string(),
+        courseTitle: z.string(),
+        /** `admin` / `purchase` / `platform` — so «اتفتح بالإيد» is visible
+         *  here too rather than being indistinguishable from a paid one. */
+        source: z.string(),
+        /** `null` means it does not expire, which the UI spells out. */
+        validUntil: z.iso.datetime().nullable(),
+      }),
+    )
+    .nullable(),
 });
 
 export const AdminUnreadCountSchema = z.object({
@@ -399,6 +740,22 @@ export const AdminUnreadCountSchema = z.object({
  */
 export const INBOX_FILTERS = ['unread', 'open', 'answered', 'closed', 'all'] as const;
 export const InboxFilterSchema = z.enum(INBOX_FILTERS).default('unread');
+
+/**
+ * How the inbox is ordered.
+ *
+ * `newest` — most recent activity first — is the default and was the ONLY
+ * order: `AssistantService.list` hard-coded `orderBy: { lastMessageAt: 'desc' }`.
+ * That is right for triage and wrong for the question it cannot answer, which
+ * is «مين مستني من زمان»: the thread that has been sitting longest is the one
+ * that sinks to the bottom of a newest-first list, which is exactly where
+ * nobody looks.
+ *
+ * `oldest` orders by the same column the other way, so «اللي بقاله كتير» is
+ * one selection rather than a scroll to the end.
+ */
+export const InboxSortSchema = z.enum(['newest', 'oldest']).default('newest');
+export type InboxSort = z.infer<typeof InboxSortSchema>;
 
 export type ConversationStatus = (typeof CONVERSATION_STATUSES)[number];
 export type ConversationOrigin = (typeof CONVERSATION_ORIGINS)[number];

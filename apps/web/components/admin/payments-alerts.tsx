@@ -16,6 +16,18 @@ const POLL_MS = 30_000;
 const PaymentsPendingCountContext = createContext<number | null>(null);
 
 /**
+ * Re-read the count NOW, without waiting for the next tick.
+ *
+ * Separate from the count context on purpose: the value here is stable for the
+ * life of the provider, so a component that only re-reads (the review buttons)
+ * does not re-render every time the number changes, and a component that only
+ * displays (the sidebar badge) does not re-render when this identity would
+ * otherwise change. One context carrying `{count, refresh}` would give both
+ * components both re-renders.
+ */
+const PaymentsRefreshContext = createContext<() => void>(() => undefined);
+
+/**
  * How many Vodafone Cash submissions are sitting in `pending`, or `null`
  * before the first answer lands (and on every session without `payment:read`
  * — see the layout, which mounts this provider only when the permission is
@@ -23,6 +35,24 @@ const PaymentsPendingCountContext = createContext<number | null>(null);
  */
 export function usePaymentsPendingCount(): number | null {
   return useContext(PaymentsPendingCountContext);
+}
+
+/**
+ * For the screen that CHANGES the number — «وافق» / «ارفض» on
+ * `/admin/payments`.
+ *
+ * Without it the badge kept the old count for up to a full poll interval after
+ * a review: approve the last pending claim and the sidebar still says «1» for
+ * thirty seconds. «لما أوافق أو أرفض يبقى الرقم ده خلاص يتشال على طول.» The
+ * poll is the floor, not the mechanism — an admin who just acted should not be
+ * told about their own action on a timer.
+ *
+ * Safe to call from a page mounted outside the provider (it defaults to a
+ * no-op): the layout mounts `PaymentsAlertsProvider` only for sessions holding
+ * `payment:read`, and a session without it has no badge to correct.
+ */
+export function useRefreshPaymentsPendingCount(): () => void {
+  return useContext(PaymentsRefreshContext);
 }
 
 /**
@@ -77,8 +107,10 @@ export function PaymentsAlertsProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   return (
-    <PaymentsPendingCountContext.Provider value={count}>
-      {children}
-    </PaymentsPendingCountContext.Provider>
+    <PaymentsRefreshContext.Provider value={refresh}>
+      <PaymentsPendingCountContext.Provider value={count}>
+        {children}
+      </PaymentsPendingCountContext.Provider>
+    </PaymentsRefreshContext.Provider>
   );
 }

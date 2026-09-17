@@ -20,6 +20,9 @@ describe('EnrollmentService', () => {
   let studentB = '';
   let courseId = '';
   let unpublishedCourseId = '';
+  /** A `scope: term` grant is the common purchase shape on this platform and
+   *  the CHECK constraint refuses one without a real term id. */
+  let termId = '';
 
   beforeAll(async () => {
     await prisma.$connect();
@@ -57,6 +60,11 @@ describe('EnrollmentService', () => {
     });
     courseId = course.id;
 
+    const term = await prisma.courseTerm.create({
+      data: { courseId, title: 'الترم الأول', position: 1 },
+    });
+    termId = term.id;
+
     const unpublished = await prisma.course.create({
       data: { ...base, slug: `enr-draft-${stamp}`, title: 'مسودة' },
     });
@@ -81,6 +89,7 @@ describe('EnrollmentService', () => {
   });
 
   afterAll(async () => {
+    await prisma.accessGrant.deleteMany({ where: { userId: { in: [studentA, studentB] } } });
     await prisma.enrollment.deleteMany({ where: { courseId: { in: [courseId, unpublishedCourseId] } } });
     await prisma.course.deleteMany({ where: { id: { in: [courseId, unpublishedCourseId] } } });
     await prisma.user.deleteMany({ where: { id: { in: [studentA, studentB] } } });
@@ -109,6 +118,125 @@ describe('EnrollmentService', () => {
       // the filter is the session user id, not the course.
       expect(forA).toHaveLength(1);
       expect(forB).toHaveLength(1);
+    });
+
+    /*
+     * `accessActive` — «الطالب اللي اشتراكه خلص مش قادر يدفع».
+     *
+     * The enrollment row and the subscription behind it are two different
+     * facts. Nothing in this codebase ever writes `EnrollmentStatus.expired`,
+     * so a lapsed student's row stays `active` forever; every reader that
+     * treated «has a row» as «has access» sent that student to a page with no
+     * price on it and no way back. These assert the flag reports the GRANT,
+     * and that the row is still returned either way.
+     */
+    describe('accessActive', () => {
+      const closedCourse = () =>
+        prisma.course.update({ where: { id: courseId }, data: { requiresGrant: true } });
+
+      beforeEach(async () => {
+        await prisma.accessGrant.deleteMany({ where: { userId: studentA } });
+        await closedCourse();
+      });
+
+      afterAll(async () => {
+        await prisma.course.update({ where: { id: courseId }, data: { requiresGrant: false } });
+      });
+
+      it('is true while a course grant is open-ended and started', async () => {
+        await prisma.accessGrant.create({
+          data: { userId: studentA, scope: 'course', courseId, source: 'admin' },
+        });
+
+        expect((await service.listOwn(studentA))[0]?.accessActive).toBe(true);
+      });
+
+      it('is true while a dated purchase grant is inside its window', async () => {
+        await prisma.accessGrant.create({
+          data: {
+            userId: studentA,
+            scope: 'course',
+            courseId,
+            source: 'purchase',
+            validUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          },
+        });
+
+        expect((await service.listOwn(studentA))[0]?.accessActive).toBe(true);
+      });
+
+      it('goes false once the purchase grant has elapsed — and KEEPS the row', async () => {
+        await prisma.accessGrant.create({
+          data: {
+            userId: studentA,
+            scope: 'course',
+            courseId,
+            source: 'purchase',
+            validFrom: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+            validUntil: new Date(Date.now() - 24 * 60 * 60 * 1000),
+          },
+        });
+
+        const rows = await service.listOwn(studentA);
+        // Still listed: the course and the progress are still the student's,
+        // and /library must keep showing it. Only `accessActive` changes.
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ courseId, status: 'active', accessActive: false });
+      });
+
+      it('goes false when a term grant is revoked — the close-the-term cliff', async () => {
+        // `TermService.setOpen(false)` stamps `revokedAt` on every term grant
+        // in one statement and touches no enrollment. That is the moment a
+        // whole cohort lapses at once, and the moment they all need to be
+        // able to reach the checkout.
+        await prisma.accessGrant.create({
+          data: {
+            userId: studentA,
+            scope: 'term',
+            courseId,
+            termId,
+            source: 'purchase',
+            revokedAt: new Date(),
+          },
+        });
+
+        expect((await service.listOwn(studentA))[0]?.accessActive).toBe(false);
+      });
+
+      it('is true again the moment a renewal grant lands beside the spent one', async () => {
+        await prisma.accessGrant.createMany({
+          data: [
+            {
+              userId: studentA,
+              scope: 'term',
+              courseId,
+              termId,
+              source: 'purchase',
+              revokedAt: new Date(),
+            },
+            { userId: studentA, scope: 'course', courseId, source: 'purchase' },
+          ],
+        });
+
+        expect((await service.listOwn(studentA))[0]?.accessActive).toBe(true);
+      });
+
+      it('does not let the platform grant open a course that requires its own', async () => {
+        await prisma.accessGrant.create({
+          data: { userId: studentA, scope: 'platform', source: 'auto_free' },
+        });
+
+        expect((await service.listOwn(studentA))[0]?.accessActive).toBe(false);
+      });
+
+      it('DOES let the platform grant open a free course', async () => {
+        await prisma.course.update({ where: { id: courseId }, data: { requiresGrant: false } });
+        await prisma.accessGrant.create({
+          data: { userId: studentA, scope: 'platform', source: 'auto_free' },
+        });
+
+        expect((await service.listOwn(studentA))[0]?.accessActive).toBe(true);
+      });
     });
 
     it('excludes a revoked enrollment', async () => {

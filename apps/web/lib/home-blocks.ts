@@ -1,3 +1,4 @@
+import { HonorBoardSchema, type HonorBoardEntry } from '@ayman/contracts/admin/exams';
 import { cacheLife, cacheTag } from 'next/cache';
 import {
   HomeBlockListSchema,
@@ -78,6 +79,22 @@ export const DEFAULT_HOME_BLOCKS: readonly { key: string; props: HomeBlockProps 
       limit: 3,
     },
   },
+  {
+    /*
+     * Straight after the course grid, and that placement is the argument: a
+     * reader who has just been shown what the recorded lessons are is the
+     * reader for whom «والكتاب مطبوع كمان» means something. Above the year
+     * tracks, because those are a navigation aid and this is a product.
+     */
+    key: 'books-strip',
+    props: {
+      type: 'books',
+      titleAr: c.booksTitle,
+      leadAr: c.booksLead,
+      ctaLabelAr: c.booksCta,
+      limit: 3,
+    },
+  },
   // ⚠️ NO `instructor` BLOCK, and its absence is a decision rather than an
   // omission. The profile — avatar, tier, counts, course grid — was taken off
   // the shipped page by the brand owner; `<InstructorProfile>` and the
@@ -94,6 +111,23 @@ export const DEFAULT_HOME_BLOCKS: readonly { key: string; props: HomeBlockProps 
       roleAr: c.aboutRole,
       chipsAr: [c.aboutChip1, c.aboutChip2, c.aboutChip3],
     },
+  },
+
+  {
+    /**
+     * «لوحة الشرف». Placement-only, like `instructor` and `yearTracks` — the
+     * section builds itself and this entry only says where it sits.
+     *
+     * ⚠️ Its presence here is LOAD-BEARING for a fresh database, and it is the
+     * other half of the guard in `20260909030000_seed_honor_board_block`. This
+     * list is served only while `home_blocks` is EMPTY (see the return at the
+     * bottom of this file); that migration deliberately does nothing to an
+     * empty table, so this entry is what puts the section on the page there.
+     * On a seeded table the migration's own row does it instead. Removing
+     * either one silently drops the section from one of the two worlds.
+     */
+    key: 'honor-board',
+    props: { type: 'honorBoard' },
   },
   {
     key: 'faq',
@@ -124,14 +158,104 @@ export const DEFAULT_HOME_BLOCKS: readonly { key: string; props: HomeBlockProps 
   },
 ] as const;
 
-/** The fallback, shaped like the API's response so the renderer has one path. */
-const FALLBACK: HomeBlockList = DEFAULT_HOME_BLOCKS.map((block, index) => ({
-  id: `default-${block.key}`,
-  key: block.key,
-  position: index,
-  isPublished: true,
-  props: block.props,
-}));
+/**
+ * The same page for a deployment that is NOT Ayman's.
+ *
+ * `DEFAULT_HOME_BLOCKS` above is his real, designed landing page, and it is
+ * served in two situations: an empty `home_blocks` table, and an API that
+ * cannot be reached. Both are correct for him — an outage should still show
+ * his homepage. Neither is correct for anybody else. A second instructor's
+ * first boot has an empty table by definition, so his hero copy, his «why»
+ * rail, his biography and his ten FAQs would render, finished and convincing,
+ * on somebody else's domain. And once that tenant is live, one API blip would
+ * do the same thing from inside their own container.
+ *
+ * So the fallback is chosen by `TENANT_KEY`, the same switch the API's
+ * `TENANT_CONTACT_SEED` uses. This list is deliberately SHORT and says nothing
+ * that is not true of every deployment:
+ *
+ * · `hero` — the tenant's own display name, a generic promise, two CTAs.
+ * · `courseGrid` — reads the catalogue, so it shows THEIR courses or nothing.
+ * · `yearTracks` — builds itself from the shared curriculum taxonomy, which is
+ *   identical for every tenant, so it is true on day one with zero content.
+ *
+ * Nothing biographical, no `about`, no `honorBoard` (there are no results to
+ * put on a board of honour on day one, and reserved empty places on a brand
+ * new site read as a broken section rather than a promise), and no `faq` —
+ * ten answers about somebody else's courses are worse than no FAQ.
+ *
+ * This is a FALLBACK, not the product. The tenant composes their real page in
+ * /admin/home and from that moment this is only ever seen during an outage.
+ */
+const TENANT_KEY = (process.env.TENANT_KEY ?? '').trim() || 'ayman';
+
+/**
+ * The instructor's name as it should appear before anybody has opened
+ * /admin/settings. Set per stack by the provisioner. The generic phrase is the
+ * honest last resort — it names no one rather than naming the wrong person.
+ */
+const TENANT_DISPLAY_NAME = (process.env.TENANT_DISPLAY_NAME ?? '').trim() || 'المنصة التعليمية';
+
+const NEUTRAL_FALLBACK_BLOCKS: readonly { key: string; props: HomeBlockProps }[] = [
+  {
+    key: 'hero',
+    props: {
+      type: 'hero',
+      eyebrowAr: 'منصة تعليمية',
+      headlineAr: TENANT_DISPLAY_NAME,
+      subheadlineAr: 'كل الشرح والامتحانات في مكان واحد',
+      rotatingAr: [],
+      leadAr: 'محاضرات مسجّلة تتفرج عليها في وقتك، وامتحانات تقيس مستواك أول بأول.',
+      ctaLabelAr: 'ابدأ دلوقتي',
+      ctaHref: '/register',
+      secondaryCtaLabelAr: 'شوف الكورسات',
+      secondaryCtaHref: '/courses',
+      stats: [],
+      imageAssetId: null,
+    },
+  },
+  {
+    key: 'featured-courses',
+    props: {
+      type: 'courseGrid',
+      titleAr: 'الكورسات',
+      leadAr: 'اللي متاح دلوقتي.',
+      ctaLabelAr: 'كل الكورسات',
+      courseIds: [],
+      limit: 3,
+    },
+  },
+  { key: 'year-tracks', props: { type: 'yearTracks' } },
+];
+
+/** Shaped like the API's response so the renderer has one path. */
+function asBlockList(
+  blocks: readonly { key: string; props: HomeBlockProps }[],
+): HomeBlockList {
+  return blocks.map((block, index) => ({
+    id: `default-${block.key}`,
+    key: block.key,
+    position: index,
+    isPublished: true,
+    props: block.props,
+  }));
+}
+
+/**
+ * This deployment's starter page — what the fallback renders, and what
+ * «انشر الصفحة الافتراضية» in /admin/home writes into `home_blocks`.
+ *
+ * One constant for both, deliberately. The admin action's whole promise is
+ * "turn what visitors already see into rows you can edit"; if it seeded a
+ * different list from the one being rendered, pressing it would silently
+ * change the live page. On a non-Ayman stack that divergence was the bug —
+ * the action would have written HIS page into THEIR database, permanently,
+ * where no fallback gate could take it back.
+ */
+export const STARTER_HOME_BLOCKS: readonly { key: string; props: HomeBlockProps }[] =
+  TENANT_KEY === 'ayman' ? DEFAULT_HOME_BLOCKS : NEUTRAL_FALLBACK_BLOCKS;
+
+const FALLBACK: HomeBlockList = asBlockList(STARTER_HOME_BLOCKS);
 
 /**
  * The published section list for `/`.
@@ -166,3 +290,26 @@ export async function getHomeBlocks(): Promise<HomeBlockList> {
     return FALLBACK;
   }
 }
+
+/**
+ * لوحة الشرف — the names on the public board.
+ *
+ * Cached like every other landing read, and it fails SOFT to an empty board:
+ * `<HonorBoardSection>` renders its reserved places when there is nothing on
+ * it, so an API blip costs the page a board with no names rather than a
+ * section that 500s. The empty render is the one this component was written
+ * for in the first place.
+ */
+export async function getHonorBoard(): Promise<HonorBoardEntry[]> {
+  'use cache';
+  cacheLife('minutes');
+  cacheTag(tags.honorBoard());
+
+  try {
+    const board = await apiGet('/api/catalog/honor-board', HonorBoardSchema);
+    return board.entries;
+  } catch {
+    return [];
+  }
+}
+

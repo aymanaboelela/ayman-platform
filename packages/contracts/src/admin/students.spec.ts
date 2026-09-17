@@ -5,6 +5,7 @@ import {
   AdminStudentBulkDeleteSchema,
   AdminStudentPatchSchema,
   AdminStudentSetPasswordSchema,
+  deleteIdentityMatches,
 } from './students';
 
 describe('AdminStudentPatchSchema', () => {
@@ -183,5 +184,47 @@ describe('AdminStudentBulkDeleteResultSchema', () => {
         failed: [{ userId: 'abc123', name: '', reason: 'because-i-said-so' }],
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('deleteIdentityMatches', () => {
+  const PHONE = '+201223334567';
+
+  it('accepts the number written the way the rest of the admin prints it', () => {
+    // The students table, the student header and the shipping sheet all show
+    // `01223334567`; the dialog's hint shows the stored `+201223334567`. Every
+    // one of these is the same account.
+    for (const typed of [
+      '+201223334567',
+      '201223334567',
+      '01223334567',
+      '00201223334567',
+      '+01223334567',
+      ' 0122 333 4567 ',
+      '0122-333-4567',
+    ]) {
+      expect(deleteIdentityMatches(typed, PHONE)).toBe(true);
+    }
+  });
+
+  it('still demands the whole number', () => {
+    // The point of the field is that it cannot be passed by accident on the
+    // wrong row. Nothing here matches on a prefix, a suffix or a substring.
+    for (const typed of ['+201223334568', '1223334', '3334567', '01223334', '']) {
+      expect(deleteIdentityMatches(typed, PHONE)).toBe(false);
+    }
+  });
+
+  it('compares an email as a string and never as digits', () => {
+    // An address that happens to be made of digits must not be passable by
+    // typing a phone number — folding is attempted only when the EXPECTED
+    // identity is itself a valid Egyptian number.
+    expect(deleteIdentityMatches('  Student@Example.TEST ', 'student@example.test')).toBe(true);
+    expect(deleteIdentityMatches('01223334567', '01223334567@example.test')).toBe(false);
+  });
+
+  it('fails closed for an account with no identifier at all', () => {
+    expect(deleteIdentityMatches('', null)).toBe(false);
+    expect(deleteIdentityMatches('anything', null)).toBe(false);
   });
 });

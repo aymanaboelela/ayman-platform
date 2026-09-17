@@ -1,13 +1,26 @@
 import Link from 'next/link';
 import { CornerUpRight, MessageCircle, Phone, UserRound } from 'lucide-react';
-import { copy } from '@ayman/contracts';
-import { AdminConversationDetailSchema } from '@ayman/contracts/assistant/conversation';
+import { copy, formatCopy } from '@ayman/contracts';
+import {
+  AdminConversationDetailSchema,
+  assistantTranscriptTrimmed,
+  parseAssistantTranscript,
+} from '@ayman/contracts/assistant/conversation';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 import { cn } from '@ayman/ui';
 import { adminGetOrNotFound } from '@/lib/admin-api';
 import { assistantPathLabels } from '@/lib/assistant-path';
+import { AssistantTranscript } from './assistant-transcript';
 import { MessageBubble } from './message-bubble';
 import { InboxStatusChip } from '../status-chip';
+
+/** Day precision is enough on a hover title — the hour a subscription lapses
+ *  is never what he is deciding on here. */
+function shortDate(iso: string): string {
+  return new Intl.DateTimeFormat('ar-EG', { dateStyle: 'medium', numberingSystem: 'latn' }).format(
+    new Date(iso),
+  );
+}
 import { ThreadActions } from './thread-actions';
 
 const c = copy.assistant.inbox;
@@ -93,20 +106,40 @@ export default async function AdminInboxThreadPage({
           <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
             {thread.isGuest ? c.guestBadge : c.studentBadge}
           </span>
-          {/* `null` for a guest — see `hasActiveSubscription`'s own note on
-              why that is neither badge rather than "مش مشترك". */}
-          {thread.hasActiveSubscription !== null ? (
-            <span
-              className={cn(
-                'rounded-full border px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium',
-                thread.hasActiveSubscription
-                  ? 'border-[oklch(0.62_0.15_150)]/40 bg-[oklch(0.62_0.15_150)]/12 text-[oklch(0.62_0.15_150)]'
-                  : 'border-line text-fg-muted',
-              )}
-            >
-              {thread.hasActiveSubscription ? c.subscribedBadge : c.notSubscribedBadge}
-            </span>
-          ) : null}
+          {/*
+            One badge PER COURSE, not a single «مشترك» — «هنا يبقى قايل هو
+            مشترك في إيه». He is answering a question about a specific course
+            and needs to know whether this student holds THAT one; two
+            students both reading «مشترك» can need opposite answers.
+
+            `null` for a guest — see `courses`' own note on why that is
+            neither badge rather than «مش مشترك».
+          */}
+          {thread.courses !== null
+            ? thread.courses.length > 0
+              ? thread.courses.map((course) => (
+                  <span
+                    key={course.courseId}
+                    title={
+                      course.validUntil
+                        ? formatCopy(c.subscribedUntil, { date: shortDate(course.validUntil) })
+                        : c.subscribedNoExpiry
+                    }
+                    className="rounded-full border border-[oklch(0.62_0.15_150)]/40 bg-[oklch(0.62_0.15_150)]/12 px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium text-[oklch(0.62_0.15_150)]"
+                  >
+                    {course.courseTitle}
+                    {/* «اتفتح بالإيد» stays visible here too — a hand-issued
+                        course must never be indistinguishable from a paid
+                        one on the screen where he decides how to answer. */}
+                    {course.source === 'admin' ? ` · ${c.subscribedByHand}` : ''}
+                  </span>
+                ))
+              : (
+                  <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium text-fg-muted">
+                    {c.notSubscribedBadge}
+                  </span>
+                )
+            : null}
         </div>
 
         <dl className="mt-3 grid gap-2 text-[length:var(--fs-text-sm)] sm:grid-cols-2">
@@ -185,14 +218,40 @@ export default async function AdminInboxThreadPage({
         server.
       */}
       <ol className="mt-5 flex flex-col gap-4">
-        {thread.messages.map((message) => (
-          <MessageBubble
-            key={message.id}
-            conversationId={thread.id}
-            message={message}
-            who={thread.who}
-          />
-        ))}
+        {thread.messages.map((message) => {
+          /*
+            ── THE ASSISTANT TRANSCRIPT, told apart from the student's words ──
+
+            A handoff out of المساعد writes the exchange into the thread as its
+            own message, authored `visitor` because the enum has two members
+            (see `serializeAssistantTranscript`). Parsed HERE, on the server,
+            and drawn as a record rather than as a bubble — «محتاج أعرف هو سأل
+            على إيه» is only answered if he can also tell which half of it a
+            machine said.
+
+            A body that does not parse is every message ever written before
+            this format existed, and it falls through to the bubble untouched.
+          */
+          const turns = parseAssistantTranscript(message.body);
+          if (turns) {
+            return (
+              <AssistantTranscript
+                key={message.id}
+                turns={turns}
+                trimmed={assistantTranscriptTrimmed(message.body)}
+                createdAt={message.createdAt}
+              />
+            );
+          }
+          return (
+            <MessageBubble
+              key={message.id}
+              conversationId={thread.id}
+              message={message}
+              who={thread.who}
+            />
+          );
+        })}
       </ol>
 
       <ThreadActions id={thread.id} status={thread.status} />

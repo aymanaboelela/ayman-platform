@@ -16,6 +16,7 @@ import { prismaAdapter } from 'better-auth/adapters/prisma';
 // The NARROW subpath, never the `better-auth/plugins` barrel. Same class of
 // hazard as this repo's contracts root barrel: the barrel pulls in every
 // plugin's module-evaluation side effects for the one we use.
+import { bearer } from 'better-auth/plugins/bearer';
 import { phoneNumber } from 'better-auth/plugins/phone-number';
 import { importPKCS8, SignJWT } from 'jose';
 import { loadEnv } from '../config/env';
@@ -24,11 +25,12 @@ import { SessionDeviceService } from '../modules/sessions/session-device.service
 import { ARGON2_OPTIONS } from './argon2-options';
 import {
   PrismaBannedAccountLookup,
+  PrismaRegisteredPhoneLookup,
   PrismaCredentialLookup,
   createAuthBeforeHook,
 } from './login-security.hook';
 import { LoginSecurityService } from './login-security.service';
-import { LoginThrottleService } from './login-throttle.service';
+import { loginThrottle } from './login-throttle.instance';
 
 const env = loadEnv(process.env);
 const isProduction = env.NODE_ENV === 'production';
@@ -70,12 +72,15 @@ const prisma = new PrismaClient({
 // concrete adapter that touches Prisma; `createLoginSecurityHook` is the one
 // place that touches `better-auth/api` (`createAuthMiddleware`/`APIError`),
 // so this file stays the only import boundary, same as Task 2's guard.
-const loginThrottleService = new LoginThrottleService();
+// The ledger itself is NOT constructed here — `./login-throttle.instance`
+// owns the one instance, because the admin «تعيين كلمة سر جديدة» path has to
+// clear a student's soft lock and cannot import this file to reach it (ESM).
 const credentialLookup = new PrismaCredentialLookup(prisma);
-const loginSecurityService = new LoginSecurityService(loginThrottleService, credentialLookup);
+const loginSecurityService = new LoginSecurityService(loginThrottle, credentialLookup);
 // حظر — read only AFTER a password verifies, so the ban is never an
 // account-enumeration oracle. See the block in `createLoginSecurityHook`.
 const bannedAccountLookup = new PrismaBannedAccountLookup(prisma);
+const registeredPhoneLookup = new PrismaRegisteredPhoneLookup(prisma);
 
 // ── Task 7: أجهزتي (sessions/devices) ──────────────────────────────────────
 // Same pattern as the three services above: constructed directly against
@@ -244,7 +249,7 @@ export const auth = betterAuth({
   user: {
     additionalFields: {
       role: {
-        type: ['admin', 'student'],
+        type: ['admin', 'owner', 'student'],
         required: false,
         defaultValue: 'student',
         input: false,
@@ -345,6 +350,37 @@ export const auth = betterAuth({
   // happens in `createAuthBeforeHook` before the value ever reaches the
   // plugin. This validator only rejects what normalisation could not fix.
   plugins: [
+    /**
+     * The ONLY thing that lets the Flutter app hold a session.
+     *
+     * Every sign-in and sign-up response already returns the session token in
+     * its JSON body; what was missing was a way to send it back. A native
+     * client has no cookie jar it can be trusted to drive — iOS and Android
+     * both persist `__Host-` cookies inconsistently across process death, and
+     * a cookie a native client DOES send drags better-auth's origin check in
+     * with it (`origin-check.mjs`: `useCookies = headers.has('cookie')`),
+     * which then 403s because a native request has no `Origin` at all.
+     *
+     * This plugin adds two hooks:
+     *   - before: `Authorization: Bearer <token>` is HMAC-verified against
+     *     `BETTER_AUTH_SECRET` and injected as the session cookie.
+     *   - after: any response that sets the session cookie also emits
+     *     `set-auth-token`, which is what the app stores in the Keychain.
+     *
+     * ⚠️ It covers the whole API, not just `/api/auth/**`, and that is not a
+     * coincidence to rely on quietly: `AuthGuard` resolves sessions through
+     * `this.auth.api.getSession({ headers: toWebHeaders(request.headers) })`,
+     * and `toWebHeaders` copies EVERY incoming header including
+     * `authorization`. `auth.api.*` runs plugin hooks, so the bearer token is
+     * resolved there too. Remove this plugin and every mobile request becomes
+     * anonymous — not 401, ANONYMOUS — so public routes keep working and only
+     * the signed-in ones break.
+     *
+     * Registered FIRST so its before-hook has injected the cookie before any
+     * other plugin's hook looks for a session.
+     */
+    bearer(),
+
     phoneNumber({
       phoneNumberValidator: (value) => normalizeEgyptianPhone(value) !== null,
 
@@ -443,7 +479,7 @@ export const auth = betterAuth({
   // Auth's own handler ever runs so no library-specific message reaches the
   // client.
   hooks: {
-    before: createAuthBeforeHook(loginSecurityService, bannedAccountLookup),
+    before: createAuthBeforeHook(loginSecurityService, bannedAccountLookup, registeredPhoneLookup),
   },
 
   // ── Task 7: أجهزتي — populate SessionDevice on every session creation ────

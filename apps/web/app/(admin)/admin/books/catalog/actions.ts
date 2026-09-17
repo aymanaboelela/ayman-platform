@@ -6,12 +6,14 @@ import {
   AdminBookCreateSchema,
   AdminBookPatchSchema,
   AdminBookRowSchema,
+  type AdminBookRow,
   type AdminBookCreateInput,
   type AdminBookPatchInput,
 } from '@ayman/contracts/admin/books';
+import type { BookShippingRates } from '@ayman/contracts/books';
 import { SiteSettingsSchema, StoreSettingsSchema } from '@ayman/contracts/admin/settings';
 import { copy } from '@ayman/contracts/copy/admin';
-import { adminSend } from '@/lib/admin-api';
+import { adminGet, adminSend } from '@/lib/admin-api';
 import { TAG_BOOKS } from '@/lib/cache-tags';
 
 const c = copy.admin.books;
@@ -106,9 +108,21 @@ export async function deleteBookAction(id: string): Promise<ActionResult> {
  * `shipping_cents` at checkout. It only changes what the next order is quoted,
  * which is exactly what a price change should mean.
  */
-export async function setBookShippingAction(shippingCents: number): Promise<ActionResult> {
+export async function setBookShippingAction(
+  shippingRates: BookShippingRates,
+): Promise<ActionResult> {
   try {
-    const body = StoreSettingsSchema.parse({ shippingCents });
+    /*
+     * ⚠️ Parsed, which is what keeps the legacy `shippingCents` key on the row.
+     *
+     * `StoreSettingsSchema` is `.strict()` and still declares that field with a
+     * `.default()`, so parsing `{ shippingRates }` fills it back in and the
+     * PATCH writes a settings object that a reader of the old shape can still
+     * make sense of. Sending only the new key would be accepted too — but the
+     * stored jsonb is replaced wholesale, and a row that loses a key this
+     * schema requires is a row that throws on every subsequent read.
+     */
+    const body = StoreSettingsSchema.parse({ shippingRates });
     /* The route answers with the WHOLE settings object, not the section it was
        given — `SettingsController.update` returns `SiteSettings`. */
     await adminSend('PATCH', '/api/admin/settings/store', body, SiteSettingsSchema);
@@ -116,5 +130,52 @@ export async function setBookShippingAction(shippingCents: number): Promise<Acti
     return { ok: true };
   } catch {
     return { ok: false, message: c.shippingSettingFailed };
+  }
+}
+
+/**
+ * Everything the «الكتاب الورقي» panel inside a course editor needs, read on
+ * demand.
+ *
+ * ## Why a Server Action and not props from the course page
+ *
+ * `/admin/courses/[id]` builds one `AdminCourseDetail`, and a course's book is
+ * not part of it — the link lives on `books.course_id`, pointing the other way.
+ * Threading it through the page would mean widening that payload for every
+ * course editor render, including the forty-lecture ones where nobody opens the
+ * book panel at all. The panel is a client island that already knows its own
+ * course id, so it asks for exactly what it needs, when it is on screen.
+ *
+ * It also gives the panel a way to REFRESH itself after a save:
+ * `invalidate()` above re-renders `/admin/books/catalog`, which is not the page
+ * the admin is standing on.
+ *
+ * The book is found by scanning the catalogue rather than by a dedicated route:
+ * `books.course_id` is UNIQUE, the shop is a list of twelve titles by design
+ * (see the catalogue page's own note on why it is not paginated), and one
+ * uncached read is cheaper than an endpoint another agent would have to own.
+ */
+export async function loadCourseBookAction(courseId: string): Promise<
+  | { ok: true; book: AdminBookRow | null; subjects: { id: string; nameAr: string }[] }
+  | { ok: false; message: string }
+> {
+  try {
+    const [books, subjects] = await Promise.all([
+      adminGet('/api/admin/books', z.array(AdminBookRowSchema)),
+      /* `/admin/taxonomy/subjects`, not the public `/api/taxonomy` — the same
+         reason the catalogue page gives: the public payload nests subjects per
+         offering, so one subject appears many times without its bare id. */
+      adminGet(
+        '/api/admin/taxonomy/subjects',
+        z.array(z.object({ id: z.string(), nameAr: z.string() })),
+      ),
+    ]);
+    return {
+      ok: true,
+      book: books.find((candidate) => candidate.courseId === courseId) ?? null,
+      subjects,
+    };
+  } catch {
+    return { ok: false, message: c.actionFailed };
   }
 }

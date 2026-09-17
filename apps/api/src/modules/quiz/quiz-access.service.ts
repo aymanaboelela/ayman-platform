@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
 import { countingAttemptId, decideNextSitting } from './attempt-allowance';
+import { splitPendingMarks } from './grading/mark-split';
 
 export interface QuizForAttempt {
   id: string;
@@ -163,6 +164,36 @@ export class QuizAccessService {
       scaledScore: row.scaledScore === null ? null : Number(row.scaledScore),
     }));
 
+    /*
+     * How much of each sitting is still on the instructor's desk.
+     *
+     * A second query, and worth it: without it this list renders a midterm's
+     * provisional «٤٨٫٥ من ١٠٠» beside a red «محتاجة مراجعة» while half the
+     * paper has not been read — see `AttemptHistoryRowSchema.pendingOutOf`.
+     * It is ONE `groupBy` over `attempt_questions` for this student's own
+     * sittings of one quiz (at most a handful of rows), issued only when one
+     * of them is actually `pending_review`, so a fully auto-marked quiz —
+     * which is nearly all of them — pays nothing at all for it.
+     *
+     * `maxMark` is summed on the PAPER's scale here; `splitMarks` does the
+     * rescale to `gradeOutOf` per attempt, against that attempt's OWN
+     * `sumMarks` snapshot rather than the quiz's live one (B7).
+     */
+    const pendingIds = attempts
+      .filter((attempt) => attempt.state === 'pending_review')
+      .map((attempt) => attempt.id);
+    const pendingByAttempt = new Map<string, number>();
+    if (pendingIds.length > 0) {
+      const grouped = await this.prisma.attemptQuestion.groupBy({
+        by: ['attemptId'],
+        where: { attemptId: { in: pendingIds }, state: 'needs_grading' },
+        _sum: { maxMark: true },
+      });
+      for (const group of grouped) {
+        pendingByAttempt.set(group.attemptId, Number(group._sum.maxMark ?? 0));
+      }
+    }
+
     const now = new Date();
     const sitting = decideNextSitting(quiz.allowsImprovement, attempts);
 
@@ -221,6 +252,18 @@ export class QuizAccessService {
         scaledScore: attempt.scaledScore,
         passed: attempt.passed,
         counts: attempt.id === counting,
+        ...splitPendingMarks(pendingByAttempt.get(attempt.id) ?? 0, {
+          // The attempt's own snapshot is not selected on this list (it does
+          // not need one otherwise), so the PAPER the sitting was drawn from
+          // supplies the scale — `sumMarks` for an original, and
+          // `improvementSumMarks` for a تحسين sitting. Getting that wrong on
+          // an improvable exam would scale the pending share against the
+          // wrong paper's total.
+          sumMarks: Number(
+            attempt.paper === 'improvement' ? quiz.improvementSumMarks : quiz.sumMarks,
+          ),
+          gradeOutOf: Number(quiz.gradeOutOf),
+        }),
       })),
     };
   }
