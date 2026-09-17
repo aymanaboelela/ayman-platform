@@ -7,9 +7,11 @@ import { formatCopy } from '@ayman/contracts/format';
 import {
   MAX_BOOK_QUANTITY,
   bookOrderTotals,
+  minBookShippingCents,
   type BookCard,
   type BookCatalog,
   type BookShelf,
+  type BookShippingRates,
   type BookTerm,
 } from '@ayman/contracts/books';
 import {
@@ -22,7 +24,7 @@ import { CourseArt } from '@/components/course-art';
 import { StreamBadge } from '@/components/stream-badge';
 import { BookOrderPanel } from '@/components/site/book-order-panel';
 import { subjectArt } from '@/lib/subject-art';
-import { formatEGP, formatShipping } from '@/lib/price';
+import { formatEGP } from '@/lib/price';
 
 const c = copy.books;
 
@@ -120,9 +122,23 @@ export function BooksShop({
     [quantities, booksById],
   );
 
+  /** The cheapest zone — what the basket may quote as a FLOOR before it knows
+   *  an address. Never what it charges. */
+  const fromShippingCents = minBookShippingCents(catalog.shippingRates);
+
+  /*
+   * ⚠️ Shipping is `0` HERE, and the basket's own «الشحن» row says «على حسب
+   * المحافظة» rather than a number.
+   *
+   * The fee depends on where the parcel is going and nothing on this page knows
+   * that yet — the governorate is chosen inside `BookOrderPanel`, which quotes
+   * the real number the instant it is. Adding the cheapest zone here instead
+   * would show «٨٠ ج» to a reader in أسوان and then replace it with «١٥٠ ج» one
+   * screen later, which is a price that went up on them.
+   */
   const totals = bookOrderTotals(
     lines.map((line) => ({ unitPriceCents: line.book.priceCents, quantity: line.quantity })),
-    catalog.shippingCents,
+    0,
   );
 
   const bookCount = lines.reduce((sum, line) => sum + line.quantity, 0);
@@ -237,7 +253,7 @@ export function BooksShop({
                   ))}
                 </ul>
 
-                <Totals totals={totals} />
+                <Totals totals={totals} fromShippingCents={fromShippingCents} />
 
                 <button
                   type="button"
@@ -261,7 +277,7 @@ export function BooksShop({
       <p role="status" aria-live="polite" className="sr-only">
         {lines.length === 0
           ? c.cartEmpty
-          : formatCopy(c.cartAnnounce, { n: bookCount, price: formatEGP(totals.totalCents) })}
+          : formatCopy(c.cartAnnounce, { n: bookCount, price: formatEGP(totals.itemsCents) })}
       </p>
 
       <Dialog open={checkingOut} onOpenChange={setCheckingOut}>
@@ -282,7 +298,13 @@ export function BooksShop({
                   <span>{formatEGP(line.book.priceCents * line.quantity)}</span>
                 </div>
               ))}
-              <Totals totals={totals} />
+              {/* ⚠️ NO `<Totals>` here. It would be a SECOND, frozen answer to
+                  the question the panel below answers live: this copy is stuck
+                  on «من ٢٣٠» (the cheapest zone) while the panel's own total
+                  becomes ٢٥٠ the moment a وجه-بحري address is picked, and the
+                  reader gets two different totals stacked on top of each other.
+                  The panel owns the breakdown — same reason `BookOrderButton`
+                  keeps its breakdown inside rather than above. */}
             </div>
 
             {/*
@@ -293,7 +315,8 @@ export function BooksShop({
             */}
             <BookOrderPanel
               items={lines.map((line) => ({ bookId: line.book.id, quantity: line.quantity }))}
-              amountCents={totals.totalCents}
+              itemsCents={totals.itemsCents}
+              shippingRates={catalog.shippingRates}
               instapay={instapay}
               vodafoneCash={vodafoneCash}
               onCancel={() => setCheckingOut(false)}
@@ -305,7 +328,22 @@ export function BooksShop({
   );
 }
 
-function Totals({ totals }: { totals: ReturnType<typeof bookOrderTotals> }) {
+/**
+ * The basket's three rows, BEFORE an address exists.
+ *
+ * «الشحن» names the rule instead of a number, and «الإجمالي» is a floor rather
+ * than a price — see `copy.books.shippingByGovernorate`. Both become real
+ * figures inside `BookOrderPanel` the moment a governorate is picked, and the
+ * rows keep their labels and their order so the reader watches two values
+ * change rather than a layout.
+ */
+function Totals({
+  totals,
+  fromShippingCents,
+}: {
+  totals: ReturnType<typeof bookOrderTotals>;
+  fromShippingCents: number;
+}) {
   return (
     <div className="books-cart__totals">
       <div className="books-cart__row">
@@ -314,11 +352,15 @@ function Totals({ totals }: { totals: ReturnType<typeof bookOrderTotals> }) {
       </div>
       <div className="books-cart__row">
         <span>{c.shipping}</span>
-        <span>{formatShipping(totals.shippingCents, c.shippingFree)}</span>
+        <span>{c.shippingByGovernorate}</span>
       </div>
       <div className="books-cart__row books-cart__row--total">
         <span>{c.total}</span>
-        <span>{formatEGP(totals.totalCents)}</span>
+        <span>
+          {formatCopy(c.totalFrom, {
+            price: formatEGP(totals.itemsCents + fromShippingCents),
+          })}
+        </span>
       </div>
     </div>
   );
@@ -522,19 +564,37 @@ function BookTile({
   );
 }
 
-/** The hero's shipping chip — exported so the page can render it server-side. */
-export function BooksShippingChip({ shippingCents }: { shippingCents: number }) {
+/**
+ * The hero's shipping chip — exported so the page can render it server-side.
+ *
+ * It states the FLOOR and then the three zones under it. «الشحن ٨٠ ج» alone
+ * would be a number two thirds of the country is not charged, and this line is
+ * read on the shelf precisely so nobody meets the real figure as a surprise at
+ * the address form.
+ */
+export function BooksShippingChip({ rates }: { rates: BookShippingRates }) {
+  const free = rates.cairo_giza === 0 && rates.delta === 0 && rates.far === 0;
   return (
     <p className="books-hero__shipping">
       <Truck size={16} aria-hidden="true" />
-      {/* A whole different sentence at zero, not the same one with «٠ ج» in
-          its slot — see `shippingFreeOnce`. `shippingOnce` spends its second
-          half promising the fee is charged only once, which is nonsense about
-          a fee that is not charged, and it buries the best thing this line
-          could say. */}
-      {shippingCents === 0
-        ? c.shippingFreeOnce
-        : formatCopy(c.shippingOnce, { price: formatEGP(shippingCents) })}
+      {/* A whole different sentence when delivery is free everywhere, not the
+          same one with «٠ ج» in its slot — see `shippingFreeOnce`. The zoned
+          wording spends its second half promising the fee is charged once,
+          which is nonsense about a fee that is not charged at all. */}
+      {free ? (
+        c.shippingFreeOnce
+      ) : (
+        <span>
+          {formatCopy(c.shippingOnce, { price: formatEGP(minBookShippingCents(rates)) })}
+          <small className="books-hero__zones">
+            {formatCopy(c.shippingZones, {
+              near: formatEGP(rates.cairo_giza),
+              delta: formatEGP(rates.delta),
+              far: formatEGP(rates.far),
+            })}
+          </small>
+        </span>
+      )}
     </p>
   );
 }

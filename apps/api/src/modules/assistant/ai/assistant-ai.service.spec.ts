@@ -335,7 +335,7 @@ const MONEY: AssistantFacts = {
     },
   ],
   courses: [],
-  shippingCents: 6_500,
+  shippingRates: { cairo_giza: 8_000, delta: 10_000, far: 15_000 },
   at: Date.now(),
 };
 

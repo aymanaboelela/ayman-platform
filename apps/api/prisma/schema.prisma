@@ -179,6 +179,7 @@ model User {
   // STUDENT asked for, which must survive the shipping admin's account
   // being deleted.
   bookOrders                 BookOrder[]             @relation("BookOrderStudent")
+  bookOrdersPrinted          BookOrder[]             @relation("BookOrderPrintedBy")
   bookOrdersShipped          BookOrder[]             @relation("BookOrderShippedBy")
   bookOrdersDelivered        BookOrder[]             @relation("BookOrderDeliveredBy")
   bookOrdersRejected         BookOrder[]             @relation("BookOrderRejectedBy")
@@ -2376,6 +2377,27 @@ model BookOrder {
 
   status BookOrderStatus @default(address_only)
 
+  /// «راح للمطبعة» — this order's copy went into a print run.
+  ///
+  /// The hand-off BEFORE the courier's, and the one the screen could not
+  /// previously see: «أنزّل PDF، أوديه للمطبعة، أضغط الطباعة» — until this
+  /// existed, an order sent to the printer was indistinguishable from one still
+  /// sitting on the desk, and the «مدفوعة» tab could not answer the only
+  /// question asked of it every morning.
+  ///
+  /// NULLABLE, and null is not "unknown": it is «ما راحش للمطبعة», which is a
+  /// real path. A single reprint handed over the counter never goes near a run,
+  /// and `markShipped` still accepts `paid` directly — the same reason
+  /// `deliveredAt` is reachable from `paid` without a `shippedAt`. Inventing a
+  /// print time to satisfy the sequence would put a lie one column over.
+  ///
+  /// No notification fires here, deliberately: paper entering a print shop is
+  /// not news to a student, and a message about it would promise a date the run
+  /// cannot keep. `printedByUserId` is the only record of who sent it — which is
+  /// why `book-order:printing` is an audit action of its own.
+  printedAt       DateTime? @map("printed_at")
+  printedByUserId String?   @map("printed_by_user_id")
+
   /// «اتشحن» — set by `BookOrdersService.markShipped`, an explicit admin
   /// action. Records ONLY that the order shipped; no notification is sent to
   /// the student (the admin handles that himself, outside the platform).
@@ -2435,6 +2457,7 @@ model BookOrder {
 
   user        User?           @relation("BookOrderStudent", fields: [userId], references: [id], onDelete: Cascade)
   course      Course?         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  printedBy   User?           @relation("BookOrderPrintedBy", fields: [printedByUserId], references: [id], onDelete: SetNull)
   shippedBy   User?           @relation("BookOrderShippedBy", fields: [shippedByUserId], references: [id], onDelete: SetNull)
   deliveredBy User?           @relation("BookOrderDeliveredBy", fields: [deliveredByUserId], references: [id], onDelete: SetNull)
   rejectedBy  User?           @relation("BookOrderRejectedBy", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
@@ -2467,6 +2490,7 @@ model BookOrder {
 enum BookOrderStatus {
   address_only
   paid
+  printing
   shipped
   delivered
   rejected

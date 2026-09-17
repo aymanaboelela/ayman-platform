@@ -217,6 +217,30 @@ function hasSessionCookie(request: NextRequest): boolean {
   return SESSION_COOKIE_NAMES.some((name) => request.cookies.has(name));
 }
 
+/**
+ * Whether ONE row of `GET /api/enrollments` means "this student is already
+ * inside this course, send them to their library copy of it".
+ *
+ * Exported and pure purely so it can be tested — `resolveEnrolledCourseRedirect`
+ * below cannot be, it does a network call.
+ *
+ * ⚠️ BOTH conditions, and `accessActive` is the one that is easy to lose.
+ * The enrollment row is not the subscription: nothing writes
+ * `EnrollmentStatus.expired`, so a student whose grant lapsed — every term
+ * buyer, the moment an admin closes the term — keeps an `active` row forever.
+ * Matching on the slug alone redirected exactly that student away from
+ * `/courses/:slug`, the only page carrying a price and a «اشترك» button, into
+ * `/library/:slug`, which carries neither; the lesson gate then 403s back to
+ * `/courses/:slug` and this fires again. They could not pay.
+ */
+export function enrollmentOpensCourse(row: unknown, pathSlug: string): boolean {
+  if (typeof row !== 'object' || row === null) return false;
+  if (!matchesSlug((row as { courseSlug?: unknown }).courseSlug, pathSlug)) return false;
+  // Strict `=== true`: an older API that does not send the field at all must
+  // read as "no live access", never as "redirect anyway".
+  return (row as { accessActive?: unknown }).accessActive === true;
+}
+
 /** The API sends `courseSlug` decoded; the path carries it encoded. */
 function matchesSlug(courseSlug: unknown, pathSlug: string): boolean {
   if (typeof courseSlug !== 'string') return false;
@@ -278,14 +302,10 @@ async function resolveEnrolledCourseRedirect(request: NextRequest): Promise<URL 
 
     // `GET /api/enrollments` already filters to ACTIVE_ENROLLMENT_STATUSES
     // (`active` and `completed`), so a suspended or revoked enrollment never
-    // appears here and correctly leaves the student on the public page.
-    const enrolled = rows.some(
-      (row) =>
-        typeof row === 'object' &&
-        row !== null &&
-        matchesSlug((row as { courseSlug?: unknown }).courseSlug, slug),
-    );
-    if (!enrolled) return null;
+    // appears here and correctly leaves the student on the public page. A
+    // LAPSED one still does appear, and `enrollmentOpensCourse` is what keeps
+    // it from redirecting — see its own note.
+    if (!rows.some((row) => enrollmentOpensCourse(row, slug))) return null;
   } catch {
     return null;
   }

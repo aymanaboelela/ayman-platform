@@ -257,16 +257,17 @@ describe('the payment rail', () => {
     // point of making this a step instead of a dropdown over a live number.
     expect(screen.queryAllByText(/1021196367/)).toHaveLength(0);
     expect(screen.queryAllByText(/1555555555/)).toHaveLength(0);
-    // And «التالي» cannot be pressed: a default rail is a choice the student
-    // did not make, about where their money goes.
-    expect(screen.getByRole('button', { name: copy.subscribe.railNext })).toBeDisabled();
+    // ⚠️ And nothing is preselected. With the confirm button gone there is no
+    // default to drift through — nothing happens until a finger lands on one of
+    // the two, which is what makes a one-tap choice safe here.
+    expect(screen.getAllByRole('button', { name: /إنستاباي|فودافون كاش/ })).toHaveLength(2);
   });
 
   it('shows the number of the rail the student picked', async () => {
     await openCheckout(liveSettings(INSTAPAY, WALLET));
 
-    fireEvent.click(screen.getByRole('radio', { name: new RegExp(copy.subscribe.railVodafoneCash) }));
-    fireEvent.click(screen.getByRole('button', { name: copy.subscribe.railNext }));
+    // One tap — the choice and the move are the same press.
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.railVodafoneCash) }));
 
     // `getAllBy`, because the number is deliberately on screen TWICE — in the
     // instructions sentence and in the copyable row — and both have to be the
@@ -274,6 +275,18 @@ describe('the payment rail', () => {
     await waitFor(() => expect(screen.getAllByText(/1555555555/).length).toBeGreaterThan(0));
     // ⚠️ And NOT the other one, anywhere. There is no fallback between rails.
     expect(screen.queryAllByText(/1021196367/)).toHaveLength(0);
+
+    /*
+     * ⚠️ And every SENTENCE names the chosen rail too, not just the number.
+     * The screenshot hint under the uploader was missed by the first pass and
+     * still said «من تطبيق إنستاباي» to a student paying by wallet — caught by
+     * opening the real checkout on production, not by any test, which is why
+     * there is one now.
+     */
+    expect(screen.queryAllByText(new RegExp(copy.subscribe.railInstapay))).toHaveLength(0);
+    expect(
+      screen.getAllByText(new RegExp(copy.subscribe.railVodafoneCash)).length,
+    ).toBeGreaterThan(1);
   });
 
   it('offers an unconfigured rail as unavailable rather than hiding it', async () => {
@@ -282,7 +295,7 @@ describe('the payment rail', () => {
     // hidden gap is one the admin never sees either.
     await openCheckout(liveSettings(INSTAPAY, null));
 
-    const wallet = screen.getByRole('radio', { name: new RegExp(copy.subscribe.railVodafoneCash) });
+    const wallet = screen.getByRole('button', { name: new RegExp(copy.subscribe.railVodafoneCash) });
     expect(wallet).toBeDisabled();
     expect(screen.getByText(copy.subscribe.railUnavailable)).toBeTruthy();
   });
@@ -293,8 +306,8 @@ describe('the payment rail', () => {
     await openCheckout(liveSettings(null, WALLET));
 
     expect(screen.queryByText(copy.subscribe.noNumber)).toBeNull();
-    fireEvent.click(screen.getByRole('radio', { name: new RegExp(copy.subscribe.railVodafoneCash) }));
-    fireEvent.click(screen.getByRole('button', { name: copy.subscribe.railNext }));
+    // One tap — the choice and the move are the same press.
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.railVodafoneCash) }));
     await waitFor(() => expect(screen.getAllByText(/1555555555/).length).toBeGreaterThan(0));
   });
 });

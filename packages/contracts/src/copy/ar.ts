@@ -187,6 +187,25 @@ export const copy = {
       'أفضل مدرس برمجة بكالوريا',
       'احسن مدرس برمجة وذكاء اصطناعي',
     ],
+    /**
+     * The `Person` name, decomposed.
+     *
+     * ⚠️ `site.instructor` («المهندس أيمن أبو العلا») is a TITLE plus a name and
+     * must not be the `Person`'s `name` — `site.name`'s own note already says
+     * the JSON-LD `Person` wants the bare name, and `jsonld.ts` had been
+     * passing the honorific form anyway. schema.org has `honorificPrefix` for
+     * exactly this, and an engine matching «أيمن أبو العلا» against a `name`
+     * that opens with «المهندس» is matching a substring rather than an entity.
+     *
+     * ⚠️ «أبو العلا» is the family name, BOTH words. A consumer splitting the
+     * full name on whitespace gets «أبو» as the family name and «العلا» as a
+     * middle name, which matches nothing — which is the whole reason these are
+     * stated here rather than derived.
+     */
+    personHonorific: 'المهندس',
+    personGivenName: 'أيمن',
+    personFamilyName: 'أبو العلا',
+
     /** `jobTitle` on the `Person` entity — what a knowledge panel would show. */
     jobTitle: 'مدرّس البرمجة وعلوم الحاسب',
     /**
@@ -1670,6 +1689,19 @@ export const copy = {
     foundationTitle: 'الكورس التأسيسي',
     foundationLead:
       'الكورس ده مش لصف معيّن — أي حد لسه بادئ يبدأ منه، وبعده كورسات الصف بتبقى ماشية معاك.',
+    /**
+     * For the MARKDOWN twin of a year page that has the shared foundation
+     * course on it and nothing of its own.
+     *
+     * ⚠️ The HTML says this by being visibly empty under the foundation
+     * section — a reader sees one card and no shelf beneath it. Markdown has no
+     * empty space, so it has to say it in words: `/years/3.md` was headed
+     * «الصف الثالث بكالوريا» with a single row reading «الصف الثاني بكالوريا»,
+     * because `courseLine` leads with the COURSE's year and the foundation
+     * course is stored under year 2. The document contradicted its own title.
+     */
+    foundationOnlyNote:
+      'لسه مفيش كورس من كورسات الصف ده نفسه — اللي فوق هو الكورس التأسيسي المشترك.',
 
     /**
      * The count beside each subject heading on `/years/[year]`.
@@ -2303,7 +2335,6 @@ export const copy = {
     railInstapay: 'إنستاباي',
     railVodafoneCash: 'فودافون كاش',
     railUnavailable: 'مش متاح دلوقتي',
-    railNext: 'التالي',
     /** Back to the question, from the screen that shows the number. */
     railChange: 'غيّر طريقة التحويل',
     cta: 'اشترك دلوقتي',
@@ -2359,7 +2390,17 @@ export const copy = {
     screenshotLabel: 'صورة إثبات التحويل',
     screenshotPlaceholder: 'اضغط هنا وارفع صورة السكرين شوت',
     screenshotChange: 'تغيير الصورة',
-    screenshotHint: 'سكرين شوت واضح من تطبيق إنستاباي بيوضّح المبلغ والتاريخ.',
+    /**
+     * ⚠️ `{rail}` — same reason as `instructions` above, and this one was
+     * MISSED when that fix went in.
+     *
+     * Caught by opening the real checkout on production: the student picks
+     * «فودافون كاش», sees the Vodafone number and the Vodafone mark, and then
+     * this line under the uploader tells them to screenshot InstaPay. A
+     * sentence naming the wrong app is how a correct transfer arrives with
+     * proof nobody can match to it.
+     */
+    screenshotHint: 'سكرين شوت واضح من تطبيق {rail} بيوضّح المبلغ والتاريخ.',
     back: 'رجوع',
     submit: 'إرسال الطلب',
     submitting: 'بنبعت الطلب…',
@@ -4852,11 +4893,71 @@ export const copy = {
     metaTrack: 'المسار',
     metaSystem: 'النظام',
     metaLessons: 'عدد المحاضرات',
+    /**
+     * «الكورس بكام؟» is one of the three things anybody asks about a course,
+     * and until 2026-09-15 the markdown twin — the document an assistant
+     * actually reads — was the only surface on the site that did not answer it.
+     * The visible page has carried the price block all along.
+     */
+    metaPrice: 'السعر',
+    /**
+     * The byline and the dates on a markdown twin. The HTML page has shown both
+     * since the «نيوز» section shipped; the document written for machines
+     * showed neither, and an engine deciding whether to cite a page weighs
+     * exactly these two.
+     */
+    /**
+     * On a course whose lessons have not gone up yet — the machine-readable
+     * counterpart of the «قريبًا» panel the HTML page renders. Without it the
+     * agent documents listed a course with four purchasable plans and «0:00»
+     * beside a description promising recorded lectures, and an assistant
+     * recommending it was recommending an empty shelf.
+     */
+    metaContentPending: 'المحتوى لسه بينزل',
+    metaAuthor: 'الكاتب',
+    metaUpdated: 'آخر تعديل',
     sourcePage: 'الصفحة الأصلية',
     agentIndex: 'فهرس الوكلاء',
     publicApi: 'واجهة البيانات العامة',
+    /**
+     * ⚠️ THREE notes, not one, and picking the wrong one is the failure this
+     * split exists to stop.
+     *
+     * `contentNote` used to close EVERY markdown twin — including the thirty-two
+     * free articles, whose whole body is teaching material that needs no
+     * account, and `/books.md`, whose printed books are sold through a guest
+     * checkout (`create`/`submitPayment`/`uploadScreenshot` are `@Public()` on
+     * the API). So the document written for assistants ended every free page by
+     * telling the assistant the page was paid. That is the exact mirror of the
+     * `price: '0'` falsehood on the course graph, pointing the other way: there
+     * a paid thing was published as free, here free things are published as
+     * gated — and this one suppresses the only long-form free teaching corpus
+     * the site has.
+     */
     contentNote:
       'اللي معروض هنا هو الفهرس العام للكورسات. الدروس نفسها — الفيديو والملفات والاختبارات — محتاجة حساب طالب واشتراك في الكورس.',
+    /**
+     * For the pages that are genuinely open: `/about`, `/essentials`, `/news`
+     * and every article.
+     *
+     * ⚠️ The second sentence is not padding — it is `contentNote`'s guard,
+     * restated. Without it an assistant reads «مفتوحة» and generalises it to
+     * the lessons, which is the falsehood this whole split is correcting,
+     * inverted.
+     */
+    openNote:
+      'الصفحة دي منشورة كاملة ومفتوحة للقراءة من غير حساب ومن غير اشتراك. اللي محتاج حساب واشتراك هو دروس الكورسات نفسها — الفيديو والملفات والاختبارات.',
+    /**
+     * For `/books.md`. Says the one thing an assistant needs and a student
+     * asks: that ordering needs no account.
+     *
+     * ⚠️ Says nothing about the delivery FEE. `renderBooksMarkdown` already
+     * prints `books.shippingOnce`/`shippingFreeOnce` from the live setting two
+     * blocks above this line, and a second statement of a number that can
+     * change in the admin panel is a number that will disagree with itself.
+     */
+    booksNote:
+      'الكتب دي مطبوعة وبتتشحن لحد باب البيت. الطلب مابيحتاجش حساب — بتكتب العنوان، بتحوّل، وبتبعت صورة التحويل.',
   },
 
   /**
@@ -4931,8 +5032,19 @@ export const copy = {
       'الأجهزة اللي الحساب دخل منها عشان تبان وتتقفل من الإعدادات، وسجلّ للعمليات الإدارية على المنصة.',
 
     neverTitle: 'حاجات مابنجمعهاش',
+    /*
+     * ⚠️ The last sentence used to read «المنصة مجانية ومفيش أي مدفوعات فيها
+     * أصلاً», and it stayed on the live privacy page for months after checkout
+     * shipped — the platform takes InstaPay and Vodafone Cash transfers and
+     * sells a printed book. A false statement on a legal page is the worst
+     * place to leave one, and an assistant quoting «المنصة مجانية» to a parent
+     * is quoting it from here.
+     *
+     * The reassuring half is true and is kept: no card data is stored, because
+     * no card is ever entered — the student transfers and uploads a receipt.
+     */
     neverBody:
-      'مابنطلبش الرقم القومي، ولا أي بيانات بنكية أو أرقام كروت، ولا صور مستندات رسمية. المنصة مجانية ومفيش أي مدفوعات فيها أصلاً.',
+      'مابنطلبش الرقم القومي، ولا أرقام كروت، ولا صور مستندات رسمية. الاشتراك بيتدفع بتحويل على إنستاباي أو فودافون كاش وإنت بترفع صورة التحويل، فمفيش بيانات كروت بتتكتب على المنصة أصلاً ولا بتتخزّن عندنا.',
 
     shareTitle: 'مين تاني بيشوف البيانات',
     shareBody: 'مابنبيعش بياناتك ومابنأجرهاش لحد، ومابنستخدمهاش في إعلانات. الأطراف التانية الوحيدة اللي ليها علاقة بالموقع:',
@@ -5101,6 +5213,83 @@ export const copy = {
    * of the product uses, because this platform never asks whether the student is
    * a boy or a girl and copy that guesses would be wrong for half of them.
    */
+  /**
+   * «إزاي أشترك؟» — the one question with a definite published answer and no
+   * public page.
+   *
+   * ## Why this exists
+   *
+   * Verified 2026-09-15: `/checkout`, `/pricing`, `/payment`, `/faq` and
+   * `/help` all 404. Every course page publishes its prices and then says the
+   * lessons need «حساب طالب واشتراك» — and stops. The checkout that shipped
+   * InstaPay and Vodafone Cash is behind auth, so a visitor who has not signed
+   * in sees none of it, and neither does an assistant. The one public sentence
+   * naming both rails sits inside `/privacy`'s «حاجات مابنجمعهاش», where it
+   * exists to say no card data is stored — not to tell anyone how to pay.
+   *
+   * ## Three things this page must never say
+   *
+   * ⚠️ NO turnaround window. `subscribe.success` deliberately says «هيوصلك
+   * إشعار أول ما يتم» and names no hours, for the reason recorded there: a
+   * stated window becomes a complaint the moment it slips.
+   *
+   * ⚠️ NO refund or cancellation policy. Nothing public states one and
+   * `/terms` is silent, so writing one here would be inventing policy on the
+   * instructor's behalf.
+   *
+   * ⚠️ NO destination number. It is his personal wallet, and an indexed page
+   * carrying a payment destination is the template every scam clone wants. It
+   * is not needed to answer the question either — the checkout shows it live,
+   * at the step where it is used.
+   *
+   * ⚠️ The rail NAMES come from `subscribe.railInstapay`/`railVodafoneCash`,
+   * never retyped. The screenshot-hint bug was exactly a second hand-written
+   * copy of a rail name drifting from the first.
+   */
+  subscribePage: {
+    title: 'إزاي تشترك في الكورس',
+    lead: 'الاشتراك بيتم من على المنصة نفسها، والدفع تحويل — إنستاباي أو فودافون كاش. الخطوات بالترتيب:',
+    metaTitle: 'إزاي تشترك في كورسات أيمن أبو العلا — الخطوات وطرق الدفع',
+    metaDescription:
+      'خطوات الاشتراك في كورسات البرمجة والذكاء الاصطناعي: تعمل حساب، تختار الباقة، تحوّل بإنستاباي أو فودافون كاش، وترفع صورة التحويل.',
+    eyebrow: 'قبل ما تبدأ',
+
+    step1Title: 'اعمل حساب',
+    step1Body: 'الاشتراك بيتربط بحسابك، فلازم تسجّل الأول. التسجيل مجاني ومش بيتطلب أي بيانات دفع.',
+    step2Title: 'افتح الكورس واضغط «اشترك دلوقتي»',
+    step2Body: 'كل كورس ليه صفحته، وأسعار الباقات مكتوبة عليها قبل ما تضغط أي حاجة.',
+    step3Title: 'اختار الباقة',
+    step3Body: 'شهر، ٣ شهور، ترم، أو سنة كاملة — بيختلفوا من كورس لكورس، واللي متاح بيبان قدامك.',
+    step4Title: 'اختار هتحوّل بإيه',
+    step4Body: 'إنستاباي ولا فودافون كاش. لو واحدة منهم مش متاحة دلوقتي هتلاقيها مكتوبة كده قدامك.',
+    step5Title: 'حوّل على الرقم اللي بيظهرلك',
+    step5Body:
+      'الرقم بيتعرض في الخطوة دي نفسها بعد ما تختار طريقة التحويل. مابنعرضهوش هنا عشان الرقم بيتقرا من الإعدادات وقت الطلب، والصفحة دي ممكن تكون متخزّنة عند حد من فترة.',
+    step6Title: 'ارفع صورة التحويل',
+    step6Body:
+      'اكتب رقم الموبايل اللي حوّلت منه، وارفع سكرين شوت واضح بيوضّح المبلغ والتاريخ.',
+    step7Title: 'استنى التفعيل',
+    step7Body: 'الطلب بيتراجع، وهيوصلك إشعار على المنصة أول ما الاشتراك يتفعّل.',
+
+    /** The rails, as a list under the steps — the answer to «بتقبلوا إيه؟». */
+    railsTitle: 'طرق الدفع المتاحة',
+    railsNone: 'طرق الدفع بتتظبط من لوحة التحكم، وبتبان لك وقت الاشتراك.',
+
+    /**
+     * ⚠️ The answers are the SAME sentences the steps above render — a FAQ
+     * that paraphrases its own page is two wordings of one fact, and
+     * `faqPageJsonLd` requires the answer text to be the text on the page.
+     */
+    faqQ1: 'إزاي أشترك في كورس؟',
+    faqQ2: 'بتقبلوا إيه في الدفع؟',
+    faqQ3: 'دفعت، وبعدين؟',
+
+    booksNote:
+      'الكتب المطبوعة حاجة تانية خالص: بتتطلب من صفحة الكتب من غير حساب أصلاً، وبتتشحن لحد باب البيت.',
+    booksCta: 'صفحة الكتب',
+    coursesCta: 'شوف الكورسات وأسعارها',
+  },
+
   books: {
     badge: 'كتب المنهج',
     pageTitle: 'الكتب',
@@ -5141,7 +5330,9 @@ export const copy = {
     cartEmpty: 'لسه مختارتش أي كتاب',
     /** The line that does the most work on this page. Stated on the shelf, not
      *  only at checkout, so nobody meets it as a surprise. */
-    shippingOnce: 'الشحن {price} مرة واحدة على الطلب كله — مهما كان عدد الكتب',
+    shippingOnce: 'الشحن من {price} على حسب المحافظة — مرة واحدة على الطلب كله مهما كان عدد الكتب',
+    /** The zones spelled out, under the line above — «الرقم ده جه منين». */
+    shippingZones: 'القاهرة والجيزة {near} · وجه بحري {delta} · الصعيد وسيناء والبحر الأحمر {far}',
     /**
      * The same shelf line when the fee is ZERO, and it has to be its own
      * sentence rather than `shippingOnce` with «٠ ج» in the slot.
@@ -5165,7 +5356,29 @@ export const copy = {
      * — or than «٠ ج», which reads as a number that failed to load.
      */
     shippingFree: 'مجانًا',
+    /**
+     * The VALUE in the shipping row BEFORE a governorate has been chosen.
+     *
+     * A third state, never a zero and never the cheapest zone: «٨٠ ج» shown to
+     * somebody in أسوان and then replaced by «١٥٠ ج» one field later is a price
+     * that went up on them, which is the single commonest reason a cart is
+     * abandoned at the address step. Naming the rule instead is honest and
+     * turns the change that follows into an answer rather than a surprise.
+     */
+    shippingByGovernorate: 'على حسب المحافظة',
     total: 'الإجمالي',
+    /** The TOTAL row in the same "no address yet" state — the lowest it can
+     *  possibly be, said as a floor rather than as a price. `{price}` */
+    totalFrom: 'من {price}',
+    /**
+     * The shelf line, and the CTA on a course page's «اطلب الكتاب», now that
+     * delivery depends on where the parcel is going.
+     *
+     * It quotes the book and the CHEAPEST zone, and says «من» out loud. The
+     * previous wording added one fee to one price and promised a single total,
+     * which is now only true for القاهرة والجيزة.
+     */
+    shippingFromByGovernorate: 'والشحن من {price} على حسب المحافظة',
     quantity: 'العدد',
     /** The per-book line inside the basket — «٢ × ٢٥٠ جنيه»: how many, at what
      *  each. The title is already the line above it. */
@@ -5213,6 +5426,9 @@ export const copy = {
        *  it is where the explaining happens. */
       statusAddressOnly: 'مكمّلتش',
       statusPaid: 'بنجهّزه',
+      /** «في المطبعة» داخليًا — بس الطالب بيشوف «بنطبعه»، لأن ده اللي بيحصل
+       *  فعلًا وهو أوضح من اسم محطة إدارية مش بتاعته. */
+      statusPrinting: 'بنطبعه',
       statusShipped: 'في الطريق',
       statusDelivered: 'وصلك',
       statusRejected: 'اترفض',
@@ -5223,6 +5439,9 @@ export const copy = {
          what happens next. */
       noteAddressOnly: 'الطلب اتسجّل بس لسه ماتدفعش. كمّل الدفع وهنجهّزه على طول.',
       notePaid: 'استلمنا طلبك وبنجهّزه للشحن. ما تقلقش — أول ما يتشحن هتلاقي هنا إنه في الطريق.',
+      /** ما بيوعدش بيوم — الطبعة بترجع لما ترجع — بس بيقول الخطوة اللي بعدها،
+       *  زي باقي السطور هنا. */
+      notePrinting: 'نسختك دخلت المطبعة مع طبعة جديدة. أول ما تخرج وتتشحن هتلاقي هنا إنها في الطريق.',
       noteShipped: 'الكتاب خرج ليك وفي الطريق. ساعات بيتأخر يوم أو اتنين، وده عادي — أول ما يوصلك هتلاقي هنا إنه اتسلّم.',
       noteDelivered: 'الكتاب وصلك. لو في أي مشكلة فيه كلّم الدعم وإحنا نظبّطها.',
       /** The rejection line. The admin's own words follow it verbatim, exactly

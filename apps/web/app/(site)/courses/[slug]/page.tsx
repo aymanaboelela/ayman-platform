@@ -17,7 +17,7 @@ import { isComingSoon as catalogIsComingSoon } from '@ayman/contracts/catalog';
 import { mediaUrl } from '@ayman/ui/branding';
 import { getCourse } from '@/lib/catalog';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
-import { getBookShippingCents } from '@/lib/books';
+import { getBookShippingRates } from '@/lib/books';
 import { formatCopy } from '@ayman/contracts/format';
 import { formatEGP } from '@/lib/price';
 import { RichText } from '@/components/content/rich-text';
@@ -152,10 +152,19 @@ export async function generateMetadata({
  * particular.
  *
  * The rest of the page is untouched on purpose. Titles, descriptions, section
- * and lesson names, durations and `courseJsonLd` all still render for anonymous
- * visitors and crawlers — gating the catalog too would have taken the platform
- * out of search results, which is how students find it in the first place
- * (§3.1).
+ * names and `courseJsonLd` all still render for anonymous visitors and crawlers
+ * — gating the catalog too would have taken the platform out of search results,
+ * which is how students find it in the first place (§3.1).
+ *
+ * ⚠️ «lesson names, durations» were in that sentence and are no longer true of
+ * THIS page: the `priced` branch below replaced the outline with
+ * `copy.course.lessonsLockedNote` on 2026-08-26, and the stale sentence is what
+ * would otherwise keep talking a reader into "restoring" a gate that is already
+ * there. They are still published on `/courses/<slug>.md`, on the WebMCP tool
+ * and on the public catalog API, deliberately — the reasoning is in
+ * `lib/agents/markdown-render.ts`'s header and in
+ * `docs/runbooks/agent-discovery.md`. The gate below is a UI decision about a
+ * screen of dead buttons, not a disclosure rule.
  */
 export default async function CourseDetailPage({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
@@ -165,8 +174,8 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
   const hasLessons = course.sections.some((section) => section.lessons.length > 0);
   const { contact } = await getPublicSettingsOrDefaults();
   /* The delivery fee «اطلب الكتاب» has to quote. One cached read shared with
-     `/books` and every other course page — see `getBookShippingCents`. */
-  const shippingCents = await getBookShippingCents();
+     `/books` and every other course page — see `getBookShippingRates`. */
+  const shippingRates = await getBookShippingRates();
   const priced =
     course.monthlyPriceCents !== null ||
     course.quarterlyPriceCents !== null ||
@@ -182,6 +191,8 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
   const hasBook = courseBookCtaVisible(course);
 
   /*
+   * Is there anything here a student could actually watch?
+   *
    * Zero real LECTURES, not zero rows — `course.lessonCount` already excludes
    * quizzes (`isComingSoon` in `catalog.ts`), and `hasLessons` above does not:
    * it counts every kind, so a course whose only published row is a lone quiz
@@ -192,7 +203,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
    * everywhere else on this page — it still gates the play control below,
    * which is a different question (can THIS row be pressed).
    */
-  const isComingSoon = catalogIsComingSoon(course.lessonCount);
+  const isComingSoon = catalogIsComingSoon(course);
 
   return (
     <main>
@@ -337,7 +348,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                 courseId={course.id}
                 bookTitle={course.bookTitle as string}
                 bookPriceCents={course.bookPriceCents as number}
-                shippingCents={shippingCents}
+                shippingRates={shippingRates}
                 instapay={contact.instapay}
                 vodafoneCash={contact.vodafoneCash}
               />

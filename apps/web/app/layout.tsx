@@ -189,7 +189,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         */}
         <JsonLd data={webSiteJsonLd()} />
         <JsonLd data={organizationJsonLd(contact)} />
-        <JsonLd data={personJsonLd()} />
+        <JsonLd data={personJsonLd(contact)} />
         {/*
           nuqs needs its adapter above every `useQueryState` in the tree. It is
           mounted once, at the root, rather than per route group: a second
