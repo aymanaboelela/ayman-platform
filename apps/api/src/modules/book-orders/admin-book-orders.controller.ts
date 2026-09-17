@@ -10,6 +10,7 @@ import type {
   MarkBookOrderPrintingResult,
   RejectBookOrderResult,
   RestoreBookOrderResult,
+  ClearBookOrderHoldResult,
 } from '@ayman/contracts/admin/book-orders';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
@@ -178,6 +179,28 @@ export class AdminBookOrdersController {
    * `:id`. Same defensive ordering `StudentsController` documents for its own
    * collection-level `@Delete()`.
    */
+  /**
+   * «راجعته وتمام» — lifting the hold on one order.
+   *
+   * ⚠️ Declared BEFORE `@Post(':id/…')` routes, like `ship`/`deliver`/`printing`
+   * above: Nest matches within a method in declaration order, and a literal
+   * path registered after a parameterised one of the same shape is unreachable.
+   *
+   * `book-order:ship` and not `book-order:write`: the hold's only effect is that
+   * the parcel does not go out, so clearing it IS the shipping decision — the
+   * same authority that presses «اتشحن», exercised a moment earlier. Nothing
+   * about the order's money or contents changes here.
+   */
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post(':id/review-ok')
+  clearReviewHold(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ): Promise<ClearBookOrderHoldResult> {
+    return this.bookOrders.clearReviewHold(user.id, id);
+  }
+
   @RequirePermission('book-order:ship')
   @RequireCsrf()
   @Post('ship')

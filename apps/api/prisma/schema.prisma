@@ -2354,6 +2354,75 @@ model BookOrder {
   /// `PaymentSubmission.screenshotKey`, served only through the gated admin
   /// route, never the public `/media/:prefix/:name` path.
   screenshotKey String?   @map("screenshot_key")
+  /// SHA-256 of the STORED screenshot bytes — the fingerprint that makes one
+  /// transfer impossible to spend twice.
+  ///
+  /// Measured on production 2026-09-17: five students each had two paid orders
+  /// for the same book, and in FOUR of them the two orders carried a
+  /// byte-identical receipt. They had not paid twice — they re-uploaded the one
+  /// screenshot they had, because nothing asked. The fifth (`BK-EA9B7C` /
+  /// `BK-7A3FD3`) was the same transfer photographed two different ways, which
+  /// is what `screenshotRef` below is for.
+  ///
+  /// Hashed from STORAGE at submit time, never from the request: the client
+  /// sends a key, and a hash it also sent would be a fingerprint the forger
+  /// chooses. `gateAndEncode` re-encodes every upload to webp, so two uploads of
+  /// one file land on identical bytes and this equality is exact rather than
+  /// fuzzy — the near-miss case (a re-crop, a re-compress) is `screenshotPhash`.
+  ///
+  /// Nullable forever: every order placed before this column existed has none,
+  /// and a null must never collide with another null.
+  screenshotSha256 String? @map("screenshot_sha256")
+  /// A 64-bit perceptual hash of the same image, as 16 hex characters.
+  ///
+  /// Catches what SHA-256 cannot: the same receipt screenshotted again, cropped,
+  /// or pushed through a messenger that re-compressed it. Compared by Hamming
+  /// distance (see `PHASH_MAX_DISTANCE`), so it is a SUSPICION and not a proof —
+  /// which is why a near-match is refused with the same message but only ever
+  /// against another order of the SAME student's phone.
+  screenshotPhash String? @map("screenshot_phash")
+  /// The transfer's own reference, read off the image — «رقم العملية».
+  ///
+  /// The only field that identifies the MONEY rather than the picture of it.
+  /// `BK-EA9B7C` and `BK-7A3FD3` carry two different images (a Vodafone-Cash SMS
+  /// and an InstaPay receipt) of one transfer `023031384189`; nothing but this
+  /// can tell that they are the same 250 EGP.
+  ///
+  /// Null when the OCR could not find one, which is a normal outcome and never
+  /// blocks a payment — see `receipt-ocr.ts` for why this reads rather than
+  /// judges.
+  screenshotRef String? @map("screenshot_ref")
+  /// The amount read off the image, in piastres, or null when unreadable.
+  ///
+  /// Recorded, never enforced: a student who transferred the right money with a
+  /// receipt this cannot parse must still be able to pay. It is the admin's
+  /// «راجعها» flag — `screenshotAmountCents` disagreeing with `amountCents` is
+  /// the one thing worth a human look before a parcel is printed.
+  screenshotAmountCents Int? @map("screenshot_amount_cents")
+
+  /// «لسه متأكدش منه» — the order is paid, and something about its receipt
+  /// needs a human before the parcel moves.
+  ///
+  /// A FLAG and not a sixth `status`: the status drives every tab, filter,
+  /// export and packing list on the admin side, and adding a value to it would
+  /// put every one of those queries up for review — where the first one missed
+  /// is a held order that ships anyway, which is the thing this exists to
+  /// prevent. It also says something the status cannot: «مدفوع، بس المبلغ
+  /// المكتوب على الإيصال أقل من المطلوب» is two independent facts.
+  ///
+  /// What it actually does: `packingList` and the bulk «اتشحن»/«راح للمطبعة»
+  /// skip a held row, so it cannot be printed or handed to a courier until the
+  /// hold is cleared. Everything else — the list, the money screens, the
+  /// student's own view — treats it as the `paid` order it is.
+  ///
+  /// Cleared by setting it back to NULL. There is no «اتراجع إمتى» column: the
+  /// audit log holds who and when, and this row only has to answer whether it
+  /// is held right now.
+  heldForReviewAt DateTime? @map("held_for_review_at")
+  /// Why, so the admin knows what to look at: `amount_short` or
+  /// `duplicate_receipt`. See `book_orders_held_reason_matches_hold`, which
+  /// pins the pair together in both directions.
+  heldReason String? @map("held_reason")
   /// Set the moment the screenshot is submitted — see the model doc for why
   /// this alone is what "paid" means for a book order.
   paidAt        DateTime? @map("paid_at")
@@ -2485,6 +2554,22 @@ model BookOrder {
   /// own duplicate-address-only-row reuse runs.
   @@index([userId, courseId, status])
   @@index([governorateCode])
+  /// The receipt-reuse lookup, run once per payment submission.
+  ///
+  /// NOT a unique index, deliberately. A duplicate must be refused with a
+  /// message naming the order it collides with — «الإيصال ده اتبعت قبل كده على
+  /// طلب BK-XXXX» — and a constraint violation arrives as a 500 with nothing in
+  /// it the student can act on. The rule lives in `submitPayment`; this only
+  /// makes it cheap.
+  @@index([screenshotSha256])
+  /// Same lookup for the money rather than the picture — see `screenshotRef`.
+  @@index([screenshotRef])
+  /// «نفس الطالب وطلبه الأول لسه في السكة»: the in-flight duplicate check runs
+  /// `phone` + `status`, because `phone` is the identity a guest checkout has
+  /// and `userId` is null for most of these rows.
+  @@index([phone, status])
+  /// «وريني اللي محتاج مراجعة» — a handful of rows against the whole table.
+  @@index([heldForReviewAt])
   @@map("book_orders")
   @@schema("app")
 }

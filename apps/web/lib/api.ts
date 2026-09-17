@@ -47,10 +47,25 @@ export class ApiRequestError extends Error {
    * recognise across the server/client boundary. See `UPSTREAM_TIMEOUT_DIGEST`.
    */
   digest?: string;
+  /**
+   * The error response's own JSON body, when it had one and `apiPost` was the
+   * caller.
+   *
+   * ⚠️ Untyped on purpose — it is whatever the API sent, and every reader has
+   * to narrow it before trusting a field.
+   *
+   * The one case today is the «إنت طلبت الكتاب ده قبل كده» 409, which carries
+   * the existing order's status so the question can say «طلبك في المطبعة»
+   * instead of leaving the student to guess whether the first one is still
+   * coming. A student who cannot tell orders again, which is the thing the
+   * dialog exists to prevent.
+   */
+  payload?: unknown;
 
-  constructor(status: number, path: string) {
+  constructor(status: number, path: string, payload?: unknown) {
     super(`${path} failed with ${status}`);
     this.status = status;
+    this.payload = payload;
   }
 }
 
@@ -240,7 +255,15 @@ export async function apiPost<T>(
   }));
 
   if (!response.ok) {
-    throw new ApiRequestError(response.status, path);
+    /* The body is read on the FAILURE path only, and only here: the status is
+       what every caller needs and `payload` is what one of them does — see
+       `ApiRequestError.payload`. A body that will not parse is not itself worth
+       throwing over. */
+    throw new ApiRequestError(
+      response.status,
+      path,
+      await response.json().catch(() => undefined),
+    );
   }
 
   return schema.parse(await response.json());

@@ -127,6 +127,33 @@ export class BookOrdersController {
   }
 
   /**
+   * «استلمت الكتاب» — the student closing their own order.
+   *
+   * ⚠️ Declared BEFORE `@Get(':id')` is irrelevant here (different verb), but
+   * it IS declared after `@Get('mine')` for the reason that route documents:
+   * Nest matches within a method in declaration order.
+   *
+   * Signed in, unlike every other route on this controller. The rest support a
+   * guest checkout because the order id is the bearer token for an UNCLAIMED
+   * row — but that is a token a guest keeps in `localStorage`, and letting it
+   * CLOSE an order would mean anybody holding a copied link could mark a parcel
+   * delivered. Confirming receipt is the one action here that changes what the
+   * shipping desk chases, so it asks who is asking.
+   *
+   * `book-order:submit` — the permission every student already carries, and the
+   * same one `mine` uses. This is not an admin action wearing a student route.
+   */
+  @RequirePermission('book-order:submit')
+  @RequireCsrf()
+  @Post(':id/received')
+  confirmReceived(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ): Promise<BookOrder> {
+    return this.bookOrders.confirmReceived(user.id, id);
+  }
+
+  /**
    * One order, by id — read-only, no `@RequireCsrf()` (a GET changes
    * nothing). Lets a guest's browser turn the `bookOrderId` it kept in
    * `localStorage` back into "still `address_only`, or already `paid`?"
