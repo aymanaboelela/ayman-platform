@@ -3,6 +3,13 @@ import { MESSAGE_MAX } from '@ayman/contracts/assistant/conversation';
 import {
   FOCUS_INTROS,
   FOCUS_TAILS,
+  FOLLOW_UP_ASKS,
+  FOLLOW_UP_CLOSERS,
+  FOLLOW_UP_LESSON_MANY,
+  FOLLOW_UP_LESSON_SINGLE,
+  FOLLOW_UP_OPENERS,
+  FOLLOW_UP_QUIZ_MANY,
+  FOLLOW_UP_QUIZ_SINGLE,
   NUDGE_BODIES,
   NUDGE_CLOSERS,
   NUDGE_OPENERS,
@@ -14,6 +21,10 @@ import {
   QUIZ_RESULT_OPENERS,
   QUIZ_SCORE_LINES,
   STRENGTH_LINES,
+  SUBSCRIBE_BODIES,
+  SUBSCRIBE_BODIES_UNKNOWN,
+  SUBSCRIBE_CLOSERS,
+  SUBSCRIBE_OPENERS,
   WHATSAPP_BODIES,
   WHATSAPP_CLOSERS,
   WHATSAPP_OPENERS,
@@ -362,6 +373,10 @@ describe('composeOutreach — content', () => {
       { kind: 'quiz_nudge', lessonTitle: 'الدوال' },
       { kind: 'lesson_praise', lessonTitle: 'المقدمة' },
       { kind: 'whatsapp_invite' },
+      { kind: 'follow_up', missedLessons: ['الدوال'], missedQuizzes: [] },
+      { kind: 'follow_up', missedLessons: [], missedQuizzes: ['الدوال', 'المصفوفات'] },
+      { kind: 'subscribe_nudge', courseTitle: 'الصف الأول', url: 'https://x.test/courses/y1' },
+      { kind: 'subscribe_nudge', courseTitle: null, url: 'https://x.test/courses' },
     ];
     for (const kind of facts) {
       for (let index = 0; index < 25; index += 1) {
@@ -484,6 +499,17 @@ describe('the voice — one message, written for either reader', () => {
     ...WHATSAPP_BODIES,
     ...WHATSAPP_CLOSERS,
     ...WHATSAPP_TAGALONGS,
+    ...FOLLOW_UP_OPENERS,
+    ...FOLLOW_UP_LESSON_SINGLE,
+    ...FOLLOW_UP_LESSON_MANY,
+    ...FOLLOW_UP_QUIZ_SINGLE,
+    ...FOLLOW_UP_QUIZ_MANY,
+    ...FOLLOW_UP_ASKS,
+    ...FOLLOW_UP_CLOSERS,
+    ...SUBSCRIBE_OPENERS,
+    ...SUBSCRIBE_BODIES,
+    ...SUBSCRIBE_BODIES_UNKNOWN,
+    ...SUBSCRIBE_CLOSERS,
   ];
 
   it('never addresses the student as a boy', () => {
@@ -508,6 +534,9 @@ describe('the voice — one message, written for either reader', () => {
       { kind: 'quiz_nudge', lessonTitle: 'الدوال' },
       { kind: 'lesson_praise', lessonTitle: 'الدوال' },
       { kind: 'whatsapp_invite' },
+      { kind: 'follow_up', missedLessons: ['الدوال', 'المصفوفات'], missedQuizzes: ['الدوال'] },
+      { kind: 'subscribe_nudge', courseTitle: 'الصف الأول', url: 'https://x.test/courses/y1' },
+      { kind: 'subscribe_nudge', courseTitle: null, url: 'https://x.test/courses' },
     ];
 
     for (const facts of kinds) {
@@ -569,7 +598,140 @@ describe('the kind catalogue', () => {
       'quiz_nudge',
       'lesson_praise',
       'whatsapp_invite',
+      'follow_up',
+      'subscribe_nudge',
     ];
     expect([...OUTREACH_KINDS].sort()).toEqual([...composed].sort());
+  });
+});
+
+/**
+ * «إزاي الأخبار؟» — the message that asks.
+ *
+ * Every assertion here is about a way this kind can go wrong that no other
+ * kind can: it is the only one built from two independent LISTS, the only one
+ * whose whole purpose is the question at the end, and the only one where the
+ * facts arrive from a screen an admin is looking at rather than from a row the
+ * sweeper found.
+ */
+describe('composeOutreach — follow_up', () => {
+  const both: OutreachFacts = {
+    kind: 'follow_up',
+    missedLessons: ['الدوال', 'المصفوفات'],
+    missedQuizzes: ['كويز الوحدة الأولى'],
+  };
+
+  it('names every lecture and every quiz it was given, whatever the seed', () => {
+    for (let index = 0; index < 60; index += 1) {
+      const body = composeOutreach(input({ facts: both, seed: `f${index}` })).body;
+      for (const title of [...both.missedLessons, ...both.missedQuizzes]) {
+        expect(body, `«${title}» went missing: ${body}`).toContain(title);
+      }
+    }
+  });
+
+  it('always asks', () => {
+    // The lists are the evidence; the question is the point. A variant that
+    // dropped it would still read fine and would stop being the feature.
+    for (let index = 0; index < 60; index += 1) {
+      const body = composeOutreach(input({ facts: both, seed: `a${index}` })).body;
+      expect(FOLLOW_UP_ASKS.some((line) => body.includes(line))).toBe(true);
+    }
+  });
+
+  it('says nothing about quizzes when none were missed, and nothing about lectures when none were', () => {
+    const lessonsOnly = composeOutreach(
+      input({ facts: { kind: 'follow_up', missedLessons: ['الدوال'], missedQuizzes: [] } }),
+    ).body;
+    expect(lessonsOnly).toContain('الدوال');
+    expect(FOLLOW_UP_QUIZ_SINGLE.some((line) => lessonsOnly.includes(line.replace('{quizzes}', '')))).toBe(
+      false,
+    );
+
+    const quizzesOnly = composeOutreach(
+      input({ facts: { kind: 'follow_up', missedLessons: [], missedQuizzes: ['كويز ١'] } }),
+    ).body;
+    expect(quizzesOnly).toContain('كويز ١');
+  });
+
+  it('uses the one-line form for a single lecture and the list form for several', () => {
+    /*
+     * The same split `FOCUS_SINGLE` exists for, and it is asserted because the
+     * failure is invisible: a list-form sentence with one item in it is
+     * grammatically fine Arabic and simply reads as a form letter.
+     */
+    const single = composeOutreach(
+      input({ facts: { kind: 'follow_up', missedLessons: ['الدوال'], missedQuizzes: [] }, seed: 's1' }),
+    ).variantKey;
+    expect(single).toContain('l1=');
+    expect(single).not.toMatch(/(^|\|)l=/u);
+
+    const many = composeOutreach(
+      input({
+        facts: { kind: 'follow_up', missedLessons: ['الدوال', 'المصفوفات'], missedQuizzes: [] },
+        seed: 's2',
+      }),
+    ).variantKey;
+    expect(many).toMatch(/(^|\|)l=/u);
+  });
+
+  it('never carries the WhatsApp tagalong, however the hash falls', () => {
+    // Two things to press in one message is one thing too many — see the
+    // comment on `NO_TAGALONG`.
+    for (let index = 0; index < 60; index += 1) {
+      const body = composeOutreach(
+        input({ facts: both, seed: `w${index}`, whatsappUrl: 'https://chat.whatsapp.com/x' }),
+      ).body;
+      expect(WHATSAPP_TAGALONGS.some((line) => body.includes(line))).toBe(false);
+    }
+  });
+});
+
+describe('composeOutreach — subscribe_nudge', () => {
+  const url = 'https://ayman.test/courses/first-year';
+
+  it('puts the link alone on its own line, so the card can replace it', () => {
+    /*
+     * ⚠️ The ONE assertion this kind cannot ship without. `MessageBody` draws
+     * the pressable card only for a line that is NOTHING BUT a URL; a closer
+     * glued onto the same line, or a label in front of it, ships 40 unbreakable
+     * characters into a 280px bubble instead — which is the exact bug
+     * `WHATSAPP_LINK_LINE`'s own note records having shipped once already.
+     */
+    for (let index = 0; index < 40; index += 1) {
+      const body = composeOutreach(
+        input({
+          facts: { kind: 'subscribe_nudge', courseTitle: 'الصف الأول الثانوي', url },
+          seed: `u${index}`,
+        }),
+      ).body;
+      expect(body.split('\n')).toContain(url);
+    }
+  });
+
+  it('names the course when there is one', () => {
+    for (let index = 0; index < 40; index += 1) {
+      const body = composeOutreach(
+        input({
+          facts: { kind: 'subscribe_nudge', courseTitle: 'الصف الأول الثانوي', url },
+          seed: `c${index}`,
+        }),
+      ).body;
+      expect(body).toContain('الصف الأول الثانوي');
+    }
+  });
+
+  it('switches to the catalog sentence rather than naming an empty course', () => {
+    // A body that says «الكورس اللي على سنتك هو «»» is worse than no message.
+    for (let index = 0; index < 40; index += 1) {
+      const body = composeOutreach(
+        input({
+          facts: { kind: 'subscribe_nudge', courseTitle: null, url: 'https://ayman.test/courses' },
+          seed: `k${index}`,
+        }),
+      ).body;
+      expect(SUBSCRIBE_BODIES_UNKNOWN.some((line) => body.includes(line))).toBe(true);
+      expect(SUBSCRIBE_BODIES.some((line) => body.includes(line.replace('{course}', '')))).toBe(false);
+    }
   });
 });

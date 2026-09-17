@@ -138,3 +138,62 @@ describe('MessageBody', () => {
     expect(screen.getAllByRole('link')).toHaveLength(2);
   });
 });
+
+/**
+ * «الكورس بتاعك» — the card that goes INWARDS.
+ *
+ * Three properties, and each is a way it could quietly become something else:
+ * it only ever navigates within this site, it only draws for a body the
+ * platform wrote, and it draws for a line that is nothing but a course link.
+ */
+describe('MessageBody — the course card', () => {
+  const c = copy.assistant.thread.courseCard;
+
+  it('draws a card with the button every closer points at', () => {
+    render(<MessageBody body="https://ayman.test/courses/first-year" trusted />);
+
+    const link = screen.getByRole('link');
+    expect(link).toHaveTextContent(c.title);
+    expect(link).toHaveTextContent(c.action);
+    expect(link.querySelector('button')).toBeNull();
+  });
+
+  it('navigates to the PATH, never to the host the message named', () => {
+    /*
+     * ⚠️ The whole safety argument of this card in one assertion. The stored
+     * body carries an absolute URL because that is what was sent and the
+     * outreach ledger is a record; the card drops the origin, so no arrangement
+     * of message text can make «الكورس بتاعك» point off-site.
+     */
+    render(<MessageBody body="https://somewhere-else.test/courses/x?ref=1" trusted />);
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/courses/x?ref=1');
+  });
+
+  it('draws nothing for a link a visitor typed', () => {
+    // `trusted` defaults to false, so a student pasting a course-shaped URL
+    // into their own message gets an ordinary link and no endorsement.
+    render(<MessageBody body="https://ayman.test/courses/first-year" />);
+    const link = screen.getByRole('link');
+    expect(link).toHaveTextContent('https://ayman.test/courses/first-year');
+    expect(link).not.toHaveTextContent(c.action);
+  });
+
+  it('leaves a course link that shares its line as inline text', () => {
+    render(<MessageBody body="شوف https://ayman.test/courses/x كده" trusted />);
+    expect(screen.getByRole('link')).toHaveTextContent('https://ayman.test/courses/x');
+  });
+
+  it('gives a non-course path no card', () => {
+    render(<MessageBody body="https://ayman.test/news/x" trusted />);
+    const link = screen.getByRole('link');
+    expect(link).toHaveTextContent('https://ayman.test/news/x');
+    expect(link).not.toHaveTextContent(c.action);
+  });
+
+  it('still prefers the WhatsApp card when both could match', () => {
+    // A WhatsApp host with a `/courses` path is not a course page. The
+    // WhatsApp check runs first and this asserts it stays that way.
+    render(<MessageBody body="https://whatsapp.com/courses/x" trusted />);
+    expect(screen.getByRole('link')).toHaveTextContent(copy.assistant.thread.whatsappCard.action);
+  });
+});

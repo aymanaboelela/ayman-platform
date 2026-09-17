@@ -4361,6 +4361,25 @@ export const copy = {
         lead: 'كل الملفات والمراجعات',
         action: 'فتح القناة',
       },
+      /**
+       * «الكورس بتاعك» — the inward twin of the card above.
+       *
+       * ⚠️ The card NEVER names the course, and that is not a gap. It is drawn
+       * from a line that is nothing but a URL, so the only thing it knows is a
+       * path; the sentence directly above it in the message
+       * (`SUBSCRIBE_BODIES`) is what names the course, by title, from the
+       * facts. A card that tried to name it would have to parse a slug, which
+       * is how «الصف الأول الثانوي» becomes «first-year-math».
+       *
+       * `action` is Ayman's own wording for this button, and it is a masdar
+       * phrase for the usual reason: «ادخل» is an imperative that grows a ي in
+       * the feminine, and this platform never asks which reader it has.
+       */
+      courseCard: {
+        title: 'الكورس بتاعك',
+        lead: 'المحاضرات مرتبة من أول واحدة',
+        action: 'ادخل اشترك من هنا',
+      },
       /** Under his name on the first message of a thread he started. */
       aymanRole: 'مدرّس المادة',
       waiting: 'مستنيين رد أيمن.',

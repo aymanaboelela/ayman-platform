@@ -57,6 +57,7 @@
     "./outreach/compose": "./src/outreach/compose.ts",
     "./outreach/admin": "./src/outreach/admin.ts",
     "./outreach/broadcast": "./src/outreach/broadcast.ts",
+    "./outreach/follow-up": "./src/outreach/follow-up.ts",
     "./assistant/script": "./src/assistant/script.ts",
     "./assistant/conversation": "./src/assistant/conversation.ts",
     "./assistant/summary": "./src/assistant/summary.ts",

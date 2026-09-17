@@ -48,6 +48,24 @@ export const OutreachFactsSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('quiz_nudge'), lessonTitle: z.string() }),
   z.object({ kind: z.literal('lesson_praise'), lessonTitle: z.string() }),
   z.object({ kind: z.literal('whatsapp_invite') }),
+  z.object({
+    kind: z.literal('follow_up'),
+    missedLessons: z.array(z.string()),
+    missedQuizzes: z.array(z.string()),
+  }),
+  z.object({
+    kind: z.literal('subscribe_nudge'),
+    courseTitle: z.string().nullable(),
+    /*
+     * `z.string()`, not `z.url()`. This is a SNAPSHOT of what was sent, read
+     * back out of a jsonb column — a row written before `APP_URL` was
+     * corrected, or one whose course has since been renamed out of its slug,
+     * must render in the log rather than fail to parse and take the whole
+     * screen down with it. The write side is where the URL is built, and it
+     * builds it from `APP_URL` and a slug.
+     */
+    url: z.string(),
+  }),
 ]);
 
 export const OutreachLogRowSchema = z.object({

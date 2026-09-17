@@ -92,6 +92,12 @@ const admin = {
      *  `outreach.settingsNote` — its own screen, so the two are never read as
      *  the same feature. See `AdminBroadcastController`'s header. */
     broadcast: 'رسالة للطلبة',
+    /**
+     * «متابعة الطلبة» — the queue of people who stopped, and the people who
+     * signed up and never started. Sits between the inbox pair and the two
+     * send screens, because it is the one that CREATES the reason to send.
+     */
+    followUp: 'متابعة الطلبة',
     // ── Sidebar group headings. The nav is eleven links long; ungrouped,
     //    it reads as one undifferentiated list and nobody scans it.
     groupTeaching: 'التدريس',
@@ -1132,6 +1138,7 @@ const admin = {
     '/admin/analytics': 'أداء الطلبة وأصعب الأسئلة.',
     '/admin/inbox': 'رسايل الطلبة والرد عليها.',
     '/admin/outreach': 'سجل الرسايل اللي اتبعتت باسمك.',
+    '/admin/follow-up': 'مين وقف في نص الكورس، ومين دخل ومشترَكش.',
     '/admin/assistant': 'الأسئلة اللي الطلبة بيسألوها للمساعد.',
     '/admin/taxonomy': 'الأنظمة والصفوف والمسارات والمواد.',
     '/admin/marketing/campaigns': 'حملات واتساب للي لسه بره المنصة.',
@@ -1386,12 +1393,24 @@ const admin = {
     whyWhatsappInvite: 'دعوة لجروب الواتساب',
     /** `{topics}` — the weak areas the message named. */
     whyFocus: 'ركّزت على: {topics}',
+    /** `{n}` — counts, because a log row has no space for five titles. */
+    whyFollowUpLessons: 'فاته {n} محاضرة',
+    whyFollowUpQuizzes: 'و{n} كويز',
+    /** `{course}` — the course the card in the message pointed at. */
+    whySubscribeNudge: 'دعوة للاشتراك في «{course}»',
+    whySubscribeNudgeCatalog: 'دعوة للاشتراك — مفيش كورس على سنته، فراح لصفحة الكورسات',
 
     // ── the kinds ────────────────────────────────────────────────────
     kindQuizResult: 'بعد الامتحان',
     kindQuizNudge: 'كويز ما اتحلّش',
     kindLessonPraise: 'درس خلص',
     kindWhatsappInvite: 'دعوة الجروب',
+    /** The two kinds a human presses rather than a cron finding — see
+     *  `MANUAL_OUTREACH_KINDS`. They appear in this log like any other,
+     *  because a record of what went out in his name does not care which
+     *  of the two started it. */
+    kindFollowUp: 'متابعة طالب وقف',
+    kindSubscribeNudge: 'دعوة اشتراك',
 
     // ── the preview ──────────────────────────────────────────────────
     previewTitle: 'شكل الرسايل',
@@ -1484,6 +1503,123 @@ const admin = {
     confirmBody: 'الرسالة هتوصل لـ {count} طالب دلوقتي. الخطوة دي مش هترجع.',
     confirmCancel: 'رجوع',
     confirmSend: 'أيوه، ابعت',
+  },
+
+  /**
+   * «متابعة الطلبة» — the two queues on `/admin/follow-up`.
+   *
+   * ## The wording avoids one word on purpose
+   *
+   * Nothing here says «متسرّب» or «مقصّر». The screen exists so somebody can
+   * be ASKED what happened, and a table that has already decided the answer
+   * («الطلبة المهملين») makes the message that follows it read as a telling-off
+   * before a single word of it is written. «وقف» and «مشترَكش» are facts;
+   * everything else is a guess the platform has not earned.
+   *
+   * ## «فات» and not «مشافش»
+   *
+   * Same rule as `copy/outreach.ts` — the subject of every sentence is the
+   * lecture, never the student, because the student's gender is a thing this
+   * platform never asks and «مشافش» only works on a boy.
+   */
+  followUp: {
+    eyebrow: 'متابعة',
+    title: 'متابعة الطلبة',
+    lead: 'مين وقف في نص الكورس، ومين عمل حساب وما اشترَكش في أي حاجة. كل صف بيفتح سجل الطالب، وزرار واحد بيبعتله رسالة بصوتك.',
+
+    tabStalled: 'وقفوا في نص الطريق',
+    tabIdle: 'دخلوا ومشترَكوش',
+
+    /** `{n}` — the row count on the active tab. */
+    countStalled: '{n} طالب فاتتهم آخر المحاضرات أو الكويزات',
+    countIdle: '{n} حساب من غير اشتراك في مكانه',
+
+    filterCourse: 'الكورس',
+    filterCourseAll: 'كل الكورسات',
+    filterYear: 'السنة',
+    filterYearAll: 'كل السنين',
+    filterWindow: 'آخر كام محاضرة',
+    /**
+     * The window options, written out rather than generated.
+     *
+     * `آخر {n}` was the first version and it rendered «آخر 2» — a bare numeral
+     * where Arabic wants the dual. Arabic counts in three shapes (one, two,
+     * three-to-ten) and no `{n}` template spans them, so the five values this
+     * control offers are five strings. `FOLLOW_UP_WINDOW_MAX` is 5, and the
+     * page falls back to the numeral for anything this map does not name.
+     */
+    filterWindowOptions: {
+      1: 'آخر محاضرة',
+      2: 'آخر محاضرتين',
+      3: 'آخر ٣ محاضرات',
+      4: 'آخر ٤ محاضرات',
+      5: 'آخر ٥ محاضرات',
+    } as Record<number, string | undefined>,
+    filterReason: 'الحالة',
+    filterReasonAll: 'الكل',
+    reasonNever: 'ما اشترَكش في أي كورس',
+    reasonElsewhere: 'مشترك في كورس مش بتاع سنته',
+
+    missedLessons: 'محاضرات',
+    missedQuizzes: 'كويزات',
+
+    /** `{n}` — the student's own year, on the row. */
+    yearKnown: 'سنة {n}',
+    /**
+     * ⚠️ NOT «كل السنين», which is what this rendered at first by reusing the
+     * FILTER's «all» label for a row with no year — so a student the platform
+     * never asked read as one who is in every year at once. A missing answer
+     * says so.
+     */
+    yearUnknown: 'السنة مش متسجّلة',
+    /** `{n}` — the seats they DO hold, on an «elsewhere» row. «مشترك في كورس
+     *  مش بتاع سنته» says the shape; this says how much of it there is, which
+     *  is the difference between one stray enrolment and a student who is
+     *  studying hard in the wrong place. */
+    enrolledElsewhere: 'مشترك في {n} كورس',
+
+    lastActiveNever: 'عمره ما دخل',
+    /** `{days}` — «من ١٢ يوم». */
+    lastActiveDays: 'من {days} يوم',
+    lastActiveToday: 'النهارده',
+    lastActiveYesterday: 'امبارح',
+
+    /** The chip on a row we already wrote to. `{days}` */
+    messagedAgo: 'اتبعتله من {days} يوم',
+    messagedToday: 'اتبعتله النهارده',
+
+    /** A student with no profile row — the record page has nothing to open. */
+    noProfile: 'ما كمّلش التسجيل',
+    /** No course matches the year/stream on file, so the message goes to the catalog. */
+    noSuggestion: 'مفيش كورس على سنته — هيروح لصفحة الكورسات',
+
+    send: 'ابعتله',
+    sending: 'بيتبعت…',
+    sendAll: 'ابعت للكل',
+
+    sentOne: 'الرسالة اتبعتت.',
+    /** The student caught up between the page load and the press. */
+    sentNotListed: 'الطالب لحق نفسه — مبقاش في القايمة، وما اتبعتش حاجة.',
+    sentDuplicate: 'الرسالة دي اتبعتت قبل كده بالظبط، فما اتبعتتش تاني.',
+    sentCapped: 'الطالب ده وصل حد الرسايل اليومية، فما اتبعتش دلوقتي.',
+    sendFailed: 'الرسالة ما اتبعتتش. جرّب تاني.',
+
+    /** `{sent}` — the headline of a bulk press. */
+    sentAll: 'اتبعت لـ {sent} طالب.',
+    /** Appended only when any of the three is non-zero; `{skipped}` is their sum. */
+    sentAllSkipped: 'واتخطّى {skipped} (اتبعتلهم قبل كده أو وصلوا الحد اليومي).',
+    sentAllNone: 'ما اتبعتش لحد — كلهم اتبعتلهم قبل كده.',
+
+    confirmTitle: 'هتبعت لكل اللي في القايمة؟',
+    /** `{count}` — re-read immediately before the dialog opens. */
+    confirmBody: 'الرسالة هتتكتب باسمك لـ {count} طالب، كل واحد برسالة مكتوبة على حالته. اللي اتبعتله في آخر أسبوع هيتخطّى تلقائياً.',
+    /** `{max}` — the per-press ceiling. */
+    confirmCap: 'أقصى عدد في الضغطة الواحدة {max}، والباقي بضغطة تانية.',
+    confirmCancel: 'رجوع',
+    confirmSend: 'أيوه، ابعت',
+
+    emptyStalled: 'مفيش حد واقف — كل الطلبة لاحقين آخر المحاضرات والكويزات.',
+    emptyIdle: 'مفيش حساب من غير اشتراك.',
   },
   branding: {
     title: 'الهوية البصرية',

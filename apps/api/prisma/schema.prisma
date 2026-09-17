@@ -4081,11 +4081,19 @@ model OutreachMessage {
 /// The four reasons the platform speaks first. Mirrors `OUTREACH_KINDS` in
 /// `@ayman/contracts/outreach/kinds`, and `outreach.service.spec.ts` asserts
 /// the two agree.
+/// Mirrors `OUTREACH_KINDS` in `@ayman/contracts/outreach/kinds` value for
+/// value — `outreach.service.spec.ts` asserts the two agree, so adding one
+/// here without the other is a failing test rather than a runtime insert
+/// error.
 enum OutreachKind {
   quiz_result
   quiz_nudge
   lesson_praise
   whatsapp_invite
+  /// «إزاي الأخبار؟» — sent by hand from `/admin/follow-up`, never by a cron.
+  follow_up
+  /// An account with no seat in the course its own year and stream point at.
+  subscribe_nudge
 
   @@map("outreach_kind")
   @@schema("app")

@@ -35,6 +35,8 @@ const KIND_LABELS: Record<OutreachKind, string> = {
   quiz_nudge: c.kindQuizNudge,
   lesson_praise: c.kindLessonPraise,
   whatsapp_invite: c.kindWhatsappInvite,
+  follow_up: c.kindFollowUp,
+  subscribe_nudge: c.kindSubscribeNudge,
 };
 
 const FILTER_LABELS: Record<OutreachLogFilter, string> = {
@@ -407,5 +409,22 @@ function reasonFor(row: OutreachLogRow): string {
       return formatCopy(c.whyLessonPraise, { lesson: row.facts.lessonTitle });
     case 'whatsapp_invite':
       return c.whyWhatsappInvite;
+    case 'follow_up': {
+      // Counts, not titles. The «اللي فاته» line on `/admin/follow-up` is where
+      // the names belong; here the row is one line in a log of thousands and a
+      // list of five lecture titles inside it is unreadable.
+      const parts: string[] = [];
+      if (row.facts.missedLessons.length > 0) {
+        parts.push(formatCopy(c.whyFollowUpLessons, { n: row.facts.missedLessons.length }));
+      }
+      if (row.facts.missedQuizzes.length > 0) {
+        parts.push(formatCopy(c.whyFollowUpQuizzes, { n: row.facts.missedQuizzes.length }));
+      }
+      return parts.join('، ');
+    }
+    case 'subscribe_nudge':
+      return row.facts.courseTitle
+        ? formatCopy(c.whySubscribeNudge, { course: row.facts.courseTitle })
+        : c.whySubscribeNudgeCatalog;
   }
 }
