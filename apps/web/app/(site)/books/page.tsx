@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { tenantSentence } from '@/lib/tenant-copy';
 import { copy } from '@ayman/contracts';
 import { JsonLd } from '@/components/seo/json-ld';
 import { BooksShippingChip, BooksShop } from '@/components/site/books-shop';
@@ -20,8 +21,14 @@ export async function generateMetadata(): Promise<Metadata> {
      * they click, and answering it in the title is worth more than the two
      * words it costs.
      */
-    title: c.metaTitle,
-    description: c.metaDescription,
+    /*
+     * ⚠️ «كتب أيمن أبو العلا — اطلبها وتوصلك البيت» has the name welded into
+     * it, and this is the `<title>`, the `og:title` and the `twitter:title` of
+     * the page a parent opens to buy a book. On a tenant stack it read his name
+     * beside their own platform name in the same string.
+     */
+    title: tenantSentence(c.metaTitle),
+    description: tenantSentence(c.metaDescription),
     path: '/books',
   });
 }

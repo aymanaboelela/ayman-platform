@@ -1,4 +1,7 @@
 import { connection } from 'next/server';
+import { tenantSentence } from '@/lib/tenant-copy';
+import { tenantName } from '@/lib/tenant';
+import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { copy } from '@ayman/contracts';
 import { AGENT_DISCOVERY_PATHS } from '@/lib/agents/discovery';
 import { getCatalogOrEmpty } from '@/lib/catalog';
@@ -38,13 +41,20 @@ export async function GET(): Promise<Response> {
   const { courses } = await getCatalogOrEmpty();
 
   const lines = [
-    `# AGENTS.md — ${copy.site.platformName}`,
+    `# AGENTS.md — ${tenantName(copy.site.platformName)}`,
     '',
     '## What this site is',
     '',
-    `${copy.seo.description}`,
+        /*
+     * ⚠️ `SITE_DESCRIPTION`, not `copy.seo.description`. This surface is read by
+     * ASSISTANTS, which is the worst place for the wrong instructor's name: a page
+     * is read by a person who can tell it is wrong, and this is quoted back as
+     * fact. `copy.seo.description` welds his name mid-sentence, so the whole
+     * sentence has to be rebuilt — see `SITE_DESCRIPTION` in `lib/seo/metadata.ts`.
+     */
+`${SITE_DESCRIPTION}`,
     '',
-    `Arabic (RTL) throughout. The instructor is ${copy.site.instructor} — ${copy.landing.aboutRole}.`,
+    `Arabic (RTL) throughout. The instructor is ${tenantName(copy.site.instructor)} — ${tenantSentence(copy.landing.aboutRole)}.`,
     copy.seo.instructorCoverage,
     '',
     '## Who it is for',

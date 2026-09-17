@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { tenantSentence } from '@/lib/tenant-copy';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { copy } from '@ayman/contracts';
@@ -147,7 +148,24 @@ export function LegalSection({
   return (
     <section className="legal__section">
       <h2 className="legal__h2">{title}</h2>
-      {body ? <p>{body}</p> : null}
+      {/*
+        ⚠️ `tenantSentence`, and this is the highest-stakes gate on the public
+        site.
+
+        `/privacy` and `/terms` are the two pages that name a RESPONSIBLE PERSON
+        and a COPYRIGHT HOLDER: «المنصة دي بيديرها ويشرف عليها أيمن أبو العلا
+        شخصياً» and «الفيديوهات والملفات والاختبارات كلها ملك أيمن أبو العلا».
+        Both are legal statements, both were shipping verbatim from every
+        tenant's domain, and both are false there in a way that matters — one
+        names the wrong data controller to a parent, the other assigns another
+        instructor's lessons to him.
+
+        It sits on the shared component rather than on each page: `LegalPage`
+        renders every legal surface there is, and a per-page gate is a list
+        somebody has to remember to add to. Here, a new legal section is covered
+        the moment it is written.
+      */}
+      {body ? <p>{tenantSentence(body)}</p> : null}
       {children}
     </section>
   );
@@ -158,7 +176,7 @@ export function LegalItem({ term, body }: { term: string; body: string }) {
   return (
     <div className="legal__item">
       <h3 className="legal__h3">{term}</h3>
-      <p>{body}</p>
+      <p>{tenantSentence(body)}</p>
     </div>
   );
 }

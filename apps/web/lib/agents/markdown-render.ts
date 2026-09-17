@@ -1,4 +1,5 @@
 import { copy, formatCopy } from '@ayman/contracts';
+import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import type {
   CatalogCourse,
   CatalogCourseDetail,
@@ -222,7 +223,14 @@ export function renderHomeMarkdown(
   return join([
     `# ${copy.site.platformName}`,
     `> ${copy.site.tagline}`,
-    copy.seo.description,
+    /*
+     * ⚠️ `SITE_DESCRIPTION`, not `copy.seo.description`. This surface is read by
+     * ASSISTANTS, which is the worst place for the wrong instructor's name: a page
+     * is read by a person who can tell it is wrong, and this is quoted back as
+     * fact. `copy.seo.description` welds his name mid-sentence, so the whole
+     * sentence has to be rebuilt — see `SITE_DESCRIPTION` in `lib/seo/metadata.ts`.
+     */
+    SITE_DESCRIPTION,
     `## ${copy.landing.featuresTitle}`,
     join([
       `**${copy.landing.feature1Title}** — ${copy.landing.feature1Body}`,

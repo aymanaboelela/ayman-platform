@@ -6,7 +6,7 @@ import { copy } from '@ayman/contracts';
 import type { HomeBlock } from '@ayman/contracts/admin/home-blocks';
 import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
 import { JsonLd } from '@/components/seo/json-ld';
-import { buildMetadata } from '@/lib/seo/metadata';
+import { buildMetadata, SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { faqPageJsonLd } from '@/lib/seo/jsonld';
 import { getHomeBlocks, getHonorBoard } from '@/lib/home-blocks';
 import { SiteHero } from '@/components/site/site-hero';
@@ -64,7 +64,22 @@ import { SiteFaq } from '@/components/site/site-faq';
  * `title.default` (or the admin's override) stand on its own.
  */
 export async function generateMetadata(): Promise<Metadata> {
-  return buildMetadata({ path: '/', description: copy.seo.homeDescription });
+  /*
+   * ⚠️ `SITE_DESCRIPTION`, not `copy.seo.homeDescription`.
+   *
+   * The landing page passes its OWN description rather than letting
+   * `buildMetadata` fall back, so gating the fallback in `lib/seo/metadata.ts`
+   * never reached this line — and this is the one page whose description
+   * Google actually shows for the site's name. «البرمجة وعلوم الحاسب صح مع
+   * المهندس أيمن أبو العلا» went on shipping as the meta, og and twitter
+   * description of every tenant's home page while the title beside it read
+   * their own name.
+   *
+   * Caught by loading a tenant stack and grepping the served HTML for the
+   * name: two hits, both in `<head>`, none in the body — the half nobody
+   * proof-reads because nobody sees it.
+   */
+  return buildMetadata({ path: '/', description: SITE_DESCRIPTION });
 }
 
 /**

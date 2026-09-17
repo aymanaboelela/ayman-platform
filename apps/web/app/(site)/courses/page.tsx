@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { tenantSentence } from '@/lib/tenant-copy';
 import { copy } from '@ayman/contracts';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { CourseCard } from '@/components/site/course-card';
@@ -10,7 +11,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 export async function generateMetadata(): Promise<Metadata> {
   return buildMetadata({
     title: copy.catalog.title,
-    description: copy.seo.catalogDescription,
+    description: tenantSentence(copy.seo.catalogDescription),
     path: '/courses',
   });
 }

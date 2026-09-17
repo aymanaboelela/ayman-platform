@@ -777,7 +777,11 @@ const personRef = (): EntityRef => ({
 const organizationRef = (): EntityRef => ({
   '@id': ORGANIZATION_ID,
   '@type': 'EducationalOrganization',
-  name: copy.site.platformName,
+  // ⚠️ Gated like the two full Organization nodes above it. This is the SHORT
+  // reference, emitted as `provider` / `publisher` on every course, article and
+  // glossary page — so the one that was missed appeared on more pages than the
+  // two that were not.
+  name: tenantName(copy.site.platformName),
 });
 
 /**
