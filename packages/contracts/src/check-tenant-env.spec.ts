@@ -48,6 +48,9 @@ function goodEnv(): Record<string, string> {
     ADMIN_NAME: 'Mohamed Hassan',
     ADMIN_EMAIL: 'admin@mohamedhassan.com',
     ADMIN_PASSWORD: FAKE.adminPassword,
+    // The pair is all-or-nothing: `config/env.ts` refines it, and one without
+    // the other stops the API booting.
+    WA_SERVICE_URL: 'http://wa:3400',
     WA_TOKEN: FAKE.waToken,
     WA_DEVICE_NAME: 'منصة محمد حسن',
     CLARITY_PROJECT_ID: '',
@@ -56,8 +59,10 @@ function goodEnv(): Record<string, string> {
     TENANT_INSTAGRAM: 'https://www.instagram.com/mohamedhassan',
     TENANT_TIKTOK: 'https://www.tiktok.com/@mohamedhassan',
     TENANT_FACEBOOK: 'https://www.facebook.com/mohamedhassan',
+    // All three, because the API refines them as a group.
     VAPID_PUBLIC_KEY: 'BPk1',
     VAPID_PRIVATE_KEY: 'vk1',
+    VAPID_SUBJECT: 'mailto:admin@mohamedhassan.com',
   };
 }
 
@@ -204,6 +209,93 @@ describe('checkTenantEnv', () => {
 
       expect(errors).toEqual([]);
       expect(warnings.join(' ')).toContain('المنصة التعليمية');
+    });
+  });
+
+  describe('the config that boots BROKEN — every one of these shipped green before', () => {
+    it('rejects a database password containing a URL delimiter', () => {
+      // `openssl rand -base64 32` produces `/` about half the time, and the
+      // template used to tell operators to run exactly that. The value is
+      // interpolated raw into `postgresql://…:PASSWORD@postgres:5432/…`, so a
+      // `/` before the `@` re-parses the URL and the API restart-loops on a
+      // connection error that names none of this.
+      const { errors } = check({ POSTGRES_PASSWORD: `ab/cd${'x'.repeat(28)}` });
+
+      expect(errors.join(' ')).toContain('postgresql://');
+    });
+
+    it('rejects an ADMIN_PASSWORD create-admin would refuse', () => {
+      // The entrypoint runs create-admin with `|| echo WARNING`, so its throw
+      // is swallowed and the platform boots with NO ADMIN ACCOUNT. Nobody can
+      // sign in and the only trace is one line in a boot log.
+      const { errors } = check({ ADMIN_PASSWORD: 'short' });
+
+      expect(errors.join(' ')).toContain('no admin account');
+    });
+
+    it('rejects an ADMIN_EMAIL create-admin would refuse', () => {
+      expect(check({ ADMIN_EMAIL: 'not-an-email' }).errors.join(' ')).toContain('ADMIN_EMAIL');
+    });
+
+    it('rejects CHANGE_ME on ANY key, not just the seven it used to check', () => {
+      // `VAPID_SUBJECT=CHANGE_ME` sailed through and crashed the API at boot.
+      const { errors } = check({ VAPID_SUBJECT: 'CHANGE_ME' });
+
+      expect(errors.join(' ')).toContain('VAPID_SUBJECT');
+    });
+
+    it('rejects a trailing slash on MEDIA_ORIGIN, which every media URL inherits', () => {
+      // `MEDIA_BASE_URL: ${MEDIA_ORIGIN}/media` is plain concatenation, so a
+      // trailing slash gives `//media` and every upload 404s. Every other rule
+      // runs on `new URL(v).origin`, which discards exactly this.
+      const { errors } = check({ MEDIA_ORIGIN: 'https://media-mohamedhassan.com/' });
+
+      expect(errors.join(' ')).toContain('bare origin');
+    });
+
+    it('rejects a path on APP_URL', () => {
+      expect(check({ APP_URL: 'https://mohamedhassan.com/platform' }).errors.join(' ')).toContain(
+        'bare origin',
+      );
+    });
+
+    it('rejects WA_TOKEN without WA_SERVICE_URL — the API refuses to boot', () => {
+      // `config/env.ts` refines the pair to all-or-nothing, and a container
+      // that will not start 404s the whole domain through Traefik. The
+      // template handed out the token alone.
+      const { errors } = check({ WA_SERVICE_URL: '' });
+
+      expect(errors.join(' ')).toContain('half-configured');
+    });
+
+    it('rejects a half-filled video mirror', () => {
+      const { errors } = check({ VIDEO_MIRROR_BUCKET: 'a-bucket' });
+
+      expect(errors.join(' ')).toContain('half-configured');
+    });
+
+    it('rejects GOOGLE_CLIENT_ID without its secret', () => {
+      const { errors } = check({ GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com' });
+
+      expect(errors.join(' ')).toContain('half-configured');
+    });
+
+    it('rejects two of the three VAPID keys', () => {
+      const { errors } = check({ VAPID_SUBJECT: '' });
+
+      expect(errors.join(' ')).toContain('half-configured');
+    });
+
+    it('accepts a group left entirely empty', () => {
+      expect(
+        check({ VAPID_PUBLIC_KEY: '', VAPID_PRIVATE_KEY: '', VAPID_SUBJECT: '' }).errors,
+      ).toEqual([]);
+    });
+
+    it('rejects a social link that is not https — the seed throws on every boot', () => {
+      const { errors } = check({ TENANT_YOUTUBE: 'http://www.youtube.com/@x' });
+
+      expect(errors.join(' ')).toContain('https://');
     });
   });
 
