@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Medal, Trophy } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
@@ -121,16 +122,24 @@ export function HonorBoardSection({ entries = [] }: { entries?: HonorBoardEntry[
           honest render when the board is empty — see this component's header.
         */}
         {entries.length > 0 ? (
+          <>
           <ul className="honor-board__slots">
-            {entries.map((entry, index) => (
-              <li className="honor-board__slot honor-board__slot--filled" key={`${entry.studentName}-${index}`}>
+            {entries.map((entry) => (
+              <li className="honor-board__slot honor-board__slot--filled" key={`${entry.studentName}-${entry.courseLabel}-${entry.rank}`}>
                 <span className="honor-board__slot-mark" aria-hidden="true">
                   <Medal size={22} strokeWidth={1.5} />
                 </span>
-                {/* The rank word only exists for the first four places; past
-                    that the list simply continues, which is what the fourth
-                    place was written to promise. */}
-                <span className="honor-board__slot-rank">{c.ranks[index] ?? ''}</span>
+                {/* The rank is the place WITHIN this entry's course, so two
+                    cards on one board are both «المركز الأول» when they are
+                    the firsts of عربي and لغات. `entry.rank` is 1-based; a
+                    course with more than four pinned places simply stops
+                    getting a word, which is what the fourth place promises. */}
+                <span className="honor-board__slot-rank">
+                  {c.placeRanks[entry.rank - 1] ?? ''}
+                </span>
+                {/* Which race this was won in. Without it the two «المركز
+                    الأول» cards read as a contradiction. */}
+                <span className="honor-board__slot-course">{entry.courseLabel}</span>
                 {/*
                   Initials, never the photograph — and `avatarKey` is
                   deliberately ignored rather than absent from the payload.
@@ -150,6 +159,18 @@ export function HonorBoardSection({ entries = [] }: { entries?: HonorBoardEntry[
               </li>
             ))}
           </ul>
+          {/*
+            «عرض الكل» — only on a board that HAS names. On the empty board it
+            would lead to an empty archive, which is a promise broken twice.
+            A plain link and not a button: it navigates, and the site header
+            already styles links this way.
+          */}
+          <p className="honor-board__more">
+            <Link className="honor-board__more-link" href="/honor-board">
+              {c.viewAll}
+            </Link>
+          </p>
+          </>
         ) : (
         <ul className="honor-board__slots">
           {c.ranks.map((rank, index) => (

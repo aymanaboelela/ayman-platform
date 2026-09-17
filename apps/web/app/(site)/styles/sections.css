@@ -3619,18 +3619,152 @@
 .honor-board__slot-avatar {
   display: grid;
   place-items: center;
-  inline-size: 3.5rem;
-  block-size: 3.5rem;
+  /* Centred in the card and large, because it is the card's face — the owner
+     asked for it that way and the slot is a portrait, not a table row. The
+     auto margins are what centre it; everything else in the slot stays
+     start-aligned, which is what keeps the Arabic names readable. */
+  margin-inline: auto;
+  inline-size: 5rem;
+  block-size: 5rem;
   border-radius: var(--r-full);
   background: color-mix(in oklch, var(--a-9) 18%, var(--site-card));
   box-shadow: 0 0 0 1px color-mix(in oklch, var(--a-9) 45%, transparent);
   color: var(--a-11);
-  font-size: var(--fs-title-4);
+  font-size: var(--fs-title-2);
   font-weight: var(--fw-semibold);
   /* Arabic initials are letters, not capitals — no `text-transform` here, and
      `line-height: 1` so a two-letter monogram sits on the disc's centre rather
      than on its type baseline. */
   line-height: 1;
+}
+
+/* «تانية بكالوريا — لغات». The board runs one race per course, so without
+   this chip two «المركز الأول» cards read as a contradiction rather than as
+   two winners. Quiet on purpose: it is the answer to "first of WHAT", not a
+   second headline competing with the name. */
+.honor-board__slot-course {
+  align-self: flex-start;
+  padding-inline: 0.5rem;
+  padding-block: 0.125rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklch, var(--a-9) 12%, transparent);
+  color: var(--a-11);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+}
+
+.honor-board__more {
+  margin-block-start: var(--s-16);
+  text-align: center;
+}
+
+.honor-board__more-link {
+  color: var(--a-11);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  text-decoration-line: underline;
+  text-underline-offset: 0.25em;
+}
+
+/* ── /honor-board ─────────────────────────────────────────────────────────
+   The archive. It reuses `.honor-board__slot*` wholesale so a round in the
+   archive is drawn by the same rules as the live board — two sets of card
+   styles is two places for the board to stop looking like itself. */
+/* Width and gutter come from `.site-shell` on the element itself, the same as
+   every other page in this group — a second container token here would be a
+   page that drifts out of line with the header above it the first time the
+   shell changes. */
+.honor-archive {
+  padding-block: var(--s-48) var(--s-64);
+}
+
+.honor-archive__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--a-11);
+  font-size: var(--fs-text-sm);
+}
+
+.honor-archive__title {
+  margin-block-start: var(--s-8);
+  font-size: var(--fs-title-1);
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+.honor-archive__lead {
+  margin-block-start: var(--s-8);
+  color: var(--site-fg-2);
+}
+
+.honor-archive__body {
+  display: grid;
+  gap: var(--s-24);
+  margin-block-start: var(--s-32);
+}
+
+/* The rail goes beside the board only once there is room for both; on a phone
+   it stacks above, which is the reading order anyway — pick a round, then see
+   who was on it. */
+@media (min-width: 64rem) {
+  .honor-archive__body {
+    grid-template-columns: 16rem minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.honor-archive__rail-title {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--site-fg-2);
+}
+
+.honor-archive__rail-list {
+  display: grid;
+  gap: 0.5rem;
+  margin-block-start: var(--s-12);
+  padding: 0;
+  list-style: none;
+}
+
+.honor-archive__rail-item {
+  display: grid;
+  gap: 0.125rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--site-line-strong);
+  border-radius: var(--r-lg);
+  transition: border-color 160ms ease-out, background-color 160ms ease-out;
+}
+
+.honor-archive__rail-item:hover {
+  border-color: color-mix(in oklch, var(--a-9) 40%, transparent);
+}
+
+.honor-archive__rail-item--on {
+  border-color: color-mix(in oklch, var(--a-9) 55%, transparent);
+  background: color-mix(in oklch, var(--a-9) 10%, transparent);
+}
+
+.honor-archive__rail-date {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--site-fg);
+}
+
+.honor-archive__rail-exam {
+  font-size: var(--fs-text-xs);
+  color: var(--site-fg-2);
+}
+
+/* Two across at most in the archive, never four: the rail has already taken
+   a quarter of the row, and four cards in what is left turns every Egyptian
+   full name into three lines. */
+@media (min-width: 64rem) {
+  .honor-archive__slots {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-block-start: 0;
+  }
 }
 
 .honor-board__slot-name {
