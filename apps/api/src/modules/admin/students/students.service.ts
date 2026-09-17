@@ -16,11 +16,19 @@ import {
   type AdminStudentBulkDeleteResult,
   type AdminStudentDeleteBlocker,
   type AdminStudentDetail,
+  type AdminStudentConversation,
   type AdminStudentPatch,
   type AdminStudentRow,
   expectedDeleteIdentity,
+  deleteIdentityMatches,
 } from '@ayman/contracts/admin/students';
 import { ARGON2_OPTIONS } from '../../../auth/argon2-options';
+import {
+  emailIdentifier,
+  phoneIdentifier,
+  throttleKeyFor,
+} from '../../../auth/credential-check.service';
+import { loginThrottle } from '../../../auth/login-throttle.instance';
 import { AuditService } from '../../../audit/audit.service';
 import { isUniqueViolation } from '../../../common/prisma/prisma-errors';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -35,6 +43,11 @@ export interface StudentListQuery {
   track: string[];
   sort: string;
   dir: 'asc' | 'desc';
+  /** «مين اللي مسجّلهم مجاني؟» — see the contract's own note on
+   *  `StudentListQuerySchema.access` for what each bucket means and why the
+   *  automatic `platform` grant is deliberately not one of them. */
+  access: 'hand_opened' | 'comped' | 'paid' | null;
+  stream: 'general' | 'languages' | 'unset' | null;
 }
 
 const DETAIL_SELECT = {
@@ -99,6 +112,57 @@ function toDetail(record: DetailRecord): AdminStudentDetail {
   };
 }
 
+/**
+ * «مين اللي مسجّلهم مجاني؟» as a `where` fragment.
+ *
+ * A LIVE grant is `revokedAt: null` plus a validity window that covers now —
+ * an expired subscription is not "currently free", it is "no longer anything",
+ * and a filter that ignored the window would keep every lapsed student in the
+ * paid bucket forever.
+ *
+ * ⚠️ `scope: 'course'` only. Every student who has ever enrolled in anything
+ * holds the automatic `platform` grant; counting it here would put the whole
+ * table in the free bucket. See `StudentListQuery.access`.
+ */
+function accessFilter(access: StudentListQuery['access']): Prisma.StudentProfileWhereInput {
+  if (access === null) return {};
+
+  const live: Prisma.AccessGrantWhereInput = {
+    scope: 'course',
+    revokedAt: null,
+    validFrom: { lte: new Date() },
+    OR: [{ validUntil: null }, { validUntil: { gt: new Date() } }],
+  };
+
+  if (access === 'hand_opened') {
+    return { user: { accessGrants: { some: { ...live, source: 'admin' } } } };
+  }
+
+  // Both remaining buckets are `purchase` grants; the approved submission
+  // behind them is what tells a comped one from a paid one. `some`/`none` on
+  // the nested relation rather than a join in code — the count and the page
+  // must agree, and they only do if the filter is in the same query.
+  return {
+    user: {
+      accessGrants: {
+        some: {
+          ...live,
+          source: 'purchase',
+          paymentSubmissions:
+            access === 'comped'
+              ? { some: { status: 'approved', isFree: true } }
+              : { some: { status: 'approved', isFree: false } },
+        },
+      },
+    },
+  };
+}
+
+/** How much of a thread the profile panel shows before it defers to
+ *  `/admin/inbox/:id`. A number, not a scroll: this is a panel in a column of
+ *  other panels on a record page, not an inbox. */
+const CONVERSATION_PREVIEW_MAX = 30;
+
 @Injectable()
 export class StudentsService {
   constructor(
@@ -125,6 +189,15 @@ export class StudentsService {
       ...(query.governorate.length > 0 ? { governorateCode: { in: query.governorate } } : {}),
       ...(query.year.length > 0 ? { year: { in: query.year } } : {}),
       ...(query.track.length > 0 ? { trackId: { in: query.track } } : {}),
+      /* «مش متسجّل» is `null`, which Prisma cannot express through the same
+         `equals` the other two use — hence the explicit branch rather than a
+         value passed straight through. */
+      ...(query.stream === null
+        ? {}
+        : query.stream === 'unset'
+          ? { schoolStream: null }
+          : { schoolStream: query.stream }),
+      ...accessFilter(query.access),
     };
 
     // Count and page in one round trip. `rowCount` is the TOTAL, not the page.
@@ -142,6 +215,7 @@ export class StudentsService {
           gender: true,
           governorateCode: true,
           year: true,
+          schoolStream: true,
           onboardingCompletedAt: true,
           createdAt: true,
           // `bannedAt` on the LIST too, not just the detail: an admin scanning
@@ -165,6 +239,7 @@ export class StudentsService {
         gender: record.gender,
         governorateCode: record.governorateCode,
         governorateNameAr: record.governorate.nameAr,
+        schoolStream: record.schoolStream,
         systemSlug: record.system?.slug ?? null,
         year: record.year,
         trackLabelAr: record.track?.labelAr ?? null,
@@ -485,8 +560,39 @@ export class StudentsService {
    * path with no special case.
    */
   async setPassword(userId: string, newPassword: string, actorUserId: string): Promise<{ status: true }> {
-    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      // The two login identifiers come back with the id because the soft lock
+      // is keyed on THEM, not on the user — see the unlock below. `role` is
+      // here for the guard immediately below it.
+      select: { id: true, email: true, phoneNumber: true, role: true },
+    });
     if (!target) throw new NotFoundException();
+
+    /**
+     * ⚠️ STUDENTS ONLY, and this is a privilege-escalation guard rather than
+     * a tidiness rule.
+     *
+     * This method rewrites an account's Argon2 hash from a user id. With no
+     * check on the target's role it will rewrite an ADMIN's — so any caller
+     * holding `student:set-password` could set a password on the platform
+     * operator's account and sign in as them, holding `'*'`. `ban`,
+     * `changeRole` and the delete path all guard their target's role already
+     * (`target.role === 'admin'` at :709, :650, :968); this one did not, and
+     * it is the only one of the four that hands over a working credential.
+     *
+     * `student:set-password` is also in `NEVER_GRANTABLE` now, so no
+     * instructor can be given it. This is the second lock: the permission
+     * catalogue is a list somebody edits, and a guard in the code path is what
+     * survives that edit.
+     *
+     * Resetting a STAFF password is deliberately not reachable from here. It
+     * is a rare act with a different blast radius, and it belongs to whoever
+     * has the database, not to a screen a support desk can be granted.
+     */
+    if (target.role !== 'student') {
+      throw new ForbiddenException('passwords can only be set on student accounts');
+    }
 
     const passwordHash = await argon2.hash(newPassword, ARGON2_OPTIONS);
 
@@ -501,6 +607,63 @@ export class StudentsService {
         password: passwordHash,
       },
     });
+
+    /**
+     * ...and then let them actually USE it, which is the half that was
+     * missing.
+     *
+     * `login-throttle.service` locks an account for 15 minutes after 10 failed
+     * attempts, and `credential-check.service`'s `throttleKeyFor` namespaces
+     * that ledger BY IDENTIFIER KIND — `phone:+2010…` and `email:…` are two
+     * independent buckets for one student, deliberately (see that function).
+     * The consequence in the field: a student who cannot get in tries their
+     * number over and over, trips the phone lock, and asks for a new password.
+     * The admin sets one, the student types it, and is refused again — while
+     * the very same password works instantly through the email box, because
+     * that bucket was never touched. It reads exactly like a set-password that
+     * did not save, and it is what this method is usually called to fix.
+     *
+     * So both buckets are dropped here. Only the two identifiers this account
+     * can actually sign in with, normalised the same way the sign-in path
+     * normalises them, or the key would not match the one a failed attempt
+     * wrote: `users.phone_number` is already E.164 (`planPhoneNormalization`
+     * rewrites the body before anything stores it), and the email is folded to
+     * lower case by `emailIdentifier`.
+     *
+     * Not inside the transaction and not awaited-then-checked: this is an
+     * in-memory Map delete that cannot fail, and a password that was written
+     * must not be reported as unwritten because of anything after it.
+     */
+    if (target.phoneNumber) {
+      loginThrottle.clear(throttleKeyFor(phoneIdentifier(target.phoneNumber)));
+    }
+    if (target.email) {
+      loginThrottle.clear(throttleKeyFor(emailIdentifier(target.email)));
+    }
+
+    /**
+     * Every existing session goes with the password.
+     *
+     * `ban` already does this (:750) and for the reason recorded there:
+     * `session.cookieCache` is deliberately absent, so deleting the rows takes
+     * effect on the account's very next request rather than whenever a cached
+     * cookie lapses. A password reset without it leaves whoever was signed in
+     * BEFORE the reset signed in after it — which is the wrong answer for both
+     * reasons this method is ever called:
+     *
+     *   · a student who was locked out gets a new password while the person
+     *     who took their phone keeps the session they already had;
+     *   · a credential reset done BECAUSE an account was compromised does not
+     *     actually evict the intruder.
+     *
+     * `sessionDevice` goes too, same as the ban path: «أجهزتي» still listing
+     * «نشط» for a session that no longer exists is a lie told at exactly the
+     * wrong moment.
+     */
+    await this.prisma.$transaction([
+      this.prisma.session.deleteMany({ where: { userId } }),
+      this.prisma.sessionDevice.deleteMany({ where: { userId } }),
+    ]);
 
     // Never the password itself, hashed or otherwise — just who did it and to
     // whom. `audit_log` is INSERT-only; a credential belongs nowhere in it.
@@ -841,14 +1004,14 @@ export class StudentsService {
       return { ok: false, reason: 'email-mismatch', name: target.name };
     }
 
-    // Case-insensitive and trimmed: the admin is retyping an identifier, not a
-    // password, and rejecting «Ahmed@X.com» for «ahmed@x.com» would teach them
-    // to paste it — which defeats the point of asking. Harmless for a phone,
-    // which has no letters to fold.
-    if (
-      confirmIdentity !== undefined &&
-      confirmIdentity.trim().toLowerCase() !== (expected ?? '').trim().toLowerCase()
-    ) {
+    // `deleteIdentityMatches` rather than a compare written out here — it is
+    // the same function the dialog uses to decide whether to enable its own
+    // button, so the two cannot drift into disagreeing. It is trimmed and
+    // case-insensitive for an email, and for a phone it accepts every way the
+    // number is written on this platform (`01223334567` as much as
+    // `+201223334567`) while still demanding all ten national digits. That
+    // file carries the reasoning and the measurement.
+    if (confirmIdentity !== undefined && !deleteIdentityMatches(confirmIdentity, expected)) {
       return { ok: false, reason: 'email-mismatch', name: target.name };
     }
 
@@ -905,6 +1068,68 @@ export class StudentsService {
 
     return { ok: true, name: target.name };
   }
+
+  /**
+   * «المحادثة» on a student's record — the thread, and the way into it.
+   *
+   * ## Why the thread is resolved here rather than passed in
+   *
+   * A conversation is keyed on the student, not on a URL anyone holds: from
+   * their record, or from a row on the grading queue, the only id in hand is
+   * theirs. `/admin/inbox` can find a thread by name; nothing could find one
+   * by account.
+   *
+   * ## Which thread, when there is more than one
+   *
+   * The most recent one that is still open, whatever its origin — a student
+   * who asked المساعد something (`origin: 'visitor'`) and a student he
+   * messaged first (`origin: 'outreach'`) are the same conversation as far as
+   * this screen is concerned, and showing the outreach thread while an unread
+   * question sits in the other one is how a question goes unanswered. Closed
+   * threads are excluded from the pick but are still reachable at
+   * `/admin/inbox`; reopening a closed thread from a profile composer would be
+   * a decision made by accident.
+   *
+   * ## The cap
+   *
+   * The last 30 messages, returned oldest-first so it reads as a transcript.
+   * A thread with a year of المساعد history in it would otherwise put a
+   * hundred bubbles above the one control on this panel — and `truncated`
+   * says so rather than the panel quietly showing a fragment.
+   */
+  async conversation(userId: string): Promise<AdminStudentConversation> {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { userId, status: { not: 'closed' } },
+      orderBy: { lastMessageAt: 'desc' },
+      select: { id: true },
+    });
+    if (!conversation) return { conversationId: null, messages: [], truncated: false };
+
+    // `desc` + `take` + reverse, not `asc` + `take`: the newest messages are
+    // the ones worth keeping, and an ascending take would return the OLDEST
+    // thirty — the wrong end of a long thread.
+    const rows = await this.prisma.conversationMessage.findMany({
+      where: { conversationId: conversation.id },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: CONVERSATION_PREVIEW_MAX + 1,
+      select: { id: true, author: true, body: true, createdAt: true },
+    });
+
+    const truncated = rows.length > CONVERSATION_PREVIEW_MAX;
+    const kept = truncated ? rows.slice(0, CONVERSATION_PREVIEW_MAX) : rows;
+
+    return {
+      conversationId: conversation.id,
+      messages: kept.reverse().map((row) => ({
+        id: row.id,
+        author: row.author,
+        body: row.body,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      truncated,
+    };
+  }
+
 }
 
 /**

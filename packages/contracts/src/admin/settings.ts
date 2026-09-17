@@ -1,4 +1,5 @@
 import { z } from '@ayman/contracts/zod';
+import { BookShippingRatesSchema } from '@ayman/contracts/books';
 
 /**
  * TOKEN SLOTS, not colours. The admin picks one of these; the mapping from a
@@ -12,6 +13,63 @@ export const ACCENT_SLOTS = ['amber', 'cyan', 'blue', 'violet', 'magenta', 'slat
 export const AccentSlotSchema = z.enum(ACCENT_SLOTS);
 export type AccentSlot = z.infer<typeof AccentSlotSchema>;
 
+/**
+ * Hues a brand may never take, because they already mean something.
+ *
+ * `--ok` is hue 150 and `--err` is 25, and they are how a student is told
+ * whether an answer was right. The docblock on `ACCENT_SLOTS` above has always
+ * said green and red can never be the brand; with a free hue that stops being
+ * a matter of which six values got listed and has to be enforced.
+ *
+ * ±20° each, which is wide enough that "nearly the correct-answer green" is
+ * also out. Amber (72) and blue (258) sit outside both bands, so the six
+ * shipped slots are unaffected — as does `--warn` at 85 and `--info` at 245,
+ * which are close to two of them and deliberately tolerated: a warning banner
+ * looking brand-adjacent costs nothing, a wrong answer looking correct does.
+ */
+export const RESERVED_HUES = [
+  { center: 150, meaning: 'إجابة صح' },
+  { center: 25, meaning: 'إجابة غلط' },
+] as const;
+
+const RESERVED_HUE_RADIUS = 20;
+
+/** Angular distance between two hues, 0–180. */
+function hueDistance(a: number, b: number): number {
+  const raw = Math.abs(((a - b) % 360) + 360) % 360;
+  return raw > 180 ? 360 - raw : raw;
+}
+
+export function reservedHueConflict(hue: number): string | null {
+  for (const { center, meaning } of RESERVED_HUES) {
+    if (hueDistance(hue, center) <= RESERVED_HUE_RADIUS) return meaning;
+  }
+  return null;
+}
+
+/**
+ * A tenant's own brand hue, which OVERRIDES `accent` when set.
+ *
+ * A NUMBER, not a colour string — the editor still never types CSS (Global
+ * Constraint 18 / A12). The server turns this into the whole scheme through
+ * `generateRamps` in `@ayman/ui`, which solves each step for its contrast
+ * target and clamps every value into sRGB.
+ *
+ * `null` means "use the `accent` slot", which is what every existing row says
+ * and what Ayman's platform keeps saying — his amber is hand-tuned and is not
+ * regenerated.
+ */
+export const AccentHueSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(359)
+  .nullable()
+  .default(null)
+  .refine((hue) => hue === null || reservedHueConflict(hue) === null, {
+    message: 'اللون ده قريب أوي من لون «إجابة صح» أو «إجابة غلط» — اختار درجة تانية',
+  });
+
 /** Radius presets. Every preset keeps the card ceiling at ≤ 8px. */
 export const RADIUS_SLOTS = ['sharp', 'default', 'soft'] as const;
 export const RadiusSlotSchema = z.enum(RADIUS_SLOTS);
@@ -23,6 +81,8 @@ const assetId = z.uuid().nullable().default(null);
 export const BrandingSchema = z
   .object({
     accent: AccentSlotSchema.default('amber'),
+    /** Overrides `accent` when set. See `AccentHueSchema`. */
+    accentHue: AccentHueSchema,
     radius: RadiusSlotSchema.default('default'),
     logoLightAssetId: assetId,
     logoDarkAssetId: assetId,
@@ -149,8 +209,41 @@ export const ContactSchema = z
      * "here's the door" role `whatsappChannel` already plays. Public: it has
      * to be, the subscribe panel renders before a student has any session,
      * same as every other contact field on this object.
+     *
+     * ⚠️ ALIVE AGAIN as of 2026-09-14, after a spell as a dead key.
+     *
+     * It was superseded by `instapay` when InstaPay became the only
+     * destination. Checkout now ASKS which rail the student wants — إنستاباي
+     * or فودافون كاش — so this is a real payment destination once more, and
+     * the wallet number is genuinely a different number from the InstaPay one.
+     *
+     * ⚠️ The two must never be conflated or defaulted into each other. A
+     * student who picks «فودافون كاش» and is shown the InstaPay number sends
+     * money to a rail the screen is not describing, and nothing reconciles it.
+     * Empty here means the Vodafone Cash choice is offered as unavailable —
+     * which is a fixable admin gap. A wrong number is not fixable.
+     *
+     * Note for anyone tempted to delete it in a future cleanup: this object is
+     * `.strict()` and a row carrying this key is stored in production's
+     * `site_settings.data`, so removing the field makes the stored row fail to
+     * parse — and `SettingsService.read()` feeds the root layout, so every page
+     * on the site 500s at once.
      */
     vodafoneCash: optionalPhone,
+    /**
+     * The InstaPay number students transfer to — the live payment
+     * destination for BOTH course subscriptions and book orders.
+     *
+     * Deliberately a NEW key rather than a rename of `vodafoneCash` above,
+     * for the reason spelled out there. And deliberately no fallback to it
+     * anywhere in the read path: the panel that renders this number is
+     * labelled «إنستاباي», and falling back to the old Vodafone number would
+     * put a wallet number under an InstaPay heading — students would send
+     * money to a destination the screen is not describing. Empty here means
+     * the panel says the payment number is not set up yet, which is a
+     * fixable admin gap; a wrong number is not.
+     */
+    instapay: optionalPhone,
   })
   .strict();
 
@@ -227,6 +320,53 @@ export const OutreachSettingsSchema = z
 export type OutreachSettings = z.infer<typeof OutreachSettingsSchema>;
 
 /**
+ * «الكتب» — the one number about the shop that must move without a deploy.
+ *
+ * Delivery is quoted per ORDER, once, no matter how many books are in it, and
+ * the courier's price changes. Keeping it here rather than as a constant means
+ * raising it is a form field; keeping the CHARGED amount frozen on each
+ * `book_orders.shipping_cents` row means raising it never rewrites what an old
+ * order says it cost. Those two facts are what make a settings row the right
+ * home for it rather than either extreme.
+ *
+ * ⚠️ NOT on `PublicSettingsSchema`, unlike `contact`. The public catalogue
+ * response carries the fee itself (see `BookCatalogSchema`) — the cart needs it
+ * on the first render, and adding a required key to the settings payload every
+ * page on the site parses is a blast radius this does not need.
+ *
+ * Capped at 500 EGP because a delivery fee above that is a typed extra zero,
+ * and the failure mode of the typo is a cart nobody completes.
+ */
+export const StoreSettingsSchema = z
+  .object({
+    /**
+     * ⚠️ LEGACY — the old FLAT fee. Parsed and IGNORED.
+     *
+     * Delivery is priced per zone now (`shippingRates` below). This key is kept
+     * because a settings row already written on production carries it and this
+     * schema is `.strict()`: removing the field would make every settings read
+     * on the live row throw, which on this platform is the whole site rather
+     * than one screen. See `BOOK_SHIPPING_CENTS`.
+     */
+    shippingCents: z.number().int().min(0).max(50_000).default(6_500),
+    /**
+     * «قاهرة وجيزة ٨٠، وجه بحري ١٠٠، صعيد وسينا وبحر أحمر ١٥٠» — the three
+     * rates, editable without a deploy for exactly the reason the single fee
+     * was: the courier's price moves and a deploy is the wrong unit of work
+     * for it.
+     *
+     * `.prefault({})` and not `.default({})` — see `SiteSettingsSchema`'s own
+     * note. With `.default({})` a never-written key would read as a literal
+     * `{}` typed as `BookShippingRates`, i.e. three `undefined` fees, and the
+     * cart would quote `NaN`.
+     */
+    shippingRates: BookShippingRatesSchema.prefault({}),
+  })
+  .strict();
+
+export type StoreSettings = z.infer<typeof StoreSettingsSchema>;
+
+/**
  * ⚠️ `.prefault({})`, never `.default({})`.
  *
  * Zod 4 changed `.default()` to short-circuit: the given value is returned
@@ -243,6 +383,7 @@ export const SiteSettingsSchema = z
     seo: SeoSchema.prefault({}),
     contact: ContactSchema.prefault({}),
     outreach: OutreachSettingsSchema.prefault({}),
+    store: StoreSettingsSchema.prefault({}),
   })
   .strict();
 
@@ -260,7 +401,7 @@ export const PublicSettingsReadSchema = z
 
 export type PublicSettingsRead = z.infer<typeof PublicSettingsReadSchema>;
 
-export const SETTINGS_SECTIONS = ['branding', 'seo', 'contact', 'outreach'] as const;
+export const SETTINGS_SECTIONS = ['branding', 'seo', 'contact', 'outreach', 'store'] as const;
 export const SettingsSectionSchema = z.enum(SETTINGS_SECTIONS);
 export type SettingsSection = z.infer<typeof SettingsSectionSchema>;
 
@@ -276,4 +417,12 @@ export const SECTION_SCHEMAS = {
    * not to publish it.
    */
   outreach: OutreachSettingsSchema,
+  /**
+   * ⚠️ Also NOT on `PublicSettingsSchema` — for a different reason from
+   * `outreach` above. The delivery fee is not a secret; it is on the cart. It
+   * stays off that payload because the catalogue response already carries it,
+   * and one number with two sources is one number that will eventually
+   * disagree with itself.
+   */
+  store: StoreSettingsSchema,
 } as const;

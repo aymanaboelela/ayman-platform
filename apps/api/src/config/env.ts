@@ -142,12 +142,73 @@ const schema = z
      */
     WA_SERVICE_TOKEN: optionalSecret,
 
+    /**
+     * The shared secret the Android handset sends with «التحويلات الواردة» —
+     * `POST /api/ingest/transfers`.
+     *
+     * Same shape and same reasoning as `WA_SERVICE_TOKEN` above: the caller is
+     * a device, not a browser, so a session cookie is the wrong question to
+     * ask and a header token is the right one. Unlike that one this endpoint
+     * IS reachable from the internet — the handset is on wifi, not on the
+     * compose network — which makes the token the only thing standing between
+     * a stranger and a request that can open a paid course.
+     *
+     * Unset disables ingest entirely (the route rejects every call), which is
+     * the correct default: a deployment that has not been given a token has
+     * not been configured for this feature.
+     */
+    INSTAPAY_INGEST_TOKEN: optionalSecret,
+
     /** Where uploaded, re-encoded bytes live on disk (Task 13). */
     MEDIA_ROOT: z.string().min(1).default('./.media'),
 
     /** Mirrors `MAX_UPLOAD_BYTES` in `@ayman/contracts/admin/media` — kept as
      *  its own env var so an operator can lower it without a code change. */
     MEDIA_MAX_BYTES: z.coerce.number().int().positive().default(8 * 1024 * 1024),
+
+    /* ── «النسخة اللي عندنا» — the video mirror ─────────────────────────
+     *
+     * Object storage for the HLS copies, and the public origin they are
+     * served from. R2 in production; anything S3-compatible works.
+     *
+     * ALL OPTIONAL, and the platform is whole with none of them. Unset — the
+     * case locally, in CI, and on any deployment that has not been given a
+     * bucket — the worker never runs, `mirrorStatus` stays `pending` on every
+     * row, and the player falls back to YouTube exactly as it does today.
+     * That is the entire degradation path, and it is why nothing below is
+     * required: a deployment must not fail to boot over a mirror.
+     *
+     * Every one of them is `optional*` and not a bare `.optional()` for the
+     * reason the WhatsApp block above documents — compose substitutes an
+     * unset `${VAR:-}` as the EMPTY STRING, and an empty string that fails
+     * `.url()` takes the whole API down at boot over a feature nobody
+     * switched on.
+     */
+    VIDEO_MIRROR_ENDPOINT: optionalHttpUrl,
+    VIDEO_MIRROR_BUCKET: optionalSecret,
+    VIDEO_MIRROR_ACCESS_KEY_ID: optionalSecret,
+    VIDEO_MIRROR_SECRET_ACCESS_KEY: optionalSecret,
+
+    /**
+     * Where students fetch the playlist — `https://video.aymanaboelela.com`,
+     * the bucket's public custom domain.
+     *
+     * A SEPARATE variable from the endpoint, never derived from it. The S3
+     * endpoint is credentialed and internal; this one is public, cached at
+     * the edge, and is the string that ends up in the CSP and in every
+     * student's network log. Deriving one from the other would mean a
+     * misconfiguration on the private side silently changing what the public
+     * side hands out.
+     */
+    VIDEO_MIRROR_PUBLIC_URL: optionalHttpUrl,
+
+    /**
+     * How many videos the worker mirrors at once. One, and the default is not
+     * a placeholder: the expensive step is pulling a gigabyte from YouTube,
+     * two of those saturate the VPS's uplink, and a saturated uplink is the
+     * API not answering. Raise it only on a box with bandwidth to spare.
+     */
+    VIDEO_MIRROR_CONCURRENCY: z.coerce.number().int().positive().max(4).default(1),
 
     /* ── المساعد's open chat — `POST /api/assistant/ask` ────────────────
      *
@@ -230,6 +291,39 @@ const schema = z
 
     /** The paid upgrade. One variable, no code change — see the runbook. */
     ANTHROPIC_API_KEY: optionalSecret,
+
+    /**
+     * Web Push — the leg of the notification system that reaches a browser
+     * with no tab open. ALL THREE OPTIONAL, same discipline as the assistant
+     * chat keys above: the platform is whole without them, `PushService`
+     * answers `publicKey()` with `null`, the admin toggle stays quiet instead
+     * of subscribing a browser nothing could ever send to, and every write
+     * (`notifyUser`) is a silent no-op rather than a boot-time crash.
+     *
+     * `optionalSecret` for the two keys, for the usual reason: compose
+     * substitutes an unset variable as the EMPTY STRING, and "present but
+     * invalid" is the one reading of that which must not take the API down.
+     */
+    VAPID_PUBLIC_KEY: optionalSecret,
+    VAPID_PRIVATE_KEY: optionalSecret,
+    /**
+     * The contact the browser vendor's push service may reach if this
+     * deployment is misbehaving — required by the Web Push protocol itself
+     * (RFC 8292), as a `mailto:` address or an `https://` URL. Not a plain
+     * string: `web-push`'s own `setVapidDetails` throws on one, and a typo
+     * here (as opposed to a typo in `VAPID_PUBLIC_KEY`, opaque either way)
+     * should be caught before the first push send rather than by watching
+     * every send fail with the same generic error.
+     */
+    VAPID_SUBJECT: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z
+        .string()
+        .refine((value) => value.startsWith('mailto:') || value.startsWith('https://'), {
+          message: 'must be a mailto: address or an https:// URL (RFC 8292)',
+        })
+        .optional(),
+    ),
   })
   .refine((data) => !(data.GOOGLE_CLIENT_ID && !data.GOOGLE_CLIENT_SECRET), {
     message: 'GOOGLE_CLIENT_SECRET is required when GOOGLE_CLIENT_ID is set',
@@ -282,6 +376,24 @@ const schema = z
     message: 'WA_SERVICE_URL and WA_SERVICE_TOKEN must both be set, or both omitted',
     path: ['WA_SERVICE_URL'],
   })
+  /**
+   * Same all-or-nothing shape as the Apple credential set above: a public key
+   * with no private key (or no subject) is a deployment that would `setVapidDetails`
+   * with `undefined` and fail every send with the same opaque error, rather
+   * than at boot where the message names exactly what is missing.
+   */
+  .refine(
+    (data) => {
+      const present = [data.VAPID_PUBLIC_KEY, data.VAPID_PRIVATE_KEY, data.VAPID_SUBJECT].filter(
+        (value) => value !== undefined,
+      ).length;
+      return present === 0 || present === 3;
+    },
+    {
+      message: 'VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and VAPID_SUBJECT must all be set together, or all omitted',
+      path: ['VAPID_PUBLIC_KEY'],
+    },
+  )
   .refine((data) => new URL(data.MEDIA_BASE_URL).origin !== new URL(data.APP_URL).origin, {
     message:
       'MEDIA_BASE_URL must be a DIFFERENT origin than APP_URL (spec §7 P6) — ' +

@@ -3,9 +3,12 @@ import { CourseOutlineSchema, LessonPlayerSchema } from '@ayman/contracts';
 import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { getBookShippingRates } from '@/lib/books';
 import { sanitizeRichText } from '@/lib/sanitize-html';
-import { CourseDetailsCard } from '@/components/player/course-details-card';
 import { CourseHelpCard } from '@/components/player/course-help-card';
+import { CourseGroupCard } from '@/components/player/course-group-card';
+import { LessonHomework } from '@/components/player/lesson-homework';
+import { LessonDescription } from '@/components/player/lesson-description';
 import { CourseOutlineSidebar } from '@/components/player/course-outline';
 import { LessonPlayerView } from '@/components/player/lesson-player';
 
@@ -44,10 +47,12 @@ function nullOn404(error: unknown): null {
  *
  * The public course page is where that answer already lives: clicking
  * «ابدأ الكورس» there re-runs `EntitlementService.enroll`, which throws this
- * SAME 403 and is what `CourseStartButton` already turns into the subscribe
- * modal (or, for an unpriced-but-closed course, `copy.course.lockedError`).
- * Sending the student back there reuses that handling rather than building a
- * second copy of it on this page.
+ * SAME 403 and is what `CourseStartButton` turns into the subscribe modal —
+ * for EVERY 403 now, not only a priced one. That branch used to fall back to
+ * `copy.course.lockedError` for a course its cached props said was free, which
+ * was wrong for any course priced in the preceding hour; the panel reads the
+ * live price itself instead. Sending the student back there reuses that
+ * handling rather than building a second copy of it on this page.
  */
 function redirectOnLapsedAccess(slug: string) {
   return (error: unknown): null => {
@@ -69,7 +74,7 @@ export default async function LessonPage({
   // lesson navigations and the lesson body is not. Both are authenticated —
   // the guard's 404 for "not enrolled" is exactly what makes `notFound()`
   // below a rendering decision rather than an authorization one.
-  const [outline, payload, settings] = await Promise.all([
+  const [outline, payload, settings, shippingRates] = await Promise.all([
     apiGetAuthed(`/api/courses/${slug}/outline`, CourseOutlineSchema).catch(nullOn404),
     apiGetAuthed(`/api/lessons/${lessonId}/player`, LessonPlayerSchema).catch(
       redirectOnLapsedAccess(slug),
@@ -78,6 +83,9 @@ export default async function LessonPage({
     // link needs — `…OrDefaults` so a settings read that throws does not
     // take a student's lesson down; the button already handles `null` (`c.noNumber`).
     getPublicSettingsOrDefaults(),
+    /* The delivery fee «اطلب الكتاب» quotes. `'use cache'` on one coarse tag,
+       so this is not a per-view request — see `getBookShippingRates`. */
+    getBookShippingRates(),
   ]);
 
   // No outline means the course is not theirs to see at all — not enrolled, or
@@ -159,22 +167,89 @@ export default async function LessonPage({
           <p className="mono mt-1 text-[length:var(--fs-mono-label)] text-fg-muted">
             {payload.lesson.courseTitle} · {payload.lesson.sectionTitle}
           </p>
+
+          {/*
+            الواجب — in the MAIN column, directly under the lecture it belongs
+            to, and `null` for most lectures.
+
+            «لو في واجب قولي واجب، يبقى أظهره بشكل كويس وكبير.» The sidebar is
+            what a student navigates BY; this is a thing they DO, on this
+            lecture, and it is the second most important object on the page
+            after the video. Putting it in the rail would file it beside the
+            table of contents at a third of the width.
+          */}
+          {/*
+            الملخص — closed, and ABOVE the homework rather than below it.
+
+            It is the thing to read once the video is finished and before the
+            exercise is attempted, so it sits in that order on the page. It
+            renders nothing at all on a lecture with no summary, which is most
+            of them.
+          */}
+          <LessonDescription description={payload.lesson.description} />
+
+          {payload.homework ? (
+            <LessonHomework lessonId={payload.lesson.id} homework={payload.homework} />
+          ) : null}
         </div>
-        {/* The "about this course" framing, ABOVE the lesson list — the
-            details card is the course's own header, the outline is the
-            table of contents underneath it, and the help card is the last
-            resort once both have been scrolled past. A plain stacking
-            wrapper only: `CourseOutlineSidebar` keeps its OWN
-            `lg:sticky`/`overflow-y-auto` pair unchanged, so it still pins
-            and scrolls exactly as it did before these two joined it —
-            nesting a second sticky/scroll container here would fight it. */}
-        <div className="flex flex-col gap-4">
-          <CourseDetailsCard outline={outline} />
+        {/*
+          ⚠️ NO `<CourseDetailsCard>` here any more, deliberately.
+
+          It rendered the course cover, the course title, the subject chips and
+          «إجمالي الوقت / إجمالي الدروس» — the course SELLING itself — directly
+          under the player of a lesson the student is already sitting in. That
+          card is written for somebody deciding whether to enrol. By the time
+          this page loads that decision is months old, and the space it took was
+          the space the lesson's own table of contents needed:
+          «أنا خلاص دخلت واشتركت في الكورس، مش عايز المعلومات بتاعت الكورس —
+          عايز الحاجات الخاصة بالمحاضرة بس».
+
+          The course is still named, once, in the `mono` line under the lesson
+          title above — which is orientation, not a pitch.
+
+          `course-details-card.tsx` is DELETED rather than left unmounted: this
+          page was its only caller, and a component whose sole remaining
+          reference is its own export is the shape this codebase has been
+          bitten by before (see the `LessonSettingsForm` note — written,
+          tested, and rendered nowhere). If `/library` ever wants a card like
+          it, that is a card written for `/library`.
+
+          A plain stacking wrapper only: `CourseOutlineSidebar` keeps its OWN
+          `lg:sticky`/`overflow-y-auto` pair, so nesting a second sticky/scroll
+          container here would fight it.
+        */}
+        {/*
+          `min-w-0` is load-bearing, and its absence is what made this page
+          overflow its own viewport on a phone.
+
+          On mobile this grid has ONE auto-sized column, and an `auto` track's
+          base size is the min-content of the widest item in it. The item is
+          this column, whose min-content is the outline's — and every
+          `.lesson-row__meta` inside it is `truncate`, i.e. `white-space:
+          nowrap`, so its min-content is the FULL width of «الوحدة الأولى ·
+          1:05:50 · لسه ما بدأتش». One long meta line therefore sized the whole
+          track, and the track is shared: the player, the title, the hint and
+          the prev/next row all grew with it and clipped at the inline end.
+          Measured at 360px: a 328px column rendered 373px wide.
+
+          The content column above already carries `min-w-0` for the same
+          reason. With it here too the track is the container's width, and the
+          meta does what `truncate` says — it truncates.
+        */}
+        <div className="flex min-w-0 flex-col gap-4">
           <CourseOutlineSidebar
             outline={outline}
             activeLessonId={payload.lesson.id}
+            shippingRates={shippingRates}
+            instapay={settings.contact.instapay}
             vodafoneCash={settings.contact.vodafoneCash}
           />
+          {/* «جروب الدفعة» — ABOVE the help card, deliberately. That one is a
+              DM to him, which is the last resort; this is the room the student's
+              own classmates are in, which is the first place a question about a
+              lecture actually gets answered. Renders nothing when the course
+              has no group, which is the default. */}
+          <CourseGroupCard url={outline.course.whatsappGroupUrl} />
           <CourseHelpCard whatsapp={settings.contact.whatsapp} />
         </div>
       </div>

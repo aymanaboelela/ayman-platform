@@ -291,6 +291,116 @@ describe('FinanceService', () => {
     );
   });
 
+  /**
+   * «لما أحدد فلتر، عايز أعرف الأرقام» — the selection block.
+   *
+   * These assert against a NARROWED selection rather than the whole table, for
+   * the same reason the facet-count test above works in deltas: this spec runs
+   * against the shared dev database and the fixture's four grants sit inside
+   * whatever else is already there. A filter that isolates exactly one fixture
+   * course is an exact assertion; a total over the whole table is not.
+   */
+  describe('selection', () => {
+    it('counts only what the filter left, and counts STUDENTS distinctly from subscriptions', async () => {
+      // The quarterly course has exactly one grant, from one student, comped.
+      const { rowCount, summary } = await finance.list({
+        page: 1,
+        perPage: PER_PAGE,
+        sort: 'paid_desc',
+        plan: 'quarterly',
+      });
+
+      const mine = summary.selection.byCourse.find((c) => c.courseId === quarterlyCourseId);
+      expect(mine).toBeDefined();
+      expect(mine!.subscriptionCount).toBe(1);
+      expect(mine!.studentCount).toBe(1);
+      // Comped, so it contributes a `freeCount` and NOT a millieme of revenue.
+      expect(mine!.freeCount).toBe(1);
+      expect(mine!.revenueCents).toBe(0);
+
+      // `subscriptionCount` restates `rowCount`, deliberately — a caller
+      // reading only the summary should not have to infer it.
+      expect(summary.selection.subscriptionCount).toBe(rowCount);
+    });
+
+    it('adds up: free + paid never exceeds the subscription count', async () => {
+      const { summary } = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+      const { freeCount, paidCount, subscriptionCount } = summary.selection;
+
+      // Not equality: a grant with NO approved submission behind it is neither
+      // free nor paid, and the schema says so. `<=` is the honest invariant.
+      expect(freeCount + paidCount).toBeLessThanOrEqual(subscriptionCount);
+      expect(subscriptionCount).toBeGreaterThan(0);
+    });
+
+    it('never counts more students than subscriptions', async () => {
+      const { summary } = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+      // One student can hold several subscriptions; the reverse is impossible.
+      expect(summary.selection.studentCount).toBeLessThanOrEqual(
+        summary.selection.subscriptionCount,
+      );
+    });
+
+    it('sums the LATEST payment per grant, not every payment ever', async () => {
+      // The monthly grant was renewed once — two approved submissions, one
+      // grant. The global revenue tile counts both; the selection counts one.
+      // This is the single most confusable pair of numbers on the screen, and
+      // the copy calls this one «مجموع آخر دفعة» because of exactly this.
+      const { summary, rows } = await finance.list({
+        page: 1,
+        perPage: PER_PAGE,
+        sort: 'paid_desc',
+        plan: 'monthly',
+      });
+
+      const monthlyCourse = summary.selection.byCourse.find(
+        (c) => c.courseId === monthlyCourseId,
+      );
+      const monthlyRows = rows.filter((r) => r.courseId === monthlyCourseId && r.isFree === false);
+      const sumOfLatest = monthlyRows.reduce((total, r) => total + (r.amountCents ?? 0), 0);
+
+      expect(monthlyCourse).toBeDefined();
+      // The breakdown equals the column a reader would add up by hand.
+      expect(monthlyCourse!.revenueCents).toBe(sumOfLatest);
+    });
+
+    it('reports the stream flags as OVERLAPPING, not as a partition', async () => {
+      const { summary } = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+      const { general, languages, both } = summary.selection.streamFlags;
+
+      // `both` is what makes the two other numbers un-addable — the yearly
+      // fixture course carries BOTH flags. Without this the screen would print
+      // «عربي N · لغات M» as if N + M were the total, which on production data
+      // (where essentially every course carries both) is wildly wrong.
+      expect(both).toBeGreaterThan(0);
+      expect(both).toBeLessThanOrEqual(Math.min(general, languages));
+    });
+
+    it('breaks down by course, biggest first', async () => {
+      const { summary } = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+      const counts = summary.selection.byCourse.map((c) => c.subscriptionCount);
+      expect([...counts].sort((a, b) => b - a)).toEqual(counts);
+
+      // Every subscription lands in exactly one course bucket.
+      const summed = counts.reduce((total, n) => total + n, 0);
+      expect(summed).toBe(summary.selection.subscriptionCount);
+    });
+
+    it('agrees with the status tabs it is describing', async () => {
+      const all = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+      const active = await finance.list({
+        page: 1,
+        perPage: PER_PAGE,
+        sort: 'paid_desc',
+        status: 'active',
+      });
+
+      // The active-only selection must be exactly the active slice the
+      // unfiltered selection already reported — two reads, one answer.
+      expect(active.summary.selection.subscriptionCount).toBe(all.summary.selection.byStatus.active);
+    });
+  });
+
   it('reports facet counts that move by exactly this fixture set\'s own contribution', async () => {
     // A fresh baseline AFTER every fixture above already exists (`beforeAll`
     // ran before this `it`), read with a filter that isolates nothing —
@@ -434,5 +544,93 @@ describe('FinanceService', () => {
       where: { userId: studentQuarterlyId, kind: 'subscription_cancelled' },
     });
     expect(silentNotification).toBeNull();
+  });
+
+  /*
+   * ── the money side of cancelling ────────────────────────────────────────
+   *
+   * These three exist because the suite above proved the ROW disappears and
+   * never once read `summary.revenueTotalCents` — so a cancel that left 100%
+   * of its money in every total passed for as long as the feature existed.
+   * Every assertion here is a BEFORE/AFTER delta for the reason the file
+   * header gives: this is a shared database with real subscribers in it.
+   */
+
+  it('cancelling WITHOUT a refund leaves revenue untouched — the money was kept', async () => {
+    const before = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+    const grantId = grantIdFor(before.rows, studentMonthlyId);
+
+    await finance.cancel(adminId, grantId, {
+      reason: 'وقفته لأنه بيغش في الامتحانات',
+      showToStudent: false,
+      refundCents: null,
+    });
+
+    const after = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+
+    // The whole point of the distinction: access ended, the money stayed.
+    // If this ever starts failing, cancelling has begun silently restating
+    // revenue and every disciplinary cut-off is deflating the owner's books.
+    expect(after.summary.revenueTotalCents).toBe(before.summary.revenueTotalCents);
+    expect(after.summary.refundsTotalCents).toBe(before.summary.refundsTotalCents);
+    expect(after.summary.netRevenueTotalCents).toBe(before.summary.netRevenueTotalCents);
+    expect(after.rows.some((r) => r.userId === studentMonthlyId)).toBe(false);
+  });
+
+  it('cancelling WITH a refund subtracts exactly that amount from net revenue and records the reason', async () => {
+    const before = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+    const grantId = grantIdFor(before.rows, studentTermId);
+    const row = before.rows.find((r) => r.userId === studentTermId);
+    expect(row?.refundedCents).toBe(0);
+
+    const REFUND = 5000;
+    await finance.cancel(adminId, grantId, {
+      reason: 'رجعتله فلوسه كاملة، اتحول لمدرسة تانية',
+      showToStudent: false,
+      refundCents: REFUND,
+    });
+
+    const after = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+
+    // Gross revenue does NOT move — the sale really happened and July stays
+    // what July was. The refund is its own dated row, and only the NET moves.
+    expect(after.summary.revenueTotalCents).toBe(before.summary.revenueTotalCents);
+    expect(after.summary.refundsTotalCents).toBe(before.summary.refundsTotalCents + REFUND);
+    expect(after.summary.netRevenueTotalCents).toBe(before.summary.netRevenueTotalCents - REFUND);
+
+    // The reason travels onto the ledger row, so the deduction can be
+    // explained without opening the grant it came from.
+    const refund = await prisma.refund.findFirst({
+      where: { submission: { grantId } },
+      select: { amountCents: true, reasonAr: true, createdBy: true },
+    });
+    expect(refund?.amountCents).toBe(REFUND);
+    expect(refund?.reasonAr).toBe('رجعتله فلوسه كاملة، اتحول لمدرسة تانية');
+    expect(refund?.createdBy).toBe(adminId);
+  });
+
+  it('refuses a refund larger than what the subscription ever collected', async () => {
+    // Read straight from the grant, NOT from `list()`: by this point every
+    // fixture above has been cancelled by an earlier test in the file, and
+    // `list()` filters `revokedAt: null` so none of them is on the screen any
+    // more. `cancel` itself is idempotent and `resolveRefund` reads the
+    // submissions regardless of revocation, so an already-cancelled grant is a
+    // perfectly good subject for the cap — and is in fact the realistic one,
+    // since attaching a refund after the fact is exactly what this supports.
+    const grant = await prisma.accessGrant.findFirstOrThrow({
+      where: { userId: studentYearlyId, source: 'purchase' },
+      select: { id: true },
+    });
+    const grantId = grant.id;
+
+    // A slipped digit. Without the cap this books a negative subscriptions
+    // total, on the one tile that is supposed to be the owner's ground truth.
+    await expect(
+      finance.cancel(adminId, grantId, {
+        reason: 'غلطة كتابة',
+        showToStudent: false,
+        refundCents: 99_999_999,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

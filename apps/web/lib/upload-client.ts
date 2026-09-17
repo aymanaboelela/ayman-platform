@@ -13,6 +13,7 @@ import {
 } from '@ayman/contracts/assistant/conversation';
 import { z } from 'zod';
 import { CSRF_HEADER, readCsrfToken } from '@/lib/csrf';
+import { compressImage } from '@/lib/image-compress';
 
 /**
  * File uploads, sent from the BROWSER straight to the API.
@@ -155,10 +156,26 @@ async function upload<T>(
   maxBytes: number,
   parse: (json: unknown) => T,
   onProgress?: (fraction: number) => void,
+  /**
+   * Shrink the image in the browser first — see `compressImage`.
+   *
+   * Opt-IN, and the split is by who is holding the device. A student uploading
+   * a transfer screenshot, a homework page or an avatar is on a phone, on
+   * mobile data, sending a file the camera wrote; the picture only has to stay
+   * READABLE. An admin uploading a course cover or replacing a library asset is
+   * publishing artwork that gets rendered large, and re-encoding it down to
+   * 1600px would quietly degrade every cover on the platform.
+   *
+   * ⚠️ Compression runs BEFORE the size check on purpose. Checking first would
+   * refuse a 9 MB phone photo that compresses to 400 KB — a refusal the student
+   * cannot act on, on the last step of an order they have already paid for.
+   */
+  compress = false,
 ): Promise<UploadOutcome<T>> {
-  if (file.size > maxBytes) return { ok: false, reason: 'tooLarge' };
+  const payload = compress ? await compressImage(file) : file;
+  if (payload.size > maxBytes) return { ok: false, reason: 'tooLarge' };
 
-  const response = await post(path, file, onProgress);
+  const response = await post(path, payload, onProgress);
   if (!response) return { ok: false, reason: 'network' };
   if (response.status < 200 || response.status >= 300) {
     return { ok: false, reason: classify(response.status, response.body) };
@@ -233,6 +250,10 @@ export function uploadAvatar(
     MAX_AVATAR_BYTES,
     (json) => z.object({ image: z.string() }).parse(json),
     onProgress,
+    /* The tightest ceiling on the platform (2 MB) meeting the widest audience
+       — every student, straight off a phone camera. Compressing first turns a
+       refusal they cannot act on into an upload that just works. */
+    true,
   );
 }
 
@@ -293,6 +314,9 @@ export function uploadPaymentScreenshot(
     MAX_UPLOAD_BYTES,
     (json) => z.object({ screenshotKey: z.string() }).parse(json),
     onProgress,
+    // A phone screenshot of an InstaPay receipt, sent on mobile data right
+    // after the money left the student's account — see `compressImage`.
+    true,
   );
 }
 
@@ -312,6 +336,41 @@ export function uploadBookOrderScreenshot(
     MAX_UPLOAD_BYTES,
     (json) => z.object({ screenshotKey: z.string() }).parse(json),
     onProgress,
+    // A phone screenshot of an InstaPay receipt, sent on mobile data right
+    // after the money left the student's account — see `compressImage`.
+    true,
+  );
+}
+
+/**
+ * الواجب — one page of a student's answer.
+ *
+ * Same `MediaService.uploadPrivateImage` gates as every image on this platform
+ * (extension allowlist, magic-byte sniff, sharp re-encode that also strips the
+ * GPS block off a phone photo), to a prefix the public `/media/:prefix/:name`
+ * route cannot address — and encoded smaller than the platform default,
+ * because these are read once and then deleted. See `HOMEWORK_ENCODE` in the
+ * API.
+ *
+ * Per PAGE, not per submission: the student picks four photographs and this
+ * runs four times, so one that fails can be retried on its own rather than
+ * costing the other three. `lessonId` is in the path because the enrolment is
+ * checked HERE too — an upload endpoint that only checks it on the next
+ * request is a free image host.
+ */
+export function uploadHomeworkImage(
+  lessonId: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<UploadOutcome<{ storageKey: string; sizeBytes: number }>> {
+  return upload(
+    `/api/homework/lessons/${encodeURIComponent(lessonId)}/images`,
+    file,
+    MAX_UPLOAD_BYTES,
+    (json) => z.object({ storageKey: z.string(), sizeBytes: z.number().int() }).parse(json),
+    onProgress,
+    // Four phone photographs of a handwritten page, uploaded one by one.
+    true,
   );
 }
 

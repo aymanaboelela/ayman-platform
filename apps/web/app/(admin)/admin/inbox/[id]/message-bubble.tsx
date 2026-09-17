@@ -8,10 +8,14 @@ import {
   type ConversationMessageEntry,
 } from '@ayman/contracts/assistant/conversation';
 import { cn } from '@ayman/ui/lib/cn';
+import { Pencil, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@ayman/ui/components/button';
+import { Textarea } from '@ayman/ui/components/textarea';
 import { MessageBody } from '@/components/assistant/message-body';
 import { MessageAttachmentView } from '@/components/assistant/message-attachment';
 import { inboxTimeFormatter } from '../status-chip';
-import { setReactionAction } from '../actions';
+import { deleteMessageAction, editMessageAction, setReactionAction } from '../actions';
 
 const c = copy.assistant.inbox;
 
@@ -126,6 +130,47 @@ export function MessageBubble({
       .finally(() => setOverride(undefined));
   }
 
+  /**
+   * Rewriting in place, on the bubble, rather than in a dialog.
+   *
+   * The message stays where it is in the transcript while it is being edited —
+   * a modal would hide the two either side of it, which are usually the whole
+   * reason a correction is being made.
+   */
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(message.body);
+  const [busy, setBusy] = useState(false);
+
+  async function saveEdit() {
+    const next = draft.trim();
+    if (next.length === 0 || next === message.body) {
+      setEditing(false);
+      setDraft(message.body);
+      return;
+    }
+    setBusy(true);
+    const result = await editMessageAction(conversationId, message.id, next);
+    setBusy(false);
+    if (result.ok) {
+      setEditing(false);
+      router.refresh();
+    } else {
+      toast.error(c.messageActionFailed);
+    }
+  }
+
+  async function remove() {
+    // A message the student may already have read is going. Asking first is the
+    // same guard «اتشحن» and a ledger delete use, for the same reason.
+    if (!window.confirm(c.messageDeleteConfirm)) return;
+    setPicking(false);
+    setBusy(true);
+    const result = await deleteMessageAction(conversationId, message.id);
+    setBusy(false);
+    if (result.ok) router.refresh();
+    else toast.error(c.messageActionFailed);
+  }
+
   return (
     <li className={cn('group flex flex-col gap-1', fromVisitor ? 'items-start' : 'items-end')}>
       <span className="flex items-center gap-1.5 px-1 text-[length:var(--fs-text-xs)] text-fg-faint">
@@ -156,10 +201,39 @@ export function MessageBubble({
               : 'rounded-se-md bg-accent text-[#1A1206]',
           )}
         >
-          {/* An empty body is legal — a reply may be only a file — and
-              `MessageBody` renders nothing for '', so the bubble collapses
-              onto the attachment rather than reserving a blank line. */}
-          <MessageBody body={message.body} />
+          {editing ? (
+            <div className="flex w-[min(32rem,70vw)] flex-col gap-2">
+              <Textarea
+                value={draft}
+                rows={3}
+                autoFocus
+                onChange={(event) => setDraft(event.target.value)}
+                className="bg-surface-1 text-fg"
+              />
+              <div className="flex items-center gap-2">
+                <Button type="button" onClick={saveEdit} disabled={busy}>
+                  {c.messageEditSave}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(false);
+                    setDraft(message.body);
+                  }}
+                  className="text-[length:var(--fs-text-sm)] text-[#1A1206]/70 hover:text-[#1A1206]"
+                >
+                  {c.messageEditCancel}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* An empty body is legal — a reply may be only a file — and
+                  `MessageBody` renders nothing for '', so the bubble collapses
+                  onto the attachment rather than reserving a blank line. */}
+              <MessageBody body={message.body} />
+            </>
+          )}
 
           {message.attachment ? (
             <MessageAttachmentView
@@ -213,6 +287,9 @@ export function MessageBubble({
         className="mono px-1 text-[length:var(--fs-mono-label)] text-fg-faint"
       >
         {inboxTimeFormatter.format(new Date(message.createdAt))}
+        {/* Beside the time, not instead of it: the reader needs to know WHEN it
+            was said and that the words changed since. */}
+        {message.editedAt ? ` · ${c.messageEdited}` : ''}
       </time>
 
       {picking ? (
@@ -249,6 +326,43 @@ export function MessageBubble({
                 {emoji}
               </button>
             ))}
+
+            {/*
+              «أعدل» و«أمسح» — on HIS OWN messages only, and the check is
+              `fromVisitor` because a student's words are not his to rewrite.
+              The API enforces the same thing in the WHERE clause; this is what
+              stops the buttons being offered where they would 404.
+
+              In the same row as the emoji rather than a second menu: the long
+              press already opens this, and «شبه واتساب بالظبط» is one sheet of
+              things you can do to a message, not two.
+            */}
+            {fromVisitor ? null : (
+              <>
+                <span aria-hidden="true" className="mx-0.5 h-5 w-px bg-line" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPicking(false);
+                    setDraft(message.body);
+                    setEditing(true);
+                  }}
+                  aria-label={c.messageEdit}
+                  className="grid size-9 place-items-center rounded-full text-fg-muted hover:bg-surface-3 hover:text-fg"
+                >
+                  <Pencil className="size-4" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={remove}
+                  disabled={busy}
+                  aria-label={c.messageDelete}
+                  className="grid size-9 place-items-center rounded-full text-fg-muted hover:bg-surface-3 hover:text-[var(--err)]"
+                >
+                  <Trash2 className="size-4" aria-hidden="true" />
+                </button>
+              </>
+            )}
           </div>
         </>
       ) : null}

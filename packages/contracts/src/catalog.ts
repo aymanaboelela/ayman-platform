@@ -54,6 +54,21 @@ export const CatalogSectionSchema = z.object({
 });
 
 export const CatalogCourseSchema = z.object({
+  /**
+   * اكتمل نزول المحتوى — the instructor's own statement that the syllabus is
+   * fully uploaded, NOT anything derived from the lesson count.
+   *
+   * Every «خلصت الكورس» on the platform used to mean `clearedLessons ===
+   * totalLessons`, and `totalLessons` is only what has been published so far.
+   * A student who watched the one lecture of a course still being recorded was
+   * told they had finished it. So the word is gated on this, and a course that
+   * is still filling up says «خلّصت اللي نزل» instead — true either way.
+   *
+   * ⚠️ Never an access decision, and it does not move the exam gate: the gate
+   * asks whether the student cleared the lectures that EXIST, which is a
+   * different question and stays answered the same way.
+   */
+  contentComplete: z.boolean(),
   id: z.uuid(),
   slug: z.string(),
   title: z.string(),
@@ -80,11 +95,33 @@ export const CatalogCourseSchema = z.object({
    * a visitor with no session can see what a course costs before signing up.
    * Never used to decide access; see `Course.monthlyPriceCents`'s own note.
    */
-  monthlyPriceCents: z.number().int().nullable(),
-  quarterlyPriceCents: z.number().int().nullable(),
+  /*
+   * ⚠️ `.describe()` beside a JSDoc block that already says «EGP cents», and it
+   * is not a duplicate. `z.toJSONSchema` reads Zod METADATA, not JSDoc, so this
+   * sentence is the only copy of the unit that reaches `/openapi.json` — which
+   * publishes these fields as a bare unbounded integer. Measured 2026-09-15:
+   * the live 22 KB document contains zero occurrences of «EGP» and zero of
+   * «currenc», so an agent reading it sees `15000` and has to guess whether
+   * that is 150 pounds, 15000 pounds, or dollars. The ARD manifest points price
+   * questions at this very document.
+   */
+  monthlyPriceCents: z
+    .number()
+    .int()
+    .nullable()
+    .describe('Egyptian piastres. 15000 is 150 EGP (ج.م). null when this plan is not for sale.'),
+  quarterlyPriceCents: z
+    .number()
+    .int()
+    .nullable()
+    .describe('Egyptian piastres. 30000 is 300 EGP (ج.م). null when this plan is not for sale.'),
   /** EGP cents, `null` when this plan is not for sale — a full-year
    *  subscription, same public-pricing reasoning as the two above. */
-  yearlyPriceCents: z.number().int().nullable(),
+  yearlyPriceCents: z
+    .number()
+    .int()
+    .nullable()
+    .describe('Egyptian piastres. 95000 is 950 EGP (ج.م). null when this plan is not for sale.'),
   /**
    * الكتاب الورقي — `null` when this course has no printed textbook to
    * order, which is what gates «اطلب الكتاب» everywhere it can appear: the
@@ -96,7 +133,11 @@ export const CatalogCourseSchema = z.object({
    * of `monthlyPriceCents`/etc — a free course can still sell a book.
    */
   bookTitle: z.string().nullable(),
-  bookPriceCents: z.number().int().nullable(),
+  bookPriceCents: z
+    .number()
+    .int()
+    .nullable()
+    .describe('Egyptian piastres. 25000 is 250 EGP (ج.م). null when this course has no printed book.'),
   publishedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
@@ -121,7 +162,7 @@ export type CatalogStreamFilter = z.infer<typeof CatalogStreamFilterSchema>;
 export const CatalogCourseTermSchema = z.object({
   id: z.uuid(),
   title: z.string(),
-  priceCents: z.number().int(),
+  priceCents: z.number().int().describe('Egyptian piastres. 45000 is 450 EGP (ج.م).'),
 });
 export type CatalogCourseTerm = z.infer<typeof CatalogCourseTermSchema>;
 
@@ -150,9 +191,24 @@ export const CatalogCourseDetailSchema = CatalogCourseSchema.extend({
  * something to watch". This is the one place that turns the already-correct
  * count into the display decision, so the course page, the enrolled-course
  * card and the library card cannot each invent their own threshold.
+ *
+ * ⚠️ `totalSeconds === 0` as well as `lessonCount === 0`, because the count
+ * alone was being defeated by a PLACEHOLDER. Read off production 2026-09-15:
+ * `programming-cs-year1-2027-general` and `-languages` each carry one
+ * `kind: 'text'` row titled «لسه اول محاضره هتنزل قريب جداً», which makes
+ * `lessonCount` 1 and `totalSeconds` 0 — so the «قريبًا» panel did not render,
+ * and the course published four purchasable Offers beside a description
+ * promising recorded lectures. There is nothing to watch; the duration is the
+ * honest test.
+ *
+ * ⚠️ NEVER gate this on `contentComplete`. That is the instructor's manual
+ * «اكتمل نزول المحتوى» flag and it is `false` on every live course including
+ * the four-hour foundation one — see its own note above. Using it here would
+ * stamp "coming soon" on the entire catalogue, which is the `price: '0'`
+ * mistake pointed the other way.
  */
-export function isComingSoon(realLectureCount: number): boolean {
-  return realLectureCount === 0;
+export function isComingSoon(course: { lessonCount: number; totalSeconds: number }): boolean {
+  return course.lessonCount === 0 || course.totalSeconds === 0;
 }
 
 export const CatalogListSchema = z.object({

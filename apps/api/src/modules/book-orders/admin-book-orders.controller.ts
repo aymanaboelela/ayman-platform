@@ -1,18 +1,41 @@
-import { Body, Controller, Get, NotFoundException, Param, Post, Query, Res, UsePipes } from '@nestjs/common';
+import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query, Res, UsePipes } from '@nestjs/common';
 import type { Response } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { OUTPUT_MIME } from '@ayman/contracts/admin/media';
 import type { BookOrder } from '@ayman/contracts/book-orders';
+import type {
+  DeleteBookOrderResult,
+  MarkBookOrderDeliveredResult,
+  MarkBookOrderPrintingResult,
+  RejectBookOrderResult,
+  RestoreBookOrderResult,
+} from '@ayman/contracts/admin/book-orders';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { MediaService } from '../media/media.service';
-import { AdminBookOrderQueryDto, AdminCreateBookOrderDto, ExportBookOrdersQueryDto } from './book-orders.dto';
+import { RequireCsrf } from '../security/require-csrf.decorator';
+import {
+  AdminBookOrderPatchDto,
+  AdminBookOrderQueryDto,
+  AdminCreateBookOrderDto,
+  DeleteBookOrderDto,
+  BulkBookOrderActionDto,
+  ExportBookOrdersQueryDto,
+  RejectBookOrderDto,
+} from './book-orders.dto';
 import { BookOrdersService } from './book-orders.service';
 
 /**
  * `/admin/books` — الكتاب الورقي, the shipping queue. `book-order:read` sees
- * it; `book-order:ship` decides «اتشحن» — see the permission catalogue's own
- * note on why the two are split even though a book order grants no access.
+ * it; `book-order:ship` decides where the parcel got to — «اتشحن» and «وصل»,
+ * the two halves of the courier leg, on the same authority because they are
+ * the same desk closing the same parcel one step apart.
+ *
+ * The three JUDGEMENTS about an order — «ارفض», «احذف», «رجّعه» — sit on
+ * `book-order:write` beside editing the basket instead. Moving a parcel along
+ * is fulfilment; deciding an order should not happen changes what somebody who
+ * has already been quoted a number gets, and a shipping clerk should plausibly
+ * hold the first and never the second. See the permission catalogue's own note.
  */
 @Controller('admin/book-orders')
 export class AdminBookOrdersController {
@@ -39,15 +62,57 @@ export class AdminBookOrdersController {
   }
 
   /**
+   * «كام نسخة، كام كتاب، كام طالب، كام عربي، كام لغات» — the header on
+   * `/admin/books`.
+   *
+   * Takes the SAME query as `list` above and ignores its paging, which is the
+   * whole point: the header describes the tab, not the fifty rows under it. See
+   * `BookOrdersService.adminOverview` for why counting the rendered page is the
+   * one implementation that must not ship.
+   */
+  @RequirePermission('book-order:read')
+  @Get('overview')
+  @UsePipes(ZodValidationPipe)
+  overview(@Query() query: AdminBookOrderQueryDto) {
+    return this.bookOrders.adminOverview(query);
+  }
+
+  /**
    * «أضف طلب كتاب» — an admin recording a customer's order directly, rather
    * than the customer going through the public/guest form. See
    * `BookOrdersService.adminCreate` for what this actually writes.
    */
   @RequirePermission('book-order:create')
+  @RequireCsrf()
   @Post()
   @UsePipes(ZodValidationPipe)
   create(@CurrentUser() user: AuthenticatedUser, @Body() body: AdminCreateBookOrderDto): Promise<BookOrder> {
     return this.bookOrders.adminCreate(user.id, body);
+  }
+
+  /**
+   * «أعدل الطلب» — the basket, the delivery fee, the discount, the address and
+   * the internal note, in one PATCH.
+   *
+   * One route rather than four because changing a quantity and waiving the
+   * delivery fee is one decision made in one phone call, and splitting it would
+   * let an order sit half-edited between two requests with its total disagreeing
+   * with its lines — a state the database rejects anyway, as a 500 the admin
+   * cannot act on. `book-order:write` and not `book-order:create`: inventing an
+   * order and changing what an already-quoted customer owes are different
+   * risks. See `BookOrdersService.adminPatch` for what is deliberately NOT
+   * editable here.
+   */
+  @RequirePermission('book-order:write')
+  @RequireCsrf()
+  @Patch(':id')
+  @UsePipes(ZodValidationPipe)
+  patch(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: AdminBookOrderPatchDto,
+  ): Promise<BookOrder> {
+    return this.bookOrders.adminPatch(user.id, id, body);
   }
 
   /**
@@ -80,7 +145,7 @@ export class AdminBookOrdersController {
   @Get('export')
   @UsePipes(ZodValidationPipe)
   async export(@Query() query: ExportBookOrdersQueryDto, @Res() response: Response): Promise<void> {
-    const buffer = await this.bookOrders.exportXlsx(query.status);
+    const buffer = await this.bookOrders.exportXlsx(query);
     response.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="book-orders-${query.status}.xlsx"`,
@@ -89,9 +154,169 @@ export class AdminBookOrdersController {
     response.send(buffer);
   }
 
+  /**
+   * The same packing list as JSON — what `/admin/books/print` lays out on A4
+   * for «حفظ كـ PDF».
+   *
+   * Same query, same permission and same service call as the spreadsheet
+   * above, so the PDF and the `.xlsx` are two renderings of ONE list rather
+   * than two lists that have to be kept in agreement.
+   */
+  @RequirePermission('book-order:read')
+  @Get('packing-list')
+  @UsePipes(ZodValidationPipe)
+  packingList(@Query() query: ExportBookOrdersQueryDto) {
+    return this.bookOrders.packingList(query);
+  }
+
+  /**
+   * ⚠️ Declared BEFORE `@Post(':id/ship')`. Nest matches within a method in
+   * DECLARATION order, so a literal path registered after a parameterised
+   * one of the same shape is unreachable — `ship` would be swallowed as an
+   * `:id`. Same defensive ordering `StudentsController` documents for its own
+   * collection-level `@Delete()`.
+   */
   @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post('ship')
+  @UsePipes(ZodValidationPipe)
+  shipMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
+    return this.bookOrders.markShippedMany(user.id, body.ids, body.whatsapp);
+  }
+
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post('deliver')
+  @UsePipes(ZodValidationPipe)
+  deliverMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
+    return this.bookOrders.markDeliveredMany(user.id, body.ids);
+  }
+
+  /**
+   * «راح للمطبعة» in bulk — the way this is actually used. A print run is
+   * thirty orders selected off the packing list, not one row.
+   *
+   * ⚠️ Declared BEFORE `@Post(':id/printing')`, like `ship` and `deliver` above
+   * — Nest matches in declaration order within a method, so a literal path
+   * registered after a parameterised one of the same shape is unreachable.
+   *
+   * `book-order:ship`, not a permission of its own: this is the same desk
+   * moving the same parcel one step earlier, and a clerk who may record that a
+   * box left may certainly record that paper went to the printer. It takes no
+   * `whatsapp` flag because nothing is sent — see `markPrinting`.
+   */
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post('printing')
+  @UsePipes(ZodValidationPipe)
+  printMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
+    return this.bookOrders.markPrintingMany(user.id, body.ids);
+  }
+
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
   @Post(':id/ship')
   markShipped(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.bookOrders.markShipped(user.id, id);
+  }
+
+  /** «راح للمطبعة» for one row. No body: there is nothing to say about paper
+   *  going to a printer beyond that it went, and the WHO is the session. */
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post(':id/printing')
+  markPrinting(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<MarkBookOrderPrintingResult> {
+    return this.bookOrders.markPrinting(user.id, id);
+  }
+
+  /**
+   * «وصل» — the arrival confirmation, and the notification that goes with it.
+   *
+   * `book-order:ship` and not `book-order:write`: this is the same person, on
+   * the same row, one step after «اتشحن». It takes no body — there is nothing
+   * to say about a parcel arriving beyond that it did, and the WHO is the
+   * session. See `BookOrdersService.markDelivered` for why it is reachable from
+   * `paid` as well as `shipped`.
+   */
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post(':id/deliver')
+  markDelivered(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<MarkBookOrderDeliveredResult> {
+    return this.bookOrders.markDelivered(user.id, id);
+  }
+
+  /**
+   * «ارفض الطلب» — turn it down, with a reason the student reads verbatim.
+   *
+   * `book-order:write`, not `book-order:ship`: this decides that an order
+   * somebody has already been quoted a price for is not going to happen.
+   */
+  @RequirePermission('book-order:write')
+  @RequireCsrf()
+  @Post(':id/reject')
+  @UsePipes(ZodValidationPipe)
+  reject(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: RejectBookOrderDto,
+  ): Promise<RejectBookOrderResult> {
+    return this.bookOrders.reject(user.id, id, body.reason);
+  }
+
+  /**
+   * «احذف الطلب» — hide it from every working list. SOFT: see
+   * `BookOrdersService.softDelete` for why the row survives and why the student
+   * is told nothing.
+   *
+   * A `DELETE` with a BODY, which is unusual and is deliberate: the reason is
+   * mandatory, and putting it in a query string would print it in every access
+   * log and proxy trace on the way. Express and Nest both parse it; the web
+   * client sends it as JSON like any other write.
+   */
+  @RequirePermission('book-order:write')
+  @RequireCsrf()
+  @Delete(':id')
+  @UsePipes(ZodValidationPipe)
+  remove(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: DeleteBookOrderDto,
+  ): Promise<DeleteBookOrderResult> {
+    return this.bookOrders.softDelete(user.id, id, body.reason);
+  }
+
+  /** «رجّعه» — undo a deletion. No body: putting something back is not a
+   *  decision anybody has to justify, and the audit row records who did it. */
+  /**
+   * «ده كان مجاني» — label a zero-total order that predates the free switch.
+   *
+   * No body: there is nothing to justify, and the audit row records who did it
+   * — same shape and same reasoning as `restore` below. It refuses any order
+   * that collected money, so it can only ever re-label, never move a pound.
+   */
+  @RequirePermission('book-order:write')
+  @RequireCsrf()
+  @Post(':id/free')
+  markFree(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ id: string; isFree: boolean }> {
+    return this.bookOrders.markFree(user.id, id);
+  }
+
+  @RequirePermission('book-order:write')
+  @RequireCsrf()
+  @Post(':id/restore')
+  restore(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<RestoreBookOrderResult> {
+    return this.bookOrders.restore(user.id, id);
   }
 }

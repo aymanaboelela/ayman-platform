@@ -4,6 +4,7 @@ import {
   type ErrorReportList,
 } from '@ayman/contracts/diagnostics';
 import { ListQuerySchema } from '@ayman/contracts/admin/list';
+import { parseRequest } from '../../common/http/parse-request';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { DiagnosticsService } from './diagnostics.service';
 
@@ -39,10 +40,15 @@ export class AdminErrorsController {
      * assistant inbox records: these land in Prisma's `take`/`skip`, where a
      * `NaN` from junk input is a driver-level error — a 500 for a malformed
      * request — and an unbounded `perPage` is a free full-table read.
+     *
+     * `parseRequest` rather than `.parse()`: a ZodError is not an HttpException,
+     * so the fail-closed filter turns bad CLIENT input into a 500 — which is
+     * both the wrong status and a line in the error log nobody can act on. See
+     * `common/http/parse-request.ts`.
      */
-    const query = ListQuerySchema.parse({ page, perPage });
+    const query = parseRequest(ListQuerySchema, { page, perPage }, 'list query');
     return this.diagnostics.list(
-      ErrorReportFilterSchema.parse(filter ?? undefined),
+      parseRequest(ErrorReportFilterSchema, filter ?? undefined, 'filter'),
       query.page,
       query.perPage,
     );

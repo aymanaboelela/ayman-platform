@@ -1,6 +1,7 @@
 import { z } from '@ayman/contracts/zod';
 import { DEFAULT_PACING } from '@ayman/contracts/marketing/pacing';
 import { SchoolStreamSchema } from '@ayman/contracts/onboarding';
+import { BookOrderStatusSchema } from '@ayman/contracts/book-orders';
 
 /**
  * «حملة واتساب» — the shapes the admin screen, the API and the sender all
@@ -29,6 +30,21 @@ export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
 
 export const RECIPIENT_STATUSES = ['pending', 'sent', 'failed', 'skipped'] as const;
 export type RecipientStatus = (typeof RECIPIENT_STATUSES)[number];
+
+/**
+ * What the recipient table can be filtered down to — the four statuses, plus
+ * two views that are not statuses at all.
+ *
+ * `undelivered` is the whole reason this type exists separately from
+ * `RecipientStatus`. «اتبعتت وماوصلتش» is not a status a row can hold: those
+ * rows ARE `sent`, and their sentness is exactly what makes them alarming.
+ * It is `status = sent AND deliveredAt IS NULL`, and it is the only view that
+ * would have shown the 2026-09 failure — a campaign WhatsApp accepted in full
+ * and delivered to nobody, which every other filter on this screen reported
+ * as a flawless run.
+ */
+export const RECIPIENT_FILTERS = ['all', ...RECIPIENT_STATUSES, 'undelivered'] as const;
+export type RecipientFilter = (typeof RECIPIENT_FILTERS)[number];
 
 /**
  * The placeholder the instructor types. ONE, deliberately.
@@ -81,6 +97,58 @@ export const AudienceSchema = z.object({
    */
   notSubscribedOnly: z.boolean().default(false),
   /**
+   * «الناس اللي اتشحن ليها، واللي ماتشحنتش ليها، واللي وصل ليها» — students
+   * picked by the state of a book order they placed. Empty = no filter on this
+   * axis, exactly like `years` and `courseIds` above; it never means "nobody".
+   *
+   * ## Why the raw `BookOrderStatusSchema` and not a vocabulary of its own
+   *
+   * The admin who sets this up is the same person who looks at
+   * `/admin/books`, and that screen's tabs ARE these five values. A second set
+   * of names for the same five states — `awaiting_shipping`, `not_paid` — would
+   * read as a second set of states, and the first time the two lists disagreed
+   * about anything the picker would be the one nobody trusts. The labels do the
+   * translating (`copy.marketing.audienceBookOrderState`), the wire values stay
+   * the ones the database already uses, and a sixth status becomes a compile
+   * error in the label table rather than a checkbox that silently never appears.
+   *
+   * ## Where «ماتشحنتش ليها» lands, and where `address_only` does NOT
+   *
+   * «الناس اللي ماتشحنتش ليها» is `paid` and ONLY `paid`. The statuses are a
+   * lifecycle, not flags: an order that shipped moved OFF `paid`, so `paid`
+   * already means "the money arrived and the book has not left" — precisely the
+   * group owed an apology.
+   *
+   * `address_only` is a separate checkbox and deliberately not folded in with
+   * it. Someone who filled in an address and never sent a transfer is not
+   * waiting on a courier and is not owed «معلش اتأخرنا» — they are owed «كمّل
+   * الدفع». Same screen, same axis, different message, so it gets its own box
+   * rather than being either merged (which would send an apology to people who
+   * never paid) or dropped (which would leave the admin no way to reach a group
+   * he can see on `/admin/books`).
+   *
+   * `rejected` is here for the same reason: it exists on the tab strip, the
+   * student was told, and «اتصل بينا» is a real follow-up. Nothing selects it by
+   * default.
+   *
+   * ## The match is "HAS an order in one of these states", not "their latest"
+   *
+   * `some`, the same shape `courseIds` uses on enrolments. A student who
+   * ordered twice and had one delivered and one still waiting is in both
+   * groups, which is true and is what the admin means when he asks for «اللي
+   * لسه مستنيين». Soft-deleted orders count for nothing — see `AudienceService`.
+   *
+   * ⚠️ A GUEST order — `book_orders.user_id IS NULL`, the checkout that never
+   * required an account — cannot be reached through this axis at all. See
+   * `AudienceService.students()` for the whole reason and for the escape hatch;
+   * it is stated there rather than here because it is a property of how the
+   * audience is resolved, not of what the admin asked for.
+   *
+   * `.default([])` so a campaign row written before this field existed still
+   * parses, same as `schoolStreams` and `notSubscribedOnly`.
+   */
+  bookOrderStatuses: z.array(BookOrderStatusSchema).default([]),
+  /**
    * Numbers pasted by hand, already normalised to E.164 by the API.
    *
    * The riskiest audience on this list by a distance — a number that has
@@ -99,6 +167,7 @@ export const EMPTY_AUDIENCE: Audience = {
   schoolStreams: [],
   courseIds: [],
   notSubscribedOnly: false,
+  bookOrderStatuses: [],
   extraPhones: [],
 };
 
@@ -190,6 +259,20 @@ export const CampaignCountsSchema = z.object({
   sent: z.number().int(),
   failed: z.number().int(),
   skipped: z.number().int(),
+  /**
+   * Of the `sent`, how many WhatsApp confirmed reached a DEVICE.
+   *
+   * Not a fifth status and not a stage after `sent` — a second axis. A
+   * delivered message is still `sent`; this counts the subset of them that
+   * got a second tick. `sent - delivered` is «اتبعتت ومحدش استلمها», which is
+   * the number that matters and which the screen could not express at all
+   * before: a campaign that WhatsApp accepted in full and delivered to nobody
+   * reported «٧٤ من ٧٤ · اتبعت · ٠ فشل», identical to a perfect run.
+   *
+   * Rows that predate the receipt listener are permanently uncounted here —
+   * their receipts were never subscribed to. See the migration.
+   */
+  delivered: z.number().int(),
 });
 export type CampaignCounts = z.infer<typeof CampaignCountsSchema>;
 
@@ -202,6 +285,11 @@ export const CampaignRowSchema = z.object({
   startedAt: z.iso.datetime().nullable(),
   finishedAt: z.iso.datetime().nullable(),
   nextSendAt: z.iso.datetime().nullable(),
+  /**
+   * Why the runner stopped this campaign on its own. NULL when a human
+   * paused it — that needs no explanation — and NULL once they resume.
+   */
+  pausedReason: z.string().nullable(),
 });
 export type CampaignRow = z.infer<typeof CampaignRowSchema>;
 
@@ -228,6 +316,11 @@ export const RecipientRowSchema = z.object({
   status: z.enum(RECIPIENT_STATUSES),
   attempts: z.number().int(),
   sentAt: z.iso.datetime().nullable(),
+  /**
+   * When a device acknowledged it — the second tick. NULL on a row that was
+   * sent and never delivered, which is exactly the row worth looking at.
+   */
+  deliveredAt: z.iso.datetime().nullable(),
   error: z.string().nullable(),
 });
 export type RecipientRow = z.infer<typeof RecipientRowSchema>;
@@ -264,6 +357,54 @@ export const WhatsappDeviceSchema = z.object({
   detail: z.string().nullable(),
 });
 export type WhatsappDevice = z.infer<typeof WhatsappDeviceSchema>;
+
+/**
+ * «رسالة تجربة» — one message to one number, to find out what is actually
+ * happening before an audience is spent finding out.
+ *
+ * ## Why this exists at all
+ *
+ * Until it did, the smallest experiment the platform permitted was firing a
+ * real campaign at a real audience. When messages started being accepted by
+ * WhatsApp and delivered to nobody, there was no way to ask a single question
+ * of the sender — so the question was answered by seventy-four students not
+ * receiving a lecture reminder.
+ *
+ * ## What it reports, and why each field is here
+ *
+ * `lid` is the diagnostic. WhatsApp has been migrating accounts from
+ * phone-number addressing to a Linked Identity, and the 6.x Baileys line the
+ * sender runs on has no LID↔PN mapping at all — it addresses the phone number
+ * and nothing else. If a recipient has a `lid` AND this message stays on one
+ * tick, that is the shape of the failure. If they have no `lid`, that whole
+ * explanation is dead and the fault is elsewhere. One call either way.
+ */
+export const TestSendResultSchema = z.object({
+  /** NULL means WhatsApp says this number has no account — nothing was sent. */
+  messageId: z.string().nullable(),
+  onWhatsApp: z.boolean(),
+  /** What the sender addressed. */
+  jid: z.string().nullable(),
+  /** What WhatsApp calls it. Normally identical to `jid`. */
+  serverJid: z.string().nullable(),
+  /** Non-null = this account has migrated to LID addressing. */
+  lid: z.string().nullable(),
+});
+export type TestSendResult = z.infer<typeof TestSendResultSchema>;
+
+/**
+ * What WhatsApp has said about that message since.
+ *
+ * `null` is «لسه ماوصلتش خبر» — NOT failure. A phone that is off legitimately
+ * takes hours, and reading no-receipt-yet as failure is the exact mirror of
+ * the bug where `sent` was read as delivered.
+ */
+export const TestSendReceiptSchema = z.object({
+  messageId: z.string(),
+  /** `proto.WebMessageInfo.Status`: 2 server, 3 delivered, 4 read, 0 refused. */
+  status: z.number().int().nullable(),
+});
+export type TestSendReceipt = z.infer<typeof TestSendReceiptSchema>;
 
 export const OptOutRowSchema = z.object({
   phone: z.string(),

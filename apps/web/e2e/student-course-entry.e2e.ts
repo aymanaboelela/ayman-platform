@@ -2,6 +2,11 @@ import { expect, test } from '@playwright/test';
 import { copy } from '@ayman/contracts';
 import { enrollInDemoCourse, registerAndOnboard, uniqueStudent } from './fixtures';
 
+/** The slug `apps/api/prisma/seed-admin.ts` creates, and the course
+ *  `enrollInDemoCourse` enrolls into — `login-gated-content.e2e.ts` and
+ *  `study-surface-a11y.e2e.ts` hard-code the same literal for the same reason. */
+const DEMO_COURSE_SLUG = 'e2e-demo-course';
+
 /**
  * Two reported failures, both of them "I clicked the thing and nothing
  * happened", both of them invisible to every test that existed — because in
@@ -81,6 +86,37 @@ test.describe('a student getting into their own course', () => {
       /^\/courses\/[^/]+$/,
     );
     expect(landed).toMatch(/^\/(library\/|courses\/[^/]+\/lessons\/)/);
+  });
+
+  test('opening the public course URL while already enrolled goes straight to the course', async ({
+    page,
+  }) => {
+    const student = uniqueStudent();
+    await registerAndOnboard(page, student);
+    await enrollInDemoCourse(page);
+
+    /*
+     * The complaint this covers: «أول ما يدخل الصفحة وقتها بيتشك ووقتها
+     * بيحوله على صفحة الكورس». The public page cannot know who is reading it,
+     * so it used to resolve that on CLICK — a student who joined weeks ago
+     * landed on a pitch for a course they already own, pressed «ابدأ الكورس»,
+     * waited for `POST /enroll`, and only then got where they were going.
+     *
+     * The link on the dashboard is not the only way in: a bookmark, a shared
+     * URL, or the address bar all arrive here. So the check now happens in
+     * `proxy.ts` before any HTML is chosen, and this navigates to the public
+     * URL DIRECTLY rather than clicking something — that is the case the test
+     * above cannot reach.
+     */
+    await page.goto(`/courses/${DEMO_COURSE_SLUG}`);
+
+    await page.waitForURL(/\/library\//, { timeout: 30_000 });
+    expect(new URL(page.url()).pathname).toBe(`/library/${DEMO_COURSE_SLUG}`);
+
+    // And nothing on the way asked them to start a course they are already in.
+    await expect(
+      page.getByRole('button', { name: copy.course.start }).filter({ visible: true }),
+    ).toHaveCount(0);
   });
 
   test('the «نبدأ من هنا» badge on the path is itself clickable', async ({ page }) => {

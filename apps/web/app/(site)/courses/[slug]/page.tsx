@@ -17,16 +17,21 @@ import { isComingSoon as catalogIsComingSoon } from '@ayman/contracts/catalog';
 import { mediaUrl } from '@ayman/ui/branding';
 import { getCourse } from '@/lib/catalog';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { getBookShippingRates } from '@/lib/books';
 import { formatCopy } from '@ayman/contracts/format';
 import { formatEGP } from '@/lib/price';
 import { RichText } from '@/components/content/rich-text';
 import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd, courseJsonLd } from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
+import { CourseArticles } from '@/components/site/course-articles';
+import { yearLabelAr } from '@/lib/year-label';
+import { lessonCountLabel } from '@/lib/course-groups';
 import { formatDuration } from '@/components/site/course-card';
 import { CourseCover } from '@/components/site/course-cover';
 import { CourseStartButton } from '@/components/site/course-start-button';
 import { BookOrderButton } from '@/components/site/book-order-button';
+import { courseBookCtaVisible } from '@/lib/course-book';
 import { CourseSubscribeState } from '@/components/site/course-subscribe-state';
 import { CourseEntry } from '@/components/site/course-entry';
 import { StreamBadge } from '@/components/stream-badge';
@@ -98,7 +103,28 @@ export async function generateMetadata({
 
   return buildMetadata({
     title: course.title,
-    description: course.subtitle ?? course.description ?? copy.site.tagline,
+    /*
+     * ⚠️ NOT `course.subtitle`, and that is the point of this change.
+     *
+     * The subtitle is a catalogue label — «المنهج الرسمي كامل — مسار الهندسة
+     * وعلوم الحاسب — دفعة 2027» — correct, 55 characters, and no reason to
+     * click. Search Console on 2026-09-14: this page was shown 133 times for
+     * «منهج البرمجه تانيه بكالوريا» and clicked 14 times. 10%, against 93% on
+     * the branded queries. It ranks; it just loses the choice.
+     *
+     * `copy.seo.courseDescription` is built from the course's own numbers, so
+     * it cannot drift from the page. The subtitle stays the fallback for a
+     * course with no lessons yet, where the count would read «0 محاضرة».
+     */
+    description:
+      course.lessonCount > 0
+        ? formatCopy(copy.seo.courseDescription, {
+            // `lessonCountLabel` carries the NUMBER and the noun in the right
+            // Arabic plural — the template must not add «محاضرة» itself.
+            lessons: lessonCountLabel(course.lessonCount),
+            year: yearLabelAr(course.year),
+          })
+        : (course.subtitle ?? course.description ?? copy.site.tagline),
     path: `/courses/${course.slug}`,
     // A course IS an article-like object with a subject and an author, and
     // `article` is what makes Facebook/WhatsApp render the large card rather
@@ -126,10 +152,19 @@ export async function generateMetadata({
  * particular.
  *
  * The rest of the page is untouched on purpose. Titles, descriptions, section
- * and lesson names, durations and `courseJsonLd` all still render for anonymous
- * visitors and crawlers — gating the catalog too would have taken the platform
- * out of search results, which is how students find it in the first place
- * (§3.1).
+ * names and `courseJsonLd` all still render for anonymous visitors and crawlers
+ * — gating the catalog too would have taken the platform out of search results,
+ * which is how students find it in the first place (§3.1).
+ *
+ * ⚠️ «lesson names, durations» were in that sentence and are no longer true of
+ * THIS page: the `priced` branch below replaced the outline with
+ * `copy.course.lessonsLockedNote` on 2026-08-26, and the stale sentence is what
+ * would otherwise keep talking a reader into "restoring" a gate that is already
+ * there. They are still published on `/courses/<slug>.md`, on the WebMCP tool
+ * and on the public catalog API, deliberately — the reasoning is in
+ * `lib/agents/markdown-render.ts`'s header and in
+ * `docs/runbooks/agent-discovery.md`. The gate below is a UI decision about a
+ * screen of dead buttons, not a disclosure rule.
  */
 export default async function CourseDetailPage({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
@@ -138,6 +173,9 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
 
   const hasLessons = course.sections.some((section) => section.lessons.length > 0);
   const { contact } = await getPublicSettingsOrDefaults();
+  /* The delivery fee «اطلب الكتاب» has to quote. One cached read shared with
+     `/books` and every other course page — see `getBookShippingRates`. */
+  const shippingRates = await getBookShippingRates();
   const priced =
     course.monthlyPriceCents !== null ||
     course.quarterlyPriceCents !== null ||
@@ -146,10 +184,15 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
   // الكتاب الورقي — entirely independent of `priced` above: a free course
   // can sell a book, and a priced one can sell none. Both `bookTitle` and
   // `bookPriceCents` are set together or not at all (`courses_book_needs_
-  // price_and_title`), so either alone is enough to gate on.
-  const hasBook = course.bookTitle !== null && course.bookPriceCents !== null;
+  // price_and_title`), and the linked catalogue row's `showOnCourse` can then
+  // take the CTA away — «الكتاب معروض في المتجر بس مش على صفحة الكورس». One
+  // shared predicate with the dashboard card and the player outline, so the
+  // three surfaces cannot drift; see `courseBookCtaVisible`.
+  const hasBook = courseBookCtaVisible(course);
 
   /*
+   * Is there anything here a student could actually watch?
+   *
    * Zero real LECTURES, not zero rows — `course.lessonCount` already excludes
    * quizzes (`isComingSoon` in `catalog.ts`), and `hasLessons` above does not:
    * it counts every kind, so a course whose only published row is a lone quiz
@@ -160,7 +203,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
    * everywhere else on this page — it still gates the play control below,
    * which is a different question (can THIS row be pressed).
    */
-  const isComingSoon = catalogIsComingSoon(course.lessonCount);
+  const isComingSoon = catalogIsComingSoon(course);
 
   return (
     <main>
@@ -282,7 +325,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                 quarterlyPriceCents={course.quarterlyPriceCents}
                 yearlyPriceCents={course.yearlyPriceCents}
                 terms={course.terms}
-                vodafoneCash={contact.vodafoneCash}
+                instapay={contact.instapay}
                 label={copy.subscribe.cta}
               />
               {/* Client-only, renders nothing for the common anonymous
@@ -305,6 +348,8 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
                 courseId={course.id}
                 bookTitle={course.bookTitle as string}
                 bookPriceCents={course.bookPriceCents as number}
+                shippingRates={shippingRates}
+                instapay={contact.instapay}
                 vodafoneCash={contact.vodafoneCash}
               />
             </div>
@@ -453,7 +498,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
               quarterlyPriceCents={course.quarterlyPriceCents}
               yearlyPriceCents={course.yearlyPriceCents}
               terms={course.terms}
-              vodafoneCash={contact.vodafoneCash}
+              instapay={contact.instapay}
             />
           </section>
 
@@ -565,6 +610,23 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
           </section>
         </div>
       </div>
+
+      {/*
+        الشرح المكتوب — the free articles written for THIS course.
+
+        Two things were true before this and both were bad. A student who
+        landed on a course page and was not ready to pay left with nothing,
+        while the site had a full written explanation of every lesson in the
+        syllabus sitting one directory away. And those articles were reachable
+        only from `/news` and the sitemap — the pages that earn the impressions
+        (Search Console, 2026-09-14: this page, 133 for «منهج البرمجه تانيه
+        بكالوريا») linked to none of them.
+
+        `relatedCourseSlug` is already on every news row, set when the article
+        was published, so this needs no new endpoint and cannot list an article
+        that belongs to another course.
+      */}
+      <CourseArticles courseSlug={course.slug} />
     </main>
   );
 }

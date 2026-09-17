@@ -116,6 +116,9 @@ export class CourseService {
           emphasis: input.emphasis,
           emphasisNote: input.emphasisNote,
           comingSoonNote: input.comingSoonNote,
+          scheduleNote: input.scheduleNote,
+          whatsappGroupUrl: input.whatsappGroupUrl,
+          contentComplete: input.contentComplete,
           monthlyPriceCents: input.monthlyPriceCents,
           quarterlyPriceCents: input.quarterlyPriceCents,
           yearlyPriceCents: input.yearlyPriceCents,
@@ -227,6 +230,22 @@ export class CourseService {
           }),
           ...(input.comingSoonNote !== undefined && {
             comingSoonNote: input.comingSoonNote,
+          }),
+          // «ميعاد المحاضرة». Absent means "leave it alone", an explicit
+          // `null` is the instructor clearing it — which is why this reads
+          // `!== undefined` and not truthiness. `''` never arrives: the schema
+          // trims and refuses an empty string, and the form submits `''` only
+          // to have `readOptionalText` turn it into that `null`.
+          ...(input.scheduleNote !== undefined && {
+            scheduleNote: input.scheduleNote,
+          }),
+          // «جروب الدفعة» — same absent-vs-null rule as the note above: absent
+          // leaves it alone, an explicit `null` is him removing the group.
+          ...(input.whatsappGroupUrl !== undefined && {
+            whatsappGroupUrl: input.whatsappGroupUrl,
+          }),
+          ...(input.contentComplete !== undefined && {
+            contentComplete: input.contentComplete,
           }),
           ...(input.monthlyPriceCents !== undefined && {
             monthlyPriceCents: input.monthlyPriceCents,
@@ -815,6 +834,20 @@ export class CourseService {
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
+        // مدارس عام / مدارس لغات.
+        //
+        // Not for the grid — the admin cards do not draw a stream badge. This
+        // is for the COURSE PICKERS that read this list, the book editor's
+        // «الكورس المرتبط» first among them: a picker that offers «الرياضيات
+        // — أولى بكالوريا» twice, once for عام and once for لغات, with no way
+        // to tell the two apart is a picker whose options are indistinguishable
+        // by the only fact that separates them. `books.course_id` is UNIQUE, so
+        // picking the wrong one of that pair is not a mistake the admin gets to
+        // correct by adding a second row — they have to find and unlink the
+        // first. The label is what prevents that, and it costs two booleans on
+        // a query the list already runs.
+        forGeneral: true,
+        forLanguages: true,
         // «أضف طلب كتاب» — the admin manual book-order form's own course
         // picker finds its choices here (only courses with both set), same
         // reasoning as the priced-plan fields above.
@@ -854,6 +887,15 @@ export class CourseService {
         emphasis: true,
         emphasisNote: true,
         comingSoonNote: true,
+        // «ميعاد المحاضرة» — the editor pre-fills its input from this, and it
+        // has to be selected here or the form's draft opens empty and the next
+        // autosave writes that emptiness back over a note that was already set.
+        scheduleNote: true,
+        // «جروب الدفعة». Selected here or the editor's field opens EMPTY over a
+        // link that is already set, and its next autosave writes that emptiness
+        // back — the exact failure the note above documents.
+        whatsappGroupUrl: true,
+        contentComplete: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
@@ -898,11 +940,26 @@ export class CourseService {
                 completionMode: true,
                 completionMinViewSeconds: true,
                 completionPassGrade: true,
+                // «ينزل الساعة ٨» and the after-the-lecture summary. Both are
+                // edited in the same panel this payload feeds, so a lecture
+                // whose schedule is not selected here would show an empty
+                // date box every time the page reloads — and the next save
+                // would quietly look like the instructor had cleared it.
+                publishAt: true,
+                description: true,
                 video: {
                   select: {
                     externalId: true,
                     durationSeconds: true,
                     posterKey: true,
+                    // «الرفع المباشر»: which of the two sources this lecture
+                    // came from, and where its copy has got to. The panel
+                    // needs both to know which form to show — a lecture
+                    // uploaded to us has no URL to prefill, and one still
+                    // encoding must not be offered as ready.
+                    provider: true,
+                    mirrorStatus: true,
+                    sourceName: true,
                   },
                 },
                 // The editor prefills its textarea from this. Without it the
@@ -916,7 +973,22 @@ export class CourseService {
                 // lesson_progress is keyed @@id([enrollmentId, lessonId]) and
                 // an enrollment is one per user per course, so one lesson can
                 // never hold two rows for the same student.
-                _count: { select: { progress: true } },
+                _count: {
+                  select: {
+                    progress: true,
+                    // «فيه X مستنيين» straight in the lesson panel, so he can
+                    // see there is work waiting without opening the queue.
+                    // A FILTERED relation count rather than a second query —
+                    // one aggregate per lesson, in the payload the editor
+                    // already fetches.
+                    homeworkSubmissions: { where: { status: 'submitted' } },
+                  },
+                },
+                // الواجب — the questions, so the panel's field opens filled.
+                // Same reason `text` above is selected: a field that renders
+                // empty over existing content is a field the instructor
+                // overwrites without ever being shown what was there.
+                homework: { select: { body: true, maxImages: true, isPublished: true } },
                 // The quiz's SHAPE, never its questions. `slots` is what lets
                 // the outline say "this exam has no questions yet" without a
                 // second round trip — and without putting a single answer key

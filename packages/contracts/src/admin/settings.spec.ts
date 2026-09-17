@@ -73,11 +73,16 @@ describe('SiteSettingsSchema', () => {
     const parsed = SiteSettingsSchema.parse({});
     expect(Object.keys(parsed.branding).sort()).toEqual([
       'accent',
+      'accentHue',
       'faviconAssetId',
       'logoDarkAssetId',
       'logoLightAssetId',
       'radius',
     ]);
+    // A stored row written before `accentHue` existed must keep its slot, so
+    // the default has to be null rather than a hue — otherwise every existing
+    // platform would silently switch to a generated scheme on first parse.
+    expect(parsed.branding.accentHue).toBeNull();
   });
 
   it('merges a partially-written blob without dropping the untouched sections', () => {
@@ -85,5 +90,27 @@ describe('SiteSettingsSchema', () => {
     expect(parsed.branding.accent).toBe('cyan');
     expect(parsed.branding.radius).toBe('default');
     expect(parsed.seo.descriptionAr).toBe('');
+  });
+
+  /**
+   * ⚠️ Production's `site_settings.data` was written before `store` existed and
+   * has no such key. This schema is `.strict()` and `SettingsService.read()`
+   * feeds the root layout — so if adding a section could make an existing row
+   * fail to parse, every page on the site would 500 at once. That is the exact
+   * outage `OutreachSettings.groupInviteEveryDays` carries a comment about.
+   *
+   * `.prefault({})` is what makes adding a section safe (the value is fed
+   * THROUGH the inner schema rather than returned raw), and this is the
+   * assertion that says so out loud — including the fee it lands on, because a
+   * delivery charge that silently defaulted to 0 would be worse than a crash.
+   */
+  it('parses a blob written before `store` existed, and lands on the real fee', () => {
+    const parsed = SiteSettingsSchema.parse({
+      branding: { accent: 'cyan' },
+      seo: { titleAr: 'x' },
+      contact: {},
+      outreach: {},
+    });
+    expect(parsed.store.shippingCents).toBe(6_500);
   });
 });

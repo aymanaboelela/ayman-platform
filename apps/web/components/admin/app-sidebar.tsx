@@ -36,10 +36,12 @@ export function AppSidebar({ permissions }: { permissions: readonly string[] }) 
 
         <Link
           href="/"
-          className="flex items-center gap-2 rounded-md px-3 py-2 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:bg-surface-3 hover:text-fg"
+          className="nav-pill"
         >
-          <ArrowUpLeft className="size-4 shrink-0" aria-hidden="true" />
-          {copy.nav.home}
+          <span className="nav-pill__well" aria-hidden="true">
+            <ArrowUpLeft className="size-4" />
+          </span>
+          <span className="nav-pill__label">{copy.nav.home}</span>
         </Link>
       </div>
     </aside>

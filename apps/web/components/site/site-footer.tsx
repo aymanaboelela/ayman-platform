@@ -4,7 +4,7 @@ import { copy } from '@ayman/contracts';
 import { SOCIAL_MARKS, SocialIcon, type SocialKey } from '@/components/site/social-icons';
 import { FooterDragons } from '@/components/site/footer-dragons';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
-import { OFFICIAL_PROFILES } from '@ayman/contracts/site-profiles';
+import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 
 const c = copy.landing;
@@ -21,21 +21,31 @@ const c = copy.landing;
  * are one entity, and a footer that links somewhere else quietly contradicts
  * the claim.
  *
- * ## Why these are still here now that `ContactSchema` holds them
+ * ## The fallback is per-DEPLOYMENT, not shipped
  *
- * A default, not a duplicate. `site_settings.data` starts empty and every
- * contact field defaults to `null`, so a footer that read ONLY from settings
- * would ship with no social links at all until someone typed five URLs into
- * the dashboard — replacing "links to the wrong place" with "links nowhere",
- * which is not an improvement. Whatever the admin saves wins; this is what the
- * site says about itself in the meantime.
+ * There used to be `SOCIAL_FALLBACK = OFFICIAL_PROFILES` — Ayman's accounts,
+ * shipped in the image. That is correct for exactly one deployment; on anybody
+ * else's it publishes HIS four accounts on their domain, and nothing looks
+ * broken, which is the worst kind of wrong.
+ *
+ * Removing it outright was also wrong, and shipped: `getPublicSettingsOrDefaults()`
+ * answers `contact: {}` when the API is unreachable, `next build` runs with no
+ * API, and this footer is prerendered — so the first request after every deploy
+ * got an `<h2>تابعني</h2>` above an EMPTY list on every marketing page.
+ *
+ * `TENANT_CONTACT_FALLBACK` is the version that is right in both directions:
+ * Ayman's stack still renders his accounts during that window, and any other
+ * stack renders its own or nothing at all. See its own header.
  */
-const SOCIAL_FALLBACK = OFFICIAL_PROFILES;
 
 const PAGE_LINKS = [
   { href: '/', label: c.footerHome },
   { href: '/courses', label: c.coursesCta },
   { href: '/essentials', label: c.trackEssentialsTitle },
+  // «الكتب». Linked from every page for the reason `/about` gives below —
+  // otherwise it is a sitemap entry nothing points at — and directly under the
+  // catalogue, because the two are the same question asked about two products.
+  { href: '/books', label: copy.books.pageTitle },
   // `/about` is linked from every page in the site because that is how it gets
   // crawled and weighted at all — a page in the sitemap that nothing links to
   // reads as an orphan. The label is his NAME rather than «عن المنصة», so the
@@ -46,6 +56,13 @@ const PAGE_LINKS = [
   // linked by nothing. That is the shape `/about`'s note above describes, and
   // it is worth one row here for the same reason.
   { href: '/links', label: copy.linkhub.pageTitle },
+  // «نيوز» is the section that exists to be FOUND — it ranks for curriculum
+  // queries the catalogue never will. Until this row it was reachable from
+  // `/links` alone: in the sitemap, linked by one page, which is the orphan
+  // shape both notes above describe and the worst possible position for the
+  // one section whose entire job is search. The anchor text is the phrase
+  // people type, not the section's name — see `copy.news.footerLink`.
+  { href: '/news', label: copy.news.footerLink },
 ] as const;
 
 const YEAR_LINKS = [
@@ -90,33 +107,22 @@ export async function SiteFooter() {
   const { contact } = await getPublicSettingsOrDefaults();
 
   /*
-   * Dashboard value first, shipped profile second, and the entry DROPPED if
-   * neither exists — never a bare platform root. An icon that links to
+   * Every row comes from the setting, and a row with no destination is
+   * DROPPED — never a bare platform root. An icon that links to
    * `https://www.tiktok.com/` is worse than no icon: it looks like a working
-   * link, and the student who taps it lands on a stranger's feed.
+   * link, and the student who taps it lands on a stranger's feed. The WhatsApp
+   * channel has always been in this list; the other four joined it when the
+   * shipped fallback was removed, for the reason in the docblock above.
    */
-  const social: { key: SocialKey; href: string; label: string }[] = [
-    { key: 'youtube', href: contact.youtube ?? SOCIAL_FALLBACK.youtube, label: c.footerYoutube },
-    {
-      key: 'instagram',
-      href: contact.instagram ?? SOCIAL_FALLBACK.instagram,
-      label: c.footerInstagram,
-    },
-    { key: 'facebook', href: contact.facebook ?? SOCIAL_FALLBACK.facebook, label: c.footerFacebook },
-    { key: 'tiktok', href: contact.tiktok ?? SOCIAL_FALLBACK.tiktok, label: c.footerTiktok },
-    // No fallback: a WhatsApp CHANNEL is not something this repo knows the URL
-    // of, and the placeholder it used to carry (`https://www.whatsapp.com/`)
-    // was the exact failure described above.
-    ...(contact.whatsappChannel
-      ? [
-          {
-            key: 'whatsapp' as SocialKey,
-            href: contact.whatsappChannel,
-            label: c.footerWhatsappChannel,
-          },
-        ]
-      : []),
-  ];
+  const social = (
+    [
+      { key: 'youtube', href: contact.youtube ?? TENANT_CONTACT_FALLBACK.youtube, label: c.footerYoutube },
+      { key: 'instagram', href: contact.instagram ?? TENANT_CONTACT_FALLBACK.instagram, label: c.footerInstagram },
+      { key: 'facebook', href: contact.facebook ?? TENANT_CONTACT_FALLBACK.facebook, label: c.footerFacebook },
+      { key: 'tiktok', href: contact.tiktok ?? TENANT_CONTACT_FALLBACK.tiktok, label: c.footerTiktok },
+      { key: 'whatsapp', href: contact.whatsappChannel ?? TENANT_CONTACT_FALLBACK.whatsappChannel, label: c.footerWhatsappChannel },
+    ] satisfies { key: SocialKey; href: string | null; label: string }[]
+  ).flatMap(({ key, href, label }) => (href ? [{ key, href, label }] : []));
 
   /*
    * `wa.me/<number>` built from the stored phone. This link was
@@ -133,7 +139,30 @@ export async function SiteFooter() {
 
       <div className="site-shell site-footer__inner">
         <section className="footer-cta">
-          <h2 className="footer-cta__title">{c.finalTitle}</h2>
+          {/*
+            ⚠️ `<p>`, not `<h2>` — and every heading was taken out of this
+            footer for the same reason on 2026-09-13.
+
+            The footer is rendered in the shell; the page's own content is
+            streamed in after it. So in the HTML as delivered — which is what a
+            crawler that does not run JavaScript parses, and that is most of the
+            AI ones — this line came BEFORE the page's `<h1>`, followed by three
+            `<h3>` column labels. A document whose first four headings are an h2
+            and three h3s, with the h1 arriving fifth, fails every heading-order
+            check there is; an AI-readiness scan scored the site 0/20 on it.
+
+            Nothing was lost by demoting them. A CTA is not a section of the
+            document, and each column below is a `<nav>` with an `aria-label`
+            already carrying the same words — the heading was a second, weaker
+            copy of a label the landmark states properly. Styling is by class in
+            `sections.css`, and Tailwind's preflight zeroes the margins on both
+            elements, so the rendering is byte-identical.
+
+            Do not reintroduce a heading here. If the footer ever needs one, it
+            has to come after the page content in SOURCE order, which is a
+            layout change, not a tag change.
+          */}
+          <p className="footer-cta__title">{c.finalTitle}</p>
           <p className="footer-cta__lead">{c.finalLead}</p>
           <div className="footer-cta__actions">
             <Link className="site-btn site-btn--solid" href="/register">
@@ -180,7 +209,7 @@ export async function SiteFooter() {
           </div>
 
           <nav className="site-footer__col" aria-label={c.footerPages}>
-            <h3 className="site-footer__h">{c.footerPages}</h3>
+            <p className="site-footer__h">{c.footerPages}</p>
             {PAGE_LINKS.map((link) => (
               <Link href={link.href} key={link.href}>
                 {link.label}
@@ -189,7 +218,7 @@ export async function SiteFooter() {
           </nav>
 
           <nav className="site-footer__col" aria-label={c.tracksSelectTitle}>
-            <h3 className="site-footer__h">{copy.onboarding.year}</h3>
+            <p className="site-footer__h">{copy.onboarding.year}</p>
             {YEAR_LINKS.map((link) => (
               <Link href={link.href} key={link.href}>
                 {link.label}
@@ -198,7 +227,7 @@ export async function SiteFooter() {
           </nav>
 
           <nav className="site-footer__col" aria-label={copy.nav.dashboard}>
-            <h3 className="site-footer__h">{copy.nav.dashboard}</h3>
+            <p className="site-footer__h">{copy.nav.dashboard}</p>
             {ACCOUNT_LINKS.map((link) => (
               <Link href={link.href} key={link.href}>
                 {link.label}

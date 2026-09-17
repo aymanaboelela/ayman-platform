@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Req, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Req, UploadedFile, UseInterceptors, UsePipes } from '@nestjs/common';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle, seconds } from '@nestjs/throttler';
 import { memoryStorage } from 'multer';
@@ -94,6 +95,7 @@ export class BookOrdersController {
   @Public()
   @RequireCsrf()
   @Throttle(CREATE_THROTTLE)
+  @UsePipes(ZodValidationPipe)
   @Post()
   async create(@Req() request: Request, @Body() body: CreateBookOrderDto): Promise<BookOrder> {
     const user = await this.session.userOrNull(request);
@@ -104,6 +106,7 @@ export class BookOrdersController {
   @Public()
   @RequireCsrf()
   @Throttle(PAYMENT_THROTTLE)
+  @UsePipes(ZodValidationPipe)
   @Post(':id/payment')
   async submitPayment(
     @Req() request: Request,

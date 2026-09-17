@@ -292,5 +292,105 @@ describe('CatalogService', () => {
       const list = await service.list();
       expect(CatalogListSchema.safeParse(list).success).toBe(true);
     });
+
+    // «توحيد» — the catalogue and the course page have to name ONE book at ONE
+    // price. Every test below sets the legacy pair to a DIFFERENT title and a
+    // DIFFERENT number from the linked `books` row on purpose: an assertion
+    // where the two agree cannot tell which one the serializer actually read,
+    // and "they happen to be equal in the fixture" is exactly how this bug
+    // survived in the first place.
+    describe('unification with the books catalogue', () => {
+      const LEGACY = { bookTitle: 'حجز الكتاب هيتبعتلك لحد البيت', bookPriceCents: 25000 };
+
+      afterEach(async () => {
+        await prisma.book.deleteMany({ where: { courseId: publishedCourseId } });
+      });
+
+      const linkBook = (data: { isActive?: boolean; showOnCourse?: boolean }) =>
+        prisma.book.create({
+          data: {
+            slug: `cat-book-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+            titleAr: 'كتاب البرمجة وعلوم الحاسب',
+            priceCents: 30000,
+            courseId: publishedCourseId,
+            ...data,
+          },
+        });
+
+      it('quotes the catalogue title and price, not the legacy columns', async () => {
+        await prisma.course.update({ where: { id: publishedCourseId }, data: LEGACY });
+        await linkBook({ isActive: true, showOnCourse: true });
+
+        const detail = await service.findBySlug(publishedSlug);
+        expect(detail.bookTitle).toBe('كتاب البرمجة وعلوم الحاسب');
+        expect(detail.bookPriceCents).toBe(30000);
+
+        // The card and the page read the same row. A rail that advertises 250
+        // beside a page that says 300 is the same defect, one screen earlier.
+        const { courses } = await service.list();
+        const card = courses.find((c) => c.slug === publishedSlug);
+        expect(card?.bookTitle).toBe('كتاب البرمجة وعلوم الحاسب');
+        expect(card?.bookPriceCents).toBe(30000);
+      });
+
+      // The `books_backfill_inactive` state: a row exists for this course, but
+      // it was created from CTA copy and a human has not promoted it yet.
+      // Falling through to the legacy pair is what keeps «اطلب الكتاب» on the
+      // page for those courses — dropping the fallback would delete a live
+      // call to action rather than unify anything.
+      it('falls back to the legacy columns while the catalogue row is inactive', async () => {
+        await prisma.course.update({ where: { id: publishedCourseId }, data: LEGACY });
+        await linkBook({ isActive: false, showOnCourse: true });
+
+        const detail = await service.findBySlug(publishedSlug);
+        expect(detail.bookTitle).toBe(LEGACY.bookTitle);
+        expect(detail.bookPriceCents).toBe(LEGACY.bookPriceCents);
+      });
+
+      // ⚠️ THE test that separates the two flags, and the one that is easy to
+      // get backwards.
+      //
+      // `showOnCourse: false` is the admin ANSWERING the placement question —
+      // «الكتاب ده يتباع من قسم الكتب بس» — so the course page shows NOTHING.
+      // It must NOT fall through to the legacy pair the way `isActive: false`
+      // above does: that would answer "don't advertise it here" by advertising
+      // it here, under the old CTA-copy title and at whatever price that column
+      // was left at. The flag would be inert, and inert in the direction that
+      // quotes the wrong number.
+      //
+      // The legacy pair is set on the course FIRST precisely so this test can
+      // fail: with the columns null, `null` would prove nothing.
+      it('shows no book at all when the live catalogue row is hidden from the course page', async () => {
+        await prisma.course.update({ where: { id: publishedCourseId }, data: LEGACY });
+        await linkBook({ isActive: true, showOnCourse: false });
+
+        const detail = await service.findBySlug(publishedSlug);
+        expect(detail.bookTitle).toBeNull();
+        expect(detail.bookPriceCents).toBeNull();
+      });
+
+      // A course with NO legacy pair and no live catalogue row sells nothing —
+      // `null`, which is what gates «اطلب الكتاب» everywhere it can appear.
+      it('reports null when neither the catalogue nor the legacy columns have an answer', async () => {
+        await linkBook({ isActive: false, showOnCourse: true });
+
+        const detail = await service.findBySlug(publishedSlug);
+        expect(detail.bookTitle).toBeNull();
+        expect(detail.bookPriceCents).toBeNull();
+      });
+
+      // A book that exists ONLY in the catalogue — the course's own columns
+      // were never filled in. This is the shape every new course should have
+      // once the ramp ends, so it is the one that must not depend on the
+      // fallback at all.
+      it('quotes the catalogue for a course whose legacy columns were never filled', async () => {
+        await linkBook({ isActive: true, showOnCourse: true });
+
+        const detail = await service.findBySlug(publishedSlug);
+        expect(detail.bookTitle).toBe('كتاب البرمجة وعلوم الحاسب');
+        expect(detail.bookPriceCents).toBe(30000);
+        expect(CatalogCourseDetailSchema.safeParse(detail).success).toBe(true);
+      });
+    });
   });
 });

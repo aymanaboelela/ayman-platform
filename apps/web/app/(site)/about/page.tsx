@@ -3,18 +3,31 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { AboutInstructor } from '@/components/site/about-instructor';
+import { SiteFaq } from '@/components/site/site-faq';
 import { JsonLd } from '@/components/seo/json-ld';
-import { PERSON_ID, SITE_URL, breadcrumbJsonLd } from '@/lib/seo/jsonld';
+import { PERSON_ID, SITE_URL, breadcrumbJsonLd, faqPageJsonLd } from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
 
 const c = copy.landing;
 
 export async function generateMetadata(): Promise<Metadata> {
   return buildMetadata({
-    // The bare NAME as the title, not "عن المنصة". This page exists to be the
-    // answer to a search for the person, and a title that leads with anything
-    // else competes with the homepage for a query it is better placed to win.
-    title: c.aboutPageTitle,
+    /*
+     * The NAME, then the ROLE — not "عن المنصة" and no longer the bare name
+     * either.
+     *
+     * The bare name was right about one thing and wrong about another. Right:
+     * a title leading with «منصة» competes with the homepage for a query the
+     * homepage wins. Wrong: «أيمن أبو العلا» alone answers ONLY a query that
+     * already contains the name, and the queries worth winning do not —
+     * «أفضل مدرس برمجة بكالوريا» has no name in it at all.
+     *
+     * ⚠️ The name still LEADS. Measured 2026-09-13: this name is contested —
+     * an MP shares it and dominates the results — so the role is what tells a
+     * searcher and a crawler which أيمن أبو العلا this page is about, and it is
+     * the half that matches an unbranded query.
+     */
+    title: c.aboutPageRoleTitle,
     description: c.aboutPageDescription,
     path: '/about',
   });
@@ -89,6 +102,29 @@ export default function AboutPage() {
           correctly UNDER an `<h1>` of the name — a question about the subject,
           below the subject. */}
       <AboutInstructor />
+
+      {/*
+        The FAQ, and the reason it is on this page.
+        
+        Measured on 2026-09-13, the site that DOES rank for «أفضل مدرس برمجة
+        وذكاء اصطناعي بكالوريا» is a one-page brochure whose strongest asset is
+        exactly this: a `FAQPage` whose first question is «ليه أتعلّم … معايا
+        تحديدًا؟». That is the question an assistant is resolving, answered as a
+        labelled question/answer pair instead of left to be inferred from
+        marketing copy.
+        
+        The same facts already went to `/llms.txt` and `/AGENTS.md`
+        (`copy.seo.instructorWhy`), which is where an assistant reads them. This
+        is where Google and Bing do. Both surfaces, one set of facts.
+        
+        ⚠️ `SiteFaq` renders these rows and `faqPageJsonLd` describes THE SAME
+        array. Structured data describing questions a page does not show is the
+        one failure here worse than no structured data — so if the visible list
+        is ever filtered or truncated, the markup has to take the same list, not
+        `aboutFaq` again.
+      */}
+      <JsonLd data={faqPageJsonLd(c.aboutFaq)} />
+      <SiteFaq title={c.aboutFaqTitle} eyebrow={c.aboutFaqEyebrow} rows={[...c.aboutFaq]} />
 
       <section className="site-section">
         <div className="site-shell" style={{ textAlign: 'center' }}>

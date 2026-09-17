@@ -1,0 +1,48 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- «مبروك، خلصت الكورس» — التهنئة اللي بتوصل الطالب وهو مش قاعد قدام الشاشة.
+--
+-- «لو خلص ١٠٠٪ فرحة عليها بشكل حلو… وتهنّيه وتبعتله مسج عشان تشجّعه وتحسّسه
+--  إنه شاطر.»
+--
+-- ## لية إشعار أصلاً، والاحتفال موجود على الداشبورد؟
+--
+-- The celebration already exists on screen — `next-up-block.tsx` turns the
+-- 100% card into `wonTitle`/`wonNote`. But it only ever congratulates someone
+-- who is ALREADY looking at the dashboard, and the moment a course is
+-- finished is almost never spent there: it is spent on the last lesson's
+-- player, and the student closes the tab from it. The one person the
+-- celebration is for is the one person it does not reach.
+--
+-- So this kind is not a duplicate of the card. The card is what a student
+-- sees when they come back; this is what tells them there is something to
+-- come back TO — in the bell, in the feed, and (once a student browser ever
+-- subscribes) in a push that reaches a phone with no tab open at all.
+--
+-- ## ON THE TRANSITION ONLY
+--
+-- ⚠️ The reason this note is long. `CourseProgressService.recalculate` runs on
+-- every lesson completion, and it recomputes `finished` from scratch each
+-- time — so a student who finished a course in March and re-opens a lesson in
+-- May recomputes `finished = true` all over again. Emitting on the RESULT
+-- would congratulate them for the same course every single time they went
+-- back to revise, which turns the warmest message on the platform into the
+-- most irritating one.
+--
+-- The emit is therefore gated on the ENROLMENT'S OWN `completed_at` being
+-- null before the update — the row is the record of "we have already said
+-- this", and it is the only durable one available inside the same transaction
+-- that decides. The same change stops `completed_at` being re-stamped with a
+-- fresh `now()` on every recalculation while a course stays finished; the
+-- date a student finished is a fact about March, and it was drifting forward
+-- with every visit.
+--
+-- ## لية ALTER TYPE لوحده في ملف
+--
+-- PostgreSQL 12+ permits `ADD VALUE` inside a transaction block (which is what
+-- Prisma wraps every migration in) ONLY while the new label is not USED before
+-- that transaction commits. Nothing below inserts a notification, so this
+-- holds — the same reasoning as `20260830000001_subscription_cancelled_notification`
+-- and `20260903160000_admin_notification_kinds` before it.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+ALTER TYPE "app"."notification_kind" ADD VALUE IF NOT EXISTS 'course_completed';

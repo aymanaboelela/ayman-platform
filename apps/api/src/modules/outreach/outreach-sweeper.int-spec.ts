@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { OutreachSettings } from '@ayman/contracts/admin/settings';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import type { NotificationsRealtimeService } from '../notifications/notifications-realtime.service';
 import type { SettingsService } from '../admin/settings/settings.service';
 import { OutreachService, type DeliveryContext } from './outreach.service';
 import { OutreachSweeper } from './outreach-sweeper.service';
@@ -96,9 +97,17 @@ describe('OutreachSweeper (real database)', () => {
         scaledScore: 50,
         passed: true,
         questions: {
+          /*
+           * Slots 0 and 1, because that is what a real attempt holds —
+           * `AttemptService` writes `slotPosition: index`. The fixture used to
+           * start at 1, which made it agree with the message body only while
+           * the body printed the raw index; the assertions below say «سؤال 1»
+           * for the MISSED question either way, so the fix is the fixture
+           * being honest rather than the expectation being moved.
+           */
           create: [
             {
-              slotPosition: 1,
+              slotPosition: 0,
               questionVersionId: version.id,
               optionOrder: [0, 1],
               maxMark: 1,
@@ -107,7 +116,7 @@ describe('OutreachSweeper (real database)', () => {
               state: 'graded_wrong',
             },
             {
-              slotPosition: 2,
+              slotPosition: 1,
               questionVersionId: version.id,
               optionOrder: [0, 1],
               maxMark: 1,
@@ -147,7 +156,22 @@ describe('OutreachSweeper (real database)', () => {
     prisma = new PrismaService();
     await prisma.$connect();
 
-    outreachService = new OutreachService(prisma, new NotificationsService(prisma), settings);
+    /*
+      A stub realtime fan-out. This suite is about what the sweeper WRITES, and
+      the live stream is a delivery optimisation on top of those rows — wiring
+      a real Redis subscriber into an integration test would add a second
+      service to keep alive and prove nothing the notification rows do not
+      already prove.
+    */
+    const realtime = {
+      publish: async () => undefined,
+      subscribe: () => () => undefined,
+    } as unknown as NotificationsRealtimeService;
+    outreachService = new OutreachService(
+      prisma,
+      new NotificationsService(prisma, realtime),
+      settings,
+    );
     sweeper = new OutreachSweeper(prisma, outreachService);
 
     adminId = randomUUID();

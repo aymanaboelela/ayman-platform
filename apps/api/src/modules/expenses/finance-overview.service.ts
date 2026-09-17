@@ -1,0 +1,576 @@
+import { Injectable } from '@nestjs/common';
+import ExcelJS from 'exceljs';
+import type {
+  AdminFinanceOverview,
+  ExpenseCategory,
+  FinanceMonth,
+} from '@ayman/contracts/admin/expenses';
+import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '../../generated/prisma/client';
+import {
+  BOOK_COUNTED_SQL,
+  BOOK_REVENUE_SQL,
+  BOOK_REVENUE_WHERE,
+} from '../book-orders/book-revenue';
+
+/** The shared predicate as a raw SQL fragment. `Prisma.raw` is safe here and
+ *  only here: `BOOK_REVENUE_SQL` is a module-level constant with no interpolation
+ *  and nothing from a request ever reaches it. Going through the constant — 
+ *  rather than retyping the statuses in each query — is what stops the raw
+ *  month-by-month SQL from drifting away from the Prisma `where` again. */
+const BOOK_REVENUE_RAW = Prisma.raw(BOOK_REVENUE_SQL);
+/** Everything that shipped, giveaways included — see `BOOK_COUNTED_WHERE`.
+ *  What a comped book COST is real money out, so cost of sales uses this one
+ *  while revenue uses the narrower twin above. */
+const BOOK_COUNTED_RAW = Prisma.raw(BOOK_COUNTED_SQL);
+
+/** How many months of trend the screen gets. Eighteen covers "this year and
+ *  last autumn", which is the longest comparison anybody makes here, and keeps
+ *  the payload a fixed small size no matter how old the platform gets. */
+const MONTHS = 18;
+
+
+/** The Arabic each category is called on screen. Kept beside the report rather
+ *  than imported from the web app's copy: the API cannot reach into
+ *  `apps/web`, and a spreadsheet column reading `equipment` is one the owner
+ *  has to translate in his head every time he opens it. */
+const CATEGORY_LABEL: Record<ExpenseCategory, string> = {
+  filming: 'تصوير واستوديو',
+  printing: 'مطبعة',
+  equipment: 'أدوات ومعدات',
+  marketing: 'إعلانات',
+  staff: 'أجور ومساعدين',
+  services: 'اشتراكات وخدمات',
+  other: 'حاجات تانية',
+};
+
+/** `YYYY-MM-DD` from a `@db.Date`, read off the UTC parts for the reason
+ *  `ExpensesService`'s own copy of this spells out — a local-midnight Date
+ *  would shift a day through `toISOString`. */
+function isoDate(value: Date): string {
+  const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(value.getUTCDate()).padStart(2, '0');
+  return `${value.getUTCFullYear()}-${month}-${day}`;
+}
+
+interface MonthlyRow {
+  month: string;
+  subscription: bigint | number | null;
+  books: bigint | number | null;
+  expenses: bigint | number | null;
+  subscriptionRefunds: bigint | number | null;
+  bookRefunds: bigint | number | null;
+}
+
+interface CostRow {
+  cost: bigint | number | null;
+  unknown: bigint | number | null;
+  items: bigint | number | null;
+  shipping: bigint | number | null;
+}
+
+/** Postgres `SUM`/`COUNT` come back as `bigint` through the driver. Every
+ *  figure here is piastres and fits in a double many times over, so the
+ *  narrowing is safe — but it has to be explicit or the JSON serialiser throws
+ *  on a `bigint` it cannot represent. */
+function toNumber(value: bigint | number | null): number {
+  return value === null ? 0 : Number(value);
+}
+
+/**
+ * «النظرة العامة» — what came in, what went out, and what is left.
+ *
+ * ## Why this is its own service and not more of `FinanceService`
+ *
+ * That one is about SUBSCRIPTIONS: it lists grants, edits their amounts and
+ * cancels them, and its spec pins the Prisma delegates it may touch. This
+ * composes three unrelated sources — payment submissions, book orders and
+ * expenses — and owns no rows at all. Putting it there would give a service
+ * with mutation power over grants a reason to read the whole database.
+ *
+ * ## Revenue is defined ONCE, here, and matches the tiles
+ *
+ * Subscriptions: approved, non-comped submissions, all time — the same filter
+ * `FinanceService.list`'s own revenue tile uses, including the `isFree: false`
+ * that keeps an admin-comped term out of the money. Books: `BOOK_REVENUE_WHERE`
+ * below, which is the SAME constant `BookOrdersService.adminRevenueSummary`
+ * uses. Two screens computing revenue two ways is how one number ends up with
+ * two values — and that is not hypothetical here, it is what this file did.
+ *
+ * ## What was wrong, so it does not come back
+ *
+ * This service filtered book orders to `status IN ('paid','shipped')` with no
+ * `deletedAt` clause, while `/admin/books` counted `('paid','shipped',
+ * 'delivered')` AND `deletedAt: null`. Two tiles carrying the identical Arabic
+ * label «إجمالي إيرادات الكتب» therefore showed different EGP, diverging by
+ * every delivered order (missing here) and every soft-deleted one (counted
+ * here and nowhere else). Marking an order «وصل» — doing the paperwork right —
+ * silently deleted its revenue from this screen.
+ *
+ * Both surfaces now import one exported constant. A future divergence has to
+ * be written deliberately rather than arrived at.
+ *
+ * ## Refunds are subtracted, cancellations are not
+ *
+ * A refund is a `Refund` row: dated, explained, and landing in ITS OWN month.
+ * Revoking access is not a refund — cutting off a student who cheated keeps
+ * the money — so nothing here reads `revokedAt`. See `Refund`'s model note.
+ */
+@Injectable()
+export class FinanceOverviewService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async overview(): Promise<AdminFinanceOverview> {
+    const [subscriptionRevenue, bookRevenue, expenseGroups, cost, refunds, months] =
+      await Promise.all([
+        this.prisma.paymentSubmission.aggregate({
+          // Identical to the revenue tile's filter — see the class doc.
+          where: { status: 'approved', isFree: false },
+          _sum: { amountCents: true },
+        }),
+        this.prisma.bookOrder.aggregate({
+          where: BOOK_REVENUE_WHERE,
+          _sum: { amountCents: true },
+        }),
+        this.prisma.expense.groupBy({
+          by: ['category'],
+          _sum: { amountCents: true },
+        }),
+        this.bookCostOfSales(),
+        this.refundTotals(),
+        this.monthly(),
+      ]);
+
+    const subscriptionRevenueCents = subscriptionRevenue._sum.amountCents ?? 0;
+    const bookRevenueCents = bookRevenue._sum.amountCents ?? 0;
+    const revenueTotalCents = subscriptionRevenueCents + bookRevenueCents;
+
+    const { subscriptionRefundsCents, bookRefundsCents } = refunds;
+    const refundsTotalCents = subscriptionRefundsCents + bookRefundsCents;
+
+    const subscriptionNetRevenueCents = subscriptionRevenueCents - subscriptionRefundsCents;
+    const bookNetRevenueCents = bookRevenueCents - bookRefundsCents;
+    const netRevenueTotalCents = revenueTotalCents - refundsTotalCents;
+
+    // «مكسب الكتب» is built from the ITEMS, never from the order total — see
+    // the contract's own note. The order total carries the shipping fee, which
+    // is collected from the student and handed to the courier unchanged;
+    // counting it as margin reported the courier's money as the owner's, at the
+    // full fee on every single order.
+    //
+    // The refund comes off here too. A refunded order is one whose money went
+    // back, and the copies it cost to print are still gone — so the profit on
+    // it is genuinely negative, and saying so is the point of the figure.
+    const bookItemsNetCents = cost.bookItemsCents - bookRefundsCents;
+    const bookProfitCents = bookItemsNetCents - cost.bookCostOfSalesCents;
+
+    const expensesByCategory = expenseGroups
+      .map((group) => ({
+        category: group.category as ExpenseCategory,
+        amountCents: group._sum.amountCents ?? 0,
+      }))
+      // Empty buckets are dropped rather than sent as zeroes: a legend with
+      // four «٠ ج» rows in it is one nobody reads to the bottom.
+      .filter((entry) => entry.amountCents > 0)
+      .sort((a, b) => b.amountCents - a.amountCents);
+
+    const expensesTotalCents = expensesByCategory.reduce((sum, e) => sum + e.amountCents, 0);
+
+    return {
+      subscriptionRevenueCents,
+      bookRevenueCents,
+      revenueTotalCents,
+      subscriptionRefundsCents,
+      bookRefundsCents,
+      refundsTotalCents,
+      subscriptionNetRevenueCents,
+      bookNetRevenueCents,
+      netRevenueTotalCents,
+      expensesTotalCents,
+      expensesByCategory,
+      bookCostOfSalesCents: cost.bookCostOfSalesCents,
+      bookCostUnknownCount: cost.bookCostUnknownCount,
+      bookProfitCents,
+      bookItemsNetCents,
+      bookShippingCents: cost.bookShippingCents,
+      // Revenue that actually STAYED, minus what went out. The refund is
+      // subtracted here and the cost of sales is NOT — `printing` expenses
+      // already carry what the paper cost, in the month the printer was paid,
+      // and subtracting both would count every print run twice. `bookProfitCents`
+      // above is the per-copy view of the same books and is deliberately not
+      // an addend of this total.
+      netCents: netRevenueTotalCents - expensesTotalCents,
+      months,
+    };
+  }
+
+  /**
+   * «الفلوس اللي رجعت» — all time, split by the stream each refund reverses.
+   *
+   * One `groupBy` and not two aggregates: the two figures are always read
+   * together and a row belongs to exactly one stream (`refunds_one_target`),
+   * so grouping on the two nullable FKs partitions the table with no overlap
+   * and no gap.
+   *
+   * ⚠️ Nothing here reads `revokedAt`. A cancellation is not a refund: cutting
+   * off a student who cheated keeps his money, and only an explicitly recorded
+   * `Refund` takes money out of a total. Making the deduction a separate act is
+   * what lets the owner do one without the other.
+   */
+  private async refundTotals(): Promise<{
+    subscriptionRefundsCents: number;
+    bookRefundsCents: number;
+  }> {
+    const [subscription, book] = await Promise.all([
+      this.prisma.refund.aggregate({
+        where: { submissionId: { not: null } },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.refund.aggregate({
+        where: { bookOrderId: { not: null } },
+        _sum: { amountCents: true },
+      }),
+    ]);
+
+    return {
+      subscriptionRefundsCents: subscription._sum.amountCents ?? 0,
+      bookRefundsCents: book._sum.amountCents ?? 0,
+    };
+  }
+
+  /**
+   * What the copies that were actually SOLD cost to make.
+   *
+   * ⚠️ Deliberately not the `printing` expenses, and both are real numbers. A
+   * print run is money that left in the month it was paid; this is the cost
+   * attributable to what was sold. Reporting book profit as revenue minus print
+   * runs swings wildly with when the printer was invoiced — a month with a run
+   * and no sales would show a catastrophic loss on books that are sitting in a
+   * box waiting to ship.
+   *
+   * A line whose book has no `unit_cost_cents` — or no book at all, which is
+   * what an admin's hand-typed «كتاب خاص» line is — contributes nothing and is
+   * COUNTED, so a margin computed against a partly-unpriced catalogue announces
+   * itself instead of quietly overstating profit.
+   */
+  private async bookCostOfSales(): Promise<{
+    bookCostOfSalesCents: number;
+    bookCostUnknownCount: number;
+    bookItemsCents: number;
+    bookShippingCents: number;
+  }> {
+    /*
+     * The cost comes from `i."unit_cost_cents"` — the line's OWN frozen
+     * snapshot — and no longer from a join to `books`.
+     *
+     * That join was live, so two ordinary admin actions rewrote history:
+     * deleting a retired title (`book_id` is `ON DELETE SET NULL`) erased the
+     * cost of every copy ever sold under it and raised the reported margin
+     * across months already closed, and editing what a copy costs restated the
+     * profit of every past sale. `unit_price_cents` next to it has always been
+     * frozen for exactly this reason; the cost now is too.
+     *
+     * `items` and `shipping` are summed in the same pass because the profit
+     * figure must be built from items alone — the shipping fee is collected
+     * from the student and paid straight to the courier, so counting it as book
+     * margin credited the owner with the courier's money on every order.
+     * Shipping is read off `book_orders` with a DISTINCT-safe subquery rather
+     * than summed here: it is per ORDER and this query is per ITEM, so summing
+     * it alongside would multiply it by the number of lines in the basket.
+     */
+    const rows = await this.prisma.$queryRaw<CostRow[]>`
+      SELECT
+        COALESCE(SUM(i."quantity" * i."unit_cost_cents"), 0)      AS cost,
+        COUNT(*) FILTER (WHERE i."unit_cost_cents" IS NULL)       AS unknown,
+        /* items is REVENUE and must not count a giveaway, even though the
+           surrounding query counts one for its COST. Summing it over the same
+           rows credited the owner with the list price of every book he handed
+           out for nothing, which then cancelled the cost below and made a
+           giveaway look free. The FILTER is the whole split, in one line, on
+           the one column where the two populations differ.
+           (No backticks in here: this is inside a JS template literal.) */
+        COALESCE(SUM(i."quantity" * i."unit_price_cents")
+                 FILTER (WHERE NOT o."is_free"), 0)               AS items,
+        (
+          /* Shipping COLLECTED, so the revenue predicate: a comped order
+             charged the student nothing to deliver, even though the courier
+             was still paid. That gap is the giveaway's real cost and it shows
+             up through cost of sales, not by pretending a fee was taken. */
+          SELECT COALESCE(SUM(o."shipping_cents"), 0)
+          FROM "app"."book_orders" o
+          WHERE ${BOOK_REVENUE_RAW}
+        )                                                          AS shipping
+      FROM "app"."book_order_items" i
+      JOIN "app"."book_orders" o ON o."id" = i."order_id"
+      WHERE ${BOOK_COUNTED_RAW}
+    `;
+
+    const row = rows[0];
+    return {
+      bookCostOfSalesCents: toNumber(row?.cost ?? 0),
+      bookCostUnknownCount: toNumber(row?.unknown ?? 0),
+      bookItemsCents: toNumber(row?.items ?? 0),
+      bookShippingCents: toNumber(row?.shipping ?? 0),
+    };
+  }
+
+  /**
+   * The trend, one row per calendar month, newest first.
+   *
+   * ## Why one query and not three
+   *
+   * The three sources have to be aligned on the same months or the screen has
+   * to do a join in JavaScript over three sparse lists — and get the months
+   * where one of them is empty right. `generate_series` builds the axis first
+   * and the three sums land on it, so a month with expenses and no revenue is a
+   * real row with a real negative net rather than a gap.
+   *
+   * ## Which date each source is bucketed by
+   *
+   * A subscription counts in the month it was APPROVED (`reviewed_at`) — that
+   * is when the money became ours. A book order counts when it was PAID. An
+   * expense counts on `occurred_on`, which is the month the money left, not the
+   * day somebody typed it in. A refund counts on ITS OWN `occurred_on`, never
+   * on the date of the sale it reverses: a September refund of a July payment
+   * reduces September. July was read once, to close it, and a figure that moves
+   * after that is one the owner cannot reconcile against what he actually did.
+   * Each is the date that answers "what did this month make", and none of them
+   * is `created_at`.
+   */
+  private async monthly(): Promise<FinanceMonth[]> {
+    const rows = await this.prisma.$queryRaw<MonthlyRow[]>`
+      WITH axis AS (
+        SELECT to_char(month, 'YYYY-MM') AS month, month AS starts
+        FROM generate_series(
+          date_trunc('month', now()) - make_interval(months => ${MONTHS - 1}),
+          date_trunc('month', now()),
+          '1 month'
+        ) AS month
+      )
+      SELECT
+        a.month,
+        (
+          SELECT COALESCE(SUM(p."amount_cents"), 0)
+          FROM "app"."payment_submissions" p
+          WHERE p."status" = 'approved'
+            AND p."is_free" = false
+            AND p."reviewed_at" >= a.starts
+            AND p."reviewed_at" <  a.starts + INTERVAL '1 month'
+        ) AS subscription,
+        (
+          SELECT COALESCE(SUM(o."amount_cents"), 0)
+          FROM "app"."book_orders" o
+          WHERE ${BOOK_REVENUE_RAW}
+            AND o."paid_at" >= a.starts
+            AND o."paid_at" <  a.starts + INTERVAL '1 month'
+        ) AS books,
+        (
+          SELECT COALESCE(SUM(e."amount_cents"), 0)
+          FROM "app"."expenses" e
+          WHERE e."occurred_on" >= a.starts::date
+            AND e."occurred_on" <  (a.starts + INTERVAL '1 month')::date
+        ) AS expenses,
+        (
+          SELECT COALESCE(SUM(r."amount_cents"), 0)
+          FROM "app"."refunds" r
+          WHERE r."submission_id" IS NOT NULL
+            AND r."occurred_on" >= a.starts::date
+            AND r."occurred_on" <  (a.starts + INTERVAL '1 month')::date
+        ) AS "subscriptionRefunds",
+        (
+          SELECT COALESCE(SUM(r."amount_cents"), 0)
+          FROM "app"."refunds" r
+          WHERE r."book_order_id" IS NOT NULL
+            AND r."occurred_on" >= a.starts::date
+            AND r."occurred_on" <  (a.starts + INTERVAL '1 month')::date
+        ) AS "bookRefunds"
+      FROM axis a
+      ORDER BY a.month DESC
+    `;
+
+    return rows.map((row) => {
+      const subscriptionRevenueCents = toNumber(row.subscription);
+      const bookRevenueCents = toNumber(row.books);
+      const expensesCents = toNumber(row.expenses);
+      const subscriptionRefundsCents = toNumber(row.subscriptionRefunds);
+      const bookRefundsCents = toNumber(row.bookRefunds);
+      return {
+        month: row.month,
+        subscriptionRevenueCents,
+        bookRevenueCents,
+        expensesCents,
+        subscriptionRefundsCents,
+        bookRefundsCents,
+        // May be negative, and is left that way: a month that bought a print
+        // run and sold nothing really did lose money — and a month whose only
+        // movement was refunding an earlier one is genuinely negative too,
+        // which is exactly why a refund is bucketed on its own date and never
+        // on the sale's.
+        netCents:
+          subscriptionRevenueCents +
+          bookRevenueCents -
+          subscriptionRefundsCents -
+          bookRefundsCents -
+          expensesCents,
+      };
+    });
+  }
+
+  /**
+   * «التقرير» — the whole P&L as one downloadable workbook.
+   *
+   * ## Why a file and not another screen
+   *
+   * `/admin/finance` answers «صرفت كام ودخلي كام» while you are looking at it,
+   * and nothing on the platform could hand that figure to anybody else. The
+   * accountant, the printer and the tax return all want the SAME numbers in a
+   * form that survives leaving the browser — and re-typing them into a
+   * spreadsheet by hand is how the figure that has to reconcile acquires a
+   * typo.
+   *
+   * ## Why it is three sheets and not one
+   *
+   * They answer three different questions and get read by different people.
+   * «الملخص» is the P&L — the tiles, in the order the screen shows them, with
+   * the subtraction written out so the net is checkable rather than asserted.
+   * «المصروفات» is the ledger itself, one row per spend, because «راح فين» is
+   * only answerable line by line. «شهر بشهر» is the trend, which is the only
+   * one of the three that says whether a bad month was bad or just early.
+   *
+   * ⚠️ Every figure comes from `overview()` and the same `expense` table the
+   * list screen reads — this method formats and never computes. A report that
+   * did its own arithmetic is a fourth place for «صافي الربح» to disagree with
+   * itself, which is the exact bug this service's own class doc was written
+   * about.
+   */
+  async reportXlsx(): Promise<Buffer> {
+    const [o, expenses] = await Promise.all([
+      this.overview(),
+      this.prisma.expense.findMany({
+        orderBy: [{ occurredOn: 'desc' }, { id: 'desc' }],
+        select: {
+          occurredOn: true,
+          category: true,
+          amountCents: true,
+          titleAr: true,
+          noteAr: true,
+          quantity: true,
+          book: { select: { titleAr: true } },
+        },
+      }),
+    ]);
+
+    const workbook = new ExcelJS.Workbook();
+    /* Money is written as a NUMBER in pounds, never as a formatted string:
+     * the whole point of the file is that the reader can total a column, and
+     * "1,234.00 ج" is text that sums to zero in every spreadsheet there is. */
+    const MONEY = '#,##0.00';
+    const pounds = (cents: number): number => cents / 100;
+
+    const summary = workbook.addWorksheet('الملخص', {
+      views: [{ rightToLeft: true }],
+    });
+    summary.columns = [
+      { header: 'البند', key: 'label', width: 34 },
+      { header: 'المبلغ بالجنيه', key: 'amount', width: 18, style: { numFmt: MONEY } },
+    ];
+    summary.getRow(1).font = { bold: true };
+
+    const section = (title: string): void => {
+      const row = summary.addRow({ label: title });
+      row.font = { bold: true };
+    };
+    const line = (label: string, cents: number, bold = false): void => {
+      const row = summary.addRow({ label, amount: pounds(cents) });
+      if (bold) row.font = { bold: true };
+    };
+
+    section('الدخل');
+    line('اشتراكات', o.subscriptionRevenueCents);
+    line('كتب', o.bookRevenueCents);
+    line('إجمالي الدخل', o.revenueTotalCents, true);
+    summary.addRow({});
+    section('المرتجعات');
+    line('مرتجعات اشتراكات', o.subscriptionRefundsCents);
+    line('مرتجعات كتب', o.bookRefundsCents);
+    line('إجمالي المرتجعات', o.refundsTotalCents, true);
+    line('صافي الدخل بعد المرتجعات', o.netRevenueTotalCents, true);
+    summary.addRow({});
+    section('المصروفات');
+    for (const entry of o.expensesByCategory) {
+      line(CATEGORY_LABEL[entry.category], entry.amountCents);
+    }
+    line('إجمالي المصروفات', o.expensesTotalCents, true);
+    summary.addRow({});
+    section('الصافي');
+    line('صافي الدخل − المصروفات', o.netCents, true);
+    summary.addRow({});
+    /* The book block sits BELOW the net and is deliberately not an addend of
+     * it — see `overview()`'s own note. Cost of sales and the `printing`
+     * expenses are both real, and adding both to one total counts every print
+     * run twice. It is here because «مكسب الكتب إيه» is a question the owner
+     * asks, not because it belongs in the subtraction above. */
+    section('الكتب (للعِلم — مش داخلة في الصافي فوق)');
+    line('مبيعات الكتب بعد المرتجعات (من غير الشحن)', o.bookItemsNetCents);
+    line('تكلفة النسخ اللي اتباعت', o.bookCostOfSalesCents);
+    line('مكسب الكتب', o.bookProfitCents, true);
+    line('الشحن المحصّل (بيروح للشركة)', o.bookShippingCents);
+    if (o.bookCostUnknownCount > 0) {
+      summary.addRow({
+        label: `⚠️ ${o.bookCostUnknownCount} سطر مالوش سعر تكلفة — المكسب فوق أعلى من الحقيقي`,
+      });
+    }
+
+    const ledger = workbook.addWorksheet('المصروفات', { views: [{ rightToLeft: true }] });
+    ledger.columns = [
+      { header: 'التاريخ', key: 'date', width: 14 },
+      { header: 'البند', key: 'title', width: 34 },
+      { header: 'النوع', key: 'category', width: 18 },
+      { header: 'المبلغ بالجنيه', key: 'amount', width: 16, style: { numFmt: MONEY } },
+      { header: 'الكتاب', key: 'book', width: 26 },
+      { header: 'العدد', key: 'quantity', width: 10 },
+      { header: 'ملاحظات', key: 'note', width: 44 },
+    ];
+    ledger.getRow(1).font = { bold: true };
+    for (const e of expenses) {
+      ledger.addRow({
+        date: isoDate(e.occurredOn),
+        title: e.titleAr,
+        category: CATEGORY_LABEL[e.category],
+        amount: pounds(e.amountCents),
+        book: e.book?.titleAr ?? '',
+        quantity: e.quantity ?? '',
+        note: e.noteAr ?? '',
+      });
+    }
+    const ledgerTotal = ledger.addRow({
+      title: 'الإجمالي',
+      amount: pounds(o.expensesTotalCents),
+    });
+    ledgerTotal.font = { bold: true };
+
+    const trend = workbook.addWorksheet('شهر بشهر', { views: [{ rightToLeft: true }] });
+    trend.columns = [
+      { header: 'الشهر', key: 'month', width: 12 },
+      { header: 'اشتراكات', key: 'subs', width: 14, style: { numFmt: MONEY } },
+      { header: 'كتب', key: 'books', width: 14, style: { numFmt: MONEY } },
+      { header: 'مرتجعات', key: 'refunds', width: 14, style: { numFmt: MONEY } },
+      { header: 'مصروفات', key: 'expenses', width: 14, style: { numFmt: MONEY } },
+      { header: 'الصافي', key: 'net', width: 14, style: { numFmt: MONEY } },
+    ];
+    trend.getRow(1).font = { bold: true };
+    for (const m of o.months) {
+      trend.addRow({
+        month: m.month,
+        subs: pounds(m.subscriptionRevenueCents),
+        books: pounds(m.bookRevenueCents),
+        refunds: pounds(m.subscriptionRefundsCents + m.bookRefundsCents),
+        expenses: pounds(m.expensesCents),
+        net: pounds(m.netCents),
+      });
+    }
+
+    return Buffer.from(await workbook.xlsx.writeBuffer());
+  }
+
+}

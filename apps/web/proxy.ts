@@ -56,6 +56,40 @@ const MEDIA_ORIGIN = (process.env.NEXT_PUBLIC_MEDIA_ORIGIN ?? 'http://localhost:
 );
 
 /**
+ * Where «النسخة اللي عندنا» is served from — the bucket's public custom
+ * domain, `https://video.aymanaboelela.com`.
+ *
+ * A SEPARATE origin from `MEDIA_ORIGIN` and not folded into it: uploaded
+ * media is bytes this API streams, the mirror is bytes an object store
+ * streams, and the two move independently. Empty string when the deployment
+ * has no mirror, which is a valid state and must not emit a stray token into
+ * the policy — hence the `.filter(Boolean)` at each use.
+ *
+ * ⚠️ Getting this wrong is invisible in the worst way. A missing entry does
+ * not error, log, or degrade: hls.js's segment fetches are refused by the
+ * browser, the element stalls with no `error` event, and the student sees the
+ * same dead grey box this whole feature exists to remove — while the server
+ * is serving the file perfectly. The report-only policy taught this platform
+ * that lesson once already; the enforced one is where it actually bites.
+ */
+const VIDEO_ORIGIN = (process.env.NEXT_PUBLIC_VIDEO_ORIGIN ?? '').replace(/\/$/, '');
+/**
+ * Where the admin's browser PUTs the parts of an uploaded lecture.
+ *
+ * ⚠️ A DIFFERENT HOST from `VIDEO_ORIGIN`, and that is the trap. The public
+ * origin is the custom domain students read segments from; the parts go to
+ * the bucket's credentialed S3 endpoint, which nothing else on the site ever
+ * talks to. Naming only the public one — the natural mistake, since both are
+ * "the video bucket" — lets every part upload fail on an enforced policy,
+ * and CSP failures in `fetch`/XHR surface as a generic network error with no
+ * indication that a header refused them.
+ *
+ * Empty unless the mirror is configured, exactly like `VIDEO_ORIGIN`, so a
+ * deployment without a bucket adds nothing to the policy.
+ */
+const VIDEO_UPLOAD_ORIGIN = (process.env.NEXT_PUBLIC_VIDEO_UPLOAD_ORIGIN ?? '').replace(/\/$/, '');
+
+/**
  * Every route prefix gated behind a session. A single exported constant so
  * later plans append to it instead of each hand-editing a private regex —
  * Plan 5 appends `/quizzes`.
@@ -76,6 +110,19 @@ export const PROTECTED_PREFIXES = [
   '/results',
   '/foundations',
   '/playground',
+  /*
+    `/store` — «الكتب» inside the shell.
+
+    It reads no authed endpoint itself (the catalogue and the shipping fee are
+    both cached public loaders), so it is here for the OTHER half of the rule
+    above: it renders inside `<StudentShell>`, whose rail, notification bell
+    and account menu are all authed reads. An anonymous visitor who followed
+    the link would get a shell with three empty slots around a shop, when the
+    shop they actually want — public, indexed, with the site's own header and
+    footer — is sitting at `/books`. Sending them to sign in is the honest
+    answer for a rail URL; `/books` stays open to everyone and is unaffected.
+  */
+  '/store',
   /*
     `/notifications` was missing from this list until 2026-08-13, and it is the
     case the paragraph above already describes rather than a new one:
@@ -123,6 +170,148 @@ export function isProtectedRoute(pathname: string): boolean {
     PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) ||
     PROTECTED_LESSON_PATTERN.test(pathname)
   );
+}
+
+/**
+ * The admin panel — the only part of this app that asks for a microphone.
+ *
+ * `VoiceRecorder` lives in the inbox thread and has no counterpart in the
+ * student's panel by design, so the `Permissions-Policy` grant follows the
+ * same shape: one prefix, not `self` on every response.
+ */
+export function isAdminRoute(pathname: string): boolean {
+  return pathname === '/admin' || pathname.startsWith('/admin/');
+}
+
+/**
+ * `/courses/:slug` — the PUBLIC course page, and the ONLY public route this
+ * proxy ever redirects away from.
+ *
+ * ⚠️ Exactly one segment, and never `/courses` itself or `/courses/:slug/…`.
+ * `PROTECTED_LESSON_PATTERN` above owns the player; the catalog index is a
+ * page in its own right and has no slug to check.
+ *
+ * The segment comes back still percent-encoded, because `nextUrl.pathname` is
+ * — an Arabic slug arrives as `%d8%a7…`. Callers that compare it to a slug the
+ * API sent have to decode; callers that build a URL from it must NOT re-encode.
+ */
+const COURSE_DETAIL_PATTERN = /^\/courses\/([^/]+)$/;
+
+export function courseSlugFromPath(pathname: string): string | null {
+  return COURSE_DETAIL_PATTERN.exec(pathname)?.[1] ?? null;
+}
+
+/**
+ * Both spellings of the Better Auth session cookie — `__Host-` prefixed in
+ * production, bare in development (`apps/api/src/auth/auth.config.ts`).
+ *
+ * Its mere PRESENCE is not authentication and is never used as one. It is used
+ * as the cheap "is it even worth asking?" gate in front of the enrollment
+ * lookup below, so an anonymous visitor — which is most of the traffic on a
+ * public course page, crawlers included — costs zero API round trips and the
+ * route keeps the static treatment the public branch of `proxy()` protects.
+ */
+const SESSION_COOKIE_NAMES = ['__Host-session_token', 'session_token'] as const;
+
+function hasSessionCookie(request: NextRequest): boolean {
+  return SESSION_COOKIE_NAMES.some((name) => request.cookies.has(name));
+}
+
+/**
+ * Whether ONE row of `GET /api/enrollments` means "this student is already
+ * inside this course, send them to their library copy of it".
+ *
+ * Exported and pure purely so it can be tested — `resolveEnrolledCourseRedirect`
+ * below cannot be, it does a network call.
+ *
+ * ⚠️ BOTH conditions, and `accessActive` is the one that is easy to lose.
+ * The enrollment row is not the subscription: nothing writes
+ * `EnrollmentStatus.expired`, so a student whose grant lapsed — every term
+ * buyer, the moment an admin closes the term — keeps an `active` row forever.
+ * Matching on the slug alone redirected exactly that student away from
+ * `/courses/:slug`, the only page carrying a price and a «اشترك» button, into
+ * `/library/:slug`, which carries neither; the lesson gate then 403s back to
+ * `/courses/:slug` and this fires again. They could not pay.
+ */
+export function enrollmentOpensCourse(row: unknown, pathSlug: string): boolean {
+  if (typeof row !== 'object' || row === null) return false;
+  if (!matchesSlug((row as { courseSlug?: unknown }).courseSlug, pathSlug)) return false;
+  // Strict `=== true`: an older API that does not send the field at all must
+  // read as "no live access", never as "redirect anyway".
+  return (row as { accessActive?: unknown }).accessActive === true;
+}
+
+/** The API sends `courseSlug` decoded; the path carries it encoded. */
+function matchesSlug(courseSlug: unknown, pathSlug: string): boolean {
+  if (typeof courseSlug !== 'string') return false;
+  if (courseSlug === pathSlug) return true;
+  try {
+    return courseSlug === decodeURIComponent(pathSlug);
+  } catch {
+    // A malformed escape in the path. Not a slug anybody is enrolled in.
+    return false;
+  }
+}
+
+/**
+ * A student who is ALREADY in this course does not get shown the page that
+ * asks them to join it.
+ *
+ * The public course page is a sales page: one cached HTML document for every
+ * visitor, whose controls therefore cannot know who is reading them, so they
+ * resolve the question on CLICK — press «ابدأ الكورس», wait for
+ * `POST /enroll`, get bounced into the lesson. That is right for a stranger
+ * and wrong for the student who joined three weeks ago: they land on a pitch
+ * for something they own, and only find that out after pressing a button.
+ * «أول ما يدخل الصفحة وقتها بيتشك ووقتها بيحوله على صفحة الكورس.»
+ *
+ * So the question is answered HERE, before any HTML is chosen, and the answer
+ * is an ordinary 307 to `/library/:slug` — the same course as the student
+ * studying it sees it, with the outline, the gates and the resume button.
+ * Doing it in the page instead would mean `cookies()` on `(site)/courses/
+ * [slug]`, which makes the route dynamic for everyone and turns the redirect
+ * into a flash of the sales page behind `loading.tsx`.
+ *
+ * Cost, deliberately: ONE extra API call, only for a request that carries a
+ * session cookie, only on this one route. `GET /api/enrollments` is the
+ * student's own small list and is the endpoint `/library` already reads.
+ *
+ * ⚠️ Fails OPEN, unlike `resolveAuthState`, and the difference is not an
+ * oversight. Failing closed there means "you are not signed in", which is
+ * safe. Failing closed here would mean "you are not enrolled" — it would take
+ * a student who owns the course and show them the page asking them to buy it.
+ * A timeout, a 401, a 403 (an admin has no `enrollment:read`), a 500 or a
+ * malformed body all fall through to the public page, which is exactly what
+ * this route did before this function existed.
+ */
+async function resolveEnrolledCourseRedirect(request: NextRequest): Promise<URL | null> {
+  const slug = courseSlugFromPath(request.nextUrl.pathname);
+  if (!slug || !hasSessionCookie(request)) return null;
+
+  const cookie = request.headers.get('cookie');
+  try {
+    const response = await fetch(`${API_ORIGIN}/api/enrollments`, {
+      headers: cookie ? { cookie, accept: 'application/json' } : { accept: 'application/json' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) return null;
+
+    const rows: unknown = await response.json();
+    if (!Array.isArray(rows)) return null;
+
+    // `GET /api/enrollments` already filters to ACTIVE_ENROLLMENT_STATUSES
+    // (`active` and `completed`), so a suspended or revoked enrollment never
+    // appears here and correctly leaves the student on the public page. A
+    // LAPSED one still does appear, and `enrollmentOpensCourse` is what keeps
+    // it from redirecting — see its own note.
+    if (!rows.some((row) => enrollmentOpensCourse(row, slug))) return null;
+  } catch {
+    return null;
+  }
+
+  // NOT re-encoded: `slug` came out of an already-encoded pathname.
+  return new URL(`/library/${slug}`, request.url);
 }
 
 function isOnboardingRoute(pathname: string): boolean {
@@ -345,7 +534,16 @@ function sharedCspDirectives(dev: boolean): string[] {
     `img-src 'self' blob: data: https://i.ytimg.com https://c.clarity.ms https://c.bing.com ${MEDIA_ORIGIN}`,
     "font-src 'self'",
     // Same reasoning for uploaded audio/video served from the media origin.
-    `media-src 'self' ${MEDIA_ORIGIN}`,
+    //
+    // `blob:` and `VIDEO_ORIGIN` are the mirror's two halves, and BOTH are
+    // required. hls.js does not point the element at the playlist — it feeds
+    // segments through Media Source Extensions, so the element's `src` is a
+    // `blob:` URL this page created, while the segments themselves are
+    // fetched from the video origin (and so appear in `connect-src`, not
+    // here). Safari, which plays HLS natively, does the opposite: no blob at
+    // all, the origin directly in `media-src`. Naming one and not the other
+    // breaks exactly half the phones in the country.
+    ['media-src', "'self'", 'blob:', MEDIA_ORIGIN, VIDEO_ORIGIN].filter(Boolean).join(' '),
     "manifest-src 'self'",
     "worker-src 'self' blob:",
     "object-src 'none'",
@@ -373,7 +571,17 @@ function sharedCspDirectives(dev: boolean): string[] {
     // says nobody embeds us. The URL is rebuilt from an extracted id against a
     // hardcoded origin (`driveEmbedUrl`), never echoed from stored input — so
     // widening the policy does not widen what can be pointed at.
-    "frame-src 'self' https://www.youtube-nocookie.com https://drive.google.com https://docs.google.com",
+    //
+    // ⚠️ `www.youtube.com` is here for the PLAYER'S FALLBACK, not for a second
+    // way of doing the same thing. When the IFrame API does not load — and it
+    // is on far more blocklists than YouTube itself is, because it is also how
+    // a page tracks what you watched — `video-lesson.tsx` embeds
+    // `youtube.com/embed/<id>` directly. Without this entry that fallback is
+    // blocked by our own policy and the student sees the same dead player the
+    // fallback exists to replace, with nothing in the console but a CSP
+    // violation nobody is reading. Same construction guarantee as the nocookie
+    // host: rebuilt from the stored 11-char id against a hardcoded origin.
+    "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://drive.google.com https://docs.google.com",
     // ⚠️ `static.cloudflareinsights.com` is not a dependency this app chose.
     // Cloudflare INJECTS its Web Analytics beacon into the HTML at the edge,
     // after the origin has responded — so it appears in the browser and never
@@ -394,9 +602,30 @@ function sharedCspDirectives(dev: boolean): string[] {
     // then fail to upload a single session — the dashboard says "no data"
     // while the browser console holds the answer. The wildcard is unavoidable
     // here; Clarity picks the subdomain itself.
+    // `VIDEO_ORIGIN` here is what lets hls.js READ the playlist and segments.
+    // It is a fetch, not a media load, so `media-src` above does not cover it
+    // — the single most likely way to ship this feature broken is to add the
+    // origin to one of these two directives and believe it is done.
+    // `VIDEO_UPLOAD_ORIGIN` is the other half, and it is a different host —
+    // see its definition. hls.js READS from `VIDEO_ORIGIN`; the admin's
+    // browser WRITES to the bucket's S3 endpoint, and both are XHR/fetch, so
+    // both belong here and neither is covered by `media-src`.
     dev
-      ? "connect-src 'self' ws: wss:"
-      : "connect-src 'self' https://cloudflareinsights.com https://static.cloudflareinsights.com https://*.clarity.ms https://c.bing.com",
+      ? ['connect-src', "'self'", 'ws:', 'wss:', VIDEO_ORIGIN, VIDEO_UPLOAD_ORIGIN]
+          .filter(Boolean)
+          .join(' ')
+      : [
+          'connect-src',
+          "'self'",
+          'https://cloudflareinsights.com',
+          'https://static.cloudflareinsights.com',
+          'https://*.clarity.ms',
+          'https://c.bing.com',
+          VIDEO_ORIGIN,
+          VIDEO_UPLOAD_ORIGIN,
+        ]
+          .filter(Boolean)
+          .join(' '),
     // report-uri is deprecated but still the only mechanism Safari/Firefox
     // implement; report-to is what Chrome honours. Ship both.
     'report-uri /api/security/csp-report',
@@ -555,7 +784,11 @@ const CSP_HEADER_NAME = CSP_ENFORCING
  * directly unit-testable without mocking `process.env` at import time,
  * matching `buildPublicCsp`/`buildAuthenticatedCsp`'s own signature.
  */
-export function applyBaseSecurityHeaders(headers: Headers, dev: boolean): void {
+export function applyBaseSecurityHeaders(
+  headers: Headers,
+  dev: boolean,
+  { microphone = false }: { microphone?: boolean } = {},
+): void {
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   headers.set(
@@ -570,8 +803,20 @@ export function applyBaseSecurityHeaders(headers: Headers, dev: boolean): void {
     // fullscreen no matter what the iframe asked for. On a phone that is the
     // difference between watching a lecture and squinting at a strip of it —
     // «وأنا بشوف الفيديو على يوتيوب لما بضغط عليه ما أقدرش إن هو يلف عشان يبقى
-    // بعرض الفيديو كامل». Named origin, not `*`.
-    'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=(), display-capture=(), browsing-topics=(), interest-cohort=(), fullscreen=(self "https://www.youtube-nocookie.com")',
+    // بعرض الفيديو كامل». Named origins, not `*` — and BOTH player hosts, or
+    // the fallback embed (`www.youtube.com`, see `frame-src`) would be the
+    // strip-at-the-top-of-the-page player all over again for exactly the
+    // students who already could not use the normal one.
+    // `microphone` is the second capability that can be GRANTED, and it is
+    // granted on the admin panel alone — see the `microphone` argument at the
+    // protected-route call site. A feature denied here is not a prompt the
+    // admin can accept: `getUserMedia` rejects before the browser ever asks,
+    // so the inbox's «سجّل رسالة صوتية» button answered «المتصفح مسمحش
+    // بالمايك» on every deployed build while working perfectly in any local
+    // check that skipped the proxy. Granting it to `self` restores the
+    // PROMPT, not the access — the student panel never sees it, because
+    // nothing there records.
+    `camera=(), microphone=(${microphone ? 'self' : ''}), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=(), display-capture=(), browsing-topics=(), interest-cohort=(), fullscreen=(self "https://www.youtube-nocookie.com" "https://www.youtube.com")`,
   );
   headers.set('X-DNS-Prefetch-Control', 'off');
   /**
@@ -817,7 +1062,17 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return response;
   }
 
-  const redirectTarget = await resolveRedirect(request);
+  /*
+   * Both redirect rules, in one branch, because the response they need is
+   * identical. They can never both fire: `resolveRedirect` returns `null` for
+   * every public route, and `/courses/:slug` is one.
+   *
+   * `??` and not two awaits: `resolveEnrolledCourseRedirect` is the one that
+   * costs an API call, and it must not be paid on a protected route that is
+   * already redirecting to the login form.
+   */
+  const redirectTarget =
+    (await resolveRedirect(request)) ?? (await resolveEnrolledCourseRedirect(request));
   if (redirectTarget) {
     const response = NextResponse.redirect(redirectTarget);
     applyBaseSecurityHeaders(response.headers, DEV);
@@ -873,7 +1128,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const response = NextResponse.next({
     request: { headers: stampPathname(request.headers, pathname) },
   });
-  applyBaseSecurityHeaders(response.headers, DEV);
+  applyBaseSecurityHeaders(response.headers, DEV, { microphone: isAdminRoute(pathname) });
   response.headers.set(CSP_HEADER_NAME, buildAuthenticatedCsp('', DEV));
   /**
    * The third and last layer keeping the signed-in area out of search results,

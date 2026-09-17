@@ -236,6 +236,16 @@ export function QuestionForm({
         ? SavedQuestionSchema.parse(await apiPatch(`/api/admin/questions/${bankEntryId}`, payload))
         : await apiPost('/api/admin/questions', SavedQuestionSchema, payload);
       toast.success(copy.admin.common.saved);
+      /*
+       * `next.config.ts` lets the client router cache reuse a dynamic route for
+       * 30 seconds (`staleTimes.dynamic`), and `router.refresh()` is the only
+       * call that empties it. Without this, a save followed by a return to
+       * `/admin/questions/<id>` or to the list within half a minute replays the
+       * PRE-EDIT render — the edit reads as lost, and the obvious next move is
+       * to type it again.
+       * Same rule, and the same ⚠️, as `components/player/lesson-nav.tsx`.
+       */
+      router.refresh();
       if (onSaved) onSaved({ ...result, defaultMark: values.defaultMark });
       else router.push(`/admin/questions/${result.bankEntryId}`);
     } catch {

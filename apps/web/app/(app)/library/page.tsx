@@ -75,7 +75,7 @@ export default async function LibraryPage() {
   const yoursCount = view.yours?.reduce((n, track) => n + track.courses.length, 0) ?? 0;
 
   return (
-    <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
+    <main className="mx-auto w-full max-w-[var(--w-app)] px-6 py-10 md:py-12">
       <header className="study-head">
         <p className="eyebrow mb-2 text-fg-muted">{c.eyebrow}</p>
         <h1 className="study-head__title">{c.title}</h1>

@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Award, Clock, Layers, Target } from 'lucide-react';
 import { ProfileMeSchema, StudentQuizHistorySchema, copy } from '@ayman/contracts';
 import { Skeleton } from '@ayman/ui';
@@ -46,7 +47,7 @@ const c = copy.profile;
  */
 export default function ProfilePage() {
   return (
-    <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
+    <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
       <header className="mb-6">
         <p className="eyebrow mb-2 text-fg-muted">{c.eyebrow}</p>
         <h1 className="text-[length:var(--fs-title-1)] font-semibold text-fg">{c.title}</h1>
@@ -174,6 +175,18 @@ async function Identity() {
             dashboard band read — see below for the local table it replaces. */}
         <Field label={c.fieldYear} value={identityOf(me, taxonomy)?.yearLabelAr ?? null} />
       </dl>
+
+      {/* A plain `<Link>`, not a button opening a dialog: the editor is nine
+          fields with its own validation and its own save, and a phone has no
+          room to put that inside a modal over this page. `/settings/section`
+          is where it lives — the route kept its name, its scope is now every
+          field printed above. */}
+      <Link
+        href="/settings/section"
+        className="mt-5 inline-flex min-h-11 items-center rounded-sm border border-line px-4 text-[length:var(--fs-text-sm)] text-fg transition-colors duration-[var(--d-hover)] ease-[var(--ease)] hover:border-accent hover:text-accent-text"
+      >
+        {c.fieldsEdit}
+      </Link>
     </section>
   );
 }

@@ -213,12 +213,85 @@
   --stage-fg-2: rgb(255 255 255 / 0.86);
 }
 
+/* ---------------------------------------------------------------------------
+   The band's clusters — greeting, dial, figures, schedule — and how they sit.
+
+   `.dash-hero__stats` is a DIRECT CHILD of the band, not a line inside
+   `.dash-hero__text`; the component says why. Only a direct child can be given
+   a row, and a row is what the figures now need.
+
+   ## The shape: greeting and dial share row 1, everything else spans
+
+   Row 1 is `minmax(0, 1fr) auto` — the identity cluster at the inline start,
+   the dial at the end. Rows 2 and 3 span `1 / -1`: the three figures, then
+   «مواعيد المحاضرات». Both are full-width for the same reason, and it is a
+   measured one rather than a taste: three `.tile`s want ~190px each before the
+   number and the label stop sharing a line, and the strip was asked for in the
+   words «تبقى كبيرة وباينة».
+
+   ## ⚠️ Why the figures are NOT in a middle column any more
+
+   They were, above `90rem` — a three-column band, greeting / figures / dial,
+   added when `--w-app` (1600px, up from `--w-shell`'s 1152) opened a ~450px
+   hole between the greeting and the ring on a wide window. That rule is gone,
+   and deleting it was the price of the figures becoming TILES.
+
+   The arithmetic is why. At 1440 the band is `min(viewport - 248px rail, 1600)
+   - 48px page padding - 64px of its own padding` ≈ 1080px; the greeting needs
+   ~500 for a portrait, a name and up to three fact chips, the dial ~110, and
+   the gaps ~64. That leaves ~400px for the middle column — 133px per tile,
+   against a tile that is 32px of well plus 12 of gap plus 32 of padding before
+   a single digit is drawn. Three figures as bare text fitted there; three
+   surfaces do not.
+
+   The hole the 90rem rule existed to fill is filled anyway, and better: row 2
+   is now a full-width band of three lit tiles rather than a line of small
+   grey text, so the band no longer reads as two clusters with ember between
+   them at ANY width. `.dash-hero__art` covers what is left of row 1's middle,
+   which is the job it was drawn for.
+
+   The dial takes `align-self: center` on its own row rather than spanning two;
+   it is one object and it centres on the greeting beside it. */
 @media (min-width: 48rem) {
   .dash-hero {
     padding: var(--s-32);
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: var(--s-32);
+    /* Tighter than the column gap: the figures are a continuation of the
+       greeting above them, and 32px between the two reads as two blocks. */
+    row-gap: var(--s-16);
+  }
+
+  .dash-hero__id {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .dash-hero__aside {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+  }
+
+  /* FULL WIDTH, under the dial as well as under the greeting — see the note
+     above for the 133px-per-tile arithmetic that killed the middle-column
+     version. Spanning to `-1` is safe here and on the strip below it for the
+     same narrow reason: the column lines are explicit in this block, the row
+     lines are implicit. */
+  .dash-hero__stats {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  /* FULL WIDTH, across the bottom of the band. The alternative (a third row in
+     column 1 only) leaves the strip squeezed into the same column as the
+     greeting while ~110px of ember sits empty under the ring, and «مواعيد
+     المحاضرات» is the one thing on this band that was asked for in the words
+     «تبقى كبيرة وباينة». */
+  .dash-hero__schedule {
+    grid-column: 1 / -1;
+    grid-row: 3;
   }
 }
 
@@ -343,64 +416,192 @@
   white-space: nowrap;
 }
 
-/* The second fact row. `.dash-hero__facts` above it is WHO YOU ARE — year,
-   track, school. This is HOW MUCH YOU HAVE DONE, and the two are kept apart
-   because a school name and a lesson count are not the same kind of claim:
-   one identifies a student, the other measures them.
+/* ---------------------------------------------------------------------------
+   The band's three figures. `.dash-hero__facts` above them is WHO YOU ARE —
+   year, track, school. This is HOW MUCH YOU HAVE DONE, and the two are kept
+   apart because a school name and a lesson count are not the same kind of
+   claim: one identifies a student, the other measures them.
 
-   No pills, no wells, no meters and no icons. These were four `.tile`s under
-   the band a moment ago, and redrawing four shapes ON it would relocate the
-   clutter rather than remove it — so the figures sit as plain text separated
-   by hairlines. The band stays a band: nothing on it is pressable. */
+   ## What is here now, and what was here before
+
+   Three `.tile`s — «نقاط الخبرة», «وقت المذاكرة», «شارات محققة» — moved onto
+   the band from a loose row a screen below it («عاوز تنقل السكشن ده أعلى»),
+   each carrying as a second line the small inline count the band itself used
+   to state («٤ دروس خلصتها» and the other two). That row of plain text is
+   gone: it stated the same KIND of fact as the tiles, in a second shape, forty
+   pixels away. `statFigures` in `stats-row.tsx` is the pairing and the
+   argument for it.
+
+   The previous version of this block argued that redrawing tiles ON the band
+   would relocate the clutter rather than remove it, and it was right about the
+   version it was looking at — SEVEN shapes, because the inline row survived
+   alongside them. Three shapes that replace six figures is the opposite trade.
+
+   ## The two shapes, and the phone one is the load-bearing one
+
+   Always three across, never wrapped, because a 2 + 1 row reads as an overflow
+   and a stack of three full-width rows adds ~230px to a band that already
+   carries a greeting, two chips, a 104px ring and the schedule strip.
+
+   At 390px the band's inner width is `390 − 32 (page padding) − 40 (its own
+   --s-20)` = 318px, so each tile gets ~100px and the 16px well cannot sit
+   BESIDE a two-digit number and a label. Below `48rem` the tile turns its own
+   axis instead — well on top, number under it, label under that — which fits
+   «شارات محققة» on one line at ~66px and is a deliberate shape rather than a
+   squeezed one. From `48rem` the band is wide enough for the tile's normal
+   horizontal reading, and it takes it back.
+   --------------------------------------------------------------------------- */
 .dash-hero__stats {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-8);
+}
+
+@media (min-width: 48rem) {
+  .dash-hero__stats {
+    gap: var(--s-12);
+  }
+}
+
+/* The phone shape described above. Scoped to the band rather than folded into
+   `.tile--ink`, because turning the tile's axis is a fact about how much room
+   THIS container has — `/results` and the quiz runner give their tiles a whole
+   page column and must not inherit it. */
+@media (max-width: 47.9375rem) {
+  .dash-hero__stats .tile {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--s-8);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   «مواعيد المحاضرات» — the live-lesson times, on the band.
+
+   ## Why it is here at all, and why it is not a caption
+
+   «يبقى موجودة في البانر اللي فوق اللي هو أهلاً أيمن، وتكتبها بخط كويس وتبقى
+   كبير وباينة، حتى لو فتح من الموبايل.» A student who misses the live lesson
+   misses it for good, and every quieter place this line could have gone — a
+   card halfway down the page, a caption under the course title, the course
+   page itself — is a place that gets scrolled past. So it is on the one block
+   nobody can miss, and it is typed at a size that says so.
+
+   ## The sizes, and where they come from
+
+   The time is `--fs-title-3` on a phone and `--fs-title-2` from `md` — one and
+   two steps below `.dash-hero__title` respectively. That ordering is the whole
+   hierarchy of the band: the greeting is still the biggest thing on it (it is
+   the student's own name), the time is the next, and everything else — chips,
+   figures, the ring's caption — is body text. Anything smaller here and it
+   reads as a footnote, which is what «مش باينة» means.
+
+   The course name above it is `--fs-text-sm` and `--stage-fg-2` on purpose: it
+   is a LABEL, and the student already knows which courses are theirs. The one
+   thing they came to this strip to read is the when.
+
+   ## Why the rows stack rather than sitting inline
+
+   The band is already tight at 390px — the greeting has a 64px portrait beside
+   it and the fact chips wrap under it at that width. At 390 the strip gets
+   `390 - 32 (page padding) - 40 (the band's own --s-20)` = 318px, and a course
+   title and a 120-character sentence on ONE line inside 318px is two ellipses
+   or four wrapped lines. Stacked (label, then time) each row is two short
+   lines that never compete with the greeting for horizontal room, and the
+   `flex-wrap` below only lets the ROWS sit beside each other once there is
+   genuinely space for two of them — 20rem apiece, which is past `md` on every
+   phone and immediately on a tablet.
+
+   ## Why two lines look deliberate
+
+   عربي on one night and لغات on another is the NORMAL case, not the edge one.
+   Each row is a well with an amber bar on its reading edge, so two of them
+   read as two entries in one list rather than as a wrapped sentence that broke
+   — and the amber is the same `--a-9` the ring's arc and every «where you are»
+   marker on this surface uses. Grey-on-ember here would be the version that
+   looks like a bug.
+   --------------------------------------------------------------------------- */
+.dash-hero__schedule {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: var(--s-12);
+  padding-block-start: var(--s-16);
+  /* Separates the strip from the figures above it without adding a second
+     background on a band that already carries three layers of gradient. */
+  border-block-start: var(--hairline) solid rgb(255 255 255 / 0.16);
+}
+
+.dash-hero__schedule-title {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  letter-spacing: 0.04em;
+  /* Amber, matching the bar on every row under it — this heading and those
+     bars are one object, and the eyebrow is what stops a single row from
+     reading as a stray sentence someone left on the band. */
+  color: var(--a-9);
+}
+
+.dash-hero__schedule-list {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
   gap: var(--s-12);
-  margin-block-start: var(--s-12);
+  /* `study.css` is loaded alongside Tailwind's preflight, which already strips
+     the list marker and padding — restated so this block survives being read
+     on its own. */
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
-/* Each figure is a LINK to the screen holding the rest of that number —
-   «كورساتك» → /library, «دروس خلصت» → /path, «متوسط درجاتك» → /results. They
-   were inert `<span>`s, and on a phone (where the rail is gone) this band is
-   most of what a student can see.
+/* `20rem` and not a media query: what decides whether two lectures sit side by
+   side is how much room the STRIP has, and the strip's width depends on the
+   rail as much as on the viewport (see `.dash-split`'s own note on measuring
+   the container). Below that each row takes the full line. */
+.dash-hero__schedule-row {
+  flex: 1 1 20rem;
+  min-inline-size: 0;
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-12) var(--s-16);
+  border-radius: var(--r-md);
+  background: rgb(255 255 255 / 0.10);
+  box-shadow: inset 0 0 0 var(--hairline) rgb(255 255 255 / 0.16);
+  border-inline-start: 3px solid var(--a-9);
+}
 
-   Deliberately NOT underlined and not chevroned: the band is structure, and
-   the page's one primary action is the card underneath it. The hover and the
-   focus ring are the whole affordance. `min-block-size` is the thumb target —
-   the text is 14px, which is a 20px tap box without it. */
-.dash-hero__stat {
-  display: flex;
-  align-items: baseline;
-  gap: 0.375rem;
-  min-block-size: 1.75rem;
-  border-radius: var(--r-xs);
+.dash-hero__schedule-course {
   font-size: var(--fs-text-sm);
   color: var(--stage-fg-2);
-  transition: color var(--d-hover) var(--ease-out);
+  /* One line. A long course title («الفيزياء — تانية ثانوي لغات») must not push
+     the time it labels onto a third line. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.dash-hero__stat:hover,
-.dash-hero__stat:hover .dash-hero__stat-value {
+.dash-hero__schedule-time {
+  font-size: var(--fs-title-3);
+  line-height: var(--lh-title-3);
+  font-weight: var(--fw-semibold);
   color: var(--ink-fg);
+  /* NOT clipped, unlike the label above it. The label is a name the student
+     already knows and can lose the end of; the time is the content, and «السبت
+     والتلات ٨ م بتوقيت مصر» wrapping to two lines is correct where truncating
+     it to «السبت والتلات ٨ م بتوق…» is a lie. */
+  text-wrap: balance;
 }
 
-.dash-hero__stat:focus-visible {
-  outline-offset: var(--s-4);
-}
-
-/* Drawn BETWEEN items rather than after each, so a row that wraps never ends
-   on a hanging rule. */
-.dash-hero__stat + .dash-hero__stat {
-  padding-inline-start: var(--s-12);
-  border-inline-start: var(--hairline) solid rgb(255 255 255 / 0.16);
-}
-
-.dash-hero__stat-value {
-  font-size: var(--fs-text-base);
-  font-weight: var(--fw-medium);
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-fg);
+@media (min-width: 48rem) {
+  .dash-hero__schedule-time {
+    font-size: var(--fs-title-2);
+    line-height: var(--lh-title-2);
+  }
 }
 
 .dash-hero__aside {
@@ -468,6 +669,13 @@
    are outlined and carry their own one-line condition, so the strip doubles as
    the answer to "how do I get the next one" — and `aria-label` states earned or
    not in words, because the difference between the two is fill and opacity.
+
+   ## Why the earned ones are not all the same
+
+   They are struck in three metals — see «The three metals» below, and
+   `lib/achievements.ts` for which marker is worth which. A strip where a first
+   lecture and a finished course are the same picture reports a COUNT and calls
+   it an achievement.
    --------------------------------------------------------------------------- */
 /* Two rows of three, and one row of six only from `lg`.
    NOT `md`: between 768 and 1024 this block shares its row with the open rail,
@@ -494,7 +702,12 @@
   padding: var(--s-12) var(--s-8);
   border-radius: var(--r-lg);
   border: var(--hairline) solid var(--border);
-  background: var(--n-1);
+  /* ⚠️ `--n-3`, not `--n-1`. In the dark theme `--n-1` IS the page background,
+     and this strip's usual home is inside an `.aside-card` (`--n-2`) — a card
+     painted at `--n-1` on top of `--n-2` is not a surface, it is a hole. Same
+     correction `.tile` and `.aside-card` already took. `--n-3` reads as a chip
+     on the card AND as a chip on the bare page in the full-width variant. */
+  background: var(--n-3);
   text-align: center;
 }
 
@@ -504,22 +717,128 @@
   inline-size: 2.75rem;
   block-size: 2.75rem;
   border-radius: 999px;
-  background: var(--n-3);
-  color: var(--n-9);
+  /* One step above the card it sits on, so an unearned disc is still visibly a
+     disc. `--n-10` rather than `--n-9` for the glyph: at `--n-9` on `--n-4` the
+     icon measures ~2.9:1 in the light theme, under the 3:1 that non-text
+     graphics have to clear. Quiet is not the same thing as invisible. */
+  background: var(--n-4);
+  color: var(--n-10);
 }
 
-/* An earned marker is the ONE amber-filled thing in the strip, and amber is
-   correct here for the same reason it marks the current lesson: this is a
-   statement about the student's position, not a control. Nothing in the strip
-   is pressable, so nothing competes with the page's real actions. */
+/* ---------------------------------------------------------------------------
+   The three metals — bronze, silver, gold.
+
+   ## Why the strip needed them
+
+   Every marker used to be one amber disc: earned or not, and nothing else. So
+   six discs said how MANY a student had and never how much any one of them was
+   worth — «أول درس» and «كورس كامل» were the same picture. «خليها يبقى فيه
+   البرونز».
+
+   WHICH marker is which tier is not decided here and must not be: it is a claim
+   about difficulty, it is argued out in `lib/achievements.ts` beside the
+   predicate that earns it, and this file only knows how to paint the three
+   names it is handed.
+
+   ## Built out of the ramps, not out of new colour
+
+   There are no metallic hues in the palette and none are being added — a fourth
+   family beside amber and ember is a fourth thing to keep in tune. Each metal is
+   a three-stop gradient assembled from steps that already exist:
+
+     bronze  the PRIMARY ramp's deep end (`--p-400`/`--p-600`/`--p-800`, hue
+             42–66) pulled toward `--ink-fg-2` and `--ink`, which drops the
+             chroma enough that it stops reading as "the brand orange, darker"
+             and starts reading as metal.
+     silver  the `--ink-*` family, which is achromatic by design and is the only
+             neutral in this file that does NOT flip between themes — the `--n-*`
+             ramp inverts, so a silver built from `--n-8` is a light disc on
+             paper and a near-black one at night.
+     gold    the accent itself, lifted at the top stop and dropped into `--p-700`
+             at the bottom. Amber is already the "this is where you are" colour,
+             and the most expensive badge is the right place to spend it.
+
+   ⚠️ THEME STABILITY IS THE POINT. Every stop above is either theme-fixed
+   (`--p-*`, `--ink*`) or moves by less than one percent lightness between the
+   two `--a-9` declarations. A metal that changes colour when the page does is
+   not a metal.
+
+   ## Telling them apart on a 390px phone
+
+   Colour alone will not do it — the strip is three columns at that width, the
+   discs are 44px, and bronze-vs-gold is a hue difference of about 20° that
+   collapses entirely under protanopia. So the tier is ALSO carried by the
+   weight of the ring around the disc — 1px bronze, 2px silver, 3px gold — which
+   survives greyscale, survives a bad screen in sunlight, and reads as exactly
+   what it is: the expensive ones are the heavy ones.
+   --------------------------------------------------------------------------- */
+.badge--bronze {
+  --badge-metal-hi: color-mix(in oklch, var(--p-400) 62%, var(--ink-fg-2));
+  --badge-metal:    color-mix(in oklch, var(--p-600) 74%, var(--ink-fg-2));
+  --badge-metal-lo: color-mix(in oklch, var(--p-800) 82%, var(--ink));
+  /* Near-white off the top of the primary ramp: `--p-50` is theme-fixed, and a
+     warm white on a warm metal beats a pure one, which reads as a sticker. */
+  --badge-metal-fg: var(--p-50);
+  --badge-ring: 1px;
+}
+
+.badge--silver {
+  --badge-metal-hi: var(--ink-fg);
+  --badge-metal:    var(--ink-fg-2);
+  --badge-metal-lo: color-mix(in oklch, var(--ink-fg-2) 55%, var(--ink-2));
+  --badge-metal-fg: var(--ink);
+  --badge-ring: 2px;
+}
+
+.badge--gold {
+  --badge-metal-hi: color-mix(in oklch, var(--a-9) 55%, var(--ink-fg));
+  --badge-metal:    var(--a-9);
+  --badge-metal-lo: var(--p-700);
+  --badge-metal-fg: var(--ink);
+  --badge-ring: 3px;
+}
+
+/* ⚠️ The tier class is on the `<li>` whether or not the marker is earned — an
+   unearned gold badge is still a gold badge, and the strip is supposed to say
+   so. The METAL, though, is spent only here, under `.badge--earned`: an
+   unearned marker stays the quiet `--n-3`/`--n-4` chip above, keeps its `title`
+   hint, and carries no lock, no dimming and no strike-through. It has to read
+   as "not yet", never as "not for you". */
 .badge--earned {
-  border-color: color-mix(in oklch, var(--a-9) 40%, transparent);
-  background: color-mix(in oklch, var(--a-9) 7%, var(--n-1));
+  border-color: color-mix(in oklch, var(--badge-metal) 45%, transparent);
+  background: color-mix(in oklch, var(--badge-metal) 10%, var(--n-3));
 }
 
 .badge--earned .badge__disc {
-  background: var(--a-9);
-  color: #1a1206;
+  /* 160deg, not 180: a straight vertical ramp reads as a gradient, an angled
+     one reads as a lit object. The two inset shadows are the same trick — a
+     bright top edge and a shadowed bottom one are what make a flat circle look
+     struck rather than filled. White and black at low alpha rather than palette
+     colours, because they are LIGHT, not hue; `--ink-line` in the tokens file
+     is the same idea. */
+  background: linear-gradient(
+    160deg,
+    var(--badge-metal-hi) 0%,
+    var(--badge-metal) 52%,
+    var(--badge-metal-lo) 100%
+  );
+  color: var(--badge-metal-fg);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.45),
+    inset 0 -2px 4px rgb(0 0 0 / 0.22),
+    0 0 0 var(--badge-ring) color-mix(in oklch, var(--badge-metal) 34%, transparent);
+}
+
+/* Gold gets one thing the other two do not: a halo. It is the only tier a
+   student can hold without holding the cheaper ones (a distinction on the first
+   exam), so it has to win the strip at a glance rather than merely sit at the
+   top of an ordering nobody can see. */
+.badge--gold.badge--earned .badge__disc {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.5),
+    inset 0 -2px 4px rgb(0 0 0 / 0.22),
+    0 0 0 var(--badge-ring) color-mix(in oklch, var(--badge-metal) 34%, transparent),
+    0 0 14px -2px color-mix(in oklch, var(--badge-metal) 55%, transparent);
 }
 
 .badge__title {
@@ -543,11 +862,41 @@
    rather than the solid one: a page of four solid ember bars competes with
    the stage above them, and the stage has to stay the loudest thing.
    --------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+   ⚠️ EMBER HERE IS STATE, NOT DECORATION — and it used to be the other way up.
+
+   Every unit carried `--e-tint-line` as its border and `--e-tint` as its head,
+   open or closed. On a course with four units that is four saturated maroon
+   outlines stacked down a near-black page, each wrapping a header of muddy
+   warm brown, and nothing among them saying which one the student is actually
+   in. Measured on production 2026-09-05: `.unit` border
+   `lab(28.5 33.8 30.5)` around a `rgb(8,9,10)` body, `.unit__head`
+   `lab(9.3 16.3 11.0)`. Reported as «الشكل وحش… وبلاش اللون الفاجّ دي».
+
+   The colour was never the problem; spending it on everything was. A closed
+   unit is now an ordinary card — the neutral hairline every other surface on
+   this platform uses, on a real `--n-2` surface — and the ember is kept for
+   the one unit that is OPEN. That is the same rule the rest of the file
+   already follows for amber («ACTION, plus THE CURRENT POSITION»): a hue that
+   marks everything marks nothing.
+
+   `--n-2` and not `--n-1`: in the dark theme `--n-1` IS the page background,
+   so a card painted with it is a hole held together by a hairline. Same
+   correction `.tile` and `.aside-card` took.
+   --------------------------------------------------------------------------- */
 .unit {
-  border: var(--hairline) solid var(--e-tint-line);
+  border: var(--hairline) solid var(--border);
   border-radius: var(--r-lg);
   overflow: hidden;
-  background: var(--n-1);
+  background: var(--n-2);
+  transition:
+    border-color var(--d-hover) var(--ease-out),
+    background var(--d-hover) var(--ease-out);
+}
+
+/* The one you are in. This is the whole of what the ember now buys. */
+.unit[open] {
+  border-color: var(--e-tint-line);
 }
 
 .unit + .unit { margin-block-start: var(--s-16); }
@@ -558,13 +907,24 @@
   gap: var(--s-12);
   inline-size: 100%;
   padding: var(--s-16);
-  background: var(--e-tint);
+  /* A surface step off the card, not an ember wash — see `.unit` above. The
+     open unit's head takes the tint back, which is what makes the tint mean
+     «إنت هنا» instead of «هذا صندوق». */
+  background: var(--n-3);
   text-align: start;
   cursor: pointer;
   transition: background var(--d-hover) var(--ease-out);
 }
 
+.unit[open] > .unit__head {
+  background: var(--e-tint);
+}
+
 .unit__head:hover {
+  background: var(--n-4);
+}
+
+.unit[open] > .unit__head:hover {
   background: color-mix(in oklch, var(--e-tint), var(--e-stage) 8%);
 }
 
@@ -1038,6 +1398,16 @@ details[open] > .unit__head .unit__chevron,
    border. The icon well is what gives them a shape at a glance; the hue is
    what stops four of them in a row from reading as one grey block.
    --------------------------------------------------------------------------- */
+/* ⚠️ `--n-2`, not `--n-1`. `--n-1` IS the page background — in the dark theme
+   both resolve to `#08090A`, so a row of these was a row of invisible
+   rectangles held apart by a 12%-white hairline and nothing else. Measured on
+   production 2026-09-05: `body`, `.tile` and `.aside-card` all painted
+   `rgb(8,9,10)`, while `.panel` beside them already sat on `--n-2` and read
+   correctly. This is that inconsistency fixed, not a new palette — «الشكل وحش،
+   حسّن شكل الديزاين» is what one flat value across every surface looks like.
+   Works in light too: there the page is `--n-1` (#FDFCFB) and `--n-2` is one
+   step darker, so a tile sits off the page in BOTH themes rather than in
+   neither. */
 .tile {
   display: flex;
   align-items: flex-start;
@@ -1045,7 +1415,17 @@ details[open] > .unit__head .unit__chevron,
   padding: var(--s-16);
   border: var(--hairline) solid var(--border);
   border-radius: var(--r-lg);
-  background: var(--n-1);
+  background: var(--n-2);
+}
+
+/* The text side. It was `min-w-0 flex-1` in the markup and had to become a
+   class: on the dashboard band the tile turns its axis below `48rem`, and in a
+   COLUMN flex container `flex: 1` grows the wrong dimension while `min-width`
+   constrains nothing. `min-inline-size` and a logical `flex-basis` say the same
+   thing in either direction. */
+.tile__body {
+  min-inline-size: 0;
+  flex: 1 1 auto;
 }
 
 .tile__well {
@@ -1107,6 +1487,142 @@ details[open] > .unit__head .unit__chevron,
   color: oklch(0.82 0.095 var(--tile-h));
 }
 
+/*
+ * `tone="ink"` — the tile drawn on a block that is DARK IN BOTH THEMES.
+ *
+ * Today that is only the dashboard's ember band, and it is the reason this
+ * modifier exists at all. `.tile`'s ground is `--n-2`, which is one step off
+ * the PAGE — correct there, and meaningless on ember: in the dark theme `--n-2`
+ * is within a hair of the band's own darkest gradient stop, so an unmodified
+ * tile on the band is a rectangle you can only find by its border, and in the
+ * light theme it is a near-white slab punched into a mid-lightness ember field.
+ * Neither is a surface; they are two different accidents from one value.
+ *
+ * The fix is not a third neutral step. Every neutral in this product INVERTS
+ * between themes, and this band does not — so the only paint that behaves is a
+ * white alpha, which composites against whatever part of the gradient it lands
+ * on and is the same colour in both themes because the thing under it is. That
+ * is the identical argument `<ProgressRing tone="ink">` makes for its unfilled
+ * track, six inches to the left of these tiles.
+ *
+ * The specific alphas are not new either: `0.10` on `0.16` is exactly what the
+ * «مواعيد المحاضرات» rows beside them are built from. These tiles and that
+ * strip are siblings on one band, and two white-alpha recipes on one surface
+ * would read as two different materials. The well goes one step brighter than
+ * the tile it sits in (`0.18`) so it keeps the shape-at-a-glance job it does on
+ * the page surface, where it has a whole hue to do it with.
+ */
+.tile--ink {
+  background: rgb(255 255 255 / 0.10);
+  border-color: rgb(255 255 255 / 0.16);
+}
+
+.tile--ink .tile__well {
+  background: rgb(255 255 255 / 0.18);
+  color: var(--ink-fg);
+}
+
+.tile--ink .tile__value {
+  color: var(--ink-fg);
+}
+
+/* `--stage-fg-2` is set on `.dash-hero` itself and inherits down to here — a
+   measured 86% white, for the reason `.stage` argues at length: `--ink-fg-2` is
+   too dark on a mid-lightness ember. The fallback keeps this honest if the tone
+   is ever used on a dark block that does not define it. */
+.tile--ink .tile__label,
+.tile--ink .tile__suffix,
+.tile--ink .tile__note {
+  color: var(--stage-fg-2, rgb(255 255 255 / 0.86));
+}
+
+.tile--ink .tile__note {
+  border-block-start-color: rgb(255 255 255 / 0.16);
+}
+
+/*
+ * A well struck in METAL — the one thing on these three tiles that is allowed
+ * a colour: «شارات محققة», lit by the best badge tier the student holds.
+ *
+ * ## Why a metal rather than a hue
+ *
+ * The other two wells on the band are a flat white alpha, matching the «مواعيد
+ * المحاضرات» rows beside them, which leaves colour free to MEAN something
+ * here — and what it means is a rank. A rank wants the material the rank is
+ * already made of everywhere else on this page: the `--badge-metal*` stops
+ * `.badge--bronze` / `--silver` / `--gold` declare for «إنجازاتك», reused
+ * verbatim rather than re-mixed. The tier class is put on the tile by
+ * `statFigures`; those classes are a palette and declare no layout, which is
+ * what makes borrowing them safe.
+ *
+ * The gradient is the same 160° recipe, and the same pair of inset shadows, as
+ * `.badge--earned .badge__disc` — an angled ramp reads as a lit object where a
+ * vertical one reads as a gradient, and a bright top edge over a shadowed
+ * bottom one is what makes a flat shape look struck rather than filled. It is
+ * duplicated here rather than shared because the disc is a circle in a strip of
+ * six and this is a rounded square in a row of three; one rule serving both
+ * would have to be told which, every time.
+ *
+ * ## Theme
+ *
+ * Nothing here is theme-conditional, and that is inherited rather than lazy:
+ * every `--badge-metal*` stop is either theme-fixed (`--p-*`, `--ink*`) or
+ * moves by under one percent lightness between themes, on the stated grounds
+ * that a metal which changes colour when the page does is not a metal. That is
+ * exactly the property the ember band needs from anything painted on it.
+ *
+ * ⚠️ The leading `:root` is a SPECIFICITY BUMP, not a scope. Without it this
+ * rule is three classes and loses to `:root[data-theme='dark'] .tile--hued
+ * .tile__well` further up — a pseudo-class, an attribute and two classes,
+ * which is four — for any tile that ever carried both. Written the intuitive
+ * way, a rule like this is dead in exactly one theme and correct in the other,
+ * which is the hardest kind to notice.
+ */
+:root .tile--ink.tile--metal .tile__well {
+  background: linear-gradient(
+    160deg,
+    var(--badge-metal-hi) 0%,
+    var(--badge-metal) 52%,
+    var(--badge-metal-lo) 100%
+  );
+  color: var(--badge-metal-fg);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.45),
+    inset 0 -2px 4px rgb(0 0 0 / 0.22);
+}
+
+/*
+ * A tile that is an anchor. `.tile--link` is the affordance in full: no
+ * underline, no chevron, no lift.
+ *
+ * On the band these replaced three inline `<Link>`s that were styled exactly
+ * this way and for exactly this reason — the band is structure the student can
+ * walk through, and the page's one primary action is the amber-filled button
+ * on the card directly beneath it. A row of three tiles that announced
+ * themselves as buttons would take that fight, and the band would lose it.
+ */
+.tile--link {
+  transition:
+    background-color var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out);
+}
+
+.tile--link:hover {
+  border-color: var(--border-strong);
+}
+
+.tile--ink.tile--link:hover {
+  background: rgb(255 255 255 / 0.16);
+  border-color: rgb(255 255 255 / 0.28);
+}
+
+/* Outside the border rather than on it — the tile has its own hairline, and a
+   focus ring drawn flush against one reads as a thicker border rather than as
+   focus. */
+.tile--link:focus-visible {
+  outline-offset: var(--s-2);
+}
+
 .tile__value {
   font-size: var(--fs-title-2);
   line-height: 1.1;
@@ -1119,6 +1635,36 @@ details[open] > .unit__head .unit__chevron,
   display: block;
   margin-block-start: 0.125rem;
   font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+/*
+ * The second line — the raw count the headline number was computed FROM.
+ *
+ * Its hierarchy comes from SIZE and a rule, not from a fainter colour, and
+ * that is deliberate: on the dashboard band this text sits on a gradient, so a
+ * white alpha dialled down far enough to read as secondary is a white alpha
+ * whose contrast changes across the tile depending on which part of the ember
+ * it lands on. A hairline above it says "a related, smaller fact" at any
+ * lightness, and the colour can stay a measured one.
+ *
+ * It is also what stops the note from reading as a wrapped continuation of the
+ * label directly above it, which at two lines of similar size is exactly what
+ * it would otherwise look like.
+ */
+/* Beside the number, not under it — a unit, or the name of the thing the
+   number counts. Same size and colour the utilities it replaced resolved to. */
+.tile__suffix {
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.tile__note {
+  display: block;
+  margin-block-start: var(--s-8);
+  padding-block-start: var(--s-8);
+  border-block-start: var(--hairline) solid var(--border);
+  font-size: var(--fs-text-xs);
   color: var(--n-11);
 }
 
@@ -1187,10 +1733,38 @@ details[open] > .unit__head .unit__chevron,
    actually puts the course grid on the right and the mastery card on the
    left, independent of which one is written first.
    --------------------------------------------------------------------------- */
-@media (min-width: 64rem) {
+/* ⚠️ 80rem, NOT the 64rem this started at — and the number is a MEASUREMENT,
+   not a preference.
+
+   A viewport media query is the wrong instrument here and it is what we have:
+   this grid does not live in the viewport, it lives in the content column, and
+   the rail eats 296px of that before the page gets any. Measured in Chromium
+   with the real shell, `.dash-split__main` comes out at:
+
+     1024 → 336px    1152 → 464px    1280 → 592px    1440 → 752px
+
+   At 1024 the "two column" dashboard gives the student's own courses a 336px
+   track — NARROWER than the single-column stack it replaces, on a screen wide
+   enough that it looks like a mistake. 1280 is the first width where the main
+   column is wider than the aside beside it, which is the least a split has to
+   be true for. Below it the page stacks, which is the honest answer.
+
+   ⚠️ The table no longer ends at 1440. It used to, because `<main>` was capped
+   at `--w-shell` (1152px) and every viewport above ~1450 produced the same
+   752px column with the surplus spent on dead margin either side. The dashboard
+   now measures `--w-app` (1600px), so it keeps going — 1600 → 912px,
+   1800 → 1112px, 1920+ → 1160px — and the course grid's own
+   `2xl:grid-cols-2` is what spends it. The 80rem floor is unaffected: the cap
+   does not bind until roughly 1850px, so every number at or below 1440 is the
+   one that was measured.
+
+   If `.shell` ever becomes a container (`container-type: inline-size`), this
+   should become a container query on the content column and the number will
+   drop back to something near 64rem. */
+@media (min-width: 80rem) {
   .dash-split {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 20rem;
+    grid-template-columns: minmax(0, 1fr) 23rem;
     align-items: start;
     gap: var(--s-24);
   }
@@ -1207,6 +1781,179 @@ details[open] > .unit__head .unit__chevron,
   .dash-split__side {
     grid-column: 2;
     grid-row: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   .aside-card — one block in the dashboard's right-hand column.
+
+   ## Why these blocks moved off the main column at all
+
+   Reported, with a screenshot of a dashboard that was one long ribbon of
+   full-width rows: «إنت بتهدسلي كله تحت بعض… أنا عايز يبقى حاجات على الجنب
+   وحاجات في النص». Every block on the page had the same weight and the same
+   width, so «قناة الواتساب», «نصيحة اليوم» and «إنجازاتك» — none of which is
+   the student's actual work — sat between the resume card and their courses at
+   exactly the size of the thing they were interrupting.
+
+   ## Why each one opens with a drawing
+
+   Same complaint, second half: «غير الأيكونز، يبقى فيه صور، لأن بجد مش فاهم
+   حاجة». A 16px lucide glyph in a 40px well is a bullet point — at that size a
+   lightbulb and a trophy are the same grey smudge, so the icon was carrying no
+   information and the card was reading as a paragraph with a dot in front of
+   it. The banner is the first thing in the card and it is the size of a
+   picture, which is what makes the three tell each other apart at a glance.
+
+   DRAWN, not photographed — the same trade `SpotIllustration` and `CourseArt`
+   already make on this surface: it re-themes with the page (a raster asset
+   would need a light and a dark copy), it is sharp on every screen, and it
+   costs no request on the screen that has to paint fastest. It is also the
+   only way to keep them recognisably one family; three stock photos are three
+   different photographers.
+   --------------------------------------------------------------------------- */
+/* `--n-2` for the same reason `.tile` above documents: `--n-1` is the page. */
+.aside-card {
+  overflow: hidden;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-2);
+}
+
+.aside-card__art {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  /* Wide and shallow. A square banner on a 23rem column is 368px of picture
+     above four words of text, which is the opposite of the problem being
+     fixed — the drawing is a label for the card, not the card. */
+  aspect-ratio: 16 / 6;
+  /* `--e-art`, not `--e-tint` — see that token's own note. `--e-tint` in the
+     dark theme is one percent of lightness away from the page, so these four
+     banners rendered as dark smudges and the drawings inside them were barely
+     legible. A banner is decoration with nothing to read on it, so it can and
+     should carry real colour. */
+  background: var(--e-art);
+}
+
+.aside-card__body {
+  padding: var(--s-16);
+}
+
+/* ── the banner drawings (components/dashboard/card-art.tsx) ──────────────
+   Structure in ember, exactly one amber element per scene, and one decorative
+   hue per scene fed in as `--card-art-h`. That hue tints ONLY the wash behind
+   the subject — the rule `lib/subject-art.ts` sets for the decorative ramp is
+   that it may fill a non-interactive category mark and nothing else, and a
+   banner is the purest case of one. */
+/* Must match `.aside-card__art`'s background exactly — the SVG is `slice`d
+   inside the banner, so any gap shows the ground through. */
+.card-art__field {
+  fill: var(--e-art);
+}
+
+.card-art__wash {
+  fill: oklch(0.62 0.13 var(--card-art-h) / 0.14);
+}
+
+.card-art__solid {
+  fill: var(--n-1);
+  stroke: var(--e-tint-line);
+  stroke-width: 2;
+}
+
+.card-art__screen {
+  fill: var(--e-tint);
+}
+
+/* A raised face — the podium's winning block, and anything else that has to
+   read as a surface rather than as a hole. `--n-1` (what `.card-art__solid`
+   fills with) is the PAGE background, which on a light card is white paper and
+   on the dark theme is a near-black rectangle sitting in the middle of an ember
+   banner. A neutral wash keyed off the foreground is light on dark and dark on
+   light, so it reads as "raised" in both. */
+.card-art__riser {
+  fill: color-mix(in oklch, var(--n-12), transparent 90%);
+  stroke: var(--e-tint-line);
+  stroke-width: 2;
+}
+
+.card-art__line {
+  fill: none;
+  stroke: var(--e-tint-line);
+  stroke-width: 2;
+}
+
+.card-art__lens {
+  fill: oklch(0.62 0.13 var(--card-art-h) / 0.18);
+  stroke: var(--e-tint-line);
+  stroke-width: 2;
+}
+
+.card-art__mark {
+  fill: none;
+  stroke: var(--e-tint-line);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.card-art__accent-fill {
+  fill: var(--a-9);
+}
+
+.card-art__accent-stroke {
+  fill: none;
+  stroke: var(--a-9);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.aside-card__title {
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+/* A `.group-head` that has been wrapped in a card by `<AsideBlock>` keeps its
+   ember mark and its rule — both still do their job — but not its full-width
+   type size. `--fs-title-3` beside the `--fs-title-4` of the cards above and
+   below it is the same heading printed at two sizes in one 23rem column. */
+.aside-card .group-head {
+  margin-block-end: var(--s-12);
+}
+
+.aside-card .group-head__title {
+  font-size: var(--fs-title-4);
+}
+
+.aside-card__note {
+  margin-block-start: var(--s-4);
+  font-size: var(--fs-text-sm);
+  line-height: var(--lh-text-sm);
+  color: var(--n-11);
+}
+
+/* The strip inside a 23rem column. `.badge-strip`'s own `lg` rule opens to six
+   columns on the assumption it has the content width — in the aside that is
+   six 50px cells, and «أول امتحان» wraps to three lines inside each one. Three
+   across, at every width, is what the column can actually carry. */
+.badge-strip--compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-8);
+}
+
+/* …and it has to WIN over `.badge-strip`'s own `lg` rule, which is written
+   inside a media query and would otherwise come later in the cascade at equal
+   specificity. Repeating it under the same query is the fix; a modifier that
+   only works below the breakpoint it exists for is not a modifier.
+
+   64rem here and not 80rem: this is answering `.badge-strip`'s own query, which
+   is at 64rem. It is not the split's breakpoint and must not follow it. */
+@media (min-width: 64rem) {
+  .badge-strip--compact {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s-8);
   }
 }
 
@@ -1528,6 +2275,21 @@ details[open] > .unit__head .unit__chevron,
   background: color-mix(in oklch, var(--err) 12%, var(--n-1));
   box-shadow: inset 0 0 0 var(--hairline) color-mix(in oklch, var(--err) 35%, transparent);
   color: var(--err);
+}
+
+/* The third state, and the reason the other two are not enough: a paper whose
+   essays are still with مهندس أيمن has no verdict yet. It used to render
+   `.verdict--fail` — «محتاجة مراجعة», in red, on a midterm nobody had finished
+   marking, because `gradeAttempt` counts an ungraded answer as zero and the
+   provisional total lands under the pass line.
+
+   Ember, not a third hue: amber is already this product's "in flight" colour
+   (the queue badge, `.chip--solid`, the grading screen's running total), and
+   green/red stay reserved for a decision that has actually been made. */
+.verdict--pending {
+  background: color-mix(in oklch, var(--a-9) 12%, var(--n-1));
+  box-shadow: inset 0 0 0 var(--hairline) color-mix(in oklch, var(--a-9) 35%, transparent);
+  color: var(--a-11);
 }
 
 /* ---------------------------------------------------------------------------
@@ -2305,10 +3067,349 @@ details[open] > .unit__head .unit__chevron,
    highlight; the dots must sit under the body text either way. */
 .stage__body { position: relative; z-index: 1; }
 
-/* ---------------------------------------------------------------------------
+
+/* ===========================================================================
    /welcome — the last screen of signing up and the first of the product.
 
-   ## .welcome-steps
+   ## What changed, and what the change is answering
+
+   Everything below the first two blocks is new, and it is one request: «دي
+   عاوز يبقى شكلها حلو كده، ترحب بيه بأنيميشن أو صور من النت، ويضغط ابدأ الآن
+   تبقى قدامه بتتحرك كده يعني».
+
+   The screen it describes was a ~380px card sitting at the top of a 1129px
+   page with nothing under it, nothing moving on it, and a link that navigated
+   in the same frame it was pressed. Every element was individually correct and
+   the screen as a whole read as a receipt rather than as an arrival.
+
+   ## Why motion and not «صور من النت»
+
+   Stock photography has been tried on this product's cards and lost every
+   time: English burned into the artwork, crops that fail at wide aspect
+   ratios, and a look that fights the bespoke course covers the platform
+   already draws. Motion built out of the ember ramp costs no request on a
+   FIRST-PAINT screen, re-themes with light and dark for free, and cannot
+   arrive broken. It is also closer to what was actually asked for — «تبقى
+   قدامه بتتحرك».
+
+   ## The three rules everything here obeys
+
+   1. TRANSFORM AND OPACITY ONLY (plus `stroke-dashoffset`, which is paint, and
+      one `color`). Nothing animates a width, a height or a margin, so nothing
+      here can cost a layout pass or move a neighbour. Same rule
+      `ayman/no-layout-animation` enforces on the JS side.
+   2. NOTHING GATES THE CTA. `.welcome-cta`'s entrance animates transform and
+      NOTHING else — it is painted, hit-testable and pressable on the first
+      frame. An entrance that hides the one control for a third of a second is
+      a worse screen than the static one it replaced.
+   3. IT ALL STOPS UNDER `prefers-reduced-motion: reduce`. Not "shortened" —
+      the block at the bottom of this file removes every animation on this
+      screen and leaves a complete, finished, fully usable static page. The
+      handoff timer goes to zero with it (`handoffDelayMs` in
+      `lib/welcome-motion.ts`), so that student's press navigates on the same
+      tick the browser would have.
+
+   ## Where the numbers live
+
+   The stagger is written into the markup as `--welcome-delay`, from the table
+   in `apps/web/lib/welcome-motion.ts`. The DURATIONS are the custom properties
+   declared on `.welcome-page` and `.welcome-steps` below, and the ones that
+   TypeScript also needs (because the handoff is a `setTimeout` that has to
+   outlast the animation it is waiting for) are restated there.
+
+   ⚠️ Two copies of a number is a bug waiting to happen, so it is tested:
+   `lib/welcome-motion.test.ts` reads THIS FILE and fails if any mirrored value
+   drifts from its constant.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   .welcome-page — the `<main>`, and the answer to the empty page.
+
+   Three things, and none of them is a bigger card:
+
+   · CENTRED IN THE VIEWPORT, not pinned to the top of it. `100dvh` less the
+     topbar is exactly the room this route has, so the scene sits in the middle
+     of its own screen and the space above and below it is symmetrical and
+     therefore reads as composition rather than as a page that stopped early.
+
+     ⚠️ Centred with `margin-block: auto` on the scene, NOT `justify-content`
+     on the page. An auto margin absorbs POSITIVE free space only — when the
+     content is taller than the room (a phone in landscape, a student with a
+     large text size), it resolves to zero and the scene simply starts at the
+     top. `justify-content: center` in the same situation overflows the box
+     equally at both ends and pushes the greeting above the top of the scroll
+     range, where it cannot be reached. `safe center` was the other answer to
+     that; it was tried and dropped, because lightningcss dedupes the two
+     `justify-content` declarations down to the `safe` one at build time, so
+     the fallback the pair depends on does not survive into the stylesheet the
+     browser is served.
+   · 36rem RATHER THAN 32. Four rem is not a redesign; it is the difference
+     between a card and a panel at the width this screen is actually viewed at.
+   · A FLOOR GLOW. `.app-bloom` (globals.css) already lights every signed-in
+     screen from the top with one token at 6%. This is the same idiom anchored
+     at the other end and in the ember family instead of amber, so it reads as
+     light spilling off the band rather than as a second accent.
+
+     ⚠️ ABSOLUTE with a `-50vw` inline bleed, and NOT `position: fixed` the way
+     `.app-bloom` is. `.app-bloom` lives in the shell; this lives inside
+     `.route-fade`, which animates a `transform` for 220ms after every
+     navigation — and an element with a transform is the containing block for
+     every `position: fixed` descendant, so a fixed glow would be sized to the
+     content column for that 220ms and then snap to the viewport. Bleeding an
+     absolute box past both edges gets the same picture with nothing to snap;
+     `body { overflow-x: clip }` (globals.css) is what makes the overflow free.
+     `z-index: -1` still guarantees it can never paint over content.
+
+   On a 390px phone the centring is a no-op (the scene is taller than the room
+   it is given), the glow is simply the background, and the width cap never
+   engages. Nothing here has a desktop-only fallback because nothing here needs
+   one.
+   --------------------------------------------------------------------------- */
+.welcome-page {
+  /* ⚠️ MIRRORED in `lib/welcome-motion.ts` as WELCOME_ENTRANCE_DURATION_MS and
+     WELCOME_HANDOFF_MS. `welcome-motion.test.ts` reads this file and asserts
+     the pairs still agree — the handoff is a JS timer waiting on a CSS
+     animation, and the two drifting apart is a navigation that fires while the
+     scene is still on screen. */
+  --welcome-rise: 360ms;
+  --welcome-handoff: 260ms;
+
+  /* Where an element sits on the entrance ladder. Every animating element
+     overrides this inline, from the table in `lib/welcome-motion.ts`; declaring
+     the default here is what makes `.welcome-in` on an element with no delay
+     mean "arrive now" rather than "arrive at an undefined time".
+
+     ⚠️ It also has to be DECLARED somewhere `css-token-coverage.test.ts` looks,
+     and `apps/web/lib` is not one of its definition roots — a property that
+     only ever exists as a string in a lib module reads to that guard as a
+     `var()` nothing defines, which is exactly the silent-empty-value failure it
+     was written to catch. Here it is both the default and the definition. */
+  --welcome-delay: 0ms;
+
+  /* The departing tick — the third stop completing as the student leaves.
+     CSS-only, so these are not mirrored; the test asserts the relationship
+     that matters instead, which is that the tick FINISHES before the router
+     moves: draw-delay + commit ≤ handoff. */
+  --welcome-commit: 180ms;
+  --welcome-commit-draw-delay: 60ms;
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  inline-size: 100%;
+  max-inline-size: 36rem;
+  margin-inline: auto;
+  padding-inline: var(--s-16);
+  padding-block: var(--s-32);
+  /* Exactly the room below the sticky topbar, so the page fills its screen and
+     does not invent a scrollbar. `box-sizing: border-box` is global, so the
+     shell's own mobile `padding-block-end` (the space it reserves for the
+     assistant launcher) is inside this figure rather than added to it.
+
+     ⚠️ `- 1px` as well, and it is not a fudge. `--topbar-h` is 56px and it is
+     the height of the DIV INSIDE the header (`student-topbar.tsx` sets
+     `h-[var(--topbar-h)]` there); the `<header>` itself adds
+     `border-b border-line`. So the bar occupies 57px and subtracting 56 left
+     this page one pixel taller than the space under it — a permanent
+     scrollbar on the one screen whose whole point is that it sits still. */
+  min-block-size: calc(100dvh - var(--topbar-h) - 1px);
+}
+
+.welcome-page::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline: -50vw;
+  z-index: -1;
+  pointer-events: none;
+  /* 10%, not the 6% `.app-bloom` spends. That bloom lights a page that already
+     has a dashboard on it; this one is the only thing in the bottom half of the
+     screen, and at 6% it measured three levels of blue against the light page —
+     present in the stylesheet and absent from the picture. Nothing reads text
+     off it, so the ceiling here is taste rather than contrast. */
+  background: radial-gradient(
+    58% 62% at 50% 108%,
+    color-mix(in oklch, var(--e-500), transparent 90%) 0%,
+    transparent 70%
+  );
+}
+
+/* The stack that arrives, and later departs, as one object. A wrapper rather
+   than animating `<main>` itself, so the floor glow above — which is a
+   `::before` of `<main>` — does not lift and fade with the content it lights.
+
+   `margin-block: auto` is also what centres it; see the ⚠️ on `.welcome-page`
+   for why the centring lives here rather than up there. */
+.welcome-scene {
+  position: relative;
+  margin-block: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   .stage--welcome — the band, on the one screen where it is the whole page.
+
+   ## Deeper body
+
+   `.stage` is sized for a band that sits ABOVE a course outline; here there is
+   no outline, and the same padding leaves a strip rather than a hero. Static
+   padding, changed once at `md` — this is layout, not motion, and it is the
+   half of "the page feels empty" that no animation could have fixed.
+
+   ## .welcome-aura — the thing behind the words
+
+   «a slow warm drift, a soft glow that breathes», built from `--e-*` and
+   nothing else. Two layers:
+
+     ::before  two DEEP pools (`--e-950`, `--e-900`) that drift across the band
+               over nineteen seconds. Deep, so they DARKEN — which is the whole
+               reason this is safe: every pixel they touch gains contrast
+               against the white text on it, never loses it.
+     ::after   one WARM bloom (`--e-500`) that breathes, capped at 9% and
+               anchored below the bottom-left corner, physically — the same
+               physical-coordinate reasoning `.stage`'s own radial highlight
+               writes out at length: this is an RTL surface, the words start at
+               its RIGHT, so a bright thing belongs at its LEFT.
+
+   ### Measured, not chosen by eye — the same rule the token file sets
+
+   `.stage` documents its own worst case: `--stage-fg-2` (86% white) at 5.08:1
+   over the band's highlighted corner, against a 4.5:1 requirement. A glow
+   behind text has to beat that, not merely coexist with it, so it was rendered
+   and read rather than argued: the aura pinned at its BRIGHTEST (the drift at
+   the far end of its travel, the breath at full opacity), the band painted with
+   its text hidden, and the brightest pixel in it sampled out of the screenshot.
+
+                      brightest band pixel   white     --stage-fg-2
+     light theme      rgb(160, 66, 42)       6.35:1    5.14:1  ✓
+     dark theme       rgb(127, 54, 36)       8.55:1    6.78:1  ✓
+
+   The light figure comes out ABOVE the band's own documented 5.08:1, and that
+   is the whole design working: the corner where the reading starts is where the
+   deep pools sit, so the aura's net effect exactly there is to darken. The 9%
+   bloom is a ceiling rather than a starting point — `welcome-breathe` only ever
+   takes the layer's opacity DOWN from it.
+
+   ### Why a real element and not a third pseudo
+
+   `.stage` has spent both of its own: `::before` is the dot field every band
+   carries and `::after` is the hairline that keeps it off a dark page. And
+   scoping it to `.stage--welcome` is deliberate — a course band that pulsed
+   behind its title every single day would be exactly the "decoration competing
+   with the text" this is not allowed to be.
+   --------------------------------------------------------------------------- */
+.stage--welcome .stage__body {
+  padding-block: var(--s-32);
+}
+
+@media (min-width: 768px) {
+  .stage--welcome .stage__body {
+    padding-block: var(--s-48);
+  }
+}
+
+.welcome-aura {
+  position: absolute;
+  inset: 0;
+  /* Above the band's own gradient, below its dots, its hairline and its body.
+     `.stage` sets `isolation: isolate`, so a negative index cannot escape it
+     and land behind the page. */
+  z-index: -1;
+  pointer-events: none;
+}
+
+.welcome-aura::before,
+.welcome-aura::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.welcome-aura::before {
+  background:
+    radial-gradient(
+      42% 55% at 18% 24%,
+      color-mix(in oklch, var(--e-950), transparent 62%) 0%,
+      transparent 68%
+    ),
+    radial-gradient(
+      46% 60% at 82% 88%,
+      color-mix(in oklch, var(--e-900), transparent 68%) 0%,
+      transparent 70%
+    );
+  animation: welcome-drift 16s var(--ease-in-out) infinite alternate;
+}
+
+.welcome-aura::after {
+  background: radial-gradient(
+    34% 42% at 14% 98%,
+    color-mix(in oklch, var(--e-500), transparent 91%) 0%,
+    transparent 70%
+  );
+  animation: welcome-breathe 7s var(--ease-in-out) infinite alternate;
+}
+
+/* Sixteen seconds and a 3% translate: slow enough and small enough that a
+   student cannot catch it moving, which is the point — it should read as the
+   band being lit rather than as something happening. The layer starts already
+   scaled past its box so a translate can never expose an edge. */
+@keyframes welcome-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.06);
+  }
+  to {
+    transform: translate3d(-3%, 3.5%, 0) scale(1.14);
+  }
+}
+
+/* The breath. Opacity is the ceiling described above — 1 IS the 9% mix, and
+   this only ever takes it down. */
+@keyframes welcome-breathe {
+  from {
+    opacity: 0.4;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   .welcome-in — the entrance, one class, six delays.
+
+   Every block on the screen carries this and its own `--welcome-delay`, from
+   the table in `lib/welcome-motion.ts`. Six classes carrying six hardcoded
+   `animation-delay` values would be the same information spread across two
+   files with nothing keeping them in step.
+
+   10px and 360ms: enough that the eye registers an arrival, short enough that
+   the whole ladder — including the second tick, which is the last thing on the
+   screen to finish — is over inside 800ms. This is the screen between a form
+   and the product, not a title sequence.
+
+   `both` rather than `forwards`: the BACKWARDS half is the load-bearing one.
+   It holds the element at `opacity: 0` through its delay, which is what makes
+   the elements arrive in an order rather than all appearing at once and then
+   sliding.
+   --------------------------------------------------------------------------- */
+@keyframes welcome-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.welcome-in {
+  animation: welcome-rise var(--welcome-rise, 360ms) var(--ease-out) both;
+  animation-delay: var(--welcome-delay, 0ms);
+}
+
+/* ---------------------------------------------------------------------------
+   .welcome-steps
 
    Two ticks and one open stop, on the `.stage` band. It is «حسابك جاهز، فاضل
    حاجة واحدة» drawn rather than written, and it is the only element on the
@@ -2322,8 +3423,26 @@ details[open] > .unit__head .unit__chevron,
    Everything here reads `--stage-fg-2`, the translucent white `.stage`
    declares for secondary text on its own gradient — see the measurement note
    there. Nothing on this rail invents a colour.
+
+   ## The ticks, and why THIS is the moment worth animating
+
+   Of everything on this screen, the two finished stops are the only part that
+   is about the student rather than about us. The band greets them, the card
+   asks them for something, the button offers them a way out — and the rail is
+   the one element that says the work they have just done counted. So it is the
+   one element that gets a real moment: the mark POPS, and then the check DRAWS
+   ITSELF, chasing its own row up the ladder.
+
+   The delays chain off the row's `--welcome-delay` rather than carrying their
+   own, so a stop and its tick can never come apart.
    --------------------------------------------------------------------------- */
 .welcome-steps {
+  /* ⚠️ MIRRORED in `lib/welcome-motion.ts` — see the note on `.welcome-page`. */
+  --welcome-tick-delay: 140ms;
+  --welcome-tick-pop: 320ms;
+  --welcome-tick-draw-delay: 120ms;
+  --welcome-tick-draw: 300ms;
+
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-8) var(--s-16);
@@ -2336,6 +3455,9 @@ details[open] > .unit__head .unit__chevron,
   display: inline-flex;
   align-items: center;
   gap: 0.4375rem;
+  /* The third stop brightens to full ink the moment it is completed, on the
+     way out. See the departure block at the foot of this file. */
+  transition: color var(--d-hover) var(--ease-out);
 }
 
 /* The open stop: a ring, deliberately empty. A third tick would say the
@@ -2350,6 +3472,15 @@ details[open] > .unit__head .unit__chevron,
   border-radius: 999px;
 }
 
+/* ⚠️ ALL THREE marks now contain a `<Check>`, and the open one's is invisible.
+   It is in the DOM for one reason: pressing «يلا نبدأ» completes that third
+   stop on the way out, and a path cannot draw itself in the same frame it is
+   inserted. Hidden by opacity, so the ring is exactly as empty as it has
+   always been, and the whole mark is `aria-hidden` either way. */
+.welcome-steps__mark svg {
+  opacity: 0;
+}
+
 .welcome-steps__step--done {
   /* Full-strength ink on the two that are finished, so the open one is the
      quiet one. The band's own foreground, not green: `--ok` is licensed for a
@@ -2362,6 +3493,63 @@ details[open] > .unit__head .unit__chevron,
   border-color: transparent;
   background: rgb(255 255 255 / 0.16);
   color: var(--ink-fg);
+  animation: welcome-tick-pop var(--welcome-tick-pop, 320ms) var(--ease-pop) both;
+  animation-delay: calc(var(--welcome-delay, 0ms) + var(--welcome-tick-delay, 140ms));
+}
+
+.welcome-steps__step--done .welcome-steps__mark svg {
+  opacity: 1;
+}
+
+.welcome-steps__step--done .welcome-steps__mark path {
+  animation: welcome-tick-draw var(--welcome-tick-draw, 300ms) var(--ease-out) both;
+  animation-delay: calc(
+    var(--welcome-delay, 0ms) + var(--welcome-tick-delay, 140ms) +
+      var(--welcome-tick-draw-delay, 120ms)
+  );
+}
+
+/* The mark lands. `--ease-pop` overshoots by design — it is the same curve the
+   product's popovers use, and this is the same gesture: something arriving
+   with a little more force than it needs. */
+@keyframes welcome-tick-pop {
+  from {
+    transform: scale(0.4);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* The check draws itself.
+
+   28 comfortably exceeds the ~22.6 user units lucide's check actually measures
+   — (20,6) → (9,17) → (4,12) — so an offset of 28 puts the whole path inside
+   the dash pattern's gap and hides it, and 0 shows all of it.
+
+   ⚠️ `stroke-dasharray` is declared on the path itself (below) rather than
+   inside the keyframes, because `lucide-react` forwards props to the `<svg>`
+   and never to the `<path>` inside it — `pathLength="1"`, which would have
+   made this a clean 1 → 0 with no magic number at all, is simply not reachable
+   from the component. `stroke-dashoffset` is a paint-only property: no layout,
+   no reflow, nothing moves. */
+@keyframes welcome-tick-draw {
+  from {
+    stroke-dashoffset: 28;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* On every mark, done or not — the open one's check is drawn by the departure
+   and it needs the same dash pattern waiting for it. With no animation running
+   (reduced motion) the offset is its initial 0 and the check is simply there. */
+.welcome-steps__mark path {
+  stroke-dasharray: 28;
 }
 
 /* ---------------------------------------------------------------------------
@@ -2376,7 +3564,35 @@ details[open] > .unit__head .unit__chevron,
    loaded after Tailwind's layer — so those two utilities would have lost
    silently, which is the failure mode the ⚠️ at the top of this file exists
    to warn about.
+
+   ## ⚠️ The one element on this screen that never fades in
+
+   `welcome-settle` animates TRANSFORM AND NOTHING ELSE. Every other block on
+   the page arrives from `opacity: 0`; this one arrives from 10px lower, at
+   full opacity, painted and hit-testable on the first frame the browser draws.
+
+   That is not a stylistic choice, it is the constraint the whole entrance was
+   designed around: a student who wants to skip the greeting must be able to
+   press this immediately, and an entrance that hides the single control on the
+   screen for a third of a second is a worse screen than the static one it
+   replaced. Nothing here sets `pointer-events`, `visibility` or `disabled`,
+   and the click handler in `welcome-scene.tsx` is attached on mount with no
+   readiness gate of its own.
+
+   `backwards`, not `both`: the fill has to STOP when the animation ends, or
+   its `transform: none` would outrank the `:active` press feedback below for
+   the rest of the page's life. Backwards still holds the 10px offset through
+   the delay, which is the half that matters.
    --------------------------------------------------------------------------- */
+@keyframes welcome-settle {
+  from {
+    transform: translateY(10px);
+  }
+  to {
+    transform: none;
+  }
+}
+
 .welcome-cta {
   display: flex;
   align-items: center;
@@ -2392,7 +3608,191 @@ details[open] > .unit__head .unit__chevron,
   color: #1a1206;
   font-size: var(--fs-text-base);
   font-weight: var(--fw-medium);
-  transition: background var(--d-hover) var(--ease-out);
+  transition:
+    background var(--d-hover) var(--ease-out),
+    transform var(--d-hover) var(--ease-out);
+  animation: welcome-settle var(--welcome-rise, 360ms) var(--ease-out) backwards;
+  animation-delay: var(--welcome-delay, 0ms);
 }
 
-.welcome-cta:hover { background: var(--a-10); }
+.welcome-cta:hover {
+  background: var(--a-10);
+}
+
+/* The press, before anything else happens. A 1% squash is the cheapest honest
+   acknowledgement a button can give, and it is the first half of «يضغط ابدأ
+   الآن تبقى قدامه بتتحرك» — the button answers, and then the scene leaves. */
+.welcome-cta:active {
+  transform: scale(0.99);
+}
+
+/* ---------------------------------------------------------------------------
+   The departure.
+
+   `welcome-scene.tsx` stamps `data-welcome="leaving"` on the `<main>` for a
+   plain left press, holds for `--welcome-handoff`, and only then asks the
+   router to move. Middle-click, ⌘-click and open-in-new-tab never reach this
+   state at all — `isPlainPress` stands down for every one of them, which is
+   why «يلا نبدأ» is still a real `<Link>` and not a `<button>`.
+
+   Three things happen in those 260ms, in this order:
+
+     1. The third stop TICKS. The rail said «نبدأ الدراسة» with an empty ring
+        for the whole visit; the press is the thing that fills it. It is the
+        closing sentence of the same picture the two ticks above it opened, and
+        it is the only reason those marks all carry a hidden `<Check>`.
+     2. The scene lifts away — 10px up, faded out, very slightly reduced.
+        Transform and opacity, so this cannot cost a layout pass while the next
+        route is already streaming in behind it.
+     3. The router moves, at 260ms — the 220ms the incoming page spends fading
+        in (`.route-fade`, globals.css) plus the 40ms the tick needs to land.
+        The scene leaves in exactly the time the next one takes to arrive, so
+        the two read as one movement rather than as a stall and then a page.
+
+   `<Link>` has prefetched the destination long before anyone presses, so this
+   is not 260ms added to a wait — it is 260ms spent while the router would have
+   been working anyway.
+   --------------------------------------------------------------------------- */
+@keyframes welcome-depart {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.985);
+  }
+}
+
+/* The button holds its ground and firms up while everything else leaves — it
+   is the thing that was pressed, so it is the thing that should look decided. */
+@keyframes welcome-cta-commit {
+  from {
+    transform: none;
+  }
+  45% {
+    transform: scale(1.03);
+  }
+  to {
+    transform: scale(1.01);
+  }
+}
+
+/* The third stop's mark, already full size, punched rather than popped. */
+@keyframes welcome-tick-commit {
+  from {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.18);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.welcome-page[data-welcome='leaving'] .welcome-scene {
+  animation: welcome-depart var(--welcome-handoff, 260ms) var(--ease-in-out) both;
+}
+
+.welcome-page[data-welcome='leaving'] .welcome-cta {
+  background: var(--a-10);
+  animation: welcome-cta-commit var(--welcome-handoff, 260ms) var(--ease-out) both;
+  /* Explicitly zeroed: this rule replaces the entrance's `animation` shorthand
+     but NOT the `animation-delay` declaration that followed it, so without
+     this the commit would wait out the CTA's 360ms entrance delay and never
+     run at all. */
+  animation-delay: 0ms;
+}
+
+.welcome-page[data-welcome='leaving'] .welcome-steps__step {
+  color: var(--ink-fg);
+}
+
+.welcome-page[data-welcome='leaving']
+  .welcome-steps__step:not(.welcome-steps__step--done)
+  .welcome-steps__mark {
+  border-color: transparent;
+  background: rgb(255 255 255 / 0.16);
+  color: var(--ink-fg);
+  animation: welcome-tick-commit var(--welcome-commit, 180ms) var(--ease-pop) both;
+}
+
+.welcome-page[data-welcome='leaving']
+  .welcome-steps__step:not(.welcome-steps__step--done)
+  .welcome-steps__mark
+  svg {
+  opacity: 1;
+}
+
+.welcome-page[data-welcome='leaving']
+  .welcome-steps__step:not(.welcome-steps__step--done)
+  .welcome-steps__mark
+  path {
+  animation: welcome-tick-draw var(--welcome-commit, 180ms) var(--ease-out) both;
+  animation-delay: var(--welcome-commit-draw-delay, 60ms);
+}
+
+/* ---------------------------------------------------------------------------
+   ⚠️ Reduced motion — the whole screen, static.
+
+   `motion.css` already carries a global backstop that collapses every
+   animation to 0.01ms, and that alone would leave this screen correct: an
+   entrance whose duration is zero simply lands on its own end state. This
+   block is here anyway, and it is not belt-and-braces.
+
+   The backstop stops animations from RUNNING. It does not stop them from
+   existing, and two of the things on this screen loop forever — a 19-second
+   drift and a 7-second breath. `animation-iteration-count: 1` plus a
+   near-zero duration leaves those parked on their `from` keyframe, which for
+   `welcome-breathe` is `opacity: 0.4; scale(0.92)`: a bloom permanently stuck
+   at less than half strength, chosen for a frame nobody will ever see. Killing
+   the animation outright leaves both layers at their declared values instead,
+   which is the composed, finished, still-lit band a static screen deserves.
+
+   The same reasoning covers the ticks: with no `welcome-tick-draw` running,
+   the check's `stroke-dashoffset` is its initial `0` and every finished stop is
+   simply, permanently, ticked.
+
+   The handoff goes with it — `handoffDelayMs(true)` returns 0, so the press
+   navigates immediately. A student who asked their operating system for less
+   movement is not made to wait out a departure they were never shown.
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .welcome-in,
+  .welcome-cta,
+  .welcome-aura::before,
+  .welcome-aura::after,
+  /* ⚠️ These four MATCH THE DECLARING SELECTOR EXACTLY, compound for compound.
+     They used to be the short forms — `.welcome-steps__mark` and
+     `.welcome-steps__mark path` — and those LOSE on specificity: (0,1,0)
+     against `.welcome-steps__step--done .welcome-steps__mark`'s (0,2,0), and
+     (0,3,0) against the departure rule's (0,5,0). A cancelling rule has to be
+     at least as specific as the rule it cancels; a media query gives it no
+     extra weight.
+
+     `motion.css`'s global backstop does not cover the gap either. It forces
+     `animation-duration: 0.01ms !important` and `animation-iteration-count: 1
+     !important` — and touches `animation-delay` not at all. Every animation
+     here fills `both`, so a losing rule left each mark held on its `from`
+     keyframe (`scale(0.4)`, `stroke-dashoffset: 28`) for the whole delay and
+     then snapped it into place ~0.4s after paint: an abrupt, unrequested
+     movement on the one screen that promises none. */
+  .welcome-steps__step--done .welcome-steps__mark,
+  .welcome-steps__step--done .welcome-steps__mark path,
+  .welcome-page[data-welcome='leaving'] .welcome-scene,
+  .welcome-page[data-welcome='leaving'] .welcome-cta,
+  .welcome-page[data-welcome='leaving']
+    .welcome-steps__step:not(.welcome-steps__step--done)
+    .welcome-steps__mark,
+  .welcome-page[data-welcome='leaving']
+    .welcome-steps__step:not(.welcome-steps__step--done)
+    .welcome-steps__mark
+    path {
+    animation: none;
+  }
+
+  .welcome-cta:active {
+    transform: none;
+  }
+}

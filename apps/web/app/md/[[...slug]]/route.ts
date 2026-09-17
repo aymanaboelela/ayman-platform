@@ -3,14 +3,19 @@ import { getNewsListOrEmpty, getNewsPost } from '@/lib/news';
 import { estimateMarkdownTokens, resolveMarkdownRoute } from '@/lib/agents/markdown-routes';
 import {
   renderAboutMarkdown,
+  renderBooksMarkdown,
   renderCourseMarkdown,
   renderCoursesMarkdown,
   renderEssentialsMarkdown,
   renderHomeMarkdown,
   renderNewsIndexMarkdown,
   renderNewsPostMarkdown,
+  renderSubscribeMarkdown,
   renderYearMarkdown,
 } from '@/lib/agents/markdown-render';
+import { getBookCatalogOrEmpty } from '@/lib/books';
+import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { getHomeBlocks } from '@/lib/home-blocks';
 
 /**
  * Markdown for Agents.
@@ -67,13 +72,41 @@ export async function GET(
 
   switch (route.kind) {
     case 'home': {
-      const { courses } = await getCatalogOrEmpty();
-      return markdownResponse(renderHomeMarkdown(courses));
+      /*
+       * The live `faq` block, not the seed in `ar.ts`. The homepage FAQ is a
+       * row an admin edits — see `renderHomeMarkdown` — and this route was the
+       * one surface still publishing the shipped defaults, so `/index.md` and
+       * `/` answered different questions.
+       *
+       * `getHomeBlocks` cannot throw and falls back to the shipped blocks, so
+       * this adds a cache read and no failure mode.
+       */
+      const [{ courses }, blocks] = await Promise.all([getCatalogOrEmpty(), getHomeBlocks()]);
+      const faq = blocks.find(
+        (block) => block.isPublished && block.props.type === 'faq',
+      )?.props;
+      return markdownResponse(
+        renderHomeMarkdown(courses, faq?.type === 'faq' ? faq.items : undefined),
+      );
     }
     case 'about':
       return markdownResponse(renderAboutMarkdown());
     case 'essentials':
       return markdownResponse(renderEssentialsMarkdown());
+    case 'subscribe': {
+      // The rails are admin-configured and this route is reachable during a
+      // build where no API answers, so the defaults variant — an unconfigured
+      // page recovers on the next revalidation.
+      const { contact } = await getPublicSettingsOrDefaults();
+      return markdownResponse(renderSubscribeMarkdown(contact));
+    }
+    case 'books': {
+      // `getBookCatalogOrEmpty`, like every other loader here: this route is
+      // reachable during a build where no API answers, and an empty shop is a
+      // document that recovers on the next revalidation.
+      const catalog = await getBookCatalogOrEmpty();
+      return markdownResponse(renderBooksMarkdown(catalog));
+    }
     case 'courses': {
       const { courses } = await getCatalogOrEmpty();
       return markdownResponse(renderCoursesMarkdown(courses));

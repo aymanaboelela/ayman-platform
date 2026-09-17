@@ -1,10 +1,15 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import type {
   NotificationFeed,
   StudentNotification,
 } from '@ayman/contracts/notifications';
 import { PrismaService } from '../../prisma/prisma.service';
+import { rolesWithPermission } from '../../auth/permissions';
+import { NotificationsRealtimeService } from './notifications-realtime.service';
+import { PushService } from './push.service';
+import { pushPayloadFor } from './push-text';
 import type { Prisma } from '../../generated/prisma/client';
+import { deliveryDaysFor } from '../book-orders/delivery-days';
 
 /**
  * What the emitter is given.
@@ -18,7 +23,17 @@ import type { Prisma } from '../../generated/prisma/client';
  * for something that has no lesson.
  */
 export type EmitInput =
-  | { userId: string; kind: 'quiz_graded'; lessonId: string; attemptId: string; scorePercent: number; passed: boolean | null }
+  | {
+      userId: string;
+      kind: 'quiz_graded';
+      lessonId: string;
+      attemptId: string;
+      scorePercent: number;
+      passed: boolean | null;
+      /** Marks still awaiting a human, out of the quiz's total — `0` on a
+       *  finished paper. See the field's own note in `notifications.ts`. */
+      pendingOutOf: number;
+    }
   | { userId: string; kind: 'extra_attempt_granted'; lessonId: string }
   | { userId: string; kind: 'conversation_reply'; conversationId: string }
   | {
@@ -31,16 +46,107 @@ export type EmitInput =
   | { userId: string; kind: 'payment_approved'; courseId: string; validUntil: string | null }
   | { userId: string; kind: 'payment_rejected'; courseId: string; reason: string }
   | { userId: string; kind: 'subscription_expiring_soon'; courseId: string; validUntil: string }
-  | { userId: string; kind: 'subscription_cancelled'; courseId: string; reason: string };
+  | { userId: string; kind: 'subscription_cancelled'; courseId: string; reason: string }
+  /** ADMIN — a student submitted a Vodafone Cash transfer for review. */
+  | { userId: string; kind: 'payment_submitted'; submissionId: string; courseId: string }
+  /** ADMIN — a paid book order is waiting to be shipped. */
+  | { userId: string; kind: 'book_order_placed'; orderId: string }
+  /**
+   * ADMIN — a student sent المساعد a message that needs a reply. `preview` is
+   * a short snapshot of what was asked, taken at write time — see
+   * `AssistantController`'s `summaryPreview` call and the schema's own note
+   * for why this one is NOT resolved fresh on read the way a title is.
+   */
+  | { userId: string; kind: 'assistant_question_received'; conversationId: string; preview: string }
+  /*
+   * STUDENT — الطالب نفسه، بعد ما طلب الكتاب.
+   *
+   * `book_order_placed` above is the ADMIN's alert about the same order; these
+   * three are the half the student was never told. They carry `orderId` ONLY —
+   * no book title — because the title is resolved on read from the order's
+   * first line, same discipline every lesson and course title on this feed
+   * follows: a book renamed after it shipped should read with its new name,
+   * and freezing it onto the row would put user-facing text in the database
+   * (Global Constraint 4) on top of that.
+   */
+  | { userId: string; kind: 'book_order_shipped'; orderId: string }
+  | { userId: string; kind: 'book_order_delivered'; orderId: string }
+  /** The one that carries text. `reason` is the admin's own words, stored on
+   *  the order and shown verbatim — the same slot `payment_rejected` fills. */
+  | { userId: string; kind: 'book_order_rejected'; orderId: string; reason: string }
+  /**
+   * «مبروك، خلصت الكورس». `courseId` and nothing else — the percentage is 100
+   * by construction and the date is the row's own `createdAt`.
+   *
+   * ⚠️ The ONE caller (`CourseProgressService.recalculate`) must emit this on
+   * the TRANSITION into finished, never on the recomputed value: course
+   * progress is recalculated on every lesson completion and keeps answering
+   * "finished" for a course already done, so an emit on the value would
+   * congratulate a student again every time they re-opened a lesson to
+   * revise.
+   */
+  | { userId: string; kind: 'course_completed'; courseId: string }
+  /**
+   * ADMIN — «الواجب وصل». Fanned out to `homework:read` from inside the same
+   * transaction that writes the submission, like `payment_submitted`, so an
+   * answer that exists is always an answer somebody was told about.
+   *
+   * `submissionId` is what the alert LINKS to (the review screen) and
+   * `lessonId` is what it NAMES; both are needed because the queue is per
+   * submission and the sentence is about a lecture.
+   */
+  | { userId: string; kind: 'homework_submitted'; submissionId: string; lessonId: string }
+  /**
+   * STUDENT — he marked it. The words are a message in the student's own
+   * thread (see `HomeworkService.review`); this carries only what the feed has
+   * to draw: which lecture, which verdict, and the mark if he gave one.
+   */
+  | {
+      userId: string;
+      kind: 'homework_reviewed';
+      submissionId: string;
+      lessonId: string;
+      /** So the feed can build a link to the LESSON, which needs the course's
+       *  slug — resolved at read time from the batched course lookup. */
+      courseId: string;
+      homeworkStatus: 'accepted' | 'needs_work';
+      grade: number | null;
+    };
 
 /** The kinds whose title is resolved from a lesson at read time. */
-const LESSON_KINDS = new Set(['quiz_graded', 'extra_attempt_granted']);
+const LESSON_KINDS = new Set([
+  'quiz_graded',
+  'extra_attempt_granted',
+  // الواجب — both directions name a LECTURE, so both resolve their title from
+  // the one batched lesson lookup rather than each adding a query of its own.
+  'homework_submitted',
+  'homework_reviewed',
+]);
 /** The kinds whose title is resolved from a COURSE at read time. */
 const COURSE_KINDS = new Set([
   'payment_approved',
   'payment_rejected',
   'subscription_expiring_soon',
   'subscription_cancelled',
+  'payment_submitted',
+  'course_completed',
+  // Not because a course is what it is ABOUT — the lecture is — but because
+  // the link to that lecture is `/courses/:slug/lessons/:id`, and the slug
+  // comes from the same batched lookup rather than a query of its own.
+  'homework_reviewed',
+]);
+/**
+ * The three STUDENT kinds whose title comes from the ORDER's first line.
+ *
+ * Deliberately not folded into `COURSE_KINDS` above even though a book order
+ * can name a course: an order placed from `/books` has a basket and no course
+ * at all (`BookOrder.courseId` is nullable — see the model's own warning), so
+ * the course is never the thing to name here. The book is.
+ */
+const BOOK_ORDER_KINDS = new Set([
+  'book_order_shipped',
+  'book_order_delivered',
+  'book_order_rejected',
 ]);
 
 /**
@@ -64,7 +170,31 @@ const COURSE_KINDS = new Set([
  */
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  /**
+   * `@Optional()` on the fan-out, and only on the fan-out.
+   *
+   * Writing a notification is the job; delivering it to an already-open tab is
+   * an optimisation on top. Nine unit specs construct this service by hand as
+   * `new NotificationsService(prisma)` to assert what it WRITES, and three
+   * more build cut-down Nest fixtures that list their providers explicitly —
+   * none of them is about the live stream, and requiring the dependency turns
+   * every one of them into a DI failure that reads as "the route does not
+   * exist".
+   *
+   * The real application always has it: `NotificationsModule` provides it in
+   * the same `providers` array as this service. `announce` below is the only
+   * caller and it checks — so an instance without one still writes every row
+   * and simply does not push.
+   */
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly realtime?: NotificationsRealtimeService,
+    // `@Optional()` for the same reason `realtime` is: nine unit specs build
+    // this service by hand as `new NotificationsService(prisma)`, and none of
+    // them is about push. The real application always has it —
+    // `NotificationsModule` provides it in the same array as this service.
+    @Optional() private readonly push?: PushService,
+  ) {}
 
   /**
    * Writes one notification inside the caller's transaction.
@@ -78,6 +208,82 @@ export class NotificationsService {
     await tx.notification.create({
       data: { userId, kind, payload: rest as Prisma.InputJsonValue },
     });
+  }
+
+  /**
+   * Writes one notification for EVERY user who holds `permission`, inside the
+   * caller's transaction, and answers with the ids so the caller can announce
+   * to them once it has committed.
+   *
+   * ## Why a permission and not a role
+   *
+   * «مين المفروض يعرف إن فيه دفعة مستنية» is answered by the same authority
+   * that decides who may open the review screen. Addressing `role: 'admin'`
+   * directly would be a second answer to that question, free to disagree with
+   * the first the day a narrower staff role exists — and the failure would be
+   * silent: the new role gets the screen and never gets told to look at it.
+   *
+   * ## Why rows and not just a socket event
+   *
+   * Because most of these arrive while nobody is looking. A fire-and-forget
+   * live event reaches the admin who happens to have the tab open at 2am and
+   * nobody else; a row is still there in the morning, and the same feed, badge
+   * and mark-as-read the student side already has come for free.
+   */
+  async emitToPermission<K extends EmitInput['kind']>(
+    tx: Prisma.TransactionClient,
+    permission: string,
+    kind: K,
+    payload: Omit<Extract<EmitInput, { kind: K }>, 'kind' | 'userId'>,
+  ): Promise<string[]> {
+    const roles = rolesWithPermission(permission);
+    if (roles.length === 0) return [];
+
+    const recipients = await tx.user.findMany({
+      where: { role: { in: roles } },
+      select: { id: true },
+    });
+    if (recipients.length === 0) return [];
+
+    // `createMany` rather than N `create`s: this is one event, and one INSERT
+    // is what it should cost however many people are told about it.
+    await tx.notification.createMany({
+      data: recipients.map((recipient) => ({
+        userId: recipient.id,
+        kind,
+        payload: payload as Prisma.InputJsonValue,
+      })),
+    });
+
+    return recipients.map((recipient) => recipient.id);
+  }
+
+  /**
+   * `emitToPermission` + `announceAll`, in one call, for a caller with no
+   * transaction of its own to extend.
+   *
+   * `AssistantController` is the reason this exists. `PaymentsService` and
+   * `BookOrdersService` call `emitToPermission` from INSIDE the same
+   * transaction that creates the row it is about — see either one's own
+   * comment for why that matters. `AssistantService` cannot offer the same
+   * transaction: its own spec (`assistant.service.spec.ts`) asserts it
+   * reaches no Prisma delegate outside `conversation`/`conversationMessage`,
+   * which is the strongest statement this product makes about what a
+   * stranger's message can touch, and `emitToPermission` needs `user` to
+   * resolve recipients. So the notification is a second commit rather than
+   * folded into the first — a crash in the gap between them loses an ALERT,
+   * never the question itself, which stays fully readable in `/admin/inbox`
+   * regardless.
+   */
+  async notifyPermission<K extends EmitInput['kind']>(
+    permission: string,
+    kind: K,
+    payload: Omit<Extract<EmitInput, { kind: K }>, 'kind' | 'userId'>,
+  ): Promise<void> {
+    const admins = await this.prisma.$transaction((tx) =>
+      this.emitToPermission(tx, permission, kind, payload),
+    );
+    await this.announceAll(admins);
   }
 
   async feed(userId: string, limit: number, cursor?: string): Promise<NotificationFeed> {
@@ -135,8 +341,9 @@ export class NotificationsService {
     });
     const titles = new Map(lessons.map((lesson) => [lesson.id, lesson.title]));
 
-    // Same shape as the lesson lookup above, for the two kinds a course rather
-    // than a lesson is the subject of.
+    // Same shape as the lesson lookup above, for every kind a course rather
+    // than a lesson is the subject of — `COURSE_KINDS`, which is now six of
+    // them. ONE query for the page, however many of those rows it holds.
     const courseIds = [
       ...new Set(
         page
@@ -153,8 +360,136 @@ export class NotificationsService {
     const courseTitles = new Map(courses.map((course) => [course.id, course.title]));
     const courseSlugs = new Map(courses.map((course) => [course.id, course.slug]));
 
+    /*
+      WHO the admin-facing rows are about.
+
+      One map, keyed by the row's own subject id — a submission id or an order
+      id — because the two admin kinds resolve a person from two different
+      tables and neither has a `userId` worth trusting on the payload: a book
+      order can be placed by someone with no account at all, and its
+      `fullName` is the name the parcel is addressed to, which is the name an
+      admin needs to read.
+
+      Resolved at read time like every other title on this feed, so a student
+      who corrects their name sees it corrected everywhere.
+    */
+    const submissionIds = page
+      .filter((row) => row.kind === 'payment_submitted')
+      .map((row) => payloadString(row.payload, 'submissionId'))
+      .filter((id): id is string => id !== null);
+    const orderIds = page
+      .filter((row) => row.kind === 'book_order_placed')
+      .map((row) => payloadString(row.payload, 'orderId'))
+      .filter((id): id is string => id !== null);
+    // Keyed by CONVERSATION id rather than a submission/order id, but the
+    // same `names` map — an `assistant_question_received` row never collides
+    // with the two above, since ids are uuid7s from different tables.
+    const conversationIds = page
+      .filter((row) => row.kind === 'assistant_question_received')
+      .map((row) => payloadString(row.payload, 'conversationId'))
+      .filter((id): id is string => id !== null);
+    // «مين اللي بعت» on the admin's homework alert. Keyed by the homework
+    // submission id, in the same map for the same reason the comment above
+    // gives: these are uuid7s from a different table and cannot collide.
+    const homeworkIds = page
+      .filter((row) => row.kind === 'homework_submitted')
+      .map((row) => payloadString(row.payload, 'submissionId'))
+      .filter((id): id is string => id !== null);
+
+    const names = new Map<string, string>();
+    if (submissionIds.length > 0) {
+      const submissions = await this.prisma.paymentSubmission.findMany({
+        where: { id: { in: submissionIds } },
+        select: { id: true, user: { select: { name: true } } },
+      });
+      for (const submission of submissions) names.set(submission.id, submission.user.name);
+    }
+    if (orderIds.length > 0) {
+      const orders = await this.prisma.bookOrder.findMany({
+        where: { id: { in: orderIds } },
+        select: { id: true, fullName: true },
+      });
+      for (const order of orders) names.set(order.id, order.fullName);
+    }
+    if (homeworkIds.length > 0) {
+      const submissions = await this.prisma.homeworkSubmission.findMany({
+        where: { id: { in: homeworkIds } },
+        select: { id: true, user: { select: { name: true } } },
+      });
+      for (const submission of submissions) names.set(submission.id, submission.user.name);
+    }
+    if (conversationIds.length > 0) {
+      const conversations = await this.prisma.conversation.findMany({
+        where: { id: { in: conversationIds } },
+        select: { id: true, guestName: true, user: { select: { name: true } } },
+      });
+      // `guestName` first: a signed-in student's row also carries a `user`
+      // relation, but `guestName` is only ever set for a guest, so this never
+      // has to choose between two real names for the same row.
+      for (const conversation of conversations) {
+        names.set(conversation.id, conversation.guestName ?? conversation.user?.name ?? '');
+      }
+    }
+
+    /*
+      «أي كتاب؟» — اسم الكتاب على تلات إشعارات الطالب.
+
+      One query for the whole page, keyed by order id, exactly like `names`
+      above: an inbox showing twenty shipped orders must not become twenty
+      lookups, and the fan-out here is worse than it looks because a single
+      order can hold several lines.
+
+      `orderBy` is `titleAr` — the SAME order `bookOrderSelect` and both admin
+      list queries in `book-orders.service.ts` use — so «أول سطر» means the
+      same line here as it does on the order card the student is being sent to.
+      Ordering by `orderId` first is only so the scan below can keep the first
+      row it sees per order.
+
+      An order whose lines are all gone (an admin rewrote the basket and
+      removed the last one) yields NO entry, and `toEntry` falls back to the
+      empty string rather than dropping the row: «الكتاب وصلك» with no title is
+      still the fact the student was waiting for, and the copy is written with
+      the name at the end so the sentence survives it.
+    */
+    const bookOrderIds = [
+      ...new Set(
+        page
+          .filter((row) => BOOK_ORDER_KINDS.has(row.kind))
+          .map((row) => payloadString(row.payload, 'orderId'))
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+
+    const bookTitles = new Map<string, string>();
+    const bookOrderDays = new Map<string, number>();
+    if (bookOrderIds.length > 0) {
+      /* Two reads over the same id set rather than one join: the titles come
+         from the LINES (one row per book) and the governorate from the ORDER
+         (one row), and folding them together would return the order's
+         governorate once per line for nothing. */
+      const [lines, orders] = await Promise.all([
+        this.prisma.bookOrderItem.findMany({
+          where: { orderId: { in: bookOrderIds } },
+          orderBy: [{ orderId: 'asc' }, { titleAr: 'asc' }],
+          select: { orderId: true, titleAr: true },
+        }),
+        this.prisma.bookOrder.findMany({
+          where: { id: { in: bookOrderIds } },
+          select: { id: true, governorateCode: true },
+        }),
+      ]);
+      for (const line of lines) {
+        if (!bookTitles.has(line.orderId)) bookTitles.set(line.orderId, line.titleAr);
+      }
+      for (const order of orders) {
+        bookOrderDays.set(order.id, deliveryDaysFor(order.governorateCode));
+      }
+    }
+
     const entries = page
-      .map((row) => toEntry(row, titles, courseTitles, courseSlugs))
+      .map((row) =>
+        toEntry(row, titles, courseTitles, courseSlugs, names, bookTitles, bookOrderDays),
+      )
       // A notification whose lesson has since been deleted has nothing left to
       // point at. Dropping it beats rendering a row that navigates to a 404 —
       // and beats crashing the feed on a title that is not there.
@@ -168,6 +503,69 @@ export class NotificationsService {
       entries,
       nextCursor: hasMore && page.length > 0 ? page[page.length - 1]!.id : null,
     };
+  }
+
+  /**
+   * Pushes whatever this user's newest notification is down their open
+   * streams, with the current unread count beside it.
+   *
+   * ## Why this is separate from `emit`, and called AFTER the transaction
+   *
+   * `emit` writes inside the caller's transaction, on purpose — a notification
+   * about a grade that was rolled back is worse than none. Publishing from in
+   * there would announce events that never happened: the row disappears with
+   * the rollback and the browser is left showing a notification whose id
+   * 404s, and a badge count that is wrong until the next poll.
+   *
+   * So the announcement is a separate, explicit step the caller takes once the
+   * write is durable. It re-reads rather than being handed the row, which
+   * costs one small query and buys the guarantee that what is streamed is
+   * byte-identical to what a `GET /api/me/notifications` would return —
+   * including the read-time title resolution, which `emit` never performs.
+   *
+   * Never throws: see `NotificationsRealtimeService`. A failed announcement
+   * degrades to "arrives on the next poll", and must not fail the request that
+   * caused it.
+   */
+  async announce(userId: string): Promise<void> {
+    try {
+      const [feed, unread] = await Promise.all([
+        this.feed(userId, 1),
+        this.unreadCount(userId),
+      ]);
+      const notification = feed.entries[0];
+      // Nothing renderable at the head of the feed — an unknown kind, or a
+      // payload the reader dropped. The badge is still worth correcting, but
+      // there is no event to describe, so this stays quiet rather than
+      // inventing one.
+      if (!notification) return;
+      // Absent only in a test fixture — see the constructor.
+      await this.realtime?.publish(userId, { type: 'notification', notification, unread });
+
+      /*
+       * Web Push — the leg that reaches a browser with no tab open at all.
+       * `pushPayloadFor` returns `null` for a kind nobody has decided is
+       * worth waking a phone for — which is most STUDENT kinds, the three
+       * الكتاب الورقي ones being the exception, and a no-op for them anyway
+       * until a student-side UI subscribes a phone. `PushService.notifyUser`
+       * is itself a no-op wherever this user holds
+       * no subscription or the deployment never configured VAPID keys — see
+       * both of their own headers. Reusing the ALREADY-RESOLVED `notification`
+       * from `feed()` above means no second query: whatever title/course/
+       * student-name the realtime toast just rendered is exactly what gets
+       * pushed.
+       */
+      const push = pushPayloadFor(notification);
+      if (push) await this.push?.notifyUser(userId, push);
+    } catch {
+      // Deliberately swallowed. The caller has already committed.
+    }
+  }
+
+  /** `announce` for several recipients at once — the admin fan-out, where one
+   *  event is told to everybody holding a permission. */
+  async announceAll(userIds: readonly string[]): Promise<void> {
+    await Promise.all(userIds.map((userId) => this.announce(userId)));
   }
 
   async unreadCount(userId: string): Promise<number> {
@@ -237,6 +635,12 @@ function toEntry(
   titles: Map<string, string>,
   courseTitles: Map<string, string>,
   courseSlugs: Map<string, string>,
+  /** Subject id (a submission or an order) → the person's name. */
+  names: Map<string, string>,
+  /** Book order id → the title of its first line; missing for an order with
+   *  no lines left, which is not a reason to drop the row. */
+  bookTitles: Map<string, string>,
+  bookOrderDays: Map<string, number>,
 ): StudentNotification | null {
   const base = {
     id: row.id,
@@ -300,6 +704,101 @@ function toEntry(
     return { ...base, kind: 'payment_rejected', courseId, courseTitle, courseSlug, reason };
   }
 
+  if (row.kind === 'payment_submitted') {
+    const submissionId = payloadString(row.payload, 'submissionId');
+    const courseId = payloadString(row.payload, 'courseId');
+    if (!submissionId || !courseId) return null;
+    const courseTitle = courseTitles.get(courseId);
+    const courseSlug = courseSlugs.get(courseId);
+    if (!courseTitle || !courseSlug) return null;
+    return {
+      ...base,
+      kind: 'payment_submitted',
+      submissionId,
+      courseId,
+      courseTitle,
+      courseSlug,
+      // Resolved at read time like every title on this feed — see
+      // `names`. Falls back to the empty string rather than dropping the
+      // row: an admin still needs to know a payment is waiting even if the
+      // account behind it has since been deleted.
+      studentName: names.get(submissionId) ?? '',
+    };
+  }
+
+  if (row.kind === 'book_order_placed') {
+    const orderId = payloadString(row.payload, 'orderId');
+    if (!orderId) return null;
+    return { ...base, kind: 'book_order_placed', orderId, studentName: names.get(orderId) ?? '' };
+  }
+
+  /*
+   * الكتاب الورقي — الطالب. تلات لحظات، نفس الشكل.
+   *
+   * `bookTitle` falls back to the empty string instead of returning `null` the
+   * way a missing lesson title does above, and the difference is deliberate: a
+   * notification whose LESSON was deleted has nothing left to point at, while
+   * an order whose lines were rewritten still exists, still has a status, and
+   * is still exactly where the student is being sent. The copy carries the
+   * name at the end of the sentence for this case.
+   */
+  if (row.kind === 'book_order_shipped') {
+    const orderId = payloadString(row.payload, 'orderId');
+    if (!orderId) return null;
+    return {
+      ...base,
+      kind: 'book_order_shipped',
+      orderId,
+      bookTitle: bookTitles.get(orderId) ?? '',
+      /* Falls back to the LONGER promise when the order is gone. Four days
+         quoted to Cairo is a parcel that arrives early; three quoted to أسوان
+         is a complaint on day four. Same rule as `deliveryDays` itself. */
+      deliveryDays: bookOrderDays.get(orderId) ?? 4,
+    };
+  }
+
+  if (row.kind === 'book_order_delivered') {
+    const orderId = payloadString(row.payload, 'orderId');
+    if (!orderId) return null;
+    return {
+      ...base,
+      kind: 'book_order_delivered',
+      orderId,
+      bookTitle: bookTitles.get(orderId) ?? '',
+    };
+  }
+
+  if (row.kind === 'book_order_rejected') {
+    const orderId = payloadString(row.payload, 'orderId');
+    // Required, exactly as on `payment_rejected` — and the requirement is
+    // already true three layers down (`RejectBookOrderSchema`, the DTO, and
+    // the `book_orders_rejection_has_a_reason` check constraint), so a row
+    // reaching here without one was not written by this build.
+    const reason = payloadString(row.payload, 'reason');
+    if (!orderId || !reason) return null;
+    return {
+      ...base,
+      kind: 'book_order_rejected',
+      orderId,
+      bookTitle: bookTitles.get(orderId) ?? '',
+      reason,
+    };
+  }
+
+  if (row.kind === 'assistant_question_received') {
+    const conversationId = payloadString(row.payload, 'conversationId');
+    if (!conversationId) return null;
+    return {
+      ...base,
+      kind: 'assistant_question_received',
+      conversationId,
+      // Snapshotted at write time — see `EmitInput`'s own note on why this
+      // kind is the one exception to "resolved at read time".
+      preview: payloadString(row.payload, 'preview') ?? '',
+      studentName: names.get(conversationId) ?? '',
+    };
+  }
+
   if (row.kind === 'subscription_expiring_soon') {
     const courseId = payloadString(row.payload, 'courseId');
     const validUntil = payloadString(row.payload, 'validUntil');
@@ -308,6 +807,19 @@ function toEntry(
     const courseSlug = courseSlugs.get(courseId);
     if (!courseTitle || !courseSlug) return null;
     return { ...base, kind: 'subscription_expiring_soon', courseId, courseTitle, courseSlug, validUntil };
+  }
+
+  if (row.kind === 'course_completed') {
+    const courseId = payloadString(row.payload, 'courseId');
+    if (!courseId) return null;
+    // Resolved from the batched `courses` lookup above — this kind is in
+    // `COURSE_KINDS`, so its id was in that one query, not a lookup of its
+    // own. A course deleted since drops the row rather than rendering a
+    // congratulation for something with no name and nowhere to go.
+    const courseTitle = courseTitles.get(courseId);
+    const courseSlug = courseSlugs.get(courseId);
+    if (!courseTitle || !courseSlug) return null;
+    return { ...base, kind: 'course_completed', courseId, courseTitle, courseSlug };
   }
 
   if (row.kind === 'subscription_cancelled') {
@@ -339,10 +851,47 @@ function toEntry(
         attemptId,
         scorePercent: Math.round(Math.min(Math.max(scorePercent, 0), 100)),
         passed: payloadBoolean(row.payload, 'passed'),
+        // `?? 0` and not a required read: every row written before the field
+        // existed is a finished paper, and dropping those rows out of the
+        // feed (which is what returning `null` here does) would blank the
+        // notification history of every student on the platform.
+        pendingOutOf: Math.max(payloadNumber(row.payload, 'pendingOutOf') ?? 0, 0),
       };
     }
     case 'extra_attempt_granted':
       return { ...shared, kind: 'extra_attempt_granted' };
+    case 'homework_submitted': {
+      const submissionId = payloadString(row.payload, 'submissionId');
+      if (!submissionId) return null;
+      return {
+        ...shared,
+        kind: 'homework_submitted',
+        submissionId,
+        // Resolved at read time from the batched lookup above; an account
+        // deleted since renders an empty name rather than dropping an alert
+        // about work that is still sitting in the queue.
+        studentName: names.get(submissionId) ?? '',
+      };
+    }
+    case 'homework_reviewed': {
+      const submissionId = payloadString(row.payload, 'submissionId');
+      const homeworkStatus = payloadString(row.payload, 'homeworkStatus');
+      const courseId = payloadString(row.payload, 'courseId');
+      if (!submissionId || !courseId) return null;
+      const courseSlug = courseSlugs.get(courseId);
+      if (!courseSlug) return null;
+      // Anything other than the two verdicts is a row this build cannot
+      // render honestly — «اتصحّح» with no verdict says nothing.
+      if (homeworkStatus !== 'accepted' && homeworkStatus !== 'needs_work') return null;
+      return {
+        ...shared,
+        kind: 'homework_reviewed',
+        submissionId,
+        courseSlug,
+        homeworkStatus,
+        grade: payloadNumber(row.payload, 'grade'),
+      };
+    }
     default:
       // A kind this build does not know about — a row written by a newer
       // deployment during a rolling release. Dropped, not crashed.

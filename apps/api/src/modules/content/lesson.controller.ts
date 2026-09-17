@@ -16,13 +16,18 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { extractYouTubeId, type VideoEmbedStatus } from '@ayman/contracts/video';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { LessonService } from './lesson.service';
+import { VideoUploadService } from '../video-mirror/video-upload.service';
 import { YouTubeDurationService } from './youtube-duration.service';
+import { SetHomeworkDto } from '../homework/homework.dto';
 import {
   AddResourceDto,
   CreateLessonDto,
   ReorderDto,
   SetLessonTextDto,
+  AbortVideoUploadDto,
+  CompleteVideoUploadDto,
   SetLessonVideoDto,
+  StartVideoUploadDto,
   UpdateLessonDto,
   UpdateResourceDto,
 } from './dto/lesson.dto';
@@ -33,6 +38,7 @@ export class LessonController {
   constructor(
     private readonly lessons: LessonService,
     private readonly youtube: YouTubeDurationService,
+    private readonly uploads: VideoUploadService,
   ) {}
 
   /**
@@ -109,10 +115,93 @@ export class LessonController {
     return this.lessons.removeVideo(id);
   }
 
+  /**
+   * «حاول تاني» — put this lecture's video back in the mirror queue.
+   *
+   * The worker gives up after three consecutive failures, which is right: the
+   * failures that clear on a retry clear on the second one, and a video
+   * YouTube has deleted will not come back on the fiftieth. But "gives up"
+   * without a way back means a single bad night leaves a lecture permanently
+   * unwatchable on ministry tablets, fixable only by someone with a psql
+   * prompt. This is that way back.
+   *
+   * `lesson:write` and not a new permission: the person who may replace the
+   * video may certainly ask for it to be copied again.
+   */
+  @RequirePermission('lesson:write')
+  @Post('lessons/:id/video/mirror')
+  remirrorVideo(@Param('id') id: string) {
+    return this.lessons.remirrorVideo(id);
+  }
+
+  /* ── الرفع المباشر ───────────────────────────────────────────────────────
+   *
+   * Three endpoints, and not one of them carries a video byte. The browser is
+   * handed pre-signed URLs and sends the parts straight to the bucket; these
+   * open the session, seal it, and cancel it.
+   *
+   * All on `lesson:write` — the same permission as pasting a YouTube link,
+   * because it is the same act. A separate permission would mean a role that
+   * can replace a lecture with a link but not with a file, which describes
+   * nobody.
+   */
+  @RequirePermission('lesson:write')
+  @Post('lessons/:id/video/upload')
+  startVideoUpload(@Param('id') id: string, @Body() body: StartVideoUploadDto) {
+    return this.uploads.start(id, body);
+  }
+
+  @RequirePermission('lesson:write')
+  @Post('lessons/:id/video/upload/complete')
+  completeVideoUpload(@Param('id') id: string, @Body() body: CompleteVideoUploadDto) {
+    return this.uploads.complete(id, body);
+  }
+
+  @RequirePermission('lesson:write')
+  @Post('lessons/:id/video/upload/abort')
+  abortVideoUpload(@Param('id') id: string, @Body() body: AbortVideoUploadDto) {
+    return this.uploads.abort(id, body);
+  }
+
+  /**
+   * Polled by the admin screen while the encode runs.
+   *
+   * A read, so `lesson:read` would be defensible — but it reports the encoder
+   * error verbatim, which is a server-side diagnostic, and it is only ever
+   * called by the screen that just started the upload. `lesson:write` costs
+   * nothing here and keeps the diagnostic with the people who can act on it.
+   */
+  @RequirePermission('lesson:write')
+  @Get('lessons/:id/video/upload/status')
+  videoUploadStatus(@Param('id') id: string) {
+    return this.uploads.status(id);
+  }
+
   @RequirePermission('lesson:write')
   @Put('lessons/:id/text')
   setText(@Param('id') id: string, @Body() body: SetLessonTextDto) {
     return this.lessons.setText(id, body);
+  }
+
+  /**
+   * الواجب — the exercise on this lecture, and «شيل الواجب».
+   *
+   * `lesson:write`, not a `homework:*` permission: this is authoring the
+   * lecture's own content, exactly like its text or its materials. The
+   * `homework:*` pair governs reading and DECIDING what students hand back,
+   * which is a different act by a possibly different person — see the
+   * permission catalogue's own note.
+   */
+  @RequirePermission('lesson:write')
+  @Put('lessons/:id/homework')
+  setHomework(@Param('id') id: string, @Body() body: SetHomeworkDto) {
+    return this.lessons.setHomework(id, body);
+  }
+
+  @RequirePermission('lesson:write')
+  @Delete('lessons/:id/homework')
+  removeHomework(@Param('id') id: string) {
+    return this.lessons.removeHomework(id);
   }
 
   /**

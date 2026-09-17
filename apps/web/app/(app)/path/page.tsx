@@ -25,7 +25,7 @@ export default async function PathPage() {
 
   if (path.courses.length === 0) {
     return (
-      <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
+      <main className="mx-auto w-full max-w-[var(--w-app)] px-6 py-10 md:py-12">
         <header className="study-head">
           <p className="eyebrow mb-2 text-fg-muted">{c.eyebrow}</p>
           <h1 className="study-head__title">{c.title}</h1>
@@ -57,7 +57,7 @@ export default async function PathPage() {
     .replace('{courses}', String(path.courses.length));
 
   return (
-    <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
+    <main className="mx-auto w-full max-w-[var(--w-app)] px-6 py-10 md:py-12">
       <header className="study-head">
         <p className="eyebrow mb-2 text-fg-muted">{c.eyebrow}</p>
         <h1 className="study-head__title">{c.title}</h1>

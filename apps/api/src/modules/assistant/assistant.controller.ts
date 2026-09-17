@@ -24,7 +24,8 @@ import { Public } from '../../auth/decorators/public.decorator';
 import { OptionalSessionService } from '../../auth/optional-session.service';
 import { RequireCsrf } from '../security/require-csrf.decorator';
 import { loadEnv } from '../../config/env';
-import { AssistantService } from './assistant.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { AssistantService, summaryPreview } from './assistant.service';
 import { ConversationAttachmentService } from './conversation-attachment.service';
 import { sendAttachment } from './serve-attachment';
 import { OpenConversationDto, PostMessageDto } from './assistant.dto';
@@ -76,9 +77,28 @@ export class AssistantController {
     private readonly assistant: AssistantService,
     private readonly attachments: ConversationAttachmentService,
     private readonly session: OptionalSessionService,
+    private readonly notifications: NotificationsService,
   ) {
     this.isProduction = loadEnv(process.env).NODE_ENV === 'production';
     this.cookieName = guestCookieName(this.isProduction);
+  }
+
+  /**
+   * Tells every admin holding `conversation:read` that a student is waiting
+   * on a reply — a new thread or a follow-up, `open` and `post` are the only
+   * two callers. Fire-and-forget, deliberately not awaited by the route
+   * handler beyond `.catch()`: see `NotificationsService.notifyPermission`
+   * for why this cannot ride inside `AssistantService`'s own transaction, and
+   * `PushService`'s header for why a failed send here never surfaces to the
+   * student who just asked a question that WAS saved correctly.
+   */
+  private notifyAdmins(conversationId: string, message: string): void {
+    void this.notifications
+      .notifyPermission('conversation:read', 'assistant_question_received', {
+        conversationId,
+        preview: summaryPreview(message),
+      })
+      .catch(() => undefined);
   }
 
   /**
@@ -156,6 +176,12 @@ export class AssistantController {
       // entirely when `userId` is set.
       guest:
         user || !body.name || !body.phone ? null : { name: body.name, phone: body.phone },
+      /*
+       * The chat that led here, when there was one. Attacker-controlled text
+       * that is stored and read by one person and gates on nothing — see
+       * `OpenConversationSchema.transcript`.
+       */
+      transcript: body.transcript ?? null,
     });
 
     if (result.guestToken) {
@@ -180,6 +206,8 @@ export class AssistantController {
       });
     }
 
+    this.notifyAdmins(result.thread.id, body.message);
+
     return result.thread;
   }
 
@@ -195,7 +223,17 @@ export class AssistantController {
   ): Promise<ConversationThread> {
     const user = await this.session.userOrNull(request);
     const guestToken = readCookie(request.headers.cookie, this.cookieName) ?? null;
-    return this.assistant.postMessage(id, user?.id ?? null, guestToken, body.message);
+    const thread = await this.assistant.postMessage(
+      id,
+      user?.id ?? null,
+      guestToken,
+      body.message,
+      // Present only when المساعد handed over a second time into a thread that
+      // already existed. See `PostMessageSchema.transcript`.
+      body.transcript ?? null,
+    );
+    this.notifyAdmins(id, body.message);
+    return thread;
   }
 
   /**

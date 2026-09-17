@@ -81,7 +81,8 @@ describe('CourseOutlineSidebar — the tick', () => {
           }),
         ])}
         activeLessonId="l1"
-        vodafoneCash={null}
+        shippingRates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }}
+        instapay={null} vodafoneCash={null}
       />,
     );
 
@@ -107,7 +108,8 @@ describe('CourseOutlineSidebar — the tick', () => {
           lesson({ id: 'q1', title: 'كويز لسه', kind: 'quiz', position: 2, state: 'not_started' }),
         ])}
         activeLessonId="l1"
-        vodafoneCash={null}
+        shippingRates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }}
+        instapay={null} vodafoneCash={null}
       />,
     );
 
@@ -124,7 +126,8 @@ describe('CourseOutlineSidebar — the tick', () => {
           lesson({ id: 'l2', title: 'المحاضرة التانية', position: 2, state: 'not_started' }),
         ])}
         activeLessonId="l1"
-        vodafoneCash={null}
+        shippingRates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }}
+        instapay={null} vodafoneCash={null}
       />,
     );
 
@@ -147,7 +150,8 @@ describe('CourseOutlineSidebar — the tick', () => {
           }),
         ])}
         activeLessonId="l1"
-        vodafoneCash={null}
+        shippingRates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }}
+        instapay={null} vodafoneCash={null}
       />,
     );
 
@@ -161,7 +165,8 @@ describe('CourseOutlineSidebar — the book CTA', () => {
       <CourseOutlineSidebar
         outline={outline([lesson()])}
         activeLessonId="l1"
-        vodafoneCash="+201021196367"
+        shippingRates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }}
+        instapay="+201021196367" vodafoneCash="+201555555555"
       />,
     );
     expect(screen.queryByRole('button', { name: new RegExp(copy.bookOrder.cta) })).not.toBeInTheDocument();
@@ -172,7 +177,12 @@ describe('CourseOutlineSidebar — the book CTA', () => {
     withBook.course = { ...withBook.course, bookTitle: 'كتاب البرمجة', bookPriceCents: 25000 };
 
     render(
-      <CourseOutlineSidebar outline={withBook} activeLessonId="l1" vodafoneCash="+201021196367" />,
+      <CourseOutlineSidebar
+        outline={withBook}
+        activeLessonId="l1"
+        shippingRates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }}
+        instapay="+201021196367" vodafoneCash="+201555555555"
+      />,
     );
     expect(screen.getByRole('button', { name: new RegExp(copy.bookOrder.cta) })).toBeInTheDocument();
   });

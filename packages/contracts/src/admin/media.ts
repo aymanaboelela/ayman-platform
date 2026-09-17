@@ -128,14 +128,39 @@ export const PAYMENT_PROOF_KEY_PATTERN = /^payment-proof\/[0-9a-f]{2}\/[0-9a-f-]
  */
 export const BOOK_ORDER_PROOF_KEY_PATTERN = /^book-order-proof\/[0-9a-f]{2}\/[0-9a-f-]{36}\.webp$/;
 
-/** Any of the four shapes. `MediaStorage` implementations validate against this. */
+/**
+ * الواجب — `hw/<2 hex>/<uuid>.webp`, minted by `HomeworkService`.
+ *
+ * ## Another prefix, and this time the reason is a LIFETIME
+ *
+ * The access story is the one every prefix above already tells: three
+ * segments, so the public, `@Public()`, `immutable` `GET /media/:prefix/:name`
+ * — which binds exactly two — cannot address it, and there is no
+ * `media_assets` row so `GET /admin/media` never lists it either. A
+ * photograph of a student's own handwriting must not be readable by anyone
+ * holding the key.
+ *
+ * What makes it its OWN prefix rather than more `msg/` keys is that these
+ * bytes get deleted: at the moment the instructor accepts the answer, and
+ * unconditionally after thirty days. A conversation attachment is kept for as
+ * long as the conversation is. A sweep that had to tell the two apart by
+ * joining back to a table is a sweep that can delete the wrong bytes; the
+ * prefix makes that question unaskable.
+ *
+ * `.webp` only, unlike `msg/`: this pipeline takes photographs and nothing
+ * else, so every key here came out of the sharp re-encode.
+ */
+export const HOMEWORK_KEY_PATTERN = /^hw\/[0-9a-f]{2}\/[0-9a-f-]{36}\.webp$/;
+
+/** Any of the five shapes. `MediaStorage` implementations validate against this. */
 export function isValidStorageKey(key: string): boolean {
   return (
     STORAGE_KEY_PATTERN.test(key) ||
     DOCUMENT_KEY_PATTERN.test(key) ||
     CONVERSATION_KEY_PATTERN.test(key) ||
     PAYMENT_PROOF_KEY_PATTERN.test(key) ||
-    BOOK_ORDER_PROOF_KEY_PATTERN.test(key)
+    BOOK_ORDER_PROOF_KEY_PATTERN.test(key) ||
+    HOMEWORK_KEY_PATTERN.test(key)
   );
 }
 
@@ -155,6 +180,10 @@ export const MIME_FOR_EXT: Record<string, string> = {
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  // Voice notes. The extension is chosen from the SNIFFED container, never
+  // echoed from the upload — same rule as every entry above it.
+  webm: 'audio/webm',
+  m4a: 'audio/mp4',
 };
 
 /** `webp` → an image the thread renders inline; anything else → a file card. */
@@ -244,3 +273,54 @@ export const ALLOWED_DOCUMENT_MIME = [
  * `docs/runbooks/vps-setup.md`.
  */
 export const MAX_DOCUMENT_BYTES = 95 * 1024 * 1024;
+
+// ── Voice notes ──────────────────────────────────────────────────────────
+// A recorded reply in the inbox. Neither an image (no sharp re-encode is
+// possible or wanted) nor a document (no Office container to gate), so it is a
+// third, deliberately narrow pipeline — see `VoiceService`.
+
+/**
+ * The two containers `MediaRecorder` actually produces, and nothing else.
+ *
+ * Chrome and Firefox record WebM/Opus; Safari records MP4/AAC and has since
+ * iOS 14.3. `.ogg` is absent on purpose — no browser this platform supports
+ * emits it from `MediaRecorder`, and an extension nothing writes is an
+ * extension nobody has audited the parser for.
+ *
+ * ⚠️ This is an ADMIN-ONLY upload. Only the instructor records; a student's
+ * side of the thread has no recorder at all. That is what makes storing the
+ * bytes without a re-encode an acceptable trade here and not in the public
+ * image pipeline.
+ */
+export const ALLOWED_VOICE_EXT = ['webm', 'm4a'] as const;
+
+export const ALLOWED_VOICE_MIME = ['audio/webm', 'audio/mp4'] as const;
+
+/**
+ * Container magic, checked against the bytes rather than trusted from the
+ * name — the same discipline `DocumentService` applies, for the same reason.
+ *
+ * WebM/Matroska opens with the EBML header `1A 45 DF A3`. MP4 (and the `.m4a`
+ * Safari writes) has `66 74 79 70` — "ftyp" — at offset 4, after a four-byte
+ * box length that varies.
+ */
+export const VOICE_MAGIC: ReadonlyArray<{
+  ext: (typeof ALLOWED_VOICE_EXT)[number];
+  offset: number;
+  bytes: readonly number[];
+}> = [
+  { ext: 'webm', offset: 0, bytes: [0x1a, 0x45, 0xdf, 0xa3] },
+  { ext: 'm4a', offset: 4, bytes: [0x66, 0x74, 0x79, 0x70] },
+];
+
+/**
+ * 20 MiB. Opus at the bitrate a browser picks for speech is roughly 24 kbps —
+ * about 180 KB a minute — so this is two hours of talking, against a ten-minute
+ * cap on the clip itself. It is a ceiling on a mistake (a stuck recorder, a
+ * hand-built request), not a budget anybody records against.
+ */
+export const MAX_VOICE_BYTES = 20 * 1024 * 1024;
+
+/** Whole seconds. The bubble's progress bar is drawn from the stored number,
+ *  and the database CHECK matches this exactly. */
+export const MAX_VOICE_SECONDS = 600;

@@ -4,6 +4,7 @@ import { RequirePermission } from '../../auth/decorators/require-permission.deco
 import {
   AddPoolDto,
   AddSlotDto,
+  MoveQuizToLessonDto,
   QuizSettingsDto,
   ReorderSlotsDto,
   SetSlotMarkDto,
@@ -39,6 +40,19 @@ export class AdminQuizzesController {
   @Put('lesson/:lessonId')
   async upsertForLesson(@Param('lessonId') lessonId: string, @Body() body: QuizSettingsDto) {
     return { id: await this.builder.upsertForLesson(lessonId, body) };
+  }
+
+  /**
+   * Moves a quiz to another lesson of the same course, keeping its slots,
+   * its publication state and — the reason this route exists at all — every
+   * attempt already sat on it. Registered above `:quizId`'s siblings for the
+   * same reason `lesson/:lessonId` is: a literal segment must never be read
+   * as an id.
+   */
+  @Patch(':quizId/lesson')
+  async moveToLesson(@Param('quizId') quizId: string, @Body() body: MoveQuizToLessonDto) {
+    await this.builder.moveToLesson(quizId, body.lessonId);
+    return { ok: true };
   }
 
   @Get(':quizId')

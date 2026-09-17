@@ -14,6 +14,25 @@
   --w-shell: 1152px;
   --w-prose: 640px;
 
+  /* The signed-in APP's measure, for the screens that are a grid of cards
+     rather than something you read: dashboard, library, results, profile,
+     path, foundations.
+
+     `--w-shell` is a READING measure and stays one — it is what the marketing
+     pages, the quiz runner and every prose surface use. It is the wrong cap
+     for a dashboard, and the failure was visible rather than theoretical: the
+     `(app)` shell spends 248px on the rail and then centres a 1152px column in
+     what is left, while `StudentTopbar` is full-bleed. On a 1800px window that
+     draws a topbar reaching both edges above a page floating in ~200px of dead
+     margin either side — reported with a screenshot, «المساحة دي متبقاش
+     فاضية» — with «كورساتي» squeezed into two narrow cards at the same time.
+
+     1600px is a ceiling, not a target: below it these pages simply fill the
+     content column, and above it they stop rather than stretching a row of
+     cards across an ultrawide monitor. The inner grids do the adapting —
+     see `.dash-split` in `apps/web/app/study.css`. */
+  --w-app: 1600px;
+
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
   --min-tap-size: 44px;

@@ -1,4 +1,10 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  emailIdentifier,
+  phoneIdentifier,
+  throttleKeyFor,
+} from '../../../auth/credential-check.service';
+import { loginThrottle } from '../../../auth/login-throttle.instance';
 import { StudentsService } from './students.service';
 
 const BASE_QUERY = {
@@ -193,7 +199,7 @@ describe('StudentsService.setPassword', () => {
 
   it('upserts the credential account on (providerId, accountId), keyed by userId', async () => {
     const { service, prisma } = makeService();
-    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u1' });
+    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u1', role: 'student' });
 
     const result = await service.setPassword('u1', 'a-real-password', 'actor');
 
@@ -217,7 +223,7 @@ describe('StudentsService.setPassword', () => {
 
   it('writes one audit entry naming the actor, never the password', async () => {
     const { service, prisma, audit } = makeService();
-    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u1' });
+    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u1', role: 'student' });
 
     await service.setPassword('u1', 'a-real-password', 'actor');
 
@@ -231,6 +237,67 @@ describe('StudentsService.setPassword', () => {
       metadata: { actorUserId: 'actor' },
     });
     expect(JSON.stringify(entry)).not.toContain('a-real-password');
+  });
+
+  /**
+   * The regression this method was quietly failing at: the password DID
+   * change, and the student still could not get in with it.
+   *
+   * `throttleKeyFor` gives a phone and an email their own soft-lock buckets,
+   * so a student who burned ten attempts on their number stayed locked out of
+   * the number while the identical new password sailed through the email box —
+   * which is exactly what «غيّرت الباسورد وهي لسه مش عارفة تدخل» looked like
+   * from the admin's side. Both buckets, or the fix only covers whichever
+   * identifier the student did not happen to be using.
+   */
+  it('drops the soft lock on both identifiers, so the new password works on the first try', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: 'u1',
+      // `role` is read by the guard that refuses a non-student target.
+      role: 'student',
+      // Mixed case on purpose — `emailIdentifier` folds it, and the key this
+      // clears has to be the one a failed attempt actually wrote.
+      email: 'Shrouk@Example.com',
+      phoneNumber: '+201153689519',
+    });
+
+    const phoneKey = throttleKeyFor(phoneIdentifier('+201153689519'));
+    const emailKey = throttleKeyFor(emailIdentifier('shrouk@example.com'));
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      loginThrottle.recordFailure(phoneKey, '203.0.113.7');
+      loginThrottle.recordFailure(emailKey, '203.0.113.7');
+    }
+    expect(loginThrottle.isLocked(phoneKey)).toBe(true);
+    expect(loginThrottle.isLocked(emailKey)).toBe(true);
+
+    await service.setPassword('u1', 'a-real-password', 'actor');
+
+    expect(loginThrottle.isLocked(phoneKey)).toBe(false);
+    expect(loginThrottle.isLocked(emailKey)).toBe(false);
+  });
+
+  // A phone-only account has `email: null` (the placeholder is stripped before
+  // the row is written — see `databaseHooks.user.create.before`). Nothing to
+  // unlock on that side, and reading it as a key would throw.
+  it('unlocks a phone-only account without touching an email key', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: 'u1',
+      role: 'student',
+      email: null,
+      phoneNumber: '+201010000001',
+    });
+
+    const phoneKey = throttleKeyFor(phoneIdentifier('+201010000001'));
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      loginThrottle.recordFailure(phoneKey, '203.0.113.7');
+    }
+
+    await expect(service.setPassword('u1', 'a-real-password', 'actor')).resolves.toEqual({
+      status: true,
+    });
+    expect(loginThrottle.isLocked(phoneKey)).toBe(false);
   });
 });
 
@@ -434,6 +501,42 @@ describe('StudentsService.remove', () => {
 
     await service.remove('target', { ...INPUT, confirmIdentity: '  +201012345678  ' }, 'actor');
     expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'target' } });
+  });
+
+  /**
+   * The number as the admin has just been LOOKING at it. Every other screen
+   * prints `01223334567`; only this dialog's hint prints the stored
+   * `+201223334567`, so retyping what was on screen used to be refused.
+   * Measured on production, where the typed value was `+01223334567`.
+   */
+  it('accepts the number written the local way, and the +0 typo the hint invites', async () => {
+    for (const typed of ['01012345678', '+01012345678', '00201012345678']) {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        email: 'student@example.test',
+        phoneNumber: '+201012345678',
+        name: 'X',
+        role: 'student',
+      });
+
+      await service.remove('target', { ...INPUT, confirmIdentity: typed }, 'actor');
+      expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'target' } });
+    }
+  });
+
+  it('still refuses a number that is one digit off', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({
+      email: 'student@example.test',
+      phoneNumber: '+201012345678',
+      name: 'X',
+      role: 'student',
+    });
+
+    await expect(
+      service.remove('target', { ...INPUT, confirmIdentity: '01012345679' }, 'actor'),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.user.delete).not.toHaveBeenCalled();
   });
 
   /**

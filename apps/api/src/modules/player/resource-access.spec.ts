@@ -22,6 +22,12 @@ describe('PlayerService.resourceStream', () => {
     gate as never,
     media as never,
     storage as never,
+    // `resourceStream` is the only method under test here and it never reaches
+    // الواجب — see the note on `gate` above for the same reasoning.
+    null as never,
+    // Nor the mirror, for the same reason: streaming a resource's bytes has
+    // nothing to do with where a video is served from.
+    null as never,
   );
 
   beforeEach(() => jest.clearAllMocks());

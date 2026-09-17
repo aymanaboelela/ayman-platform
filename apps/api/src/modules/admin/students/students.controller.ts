@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UsePipes } fr
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../../auth/decorators/require-permission.decorator';
+import { StudentHistoryService } from './student-history.service';
 import { StudentsService } from './students.service';
 import {
   AdminGrantCreateDto,
@@ -17,7 +18,10 @@ import {
 @Controller('admin/students')
 @UsePipes(ZodValidationPipe)
 export class StudentsController {
-  constructor(private readonly students: StudentsService) {}
+  constructor(
+    private readonly students: StudentsService,
+    private readonly history: StudentHistoryService,
+  ) {}
 
   @RequirePermission('student:read')
   @Get()
@@ -37,6 +41,22 @@ export class StudentsController {
     return this.students.patch(userId, body);
   }
 
+  /**
+   * The account's own history — what was done to it and by whom.
+   *
+   * `student:read`, the same permission as the profile it renders inside: it
+   * composes rows the holder of that permission can already reach one screen
+   * at a time (grants, subscriptions, book orders) and adds no field that is
+   * not already on one of them. It is NOT `audit:read` — see
+   * `StudentHistoryService`'s own note on why the audit log is a different
+   * artefact rather than this one's data source.
+   */
+  @RequirePermission('student:read')
+  @Get(':userId/history')
+  listHistory(@Param('userId') userId: string) {
+    return this.history.list(userId);
+  }
+
   /*
    * Opening and closing a course for one student.
    *
@@ -45,6 +65,21 @@ export class StudentsController {
    * can lock every admin out of the platform. Granting a course is an
    * ordinary teaching decision and is fully reversible.
    */
+  /**
+   * «المحادثة» on the record — the thread with this student, resolved from
+   * their account rather than from a conversation id nobody holds.
+   *
+   * `conversation:read`, not `student:read`: the payload is message bodies,
+   * and what governs reading those is the inbox's own permission. Gating it on
+   * the profile's permission instead would let anyone who can edit a phone
+   * number read every private thread on the platform.
+   */
+  @RequirePermission('conversation:read')
+  @Get(':userId/conversation')
+  conversation(@Param('userId') userId: string) {
+    return this.students.conversation(userId);
+  }
+
   @RequirePermission('student:read')
   @Get(':userId/grants')
   listGrants(@Param('userId') userId: string) {

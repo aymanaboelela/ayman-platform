@@ -76,6 +76,7 @@ export const ASSISTANT_NODES: Record<AssistantNodeId, AssistantNode> = {
     choices: [
       { id: 'courses', next: 'courses' },
       { id: 'join', next: 'join' },
+      { id: 'books', next: 'books' },
       { id: 'study', next: 'study' },
       { id: 'account', next: 'account' },
       { id: 'talk', escalate: true },
@@ -127,9 +128,71 @@ export const ASSISTANT_NODES: Record<AssistantNodeId, AssistantNode> = {
       { id: 'back', next: 'join' },
     ],
   },
+  /*
+   * The subscribe walk-through — THREE nodes, one step each, and a chain
+   * rather than a single paragraph.
+   *
+   * «امشي معاه لحد آخر خطوة»: a student who wants to pay has to choose a
+   * course, choose a plan, transfer on Vodafone Cash, and then send back two
+   * things the platform cannot learn on its own — the number the money came
+   * FROM, and a screenshot of the transfer. That is four decisions, and
+   * stacking them into one bubble is how the second half stops being read.
+   *
+   * Each node keeps ONE onward stop, which is also what keeps all three in the
+   * AI corpus: `assistant-knowledge.ts` treats a node with two or more onward
+   * choices as a menu and drops it. So the chain is not only easier to read in
+   * the widget — it is the difference between the chat knowing the payment
+   * steps and the chat knowing that a menu about payment exists.
+   *
+   * No number anywhere in the copy. The plan prices are on the course's own
+   * panel and the Vodafone Cash number comes from site settings, and both move
+   * without anybody touching this repo — same reasoning as `joinPrice` below.
+   *
+   * ⚠️ EVERY `back` ON A CHAIN POINTS AT THE MENU, never at the step before —
+   * and that is not a UX preference, it is a correctness constraint.
+   *
+   * `assistant-knowledge.ts` labels each corpus entry with the choice that
+   * LEADS to its node, walking every node in key order and letting the last
+   * write win. A `back` edge is an edge like any other to that walk, so
+   * `joinPay: { back → joinEnroll }` silently retitled the subscribe answer
+   * «رجوع» — the one word in the tree that carries no meaning — and threw away
+   * «إزاي أشترك في كورس؟», which is the exact phrase a student types. The
+   * matcher then had «رجوع» as a STRONG token for the payment steps.
+   *
+   * Pointing back at the menu is also what the rest of this tree already does,
+   * so nothing here is a special case; it just now has a reason written down.
+   * A `backStep` id would NOT fix it — the same module treats any non-`back`
+   * onward choice as evidence the node is a menu and drops it from the corpus
+   * entirely, which is worse than a bad label.
+   */
   joinEnroll: {
     choices: [
+      { id: 'joinPay', next: 'joinPay' },
       { id: 'browseCourses', href: '/courses' },
+      { id: 'back', next: 'join' },
+    ],
+  },
+  joinPay: {
+    choices: [
+      { id: 'joinReview', next: 'joinReview' },
+      { id: 'back', next: 'join' },
+    ],
+  },
+  /*
+   * The last step, and the one that ESCALATES.
+   *
+   * Review is a human reading a screenshot against a real Vodafone Cash log —
+   * there is no automatic approval anywhere in `payments.ts` — so the only
+   * honest answer to «طلبي واقف ليه؟» is the person doing the reading.
+   * `subscribe.success` already refuses to name a turnaround window on purpose
+   * (a stated window becomes a complaint the moment it slips), and this node
+   * holds that line: it says the review is by hand and says how the answer
+   * arrives, and it does not invent hours.
+   */
+  joinReview: {
+    choices: [
+      { id: 'talk', escalate: true },
+      { id: 'dashboard', href: '/dashboard' },
       { id: 'back', next: 'join' },
     ],
   },
@@ -145,6 +208,84 @@ export const ASSISTANT_NODES: Record<AssistantNodeId, AssistantNode> = {
     choices: [
       { id: 'talk', escalate: true },
       { id: 'back', next: 'join' },
+    ],
+  },
+
+  // ── الكتاب الورقي ────────────────────────────────────────────────────
+  /*
+   * The shop had no branch on this tree at all, which is why it is here.
+   *
+   * «الكتب» is a whole product surface — a public catalogue at `/books`, a
+   * cart, a Vodafone Cash checkout, and an order the student can follow at
+   * `/store/orders` — and the assistant's five-button menu behaved as though
+   * none of it existed. The two questions it is asked about books are «أطلبه
+   * إزاي؟» and «فين كتابي؟», so the branch is exactly those two.
+   */
+  books: {
+    choices: [
+      { id: 'bookOrderHow', next: 'bookOrderHow' },
+      { id: 'bookNotArrived', next: 'bookNotArrived' },
+      { id: 'back', next: 'root' },
+    ],
+  },
+  /*
+   * `/books` and NOT `/store`.
+   *
+   * They are the same shop and only one of them is open to a visitor with no
+   * session: `/store` renders inside the student shell and `proxy.ts` sends an
+   * anonymous request from it to the sign-in page. The assistant is on the
+   * public site — `escalate.leadGuest` exists precisely because the person
+   * asking may have no account yet — so a link that bounces to a login form is
+   * a dead end dressed as an answer.
+   */
+  bookOrderHow: {
+    choices: [
+      { id: 'browseBooks', href: '/books' },
+      { id: 'back', next: 'books' },
+    ],
+  },
+  /*
+   * «طمّنه» — the node the instructor asked for by name.
+   *
+   * ⚠️ The order of the answer is deliberate and it was WRONG at first: it
+   * used to reassure first («الكتاب في السكة وبيوصل خلال أيام»), give the
+   * reason second, and point at the page third. That put a claim about ONE
+   * student's shipment in front of the only thing that actually knows —
+   * stated by a node with no session, to a student whose order may never have
+   * been paid for at all. So the page leads now, and the reassurance that
+   * follows it is about the SHOP being busy, which is true for everybody
+   * reading this.
+   *
+   * `/store/orders` is authed on purpose — it is their own order, and nobody
+   * else's business.
+   *
+   * It must not promise a date either. `books.mine.noteShipped` already
+   * carries that discipline for the same person on the dashboard («ساعات
+   * بيتأخر يوم أو اتنين، وده عادي»), and a cheerful date from the assistant
+   * that the courier then misses is worse than the worry it was meant to
+   * settle.
+   */
+  bookNotArrived: {
+    choices: [
+      { id: 'bookWhenExactly', next: 'bookWhenExactly' },
+      { id: 'myOrders', href: '/store/orders' },
+      { id: 'back', next: 'books' },
+    ],
+  },
+  /*
+   * «هيوصل إمتى بالظبط؟» — and the answer is a PROMISE THE PLATFORM KEEPS
+   * instead of a date it guesses.
+   *
+   * Nobody here knows which day a courier will knock. What the platform does
+   * know is its own procedure: somebody calls the day before. That answers the
+   * real question underneath — «أستنى في البيت إمتى؟» — without naming a date,
+   * which is the one thing this node is not allowed to do.
+   */
+  bookWhenExactly: {
+    choices: [
+      { id: 'talk', escalate: true },
+      { id: 'myOrders', href: '/store/orders' },
+      { id: 'back', next: 'books' },
     ],
   },
 

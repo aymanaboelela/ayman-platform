@@ -1,0 +1,41 @@
+# Is there a usable backup from last night?
+#
+# The backups themselves are not run from here — Dokploy runs them on the VPS,
+# a Postgres dump at 00:00 UTC and a tarball of the `media` volume at 00:20 UTC,
+# both into the Cloudflare R2 bucket. What Dokploy cannot do is tell anyone when
+# it stops: a failed run leaves a red line in a deployments tab nobody opens,
+# and a run that uploads a zero-byte dump leaves a GREEN one. Either way the
+# platform keeps serving, so nothing else notices, and the first person to find
+# out is whoever needs to restore.
+#
+# So this job exists for exactly one failure: backups that quietly stopped being
+# backups. It reads the bucket, not the dashboard.
+#
+# A red run is the notification — same mechanism as `uptime.yml`: GitHub emails
+# the repository owner when a scheduled workflow fails. Nothing else to keep
+# alive.
+name: backup check
+
+on:
+  schedule:
+    # 02:00 UTC — two hours after the database dump and well after the media
+    # tarball, so a slow night is not reported as a missing backup.
+    - cron: '0 2 * * *'
+  # For running it by hand after changing anything about the backups.
+  workflow_dispatch:
+
+jobs:
+  fresh-backup-exists:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: last night's backups are in R2, fresh and restorable
+        env:
+          # Read-only in practice: the token is scoped to this bucket, and the
+          # script only ever issues GETs.
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: python3 scripts/check-r2-backups.py

@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
 import { SCORE_FEED, type ScoreFeed } from './score-feed';
+import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
 
 const RECENT_SCORE_LIMIT = 5;
 
@@ -67,14 +68,30 @@ export class DashboardService {
             // Selected, not filtered on — see the `where` above.
             status: true,
             coverKey: true,
+            // «جروب الدفعة» — per course, and the reason it is per course is
+            // the same one `scheduleNote` below gives: عربي and لغات are two
+            // cohorts, and a student belongs to one of them.
+            whatsappGroupUrl: true,
             // The admin's «لسه هننزل قريبًا» wording — meaningful only once
             // `_count.lessons` below reads `0`, same as the public course
             // page's `comingSoonNote`. See `isComingSoon` in `catalog.ts`.
             comingSoonNote: true,
-            // Same pair the catalog reads — gates `EnrolledCourseCard`'s own
-            // «اطلب الكتاب» CTA. See `EnrolledCourseSchema`'s own note.
+            // «ميعاد المحاضرة» — the instructor's own line for THIS course,
+            // printed verbatim in the hero band. Per-course and not a site
+            // setting for the reason the column's own doc gives: عربي and لغات
+            // are two courses on two different nights, and a student is in one
+            // of them.
+            scheduleNote: true,
+            contentComplete: true,
+            // Gates `EnrolledCourseCard`'s own «اطلب الكتاب» CTA. The legacy
+            // pair plus the catalogue row, because `courseBook()` needs both:
+            // the row wins when it is live, and these two are the ramp for
+            // courses whose row is still unpublished. Reading only the pair —
+            // which is what this did — is how the card quoted a price the
+            // catalogue had already changed.
             bookTitle: true,
             bookPriceCents: true,
+            book: { select: COURSE_BOOK_SELECT },
             subject: { select: { nameAr: true } },
             // The exam lesson, if this course has one — read here rather than
             // with a second query per course. `examLesson` is only selected
@@ -277,6 +294,7 @@ export class DashboardService {
         slug: row.course.slug,
         title: row.course.title,
         coverKey: row.course.coverKey,
+        whatsappGroupUrl: row.course.whatsappGroupUrl,
         subjectNameAr: row.course.subject.nameAr,
         published,
         progressPercent: Number(row.progressPercent),
@@ -288,8 +306,15 @@ export class DashboardService {
         lastLessonId: published ? (row.lastLesson?.id ?? null) : null,
         subscriptionValidUntil: subscriptionExpiry.get(row.course.id)?.toISOString() ?? null,
         comingSoonNote: row.course.comingSoonNote,
-        bookTitle: row.course.bookTitle,
-        bookPriceCents: row.course.bookPriceCents,
+        // Carried even while the course is CLOSED, unlike `lastLessonId` above.
+        // The two are opposite kinds of field: that one is a link into a lesson
+        // the routes would refuse, this one is a sentence — a student whose
+        // course is down for an edit still needs to know they are expected on
+        // Saturday at eight.
+        scheduleNote: row.course.scheduleNote,
+        contentComplete: row.course.contentComplete,
+        bookTitle: courseBook(row.course).bookTitle,
+        bookPriceCents: courseBook(row.course).bookPriceCents,
       };
     });
 

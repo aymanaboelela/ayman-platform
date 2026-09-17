@@ -9,13 +9,13 @@ import { z } from '@ayman/contracts/zod';
  * `whyRail`, `about`, `faq`, `stats`, `testimonials`, `cta`, `courseGrid`.
  * Editing one changes what the page says.
  *
- * **Placement blocks** carry no content at all — `instructor` and
- * `yearTracks`. Those two sections build themselves from the catalogue and
- * the taxonomy (and, for the tracks section, from a motion sequence that is
- * not expressible as form fields), so the only thing an editor can
- * meaningfully decide about them is *whether* they appear and *where*. A
- * block with a `type` and nothing else is exactly that decision, and it is
- * deliberately not padded out with props the section would ignore.
+ * **Placement blocks** carry no content at all — `instructor`, `yearTracks`
+ * and `honorBoard`. Those sections build themselves from the catalogue, the
+ * taxonomy and the exam results (and, for the tracks section, from a motion
+ * sequence that is not expressible as form fields), so the only thing an
+ * editor can meaningfully decide about them is *whether* they appear and
+ * *where*. A block with a `type` and nothing else is exactly that decision,
+ * and it is deliberately not padded out with props the section would ignore.
  *
  * Per-variant rules live INSIDE each member, never as a `.refine()` on the
  * union. `@hookform/resolvers` drops refinements applied on top of a
@@ -84,11 +84,48 @@ export const CourseGridPropsSchema = z.object({
   limit: z.number().int().min(1).max(12).default(6),
 });
 
+/**
+ * «قسم الكتب» on the landing page — the shop's own strip.
+ *
+ * Shaped like `courseGrid` and for the same reason: the admin owns the words
+ * and how many cards run, and the section builds its own content from the
+ * catalogue rather than from ids typed into a form. There is no `bookIds`
+ * curation field, unlike the course grid — the shop is small enough that
+ * «الأحدث N» is the whole answer, and a curated list of products is a second
+ * place to forget to update when a title goes out of print.
+ */
+export const BooksPropsSchema = z.object({
+  type: z.literal('books'),
+  titleAr: z.string().min(2).max(80),
+  leadAr: lead,
+  ctaLabelAr: z.string().max(40).default(''),
+  limit: z.number().int().min(1).max(12).default(3),
+});
+
 /** Placement-only — see the module comment. */
 export const InstructorPropsSchema = z.object({ type: z.literal('instructor') });
 
 /** Placement-only — see the module comment. */
 export const YearTracksPropsSchema = z.object({ type: z.literal('yearTracks') });
+
+/**
+ * «لوحة الشرف» — the honour board, and placement-only for a reason the other
+ * two do not share: its content does not exist yet.
+ *
+ * The names on it are the top marks in the monthly exam, and the first paper
+ * has not been sat. What ships now is the section itself, holding four empty
+ * places and one line saying when they fill. Nothing about that is editable —
+ * an admin who could type names into a board of honour would be typing the
+ * one thing on the page that has to be earned.
+ *
+ * ⚠️ IT STAYS PROPS-FREE WHEN THE REAL BOARD LANDS. The later slice reads the
+ * results the same way `courseGrid` reads the catalogue, so the block keeps
+ * this exact shape and only `<HonorBoardSection>` changes — which is what lets
+ * the placeholder be replaced without touching a single stored row. Adding a
+ * field here later would be safe (every field added after a type ships MUST
+ * carry a `.default()`, see the module comment) but it should not be needed.
+ */
+export const HonorBoardPropsSchema = z.object({ type: z.literal('honorBoard') });
 
 export const AboutPropsSchema = z.object({
   type: z.literal('about'),
@@ -145,8 +182,10 @@ export const HomeBlockPropsSchema = z.discriminatedUnion('type', [
   HeroPropsSchema,
   WhyRailPropsSchema,
   CourseGridPropsSchema,
+  BooksPropsSchema,
   InstructorPropsSchema,
   YearTracksPropsSchema,
+  HonorBoardPropsSchema,
   AboutPropsSchema,
   StatsPropsSchema,
   TestimonialsPropsSchema,
@@ -166,8 +205,10 @@ export const HOME_BLOCK_TYPES = [
   'hero',
   'whyRail',
   'courseGrid',
+  'books',
   'instructor',
   'yearTracks',
+  'honorBoard',
   'about',
   'stats',
   'testimonials',

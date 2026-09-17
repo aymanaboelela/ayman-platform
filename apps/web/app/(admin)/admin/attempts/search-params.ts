@@ -4,7 +4,7 @@ import {
   parseAsString,
   parseAsStringLiteral,
 } from 'nuqs/server';
-import { ATTEMPT_STATES } from '@ayman/contracts/admin/attempts';
+import { ATTEMPT_SORTS, ATTEMPT_STATES } from '@ayman/contracts/admin/attempts';
 
 /**
  * Plan 5's `AttemptAdminService.listAttempts` supports exactly `quizId`,
@@ -18,6 +18,9 @@ export const attemptsSearchParams = {
   q: parseAsString.withDefault('').withOptions({ shallow: false, throttleMs: 400 }),
   state: parseAsStringLiteral(ATTEMPT_STATES).withOptions({ shallow: false }),
   quizId: parseAsString.withOptions({ shallow: false }),
+  /** The endpoint honours these four now — see `ATTEMPT_SORTS`. The comment
+   *  above still holds: nothing is added here that the API cannot apply. */
+  sort: parseAsStringLiteral(ATTEMPT_SORTS).withDefault('newest').withOptions({ shallow: false }),
 };
 
 export const attemptsCache = createSearchParamsCache(attemptsSearchParams);

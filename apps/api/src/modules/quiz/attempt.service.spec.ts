@@ -37,7 +37,8 @@ describe('AttemptService', () => {
   const progress = new LessonProgressService(
     prisma,
     new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
-    new CourseProgressService(),
+    new CourseProgressService(new NotificationsService(prisma)),
+    new NotificationsService(prisma),
   );
   const service = new AttemptService(
     prisma,

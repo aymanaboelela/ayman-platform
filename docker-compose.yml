@@ -17,14 +17,20 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
+      # ⚠️ الدور `ayman_owner` اسمه ثابت عن قصد ومش متغيّر: تلات ميجريشنز
+      # بتكتب `ayman_runtime` نصًا، و`migrate deploy` بيقع بـ"role does not
+      # exist" لو الأدوار اتسمّت بأسماء تانية. وكل ستاك عنده كلاستر لوحده،
+      # فالأسماء دي مابتتصادمش بين المدرّسين أصلًا.
       POSTGRES_USER: ayman_owner
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ayman_platform
+      # اسم الداتابيز متغيّر عشان الستاك ده يتنصب أكتر من مرة. القيمة
+      # الافتراضية هي القيمة اللي شغّالة دلوقتي، فستاك أيمن مايتغيرش فيه حاجة.
+      POSTGRES_DB: ${POSTGRES_DB:-ayman_platform}
     volumes:
       - pgdata:/var/lib/postgresql/data
     # مفيش `ports:` عن قصد — الداتابيز مش بتتعرّض للإنترنت.
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ayman_owner -d ayman_platform']
+      test: ['CMD-SHELL', 'pg_isready -U ayman_owner -d ${POSTGRES_DB:-ayman_platform}']
       interval: 10s
       timeout: 5s
       retries: 10
@@ -93,8 +99,25 @@ services:
       API_PORT: '3300'
       # يقراه docker-entrypoint.sh عشان يعمل/يحدّث الدور المحدود قبل الميجريشن.
       RUNTIME_PASSWORD: ${RUNTIME_PASSWORD}
-      DATABASE_URL: postgresql://ayman_runtime:${RUNTIME_PASSWORD}@postgres:5432/ayman_platform?schema=app
-      DIRECT_DATABASE_URL: postgresql://ayman_owner:${POSTGRES_PASSWORD}@postgres:5432/ayman_platform?schema=app
+      DATABASE_URL: postgresql://ayman_runtime:${RUNTIME_PASSWORD}@postgres:5432/${POSTGRES_DB:-ayman_platform}?schema=app
+      DIRECT_DATABASE_URL: postgresql://ayman_owner:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ayman_platform}?schema=app
+
+      # ── هوية الستاك ───────────────────────────────────────────────────
+      #
+      # `TENANT_KEY` هو المفتاح اللي بيقرر الستاك ده بتاع مين. مش مضبوط أو
+      # `ayman` = ستاك أيمن، وكل القيم الافتراضية القديمة بتشتغل زي ما هي.
+      # أي قيمة تانية = مدرّس تاني، وساعتها **مافيش حاجة بتتورّث**: كل حقل
+      # بياخد المتغيّر بتاعه، والسكوت معناه الحقل يفضل فاضي.
+      #
+      # السبب إن الافتراضي fail-closed مش fail-open: النسيان هو الفشل
+      # المتوقع، وتمنه هنا إن طلبة مدرّس تاني يكلّموا أيمن على رقمه الشخصي.
+      TENANT_KEY: ${TENANT_KEY:-}
+      TENANT_YOUTUBE: ${TENANT_YOUTUBE:-}
+      TENANT_INSTAGRAM: ${TENANT_INSTAGRAM:-}
+      TENANT_TIKTOK: ${TENANT_TIKTOK:-}
+      TENANT_FACEBOOK: ${TENANT_FACEBOOK:-}
+      TENANT_WHATSAPP_CHANNEL: ${TENANT_WHATSAPP_CHANNEL:-}
+      TENANT_WHATSAPP: ${TENANT_WHATSAPP:-}
       REDIS_URL: redis://redis:6379
       APP_URL: ${APP_URL}
       BETTER_AUTH_URL: ${APP_URL}
@@ -111,6 +134,23 @@ services:
       # ⚠️ لازم أصل مختلف عن APP_URL — الـ API بيرفض يقلع لو اتساووا.
       MEDIA_BASE_URL: ${MEDIA_ORIGIN}/media
       MEDIA_ROOT: /var/lib/ayman/media
+      # ── «النسخة اللي عندنا» — نسخة كل محاضرة على التخزين بتاعنا ───────
+      #
+      # تابلت الوزارة حاجب يوتيوب، وسلسلة البدائل في المشغّل كلها نفس
+      # الدومين — يعني الطالب بيشوف مربع فاضي مهما عملنا في الكود. الحل
+      # الوحيد إن البايتات تيجي من أصل التابلت سامح بيه، وهو بتاعنا.
+      #
+      # الخمسة **كلهم مع بعض أو ولا واحد**. الـ API بيرفض يقلع لو نُصهم
+      # موجود، وده مقصود: بوكِت العامل بيكتب فيه ومحدش يقدر يقراه — أو
+      # العكس — عرض بيظهر بعد أيام على إنه «الفيديو مش شغال» من مدرسة
+      # واحدة، وده أغلى بكتير من إقلاع بيفشل بسطر واضح.
+      #
+      # من غيرهم خالص: العامل مبيشتغلش، وكل مشغّل بيرجع ليوتيوب زي ما كان.
+      VIDEO_MIRROR_ENDPOINT: ${VIDEO_MIRROR_ENDPOINT:-}
+      VIDEO_MIRROR_BUCKET: ${VIDEO_MIRROR_BUCKET:-}
+      VIDEO_MIRROR_ACCESS_KEY_ID: ${VIDEO_MIRROR_ACCESS_KEY_ID:-}
+      VIDEO_MIRROR_SECRET_ACCESS_KEY: ${VIDEO_MIRROR_SECRET_ACCESS_KEY:-}
+      VIDEO_MIRROR_PUBLIC_URL: ${VIDEO_ORIGIN:-}
       # الشات الذكي بتاع المساعد (`POST /api/assistant/ask`). التلاتة اختياريين:
       # من غيرهم الشات بيفضل شغّال وبيجاوب من نفس الكلام المكتوب في شجرة
       # الأسئلة، وبيحط زرار «أكلّم م. أيمن» على كل رد.
@@ -139,6 +179,16 @@ services:
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       GROQ_MODEL: ${GROQ_MODEL:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # الإشعارات اللي بتوصل حتى وأنت قافل التاب (Web Push). التلاتة اختياريين
+      # مع بعض — من غيرهم زرار «تفعيل التنبيهات» في الأدمن بيفضل ساكت.
+      # اتولّدوا مرة واحدة بـ`npx web-push generate-vapid-keys`؛ لو اتغيّروا كل
+      # المتصفحات اللي مفعّلة بيبطل اشتراكها.
+      #
+      # ⚠️ نفس فخ `${VAR:-}` بالظبط: سترينج فاضية مش متغير مفقود، وده اللي
+      # `optionalSecret` في `env.ts` بيتعامل معاه.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
       # بوت حساب الأدمن الأول. `docker-entrypoint.sh` بيشغّله بس لو الاتنين
       # موجودين، وبـ`ADMIN_ONLY_IF_MISSING=true` — يعني مبيلمسش أدمن موجود.
       #
@@ -157,6 +207,11 @@ services:
       # صراحةً.
       WA_SERVICE_URL: ${WA_SERVICE_URL:-}
       WA_SERVICE_TOKEN: ${WA_TOKEN:-}
+      # «التحويلات الواردة» — the secret the Android handset sends when it
+      # forwards an InstaPay notification. Empty means the ingest route rejects
+      # everything, which is the intended default: مفيش موافقة أوتوماتيك من
+      # غير ما حد يظبط التوكن بنفسه.
+      INSTAPAY_INGEST_TOKEN: ${INSTAPAY_INGEST_TOKEN:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       ADMIN_NAME: ${ADMIN_NAME:-}
@@ -193,7 +248,17 @@ services:
       WA_AUTH_DIR: /var/lib/ayman/wa
       # الردود الواردة بتترمي هنا عشان «قف» توقّف الحملة فعلاً. داخلي.
       WA_INBOUND_URL: http://api:3300/api/marketing/wa/inbound # gitleaks:allow — an internal route path, not a secret
-      WA_LOG_LEVEL: ${WA_LOG_LEVEL:-warn}
+      # ⚠️ إيصالات التسليم. من غير السطر ده الخدمة بترجع تقول «اتبعتت» أول ما
+      # سيرفرات واتساب تستلم الرسالة — صح واحدة — وده بالظبط اللي خلّى حملة
+      # ماوصلتش لحد تتقري «٧٤ من ٧٤ · اتبعت · ٠ فشل». داخلي.
+      WA_RECEIPT_URL: http://api:3300/api/marketing/wa/receipt # gitleaks:allow — an internal route path, not a secret
+      WA_LOG_LEVEL: ${WA_LOG_LEVEL:-info}
+      WA_BAILEYS_LOG_LEVEL: ${WA_BAILEYS_LOG_LEVEL:-warn}
+      # الاسم اللي بيبان في «الأجهزة المرتبطة» على تليفون المدرّس. ده الاسم
+      # اللي صاحب التليفون بيقرأه وهو بيقرر الجهاز ده شرعي ولا لأ — واسم غلط
+      # بيتفصل، وفصله معناه واتساب المدرّس ده وقف.
+      TENANT_KEY: ${TENANT_KEY:-}
+      WA_DEVICE_NAME: ${WA_DEVICE_NAME:-}
     volumes:
       # ⚠️ الأهم في الملف ده. بيانات الاقتران هنا — من غير الـ volume كل نشرة
       # بتفصل الرقم وتطلب مسح QR من تاني.
@@ -208,11 +273,45 @@ services:
         # بتتحرق في الـ bundle وقت البناء — تغييرها بعدين محتاج إعادة بناء.
         NEXT_PUBLIC_APP_URL: ${APP_URL}
         NEXT_PUBLIC_MEDIA_ORIGIN: ${MEDIA_ORIGIN}
+        # أصل الفيديو — بيتحط في `media-src` و`connect-src` في الـ CSP.
+        # فاضي = مفيش نسخة عندنا، والسياسة بتتكتب من غيره.
+        NEXT_PUBLIC_VIDEO_ORIGIN: ${VIDEO_ORIGIN:-}
+        # ⚠️ مضيف تاني غير اللي فوق. ده اللي متصفح الأدمن بيرفع عليه أجزاء
+        # الفيديو (نقطة S3 بتاعت البوكِت)، واللي فوق هو اللي الطالب بيقرا منه.
+        # الاتنين لازم يكونوا في `connect-src` — لو كتبت العام بس، كل جزء
+        # بيتبعت هيترفض من غير أي رسالة خطأ مفهومة.
+        # نفس قيمة `VIDEO_MIRROR_ENDPOINT` — مش متغير جديد يتحط باليد.
+        NEXT_PUBLIC_VIDEO_UPLOAD_ORIGIN: ${VIDEO_MIRROR_ENDPOINT:-}
         # مشروع Clarity الحقيقي هو الافتراضي هنا عن قصد: من غير كده كل نشرة
         # على سيرفر ما اتضبطش فيه المتغير دي بتطلع من غير تسجيل جلسات خالص،
         # والداشبورد بتقول «مفيش داتا» من غير أي إشارة إن السبب هو الإعداد.
         # حط `CLARITY_PROJECT_ID=` فاضي في .env لو عايز توقّفه.
         NEXT_PUBLIC_CLARITY_PROJECT_ID: ${CLARITY_PROJECT_ID-y1hu9w4lii}
+        # ⚠️ وقت البناء **كمان**، مش وقت التشغيل بس — و`/` صفحة prerendered
+        # (موجودة في `prerender-manifest.json`). يعني وقت `next build` الصفحة
+        # بتترسم مرة، والـAPI مش موجود، فالـcatch بيرجّع الـfallback — واللي
+        # بيتحدد من `TENANT_KEY`. من غير قيمة وقت البناء ده بيطلع `ayman`،
+        # فصفحة أيمن بتتحرق في الـshell بتاع صورة أي مدرّس تاني.
+        # `cacheLife('minutes')` بيصلّحها بعد ما الحاوية تقوم، بس الشباك ده هو
+        # أول دقايق بعد النشر — وللمدرّس الجديد دي لحظة الإطلاق بالظبط.
+        TENANT_KEY: ${TENANT_KEY:-}
+        TENANT_DISPLAY_NAME: ${TENANT_DISPLAY_NAME:-}
+        # ⚠️ وقت البناء كمان، وللسبب اللي فوق نفسه: الفوتر و`/links` صفحات
+        # prerendered، و`next build` بيشتغل من غير API فبيخبز `contact` فاضي.
+        # القيم دي هي اللي بتترسم في الشباك ده — من غيرها أول زائر بعد كل نشر
+        # بيلاقي «تابعني» و«كلّمنا» عناوين فوق قوايم فاضية.
+        TENANT_YOUTUBE: ${TENANT_YOUTUBE:-}
+        TENANT_INSTAGRAM: ${TENANT_INSTAGRAM:-}
+        TENANT_TIKTOK: ${TENANT_TIKTOK:-}
+        TENANT_FACEBOOK: ${TENANT_FACEBOOK:-}
+        TENANT_WHATSAPP_CHANNEL: ${TENANT_WHATSAPP_CHANNEL:-}
+        TENANT_WHATSAPP: ${TENANT_WHATSAPP:-}
+        # ⚠️ `:+` مش `:-`. ده بيتحط بس لو `GOOGLE_CLIENT_ID` نفسه متظبط — يعني
+        # مصدر واحد للحقيقة ومفيش مفتاح تاني تنساه. زرار «المتابعة بحساب
+        # جوجل» كان بيترسم دايمًا حتى لو المنصة مالهاش تطبيق جوجل أصلًا،
+        # فالطالب يدوس ويلاقيه مكسور — والـAPI طول الوقت بيتصرف صح، وده اللي
+        # كان بيخلّيه صعب يتلاقى.
+        NEXT_PUBLIC_GOOGLE_ENABLED: ${GOOGLE_CLIENT_ID:+1}
     restart: unless-stopped
     depends_on:
       api: { condition: service_healthy }
@@ -231,7 +330,39 @@ services:
       REDIS_URL: redis://redis:6379
       NEXT_PUBLIC_APP_URL: ${APP_URL}
       NEXT_PUBLIC_MEDIA_ORIGIN: ${MEDIA_ORIGIN}
+      # ⚠️ وقت التشغيل كمان مش بس build arg: الـ CSP بتتبني في `proxy.ts`
+      # على السيرفر لكل طلب، مش وقت البناء. من غير السطر ده السياسة بتخرج
+      # من غير أصل الفيديو، والمتصفح بيرفض كل segment **من غير أي خطأ** —
+      # نفس المربع الرمادي اللي الميزة دي اتعملت عشانه.
+      NEXT_PUBLIC_VIDEO_ORIGIN: ${VIDEO_ORIGIN:-}
+      # ونفس الكلام على مضيف الرفع — وقت التشغيل، مش build arg بس.
+      NEXT_PUBLIC_VIDEO_UPLOAD_ORIGIN: ${VIDEO_MIRROR_ENDPOINT:-}
       CSP_ENFORCE: ${CSP_ENFORCE:-}
+      # ── هوية الستاك ───────────────────────────────────────────────────
+      #
+      # وقت التشغيل **و** وقت البناء (شوف `build.args` فوق والسبب المكتوب
+      # هناك). وقت التشغيل هو اللي بيحكم بعد ما الكاش يتجدد، ووقت البناء هو
+      # اللي بيحكم في أول دقايق بعد النشر لأن `/` صفحة prerendered.
+      #
+      # وده معناه إن **صورة الويب بتبقى لكل مدرّس لوحده** — وهي كده كده
+      # كذلك، لأن `NEXT_PUBLIC_APP_URL` و`NEXT_PUBLIC_MEDIA_ORIGIN` بيتحرقوا
+      # في الـbundle وقت البناء. صور الـapi والـwa مشتركة عادي.
+      #
+      # ⚠️ يعني البناء **لازم** ينتقل على CI قبل ما نبقى تلات ستاكات:
+      # السيرفر بيقع من الرام وهو بيبني صورة واحدة (`exit 137` في
+      # docs/runbooks/deploy.md)، وتلاتة عليه مش هيحصل.
+      #
+      # بيحددوا الصفحة اللي بتترسم قبل ما حد يركّب صفحته من /admin/home —
+      # ووقت أي عطل في الـAPI بعد كده.
+      TENANT_KEY: ${TENANT_KEY:-}
+      TENANT_DISPLAY_NAME: ${TENANT_DISPLAY_NAME:-}
+      TENANT_YOUTUBE: ${TENANT_YOUTUBE:-}
+      TENANT_INSTAGRAM: ${TENANT_INSTAGRAM:-}
+      TENANT_TIKTOK: ${TENANT_TIKTOK:-}
+      TENANT_FACEBOOK: ${TENANT_FACEBOOK:-}
+      TENANT_WHATSAPP_CHANNEL: ${TENANT_WHATSAPP_CHANNEL:-}
+      TENANT_WHATSAPP: ${TENANT_WHATSAPP:-}
+      NEXT_PUBLIC_GOOGLE_ENABLED: ${GOOGLE_CLIENT_ID:+1}
     networks: [dokploy-network, default]
 
 # ⚠️ شبكة Traefik بتاعت Dokploy. من غيرها الحاويات بتشتغل تمام بس Traefik

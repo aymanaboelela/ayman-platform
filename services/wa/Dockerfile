@@ -19,12 +19,30 @@ RUN apt-get update -y \
  && apt-get install -y --no-install-recommends git ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
-# `npm install` مش `npm ci`: مفيش package-lock.json مقصود — الحاوية دي
-# بتتبني على السيرفر ومالهاش أي علاقة بـ lockfile المشروع، وتثبيت نسخة
-# Baileys بالظبط هيبقى غلط أصلاً: بروتوكول واتساب بيتغير من تحتها وآخر نسخة
-# صغيرة هي اللي بتفضل شغالة.
-COPY package.json ./
-RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
+# `npm ci` مش `npm install`، وفيه `package-lock.json` متسجّل في الريپو.
+#
+# الكلام اللي كان مكتوب هنا قبل كده كان بيقول العكس: إن التثبيت غلط لأن
+# «بروتوكول واتساب بيتغير من تحتها وآخر نسخة صغيرة هي اللي بتفضل شغالة».
+# الحجة دي كانت غلط من ناحيتين:
+#
+#   · `^6.7.18` مكانش بيتابع «آخر نسخة صغيرة» — ده أي حاجة تحت 7.0.0،
+#     والمدى ده بيوصل لـ6.17.16 (نشر غلط لنسخة 6.7.16 في مارس ٢٠٢٥). اللي
+#     منعها من التنزيل هو إن npm بيتجنب النسخ الموقوفة، مش إن المدى ضيّق.
+#   · نسخة بروتوكول واتساب نفسها مش بتتحدد من المكتبة أصلاً —
+#     `fetchLatestBaileysVersion()` بيجيبها من على النت وقت كل اتصال. فتثبيت
+#     المكتبة مش بيجمّد البروتوكول، ودي كانت وظيفة حاجة تانية من الأول.
+#
+# واللي كان بيتكلّف فعلًا: `libsignal` تبعية git من غير ref، يعني كل بناء
+# بيعيد التثبيت كان بياخد أي حاجة على رأس الفرع ساعتها — كود تشفير بيتغيّر
+# من غير أي diff ولا مراجعة ولا رجوع لورا. الـlockfile بيثبّت الكوميت ده.
+#
+# ⚠️ الـ`git config` تحت **لسه ضروري** مع `npm ci`: الـlockfile نفسه مسجّل
+# عنوان الـlibsignal كـ`git+ssh://`.
+RUN git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" \
+ && git config --global url."https://github.com/".insteadOf "git@github.com:"
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
 COPY src ./src
 

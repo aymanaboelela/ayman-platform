@@ -183,6 +183,11 @@ const baseEnrolledCourse = () => ({
   title: 'البرمجة وعلوم الحاسب',
   coverKey: null,
   subjectNameAr: 'الحاسب الآلي',
+  /* «جروب الدفعة» — null is the steady state, not a gap: most courses have no
+     group, and the card renders nothing rather than falling back to the
+     platform-wide one. */
+  whatsappGroupUrl: null,
+  contentComplete: false,
   published: true,
   progressPercent: 0,
   completedLessons: 0,
@@ -190,6 +195,7 @@ const baseEnrolledCourse = () => ({
   lastLessonId: null,
   subscriptionValidUntil: null,
   comingSoonNote: null,
+  scheduleNote: null,
 });
 
 /**
@@ -200,6 +206,38 @@ const baseEnrolledCourse = () => ({
  * the pair outright must fail to parse, the same way `comingSoonNote`'s own
  * test above guards it.
  */
+/**
+ * «ميعاد المحاضرة» on the enrolled course — the line the dashboard's hero band
+ * prints. Same regression shape as the book pair below: a payload that omits
+ * it must FAIL to parse rather than quietly reach a band that then renders
+ * nothing, because "the instructor wrote no time" and "the API stopped sending
+ * the time" have to look different from each other here.
+ */
+describe('EnrolledCourseSchema.scheduleNote', () => {
+  // The book pair is not on `baseEnrolledCourse` — every test in this file
+  // supplies it — so these do too, and only `scheduleNote` varies.
+  const withBook = () => ({ ...baseEnrolledCourse(), bookTitle: null, bookPriceCents: null });
+
+  it('accepts null — «مفيش ميعاد معلن», which is most courses', () => {
+    expect(EnrolledCourseSchema.parse(withBook()).scheduleNote).toBeNull();
+  });
+
+  it("carries the instructor's own sentence through unchanged", () => {
+    // Verbatim, and deliberately not normalised: nothing parses this field, so
+    // anything that "tidied" it could only ever make it wrong.
+    const parsed = EnrolledCourseSchema.parse({
+      ...withBook(),
+      scheduleNote: 'السبت والتلات ٨ م بتوقيت مصر',
+    });
+    expect(parsed.scheduleNote).toBe('السبت والتلات ٨ م بتوقيت مصر');
+  });
+
+  it('refuses a payload that omits the field entirely', () => {
+    const { scheduleNote: _omitted, ...withoutNote } = withBook();
+    expect(EnrolledCourseSchema.safeParse(withoutNote).success).toBe(false);
+  });
+});
+
 describe('EnrolledCourseSchema.bookTitle/bookPriceCents', () => {
   it('accepts null — no book configured for this course', () => {
     const parsed = EnrolledCourseSchema.parse({

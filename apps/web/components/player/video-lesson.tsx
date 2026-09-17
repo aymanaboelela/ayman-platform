@@ -11,6 +11,7 @@ import {
   loadYouTubeIframeApi,
   type YouTubePlayer,
 } from '@/lib/youtube';
+import { MirrorVideo } from './mirror-video';
 import { PlayIcon } from './icons';
 import { useVideoHeartbeat } from './use-video-heartbeat';
 
@@ -28,14 +29,34 @@ import { useVideoHeartbeat } from './use-video-heartbeat';
  * Only `script` is worth retrying — the other two are properties of the video
  * on YouTube's side and will fail identically a second later.
  */
-type VideoFailure = 'embedBlocked' | 'removed' | 'script' | 'unknown';
+type VideoFailure = 'embedBlocked' | 'removed' | 'unknown' | 'ourCopyFailed';
 
 const FAILURE_COPY: Record<VideoFailure, string> = {
   embedBlocked: copy.player.videoEmbedBlocked,
   removed: copy.player.videoRemoved,
-  script: copy.player.videoBlockedByBrowser,
   unknown: copy.player.videoUnavailable,
+  /*
+   * The one failure with NO fallback behind it.
+   *
+   * An uploaded lecture exists on our origin and nowhere else — there is no
+   * YouTube page to open and no embed to try, so when our copy will not play
+   * this is the end of the road rather than a step on the way to one. Saying
+   * «حاول تاني» is the honest advice: the causes left are transient (a
+   * connection that dropped mid-segment, an origin hiccup) and a reload
+   * genuinely clears them.
+   */
+  ourCopyFailed: copy.player.videoOurCopyFailed,
 };
+
+/**
+ * How long a constructed player may stay silent before it counts as blocked.
+ *
+ * Deliberately longer than the script timeout in `lib/youtube.ts`: this clock
+ * starts only once the API is in hand, and the frame it builds has its own
+ * handshake to complete on the same connection that was already slow enough
+ * to need most of the first budget.
+ */
+const FRAME_READY_TIMEOUT_MS = 15_000;
 
 /** https://developers.google.com/youtube/iframe_api_reference#onError */
 function failureOfCode(code: number): VideoFailure {
@@ -111,10 +132,74 @@ export function VideoLesson({
   const mountRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
+  /**
+   * Kills the "player built, never ready" state.
+   *
+   * `loadYouTubeIframeApi` has its own timeout for a script that never
+   * arrives, but the frame is a SECOND thing the network can swallow: the API
+   * loads from `youtube.com`, the player it then builds loads from
+   * `youtube-nocookie.com`, and a data bundle or filter can allow the first
+   * and drop the second. YouTube reports nothing when that happens — `onError`
+   * is for videos it managed to look up, not for a frame that never spoke —
+   * so without this the poster is gone, no message is drawn, and the student
+   * sits in front of an empty grey box.
+   */
+  const readyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [player, setPlayer] = useState<YouTubePlayer | null>(null);
   const [activated, setActivated] = useState(false);
   const [failure, setFailure] = useState<VideoFailure | null>(null);
+  /**
+   * The poster is the ONE image on this page with nothing behind it.
+   *
+   * `alt=""` is right — it is decoration, the title is already on the page —
+   * but it also means a browser that fails to fetch it draws its broken-image
+   * glyph in the middle of the player and nothing else. Dropping the element
+   * instead leaves the scrim, the play disc and the duration exactly where
+   * they were, which is what the `posterUrl == null` branch has always looked
+   * like anyway.
+   */
+  const [posterFailed, setPosterFailed] = useState(false);
+  /**
+   * The last thing tried before giving up: a plain `<iframe>` embed, with no
+   * IFrame API behind it.
+   *
+   * The API is a SEPARATE request from the video — `youtube.com/iframe_api` is
+   * a script, and it is on more blocklists than YouTube itself (every ad
+   * blocker and filtering DNS resolver ships a rule for it, because it is also
+   * how a page tracks what you watched). A student whose network drops that
+   * one file can still watch YouTube perfectly, and until now got nothing at
+   * all from us.
+   *
+   * So instead of stopping at «مش قادرين نحمّل المشغّل», the player falls back
+   * to the embed URL directly. What it costs is the API: no `getCurrentTime`,
+   * so no heartbeat and no automatic completion — the fallback strip says so
+   * and points at «خلاص · التالي». Playing without the progress bar beats not
+   * playing.
+   */
+  const [plainFrame, setPlainFrame] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  /**
+   * Our own copy could not play, so YouTube gets its turn after all.
+   *
+   * The mirror is tried FIRST — see `useMirror` — because it is the only
+   * source that works on a ministry tablet. But it is newer than the YouTube
+   * path and served from an origin with its own ways of failing, so a fatal
+   * error here must not be a dead end for the students YouTube would have
+   * served perfectly. One flag, and the component becomes what it always was.
+   */
+  const [mirrorFailed, setMirrorFailed] = useState(false);
+  /**
+   * The second the student chose to start from — their resume, or 0 from «من
+   * الأول».
+   *
+   * State and not a ref, even though it is written exactly once. `MirrorVideo`
+   * READS it while rendering, and a ref read during render is both a lint
+   * error and a real hazard: it holds whatever was last written rather than
+   * what this render was built from. Set in the same handler as `activated`,
+   * so React batches the two and the element mounts already knowing where to
+   * seek.
+   */
+  const [startedAt, setStartedAt] = useState(0);
 
   // Computed once per render rather than inside `activate`, because the poster
   // has to PRINT the same second it is going to seek to. Two call sites, one
@@ -139,6 +224,24 @@ export function VideoLesson({
     resumeSeconds > 0
       ? `${copy.player.play} — ${copy.player.resumeFrom} ${formatDuration(resumeSeconds)} — ${title}`
       : `${copy.player.play} — ${title}`;
+
+  /**
+   * The fallback embed URL, built the same way the API player's options are:
+   * from the stored 11-char id and nothing else (spec §7 P3 — no URL ever
+   * comes out of the database).
+   */
+  const plainEmbedSrc =
+    video.youtubeId === null
+      ? null
+      : `https://www.youtube.com/embed/${video.youtubeId}?${new URLSearchParams({
+          autoplay: '1',
+          rel: '0',
+          modestbranding: '1',
+          playsinline: '1',
+          hl: 'ar',
+          cc_lang_pref: 'ar',
+          start: String(resumeSeconds),
+        }).toString()}`;
 
   useVideoHeartbeat({ lessonId, player, onResponse: onProgress, onError });
 
@@ -200,9 +303,49 @@ export function VideoLesson({
    * into the `new api.Player(...)` call. There is no second chance: `start` is
    * read once, when the player is constructed, and never again.
    */
-  const activate = useCallback(async (startAt: number) => {
-    if (activated || !mountRef.current) return;
-    setActivated(true);
+  /**
+   * Which source this render is showing.
+   *
+   * The mirror wins when there is one, and that ORDER is the entire point of
+   * the feature: YouTube first with our copy as a fallback would still leave
+   * every ministry-tablet student watching the same dead frame, because the
+   * fallback only ever runs after something reports a failure and a blocked
+   * network reports nothing at all.
+   */
+  const useMirror = video.mirror !== null && !mirrorFailed;
+
+  /**
+   * An UPLOADED lecture. It exists on our origin and nowhere else.
+   *
+   * Everything YouTube-shaped below is gated on this being false: the API
+   * player, the plain-embed fallback, the «افتحه على يوتيوب» link. Not to be
+   * tidy — offering any of them here would send the student to a video that
+   * does not exist, which is worse than the error it is trying to soften.
+   */
+  const isUpload = video.provider === 'upload';
+  const youtubeId = video.youtubeId;
+
+  /**
+   * The lecture is uploaded and still being packaged.
+   *
+   * The row exists, the bytes are ours, and there is simply nothing to play
+   * for the few minutes the encoder needs. A play button here would spin on a
+   * playlist that 404s; the poster says so instead.
+   */
+  const stillProcessing = isUpload && video.mirror === null;
+
+  /**
+   * Bring up the YouTube player. Split out of `activate` so the mirror's
+   * fatal-error path can reach it: by then `activated` is already true, and
+   * the guard at the top of `activate` would refuse the very call that is
+   * supposed to rescue the lesson.
+   */
+  const startYouTube = useCallback(async (startAt: number) => {
+    if (!mountRef.current) return;
+    // No id means an uploaded lecture, and there is no YouTube player to
+    // build. Reaching here at all would be a bug in the caller, so it fails
+    // closed rather than constructing a player for `undefined`.
+    if (video.youtubeId === null) return;
 
     try {
       const api = await loadYouTubeIframeApi();
@@ -243,6 +386,10 @@ export function VideoLesson({
         },
         events: {
           onReady: (event) => {
+            if (readyTimerRef.current) {
+              clearTimeout(readyTimerRef.current);
+              readyTimerRef.current = null;
+            }
             playerRef.current = event.target;
             setPlayer(event.target);
 
@@ -300,23 +447,56 @@ export function VideoLesson({
         },
       });
       playerRef.current = instance;
+
+      // Armed AFTER construction so it only ever measures the frame, never the
+      // script fetch that `loadYouTubeIframeApi` already bounds. `onReady`
+      // above disarms it; nothing else can, which is the point.
+      readyTimerRef.current = setTimeout(() => {
+        readyTimerRef.current = null;
+        if (playerRef.current !== instance) return;
+        // The frame was built on `youtube-nocookie.com` and never spoke. Take
+        // it down and let the plain embed try the ordinary host instead —
+        // filters routinely carry one of the two domains and not the other.
+        instance.destroy();
+        playerRef.current = null;
+        setPlainFrame(true);
+      }, FRAME_READY_TIMEOUT_MS);
     } catch {
       // `loadYouTubeIframeApi()` threw, or the constructor did: the script
-      // never arrived. An ad blocker, filtered DNS, or no network — the one
-      // failure of the four that a retry can genuinely clear.
-      setFailure('script');
-      setActivated(false);
+      // never arrived — an ad blocker, filtered DNS, or a captive network.
+      // None of those necessarily touch the video itself, so this is a
+      // fallback and not yet a failure.
+      setPlainFrame(true);
     }
-  }, [activated, video.youtubeId]);
+  }, [video.youtubeId]);
+
+  const activate = useCallback(async (startAt: number) => {
+    if (activated || !mountRef.current) return;
+    // Nothing to play yet. The poster is already saying so; this is the guard
+    // that keeps a keyboard activation from getting past it.
+    if (stillProcessing) return;
+    setActivated(true);
+    setStartedAt(startAt);
+
+    // Our copy needs no API, no script and no handshake — the element is in
+    // the tree on the next render and starts itself. Nothing below this line
+    // applies to it.
+    if (useMirror) return;
+
+    await startYouTube(startAt);
+  }, [activated, stillProcessing, useMirror, startYouTube]);
 
   useEffect(() => {
     return () => {
+      if (readyTimerRef.current) clearTimeout(readyTimerRef.current);
+      readyTimerRef.current = null;
       playerRef.current?.destroy();
       playerRef.current = null;
     };
   }, []);
 
   return (
+    <>
     <div
       ref={shellRef}
       className={cn(
@@ -334,7 +514,87 @@ export function VideoLesson({
     >
       <div ref={mountRef} className="absolute inset-0 h-full w-full" />
 
-      {!activated ? (
+      {/*
+        «النسخة اللي عندنا». Rendered INSTEAD of the YouTube frame, not beside
+        it — the mount div above stays empty in this branch and costs nothing.
+
+        `activated` gates it for the same reason it gates everything else: the
+        poster is the page's first paint and a video element that starts
+        fetching a playlist before anyone pressed play would spend a student's
+        data on a lesson they were only scrolling past.
+      */}
+      {activated && useMirror && video.mirror ? (
+        <MirrorVideo
+          mirror={video.mirror}
+          title={title}
+          posterUrl={posterFailed ? null : video.posterUrl}
+          startAt={startedAt}
+          onPlayer={setPlayer}
+          onFatal={() => {
+            setMirrorFailed(true);
+            if (isUpload) {
+              // Nowhere to go. This lecture is ours and only ours, so the
+              // panel names that instead of quietly trying a YouTube video
+              // that was never uploaded.
+              setFailure('ourCopyFailed');
+              return;
+            }
+            // Straight on to YouTube, from the same second. The student sees
+            // one reload of the frame rather than an error, and for everyone
+            // whose network allows YouTube that is the end of it.
+            void startYouTube(startedAt);
+          }}
+        />
+      ) : null}
+
+      {/*
+        The fallback embed. `youtube.com`, deliberately NOT the nocookie host
+        the API player uses: when the API player is the thing that failed, the
+        host it was built on is one of the two suspects, and repeating it would
+        make this a retry of the same request rather than a different attempt.
+
+        `autoplay=1` is safe here in a way it is not for the API player: this
+        frame is only ever mounted because the student pressed play, so the
+        gesture that permits autoplay has already happened.
+      */}
+      {plainFrame && plainEmbedSrc !== null ? (
+        <iframe
+          title={title}
+          src={plainEmbedSrc}
+          allow={FRAME_ALLOW}
+          allowFullScreen
+          referrerPolicy="strict-origin-when-cross-origin"
+          className="absolute inset-0 h-full w-full border-0"
+        />
+      ) : null}
+
+      {/*
+        The lecture is ours, and the encoder has not finished with it yet.
+
+        Rendered INSTEAD of the poster — before this, an upload still being
+        packaged showed a normal play button over a playlist URL that 404s, so
+        a student who arrived in the first few minutes after the instructor
+        uploaded got the same spinning grey box this whole feature exists to
+        end. It self-heals on the next page load, which is exactly why it had
+        to say so rather than look broken.
+      */}
+      {stillProcessing ? (
+        <div
+          role="status"
+          className={cn(
+            'absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surface-2 px-6',
+            'text-center text-fg-muted',
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-accent"
+          />
+          <p className="text-[length:var(--fs-text-sm)]">{copy.player.videoProcessing}</p>
+        </div>
+      ) : null}
+
+      {!activated && !stillProcessing ? (
         /*
           The poster is a DIV that CONTAINS the play button; it used to BE the
           button.
@@ -375,11 +635,14 @@ export function VideoLesson({
                 Absolutely positioned inside the reserved box, so its own
                 intrinsic size can never move anything.
               */}
-              <img
-                src={video.posterUrl}
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover"
-              />
+              {posterFailed ? null : (
+                <img
+                  src={video.posterUrl}
+                  alt=""
+                  onError={() => setPosterFailed(true)}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              )}
               <span aria-hidden="true" className="absolute inset-0 bg-black/45" />
             </>
           ) : null}
@@ -529,29 +792,57 @@ export function VideoLesson({
         >
           <p>{FAILURE_COPY[failure]}</p>
           <div className="flex items-center gap-4">
-            {failure === 'script' ? (
-              <button
-                type="button"
+            {/*
+              No retry here any more. The one failure a retry could clear —
+              the API script not loading — no longer reaches this panel at
+              all: it falls back to the plain embed instead, which is a better
+              answer than asking the student to press the same button again.
+              What is left are the three YouTube REPORTED, and every one of
+              them is about the video rather than the connection.
+
+              And nothing at all for an uploaded lecture: there is no YouTube
+              page behind it, so this link would be a promise of a video that
+              does not exist.
+            */}
+            {youtubeId !== null ? (
+              <a
+                href={`https://www.youtube.com/watch?v=${youtubeId}`}
+                target="_blank"
+                rel="noreferrer"
                 className="underline"
-                onClick={() => {
-                  setFailure(null);
-                  setActivated(false);
-                }}
               >
-                {copy.player.videoRetry}
-              </button>
+                {copy.player.videoOpenOnYouTube}
+              </a>
             ) : null}
-            <a
-              href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
-              target="_blank"
-              rel="noreferrer"
-              className="underline"
-            >
-              {copy.player.videoOpenOnYouTube}
-            </a>
           </div>
         </div>
       ) : null}
     </div>
+
+    {/*
+      Sits UNDER the player, not over it: the fallback frame is YouTube's own
+      chrome, and a bar across its bottom edge would land on the controls.
+
+      Always carries the YouTube link, because the fallback is the last thing
+      this component can try — if the embed is dark too, this sentence is the
+      only route left to the lesson.
+    */}
+    {plainFrame && youtubeId !== null ? (
+      <p
+        role="status"
+        className="mt-2 text-[length:var(--fs-text-sm)] text-fg-muted"
+      >
+        {copy.player.videoFallbackNote}{' '}
+        <a
+          href={`https://www.youtube.com/watch?v=${youtubeId}`}
+          target="_blank"
+          rel="noreferrer"
+          className="underline"
+        >
+          {copy.player.videoOpenOnYouTube}
+        </a>
+      </p>
+    ) : null}
+    </>
   );
 }

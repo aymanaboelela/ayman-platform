@@ -1,13 +1,17 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
-import { AdminGrantRowSchema, AdminStudentDetailSchema } from '@ayman/contracts/admin/students';
+import {
+  AdminGrantRowSchema,
+  AdminStudentConversationSchema,
+  AdminStudentDetailSchema,
+  StudentHistoryEntrySchema,
+} from '@ayman/contracts/admin/students';
 import { AdminSubscriptionRowSchema } from '@ayman/contracts/admin/payments';
 import { z } from 'zod';
-import { TaxonomySchema } from '@ayman/contracts';
 import { StudentAnalyticsDetailSchema } from '@ayman/contracts/admin/analytics';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Skeleton } from '@ayman/ui/components/skeleton';
-import { apiGet } from '@/lib/api';
+import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { adminGet } from '@/lib/admin-api';
 import { StudentRecord } from '@/components/admin/students/student-record';
 import { WhatsappButton } from '@/components/admin/whatsapp-button';
@@ -17,6 +21,8 @@ import { SetPasswordSection } from './set-password-section';
 import { CourseAccessSection } from './course-access-section';
 import { SubscriptionSection } from './subscription-section';
 import { AccountAccessSection } from './account-access-section';
+import { HistorySection } from './history-section';
+import { ConversationSection } from './conversation-section';
 
 export const metadata = { title: copy.admin.students.detailTitle };
 
@@ -113,9 +119,10 @@ export default async function StudentDetailPage({
    * overlap; they serve different controls for different reasons and neither
    * is a subset built from the other.
    */
-  const [student, taxonomy, grants, courses, subscriptions] = await Promise.all([
+  const [student, taxonomy, grants, courses, subscriptions, history, conversation] =
+    await Promise.all([
     adminGet(`/api/admin/students/${userId}`, AdminStudentDetailSchema),
-    apiGet('/api/taxonomy', TaxonomySchema),
+    getTaxonomyOrNull(),
     adminGet(`/api/admin/students/${userId}/grants`, z.array(AdminGrantRowSchema)),
     adminGet(
       '/api/admin/courses',
@@ -142,6 +149,19 @@ export default async function StudentDetailPage({
       ),
     ),
     adminGet(`/api/admin/students/${userId}/subscriptions`, z.array(AdminSubscriptionRowSchema)),
+    adminGet(`/api/admin/students/${userId}/history`, z.array(StudentHistoryEntrySchema)),
+    /*
+     * The thread with this student, beside the five reads above rather than in
+     * its own boundary: it is one indexed lookup plus at most thirty rows, and
+     * a Suspense fallback for a panel that resolves as fast as the profile
+     * form does would only make the column shuffle after paint.
+     *
+     * Unlike `StudentRecordSection` it is NOT allowed to fail quietly — a 403
+     * here means this operator does not hold `conversation:read`, which is a
+     * real answer the page should surface rather than a panel that silently
+     * pretends the student has never written.
+     */
+    adminGet(`/api/admin/students/${userId}/conversation`, AdminStudentConversationSchema),
   ]);
 
   const closedCourses = courses
@@ -169,7 +189,14 @@ export default async function StudentDetailPage({
       terms: course.terms.filter((term) => term.priceCents !== null),
     }));
 
-  const governorateOptions = taxonomy.governorates
+  /* ⚠️ `getTaxonomyOrNull()`, not `apiGet('/api/taxonomy', …)` — the throwing
+     uncached read is what 500'd `/admin/students` for seven minutes after a
+     deploy on 2026-09-04. Its page.tsx carries the full account; the short
+     version is that `apiGet` forwards no cookie, so every server-side taxonomy
+     read in the fleet shares one rate-limit identity, and a cold cache after a
+     container restart empties that bucket. Here the data only labels a select,
+     so `null` costs an empty dropdown rather than the screen. */
+  const governorateOptions = (taxonomy?.governorates ?? [])
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((g) => ({ value: g.code, label: g.nameAr }));
@@ -210,11 +237,16 @@ export default async function StudentDetailPage({
             subscriptions={subscriptions}
             courses={subscribableCourses}
           />
+          {/* Above `AccountAccessSection`, with the everyday controls: talking
+              to a student is the most ordinary thing on this page, and the
+              panel below it is where the destructive ones start. */}
+          <ConversationSection userId={userId} conversation={conversation} />
           {/* LAST in the column, deliberately. Two of its three controls are
               destructive and one is irreversible, so it sits below the
               everyday ones rather than beside them — an operator scrolling to
               change a role should not pass «مسح الحساب» on the way. */}
           <AccountAccessSection student={student} />
+          <HistorySection entries={history} />
         </div>
       </div>
 

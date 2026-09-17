@@ -132,6 +132,7 @@ export class AudienceService {
         ...(audience.courseIds.length > 0
           ? { enrollments: { some: { courseId: { in: audience.courseIds } } } }
           : {}),
+        ...this.bookOrderFilter(audience),
       },
       select: {
         id: true,
@@ -163,6 +164,75 @@ export class AudienceService {
       mapped.map((row) => row.id),
     );
     return mapped.filter((row) => !alreadyGranted.has(row.id));
+  }
+
+  /**
+   * «الناس اللي اتشحن ليها + اللي ماتشحنتش ليها + اللي وصل ليها» — the book
+   * order half of the picker, as one `where` fragment.
+   *
+   * ## Empty is not a filter
+   *
+   * `{}` when nothing is ticked, so this axis behaves exactly like `years` and
+   * `courseIds`: no selection narrows nothing. The one shape that must never
+   * appear here is `status: { in: [] }`, which Prisma turns into `IN ()` — a
+   * predicate no row satisfies, i.e. the "empty means nobody" bug the
+   * `Audience` docblock exists to prevent.
+   *
+   * ## `some`, and why `deletedAt: null` is inside it
+   *
+   * `some` asks "does this student HAVE an order in one of these states",
+   * which is the question the admin is asking — a student with two orders,
+   * one delivered and one still waiting, genuinely belongs in both messages.
+   *
+   * The soft-delete filter sits INSIDE the `some` rather than beside it
+   * because it narrows the ORDER, not the student: a student whose only paid
+   * order was deleted must fall out of «لسه ماتشحنش ليهم» entirely, and a
+   * student who has both a deleted order and a live one must stay in. Every
+   * other read of this table carries the same clause and for the same reason —
+   * see `liveOrDeletedWhere` in `book-orders.service.ts`, where the rule is
+   * written down: forgetting it does not throw, it just keeps counting an
+   * order the admin decided did not happen. Here that would be a WhatsApp
+   * message about a book nobody is sending.
+   *
+   * ## ⚠️ A guest order cannot be targeted from here, and that is visible
+   *
+   * `book_orders.user_id` is NULLABLE — ordering the printed book never
+   * required an account. This filter rides the `bookOrders` RELATION, so it
+   * only ever sees orders that carry a `user_id`, and an order placed by a
+   * signed-out visitor is invisible to it.
+   *
+   * That is a real limit and not an oversight, so it is written here rather
+   * than left to be discovered:
+   *
+   *   · A campaign recipient is a USER row. It is what supplies `{{الاسم}}`
+   *     and the `user_id` on the recipient row that makes the send auditable.
+   *     A guest order carries `fullName`/`phone` and no account, so there is
+   *     nothing for the picker's own «الطلبة» source to match it to.
+   *   · Elsewhere the platform DOES link the two at read time, by exact
+   *     `users.phone_number = book_orders.phone` — `listMine`, the
+   *     shipped/delivered/rejected notifications and the admin's «طلب قبل
+   *     كده» all do it (see the header of
+   *     `20260904120100_books_stream_placement_and_order_lifecycle`). It is
+   *     deliberately NOT done here: this axis is composed with `years`,
+   *     `schoolStreams`, `courseIds` and `notSubscribedOnly` in one query, and
+   *     a phone join would make the count on the confirm dialog depend on an
+   *     identity match none of the other axes make. If the instructor asks for
+   *     «وصّلني للي طلبوا قبل ما يسجّلوا» too, this is the method to widen —
+   *     an `OR` onto `phoneNumber` — not the schema.
+   *   · Until then the escape hatch is the one already on the screen:
+   *     «أرقام تانية» takes pasted numbers, which is exactly what a guest
+   *     order is. The picker's own hint says so.
+   *
+   * A student who was signed in when they ordered is NOT affected — that order
+   * has `user_id` set, and this finds it.
+   */
+  private bookOrderFilter(audience: Audience): Prisma.UserWhereInput {
+    if (audience.bookOrderStatuses.length === 0) return {};
+    return {
+      bookOrders: {
+        some: { deletedAt: null, status: { in: audience.bookOrderStatuses } },
+      },
+    };
   }
 
   /**

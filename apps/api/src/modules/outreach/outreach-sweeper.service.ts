@@ -589,7 +589,20 @@ export function topicsFor(
     seen.add(name);
     if (WEAK_STATES.includes(question.state)) {
       const numbers = weak.get(name) ?? [];
-      numbers.push(question.slotPosition);
+      /*
+       * `+ 1`, and this is the only place it happens. `slotPosition` is a
+       * zero-based array index (`attempt.service.ts` writes `slotPosition:
+       * index`), while every number a student has ever seen for a question —
+       * the navigator, the review screen, the submit dialog — is
+       * `slotPosition + 1`. Sending the raw index printed «سؤال 0», a number
+       * that exists on no paper, and told the student to revise a question
+       * one place off from the one they actually missed.
+       *
+       * The contract has said so all along: `questionNumbers` is
+       * `z.array(z.number().int().min(1))`. This function was the one caller
+       * that broke it, and nothing validated it on the way out.
+       */
+      numbers.push(question.slotPosition + 1);
       weak.set(name, numbers);
     }
   }

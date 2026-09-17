@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CatalogCourse } from '@ayman/contracts/catalog';
-import { courseCountLabel, groupBySubject } from './course-groups';
+import { courseCountLabel, groupBySubject, lessonCountLabel } from './course-groups';
 
 const course = (over: Partial<CatalogCourse>): CatalogCourse => ({
   id: '019fc7d2-65d3-77bc-9352-8abe447f584c',
@@ -12,6 +12,7 @@ const course = (over: Partial<CatalogCourse>): CatalogCourse => ({
   year: 2,
   trackLabelAr: 'مسار الهندسة وعلوم الحاسب',
   subjectNameAr: 'البرمجة وعلوم الحاسب',
+  contentComplete: false,
   coverKey: null,
   lessonCount: 3,
   totalSeconds: 3966,
@@ -101,5 +102,30 @@ describe('courseCountLabel', () => {
   it('goes back to the singular from eleven up', () => {
     expect(courseCountLabel(11)).toBe('11 كورس');
     expect(courseCountLabel(48)).toBe('48 كورس');
+  });
+});
+
+/**
+ * ⚠️ This describe block exists because «3 محاضرة» shipped in a live course
+ * page's `<meta name="description">` on 2026-09-14 — the sentence a parent
+ * reads in a search result before deciding whether the site was built
+ * carefully.
+ */
+describe('lessonCountLabel', () => {
+  it('uses all four Arabic plural forms', () => {
+    // Arabic has four, and picking the wrong one is not a typo — «3 محاضرة»
+    // reads to a native speaker the way «3 lesson» reads in English.
+    expect(lessonCountLabel(1)).toBe('محاضرة واحدة');
+    expect(lessonCountLabel(2)).toBe('محاضرتين');
+    expect(lessonCountLabel(3)).toBe('3 محاضرات');
+    expect(lessonCountLabel(10)).toBe('10 محاضرات');
+    expect(lessonCountLabel(11)).toBe('11 محاضرة');
+  });
+
+  it('carries the number itself, so a caller never adds the noun', () => {
+    // The bug was a template that wrote «{n} محاضرة» around a bare count. A
+    // caller that appends the noun to this output produces «3 محاضرات محاضرة».
+    expect(lessonCountLabel(3)).toContain('3');
+    expect(lessonCountLabel(1)).not.toMatch(/\d/);
   });
 });

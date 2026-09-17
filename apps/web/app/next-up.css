@@ -1,0 +1,308 @@
+/* ===========================================================================
+   .next-up — «ناقصك كذا وكذا»، and the card that says «مبروك».
+
+   ## Why this is its own file and not more of `study.css`
+
+   `study.css` is the SHARED vocabulary of the signed-in surface, and its own
+   header states the entry requirement out loud: "a class used once belongs in
+   that page's component, not here". Everything below is used by exactly one
+   component, on exactly one screen. It is imported from `(app)/layout.tsx`
+   beside `study.css` rather than from the component, matching how every other
+   stylesheet in this app reaches the page.
+
+   ## The colour rule this file obeys
+
+   Ember (`--e-*`) is STRUCTURE; amber (`--a-*`) is ACTION; green and red
+   belong to the quiz and appear nowhere here. `study.css` states it, and this
+   file is the one place on the surface where it was tempting to break it —
+   «فرحة» reads as green almost everywhere else on the web. It is amber here,
+   because a student on this platform has been taught exactly one thing about
+   colour, "orange is what you press", and the celebration ends in two buttons.
+   Spending green on it would also cost the quiz its only unambiguous signal.
+
+   `#1a1206` is the ink amber carries, and it is a literal for the same reason
+   `.chip--solid` and `.attempt-row--action .attempt-row__well` write it as
+   one: it is not a step of any ramp, it is the near-black that clears 4.5:1 on
+   `--a-9` in BOTH themes, where every `--n-*` step moves between them.
+
+   ## RTL
+
+   Logical properties only, same as `study.css`. Nothing here has a left or a
+   right.
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   The list state — the ring, and under it the three things left.
+   --------------------------------------------------------------------------- */
+.next-up {
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-1);
+  padding: var(--s-20);
+}
+
+.next-up__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-16);
+}
+
+/* The figure inside the ring. Mono and tabular so 8%, 80% and 100% occupy the
+   same box — the ring is a circle and a reflowing number inside one is
+   visible as a wobble on every render. */
+.next-up__dial {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.next-up__title {
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+.next-up__lead {
+  margin-block-start: var(--s-4);
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.next-up__list {
+  margin-block-start: var(--s-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+}
+
+/* Each row is the whole link, not a line of text with a button beside it.
+
+   Amber-tinted, in the same 6%-over-the-card-surface mix `.attempt-row--action`
+   uses, and for the same stated reason: these rows have something still to DO,
+   which is amber in its ordinary sense. They read as the same card as their
+   neighbours, lit differently — a flat amber panel would read as an alert.
+
+   ⚠️ Deliberately NOT `.attempt-row--action` itself. That class is the exam
+   history's, its `__well` is fixed to the amber fill, and its below-`30rem`
+   rules indent a `.chip` by exactly `3.25rem`. Borrowing it would make every
+   future edit to the results screen a silent edit to the dashboard. */
+.next-up__item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid color-mix(in oklch, var(--a-9) 45%, transparent);
+  background: color-mix(in oklch, var(--a-9) 6%, var(--n-1));
+  transition:
+    background var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out);
+}
+
+.next-up__item:hover {
+  background: color-mix(in oklch, var(--a-9) 12%, var(--n-1));
+  border-color: color-mix(in oklch, var(--a-9) 70%, transparent);
+}
+
+.next-up__item:focus-visible {
+  outline-offset: var(--s-4);
+}
+
+/* The well carries the COUNT for a lecture row — «3» in a solid amber square,
+   which is the concrete number the whole block exists to show — and a glyph
+   for the exam, which has no count worth printing. */
+.next-up__well {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-md);
+  background: var(--a-9);
+  color: #1a1206;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+}
+
+.next-up__text {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.next-up__label {
+  display: block;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+.next-up__course {
+  display: block;
+  font-size: var(--fs-mono-label);
+  color: var(--n-11);
+  overflow-wrap: anywhere;
+}
+
+/* A real button with a word on it, not a chevron. It is inside the `<a>`, so
+   it is a rendered affordance rather than a second tab stop — one row, one
+   destination, one focus target. */
+.next-up__cta {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  block-size: 2rem;
+  padding-inline: var(--s-12);
+  border-radius: var(--r-full);
+  background: var(--a-9);
+  color: #1a1206;
+  font-size: var(--fs-mono-label);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.next-up__item:hover .next-up__cta {
+  background: var(--a-10);
+}
+
+/* Below `30rem` the CTA drops to its own line rather than squeezing the course
+   title into two characters — the same call `.attempt-row` makes at the same
+   breakpoint. The indent lines it up under the text, not under the well. */
+@media (max-width: 30rem) {
+  .next-up__item {
+    flex-wrap: wrap;
+    row-gap: var(--s-8);
+  }
+
+  .next-up__text {
+    flex-basis: calc(100% - 3.25rem);
+  }
+
+  .next-up__cta {
+    margin-inline-start: 3.25rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   .next-up--won — 100%.
+
+   This is the one element on the dashboard that is allowed to be loud, and
+   that is a considered exception rather than a slip. Every other surface here
+   is deliberately calm because a student sees it daily; this one is reached
+   once per syllabus, it is the payoff for months of work, and a «تم» in grey
+   at the end of that is an insult with correct grammar.
+
+   So: a full amber band, a disc, a burst behind it, a real congratulation in
+   words, and two buttons. Nothing on it is a status.
+   --------------------------------------------------------------------------- */
+.next-up--won {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: none;
+  padding: 0;
+  background: linear-gradient(160deg, var(--a-9) 0%, var(--a-10) 100%);
+}
+
+/* The rays. White at 10%, so they composite against whatever part of the
+   gradient they land on instead of assuming one flat amber — the same reason
+   `.stage` sets `--stage-fg-2` as a translucent white rather than a token. */
+.next-up__burst {
+  position: absolute;
+  inset-block-start: -30%;
+  inset-inline-start: 50%;
+  translate: -50% 0;
+  inline-size: 30rem;
+  max-inline-size: 160%;
+  block-size: 30rem;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.next-up__burst path {
+  fill: rgb(255 255 255 / 0.5);
+}
+
+.next-up__won-body-wrap {
+  position: relative;
+  z-index: 1;
+  padding: var(--s-32) var(--s-24);
+  text-align: center;
+}
+
+.next-up__trophy {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 4.5rem;
+  block-size: 4.5rem;
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.38);
+  color: #1a1206;
+}
+
+.next-up__won-title {
+  margin-block-start: var(--s-16);
+  font-size: var(--fs-title-2);
+  font-weight: var(--fw-bold);
+  color: #1a1206;
+}
+
+.next-up__won-body {
+  margin-block-start: var(--s-8);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-medium);
+  color: rgb(26 18 6 / 0.88);
+}
+
+/* The sentence in his own voice. Held to a reading measure and centred — it is
+   a message, not a caption, and a 90-character line across a wide dashboard
+   reads as legal text. */
+.next-up__won-note {
+  margin-block: var(--s-12) 0;
+  margin-inline: auto;
+  max-inline-size: 46ch;
+  font-size: var(--fs-text-sm);
+  color: rgb(26 18 6 / 0.78);
+}
+
+.next-up__won-actions {
+  margin-block-start: var(--s-24);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-8);
+}
+
+/* 44px — the thumb target `.welcome-cta` measures and names. Two of them, and
+   the quiet one is still a solid object with a word on it, because the second
+   choice on a celebration card is «كورسات تانية» and not a footnote. */
+.next-up__won-cta {
+  display: inline-flex;
+  align-items: center;
+  block-size: 2.75rem;
+  padding-inline: var(--s-20);
+  border-radius: var(--r-full);
+  background: #1a1206;
+  color: var(--ink-fg);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  transition: opacity var(--d-hover) var(--ease-out);
+}
+
+.next-up__won-cta:hover {
+  opacity: 0.88;
+}
+
+.next-up__won-cta--quiet {
+  background: rgb(255 255 255 / 0.42);
+  color: #1a1206;
+}
+
+.next-up__won-cta--quiet:hover {
+  background: rgb(255 255 255 / 0.6);
+  opacity: 1;
+}

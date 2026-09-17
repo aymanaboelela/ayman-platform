@@ -156,22 +156,43 @@
 @media (min-width: 62rem) {
   .auth-aside {
     display: flex;
-    align-items: center;
+    /* Bottom, not centre. The words sit in the darkest, emptiest part of the
+       photograph and the top of the frame stays clear. */
+    align-items: flex-end;
   }
 }
 
-/* A faint grid, faded out towards the edges so the panel does not read as a
-   tiled texture. Two gradients rather than an image — no request, no decode. */
-.auth-aside__grid {
+/* ------------------------------------------------------------ the photograph
+   Behind everything, including the panel's own gradient background — which
+   stays as the colour the column falls back to if the file never arrives.
+
+   The crop is anchored ABOVE centre: the subject and the robot sit in the upper
+   half, and a plain `cover` on a column this tall would push both out of frame
+   from the top. */
+.auth-aside__photo {
+  z-index: -3;
+  object-fit: cover;
+  object-position: 50% 34%;
+}
+
+/* The scrim that makes the copy legible over it. Weighted to the bottom, where
+   the words are; the top stays open so the picture is a picture and not a
+   texture. The warm key light is re-stated here because the photo now covers
+   the background that used to carry it. */
+.auth-aside__scrim {
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: -2;
   pointer-events: none;
-  background-image:
-    linear-gradient(to left, rgb(255 255 255 / 0.045) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(255 255 255 / 0.045) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: radial-gradient(120% 90% at 70% 20%, #000 20%, transparent 78%);
+  background:
+    linear-gradient(
+      to top,
+      rgb(8 9 10 / 0.97) 0%,
+      rgb(8 9 10 / 0.93) 30%,
+      rgb(8 9 10 / 0.6) 58%,
+      rgb(8 9 10 / 0.12) 100%
+    ),
+    radial-gradient(72% 52% at 78% 2%, rgb(255 138 26 / 0.12), transparent 62%);
 }
 
 .auth-aside__inner {
@@ -234,84 +255,6 @@
   background: rgb(255 138 26 / 0.18);
   color: oklch(0.845 0.13 78);
 }
-
-/* --------------------------------------------------- the decorative snippet */
-
-.auth-code {
-  border-radius: var(--r-lg);
-  border: 1px solid rgb(255 255 255 / 0.09);
-  background: rgb(0 0 0 / 0.32);
-  overflow: hidden;
-}
-
-.auth-code__bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 12px;
-  border-bottom: 1px solid rgb(255 255 255 / 0.07);
-}
-
-.auth-code__bar i {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.16);
-}
-
-.auth-code__file {
-  margin-inline-start: auto;
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  color: rgb(255 255 255 / 0.4);
-  direction: ltr;
-}
-
-.auth-code__body {
-  margin: 0;
-  padding: 14px 16px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  direction: ltr;
-  text-align: left;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  line-height: 1.85;
-  color: rgb(255 255 255 / 0.55);
-  overflow-x: auto;
-}
-
-.auth-code__line {
-  display: block;
-  white-space: pre;
-}
-
-.auth-code .t-k {
-  color: oklch(0.8 0.13 320);
-  font-weight: 400;
-}
-.auth-code .t-v {
-  color: oklch(0.86 0.09 240);
-  font-weight: 400;
-}
-.auth-code .t-a {
-  color: oklch(0.88 0.08 200);
-  font-weight: 400;
-}
-.auth-code .t-s {
-  color: oklch(0.84 0.13 140);
-  font-weight: 400;
-}
-.auth-code .t-n {
-  color: oklch(0.85 0.13 60);
-  font-weight: 400;
-}
-.auth-code .t-f {
-  color: oklch(0.86 0.14 80);
-  font-weight: 400;
-}
-
 
 /* ===========================================================================
    The switch between signing in and signing up, at a size a thumb can hit.

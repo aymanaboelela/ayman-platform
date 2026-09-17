@@ -1,5 +1,5 @@
-import { Lightbulb } from 'lucide-react';
 import { copy } from '@ayman/contracts';
+import { CardArt } from './card-art';
 
 const c = copy.dashboard;
 
@@ -41,27 +41,29 @@ export function tipOfTheDay(date: Date = new Date()): string {
   return tips[index] ?? tips[0] ?? '';
 }
 
-/*
- * `.tile--hued`, not the plain `.tile` this card opened with.
+/**
+ * ## Why this is a banner card and not a `.tile` any more
  *
- * The stats row right above it already gives its three tiles their own
- * per-tile hue (see `StatsRow`) precisely to answer the "four grey wells"
- * flatness complaint `.tile--hued`'s own comment in `study.css` documents —
- * and a plain ember well directly underneath that row put the exact
- * complaint right back on the page, one card down. `hue={280}` (violet) is
- * simply the next step in that same row's spread (45 → 140 → 225 → 280), far
- * enough from the amber accent (~72) and the ember structure hue (35) that a
- * decorative well here still cannot be mistaken for either.
+ * It was a 40px well with a `Lightbulb` in it and one line of text beside it,
+ * sitting full-width between the stats row and «إنجازاتك». Two things were
+ * wrong with that and they are the same two the whole aside column fixes: at
+ * full width a one-line card reads as important, and it is not — it is the
+ * lightest thing on the page — and the glyph was too small to say "tip"
+ * («غير الأيكونز، يبقى فيه صور، لأن بجد مش فاهم حاجة»).
+ *
+ * The heading is new. There was none: the card printed the sentence with no
+ * word anywhere saying what it was, so a student read a piece of advice with
+ * no idea whether it was aimed at them, generated, or written by the
+ * instructor. `c.tipOfDayTitle` names it.
  */
 export function TipOfDayCard() {
   return (
-    <div className="tile tile--hued" style={{ '--tile-h': 280 } as React.CSSProperties}>
-      <span className="tile__well" aria-hidden="true">
-        <Lightbulb className="size-4" />
-      </span>
-      <p className="min-w-0 flex-1 self-center text-[length:var(--fs-text-sm)] text-fg">
-        {tipOfTheDay()}
-      </p>
-    </div>
+    <section className="aside-card">
+      <CardArt name="tip" />
+      <div className="aside-card__body">
+        <h2 className="aside-card__title">{c.tipOfDayTitle}</h2>
+        <p className="aside-card__note">{tipOfTheDay()}</p>
+      </div>
+    </section>
   );
 }

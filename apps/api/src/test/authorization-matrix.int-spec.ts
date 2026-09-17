@@ -33,6 +33,7 @@ import { StudentsModule } from '../modules/admin/students/students.module';
 import { AdminTaxonomyModule } from '../modules/admin/taxonomy/admin-taxonomy.module';
 import { MediaModule } from '../modules/media/media.module';
 import { FlagsModule } from '../modules/admin/flags/flags.module';
+import { RolesModule } from '../modules/admin/roles/roles.module';
 import { NavigationModule } from '../modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.module';
 import { NewsModule } from '../modules/news/news.module';
@@ -47,6 +48,9 @@ import { AssistantAskController } from '../modules/assistant/ai/assistant-ask.co
 import { OutreachModule } from '../modules/outreach/outreach.module';
 import { MarketingController } from '../modules/marketing/marketing.controller';
 import { WhatsappInboundController } from '../modules/marketing/whatsapp-inbound.controller';
+import { WhatsappReceiptController } from '../modules/marketing/whatsapp-receipt.controller';
+import { AdminBroadcastController } from '../modules/outreach/admin-broadcast.controller';
+import { BroadcastService } from '../modules/outreach/broadcast.service';
 import { CampaignService } from '../modules/marketing/campaign.service';
 import { AudienceService } from '../modules/marketing/audience.service';
 import { WhatsappDeviceService } from '../modules/marketing/whatsapp-device.service';
@@ -54,18 +58,29 @@ import { AssistantService } from '../modules/assistant/assistant.service';
 import { ConversationAttachmentService } from '../modules/assistant/conversation-attachment.service';
 import { AssistantAiService } from '../modules/assistant/ai/assistant-ai.service';
 import { AssistantStudentService } from '../modules/assistant/ai/assistant-student.service';
+import { AssistantFactsService } from '../modules/assistant/ai/assistant-facts.service';
 import { AssistantQuestionService } from '../modules/assistant/ai/assistant-question.service';
 import { AdminAssistantQuestionsController } from '../modules/assistant/ai/admin-questions.controller';
 import { NotificationsService } from '../modules/notifications/notifications.service';
+import { NotificationsRealtimeService } from '../modules/notifications/notifications-realtime.service';
 import { OptionalSessionService } from '../auth/optional-session.service';
 import { PaymentsController } from '../modules/payments/payments.controller';
 import { AdminPaymentsController } from '../modules/payments/admin-payments.controller';
+import { AdminTransfersController } from '../modules/payments/admin-transfers.controller';
+import { TransfersIngestController } from '../modules/payments/transfers-ingest.controller';
 import { AdminFinanceController } from '../modules/payments/admin-finance.controller';
 import { PaymentsService } from '../modules/payments/payments.service';
+import { TransfersService } from '../modules/payments/transfers.service';
 import { FinanceService } from '../modules/payments/finance.service';
 import { BookOrdersController } from '../modules/book-orders/book-orders.controller';
 import { AdminBookOrdersController } from '../modules/book-orders/admin-book-orders.controller';
 import { BookOrdersService } from '../modules/book-orders/book-orders.service';
+import { BooksController } from '../modules/books/books.controller';
+import { AdminBooksController } from '../modules/books/admin-books.controller';
+import { ExpensesController } from '../modules/expenses/expenses.controller';
+import { ExpensesService } from '../modules/expenses/expenses.service';
+import { FinanceOverviewService } from '../modules/expenses/finance-overview.service';
+import { BooksService } from '../modules/books/books.service';
 
 import { enumerateRoutes, type RouteRef } from './route-inventory';
 
@@ -167,6 +182,16 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         AdminErrorsController,
         MarketingController,
         WhatsappInboundController,
+        // ⚠️ THIS FIXTURE IS AN EXPLICIT LIST, NOT `AppModule`.
+        //
+        // A controller that exists in production and is missing here is not
+        // "untested" — it is invisible: `enumerateRoutes()` never sees it, so
+        // the coverage assertions below pass while saying nothing, and any
+        // MATRIX row aimed at it answers 404 instead of the 401/403 it claims
+        // to be checking. Both of these were added to the product without
+        // being added here.
+        WhatsappReceiptController,
+        AdminBroadcastController,
         // Listed directly, like `ConversationAttachmentService` below, rather
         // than imported via `PaymentsModule` — that module also imports
         // `NotificationsModule`, which brings `NotificationsController` in
@@ -178,6 +203,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // from `AuditModule`/`MediaModule` and the direct provider below.
         PaymentsController,
         AdminPaymentsController,
+        // «التحويلات الواردة» — the ledger behind the review queue above, and
+        // the token-authenticated ingest that fills it. Registered here (and
+        // not only in `PaymentsModule`) for the same reason as its neighbours;
+        // the ingest route itself is a `KNOWN_GAPS` entry, not a matrix row.
+        AdminTransfersController,
+        TransfersIngestController,
         // «الاشتراكات والإيرادات» — same reasoning as `PaymentsController`
         // above: `FinanceService`'s own dependencies (Prisma, `AuditService`,
         // `NotificationsService`) are all already available from this
@@ -189,6 +220,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // `PaymentsController`'s own comment.
         BookOrdersController,
         AdminBookOrdersController,
+        // «قسم الكتب» — the catalogue. Same by-class registration and the same
+        // reason: its `BooksService` dependencies (Prisma, `AuditService`,
+        // `SettingsService`) are already available from `AuditModule` and
+        // `SettingsModule` above.
+        BooksController,
+        AdminBooksController,
+        // المصروفات + «النظرة العامة». Registered by class like every entry
+        // above rather than through `ExpensesModule`, and it resolves for the
+        // same reason: `ExpensesService` and `FinanceOverviewService` reach for
+        // Prisma and `AuditService`, both already available from `AuditModule`.
+        ExpensesController,
       ],
       imports: [
         DiscoveryModule,
@@ -208,6 +250,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         AdminTaxonomyModule,
         MediaModule,
         FlagsModule,
+        RolesModule,
         NavigationModule,
         HomeBlocksModule,
         NewsModule,
@@ -264,13 +307,40 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
          * calls a model.
          */
         AssistantStudentService,
+        /*
+         * The live prices, injected by `AssistantAiService`. Listed here for
+         * the same reason as everything else in this block: a provider a
+         * registered controller transitively needs and that this fixture does
+         * not supply makes the module fail to COMPILE, which shows up as all
+         * 455 rows below failing at once rather than as a missing route.
+         *
+         * Its own `BooksService` dependency is already here (see «قسم الكتب»
+         * above), and `PrismaService` is overridden for the whole fixture, so
+         * nothing about a price is read in this file — the table is about who
+         * may call a route, and that answer does not depend on a number.
+         */
+        AssistantFactsService,
         AssistantQuestionService,
         NotificationsService,
+        // The fixture builds from an explicit provider list, not from
+        // `AppModule` — a service a controller injects but that is not listed
+        // here makes every route on that controller 404 instead of 401, and
+        // the failure reads as "the route does not exist" rather than "the
+        // fixture is incomplete".
+        NotificationsRealtimeService,
         OptionalSessionService,
         DiagnosticsService,
         PaymentsService,
+        TransfersService,
         FinanceService,
         BookOrdersService,
+        BooksService,
+        // `AdminBroadcastController`'s dependency. Listed for the reason the
+        // block above gives: a provider a registered controller needs and
+        // that this fixture does not supply makes the module fail to compile.
+        BroadcastService,
+        ExpensesService,
+        FinanceOverviewService,
       ],
     })
     class FixtureModule {}
@@ -503,6 +573,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'health', method: 'get', path: () => '/api/health', actor: 'anonymous', status: 200 },
     { label: 'taxonomy', method: 'get', path: () => '/api/taxonomy', actor: 'anonymous', status: 200 },
     { label: 'catalog list', method: 'get', path: () => '/api/catalog/courses', actor: 'anonymous', status: 200 },
+    // Anonymous and 200: the board is on the landing page. It answers with an
+    // empty list until an instructor puts someone on it.
+    { label: 'honor board', method: 'get', path: () => '/api/catalog/honor-board', actor: 'anonymous', status: 200 },
     { label: 'catalog course', method: 'get', path: () => `/api/catalog/courses/${courseId}`, actor: 'anonymous', status: 404 },
 
     // ── Session echo — authenticated only, no permission string ──
@@ -575,6 +648,81 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'resource download: anonymous', method: 'get', path: () => `/api/lessons/${lessonId}/resources/${resourceId}/download`, actor: 'anonymous', status: 401 },
     { label: 'resource download: non-enrolled is 404', method: 'get', path: () => `/api/lessons/${lessonId}/resources/${resourceId}/download`, actor: 'other', status: 404 },
 
+    /*
+     * ── الواجب, the student's half ──
+     *
+     * `homework:submit` is self-scoped: every method reads `user.id` from the
+     * session, and the LESSON goes through `LessonAccessService.require`, so
+     * the ownership dimension is enrolment exactly as it is for the player
+     * above. A non-enrolled caller is a 404 and never a 403 — a 403 would
+     * confirm the lesson exists — and that holds for the ADMIN too, who holds
+     * every permission and no enrolment.
+     *
+     * The fixture's lesson has no `lesson_homework` row, so an ENROLLED
+     * student is a 404 too: «مفيش واجب هنا» is the honest answer, and the fact
+     * that it is reached at all proves the permission gate ran and the request
+     * got into real business logic. What each row is really pinning is the
+     * distinction between 401 / 403 / 404, which is the whole subject of this
+     * table.
+     */
+    { label: 'homework mine: anonymous', method: 'get', path: () => `/api/homework/lessons/${lessonId}`, actor: 'anonymous', status: 401 },
+    { label: 'homework mine: enrolled student, no homework set', method: 'get', path: () => `/api/homework/lessons/${lessonId}`, actor: 'student', status: 200 },
+    { label: 'homework mine: non-enrolled is 404', method: 'get', path: () => `/api/homework/lessons/${lessonId}`, actor: 'other', status: 404 },
+    // `admin: '*'` holds `homework:submit` like every other permission, so the
+    // gate passes — and the ENROLMENT still does not. Same «no bypass» row the
+    // player and progress blocks above each carry, and the reason this endpoint
+    // runs `access.require` at all: without it, the exercise text of any
+    // published lecture would be readable by any signed-in account.
+    { label: 'homework mine: admin has no enrollment bypass', method: 'get', path: () => `/api/homework/lessons/${lessonId}`, actor: 'admin', status: 404 },
+    { label: 'homework image upload: anonymous', method: 'post', path: () => `/api/homework/lessons/${lessonId}/images`, actor: 'anonymous', status: 401 },
+    { label: 'homework image upload: non-enrolled is 404', method: 'post', path: () => `/api/homework/lessons/${lessonId}/images`, actor: 'other', status: 404 },
+    /*
+     * Past the permission gate and into `requireOpenHomework`, which 404s
+     * because this fixture lecture carries no PUBLISHED exercise.
+     *
+     * The same 404 the non-enrolled row above gets, and that is the point
+     * rather than a weakness: the order is permission → enrolment → published
+     * homework → payload, so a caller learns nothing about the shape of their
+     * request until they are entitled to the lecture. The 400 for a missing
+     * file lives behind all three (see `HomeworkService.uploadImage`), and the
+     * enrolment distinction itself is pinned by the `homework mine` rows above,
+     * which answer 200 and 404 for the same URL.
+     */
+    { label: 'homework image upload: enrolled student, no homework set', method: 'post', path: () => `/api/homework/lessons/${lessonId}/images`, actor: 'student', status: 404 },
+    {
+      label: 'homework submit: anonymous',
+      method: 'post',
+      path: () => `/api/homework/lessons/${lessonId}/submissions`,
+      actor: 'anonymous',
+      body: () => ({ images: [{ storageKey: 'hw/ab/00000000-0000-7000-8000-000000000000.webp', sizeBytes: 10 }] }),
+      status: 401,
+    },
+    {
+      label: 'homework submit: non-enrolled is 404',
+      method: 'post',
+      path: () => `/api/homework/lessons/${lessonId}/submissions`,
+      actor: 'other',
+      body: () => ({ images: [{ storageKey: 'hw/ab/00000000-0000-7000-8000-000000000000.webp', sizeBytes: 10 }] }),
+      status: 404,
+    },
+    {
+      // Enrolled, past the gate, and 404 because this lesson carries no
+      // PUBLISHED homework — see the block comment above.
+      label: 'homework submit: enrolled student, no homework set',
+      method: 'post',
+      path: () => `/api/homework/lessons/${lessonId}/submissions`,
+      actor: 'student',
+      body: () => ({ images: [{ storageKey: 'hw/ab/00000000-0000-7000-8000-000000000000.webp', sizeBytes: 10 }] }),
+      status: 404,
+    },
+    { label: 'homework image: anonymous', method: 'get', path: () => `/api/homework/images/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    // A page belonging to nobody, asked for by a student who owns nothing: the
+    // owner is compiled INTO the query, so this is the same 404 another
+    // student's page would give — which is the point. A 403 would confirm the
+    // id exists.
+    { label: 'homework image: student, unknown page', method: 'get', path: () => `/api/homework/images/${randomUUID()}`, actor: 'student', status: 404 },
+    { label: 'homework image: other student, unknown page', method: 'get', path: () => `/api/homework/images/${randomUUID()}`, actor: 'other', status: 404 },
+
     // ── Dashboard — self-scoped, no id in the URL ──
     { label: 'dashboard: anonymous', method: 'get', path: () => '/api/me/dashboard', actor: 'anonymous', status: 401 },
     { label: 'path: anonymous', method: 'get', path: () => '/api/me/path', actor: 'anonymous', status: 401 },
@@ -592,6 +740,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // holds if a new route is named, however closely it resembles a neighbour.
     { label: 'mastery: anonymous', method: 'get', path: () => '/api/me/mastery', actor: 'anonymous', status: 401 },
     { label: 'mastery: student', method: 'get', path: () => '/api/me/mastery', actor: 'student', status: 200 },
+    // امتحانات الشهر, guarded by `quiz:read` like its two neighbours above. Its
+    // own rows for the reason stated there: the assertion that this matrix
+    // accounts for every registered route only holds if a new route is named,
+    // however closely it resembles one already listed.
+    { label: 'monthly exams: anonymous', method: 'get', path: () => '/api/me/exams', actor: 'anonymous', status: 401 },
+    { label: 'monthly exams: student', method: 'get', path: () => '/api/me/exams', actor: 'student', status: 200 },
     // Same again for the activity feed, guarded by `progress:read` — the READ
     // half of the pair the heartbeat writes. Its own rows for the same reason
     // the quiz history has its own: a different permission is a different
@@ -605,6 +759,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // authorization question, so each gets its own rows.
     { label: 'notifications feed: anonymous', method: 'get', path: () => '/api/me/notifications', actor: 'anonymous', status: 401 },
     { label: 'notifications feed: student', method: 'get', path: () => '/api/me/notifications', actor: 'student', status: 200 },
+    /*
+      The live stream, ANONYMOUS ONLY.
+
+      There is deliberately no authenticated row for it. A 200 on this route
+      does not end — it is an open `text/event-stream` that stays open until
+      the client goes away — so a `supertest` request asserting it would hang
+      until the suite timed out. What the matrix is here to prove is that the
+      route is behind the guard at all, and the 401 proves exactly that: it is
+      produced by `AuthGuard` before the handler ever writes a header.
+    */
+    { label: 'notifications stream: anonymous', method: 'get', path: () => '/api/me/notifications/stream', actor: 'anonymous', status: 401 },
     { label: 'notifications unread count: anonymous', method: 'get', path: () => '/api/me/notifications/unread-count', actor: 'anonymous', status: 401 },
     { label: 'notifications unread count: student', method: 'get', path: () => '/api/me/notifications/unread-count', actor: 'student', status: 200 },
     { label: 'notifications read-all: anonymous', method: 'post', path: () => '/api/me/notifications/read-all', actor: 'anonymous', status: 401 },
@@ -615,6 +780,44 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // A 404 here would be an existence oracle over another student's ids.
     { label: 'notification read: anonymous', method: 'post', path: () => `/api/me/notifications/${randomUUID()}/read`, actor: 'anonymous', status: 401 },
     { label: 'notification read: student (someone else’s id is a silent no-op)', method: 'post', path: () => `/api/me/notifications/${randomUUID()}/read`, actor: 'student', status: 204 },
+    // Web Push (assistant_question_received's delivery leg) — `profile:read`/
+    // `profile:write`, same as every route above: this is a self-service
+    // toggle on the CALLER'S OWN browser rather than a kind-specific
+    // authority, so it needs no permission of its own.
+    { label: 'push public key: anonymous', method: 'get', path: () => '/api/me/push/public-key', actor: 'anonymous', status: 401 },
+    { label: 'push public key: student', method: 'get', path: () => '/api/me/push/public-key', actor: 'student', status: 200 },
+    {
+      label: 'push subscribe: anonymous',
+      method: 'post',
+      path: () => '/api/me/push/subscribe',
+      actor: 'anonymous',
+      status: 401,
+      body: () => ({ endpoint: 'https://push.example/x', keys: { p256dh: 'p', auth: 'a' } }),
+    },
+    {
+      label: 'push subscribe: student',
+      method: 'post',
+      path: () => '/api/me/push/subscribe',
+      actor: 'student',
+      status: 204,
+      body: () => ({ endpoint: 'https://push.example/x', keys: { p256dh: 'p', auth: 'a' } }),
+    },
+    {
+      label: 'push unsubscribe: anonymous',
+      method: 'post',
+      path: () => '/api/me/push/unsubscribe',
+      actor: 'anonymous',
+      status: 401,
+      body: () => ({ endpoint: 'https://push.example/x' }),
+    },
+    {
+      label: 'push unsubscribe: student',
+      method: 'post',
+      path: () => '/api/me/push/unsubscribe',
+      actor: 'student',
+      status: 204,
+      body: () => ({ endpoint: 'https://push.example/x' }),
+    },
 
     // ── المساعد: the visitor side is PUBLIC on purpose ──────────────────
     // These are the only public routes in the product that WRITE, which is
@@ -710,6 +913,15 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // exactly the split that lets a reply-but-never-close role exist later.
     { label: 'inbox reply: anonymous', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/reply`, actor: 'anonymous', status: 401, body: () => ({ message: 'أهلاً' }) },
     { label: 'inbox reply: student', method: 'post', path: () => `/api/admin/conversations/${randomUUID()}/reply`, actor: 'student', status: 403, body: () => ({ message: 'أهلاً' }) },
+    // «أعدل عليها» / «أمسحها» — the same `conversation:reply`, for the reason
+    // the reaction route documents: both land on a student's screen under the
+    // instructor's name, so a role trusted to write words there is trusted to
+    // correct and remove them, and a role that is not must not get either as a
+    // loophole.
+    { label: 'inbox edit message: anonymous', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}`, actor: 'anonymous', status: 401, body: () => ({ message: 'تعديل' }) },
+    { label: 'inbox edit message: student', method: 'patch', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}`, actor: 'student', status: 403, body: () => ({ message: 'تعديل' }) },
+    { label: 'inbox delete message: anonymous', method: 'delete', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'inbox delete message: student', method: 'delete', path: () => `/api/admin/conversations/${randomUUID()}/messages/${randomUUID()}`, actor: 'student', status: 403 },
     // «ردّ بإيموجي» carries `conversation:reply`, not a permission of its own:
     // a reaction IS a reply, the smallest one, and it lands on a student's
     // screen under his name exactly as typed words would.
@@ -787,6 +999,14 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'marketing device unlink: anonymous', method: 'post', path: () => '/api/admin/marketing/device/unlink', actor: 'anonymous', status: 401 },
     { label: 'marketing device unlink: student', method: 'post', path: () => '/api/admin/marketing/device/unlink', actor: 'student', status: 403 },
 
+    // «رسالة تجربة» — `marketing:send`, the same authority as starting a
+    // campaign, because it puts a real message on a real phone. The receipt
+    // read beside it is `marketing:read`: it sends nothing.
+    { label: 'marketing test-send: anonymous', method: 'post', path: () => '/api/admin/marketing/device/test-send', actor: 'anonymous', status: 401, body: () => ({ phone: '+201000000000' }) },
+    { label: 'marketing test-send: student', method: 'post', path: () => '/api/admin/marketing/device/test-send', actor: 'student', status: 403, body: () => ({ phone: '+201000000000' }) },
+    { label: 'marketing test-send receipt: anonymous', method: 'get', path: () => '/api/admin/marketing/device/test-send/ABC123', actor: 'anonymous', status: 401 },
+    { label: 'marketing test-send receipt: student', method: 'get', path: () => '/api/admin/marketing/device/test-send/ABC123', actor: 'student', status: 403 },
+
     { label: 'marketing opt-outs: anonymous', method: 'get', path: () => '/api/admin/marketing/opt-outs', actor: 'anonymous', status: 401 },
     { label: 'marketing opt-outs: student', method: 'get', path: () => '/api/admin/marketing/opt-outs', actor: 'student', status: 403 },
     { label: 'marketing opt-outs: admin', method: 'get', path: () => '/api/admin/marketing/opt-outs', actor: 'admin', status: 200 },
@@ -817,6 +1037,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'marketing campaign cancel: student', method: 'post', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}/cancel`, actor: 'student', status: 403 },
     { label: 'marketing campaign delete: anonymous', method: 'delete', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'anonymous', status: 401 },
     { label: 'marketing campaign delete: student', method: 'delete', path: () => `/api/admin/marketing/campaigns/${MISSING_UUID}`, actor: 'student', status: 403 },
+
+    // ── «/admin/broadcast»: the instructor's own words, sent on purpose —
+    // deliberately `conversation:reply`, not `outreach:read` (see the
+    // controller's own header for why this is a separate screen from the
+    // read-only log above it, and the same permission `AdminInboxController`
+    // guards its own reply route with).
+    { label: 'broadcast recipient count: anonymous', method: 'get', path: () => '/api/admin/broadcast/recipient-count?type=all', actor: 'anonymous', status: 401 },
+    { label: 'broadcast recipient count: student', method: 'get', path: () => '/api/admin/broadcast/recipient-count?type=all', actor: 'student', status: 403 },
+    { label: 'broadcast recipient count: admin', method: 'get', path: () => '/api/admin/broadcast/recipient-count?type=all', actor: 'admin', status: 200 },
+    { label: 'broadcast send: anonymous', method: 'post', path: () => '/api/admin/broadcast', actor: 'anonymous', status: 401, body: () => ({ body: 'أهلاً', target: { type: 'all' } }) },
+    { label: 'broadcast send: student', method: 'post', path: () => '/api/admin/broadcast', actor: 'student', status: 403, body: () => ({ body: 'أهلاً', target: { type: 'all' } }) },
 
     // ── Content admin: course/section/lesson — admin-only CRUD, no per-
     // resource ownership dimension (any admin may touch any course). ──
@@ -918,8 +1149,48 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin lesson video duration: student', method: 'get', path: () => `/api/admin/lessons/video-duration`, actor: 'student', status: 403 },
     { label: 'admin lesson video duration: admin', method: 'get', path: () => `/api/admin/lessons/video-duration`, actor: 'admin', status: 400 },
     { label: 'admin lesson video delete: student', method: 'delete', path: () => `/api/admin/lessons/${scratchLessonId}/video`, actor: 'student', status: 403 },
+    // «حاول تاني» on the mirror. Same permission as replacing the video, and
+    // for the same reason — but it is a POST that costs the platform a
+    // gigabyte of transfer and a worker slot, so an unauthenticated or
+    // student caller reaching it would be a free denial of service on the one
+    // queue that keeps ministry-tablet students able to watch anything.
+    { label: 'admin lesson video remirror: anonymous', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/mirror`, actor: 'anonymous', status: 401, body: () => ({}) },
+    { label: 'admin lesson video remirror: student', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/mirror`, actor: 'student', status: 403, body: () => ({}) },
+    // «الرفع المباشر». These four sign, seal, cancel and report on an upload
+    // that goes straight to the bucket — so an unauthenticated caller reaching
+    // any of them would be handed WRITE credentials for our object storage.
+    { label: 'admin lesson video upload start: anonymous', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload`, actor: 'anonymous', status: 401, body: () => ({ fileName: 'a.mp4', sizeBytes: 1024, contentType: 'video/mp4' }) },
+    { label: 'admin lesson video upload start: student', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload`, actor: 'student', status: 403, body: () => ({ fileName: 'a.mp4', sizeBytes: 1024, contentType: 'video/mp4' }) },
+    { label: 'admin lesson video upload complete: anonymous', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/complete`, actor: 'anonymous', status: 401, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u', parts: [{ partNumber: 1, etag: 'e' }] }) },
+    { label: 'admin lesson video upload complete: student', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/complete`, actor: 'student', status: 403, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u', parts: [{ partNumber: 1, etag: 'e' }] }) },
+    { label: 'admin lesson video upload abort: anonymous', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/abort`, actor: 'anonymous', status: 401, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u' }) },
+    { label: 'admin lesson video upload abort: student', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/abort`, actor: 'student', status: 403, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u' }) },
+    { label: 'admin lesson video upload status: anonymous', method: 'get', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/status`, actor: 'anonymous', status: 401 },
+    { label: 'admin lesson video upload status: student', method: 'get', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/status`, actor: 'student', status: 403 },
     { label: 'admin lesson text put: anonymous', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/text`, actor: 'anonymous', status: 401 },
     { label: 'admin lesson text put: student', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/text`, actor: 'student', status: 403 },
+    /*
+     * الواجب, the AUTHORING half — `lesson:write`, like the video and the text,
+     * because this is the lecture's own content. Reading and DECIDING what
+     * students hand back is `homework:*` and lives on its own controller
+     * below.
+     */
+    { label: 'admin lesson homework put: anonymous', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/homework`, actor: 'anonymous', status: 401 },
+    { label: 'admin lesson homework put: student', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/homework`, actor: 'student', status: 403 },
+    {
+      label: 'admin lesson homework put: admin',
+      method: 'put',
+      path: () => `/api/admin/lessons/${scratchLessonId}/homework`,
+      actor: 'admin',
+      body: () => ({ body: 'حل تمرين ٣', maxImages: 2, isPublished: false }),
+      status: 200,
+    },
+    { label: 'admin lesson homework delete: anonymous', method: 'delete', path: () => `/api/admin/lessons/${scratchLessonId}/homework`, actor: 'anonymous', status: 401 },
+    { label: 'admin lesson homework delete: student', method: 'delete', path: () => `/api/admin/lessons/${scratchLessonId}/homework`, actor: 'student', status: 403 },
+    // Idempotent by design — removing an exercise that is not there answers the
+    // same 200 as removing one that is, so a double-tap on a slow connection is
+    // not an error. See `LessonService.removeHomework`.
+    { label: 'admin lesson homework delete: admin', method: 'delete', path: () => `/api/admin/lessons/${scratchLessonId}/homework`, actor: 'admin', status: 200 },
     {
       label: 'admin lesson text put: admin',
       method: 'put',
@@ -991,6 +1262,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'students list: admin', method: 'get', path: () => '/api/admin/students', actor: 'admin', status: 200 },
     { label: 'student detail: student', method: 'get', path: () => `/api/admin/students/${studentId}`, actor: 'student', status: 403 },
     { label: 'student detail: admin', method: 'get', path: () => `/api/admin/students/${studentId}`, actor: 'admin', status: 200 },
+    // `conversation:read`, NOT `student:read` — the payload is message bodies.
+    { label: 'student conversation: anonymous', method: 'get', path: () => `/api/admin/students/${studentId}/conversation`, actor: 'anonymous', status: 401 },
+    { label: 'student conversation: student', method: 'get', path: () => `/api/admin/students/${studentId}/conversation`, actor: 'student', status: 403 },
+    { label: 'student conversation: admin', method: 'get', path: () => `/api/admin/students/${studentId}/conversation`, actor: 'admin', status: 200 },
     { label: 'student patch: anonymous', method: 'patch', path: () => `/api/admin/students/${studentId}`, actor: 'anonymous', status: 401 },
     { label: 'student patch: student', method: 'patch', path: () => `/api/admin/students/${studentId}`, actor: 'student', status: 403 },
     { label: 'student role change: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/role`, actor: 'anonymous', status: 401 },
@@ -1001,6 +1276,16 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // different authority from correcting a profile field.
     { label: 'student set-password: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/set-password`, actor: 'anonymous', status: 401 },
     { label: 'student set-password: student', method: 'post', path: () => `/api/admin/students/${studentId}/set-password`, actor: 'student', status: 403 },
+
+    // ── سجل الحساب — who did what to this student, in order. `student:read`,
+    // the same permission as the profile it renders inside: it composes rows
+    // that permission already reaches (grants, subscriptions, book orders) and
+    // adds no field that is not on one of them. NOT `audit:read` — see
+    // `StudentHistoryService`'s own note on why it reads the domain tables
+    // rather than the tamper-evident log. ──
+    { label: 'student history: anonymous', method: 'get', path: () => `/api/admin/students/${studentId}/history`, actor: 'anonymous', status: 401 },
+    { label: 'student history: student', method: 'get', path: () => `/api/admin/students/${studentId}/history`, actor: 'student', status: 403 },
+    { label: 'student history: admin', method: 'get', path: () => `/api/admin/students/${studentId}/history`, actor: 'admin', status: 200 },
 
     // ── Course grants — opening a CLOSED course for one student. Reads take
     // `student:read`, writes `student:write`; a student may not see or change
@@ -1121,6 +1406,30 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'news delete: anonymous', method: 'delete', path: () => `/api/admin/news/${newsPostId}`, actor: 'anonymous', status: 401 },
     { label: 'news delete: student', method: 'delete', path: () => `/api/admin/news/${newsPostId}`, actor: 'student', status: 403 },
 
+    // ── Role grants — admin only, in BOTH directions ──
+    //
+    // The route that hands out permissions is the one route where a 403 for
+    // the wrong caller is the whole feature: an `owner` who could reach it
+    // could grant themselves everything the baseline deliberately withholds.
+    { label: 'role grants read: anonymous', method: 'get', path: () => '/api/admin/roles/owner/permissions', actor: 'anonymous', status: 401 },
+    { label: 'role grants read: student', method: 'get', path: () => '/api/admin/roles/owner/permissions', actor: 'student', status: 403 },
+    { label: 'role grants read: admin', method: 'get', path: () => '/api/admin/roles/owner/permissions', actor: 'admin', status: 200 },
+    { label: 'role grants write: anonymous', method: 'put', path: () => '/api/admin/roles/owner/permissions', actor: 'anonymous', status: 401, body: () => ({ permissions: [] }) },
+    { label: 'role grants write: student', method: 'put', path: () => '/api/admin/roles/owner/permissions', actor: 'student', status: 403, body: () => ({ permissions: [] }) },
+    {
+      label: 'role grants write: admin',
+      method: 'put',
+      path: () => '/api/admin/roles/owner/permissions',
+      actor: 'admin',
+      status: 200,
+      body: () => ({ permissions: ['payment:read'] }),
+    },
+    // `admin` is not a grantable role — it already holds everything, so a row
+    // for it would change nothing and reads like it might.
+    { label: 'role grants write: admin role is not grantable', method: 'put', path: () => '/api/admin/roles/admin/permissions', actor: 'admin', status: 400, body: () => ({ permissions: [] }) },
+    // And the loop the whole design exists to not close.
+    { label: 'role grants write: cannot grant role:grant', method: 'put', path: () => '/api/admin/roles/owner/permissions', actor: 'admin', status: 400, body: () => ({ permissions: ['role:grant'] }) },
+
     // ── Flags — one public read, admin-only read/write ──
     { label: 'flags public: anonymous', method: 'get', path: () => '/api/flags', actor: 'anonymous', status: 200 },
     { label: 'flags admin read: anonymous', method: 'get', path: () => '/api/admin/flags', actor: 'anonymous', status: 401 },
@@ -1154,6 +1463,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'analytics overview: anonymous', method: 'get', path: () => '/api/admin/analytics/overview', actor: 'anonymous', status: 401 },
     { label: 'analytics overview: student', method: 'get', path: () => '/api/admin/analytics/overview', actor: 'student', status: 403 },
     { label: 'analytics overview: admin', method: 'get', path: () => '/api/admin/analytics/overview', actor: 'admin', status: 200 },
+    { label: 'analytics courses: anonymous', method: 'get', path: () => '/api/admin/analytics/courses', actor: 'anonymous', status: 401 },
+    { label: 'analytics courses: student', method: 'get', path: () => '/api/admin/analytics/courses', actor: 'student', status: 403 },
+    { label: 'analytics courses: admin', method: 'get', path: () => '/api/admin/analytics/courses', actor: 'admin', status: 200 },
     { label: 'analytics lessons: anonymous', method: 'get', path: () => '/api/admin/analytics/lessons', actor: 'anonymous', status: 401 },
     { label: 'analytics lessons: student', method: 'get', path: () => '/api/admin/analytics/lessons', actor: 'student', status: 403 },
     { label: 'analytics lessons: admin', method: 'get', path: () => '/api/admin/analytics/lessons', actor: 'admin', status: 200 },
@@ -1194,6 +1506,27 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     },
     { label: 'payment mine: anonymous', method: 'get', path: () => '/api/payments/submissions/me', actor: 'anonymous', status: 401 },
     { label: 'payment mine: student', method: 'get', path: () => '/api/payments/submissions/me', actor: 'student', status: 200 },
+    { label: 'admin transfers list: anonymous', method: 'get', path: () => '/api/admin/transfers', actor: 'anonymous', status: 401 },
+    { label: 'admin transfers list: student', method: 'get', path: () => '/api/admin/transfers', actor: 'student', status: 403 },
+    { label: 'admin transfers list: admin', method: 'get', path: () => '/api/admin/transfers', actor: 'admin', status: 200 },
+    { label: 'admin transfers ingest: anonymous', method: 'post', path: () => '/api/admin/transfers/ingest', actor: 'anonymous', status: 401 },
+    { label: 'admin transfers ingest: student', method: 'post', path: () => '/api/admin/transfers/ingest', actor: 'student', body: () => ({ text: 'x' }), status: 403 },
+    {
+      label: 'admin transfers ingest: admin',
+      method: 'post',
+      path: () => '/api/admin/transfers/ingest',
+      actor: 'admin',
+      // Text with no transfer in it: parses to nothing, writes nothing, and
+      // still proves the permission gate let the admin through.
+      body: () => ({ text: 'لا يوجد تحويل هنا' }),
+      status: 201,
+    },
+    { label: 'admin transfer dismiss: anonymous', method: 'post', path: () => `/api/admin/transfers/${randomUUID()}/dismiss`, actor: 'anonymous', status: 401 },
+    { label: 'admin transfer dismiss: student', method: 'post', path: () => `/api/admin/transfers/${randomUUID()}/dismiss`, actor: 'student', status: 403 },
+    // A dismiss of a transfer that does not exist is a no-op, not a 404 —
+    // `updateMany` matched nothing. The row is here for the gate, not the
+    // business rule.
+    { label: 'admin transfer dismiss: admin', method: 'post', path: () => `/api/admin/transfers/${randomUUID()}/dismiss`, actor: 'admin', status: 201 },
     { label: 'admin payments list: anonymous', method: 'get', path: () => '/api/admin/payments/submissions', actor: 'anonymous', status: 401 },
     { label: 'admin payments list: student', method: 'get', path: () => '/api/admin/payments/submissions', actor: 'student', status: 403 },
     { label: 'admin payments list: admin', method: 'get', path: () => '/api/admin/payments/submissions', actor: 'admin', status: 200 },
@@ -1397,6 +1730,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin book orders summary: anonymous', method: 'get', path: () => '/api/admin/book-orders/summary', actor: 'anonymous', status: 401 },
     { label: 'admin book orders summary: student', method: 'get', path: () => '/api/admin/book-orders/summary', actor: 'student', status: 403 },
     { label: 'admin book orders summary: admin', method: 'get', path: () => '/api/admin/book-orders/summary', actor: 'admin', status: 200 },
+    // الأرقام اللي فوق الشاشة — same `book-order:read` as the list it heads,
+    // and the same query. It is a second READ of the same set, never a
+    // privilege of its own.
+    { label: 'admin book orders overview: anonymous', method: 'get', path: () => '/api/admin/book-orders/overview', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders overview: student', method: 'get', path: () => '/api/admin/book-orders/overview', actor: 'student', status: 403 },
+    { label: 'admin book orders overview: admin', method: 'get', path: () => '/api/admin/book-orders/overview', actor: 'admin', status: 200 },
     {
       label: 'admin book order create: anonymous',
       method: 'post',
@@ -1469,9 +1808,177 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       actor: 'admin',
       status: 400,
     },
+    // ── The same list as JSON, for the printable A4 page the browser turns
+    // into a PDF. Same permission and same required `status` as the
+    // spreadsheet, because it is the same list. ──
+    { label: 'admin book orders packing list: anonymous', method: 'get', path: () => '/api/admin/book-orders/packing-list', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders packing list: student', method: 'get', path: () => '/api/admin/book-orders/packing-list', actor: 'student', status: 403 },
+    { label: 'admin book orders packing list: admin, no status', method: 'get', path: () => '/api/admin/book-orders/packing-list', actor: 'admin', status: 400 },
+    { label: 'admin book orders packing list: admin', method: 'get', path: () => '/api/admin/book-orders/packing-list?status=paid', actor: 'admin', status: 200 },
+    // ── الشحن بالجملة. Same `book-order:ship` authority as the per-row
+    // routes above; a batch is not a different permission, it is the same
+    // decision taken ten times. The admin case sends a syntactically valid
+    // but unknown id, so a 200 here proves the route is REACHED — the body
+    // reports that row as `skipped`, which is the documented outcome for an
+    // order that is not there. ──
+    { label: 'admin book orders ship many: anonymous', method: 'post', path: () => '/api/admin/book-orders/ship', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders ship many: student', method: 'post', path: () => '/api/admin/book-orders/ship', actor: 'student', status: 403 },
+    // 201, not 200: Nest's default success code for `@Post` and this route
+    // does not override it. The status is about the REQUEST being accepted —
+    // the per-row outcome (here: `skipped`, the id belongs to no order) lives
+    // in the body, which is the whole point of the batch shape.
+    { label: 'admin book orders ship many: admin', method: 'post', path: () => '/api/admin/book-orders/ship', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
+    { label: 'admin book orders deliver many: anonymous', method: 'post', path: () => '/api/admin/book-orders/deliver', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders deliver many: student', method: 'post', path: () => '/api/admin/book-orders/deliver', actor: 'student', status: 403 },
+    { label: 'admin book orders deliver many: admin', method: 'post', path: () => '/api/admin/book-orders/deliver', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
+    // «راح للمطبعة» in bulk — same `book-order:ship` authority as the two
+    // above. It is the same desk moving the same parcel one step earlier, and
+    // a clerk trusted to record that a box left is trusted to record that
+    // paper went to the printer.
+    { label: 'admin book orders print many: anonymous', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders print many: student', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'student', status: 403 },
+    { label: 'admin book orders print many: admin', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
+
     { label: 'admin book order ship: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'anonymous', status: 401 },
     { label: 'admin book order ship: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'student', status: 403 },
     { label: 'admin book order ship: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'admin', status: 404 },
+    { label: 'admin book order printing: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/printing`, actor: 'anonymous', status: 401 },
+    { label: 'admin book order printing: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/printing`, actor: 'student', status: 403 },
+    { label: 'admin book order printing: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/printing`, actor: 'admin', status: 404 },
+    // «وصل» carries the same authority as «اتشحن» (`book-order:ship`): both are
+    // the shipping desk saying where a parcel got to. Reject, delete and
+    // restore sit one permission over on `book-order:write`, because they
+    // change what the order IS rather than where it is.
+    { label: 'admin book order deliver: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/deliver`, actor: 'anonymous', status: 401 },
+    { label: 'admin book order deliver: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/deliver`, actor: 'student', status: 403 },
+    { label: 'admin book order deliver: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/deliver`, actor: 'admin', status: 404 },
+    { label: 'admin book order reject: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/reject`, actor: 'anonymous', body: () => ({ reason: 'التحويل ما وصلش' }), status: 401 },
+    { label: 'admin book order reject: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/reject`, actor: 'student', body: () => ({ reason: 'التحويل ما وصلش' }), status: 403 },
+    { label: 'admin book order reject: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/reject`, actor: 'admin', body: () => ({ reason: 'التحويل ما وصلش' }), status: 404 },
+    { label: 'admin book order delete: anonymous', method: 'delete', path: () => `/api/admin/book-orders/${randomUUID()}`, actor: 'anonymous', body: () => ({ reason: 'طلب مكرر' }), status: 401 },
+    { label: 'admin book order delete: student', method: 'delete', path: () => `/api/admin/book-orders/${randomUUID()}`, actor: 'student', body: () => ({ reason: 'طلب مكرر' }), status: 403 },
+    { label: 'admin book order delete: admin, unknown order', method: 'delete', path: () => `/api/admin/book-orders/${randomUUID()}`, actor: 'admin', body: () => ({ reason: 'طلب مكرر' }), status: 404 },
+    // «ده كان مجاني» — re-labels a zero-total order and refuses any that
+    // collected money, so it sits with the other `book-order:write` actions
+    // that change what the order IS.
+    { label: 'admin book order mark free: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/free`, actor: 'anonymous', status: 401 },
+    { label: 'admin book order mark free: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/free`, actor: 'student', status: 403 },
+    { label: 'admin book order mark free: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/free`, actor: 'admin', status: 404 },
+    { label: 'admin book order restore: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/restore`, actor: 'anonymous', status: 401 },
+    { label: 'admin book order restore: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/restore`, actor: 'student', status: 403 },
+    { label: 'admin book order restore: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/restore`, actor: 'admin', status: 404 },
+    // «أعدل الطلب» — `book-order:write`, split from `book-order:create`.
+    { label: 'admin book order patch: anonymous', method: 'patch', path: () => `/api/admin/book-orders/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin book order patch: student', method: 'patch', path: () => `/api/admin/book-orders/${randomUUID()}`, actor: 'student', status: 403 },
+    {
+      label: 'admin book order patch: admin, unknown order',
+      method: 'patch',
+      path: () => `/api/admin/book-orders/${randomUUID()}`,
+      actor: 'admin',
+      // A well-formed body that names a real edit — so this passes the pipe and
+      // the permission gate, and 404s on the order itself. Proof the gate runs;
+      // `book-orders.service.spec.ts` covers what the edit actually does.
+      body: () => ({ city: 'الجيزة' }),
+      status: 404,
+    },
+
+    /*
+     * ── الواجب, the review queue ──────────────────────────────────────────
+     *
+     * `homework:read` sees it; `homework:review` decides it. The split is real:
+     * marking writes a grade, puts words on a student's screen under his name,
+     * and irreversibly deletes their photographs.
+     *
+     * ⚠️ `images/:imageId` is declared BEFORE `:id` on the controller, and the
+     * two rows below are what pins that ordering: with `:id` first, `images`
+     * would be captured as a submission id and every page on the review screen
+     * would 400 from `ParseUUIDPipe`.
+     */
+    { label: 'admin homework list: anonymous', method: 'get', path: () => '/api/admin/homework', actor: 'anonymous', status: 401 },
+    { label: 'admin homework list: student', method: 'get', path: () => '/api/admin/homework', actor: 'student', status: 403 },
+    { label: 'admin homework list: admin', method: 'get', path: () => '/api/admin/homework', actor: 'admin', status: 200 },
+    { label: 'admin homework pending count: anonymous', method: 'get', path: () => '/api/admin/homework/pending-count', actor: 'anonymous', status: 401 },
+    { label: 'admin homework pending count: student', method: 'get', path: () => '/api/admin/homework/pending-count', actor: 'student', status: 403 },
+    { label: 'admin homework pending count: admin', method: 'get', path: () => '/api/admin/homework/pending-count', actor: 'admin', status: 200 },
+    { label: 'admin homework detail: anonymous', method: 'get', path: () => `/api/admin/homework/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin homework detail: student', method: 'get', path: () => `/api/admin/homework/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin homework detail: admin, unknown submission', method: 'get', path: () => `/api/admin/homework/${randomUUID()}`, actor: 'admin', status: 404 },
+    { label: 'admin homework image: anonymous', method: 'get', path: () => `/api/admin/homework/images/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin homework image: student', method: 'get', path: () => `/api/admin/homework/images/${randomUUID()}`, actor: 'student', status: 403 },
+    // 404 and not 400: proof the static `images/` segment wins over `:id`.
+    { label: 'admin homework image: admin, unknown page', method: 'get', path: () => `/api/admin/homework/images/${randomUUID()}`, actor: 'admin', status: 404 },
+    {
+      label: 'admin homework review: anonymous',
+      method: 'post',
+      path: () => `/api/admin/homework/${randomUUID()}/review`,
+      actor: 'anonymous',
+      body: () => ({ decision: 'accepted', grade: 90, message: 'تمام كده.' }),
+      status: 401,
+    },
+    {
+      label: 'admin homework review: student',
+      method: 'post',
+      path: () => `/api/admin/homework/${randomUUID()}/review`,
+      actor: 'student',
+      body: () => ({ decision: 'accepted', grade: 90, message: 'تمام كده.' }),
+      status: 403,
+    },
+    {
+      // A well-formed body, so this passes the pipe and the `homework:review`
+      // gate and 404s on the submission itself — proof the gate runs and the
+      // route reaches real business logic. What the review DOES is
+      // `homework.service.spec.ts`'s job.
+      label: 'admin homework review: admin, unknown submission',
+      method: 'post',
+      path: () => `/api/admin/homework/${randomUUID()}/review`,
+      actor: 'admin',
+      body: () => ({ decision: 'accepted', grade: 90, message: 'تمام كده.' }),
+      status: 404,
+    },
+    {
+      // The contract's own refusal, reached through the real pipe: a mark on
+      // work that is coming back is a mark on something that does not exist
+      // yet. 400 BEFORE the 404 above, because validation runs first.
+      label: 'admin homework review: admin, grade on needs_work is 400',
+      method: 'post',
+      path: () => `/api/admin/homework/${randomUUID()}/review`,
+      actor: 'admin',
+      body: () => ({ decision: 'needs_work', grade: 60, message: 'مراجعة صغيرة.' }),
+      status: 400,
+    },
+
+    // ── «قسم الكتب» — the catalogue ────────────────────────────────────────
+    // `book:read`/`book:write`, never `book-order:*`: what is ON SALE and what
+    // somebody has BOUGHT are different objects. `GET /api/books` is the public
+    // shop and is deliberately open to anonymous — it is a shop window.
+    { label: 'books catalog: anonymous', method: 'get', path: () => '/api/books', actor: 'anonymous', status: 200 },
+    { label: 'admin books list: anonymous', method: 'get', path: () => '/api/admin/books', actor: 'anonymous', status: 401 },
+    { label: 'admin books list: student', method: 'get', path: () => '/api/admin/books', actor: 'student', status: 403 },
+    { label: 'admin books list: admin', method: 'get', path: () => '/api/admin/books', actor: 'admin', status: 200 },
+    { label: 'admin books create: anonymous', method: 'post', path: () => '/api/admin/books', actor: 'anonymous', status: 401 },
+    { label: 'admin books create: student', method: 'post', path: () => '/api/admin/books', actor: 'student', status: 403 },
+    { label: 'admin books patch: anonymous', method: 'patch', path: () => `/api/admin/books/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin books patch: student', method: 'patch', path: () => `/api/admin/books/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin books delete: anonymous', method: 'delete', path: () => `/api/admin/books/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin books delete: student', method: 'delete', path: () => `/api/admin/books/${randomUUID()}`, actor: 'student', status: 403 },
+    // المصروفات. `expense:read`/`expense:write` — the overview is on the READ
+    // one even though it reports subscription revenue: see the controller's own
+    // note on why that split is the useful one.
+    { label: 'admin expenses list: anonymous', method: 'get', path: () => '/api/admin/expenses', actor: 'anonymous', status: 401 },
+    { label: 'admin expenses list: student', method: 'get', path: () => '/api/admin/expenses', actor: 'student', status: 403 },
+    { label: 'admin expenses list: admin', method: 'get', path: () => '/api/admin/expenses', actor: 'admin', status: 200 },
+    { label: 'finance overview: anonymous', method: 'get', path: () => '/api/admin/expenses/overview', actor: 'anonymous', status: 401 },
+    { label: 'finance overview: student', method: 'get', path: () => '/api/admin/expenses/overview', actor: 'student', status: 403 },
+    { label: 'finance overview: admin', method: 'get', path: () => '/api/admin/expenses/overview', actor: 'admin', status: 200 },
+    { label: 'finance report: anonymous', method: 'get', path: () => '/api/admin/expenses/report', actor: 'anonymous', status: 401 },
+    { label: 'finance report: student', method: 'get', path: () => '/api/admin/expenses/report', actor: 'student', status: 403 },
+    { label: 'finance report: admin', method: 'get', path: () => '/api/admin/expenses/report', actor: 'admin', status: 200 },
+    { label: 'admin expenses create: anonymous', method: 'post', path: () => '/api/admin/expenses', actor: 'anonymous', status: 401 },
+    { label: 'admin expenses create: student', method: 'post', path: () => '/api/admin/expenses', actor: 'student', status: 403 },
+    { label: 'admin expenses patch: anonymous', method: 'patch', path: () => `/api/admin/expenses/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin expenses patch: student', method: 'patch', path: () => `/api/admin/expenses/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin expenses delete: anonymous', method: 'delete', path: () => `/api/admin/expenses/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin expenses delete: student', method: 'delete', path: () => `/api/admin/expenses/${randomUUID()}`, actor: 'student', status: 403 },
   ];
 
   it.each(MATRIX.map((row) => [row.label, row] as const))('%s', async (_label, row) => {
@@ -1523,13 +2030,35 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // a comment.
       'PATCH /api/admin/quizzes/:quizId/slots/:slotId',
       'POST /api/admin/quizzes/:quizId/pools',
+      'PATCH /api/admin/quizzes/:quizId/lesson',
       'POST /api/admin/quizzes/:quizId/publish',
       'GET /api/admin/attempts',
       'GET /api/admin/quizzes/:quizId/attempts',
+      'GET /api/admin/attempts/:id/review',
       'POST /api/admin/attempts/:id/reopen',
       'POST /api/admin/attempts/:id/extra-time',
       'POST /api/admin/quizzes/:quizId/students/:userId/extra-attempt',
       'GET /api/admin/quizzes/:quizId/analytics',
+      // امتحانات الشهر — the authoring surface. `quiz:write`, never
+      // `quiz:read`: that one is in the STUDENT permission set, and gating an
+      // admin surface on a student permission is the bug `nav-items.ts`
+      // documents at length on its courses row.
+      'GET /api/admin/exams',
+      'GET /api/admin/exams/courses/:courseId/lessons',
+      'POST /api/admin/exams',
+      'PATCH /api/admin/exams/:lessonId',
+      'PUT /api/admin/exams/:lessonId/published',
+      'POST /api/admin/exams/:lessonId/duplicate',
+      'DELETE /api/admin/exams/:lessonId',
+      // التصحيح اليدوي, `attempt:grade`. Declared with the literal
+      // `grading-queue` segment BEFORE `attempts/:attemptId/...` so it cannot
+      // be swallowed as an attempt id — the matrix covers both, which is what
+      // makes that ordering a tested property rather than a comment.
+      'GET /api/admin/grading-queue',
+      'GET /api/admin/grading-results',
+      'PATCH /api/admin/attempts/:attemptId/mark',
+      'GET /api/admin/attempts/:attemptId/grading',
+      'PATCH /api/admin/attempts/:attemptId/questions/:attemptQuestionId/grade',
     ]);
 
     /**
@@ -1557,6 +2086,14 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // /payments/submissions`, `GET /payments/submissions/me`, and the whole
       // admin review surface) ARE covered above.
       'POST /api/payments/screenshot',
+      // «التحويلات الواردة» — InstaPay notifications forwarded by the Android
+      // handset that receives them, holding `INSTAPAY_INGEST_TOKEN`. Not a
+      // browser route: its actor is a device, so none of anonymous/student/
+      // admin is the question, exactly as with the WhatsApp sidecar's relay
+      // below. The token check is exercised directly in
+      // `transfers-ingest.controller.spec.ts`; the admin-authenticated twin of
+      // this ingest (`POST /api/admin/transfers/ingest`) IS covered above.
+      'POST /api/ingest/transfers',
       // Same multipart problem, same reasoning — the book-order proof
       // upload. The plain-JSON routes around it (create, payment, mine, and
       // the whole admin surface) ARE covered above.
@@ -1573,6 +2110,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // own shared-secret check is exercised directly in
       // `whatsapp-inbound.controller.spec.ts`.
       'POST /api/marketing/wa/inbound',
+      // The delivery-receipt relay, same actor and same shared secret — a
+      // container on the compose network, so none of anonymous/student/admin
+      // is the caller and there is no row in this file to write. Its token
+      // check and every status branch are exercised directly in
+      // `whatsapp-receipt.controller.spec.ts`.
+      'POST /api/marketing/wa/receipt',
     ]);
 
     /**
@@ -1584,8 +2127,26 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
      * something (anything) in the row's rendered path.
      */
     function matchesRoute(routePath: string, renderedPath: string): boolean {
-      const routeSegments = routePath.split('/');
-      const renderedSegments = renderedPath.split('/');
+      /*
+       * ⚠️ THE QUERY STRING IS NOT PART OF THE PATH, and until a row carried one
+       * nothing here had to say so.
+       *
+       * A row's `path()` renders what the request actually asks for, so a route
+       * that needs a parameter to be meaningful renders it —
+       * `/api/admin/broadcast/recipient-count?type=all`. `enumerateRoutes()`
+       * reports the registered path, which has no query. Compared segment by
+       * segment those differ in the last one, so the route matched no row and
+       * was reported as having no authorization coverage at all — while the
+       * three rows asserting its 401/403/200 sat in the matrix, passing.
+       *
+       * It failed only on the branch that added the first such row, and only in
+       * the coverage meta-test, which is the most confusing shape this could
+       * have taken: real coverage, green assertions, and a gate saying the route
+       * is unguarded.
+       */
+      const pathOnly = (value: string) => value.replace(/\?.*$/, '');
+      const routeSegments = pathOnly(routePath).split('/');
+      const renderedSegments = pathOnly(renderedPath).split('/');
       if (routeSegments.length !== renderedSegments.length) return false;
       return routeSegments.every(
         (segment, index) => segment.startsWith(':') || segment === renderedSegments[index],
@@ -1621,6 +2182,22 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           'GET /api/taxonomy',
           'GET /api/catalog/courses',
           'GET /api/catalog/courses/:slug',
+          /*
+           * لوحة الشرف. PUBLIC on purpose — it is drawn on the landing page,
+           * before anyone signs in.
+           *
+           * ⚠️ It is also the ONLY public payload on this platform that
+           * describes a named minor: a student's full name and their photo.
+           * Two things keep that deliberate rather than accidental, and both
+           * are worth re-reading before this line is ever widened:
+           *
+           *   · membership is `honor_board_at IS NOT NULL`, which only an
+           *     instructor's own press sets. Nothing derives it from a score.
+           *   · the projection carries NO ids — not the user's, not the
+           *     attempt's — so the board cannot be used to enumerate students
+           *     from an unauthenticated page.
+           */
+          'GET /api/catalog/honor-board',
           'GET /api/settings/branding',
           'GET /api/settings/public',
           'GET /api/flags',
@@ -1630,6 +2207,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           // in SQL, so a draft is unreachable rather than merely unlinked.
           'GET /api/news',
           'GET /api/news/:slug',
+          // «قسم الكتب». A shop window: the whole point of the page is that a
+          // stranger who tapped a link in a bio can read it. Reads only, and
+          // the service filters `isActive: true` in SQL, so a withdrawn title
+          // is unreachable rather than merely unlinked — the same shape the
+          // news reads above take, for the same reason.
+          'GET /api/books',
           'GET /api/media/:prefix/:name',
           // المساعد. The only PUBLIC WRITES in the product — every other
           // entry on this list is a read. They are here deliberately, and
@@ -1684,6 +2267,28 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           // session; `x-wa-token` is the actual gate, checked inside the
           // handler rather than by a guard `enumerateRoutes()` can see.
           'POST /api/marketing/wa/inbound',
+          // The receipt relay, and public for the identical reason — same
+          // caller, same `x-wa-token`, same absence of a session. It carries
+          // less authority than the inbound route, not more: the worst a
+          // forged call achieves is stamping `deliveredAt` on a row whose
+          // WhatsApp message id the caller already had to know.
+          'POST /api/marketing/wa/receipt',
+          /*
+           * «التحويلات الواردة» — the Android handset that received the money,
+           * forwarding each InstaPay push as it appears. Public for exactly the
+           * reason the WhatsApp relay above is: the caller holds no session, so
+           * none of anonymous/student/admin is the actor and there is no row in
+           * the matrix to write (hence its `KNOWN_GAPS` entry too).
+           * `x-instapay-token` is the gate, checked inside the handler rather
+           * than by a guard `enumerateRoutes()` can see.
+           *
+           * ⚠️ Unlike the WhatsApp sidecar's token, this endpoint is reachable
+           * from the OPEN INTERNET — the handset is on wifi, not on the compose
+           * network — and a request accepted here can open a paid course. So an
+           * unset token disables the route outright instead of waving requests
+           * through, which is also what makes the feature ship dormant.
+           */
+          'POST /api/ingest/transfers',
           /*
            * الكتاب الورقي — guest checkout. Per Ayman: ordering the physical
            * textbook is "a different service" from the platform's login-

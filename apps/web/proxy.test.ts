@@ -1,14 +1,17 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
 import {
   PREPAINT_SCRIPT_HASH,
   applyBaseSecurityHeaders,
   buildAuthenticatedCsp,
   buildPublicCsp,
+  courseSlugFromPath,
+  enrollmentOpensCourse,
   decideRedirect,
+  isAdminRoute,
   isDevOnlyRoute,
   isProtectedRoute,
   resolveMarkdownRewrite,
@@ -125,6 +128,84 @@ describe('isProtectedRoute', () => {
     expect(isProtectedRoute('/courses/some-other-slug/lessons/xyz')).toBe(true);
     // A course whose slug happens to CONTAIN "lessons" must not false-match.
     expect(isProtectedRoute('/courses/lessons-101')).toBe(false);
+  });
+});
+
+describe('courseSlugFromPath — which URLs the enrolled-student redirect may fire on', () => {
+  it('matches the public course page and returns its slug', () => {
+    expect(courseSlugFromPath('/courses/python-basics')).toBe('python-basics');
+  });
+
+  it('returns the segment still percent-encoded, because the redirect rebuilds a URL from it', () => {
+    // Re-encoding this would produce `/library/%25d8%25a7…` — a 404 that looks
+    // like the course was deleted.
+    expect(courseSlugFromPath('/courses/%d8%b9%d9%84%d9%88%d9%85')).toBe(
+      '%d8%b9%d9%84%d9%88%d9%85',
+    );
+  });
+
+  it('does not match the catalog index, the player, or anything deeper', () => {
+    expect(courseSlugFromPath('/courses')).toBeNull();
+    expect(courseSlugFromPath('/courses/')).toBeNull();
+    expect(courseSlugFromPath('/courses/python-basics/lessons')).toBeNull();
+    expect(courseSlugFromPath('/courses/python-basics/lessons/abc-123')).toBeNull();
+  });
+
+  it('does not match another route that merely begins the same way', () => {
+    expect(courseSlugFromPath('/coursesish/x')).toBeNull();
+    expect(courseSlugFromPath('/library/python-basics')).toBeNull();
+    expect(courseSlugFromPath('/')).toBeNull();
+  });
+
+  it('never fires on a route the redirect matrix already owns', () => {
+    // The two rules share one branch in `proxy()`; this is what makes the
+    // «they can never both fire» comment there true.
+    const slugged = ['/courses/python-basics', '/courses/x'];
+    for (const path of slugged) {
+      expect(courseSlugFromPath(path)).not.toBeNull();
+      expect(isProtectedRoute(path)).toBe(false);
+    }
+  });
+});
+
+describe('enrollmentOpensCourse — who gets sent to /library instead of the sales page', () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    courseSlug: 'python-basics',
+    accessActive: true,
+    ...over,
+  });
+
+  it('redirects a student whose subscription is live', () => {
+    expect(enrollmentOpensCourse(row(), 'python-basics')).toBe(true);
+  });
+
+  it('LEAVES a student whose subscription lapsed on the public course page', () => {
+    // The whole point. Their enrollment row stays `active` forever — nothing
+    // writes `EnrollmentStatus.expired` — and /courses/:slug is the only page
+    // that can sell them a renewal. Redirecting them here closed a loop they
+    // could not pay their way out of.
+    expect(enrollmentOpensCourse(row({ accessActive: false }), 'python-basics')).toBe(false);
+  });
+
+  it('treats a missing accessActive as no access, never as permission to redirect', () => {
+    const { accessActive: _dropped, ...withoutFlag } = row();
+    expect(enrollmentOpensCourse(withoutFlag, 'python-basics')).toBe(false);
+  });
+
+  it('still matches an Arabic slug across the encoded path and the decoded API value', () => {
+    expect(enrollmentOpensCourse(row({ courseSlug: 'علوم' }), '%d8%b9%d9%84%d9%88%d9%85')).toBe(
+      true,
+    );
+  });
+
+  it('ignores another course’s enrollment, live or not', () => {
+    expect(enrollmentOpensCourse(row({ courseSlug: 'other' }), 'python-basics')).toBe(false);
+  });
+
+  it('ignores junk rows rather than throwing', () => {
+    expect(enrollmentOpensCourse(null, 'python-basics')).toBe(false);
+    expect(enrollmentOpensCourse('nope', 'python-basics')).toBe(false);
+    expect(enrollmentOpensCourse(row({ courseSlug: 42 }), 'python-basics')).toBe(false);
   });
 });
 
@@ -276,6 +357,43 @@ describe('applyBaseSecurityHeaders', () => {
     }
   });
 
+  /**
+   * The inbox recorder's one dependency outside its own component. A denied
+   * feature is not a prompt the admin can decline — `getUserMedia` rejects
+   * before the browser asks — so «سجّل رسالة صوتية» was dead on every
+   * deployed build while every local test that skipped the proxy passed.
+   */
+  it('grants the microphone to the admin panel, and to nothing else', () => {
+    const admin = new Headers();
+    applyBaseSecurityHeaders(admin, false, { microphone: true });
+    expect(admin.get('Permissions-Policy')).toContain('microphone=(self)');
+
+    const student = new Headers();
+    applyBaseSecurityHeaders(student, false, { microphone: false });
+    expect(student.get('Permissions-Policy')).toContain('microphone=()');
+    // Fullscreen is delegated to BOTH player hosts. The default allowlist is
+    // `self`, so a host missing here is a lecture that plays as a strip across
+    // the top of a phone and will not rotate — and `www.youtube.com` is the
+    // fallback embed, i.e. exactly the students whose network already broke
+    // the normal player.
+    expect(student.get('Permissions-Policy')).toContain(
+      'fullscreen=(self "https://www.youtube-nocookie.com" "https://www.youtube.com")',
+    );
+
+    // The default is the DENIAL: every call site that says nothing about a
+    // microphone must keep getting one that is off.
+    const bare = new Headers();
+    applyBaseSecurityHeaders(bare, false);
+    expect(bare.get('Permissions-Policy')).toContain('microphone=()');
+  });
+
+  it('routes: only /admin and its descendants get the grant', () => {
+    expect(isAdminRoute('/admin')).toBe(true);
+    expect(isAdminRoute('/admin/inbox/abc')).toBe(true);
+    expect(isAdminRoute('/administration')).toBe(false);
+    expect(isAdminRoute('/dashboard')).toBe(false);
+  });
+
   it('omits HSTS in dev (meaningless, and a no-op, over plain http://localhost)', () => {
     const headers = new Headers();
     applyBaseSecurityHeaders(headers, true);
@@ -361,6 +479,80 @@ describe('CSP builders', () => {
     }
   });
 
+  it('allows blob: in media-src, which is where hls.js actually attaches', () => {
+    /*
+     * «النسخة اللي عندنا» plays through Media Source Extensions on every
+     * engine except Safari: hls.js fetches the segments itself and hands the
+     * `<video>` element a `blob:` URL it created. Without this token the
+     * element is refused its own source — and refused SILENTLY, with no
+     * `error` event and no console line a student could report, which is the
+     * identical dead grey box the mirror exists to eliminate.
+     *
+     * The origin half of the same feature lives in `connect-src`; asserted
+     * separately below, because naming one and not the other is the way this
+     * ships broken.
+     */
+    for (const policy of [buildPublicCsp(false), buildAuthenticatedCsp(NONCE, false)]) {
+      expect(directive(policy, 'media-src')).toContain('blob:');
+    }
+  });
+
+  /*
+   * ⚠️ The half of «الرفع المباشر» that is a header, not a feature.
+   *
+   * A lecture is uploaded by the ADMIN'S BROWSER, straight to the bucket's
+   * S3 endpoint — a different host from the public origin students read
+   * segments from. Both are XHR, so both belong in `connect-src` and neither
+   * is covered by `media-src`; naming only the public one is the natural
+   * mistake, because to a reader they are both "the video bucket".
+   *
+   * This asserts the SHAPE of the policy rather than a value, because both
+   * origins are empty in a test run: whatever is configured must reach
+   * `connect-src`, and this is the test that fails if a future edit drops
+   * either variable from the directive.
+   */
+  it('carries both video origins in connect-src, not just the public one', async () => {
+    vi.resetModules();
+    vi.stubEnv('NEXT_PUBLIC_VIDEO_ORIGIN', 'https://video.example.test');
+    vi.stubEnv('NEXT_PUBLIC_VIDEO_UPLOAD_ORIGIN', 'https://acct.r2.cloudflarestorage.test');
+
+    // `resetModules` is what makes the re-import re-read the env: the origins
+    // are module-level constants, evaluated once at import time.
+    const fresh = await import('./proxy');
+    const policy = fresh.buildPublicCsp(false);
+
+    expect(directive(policy, 'connect-src')).toContain('https://video.example.test');
+    expect(directive(policy, 'connect-src')).toContain('https://acct.r2.cloudflarestorage.test');
+    // The read origin is a media load as well as a fetch; the upload host is
+    // never a media source and must not be granted as one.
+    expect(directive(policy, 'media-src')).toContain('https://video.example.test');
+    expect(directive(policy, 'media-src')).not.toContain('r2.cloudflarestorage.test');
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('emits no empty source when the deployment has no video origin', () => {
+    /*
+     * `VIDEO_ORIGIN` is the empty string on every deployment without a
+     * bucket — which is this test run, local development, and the platform as
+     * it stood before the mirror existed. Interpolating it directly would
+     * produce `media-src 'self' blob: http://localhost:3300 ` with a trailing
+     * space, and a CSP parser reading a stray empty token is entitled to
+     * discard the whole directive.
+     *
+     * So the sources are joined through a filter, and this asserts the EFFECT
+     * of that rather than its presence: no directive anywhere in the policy
+     * carries a doubled or trailing space.
+     */
+    for (const policy of [buildPublicCsp(false), buildAuthenticatedCsp(NONCE, false)]) {
+      for (const part of policy.split(';')) {
+        expect(part).not.toMatch(/ {2}/);
+        expect(part.trimStart()).not.toMatch(/ $/);
+      }
+    }
+  });
+
   it('names the external script hosts, since strict-dynamic no longer covers them', () => {
     const scriptSrc = directive(buildPublicCsp(false), 'script-src');
     // The YouTube IFrame API: `loadYouTubeIframeApi()` injects this tag, and
@@ -432,8 +624,13 @@ describe('CSP builders', () => {
       // material. Asserted VERBATIM on purpose: `frame-src` is enforced, so a
       // host missing here renders as a blank box with a console error and no
       // visible explanation — the failure that looks like a working feature.
+      // `www.youtube.com` is the player's fallback embed, used when the
+      // IFrame API script does not load. It is the entry most likely to be
+      // "tidied away" as a duplicate of the nocookie host, and doing that
+      // would silently restore the dead-player bug for the students who need
+      // the fallback in the first place.
       expect(directive(policy, 'frame-src')).toBe(
-        "frame-src 'self' https://www.youtube-nocookie.com https://drive.google.com https://docs.google.com",
+        "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://drive.google.com https://docs.google.com",
       );
       // `toContain`, not `toBe`: the media origin is appended from an env var
       // and is asserted on its own above. Pinning the whole string here would

@@ -13,6 +13,11 @@ import { Card, CardBody } from '@ayman/ui/components/card';
 import { apiPatch, ApiRequestError } from '@/lib/api';
 import { safeNext } from '@/lib/safe-next';
 import { fixedSectionFor, offeredYearOptions } from '@/lib/section-defaults';
+import {
+  GENDER_OPTIONS,
+  SCHOOL_STREAM_OPTIONS,
+  governorateOptions as governorateOptionsFor,
+} from '@/lib/profile-options';
 import { FormField } from '../auth/form-field';
 import { PhoneField } from '../auth/phone-field';
 import { SelectField, type SelectOption } from './select-field';
@@ -27,22 +32,6 @@ import {
 
 /** Ties the guardian-phone `<FieldNote>` to the input it explains. */
 const PARENT_PHONE_NOTE_ID = 'father-phone-why';
-
-const GENDER_OPTIONS: SelectOption[] = [
-  { value: 'male', label: copy.onboarding.genderMale },
-  { value: 'female', label: copy.onboarding.genderFemale },
-];
-
-/**
- * The same two words the admin ticks on a course and a visitor reads on its
- * badge (`copy.stream`), so a student picking «لغات» here and a course
- * labelled «لغات» there are visibly the same thing. Two options and no
- * «الاتنين»: a course can serve both audiences, a student attends one school.
- */
-const SCHOOL_STREAM_OPTIONS: SelectOption[] = [
-  { value: 'general', label: copy.stream.general },
-  { value: 'languages', label: copy.stream.languages },
-];
 
 /**
  * Which fields each step owns, so "can I move forward" can be answered by
@@ -62,6 +51,11 @@ const STEPS = [
   title: string;
   fields: ReadonlyArray<keyof Onboarding>;
 }>;
+
+/** Which step owns `phone` — see `onSubmit`'s 409 branch, which sends the
+ *  student back to it. Derived rather than written as `0`, so re-ordering the
+ *  wizard cannot silently point the one server-side error at the wrong step. */
+const PHONE_STEP = STEPS.findIndex((step) => (step.fields as readonly string[]).includes('phone'));
 
 /**
  * A native `<select>` reports an empty string for "nothing chosen", never
@@ -117,6 +111,7 @@ export function OnboardingForm({
     handleSubmit,
     trigger,
     watch,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<Onboarding>({
     resolver: zodResolver(OnboardingSchema),
@@ -156,15 +151,9 @@ export function OnboardingForm({
 
   useOnboardingDraft(watch);
 
-  const pinnedGovernorates = taxonomy.pinnedGovernorateCodes
-    .map((code) => taxonomy.governorates.find((g) => g.code === code))
-    .filter((g): g is Taxonomy['governorates'][number] => g !== undefined);
-  const restGovernorates = taxonomy.governorates.filter(
-    (g) => !taxonomy.pinnedGovernorateCodes.includes(g.code),
-  );
-  const governorateOptions: SelectOption[] = [...pinnedGovernorates, ...restGovernorates].map(
-    (g) => ({ value: g.code, label: g.nameAr }),
-  );
+  // Shared with the profile editor — see `@/lib/profile-options`, which is
+  // also where the two option lists this form used to declare inline now live.
+  const governorateOptions: SelectOption[] = governorateOptionsFor(taxonomy);
 
   const yearOptions: SelectOption[] = offeredYearOptions(taxonomy);
 
@@ -201,11 +190,35 @@ export function OnboardingForm({
         ...fixedSectionFor(taxonomy, values.year),
       });
     } catch (error) {
-      setFormError(
-        error instanceof ApiRequestError && error.status === 409
-          ? copy.onboarding.phoneConflictError
-          : copy.onboarding.submitError,
-      );
+      /*
+       * ## The 409 is about the STUDENT'S OWN number, and it used to be shown
+       *    under the guardian's.
+       *
+       * Nothing on this form can collide except `phone`: `users.phone_number`
+       * and `student_profiles.phone` are the two UNIQUE columns behind that
+       * 409, and both hold the student's own number. `father_phone` has no
+       * unique index at all — two siblings are expected to give the same one.
+       *
+       * But the whole payload is submitted from step 4, whose only field is
+       * «تليفون ولي الأمر», and the refusal was painted as a form-level line
+       * directly under it. So the message every student read was «الرقم ده
+       * متسجّل على حساب تاني» about the number they had just typed — their
+       * father's — while the number actually taken sat three steps back with
+       * nothing pointing at it. Reported as «كل ما اجي احط رقم ولي الامر يقول
+       * متسجل قبل كده مع انه مش متسجل», which is exactly what it looks like.
+       *
+       * So the error is attached to the FIELD it belongs to and the wizard
+       * walks back to it. `shouldFocus` is deliberately off: the step is being
+       * switched in the same commit, and focusing an input inside a `hidden`
+       * div does nothing on some browsers and scrolls the page on others.
+       */
+      if (error instanceof ApiRequestError && error.status === 409) {
+        setError('phone', { message: copy.onboarding.phoneConflictError }, { shouldFocus: false });
+        setStepIndex(PHONE_STEP);
+        setFormError(copy.onboarding.phoneConflictHint);
+        return;
+      }
+      setFormError(copy.onboarding.submitError);
       return;
     }
 

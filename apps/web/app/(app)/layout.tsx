@@ -8,6 +8,22 @@ import { Suspense, type ReactNode } from 'react';
 // picked up `.unit` would still be styling something that means nothing there,
 // which is why this is not global.
 import '../study.css';
+// `.next-up` — the dashboard's «ناقصك كذا وكذا» block and its 100% card.
+//
+// Its own file rather than more of `study.css`, whose header sets that
+// vocabulary's entry requirement out loud: a class used by ONE component
+// belongs with that component, not in the shared table. It is imported here
+// beside it all the same, because a layout is how every stylesheet in this app
+// reaches a page — and unlike the study vocabulary it is NOT shared with
+// `(admin)`, which has no student dashboard to put it on.
+import '../next-up.css';
+// `.exam-band` — «امتحان الشهر», the countdown band the dashboard opens on when
+// one is scheduled. Its own file for exactly the reason above: one component,
+// one screen, and `study.css`'s entry requirement is "used by more than one
+// page". Imported here beside the other two because a layout is how every
+// stylesheet in this app reaches a page, and not shared with `(admin)` for the
+// same reason `next-up.css` is not.
+import '../exam-band.css';
 import { AccountMenu, AccountMenuFallback } from '@/components/app/account-menu';
 import {
   NotificationBell,

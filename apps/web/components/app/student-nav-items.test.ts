@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   STUDENT_NAV,
@@ -56,6 +58,43 @@ describe('activeStudentNav', () => {
       const matches = STUDENT_NAV.filter((item) => activeStudentNav(path)?.href === item.href);
       expect(matches).toHaveLength(1);
     }
+  });
+});
+
+describe('every rail entry stays inside the student shell', () => {
+  /**
+   * The defect this is written for, not a tidiness rule.
+   *
+   * «الكتب» pointed at `/books` for months. That is a `(site)` route — the
+   * marketing shop — so pressing it in the rail navigated OUT of the app: the
+   * rail disappeared, the topbar was replaced by the marketing header, and the
+   * only way back was the browser's own button. It was deliberate at the time
+   * (the shop had no other entrance) and the comment above the entry said so,
+   * which is exactly why nobody read it as a bug. It was reported as one:
+   * «متفتحهاش صفحة لوحدها».
+   *
+   * A rail is a promise that the thing it points at is part of this
+   * application. The fix was `(app)/store`; this is what stops the next entry
+   * from quietly making the same trade.
+   *
+   * Source-level rather than a click in Playwright: a browser test would catch
+   * it, twenty minutes later, on a shard — and only if someone thought to
+   * write one per entry. This fails on a laptop, on every entry, for free.
+   */
+  it('resolves each href to a page under app/(app)', () => {
+    const group = join(__dirname, '..', '..', 'app', '(app)');
+    const outside = STUDENT_NAV.filter(
+      (item) => !existsSync(join(group, item.href, 'page.tsx')),
+    ).map((item) => `${item.labelAr} → ${item.href}`);
+
+    expect(
+      outside,
+      `these rail entries do not resolve to a page inside the student shell, so pressing them leaves the app: ${outside.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('finds the group at all, so the walk cannot pass by finding nothing', () => {
+    expect(STUDENT_NAV.length).toBeGreaterThan(5);
   });
 });
 

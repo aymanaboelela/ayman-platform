@@ -1,5 +1,6 @@
-import { BadRequestException, Body, Controller, Get, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, UploadedFile, UseInterceptors, UsePipes } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { memoryStorage } from 'multer';
 import { MAX_UPLOAD_BYTES } from '@ayman/contracts/admin/media';
 import type { PaymentSubmission } from '@ayman/contracts/payments';
@@ -38,6 +39,7 @@ export class PaymentsController {
   }
 
   @RequirePermission('payment:submit')
+  @UsePipes(ZodValidationPipe)
   @Post('submissions')
   submit(
     @CurrentUser() user: AuthenticatedUser,

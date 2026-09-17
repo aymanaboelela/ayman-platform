@@ -120,9 +120,9 @@ const REWIND_RATE = 2;
  *
  * This was a frame sequence painted to a `<canvas>`, which was correct while the
  * scene was scrubbed by the scroll wheel. It plays itself now, and once nothing
- * seeks, the same six seconds cost 748KB as VP9 instead of 2.5MB as WebP frames,
- * decode on the GPU, and stop repainting most of the screen's width on the main
- * thread twelve times a second. See `DRAGON_RIDE`.
+ * seeks, six seconds cost 1.2MB as VP9 instead of the 4MB a WebP sequence would
+ * at the same rate, decode on the GPU, and stop repainting most of the screen's
+ * width on the main thread twenty-four times a second. See `DRAGON_RIDE`.
  *
  * ## What is not rendered
  *
@@ -151,7 +151,14 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
     let started = false;
     /** While true, the clip is held on its opening loop. */
     let circling = false;
+    /** The loop watcher's pending callback; 0 when none is armed. */
     let watching = 0;
+    /** Which clock issued it — see `stopCircling`, where getting this wrong bites. */
+    const framePaced = 'requestVideoFrameCallback' in ride;
+    type FrameClock = HTMLVideoElement & {
+      requestVideoFrameCallback(cb: () => void): number;
+      cancelVideoFrameCallback(handle: number): void;
+    };
 
     /* ---- ⚠️ THE CLIPS ARE PUT BACK BEFORE ANYTHING ELSE RUNS --------------
      *
@@ -214,12 +221,13 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
      * ⚠️ `round`, NOT `floor`, and the difference is one frame that shows.
      *
      * This is a BOUNDARY rather than a playback position: `DRAGON_FLIGHT_LOOP.to`
-     * is the instant frame 32 begins, and 2.133 × 15 lands at 31.995, so
-     * flooring it stops the rewind one frame early. That matters because the
-     * hand-back reuses the flight loop's own wrap — the pair of frames whose
-     * join was measured to be smaller than an ordinary frame step (0.82x), and
-     * which is the reason those two numbers were measured to a frame at all.
-     * Stopping a frame short hands over on a pair nobody measured.
+     * is the instant frame 51 begins, and floating point can leave `to × fps` a
+     * hair under it, so flooring risks stopping the rewind one frame early. That
+     * matters because the hand-back reuses the flight loop's own wrap — the pair
+     * of frames whose join was measured to cost about what one ordinary frame of
+     * playing costs (1.06x), and which is the reason those two numbers were
+     * measured to a frame at all. Stopping a frame short hands over on a pair
+     * nobody measured, and frame 50 scores 1.16x.
      */
     const LOOP_END_FRAME = Math.round(DRAGON_FLIGHT_LOOP.to * fps);
 
@@ -237,16 +245,78 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
      *
      * The backward seek is ~1.6s in an already-buffered file with a keyframe at
      * its head, so it decodes a handful of frames and does not stall.
+     *
+     * ⚠️ IT DOES, HOWEVER, THROW DECODED FRAMES AWAY, AND THAT IS EXPECTED —
+     * written down here because it looks exactly like a bug to whoever profiles
+     * this section next.
+     *
+     * `getVideoPlaybackQuality().droppedVideoFrames` on the ride reads about
+     * half of everything decoded: measured over one pass, 240 decoded and 112
+     * dropped locally, 229 and 121 on production. A clip that needs ~137 frames
+     * to play through is decoding 229, so roughly ninety of them are decoded and
+     * then seeked away from — the wrap doing its job, once every 1.6 seconds,
+     * for however long the reader takes to arrive.
+     *
+     * That is the price of the join being invisible, and it is not payable any
+     * other way in a one-file design: the loop point was chosen so the WRAP
+     * cannot be seen, and not seeing it means decoding into frames you then
+     * leave. Quote the COMPARISON if you ever cite these numbers — the two
+     * encodes measured against each other on the same harness — never the
+     * percentage on its own. Half of all frames dropped would describe a broken
+     * page, and this one plainly is not.
      */
     const circle = () => {
+      // The handle that just fired is spent. Cleared before the early return so
+      // nothing downstream tries to cancel a callback that has already run.
+      watching = 0;
       if (!circling) return;
       if (ride.currentTime >= DRAGON_FLIGHT_LOOP.to) {
         ride.currentTime = DRAGON_FLIGHT_LOOP.from;
       }
-      watching = 'requestVideoFrameCallback' in ride
-        ? (ride as HTMLVideoElement & { requestVideoFrameCallback(cb: () => void): number })
-            .requestVideoFrameCallback(circle)
+      watching = framePaced
+        ? (ride as FrameClock).requestVideoFrameCallback(circle)
         : requestAnimationFrame(circle);
+    };
+
+    /**
+     * ⚠️ CANCEL WITH THE CLOCK THAT ISSUED THE HANDLE, and the wrong one does
+     * not merely fail — it reaches into somebody else's animation.
+     *
+     * `requestVideoFrameCallback` hands back a handle from the VIDEO ELEMENT's
+     * own counter, cancellable only with `cancelVideoFrameCallback`. Teardown
+     * used to call `cancelAnimationFrame` on it, which is wrong twice over: the
+     * video callback stays armed, and — both counters start at 1 and step by 1,
+     * so the ids collide constantly — it cancels whatever `requestAnimationFrame`
+     * happens to be holding that number. On this page that is very often GSAP's
+     * ticker, which re-requests its frame only from INSIDE its own tick: cancel
+     * the pending one and the global ticker stops for good, taking every
+     * scrubbed animation on the landing page with it. It ran on every teardown,
+     * which is to say on every soft navigation off the landing page.
+     */
+    const stopCircling = () => {
+      if (!watching) return;
+      if (framePaced) (ride as FrameClock).cancelVideoFrameCallback(watching);
+      else cancelAnimationFrame(watching);
+      watching = 0;
+    };
+
+    /**
+     * ⚠️ ONE WATCHER, and calling `circle()` twice is how you end up with several.
+     *
+     * `circle()` re-arms itself, so calling it starts a CHAIN rather than
+     * scheduling a callback — and three places have to call it (`fly`, `resume`
+     * and `flyOn`), because the frame callback dies with the video the moment
+     * the element pauses. Unguarded, that is a fresh chain per scroll cycle
+     * running on top of every chain before it: pausing does not cancel the
+     * pending `requestVideoFrameCallback`, it holds it until the element plays
+     * again, and then the old chain wakes up alongside the new one. They do not
+     * fight — the wrap is idempotent — they accumulate, one more callback per
+     * decoded frame for every time the reader has crossed the section, for as
+     * long as the page stays open.
+     */
+    const startCircling = () => {
+      stopCircling();
+      circle();
     };
 
     /**
@@ -391,7 +461,7 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
     const flyOn = () => {
       settleToFlight();
       void ride.play().catch(() => {});
-      circle();
+      startCircling();
     };
 
     const unwind = () => {
@@ -417,7 +487,7 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
       // browser's own guess that the whole clip will play through uninterrupted,
       // which on a fast connection is a guess it makes lazily and on a slow one
       // is a wait the reader spends looking at an empty stage. Future-data plus
-      // a 724KB file that is already downloading is the right trade.
+      // a 1.2MB file that is already downloading is the right trade.
       ready: () => ride.readyState >= 3,
 
       fly: () => {
@@ -437,7 +507,7 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
           // forwards underneath it. `release()` is what turns it around.
           if (unwinding) return;
           void ride.play().catch(() => {});
-          if (circling) circle();
+          if (circling) startCircling();
           if (lit()) void blaze.play().catch(() => {});
           return;
         }
@@ -460,7 +530,7 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
         ride.currentTime = 0;
         ride.style.opacity = '1';
         void ride.play().catch(() => {});
-        circle();
+        startCircling();
       },
 
       // Nothing is switched, cut to or faded here. The clip has been playing its
@@ -526,7 +596,7 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
           void ride.play().catch(() => {});
           // Same reason as in `fly` — the frame callback stops with the video,
           // so the flight loop has to be re-armed by hand after any pause.
-          if (circling) circle();
+          if (circling) startCircling();
         }
       },
 
@@ -645,7 +715,7 @@ export function TracksDragon({ stageRef }: { stageRef: RefObject<DragonStage | n
     return () => {
       circling = false;
       stopUnwinding();
-      cancelAnimationFrame(watching);
+      stopCircling();
       ride.removeEventListener('ended', cross);
       ride.removeEventListener('timeupdate', backstop);
       // ⚠️ AND THE CLIPS ARE STOPPED, because this teardown does not mean the

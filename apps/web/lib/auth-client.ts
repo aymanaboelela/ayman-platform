@@ -38,6 +38,18 @@ interface AuthErrorBody {
 export const BANNED_ACCOUNT_CODE = 'ACCOUNT_BANNED';
 
 /**
+ * «الرقم ده ليه حساب بالفعل» — returned by `/sign-up/email` only.
+ *
+ * Kept beside `BANNED_ACCOUNT_CODE` because the two are the only codes this
+ * client inspects, and both are documented exceptions to "never distinguish a
+ * failure in the UI". The rule exists to stop the LOGIN form leaking whether an
+ * account exists; a sign-up form answers that by refusing, whatever it prints,
+ * so vagueness there only hides the reason from the student who needs it. See
+ * `PHONE_TAKEN_ERROR` in the API's `login-security.hook.ts`.
+ */
+export const PHONE_TAKEN_CODE = 'PHONE_ALREADY_REGISTERED';
+
+/**
  * Carries the raw status/code for logging or future branching, but callers
  * in this codebase must NOT surface `.message` to the user — it can be a
  * library-specific string. The one exception, `sign-in/email`, is already

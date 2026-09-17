@@ -6,6 +6,7 @@ import type { z } from 'zod';
 import {
   AboutPropsSchema,
   CourseGridPropsSchema,
+  BooksPropsSchema,
   CtaPropsSchema,
   FaqPropsSchema,
   HeroPropsSchema,
@@ -278,6 +279,52 @@ export function CourseGridForm({ defaultValues, onSubmit }: BlockFormProps<Cours
   );
 }
 
+/* ── books ───────────────────────────────────────────────────────────────── */
+
+type BooksInput = z.input<typeof BooksPropsSchema>;
+
+/**
+ * Four fields, and deliberately no book picker.
+ *
+ * `CourseGridForm` above has one (`courseIds`) because a catalogue of forty
+ * courses needs curating. The shop does not: it is a handful of titles, the
+ * strip shows the first few, and a curated id list would be a second place to
+ * remember when a book goes out of print — one that fails silently, by
+ * rendering a shorter row.
+ */
+export function BooksForm({ defaultValues, onSubmit }: BlockFormProps<BooksInput>) {
+  const form = useForm<BooksInput>({ resolver: zodResolver(BooksPropsSchema), defaultValues });
+
+  async function submit(values: BooksInput) {
+    await onSubmit(BooksPropsSchema.parse(values));
+  }
+
+  return (
+    <form method="post" onSubmit={form.handleSubmit(submit)} noValidate className="space-y-3">
+      <Row id="books-title" label={h.blockTitle}>
+        <Input id="books-title" {...form.register('titleAr')} />
+      </Row>
+      <Row id="books-lead" label={h.blockLead}>
+        <Textarea id="books-lead" {...form.register('leadAr')} />
+      </Row>
+      <Row id="books-cta" label={h.ctaLabel}>
+        <Input id="books-cta" {...form.register('ctaLabelAr')} />
+      </Row>
+      <Row id="books-limit" label={h.bookLimit}>
+        <Input
+          id="books-limit"
+          type="number"
+          min={1}
+          max={12}
+          {...form.register('limit', { valueAsNumber: true })}
+        />
+      </Row>
+      <FormErrors form={form} />
+      <SaveButton pending={form.formState.isSubmitting} />
+    </form>
+  );
+}
+
 /* ── about ───────────────────────────────────────────────────────────────── */
 
 type AboutInput = z.input<typeof AboutPropsSchema>;
@@ -536,20 +583,29 @@ export function CtaForm({ defaultValues, onSubmit }: BlockFormProps<CtaInput>) {
 /* ── placement-only ──────────────────────────────────────────────────────── */
 
 /**
- * `instructor` and `yearTracks` have no editable props at all — see the module
- * comment in `packages/contracts/src/admin/home-blocks.ts`. The dialog still
- * needs a submit path so the block can be CREATED from the composer, so this
- * renders the explanation plus the same save button every other form has.
+ * `instructor`, `yearTracks` and `honorBoard` have no editable props at all —
+ * see the module comment in `packages/contracts/src/admin/home-blocks.ts`. The
+ * dialog still needs a submit path so the block can be CREATED from the
+ * composer, so this renders the explanation plus the same save button every
+ * other form has.
+ *
+ * ⚠️ The note is per-type, not one shared sentence. `instructor` and
+ * `yearTracks` are uneditable because they build themselves from the catalogue
+ * and the taxonomy; `honorBoard` is uneditable because its content is the
+ * monthly exam's results and the first paper has not been sat. An admin
+ * deciding whether to publish an EMPTY section needs to be told that it is
+ * empty, and «بيبني نفسه من الكورسات» would tell them the opposite.
  */
 export function PlacementOnlyForm({
   defaultValues,
   onSubmit,
-}: BlockFormProps<{ type: 'instructor' | 'yearTracks' }>) {
+}: BlockFormProps<{ type: 'instructor' | 'yearTracks' | 'honorBoard' }>) {
   const form = useForm({ defaultValues });
+  const note = defaultValues.type === 'honorBoard' ? h.placementOnlyHonorBoard : h.placementOnly;
 
   return (
     <form method="post" onSubmit={form.handleSubmit(() => onSubmit(defaultValues))} noValidate className="space-y-3">
-      <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{h.placementOnly}</p>
+      <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{note}</p>
       <SaveButton pending={form.formState.isSubmitting} />
     </form>
   );

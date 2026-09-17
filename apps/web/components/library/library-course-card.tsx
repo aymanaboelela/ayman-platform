@@ -125,7 +125,9 @@ export function LibraryCourseCard({ course }: { course: LibraryCourse }) {
                   )}
                 >
                   {done
-                    ? c.courseDone
+                    ? course.contentComplete
+                      ? c.courseDone
+                      : c.courseUpToDate
                     : c.percentDone.replace('{percent}', String(course.progressPercent))}
                 </span>
                 <span className="mono tabular text-[length:var(--fs-mono-label)] text-accent-text">

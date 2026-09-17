@@ -44,6 +44,8 @@ const admin = {
     content: 'المحتوى',
     courses: 'الكورسات',
     questions: 'بنك الأسئلة',
+    monthlyExams: 'امتحانات الشهر',
+    grading: 'تصحيح الورق',
     // ── Plan 6 appends below. Plan 3 owns this sub-namespace; entries are
     // ADDED here, never rewritten, or every existing admin link breaks.
     overview: 'نظرة عامة',
@@ -68,15 +70,28 @@ const admin = {
     outreach: 'رسايلي للطلبة',
     /** Vodafone Cash review queue. */
     payments: 'المدفوعات',
+    /** «التحويلات الواردة» — the ledger under the review queue. */
+    transfers: 'التحويلات الواردة',
     /** «مين دفع، قد إيه، وهيخلص إمتى» — the money side of `payments` above:
      *  that screen reviews a CLAIM, this one reports the SUBSCRIPTIONS it
      *  produced. */
     finance: 'الاشتراكات والإيرادات',
     /** الكتاب الورقي — the shipping queue. */
     books: 'طلبات الكتب',
+    /**
+     * الواجب — the review queue. In the teaching group, directly under the
+     * inbox pair: it is the third screen where somebody is waiting on an
+     * answer from him, and the only one where the answer is a mark.
+     */
+    homework: 'الواجبات',
     // ── قسم التسويق — واتساب برة المنصة، لأول مرة. غير من «رسايلي للطلبة»
     // (outreach) اللي بتتبعت جوه المنصة نفسها لكل طالب بمناسبة حصلت له.
     marketing: 'التسويق',
+
+    /** The one deliberate exception to «مفيش زرار إرسال للكل» in
+     *  `outreach.settingsNote` — its own screen, so the two are never read as
+     *  the same feature. See `AdminBroadcastController`'s header. */
+    broadcast: 'رسالة للطلبة',
     // ── Sidebar group headings. The nav is eleven links long; ungrouped,
     //    it reads as one undifferentiated list and nobody scans it.
     groupTeaching: 'التدريس',
@@ -164,6 +179,40 @@ const admin = {
     preview: 'معاينة',
     title: 'اسم الكورس',
     edit: 'تعديل الكورس',
+    /**
+     * The six blocks the editor's form is cut into (`FormSection`).
+     *
+     * Each `…Note` is ONE sentence and says what the block decides, not what
+     * the fields are — the labels already name those. «الكتاب الورقي» is its
+     * own block rather than two inputs at the end of the pricing one because
+     * it is a different product with a different price and a different
+     * fulfilment (a delivery, not an unlock), and sharing a heading with the
+     * subscription plans is exactly how a book price gets read as one.
+     */
+    sectionBasics: 'المعلومات الأساسية',
+    sectionBasicsNote: 'الاسم والرابط والوصف — ده اللي بيظهر في قوايم الكورسات وفي نتايج البحث.',
+    sectionTaxonomy: 'التصنيف والمنهج',
+    sectionTaxonomyNote: 'النظام والصف والمسار والمادة، ومين شايف الكورس من الشُّعَب.',
+    sectionCover: 'صورة الكورس',
+    sectionCoverNote: 'بتظهر على كارت الكورس وفي لوحة الطالب.',
+    sectionPricing: 'الاشتراك والتسعير',
+    sectionPricingNote: 'أسعار الاشتراك بالجنيه. أي سعر بتحطه بيقفل الكورس تلقائيًا.',
+    sectionBook: 'الكتاب الورقي',
+    sectionBookNote: 'كتاب المادة اللي الطالب يطلبه ويتشحنله. مالوش علاقة خالص بسعر الاشتراك.',
+    sectionExtras: 'الشارة والملاحظات',
+    sectionExtrasNote: 'سطور بتظهر على الكارت وصفحة الكورس — مش بتتحكم في وصول حد.',
+    /**
+     * The switch that lets the platform say «خلصت الكورس» at all.
+     *
+     * Worded as a statement about the CONTENT, not about the student: what it
+     * answers is «نزل كل المنهج ولا لسه؟», and nothing about access or grading
+     * moves when it flips.
+     */
+    contentComplete: 'المنهج نزل كله',
+    contentCompleteHint:
+      'سيبها فاضية طول ما لسه فيه محاضرات جاية. لغاية ما تعلّمها، الطالب اللي خلّص اللي نازل هيقرا «خلّصت اللي نزل» مش «خلصت الكورس».',
+    /** The «⋯» trigger in the editor bar: archive, delete, and the video check. */
+    moreActions: 'إجراءات تانية',
     slug: 'المُعرّف في الرابط',
     slugHint: 'حروف إنجليزي صغيرة وأرقام وشرطات — ده اللي بيظهر في العنوان',
     /** The 409 from `updateCourseAction`, which is always the slug. */
@@ -288,6 +337,11 @@ const admin = {
     bookTitle: 'اسم الكتاب',
     bookPrice: 'سعر الكتاب (جنيه)',
     bookNone: 'من غير كتاب',
+    /** The chip in the book block's heading. It reads the PAIR, not one
+     *  field: a title with no price sells nothing (`formDataOf` drops both),
+     *  so «مفيش كتاب» beside a filled-in title is the warning. */
+    bookOn: 'الكتاب متاح للطلب',
+    bookOff: 'مفيش كتاب',
     bookHint:
       'سيبهم فاضيين لو الكورس ده مالوش كتاب ورقي. أول ما تحط اسم وسعر، هيظهر «اطلب الكتاب» في صفحة الكورس.',
     /**
@@ -313,6 +367,28 @@ const admin = {
     comingSoonNotePlaceholder: 'المحاضرات بتتصور دلوقتي، هتتنزل الأسبوع الجاي',
     comingSoonNoteHint:
       'بتظهر بدل الدروس لو الكورس لسه مفيهوش محاضرة حقيقية منشورة، وميمنعش الاشتراك خالص. سيبها فاضية عشان تستخدم الجملة الافتراضية.',
+    /**
+     * «ميعاد المحاضرة» — a plain text input on purpose, NOT a day picker and
+     * not a clock. The hint has to say two things or the field gets used
+     * wrong: WHERE it lands (the student's own dashboard band, not a hidden
+     * settings page) and that it is a sentence he writes, so «السبت والتلات ٨
+     * م» and «الأسبوع ده استثناءً الأحد» are both allowed. The placeholder is
+     * his own wording from the ask — a real example beats «مثال: …».
+     */
+    scheduleNote: 'ميعاد المحاضرة',
+    schedulePlaceholder: 'السبت الساعة ٨ مساءً',
+    scheduleHint:
+      'بتظهر للطالب في أول صفحته، فوق خالص جنب اسمه، عشان يعرف محاضرته إمتى من غير ما يسأل. اكتبها زي ما بتقولها — «السبت الساعة ٨ مساءً» أو «السبت والتلات ٨ م». سيبها فاضية لو الكورس ده لسه مالوش ميعاد معلن.',
+    /**
+     * «جروب الدفعة» — the per-course WhatsApp group, NOT the one official
+     * group in `/admin/settings`. The hint says so out loud, because the two
+     * fields look identical and putting the big group's link here would send
+     * every course's students to the same place.
+     */
+    whatsappGroup: 'جروب الواتساب بتاع الكورس',
+    whatsappGroupPlaceholder: 'https://chat.whatsapp.com/…',
+    whatsappGroupHint:
+      'ده جروب الدفعة بتاعة الكورس ده لوحده — غير الجروب الرسمي الكبير اللي في الإعدادات. الطالب المشترك بس هو اللي بيشوفه، وبيلاقيه وهو بيتفرج على المحاضرة. سيبه فاضي لو الكورس ده مالوش جروب.',
   },
   /**
    * الترم الأول / الترم الثاني — a division of the course's own content, not
@@ -362,6 +438,80 @@ const admin = {
   },
   lesson: {
     new: 'محاضرة جديدة',
+
+    /* ── ينزل الساعة ٨ ─────────────────────────────────────────────────────
+     *
+     * محاضرة تنشر نفسها. المدرّس بيحدد اليوم والساعة، والمحاضرة بتفضل مسودة
+     * لحد ما الميعاد يجي فتتنشر لوحدها.
+     *
+     * الوقت بتوقيتك إنت — الـ input بياخد ساعة الجهاز، والمتصفح بيحوّلها
+     * للحظة الحقيقية قبل ما تتبعت. فـ«٨ مساءً» بتفضل ٨ مساءً حتى بعد ما
+     * التوقيت الصيفي يتغيّر في أكتوبر.
+     */
+    publishAt: 'ينشر تلقائيًا في',
+    publishAtClear: 'إلغاء الموعد',
+    publishAtEmpty: 'سيبها فاضية والمحاضرة تفضل مسودة لحد ما تنشرها بإيدك.',
+    publishAtHint: 'المحاضرة هتفضل مسودة لحد الميعاد ده، وبعدين تتنشر لوحدها. الوقت بتوقيتك.',
+    /** الجملة اللي بتوفر سهرة: جدولة على محاضرة منشورة أصلاً مش هتعمل حاجة. */
+    publishAtAlreadyLive: 'المحاضرة منشورة خلاص — الموعد ده مش هيعمل حاجة. لو عايز تجدولها، اعملها مسودة الأول.',
+
+    /* ── فاضل كام ─────────────────────────────────────────────────────────
+     *
+     * التاريخ لوحده حقيقة لازم تحسبها بنفسك، في اللحظة اللي مش فاضي تحسب
+     * فيها: بالليل وإنت بتتأكد إن المحاضرة هتنزل. «فاضل ٤ ساعات» هي نفس
+     * الحقيقة بس متحسوبة.
+     *
+     * أكبر وحدة صح + اللي تحتها، مش تلاتة: «يوم و٤ ساعات» بتتقري بنظرة،
+     * و«يوم و٤ ساعات و١٢ دقيقة» بتتقري مرتين.
+     */
+    publishAtInDays: 'فاضل {days} يوم و{hours} ساعة',
+    publishAtInHours: 'فاضل {hours} ساعة و{minutes} دقيقة',
+    publishAtInMinutes: 'فاضل {minutes} دقيقة',
+    /** الميعاد عدّى بثواني. الـsweeper بيلف كل دقيقة، فده وضع طبيعي مش عُطل. */
+    publishAtDueNow: 'الميعاد جه — بتتنشر خلال دقيقة',
+    /** عدّى بأكتر من كده وهي لسه مسودة. القراءة الأمينة إن الجدولة ما اشتغلتش،
+     *  ومدرّس بيبص على محاضرة المفروض نزلت محتاج يتقاله مش يتطمّن. */
+    publishAtOverdue: 'الميعاد عدّى والمحاضرة لسه مسودة — انشرها بإيدك',
+
+    /* ── وصف المحاضرة ─────────────────────────────────────────────────── */
+    description: 'وصف المحاضرة (بعد المشاهدة)',
+    descriptionHint:
+      'ملخص قصير الطالب بيشوفه مقفول، وبيفتحه بنفسه بعد ما يخلّص الدرس. كلام عادي من غير تنسيق.',
+
+    /* ── الرفع المباشر ──────────────────────────────────────────────────
+     *
+     * The default way a lecture gets on the platform now. The YouTube field
+     * below it is still there — the courses already published use it — but a
+     * new lecture is a file, and the wording says so without making the
+     * older path look broken.
+     */
+    videoSourceUpload: 'ارفع الفيديو',
+    videoSourceYouTube: 'رابط يوتيوب',
+    videoUploadPick: 'اختار ملف الفيديو',
+    /**
+     * Names the two things an instructor actually wants to know before
+     * committing an hour of uplink: what it will take, and that it does not
+     * have to be perfect. No mention of codecs — the encoder handles them.
+     */
+    videoUploadHint:
+      'أي فيديو من الكاميرا أو الموبايل. إحنا بنجهّزه لكل الجودات لوحدنا — مش محتاج تظبط حاجة.',
+    videoUploadTooBig: 'الملف أكبر من ٨ جيجا — لازم يتقسّم أو يتضغط الأول',
+    videoUploadWrongType: 'ده مش ملف فيديو',
+    videoUploading: 'بيترفع…',
+    /** After the last part lands and before the encoder is done with it. */
+    videoUploadProcessing: 'بيتجهّز… ده بياخد دقايق حسب طول المحاضرة',
+    videoUploadDone: 'خلصت، والمحاضرة شغالة عند الطلبة',
+    videoUploadFailed: 'الرفع وقع',
+    videoUploadRetry: 'حاول تاني',
+    videoUploadCancel: 'إلغاء',
+    /**
+     * ⚠️ Says what cancelling COSTS, because it is not obvious: the previous
+     * video comes back, so cancelling is safe — and an instructor who thinks
+     * it is not will sit through an upload they no longer want.
+     */
+    videoUploadCancelHint: 'لو ألغيت، الفيديو القديم هيرجع زي ما كان',
+    videoUploadKeepOpen: 'سيب الصفحة مفتوحة لحد ما الرفع يخلص',
+    videoUploadSource: 'الملف الأصلي',
     title: 'عنوان المحاضرة',
     kind: 'النوع',
     freePreview: 'معاينة مجانية',
@@ -456,6 +606,115 @@ const admin = {
     // which of the two situations it is: open the quiz, or start one.
     addQuiz: 'إضافة اختبار للمحاضرة',
   },
+  /**
+   * الواجب — both halves: the block inside the lesson panel where the exercise
+   * is written, and the queue at `/admin/homework` where the answers arrive.
+   *
+   * One copy block for two screens on purpose. They are the same object seen
+   * twice, and the words for «مقبول» / «محتاج شغل تاني» have to be identical in
+   * the panel's summary and on the review card or the two screens read as two
+   * features.
+   */
+  homework: {
+    // ── the lesson panel ─────────────────────────────────────────────────
+    title: 'واجب المحاضرة',
+    hint: 'اكتب المطلوب زي ما بتقوله في الحصة. الطالب هيقراه هنا ويرفع صور الحل بتاعه، وهتلاقيها في «الواجبات».',
+    add: 'أضف واجب على المحاضرة دي',
+    body: 'المطلوب',
+    /** A multi-line example, because the field IS multi-line: the questions
+     *  arrive as «١- … ٢- … ٣- …» and a one-line placeholder would suggest
+     *  otherwise. Rendered by the student's card with `whitespace-pre-line`. */
+    bodyPlaceholder: '١- حل تمرين ٣ صفحة ٤٠\n٢- ارسم المنحنى\n٣- اكتب الخلاصة في سطرين',
+    maxImages: 'أقصى عدد صور للحل',
+    published: 'اظهر الواجب للطلبة',
+    /** Under the switch. It is the difference between a draft and a thing
+     *  every enrolled student is looking at, so it says which. */
+    publishedHint: 'وهو مقفول محدش بيشوفه — تقدر تكتب وتسيبه لبعدين.',
+    remove: 'شيل الواجب',
+    removeConfirm: 'أشيل الواجب من المحاضرة دي؟ الحلول اللي اتسلّمت هتفضل موجودة.',
+    /** «فيه ٤ مستنيين» — rendered with the number between the two. */
+    pendingBefore: 'فيه',
+    pendingAfter: 'حل مستني مراجعة',
+    openQueue: 'شوف الحلول',
+
+    // ── the queue ────────────────────────────────────────────────────────
+    /* ── «أضيف واجب» from the queue ────────────────────────────────────
+     * The queue was read-only and the only way to SET a واجب was four clicks
+     * deep in the course editor. These are the two questions that screen
+     * answered implicitly — which course, which lecture — asked out loud. */
+    createTrigger: 'أضف واجب',
+    createTitle: 'واجب جديد',
+    createCourseLabel: 'الكورس',
+    createCoursePlaceholder: 'اختار الكورس',
+    createLessonLabel: 'المحاضرة',
+    createLessonPlaceholder: 'اختار المحاضرة',
+    createLessonsLoading: 'بنجيب المحاضرات…',
+    createNoLessons: 'الكورس ده لسه مفيهوش محاضرات',
+    createLessonsFailed: 'مقدرناش نجيب محاضرات الكورس ده',
+    /** The chosen lecture already carries an exercise — the write is an
+     *  upsert, so this is an edit and the field opened filled from it. */
+    createAlreadyHas: 'المحاضرة دي عليها واجب بالفعل — اللي مكتوب تحت هو نصّه، وأي تعديل هيستبدله.',
+    /** The trap worth naming: a PUBLISHED homework on an UNPUBLISHED lecture
+     *  reaches nobody, and nothing else on this screen would say so. */
+    createLessonUnpublished: 'المحاضرة دي لسه مش منشورة — الواجب مش هيوصل لحد غير لما تنشرها.',
+    createConfirm: 'أضف الواجب',
+    createUpdate: 'حدّث الواجب',
+    createSaving: 'بنحفظ…',
+    createBack: 'إلغاء',
+    createPublished: 'الواجب اتنشر للطلبة',
+    createSavedDraft: 'الواجب اتحفظ — لسه مقفول عن الطلبة',
+    createFailed: 'مقدرناش نحفظ الواجب',
+    queueTitle: 'الواجبات',
+    queueLead: 'الحلول اللي الطلبة رفعوها. افتح أي واحد، شوف الصور، وابعت رد بضغطة.',
+    empty: 'مفيش حلول مستنية دلوقتي.',
+    emptyHint: 'أول ما طالب يرفع حل واجب، هتلاقيه هنا.',
+    filterPending: 'مستني مراجعة',
+    filterAccepted: 'مقبول',
+    filterNeedsWork: 'رجع للطالب',
+    filterAll: 'الكل',
+    student: 'الطالب',
+    lesson: 'المحاضرة',
+    course: 'الكورس',
+    submittedAt: 'اتسلّم',
+    /** «المحاولة ٢» — a resubmission after «فكّر أكتر». */
+    attempt: 'المحاولة',
+    /** «٣ صور» — rendered with the number before it. */
+    imageUnit: 'صورة',
+    openProfile: 'ملف الطالب',
+    openLesson: 'المحاضرة',
+    openThread: 'افتح المحادثة',
+    /** On the thread button: what it is FOR, since the review form already
+     *  sends a written reply. */
+    openThreadHint: 'لو عايز تبعتله صوت أو تكمّل كلام',
+    prompt: 'المطلوب في الواجب',
+    noPrompt: 'الواجب اتشال من المحاضرة، والحل ده فضل.',
+
+    // ── the decision ─────────────────────────────────────────────────────
+    accept: 'مقبول',
+    needsWork: 'يفكّر تاني ويبعته',
+    grade: 'الدرجة من ١٠٠',
+    gradeOptional: 'اختياري — سيبها فاضية لو مش بتدّي درجة على الواجب ده.',
+    message: 'الرد اللي هيوصله',
+    /** The canned notes. «اختار من دول» rather than «اقتراحات» — they are a
+     *  shortcut he picks from, not advice. */
+    suggestions: 'اختار من دول',
+    send: 'ابعت الرد',
+    sending: 'بنبعت…',
+    /** What accepting DOES, said before he does it — the photographs go. */
+    acceptWarning: 'أول ما تقبله، صور الحل بتتمسح خالص وبيفضل إنه سلّم والدرجة والرد.',
+    failed: 'مقدرناش نبعت الرد. نجرّب تاني.',
+    /** The verdict already on a reviewed submission. */
+    reviewedAccepted: 'اتقبل',
+    reviewedNeedsWork: 'رجع للطالب',
+    pending: 'مستني مراجعة',
+    /** Where the pictures went. Never «اتمسحت» alone — the point is that the
+     *  submission itself is intact. */
+    imagesGone: 'الصور اتمسحت بعد المراجعة — التسليم نفسه لسه متسجّل.',
+    imagesExpired: 'الصور اتمسحت بعد ٣٠ يوم — التسليم نفسه لسه متسجّل.',
+    yourNote: 'اللي بعتّه',
+    /** The `sr-only` sentence beside the sidebar badge. `{n}` is the count. */
+    pendingBadgeLabel: '{n} حل مستني مراجعة',
+  },
   exam: {
     title: 'امتحان الكورس',
     hint: 'محاضرة من نوع «اختبار» تبقى امتحان الكورس النهائي. مش بتتفتح للطالب غير لما كل المحاضرات التانية تخلص، ولازم النجاح فيها عشان الكورس يتحسب خلص.',
@@ -481,6 +740,219 @@ const admin = {
     gateNoLessons: 'مفيش محاضرات منشورة لسه، فالامتحان هيتفتح للطالب على طول',
     draft: 'لسه مسودة',
   },
+  /**
+   * امتحانات نص/آخر الشهر — its own namespace, deliberately NOT folded into
+   * `exam` above. That one is «امتحان الكورس»: the single final, reached
+   * through `courses.exam_lesson_id`, gated on finishing every lecture. This is
+   * a different object with a different rule (a chosen subset of lessons, its
+   * own window, several per course per month), and sharing a namespace would
+   * make every string ambiguous at the call site.
+   */
+  monthlyExams: {
+    title: 'امتحانات الشهر',
+    lead: 'امتحانات نص الشهر وآخر الشهر — انت اللي بتحدد على أنهي دروس، وامتى تفتح وتقفل، وقد إيه مدتها.',
+    create: 'امتحان جديد',
+    empty: 'لسه مفيش امتحانات. اعمل واحد وحدد الدروس والميعاد.',
+
+    // ── the form ────────────────────────────────────────────────────────────
+    courseLabel: 'الكورس',
+    titleLabel: 'اسم الامتحان',
+    titlePlaceholder: 'امتحان نص شهر سبتمبر',
+    coverageLabel: 'الامتحان على أنهي دروس؟',
+    coverageHint: 'اختار درس على الأقل. الطالب هيشوف الأسامي دي في الكارت بتاعه، فهي اللي بتقوله يذاكر إيه.',
+    coverageEmpty: 'الكورس ده لسه من غير دروس.',
+    opensAtLabel: 'يفتح',
+    closesAtLabel: 'يقفل',
+    durationLabel: 'مدة الامتحان (بالدقيقة)',
+    gradeOutOfLabel: 'الدرجة من',
+    passPercentLabel: 'نسبة النجاح %',
+    /**
+     * ⚠️ The echo line under the two date fields, rendered back in CAIRO wall
+     * clock before he submits — `{when}` is a formatted Arabic datetime.
+     *
+     * This is the cheapest defence against the one mistake that cannot be
+     * recovered at 19:45. A `datetime-local` input shows the browser's local
+     * time, and an exam that opens at 5pm or 11pm instead of 8 is
+     * indistinguishable from a broken deploy.
+     */
+    windowEcho: 'يعني {when} بتوقيت القاهرة',
+    save: 'حفظ',
+    saved: 'اتحفظ',
+    saveFailed: 'مقدرناش نحفظ — نجرّب تاني',
+
+    // ── the row ─────────────────────────────────────────────────────────────
+    phaseUpcoming: 'لسه هيفتح',
+    phaseOpen: 'مفتوح دلوقتي',
+    phaseClosed: 'قفل',
+    /** Rendered as `١٢ سؤال`. */
+    questionCount: 'سؤال',
+    noQuestions: 'لسه من غير أسئلة',
+    /** `{n}` — sittings so far. */
+    attempts: '{n} طالب دخل',
+    addQuestions: 'حط الأسئلة',
+    publish: 'انشر',
+    unpublish: 'اوقف النشر',
+    published: 'منشور',
+    draft: 'لسه مسودة',
+    /**
+     * `{n}` — papers with an ungraded essay. Loud, because until they are
+     * marked every one of them scores that question ZERO — and that is the
+     * score the platform believes, everywhere.
+     */
+    needsGrading: '{n} ورقة محتاجة تصحيح',
+    duplicate: 'كرره على كورسات تانية',
+    delete: 'امسح',
+    /** Delete cascades the quiz, the attempts and the coverage, permanently. */
+    deleteConfirm: 'هيتمسح الامتحان وكل حاجة فيه، ومفيش رجوع. متأكد؟',
+    deleteHasAttempts: 'فيه طلبة دخلوا الامتحان ده، فمينفعش يتمسح. لو عايزه يختفي، اوقف النشر.',
+
+    // ── the two states that read like a broken site ─────────────────────────
+    /**
+     * ⚠️ Surfaced because `LessonAccessService.resolve` does NOT check
+     * `section.isPublished` while `LessonGateService.resolveCourse` DOES — an
+     * unpublished shelf 404s the intro page for everyone while attempts still
+     * start. Total, silent, and only visible if the row says so.
+     */
+    shelfUnpublished: '⚠️ قسم «امتحانات الشهر» في الكورس ده موقوف — الطلبة مش هيشوفوا الامتحان.',
+    publishNeedsQuestions: 'مينفعش تنشر امتحان من غير أسئلة.',
+    /**
+     * The publish preflight's SECOND refusal (`sum_marks_must_be_positive`),
+     * and the one that looks like nothing is wrong: the paper HAS questions,
+     * every one of them is worth zero, so the exam is out of nothing and every
+     * student scores 0/0. Split from `publishNeedsQuestions` because the fix is
+     * a different field on a different screen — the per-slot marks in the quiz
+     * builder, not "write more questions".
+     */
+    publishNeedsMarks: 'كل أسئلة الامتحان بدرجة صفر. حط درجة لكل سؤال في الورقة الأول.',
+    /**
+     * `exam_window_inverted` — «يقفل» landing on or before «يفتح».
+     *
+     * Rendered ON the closing field, because that is the one to move: the
+     * opening instant is the thing he decided. The API re-checks the pair
+     * against what is already stored, so a PATCH that moves only «يفتح» past a
+     * stored «يقفل» is refused with the same code and reads the same here.
+     */
+    windowInverted: 'ميعاد القفل لازم يكون بعد ميعاد الفتح.',
+    /** The edit screen's heading. «امتحان جديد» (`create`) is the other one. */
+    edit: 'تعديل الامتحان',
+  },
+
+  /**
+   * التصحيح اليدوي — the screen that did not exist.
+   *
+   * Until this shipped there was NO way to mark an essay: `gradeQuestion`
+   * returns `needs_grading`, `needs_grading` sits inside `GRADED_STATES` so the
+   * paper counts as graded everywhere, and `recomputeScore` had zero callers.
+   * Every essay anyone ever answered scored zero, silently.
+   */
+  grading: {
+    title: 'تصحيح الورق',
+    lead: 'الأسئلة المقالية اللي مستنية درجة منك. لحد ما تتصحح، الطالب واخد فيها صفر.',
+    empty: 'مفيش ورق مستني تصحيح.',
+    /** `{n}` — ungraded answers on one paper. */
+    pending: '{n} سؤال',
+    studentAnswer: 'إجابة الطالب',
+    noAnswer: 'ساب السؤال فاضي',
+    markLabel: 'الدرجة',
+    /** `{n}` — the question's own maximum. Typing more is clamped, not refused. */
+    markOutOf: 'من {n}',
+    feedbackLabel: 'ملاحظتك للطالب (اختياري)',
+    save: 'احفظ الدرجة',
+    saved: 'اتحفظت',
+    saveFailed: 'مقدرناش نحفظ — نجرّب تاني',
+    /** `{score}` `{outOf}` — recomputed and shown after every save, because the
+     *  whole point is that marking one answer moves the paper's total. */
+    totalNow: 'المجموع دلوقتي {score} من {outOf}',
+    open: 'صحّح',
+
+    /* ── الشاشة بقت تلات أقسام ──────────────────────────────────────────────
+     *
+     * الطابور لوحده كان بيجاوب سؤال واحد: «مين مستني؟». وبعد ما تصحّح الورقة
+     * كانت بتختفي من على الشاشة وما بتظهرش في أي مكان تاني — فمفيش طريقة
+     * تراجع درجة إديتها، ولا تشوف الفصل عمل إيه.
+     */
+    /** التبويبات. أسماء قصيرة عشان تعدّي على موبايل من غير ما تلف. */
+    tabQueue: 'محتاج تصحيح',
+    tabMarked: 'اتصحّح خلاص',
+    tabTop: 'الأوائل',
+    /** «اللي امتحنوا بعد الميعاد». تبويب لوحدهم مش بادچ جوه الأوائل — الورقة
+     *  المتأخرة بتتصحّح عادي والطالب بيشوف درجته، بس هي مش في السباق، وسيبها
+     *  في لستة عنوانها «الأوائل» معناه إنها فيه. */
+    tabLate: 'متأخرين',
+    leadLate:
+      'الورق اللي اتحلّ بعد ما الامتحان قفل. بيتصحّح عادي والطالب بيشوف درجته، بس مش داخل في الترتيب ولا لوحة الشرف.',
+    emptyLate: 'مفيش حد امتحن بعد الميعاد.',
+    /** على الصف نفسه في تبويب المتأخرين. */
+    rowLate: 'بعد الميعاد',
+    /** تحت كل تبويب — بيقول التبويب ده بيجاوب على إيه. */
+    leadMarked: 'الورق اللي صحّحته بإيدك. اضغط على أي ورقة تعدّل درجتها.',
+    leadTop: 'ترتيب الطلبة على الامتحانات اللي اتصحّحت. الترتيب بالنسبة المئوية عشان الامتحانات المختلفة تتقارن صح.',
+    emptyMarked: 'لسه مصحّحتش ورق.',
+    emptyTop: 'مفيش امتحانات متصحّحة لسه.',
+
+    /* ── الفلاتر ───────────────────────────────────────────────────────── */
+    filterExam: 'الامتحان',
+    filterExamAll: 'كل الامتحانات',
+    filterSort: 'الترتيب',
+    sortScore: 'الأعلى درجة',
+    sortFastest: 'الأسرع تسليم',
+    sortLatest: 'آخر واحد سلّم',
+    sortEarliest: 'أول واحد سلّم',
+    sortName: 'بالاسم',
+    filterApply: 'رتّب',
+
+    /* ── الصفوف ───────────────────────────────────────────────────────── */
+    /** `{marks}` `{outOf}` — على الطابور، جنب عدد الأسئلة. «٢ سؤال» مش بيقول
+     *  ده تقيل ولا خفيف؛ ده اللي بيقول. */
+    pendingMarks: '{marks} درجة معلّقة من {outOf}',
+    /** `{score}` `{outOf}` على صف نتيجة. */
+    rowScore: '{score} من {outOf}',
+    /** `{n}` بالدقايق. */
+    rowDuration: 'خلّص في {n} دقيقة',
+    /** `{n}` بالتواني — لأقل من دقيقة. */
+    rowDurationSeconds: 'خلّص في {n} ثانية',
+    rowHandMarked: 'صحّحتها بإيدك',
+    rowRank: '#{n}',
+    /** على اسم الطالب في أي صف — بيروح لملفه، واللي فيه المحادثة معاه. */
+    openProfile: 'ملف الطالب',
+    openPaper: 'شوف الورقة',
+
+    /* ── الإحصائية فوق اللستة ────────────────────────────────────────────
+     *
+     * «كام واحد دخل، كام جاب ١٠٠، كام رسب». بتتحسب على نفس الفلتر اللي
+     * قدامك — امتحان واحد أو يوم واحد — مش على المنصة كلها.
+     */
+    statSat: 'دخلوا الامتحان',
+    statPerfect: 'جابوا الدرجة كاملة',
+    statFailed: 'تحت درجة النجاح',
+    statAverage: 'المتوسط',
+
+    /* ── فلتر اليوم ─────────────────────────────────────────────────────
+     *
+     * أيام فيها امتحانات فعلاً، مش تقويم فاضي — عشان ما ينفعش تختار يوم
+     * وتلاقي الشاشة فاضية وتفتكرها بايظة.
+     */
+    dayFilterTitle: 'الأيام',
+    dayFilterAll: 'كل الأيام',
+    /** `{n}` عدد الورق في اليوم ده. */
+    dayFilterCount: '{n} ورقة',
+
+    /* ── التقييم ولوحة الشرف ────────────────────────────────────────────
+     *
+     * الدرجة مش بتفصل بين عشرة جابوا ١٠٠. التقييم هو اللي بيفصل، وهو اللي
+     * لوحة الشرف بترتّب بيه.
+     */
+    ratingLabel: 'تقييمك',
+    ratingHint: 'من ١ لـ ٥ — ده اللي بيفصل بين اللي جابوا نفس الدرجة.',
+    ratingClear: 'شيل التقييم',
+    honorAdd: 'حطه في لوحة الشرف',
+    honorRemove: 'شيله من لوحة الشرف',
+    honorOn: 'في لوحة الشرف',
+    /** بيتقال قبل ما اسم الطالب وصورته يظهروا على الصفحة الرئيسية. */
+    honorConfirm: 'اسم {name} وصورته هيظهروا في لوحة الشرف على الصفحة الرئيسية. تمام؟',
+    honorFailed: 'مقدرناش نحفظ — نجرّب تاني',
+  },
+
   resource: {
     title: 'مواد الدرس',
     hint: 'المواد بتتعلّق على أي نوع محاضرة — فيديو، نص، أو مرفقات.',
@@ -585,7 +1057,75 @@ const admin = {
     quickNewCourse: 'كورس جديد',
     quickHomeBlocks: 'أقسام الصفحة الرئيسية',
     quickMedia: 'رفع صورة',
+    /** Above the section grid, beside the group heading. */
+    statPendingPayments: 'دفعة مستنية مراجعة',
+    statUnshippedBooks: 'كتاب لسه ما اتشحنش',
+    statUnreadInbox: 'رسالة مستنية رد',
+    /** The heading over the live queues, which only render when non-zero. */
+    waitingTitle: 'محتاج تصرّف',
+    waitingNone: 'مفيش حاجة مستنياك دلوقتي.',
+    /** «كام واحد مشترك في كل كورس» — the per-course headcount strip. */
+    coursesTitle: 'الطلبة في كل كورس',
+    coursesLead: 'كام واحد داخل كل كورس، وكام اشتراك شغال.',
+    /** The number every row leads with. */
+    coursesEnrolled: 'طالب',
+    /** Second line on a closed course only — a free course has no subscribers
+     *  of its own, every مسجّل can enter it. */
+    coursesSubscribed: 'اشتراك شغال',
+    /** A closed course nobody has bought yet, and a free one nobody opened. */
+    coursesEmpty: 'لسه محدش',
+    /** The badge that separates مقفول from مفتوح للكل at a glance. */
+    coursesPaid: 'مقفول',
+    coursesFree: 'مفتوح للكل',
+    /** Per-row button. The `For` variant is its accessible name — «تحليلات
+     *  الكورس» eight times over is a screen reader reading the same label
+     *  eight times and never saying which course. */
+    coursesOpen: 'تحليلات الكورس',
+    coursesOpenFor: 'تحليلات كورس {title}',
+    /** The tail line when the strip is capped. */
+    coursesMore: 'و{n} كورس كمان',
+    coursesNone: 'مفيش كورسات لسه.',
+    coursesUnavailable: 'أرقام الكورسات مش متاحة دلوقتي.',
   },
+
+  /**
+   * One line per admin section, shown under its name on `/admin`.
+   *
+   * The overview used to be twenty identical dark rectangles carrying an icon
+   * and a word — a menu drawn twice, once in the sidebar and once in the page,
+   * with the page's copy adding nothing the sidebar had not already said. A
+   * sentence per tile is what makes it a directory instead: it answers «القسم
+   * ده بيعمل إيه» for someone who has not opened it in a month.
+   *
+   * Keyed by `href` so the table and this map cannot drift apart silently —
+   * `navBlurb[item.href]` is `undefined` for a section with no line yet, and
+   * the tile simply renders without one.
+   */
+  navBlurb: {
+    '/admin/exams': 'امتحانات نص الشهر وآخر الشهر — مواعيدها والدروس اللي عليها.',
+    '/admin/grading': 'الأسئلة المقالية اللي مستنية درجة منك.',
+    '/admin/courses': 'اعمل كورس، رتّب محاضراته، وانشره.',
+    '/admin/students': 'دوّر على طالب، افتح سجله، أو اقفل حسابه.',
+    '/admin/payments': 'راجع تحويلات إنستاباي واقبلها أو ارفضها.',
+    '/admin/transfers': 'الفلوس اللي وصلت فعلاً على إنستاباي.',
+    '/admin/finance': 'الإيرادات والمصروفات وصافي الربح.',
+    '/admin/books': 'طلبات الكتاب المدفوعة اللي لسه ما اتشحنتش.',
+    '/admin/attempts': 'محاولات الامتحانات ودرجاتها.',
+    '/admin/analytics': 'أداء الطلبة وأصعب الأسئلة.',
+    '/admin/inbox': 'رسايل الطلبة والرد عليها.',
+    '/admin/outreach': 'سجل الرسايل اللي اتبعتت باسمك.',
+    '/admin/assistant': 'الأسئلة اللي الطلبة بيسألوها للمساعد.',
+    '/admin/taxonomy': 'الأنظمة والصفوف والمسارات والمواد.',
+    '/admin/marketing/campaigns': 'حملات واتساب للي لسه بره المنصة.',
+    '/admin/home': 'أقسام الصفحة الرئيسية وترتيبها.',
+    '/admin/navigation': 'روابط الهيدر والفوتر.',
+    '/admin/media': 'الصور المرفوعة وروابطها.',
+    '/admin/news': 'الأخبار والإعلانات.',
+    '/admin/settings/branding': 'الهوية والسيو وبيانات التواصل.',
+    '/admin/flags': 'تشغيل وإطفاء مميزات المنصة.',
+    '/admin/errors': 'الأخطاء اللي حصلت في المنصة.',
+    '/admin/audit': 'مين عمل إيه وإمتى.',
+  } as Record<string, string | undefined>,
   // ── Task 16 appends more keys under commandPalette (search, groups, empty).
   commandPalette: {
     trigger: 'البحث السريع',
@@ -643,9 +1183,26 @@ const admin = {
     seoDescriptionHint: 'حتى 160 حرف — الوصف اللي بيظهر تحت العنوان في نتائج البحث',
     phoneHint: 'بصيغة دولية، يعني +20 وبعدها الرقم',
     urlHttpsOnly: 'لازم يبدأ بـ https://',
+    /**
+     * The two payment destinations. Both are on the form again — checkout asks
+     * the student which rail they want, so both numbers are live.
+     *
+     * ⚠️ They are DIFFERENT numbers and the hints say so. The wallet number and
+     * the InstaPay address are not interchangeable, and a student who picks one
+     * and is shown the other sends money to a rail nothing is reconciling.
+     */
+    instapay: 'رقم إنستاباي',
+    instapayHint:
+      'الرقم اللي الطلبة هيحوّلوا عليه لما يختاروا إنستاباي — اشتراكات الكورسات وطلبات الكتب. بصيغة دولية زي رقم الهاتف فوق.',
     vodafoneCash: 'رقم فودافون كاش',
-    vodafoneCashHint: 'الرقم اللي الطلبة هيحوّلوا عليه اشتراك الكورسات المدفوعة. بصيغة دولية زي رقم الهاتف فوق.',
+    vodafoneCashHint:
+      'رقم محفظة فودافون كاش — غير رقم إنستاباي. سيبه فاضي لو مش عايز تستقبل على فودافون كاش، والاختيار ده هيتقفل قدام الطالب.',
     accentPreviewLabel: 'معاينة اللون',
+    /** The seventh option in the accent picker: this instructor's own hue. */
+    accentCustom: 'لون خاص',
+    accentHue: 'درجة اللون',
+    accentHueHint:
+      'حرّك الشريط لحد ما توصل للون بتاعك. السكيمة كلها بتتولّد منه — الأزرار والخلفيات والنص — والدرجات القريبة من لون «إجابة صح» أو «إجابة غلط» مرفوضة عشان الطالب مايتلخبطش.',
 
     /**
      * The four channels the site footer renders that the dashboard could not
@@ -702,7 +1259,25 @@ const admin = {
    * Same gender rule as everywhere else — nothing here is second person, so
    * nothing here has to guess who is reading it.
    */
+  /** The two tabs over «صندوق الوارد» — see `InboxTabs`. */
+  inboxTabs: {
+    ariaLabel: 'أقسام صندوق الوارد',
+    tabConversations: 'المحادثات',
+    /** «أسئلة الطلبة» kept its name; only its home changed. Calling it
+     *  something new here would read as a different feature. */
+    tabQuestions: 'أسئلة الطلبة',
+  },
+
   assistantQuestions: {
+    filterLabel: 'اعرض',
+    /** New UI over a capability the endpoint always had — `q` was accepted by
+     *  the API and read from the URL, and nothing on screen could set it. */
+    searchLabel: 'دوّر في الأسئلة',
+    searchSubmit: 'دوّر',
+    /** Over the answer bubble. المساعد is not him, and an unlabelled bubble on
+     *  the answer side reads as something he wrote — on the exact screen whose
+     *  job is deciding whether to step in himself. */
+    answeredByAssistant: 'رد المساعد',
     eyebrow: 'المساعد',
     title: 'أسئلة الطلبة',
     lead: 'كل سؤال اتكتب في الشات، والرد اللي راح عليه. اللي عليه علامة معناه إن المساعد وقف قدامه — ودي أهم صف في الصفحة.',
@@ -805,6 +1380,26 @@ const admin = {
     lessonPraise: 'كلمة بعد الدرس',
     lessonPraiseHint: 'للدروس اللي مالهاش كويز — الرسالة الوحيدة اللي مش بتطلب حاجة',
     whatsappInvite: 'دعوة قناة الواتساب',
+
+    /* ── «شوف ورقته» — the paper behind a quiz-result message ──────────── */
+    /** On the button, and deliberately not «مراجعة»: the question he asks is
+     *  «هو غلط في إيه», and the button should be the answer to that. */
+    reviewPaper: 'شوف ورقته — غلط في إيه',
+    reviewDialogTitle: 'ورقة {student} — {quiz}',
+    /** «٣ غلط من ١٢». The denominator is not optional: three wrong out of
+     *  four and three out of forty are different papers. */
+    reviewWrongOf: '{wrong} غلط من {total}',
+    reviewScore: 'الدرجة {score} من {outOf}',
+    reviewShowWrongOnly: 'الغلط بس',
+    reviewShowAll: 'كل الأسئلة',
+    reviewLoading: 'بجيب الورقة…',
+    reviewFailed: 'مقدرناش نجيب الورقة. جرّب تاني.',
+    reviewAllCorrect: 'مفيش غلط في الورقة دي.',
+    reviewQuestionNumber: 'سؤال {n}',
+    reviewHisAnswer: 'إجابته',
+    reviewRightAnswer: 'الإجابة الصحيحة',
+    reviewNoAnswer: 'مجاوبش',
+    reviewExplanation: 'الشرح',
     whatsappInviteHint: 'بتتبعت للطلبة اللي لسه مضغطوش على اللينك — ومحتاجة لينك القناة في وسائل التواصل',
     nudgeAfterHours: 'يستنى قد إيه قبل التنبيه',
     nudgeAfterHoursHint: 'بالساعات، من ساعة ما يخلّص الدرس',
@@ -816,6 +1411,51 @@ const admin = {
     maxPerStudentPerDayHint: 'رسايل النتايج مستثناة — الطالب اللي امتحن تلات مرات يستاهل تلات ردود',
     /** The line under the whole switch block. */
     settingsNote: 'مفيش زرار «إرسال للكل» هنا، وده مقصود: كل رسالة سببها حاجة عملها الطالب نفسه.',
+  },
+  /**
+   * `/admin/broadcast` — the instructor writes the words himself, and this is
+   * the one screen where «إرسال للكل» does exist. See `outreach.settingsNote`
+   * for why it does not live there, and the controller's own header for the
+   * full reasoning.
+   */
+  broadcast: {
+    eyebrow: 'رسالة مباشرة',
+    title: 'رسالة للطلبة',
+    lead: 'اكتب رسالة بصوتك وابعتها لطالب واحد، أو لكل الطلبة دفعة واحدة. الرسالة بتوصل في نفس مكان «رسايلي للطلبة»، وبيقدر يردّ عليها.',
+
+    body: 'الرسالة',
+    bodyPlaceholder: 'اكتب اللي عايز تقوله…',
+
+    targetAll: 'كل الطلبة',
+    targetOne: 'طالب واحد',
+    /** The field label when «طالب واحد» is selected. */
+    targetSearchLabel: 'البريد الإلكتروني أو رقم الهاتف',
+    targetSearchPlaceholder: 'ابحث بالبريد أو رقم الهاتف',
+    targetSearchButton: 'دوّر',
+    targetNotFound: 'مفيش طالب بالبيانات دي.',
+    /** `{n}` — more than one match; the admin has to narrow it. */
+    targetAmbiguous: 'فيه {n} نتيجة — اكتب بريد إلكتروني كامل عشان نحدده.',
+    /** The resolved student, shown before send so a typo is caught early. */
+    targetFound: 'هيوصل لـ: {name} ({email})',
+
+    /** `{count}` — read before the confirm dialog is even pressable. */
+    recipientCountAll: 'هيوصل لـ {count} طالب.',
+    countLoading: 'بنحسب العدد…',
+
+    send: 'إرسال',
+    sending: 'بيتبعت…',
+    sentOne: 'اتبعتت.',
+    /** `{count}` — for the «كل الطلبة» path, which returns before delivery finishes. */
+    sentAll: 'جاري الإرسال لـ {count} طالب.',
+    sendFailed: 'الرسالة ما اتبعتتش. جرّب تاني.',
+
+    /** The confirm dialog before an «كل الطلبة» send — the one press this
+     *  screen exists to make sure is never an accident. */
+    confirmTitle: 'هتبعت لكل الطلبة؟',
+    /** `{count}` */
+    confirmBody: 'الرسالة هتوصل لـ {count} طالب دلوقتي. الخطوة دي مش هترجع.',
+    confirmCancel: 'رجوع',
+    confirmSend: 'أيوه، ابعت',
   },
   branding: {
     title: 'الهوية البصرية',
@@ -848,6 +1488,24 @@ const admin = {
     clearSelection: 'إلغاء التحديد',
   },
   students: {
+    /* ── المحادثة على ملف الطالب ─────────────────────────────────────────
+     *
+     * «يبقى في البروفايل يبقى في محادثة أقدر أكلمها». الوصول للطالب من ملفه
+     * كان يعني تقرا رقمه وتفتح واتساب؛ ده القناة بتاعة المنصة نفسها — الطالب
+     * بيشوفها في نفس بانل المساعد وبيقدر يرد.
+     */
+    conversationTitle: 'المحادثة',
+    conversationEmpty: 'مفيش محادثة مع الطالب ده لسه. أول رسالة هتفتح واحدة.',
+    conversationTruncated: 'دي آخر الرسائل بس — افتح المحادثة كاملة',
+    conversationOpenFull: 'المحادثة كاملة',
+    conversationYou: 'إنت',
+    conversationStudent: 'الطالب',
+    messagePlaceholder: 'اكتب رسالتك للطالب…',
+    messageSend: 'ابعت',
+    messageSending: 'بيتبعت…',
+    messageSent: 'اتبعتت',
+    messageEmpty: 'اكتب رسالة الأول.',
+    messageFailed: 'مقدرناش نبعت — نجرّب تاني',
     columnName: 'الاسم',
     columnEmail: 'البريد الإلكتروني',
     columnPhone: 'رقم الهاتف',
@@ -888,7 +1546,7 @@ const admin = {
    */
   subscriptionsTitle: 'اشتراكات الكورسات المدفوعة',
   subscriptionsLead:
-    'اشترك الطالب في كورس مدفوع من هنا — بنفس الباقات والأسعار اللي شايفها في صفحة الكورس، وبيتفعّل على طول زي ما لو دفع فودافون كاش وتمت الموافقة عليه.',
+    'اشترك الطالب في كورس مدفوع من هنا — بنفس الباقات والأسعار اللي شايفها في صفحة الكورس، وبيتفعّل على طول زي ما لو دفع إنستاباي وتمت الموافقة عليه.',
   subscriptionsEmpty: 'الطالب ده مالوش أي اشتراك مدفوع لسه.',
   noPricedCourses: 'مفيش كورسات مدفوعة أصلاً.',
   subscribeButton: 'اشتراك جديد',
@@ -934,6 +1592,66 @@ const admin = {
     'الطالب مش هيقدر يفتح الكورس ده تاني لحد ما يشترك من جديد. الفلوس اللي اتدفعت مش بترجع من هنا — ده بس بيقفل الوصول.',
   cancelSubscriptionConfirm: 'إلغاء الاشتراك',
   cancelSubscriptionFailed: 'مقدرناش نلغي الاشتراك — نحاول تاني',
+
+  /* ── سجل الحساب ──────────────────────────────────────────────────────
+   *
+   * «عايز في بروفايل الشخص اللي اتعمل، أبقى عارف كل حاجة: أنا عملته ولا هو
+   * اشترك؟» — the panel that answers it, and the reason it is worded around
+   * WHO rather than around what.
+   *
+   * The two panels above it both hide hand-issued access (`source: 'purchase'`
+   * filters, see `StudentHistoryService`), so «مافيش اشتراكات» on this page
+   * has never meant «مادفعش» — it meant «مادفعش من خلال الموقع». This is
+   * where that difference becomes readable.
+   */
+  /** The list filter — «مين اللي مسجّلهم مجاني؟». */
+  filterStream: 'عربي / لغات',
+  /** «مش متسجّل» is a real bucket, not an absence: the onboarding question
+   *  postdates a lot of these profiles, and calling them عربي would be a guess
+   *  the screen has no business making. */
+  streamFilterLabels: {
+    general: 'عربي',
+    languages: 'لغات',
+    unset: 'مش متسجّل',
+  },
+  filterAccess: 'طريقة الدخول',
+  accessFilterLabels: {
+    hand_opened: 'اتفتح بالإيد',
+    comped: 'اتسجّل مجاني',
+    paid: 'مدفوع',
+  },
+
+  historyTitle: 'سجل الحساب',
+  historyLead: 'كل اللي حصل في الحساب ده بالترتيب، ومين اللي عمله.',
+  historyEmpty: 'مافيش حاجة اتسجلت على الحساب ده لسه.',
+  /** `{name}` — the admin who did it. Absent when the student did it themselves. */
+  historyBy: 'بواسطة {name}',
+  historyByStudent: 'الطالب بنفسه',
+  /** The one distinction the whole panel exists to draw. */
+  historySourceAdmin: 'اتفتح بالإيد',
+  historySourcePurchase: 'اشتراك مدفوع',
+  historySourceAutoFree: 'تلقائي (كورسات مفتوحة)',
+  /** ⚠️ A grant with no `validUntil` is spelled out, never left blank — an
+   *  empty cell reads as "unknown", and this one means "forever". */
+  historyNoExpiry: 'مبينتهيش',
+  /** `{date}` */
+  historyUntil: 'لحد {date}',
+  historyFree: 'مجاني',
+  historyKinds: {
+    account_created: 'سجّل في المنصة',
+    grant_created: 'اتفتح له كورس',
+    grant_revoked: 'اتقفل عنه الكورس',
+    payment_submitted: 'بعت تحويل اشتراك',
+    payment_approved: 'الاشتراك اتقبل',
+    payment_rejected: 'الاشتراك اترفض',
+    book_order_placed: 'طلب كتاب',
+    book_order_paid: 'دفع الكتاب',
+    book_order_shipped: 'الكتاب اتشحن',
+    book_order_delivered: 'الكتاب اتسلّم',
+    book_order_rejected: 'طلب الكتاب اترفض',
+    banned: 'الحساب اتحظر',
+    unbanned: 'الحظر اترفع',
+  },
 
     backToList: 'رجوع لقائمة الطلبة',
     profileSection: 'البيانات الشخصية',
@@ -1114,7 +1832,14 @@ const admin = {
     bulkDeleteReasonMissing: 'اتمسح قبل كده',
   },
   payments: {
-    eyebrow: 'فودافون كاش',
+    /* ── الفرز والفلترة ──────────────────────────────────────────────── */
+    filterStatusLabel: 'الحالة',
+    filterSortLabel: 'الترتيب',
+    sortOldest: 'الأقدم الأول',
+    sortNewest: 'الأحدث الأول',
+    sortAmountDesc: 'الأغلى الأول',
+    sortAmountAsc: 'الأرخص الأول',
+    eyebrow: 'إنستاباي',
     title: 'المدفوعات',
     subtitle: 'طلبات اشتراك الطلبة في الكورسات المدفوعة، بانتظار المراجعة.',
     filterPending: 'قيد المراجعة',
@@ -1172,14 +1897,201 @@ const admin = {
      *  on `PaymentSubmission.isFree`. */
     freeBadge: 'مجاني',
   },
+  /**
+   * «التحويلات الواردة» — the ledger of money that actually landed, read off
+   * the Android handset that receives the InstaPay notifications.
+   *
+   * A screen beside the review queue rather than a section inside it: the
+   * queue answers "who is asking", this answers "what arrived". Most of the
+   * time the two are joined by the sender's InstaPay address with nobody
+   * reading either; what is left for a human is the residue — an address the
+   * platform has not learned yet, and money nothing explains.
+   */
+  transfers: {
+    eyebrow: 'الفلوس',
+    title: 'التحويلات الواردة',
+    subtitle: 'اللي وصل فعلاً على إنستاباي، ومين اتفتحله كورس بيه.',
+    filterStatusLabel: 'اعرض',
+    /** The default, and the only slice that needs a decision. */
+    filterUnmatched: 'محتاجة مراجعة',
+    filterMatched: 'اتطابقت',
+    filterDismissed: 'اتقفلت',
+    filterAll: 'الكل',
+    empty: 'مفيش تحويلات هنا',
+    emptyHint:
+      'التحويلات بتوصل هنا لوحدها من تليفون الأندرويد. لو لسه مش متظبط، الصق نص الإشعار في الخانة تحت.',
+    /* ── one row ────────────────────────────────────────────────────────── */
+    /** Where the row came from. `manual` covers both the paste box and a row
+     *  typed in by hand — from the ledger's point of view they are the same
+     *  thing: a human put it there. */
+    sourceNotification: 'إشعار إنستاباي',
+    sourceSms: 'رسالة البنك',
+    sourceManual: 'مكتوبة بالإيد',
+    /** A line that was recognisably a transfer but did not parse — kept on
+     *  purpose, because silence about money that arrived is the one outcome
+     *  worth engineering against. */
+    unreadable: 'مش مقروء',
+    unreadableHint: 'وصل إشعار بس مقدرناش نقرا المبلغ منه — راجعه بنفسك.',
+    /** `{student}` and `{course}` — what this transfer opened. */
+    matchedTo: 'فتح {course} لـ{student}',
+    /** `{student}` — a printed book paid for over the same InstaPay account.
+     *  «الكتب» settle through this ledger exactly like a subscription. */
+    matchedBook: 'دفع طلب كتاب لـ{student}',
+    /** The same, for a guest checkout that has no account behind it. */
+    matchedBookGuest: 'دفع طلب كتاب',
+    /** An address the platform already knows, whose owner has nothing
+     *  outstanding — money from a student who is not waiting on anything. */
+    knownSenderHint: 'التحويل من {student}، بس مفيش عنده طلب مستني.',
+    /** The first payment from an address nobody has claimed yet. Approving the
+     *  student's own request is what teaches the platform this address. */
+    unknownSenderHint: 'أول مرة نشوف العنوان ده. وافق على طلب الطالب وهنربطه بيه لوحدنا.',
+    /** An `sms` row: real money, but the bank names no sender. */
+    noSenderHint: 'رسالة البنك مبتقولش مين حوّل — للتأكيد بس.',
+    dismiss: 'اقفلها',
+    dismissedBadge: 'اتقفلت',
+    actionFailed: 'مقدرناش نعمل ده دلوقتي، جرّب تاني.',
+    /* ── the paste box ──────────────────────────────────────────────────── */
+    pasteTitle: 'الصق نص الإشعارات',
+    pasteHint:
+      'لو تليفون الأندرويد مش شغّال، الصق نص إشعار إنستاباي هنا — أو النص كله مرة واحدة، وكل اللي فيه هيتقرا.',
+    pastePlaceholder: 'لقد استلمت 250.00 جنيه من someone@instapay',
+    pasteSubmit: 'اقرا التحويلات',
+    /** `{read}` `{created}` `{matched}` `{duplicates}` `{unreadable}` — what
+     *  one paste did. Every number is there because each one answers a
+     *  different question the admin will ask when the total looks wrong. */
+    pasteResult:
+      'اتقرا {read} · جديد {created} · فتح كورسات {matched} · متكرر {duplicates} · مش مقروء {unreadable}',
+  },
   finance: {
-    eyebrow: 'الإيرادات',
+    eyebrow: 'الحسابات',
     title: 'الاشتراكات والإيرادات',
     subtitle: 'مين دفع، قد إيه، واشتراكه هيخلص إمتى.',
+    /* ── the three tabs ─────────────────────────────────────────────────── */
+    tabOverview: 'النظرة العامة',
+    tabSubscriptions: 'المشتركين',
+    tabExpenses: 'المصروفات',
+    /* ── «النظرة العامة» ────────────────────────────────────────────────── */
+    overviewTitle: 'النظرة العامة',
+    overviewSubtitle: 'دخل كام، صرف كام، وفضل كام.',
+    /** «حمّل التقرير» — the P&L as a file. Named for the act and not for the
+     *  format: he asks for «التقرير», and «XLSX» is a word that means nothing
+     *  on the screen he is looking at. */
+    downloadReport: 'حمّل التقرير',
+    downloadReportHint: 'ملف إكسل فيه الملخص والمصروفات وشهر بشهر.',
+    tileRevenueTotal: 'إجمالي الإيرادات',
+    tileSubscriptionRevenue: 'إيراد الاشتراكات',
+    tileExpensesTotal: 'إجمالي المصروفات',
+    /** May be negative, and the tile says so rather than clamping at zero. */
+    tileNet: 'صافي الربح',
+    tileBookProfit: 'مكسب الكتب',
+
+    /* ── «رجع لهم كام» ──────────────────────────────────────────────────── */
+    /** All-time refunds. «رجعت» and not «مرتجعات»: he says «رجعتله فلوسه»,
+     *  and the tile should read the way the act is described. */
+    tileRefunds: 'فلوس رجعت',
+    /** The two per-stream nets he asked for by name — «الاشتراكات هتقولي
+     *  حسابها كذا، والكتب حسابها الفعلي». «صافي» rather than «إيراد» is the
+     *  whole distinction: what came in, minus what went back out. */
+    tileSubscriptionNet: 'صافي الاشتراكات',
+    tileBookNet: 'صافي الكتب',
+    /** Under the two nets, only while there is anything to explain — the
+     *  difference between the gross above and the net beside it. */
+    netAfterRefunds: 'بعد خصم {refunds} رجعت',
+    /**
+     * The shipping pass-through, said out loud so «مكسب الكتب» does not have
+     * to be defended. The fee is collected from the student and handed to the
+     * courier; it was being counted as book profit, which credited the owner
+     * with the courier's money on every single order.
+     */
+    shippingPassThrough: 'الشحن {amount} — بيتجمع من الطالب ويروح للمندوب، مش محسوب مكسب',
+    /** Over the profit breakdown, so the subtraction is shown rather than
+     *  asserted: he can check the arithmetic instead of trusting it. */
+    bookProfitBreakdown: 'مبيعات الكتب {items} − تكلفة النسخ {cost} = {profit}',
+    /** The «صافي الربح» tile's own one-liner. The formula is spelled out
+     *  because three tiles above it are inputs to it and the reader should not
+     *  have to guess which. */
+    netExplained: 'كل اللي دخل − اللي رجع − المصروفات',
+    /**
+     * ⚠️ Why «مكسب الكتب» and «صافي الربح» do not add up, said before he
+     * notices and asks. Print runs are already inside المصروفات as the month
+     * they were paid; the per-copy cost is a different view of the same paper.
+     * Subtracting both would count every run twice.
+     */
+    bookProfitNote:
+      'ملحوظة: مكسب الكتب بيحسب تكلفة النسخة، والمطبعة أصلاً متسجّلة في المصروفات — عشان كده الرقمين مش بيتجمعوا على بعض.',
+    /** The heading over the per-category breakdown. */
+    expensesByCategory: 'المصروفات راحت فين',
+    /** Shown under «مكسب الكتب» when some sold titles have no unit cost — the
+     *  margin is understated by exactly those, and saying so is the difference
+     *  between a figure and a guess. */
+    bookCostUnknown: '{n} سطر مالوش تكلفة نسخة — المكسب محسوب من غيرهم',
+    /** The way OUT of the sentence above — it named a problem and pointed at
+     *  nothing, so the fix («تكلفة النسخة» on the book) was a screen nobody
+     *  knew to look for. */
+    bookCostFix: 'حدّد تكلفة النسخة',
+    monthlyTitle: 'شهر بشهر',
+    monthColumn: 'الشهر',
+    monthSubscriptions: 'اشتراكات',
+    monthBooks: 'كتب',
+    monthExpenses: 'مصروفات',
+    /** The month's own refunds — landing on the date the money went back,
+     *  never on the date of the sale it reverses. */
+    monthRefunds: 'رجعت',
+    monthNet: 'الصافي',
+    monthlyEmpty: 'لسه مفيش حركة',
     /** Summary tiles. */
     tileRevenue: 'إجمالي الإيرادات',
+    /**
+     * «المحدد» — the strip above the table, describing the rows currently on
+     * screen. Its own vocabulary, deliberately NOT reusing the tile labels: the
+     * tiles are the platform's totals and this is the selection's, and one word
+     * doing both jobs is how a reader stops knowing which number they are
+     * looking at.
+     */
+    selectionTitle: 'المحدد دلوقتي',
+    /** Shown only when NO filter is on, so «المحدد» does not read as a
+     *  narrowing when it is showing everything. */
+    selectionAll: 'كل الاشتراكات',
+    /** `{n}` — rows in the table. */
+    selectionSubscriptions: '{n} اشتراك',
+    /**
+     * `{n}` — DISTINCT students behind those rows, which is what «كام واحد
+     * مشترك» actually asks. Shown beside the subscription count rather than
+     * instead of it, because one person can hold two subscriptions and hiding
+     * either number invites the wrong one being quoted.
+     */
+    selectionStudents: '{n} طالب',
+    /** `{amount}` — sum of the LAST payment behind each row, which is the «آخر
+     *  دفعة» column added up. NOT the all-time revenue tile, and the wording
+     *  says so on purpose. */
+    selectionRevenue: 'مجموع آخر دفعة {amount} ج',
+    /** `{n}` — comped subscriptions in the selection. */
+    selectionFree: '{n} مجاني',
+    /** `{n}` — the rest. */
+    selectionPaid: '{n} مدفوع',
+    /** The per-course breakdown — the honest answer to «كام عربي وكام لغات»,
+     *  because the streams are separate courses with «(عربي)» / «(لغات)» in
+     *  their own titles. */
+    selectionByCourse: 'التوزيع على الكورسات',
+    /** `{subs}` `{students}` `{free}` — one course's line. */
+    selectionCourseLine: '{subs} اشتراك · {students} طالب · {free} مجاني',
+    /**
+     * ⚠️ Shown when EVERY course in the selection carries both stream flags —
+     * which is the case for 580 of 582 courses on the dev database. The «عربي /
+     * لغات» dropdown then returns the identical set whichever way it is set,
+     * and saying so is better than printing two equal numbers as if they were
+     * an answer.
+     */
+    selectionStreamsIdentical:
+      'كل الكورسات دي متسجّلة «عام ولغات» مع بعض، فاختيار عربي أو لغات مش هيغيّر حاجة. اقرا التوزيع على الكورسات تحت.',
     tileActive: 'اشتراكات فعالة',
     tileExpiringSoon: 'هتخلص خلال أسبوع',
+    /** Labels ABOVE each dropdown. A select whose only label is its own first
+     *  option loses that label the moment anything else is chosen. */
+    filterStatusLabel: 'الحالة',
+    filterPlanLabel: 'الباقة',
+    filterStreamLabel: 'عربي / لغات',
+    filterSortLabel: 'الترتيب',
     filterAll: 'الكل',
     filterActive: 'فعّال',
     filterExpiringSoon: 'هيخلص قريب',
@@ -1276,6 +2188,20 @@ const admin = {
      *  it student-visible on its own. */
     cancelShowToStudentLabel: 'يظهر السبب ده للطالب في إشعاراته',
     cancelConfirm: 'تأكيد الإلغاء',
+    /* ── the money half of cancelling ─────────────────────────────────── */
+    /** The switch. Phrased as the question he actually asks himself, so it is
+     *  obvious that leaving it off is a real answer and not a skipped field. */
+    cancelRefundLabel: 'رجعتله فلوسه؟',
+    /** Why it is a separate switch — the distinction the whole feature rests
+     *  on. Without this the reader assumes cancelling refunds by itself. */
+    cancelRefundHint:
+      'سيبه مقفول لو الفلوس فضلت معاك. اللي بيتقفل عشان غش مثلاً، فلوسه ما بترجعش وما بتتخصمش من الحسابات.',
+    cancelRefundAmountLabel: 'رجعتله كام؟ (بالجنيه)',
+    /** `{max}` — the cap, shown while he types instead of as a 400 after. */
+    cancelRefundMax: 'أقصى مبلغ {max} ج',
+    /** Under the amount column when money went back. `{amount}` — the total
+     *  refunded against this subscription, across every payment behind it. */
+    rowRefunded: 'رجع منها {amount}',
     cancelBack: 'رجوع',
     cancelCancelling: 'بيتلغي…',
     cancelFailed: 'مقدرناش نلغي — حاول تاني',
@@ -1290,6 +2216,58 @@ const admin = {
     tileBookRevenue: 'إجمالي إيرادات الكتب',
     tileBookPaidCount: 'كتب مدفوعة',
   },
+
+  /** المصروفات — `/admin/finance/expenses`. */
+  expenses: {
+    eyebrow: 'الحسابات',
+    title: 'المصروفات',
+    subtitle: 'كل حاجة اتدفعت — تصوير، مطبعة، أدوات، وأي حاجة تانية.',
+    add: 'أضف مصروف',
+    edit: 'تعديل',
+    remove: 'حذف',
+    removeConfirm: 'تمسح المصروف ده؟ مش هيرجع تاني.',
+    empty: 'مفيش مصروفات مسجّلة',
+    emptyHint: 'أول ما تسجّل حاجة اتدفعت، هتظهر هنا وتتحسب في الصافي.',
+    columnDate: 'التاريخ',
+    columnCategory: 'النوع',
+    columnTitle: 'الوصف',
+    columnBook: 'الكتاب',
+    columnAmount: 'المبلغ',
+    /* ── the form ───────────────────────────────────────────────────────── */
+    formTitle: 'مصروف جديد',
+    formTitleEdit: 'تعديل المصروف',
+    fieldDate: 'اتدفع في',
+    /** The month the money LEFT, not the day it was typed in — see the column
+     *  note in schema.prisma. Said out loud because entering last month's
+     *  invoice today is the case that gets it wrong. */
+    fieldDateHint: 'الشهر اللي الفلوس خرجت فيه، مش النهاردة.',
+    fieldCategory: 'النوع',
+    fieldAmount: 'المبلغ بالجنيه',
+    fieldTitle: 'الوصف',
+    fieldTitlePlaceholder: 'يوم تصوير استوديو',
+    fieldNote: 'ملاحظات (اختياري)',
+    fieldBook: 'الكتاب (اختياري)',
+    fieldBookNone: 'مش مربوط بكتاب',
+    fieldBookHint: 'لو ده طبعة كتاب، اختاره واكتب اشتريت كام نسخة.',
+    fieldQuantity: 'عدد النسخ',
+    filterMonth: 'الشهر',
+    filterMonthAll: 'كل الشهور',
+    filterCategoryAll: 'كل الأنواع',
+    saveFailed: 'المصروف ماتسجّلش',
+    removeFailed: 'الحذف مانفعش',
+  },
+
+  /** What a spend was for. One table, read by the form's select, the list's
+   *  cells and the overview's breakdown — three copies would drift. */
+  expenseCategory: {
+    filming: 'تصوير',
+    printing: 'مطبعة',
+    equipment: 'أدوات ومعدات',
+    marketing: 'إعلانات',
+    staff: 'أجور',
+    services: 'خدمات واشتراكات',
+    other: 'حاجات تانية',
+  },
   /**
    * الكتاب الورقي — `/admin/books`. `filterAddressOnly` and `filterPaid` are
    * the two "real" lists Ayman asked for by name, kept on separate tabs
@@ -1302,10 +2280,67 @@ const admin = {
     subtitle: 'طلبات الطلبة لاستلام كتاب الكورس في البيت.',
     filterPaid: 'مدفوعة',
     filterAddressOnly: 'بدأت ومكملتش',
+    /** «راح للمطبعة» — الورق مشي للمطبعة، والكرتونة لسه ما مشيتش. */
+    filterPrinting: 'في المطبعة',
     filterShipped: 'اتشحنت',
+    filterDelivered: 'وصلت',
+    filterRejected: 'مرفوضة',
+    /** Not a status — a view. See `AdminBookOrderFilterSchema`. */
+    filterDeleted: 'المحذوفة',
     filterAll: 'الكل',
     empty: 'مفيش طلبات دلوقتي',
     emptyHint: 'أول ما طالب يطلب كتاب، هيظهر هنا.',
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * «عشان أعرف أوصل» — one box for the name, the number and المكان.
+     * The label names all three because a box labelled «بحث» over a shipping
+     * queue reads as searching book titles, and the admin who wants the
+     * caller on the phone would not think to type a street into it.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    searchLabel: 'دوّر بالاسم أو الموبايل أو العنوان',
+    searchPlaceholder: 'اسم، رقم موبايل، محافظة أو شارع…',
+    searchSubmit: 'دوّر',
+    /* ── الفرز والفلترة ────────────────────────────────────────────────
+     * Dropdowns, not a chip row — asked for by name: «كله بقى يبقى زي دروب،
+     * بضغط عليها ينزللي منها تحت كده حاجة، زي أي ويب سايت». */
+    sortLabel: 'الترتيب',
+    sortOldest: 'الأقدم الأول',
+    sortNewest: 'الأحدث الأول',
+    sortAmountDesc: 'الأغلى الأول',
+    sortAmountAsc: 'الأرخص الأول',
+    sortNameAsc: 'بالاسم',
+    sortGovernorate: 'بالمحافظة',
+    streamLabel: 'عربي / لغات',
+    streamAll: 'الكل',
+    streamGeneral: 'عربي',
+    streamLanguages: 'لغات',
+    yearLabel: 'الصف',
+    yearAll: 'كل الصفوف',
+    /** `{year}` — «أولى» / «تانية» / «تالتة». */
+    yearOption: '{year} بكالوريا',
+    /** The pager. It had none at all, so only the oldest page of a tab was
+     *  ever reachable — on the screen whose job is shipping today's parcels. */
+    pagerPrevious: 'السابق',
+    pagerNext: 'التالي',
+    pagerOf: 'من',
+    /** Beside the pager — «٤٦ طلب». */
+    resultCount: '{n} طلب',
+    searchClear: 'امسح البحث',
+    /** `{n}` — how many orders matched, in the OPEN tab only. Shown instead
+     *  of nothing so a short list reads as "that's all there is" rather than
+     *  as a list that got cut off. */
+    searchResults: '{n} طلب مطابق للبحث',
+    /** The screen loads 50 orders at a time and has no pager. Saying «١٢٠
+     *  مطابق» over a list of 50 would read as a list that is all there —
+     *  this says how many are actually on screen instead. */
+    searchResultsCapped: 'أول {shown} من {n} طلب مطابق — ضيّق البحث شوية',
+    /** The empty state when a search matched nothing IN THIS TAB — the order
+     *  is very often sitting one tab away («اتشحنت» after it shipped), so the
+     *  hint points at «الكل» instead of suggesting the search failed. */
+    searchEmpty: 'مفيش طلب مطابق لـ «{q}»',
+    searchEmptyHint: 'جرّب تدوّر في «الكل» — الطلب ممكن يكون في تبويب تاني، أو جرّب جزء من الاسم أو آخر أرقام الموبايل.',
+    searchEmptyAll: 'دوّر في الكل',
     columnBook: 'الكتاب',
     columnCourse: 'الكورس',
     columnStudent: 'الطالب',
@@ -1315,7 +2350,10 @@ const admin = {
     columnDate: 'التاريخ',
     statusAddressOnly: 'بدأ ومكملش الدفع',
     statusPaid: 'مدفوعة، لسه ماتشحنتش',
+    statusPrinting: 'في المطبعة، لسه ماتشحنتش',
     statusShipped: 'اتشحنت',
+    statusDelivered: 'وصلت للطالب',
+    statusRejected: 'مرفوضة',
     /** Shown beside the name on a GUEST order — no account is linked, so
      *  there is nowhere for the name to link to. See `AdminBookOrderRow`'s
      *  own note on why `userId`/`studentName` are nullable now. */
@@ -1333,13 +2371,285 @@ const admin = {
     whatsapp: 'واتساب',
     ship: 'اتشحن',
     shipping: 'بتسجّل…',
+    /* ── الشحن بالجملة ─────────────────────────────────────────────────
+     *
+     * «طلب ١٠ كتب النهاردة … أقدر أضغط على شحن مرة واحدة». The bar only
+     * appears once something is selected, so none of this is ever on screen
+     * during ordinary browsing.
+     */
+    /** The packing-list range — «من يوم كام لـ يوم كام». Both optional;
+     *  empty means the whole tab, exactly as before. */
+    exportFrom: 'من',
+    exportTo: 'لـ',
+
+    /**
+     * «حدّد اللي في المدى ده» — tick every row the export's own dates cover.
+     *
+     * `{n}` is in the LABEL, not only in a tooltip: it is the number the admin
+     * checks against the sheet in his hand before he presses ship, and a button
+     * that just says «حدّد المدى» would move that check to after the batch ran.
+     */
+    bulkSelectRange: 'حدّد الكل ({n})',
+    /**
+     * With dates set, the count is NOT known before asking: the screen holds
+     * one page and the range can span many. Naming the page's number here is
+     * exactly the bug this button had — «(50)» beside a badge saying «52» —
+     * so it names the ACTION instead, and the bar that appears says how many
+     * were actually selected.
+     */
+    bulkSelectRangeDates: 'حدّد اللي في المدى',
+    bulkSelectRangeWorking: 'بيحدّد…',
+    bulkSelectRangeEmpty: 'مفيش طلبات في المدى ده.',
+    bulkSelectRangeHint:
+      'بيحدّد نفس الطلبات اللي في ملف التصدير بالظبط — كل اللستة مش الصفحة اللي قدامك بس.',
+    bulkSelect: 'حدّد',
+    /** The checkbox's accessible name — «حدّد {name}» — because a column of
+     *  identical «حدّد» labels tells a screen reader nothing. `{name}` */
+    bulkSelectOne: 'حدّد طلب {name}',
+    /** `{count}` */
+    bulkSelected: 'محدّد {count}',
+    bulkShipButton: 'اشحن المحدد',
+    bulkDeliverButton: 'اتسلّم',
+    bulkClear: 'إلغاء التحديد',
+    bulkWorking: 'بيتنفّذ…',
+    /** `{count}` — spelled out because the batch also SENDS messages, which
+     *  is not undoable. */
+    bulkShipConfirm: 'هيتشحن {count} طلب، وكل طالب فيهم هتوصله رسالة على المنصة إن كتابه اتشحن. تمام؟',
+    /** The opt-in variant — WhatsApp leaves the platform, so it says so. */
+    bulkShipConfirmWhatsapp:
+      'هيتشحن {count} طلب، وكل طالب فيهم هتوصله رسالة على المنصة **وعلى واتساب**. تمام؟',
+    /** ⚠️ Off by default — the platform message is the notice; this is a
+     *  second copy. See `BulkBookOrderActionSchema.whatsapp`. */
+    bulkAlsoWhatsapp: 'ابعت واتساب كمان',
+    bulkDeliverConfirm: 'هتعلّم {count} طلب إنهم اتسلّموا. تمام؟',
+    /** `{count}` */
+    bulkShipped: 'اتشحن {count}',
+    /** ⚠️ NAMES, not a count — see `report()` in `bulk-ship.tsx` for why.
+     *  `{names}` */
+    bulkSkipped: 'اتخطّينا: {names}',
+
     shipConfirm: 'نسجّل إن الطلب ده اتشحن؟',
     actionFailed: 'حصل خطأ، حاول تاني',
     alreadyShipped: 'الطلب ده اتشحن قبل كده',
-    exportHint: 'بيصدّر كل الطلبات في التبويب المفتوح دلوقتي — جاهز يتبعت لشركة الشحن والمطبعة.',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * «راح للمطبعة» — الخطوة اللي كانت ناقصة بين «مدفوعة» و«اتشحنت».
+     *
+     * الفلو بالظبط: يحدّد الطلبات، ينزّل الـPDF، يوديه للمطبعة، يضغط
+     * «راح للمطبعة». ولما الكتب ترجع ويتأكد إنها هتتشحن فعلاً يضغط «اتشحن».
+     * الطالب ما بيتبعتلهوش أي حاجة في الخطوة دي — الورق بيتطبع، والكلام
+     * الوحيد اللي بيتقال للطالب هو إن الكتاب خرج ليه.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    markPrinting: 'راح للمطبعة',
+    markPrintingWorking: 'بتسجّل…',
+    markPrintingConfirm: 'نسجّل إن الطلب ده راح للمطبعة؟ الطالب مش هيوصله أي إشعار.',
+    alreadyPrinting: 'الطلب ده راح للمطبعة قبل كده',
+    /** الزرار اللي في بار التحديد. «ابعت» مش «اطبع» — ده مش أمر طباعة، ده
+     *  تسجيل إن الورق مشي. */
+    bulkPrintButton: 'ابعت للمطبعة',
+    /** `{count}` — من غير كلام عن إشعارات، عشان مفيش. */
+    bulkPrintConfirm: 'هتسجّل إن {count} طلب راحوا للمطبعة. مفيش أي رسايل هتتبعت للطلبة. تمام؟',
+    /** `{count}` */
+    bulkPrinted: 'راحوا للمطبعة {count}',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * «لازم أتأكد إنه وصل» — the second half of the courier's job, and the
+     * one the student is actually waiting on. Its own button and not a
+     * second click on «اتشحن», because pressing it SENDS the student a
+     * notification: it is a statement about the world, not a tidy-up.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    deliver: 'وصل',
+    delivering: 'بتسجّل…',
+    deliverConfirm: 'نسجّل إن الكتاب وصل للطالب؟ الطالب هيوصله إشعار إن الطلب اتسلّم.',
+    alreadyDelivered: 'الطلب ده اتسجّل إنه وصل قبل كده',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * الرفض والحذف — حاجتين مختلفتين خالص.
+     *
+     * الرفض قرار الطالب يشوفه: الطلب يفضل في اللستة بحالة «مرفوضة»
+     * والسبب بيوصله. الحذف إداري: الصف بيختفي من كل الشاشات، والسبب
+     * ليك إنت لوحدك. الاتنين محتاجين سبب مكتوب، والاتنين ليهم ديالوج
+     * فيه textarea — مش `window.confirm`، اللي مش بياخد نص.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    reject: 'ارفض الطلب',
+    rejectDialogTitle: 'رفض الطلب',
+    rejectDialogHint: 'الطالب هيشوف السبب ده بنصه، فاكتبه بلغة يفهمها.',
+    rejectReasonLabel: 'سبب الرفض',
+    rejectReasonPlaceholder: 'مثلاً: التحويل ما وصلش، أو العنوان مش واضح',
+    rejectSubmit: 'ارفض',
+    rejectSubmitting: 'بيترفض…',
+    rejectFailed: 'مقدرناش نرفض الطلب — نحاول تاني',
+    rejectedReasonLabel: 'سبب الرفض',
+
+    remove: 'احذف الطلب',
+    removeDialogTitle: 'حذف الطلب',
+    /** Says exactly what "delete" does here, because it does not do what the
+     *  word normally does — and the difference is the whole safety of it. */
+    removeDialogHint:
+      'الطلب هيختفي من اللستة ومن الحسابات ومن ملف الشحن، بس مش هيتمسح من الداتابيز — تقدر ترجّعه من تبويب «المحذوفة».',
+    removeReasonLabel: 'سبب الحذف',
+    removeReasonPlaceholder: 'مثلاً: طلب مكرر، أو اتلغى في التليفون',
+    removeSubmit: 'احذف',
+    removeSubmitting: 'بيتحذف…',
+    removeFailed: 'مقدرناش نحذف الطلب — نحاول تاني',
+    removedReasonLabel: 'سبب الحذف',
+    removedBadge: 'محذوف',
+
+    restore: 'رجّعه',
+    restoring: 'بيترجّع…',
+    restoreConfirm: 'نرجّع الطلب ده للّستة؟',
+    restoreFailed: 'مقدرناش نرجّع الطلب — نحاول تاني',
+
+    /** «أعرف إن الراجل ده طلب كتاب قبل كده ولا لأ» — counted on the phone
+     *  number, because guest checkout means the same person is several
+     *  unlinked rows and the number is the only thing they share. `{n}` is
+     *  how many OTHER live orders that number has. */
+    repeatCustomer: 'طلب قبل كده {n} مرة',
+    /** The `sr-only` sentence beside the sidebar's «الكتب» badge. `{n}` is the
+     *  number of paid orders that have not shipped yet. */
+    unshippedBadgeLabel: '{n} طلب كتاب متشحنش لسه',
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * الأرقام اللي فوق — «كام نسخة، كام كتاب، كام طالب، كام عربي، كام لغات».
+     *
+     * كل رقم فيهم على التبويب المفتوح وبكل الفلاتر اللي ظاهرة، مش على
+     * الصفحة اللي قدامك: الليستة خمسين في الصفحة، وعدّ اللي على الشاشة
+     * بيجاوب على سؤال تاني خالص.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    overviewTitle: 'الأرقام',
+    overviewOrders: 'طلب',
+    /** «طالب» بالمعنى الحرفي — ناس، متعدودين بالموبايل مش بالحساب، لأن معظم
+     *  الطلبات من غير حساب أصلاً. */
+    overviewStudents: 'طالب',
+    overviewBooks: 'كتاب',
+    overviewCopies: 'نسخة',
+    overviewGeneral: 'نسخة عربي',
+    overviewLanguages: 'نسخة لغات',
+    /** تحت الأرقام — بيقول إنها على الفلاتر الظاهرة، مش على كل الطلبات. */
+    overviewScope: 'على التبويب والفلاتر اللي ظاهرة دلوقتي',
+    /** التحذير اللي لازم يتقال مرة واحدة: أرقام السنين ما بتجمعش على الإجمالي،
+     *  لأن الطلب اللي فيه كتاب أولى وكتاب تانية محسوب في الاتنين. */
+    overviewYearsNote: 'الطلب اللي فيه كتاب أولى وكتاب تانية محسوب في الاتنين، فأرقام السنين ما بتجمعش على الإجمالي.',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * تقسيمة الصفوف — «جزء يمين سنة أولى وجزء شمال سنة تانية».
+     *
+     * القسمة بتبان لوحدها لما الفلتر على «كل الصفوف»؛ لو اختار صف بعينه
+     * فالشاشة كلها بقت الصف ده وما ينفعش تتقسم تاني.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    /** `{year}` — «أولى» / «تانية» / «تالتة». */
+    yearSectionTitle: 'سنة {year}',
+    yearSectionNone: 'من غير صف',
+    /** تحت عنوان القسم — `{orders}` طلب في الصف ده كله (مش في الصفحة دي). */
+    yearSectionCount: '{orders} طلب · {books} كتاب · {copies} نسخة',
+    yearSectionStreams: 'عربي {general} · لغات {languages}',
+    /** لما الصف ده مالوش طلبات في الصفحة اللي قدامك بس عنده طلبات تانية. */
+    yearSectionEmptyPage: 'مفيش طلبات من الصف ده في الصفحة دي.',
+    yearSectionEmpty: 'مفيش طلبات في الصف ده.',
+    /** على الطلب اللي فيه كتب من أكتر من صف — بيتعرض مرة واحدة، تحت أصغر صف
+     *  فيه، والشارة دي بتقول إن فيه حاجة تانية جوّاه. */
+    multiYearBadge: 'فيه كتب من أكتر من صف',
+    /** زراير التحميل جوّه قسم الصف — «أحمّل PDF بتاع سنة أولى لوحده». */
+    yearSectionDownloads: 'تحميل الصف ده',
+
+    exportHint:
+      'بيصدّر الطلبات اللي ظاهرة قدامك دلوقتي بالظبط — نفس التبويب ونفس الفلاتر — جاهز يتبعت لشركة الشحن والمطبعة.',
     /** `{tab}` — the currently open tab's own label, so the button names
      *  exactly what it will export rather than a hidden default. */
     exportButton: 'تصدير: {tab}',
+
+    /* ── الـ PDF ───────────────────────────────────────────────────────────
+       «وانا بعمل تحميل يتعمل PDF أحسن بشكل كويس كده». Same list as the Excel
+       file, متصفّحة على A4 وجاهزة للطباعة — the browser's own print dialog is
+       what writes the file, which is the only way Arabic comes out joined and
+       in the right direction. */
+    exportPdf: 'تحميل PDF',
+    exportPdfHint: 'نفس اللستة دي مظبوطة على A4 — تفتح وتطبع أو تحفظها PDF.',
+
+    /* ── كروت الشحن ───────────────────────────────────────────────────────── */
+    /** «هخده نص بس الكرت وتحطه على الشحنة» — كرت لكل طرد، أربعة في الورقة،
+     *  بيتلزقوا على الكرتونة. غير لستة الشحن: دي ورقة المكتب، ودي ورقة
+     *  الصندوق. */
+    labelsTitle: 'كروت الشحن',
+    labelsButton: 'كروت الشحن (PDF)',
+    labelsHint: 'كرت لكل طرد — الاسم والعنوان والموبايلين والطبعة والعدد، جاهز يتلزق على الشحنة.',
+    labelsCount: '{n} كرت',
+    /** العناوين الصغيرة جوّه الكرت. */
+    labelsTo: 'الطرد لـ',
+    labelsPhone: 'موبايل',
+    labelsAltPhone: 'احتياطي',
+    labelsAddress: 'العنوان',
+    labelsCopies: 'نسخة',
+    /** الطبعة اللي في الصندوق — «كتاب عربي» / «كتاب لغات». الاسم الكامل
+     *  للكتاب بيلفّ على تلات سطور في الكرت، واللي بيملا الصندوق مش بيعمل
+     *  حاجة غير إنه يبص على آخر كلمة فيه. الاسم فاضل في لستة الشحن. */
+    labelsStream: 'كتاب {stream}',
+    /**
+     * When no edition can be worked out at all.
+     *
+     * A card that simply prints NOTHING in this slot is the worst of the three
+     * outcomes: the person filling the box cannot tell «مفيش طبعة محددة» from
+     * «الكرت باظ» from «نسيت تبص», so they guess. It happens for a real
+     * reason — an order typed over the phone can carry a hand-written title
+     * with no catalogue book behind it (`bookId: null`), and then there is no
+     * edition to read — so the honest answer is to say so on the card and let
+     * the packer check, not to leave a blank or invent «عربي».
+     */
+    labelsStreamUnknown: 'الطبعة مش محددة — راجعها',
+
+    /* ── صفحة الطباعة ─────────────────────────────────────────────────────── */
+    printTitle: 'طلبات الكتب — لستة الشحن',
+    printButton: 'اطبع / احفظ PDF',
+    printBack: 'رجوع للطلبات',
+    /** The counts above the table — «الطلبات» is the ONE number that can be
+     *  compared with the screen, because the screen counts orders. */
+    printOrders: '{n} طلب',
+    printBooks: '{n} كتاب',
+    printCopies: '{n} نسخة',
+    /** The three cards at the top — the number alone, with the word under it.
+     *  «الطلبات» is the one that can be compared with the screen. */
+    printOrdersLabel: 'طلبات',
+    printBooksLabel: 'كتب',
+    printCopiesLabel: 'نسخ',
+    printNoStream: 'من غير طبعة محددة',
+    printNoYear: 'من غير صف',
+    printYear: 'الصف {n}',
+    /** رأس البلوك اللي بيقسّم الورقة بالصف الأول — «كام كتاب سنة أولى وكام
+     *  سنة تانية» — جنب بعض على نفس السطر، قبل تفاصيل الطبعات. */
+    printYearsTitle: 'الصفوف',
+    /** `{year}` — «أولى» / «تانية» / «تالتة». نفس الكلمة اللي على الشاشة. */
+    printYearName: 'سنة {year}',
+    printYearsNone: 'من غير صف',
+    printGeneratedAt: 'اتطبعت في {date}',
+    printRange: 'من {from} لـ {to}',
+    printFrom: 'من {from}',
+    printTo: 'لغاية {to}',
+    printSearch: 'بحث: {q}',
+    printEmpty: 'مفيش طلبات في اللستة دي.',
+    printColumns: {
+      seq: '#',
+      bookTitle: 'اسم الكتاب',
+      quantity: 'العدد',
+      stream: 'عربي / لغات',
+      year: 'الصف',
+      fullName: 'الاسم بالكامل',
+      phone: 'الموبايل',
+      altPhone: 'موبايل تاني',
+      address: 'العنوان',
+      createdAt: 'تاريخ الطلب',
+      /** خانة فاضية الشغّال يعلّم فيها بالقلم لما يحطّ الطرد في الكرتونة —
+       *  لستة من أربعين من غير علامة هي لستة بتتعاد من الأول. */
+      tick: 'اتشحن',
+    },
     /*
      * ════════════════════════════════════════════════════════════════════
      * «أضف طلب كتاب» — an admin entering a customer's order directly,
@@ -1369,6 +2679,29 @@ const admin = {
      *  never admin-typed, same rule the public flow follows. */
     createAmountLabel: 'سعر الكتاب: {amount} ج',
     createPaidLabel: 'مدفوع بالفعل',
+    /** «مجاني» on the create dialog. Phrased as the act, not as a price:
+     *  he is giving a book away, not selling one at zero. */
+    createFreeLabel: 'الكتاب ده مجاني',
+    /** Says the half that is easy to assume wrong — a giveaway is not free to
+     *  the business, and «مكسب الكتب» will show its cost. */
+    createFreeHint: 'مش هيتحسب في الإيرادات، بس تكلفة النسخة هتفضل محسوبة عليك.',
+    /** The badge on a free order's row, and beside its money line. */
+    freeBadge: 'مجاني',
+    /** Shown in the sender-number slot when there is no number, instead of
+     *  leaving the slot out — an absent line reads as a missing feature. */
+    senderPhoneUnpaid: 'لسه مدفعش',
+    /** Recorded by hand: `adminCreate` writes no sender number, because the
+     *  money moved somewhere this platform never saw. */
+    senderPhoneManual: 'اتسجّل يدوي — مفيش تحويل',
+    /** A zero-total order nobody marked «مجاني». Before the free switch existed
+     *  this was the only way to record a giveaway, so these rows are real — and
+     *  indistinguishable from a price left blank. */
+    zeroNotFree: '٠ ج ومش متحدد مجاني',
+    /** The badge IS the button — pressing it answers the question it asks. */
+    markFreeConfirm:
+      'أحدّد الطلب ده مجاني؟ هيروح للطلبات المدفوعة عشان يتشحن عادي، ومش هيتحسب في الإيرادات، وتكلفة النسخة هتفضل محسوبة عليك.',
+    markFreeSaving: 'بنحفظ…',
+    markFreeFailed: 'مقدرناش نحدّده مجاني',
     createPaidHint: 'العميل حوّل بالفعل — الطلب هيتسجل «مدفوعة» على طول، من غير الخطوتين.',
     createAddressOnlyLabel: 'لسه مادفعش',
     /** OPTIONAL, unlike the public payment step's own required field — an
@@ -1380,6 +2713,173 @@ const admin = {
     createSubmitting: 'بيتسجّل…',
     createFailed: 'مقدرناش نسجل الطلب — نحاول تاني',
     createUploadFailed: 'مقدرناش نرفع الصورة — نحاول تاني',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * The two tabs. `/admin/books` is the shipping queue it has always been;
+     * `/admin/books/catalog` is the SHELF — what is on sale. Two screens and
+     * not two halves of one, because they are opened for different reasons:
+     * the queue daily, the catalogue when a title or a price changes.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    tabOrders: 'الطلبات',
+    tabCatalog: 'الكتب',
+
+    /** The order's own lines. `{n}` books, `{copies}` copies in total — the
+     *  two differ the moment somebody orders two of anything, and «كل واحد
+     *  عايز كام كتاب» is the second number. */
+    itemsSummary: '{n} كتاب — {copies} نسخة',
+    /** One line: «كتاب الترم الأول ×٢ — ٥٠٠ ج». */
+    itemLine: '{title} ×{quantity} — {amount} ج',
+    /** The money breakdown on a row. Shown apart from the total because the
+     *  delivery fee is the number people call to ask about. */
+    breakdown: 'الكتب {items} ج · الشحن {shipping} ج · الإجمالي {total} ج',
+    breakdownWithDiscount:
+      'الكتب {items} ج · الشحن {shipping} ج · خصم {discount} ج · الإجمالي {total} ج',
+    adminNoteLabel: 'ملاحظة داخلية',
+    /** Under the note field. The one thing that must be unambiguous about it. */
+    adminNoteHint: 'الطالب مش بيشوف الملاحظة دي.',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * «أعدل الطلب» — the basket, the delivery fee, the discount, the address
+     * and the note, in one form. See `AdminBookOrderPatchSchema`.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    editButton: 'تعديل',
+    editDialogTitle: 'تعديل الطلب',
+    editItemsLabel: 'الكتب',
+    editAddItem: 'ضيف كتاب',
+    editAddCustom: 'ضيف سطر من غير كتالوج',
+    editRemoveItem: 'شيل السطر',
+    editItemTitleLabel: 'اسم الكتاب',
+    editItemPriceLabel: 'سعر النسخة (ج)',
+    editItemQuantityLabel: 'العدد',
+    editShippingLabel: 'الشحن (ج)',
+    /** Says the rule the column encodes, at the field that sets it. */
+    editShippingHint: 'مرة واحدة على الطلب كله. اكتب صفر لو الشحن مجاني.',
+    editDiscountLabel: 'خصم (ج)',
+    editTotalLabel: 'الإجمالي',
+    editSubmit: 'احفظ التعديل',
+    editSubmitting: 'بيتحفظ…',
+    editFailed: 'مقدرناش نحفظ التعديل — نحاول تاني',
+    editNoItems: 'لازم يفضل كتاب واحد على الأقل في الطلب',
+    /** In the «ضيف كتاب» picker, above the catalogue list. */
+    editPickBook: 'اختار من الكتب',
+    editCustomTitle: 'سطر جديد',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * «قسم الكتب» — the catalogue itself.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    catalogTitle: 'الكتب',
+    catalogSubtitle: 'اللي معروض في قسم الكتب — الأسعار والأغلفة والمخزون.',
+    catalogEmpty: 'مفيش كتب في الكتالوج',
+    catalogEmptyHint: 'ضيف أول كتاب، وهيظهر على طول في /books.',
+    catalogNew: 'كتاب جديد',
+    catalogEditTitle: 'تعديل الكتاب',
+    catalogNewTitle: 'كتاب جديد',
+    catalogColumnTitle: 'الكتاب',
+    catalogColumnSubject: 'المادة',
+    catalogColumnTerm: 'الترم',
+    catalogColumnPrice: 'السعر',
+    catalogColumnStock: 'المخزون',
+    catalogColumnOrdered: 'اتطلب',
+    /** `{n}` copies ordered, all-time. The column that makes the list worth
+     *  sorting by something other than the title. */
+    catalogOrderedCount: '{n} نسخة',
+    /** `stock: null` — «مش بنعد», which is not the same as zero. */
+    catalogStockUncounted: 'مش بنعد',
+    catalogStockOut: 'خلص',
+    catalogActive: 'معروض',
+    catalogHidden: 'مخفي',
+
+    fieldSlug: 'الرابط',
+    fieldSlugHint: 'بيظهر في /books. من غير مسافات ولا نقط ولا شرطة مائلة.',
+    fieldTitle: 'اسم الكتاب',
+    fieldSubtitle: 'سطر تحت الاسم (اختياري)',
+    fieldSubject: 'المادة',
+    fieldSubjectNone: 'من غير مادة — يتحط في «كتب عامة»',
+    fieldYear: 'الصف',
+    fieldYearNone: 'من غير صف',
+    fieldTerm: 'الترم',
+    fieldCourse: 'الكورس المرتبط (اختياري)',
+    fieldCourseNone: 'من غير كورس',
+    fieldCourseHint: 'لو الكتاب ده هو كتاب كورس، اربطه بيه — الكورس الواحد ليه كتاب واحد بس.',
+    fieldPrice: 'السعر (ج)',
+    fieldComparePrice: 'السعر قبل الخصم (ج، اختياري)',
+    fieldComparePriceHint: 'لازم يكون أعلى من السعر الحالي، وإلا الخصم يبقى كذب.',
+    fieldUnitCost: 'تكلفة النسخة (ج، اختياري)',
+    /** Said plainly because the alternative reading — "what I charge" — is the
+     *  field right above it, and a cost typed into a price is a margin that
+     *  reports itself as zero. */
+    fieldUnitCostHint: 'النسخة الواحدة بتكلّفك كام. منها بيتحسب «مكسب الكتب» في الحسابات — سيبها فاضية لو مش عارف.',
+    fieldCover: 'الغلاف',
+    fieldDescription: 'وصف (اختياري)',
+    fieldPageCount: 'عدد الصفحات (اختياري)',
+    fieldStock: 'المخزون (اختياري)',
+    fieldStockHint: 'سيبه فاضي لو مش بتعد. صفر معناه خلص، والكتاب يفضل ظاهر ومش قابل للطلب.',
+    fieldSortOrder: 'الترتيب',
+    fieldActive: 'معروض في قسم الكتب',
+
+    /** عربي / لغات — the same `StreamChoiceField` the course form uses, and
+     *  the same three radios, so the two screens cannot describe the same
+     *  distinction differently. */
+    fieldStreamHint: 'الكتاب ده لمدارس عربي ولا لغات ولا الاتنين — بيظهر جنب اسمه في الطلبات وفي ملف الشحن.',
+
+    /*
+     * «أضيفه في الـlanding page ولا هنا ولا الاتنين» — placement, and the
+     * hint has to say what it is NOT, because the obvious reading of two
+     * unticked boxes is "the book is off".
+     */
+    fieldPlacementLabel: 'يظهر فين',
+    fieldShowOnLanding: 'في الصفحة الرئيسية',
+    fieldShowOnCourse: 'في صفحة الكورس',
+    fieldPlacementHint:
+      'دي أماكن الإعلان بس. الكتاب بيفضل معروض وقابل للطلب في /books في كل الحالات — «معروض في قسم الكتب» فوق هو اللي بيقفله خالص.',
+    /** Shown instead of the course checkbox when nothing is linked. */
+    fieldShowOnCourseNeedsCourse: 'اربط الكتاب بكورس الأول عشان يظهر في صفحته.',
+    catalogColumnStream: 'المدارس',
+    catalogColumnPlacement: 'يظهر فين',
+    placementLanding: 'الرئيسية',
+    placementCourse: 'الكورس',
+    placementShopOnly: 'قسم الكتب بس',
+
+    termFirst: 'الترم الأول',
+    termSecond: 'الترم التاني',
+    termFull: 'السنة كاملة',
+
+    catalogSave: 'احفظ',
+    catalogSaving: 'بيتحفظ…',
+    catalogSaveFailed: 'مقدرناش نحفظ الكتاب — نحاول تاني',
+    catalogDelete: 'امسح',
+    catalogDeleteConfirm: 'نمسح الكتاب ده؟ الطلبات اللي اشترته هتفضل زي ما هي.',
+    catalogDeleteFailed: 'مقدرناش نمسح الكتاب — نحاول تاني',
+    catalogHide: 'اخفيه',
+    catalogShow: 'اعرضه',
+
+    /** The delivery fee, edited on the catalogue screen because that is where
+     *  prices live. One number for the whole shop. */
+    shippingSettingTitle: 'سعر الشحن حسب المنطقة',
+    shippingSettingHint:
+      'بينضاف مرة واحدة على كل طلب مهما كان عدد الكتب، والرقم بيتحدد من محافظة العنوان. تغيير السعر هنا مش بيغيّر طلبات قديمة — كل طلب مجمّد سعر شحنه يوم ما اتعمل.',
+    /** ⚠️ LEGACY — سعر الشحن كان رقم واحد. الحقل اتشال من الشاشة والمفتاح فاضل
+     *  عشان أي كود قديم لسه شايفه ما يكسرش. الجديد `shippingZone*` تحت. */
+    shippingSettingLabel: 'الشحن (ج)',
+    shippingSettingSave: 'احفظ',
+    shippingSettingFailed: 'مقدرناش نحفظ سعر الشحن — نحاول تاني',
+    /* ── المناطق التلاتة ──────────────────────────────────────────────────
+       كل واحدة تحتها المحافظات اللي جوّاها بالاسم: «السويس وجه بحري ولا بعيد؟»
+       سؤال حقيقي، والإدمن اللي بيحط سعر لليستة مش شايفها بيخمّن. */
+    shippingZoneNear: 'القاهرة والجيزة (ج)',
+    shippingZoneNearHint: 'القاهرة، الجيزة.',
+    shippingZoneDelta: 'وجه بحري (ج)',
+    shippingZoneDeltaHint:
+      'الإسكندرية، بورسعيد، السويس، الإسماعيلية، دمياط، الدقهلية، الشرقية، القليوبية، كفر الشيخ، الغربية، المنوفية، البحيرة.',
+    shippingZoneFar: 'الصعيد وسينا والبحر الأحمر (ج)',
+    shippingZoneFarHint:
+      'بني سويف، الفيوم، المنيا، أسيوط، سوهاج، قنا، أسوان، الأقصر، البحر الأحمر، الوادي الجديد، مطروح، شمال وجنوب سيناء.',
   },
   taxonomy: {
     title: 'الهيكل الدراسي',
@@ -1596,16 +3096,27 @@ const admin = {
     blockTypeHero: 'قسم البداية',
     blockTypeWhyRail: 'ليه تتعلم هنا',
     blockTypeCourseGrid: 'شبكة كورسات',
+    blockTypeBooks: 'قسم الكتب',
     blockTypeInstructor: 'كارت المحاضر',
     blockTypeYearTracks: 'مسارات الصفوف',
+    blockTypeHonorBoard: 'لوحة الشرف',
     blockTypeAbout: 'نبذة عن المحاضر',
     blockTypeStats: 'إحصائيات',
     blockTypeTestimonials: 'آراء الطلبة',
     blockTypeFaq: 'أسئلة شائعة',
     blockTypeCta: 'دعوة لإجراء',
-    /** Shown instead of a form for the two placement-only block types. */
+    /** Shown instead of a form for `instructor` and `yearTracks`. */
     placementOnly:
       'القسم ده بيبني نفسه من الكورسات والهيكل الدراسي، فمفيش نصوص تتعدّل فيه. اللي بيتحكم فيه هنا هو مكانه في الصفحة، ونشره من عدمه.',
+    /**
+     * `honorBoard` is placement-only too, but NOT for the same reason, so it
+     * does not share the line above: the board is not built from the catalogue,
+     * it is built from exam results that do not exist yet. An admin looking at
+     * this dialog is deciding where a section that is currently EMPTY sits, and
+     * that is the one fact they need before they publish it.
+     */
+    placementOnlyHonorBoard:
+      'لوحة الشرف بتتملي لوحدها من نتايج امتحان الشهر، فمفيش نصوص تتعدّل فيها. دلوقتي هي فاضية وبتقول إنها هتبدأ بعد امتحان الجمعة — اللي بيتحكم فيه هنا هو مكانها في الصفحة، ونشرها من عدمه.',
     keyLabel: 'مُعرّف القسم',
     keyHint: 'حروف إنجليزي صغيرة وأرقام وشرطات — ثابت بعد الإنشاء',
     headline: 'العنوان الرئيسي',
@@ -1623,6 +3134,8 @@ const admin = {
     faqAnswer: 'الإجابة',
     addFaq: 'أضف سؤال',
     removeItem: 'حذف',
+    /** «قسم الكتب» — how many covers the strip runs before the CTA. */
+    bookLimit: 'عدد الكتب',
     courseLimit: 'أقصى عدد كورسات معروضة',
     // ── fields the new section blocks add ────────────────────────────────
     // `blockLead`, not `lead` — `admin.home.lead` above is the SCREEN's own
@@ -1673,6 +3186,10 @@ const admin = {
     filterResourceType: 'نوع العنصر',
     filterActor: 'المستخدم',
     filterOutcome: 'النتيجة',
+    /** The date range — validated and applied server-side since the endpoint
+     *  shipped, and unreachable until now because nothing sent it. */
+    filterFrom: 'من يوم',
+    filterTo: 'لحد يوم',
     filterAll: 'الكل',
     viewMetadata: 'اعرض التفاصيل',
   },
@@ -1740,6 +3257,12 @@ const admin = {
  * clicks the opposite of what they meant.
  */
 const adminNews = {
+  /** The list is a published/draft mix; the badge was the only way to tell them
+   *  apart, one row at a time. */
+  filterStatus: 'الحالة',
+  filterAll: 'الكل',
+  filterPublished: 'منشور',
+  filterDraft: 'مسوّدة',
   title: 'نيوز',
   lead: 'المقالات اللي بتظهر في قسم نيوز على الموقع. المقالة ما بتظهرش لحد لما تنشرها.',
   create: 'مقالة جديدة',
@@ -1781,6 +3304,29 @@ const adminNews = {
 
 const quizAdmin = {
   bankTitle: 'بنك الأسئلة',
+  /* ── ترتيب المحاولات ───────────────────────────────────────────────────
+   * الشاشة مكانش فيها ترتيب خالص — الجدول كان بيبلع onSortingChange بتاعه
+   * لأن الـendpoint مكانش عنده حاجة يقدّمها. */
+  sortLabel: 'الترتيب',
+  sortNewest: 'الأحدث',
+  sortOldest: 'الأقدم',
+  /** «مين جاب أعلى درجة» — الورقة اللي جابت ٣٠٪ واللي جابت ٩٥٪ محتاجين نوعين
+   *  اهتمام مختلفين، ولقيان أي منهم كان معناه تقرا القايمة كلها. */
+  sortScoreDesc: 'الأعلى درجة',
+  sortScoreAsc: 'الأقل درجة',
+  /* ── الفلترة والبحث في البنك ──────────────────────────────────────────
+   * All three were supported by the API and none was reachable: the page
+   * showed the newest 50 of 704 with no pager and nothing saying so. */
+  bankSearchLabel: 'دوّر في الأسئلة',
+  bankSearchPlaceholder: 'كلمة من نص السؤال…',
+  bankSearchSubmit: 'دوّر',
+  bankCategoryLabel: 'التصنيف',
+  bankAllCategories: 'كل التصنيفات',
+  bankTypeLabel: 'نوع السؤال',
+  bankAllTypes: 'كل الأنواع',
+  /** `{n}` — how many questions match, so the size of the bank is visible
+   *  rather than implied by a page that stops at fifty. */
+  bankCount: '{n} سؤال',
   newQuestion: 'سؤال جديد',
   /**
    * The exam builder's own «write a question» entry point — see
@@ -2290,6 +3836,22 @@ const marketing = {
   unlinkButton: 'افصل الرقم',
   unlinkConfirm: 'تفصل الرقم ده؟ الحملات الشغالة هتوقف.',
 
+  // ── لما الربط يقف من غير ما يوصل لكود ──────────────────────────────
+  // بيانات الاقتران بتتخزن على قرص الخدمة وبتفضل مكانها بين النشرات. لو
+  // اتكتبت نص كتابة — اتقفل الاتصال في نص المصافحة، أو الكود خلص وهو
+  // بيتحفظ — واتساب بيفضل يحاول يرجّع الجلسة القديمة بدل ما يطلع كود
+  // جديد، فالشاشة تفضل «مفيش رقم متربط» مهما دوست «اربط».
+  //
+  // الزرار ده بيمسح البيانات دي ويخلّي المحاولة الجاية تبدأ من الصفر.
+  // قبل كده مكانش ليه أي طريق من الشاشة: «افصل الرقم» كان بيظهر لما
+  // الجهاز يكون **متربط** بس — يعني بالظبط الحالة اللي مش محتاجاه.
+  resetButton: 'امسح البيانات وابدأ من الأول',
+  resetConfirm: 'هنمسح بيانات الربط المحفوظة ونبدأ من الصفر. مش هيتفصل أي رقم شغّال.',
+  /** Under the badge, whenever the sidecar reported WHY it is not connected. */
+  deviceDetailLabel: 'آخر سبب:',
+  /** Shown beside the link button once a first attempt produced no code. */
+  linkNoCodeHint: 'لو دوست وما ظهرش كود خلال شوية ثواني، امسح البيانات وابدأ من الأول.',
+
   // ── the audience picker ──────────────────────────────────────────────────
   audienceTitle: 'مين هيوصله؟',
   audienceStudents: 'الطلبة',
@@ -2305,8 +3867,59 @@ const marketing = {
   audienceNotSubscribedOnly: 'بس اللي لسه مش مشتركين',
   audienceNotSubscribedOnlyHint: 'بيستبعد اللي عنده اشتراك سارٍ في الكورس ده دلوقتي — يفضل بس اللي مسجّل ومحاولش يشترك، أو اشتراكه خلص',
   audienceNotSubscribedOnlyNeedsCourse: 'اختار كورس واحد على الأقل الأول عشان الفلتر ده يشتغل',
+  /*
+   * ════════════════════════════════════════════════════════════════════════
+   * «أحدد الناس اللي اتشحن ليها، واللي ماتشحنتش ليها، واللي وصل ليها»
+   *
+   * The same five states `/admin/books` puts on its tab strip, worded from the
+   * OTHER side. That screen describes an order — «اتشحنت» — and this one
+   * describes the person the message is about to reach — «اتشحن ليهم». Reusing
+   * `copy.admin.books.status*` here would have been one table instead of two,
+   * and it would have put «وصلت للطالب» on a checkbox that selects the student
+   * it is talking about, which reads as the wrong row every time.
+   *
+   * `audienceBookOrderState` is keyed on the wire values of
+   * `BookOrderStatusSchema`; `campaign.spec.ts` fails if the two ever stop
+   * covering each other, so a sixth status cannot ship a checkbox with no label.
+   * ════════════════════════════════════════════════════════════════════════
+   */
+  audienceBookOrder: 'حالة طلب الكتاب',
+  audienceBookOrderAll: 'بغضّ النظر عن طلب الكتاب',
+  /** Under the checkboxes, once at least one is ticked. Says the two things
+   *  that are not visible from the boxes themselves: an order the admin
+   *  deleted counts for nothing, and a طلب اتعمل من غير حساب مالوش رقم هنا. */
+  audienceBookOrderHint: 'بيختار الطلبة اللي عندهم طلب كتاب في الحالة دي. الطلبات المحذوفة مش محسوبة، واللي طلبوا من غير ما يعملوا حساب مش هيوصلهم من هنا.',
+  audienceBookOrderState: {
+    address_only: 'طلبوا ومدفعوش',
+    paid: 'دفعوا ولسه ماتشحنش ليهم',
+    printing: 'كتابهم في المطبعة',
+    shipped: 'اتشحن ليهم',
+    delivered: 'وصلهم الكتاب',
+    rejected: 'طلبهم اترفض',
+  },
   audienceExtraPhones: 'أرقام تانية',
   audienceExtraPhonesHint: 'رقم في كل سطر. للناس اللي لسه مش مسجّلين في المنصة.',
+  /*
+   * ══════════════════════════════════════════════════════════════════════════
+   * «عايز أحدد الأرقام اللي أبعتلها بس — رقم بعينه، مش فلاتر»
+   *
+   * The audience model has ALWAYS been able to do this: `students: false,
+   * parents: false` with numbers in `extraPhones` resolves to exactly those
+   * numbers. Nothing was missing except a way to find out — «الطلبة» is ticked
+   * by default, the typed numbers ADD to it, and the summary underneath said
+   * «هيوصله 486 رقم» while he was staring at one number he had just pasted.
+   *
+   * So this is one press that says what it does, shown only when there is
+   * something to narrow TO. It is not a new mode and it stores no new state:
+   * it unticks the two audience switches, which is what he would have done
+   * himself if the form had ever suggested it.
+   * ══════════════════════════════════════════════════════════════════════════
+   */
+  audienceOnlyTheseAction: 'ابعت للأرقام دي بس',
+  audienceOnlyTheseHint: 'هيشيل الطلبة وأولياء الأمور من الحملة، ويبعت للأرقام اللي فوق بس.',
+  /** Replaces the count line when the campaign is numbers-only, so the summary
+   *  states the SHAPE of the audience and not just its size. `{n}` */
+  audienceOnlyTheseActive: 'الحملة دي للأرقام اللي كتبتها بس — {n} رقم.',
   audiencePreviewLoading: 'بنحسب العدد…',
   /** `{n}` */
   audiencePreviewCount: 'هيوصله {n} رقم',
@@ -2390,11 +4003,58 @@ const marketing = {
   recipientFilterSent: 'اتبعت',
   recipientFilterFailed: 'فشل',
   recipientFilterSkipped: 'اتجاهل',
+  /**
+   * The filter that would have caught 2026-09. Not a status — these rows ARE
+   * `sent`, and that is what makes them alarming.
+   */
+  recipientFilterUndelivered: 'اتبعتت وماوصلتش',
   colPhone: 'الرقم',
   colRecipientStatus: 'الحالة',
   colSentAt: 'وقت الإرسال',
+  colDeliveredAt: 'وقت الوصول',
   colError: 'السبب',
   noName: 'من غير اسم',
+
+  /**
+   * `{n}` — how many of the sent messages a DEVICE actually acknowledged.
+   *
+   * Shown beside «اتبعت» and never instead of it, because the gap between the
+   * two is the whole point: «٧٤ من ٧٤» said nothing about whether anybody got
+   * anything, and for one campaign the honest reading of it was «صفر».
+   */
+  deliveredLabel: 'وصلت {n}',
+  /** Shown when a campaign has sent messages and not one has been acknowledged. */
+  deliveredNone: '⚠️ ولا رسالة وصلت لحد',
+  /** `paused_reason` — why the runner stopped on its own. */
+  pausedReasonTitle: 'الحملة وقفت لوحدها',
+
+  // ── «رسالة تجربة» ──────────────────────────────────────────────────────
+  testSendTitle: 'رسالة تجربة',
+  testSendLead:
+    'ابعت رسالة واحدة لرقم انت مختاره قبل ما تشغّل حملة على آلاف. لو الرسالة مستقرة على صح واحدة، الحملة كلها هتعمل نفس الحاجة.',
+  testSendPhone: 'الرقم',
+  testSendText: 'نص الرسالة (اختياري)',
+  testSendButton: 'ابعت التجربة',
+  testSendSending: 'بيبعت…',
+  testSendNotOnWhatsapp: 'الرقم ده مش على واتساب أصلاً — مابعتناش حاجة.',
+  testSendQueued: 'الرسالة اتبعتت. واتساب استلمها — وبنستنى دلوقتي نعرف وصلت لحد ولا لأ.',
+  /** The answer everybody is here for. */
+  testSendDelivered: '✅ وصلت للجهاز. الإرسال شغال.',
+  testSendRead: '✅ وصلت واتقرت.',
+  testSendRefused: '❌ واتساب رفض الرسالة.',
+  /**
+   * Deliberately NOT «فشلت». No receipt yet is the correct state for hours if
+   * the phone is off, and calling it failure is the same mistake as calling
+   * «اتبعت» delivery.
+   */
+  testSendPending: 'لسه ماجاش خبر. لو الرقم مقفول ده طبيعي — استنى وجرب تعرف تاني.',
+  testSendCheckAgain: 'اعرف وصلت ولا لأ',
+  /**
+   * The LID line. Shown only when WhatsApp hands one back, because when it
+   * does AND the message stays on one tick, that is the diagnosis.
+   */
+  testSendLid: 'الرقم ده عنده LID: {lid}',
+  testSendNoLid: 'الرقم ده لسه على العنونة بالرقم (من غير LID).',
 
   // ── opt-outs ──────────────────────────────────────────────────────────
   optOutsTitle: 'طلبوا الإيقاف',

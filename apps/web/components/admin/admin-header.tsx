@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Menu } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Kbd } from '@ayman/ui/components/kbd';
@@ -33,10 +33,19 @@ import { activeNavItem } from './nav-items';
 export function AdminHeader({
   identity,
   permissions,
+  notifications,
 }: {
   /** Email if the account has one, otherwise the phone. Null for neither. */
   identity: string | null;
   permissions: readonly string[];
+  /**
+   * The notification bell, handed down as an already-rendered Server
+   * Component node — it reads the unread count on the server so the badge is
+   * correct in the first paint. Same arrangement the student shell uses, and
+   * for the same reason: this header is a client component (it reads
+   * `usePathname`) and a client component cannot await anything.
+   */
+  notifications?: ReactNode;
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -105,6 +114,12 @@ export function AdminHeader({
         {/* Only for a session that HAS an inbox — the control asks the browser
             for permission to announce messages this admin cannot read. */}
         {permissions.includes('conversation:read') ? <InboxAlertsToggle /> : null}
+
+        {/* The same bell the student has, with the same feed behind it.
+            «فيه حاجة مستنياك» must have ONE place it shows up, or it has
+            none — see `notification-view.ts` for why the two admin kinds
+            render through the student's own mapper. */}
+        {notifications}
 
         <ThemeToggle />
 

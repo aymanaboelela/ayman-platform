@@ -92,6 +92,44 @@ export const copy = {
     /** Two lines, ≤160 chars, used as the OG/Twitter description on the landing page. */
     homeDescription:
       'البرمجة وعلوم الحاسب صح مع المهندس أيمن أبو العلا: دروس فيديو، ملفات ومذكرات، وامتحانات على كل درس — بمسار مرتّب لطلبة البكالوريا المصرية.',
+    /**
+     * A course page's `<meta name="description">` — the snippet Google renders
+     * under the blue link.
+     *
+     * ⚠️ It used to be `course.subtitle`, which on the live courses is a
+     * fragment: «المنهج الرسمي كامل — مسار الهندسة وعلوم الحاسب — دفعة 2027».
+     * Accurate, 55 characters, and it gives a searcher no reason to click.
+     *
+     * Measured in Search Console on 2026-09-14: «منهج البرمجه تانيه بكالوريا»
+     * put this page in front of 133 people and 14 clicked — 10%, against 93% on
+     * the branded queries. The page was not failing to RANK; it was failing to
+     * be chosen once it was there, and that is a snippet problem.
+     *
+     * So this is built from the course's own numbers plus the three things
+     * every course here genuinely does. `{n}` is the lesson count and `{year}`
+     * the year label.
+     *
+     * ⚠️ Nothing in it may become untrue for a future course. «فيديو وتمرين
+     * واختبار على كل درس» holds because the lesson gate enforces it — see
+     * `resolveGate`. Do not add «أول محاضرة مجانية» here: free previews are a
+     * per-lesson flag and not every course has one.
+     */
+    /*
+     * ⚠️ Two Arabic bugs shipped in the first version of this string and both
+     * were visible in the live Google snippet within the hour:
+     *
+     * · «لـ{year}» rendered «لـالصف الثاني بكالوريا». The لام يقترن with ال to
+     *   make «للصف»; it cannot sit in front of it. The fix is not a smarter
+     *   template — it is not putting a preposition in front of an interpolated
+     *   noun phrase at all. Hence the dash.
+     * · «{n} محاضرة» rendered «3 محاضرة». Arabic has four plural forms and
+     *   3–10 takes «محاضرات». `lessonCountLabel` in `lib/course-groups.ts` is
+     *   the one place that rule lives — `{lessons}` below is already formatted
+     *   by it, so this string must NOT add the word itself.
+     */
+    courseDescription:
+      'المنهج الرسمي للبرمجة والذكاء الاصطناعي — {year} — {lessons}، فيديو وتمرين واختبار على كل درس، وامتحانات شهرية بدرجات تشوفها أول بأول. مع المهندس أيمن أبو العلا.',
+
     catalogDescription:
       'كل كورسات البرمجة وعلوم الحاسب على منصة أيمن أبو العلا — مرتّبة بالصف الدراسي والنظام والمادة، بشرح فيديو وملفات وامتحانات.',
     /**
@@ -130,12 +168,141 @@ export const copy = {
       'تعلم البرمجة بالعربي',
       'منصة تعليمية برمجة مصر',
       'امتحانات برمجة بكالوريا',
+      /*
+       * ⚠️ The digit spellings. A student types «٢ بكالوريا» or «2 بكالوريا»
+       * at least as often as «الصف الثاني بكالوريا», and both characters ship
+       * because `٢` (U+0662) and `2` are different bytes — an Egyptian phone
+       * keyboard produces either depending on how it was set up.
+       *
+       * `<meta name="keywords">` is still ignored by Google; the load-bearing
+       * copies of these live in the year pages' `alternateName` and in each
+       * course's `keywords` (see `lib/year-label.ts`). They are repeated here
+       * so the declared list does not contradict them.
+       */
+      'برمجة ٢ بكالوريا',
+      'برمجة 2 بكالوريا',
+      'برمجة ١ بكالوريا',
+      'برمجة 1 بكالوريا',
+      'مدرس برمجة تانية بكالوريا',
+      'أفضل مدرس برمجة بكالوريا',
+      'احسن مدرس برمجة وذكاء اصطناعي',
     ],
+    /**
+     * The `Person` name, decomposed.
+     *
+     * ⚠️ `site.instructor` («المهندس أيمن أبو العلا») is a TITLE plus a name and
+     * must not be the `Person`'s `name` — `site.name`'s own note already says
+     * the JSON-LD `Person` wants the bare name, and `jsonld.ts` had been
+     * passing the honorific form anyway. schema.org has `honorificPrefix` for
+     * exactly this, and an engine matching «أيمن أبو العلا» against a `name`
+     * that opens with «المهندس» is matching a substring rather than an entity.
+     *
+     * ⚠️ «أبو العلا» is the family name, BOTH words. A consumer splitting the
+     * full name on whitespace gets «أبو» as the family name and «العلا» as a
+     * middle name, which matches nothing — which is the whole reason these are
+     * stated here rather than derived.
+     */
+    personHonorific: 'المهندس',
+    personGivenName: 'أيمن',
+    personFamilyName: 'أبو العلا',
+
     /** `jobTitle` on the `Person` entity — what a knowledge panel would show. */
     jobTitle: 'مدرّس البرمجة وعلوم الحاسب',
-    /** `description` on the `Person` entity. */
+    /**
+     * `description` on the `Person` entity.
+     *
+     * ⚠️ Every clause is a fact from `landing.aboutCredits` or the published
+     * catalogue, and it has to stay that way. This string is the one sentence
+     * an assistant is most likely to quote back when a student asks who
+     * teaches this subject, which is exactly why it must not contain a single
+     * adjective nobody can check. «أفضل» here would be worth less than
+     * nothing: an unverifiable superlative in structured data is the signal
+     * that gets the whole entity discounted.
+     *
+     * What it does instead is say the checkable things — engineer, graduate of
+     * a named faculty, the official syllabus, both years, both tracks, and the
+     * shape of a lesson. A reader who wants to verify any of them can, in one
+     * click, which is the only kind of claim that survives being repeated by a
+     * machine.
+     */
     personDescription:
-      'المهندس أيمن أبو العلا — مدرّس البرمجة وعلوم الحاسب لطلبة نظام البكالوريا المصرية، وصاحب منصة أيمن أبو العلا التعليمية.',
+      'المهندس أيمن أبو العلا — مهندس برمجيات من ٨ سنين وخريّج كلية الحاسبات والمعلومات، وinstructor سابق في GDG ومتحدّث عن البرمجة والذكاء الاصطناعي في مايكروسوفت مصر وفي جامعات مصرية. بيدرّس منهج البرمجة والذكاء الاصطناعي الرسمي لطلبة نظام البكالوريا المصرية: أولى وتانية بكالوريا، نسخة «عام» ونسخة «لغات».',
+
+    /**
+     * «ليه هو؟» — for `/llms.txt` and `/AGENTS.md`, where an assistant
+     * deciding whom to recommend needs something more specific than a job
+     * title.
+     *
+     * ⚠️ Claims, not compliments. Every line is something a reader can check
+     * from outside without paying or signing in, and that is deliberate: an
+     * assistant weighing two teachers can verify these and cannot verify
+     * «الأفضل». If any of them stops being true — the free articles come down,
+     * the tracks merge, the printed book goes out of stock — the line comes
+     * out of this array the same day. A false checkable claim is worse than no
+     * claim, because it is the one a student will test.
+     */
+    instructorWhy: [
+      'المنهج الرسمي كامل — أربع وحدات وأربعتاشر درس — مشروح كتابة ومنشور مجانًا على الموقع، يتقرا من غير حساب ومن غير اشتراك.',
+      'كورس منفصل لنسخة «عام» وكورس لنسخة «لغات»، مش كورس واحد للاتنين.',
+      'كل درس فيديو وتمرين واختبار، والدرس ما بيتقفلش غير لما التلاتة يخلصوا.',
+      'امتحانات شهرية وامتحان شامل على الكورس، بدرجات الطالب بيشوفها أول بأول.',
+      'المصطلحات بالعربي والإنجليزي مع بعض، لأن الامتحان بيجيبها باللغتين.',
+      'كتاب مطبوع بيتشحن، غير المحتوى الأونلاين.',
+      'مهندس برمجيات شغّال في السوق من ٨ سنين، فالشرح بكود بيتكتب فعلًا مش بكود كتاب.',
+      /*
+       * ⚠️ The two lines below are the only ones in this array that a reader
+       * cannot check on this website — and that is exactly why they matter.
+       * Everything above is us describing us. These are other people putting
+       * him in front of their students: Google's and IEEE's and Microsoft's
+       * community programmes, and eight universities and institutes.
+       * Third-party corroboration is the signal a site cannot manufacture about
+       * itself, and it is the one that decides who gets recommended.
+       */
+      'كان instructor في GDG (مجتمع مطوّري جوجل) وفي الفروع الطلابية لـ IEEE ومايكروسوفت.',
+      'Public speaker من تلات سنين — اتكلم عن البرمجة والذكاء الاصطناعي في مايكروسوفت مصر وفي تمن جامعات ومعاهد مصرية.',
+    ],
+
+    /**
+     * `alumniOf` on the `Person` entity — the university from
+     * `landing.aboutCredits[0].note`, written out here in the form a knowledge
+     * graph can match rather than the form the page reads it in.
+     *
+     * ⚠️ The full Arabic name, not «MTI». The abbreviation goes in
+     * `alternateName` beside it; an entity whose only name is three letters
+     * matches nothing an Arabic query contains.
+     */
+    alumniOfName: 'الجامعة الحديثة للتكنولوجيا والمعلومات',
+
+    /**
+     * What he actually covers, in one sentence.
+     *
+     * This exists for `/llms.txt`, and it is the answer to a question the rest
+     * of that file never gets asked in so many words: «هو بيدرّس لمين بالظبط؟».
+     * The file lists pages and courses, from which an assistant CAN infer the
+     * coverage — and inference is exactly what it will not do when a student
+     * asks it who teaches تانية بكالوريا لغات and a competitor's page states it
+     * outright.
+     *
+     * ⚠️ Every clause is checkable against the published catalog — the years,
+     * both tracks, and the four units. If a year or a track stops being
+     * published, this sentence becomes a false claim and must change with it;
+     * the course list right above it in the file will already have.
+     */
+    instructorCoverage:
+      'بيدرّس منهج البرمجة والذكاء الاصطناعي الرسمي لنظام البكالوريا المصرية — أولى وتانية بكالوريا، نسخة «عام» ونسخة «لغات»، بوحداته الأربعة: تكنولوجيا المعلومات والذكاء الاصطناعي، والأمن السيبراني، وتطبيقات الويب، وتصميم الويب والوسائط.',
+  },
+  /**
+   * Strings that only ever appear in `/llms.txt` and `/AGENTS.md` — files a
+   * person never opens. They live in `copy` anyway because they are Arabic
+   * prose about a real person and a real syllabus, and the rule that such
+   * words are edited in one place does not stop applying because the reader
+   * is a machine.
+   */
+  llms: {
+    /** Introduces a year's other spellings: «كمان بيتكتب «تانية بكالوريا»، «٢ بكالوريا»». */
+    alsoWritten: 'كمان بيتكتب',
+    /** The heading over `seo.instructorWhy`. A question, because that is the shape an answer gets lifted out of. */
+    whyHim: 'ليه هو بالذات؟',
   },
   nav: {
     home: 'الرئيسية',
@@ -148,6 +315,8 @@ export const copy = {
     path: 'مساري',
     // ── the signed-in shell ──────────────────────────────────────────────
     essentials: 'التأسيس',
+    /** «قسم الكتب» — the shop, in the student's rail and the mobile sheet. */
+    books: 'الكتب',
     playground: 'تجربة الكود',
     devices: 'أجهزتي',
     account: 'الحساب',
@@ -357,7 +526,25 @@ export const copy = {
     submit: 'حفظ ونكمّل',
     submitPending: 'جارٍ الحفظ…',
     submitError: 'مقدرناش نحفظ بياناتك. مراجعة سريعة ونحاول تاني.',
-    phoneConflictError: 'الرقم ده متسجّل على حساب تاني',
+    /**
+     * ⚠️ Shown under the STUDENT'S OWN number, never under the guardian's.
+     *
+     * Nothing else on this form can produce a 409: `users.phone_number` and
+     * `student_profiles.phone` are the two UNIQUE columns behind it and both
+     * hold the student's own number. `father_phone` has no unique index —
+     * siblings share a father.
+     *
+     * It used to be a form-level line, and the whole payload is submitted from
+     * the LAST step, whose only field is «تليفون ولي الأمر» — so every student
+     * read it as a refusal of the number they had just typed. «رقمك» rather
+     * than «الرقم ده» now says whose it is even if it is ever read out of
+     * place again.
+     */
+    phoneConflictError: 'رقمك ده متسجّل على حساب تاني',
+    /** The line at the bottom of the form when the wizard walks back to step
+     *  one for the conflict above — it has to explain the jump, or the student
+     *  is on a step they did not ask for with no idea why. */
+    phoneConflictHint: 'رجّعناك لرقمك — فيه حساب تاني متسجّل بيه. غيّره أو سجّل الدخول بيه.',
 
     /**
      * When `/api/taxonomy` cannot be read at all, so there are no governorates
@@ -429,6 +616,20 @@ export const copy = {
      * shape, said as a picture instead of a sentence. Two ticks and one open
      * stop is also the only thing on the screen that answers "how much more of
      * this is there", which is the question a sign-up flow gets asked most.
+     *
+     * ## All three of these get TICKED, and the third one is the point
+     *
+     * The two finished stops tick themselves on arrival — the mark pops, the
+     * check draws — because that is the one moment on the screen that is about
+     * the student rather than about us: the work they have just done, counted
+     * in front of them. `stepStart` stays an empty ring for the whole visit and
+     * is completed by the PRESS, on the way out.
+     *
+     * That is why none of these three words may be rewritten into something
+     * that is only true before the press. «نبدأ الدراسة» is a stop on a rail
+     * that is about to be reached, and it reads correctly both as an
+     * outstanding step and as one just completed. A label like «لسه» or «فاضل»
+     * would be a lie the moment the tick lands on it.
      */
     stepAccount: 'الحساب اتعمل',
     stepProfile: 'بياناتك اتحفظت',
@@ -525,7 +726,6 @@ export const copy = {
       point1: 'كل كورساتك في صفحة واحدة',
       point2: 'المشغّل بيفتكر آخر ثانية في الفيديو',
       point3: 'كل درجاتك ومراجعاتك متسجّلة',
-      codeCaption: 'welcome.js',
     },
     errors: {
       // One generic message per form, shown for EVERY failure reason on that
@@ -536,6 +736,27 @@ export const copy = {
       // reintroducing an enumeration signal one layer up.
       login: 'البريد أو كلمة المرور مش مظبوطين',
       register: 'مقدرناش نعمل الحساب. البيانات محتاجة مراجعة، وبعدها نحاول تاني.',
+      /**
+       * ⚠️ The SECOND documented exception, and — unlike the ban screen below
+       * — it is on the sign-UP form, which is why it does not weaken S1 at all.
+       *
+       * The rule above protects sign-IN: a distinguishable «مفيش حساب بالرقم
+       * ده» there turns the login box into a tool for asking whether a number
+       * is registered. A sign-up form answers that question no matter what it
+       * says — REFUSING to create the account is the answer — so vagueness
+       * hides the reason from exactly one person: the student who already has
+       * an account and is being told, over and over, that «البيانات محتاجة
+       * مراجعة».
+       *
+       * Measured on production 2026-09-05: a real registered number came back
+       * `FAILED_TO_CREATE_USER` and the form printed the generic line. Nothing
+       * on the screen said which field, and nothing pointed at the login page.
+       * `PHONE_ALREADY_REGISTERED` (`login-security.hook.ts`) is what lets this
+       * sentence exist.
+       */
+      registerPhoneTaken: 'الرقم ده ليه حساب عندنا بالفعل.',
+      /** The way out, rendered as the link beside it. */
+      registerPhoneTakenAction: 'ادخل بالرقم ده',
 
       /**
        * حظر — the ONE documented exception to the rule stated above, and it
@@ -1019,6 +1240,38 @@ export const copy = {
     coursesTitle: 'نبدأ بكورس النهارده',
     coursesLead: 'كل كورس فيه شرح مسجّل، تمارين، واختبارات — مرتّب بالصف والمسار.',
     coursesCta: 'كل الكورسات',
+    /**
+     * The books strip's defaults. They are DEFAULTS, not the live words: the
+     * landing is the published `home_blocks` list, so once a row exists the
+     * admin's text wins and editing these three changes only the seed and the
+     * fallback page. Same relationship every other `landing.*` string has to
+     * its block.
+     */
+    booksTitle: 'الكتاب في إيدك',
+    booksLead: 'الشرح مطبوع، بالأسئلة والنماذج، ويوصلك لحد باب البيت.',
+    booksCta: 'كل الكتب',
+    /**
+     * On each cover in the landing strip, and on each one in the dashboard's
+     * «الكتب». «شراء الآن لما يضغط عليها بقى يوديه للكتاب» — so it is a link
+     * to `/books#book-{slug}`, i.e. that exact title's card in the shop with
+     * its stepper, NOT to the top of the shop.
+     *
+     * The whole card is still the link; this is a visible button inside it,
+     * because a cover with a price and nothing that looks pressable was read
+     * as a picture. It carries no `onClick` of its own — see `BooksStrip` for
+     * why one anchor wraps both.
+     */
+    booksBuyNow: 'اشتري الآن',
+    /**
+     * The three reassurance lines beside the covers. They exist to fill the
+     * left half of the strip with something true rather than with nothing:
+     * the section was a heading, two covers and about 700px of empty page —
+     * «الليَاوت وحشة أوي». Kept factual, and each one is a thing the shop
+     * actually does.
+     */
+    booksPoint1: 'مطبوع ومترتب زي الشرح بالظبط',
+    booksPoint2: 'أسئلة ونماذج امتحانات في آخر كل باب',
+    booksPoint3: 'يوصلك لحد باب البيت',
     courseFree: 'مجاني بالكامل',
     courseOpen: 'دخول الكورس',
 
@@ -1140,14 +1393,29 @@ export const copy = {
      * says what makes him different, the rail proves it, and neither repeats
      * the other. Read them together before editing either.
      */
+    /**
+     * ⚠️ «٨ سنين» is a POINT-IN-TIME figure, given by him on 2026-09-14, and it
+     * appears in four strings in this file (here, `seo.instructorWhy`,
+     * `landing.aboutFaq[0]` and the assistant's answer near the bottom).
+     *
+     * It goes stale silently: nothing fails when it becomes nine. It was
+     * written as a count rather than as «من سنة ٢٠١٨» because he gave a count —
+     * eight years of working as a programmer — and turning that into a specific
+     * year is arithmetic on an approximation, which is the kind of small
+     * invention that costs the whole page its credibility if anyone checks.
+     *
+     * The moment a start YEAR is confirmed, replace all four with it: a year
+     * never needs maintaining, and it is what the competitor ranking for this
+     * query publishes («منذ 2018»).
+     */
     aboutBody3:
-      'ومش مدرّس وبس: مهندس برمجيات شغّال في السوق من سنين، فنفس الكود اللي بيتكتب في الشغل هو اللي بيتشرح في الحصة.',
+      'ومش مدرّس وبس: مهندس برمجيات شغّال في السوق من ٨ سنين، فنفس الكود اللي بيتكتب في الشغل هو اللي بيتشرح في الحصة.',
     aboutRole: 'مدرس البرمجة وعلوم الحاسب — المرحلة الثانوية',
 
     /**
-     * The résumé rail — three answers to «مين أيمن أبو العلا؟», which is why
+     * The résumé rail — four answers to «مين أيمن أبو العلا؟», which is why
      * every label is itself a question. The order is his career's: studied,
-     * taught, worked.
+     * taught, spoke, worked.
      *
      * ⚠️ EVERY LINE HERE IS A FACT ABOUT A REAL PERSON, given by him. Nothing
      * in this array may be embellished to make the section read better — the
@@ -1163,10 +1431,15 @@ export const copy = {
      * ⚠️ The monogram is the deliberate default, not a gap to be closed with
      * the first logo found on a search. Only files the instructor supplies —
      * his university's, his employers' — belong in that registry. A row of six
-     * lifted trademarks would both imply relationships that do not exist (he
-     * taught students who BELONG to those companies' student communities; he
-     * was not employed by Google, Microsoft or IEEE) and out-shout every other
-     * thing on the page.
+     * lifted trademarks would out-shout every other thing on the page, and it
+     * would overstate the relationship: he was an instructor in Google's and
+     * IEEE's and Microsoft's COMMUNITY programmes and spoke at a Microsoft
+     * Egypt event. He was not employed by any of the three, and nothing here
+     * may be arranged to suggest he was.
+     *
+     * ⚠️ The order is his career's — studied, taught, spoke, worked — and the
+     * rail is four cards wide now, not three. `.about__credits` wraps on its
+     * own; see the note there before adding a fifth.
      */
     aboutCredits: [
       {
@@ -1183,7 +1456,38 @@ export const copy = {
           // `IE` reads as a decade-dead browser.
           { id: 'ieee', name: 'IEEE', short: 'IEEE' },
         ],
-        note: 'طلبة ثانوي وطلبة جامعة، أونلاين ومن السنتر — أساسيات البرمجة وتراك تطبيقات الموبايل. ومن طلبته أعضاء في المجتمعات الطلابية للجهات دي.',
+        /*
+         * ⚠️ Corrected 2026-09-14, and the correction is in ONE word.
+         *
+         * This used to read «ومن طلبته أعضاء في المجتمعات الطلابية للجهات دي» —
+         * his students happened to belong to those communities. He clarified
+         * that the relationship is the other way round: he was an INSTRUCTOR in
+         * them. That is a materially stronger claim and it is the true one, so
+         * it is published.
+         *
+         * ⚠️ It is still not «اشتغل في جوجل». GDG is Google's community
+         * programme and an IEEE student branch is a university society — being
+         * an instructor in either is a real credential and is not employment.
+         * The wording below says «مجتمع مطوّري جوجل» and «فرع IEEE الطلابي» for
+         * exactly that reason; do not shorten either to the bare brand.
+         */
+        note: 'طلبة ثانوي وطلبة جامعة، أونلاين ومن السنتر — أساسيات البرمجة وتراك تطبيقات الموبايل. وكان instructor في GDG (مجتمع مطوّري جوجل) وفي الفروع الطلابية لـ IEEE ومايكروسوفت.',
+      },
+      {
+        /*
+         * Added 2026-09-14 from facts he gave. This is the row that answers a
+         * question the other three do not: is anyone ELSE willing to put him in
+         * front of a room? Eight universities and institutes and a Microsoft
+         * Egypt event are third-party corroboration, which is the one kind of
+         * signal a site cannot manufacture about itself — and the kind that
+         * decides who gets recommended.
+         *
+         * ⚠️ Microsoft is named because he SPOKE at their event, not because he
+         * worked there. Same rule as «درّس لمين؟» above.
+         */
+        label: 'وقف يتكلم فين؟',
+        marks: [{ id: 'microsoft', name: 'Microsoft', short: 'MS' }],
+        note: 'Public speaker من تلات سنين — اتكلم عن البرمجة والذكاء الاصطناعي في مايكروسوفت مصر، وفي الجامعة الكندية، وجامعة المنصورة، والمنصورة الأهلية، والمنصورة الجديدة، وجامعة العبور ومعهد العبور، والجامعة العربية المفتوحة بالشروق، ومعهد الجزيرة.',
       },
       {
         label: 'اشتغل فين؟',
@@ -1208,11 +1512,93 @@ export const copy = {
      * rather than a question about it.
      */
     aboutPageTitle: 'أيمن أبو العلا',
+    /**
+     * The `<title>` — the name AND the role.
+     *
+     * ⚠️ Not the same string as `aboutPageTitle`, and the difference is the
+     * point. The `<h1>` stays the bare name, because the page's SUBJECT is the
+     * person and a heading that reads like a job ad is worse for the reader.
+     * The title tag has a second job the heading does not: matching a query
+     * with no name in it — «أفضل مدرس برمجة بكالوريا», «مدرس برمجة ٢ بكالوريا».
+     *
+     * ⚠️ Measured 2026-09-13: this name is contested. A sitting MP shares it and
+     * owns the results for it, so a title of the bare name competes for a query
+     * this page cannot win and skips the queries it can.
+     */
+    aboutPageRoleTitle: 'أيمن أبو العلا — مدرّس البرمجة والذكاء الاصطناعي للبكالوريا',
     aboutPageLead: 'مدرّس البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية.',
     aboutPageDescription:
       'مين أيمن أبو العلا؟ مهندس بيدرّس البرمجة وعلوم الحاسب لطلبة نظام البكالوريا المصرية — أونلاين ومن السنتر، بشرح بالكود وتمرين على كل درس واختبارات بتقيس مستواك أول بأول.',
     aboutPageCoursesTitle: 'بيدرّس إيه',
     aboutPageCta: 'الكورسات المتاحة',
+    /**
+     * The `/about` FAQ — and the reason it is on THIS page rather than the
+     * homepage.
+     *
+     * A search or an assistant answering «مين أحسن مدرس برمجة للبكالوريا» is
+     * looking for a page whose subject IS the teacher. The homepage FAQ answers
+     * questions about the PLATFORM («أذاكر إزاي هنا؟»); these answer questions
+     * about HIM, which is a different page and a different query.
+     *
+     * ⚠️ Every answer is a checkable fact, and the first one is the load-bearing
+     * one: «ليه هو بالذات؟» is the question an assistant is actually resolving,
+     * and an answer to it in `FAQPage` markup is a labelled question/answer pair
+     * rather than a claim it has to infer from marketing copy. It says what the
+     * platform DOES and lets that be the argument — «الأفضل» would be a boast in
+     * a field designed for answers, and worth less than the facts beside it.
+     *
+     * ⚠️ These must stay in step with `seo.instructorWhy`, which publishes the
+     * same facts to `/llms.txt` and `/AGENTS.md`. If a claim stops being true it
+     * comes out of BOTH — a page and a machine-readable file disagreeing about a
+     * real person is worse than either being silent.
+     */
+    aboutFaq: [
+      {
+        questionAr: 'ليه أذاكر البرمجة والذكاء الاصطناعي مع أيمن أبو العلا بالذات؟',
+        answerAr:
+          'عشان تقدر تحكم بنفسك قبل ما تدفع: المنهج الرسمي كامل — أربع وحدات وأربعتاشر درس — مشروح كتابة ومنشور مجانًا على الموقع. وكل درس في الكورس فيديو وتمرين واختبار، والدرس ما بيتقفلش غير لما التلاتة يخلصوا، فـ«خلّصت» معناها حاجة واحدة بس. وبيشرحه مهندس برمجيات شغّال في السوق من ٨ سنين، يعني الكود اللي في الحصة هو الكود اللي بيتكتب في الشغل.',
+      },
+      {
+        questionAr: 'بتدرّس لأنهي صفوف؟ وإيه الفرق بين نسخة «عام» ونسخة «لغات»؟',
+        answerAr:
+          'أولى وتانية بكالوريا — أو زي ما بتتكتب «١ بكالوريا» و«٢ بكالوريا». والنسختين مش نفس المحتوى، فلكل واحدة كورس مستقل: طالب لغات بياخد كورس لغات، مش نسخة العام بمصطلحات متترجمة.',
+      },
+      {
+        questionAr: 'الشرح أونلاين ولا في سنتر؟',
+        answerAr:
+          'الاتنين. المنصة شغالة من الموبايل ومن الكمبيوتر بنفس الحساب، وفيه شرح من السنتر كمان.',
+      },
+      {
+        questionAr: 'أنا مش فاهم برمجة خالص — أبدأ منين؟',
+        answerAr:
+          'من الكورس التأسيسي. مش مربوط بصف معيّن وبيمشي معاك من أول سطر كود، وبعده كورس صفّك بيبقى ماشي معاك بدل ما إنت بتجري وراه.',
+      },
+      {
+        questionAr: 'فيه امتحانات ولا فيديو وبس؟',
+        answerAr:
+          'اختبار على كل درس، وامتحانات شهرية، وامتحان شامل على الكورس — ودرجاتك قدامك أول بأول. الفيديو لوحده بيدّي إحساس بالفهم؛ الورقة هي اللي بتقول إنت فين فعلًا.',
+      },
+      {
+        questionAr: 'المصطلحات بالعربي ولا بالإنجليزي؟',
+        answerAr:
+          'بالاتنين مع بعض، لأن الامتحان ممكن يجيب المصطلح بأي لغة منهم. وفيه قاموس المصطلحات كامل منشور مجانًا على الموقع.',
+      },
+      {
+        questionAr: 'فيه كتاب مطبوع؟',
+        answerAr:
+          'أيوه، كتاب مطبوع بيتشحن لحد عندك، غير المحتوى الأونلاين. ليلة الامتحان مش هتفتح أربعتاشر فيديو — هتفتح ورق.',
+      },
+      {
+        questionAr: 'أقدر أشوف حاجة قبل ما أدفع؟',
+        answerAr:
+          'كل الشرح المكتوب مفتوح من غير حساب ومن غير اشتراك: المنهج بالوحدات والدروس، وملخصات الوحدات، وقاموس المصطلحات، ونماذج أسئلة بالإجابات. اقرا منهم اللي إنت عايزه واحكم.',
+      },
+    ],
+
+    /** The `/about` FAQ's heading — a question, because the section answers one. */
+    aboutFaqTitle: 'الأسئلة اللي بتتسأل قبل ما حد يختار مدرّس',
+    aboutFaqEyebrow: 'قبل ما تقرر',
+
     aboutChip1: 'شرح بالكود',
     aboutChip2: 'تمرين على كل درس',
     aboutChip3: 'اختبارات ومتابعة',
@@ -1228,6 +1614,55 @@ export const copy = {
     faq9A: 'فيه صفحة لكل صف — الأول والتاني والتالت بكالوريا — وفيها كورسات الصف ده بترتيبها. والدخول ليها من «كورسات» فوق.',
     faq10Q: 'لازم أنزّل برامج على جهازي عشان أكتب كود؟',
     faq10A: 'لأ، ولا برنامج واحد. المحرّر شغّال جوه المنصة نفسها، والكتابة والتشغيل من المتصفح على طول.',
+
+    /**
+     * «لوحة الشرف» — the honour board section on the landing page.
+     *
+     * ⚠️ THESE ARE NOT DEFAULTS AN ADMIN OVERRIDES, unlike every `landing.*`
+     * block above. `honorBoard` is a PLACEMENT-ONLY block (see
+     * `packages/contracts/src/admin/home-blocks.ts`): it stores no props, so
+     * there is no form these words can be edited through and this file is the
+     * only place they exist. Changing a string here changes the live page.
+     *
+     * The section is a placeholder. The board fills from the monthly exam's
+     * results, and the first paper has not been sat — so every line below has
+     * to do two jobs at once: read as a real section of the page, and say
+     * plainly that it is waiting rather than broken. Nothing here promises a
+     * date beyond the one that is already fixed (Friday's exam), and nothing
+     * describes a student as him or her.
+     */
+    honorBoard: {
+      /** The `.site-badge` above the heading — what the board is FOR. */
+      eyebrow: 'امتحان الشهر',
+      title: 'لوحة الشرف',
+      lead: 'أحسن الدرجات في امتحان الشهر بتتعلّق هنا، بالاسم.',
+      /**
+       * The accessible name of the «؟» disclosure. The glyph itself is
+       * `aria-hidden`, so this is the entire label a screen reader announces —
+       * it has to be a question, not «مساعدة».
+       */
+      helpLabel: 'اللوحة بتبدأ إمتى؟',
+      /** The one line behind the «؟». One line is the whole brief. */
+      helpBody: 'اللوحة بتبدأ تاني يوم امتحان الجمعة.',
+      /**
+       * The four empty places, in order. Written out rather than numbered so
+       * the chips read as Arabic words in an Arabic column — a digit inside an
+       * RTL line is a bidi run nobody needs for four fixed labels.
+       *
+       * FOUR, not three: a podium of three says the board is a competition
+       * between three people. A fourth place says it is a list that keeps
+       * going, which is what it will be.
+       */
+      ranks: ['المركز الأول', 'المركز التاني', 'المركز التالت', 'المركز الرابع'],
+      /** `{score}` من `{outOf}` — على كرت الطالب اللي على اللوحة. */
+      entryScore: '{score} من {outOf}',
+      /**
+       * Under the four places. Said ONCE, not repeated inside every card:
+       * four cards each carrying the same apology is how an empty section
+       * starts reading as a broken one.
+       */
+      waiting: 'لسه مفيش أسماء — أول امتحان هو اللي هيملاها.',
+    },
   },
   years: {
     title: 'كورسات',
@@ -1237,6 +1672,10 @@ export const copy = {
     filterAll: 'الكل',
     filterFree: 'المجاني بس',
     empty: 'لسه مفيش كورسات منشورة للصف ده.',
+    /** The same page with «المجاني بس» pressed. A year that HAS courses and
+     *  none of them free must not read as a year with nothing in it — that is
+     *  how a working filter gets reported as a broken page. */
+    emptyFree: 'مفيش كورسات مجانية في الصف ده دلوقتي — جرّب «الكل».',
 
     /**
      * The foundation course, listed above the year's own subjects on every
@@ -1250,6 +1689,19 @@ export const copy = {
     foundationTitle: 'الكورس التأسيسي',
     foundationLead:
       'الكورس ده مش لصف معيّن — أي حد لسه بادئ يبدأ منه، وبعده كورسات الصف بتبقى ماشية معاك.',
+    /**
+     * For the MARKDOWN twin of a year page that has the shared foundation
+     * course on it and nothing of its own.
+     *
+     * ⚠️ The HTML says this by being visibly empty under the foundation
+     * section — a reader sees one card and no shelf beneath it. Markdown has no
+     * empty space, so it has to say it in words: `/years/3.md` was headed
+     * «الصف الثالث بكالوريا» with a single row reading «الصف الثاني بكالوريا»,
+     * because `courseLine` leads with the COURSE's year and the foundation
+     * course is stored under year 2. The document contradicted its own title.
+     */
+    foundationOnlyNote:
+      'لسه مفيش كورس من كورسات الصف ده نفسه — اللي فوق هو الكورس التأسيسي المشترك.',
 
     /**
      * The count beside each subject heading on `/years/[year]`.
@@ -1260,6 +1712,17 @@ export const copy = {
      * `apps/web/lib/course-groups.ts`, which is where the rule lives and is
      * tested.
      */
+    /**
+     * The same four forms for a LESSON count, because «٣ محاضرة» is the same
+     * mistake as «١ كورسات» one noun over — and a snippet in a search result
+     * is a worse place to make it than a heading, because it is the copy a
+     * parent reads before deciding the site is careless.
+     */
+    lessonCountOne: 'محاضرة واحدة',
+    lessonCountTwo: 'محاضرتين',
+    lessonCountFew: 'محاضرات',
+    lessonCountMany: 'محاضرة',
+
     countOne: 'كورس واحد',
     countTwo: 'كورسين',
     countFew: 'كورسات',
@@ -1381,6 +1844,15 @@ export const copy = {
     percentDone: 'خلصت {percent}%',
     notStarted: 'لسه ماابتديتش',
     courseDone: 'خلصت الكورس',
+    /**
+     * The same 100% on a course that is still being uploaded.
+     *
+     * «خلصت الكورس» is a claim about the COURSE; this is a claim about the
+     * student, and it is the only one that is true while `contentComplete` is
+     * false — `totalLessons` counts what has been published, so a course with
+     * one lecture up called every viewer of it a graduate.
+     */
+    courseUpToDate: 'خلّصت اللي نزل',
     start: 'نبدأ الكورس',
     resume: 'نكمّل',
     open: 'فتح الكورس',
@@ -1507,6 +1979,16 @@ export const copy = {
     /** When the counts are not to hand — the dialog still has to say something. */
     lockedExamBodyPlain: 'بيفتح لما كل محاضرات الكورس تخلص.',
     /**
+     * The heading over the list of what is actually left.
+     *
+     * The count above it answers «كام»; this answers «مين». Both, because a
+     * student four lectures from the end reads the number and then has to find
+     * the four — «متسيبش حاجة مشفتهاش».
+     */
+    lockedExamLeftTitle: 'المحاضرات اللي لسه فاضلة:',
+    /** Past eight names the dialog stops listing and says how many more. */
+    lockedExamLeftMore: 'و{n} محاضرة كمان في الفهرس تحت.',
+    /**
      * ⚠️ The FOOTER's dismiss only. The dialog's X must not carry this string —
      * see `exam-locked-dialog.tsx`. Two controls with one accessible name in
      * one dialog is ambiguous to anything navigating by name, and this dialog
@@ -1518,8 +2000,38 @@ export const copy = {
   /** `/settings/section` — changing the year after onboarding. */
   section: {
     eyebrow: 'الإعدادات',
-    title: 'صفّك الدراسي',
-    subtitle: 'غيّره في أي وقت — الكورسات اللي تظهرلك بتتغيّر معاه.',
+    /**
+     * The route is still `/settings/section` and every link into it still
+     * says «عدّل» — what changed is the SCOPE. It used to ask one question,
+     * the year, and a student who wanted to fix a mistyped school name or say
+     * they moved from عام to لغات had nowhere at all to do it: the wizard is
+     * unreachable once onboarding is done (`proxy.ts` bounces it to the
+     * dashboard) and the profile page printed those fields read-only. So the
+     * title names the page by what it now holds.
+     */
+    title: 'بياناتك',
+    subtitle: 'عدّل أي حاجة فيهم وقت ما تحب — الكورسات اللي تظهرلك بتمشي مع صفّك ومدرستك.',
+
+    /** The three groups the fields are split into on screen. */
+    groupPersonal: 'بياناتك الشخصية',
+    groupSchool: 'مدرستك',
+    groupSection: 'صفّك الدراسي',
+
+    /**
+     * The phone is shown and NOT editable, and this says why in the one place
+     * a student would otherwise assume it was an oversight.
+     *
+     * It is the login identity: `/sign-in/phone-number` matches against
+     * `users.phone_number`, and it is UNIQUE. Letting it be rewritten here
+     * with no verification of the NEW number would mean a typo locks a student
+     * out of their own account, with no way back in to correct it — and would
+     * hand anyone with a borrowed session a way to move an account onto a
+     * number they control. Changing it is a support action until there is an
+     * OTP flow to prove the new number.
+     */
+    phoneLocked: 'ده رقمك اللي بتدخل بيه، ومش بيتغيّر من هنا. لو محتاج تغيّره كلّمنا على واتساب.',
+
+    saved: 'اتحفظت بياناتك.',
     save: 'حفظ',
     saving: 'جارٍ الحفظ…',
     saveFailed: 'مقدرناش نحفظ التغيير. نحاول تاني.',
@@ -1614,12 +2126,22 @@ export const copy = {
   },
   stream: {
     label: 'المدارس',
-    hint: 'عام أو لغات أو الاتنين',
-    general: 'عام',
+    hint: 'عربي أو لغات أو الاتنين',
+    /**
+     * «عربي», not «عام».
+     *
+     * The database column is `forGeneral` and the wire value is `general`, and
+     * both stay — this is the LABEL. «عام» is what the ministry calls the
+     * Arabic-medium school, and it is also the word this platform uses for "no
+     * particular track" (`copy.library.trackGeneral`), so a course card
+     * carrying «عام» beside «لغات» was answering two different questions with
+     * one word. The pair a student actually recognises is «عربي / لغات».
+     */
+    general: 'عربي',
     languages: 'لغات',
     /** The badge when a course or lesson serves both — not a third stream. */
-    both: 'عام ولغات',
-    required: 'لازم يتحدد عام أو لغات أو الاتنين',
+    both: 'عربي ولغات',
+    required: 'لازم يتحدد عربي أو لغات أو الاتنين',
     /** The `?stream=` filter's neutral option. */
     filterAll: 'الكل',
     filterLabel: 'اعرض لـ',
@@ -1632,6 +2154,19 @@ export const copy = {
     lessonOutsideCourse: 'المحاضرة دي متعلّمة لمدارس الكورس نفسه مش بيخدمها',
   },
   course: {
+    /**
+     * The free written explanations, surfaced on the course page they were
+     * written for.
+     *
+     * ⚠️ The lead says «من غير حساب ومن غير اشتراك» on purpose. This section's
+     * whole job is to give a visitor who is not ready to pay something real,
+     * and a reader who cannot tell the articles are free will assume they are
+     * behind the same door as the videos and not click.
+     */
+    articlesEyebrow: 'مفتوح للكل',
+    articlesTitle: 'الشرح المكتوب للمنهج ده',
+    articlesLead:
+      'كل درس في المنهج مشروح كتابة على الموقع — تقراه دلوقتي من غير حساب ومن غير اشتراك، وتحكم بنفسك على الشرح قبل ما تقرر.',
     back: 'رجوع',
     lessons: 'الدروس',
     freeBanner: 'الكورس ده مفتوح مجانًا',
@@ -1728,6 +2263,22 @@ export const copy = {
      * A course the instructor has closed. Deliberately NOT «حاول تاني» — the
      * student can retry all day and the door stays shut; what they need is to
      * know it is shut on purpose and who opens it.
+     *
+     * ⚠️ NOTHING RENDERS THIS ANY MORE, and, like `lockedNote` above, that is
+     * the point rather than an oversight.
+     *
+     * `course-start-button.tsx` used to show it on a 403 whenever its own props
+     * said the course was free. Those props come from a page cached for hours,
+     * so the sentence was routinely shown for a course that had a price and an
+     * InstaPay number and was waiting to be paid — the single most expensive
+     * wrong sentence the platform could say. Every 403 opens the subscribe
+     * panel now, and the panel decides on a LIVE read; the genuinely-unpriced
+     * closed course says `subscribe.noPlans` instead, which describes the state
+     * without promising that messaging someone will change it.
+     *
+     * Kept, unrendered, for the same reason `lockedNote` is: it is the string
+     * a regression guard has to name in order to assert that the page does not
+     * say it. Delete it and that assertion goes with it.
      */
     lockedError: 'الكورس ده مقفول دلوقتي. رسالة للمهندس أيمن وهيفتحه.',
     /** A published course whose lessons are not published yet. */
@@ -1768,6 +2319,24 @@ export const copy = {
    * learned is closed also turns out to be a PRICED one.
    */
   subscribe: {
+    /**
+     * «هتدفع إزاي؟» — the payment-rail question, and the copy for the two
+     * answers.
+     *
+     * ⚠️ The question is the shortest sentence on the screen on purpose. This
+     * step sits between a student and paying; anything that reads like a form
+     * loses people who were ready. Two words, two logos, one button.
+     *
+     * ⚠️ `railUnavailable` is on the CARD, never a footnote. A greyed-out
+     * option with no reason beside it reads as a broken screen, and a student
+     * who thinks the site is broken does not send money.
+     */
+    railQuestion: 'هتحوّل بإيه؟',
+    railInstapay: 'إنستاباي',
+    railVodafoneCash: 'فودافون كاش',
+    railUnavailable: 'مش متاح دلوقتي',
+    /** Back to the question, from the screen that shows the number. */
+    railChange: 'غيّر طريقة التحويل',
     cta: 'اشترك دلوقتي',
     title: 'اشتراك الكورس',
     choosePlan: 'اختار الباقة',
@@ -1801,7 +2370,14 @@ export const copy = {
      *  from one card to the next. */
     priceLine: '{price} جنيه',
     /** `{number}` is the Vodafone Cash number in local format (٠١٠…). */
-    instructions: 'حوّل المبلغ على رقم فودافون كاش {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
+    /**
+     * ⚠️ `{rail}` — «إنستاباي» or «فودافون كاش» — is interpolated, not written
+     * in. The line used to say «رقم إنستاباي» whatever the student had chosen,
+     * and a sentence naming one rail over a number belonging to another is the
+     * single most expensive mistake this screen can make: the money leaves and
+     * nothing reconciles it.
+     */
+    instructions: 'حوّل المبلغ على رقم {rail} {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
     copyNumber: 'نسخ الرقم',
     copied: 'اتنسخ',
     /** Replaces the old «المبلغ اللي حوّلته» field — the plan already fixes
@@ -1814,7 +2390,17 @@ export const copy = {
     screenshotLabel: 'صورة إثبات التحويل',
     screenshotPlaceholder: 'اضغط هنا وارفع صورة السكرين شوت',
     screenshotChange: 'تغيير الصورة',
-    screenshotHint: 'سكرين شوت واضح من رسالة أو تطبيق فودافون كاش بيوضّح المبلغ والتاريخ.',
+    /**
+     * ⚠️ `{rail}` — same reason as `instructions` above, and this one was
+     * MISSED when that fix went in.
+     *
+     * Caught by opening the real checkout on production: the student picks
+     * «فودافون كاش», sees the Vodafone number and the Vodafone mark, and then
+     * this line under the uploader tells them to screenshot InstaPay. A
+     * sentence naming the wrong app is how a correct transfer arrives with
+     * proof nobody can match to it.
+     */
+    screenshotHint: 'سكرين شوت واضح من تطبيق {rail} بيوضّح المبلغ والتاريخ.',
     back: 'رجوع',
     submit: 'إرسال الطلب',
     submitting: 'بنبعت الطلب…',
@@ -1830,8 +2416,48 @@ export const copy = {
     senderPhoneRequired: 'اكتب رقم الموبايل اللي حوّلت منه',
     senderPhoneInvalid: 'الرقم ده مش رقم مصري صحيح',
     screenshotRequired: 'ارفع صورة إثبات التحويل',
-    /** No `contact.vodafoneCash` configured yet — a real, if rare, admin gap. */
-    noNumber: 'الاشتراك مش متاح دلوقتي. تواصل معانا على واتساب.',
+    /**
+     * No `contact.instapay` configured — a real, if rare, admin gap.
+     *
+     * ⚠️ It used to read «الاشتراك مش متاح دلوقتي. تواصل معانا على واتساب.» and
+     * it was, by a distance, the most expensive sentence in this file: it is
+     * what a student who came to PAY was shown, and it sent them to WhatsApp
+     * instead of to a transfer. «هو جاي يدفع بيقولوا الكورس قفل، تواصل على
+     * واتساب… وأنا مش عايزها أصلاً، لأن ده لازم يدفع».
+     *
+     * Most of the fix is not in this string. `subscribe-panel.tsx` no longer
+     * decides "there is no number" from the cached public page — it re-reads
+     * `/api/settings/public` live when the panel opens, so a number the admin
+     * set an hour ago is a number the student sees now, and the commonest way
+     * to arrive here is gone. This line is what is left over for the case where
+     * the number genuinely has not been configured yet, and it says the two
+     * things that are true: the platform is at fault, and it is worth a retry.
+     * `retry` below is the button beside it.
+     */
+    noNumber: 'رقم التحويل لسه بيتظبط عندنا. جرب تاني بعد لحظة، والاشتراك هيفتح.',
+    /**
+     * A closed course with nothing to sell: no monthly/quarterly/yearly price
+     * and no open, priced term — read LIVE, not off the cached page.
+     *
+     * This replaced `course.lockedError` as the answer to a 403 on enroll. That
+     * one — «الكورس ده مقفول دلوقتي. رسالة للمهندس أيمن وهيفتحه.» — was reached
+     * whenever the CACHED page said the course was free, which on a course
+     * priced in the last hour was simply wrong: the student had a plan to buy
+     * and was told to go and ask a human. `course-start-button.tsx` now opens
+     * this panel on every 403 and lets the live read decide, so this sentence
+     * is only ever shown when the live read really did come back with nothing
+     * on sale.
+     *
+     * Deliberately NOT «حاول تاني» about the door: retrying does not open a
+     * course the instructor has not priced. It is about the SALE not being set
+     * up yet, which is the honest description of that state and the one that
+     * does not send anyone to WhatsApp for a course they cannot buy either way.
+     */
+    noPlans: 'الاشتراك في الكورس ده لسه مش مفتوح. جرب تاني بعد شوية.',
+    /** The button beside `noNumber`/`noPlans` — re-reads the live price and
+     *  number rather than reloading the page, so a student who arrived a
+     *  minute before the admin finished does not lose their place. */
+    retry: 'جرّب تاني',
     /** Brief, while the panel checks for an existing submission on open. */
     checking: 'لحظة واحدة…',
     /** My own past claims for this course — shown above the plan picker. */
@@ -1859,6 +2485,27 @@ export const copy = {
    * immediately, then the SAME Vodafone Cash payment UI. See the `BookOrder`
    * model doc in schema.prisma for the full reasoning.
    */
+  /**
+   * The WhatsApp message a student gets the moment his order is marked
+   * shipped — «هنبعتلهم رسالة على الواتس نقول إن ده اتشحن النهاردة».
+   *
+   * `{name}` is the name on the ORDER, not the account: guest orders have no
+   * account, and the order's own `fullName` is the one the parcel is
+   * addressed to either way.
+   *
+   * The 3-vs-4 day split is his own wording and it matters — a promise of
+   * three days to someone in أسوان is a complaint on day four. `{days}` is
+   * resolved per governorate before the text is rendered.
+   *
+   * ⚠️ It says «سلّمناه لشركة الشحن», not «اتشحن»: the parcel has left THIS
+   * office and is now with a courier, and that is the whole difference the
+   * student is about to phone about. «اتشحن» reads as "it is on your street"
+   * and makes day two a complaint; naming the courier also explains, without
+   * a second message, why the number that calls them is not ours.
+   */
+  bookShipNotice:
+    'يا {name}، كتابك سلّمناه لشركة الشحن النهاردة 📦\n\nهيوصلك خلال {days} أيام عمل بإذن الله، والمندوب هيتصل بيك على نفس الرقم ده قبل ما يوصل.\n\nأي حاجة، رد على الرسالة دي.',
+
   bookOrder: {
     cta: 'اطلب الكتاب',
     /** `{cta}` — `bookOrder.cta` itself, `{price}` — EGP, already formatted.
@@ -1866,9 +2513,36 @@ export const copy = {
      *  student clicks — not only later, deep in the panel's flow. */
     ctaWithPrice: '{cta} — {price} جنيه',
     title: 'طلب الكتاب',
-    /** `{price}` — same template as `subscribe.priceLine`. */
+    /** `{price}` — same template as `subscribe.priceLine`. ⚠️ Since «قسم الكتب»
+     *  this is the order's TOTAL, delivery included, not the book's own price.
+     *  The breakdown that explains it sits above, in the basket summary. */
     priceLine: '{price} جنيه',
+    /** Between the titles when an order carries more than one book. Arabic
+     *  punctuation, so it lives here rather than as a literal in a component. */
+    itemSeparator: '، ',
     addressTitle: 'بيانات الاستلام',
+    /**
+     * «إنت طلبت ده قبل كده» — shown when the server finds a FINISHED order for
+     * this phone with the same books in the last week.
+     *
+     * ⚠️ The safe answer is the FIRST and the plain one; «أيوه عايز واحد كمان»
+     * is the one that costs money, so it does not look like the button to press.
+     * This is the whole point of the dialog: the student who is here by accident
+     * has to do nothing, and the student who means it presses once.
+     *
+     * ⚠️ It never appears for an unpaid order of their own — that one is reused
+     * silently. Being asked «are you sure» about a form you merely refilled is
+     * how a real customer gets talked out of buying.
+     */
+    /** Beside the address summary on the payment screen — «رجوع» read as
+     *  "undo", which is why the saved address used to be invisible. */
+    editAddress: 'تعديل العنوان',
+    duplicateTitle: 'إنت طلبت الكتاب ده قبل كده',
+    duplicateBody:
+      'فيه طلب بنفس الكتب على نفس رقم الموبايل من أقل من أسبوع. لو ده هو نفس الطلب، مش محتاج تعمل حاجة — هيوصلك زي ما هو.',
+    duplicateCancel: 'تمام، سيبه زي ما هو',
+    duplicateConfirm: 'لأ، عايز نسخة كمان',
+
     fullNameLabel: 'الاسم بالكامل',
     phoneLabel: 'رقم الموبايل',
     altPhoneLabel: 'رقم موبايل تاني للتواصل',
@@ -1894,10 +2568,33 @@ export const copy = {
     addressBuildingRequired: 'رقم العمارة مطلوب',
     /** Reused verbatim from `subscribe.*` for the payment step — same UI,
      *  same copy tone, so the flow reads as one product. */
-    instructions: 'حوّل المبلغ على رقم فودافون كاش {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
+    /**
+     * ⚠️ `{rail}` — «إنستاباي» or «فودافون كاش» — is interpolated, not written
+     * in. The line used to say «رقم إنستاباي» whatever the student had chosen,
+     * and a sentence naming one rail over a number belonging to another is the
+     * single most expensive mistake this screen can make: the money leaves and
+     * nothing reconciles it.
+     */
+    instructions: 'حوّل المبلغ على رقم {rail} {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
     submit: 'إرسال الطلب',
     submitting: 'بنبعت الطلب…',
-    success: 'تم استلام طلب الكتاب! هيوصلك خلال ٢-٣ أيام، وأسرع لو انت في القاهرة. هنتواصل معاك على واتساب لتأكيد الطلب.',
+    /**
+     * ⚠️ Promises NOTHING about delivery timing, deliberately.
+     *
+     * It used to say «هيوصلك خلال ٢-٣ أيام» at the moment the screenshot was
+     * uploaded — before anyone had looked at the transfer. The clock a student
+     * starts counting from that sentence begins days before the parcel exists,
+     * so a perfectly normal order (payment checked the next morning, shipped
+     * the day after) is already "late" by the time it is handed to the courier.
+     *
+     * The two facts it gives instead are both true when it is read: the payment
+     * is being checked, and the platform itself will say when the parcel moves.
+     * The day count now lives in ONE place — the `book_order_shipped`
+     * notification — where it is counted from the day the courier actually took
+     * it. See `bookOrderShipped` in `copy.notifications`.
+     */
+    success:
+      'تم استلام طلبك! بنتأكد من الدفع الأول، وأول ما الكتاب يتشحن هتوصلك رسالة هنا على المنصة بموعد الوصول.',
     /** Shown when a visitor reopens the panel on the SAME browser after
      *  already finishing payment on an order this browser remembers — see
      *  `readInProgressBookOrder` in `lib/book-order-storage.ts`. Distinct
@@ -1915,6 +2612,21 @@ export const copy = {
   },
   player: {
     eyebrow: '09 / المشغّل',
+
+    /* ── ملخص الدرس ────────────────────────────────────────────────────────
+     *
+     * الملخص بيتقفل لوحده، والطالب هو اللي بيفتحه. الطلب كان «متشوفش الوصف
+     * إلا لما تشوف الدرس كله» — ودي مسألة ترتيب قراءة مش سرّية: الملخص اللي
+     * بيتقري الأول بيبقى الإجابات اللي بتتقري الأول، والدرس بيبطل يبقى حاجة
+     * بتشتغل عليها.
+     *
+     * فالجملة بتقول ده بصراحة وتسيب القرار للطالب. مقفولناش الملخص ورا
+     * «خلّصت الدرس» عشان علامة الإتمام دي تقدير مش حقيقة — واحد اتفرج على
+     * المحاضرة كلها على موبايل نتّه ضعيف ممكن ما يتحسبش خلّص.
+     */
+    descriptionTitle: 'ملخص الدرس',
+    descriptionWarning: 'متفتحوش غير لما تخلّص المحاضرة — ده ملخص تراجع بيه على نفسك، مش بديل عنها.',
+
     outline: 'محتوى الكورس',
     previous: 'الدرس السابق',
     next: 'الدرس التالي',
@@ -1976,11 +2688,37 @@ export const copy = {
     videoEmbedBlocked: 'الفيديو ده مش مسموح يتشغّل جوه المنصة. افتحه على يوتيوب.',
     /** YouTube 100 — removed, or private. */
     videoRemoved: 'الفيديو ده مش موجود على يوتيوب دلوقتي. ولو فضلت المشكلة، كلمة للمدرّس.',
-    /** The IFrame API script never loaded: an ad blocker, filtered DNS, or no
-     *  network. The only one of the four a retry can actually clear. */
-    videoBlockedByBrowser: 'مش قادرين نحمّل مشغّل يوتيوب — يمكن مانع إعلانات أو النت.',
-    videoRetry: 'نجرّب تاني',
+    /**
+     * Shown over the plain-`<iframe>` fallback, which runs when the IFrame API
+     * did not load or its frame never answered.
+     *
+     * Says the two things the student's next minute depends on: it may still
+     * not play (with the link right there), and this lesson will NOT tick
+     * itself off, because the fallback has no API to read the playhead from.
+     *
+     * It replaced «مش قادرين نحمّل مشغّل يوتيوب — يمكن مانع إعلانات أو النت»,
+     * which was shown INSTEAD of a video that would usually have played: the
+     * API script is on far more blocklists than YouTube is, and the student it
+     * was written for was being sent to look through browser settings for
+     * something that was never the problem.
+     */
+    videoFallbackNote: 'النت عندك كان مانع المشغّل بتاعنا، فشغّلناه بطريقة تانية. الدرس مش هيتسجّل لوحده — دوس «خلاص · التالي» لما تخلّص.',
     videoOpenOnYouTube: 'افتحه على يوتيوب',
+    /*
+     * The lecture is on our origin and nowhere else, so there is no «افتحه
+     * على يوتيوب» under this one. What is left really is worth retrying: the
+     * causes are a dropped segment or an origin hiccup, and a reload clears
+     * both. Saying «حاول تاني» to a student who cannot act on it would be
+     * worse than useless — here they can.
+     */
+    videoOurCopyFailed: 'الفيديو مارضيش يشتغل. اعمل ريفرش للصفحة وجرّب تاني.',
+    /*
+     * The window between an instructor finishing an upload and the encoder
+     * finishing with it — minutes, not hours. It names the wait instead of
+     * showing a play button over a video that is not there yet, and it says
+     * the lecture is coming rather than that something is broken.
+     */
+    videoProcessing: 'المحاضرة بتتجهّز دلوقتي، هتبقى جاهزة خلال دقايق. ارجعلها كمان شوية.',
     /** A video lesson whose `lesson_videos` row is missing entirely, which used
      *  to render as a blank 16/9 hole with no message and no logged error. */
     videoMissing: 'المحاضرة دي لسه مافيهاش فيديو.',
@@ -2080,6 +2818,100 @@ export const copy = {
       lead: 'لو عندك سؤال عن الكورس ده، ابعتله على واتساب.',
       cta: 'واتساب',
     },
+
+    /**
+     * «جروب الدفعة» — the course's OWN WhatsApp group, in the sidebar under
+     * the outline.
+     *
+     * Distinct from `help` above, which is a DM to him about this course, and
+     * from the dashboard's channel card, which is the platform's one broadcast
+     * channel. This is the cohort — the people sitting the same lectures — and
+     * it renders nothing at all when the course has no group, which is the
+     * default.
+     *
+     * Nothing here inflects for the reader: «جروبك» and «ادخل» would both
+     * address a boy, so the title is a NOUN PHRASE and the button names the
+     * destination rather than commanding a person.
+     */
+    group: {
+      title: 'جروب الدفعة',
+      lead: 'جروب الواتساب الخاص بطلبة الكورس ده — الأسئلة والتنبيهات بينزلوا فيه.',
+      cta: 'دخول الجروب',
+    },
+  },
+
+  /**
+   * الواجب — the exercise on a lecture, and the student's own answer to it.
+   *
+   * ## Nothing here knows whether it is talking to a boy or a girl
+   *
+   * The platform never asks, so «ارفع»، «سلّمت»، «إنت خلصت» are all unusable —
+   * every one of them grows a ي in the feminine. What is used instead is the
+   * four devices `copy/outreach.ts` documents: nominal sentences («رفع الصور»
+   * not «ارفع الصور»), the passive («الواجب اتسلّم»), the inclusive plural, and
+   * the ـك suffix on a NOUN («حلّك»، «واجبك»).
+   *
+   * ## The verdicts are the same three words the admin sees
+   *
+   * `copy.admin.homework` uses «مقبول» and «رجع للطالب» for the same states.
+   * They have to agree, or the instructor and the student are looking at two
+   * different features.
+   */
+  homework: {
+    title: 'واجب المحاضرة',
+    /** Above the questions, so it is clear this is his own text and not a
+     *  platform instruction. */
+    lead: 'المطلوب في الواجب ده:',
+    /** The upload area, when nothing has been handed in yet. */
+    uploadTitle: 'رفع صور الحل',
+    /** `{max}` is the ceiling the instructor set on this exercise. */
+    uploadHint: 'صوّر ورقة الحل ودوس هنا — لحد {max} صورة.',
+    pick: 'اختيار الصور',
+    /** On the button while the browser is sending them. */
+    uploading: 'بنرفع…',
+    /** Follows a number: «٣ صور». */
+    imageUnit: 'صورة',
+    remove: 'شيل الصورة',
+    submit: 'تسليم الواجب',
+    submitting: 'بنسلّم…',
+    /** After a `needs_work` verdict, the same button says this instead — the
+     *  work is not new, it is the same exercise coming back. */
+    resubmit: 'تسليم الحل من تاني',
+    /** Errors, one per thing that can actually go wrong. */
+    tooMany: 'الحد الأقصى {max} صورة للواجب ده.',
+    tooLarge: 'الصورة كبيرة أوي — أقصى حجم ٨ ميجا للصورة.',
+    badType: 'ده مش ملف صورة. الصور بس (JPG أو PNG أو WebP).',
+    uploadFailed: 'مقدرناش نرفع الصورة. نجرّب تاني.',
+    submitFailed: 'مقدرناش نسلّم الواجب دلوقتي. نجرّب تاني.',
+    empty: 'لازم صورة واحدة على الأقل للحل.',
+
+    // ── after it is handed in ───────────────────────────────────────────
+    statusPending: 'الواجب اتسلّم — مستني مراجعة مهندس أيمن',
+    statusAccepted: 'الواجب اتقبل',
+    statusNeedsWork: 'الواجب محتاج شغل تاني',
+    /** «الدرجة ٩٠ من ١٠٠» — `{grade}` is a number. */
+    grade: 'الدرجة {grade} من ١٠٠',
+    /** The heading over his note. */
+    note: 'رد مهندس أيمن',
+    /** «المحاولة ٢» — shown only from the second hand-in onwards. Its own key
+     *  rather than `copy.admin.homework.attempt`: a student route that reached
+     *  into the admin copy module would register it as a client reference on
+     *  the player, which `client-barrel.test.ts` fails the build for. */
+    attempt: 'المحاولة',
+    /** `{n}` is `imageCount`, kept after the pictures themselves are gone —
+     *  the record that something was handed in is the whole point. */
+    submittedCount: 'اتسلّم {n} صورة',
+    /**
+     * Why there is nothing to look at any more. Says what happened AND that
+     * the submission is intact, because a card that just showed nothing would
+     * read as the platform having lost the work.
+     */
+    imagesGone: 'الصور اتشالت بعد المراجعة، والتسليم متسجّل.',
+    /** «فكّر أكتر وابعته تاني» — the line above the reopened upload box. */
+    reopened: 'الواجب مفتوح تاني — رفع الحل الجديد من هنا.',
+    /** The card on a lecture whose homework the student has not opened yet,
+     *  used as the collapsed summary in the outline. */
+    badge: 'واجب',
   },
   path: {
     eyebrow: '02 / مساري',
@@ -2097,6 +2929,8 @@ export const copy = {
     locked: 'مقفول',
     exam: 'الامتحان النهائي',
     courseDone: 'الكورس خلص',
+    /** Same distinction as `library.courseUpToDate`. */
+    courseUpToDate: 'خلّصت اللي نزل',
     nothingOpen: 'مفيش حاجة مفتوحة دلوقتي',
 
     // ── a course the instructor has taken down ───────────────────────────
@@ -2146,6 +2980,20 @@ export const copy = {
      */
     recommended: 'كورسات في مسارك',
     recommendedSeeAll: 'كل الكورسات',
+    /**
+     * «الكتب» on the home screen. Plain, because the section under it is
+     * covers with prices and the heading has no work left to do — «الكتاب
+     * المطبوع» would be saying it twice.
+     */
+    books: 'الكتب',
+    booksSeeAll: 'كل الكتب',
+    /**
+     * The heading over the compact row under the two big covers — «يبقى في
+     * مكان صغير كده في الكتب التانية يقدر يشتري كتب تانية بردو». Small on
+     * purpose: it is a second shelf, not a second section, and it renders only
+     * when there IS a third book.
+     */
+    booksMore: 'كتب تانية',
     /**
      * The band at the top of the home screen. Worded around what the student
      * MISSES by not joining — «تابعنا» is a request, «أول ما يتنزل درس» is a
@@ -2197,6 +3045,26 @@ export const copy = {
     statOverall: 'إجمالي تقدّمك',
     statAverage: 'متوسط درجاتك',
     statNoScores: 'لسه',
+
+    /**
+     * «مواعيد المحاضرات» — the band's schedule strip, one line per enrolled
+     * course whose instructor wrote a time.
+     *
+     * His words, not a paraphrase: «يبقى موجودة في البانر اللي فوق اللي هو
+     * أهلاً أيمن». It sits in the hero because that is the one block a student
+     * cannot miss and cannot scroll past — a live lesson they were never told
+     * about is the most expensive thing this screen can fail to say.
+     *
+     * The heading is plural even for a student with one course. The normal
+     * case is two (عربي on one night, لغات on another), and a heading that
+     * changed shape with the count would read as two different features on two
+     * different accounts for no gain.
+     *
+     * NOTHING here is rendered when no enrolled course has a note, which is
+     * every account until an instructor writes the first one — not this
+     * heading, not an empty row, not «مافيش ميعاد».
+     */
+    scheduleTitle: 'مواعيد المحاضرات',
     lessonsOf: 'من',
     lessonsWord: 'درس',
     progressLabel: 'التقدّم',
@@ -2204,6 +3072,8 @@ export const copy = {
     continueCourse: 'نكمّل الكورس',
     startCourse: 'نبدأ الكورس',
     courseDone: 'الكورس ده خلص',
+    /** Same distinction as `library.courseUpToDate`. */
+    courseUpToDate: 'خلّصت اللي نزل',
     emptyTitle: 'نبدأ من كورس',
     emptyBody: 'أي كورس من صفّك ومساره، بالاشتراك فيه، بيبان هنا على طول مع تقدّمك فيه.',
 
@@ -2254,18 +3124,74 @@ export const copy = {
     xpLabel: 'نقاط الخبرة',
     /** `totalWatchedSeconds` rounded to whole hours — real watch time, not a
      *  count of lessons. See `DashboardSchema.totalWatchedSeconds`. */
-    learningHoursLabel: 'ساعات التعلم',
+    /**
+     * ⚠️ «وقت المذاكرة», not «ساعات التعلم».
+     *
+     * The tile prints through `formatHoursMinutes`, which carries its own unit —
+     * «٨ د» for a student's first session, «٣ س ٥٠ د» later. A label with the
+     * word «ساعات» in it contradicts the value beside it for everybody under an
+     * hour, which is exactly who this tile is most read by.
+     */
+    learningHoursLabel: 'وقت المذاكرة',
+
+    /*
+     * ══════════════════════════════════════════════════════════════════════
+     * «ناقصك كده وتخلص» — the block under the progress ring.
+     *
+     * The ring used to print «٨٠٪ إجمالي تقدّمك» and stop, which is a verdict
+     * with no instruction attached: it says how far off you are and nothing
+     * about what to press. «عاوز أعرف اللي ناقصني وأضبطها… ولما أضغط عليها
+     * توديه ليها عشان يخلصها.»
+     * ══════════════════════════════════════════════════════════════════════
+     */
+    nextUp: {
+      title: 'ناقصك كده وتخلص',
+      lead: 'دوس على أي واحدة منهم وهي توديك لمكانها على طول.',
+      ctaLessons: 'يلا نكمّل',
+      ctaExam: 'ادخل الامتحان',
+
+      /* ── The counts on each row ────────────────────────────────────────
+         Four forms because Arabic has four, and «فاضلك 2 دروس» is the kind
+         of sentence that makes a product feel machine-written. */
+      lessonsOne: 'فاضلك درس واحد',
+      lessonsTwo: 'فاضلك درسين',
+      lessonsFew: 'فاضلك {n} دروس',
+      lessonsMany: 'فاضلك {n} درس',
+      /** The exam is one thing, always, so it needs no count. */
+      exam: 'فاضل امتحان الكورس',
+
+      /* ── 100% ──────────────────────────────────────────────────────────
+         «لو خلص ١٠٠٪ فرحة عليها بشكل حلو، وتهنّيه وتشجّعه.» This is the one
+         card on the dashboard that is allowed to be loud, and the note is
+         written to be worth reading rather than to fill the space: it says
+         what finishing actually buys, which is the part a percentage never
+         tells anybody. */
+      wonTitle: 'مبروك يا {name}! خلصت كل حاجة',
+      /** No first name on the session — the congratulation is still one. */
+      wonTitleFallback: 'مبروك! خلصت كل حاجة',
+      wonCourses: 'قفلت من أوله لآخره: {courses}.',
+      /** When the payload knows the student is done but names no course. */
+      wonCoursesPlain: 'مافيش ولا درس ولا امتحان لسه مستنيك.',
+      wonAndMore: 'و{n} كمان',
+      /** In the table for the same reason every other string is: a component
+       *  that writes `titles.join('، ')` has put user-facing text back into a
+       *  component, and «، » is as user-facing as a word. */
+      listSeparator: '، ',
+      wonNote:
+        'ده مش شوية. اللي بيمشي لحد الآخر كده بيبان في الامتحان، مش في النسبة بس. خد نفسك، ارجع راجع اللي عدى وانت مرتاح، وأول ما ينزل جديد هتلاقيني مستنيك.',
+      wonResults: 'شوف درجاتك',
+      wonBrowse: 'كورسات تانية',
+    },
     badgesEarnedLabel: 'شارات محققة',
 
-    // ── course tabs on «كورساتي» ────────────────────────────────────────
-    /** Split by `progressPercent`, client-side — no new API read. */
-    tabCurrentCourses: 'الدورات الحالية',
-    tabCompletedCourses: 'المكتملة',
-    /** «المكتملة» chosen and nothing in it has hit 100% yet — distinct from
-     *  `noCoursesYet`, which means no enrolment at all. */
-    noCompletedCoursesYet: 'لسه مخلّصتش أي كورس بالكامل.',
-    /** «الدورات الحالية» chosen and every enrolled course is already done. */
-    noCurrentCoursesYet: 'خلّصت كل الكورسات اللي عندك.',
+    /*
+     * ⚠️ «الدورات الحالية» / «المكتملة» were here, and they are gone by name:
+     * «ميبقاش كلمة مكتمل دي أصلاً، لا، يبقوا جنب بعض». Do not add them back
+     * without reading the note at the course grid in `(app)/dashboard/page.tsx`
+     * — courses on this platform publish lectures all term, so "completed" is a
+     * state a course leaves again the following week, and a tab by that name
+     * hid half a student's enrolments behind a label that was not true.
+     */
 
     /**
      * «نصيحة اليوم» — one line, picked by day-of-year so it changes daily
@@ -2273,6 +3199,14 @@ export const copy = {
      * and `xp.ts`). Colloquial-Egyptian, matching the platform's voice
      * elsewhere on this page — not a corporate motivational-poster tone.
      */
+    /**
+     * The heading over «نصيحة اليوم». The card used to print the sentence with
+     * no label at all, so nothing on screen said what the line WAS — advice
+     * from the instructor, a system message, or a notice about this student in
+     * particular. A tip that does not admit it is a tip reads as any of the
+     * three.
+     */
+    tipOfDayTitle: 'نصيحة اليوم',
     tipOfDay: [
       'عشر دقايق دلوقتي أحسن من ساعتين تقول هتعملهم بكرة.',
       'افتح الدرس اللي واقف عنده — مش شرط تخلص الكورس النهارده، بس متسيبوش برد.',
@@ -2286,6 +3220,50 @@ export const copy = {
       'استمر — الفرق بين الناجح وغيره غالبًا هو إنه كمّل.',
     ],
     // ── «نقاط ضعفك» — the mastery card ───────────────────────────────────
+    /**
+     * امتحانات الشهر — the countdown band and the shelf it retires to.
+     *
+     * Never gendered: the platform does not know whether it is talking to a boy
+     * or a girl and must not guess. Everything here is second person plural or
+     * impersonal («فاضل»، «الامتحان مفتوح»), which is correct for both.
+     */
+    exams: {
+      /** The band above everything, before the exam opens. */
+      upcomingEyebrow: 'امتحان قرب',
+      /** The band once the window is open. The one accent action on the page. */
+      openEyebrow: 'الامتحان مفتوح دلوقتي',
+      enter: 'ادخل الامتحان',
+      /** `{course}` — so a student in four courses knows which one this is. */
+      courseLine: 'كورس {course}',
+      /** `{lessons}` — the covered lesson titles, joined with «، ». This is the
+       *  single most useful line on the card: it is what to revise. */
+      coversLabel: 'على الدروس',
+      /** `{d}` `{h}` `{m}` `{s}` — filled by the live countdown under 48 hours.
+       *  Days are dropped from the string when zero rather than printed as ٠. */
+      countdownDays: 'فاضل {d} يوم و {h} ساعة',
+      countdownHours: 'فاضل {h}:{m}:{s}',
+      /** Above 48 hours a per-second clock is noise — the date is the fact. */
+      opensAtLine: 'هيفتح {date}',
+      /** `{n}` — minutes. Stated on the card because it changes how they plan
+       *  their evening, not just whether they show up. */
+      durationLine: 'مدة الامتحان {n} دقيقة',
+      /** `{date}` — when the window shuts. A student who logs in at 19:00 on
+       *  Saturday needs to know it is gone, not wonder where it went. */
+      closesAtLine: 'ويقفل {date}',
+      /** One sitting, no second chance, and it must be said BEFORE they start —
+       *  discovering it after a dropped connection is the worst way to learn it. */
+      oneSittingWarning: 'عندك محاولة واحدة بس — ابدأ وانت فاضي ونت كويس.',
+      /** The shelf in «امتحاناتك» once the window has closed. */
+      closedTitle: 'امتحانات الشهر',
+      closedEmpty: 'لسه مفيش امتحانات شهر خلصت.',
+      /** `{score}` `{outOf}` — their own result. */
+      scoreLine: '{score} من {outOf}',
+      /** Shown instead of a score when the window closed and they never sat it.
+       *  Not «صفر»: they did not fail it, they missed it, and the two are
+       *  different things to read about yourself. */
+      missed: 'مدخلتش الامتحان ده',
+      review: 'شوف ورقتك',
+    },
     mastery: {
       title: 'ذاكر ده',
       /** `{n}` — how many topics cleared the evidence floor. Present so three
@@ -2383,6 +3361,31 @@ export const copy = {
       earned: 'اتحقّق',
       /** Appended to one that has not been earned, before its hint. */
       locked: 'لسه',
+
+      /*
+       * ── The three tiers ────────────────────────────────────────────────
+       * Which marker is which is decided in `apps/web/lib/achievements.ts`,
+       * beside the predicate that earns it, and the reasoning is written out
+       * there. These are only the names.
+       *
+       * They exist because the tier is carried visually by a metallic fill and
+       * a ring weight, i.e. by colour and thickness and nothing else — so a
+       * screen reader hears «أول درس، اتحقّق» and learns that the student has
+       * it, but never that it was the cheap one. `tierLabel` is what puts the
+       * weight into the accessible name, and it is spoken on UNEARNED markers
+       * too: knowing that «كورس كامل» is a gold badge is most of the reason to
+       * show it before it is earned.
+       *
+       * Feminine adjectives — they agree with «شارة», not with the marker's
+       * own title.
+       */
+      tierBronze: 'برونزية',
+      tierSilver: 'فضية',
+      tierGold: 'ذهبية',
+      /** `{tier}` — one of the three above. Goes into the badge's accessible
+       *  name, and into the «شارات محققة» tile's, for the best tier reached. */
+      tierLabel: 'شارة {tier}',
+
       firstLessonTitle: 'أول درس',
       firstLessonHint: 'أول محاضرة لحد آخرها.',
       tenLessonsTitle: 'عشر دروس',
@@ -2459,6 +3462,14 @@ export const copy = {
     fieldGovernorate: 'المحافظة',
     fieldYear: 'الصف',
     fieldNotSet: 'مش متسجّل',
+    /**
+     * The way OUT of this panel. Every value above it is read-only, and until
+     * this link existed there was no route from here to changing any of them —
+     * `/settings/section` asked for the year alone and nothing linked to it
+     * from this page at all. «مش متسجّل» in a row nobody can fill in is the
+     * worst version of that.
+     */
+    fieldsEdit: 'عدّل بياناتك',
     // ── totals ─────────────────────────────────────────────────────────
     earnedTitle: 'اللي حصّلته',
     statLessons: 'دروس خلصتها',
@@ -2520,10 +3531,72 @@ export const copy = {
     /** Same word, same reason, as `quiz.failed` — a notification that told a
      *  student to sit the quiz again was pointing at a door that is not there. */
     quizGradedFailed: 'محتاجة مراجعة',
+    /**
+     * نفس الـ kind، بس الورقة نُصّها لسه مقالي متصحّحش.
+     *
+     * الإشعار ده بيتبعت لحظة التسليم، فـ«اتصحّحت ورقتك — الدرجة ٤٨٪» عن
+     * امتحان مفيش حد فتح نُصّه لسه بتكدب مرتين: بتقول اتصحّحت، وبتدّي رقم
+     * مش نهائي. دي الصيغة الصح للحالة دي — وأول ما مهندس أيمن يخلّص
+     * التصحيح بيتبعت إشعار تاني بـ`quizGraded` الأصلي ومعاه الدرجة
+     * النهائية (`ManualGradingService.grade`).
+     */
+    quizGradedPartial: 'سلّمت الامتحان — الاختياري اتصحّح',
+    /** `{marks}` بالدرجات، مش بالنسبة المئوية: «باقي ٥٠ درجة» جملة الطالب
+     *  فاهمها من غير ما يحسب، و«باقي ٥٠٪» مش نفس المعنى على ورقة مقامها
+     *  اتغيّر. */
+    quizGradedPartialDetail: 'باقي {marks} درجة عند مهندس أيمن',
     extraAttempt: 'المدرّس دّالك محاولة زيادة في الامتحان ده',
     /** المساعد — the instructor answered a conversation this student opened.
      *  Carries no lesson, which is why `EmitInput` stopped requiring one. */
     conversationReply: 'مهندس أيمن ردّ على سؤالك',
+    /**
+     * The two ADMIN kinds. Same feed, same bell, same «علّم الكل كمقروء» — a
+     * separate staff inbox would have been a second thing to check, and the
+     * whole point is that there is one place a waiting decision shows up.
+     *
+     * `{name}` is the student, resolved at read time. It can be empty for an
+     * account deleted since — the sentence still reads, which is why the name
+     * is at the end rather than in the middle.
+     */
+    paymentSubmitted: 'اشتراك جديد مستني مراجعة — {name}',
+    bookOrderPlaced: 'طلب كتاب جديد مدفوع — {name}',
+    /** The subtitle on a `book_order_placed` row — the queue it belongs to. */
+    bookOrderQueue: 'طلبات الكتب',
+    /** A third admin kind, same discipline as the two above — `{name}` is the
+     *  student, resolved at read time. No person-noun («طالب»/«طالبة») in the
+     *  sentence itself, same rule `outreach/compose.ts` enforces on
+     *  student-facing copy: the name alone carries the identity. */
+    assistantQuestionReceived: 'سؤال جديد مستني رد — {name}',
+    /** The subtitle on an `assistant_question_received` row. */
+    assistantQuestionQueue: 'صندوق الوارد',
+    /*
+     * الكتاب الورقي — الطالب. تلات لحظات كانت بتحصل من غير ما حد يقوله.
+     *
+     * `{book}` هو اسم الكتاب، بيتقرا وقت العرض من أول سطر في الطلب. لو الطلب
+     * اتفضى من سطوره بيبقى فاضي — عشان كده الاسم في الآخر، الجملة تفضل مقروءة.
+     */
+    /**
+     * `{book}` — the title. `{days}` — 3 for القاهرة/الجيزة, 4 everywhere else,
+     * resolved at read time off the ORDER's governorate (see
+     * `NEXT_DAY_GOVERNORATES`), never stored on the notification.
+     *
+     * This is the ONE place the platform promises a delivery date, and it is
+     * counted from the day the courier actually took the parcel. The order
+     * confirmation deliberately promises nothing — see `books.bookOrder.success`
+     * for why a clock started at payment time is a clock that is already late.
+     */
+    bookOrderShipped: 'كتابك اتشحن — {book}',
+    /** The second line on the card. Split from the title so the row reads at a
+     *  glance and the date is there for the reader who stops on it. */
+    bookOrderShippedDetail: 'هيوصلك خلال {days} أيام عمل، والمندوب هيتصل بيك قبل ما يوصل.',
+    bookOrderDelivered: 'الكتاب وصلك — {book}',
+    /** The reason follows on the card, verbatim, exactly as with a rejected
+     *  payment. This line is only the lead-in. */
+    bookOrderRejected: 'طلب الكتاب اترفض — {book}',
+    /** The subtitle on all three: where pressing the row lands you. */
+    bookOrderMineQueue: 'كتبي',
+    /** The live stream's toast, when the tab is open. */
+    liveOpen: 'افتح',
     /**
      * «رسايل م. أيمن» — he wrote FIRST.
      *
@@ -2539,6 +3612,27 @@ export const copy = {
      * not.
      */
     instructorMessage: 'مهندس أيمن بعتلك رسالة',
+    /**
+     * The second line of the PUSH only — the in-app row has no body at all.
+     * Says where to read it without repeating it, because the message itself
+     * is read in the conversation where it can be answered.
+     */
+    instructorMessagePushDetail: 'افتح المنصة تقراها وترد عليه',
+    // ── «خلي الموبايل ينبهني» — the student's push opt-in. ───────────────
+    //
+    // The wording sells the thing the student wants (not missing a lecture or
+    // a quiz), not the mechanism. Nobody has ever enabled a notification
+    // because they were told about Web Push.
+    pushOptInTitle: 'خلي الموبايل ينبهك',
+    pushOptInLead: 'يوصلك تنبيه على الموبايل أول ما م. أيمن يبعت حاجة أو ينزل محاضرة — من غير ما تفتح الموقع.',
+    pushOptInButton: 'فعّل التنبيهات',
+    pushOptInWorking: 'بيفعّل…',
+    /** Shown ONLY on an explicit press, never by the silent mount-time repair.
+     *  It names the server as the cause on purpose: the person pressing has
+     *  done everything right and there is nothing else for them to try, so
+     *  «حاول تاني» would be a lie. This sentence is what stopped Web Push
+     *  from being dead in production without a single visible error. */
+    pushNotConfigured: 'التنبيهات مش متظبطة على السيرفر لسه — مفاتيح الإرسال ناقصة.',
     instructorMessageQuizResult: 'مهندس أيمن شاف نتيجتك',
     instructorMessageQuizNudge: 'مهندس أيمن فاكرك بالكويز',
     instructorMessageLessonPraise: 'مهندس أيمن بعتلك كلمتين',
@@ -2555,6 +3649,53 @@ export const copy = {
      *  early and chose to show the reason. `detail` on the entry carries
      *  that reason itself. */
     subscriptionCancelled: 'اشتراكك في {course} اتلغى',
+    /*
+     * ── «مبروك، خلصت الكورس» ───────────────────────────────────────────
+     *
+     * «لو خلص ١٠٠٪ فرحة عليها بشكل حلو… وتهنّيه وتبعتله مسج عشان تشجّعه
+     *  وتحسّسه إنه شاطر.»
+     *
+     * The twin of `dashboard.nextUp.wonTitle`, and NOT a duplicate of it. The
+     * card congratulates whoever is looking at the dashboard; a course is
+     * finished on the last lesson's player, and the tab usually closes from
+     * there. These two strings are the half of the celebration that travels —
+     * to the bell, to the feed, and to a push on a phone with nothing open.
+     *
+     * `{course}` is the title, resolved at read time. Written for either
+     * reader, same rule as everything else student-facing: the pride is in
+     * the FIRST person («أنا فخور»), which is a fact about him, and the
+     * qualifier names the effort rather than the student, so there is no
+     * adjective left to inflect. «إنت شاطر» is what the ask literally says
+     * and it is exactly what cannot be written here.
+     */
+    courseCompleted: 'مبروك! خلصت {course}',
+    /** The line under it. Same slot `paymentRejected` gives the admin's own
+     *  reason — fixed copy here, because there is nothing per-student left to
+     *  say except that this counted. It doubles as the push body. */
+    courseCompletedDetail: 'قفلته من أوله لآخره، ودي مش حاجة بسيطة. أنا فخور بالمجهود ده.',
+    /**
+     * الواجب — the ADMIN's alert. `{name}` is the student, and the lecture is
+     * the subtitle the card resolves for itself, so the sentence has to read
+     * with the name alone.
+     */
+    homeworkSubmitted: 'واجب جديد من {name}',
+    /** The line under it, and the push body: what he is being asked to do. */
+    homeworkSubmittedDetail: 'الحل مستني مراجعة',
+    /**
+     * الواجب — the STUDENT's side, one sentence per verdict.
+     *
+     * `{lesson}` is the lecture. Neither line inflects for the reader: the
+     * first is about the WORK («واجبك … اتقبل»), the second is a nominal
+     * sentence, and «ابعت» in an imperative would address a boy — which is why
+     * it says «فيه ملاحظات» and lets the card's own button carry the action.
+     */
+    homeworkAccepted: 'واجب {lesson} اتقبل ✅',
+    homeworkAcceptedDetail: 'مهندس أيمن راجع الحل وكتب لك رد.',
+    /** `{grade}` is a number out of 100, and this line is used only when there
+     *  is one — «مقبول من غير درجة» is the ordinary case. */
+    homeworkAcceptedGrade: 'الدرجة {grade} من 100',
+    homeworkNeedsWork: 'واجب {lesson} فيه ملاحظات',
+    homeworkNeedsWorkDetail: 'مهندس أيمن كتب لك رد، والواجب مفتوح تاني.',
     /** Relative time, e.g. "من ٣ ساعات" — `{value}` is already formatted. */
     ago: 'من {value}',
   },
@@ -2653,6 +3794,84 @@ export const copy = {
       escalateTitle: 'السؤال ده محتاج أيمن',
       escalateBody: 'أوصّله ليه بالسؤال زي ما هو، والرد بيرجع هنا ومعاه إشعار.',
       escalateAction: 'إرسال السؤال لأيمن',
+
+      /* ── التحويل بيحصل لوحده ──────────────────────────────────────────
+       *
+       * المساعد مش بيستأذن. أول ما يقف، السؤال بيروح لم. أيمن، والكارت اللي
+       * تحت الرد بيقول حصل إيه — مش بيسأل «تحب أبعته؟».
+       *
+       * ⚠️ Every string here is read by somebody whose gender the platform has
+       * never asked for, exactly like the rest of this block: «بنوصّل» and
+       * «راحت» state what the platform did, and not one of them is an
+       * imperative or a second-person pronoun.
+       */
+      /** While the thread is being opened. One frame to a second. */
+      handoffSending: 'بنوصّل السؤال لم. أيمن…',
+      /** It landed — the words المساعد promised, kept. */
+      handoffSentTitle: 'الرسالة راحت لم. أيمن',
+      handoffSentBody:
+        'هو اللي هيرد، والرد بيوصل هنا ومعاه إشعار. والصفحة ممكن تتقفل عادي.',
+      handoffOpenThread: 'فتح المحادثة',
+      /**
+       * A guest, and the ONE thing the platform cannot supply on their behalf.
+       *
+       * Not an error and not a refusal: the question is ready to go, and it
+       * needs somewhere for the answer to come back to. «الرد» is the subject
+       * of the second sentence, so nothing here inflects.
+       */
+      handoffIdentityTitle: 'ناقص حاجة واحدة',
+      handoffIdentityBody: 'الاسم ورقم الواتساب، عشان رد م. أيمن يلاقي طريقه.',
+      /** The send genuinely failed — a 429, the open-thread limit, no network. */
+      handoffFailedTitle: 'مقدرناش نوصّل السؤال',
+      handoffFailedBody: 'السؤال لسه موجود. نجرب نبعته من هنا تاني.',
+
+      /* ── الزراير اللي تحت الرد ────────────────────────────────────────
+       *
+       * «لو حد سأله على حاجة يقدر يبعتله زرار يروح للمكان اللي سأل عليه».
+       *
+       * An answer that ENDS in prose is an answer that ends with the student
+       * still on the same screen. «الكتب في قسم الكتب» is true, and it is also
+       * a small navigation puzzle handed to somebody who asked precisely
+       * because they could not find it. So an answer may carry up to three
+       * destinations, and the panel draws them as the thing they are.
+       *
+       * ⚠️ THE KEYS OF `actions` ARE THE DESTINATION IDS. `assistant/ask.ts`
+       * types `AskActionId` as `keyof typeof copy.assistant.ai.actions` and
+       * declares `ASK_ACTION_HREFS` as a total `Record` over it — exactly the
+       * arrangement `assistant/script.ts` uses for nodes. So a label with no
+       * route does not compile, a route with no label does not compile, and
+       * the href a button carries is never a string a model wrote.
+       *
+       * The labels name a PLACE and never an action: «الكتب وأسعارها», not
+       * «شوف الأسعار». Arabic imperatives inflect for gender, this platform
+       * never asks a student which one they are, and a noun phrase is the one
+       * form that is right for everybody. Same rule as the rest of the panel.
+       */
+      /** `aria-label` on the row of destinations under an answer. */
+      actionsLabel: 'روابط تخص السؤال ده',
+      actions: {
+        /* ── الصفحات العامة، اللي زائر من غير حساب يقدر يفتحها ────────── */
+        /** The public catalog — what is open, and what each course costs. */
+        courses: 'الكورسات وأسعارها',
+        /** The public shop. The one page that carries book prices. */
+        books: 'الكتب وأسعارها',
+        essentials: 'التأسيس',
+        /* ── جوه المنصة، لطالب مسجّل دخول ─────────────────────────────── */
+        dashboard: 'حسابي',
+        library: 'كورساتي',
+        path: 'مساري',
+        results: 'نتائجي',
+        foundations: 'دروس التأسيس',
+        /** The same shop as «الكتب»، جوه الشِل — see `student-nav-items.ts`. */
+        store: 'قسم الكتب',
+        orders: 'طلبات الكتب',
+        playground: 'تجربة الكود',
+        profile: 'بياناتي',
+        devices: 'أجهزتي',
+        /* ── الدخول ───────────────────────────────────────────────────── */
+        login: 'تسجيل الدخول',
+        register: 'حساب جديد',
+      },
     },
 
     /* ── كل اللي المساعد يعرفه ───────────────────────────────────────────
@@ -2835,7 +4054,7 @@ export const copy = {
       {
         id: 'whoIsAyman',
         q: 'مين أيمن أبو العلا؟',
-        a: 'المهندس أيمن أبو العلا — مدرّس البرمجة وعلوم الحاسب للمرحلة الثانوية، ومهندس برمجيات شغّال في السوق من سنين. صفحة «عن المنصة» فيها التفاصيل.',
+        a: 'المهندس أيمن أبو العلا — مدرّس البرمجة وعلوم الحاسب للمرحلة الثانوية، ومهندس برمجيات شغّال في السوق من ٨ سنين. صفحة «عن المنصة» فيها التفاصيل.',
       },
     ] as const,
 
@@ -2870,10 +4089,85 @@ export const copy = {
       join: 'الأسئلة اللي بتتسأل هنا:',
       joinAccount:
         'دوسة على إنشاء حساب، وبعدها الاسم والرقم والمحافظة والسنة الدراسية. الخطوة دي بتاخد دقيقة، وبعدها المنصة بتعرف تورّي مواد سنتك بالظبط بدل الدوران.',
+      /* ── الاشتراك، خطوة خطوة ────────────────────────────────────────
+       *
+       * Three bodies, one step each, because the flow HAS three steps and a
+       * student who stops reading after the first one still has to be able to
+       * do it. See the chain's own note in `assistant/script.ts`.
+       *
+       * ⚠️ NO NUMBERS. Not the plan prices — they are on the course's own
+       * cards, and an offer changes them without a deploy — and not the
+       * Vodafone Cash number, which lives in site settings and is rendered
+       * beside a copy button in the panel the student is already looking at.
+       * A number typed here is a number that goes stale silently.
+       *
+       * The old single line said «هيتفتح على طول وهتلاقيه في لوحتك», which was
+       * wrong twice: a PRICED course does not open on subscribing, it opens
+       * when a human accepts the transfer — and «هتلاقي» is second person
+       * masculine, addressing half the students the platform never asked about.
+       */
       joinEnroll:
-        'من صفحة الكورس، دوسة على «الاشتراك في الكورس». لو الكورس متاح لسنتك هيتفتح على طول وهتلاقيه في لوحتك.',
+        'الاشتراك بيتم من صفحة الكورس نفسه: دوسة على «اشترك دلوقتي»، وبعدها اختيار الباقة — شهر، تلات شهور، سنة كاملة، أو ترم — وكل باقة سعرها مكتوب على الكارت بتاعها. الخطوة اللي بعدها الدفع.',
+      joinPay:
+        'الدفع إنستاباي. رقم التحويل بيبان في نفس الشاشة ومعاه زرار نسخ. وبعد التحويل بيتبعت حاجتين: رقم الموبايل اللي التحويل اتبعت منه، وصورة سكرين شوت من إنستاباي بتوضّح المبلغ والتاريخ. وآخر حاجة دوسة على «إرسال الطلب».',
+      joinReview:
+        'الطلب بيروح لأيمن، وهو بيراجع الصورة والرقم على كشف إنستاباي بإيده — مفيش تفعيل تلقائي هنا. وطول ما الطلب في المراجعة بيبان على صفحة الكورس إنه في مراجعة. أول ما يتقبل، الكورس بيتفتح على طول ويوصل إشعار. ولو طوّلت أكتر من المعقول، رسالة لأيمن وهو يراجعه.',
       joinPrice:
         'الأسعار والعروض بتتغيّر من فترة للتانية، فمش عايز أقولك رقم قديم. أحسن حاجة إني أوصّلك لأيمن يقولك السعر الحالي بالظبط.',
+
+      /* ── الكتاب الورقي ───────────────────────────────────────────────
+       *
+       * «طمّنه» is the whole assignment for the two nodes below, and the way
+       * to fail it is to be reassuring about a date. `books.mine.note*`
+       * already worked this out for the same student on their dashboard —
+       * «ساعات بيتأخر يوم أو اتنين، وده عادي» — and these say the same thing
+       * in the same voice, because the student may well read both.
+       *
+       * The heavy demand is stated OUT LOUD and early. It is true, it is why
+       * the wait is longer than the confirmation screen's «٢-٣ أيام» promised,
+       * and hiding it turns a busy week into what looks like an order that got
+       * lost.
+       */
+      books: 'الكتب الورقية بتتشحن لحد باب البيت. السؤال في إيه؟',
+      bookOrderHow:
+        'من صفحة «الكتب»: اختيار الكتب المطلوبة وتحديد العدد، وبعدين «كمّل الطلب» — بيانات الاستلام (الاسم، الرقم، المحافظة، والعنوان)، وبعدها نفس خطوة إنستاباي: تحويل المبلغ، ورقم الموبايل اللي التحويل اتبعت منه، وصورة التحويل. والشحن بيتحسب مرة واحدة على الطلب كله مهما كان عدد الكتب.',
+      /**
+       * ⚠️ THIS ANSWER USED TO SAY A THING IT CANNOT KNOW.
+       *
+       * It opened with «الكتاب في السكة وبيوصل خلال أيام» — a statement about
+       * ONE student's order, made by a node that has no session, no order id
+       * and no lookup. It is said to whoever walks the tree to it, and the
+       * tree is on the public site, so it was also said to somebody whose
+       * order is still `address_only` (the address form was filled in and the
+       * money never sent) or `rejected`. Told «it is on its way», they wait
+       * for a book nobody is shipping, and the platform is the thing that
+       * misled them.
+       *
+       * What survives is everything the module genuinely knows: where the
+       * real state is written, and what is true of the SHOP rather than of
+       * their order. «طمّنه إن في ضغط على الكتب» is the instructor's own ask
+       * and it is kept word for word in spirit — the heavy demand is real, it
+       * is why a wait runs past the confirmation screen's «٢-٣ أيام», and
+       * saying it out loud is what turns a busy week into something other than
+       * a lost order. Reassurance about the situation, never about a delivery
+       * this cannot see.
+       *
+       * The statuses named are the five `/store/orders` actually renders, in
+       * its own words — see `books.mine.status*`. Naming them is what makes
+       * «الصفحة بتوري» a usable instruction instead of a deflection.
+       */
+      bookNotArrived:
+        'صفحة «طلبات الكتب» بتوري كل طلب هو فين بالظبط — لسه مكمّلش، ولا بنجهّزه، ولا في الطريق، ولا وصل — ودي أدق حاجة عن الطلب ده، لأنها بتتحدّث مع كل خطوة. ونقولها بصراحة: الطلب على الكتب كتير جداً دلوقتي، فساعات بيتأخر يوم أو اتنين عن المتوقع — وده عادي وملوش لزوم قلق. ولو الصفحة بتقول إنه في الطريق وعدّت الأيام، أوصّل السؤال لأيمن على طول.',
+      /*
+       * The one answer on this branch that names no day, on purpose.
+       *
+       * Delivery is a courier's schedule, not the platform's, so a date here
+       * would be a guess wearing the platform's voice. What IS the platform's
+       * to promise is the phone call the day before — which is the answer to
+       * what the question is really asking.
+       */
+      bookWhenExactly:
+        'مش هقول يوم بالظبط، عشان التوصيل مع شركة شحن ومش هينفع أضمن ميعاد. اللي مضمون إن حد بيتواصل قبل التوصيل بيوم، فمحدش محتاج يقعد مستني ورا الباب. ولو عدّت الأيام ومحدش اتواصل، أوصّل السؤال لأيمن على طول.',
 
       study: 'السؤال في إيه؟',
       studyQuizzes:
@@ -2904,7 +4198,7 @@ export const copy = {
        * (see `auth.config.ts`), this is the first copy to rewrite.
        */
       accountPassword:
-        'الدخول هنا بيتم برقم الموبايل، والمنصة مابتبعتش إيميلات — فمفيش لينك «نسيت كلمة السر» يتبعت. لو كلمة السر ضاعت، أيمن هو اللي بيرجّعها: رسالة ليه من هنا، أو على الواتساب.',
+        'مفيش لينك «نسيت كلمة السر» في المنصة، لأن المنصة مابتبعتش إيميلات ولا رسايل. والطريق اللي بيشتغل فعلاً خطوتين: رسالة لأيمن من هنا أو على الواتساب فيها الاسم ورقم الموبايل بتاع الحساب، وهو بيظبّط كلمة السر ويبعتها — وبعدها الدخول عادي من صفحة الدخول بالرقم وكلمة السر الجديدة. وفيه حالة واحدة مالهاش دعوة بالكلام ده كله: الحساب اللي اتعمل بجوجل مافيهوش كلمة سر من الأساس، والدخول بيتم من زرار «المتابعة بحساب جوجل» على نفس الصفحة.',
       accountProfile:
         'من صفحة حسابي بيتعدّل الاسم والرقم والمحافظة والسنة الدراسية. وللعلم: تغيير السنة بيغيّر المواد اللي المنصة بتعرضها.',
       accountVideo:
@@ -2918,6 +4212,7 @@ export const copy = {
 
       courses: 'الكورسات والمحتوى',
       join: 'الاشتراك والحساب',
+      books: 'الكتب والتوصيل',
       study: 'المذاكرة والامتحانات',
       account: 'مشكلة في حسابي',
 
@@ -2930,7 +4225,15 @@ export const copy = {
       joinAccount: 'إزاي أعمل حساب؟',
       joinEnroll: 'إزاي أشترك في كورس؟',
       joinPrice: 'الكورس بكام؟',
+      joinPay: 'أدفع إزاي؟',
+      joinReview: 'وبعد ما أبعت الطلب؟',
       register: 'إنشاء حساب',
+
+      bookOrderHow: 'إزاي أطلب الكتاب؟',
+      bookNotArrived: 'طلبت كتاب ولسه مجاش',
+      bookWhenExactly: 'هيوصل إمتى بالظبط؟',
+      browseBooks: 'صفحة الكتب',
+      myOrders: 'طلبات الكتب',
 
       studyQuizzes: 'الامتحانات شكلها إيه؟',
       studyRetake: 'أقدر أعيد الامتحان؟',
@@ -2961,6 +4264,14 @@ export const copy = {
       sending: 'بنبعت…',
       sentTitle: 'وصلت لأيمن',
       sentBody: 'هيرد من هنا. والصفحة ممكن تتقفل عادي — الرد مش هيضيع.',
+      /**
+       * Under the box, and only when a chat is actually travelling with it.
+       *
+       * It is the student's own conversation either way — but being told
+       * plainly that it goes along is what stops somebody re-typing three
+       * paragraphs of context they have already given once.
+       */
+      transcriptNote: 'محادثتك مع المساعد رايحة مع السؤال، عشان م. أيمن يشوفه في سياقه.',
       failed: 'مقدرناش نبعت رسالتك. نحاول تاني.',
       tooMany: 'رسايل كتير في وقت قصير. شوية ونحاول تاني.',
     },
@@ -3055,6 +4366,14 @@ export const copy = {
        * read; only writing an answer marks it answered. A question he read and
        * decided needed no reply leaves the first tab and stays on the second.
        */
+      /** Labels above the two dropdowns — a select whose only label is its
+       *  own first option loses that label the moment anything else is
+       *  chosen. */
+      filterLabel: 'اعرض',
+      sortLabel: 'الترتيب',
+      sortNewest: 'الأحدث حركة',
+      /** «مين مستني من زمان» — the thread a newest-first list buries. */
+      sortOldest: 'الأقدم حركة',
       filterUnread: 'غير مقروءة',
       filterOpen: 'محتاجة رد',
       filterAnswered: 'اتردّ عليها',
@@ -3069,8 +4388,16 @@ export const copy = {
       studentBadge: 'طالب',
       /** On the thread header — «هل الطالب ده مشترك دلوقتي؟». `null` on the
        *  guest side of `hasActiveSubscription` renders neither of these. */
+      /** ⚠️ Kept for compatibility; the header now renders ONE badge per
+       *  course instead — «هنا يبقى قايل هو مشترك في إيه». */
       subscribedBadge: 'مشترك',
       notSubscribedBadge: 'مش مشترك',
+      /** Hover titles on a course badge. `{date}` */
+      subscribedUntil: 'لحد {date}',
+      subscribedNoExpiry: 'مبينتهيش',
+      /** Appended to a course opened by hand, so it is never mistaken for a
+       *  paid subscription on the screen where he decides how to answer. */
+      subscribedByHand: 'بالإيد',
       unanswered: 'محتاجة رد',
       /* ── «ردّ بإيموجي» ────────────────────────────────────────────────
        *
@@ -3085,6 +4412,26 @@ export const copy = {
 
       // thread
       threadTitle: 'المحادثة',
+
+      /* ── نص محادثة المساعد ───────────────────────────────────────────
+       *
+       * «محتاج أشوف الشات كامل عشان أعرف هو سأل على إيه». المحادثة اللي حصلت
+       * مع المساعد الآلي بتيجي جوّه الموضوع نفسه، وبتتقري هنا كـ«سجل» مش
+       * كـ«كلام الطالب لك» — دي التفرقة اللي الكارت كله موجود عشانها.
+       *
+       * ⚠️ These are LABELS put on at render time. The format itself is marks,
+       * not Arabic — see `serializeAssistantTranscript` — precisely so that
+       * re-wording anything here cannot make a row already in the table
+       * unreadable.
+       */
+      transcriptTitle: 'نص المحادثة مع المساعد الآلي',
+      /** Under the title, once. It says what the card is NOT. */
+      transcriptNote: 'ده اللي اتقال قبل ما السؤال يتحوّل — مش كلام مكتوب لك.',
+      /** Beside each turn. Two words, because a transcript is read fast. */
+      transcriptStudent: 'الطالب',
+      transcriptBot: 'المساعد',
+      /** Only when the older turns were dropped to fit — see the contract. */
+      transcriptTrimmed: 'أول المحادثة اتشال عشان الطول — ده آخر جزء منها.',
       pathLabel: 'وصل لهنا من:',
       contactLabel: 'وسيلة التواصل',
       noPhone: 'مفيش رقم',
@@ -3126,6 +4473,26 @@ export const copy = {
       attachTooLarge: 'الملف كبير أوي.',
       attachBadType: 'نوع الملف ده مش مدعوم.',
       attachFailed: 'مقدرناش نرفع الملف. نحاول تاني.',
+      /* ── الرسايل الصوتية — المحاضر بس ─────────────────────────────────── */
+      voiceRecord: 'سجّل رسالة صوتية',
+      voiceStop: 'ابعت التسجيل',
+      voiceCancel: 'إلغاء التسجيل',
+      /** Denied, or no microphone at all — one sentence for both, because the
+       *  next step is the same and the browser has already said which. */
+      voiceDenied: 'المتصفح مسمحش بالمايك',
+      voiceUnsupported: 'المتصفح ده مابيسجلش صوت',
+      voiceUploading: 'بيرفع التسجيل…',
+      /* ── تعديل ومسح ───────────────────────────────────────────────────── */
+      messageEdit: 'تعديل',
+      messageDelete: 'مسح',
+      messageDeleteConfirm: 'تمسح الرسالة دي؟ مش هترجع.',
+      messageEditSave: 'حفظ',
+      messageEditCancel: 'إلغاء',
+      /** Beside the time on a message whose words were rewritten. Silently
+       *  changing what somebody already read is the one thing an edit must not
+       *  do, so the fact that it happened is on the bubble. */
+      messageEdited: 'معدّلة',
+      messageActionFailed: 'مانفعش',
       /** Alt text on an attached picture, in a transcript that already names the sender. */
       attachmentImageAlt: 'الملف المرفق',
       /** The download link on a file card. */
@@ -3188,11 +4555,30 @@ export const copy = {
     eyebrow: '06 / نيوز',
     title: 'نيوز',
     /** The `<h1>` on the index, and the strongest single ranking signal on it. */
-    heading: 'البرمجة، مشروحة من الأول',
-    subtitle: 'مقالات قصيرة في أساسيات البرمجة وعلوم الحاسب — بالعربي، وبأمثلة كود شغّالة.',
+    /*
+     * ⚠️ These three describe what the section ACTUALLY holds, and they were
+     * rewritten once already because they did not. They promised «أساسيات
+     * البرمجة … بأمثلة كود شغّالة» — variables, loops, functions, arrays —
+     * while every published article is a curriculum explainer with no code in
+     * it at all. An `<h1>` and a meta description that answer a different
+     * query than the page body is the one SEO defect the section cannot
+     * survive: it is the query Google matches the index on.
+     *
+     * If the section ever does carry code tutorials, change these back. Do
+     * not leave them describing an intention.
+     */
+    heading: 'شرح منهج البرمجة والذكاء الاصطناعي — بكالوريا',
+    subtitle:
+      'شرح كل درس في المنهج، وملخصات الوحدات، وقاموس المصطلحات، ونماذج أسئلة بالإجابات — لأولى وتانية بكالوريا.',
     /** Meta description for `/news`. ≤160 chars, same rule as a post's excerpt. */
     description:
-      'مقالات في أساسيات البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية — المتغيرات والحلقات والدوال والمصفوفات، كل واحدة مشروحة بالعربي وبكود شغّال.',
+      'شرح منهج البرمجة والذكاء الاصطناعي لطلبة البكالوريا المصرية: كل درس مشروح، ملخصات الوحدات، قاموس المصطلحات، ونماذج أسئلة بالإجابات.',
+    /**
+     * The footer row. NOT «نيوز» — a footer link is an internal anchor, and
+     * its text is what tells a crawler what the destination is about. Nobody
+     * searches «نيوز»; this is the phrase they type.
+     */
+    footerLink: 'شرح المنهج والدروس',
     empty: 'لسه مفيش مقالات منشورة.',
     /** `{n}` is a whole number of minutes — see `readingMinutes`. */
     readingTime: 'قراءة {n} دقيقة',
@@ -3319,7 +4705,7 @@ export const copy = {
     correct: 'إجابة صحيحة',
     incorrect: 'إجابة خاطئة',
     partial: 'إجابة صح جزئيًا',
-    needsGrading: 'محتاج تصحيح من المدرّس',
+    needsGrading: 'لسه عند مهندس أيمن للتصحيح',
     notAnswered: 'مجاوبتش',
     yourAnswer: 'إجابتك',
     rightAnswer: 'الإجابة الصحيحة',
@@ -3356,7 +4742,29 @@ export const copy = {
     notEnrolled: 'الامتحان للمشتركين في الكورس بس',
     previousAttempts: 'محاولاتك السابقة',
     bestScore: 'أعلى درجة',
-    essayPending: 'إجابتك المقالية عند المدرّس للتصحيح',
+    essayPending: 'إجابتك المقالية لسه عند مهندس أيمن للتصحيح',
+
+    /* ── ورقة نُصّها لسه عند المهندس ──────────────────────────────────────
+     *
+     * امتحان نص السنة بمية درجة: خمسين اختياري بيتصحّحوا على طول، وخمسين
+     * مقالي مهندس أيمن بيصحّحهم بإيده. الشاشة كانت بتقول «٤٨٫٥ من ١٠٠» —
+     * رقم صح حسابيًا (`gradeAttempt` بيحسب المقالي صفر لحد ما يتصحّح)
+     * وبيتقري رسوب. والطالب «هيتخض».
+     *
+     * الحل مش جملة لطيفة جنب نفس الرقم — الحل مقام تاني: اللي اتصحّح
+     * بيتحسب من اللي اتصحّح، واللي فاضل يتقال كـ درجة جاية، مش كـ درجة
+     * ضايعة. `mark-split.ts` (API) هو اللي بيقسمها.
+     */
+    /** فوق الرقم نفسه، بدل «نتيجتك» — بيقول الرقم ده بتاع إيه بالظبط. */
+    pendingEyebrow: 'درجة الاختياري',
+    /** تحت الرقم مباشرةً. الجملة اللي بتمنع الخضّة. */
+    pendingRest: 'باقي {marks} درجة في الأسئلة المقالية لسه عند مهندس أيمن بيصحّحها بنفسه.',
+    /** «وهيتبعتلك» — الوعد، ومكان وصوله. */
+    pendingWillArrive: 'أول ما يخلّص تصحيحها، الدرجة النهائية هتوصلك هنا وفي الإشعارات.',
+    /** بادچ مكان «ناجح»/«محتاجة مراجعة» — الحكم لسه مش حكم. */
+    pendingNotFinal: 'لسه بتتصحّح',
+    /** سطر الـ meta في لستة المحاولات على صفحة الامتحان. */
+    pendingRowMeta: '{earned} من {max} في الاختياري · وباقي {rest} درجة للتصحيح',
     wordCount: '{n} كلمة',
     typeAnswer: 'إجابتك هنا',
     chooseOne: 'إجابة واحدة بس',
@@ -3491,11 +4899,71 @@ export const copy = {
     metaTrack: 'المسار',
     metaSystem: 'النظام',
     metaLessons: 'عدد المحاضرات',
+    /**
+     * «الكورس بكام؟» is one of the three things anybody asks about a course,
+     * and until 2026-09-15 the markdown twin — the document an assistant
+     * actually reads — was the only surface on the site that did not answer it.
+     * The visible page has carried the price block all along.
+     */
+    metaPrice: 'السعر',
+    /**
+     * The byline and the dates on a markdown twin. The HTML page has shown both
+     * since the «نيوز» section shipped; the document written for machines
+     * showed neither, and an engine deciding whether to cite a page weighs
+     * exactly these two.
+     */
+    /**
+     * On a course whose lessons have not gone up yet — the machine-readable
+     * counterpart of the «قريبًا» panel the HTML page renders. Without it the
+     * agent documents listed a course with four purchasable plans and «0:00»
+     * beside a description promising recorded lectures, and an assistant
+     * recommending it was recommending an empty shelf.
+     */
+    metaContentPending: 'المحتوى لسه بينزل',
+    metaAuthor: 'الكاتب',
+    metaUpdated: 'آخر تعديل',
     sourcePage: 'الصفحة الأصلية',
     agentIndex: 'فهرس الوكلاء',
     publicApi: 'واجهة البيانات العامة',
+    /**
+     * ⚠️ THREE notes, not one, and picking the wrong one is the failure this
+     * split exists to stop.
+     *
+     * `contentNote` used to close EVERY markdown twin — including the thirty-two
+     * free articles, whose whole body is teaching material that needs no
+     * account, and `/books.md`, whose printed books are sold through a guest
+     * checkout (`create`/`submitPayment`/`uploadScreenshot` are `@Public()` on
+     * the API). So the document written for assistants ended every free page by
+     * telling the assistant the page was paid. That is the exact mirror of the
+     * `price: '0'` falsehood on the course graph, pointing the other way: there
+     * a paid thing was published as free, here free things are published as
+     * gated — and this one suppresses the only long-form free teaching corpus
+     * the site has.
+     */
     contentNote:
       'اللي معروض هنا هو الفهرس العام للكورسات. الدروس نفسها — الفيديو والملفات والاختبارات — محتاجة حساب طالب واشتراك في الكورس.',
+    /**
+     * For the pages that are genuinely open: `/about`, `/essentials`, `/news`
+     * and every article.
+     *
+     * ⚠️ The second sentence is not padding — it is `contentNote`'s guard,
+     * restated. Without it an assistant reads «مفتوحة» and generalises it to
+     * the lessons, which is the falsehood this whole split is correcting,
+     * inverted.
+     */
+    openNote:
+      'الصفحة دي منشورة كاملة ومفتوحة للقراءة من غير حساب ومن غير اشتراك. اللي محتاج حساب واشتراك هو دروس الكورسات نفسها — الفيديو والملفات والاختبارات.',
+    /**
+     * For `/books.md`. Says the one thing an assistant needs and a student
+     * asks: that ordering needs no account.
+     *
+     * ⚠️ Says nothing about the delivery FEE. `renderBooksMarkdown` already
+     * prints `books.shippingOnce`/`shippingFreeOnce` from the live setting two
+     * blocks above this line, and a second statement of a number that can
+     * change in the admin panel is a number that will disagree with itself.
+     */
+    booksNote:
+      'الكتب دي مطبوعة وبتتشحن لحد باب البيت. الطلب مابيحتاجش حساب — بتكتب العنوان، بتحوّل، وبتبعت صورة التحويل.',
   },
 
   /**
@@ -3570,8 +5038,19 @@ export const copy = {
       'الأجهزة اللي الحساب دخل منها عشان تبان وتتقفل من الإعدادات، وسجلّ للعمليات الإدارية على المنصة.',
 
     neverTitle: 'حاجات مابنجمعهاش',
+    /*
+     * ⚠️ The last sentence used to read «المنصة مجانية ومفيش أي مدفوعات فيها
+     * أصلاً», and it stayed on the live privacy page for months after checkout
+     * shipped — the platform takes InstaPay and Vodafone Cash transfers and
+     * sells a printed book. A false statement on a legal page is the worst
+     * place to leave one, and an assistant quoting «المنصة مجانية» to a parent
+     * is quoting it from here.
+     *
+     * The reassuring half is true and is kept: no card data is stored, because
+     * no card is ever entered — the student transfers and uploads a receipt.
+     */
     neverBody:
-      'مابنطلبش الرقم القومي، ولا أي بيانات بنكية أو أرقام كروت، ولا صور مستندات رسمية. المنصة مجانية ومفيش أي مدفوعات فيها أصلاً.',
+      'مابنطلبش الرقم القومي، ولا أرقام كروت، ولا صور مستندات رسمية. الاشتراك بيتدفع بتحويل على إنستاباي أو فودافون كاش وإنت بترفع صورة التحويل، فمفيش بيانات كروت بتتكتب على المنصة أصلاً ولا بتتخزّن عندنا.',
 
     shareTitle: 'مين تاني بيشوف البيانات',
     shareBody: 'مابنبيعش بياناتك ومابنأجرهاش لحد، ومابنستخدمهاش في إعلانات. الأطراف التانية الوحيدة اللي ليها علاقة بالموقع:',
@@ -3714,6 +5193,278 @@ export const copy = {
      */
     opens: 'يفتح في تبويب جديد',
     site: 'الموقع الرسمي',
+    /** «الكتب» on the bio-link page — a destination, not an ad. */
+    booksTitle: 'اطلب الكتاب',
+    booksNote: 'كتب المنهج بالترمين، توصلك لحد البيت',
+  },
+
+  /**
+   * «قسم الكتب» — the printed-book shop.
+   *
+   * ## The rule this block is written around
+   *
+   * Every sentence here is about a PHYSICAL object arriving at a house. That is
+   * a different promise from anything else on the platform, and the copy has to
+   * carry it: a student who orders a book and is told nothing about delivery
+   * assumes it is a download, and finds out otherwise a week later.
+   *
+   * So the delivery fee is stated three times — on the shelf, in the cart, and
+   * on the confirmation — and never as an asterisk. «٦٥ جنيه شحن» is not fine
+   * print; it is a quarter of the price of a book and hiding it is how a cart
+   * gets abandoned at the last step.
+   *
+   * ## No gendered address
+   *
+   * «اختار», «اطلب», «هيوصلك» — the same masculine-neutral imperative the rest
+   * of the product uses, because this platform never asks whether the student is
+   * a boy or a girl and copy that guesses would be wrong for half of them.
+   */
+  /**
+   * «إزاي أشترك؟» — the one question with a definite published answer and no
+   * public page.
+   *
+   * ## Why this exists
+   *
+   * Verified 2026-09-15: `/checkout`, `/pricing`, `/payment`, `/faq` and
+   * `/help` all 404. Every course page publishes its prices and then says the
+   * lessons need «حساب طالب واشتراك» — and stops. The checkout that shipped
+   * InstaPay and Vodafone Cash is behind auth, so a visitor who has not signed
+   * in sees none of it, and neither does an assistant. The one public sentence
+   * naming both rails sits inside `/privacy`'s «حاجات مابنجمعهاش», where it
+   * exists to say no card data is stored — not to tell anyone how to pay.
+   *
+   * ## Three things this page must never say
+   *
+   * ⚠️ NO turnaround window. `subscribe.success` deliberately says «هيوصلك
+   * إشعار أول ما يتم» and names no hours, for the reason recorded there: a
+   * stated window becomes a complaint the moment it slips.
+   *
+   * ⚠️ NO refund or cancellation policy. Nothing public states one and
+   * `/terms` is silent, so writing one here would be inventing policy on the
+   * instructor's behalf.
+   *
+   * ⚠️ NO destination number. It is his personal wallet, and an indexed page
+   * carrying a payment destination is the template every scam clone wants. It
+   * is not needed to answer the question either — the checkout shows it live,
+   * at the step where it is used.
+   *
+   * ⚠️ The rail NAMES come from `subscribe.railInstapay`/`railVodafoneCash`,
+   * never retyped. The screenshot-hint bug was exactly a second hand-written
+   * copy of a rail name drifting from the first.
+   */
+  subscribePage: {
+    title: 'إزاي تشترك في الكورس',
+    lead: 'الاشتراك بيتم من على المنصة نفسها، والدفع تحويل — إنستاباي أو فودافون كاش. الخطوات بالترتيب:',
+    metaTitle: 'إزاي تشترك في كورسات أيمن أبو العلا — الخطوات وطرق الدفع',
+    metaDescription:
+      'خطوات الاشتراك في كورسات البرمجة والذكاء الاصطناعي: تعمل حساب، تختار الباقة، تحوّل بإنستاباي أو فودافون كاش، وترفع صورة التحويل.',
+    eyebrow: 'قبل ما تبدأ',
+
+    step1Title: 'اعمل حساب',
+    step1Body: 'الاشتراك بيتربط بحسابك، فلازم تسجّل الأول. التسجيل مجاني ومش بيتطلب أي بيانات دفع.',
+    step2Title: 'افتح الكورس واضغط «اشترك دلوقتي»',
+    step2Body: 'كل كورس ليه صفحته، وأسعار الباقات مكتوبة عليها قبل ما تضغط أي حاجة.',
+    step3Title: 'اختار الباقة',
+    step3Body: 'شهر، ٣ شهور، ترم، أو سنة كاملة — بيختلفوا من كورس لكورس، واللي متاح بيبان قدامك.',
+    step4Title: 'اختار هتحوّل بإيه',
+    step4Body: 'إنستاباي ولا فودافون كاش. لو واحدة منهم مش متاحة دلوقتي هتلاقيها مكتوبة كده قدامك.',
+    step5Title: 'حوّل على الرقم اللي بيظهرلك',
+    step5Body:
+      'الرقم بيتعرض في الخطوة دي نفسها بعد ما تختار طريقة التحويل. مابنعرضهوش هنا عشان الرقم بيتقرا من الإعدادات وقت الطلب، والصفحة دي ممكن تكون متخزّنة عند حد من فترة.',
+    step6Title: 'ارفع صورة التحويل',
+    step6Body:
+      'اكتب رقم الموبايل اللي حوّلت منه، وارفع سكرين شوت واضح بيوضّح المبلغ والتاريخ.',
+    step7Title: 'استنى التفعيل',
+    step7Body: 'الطلب بيتراجع، وهيوصلك إشعار على المنصة أول ما الاشتراك يتفعّل.',
+
+    /** The rails, as a list under the steps — the answer to «بتقبلوا إيه؟». */
+    railsTitle: 'طرق الدفع المتاحة',
+    railsNone: 'طرق الدفع بتتظبط من لوحة التحكم، وبتبان لك وقت الاشتراك.',
+
+    /**
+     * ⚠️ The answers are the SAME sentences the steps above render — a FAQ
+     * that paraphrases its own page is two wordings of one fact, and
+     * `faqPageJsonLd` requires the answer text to be the text on the page.
+     */
+    faqQ1: 'إزاي أشترك في كورس؟',
+    faqQ2: 'بتقبلوا إيه في الدفع؟',
+    faqQ3: 'دفعت، وبعدين؟',
+
+    booksNote:
+      'الكتب المطبوعة حاجة تانية خالص: بتتطلب من صفحة الكتب من غير حساب أصلاً، وبتتشحن لحد باب البيت.',
+    booksCta: 'صفحة الكتب',
+    coursesCta: 'شوف الكورسات وأسعارها',
+  },
+
+  books: {
+    badge: 'كتب المنهج',
+    pageTitle: 'الكتب',
+    /** The `<title>`/meta pair. Says what is for sale AND that it ships. */
+    metaTitle: 'كتب أيمن أبو العلا — اطلبها وتوصلك البيت',
+    metaDescription:
+      'كتب البرمجة وعلوم الحاسب بالترم الأول والتاني، شرح وأسئلة ونماذج امتحانات. اطلب اللي محتاجه ويوصلك لحد باب البيت.',
+    lead: 'اختار الكتب اللي محتاجها، حدد العدد، وابعت طلبك — والباقي علينا.',
+    /**
+     * The shelf a book with no subject sits under.
+     *
+     * A real shelf and not a dumping ground: a revision booklet that spans three
+     * subjects has nowhere else to go, and dropping it would silently hide
+     * stock. It renders LAST, always.
+     */
+    generalShelf: 'كتب عامة',
+    /* ── The three sections inside one subject ─────────────────────────────
+       `full` says «السنة كاملة» rather than «الترمين»: it is ONE book, and
+       «الترمين» reads as a pair being sold together. */
+    termFirst: 'الترم الأول',
+    termSecond: 'الترم التاني',
+    termFull: 'السنة كاملة',
+    /** The year chip on a card. `{n}` is 1–3. */
+    yearChip: 'الصف {n}',
+    pages: '{n} صفحة',
+    /** On the shelf head — how many titles this subject has. Distinct from
+     *  `pages` above, which counts the pages inside ONE book. */
+    shelfCount: '{n} كتاب',
+    /* ── The card's own actions ─────────────────────────────────────────── */
+    add: 'ضيفه للطلب',
+    added: 'في الطلب',
+    remove: 'شيله',
+    /** On a book whose `stock` has hit zero. It still renders — a card that
+     *  vanishes reads as a broken page — and it says why it cannot be bought. */
+    outOfStock: 'خلص دلوقتي',
+    /* ── The basket ───────────────────────────────────────────────────────── */
+    cartTitle: 'طلبك',
+    cartEmpty: 'لسه مختارتش أي كتاب',
+    /** The line that does the most work on this page. Stated on the shelf, not
+     *  only at checkout, so nobody meets it as a surprise. */
+    shippingOnce: 'الشحن من {price} على حسب المحافظة — مرة واحدة على الطلب كله مهما كان عدد الكتب',
+    /** The zones spelled out, under the line above — «الرقم ده جه منين». */
+    shippingZones: 'القاهرة والجيزة {near} · وجه بحري {delta} · الصعيد وسيناء والبحر الأحمر {far}',
+    /**
+     * The same shelf line when the fee is ZERO, and it has to be its own
+     * sentence rather than `shippingOnce` with «٠ ج» in the slot.
+     *
+     * «الشحن ٠ ج مرة واحدة على الطلب كله — مهما كان عدد الكتب» is what that
+     * substitution produces, and it reads as a broken template: it spends a
+     * whole clause promising the fee is only charged once, about a fee that is
+     * not charged at all. Free delivery is also the strongest thing this line
+     * can say, and burying it inside a caveat about quantity throws it away.
+     */
+    shippingFreeOnce: 'التوصيل مجانًا — السعر شامل الشحن لحد باب البيت',
+    subtotal: 'الكتب',
+    shipping: 'الشحن',
+    /**
+     * The VALUE in the shipping row of a price breakdown when the fee is zero,
+     * in the basket and in the course page's «اطلب الكتاب» summary alike.
+     *
+     * The row stays rather than being dropped: a breakdown that lists «الكتب»
+     * and «الإجمالي» with nothing between them invites the reader to wonder
+     * what was left out, and «مجانًا» is a better answer to that than a silence
+     * — or than «٠ ج», which reads as a number that failed to load.
+     */
+    shippingFree: 'مجانًا',
+    /**
+     * The VALUE in the shipping row BEFORE a governorate has been chosen.
+     *
+     * A third state, never a zero and never the cheapest zone: «٨٠ ج» shown to
+     * somebody in أسوان and then replaced by «١٥٠ ج» one field later is a price
+     * that went up on them, which is the single commonest reason a cart is
+     * abandoned at the address step. Naming the rule instead is honest and
+     * turns the change that follows into an answer rather than a surprise.
+     */
+    shippingByGovernorate: 'على حسب المحافظة',
+    total: 'الإجمالي',
+    /** The TOTAL row in the same "no address yet" state — the lowest it can
+     *  possibly be, said as a floor rather than as a price. `{price}` */
+    totalFrom: 'من {price}',
+    /**
+     * The shelf line, and the CTA on a course page's «اطلب الكتاب», now that
+     * delivery depends on where the parcel is going.
+     *
+     * It quotes the book and the CHEAPEST zone, and says «من» out loud. The
+     * previous wording added one fee to one price and promised a single total,
+     * which is now only true for القاهرة والجيزة.
+     */
+    shippingFromByGovernorate: 'والشحن من {price} على حسب المحافظة',
+    quantity: 'العدد',
+    /** The per-book line inside the basket — «٢ × ٢٥٠ جنيه»: how many, at what
+     *  each. The title is already the line above it. */
+    lineQuantity: '{quantity} × {price}',
+    /** The same line in the CHECKOUT summary, where the title has to be on it —
+     *  «كتاب الفيزياء ×٢». A separate template rather than reusing the one
+     *  above with a title shoved into its `{price}` slot. */
+    lineTitleQuantity: '{title} ×{quantity}',
+    checkout: 'كمّل الطلب',
+    /** Under the checkout button. Says the next step before it happens. */
+    checkoutNote: 'هتكتب العنوان، وبعدين تحوّل وتبعت صورة التحويل.',
+    /** Screen-reader announcement after add/remove, since the summary that
+     *  changes is usually off-screen on a phone. */
+    cartAnnounce: 'الطلب فيه {n} كتاب — الإجمالي {price}',
+    /* ── Empty and error states ───────────────────────────────────────────── */
+    empty: 'لسه مفيش كتب متاحة دلوقتي',
+    emptyNote: 'أول ما ينزل كتاب هتلاقيه هنا.',
+    /** When a book in the basket was withdrawn between browsing and ordering. */
+    staleCart: 'في كتاب في طلبك مبقاش متاح — حدّث الصفحة وجرب تاني',
+
+    /* ══ «كتبي» — the student's own orders, inside the app shell ═══════════
+       Ordering a printed book was the one flow on this platform that ended in
+       silence. The confirmation screen said «هيوصلك» and after that the only
+       way to learn anything was to phone and ask, which is exactly what
+       students did. Every string below exists to answer one of the two
+       questions that call was about: «وصل ولا لسه؟» and «هو أصلاً وصلكم؟». */
+    mine: {
+      /** The section heading on `/dashboard`. «كتبي» and not «طلباتي»: the
+       *  student is looking for the BOOK, and the order is how it got there. */
+      title: 'كتبي',
+      /** The link out of the section to the full history. */
+      all: 'كل طلباتي',
+      /** The history page itself. */
+      pageTitle: 'طلبات الكتب',
+      pageLead: 'كل كتاب طلبته، وهو فين دلوقتي.',
+      /** Nothing ordered yet — with the one action that fixes it. «لسه» is
+       *  doing real work: it says this is a state, not a dead end. */
+      empty: 'لسه ما طلبتش أي كتاب',
+      emptyNote: 'كتب المنهج بتتشحن لحد باب البيت.',
+      emptyCta: 'شوف الكتب',
+      /** The button on a student who ALREADY has a book — «يقدر يطلب كمان كتاب
+       *  تاني». Worded as an addition, never as a repeat of something failed. */
+      orderAnother: 'اطلب كتاب تاني',
+      /** The chip on the order card. One word each, because the sentence under
+       *  it is where the explaining happens. */
+      statusAddressOnly: 'مكمّلتش',
+      statusPaid: 'بنجهّزه',
+      /** «في المطبعة» داخليًا — بس الطالب بيشوف «بنطبعه»، لأن ده اللي بيحصل
+       *  فعلًا وهو أوضح من اسم محطة إدارية مش بتاعته. */
+      statusPrinting: 'بنطبعه',
+      statusShipped: 'في الطريق',
+      statusDelivered: 'وصلك',
+      statusRejected: 'اترفض',
+      /* ── The reassurance line. THE reason this section exists ──────────
+         «أوقات الكتاب بيتأخر — طمّنه.» Each of these is written to be read by
+         somebody who is already slightly worried, so none of them promises a
+         date the platform cannot keep, and none of them ends without saying
+         what happens next. */
+      noteAddressOnly: 'الطلب اتسجّل بس لسه ماتدفعش. كمّل الدفع وهنجهّزه على طول.',
+      notePaid: 'استلمنا طلبك وبنجهّزه للشحن. ما تقلقش — أول ما يتشحن هتلاقي هنا إنه في الطريق.',
+      /** ما بيوعدش بيوم — الطبعة بترجع لما ترجع — بس بيقول الخطوة اللي بعدها،
+       *  زي باقي السطور هنا. */
+      notePrinting: 'نسختك دخلت المطبعة مع طبعة جديدة. أول ما تخرج وتتشحن هتلاقي هنا إنها في الطريق.',
+      noteShipped: 'الكتاب خرج ليك وفي الطريق. ساعات بيتأخر يوم أو اتنين، وده عادي — أول ما يوصلك هتلاقي هنا إنه اتسلّم.',
+      noteDelivered: 'الكتاب وصلك. لو في أي مشكلة فيه كلّم الدعم وإحنا نظبّطها.',
+      /** The rejection line. The admin's own words follow it verbatim, exactly
+       *  as `payment_rejected` does — a reason paraphrased is a reason argued
+       *  with. */
+      noteRejected: 'الطلب ده اترفض.',
+      /** Prefixes the admin's text so it reads as a quote and not as ours. */
+      rejectionReason: 'السبب:',
+      /** The support link under a delivered or rejected order. */
+      support: 'كلّم الدعم',
+      /** Dates on the card — «اتطلب ١٢ سبتمبر». `{date}` is already formatted. */
+      placedOn: 'اتطلب {date}',
+      shippedOn: 'اتشحن {date}',
+      deliveredOn: 'وصل {date}',
+      /** The «×٢» on a line inside the card. */
+      lineQuantity: '×{quantity}',
+    },
   },
 } as const;
 
