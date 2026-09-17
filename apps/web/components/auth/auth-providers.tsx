@@ -15,6 +15,36 @@ import { withNext } from '@/lib/safe-next';
 const POST_SOCIAL_CALLBACK_URL = '/onboarding';
 
 /**
+ * Whether this deployment actually has a Google OAuth app.
+ *
+ * ## The bug this closes
+ *
+ * `auth.config.ts` registers the Google provider CONDITIONALLY — no client id,
+ * no provider — but this button was rendered unconditionally. So a deployment
+ * without Google credentials showed «المتابعة بحساب جوجل», and pressing it
+ * asked Better Auth for a provider that was never registered. A dead button on
+ * the login page of every stack that does not use Google, and the API is
+ * behaving correctly the whole time, which is what makes it hard to find.
+ *
+ * It has never been visible on Ayman's platform because his stack has the
+ * credentials. It becomes visible the moment a second instructor's does not —
+ * and the decision for the new instructors is exactly that: phone sign-up only.
+ *
+ * ## Why a build-time value and not a fetch
+ *
+ * This is a client component, and the WEB container does not hold
+ * `GOOGLE_CLIENT_ID` — only the API does. The honest options were a new public
+ * endpoint or a baked flag, and the flag wins here because the web image is
+ * ALREADY per-instructor: `NEXT_PUBLIC_APP_URL` and `NEXT_PUBLIC_MEDIA_ORIGIN`
+ * are inlined at build, so one shared image was never on the table.
+ *
+ * `docker-compose.yml` derives it from the API's own variable with
+ * `${GOOGLE_CLIENT_ID:+1}` — set only when that is non-empty — so there is one
+ * source of truth and no second switch to forget.
+ */
+const GOOGLE_ENABLED = (process.env.NEXT_PUBLIC_GOOGLE_ENABLED ?? '').trim() !== '';
+
+/**
  * Google's four-colour "G", inlined rather than pulled from `simple-icons`
  * like `components/site/social-icons.tsx` does for the footer marks. That
  * package ships every brand as a single monochrome silhouette path, which is
@@ -97,6 +127,11 @@ export function AuthProviders({ next }: { next?: string | null }) {
     }
     setPending(false);
   }
+
+  // Nothing at all when this deployment has no Google app — not a disabled
+  // button, not a greyed one. The divider goes with it: a separator above an
+  // empty space reads as something that failed to load.
+  if (!GOOGLE_ENABLED) return null;
 
   return (
     <div className="space-y-3">

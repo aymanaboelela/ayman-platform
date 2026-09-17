@@ -38,6 +38,18 @@ export const AdminStudentRowSchema = z.object({
   governorateNameAr: z.string(),
   systemSlug: z.string().nullable(),
   year: z.number().int().nullable(),
+  /**
+   * عربي / لغات.
+   *
+   * On the LIST, not only the detail. It was on `AdminStudentDetailSchema`
+   * alone, so the one screen that shows every student at once could neither
+   * show it nor filter by it — and «أقدر أشوف اللغات لوحدهم» is the ask that
+   * comes back on every screen.
+   *
+   * `null` for every profile onboarded before the question existed — «مش
+   * متسجّل», never a guess, which is why the filter has a bucket for it.
+   */
+  schoolStream: SchoolStreamSchema.nullable(),
   trackLabelAr: z.string().nullable(),
   onboardingCompleted: z.boolean(),
   createdAt: z.string(),
@@ -73,6 +85,53 @@ export const AdminStudentDetailSchema = AdminStudentRowSchema.extend({
 });
 
 export type AdminStudentDetail = z.infer<typeof AdminStudentDetailSchema>;
+
+/**
+ * `GET /api/admin/students/:userId/conversation` — the thread with this
+ * student, on their own record.
+ *
+ * ## Why it is here and not only in the inbox
+ *
+ * «يبقى في البروفايل يبقى في محادثة أقدر أكلمها». Reaching a student from
+ * their record meant reading their phone number off the screen and opening
+ * WhatsApp, or going to `/admin/inbox` and finding them by name — and from the
+ * grading queue, where the question "who is this and can I say something to
+ * them" actually comes up, neither was one click away. The conversation is the
+ * platform's own channel: the student sees it in the same المساعد panel and
+ * can reply, which a WhatsApp message out of the blue cannot promise.
+ *
+ * ## `conversationId` is nullable, and that is the ordinary case
+ *
+ * Most students have never opened a thread. `null` is "there is nothing to
+ * show yet", not an error — the section renders its composer and the first
+ * message CREATES the thread (`OutreachService.sendManual`, the same path
+ * «رسايلي للطلبة» uses, which also emits the `instructor_message`
+ * notification).
+ */
+export const AdminStudentMessageSchema = z.object({
+  id: z.string(),
+  /** `visitor` is the student. The enum is the one `conversation.ts` owns;
+   *  it is re-stated as a literal union here for the same local-copy reason
+   *  `GenderSchema` above is — a runtime value must come from one leaf's own
+   *  subpath export, never by hopping through another leaf's relative
+   *  import. Keep in sync with `MESSAGE_AUTHORS`. */
+  author: z.enum(['visitor', 'admin']),
+  body: z.string(),
+  createdAt: z.string(),
+});
+
+export const AdminStudentConversationSchema = z.object({
+  conversationId: z.string().nullable(),
+  /** Oldest first — this renders as a transcript, and a transcript reads down.
+   *  Capped server-side; the whole thread lives at `/admin/inbox/:id`. */
+  messages: z.array(AdminStudentMessageSchema),
+  /** True when older messages were trimmed, so the section can say so and
+   *  point at the full thread rather than silently showing half of it. */
+  truncated: z.boolean(),
+});
+
+export type AdminStudentMessage = z.infer<typeof AdminStudentMessageSchema>;
+export type AdminStudentConversation = z.infer<typeof AdminStudentConversationSchema>;
 
 /**
  * A4: the admin-writable field set, and nothing else. `role` is ABSENT on
@@ -147,7 +206,14 @@ export type AdminStudentSetPassword = z.infer<typeof AdminStudentSetPasswordSche
 
 export const AdminRoleChangeSchema = z
   .object({
-    role: z.enum(['admin', 'student']),
+    /**
+     * `owner` is the instructor this deployment belongs to — see the role's
+     * note in `apps/api/src/auth/permissions.ts`. It is mintable here because
+     * otherwise there is no way to CREATE one: the platform ships with an
+     * admin and students, and «make this account the instructor» is the step
+     * that turns a fresh stack into somebody's platform.
+     */
+    role: z.enum(['admin', 'owner', 'student']),
     /** Forces the operator to say why; it lands in the audit metadata. */
     reason: z.string().min(8).max(500),
   })
@@ -451,6 +517,11 @@ function toArray(value: unknown): unknown[] {
  *  bucket cannot exist in the API and be unreachable from the UI. */
 export const STUDENT_ACCESS_FILTERS = ['hand_opened', 'comped', 'paid'] as const;
 
+/** عربي / لغات / مش متسجّل — exported for the URL parser and the filter's own
+ *  option list, the same way `STUDENT_ACCESS_FILTERS` is, so a value cannot
+ *  exist in the API and be unreachable from the screen. */
+export const STUDENT_STREAM_FILTERS = ['general', 'languages', 'unset'] as const;
+
 export const StudentListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   perPage: z.coerce.number().int().min(1).max(100).default(20),
@@ -480,6 +551,14 @@ export const StudentListQuerySchema = z.object({
    * the "free" bucket and make the filter useless.
    */
   access: z.enum(STUDENT_ACCESS_FILTERS).nullable().default(null),
+  /**
+   * عربي / لغات — plus «مش متسجّل» for the profiles that predate the question.
+   *
+   * A THREE-value filter and not two: `school_stream` is nullable, and a
+   * two-value filter would make those students unreachable from this screen
+   * while quietly implying they are one or the other.
+   */
+  stream: z.enum(STUDENT_STREAM_FILTERS).nullable().default(null),
 });
 
 export type StudentListQuery = z.infer<typeof StudentListQuerySchema>;

@@ -41,6 +41,12 @@ const PUBLIC_ROUTES = [
   // It is also the page most likely to be somebody's first ever view of this
   // product, arriving from a YouTube description.
   '/links',
+  // «إزاي تشترك». An ordered procedure is the one shape on this site where
+  // getting the semantics wrong actually costs a reader the content: the
+  // numbers are rendered in `aria-hidden` spans over a real `<ol>`, so a screen
+  // reader must still hear seven steps in order. Nothing else here is a list
+  // whose ORDER carries the meaning.
+  '/subscribe',
   '/login',
   '/register',
   // The PWA's offline screen. It is a real public route with real controls,

@@ -1,5 +1,5 @@
 import { copy } from '@ayman/contracts/copy';
-import { formatCopy } from '@ayman/contracts/format';
+import { formatCopy, formatMark } from '@ayman/contracts/format';
 import type { StudentNotification } from '@ayman/contracts/notifications';
 import { ASSISTANT_OPEN_PARAM } from './assistant-mount';
 import { MY_BOOK_ORDERS_HREF } from './book-order-view';
@@ -36,6 +36,32 @@ const c = copy.notifications;
 export function describeNotification(entry: StudentNotification): NotificationView {
   switch (entry.kind) {
     case 'quiz_graded':
+      /*
+       * Two rows, one kind, told apart by `pendingOutOf`.
+       *
+       * The kind fires at SUBMIT, before any human has read the paper — so on
+       * a midterm with 50 marks of essay outstanding this card said «اتصحّحت
+       * ورقتك — الدرجة ٤٨٪» about work nobody had marked, quoting a
+       * provisional total (`gradeAttempt` scores an ungraded answer zero) as
+       * a final one. A student who opens the bell and reads that has already
+       * had the fright the results screen was fixed to prevent.
+       *
+       * So a row with marks outstanding is a RECEIPT: what was marked, and
+       * how much is still coming. `ManualGradingService.grade` emits the
+       * second row — this same kind with `pendingOutOf: 0` and the real
+       * percentage — the moment the last answer is marked, which is where the
+       * «هيتبعتلك» on the results screen lands.
+       */
+      if (entry.pendingOutOf > 0) {
+        return {
+          title: c.quizGradedPartial,
+          detail: formatCopy(c.quizGradedPartialDetail, {
+            marks: formatMark(entry.pendingOutOf),
+          }),
+          subtitle: entry.lessonTitle,
+          href: reviewHref(entry.lessonId, entry.attemptId),
+        };
+      }
       return {
         title: formatCopy(c.quizGraded, { score: entry.scorePercent }),
         // `passed` is nullable on the wire; a missing verdict renders no
@@ -200,7 +226,11 @@ export function describeNotification(entry: StudentNotification): NotificationVi
     case 'book_order_shipped':
       return {
         title: formatCopy(c.bookOrderShipped, { book: entry.bookTitle }),
-        detail: null,
+        /* The one place the platform promises a date, counted from the day the
+           courier actually took the parcel. The order confirmation promises
+           nothing — see `books.bookOrder.success` for why a clock started at
+           payment time is already late by the time the parcel exists. */
+        detail: formatCopy(c.bookOrderShippedDetail, { days: entry.deliveryDays }),
         // `copy.notifications`, NOT `copy.books.mine.title` — the two say the
         // same word today and this module is imported by the student's bell, so
         // the subtitle is kept in the same table as every other row's.

@@ -27,6 +27,44 @@ describe('AGENT_DISCOVERY_PATHS', () => {
   });
 });
 
+/**
+ * The orphan guard.
+ *
+ * ⚠️ `/AGENTS.md` and `/.well-known/ai-catalog.json` were both live, both
+ * correct, and reachable from NOTHING an assistant walks — each was named only
+ * by the other. `/AGENTS.md` exists because a readiness scan said an AI visitor
+ * could not tell what the site was for; it then sat behind a document that was
+ * itself unlinked for a quarter.
+ *
+ * Nothing could catch that. `AGENT_DISCOVERY_PATHS` proves each path is a route
+ * that EXISTS, the linkset proves the API entries are advertised, and no test
+ * asked whether a document was reachable from a surface an agent starts at. A
+ * path added to that object with no mention on any of the three surfaces below
+ * now fails here rather than being published into silence.
+ *
+ * Source TEXT, like `link-header-guard.test.ts` next door: `/llms.txt` is an
+ * async route handler over two cached catalog reads, and mocking both to assert
+ * a link list would test the mocks. What matters is that the key is referenced
+ * at all.
+ */
+describe('every discovery document is reachable from a surface an agent starts at', () => {
+  /** The three places an agent can find a document without already knowing its URL. */
+  const SURFACES = [
+    'app/llms.txt/route.ts',
+    'components/agents/agent-discovery-links.tsx',
+    'lib/agents/discovery.ts',
+  ] as const;
+
+  // `../..` from `lib/agents` is `apps/web`.
+  const sources = SURFACES.map((file) =>
+    readFileSync(path.join(import.meta.dirname, '../..', file), 'utf8'),
+  ).join('\n');
+
+  it.each(Object.keys(AGENT_DISCOVERY_PATHS))('%s is named by at least one surface', (key) => {
+    expect(sources).toContain(`AGENT_DISCOVERY_PATHS.${key}`);
+  });
+});
+
 describe('buildAgentLinkHeader', () => {
   it('parses as a valid RFC 8288 header', () => {
     expect(() => parseLinkHeader(buildAgentLinkHeader(null))).not.toThrow();

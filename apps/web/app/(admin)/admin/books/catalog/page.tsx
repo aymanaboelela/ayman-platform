@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AdminBookRowSchema } from '@ayman/contracts/admin/books';
 import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
-import { BOOK_SHIPPING_CENTS, type BookTerm } from '@ayman/contracts/books';
+import { DEFAULT_BOOK_SHIPPING_RATES, type BookTerm } from '@ayman/contracts/books';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { adminGet } from '@/lib/admin-api';
@@ -96,7 +96,7 @@ export default async function AdminBooksCatalogPage() {
       <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
         {/* The delivery fee lives HERE and not under a fifth settings tab,
             because it is a price and this is the prices screen. */}
-        <ShippingFeeForm shippingCents={settings.store?.shippingCents ?? BOOK_SHIPPING_CENTS} />
+        <ShippingFeeForm rates={settings.store?.shippingRates ?? DEFAULT_BOOK_SHIPPING_RATES} />
         <BookFormDialog book={null} subjects={subjects} courses={courseOptions} />
       </div>
 

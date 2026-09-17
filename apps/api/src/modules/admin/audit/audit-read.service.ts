@@ -100,7 +100,13 @@ export class AuditReadService {
       this.prisma.auditLog.count({ where }),
       this.prisma.auditLog.findMany({
         where,
-        orderBy: { occurredAt: 'desc' },
+        /* `id` after the timestamp, and here it is not theoretical: `AuditService
+           .record` stamps `new Date()` at millisecond resolution, and bulk ship
+           writes one row per order inside its loop — forty parcels in one click
+           produce forty rows sharing a timestamp. Under `skip`/`take` an
+           unstable order duplicates some onto page two and drops others, on the
+           one screen whose entire claim is completeness. */
+        orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
         skip: (query.page - 1) * query.perPage,
         take: query.perPage,
       }),

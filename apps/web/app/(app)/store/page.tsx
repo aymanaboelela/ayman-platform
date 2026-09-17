@@ -77,9 +77,9 @@ export default async function StorePage() {
         {/* The delivery fee on the shelf rather than only at checkout — the
             same call `(site)/books` makes, for the same reason: at these
             prices «٦٥ جنيه شحن» is not fine print. */}
-        <BooksShippingChip shippingCents={catalog.shippingCents} />
+        <BooksShippingChip rates={catalog.shippingRates} />
 
-        <BooksShop catalog={catalog} instapay={contact.instapay} />
+        <BooksShop catalog={catalog} instapay={contact.instapay} vodafoneCash={contact.vodafoneCash} />
       </div>
     </main>
   );

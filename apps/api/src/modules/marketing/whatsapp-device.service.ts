@@ -57,8 +57,32 @@ export interface SendInput {
 }
 
 export interface SendResult {
-  /** WhatsApp's message id, for the log. */
+  /** WhatsApp's message id, for the log — and for matching the receipt. */
   messageId: string | null;
+  /** What the sidecar addressed: `<digits>@s.whatsapp.net`. */
+  jid?: string | null;
+  /** What WhatsApp says the canonical address is. Normally the same. */
+  serverJid?: string | null;
+  /**
+   * WhatsApp's Linked Identity for the recipient, non-null once their account
+   * has migrated to LID addressing. Reported, never addressed — see the
+   * sidecar's `send()`. This is the field that answers whether LID is why a
+   * message was accepted and never delivered.
+   */
+  lid?: string | null;
+}
+
+/**
+ * What WhatsApp has said about one message so far.
+ *
+ * `null` is not failure. It is "no receipt yet", which for a phone that is
+ * off is the correct answer for hours — and treating it as failure is the
+ * mirror image of the bug that made `sent` mean delivered.
+ */
+export interface ReceiptStatus {
+  messageId: string;
+  /** `proto.WebMessageInfo.Status`: 3 delivered, 4 read, 0 refused. */
+  status: number | null;
 }
 
 const DISABLED: WhatsappDevice = {
@@ -173,12 +197,41 @@ export class WhatsappDeviceService {
         }),
       },
       SEND_TIMEOUT_MS,
-    )) as { messageId?: string | null; onWhatsApp?: boolean };
+    )) as {
+      messageId?: string | null;
+      onWhatsApp?: boolean;
+      jid?: string | null;
+      serverJid?: string | null;
+      lid?: string | null;
+    };
 
     // A number that is not registered is not a failure of the campaign — it
     // is a fact about the number, and the caller marks the row `skipped`
     // rather than retrying it forever.
     if (body.onWhatsApp === false) throw new NotOnWhatsAppError(input.phone);
-    return { messageId: body.messageId ?? null };
+    return {
+      messageId: body.messageId ?? null,
+      jid: body.jid ?? null,
+      serverJid: body.serverJid ?? null,
+      lid: body.lid ?? null,
+    };
+  }
+
+  /**
+   * Whether one message has been acknowledged by a device yet.
+   *
+   * Reads the sidecar's own in-memory view rather than the database, because
+   * this exists for a message that has no recipient row — a test send. Its
+   * memory is bounded and does not survive a restart; a `null` from a sidecar
+   * that has restarted is indistinguishable from a message nobody received,
+   * which is why this is a diagnostic and not a record.
+   */
+  async receipt(messageId: string): Promise<ReceiptStatus> {
+    const body = (await this.call(
+      `/receipt?id=${encodeURIComponent(messageId)}`,
+      { method: 'GET' },
+      STATUS_TIMEOUT_MS,
+    )) as { messageId?: string; status?: number | null };
+    return { messageId, status: body.status ?? null };
   }
 }

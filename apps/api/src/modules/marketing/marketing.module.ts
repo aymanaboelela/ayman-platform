@@ -7,6 +7,7 @@ import { CampaignRunner } from './campaign-runner.service';
 import { CampaignService } from './campaign.service';
 import { MarketingController } from './marketing.controller';
 import { WhatsappInboundController } from './whatsapp-inbound.controller';
+import { WhatsappReceiptController } from './whatsapp-receipt.controller';
 import { WhatsappDeviceService } from './whatsapp-device.service';
 
 /**
@@ -27,7 +28,7 @@ import { WhatsappDeviceService } from './whatsapp-device.service';
  */
 @Module({
   imports: [AuditModule, OutreachModule],
-  controllers: [MarketingController, WhatsappInboundController],
+  controllers: [MarketingController, WhatsappInboundController, WhatsappReceiptController],
   providers: [
     CampaignService,
     AudienceService,

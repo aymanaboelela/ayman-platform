@@ -10,7 +10,7 @@ describe('resolveCourseVisitorState', () => {
     // caller that skips the "am I signed in" gate.
     const state = resolveCourseVisitorState({
       isSignedIn: false,
-      enrollment: { lastLessonId: 'lesson-1' },
+      enrollment: { lastLessonId: 'lesson-1', accessActive: true },
       hasPendingSubmission: true,
     });
 
@@ -20,7 +20,7 @@ describe('resolveCourseVisitorState', () => {
   it('redirects a signed-in, already-enrolled visitor to their last lesson', () => {
     const state = resolveCourseVisitorState({
       isSignedIn: true,
-      enrollment: { lastLessonId: 'lesson-7' },
+      enrollment: { lastLessonId: 'lesson-7', accessActive: true },
       hasPendingSubmission: false,
     });
 
@@ -32,11 +32,38 @@ describe('resolveCourseVisitorState', () => {
     // resolves the course's first lesson server-side.
     const state = resolveCourseVisitorState({
       isSignedIn: true,
-      enrollment: { lastLessonId: null },
+      enrollment: { lastLessonId: null, accessActive: true },
       hasPendingSubmission: true,
     });
 
     expect(state).toEqual({ kind: 'none' });
+  });
+
+  it('does NOT redirect a visitor whose subscription lapsed — this page is where they renew', () => {
+    // The regression this flag exists for. Nothing writes
+    // `EnrollmentStatus.expired`, so a lapsed student still has an `active`
+    // enrollment row with a `lastLessonId` on it. Redirecting them into that
+    // lesson hits the access gate's 403, which redirects back to this page,
+    // which redirected again — a closed loop with the checkout outside it.
+    const state = resolveCourseVisitorState({
+      isSignedIn: true,
+      enrollment: { lastLessonId: 'lesson-7', accessActive: false },
+      hasPendingSubmission: false,
+    });
+
+    expect(state).toEqual({ kind: 'none' });
+  });
+
+  it('shows the pending banner to a lapsed student who has already sent the renewal', () => {
+    // Falls through the enrollment branch to the submission one, which is
+    // what a renewing student needs to see: «قيد المراجعة», not silence.
+    const state = resolveCourseVisitorState({
+      isSignedIn: true,
+      enrollment: { lastLessonId: 'lesson-7', accessActive: false },
+      hasPendingSubmission: true,
+    });
+
+    expect(state).toEqual({ kind: 'pending' });
   });
 
   it('shows the pending banner for a signed-in visitor with a pending submission and no enrollment', () => {
@@ -67,7 +94,7 @@ describe('resolveCourseVisitorState', () => {
     // for a review.
     const state = resolveCourseVisitorState({
       isSignedIn: true,
-      enrollment: { lastLessonId: 'lesson-3' },
+      enrollment: { lastLessonId: 'lesson-3', accessActive: true },
       hasPendingSubmission: true,
     });
 

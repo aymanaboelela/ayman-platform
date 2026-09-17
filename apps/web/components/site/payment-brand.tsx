@@ -1,7 +1,13 @@
 import Image from 'next/image';
 
 /**
- * The «إنستاباي» badge that sits above the transfer number.
+ * Which rail the money travels on. Both are live destinations and they are
+ * DIFFERENT numbers — see `ContactSchema.vodafoneCash`.
+ */
+export type PaymentRail = 'instapay' | 'vodafoneCash';
+
+/**
+ * The mark for one payment rail, above the transfer number.
  *
  * ## Why a logo at all
  *
@@ -12,29 +18,41 @@ import Image from 'next/image';
  * money somewhere it cannot be reconciled. The mark answers that before the
  * sentence does.
  *
+ * That was true when there was one rail. With two it is the whole design: the
+ * student is CHOOSING between them, and a name in Arabic text is a far weaker
+ * signal than the mark they already know from their own phone.
+ *
  * ## One path, everywhere
  *
  * Both places that take money — the course subscribe panel and the book-order
  * panel — render this, so the payment destination can never be described two
- * different ways on two screens. Swapping providers again is this file plus
- * the copy strings, not a hunt through six components.
+ * different ways on two screens.
  *
- * The asset is InstaPay's own wordmark, taken from instapay.eg and trimmed to
- * its ink with the white field keyed out, so the badge can be sized by HEIGHT
- * like any other mark rather than carrying 512px of padding around it.
+ * ⚠️ `alt` stays set on both. A brand mark carries no information the
+ * surrounding Arabic does not already state, so it is decorative to a screen
+ * reader — but a student on a slow connection who gets no image still needs
+ * the provider's name, and here that name IS the choice being made.
+ *
+ * The InstaPay asset is their own wordmark from instapay.eg, trimmed to its
+ * ink so the badge can be sized by HEIGHT rather than carrying 512px of
+ * padding. The Vodafone one is the 2017 wordmark, and it is used the way a
+ * payment rail's mark is always used — to name the destination, not to claim
+ * any relationship with the company.
  */
-export function PaymentBrand({ className }: { className?: string }) {
+const MARKS: Record<PaymentRail, { src: string; alt: string; width: number; height: number }> = {
+  instapay: { src: '/brand/logos/instapay.png', alt: 'InstaPay', width: 369, height: 72 },
+  vodafoneCash: { src: '/brand/logos/vodafone.png', alt: 'Vodafone Cash', width: 960, height: 238 },
+};
+
+export function PaymentBrand({
+  rail = 'instapay',
+  className,
+}: {
+  rail?: PaymentRail;
+  className?: string;
+}) {
+  const mark = MARKS[rail];
   return (
-    <Image
-      src="/brand/logos/instapay.png"
-      alt="InstaPay"
-      width={369}
-      height={72}
-      // A brand mark carries no information the surrounding copy does not
-      // already state in Arabic, so it is decorative to a screen reader —
-      // but `alt` stays set, because a student who cannot load images still
-      // needs the provider's name.
-      className={className}
-    />
+    <Image src={mark.src} alt={mark.alt} width={mark.width} height={mark.height} className={className} />
   );
 }

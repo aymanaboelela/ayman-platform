@@ -3,7 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "sideEffects": ["**/*.css"],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": "./src/index.ts",
     "./tokens": "./src/tokens/tokens.ts",
@@ -13,7 +15,9 @@
     "./components/*": "./src/components/*.tsx",
     "./hooks/*": "./src/hooks/*.ts",
     "./lib/cn": "./src/lib/cn.ts",
-    "./branding": "./src/lib/branding.ts"
+    "./branding": "./src/lib/branding.ts",
+    "./ramp": "./src/lib/ramp.ts",
+    "./oklch": "./src/lib/oklch.ts"
   },
   "scripts": {
     "test": "vitest run",

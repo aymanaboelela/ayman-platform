@@ -10,6 +10,7 @@ import {
   type AdminBookCreateInput,
   type AdminBookPatchInput,
 } from '@ayman/contracts/admin/books';
+import type { BookShippingRates } from '@ayman/contracts/books';
 import { SiteSettingsSchema, StoreSettingsSchema } from '@ayman/contracts/admin/settings';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet, adminSend } from '@/lib/admin-api';
@@ -107,9 +108,21 @@ export async function deleteBookAction(id: string): Promise<ActionResult> {
  * `shipping_cents` at checkout. It only changes what the next order is quoted,
  * which is exactly what a price change should mean.
  */
-export async function setBookShippingAction(shippingCents: number): Promise<ActionResult> {
+export async function setBookShippingAction(
+  shippingRates: BookShippingRates,
+): Promise<ActionResult> {
   try {
-    const body = StoreSettingsSchema.parse({ shippingCents });
+    /*
+     * ⚠️ Parsed, which is what keeps the legacy `shippingCents` key on the row.
+     *
+     * `StoreSettingsSchema` is `.strict()` and still declares that field with a
+     * `.default()`, so parsing `{ shippingRates }` fills it back in and the
+     * PATCH writes a settings object that a reader of the old shape can still
+     * make sense of. Sending only the new key would be accepted too — but the
+     * stored jsonb is replaced wholesale, and a row that loses a key this
+     * schema requires is a row that throws on every subsequent read.
+     */
+    const body = StoreSettingsSchema.parse({ shippingRates });
     /* The route answers with the WHOLE settings object, not the section it was
        given — `SettingsController.update` returns `SiteSettings`. */
     await adminSend('PATCH', '/api/admin/settings/store', body, SiteSettingsSchema);

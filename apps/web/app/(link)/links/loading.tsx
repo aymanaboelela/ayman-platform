@@ -23,7 +23,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
  */
 export default function Loading() {
   return (
-    <main className="linkhub__page linkhub__page--loading">
+    <div aria-hidden="true" className="linkhub__page linkhub__page--loading">
       <div className="linkhub__head">
         <Skeleton className="h-28 w-28 rounded-full" />
         <Skeleton width="narrow" className="mt-3 h-7" />
@@ -39,6 +39,6 @@ export default function Loading() {
           ))}
         </div>
       ))}
-    </main>
+    </div>
   );
 }

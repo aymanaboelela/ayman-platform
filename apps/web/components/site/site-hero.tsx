@@ -161,7 +161,18 @@ export function SiteHero({
           ) : null}
 
           <h1 className="hero__title">
-            <span data-hero-line>{headline}</span>
+            <span data-hero-line>{headline}</span>{' '}
+            {/*
+              ⚠️ That `{' '}` is load-bearing and invisible.
+
+              Both spans are `display: block` (see `.hero__title > span`), so a
+              whitespace text node between them collapses to nothing on screen.
+              Without it the h1's TEXT was «من أول سطر كودلحد آخر سؤال في
+              الامتحان.» — «كودلحد», one non-word — and that string is what a
+              search snippet, an accessible name, and any model reading the
+              page actually get. The heading looked perfect and read as
+              gibberish everywhere it was not being looked at.
+            */}
             <span className="hero__title-accent" data-hero-line>
               {rotates ? (
                 <RotatingHeadline phrases={phrases} className="hero__rotate" />

@@ -85,6 +85,15 @@ export function CreateBookOrderDialog({
   const [addressBuilding, setAddressBuilding] = useState('');
   const [addressNote, setAddressNote] = useState('');
   const [paid, setPaid] = useState(false);
+  /*
+   * «مجاني» — handed over without charging.
+   *
+   * Separate from `paid`, and turning it on implies `paid`: there is nothing
+   * left to collect, so the order is settled the moment it is created. What it
+   * does NOT imply is that the book was free to produce — the copies still
+   * cost what they cost, and «مكسب الكتب» will show that.
+   */
+  const [isFree, setIsFree] = useState(false);
   const [senderPhone, setSenderPhone] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
@@ -107,7 +116,10 @@ export function CreateBookOrderDialog({
   const [state, action, pending] = useActionState<ActionResult, FormData>(
     async (_previous, formData) => {
       let screenshotKey = '';
-      if (paid && file) {
+      // No transfer to prove on a giveaway — the screenshot field is not even
+      // rendered, and uploading a stale one would attach proof of a payment
+      // that did not happen.
+      if (paid && !isFree && file) {
         const uploaded = await uploadBookOrderScreenshot(file);
         if (!uploaded.ok) return { ok: false, message: c.createUploadFailed };
         screenshotKey = uploaded.value.screenshotKey;
@@ -171,8 +183,11 @@ export function CreateBookOrderDialog({
           <input type="hidden" name="addressStreet" value={addressStreet} />
           <input type="hidden" name="addressBuilding" value={addressBuilding} />
           <input type="hidden" name="addressNote" value={addressNote} />
-          <input type="hidden" name="paid" value={String(paid)} />
-          <input type="hidden" name="senderPhone" value={paid ? senderPhone : ''} />
+          {/* A giveaway is settled by definition — there is no transfer left
+              to wait for, so it posts as paid regardless of the switch. */}
+          <input type="hidden" name="paid" value={String(paid || isFree)} />
+          <input type="hidden" name="isFree" value={String(isFree)} />
+          <input type="hidden" name="senderPhone" value={paid && !isFree ? senderPhone : ''} />
 
           <div>
             <Label htmlFor="book-create-book">{c.editPickBook}</Label>
@@ -279,19 +294,39 @@ export function CreateBookOrderDialog({
             />
           </div>
 
+          {/* «مجاني» above «مدفوع»: it is the stronger statement of the two and
+              it takes the other over, so asking it second would mean answering
+              a question that the next switch discards. */}
           <div className="flex items-center justify-between gap-3 rounded-sm border border-line-subtle bg-surface-3 p-3">
             <div>
-              <p className="text-[length:var(--fs-text-sm)] font-medium text-fg">
-                {paid ? c.createPaidLabel : c.createAddressOnlyLabel}
+              <p className="text-[length:var(--fs-text-sm)] font-medium text-fg">{c.createFreeLabel}</p>
+              <p className="mt-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
+                {c.createFreeHint}
               </p>
-              {paid ? (
-                <p className="mt-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">{c.createPaidHint}</p>
-              ) : null}
             </div>
-            <Switch checked={paid} onCheckedChange={setPaid} aria-label={c.createPaidLabel} />
+            <Switch checked={isFree} onCheckedChange={setIsFree} aria-label={c.createFreeLabel} />
           </div>
 
-          {paid ? (
+          {/* Hidden while «مجاني» is on — «اتدفع؟» has no answer for an order
+              nobody was asked to pay for, and a switch that is ignored is worse
+              than one that is absent. */}
+          {isFree ? null : (
+            <div className="flex items-center justify-between gap-3 rounded-sm border border-line-subtle bg-surface-3 p-3">
+              <div>
+                <p className="text-[length:var(--fs-text-sm)] font-medium text-fg">
+                  {paid ? c.createPaidLabel : c.createAddressOnlyLabel}
+                </p>
+                {paid ? (
+                  <p className="mt-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
+                    {c.createPaidHint}
+                  </p>
+                ) : null}
+              </div>
+              <Switch checked={paid} onCheckedChange={setPaid} aria-label={c.createPaidLabel} />
+            </div>
+          )}
+
+          {paid && !isFree ? (
             <>
               <div>
                 <Label htmlFor="book-create-sender-phone">{c.createSenderPhoneLabel}</Label>

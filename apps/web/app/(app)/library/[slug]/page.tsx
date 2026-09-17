@@ -67,6 +67,24 @@ export async function generateMetadata({
  * is identical for everyone. `/api/me/path` is the per-student half. They are
  * parallel, and the join is `buildCourseOutline`, which is unit-tested.
  */
+/**
+ * Five seconds, not the thirty `next.config.ts` gives every other dynamic route.
+ *
+ * This is the outline, and the outline is where a lesson is drawn as locked or
+ * open. Two things unlock one: finishing the lesson before it, and passing its
+ * quiz. The first calls `router.refresh()` (`components/player/lesson-nav.tsx`);
+ * the second cannot, because the submit happens on the attempt route and
+ * refreshing THAT re-posts `resume` — see `quiz-runner.tsx`. So a passing grade
+ * would leave the next lesson drawn as locked for up to half a minute, on the
+ * screen the student goes to precisely in order to see it open.
+ *
+ * Five seconds keeps almost all of the win — the complaint is a student
+ * bouncing between the outline and a lesson, which is a two-second round trip —
+ * while making the gate feel immediate. Not `0`: this page is a real read, and
+ * it is one of the two most revisited screens in the app.
+ */
+export const unstable_dynamicStaleTime = 5;
+
 export default async function LibraryCoursePage({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
 

@@ -6,6 +6,7 @@ import {
   LessonResourceKindSchema,
 } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
+import { VideoMirrorStatusSchema, VideoProviderSchema } from '@ayman/contracts/video';
 import { getTaxonomyLiveOrNull, getTaxonomyOrNull } from '@/lib/taxonomy';
 import { apiGetAuthedOrNotFound } from '@/lib/api-server';
 import { CourseEditor } from '@/components/admin/course/course-editor';
@@ -76,6 +77,14 @@ const AdminCourseDetailSchema = z.object({
           completionMinViewSeconds: z.number().int().nullable(),
           // Decimal(6,3) on the wire — a JSON number here, not a string.
           completionPassGrade: z.coerce.number().nullable(),
+          /* «ينزل الساعة ٨» and the after-the-lecture summary. `.catch(null)`
+             on both, not `.nullable()` alone: this page is served by whichever
+             API container answers, and during a rolling deploy that is briefly
+             one that predates the columns. A missing field must degrade to "no
+             schedule / no summary" rather than fail the parse and blank the
+             whole course editor. */
+          publishAt: z.string().nullable().catch(null),
+          description: z.string().nullable().catch(null),
           video: z
             .object({
               externalId: z.string(),
@@ -83,6 +92,17 @@ const AdminCourseDetailSchema = z.object({
               // The thumbnail. Present here so the video form can prefill it —
               // it was a column the admin could never see, let alone set.
               posterKey: z.string().nullable(),
+              /*
+               * «الرفع المباشر». Which source the lecture came from decides
+               * which form the panel shows — an uploaded lecture has no URL
+               * to prefill and prefilling `https://youtu.be/<32 hex>` is a
+               * link to nothing.
+               */
+              provider: VideoProviderSchema,
+              /** Whether our copy is ready, still encoding, or failed. */
+              mirrorStatus: VideoMirrorStatusSchema,
+              /** The instructor's own filename, shown back to them. */
+              sourceName: z.string().nullable(),
             })
             .nullable(),
           // Prefills the body editor. See `findForAdmin` for why its absence

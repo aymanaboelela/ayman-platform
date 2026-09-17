@@ -10,7 +10,10 @@ import { AuditService } from '../../audit/audit.service';
 import type { SettingsService } from '../admin/settings/settings.service';
 import { BooksService } from './books.service';
 
-const SHIPPING_CENTS = 6_500;
+/** The three zone rates the settings stub serves — «قاهرة وجيزة ٨٠، وجه بحري
+ *  ١٠٠، صعيد وسينا وبحر أحمر ١٥٠». Pinned so these assertions do not move when
+ *  somebody edits the live rates in the shared dev database. */
+const SHIPPING_RATES = { cairo_giza: 8_000, delta: 10_000, far: 15_000 };
 
 describe('BooksService', () => {
   const prisma = new PrismaClient({
@@ -18,7 +21,7 @@ describe('BooksService', () => {
   }) as unknown as PrismaService;
   const audit = new AuditService(prisma);
   const settings = {
-    read: async () => ({ store: { shippingCents: SHIPPING_CENTS } }),
+    read: async () => ({ store: { shippingRates: SHIPPING_RATES } }),
   } as unknown as SettingsService;
   const service = new BooksService(prisma, audit, settings);
 
@@ -103,7 +106,11 @@ describe('BooksService', () => {
       expect(mine(shelf!.first)).toHaveLength(1);
       expect(mine(shelf!.second)).toHaveLength(1);
       expect(shelf!.subjectNameAr).toBe(subjectNameAr);
-      expect(catalog.shippingCents).toBe(SHIPPING_CENTS);
+      /* ⚠️ The CHEAPEST zone, and the field means exactly that now — it is the
+         floor a page may quote before it knows an address, never a fee anything
+         charges. The rates ride beside it for the cart to re-quote from. */
+      expect(catalog.shippingCents).toBe(SHIPPING_RATES.cairo_giza);
+      expect(catalog.shippingRates).toEqual(SHIPPING_RATES);
     });
 
     /*

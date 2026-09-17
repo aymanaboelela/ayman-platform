@@ -25,7 +25,9 @@ add a document there, not as a literal in five files.
 | `/.well-known/agent-skills/index.json` | `application/json` | Agent Skills Discovery v0.2.0 |
 | `/.well-known/agent-skills/{name}/SKILL.md` | `text/markdown` | Each skill, hashed in the index |
 | `/robots.txt` | `text/plain` | Content signals + crawl rules |
-| `/{page}.md`, or `Accept: text/markdown` | `text/markdown` | Markdown twin of every public page |
+| `/{page}.md`, or `Accept: text/markdown` | `text/markdown` | Markdown twin of every public page — including `/books.md` |
+| `/.well-known/ai-catalog.json` | `application/json` | ARD manifest, with the Arabic queries each document answers |
+| `/AGENTS.md` | `text/markdown` | agentsmd.net — the prose guide |
 
 Plus, on every public HTML response: `<link>` elements in `<head>` pointing at all of the
 above, from `components/agents/agent-discovery-links.tsx`. The `Link` **header** is a
@@ -38,6 +40,28 @@ WebMCP tools (`search_courses`, `get_course`, `get_study_path`) are registered f
 ### Content signals
 
 `robots.txt` carries `Content-Signal: search=yes, ai-input=yes, ai-train=no`.
+
+⚠️ **`Google-Extended` is the one named exception, and it is allowed.**
+
+Checked 2026-09-15 against Google's own crawler doc: the token is not a crawler,
+it controls *both* Gemini training *and* "grounding in Gemini Apps and Vertex
+AI", and it has no effect on Google Search or AI Overviews. Google offers no way
+to keep the grounding and refuse the training.
+
+**Ayman decided on 2026-09-16 to allow it**, told the cost of both sides: being
+citable inside Gemini is worth letting Google train on the material. Every other
+training crawler stays `Disallow: /` — the decision was about Gemini, not about
+training in general.
+
+So `robots.txt` now carries a second signal for that one group,
+`search=yes, ai-input=yes, ai-train=yes`, beside its `Allow: /`. The wildcard
+group is unchanged. ⚠️ Do not "restore" the block from memory of the old rule,
+and do not flip the group's `Allow` without flipping its `Content-Signal` with
+it — a group granting access under a signal refusing it is a contradiction a
+reverting reader produces by touching one line of two.
+
+⚠️ It is one-way in practice: what has already entered a model's weights does
+not come back if this is reverted later.
 
 Decided by Ayman on 2026-08-05: index it, let assistants read and cite it, do **not** let
 it become training data. Changing any of the three is his call, not a maintenance
@@ -319,6 +343,90 @@ informational.
 Revisit if the platform ever grows an outbound crawler or fetcher.
 
 ---
+
+## What the pages themselves publish (2026-09-15)
+
+Discovery documents are only half of it: an assistant that arrives at a PAGE
+reads its JSON-LD. The rule that decides every question here —
+
+> **Structured data is a machine-readable copy of the page. It may never say
+> less than the page, and never more.**
+
+Both halves have been violated in production, so both are written down:
+
+- **Never less.** Every `Course` published `price: '0', category: 'Free'` while
+  its own page rendered «١٥٠ ج / الشهر». `courseJsonLd` now emits one `Offer`
+  per plan, in the page's own order, and the price fields are **required** on
+  `CourseForJsonLd` so a new surface has to decide what it costs.
+- **Never more.** `syllabusSections`/`teaches` were written and removed:
+  `(site)/courses/[slug]/page.tsx` deliberately replaces the lesson list with
+  `copy.course.lessonsLockedNote` for priced courses, and publishing those
+  titles would announce to a crawler exactly what the page withholds.
+
+Derived from the articles themselves (`lib/news/structured.ts`), with no new
+content authored and nothing invented — every string is lifted verbatim from
+the block tree the page renders:
+
+| Graph | Source shape | Live count |
+| --- | --- | --- |
+| `FAQPage` | `## …؟` headings and the blocks under them | 12 rows over 3 articles |
+| `DefinedTermSet` | `- **عربي — English**: تعريف` and two undashed variants | 130 terms |
+| `Quiz` | the MCQ bank plus `**الإجابات**: 1-ج · 2-ب`, and the `**س1:**`/`ج:` essay pairs | 26 questions |
+
+⚠️ A question the answer key does not name is **dropped**, never published bare.
+A `Question` with no `acceptedAnswer` invites an assistant to supply one and
+attribute the guess to this site.
+
+`/books` needed all of this most and had none of it: its shelves render from a
+CLIENT component, so `curl /books` returns zero cards — see the scroll note in
+`components/site/books-shop.tsx`. `bookListJsonLd` and `/books.md` are the only
+server-rendered description of the shop that exists.
+
+### Sources that must be live, not seeded
+
+Three surfaces published the shipped constant where the page reads a row:
+
+- the home `FAQ` (`home_blocks`, editable at `/admin/home`),
+- `sameAs` (the contact row at `/admin/settings` — and `SAME_AS` is **Ayman's**
+  accounts, which on another instructor's stack is a false identity claim),
+- course and book prices.
+
+The constants remain as fallbacks only, because `next build` runs where the API
+is unreachable.
+
+### The paid lesson outline: three surfaces, one decision
+
+The HTML course page hides the lesson list for a PRICED course
+(`copy.course.lessonsLockedNote`). `/courses/<slug>.md`, the WebMCP `get_course`
+tool and `GET /api/catalog/courses/<slug>` all still publish the titles — and
+the API publishes strictly more (ids, `isFreePreview`, durations).
+
+**They stay published.** The allowlist is `CatalogService.findBySlug`, not the
+page: the API is public, unauthenticated, documented in `/openapi.json` and
+linked from every twin's own footer, so gating the twin would hide from a polite
+agent exactly what an impolite one reads two lines below. And the page's gate is
+a UI decision rather than a disclosure rule — every outline row there is a
+`CourseEntry`, i.e. a button, so a priced course rendered a screen of controls
+that all led to the same subscribe error.
+
+⚠️ If it ever becomes a disclosure rule, the change is the
+`sections.lessons.select` in `findBySlug` — the one source all three surfaces
+read. Gating the twin alone leaves three surfaces disagreeing, which is worse
+than either answer. Two comments used to assert the opposite of the current
+behaviour and have been corrected; they are named here so the next reader does
+not re-derive this from scratch.
+
+### IndexNow fires on publish
+
+`scripts/indexnow.mjs` still exists for a full resubmission, and nobody ran it.
+`lib/seo/indexnow.ts` now pushes from the publish action itself — news and
+course status alike, inside `after()` so it cannot delay or fail the save.
+**Bing is the point**: it is the index ChatGPT's search reads, so this is the
+shortest path from «نشرنا مقال» to an assistant being able to cite it. Google
+does not participate; its side is Search Console and needs a human.
+
+⚠️ Only on the way **in**. Unpublishing must never submit — IndexNow is an
+assertion that a URL belongs in an index.
 
 ## Known issues on this surface
 
