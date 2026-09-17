@@ -266,6 +266,23 @@ export const AUDIT_ACTIONS = [
    * not a failure, and the thing it found is in `metadata.alsoOnRef`.
    */
   'book-order:duplicate-receipt',
+  /*
+   * «المبلغ اللي على الإيصال أقل من المطلوب» — also written by the platform.
+   *
+   * Separate from `duplicate-receipt` because they send the admin to look at
+   * two different things: one is another order to compare against, the other is
+   * a number on a picture to check against what the basket costs. Folding them
+   * into one action would make «وريني اللي المبلغ فيه ناقص» a metadata filter
+   * on a log whose whole point is that its actions are findable.
+   *
+   * Both set the same hold — see `BookOrder.heldForReviewAt` — and neither
+   * changes the order's status: the money was still claimed, and the parcel is
+   * simply not printed until somebody says so.
+   */
+  'book-order:held-for-review',
+  /* «راجعته وتمام» — the admin clearing either hold by hand. The only one of
+     the three a person writes. */
+  'book-order:review-cleared',
   // «راح للمطبعة» — its own row and not a `metadata` flag on `ship`, for the
   // same reason `deliver` is separate: «الطلب ده راح للمطبعة إمتى» is a
   // question asked about a run that came back short, and an action whose name

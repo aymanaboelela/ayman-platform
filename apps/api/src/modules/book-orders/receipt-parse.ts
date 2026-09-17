@@ -105,8 +105,46 @@ export function readReference(text: string): string | null {
  * outrank the real amount — so anything under `MIN_PLAUSIBLE_CENTS` is ignored
  * rather than trusted.
  */
-export function readAmountCents(text: string): number | null {
+export function readAmountCents(text: string, payTo: readonly string[] = []): number | null {
   const digits = toAsciiDigits(text);
+
+  /*
+   * ⚠️ ANCHOR FIRST, shape second.
+   *
+   * Every receipt prints the number the money went TO, and that number is ours
+   * — `settings.payments.instapay` / `vodafoneCash`. It is the one token on the
+   * page whose meaning is known before the page is read, which makes it the
+   * only reliable way to tell the amount from the fee, the balance, the date
+   * and the battery percentage.
+   *
+   * Measured on the ten production receipts: the shape rule alone read 1 of 10.
+   * Anchored on our own number it reads 8, because the amount is always within
+   * a line or two of it:
+   *
+   *   فودافون كاش   «تم تحويل 250 جنيه لرقم 01225796476»      نفس السطر
+   *   إنستا باي     «المبلغ 250.00» / «إلى 01225796476»        السطر اللي فوقه
+   *
+   * And being anchored is what makes a BARE integer safe to accept here, which
+   * is the whole Vodafone-Cash format — «250 جنيه», no decimals. Unanchored it
+   * never was.
+   */
+  /*
+   * ⚠️ BEFORE the anchor: a number the receipt itself labels as money.
+   *
+   * A third layout turned up among the ten — a QNB/IPN receipt that prints
+   * «250 EGP» in display type at the top and the recipient's number six hundred
+   * pixels below it, so no line-distance rule reaches from one to the other.
+   * But `EGP` is Latin, reads cleanly where the Arabic does not, and means
+   * exactly one thing.
+   *
+   * The FIRST one, because every layout leads with what was sent and puts the
+   * fee and the total underneath.
+   */
+  const labelled = amountBeforeCurrency(digits);
+  if (labelled !== null) return labelled;
+
+  const anchored = amountNearAnchor(digits, payTo);
+  if (anchored !== null) return anchored;
 
   /* ⚠️ EXACTLY two decimals, and nothing else counts.
      A bare integer is not safe to read as money from this text. Measured on the
@@ -153,6 +191,109 @@ export function readAmountCents(text: string): number | null {
 const MIN_PLAUSIBLE_CENTS = 2000; // ٢٠ جنيه
 const MAX_PLAUSIBLE_CENTS = 500000; // ٥٠٠٠ جنيه
 
+
+
+/**
+ * A number the page itself labels as pounds — «250 EGP».
+ *
+ * Latin `EGP` only. «جنيه» is what the Arabic layouts write, and an `eng` pass
+ * returns it as mojibake that changes with the compression — matching on it
+ * would be matching on noise. See `receipt-ocr.ts` for why the pass is `eng`.
+ */
+function amountBeforeCurrency(digits: string): number | null {
+  for (const match of digits.matchAll(/(\d{1,6})(?:[.,](\d{2}))?\s*(?:EGP|LE)\b/gi)) {
+    const whole = Number.parseInt(match[1] ?? '', 10);
+    if (!Number.isFinite(whole)) continue;
+    const cents = whole * 100 + (match[2] ? Number.parseInt(match[2], 10) : 0);
+    if (cents < MIN_PLAUSIBLE_CENTS || cents > MAX_PLAUSIBLE_CENTS) continue;
+    return cents;
+  }
+  return null;
+}
+
+/** How many lines either side of our own number an amount may sit on. */
+const ANCHOR_LINE_RADIUS = 1;
+
+/**
+ * The amount nearest to one of OUR payment numbers, or null when none of them
+ * appears on the page.
+ *
+ * Bare integers count here — see `readAmountCents`'s note on why the anchor is
+ * what makes that safe. Still filtered by the plausibility window, so the
+ * «رسوم الخدمة 1.00» sitting one line under the recipient is not mistaken for
+ * the transfer.
+ */
+function amountNearAnchor(digits: string, payTo: readonly string[]): number | null {
+  const wanted = payTo
+    .map((number) => toAsciiDigits(number).replace(/\D/g, ''))
+    /* Matched on the last nine digits, so `+201225796476`, `01225796476` and
+       `1225796476` are one number — the receipt writes whichever form its app
+       prefers and the setting holds E.164. */
+    .map((number) => number.slice(-9))
+    .filter((number) => number.length === 9);
+  if (wanted.length === 0) return null;
+
+  const lines = digits.split('\n');
+  const anchorLines = lines
+    .map((line, index) => ({ line: line.replace(/\D/g, ''), index }))
+    .filter(({ line }) => wanted.some((number) => line.includes(number)))
+    .map(({ index }) => index);
+  if (anchorLines.length === 0) return null;
+
+  let best: { cents: number; distance: number } | null = null;
+  for (const anchor of anchorLines) {
+    for (let offset = -ANCHOR_LINE_RADIUS; offset <= ANCHOR_LINE_RADIUS; offset += 1) {
+      const line = lines[anchor + offset];
+      if (line === undefined) continue;
+      for (const cents of moneyIn(line)) {
+        const distance = Math.abs(offset);
+        /* Ties go to the FIRST reading on the nearest line: both layouts print
+           what was sent before what it cost. */
+        if (best === null || distance < best.distance) best = { cents, distance };
+      }
+    }
+  }
+  return best?.cents ?? null;
+}
+
+/**
+ * Every plausible amount on one line, largest first.
+ *
+ * ⚠️ Largest, not first. The Vodafone line reads «01225796476 p38) auix> 250»
+ * once the Arabic is mangled, and `38` — a fragment of the mojibake around the
+ * real number — comes before the 250 that is the actual transfer. Taking the
+ * first read it as 38 EGP. Nothing on an anchor line legitimately exceeds the
+ * amount sent: the fee is smaller, and the total-with-fee lives on its own line
+ * in the one layout that prints it.
+ */
+function* moneyIn(line: string): Generator<number> {
+  /* A date anywhere on the line disqualifies the WHOLE line. «تاريخ العملية :
+     10-9-2026 21:57» sits one line from the recipient in both layouts, and
+     `2026` is inside the plausible window — it was read as 2,026 EGP on four of
+     the ten real receipts, which is worse than reading nothing at all. */
+  if (/\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(line)) return;
+
+  const found: number[] = [];
+  for (const match of line.matchAll(/(\d{1,6})(?:[.,](\d{2}))?(?!\d)/g)) {
+    const whole = Number.parseInt(match[1] ?? '', 10);
+    if (!Number.isFinite(whole)) continue;
+    /* A bare four-digit number in the 2000s is a year that lost its separators
+       to the OCR, not two thousand pounds. A real amount that size is written
+       with decimals by every app here. */
+    if (!match[2] && whole >= 1900 && whole <= 2100) continue;
+
+    const cents = whole * 100 + (match[2] ? Number.parseInt(match[2], 10) : 0);
+    if (cents < MIN_PLAUSIBLE_CENTS || cents > MAX_PLAUSIBLE_CENTS) continue;
+    /* A long run that merely contains something amount-shaped is a reference or
+       a phone. The anchor line itself holds our number, so this matters most
+       here of anywhere. */
+    const token = tokenAround(line, match.index ?? 0);
+    if (/^\d{7,}$/.test(token)) continue;
+    found.push(cents);
+  }
+  yield* found.sort((a, b) => b - a);
+}
+
 /** The whitespace-delimited token the match at `index` belongs to. */
 function tokenAround(text: string, index: number): string {
   let start = index;
@@ -163,6 +304,6 @@ function tokenAround(text: string, index: number): string {
 }
 
 /** Both readings of one receipt. */
-export function parseReceiptText(text: string): ReceiptReading {
-  return { ref: readReference(text), amountCents: readAmountCents(text) };
+export function parseReceiptText(text: string, payTo: readonly string[] = []): ReceiptReading {
+  return { ref: readReference(text), amountCents: readAmountCents(text, payTo) };
 }

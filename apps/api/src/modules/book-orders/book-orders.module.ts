@@ -5,6 +5,7 @@ import { MarketingModule } from '../marketing/marketing.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OutreachModule } from '../outreach/outreach.module';
 import { MediaModule } from '../media/media.module';
+import { SettingsModule } from '../admin/settings/settings.module';
 import { BookOrdersController } from './book-orders.controller';
 import { AdminBookOrdersController } from './admin-book-orders.controller';
 import { BookOrdersService } from './book-orders.service';
@@ -17,7 +18,16 @@ import { warmReceiptOcr } from './receipt-ocr';
  * has, for the same reason.
  */
 @Module({
-  imports: [MediaModule, AuthModule, BooksModule, NotificationsModule, MarketingModule, OutreachModule],
+  imports: [
+    MediaModule,
+    AuthModule,
+    BooksModule,
+    NotificationsModule,
+    MarketingModule,
+    OutreachModule,
+    /* «إنستا باي» و«فودافون كاش» — الرقمين اللي الإيصال بيتقري بالنسبة لهم. */
+    SettingsModule,
+  ],
   controllers: [BookOrdersController, AdminBookOrdersController],
   providers: [BookOrdersService],
   // «التحويلات الواردة» settles a paid book the same way it settles a

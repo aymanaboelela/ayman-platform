@@ -2399,6 +2399,30 @@ model BookOrder {
   /// «راجعها» flag — `screenshotAmountCents` disagreeing with `amountCents` is
   /// the one thing worth a human look before a parcel is printed.
   screenshotAmountCents Int? @map("screenshot_amount_cents")
+
+  /// «لسه متأكدش منه» — the order is paid, and something about its receipt
+  /// needs a human before the parcel moves.
+  ///
+  /// A FLAG and not a sixth `status`: the status drives every tab, filter,
+  /// export and packing list on the admin side, and adding a value to it would
+  /// put every one of those queries up for review — where the first one missed
+  /// is a held order that ships anyway, which is the thing this exists to
+  /// prevent. It also says something the status cannot: «مدفوع، بس المبلغ
+  /// المكتوب على الإيصال أقل من المطلوب» is two independent facts.
+  ///
+  /// What it actually does: `packingList` and the bulk «اتشحن»/«راح للمطبعة»
+  /// skip a held row, so it cannot be printed or handed to a courier until the
+  /// hold is cleared. Everything else — the list, the money screens, the
+  /// student's own view — treats it as the `paid` order it is.
+  ///
+  /// Cleared by setting it back to NULL. There is no «اتراجع إمتى» column: the
+  /// audit log holds who and when, and this row only has to answer whether it
+  /// is held right now.
+  heldForReviewAt DateTime? @map("held_for_review_at")
+  /// Why, so the admin knows what to look at: `amount_short` or
+  /// `duplicate_receipt`. See `book_orders_held_reason_matches_hold`, which
+  /// pins the pair together in both directions.
+  heldReason String? @map("held_reason")
   /// Set the moment the screenshot is submitted — see the model doc for why
   /// this alone is what "paid" means for a book order.
   paidAt        DateTime? @map("paid_at")
@@ -2544,6 +2568,8 @@ model BookOrder {
   /// `phone` + `status`, because `phone` is the identity a guest checkout has
   /// and `userId` is null for most of these rows.
   @@index([phone, status])
+  /// «وريني اللي محتاج مراجعة» — a handful of rows against the whole table.
+  @@index([heldForReviewAt])
   @@map("book_orders")
   @@schema("app")
 }

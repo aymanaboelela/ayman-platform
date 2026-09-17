@@ -90,8 +90,45 @@ let workerPromise: Promise<OcrWorker | null> | null = null;
 /** Only the part of the `tesseract.js` surface this file uses. */
 type OcrWorker = {
   recognize: (image: Buffer) => Promise<{ data: { text: string } }>;
+  setParameters: (parameters: Record<string, string>) => Promise<unknown>;
   terminate: () => Promise<unknown>;
 };
+
+/**
+ * Tesseract's page-segmentation modes, by the two names this file uses them by.
+ *
+ *   `3` — the default. Finds columns and paragraphs, and is what reads an
+ *         ordinary receipt correctly.
+ *   `11` — «sparse text». Looks for text anywhere with no layout assumptions,
+ *         and is the ONLY mode that sees the amount on a QNB/IPN receipt, where
+ *         «250 EGP» is set in display type twice the height of anything else on
+ *         the page. The default mode returns that line as `° \` and `"mane`.
+ *
+ * ⚠️ Sparse is a fallback and not the default: with no layout to go on it also
+ * reorders what it finds, which breaks the line-distance rule the amount anchor
+ * depends on (see `amountNearAnchor`).
+ */
+const PSM_DEFAULT = '3';
+const PSM_SPARSE = '11';
+
+/**
+ * One reading at a time.
+ *
+ * `setParameters` is state on a SHARED worker, so two overlapping reads would
+ * otherwise have one switch the other into sparse mode mid-page. These are
+ * fire-and-forget background reads with no user waiting on them, so a queue
+ * costs nothing and a second worker would mean a second copy of a 22 MB model.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+
+function enqueue<T>(work: () => Promise<T>): Promise<T> {
+  const next = queue.then(work, work);
+  queue = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
+}
 
 /**
  * Whether the engine may be started at all.
@@ -170,26 +207,77 @@ async function getWorker(): Promise<OcrWorker | null> {
  *
  * Returns nulls rather than throwing, always — see the header.
  */
-export async function readReceipt(bytes: Buffer): Promise<ReceiptReading> {
+export async function readReceipt(
+  bytes: Buffer,
+  /** Our own transfer numbers — `contact.instapay` and `contact.vodafoneCash`.
+   *  They are what tells the amount from the fee and the balance; see
+   *  `readAmountCents`. */
+  payTo: readonly string[] = [],
+): Promise<ReceiptReading> {
   const nothing: ReceiptReading = { ref: null, amountCents: null };
 
   const worker = await getWorker();
   if (!worker) return nothing;
 
-  let prepared: Buffer;
-  try {
-    prepared = await prepare(bytes);
-  } catch {
-    return nothing;
-  }
+  /*
+   * ⚠️ Rotations, because a good proportion of these are not screenshots.
+   *
+   * `BK-8C7643` is a PHOTOGRAPH of somebody else's phone screen, taken
+   * sideways, with a lamp reflected in it and a fingerprint across the middle.
+   * Tesseract reads that as nothing at all, and it is not a rare shape — a
+   * student whose transfer confirmation arrived on a parent's handset has no
+   * other way to send it.
+   *
+   * Upright FIRST and the rest only if it read nothing, so the ordinary
+   * screenshot still costs one pass. A page that yields neither a reference nor
+   * an amount has told us nothing, which is the only signal available for "that
+   * was the wrong way up" — there is no confidence score worth trusting on a
+   * page of mojibake.
+   */
+  return enqueue(async () => {
+    for (const rotation of [0, 90, 270, 180]) {
+      let prepared: Buffer;
+      try {
+        prepared = await prepare(bytes, rotation);
+      } catch {
+        continue;
+      }
 
-  try {
-    const result = await withTimeout(worker.recognize(prepared), OCR_TIMEOUT_MS);
-    return parseReceiptText(result.data.text);
-  } catch (error) {
-    log.warn(`could not read a receipt: ${String(error)}`);
+      try {
+        const reading = await readOnce(worker, prepared, payTo, PSM_DEFAULT);
+
+        /* ⚠️ A second pass ONLY for the amount, and only when the first found
+           none. The default mode reads the reference and the layout correctly
+           and misses a display-type total; sparse mode is the other way round.
+           Neither is a better setting than the other — they are two different
+           readings of one page, and this takes what each is good at. */
+        if (reading.amountCents === null) {
+          const sparse = await readOnce(worker, prepared, payTo, PSM_SPARSE);
+          if (sparse.amountCents !== null) {
+            return { ref: reading.ref ?? sparse.ref, amountCents: sparse.amountCents };
+          }
+        }
+
+        if (reading.ref !== null || reading.amountCents !== null) return reading;
+      } catch (error) {
+        log.warn(`could not read a receipt: ${String(error)}`);
+        return nothing;
+      }
+    }
     return nothing;
-  }
+  });
+}
+
+/** One recognise at one segmentation mode. */
+async function readOnce(
+  worker: OcrWorker,
+  image: Buffer,
+  payTo: readonly string[],
+  mode: string,
+): Promise<ReceiptReading> {
+  await worker.setParameters({ tessedit_pageseg_mode: mode });
+  const result = await withTimeout(worker.recognize(image), OCR_TIMEOUT_MS);
+  return parseReceiptText(result.data.text, payTo);
 }
 
 /**
@@ -202,12 +290,12 @@ export async function readReceipt(bytes: Buffer): Promise<ReceiptReading> {
  * because the digits in a 1080-wide screenshot are smaller than the engine
  * likes.
  */
-async function prepare(bytes: Buffer): Promise<Buffer> {
+async function prepare(bytes: Buffer, rotation = 0): Promise<Buffer> {
   const image = sharp(bytes).greyscale();
   const stats = await image.stats();
   const meanBrightness = stats.channels[0]?.mean ?? 255;
 
-  let pipeline = sharp(bytes).greyscale();
+  let pipeline = sharp(bytes).rotate(rotation).greyscale();
   if (meanBrightness < 110) pipeline = pipeline.negate();
 
   const metadata = await sharp(bytes).metadata();
