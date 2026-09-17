@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import type { BookShippingRates } from '@ayman/contracts/books';
 import { BooksService } from '../../books/books.service';
 
 /**
@@ -124,8 +125,10 @@ export interface CourseFact {
 export interface AssistantFacts {
   readonly books: readonly BookFact[];
   readonly courses: readonly CourseFact[];
-  /** Charged ONCE per order, not per book — the rendering says so out loud. */
-  readonly shippingCents: number;
+  /** The three zone rates — «قاهرة وجيزة ٨٠، وجه بحري ١٠٠، صعيد وسينا وبحر
+   *  أحمر ١٥٠». Charged ONCE per order, not per book, whichever zone it is —
+   *  the rendering says both out loud. */
+  readonly shippingRates: BookShippingRates;
   /** `Date.now()` when the rows were read. The TTL is measured off this. */
   readonly at: number;
 }
@@ -155,11 +158,11 @@ export class AssistantFactsService {
   constructor(
     private readonly prisma: PrismaService,
     /**
-     * For the delivery fee ALONE, and deliberately through the shop's own
-     * service rather than by reading `SiteSettings.store.shippingCents` here.
+     * For the delivery rates ALONE, and deliberately through the shop's own
+     * service rather than by reading `SiteSettings.store.shippingRates` here.
      *
-     * `BooksService.shippingCents()` already resolves the "unset ⇒
-     * `BOOK_SHIPPING_CENTS`" default, and it is the same call
+     * `BooksService.shippingRates()` already resolves the "unset ⇒
+     * `DEFAULT_BOOK_SHIPPING_RATES`" default, and it is the same call
      * `BookOrdersService` uses to price a real basket. A second copy of that
      * expression would eventually quote a delivery fee that is not the one the
      * checkout charges — which is the exact class of bug this whole file is
@@ -200,7 +203,7 @@ export class AssistantFactsService {
    */
   private async load(): Promise<AssistantFacts | null> {
     try {
-      const [books, courses, shippingCents] = await Promise.all([
+      const [books, courses, shippingRates] = await Promise.all([
         this.prisma.book.findMany({
           /*
            * `isActive` only — the same filter the public shop applies. A
@@ -248,7 +251,7 @@ export class AssistantFactsService {
              */
           },
         }),
-        this.books.shippingCents(),
+        this.books.shippingRates(),
       ]);
 
       this.snapshot = {
@@ -267,7 +270,7 @@ export class AssistantFactsService {
           quarterlyPriceCents: row.quarterlyPriceCents,
           yearlyPriceCents: row.yearlyPriceCents,
         })),
-        shippingCents,
+        shippingRates,
         at: Date.now(),
       };
       return this.snapshot;

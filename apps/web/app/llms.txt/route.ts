@@ -142,6 +142,20 @@ export async function GET(): Promise<Response> {
     `- [${copy.essentials.title}](${url('/essentials.md')}): ${copy.essentials.listLead}`,
     `- [${copy.news.title}](${url('/news.md')}): ${copy.news.subtitle}`,
     /*
+     * ⚠️ `/books.md` was missing from every agent surface at once — no twin, no
+     * line here, no structured data beyond a breadcrumb — and it is the only
+     * page on this site that states a price a stranger can act on. «كتاب أيمن
+     * أبو العلا بكام؟» has a definite published answer and an assistant had to
+     * decline it.
+     */
+    `- [${copy.books.metaTitle}](${url('/books.md')}): ${copy.books.metaDescription}`,
+    /*
+     * ⚠️ «إزاي أشترك وأدفع؟» — a question this platform answers every day and
+     * no public page did. The checkout is behind auth, so an assistant saw the
+     * four prices on every course page and nothing about how to pay them.
+     */
+    `- [${copy.subscribePage.title}](${url('/subscribe.md')}): ${copy.subscribePage.metaDescription}`,
+    /*
      * ⚠️ The year lines carry their alternate spellings, and the digit forms
      * are the reason.
      *
@@ -183,6 +197,28 @@ export async function GET(): Promise<Response> {
     '## Skills',
     '',
     ...AGENT_SKILLS.map((skill) => `- [${skill.name}](${url(skillPath(skill.name))}): ${skill.description}`),
+    '',
+    /*
+     * ## For agents — the two documents that answer «إيه الموقع ده ولمين؟».
+     *
+     * ⚠️ Both were reachable from nowhere an assistant walks. `/AGENTS.md`
+     * exists BECAUSE a readiness scan reported that an AI visitor could not
+     * work out the site's purpose and audience — and it was linked only from
+     * the ARD manifest, which was itself linked from nothing. The two pointed
+     * at each other and at no third document. A file nothing links to is a
+     * file nothing reads, and this route's own header calls it the one
+     * document today's assistants actually fetch.
+     *
+     * ⚠️ NOT under `## Optional`. llmstxt.org defines that heading as the
+     * section a reader may skip when context is short, and «what is this site
+     * and who is it for» is the last thing that should be dropped from a short
+     * read. `discovery.test.ts` now fails if a path in `AGENT_DISCOVERY_PATHS`
+     * is named by no surface at all.
+     */
+    '## For agents',
+    '',
+    `- [AGENTS.md](${url(AGENT_DISCOVERY_PATHS.agentsGuide)}): what this site is, who it is for, which routes are open and what needs a student account`,
+    `- [Agentic Resource Discovery manifest](${url(AGENT_DISCOVERY_PATHS.aiCatalog)}): every machine-readable document here in one JSON index, with the Arabic queries each one answers`,
     '',
     '## Optional',
     '',

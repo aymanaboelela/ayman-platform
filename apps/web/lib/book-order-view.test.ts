@@ -23,10 +23,11 @@ const c = copy.books.mine;
  * wording pass while proving nothing about the mapping.
  */
 describe('describeBookOrderStatus', () => {
-  it('pairs each of the five statuses with its own chip and its own note', () => {
+  it('pairs each of the six statuses with its own chip and its own note', () => {
     const cases: Record<BookOrderStatus, { label: string; note: string }> = {
       address_only: { label: c.statusAddressOnly, note: c.noteAddressOnly },
       paid: { label: c.statusPaid, note: c.notePaid },
+      printing: { label: c.statusPrinting, note: c.notePrinting },
       shipped: { label: c.statusShipped, note: c.noteShipped },
       delivered: { label: c.statusDelivered, note: c.noteDelivered },
       rejected: { label: c.statusRejected, note: c.noteRejected },
@@ -42,7 +43,7 @@ describe('describeBookOrderStatus', () => {
     }
   });
 
-  it('covers every member of the contract, so a sixth status cannot ship unmapped', () => {
+  it('covers every member of the contract, so a seventh status cannot ship unmapped', () => {
     /*
      * The enum grew from three members to five in the commit that added
      * `deliveredAt`/`rejectedAt`, and the `switch` in `book-order-view.ts` is

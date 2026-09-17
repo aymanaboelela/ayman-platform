@@ -1,4 +1,5 @@
 import { z } from '@ayman/contracts/zod';
+import { BookShippingRatesSchema } from '@ayman/contracts/books';
 
 /**
  * TOKEN SLOTS, not colours. The admin picks one of these; the mapping from a
@@ -209,16 +210,24 @@ export const ContactSchema = z
      * to be, the subscribe panel renders before a student has any session,
      * same as every other contact field on this object.
      *
-     * ⚠️ SUPERSEDED by `instapay` and kept anyway. Nothing reads it any more.
+     * ⚠️ ALIVE AGAIN as of 2026-09-14, after a spell as a dead key.
      *
-     * This object is `.strict()` and a row carrying this key is already
-     * stored in production's `site_settings.data`. `.strict()` rejects
-     * UNKNOWN keys, so DELETING this field would make the stored row fail to
-     * parse — and `SettingsService.read()` feeds the root layout, so every
-     * page on the site would 500 at once. Exactly the trap
-     * `OutreachSettings.groupInviteEveryDays` documents from the renaming
-     * side. A dead field is cheaper than an outage; remove it only in a
-     * commit that also migrates the stored row.
+     * It was superseded by `instapay` when InstaPay became the only
+     * destination. Checkout now ASKS which rail the student wants — إنستاباي
+     * or فودافون كاش — so this is a real payment destination once more, and
+     * the wallet number is genuinely a different number from the InstaPay one.
+     *
+     * ⚠️ The two must never be conflated or defaulted into each other. A
+     * student who picks «فودافون كاش» and is shown the InstaPay number sends
+     * money to a rail the screen is not describing, and nothing reconciles it.
+     * Empty here means the Vodafone Cash choice is offered as unavailable —
+     * which is a fixable admin gap. A wrong number is not fixable.
+     *
+     * Note for anyone tempted to delete it in a future cleanup: this object is
+     * `.strict()` and a row carrying this key is stored in production's
+     * `site_settings.data`, so removing the field makes the stored row fail to
+     * parse — and `SettingsService.read()` feeds the root layout, so every page
+     * on the site 500s at once.
      */
     vodafoneCash: optionalPhone,
     /**
@@ -330,7 +339,28 @@ export type OutreachSettings = z.infer<typeof OutreachSettingsSchema>;
  */
 export const StoreSettingsSchema = z
   .object({
+    /**
+     * ⚠️ LEGACY — the old FLAT fee. Parsed and IGNORED.
+     *
+     * Delivery is priced per zone now (`shippingRates` below). This key is kept
+     * because a settings row already written on production carries it and this
+     * schema is `.strict()`: removing the field would make every settings read
+     * on the live row throw, which on this platform is the whole site rather
+     * than one screen. See `BOOK_SHIPPING_CENTS`.
+     */
     shippingCents: z.number().int().min(0).max(50_000).default(6_500),
+    /**
+     * «قاهرة وجيزة ٨٠، وجه بحري ١٠٠، صعيد وسينا وبحر أحمر ١٥٠» — the three
+     * rates, editable without a deploy for exactly the reason the single fee
+     * was: the courier's price moves and a deploy is the wrong unit of work
+     * for it.
+     *
+     * `.prefault({})` and not `.default({})` — see `SiteSettingsSchema`'s own
+     * note. With `.default({})` a never-written key would read as a literal
+     * `{}` typed as `BookShippingRates`, i.e. three `undefined` fees, and the
+     * cart would quote `NaN`.
+     */
+    shippingRates: BookShippingRatesSchema.prefault({}),
   })
   .strict();
 

@@ -1730,6 +1730,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin book orders summary: anonymous', method: 'get', path: () => '/api/admin/book-orders/summary', actor: 'anonymous', status: 401 },
     { label: 'admin book orders summary: student', method: 'get', path: () => '/api/admin/book-orders/summary', actor: 'student', status: 403 },
     { label: 'admin book orders summary: admin', method: 'get', path: () => '/api/admin/book-orders/summary', actor: 'admin', status: 200 },
+    // الأرقام اللي فوق الشاشة — same `book-order:read` as the list it heads,
+    // and the same query. It is a second READ of the same set, never a
+    // privilege of its own.
+    { label: 'admin book orders overview: anonymous', method: 'get', path: () => '/api/admin/book-orders/overview', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders overview: student', method: 'get', path: () => '/api/admin/book-orders/overview', actor: 'student', status: 403 },
+    { label: 'admin book orders overview: admin', method: 'get', path: () => '/api/admin/book-orders/overview', actor: 'admin', status: 200 },
     {
       label: 'admin book order create: anonymous',
       method: 'post',
@@ -1825,10 +1831,20 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin book orders deliver many: anonymous', method: 'post', path: () => '/api/admin/book-orders/deliver', actor: 'anonymous', status: 401 },
     { label: 'admin book orders deliver many: student', method: 'post', path: () => '/api/admin/book-orders/deliver', actor: 'student', status: 403 },
     { label: 'admin book orders deliver many: admin', method: 'post', path: () => '/api/admin/book-orders/deliver', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
+    // «راح للمطبعة» in bulk — same `book-order:ship` authority as the two
+    // above. It is the same desk moving the same parcel one step earlier, and
+    // a clerk trusted to record that a box left is trusted to record that
+    // paper went to the printer.
+    { label: 'admin book orders print many: anonymous', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders print many: student', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'student', status: 403 },
+    { label: 'admin book orders print many: admin', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
 
     { label: 'admin book order ship: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'anonymous', status: 401 },
     { label: 'admin book order ship: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'student', status: 403 },
     { label: 'admin book order ship: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'admin', status: 404 },
+    { label: 'admin book order printing: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/printing`, actor: 'anonymous', status: 401 },
+    { label: 'admin book order printing: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/printing`, actor: 'student', status: 403 },
+    { label: 'admin book order printing: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/printing`, actor: 'admin', status: 404 },
     // «وصل» carries the same authority as «اتشحن» (`book-order:ship`): both are
     // the shipping desk saying where a parcel got to. Reject, delete and
     // restore sit one permission over on `book-order:write`, because they

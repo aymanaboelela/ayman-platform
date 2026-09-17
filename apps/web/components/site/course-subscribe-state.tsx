@@ -58,7 +58,10 @@ const MY_SUBMISSIONS_SCHEMA = z.array(PaymentSubmissionSchema);
  *      - `GET /api/enrollments` — the same list `EnrollmentController` has
  *        always exposed, filtered here to this course. Read-only: unlike
  *        `POST .../enroll`, it cannot create or revive an enrollment, so
- *        visiting a course page never has a side effect.
+ *        visiting a course page never has a side effect. Its `accessActive`
+ *        flag, not the row's existence, is what decides the redirect — a
+ *        lapsed subscription leaves the row behind and this page is where
+ *        that student renews.
  *      - `GET /api/payments/submissions/me` — literally the same call and
  *        the same per-course filter `<SubscribePanel>`'s own `checkExisting`
  *        effect already makes; see that file for why `find()` (newest-first)
@@ -123,7 +126,9 @@ export function CourseSubscribeState({
 
       const next = resolveCourseVisitorState({
         isSignedIn,
-        enrollment: enrollment ? { lastLessonId: enrollment.lastLessonId } : null,
+        enrollment: enrollment
+          ? { lastLessonId: enrollment.lastLessonId, accessActive: enrollment.accessActive }
+          : null,
         hasPendingSubmission: latestSubmission?.status === 'pending',
       });
 

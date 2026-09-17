@@ -1183,12 +1183,20 @@ const admin = {
     seoDescriptionHint: 'حتى 160 حرف — الوصف اللي بيظهر تحت العنوان في نتائج البحث',
     phoneHint: 'بصيغة دولية، يعني +20 وبعدها الرقم',
     urlHttpsOnly: 'لازم يبدأ بـ https://',
-    /** ⚠️ The Vodafone field is gone from the form — `contact.vodafoneCash` is
-     *  a dead key kept only so the stored settings row still parses. See its
-     *  note in `ContactSchema`. */
+    /**
+     * The two payment destinations. Both are on the form again — checkout asks
+     * the student which rail they want, so both numbers are live.
+     *
+     * ⚠️ They are DIFFERENT numbers and the hints say so. The wallet number and
+     * the InstaPay address are not interchangeable, and a student who picks one
+     * and is shown the other sends money to a rail nothing is reconciling.
+     */
     instapay: 'رقم إنستاباي',
     instapayHint:
-      'الرقم اللي الطلبة هيحوّلوا عليه — اشتراكات الكورسات المدفوعة وطلبات الكتب، الاتنين. بصيغة دولية زي رقم الهاتف فوق.',
+      'الرقم اللي الطلبة هيحوّلوا عليه لما يختاروا إنستاباي — اشتراكات الكورسات وطلبات الكتب. بصيغة دولية زي رقم الهاتف فوق.',
+    vodafoneCash: 'رقم فودافون كاش',
+    vodafoneCashHint:
+      'رقم محفظة فودافون كاش — غير رقم إنستاباي. سيبه فاضي لو مش عايز تستقبل على فودافون كاش، والاختيار ده هيتقفل قدام الطالب.',
     accentPreviewLabel: 'معاينة اللون',
     /** The seventh option in the accent picker: this instructor's own hue. */
     accentCustom: 'لون خاص',
@@ -2272,6 +2280,8 @@ const admin = {
     subtitle: 'طلبات الطلبة لاستلام كتاب الكورس في البيت.',
     filterPaid: 'مدفوعة',
     filterAddressOnly: 'بدأت ومكملتش',
+    /** «راح للمطبعة» — الورق مشي للمطبعة، والكرتونة لسه ما مشيتش. */
+    filterPrinting: 'في المطبعة',
     filterShipped: 'اتشحنت',
     filterDelivered: 'وصلت',
     filterRejected: 'مرفوضة',
@@ -2340,6 +2350,7 @@ const admin = {
     columnDate: 'التاريخ',
     statusAddressOnly: 'بدأ ومكملش الدفع',
     statusPaid: 'مدفوعة، لسه ماتشحنتش',
+    statusPrinting: 'في المطبعة، لسه ماتشحنتش',
     statusShipped: 'اتشحنت',
     statusDelivered: 'وصلت للطالب',
     statusRejected: 'مرفوضة',
@@ -2423,6 +2434,28 @@ const admin = {
 
     /*
      * ════════════════════════════════════════════════════════════════════
+     * «راح للمطبعة» — الخطوة اللي كانت ناقصة بين «مدفوعة» و«اتشحنت».
+     *
+     * الفلو بالظبط: يحدّد الطلبات، ينزّل الـPDF، يوديه للمطبعة، يضغط
+     * «راح للمطبعة». ولما الكتب ترجع ويتأكد إنها هتتشحن فعلاً يضغط «اتشحن».
+     * الطالب ما بيتبعتلهوش أي حاجة في الخطوة دي — الورق بيتطبع، والكلام
+     * الوحيد اللي بيتقال للطالب هو إن الكتاب خرج ليه.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    markPrinting: 'راح للمطبعة',
+    markPrintingWorking: 'بتسجّل…',
+    markPrintingConfirm: 'نسجّل إن الطلب ده راح للمطبعة؟ الطالب مش هيوصله أي إشعار.',
+    alreadyPrinting: 'الطلب ده راح للمطبعة قبل كده',
+    /** الزرار اللي في بار التحديد. «ابعت» مش «اطبع» — ده مش أمر طباعة، ده
+     *  تسجيل إن الورق مشي. */
+    bulkPrintButton: 'ابعت للمطبعة',
+    /** `{count}` — من غير كلام عن إشعارات، عشان مفيش. */
+    bulkPrintConfirm: 'هتسجّل إن {count} طلب راحوا للمطبعة. مفيش أي رسايل هتتبعت للطلبة. تمام؟',
+    /** `{count}` */
+    bulkPrinted: 'راحوا للمطبعة {count}',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
      * «لازم أتأكد إنه وصل» — the second half of the courier's job, and the
      * one the student is actually waiting on. Its own button and not a
      * second click on «اتشحن», because pressing it SENDS the student a
@@ -2481,6 +2514,53 @@ const admin = {
     /** The `sr-only` sentence beside the sidebar's «الكتب» badge. `{n}` is the
      *  number of paid orders that have not shipped yet. */
     unshippedBadgeLabel: '{n} طلب كتاب متشحنش لسه',
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * الأرقام اللي فوق — «كام نسخة، كام كتاب، كام طالب، كام عربي، كام لغات».
+     *
+     * كل رقم فيهم على التبويب المفتوح وبكل الفلاتر اللي ظاهرة، مش على
+     * الصفحة اللي قدامك: الليستة خمسين في الصفحة، وعدّ اللي على الشاشة
+     * بيجاوب على سؤال تاني خالص.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    overviewTitle: 'الأرقام',
+    overviewOrders: 'طلب',
+    /** «طالب» بالمعنى الحرفي — ناس، متعدودين بالموبايل مش بالحساب، لأن معظم
+     *  الطلبات من غير حساب أصلاً. */
+    overviewStudents: 'طالب',
+    overviewBooks: 'كتاب',
+    overviewCopies: 'نسخة',
+    overviewGeneral: 'نسخة عربي',
+    overviewLanguages: 'نسخة لغات',
+    /** تحت الأرقام — بيقول إنها على الفلاتر الظاهرة، مش على كل الطلبات. */
+    overviewScope: 'على التبويب والفلاتر اللي ظاهرة دلوقتي',
+    /** التحذير اللي لازم يتقال مرة واحدة: أرقام السنين ما بتجمعش على الإجمالي،
+     *  لأن الطلب اللي فيه كتاب أولى وكتاب تانية محسوب في الاتنين. */
+    overviewYearsNote: 'الطلب اللي فيه كتاب أولى وكتاب تانية محسوب في الاتنين، فأرقام السنين ما بتجمعش على الإجمالي.',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * تقسيمة الصفوف — «جزء يمين سنة أولى وجزء شمال سنة تانية».
+     *
+     * القسمة بتبان لوحدها لما الفلتر على «كل الصفوف»؛ لو اختار صف بعينه
+     * فالشاشة كلها بقت الصف ده وما ينفعش تتقسم تاني.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    /** `{year}` — «أولى» / «تانية» / «تالتة». */
+    yearSectionTitle: 'سنة {year}',
+    yearSectionNone: 'من غير صف',
+    /** تحت عنوان القسم — `{orders}` طلب في الصف ده كله (مش في الصفحة دي). */
+    yearSectionCount: '{orders} طلب · {books} كتاب · {copies} نسخة',
+    yearSectionStreams: 'عربي {general} · لغات {languages}',
+    /** لما الصف ده مالوش طلبات في الصفحة اللي قدامك بس عنده طلبات تانية. */
+    yearSectionEmptyPage: 'مفيش طلبات من الصف ده في الصفحة دي.',
+    yearSectionEmpty: 'مفيش طلبات في الصف ده.',
+    /** على الطلب اللي فيه كتب من أكتر من صف — بيتعرض مرة واحدة، تحت أصغر صف
+     *  فيه، والشارة دي بتقول إن فيه حاجة تانية جوّاه. */
+    multiYearBadge: 'فيه كتب من أكتر من صف',
+    /** زراير التحميل جوّه قسم الصف — «أحمّل PDF بتاع سنة أولى لوحده». */
+    yearSectionDownloads: 'تحميل الصف ده',
+
     exportHint:
       'بيصدّر الطلبات اللي ظاهرة قدامك دلوقتي بالظبط — نفس التبويب ونفس الفلاتر — جاهز يتبعت لشركة الشحن والمطبعة.',
     /** `{tab}` — the currently open tab's own label, so the button names
@@ -2543,6 +2623,12 @@ const admin = {
     printNoStream: 'من غير طبعة محددة',
     printNoYear: 'من غير صف',
     printYear: 'الصف {n}',
+    /** رأس البلوك اللي بيقسّم الورقة بالصف الأول — «كام كتاب سنة أولى وكام
+     *  سنة تانية» — جنب بعض على نفس السطر، قبل تفاصيل الطبعات. */
+    printYearsTitle: 'الصفوف',
+    /** `{year}` — «أولى» / «تانية» / «تالتة». نفس الكلمة اللي على الشاشة. */
+    printYearName: 'سنة {year}',
+    printYearsNone: 'من غير صف',
     printGeneratedAt: 'اتطبعت في {date}',
     printRange: 'من {from} لـ {to}',
     printFrom: 'من {from}',
@@ -2775,11 +2861,25 @@ const admin = {
 
     /** The delivery fee, edited on the catalogue screen because that is where
      *  prices live. One number for the whole shop. */
-    shippingSettingTitle: 'سعر الشحن',
-    shippingSettingHint: 'بينضاف مرة واحدة على كل طلب، مهما كان عدد الكتب.',
+    shippingSettingTitle: 'سعر الشحن حسب المنطقة',
+    shippingSettingHint:
+      'بينضاف مرة واحدة على كل طلب مهما كان عدد الكتب، والرقم بيتحدد من محافظة العنوان. تغيير السعر هنا مش بيغيّر طلبات قديمة — كل طلب مجمّد سعر شحنه يوم ما اتعمل.',
+    /** ⚠️ LEGACY — سعر الشحن كان رقم واحد. الحقل اتشال من الشاشة والمفتاح فاضل
+     *  عشان أي كود قديم لسه شايفه ما يكسرش. الجديد `shippingZone*` تحت. */
     shippingSettingLabel: 'الشحن (ج)',
     shippingSettingSave: 'احفظ',
     shippingSettingFailed: 'مقدرناش نحفظ سعر الشحن — نحاول تاني',
+    /* ── المناطق التلاتة ──────────────────────────────────────────────────
+       كل واحدة تحتها المحافظات اللي جوّاها بالاسم: «السويس وجه بحري ولا بعيد؟»
+       سؤال حقيقي، والإدمن اللي بيحط سعر لليستة مش شايفها بيخمّن. */
+    shippingZoneNear: 'القاهرة والجيزة (ج)',
+    shippingZoneNearHint: 'القاهرة، الجيزة.',
+    shippingZoneDelta: 'وجه بحري (ج)',
+    shippingZoneDeltaHint:
+      'الإسكندرية، بورسعيد، السويس، الإسماعيلية، دمياط، الدقهلية، الشرقية، القليوبية، كفر الشيخ، الغربية، المنوفية، البحيرة.',
+    shippingZoneFar: 'الصعيد وسينا والبحر الأحمر (ج)',
+    shippingZoneFarHint:
+      'بني سويف، الفيوم، المنيا، أسيوط، سوهاج، قنا، أسوان، الأقصر، البحر الأحمر، الوادي الجديد، مطروح، شمال وجنوب سيناء.',
   },
   taxonomy: {
     title: 'الهيكل الدراسي',
@@ -3792,6 +3892,7 @@ const marketing = {
   audienceBookOrderState: {
     address_only: 'طلبوا ومدفعوش',
     paid: 'دفعوا ولسه ماتشحنش ليهم',
+    printing: 'كتابهم في المطبعة',
     shipped: 'اتشحن ليهم',
     delivered: 'وصلهم الكتاب',
     rejected: 'طلبهم اترفض',

@@ -9,6 +9,7 @@ import {
   DeleteBookOrderResultSchema,
   DeleteBookOrderSchema,
   MarkBookOrderDeliveredResultSchema,
+  MarkBookOrderPrintingResultSchema,
   MarkBookOrderShippedResultSchema,
   RejectBookOrderResultSchema,
   RejectBookOrderSchema,
@@ -183,6 +184,53 @@ export async function deliverBookOrdersAction(ids: string[]): Promise<BulkBookOr
     return result;
   } catch {
     return null;
+  }
+}
+
+/**
+ * «ابعت للمطبعة» in batch — the way this is really used.
+ *
+ * No `whatsapp` argument and no confirmation about messages, because there are
+ * none: paper entering a print shop is not news to a student. That is the whole
+ * difference from `shipBookOrdersAction` above, and it is why the two are
+ * separate actions rather than one with a mode.
+ */
+export async function printBookOrdersAction(ids: string[]): Promise<BulkBookOrderResult | null> {
+  try {
+    const result = await adminSend(
+      'POST',
+      '/api/admin/book-orders/printing',
+      { ids },
+      BulkBookOrderResultSchema,
+    );
+    revalidatePath('/admin/books');
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+/** «راح للمطبعة» for one row. The 400 is mapped the same way «اتشحن» maps its
+ *  own — a second press on a row already at the printer is a fact, not a
+ *  status code. */
+export async function markBookOrderPrintingAction(id: string): Promise<ActionResult> {
+  try {
+    await adminSend(
+      'POST',
+      `/api/admin/book-orders/${encodeURIComponent(id)}/printing`,
+      {},
+      MarkBookOrderPrintingResultSchema,
+    );
+    revalidatePath('/admin/books');
+    return { ok: true };
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message.includes('failed with 400')
+        ? 'already-printing'
+        : error instanceof Error
+          ? error.message
+          : 'unknown';
+    return { ok: false, message };
   }
 }
 

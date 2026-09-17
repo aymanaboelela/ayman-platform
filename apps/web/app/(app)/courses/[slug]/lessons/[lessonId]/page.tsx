@@ -3,7 +3,7 @@ import { CourseOutlineSchema, LessonPlayerSchema } from '@ayman/contracts';
 import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
-import { getBookShippingCents } from '@/lib/books';
+import { getBookShippingRates } from '@/lib/books';
 import { sanitizeRichText } from '@/lib/sanitize-html';
 import { CourseHelpCard } from '@/components/player/course-help-card';
 import { CourseGroupCard } from '@/components/player/course-group-card';
@@ -74,7 +74,7 @@ export default async function LessonPage({
   // lesson navigations and the lesson body is not. Both are authenticated —
   // the guard's 404 for "not enrolled" is exactly what makes `notFound()`
   // below a rendering decision rather than an authorization one.
-  const [outline, payload, settings, shippingCents] = await Promise.all([
+  const [outline, payload, settings, shippingRates] = await Promise.all([
     apiGetAuthed(`/api/courses/${slug}/outline`, CourseOutlineSchema).catch(nullOn404),
     apiGetAuthed(`/api/lessons/${lessonId}/player`, LessonPlayerSchema).catch(
       redirectOnLapsedAccess(slug),
@@ -84,8 +84,8 @@ export default async function LessonPage({
     // take a student's lesson down; the button already handles `null` (`c.noNumber`).
     getPublicSettingsOrDefaults(),
     /* The delivery fee «اطلب الكتاب» quotes. `'use cache'` on one coarse tag,
-       so this is not a per-view request — see `getBookShippingCents`. */
-    getBookShippingCents(),
+       so this is not a per-view request — see `getBookShippingRates`. */
+    getBookShippingRates(),
   ]);
 
   // No outline means the course is not theirs to see at all — not enrolled, or
@@ -240,8 +240,9 @@ export default async function LessonPage({
           <CourseOutlineSidebar
             outline={outline}
             activeLessonId={payload.lesson.id}
-            shippingCents={shippingCents}
+            shippingRates={shippingRates}
             instapay={settings.contact.instapay}
+            vodafoneCash={settings.contact.vodafoneCash}
           />
           {/* «جروب الدفعة» — ABOVE the help card, deliberately. That one is a
               DM to him, which is the last resort; this is the room the student's

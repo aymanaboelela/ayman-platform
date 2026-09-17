@@ -15,7 +15,8 @@ import { Label } from '@ayman/ui/components/label';
 import { ApiRequestError, apiGet, apiPost } from '@/lib/api';
 import { uploadPaymentScreenshot } from '@/lib/upload-client';
 import { formatEGP } from '@/lib/price';
-import { PaymentBrand } from './payment-brand';
+import { PaymentBrand, type PaymentRail } from './payment-brand';
+import { PaymentMethodChoice } from './payment-method-choice';
 
 /** `+201021196367` → `٠١٠٢١١٩٦٣٦٧`-shaped local digits, what a Vodafone Cash
  *  transfer screen actually asks a student to dial. */
@@ -183,6 +184,20 @@ export function SubscribePanel({
   // until the read lands, and after a read that failed.
   const [livePlans, setLivePlans] = useState<LivePlans | undefined>(undefined);
   const [liveInstapay, setLiveInstapay] = useState<string | null | undefined>(undefined);
+  const [liveVodafone, setLiveVodafone] = useState<string | null | undefined>(undefined);
+  /**
+   * «هتحوّل بإيه؟» — the rail, and whether the student has confirmed it.
+   *
+   * ⚠️ `rail` starts null and NOTHING preselects it. A default here is a choice
+   * the student did not make, and this one decides where their money goes.
+   *
+   * `railConfirmed` is a second flag rather than `rail !== null`, so going back
+   * from the number screen returns to the question with the previous answer
+   * still lit instead of clearing it — the student who picked wrong is one tap
+   * from right, not back at the start.
+   */
+  const [rail, setRail] = useState<PaymentRail | null>(null);
+  const [railConfirmed, setRailConfirmed] = useState(false);
   // Bumped by «جرّب تاني» on the two dead-end screens, which is the whole of
   // what that button does: re-run the effect below. A student who opened the
   // panel thirty seconds before the admin finished setting the price gets the
@@ -252,6 +267,14 @@ export function SubscribePanel({
 
       if (settingsResult.status === 'fulfilled') {
         setLiveInstapay(settingsResult.value.contact.instapay ?? null);
+        /*
+         * The Vodafone number rides the SAME request — no new prop through the
+         * nine call sites that pass `instapay` down, and no second round trip.
+         * There is no cached seed for it and it does not need one: the rail
+         * question renders before any number does, which covers the latency
+         * for free.
+         */
+        setLiveVodafone(settingsResult.value.contact.vodafoneCash ?? null);
       }
 
       if (mineResult.status === 'fulfilled') {
@@ -331,7 +354,16 @@ export function SubscribePanel({
    * the panel with «تواصل معانا على واتساب» and the answer that would have
    * contradicted it arrived, unread, a moment later.
    */
-  if (!hasPlan || !instapay) {
+  /*
+   * ⚠️ EITHER rail is enough to sell, so this is `&&` and not `!instapay`.
+   *
+   * It used to be InstaPay alone, and leaving it that way would close checkout
+   * on a platform that takes Vodafone Cash and nothing else — «الاشتراك مش
+   * متاح» on a course a student could have paid for in ten seconds.
+   */
+  const vodafone = liveVodafone !== undefined ? liveVodafone : null;
+
+  if (!hasPlan || (!instapay && !vodafone)) {
     return (
       <div className="course-subscribe">
         <p className="course-subscribe__error">
@@ -357,7 +389,19 @@ export function SubscribePanel({
     );
   }
 
-  const localNumber = localEgyptianDigits(instapay);
+  /**
+   * ⚠️ The number FOLLOWS the rail, and there is no fallback between them.
+   *
+   * Showing the InstaPay number under a «فودافون كاش» heading — or the reverse
+   * — is the most expensive bug this screen can have: the money leaves and
+   * nothing reconciles it. An unset rail has no number, and the chooser is
+   * what the student sees instead.
+   */
+  const railNumber = rail === 'vodafoneCash' ? vodafone : rail === 'instapay' ? instapay : null;
+  // Empty until a rail is chosen, and that is unreachable: the chooser renders
+  // in place of everything that reads this until `railConfirmed` is true.
+  const localNumber = railNumber ? localEgyptianDigits(railNumber) : '';
+  const railName = rail === 'vodafoneCash' ? copy.subscribe.railVodafoneCash : copy.subscribe.railInstapay;
 
   function choosePlan(next: PaymentPlan) {
     setPlan(next);
@@ -583,11 +627,38 @@ export function SubscribePanel({
         </p>
       ) : null}
 
-      <p className="course-subscribe__instructions">
-        {formatCopy(copy.subscribe.instructions, { number: localNumber })}
-      </p>
+      {/*
+        ⚠️ The rail question comes BEFORE anything with a number on it, and it
+        returns early. Rendering the chooser above the form instead would put a
+        transfer number on screen while the student is still deciding which app
+        to open — which is the exact confusion this step exists to remove.
+      */}
+      {!railConfirmed ? (
+        <PaymentMethodChoice
+          value={rail}
+          // One tap: pick the rail AND move on. There is no confirm button —
+          // see `PaymentMethodChoice`.
+          onChange={(next) => {
+            setRail(next);
+            setRailConfirmed(true);
+          }}
+          available={{ instapay: Boolean(instapay), vodafoneCash: Boolean(vodafone) }}
+        />
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() => setRailConfirmed(false)}
+            className="pay-choice__back"
+          >
+            {copy.subscribe.railChange}
+          </button>
 
-      <PaymentBrand className="course-subscribe__brand" />
+          <p className="course-subscribe__instructions">
+            {formatCopy(copy.subscribe.instructions, { number: localNumber, rail: railName })}
+          </p>
+
+          <PaymentBrand rail={rail ?? 'instapay'} className="course-subscribe__brand" />
 
       <div className="course-subscribe__number-row">
         <span dir="ltr" className="course-subscribe__number">
@@ -678,7 +749,9 @@ export function SubscribePanel({
             <span className="course-subscribe__upload-change">{copy.subscribe.screenshotChange}</span>
           ) : null}
         </button>
-        <p className="course-subscribe__hint">{copy.subscribe.screenshotHint}</p>
+        <p className="course-subscribe__hint">
+          {formatCopy(copy.subscribe.screenshotHint, { rail: railName })}
+        </p>
       </div>
 
       {error ? (
@@ -703,6 +776,8 @@ export function SubscribePanel({
           {copy.subscribe.back}
         </button>
       </div>
+        </>
+      )}
     </div>
   );
 }

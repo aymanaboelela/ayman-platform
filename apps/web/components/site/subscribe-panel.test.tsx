@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { copy } from '@ayman/contracts';
 import type { CatalogCourseTerm } from '@ayman/contracts/catalog';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -58,8 +58,11 @@ function liveCourse(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function liveSettings(instapay: string | null = '+201021196367') {
-  return { contact: { instapay } };
+function liveSettings(
+  instapay: string | null = '+201021196367',
+  vodafoneCash: string | null = null,
+) {
+  return { contact: { instapay, vodafoneCash } };
 }
 
 /**
@@ -215,5 +218,96 @@ describe('SubscribePanel', () => {
     await waitFor(() => {
       expect(screen.getByText(copy.subscribe.planMonthlyLabel)).toBeTruthy();
     });
+  });
+});
+
+/**
+ * «هتحوّل بإيه؟» — the rail question, and the one property that matters about
+ * it: THE NUMBER FOLLOWS THE ANSWER.
+ *
+ * ⚠️ Every case below asserts a NUMBER on screen, never which card carries a
+ * class. A test that checked the lit state would pass on an implementation that
+ * lights the right card and prints the other rail's number — which is the exact
+ * bug worth having tests for, because it ends with a student's money on a rail
+ * nothing reconciles.
+ */
+describe('the payment rail', () => {
+  const INSTAPAY = '+201021196367';
+  const WALLET = '+201555555555';
+
+  /**
+   * Plan picker → payment screen. The rail question is the first thing on the
+   * payment screen, so every case here has to get past the plan first — the
+   * panel opens on «اختار الخطة», not on the transfer details.
+   */
+  async function openCheckout(settings: unknown) {
+    respondWith({ course: liveCourse(), settings });
+    render(<Panel />);
+
+    const monthly = await screen.findByText(copy.subscribe.planMonthlyLabel);
+    fireEvent.click(monthly.closest('button') as HTMLButtonElement);
+
+    await screen.findByText(copy.subscribe.railQuestion);
+  }
+
+  it('asks before it shows any number, and preselects nothing', async () => {
+    await openCheckout(liveSettings(INSTAPAY, WALLET));
+
+    // Neither number is on screen while the question is unanswered — the whole
+    // point of making this a step instead of a dropdown over a live number.
+    expect(screen.queryAllByText(/1021196367/)).toHaveLength(0);
+    expect(screen.queryAllByText(/1555555555/)).toHaveLength(0);
+    // ⚠️ And nothing is preselected. With the confirm button gone there is no
+    // default to drift through — nothing happens until a finger lands on one of
+    // the two, which is what makes a one-tap choice safe here.
+    expect(screen.getAllByRole('button', { name: /إنستاباي|فودافون كاش/ })).toHaveLength(2);
+  });
+
+  it('shows the number of the rail the student picked', async () => {
+    await openCheckout(liveSettings(INSTAPAY, WALLET));
+
+    // One tap — the choice and the move are the same press.
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.railVodafoneCash) }));
+
+    // `getAllBy`, because the number is deliberately on screen TWICE — in the
+    // instructions sentence and in the copyable row — and both have to be the
+    // rail that was picked.
+    await waitFor(() => expect(screen.getAllByText(/1555555555/).length).toBeGreaterThan(0));
+    // ⚠️ And NOT the other one, anywhere. There is no fallback between rails.
+    expect(screen.queryAllByText(/1021196367/)).toHaveLength(0);
+
+    /*
+     * ⚠️ And every SENTENCE names the chosen rail too, not just the number.
+     * The screenshot hint under the uploader was missed by the first pass and
+     * still said «من تطبيق إنستاباي» to a student paying by wallet — caught by
+     * opening the real checkout on production, not by any test, which is why
+     * there is one now.
+     */
+    expect(screen.queryAllByText(new RegExp(copy.subscribe.railInstapay))).toHaveLength(0);
+    expect(
+      screen.getAllByText(new RegExp(copy.subscribe.railVodafoneCash)).length,
+    ).toBeGreaterThan(1);
+  });
+
+  it('offers an unconfigured rail as unavailable rather than hiding it', async () => {
+    // A student staring at a single option with no explanation cannot tell
+    // whether the site is broken or the choice simply is not offered — and a
+    // hidden gap is one the admin never sees either.
+    await openCheckout(liveSettings(INSTAPAY, null));
+
+    const wallet = screen.getByRole('button', { name: new RegExp(copy.subscribe.railVodafoneCash) });
+    expect(wallet).toBeDisabled();
+    expect(screen.getByText(copy.subscribe.railUnavailable)).toBeTruthy();
+  });
+
+  it('sells on the wallet alone when that is the only number set', async () => {
+    // The guard used to be `if (!instapay)`, which would have closed checkout
+    // entirely on a platform that takes Vodafone Cash and nothing else.
+    await openCheckout(liveSettings(null, WALLET));
+
+    expect(screen.queryByText(copy.subscribe.noNumber)).toBeNull();
+    // One tap — the choice and the move are the same press.
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.railVodafoneCash) }));
+    await waitFor(() => expect(screen.getAllByText(/1555555555/).length).toBeGreaterThan(0));
   });
 });

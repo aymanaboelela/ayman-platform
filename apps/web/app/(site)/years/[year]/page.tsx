@@ -76,8 +76,17 @@ export async function generateMetadata({
    */
   const { courses } = await getCatalogOrEmpty();
   if (!isYearIndexable(courses, year)) {
+    /*
+     * ⚠️ `await`. `buildMetadata` is async, and spreading a PROMISE copies no
+     * own enumerable properties at all — so this branch used to return
+     * `{ robots }` and nothing else. Measured on production 2026-09-15:
+     * `/years/3` served the root title «منصة أيمن أبو العلا — …» and
+     * `<link rel="canonical" href="https://aymanaboelela.com">`, a page
+     * declaring the homepage to be its own preferred URL. The `noindex` worked,
+     * which is why nothing looked broken.
+     */
     return {
-      ...buildMetadata({ title, path: `/years/${year}` }),
+      ...(await buildMetadata({ title, path: `/years/${year}` })),
       robots: { index: false, follow: true },
     };
   }
