@@ -3607,6 +3607,32 @@
   background: color-mix(in oklch, var(--a-9) 6%, var(--site-card-2));
 }
 
+/* The face of a filled place — INITIALS, never the student's photograph.
+   `honor-board-section.tsx` says why the photo is declined; this says why the
+   disc still has to look like a prize.
+
+   It is the accent, unlike `.honor-board__slot-mark` right above it, and the
+   contrast between the two is the point: the medal disc is muted because it
+   marks a place that is merely reserved, and this one is filled because
+   somebody won it. The ring keeps it a disc rather than a blob when the card's
+   own fill is already accent-tinted. */
+.honor-board__slot-avatar {
+  display: grid;
+  place-items: center;
+  inline-size: 3.5rem;
+  block-size: 3.5rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklch, var(--a-9) 18%, var(--site-card));
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--a-9) 45%, transparent);
+  color: var(--a-11);
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-semibold);
+  /* Arabic initials are letters, not capitals — no `text-transform` here, and
+     `line-height: 1` so a two-letter monogram sits on the disc's centre rather
+     than on its type baseline. */
+  line-height: 1;
+}
+
 .honor-board__slot-name {
   font-size: var(--fs-title-4);
   font-weight: var(--fw-semibold);

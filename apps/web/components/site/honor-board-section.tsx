@@ -1,8 +1,7 @@
 import { Medal, Trophy } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
-import { formatCopy, formatMark } from '@ayman/contracts/format';
 import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
-import { UserAvatar } from '@/components/app/user-avatar';
+import { initials } from '@/components/app/user-avatar';
 
 const c = copy.landing.honorBoard;
 
@@ -132,14 +131,21 @@ export function HonorBoardSection({ entries = [] }: { entries?: HonorBoardEntry[
                     that the list simply continues, which is what the fourth
                     place was written to promise. */}
                 <span className="honor-board__slot-rank">{c.ranks[index] ?? ''}</span>
-                <UserAvatar name={entry.studentName} image={entry.avatarKey} size={56} />
-                <span className="honor-board__slot-name">{entry.studentName}</span>
-                <span className="honor-board__slot-score mono tabular-nums">
-                  {formatCopy(c.entryScore, {
-                    score: formatMark(entry.scaledScore),
-                    outOf: formatMark(entry.gradeOutOf),
-                  })}
+                {/*
+                  Initials, never the photograph — and `avatarKey` is
+                  deliberately ignored rather than absent from the payload.
+                  This board is the one surface on the platform that a
+                  stranger on the internet reads, and it names a minor; a
+                  face beside that name is a different disclosure from a
+                  name alone, and the owner asked for it not to be made.
+                  The contract still carries `avatarKey` so an instructor
+                  screen can show who a row is — it is THIS render that
+                  declines it.
+                */}
+                <span className="honor-board__slot-avatar" aria-hidden="true">
+                  {initials(entry.studentName)}
                 </span>
+                <span className="honor-board__slot-name">{entry.studentName}</span>
                 <span className="honor-board__slot-quiz">{entry.quizTitle}</span>
               </li>
             ))}
