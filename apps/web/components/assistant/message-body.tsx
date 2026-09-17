@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, GraduationCap } from 'lucide-react';
 import { Fragment } from 'react';
 import { copy } from '@ayman/contracts/copy';
 import { cn } from '@ayman/ui/lib/cn';
@@ -8,6 +8,7 @@ import { SOCIAL_MARKS, SocialIcon } from '@/components/site/social-icons';
 import { recordWhatsappOpened } from '@/lib/whatsapp-opened';
 
 const c = copy.assistant.thread.whatsappCard;
+const cc = copy.assistant.thread.courseCard;
 
 /**
  * A chat message's text, with any link in it actually pressable — and a
@@ -48,7 +49,30 @@ const URL_PATTERN = /https?:\/\/[^\s<>()[\]{}"'«»]+[^\s<>()[\]{}"'«».,؛،:!
 /** WhatsApp's own hosts. A link to one of these gets the card. */
 const WHATSAPP_HOSTS = new Set(['chat.whatsapp.com', 'wa.me', 'whatsapp.com', 'www.whatsapp.com']);
 
-export function MessageBody({ body, className }: { body: string; className?: string }) {
+/** The public course catalog, and a course page under it. */
+const COURSE_PATH = /^\/courses(\/|$)/u;
+
+export function MessageBody({
+  body,
+  className,
+  trusted = false,
+}: {
+  body: string;
+  className?: string;
+  /**
+   * This body was written by the platform or by an admin, not typed by a
+   * visitor.
+   *
+   * ⚠️ The ONLY gate on the course card, and it is not decoration. That card
+   * says «الكورس بتاعك» over a link, which is a sentence the platform is
+   * vouching for — drawn around an address a student pasted into their own
+   * message it would be the platform endorsing a stranger's link. The card
+   * navigates to the PATH only (see `CourseCard`), so the worst case was
+   * always cosmetic rather than a redirect; this keeps it from being even
+   * that. Defaults to `false` so a new call site is safe by omission.
+   */
+  trusted?: boolean;
+}) {
   /*
    * LINE BY LINE, because the card is a line-level decision.
    *
@@ -64,10 +88,17 @@ export function MessageBody({ body, className }: { body: string; className?: str
     <span className={className}>
       {lines.map((line, index) => {
         const card = whatsappCardFor(line);
+        const course = card === null && trusted ? courseCardFor(line) : null;
         return (
           <Fragment key={index}>
             {index > 0 ? '\n' : null}
-            {card ? <WhatsappCard href={card} /> : linkify(line)}
+            {card ? (
+              <WhatsappCard href={card} />
+            ) : course ? (
+              <CourseCard path={course} />
+            ) : (
+              linkify(line)
+            )}
           </Fragment>
         );
       })}
@@ -179,6 +210,97 @@ function WhatsappCard({ href }: { href: string }) {
   );
 }
 
+/**
+ * «الكورس بتاعك» — the same card shape, for the one link that goes INWARDS.
+ *
+ * ## Why it is not the WhatsApp card with a different colour
+ *
+ * Because it does a different thing and must not be mistaken for the one the
+ * student has already learned to read as "this leaves the app". That one is
+ * green, opens a new tab, and ends a conversation; this one is the platform's
+ * own accent, stays on the site, and is the first step of one.
+ *
+ * ## Why a plain `<a>` and not a soft navigation
+ *
+ * This card is rendered inside المساعد's panel, which is an overlay with a
+ * scroll lock on the document. A client-side navigation would leave the panel
+ * mounted over the course page, or unmount it mid-transition and leave the
+ * lock behind — the exact failure mode this codebase has already paid for
+ * twice. A real navigation tears all of it down and lands the student on the
+ * course page with nothing left over. It costs one page load, on the press
+ * that matters least about speed.
+ *
+ * ## Why the HOST is dropped
+ *
+ * `path` is the pathname alone, so the card can only ever navigate within this
+ * site whatever the stored URL said. Combined with `trusted`, there is no
+ * arrangement of message text that makes this card point off-origin.
+ */
+function CourseCard({ path }: { path: string }) {
+  return (
+    <a
+      href={path}
+      className={cn(
+        'group my-1.5 flex w-full max-w-[17.5rem] flex-col gap-2.5 rounded-[14px] p-2.5',
+        'border border-[color:var(--cc-line)] bg-[color:var(--cc-sheet)] text-start no-underline',
+        'shadow-[0_1px_2px_rgb(26_18_6_/_0.16)]',
+        'transition-transform duration-[140ms] ease-out active:translate-y-px',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--cc-title)]',
+      )}
+      style={
+        {
+          /*
+           * Literals, exactly as `WhatsappCard` uses them and for the identical
+           * reason spelled out there: the bubble under this card is `bg-accent`
+           * with fixed `#1A1206` ink, and the accent ramp is ADMIN-SETTABLE.
+           * A card built from theme tokens would follow the theme while the
+           * surface it sits on followed the brand, and would go dark-on-dark
+           * the first time somebody picks a ramp the palette did not expect.
+           *
+           * The violet is the platform's own "structure" colour rather than
+           * the amber "action" one — on an amber bubble an amber button is
+           * invisible, which is the same vibration problem the green slab had.
+           * White on `#4F31D8` measures 8.4:1.
+           */
+          '--cc': '#4F31D8',
+          '--cc-deep': '#3F26B4',
+          '--cc-ink': '#FFFFFF',
+          '--cc-sheet': '#FFFDF8',
+          '--cc-line': 'rgb(26 18 6 / 0.10)',
+          '--cc-title': '#1A1206',
+          '--cc-lead': '#5B5147',
+        } as React.CSSProperties
+      }
+    >
+      <span className="flex items-center gap-2.5">
+        <span
+          aria-hidden="true"
+          className="grid size-9 shrink-0 place-items-center rounded-full bg-[color:var(--cc)] text-[color:var(--cc-ink)]"
+        >
+          <GraduationCap className="size-5" />
+        </span>
+
+        <span className="min-w-0 flex-1">
+          <span className="block break-words text-[length:var(--fs-text-sm)] font-semibold leading-tight text-[color:var(--cc-title)]">
+            {cc.title}
+          </span>
+          <span className="mt-1 block break-words text-[length:var(--fs-text-xs)] leading-tight text-[color:var(--cc-lead)]">
+            {cc.lead}
+          </span>
+        </span>
+      </span>
+
+      {/* The shape every `SUBSCRIBE_CLOSERS` entry points at — «الزرار اللي
+          فوق». A closer that names a button the card does not draw is the bug
+          `WHATSAPP_LINK_LINE` documents, one layer up. */}
+      <span className="flex items-center justify-center gap-1.5 rounded-[10px] bg-[color:var(--cc)] px-3 py-2 text-[length:var(--fs-text-sm)] font-semibold text-[color:var(--cc-ink)] transition-colors duration-[140ms] ease-out group-hover:bg-[color:var(--cc-deep)]">
+        {cc.action}
+        <ArrowLeft className="size-4" aria-hidden="true" />
+      </span>
+    </a>
+  );
+}
+
 /** The URL when `line` is nothing but a WhatsApp link, else `null`. */
 function whatsappCardFor(line: string): string | null {
   const trimmed = line.trim();
@@ -191,6 +313,33 @@ function whatsappCardFor(line: string): string | null {
 
   const href = matches[0]![0];
   return href === trimmed && isWhatsapp(href) ? href : null;
+}
+
+/**
+ * The PATHNAME when `line` is nothing but a link to a course page, else `null`.
+ *
+ * The host is read and thrown away on purpose — see `CourseCard`. What the
+ * caller gets back can only ever be a path on this site.
+ */
+function courseCardFor(line: string): string | null {
+  const trimmed = line.trim();
+  if (trimmed.length === 0) return null;
+
+  // `matchAll`, not `test` — the pattern is `/g` and carries `lastIndex`
+  // between calls, which makes `test` alternate on identical input.
+  const matches = [...trimmed.matchAll(URL_PATTERN)];
+  if (matches.length !== 1) return null;
+
+  const href = matches[0]![0];
+  if (href !== trimmed) return null;
+
+  try {
+    const url = new URL(href);
+    if (!COURSE_PATH.test(url.pathname)) return null;
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return null;
+  }
 }
 
 function linkify(line: string): React.ReactNode[] {

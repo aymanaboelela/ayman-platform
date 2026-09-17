@@ -39,6 +39,23 @@ const PREVIEW_FACTS: Record<string, OutreachFacts> = {
   quiz_nudge: { kind: 'quiz_nudge', lessonTitle: 'مقدمة عن البرمجة' },
   lesson_praise: { kind: 'lesson_praise', lessonTitle: 'تاريخ الحاسب' },
   whatsapp_invite: { kind: 'whatsapp_invite' },
+  follow_up: {
+    kind: 'follow_up',
+    missedLessons: ['الحلقات التكرارية', 'المصفوفات'],
+    missedQuizzes: ['كويز المحاضرة الثالثة'],
+  },
+  /*
+   * A real-looking absolute URL, because the preview is the only place the
+   * instructor ever sees what the course card LOOKS like before a student
+   * does — `MessageBody` draws it from a line that is nothing but a URL, and a
+   * placeholder like «رابط الكورس» would render as text and quietly hide the
+   * one element of this message that matters.
+   */
+  subscribe_nudge: {
+    kind: 'subscribe_nudge',
+    courseTitle: 'الصف الأول الثانوي — رياضيات',
+    url: 'https://example.invalid/courses/first-year-math',
+  },
 };
 
 /** Three per kind. One proves the wording exists; three prove it moves. */

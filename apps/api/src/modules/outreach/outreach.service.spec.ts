@@ -467,14 +467,17 @@ describe('isoWeek', () => {
 });
 
 describe('the Prisma enum and the contract agree', () => {
-  it('has the same four kinds on both sides', () => {
+  it('has the same kinds on both sides', () => {
     // A kind added to one side and not the other typechecks fine and then
-    // throws on the INSERT, in a cron, in production.
+    // throws on the INSERT — in a cron, in production, or on the press of a
+    // button in `/admin/follow-up`, which is where the last two land.
     const prismaKinds: OutreachKind[] = [
       'quiz_result',
       'quiz_nudge',
       'lesson_praise',
       'whatsapp_invite',
+      'follow_up',
+      'subscribe_nudge',
     ];
     expect([...prismaKinds].sort()).toEqual([...OUTREACH_KINDS].sort());
   });
