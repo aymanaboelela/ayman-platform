@@ -40,7 +40,21 @@
  * not guaranteed permanent. Each was resolved by loading it.
  */
 export const OFFICIAL_PROFILES = {
-  youtube: 'https://www.youtube.com/@2ayman6',
+  /**
+   * ⚠️ CHANGED on 2026-09-17. It was `@2ayman6`, which is now a 404 — the
+   * channel was moved, not renamed in place, so every surface that carried the
+   * old handle was linking students at YouTube's «this page isn't available».
+   *
+   * `sameAs` is why that mattered more than a dead icon: it asserts to a
+   * crawler that this site and that URL are ONE entity, and asserting it about
+   * a page that does not exist is the claim being wrong rather than missing.
+   *
+   * This constant is only the BACKSTOP. `site_settings.contact.youtube` is
+   * seeded fill-if-empty and is what the footer and `/links` actually read, so
+   * a live deployment that has ever been seeded keeps the old value until the
+   * setting itself is changed — see `/admin/settings`.
+   */
+  youtube: 'https://www.youtube.com/@aymanaboelela1',
   instagram: 'https://www.instagram.com/2ayman6',
   tiktok: 'https://www.tiktok.com/@2ayman_6',
   facebook: 'https://www.facebook.com/aymanaboelela2',

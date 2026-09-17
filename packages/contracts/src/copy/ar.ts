@@ -5176,7 +5176,7 @@ export const copy = {
    *
    * ## What is deliberately NOT written here
    *
-   * The account handles — «@2ayman6» and the rest. They are DERIVED from the
+   * The account handles — «@aymanaboelela1» and the rest. They are DERIVED from the
    * URLs in `site-profiles.ts` at render time, not typed again here, because a
    * handle written in two places is a handle that will eventually disagree
    * with the link beside it. On a page whose whole job is «ده هو حسابه
