@@ -213,6 +213,19 @@ export const DEFAULT_PACING_INPUT = DEFAULT_PACING;
  * scroll does not get read, and the ceiling is a design constraint on the
  * instructor rather than a technical one.
  */
+/**
+ * Where the message is delivered — see the `CampaignChannel` enum in
+ * schema.prisma for why `whatsapp` is the default and `both` is not.
+ *
+ * The choice is not cosmetic: it decides who is REACHABLE. A campaign on the
+ * platform can only land in the thread of a student who has an account, so a
+ * pasted number and a parent's phone are unreachable on it by construction —
+ * `AudienceService` still queues them, and the runner settles them as
+ * `skipped` with a reason that says so rather than pretending they were sent.
+ */
+export const CampaignChannelSchema = z.enum(['whatsapp', 'platform', 'both']);
+export type CampaignChannel = z.infer<typeof CampaignChannelSchema>;
+
 export const CampaignCreateSchema = z.object({
   name: z.string().trim().min(2).max(120),
   body: z.string().trim().min(4).max(900),
@@ -228,6 +241,9 @@ export const CampaignCreateSchema = z.object({
     .nullable(),
   audience: AudienceSchema,
   pacing: PacingSchema,
+  /** `.default('whatsapp')` so a client written before this field existed —
+   *  and every stored campaign — still parses as what it actually was. */
+  channel: CampaignChannelSchema.default('whatsapp'),
 });
 export type CampaignCreate = z.infer<typeof CampaignCreateSchema>;
 
@@ -300,6 +316,7 @@ export const CampaignDetailSchema = CampaignRowSchema.extend({
   linkUrl: z.string().nullable(),
   audience: AudienceSchema,
   pacing: PacingViewSchema,
+  channel: CampaignChannelSchema,
   sentToday: z.number().int(),
   /** Minutes of wall clock the remaining recipients are expected to take. */
   estimateMinutes: z.number().int(),
