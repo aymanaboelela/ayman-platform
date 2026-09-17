@@ -283,6 +283,21 @@ export const AUDIT_ACTIONS = [
    *  switch. Never moves money: the endpoint refuses any order that collected
    *  any, so this row can only ever mean a label changed. */
   'book-order:mark-free',
+  /**
+   * «الفلوس وصلت» — an admin settling an order the student never paid for
+   * through the site: a wallet transfer, cash in hand, a parent on the phone.
+   *
+   * Its own action and NOT `book-order:pay`, which is written by the STUDENT —
+   * the same split as `payment:admin-subscribe` against `payment:submit`. The
+   * question the trail has to answer is «مين قال إن ده اتدفع ومحدش رفع صورة», and
+   * a row that says the customer paid cannot answer it.
+   *
+   * ⚠️ Unlike `book-order:mark-free` this one CAN move money: settling as
+   * «مجاني» waives a basket that was really going to collect, so the metadata
+   * carries `amountCentsBefore` — the audit row is the only place that number
+   * survives, because the order now says 0.
+   */
+  'book-order:mark-paid',
   // «أضف طلب كتاب» — the admin student-page-style entry point into the same
   // `BookOrder` model, recording a customer's order directly rather than
   // reviewing one the customer submitted themselves. Split from

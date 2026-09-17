@@ -9,6 +9,9 @@ import {
   DeleteBookOrderResultSchema,
   DeleteBookOrderSchema,
   MarkBookOrderDeliveredResultSchema,
+  MarkBookOrderPaidResultSchema,
+  MarkBookOrderPaidSchema,
+  type MarkBookOrderPaidInput,
   MarkBookOrderPrintingResultSchema,
   MarkBookOrderShippedResultSchema,
   RejectBookOrderResultSchema,
@@ -356,6 +359,39 @@ export async function deleteBookOrderAction(id: string, reason: string): Promise
     return { ok: true };
   } catch {
     return { ok: false, message: c.removeFailed };
+  }
+}
+
+/**
+ * «الفلوس وصلت» — settle an order the student never paid for on the site.
+ *
+ * The one action in this file that can move REVENUE: the «مجاني» answer waives
+ * a basket that was really going to collect, so `/admin/finance` is revalidated
+ * beside the queue. The money answer moves revenue too — an order that was
+ * `address_only` was never counted — so both branches do it, and the path is
+ * expired unconditionally rather than on a flag the caller could get wrong.
+ *
+ * `screenshotKey` arrives already uploaded, exactly like `adminCreateBookOrder-
+ * Action`'s: the dialog does the upload client-side and this action never sees
+ * the file.
+ */
+export async function markBookOrderPaidAction(
+  id: string,
+  input: MarkBookOrderPaidInput,
+): Promise<ActionResult> {
+  try {
+    const body = MarkBookOrderPaidSchema.parse(input);
+    await adminSend(
+      'POST',
+      `/api/admin/book-orders/${encodeURIComponent(id)}/pay`,
+      body,
+      MarkBookOrderPaidResultSchema,
+    );
+    revalidatePath('/admin/books');
+    revalidatePath('/admin/finance');
+    return { ok: true };
+  } catch {
+    return { ok: false, message: c.markPaidFailed };
   }
 }
 

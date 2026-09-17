@@ -1864,6 +1864,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin book order mark free: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/free`, actor: 'anonymous', status: 401 },
     { label: 'admin book order mark free: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/free`, actor: 'student', status: 403 },
     { label: 'admin book order mark free: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/free`, actor: 'admin', status: 404 },
+    // «الفلوس وصلت» — settling an unpaid order by hand. `book-order:write` and
+    // not `book-order:ship`: the «مجاني» answer WAIVES a basket that was going
+    // to collect, which is a money change and belongs with the edit dialog
+    // rather than with the desk that records where a parcel got to.
+    { label: 'admin book order mark paid: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/pay`, actor: 'anonymous', body: () => ({}), status: 401 },
+    { label: 'admin book order mark paid: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/pay`, actor: 'student', body: () => ({}), status: 403 },
+    { label: 'admin book order mark paid: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/pay`, actor: 'admin', body: () => ({}), status: 404 },
     { label: 'admin book order restore: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/restore`, actor: 'anonymous', status: 401 },
     { label: 'admin book order restore: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/restore`, actor: 'student', status: 403 },
     { label: 'admin book order restore: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/restore`, actor: 'admin', status: 404 },

@@ -2740,6 +2740,38 @@ const admin = {
       'أحدّد الطلب ده مجاني؟ هيروح للطلبات المدفوعة عشان يتشحن عادي، ومش هيتحسب في الإيرادات، وتكلفة النسخة هتفضل محسوبة عليك.',
     markFreeSaving: 'بنحفظ…',
     markFreeFailed: 'مقدرناش نحدّده مجاني',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * «الفلوس وصلت» — settling an order the student never paid for on the
+     * site.
+     *
+     * The tab «بدأ ومكملش الدفع» used to be a dead end: the only door out of
+     * it was the STUDENT coming back to upload a screenshot, so money that
+     * arrived on WhatsApp or in cash had nowhere to be written down and the
+     * parcel could not be shipped at all. This is the door.
+     *
+     * Two answers, one question — «اتحصّل منه إيه؟»: فلوس, or مجاني.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    markPaid: 'سجّل الدفع',
+    markPaidDialogTitle: 'تسجيل دفع الطلب',
+    markPaidHint: 'الطلب ده هيروح للطلبات المدفوعة على طول عشان يتطبع ويتشحن عادي.',
+    /** The two answers, as one pair of choices — never two separate buttons on
+     *  the row: they are one decision about one order. */
+    markPaidModeLabel: 'اتحصّل منه إيه؟',
+    markPaidModeMoney: 'دفع فلوس',
+    markPaidModeFree: 'مجاني — مش هياخد منه حاجة',
+    /** `{amount}` — what the order is quoted at right now. Shown on the money
+     *  branch so the admin is confirming a number, not a checkbox. */
+    markPaidAmount: 'المبلغ: {amount} ج',
+    /** `{amount}` — the same number, as what is being GIVEN UP. A waiver is a
+     *  real negative and the dialog says so before it is signed. */
+    markPaidFreeHint:
+      'هنسجّل إن الطلب اتسلّم من غير فلوس: الـ {amount} ج هتتخصم بالكامل، ومش هيتحسب في الإيرادات — بس تكلفة النسخة والشحن هتفضل عليك.',
+    markPaidSubmit: 'سجّل الدفع',
+    markPaidSubmitting: 'بيتسجّل…',
+    markPaidFailed: 'مقدرناش نسجّل الدفع — نحاول تاني',
     createPaidHint: 'العميل حوّل بالفعل — الطلب هيتسجل «مدفوعة» على طول، من غير الخطوتين.',
     createAddressOnlyLabel: 'لسه مادفعش',
     /** OPTIONAL, unlike the public payment step's own required field — an
