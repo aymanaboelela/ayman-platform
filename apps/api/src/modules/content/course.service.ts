@@ -12,7 +12,7 @@ import type {
   LessonKind,
   PublishAllResult,
 } from '@ayman/contracts/content';
-import { EXAM_SECTION_TITLE } from '@ayman/contracts/content';
+import { COURSE_LIST_SORTS, EXAM_SECTION_TITLE, type CourseListSort } from '@ayman/contracts/content';
 import { copy } from '@ayman/contracts/copy/admin';
 import { DEFAULT_REVIEW_OPTIONS } from '@ayman/contracts/quiz/quiz-settings';
 import { AuditService } from '../../audit/audit.service';
@@ -21,6 +21,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { isUniqueViolation } from '../../common/prisma/prisma-errors';
 import { YouTubeDurationService } from './youtube-duration.service';
 import type { Course } from '../../generated/prisma/client';
+import type { Prisma } from '../../generated/prisma/client';
+
+export { COURSE_LIST_SORTS, type CourseListSort };
 
 /** Just enough of a lesson to decide whether a student could study it. */
 type ReadinessRow = {
@@ -53,6 +56,32 @@ function reasonFor(kind: LessonKind): PublishAllResult['skipped'][number]['reaso
   if (kind === 'text') return 'noText';
   if (kind === 'attachment') return 'noResources';
   return 'quizNotPublished';
+}
+
+
+/**
+ * How the admin course grid is ordered.
+ *
+ * `position` — the manual arrangement — stays the DEFAULT so the order he set
+ * by hand is what opens. It is also why the other three exist: 564 of 568
+ * courses share `position = 0`, so that default degrades to `id asc` (oldest
+ * first) and a course created today lands at the bottom of an unpaginated grid.
+ *
+ * Every branch ends on `id`, which is uuid(7) and therefore chronological — so
+ * the tiebreak is both stable and meaningful.
+ */
+function courseListOrderBy(sort: CourseListSort | undefined): Prisma.CourseOrderByWithRelationInput[] {
+  switch (sort) {
+    case 'newest':
+      return [{ id: 'desc' }];
+    case 'oldest':
+      return [{ id: 'asc' }];
+    case 'title':
+      return [{ title: 'asc' }, { id: 'asc' }];
+    case 'position':
+    default:
+      return [{ position: 'asc' }, { id: 'asc' }];
+  }
 }
 
 @Injectable()
@@ -813,9 +842,40 @@ export class CourseService {
     return { id };
   }
 
-  list() {
+  /**
+   * Every course, for the admin grid AND for eight course PICKERS.
+   *
+   * ## Why this stays a bare, unpaginated array
+   *
+   * `/api/admin/courses` is read by the books catalogue, the student record,
+   * the homework dialog, three analytics screens and the admin overview — all
+   * of them as a picker that needs every course. Giving this endpoint a default
+   * page size would silently truncate all eight, and a picker that is missing
+   * the course you want is a bug nobody reports as one. So `filter` is
+   * OPT-IN: send nothing and the response is exactly what it always was.
+   *
+   * ## What the ordering was costing
+   *
+   * `position` is the manual arrangement, and 564 of 568 courses sit at 0 — so
+   * the effective order was `id asc`, oldest first, and a course created today
+   * rendered as the 568th card of an unpaginated grid. `newest` is why the sort
+   * exists; `position` is kept as the default so the arrangement he set by hand
+   * is still what opens.
+   */
+  list(filter: { sort?: CourseListSort; status?: CourseStatus; q?: string } = {}) {
     return this.prisma.course.findMany({
-      orderBy: [{ position: 'asc' }, { id: 'asc' }],
+      where: {
+        ...(filter.status ? { status: filter.status } : {}),
+        ...(filter.q
+          ? {
+              OR: [
+                { title: { contains: filter.q, mode: 'insensitive' } },
+                { slug: { contains: filter.q, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: courseListOrderBy(filter.sort),
       select: {
         id: true,
         slug: true,
