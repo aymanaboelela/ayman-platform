@@ -11,9 +11,10 @@ import {
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { getSession } from '@/lib/session';
-import { getAdminOverviewStats } from '@/lib/admin-overview';
+import { getAdminCourseHeadcount, getAdminOverviewStats } from '@/lib/admin-overview';
 import { ADMIN_NAV, ADMIN_NAV_GROUPS } from '@/components/admin/nav-items';
 import { OverviewQueues } from '@/components/admin/overview-queues';
+import { OverviewCourses } from '@/components/admin/overview-courses';
 
 export const metadata = { title: copy.admin.title };
 
@@ -56,7 +57,12 @@ export default async function AdminOverviewPage() {
   const session = await getSession();
   const permissions = session?.permissions ?? [];
 
-  const stats = await getAdminOverviewStats();
+  // Two calls, not one, and in parallel: they need different permissions and
+  // each degrades on its own — see `getAdminCourseHeadcount`'s own note.
+  const [stats, courses] = await Promise.all([
+    getAdminOverviewStats(),
+    permissions.includes('analytics:read') ? getAdminCourseHeadcount() : Promise.resolve(null),
+  ]);
   const actions = QUICK_ACTIONS.filter((action) => permissions.includes(action.permission));
 
   return (
@@ -114,6 +120,12 @@ export default async function AdminOverviewPage() {
           {c.statsUnavailable}
         </p>
       )}
+
+      {/* «كام واحد مشترك في كل كورس» — above the section directory, because it
+          is a NUMBER about the platform and the grid below it is a menu. An
+          editor without `analytics:read` sees nothing here rather than an
+          error: `courses` is null for them, same as for an unreachable API. */}
+      {permissions.includes('analytics:read') ? <OverviewCourses rows={courses} /> : null}
 
       <section>
         <div className="group-head">

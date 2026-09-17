@@ -1,8 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
+// The dedicated leaf module, never `@ayman/contracts/admin/book-orders` — see
+// its own header note: this is a client component on the orders screen, and
+// the full contract would ride into the bundle for one array of ids.
+import { parseAdminBookOrderIds } from '@ayman/contracts/admin/book-orders-packing-ids';
+import { apiGetNarrow } from '@/lib/api';
 import { useBulkSelectMany } from './bulk-ship';
 
 const c = copy.admin.books;
@@ -37,39 +43,123 @@ const c = copy.admin.books;
 export function ExportRange({
   status,
   tabLabel,
-  selectable = [],
+  filters,
+  rowCount,
+  batchable,
+  compact = false,
 }: {
   status: string;
   tabLabel: string;
   /**
-   * Every row on screen a batch action can apply to, with the date the export
-   * filters on. Empty on tabs that have no such rows, which is what makes the
-   * select button disappear rather than select nothing.
+   * The OTHER filters the screen is showing — «عربي / لغات», «الصف» and the
+   * search box.
+   *
+   * «جالب إن واحد ناقص»: the file used to carry only the tab and the dates
+   * while the list above it was also filtered by these three, so the two could
+   * never be counted against each other. They ride along on both downloads.
    */
-  selectable?: { id: string; createdAt: string }[];
+  filters?: { stream?: string; year?: number; q?: string };
+  /**
+   * How many orders this tab holds in TOTAL — `rowCount`, not the length of
+   * the page. It is what the button can promise before it has asked the
+   * server, and it is the number the sidebar badge shows.
+   */
+  rowCount: number;
+  /**
+   * Whether a batch action can apply to this tab at all. «اتشحن» and «وصل» act
+   * on `paid`/`shipped` rows, so the select button is hidden everywhere else
+   * rather than selecting rows every batch would skip.
+   */
+  batchable: boolean;
+  /**
+   * The صف-section variant — «تحميل الصف ده».
+   *
+   * Same three downloads, same filters, no date inputs: a section header has
+   * room for two buttons and not for a range picker, and the range belongs to
+   * the WHOLE run rather than to one year of it — the dates are set once in the
+   * toolbar above and every per-year link inherits them through `filters`.
+   *
+   * ⚠️ It also drops «حدّد اللي في المدى». A select button per section would
+   * REPLACE the selection each time it is pressed (see `useBulkSelectMany`), so
+   * ticking سنة أولى and then سنة تانية would silently leave only the second —
+   * on the control whose entire job is making sure no parcel is missed.
+   */
+  compact?: boolean;
 }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [selecting, setSelecting] = useState(false);
   const selectMany = useBulkSelectMany();
 
   const params = new URLSearchParams({ status });
   if (from) params.set('from', from);
   if (to) params.set('to', to);
+  if (filters?.stream) params.set('stream', filters.stream);
+  if (filters?.year !== undefined) params.set('year', String(filters.year));
+  if (filters?.q) params.set('q', filters.q);
 
-  /*
-   * The SAME predicate the export runs, on the rows already rendered.
+  /**
+   * «حدّد اللي في المدى» — tick exactly the orders the file would contain.
    *
-   * `createdAt` is an ISO instant and the inputs are `YYYY-MM-DD`, so the
-   * comparison is on the date prefix — string comparison is correct for ISO
-   * dates and, unlike `new Date(from)`, cannot shift a row into the previous
-   * day for an admin who is not on UTC. Both ends inclusive, matching the
-   * spreadsheet: «من ٢٩ لـ ٥» has to contain the 5th, or the last day of the
-   * run is the one order left behind.
+   * ⚠️ It ASKS THE SERVER, and used to filter the rows already rendered. The
+   * page is fifty rows long: on a tab of fifty-two, the button said «(50)»
+   * while the sidebar badge said «52», and a batch «اتشحن» quietly left the
+   * last two unshipped — the screen showed nothing that said so. The ids come
+   * out of the packing list itself, so the selection, the spreadsheet and the
+   * PDF are the same set by construction.
    */
-  const inRange = selectable.filter(({ createdAt }) => {
-    const day = createdAt.slice(0, 10);
-    return (!from || day >= from) && (!to || day <= to);
-  });
+  async function selectInRange(): Promise<void> {
+    setSelecting(true);
+    try {
+      const ids = await apiGetNarrow(
+        `/api/admin/book-orders/packing-list?${params.toString()}`,
+        parseAdminBookOrderIds,
+      );
+      if (ids.length === 0) {
+        toast.message(c.bulkSelectRangeEmpty);
+        return;
+      }
+      selectMany?.(ids);
+    } catch {
+      toast.error(c.actionFailed);
+    } finally {
+      setSelecting(false);
+    }
+  }
+
+  if (compact) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <a
+          href={`/admin/books/print?${params.toString()}`}
+          target="_blank"
+          rel="noopener"
+          className="rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-[length:var(--fs-text-xs)] text-accent-text transition-colors duration-[160ms] ease-out hover:bg-accent/20"
+          title={c.exportPdfHint}
+        >
+          {c.exportPdf}
+        </a>
+        {batchable ? (
+          <a
+            href={`/admin/books/labels?${params.toString()}`}
+            target="_blank"
+            rel="noopener"
+            className="rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-[length:var(--fs-text-xs)] text-accent-text transition-colors duration-[160ms] ease-out hover:bg-accent/20"
+            title={c.labelsHint}
+          >
+            {c.labelsButton}
+          </a>
+        ) : null}
+        <a
+          href={`/api/admin/book-orders/export?${params.toString()}`}
+          className="rounded-full border border-line px-3 py-1 text-[length:var(--fs-text-xs)] text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg"
+          title={c.exportHint}
+        >
+          {formatCopy(c.exportButton, { tab: tabLabel })}
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -102,17 +192,25 @@ export function ExportRange({
         loses one, and it is the only step of the loop the screen was not
         helping with.
 
-        Hidden until the provider is present AND something matches, so it can
-        never be a button whose only outcome is an empty selection.
+        Shown on the tabs a batch can act on, and only inside the provider —
+        `ExportRange` also renders on tabs that have no batch actions at all.
       */}
-      {selectMany && inRange.length > 0 ? (
+      {selectMany && batchable ? (
         <button
           type="button"
-          onClick={() => selectMany(inRange.map((row) => row.id))}
-          className="rounded-full border border-line px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg"
+          onClick={() => void selectInRange()}
+          disabled={selecting}
+          className="rounded-full border border-line px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg disabled:opacity-60"
           title={c.bulkSelectRangeHint}
         >
-          {formatCopy(c.bulkSelectRange, { n: String(inRange.length) })}
+          {selecting
+            ? c.bulkSelectRangeWorking
+            : /* With no dates the range IS the tab, and the tab's own total is
+                 already known — so the button can name it instead of naming
+                 the page it happens to be showing. */
+              formatCopy(from || to ? c.bulkSelectRangeDates : c.bulkSelectRange, {
+                n: String(rowCount),
+              })}
         </button>
       ) : null}
       <a
@@ -122,6 +220,49 @@ export function ExportRange({
       >
         {formatCopy(c.exportButton, { tab: tabLabel })}
       </a>
+      {/*
+        «وانا بعمل تحميل يتعمل PDF أحسن بشكل كويس كده» — the same list, laid
+        out on A4.
+
+        A new TAB and not a download: the page prints itself, and the file the
+        admin keeps comes out of the browser's own «حفظ كـ PDF». That is what
+        makes the Arabic correct — an Arabic PDF needs bidi and letter joining,
+        and every Node PDF library would hand the print shop reversed, unjoined
+        letters. The browser already does it perfectly.
+      */}
+      <a
+        href={`/admin/books/print?${params.toString()}`}
+        target="_blank"
+        rel="noopener"
+        className="rounded-full border border-accent/40 bg-accent/10 px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-accent-text transition-colors duration-[160ms] ease-out hover:bg-accent/20"
+        title={c.exportPdfHint}
+      >
+        {c.exportPdf}
+      </a>
+      {/*
+        «هخده نص بس الكرت وتحطه على الشحنة» — the same run again, as cut-out
+        cards rather than as a table.
+
+        A SECOND button and not a mode on the first: the packing sheet is the
+        desk's paper (ticked once while the boxes are filled) and this is the
+        box's paper. Both get printed on the same day for the same run, so
+        replacing one with the other would just mean visiting the screen twice.
+
+        Only on the tabs a parcel can actually be shipped from — printing
+        address cards for a REJECTED order is printing a label for a box nobody
+        is sending. `batchable` is already exactly that set.
+      */}
+      {batchable ? (
+        <a
+          href={`/admin/books/labels?${params.toString()}`}
+          target="_blank"
+          rel="noopener"
+          className="rounded-full border border-accent/40 bg-accent/10 px-3.5 py-1.5 text-[length:var(--fs-text-sm)] text-accent-text transition-colors duration-[160ms] ease-out hover:bg-accent/20"
+          title={c.labelsHint}
+        >
+          {c.labelsButton}
+        </a>
+      ) : null}
     </div>
   );
 }

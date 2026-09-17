@@ -43,6 +43,16 @@ describe('progression gate enforcement', () => {
     // gives: `lesson()` now awaits it, and a stub that answers `undefined`
     // would pass these assertions without proving anything.
     new HomeworkService(prisma, null as never, null as never, null as never, null as never, null as never),
+    /*
+     * «النسخة اللي عندنا» — the mirror, with no bucket configured.
+     *
+     * `publicUrl: null` is the state of every deployment that has not been
+     * given one, and it is what makes `mirror: null` on the payload below the
+     * DEFAULT rather than a special case. A stub returning an origin here
+     * would quietly change what `matches the shared contract exactly` is
+     * asserting.
+     */
+    { publicUrl: null } as never,
   );
 
   const stamp = Date.now().toString(36);

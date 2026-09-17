@@ -2,11 +2,16 @@ import type { SearchParams } from 'nuqs/server';
 import { listResponse } from '@ayman/contracts/admin/list';
 import { MediaAssetSchema } from '@ayman/contracts/admin/media';
 import { copy } from '@ayman/contracts/copy/admin';
+import { ListPager } from '@/components/admin/list-controls';
 import { adminGet } from '@/lib/admin-api';
 import { MediaGrid } from './media-grid';
 import { UploadForm } from './upload-form';
 
 const ResponseSchema = listResponse(MediaAssetSchema);
+
+/** Sixty was hardcoded into the URL; it is a constant now so the pager and the
+ *  request cannot disagree about the page size. */
+const PER_PAGE = 60;
 
 export const metadata = { title: copy.admin.media.title };
 
@@ -15,8 +20,13 @@ export default async function MediaPage({ searchParams }: { searchParams: Promis
   const params = await searchParams;
   const includeArchived = params.archived === '1';
 
+  /* `page=1` was hardcoded and the grid rendered no pager, so asset 61 onward
+     was permanently unreachable — and `rowCount`, which the API already
+     returns, was being thrown away. */
+  const page = Math.max(1, Number(params.page) || 1);
+
   const data = await adminGet(
-    `/api/admin/media?page=1&perPage=60&includeArchived=${includeArchived ? 'true' : 'false'}`,
+    `/api/admin/media?page=${page}&perPage=${PER_PAGE}&includeArchived=${includeArchived ? 'true' : 'false'}`,
     ResponseSchema,
   );
 
@@ -29,6 +39,16 @@ export default async function MediaPage({ searchParams }: { searchParams: Promis
 
       <UploadForm />
       <MediaGrid assets={data.rows} includeArchived={includeArchived} />
+      <ListPager
+        page={page}
+        perPage={PER_PAGE}
+        rowCount={data.rowCount}
+        labels={{
+          previous: copy.admin.books.pagerPrevious,
+          next: copy.admin.books.pagerNext,
+          of: copy.admin.books.pagerOf,
+        }}
+      />
     </>
   );
 }

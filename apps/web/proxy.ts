@@ -56,6 +56,40 @@ const MEDIA_ORIGIN = (process.env.NEXT_PUBLIC_MEDIA_ORIGIN ?? 'http://localhost:
 );
 
 /**
+ * Where «النسخة اللي عندنا» is served from — the bucket's public custom
+ * domain, `https://video.aymanaboelela.com`.
+ *
+ * A SEPARATE origin from `MEDIA_ORIGIN` and not folded into it: uploaded
+ * media is bytes this API streams, the mirror is bytes an object store
+ * streams, and the two move independently. Empty string when the deployment
+ * has no mirror, which is a valid state and must not emit a stray token into
+ * the policy — hence the `.filter(Boolean)` at each use.
+ *
+ * ⚠️ Getting this wrong is invisible in the worst way. A missing entry does
+ * not error, log, or degrade: hls.js's segment fetches are refused by the
+ * browser, the element stalls with no `error` event, and the student sees the
+ * same dead grey box this whole feature exists to remove — while the server
+ * is serving the file perfectly. The report-only policy taught this platform
+ * that lesson once already; the enforced one is where it actually bites.
+ */
+const VIDEO_ORIGIN = (process.env.NEXT_PUBLIC_VIDEO_ORIGIN ?? '').replace(/\/$/, '');
+/**
+ * Where the admin's browser PUTs the parts of an uploaded lecture.
+ *
+ * ⚠️ A DIFFERENT HOST from `VIDEO_ORIGIN`, and that is the trap. The public
+ * origin is the custom domain students read segments from; the parts go to
+ * the bucket's credentialed S3 endpoint, which nothing else on the site ever
+ * talks to. Naming only the public one — the natural mistake, since both are
+ * "the video bucket" — lets every part upload fail on an enforced policy,
+ * and CSP failures in `fetch`/XHR surface as a generic network error with no
+ * indication that a header refused them.
+ *
+ * Empty unless the mirror is configured, exactly like `VIDEO_ORIGIN`, so a
+ * deployment without a bucket adds nothing to the policy.
+ */
+const VIDEO_UPLOAD_ORIGIN = (process.env.NEXT_PUBLIC_VIDEO_UPLOAD_ORIGIN ?? '').replace(/\/$/, '');
+
+/**
  * Every route prefix gated behind a session. A single exported constant so
  * later plans append to it instead of each hand-editing a private regex —
  * Plan 5 appends `/quizzes`.
@@ -183,6 +217,30 @@ function hasSessionCookie(request: NextRequest): boolean {
   return SESSION_COOKIE_NAMES.some((name) => request.cookies.has(name));
 }
 
+/**
+ * Whether ONE row of `GET /api/enrollments` means "this student is already
+ * inside this course, send them to their library copy of it".
+ *
+ * Exported and pure purely so it can be tested — `resolveEnrolledCourseRedirect`
+ * below cannot be, it does a network call.
+ *
+ * ⚠️ BOTH conditions, and `accessActive` is the one that is easy to lose.
+ * The enrollment row is not the subscription: nothing writes
+ * `EnrollmentStatus.expired`, so a student whose grant lapsed — every term
+ * buyer, the moment an admin closes the term — keeps an `active` row forever.
+ * Matching on the slug alone redirected exactly that student away from
+ * `/courses/:slug`, the only page carrying a price and a «اشترك» button, into
+ * `/library/:slug`, which carries neither; the lesson gate then 403s back to
+ * `/courses/:slug` and this fires again. They could not pay.
+ */
+export function enrollmentOpensCourse(row: unknown, pathSlug: string): boolean {
+  if (typeof row !== 'object' || row === null) return false;
+  if (!matchesSlug((row as { courseSlug?: unknown }).courseSlug, pathSlug)) return false;
+  // Strict `=== true`: an older API that does not send the field at all must
+  // read as "no live access", never as "redirect anyway".
+  return (row as { accessActive?: unknown }).accessActive === true;
+}
+
 /** The API sends `courseSlug` decoded; the path carries it encoded. */
 function matchesSlug(courseSlug: unknown, pathSlug: string): boolean {
   if (typeof courseSlug !== 'string') return false;
@@ -244,14 +302,10 @@ async function resolveEnrolledCourseRedirect(request: NextRequest): Promise<URL 
 
     // `GET /api/enrollments` already filters to ACTIVE_ENROLLMENT_STATUSES
     // (`active` and `completed`), so a suspended or revoked enrollment never
-    // appears here and correctly leaves the student on the public page.
-    const enrolled = rows.some(
-      (row) =>
-        typeof row === 'object' &&
-        row !== null &&
-        matchesSlug((row as { courseSlug?: unknown }).courseSlug, slug),
-    );
-    if (!enrolled) return null;
+    // appears here and correctly leaves the student on the public page. A
+    // LAPSED one still does appear, and `enrollmentOpensCourse` is what keeps
+    // it from redirecting — see its own note.
+    if (!rows.some((row) => enrollmentOpensCourse(row, slug))) return null;
   } catch {
     return null;
   }
@@ -480,7 +534,16 @@ function sharedCspDirectives(dev: boolean): string[] {
     `img-src 'self' blob: data: https://i.ytimg.com https://c.clarity.ms https://c.bing.com ${MEDIA_ORIGIN}`,
     "font-src 'self'",
     // Same reasoning for uploaded audio/video served from the media origin.
-    `media-src 'self' ${MEDIA_ORIGIN}`,
+    //
+    // `blob:` and `VIDEO_ORIGIN` are the mirror's two halves, and BOTH are
+    // required. hls.js does not point the element at the playlist — it feeds
+    // segments through Media Source Extensions, so the element's `src` is a
+    // `blob:` URL this page created, while the segments themselves are
+    // fetched from the video origin (and so appear in `connect-src`, not
+    // here). Safari, which plays HLS natively, does the opposite: no blob at
+    // all, the origin directly in `media-src`. Naming one and not the other
+    // breaks exactly half the phones in the country.
+    ['media-src', "'self'", 'blob:', MEDIA_ORIGIN, VIDEO_ORIGIN].filter(Boolean).join(' '),
     "manifest-src 'self'",
     "worker-src 'self' blob:",
     "object-src 'none'",
@@ -539,9 +602,30 @@ function sharedCspDirectives(dev: boolean): string[] {
     // then fail to upload a single session — the dashboard says "no data"
     // while the browser console holds the answer. The wildcard is unavoidable
     // here; Clarity picks the subdomain itself.
+    // `VIDEO_ORIGIN` here is what lets hls.js READ the playlist and segments.
+    // It is a fetch, not a media load, so `media-src` above does not cover it
+    // — the single most likely way to ship this feature broken is to add the
+    // origin to one of these two directives and believe it is done.
+    // `VIDEO_UPLOAD_ORIGIN` is the other half, and it is a different host —
+    // see its definition. hls.js READS from `VIDEO_ORIGIN`; the admin's
+    // browser WRITES to the bucket's S3 endpoint, and both are XHR/fetch, so
+    // both belong here and neither is covered by `media-src`.
     dev
-      ? "connect-src 'self' ws: wss:"
-      : "connect-src 'self' https://cloudflareinsights.com https://static.cloudflareinsights.com https://*.clarity.ms https://c.bing.com",
+      ? ['connect-src', "'self'", 'ws:', 'wss:', VIDEO_ORIGIN, VIDEO_UPLOAD_ORIGIN]
+          .filter(Boolean)
+          .join(' ')
+      : [
+          'connect-src',
+          "'self'",
+          'https://cloudflareinsights.com',
+          'https://static.cloudflareinsights.com',
+          'https://*.clarity.ms',
+          'https://c.bing.com',
+          VIDEO_ORIGIN,
+          VIDEO_UPLOAD_ORIGIN,
+        ]
+          .filter(Boolean)
+          .join(' '),
     // report-uri is deprecated but still the only mechanism Safari/Firefox
     // implement; report-to is what Chrome honours. Ship both.
     'report-uri /api/security/csp-report',

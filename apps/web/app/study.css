@@ -2277,6 +2277,21 @@ details[open] > .unit__head .unit__chevron,
   color: var(--err);
 }
 
+/* The third state, and the reason the other two are not enough: a paper whose
+   essays are still with مهندس أيمن has no verdict yet. It used to render
+   `.verdict--fail` — «محتاجة مراجعة», in red, on a midterm nobody had finished
+   marking, because `gradeAttempt` counts an ungraded answer as zero and the
+   provisional total lands under the pass line.
+
+   Ember, not a third hue: amber is already this product's "in flight" colour
+   (the queue badge, `.chip--solid`, the grading screen's running total), and
+   green/red stay reserved for a decision that has actually been made. */
+.verdict--pending {
+  background: color-mix(in oklch, var(--a-9) 12%, var(--n-1));
+  box-shadow: inset 0 0 0 var(--hairline) color-mix(in oklch, var(--a-9) 35%, transparent);
+  color: var(--a-11);
+}
+
 /* ---------------------------------------------------------------------------
    .topic-row — one weak topic on the dashboard's mastery card.
 

@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { copy, type CatalogCourseDetail, type PathCourse, type PathNode } from '@ayman/contracts';
 import {
   buildCourseOutline,
+  groupIntoEntries,
   isLessonFinished,
   lessonStateLabel,
   lessonStateMark,
+  nestedQuizIds,
 } from './course-outline';
 
 function lesson(id: string, kind: PathNode['kind'] = 'video') {
@@ -322,5 +324,51 @@ describe('isLessonFinished', () => {
     expect(
       isLessonFinished({ kind: 'video', isExam: false, gate: 'available', state: 'failed' }),
     ).toBe(false);
+  });
+});
+
+/**
+ * ⚠️ These four cases are the whole contract of the indent in the course
+ * editor. The editor listed every lesson as an equal row until 2026-09-13 —
+ * «كده مش مظبوطة، يبقى في الكويز تحتها» — while the student's outline had
+ * always nested them, so the person arranging the course saw a flatter
+ * picture than the one being arranged.
+ */
+describe('nestedQuizIds', () => {
+  const lecture = (id: string) => ({ id, kind: 'video' });
+  const quiz = (id: string) => ({ id, kind: 'quiz' });
+
+  it('nests a quiz under the lecture before it', () => {
+    const ids = nestedQuizIds([lecture('l1'), quiz('q1'), lecture('l2'), quiz('q2')], null);
+    expect([...ids].sort()).toEqual(['q1', 'q2']);
+  });
+
+  it('leaves a quiz with no lecture before it at the top level', () => {
+    // The admin can no longer produce one; old courses still hold them, and a
+    // row that indents under nothing is worse than a row that does not indent.
+    expect(nestedQuizIds([quiz('q1'), lecture('l1')], null).has('q1')).toBe(false);
+  });
+
+  it('never nests the course exam', () => {
+    // The exam belongs to the COURSE, not to whichever lecture happens to sit
+    // above it — `courses.exam_lesson_id` is the link, and drawing it as a
+    // lecture's check would say the opposite of what the gate does.
+    expect(nestedQuizIds([lecture('l1'), quiz('exam')], 'exam').has('exam')).toBe(false);
+  });
+
+  it('re-parents on reorder, because ownership is position', () => {
+    /*
+     * The reason nothing is stored — and the assertion has to be on the OWNER,
+     * not on the nested set. The set contains `q1` either way, so a test that
+     * only checked membership would pass on an implementation that never
+     * re-parented at all.
+     */
+    const ownerOf = (lessons: { id: string; kind: string }[]) =>
+      groupIntoEntries(lessons.map((l) => ({ ...l, isExam: false }))).find((entry) =>
+        entry.quizzes.some((q) => q.id === 'q1'),
+      )?.lecture.id;
+
+    expect(ownerOf([lecture('l1'), quiz('q1'), lecture('l2')])).toBe('l1');
+    expect(ownerOf([lecture('l1'), lecture('l2'), quiz('q1')])).toBe('l2');
   });
 });

@@ -4,6 +4,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { cn } from '@ayman/ui/lib/cn';
 import { reorderLessonsAction } from '@/app/(admin)/admin/courses/actions';
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
+import { nestedQuizIds } from '@/lib/course-outline';
 import { SortableList } from '../sortable-list';
 import type { ReorderStatus } from '../use-debounced-reorder';
 import { LessonCard } from './lesson-card';
@@ -21,7 +22,12 @@ const STATUS_LABEL: Record<ReorderStatus, string> = {
 /**
  * `SortableList` bound to the lesson-reorder action. Drag-reorders freely
  * across kinds within one section; everything about how a lesson LOOKS lives
- * in `LessonCard`, so this component stays about ordering only.
+ * in `LessonCard`.
+ *
+ * The one thing this component knows about appearance is which rows are
+ * SUBORDINATE — a quiz belongs under the lecture it checks — because that is a
+ * fact about a row's POSITION in the list, which is the thing this component
+ * owns. `LessonCard` cannot work it out from a lesson alone.
  */
 export function SortableLessonList({
   courseId,
@@ -37,6 +43,25 @@ export function SortableLessonList({
   /** The course's pair, so a lesson labelled outside it can be flagged. */
   courseStream?: { forGeneral: boolean; forLanguages: boolean };
 }) {
+  /**
+   * Which rows are a lecture's quiz, and therefore belong UNDER it.
+   *
+   * ⚠️ `groupIntoEntries` — the student side's rule, imported rather than
+   * re-implemented. Ownership is ADJACENCY in reading order: a non-exam quiz
+   * belongs to the nearest lecture before it in the same section, which is
+   * also what `resolveGate` uses to decide when that quiz opens.
+   *
+   * That equivalence is the reason this is a derived value and not a stored
+   * one. Drag a quiz above a different lecture and it is that lecture's quiz —
+   * in the outline, in the gate, and in the indent here — with nothing to keep
+   * in sync. A second notion of ownership living only in the admin would be a
+   * flag that could disagree with the gate the student actually hits.
+   *
+   * A quiz with no lecture before it in its section falls through as a
+   * top-level row rather than vanishing, same as the student outline.
+   */
+  const nested = nestedQuizIds(lessons, examLessonId);
+
   return (
     <SortableList
       items={lessons}
@@ -46,6 +71,7 @@ export function SortableLessonList({
           courseId={courseId}
           lesson={lesson}
           isExam={lesson.id === examLessonId}
+          isNested={nested.has(lesson.id)}
           handleProps={handleProps}
           courseStream={courseStream}
         />

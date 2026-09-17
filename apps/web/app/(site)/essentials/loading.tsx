@@ -4,7 +4,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
  *  A Server Component, so it ships in the SSR'd HTML. */
 export default function Loading() {
   return (
-    <main>
+    <div aria-hidden="true">
       <section className="essentials-hero">
         <div className="site-shell">
           <Skeleton className="mx-auto mb-4 h-7 w-32 rounded-full" />
@@ -30,6 +30,6 @@ export default function Loading() {
           </div>
         </div>
       </section>
-    </main>
+    </div>
   );
 }

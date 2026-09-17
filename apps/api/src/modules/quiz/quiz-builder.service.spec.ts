@@ -67,6 +67,27 @@ describe('QuizBuilderService', () => {
     return lesson.id;
   }
 
+  /**
+   * A lesson that is its course's OWN exam — `courses.exam_lesson_id` points at
+   * it.
+   *
+   * Needed because `allowsImprovement: true` (تحسين, the second paper) is now
+   * refused on anything else: `assertPaperAllowed` reads nothing but that
+   * boolean, so a lesson quiz carrying it was a free retake for every student.
+   * The rule was always the intent — it just lived in the UI and at publish
+   * time rather than in the one place settings are written.
+   *
+   * ⚠️ `Course.examLessonId` is `@unique`, so only ONE lesson per course can
+   * hold it. A second call re-points the same course at the new lesson, which
+   * is fine here: each test that needs an improvement paper uses its own quiz
+   * and never re-reads an earlier one's exam status.
+   */
+  async function createCourseExamLesson(): Promise<string> {
+    const lessonId = await createLesson();
+    await prisma.course.update({ where: { id: courseId }, data: { examLessonId: lessonId } });
+    return lessonId;
+  }
+
   async function seedSlots(count: number): Promise<string> {
     const quizId = await service.upsertForLesson(await createLesson(), defaultSettings());
     extraQuizIds.push(quizId);
@@ -518,8 +539,10 @@ describe('QuizBuilderService', () => {
     });
 
     it('totals the slot OWN paper, leaving the other one alone', async () => {
+      // A COURSE EXAM lesson: تحسين is only legal there, and `upsertForLesson`
+      // now enforces that rather than trusting the UI to.
       const quizId = await service.upsertForLesson(
-        await createLesson(),
+        await createCourseExamLesson(),
         { ...defaultSettings(), allowsImprovement: true },
       );
       extraQuizIds.push(quizId);

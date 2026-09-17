@@ -142,12 +142,73 @@ const schema = z
      */
     WA_SERVICE_TOKEN: optionalSecret,
 
+    /**
+     * The shared secret the Android handset sends with «التحويلات الواردة» —
+     * `POST /api/ingest/transfers`.
+     *
+     * Same shape and same reasoning as `WA_SERVICE_TOKEN` above: the caller is
+     * a device, not a browser, so a session cookie is the wrong question to
+     * ask and a header token is the right one. Unlike that one this endpoint
+     * IS reachable from the internet — the handset is on wifi, not on the
+     * compose network — which makes the token the only thing standing between
+     * a stranger and a request that can open a paid course.
+     *
+     * Unset disables ingest entirely (the route rejects every call), which is
+     * the correct default: a deployment that has not been given a token has
+     * not been configured for this feature.
+     */
+    INSTAPAY_INGEST_TOKEN: optionalSecret,
+
     /** Where uploaded, re-encoded bytes live on disk (Task 13). */
     MEDIA_ROOT: z.string().min(1).default('./.media'),
 
     /** Mirrors `MAX_UPLOAD_BYTES` in `@ayman/contracts/admin/media` — kept as
      *  its own env var so an operator can lower it without a code change. */
     MEDIA_MAX_BYTES: z.coerce.number().int().positive().default(8 * 1024 * 1024),
+
+    /* ── «النسخة اللي عندنا» — the video mirror ─────────────────────────
+     *
+     * Object storage for the HLS copies, and the public origin they are
+     * served from. R2 in production; anything S3-compatible works.
+     *
+     * ALL OPTIONAL, and the platform is whole with none of them. Unset — the
+     * case locally, in CI, and on any deployment that has not been given a
+     * bucket — the worker never runs, `mirrorStatus` stays `pending` on every
+     * row, and the player falls back to YouTube exactly as it does today.
+     * That is the entire degradation path, and it is why nothing below is
+     * required: a deployment must not fail to boot over a mirror.
+     *
+     * Every one of them is `optional*` and not a bare `.optional()` for the
+     * reason the WhatsApp block above documents — compose substitutes an
+     * unset `${VAR:-}` as the EMPTY STRING, and an empty string that fails
+     * `.url()` takes the whole API down at boot over a feature nobody
+     * switched on.
+     */
+    VIDEO_MIRROR_ENDPOINT: optionalHttpUrl,
+    VIDEO_MIRROR_BUCKET: optionalSecret,
+    VIDEO_MIRROR_ACCESS_KEY_ID: optionalSecret,
+    VIDEO_MIRROR_SECRET_ACCESS_KEY: optionalSecret,
+
+    /**
+     * Where students fetch the playlist — `https://video.aymanaboelela.com`,
+     * the bucket's public custom domain.
+     *
+     * A SEPARATE variable from the endpoint, never derived from it. The S3
+     * endpoint is credentialed and internal; this one is public, cached at
+     * the edge, and is the string that ends up in the CSP and in every
+     * student's network log. Deriving one from the other would mean a
+     * misconfiguration on the private side silently changing what the public
+     * side hands out.
+     */
+    VIDEO_MIRROR_PUBLIC_URL: optionalHttpUrl,
+
+    /**
+     * How many videos the worker mirrors at once. One, and the default is not
+     * a placeholder: the expensive step is pulling a gigabyte from YouTube,
+     * two of those saturate the VPS's uplink, and a saturated uplink is the
+     * API not answering. Raise it only on a box with bandwidth to spare.
+     */
+    VIDEO_MIRROR_CONCURRENCY: z.coerce.number().int().positive().max(4).default(1),
 
     /* ── المساعد's open chat — `POST /api/assistant/ask` ────────────────
      *

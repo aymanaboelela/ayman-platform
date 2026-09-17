@@ -7,7 +7,8 @@ import { getCatalogOrEmpty } from '@/lib/catalog';
 import { isFreeCourse } from '@/lib/price';
 import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
 import { JsonLd } from '@/components/seo/json-ld';
-import { breadcrumbJsonLd, courseListJsonLd } from '@/lib/seo/jsonld';
+import { PERSON_ID, SITE_URL, WEBSITE_ID, breadcrumbJsonLd, courseListJsonLd } from '@/lib/seo/jsonld';
+import { yearAliasesAr } from '@/lib/year-label';
 import { isYearIndexable } from '@/lib/seo/year-visibility';
 import { CourseCard } from '@/components/site/course-card';
 import { courseCountLabel, groupBySubject } from '@/lib/course-groups';
@@ -75,8 +76,17 @@ export async function generateMetadata({
    */
   const { courses } = await getCatalogOrEmpty();
   if (!isYearIndexable(courses, year)) {
+    /*
+     * ⚠️ `await`. `buildMetadata` is async, and spreading a PROMISE copies no
+     * own enumerable properties at all — so this branch used to return
+     * `{ robots }` and nothing else. Measured on production 2026-09-15:
+     * `/years/3` served the root title «منصة أيمن أبو العلا — …» and
+     * `<link rel="canonical" href="https://aymanaboelela.com">`, a page
+     * declaring the homepage to be its own preferred URL. The `noindex` worked,
+     * which is why nothing looked broken.
+     */
     return {
-      ...buildMetadata({ title, path: `/years/${year}` }),
+      ...(await buildMetadata({ title, path: `/years/${year}` })),
       robots: { index: false, follow: true },
     };
   }
@@ -87,7 +97,16 @@ export async function generateMetadata({
     // below shipped "كورسات كورسات الصف الأول بكالوريا" to all three year
     // pages. Google renders the description verbatim in the snippet, so the
     // stutter was visible to every searcher who saw the result.
-    description: `كورسات ${YEAR_TITLES[year]} في البرمجة وعلوم الحاسب على ${copy.site.platformName} — ${copy.site.tagline}.`,
+    /*
+     * ⚠️ The second clause carries the spelling a student actually types —
+     * «تانية بكالوريا», not «الصف الثاني بكالوريا» — because Google renders
+     * this verbatim in the snippet and the searcher has to recognise their own
+     * words in it. The digit forms are NOT here: a description is prose a human
+     * reads, and «٢ بكالوريا / 2 بكالوريا» in the middle of a sentence reads
+     * like a machine wrote it. They go in the page's `alternateName` instead —
+     * see the `CollectionPage` node below.
+     */
+    description: `كورسات ${YEAR_TITLES[year]} — ${yearAliasesAr(year)[1] ?? YEAR_TITLES[year]} — في البرمجة والذكاء الاصطناعي على ${copy.site.platformName}: شرح بالفيديو، تمرين واختبار على كل درس.`,
     path: `/years/${year}`,
   });
 }
@@ -138,6 +157,34 @@ export default async function YearPage({
    */
   return (
     <main>
+      {/*
+        `CollectionPage`, with the year's alternate spellings on it.
+
+        ⚠️ This is where «٢ بكالوريا» and «2 بكالوريا» live. The page's `<h1>`
+        says «الصف الثاني بكالوريا» and a student types the digit — and until
+        this node existed there was no string anywhere on the page, visible or
+        structured, that a numeral query could match. `alternateName` is the
+        field whose defined job is "this same thing, under its other names",
+        which keeps the spellings out of the heading where they would read as
+        stuffing to a reader and to a spam classifier.
+
+        The list of aliases is per-year and lives in `lib/year-label.ts`; see
+        it for why both Arabic-Indic and ASCII digits ship, and why «تانية» and
+        «ثانية» are both here.
+      */}
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@type': 'CollectionPage',
+          '@id': `${SITE_URL}/years/${year}#webpage`,
+          url: `${SITE_URL}/years/${year}`,
+          name: `${copy.years.title} ${YEAR_TITLES[year]}`,
+          alternateName: yearAliasesAr(year),
+          inLanguage: 'ar',
+          isPartOf: { '@id': WEBSITE_ID },
+          about: { '@id': PERSON_ID },
+        }}
+      />
       <JsonLd data={courseListJsonLd(listed)} />
       <JsonLd
         data={breadcrumbJsonLd([

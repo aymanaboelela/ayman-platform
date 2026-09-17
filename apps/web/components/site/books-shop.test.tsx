@@ -1,8 +1,15 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { copy } from '@ayman/contracts';
 import type { BookCard, BookCatalog } from '@ayman/contracts/books';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BooksShop } from './books-shop';
+
+// `BookOrderPanel` (inside the checkout dialog) calls `useRouter` on the
+// success path. jsdom has no app-router context, so rendering the dialog
+// throws without this.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
 
 // Explicit, as every component test in this repo does it — `vitest.setup.ts`
 // registers no automatic cleanup.
@@ -48,7 +55,11 @@ function catalogOf(...books: BookCard[]): BookCatalog {
         full: [],
       },
     ],
-    shippingCents: 0,
+    /* ⚠️ THREE DIFFERENT rates. A fixture with one flat figure (or free
+       delivery) makes every zone agree, and a component that quotes the wrong
+       zone then passes every assertion here. */
+    shippingCents: 8_000,
+    shippingRates: { cairo_giza: 8_000, delta: 10_000, far: 15_000 },
     total: books.length,
   };
 }
@@ -65,7 +76,7 @@ describe('BooksShop', () => {
    * except the attribute itself.
    */
   it('asks for a cover wide enough for the card, not a thumbnail', () => {
-    const { container } = render(<BooksShop catalog={catalog} instapay={null} />);
+    const { container } = render(<BooksShop catalog={catalog} instapay={null} vodafoneCash={null} />);
 
     const cover = container.querySelector('.book-card__art img');
     expect(cover).not.toBeNull();
@@ -80,7 +91,7 @@ describe('BooksShop', () => {
    * CSS-only change would look right in review and still render at the bottom.
    */
   it('puts the phone basket above the shelves once a book is added', () => {
-    const { container } = render(<BooksShop catalog={catalog} instapay={null} />);
+    const { container } = render(<BooksShop catalog={catalog} instapay={null} vodafoneCash={null} />);
 
     expect(container.querySelector('.books-bar')).toBeNull();
 
@@ -110,7 +121,7 @@ describe('BooksShop', () => {
     render(
       <BooksShop
         catalog={catalogOf(book({ forGeneral: false, forLanguages: true }))}
-        instapay={null}
+        instapay={null} vodafoneCash={null}
       />
     );
 
@@ -131,11 +142,37 @@ describe('BooksShop', () => {
   it('sells a book that is not advertised on the landing page', () => {
     const hidden = book({ showOnLanding: false, titleAr: 'كتاب مش في الواجهة' });
 
-    render(<BooksShop catalog={catalogOf(hidden)} instapay={null} />);
+    render(<BooksShop catalog={catalogOf(hidden)} instapay={null} vodafoneCash={null} />);
 
     expect(screen.getByText(hidden.titleAr)).toBeTruthy();
     // Not merely present — buyable. A card rendered with no «ضيفه» on it would
     // pass a text assertion and still be a shop nobody can order from.
     expect(screen.getByRole('button', { name: copy.books.add })).toBeTruthy();
+  });
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * ONE total in the checkout dialog, and it is the live one.
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * The dialog used to render `<Totals>` — frozen at «من ٢٣٠», the cheapest
+   * zone — directly above `<BookOrderPanel>`, which prints its OWN breakdown
+   * and re-quotes the moment a governorate is chosen. Pick a وجه-بحري address
+   * and the reader got two totals stacked on each other, «من ٢٣٠» and ٢٥٠,
+   * with nothing saying which one they would actually pay.
+   *
+   * ⚠️ The assertion is on the COUNT of «الإجمالي» rows, not on the presence
+   * of one. The old code rendered the label twice and every «is the total
+   * shown» test passed on it — presence was never the thing that broke.
+   */
+  it('shows the total once in the checkout dialog, not a frozen copy above the live one', () => {
+    render(<BooksShop catalog={catalog} instapay={null} vodafoneCash={null} />);
+
+    fireEvent.click(screen.getByRole('button', { name: copy.books.add }));
+    /* «كمّل الطلب» exists twice — the sticky bar for a phone and the aside for a
+       desktop. Either opens the same dialog. */
+    fireEvent.click(screen.getAllByRole('button', { name: copy.books.checkout })[0]!);
+
+    expect(screen.getAllByText(copy.books.total)).toHaveLength(1);
   });
 });

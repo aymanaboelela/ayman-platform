@@ -1,27 +1,34 @@
 'use client';
 
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { ImagePlus } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { TaxonomySchema, type Taxonomy } from '@ayman/contracts/taxonomy';
 import { BookOrderSchema, type BookOrder } from '@ayman/contracts/book-orders';
+import {
+  bookShippingCentsFor,
+  minBookShippingCents,
+  type BookShippingRates,
+} from '@ayman/contracts/books';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
-import { apiGet, apiPost } from '@/lib/api';
+import { ApiRequestError, apiGet, apiPost } from '@/lib/api';
 import { uploadBookOrderScreenshot } from '@/lib/upload-client';
-import { formatEGP } from '@/lib/price';
+import { formatEGP, formatShipping } from '@/lib/price';
 import {
   CART_ORDER_KEY,
   clearInProgressBookOrder,
   readInProgressBookOrder,
   saveInProgressBookOrder,
 } from '@/lib/book-order-storage';
-import { PaymentBrand } from './payment-brand';
+import { PaymentBrand, type PaymentRail } from './payment-brand';
+import { PaymentMethodChoice } from './payment-method-choice';
 
 const c = copy.bookOrder;
 
@@ -38,7 +45,8 @@ type Step = 'checking' | 'address' | 'payment' | 'submitting' | 'success' | 'alr
  *
  * Two steps: an ADDRESS form, saved to the database the moment it is
  * submitted (before any payment exists — see `BookOrdersService.create`),
- * then the exact same Vodafone Cash payment UI `SubscribePanel` uses. A
+ * then the exact same payment UI `SubscribePanel` uses — the rail question
+ * and the transfer details behind it. A
  * student who abandons after step one already left a real, visible row for
  * an admin — see the `BookOrder` model doc for why that is the point.
  *
@@ -69,8 +77,10 @@ type Step = 'checking' | 'address' | 'payment' | 'submitting' | 'success' | 'alr
 export function BookOrderPanel({
   courseId,
   items,
-  amountCents,
+  itemsCents,
+  shippingRates,
   instapay,
+  vodafoneCash,
   onCancel,
 }: {
   /**
@@ -84,18 +94,28 @@ export function BookOrderPanel({
   /** «قسم الكتب»: a basket. Ids and quantities only — the server prices it. */
   items?: readonly { bookId: string; quantity: number }[];
   /**
-   * What the reader has been quoted, INCLUDING delivery, for the line above the
-   * form.
+   * The BOOKS only, with no delivery in it.
    *
-   * Passed in rather than computed here because the two callers know it in
-   * different ways — the shop has already totalled a basket, the course page has
-   * one price and the shipping fee — and because this panel must never be the
-   * thing that decides what an order costs. The server recomputes it from the
-   * catalogue regardless; this number is what the person was told.
+   * ⚠️ It used to be `amountCents` — books plus delivery, totalled by each
+   * caller. That stopped being possible when delivery became zoned: neither
+   * caller knows where the parcel is going, because the governorate is chosen
+   * on THIS form. A total computed before the address is a total that is wrong
+   * for two of the three zones, and «الكتاب بـ١٥٠ والشحن ٨٠» followed by a form
+   * that asks for ٣٠٠ is exactly the surprise the breakdown exists to prevent.
+   *
+   * So the panel owns the quote now: it holds `governorateCode`, so it is the
+   * only place that can say what delivery costs, and it says so the instant the
+   * select changes. This is still what the person was TOLD and never what they
+   * are charged — the server reprices the basket and re-derives the fee from
+   * the same table when the order is written.
    */
-  amountCents: number;
+  itemsCents: number;
+  /** The three zone rates, from `GET /api/books`. See `bookShippingCentsFor`. */
+  shippingRates: BookShippingRates;
   /** E.164, or `null` when the admin has not configured one yet. */
   instapay: string | null;
+  /** The wallet number — a second live destination, see `ContactSchema`. */
+  vodafoneCash: string | null;
   onCancel: () => void;
 }) {
   /*
@@ -109,22 +129,52 @@ export function BookOrderPanel({
    */
   const storageKey = courseId ?? CART_ORDER_KEY;
 
+  // Only used once, on the success path — see the ⚠️ there.
+  const router = useRouter();
+
   const [step, setStep] = useState<Step>('checking');
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
   const [order, setOrder] = useState<BookOrder | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  /**
+   * «هتحوّل بإيه؟» — same two-state shape as the course panel. Nothing is
+   * preselected: a default is a choice the student did not make, and this one
+   * decides where their money goes. `railConfirmed` is separate from
+   * `rail !== null` so going back keeps the previous answer lit.
+   */
+  const [rail, setRail] = useState<PaymentRail | null>(null);
+  const [railConfirmed, setRailConfirmed] = useState(false);
 
   // Address fields.
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [altPhone, setAltPhone] = useState('');
   const [governorateCode, setGovernorateCode] = useState('');
+  /*
+   * ── الشحن على حسب المحافظة، حيّ ────────────────────────────────────────
+   *
+   * `null` until a governorate is picked, and that is a THIRD state rather than
+   * a zero: «٠ ج» reads as free delivery, and the honest answer before the
+   * select is touched is «على حسب المحافظة» — which is also the sentence that
+   * stops «ليه الرقم اتغيّر؟» when the total moves a line later.
+   *
+   * ⚠️ It is what the reader is TOLD, never what they are charged. The server
+   * re-derives the fee from the same table off the governorate on the saved
+   * row, so a tampered client changes the sentence on its own screen and
+   * nothing else. Same rule the book prices follow.
+   */
+  const shippingQuoteCents = governorateCode
+    ? bookShippingCentsFor(governorateCode, shippingRates)
+    : null;
+  const quotedTotalCents = itemsCents + (shippingQuoteCents ?? 0);
   const [city, setCity] = useState('');
   const [addressStreet, setAddressStreet] = useState('');
   const [addressBuilding, setAddressBuilding] = useState('');
   const [addressNote, setAddressNote] = useState('');
   const [savingAddress, setSavingAddress] = useState(false);
+  /** The server said this phone already has a finished order for these books. */
+  const [duplicatePrompt, setDuplicatePrompt] = useState(false);
 
   // Payment fields — identical shape to `SubscribePanel`.
   const [senderPhone, setSenderPhone] = useState('');
@@ -208,7 +258,24 @@ export function BookOrderPanel({
           setAddressStreet(fetched.addressStreet);
           setAddressBuilding(fetched.addressBuilding ?? '');
           setAddressNote(fetched.addressNote ?? '');
-          setStep('address');
+          /*
+           * ⚠️ PAYMENT, not the address form — and the summary line on that
+           * screen is what makes it affordable.
+           *
+           * The history here runs both ways and both complaints are real. It
+           * resumed at payment once, and a student landed on a transfer number
+           * with nothing saying WHERE the parcel was going: «المفروض لما أضغط
+           * على طلب الكتاب الأول أكتب العنوان بتاعي وكده». So it was moved to
+           * the prefilled address form — and then «هو مش عايز يقعد يكتب العنوان
+           * مرة تانية»: a student who already gave the address is made to walk
+           * through it again before they can pay.
+           *
+           * Neither screen was wrong; the missing piece was that the address
+           * was invisible on the payment step. It is now printed there with
+           * «تعديل العنوان» beside it, so the parcel's destination is on screen
+           * AND nobody retypes it.
+           */
+          setStep('payment');
         } else {
           // Already `paid`/`shipped` — nothing left to resume.
           clearInProgressBookOrder(storageKey);
@@ -235,11 +302,21 @@ export function BookOrderPanel({
     setFile(next);
   }
 
-  if (!instapay) {
+  // ⚠️ EITHER rail sells a book. Keeping this on InstaPay alone would close the
+  // shop on a platform that takes Vodafone Cash and nothing else.
+  if (!instapay && !vodafoneCash) {
     return <p className="course-subscribe__error">{c.noNumber}</p>;
   }
 
-  const localNumber = localEgyptianDigits(instapay);
+  /**
+   * ⚠️ The number FOLLOWS the rail, with no fallback between them. A Vodafone
+   * heading over an InstaPay number sends the money somewhere nothing
+   * reconciles it — see the same note in `subscribe-panel.tsx`.
+   */
+  const railNumber = rail === 'vodafoneCash' ? vodafoneCash : rail === 'instapay' ? instapay : null;
+  const localNumber = railNumber ? localEgyptianDigits(railNumber) : '';
+  const railName =
+    rail === 'vodafoneCash' ? copy.subscribe.railVodafoneCash : copy.subscribe.railInstapay;
 
   async function copyNumber() {
     try {
@@ -341,30 +418,75 @@ export function BookOrderPanel({
 
     setSavingAddress(true);
     try {
-      const created = await apiPost('/api/book-orders', BookOrderSchema, {
+      const created = await postOrder(false);
+      if (created) finishAddress(created);
+    } catch (cause) {
+      /*
+       * ⚠️ ONE code, and it is not an error: the server has seen a FINISHED
+       * order for this phone with the same books inside the last week, and is
+       * asking rather than refusing.
+       *
+       * It cannot be "did they already pay", because this platform has no
+       * payment gateway and nobody verifies the transfer — «مدفوع» is a claim
+       * made with a screenshot. So the question is «are you sure», and the
+       * student answers it.
+       */
+      if (cause instanceof ApiRequestError && cause.status === 409) {
+        setDuplicatePrompt(true);
+      } else {
+        // No `onUnauthorized` branch — this endpoint is `@Public()`, so a
+        // signed-out visitor's submit never 401s.
+        setError(c.genericError);
+      }
+    } finally {
+      setSavingAddress(false);
+    }
+  }
+
+  /**
+   * The POST itself, lifted out of `submitAddress` so the confirm path can
+   * repeat it verbatim with the flag set. Re-normalising the phones here rather
+   * than passing them in keeps the two calls provably identical — the whole
+   * point is that the second request differs from the first in ONE field.
+   */
+  async function postOrder(confirmDuplicate: boolean) {
+    return apiPost('/api/book-orders', BookOrderSchema, {
         /* Exactly one of the two reaches the wire — `CreateBookOrderSchema` is
            `.strict()` AND refines on "one, never both", so spreading whichever
            this panel was given is the only spelling that satisfies it. */
         ...(items ? { items } : { courseId }),
         fullName: fullName.trim(),
-        phone: normalizedPhone,
-        altPhone: normalizedAltPhone,
+        phone: normalizeEgyptianPhone(phone),
+        altPhone: normalizeEgyptianPhone(altPhone),
         governorateCode,
         city: city.trim(),
         addressStreet: addressStreet.trim(),
         addressBuilding: addressBuilding.trim() === '' ? null : addressBuilding.trim(),
         addressNote: addressNote.trim() === '' ? null : addressNote.trim(),
+        confirmDuplicate,
+        // This IS the checkout — see `reuseOpenOrder` in the contract.
+        reuseOpenOrder: true,
       });
-      setOrder(created);
-      // Remembered on THIS browser so closing the tab before paying does not
-      // lose the order — see the panel's own docblock and
-      // `lib/book-order-storage.ts`.
-      saveInProgressBookOrder(storageKey, created.id);
-      setStep('payment');
+  }
+
+  function finishAddress(created: BookOrder) {
+    setOrder(created);
+    // Remembered on THIS browser so closing the tab before paying does not
+    // lose the order. ⚠️ It is no longer the only thing stopping a duplicate:
+    // the SERVER now reuses this phone's own unpaid order, because this key
+    // lives in one browser and half the production queue was the same person
+    // starting over somewhere else.
+    saveInProgressBookOrder(storageKey, created.id);
+    setStep('payment');
+  }
+
+  /** «أيوه، عايز نسخة كمان» — the same POST, with the student's answer. */
+  async function confirmDuplicateOrder() {
+    setDuplicatePrompt(false);
+    setSavingAddress(true);
+    try {
+      finishAddress(await postOrder(true));
     } catch {
-      // No `onUnauthorized` branch any more — this endpoint is `@Public()`,
-      // so a signed-out visitor's submit never 401s. Anything else thrown
-      // here is a genuine failure.
       setError(c.genericError);
     } finally {
       setSavingAddress(false);
@@ -404,6 +526,18 @@ export function BookOrderPanel({
       });
       // Finished — nothing left to resume if this tab closes now.
       clearInProgressBookOrder(storageKey);
+      /*
+       * And the client router cache has to hear about it. `next.config.ts` lets
+       * that cache reuse a dynamic route for 30 seconds
+       * (`staleTimes.dynamic`), and this order is rendered by two OTHER routes
+       * — `/store/orders`, and `MyBookOrdersSection` on the dashboard. Without
+       * this, a student who orders a book and taps straight to either one is
+       * shown a screen with no sign of the order they just paid for, which is
+       * the single most alarming thing this flow could do. `refresh()` is the
+       * only call that empties it; same ⚠️ as
+       * `components/player/lesson-nav.tsx`.
+       */
+      router.refresh();
       setStep('success');
     } catch {
       setError(c.genericError);
@@ -432,11 +566,68 @@ export function BookOrderPanel({
     );
     const governorateOptions = [...pinned, ...rest];
 
+    /*
+     * ⚠️ The question REPLACES the form rather than sitting over it as a modal.
+     *
+     * This is the one screen where a student is deciding whether to spend money
+     * twice, and a dialog floating over a filled-in form invites the reflex
+     * that dismisses dialogs. One screen, one question, two answers — and the
+     * safe one is first and plain, so doing nothing costs nothing.
+     */
+    if (duplicatePrompt) {
+      return (
+        <div className="course-subscribe">
+          <p className="course-subscribe__title">{c.duplicateTitle}</p>
+          <p className="course-subscribe__instructions">{c.duplicateBody}</p>
+          <div className="course-subscribe__actions">
+            <Button type="button" onClick={onCancel}>
+              {c.duplicateCancel}
+            </Button>
+            <button
+              type="button"
+              className="course-subscribe__cancel"
+              onClick={() => void confirmDuplicateOrder()}
+              disabled={savingAddress}
+            >
+              {c.duplicateConfirm}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="course-subscribe">
-        <p className="course-subscribe__amount">
-          {formatCopy(c.priceLine, { price: formatEGP(amountCents) })}
-        </p>
+        {/* The breakdown, and it MOVES — «الشحن» is «على حسب المحافظة» until the
+            select below is touched and the real number the moment it is. Three
+            rows rather than one total, for the reason the shop's basket shows
+            three: a single figure that changes when you pick an address, with
+            nothing naming the part that changed, reads as a price that went up
+            on you. */}
+        <div className="books-checkout__summary">
+          <div className="books-cart__row">
+            <span>{copy.books.subtotal}</span>
+            <span>{formatEGP(itemsCents)}</span>
+          </div>
+          <div className="books-cart__row">
+            <span>{copy.books.shipping}</span>
+            <span>
+              {shippingQuoteCents === null
+                ? copy.books.shippingByGovernorate
+                : formatShipping(shippingQuoteCents, copy.books.shippingFree)}
+            </span>
+          </div>
+          <div className="books-cart__row books-cart__row--total">
+            <span>{copy.books.total}</span>
+            <span>
+              {shippingQuoteCents === null
+                ? formatCopy(copy.books.totalFrom, {
+                    price: formatEGP(itemsCents + minBookShippingCents(shippingRates)),
+                  })
+                : formatEGP(quotedTotalCents)}
+            </span>
+          </div>
+        </div>
         <p className="course-subscribe__title">{c.addressTitle}</p>
 
         <div>
@@ -541,7 +732,11 @@ export function BookOrderPanel({
   return (
     <div className="course-subscribe">
       <p className="course-subscribe__amount">
-        {formatCopy(c.priceLine, { price: formatEGP(order?.amountCents ?? amountCents) })}
+        {/* The ORDER's own frozen total once it exists — by this step it always
+            does, and it is the number the transfer has to match. The fallback
+            is the live quote, which can only be reached in the instant between
+            the address saving and the row coming back. */}
+        {formatCopy(c.priceLine, { price: formatEGP(order?.amountCents ?? quotedTotalCents) })}
       </p>
       {/* The order's own lines once it exists — one book for the course flow, the
           whole basket for the shop. Read off the ORDER rather than the props so
@@ -551,11 +746,68 @@ export function BookOrderPanel({
         {(order?.items ?? []).map((line) => line.titleAr).join(c.itemSeparator)}
       </p>
 
-      <p className="course-subscribe__instructions">
-        {formatCopy(c.instructions, { number: localNumber })}
-      </p>
+      {/*
+        ⚠️ WHERE THE PARCEL IS GOING, on the screen that asks for money.
 
-      <PaymentBrand className="course-subscribe__brand" />
+        This line is the reason resuming can land here instead of on the address
+        form. Without it a student arrived at a transfer number with no sign
+        that an address had ever been given — «المفروض لما أضغط على طلب الكتاب
+        الأول أكتب العنوان بتاعي وكده» — and the way back existed but was
+        labelled «رجوع», which reads as "undo", not as "check your address".
+
+        It renders from `order`, not from the form state, so it shows what the
+        SERVER has: after a resume those can differ, and the parcel follows the
+        server's copy.
+      */}
+      {order ? (
+        <p className="course-subscribe__hint">
+          {/* `governorateCode` is what the order row carries; the readable name
+              lives on the taxonomy this panel already loaded. Falling back to
+              the code rather than dropping the field keeps the line honest when
+              the taxonomy has not arrived yet. */}
+          {[
+            order.fullName,
+            taxonomy?.governorates.find((g) => g.code === order.governorateCode)?.nameAr ??
+              order.governorateCode,
+            order.city,
+            order.addressStreet,
+          ]
+            .filter(Boolean)
+            .join(c.itemSeparator)}{' '}
+          <button
+            type="button"
+            className="pay-choice__back"
+            onClick={() => setStep('address')}
+          >
+            {c.editAddress}
+          </button>
+        </p>
+      ) : null}
+
+      {/* The rail question comes before anything carrying a number — see the
+          note in `subscribe-panel.tsx`. */}
+      {!railConfirmed ? (
+        <PaymentMethodChoice
+          value={rail}
+          // One tap: pick the rail AND move on. There is no confirm button —
+          // see `PaymentMethodChoice`.
+          onChange={(next) => {
+            setRail(next);
+            setRailConfirmed(true);
+          }}
+          available={{ instapay: Boolean(instapay), vodafoneCash: Boolean(vodafoneCash) }}
+        />
+      ) : (
+        <>
+          <button type="button" onClick={() => setRailConfirmed(false)} className="pay-choice__back">
+            {copy.subscribe.railChange}
+          </button>
+
+          <p className="course-subscribe__instructions">
+            {formatCopy(c.instructions, { number: localNumber, rail: railName })}
+          </p>
+
+          <PaymentBrand rail={rail ?? 'instapay'} className="course-subscribe__brand" />
 
       <div className="course-subscribe__number-row">
         <span dir="ltr" className="course-subscribe__number">
@@ -595,7 +847,19 @@ export function BookOrderPanel({
           ref={fileInputRef}
           id="book-order-screenshot"
           type="file"
-          accept="image/png,image/jpeg,image/webp"
+          /* `image/*`, not the API's allowlist.
+
+             The narrow list greyed out a real share of the photo library on
+             iOS, where pictures are HEIC and HEIC is not on that allowlist —
+             the student taps a screenshot that is visibly there and the picker
+             refuses to hand it over, so the form still says «ارفع صورة إثبات
+             التحويل» and there is nothing on screen explaining why.
+
+             Safe to widen because the upload no longer sends what the picker
+             returns: `compressImage` re-encodes to JPEG first, and the API's
+             own allowlist is still the gate. Same value the homework picker
+             has always used. */
+          accept="image/*"
           onChange={handleFileChange}
           disabled={submitting}
           className="sr-only"
@@ -620,7 +884,9 @@ export function BookOrderPanel({
             <span className="course-subscribe__upload-change">{copy.subscribe.screenshotChange}</span>
           ) : null}
         </button>
-        <p className="course-subscribe__hint">{copy.subscribe.screenshotHint}</p>
+        <p className="course-subscribe__hint">
+          {formatCopy(copy.subscribe.screenshotHint, { rail: railName })}
+        </p>
       </div>
 
       {error ? (
@@ -642,6 +908,8 @@ export function BookOrderPanel({
           {c.back}
         </button>
       </div>
+        </>
+      )}
     </div>
   );
 }

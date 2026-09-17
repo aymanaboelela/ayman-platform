@@ -2435,3 +2435,105 @@
    is exactly the bug that shipped a phone drawer with six icons and no words.
    The pill only has to make sure the icon well survives losing the label,
    which it does: it is the one child that is not `.rail__label`. */
+
+/* ---------------------------------------------------------------------------
+   .pay-choice — «هتحوّل بإيه؟», the first step of every checkout.
+
+   Two rails, two marks, one «التالي». See
+   `components/site/payment-method-choice.tsx` for why this is a step of its own
+   rather than a dropdown over a number that rewrites itself.
+
+   The cards are deliberately LARGE. This is the screen where a student decides
+   whether to send money at all, most of them on a phone, and the two targets
+   have to be unmissable and impossible to hit by accident — 44px is the floor
+   for a tap target and these are several times that.
+   --------------------------------------------------------------------------- */
+.pay-choice__question {
+  font-size: var(--fs-text-lg);
+  font-weight: var(--fw-semibold);
+  margin-bottom: 0.75rem;
+}
+
+/* `auto-fit` with a `min()` floor rather than a media query: two cards side by
+   side wherever there is room for them, one above the other when there is not,
+   and the `min(100%, …)` stops the track from overflowing a narrow phone —
+   a grid track cannot shrink below its own minimum. */
+.pay-choice__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+  gap: 0.75rem;
+}
+
+.pay-choice__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  min-block-size: 7.5rem;
+  padding: 1rem 0.75rem;
+  border-radius: var(--r-lg);
+  border: 2px solid var(--border);
+  background: var(--n-1);
+  cursor: pointer;
+  transition:
+    border-color var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease);
+}
+
+.pay-choice__card:hover:not(:disabled) {
+  border-color: var(--a-9);
+}
+
+/* ⚠️ The selected state is THREE signals, not one: a 2px amber edge, a warm
+   fill, and a ring. On a phone in daylight a border colour alone is not a
+   reliable answer to «انا ضغطت على انهي واحدة؟», and this is the question whose
+   wrong answer sends money to the wrong rail.
+
+   `--a-9` is the file's own rule for it — amber is ACTION and the current
+   position, which is exactly what a chosen payment method is. */
+.pay-choice__card--on {
+  border-color: var(--a-9);
+  background: color-mix(in oklch, var(--a-9), transparent 88%);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--a-9), transparent 78%);
+}
+
+.pay-choice__card:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Sized by HEIGHT, so two wordmarks with different aspect ratios sit on the
+   same optical line — the InstaPay mark is 5:1 and the Vodafone one 4:1. */
+.pay-choice__logo {
+  block-size: 1.5rem;
+  inline-size: auto;
+  max-inline-size: 100%;
+  object-fit: contain;
+}
+
+.pay-choice__label {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.pay-choice__off {
+  font-size: var(--fs-text-xs);
+  color: var(--n-10);
+}
+
+.pay-choice__next {
+  margin-top: 1rem;
+}
+
+/* The way back, from the number screen to the question. Quiet on purpose: it
+   must be findable by the student who picked wrong and invisible to the one who
+   did not — the primary action on that screen is sending the money. */
+.pay-choice__back {
+  font-size: var(--fs-text-sm);
+  color: var(--a-9);
+  font-weight: var(--fw-semibold);
+  align-self: flex-start;
+}
