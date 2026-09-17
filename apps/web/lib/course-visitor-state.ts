@@ -30,6 +30,11 @@ export interface CourseEnrollmentSignal {
    *  below for why that case is deliberately left to the ordinary click flow
    *  rather than guessed at here. */
   lastLessonId: string | null;
+  /** Whether a LIVE grant stands behind the enrollment right now. An
+   *  enrollment row outlives the subscription that paid for it — see the
+   *  field's own note in `EnrollmentSchema` — so this, never the row's mere
+   *  existence, is what may trigger a redirect. */
+  accessActive: boolean;
 }
 
 export interface ResolveCourseVisitorStateInput {
@@ -65,9 +70,19 @@ export function resolveCourseVisitorState({
 }: ResolveCourseVisitorStateInput): CourseVisitorState {
   if (!isSignedIn) return { kind: 'none' };
 
-  if (enrollment) {
-    // Enrolled means a grant already resolved `allowed: true` at some point
-    // — access exists regardless of `lastLessonId`. Without a lesson to name
+  /*
+   * `accessActive`, not the row's existence, and the difference is the whole
+   * reason this check is here.
+   *
+   * A student whose subscription lapsed keeps their enrollment row — nothing
+   * writes `status: 'expired'` — so «has an enrollment» was true for exactly
+   * the student who most needs to stay on this page and press «اشترك».
+   * Redirecting them into a lesson sent them to a 403 instead, and the 403
+   * redirects right back here. `none` is correct for them: the page renders
+   * its price and its subscribe button, and the click flow does the rest.
+   */
+  if (enrollment?.accessActive) {
+    // Access exists regardless of `lastLessonId`. Without a lesson to name
     // yet (first enrollment, never opened), there is nothing for a REDIRECT
     // to point at; the ordinary "نبدأ الكورس" click already resolves this
     // correctly (it re-enrolls, idempotently, and computes the course's

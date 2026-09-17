@@ -72,6 +72,7 @@ export class OutreachLogService {
           id: true,
           kind: true,
           userId: true,
+          dedupeKey: true,
           facts: true,
           createdAt: true,
           conversationId: true,
@@ -171,6 +172,7 @@ interface LogRowSource {
   id: string;
   kind: string;
   userId: string;
+  dedupeKey: string;
   facts: Prisma.JsonValue;
   createdAt: Date;
   conversationId: string;
@@ -200,6 +202,14 @@ function toLogRow(row: LogRowSource): OutreachLogRow {
      * whole page down — `catch` gives the renderer something it can branch on.
      */
     facts: OutreachFactsSchema.safeParse(row.facts).data ?? { kind: 'whatsapp_invite' },
+    /*
+     * The attempt, for the «شوف ورقته» button — and ONLY for `quiz_result`.
+     * `dedupeKey` means something different per kind (a lesson id for a nudge,
+     * a bare marker for the channel invite), so reading it unconditionally
+     * would hand the review popup an id that is not an attempt's and produce a
+     * 404 on a button that should never have been there.
+     */
+    attemptId: row.kind === 'quiz_result' ? row.dedupeKey : null,
     createdAt: sentAt.toISOString(),
     seen: visitorRead !== null && visitorRead >= sentAt,
     replied: lastVisitorMessage !== null && lastVisitorMessage > sentAt,

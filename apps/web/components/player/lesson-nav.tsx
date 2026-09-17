@@ -57,9 +57,47 @@ export function LessonNav({
     setFailed(false);
     try {
       onProgress(await postComplete(lessonId));
-      // Advance immediately — "أنهيت الدرس · التالي" is one gesture, and
-      // making the student find the next link afterwards is the single most
-      // common complaint about these players.
+      /*
+       * Advance immediately — "أنهيت الدرس · التالي" is one gesture, and
+       * making the student find the next link afterwards is the single most
+       * common complaint about these players.
+       *
+       * ⚠️ `router.refresh()` is NOT optional here, and it is not about this
+       * page. It is what invalidates the CLIENT SEGMENT CACHE and the bfcache,
+       * and `next.config.ts` now lets those be reused for 30 seconds
+       * (`staleTimes.dynamic`). This write changes what several OTHER routes
+       * render — the lesson being pushed to, which is gated on THIS one being
+       * complete, plus `/library/<slug>` and `/dashboard`, which would keep
+       * showing the lesson unfinished and the ring where it was.
+       *
+       * The invalidation is a global version bump, not a scope to this route
+       * (`segment-cache/cache.js`), which is exactly why one call here covers
+       * screens this component has never heard of.
+       *
+       * It runs whether or not there is a `next`: finishing the LAST lesson of
+       * a course changes those two screens more than any other completion does.
+       *
+       * ⚠️ OUTSIDE the transition the push uses, and not inside it. React holds
+       * a transition until its work settles, so pairing them would make the
+       * navigation wait on this route's own re-render — the player's most-used
+       * control, blocked on a round trip it does not need. The two enroll
+       * buttons were written that way for one commit and
+       * `login-gated-content.e2e.ts` failed on it: «one click opens the lesson»
+       * timed out at 30 seconds, twice including the retry. `refresh()` runs
+       * its cache invalidation synchronously before it returns, so splitting
+       * them costs nothing and the push stays immediate.
+       *
+       * ⚠️ What it does NOT clear, so nobody reads more into it than it does:
+       * `refreshReducer` invalidates the segment cache "but not the route
+       * cache" — its own comment — and the route cache is what remembers a
+       * pathname's post-redirect `canonicalUrl` for `staleTimes.static`. So a
+       * prefetch that followed this lesson's gate-bounce to `/library` can
+       * still resolve that way for a few minutes. That is unchanged by the new
+       * dynamic stale time (the route cache has always used the static one) and
+       * is a separate piece of work; it is written down here because this
+       * comment is where someone will come looking.
+       */
+      router.refresh();
       if (next) {
         startTransition(() => router.push(`/courses/${courseSlug}/lessons/${next.id}`));
       }
@@ -94,8 +132,25 @@ export function LessonNav({
       : copy.player.markCompleteFinal;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-6">
-      <div className="flex items-center gap-2">
+    /*
+      Two rows on a phone, one from `sm` up.
+
+      The single `flex-wrap` row this replaces only LOOKED right because the
+      finish button was «تم» — six characters. On a lesson that is not finished
+      the label is «خلّصت الدرس», and «الدرس السابق» + «الدرس التالي» + that
+      button is 420px of content in a 328px column: the row wrapped and left the
+      button hanging alone at the inline end, or — before the grid track above
+      was pinned with `min-w-0` — did not wrap at all and pushed the button
+      clean off the screen. That is the state the phone screenshot caught.
+
+      So the split is explicit rather than emergent: the neighbours take a row
+      of their own and go to the two ends of it (two far-apart 40px targets
+      instead of two adjacent ones under the same thumb), and the finish
+      button — the primary action of the whole page — gets the full width
+      underneath. Nothing changes at `sm` and above.
+    */
+    <div className="flex flex-col gap-3 border-t border-line-subtle pt-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="flex items-center justify-between gap-2 sm:justify-start">
         {previous ? (
           <Link href={`/courses/${courseSlug}/lessons/${previous.id}`} className={GHOST_LINK}>
             <ChevronBack />
@@ -121,8 +176,12 @@ export function LessonNav({
           and `justify-between` on the row above would still be spacing against
           it. */}
       {manualComplete ? (
-        <div className="flex flex-col items-end gap-2">
-          <Button onClick={() => void finish()} disabled={saving || isComplete}>
+        <div className="flex flex-col gap-2 sm:items-end">
+          <Button
+            onClick={() => void finish()}
+            disabled={saving || isComplete}
+            className="w-full sm:w-auto"
+          >
             <span className="flex items-center gap-2">
               {isComplete ? <CheckIcon /> : null}
               {isComplete ? copy.player.completed : label}
@@ -137,7 +196,7 @@ export function LessonNav({
             <p
               role="alert"
               aria-live="polite"
-              className="text-[length:var(--fs-text-xs)] text-end"
+              className="text-[length:var(--fs-text-xs)] text-center sm:text-end"
               style={{ color: 'var(--err)' }}
             >
               {copy.player.markFailed}

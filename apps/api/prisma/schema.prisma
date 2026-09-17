@@ -137,7 +137,7 @@ model User {
   questionVersions           QuestionVersion[]
   // Plan 5 — attempts
   quizAttempts               QuizAttempt[]
-  gradedQuestions            AttemptQuestion[]    @relation("AttemptQuestionGrader")
+  gradedQuestions            AttemptQuestion[]       @relation("AttemptQuestionGrader")
   // Slice 4 — in-app notifications.
   notifications              Notification[]
   // Web Push — one row per subscribed browser. `Cascade`: a subscription is
@@ -161,24 +161,29 @@ model User {
   // was queued for. Both `SetNull` on the far side: a deleted account must not
   // take the record of what went out with it, because that record is the only
   // answer to «مين اتبعتله».
-  marketingCampaigns         MarketingCampaign[]  @relation("MarketingCampaignAuthor")
-  marketingMessages          MarketingRecipient[] @relation("MarketingRecipientUser")
+  marketingCampaigns         MarketingCampaign[]     @relation("MarketingCampaignAuthor")
+  marketingMessages          MarketingRecipient[]    @relation("MarketingRecipientUser")
   // Vodafone Cash payment claims — this student's own, and (for an admin)
   // the ones they reviewed. `SetNull` on the reviewer side only: a rejected
   // or approved submission is the record of what a STUDENT claimed, which
   // must survive the reviewing admin's account being deleted.
-  paymentSubmissions         PaymentSubmission[]  @relation("PaymentSubmissionStudent")
-  paymentSubmissionsReviewed PaymentSubmission[]  @relation("PaymentSubmissionReviewer")
+  paymentSubmissions         PaymentSubmission[]     @relation("PaymentSubmissionStudent")
+  paymentSubmissionsReviewed PaymentSubmission[]     @relation("PaymentSubmissionReviewer")
+  // عناوين إنستاباي — the addresses this student has been seen paying from.
+  // `Cascade`: an address is a lookup key for an account, not money history,
+  // and it must not outlive the account it identifies.
+  paymentAddresses           StudentPaymentAddress[]
   // الكتاب الورقي — this student's own orders, and (for an admin) the ones
   // they marked shipped. `SetNull` on the shipper side only, same reasoning
   // as `paymentSubmissionsReviewed`: the order is the record of what a
   // STUDENT asked for, which must survive the shipping admin's account
   // being deleted.
-  bookOrders                 BookOrder[]          @relation("BookOrderStudent")
-  bookOrdersShipped          BookOrder[]          @relation("BookOrderShippedBy")
-  bookOrdersDelivered        BookOrder[]          @relation("BookOrderDeliveredBy")
-  bookOrdersRejected         BookOrder[]          @relation("BookOrderRejectedBy")
-  bookOrdersDeleted          BookOrder[]          @relation("BookOrderDeletedBy")
+  bookOrders                 BookOrder[]             @relation("BookOrderStudent")
+  bookOrdersPrinted          BookOrder[]             @relation("BookOrderPrintedBy")
+  bookOrdersShipped          BookOrder[]             @relation("BookOrderShippedBy")
+  bookOrdersDelivered        BookOrder[]             @relation("BookOrderDeliveredBy")
+  bookOrdersRejected         BookOrder[]             @relation("BookOrderRejectedBy")
+  bookOrdersDeleted          BookOrder[]             @relation("BookOrderDeletedBy")
   // الواجب — the homework this student handed in, and (for an admin) the
   // submissions they marked. `Cascade` on the student side and `SetNull` on
   // the reviewer's, the same split `paymentSubmissions*` makes and for the
@@ -187,13 +192,15 @@ model User {
   // there is no corpus, no ledger and no money in it, only a photograph of one
   // person's exercise book, which is exactly the thing an account deletion is
   // expected to take with it.
-  homeworkSubmissions        HomeworkSubmission[] @relation("HomeworkSubmissionStudent")
-  homeworkReviewed           HomeworkSubmission[] @relation("HomeworkSubmissionReviewer")
+  homeworkSubmissions        HomeworkSubmission[]    @relation("HomeworkSubmissionStudent")
+  homeworkReviewed           HomeworkSubmission[]    @relation("HomeworkSubmissionReviewer")
   /// Ledger rows this account entered — see `Expense.createdBy`.
   expensesCreated            Expense[]
   /// Refunds this account issued — see `Refund.createdBy`. `SetNull` there,
   /// so deleting the admin keeps the money correction and loses only the name.
   refundsIssued              Refund[]
+  /// Permissions this account opened up to a role — see `RolePermissionGrant`.
+  permissionGrantsIssued     RolePermissionGrant[]   @relation("RolePermissionGrantIssuer")
 
   @@unique([email])
   @@map("users")
@@ -629,6 +636,11 @@ enum VideoProvider {
 /// `VideoMirrorStatusSchema` in `@ayman/contracts/video`; the two are asserted
 /// equal in `video-mirror.service.spec.ts` so neither can drift alone.
 enum VideoMirrorStatus {
+  /// An upload session is open and the bytes are still arriving from the
+  /// admin's browser. Only ever set on `provider = upload` rows — a CHECK
+  /// says so, because such a row is invisible to BOTH worker queues and would
+  /// stay dark forever.
+  uploading
   pending
   mirroring
   ready
@@ -1042,6 +1054,39 @@ model Lesson {
   isFreePreview    Boolean @default(false) @map("is_free_preview")
   estimatedSeconds Int     @default(0) @map("estimated_seconds")
 
+  /// «ينزل الساعة ٨» — when this lecture should publish ITSELF.
+  ///
+  /// A SCHEDULE, not an access gate. `LessonPublishSweeper` reads it once a
+  /// minute and flips `isPublished` to true when the moment passes, then
+  /// clears it. Nothing on any read path consults this column, which is the
+  /// whole reason it is shaped this way: `isPublished` stays the single fact
+  /// every catalogue query, outline, player and access check already tests,
+  /// so scheduling adds no second answer to "may this student see it" and no
+  /// new row to the authorization matrix.
+  ///
+  /// ⚠️ Deliberately NOT `visibleFrom`, which sits a few lines below and is
+  /// reserved for a real read-time gate (Global Constraint 17). Overloading
+  /// it would mean that when that gate is finally switched on, every lecture
+  /// this sweeper ever published carries a stale value the gate would then
+  /// start enforcing.
+  ///
+  /// `timestamptz`, unlike `quiz_attempts.deadline_at` — a publish time is a
+  /// wall-clock moment in Cairo that an instructor typed, and storing it with
+  /// its offset is what makes "8pm" mean 8pm after a DST change.
+  publishAt DateTime? @map("publish_at") @db.Timestamptz(3)
+
+  /// A short plain-text summary of the lecture, shown on the lesson page.
+  ///
+  /// Written for AFTER the video: «قوله متشوفش الوصف إلا لما تشوف الدرس كله».
+  /// The student UI renders it collapsed behind a disclosure for that reason —
+  /// it is a recap to check yourself against, and reading it first is reading
+  /// the answers first.
+  ///
+  /// PLAIN TEXT with newlines, exactly like `LessonHomework.body` and for the
+  /// same reason: a paragraph needs no headings, and a rich-text column here
+  /// would add an HTML sink to a field with no use for one.
+  description String? @db.Text
+
   /// Per-lesson stream, same two flags as the course — a course can serve both
   /// and still teach one lecture only to لغات.
   ///
@@ -1102,6 +1147,11 @@ model Lesson {
   quiz                Quiz?
   /// Slice 3's back-relation — one row per sitting at this lesson.
   viewSessions        LessonViewSession[]
+  /// «الامتحان ده على الوحدة ١ ٢ ٣» — the lessons THIS lesson's exam covers.
+  /// Non-empty only on a monthly-exam lesson.
+  coversLessons       ExamCoverage[]       @relation("ExamCoverageExam")
+  /// The inverse: which monthly exams carry this lecture on their syllabus.
+  coveredByExams      ExamCoverage[]       @relation("ExamCoverageCovered")
 
   @@unique([sectionId, position], map: "lessons_section_position_key")
   // Backs `courses_exam_lesson_in_same_course` — the composite FK the
@@ -1114,6 +1164,53 @@ model Lesson {
   @@unique([id, courseId], map: "lessons_id_course_key")
   @@index([courseId, isPublished])
   @@map("lessons")
+  @@schema("app")
+}
+
+/// «امتحان نص الشهر» / «امتحان آخر الشهر» — WHICH LESSONS an exam covers.
+///
+/// The exam itself is an ordinary `Lesson(kind: 'quiz')` carrying an ordinary
+/// `Quiz`, exactly as `Course.examLessonId` already is, and for the reason
+/// `20260802140000_course_exam`'s own header gives: "modelling it as a lesson
+/// rather than as a second kind of quiz owner is what lets the entire quiz
+/// engine apply to it unchanged". Three independent designs proposed relaxing
+/// `quizzes.lesson_id` instead; the decision not to is recorded in
+/// `docs/superpowers/specs/2026-09-08-monthly-exams-honor-board-design.md` §1,
+/// with the thirteen INNER JOINs on `q.lesson_id` that a nullable column would
+/// silently empty.
+///
+/// This table adds the ONE fact that arrangement cannot already express.
+/// It hangs off the exam's LESSON, not its `Quiz`, because both reads (the
+/// student's `/api/me/exams` and the admin list) are keyed on the lesson — and
+/// because a quiz rebuilt from scratch on the same lesson keeps its syllabus.
+model ExamCoverage {
+  examLessonId    String @map("exam_lesson_id") @db.Uuid
+  coveredLessonId String @map("covered_lesson_id") @db.Uuid
+  /// Denormalised from BOTH lessons, and LOAD-BEARING. The two composite FKs in
+  /// the hand-written migration point at `lessons(id, course_id)` — the unique
+  /// index `20260802140000_course_exam` already created — so "an exam only ever
+  /// covers lessons of its own course" is a DATABASE fact rather than a service
+  /// `if`. Same arrangement, and same reason, as
+  /// `courses_exam_lesson_in_same_course`.
+  courseId        String @map("course_id") @db.Uuid
+  /// Reading order of the covered list — what the student sees as «على الدروس:
+  /// ...». Contiguous from 0, rewritten only by `ExamCoverageService.replace`,
+  /// which writes the whole set in one statement.
+  position        Int
+
+  examLesson    Lesson @relation("ExamCoverageExam", fields: [examLessonId], references: [id], onDelete: Cascade)
+  coveredLesson Lesson @relation("ExamCoverageCovered", fields: [coveredLessonId], references: [id], onDelete: Cascade)
+
+  @@id([examLessonId, coveredLessonId])
+  /// ⚠️ Redefined as DEFERRABLE in the hand-written migration, exactly like
+  /// `quiz_slots_quiz_id_paper_position_key`. Prisma cannot express
+  /// deferrability and `migrate dev` will offer to "correct" it away on every
+  /// future run — never accept that. `replace()` rewrites the whole ordered set
+  /// in one statement and needs the deferral to pass through transient
+  /// position collisions.
+  @@unique([examLessonId, position], map: "exam_coverage_exam_position_key")
+  @@index([coveredLessonId])
+  @@map("exam_coverage")
   @@schema("app")
 }
 
@@ -1154,6 +1251,22 @@ model LessonVideo {
   /// `mirroring`" reaper — a worker killed mid-run leaves a row nothing else
   /// would ever pick up again.
   mirrorAt       DateTime?         @map("mirror_at")
+  /// Coarse 0–100, written between encoder passes rather than read out of
+  /// ffmpeg. A transcode is minutes of silence, and an admin watching a
+  /// spinner concludes it has hung; four honest steps beat a smooth bar
+  /// interpolated from nothing.
+  mirrorProgress Int?              @map("mirror_progress")
+
+  /// ── الرفع المباشر ───────────────────────────────────────────────────
+  /// Set only for `provider = upload`: the instructor's own file, before the
+  /// ladder replaced it.
+
+  /// Size of the ORIGINAL upload. Kept after the source object is deleted so
+  /// the admin screen can still say what the lecture arrived as.
+  sourceBytes BigInt? @map("source_bytes")
+  /// The filename the instructor's file had, shown back to them. NEVER part
+  /// of an object key — the key is built from the upload id alone.
+  sourceName  String? @map("source_name")
 
   lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
@@ -1161,6 +1274,10 @@ model LessonVideo {
   /// `ready` is the steady state of every row and indexing it would be an
   /// index of the whole table to find the handful that are not.
   @@index([mirrorStatus, mirrorAt], map: "lesson_videos_mirror_idx")
+  /// The same claim, narrowed by pipeline. The two workers draw from disjoint
+  /// sets and scanning one to find the other is the query this table would
+  /// otherwise get wrong once there are thousands of `ready` rows.
+  @@index([provider, mirrorStatus, mirrorAt], map: "lesson_videos_mirror_provider_idx")
   @@map("lesson_videos")
   @@schema("app")
 }
@@ -1745,15 +1862,19 @@ model PaymentSubmission {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  user       User         @relation("PaymentSubmissionStudent", fields: [userId], references: [id], onDelete: Cascade)
-  course     Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  reviewedBy User?        @relation("PaymentSubmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
-  grant      AccessGrant? @relation(fields: [grantId], references: [id], onDelete: SetNull)
-  term       CourseTerm?  @relation(fields: [termId], references: [id], onDelete: SetNull)
+  user             User              @relation("PaymentSubmissionStudent", fields: [userId], references: [id], onDelete: Cascade)
+  course           Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  reviewedBy       User?             @relation("PaymentSubmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  grant            AccessGrant?      @relation(fields: [grantId], references: [id], onDelete: SetNull)
+  term             CourseTerm?       @relation(fields: [termId], references: [id], onDelete: SetNull)
   /// Money given back against this payment — see `Refund`. Never a negative
   /// `amountCents` on this row: the sale is what it was, and the reversal is
   /// its own dated, explained row in a month of its own.
-  refunds    Refund[]
+  refunds          Refund[]
+  /// The InstaPay transfer that paid for this claim, when the platform
+  /// recognised the sender and approved it with nobody looking. `null` for
+  /// every claim an admin reviewed by hand — see `IncomingTransfer`.
+  incomingTransfer IncomingTransfer?
 
   /// The review queue: pending first, oldest first — a submission review is
   /// first-come-first-served like a support ticket.
@@ -1762,6 +1883,162 @@ model PaymentSubmission {
   /// check `PaymentsService.submit` runs before accepting a new one.
   @@index([userId, courseId, status])
   @@map("payment_submissions")
+  @@schema("app")
+}
+
+/// Where one `IncomingTransfer` row came from.
+///
+/// `notification` is the ONLY source that carries a sender — the InstaPay
+/// push reads «لقد استلمت 250.13 جنيه من someone@instapay», and it is the
+/// only place the platform ever learns an InstaPay address. `sms` is Banque
+/// Misr's own «تم اضافة مبلغ 250EGP الى حساب رقم xxx1734 فى 07-SEP-2026»,
+/// which names no sender and carries no clock time — useful as a
+/// completeness check against the notification feed («the bank says seven
+/// transfers landed today and we hold six»), never as a match on its own.
+/// `manual` is an admin typing a transfer in by hand.
+enum IncomingTransferSource {
+  notification
+  sms
+  manual
+
+  @@map("incoming_transfer_source")
+  @@schema("app")
+}
+
+/// One InstaPay address a student has been seen paying from — «عنوانه».
+///
+/// ## Why this table is the whole feature
+///
+/// An incoming transfer says two things: an amount, and an address like
+/// `moazkoritam@instapay`. That address matches nothing the platform holds —
+/// it is not an email, not a phone, and for a bank-account sender it is an
+/// IBAN the student has never typed. So the platform LEARNS it: the first
+/// payment from an unknown address is reviewed by hand exactly as every
+/// payment used to be, and approving it records the address here. Every later
+/// payment from that address is matched and approved with nobody looking.
+///
+/// The work therefore decays. A cohort's first month is the old manual queue;
+/// by the second, most transfers approve themselves.
+///
+/// ## Several per student, one student per address
+///
+/// `handle` is UNIQUE and `userId` is not. A student may pay from their own
+/// account one month and a parent's the next — both are theirs to be matched
+/// by. The reverse cannot be allowed: one address resolving to two students
+/// is an address that can open the wrong course, so the constraint lives in
+/// the database rather than in a check somebody could forget.
+///
+/// A parent paying for two siblings is the case this deliberately gets wrong,
+/// and it gets it wrong SAFELY: the address binds to whichever child was
+/// approved first, and the other child's transfers match the sibling — so
+/// `TransfersService` requires the amount to match a pending claim of that
+/// same student before it approves anything, and drops to the manual queue
+/// when it does not.
+model StudentPaymentAddress {
+  id     String @id @default(uuid(7)) @db.Uuid
+  userId String @map("user_id")
+
+  /// Lower-cased, exactly as `IncomingTransfer.senderHandle` is — the join
+  /// between the two is a string equality and a stray capital would silently
+  /// send a known payer back to the manual queue.
+  handle String @unique
+
+  /// The transfer whose manual approval taught the platform this address —
+  /// `null` for one an admin entered directly. `SetNull` rather than
+  /// `Cascade`: deleting the evidence must not unlearn the fact.
+  learnedFromTransferId String? @map("learned_from_transfer_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// "Which addresses belong to this student" — the admin student page, and
+  /// the ambiguity check before learning a new one.
+  @@index([userId])
+  @@map("student_payment_addresses")
+  @@schema("app")
+}
+
+/// One transfer that actually landed in the receiving account, as read off
+/// the phone that received it.
+///
+/// ## This is the trusted side of the ledger
+///
+/// A student's uploaded screenshot proves nothing — it is an image they
+/// supplied. This row is the platform's own record that money arrived, and it
+/// is the only thing an automatic approval is ever allowed to act on.
+///
+/// ## How a row gets here
+///
+/// iOS has no way to hand a push notification to an automation, so the
+/// bank's SMS is the feed that runs unattended: a Shortcuts automation fires
+/// on the message and posts its text, with nobody touching the phone. The
+/// InstaPay push is richer (it names the sender) but iOS hands app
+/// notifications to no automation at all, so it can only arrive as a picture
+/// an admin screenshots and shares in. Either way one post can carry several
+/// transfers, so `rawLine` holds the single parsed line this row came from,
+/// not the whole blob.
+///
+/// Nothing is deleted on a failed parse: an unrecognised line is kept as a
+/// row with `amountCents` and `senderHandle` both null so the admin can see
+/// that something arrived the parser could not read.
+model IncomingTransfer {
+  id     String                 @id @default(uuid(7)) @db.Uuid
+  source IncomingTransferSource
+
+  /// Piastres, exactly as stated — 25300 for «253.00 جنيه», and 25013 if a
+  /// sending app ever does manage a fraction. `null` only on a line the
+  /// parser could not read.
+  amountCents Int? @map("amount_cents")
+
+  /// The sender's InstaPay address — `moazkoritam@instapay`, or an IBAN-shaped
+  /// `eg6300010002200000@instapay`. Lower-cased on the way in.
+  ///
+  /// THE identifier. `StudentPaymentAddress` is what turns it into a student,
+  /// and everything automatic about this feature runs through that join.
+  /// `null` for an `sms` row, which names no sender at all and therefore can
+  /// only ever be corroboration.
+  senderHandle String? @map("sender_handle")
+
+  /// The line the parser read, kept verbatim. The evidence behind an
+  /// automatic approval, and the only way to tell a parser bug from a
+  /// genuinely odd transfer.
+  rawLine String @map("raw_line")
+
+  /// When the transfer actually landed, as best the platform can tell. The
+  /// notification list shows «31m ago» rather than a clock time and Live Text
+  /// reads it inconsistently, so this is usually the ingest time, not a
+  /// parsed one — close enough for an admin reading the queue, and never used
+  /// as a matching key.
+  receivedAt DateTime @map("received_at")
+
+  /// What this money paid for — a course subscription, or a printed book
+  /// («الكتب» are bought over the same InstaPay account and identified the
+  /// same way). At most ONE is ever set; both `null` for a transfer nothing
+  /// claimed, which is exactly the row an admin needs to see.
+  ///
+  /// `@unique` on each is the double-settle guard: two ingests of the same
+  /// notification cannot pay for the same thing twice, and it is the database
+  /// that says so.
+  matchedSubmissionId String? @unique @map("matched_submission_id") @db.Uuid
+  matchedBookOrderId  String? @unique @map("matched_book_order_id") @db.Uuid
+
+  matchedSubmission PaymentSubmission? @relation(fields: [matchedSubmissionId], references: [id], onDelete: SetNull)
+  matchedBookOrder  BookOrder?         @relation(fields: [matchedBookOrderId], references: [id], onDelete: SetNull)
+
+  /// An admin saying "I have looked at this and it needs no action" — a
+  /// personal transfer, a refund coming back, a duplicate the parser kept.
+  /// Distinct from matched: nothing was granted.
+  dismissedAt DateTime? @map("dismissed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// The unmatched queue, newest first.
+  @@index([matchedSubmissionId, dismissedAt, receivedAt], map: "incoming_transfers_unmatched_idx")
+  /// The lookup every ingest runs: "is there a live reservation for exactly
+  /// this amount", and the duplicate check that precedes it.
+  @@index([amountCents, senderHandle])
+  @@map("incoming_transfers")
   @@schema("app")
 }
 
@@ -2102,6 +2379,27 @@ model BookOrder {
 
   status BookOrderStatus @default(address_only)
 
+  /// «راح للمطبعة» — this order's copy went into a print run.
+  ///
+  /// The hand-off BEFORE the courier's, and the one the screen could not
+  /// previously see: «أنزّل PDF، أوديه للمطبعة، أضغط الطباعة» — until this
+  /// existed, an order sent to the printer was indistinguishable from one still
+  /// sitting on the desk, and the «مدفوعة» tab could not answer the only
+  /// question asked of it every morning.
+  ///
+  /// NULLABLE, and null is not "unknown": it is «ما راحش للمطبعة», which is a
+  /// real path. A single reprint handed over the counter never goes near a run,
+  /// and `markShipped` still accepts `paid` directly — the same reason
+  /// `deliveredAt` is reachable from `paid` without a `shippedAt`. Inventing a
+  /// print time to satisfy the sequence would put a lie one column over.
+  ///
+  /// No notification fires here, deliberately: paper entering a print shop is
+  /// not news to a student, and a message about it would promise a date the run
+  /// cannot keep. `printedByUserId` is the only record of who sent it — which is
+  /// why `book-order:printing` is an audit action of its own.
+  printedAt       DateTime? @map("printed_at")
+  printedByUserId String?   @map("printed_by_user_id")
+
   /// «اتشحن» — set by `BookOrdersService.markShipped`, an explicit admin
   /// action. Records ONLY that the order shipped; no notification is sent to
   /// the student (the admin handles that himself, outside the platform).
@@ -2161,6 +2459,7 @@ model BookOrder {
 
   user        User?           @relation("BookOrderStudent", fields: [userId], references: [id], onDelete: Cascade)
   course      Course?         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  printedBy   User?           @relation("BookOrderPrintedBy", fields: [printedByUserId], references: [id], onDelete: SetNull)
   shippedBy   User?           @relation("BookOrderShippedBy", fields: [shippedByUserId], references: [id], onDelete: SetNull)
   deliveredBy User?           @relation("BookOrderDeliveredBy", fields: [deliveredByUserId], references: [id], onDelete: SetNull)
   rejectedBy  User?           @relation("BookOrderRejectedBy", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
@@ -2173,6 +2472,12 @@ model BookOrder {
   /// The admin list: paid-not-yet-shipped is the default view of `/admin/books`
   /// and the Excel export's own filter — oldest first, first-come-first-served,
   /// same convention as the payment review queue.
+  /// The InstaPay transfer that paid for this order, when the platform
+  /// recognised the sender and settled it without anybody looking. `null` for
+  /// an order paid the old way — the student uploaded a screenshot — which is
+  /// still every order until the sender's address has been learned once.
+  matchedTransfer IncomingTransfer?
+
   @@index([status, createdAt])
   /// "Has this student got an order already sitting for this course" — not
   /// enforced as a hard uniqueness constraint (a lost book is a real reason
@@ -2187,6 +2492,7 @@ model BookOrder {
 enum BookOrderStatus {
   address_only
   paid
+  printing
   shipped
   delivered
   rejected
@@ -2532,6 +2838,33 @@ model Quiz {
   openFrom        DateTime? @map("open_from")
   openUntil       DateTime? @map("open_until")
 
+  /// «اللي امتحنوا بعد الوقت المسموح بيه» — the deadline that MATTERED, kept
+  /// after the window itself is reopened.
+  ///
+  /// A monthly exam closes, and then the students who missed it need to sit
+  /// it. The only way to let them is to reopen the window — which erases the
+  /// one fact that separates them from everyone who sat it on time. This
+  /// column is that fact, preserved: `openUntil` goes back to null so the
+  /// paper is sittable, and this keeps the original closing instant so a
+  /// sitting started after it can still be told apart.
+  ///
+  /// ## Derived, never snapshotted onto the attempt
+  ///
+  /// «late» is `attempt.startedAt > lateAfter`, computed at read time. A
+  /// boolean on `quiz_attempts` would be the usual choice here — B7 snapshots
+  /// nearly everything else onto the attempt — and it is wrong for this one:
+  /// the papers that need flagging were sat BEFORE the flag existed, and only
+  /// a derived rule reaches backwards over them. Correcting the date later
+  /// re-files every affected paper too, which is what an instructor expects a
+  /// date field to do.
+  ///
+  /// ## startedAt, not submittedAt
+  ///
+  /// A student who opened the paper at 19:50 and handed it in at 21:20 sat it
+  /// on time and used their ninety minutes. Lateness is about when you walked
+  /// in.
+  lateAfter DateTime? @map("late_after") @db.Timestamptz(3)
+
   /// Offers ONE extra sitting, drawn from the `improvement` paper, with the
   /// HIGHER of the two scores counting. Only ever true on a course's final
   /// exam — `QuizBuilderService` refuses to set it on any other lesson.
@@ -2748,6 +3081,34 @@ model QuizAttempt {
   gradeOutOf       Decimal      @map("grade_out_of") @db.Decimal(10, 4)
   passPercent      Decimal      @map("pass_percent") @db.Decimal(5, 2)
 
+  /// «أقيّم كل واحد عشان أطلّع الأول» — the instructor's own 1..5 judgement of
+  /// this paper, beyond what the score says.
+  ///
+  /// It exists because the score cannot settle the question he actually asks:
+  /// ten students reach 100/100 on a monthly exam and only one of them can be
+  /// الأول. The mark measures whether the answers were right; this measures
+  /// how they were written, and it is the tiebreak the honour board orders on.
+  ///
+  /// Nullable, and null is the ordinary state: most papers are never rated.
+  /// CHECKed 1..5 in the migration rather than left open, so a stray 50 from a
+  /// mistyped field cannot silently outrank every real rating.
+  instructorRating Int? @map("instructor_rating") @db.SmallInt
+
+  /// When this paper was put on «لوحة الشرف», or null for the papers that are
+  /// not on it — which is almost all of them.
+  ///
+  /// A TIMESTAMP, not a boolean, for two things a boolean cannot give: the
+  /// board has a stable secondary order (who was added first) without a second
+  /// column, and "when did this student go up" is answerable later without an
+  /// audit-log crawl.
+  ///
+  /// ⚠️ Putting a paper here publishes the student's NAME AND AVATAR on the
+  /// public landing page. That is why it is an explicit act with its own
+  /// column and its own admin control, and never derived from the score: a
+  /// board that filled itself would publish a child's photo because they did
+  /// well on a quiz, which is not a decision code gets to make.
+  honorBoardAt DateTime? @map("honor_board_at") @db.Timestamptz(3)
+
   quiz      Quiz              @relation(fields: [quizId], references: [id], onDelete: Cascade)
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   questions AttemptQuestion[]
@@ -2833,6 +3194,57 @@ model AttemptEvent {
 /// packages/contracts on the way in and on the way out; keeping it as jsonb
 /// means adding a settings field is a schema change in TypeScript, not a
 /// migration.
+/// A permission opened up to a role at runtime, on top of the baseline in
+/// `apps/api/src/auth/permissions.ts`.
+///
+/// ## Why a table and not a bigger constant
+///
+/// `ROLE_PERMISSIONS.owner` is a fixed list compiled into the image, and it has
+/// to be: it is what an instructor can do before anybody decides anything, and
+/// a default that lives in the database cannot exist on the first boot that
+/// creates the database. But «this feature is ready, open it for him» is a
+/// decision made months after that image shipped, by a person, on one
+/// deployment — which is a row, not a release.
+///
+/// ## Additive only, by construction
+///
+/// There is no `revoked` column and no way to express "take this away". A row
+/// here can only ADD to the baseline (`roleHasPermission` checks the baseline
+/// first and returns early). Subtraction was left out deliberately: a row that
+/// silently removed `course:read` from an instructor would present as a broken
+/// platform, and the person debugging it would be looking at the code.
+///
+/// To close a feature again, delete the row.
+///
+/// ## Not scoped to a tenant, because the database already is
+///
+/// Every instructor runs their own deployment against their own database (see
+/// `docs/runbooks/new-tenant.md`), so «this stack's owner may now see payments»
+/// is one row in that stack's database and reaches nobody else. A `tenantId`
+/// here would be a column that is the same value in every row of every
+/// database.
+model RolePermissionGrant {
+  /// The role being opened up. A plain string, matching `users.role` — see the
+  /// note there for why the role column is not an enum.
+  role       String
+  /// A `resource:action` string from the catalogue. Validated against
+  /// `grantablePermissions()` before it is written, never on read: a
+  /// permission that is retired from the catalogue must not stop the API from
+  /// booting, and `roleHasPermission` simply never matches it.
+  permission String
+
+  grantedAt       DateTime @default(now()) @map("granted_at")
+  /// `SetNull`: deleting the operator who opened a feature must not silently
+  /// close it again. The grant outlives its issuer, same rule as `AccessGrant`.
+  grantedByUserId String?  @map("granted_by_user_id")
+  grantedBy       User?    @relation("RolePermissionGrantIssuer", fields: [grantedByUserId], references: [id], onDelete: SetNull)
+
+  @@id([role, permission])
+  @@index([role])
+  @@map("role_permission_grants")
+  @@schema("app")
+}
+
 model SiteSetting {
   id        Int      @id @default(1)
   data      Json
@@ -3029,6 +3441,8 @@ enum HomeBlockType {
   books
   instructor
   yearTracks
+  /// «لوحة الشرف» — the honour board. Placement-only, like the two above.
+  honorBoard
   about
   stats
   testimonials
@@ -3839,6 +4253,14 @@ model MarketingCampaign {
 
   startedAt   DateTime? @map("started_at")
   finishedAt  DateTime? @map("finished_at")
+  /// Why the runner paused this campaign on its own, when it did.
+  ///
+  /// NULL for a campaign a human paused — that needs no explanation, they
+  /// pressed the button. This exists for the pauses nobody asked for, and
+  /// above all for the one that matters: «بعتنا كذا رسالة ومحدش استلم ولا
+  /// واحدة». A campaign that stops itself and cannot say why reads as a bug
+  /// in the runner, which is how an operator learns to press resume.
+  pausedReason String?  @map("paused_reason") @db.VarChar(200)
   createdById String?   @map("created_by_id")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
@@ -3878,6 +4300,21 @@ model MarketingRecipient {
   /// Truncated device error, for the failures list. Never shown to a student.
   error      String?                 @db.VarChar(300)
 
+  /// WhatsApp's own id for the message, so a delivery receipt arriving later —
+  /// out of band, on its own connection — can find the row that sent it. The
+  /// sidecar has always returned this and the runner used to drop it.
+  messageId   String?   @map("message_id") @db.VarChar(64)
+  /// When WhatsApp said the message reached a DEVICE, not merely its servers.
+  ///
+  /// ⚠️ `status = 'sent'` IS NOT DELIVERY, and reading it as such is the bug
+  /// this column exists to make impossible. `sent` records that
+  /// `sock.sendMessage` resolved — which is one grey tick, the server taking
+  /// custody. A campaign in which WhatsApp accepted every message and
+  /// delivered none looked byte-identical to a perfect run: «٧٤ من ٧٤ · اتبعت،
+  /// ٠ فشل». This is the second tick, and it is the only column that can tell
+  /// the two apart.
+  deliveredAt DateTime? @map("delivered_at")
+
   campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   user     User?             @relation("MarketingRecipientUser", fields: [userId], references: [id], onDelete: SetNull)
 
@@ -3887,6 +4324,8 @@ model MarketingRecipient {
   @@unique([campaignId, phone])
   /// The runner's only query: the next pending row of a running campaign.
   @@index([campaignId, status, position])
+  /// The receipt route's only query: which row sent this WhatsApp message id.
+  @@index([messageId])
   @@map("marketing_recipients")
   @@schema("app")
 }

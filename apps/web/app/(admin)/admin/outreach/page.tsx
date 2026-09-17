@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { AttemptReviewDialog } from './attempt-review-dialog';
 import { Check, Eye, MessageSquareReply } from 'lucide-react';
 import { Card, CardBody, CardHeader, CardTitle } from '@ayman/ui';
 import { cn } from '@ayman/ui/lib/cn';
@@ -300,12 +301,20 @@ function SentMessage({ row }: { row: OutreachLogRow }) {
         <MessageBody body={row.body} />
       </div>
 
-      <Link
-        href={`/admin/inbox/${row.conversationId}`}
-        className="mt-3 inline-flex min-h-11 items-center text-[length:var(--fs-text-sm)] text-accent-text hover:underline"
-      >
-        {c.openThread}
-      </Link>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <Link
+          href={`/admin/inbox/${row.conversationId}`}
+          className="inline-flex min-h-11 items-center text-[length:var(--fs-text-sm)] text-accent-text hover:underline"
+        >
+          {c.openThread}
+        </Link>
+
+        {/* Only a `quiz_result` row has a paper behind it — every other kind
+            carries a `dedupeKey` that is not an attempt id, so the API sends
+            `null` and the button is simply absent rather than present and
+            404ing. */}
+        {row.attemptId ? <AttemptReviewDialog attemptId={row.attemptId} /> : null}
+      </div>
     </li>
   );
 }

@@ -1,3 +1,4 @@
+import { copy, formatCopy } from '@ayman/contracts';
 /**
  * EGP cents → a whole-pound Arabic string with Western digits — the same
  * `-u-nu-latn` convention `formatNotificationTime` and `devices-list.tsx` use
@@ -74,4 +75,47 @@ export function isFreeCourse(course: {
     course.quarterlyPriceCents === null &&
     course.yearlyPriceCents === null
   );
+}
+
+/**
+ * The cheapest way in, as the card's badge phrases it — «١٥٠ ج / الشهر», or
+ * «مجاني بالكامل» when nothing is on sale.
+ *
+ * ## Why it moved out of `course-card.tsx`
+ *
+ * Because the card was the only surface that had it. Every machine-readable
+ * index — `/courses.md`, all three `/years/*.md`, `/llms.txt` and the WebMCP
+ * `search_courses` tool — rendered the free foundation course in exactly the
+ * same shape as the 150 ج/شهر ones, so «الكورس بكام؟» and «فيه حاجة أجربها من
+ * غير فلوس؟» could not be answered from any of them. The HTML page even lets a
+ * human FILTER for free courses while the markdown twin of that same page
+ * could not tell them apart.
+ *
+ * The ladder is monthly → quarterly → yearly → free, not a list of every plan:
+ * a badge answers "from how much", and the course page states the rest.
+ *
+ * ⚠️ `CatalogCourse` carries no `terms`, so a course sold ONLY by the term
+ * reads as free here. That is not new exposure — the card and
+ * `courseListJsonLd` have always had it — but it is the reason this must not
+ * become the site's definition of "free": `isFreeCourse` below stays the one
+ * the «المجاني بس» filter uses, and the detail page computes its own `priced`
+ * with the terms in hand.
+ */
+export function coursePriceBadge(course: {
+  monthlyPriceCents: number | null;
+  quarterlyPriceCents: number | null;
+  yearlyPriceCents: number | null;
+}): string {
+  if (course.monthlyPriceCents !== null) {
+    return formatCopy(copy.course.priceMonthly, { price: formatEGP(course.monthlyPriceCents) });
+  }
+  if (course.quarterlyPriceCents !== null) {
+    return formatCopy(copy.course.priceQuarterly, { price: formatEGP(course.quarterlyPriceCents) });
+  }
+  if (course.yearlyPriceCents !== null) {
+    return formatCopy(copy.course.priceYearly, { price: formatEGP(course.yearlyPriceCents) });
+  }
+  // The LIST page's own word, not the detail page's sentence — a second
+  // wording of one fact is a wording that will drift.
+  return copy.landing.courseFree;
 }

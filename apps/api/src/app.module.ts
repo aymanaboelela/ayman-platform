@@ -31,6 +31,7 @@ import { StudentsModule } from './modules/admin/students/students.module';
 import { AdminTaxonomyModule } from './modules/admin/taxonomy/admin-taxonomy.module';
 import { MediaModule } from './modules/media/media.module';
 import { FlagsModule } from './modules/admin/flags/flags.module';
+import { RolesModule } from './modules/admin/roles/roles.module';
 import { NavigationModule } from './modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from './modules/admin/home-blocks/home-blocks.module';
 import { MarketingModule } from './modules/marketing/marketing.module';
@@ -142,6 +143,7 @@ import { HomeworkModule } from './modules/homework/homework.module';
     AdminTaxonomyModule,
     MediaModule,
     FlagsModule,
+    RolesModule,
     NavigationModule,
     HomeBlocksModule,
     MarketingModule,

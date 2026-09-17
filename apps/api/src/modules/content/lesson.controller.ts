@@ -16,6 +16,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { extractYouTubeId, type VideoEmbedStatus } from '@ayman/contracts/video';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { LessonService } from './lesson.service';
+import { VideoUploadService } from '../video-mirror/video-upload.service';
 import { YouTubeDurationService } from './youtube-duration.service';
 import { SetHomeworkDto } from '../homework/homework.dto';
 import {
@@ -23,7 +24,10 @@ import {
   CreateLessonDto,
   ReorderDto,
   SetLessonTextDto,
+  AbortVideoUploadDto,
+  CompleteVideoUploadDto,
   SetLessonVideoDto,
+  StartVideoUploadDto,
   UpdateLessonDto,
   UpdateResourceDto,
 } from './dto/lesson.dto';
@@ -34,6 +38,7 @@ export class LessonController {
   constructor(
     private readonly lessons: LessonService,
     private readonly youtube: YouTubeDurationService,
+    private readonly uploads: VideoUploadService,
   ) {}
 
   /**
@@ -127,6 +132,49 @@ export class LessonController {
   @Post('lessons/:id/video/mirror')
   remirrorVideo(@Param('id') id: string) {
     return this.lessons.remirrorVideo(id);
+  }
+
+  /* ── الرفع المباشر ───────────────────────────────────────────────────────
+   *
+   * Three endpoints, and not one of them carries a video byte. The browser is
+   * handed pre-signed URLs and sends the parts straight to the bucket; these
+   * open the session, seal it, and cancel it.
+   *
+   * All on `lesson:write` — the same permission as pasting a YouTube link,
+   * because it is the same act. A separate permission would mean a role that
+   * can replace a lecture with a link but not with a file, which describes
+   * nobody.
+   */
+  @RequirePermission('lesson:write')
+  @Post('lessons/:id/video/upload')
+  startVideoUpload(@Param('id') id: string, @Body() body: StartVideoUploadDto) {
+    return this.uploads.start(id, body);
+  }
+
+  @RequirePermission('lesson:write')
+  @Post('lessons/:id/video/upload/complete')
+  completeVideoUpload(@Param('id') id: string, @Body() body: CompleteVideoUploadDto) {
+    return this.uploads.complete(id, body);
+  }
+
+  @RequirePermission('lesson:write')
+  @Post('lessons/:id/video/upload/abort')
+  abortVideoUpload(@Param('id') id: string, @Body() body: AbortVideoUploadDto) {
+    return this.uploads.abort(id, body);
+  }
+
+  /**
+   * Polled by the admin screen while the encode runs.
+   *
+   * A read, so `lesson:read` would be defensible — but it reports the encoder
+   * error verbatim, which is a server-side diagnostic, and it is only ever
+   * called by the screen that just started the upload. `lesson:write` costs
+   * nothing here and keeps the diagnostic with the people who can act on it.
+   */
+  @RequirePermission('lesson:write')
+  @Get('lessons/:id/video/upload/status')
+  videoUploadStatus(@Param('id') id: string) {
+    return this.uploads.status(id);
   }
 
   @RequirePermission('lesson:write')

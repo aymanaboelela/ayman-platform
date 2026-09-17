@@ -106,6 +106,27 @@ export function CourseEntry({
       // the server owns that decision, and
       // `(app)/courses/[slug]/lessons/[lessonId]` redirects to `/library/[slug]`
       // rather than 404ing, so they land on the outline that explains why.
+      /*
+       * ⚠️ NO `router.refresh()` on this path, and it was tried twice — once
+       * paired with the push in a transition, once split from it. Both broke
+       * `login-gated-content.e2e.ts`'s «one click opens the lesson», on two
+       * shards, with a 30-second `toHaveURL` timeout on the click this button
+       * exists for.
+       *
+       * The reason is specific to THIS route, and it is not a race worth
+       * tuning. `refresh()` re-requests the CURRENT route, and the current
+       * route is `(site)/courses/:slug` — which `proxy.ts`'s
+       * `resolveEnrolledCourseRedirect` answers with a 307 to `/library/:slug`
+       * for a student who has an enrollment. The enroll that just succeeded is
+       * what creates one. So the refresh does not refresh: it navigates, to
+       * somewhere nobody asked to go, racing the push to the lesson.
+       *
+       * The cost of leaving it out is bounded and cosmetic: `/dashboard` and
+       * the `/library` list can be up to `staleTimes.dynamic` behind on a
+       * course joined seconds ago. The student is being taken into the lesson,
+       * not to either of those. `next.config.ts` states the general rule and
+       * this is its one documented exception.
+       */
       router.push(destination);
     } catch (caught) {
       // 401 and ONLY 401 means "no session". A 403 here would be CSRF — which

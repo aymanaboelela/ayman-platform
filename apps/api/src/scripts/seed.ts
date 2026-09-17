@@ -2,15 +2,18 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { FLAG_DECLARATIONS } from '@ayman/contracts/admin/flags';
 import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
-import {
-  OFFICIAL_PROFILES,
-  OFFICIAL_WHATSAPP_CHANNEL,
-  OFFICIAL_WHATSAPP_E164,
-} from '@ayman/contracts/site-profiles';
 import { copy } from '@ayman/contracts/copy';
 import { PrismaClient, type Region } from '../generated/prisma/client';
 import { GOVERNORATES } from './seed-data/governorates';
+import {
+  SEED_BOOK_COVERS,
+  readSeedBookCover,
+  type SeedBookCover,
+} from './seed-data/book-covers/index';
+import { LocalDiskStorage } from '../modules/media/storage/local-disk.storage';
+import { loadEnv } from '../config/env';
 import { SITE_SETTINGS_ID } from '../modules/admin/admin.constants';
+import { TENANT_CONTACT_SEED } from './seed-data/tenant-contact';
 
 // Prisma 7 requires a driver adapter at construction time (see Task 8's
 // prisma.service.ts) — bare `new PrismaClient()` throws. Seeding is pure DML
@@ -467,16 +470,16 @@ async function main(): Promise<void> {
 
     const contact = {
       ...current.contact,
-      youtube: current.contact.youtube ?? OFFICIAL_PROFILES.youtube,
-      instagram: current.contact.instagram ?? OFFICIAL_PROFILES.instagram,
-      tiktok: current.contact.tiktok ?? OFFICIAL_PROFILES.tiktok,
-      facebook: current.contact.facebook ?? OFFICIAL_PROFILES.facebook,
+      youtube: current.contact.youtube ?? TENANT_CONTACT_SEED.youtube,
+      instagram: current.contact.instagram ?? TENANT_CONTACT_SEED.instagram,
+      tiktok: current.contact.tiktok ?? TENANT_CONTACT_SEED.tiktok,
+      facebook: current.contact.facebook ?? TENANT_CONTACT_SEED.facebook,
       // Supplied 2026-08-16, so no longer in the "cannot be guessed" list two
       // paragraphs up. Same fill-if-empty rule as the four above: an admin who
       // edits either one in /admin/settings keeps their value through every
       // subsequent boot.
-      whatsappChannel: current.contact.whatsappChannel ?? OFFICIAL_WHATSAPP_CHANNEL,
-      whatsapp: current.contact.whatsapp ?? OFFICIAL_WHATSAPP_E164,
+      whatsappChannel: current.contact.whatsappChannel ?? TENANT_CONTACT_SEED.whatsappChannel,
+      whatsapp: current.contact.whatsapp ?? TENANT_CONTACT_SEED.whatsapp,
     };
 
     const next = SiteSettingsSchema.parse({ ...current, seo, contact });
@@ -492,7 +495,105 @@ async function main(): Promise<void> {
     }
   }
 
+  await seedBookCovers();
+
   console.log('Seed complete.');
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * أغلفة كتب أولى بكالوريا — بتتحط مرة واحدة، وبتفضل قابلة للتغيير.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * See `seed-data/book-covers/index.ts` for why the covers ship as files rather
+ * than as an upload somebody did once on production.
+ *
+ * ## Three writes, each with its own guard, and none of them overwrites a human
+ *
+ *   1. The OBJECT. `LocalDiskStorage.put` opens with `wx`, so a second boot
+ *      throws `EEXIST` and the bytes are never rewritten. That is the intended
+ *      outcome, not an error — it is caught and ignored, and any other failure
+ *      is re-thrown.
+ *   2. The `media_assets` ROW, so the cover is visible in `/admin/media` and can
+ *      be found, renamed or replaced like any other asset. `createMany` with
+ *      `skipDuplicates`, keyed on the pinned id.
+ *   3. `books.cover_key` — and ONLY when it still points at the COURSE's cover,
+ *      which is what `20260916000200_year1_books` copied in as a placeholder.
+ *      The moment a human uploads a different cover from the catalogue screen,
+ *      that condition stops matching and this seed leaves the row alone
+ *      forever. Same fill-if-empty rule the settings block above follows, and
+ *      for the same reason: this runs on every container start, and a seed that
+ *      re-asserts its own value is a seed that undoes the admin's work at 3am.
+ *
+ * ## Why it never fails the boot
+ *
+ * A missing media volume, a read-only mount, a file that did not make it into
+ * the image — none of those is a reason for the API not to start. The cover
+ * falls back to the course's, which is what the rows already carry, and the
+ * failure is logged where the deploy log will show it.
+ */
+async function seedBookCovers(): Promise<void> {
+  let storage: LocalDiskStorage;
+  try {
+    storage = new LocalDiskStorage(loadEnv(process.env).MEDIA_ROOT);
+  } catch (error) {
+    console.warn('Skipped book covers — no media root:', error);
+    return;
+  }
+
+  for (const cover of SEED_BOOK_COVERS) {
+    try {
+      await installBookCover(storage, cover);
+    } catch (error) {
+      console.warn(`Skipped cover for ${cover.bookSlug}:`, error);
+    }
+  }
+}
+
+async function installBookCover(storage: LocalDiskStorage, cover: SeedBookCover): Promise<void> {
+  const book = await prisma.book.findUnique({
+    where: { slug: cover.bookSlug },
+    select: { id: true, coverKey: true, course: { select: { coverKey: true } } },
+  });
+  /* No book, no cover. The row is created by a migration, so this only happens
+     on a database that has not run it yet — and inventing an orphaned object
+     for a book that may never exist is worse than doing nothing. */
+  if (!book) return;
+
+  const bytes = await readSeedBookCover(cover);
+
+  try {
+    await storage.put(cover.storageKey, bytes);
+  } catch (error) {
+    /* `wx` — already there, which is every boot after the first. Anything else
+       is a real storage failure and belongs in the caller's log. */
+    if ((error as NodeJS.ErrnoException)?.code !== 'EEXIST') throw error;
+  }
+
+  await prisma.mediaAsset.createMany({
+    data: [
+      {
+        id: cover.assetId,
+        storageKey: cover.storageKey,
+        filename: cover.filename,
+        mime: 'image/webp',
+        sizeBytes: bytes.byteLength,
+        width: 1000,
+        height: 1500,
+        altAr: cover.altAr,
+      },
+    ],
+    skipDuplicates: true,
+  });
+
+  /* ⚠️ Only while the book is still wearing its COURSE's cover — the
+     placeholder the migration copied in. `null` counts too: a book whose course
+     had no cover either. Anything else is a human's choice and is left alone. */
+  const isPlaceholder = book.coverKey === null || book.coverKey === book.course?.coverKey;
+  if (!isPlaceholder) return;
+
+  await prisma.book.update({ where: { id: book.id }, data: { coverKey: cover.storageKey } });
+  console.log(`Seeded cover for ${cover.bookSlug}.`);
 }
 
 main()

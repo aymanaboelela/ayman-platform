@@ -6,6 +6,7 @@ import {
   type AssistantNodeId,
 } from '@ayman/contracts/assistant/script';
 import type { CatalogCourse } from '@ayman/contracts/catalog';
+import type { BookShippingRates } from '@ayman/contracts/books';
 import type { AssistantFacts, BookFact, CourseFact } from './assistant-facts.service';
 
 /**
@@ -221,16 +222,30 @@ function egp(cents: number): string {
 }
 
 /** «الشحن 65 جنيه», or the word for free — never a bare «0 جنيه». */
-function shipping(cents: number): string {
+function shipping(rates: BookShippingRates): string {
   /*
-   * A zero fee is a chosen configuration, not a missing value, and
-   * `formatShipping` on the web side exists for exactly this: `0 جنيه` reads
-   * as a number that failed to load. Said in words here for the same reason,
-   * and the two must not disagree.
+   * ⚠️ It has to name the ZONES now. «الشحن ٨٠ جنيه» to a student in أسوان is a
+   * wrong number said confidently, which is the one failure this whole file
+   * exists to prevent — and المساعد's answer is read VERBATIM, so a
+   * single-number sentence cannot be qualified later.
+   *
+   * A zero fee is still a chosen configuration and not a missing value —
+   * `formatShipping` on the web side exists for exactly that, because «٠ جنيه»
+   * reads as a number that failed to load. All three zero means delivery really
+   * is free everywhere; one zero among three is a real zone that costs nothing,
+   * and the list says so rather than hiding it.
    */
-  return cents === 0
-    ? 'الشحن مجاني على أي أوردر.'
-    : `الشحن ${egp(cents)} على الأوردر كله مرة واحدة مهما كان عدد الكتب، مش على كل كتاب لوحده.`;
+  if (rates.cairo_giza === 0 && rates.delta === 0 && rates.far === 0) {
+    return 'الشحن مجاني على أي أوردر.';
+  }
+  const zone = (cents: number) => (cents === 0 ? 'مجاني' : egp(cents));
+  return [
+    'الشحن على حسب المحافظة:',
+    `- القاهرة والجيزة: ${zone(rates.cairo_giza)}`,
+    `- وجه بحري (الإسكندرية والدلتا والقناة): ${zone(rates.delta)}`,
+    `- الصعيد وسيناء والبحر الأحمر ومطروح والوادي الجديد: ${zone(rates.far)}`,
+    'والشحن بيتحسب على الأوردر كله مرة واحدة مهما كان عدد الكتب، مش على كل كتاب لوحده.',
+  ].join('\n');
 }
 
 /** One shelf line — title, price, the discount if there is one, and its course. */
@@ -310,7 +325,7 @@ export function priceEntries(facts: AssistantFacts): KnowledgeEntry[] {
     facts.books.length === 0
       ? 'مفيش كتب معروضة للبيع دلوقتي.'
       : `أسعار الكتب المتاحة دلوقتي:\n${facts.books.map(bookLine).join('\n')}\n${shipping(
-          facts.shippingCents,
+          facts.shippingRates,
         )}`;
 
   const courses =
@@ -323,7 +338,7 @@ export function priceEntries(facts: AssistantFacts): KnowledgeEntry[] {
   return [
     { id: 'livePriceBooks', question: 'الكتاب بكام؟', answer: books },
     { id: 'livePriceCourses', question: 'الاشتراك بكام؟', answer: courses },
-    { id: 'livePriceShipping', question: 'الشحن بكام؟', answer: shipping(facts.shippingCents) },
+    { id: 'livePriceShipping', question: 'الشحن بكام؟', answer: shipping(facts.shippingRates) },
   ];
 }
 

@@ -17,6 +17,7 @@ vi.mock('./use-video-heartbeat', () => ({
 const { VideoLesson } = await import('./video-lesson');
 
 const VIDEO: PlayerVideo = {
+  provider: 'youtube',
   youtubeId: 'WndSPGcPmfM',
   durationSeconds: 3696,
   posterUrl: null,
@@ -30,6 +31,21 @@ const MIRRORED: PlayerVideo = {
   ...VIDEO,
   mirror: { hlsUrl: 'https://video.example.test/v/WndSPGcPmfM/master.m3u8', maxHeight: 1080 },
 };
+
+/** A lecture uploaded to us — no YouTube id, because there is no YouTube video. */
+const UPLOADED: PlayerVideo = {
+  provider: 'upload',
+  youtubeId: null,
+  durationSeconds: 3696,
+  posterUrl: null,
+  mirror: {
+    hlsUrl: 'https://video.example.test/v/0123456789abcdef0123456789abcdef/master.m3u8',
+    maxHeight: 1080,
+  },
+};
+
+/** The same upload, while the encoder still has it. */
+const PROCESSING: PlayerVideo = { ...UPLOADED, mirror: null };
 
 function renderPlayer() {
   return render(
@@ -232,5 +248,64 @@ describe('VideoLesson with a mirror', () => {
     const { container } = renderMirrored();
     expect(container.querySelector('video')).toBeNull();
     expect(screen.getByRole('button', { name: new RegExp(copy.player.play) })).toBeTruthy();
+  });
+
+  /* ── الرفع المباشر ─────────────────────────────────────────────────────
+   *
+   * A lecture uploaded to us exists on our origin and NOWHERE else. Every
+   * YouTube affordance the component grew over its first year is a promise of
+   * a video that was never uploaded there, so each one has to be absent —
+   * not merely unused.
+   */
+
+  function renderUpload(video: PlayerVideo) {
+    return render(
+      <VideoLesson
+        lessonId="0198c3a2-0000-7000-8000-000000000001"
+        video={video}
+        title="How AI Works"
+        resumeAt={0}
+        onProgress={() => {}}
+        onError={() => {}}
+      />,
+    );
+  }
+
+  it('plays an uploaded lecture from our origin', async () => {
+    const { container } = renderUpload(UPLOADED);
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {});
+
+    expect(container.querySelector('video')?.getAttribute('src')).toBe(UPLOADED.mirror?.hlsUrl);
+    expect(loadYouTubeIframeApi).not.toHaveBeenCalled();
+  });
+
+  it('offers no YouTube link anywhere for an uploaded lecture', async () => {
+    const { container } = renderUpload(UPLOADED);
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {});
+
+    const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href') ?? '');
+    expect(hrefs.some((href) => href.includes('youtube.com'))).toBe(false);
+  });
+
+  /*
+   * The window right after an instructor uploads. Before this branch existed
+   * the poster showed an ordinary play button over a playlist URL that 404s,
+   * which is the spinning grey box this whole feature was built to end —
+   * reintroduced, for the few minutes the encoder needs.
+   */
+  it('says the lecture is being prepared instead of offering a dead play button', () => {
+    renderUpload(PROCESSING);
+    expect(screen.getByText(copy.player.videoProcessing)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: new RegExp(copy.player.play) })).toBeNull();
+  });
+
+  it('does not fetch anything while the lecture is still being prepared', async () => {
+    const { container } = renderUpload(PROCESSING);
+    await act(async () => {});
+    expect(container.querySelector('video')).toBeNull();
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(loadYouTubeIframeApi).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,9 @@
 import { copy } from '@ayman/contracts';
+import {
+  MARKDOWN_ROUTE_PATTERNS,
+  STATIC_MARKDOWN_ROUTES,
+  markdownTwinPath,
+} from '@/lib/agents/markdown-routes';
 import { AGENT_DISCOVERY_PATHS, PUBLIC_API_ENDPOINTS } from '@/lib/agents/discovery';
 import { SITE_URL } from '@/lib/seo/jsonld';
 
@@ -72,6 +77,23 @@ is the platform, "${copy.site.instructor}" is the instructor.
 `,
 };
 
+/**
+ * The twin table, GENERATED from the routing module rather than written out.
+ *
+ * ⚠️ It was written out, and it went stale: `/books.md`, `/news.md` and
+ * `/news/{slug}.md` were all live and in none of the six hand-copied rows, so
+ * the skill file published for agents hid the three documents most worth
+ * reading. A table built from `STATIC_MARKDOWN_ROUTES` and
+ * `MARKDOWN_ROUTE_PATTERNS` cannot drift from what the router actually serves.
+ *
+ * `markdownTwinPath` handles `/` → `/index.md`; the patterns take a plain
+ * suffix because a `{slug}` placeholder is not a path that function can parse.
+ */
+const TWIN_TABLE = [
+  ...STATIC_MARKDOWN_ROUTES.map((page) => `| ${url(page)} | ${url(markdownTwinPath(page) ?? '')} |`),
+  ...MARKDOWN_ROUTE_PATTERNS.map((page) => `| ${url(page)} | ${url(`${page}.md`)} |`),
+].join('\n');
+
 const READ_AS_MARKDOWN: AgentSkill = {
   name: 'read-as-markdown',
   description:
@@ -94,16 +116,15 @@ animation markup. Expect roughly 2 KB where the HTML is closer to 90 KB.
 
 | Page | Markdown |
 | --- | --- |
-| ${url('/')} | ${url('/index.md')} |
-| ${url('/courses')} | ${url('/courses.md')} |
-| ${url('/courses/{slug}')} | ${url('/courses/{slug}.md')} |
-| ${url('/years/{1,2,3}')} | ${url('/years/{1,2,3}.md')} |
-| ${url('/about')} | ${url('/about.md')} |
-| ${url('/essentials')} | ${url('/essentials.md')} |
+${TWIN_TABLE}
 
-Every HTML response for these paths advertises its twin as
-\`Link: <...>; rel="alternate"; type="text/markdown"\`, so you can discover this
-from the response you already have rather than guessing at URLs.
+Every HTML response for these paths carries its twin in the document head as
+\`<link rel="alternate" type="text/markdown" href="...">\`, so you can discover
+this from a page you have already fetched rather than guessing at URLs.
+
+There is no per-page \`Link\` RESPONSE header. The \`Link\` on \`/\` carries the
+site-wide discovery relations only, and no \`alternate\`; do not treat its
+absence on other paths as a sign the twins are gone.
 
 ## Note on caching
 

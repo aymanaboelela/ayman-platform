@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { Throttle, seconds } from '@nestjs/throttler';
 import { CatalogStreamFilterSchema } from '@ayman/contracts/catalog';
 import type { CatalogCourseDetail, CatalogList } from '@ayman/contracts/catalog';
+import type { HonorBoard } from '@ayman/contracts/admin/exams';
 import { Public } from '../../auth/decorators/public.decorator';
 import { CatalogService } from './catalog.service';
 
@@ -56,5 +57,23 @@ export class CatalogController {
   @Get('courses/:slug')
   one(@Param('slug') slug: string): Promise<CatalogCourseDetail> {
     return this.catalog.findBySlug(slug);
+  }
+
+  /**
+   * لوحة الشرف — the board the landing page draws.
+   *
+   * `@Public()` like the rest of this controller, and it is the one payload
+   * here that describes a named minor rather than a product. Everything that
+   * follows from that is in `HonorBoardEntrySchema` and in
+   * `CatalogService.honorBoard`: no ids on the wire, and nothing on the board
+   * that an instructor did not deliberately put there.
+   *
+   * ⚠️ Declared BELOW `courses/:slug`? No — it is a sibling segment
+   * (`catalog/honor-board`), not a `courses/*` one, so nothing can swallow it.
+   */
+  @Public()
+  @Get('honor-board')
+  honorBoard(): Promise<HonorBoard> {
+    return this.catalog.honorBoard();
   }
 }

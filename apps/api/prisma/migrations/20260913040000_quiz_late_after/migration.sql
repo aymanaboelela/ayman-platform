@@ -1,0 +1,32 @@
+-- «اللي امتحنوا بعد الوقت المسموح بيه» — the deadline that mattered, kept
+-- after the window is reopened.
+--
+-- A monthly exam closes, and then the students who missed it need to sit it.
+-- The only way to let them is to clear `open_until` — which erases the one
+-- fact that separates them from everyone who sat it on time. This column keeps
+-- that instant, so the paper can be open and a late sitting can still be told
+-- apart from an on-time one.
+--
+-- ## Derived, not snapshotted
+--
+-- «late» is `quiz_attempts.started_at > quizzes.late_after`, computed when the
+-- results are read. A boolean on the attempt would be the usual choice — B7
+-- snapshots almost everything else onto the attempt — and it is wrong here for
+-- two reasons:
+--
+--   · the sittings that need flagging happened BEFORE the flag existed, and
+--     only a derived rule reaches backwards over them;
+--   · correcting the date later re-files every affected paper, which is what
+--     an instructor expects a date field to do.
+--
+-- `started_at`, not `submitted_at`: a student who opened the paper at 19:50
+-- and handed it in at 21:20 sat it on time and used their ninety minutes.
+--
+-- `timestamptz`, like `publish_at` and unlike `quiz_attempts.deadline_at` — it
+-- is a wall-clock moment an instructor typed in Cairo, and keeping the offset
+-- is what stops it drifting across the DST change in October.
+--
+-- One nullable column, no default: a catalogue-only change, no table rewrite.
+
+ALTER TABLE "app"."quizzes"
+  ADD COLUMN "late_after" TIMESTAMPTZ(3);
