@@ -93,9 +93,43 @@ type OcrWorker = {
   terminate: () => Promise<unknown>;
 };
 
+/**
+ * Whether the engine may be started at all.
+ *
+ * ⚠️ OFF under Jest, and that is not a test being hidden from. Starting the
+ * worker reads a 22 MB model and compiles a WASM module, and enough of that
+ * happens on the CALLING thread to stall the event loop for seconds — measured
+ * as twelve specs with a five-second budget timing out the moment this was
+ * wired in, on a code path whose own contract is that it never blocks anybody.
+ *
+ * A suite that never boots the application must not pay for a model it has no
+ * image to read. `receipt-parse.spec.ts` covers the half with the logic in it,
+ * and `RECEIPT_OCR_IN_TESTS=1` turns the engine back on for anyone who wants to
+ * exercise the real thing.
+ */
+const OCR_ENABLED =
+  process.env.NODE_ENV !== 'test' || process.env.RECEIPT_OCR_IN_TESTS === '1';
+
+/**
+ * Start the engine now, so that no REQUEST ever pays for starting it.
+ *
+ * Called once from `BookOrdersModule.onModuleInit` and deliberately not awaited:
+ * the API may serve traffic while this is still loading, and every reader falls
+ * back to «مقريتش» until it is ready.
+ *
+ * ⚠️ Without this the first book payment after each deploy is the one that
+ * stalls, which is the worst possible request to put it on — it is a student
+ * with money already sent, watching a spinner.
+ */
+export function warmReceiptOcr(): void {
+  if (!OCR_ENABLED) return;
+  void getWorker().catch(() => undefined);
+}
+
 async function getWorker(): Promise<OcrWorker | null> {
   if (workerPromise) return workerPromise;
   workerPromise = (async () => {
+    if (!OCR_ENABLED) return null;
     if (!LANG_PATH) {
       log.warn('tesseract language data is not installed — receipts will not be read');
       return null;

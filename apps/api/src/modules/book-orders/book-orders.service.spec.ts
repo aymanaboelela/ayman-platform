@@ -267,6 +267,24 @@ describe('BookOrdersService', () => {
     await prisma.bookOrder.deleteMany({
       where: { items: { some: { bookId: { in: [bookA, bookB, soldOutBook, languagesBook, generalBook] } } } },
     });
+    /*
+     * ⚠️ And by PHONE, which is the only thing that reaches an order the admin
+     * created by hand.
+     *
+     * `adminCreate` writes «عميل بالتليفون» with no `userId`, no `courseId` and
+     * a line whose book is not one of the fixtures above — so all three filters
+     * miss it, and it survives into the next test. The `duplicate orders` block
+     * matches on the phone across the WHOLE table, so one survivor turned all
+     * nine of its cases red whenever the file ran as a whole while every one of
+     * them passed on its own. That is the shape of every «مرة بيعدّي ومرة لأ»
+     * report about this file.
+     *
+     * Both spellings: a student order is normalised to E.164 on the way in and
+     * a hand-typed one is stored exactly as the admin wrote it.
+     */
+    await prisma.bookOrder.deleteMany({
+      where: { phone: { in: [address().phone, `+2${address().phone}`] } },
+    });
   });
 
   afterAll(async () => {
@@ -419,6 +437,67 @@ describe('BookOrdersService', () => {
         confirmDuplicate: true,
       });
       expect(confirmed.id).not.toBe(first.id);
+    });
+
+    /**
+     * The regression behind the 2026-09-17 duplicates.
+     *
+     * معاذ and ayasaber each filled in an address, left it for over a week, then
+     * came back, paid, and placed a SECOND order two and eight minutes later.
+     * The question never fired: it windowed on the old order's `createdAt`, and
+     * by then that was nine days old. The date that matters is when the student
+     * last did something about the order.
+     */
+    it('asks about an old order that was PAID recently, not just a recent one', async () => {
+      const stale = new Date(Date.now() - 9 * 24 * 60 * 60 * 1000);
+      const first = await service.create(studentId, checkout());
+      await prisma.bookOrder.update({
+        where: { id: first.id },
+        // Filled in nine days ago — outside any sane window — and paid a minute
+        // ago, which is the fact that makes a second order a duplicate.
+        data: { createdAt: stale, status: 'paid', paidAt: new Date() },
+      });
+
+      await expect(service.create(studentId, checkout())).rejects.toThrow(ConflictException);
+    });
+
+    /**
+     * ⚠️ And a parcel still owed is worth asking about on ANY day — the student
+     * asking for a second copy has not seen the first one yet, so the age of
+     * the order says nothing about whether they meant it.
+     */
+    it('asks about an in-flight parcel however old the order is', async () => {
+      const ancient = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+      const first = await service.create(studentId, checkout());
+      await prisma.bookOrder.update({
+        where: { id: first.id },
+        data: { createdAt: ancient, paidAt: ancient, status: 'shipped', shippedAt: ancient },
+      });
+
+      await expect(service.create(studentId, checkout())).rejects.toThrow(ConflictException);
+    });
+
+    /**
+     * The other side of it: a book the student ordered, paid for and RECEIVED a
+     * long time ago is finished business. Asking again would turn a
+     * duplicate-guard into a one-per-customer rule.
+     */
+    it('stays quiet about a delivered order that is long past the window', async () => {
+      const ancient = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+      const first = await service.create(studentId, checkout());
+      await prisma.bookOrder.update({
+        where: { id: first.id },
+        data: {
+          createdAt: ancient,
+          paidAt: ancient,
+          status: 'delivered',
+          shippedAt: ancient,
+          deliveredAt: ancient,
+        },
+      });
+
+      const again = await service.create(studentId, checkout());
+      expect(again.id).not.toBe(first.id);
     });
 
     it('lets a different basket through without a question', async () => {

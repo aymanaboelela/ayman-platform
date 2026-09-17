@@ -78,10 +78,6 @@ type ReceiptFingerprint = {
   sha256: string | null;
   /** The picture, approximately. */
   phash: string | null;
-  /** «رقم العملية», read off the image — the money rather than the paper. */
-  ref: string | null;
-  /** The amount read off the image, in piastres. Recorded, never enforced. */
-  amountCents: number | null;
 };
 
 /** The 409 both receipt checks raise — one shape, so the shop renders one
@@ -819,7 +815,36 @@ export class BookOrdersService {
           phone: input.phone,
           status: { not: 'address_only' },
           deletedAt: null,
-          createdAt: { gte: since },
+          /*
+           * ⚠️ Recent by PAYMENT or by creation, and anything still in flight
+           * counts however old it is.
+           *
+           * It used to be `createdAt` alone, and that is how two of the five
+           * duplicate payments of 2026-09-17 walked past this question without
+           * it ever being asked. Both students filled in an address, left it,
+           * and came back more than a week later:
+           *
+           *   معاذ محمد فوزي   الطلب اتعمل ٠٧/٠٩ · اتدفع ١٦/٠٩ ١:٣١م
+           *                    والتاني اتعمل ١٦/٠٩ ١:٣٣م — بفارق دقيقتين
+           *   ayasaber         الطلب اتعمل ٠٨/٠٩ · اتدفع ١٦/٠٩ ٤:٠١م
+           *                    والتاني اتعمل ١٦/٠٩ ٤:٠٩م — بفارق ٨ دقايق
+           *
+           * Two minutes apart is as clear a double-submission as this platform
+           * will ever see, and the old order was nine days old by `createdAt`
+           * — outside a seven-day window — so the dialog stayed shut. The date
+           * that matters is when the student last DID something about the
+           * order, not when they first opened the form.
+           *
+           * And `paid`/`printing`/`shipped` skip the window entirely: a parcel
+           * that is owed and has not arrived is worth asking about on any day,
+           * because the student asking for a second one has not yet seen the
+           * first.
+           */
+          OR: [
+            { createdAt: { gte: since } },
+            { paidAt: { gte: since } },
+            { status: { in: ['paid', 'printing', 'shipped'] } },
+          ],
         },
         select: { items: { select: { bookId: true, quantity: true } } },
       });
@@ -1427,11 +1452,10 @@ export class BookOrdersService {
         id: true,
         status: true,
         courseId: true,
-        /* Both are read for the two duplicate guards below and nothing else:
-           `phone` is the identity a guest checkout has, and the lines are what
-           make "the same book" a question with an answer. */
+        /* `phone` is read for the receipt guard below and nothing else — it is
+           the fence that keeps a PERCEPTUAL near-match weighed only against
+           this student's own orders. See `assertReceiptNotAlreadySpent`. */
         phone: true,
-        items: { select: { bookId: true } },
       },
     });
     if (!existing) throw new NotFoundException();
@@ -1439,12 +1463,21 @@ export class BookOrdersService {
       throw new BadRequestException('this order was already paid');
     }
 
-    /* ⚠️ Both guards run BEFORE anything is written, and both throw 409 with a
-       machine-readable `code` — the shop renders its own Arabic from that, so
-       the message a student reads is never this file's English. */
-    await this.assertNoOrderAlreadyOnItsWay(existing);
+    /*
+     * ⚠️ BEFORE anything is written, and a 409 with a machine-readable `code` —
+     * the shop renders its own Arabic from that, so what a student reads is
+     * never this file's English.
+     *
+     * ⚠️ And ONE check here, not two. «نفس الكتاب اتطلب قبل كده» is asked at the
+     * ADDRESS step (see `create`), where it is a QUESTION the student can answer
+     * «لأ، عايز نسخة كمان» to — a second copy is a real sale, and a refusal at
+     * the payment step would kill it with no way through. What is never
+     * legitimate is spending one transfer twice, and that is what this refuses.
+     */
     const receipt = await this.fingerprintReceipt(input.screenshotKey);
     await this.assertReceiptNotAlreadySpent(existing, receipt);
+    /* ⚠️ The OCR is NOT here. See `readReceiptAfterwards` — it runs after the
+       commit, because it costs a second and a student's checkout may not. */
 
     const now = new Date();
     /*
@@ -1466,8 +1499,6 @@ export class BookOrdersService {
              it would be exactly the gap this feature closes. */
           screenshotSha256: receipt.sha256,
           screenshotPhash: receipt.phash,
-          screenshotRef: receipt.ref,
-          screenshotAmountCents: receipt.amountCents,
           paidAt: now,
           status: 'paid',
         },
@@ -1497,90 +1528,21 @@ export class BookOrdersService {
       metadata: { userId, courseId: existing.courseId, amountCents: order.amountCents },
     });
 
+    /* ⚠️ Not awaited. The reading takes a second and the student is already
+       finished; see `readReceiptAfterwards` for why a collision it finds is a
+       flag rather than a refusal. `void` and a `.catch` so an unhandled
+       rejection can never reach the process. */
+    void this.readReceiptAfterwards(order.id, input.screenshotKey, existing.phone).catch(
+      () => undefined,
+    );
+
     return this.toBookOrder(order);
   }
 
   /**
-   * «إنت طلبت الكتاب ده قبل كده وطلبك لسه في السكة» — guard one of two.
+   * «الإيصال ده اتبعت قبل كده» — الحارس اللي بيرفض فعلاً.
    *
-   * ## What it is for
-   *
-   * The shop's own «الطلب ده اتبعت وخلص قبل كده» screen reads `localStorage`,
-   * so it only ever fires in the ONE browser that placed the order. Open the
-   * shop on a second phone, in a private window, or after clearing site data,
-   * and the flow starts from scratch with nothing server-side in its way. That
-   * is how five students ended up with two paid orders each — see
-   * `receipt-fingerprint.ts` for the list.
-   *
-   * ## Matched on `phone`, not on the account
-   *
-   * `userId` is null for most of these rows — guest checkout never claims one
-   * (see `create`) — so an account-based check would miss exactly the students
-   * it is meant to catch. `phone` goes through `egyptianPhone()` before it is
-   * written, so both sides are canonical E.164 and this is an equality.
-   *
-   * ## Only while the first order is still IN FLIGHT
-   *
-   * `paid`, `printing`, `shipped` — a parcel that is owed and has not arrived.
-   *
-   * ⚠️ `delivered` is deliberately NOT in that list. A student holding the book
-   * who orders another copy is a real second sale — a lost book, a sibling, a
-   * spare — and refusing it would turn a duplicate-guard into a one-per-customer
-   * rule nobody asked for. Same for `rejected` and `address_only`: neither is a
-   * parcel anybody owes.
-   *
-   * ## Same BOOK, not just any order
-   *
-   * Two different titles are two parcels and both are owed. The comparison is on
-   * `bookId`, falling back to the course for the older course-page orders whose
-   * lines carry no catalogue book at all.
-   */
-  private async assertNoOrderAlreadyOnItsWay(existing: {
-    id: string;
-    phone: string;
-    courseId: string | null;
-    items: { bookId: string | null }[];
-  }): Promise<void> {
-    const bookIds = existing.items
-      .map((item) => item.bookId)
-      .filter((id): id is string => id !== null);
-
-    const inFlight = await this.prisma.bookOrder.findFirst({
-      where: {
-        id: { not: existing.id },
-        deletedAt: null,
-        phone: existing.phone,
-        status: { in: ['paid', 'printing', 'shipped'] },
-        ...(bookIds.length > 0
-          ? { items: { some: { bookId: { in: bookIds } } } }
-          : /* No catalogue book on this order at all — an order placed from a
-               course page before the shop existed. The course is then the only
-               identity it has, and `null` matches nothing, which is the safe
-               way round: it lets the payment through rather than refusing it on
-               a comparison that cannot be made. */
-            { courseId: existing.courseId ?? ' ' }),
-      },
-      orderBy: [{ createdAt: 'asc' }],
-      select: { id: true, status: true, createdAt: true },
-    });
-    if (!inFlight) return;
-
-    throw new ConflictException({
-      /* A `code`, and the Arabic is the shop's. Putting the sentence here would
-         put copy in the API and leave the web app parsing English to decide
-         what to render. */
-      code: 'book-order/already-on-its-way',
-      ref: bookOrderRef(inFlight.id),
-      status: inFlight.status,
-      orderedAt: inFlight.createdAt.toISOString(),
-      message: 'this phone already has an order for this book on its way',
-    });
-  }
-
-  /**
-   * «الإيصال ده اتبعت قبل كده» — guard two of two.
-   *
-   * Two comparisons, in the order they are worth making:
+   * Two comparisons, both of them milliseconds:
    *
    *   1. `sha256` against EVERY other order. An exact byte match is proof, not
    *      a resemblance, so it needs no same-student fence to be safe — and it
@@ -1592,10 +1554,11 @@ export class BookOrdersService {
    *      bits apart. Fencing it to one phone is what makes acting on it safe.
    *      See `PHASH_MAX_DISTANCE` for the measurements.
    *
-   *   3. `ref` — the transfer's own number, read off the picture — against
-   *      every other order. This is the only one that sees the money rather
-   *      than the paper, and the only one that would have caught
-   *      `BK-EA9B7C` / `BK-7A3FD3`: two different images of one transfer.
+   * ⚠️ The transfer's own NUMBER is not checked here, and it is the only one of
+   * the three that can see `BK-EA9B7C` / `BK-7A3FD3` — two different pictures of
+   * one transfer. Reading it needs an OCR pass, which costs a second that a
+   * student's checkout may not be made to pay, so it happens after the commit
+   * and raises a flag instead: see `readReceiptAfterwards`.
    *
    * ⚠️ A `rejected` order is excluded from all three. Its receipt was turned
    * down, and the student re-submitting a corrected order with the same proof
@@ -1619,9 +1582,6 @@ export class BookOrdersService {
 
     const byBytes = receipt.sha256 ? await spent({ screenshotSha256: receipt.sha256 }) : null;
     if (byBytes) throw duplicateReceipt(byBytes);
-
-    const byRef = receipt.ref ? await spent({ screenshotRef: receipt.ref }) : null;
-    if (byRef) throw duplicateReceipt(byRef);
 
     if (!receipt.phash) return;
     /* Fetched rather than compared in SQL: Hamming distance on 16 hex
@@ -1657,28 +1617,93 @@ export class BookOrdersService {
    * storage hiccup must not be the thing that stops them ordering a book.
    */
   private async fingerprintReceipt(key: string): Promise<ReceiptFingerprint> {
-    const empty: ReceiptFingerprint = { sha256: null, phash: null, ref: null, amountCents: null };
-    let bytes: Buffer;
-    try {
-      bytes = await collectStream(await this.media.streamByKey(key));
-    } catch {
-      return empty;
-    }
-    if (bytes.length === 0) return empty;
+    const bytes = await this.receiptBytes(key);
+    if (!bytes) return { sha256: null, phash: null };
+    return { sha256: receiptSha256(bytes), phash: await perceptualHash(bytes) };
+  }
 
-    const [phash, read] = await Promise.all([
-      perceptualHash(bytes),
-      /* Reads the amount and «رقم العملية» off the image. Slow (seconds) and
-         allowed to fail — see `readReceipt`'s own note on why it never throws
-         and never blocks. */
-      readReceipt(bytes),
-    ]);
-    return {
-      sha256: receiptSha256(bytes),
-      phash,
-      ref: read.ref,
-      amountCents: read.amountCents,
-    };
+  /** The stored screenshot, or null if it cannot be read. */
+  private async receiptBytes(key: string): Promise<Buffer | null> {
+    try {
+      const bytes = await collectStream(await this.media.streamByKey(key));
+      return bytes.length > 0 ? bytes : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Read «رقم العملية» and the amount off the receipt — AFTER the order is
+   * saved, never before it.
+   *
+   * ## Why this is not part of the payment
+   *
+   * The OCR costs about a second warm and two on a cold worker, and a student
+   * pressing «تم» does not owe that to anybody. It first went in the request
+   * path and its bill arrived immediately: six specs with a five-second budget
+   * started timing out, which is the same second every real checkout would have
+   * paid.
+   *
+   * Nothing is lost by moving it. The checks that REFUSE — the byte hash and
+   * the perceptual hash — are milliseconds and stay inline. This one records
+   * two facts and raises a flag.
+   *
+   * ## Why a collision here is a flag and not a refusal
+   *
+   * The money has already been claimed and the order is already `paid`. Undoing
+   * that from a background task would leave a student staring at a success
+   * screen for an order that quietly became something else. So a reference that
+   * has been used before is written to the audit log and alerted to the admins
+   * who work the queue, and a human decides — which is the same desk that
+   * decides on a screenshot that does not match the amount.
+   *
+   * ⚠️ Fire-and-forget by design, and it swallows everything. A failure here
+   * must never surface on a payment that already succeeded.
+   */
+  private async readReceiptAfterwards(orderId: string, key: string, phone: string): Promise<void> {
+    try {
+      const bytes = await this.receiptBytes(key);
+      if (!bytes) return;
+
+      const reading = await readReceipt(bytes);
+      if (reading.ref === null && reading.amountCents === null) return;
+
+      await this.prisma.bookOrder.update({
+        where: { id: orderId },
+        data: { screenshotRef: reading.ref, screenshotAmountCents: reading.amountCents },
+      });
+
+      if (reading.ref === null) return;
+      const twin = await this.prisma.bookOrder.findFirst({
+        where: {
+          id: { not: orderId },
+          deletedAt: null,
+          status: { not: 'rejected' },
+          screenshotRef: reading.ref,
+        },
+        orderBy: [{ paidAt: 'asc' }],
+        select: { id: true },
+      });
+      if (!twin) return;
+
+      /* «نفس التحويلة على طلبين» — `BK-EA9B7C` and `BK-7A3FD3` were exactly
+         this: one transfer, two different pictures of it, so no hash could
+         see it and only the number could. */
+      await this.audit.record({
+        action: 'book-order:duplicate-receipt',
+        resourceType: AUDIT_RESOURCES.bookOrder,
+        resourceId: orderId,
+        outcome: 'success',
+        metadata: {
+          phone,
+          transferRef: reading.ref,
+          alsoOn: twin.id,
+          alsoOnRef: bookOrderRef(twin.id),
+        },
+      });
+    } catch {
+      /* Deliberately silent — see the note above. */
+    }
   }
 
   /**
