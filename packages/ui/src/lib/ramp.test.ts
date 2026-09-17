@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contrastRatio, isInGamut, oklchToRgb } from './oklch';
+import { contrastRatio, isInGamut, oklchToRgb, readableInk } from './oklch';
 import {
   PRIMARY_STEPS,
   accentRamp,
@@ -41,6 +41,27 @@ describe('the text step is readable on every hue', () => {
 
       expect(ratio, `${theme} hue ${hue}`).toBeGreaterThanOrEqual(4.5);
     }
+  });
+});
+
+describe('a step stays where the ladder put it', () => {
+  it.each(ALL_HUES)('hue %i keeps the dark fill at the ladder lightness', (hue) => {
+    // The regression: the solver used to bisect from the theme extreme and
+    // return the THRESHOLD, so every hue landed on exactly 3.00:1 and the dark
+    // step 9 fell from L 0.78 to about L 0.48 — a dark fill on a dark page
+    // where a bright one was designed. The ramp read as collapsed.
+    const [nine] = accentRamp(hue, 'dark');
+
+    expect(nine.l).toBeCloseTo(0.78, 2);
+  });
+
+  it('only moves a step when its own position cannot clear the target', () => {
+    // Light amber at L 0.77 genuinely cannot reach 3:1 on a near-white page,
+    // so it is allowed to darken — but not all the way to the extreme.
+    const [nine] = accentRamp(72, 'light');
+
+    expect(nine.l).toBeLessThan(0.77);
+    expect(nine.l).toBeGreaterThan(0.6);
   });
 });
 
@@ -138,6 +159,43 @@ describe('describeRamp', () => {
   });
 });
 
+describe('the fixed ink on the accent fill stays readable', () => {
+  /**
+   * `button.tsx` pairs `bg-accent` with the literal `#1A1206`, and
+   * `globals.css` repeats it in three more places, on the stated assumption
+   * that "the accent is bright in both themes".
+   *
+   * That assumption was FALSE while `solveForContrast` returned the threshold:
+   * the dark fill collapsed to about L 0.48 and the near-black ink measured
+   * 2.78:1 on it — button labels a reader could not make out. Fixing the ramp
+   * fixed the ink, which is why there is no `--a-ink` token here.
+   *
+   * This test is what keeps that true. If the ramp ever darkens again, this
+   * fails before anybody ships unreadable buttons, and THEN the ink has to
+   * become a generated token.
+   */
+  const INK = { l: 0.167, c: 0.035, h: 70 } as const; // #1a1206 in OKLCH
+
+  it.each(ALL_HUES)('hue %i keeps label text over 4.5:1 in both themes', (hue) => {
+    for (const theme of THEMES) {
+      const [fill] = accentRamp(hue, theme);
+
+      expect(contrastRatio(oklchToRgb(fill), oklchToRgb(INK)), `${theme} hue ${hue}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('agrees with readableInk — the fixed literal is the right family', () => {
+    // If `readableInk` ever preferred white on a generated fill, the fixed
+    // near-black would be the wrong choice even where it technically passes.
+    for (const hue of ALL_HUES) {
+      for (const theme of THEMES) {
+        const [fill] = accentRamp(hue, theme);
+        expect({ hue, theme, ink: readableInk(fill) }).toEqual({ hue, theme, ink: 'black' });
+      }
+    }
+  });
+});
+
 describe('rampDeclarations', () => {
   it('emits the accent in both themes and the shared primary ramp once', () => {
     const light = rampDeclarations(72, 'light').map(([property]) => property);
@@ -163,13 +221,46 @@ describe('rampDeclarations', () => {
     }
   });
 
+  it('emits --p-rgb, the triplet the glows and tinted shadows need', () => {
+    // Without it a tenant on a blue hue gets blue everywhere the ramp reaches
+    // and ORANGE glows everywhere `rgb(var(--p-rgb) / alpha)` does. Nothing
+    // errors — the page is simply two brands at once.
+    const light = new Map(rampDeclarations(258, 'light'));
+
+    expect(light.has('--p-rgb')).toBe(true);
+    expect(light.get('--p-rgb')).toMatch(/^\d{1,3} \d{1,3} \d{1,3}$/);
+  });
+
+  it('keeps --p-rgb and --p-600 the same colour, not two roundings of one', () => {
+    const light = new Map(rampDeclarations(258, 'light'));
+    const triplet = (light.get('--p-rgb') ?? '').split(' ').map(Number);
+    const step600 = /oklch\(([\d.]+) ([\d.]+) (\d+)\)/.exec(light.get('--p-600') ?? '');
+
+    expect(step600).not.toBeNull();
+    if (!step600) return;
+    const { r, g, b } = oklchToRgb({
+      l: Number(step600[1]),
+      c: Number(step600[2]),
+      h: Number(step600[3]),
+    });
+
+    expect(triplet).toEqual([Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)]);
+  });
+
+  it('never emits --p-rgb twice, since the ramp is theme-independent', () => {
+    expect(rampDeclarations(258, 'dark').some(([p]) => p === '--p-rgb')).toBe(false);
+  });
+
   it('rounds to three decimals without pushing a value out of gamut', () => {
     // `formatOklch` rounds, and a chroma sitting exactly on the ceiling can
     // round up past it. CHROMA_SAFETY exists for this; the test is what proves
     // the margin is actually enough.
     for (const hue of ALL_HUES) {
       for (const theme of THEMES) {
-        for (const [, value] of rampDeclarations(hue, theme)) {
+        for (const [property, value] of rampDeclarations(hue, theme)) {
+          // `--p-rgb` is a bare `R G B` triplet, not an oklch() string — it is
+          // the one value the washes need decomposed so they can take an alpha.
+          if (property === '--p-rgb') continue;
           const match = /oklch\(([\d.]+) ([\d.]+) (\d+)\)/.exec(value);
           expect(match, value).not.toBeNull();
           if (!match) continue;
