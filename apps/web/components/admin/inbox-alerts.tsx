@@ -224,7 +224,21 @@ export function InboxAlertsToggle() {
            * function that runs on one click, ever.
            */
           if (result === 'granted') {
-            void import('@/lib/push-subscribe').then(({ subscribeToPush }) => subscribeToPush());
+            /*
+             * The RESULT is read now, and that is the whole repair on this
+             * side. It used to be discarded, so a deployment with no VAPID key
+             * produced a press that granted the OS permission, created no
+             * subscription, and then hid this button forever — silently. Web
+             * Push was dead in production for months behind exactly that.
+             */
+            void import('@/lib/push-subscribe')
+              .then(({ subscribeToPush }) => subscribeToPush())
+              .then((outcome) => {
+                if (!outcome.ok && outcome.reason === 'not_configured') {
+                  toast.error(copy.notifications.pushNotConfigured);
+                }
+              })
+              .catch(() => undefined);
           }
         });
       }}

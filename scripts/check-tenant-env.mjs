@@ -130,12 +130,59 @@ export function checkTenantEnv(env) {
     'BETTER_AUTH_SECRET',
     'APP_URL',
     'MEDIA_ORIGIN',
+    'ADMIN_NAME',
     'ADMIN_EMAIL',
     'ADMIN_PASSWORD',
+    'WA_SERVICE_URL',
   ]) {
-    const value = get(env, required);
-    if (value === '') fail(`${required} is required and is empty.`);
-    else if (value.includes('CHANGE_ME')) fail(`${required} still says CHANGE_ME.`);
+    if (get(env, required) === '') fail(`${required} is required and is empty.`);
+  }
+
+  // CHANGE_ME on EVERY key, not a hand-kept list. The template ships fifteen of
+  // them and the list only covered seven, so `VAPID_SUBJECT=CHANGE_ME` sailed
+  // through the check and then crashed the API at boot. A list that has to be
+  // extended every time the template grows is a list that will not be.
+  for (const [name, value] of Object.entries(env)) {
+    if ((value ?? '').includes('CHANGE_ME')) fail(`${name} still says CHANGE_ME.`);
+  }
+
+  /*
+   * `create-admin.ts` has its own two rules, and the entrypoint runs it with
+   * `|| echo WARNING` — so when it throws, the API starts anyway and the new
+   * platform has NO ADMIN ACCOUNT. Nobody can sign in, and the only trace is
+   * one line in a boot log nobody reads. Mirrored here so it is caught before
+   * the deploy rather than discovered after it.
+   */
+  const adminPassword = get(env, 'ADMIN_PASSWORD');
+  if (adminPassword !== '' && adminPassword.length < 12) {
+    fail(
+      `ADMIN_PASSWORD is ${adminPassword.length} characters; create-admin.ts requires at least 12 ` +
+        `and the entrypoint swallows its error, so the platform would boot with no admin account.`,
+    );
+  }
+  const adminEmail = get(env, 'ADMIN_EMAIL');
+  if (adminEmail !== '' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(adminEmail)) {
+    fail(`ADMIN_EMAIL "${adminEmail}" is not an email address (create-admin.ts rejects it).`);
+  }
+
+  /*
+   * Both database passwords are interpolated RAW into a connection string:
+   * `postgresql://ayman_runtime:${RUNTIME_PASSWORD}@postgres:5432/...`. A `/`,
+   * `@`, `:`, `?` or `#` in the value re-parses that URL into something else,
+   * and the API restart-loops on a connection error that names none of this.
+   *
+   * `openssl rand -base64 32` produces `/` about half the time, which is what
+   * the template used to tell operators to run. It now says `-hex`.
+   */
+  for (const key of ['POSTGRES_PASSWORD', 'RUNTIME_PASSWORD']) {
+    const value = get(env, key);
+    const bad = [...new Set([...value].filter((ch) => '/@:?#[]'.includes(ch)))];
+    if (bad.length > 0) {
+      fail(
+        `${key} contains ${bad.map((c) => `"${c}"`).join(', ')} — it is interpolated into a ` +
+          `postgresql:// URL and these re-parse it. Use \`openssl rand -hex 32\`.`,
+      );
+    }
   }
 
   const secret = get(env, 'BETTER_AUTH_SECRET');
@@ -169,6 +216,23 @@ export function checkTenantEnv(env) {
         'boot — and a container that will not boot 404s the entire domain through Traefik.',
     );
   }
+  /*
+   * A BARE origin, because both values are concatenated by plain string:
+   * `MEDIA_BASE_URL: ${MEDIA_ORIGIN}/media` in docker-compose.yml. A trailing
+   * slash gives `//media` and a path gives `/x/media`, and every media URL
+   * 404s. Every other rule here runs on `new URL(v).origin`, which DISCARDS
+   * exactly the part that breaks it — so the raw string has to be compared
+   * against its own origin.
+   */
+  for (const [key, raw, parsed] of [
+    ['APP_URL', appUrl, appOrigin],
+    ['MEDIA_ORIGIN', mediaOrigin, mediaOriginParsed],
+  ]) {
+    if (raw !== '' && parsed !== null && raw !== parsed) {
+      fail(`${key} must be a bare origin with no path, port or trailing slash — got "${raw}", expected "${parsed}".`);
+    }
+  }
+
   if (appUrl !== '' && !appUrl.startsWith('https://')) {
     fail(`APP_URL must be https:// on a real deployment (got "${appUrl}").`);
   }
@@ -205,6 +269,42 @@ export function checkTenantEnv(env) {
         'dashboard. Set it to this instructor\'s own project, or write `CLARITY_PROJECT_ID=` ' +
         'with nothing after it to turn analytics off.',
     );
+  }
+
+  /*
+   * Three groups the API enforces at BOOT and this did not check at all. Each
+   * one half-filled is a container that will not start — and a container that
+   * will not start 404s the whole domain through Traefik, which reads as "the
+   * site is down", not as "one variable is missing".
+   */
+  const GROUPS = [
+    {
+      name: 'the video mirror',
+      keys: ['VIDEO_ORIGIN', 'VIDEO_MIRROR_ENDPOINT', 'VIDEO_MIRROR_BUCKET', 'VIDEO_MIRROR_ACCESS_KEY_ID', 'VIDEO_MIRROR_SECRET_ACCESS_KEY'],
+    },
+    { name: 'Google sign-in', keys: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'] },
+    { name: 'web push', keys: ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'] },
+    { name: 'WhatsApp', keys: ['WA_SERVICE_URL', 'WA_TOKEN'] },
+  ];
+  for (const { name, keys } of GROUPS) {
+    const set = keys.filter((key) => get(env, key) !== '');
+    if (set.length > 0 && set.length < keys.length) {
+      const missing = keys.filter((key) => get(env, key) === '');
+      fail(`${name} is half-configured — ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} empty. Set all of ${keys.join(', ')} or none.`);
+    }
+  }
+
+  /*
+   * A social link that is not https fails `ContactSchema` — and it fails
+   * inside `seed.ts`, which runs on EVERY container boot, so the stack comes
+   * up with the seed erroring every time and the settings never populated.
+   */
+  for (const key of ['TENANT_YOUTUBE', 'TENANT_INSTAGRAM', 'TENANT_TIKTOK', 'TENANT_FACEBOOK', 'TENANT_WHATSAPP_CHANNEL']) {
+    const value = get(env, key);
+    if (value === '') continue;
+    if (originOf(value) === null || !value.startsWith('https://')) {
+      fail(`${key} must be an https:// URL — "${value}" makes the settings seed throw on every boot.`);
+    }
   }
 
   // ── Phone shape ────────────────────────────────────────────────────────

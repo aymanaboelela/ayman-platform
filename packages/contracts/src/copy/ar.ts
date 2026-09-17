@@ -3627,6 +3627,12 @@ export const copy = {
     pushOptInLead: 'يوصلك تنبيه على الموبايل أول ما م. أيمن يبعت حاجة أو ينزل محاضرة — من غير ما تفتح الموقع.',
     pushOptInButton: 'فعّل التنبيهات',
     pushOptInWorking: 'بيفعّل…',
+    /** Shown ONLY on an explicit press, never by the silent mount-time repair.
+     *  It names the server as the cause on purpose: the person pressing has
+     *  done everything right and there is nothing else for them to try, so
+     *  «حاول تاني» would be a lie. This sentence is what stopped Web Push
+     *  from being dead in production without a single visible error. */
+    pushNotConfigured: 'التنبيهات مش متظبطة على السيرفر لسه — مفاتيح الإرسال ناقصة.',
     instructorMessageQuizResult: 'مهندس أيمن شاف نتيجتك',
     instructorMessageQuizNudge: 'مهندس أيمن فاكرك بالكويز',
     instructorMessageLessonPraise: 'مهندس أيمن بعتلك كلمتين',

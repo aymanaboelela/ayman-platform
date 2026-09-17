@@ -58,6 +58,11 @@ export function useLiveUnread(): number | null {
  *    same `Notification.permission` gate, as the admin inbox alert already
  *    uses. A toast in a background tab is not a notification.
  *
+ * It also runs the one-time Web Push repair on mount (`ensurePushSubscribed`)
+ * — the only code path that can re-establish a subscription for someone whose
+ * browser already granted the permission, since the bell that asks for it
+ * hides itself once granted.
+ *
  * It does NOT call `router.refresh()`. That would re-run every server
  * component on the page — including the ones fetching a course, a lesson or a
  * quiz — for an event whose whole payload is already in hand. The screens that
@@ -150,6 +155,25 @@ export function NotificationStreamProvider({ children }: { children: ReactNode }
       void handle(event.data).catch(() => undefined);
     };
   }, [handle]);
+
+  /*
+    The push REPAIR, mounted here because this provider is the one thing both
+    shells already mount for every signed-in person — see
+    `ensurePushSubscribed`'s own note for the dead end it undoes (permission
+    granted, no subscription, and the only button that could fix it hidden by
+    the very permission that broke it).
+
+    Deliberately separate from the EventSource effect below: that one must not
+    be delayed, and this one must not tear the stream down when it resolves.
+    It is also silent — a repair that runs on every page load has nothing
+    useful to say to someone who never asked for it. The CLICK path is where a
+    failure gets spoken aloud.
+  */
+  useEffect(() => {
+    void import('@/lib/push-subscribe')
+      .then(({ ensurePushSubscribed }) => ensurePushSubscribed())
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     // Same-origin, so the session cookie rides along with no configuration —
