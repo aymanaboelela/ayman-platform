@@ -219,14 +219,29 @@ export function BookOrderCard({
                 </Chip>
               ) : null}
 
-              {/* «أعرف إن الراجل ده طلب كتاب قبل كده ولا لأ» — counted on the
-                  PHONE, because guest checkout means one person is several
-                  unlinked rows. Coloured, because it is the one chip here that
-                  changes how you treat the call. */}
+              {/*
+                «أعرف إن الراجل ده طلب كتاب قبل كده ولا لأ» — counted on the
+                PHONE, because guest checkout means one person is several
+                unlinked rows. Coloured, because it is the one chip here that
+                changes how you treat the call.
+
+                A LINK and not a plain chip, which is the whole of this change:
+                the count raises a question it cannot itself answer — WHICH
+                orders, and did they arrive? — and leaving the admin to retype
+                the number into the search box was the gap. `status=all`,
+                because the previous order worth seeing is usually one that
+                already shipped and the default tab hides it; and `q` is the
+                phone rather than the name because two students share a name
+                far more often than they share a number.
+              */}
               {row.previousOrdersFromPhone > 0 ? (
-                <Chip className="!border-accent/50 !bg-accent/10 !font-medium !text-accent-text">
+                <Link
+                  href={`/admin/books?status=all&q=${encodeURIComponent(row.phone)}`}
+                  title={c.repeatCustomerHint}
+                  className="rounded-full border border-accent/50 bg-accent/10 px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium text-accent-text transition-colors duration-[160ms] ease-out hover:border-accent hover:bg-accent/20"
+                >
                   {formatCopy(c.repeatCustomer, { n: row.previousOrdersFromPhone })}
-                </Chip>
+                </Link>
               ) : null}
 
               {!row.userId ? <Chip>{c.guestLabel}</Chip> : null}
