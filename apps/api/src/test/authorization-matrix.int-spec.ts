@@ -1596,6 +1596,33 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       }),
       status: 404,
     },
+    // «استلمت الكتاب» — the student closing their own order, and the SECOND
+    // authenticated route on this controller.
+    //
+    // ⚠️ Not `@Public()` like the rest of the checkout. Those routes work for a
+    // guest because the order id is the bearer token for an unclaimed row — but
+    // it is a token kept in `localStorage`, and letting it CLOSE an order would
+    // let anybody holding a copied link mark a parcel delivered and take it off
+    // the list the shipping desk chases.
+    //
+    // The admin's own «وصل» sits on `book-order:ship` a hundred lines below;
+    // this one is `book-order:submit`, the permission every student carries.
+    // 404 for the student because the order id is random — proof the permission
+    // gate PASSED and ownership is what refused.
+    {
+      label: 'book order received: anonymous',
+      method: 'post',
+      path: () => `/api/book-orders/${randomUUID()}/received`,
+      actor: 'anonymous',
+      status: 401,
+    },
+    {
+      label: 'book order received: student, unknown order',
+      method: 'post',
+      path: () => `/api/book-orders/${randomUUID()}/received`,
+      actor: 'student',
+      status: 404,
+    },
     // `mine` stays authenticated — a guest has no session to list orders
     // from in the first place; this is the one route in the controller that
     // still requires `book-order:submit`.

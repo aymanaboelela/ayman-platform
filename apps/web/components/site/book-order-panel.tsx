@@ -539,8 +539,24 @@ export function BookOrderPanel({
        */
       router.refresh();
       setStep('success');
-    } catch {
-      setError(c.genericError);
+    } catch (error) {
+      /*
+       * ⚠️ 409 is the ONE outcome here worth its own sentence: the receipt has
+       * already been attached to another order. Everything else on this route
+       * is a network blip or a server fault, and «حصل خطأ، حاول تاني» is the
+       * right answer to those — but it is exactly the wrong answer to this one,
+       * because trying again with the same screenshot will fail again forever
+       * and the student has no way to know why.
+       *
+       * Branched on the STATUS rather than the body's `code`: `apiPost` throws
+       * `ApiRequestError`, which keeps the status and drops the payload, and
+       * this route has no other 409 to be confused with.
+       */
+      setError(
+        error instanceof ApiRequestError && error.status === 409
+          ? c.receiptAlreadyUsed
+          : c.genericError,
+      );
       setStep('payment');
     }
   }

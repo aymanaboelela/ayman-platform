@@ -2827,6 +2827,84 @@ export class BookOrdersService {
   }
 
   /**
+   * «استلمت الكتاب» — the STUDENT closing their own order.
+   *
+   * ## Why the student gets this at all
+   *
+   * `markDelivered` above is the admin pressing «وصل», and it is the only way
+   * an order has ever reached `delivered` — which means the column says when
+   * somebody at a desk got round to ticking it, not when the parcel arrived.
+   * The person who knows that is the one holding the book.
+   *
+   * It also closes the loop the shipping desk actually needs: an order that
+   * sits in `shipped` for two weeks with no confirmation is the one worth
+   * chasing the courier about, and until now nothing distinguished it from one
+   * that arrived on the second day.
+   *
+   * ## `shipped` only
+   *
+   * ⚠️ Not `paid` and not `printing`, even though the admin may close both. The
+   * admin's extra doors exist for the book handed over at the centre — a fact
+   * they witnessed. A student pressing «استلمت» on a parcel nobody has posted
+   * yet is either confused or mistaken about which order they are looking at,
+   * and letting it through would erase a real «لسه في المطبعة» from the queue.
+   *
+   * ## Idempotent, and quiet about it
+   *
+   * Pressing it twice returns the order as it stands rather than a 400. The
+   * second press is a double tap or a stale tab, not an error the student can
+   * do anything about — and the first one already did the job.
+   *
+   * ## What it deliberately does NOT do
+   *
+   * `deliveredByUserId` stays NULL. That column answers «مين الأدمن اللي قفل
+   * الطلب», and writing the student into it would put a customer in a list of
+   * staff actions. The audit entry carries who it really was.
+   *
+   * And no `book_order_delivered` notification: that message exists to tell the
+   * student their parcel arrived, and they are the one who just said so.
+   */
+  async confirmReceived(userId: string, orderId: string): Promise<BookOrder> {
+    const phone = await this.phoneOf(userId);
+    const order = await this.prisma.bookOrder.findFirst({
+      /* The same ownership union `listMine` uses — a guest order is linked by
+         the phone at READ time and never claimed, so an account-only match
+         would hide exactly the orders placed before the student registered. */
+      where: {
+        id: orderId,
+        deletedAt: null,
+        OR: [{ userId }, ...(phone ? [{ userId: null, phone }] : [])],
+      },
+      select: { id: true, status: true, courseId: true, userId: true },
+    });
+    if (!order) throw new NotFoundException();
+
+    if (order.status === 'delivered') return this.byId(order.id);
+    if (order.status !== 'shipped') {
+      throw new BadRequestException('this order has not shipped yet');
+    }
+
+    const now = new Date();
+    await this.prisma.bookOrder.update({
+      where: { id: order.id },
+      data: { status: 'delivered', deliveredAt: now },
+    });
+
+    await this.audit.record({
+      action: 'book-order:deliver',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      /* `by: 'student'` is what separates this from the admin's own entry on
+         the same action — «الطالب قال إنه استلم» and «الأدمن قفل الطلب» are the
+         same transition and two different facts about how it happened. */
+      metadata: { userId, courseId: order.courseId, by: 'student', from: order.status },
+    });
+
+    return this.byId(order.id);
+  }
+
+  /**
    * «أرفضه» — the order is turned down, and the student is told why.
    *
    * ## Rejecting is not deleting
