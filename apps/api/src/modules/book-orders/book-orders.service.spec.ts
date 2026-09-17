@@ -14,11 +14,30 @@ import type { SettingsService } from '../admin/settings/settings.service';
 import { BooksService } from '../books/books.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { FinanceOverviewService } from '../expenses/finance-overview.service';
+import { DEFAULT_BOOK_SHIPPING_RATES, bookShippingCentsFor } from '@ayman/contracts/books';
 import { BookOrdersService } from './book-orders.service';
 
-/** Pinned so these assertions do not move when someone edits the live delivery
- *  fee in the shared dev database. 65 EGP is the real default. */
-const SHIPPING_CENTS = 6_500;
+/**
+ * Pinned so these assertions do not move when someone edits the live delivery
+ * rates in the shared dev database. These three are the real defaults.
+ */
+const SHIPPING_RATES = DEFAULT_BOOK_SHIPPING_RATES;
+
+/**
+ * The governorate every fixture address below ships to — القاهرة.
+ *
+ * ⚠️ PINNED, and it used to be `findFirstOrThrow()`. That was harmless while
+ * delivery was one flat fee and became a coin-flip the moment it depended on
+ * the address: «أول محافظة في الجدول» is whatever Postgres feels like
+ * returning, so the expected total would have been 80, 100 or 150 EGP
+ * depending on the plan — a suite that fails on a different machine for a
+ * reason nothing in the diff explains.
+ */
+const FIXTURE_GOVERNORATE = '01';
+
+/** What that address costs to deliver to — derived, never a second literal, so
+ *  this file cannot disagree with the table it is testing. */
+const SHIPPING_CENTS = bookShippingCentsFor(FIXTURE_GOVERNORATE, SHIPPING_RATES);
 
 describe('BookOrdersService', () => {
   const prisma = new PrismaClient({
@@ -40,7 +59,7 @@ describe('BookOrdersService', () => {
    * shipping price in the shared dev database.
    */
   const settings = {
-    read: async () => ({ store: { shippingCents: SHIPPING_CENTS } }),
+    read: async () => ({ store: { shippingRates: SHIPPING_RATES } }),
   } as unknown as SettingsService;
   const books = new BooksService(prisma, audit, settings);
   /*
@@ -120,7 +139,13 @@ describe('BookOrdersService', () => {
 
     const system = await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } });
     const subject = await prisma.subject.findFirstOrThrow();
-    const governorate = await prisma.governorate.findFirstOrThrow();
+    /* By CODE, not `findFirstOrThrow()` — see `FIXTURE_GOVERNORATE`. The row is
+       still read rather than assumed, so a taxonomy that lost القاهرة fails
+       here with a clear message instead of as a foreign-key violation forty
+       assertions later. */
+    const governorate = await prisma.governorate.findUniqueOrThrow({
+      where: { code: FIXTURE_GOVERNORATE },
+    });
     governorateCode = governorate.code;
 
     bookedCourseId = (
@@ -1504,6 +1529,354 @@ describe('BookOrdersService', () => {
     });
   });
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * «راح للمطبعة» — المحطة اللي بين «مدفوعة» و«اتشحنت».
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * The flow being protected: «أنزّل PDF، أحدّد على الناس كلهم، أضغط الطباعة.
+   * ولما أتأكد إنه هيشحن فعلاً أضغط الشحن.» Two hand-offs, hours apart, that
+   * used to collapse into one click.
+   */
+  describe('markPrinting', () => {
+    /*
+     * ⚠️ A FRESH PHONE per order, and it is not cosmetic.
+     *
+     * `create` refuses a second finished order for the same books from the same
+     * number inside seven days (`DUPLICATE_RECENT_BOOK_ORDER`) — a real
+     * protection, measured against real double-payments. A block like this one,
+     * which needs a handful of independent paid orders, is exactly the shape
+     * that trips it: every case after the first would 409 on a guard that has
+     * nothing to do with what is being tested.
+     */
+    let phoneSeq = 0;
+    const paidOrder = async () => {
+      phoneSeq += 1;
+      const order = await service.create(studentId, {
+        ...address(),
+        phone: `0102${String(phoneSeq).padStart(7, '0')}`,
+      });
+      await service.submitPayment(studentId, order.id, {
+        senderPhone: '01011112222',
+        screenshotKey: validScreenshotKey(),
+      });
+      return order;
+    };
+
+    it('stamps printedAt, records who sent it, and moves status to printing', async () => {
+      const order = await paidOrder();
+
+      const result = await service.markPrinting(adminId, order.id);
+      expect(result.status).toBe('printing');
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.status).toBe('printing');
+      expect(row.printedAt).not.toBeNull();
+      expect(row.printedByUserId).toBe(adminId);
+      /* ⚠️ NOT shipped. The parcel has not left; only the paper has. Setting
+         `shippedAt` here would put the two hand-offs back into one fact, which
+         is the whole thing this state exists to separate. */
+      expect(row.shippedAt).toBeNull();
+    });
+
+    it('refuses an order that was never paid', async () => {
+      const order = await service.create(studentId, address());
+      await expect(service.markPrinting(adminId, order.id)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('refuses the same order twice', async () => {
+      const order = await paidOrder();
+      await service.markPrinting(adminId, order.id);
+      await expect(service.markPrinting(adminId, order.id)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    /* Sending a parcel that has already left back to the printer is not a
+       correction, it is two different facts about one row. */
+    it('refuses an order that has already shipped', async () => {
+      const order = await paidOrder();
+      await service.markShipped(adminId, order.id);
+      await expect(service.markPrinting(adminId, order.id)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('ships from printing, and keeps the print stamp', async () => {
+      const order = await paidOrder();
+      await service.markPrinting(adminId, order.id);
+
+      const shipped = await service.markShipped(adminId, order.id);
+      expect(shipped.status).toBe('shipped');
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      expect(row.status).toBe('shipped');
+      /* «راح للمطبعة إمتى» has to survive the next transition — it is the
+         question asked on the day a run comes back short. */
+      expect(row.printedAt).not.toBeNull();
+    });
+
+    /**
+     * ⚠️ `paid` still ships DIRECTLY. The printer is a step the work takes, not
+     * a gate the state machine imposes: a single reprint handed over the
+     * counter never sees a run, and forcing a fake «راح للمطبعة» to unlock
+     * «اتشحن» would put a lie in the audit trail to satisfy a sequence.
+     */
+    it('does not make the printer a required stop', async () => {
+      const order = await paidOrder();
+
+      const shipped = await service.markShipped(adminId, order.id);
+      expect(shipped.status).toBe('shipped');
+
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+      /* And it does not INVENT one — `null` here reads correctly as «ما راحش
+         للمطبعة», the same way a delivered order with no `shippedAt` reads as
+         «اتسلّم باليد». */
+      expect(row.printedAt).toBeNull();
+    });
+
+    it('delivers straight from printing — he hands some of these over himself', async () => {
+      const order = await paidOrder();
+      await service.markPrinting(adminId, order.id);
+
+      const delivered = await service.markDelivered(adminId, order.id);
+      expect(delivered.status).toBe('delivered');
+    });
+
+    describe('in bulk', () => {
+      it('sends a whole run and reports each row', async () => {
+        const first = await paidOrder();
+        const second = await paidOrder();
+
+        const result = await service.markPrintingMany(adminId, [first.id, second.id]);
+        expect(result.succeeded).toBe(2);
+        expect(result.skipped).toBe(0);
+        expect(result.rows.every((row) => row.outcome === 'printing')).toBe(true);
+      });
+
+      /* Re-selecting a row is a mistake, not a fault — «بتلخبط أنا شحنت ولا
+         لأ» is the actual failure being designed against, so the batch NAMES
+         what it skipped instead of failing wholesale. */
+      it('skips a row that already went, and says which one', async () => {
+        const already = await paidOrder();
+        const fresh = await paidOrder();
+        await service.markPrinting(adminId, already.id);
+
+        const result = await service.markPrintingMany(adminId, [already.id, fresh.id]);
+        expect(result.succeeded).toBe(1);
+        expect(result.skipped).toBe(1);
+        const skipped = result.rows.find((row) => row.outcome === 'skipped');
+        expect(skipped?.id).toBe(already.id);
+        expect(skipped?.fullName).not.toBe('');
+      });
+
+      /* ⚠️ No bulk-SHIP case here, deliberately. `markShippedMany` posts the
+         student's notice through `OutreachService`, which this suite does not
+         build — see the service construction at the top. That a `printing` row
+         is shippable is asserted one level up, on `markShipped`, where the
+         transition actually lives; asserting it again through a dependency the
+         suite stubs to `undefined` would test the stub. */
+    });
+  });
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * الشحن على حسب المحافظة — «قاهرة وجيزة ٨٠، وجه بحري ١٠٠، صعيد ١٥٠».
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * `book-shipping.spec.ts` pins the table itself. This pins the thing that
+   * actually costs money: that `create` reads the fee off THIS order's address
+   * and freezes it onto the row, rather than off a flat setting or off the
+   * request.
+   */
+  describe('shipping is priced from the address', () => {
+    /** أسوان — the far zone, two zones away from the fixture's القاهرة. */
+    const FAR_GOVERNORATE = '28';
+
+    /** Same reason as `markPrinting`'s: the duplicate guard would 409 every
+     *  case after the first, on a rule none of these are about. */
+    let phoneSeq = 0;
+    const freshPhone = () => {
+      phoneSeq += 1;
+      return `0103${String(phoneSeq).padStart(7, '0')}`;
+    };
+
+    it('charges the far-zone fee for a far-zone address', async () => {
+      const order = await service.create(studentId, {
+        ...address(),
+        phone: freshPhone(),
+        governorateCode: FAR_GOVERNORATE,
+      });
+
+      expect(order.shippingCents).toBe(SHIPPING_RATES.far);
+      expect(order.amountCents).toBe(25_000 + SHIPPING_RATES.far);
+    });
+
+    it('charges the near-zone fee for القاهرة, on the same books', async () => {
+      const order = await service.create(studentId, { ...address(), phone: freshPhone() });
+      expect(order.shippingCents).toBe(SHIPPING_RATES.cairo_giza);
+    });
+
+    /**
+     * «لو حد طلب أكتر من كتاب هيبقى نفس الشحن، متزودش شحن.»
+     *
+     * The rule most likely to be broken by making the fee depend on the
+     * address: what changed is WHICH number is added, never how many times.
+     */
+    it('still charges delivery once, however many books are in the basket', async () => {
+      const order = await service.create(studentId, {
+        ...cartAddress(),
+        phone: freshPhone(),
+        governorateCode: FAR_GOVERNORATE,
+        items: [
+          { bookId: bookA, quantity: 2 },
+          { bookId: bookB, quantity: 1 },
+        ],
+      });
+
+      expect(order.shippingCents).toBe(SHIPPING_RATES.far);
+    });
+
+    /**
+     * ⚠️ Correcting the governorate RE-QUOTES the delivery.
+     *
+     * An order moved from القاهرة to أسوان and left at ٨٠ ج is an address edit
+     * that quietly eats the difference on exactly the parcels that cost most.
+     */
+    it('re-quotes when an admin corrects the governorate', async () => {
+      const order = await service.create(studentId, { ...address(), phone: freshPhone() });
+      expect(order.shippingCents).toBe(SHIPPING_RATES.cairo_giza);
+
+      const edited = await service.adminPatch(adminId, order.id, {
+        governorateCode: FAR_GOVERNORATE,
+      });
+      expect(edited.shippingCents).toBe(SHIPPING_RATES.far);
+    });
+
+    /* A number the admin typed is a negotiation, and a lookup must never
+       overwrite a decision. */
+    it('never overwrites a fee the admin typed', async () => {
+      const order = await service.create(studentId, { ...address(), phone: freshPhone() });
+
+      const edited = await service.adminPatch(adminId, order.id, {
+        governorateCode: FAR_GOVERNORATE,
+        shippingCents: 0,
+      });
+      expect(edited.shippingCents).toBe(0);
+    });
+  });
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * الأرقام فوق الشاشة — «كام نسخة، كام كتاب، كام طالب، كام عربي، كام لغات».
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Scoped with `q` to a name nothing else in the shared dev database carries.
+   * The alternative is asserting against the whole table, which on a database
+   * other suites are writing to is a number that is right once.
+   */
+  describe('adminOverview', () => {
+    const TAG = `نظرة-${Date.now()}`;
+    let phoneSeq = 0;
+    const freshPhone = () => {
+      phoneSeq += 1;
+      return `0104${String(phoneSeq).padStart(7, '0')}`;
+    };
+
+    it('counts orders, PEOPLE, books and copies — and the four are different numbers', async () => {
+      const shared = freshPhone();
+      /* Two orders from ONE number, plus one from another: three orders, two
+         people. Counting rows would say three students; counting `userId`
+         would say one, because most of this table is guests. */
+      await service.create(studentId, {
+        ...cartAddress(),
+        fullName: TAG,
+        phone: shared,
+        items: [{ bookId: bookA, quantity: 2 }],
+      });
+      await service.create(studentId, {
+        ...cartAddress(),
+        fullName: TAG,
+        phone: shared,
+        items: [{ bookId: bookB, quantity: 1 }],
+      });
+      await service.create(studentId, {
+        ...cartAddress(),
+        fullName: TAG,
+        phone: freshPhone(),
+        items: [
+          { bookId: bookA, quantity: 1 },
+          { bookId: bookB, quantity: 1 },
+        ],
+      });
+
+      const overview = await service.adminOverview({
+        q: TAG,
+        page: 1,
+        perPage: 50,
+        sort: 'oldest',
+      } as never);
+
+      expect(overview.orders).toBe(3);
+      /* «كام طالب» — two, on three orders. This is the assertion that fails if
+         anybody ever "simplifies" it to a row count. */
+      expect(overview.students).toBe(2);
+      /* Four LINES across three orders… */
+      expect(overview.books).toBe(4);
+      /* …and five COPIES, because one line asked for two. «كام كتاب» is what to
+         print; «كام نسخة» is what to pack, and they differ the moment anybody
+         orders two. */
+      expect(overview.copies).toBe(5);
+    });
+
+    it('counts a book that serves BOTH streams in both — they are two questions, not a split', async () => {
+      await service.create(studentId, {
+        ...cartAddress(),
+        fullName: `${TAG}-ستريم`,
+        phone: freshPhone(),
+        items: [{ bookId: bookA, quantity: 1 }],
+      });
+
+      const overview = await service.adminOverview({
+        q: `${TAG}-ستريم`,
+        page: 1,
+        perPage: 50,
+        sort: 'oldest',
+      } as never);
+
+      /* `bookA` is the fixture catalogue book, which serves both — so it is one
+         copy that answers «كام عربي؟» and «كام لغات؟» with 1 each. Dropping it
+         from both to make the two sum to `copies` is the only arrangement that
+         is wrong twice. */
+      expect(overview.copies).toBe(1);
+      expect(overview.streams.general).toBe(1);
+      expect(overview.streams.languages).toBe(1);
+    });
+
+    it('describes the TAB and not the page', async () => {
+      /* `perPage` is ignored — the header answers a question about the filtered
+         set, and counting the rendered page is the bug «حدّد اللي في المدى»
+         already shipped once (fifty ticked on a tab of fifty-two). */
+      const wide = await service.adminOverview({
+        q: TAG,
+        page: 1,
+        perPage: 50,
+        sort: 'oldest',
+      } as never);
+      const narrow = await service.adminOverview({
+        q: TAG,
+        page: 1,
+        perPage: 10,
+        sort: 'oldest',
+      } as never);
+
+      expect(narrow.orders).toBe(wide.orders);
+      expect(narrow.copies).toBe(wide.copies);
+    });
+  });
+
   describe('exportXlsx', () => {
     it('produces a workbook containing exactly the rows for the requested status', async () => {
       const paidOrder = await service.create(studentId, address());
@@ -2475,6 +2848,32 @@ describe('BookOrdersService', () => {
       const row = (await exportRows('paid')).find((cells) => cells.includes('زبون لغات'));
       expect(row).toBeDefined();
       expect(row?.[STREAM_COLUMN]).toBe(copy.stream.languages);
+    });
+
+    /**
+     * ⚠️ الصف walks the SAME chain as the stream, and it used not to.
+     *
+     * `packingList` built each line by spreading one `address` object, and that
+     * object read `row.course.year` — so on an order placed from `/books`,
+     * which has no course at all, every line printed «من غير صف». That is most
+     * orders, on the one figure the sheet is read for before a print run is
+     * ordered: «كام كتاب سنة أولى وكام سنة تانية».
+     */
+    it('takes الصف from the BOOK on a cart order, which has no course to read', async () => {
+      await paidOrder(studentId, {
+        courseId: undefined,
+        items: [{ bookId: languagesBook, quantity: 1 }],
+        fullName: 'زبون صف',
+        phone: '01055500001',
+      });
+
+      const list = await service.packingList({ status: 'paid', from: null, to: null, q: 'زبون صف' });
+      const line = list.groups.flatMap((group) => group.lines).find((l) => l.fullName === 'زبون صف');
+      expect(line).toBeDefined();
+      /* `languagesBook` is a first-year book — see its fixture. The course
+         fallback would have produced `null` here, because there is no course. */
+      expect(line?.year).toBe(1);
+      expect(list.years.some((entry) => entry.year === 1)).toBe(true);
     });
 
     /** The fallback: a course-book line has no `bookId` when the course's book

@@ -8,6 +8,11 @@ import { formatCopy } from '@ayman/contracts/format';
 import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { TaxonomySchema, type Taxonomy } from '@ayman/contracts/taxonomy';
 import { BookOrderSchema, type BookOrder } from '@ayman/contracts/book-orders';
+import {
+  bookShippingCentsFor,
+  minBookShippingCents,
+  type BookShippingRates,
+} from '@ayman/contracts/books';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
@@ -15,7 +20,7 @@ import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { ApiRequestError, apiGet, apiPost } from '@/lib/api';
 import { uploadBookOrderScreenshot } from '@/lib/upload-client';
-import { formatEGP } from '@/lib/price';
+import { formatEGP, formatShipping } from '@/lib/price';
 import {
   CART_ORDER_KEY,
   clearInProgressBookOrder,
@@ -72,7 +77,8 @@ type Step = 'checking' | 'address' | 'payment' | 'submitting' | 'success' | 'alr
 export function BookOrderPanel({
   courseId,
   items,
-  amountCents,
+  itemsCents,
+  shippingRates,
   instapay,
   vodafoneCash,
   onCancel,
@@ -88,16 +94,24 @@ export function BookOrderPanel({
   /** «قسم الكتب»: a basket. Ids and quantities only — the server prices it. */
   items?: readonly { bookId: string; quantity: number }[];
   /**
-   * What the reader has been quoted, INCLUDING delivery, for the line above the
-   * form.
+   * The BOOKS only, with no delivery in it.
    *
-   * Passed in rather than computed here because the two callers know it in
-   * different ways — the shop has already totalled a basket, the course page has
-   * one price and the shipping fee — and because this panel must never be the
-   * thing that decides what an order costs. The server recomputes it from the
-   * catalogue regardless; this number is what the person was told.
+   * ⚠️ It used to be `amountCents` — books plus delivery, totalled by each
+   * caller. That stopped being possible when delivery became zoned: neither
+   * caller knows where the parcel is going, because the governorate is chosen
+   * on THIS form. A total computed before the address is a total that is wrong
+   * for two of the three zones, and «الكتاب بـ١٥٠ والشحن ٨٠» followed by a form
+   * that asks for ٣٠٠ is exactly the surprise the breakdown exists to prevent.
+   *
+   * So the panel owns the quote now: it holds `governorateCode`, so it is the
+   * only place that can say what delivery costs, and it says so the instant the
+   * select changes. This is still what the person was TOLD and never what they
+   * are charged — the server reprices the basket and re-derives the fee from
+   * the same table when the order is written.
    */
-  amountCents: number;
+  itemsCents: number;
+  /** The three zone rates, from `GET /api/books`. See `bookShippingCentsFor`. */
+  shippingRates: BookShippingRates;
   /** E.164, or `null` when the admin has not configured one yet. */
   instapay: string | null;
   /** The wallet number — a second live destination, see `ContactSchema`. */
@@ -137,6 +151,23 @@ export function BookOrderPanel({
   const [phone, setPhone] = useState('');
   const [altPhone, setAltPhone] = useState('');
   const [governorateCode, setGovernorateCode] = useState('');
+  /*
+   * ── الشحن على حسب المحافظة، حيّ ────────────────────────────────────────
+   *
+   * `null` until a governorate is picked, and that is a THIRD state rather than
+   * a zero: «٠ ج» reads as free delivery, and the honest answer before the
+   * select is touched is «على حسب المحافظة» — which is also the sentence that
+   * stops «ليه الرقم اتغيّر؟» when the total moves a line later.
+   *
+   * ⚠️ It is what the reader is TOLD, never what they are charged. The server
+   * re-derives the fee from the same table off the governorate on the saved
+   * row, so a tampered client changes the sentence on its own screen and
+   * nothing else. Same rule the book prices follow.
+   */
+  const shippingQuoteCents = governorateCode
+    ? bookShippingCentsFor(governorateCode, shippingRates)
+    : null;
+  const quotedTotalCents = itemsCents + (shippingQuoteCents ?? 0);
   const [city, setCity] = useState('');
   const [addressStreet, setAddressStreet] = useState('');
   const [addressBuilding, setAddressBuilding] = useState('');
@@ -567,9 +598,36 @@ export function BookOrderPanel({
 
     return (
       <div className="course-subscribe">
-        <p className="course-subscribe__amount">
-          {formatCopy(c.priceLine, { price: formatEGP(amountCents) })}
-        </p>
+        {/* The breakdown, and it MOVES — «الشحن» is «على حسب المحافظة» until the
+            select below is touched and the real number the moment it is. Three
+            rows rather than one total, for the reason the shop's basket shows
+            three: a single figure that changes when you pick an address, with
+            nothing naming the part that changed, reads as a price that went up
+            on you. */}
+        <div className="books-checkout__summary">
+          <div className="books-cart__row">
+            <span>{copy.books.subtotal}</span>
+            <span>{formatEGP(itemsCents)}</span>
+          </div>
+          <div className="books-cart__row">
+            <span>{copy.books.shipping}</span>
+            <span>
+              {shippingQuoteCents === null
+                ? copy.books.shippingByGovernorate
+                : formatShipping(shippingQuoteCents, copy.books.shippingFree)}
+            </span>
+          </div>
+          <div className="books-cart__row books-cart__row--total">
+            <span>{copy.books.total}</span>
+            <span>
+              {shippingQuoteCents === null
+                ? formatCopy(copy.books.totalFrom, {
+                    price: formatEGP(itemsCents + minBookShippingCents(shippingRates)),
+                  })
+                : formatEGP(quotedTotalCents)}
+            </span>
+          </div>
+        </div>
         <p className="course-subscribe__title">{c.addressTitle}</p>
 
         <div>
@@ -674,7 +732,11 @@ export function BookOrderPanel({
   return (
     <div className="course-subscribe">
       <p className="course-subscribe__amount">
-        {formatCopy(c.priceLine, { price: formatEGP(order?.amountCents ?? amountCents) })}
+        {/* The ORDER's own frozen total once it exists — by this step it always
+            does, and it is the number the transfer has to match. The fallback
+            is the live quote, which can only be reached in the instant between
+            the address saving and the row coming back. */}
+        {formatCopy(c.priceLine, { price: formatEGP(order?.amountCents ?? quotedTotalCents) })}
       </p>
       {/* The order's own lines once it exists — one book for the course flow, the
           whole basket for the shop. Read off the ORDER rather than the props so

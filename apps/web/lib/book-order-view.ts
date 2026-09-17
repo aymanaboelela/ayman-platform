@@ -110,6 +110,23 @@ export function describeBookOrderStatus(status: BookOrderStatus): BookOrderStatu
     case 'paid':
       return { label: c.statusPaid, note: c.notePaid, tone: 'var(--info)', closed: false };
 
+    /*
+     * The SAME blue as `paid`, deliberately.
+     *
+     * The colour breaks on this card mark whose move it is, not which internal
+     * stage the order is at: `--warn` is «your move», blue is «ours», ember is
+     * «on the road», green done, red refused. `paid` and `printing` are both
+     * «ours» — the student does nothing differently for either — and giving the
+     * second one a colour of its own would announce an admin's workflow step as
+     * if it were a change in what the student is waiting for. The LABEL and the
+     * note are what differ, and they are the parts that say something.
+     *
+     * Amber in particular is unavailable: it is this product's action colour,
+     * and a state nobody can act on must not look pressable.
+     */
+    case 'printing':
+      return { label: c.statusPrinting, note: c.notePrinting, tone: 'var(--info)', closed: false };
+
     /* Ember rather than a second blue: `paid` and `shipped` are the two states
        a student checks back on most, and they sit one above the other in a
        history list where telling them apart at a glance is the entire job. */

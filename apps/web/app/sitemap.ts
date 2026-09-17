@@ -3,6 +3,7 @@ import { connection } from 'next/server';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getNewsListOrEmpty } from '@/lib/news';
 import { SITE_URL } from '@/lib/seo/jsonld';
+import { sitemapLoc } from '@/lib/seo/sitemap-url';
 import { isYearIndexable } from '@/lib/seo/year-visibility';
 
 /**
@@ -15,7 +16,19 @@ import { isYearIndexable } from '@/lib/seo/year-visibility';
  * this file no test can verify — a wrong date here is a claim to every crawler
  * that a page it already has is unchanged.
  */
-const EDITORIAL_LAST_MODIFIED = new Date('2026-09-13T00:00:00.000Z');
+/*
+ * 2026-09-16 — `/privacy` («المنصة مجانية ومفيش أي مدفوعات» came out, it had
+ * been false since checkout shipped) and the new `/subscribe`.
+ *
+ * ⚠️ It was missed on the day those shipped, which is the exact failure the
+ * warning above describes: for a day the sitemap told every crawler that a page
+ * whose copy had just been corrected — and a page that had not existed at
+ * all — were both unchanged since the 13th. A new URL carrying a `lastmod`
+ * from before it existed is the worst version of this: there is no cached copy
+ * for the date to be compared against, so the only thing it can do is make the
+ * URL look stale on arrival.
+ */
+const EDITORIAL_LAST_MODIFIED = new Date('2026-09-16T00:00:00.000Z');
 
 /**
  * Every URL a crawler should know about, and no others.
@@ -90,6 +103,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Static, entirely self-contained, and the natural landing page for
     // "تعلم البرمجة" style queries that are not brand searches.
     { url: `${SITE_URL}/essentials`, lastModified: EDITORIAL_LAST_MODIFIED, changeFrequency: 'monthly', priority: 0.6 },
+    // «إزاي أشترك؟» — the answer to a high-intent question that had no public
+    // page at all. `monthly`: the steps change when the checkout does, which is
+    // rarely, and the rails it names are read live rather than written here.
+    { url: `${SITE_URL}/subscribe`, lastModified: EDITORIAL_LAST_MODIFIED, changeFrequency: 'monthly', priority: 0.6 },
     // «قسم الكتب» — a real commercial page and the answer to «كتاب أيمن أبو
     // العلا», so it sits with the catalogue rather than with the hub pages
     // below. `weekly`, not `monthly`: prices and stock move, and a crawler that
@@ -144,8 +161,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Only PUBLISHED articles reach this list — `GET /api/news` filters on
     // status in SQL, so a draft can never be announced here. That is the usual
     // way an unreleased URL leaks.
+    /*
+     * ⚠️ `sitemapLoc` on the two entries built from a DATABASE string. Next
+     * writes `<loc>` unescaped and an article slug may legally contain `&` —
+     * see `lib/seo/sitemap-url.ts` for why one such slug would take the whole
+     * document down rather than its own row. The static entries above are
+     * literals in this file and need nothing.
+     */
     ...posts.map((post) => ({
-      url: `${SITE_URL}/news/${post.slug}`,
+      url: sitemapLoc(`${SITE_URL}/news/${post.slug}`),
       // `updatedAt`, not `publishedAt`: <lastmod> means "last modified", and
       // an article edited last week should be recrawled.
       lastModified: new Date(post.updatedAt),
@@ -153,7 +177,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.6,
     })),
     ...courses.map((course) => ({
-      url: `${SITE_URL}/courses/${course.slug}`,
+      url: sitemapLoc(`${SITE_URL}/courses/${course.slug}`),
       // updatedAt, not publishedAt: <lastmod> means "last modified".
       lastModified: new Date(course.updatedAt),
       changeFrequency: 'weekly' as const,

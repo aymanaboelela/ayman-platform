@@ -183,7 +183,7 @@ export default async function DashboardPage() {
      * The book catalogue: the delivery fee «اطلب الكتاب» quotes on an enrolled
      * course's card, AND the covers «الكتب» renders at the foot of the page.
      *
-     * `getBookCatalogOrEmpty` rather than `getBookShippingCents`, which is a
+     * `getBookCatalogOrEmpty` rather than `getBookShippingRates`, which is a
      * wrapper that reads exactly this and throws the shelves away. Calling both
      * would not cost a second request — they share one `'use cache'` entry on
      * one coarse tag — but it would mean two names for one value on one page,
@@ -510,7 +510,7 @@ export default async function DashboardPage() {
                   <EnrolledCourseCard
                     key={course.id}
                     course={course}
-                    shippingCents={bookCatalog.shippingCents}
+                    shippingRates={bookCatalog.shippingRates}
                     instapay={settings.contact.instapay}
                     vodafoneCash={settings.contact.vodafoneCash}
                   />

@@ -5,7 +5,11 @@ import type {
   AdminBookRow,
 } from '@ayman/contracts/admin/books';
 import type { BookCard, BookCatalog, BookShelf, BookTerm } from '@ayman/contracts/books';
-import { BOOK_SHIPPING_CENTS } from '@ayman/contracts/books';
+import {
+  DEFAULT_BOOK_SHIPPING_RATES,
+  minBookShippingCents,
+  type BookShippingRates,
+} from '@ayman/contracts/books';
 import { copy } from '@ayman/contracts/copy';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
@@ -190,25 +194,36 @@ export class BooksService {
       return a.subjectNameAr.localeCompare(b.subjectNameAr, 'ar');
     });
 
+    const shippingRates = await this.shippingRates();
     return {
       shelves: ordered,
-      shippingCents: await this.shippingCents(),
+      /* ⚠️ The CHEAPEST zone, and the payload says so — a page with no address
+         yet can honestly quote «الشحن يبدأ من ٨٠ ج» and nothing may charge it.
+         What is owed comes from `bookShippingCentsFor` on the server at the
+         moment the order is written. */
+      shippingCents: minBookShippingCents(shippingRates),
+      shippingRates,
       total: rows.length,
     };
   }
 
   /**
-   * The delivery fee currently in force, in piastres.
+   * The delivery rates currently in force, in piastres — «قاهرة وجيزة ٨٠، وجه
+   * بحري ١٠٠، صعيد وسينا وبحر أحمر ١٥٠».
    *
    * Read from settings on every call rather than cached: it is one jsonb column
    * on a singleton row that every page already loads, and a cached shipping fee
    * is a fee that keeps being charged for minutes after it was changed — the
    * exact failure `build-bakes-empty-settings-cache` describes, on a number
    * people pay.
+   *
+   * The `??` is not dead code even though the schema defaults every zone: a
+   * settings row that has never been written at all reads as `undefined` here,
+   * and three `undefined` fees would quote `NaN` at checkout.
    */
-  async shippingCents(): Promise<number> {
+  async shippingRates(): Promise<BookShippingRates> {
     const settings = await this.settings.read();
-    return settings.store?.shippingCents ?? BOOK_SHIPPING_CENTS;
+    return settings.store?.shippingRates ?? DEFAULT_BOOK_SHIPPING_RATES;
   }
 
   // ── admin ───────────────────────────────────────────────────────────────
