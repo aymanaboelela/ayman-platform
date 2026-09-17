@@ -1,10 +1,10 @@
 import Link from 'next/link';
+import { CourseArt } from '@/components/course-art';
 import type { CatalogCourse } from '@ayman/contracts/catalog';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { formatEGP } from '@/lib/price';
 import { Mono, NeonCommand, NeonHead, NeonMeta, NeonWindow, type MetaRow } from './neon-chrome';
 import { META, MARKERS, neonCopy } from './neon-copy';
-import { runtime } from './neon-format';
 
 /**
  * The cheapest plan's price as a bare number, or «مجاني».
@@ -41,14 +41,22 @@ function priceRow(course: CatalogCourse): MetaRow {
  * `getCatalogOrEmpty()` read, the same curation-order rule, the same price
  * precedence. The card is different; the facts are not.
  *
- * ## No cover image, deliberately
+ * ## The cover, and why it is back
  *
- * The catalogue carries `coverKey` and this card ignores it. A course cover is
- * a designed poster in whatever palette its designer chose, and this page is
- * one unbroken dark ground lit by a single hue — a row of three arbitrary
- * rectangles is the fastest way to break that, and cropping or tinting
- * somebody's cover to fit is worse. The window's filename carries the
- * identity instead, and it is the real slug.
+ * This card shipped WITHOUT one, on the argument that a poster in whatever
+ * palette its designer chose breaks a page that is one unbroken dark ground
+ * lit by a single hue. That argument is real and it lost to a simpler fact:
+ * with no cover the whole catalogue is text, and a student scrolling a course
+ * list on a phone has nothing to recognise a course BY. «شكل الكورسات» was the
+ * first thing asked for after seeing it.
+ *
+ * So the cover renders inside the window, above the title, in the one place
+ * that keeps the original argument's point: it sits UNDER the title bar, so
+ * the frame still reads as an editor and the poster reads as a file open in
+ * it — bounded, not floating on the ground. `<CourseArt>` (not a bare
+ * `<Image>`) because a course with no cover yet must still draw something
+ * rather than collapse, and it already derives a per-subject composition for
+ * exactly that case.
  */
 function NeonCourseWindow({ course }: { course: CatalogCourse }) {
   const href = `/courses/${course.slug}`;
@@ -61,14 +69,33 @@ function NeonCourseWindow({ course }: { course: CatalogCourse }) {
         : course.systemNameAr,
       arabic: true,
     },
-    { key: META.lessons, value: String(course.lessonCount) },
-    { key: META.runtime, value: runtime(course.totalSeconds) },
+    /*
+     * ⚠️ `lessons` and `runtime` are deliberately NOT here any more.
+     *
+     * They were the two rows a brand-new course is worst at: «lessons 1» and
+     * «runtime 03:37» under a title that promises a curriculum reads as a
+     * course nobody finished, and it is the first thing a visitor sees. A
+     * lecture count is a fact the COURSE PAGE should state, next to the outline
+     * that justifies it — not a number on a card, with nothing around it, at
+     * the moment a student is deciding whether to look at all.
+     *
+     * What stays is what helps someone choose: which year and stream it is for,
+     * and what it costs.
+     */
     priceRow(course),
   ];
 
   return (
     <li className="neon-course">
       <NeonWindow file={course.slug}>
+        <Link href={href} className="neon-course__art" tabIndex={-1} aria-hidden="true">
+          <CourseArt
+            coverKey={course.coverKey ?? null}
+            subjectNameAr={course.subjectNameAr}
+            seed={course.slug}
+            sizes="(max-width: 48rem) 92vw, 30rem"
+          />
+        </Link>
         <h3 className="neon-course__title">
           <Link href={href}>{course.title}</Link>
         </h3>

@@ -2130,9 +2130,15 @@
 }
 
 [data-preset='neon'] .neon-course__title {
-  font-size: var(--fs-title-4);
-  line-height: 1.55;
-  font-weight: var(--fw-semibold);
+  /* Sized as a heading, not as another line of window chrome.
+     `1.55` was the leading of the meta rows around it, which on a two-line
+     Arabic course title opened a gap wide enough to read as two separate
+     headings; and semibold left it competing with the filename in the title
+     bar above it. This is the first thing a student reads on the card. */
+  font-size: var(--fs-title-3);
+  line-height: 1.35;
+  font-weight: var(--fw-bold);
+  text-wrap: balance;
 }
 
 [data-preset='neon'] .neon-course__title a {
@@ -2825,3 +2831,24 @@
   --site-shadow-lg: 0 24px 60px rgb(0 0 0 / 0.55);
   color-scheme: dark;
 }
+
+/* The course poster, inside the window and under its title bar — see the
+   rationale in `neon-courses.tsx`. Bounded and clipped so it reads as a file
+   open in an editor rather than a rectangle floating on the dark ground; the
+   hairline is the same one the window's own chrome uses. */
+[data-preset='neon'] .neon-course__art {
+  display: block;
+  margin-block-end: 0.875rem;
+  border-radius: var(--r-xs);
+  overflow: hidden;
+  border: 1px solid rgb(var(--p-rgb) / 0.22);
+  aspect-ratio: 16 / 10;
+}
+
+[data-preset='neon'] .neon-course__art > * {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+

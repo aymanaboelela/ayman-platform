@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { IS_AYMAN } from '@/lib/tenant';
 import { AgentDiscoveryLinks } from '@/components/agents/agent-discovery-links';
 import { WebMcpProvider } from '@/components/agents/webmcp-provider';
 import { SmoothScroll } from '@/components/motion/smooth-scroll';
@@ -90,7 +91,26 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
 
       <div className="dot-grid" aria-hidden="true" />
       <DotGridSpotlight />
-      <SplashCursorMount />
+      {/*
+        ⚠️ A WebGL fluid simulation, on HIS stack only.
+
+        `<SplashCursorMount />` is a continuous full-viewport WebGL canvas — it
+        compiles shaders, holds a GL context and runs a simulation for as long
+        as the page is open. It is Ayman's ambient signature and it is worth its
+        cost on his page.
+
+        On another instructor's it is worth nothing at all, and it is not free:
+        it is the single heaviest thing this layout mounts, it runs on the phone
+        of a student on Egyptian mobile data, and its colour is a hard-coded
+        orange that is not even the tenant's hue (`splash-cursor-mount.tsx`).
+        Every stack was paying for an effect that belongs to somebody else's
+        brand.
+
+        Gated at the MOUNT, not inside the component: the point is that the
+        chunk is never loaded and no context is ever created, which a `return
+        null` inside a client component does not buy.
+      */}
+      {IS_AYMAN ? <SplashCursorMount /> : null}
 
       <SmoothScroll />
       {/* Watches for the reported white page — laid out, full of text, painting
