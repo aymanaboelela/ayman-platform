@@ -5,7 +5,7 @@ import { ImagePlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
-import { cn } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
 import { Button } from '@ayman/ui/components/button';
 import {
   Dialog,
