@@ -1,5 +1,6 @@
 import { formatCopy } from '@ayman/contracts/format';
 import {
+  COURSE_LINK_LINE,
   FOCUS_INTROS,
   FOCUS_ITEM,
   FOCUS_SINGLE,
@@ -7,6 +8,13 @@ import {
   FOCUS_SINGLE_PLAIN,
   FOCUS_ITEM_UNTITLED,
   FOCUS_TAILS,
+  FOLLOW_UP_ASKS,
+  FOLLOW_UP_CLOSERS,
+  FOLLOW_UP_LESSON_MANY,
+  FOLLOW_UP_LESSON_SINGLE,
+  FOLLOW_UP_OPENERS,
+  FOLLOW_UP_QUIZ_MANY,
+  FOLLOW_UP_QUIZ_SINGLE,
   LIST_LAST_SEPARATOR,
   LIST_SEPARATOR,
   NUDGE_BODIES,
@@ -21,6 +29,11 @@ import {
   QUIZ_RESULT_OPENERS,
   QUIZ_SCORE_LINES,
   STRENGTH_LINES,
+  SUBSCRIBE_BODIES,
+  SUBSCRIBE_BODIES_UNKNOWN,
+  SUBSCRIBE_CLOSERS,
+  SUBSCRIBE_OPENERS,
+  TITLE_QUOTE,
   WHATSAPP_BODIES,
   WHATSAPP_CLOSERS,
   WHATSAPP_LINK_LINE,
@@ -91,7 +104,30 @@ export type OutreachFacts =
     }
   | { kind: 'quiz_nudge'; lessonTitle: string }
   | { kind: 'lesson_praise'; lessonTitle: string }
-  | { kind: 'whatsapp_invite' };
+  | { kind: 'whatsapp_invite' }
+  | {
+      kind: 'follow_up';
+      /**
+       * Lecture titles that went by untouched, newest first. May be empty —
+       * but not at the same time as `missedQuizzes`, which `/admin/follow-up`
+       * guarantees by never listing a student with nothing missed.
+       */
+      missedLessons: string[];
+      /** Quiz titles with no submitted sitting. Same shape, same guarantee. */
+      missedQuizzes: string[];
+    }
+  | {
+      kind: 'subscribe_nudge';
+      /**
+       * The course this student's own year and stream point at, or `null` when
+       * the profile does not say enough to pick one — see
+       * `SUBSCRIBE_BODIES_UNKNOWN` for why that is a different sentence rather
+       * than the same one with a blank in it.
+       */
+      courseTitle: string | null;
+      /** Absolute. The course page when there is a course, else the catalog. */
+      url: string;
+    };
 
 export interface ComposeInput {
   /** The student's first name. `firstNameOf` derives it from the account name. */
@@ -175,6 +211,13 @@ const MAX_STRENGTH_TOPICS = 2;
  * thing every message is really about. Never twice in a row; see `wantsGroup`.
  */
 const GROUP_TAGALONG_ODDS = 3;
+
+/** Kinds that already end on something to press. See `shouldAddGroup`'s caller. */
+const NO_TAGALONG: ReadonlySet<OutreachFacts['kind']> = new Set([
+  'whatsapp_invite',
+  'follow_up',
+  'subscribe_nudge',
+]);
 
 export function bandFor(scorePercent: number): OutreachBand {
   if (scorePercent >= BAND_EXCELLENT) return 'excellent';
@@ -311,6 +354,73 @@ export function composeOutreach(input: ComposeInput): ComposedOutreach {
       break;
     }
 
+    /**
+     * «إزاي الأخبار؟» — what was missed, and one question.
+     *
+     * The ORDER is the design and it is the opposite of the obvious one: the
+     * facts come before the question, because a message that opens with «حصل
+     * إيه؟» is an interrogation and one that opens with what was noticed is a
+     * teacher who looked. And the lists come as at most two sentences, never
+     * as a heading with bullets under it — see `FOLLOW_UP_LESSON_SINGLE` for
+     * the reply that taught this file that lesson.
+     */
+    case 'follow_up': {
+      const facts = input.facts;
+      blocks.push([formatCopy(take('o', FOLLOW_UP_OPENERS), vars)]);
+
+      const noticed: string[] = [];
+      if (facts.missedLessons.length > 0) {
+        const single = facts.missedLessons.length === 1;
+        noticed.push(
+          formatCopy(take(single ? 'l1' : 'l', single ? FOLLOW_UP_LESSON_SINGLE : FOLLOW_UP_LESSON_MANY), {
+            ...vars,
+            lessons: joinQuoted(facts.missedLessons),
+          }),
+        );
+      }
+      if (facts.missedQuizzes.length > 0) {
+        const single = facts.missedQuizzes.length === 1;
+        noticed.push(
+          formatCopy(take(single ? 'q1' : 'q', single ? FOLLOW_UP_QUIZ_SINGLE : FOLLOW_UP_QUIZ_MANY), {
+            ...vars,
+            quizzes: joinQuoted(facts.missedQuizzes),
+          }),
+        );
+      }
+      // One block, so the two sentences sit on consecutive lines rather than
+      // as two paragraphs — they are one observation said in two halves.
+      if (noticed.length > 0) blocks.push(noticed);
+
+      blocks.push([formatCopy(take('a', FOLLOW_UP_ASKS), vars)]);
+      blocks.push([formatCopy(take('c', FOLLOW_UP_CLOSERS), vars)]);
+      break;
+    }
+
+    /**
+     * «كمّل رحلتك» — the account with no seat.
+     *
+     * The link goes at the END of the body block, exactly where the WhatsApp
+     * invitation puts its own, so the closer that follows can point UP at the
+     * card `MessageBody` draws from it.
+     */
+    case 'subscribe_nudge': {
+      const facts = input.facts;
+      const scoped = { ...vars, course: facts.courseTitle ?? '' };
+
+      blocks.push([formatCopy(take('o', SUBSCRIBE_OPENERS), scoped)]);
+
+      const body = [
+        facts.courseTitle
+          ? formatCopy(take('b', SUBSCRIBE_BODIES), scoped)
+          : formatCopy(take('bu', SUBSCRIBE_BODIES_UNKNOWN), scoped),
+        formatCopy(COURSE_LINK_LINE, { url: facts.url }),
+      ];
+      blocks.push(body);
+
+      blocks.push([formatCopy(take('c', SUBSCRIBE_CLOSERS), scoped)]);
+      break;
+    }
+
     case 'whatsapp_invite': {
       blocks.push([formatCopy(take('o', WHATSAPP_OPENERS), vars)]);
       const body = [formatCopy(take('b', WHATSAPP_BODIES), vars)];
@@ -324,11 +434,16 @@ export function composeOutreach(input: ComposeInput): ComposedOutreach {
   }
 
   /*
-   * The tagalong is appended to the OTHER three kinds only. On a
-   * `whatsapp_invite` the group is already the whole message, and adding it
-   * again is how a message starts reading like an autoresponder.
+   * The tagalong is appended to the three SWEPT kinds only.
+   *
+   * On a `whatsapp_invite` the channel is already the whole message, and
+   * adding it again is how a message starts reading like an autoresponder.
+   * The two manual kinds are excluded for a different reason: each of them
+   * ends on ONE thing to press — a question to answer, or a course card —
+   * and a second link under it splits the one action the message exists to
+   * produce. `subscribe_nudge` would also draw two cards in one bubble.
    */
-  if (wantsGroup && input.facts.kind !== 'whatsapp_invite') {
+  if (wantsGroup && !NO_TAGALONG.has(input.facts.kind)) {
     const tail = [formatCopy(take('w', WHATSAPP_TAGALONGS), vars)];
     if (input.whatsappUrl) {
       tail.push(formatCopy(WHATSAPP_LINK_LINE, { url: input.whatsappUrl }));
@@ -368,6 +483,18 @@ function renderFocusItem(topic: OutreachTopic): string {
   return topic.name
     ? formatCopy(FOCUS_ITEM, { topic: topic.name, questions })
     : formatCopy(FOCUS_ITEM_UNTITLED, { questions });
+}
+
+/**
+ * Lecture and quiz titles, each in Arabic quotation marks, joined the same way.
+ *
+ * The quotes are not decoration: a title like «الدرس الأول» dropped bare into
+ * «المحاضرات دي لسه ما اتفتحتش: الدرس الأول، المراجعة» reads as prose and the
+ * boundary between two titles disappears. Same reason every other pool here
+ * writes «{quiz}» rather than {quiz}.
+ */
+function joinQuoted(items: readonly string[]): string {
+  return joinArabic(items.map((title) => formatCopy(TITLE_QUOTE, { title })));
 }
 
 /**

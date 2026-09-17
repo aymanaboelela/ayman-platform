@@ -19,6 +19,7 @@ import {
 } from './order-actions';
 import { MarkOrderPaidDialog } from './mark-paid-dialog';
 import { ShipAction } from './ship-action';
+import { HeldBanner } from './held-banner';
 import { PrintAction } from './print-action';
 import { OrderCheckbox } from './bulk-ship';
 import { BookOrderScreenshotThumbnail } from './screenshot-thumbnail';
@@ -171,6 +172,20 @@ export function BookOrderCard({
       />
 
       <div className="flex flex-col gap-3 p-4 ps-5">
+        {/*
+          «محجوز للمراجعة» — ABOVE the name, because it changes what to do with
+          the whole row. A held order is already missing from the packing list
+          and skipped by the bulk «اتشحن»; this is the only place that says so.
+        */}
+        {row.heldForReviewAt ? (
+          <HeldBanner
+            id={row.id}
+            reason={row.heldReason}
+            readCents={row.screenshotAmountCents}
+            owedCents={row.amountCents}
+          />
+        ) : null}
+
         {/* ── WHO, and what state ─────────────────────────────────────── */}
         <div className="flex flex-wrap items-start gap-3">
           <span

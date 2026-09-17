@@ -112,6 +112,21 @@ export const AdminBookOrderQuerySchema = ListQuerySchema.extend({
 }).omit({ dir: true });
 export type AdminBookOrderQuery = z.infer<typeof AdminBookOrderQuerySchema>;
 
+/**
+ * «راجعته وتمام» — what the API answers when a hold is lifted.
+ *
+ * The id and the fact it is no longer held, nothing else. The screen reloads
+ * the row it already has; a whole `AdminBookOrderRow` here would be a second
+ * shape of the same order to keep in agreement with the first.
+ */
+export const ClearBookOrderHoldResultSchema = z.object({
+  id: z.uuid(),
+  /** Always null on success — the field is here so the caller can assert it
+   *  rather than assume it. */
+  heldForReviewAt: z.null(),
+});
+export type ClearBookOrderHoldResult = z.infer<typeof ClearBookOrderHoldResultSchema>;
+
 export const AdminBookOrderRowSchema = z.object({
   id: z.uuid(),
   /** `null` for a GUEST order — no account is linked. `fullName`/`phone`
@@ -179,6 +194,21 @@ export const AdminBookOrderRowSchema = z.object({
   status: BookOrderStatusSchema,
   createdAt: z.iso.datetime(),
   paidAt: z.iso.datetime().nullable(),
+  /**
+   * «محجوز للمراجعة» — set when reading the receipt found something the admin
+   * has to look at before the parcel moves. Null is the normal case.
+   *
+   * On the ROW rather than behind a filter, because the chip has to be visible
+   * wherever the order is: an order that vanishes from the printing run with
+   * nothing on the list saying why is a parcel that looks lost.
+   */
+  heldForReviewAt: z.iso.datetime().nullable(),
+  /** `amount_short` or `duplicate_receipt` — what to go and look at. */
+  heldReason: z.string().nullable(),
+  /** The amount read off the screenshot, in piastres, or null when the picture
+   *  could not be read. Compared against `amountCents` by eye on the screen —
+   *  the platform only acts on it when it is SHORT. */
+  screenshotAmountCents: z.number().int().nullable(),
   /** «راح للمطبعة» — when this order's copy went into a print run. `null` for
    *  an order that never passed through the printer, which is a real path and
    *  not a missing value: see `BookOrderStatusSchema`. */

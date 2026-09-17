@@ -244,7 +244,9 @@ export function MessageBubble({
               {/* An empty body is legal — a reply may be only a file — and
                   `MessageBody` renders nothing for '', so the bubble collapses
                   onto the attachment rather than reserving a blank line. */}
-              <MessageBody body={message.body} />
+              {/* Same rule as the student's thread: only his own side draws
+                  a course card, so he sees exactly what the student saw. */}
+              <MessageBody body={message.body} trusted={!fromVisitor} />
             </>
           )}
 

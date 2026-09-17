@@ -1,8 +1,22 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { copy } from '@ayman/contracts';
 import type { BookOrder, BookOrderStatus } from '@ayman/contracts/book-orders';
 import { MyBookOrdersSection } from './my-book-orders-section';
+
+/*
+ * ⚠️ A «في الطريق» card now renders `<BookOrderReceivedButton>`, which is a
+ * client component calling `useRouter()` — and outside a Next tree that throws
+ * «invariant expected app router to be mounted» before a single assertion runs.
+ *
+ * Mocked rather than wrapped in a provider: nothing in this file exercises
+ * navigation, and the button's own behaviour (the POST, the refresh, the toast)
+ * belongs to a test of the button, not of the section that happens to contain
+ * one.
+ */
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: () => undefined, push: () => undefined }),
+}));
 
 // Explicit, as every component test in this repo does it — `vitest.setup.ts`
 // registers no automatic cleanup, so without this each `render` leaves its tree
@@ -195,6 +209,35 @@ describe('MyBookOrdersSection — the way out', () => {
     expect(screen.getByText('الأحدث')).toBeInTheDocument();
     expect(screen.getByText('الأوسط')).toBeInTheDocument();
     expect(screen.queryByText('الأقدم')).not.toBeInTheDocument();
+  });
+});
+
+describe('MyBookOrdersSection — «استلمت الكتاب»', () => {
+  /**
+   * The button exists so `delivered` stops meaning «الأدمن فضي يعلّم» and
+   * starts meaning «الكتاب وصل». Only the student holding the parcel knows
+   * that, and only while it is out.
+   */
+  it('offers it on an order in the post, and nowhere else', () => {
+    render(<MyBookOrdersSection orders={[order({ status: 'shipped' })]} supportHref={SUPPORT} />);
+    expect(screen.getByRole('button', { name: c.confirmReceived })).toBeTruthy();
+
+    for (const status of ['address_only', 'paid', 'printing', 'delivered', 'rejected'] as const) {
+      cleanup();
+      render(<MyBookOrdersSection orders={[order({ status })]} supportHref={SUPPORT} />);
+      expect(screen.queryByRole('button', { name: c.confirmReceived })).toBeNull();
+    }
+  });
+
+  /**
+   * ⚠️ «بنطبعه» in particular. A student pressing «استلمت» on a copy still at
+   * the printer is looking at the wrong order, and accepting it would erase a
+   * real «لسه في المطبعة» from the queue the shipping desk works from.
+   */
+  it('does not offer it on an order still at the printer', () => {
+    render(<MyBookOrdersSection orders={[order({ status: 'printing' })]} supportHref={SUPPORT} />);
+    expect(screen.getByText(c.notePrinting)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: c.confirmReceived })).toBeNull();
   });
 });
 

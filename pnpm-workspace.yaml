@@ -20,6 +20,10 @@ allowBuilds:
   # Denied: anonymous usage telemetry. Builds and runs fine without it.
   '@scarf/scarf': false
   argon2: true # native Argon2id binding; ships prebuilt binaries, no compile step
+  # Denied: its only install script is `opencollective-postinstall`, a donation
+  # banner. The WASM and the worker ship prebuilt in the tarball, so the OCR
+  # works with the script refused — same call as `@scarf/scarf` above.
+  tesseract.js: false
 
 # Forced resolutions. Keep this list short and keep every entry's reason with
 # it — an override is a promise that a transitive dependency will work on a

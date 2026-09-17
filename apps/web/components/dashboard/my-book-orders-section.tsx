@@ -4,6 +4,7 @@ import type { BookOrder } from '@ayman/contracts/book-orders';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
 import { StreamBadge } from '@/components/stream-badge';
+import { BookOrderReceivedButton } from './book-order-received-button';
 import { describeBookOrderStatus, formatBookOrderDate, MY_BOOK_ORDERS_HREF } from '@/lib/book-order-view';
 import { newestFirst } from '@/lib/my-book-orders';
 import { formatEGP, formatShipping } from '@/lib/price';
@@ -273,6 +274,14 @@ export function BookOrderCard({
           ) : null}
         </div>
       ) : null}
+
+      {/*
+        «استلمت الكتاب» — on «في الطريق» and nowhere else.
+        The parcel is out and only the student can say it arrived; see the
+        button's own note for why `delivered` was previously a date about the
+        admin rather than about the book.
+      */}
+      {order.status === 'shipped' ? <BookOrderReceivedButton orderId={order.id} /> : null}
 
       {/*
         «كلّم الدعم» — on a CLOSED order only, and only when a number is

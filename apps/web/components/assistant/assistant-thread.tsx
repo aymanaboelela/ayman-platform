@@ -174,7 +174,10 @@ export function AssistantThread({
                 {/* An empty body is legal now — a message may be only a file
                     — and `MessageBody` on '' renders nothing, so the bubble
                     collapses to the attachment rather than reserving a line. */}
-                <MessageBody body={message.body} />
+                {/* `trusted` only for a message Ayman's side wrote — it is
+                    what lets «الكورس بتاعك» draw as a card. A visitor's own
+                    pasted link never gets one; see `MessageBody`. */}
+                <MessageBody body={message.body} trusted={!fromVisitor} />
 
                 {message.attachment ? (
                   <MessageAttachmentView

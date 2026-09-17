@@ -483,3 +483,185 @@ export const LIST_LAST_SEPARATOR = ' و';
 
 /** Joins slot numbers inside one bullet: «سؤال 3 و 7». */
 export const QUESTION_NUMBER_SEPARATOR = ' و ';
+
+// ── «إزاي الأخبار؟» — the student who stopped ──────────────────────────
+//
+// The one message on this list that ASKS A QUESTION and means it. Everything
+// else here tells a student something; this one is sent because the platform
+// does not know why someone disappeared, and the only thing that can answer
+// that is the student.
+//
+// Three rules on top of the four in the header, all learned from what the
+// first draft of these lines did wrong:
+//
+// **It never accuses.** «إنت مش بتدخل» and «بقالك أسبوع مختفي» are the same
+// fact as «المحاضرات دي لسه ما اتفتحتش» and the student reads them completely
+// differently — one is a teacher noticing, the other is a register being
+// called. The pool is written so that the SUBJECT of every sentence is the
+// lecture or the quiz, never the person.
+//
+// **It offers the way out in the same breath.** A message that lists what
+// somebody missed and then stops is a bill. Every closer here either asks
+// what happened or says the catching up is small — usually both.
+//
+// **It never guesses the reason.** «عارف إن الامتحانات ضاغطة» is a guess, and
+// it is wrong for the student whose laptop broke, whose subscription lapsed,
+// or who simply could not find the lesson. Asking costs one line and is the
+// entire point of the send.
+
+/**
+ * ⚠️ NOT a second greeting.
+ *
+ * The first draft opened every entry with «إزاي الأخبار؟ أنا مهندس أيمن» —
+ * which is exactly what Ayman dictated, and exactly what the GREETING slot
+ * above already does: two of its eight entries name him, and all eight say
+ * hello. What shipped in preview was «سلام عليكم يا مروان، أخبار المذاكرة
+ * إيه؟» followed immediately by «إزيك؟ أنا مهندس أيمن.» — hello twice, from
+ * someone who has apparently forgotten he just said it.
+ *
+ * So the greeting stays where greetings live, and this pool does the job the
+ * brief actually needs it to do: say that somebody LOOKED.
+ */
+export const FOLLOW_UP_OPENERS = [
+  'كنت بمرّ على الكورس النهارده وبشوف مين وصل لفين، ووقفت عند حاجة.',
+  'بتابع الكورس أول بأول، وخدت بالي من حاجة صغيرة.',
+  'بشوف الكورس واحد واحد مش بالجملة، وفيه حاجة حبيت أسأل عنها.',
+  'مريت على الحساب النهارده، وفيه حاجة عايز أسأل عنها.',
+  'بصّيت على الكورس من شوية، ولقيت حاجة واقفة.',
+] as const;
+
+/**
+ * The lectures, when there is exactly one.
+ *
+ * ⚠️ Separate pool from the list form for the reason `FOCUS_SINGLE`'s own note
+ * gives at length: a heading, one bullet and a tail is six lines about one
+ * lecture, and that structure is what made a student reply «يعني اي» to a
+ * message that was trying to be kind. `{lessons}` is the title, already quoted.
+ */
+export const FOLLOW_UP_LESSON_SINGLE = [
+  'خدت بالي إن {lessons} لسه ما اتفتحتش.',
+  '{lessons} لسه مفتوحة ومستنية.',
+  'فيه محاضرة واحدة بس لسه ما اتشافتش: {lessons}.',
+] as const;
+
+/** Two or more lectures. `{lessons}` is already joined with «و». */
+export const FOLLOW_UP_LESSON_MANY = [
+  'خدت بالي إن المحاضرات دي لسه ما اتفتحتش: {lessons}.',
+  'فيه محاضرتين أو أكتر لسه مستنيين: {lessons}.',
+  'المحاضرات دي لسه ما اتشافتش: {lessons}.',
+] as const;
+
+/** Exactly one quiz. `{quizzes}` is the title. */
+/**
+ * Exactly one quiz. `{quizzes}` is the title, already quoted.
+ *
+ * ⚠️ No «كويز» in front of the placeholder. A quiz lesson is titled by the
+ * instructor and is usually already called «كويز المحاضرة الثانية», so the
+ * noun produced «وكويز «كويز الوحدة الأولى» لسه من غير حل». Same reason
+ * `QUIZ_RESULT_OPENERS` says «نتيجتك في «{quiz}»» and not «في كويز «{quiz}»».
+ */
+export const FOLLOW_UP_QUIZ_SINGLE = [
+  'وكمان {quizzes} لسه من غير حل.',
+  'و{quizzes} لسه فاضي ومستني الحل.',
+  'وفيه كمان واحد مستني الحل: {quizzes}.',
+] as const;
+
+/** Two or more quizzes. */
+export const FOLLOW_UP_QUIZ_MANY = [
+  'ودول لسه من غير حل: {quizzes}.',
+  'وكمان دول لسه فاضيين: {quizzes}.',
+  'وفيه كمان لسه مستني الحل: {quizzes}.',
+] as const;
+
+/**
+ * The question. It is the point of the message, so it gets a block of its own
+ * and it is always the second-to-last thing read.
+ */
+export const FOLLOW_UP_ASKS = [
+  'ممكن أعرف السبب؟ أي حاجة عطّلت، أنا عايز أعرفها وأحلّها.',
+  'فيه حاجة واقفة؟ أنا عايز أفهم بصراحة وإحنا نتصرف.',
+  'ممكن أعرف إيه اللي حصل؟ مفيش مشكلة خالص، بس محتاج أفهم.',
+  'حصل إيه؟ لو فيه حاجة صعبة أو حاجة مش شغالة، الرسالة دي مكانها.',
+  'إيه السبب لو سمحت؟ سؤال، ظرف، مشكلة في المنصة — أي حاجة، وأنا هنا.',
+] as const;
+
+export const FOLLOW_UP_CLOSERS = [
+  'اللي فات ده يتعوّض في يوم واحد، وأنا هرتّبهولك بالترتيب.',
+  'الرجوع أسهل بكتير مما هو باين، ومحدش هيحاسب على اللي فات.',
+  'أنا مش هسيبك، بس محتاج أعرف نبدأ منين.',
+  'رسالة واحدة هنا، وأنا أقول نبدأ منين بالظبط.',
+  'أي وقت، أنا موجود — والباقي شغل بسيط.',
+] as const;
+
+// ── «كمّل رحلتك» — an account with no seat ─────────────────────────────
+//
+// Sent to somebody who signed up, looked around and never subscribed to the
+// course their own year and stream point at. It is the only message here with
+// a commercial ask in it, and that is exactly why it is the shortest.
+//
+// **It names ONE course.** The catalog does not filter by year (see
+// `CourseEmphasis`'s own note on why), so a student who opens it sees
+// everything and picks nothing. The whole value this message adds over the
+// catalog is that it has already done the picking — year, شعبة, لغات ولا عام —
+// and hands over one card.
+//
+// **It never mentions price.** Nothing here knows one: the course may be free,
+// may be monthly, may be sold with a book. A message that says «اشترك» over a
+// free course is a lie, and one that quotes a number is a number that will be
+// wrong the first time it changes. The card opens the course page, which is
+// the one surface that knows.
+//
+// **It congratulates the step already taken.** Ayman's own brief: «إنه أنت
+// تمام، دخلت المنصة، فكمل رحلتك بقى». Somebody who made an account did the
+// hard part; the message is a nudge, not a sales pitch.
+
+/** Same rule as `FOLLOW_UP_OPENERS`: the greeting slot already said hello. */
+export const SUBSCRIBE_OPENERS = [
+  'شفت إن الحساب هنا اتعمل وخلاص — والخطوة دي تمام.',
+  'الحساب جاهز، وفاضل خطوة واحدة بس.',
+  'أهلاً بالحساب الجديد — الجزء الصعب خلص.',
+  'الحساب اتعمل، وده أصعب جزء وعدّى.',
+] as const;
+
+/** The course was identified from the student's own year and stream. */
+export const SUBSCRIBE_BODIES = [
+  'الكورس اللي على سنتك هو «{course}»، وجاهز من دلوقتي.',
+  'على حسب سنتك، الكورس اللي يخصك هو «{course}».',
+  'دوّرت على اللي يخص سنتك ولقيت «{course}» — ده مكانك.',
+  'كورس «{course}» هو اللي على مقاسك بالظبط، وكل المحاضرات فيه مرتبة من أول واحدة.',
+] as const;
+
+/**
+ * The fallback body, used when the profile does not say enough to pick a
+ * course — no year, or no stream.
+ *
+ * ⚠️ NOT a variant of the pool above with the title left blank. A sentence
+ * that says «الكورس اللي على سنتك هو» and then names nothing is worse than no
+ * message, and a body that invents a course for a student whose year the
+ * platform never asked for is the profile claiming a fact nobody gave it.
+ * This one sends them to the catalog and says so.
+ */
+export const SUBSCRIBE_BODIES_UNKNOWN = [
+  'كل الكورسات مرتبة هنا حسب السنة، والاختيار على حسب سنتك.',
+  'الكورسات كلها في صفحة واحدة، وكل واحد مكتوب عليه هو لسنة كام.',
+  'من هنا الكورسات المتاحة كلها في مكان واحد.',
+] as const;
+
+export const SUBSCRIBE_CLOSERS = [
+  'الزرار اللي فوق بيفتح الكورس على طول — دوسة واحدة وخلاص.',
+  'دوسة واحدة على الكرت ده والكورس يفتح على طول.',
+  'الكرت اللي فوق هو الباب، وأي سؤال قبل البداية أنا هنا.',
+  'الفتح من الزرار اللي فوق، ولو فيه أي سؤال أنا موجود هنا.',
+] as const;
+
+/**
+ * The course link, ALONE on its own line — the same contract
+ * `WHATSAPP_LINK_LINE` documents, and for the identical reason: `MessageBody`
+ * keys off a line being nothing but a URL, turns it into a pressable card, and
+ * drops the address. Put a label in front of it and what ships is 55
+ * unbreakable characters inside a 280px bubble.
+ */
+export const COURSE_LINK_LINE = '{url}';
+
+/** Joins lecture or quiz titles inside one sentence. Same rule as `joinArabic`. */
+export const TITLE_QUOTE = '«{title}»';

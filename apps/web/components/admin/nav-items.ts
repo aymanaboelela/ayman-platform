@@ -18,6 +18,7 @@ import {
   Settings,
   SquarePen,
   Users,
+  UserRoundSearch,
   type LucideIcon,
   Megaphone,
   MessagesSquare,
@@ -218,6 +219,18 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.broadcast,
     icon: MessagesSquare,
     permission: 'conversation:reply',
+    group: 'teaching',
+  },
+  {
+    // «متابعة الطلبة» — between the log and the send button, because it is the
+    // screen that produces the REASON to send. `student:read`, not
+    // `outreach:read`: the rows are students and their progress, and every one
+    // of them links to a record that same permission already opens. The send
+    // routes under it carry `conversation:reply` on their own.
+    href: '/admin/follow-up',
+    labelAr: copy.admin.nav.followUp,
+    icon: UserRoundSearch,
+    permission: 'student:read',
     group: 'teaching',
   },
   {

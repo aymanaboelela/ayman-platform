@@ -17,6 +17,7 @@ import {
   RejectBookOrderResultSchema,
   RejectBookOrderSchema,
   RestoreBookOrderResultSchema,
+  ClearBookOrderHoldResultSchema,
 } from '@ayman/contracts/admin/book-orders';
 import { z } from 'zod';
 import {
@@ -234,6 +235,31 @@ export async function markBookOrderPrintingAction(id: string): Promise<ActionRes
           ? error.message
           : 'unknown';
     return { ok: false, message };
+  }
+}
+
+/**
+ * «راجعته، كمّل» — lifting the review hold on one order.
+ *
+ * The hold keeps a paid order off the packing list and out of the bulk shipping
+ * buttons until a human has looked at why its receipt was flagged. This is the
+ * human saying they looked — see `BookOrder.heldForReviewAt` on the API side.
+ *
+ * `revalidatePath` because the row's chip, and its absence from the print run,
+ * are both server-rendered.
+ */
+export async function clearBookOrderHoldAction(id: string): Promise<ActionResult> {
+  try {
+    await adminSend(
+      'POST',
+      `/api/admin/book-orders/${id}/review-ok`,
+      {},
+      ClearBookOrderHoldResultSchema,
+    );
+    revalidatePath('/admin/books');
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
   }
 }
 

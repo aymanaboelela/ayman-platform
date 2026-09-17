@@ -28,6 +28,7 @@
     "@nestjs/throttler": "6.5.0",
     "@prisma/adapter-pg": "7.9.0",
     "@prisma/client": "7.9.0",
+    "@tesseract.js-data/eng": "^1.0.0",
     "@thallesp/nestjs-better-auth": "2.7.0",
     "argon2": "0.45.1",
     "better-auth": "1.6.25",
@@ -45,6 +46,7 @@
     "rxjs": "7.8.2",
     "sanitize-html": "2.17.6",
     "sharp": "0.35.3",
+    "tesseract.js": "^7.0.0",
     "web-push": "^3.6.7",
     "zod": "catalog:"
   },

@@ -50,6 +50,8 @@ import { MarketingController } from '../modules/marketing/marketing.controller';
 import { WhatsappInboundController } from '../modules/marketing/whatsapp-inbound.controller';
 import { WhatsappReceiptController } from '../modules/marketing/whatsapp-receipt.controller';
 import { AdminBroadcastController } from '../modules/outreach/admin-broadcast.controller';
+import { AdminFollowUpController } from '../modules/follow-up/follow-up.controller';
+import { FollowUpService } from '../modules/follow-up/follow-up.service';
 import { BroadcastService } from '../modules/outreach/broadcast.service';
 import { CampaignService } from '../modules/marketing/campaign.service';
 import { AudienceService } from '../modules/marketing/audience.service';
@@ -192,6 +194,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // being added here.
         WhatsappReceiptController,
         AdminBroadcastController,
+        // «متابعة الطلبة». Registered by class like every entry here rather
+        // than through `FollowUpModule`, and it resolves for the usual reason:
+        // `FollowUpService` reaches for Prisma and `OutreachService`, and
+        // `OutreachModule` is already imported below. It is the controller
+        // whose TWO permissions are the thing worth asserting — `student:read`
+        // to read the queue, `conversation:reply` to write in his name.
+        AdminFollowUpController,
         // Listed directly, like `ConversationAttachmentService` below, rather
         // than imported via `PaymentsModule` — that module also imports
         // `NotificationsModule`, which brings `NotificationsController` in
@@ -339,6 +348,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // block above gives: a provider a registered controller needs and
         // that this fixture does not supply makes the module fail to compile.
         BroadcastService,
+        // `AdminFollowUpController`'s dependency — same rule as
+        // `BroadcastService` directly above.
+        FollowUpService,
         ExpensesService,
         FinanceOverviewService,
       ],
@@ -1049,6 +1061,41 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'broadcast send: anonymous', method: 'post', path: () => '/api/admin/broadcast', actor: 'anonymous', status: 401, body: () => ({ body: 'أهلاً', target: { type: 'all' } }) },
     { label: 'broadcast send: student', method: 'post', path: () => '/api/admin/broadcast', actor: 'student', status: 403, body: () => ({ body: 'أهلاً', target: { type: 'all' } }) },
 
+    // ── «/admin/follow-up»: who stopped, who never started.
+    //
+    // TWO permissions across one controller, which is the thing worth
+    // asserting here rather than trusting: reading the queue is `student:read`
+    // (the rows are students and their progress, and each links to a record
+    // that same permission opens), and sending is `conversation:reply` — the
+    // authority `AdminInboxController` and `AdminBroadcastController` already
+    // use for putting words on a student's screen. A role holding only the
+    // first must get the list and be refused the send.
+    { label: 'follow-up list: anonymous', method: 'get', path: () => '/api/admin/follow-up', actor: 'anonymous', status: 401 },
+    { label: 'follow-up list: student', method: 'get', path: () => '/api/admin/follow-up', actor: 'student', status: 403 },
+    { label: 'follow-up list: admin', method: 'get', path: () => '/api/admin/follow-up', actor: 'admin', status: 200 },
+    { label: 'follow-up idle list: anonymous', method: 'get', path: () => '/api/admin/follow-up/idle', actor: 'anonymous', status: 401 },
+    { label: 'follow-up idle list: student', method: 'get', path: () => '/api/admin/follow-up/idle', actor: 'student', status: 403 },
+    { label: 'follow-up idle list: admin', method: 'get', path: () => '/api/admin/follow-up/idle', actor: 'admin', status: 200 },
+    { label: 'follow-up send: anonymous', method: 'post', path: () => '/api/admin/follow-up/send', actor: 'anonymous', status: 401, body: () => ({ userId: 'nobody', courseId: MISSING_UUID, window: 2 }) },
+    { label: 'follow-up send: student', method: 'post', path: () => '/api/admin/follow-up/send', actor: 'student', status: 403, body: () => ({ userId: 'nobody', courseId: MISSING_UUID, window: 2 }) },
+    /*
+     * 2xx with every count at zero, NOT 404 — a student who is no longer in
+     * the selection is the good outcome this route reports rather than an
+     * error (see the controller). `MISSING_UUID` guarantees an empty
+     * selection, so this row asserts that shape as well as the permission.
+     *
+     * 201 rather than 200 because it is a POST and nothing here overrides
+     * Nest's default, exactly like every other write in this file.
+     */
+    { label: 'follow-up send: admin', method: 'post', path: () => '/api/admin/follow-up/send', actor: 'admin', status: 201, body: () => ({ userId: 'nobody', courseId: MISSING_UUID, window: 2 }) },
+    { label: 'follow-up send-all: anonymous', method: 'post', path: () => '/api/admin/follow-up/send-all', actor: 'anonymous', status: 401, body: () => ({ courseId: MISSING_UUID, window: 2 }) },
+    { label: 'follow-up send-all: student', method: 'post', path: () => '/api/admin/follow-up/send-all', actor: 'student', status: 403, body: () => ({ courseId: MISSING_UUID, window: 2 }) },
+    { label: 'subscribe nudge send: anonymous', method: 'post', path: () => '/api/admin/follow-up/subscribe/send', actor: 'anonymous', status: 401, body: () => ({ userId: 'nobody' }) },
+    { label: 'subscribe nudge send: student', method: 'post', path: () => '/api/admin/follow-up/subscribe/send', actor: 'student', status: 403, body: () => ({ userId: 'nobody' }) },
+    { label: 'subscribe nudge send: admin', method: 'post', path: () => '/api/admin/follow-up/subscribe/send', actor: 'admin', status: 201, body: () => ({ userId: 'nobody' }) },
+    { label: 'subscribe nudge send-all: anonymous', method: 'post', path: () => '/api/admin/follow-up/subscribe/send-all', actor: 'anonymous', status: 401, body: () => ({ reason: 'never' }) },
+    { label: 'subscribe nudge send-all: student', method: 'post', path: () => '/api/admin/follow-up/subscribe/send-all', actor: 'student', status: 403, body: () => ({ reason: 'never' }) },
+
     // ── Content admin: course/section/lesson — admin-only CRUD, no per-
     // resource ownership dimension (any admin may touch any course). ──
     { label: 'admin courses list: anonymous', method: 'get', path: () => '/api/admin/courses', actor: 'anonymous', status: 401 },
@@ -1596,6 +1643,33 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       }),
       status: 404,
     },
+    // «استلمت الكتاب» — the student closing their own order, and the SECOND
+    // authenticated route on this controller.
+    //
+    // ⚠️ Not `@Public()` like the rest of the checkout. Those routes work for a
+    // guest because the order id is the bearer token for an unclaimed row — but
+    // it is a token kept in `localStorage`, and letting it CLOSE an order would
+    // let anybody holding a copied link mark a parcel delivered and take it off
+    // the list the shipping desk chases.
+    //
+    // The admin's own «وصل» sits on `book-order:ship` a hundred lines below;
+    // this one is `book-order:submit`, the permission every student carries.
+    // 404 for the student because the order id is random — proof the permission
+    // gate PASSED and ownership is what refused.
+    {
+      label: 'book order received: anonymous',
+      method: 'post',
+      path: () => `/api/book-orders/${randomUUID()}/received`,
+      actor: 'anonymous',
+      status: 401,
+    },
+    {
+      label: 'book order received: student, unknown order',
+      method: 'post',
+      path: () => `/api/book-orders/${randomUUID()}/received`,
+      actor: 'student',
+      status: 404,
+    },
     // `mine` stays authenticated — a guest has no session to list orders
     // from in the first place; this is the one route in the controller that
     // still requires `book-order:submit`.
@@ -1815,6 +1889,35 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin book orders packing list: student', method: 'get', path: () => '/api/admin/book-orders/packing-list', actor: 'student', status: 403 },
     { label: 'admin book orders packing list: admin, no status', method: 'get', path: () => '/api/admin/book-orders/packing-list', actor: 'admin', status: 400 },
     { label: 'admin book orders packing list: admin', method: 'get', path: () => '/api/admin/book-orders/packing-list?status=paid', actor: 'admin', status: 200 },
+    /*
+     * «راجعته وتمام» — lifting the review hold.
+     *
+     * `book-order:ship` and not `book-order:write`: the hold's ONLY effect is
+     * that the parcel stays off the printing run and out of the bulk shipping
+     * buttons, so clearing it is the shipping decision taken a moment early.
+     * Nothing about the order's money or its contents moves.
+     */
+    {
+      label: 'admin book order review-ok: anonymous',
+      method: 'post',
+      path: () => `/api/admin/book-orders/${randomUUID()}/review-ok`,
+      actor: 'anonymous',
+      status: 401,
+    },
+    {
+      label: 'admin book order review-ok: student',
+      method: 'post',
+      path: () => `/api/admin/book-orders/${randomUUID()}/review-ok`,
+      actor: 'student',
+      status: 403,
+    },
+    {
+      label: 'admin book order review-ok: admin, unknown order',
+      method: 'post',
+      path: () => `/api/admin/book-orders/${randomUUID()}/review-ok`,
+      actor: 'admin',
+      status: 404,
+    },
     // ── الشحن بالجملة. Same `book-order:ship` authority as the per-row
     // routes above; a batch is not a different permission, it is the same
     // decision taken ten times. The admin case sends a syntactically valid

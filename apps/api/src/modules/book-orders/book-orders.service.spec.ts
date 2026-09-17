@@ -254,8 +254,15 @@ describe('BookOrdersService', () => {
     ).id;
   });
 
-  /** Every phone this spec ever books with — see the note in `beforeEach`. */
-  const FIXTURE_PHONES = ['01012345678', '+201555000111', '01555000222', '01555000444'];
+  /*
+   * Every phone this spec books with — in BOTH spellings, and that is the part
+   * that bites. A student order is normalised to E.164 on the way in; an order
+   * `adminCreate` writes is stored exactly as the admin typed it. Listing one
+   * form leaves the other behind, and one survivor is enough (see `beforeEach`).
+   */
+  const FIXTURE_PHONES = ['01012345678', '01555000111', '01555000222', '01555000444'].flatMap(
+    (local) => [local, `+2${local}`],
+  );
 
   beforeEach(async () => {
     await prisma.bookOrder.deleteMany({ where: { userId: { in: [studentId, strangerId, linkedStudentId] } } });
@@ -270,27 +277,28 @@ describe('BookOrdersService', () => {
     await prisma.bookOrder.deleteMany({
       where: { items: { some: { bookId: { in: [bookA, bookB, soldOutBook, languagesBook, generalBook] } } } },
     });
-
     /*
-     * And by PHONE — the one key that survives.
+     * And by PHONE — the one key that reaches an order neither filter above can.
      *
-     * Every filter above is scoped to a fixture id, and `afterAll` deletes the
-     * users, books and courses those ids name. So the instant a run ends, any
-     * order it left behind becomes unreachable by its own cleanup: the next
-     * run's `beforeEach` looks for books that no longer exist and matches
-     * nothing. The rows accumulate, permanently, one failed run at a time.
+     * Two different ways a row escapes the id-scoped deletes:
      *
-     * That is not a tidiness problem, because `create()`'s duplicate guard
-     * matches on PHONE within `DUPLICATE_WINDOW_DAYS` — deliberately wider
-     * than the reuse match, so it catches the same human on a new device. A
-     * leftover row on this number is therefore a real prior order as far as
-     * the service is concerned, and every duplicate test starts failing with
-     * `DUPLICATE_RECENT_BOOK_ORDER`.
+     * · `afterAll` deletes the users, books and courses the filters above name,
+     *   so the instant a run ends, any order it left becomes unreachable by its
+     *   own cleanup — the next run looks for books that no longer exist and
+     *   matches nothing. Rows accumulate permanently, one failed run at a time.
+     *   Found at 514 orders on `01012345678`, dating back three weeks.
      *
-     * Found at 514 orders on `01012345678`, dating back three weeks — enough
-     * to fail twelve tests in this file and read as a broken service.
+     * · `adminCreate` writes «عميل بالتليفون» with no `userId`, no `courseId`
+     *   and a line whose book is not one of the fixtures — so all three filters
+     *   miss it and it survives into the next test.
      *
-     * The numbers below are this spec's own fixtures and appear nowhere else.
+     * Either way it is not a tidiness problem: `create()`'s duplicate guard
+     * matches on PHONE across the whole table within `DUPLICATE_WINDOW_DAYS`,
+     * deliberately wider than the reuse match so it catches the same human on a
+     * new device. A leftover row on one of these numbers is a real prior order
+     * as far as the service is concerned, and every duplicate case goes red —
+     * while each of them passes on its own. That is the shape of every «مرة
+     * بيعدّي ومرة لأ» report about this file.
      */
     await prisma.bookOrder.deleteMany({
       where: { phone: { in: FIXTURE_PHONES } },
@@ -447,6 +455,67 @@ describe('BookOrdersService', () => {
         confirmDuplicate: true,
       });
       expect(confirmed.id).not.toBe(first.id);
+    });
+
+    /**
+     * The regression behind the 2026-09-17 duplicates.
+     *
+     * معاذ and ayasaber each filled in an address, left it for over a week, then
+     * came back, paid, and placed a SECOND order two and eight minutes later.
+     * The question never fired: it windowed on the old order's `createdAt`, and
+     * by then that was nine days old. The date that matters is when the student
+     * last did something about the order.
+     */
+    it('asks about an old order that was PAID recently, not just a recent one', async () => {
+      const stale = new Date(Date.now() - 9 * 24 * 60 * 60 * 1000);
+      const first = await service.create(studentId, checkout());
+      await prisma.bookOrder.update({
+        where: { id: first.id },
+        // Filled in nine days ago — outside any sane window — and paid a minute
+        // ago, which is the fact that makes a second order a duplicate.
+        data: { createdAt: stale, status: 'paid', paidAt: new Date() },
+      });
+
+      await expect(service.create(studentId, checkout())).rejects.toThrow(ConflictException);
+    });
+
+    /**
+     * ⚠️ And a parcel still owed is worth asking about on ANY day — the student
+     * asking for a second copy has not seen the first one yet, so the age of
+     * the order says nothing about whether they meant it.
+     */
+    it('asks about an in-flight parcel however old the order is', async () => {
+      const ancient = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+      const first = await service.create(studentId, checkout());
+      await prisma.bookOrder.update({
+        where: { id: first.id },
+        data: { createdAt: ancient, paidAt: ancient, status: 'shipped', shippedAt: ancient },
+      });
+
+      await expect(service.create(studentId, checkout())).rejects.toThrow(ConflictException);
+    });
+
+    /**
+     * The other side of it: a book the student ordered, paid for and RECEIVED a
+     * long time ago is finished business. Asking again would turn a
+     * duplicate-guard into a one-per-customer rule.
+     */
+    it('stays quiet about a delivered order that is long past the window', async () => {
+      const ancient = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+      const first = await service.create(studentId, checkout());
+      await prisma.bookOrder.update({
+        where: { id: first.id },
+        data: {
+          createdAt: ancient,
+          paidAt: ancient,
+          status: 'delivered',
+          shippedAt: ancient,
+          deliveredAt: ancient,
+        },
+      });
+
+      const again = await service.create(studentId, checkout());
+      expect(again.id).not.toBe(first.id);
     });
 
     it('lets a different basket through without a question', async () => {

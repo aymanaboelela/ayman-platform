@@ -252,6 +252,37 @@ export const AUDIT_ACTIONS = [
   // between submitting the screenshot and shipping.
   'book-order:submit',
   'book-order:pay',
+  /*
+   * «نفس التحويلة على طلبين» — written by the PLATFORM, not by a person.
+   *
+   * The receipt OCR found this order's «رقم العملية» already recorded against
+   * another order. The byte hash and the perceptual hash refuse a re-used
+   * receipt outright at payment time; this one cannot, because reading the
+   * number costs a second and therefore happens AFTER the order is saved (see
+   * `BookOrdersService.readReceiptAfterwards`). So it is the only duplicate
+   * signal that arrives as a row to read rather than as a refusal.
+   *
+   * `outcome: 'success'` — the ENTRY was written successfully. It is a finding,
+   * not a failure, and the thing it found is in `metadata.alsoOnRef`.
+   */
+  'book-order:duplicate-receipt',
+  /*
+   * «المبلغ اللي على الإيصال أقل من المطلوب» — also written by the platform.
+   *
+   * Separate from `duplicate-receipt` because they send the admin to look at
+   * two different things: one is another order to compare against, the other is
+   * a number on a picture to check against what the basket costs. Folding them
+   * into one action would make «وريني اللي المبلغ فيه ناقص» a metadata filter
+   * on a log whose whole point is that its actions are findable.
+   *
+   * Both set the same hold — see `BookOrder.heldForReviewAt` — and neither
+   * changes the order's status: the money was still claimed, and the parcel is
+   * simply not printed until somebody says so.
+   */
+  'book-order:held-for-review',
+  /* «راجعته وتمام» — the admin clearing either hold by hand. The only one of
+     the three a person writes. */
+  'book-order:review-cleared',
   // «راح للمطبعة» — its own row and not a `metadata` flag on `ship`, for the
   // same reason `deliver` is separate: «الطلب ده راح للمطبعة إمتى» is a
   // question asked about a run that came back short, and an action whose name
