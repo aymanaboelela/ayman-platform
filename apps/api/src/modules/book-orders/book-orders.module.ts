@@ -19,5 +19,8 @@ import { BookOrdersService } from './book-orders.service';
   imports: [MediaModule, AuthModule, BooksModule, NotificationsModule, MarketingModule, OutreachModule],
   controllers: [BookOrdersController, AdminBookOrdersController],
   providers: [BookOrdersService],
+  // «التحويلات الواردة» settles a paid book the same way it settles a
+  // subscription — see `TransfersService`, which lives in `PaymentsModule`.
+  exports: [BookOrdersService],
 })
 export class BookOrdersModule {}

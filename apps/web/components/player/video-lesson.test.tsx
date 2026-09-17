@@ -17,10 +17,35 @@ vi.mock('./use-video-heartbeat', () => ({
 const { VideoLesson } = await import('./video-lesson');
 
 const VIDEO: PlayerVideo = {
+  provider: 'youtube',
   youtubeId: 'WndSPGcPmfM',
   durationSeconds: 3696,
   posterUrl: null,
+  // No mirror: every test below is about the YouTube path, which is what a
+  // lesson still falls back to when there is no copy of it on our origin.
+  mirror: null,
 };
+
+/** The same lesson, mirrored. */
+const MIRRORED: PlayerVideo = {
+  ...VIDEO,
+  mirror: { hlsUrl: 'https://video.example.test/v/WndSPGcPmfM/master.m3u8', maxHeight: 1080 },
+};
+
+/** A lecture uploaded to us — no YouTube id, because there is no YouTube video. */
+const UPLOADED: PlayerVideo = {
+  provider: 'upload',
+  youtubeId: null,
+  durationSeconds: 3696,
+  posterUrl: null,
+  mirror: {
+    hlsUrl: 'https://video.example.test/v/0123456789abcdef0123456789abcdef/master.m3u8',
+    maxHeight: 1080,
+  },
+};
+
+/** The same upload, while the encoder still has it. */
+const PROCESSING: PlayerVideo = { ...UPLOADED, mirror: null };
 
 function renderPlayer() {
   return render(
@@ -150,6 +175,138 @@ describe('VideoLesson when YouTube never answers', () => {
 
     expect(screen.queryByTitle('How AI Works')).toBeNull();
     expect(destroy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The whole point of «النسخة اللي عندنا».
+ *
+ * A student on a ministry tablet has YouTube blocked at the NETWORK. That
+ * failure is a silence — no `onError`, no `script.onerror`, nothing for a
+ * fallback chain to react to — so a player that reaches for YouTube first and
+ * our copy second would leave those students exactly where they were. The
+ * order is the feature; these assert it rather than the plumbing.
+ */
+describe('VideoLesson with a mirror', () => {
+  /**
+   * jsdom reports it can play nothing, which would send every test down the
+   * hls.js branch and out again through `onFatal` (there is no Media Source
+   * Extensions here either) — the component would fall back to YouTube and
+   * the assertions below would pass for entirely the wrong reason.
+   *
+   * Claiming native HLS is the Safari path, and it is also the honest one to
+   * test in jsdom: no library, the element plays the playlist itself.
+   */
+  beforeEach(() => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockImplementation((type: string) =>
+      type === 'application/vnd.apple.mpegurl' ? 'probably' : '',
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function renderMirrored() {
+    return render(
+      <VideoLesson
+        lessonId="0198c3a2-0000-7000-8000-000000000001"
+        video={MIRRORED}
+        title="How AI Works"
+        resumeAt={0}
+        onProgress={() => {}}
+        onError={() => {}}
+      />,
+    );
+  }
+
+  it('never asks YouTube for anything when we have our own copy', async () => {
+    renderMirrored();
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {});
+
+    // Not "loaded and then ignored" — never requested. On a blocked network
+    // that request is the thing that hangs.
+    expect(loadYouTubeIframeApi).not.toHaveBeenCalled();
+  });
+
+  it('plays from our origin, not from youtube.com', async () => {
+    const { container } = renderMirrored();
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {});
+
+    const video = container.querySelector('video');
+    expect(video).not.toBeNull();
+    expect(video?.getAttribute('src')).toBe(MIRRORED.mirror?.hlsUrl);
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('still shows the poster until the student presses play', () => {
+    // A mirrored lesson must not start fetching a playlist on page load — the
+    // students this is for are on school data, and an outline they scrolled
+    // past is not a lesson they opened.
+    const { container } = renderMirrored();
+    expect(container.querySelector('video')).toBeNull();
+    expect(screen.getByRole('button', { name: new RegExp(copy.player.play) })).toBeTruthy();
+  });
+
+  /* ── الرفع المباشر ─────────────────────────────────────────────────────
+   *
+   * A lecture uploaded to us exists on our origin and NOWHERE else. Every
+   * YouTube affordance the component grew over its first year is a promise of
+   * a video that was never uploaded there, so each one has to be absent —
+   * not merely unused.
+   */
+
+  function renderUpload(video: PlayerVideo) {
+    return render(
+      <VideoLesson
+        lessonId="0198c3a2-0000-7000-8000-000000000001"
+        video={video}
+        title="How AI Works"
+        resumeAt={0}
+        onProgress={() => {}}
+        onError={() => {}}
+      />,
+    );
+  }
+
+  it('plays an uploaded lecture from our origin', async () => {
+    const { container } = renderUpload(UPLOADED);
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {});
+
+    expect(container.querySelector('video')?.getAttribute('src')).toBe(UPLOADED.mirror?.hlsUrl);
+    expect(loadYouTubeIframeApi).not.toHaveBeenCalled();
+  });
+
+  it('offers no YouTube link anywhere for an uploaded lecture', async () => {
+    const { container } = renderUpload(UPLOADED);
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {});
+
+    const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href') ?? '');
+    expect(hrefs.some((href) => href.includes('youtube.com'))).toBe(false);
+  });
+
+  /*
+   * The window right after an instructor uploads. Before this branch existed
+   * the poster showed an ordinary play button over a playlist URL that 404s,
+   * which is the spinning grey box this whole feature was built to end —
+   * reintroduced, for the few minutes the encoder needs.
+   */
+  it('says the lecture is being prepared instead of offering a dead play button', () => {
+    renderUpload(PROCESSING);
+    expect(screen.getByText(copy.player.videoProcessing)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: new RegExp(copy.player.play) })).toBeNull();
+  });
+
+  it('does not fetch anything while the lecture is still being prepared', async () => {
+    const { container } = renderUpload(PROCESSING);
+    await act(async () => {});
+    expect(container.querySelector('video')).toBeNull();
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(loadYouTubeIframeApi).not.toHaveBeenCalled();
   });
 });
 

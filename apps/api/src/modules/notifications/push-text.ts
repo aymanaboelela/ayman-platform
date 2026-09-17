@@ -86,7 +86,11 @@ export function pushPayloadFor(entry: StudentNotification): PushPayload | null {
     case 'book_order_shipped':
       return {
         title: formatCopy(c.bookOrderShipped, { book: entry.bookTitle }),
-        body: c.bookOrderMineQueue,
+        /* The date, not «كتبي». A push notification is read on a lock screen
+           and usually not opened — so the one fact the student wants is in the
+           body rather than behind a tap, and the destination is already the
+           whole point of the tap. */
+        body: formatCopy(c.bookOrderShippedDetail, { days: entry.deliveryDays }),
         url: BOOK_ORDERS_URL,
         tag: `ayman-book-order-${entry.orderId}`,
       };
@@ -167,6 +171,38 @@ export function pushPayloadFor(entry: StudentNotification): PushPayload | null {
         tag: `ayman-homework-${entry.submissionId}`,
       };
     }
+
+    /*
+      «مهندس أيمن بعتلك رسالة» — and the reason it is on this list is the whole
+      point of the channel.
+     
+      The in-app broadcast exists BECAUSE WhatsApp cannot be promised: a
+      campaign ran in 2026-09 in which every message was accepted by WhatsApp
+      and delivered to nobody, and the platform reported it as a flawless run.
+      This kind is what replaces it. But an announcement that only arrives on
+      the student's next tab open is not a replacement for a message that used
+      to buzz a phone — so the one kind that has to reach a locked screen is
+      this one.
+     
+      Body from the copy table, not the message text: the message is read in
+      the conversation where it can be answered, and a tray line carrying a
+      second copy of it is free to disagree with the first — the same reason
+      `InstructorMessageNotificationSchema` stores no body either.
+     
+      SHARED tag: two announcements in one evening collapse to the newest,
+      like `ayman-inbox`. A student told twice about a lecture reminder learns
+      nothing the second time.
+    */
+    case 'instructor_message':
+      return {
+        title: c.instructorMessage,
+        body: c.instructorMessagePushDetail,
+        // The thread lives in the assistant widget — a `/conversations/:id`
+        // route would give the student two inboxes for one conversation, the
+        // same note `notification-view.ts` carries for the in-app row.
+        url: '/dashboard?assistant=1',
+        tag: 'ayman-instructor-message',
+      };
 
     default:
       return null;

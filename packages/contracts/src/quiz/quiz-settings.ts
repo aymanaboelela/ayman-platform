@@ -101,6 +101,21 @@ export const QuizSettingsSchema = z
     openFrom: z.coerce.date().nullable().default(null),
     openUntil: z.coerce.date().nullable().default(null),
     /**
+     * «اللي امتحنوا بعد الوقت المسموح بيه» — the deadline that mattered, kept
+     * after the window itself is reopened.
+     *
+     * Set it to the exam's original closing instant and clear `openUntil`: the
+     * paper becomes sittable again for whoever missed it, and every sitting
+     * STARTED after this moment is still marked late in the grading screens,
+     * kept out of «الأوائل», and refused a place on the honour board.
+     *
+     * Independent of `openUntil` on purpose. They answer different questions —
+     * "may this be sat" and "did you sit it on time" — and folding them into
+     * one field is exactly what makes reopening an exam destroy the answer to
+     * the second.
+     */
+    lateAfter: z.coerce.date().nullable().default(null),
+    /**
      * Offers ONE extra sitting on the improvement paper, and the higher of the
      * two scores counts. Only ever true on a course's final exam.
      *

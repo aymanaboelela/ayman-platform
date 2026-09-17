@@ -19,9 +19,10 @@
     "db:studio": "pnpm --filter @ayman/api exec prisma studio"
   },
   "devDependencies": {
-    "turbo": "2.10.6",
-    "typescript": "catalog:",
     "@types/node": "catalog:",
-    "prettier": "3.6.2"
+    "prettier": "3.6.2",
+    "sharp": "0.35.3",
+    "turbo": "2.10.6",
+    "typescript": "catalog:"
   }
 }

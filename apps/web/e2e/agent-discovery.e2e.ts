@@ -221,6 +221,70 @@ test.describe('content signals', () => {
   });
 });
 
+/**
+ * What a crawler that does not execute JavaScript actually reads.
+ *
+ * ⚠️ These assertions are on `request.get('/')` — the raw HTML — and not on a
+ * `page`, deliberately. In a browser the document is always fine: the streamed
+ * content replaces the Suspense fallbacks and the DOM ends up with one `<main>`
+ * in the right place. The bug this guards was visible ONLY in the bytes, and
+ * most AI crawlers only ever see the bytes.
+ *
+ * On 2026-09-13 those bytes contained three `<main>` elements — two of them
+ * loading skeletons — and the page's `<h1>` arrived after the footer, roughly
+ * 31 KB in, behind an `<h2>` and three `<h3>`s. An AI-readiness scan scored the
+ * site 0/20 on heading hierarchy, 0/20 on semantic elements, 0/10 on landmarks,
+ * and reported that an AI visitor could not tell what the site was for.
+ *
+ * Three separate changes hold this up — the skeletons are no longer landmarks,
+ * the landing page is `'use cache'` so its content is prerendered, and the
+ * footer's headings were demoted to paragraphs — and any one of them being
+ * reverted re-breaks it. Hence an assertion on the outcome rather than on any
+ * of the three mechanisms.
+ */
+test.describe('the document a JS-less crawler reads', () => {
+  test('the homepage has exactly one main landmark', async ({ request }) => {
+    const html = await (await request.get('/')).text();
+
+    expect(html.match(/<main[\s>]/g) ?? []).toHaveLength(1);
+    expect(html.match(/<footer[\s>]/g) ?? []).toHaveLength(1);
+  });
+
+  test('the first heading in the homepage source is the h1', async ({ request }) => {
+    const html = await (await request.get('/')).text();
+    const headings = [...html.matchAll(/<(h[1-6])[\s>]/g)].map((match) => match[1]);
+
+    expect(headings.length).toBeGreaterThan(0);
+    expect(headings[0]).toBe('h1');
+    // And only one of them — a second h1 is the other half of the same check.
+    expect(headings.filter((tag) => tag === 'h1')).toHaveLength(1);
+  });
+
+  test('an article states its publication date in text, not only in an attribute', async ({
+    request,
+  }) => {
+    /*
+     * `<time dateTime="…">اتنشر</time>` satisfied every parser that reads the
+     * attribute and left the rendered text with no date in it at all — which is
+     * what a reader sees, and what a model summarising the page sees.
+     *
+     * The list page is the entry point, so this walks to the first article
+     * rather than hard-coding a slug: article slugs are Arabic, editable from
+     * the admin, and a test naming one breaks the day it is renamed.
+     */
+    const list = await (await request.get('/news')).text();
+    const href = /href="(\/news\/[^"]+)"/.exec(list)?.[1];
+    test.skip(!href, 'no published articles to check');
+
+    const article = await (await request.get(href as string)).text();
+    const time = /<time[^>]*>([\s\S]*?)<\/time>/.exec(article)?.[1] ?? '';
+    const text = time.replace(/<[^>]+>/g, '').trim();
+
+    // A year is the cheapest thing to assert that a bare label cannot satisfy.
+    expect(text).toMatch(/\d{4}/);
+  });
+});
+
 test.describe('agent skills', () => {
   test('every indexed skill resolves and matches its published digest', async ({ request }) => {
     const index = (await (await request.get('/.well-known/agent-skills/index.json')).json()) as {

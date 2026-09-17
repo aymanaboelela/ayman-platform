@@ -15,7 +15,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
  */
 export default function Loading() {
   return (
-    <main className="mx-auto max-w-[var(--w-shell)] px-6 py-16">
+    <div aria-hidden="true" className="mx-auto max-w-[var(--w-shell)] px-6 py-16">
       <Skeleton width="narrow" className="mb-6 h-3" />
       <Skeleton width="narrow" className="mb-2 h-3" />
       <Skeleton width="wide" className="mb-2 h-9" />
@@ -27,6 +27,6 @@ export default function Loading() {
           <Skeleton key={i} width={i % 2 === 0 ? 'full' : 'wide'} className="h-10" />
         ))}
       </div>
-    </main>
+    </div>
   );
 }

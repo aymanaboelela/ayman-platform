@@ -1,5 +1,5 @@
+import Image from 'next/image';
 import { copy } from '@ayman/contracts';
-import { BrandLockup } from '@/components/brand-lockup';
 
 const c = copy.auth.aside;
 
@@ -21,21 +21,56 @@ const POINTS = [c.point1, c.point2, c.point3] as const;
  * whole viewport. Its content is decorative reassurance, not information the
  * form needs — so dropping it on a phone costs nothing, and rendering it as a
  * stacked block above the form would push the actual inputs below the fold.
+ *
+ * ## The photograph
+ *
+ * It replaced a hand-tokenised fake code snippet that sat where the copy now
+ * sits. The snippet said nothing the surrounding words did not, and it was the
+ * third layer of decoration on a panel that only ever needed one. A real
+ * picture of the instructor does the job the snippet was pretending to do.
+ *
+ * Full-bleed rather than framed, and that is a crop decision: the source is
+ * 4:3 and the composition runs top to bottom — the vaulted library above, the
+ * fallen robot below. A card in the old snippet's slot would have been a 16:9
+ * strip through the middle and would have thrown both away. This column is
+ * tall, so `cover` here shows nearly the whole frame.
+ *
+ * Two things went with the snippet once there was a photograph here:
+ *
+ *   · the `<BrandLockup>`. The form column carries one, and the eyebrow below
+ *     is the brand name in words — so the screen said «منصة أ. أيمن أبو العلا»
+ *     three times, once of them stamped across his chest;
+ *   · the grid overlay. Ruled lines over a flat gradient read as a technical
+ *     surface; the same lines over a photograph read as glass in front of it.
  */
 export function AuthShowcase() {
   return (
     <aside className="auth-aside" aria-label={c.eyebrow}>
-      <div className="auth-aside__grid" aria-hidden="true" />
-      <div className="auth-aside__inner">
-        <BrandLockup tone="ink" />
+      {/*
+        `alt=""` on purpose. The panel is decorative reassurance that the form
+        does not need, and the words layered on top already say everything this
+        picture is here to say — announcing it would only put a description
+        between a screen-reader user and the password field.
 
+        No `priority`: it is below the fold on every phone (the panel is
+        `display: none` there) and `sizes` already tells the browser so, which
+        a preload would override.
+      */}
+      <Image
+        src="/brand/auth-library.webp"
+        alt=""
+        fill
+        sizes="(min-width: 62rem) 52vw, 1px"
+        className="auth-aside__photo"
+      />
+      <div className="auth-aside__scrim" aria-hidden="true" />
+
+      <div className="auth-aside__inner">
         <div className="auth-aside__copy">
           <p className="auth-aside__eyebrow">{c.eyebrow}</p>
           <h2 className="auth-aside__title">{c.title}</h2>
           <p className="auth-aside__body">{c.body}</p>
         </div>
-
-        <AuthCodePane />
 
         <ul className="auth-aside__points">
           {POINTS.map((point) => (
@@ -57,47 +92,5 @@ export function AuthShowcase() {
         </ul>
       </div>
     </aside>
-  );
-}
-
-/**
- * Decoration, and marked as such: the snippet says nothing the surrounding copy
- * does not, and read aloud token by token it is noise. Hand-tokenised rather
- * than run through Shiki — pulling the highlighter's WASM payload onto the
- * login route to colour six lines nobody reads is not a trade worth making.
- */
-function AuthCodePane() {
-  return (
-    <div className="auth-code" aria-hidden="true">
-      <div className="auth-code__bar">
-        <i />
-        <i />
-        <i />
-        <span className="auth-code__file">{copy.auth.aside.codeCaption}</span>
-      </div>
-      <pre className="auth-code__body">
-        <code>
-          <span className="auth-code__line">
-            <b className="t-k">const</b> <b className="t-v">student</b> = {'{'}
-          </span>
-          <span className="auth-code__line">
-            {'  '}
-            <b className="t-a">name</b>: <b className="t-s">&apos;إنت&apos;</b>,
-          </span>
-          <span className="auth-code__line">
-            {'  '}
-            <b className="t-a">streak</b>: <b className="t-n">12</b>,
-          </span>
-          <span className="auth-code__line">
-            {'  '}
-            <b className="t-a">next</b>: <b className="t-s">&apos;lesson-04&apos;</b>,
-          </span>
-          <span className="auth-code__line">{'};'}</span>
-          <span className="auth-code__line">
-            <b className="t-f">resume</b>(<b className="t-v">student</b>);
-          </span>
-        </code>
-      </pre>
-    </div>
   );
 }

@@ -124,6 +124,21 @@ export const QuizGradedNotificationSchema = z.object({
    *  column is nullable, and a feed that throws on one odd row is worse than
    *  one that renders it without a verdict. */
   passed: z.boolean().nullable(),
+  /**
+   * Marks still with the instructor when this row was written, out of the
+   * quiz's total. `0` — and `.default(0)` for every row emitted before the
+   * field existed — means the paper was finished, which is the ordinary case.
+   *
+   * A non-zero value turns this row from a RESULT into a RECEIPT. The kind
+   * fires at submit (see `AttemptService.gradeAndFinalise`), so on a midterm
+   * whose 50 marks of essay nobody has opened yet it said «اتصحّحت ورقتك —
+   * الدرجة ٤٨٪» about a paper nobody had marked, quoting a provisional total
+   * as a final one. With this, the feed says «الاختياري اتصحّح» and names
+   * what is still coming; `ManualGradingService.grade` then emits a SECOND
+   * row, with `pendingOutOf: 0` and the real mark, the moment the last
+   * answer is marked — which is the «هيتبعتلك» half of the promise.
+   */
+  pendingOutOf: z.number().min(0).default(0),
 });
 
 export const ExtraAttemptNotificationSchema = z.object({
@@ -300,6 +315,18 @@ const bookOrderBase = {
 export const BookOrderShippedNotificationSchema = z.object({
   ...bookOrderBase,
   kind: z.literal('book_order_shipped'),
+  /**
+   * Working days until it arrives — 3 for القاهرة/الجيزة, 4 everywhere else.
+   *
+   * Resolved at READ time off the order's governorate, exactly like
+   * `bookTitle` beside it and for the same reason: it is a property of the
+   * order, not of the notification, and storing it would freeze a promise made
+   * under an older courier arrangement into rows nobody can find again.
+   *
+   * Only on THIS kind. «وصل» needs no estimate and a rejected order has no
+   * parcel.
+   */
+  deliveryDays: z.number().int().min(1).max(14),
 });
 
 export const BookOrderDeliveredNotificationSchema = z.object({

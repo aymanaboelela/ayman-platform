@@ -82,6 +82,20 @@ export default async function FinanceOverviewPage() {
       </h1>
       <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{c.overviewSubtitle}</p>
 
+      {/* A plain <a>, never <Link>: this href is a FILE the API streams, and
+          the client router would try to render the xlsx as a route. `download`
+          alone is not enough — the response's own Content-Disposition is what
+          names it, and this attribute only stops the browser from navigating
+          away on the browsers that would. */}
+      <a
+        href="/api/admin/expenses/report"
+        download
+        title={c.downloadReportHint}
+        className="mt-3 inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[length:var(--fs-text-sm)] font-medium text-fg transition-colors hover:bg-surface-hover"
+      >
+        {c.downloadReport}
+      </a>
+
       <FinanceTabs active="/admin/finance" />
 
       {/* In, back out, out, left — the four that answer the question in one

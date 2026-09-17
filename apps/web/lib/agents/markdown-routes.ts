@@ -37,8 +37,22 @@ const HOME_MARKDOWN_PATH = '/index.md';
  * without a session, exactly the content the redirect matrix exists to gate.
  * `markdown-routes.test.ts` asserts the two lists cannot overlap, because
  * "someone will remember" is not a control.
+ *
+ * ⚠️ EXPORTED so `lib/agents/skills.ts` can render the twin table from it
+ * rather than hand-copying it. It was hand-copied, and `/books.md`, `/news.md`
+ * and `/news/{slug}.md` went unlisted in the published skill for a release —
+ * three live documents an agent reading that file would conclude do not
+ * exist.
  */
-const STATIC_MARKDOWN_ROUTES = ['/', '/about', '/courses', '/essentials', '/news'] as const;
+export const STATIC_MARKDOWN_ROUTES = [
+  '/',
+  '/about',
+  '/books',
+  '/courses',
+  '/essentials',
+  '/news',
+  '/subscribe',
+] as const;
 
 /** `/years/1`, `/years/2`, `/years/3` — `parseYear` on the page rejects the rest. */
 const YEAR_PATTERN = /^\/years\/([123])$/;
@@ -54,12 +68,29 @@ const COURSE_PATTERN = /^\/courses\/([^/]+)$/;
 /** `/news/<slug>` and nothing deeper. Arabic slugs are normal here. */
 const ARTICLE_PATTERN = /^\/news\/([^/]+)$/;
 
+/**
+ * The PATTERN routes, labelled — the ones that cannot be listed because they
+ * take a parameter.
+ *
+ * Colocated with the regexes above on purpose: adding a pattern and forgetting
+ * its human label is then one diff rather than two files. The regexes
+ * themselves cannot be rendered into a table, and a separately hand-written
+ * list is the drift this is fixing.
+ */
+export const MARKDOWN_ROUTE_PATTERNS = [
+  '/years/{1,2,3}',
+  '/courses/{slug}',
+  '/news/{slug}',
+] as const;
+
 export type MarkdownRoute =
   | { kind: 'home' }
   | { kind: 'about' }
   | { kind: 'courses' }
   | { kind: 'essentials' }
+  | { kind: 'books' }
   | { kind: 'news' }
+  | { kind: 'subscribe' }
   | { kind: 'year'; year: 1 | 2 | 3 }
   | { kind: 'course'; slug: string }
   | { kind: 'article'; slug: string };
@@ -109,6 +140,13 @@ export function resolveMarkdownRoute(slug: readonly string[] | undefined): Markd
   if (pathname === '/about') return { kind: 'about' };
   if (pathname === '/courses') return { kind: 'courses' };
   if (pathname === '/essentials') return { kind: 'essentials' };
+  /*
+   * ⚠️ `/books` and nothing under it. There is no `/books/<slug>` route at all
+   * — the shop is deliberately one page (see its own note) — so a twin for a
+   * per-book URL would be a document for a page that does not exist.
+   */
+  if (pathname === '/books') return { kind: 'books' };
+  if (pathname === '/subscribe') return { kind: 'subscribe' };
   if (pathname === '/news') return { kind: 'news' };
 
   // `?.[1]` rather than `[1]!` throughout: the capture group is guaranteed by

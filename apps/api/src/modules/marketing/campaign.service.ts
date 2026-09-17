@@ -10,7 +10,7 @@ import type {
   CampaignStatus,
   OptOutRow,
   RecipientRow,
-  RecipientStatus,
+  RecipientFilter,
 } from '@ayman/contracts/marketing/campaign';
 import { AudienceSchema } from '@ayman/contracts/marketing/campaign';
 import {
@@ -52,7 +52,7 @@ import type { MarketingCampaign, Prisma } from '../../generated/prisma/client';
 /** Statuses whose recipient list and audience may still change. */
 const EDITABLE: readonly CampaignStatus[] = ['draft'];
 
-const EMPTY_COUNTS: CampaignCounts = { total: 0, pending: 0, sent: 0, failed: 0, skipped: 0 };
+const EMPTY_COUNTS: CampaignCounts = { total: 0, pending: 0, sent: 0, failed: 0, skipped: 0, delivered: 0 };
 
 @Injectable()
 export class CampaignService {
@@ -109,9 +109,18 @@ export class CampaignService {
     };
   }
 
-  async recipients(id: string, status: RecipientStatus | 'all', take = 200): Promise<RecipientRow[]> {
+  async recipients(id: string, filter: RecipientFilter, take = 200): Promise<RecipientRow[]> {
     const rows = await this.prisma.marketingRecipient.findMany({
-      where: { campaignId: id, ...(status === 'all' ? {} : { status }) },
+      // «اتبعتت وماوصلتش» is not a status — those rows are `sent`, and that is
+      // the point of them. See `RECIPIENT_FILTERS`.
+      where: {
+        campaignId: id,
+        ...(filter === 'all'
+          ? {}
+          : filter === 'undelivered'
+            ? { status: 'sent' as const, deliveredAt: null }
+            : { status: filter }),
+      },
       orderBy: { position: 'asc' },
       take,
     });
@@ -123,8 +132,50 @@ export class CampaignService {
       status: row.status,
       attempts: row.attempts,
       sentAt: row.sentAt?.toISOString() ?? null,
+      deliveredAt: row.deliveredAt?.toISOString() ?? null,
       error: row.error,
     }));
+  }
+
+  /**
+   * A device acknowledged a message — the second tick.
+   *
+   * Idempotent by the `deliveredAt: null` guard rather than by a read-then-
+   * write: receipts arrive duplicated and out of order (a phone with three
+   * linked devices acks three times), and the FIRST one is the honest
+   * timestamp. Re-stamping on every later receipt would slowly walk the
+   * delivery time forward until it said when the student last opened the chat.
+   *
+   * `updateMany`, not `update`, because a receipt that matches no row is the
+   * normal case and not an error: the shipping-notice path sends on the same
+   * device, and so does every message the instructor types on his own phone
+   * while the sidecar is linked.
+   */
+  async markDelivered(messageId: string, at = new Date()): Promise<void> {
+    await this.prisma.marketingRecipient.updateMany({
+      where: { messageId, deliveredAt: null },
+      data: { deliveredAt: at },
+    });
+  }
+
+  /**
+   * WhatsApp refused a message, and said why.
+   *
+   * The status is left alone — `CampaignRunner` owns `attempts` and the
+   * pending/sent/failed machine, and a receipt arriving from an endpoint with
+   * no session behind it must not be able to settle a row. All this writes is
+   * the reason, onto the row that already has a column for one.
+   *
+   * `deliveredAt: null` in the guard, not `error: null`: a message that was
+   * refused after it had already been delivered is a story about a duplicate
+   * ack, not about a failure, and overwriting a successful delivery with a
+   * refusal would be the one way this route could make things worse.
+   */
+  async markRefused(messageId: string, detail: string): Promise<void> {
+    await this.prisma.marketingRecipient.updateMany({
+      where: { messageId, deliveredAt: null },
+      data: { error: detail.slice(0, 300) },
+    });
   }
 
   /** What the audience picker shows before anything exists. */
@@ -261,6 +312,10 @@ export class CampaignService {
         nextSendAt: withinWindow(new Date(), pacingOf(campaign)),
         startedAt: campaign.startedAt ?? new Date(),
         finishedAt: null,
+        // A human pressing «كمّل» has seen the reason and decided anyway —
+        // leaving it would make the next self-pause indistinguishable from
+        // the last one on screen.
+        pausedReason: null,
       },
     });
 
@@ -428,6 +483,23 @@ export class CampaignService {
       counts.total += n;
       out.set(group.campaignId, counts);
     }
+
+    // Delivery is a second axis and cannot ride the same `groupBy`: a
+    // delivered row is still `sent`, so grouping by both would split the
+    // status counts in two and every existing total would change meaning.
+    // One extra grouped count, not one per campaign.
+    const deliveredGroups = await this.prisma.marketingRecipient.groupBy({
+      by: ['campaignId'],
+      where: { campaignId: { in: ids }, deliveredAt: { not: null } },
+      _count: { _all: true },
+    });
+    for (const group of deliveredGroups) {
+      const counts = out.get(group.campaignId);
+      // A campaign with a delivered row necessarily has recipients, so this
+      // is only ever hit if the two queries raced a delete.
+      if (counts) counts.delivered = group._count._all;
+    }
+
     return out;
   }
 
@@ -441,6 +513,7 @@ export class CampaignService {
       startedAt: campaign.startedAt?.toISOString() ?? null,
       finishedAt: campaign.finishedAt?.toISOString() ?? null,
       nextSendAt: campaign.nextSendAt?.toISOString() ?? null,
+      pausedReason: campaign.pausedReason,
     };
   }
 }

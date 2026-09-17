@@ -142,6 +142,11 @@ const RUNTIME_DEFINED = new Set<string>([
   '--font-display',
   '--font-plex-arabic',
   '--font-plex-mono',
+  // Written by `next/font` too, but NOT from `layout.tsx` and not onto <html>:
+  // `cairo.variable` is applied to the root element of `/admin/books/labels`
+  // alone, because the shipping cards are the only thing in the product set in
+  // Cairo. See `lib/fonts.ts` for why that page gets its own family.
+  '--font-cairo',
   // Written by Shiki onto the HTML it generates, per token, at highlight time.
   '--sh-light',
   '--sh-light-bg',

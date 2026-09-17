@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import {
   AnalyticsOverviewSchema,
+  CourseHeadcountSchema,
   LessonAnalyticsDetailSchema,
   LessonAnalyticsRowSchema,
   StudentAnalyticsDetailSchema,
@@ -9,6 +10,7 @@ import {
 } from '@ayman/contracts/admin/analytics';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
+import { CourseHeadcountService } from './course-headcount.service';
 import { LessonAnalyticsService } from './lesson-analytics.service';
 import { OverviewService } from './overview.service';
 import { StudentAnalyticsService } from './student-analytics.service';
@@ -34,6 +36,7 @@ describe('analytics (integration)', () => {
   let overview: OverviewService;
   let lessons: LessonAnalyticsService;
   let students: StudentAnalyticsService;
+  let headcount: CourseHeadcountService;
 
   const suffix = randomUUID().slice(0, 8);
   const userIds: string[] = [];
@@ -49,6 +52,7 @@ describe('analytics (integration)', () => {
     overview = new OverviewService(prisma);
     lessons = new LessonAnalyticsService(prisma);
     students = new StudentAnalyticsService(prisma);
+    headcount = new CourseHeadcountService(prisma);
 
     const governorate = await prisma.governorate.findFirstOrThrow();
     governorateCode = governorate.code;
@@ -285,6 +289,62 @@ describe('analytics (integration)', () => {
     // The donut is part-to-whole: its slices have to add to `eligible`, which
     // they cannot if one of the people in the denominator is not a student.
     expect(result.engagement.reduce((sum, slice) => sum + slice.n, 0)).toBe(4);
+  });
+
+  it('counts the same enrolled headcount the overview reports for that course', async () => {
+    const rows = await headcount.list();
+    expect(() => CourseHeadcountSchema.parse(rows)).not.toThrow();
+
+    const row = rows.find((candidate) => candidate.courseId === courseId);
+    expect(row).toBeDefined();
+    // The whole reason this lives beside the overview: the dashboard strip and
+    // the analytics screen it links to must report the SAME integer. The
+    // instructor is enrolled in this course and is not one of them.
+    const result = await overview.build({ days: 30, courseId });
+    expect(row!.enrolled).toBe(result.students.enrolled);
+    expect(row!.enrolled).toBe(4);
+    // Nobody bought anything: this fixture's course is free, and `subscribed`
+    // must be 0 rather than picking up the platform-wide grants the four
+    // students hold.
+    expect(row!.subscribed).toBe(0);
+    expect(row!.requiresGrant).toBe(false);
+  });
+
+  it('counts a live course grant as a subscription and a revoked one as none', async () => {
+    const [first, second] = userIds;
+    const live = await prisma.accessGrant.create({
+      data: { userId: first!, scope: 'course', courseId, source: 'admin' },
+    });
+    const revoked = await prisma.accessGrant.create({
+      data: { userId: second!, scope: 'course', courseId, source: 'purchase', revokedAt: new Date() },
+    });
+    const expired = await prisma.accessGrant.create({
+      data: {
+        userId: second!,
+        scope: 'course',
+        courseId,
+        source: 'purchase',
+        // `access_grants_window_ordered` — `validFrom` has to precede
+        // `validUntil`, and `validFrom` defaults to now(). A lapsed grant is
+        // a PAST window, not a zero-length one.
+        validFrom: new Date(Date.now() - 120_000),
+        validUntil: new Date(Date.now() - 60_000),
+      },
+    });
+
+    try {
+      const row = (await headcount.list()).find((candidate) => candidate.courseId === courseId);
+      // One live grant, and it is `source: 'admin'` — a hand-issued grant is
+      // real access, and every money screen filters exactly this row out.
+      expect(row!.subscribed).toBe(1);
+      // The enrollment count is untouched by any of it: an enrollment outlives
+      // the grant that allowed it.
+      expect(row!.enrolled).toBe(4);
+    } finally {
+      await prisma.accessGrant.deleteMany({
+        where: { id: { in: [live.id, revoked.id, expired.id] } },
+      });
+    }
   });
 
   it('counts a student who has enrolled in nothing — «إجمالي الطلبة» is not «المشتركين»', async () => {

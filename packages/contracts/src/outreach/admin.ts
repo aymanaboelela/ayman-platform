@@ -61,6 +61,18 @@ export const OutreachLogRowSchema = z.object({
   /** The full body. Short enough that truncating it would only hide the point. */
   body: z.string(),
   facts: OutreachFactsSchema,
+  /**
+   * The paper this message was written about — `null` for every other kind.
+   *
+   * Read off the row's own `dedupeKey`, which IS the attempt id for
+   * `quiz_result` (see `OutreachSweeper.sendQuizResults`, which passes
+   * `dedupeKey: attempt.id`). No new column and no migration: the id was
+   * already stored, it just had no name on the wire. Nullable rather than
+   * absent so a `quiz_result` row written before this shipped — or one whose
+   * attempt has since been deleted — renders without the button instead of
+   * failing to parse and taking the whole log down.
+   */
+  attemptId: z.uuid().nullable(),
   createdAt: z.iso.datetime(),
   /**
    * The student opened the thread after this message landed.

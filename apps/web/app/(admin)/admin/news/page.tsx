@@ -4,6 +4,7 @@ import { AdminNewsRowSchema } from '@ayman/contracts/news';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Badge, Card, CardBody } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
+import { ListControl } from '@/components/admin/list-controls';
 
 export const metadata = { title: copy.adminNews.title };
 
@@ -13,8 +14,19 @@ export const metadata = { title: copy.adminNews.title };
  * Uncached, like every other admin read here: an editor must see their own
  * last write, never a stale row that makes a save look like it failed.
  */
-export default async function AdminNewsPage() {
-  const rows = await adminGet('/api/admin/news', z.array(AdminNewsRowSchema));
+export default async function AdminNewsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const raw = Array.isArray(params.status) ? params.status[0] : params.status;
+  const status = raw === 'draft' || raw === 'published' ? raw : '';
+
+  const rows = await adminGet(
+    `/api/admin/news${status ? `?status=${status}` : ''}`,
+    z.array(AdminNewsRowSchema),
+  );
 
   return (
     <>
@@ -31,6 +43,23 @@ export default async function AdminNewsPage() {
         >
           {copy.adminNews.create}
         </Link>
+      </div>
+
+      {/* The list is a published/draft MIX and the status renders as a badge on
+          every row — but nothing filtered on it, so «ورّيني المسوّدات» meant
+          reading the badges one by one. Seven rows today, which is why this is
+          one dropdown and not a toolbar. */}
+      <div className="mb-4 flex flex-wrap items-end gap-2">
+        <ListControl
+          name="status"
+          label={copy.adminNews.filterStatus}
+          value={status}
+          options={[
+            { value: '', label: copy.adminNews.filterAll },
+            { value: 'published', label: copy.adminNews.filterPublished },
+            { value: 'draft', label: copy.adminNews.filterDraft },
+          ]}
+        />
       </div>
 
       <Card>

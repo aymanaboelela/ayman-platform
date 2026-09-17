@@ -1,6 +1,7 @@
 'use client';
 
 import { useQueryStates } from 'nuqs';
+import { ATTEMPT_SORTS } from '@ayman/contracts/admin/attempts';
 import type { AdminAttemptRow, ATTEMPT_STATES } from '@ayman/contracts/admin/attempts';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Select } from '@ayman/ui/components/select';
@@ -76,6 +77,29 @@ export function AttemptsTable({ rows, hasMore, page, perPage }: AttemptsTablePro
               {label}
             </option>
           ))}
+        </Select>
+
+        {/*
+          The screen had NO sort at all — the table swallowed its own
+          `onSortingChange` because the endpoint had nothing to offer. «مين جاب
+          أعلى درجة» and «مين سلّم بدري» were both unanswerable on the screen
+          that holds every attempt.
+        */}
+        <Select
+          aria-label={copy.quizAdmin.sortLabel}
+          value={state.sort}
+          onChange={(event) =>
+            void setState({
+              sort: event.target.value as (typeof ATTEMPT_SORTS)[number],
+              page: 1,
+            })
+          }
+          className="w-auto"
+        >
+          <option value="newest">{copy.quizAdmin.sortNewest}</option>
+          <option value="oldest">{copy.quizAdmin.sortOldest}</option>
+          <option value="score_desc">{copy.quizAdmin.sortScoreDesc}</option>
+          <option value="score_asc">{copy.quizAdmin.sortScoreAsc}</option>
         </Select>
       </DataTableToolbar>
       <DataTable table={table} columnCount={attemptColumns.length} />

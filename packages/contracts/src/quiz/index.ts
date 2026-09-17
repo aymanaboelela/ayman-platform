@@ -6,3 +6,4 @@ export * from './attempt';
 export * from './overview';
 export * from './history';
 export * from './mastery';
+export * from './scheduled';

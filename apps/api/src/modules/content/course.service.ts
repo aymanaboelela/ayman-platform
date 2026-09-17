@@ -940,11 +940,26 @@ export class CourseService {
                 completionMode: true,
                 completionMinViewSeconds: true,
                 completionPassGrade: true,
+                // «ينزل الساعة ٨» and the after-the-lecture summary. Both are
+                // edited in the same panel this payload feeds, so a lecture
+                // whose schedule is not selected here would show an empty
+                // date box every time the page reloads — and the next save
+                // would quietly look like the instructor had cleared it.
+                publishAt: true,
+                description: true,
                 video: {
                   select: {
                     externalId: true,
                     durationSeconds: true,
                     posterKey: true,
+                    // «الرفع المباشر»: which of the two sources this lecture
+                    // came from, and where its copy has got to. The panel
+                    // needs both to know which form to show — a lecture
+                    // uploaded to us has no URL to prefill, and one still
+                    // encoding must not be offered as ready.
+                    provider: true,
+                    mirrorStatus: true,
+                    sourceName: true,
                   },
                 },
                 // The editor prefills its textarea from this. Without it the
