@@ -2,6 +2,7 @@
 
 import { revalidatePath, updateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { after } from 'next/server';
 import { z } from 'zod';
 import {
   CourseCreateSchema,
@@ -31,6 +32,7 @@ import {
 import { copy } from '@ayman/contracts/copy/admin';
 import { apiGetAuthed, apiSend } from '@/lib/api-server';
 import { TAG_COURSES, courseTag } from '@/lib/cache-tags';
+import { submitToIndexNow } from '@/lib/seo/indexnow';
 
 /** The API's course row, as much of it as the admin UI needs back. */
 const CourseRowSchema = z.object({
@@ -311,7 +313,30 @@ export async function setCourseStatusAction(
 ): Promise<ActionResult> {
   try {
     const body = CourseStatusPatchSchema.parse({ status });
-    await apiSend('PATCH', `/api/admin/courses/${courseId}/status`, CourseRowSchema, body);
+    const row = await apiSend(
+      'PATCH',
+      `/api/admin/courses/${courseId}/status`,
+      CourseRowSchema,
+      body,
+    );
+
+    /*
+     * Push the new URL to Bing rather than waiting for a crawl — this is the
+     * press that puts a course on the public internet, and `/courses` changes
+     * with it because the catalog is a list this course just joined.
+     *
+     * ⚠️ Only on the way IN. Unpublishing must not submit: IndexNow is an
+     * assertion that a URL belongs in an index, and announcing one that now
+     * 404s is the fastest way to get a host's submissions distrusted. The
+     * removal happens through the sitemap, which no longer lists it.
+     *
+     * `row.slug`, from the API's response — the action is handed an id, and
+     * the slug is the only thing either URL can be built from. See
+     * `submitToIndexNow` for why this can never fail the publish.
+     */
+    if (row.status === 'published') {
+      after(() => submitToIndexNow([`/courses/${row.slug}`, '/courses']));
+    }
 
     // Publishing changes LIST MEMBERSHIP rather than a field on the card. It
     // was once the only operation that touched the catalog tag; it is now one

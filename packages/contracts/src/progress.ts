@@ -199,6 +199,21 @@ export const EnrollmentSchema = z.object({
   lastLessonId: z.string().nullable(),
   enrolledAt: z.iso.datetime(),
   completedAt: z.iso.datetime().nullable(),
+  /**
+   * Whether a LIVE `AccessGrant` stands behind this enrollment right now —
+   * the question `status` looks like it answers and does not.
+   *
+   * Nothing ever writes `status: 'expired'`. A lapsed subscription is a
+   * revoked or elapsed grant; the enrollment row stays `active`, which is
+   * correct (the course is still the student's, and so is their progress) but
+   * made every reader that treated «has a row» as «has access» send a lapsed
+   * student away from the one page that sells them a renewal. See
+   * `EnrollmentService.listOwn` for the loop that caused.
+   *
+   * `false` means: still theirs, cannot open a lesson, needs to pay. Show the
+   * course; do NOT route them into it.
+   */
+  accessActive: z.boolean(),
 });
 
 /**

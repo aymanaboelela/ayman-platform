@@ -1513,3 +1513,81 @@
 .legal__back {
   margin-block-end: clamp(1rem, 3vw, 1.5rem);
 }
+
+/* ---------------------------------------------------------------------------
+   «إزاي تشترك» — /subscribe
+
+   A numbered flow, and the numbers are the design. The page exists because a
+   student (or an assistant answering for one) asked «إزاي أدفع؟» and every
+   other surface answered with a price and a full stop, so the one thing it
+   must do is read as an ordered procedure rather than as prose about one.
+
+   `counter`-free: the `<li>` carries its own rendered number in an
+   `aria-hidden` span, because the markdown twin and the FAQPage graph are
+   built from the same list and a CSS counter would exist on one surface only.
+   --------------------------------------------------------------------------- */
+.subscribe-steps {
+  list-style: none;
+  margin: clamp(1.5rem, 4vw, 2.25rem) 0;
+  padding: 0;
+  display: grid;
+  gap: clamp(0.875rem, 2.5vw, 1.25rem);
+}
+
+.subscribe-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: clamp(0.75rem, 2vw, 1rem);
+  align-items: start;
+}
+
+.subscribe-step__n {
+  display: grid;
+  place-items: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: var(--r-full);
+  background: var(--site-accent-solid);
+  color: var(--site-accent-text);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  /* The circle must not shrink when the body wraps to four lines. */
+  flex: none;
+}
+
+.subscribe-step__title {
+  margin: 0 0 0.25rem;
+  font-size: clamp(1rem, 2.5vw, 1.125rem);
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+}
+
+.subscribe-step__body {
+  margin: 0;
+  color: var(--site-fg-2);
+  line-height: 1.75;
+}
+
+.subscribe-rails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0 0 clamp(1rem, 3vw, 1.5rem);
+  padding: 0;
+}
+
+.subscribe-rails li {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--site-line);
+  border-radius: var(--r-full);
+  background: var(--site-card-2);
+  font-weight: var(--fw-semibold);
+}
+
+.subscribe-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block-start: clamp(1.25rem, 3vw, 1.75rem);
+}

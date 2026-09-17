@@ -26,14 +26,25 @@ const c = copy.subscribe;
  * Because the number changes with the answer. A `<select>` above a number that
  * silently rewrites itself is exactly the interaction a distracted person gets
  * wrong — they read the number first and change the method after. Two big
- * targets and a «التالي» makes the order impossible to get backwards, and it
- * is the shape every payment sheet a student has already used takes.
+ * targets on their own screen make that order impossible to get backwards.
  *
  * ## The rules that hold this up
  *
- * ⚠️ **Nothing is preselected.** A default choice is a choice the student did
- * not make, and here it decides where their money goes. `value` starts null and
- * «التالي» is inert until they touch one.
+ * ⚠️ **One tap, no «التالي».** The button used to sit under the cards as a
+ * confirm step and it was pure friction: the tap IS the choice, the next screen
+ * is the feedback, and «غيّر طريقة التحويل» is the undo. A second press to
+ * agree with the press before it is a step people resent on the screen where
+ * they are deciding to spend money.
+ *
+ * ⚠️ **Nothing is preselected**, and with the confirm gone that matters more,
+ * not less: there is no default to drift through, because nothing happens until
+ * a finger lands on one of the two.
+ *
+ * ⚠️ **These are BUTTONS, not radios.** They were `role="radio"` while a
+ * «التالي» existed — a question with two answers, submitted separately. A
+ * control that acts the moment it is pressed is a button, and calling it a
+ * radio would promise a screen reader an answer it can change before
+ * committing, which is no longer true.
  *
  * ⚠️ **A rail with no number is offered as UNAVAILABLE, never hidden.** An
  * admin who has not filled `contact.vodafoneCash` yet leaves a student staring
@@ -47,12 +58,11 @@ const c = copy.subscribe;
 export function PaymentMethodChoice({
   value,
   onChange,
-  onNext,
   available,
 }: {
   value: PaymentRail | null;
+  /** Picks the rail AND moves on — the tap is the choice. */
   onChange: (rail: PaymentRail) => void;
-  onNext: () => void;
   /** Which rails the admin has actually configured a number for. */
   available: Record<PaymentRail, boolean>;
 }) {
@@ -65,14 +75,7 @@ export function PaymentMethodChoice({
     <div className="pay-choice">
       <p className="pay-choice__question">{c.railQuestion}</p>
 
-      {/*
-        `radiogroup`, not a list of buttons. These are one question with two
-        answers, and the difference is what an arrow key does: in a radio group
-        it moves between the options, which is how someone on a keyboard expects
-        to answer a question. `aria-checked` is what makes the lit card mean
-        "selected" to a screen reader rather than just "coloured".
-      */}
-      <div className="pay-choice__grid" role="radiogroup" aria-label={c.railQuestion}>
+      <div className="pay-choice__grid">
         {rails.map(({ rail, label }) => {
           const enabled = available[rail];
           const selected = value === rail;
@@ -80,8 +83,6 @@ export function PaymentMethodChoice({
             <button
               key={rail}
               type="button"
-              role="radio"
-              aria-checked={selected}
               disabled={!enabled}
               onClick={() => onChange(rail)}
               className={cn('pay-choice__card', selected && 'pay-choice__card--on')}
@@ -96,14 +97,6 @@ export function PaymentMethodChoice({
         })}
       </div>
 
-      <button
-        type="button"
-        onClick={onNext}
-        disabled={value === null}
-        className="course-subscribe__submit pay-choice__next"
-      >
-        {c.railNext}
-      </button>
     </div>
   );
 }

@@ -85,7 +85,7 @@ describe('/robots.txt', () => {
      */
     const groups = parseGroups(await GET().text());
 
-    for (const trainer of ['GPTBot', 'ClaudeBot', 'Google-Extended', 'CCBot']) {
+    for (const trainer of ['GPTBot', 'ClaudeBot', 'CCBot', 'Bytespider']) {
       expect(groups.get(trainer), `${trainer} has no group`).toContain('Disallow: /');
     }
 
@@ -93,6 +93,33 @@ describe('/robots.txt', () => {
       expect(groups.get(reader), `${reader} has no group`).toContain('Allow: /');
       expect(groups.get(reader)).not.toContain('Disallow: /');
     }
+  });
+
+  /**
+   * ⚠️ `Google-Extended` is the ONE exception, and it is Ayman's decision of
+   * 2026-09-16 rather than a drift. Google gates Gemini grounding and Gemini
+   * training behind one token and offers no way to split them; he chose being
+   * citable inside Gemini over withholding the training.
+   *
+   * This asserts the pair together on purpose. `Allow: /` beside a
+   * `Content-Signal` still saying `ai-train=no` would hand Google a permission
+   * and a refusal of it in the same group — and that contradiction is what a
+   * half-applied revert would produce.
+   */
+  it('grants Google-Extended both the access and the training it gates', async () => {
+    const groups = parseGroups(await GET().text());
+    const google = groups.get('Google-Extended');
+
+    expect(google, 'Google-Extended has no group').toContain('Allow: /');
+    expect(google).not.toContain('Disallow: /');
+    expect(google).toContain('Content-Signal: search=yes, ai-input=yes, ai-train=yes');
+  });
+
+  /** The site-wide preference is untouched: the exception is named, not general. */
+  it('still refuses training in the wildcard group', async () => {
+    const groups = parseGroups(await GET().text());
+
+    expect(groups.get('*')).toContain('Content-Signal: search=yes, ai-input=yes, ai-train=no');
   });
 
   it('still carries the content signal and the sitemap', async () => {

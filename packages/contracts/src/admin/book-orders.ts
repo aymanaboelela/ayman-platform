@@ -70,6 +70,35 @@ export type AdminBookOrderSort = z.infer<typeof AdminBookOrderSortSchema>;
  *  A stream is a property of the BOOK on each line, with the order's course as
  *  a fallback for the rows that came from a course button (a cart order has no
  *  course at all). Both are consulted — see the service's own `streamWhere`. */
+/**
+ * «أولى» / «تانية» / «تالتة» — the three secondary years as one word each,
+ * indexed by `year - 1`.
+ *
+ * ## Why a constant here and not `academic_years.badge_ar`
+ *
+ * That column is keyed by (system, year) and is the right source for a COURSE
+ * badge, where the system is known. A book order is not: a cart can hold a book
+ * for either system, `books.year` is a plain `Int` for exactly that reason (see
+ * the model doc), and asking the taxonomy would mean picking a system to ask
+ * about — a choice with no right answer on this screen.
+ *
+ * ## Why it is shared rather than three literals per surface
+ *
+ * The same three words are printed by the screen, the A4 packing sheet and the
+ * `.xlsx` summary, and those three are read side by side on the day a print run
+ * is ordered. `/admin/books` carried its own copy of this array; the sheet
+ * printed «الصف 1» instead, so the header the admin compares against said a
+ * different thing from the file he compares it with.
+ */
+export const BOOK_ORDER_YEAR_WORDS = ['أولى', 'تانية', 'تالتة'] as const;
+
+/** `null` → `null`, so a caller renders «من غير صف» rather than «سنة null». An
+ *  out-of-range year falls back to its own digits instead of `undefined`. */
+export function bookOrderYearWord(year: number | null): string | null {
+  if (year === null) return null;
+  return BOOK_ORDER_YEAR_WORDS[year - 1] ?? String(year);
+}
+
 export const AdminBookOrderStreamSchema = z.enum(['general', 'languages']);
 export type AdminBookOrderStream = z.infer<typeof AdminBookOrderStreamSchema>;
 
@@ -150,6 +179,10 @@ export const AdminBookOrderRowSchema = z.object({
   status: BookOrderStatusSchema,
   createdAt: z.iso.datetime(),
   paidAt: z.iso.datetime().nullable(),
+  /** «راح للمطبعة» — when this order's copy went into a print run. `null` for
+   *  an order that never passed through the printer, which is a real path and
+   *  not a missing value: see `BookOrderStatusSchema`. */
+  printedAt: z.iso.datetime().nullable(),
   shippedAt: z.iso.datetime().nullable(),
   /** Set when the admin confirmed ARRIVAL, which is the transition that
    *  notifies the student. `shippedAt` only records that it left. */
@@ -196,6 +229,14 @@ export const MarkBookOrderDeliveredResultSchema = z.object({
   deliveredAt: z.iso.datetime(),
 });
 export type MarkBookOrderDeliveredResult = z.infer<typeof MarkBookOrderDeliveredResultSchema>;
+
+/** «راح للمطبعة» — the hand-off BEFORE the courier's. Same convention again. */
+export const MarkBookOrderPrintingResultSchema = z.object({
+  id: z.uuid(),
+  status: z.literal('printing'),
+  printedAt: z.iso.datetime(),
+});
+export type MarkBookOrderPrintingResult = z.infer<typeof MarkBookOrderPrintingResultSchema>;
 
 /**
  * A written reason, required, and long enough to be an actual sentence.
@@ -410,8 +451,17 @@ export type BulkBookOrderAction = z.infer<typeof BulkBookOrderActionSchema>;
  *     this is not `skipped` and not a rollback.
  *   · `skipped` — the row was not in `paid`. Already shipped, rejected, or
  *     never paid; re-selecting it is a mistake, not a fault.
+ *   · `printing` — «راح للمطبعة». No message of its own: sending paper to a
+ *     print shop is not news to the student, and telling them would promise a
+ *     date the run cannot keep.
  */
-export const BulkBookOrderOutcomeSchema = z.enum(['shipped', 'delivered', 'notice_failed', 'skipped']);
+export const BulkBookOrderOutcomeSchema = z.enum([
+  'shipped',
+  'printing',
+  'delivered',
+  'notice_failed',
+  'skipped',
+]);
 export type BulkBookOrderOutcome = z.infer<typeof BulkBookOrderOutcomeSchema>;
 
 export const BulkBookOrderResultRowSchema = z.object({
@@ -517,6 +567,43 @@ export const PackingListGroupSchema = z.object({
 export type PackingListGroup = z.infer<typeof PackingListGroupSchema>;
 
 /**
+ * ONE الصف, with its two editions under it — «كام كتاب سنة أولى، كام كتاب سنة
+ * تانية».
+ *
+ * ## Why this exists when `groups[].years` already carries the same numbers
+ *
+ * It carries them the OTHER way round, and the direction is the whole point.
+ * `groups` is edition-first because that is how the paper is physically
+ * stacked: عربي in one pile, لغات in another, which is what a packer walks.
+ * But «هنضيف سنة أولى دلوقتي، ومش عايز ألخبطها بتانية» is a question about the
+ * YEAR first — two different books, two different print runs, two different
+ * decisions — and answering it by adding up two numbers from two different
+ * edition blocks is exactly the arithmetic that produces «واحد ناقص».
+ *
+ * So both orderings are computed from the same lines, in the same pass, and
+ * neither is derived from the other on a screen.
+ *
+ * `year: null` is «من غير صف» and is a real bucket, never folded into a year:
+ * a hand-typed «ملزمة مراجعة» line has no صف, and filing it under أولى would
+ * be inventing one on the sheet a print run is ordered from.
+ */
+export const PackingListYearSchema = z.object({
+  year: z.number().int().nullable(),
+  /** ORDERS that have at least one line in this صف. An order spanning two
+   *  years counts in BOTH, so these deliberately do not sum to `orders` — the
+   *  question is «كام طلب فيه كتاب أولى», not how to partition the list. */
+  orders: z.number().int(),
+  books: z.number().int(),
+  copies: z.number().int(),
+  /** The editions inside this صف, in the sheet's own order (عربي, then لغات,
+   *  then «عربي ولغات», then the unlabelled). */
+  streams: z.array(
+    z.object({ label: z.string(), books: z.number().int(), copies: z.number().int() }),
+  ),
+});
+export type PackingListYear = z.infer<typeof PackingListYearSchema>;
+
+/**
  * The short human reference a courier writes on a waybill and reads back down
  * the phone — «ك-A3F92C».
  *
@@ -601,6 +688,9 @@ export type PackingLabel = z.infer<typeof PackingLabelSchema>;
 
 export const PackingListSchema = z.object({
   groups: z.array(PackingListGroupSchema),
+  /** The same lines counted صف-first instead of edition-first — see
+   *  `PackingListYearSchema` for why both orderings ship. */
+  years: z.array(PackingListYearSchema),
   /**
    * The ORDERS behind those lines, in the same order the sheet prints them.
    *
@@ -644,3 +734,72 @@ export const PackingListSchema = z.object({
   }),
 });
 export type PackingList = z.infer<typeof PackingListSchema>;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * «كام نسخة، كام كتاب، كام طالب، كام عربي، كام لغات» — الأرقام فوق الشاشة.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * The numbers the owner reads BEFORE he does anything on this screen, on the
+ * open tab and with every filter it is showing applied.
+ *
+ * ## Why it is its own request and not derived from the page
+ *
+ * The list is paginated at fifty. Counting the rendered rows answers a
+ * question about the page, not about the tab — the same mistake «حدّد اللي في
+ * المدى» made when it selected fifty of fifty-two and silently left two
+ * parcels unshipped. Every number here is a SQL aggregate over the whole
+ * filtered set, so the header and the pager cannot disagree.
+ *
+ * ## Why students are counted on the PHONE
+ *
+ * «كام طالب» is a count of PEOPLE, and most orders on this table are guests
+ * (`userId: null`) — counting distinct `userId` would report "1 student" for a
+ * hundred guest orders, and counting rows would report the same person three
+ * times. The phone number is the only identifier every order has and the same
+ * person reuses, which is already why `previousOrdersFromPhone` counts on it.
+ *
+ * ## Why copies and books are both here
+ *
+ * They differ the moment anybody orders two, and they answer different
+ * questions: «كام كتاب» is what to PRINT, «كام نسخة» is what to PACK. The
+ * export has printed both since it was written; the screen printed neither.
+ */
+export const AdminBookOrderStreamCountsSchema = z.object({
+  /** «عربي» — copies whose book serves مدارس عام. A book flagged for BOTH
+   *  streams is counted in both, deliberately: it really is on sale to both,
+   *  and these are two answers to «كام عربي؟» / «كام لغات؟», not a partition. */
+  general: z.number().int(),
+  languages: z.number().int(),
+});
+export type AdminBookOrderStreamCounts = z.infer<typeof AdminBookOrderStreamCountsSchema>;
+
+export const AdminBookOrderYearOverviewSchema = z.object({
+  /** `null` is «من غير صف» — a line whose book has no year and whose order has
+   *  no course. Never folded into a year: see `PackingListYearSchema`. */
+  year: z.number().int().nullable(),
+  orders: z.number().int(),
+  students: z.number().int(),
+  books: z.number().int(),
+  copies: z.number().int(),
+  streams: AdminBookOrderStreamCountsSchema,
+});
+export type AdminBookOrderYearOverview = z.infer<typeof AdminBookOrderYearOverviewSchema>;
+
+export const AdminBookOrderOverviewSchema = z.object({
+  orders: z.number().int(),
+  students: z.number().int(),
+  books: z.number().int(),
+  copies: z.number().int(),
+  streams: AdminBookOrderStreamCountsSchema,
+  /**
+   * The same totals per صف, ascending, with «من غير صف» last.
+   *
+   * ⚠️ These do NOT sum to the totals above and must never be rendered as if
+   * they did. An order holding a first-year book and a second-year book is one
+   * order in `orders` and one order in each of two year buckets — which is the
+   * honest answer to «كام طلب فيه كتاب أولى» and the wrong one to «كام طلب».
+   */
+  years: z.array(AdminBookOrderYearOverviewSchema),
+});
+export type AdminBookOrderOverview = z.infer<typeof AdminBookOrderOverviewSchema>;

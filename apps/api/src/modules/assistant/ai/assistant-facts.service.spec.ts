@@ -32,7 +32,7 @@ function make(
   over: {
     books?: (typeof BOOK)[];
     courses?: (typeof COURSE)[];
-    shipping?: number;
+    shipping?: { cairo_giza: number; delta: number; far: number };
     /** Set to make the NEXT read of that source fail. */
     fail?: 'books' | 'courses' | 'shipping';
   } = {},
@@ -45,14 +45,18 @@ function make(
     if (over.fail === 'courses') throw new Error('db down');
     return over.courses ?? [COURSE];
   });
-  const shippingCents = jest.fn(async () => {
+  /* ⚠️ `shippingRates`, not `shippingCents`. Delivery is zoned, and the method
+     this stub stands in for is the one `AssistantFactsService` actually calls —
+     a stub that keeps the old name makes every case here fail at runtime with
+     "not a function" while still type-checking through `as never`. */
+  const shippingRates = jest.fn(async () => {
     if (over.fail === 'shipping') throw new Error('settings missing');
-    return over.shipping ?? 6_500;
+    return over.shipping ?? { cairo_giza: 8_000, delta: 10_000, far: 15_000 };
   });
 
   const prisma = { book: { findMany: findBooks }, course: { findMany: findCourses } };
-  const service = new AssistantFactsService(prisma as never, { shippingCents } as never);
-  return { service, findBooks, findCourses, shippingCents, over };
+  const service = new AssistantFactsService(prisma as never, { shippingRates } as never);
+  return { service, findBooks, findCourses, shippingRates, over };
 }
 
 /** Any Western digit anywhere — the shape a quoted price has to take. */
@@ -74,7 +78,7 @@ describe('AssistantFactsService — reading the numbers', () => {
       },
     ]);
     expect(facts!.courses[0]!.monthlyPriceCents).toBe(15_000);
-    expect(facts!.shippingCents).toBe(6_500);
+    expect(facts!.shippingRates).toEqual({ cairo_giza: 8_000, delta: 10_000, far: 15_000 });
 
     expect(findBooks.mock.calls[0]![0]).toMatchObject({ where: { isActive: true } });
     expect(findCourses.mock.calls[0]![0]).toMatchObject({ where: { status: 'published' } });
@@ -137,7 +141,7 @@ describe('when the numbers cannot be read — the path that must not guess', () 
     });
     const service = new AssistantFactsService(
       { book: { findMany }, course: { findMany: async () => [COURSE] } } as never,
-      { shippingCents: async () => 6_500 } as never,
+      { shippingRates: async () => ({ cairo_giza: 8_000, delta: 10_000, far: 15_000 }) } as never,
     );
 
     const first = await service.read();
@@ -194,7 +198,7 @@ describe('rendering — what a student actually reads', () => {
         yearlyPriceCents: null,
       },
     ],
-    shippingCents: 6_500,
+    shippingRates: { cairo_giza: 8_000, delta: 10_000, far: 15_000 },
     at: Date.now(),
     ...over,
   });
@@ -207,15 +211,39 @@ describe('rendering — what a student actually reads', () => {
 
   it('says the delivery fee is charged once per order', () => {
     const [, , ship] = priceEntries(facts());
-    expect(ship!.answer).toContain('65 جنيه');
     expect(ship!.answer).toContain('مش على كل كتاب');
   });
 
-  /* «0 جنيه» reads as a number that failed to load. Zero gets a word. */
+  /**
+   * ⚠️ ALL THREE zones, never just one.
+   *
+   * المساعد's answer is read back to the student VERBATIM, so «الشحن ٨٠ جنيه»
+   * is a wrong number said with confidence to everybody outside القاهرة
+   * والجيزة — and there is no second sentence to qualify it with. This is the
+   * assertion that fails if anybody ever collapses the list back to one figure.
+   */
+  it('names every zone, because its answer is quoted word for word', () => {
+    const [, , ship] = priceEntries(facts());
+    expect(ship!.answer).toContain('80 جنيه');
+    expect(ship!.answer).toContain('100 جنيه');
+    expect(ship!.answer).toContain('150 جنيه');
+    expect(ship!.answer).toContain('القاهرة والجيزة');
+  });
+
+  /* «0 جنيه» reads as a number that failed to load. Zero gets a word — but only
+     when EVERY zone is zero, which is the only case that really is «مجاني». */
   it('says free delivery in words rather than as a zero', () => {
-    const [, , ship] = priceEntries(facts({ shippingCents: 0 }));
+    const [, , ship] = priceEntries(facts({ shippingRates: { cairo_giza: 0, delta: 0, far: 0 } }));
     expect(ship!.answer).toContain('مجاني');
     expect(hasNumber(ship!.answer)).toBe(false);
+  });
+
+  /* One free zone among three is a real zone that costs nothing, not free
+     delivery — the list says so rather than hiding it behind one word. */
+  it('does not call delivery free when only one zone is', () => {
+    const [, , ship] = priceEntries(facts({ shippingRates: { cairo_giza: 0, delta: 10_000, far: 15_000 } }));
+    expect(ship!.answer).toContain('مجاني');
+    expect(ship!.answer).toContain('150 جنيه');
   });
 
   it('lists only the plans that are on sale', () => {
