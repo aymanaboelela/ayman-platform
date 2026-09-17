@@ -19,6 +19,7 @@ import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { ApiRequestError, apiGet, apiPost } from '@/lib/api';
+import { duplicateOrderFrom, whereIs, type DuplicateTwin } from '@/lib/duplicate-order';
 import { uploadBookOrderScreenshot } from '@/lib/upload-client';
 import { formatEGP, formatShipping } from '@/lib/price';
 import {
@@ -31,6 +32,7 @@ import { PaymentBrand, type PaymentRail } from './payment-brand';
 import { PaymentMethodChoice } from './payment-method-choice';
 
 const c = copy.bookOrder;
+
 
 /** `+201021196367` → `٠١٠٢١١٩٦٣٦٧`-shaped local digits — same helper
  *  `SubscribePanel` uses for the same Vodafone Cash number. */
@@ -175,6 +177,9 @@ export function BookOrderPanel({
   const [savingAddress, setSavingAddress] = useState(false);
   /** The server said this phone already has a finished order for these books. */
   const [duplicatePrompt, setDuplicatePrompt] = useState(false);
+  /** The existing order the 409 named — its status and reference, for the
+   *  «طلبك القديم» line. Null when the body could not be read. */
+  const [duplicateTwin, setDuplicateTwin] = useState<DuplicateTwin | null>(null);
 
   // Payment fields — identical shape to `SubscribePanel`.
   const [senderPhone, setSenderPhone] = useState('');
@@ -432,6 +437,7 @@ export function BookOrderPanel({
        * student answers it.
        */
       if (cause instanceof ApiRequestError && cause.status === 409) {
+        setDuplicateTwin(duplicateOrderFrom(cause.payload));
         setDuplicatePrompt(true);
       } else {
         // No `onUnauthorized` branch — this endpoint is `@Public()`, so a
@@ -483,6 +489,9 @@ export function BookOrderPanel({
   /** «أيوه، عايز نسخة كمان» — the same POST, with the student's answer. */
   async function confirmDuplicateOrder() {
     setDuplicatePrompt(false);
+    /* Cleared with the prompt. A twin left behind would be printed on the NEXT
+       question this session raises, about a different order. */
+    setDuplicateTwin(null);
     setSavingAddress(true);
     try {
       finishAddress(await postOrder(true));
@@ -595,6 +604,27 @@ export function BookOrderPanel({
         <div className="course-subscribe">
           <p className="course-subscribe__title">{c.duplicateTitle}</p>
           <p className="course-subscribe__instructions">{c.duplicateBody}</p>
+          {/*
+            «لو راح للطباعة تقوله راح للطباعة». Without this the student is
+            being asked to decide about an order they cannot see — and the one
+            who cannot tell whether the first is coming is exactly the one who
+            orders again.
+
+            Rendered only when the 409 carried a body. An older API, or a
+            response that would not parse, falls back to the question alone
+            rather than to a blank line pretending to say something.
+          */}
+          {duplicateTwin ? (
+            <p className="course-subscribe__instructions">
+              <b>{c.duplicateWhereTitle}</b> {whereIs(duplicateTwin.status)}
+              {duplicateTwin.ref ? (
+                <>
+                  {' '}
+                  <span dir="ltr">{formatCopy(c.duplicateRef, { ref: duplicateTwin.ref })}</span>
+                </>
+              ) : null}
+            </p>
+          ) : null}
           <div className="course-subscribe__actions">
             <Button type="button" onClick={onCancel}>
               {c.duplicateCancel}

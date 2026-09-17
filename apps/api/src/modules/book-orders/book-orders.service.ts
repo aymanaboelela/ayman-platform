@@ -880,10 +880,31 @@ export class BookOrdersService {
             { status: { in: ['paid', 'printing', 'shipped'] } },
           ],
         },
-        select: { items: { select: { bookId: true, quantity: true } } },
+        orderBy: [{ createdAt: 'desc' }],
+        select: {
+          id: true,
+          /* ⚠️ The STATUS travels with the refusal. «إنت طلبت قبل كده» on its
+             own leaves the student to guess whether the first one is coming —
+             and a student who cannot tell orders again, which is the whole
+             reason this dialog exists. «طلبك في المطبعة» answers it in the
+             same breath as the question. */
+          status: true,
+          createdAt: true,
+          items: { select: { bookId: true, quantity: true } },
+        },
       });
-      if (recent.some((row) => sameLines(row.items))) {
-        throw new ConflictException('DUPLICATE_RECENT_BOOK_ORDER');
+      const twin = recent.find((row) => sameLines(row.items));
+      if (twin) {
+        throw new ConflictException({
+          /* The bare string this used to throw is kept as `code` — the panel
+             has always branched on the 409's status rather than its body, and
+             the two spellings must not disagree while that is true. */
+          code: 'DUPLICATE_RECENT_BOOK_ORDER',
+          ref: bookOrderRef(twin.id),
+          status: twin.status,
+          orderedAt: twin.createdAt.toISOString(),
+          message: 'this phone already ordered these books',
+        });
       }
     }
 

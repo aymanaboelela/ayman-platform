@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { copy } from '@ayman/contracts';
+import { copy } from '@ayman/contracts/copy';
 import { cn } from '@ayman/ui/lib/cn';
 import { apiPostVoid } from '@/lib/api';
 
