@@ -1,3 +1,5 @@
+import { connection } from 'next/server';
+
 /**
  * «مفيش أيقونة» — the endpoint a non-Ayman deployment's icon requests land on.
  *
@@ -61,7 +63,39 @@
  * modes) on a request that must never be able to fail, to fix a probe that the
  * `<link>` in the head already answers.
  */
-export function GET(): Response {
+/*
+ * ⚠️ NOT prerendered, and that is the whole reason this line exists.
+ *
+ * This handler takes no input, so Next treats it as static and runs it at
+ * BUILD time, then replays the result. The replay reconstructs the response —
+ * and it hands the constructor an empty body rather than `null`, which for a
+ * 204 is illegal:
+ *
+ *     TypeError: Response constructor: Invalid response status code 204
+ *
+ * That is not a warning. The export step fails, retries three times, and takes
+ * the whole `next build` down with it — so the Docker image never builds and
+ * all four Playwright shards die on a missing app, five red checks pointing at
+ * a route nobody touched.
+ *
+ * It is invisible everywhere cheap: `next dev` runs the handler per request and
+ * never replays it, the unit suites import nothing from here, and typecheck has
+ * no opinion. Only a real production build reaches it.
+ *
+ * `await connection()` and NOT `export const dynamic = 'force-dynamic'`:
+ * `next.config.ts` sets `cacheComponents: true`, and that rejects the segment
+ * config outright — «Route segment config "dynamic" is not compatible with
+ * `nextConfig.cacheComponents`» — so the obvious spelling trades one failed
+ * build for another. `llms.txt/route.ts` hit this first and says the same.
+ *
+ * It costs nothing measurable — the handler returns a constant with no I/O —
+ * and the caching that matters is untouched: `next.config.ts` sets
+ * `max-age=31536000` on the icon paths by REQUEST path, so a browser still
+ * asks once a year whether this is computed per request or baked.
+ */
+export async function GET(): Promise<Response> {
+  await connection();
+
   return new Response(null, {
     status: 204,
     headers: {
