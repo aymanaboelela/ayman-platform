@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Medal, Trophy } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
-import { initials } from '@/components/app/user-avatar';
+import { HonorAvatar } from '@/components/site/honor-avatar';
 import { getHonorBoardRounds } from '@/lib/home-blocks';
 
 const c = copy.landing.honorBoard;
@@ -47,12 +47,12 @@ export default async function HonorBoardArchivePage({
   if (board.periods.length === 0) {
     return (
       <main className="honor-archive site-shell">
-        <header className="honor-archive__head">
+        <header className="page-head honor-archive__head">
           <p className="honor-archive__eyebrow">
             <Trophy size={18} strokeWidth={1.5} aria-hidden="true" />
             {c.eyebrow}
           </p>
-          <h1 className="honor-archive__title">{c.archiveTitle}</h1>
+          <h1 className="page-title">{c.archiveTitle}</h1>
           <p className="honor-archive__lead">{c.archiveEmpty}</p>
         </header>
       </main>
@@ -64,12 +64,12 @@ export default async function HonorBoardArchivePage({
 
   return (
     <main className="honor-archive site-shell">
-      <header className="honor-archive__head">
+      <header className="page-head honor-archive__head">
         <p className="honor-archive__eyebrow">
           <Trophy size={18} strokeWidth={1.5} aria-hidden="true" />
           {c.eyebrow}
         </p>
-        <h1 className="honor-archive__title">{c.archiveTitle}</h1>
+        <h1 className="page-title">{c.archiveTitle}</h1>
         <p className="honor-archive__lead">{c.archiveLead}</p>
       </header>
 
@@ -122,11 +122,7 @@ export default async function HonorBoardArchivePage({
                 {c.placeRanks[entry.rank - 1] ?? ''}
               </span>
               <span className="honor-board__slot-course">{entry.courseLabel}</span>
-              {/* Initials, never the photograph — same rule as the landing
-                  board, and for the same reason. See `honor-board-section`. */}
-              <span className="honor-board__slot-avatar" aria-hidden="true">
-                {initials(entry.studentName)}
-              </span>
+              <HonorAvatar variant={entry.avatarVariant} />
               <span className="honor-board__slot-name">{entry.studentName}</span>
               <span className="honor-board__slot-quiz">{entry.quizTitle}</span>
             </li>

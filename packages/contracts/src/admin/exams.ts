@@ -457,6 +457,12 @@ export const HonorBoardEntrySchema = z.object({
    *  never sat the same paper. This is a LABEL and not the course's id or
    *  slug, for the reason in this block's header. */
   courseLabel: z.string(),
+  /** Which drawing the public card shows. Derived server-side from
+   *  `StudentProfile.gender`, a REQUIRED column every student sets at
+   *  onboarding — the platform never guesses this from a name and this does
+   *  not start. The VARIANT rides the wire rather than the gender itself:
+   *  what a public payload about a minor needs is which picture to draw. */
+  avatarVariant: z.enum(['boy', 'girl']),
   /** 1-based WITHIN `courseLabel`, never across the board. Two entries on the
    *  same board are both `rank: 1` when they are firsts of different courses,
    *  and that is the intended reading. */
