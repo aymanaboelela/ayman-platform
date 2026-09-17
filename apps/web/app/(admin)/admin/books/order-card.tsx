@@ -17,6 +17,7 @@ import {
   RemoveOrderAction,
   RestoreOrderAction,
 } from './order-actions';
+import { MarkOrderPaidDialog } from './mark-paid-dialog';
 import { ShipAction } from './ship-action';
 import { PrintAction } from './print-action';
 import { OrderCheckbox } from './bulk-ship';
@@ -437,6 +438,16 @@ export function BookOrderCard({
             <>
               {/* «أعدل» first because it is the one that is reversible. */}
               <EditBookOrderDialog order={row} books={books} governorates={governorates} />
+
+              {/* «الفلوس وصلت» — the ONE way out of «بدأ ومكملش الدفع» that
+                  does not need the student to come back and upload anything.
+                  Only on that state: every later one has already been settled,
+                  and a rejected row is restored before it is paid for. It
+                  carries both answers — فلوس and مجاني — because the admin is
+                  answering «اتحصّل منه إيه؟» once. See the dialog. */}
+              {row.status === 'address_only' ? (
+                <MarkOrderPaidDialog id={row.id} amountCents={row.amountCents} />
+              ) : null}
 
               {/* Only on rows a batch can act on — a checkbox on a delivered
                   order is a control whose only outcome is «اتشحن قبل كده».
