@@ -1076,6 +1076,95 @@ jobs:
           fi
           echo "DEPLOY_TRIGGER=ok" >> "$GITHUB_ENV"
 
+      # ── The other instructors' stacks ───────────────────────────────────────
+      #
+      # The whole argument for one repo and one branch is that a bug fixed once
+      # is fixed for everybody. That only holds if every stack REBUILDS — and
+      # the step above asks exactly one of them, because `DOKPLOY_DEPLOY_URL` is
+      # a single webhook pointing at Ayman's application.
+      #
+      # Without this step a fix merges, his site updates, and the other stacks
+      # sit on the old image until somebody opens Dokploy and presses Redeploy.
+      # Nothing reports that: their sites are up, their health checks are green,
+      # and the only symptom is a bug that was fixed weeks ago still happening
+      # to somebody else's students.
+      #
+      # ## Why this is a separate step, and why it can never fail the job
+      #
+      # It runs AFTER his trigger and does not touch `DEPLOY_TRIGGER`. The next
+      # step's verdict is "did AYMAN'S production change", which is the thing
+      # this workflow has always been accountable for and the thing a red check
+      # here must keep meaning. A tenant webhook that is wrong, stale, or
+      # pointing at a stack somebody deleted must not turn his deploy red — so
+      # every failure below warns and continues, and the warning is visible on
+      # a green run.
+      #
+      # ## The secret
+      #
+      # `DOKPLOY_TENANT_DEPLOY_URLS` — one webhook per line, or comma
+      # separated. Unset is the normal state until a second stack exists, and
+      # unset must be silent rather than a warning on every merge: a workflow
+      # that cries about an optional secret on every run teaches people to stop
+      # reading its warnings, which is how the ones that matter get missed.
+      #
+      # Each URL is stripped and scheme-checked exactly like his, for the same
+      # reason — a value pasted into the GitHub UI carries a trailing newline,
+      # and curl answers that with a message naming neither the secret nor the
+      # newline, on a value masked as *** in the log.
+      - name: Trigger the other instructors' deploys
+        env:
+          TENANT_DEPLOY_URLS: ${{ secrets.DOKPLOY_TENANT_DEPLOY_URLS }}
+        run: |
+          if [ -z "$TENANT_DEPLOY_URLS" ]; then
+            echo "No DOKPLOY_TENANT_DEPLOY_URLS — nothing but Ayman's stack to deploy."
+            exit 0
+          fi
+
+          asked=0
+          failed=0
+          # Commas to newlines first, so both shapes of the secret work.
+          while IFS= read -r raw; do
+            url="$(printf '%s' "$raw" | tr -d '[:space:]')"
+            [ -z "$url" ] && continue
+
+            case "$url" in
+              http://*|https://*) ;;
+              *)
+                echo "::warning::A DOKPLOY_TENANT_DEPLOY_URLS entry is not a URL — check the secret, not this workflow."
+                failed=$((failed + 1))
+                continue
+                ;;
+            esac
+
+            asked=$((asked + 1))
+            # Same payload shape as his: Dokploy matches the pushed branch
+            # against the stack's configured branch and answers "Branch Not
+            # Match" if it cannot find one, so the ref has to be real.
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+              -X POST "$url" \
+              -H 'content-type: application/json' \
+              -H 'x-github-event: push' \
+              -d "{\"ref\":\"refs/heads/main\"}" || echo "000")
+
+            case "$code" in
+              2*) echo "stack $asked: HTTP $code — asked" ;;
+              000)
+                echo "::warning::stack $asked: curl could not reach its webhook (DNS, TLS, timeout or refused)."
+                failed=$((failed + 1))
+                ;;
+              *)
+                echo "::warning::stack $asked: webhook answered HTTP $code — that stack will NOT rebuild on this merge."
+                failed=$((failed + 1))
+                ;;
+            esac
+          done <<< "$(printf '%s' "$TENANT_DEPLOY_URLS" | tr ',' '\n')"
+
+          echo "asked $asked tenant stack(s), $failed problem(s)."
+          # Deliberately exit 0 whatever happened — see the note above. A tenant
+          # that did not rebuild is a real problem and the warnings say so; it
+          # is not a reason to report Ayman's deploy as broken.
+          exit 0
+
       # A queued deploy is not a finished one. Without this the job goes green
       # the moment the request is accepted, which is the same false comfort as
       # having no deploy step at all.
