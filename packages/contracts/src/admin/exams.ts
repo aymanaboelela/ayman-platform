@@ -444,16 +444,64 @@ export type AdminAttemptMarkInput = z.infer<typeof AdminAttemptMarkSchema>;
  */
 export const HonorBoardEntrySchema = z.object({
   studentName: z.string(),
-  /** The avatar's storage key, or null — the board draws initials for a
-   *  student who never uploaded one, which is most of them. */
+  /** The avatar's storage key, or null. The PUBLIC board declines to render
+   *  it — see `honor-board-section.tsx` — and it stays on the wire only so an
+   *  instructor surface can tell whose row this is. */
   avatarKey: z.string().nullable(),
   quizTitle: z.string(),
+  /** Which course this place was won in — «تانية بكالوريا — لغات».
+   *
+   *  The board runs ONE RACE PER COURSE, not one race overall, so `rank`
+   *  below is meaningless without it: four cards reading الأول/التاني/التالت/
+   *  الرابع would claim a تانية-لغات student beat an أولى-عربي one, and they
+   *  never sat the same paper. This is a LABEL and not the course's id or
+   *  slug, for the reason in this block's header. */
+  courseLabel: z.string(),
+  /** 1-based WITHIN `courseLabel`, never across the board. Two entries on the
+   *  same board are both `rank: 1` when they are firsts of different courses,
+   *  and that is the intended reading. */
+  rank: z.number().int().min(1),
   scaledScore: z.number(),
   gradeOutOf: z.number(),
   percent: z.number().min(0).max(100),
 });
 export type HonorBoardEntry = z.infer<typeof HonorBoardEntrySchema>;
 
-export const HonorBoardSchema = z.object({ entries: z.array(HonorBoardEntrySchema) });
+/**
+ * One round of the board — «الناس اللي كانت وقتها في لوحة الشرف».
+ *
+ * ## Why the round is the day it was PINNED
+ *
+ * There is no stored "round" column, and the obvious substitutes do not work:
+ * the two courses sit different exam lessons with different titles («امتحان
+ * نص الشهر الأول» and «Mid-Month Exam 1»), so a round cannot be a lesson id,
+ * and `opensAt` is null on an exam that was simply left open. What the four
+ * winners of a round DO share is that one instructor pinned them in one
+ * sitting, so the round is the Cairo date of `honor_board_at`.
+ *
+ * The cost is honest and small: pinning a fifth name a day later files it as
+ * its own round. Unpinning and re-pinning it moves it back, which is two
+ * clicks on a screen the instructor is already on.
+ */
+export const HonorBoardPeriodSchema = z.object({
+  /** `YYYY-MM-DD`, bucketed in CAIRO — a board pinned at 00:30 Cairo belongs
+   *  to that night in every sentence anyone says about it. */
+  key: z.string(),
+  /** The newest pin in the round, so the archive can print a real date. */
+  pinnedAt: z.iso.datetime(),
+  /** The exams this round covers, deduplicated and in card order. */
+  examTitles: z.array(z.string()),
+  entries: z.array(HonorBoardEntrySchema),
+});
+export type HonorBoardPeriod = z.infer<typeof HonorBoardPeriodSchema>;
+
+export const HonorBoardSchema = z.object({
+  /** The CURRENT board — the newest round, flat. This is what the landing
+   *  page renders, and it stays a top-level field so that section never has
+   *  to know the archive exists. */
+  entries: z.array(HonorBoardEntrySchema),
+  /** Every round, newest first. Drives «عرض الكل». */
+  periods: z.array(HonorBoardPeriodSchema),
+});
 export type HonorBoard = z.infer<typeof HonorBoardSchema>;
 
