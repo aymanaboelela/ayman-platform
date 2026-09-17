@@ -1654,8 +1654,29 @@ export const copy = {
        * going, which is what it will be.
        */
       ranks: ['المركز الأول', 'المركز التاني', 'المركز التالت', 'المركز الرابع'],
-      /** `{score}` من `{outOf}` — على كرت الطالب اللي على اللوحة. */
-      entryScore: '{score} من {outOf}',
+      /**
+       * The rank ON A FILLED CARD, indexed by `entry.rank - 1`.
+       *
+       * Separate from `ranks` above even though today they read the same,
+       * because they are answers to different questions: `ranks` labels FOUR
+       * RESERVED PLACES on an empty board, so it always has exactly four and
+       * they always count 1..4. This one labels a place someone WON, and the
+       * board runs one race per course — so two cards on the same board are
+       * both «المركز الأول», of different courses. Merging them would force
+       * the empty board to stop saying "four places" the day a fifth course
+       * is added.
+       */
+      placeRanks: ['المركز الأول', 'المركز التاني', 'المركز التالت', 'المركز الرابع'],
+      /** «عرض الكل» — من اللوحة على الصفحة الرئيسية لصفحة الأرشيف. */
+      viewAll: 'عرض الكل',
+      /** عنوان صفحة الأرشيف. */
+      archiveTitle: 'لوحة الشرف — كل الأسماء',
+      /** تحت العنوان في صفحة الأرشيف. */
+      archiveLead: 'كل اللي عدّوا على اللوحة، امتحان ورا امتحان.',
+      /** عنوان العمود الجانبي اللي فيه التواريخ. */
+      archivePeriods: 'الامتحانات',
+      /** لما الأرشيف يبقى فاضي. */
+      archiveEmpty: 'لسه مفيش حد على اللوحة.',
       /**
        * Under the four places. Said ONCE, not repeated inside every card:
        * four cards each carrying the same apology is how an empty section
@@ -2646,6 +2667,15 @@ export const copy = {
     descriptionTitle: 'ملخص الدرس',
     descriptionWarning: 'متفتحوش غير لما تخلّص المحاضرة — ده ملخص تراجع بيه على نفسك، مش بديل عنها.',
 
+    /**
+     * The corner control on the video. `F` used to be the only way in, and a
+     * phone has no F key — so these two labels exist because the button does.
+     *
+     * «ملء الشاشة» and not «كبّر»: on a phone the tap also turns the picture
+     * sideways, and «كبّر» would describe half of what happens.
+     */
+    enterFullscreen: 'ملء الشاشة',
+    exitFullscreen: 'خروج من ملء الشاشة',
     outline: 'محتوى الكورس',
     previous: 'الدرس السابق',
     next: 'الدرس التالي',

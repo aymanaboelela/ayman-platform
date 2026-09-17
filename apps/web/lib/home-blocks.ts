@@ -1,4 +1,4 @@
-import { HonorBoardSchema, type HonorBoardEntry } from '@ayman/contracts/admin/exams';
+import { HonorBoardSchema, type HonorBoard, type HonorBoardEntry } from '@ayman/contracts/admin/exams';
 import { cacheLife, cacheTag } from 'next/cache';
 import {
   HomeBlockListSchema,
@@ -301,15 +301,29 @@ export async function getHomeBlocks(): Promise<HomeBlockList> {
  * for in the first place.
  */
 export async function getHonorBoard(): Promise<HonorBoardEntry[]> {
+  return (await getHonorBoardRounds()).entries;
+}
+
+/**
+ * The same read, un-narrowed — the archive page needs every round, and the
+ * landing page needs only the newest.
+ *
+ * ONE cached function behind both, rather than two reads of the same route:
+ * they share a cache tag, and two entries under one tag is a pair that can
+ * disagree about what the board says for as long as `minutes` lasts.
+ *
+ * Fails SOFT for the reason above, and the archive renders its own empty
+ * state from `periods: []`.
+ */
+export async function getHonorBoardRounds(): Promise<HonorBoard> {
   'use cache';
   cacheLife('minutes');
   cacheTag(tags.honorBoard());
 
   try {
-    const board = await apiGet('/api/catalog/honor-board', HonorBoardSchema);
-    return board.entries;
+    return await apiGet('/api/catalog/honor-board', HonorBoardSchema);
   } catch {
-    return [];
+    return { entries: [], periods: [] };
   }
 }
 

@@ -115,3 +115,23 @@ export function LockIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+/**
+ * The fullscreen corner control — four brackets pointing out, and the same
+ * four pointing in once you are there.
+ *
+ * ONE component with a flag rather than two exports, because the two states
+ * are the same control and the icon must never disagree with the button's own
+ * label about which way it will go.
+ */
+export function FullscreenIcon({ className, exiting = false }: IconProps & { exiting?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={cn('h-5 w-5 shrink-0', className)} {...STROKE}>
+      {exiting ? (
+        <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+      ) : (
+        <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+      )}
+    </svg>
+  );
+}
