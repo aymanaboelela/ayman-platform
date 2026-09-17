@@ -1,3 +1,4 @@
+import { getBranding } from '@/lib/settings';
 import { Fragment } from 'react';
 import { cacheLife } from 'next/cache';
 import type { Metadata } from 'next';
@@ -89,9 +90,29 @@ export default async function HomePage() {
    * here — and issuing it in parallel keeps a board nobody has filled yet from
    * adding a round trip to the landing page's LCP path.
    */
-  const [blocks, honorBoard] = await Promise.all([getHomeBlocks(), getHonorBoard()]);
+  const [blocks, honorBoard, branding] = await Promise.all([
+    getHomeBlocks(),
+    getHonorBoard(),
+    getBranding(),
+  ]);
 
-  return <main>{blocks.map((block) => renderBlock(block, honorBoard))}</main>;
+  /*
+   * The page's SHAPE, chosen per instructor from /admin/settings.
+   *
+   * One attribute, and `styles/layouts.css` answers it — no block changes and
+   * no component takes a new prop. What it moves is the rhythm the sections
+   * share: how tall the opener is, whether copy sits ranged or centred,
+   * whether content sits in raised cards or between hairlines.
+   *
+   * `classic` has no rules in that file at all, so this attribute is inert on
+   * Ayman's page — which is the point. Choosing the default cannot change what
+   * he already has.
+   */
+  return (
+    <main data-layout={branding.landingLayout}>
+      {blocks.map((block) => renderBlock(block, honorBoard))}
+    </main>
+  );
 }
 
 function renderBlock(block: HomeBlock, honorBoard: HonorBoardEntry[]) {
