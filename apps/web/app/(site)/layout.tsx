@@ -14,6 +14,9 @@ import './styles/media.css';
 import './styles/sections.css';
 import './styles/blocks.css';
 import './styles/pages.css';
+// ⚠️ LAST. It answers `data-layout` on the landing page's `<main>` and must
+// win over the rules in `sections.css` without reaching for `!important`.
+import './styles/layouts.css';
 import './styles/books.css';
 import { AssistantSlot } from '@/components/assistant/assistant-slot';
 

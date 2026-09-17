@@ -1,0 +1,191 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   LANDING LAYOUTS — the page's SHAPE, chosen per instructor from /admin.
+
+   `branding.landingLayout` lands as `data-layout` on the landing page's
+   `<main>`, and everything below answers it. Nothing here restyles a block's
+   CONTENT; what changes is the rhythm the sections share — how tall the opener
+   is, whether headings sit ranged or centred, whether content sits in raised
+   cards or between hairlines, and how much air runs between sections.
+
+   ⚠️ `classic` HAS NO RULES IN THIS FILE, deliberately. It is what
+   `sections.css` already describes — Ayman's live page — and the whole point
+   is that choosing it changes not one byte of what he has. A `[data-layout]`
+   selector for it would be a second place his page is defined.
+
+   Every rule is therefore scoped to `[data-layout="editorial"]` or
+   `[data-layout="compact"]`, and this file is imported AFTER `sections.css`
+   so it wins without needing `!important`.
+
+   Colours come from the SITE token layer only (`--site-*`, defined in
+   `theme.css`) — the marketing surface has its own set and
+   `lib/css-token-coverage.test.ts` fails the build on a name that is not
+   declared anywhere. These looks are shapes; the hue is
+   `accentHue`'s job and the two are independent — any layout works with any
+   colour.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ═══ EDITORIAL ═══════════════════════════════════════════════════════════
+   No dark stage. A light opener sized to its own content, one centred column,
+   much larger headings, sections separated by hairlines instead of cards.
+   Reads like a long-form page rather than a product site. */
+
+[data-layout='editorial'] .hero {
+  /* The single biggest difference: the opener stops being a full-height dark
+     stage. `min-height: auto` lets it be as tall as its words, which is what
+     makes the page read as a document that starts rather than a site that
+     presents. */
+  min-height: auto;
+  background: var(--site-bg);
+  color: var(--site-fg);
+  color-scheme: normal;
+  border-bottom: 1px solid var(--site-line);
+}
+
+[data-layout='editorial'] .hero__fluid,
+[data-layout='editorial'] .hero__media,
+[data-layout='editorial'] .hero__scrim {
+  /* The WebGL fluid and the full-bleed photograph belong to the dark stage.
+     With a light opener they have nothing to sit on, and the scrim that made
+     the copy readable over them now only dims the page. */
+  display: none;
+}
+
+[data-layout='editorial'] .hero__body {
+  /* One column, centred, with real vertical air — not a two-column grid with
+     the copy ranged to one side. */
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 62rem;
+  padding-block: calc(var(--site-nav-h) + 5rem) 5rem;
+  text-align: center;
+}
+
+[data-layout='editorial'] .hero__copy {
+  grid-column: 1;
+  align-items: center;
+  text-align: center;
+}
+
+[data-layout='editorial'] .hero__title {
+  /* Larger than classic and set tighter — the headline carries the page. */
+  font-size: clamp(2.75rem, 7vw, 5.25rem);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+}
+
+[data-layout='editorial'] .hero__eyebrow {
+  color: var(--site-fg-2);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+[data-layout='editorial'] .hero__lead {
+  max-width: 44ch;
+  margin-inline: auto;
+  font-size: var(--fs-text-lg, 1.125rem);
+}
+
+[data-layout='editorial'] .hero__cta {
+  justify-content: center;
+}
+
+[data-layout='editorial'] .hero__stats {
+  justify-content: center;
+}
+
+/* Sections are separated by a rule, not by a change of background. */
+[data-layout='editorial'] .rail,
+[data-layout='editorial'] .courses,
+[data-layout='editorial'] .about,
+[data-layout='editorial'] .faq,
+[data-layout='editorial'] .track,
+[data-layout='editorial'] .honor-board {
+  background: var(--site-bg);
+  border-top: 1px solid var(--site-line);
+  padding-block: clamp(4.5rem, 9vw, 7.5rem);
+}
+
+/* Cards lose their fill and their shadow and keep only a hairline — the
+   content sits ON the page instead of on a raised surface. */
+[data-layout='editorial'] .course-card,
+[data-layout='editorial'] .rail__card {
+  background: transparent;
+  box-shadow: none;
+  border: 1px solid var(--site-line);
+  border-radius: var(--r-sm);
+}
+
+[data-layout='editorial'] .courses__grid {
+  gap: clamp(1.5rem, 3vw, 2.5rem);
+}
+
+/* ═══ COMPACT ═════════════════════════════════════════════════════════════
+   A short opener, centred copy, tighter type, denser sections with bordered
+   cards. Reads like an app's marketing page: more on the first screen, less
+   air. The dark stage stays — it is the height and the density that change. */
+
+[data-layout='compact'] .hero {
+  /* Roughly two thirds of the screen instead of all of it, so the first
+     section is visible without scrolling — which is the whole argument for
+     this look. */
+  min-height: 62svh;
+}
+
+[data-layout='compact'] .hero__body {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 54rem;
+  padding-block: calc(var(--site-nav-h) + 1.5rem) 2rem;
+  gap: 1.25rem;
+  text-align: center;
+}
+
+[data-layout='compact'] .hero__copy {
+  grid-column: 1;
+  align-items: center;
+  text-align: center;
+}
+
+[data-layout='compact'] .hero__title {
+  font-size: clamp(1.9rem, 3.6vw, 2.9rem);
+  line-height: 1.18;
+}
+
+[data-layout='compact'] .hero__lead {
+  max-width: 48ch;
+  margin-inline: auto;
+}
+
+[data-layout='compact'] .hero__cta,
+[data-layout='compact'] .hero__stats {
+  justify-content: center;
+}
+
+[data-layout='compact'] .rail,
+[data-layout='compact'] .courses,
+[data-layout='compact'] .about,
+[data-layout='compact'] .faq,
+[data-layout='compact'] .track,
+[data-layout='compact'] .honor-board {
+  padding-block: clamp(2.25rem, 4vw, 3.5rem);
+}
+
+/* Every card carries a visible edge, and the corners are tighter. Density
+   needs boundaries: without them a compressed page reads as a list. */
+[data-layout='compact'] .course-card,
+[data-layout='compact'] .rail__card {
+  border: 1px solid var(--site-line-strong);
+  border-radius: var(--r-xs);
+  box-shadow: none;
+}
+
+[data-layout='compact'] .courses__grid {
+  gap: 0.875rem;
+}
+
+/* ═══ Both alternates ═════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  [data-layout='editorial'] .hero,
+  [data-layout='compact'] .hero {
+    transition: none;
+  }
+}

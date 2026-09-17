@@ -75,10 +75,14 @@ describe('SiteSettingsSchema', () => {
       'accent',
       'accentHue',
       'faviconAssetId',
+      'landingLayout',
       'logoDarkAssetId',
       'logoLightAssetId',
       'radius',
     ]);
+    // A row written before this field existed must keep Ayman's page, so the
+    // default has to be `classic` rather than one of the new shapes.
+    expect(parsed.branding.landingLayout).toBe('classic');
     // A stored row written before `accentHue` existed must keep its slot, so
     // the default has to be null rather than a hue — otherwise every existing
     // platform would silently switch to a generated scheme on first parse.

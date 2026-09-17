@@ -7,13 +7,28 @@ import { runCode, type RunResult } from '@/lib/run-code';
 
 const c = copy.landing;
 
+/**
+ * The instructor this deployment belongs to, for the starter snippet.
+ *
+ * The example printed «منصة المهندس أيمن» from a literal. Nothing renders this
+ * component today — it is the only file in the app that still hardcoded the
+ * name, and it survived precisely because it is unused. The moment somebody
+ * wires it up on a second instructor's stack it teaches their students to
+ * print somebody else's name.
+ *
+ * `TENANT_DISPLAY_NAME` is already passed to the web container and baked as a
+ * build arg; `NEXT_PUBLIC_` is not needed because the value is substituted
+ * into a STRING here, at module load, not read in the browser.
+ */
+const INSTRUCTOR = (process.env.TENANT_DISPLAY_NAME ?? '').trim() || 'أيمن';
+
 /** The starter snippets behind the toolbar's picker. */
 const EXAMPLES: readonly { label: string; code: string }[] = [
   {
     label: c.playExampleStart,
     code: `console.log("أهلاً يا مبرمج 👋");
 
-const name = "أيمن";
+const name = "${INSTRUCTOR}";
 console.log(\`منصة المهندس \${name}\`);
 
 const a = 7;

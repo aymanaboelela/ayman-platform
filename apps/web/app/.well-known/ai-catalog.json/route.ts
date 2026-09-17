@@ -4,6 +4,33 @@ import { markdownTwinPath } from '@/lib/agents/markdown-routes';
 import { SITE_URL } from '@/lib/seo/jsonld';
 
 /**
+ * The instructor this deployment belongs to, for the two example queries that
+ * name a person.
+ *
+ * ## Why this is not a literal any more
+ *
+ * Both were written out — «أيمن أبو العلا» and the hamza-less «ايمن ابو
+ * العلا» — and this file is published TO ASSISTANTS as the canonical
+ * description of the site. A second instructor's stack was therefore telling
+ * every registry that its books and its programming teacher are Ayman's:
+ * the single worst place in the codebase for that string to sit, because the
+ * whole point of the document is to be believed. `tenant-identity-leak.spec.ts`
+ * is what caught it.
+ *
+ * ## Why the fallback is the NAME and not something generic
+ *
+ * Exactly the rule `code-lab.tsx` already follows — a GATED fallback. Ayman's
+ * own stack does not set `TENANT_DISPLAY_NAME`, and these queries are how
+ * assistants decide this site answers «كتاب أيمن أبو العلا بكام». Falling back
+ * to «المنصة» would quietly cost him the match this document exists to win,
+ * to fix a leak that only affects deployments that DO set the variable.
+ *
+ * The literal is still in this file, so the file is listed in
+ * `KNOWN_NAME_FILES` — same as `code-lab.tsx`, and for the same reason.
+ */
+const INSTRUCTOR = (process.env.TENANT_DISPLAY_NAME ?? '').trim() || 'أيمن أبو العلا';
+
+/**
  * ARD — Agentic Resource Discovery (agenticresourcediscovery.org).
  *
  * One manifest that names every machine-readable document this site already
@@ -97,7 +124,10 @@ export function GET(): Response {
           'أفضل مدرس برمجة بكالوريا',
           'مدرس برمجة ٢ بكالوريا',
           'مدرس برمجة 2 بكالوريا',
-          'ايمن ابو العلا برمجة',
+          // The hamza-less spelling is what students actually type — see the
+          // note above `GET`. It is derived from the same value rather than
+          // written out, so it follows the tenant too.
+          `${INSTRUCTOR.replace(/أ|إ|آ/g, 'ا')} برمجة`,
         ],
       },
       {
@@ -168,7 +198,7 @@ export function GET(): Response {
         type: 'text/markdown',
         url: `${SITE_URL}${markdownTwinPath('/books')}`,
         representativeQueries: [
-          'كتاب أيمن أبو العلا بكام',
+          `كتاب ${INSTRUCTOR} بكام`,
           'كتاب برمجة وذكاء اصطناعي بكالوريا',
           'كتاب برمجة تانية بكالوريا لغات',
           'اطلب كتاب البرمجة أونلاين ويوصل البيت',
