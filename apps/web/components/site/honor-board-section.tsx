@@ -1,8 +1,8 @@
+import Link from 'next/link';
 import { Medal, Trophy } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
-import { formatCopy, formatMark } from '@ayman/contracts/format';
 import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
-import { UserAvatar } from '@/components/app/user-avatar';
+import { initials } from '@/components/app/user-avatar';
 
 const c = copy.landing.honorBoard;
 
@@ -122,28 +122,55 @@ export function HonorBoardSection({ entries = [] }: { entries?: HonorBoardEntry[
           honest render when the board is empty — see this component's header.
         */}
         {entries.length > 0 ? (
+          <>
           <ul className="honor-board__slots">
-            {entries.map((entry, index) => (
-              <li className="honor-board__slot honor-board__slot--filled" key={`${entry.studentName}-${index}`}>
+            {entries.map((entry) => (
+              <li className="honor-board__slot honor-board__slot--filled" key={`${entry.studentName}-${entry.courseLabel}-${entry.rank}`}>
                 <span className="honor-board__slot-mark" aria-hidden="true">
                   <Medal size={22} strokeWidth={1.5} />
                 </span>
-                {/* The rank word only exists for the first four places; past
-                    that the list simply continues, which is what the fourth
-                    place was written to promise. */}
-                <span className="honor-board__slot-rank">{c.ranks[index] ?? ''}</span>
-                <UserAvatar name={entry.studentName} image={entry.avatarKey} size={56} />
-                <span className="honor-board__slot-name">{entry.studentName}</span>
-                <span className="honor-board__slot-score mono tabular-nums">
-                  {formatCopy(c.entryScore, {
-                    score: formatMark(entry.scaledScore),
-                    outOf: formatMark(entry.gradeOutOf),
-                  })}
+                {/* The rank is the place WITHIN this entry's course, so two
+                    cards on one board are both «المركز الأول» when they are
+                    the firsts of عربي and لغات. `entry.rank` is 1-based; a
+                    course with more than four pinned places simply stops
+                    getting a word, which is what the fourth place promises. */}
+                <span className="honor-board__slot-rank">
+                  {c.placeRanks[entry.rank - 1] ?? ''}
                 </span>
+                {/* Which race this was won in. Without it the two «المركز
+                    الأول» cards read as a contradiction. */}
+                <span className="honor-board__slot-course">{entry.courseLabel}</span>
+                {/*
+                  Initials, never the photograph — and `avatarKey` is
+                  deliberately ignored rather than absent from the payload.
+                  This board is the one surface on the platform that a
+                  stranger on the internet reads, and it names a minor; a
+                  face beside that name is a different disclosure from a
+                  name alone, and the owner asked for it not to be made.
+                  The contract still carries `avatarKey` so an instructor
+                  screen can show who a row is — it is THIS render that
+                  declines it.
+                */}
+                <span className="honor-board__slot-avatar" aria-hidden="true">
+                  {initials(entry.studentName)}
+                </span>
+                <span className="honor-board__slot-name">{entry.studentName}</span>
                 <span className="honor-board__slot-quiz">{entry.quizTitle}</span>
               </li>
             ))}
           </ul>
+          {/*
+            «عرض الكل» — only on a board that HAS names. On the empty board it
+            would lead to an empty archive, which is a promise broken twice.
+            A plain link and not a button: it navigates, and the site header
+            already styles links this way.
+          */}
+          <p className="honor-board__more">
+            <Link className="honor-board__more-link" href="/honor-board">
+              {c.viewAll}
+            </Link>
+          </p>
+          </>
         ) : (
         <ul className="honor-board__slots">
           {c.ranks.map((rank, index) => (

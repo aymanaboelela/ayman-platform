@@ -2461,6 +2461,168 @@ describe('BookOrdersService', () => {
     });
   });
 
+  /**
+   * «الفلوس وصلت» — the door out of «بدأ ومكملش الدفع».
+   *
+   * Until this existed the tab was a dead end: only the STUDENT could move a
+   * row out of `address_only`, by coming back to the public flow with a
+   * screenshot. Money that arrived on WhatsApp or in cash had nowhere to be
+   * recorded, and `markPrinting`/`markShipped`/`markShippedMany` all take
+   * `paid` rows by name — so the parcel could not be sent at all.
+   *
+   * The assertions that matter are therefore not "a column changed" but "the
+   * parcel can now be shipped" and "the money reads correctly afterwards".
+   */
+  describe('adminMarkPaid', () => {
+    /** An order stopped at step one, which is every row on that tab. */
+    const unpaidOrder = (userId: string | null = studentId) => service.create(userId, address());
+
+    it('settles an unpaid order as MONEY, and it can then be shipped like any other', async () => {
+      const order = await unpaidOrder();
+      expect(order.status).toBe('address_only');
+      const quoted = order.amountCents;
+      expect(quoted).toBeGreaterThan(0);
+
+      const result = await service.adminMarkPaid(adminId, order.id, {
+        isFree: false,
+        senderPhone: '01011112222',
+        screenshotKey: validScreenshotKey(),
+      });
+
+      expect(result).toMatchObject({ status: 'paid', isFree: false, amountCents: quoted });
+
+      const row = await prisma.bookOrder.findUnique({
+        where: { id: order.id },
+        select: { status: true, paidAt: true, isFree: true, amountCents: true, senderPhone: true, screenshotKey: true },
+      });
+      expect(row).toMatchObject({
+        status: 'paid',
+        isFree: false,
+        // The quote is untouched — settling records what arrived, it does not
+        // reprice the order.
+        amountCents: quoted,
+        senderPhone: '01011112222',
+      });
+      expect(row?.paidAt).not.toBeNull();
+      expect(row?.screenshotKey).not.toBeNull();
+
+      // The point of the whole feature.
+      await expect(service.markShipped(adminId, order.id)).resolves.toMatchObject({
+        status: 'shipped',
+      });
+    });
+
+    it('records the settlement with nothing attached — cash has no screenshot', async () => {
+      // The reason both transfer fields are optional. Demanding a screenshot
+      // for money handed over in person is what pushes an admin back to
+      // deleting the row and re-typing it through «أضف طلب كتاب».
+      const order = await unpaidOrder();
+      await service.adminMarkPaid(adminId, order.id, {
+        isFree: false,
+        senderPhone: null,
+        screenshotKey: null,
+      });
+
+      const row = await prisma.bookOrder.findUnique({
+        where: { id: order.id },
+        select: { status: true, senderPhone: true, screenshotKey: true },
+      });
+      expect(row).toMatchObject({ status: 'paid', senderPhone: null, screenshotKey: null });
+    });
+
+    it('«مجاني» waives the basket by DISCOUNTING it, and leaves revenue', async () => {
+      const order = await unpaidOrder();
+      const quoted = order.amountCents;
+      expect(quoted).toBeGreaterThan(0);
+
+      const before = await service.adminRevenueSummary();
+      const result = await service.adminMarkPaid(adminId, order.id, {
+        isFree: true,
+        senderPhone: null,
+        screenshotKey: null,
+      });
+
+      expect(result).toMatchObject({ status: 'paid', isFree: true, amountCents: 0 });
+
+      const row = await prisma.bookOrder.findUnique({
+        where: { id: order.id },
+        select: { isFree: true, status: true, amountCents: true, itemsCents: true, shippingCents: true, discountCents: true },
+      });
+      // The row still says what the book was WORTH — the prices are intact and
+      // the discount is what cancels them. A zeroed `itemsCents` would lose
+      // «250 ج اتوهبت» and with it the cost-of-sales story.
+      expect(row!.itemsCents).toBeGreaterThan(0);
+      expect(row!.discountCents).toBe(row!.itemsCents + row!.shippingCents);
+      expect(row!.amountCents).toBe(0);
+      expect(row).toMatchObject({ isFree: true, status: 'paid' });
+
+      // It never collected anything, so no money moves — what must NOT happen
+      // is the giveaway being counted among the paid orders.
+      const after = await service.adminRevenueSummary();
+      expect(after.revenueTotalCents).toBe(before.revenueTotalCents);
+      expect(after.paidCount).toBe(before.paidCount);
+    });
+
+    it('a waived order is shippable — a giveaway is still a parcel', async () => {
+      const order = await unpaidOrder();
+      await service.adminMarkPaid(adminId, order.id, {
+        isFree: true,
+        senderPhone: null,
+        screenshotKey: null,
+      });
+      await expect(service.markShipped(adminId, order.id)).resolves.toMatchObject({
+        status: 'shipped',
+      });
+    });
+
+    it('refuses an order that was already settled', async () => {
+      /* Settled by THIS route rather than by `paidOrder()`, deliberately: the
+         helper goes through `submitPayment`, which fans a notification out to
+         every admin and is slow enough on a real cohort to time a 5-second test
+         out. The refusal is about the STATE, and both doors reach the same one. */
+      const order = await unpaidOrder();
+      await service.adminMarkPaid(adminId, order.id, { isFree: false, senderPhone: null, screenshotKey: null });
+      await expect(
+        service.adminMarkPaid(adminId, order.id, { isFree: false, senderPhone: null, screenshotKey: null }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuses a rejected order — restoring it is its own decision', async () => {
+      const order = await unpaidOrder();
+      await service.reject(adminId, order.id, 'التحويل ما وصلش');
+      await expect(
+        service.adminMarkPaid(adminId, order.id, { isFree: false, senderPhone: null, screenshotKey: null }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuses a deleted order until it is restored', async () => {
+      const order = await unpaidOrder();
+      await service.softDelete(adminId, order.id, 'طلب مكرر');
+      await expect(
+        service.adminMarkPaid(adminId, order.id, { isFree: false, senderPhone: null, screenshotKey: null }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuses a screenshot key that was not issued by the upload route', async () => {
+      // The same guard `submitPayment` and `adminCreate` both run: without it
+      // this route would attach somebody else's picture as proof.
+      const order = await unpaidOrder();
+      await expect(
+        service.adminMarkPaid(adminId, order.id, {
+          isFree: false,
+          senderPhone: null,
+          screenshotKey: `course-covers/${randomUUID()}.webp`,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('404s an order that does not exist', async () => {
+      await expect(
+        service.adminMarkPaid(adminId, randomUUID(), { isFree: false, senderPhone: null, screenshotKey: null }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
   describe('markFree', () => {
     /* `adminAddress` above is scoped to the `adminCreate` describe, so this
        block carries its own — one zero-priced line, which is exactly the shape

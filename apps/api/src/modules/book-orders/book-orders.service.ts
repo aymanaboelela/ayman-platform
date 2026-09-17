@@ -23,6 +23,8 @@ import type {
   PackingList,
   PackingListLine,
   MarkBookOrderDeliveredResult,
+  MarkBookOrderPaidInput,
+  MarkBookOrderPaidResult,
   MarkBookOrderPrintingResult,
   MarkBookOrderShippedResult,
   PackingListYear,
@@ -1835,6 +1837,11 @@ export class BookOrdersService {
         /* For `markFree`, which refuses anything that collected money. */
         amountCents: true,
         isFree: true,
+        /* For `adminMarkPaid`'s «مجاني» branch, which waives the basket by
+           DISCOUNTING it rather than zeroing the prices — it needs the two
+           numbers the discount has to cover. See that method. */
+        itemsCents: true,
+        shippingCents: true,
       },
     });
     if (!order) throw new NotFoundException();
@@ -1923,6 +1930,137 @@ export class BookOrdersService {
     });
 
     return { id: order.id, isFree: true };
+  }
+
+  /**
+   * «الفلوس وصلت» — an admin settling an order that is still «بدأ ومكملش الدفع».
+   *
+   * ## The hole this closes
+   *
+   * Until now `address_only → paid` had exactly ONE door: `submitPayment`, the
+   * student coming back to the public flow and uploading a screenshot. Money
+   * that arrived any other way — a transfer to Ayman's own wallet, cash in
+   * hand, a parent paying over the phone — had nowhere to be recorded. The row
+   * stayed on a tab `markPrinting`, `markShipped` and `markShippedMany` all
+   * refuse by name, so the parcel could not be sent at all, and the only way
+   * out was to delete the order and re-type it through «أضف طلب كتاب» with the
+   * «مدفوع بالفعل» switch on — which loses the order's date, its id and its
+   * history.
+   *
+   * ## «دفع» and «مجاني» are one question
+   *
+   * The admin is answering «اتحصّل منه إيه؟» once, so one route takes both
+   * answers rather than the screen making him pick a button that decides it for
+   * him. They write different rows:
+   *
+   *   - `isFree: false` — the order keeps the money it was quoted, and the
+   *     transfer details (`senderPhone`, `screenshotKey`) are recorded when
+   *     there are any. Same columns `submitPayment` writes, minus the
+   *     admin notification: the person who would be told is the person who
+   *     just clicked.
+   *   - `isFree: true` — the basket is WAIVED, by discounting it in full rather
+   *     than by zeroing the line prices. The row keeps saying the book was
+   *     worth 250 ج while saying nothing was taken for it, which is the shape
+   *     `book_orders_free_collects_nothing` demands and the one `adminCreate`
+   *     already writes for its own «مجاني» switch. 250 ج given away reads
+   *     differently from a 0 ج book, and only the first is a number he can act
+   *     on.
+   *
+   * ⚠️ This is the one place a free order can be created out of one that was
+   * really going to collect money, which is why it is NOT folded into
+   * `markFree`: that endpoint refuses any order that collected anything, so it
+   * can only ever re-label. Here the waiver IS the decision, so it moves
+   * revenue — and the audit row therefore carries `amountCentsBefore`, the same
+   * way `adminPatch` does for every other money change.
+   *
+   * ## Only from `address_only`
+   *
+   * A row that already reached `paid`, the printer, the courier or the student
+   * is not settled twice, and a rejected one is not settled at all — restoring
+   * it to a live status is its own decision. Each refusal names its own case,
+   * so the admin never has to guess which of them it was.
+   */
+  async adminMarkPaid(
+    adminId: string,
+    orderId: string,
+    input: MarkBookOrderPaidInput,
+  ): Promise<MarkBookOrderPaidResult> {
+    if (input.screenshotKey !== null && !input.screenshotKey.startsWith(`${SCREENSHOT_PREFIX}/`)) {
+      // The same guard `submitPayment` and `adminCreate` both run — refuses a
+      // key from an unrelated upload rather than letting this order attach
+      // somebody else's picture as "proof".
+      throw new BadRequestException('screenshotKey was not issued by POST /book-orders/screenshot');
+    }
+
+    const order = await this.orderForAdminAction(orderId);
+    this.assertNotDeleted(order);
+
+    if (order.status !== 'address_only') {
+      throw new BadRequestException(
+        order.status === 'rejected'
+          ? 'الطلب ده مرفوض — رجّعه لحالة شغالة الأول'
+          : 'الطلب ده اتسجّل مدفوع قبل كده',
+      );
+    }
+
+    const now = new Date();
+    /* The whole basket, discounted away. `book_orders_amount_is_the_sum` and
+       `book_orders_discount_within_order` both hold: the discount is exactly
+       what is being discounted, and the total lands on 0. */
+    const waived = order.itemsCents + order.shippingCents;
+
+    await this.prisma.bookOrder.update({
+      where: { id: order.id },
+      data: input.isFree
+        ? {
+            isFree: true,
+            discountCents: waived,
+            amountCents: 0,
+            /* No transfer to record on a giveaway — there was none. Writing a
+               sender number here would be proof of a payment that never
+               happened. */
+            senderPhone: null,
+            screenshotKey: null,
+            status: 'paid',
+            paidAt: now,
+          }
+        : {
+            /* `??` and not the value: an admin who attaches nothing leaves the
+               columns null, and the card says «اتسجّل يدوي — مفيش تحويل»
+               rather than blanking a number somebody typed earlier. */
+            senderPhone: input.senderPhone ?? undefined,
+            screenshotKey: input.screenshotKey ?? undefined,
+            status: 'paid',
+            paidAt: now,
+          },
+    });
+
+    await this.audit.record({
+      action: 'book-order:mark-paid',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      metadata: {
+        adminId,
+        userId: order.userId,
+        courseId: order.courseId,
+        isFree: input.isFree,
+        /* What it WAS worth. On a waiver this is the money that stopped being
+           collectable, and the audit row is the only place that number
+           survives — the order itself now says 0. */
+        amountCentsBefore: order.amountCents,
+        amountCents: input.isFree ? 0 : order.amountCents,
+        hasScreenshot: !input.isFree && input.screenshotKey !== null,
+      },
+    });
+
+    return {
+      id: order.id,
+      status: 'paid',
+      paidAt: now.toISOString(),
+      isFree: input.isFree,
+      amountCents: input.isFree ? 0 : order.amountCents,
+    };
   }
 
   /**

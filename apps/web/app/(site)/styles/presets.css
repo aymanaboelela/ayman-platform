@@ -1161,14 +1161,32 @@
   color: var(--board-ink);
 }
 
-/* «85 من 100» — a Latin-digit run inside an Arabic sentence. Without the
-   isolate the two numbers can swap sides around the «من», which turns a mark
-   out of a hundred into a hundred out of a mark. */
-[data-preset='board'] .board-honor__score {
+/* Which course this place was won in. It sits between the rank and the name
+   because that is the order the card is read in: «المركز الأول» — «برمجة
+   تانية بكالوريا» — the student. Without it a board carrying the firsts of
+   two courses shows «المركز الأول» twice and reads as a mistake. */
+[data-preset='board'] .board-honor__course {
+  font-size: var(--fs-text-xs);
+  color: var(--board-ink-2);
+}
+
+/* The initials disc, in place of the photograph. See `board-honors.tsx` for
+   why this board declines `avatarKey` — it is a product decision, not a
+   missing asset, so there is no `img` fallback to design here. */
+[data-preset='board'] .board-honor__avatar {
+  display: grid;
+  place-items: center;
+  inline-size: 3.25rem;
+  block-size: 3.25rem;
+  border-radius: 50%;
+  background: var(--board-tile);
+  color: var(--board-on-slab);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  /* Latin initials inside an RTL card: isolate so a two-letter run cannot
+     reorder against the Arabic name underneath it. */
   direction: ltr;
   unicode-bidi: isolate;
-  font-size: var(--fs-text-sm);
-  color: var(--board-ink-2);
 }
 
 [data-preset='board'] .board-honor__quiz {

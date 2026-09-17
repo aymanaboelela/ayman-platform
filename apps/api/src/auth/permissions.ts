@@ -219,11 +219,35 @@ export const PERMISSIONS = [
   'homework:submit',
   'homework:read',
   'homework:review',
+  // «الصلاحيات» — opening a feature up to the instructor who runs this stack.
+  //
+  // The one permission that can hand out other permissions, so it is held by
+  // `admin` alone and is deliberately NOT grantable: `grantablePermissions()`
+  // below excludes it, which is what stops an owner who has been given the
+  // screen from giving themselves the rest of the platform.
+  'role:read',
+  'role:grant',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
 
-export type Role = 'admin' | 'student';
+/**
+ * `owner` is the instructor whose stack this is.
+ *
+ * Not a second `admin`. Each instructor runs their own deployment with their
+ * own database (see `docs/runbooks/new-tenant.md`), so `owner` is not about
+ * keeping tenants apart — the connection string already does that. It is about
+ * keeping the PLATFORM apart from the person renting it: the money screens,
+ * the audit trail, the WhatsApp pairing and the feature flags belong to
+ * whoever operates the platform, and the courses belong to whoever teaches.
+ *
+ * Its set is a concrete list rather than `'*'`, and that is the whole point.
+ * `admin: '*'` picks up every permission added by every future feature the
+ * moment it is written; `owner` picks up nothing it was not given. A feature
+ * ships to the operator first and reaches the instructor when somebody decides
+ * it should — which is exactly the behaviour asked for.
+ */
+export type Role = 'admin' | 'owner' | 'student';
 
 /**
  * `'*'` grants every permission, including ones added after this line was
@@ -238,6 +262,79 @@ export type Role = 'admin' | 'student';
  */
 const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission> | '*'> = {
   admin: '*',
+  /**
+   * What an instructor can do on day one, before anybody grants them anything.
+   *
+   * The line is «what is YOURS to run» against «what is the platform's». Every
+   * entry here is about their own teaching — their courses, their lessons,
+   * their quizzes, their students' work, and the look of their own site. An
+   * owner who had none of this would sign in on launch day to a dashboard that
+   * does nothing, which is not a safe default, it is a broken one.
+   *
+   * What is deliberately ABSENT is everything that is either irreversible,
+   * about money, or about the platform rather than the teaching: reading or
+   * deciding payments, book orders, expenses, the audit trail, diagnostics,
+   * feature flags, the shared curriculum taxonomy, WhatsApp campaigns, and
+   * every destructive action on a student account (ban, delete, password
+   * reset, role change). Those are grantable — see `grantablePermissions` —
+   * and granting one is a decision somebody makes, not a default.
+   *
+   * ⚠️ Adding a permission to the CATALOGUE does not add it here, and that
+   * asymmetry is the feature. `admin: '*'` picks up every future permission
+   * automatically; this list picks up none. A new screen therefore reaches the
+   * operator on the day it ships and the instructor on the day it is opened.
+   */
+  owner: new Set<Permission>([
+    'admin:access',
+
+    // Their courses, from writing them to putting them live.
+    'course:read',
+    'course:read-admin',
+    'course:create',
+    'course:update',
+    'course:publish',
+    'course:delete',
+    'section:write',
+    'section:reorder',
+    'lesson:write',
+    'lesson:reorder',
+
+    // Their question bank and their quizzes, including marking.
+    'question:read',
+    'question:write',
+    'quiz:read',
+    'quiz:write',
+    'quiz:grade',
+    'attempt:read',
+    'attempt:grade',
+
+    // Their students' work. `student:read` only — the register is theirs to
+    // SEE; banning, deleting and resetting a password are not.
+    'student:read',
+    'enrollment:read',
+    'progress:read',
+    'homework:read',
+    'homework:review',
+
+    // How their own site looks and reads. Without these a new instructor
+    // cannot replace the neutral starter page with their own.
+    'settings:read',
+    'settings:write',
+    'home:read',
+    'home:write',
+    'media:read',
+    'media:write',
+    'nav:read',
+    'taxonomy:read',
+
+    // Their own writing. `news:publish` is NOT here: putting a page on the
+    // public internet is split from writing it, the same split
+    // `course:publish` already makes.
+    'news:read',
+    'news:write',
+
+    'analytics:read',
+  ]),
   // RECONCILED: this is the accumulated set from Plans 2–5. Keep it in sync
   // with the assertion in permissions.spec.ts; shrinking it is a silent
   // regression that only shows up as a 403 for a legitimate student.
@@ -272,6 +369,94 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission> | '*'> = {
 const KNOWN_ROLES = new Set<string>(Object.keys(ROLE_PERMISSIONS));
 
 /**
+ * Permissions an operator may open up to a role at runtime.
+ *
+ * The catalogue minus three things:
+ *
+ *   · what the role already holds in its baseline — granting it would be a
+ *     no-op row that later reads like a decision somebody made;
+ *   · `role:read` / `role:grant`, because a role that can be given the granting
+ *     screen can give itself everything else, and then the baseline above is
+ *     decoration;
+ *   · the self-scoped student permissions (`*:submit`, `progress:write`,
+ *     `quiz:attempt`, `profile:*`, `enrollment:create`), which resolve through
+ *     the caller's own id and mean nothing on a staff account.
+ */
+const NEVER_GRANTABLE = new Set<Permission>([
+  'role:read',
+  'role:grant',
+  // ── The two that are privilege ESCALATION, not merely dangerous ──────
+  //
+  // Every other destructive permission on a student account is destructive
+  // and nothing more: a banned or deleted student is a bad day, and an
+  // operator who ticks it has decided to accept that. These two are different
+  // in kind, because either one hands the whole platform over:
+  //
+  //   · `student:role-change` — `changeRole` refuses to change your OWN role,
+  //     so it cannot be turned on yourself. It does not stop you promoting a
+  //     SECOND account you control (a student you registered with your own
+  //     number) to `admin`, and then signing in as that.
+  //   · `student:set-password` — `setPassword` is now refused on any target
+  //     that is not a student, but that guard lives in one service method. A
+  //     permission that grants "rewrite an arbitrary account's credential"
+  //     should not be one code path away from the operator's own account in
+  //     the first place.
+  //
+  // So they are not offered on the grants screen at all, whatever an operator
+  // ticks. Both are still held by `admin`, which already holds everything.
+  'student:role-change',
+  'student:set-password',
+  'profile:read',
+  'profile:write',
+  'progress:write',
+  'quiz:attempt',
+  'enrollment:create',
+  'payment:submit',
+  'book-order:submit',
+  'homework:submit',
+]);
+
+export function grantablePermissions(role: Role): readonly Permission[] {
+  const baseline = ROLE_PERMISSIONS[role];
+  if (baseline === '*') return [];
+  return PERMISSIONS.filter(
+    (permission) => !baseline.has(permission) && !NEVER_GRANTABLE.has(permission),
+  );
+}
+
+/**
+ * Permissions granted at RUNTIME, on top of the baselines above.
+ *
+ * ## Why module state rather than a service
+ *
+ * `roleHasPermission` is synchronous and is called by `AuthGuard` on every
+ * request, and by 58 controllers' worth of `@RequirePermission`. Making it
+ * async to read a table would change all of that, and would put a database
+ * round trip in front of every authenticated request. So the grants are held
+ * here, refreshed by `PermissionsService`, and read synchronously.
+ *
+ * ## Fail-closed in both directions
+ *
+ * Empty until something loads it, so a process that cannot reach the database
+ * grants exactly the baselines and never more. And grants are ADDITIVE ONLY —
+ * there is no mechanism to take a baseline permission away, because a row that
+ * silently removed `course:read` from an instructor would present as a broken
+ * platform rather than as a decision.
+ */
+let runtimeGrants: ReadonlyMap<Role, ReadonlySet<Permission>> = new Map();
+
+/** Replaces the grant table wholesale. Called by `PermissionsService`. */
+export function setRuntimeGrants(next: ReadonlyMap<Role, ReadonlySet<Permission>>): void {
+  runtimeGrants = next;
+}
+
+/** What is currently loaded, for the admin screen and for tests. */
+export function runtimeGrantsFor(role: Role): readonly Permission[] {
+  return [...(runtimeGrants.get(role) ?? [])];
+}
+
+
+/**
  * Every role that grants `permission`.
  *
  * The inverse of `roleHasPermission`, and it exists for exactly one kind of
@@ -302,7 +487,12 @@ function isKnownRole(role: string): role is Role {
 export function roleHasPermission(role: string | undefined | null, permission: string): boolean {
   if (!role || !isKnownRole(role)) return false;
   const granted = ROLE_PERMISSIONS[role];
-  return granted === '*' || granted.has(permission as Permission);
+  if (granted === '*') return true;
+  if (granted.has(permission as Permission)) return true;
+  // Runtime grants are checked LAST and only ever add. A permission that is
+  // not in the catalogue can never arrive here as true, because the admin
+  // endpoint validates against `grantablePermissions` before writing a row.
+  return runtimeGrants.get(role)?.has(permission as Permission) ?? false;
 }
 
 /**
@@ -314,5 +504,9 @@ export function permissionsForRole(role: string | undefined | null): readonly Pe
   if (!role || !isKnownRole(role)) return [];
   const granted = ROLE_PERMISSIONS[role];
   if (granted === '*') return PERMISSIONS;
-  return PERMISSIONS.filter((permission) => granted.has(permission));
+  const runtime = runtimeGrants.get(role);
+  // Filtered from `PERMISSIONS` rather than concatenated, so the order the
+  // client receives is the catalogue's and a grant cannot introduce a string
+  // that is not in it.
+  return PERMISSIONS.filter((permission) => granted.has(permission) || runtime?.has(permission));
 }

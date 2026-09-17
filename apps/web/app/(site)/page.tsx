@@ -2,7 +2,6 @@ import { getBranding } from '@/lib/settings';
 import { Fragment } from 'react';
 import { cacheLife } from 'next/cache';
 import type { Metadata } from 'next';
-import { copy } from '@ayman/contracts';
 import type { HomeBlock } from '@ayman/contracts/admin/home-blocks';
 import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
 import { JsonLd } from '@/components/seo/json-ld';

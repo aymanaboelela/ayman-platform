@@ -33,6 +33,7 @@ import { StudentsModule } from '../modules/admin/students/students.module';
 import { AdminTaxonomyModule } from '../modules/admin/taxonomy/admin-taxonomy.module';
 import { MediaModule } from '../modules/media/media.module';
 import { FlagsModule } from '../modules/admin/flags/flags.module';
+import { RolesModule } from '../modules/admin/roles/roles.module';
 import { NavigationModule } from '../modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.module';
 import { NewsModule } from '../modules/news/news.module';
@@ -249,6 +250,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         AdminTaxonomyModule,
         MediaModule,
         FlagsModule,
+        RolesModule,
         NavigationModule,
         HomeBlocksModule,
         NewsModule,
@@ -1404,6 +1406,30 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'news delete: anonymous', method: 'delete', path: () => `/api/admin/news/${newsPostId}`, actor: 'anonymous', status: 401 },
     { label: 'news delete: student', method: 'delete', path: () => `/api/admin/news/${newsPostId}`, actor: 'student', status: 403 },
 
+    // ── Role grants — admin only, in BOTH directions ──
+    //
+    // The route that hands out permissions is the one route where a 403 for
+    // the wrong caller is the whole feature: an `owner` who could reach it
+    // could grant themselves everything the baseline deliberately withholds.
+    { label: 'role grants read: anonymous', method: 'get', path: () => '/api/admin/roles/owner/permissions', actor: 'anonymous', status: 401 },
+    { label: 'role grants read: student', method: 'get', path: () => '/api/admin/roles/owner/permissions', actor: 'student', status: 403 },
+    { label: 'role grants read: admin', method: 'get', path: () => '/api/admin/roles/owner/permissions', actor: 'admin', status: 200 },
+    { label: 'role grants write: anonymous', method: 'put', path: () => '/api/admin/roles/owner/permissions', actor: 'anonymous', status: 401, body: () => ({ permissions: [] }) },
+    { label: 'role grants write: student', method: 'put', path: () => '/api/admin/roles/owner/permissions', actor: 'student', status: 403, body: () => ({ permissions: [] }) },
+    {
+      label: 'role grants write: admin',
+      method: 'put',
+      path: () => '/api/admin/roles/owner/permissions',
+      actor: 'admin',
+      status: 200,
+      body: () => ({ permissions: ['payment:read'] }),
+    },
+    // `admin` is not a grantable role — it already holds everything, so a row
+    // for it would change nothing and reads like it might.
+    { label: 'role grants write: admin role is not grantable', method: 'put', path: () => '/api/admin/roles/admin/permissions', actor: 'admin', status: 400, body: () => ({ permissions: [] }) },
+    // And the loop the whole design exists to not close.
+    { label: 'role grants write: cannot grant role:grant', method: 'put', path: () => '/api/admin/roles/owner/permissions', actor: 'admin', status: 400, body: () => ({ permissions: ['role:grant'] }) },
+
     // ── Flags — one public read, admin-only read/write ──
     { label: 'flags public: anonymous', method: 'get', path: () => '/api/flags', actor: 'anonymous', status: 200 },
     { label: 'flags admin read: anonymous', method: 'get', path: () => '/api/admin/flags', actor: 'anonymous', status: 401 },
@@ -1838,6 +1864,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin book order mark free: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/free`, actor: 'anonymous', status: 401 },
     { label: 'admin book order mark free: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/free`, actor: 'student', status: 403 },
     { label: 'admin book order mark free: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/free`, actor: 'admin', status: 404 },
+    // «الفلوس وصلت» — settling an unpaid order by hand. `book-order:write` and
+    // not `book-order:ship`: the «مجاني» answer WAIVES a basket that was going
+    // to collect, which is a money change and belongs with the edit dialog
+    // rather than with the desk that records where a parcel got to.
+    { label: 'admin book order mark paid: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/pay`, actor: 'anonymous', body: () => ({}), status: 401 },
+    { label: 'admin book order mark paid: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/pay`, actor: 'student', body: () => ({}), status: 403 },
+    { label: 'admin book order mark paid: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/pay`, actor: 'admin', body: () => ({}), status: 404 },
     { label: 'admin book order restore: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/restore`, actor: 'anonymous', status: 401 },
     { label: 'admin book order restore: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/restore`, actor: 'student', status: 403 },
     { label: 'admin book order restore: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/restore`, actor: 'admin', status: 404 },

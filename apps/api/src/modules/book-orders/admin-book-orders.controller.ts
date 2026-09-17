@@ -6,6 +6,7 @@ import type { BookOrder } from '@ayman/contracts/book-orders';
 import type {
   DeleteBookOrderResult,
   MarkBookOrderDeliveredResult,
+  MarkBookOrderPaidResult,
   MarkBookOrderPrintingResult,
   RejectBookOrderResult,
   RestoreBookOrderResult,
@@ -21,6 +22,7 @@ import {
   DeleteBookOrderDto,
   BulkBookOrderActionDto,
   ExportBookOrdersQueryDto,
+  MarkBookOrderPaidDto,
   RejectBookOrderDto,
 } from './book-orders.dto';
 import { BookOrdersService } from './book-orders.service';
@@ -249,6 +251,28 @@ export class AdminBookOrdersController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<MarkBookOrderDeliveredResult> {
     return this.bookOrders.markDelivered(user.id, id);
+  }
+
+  /**
+   * «الفلوس وصلت» — settle an order the student never paid for through the
+   * site, as money or as a giveaway.
+   *
+   * `book-order:write` and not `book-order:ship`: this is not where a parcel
+   * got to, it is what was collected for it — and the «مجاني» half WAIVES a
+   * basket that was going to collect, which is a money change and belongs on
+   * the same authority as the edit dialog. See `BookOrdersService.adminMarkPaid`
+   * for why the two answers share one route.
+   */
+  @RequirePermission('book-order:write')
+  @RequireCsrf()
+  @Post(':id/pay')
+  @UsePipes(ZodValidationPipe)
+  markPaid(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: MarkBookOrderPaidDto,
+  ): Promise<MarkBookOrderPaidResult> {
+    return this.bookOrders.adminMarkPaid(user.id, id, body);
   }
 
   /**

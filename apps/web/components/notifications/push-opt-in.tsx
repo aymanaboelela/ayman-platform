@@ -121,7 +121,14 @@ export function PushOptIn() {
             */
             if (result === 'granted') {
               const { subscribeToPush } = await import('@/lib/push-subscribe');
-              await subscribeToPush();
+              const outcome = await subscribeToPush();
+              // Same reasoning as the admin bell: the one failure worth saying
+              // out loud is the one the person cannot do anything about, and
+              // staying quiet about it is what hid this feature for months.
+              if (!outcome.ok && outcome.reason === 'not_configured') {
+                const { toast } = await import('sonner');
+                toast.error(c.pushNotConfigured);
+              }
             }
             setBusy(false);
           });

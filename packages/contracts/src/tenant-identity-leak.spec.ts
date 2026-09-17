@@ -139,7 +139,6 @@ const GATED_AT_POINT_OF_USE: readonly { path: string; gate: string }[] = [
   // Hamza-less on purpose: it is how students actually type it. Verified:
   // `...(IS_AYMAN ? ['ايمن ابو العلا برمجة'] : [])`, and the `name` beside it
   // goes through `tenantName(copy.site.platformName)`.
-  { path: 'apps/web/app/.well-known/ai-catalog.json/route.ts', gate: 'IS_AYMAN' },
   // `OUTREACH_SIGNATURE` — «مهندس أيمن», the short form he signs the one
   // self-introducing greeting with. Verified: it is the FALLBACK ARGUMENT and
   // never the value. No pool entry carries a name; the greeting carries

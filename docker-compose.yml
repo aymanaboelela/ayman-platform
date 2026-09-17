@@ -306,6 +306,12 @@ services:
         TENANT_FACEBOOK: ${TENANT_FACEBOOK:-}
         TENANT_WHATSAPP_CHANNEL: ${TENANT_WHATSAPP_CHANNEL:-}
         TENANT_WHATSAPP: ${TENANT_WHATSAPP:-}
+        # ⚠️ `:+` مش `:-`. ده بيتحط بس لو `GOOGLE_CLIENT_ID` نفسه متظبط — يعني
+        # مصدر واحد للحقيقة ومفيش مفتاح تاني تنساه. زرار «المتابعة بحساب
+        # جوجل» كان بيترسم دايمًا حتى لو المنصة مالهاش تطبيق جوجل أصلًا،
+        # فالطالب يدوس ويلاقيه مكسور — والـAPI طول الوقت بيتصرف صح، وده اللي
+        # كان بيخلّيه صعب يتلاقى.
+        NEXT_PUBLIC_GOOGLE_ENABLED: ${GOOGLE_CLIENT_ID:+1}
     restart: unless-stopped
     depends_on:
       api: { condition: service_healthy }
@@ -356,6 +362,7 @@ services:
       TENANT_FACEBOOK: ${TENANT_FACEBOOK:-}
       TENANT_WHATSAPP_CHANNEL: ${TENANT_WHATSAPP_CHANNEL:-}
       TENANT_WHATSAPP: ${TENANT_WHATSAPP:-}
+      NEXT_PUBLIC_GOOGLE_ENABLED: ${GOOGLE_CLIENT_ID:+1}
     networks: [dokploy-network, default]
 
 # ⚠️ شبكة Traefik بتاعت Dokploy. من غيرها الحاويات بتشتغل تمام بس Traefik

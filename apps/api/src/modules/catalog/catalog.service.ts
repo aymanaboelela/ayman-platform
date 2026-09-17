@@ -7,6 +7,7 @@ import type {
   CatalogStreamFilter,
 } from '@ayman/contracts/catalog';
 import { PrismaService } from '../../prisma/prisma.service';
+import { toHonorBoardRounds } from './honor-board';
 import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
 
 /**
@@ -332,7 +333,14 @@ export class CatalogService {
        * keeps the board full even when some pinned papers are filtered, and 24
        * rows is nothing.
        */
-      take: 24,
+      /*
+       * Was 24 — one page of the landing board. The archive reads the same
+       * query, so the cap has to cover every round it will ever show: 24
+       * rounds x 4 winners is 96, and 400 leaves room for a round the owner
+       * pinned generously without making this a scan. Rounds are capped at 24
+       * below, so an older board falls off the archive rather than off a card.
+       */
+      take: 400,
       select: {
         startedAt: true,
         scaledScore: true,
@@ -340,40 +348,47 @@ export class CatalogService {
         user: {
           select: { image: true, studentProfile: { select: { fullName: true } } },
         },
-        quiz: { select: { lateAfter: true, lesson: { select: { title: true } } } },
+        honorBoardAt: true,
+        quiz: {
+          select: {
+            lateAfter: true,
+            lesson: {
+              select: {
+                title: true,
+                // The card's course chip. `year` + the two stream flags rather
+                // than slicing the course TITLE on its dash: the title is
+                // owner-editable copy and a chip built from it would change
+                // shape the first time he renames a course.
+                course: { select: { year: true, forGeneral: true, forLanguages: true } },
+              },
+            },
+          },
+        },
       },
     });
 
-    return {
-      entries: rows
-        /*
-         * Belt and braces with `ManualGradingService.mark`, which already
-         * refuses to pin a late sitting. This is the READ side of the same
-         * rule, and it covers the one case the write cannot: a paper pinned
-         * BEFORE `lateAfter` was set on its exam. The board is public and it
-         * is about children — it is worth being sure twice.
-         */
-        .filter((row) => row.quiz.lateAfter === null || row.startedAt <= row.quiz.lateAfter)
-        .slice(0, 12)
-        .map((row) => {
-        const scaledScore = Number(row.scaledScore ?? 0);
-        const gradeOutOf = Number(row.gradeOutOf);
-        return {
-          studentName: row.user.studentProfile?.fullName ?? '—',
-          avatarKey: row.user.image,
-          quizTitle: row.quiz.lesson.title,
-          scaledScore,
-          gradeOutOf,
-          // Clamped: a paper whose slots were edited after it was sat can
-          // score above its own total, and the contract caps this at 100 —
-          // an uncaught 104 would fail the parse and blank the landing page.
-          percent:
-            gradeOutOf > 0
-              ? Math.min(Math.max(Math.round((scaledScore / gradeOutOf) * 100), 0), 100)
-              : 0,
-        };
-      }),
-    };
+    const eligible = rows
+      /*
+       * Belt and braces with `ManualGradingService.mark`, which already
+       * refuses to pin a late sitting. This is the READ side of the same
+       * rule, and it covers the one case the write cannot: a paper pinned
+       * BEFORE `lateAfter` was set on its exam. The board is public and it
+       * is about children — it is worth being sure twice.
+       */
+      .filter((row) => row.quiz.lateAfter === null || row.startedAt <= row.quiz.lateAfter)
+      // Non-null by the WHERE above. Narrowed here rather than cast inside
+      // `toHonorBoardRounds`, so that file never has to know about a state
+      // this query has already excluded.
+      .map((row) => ({ ...row, honorBoardAt: row.honorBoardAt as Date }));
+
+    /*
+     * `eligible` is already in board order — rating desc, then score desc,
+     * from the `orderBy` above — and `toHonorBoardRounds` ranks by walking
+     * it. That ordering is the contract between the two; see its header.
+     */
+    const periods = toHonorBoardRounds(eligible);
+
+    return { entries: periods[0]?.entries ?? [], periods };
   }
 
 }

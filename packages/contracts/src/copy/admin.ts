@@ -162,6 +162,24 @@ const admin = {
     digestHint: 'الكود ده موجود جنب تفاصيل الخطأ في لوج السيرفر',
   },
   course: {
+    /* ── ترتيب وفلترة الكورسات ────────────────────────────────────────
+     * ٥٦٤ من ٥٦٨ كورس على position = 0، فالترتيب اليدوي بينهار للأقدم أولاً
+     * والكورس اللي عملته النهاردة بيبقى الكارت رقم ٥٦٨. */
+    listSortLabel: 'الترتيب',
+    listSortPosition: 'الترتيب اليدوي',
+    listSortNewest: 'الأحدث',
+    listSortOldest: 'الأقدم',
+    listSortTitle: 'بالاسم',
+    listStatusLabel: 'الحالة',
+    listStatusAll: 'الكل',
+    listStatusPublished: 'منشور',
+    listStatusDraft: 'مسوّدة',
+    listStatusArchived: 'مؤرشف',
+    listSearchLabel: 'دوّر في الكورسات',
+    listSearchPlaceholder: 'اسم الكورس أو الرابط…',
+    listSearchSubmit: 'دوّر',
+    /** `{n}` — عشان حجم القايمة يبقى باين بدل ما يتقدّر. */
+    listCount: '{n} كورس',
     listTitle: 'الكورسات',
     /** Under the title on the list. The grid shows covers, so it says what a
      *  missing one means — otherwise the generated scene reads as a bug. */
@@ -2542,6 +2560,16 @@ const admin = {
      *  unlinked rows and the number is the only thing they share. `{n}` is
      *  how many OTHER live orders that number has. */
     repeatCustomer: 'طلب قبل كده {n} مرة',
+    /**
+     * The badge's `title`, and the whole reason it is a link.
+     *
+     * «عايز لما أضغط عليها أعرف كل حاجة وكل التفاصيل» — the count alone raises
+     * the question it cannot answer (which orders? did they arrive?), and the
+     * answer is a screen that already exists: this same list, every status,
+     * filtered to that number. So the badge navigates there rather than
+     * growing a dialog that would re-render the row markup a second time.
+     */
+    repeatCustomerHint: 'اضغط تشوف كل طلبات الرقم ده وتفاصيلها',
     /** The `sr-only` sentence beside the sidebar's «الكتب» badge. `{n}` is the
      *  number of paid orders that have not shipped yet. */
     unshippedBadgeLabel: '{n} طلب كتاب متشحنش لسه',
@@ -2733,6 +2761,38 @@ const admin = {
       'أحدّد الطلب ده مجاني؟ هيروح للطلبات المدفوعة عشان يتشحن عادي، ومش هيتحسب في الإيرادات، وتكلفة النسخة هتفضل محسوبة عليك.',
     markFreeSaving: 'بنحفظ…',
     markFreeFailed: 'مقدرناش نحدّده مجاني',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * «الفلوس وصلت» — settling an order the student never paid for on the
+     * site.
+     *
+     * The tab «بدأ ومكملش الدفع» used to be a dead end: the only door out of
+     * it was the STUDENT coming back to upload a screenshot, so money that
+     * arrived on WhatsApp or in cash had nowhere to be written down and the
+     * parcel could not be shipped at all. This is the door.
+     *
+     * Two answers, one question — «اتحصّل منه إيه؟»: فلوس, or مجاني.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    markPaid: 'سجّل الدفع',
+    markPaidDialogTitle: 'تسجيل دفع الطلب',
+    markPaidHint: 'الطلب ده هيروح للطلبات المدفوعة على طول عشان يتطبع ويتشحن عادي.',
+    /** The two answers, as one pair of choices — never two separate buttons on
+     *  the row: they are one decision about one order. */
+    markPaidModeLabel: 'اتحصّل منه إيه؟',
+    markPaidModeMoney: 'دفع فلوس',
+    markPaidModeFree: 'مجاني — مش هياخد منه حاجة',
+    /** `{amount}` — what the order is quoted at right now. Shown on the money
+     *  branch so the admin is confirming a number, not a checkbox. */
+    markPaidAmount: 'المبلغ: {amount} ج',
+    /** `{amount}` — the same number, as what is being GIVEN UP. A waiver is a
+     *  real negative and the dialog says so before it is signed. */
+    markPaidFreeHint:
+      'هنسجّل إن الطلب اتسلّم من غير فلوس: الـ {amount} ج هتتخصم بالكامل، ومش هيتحسب في الإيرادات — بس تكلفة النسخة والشحن هتفضل عليك.',
+    markPaidSubmit: 'سجّل الدفع',
+    markPaidSubmitting: 'بيتسجّل…',
+    markPaidFailed: 'مقدرناش نسجّل الدفع — نحاول تاني',
     createPaidHint: 'العميل حوّل بالفعل — الطلب هيتسجل «مدفوعة» على طول، من غير الخطوتين.',
     createAddressOnlyLabel: 'لسه مادفعش',
     /** OPTIONAL, unlike the public payment step's own required field — an
@@ -3884,6 +3944,25 @@ const marketing = {
   linkNoCodeHint: 'لو دوست وما ظهرش كود خلال شوية ثواني، امسح البيانات وابدأ من الأول.',
 
   // ── the audience picker ──────────────────────────────────────────────────
+  /**
+   * «عايزها تتبعت على المنصة، مش واتساب» — the delivery channel.
+   *
+   * The hints say what each one COSTS, not what it is: the admin already knows
+   * what WhatsApp is, and what he cannot see from this screen is that one of
+   * them goes out through a ban-able personal device and the other cannot
+   * reach a pasted number at all.
+   */
+  channelTitle: 'يوصل منين؟',
+  channelLabel: {
+    whatsapp: 'واتساب',
+    platform: 'المنصة',
+    both: 'الاتنين',
+  },
+  channelHint: {
+    whatsapp: 'من جهازك المربوط. بيوصل لأي رقم، بس محتاج الجهاز متوصّل وممكن يتبلوك.',
+    platform: 'في محادثة الطالب جوّا الموقع. مابيفشلش أبدًا، بس مابيوصلش غير لطالب عنده حساب — الأرقام المكتوبة بالإيد وأرقام أولياء الأمور هتتخطّى.',
+    both: 'نسخة على الاتنين. الطالب اللي عنده حساب ورقم هتوصله الرسالة مرتين.',
+  },
   audienceTitle: 'مين هيوصله؟',
   audienceStudents: 'الطلبة',
   audienceStudentsHint: 'رقم الطالب اللي مسجّل بيه في المنصة',

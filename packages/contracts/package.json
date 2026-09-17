@@ -73,6 +73,7 @@
     "./admin/analytics": "./src/admin/analytics.ts",
     "./admin/audit": "./src/admin/audit.ts",
     "./admin/settings": "./src/admin/settings.ts",
+    "./admin/roles": "./src/admin/roles.ts",
     "./admin/list": "./src/admin/list.ts",
     "./admin/students": "./src/admin/students.ts",
     "./admin/attempts": "./src/admin/attempts.ts",

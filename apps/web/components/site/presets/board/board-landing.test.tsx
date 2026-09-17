@@ -7,6 +7,7 @@ import type { CatalogCourse, CatalogList } from '@ayman/contracts/catalog';
 import type { BookCatalog } from '@ayman/contracts/books';
 import type { BrandingRead } from '@ayman/contracts/admin/settings';
 import type { HomeBlock, HomeBlockProps } from '@ayman/contracts/admin/home-blocks';
+import { copy } from '@ayman/contracts/copy';
 
 /**
  * «اللوح» — the states that are not visible from reading the components.
@@ -62,7 +63,14 @@ vi.mock('@/lib/settings', () => ({ getBranding: () => getBranding() }));
 /* Generated course art resolves a storage key through `next/image` and has
    nothing to say about any decision below. */
 vi.mock('@/components/course-art', () => ({ CourseArt: () => null }));
-vi.mock('@/components/app/user-avatar', () => ({ UserAvatar: () => null }));
+/* `initials` is the real thing, not a stub: the honour board renders it
+   INSTEAD of the photograph, so a test that stubbed it out would assert
+   nothing about the one behaviour that matters here. `UserAvatar` stays
+   stubbed — it is the component this board must not reach for. */
+vi.mock('@/components/app/user-avatar', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/app/user-avatar')>()),
+  UserAvatar: () => null,
+}));
 
 /* `next/image` needs a loader and a config this harness has no reason to
    carry; what matters here is only WHICH src the mark chose, so the stub keeps
@@ -468,8 +476,10 @@ describe('BoardHonors — the empty board', () => {
         entries={[
           {
             studentName: 'طالب مجتهد',
-            avatarKey: null,
+            avatarKey: 'students/mogtahed.jpg',
             quizTitle: 'امتحان الشهر',
+            courseLabel: 'برمجة — تانية بكالوريا',
+            rank: 1,
             scaledScore: 48,
             gradeOutOf: 50,
             percent: 96,
@@ -481,6 +491,71 @@ describe('BoardHonors — the empty board', () => {
 
     expect(container.querySelectorAll('.board-honor')).toHaveLength(1);
     expect(screen.getByText('طالب مجتهد')).toBeTruthy();
+    // The place comes from `entry.rank`, not the list index — see the note in
+    // `board-honors.tsx`. One entry ranked first must read «المركز الأول».
+    expect(screen.getByText(copy.landing.honorBoard.placeRanks[0])).toBeTruthy();
+    expect(screen.getByText('برمجة — تانية بكالوريا')).toBeTruthy();
+  });
+
+  /*
+   * The board names a minor on the one page a stranger reads, and the owner
+   * asked for the face not to go with the name. `avatarKey` stays in the
+   * contract so instructor screens can still show who a row is, which means
+   * nothing about the payload stops a preset from rendering it — only this
+   * assertion does. It is deliberately set to a real-looking key above, so a
+   * preset that reached for `<UserAvatar image={…}>` fails here rather than
+   * passing on a fixture that had no photo to leak.
+   */
+  it('shows initials and never the photograph', () => {
+    const { container } = render(
+      <BoardHonors
+        entries={[
+          {
+            studentName: 'طالب مجتهد',
+            avatarKey: 'students/mogtahed.jpg',
+            quizTitle: 'امتحان الشهر',
+            courseLabel: 'برمجة — تانية بكالوريا',
+            rank: 1,
+            scaledScore: 48,
+            gradeOutOf: 50,
+            percent: 96,
+          },
+        ]}
+        level={2}
+      />,
+    );
+
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('.board-honor__avatar')?.textContent).toBeTruthy();
+  });
+
+  /*
+   * The scores came off this board with the photographs — «بدون درجات». The
+   * contract still carries `scaledScore` and `gradeOutOf`, so the only thing
+   * keeping a mark off a public page naming a child is each preset declining
+   * to print it.
+   */
+  it('does not print the mark', () => {
+    const { container } = render(
+      <BoardHonors
+        entries={[
+          {
+            studentName: 'طالب مجتهد',
+            avatarKey: null,
+            quizTitle: 'امتحان الشهر',
+            courseLabel: 'برمجة — تانية بكالوريا',
+            rank: 1,
+            scaledScore: 48,
+            gradeOutOf: 50,
+            percent: 96,
+          },
+        ]}
+        level={2}
+      />,
+    );
+
+    expect(container.textContent).not.toContain('48');
+    expect(container.textContent).not.toContain('96');
   });
 });
 
@@ -751,14 +826,23 @@ describe('board preset — the stylesheet cannot reach the classic page', () => 
   });
 
   /**
-   * Both bidi isolates. A Western digit in an RTL run is bidi-weak: the year
-   * numeral and the «85 من 100» score both reorder without this, and the second
-   * one turns a mark out of a hundred into a hundred out of a mark.
+   * Both bidi isolates. A Western digit or Latin letter in an RTL run is
+   * bidi-weak: the year numeral and the honour board's initials both reorder
+   * without this, and a two-letter run that flips reads as a different person's
+   * initials beside an Arabic name that did not move.
+   *
+   * ⚠️ `.board-honor__score` used to be the second entry here. The mark came
+   * off this board with the photographs — «بدون درجات» — so the selector went
+   * with it, and `.board-honor__avatar` inherited the rule. A stale name in
+   * this list does not fail: `indexOf` returns -1, `slice(-1)` hands back the
+   * last character of the file, and the assertion fails on an empty body with
+   * a message naming a selector nobody can find. That is how this was noticed.
    */
   it('isolates every Latin-digit run', () => {
     const css = stripComments(boardSection());
 
-    for (const selector of ['.board-tile__n', '.board-honor__score']) {
+    for (const selector of ['.board-tile__n', '.board-honor__avatar']) {
+      expect(css, `${selector} is not in the stylesheet at all`).toContain(`${selector} {`);
       const rule = css.slice(css.indexOf(`${selector} {`));
       const body = rule.slice(0, rule.indexOf('}'));
       expect(body, `${selector} must isolate its digits`).toContain('unicode-bidi: isolate');

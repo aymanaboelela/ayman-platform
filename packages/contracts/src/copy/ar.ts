@@ -1654,8 +1654,29 @@ export const copy = {
        * going, which is what it will be.
        */
       ranks: ['المركز الأول', 'المركز التاني', 'المركز التالت', 'المركز الرابع'],
-      /** `{score}` من `{outOf}` — على كرت الطالب اللي على اللوحة. */
-      entryScore: '{score} من {outOf}',
+      /**
+       * The rank ON A FILLED CARD, indexed by `entry.rank - 1`.
+       *
+       * Separate from `ranks` above even though today they read the same,
+       * because they are answers to different questions: `ranks` labels FOUR
+       * RESERVED PLACES on an empty board, so it always has exactly four and
+       * they always count 1..4. This one labels a place someone WON, and the
+       * board runs one race per course — so two cards on the same board are
+       * both «المركز الأول», of different courses. Merging them would force
+       * the empty board to stop saying "four places" the day a fifth course
+       * is added.
+       */
+      placeRanks: ['المركز الأول', 'المركز التاني', 'المركز التالت', 'المركز الرابع'],
+      /** «عرض الكل» — من اللوحة على الصفحة الرئيسية لصفحة الأرشيف. */
+      viewAll: 'عرض الكل',
+      /** عنوان صفحة الأرشيف. */
+      archiveTitle: 'لوحة الشرف — كل الأسماء',
+      /** تحت العنوان في صفحة الأرشيف. */
+      archiveLead: 'كل اللي عدّوا على اللوحة، امتحان ورا امتحان.',
+      /** عنوان العمود الجانبي اللي فيه التواريخ. */
+      archivePeriods: 'الامتحانات',
+      /** لما الأرشيف يبقى فاضي. */
+      archiveEmpty: 'لسه مفيش حد على اللوحة.',
       /**
        * Under the four places. Said ONCE, not repeated inside every card:
        * four cards each carrying the same apology is how an empty section
@@ -2511,7 +2532,26 @@ export const copy = {
     /** `{cta}` — `bookOrder.cta` itself, `{price}` — EGP, already formatted.
      *  The button's own visible label, so the price is seen right where the
      *  student clicks — not only later, deep in the panel's flow. */
-    ctaWithPrice: '{cta} — {price} جنيه',
+    /**
+     * `{price}` is the BOOK's own price, not the order total.
+     *
+     * It briefly carried the total (price + delivery) so the button could not
+     * under-quote what the form would ask for. Ayman reversed that: the book
+     * costs 250 and the button should say 250, with delivery named beside it
+     * rather than folded into it. The breakdown inside the dialog is where the
+     * fee gets its number.
+     */
+    ctaWithPrice: '{cta} — {price} جنيه + مصاريف الشحن',
+    /**
+     * The same button when delivery is FREE.
+     *
+     * ⚠️ Not `ctaWithPrice` with the suffix left on. The live shop runs at a
+     * zero fee — «مصاريف الشحن ملهاش دعوة… السعر ٢٥٠» — and a button reading
+     * «٢٥٠ جنيه + مصاريف الشحن» there is not a rough edge, it is a false claim
+     * that the price is not the whole price. Same reason `shippingFreeOnce`
+     * exists beside `shippingOnce` rather than substituting into it.
+     */
+    ctaWithPriceFreeShipping: '{cta} — {price} جنيه شامل الشحن',
     title: 'طلب الكتاب',
     /** `{price}` — same template as `subscribe.priceLine`. ⚠️ Since «قسم الكتب»
      *  this is the order's TOTAL, delivery included, not the book's own price.
@@ -2627,6 +2667,15 @@ export const copy = {
     descriptionTitle: 'ملخص الدرس',
     descriptionWarning: 'متفتحوش غير لما تخلّص المحاضرة — ده ملخص تراجع بيه على نفسك، مش بديل عنها.',
 
+    /**
+     * The corner control on the video. `F` used to be the only way in, and a
+     * phone has no F key — so these two labels exist because the button does.
+     *
+     * «ملء الشاشة» and not «كبّر»: on a phone the tap also turns the picture
+     * sideways, and «كبّر» would describe half of what happens.
+     */
+    enterFullscreen: 'ملء الشاشة',
+    exitFullscreen: 'خروج من ملء الشاشة',
     outline: 'محتوى الكورس',
     previous: 'الدرس السابق',
     next: 'الدرس التالي',
@@ -3627,6 +3676,12 @@ export const copy = {
     pushOptInLead: 'يوصلك تنبيه على الموبايل أول ما م. أيمن يبعت حاجة أو ينزل محاضرة — من غير ما تفتح الموقع.',
     pushOptInButton: 'فعّل التنبيهات',
     pushOptInWorking: 'بيفعّل…',
+    /** Shown ONLY on an explicit press, never by the silent mount-time repair.
+     *  It names the server as the cause on purpose: the person pressing has
+     *  done everything right and there is nothing else for them to try, so
+     *  «حاول تاني» would be a lie. This sentence is what stopped Web Push
+     *  from being dead in production without a single visible error. */
+    pushNotConfigured: 'التنبيهات مش متظبطة على السيرفر لسه — مفاتيح الإرسال ناقصة.',
     instructorMessageQuizResult: 'مهندس أيمن شاف نتيجتك',
     instructorMessageQuizNudge: 'مهندس أيمن فاكرك بالكويز',
     instructorMessageLessonPraise: 'مهندس أيمن بعتلك كلمتين',
@@ -5121,7 +5176,7 @@ export const copy = {
    *
    * ## What is deliberately NOT written here
    *
-   * The account handles — «@2ayman6» and the rest. They are DERIVED from the
+   * The account handles — «@aymanaboelela1» and the rest. They are DERIVED from the
    * URLs in `site-profiles.ts` at render time, not typed again here, because a
    * handle written in two places is a handle that will eventually disagree
    * with the link beside it. On a page whose whole job is «ده هو حسابه
@@ -5334,14 +5389,18 @@ export const copy = {
     /** The zones spelled out, under the line above — «الرقم ده جه منين». */
     shippingZones: 'القاهرة والجيزة {near} · وجه بحري {delta} · الصعيد وسيناء والبحر الأحمر {far}',
     /**
-     * The same shelf line when the fee is ZERO, and it has to be its own
-     * sentence rather than `shippingOnce` with «٠ ج» in the slot.
+     * The same shelf line when the fee is ZERO.
      *
-     * «الشحن ٠ ج مرة واحدة على الطلب كله — مهما كان عدد الكتب» is what that
-     * substitution produces, and it reads as a broken template: it spends a
-     * whole clause promising the fee is only charged once, about a fee that is
-     * not charged at all. Free delivery is also the strongest thing this line
-     * can say, and burying it inside a caveat about quantity throws it away.
+     * Still its own sentence, and now for a second reason on top of the one it
+     * was written for: `shippingOnce` above says prices EXCLUDE delivery, which
+     * is precisely false when delivery is free. The two lines make opposite
+     * promises and neither can stand in for the other.
+     *
+     * (The original reason, kept because it is the sharper one: «الشحن ٠ ج مرة
+     * واحدة على الطلب كله» reads as a broken template — it spends a whole clause
+     * promising a fee is charged only once, about a fee that is not charged —
+     * and free delivery is the strongest thing this line can say, so burying it
+     * inside a caveat about quantity throws it away.)
      */
     shippingFreeOnce: 'التوصيل مجانًا — السعر شامل الشحن لحد باب البيت',
     subtotal: 'الكتب',

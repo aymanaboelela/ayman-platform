@@ -376,8 +376,8 @@ export default async function LinksPage() {
 type SocialRow = { key: SocialKey; href: string; label: string };
 
 /**
- * The account name inside a profile URL — `@2ayman6` for the YouTube channel,
- * `aymanaboelela2` for the Facebook page.
+ * The account name inside a profile URL — `@aymanaboelela1` for the YouTube
+ * channel, `aymanaboelela2` for the Facebook page.
  *
  * Derived rather than stored, so it cannot disagree with the `href` beside it.
  * Returns an empty string for anything it does not recognise as a profile path

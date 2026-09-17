@@ -239,6 +239,63 @@ export const MarkBookOrderPrintingResultSchema = z.object({
 export type MarkBookOrderPrintingResult = z.infer<typeof MarkBookOrderPrintingResultSchema>;
 
 /**
+ * «الفلوس وصلت» — an admin settling an order that is still `address_only`.
+ *
+ * ## Why this exists at all
+ *
+ * The two-step public flow is the only thing that could ever move an order out
+ * of «بدأ ومكملش الدفع»: the STUDENT had to come back and upload a screenshot.
+ * Every other way money actually arrives — a transfer to Ayman's own wallet, a
+ * hand-off in cash, a parent paying over the phone — left the row stranded on a
+ * tab no ship route will touch, with no button anywhere on the screen to say so.
+ * This is that button.
+ *
+ * ## `isFree` is the SAME question asked once
+ *
+ * «ممكن يبقى دفع وممكن يبقى مجاني» — the two are one decision about one order,
+ * not two endpoints, because the admin is answering «اتحصّل منه إيه؟» exactly
+ * once. `false` keeps the money the order was quoted at and records the
+ * transfer; `true` discounts the whole basket so the row still says what the
+ * book was WORTH while saying nothing was taken for it — the shape
+ * `book_orders_free_collects_nothing` demands and the one `adminCreate`'s own
+ * «مجاني» switch already writes.
+ *
+ * This is deliberately NOT `POST :id/free`, which stays what it is: a re-label
+ * for an order that ALREADY collected zero, refusing anything that collected
+ * money. Here the waiver is the point — the admin is deciding, now, that the
+ * 250 ج will not be collected — and that is a money change, which is why it
+ * carries its own audit action and its own before-value.
+ *
+ * `senderPhone`/`screenshotKey` are both optional and both meaningless when
+ * `isFree`, same rule and same reasoning as `AdminCreateBookOrderSchema`: an
+ * admin recording a transfer after the fact often has nothing to attach.
+ */
+export const MarkBookOrderPaidSchema = z
+  .object({
+    isFree: z.boolean().default(false),
+    senderPhone: egyptianPhone('رقم المحوّل منه غير صالح').nullable().default(null),
+    screenshotKey: z.string().min(1).max(255).nullable().default(null),
+  })
+  .strict();
+export type MarkBookOrderPaidInput = z.infer<typeof MarkBookOrderPaidSchema>;
+
+/**
+ * What actually happened — same «return the new state» convention as
+ * `MarkBookOrderShippedResultSchema` and its neighbours above.
+ *
+ * `amountCents` is in it because a «مجاني» settlement CHANGES it, and the card
+ * that just showed 250 ج has to be able to show 0 ج without a second fetch.
+ */
+export const MarkBookOrderPaidResultSchema = z.object({
+  id: z.uuid(),
+  status: z.literal('paid'),
+  paidAt: z.iso.datetime(),
+  isFree: z.boolean(),
+  amountCents: z.number().int().min(0),
+});
+export type MarkBookOrderPaidResult = z.infer<typeof MarkBookOrderPaidResultSchema>;
+
+/**
  * A written reason, required, and long enough to be an actual sentence.
  *
  * `.min(3)` rather than `.min(1)`: a one-character reason is a reason field

@@ -60,7 +60,8 @@ function goodEnv(): Record<string, string> {
     ADMIN_PASSWORD: FAKE.adminPassword,
     WA_TOKEN: FAKE.waToken,
     // The sidecar's address on the internal compose network. Identical on
-    // every stack, and the API refuses to boot with the token but not this.
+    // every stack, and all-or-nothing with the token above: `config/env.ts`
+    // refines the pair, and one without the other stops the API booting.
     WA_SERVICE_URL: 'http://wa:3400',
     WA_DEVICE_NAME: 'منصة محمد حسن',
     CLARITY_PROJECT_ID: '',
@@ -69,6 +70,7 @@ function goodEnv(): Record<string, string> {
     TENANT_INSTAGRAM: 'https://www.instagram.com/mohamedhassan',
     TENANT_TIKTOK: 'https://www.tiktok.com/@mohamedhassan',
     TENANT_FACEBOOK: 'https://www.facebook.com/mohamedhassan',
+    // All three, because the API refines them as a group.
     VAPID_PUBLIC_KEY: 'BPk1',
     VAPID_PRIVATE_KEY: 'vk1',
     VAPID_SUBJECT: 'mailto:admin@mohamedhassan.com',
@@ -358,6 +360,28 @@ describe('checkTenantEnv', () => {
    * printed «Do NOT deploy this stack» — which teaches an operator that this
    * script's verdict is noise, and that is the only way a gate like this dies.
    */
+  describe('origins that parse but concatenate wrong', () => {
+    /*
+     * `docker-compose.yml` builds `MEDIA_BASE_URL: ${MEDIA_ORIGIN}/media` by
+     * plain string concatenation, so a trailing slash gives `//media` and a
+     * path gives `/x/media` — and every uploaded image 404s on a stack whose
+     * API booted fine and whose pages all render. Every other rule in the
+     * checker runs on `new URL(v).origin`, which DISCARDS exactly the part
+     * that breaks this, so it has to compare the raw string to its own origin.
+     */
+    it('rejects a trailing slash on MEDIA_ORIGIN, which every media URL inherits', () => {
+      expect(check({ MEDIA_ORIGIN: 'https://media-mohamedhassan.com/' }).errors.join(' ')).toContain(
+        'bare origin',
+      );
+    });
+
+    it('rejects a path on APP_URL', () => {
+      expect(check({ APP_URL: 'https://mohamedhassan.com/platform' }).errors.join(' ')).toContain(
+        'bare origin',
+      );
+    });
+  });
+
   describe('the first admin, before and after launch', () => {
     it('warns rather than fails when both are empty and no flag is given', () => {
       const { errors, warnings } = check({ ADMIN_EMAIL: '', ADMIN_PASSWORD: '' });
@@ -370,6 +394,20 @@ describe('checkTenantEnv', () => {
       const { errors } = check({ ADMIN_EMAIL: '', ADMIN_PASSWORD: '' }, { firstDeploy: true });
 
       expect(errors.join(' ')).toContain('no admin account will be created');
+    });
+
+    /*
+     * `create-admin.ts`'s own two rules, mirrored. The entrypoint runs it with
+     * `|| echo WARNING`, so a throw there is swallowed: the API starts, the
+     * stack has NO admin account, the first sign-in answers «الإيميل أو
+     * الباسورد غلط», and the only trace is one line in a boot log.
+     */
+    it('rejects an ADMIN_PASSWORD create-admin would refuse', () => {
+      expect(check({ ADMIN_PASSWORD: 'short' }).errors.join(' ')).toContain('no admin account');
+    });
+
+    it('rejects an ADMIN_EMAIL create-admin would refuse', () => {
+      expect(check({ ADMIN_EMAIL: 'not-an-email' }).errors.join(' ')).toContain('ADMIN_EMAIL');
     });
 
     it('fails on half a pair either way — the bootstrap would silently not run', () => {

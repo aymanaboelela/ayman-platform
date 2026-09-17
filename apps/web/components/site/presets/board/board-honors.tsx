@@ -1,8 +1,7 @@
 import { Medal } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
-import { formatCopy, formatMark } from '@ayman/contracts/format';
 import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
-import { UserAvatar } from '@/components/app/user-avatar';
+import { initials } from '@/components/app/user-avatar';
 import { BoardHeading } from './board-heading';
 import { boardCopy } from './board-copy';
 
@@ -70,31 +69,41 @@ export function BoardHonors({
           </div>
         ) : (
           <ul className="board-honors" role="list">
-            {entries.map((entry, index) => (
-              <li className="board-honor" key={`${entry.studentName}-${index}`}>
+            {entries.map((entry) => (
+              <li
+                className="board-honor"
+                key={`${entry.studentName}-${entry.courseLabel}-${entry.rank}`}
+              >
                 <span className="board-honor__mark" aria-hidden="true">
                   <Medal size={20} strokeWidth={2} />
                 </span>
 
-                {/* The rank word exists for the first four places only; past
-                    that the list simply continues, which is what the fourth
-                    place was written to promise. */}
-                <span className="board-honor__rank">{c.ranks[index] ?? ''}</span>
+                {/* The place WITHIN this entry's course, from `placeRanks` and
+                    not from the list index. The board runs one race per
+                    course, so two cards on the same board are both «المركز
+                    الأول» — of عربي and of لغات — and an index would have
+                    renumbered the second one to «التاني». `entry.rank` is
+                    1-based; past the fourth place the word simply runs out,
+                    which is what the fourth place was written to promise. */}
+                <span className="board-honor__rank">{c.placeRanks[entry.rank - 1] ?? ''}</span>
 
-                <UserAvatar name={entry.studentName} image={entry.avatarKey} size={52} />
+                {/* Which race it was won in. Without it the two «المركز
+                    الأول» cards read as a contradiction. */}
+                <span className="board-honor__course">{entry.courseLabel}</span>
+
+                {/* Initials, never the photograph — and `avatarKey` is ignored
+                    here rather than missing from the payload. This board is the
+                    one surface a stranger reads, and it names a minor: a face
+                    beside that name is a different disclosure from a name
+                    alone, and the owner asked for it not to be made. Same
+                    decision as `honor-board-section.tsx`, and it has to be made
+                    again in every preset — a preset that reached for
+                    `<UserAvatar image={…}>` would quietly undo it. */}
+                <span className="board-honor__avatar" aria-hidden="true">
+                  {initials(entry.studentName)}
+                </span>
 
                 <span className="board-honor__name">{entry.studentName}</span>
-
-                {/* `.mono` + `.tabular-nums`, and the pair is not decoration:
-                    the string is «85 من 100», a Latin-digit run inside an
-                    Arabic sentence, and the stylesheet isolates it so the two
-                    numbers cannot swap sides around the «من». */}
-                <span className="board-honor__score mono tabular-nums">
-                  {formatCopy(c.entryScore, {
-                    score: formatMark(entry.scaledScore),
-                    outOf: formatMark(entry.gradeOutOf),
-                  })}
-                </span>
 
                 <span className="board-honor__quiz">{entry.quizTitle}</span>
               </li>
