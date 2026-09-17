@@ -563,10 +563,36 @@ export class StudentsService {
     const target = await this.prisma.user.findUnique({
       where: { id: userId },
       // The two login identifiers come back with the id because the soft lock
-      // is keyed on THEM, not on the user — see the unlock below.
-      select: { id: true, email: true, phoneNumber: true },
+      // is keyed on THEM, not on the user — see the unlock below. `role` is
+      // here for the guard immediately below it.
+      select: { id: true, email: true, phoneNumber: true, role: true },
     });
     if (!target) throw new NotFoundException();
+
+    /**
+     * ⚠️ STUDENTS ONLY, and this is a privilege-escalation guard rather than
+     * a tidiness rule.
+     *
+     * This method rewrites an account's Argon2 hash from a user id. With no
+     * check on the target's role it will rewrite an ADMIN's — so any caller
+     * holding `student:set-password` could set a password on the platform
+     * operator's account and sign in as them, holding `'*'`. `ban`,
+     * `changeRole` and the delete path all guard their target's role already
+     * (`target.role === 'admin'` at :709, :650, :968); this one did not, and
+     * it is the only one of the four that hands over a working credential.
+     *
+     * `student:set-password` is also in `NEVER_GRANTABLE` now, so no
+     * instructor can be given it. This is the second lock: the permission
+     * catalogue is a list somebody edits, and a guard in the code path is what
+     * survives that edit.
+     *
+     * Resetting a STAFF password is deliberately not reachable from here. It
+     * is a rare act with a different blast radius, and it belongs to whoever
+     * has the database, not to a screen a support desk can be granted.
+     */
+    if (target.role !== 'student') {
+      throw new ForbiddenException('passwords can only be set on student accounts');
+    }
 
     const passwordHash = await argon2.hash(newPassword, ARGON2_OPTIONS);
 
@@ -614,6 +640,30 @@ export class StudentsService {
     if (target.email) {
       loginThrottle.clear(throttleKeyFor(emailIdentifier(target.email)));
     }
+
+    /**
+     * Every existing session goes with the password.
+     *
+     * `ban` already does this (:750) and for the reason recorded there:
+     * `session.cookieCache` is deliberately absent, so deleting the rows takes
+     * effect on the account's very next request rather than whenever a cached
+     * cookie lapses. A password reset without it leaves whoever was signed in
+     * BEFORE the reset signed in after it — which is the wrong answer for both
+     * reasons this method is ever called:
+     *
+     *   · a student who was locked out gets a new password while the person
+     *     who took their phone keeps the session they already had;
+     *   · a credential reset done BECAUSE an account was compromised does not
+     *     actually evict the intruder.
+     *
+     * `sessionDevice` goes too, same as the ban path: «أجهزتي» still listing
+     * «نشط» for a session that no longer exists is a lie told at exactly the
+     * wrong moment.
+     */
+    await this.prisma.$transaction([
+      this.prisma.session.deleteMany({ where: { userId } }),
+      this.prisma.sessionDevice.deleteMany({ where: { userId } }),
+    ]);
 
     // Never the password itself, hashed or otherwise — just who did it and to
     // whom. `audit_log` is INSERT-only; a credential belongs nowhere in it.
