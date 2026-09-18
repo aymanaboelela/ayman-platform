@@ -1941,6 +1941,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin book orders print many: anonymous', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'anonymous', status: 401 },
     { label: 'admin book orders print many: student', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'student', status: 403 },
     { label: 'admin book orders print many: admin', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
+    // رفع الحجز بالجملة — same `book-order:ship` authority as the per-row
+    // `:id/review-ok` above. The admin case's id belongs to no order, so a 201
+    // proves the route is REACHED; the body reports that row as `skipped`.
+    { label: 'admin book orders review-ok many: anonymous', method: 'post', path: () => '/api/admin/book-orders/review-ok', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders review-ok many: student', method: 'post', path: () => '/api/admin/book-orders/review-ok', actor: 'student', status: 403 },
+    { label: 'admin book orders review-ok many: admin', method: 'post', path: () => '/api/admin/book-orders/review-ok', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
 
     { label: 'admin book order ship: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'anonymous', status: 401 },
     { label: 'admin book order ship: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/ship`, actor: 'student', status: 403 },

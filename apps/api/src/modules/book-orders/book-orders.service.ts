@@ -33,7 +33,11 @@ import type {
   RestoreBookOrderResult,
 } from '@ayman/contracts/admin/book-orders';
 import type { AdminBookOrderPatchInput } from '@ayman/contracts/admin/books';
-import { bookOrderRef, bookOrderYearWord } from '@ayman/contracts/admin/book-orders';
+import {
+  BULK_NOT_HELD_REASON,
+  bookOrderRef,
+  bookOrderYearWord,
+} from '@ayman/contracts/admin/book-orders';
 import { bookOrderTotals, bookShippingCentsFor } from '@ayman/contracts/books';
 import { toAsciiDigits } from '@ayman/contracts/phone';
 import { streamChoiceOf } from '@ayman/contracts/content';
@@ -3099,6 +3103,76 @@ export class BookOrdersService {
   }
 
   /**
+   * «راجعتهم كلهم، كمّلوا» — lifting the hold on a whole selection.
+   *
+   * ## Why this exists at all
+   *
+   * The hold is per parcel but the review is not: the admin opens the tab,
+   * reads the flagged receipts one after the other, decides they are fine, and
+   * then wants them back in the same print run as everybody else. Clearing
+   * thirty holds one button at a time is the same work the bulk «اتشحن» and
+   * «ابعت للمطبعة» buttons already exist to spare him — and worse here,
+   * because a hold he forgets to lift is a parcel that silently does not print.
+   *
+   * ## Why a batch endpoint and not a loop in the browser
+   *
+   * Thirty POSTs from one page is thirty admin requests, and the admin API's
+   * rate limiter starts refusing at far fewer than that — the loop would stop
+   * halfway through with no way to tell WHICH half. One request, one answer
+   * per row.
+   *
+   * ⚠️ A row that was never held is `skipped`, not cleared. `clearReviewHold`
+   * is idempotent on purpose and this calls it, so nothing breaks either way —
+   * but the COUNT in the toast has to mean «دول كانوا محجوزين واتفكوا», and a
+   * selection of fifty containing two held orders must not report fifty.
+   */
+  async clearReviewHoldMany(adminId: string, ids: string[]): Promise<BulkBookOrderResult> {
+    const rows: BulkBookOrderResultRow[] = [];
+    for (const id of ids) {
+      const order = await this.prisma.bookOrder.findUnique({
+        where: { id },
+        select: { id: true, fullName: true, deletedAt: true, heldForReviewAt: true },
+      });
+
+      if (!order || order.deletedAt !== null) {
+        rows.push({ id, outcome: 'skipped', fullName: '', reason: 'الطلب مش موجود' });
+        continue;
+      }
+      if (order.heldForReviewAt === null) {
+        rows.push({
+          id,
+          outcome: 'skipped',
+          fullName: order.fullName,
+          reason: BULK_NOT_HELD_REASON,
+        });
+        continue;
+      }
+
+      try {
+        await this.clearReviewHold(adminId, id);
+        rows.push({ id, outcome: 'review_cleared', fullName: order.fullName, reason: null });
+      } catch (error) {
+        /* Reported rather than swallowed, like the other batches: the hold was
+           there a moment ago, so this is a genuine race or a row that has just
+           been deleted, and both are things the admin should see by name. */
+        rows.push({
+          id,
+          outcome: 'skipped',
+          fullName: order.fullName,
+          reason: error instanceof BadRequestException ? error.message : 'مقدرناش نرفع الحجز',
+        });
+      }
+    }
+
+    return {
+      rows,
+      succeeded: rows.filter((row) => row.outcome === 'review_cleared').length,
+      noticeFailed: 0,
+      skipped: rows.filter((row) => row.outcome === 'skipped').length,
+    };
+  }
+
+  /**
    * «أرفضه» — the order is turned down, and the student is told why.
    *
    * ## Rejecting is not deleting
@@ -3466,16 +3540,25 @@ export class BookOrdersService {
           }
         : undefined;
 
+    /* THE SAME three filter helpers `adminList` builds its own WHERE from, in
+       the same order — the export is the list, and the only way to keep that
+       true is to share the code that decides it rather than to write a second
+       version of it here that drifts.
+
+       Lifted into a constant because the hold now splits this one filter into
+       two answers: the run, and the parcels the run is missing. Written twice,
+       the second would drift and «راجعتهم كلهم» would lift holds outside the
+       range the admin is looking at. */
+    const packingWhere = {
+      ...liveOrDeletedWhere(status),
+      ...this.adminSearchWhere(query.q ?? ''),
+      ...streamAndYearWhere(query.stream, query.year),
+      ...(createdAt ? { createdAt } : {}),
+    };
+
     const rows = await this.prisma.bookOrder.findMany({
-      /* THE SAME three filter helpers `adminList` builds its own WHERE from,
-         in the same order — the export is the list, and the only way to keep
-         that true is to share the code that decides it rather than to write a
-         second version of it here that drifts. */
       where: {
-        ...liveOrDeletedWhere(status),
-        ...this.adminSearchWhere(query.q ?? ''),
-        ...streamAndYearWhere(query.stream, query.year),
-        ...(createdAt ? { createdAt } : {}),
+        ...packingWhere,
         /*
          * ⚠️ A HELD order never reaches paper.
          *
@@ -3768,10 +3851,21 @@ export class BookOrdersService {
         };
       });
 
+    /* The other half of the exclusion above — see
+       `PackingListSchema.heldOrderIds`. Ids only, and a separate query rather
+       than a flag on the first: the rows must not exist anywhere the sheet,
+       the cards or the spreadsheet could reach them by accident. */
+    const held = await this.prisma.bookOrder.findMany({
+      where: { ...packingWhere, heldForReviewAt: { not: null } },
+      orderBy: [{ createdAt: 'asc' }],
+      select: { id: true },
+    });
+
     return {
       groups,
       years,
       orderIds: rows.map((row) => row.id),
+      heldOrderIds: held.map((row) => row.id),
       labels,
       orders: rows.length,
       books: lines.length,

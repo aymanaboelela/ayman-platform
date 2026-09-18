@@ -201,6 +201,30 @@ export class AdminBookOrdersController {
     return this.bookOrders.clearReviewHold(user.id, id);
   }
 
+  /**
+   * «راجعتهم، كمّلوا» — the same lift, on a whole selection.
+   *
+   * The review is read order by order but decided in one go, and a hold left
+   * on by accident is a parcel that silently misses the print run. It carries
+   * no `whatsapp` flag for the same reason `printing` does not: nothing is
+   * sent, the order simply rejoins the list it was already on.
+   *
+   * ⚠️ `'review-ok'` is ONE segment and `':id/review-ok'` is two, so the two
+   * cannot shadow each other — but it is declared beside its siblings anyway,
+   * because the next literal route added here may not be so lucky. See the
+   * ordering note above.
+   */
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post('review-ok')
+  @UsePipes(ZodValidationPipe)
+  clearReviewHoldMany(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: BulkBookOrderActionDto,
+  ) {
+    return this.bookOrders.clearReviewHoldMany(user.id, body.ids);
+  }
+
   @RequirePermission('book-order:ship')
   @RequireCsrf()
   @Post('ship')

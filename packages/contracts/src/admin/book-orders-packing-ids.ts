@@ -19,15 +19,31 @@
  * — into the browser bundle for a list of strings.
  */
 export function parseAdminBookOrderIds(value: unknown): string[] {
+  return idsAt(value, 'orderIds');
+}
+
+/**
+ * The same response read for the ids it EXCLUDED — «راجعتهم كلهم، كمّل».
+ *
+ * A held order is in none of `orderIds`, the sheet, the cards or the
+ * spreadsheet, so the toolbar cannot see it at all; this is the one reader that
+ * can. See `PackingListSchema.heldOrderIds` for why the exclusion reports
+ * itself instead of being silent.
+ */
+export function parseAdminBookOrderHeldIds(value: unknown): string[] {
+  return idsAt(value, 'heldOrderIds');
+}
+
+function idsAt(value: unknown, key: 'orderIds' | 'heldOrderIds'): string[] {
   if (typeof value !== 'object' || value === null) {
     throw new TypeError('book order packing ids: expected an object');
   }
 
-  const { orderIds } = value as Record<string, unknown>;
+  const ids = (value as Record<string, unknown>)[key];
 
-  if (!Array.isArray(orderIds) || orderIds.some((id) => typeof id !== 'string')) {
-    throw new TypeError('book order packing ids: `orderIds` must be an array of strings');
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string')) {
+    throw new TypeError(`book order packing ids: \`${key}\` must be an array of strings`);
   }
 
-  return orderIds as string[];
+  return ids as string[];
 }
