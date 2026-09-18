@@ -16,12 +16,16 @@ function pin(over: {
   course?: { year: number; forGeneral: boolean; forLanguages: boolean };
   title?: string;
   score?: number;
+  gender?: 'male' | 'female';
 }): PinnedAttempt {
   return {
     honorBoardAt: new Date(over.at),
     scaledScore: over.score ?? 100,
     gradeOutOf: 100,
-    user: { image: null, studentProfile: { fullName: over.name } },
+    user: {
+      image: null,
+      studentProfile: { fullName: over.name, gender: over.gender ?? 'male' },
+    },
     quiz: {
       lesson: {
         title: over.title ?? 'امتحان نص الشهر الأول',
@@ -106,6 +110,17 @@ describe('toHonorBoardRounds', () => {
     ]);
     expect(round.entries[0].percent).toBe(100);
     expect(() => HonorBoardPeriodSchema.parse(round)).not.toThrow();
+  });
+
+  it('picks the drawing from the stored gender, never from the name', () => {
+    // The platform does not guess this anywhere else and must not start here:
+    // «أميرة» is a girl's name and «زياد» a boy's, and both rows below say the
+    // opposite. The stored column is what decides.
+    const [round] = toHonorBoardRounds([
+      pin({ name: 'أميرة', at: '2026-09-17T04:00:00Z', gender: 'male' }),
+      pin({ name: 'زياد', at: '2026-09-17T04:01:00Z', gender: 'female' }),
+    ]);
+    expect(round.entries.map((e) => e.avatarVariant)).toEqual(['boy', 'girl']);
   });
 
   it('is empty for an empty board rather than throwing', () => {

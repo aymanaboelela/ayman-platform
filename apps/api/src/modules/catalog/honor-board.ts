@@ -1,4 +1,4 @@
-import type { HonorBoardPeriod } from '@ayman/contracts/admin/exams';
+import type { HonorBoardEntry, HonorBoardPeriod } from '@ayman/contracts/admin/exams';
 
 /**
  * لوحة الشرف — turning pinned attempts into rounds.
@@ -17,7 +17,10 @@ export interface PinnedAttempt {
   honorBoardAt: Date;
   scaledScore: unknown;
   gradeOutOf: unknown;
-  user: { image: string | null; studentProfile: { fullName: string } | null };
+  user: {
+    image: string | null;
+    studentProfile: { fullName: string; gender: 'male' | 'female' } | null;
+  };
   quiz: {
     lesson: {
       title: string;
@@ -102,6 +105,12 @@ export function toHonorBoardRounds(rows: readonly PinnedAttempt[]): HonorBoardPe
             avatarKey: row.user.image,
             quizTitle: row.quiz.lesson.title,
             courseLabel,
+            // `male` unless the profile says otherwise — `gender` is required
+            // on a real profile, so the fallback only ever covers the
+            // impossible row whose profile was deleted under it.
+            avatarVariant: (row.user.studentProfile?.gender === 'female'
+              ? 'girl'
+              : 'boy') as HonorBoardEntry['avatarVariant'],
             rank,
             scaledScore,
             gradeOutOf,

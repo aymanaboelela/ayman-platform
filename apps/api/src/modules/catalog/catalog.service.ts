@@ -346,7 +346,14 @@ export class CatalogService {
         scaledScore: true,
         gradeOutOf: true,
         user: {
-          select: { image: true, studentProfile: { select: { fullName: true } } },
+          select: {
+            image: true,
+            // `gender` picks the card's drawing and nothing else — see
+            // `HonorAvatar`. It is a required column, so this never widens
+            // what the public payload can say about a student who did not
+            // answer it.
+            studentProfile: { select: { fullName: true, gender: true } },
+          },
         },
         honorBoardAt: true,
         quiz: {
