@@ -7,8 +7,18 @@ import { formatEGP } from '@/lib/price';
 
 const c = copy.landing;
 
-/** How many covers the landing shows before sending people to the shop. */
-const STRIP_LIMIT = 3;
+/**
+ * How many covers the landing shows before sending people to the shop.
+ *
+ * ٤ عشان المنهج نفسه ٤ كتب — سنتين × (عربي، لغات). على ٣ كان الكتاب الرابع
+ * بيتقص، والطالب اللي بيدوّر على «أولى بكالوريا لغات» بيلاقي التلاتة التانيين
+ * ويفتكر إن كتابه مش موجود أصلاً.
+ *
+ * ⚠️ الرقم مربوط بالمنهج مش بالتصميم: `.books-strip__grid` بـ`auto-fill`،
+ * فبتستوعب الزيادة لوحدها وبتلف لسطر تاني على الشاشات الضيقة. لو المنهج كبر،
+ * ده المكان اللي بيتغير فيه — مش الـCSS.
+ */
+const STRIP_LIMIT = 4;
 
 export interface BooksStripProps {
   title?: string;
