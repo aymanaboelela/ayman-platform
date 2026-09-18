@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import { copy } from '@ayman/contracts/copy';
 import { getBrandAsset, type BrandAssetKind } from '@/lib/brand-assets';
+import { tenantName } from '@/lib/tenant';
 
 /**
  * Renders a registered brand photograph, or — while none exists — a designed
@@ -149,7 +150,19 @@ function PortraitFallback() {
 function LogoFallback() {
   return (
     <span className="wordmark">
-      <span className="wordmark__name">{copy.site.name}</span>
+      {/*
+        ⚠️ `tenantName`, not `copy.site.name` — and this line is why the whole
+        fallback family is worth re-reading after any asset gate lands.
+
+        Gating `getBrandAsset` stopped Ayman's PHOTOGRAPH from reaching a second
+        instructor's nav. What it did instead was make these fallbacks render
+        there for the first time — and they were printing his NAME, ungated,
+        because until then they only ever appeared on his own site when a file
+        went missing. Closing one leak opened a quieter one inside the very code
+        written to cover it: the header read «أيمن أبو العلا» on a stack whose
+        every other name gate was correct.
+      */}
+      <span className="wordmark__name">{tenantName(copy.site.name)}</span>
       <span className="wordmark__tag">{copy.site.tagline}</span>
     </span>
   );
@@ -164,7 +177,11 @@ function LogoFallback() {
 function MarkFallback() {
   return (
     <span className="site-mark__fallback" aria-hidden="true">
-      {copy.site.name.trim().charAt(0)}
+      {/* His initial «أ» is still his initial. Same gate, same reason as
+          `LogoFallback` above — and on a non-Ayman stack this is no longer the
+          rare missing-file case but the DEFAULT render, because the mark is a
+          photograph of him and is gated away. */}
+      {tenantName(copy.site.name).trim().charAt(0)}
     </span>
   );
 }

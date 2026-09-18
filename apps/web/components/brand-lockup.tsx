@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import { copy } from '@ayman/contracts/copy';
 import { getBrandAsset } from '@/lib/brand-assets';
+import { tenantName } from '@/lib/tenant';
 
 /**
  * The product wordmark: the instructor's portrait plus the name and tagline.
@@ -80,8 +81,21 @@ export function BrandLockup({
           still used — the footer's copyright line, the nav logo's `alt`, the
           `Person` in the JSON-LD. A structured-data `Person.name` takes the
           name, not the title.
+
+          `tenantName()` around it, and this is the widest single swap in the
+          gate: every signed-in surface renders the brand through this one
+          component — app header and its mobile sheet, admin header, admin
+          sidebar, both auth columns — so an ungated read put «المهندس أيمن أبو
+          العلا» at the top of five screens belonging to a student who has
+          never heard of him, beside another instructor's courses.
+
+          The HONORIFIC goes with the name rather than staying behind: the
+          fallback is the whole string, so a second deployment reads
+          «TENANT_DISPLAY_NAME», never a half-swapped «المهندس <somebody
+          else>». We do not know another instructor's title and must not
+          invent one for him.
         */}
-        <span className="brand__name">{copy.site.instructor}</span>
+        <span className="brand__name">{tenantName(copy.site.instructor)}</span>
         {showTagline ? <span className="brand__tag">{copy.site.tagline}</span> : null}
       </span>
     </span>

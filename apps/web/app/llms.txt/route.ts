@@ -1,4 +1,7 @@
 import { connection } from 'next/server';
+import { tenantSentence } from '@/lib/tenant-copy';
+import { tenantName } from '@/lib/tenant';
+import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { copy } from '@ayman/contracts';
 import { AGENT_DISCOVERY_PATHS } from '@/lib/agents/discovery';
 import { AGENT_SKILLS, skillPath } from '@/lib/agents/skills';
@@ -71,9 +74,16 @@ export async function GET(): Promise<Response> {
   );
 
   const lines = [
-    `# ${copy.site.platformName}`,
+    `# ${tenantName(copy.site.platformName)}`,
     '',
-    `> ${copy.site.tagline}. ${copy.seo.description}`,
+        /*
+     * ⚠️ `SITE_DESCRIPTION`, not `copy.seo.description`. This surface is read by
+     * ASSISTANTS, which is the worst place for the wrong instructor's name: a page
+     * is read by a person who can tell it is wrong, and this is quoted back as
+     * fact. `copy.seo.description` welds his name mid-sentence, so the whole
+     * sentence has to be rebuilt — see `SITE_DESCRIPTION` in `lib/seo/metadata.ts`.
+     */
+`> ${copy.site.tagline}. ${SITE_DESCRIPTION}`,
     '',
     'Arabic (RTL) throughout. Course titles, subjects and tracks are Arabic and should be',
     'quoted as they are rather than transliterated.',
@@ -99,7 +109,7 @@ export async function GET(): Promise<Response> {
      */
     '## المدرّس',
     '',
-    `${copy.site.instructor} — ${copy.landing.aboutRole}.`,
+    `${tenantName(copy.site.instructor)} — ${tenantSentence(copy.landing.aboutRole)}.`,
     '',
     copy.landing.aboutBody1,
     copy.landing.aboutBody3,
@@ -138,7 +148,7 @@ export async function GET(): Promise<Response> {
     '',
     `- [الرئيسية](${url('/index.md')}): ${copy.landing.heroLead}`,
     `- [${copy.catalog.title}](${url('/courses.md')}): ${copy.catalog.subtitle}`,
-    `- [${copy.landing.aboutPageTitle}](${url('/about.md')}): ${copy.landing.aboutPageLead}`,
+    `- [${tenantSentence(copy.landing.aboutPageTitle)}](${url('/about.md')}): ${tenantSentence(copy.landing.aboutPageLead)}`,
     `- [${copy.essentials.title}](${url('/essentials.md')}): ${copy.essentials.listLead}`,
     `- [${copy.news.title}](${url('/news.md')}): ${copy.news.subtitle}`,
     /*
@@ -148,7 +158,7 @@ export async function GET(): Promise<Response> {
      * أبو العلا بكام؟» has a definite published answer and an assistant had to
      * decline it.
      */
-    `- [${copy.books.metaTitle}](${url('/books.md')}): ${copy.books.metaDescription}`,
+    `- [${tenantSentence(copy.books.metaTitle)}](${url('/books.md')}): ${tenantSentence(copy.books.metaDescription)}`,
     /*
      * ⚠️ «إزاي أشترك وأدفع؟» — a question this platform answers every day and
      * no public page did. The checkout is behind auth, so an assistant saw the

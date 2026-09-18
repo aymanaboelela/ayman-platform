@@ -1,11 +1,56 @@
 import path from 'node:path';
 import type { NextConfig } from 'next';
+/*
+ * The tenant gate itself, imported rather than re-derived from
+ * `process.env.TENANT_KEY` here. `lib/tenant.ts` is the one place the rule
+ * "`ayman` or unset means his stack, everything else inherits nothing" is
+ * written down, and a config file that re-implemented the same `?? '' ||
+ * 'ayman'` would be a second copy free to drift from it — which is exactly the
+ * failure mode the `env` block below exists to document.
+ */
+import { IS_AYMAN } from './lib/tenant';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://localhost:3300';
 const MEDIA_ORIGIN = process.env.NEXT_PUBLIC_MEDIA_ORIGIN ?? 'http://localhost:3300';
 const mediaOriginUrl = new URL(MEDIA_ORIGIN);
 
 const nextConfig: NextConfig = {
+  /**
+   * `TENANT_KEY` and `TENANT_DISPLAY_NAME`, inlined into the CLIENT bundle.
+   *
+   * `lib/tenant.ts` reads both with a plain `process.env`, and on the server
+   * that is exactly right. In the browser it is not: Next replaces only
+   * `NEXT_PUBLIC_*` reads and whatever is listed here, so an unprefixed
+   * `process.env.TENANT_KEY` compiles to `undefined` — and `?? '' || 'ayman'`
+   * then makes `IS_AYMAN` **true on every tenant's stack**.
+   *
+   * That is not a cosmetic gap. A name gate lands on an attribute and React
+   * leaves those alone, so the server HTML survives — but an ASSET gate
+   * decides which element exists at all (`<Image src="/brand/hero-ai-dragon-2
+   * .webp">` versus `<HeroFallback>`). A structural mismatch makes React throw
+   * the server subtree away and re-render from the client, so Ayman's
+   * photograph would appear on somebody else's landing page a few hundred
+   * milliseconds after first paint. Three `'use client'` components reach
+   * `getBrandAsset`: `site-hero.tsx` (hero), `site-nav.tsx` (mark) and
+   * `year-tracks.tsx` (the three track posters).
+   *
+   * `env` rather than renaming them `NEXT_PUBLIC_*`: the names are already
+   * written into `docker-compose.yml`, the Dockerfile build args, every
+   * `deploy/tenants/*.env`, `scripts/check-tenant-env.mjs` and the API — which
+   * reads the same `TENANT_KEY` server-side, where a `NEXT_PUBLIC_` prefix
+   * would be meaningless. One config entry beats renaming the variable in
+   * eight places and leaving the API's copy spelled differently.
+   *
+   * ⚠️ Inlined at BUILD time, like every other `env` entry. The web image is
+   * already per-instructor (`NEXT_PUBLIC_APP_URL` is baked in the same way),
+   * so this costs nothing that was not already true — but it does mean a
+   * container cannot be re-pointed at another tenant by changing the runtime
+   * environment. It never could.
+   */
+  env: {
+    TENANT_KEY: process.env.TENANT_KEY ?? '',
+    TENANT_DISPLAY_NAME: process.env.TENANT_DISPLAY_NAME ?? '',
+  },
   // Emits .next/standalone with a self-contained server.js and only the
   // node_modules actually reached — the runtime image copies that instead of
   // the whole pnpm workspace.
@@ -399,9 +444,45 @@ const nextConfig: NextConfig = {
    * Single origin: the browser only ever sees `/api/...` on the web origin.
    * This is what makes __Host- cookies, SameSite=Strict, and zero CORS possible
    * simultaneously. Never call the API host directly from client code.
+   *
+   * ## The second rule, and why it is here rather than in a component
+   *
+   * `app/favicon.ico`, `app/icon.png` and `app/apple-icon.png` are three crops
+   * of Ayman's face. They are Next FILE CONVENTIONS — matched by filename,
+   * compiled into routes, linked into every page's head — so unlike every other
+   * piece of his identity there is no module to put `IS_AYMAN` inside. The leak
+   * is the URLs themselves, which is why the gate is a ROUTING rule: on any
+   * stack that is not his, those three paths resolve to `/tenant-icon`, which
+   * answers `204 No Content`. That file carries the full reasoning, including
+   * the three fixes that look right and do not work.
+   *
+   * `beforeFiles` is load-bearing and is the whole reason this is not a
+   * one-liner added to the array below. The array form of `rewrites()` is
+   * `afterFiles`, which runs AFTER filesystem and app routes have had their
+   * chance — and these three ARE app routes, so an `afterFiles` rule would
+   * never be reached. `beforeFiles` runs ahead of them.
+   *
+   * ⚠️ HIS STACK RETURNS THE ARRAY, unchanged and on its own line, rather than
+   * an object with an empty `beforeFiles`. The two are equivalent by Next's
+   * documentation, and equivalent-by-documentation is not the standard this
+   * work runs under: his deployment is live, and the one thing it must not do
+   * is take a different code path through the router than it took yesterday.
    */
   async rewrites() {
-    return [{ source: '/api/:path*', destination: `${API_ORIGIN}/api/:path*` }];
+    const api = { source: '/api/:path*', destination: `${API_ORIGIN}/api/:path*` };
+    if (IS_AYMAN) return [api];
+    return {
+      /*
+       * The same three paths the `Cache-Control` rule above matches, written
+       * the same way on purpose — if one list ever grows an icon the other does
+       * not, the mismatch is visible from one screen to the other.
+       */
+      beforeFiles: [
+        { source: '/:icon(favicon\\.ico|icon\\.png|apple-icon\\.png)', destination: '/tenant-icon' },
+      ],
+      afterFiles: [api],
+      fallback: [],
+    };
   },
 };
 

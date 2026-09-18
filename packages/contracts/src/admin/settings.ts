@@ -105,10 +105,71 @@ export const AccentHueSchema = z
  *   · `compact`   — a short opener, centred copy, tighter type and denser
  *                   sections with bordered cards. Reads like an app's
  *                   marketing page: more on the first screen, less air.
+ *
+ * ## How this relates to `landingPreset` below, and why BOTH exist
+ *
+ * They answer different questions and the answers compose:
+ * `landingPreset` chooses WHICH page component runs; this chooses the rhythm
+ * of the sections INSIDE `classic`. `app/(site)/page.tsx` branches on the
+ * preset FIRST, and only the `classic` branch ever reaches the
+ * `<main data-layout={…}>` these rules hang off — so this setting is inert on
+ * `neon` and `board` by construction, not by a convention someone has to
+ * remember to honour when they write the next preset.
+ *
+ * Neither field subsumes the other. Folding the presets in here as three more
+ * enum values would have made `editorial` and `neon` alternatives to each
+ * other, and they are not: `editorial` is a way of arranging Ayman's twelve
+ * sections, `neon` is a page that does not contain them.
  */
 export const LANDING_LAYOUTS = ['classic', 'editorial', 'compact'] as const;
 export const LandingLayoutSchema = z.enum(LANDING_LAYOUTS);
 export type LandingLayout = z.infer<typeof LandingLayoutSchema>;
+
+/**
+ * WHICH landing page renders — a different page, not the same page reshaped.
+ *
+ * ## Why `landingLayout` above was not enough, in the words of the people who
+ * ## were handed it
+ *
+ * `landingLayout` is a CSS override: one attribute on the same `<main>`, the
+ * same twelve block components in the same order, the same DOM. It moves the
+ * rhythm — opener height, ranged vs centred, cards vs hairlines — and that is
+ * genuinely a different page to LOOK at. It is not a different page to
+ * RECOGNISE. Stand `classic`, `editorial` and `compact` next to each other
+ * with three different hues on them and the shared skeleton still shows
+ * through: the same eyebrow over the same rotating headline over the same stat
+ * row, the same three-up course grid, the same accordion at the bottom. The
+ * instructors said the quiet part out loud — a recoloured, reshaped version of
+ * the same page is still recognisably the same site, and a site that is
+ * recognisably somebody else's is not a brand.
+ *
+ * ## `classic` is the default, and that is load-bearing, not tidy
+ *
+ * Every `site_settings.data.branding` row in existence was written before this
+ * field did, so none of them carries a `landingPreset` key and all of them
+ * parse to `classic` — which reaches the exact component tree
+ * `app/(site)/page.tsx` renders today, through the exact same code path. A
+ * default of anything else would have swapped Ayman's live landing page — the
+ * one with real students and real money on it — on the first deploy, silently,
+ * with nobody having touched a setting. `.strict()` on `BrandingSchema` means
+ * the new key cannot arrive from anywhere except a save that meant it.
+ *
+ *   · `classic` — what the platform ships and what every stored row means.
+ *                 `page.tsx` falls through to the return statement it has
+ *                 today and `landingLayout` does its work inside it.
+ *   · `neon`    — «الترمينال». A page that never turns light: it ignores
+ *                 `data-theme` on purpose, so there is no light variant to
+ *                 design and no pale flash on the way into one.
+ *   · `board`   — «اللوح». Solid colour blocks, everything centred, bright —
+ *                 closer to a poster than to a product site.
+ *
+ * The two alternates live in their own page components under
+ * `apps/web/components/site/presets/`, imported ONLY inside their own branch,
+ * so choosing `classic` neither loads nor evaluates a byte of either.
+ */
+export const LANDING_PRESETS = ['classic', 'neon', 'board'] as const;
+export const LandingPresetSchema = z.enum(LANDING_PRESETS);
+export type LandingPreset = z.infer<typeof LandingPresetSchema>;
 
 /** Radius presets. Every preset keeps the card ceiling at ≤ 8px. */
 export const RADIUS_SLOTS = ['sharp', 'default', 'soft'] as const;
@@ -123,7 +184,13 @@ export const BrandingSchema = z
     accent: AccentSlotSchema.default('amber'),
     /** Overrides `accent` when set. See `AccentHueSchema`. */
     accentHue: AccentHueSchema,
-    /** The landing page's shape. See `LandingLayoutSchema`. */
+    /**
+     * WHICH landing page. See `LandingPresetSchema` — and note that it is
+     * read BEFORE `landingLayout`: on `neon` and `board` the field below is
+     * never consulted at all.
+     */
+    landingPreset: LandingPresetSchema.default('classic'),
+    /** The shape of the `classic` page. See `LandingLayoutSchema`. */
     landingLayout: LandingLayoutSchema.default('classic'),
     radius: RadiusSlotSchema.default('default'),
     logoLightAssetId: assetId,

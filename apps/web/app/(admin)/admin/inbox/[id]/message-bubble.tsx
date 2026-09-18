@@ -14,6 +14,7 @@ import { Button } from '@ayman/ui/components/button';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { MessageBody } from '@/components/assistant/message-body';
 import { MessageAttachmentView } from '@/components/assistant/message-attachment';
+import { tenantName } from '@/lib/tenant';
 import { inboxTimeFormatter } from '../status-chip';
 import { deleteMessageAction, editMessageAction, setReactionAction } from '../actions';
 
@@ -173,8 +174,20 @@ export function MessageBubble({
 
   return (
     <li className={cn('group flex flex-col gap-1', fromVisitor ? 'items-start' : 'items-end')}>
+      {/*
+        The same byline the student sees in `assistant-thread.tsx`, read from
+        the same key and gated the same way — and it has to be, because these
+        two screens render the two ends of ONE conversation. Gating only the
+        student's side would leave a tenant looking at «مهندس أيمن» over
+        replies she is typing in her own inbox, which is not merely a leak: it
+        is the screen where she would conclude that the platform had been
+        sending messages in a stranger's name.
+
+        `tenantName()` hands his stack «مهندس أيمن» back verbatim, so his own
+        inbox is unchanged.
+      */}
       <span className="flex items-center gap-1.5 px-1 text-[length:var(--fs-text-xs)] text-fg-faint">
-        {fromVisitor ? who : copy.assistant.thread.ayman}
+        {fromVisitor ? who : tenantName(copy.assistant.thread.ayman)}
       </span>
 
       <div className={cn('flex items-center gap-1.5', fromVisitor ? '' : 'flex-row-reverse')}>

@@ -132,13 +132,75 @@ export class AuditService {
    * leaves the first check passing and the second failing, which is exactly
    * why both are needed.
    */
-  async verifyChain(): Promise<{ ok: true } | { ok: false; brokenAtId: string }> {
+  async verifyChain(options?: {
+    fromId?: bigint;
+  }): Promise<{ ok: true } | { ok: false; brokenAtId: string }> {
+    /*
+     * ── Verifying a RANGE, and what it does and does not prove ─────────────
+     *
+     * With no `fromId` this walks from the first row and anchors on `null`,
+     * which is the full guarantee: every row intact, no row removed, back to
+     * genesis. That is the default, and the only answer worth giving when the
+     * question is «هل الترail اتلمس؟».
+     *
+     * `fromId` starts at that row and takes ITS OWN stored `prevHash` as the
+     * anchor. So it proves every link from there forward — no row inside the
+     * range altered, none removed from inside it — and proves NOTHING about
+     * what came before it. It cannot: the anchor it trusts is a value that
+     * lives inside the range being checked.
+     *
+     * Two reasons it exists, and the second is the one that forced it.
+     *
+     *   · A full walk is O(table) and re-hashes every row ever written. The
+     *     trail only grows, so that endpoint gets slower forever and nothing
+     *     ever makes it faster again. A range is what you actually want when
+     *     the question is «آخر ساعة نضيفة؟».
+     *
+     *   · This trail can be UNREPAIRABLY broken by one write, and on the dev
+     *     database it already was. `audit.service.spec.ts` asserts that the
+     *     runtime role CANNOT run `UPDATE app.audit_log SET outcome =
+     *     'tampered'` — no WHERE clause, because the statement is meant to be
+     *     rejected. On a machine where the role still held UPDATE it
+     *     succeeded, and 135,603 rows took that value. The originals are gone;
+     *     no recompute brings them back, and a full `verifyChain()` on that
+     *     database is false forever.
+     *
+     *     (The grant is closed now — `docker-entrypoint.sh` was re-granting
+     *     UPDATE and DELETE on every table AFTER `prisma migrate deploy`,
+     *     undoing the append-only REVOKEs the migrations had just applied.
+     *     `attempt_events` survived through a trigger; `audit_log` had none,
+     *     so the trail was writable in production too.)
+     *
+     *     A spec that asserts over the whole table is therefore asserting on
+     *     damage it cannot undo and did not cause. Each one verifies the rows
+     *     it wrote itself instead.
+     */
     let cursor: bigint | undefined;
     let expectedPrev: string | null = null;
+
+    if (options?.fromId !== undefined) {
+      const anchor = await this.prisma.auditLog.findUnique({
+        where: { id: options.fromId },
+        select: { prevHash: true },
+      });
+      // A `fromId` naming no row is a caller bug, not an intact chain —
+      // `{ ok: true }` would be the most reassuring possible answer to a
+      // question nobody asked.
+      if (anchor === null) return { ok: false, brokenAtId: options.fromId.toString() };
+      expectedPrev = anchor.prevHash;
+    }
+
+    // A `where` floor rather than a cursor for the first page: Prisma's cursor
+    // is exclusive and has to NAME AN EXISTING ROW, so `fromId - 1` would
+    // throw on the very case this is for — a range whose predecessor was the
+    // row that got deleted.
+    const floor: { id: { gte: bigint } } | undefined =
+      options?.fromId === undefined ? undefined : { id: { gte: options.fromId } };
 
     for (;;) {
       const page = await this.prisma.auditLog.findMany({
         take: VERIFY_PAGE_SIZE,
+        where: floor,
         ...(cursor === undefined ? {} : { skip: 1, cursor: { id: cursor } }),
         orderBy: { id: 'asc' },
       });

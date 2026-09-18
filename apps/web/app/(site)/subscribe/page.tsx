@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { tenantSentence } from '@/lib/tenant-copy';
 import Link from 'next/link';
 import { copy } from '@ayman/contracts';
 import { JsonLd } from '@/components/seo/json-ld';
@@ -10,7 +11,11 @@ import { subscribeSteps, subscribeFaqRows, subscribeRails } from '@/lib/subscrib
 const c = copy.subscribePage;
 
 export async function generateMetadata(): Promise<Metadata> {
-  return buildMetadata({ title: c.metaTitle, description: c.metaDescription, path: '/subscribe' });
+  return buildMetadata({
+    title: tenantSentence(c.metaTitle),
+    description: tenantSentence(c.metaDescription),
+    path: '/subscribe',
+  });
 }
 
 /**

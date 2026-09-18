@@ -5,17 +5,46 @@ import { waMeHref } from '@ayman/contracts/whatsapp';
 import { SAME_AS } from '@ayman/contracts/site-profiles';
 import { mediaUrl } from '@ayman/ui/branding';
 import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
+import { aymanOnly, IS_AYMAN, tenantName } from '@/lib/tenant';
+import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
+import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 
-/**
- * The site origin. Nothing else in the app is host-aware, so switching to a
- * real domain is one environment variable.
+/*
+ * Re-exported, not defined here any more — see `./site-url` for the cycle this
+ * broke. Every existing `import { SITE_URL } from './jsonld'` keeps working.
  */
-export const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3200').replace(
-  /\/$/,
-  '',
-);
+export { SITE_URL } from './site-url';
+import { SITE_URL } from './site-url';
 
 const absolute = (path: string): string => `${SITE_URL}${path}`;
+
+/**
+ * His face — `public/team/ayman.jpg` — or nothing at all on a stack that is not
+ * his.
+ *
+ * This one file was doing three jobs: the `Person`'s `image`, and BOTH the
+ * `image` and the `logo` of the `EducationalOrganization`. Structured data is
+ * the worst possible place for a personal photograph to leak, because it is not
+ * read by a reader who can tell it is wrong — it is read by Google, stored
+ * against the entity, and rendered later in a knowledge panel and in an
+ * assistant's answer, long after the page it came from has changed. A second
+ * instructor's stack publishing his portrait as its own `logo` would be
+ * claiming, in the one format built to be believed, that his face is their
+ * organisation's mark.
+ *
+ * `undefined` rather than a generic placeholder, and the call sites SPREAD it
+ * away rather than emitting the key: `"image": null` is a validator error where
+ * a missing `image` is simply a property Google does not have — the same
+ * distinction `articleJsonLd` already makes below, and the one its spec pins
+ * with `not.toHaveProperty('image')`.
+ *
+ * There is no fallback mark to put here. `logo` is the field Google wants for a
+ * knowledge-panel thumbnail, so a non-Ayman deployment loses that until it has
+ * a mark of its own to publish — which is the right trade: an organisation with
+ * no logo in its structured data is incomplete, and one with a stranger's is
+ * wrong.
+ */
+const INSTRUCTOR_IMAGE = aymanOnly(absolute('/team/ayman.jpg'));
 
 /**
  * The subset of `CatalogCourse` the JSON-LD builders actually read — a
@@ -207,7 +236,23 @@ function sameAsFrom(contact?: ProfilesForJsonLd): readonly string[] {
   const live = [contact?.facebook, contact?.youtube, contact?.instagram, contact?.tiktok].filter(
     (url): url is string => typeof url === 'string' && url.trim().length > 0,
   );
-  return live.length > 0 ? live : SAME_AS;
+  if (live.length > 0) return live;
+
+  /*
+   * ⚠️ The FALLBACK is gated, not the live read.
+   *
+   * Main's note above is right that the settings row is the newer copy and
+   * that `SAME_AS` on a tenant stack asserts his identity. What it leaves open
+   * is this line: during `next build` the API is unreachable and `contact`
+   * arrives EMPTY, so every tenant's first prerender fell straight through to
+   * his four accounts — the exact claim the docblock says must not be made,
+   * made in the window nobody looks at.
+   *
+   * `TENANT_CONTACT_FALLBACK` is the same gated seed the footer and `/links`
+   * have used since the contact fix, so a tenant falls back to ITS OWN
+   * configured profiles and to nothing at all when it has none.
+   */
+  return IS_AYMAN ? SAME_AS : TENANT_SAME_AS;
 }
 
 function withSameAs<T extends object>(
@@ -217,6 +262,40 @@ function withSameAs<T extends object>(
   const sameAs = sameAsFrom(contact);
   return sameAs.length > 0 ? { ...entity, sameAs } : entity;
 }
+
+/**
+ * The eleven spellings of his name, on his stack only.
+ *
+ * Not prose that happens to mention him — a LIST OF HIS NAMES, assembled
+ * deliberately and published on three entities at once so a crawler cannot
+ * miss the association. From another instructor's domain it does exactly the
+ * job it was built to do, for the wrong person.
+ *
+ * Dropped whole rather than replaced: `alternateName` means "also known as",
+ * and a second stack has supplied no aliases. `alternateName: []` is a claim
+ * of "no other names", so every consumer spreads the key away entirely.
+ */
+const ALTERNATE_NAMES = aymanOnly(copy.seo.alternateNames);
+
+/**
+ * His CV, on his stack only — `description` on the `Person` node.
+ *
+ * Eight years as a software engineer, a named faculty, GDG, Microsoft Egypt.
+ * Every clause is a checkable fact ABOUT HIM, which is what makes it the
+ * sentence an assistant quotes back when a student asks who teaches this
+ * subject. On another stack it stops being a fact and becomes a fabricated
+ * biography attached to a stranger — worse than saying nothing, because a
+ * student acts on it. Gated OUT, not renamed: there is no generic CV.
+ */
+const PERSON_DESCRIPTION = aymanOnly(copy.seo.personDescription);
+
+/** A tenant's own four, from the same gated seed the footer reads. */
+const TENANT_SAME_AS: readonly string[] = [
+  TENANT_CONTACT_FALLBACK.youtube,
+  TENANT_CONTACT_FALLBACK.instagram,
+  TENANT_CONTACT_FALLBACK.tiktok,
+  TENANT_CONTACT_FALLBACK.facebook,
+].filter((url): url is string => url !== null);
 
 /**
  * The instructor as a distinct entity from the platform.
@@ -246,15 +325,37 @@ export function personJsonLd(contact?: ProfilesForJsonLd) {
      * name parts below are stated rather than derived because «أبو العلا» is
      * two words of one family name and every whitespace split gets it wrong.
      */
-    name: copy.site.name,
-    honorificPrefix: copy.seo.personHonorific,
-    givenName: copy.seo.personGivenName,
-    familyName: copy.seo.personFamilyName,
-    alternateName: copy.seo.alternateNames,
+    /*
+     * ⚠️ The four name PARTS below are his, and they are spread away rather
+     * than swapped on a tenant stack.
+     *
+     * `name` takes `tenantName()` because every entity needs one. The rest
+     * cannot be derived: `personGivenName` / `personFamilyName` are stated
+     * rather than split precisely because «أبو العلا» is two words of one
+     * family name, so there is no rule that turns an arbitrary
+     * `TENANT_DISPLAY_NAME` into the same three fields. `honorificPrefix` is
+     * a title this deployment has not claimed.
+     *
+     * Emitting them for a tenant would publish a structured claim about a
+     * person who does not exist — a family name nobody has, under a name that
+     * does. Absent is accurate.
+     */
+    name: tenantName(copy.site.name),
+    ...(IS_AYMAN
+      ? {
+          honorificPrefix: copy.seo.personHonorific,
+          givenName: copy.seo.personGivenName,
+          familyName: copy.seo.personFamilyName,
+        }
+      : {}),
+    ...(ALTERNATE_NAMES ? { alternateName: ALTERNATE_NAMES } : {}),
     url: SITE_URL,
-    image: absolute('/team/ayman.jpg'),
+    ...(INSTRUCTOR_IMAGE ? { image: INSTRUCTOR_IMAGE } : {}),
+    // `jobTitle` stays ungated: «مدرّس البرمجة وعلوم الحاسب» describes the job
+    // any instructor on this platform holds, and it is the one line that keeps
+    // a gated Person node from being an entity with a name and nothing else.
     jobTitle: copy.seo.jobTitle,
-    description: copy.seo.personDescription,
+    ...(PERSON_DESCRIPTION ? { description: PERSON_DESCRIPTION } : {}),
     knowsLanguage: ['ar', 'en'],
     /**
      * ⚠️ This list used to be the four topics a programming teacher generically
@@ -299,11 +400,29 @@ export function personJsonLd(contact?: ProfilesForJsonLd) {
       occupationalCategory: '25-2031.00',
       occupationLocation: { '@type': 'Country', name: 'Egypt' },
     },
-    alumniOf: {
-      '@type': 'CollegeOrUniversity',
-      name: copy.seo.alumniOfName,
-      alternateName: 'MTI University',
-    },
+    /*
+     * ⚠️ HIS STACK ONLY, for the same reason as `PERSON_DESCRIPTION` above and
+     * more literally: this names the university HE graduated from. There is no
+     * tenant variable to substitute and no honest default — a second
+     * instructor's degree is not ours to assert, and asserting his is a
+     * qualification invented for somebody who never claimed it.
+     *
+     * `hasOccupation` immediately above stays, because it is built from
+     * `jobTitle` and says only that the person teaches this subject, which is
+     * true of whoever runs the deployment. The difference is the test the
+     * comment there already sets out: a claim belongs in this node when a
+     * reader can check it. «graduated from MTI» is checkable and false on
+     * another stack; «teaches programming» is checkable and true.
+     */
+    ...(IS_AYMAN
+      ? {
+          alumniOf: {
+            '@type': 'CollegeOrUniversity',
+            name: copy.seo.alumniOfName,
+            alternateName: 'MTI University',
+          },
+        }
+      : {}),
     worksFor: { '@id': ORGANIZATION_ID },
     /**
      * Which page is ABOUT him. `/about` already declares the inverse with
@@ -392,13 +511,12 @@ export function organizationJsonLd(
     '@context': 'https://schema.org',
     '@type': 'EducationalOrganization',
     '@id': ORGANIZATION_ID,
-    name: copy.site.platformName,
-    alternateName: copy.seo.alternateNames,
+    name: tenantName(copy.site.platformName),
+    ...(ALTERNATE_NAMES ? { alternateName: ALTERNATE_NAMES } : {}),
     url: SITE_URL,
-    description: copy.seo.description,
+    description: SITE_DESCRIPTION,
     slogan: copy.site.tagline,
-    image: absolute('/team/ayman.jpg'),
-    logo: absolute('/team/ayman.jpg'),
+    ...(INSTRUCTOR_IMAGE ? { image: INSTRUCTOR_IMAGE, logo: INSTRUCTOR_IMAGE } : {}),
     founder: { '@id': PERSON_ID },
     inLanguage: 'ar',
     areaServed: { '@type': 'Country', name: 'Egypt' },
@@ -423,10 +541,10 @@ export function webSiteJsonLd() {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     '@id': WEBSITE_ID,
-    name: copy.site.platformName,
-    alternateName: copy.seo.alternateNames,
+    name: tenantName(copy.site.platformName),
+    ...(ALTERNATE_NAMES ? { alternateName: ALTERNATE_NAMES } : {}),
     url: SITE_URL,
-    description: copy.seo.description,
+    description: SITE_DESCRIPTION,
     inLanguage: 'ar',
     publisher: { '@id': ORGANIZATION_ID },
   } as const;
@@ -659,7 +777,11 @@ const personRef = (): EntityRef => ({
 const organizationRef = (): EntityRef => ({
   '@id': ORGANIZATION_ID,
   '@type': 'EducationalOrganization',
-  name: copy.site.platformName,
+  // ⚠️ Gated like the two full Organization nodes above it. This is the SHORT
+  // reference, emitted as `provider` / `publisher` on every course, article and
+  // glossary page — so the one that was missed appeared on more pages than the
+  // two that were not.
+  name: tenantName(copy.site.platformName),
 });
 
 /**
@@ -687,7 +809,7 @@ export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolea
     : {
         '@type': 'EducationalOrganization',
         '@id': ORGANIZATION_ID,
-        name: copy.site.platformName,
+        name: tenantName(copy.site.platformName),
         url: SITE_URL,
       };
 

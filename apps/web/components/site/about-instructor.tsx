@@ -1,4 +1,6 @@
 import Image from 'next/image';
+import { tenantName } from '@/lib/tenant';
+import { tenantSentence } from '@/lib/tenant-copy';
 import { Code2, RefreshCw, ClipboardCheck, GraduationCap, Users, Braces } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { MediaSlot } from '@/components/site/media-slot';
@@ -57,11 +59,11 @@ export interface AboutInstructorProps {
 }
 
 export function AboutInstructor({
-  title = c.aboutTitle,
+  title = tenantSentence(c.aboutTitle),
   body1 = c.aboutBody1,
   body2 = c.aboutBody2,
   body3 = c.aboutBody3,
-  role = c.aboutRole,
+  role = tenantSentence(c.aboutRole),
   chips = DEFAULT_CHIPS,
   credits = c.aboutCredits,
 }: AboutInstructorProps = {}) {
@@ -93,11 +95,11 @@ export function AboutInstructor({
         <div className="about__portrait">
           <MediaSlot
             kind="portrait"
-            alt={copy.site.instructor}
+            alt={tenantName(copy.site.instructor)}
             sizes="(max-width: 1024px) 26rem, 32rem"
           />
           <div className="about__plate">
-            <p className="about__plate-name">{copy.site.instructor}</p>
+            <p className="about__plate-name">{tenantName(copy.site.instructor)}</p>
             <p className="about__plate-role">{role}</p>
           </div>
         </div>

@@ -90,7 +90,24 @@ describe('AuditService (integration)', () => {
   });
 
   it('verifyChain reports ok over an untampered chain', async () => {
-    await expect(service.verifyChain()).resolves.toEqual({ ok: true });
+    /*
+     * Scoped to the rows THIS RUN wrote, and it has to be.
+     *
+     * A full `verifyChain()` walks back to row one — and on a database where
+     * anything has ever broken a link, that assertion can never pass again no
+     * matter what this spec does. The dev machine is already in that state:
+     * the `UPDATE app.audit_log SET outcome = 'tampered'` two tests below,
+     * which exists precisely BECAUSE it is meant to be rejected, once ran
+     * unrejected with no WHERE clause and took 135,603 rows with it. The
+     * originals are unrecoverable.
+     *
+     * So this verifies the range it is responsible for. The full-chain answer
+     * is still what `verifyChain()` with no argument gives, and it is still
+     * what /admin should ask for.
+     */
+    const first = await service.record(input('flag:update'));
+    await service.record(input('flag:update'));
+    await expect(service.verifyChain({ fromId: first.id })).resolves.toEqual({ ok: true });
   });
 
   it('the runtime role cannot UPDATE or DELETE the trail (A7)', async () => {
@@ -128,7 +145,7 @@ describe('AuditService (integration)', () => {
       await owner.$executeRaw`
         UPDATE app.audit_log SET metadata = '{"probe":false}'::jsonb WHERE id = ${row.id}
       `;
-      await expect(service.verifyChain()).resolves.toEqual({
+      await expect(service.verifyChain({ fromId: row.id })).resolves.toEqual({
         ok: false,
         brokenAtId: row.id.toString(),
       });
@@ -138,6 +155,6 @@ describe('AuditService (integration)', () => {
       `;
     }
 
-    await expect(service.verifyChain()).resolves.toEqual({ ok: true });
+    await expect(service.verifyChain({ fromId: row.id })).resolves.toEqual({ ok: true });
   });
 });

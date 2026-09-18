@@ -13,7 +13,7 @@ import {
 import { LocalDiskStorage } from '../modules/media/storage/local-disk.storage';
 import { loadEnv } from '../config/env';
 import { SITE_SETTINGS_ID } from '../modules/admin/admin.constants';
-import { TENANT_CONTACT_SEED } from './seed-data/tenant-contact';
+import { SEEDS_OFFICIAL_SEO, TENANT_CONTACT_SEED } from './seed-data/tenant-contact';
 
 // Prisma 7 requires a driver adapter at construction time (see Task 8's
 // prisma.service.ts) — bare `new PrismaClient()` throws. Seeding is pure DML
@@ -459,14 +459,32 @@ async function main(): Promise<void> {
   if (settingsRow) {
     const current = SiteSettingsSchema.parse(settingsRow.data ?? {});
 
-    const seo = {
-      ...current.seo,
-      titleAr: current.seo.titleAr || copy.seo.defaultTitle,
-      // `homeDescription`, not `description`: `SeoSchema` caps this at 160
-      // characters and the longer one is 200+, so it would fail validation the
-      // first time an admin opened the form and pressed save.
-      descriptionAr: current.seo.descriptionAr || copy.seo.homeDescription,
-    };
+    /**
+     * ⚠️ Gated, and it is not the same shape as the `contact` gate below.
+     *
+     * `copy.seo.defaultTitle` and `copy.seo.homeDescription` are not neutral
+     * platform copy — both weld Ayman's name into the middle of a sentence.
+     * Seeding them into a second instructor's empty row put his name in that
+     * platform's `<title>`, `og:title` and meta description on first boot, and
+     * because `buildMetadata` resolves `adminTitle || SITE_TITLE` the stored
+     * string then BEAT the tenant-aware fallback in `lib/seo/metadata.ts`.
+     * Every gate on the page was correct and the tab still read his name.
+     *
+     * So a non-Ayman stack seeds NOTHING here and the web falls back to
+     * `SITE_TITLE`, built from `TENANT_DISPLAY_NAME`. `SEEDS_OFFICIAL_SEO`
+     * lives beside `TENANT_CONTACT_SEED` so the two decisions are read
+     * together — see the long note there.
+     */
+    const seo = SEEDS_OFFICIAL_SEO
+      ? {
+          ...current.seo,
+          titleAr: current.seo.titleAr || copy.seo.defaultTitle,
+          // `homeDescription`, not `description`: `SeoSchema` caps this at 160
+          // characters and the longer one is 200+, so it would fail validation
+          // the first time an admin opened the form and pressed save.
+          descriptionAr: current.seo.descriptionAr || copy.seo.homeDescription,
+        }
+      : current.seo;
 
     const contact = {
       ...current.contact,

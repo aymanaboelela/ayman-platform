@@ -72,6 +72,40 @@ function envContact(key: string, official: string): string | null {
   return INHERITS_OFFICIAL_PROFILES ? official : null;
 }
 
+/**
+ * Whether this deployment seeds the SHIPPED page title and meta description.
+ *
+ * ## The leak this closes
+ *
+ * `seed.ts` fills `site_settings.seo` the same fill-if-empty way it fills
+ * `contact`, out of `copy.seo.defaultTitle` and `copy.seo.homeDescription` —
+ * two strings with AYMAN'S NAME WELDED INTO THE MIDDLE OF THEM:
+ *
+ *   «منصة أيمن أبو العلا — البرمجة وعلوم الحاسب للبكالوريا المصرية»
+ *   «البرمجة وعلوم الحاسب صح مع المهندس أيمن أبو العلا: …»
+ *
+ * The seed runs on EVERY container boot, and the migration that creates the
+ * singleton settings row leaves `seo` empty — so a fresh instructor's platform
+ * came up with his name as its `<title>`, its `og:title` and its meta
+ * description. Worse, `buildMetadata` resolves `adminTitle || SITE_TITLE`, so
+ * the stored string BEATS the gated fallback in `lib/seo/metadata.ts`: gating
+ * the code path could never have been enough while the database itself held
+ * the name.
+ *
+ * Found by running a second instructor's stack locally — every name gate on
+ * the page read correctly and the browser tab still said «منصة أيمن أبو العلا».
+ *
+ * ## Why nothing rather than a generated title
+ *
+ * A non-Ayman stack seeds NOTHING. `SeoSchema` allows both fields empty and
+ * `buildMetadata` already falls back to `SITE_TITLE`, which is built from
+ * `TENANT_DISPLAY_NAME` — so the page gets that deployment's own name without
+ * a second place deciding what it is. Writing a generated title into the row
+ * would make the database the authority and leave the admin editing a
+ * sentence nobody chose.
+ */
+export const SEEDS_OFFICIAL_SEO = INHERITS_OFFICIAL_PROFILES;
+
 export const TENANT_CONTACT_SEED = {
   youtube: envContact('TENANT_YOUTUBE', OFFICIAL_PROFILES.youtube),
   instagram: envContact('TENANT_INSTAGRAM', OFFICIAL_PROFILES.instagram),

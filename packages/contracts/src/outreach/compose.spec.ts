@@ -14,6 +14,7 @@ import {
   NUDGE_CLOSERS,
   NUDGE_OPENERS,
   OUTREACH_GREETINGS,
+  OUTREACH_SIGNATURE,
   PRAISE_BODIES,
   PRAISE_CLOSERS,
   PRAISE_OPENERS,
@@ -62,6 +63,11 @@ const RESULT: OutreachFacts = {
 function input(overrides: Partial<ComposeInput> = {}): ComposeInput {
   return {
     firstName: 'محمد',
+    // What `OutreachService` passes on Ayman's own stack —
+    // `tenantName(OUTREACH_SIGNATURE)` returns the fallback unchanged there.
+    // Every assertion below is therefore about the messages his live students
+    // actually receive; the gate itself is asserted separately.
+    instructorName: OUTREACH_SIGNATURE,
     facts: RESULT,
     recentVariantKeys: [],
     whatsappUrl: null,
@@ -83,6 +89,34 @@ function sequence(count: number, overrides: Partial<ComposeInput> = {}) {
   }
   return { history, bodies };
 }
+
+/**
+ * Every sentence the composer can draw, in one list.
+ *
+ * Module scope rather than inside one `describe`, because two different
+ * tripwires now read it — the gender check below, and the tenant-identity
+ * check in «content», which asserts that no pool entry welds the SENDER'S name
+ * into a sentence `compose.ts` would then have no way to take back out.
+ */
+const EVERY_LINE: readonly string[] = [
+  ...OUTREACH_GREETINGS,
+  ...QUIZ_RESULT_OPENERS,
+  ...Object.values(QUIZ_SCORE_LINES).flat(),
+  ...FOCUS_INTROS,
+  ...FOCUS_TAILS,
+  ...STRENGTH_LINES,
+  ...Object.values(QUIZ_CLOSERS).flat(),
+  ...NUDGE_OPENERS,
+  ...NUDGE_BODIES,
+  ...NUDGE_CLOSERS,
+  ...PRAISE_OPENERS,
+  ...PRAISE_BODIES,
+  ...PRAISE_CLOSERS,
+  ...WHATSAPP_OPENERS,
+  ...WHATSAPP_BODIES,
+  ...WHATSAPP_CLOSERS,
+  ...WHATSAPP_TAGALONGS,
+];
 
 describe('composeOutreach — variety', () => {
   it('never opens two consecutive messages the same way', () => {
@@ -334,9 +368,53 @@ describe('composeOutreach — content', () => {
 
   it('calls him مهندس أيمن when it names him at all', () => {
     // «أيمن» on its own reads like a system that only has a database column.
-    for (const greeting of OUTREACH_GREETINGS) {
-      if (!greeting.includes('أيمن')) continue;
-      expect(greeting).toContain('مهندس أيمن');
+    // The spelling moved into `OUTREACH_SIGNATURE` when the tenant gate landed;
+    // asserting it over the POOL would now pass vacuously, because no pool
+    // entry carries the name any more — which is the point of the next test.
+    expect(OUTREACH_SIGNATURE).toContain('مهندس');
+  });
+
+  it('never welds the sender’s name into a pool entry', () => {
+    /*
+     * THE GATE, asserted at the only place it can be: the pools.
+     *
+     * `compose.ts` has no way to remove a name that is already inside a
+     * sentence, so the whole tenant gate rests on every mention of the sender
+     * arriving through `{instructor}`. It did not, for the entire life of this
+     * feature — «إزيك يا {name}، أنا مهندس أيمن» was entry 4 of 8 and the
+     * composer had no gate of any kind, so one automated message in eight from
+     * EVERY instructor's platform introduced itself as Ayman, persisted by
+     * `OutreachService.deliver` and sent.
+     *
+     * Checked over every pool rather than over the greetings, so a closer or a
+     * score line that one day signs off by name is caught the day it lands.
+     */
+    for (const line of EVERY_LINE) {
+      expect(line, `«${line}» hardcodes the sender — use {instructor}`).not.toContain('أيمن');
+    }
+  });
+
+  it('sends a different stack’s messages under a different name', () => {
+    /*
+     * The gate from the OUTPUT side, which is what a student actually reads.
+     * Every kind, and enough seeds to walk each pool more than once, because
+     * which entry is drawn is a hash of ids that differ every run — the same
+     * reason the gender tripwire below loops rather than asserting one body.
+     */
+    const kinds: OutreachFacts[] = [
+      RESULT,
+      { kind: 'quiz_nudge', lessonTitle: 'الدوال' },
+      { kind: 'lesson_praise', lessonTitle: 'الدوال' },
+      { kind: 'whatsapp_invite' },
+    ];
+
+    for (const facts of kinds) {
+      for (let index = 0; index < 40; index += 1) {
+        const body = composeOutreach(
+          input({ facts, instructorName: 'محمد صبري', seed: `t${index}` }),
+        ).body;
+        expect(body, `a second instructor's message names Ayman: ${body}`).not.toContain('أيمن');
+      }
     }
   });
 

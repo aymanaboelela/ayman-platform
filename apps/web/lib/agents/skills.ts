@@ -6,6 +6,7 @@ import {
 } from '@/lib/agents/markdown-routes';
 import { AGENT_DISCOVERY_PATHS, PUBLIC_API_ENDPOINTS } from '@/lib/agents/discovery';
 import { SITE_URL } from '@/lib/seo/jsonld';
+import { IS_AYMAN, tenantName } from '@/lib/tenant';
 
 /**
  * The skills published at `/.well-known/agent-skills/` (Agent Skills Discovery
@@ -40,8 +41,26 @@ const endpointTable = PUBLIC_API_ENDPOINTS.map(
 
 const BROWSE_CATALOG: AgentSkill = {
   name: 'browse-catalog',
-  description:
-    "Find and describe the published courses on Ayman Abo El Ela's platform — Egyptian Bakalorya computer science and programming — using the public, unauthenticated catalog API.",
+  /*
+   * ⚠️ The Latin spelling of his name, hardcoded, served publicly at
+   * `/.well-known/agent-skills/` — and invisible to every grep anyone was
+   * likely to run for «أيمن أبو العلا». The note at the top of this file is
+   * why it was written that way: the body is English developer documentation
+   * rather than product copy, and the rule it states («the Arabic it quotes
+   * comes from `copy.*`») was never applied to the English sentence around it.
+   *
+   * This is the FIRST sentence an agent reads when it decides whether this
+   * site is worth a round trip, which makes it the single highest-value place
+   * on the whole machine-readable surface to be carrying somebody else's name.
+   *
+   * Swapped rather than interpolated: `tenantName()` returns an ARABIC name,
+   * and dropping «المنصة» into the middle of an English sentence produces a
+   * mixed-direction string that renders wrong wherever an agent echoes it back.
+   * A second stack gets English that names no one; his is byte-identical.
+   */
+  description: IS_AYMAN
+    ? "Find and describe the published courses on Ayman Abo El Ela's platform — Egyptian Bakalorya computer science and programming — using the public, unauthenticated catalog API."
+    : 'Find and describe the courses published on this platform — Egyptian Bakalorya computer science and programming — using the public, unauthenticated catalog API.',
   body: `# Browse the course catalog
 
 The published catalog is open. No key, no session, no registration — the endpoints
@@ -72,8 +91,8 @@ Do not tell a student the lessons can be watched without an account. They cannot
 ## Answering in Arabic
 
 The platform is Arabic and RTL. Course titles, subject and track names all arrive in
-Arabic and should be quoted as-is rather than transliterated — "${copy.site.platformName}"
-is the platform, "${copy.site.instructor}" is the instructor.
+Arabic and should be quoted as-is rather than transliterated — "${tenantName(copy.site.platformName)}"
+is the platform, "${tenantName(copy.site.instructor)}" is the instructor.
 `,
 };
 

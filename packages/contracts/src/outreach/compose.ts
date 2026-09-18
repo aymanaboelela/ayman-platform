@@ -132,6 +132,44 @@ export type OutreachFacts =
 export interface ComposeInput {
   /** The student's first name. `firstNameOf` derives it from the account name. */
   firstName: string;
+  /**
+   * Who is sending, as the student should read it — «مهندس أيمن» on his stack,
+   * the deployment's own `TENANT_DISPLAY_NAME` on any other.
+   *
+   * ## Why this is a parameter and not something this file works out
+   *
+   * It is the ONE gate on this path, and until it existed there was none at
+   * all. `OUTREACH_GREETINGS` entry 4 introduced the sender BY NAME, `pickIndex`
+   * draws that pool uniformly, and `OutreachService.deliver` persists and sends
+   * whatever comes back — so every instructor's platform was telling roughly
+   * one student in eight «أنا مهندس أيمن», in the first person, in a thread
+   * they can reply to. Nothing about it looked broken from inside the code.
+   *
+   * The two shapes worth considering were a parameter and a `process.env` read
+   * inside `packages/contracts`. The env read loses twice:
+   *
+   *   · it FAILS OPEN wherever the variable is not inlined. This package is
+   *     bundled into the browser as well as loaded by the API, and `TENANT_KEY`
+   *     reaches web client code only because `apps/web/next.config.ts` lists it
+   *     under `env:` — nothing carries that guarantee to the next consumer of
+   *     `@ayman/contracts`. Failing open here means printing his name, which is
+   *     the single outcome the whole gate design is written upside-down to
+   *     prevent.
+   *   · it costs this function its purity, which the header above argues for at
+   *     length: the admin preview is honest only because it runs the REAL
+   *     composer, and a retried delivery is idempotent only because the same
+   *     inputs give the same body.
+   *
+   * So the callers that already sit beside the API's gate module resolve it
+   * once at module load and hand it in, and this file stays a pure function of
+   * its arguments.
+   *
+   * Interpolated as `{instructor}`, and offered to EVERY pool rather than only
+   * to the greetings — a closer that one day signs off by name then needs no
+   * change here, which is the reason for doing this as a placeholder instead of
+   * a conditional wrapped around one array entry.
+   */
+  instructorName: string;
   facts: OutreachFacts;
   /**
    * The `variantKey` of this student's previous messages, NEWEST FIRST.
@@ -228,7 +266,16 @@ export function composeOutreach(input: ComposeInput): ComposedOutreach {
     return pool[index]!;
   };
 
-  const vars: Record<string, string | number> = { name: input.firstName };
+  /*
+   * `instructor` sits beside `name` in the BASE vars, so it is spread into
+   * every `scoped` object below and is available to any pool. Only the one
+   * greeting uses it today; putting it here rather than at that call site is
+   * what stops the next line that wants it from reaching for a literal.
+   */
+  const vars: Record<string, string | number> = {
+    name: input.firstName,
+    instructor: input.instructorName,
+  };
   const blocks: string[][] = [[formatCopy(take('g', OUTREACH_GREETINGS), vars)]];
 
   const wantsGroup = shouldAddGroup(input, history);

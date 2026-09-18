@@ -10,6 +10,8 @@ import { ElectricCard } from '@/components/site/electric-card';
 import { TrackCardView, type TrackCard } from '@/components/site/track-card';
 import { TracksDragon, type DragonStage } from '@/components/site/tracks-dragon';
 import { DRAGON_IGNITES_AT, DRAGON_RIDE } from '@/lib/brand-assets';
+import { useRampHex } from '@/lib/ramp-color';
+import { IS_AYMAN } from '@/lib/tenant';
 
 const c = copy.landing;
 
@@ -44,8 +46,16 @@ const c = copy.landing;
  */
 const TRACK_RADIUS = 12;
 
-/** Ramp steps 400 and 600 as literals: the effect's `oklch(from …)` relative
- *  colour syntax needs a concrete colour, not a `var()` reference. */
+/** Concrete colours, because `ElectricBorder` assigns them to `ctx.strokeStyle`
+ *  and a canvas has no cascade to resolve a `var()` in — the effect's CSS half
+ *  (`oklch(from …)`) could take one, its canvas half cannot.
+ *
+ *  ⚠️ NOT ramp steps 400 and 600, whatever this comment used to claim. Measured
+ *  with `oklchToRgb`: `--p-400` is `#F8A84F` and `--p-500` is `#F28318`, so the
+ *  active border is a hand-picked value sitting between two rungs, nearest 500;
+ *  the flank is nearest 600 (`#E35D00`) and is not it either. They are AYMAN's
+ *  two oranges and nothing derived reproduces them, which is why `rampHex`
+ *  hands them back untouched on his stack — see the note there. */
 const ACTIVE_BORDER = '#F08A2E';
 const FLANK_BORDER = '#D25C10';
 
@@ -155,6 +165,13 @@ export function YearTracks() {
   // mounted.
   const wide = useMediaQuery('(min-width: 64rem)', false);
 
+  // The two card oranges, read off the tenant's own ramp after hydration —
+  // `useRampHex` rather than `rampHex` because `<ElectricCard>` puts this colour
+  // in a `style` attribute that the server renders; see the note on the hook.
+  // Both are no-ops on Ayman's stack, which keeps the literals above.
+  const activeBorder = useRampHex(500, ACTIVE_BORDER);
+  const flankBorder = useRampHex(600, FLANK_BORDER);
+
   useGsap(
     ({ scope, reduced }) => {
       // Both terms gate the glyph loop below, not just the dragon scene further
@@ -216,7 +233,17 @@ export function YearTracks() {
       // `brand-assets.ts` and there is no flight to scrub. The glyphs above do
       // not depend on it, which is why this check stayed below them rather than
       // moving up into the guard.
-      if (!DRAGON_RIDE) return;
+      //
+      // `IS_AYMAN` is the same question asked about the tenant rather than about
+      // the file: the rider in the clip is HIM, so `<TracksDragon>` renders
+      // nothing on anybody else's stack and every selector below would come back
+      // null. The tweens tolerate that — each one is behind an `if (dragon)`,
+      // `if (glow)` or `if (spot)` — but `land()` would still park `watchForFire`
+      // on GSAP's ticker to compare `-1` against the ignition time once a frame,
+      // for as long as the page stayed open, waiting on a dragon that cannot
+      // arrive. Nothing here has any meaning without the clip, so none of it is
+      // built.
+      if (!IS_AYMAN || !DRAGON_RIDE) return;
 
       const dragon = scope.querySelector<HTMLElement>('.tracks__dragon');
       const spot = scope.querySelector<HTMLElement>('.tracks__spot');
@@ -855,7 +882,25 @@ export function YearTracks() {
   );
 
   return (
-    <section className="tracks" id="years" ref={ref}>
+    <section
+      className="tracks"
+      id="years"
+      ref={ref}
+      /* ⚠️ THE BAND OF SKY GOES WITH THE DRAGON, and this is the hole the gate
+         in `<TracksDragon>` leaves behind.
+         `.tracks` opens with `padding-top: min(40vh, 22rem)` for one reason: the
+         creature has to have somewhere to fly DOWN through before it reaches the
+         stage. `sections.css` already zeroes it under 64rem — "no flight below
+         the breakpoint, so the sky would be a screen of empty page with nothing
+         in it" — and a stack that is not Ayman's is that same case at every
+         width, since the clip never renders for it at all.
+         Inline rather than a modifier class because the rule it has to beat
+         lives in `sections.css`, which this group does not own; a style
+         attribute wins on specificity without an `!important` anywhere. Ayman's
+         stack passes `undefined`, so React emits no attribute and his markup is
+         byte for byte what it was. */
+      style={IS_AYMAN ? undefined : { paddingTop: 0 }}
+    >
       <div className="tracks__wash" aria-hidden="true" />
       <div className="tracks__floor" aria-hidden="true" />
 
@@ -902,17 +947,17 @@ export function YearTracks() {
               so the centre card still reads as the primary choice rather than
               three cards competing at the same intensity. */}
           <div className="tracks__card tracks__card--start" data-track-card>
-            <ElectricCard color={FLANK_BORDER} radius={TRACK_RADIUS} speed={0.5} chaos={0.1}>
+            <ElectricCard color={flankBorder} radius={TRACK_RADIUS} speed={0.5} chaos={0.1}>
               <TrackCardView card={ESSENTIALS} />
             </ElectricCard>
           </div>
           <div className="tracks__card tracks__card--end" data-track-card>
-            <ElectricCard color={FLANK_BORDER} radius={TRACK_RADIUS} speed={0.5} chaos={0.1}>
+            <ElectricCard color={flankBorder} radius={TRACK_RADIUS} speed={0.5} chaos={0.1}>
               <TrackCardView card={YEAR_1} />
             </ElectricCard>
           </div>
           <div className="tracks__card tracks__card--active" data-track-card>
-            <ElectricCard color={ACTIVE_BORDER} radius={TRACK_RADIUS} speed={0.7} chaos={0.16}>
+            <ElectricCard color={activeBorder} radius={TRACK_RADIUS} speed={0.7} chaos={0.16}>
               <TrackCardView card={YEAR_2} />
             </ElectricCard>
           </div>

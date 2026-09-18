@@ -1,3 +1,5 @@
+import { aymanOnly } from '@/lib/tenant';
+
 /**
  * The marketing surface's image registry — the ONE place a photographic asset
  * path may appear.
@@ -171,8 +173,74 @@ export const brandAssets: Partial<Record<BrandAssetKind, BrandAsset>> = {
   // logo:     { src: '/brand/logo.svg',      width: 168,  height: 56 },
 };
 
+/**
+ * The kinds that are NOT a picture of the instructor.
+ *
+ * `logo` is the only one: a drawn wordmark is art about the PRODUCT, so a
+ * second instructor's stack can legitimately drop its own file in that slot and
+ * have this function hand it back. Every other entry in this registry is a
+ * photograph of Ayman — `hero` is him cut out over the set, `mark` is his face
+ * cropped for the nav circle, `portrait` is him at قصر البارون, `cutout` is by
+ * definition the instructor, and all three track posters carry him as well.
+ *
+ * ⚠️ AN ALLOWLIST OF THE GENERIC ONES, and the direction is the whole point. A
+ * kind that is not named here is treated as personal, so a slot added to this
+ * file next year inherits the safe answer without anybody remembering to come
+ * back. Written the other way round — a list of the personal kinds — a new
+ * photograph of him would ship to every stack until somebody noticed, and a
+ * stranger's face on somebody else's domain is the one mistake that cannot be
+ * taken back after the page is live.
+ */
+const GENERIC_ASSET_KINDS: ReadonlySet<BrandAssetKind> = new Set(['logo']);
+
+/**
+ * The registry's one reader, and therefore the one place his likeness is handed
+ * to a component — which is why the tenant gate lives here and not at five call
+ * sites that would each have to remember it.
+ *
+ * On any stack but his the personal kinds answer `undefined`, and `undefined`
+ * is a state every consumer has always rendered: `<MediaSlot>` draws the
+ * designed stand-in it ships for an unregistered slot, `<TrackCardView>` keeps
+ * the editor window the section shipped with, `<BrandLockup>` and
+ * `<AymanAvatar>` fall back to their monograms, and `/links` drops the avatar
+ * circle out of a centred flex column that closes up behind it. Nothing needed
+ * a new branch, because "the photography does not exist yet" was the state this
+ * whole file was written around.
+ *
+ * ## ⚠️ THE GATE IS ONLY AS STRONG AS THE SERVER RENDER, AND HERE THAT IS NOT
+ * ##    ENOUGH — SEE `next.config.ts`
+ *
+ * `TENANT_KEY` carries no `NEXT_PUBLIC_` prefix, so it is read correctly while
+ * the RSC payload is produced and is simply ABSENT from the browser bundle,
+ * where `TENANT_KEY` falls back to `'ayman'` and `IS_AYMAN` therefore falls
+ * back OPEN to `true`. `site-nav.tsx` carries the same warning about the name
+ * gate and concludes that the server HTML is what matters — that conclusion
+ * does NOT transfer to this function, and the difference is the one that bites:
+ *
+ * a name lands on an ATTRIBUTE (`alt`, `aria-label`), and React does not
+ * re-patch attribute mismatches during hydration. An asset lands on WHICH
+ * ELEMENT EXISTS — `<Image src="/brand/hero-ai-dragon-2.webp">` versus the
+ * `<HeroFallback>` stage. That is a structural mismatch, React discards the
+ * server subtree and re-renders it from the client, and his photograph appears
+ * on somebody else's landing page a few hundred milliseconds after first paint.
+ *
+ * Three `'use client'` files pull this function into the browser bundle today:
+ * `site-hero.tsx` (`hero`), `site-nav.tsx` (`mark`), and `year-tracks.tsx`
+ * (`cutout`, plus the three track posters through `<TrackCardView>`). The
+ * server-rendered surfaces — `about-instructor.tsx`, `instructor-profile.tsx`,
+ * `/links` — are already airtight.
+ *
+ * ⚠️ IT CANNOT BE CLOSED FROM INSIDE THIS FILE. Nothing written here changes
+ * whether the bundler has a value to substitute. The fix is one line where the
+ * build is configured — `env: { TENANT_KEY: process.env.TENANT_KEY ?? '' }` in
+ * `next.config.ts`, which inlines it into the client bundle exactly the way a
+ * `NEXT_PUBLIC_` variable is inlined, and the Dockerfile already passes the
+ * build arg. Until that lands, treat a non-`ayman` landing page as leaking
+ * above the fold, and do NOT add a fourth client call site.
+ */
 export function getBrandAsset(kind: BrandAssetKind): BrandAsset | undefined {
-  return brandAssets[kind];
+  const asset = brandAssets[kind];
+  return GENERIC_ASSET_KINDS.has(kind) ? asset : aymanOnly(asset);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -218,8 +286,38 @@ export const credentialLogos: Record<string, BrandAsset | undefined> = {
   avnology: { src: '/brand/logos/avnology.webp', width: 395, height: 96 },
 };
 
+/**
+ * ⚠️ `aymanOnly()`, for the same reason `getBrandAsset()` higher up this file
+ * has one — this is the registry's OTHER reader, and it was a bare lookup.
+ *
+ * These six marks are not the platform's furniture. They are HIS CV: the
+ * university that taught him, the two companies that employed him, and the
+ * student communities his university students came from. A logo is a claim of
+ * relationship, and it is a stronger claim than a sentence is — `MTI`,
+ * `Avnology` and `CCR` assert an employment history that belongs to one man,
+ * and Google's, Microsoft's and IEEE's registered marks assert an association
+ * with organisations that have never heard of this deployment. Rendered under
+ * «درّس لمين؟» on a second instructor's `/about`, every one of them is a
+ * statement about that instructor which is not true, made in somebody else's
+ * trademark.
+ *
+ * `undefined` is a state this file's one consumer has always handled:
+ * `<CredentialMark>` in `about-instructor.tsx` draws the monogram tile it
+ * already ships for an id with no file — same height, same plate, set in the
+ * platform's own type. Nothing else had to change, exactly as with
+ * `getBrandAsset()`.
+ *
+ * ⚠️ AND THAT IS ONLY HALF THE LEAK. The monogram tile prints `mark.short` and
+ * `mark.name`, which come from `copy.landing.aboutCredits` and are the
+ * organisations' NAMES — so a non-Ayman stack stops showing Google's logo and
+ * starts showing the word "Google" in a résumé rail that is still his. This
+ * gate removes the trademark, not the claim; the rail itself has to be gated
+ * where it is rendered, in `components/site/about-instructor.tsx`, which is
+ * outside this file and is recorded here so the next reader does not mistake
+ * a half-closed leak for a closed one.
+ */
 export function getCredentialLogo(id: string): BrandAsset | undefined {
-  return credentialLogos[id];
+  return aymanOnly(credentialLogos[id]);
 }
 
 /* -------------------------------------------------------------------------- */

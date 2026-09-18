@@ -4,29 +4,56 @@
    `branding.landingLayout` lands as `data-layout` on the landing page's
    `<main>`, and everything below answers it. Nothing here restyles a block's
    CONTENT; what changes is the rhythm the sections share — how tall the opener
-   is, whether headings sit ranged or centred, whether content sits in raised
-   cards or between hairlines, and how much air runs between sections.
+   is, whether headings sit ranged or centred, whether content sits on a tinted
+   band or between hairlines, and how much air runs between sections.
 
    ⚠️ `classic` HAS NO RULES IN THIS FILE, deliberately. It is what
-   `sections.css` already describes — Ayman's live page — and the whole point
-   is that choosing it changes not one byte of what he has. A `[data-layout]`
-   selector for it would be a second place his page is defined.
+   `theme.css` and `sections.css` already describe — Ayman's live page — and
+   the whole point is that choosing it changes not one byte of what he has. A
+   `[data-layout]` selector for it would be a second place his page is defined.
 
    Every rule is therefore scoped to `[data-layout="editorial"]` or
-   `[data-layout="compact"]`, and this file is imported AFTER `sections.css`
-   so it wins without needing `!important`.
+   `[data-layout="compact"]`, and this file is imported after `theme.css` and
+   `sections.css` in `app/(site)/layout.tsx` so it wins without needing
+   `!important`. (`books.css` is imported after it, but declares only
+   `.book-*` selectors, so nothing here is at risk from it.)
 
    Colours come from the SITE token layer only (`--site-*`, defined in
    `theme.css`) — the marketing surface has its own set and
    `lib/css-token-coverage.test.ts` fails the build on a name that is not
-   declared anywhere. These looks are shapes; the hue is
-   `accentHue`'s job and the two are independent — any layout works with any
-   colour.
+   declared anywhere. These looks are shapes; the hue is `accentHue`'s job and
+   the two are independent — any layout works with any colour.
+
+   ── The section and card vocabulary, because it is not guessable ──────────
+   The landing page is a list of BLOCKS (`app/(site)/page.tsx`), and nearly
+   every block component roots itself on the same class:
+
+     hero        → `.hero`                            (site-hero.tsx)
+     whyRail     → `.site-section site-section--tint rail`
+     courseGrid  → `.site-section site-section--tint` + `id="featured-courses"`
+     books       → `.site-section`                    (books-strip.tsx)
+     instructor  → `.site-section profile`
+     yearTracks  → `.tracks`                          (year-tracks.tsx)
+     honorBoard  → `.site-section`  + `id="honor-board"`
+     about       → `.site-section site-section--tint` + `id="about"`
+     faq         → `.site-section`  + `id="faq"`
+
+   So the one section-level hook is `.site-section`, plus `.tracks`. `about`,
+   `faq`, `honor-board` and `featured-courses` are `id` ATTRIBUTES, never
+   classes, and `.courses` exists nowhere at all — a rule written against any
+   of those bare names matches nothing.
+
+   The CARDS are a separate vocabulary again, and `.track` is the trap: it is
+   NOT the year-tracks section (that is `.tracks`) — it is the individual
+   course-track card, `track-card.tsx:61`, rendered three times, and it is the
+   one carrying `--site-shadow-lg`. `.tracks__card` around it is a bare
+   `position: absolute` wrapper with no fill, border or shadow of its own, so
+   styling THAT only draws a second rectangle around the card.
    ───────────────────────────────────────────────────────────────────────── */
 
 /* ═══ EDITORIAL ═══════════════════════════════════════════════════════════
    No dark stage. A light opener sized to its own content, one centred column,
-   much larger headings, sections separated by hairlines instead of cards.
+   much larger headings, sections separated by hairlines instead of bands.
    Reads like a long-form page rather than a product site. */
 
 [data-layout='editorial'] .hero {
@@ -41,12 +68,21 @@
   border-bottom: 1px solid var(--site-line);
 }
 
-[data-layout='editorial'] .hero__fluid,
+/* The full-bleed photograph and the gradient that made white copy readable
+   over it both belong to the dark stage.
+
+   ⚠️ Hiding `.hero__media` does NOT cancel its download: it is the LCP image
+   and carries `fetchPriority="high"` (`site-hero.tsx:121`). Editorial pays for
+   a hero photograph it never paints, and the real fix is for `<SiteHero>` to
+   stop rendering it for this layout — not a `display: none` here.
+
+   There is no `.hero__fluid` on this page to hide, whatever the class in
+   `sections.css:451` suggests: the landing page's WebGL fluid is
+   `<SplashCursorMount>`, mounted in `app/(site)/layout.tsx` OUTSIDE `<main>`
+   as a fixed full-viewport canvas. No `[data-layout]` descendant selector can
+   reach it, and it sits over every layout equally. */
 [data-layout='editorial'] .hero__media,
 [data-layout='editorial'] .hero__scrim {
-  /* The WebGL fluid and the full-bleed photograph belong to the dark stage.
-     With a light opener they have nothing to sit on, and the scrim that made
-     the copy readable over them now only dims the page. */
   display: none;
 }
 
@@ -72,45 +108,189 @@
   letter-spacing: -0.03em;
 }
 
-[data-layout='editorial'] .hero__eyebrow {
-  color: var(--site-fg-2);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
 [data-layout='editorial'] .hero__lead {
   max-width: 44ch;
   margin-inline: auto;
-  font-size: var(--fs-text-lg, 1.125rem);
 }
 
-[data-layout='editorial'] .hero__cta {
-  justify-content: center;
-}
-
+[data-layout='editorial'] .hero__cta,
 [data-layout='editorial'] .hero__stats {
   justify-content: center;
 }
 
-/* Sections are separated by a rule, not by a change of background. */
-[data-layout='editorial'] .rail,
-[data-layout='editorial'] .courses,
-[data-layout='editorial'] .about,
-[data-layout='editorial'] .faq,
-[data-layout='editorial'] .track,
-[data-layout='editorial'] .honor-board {
+/* ── The hero's ink ───────────────────────────────────────────────────────
+   Repainting `.hero` is not enough, and this is the trap the whole look turns
+   on: EVERY piece of copy in the opener sets its own literal white in
+   `sections.css` — `.hero__title { color: #fff }` (:561), `.hero__lead` (:627)
+   and both stat lines (:671, :678) at `rgb(255 255 255 / …)`, the stat divider
+   likewise (:661), and the rotating accent at `--p-300` (:583), a
+   0.862-lightness tint. Inherited colour reaches none of them, and
+   `color-scheme: normal` does nothing to a literal `#fff`.
+
+   Answer six of the seven and the seventh is white on white: the section still
+   lays out, still measures, still passes a snapshot — and is unreadable. */
+[data-layout='editorial'] .hero__title {
+  color: var(--site-fg);
+}
+
+[data-layout='editorial'] .hero__title .hero__title-accent {
+  color: var(--site-accent-text);
+}
+
+[data-layout='editorial'] .hero__eyebrow {
+  color: var(--site-fg-2);
+  letter-spacing: 0.14em;
+}
+
+[data-layout='editorial'] .hero__lead,
+[data-layout='editorial'] .hero__stat-l {
+  color: var(--site-fg-2);
+}
+
+[data-layout='editorial'] .hero__stat-n {
+  color: var(--site-fg);
+}
+
+[data-layout='editorial'] .hero__stat + .hero__stat::before {
+  background: var(--site-line-strong);
+}
+
+/* The two hero buttons exist only for the dark stage: `--light` is a white
+   pill and `--on-ink` a white-bordered ghost. Both vanish on a light opener,
+   so they take the page's own solid and outline treatments instead.
+
+   `--light` also turns the shared specular highlight into a DARK multiply spot
+   and kills the lit top edge, because neither reads on white (`theme.css:329`,
+   `:340`). On an accent fill the original `plus-lighter` treatment is right
+   again, so both are put back — otherwise the primary button is the one
+   control on the page with no hover response. */
+[data-layout='editorial'] .hero .site-btn--light {
+  background: var(--site-accent-solid);
+  color: var(--site-on-accent);
+  box-shadow: var(--site-shadow-sm);
+}
+
+[data-layout='editorial'] .hero .site-btn--light:hover {
+  background: var(--site-accent-solid-hover);
+  box-shadow: var(--site-shadow-md);
+}
+
+[data-layout='editorial'] .hero .site-btn--light::before {
+  mix-blend-mode: plus-lighter;
+  background: radial-gradient(
+    7rem circle at var(--sx, -100%) var(--sy, 50%),
+    rgb(255 255 255 / 0.32),
+    transparent 60%
+  );
+}
+
+[data-layout='editorial'] .hero .site-btn--light::after {
+  display: block;
+}
+
+[data-layout='editorial'] .hero .site-btn--on-ink {
+  color: var(--site-accent-text);
+  border-color: var(--site-line-strong);
+  background: transparent;
+}
+
+[data-layout='editorial'] .hero .site-btn--on-ink:hover {
+  background: var(--site-bg-tint);
+  border-color: var(--site-accent-solid);
+  color: var(--site-accent-text-strong);
+}
+
+/* ── The header over a light opener ───────────────────────────────────────
+   `.site-nav--over` is set from `[data-site-hero]`'s scroll position alone
+   (`site-nav.tsx:64`), and that attribute is on `.hero` in EVERY layout — so
+   the nav still believes it is floating over a dark stage and paints the
+   wordmark and the outline button white (`media.css:291`, `sections.css:369`).
+   The nav is a sibling of `<main>`, not a descendant, so it is reached through
+   the page rather than through `[data-layout]`. */
+body:has(main[data-layout='editorial']) .site-nav--over .wordmark__name,
+body:has(main[data-layout='editorial']) .site-nav--over .wordmark__tag {
+  color: var(--site-fg);
+}
+
+body:has(main[data-layout='editorial']) .site-nav--over .site-btn--outline {
+  color: var(--site-fg);
+  border-color: var(--site-line-strong);
+}
+
+/* ── Section rhythm ───────────────────────────────────────────────────────
+   Sections are separated by a rule, not by a change of background.
+
+   ⚠️ `.rail` is excluded from the padding. It is `min-height: 100svh` because
+   a GSAP ScrollTrigger PINS it and measures this section to decide when — the
+   comment at `sections.css:823` spells out that any other height starts the
+   pin late or releases it early. Changing its padding changes what that
+   measurement returns.
+
+   `.site-section--tint` needs no selector of its own: every tinted element
+   carries BOTH classes, and `[data-layout] .site-section` is (0,2,0) against
+   the modifier's (0,1,0), so this rule already wins the background. */
+[data-layout='editorial'] .site-section:not(.rail) {
   background: var(--site-bg);
   border-top: 1px solid var(--site-line);
   padding-block: clamp(4.5rem, 9vw, 7.5rem);
 }
 
-/* Cards lose their fill and their shadow and keep only a hairline — the
-   content sits ON the page instead of on a raised surface. */
+[data-layout='editorial'] .rail {
+  background: var(--site-bg);
+  border-top: 1px solid var(--site-line);
+}
+
+/* The year-tracks block is a lit stage: a wash, a floor, a spotlight, drifting
+   glyphs and a dragon flying through `padding-top: min(40vh, 22rem)` of sky
+   (`sections.css:1294`). Editorial has no stage, so the furniture goes — and
+   the sky goes with it, because 352px of empty page above a section is only
+   defensible when something is flying in it. */
+[data-layout='editorial'] .tracks {
+  border-top: 1px solid var(--site-line);
+  padding-top: clamp(4.5rem, 9vw, 7.5rem);
+  padding-bottom: clamp(4.5rem, 9vw, 7.5rem);
+}
+
+[data-layout='editorial'] .tracks__wash,
+[data-layout='editorial'] .tracks__floor,
+[data-layout='editorial'] .tracks__spot,
+[data-layout='editorial'] .tracks__glyphs,
+[data-layout='editorial'] .tracks__dragon,
+[data-layout='editorial'] .tracks__dragon-glow {
+  display: none;
+}
+
+/* ── Cards ────────────────────────────────────────────────────────────────
+   Cards lose their fill and their shadow and keep only a hairline — the
+   content sits ON the page instead of on a raised surface.
+
+   ⚠️ The RADIUS is left alone on `.course-card` and `.track`. Both are wrapped
+   in `<ElectricCard radius={CARD_RADIUS}>`, which draws its animated border in
+   a canvas at a hard-coded 12px (`course-card.tsx:36`, `year-tracks.tsx:45`);
+   a CSS radius the JS does not know about puts the lit border and the card's
+   own corner in two different places.
+
+   ⚠️ `.honor-board__slot` is NOT here. Its border is DASHED on purpose — the
+   drawing convention for a place kept for someone who has not arrived yet
+   (`sections.css:3584`) — and a `[data-layout]` rule would beat
+   `.honor-board__slot--filled` on specificity, so a filled place and an empty
+   one would render identically. That board says what it says through exactly
+   those two states. */
 [data-layout='editorial'] .course-card,
-[data-layout='editorial'] .rail__card {
+[data-layout='editorial'] .track,
+[data-layout='editorial'] .rail__card,
+[data-layout='editorial'] .book-card,
+[data-layout='editorial'] .profile__card,
+[data-layout='editorial'] .quotes__card {
   background: transparent;
   box-shadow: none;
   border: 1px solid var(--site-line);
+}
+
+[data-layout='editorial'] .rail__card,
+[data-layout='editorial'] .book-card,
+[data-layout='editorial'] .profile__card,
+[data-layout='editorial'] .quotes__card {
   border-radius: var(--r-sm);
 }
 
@@ -159,33 +339,38 @@
   justify-content: center;
 }
 
-[data-layout='compact'] .rail,
-[data-layout='compact'] .courses,
-[data-layout='compact'] .about,
-[data-layout='compact'] .faq,
-[data-layout='compact'] .track,
-[data-layout='compact'] .honor-board {
+/* `.rail` is excluded here for the same reason as above — and it is the one
+   section compact cannot compress. It is a pinned, exactly-one-viewport
+   block, so an instructor who places the whyRail block still gets a full
+   screen of it. Shortening it means changing the pin, not the padding. */
+[data-layout='compact'] .site-section:not(.rail) {
   padding-block: clamp(2.25rem, 4vw, 3.5rem);
 }
 
-/* Every card carries a visible edge, and the corners are tighter. Density
-   needs boundaries: without them a compressed page reads as a list. */
+[data-layout='compact'] .tracks {
+  padding-bottom: clamp(2.25rem, 4vw, 3.5rem);
+}
+
+/* Every card carries a visible edge. Density needs boundaries: without them a
+   compressed page reads as a list. The radius and honor-board caveats above
+   apply here unchanged. */
 [data-layout='compact'] .course-card,
-[data-layout='compact'] .rail__card {
+[data-layout='compact'] .track,
+[data-layout='compact'] .rail__card,
+[data-layout='compact'] .book-card,
+[data-layout='compact'] .profile__card,
+[data-layout='compact'] .quotes__card {
   border: 1px solid var(--site-line-strong);
-  border-radius: var(--r-xs);
   box-shadow: none;
+}
+
+[data-layout='compact'] .rail__card,
+[data-layout='compact'] .book-card,
+[data-layout='compact'] .profile__card,
+[data-layout='compact'] .quotes__card {
+  border-radius: var(--r-xs);
 }
 
 [data-layout='compact'] .courses__grid {
   gap: 0.875rem;
-}
-
-/* ═══ Both alternates ═════════════════════════════════════════════════════ */
-
-@media (prefers-reduced-motion: reduce) {
-  [data-layout='editorial'] .hero,
-  [data-layout='compact'] .hero {
-    transition: none;
-  }
 }

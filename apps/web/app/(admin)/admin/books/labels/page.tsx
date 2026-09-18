@@ -12,6 +12,7 @@ import {
 import { z } from 'zod';
 import { adminGet } from '@/lib/admin-api';
 import { cairo } from '@/lib/fonts';
+import { tenantName } from '@/lib/tenant';
 import { PrintButton } from '../print/print-button';
 
 const c = copy.admin.books;
@@ -145,7 +146,23 @@ export default async function BookOrderLabelsPage({
         {list.labels.map((label) => (
           <article key={label.orderId} className="label-card">
             <header className="label-card__head">
-              <span className="label-card__brand">{brand.name}</span>
+              {/*
+                Of every identity gate in this pass, THIS is the one that
+                cannot be taken back. A wrong name on a screen is undone by a
+                deploy; this card is cut along the dotted line, taped to a box
+                and handed to a courier — so an ungated `brand.name` sends
+                «أيمن أبو العلا» to a student who ordered a book from a
+                different instructor, on paper, already in a van. There is no
+                revalidation for a parcel.
+
+                `brand.name` is the copy table's literal and reaches this line
+                on every stack; `tenantName()` hands HIS stack that same string
+                straight back, so his cards print byte-identically, and hands
+                anyone else `TENANT_DISPLAY_NAME` (or «المنصة» if the compose
+                file forgot it — generic is a bug report, his name on a
+                stranger's parcel is not).
+              */}
+              <span className="label-card__brand">{tenantName(brand.name)}</span>
               <span className="label-card__ref" dir="ltr">
                 {label.ref}
               </span>

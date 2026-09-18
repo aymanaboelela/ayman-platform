@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { IS_AYMAN } from '@/lib/tenant';
 import { AgentDiscoveryLinks } from '@/components/agents/agent-discovery-links';
 import { WebMcpProvider } from '@/components/agents/webmcp-provider';
 import { SmoothScroll } from '@/components/motion/smooth-scroll';
@@ -14,10 +15,20 @@ import './styles/media.css';
 import './styles/sections.css';
 import './styles/blocks.css';
 import './styles/pages.css';
-// ⚠️ LAST. It answers `data-layout` on the landing page's `<main>` and must
-// win over the rules in `sections.css` without reaching for `!important`.
+// ⚠️ After `sections.css`. It answers `data-layout` on the landing page's
+// `<main>` and must win over the rules there without reaching for
+// `!important`.
 import './styles/layouts.css';
 import './styles/books.css';
+// ⚠️ GENUINELY LAST, and after `books.css` rather than merely after
+// `layouts.css`. This is the CSS for the two landing pages that are NOT
+// Ayman's (`landingPreset` = `neon` / `board`), and a preset page renders the
+// book strip like any other block — so it has to be able to restyle `.book-*`
+// without an `!important`, which it cannot do from above the file that
+// declares them. Every rule inside is scoped to its own preset root; see that
+// file's header for why a single unscoped selector there would change Ayman's
+// live page.
+import './styles/presets.css';
 import { AssistantSlot } from '@/components/assistant/assistant-slot';
 
 /**
@@ -80,7 +91,26 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
 
       <div className="dot-grid" aria-hidden="true" />
       <DotGridSpotlight />
-      <SplashCursorMount />
+      {/*
+        ⚠️ A WebGL fluid simulation, on HIS stack only.
+
+        `<SplashCursorMount />` is a continuous full-viewport WebGL canvas — it
+        compiles shaders, holds a GL context and runs a simulation for as long
+        as the page is open. It is Ayman's ambient signature and it is worth its
+        cost on his page.
+
+        On another instructor's it is worth nothing at all, and it is not free:
+        it is the single heaviest thing this layout mounts, it runs on the phone
+        of a student on Egyptian mobile data, and its colour is a hard-coded
+        orange that is not even the tenant's hue (`splash-cursor-mount.tsx`).
+        Every stack was paying for an effect that belongs to somebody else's
+        brand.
+
+        Gated at the MOUNT, not inside the component: the point is that the
+        chunk is never loaded and no context is ever created, which a `return
+        null` inside a client component does not buy.
+      */}
+      {IS_AYMAN ? <SplashCursorMount /> : null}
 
       <SmoothScroll />
       {/* Watches for the reported white page — laid out, full of text, painting

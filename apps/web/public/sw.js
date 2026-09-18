@@ -79,15 +79,64 @@
 const VERSION = new URL(self.location.href).searchParams.get('v') || 'v4';
 const STATIC_CACHE = `ayman-static-${VERSION}`;
 const OFFLINE_URL = '/offline';
-const OFFLINE_MARK = '/icons/icon-192.png';
+
+/*
+ * The brand mark this deployment is allowed to draw — and `null` unless the
+ * page that registered this worker said otherwise.
+ *
+ * ## The leak, which was a FACE and not a name
+ *
+ * This was the literal `'/icons/icon-192.png'`, in two constants. That file is
+ * not a logo: it is a crop of Ayman's photograph, cut from `public/team
+ * /ayman.jpg` by `scripts/build-mobile-icons.mjs`. `app/manifest.ts` gates the
+ * whole `icons` array behind `IS_AYMAN` and `app/offline/page.tsx` gates the
+ * `<img>` it draws, both with long notes on why no generic tile can be
+ * substituted — and this file, which is the one that puts that image on a
+ * LOCK SCREEN, had no gate at all. Every push from every tenant's platform
+ * showed another instructor's students his face beside a sentence signed with
+ * their own teacher's name.
+ *
+ * ## Why it arrives in the URL
+ *
+ * `public/` ships byte-for-byte: no bundler, no `process.env`, no build-time
+ * substitution of any kind — `apps/web`'s build is `node scripts/vendor
+ * -pyodide.mjs && next build`, and neither step rewrites this file. The only
+ * channel into a service worker that exists before it runs is its own script
+ * URL, and this worker already uses it: `VERSION` above is read from `?v=`,
+ * put there by `components/pwa/service-worker-register.tsx`. So the mark comes
+ * the same way, from the same place, and `self.location` reads it back.
+ *
+ * ## Why the PATH and not a tenant flag
+ *
+ * `?tenant=<key>` would mean re-deciding `IS_AYMAN` here, in a file with no
+ * access to the gate module and no way to tell "the parameter says no" from
+ * "the parameter is missing" — and this is the one place in the product where
+ * a missing parameter is genuinely likely, because a worker keeps whatever URL
+ * it was registered with. Passing the URL puts the decision back in
+ * `service-worker-register.tsx`, where `aymanOnly()` is imported and where a
+ * tenant can one day pass its OWN mark with no change to this file.
+ *
+ * ## Fail closed
+ *
+ * No parameter ⇒ no mark: nothing precached, nothing drawn on the
+ * notification. That is the same answer `app/offline/page.tsx` already gives
+ * and for the same reason — there is no honest generic image to substitute,
+ * and an empty circle reads as an asset that failed to load, which on a lock
+ * screen is exactly the wrong thing to suggest.
+ */
+const MARK = new URL(self.location.href).searchParams.get('mark') || null;
 
 /*
  * Precached on install so the offline page is available the FIRST time the
  * network drops, rather than only after the student has already visited it.
  * The mark comes along because the offline page renders it, and `next/image`
  * is unavailable there by construction — see `app/offline/page.tsx`.
+ *
+ * On a stack with no mark the list is the page alone, which is exactly right:
+ * that page's `<img>` is behind `IS_AYMAN` there, so precaching the file would
+ * be paying install-time bandwidth for an image nothing renders.
  */
-const PRECACHE = [OFFLINE_URL, OFFLINE_MARK];
+const PRECACHE = MARK ? [OFFLINE_URL, MARK] : [OFFLINE_URL];
 
 /*
  * How many hashed assets this cache may hold, PRECACHE excluded.
@@ -366,8 +415,13 @@ self.addEventListener('fetch', (event) => {
    * redrawing the mark reaches a student on their next ONLINE load rather than
    * never. Cache-first would pin it: `app/manifest.ts` names this same file as
    * `icons[0]`, so a pinned copy is also what an install prompt would show.
+   *
+   * `MARK &&` first: with no mark this branch must not match, and without the
+   * guard `url.pathname === null` is merely false for every real request —
+   * true only for the one nobody makes. Written as a guard rather than left to
+   * luck because the next edit here should not have to work that out.
    */
-  if (url.pathname === OFFLINE_MARK) {
+  if (MARK && url.pathname === MARK) {
     event.respondWith(
       (async () => {
         const hit = await caches.match(request);
@@ -506,14 +560,21 @@ self.addEventListener('fetch', (event) => {
  * `push-text.ts`, not a code change on every device that already installed
  * this worker.
  *
- * `icon`/`badge` are constants rather than carried on the payload — every
- * push from this platform shows the same mark, and a per-notification image
- * would spend bytes of a payload Web Push caps at 4 KB on a picture that
+ * `icon`/`badge` come from the registration URL rather than the payload —
+ * every push from this platform shows the same mark, and a per-notification
+ * image would spend bytes of a payload Web Push caps at 4 KB on a picture that
  * would look identical every time anyway. This is the «صورة» the toggle
  * promises: a bare-text push with no icon is the thing that reads as broken.
+ *
+ * ⚠️ WHICH IS WHY THE GATE IS HERE AND NOT IN THE PAYLOAD. The mark is a crop
+ * of one instructor's photograph (see `MARK` at the top), and this is the only
+ * surface in the product that draws it on a device with nothing open: a
+ * notification from a tenant's platform put HIS face on their student's lock
+ * screen, over a line naming their own teacher. A tenant sends the same push
+ * with no image, exactly as `app/offline/page.tsx` shows no mark — a bare-text
+ * push is worse than one with a mark and far better than one with the wrong
+ * person's.
  */
-const NOTIFICATION_ICON = '/icons/icon-192.png';
-
 self.addEventListener('push', (event) => {
   let data = {};
   try {
@@ -532,8 +593,10 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body: typeof data.body === 'string' ? data.body : '',
-      icon: NOTIFICATION_ICON,
-      badge: NOTIFICATION_ICON,
+      // Spread rather than `icon: MARK ?? undefined`: the two keys are simply
+      // absent on a stack with no mark, so nothing downstream has to agree
+      // with us about how a browser reads an explicit `undefined` here.
+      ...(MARK ? { icon: MARK, badge: MARK } : {}),
       // Collapses repeats in the OS tray — the same reason
       // `notification-stream.tsx`'s own `tag` does for the toast twin of
       // this, three questions in a minute replace one another instead of

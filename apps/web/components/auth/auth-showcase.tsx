@@ -1,7 +1,26 @@
 import Image from 'next/image';
 import { copy } from '@ayman/contracts';
+import { IS_AYMAN, tenantName } from '@/lib/tenant';
 
 const c = copy.auth.aside;
+
+/**
+ * The panel's eyebrow — «منصة أ. أيمن أبو العلا» on his stack — resolved once.
+ *
+ * ⚠️ `tenantName()` and NOT the sentence-level swap in `lib/tenant-copy.ts`,
+ * because this string is a brand lockup written in words rather than a sentence
+ * with a name in it. Replacing the name inside it would leave the «منصة أ.»
+ * standing in front of a `TENANT_DISPLAY_NAME` that almost always starts with
+ * «منصة» itself — «منصة أ. منصة محمد صبري» — and the honorific «أ.» belongs to
+ * a person this deployment has never heard of. The whole string is the brand,
+ * so the whole string is what gets replaced.
+ *
+ * Read twice below, from one const: once as the `aria-label` naming this
+ * landmark and once as the visible eyebrow. They are the same fact, and a
+ * landmark announcing a different name from the one printed inside it is the
+ * kind of split nobody sees until a screen reader reads it out.
+ */
+const EYEBROW = tenantName(c.eyebrow);
 
 const POINTS = [c.point1, c.point2, c.point3] as const;
 
@@ -42,11 +61,32 @@ const POINTS = [c.point1, c.point2, c.point3] as const;
  *     three times, once of them stamped across his chest;
  *   · the grid overlay. Ruled lines over a flat gradient read as a technical
  *     surface; the same lines over a photograph read as glass in front of it.
+ *
+ * ## HIS STACK ONLY, and the panel was already built to survive without it
+ *
+ * `/brand/auth-library.webp` is a photograph of Ayman, and /login and /register
+ * are the two pages every student on every deployment sees before they have any
+ * idea whose platform they are on — so on any stack but his the picture is not
+ * rendered at all. Nothing else had to change: `.auth-aside` carries its own
+ * three-layer gradient and `auth.css` says in as many words that it "stays as
+ * the colour the column falls back to if the file never arrives". That is the
+ * state this panel shipped in before the photograph existed, and it is a
+ * finished lit stage rather than an empty box.
  */
 export function AuthShowcase() {
   return (
-    <aside className="auth-aside" aria-label={c.eyebrow}>
+    <aside className="auth-aside" aria-label={EYEBROW}>
       {/*
+        The scrim is INSIDE this branch, not beside it, and that pairing is the
+        one thing worth being careful about here. It exists to make white copy
+        legible over a picture — `rgb(8 9 10 / 0.97)` at the bottom, where the
+        words are — and `auth.css` re-states the warm key light inside it
+        precisely "because the photo now covers the background that used to
+        carry it". Left rendering with no photograph under it, it would lay
+        near-solid black over the panel's own gradient and double the key
+        light: the designed stage would come out a muddy dark smear, which is a
+        worse page than the one this gate is protecting.
+
         `alt=""` on purpose. The panel is decorative reassurance that the form
         does not need, and the words layered on top already say everything this
         picture is here to say — announcing it would only put a description
@@ -56,18 +96,22 @@ export function AuthShowcase() {
         `display: none` there) and `sizes` already tells the browser so, which
         a preload would override.
       */}
-      <Image
-        src="/brand/auth-library.webp"
-        alt=""
-        fill
-        sizes="(min-width: 62rem) 52vw, 1px"
-        className="auth-aside__photo"
-      />
-      <div className="auth-aside__scrim" aria-hidden="true" />
+      {IS_AYMAN ? (
+        <>
+          <Image
+            src="/brand/auth-library.webp"
+            alt=""
+            fill
+            sizes="(min-width: 62rem) 52vw, 1px"
+            className="auth-aside__photo"
+          />
+          <div className="auth-aside__scrim" aria-hidden="true" />
+        </>
+      ) : null}
 
       <div className="auth-aside__inner">
         <div className="auth-aside__copy">
-          <p className="auth-aside__eyebrow">{c.eyebrow}</p>
+          <p className="auth-aside__eyebrow">{EYEBROW}</p>
           <h2 className="auth-aside__title">{c.title}</h2>
           <p className="auth-aside__body">{c.body}</p>
         </div>

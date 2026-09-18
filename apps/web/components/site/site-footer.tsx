@@ -5,6 +5,7 @@ import { SOCIAL_MARKS, SocialIcon, type SocialKey } from '@/components/site/soci
 import { FooterDragons } from '@/components/site/footer-dragons';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
+import { tenantName } from '@/lib/tenant';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 
 const c = copy.landing;
@@ -50,7 +51,12 @@ const PAGE_LINKS = [
   // crawled and weighted at all — a page in the sitemap that nothing links to
   // reads as an orphan. The label is his NAME rather than «عن المنصة», so the
   // anchor text matches the query it exists to answer.
-  { href: '/about', label: c.aboutPageTitle },
+  // ⚠️ `tenantName`, because `aboutPageTitle` IS the name — literally the
+  // string «أيمن أبو العلا» and nothing else (`copy/ar.ts:1495`). The anchor
+  // text is deliberately a person's name rather than «عن المنصة» so it matches
+  // the query the page answers; on a second instructor's stack that reasoning
+  // holds exactly as written, with a different person in it.
+  { href: '/about', label: tenantName(c.aboutPageTitle) },
   // `/links` is reached almost entirely from OUTSIDE — it is the URL in four
   // bios — so it would otherwise be an orphan on this site: in the sitemap,
   // linked by nothing. That is the shape `/about`'s note above describes, and
@@ -178,7 +184,12 @@ export async function SiteFooter() {
         <div className="site-footer__grid">
           <div className="site-footer__brand">
             <span className="wordmark wordmark--lg">
-              <span className="wordmark__name">{copy.site.name}</span>
+              {/* `tenantName()`, like the nav's — the footer wordmark is the
+                  other half of the same claim, rendered on every public page.
+                  A page whose header says one name and whose footer says
+                  «أيمن أبو العلا» is worse than either alone: it reads as a
+                  platform reselling somebody else's brand. */}
+              <span className="wordmark__name">{tenantName(copy.site.name)}</span>
               <span className="wordmark__tag">{copy.site.tagline}</span>
             </span>
             <p className="site-footer__blurb">{c.footerTagline}</p>
@@ -274,8 +285,13 @@ export async function SiteFooter() {
           THROUGH the name — the dragons paint behind it, the letters on top. */}
       <div className="site-footer__signoff">
         <FooterDragons />
+        {/* The giant sign-off letters behind the dragons. `aria-hidden`, so
+            no screen reader ever reaches it — and gated anyway, because it is
+            the single largest rendering of the name on the site and it is
+            baked into the prerendered HTML, where a scraper reads it whatever
+            the ARIA says. */}
         <span className="site-footer__watermark" aria-hidden="true">
-          {copy.site.name}
+          {tenantName(copy.site.name)}
         </span>
       </div>
     </footer>

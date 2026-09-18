@@ -12,6 +12,7 @@ import { Button } from '@ayman/ui/components/button';
 import { Card, CardBody } from '@ayman/ui/components/card';
 import { apiPatch, ApiRequestError } from '@/lib/api';
 import { safeNext } from '@/lib/safe-next';
+import { tenantSentence } from '@/lib/tenant-copy';
 import { fixedSectionFor, offeredYearOptions } from '@/lib/section-defaults';
 import {
   GENDER_OPTIONS,
@@ -482,7 +483,33 @@ export function OnboardingForm({
         instead of a gesture.
       */}
       <p className="text-center text-[length:var(--fs-text-sm)] text-fg-muted">
-        {copy.onboarding.privacyNote}{' '}
+        {/*
+          ⚠️ `tenantSentence()`, and of everything the tenant gate touches on
+          the public pages this is the line that had to be fixed first.
+
+          «بياناتك محفوظة عند أيمن أبو العلا وبس» is not a heading and not a
+          brand mark — it is a PROMISE about where a phone number goes, made to
+          a student who is usually a minor, at the moment they type it, on a
+          form that asks for their father's number one step later. On a second
+          instructor's deployment it named a man with no relationship to that
+          data and no way to keep the promise, and the student reads it as the
+          answer to «البيانات دي بتروح لمين؟» — so the one sentence on the form
+          whose whole job is to be true was the one saying something false.
+
+          It is also not covered by the rest of the screen being gated. This
+          sentence exists BECAUSE the domain was flagged under «الصفحات
+          المضلّلة» for collecting numbers while saying nothing about who
+          receives them (see `copy.onboarding.privacyNote`), and a disclosure
+          naming the wrong recipient is nearer to that finding than to the fix
+          for it.
+
+          The name sits in the MIDDLE of the sentence, so `tenantName()` has
+          nothing to swap — `lib/tenant-copy.ts` carries the reasoning, and
+          `tenant-copy.test.ts` asserts against THIS string that no spelling of
+          the name survives on another stack while his own stack gets the
+          identical string back on the function's first line.
+        */}
+        {tenantSentence(copy.onboarding.privacyNote)}{' '}
         <Link href="/privacy?from=onboarding" className="underline underline-offset-2">
           {copy.onboarding.privacyLink}
         </Link>

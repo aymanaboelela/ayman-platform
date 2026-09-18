@@ -2,11 +2,10 @@ import { getBranding } from '@/lib/settings';
 import { Fragment } from 'react';
 import { cacheLife } from 'next/cache';
 import type { Metadata } from 'next';
-import { copy } from '@ayman/contracts';
 import type { HomeBlock } from '@ayman/contracts/admin/home-blocks';
 import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
 import { JsonLd } from '@/components/seo/json-ld';
-import { buildMetadata } from '@/lib/seo/metadata';
+import { buildMetadata, SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { faqPageJsonLd } from '@/lib/seo/jsonld';
 import { getHomeBlocks, getHonorBoard } from '@/lib/home-blocks';
 import { SiteHero } from '@/components/site/site-hero';
@@ -45,6 +44,16 @@ import { SiteFaq } from '@/components/site/site-faq';
  * table or an unreachable API both fall back to `DEFAULT_HOME_BLOCKS`, the
  * shipped page. This route therefore has no failure mode where it renders
  * nothing.
+ *
+ * ## One route, three pages
+ *
+ * `branding.landingPreset` decides which page component renders these blocks
+ * — see `LandingPresetSchema`. The blocks themselves are the same rows either
+ * way: a preset is a different way of PRESENTING the tenant's published list,
+ * never a different list. `classic` is the default, is what every stored row
+ * means, and is the arm below `renderBlock` serves; the alternates own their
+ * own component under `components/site/presets/` and are imported only inside
+ * their own branch.
  */
 /**
  * The one page whose title does NOT get the `%s | منصة أيمن أبو العلا`
@@ -54,7 +63,22 @@ import { SiteFaq } from '@/components/site/site-faq';
  * `title.default` (or the admin's override) stand on its own.
  */
 export async function generateMetadata(): Promise<Metadata> {
-  return buildMetadata({ path: '/', description: copy.seo.homeDescription });
+  /*
+   * ⚠️ `SITE_DESCRIPTION`, not `copy.seo.homeDescription`.
+   *
+   * The landing page passes its OWN description rather than letting
+   * `buildMetadata` fall back, so gating the fallback in `lib/seo/metadata.ts`
+   * never reached this line — and this is the one page whose description
+   * Google actually shows for the site's name. «البرمجة وعلوم الحاسب صح مع
+   * المهندس أيمن أبو العلا» went on shipping as the meta, og and twitter
+   * description of every tenant's home page while the title beside it read
+   * their own name.
+   *
+   * Caught by loading a tenant stack and grepping the served HTML for the
+   * name: two hits, both in `<head>`, none in the body — the half nobody
+   * proof-reads because nobody sees it.
+   */
+  return buildMetadata({ path: '/', description: SITE_DESCRIPTION });
 }
 
 /**
@@ -97,6 +121,52 @@ export default async function HomePage() {
   ]);
 
   /*
+   * WHICH page, decided before anything below it runs.
+   *
+   * ⚠️ Read the two branches as one rule: `classic` must fall THROUGH to the
+   * return statement underneath, untouched. That statement, `renderBlock`, and
+   * every component they reach are exactly what Ayman's platform renders
+   * today, and the only acceptable diff on his page is none — «منصتي زي ما هي
+   * بالظبط». So the alternates are early returns bolted on ABOVE it rather
+   * than a three-way `switch` that would have required rewriting the classic
+   * arm to sit inside it. Nothing here re-orders the loaders, adds an
+   * attribute to his `<main>`, or introduces a second place his page is
+   * described.
+   *
+   * ## Why `await import()` and not a top-level import
+   *
+   * A static import of both preset pages would put their whole module graph
+   * into this route's server bundle and EVALUATE it on every landing-page
+   * render — including Ayman's. Module-level evaluation is not free and, worse,
+   * it is not inert: a preset component that imports a stylesheet of its own,
+   * or references a client component, gets those effects hoisted into the
+   * route whether or not the branch ever runs. That is precisely the class of
+   * change that ends with `classic` picking up one CSS rule nobody wrote for
+   * it. A dynamic import inside the branch cannot: the module is fetched and
+   * evaluated the first time a tenant on that preset renders, and never on a
+   * tenant who is on `classic`.
+   *
+   * The cost is one extra chunk load on the FIRST render for those two
+   * tenants, which is then held by this function's own `'use cache'` entry for
+   * the whole `cacheLife('minutes')` window — paid by the tenants who chose a
+   * different page, not by the one who did not.
+   *
+   * `next/dynamic` is deliberately not used: it is a client-side lazy
+   * boundary, it cannot take `ssr: false` inside a server component, and there
+   * is nothing here to suspend — a plain `await import()` in an async server
+   * component is the server-side spelling.
+   */
+  if (branding.landingPreset === 'neon') {
+    const { default: NeonLanding } = await import('@/components/site/presets/neon/neon-landing');
+    return <NeonLanding blocks={blocks} honorBoard={honorBoard} />;
+  }
+
+  if (branding.landingPreset === 'board') {
+    const { default: BoardLanding } = await import('@/components/site/presets/board/board-landing');
+    return <BoardLanding blocks={blocks} honorBoard={honorBoard} />;
+  }
+
+  /*
    * The page's SHAPE, chosen per instructor from /admin/settings.
    *
    * One attribute, and `styles/layouts.css` answers it — no block changes and
@@ -107,6 +177,10 @@ export default async function HomePage() {
    * `classic` has no rules in that file at all, so this attribute is inert on
    * Ayman's page — which is the point. Choosing the default cannot change what
    * he already has.
+   *
+   * Only `classic` ever gets this far: the two presets above returned their
+   * own page. That is why `landingLayout` needs no "does this preset use it?"
+   * check anywhere — the question cannot be asked on a page that never ran.
    */
   return (
     <main data-layout={branding.landingLayout}>

@@ -667,7 +667,28 @@ describe('AssistantService', () => {
 
       const after = await service.myThread(null, guestToken);
       expect(after?.unreadForVisitor).toBe(1);
-      expect(await prisma.notification.count({ where: { kind: 'conversation_reply' } })).toBe(0);
+      /*
+       * Scoped to the accounts this suite owns, and both halves of that matter.
+       *
+       * CORRECTNESS: an unscoped count asserts that the whole database holds
+       * no `conversation_reply` notification at all. That is only ever true on
+       * a database nobody has used — every real one fails it for reasons that
+       * have nothing to do with guests, and the failure names this test.
+       *
+       * SPEED: `kind` carries no index (`notifications` is indexed on
+       * `(user_id, created_at)` and `(user_id, read_at)`), so the unscoped
+       * count is a sequential scan. On the dev database that is 14.1M rows and
+       * 4.6 GB — measured at 13.8 s against Jest's 5 s ceiling, which is what
+       * actually turned this red.
+       *
+       * The two accounts below are the only ones a reply on this thread could
+       * reach, so "nobody" is exactly what this asserts — through the index.
+       */
+      expect(
+        await prisma.notification.count({
+          where: { kind: 'conversation_reply', userId: { in: [studentId, strangerId] } },
+        }),
+      ).toBe(0);
     });
 
     it('puts a thread back to open when the visitor follows up', async () => {

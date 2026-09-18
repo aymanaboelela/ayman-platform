@@ -1,7 +1,8 @@
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — a dependency-free .mjs script, deliberately untyped so it
 // runs on a bare server before anything is installed.
-import { checkTenantEnv } from '../../../scripts/check-tenant-env.mjs';
+import { checkTenantEnv, parseEnvFile } from '../../../scripts/check-tenant-env.mjs';
 
 /**
  * The preflight is the only thing standing between "forgot one variable" and
@@ -34,7 +35,16 @@ const FAKE = {
   waToken: `wa-${'0'.repeat(32)}`,
 } as const;
 
-/** A tenant config with nothing wrong with it. Each case breaks one thing. */
+/**
+ * A tenant config with nothing wrong with it. Each case breaks one thing.
+ *
+ * ⚠️ `WA_SERVICE_URL` and `VAPID_SUBJECT` were both MISSING here, and this
+ * fixture was still called "correct". That is not a detail of the test — it is
+ * the bug itself, written down twice: a reviewer filled the template the same
+ * way, ran the preflight, was told «safe to deploy», and the API refused to
+ * boot on exactly these two rules. A fixture that cannot boot must not be the
+ * one the suite calls good.
+ */
 function goodEnv(): Record<string, string> {
   return {
     TENANT_KEY: 'mohamed-hassan',
@@ -48,10 +58,11 @@ function goodEnv(): Record<string, string> {
     ADMIN_NAME: 'Mohamed Hassan',
     ADMIN_EMAIL: 'admin@mohamedhassan.com',
     ADMIN_PASSWORD: FAKE.adminPassword,
-    // The pair is all-or-nothing: `config/env.ts` refines it, and one without
-    // the other stops the API booting.
-    WA_SERVICE_URL: 'http://wa:3400',
     WA_TOKEN: FAKE.waToken,
+    // The sidecar's address on the internal compose network. Identical on
+    // every stack, and all-or-nothing with the token above: `config/env.ts`
+    // refines the pair, and one without the other stops the API booting.
+    WA_SERVICE_URL: 'http://wa:3400',
     WA_DEVICE_NAME: 'منصة محمد حسن',
     CLARITY_PROJECT_ID: '',
     TENANT_WHATSAPP: '+201000000000',
@@ -66,13 +77,16 @@ function goodEnv(): Record<string, string> {
   };
 }
 
-function check(overrides: Record<string, string | undefined> = {}) {
+function check(
+  overrides: Record<string, string | undefined> = {},
+  options: { firstDeploy?: boolean } = {},
+) {
   const env = goodEnv();
   for (const [key, value] of Object.entries(overrides)) {
     if (value === undefined) delete env[key];
     else env[key] = value;
   }
-  return checkTenantEnv(env) as { errors: string[]; warnings: string[] };
+  return checkTenantEnv(env, options) as { errors: string[]; warnings: string[] };
 }
 
 describe('checkTenantEnv', () => {
@@ -212,45 +226,153 @@ describe('checkTenantEnv', () => {
     });
   });
 
-  describe('the config that boots BROKEN — every one of these shipped green before', () => {
-    it('rejects a database password containing a URL delimiter', () => {
-      // `openssl rand -base64 32` produces `/` about half the time, and the
-      // template used to tell operators to run exactly that. The value is
-      // interpolated raw into `postgresql://…:PASSWORD@postgres:5432/…`, so a
-      // `/` before the `@` re-parses the URL and the API restart-loops on a
-      // connection error that names none of this.
-      const { errors } = check({ POSTGRES_PASSWORD: `ab/cd${'x'.repeat(28)}` });
+  /**
+   * ⚠️ EVERY CASE BELOW IS A TRANSCRIPTION OF THE BOOT SCHEMA.
+   *
+   * The preflight said «OK — safe to deploy» and the API then refused to
+   * start, which is not a smaller failure than a bad deploy: `web` waits on
+   * `api`'s healthcheck and Traefik has no backend without it, so every page
+   * on the domain answers `404 page not found`. A gate that blesses a config
+   * the boot schema rejects is the reason nobody reads the deploy log.
+   *
+   * So each rule here names the line it copies — `apps/api/src/config/env.ts`
+   * or `apps/api/src/modules/video-mirror/mirror-config.ts`. When one of those
+   * changes, one of these should fail.
+   */
+  describe('the boot contract, copied rather than guessed', () => {
+    /**
+     * THE ONE THAT SHIPPED. `docker-compose.yml` feeds `WA_TOKEN` to the API
+     * as `WA_SERVICE_TOKEN`; the template carried the token and never
+     * mentioned the URL, and `env.ts` refuses to boot with half the pair.
+     */
+    it('rejects WA_TOKEN with no WA_SERVICE_URL — the API will not boot', () => {
+      const { errors } = check({ WA_SERVICE_URL: '' });
 
-      expect(errors.join(' ')).toContain('postgresql://');
+      expect(errors.join(' ')).toContain('WA_SERVICE_URL');
     });
 
-    it('rejects an ADMIN_PASSWORD create-admin would refuse', () => {
-      // The entrypoint runs create-admin with `|| echo WARNING`, so its throw
-      // is swallowed and the platform boots with NO ADMIN ACCOUNT. Nobody can
-      // sign in and the only trace is one line in a boot log.
-      const { errors } = check({ ADMIN_PASSWORD: 'short' });
-
-      expect(errors.join(' ')).toContain('no admin account');
+    it('rejects WA_SERVICE_URL with no WA_TOKEN', () => {
+      expect(check({ WA_TOKEN: '' }).errors.join(' ')).toContain('WA_SERVICE_TOKEN');
     });
 
-    it('rejects an ADMIN_EMAIL create-admin would refuse', () => {
-      expect(check({ ADMIN_EMAIL: 'not-an-email' }).errors.join(' ')).toContain('ADMIN_EMAIL');
+    it('accepts both of them empty — WhatsApp sending is simply off', () => {
+      const { errors } = check({ WA_TOKEN: '', WA_SERVICE_URL: '' });
+
+      expect(errors).toEqual([]);
     });
 
-    it('rejects CHANGE_ME on ANY key, not just the seven it used to check', () => {
-      // `VAPID_SUBJECT=CHANGE_ME` sailed through and crashed the API at boot.
-      const { errors } = check({ VAPID_SUBJECT: 'CHANGE_ME' });
-
-      expect(errors.join(' ')).toContain('VAPID_SUBJECT');
+    /**
+     * A bare `wa:3400` satisfies `z.string().url()` — WHATWG parses it as a
+     * URL whose scheme is `wa` — and fails the explicit scheme refinement that
+     * `env.ts` adds on top for exactly this reason.
+     */
+    it('rejects a WA_SERVICE_URL with no scheme', () => {
+      expect(check({ WA_SERVICE_URL: 'wa:3400' }).errors.join(' ')).toContain('scheme');
     });
 
+    /** THE OTHER ONE THAT SHIPPED: `CHANGE_ME` is not a `mailto:`. */
+    it('rejects a VAPID_SUBJECT that is neither mailto: nor https://', () => {
+      expect(check({ VAPID_SUBJECT: 'ayman@example.com' }).errors.join(' ')).toContain('RFC 8292');
+    });
+
+    it('rejects two VAPID values out of three', () => {
+      expect(check({ VAPID_SUBJECT: '' }).errors.join(' ')).toContain('half-configured');
+    });
+
+    it('accepts all three VAPID values empty', () => {
+      const { errors } = check({
+        VAPID_PUBLIC_KEY: '',
+        VAPID_PRIVATE_KEY: '',
+        VAPID_SUBJECT: '',
+      });
+
+      expect(errors).toEqual([]);
+    });
+
+    it('rejects half a Google provider', () => {
+      expect(check({ GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com' }).errors.join(' ')).toContain(
+        'GOOGLE_CLIENT_SECRET',
+      );
+    });
+
+    /**
+     * `mirror-config.ts` throws on a partial config, and the fifth variable is
+     * spelled `VIDEO_ORIGIN` in the template and `VIDEO_MIRROR_PUBLIC_URL` in
+     * the module — compose renames it, so a reader of either one alone cannot
+     * see the set. The message has to name both spellings.
+     */
+    it('rejects a half-configured video mirror, naming both spellings of the fifth key', () => {
+      const { errors } = check({
+        VIDEO_MIRROR_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
+        VIDEO_MIRROR_BUCKET: 'mohamed-video',
+      });
+
+      expect(errors.join(' ')).toContain('VIDEO_ORIGIN');
+      expect(errors.join(' ')).toContain('VIDEO_MIRROR_PUBLIC_URL');
+    });
+
+    it('accepts all five mirror variables set together', () => {
+      const { errors } = check({
+        VIDEO_MIRROR_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
+        VIDEO_MIRROR_BUCKET: 'mohamed-video',
+        VIDEO_MIRROR_ACCESS_KEY_ID: `ak-${'1'.repeat(20)}`,
+        VIDEO_MIRROR_SECRET_ACCESS_KEY: `sk-${'2'.repeat(40)}`,
+        VIDEO_ORIGIN: 'https://video-mohamedhassan.com',
+      });
+
+      expect(errors).toEqual([]);
+    });
+
+    /**
+     * Compose interpolates the password into `postgresql://…:${PW}@postgres…`,
+     * and the runbook used to generate it with `openssl rand -base64 32`. A
+     * 44-character base64 string carries a `/` about 96% of the time, and a
+     * `/` ends the URL's authority — so the documented command produced a
+     * stack that could not boot nineteen times in twenty, with an error about
+     * DATABASE_URL that never mentions the password.
+     */
+    it('rejects a database password containing a slash', () => {
+      const { errors } = check({ RUNTIME_PASSWORD: `rt/${'y'.repeat(32)}` });
+
+      expect(errors.join(' ')).toContain('connection string');
+    });
+
+    it('rejects a database name that is not a plain identifier', () => {
+      expect(check({ POSTGRES_DB: 'mohamed-platform' }).errors.join(' ')).toContain('pg_isready');
+    });
+
+    /**
+     * Compose builds `MEDIA_BASE_URL: ${MEDIA_ORIGIN}/media` and `env.ts`
+     * types it as an http(s) URL, so a bare hostname is a boot failure rather
+     * than a broken image.
+     */
+    it('rejects a MEDIA_ORIGIN with no scheme', () => {
+      expect(check({ MEDIA_ORIGIN: 'media-mohamedhassan.com' }).errors.join(' ')).toContain('https');
+    });
+  });
+
+  /**
+   * The first admin is the one pair whose CORRECT value flips at launch.
+   *
+   * `docker-entrypoint.sh` bootstraps only when both are set; compose tells
+   * the operator to blank them once the account exists. The old rule demanded
+   * them unconditionally, so re-running the gate on a correct, launched stack
+   * printed «Do NOT deploy this stack» — which teaches an operator that this
+   * script's verdict is noise, and that is the only way a gate like this dies.
+   */
+  describe('origins that parse but concatenate wrong', () => {
+    /*
+     * `docker-compose.yml` builds `MEDIA_BASE_URL: ${MEDIA_ORIGIN}/media` by
+     * plain string concatenation, so a trailing slash gives `//media` and a
+     * path gives `/x/media` — and every uploaded image 404s on a stack whose
+     * API booted fine and whose pages all render. Every other rule in the
+     * checker runs on `new URL(v).origin`, which DISCARDS exactly the part
+     * that breaks this, so it has to compare the raw string to its own origin.
+     */
     it('rejects a trailing slash on MEDIA_ORIGIN, which every media URL inherits', () => {
-      // `MEDIA_BASE_URL: ${MEDIA_ORIGIN}/media` is plain concatenation, so a
-      // trailing slash gives `//media` and every upload 404s. Every other rule
-      // runs on `new URL(v).origin`, which discards exactly this.
-      const { errors } = check({ MEDIA_ORIGIN: 'https://media-mohamedhassan.com/' });
-
-      expect(errors.join(' ')).toContain('bare origin');
+      expect(check({ MEDIA_ORIGIN: 'https://media-mohamedhassan.com/' }).errors.join(' ')).toContain(
+        'bare origin',
+      );
     });
 
     it('rejects a path on APP_URL', () => {
@@ -258,44 +380,126 @@ describe('checkTenantEnv', () => {
         'bare origin',
       );
     });
+  });
 
-    it('rejects WA_TOKEN without WA_SERVICE_URL — the API refuses to boot', () => {
-      // `config/env.ts` refines the pair to all-or-nothing, and a container
-      // that will not start 404s the whole domain through Traefik. The
-      // template handed out the token alone.
-      const { errors } = check({ WA_SERVICE_URL: '' });
+  describe('the first admin, before and after launch', () => {
+    it('warns rather than fails when both are empty and no flag is given', () => {
+      const { errors, warnings } = check({ ADMIN_EMAIL: '', ADMIN_PASSWORD: '' });
 
-      expect(errors.join(' ')).toContain('half-configured');
+      expect(errors).toEqual([]);
+      expect(warnings.join(' ')).toContain('--first-deploy');
     });
 
-    it('rejects a half-filled video mirror', () => {
-      const { errors } = check({ VIDEO_MIRROR_BUCKET: 'a-bucket' });
+    it('fails on both empty when this IS the first deploy', () => {
+      const { errors } = check({ ADMIN_EMAIL: '', ADMIN_PASSWORD: '' }, { firstDeploy: true });
 
-      expect(errors.join(' ')).toContain('half-configured');
+      expect(errors.join(' ')).toContain('no admin account will be created');
     });
 
-    it('rejects GOOGLE_CLIENT_ID without its secret', () => {
-      const { errors } = check({ GOOGLE_CLIENT_ID: 'x.apps.googleusercontent.com' });
-
-      expect(errors.join(' ')).toContain('half-configured');
+    /*
+     * `create-admin.ts`'s own two rules, mirrored. The entrypoint runs it with
+     * `|| echo WARNING`, so a throw there is swallowed: the API starts, the
+     * stack has NO admin account, the first sign-in answers «الإيميل أو
+     * الباسورد غلط», and the only trace is one line in a boot log.
+     */
+    it('rejects an ADMIN_PASSWORD create-admin would refuse', () => {
+      expect(check({ ADMIN_PASSWORD: 'short' }).errors.join(' ')).toContain('no admin account');
     });
 
-    it('rejects two of the three VAPID keys', () => {
-      const { errors } = check({ VAPID_SUBJECT: '' });
-
-      expect(errors.join(' ')).toContain('half-configured');
+    it('rejects an ADMIN_EMAIL create-admin would refuse', () => {
+      expect(check({ ADMIN_EMAIL: 'not-an-email' }).errors.join(' ')).toContain('ADMIN_EMAIL');
     });
 
-    it('accepts a group left entirely empty', () => {
-      expect(
-        check({ VAPID_PUBLIC_KEY: '', VAPID_PRIVATE_KEY: '', VAPID_SUBJECT: '' }).errors,
-      ).toEqual([]);
+    it('fails on half a pair either way — the bootstrap would silently not run', () => {
+      expect(check({ ADMIN_PASSWORD: '' }).errors.join(' ')).toContain('ADMIN_PASSWORD');
+      expect(check({ ADMIN_EMAIL: '' }).errors.join(' ')).toContain('ADMIN_EMAIL');
+    });
+  });
+
+  /**
+   * ── The template and the gate, walked end to end ──────────────────────
+   *
+   * Everything above tests the checker against a fixture. This tests it
+   * against `deploy/tenant.env.example` — the file the runbook tells an
+   * operator to copy — which is the only place the two can drift apart, and
+   * the place they DID drift apart: the sweep covered seven names while the
+   * template shipped sixteen placeholders.
+   */
+  describe('deploy/tenant.env.example', () => {
+    const TEMPLATE = join(import.meta.dirname, '..', '..', '..', 'deploy', 'tenant.env.example');
+    const template = parseEnvFile(TEMPLATE) as Record<string, string>;
+
+    /** Every placeholder in the template, and a plausible value for it. */
+    const FILL: Record<string, string> = {
+      TENANT_KEY: 'mohamed-hassan',
+      TENANT_DISPLAY_NAME: 'منصة محمد حسن',
+      POSTGRES_DB: 'mohamed_platform',
+      POSTGRES_PASSWORD: FAKE.postgresPassword,
+      RUNTIME_PASSWORD: FAKE.runtimePassword,
+      APP_URL: 'https://mohamedhassan.com',
+      MEDIA_ORIGIN: 'https://media-mohamedhassan.com',
+      BETTER_AUTH_SECRET: FAKE.authSecret,
+      ADMIN_NAME: 'Mohamed Hassan',
+      ADMIN_EMAIL: 'admin@mohamedhassan.com',
+      ADMIN_PASSWORD: FAKE.adminPassword,
+      VAPID_PUBLIC_KEY: 'BPk1',
+      VAPID_PRIVATE_KEY: 'vk1',
+      VAPID_SUBJECT: 'mailto:admin@mohamedhassan.com',
+      WA_TOKEN: FAKE.waToken,
+      WA_DEVICE_NAME: 'منصة محمد حسن',
+    };
+
+    const placeholders = Object.entries(template)
+      .filter(([, value]) => value.includes('CHANGE_ME'))
+      .map(([name]) => name);
+
+    /**
+     * A new placeholder in the template has to be thought about here before it
+     * can ship — otherwise the "a filled template deploys" case below quietly
+     * stops covering it, which is exactly how eight of them slipped through.
+     */
+    it('has a known fill for every CHANGE_ME it ships', () => {
+      expect(placeholders.sort()).toEqual(Object.keys(FILL).sort());
     });
 
-    it('rejects a social link that is not https — the seed throws on every boot', () => {
-      const { errors } = check({ TENANT_YOUTUBE: 'http://www.youtube.com/@x' });
+    it('is rejected unedited, with every placeholder named', () => {
+      const { errors } = checkTenantEnv(template, { firstDeploy: true }) as { errors: string[] };
+      const text = errors.join('\n');
 
-      expect(errors.join(' ')).toContain('https://');
+      for (const name of placeholders) {
+        expect(text, `${name} ships a CHANGE_ME the gate does not reject`).toContain(
+          `${name} still says CHANGE_ME`,
+        );
+      }
+    });
+
+    /**
+     * THE REVIEWER'S EXACT WALK: copy the template, replace every CHANGE_ME as
+     * the runbook says, run the gate. It said «OK — safe to deploy» and the
+     * API then refused to boot, because the template carried `WA_TOKEN` with
+     * no `WA_SERVICE_URL` and a `VAPID_SUBJECT` that was not a `mailto:`.
+     */
+    it('deploys clean once every CHANGE_ME is replaced as the runbook says', () => {
+      const filled: Record<string, string> = { ...template };
+      for (const [name, value] of Object.entries(FILL)) filled[name] = value;
+
+      const { errors } = checkTenantEnv(filled, { firstDeploy: true }) as { errors: string[] };
+
+      expect(errors).toEqual([]);
+    });
+
+    /** The `wa` sidecar's internal address, shipped rather than discovered. */
+    it('ships WA_SERVICE_URL, because WA_TOKEN alone stops the API booting', () => {
+      expect(template.WA_SERVICE_URL).toBe('http://wa:3400');
+    });
+
+    /**
+     * Declared-and-empty, never absent: `docker-compose.yml` uses
+     * `${CLARITY_PROJECT_ID-y1hu9w4lii}` with ONE dash, so a template that
+     * dropped the line would hand every new tenant's visitors to Ayman.
+     */
+    it('declares CLARITY_PROJECT_ID with an empty value', () => {
+      expect(template.CLARITY_PROJECT_ID).toBe('');
     });
   });
 

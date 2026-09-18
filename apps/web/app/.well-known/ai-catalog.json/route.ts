@@ -2,6 +2,8 @@ import { copy } from '@ayman/contracts';
 import { AGENT_DISCOVERY_PATHS, absoluteDiscoveryUrl } from '@/lib/agents/discovery';
 import { markdownTwinPath } from '@/lib/agents/markdown-routes';
 import { SITE_URL } from '@/lib/seo/jsonld';
+import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
+import { tenantName } from '@/lib/tenant';
 
 /**
  * The instructor this deployment belongs to, for the two example queries that
@@ -25,10 +27,17 @@ import { SITE_URL } from '@/lib/seo/jsonld';
  * to «المنصة» would quietly cost him the match this document exists to win,
  * to fix a leak that only affects deployments that DO set the variable.
  *
- * The literal is still in this file, so the file is listed in
- * `KNOWN_NAME_FILES` — same as `code-lab.tsx`, and for the same reason.
+ * ## Why the fallback is READ and not written out
+ *
+ * It used to be the literal «أيمن أبو العلا», right here. A written-out
+ * fallback is not a gate — it is the name shipping in this file, one
+ * unset environment variable away from being printed, and
+ * `tenant-identity-leak.spec.ts` counts it as a leak for that reason. Reading
+ * it from `copy.site.name` keeps the behaviour identical on every stack and
+ * leaves the string in the one table that is allowed to hold it, so this file
+ * needs no exemption at all.
  */
-const INSTRUCTOR = (process.env.TENANT_DISPLAY_NAME ?? '').trim() || 'أيمن أبو العلا';
+const INSTRUCTOR = tenantName(copy.site.name);
 
 /**
  * ARD — Agentic Resource Discovery (agenticresourcediscovery.org).
@@ -83,8 +92,24 @@ export function GET(): Response {
   const manifest = {
     specVersion: '0.1',
     host: {
-      name: copy.site.platformName,
-      description: copy.seo.description,
+      name: tenantName(copy.site.platformName),
+      /*
+       * ⚠️ `SITE_DESCRIPTION`, not `copy.seo.description` — the line above was
+       * gated and this one was not, which is the whole shape of the bug: the
+       * two sit in the same object literal, are read by the same registry, and
+       * one of them said «منصة أيمن أبو العلا» while the other said «منصة
+       * المهندس أيمن أبو العلا لتعليم…». A reviewer's eye stops at the gated
+       * call.
+       *
+       * It is imported rather than re-composed because `host.description` and
+       * the `<meta name="description">` are the same claim about the same site,
+       * made to a crawler and to an agent registry: two independently written
+       * versions is how they start disagreeing, and this one is the copy that
+       * gets EMBEDDED — a registry turns it into a vector and answers questions
+       * with it, so a wrong name here is not read once and forgotten, it is
+       * what the model recalls about this domain.
+       */
+      description: SITE_DESCRIPTION,
       url: SITE_URL,
       inLanguage: 'ar',
     },

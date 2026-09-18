@@ -72,6 +72,8 @@ import { siWhatsapp } from 'simple-icons';
  * as well as off the critical path. See the probe effect below.
  */
 import { copy } from '@ayman/contracts/copy';
+import { tenantName } from '@/lib/tenant';
+import { IS_AYMAN } from '@/lib/tenant';
 import type {
   AssistantTranscriptTurn,
   ConversationThread,
@@ -93,6 +95,30 @@ import { loadAssistantSummary } from './assistant-summary';
  * like the three screens above. The type is erased and costs nothing.
  */
 import type { HandoffState } from './assistant-handoff';
+
+/**
+ * The two strings on this widget that name the instructor, gated.
+ *
+ * Both weld the name into the MIDDLE of a phrase — «محادثتك مع مهندس أيمن» and
+ * «أكلّم م. أيمن» — so `tenantName()` has nothing to swap; the phrase has to be
+ * rebuilt. Same shape as `SITE_TITLE` in `lib/seo/metadata.ts`, and the same
+ * reason.
+ *
+ * Missing these made the screen CONTRADICT ITSELF rather than merely leak: the
+ * message bylines underneath were gated, so a tenant's student read their own
+ * instructor's name on every bubble inside a panel headed «محادثتك مع مهندس
+ * أيمن», opened from a button reading «أكلّم م. أيمن». Two names, one
+ * conversation.
+ *
+ * On Ayman's stack both are the literal copy string, byte for byte.
+ */
+const THREAD_TITLE = IS_AYMAN
+  ? copy.assistant.thread.title
+  : `محادثتك مع ${tenantName(copy.site.instructor)}`;
+
+const CONTACT_LABEL = IS_AYMAN
+  ? copy.assistant.contact.ayman
+  : `أكلّم ${tenantName(copy.site.instructor)}`;
 
 /*
  * The two panel screens that validate an API response, and therefore the two
@@ -911,7 +937,7 @@ export function AssistantWidget({
                       onClick={() => setMode('thread')}
                       className="text-[length:var(--fs-text-sm)] text-accent-text hover:underline"
                     >
-                      {c.thread.title}
+                      {THREAD_TITLE}
                     </button>
                   ) : null}
                 </div>
@@ -1007,7 +1033,7 @@ export function AssistantWidget({
                   )}
                 >
                   <UserRoundCheck className="size-3.5" aria-hidden="true" />
-                  {hasThread ? c.thread.title : copy.assistant.contact.ayman}
+                  {hasThread ? THREAD_TITLE : CONTACT_LABEL}
                   {/* The same dot the launcher carries, for the same reason:
                       it is the only thing on this screen that says an answer
                       is waiting behind the button. */}

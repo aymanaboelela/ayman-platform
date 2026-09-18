@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { aymanOnly } from '@/lib/tenant';
 
 /**
  * Registers `public/sw.js`, which is what turns a complete manifest into an
@@ -60,8 +61,59 @@ import { useEffect } from 'react';
  * already-installed worker was registered with. Emitting `?v=undefined` would
  * make a local build look like a new deploy to a real device.
  */
+/**
+ * ## Why the URL also carries the brand mark
+ *
+ * `public/sw.js` drew `/icons/icon-192.png` on every push notification and
+ * precached it for the offline page. That PNG is not a logo — it is a crop of
+ * Ayman's photograph, cut from `public/team/ayman.jpg` by
+ * `scripts/build-mobile-icons.mjs`. `app/manifest.ts` gates the whole `icons`
+ * array behind `IS_AYMAN` and `app/offline/page.tsx` gates its `<img>`, both
+ * with notes explaining that no generic tile can be substituted; the service
+ * worker, which is the one surface that draws it on a LOCK SCREEN with nothing
+ * open, was gated nowhere. `layout.tsx` mounts this component on every route of
+ * every deployment, so a tenant's students got his face over a line signed with
+ * their own teacher's name.
+ *
+ * The worker cannot gate itself. Nothing rewrites a file in `public/` — the
+ * build is `node scripts/vendor-pyodide.mjs && next build`, and neither step
+ * touches it — so it has no `process.env`, no bundler and no way to import
+ * `@/lib/tenant`. Its only channel is its own script URL, which is already how
+ * `?v=` reaches it, and `self.location` is how it reads that back.
+ *
+ * So the decision is made HERE, where `aymanOnly()` can be imported and where
+ * `TENANT_KEY` is a real value even in client code (`next.config.ts` lists it
+ * under `env:`, which inlines it into the browser bundle). The worker receives
+ * a path or receives nothing, and shows no mark when it receives nothing.
+ *
+ * The PATH rather than a tenant flag, deliberately: a flag would mean deciding
+ * `IS_AYMAN` a second time inside a file that cannot see the gate, and a tenant
+ * that one day uploads its own mark then needs no change to `sw.js` at all —
+ * only a different string on this line.
+ */
 const BUILD_ID = process.env.NEXT_PUBLIC_BUILD_ID;
-const SW_URL = BUILD_ID ? `/sw.js?v=${encodeURIComponent(BUILD_ID)}` : '/sw.js';
+const MARK = aymanOnly('/icons/icon-192.png');
+
+/*
+ * Built as a query list so a missing BUILD_ID still leaves a well-formed URL.
+ *
+ * ⚠️ Both parameters are part of the worker's IDENTITY: a browser installs a
+ * new worker when the script URL or its bytes change. That is exactly what is
+ * wanted on the deploy that ships this — every device re-registers and picks up
+ * the gate — but it also means neither value may be made conditional on
+ * anything that flickers between renders, or a student's device would churn a
+ * new worker on every visit.
+ *
+ * The no-parameter case is still emitted as a bare `/sw.js`, because that is
+ * byte-for-byte the URL every already-installed worker on a pre-`?v=` device
+ * was registered with; `?v=undefined` would make a local build look like a new
+ * deploy to a real phone.
+ */
+const SW_PARAMS = [
+  ...(BUILD_ID ? [`v=${encodeURIComponent(BUILD_ID)}`] : []),
+  ...(MARK ? [`mark=${encodeURIComponent(MARK)}`] : []),
+];
+const SW_URL = SW_PARAMS.length > 0 ? `/sw.js?${SW_PARAMS.join('&')}` : '/sw.js';
 
 export function ServiceWorkerRegister() {
   useEffect(() => {

@@ -7,8 +7,25 @@ import { cn } from '@ayman/ui/lib/cn';
 import { AymanAvatar } from '@/components/assistant/ayman-avatar';
 import { loadAssistantSummary } from '@/components/assistant/assistant-summary';
 import { openAssistant } from '@/components/assistant/assistant-open';
+import { tenantName } from '@/lib/tenant';
 
 const c = copy.dashboard.instructorMessage;
+
+/**
+ * Whose message this is, printed under the eyebrow.
+ *
+ * `c.role` is «م. أيمن أبو العلا» — a BARE name and nothing else, which is the
+ * one shape `tenantName()` handles cleanly: his stack reads the literal back
+ * unchanged and a tenant reads its own `TENANT_DISPLAY_NAME`. No `IS_AYMAN`
+ * branch is needed here, unlike `lib/notification-view.ts`, where every string
+ * that had to be gated has the name welded into the middle of a sentence.
+ *
+ * This card is the most prominent place in the app it could have leaked from:
+ * it takes the hero slot at the top of the dashboard whenever a message is
+ * unread, so it is the first thing a student reads after signing in — over a
+ * teaser of a message signed by their own teacher.
+ */
+const SENDER_NAME = tenantName(c.role);
 
 /**
  * «رسالة ليك» — an unread message from the instructor, at the top of the home
@@ -81,7 +98,7 @@ export function InstructorMessageCard() {
             {c.eyebrow}
           </p>
           <p className="mt-0.5 text-[length:var(--fs-text-base)] font-semibold text-fg">
-            {c.role}
+            {SENDER_NAME}
           </p>
 
           {/*
