@@ -7,6 +7,7 @@ import { adminGet } from '@/lib/admin-api';
 import { BrandingForm } from '../branding-form';
 import { SeoForm } from '../seo-form';
 import { ContactForm } from '../contact-form';
+import { ShippingForm } from '../shipping-form';
 
 export const metadata = { title: copy.admin.settings.title };
 
@@ -64,6 +65,15 @@ export default async function SettingsPage() {
           </CardHeader>
           <CardBody>
             <ContactForm defaultValues={settings.contact} />
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{copy.admin.settings.sectionShipping}</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <ShippingForm defaultValues={settings.store} />
           </CardBody>
         </Card>
       </div>

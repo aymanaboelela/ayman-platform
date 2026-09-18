@@ -7,13 +7,15 @@ import {
   OutreachSettingsSchema,
   SeoSchema,
   SiteSettingsSchema,
+  StoreSettingsSchema,
   type Branding,
   type Contact,
   type OutreachSettings,
   type Seo,
+  type StoreSettings,
 } from '@ayman/contracts/admin/settings';
 import { adminSend } from '@/lib/admin-api';
-import { tags } from '@/lib/cache-tags';
+import { TAG_BOOKS, tags } from '@/lib/cache-tags';
 
 export type SettingsActionResult = { ok: true } | { ok: false; message: string };
 
@@ -65,6 +67,30 @@ export async function updateContactAction(input: Contact): Promise<SettingsActio
     const body = ContactSchema.parse(input);
     await adminSend('PATCH', '/api/admin/settings/contact', body, SiteSettingsSchema);
     updateTag(tags.settings('contact'));
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}
+
+/**
+ * «سعر شحن الكتاب» — the three zone fees, editable without a deploy.
+ *
+ * `TAG_BOOKS`, not a `tags.settings(...)` key: the fee is not read by any
+ * settings loader. It reaches a student through the store — the cart quote and
+ * the checkout total — which is the same `'use cache'` entry the book catalog
+ * feeds, so raising a rate and leaving `TAG_BOOKS` alone would keep quoting
+ * yesterday's price for as long as that entry lives.
+ *
+ * What it does NOT touch is any order already placed: `book_orders.shipping_cents`
+ * is frozen when the order is created (see `bookShippingCentsFor`), so a parcel
+ * already on its way keeps the price the student agreed to.
+ */
+export async function updateStoreAction(input: StoreSettings): Promise<SettingsActionResult> {
+  try {
+    const body = StoreSettingsSchema.parse(input);
+    await adminSend('PATCH', '/api/admin/settings/store', body, SiteSettingsSchema);
+    updateTag(TAG_BOOKS);
     return { ok: true };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
