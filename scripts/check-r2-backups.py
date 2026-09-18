@@ -53,10 +53,17 @@ SERVICE = "s3"
 # missed day pass unnoticed.
 MAX_AGE_HOURS = 26
 
+# Dokploy changed where it writes: v0.26 uploaded to the prefix you typed in the
+# panel (`database/`), v0.30 namespaces it under `<appName>_<serviceName>/` first.
+# Both prefixes are live during the server migration, so each check takes the
+# NEWEST object across all of its candidates. Once the old VPS is gone its
+# prefix simply stops moving and the new one wins on recency — and if the new
+# server's backup ever breaks, every candidate goes stale together and the
+# check goes red, which is the behaviour we want.
 CHECKS = [
-    # prefix, minimum plausible size, which header to verify
-    ("database/", 100_000, "pgdump"),
-    ("media/", 10_000, "tar"),
+    # label, candidate prefixes, minimum plausible size, which header to verify
+    ("database", ("database/", "_postgres/database/"), 100_000, "pgdump"),
+    ("media", ("media/", "_api/media/"), 10_000, "tar"),
 ]
 
 
@@ -109,12 +116,17 @@ def _request(path: str, query: str = "", extra_headers: dict[str, str] | None = 
     return urllib.request.urlopen(req, timeout=60).read()
 
 
-def newest_under(prefix: str) -> tuple[str, int, dt.datetime] | None:
-    """The most recently modified object under `prefix`, or None."""
-    body = _request(
-        f"/{BUCKET}",
-        f"list-type=2&prefix={urllib.parse.quote(prefix, safe='')}",
-    ).decode()
+def newest_under(prefixes: tuple[str, ...]) -> tuple[str, int, dt.datetime] | None:
+    """The most recently modified object under any of `prefixes`, or None.
+
+    A candidate that starts with `_` is matched anywhere in the key rather than
+    at the start, because Dokploy prepends an app name we do not control and
+    that changes whenever the stack is recreated.
+    """
+    body = _request(f"/{BUCKET}", "list-type=2&max-keys=1000").decode()
+
+    def matches(key: str) -> bool:
+        return any(key.startswith(p) if not p.startswith("_") else p in key for p in prefixes)
 
     newest = None
     # R2 orders the XML fields Key, Size, LastModified — not the order the AWS
@@ -128,7 +140,7 @@ def newest_under(prefix: str) -> tuple[str, int, dt.datetime] | None:
         if not (key and size and modified):
             continue
         # `database/` itself is a zero-byte folder marker left by the dashboard.
-        if key.group(1).endswith("/"):
+        if key.group(1).endswith("/") or not matches(key.group(1)):
             continue
         when = dt.datetime.fromisoformat(modified.group(1).replace("Z", "+00:00"))
         if newest is None or when > newest[2]:
@@ -183,10 +195,10 @@ def main() -> int:
 
     verifiers = {"pgdump": looks_like_pg_dump, "tar": looks_like_tar}
 
-    for prefix, min_size, header in CHECKS:
-        newest = newest_under(prefix)
+    for label, prefixes, min_size, header in CHECKS:
+        newest = newest_under(prefixes)
         if newest is None:
-            print(f"::error::no backup at all under {prefix} in r2://{BUCKET}")
+            print(f"::error::no {label} backup at all in r2://{BUCKET} (looked under {', '.join(prefixes)})")
             failed = True
             continue
 
@@ -195,18 +207,18 @@ def main() -> int:
         detail = f"{key}  {size:,} bytes  {age_hours:.1f} h old"
 
         if age_hours > MAX_AGE_HOURS:
-            print(f"::error::{prefix} backup is stale — {detail}")
+            print(f"::error::{label} backup is stale — {detail}")
             failed = True
             continue
         if size < min_size:
-            print(f"::error::{prefix} backup is too small to be real — {detail}")
+            print(f"::error::{label} backup is too small to be real — {detail}")
             failed = True
             continue
 
         if header:
             ok, why = verifiers[header](key)
             if not ok:
-                print(f"::error::{prefix} backup is not restorable — {why} — {detail}")
+                print(f"::error::{label} backup is not restorable — {why} — {detail}")
                 failed = True
                 continue
             detail += f"  [{why}]"
