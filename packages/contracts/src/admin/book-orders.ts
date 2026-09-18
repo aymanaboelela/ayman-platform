@@ -541,11 +541,29 @@ export type BulkBookOrderAction = z.infer<typeof BulkBookOrderActionSchema>;
  *   · `printing` — «راح للمطبعة». No message of its own: sending paper to a
  *     print shop is not news to the student, and telling them would promise a
  *     date the run cannot keep.
+ *   · `review_cleared` — «راجعتهم، كمّلوا». The hold came off, so the parcel
+ *     rejoins the print run and the shipping buttons. A row that had NO hold
+ *     is reported as `skipped` with «مش محجوز» rather than as a clear: the
+ *     batch changed nothing about it, and saying it did would inflate the
+ *     count the admin reads to mean «دول كانوا محجوزين».
  */
+/**
+ * The `reason` a `review-ok` batch gives for a row that carried no hold.
+ *
+ * Shared rather than written twice because the CLIENT matches on it: the
+ * selection «راجعتهم، كمّل» runs on is normally the whole packing list, so
+ * almost every row comes back with this reason, and the toast hides them
+ * instead of naming forty-eight parcels that were always fine. Two copies of
+ * this string — one of them a letter different — would turn that filter off
+ * silently. See `report()` in `bulk-ship.tsx`.
+ */
+export const BULK_NOT_HELD_REASON = 'مش محجوز';
+
 export const BulkBookOrderOutcomeSchema = z.enum([
   'shipped',
   'printing',
   'delivered',
+  'review_cleared',
   'notice_failed',
   'skipped',
 ]);
@@ -789,6 +807,25 @@ export const PackingListSchema = z.object({
    * point is that the selection and the spreadsheet are the same set.
    */
   orderIds: z.array(z.uuid()),
+  /**
+   * The orders this list LEFT OUT because they are «محجوز للمراجعة».
+   *
+   * ## Why the exclusion has to be reported and not just performed
+   *
+   * The sheet, the cards and the spreadsheet all drop a held parcel on
+   * purpose, and «حدّد اللي في المدى» ticks `orderIds`, so a held order is
+   * invisible to every control on the toolbar — including the bulk button that
+   * exists to lift its hold. Reviewing the receipts and then pressing «راجعتهم
+   * كلهم، كمّل» would clear nothing, because nothing held was ever selected.
+   *
+   * So the same query that removes them says WHICH it removed. One query still
+   * decides the run; the ids are simply the other half of its answer.
+   *
+   * ⚠️ Ids only, never rows. This is not a second packing list of held orders —
+   * a held parcel must not be printable from anywhere. It is the input to one
+   * action: lift these holds, then ask for the list again.
+   */
+  heldOrderIds: z.array(z.uuid()),
   /**
    * The same orders again, one entry each, shaped for `/admin/books/labels` —
    * the cut-out cards that go on the parcels.

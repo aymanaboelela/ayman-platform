@@ -248,6 +248,30 @@ export async function markBookOrderPrintingAction(id: string): Promise<ActionRes
  * `revalidatePath` because the row's chip, and its absence from the print run,
  * are both server-rendered.
  */
+/**
+ * «راجعتهم، كمّل» — the same lift, on a whole selection.
+ *
+ * Returns the per-row report rather than a bare ok/failed for the reason every
+ * batch on this screen does: a selection can contain rows that were never
+ * held, and the admin has to be able to see WHICH ones actually moved.
+ */
+export async function clearBookOrderHoldsAction(
+  ids: string[],
+): Promise<BulkBookOrderResult | null> {
+  try {
+    const result = await adminSend(
+      'POST',
+      '/api/admin/book-orders/review-ok',
+      { ids },
+      BulkBookOrderResultSchema,
+    );
+    revalidatePath('/admin/books');
+    return result;
+  } catch {
+    return null;
+  }
+}
+
 export async function clearBookOrderHoldAction(id: string): Promise<ActionResult> {
   try {
     await adminSend(

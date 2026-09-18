@@ -1,14 +1,19 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 // The dedicated leaf module, never `@ayman/contracts/admin/book-orders` — see
 // its own header note: this is a client component on the orders screen, and
 // the full contract would ride into the bundle for one array of ids.
-import { parseAdminBookOrderIds } from '@ayman/contracts/admin/book-orders-packing-ids';
+import {
+  parseAdminBookOrderHeldIds,
+  parseAdminBookOrderIds,
+} from '@ayman/contracts/admin/book-orders-packing-ids';
 import { apiGetNarrow } from '@/lib/api';
+import { clearBookOrderHoldsAction } from './actions';
 import { useBulkSelectMany } from './bulk-ship';
 
 const c = copy.admin.books;
@@ -89,7 +94,9 @@ export function ExportRange({
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [selecting, setSelecting] = useState(false);
+  const [lifting, setLifting] = useState(false);
   const selectMany = useBulkSelectMany();
+  const router = useRouter();
 
   const params = new URLSearchParams({ status });
   if (from) params.set('from', from);
@@ -124,6 +131,57 @@ export function ExportRange({
       toast.error(c.actionFailed);
     } finally {
       setSelecting(false);
+    }
+  }
+
+  /**
+   * «ارفع الحجز عن المحجوزين» — the holds in THIS range, all of them.
+   *
+   * ## Why it is not the selection
+   *
+   * A held order is not in the packing list, so «حدّد اللي في المدى» cannot
+   * tick it and the bulk button in the bar has nothing to act on. The admin
+   * would have to find each held row by eye down a list of fifty and tick it by
+   * hand — on the screen whose whole job is making sure no parcel is missed.
+   *
+   * ## Why it asks the server for the ids instead of counting rows
+   *
+   * Same reason `selectInRange` does: the page is fifty rows and the range is
+   * not. A button that lifted the holds it can SEE would leave the ones on page
+   * two held, and the only symptom would be two parcels missing from a print
+   * run nobody counts.
+   *
+   * ⚠️ It does NOT select them afterwards. The next thing the admin presses is
+   * «حدّد اللي في المدى», which now includes them — replacing the selection
+   * here would quietly drop whatever he had already ticked.
+   */
+  async function liftHoldsInRange(): Promise<void> {
+    setLifting(true);
+    try {
+      const ids = await apiGetNarrow(
+        `/api/admin/book-orders/packing-list?${params.toString()}`,
+        parseAdminBookOrderHeldIds,
+      );
+      if (ids.length === 0) {
+        toast.message(c.bulkReviewOkRangeEmpty);
+        return;
+      }
+      if (!window.confirm(formatCopy(c.bulkReviewOkRangeConfirm, { count: String(ids.length) }))) {
+        return;
+      }
+      const result = await clearBookOrderHoldsAction(ids);
+      if (!result) {
+        toast.error(c.actionFailed);
+        return;
+      }
+      toast.success(formatCopy(c.bulkReviewOkDone, { count: String(result.succeeded) }));
+      /* The chips, the badges and the packing list are all server-rendered, so
+         the holds only LOOK lifted after this. */
+      router.refresh();
+    } catch {
+      toast.error(c.actionFailed);
+    } finally {
+      setLifting(false);
     }
   }
 
@@ -211,6 +269,33 @@ export function ExportRange({
               formatCopy(from || to ? c.bulkSelectRangeDates : c.bulkSelectRange, {
                 n: String(rowCount),
               })}
+        </button>
+      ) : null}
+      {/*
+        «راجعتهم كلهم، كمّل» for the whole range.
+
+        Beside «حدّد اللي في المدى» because it is the step BEFORE it: the holds
+        come off, and only then does the range select the full run. On the same
+        tabs, for the same reason — a hold on a rejected order is not a parcel
+        waiting to be printed.
+
+        Amber, matching `HeldBanner`: it is the toolbar's answer to the band the
+        admin has been reading down the list.
+      */}
+      {selectMany && batchable ? (
+        <button
+          type="button"
+          onClick={() => void liftHoldsInRange()}
+          disabled={lifting}
+          className="rounded-full px-3.5 py-1.5 text-[length:var(--fs-text-sm)] transition-colors duration-[160ms] ease-out disabled:opacity-60"
+          style={{
+            border: '1px solid color-mix(in oklch, var(--warn), transparent 55%)',
+            background: 'color-mix(in oklch, var(--warn), transparent 88%)',
+            color: 'var(--warn)',
+          }}
+          title={c.bulkReviewOkRangeHint}
+        >
+          {lifting ? c.bulkReviewOkRangeWorking : c.bulkReviewOkRange}
         </button>
       ) : null}
       <a

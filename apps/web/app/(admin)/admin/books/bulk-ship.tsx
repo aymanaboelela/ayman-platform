@@ -3,7 +3,10 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import type { BulkBookOrderResult } from '@ayman/contracts/admin/book-orders';
+import {
+  BULK_NOT_HELD_REASON,
+  type BulkBookOrderResult,
+} from '@ayman/contracts/admin/book-orders';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
@@ -12,6 +15,7 @@ import {
   shipBookOrdersAction,
   deliverBookOrdersAction,
   printBookOrdersAction,
+  clearBookOrderHoldsAction,
 } from './actions';
 
 const c = copy.admin.books;
@@ -148,7 +152,23 @@ export function OrderCheckbox({ id, label }: { id: string; label: string }) {
  * `notice_failed` in particular means "the book left but the student was not
  * told", which is a phone call he has to make.
  */
-function report(result: BulkBookOrderResult, done: string): void {
+function report(
+  result: BulkBookOrderResult,
+  done: string,
+  /**
+   * A skip reason that is NOT worth naming — and there is exactly one.
+   *
+   * «راجعتهم، كمّل» runs on the same selection as the other three batches, and
+   * that selection is normally the whole packing list with two held orders in
+   * it. Every other row comes back `skipped` / «مش محجوز», which is not a row
+   * that failed: the batch's entire job on it was already done. Naming
+   * forty-eight of them would bury the two that moved.
+   *
+   * Nothing else is ever quieted. «الطلب مش موجود» and «لسه مادفعش» are things
+   * the admin has to see.
+   */
+  quietSkipReason?: string,
+): void {
   if (result.succeeded > 0) {
     toast.success(formatCopy(done, { count: String(result.succeeded) }));
   }
@@ -157,7 +177,9 @@ function report(result: BulkBookOrderResult, done: string): void {
       toast.error(`${row.fullName} — ${row.reason ?? ''}`, { duration: 10_000 });
     }
   }
-  const skipped = result.rows.filter((row) => row.outcome === 'skipped');
+  const skipped = result.rows.filter(
+    (row) => row.outcome === 'skipped' && row.reason !== quietSkipReason,
+  );
   if (skipped.length > 0) {
     toast.message(
       formatCopy(c.bulkSkipped, {
@@ -205,6 +227,7 @@ function BulkActions({ variant }: { variant: 'bar' | 'inline' }) {
   async function run(
     action: (ids: string[], whatsapp?: boolean) => Promise<BulkBookOrderResult | null>,
     done: string,
+    options?: { quietSkipReason?: string; noneMessage?: string },
   ) {
     setBusy(true);
     const result = await action(ids, alsoWhatsapp);
@@ -213,7 +236,14 @@ function BulkActions({ variant }: { variant: 'bar' | 'inline' }) {
       toast.error(c.actionFailed);
       return;
     }
-    report(result, done);
+    /* A batch that moved nothing and has nothing to complain about still has
+       to say something — silence after a press reads as a button that is
+       broken. Only «راجعتهم، كمّل» can land here, and only when the selection
+       held no held orders at all. */
+    if (result.succeeded === 0 && options?.noneMessage) {
+      toast.message(options.noneMessage);
+    }
+    report(result, done, options?.quietSkipReason);
     clear();
     refreshUnshippedCount();
     router.refresh();
@@ -240,6 +270,42 @@ function BulkActions({ variant }: { variant: 'bar' | 'inline' }) {
         {c.bulkAlsoWhatsapp}
       </label>
       <div className={variant === 'bar' ? 'ms-auto flex flex-wrap items-center gap-2' : 'flex flex-wrap items-center gap-2'}>
+        {/*
+          «راجعتهم، كمّل» — FIRST, because it is first in the day.
+
+          A held order is missing from the packing list, from «كروت الشحن» and
+          from both batches beside this one, so pressing any of them before this
+          quietly leaves those parcels behind. Putting the lift at the head of
+          the row puts it where the run actually starts: review the flagged
+          receipts, lift the holds, then print and ship the whole list as one.
+
+          Amber, matching `HeldBanner` — it is the only control here that
+          answers a band the admin has already been reading up the page.
+        */}
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={busy}
+          onClick={() => {
+            if (!window.confirm(formatCopy(c.bulkReviewOkConfirm, { count: String(ids.length) })))
+              return;
+            void run(clearBookOrderHoldsAction, c.bulkReviewOkDone, {
+              quietSkipReason: BULK_NOT_HELD_REASON,
+              noneMessage: c.bulkReviewOkNone,
+            });
+          }}
+          /* Inline, like `HeldBanner`'s own band: `color-mix` in an arbitrary
+             Tailwind value has to be underscore-escaped to survive the class
+             parser, and a token this button MUST match exactly is not worth
+             spelling twice in two different syntaxes. */
+          style={{
+            borderColor: 'color-mix(in oklch, var(--warn), transparent 55%)',
+            background: 'color-mix(in oklch, var(--warn), transparent 88%)',
+            color: 'var(--warn)',
+          }}
+        >
+          {c.bulkReviewOkButton}
+        </Button>
         <Button
           size="sm"
           disabled={busy}
