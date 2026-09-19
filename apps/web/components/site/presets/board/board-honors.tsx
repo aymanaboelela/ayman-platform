@@ -91,14 +91,17 @@ export function BoardHonors({
                     الأول» cards read as a contradiction. */}
                 <span className="board-honor__course">{entry.courseLabel}</span>
 
-                {/* Initials, never the photograph — and `avatarKey` is ignored
-                    here rather than missing from the payload. This board is the
-                    one surface a stranger reads, and it names a minor: a face
-                    beside that name is a different disclosure from a name
-                    alone, and the owner asked for it not to be made. Same
-                    decision as `honor-board-section.tsx`, and it has to be made
-                    again in every preset — a preset that reached for
-                    `<UserAvatar image={…}>` would quietly undo it. */}
+                {/* Initials, never a photograph — both keys on the payload
+                    are ignored here rather than missing from it. This board is
+                    the one surface a stranger reads, and it names a minor: a
+                    face beside that name is a different disclosure from a name
+                    alone. The classic board now shows one, but only the one an
+                    instructor set for it (`photoKey`) and never the student's
+                    own avatar — a decision taken on Ayman's own board, for his
+                    own students. A preset built for an instructor who has not
+                    been asked should not start publishing faces on his behalf;
+                    a preset that reached for `<UserAvatar image={…}>` would do
+                    exactly that, with the wrong key. */}
                 <span className="board-honor__avatar" aria-hidden="true">
                   {initials(entry.studentName)}
                 </span>

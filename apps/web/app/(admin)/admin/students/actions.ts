@@ -59,6 +59,10 @@ export async function patchStudentAction(userId: string, formData: FormData): Pr
       // `required` input, same treatment as `fullName` above.
       phone: readOptionalText(formData, 'phone') || undefined,
       email: readOptionalText(formData, 'email'),
+      // Cleared to '' by «شيل الصورة», which `readOptionalText` turns into
+      // `null` — the one gesture that takes a child's photo back off the
+      // public board has to actually write the removal, not send `undefined`.
+      honorPhotoKey: readOptionalText(formData, 'honorPhotoKey'),
     });
 
     await adminSend('PATCH', `/api/admin/students/${userId}`, body, AdminStudentDetailSchema);

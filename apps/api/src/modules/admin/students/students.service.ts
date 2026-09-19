@@ -61,6 +61,7 @@ const DETAIL_SELECT = {
   schoolStream: true,
   fatherPhone: true,
   motherPhone: true,
+  honorPhotoKey: true,
   onboardingCompletedAt: true,
   createdAt: true,
   user: {
@@ -109,6 +110,7 @@ function toDetail(record: DetailRecord): AdminStudentDetail {
     bannedAt: record.user.bannedAt?.toISOString() ?? null,
     bannedReason: record.user.bannedReason,
     bannedByName: record.user.bannedBy?.name ?? null,
+    honorPhotoKey: record.honorPhotoKey,
   };
 }
 

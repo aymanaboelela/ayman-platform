@@ -15,11 +15,16 @@ import { CoverCropper } from './cover-cropper';
 const ACCEPT = ALLOWED_UPLOAD_EXT.map((ext) => `.${ext}`).join(',');
 
 /**
- * Both surfaces this field serves — a course cover and a lesson poster — are
- * rendered at 16/9 by `.media-key__preview` and by every reader downstream, so
- * that is the frame the crop offers. One constant rather than a prop, because
- * a caller free to pass 4/3 would be free to store an image no surface can
- * show without cropping it again at render time.
+ * A course cover and a lesson poster are both rendered at 16/9 by
+ * `.media-key__preview` and by every reader downstream, so that is the default
+ * frame the crop offers.
+ *
+ * It stayed a constant for a long time, deliberately: a caller free to pass
+ * 4/3 was free to store an image no surface could show without cropping it
+ * again at render time. `shape="round"` widens that by exactly one step rather
+ * than reopening it — صورة لوحة الشرف is drawn in a CIRCLE, and a 16/9 crop
+ * fed to a circle keeps the middle third of the picture and throws the face
+ * away. The frame still matches a real surface; there are now two of them.
  */
 const COVER_ASPECT = 16 / 9;
 
@@ -66,6 +71,7 @@ export function MediaKeyField({
   label,
   hint,
   defaultValue,
+  shape = 'cover',
   onChange,
 }: {
   /** The FormData key — `coverKey` on a course, `posterKey` on a lesson. */
@@ -74,6 +80,13 @@ export function MediaKeyField({
   label: string;
   hint?: string;
   defaultValue: string | null;
+  /**
+   * How the picture will actually be SHOWN, which decides both the crop frame
+   * and the preview — a round field crops square and previews as a disc, so
+   * what the admin approves in the dialog is what the student sees. Defaults
+   * to the 16/9 cover every earlier caller expects.
+   */
+  shape?: 'cover' | 'round';
   /**
    * The autosaving editors have no submit to read `FormData` on, so they pass
    * this and write the key themselves. It fires on a successful upload and on
@@ -197,7 +210,7 @@ export function MediaKeyField({
           if (file) setPicked(file);
         }}
       >
-        <div className="media-key__preview">
+        <div className={cn('media-key__preview', shape === 'round' && 'media-key__preview--round')}>
           {storageKey ? (
             // A raw <img>: media-origin uploads are not in next.config's
             // `remotePatterns`, so the optimiser would reject them — the same
@@ -286,7 +299,7 @@ export function MediaKeyField({
           {picked ? (
             <CoverCropper
               file={picked}
-              aspect={COVER_ASPECT}
+              aspect={shape === 'round' ? 1 : COVER_ASPECT}
               onCancel={clearPick}
               onCropped={(cropped) => {
                 clearPick();

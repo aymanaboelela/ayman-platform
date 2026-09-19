@@ -346,7 +346,12 @@ export class CatalogService {
         scaledScore: true,
         gradeOutOf: true,
         user: {
-          select: { image: true, studentProfile: { select: { fullName: true } } },
+          select: {
+            image: true,
+            // `honorPhotoKey` and not `image`: the avatar is the student's
+            // own and this board is public. See the column's own note.
+            studentProfile: { select: { fullName: true, honorPhotoKey: true } },
+          },
         },
         honorBoardAt: true,
         quiz: {

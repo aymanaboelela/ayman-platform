@@ -82,6 +82,10 @@ export const AdminStudentDetailSchema = AdminStudentRowSchema.extend({
   /** The admin who issued it, by name. Null if that admin's account has since
    *  been deleted — the ban survives its issuer (`ON DELETE SET NULL`). */
   bannedByName: z.string().nullable(),
+  /** صورة لوحة الشرف — the media key an instructor cleared for the PUBLIC
+   *  board, or null for the vast majority who have none. Never the student's
+   *  own avatar; see `student_profiles.honor_photo_key`. */
+  honorPhotoKey: z.string().nullable(),
 });
 
 export type AdminStudentDetail = z.infer<typeof AdminStudentDetailSchema>;
@@ -177,6 +181,18 @@ export const AdminStudentPatchSchema = z
       })
       .nullable()
       .optional(),
+    /**
+     * صورة لوحة الشرف — a media STORAGE KEY, or `null` to take the photo back
+     * down. Nullable for the same reason every other optional profile field
+     * is: removing a picture of a child from a public page has to be as easy
+     * as putting one up, and easier than finding who to ask.
+     *
+     * Not validated beyond its length. The shape of a key is
+     * `MediaService`'s to decide and it has changed once already; a regex here
+     * would be a second, staler copy of that rule, and a key that points at
+     * nothing renders as initials rather than as a broken page.
+     */
+    honorPhotoKey: z.string().max(200).nullable().optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, { message: 'no fields to update' });

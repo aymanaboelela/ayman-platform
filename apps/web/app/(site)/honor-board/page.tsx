@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Medal, Trophy } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
-import { initials } from '@/components/app/user-avatar';
+import { HonorFace } from '@/components/site/honor-face';
 import { getHonorBoardRounds } from '@/lib/home-blocks';
 
 const c = copy.landing.honorBoard;
@@ -122,11 +122,10 @@ export default async function HonorBoardArchivePage({
                 {c.placeRanks[entry.rank - 1] ?? ''}
               </span>
               <span className="honor-board__slot-course">{entry.courseLabel}</span>
-              {/* Initials, never the photograph — same rule as the landing
-                  board, and for the same reason. See `honor-board-section`. */}
-              <span className="honor-board__slot-avatar" aria-hidden="true">
-                {initials(entry.studentName)}
-              </span>
+              {/* The same face as the landing board, drawn by the same
+                  component — an archived round has to keep looking like the
+                  board it was. */}
+              <HonorFace name={entry.studentName} photoKey={entry.photoKey} />
               <span className="honor-board__slot-name">{entry.studentName}</span>
               <span className="honor-board__slot-quiz">{entry.quizTitle}</span>
             </li>

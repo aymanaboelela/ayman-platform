@@ -558,6 +558,25 @@ model StudentProfile {
   /// sent there.
   whatsappOpenedAt DateTime? @map("whatsapp_opened_at")
 
+  /// صورة لوحة الشرف — the one picture of this student that may be published.
+  ///
+  /// NOT `User.image`. That column is the student's own avatar: a Google photo
+  /// they never chose to share here, or a selfie they uploaded for a screen
+  /// only they and an instructor see. لوحة الشرف is read by anyone on the
+  /// internet and it names a minor, so the photo on it is a SEPARATE, opt-in
+  /// fact — set by an instructor, for that board, and for nothing else. A
+  /// student who wins a place and has no key here gets their initials, which
+  /// is what the board has always shown.
+  ///
+  /// A media storage key (`ab/abcd….webp`), never a URL — media origins are
+  /// reconstructed at render time (`mediaUrl()`), and writing today's host
+  /// into a row would make moving it a data migration.
+  ///
+  /// ⚠️ Invisible to `MediaService.usage()`, which scans only `site_settings`
+  /// and `home_blocks`. Deleting the asset from «الوسائط» takes the bytes and
+  /// leaves this key pointing at nothing — same hazard as `User.image`.
+  honorPhotoKey String? @map("honor_photo_key")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

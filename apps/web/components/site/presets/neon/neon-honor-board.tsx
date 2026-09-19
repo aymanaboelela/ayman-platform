@@ -13,8 +13,10 @@ import { MARKERS, neonCopy } from './neon-copy';
  *
  * ## No photographs, and that is a decision rather than an omission
  *
- * `HonorBoardEntry` carries `avatarKey` and the classic board renders it. This
- * one does not, for two reasons that point the same way.
+ * `HonorBoardEntry` carries two of them — `avatarKey`, the student's own, which
+ * NOTHING public renders, and `photoKey`, the one an instructor cleared for the
+ * classic board. This preset renders neither, for two reasons that point the
+ * same way.
  *
  * The aesthetic one: there is no round photo slot anywhere on this page. Every
  * other card here is a code window with monospace rows in it, and a portrait

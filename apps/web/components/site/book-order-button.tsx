@@ -2,11 +2,9 @@
 
 import { useState } from 'react';
 import { copy } from '@ayman/contracts/copy';
-import { formatCopy } from '@ayman/contracts/format';
-import { minBookShippingCents, type BookShippingRates } from '@ayman/contracts/books';
+import type { BookShippingRates } from '@ayman/contracts/books';
 import { Button } from '@ayman/ui/components/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ayman/ui/components/dialog';
-import { formatEGP } from '@/lib/price';
 import { BookOrderPanel } from './book-order-panel';
 
 
@@ -54,9 +52,6 @@ export function BookOrderButton({
   vodafoneCash: string | null;
 }) {
   const [open, setOpen] = useState(false);
-  /* The FLOOR, not the price — القاهرة والجيزة. The dialog's own breakdown
-     turns it into a real number the instant a governorate is picked. */
-  const fromShippingCents = minBookShippingCents(shippingRates);
 
   return (
     <div className="course-start">
@@ -80,13 +75,23 @@ export function BookOrderButton({
         </DialogContent>
       </Dialog>
 
+      {/*
+        «اطلب الكتاب», and nothing else on the button.
+
+        It used to carry the whole quote — «اطلب الكتاب — ١٥٠ جنيه + مصاريف
+        الشحن والشحن من ٨٠ على حسب المحافظة». That is one unbreakable line
+        (the button is `nowrap`), and this same component renders inside the
+        lesson page's outline rail, which is a ~336px column: its min-content
+        width became the panel's width and the card hung out past its own
+        track, clipped at both edges. Reported as «كبيرة الكلام» with a shot
+        of the sentence running out of the sidebar.
+
+        Nothing is lost by moving it: the dialog this opens shows the book's
+        price, the delivery fee for the governorate picked, and the total —
+        live, and one tap away. The button's job was never to be the invoice.
+      */}
       <Button type="button" onClick={() => setOpen(true)} variant="secondary" className="w-full">
-        {`${formatCopy(copy.bookOrder.ctaWithPrice, {
-          cta: copy.bookOrder.cta,
-          price: formatEGP(bookPriceCents),
-        })} ${formatCopy(copy.books.shippingFromByGovernorate, {
-          price: formatEGP(fromShippingCents),
-        })}`}
+        {copy.bookOrder.cta}
       </Button>
     </div>
   );
