@@ -53,17 +53,29 @@ SERVICE = "s3"
 # missed day pass unnoticed.
 MAX_AGE_HOURS = 26
 
-# Dokploy changed where it writes: v0.26 uploaded to the prefix you typed in the
-# panel (`database/`), v0.30 namespaces it under `<appName>_<serviceName>/` first.
-# Both prefixes are live during the server migration, so each check takes the
-# NEWEST object across all of its candidates. Once the old VPS is gone its
-# prefix simply stops moving and the new one wins on recency — and if the new
-# server's backup ever breaks, every candidate goes stale together and the
-# check goes red, which is the behaviour we want.
+# Dokploy v0.26 uploaded to the prefix you typed in the panel (`database/`);
+# v0.30 namespaces it under `<appName>_<serviceName>/` first. The bare prefixes
+# were kept as candidates through the server migration so the check stayed green
+# while both were live.
+#
+# ⚠️ اتشالوا يوم ٢٠٢٦-٠٩-٢٠، والسبب أهم من التنظيم.
+#
+# الفحص بياخد **أحدث** ملف عبر المرشّحين. السيرفر القديم اتوقف، فالملفات تحت
+# `database/` اتجمّدت — بس فضلت موجودة. يعني لو نسخ السيرفر الجديد بطّلت خالص،
+# الفحص كان هيلاقي الملف القديم، يشوفه «موجود» و«حجمه معقول»، ويطلع **أخضر على
+# نسخة مالهاش أي علاقة بالبرودكشن**. واسترجاع منها كان هيضيّع كل حركة الطلبة من
+# يوم النقل.
+#
+# فحص بيكدب أخضر أسوأ من فحص مش موجود: التاني بتعرف إنك مش مغطّى.
+#
+# الحد الأدنى للداتابيز ٢٠ كيلو مش ١٠٠: ده بيتقاس على **كل** مدرّس، ومنصة لسه
+# فاضية دمپها المضغوط ٥٢ كيلو وسليم تمامًا (رأس `PGDMP` موجود). ١٠٠ كيلو كانت
+# بتولّع أحمر على نسخة صحيحة، وده نفس فخ «أخضر كاذب» من الناحية التانية — إنذار
+# بيتعوّد الناس يتجاهلوه.
 CHECKS = [
     # label, candidate prefixes, minimum plausible size, which header to verify
-    ("database", ("database/", "_postgres/database/"), 100_000, "pgdump"),
-    ("media", ("media/", "_api/media/"), 10_000, "tar"),
+    ("database", ("_postgres/database/",), 20_000, "pgdump"),
+    ("media", ("_api/media/",), 10_000, "tar"),
 ]
 
 
