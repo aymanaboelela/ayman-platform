@@ -1,6 +1,6 @@
 import { connection } from 'next/server';
 import { tenantSentence } from '@/lib/tenant-copy';
-import { tenantName } from '@/lib/tenant';
+import { aymanOnly, tenantName } from '@/lib/tenant';
 import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { copy } from '@ayman/contracts';
 import { AGENT_DISCOVERY_PATHS } from '@/lib/agents/discovery';
@@ -112,13 +112,27 @@ export async function GET(): Promise<Response> {
     `${tenantName(copy.site.instructor)} — ${tenantSentence(copy.landing.aboutRole)}.`,
     '',
     copy.landing.aboutBody1,
-    copy.landing.aboutBody3,
-    copy.seo.instructorCoverage,
+    /*
+     * ⚠️ السيرة الذاتية متجيّتة — دي حقايق عن شخص بعينه، مش كوبي منصة.
+     *
+     * `aboutBody3` و`instructorCoverage` و`aboutCredits` بيقولوا «مهندس شغّال
+     * من ٨ سنين»، «اتخرّج من MTI»، «كان instructor في GDG وIEEE ومايكروسوفت»،
+     * «اتكلم في مايكروسوفت مصر وتمن جامعات». على ستاك مدرّس تاني دي مش تسريب
+     * شكل — دي ادّعاءات **غلط** منسوبة ليه هو، على دومينه، في الملف اللي
+     * محركات البحث والوكلاء بيقروه كمصدر موثوق.
+     *
+     * اتقاست يوم ٢٠٢٦-٠٩-١٩ على `engmohamedsabry.com/llms.txt` و
+     * `mr-mohammedadel.com/llms.txt` — السبع سطور كانت منشورة على الاتنين.
+     *
+     * الاسم نفسه كان متجيّت (`tenantName`/`tenantSentence` فوق)، والسيرة لأ —
+     * وده بالظبط الفخ اللي CLAUDE.md §٢ بيحذّر منه: قفل تسريب بيفتح تسريب تاني.
+     */
+    ...(aymanOnly([copy.landing.aboutBody3, copy.seo.instructorCoverage]) ?? []),
     '',
     // `label` is already phrased as a question in the source — «درس فين؟»,
     // «درّس لمين؟», «اشتغل فين؟» — which is exactly the shape that survives
     // being lifted into an answer.
-    ...copy.landing.aboutCredits.map((credit) => {
+    ...(aymanOnly(copy.landing.aboutCredits) ?? []).map((credit) => {
       /*
        * The marks are emblem TILES on the page, so `note` can end on «للجهات
        * دي» and the reader knows which — the logos are right there. In plain
