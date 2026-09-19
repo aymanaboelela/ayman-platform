@@ -16,12 +16,16 @@ function pin(over: {
   course?: { year: number; forGeneral: boolean; forLanguages: boolean };
   title?: string;
   score?: number;
+  photo?: string | null;
 }): PinnedAttempt {
   return {
     honorBoardAt: new Date(over.at),
     scaledScore: over.score ?? 100,
     gradeOutOf: 100,
-    user: { image: null, studentProfile: { fullName: over.name } },
+    user: {
+      image: null,
+      studentProfile: { fullName: over.name, honorPhotoKey: over.photo ?? null },
+    },
     quiz: {
       lesson: {
         title: over.title ?? 'امتحان نص الشهر الأول',
@@ -106,6 +110,24 @@ describe('toHonorBoardRounds', () => {
     ]);
     expect(round.entries[0].percent).toBe(100);
     expect(() => HonorBoardPeriodSchema.parse(round)).not.toThrow();
+  });
+
+  it('carries the board photo, and only the board photo', () => {
+    // `image` is the student's OWN avatar and it must never reach the public
+    // card — a Google photo nobody cleared for publication beside a minor's
+    // name on the landing page is the exact disclosure this board refuses.
+    const row = pin({ name: 'زياد', at: '2026-09-17T04:00:00Z', photo: 'ab/zeyad.webp' });
+    row.user.image = 'https://lh3.googleusercontent.com/selfie';
+
+    const [round] = toHonorBoardRounds([row]);
+    expect(round.entries[0].photoKey).toBe('ab/zeyad.webp');
+  });
+
+  it('leaves the photo null for a winner who has none', () => {
+    // The ordinary case, and the card draws initials for it. A '' here would
+    // render as a broken image on the one page the whole internet reads.
+    const [round] = toHonorBoardRounds([pin({ name: 'معاذ', at: '2026-09-17T04:00:00Z' })]);
+    expect(round.entries[0].photoKey).toBeNull();
   });
 
   it('is empty for an empty board rather than throwing', () => {

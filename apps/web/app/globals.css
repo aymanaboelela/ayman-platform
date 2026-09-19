@@ -1608,6 +1608,18 @@
   object-fit: cover;
 }
 
+/* صورة لوحة الشرف is drawn as a circle on the public board, so it is judged as
+   one here. A square preview of a picture that will be clipped to a disc hides
+   the only mistake worth catching at this size — a head sitting in a corner,
+   whole in the rectangle and half-gone in the circle. Smaller than the 18rem
+   cover for the same reason it is round: a disc is read at a glance, and at
+   18rem it would dominate a form of ordinary text inputs. */
+.media-key__preview--round {
+  inline-size: min(11rem, 100%);
+  aspect-ratio: 1;
+  border-radius: var(--r-full);
+}
+
 .media-key__empty {
   padding-inline: 1rem;
   font-size: var(--fs-text-sm);

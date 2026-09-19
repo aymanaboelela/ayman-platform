@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Medal, Trophy } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
-import { initials } from '@/components/app/user-avatar';
+import { HonorFace } from './honor-face';
 
 const c = copy.landing.honorBoard;
 
@@ -141,19 +141,12 @@ export function HonorBoardSection({ entries = [] }: { entries?: HonorBoardEntry[
                     الأول» cards read as a contradiction. */}
                 <span className="honor-board__slot-course">{entry.courseLabel}</span>
                 {/*
-                  Initials, never the photograph — and `avatarKey` is
-                  deliberately ignored rather than absent from the payload.
-                  This board is the one surface on the platform that a
-                  stranger on the internet reads, and it names a minor; a
-                  face beside that name is a different disclosure from a
-                  name alone, and the owner asked for it not to be made.
-                  The contract still carries `avatarKey` so an instructor
-                  screen can show who a row is — it is THIS render that
-                  declines it.
+                  The photograph an instructor cleared for THIS board, or the
+                  initials when there is none — `HonorFace` carries the whole
+                  argument, including why `entry.avatarKey` is still not the
+                  thing being read here.
                 */}
-                <span className="honor-board__slot-avatar" aria-hidden="true">
-                  {initials(entry.studentName)}
-                </span>
+                <HonorFace name={entry.studentName} photoKey={entry.photoKey} />
                 <span className="honor-board__slot-name">{entry.studentName}</span>
                 <span className="honor-board__slot-quiz">{entry.quizTitle}</span>
               </li>

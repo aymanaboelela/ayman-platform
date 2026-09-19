@@ -477,6 +477,7 @@ describe('BoardHonors — the empty board', () => {
           {
             studentName: 'طالب مجتهد',
             avatarKey: 'students/mogtahed.jpg',
+            photoKey: null,
             quizTitle: 'امتحان الشهر',
             courseLabel: 'برمجة — تانية بكالوريا',
             rank: 1,
@@ -513,6 +514,7 @@ describe('BoardHonors — the empty board', () => {
           {
             studentName: 'طالب مجتهد',
             avatarKey: 'students/mogtahed.jpg',
+            photoKey: null,
             quizTitle: 'امتحان الشهر',
             courseLabel: 'برمجة — تانية بكالوريا',
             rank: 1,
@@ -542,6 +544,7 @@ describe('BoardHonors — the empty board', () => {
           {
             studentName: 'طالب مجتهد',
             avatarKey: null,
+            photoKey: null,
             quizTitle: 'امتحان الشهر',
             courseLabel: 'برمجة — تانية بكالوريا',
             rank: 1,

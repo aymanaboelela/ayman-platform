@@ -3577,8 +3577,13 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 0.75rem;
-  min-block-size: 8rem;
-  padding: 1.25rem;
+  /* Sized around the FACE, not around the text. The disc below is 7rem and it
+     is the card's subject — «كبر الكارد شويه وحط الصورة دايرة وتبقى كبيرة
+     شويه» — so the box has to have room for it plus four short lines without
+     the name landing on the border. An empty place keeps the same height, or
+     a board filling in overnight would shove the whole section down the page. */
+  min-block-size: 11.5rem;
+  padding: 1.5rem 1.25rem;
   border-radius: var(--r-lg);
   background: var(--site-card-2);
   /* DASHED, and it is the single most load-bearing declaration in this file.
@@ -3607,9 +3612,10 @@
   background: color-mix(in oklch, var(--a-9) 6%, var(--site-card-2));
 }
 
-/* The face of a filled place — INITIALS, never the student's photograph.
-   `honor-board-section.tsx` says why the photo is declined; this says why the
-   disc still has to look like a prize.
+/* The face of a filled place — the instructor's photograph of the winner, or
+   their initials. `honor-face.tsx` says which photo is allowed here and why it
+   is NOT the student's own avatar; this says why the disc looks like a prize
+   either way.
 
    It is the accent, unlike `.honor-board__slot-mark` right above it, and the
    contrast between the two is the point: the medal disc is muted because it
@@ -3624,18 +3630,37 @@
      auto margins are what centre it; everything else in the slot stays
      start-aligned, which is what keeps the Arabic names readable. */
   margin-inline: auto;
-  inline-size: 5rem;
-  block-size: 5rem;
+  inline-size: 7rem;
+  block-size: 7rem;
+  /* `flex-shrink` and not only a size: the slot is a flex COLUMN, and a card
+     whose name wraps to three lines squashes an undersized-looking disc into
+     an oval — on the one element whose whole job is to be a circle. */
+  flex-shrink: 0;
   border-radius: var(--r-full);
   background: color-mix(in oklch, var(--a-9) 18%, var(--site-card));
   box-shadow: 0 0 0 1px color-mix(in oklch, var(--a-9) 45%, transparent);
   color: var(--a-11);
-  font-size: var(--fs-title-2);
+  /* Scaled with the disc. Two letters set at the old size inside a 7rem circle
+     read as a caption floating in a lot of empty ring rather than as a face. */
+  font-size: var(--fs-title-1);
   font-weight: var(--fw-semibold);
   /* Arabic initials are letters, not capitals — no `text-transform` here, and
      `line-height: 1` so a two-letter monogram sits on the disc's centre rather
      than on its type baseline. */
   line-height: 1;
+}
+
+/* The same disc with a picture in it.
+   `object-fit: cover` and a square box: a portrait taken on a phone is 3:4 and
+   `fill` would stretch the winner's face to fit the circle. `display: block`
+   overrides the grid above — `place-items` on a replaced element centres
+   nothing and leaves the image at its intrinsic size inside the box.
+   The ring is the one the monogram already wears, so a board that is half
+   photographs and half initials still reads as one row of prizes. */
+.honor-board__slot-avatar--photo {
+  display: block;
+  object-fit: cover;
+  background: var(--site-card);
 }
 
 /* «تانية بكالوريا — لغات». The board runs one race per course, so without

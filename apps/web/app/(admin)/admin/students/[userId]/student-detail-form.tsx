@@ -9,6 +9,7 @@ import { Card, CardBody } from '@ayman/ui/components/card';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
+import { MediaKeyField } from '@/components/admin/media-key-field';
 import { WhatsappButton } from '@/components/admin/whatsapp-button';
 import { patchStudentAction, type ActionResult } from '../actions';
 
@@ -173,6 +174,25 @@ export function StudentDetailForm({
               </Select>
             </div>
           </div>
+
+          {/*
+            صورة لوحة الشرف — inside this form and not beside it, so it saves
+            with «حفظ» like every other field on the row and there is no second
+            control that writes on its own.
+
+            Round, because that is how the board draws it: a 16/9 crop approved
+            here and then clipped to a circle there is how a winner's face ends
+            up half outside the disc. `shape="round"` crops square and previews
+            as a disc — what he approves is what the page shows.
+          */}
+          <MediaKeyField
+            name="honorPhotoKey"
+            id="honorPhotoKey"
+            label={copy.admin.students.honorPhoto}
+            hint={copy.admin.students.honorPhotoHint}
+            defaultValue={student.honorPhotoKey}
+            shape="round"
+          />
 
           <ActionError state={state} />
 

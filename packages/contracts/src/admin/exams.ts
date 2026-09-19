@@ -448,6 +448,20 @@ export const HonorBoardEntrySchema = z.object({
    *  it — see `honor-board-section.tsx` — and it stays on the wire only so an
    *  instructor surface can tell whose row this is. */
   avatarKey: z.string().nullable(),
+  /**
+   * صورة لوحة الشرف — the photo the board DOES render, or null.
+   *
+   * A different fact from `avatarKey` above, which is why both are here. The
+   * avatar is the student's own (a Google photo, a selfie for a screen only
+   * they see); this one is set by an instructor FOR this board, one student at
+   * a time, and it is the only thing that puts a face on a public page beside
+   * a minor's name. `student_profiles.honor_photo_key` carries the full
+   * argument.
+   *
+   * Null is the normal case and is not a gap: the card falls back to initials,
+   * which is what every card showed before photos existed at all.
+   */
+  photoKey: z.string().nullable(),
   quizTitle: z.string(),
   /** Which course this place was won in — «تانية بكالوريا — لغات».
    *

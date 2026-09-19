@@ -17,7 +17,10 @@ export interface PinnedAttempt {
   honorBoardAt: Date;
   scaledScore: unknown;
   gradeOutOf: unknown;
-  user: { image: string | null; studentProfile: { fullName: string } | null };
+  user: {
+    image: string | null;
+    studentProfile: { fullName: string; honorPhotoKey: string | null } | null;
+  };
   quiz: {
     lesson: {
       title: string;
@@ -100,6 +103,10 @@ export function toHonorBoardRounds(rows: readonly PinnedAttempt[]): HonorBoardPe
           return {
             studentName: row.user.studentProfile?.fullName ?? '—',
             avatarKey: row.user.image,
+            // The photo the BOARD shows, which is not the avatar above it —
+            // one is the student's own and this page is public. Null is the
+            // ordinary case and the card draws initials for it.
+            photoKey: row.user.studentProfile?.honorPhotoKey ?? null,
             quizTitle: row.quiz.lesson.title,
             courseLabel,
             rank,

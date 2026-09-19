@@ -1879,6 +1879,16 @@ const admin = {
      */
     emailNotGiven: 'مادّاش إيميل',
     electiveSubject: 'المادة الاختيارية',
+    /* ── صورة لوحة الشرف ──────────────────────────────────────────────────
+     *
+     * The label says WHERE it goes, not what it is. «الصورة الشخصية» would be
+     * read as the student's avatar — which is a different column, is theirs to
+     * set, and is never published. This one is the picture an instructor puts
+     * on a page the whole internet can read, beside a child's name, so the
+     * field has to say that out loud before anything is uploaded to it.
+     */
+    honorPhoto: 'صورة لوحة الشرف',
+    honorPhotoHint: 'بتظهر على لوحة الشرف في الصفحة الرئيسية للناس كلها. من غير صورة بيظهر أول حرفين من الاسم.',
     memberSince: 'عضو من',
     currentRole: 'الدور الحالي',
     roleAdmin: 'مسؤول',
