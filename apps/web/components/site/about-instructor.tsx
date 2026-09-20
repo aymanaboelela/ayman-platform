@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import { tenantName } from '@/lib/tenant';
+import { aymanOnly, tenantName } from '@/lib/tenant';
 import { tenantSentence } from '@/lib/tenant-copy';
 import { Code2, RefreshCw, ClipboardCheck, GraduationCap, Users, Braces } from 'lucide-react';
 import { copy } from '@ayman/contracts';
@@ -61,11 +61,25 @@ export interface AboutInstructorProps {
 export function AboutInstructor({
   title = tenantSentence(c.aboutTitle),
   body1 = c.aboutBody1,
-  body2 = c.aboutBody2,
-  body3 = c.aboutBody3,
+  /*
+   * ⚠️ متجيّتة — دي حقايق عن شخص بعينه، مش كوبي منصة.
+   *
+   * `aboutBody2` و`aboutBody3` و`aboutCredits` بيقولوا «مهندس شغّال من ٨
+   * سنين»، «اتخرّج من MTI»، «كان instructor في GDG وIEEE ومايكروسوفت». على
+   * ستاك مدرّس تاني دي مش تسريب شكل — دي ادّعاءات **غلط** منسوبة ليه هو على
+   * دومينه.
+   *
+   * الاسم والدور كانوا متجيّتين (`tenantSentence`) والسيرة لأ — نفس الفخ اللي
+   * CLAUDE.md §٢ بيسمّيه: قفل تسريب بيفتح تسريب تاني. المدرّس التاني بيلاقي
+   * عنوان باسمه وتحته سيرة مش بتاعته.
+   *
+   * القسم كله بيختفي لو مفضلش فيه كلام — شوف الشرط على `hasBody` تحت.
+   */
+  body2 = aymanOnly(c.aboutBody2),
+  body3 = aymanOnly(c.aboutBody3),
   role = tenantSentence(c.aboutRole),
   chips = DEFAULT_CHIPS,
-  credits = c.aboutCredits,
+  credits = aymanOnly(c.aboutCredits) ?? [],
 }: AboutInstructorProps = {}) {
   return (
     <section className="site-section site-section--tint" id="about">
