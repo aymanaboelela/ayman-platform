@@ -84,6 +84,9 @@ export class SettingsService {
       branding.logoLightAssetId,
       branding.logoDarkAssetId,
       branding.faviconAssetId,
+      branding.heroAssetId,
+      branding.portraitAssetId,
+      branding.loginAssetId,
     ]);
 
     return {
@@ -91,6 +94,9 @@ export class SettingsService {
       logoLightKey: key(keys, branding.logoLightAssetId),
       logoDarkKey: key(keys, branding.logoDarkAssetId),
       faviconKey: key(keys, branding.faviconAssetId),
+      heroKey: key(keys, branding.heroAssetId),
+      portraitKey: key(keys, branding.portraitAssetId),
+      loginKey: key(keys, branding.loginAssetId),
     };
   }
 

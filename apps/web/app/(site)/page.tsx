@@ -184,18 +184,21 @@ export default async function HomePage() {
    */
   return (
     <main data-layout={branding.landingLayout}>
-      {blocks.map((block) => renderBlock(block, honorBoard))}
+      {blocks.map((block) => renderBlock(block, honorBoard, branding.heroKey))}
     </main>
   );
 }
 
-function renderBlock(block: HomeBlock, honorBoard: HonorBoardEntry[]) {
+/* `heroKey` بيتمرّر مش بيتقري هنا: الدالة دي مش async ومش مكوّن، فنداء
+   `getBranding()` جوّاها كان هيخلّيها كده. الصفحة بتقراه مرة وبتمرّره. */
+function renderBlock(block: HomeBlock, honorBoard: HonorBoardEntry[], heroKey: string | null) {
   const { props } = block;
 
   switch (props.type) {
     case 'hero':
       return (
         <SiteHero
+          heroKey={heroKey}
           key={block.id}
           eyebrow={props.eyebrowAr}
           headline={props.headlineAr}

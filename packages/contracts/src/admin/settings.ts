@@ -196,6 +196,24 @@ export const BrandingSchema = z
     logoLightAssetId: assetId,
     logoDarkAssetId: assetId,
     faviconAssetId: assetId,
+
+    /*
+     * صور المدرّس نفسه — غير الشعار.
+     *
+     * `MediaSlot` بيقرا من `brandAssets` وهي ملفات مكتوبة في الكود ومتجيّتة
+     * بـ`aymanOnly`. فأي مدرّس تاني بياخد **رسمة بديلة** في المقدمة وفي قسم
+     * «المدرّس» وفي صفحة الدخول، مهما رفع صور في مكتبته.
+     *
+     * والحل مش إننا نحط صورته في `logoLightAssetId`: الخانة دي صندوق ٣:١
+     * للشعار، وصورة شخص جوّاها بتبان مربع صغير مش مقروء — اتجرّبت على منصة
+     * صبري وده اللي ظهر بالظبط.
+     *
+     * فكل خانة ليها حقلها: المقدمة عريضة (3:2)، والبورتريه طويل (3:4)،
+     * وصفحة الدخول عمود جنبي. المدرّس بيرفع في مكتبته ويختار، زي الشعار.
+     */
+    heroAssetId: assetId,
+    portraitAssetId: assetId,
+    loginAssetId: assetId,
   })
   .strict();
 
@@ -245,6 +263,9 @@ export const BrandingReadSchema = BrandingSchema.extend({
   logoLightKey: resolvedKey,
   logoDarkKey: resolvedKey,
   faviconKey: resolvedKey,
+  heroKey: resolvedKey,
+  portraitKey: resolvedKey,
+  loginKey: resolvedKey,
 });
 
 export type BrandingRead = z.infer<typeof BrandingReadSchema>;

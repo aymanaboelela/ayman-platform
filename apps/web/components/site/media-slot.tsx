@@ -1,7 +1,21 @@
 import Image from 'next/image';
 import { copy } from '@ayman/contracts/copy';
 import { getBrandAsset, type BrandAssetKind } from '@/lib/brand-assets';
+import { mediaUrl } from '@ayman/ui/branding';
 import { tenantName } from '@/lib/tenant';
+
+/**
+ * أنهي حقل في إعدادات المدرّس بيغذّي أنهي خانة.
+ *
+ * `brandAssets` ملفات مكتوبة في الكود ومتجيّتة بـ`aymanOnly`، فأي مدرّس تاني
+ * كان بياخد **رسمة بديلة** في المقدمة وفي قسم «المدرّس» وفي صفحة الدخول مهما
+ * رفع صور في مكتبته. الخريطة دي هي الوصلة: الصورة اللي رفعها تتعرض مكان
+ * الرسمة، وستاك أيمن يفضل على ملفاته زي ما هو.
+ *
+ * الخانات اللي مش هنا (`logo`, `mark`, `cutout`, وتايلات التراك) مالهاش حقل
+ * لسه — بتسقط على الرسمة البديلة، وهي مصمّمة تبقى شكل نهائي مش مكان فاضي.
+ */
+
 
 /**
  * Renders a registered brand photograph, or — while none exists — a designed
@@ -39,9 +53,24 @@ export function MediaSlot({
   fetchPriority,
   quality,
   sizes = '100vw',
+  tenantKey,
 }: {
   kind: BrandAssetKind;
   alt: string;
+  /**
+   * مفتاح صورة المدرّس، لو رفع واحدة.
+   *
+   * ⚠️ بروب مش قراءة من `getBranding()` جوّه المكوّن.
+   *
+   * القراءة هنا كانت بتخلي `MediaSlot` يستورد `@/lib/settings`، وده المودیول
+   * اللي تستات البريستات بتستبدله كله بـ`vi.mock`. النتيجة نسختين من
+   * `BrandingRead` في نفس الرندر ملهمش علاقة ببعض، و`tsc` بيرد
+   * «Two different types with this name exist» — رسالة مالهاش علاقة بالسبب.
+   *
+   * والبروب أصح وظيفيًا كمان: الصفحة بتقرا `getBranding()` مرة واحدة وبتمرّر،
+   * بدل ما كل خانة على الصفحة تنده الكاش لوحدها.
+   */
+  tenantKey?: string | null;
   className?: string;
   priority?: boolean;
   fetchPriority?: 'high' | 'low' | 'auto';
@@ -49,6 +78,29 @@ export function MediaSlot({
   sizes?: string;
 }) {
   const asset = getBrandAsset(kind);
+
+  /*
+   * صورة المدرّس الأول، وملفات أيمن بعدها.
+   *
+   * على ستاك أيمن `tenantKey` بيفضل فاضي فبيسقط على ملفاته المكتوبة في الكود
+   * وما بيتغيّرش عنده ولا بايت. وعلى ستاك تاني `getBrandAsset` بيرجّع
+   * `undefined` أصلًا (متجيّت بـ`aymanOnly`) — فالصورة المرفوعة هي الوحيدة.
+   */
+  if (tenantKey) {
+    return (
+      <Image
+        src={mediaUrl(tenantKey)}
+        width={1200}
+        height={kind === 'portrait' ? 1600 : 800}
+        alt={alt}
+        priority={priority}
+        fetchPriority={fetchPriority}
+        quality={quality}
+        sizes={sizes}
+        className={className}
+      />
+    );
+  }
 
   if (asset) {
     return (

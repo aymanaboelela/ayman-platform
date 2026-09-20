@@ -58,7 +58,12 @@ const getBranding = vi.fn<() => Promise<BrandingRead>>();
 
 vi.mock('@/lib/catalog', () => ({ getCatalogOrEmpty: () => getCatalogOrEmpty() }));
 vi.mock('@/lib/books', () => ({ getBookCatalogOrEmpty: () => getBookCatalogOrEmpty() }));
-vi.mock('@/lib/settings', () => ({ getBranding: () => getBranding() }));
+/* `getPublicSettingsOrDefaults` كمان: `MediaSlot` بقى بيقرا صورة المدرّس من
+   الإعدادات، والموك اللي بيستبدل المودیول كله لازم يوفّر اللي بيتنده. */
+vi.mock('@/lib/settings', () => ({
+  getBranding: () => getBranding(),
+  getPublicSettingsOrDefaults: async () => ({ seo: {}, contact: {}, about: { bioAr: '', credits: [] } }),
+}));
 
 /* Generated course art resolves a storage key through `next/image` and has
    nothing to say about any decision below. */
@@ -120,9 +125,15 @@ function branding(overrides: Partial<BrandingRead> = {}): BrandingRead {
     logoLightAssetId: null,
     logoDarkAssetId: null,
     faviconAssetId: null,
+    heroAssetId: null,
+    portraitAssetId: null,
+    loginAssetId: null,
     logoLightKey: null,
     logoDarkKey: null,
     faviconKey: null,
+    heroKey: null,
+    portraitKey: null,
+    loginKey: null,
     ...overrides,
   };
 }

@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import { aymanOnly, tenantName } from '@/lib/tenant';
-import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { getBranding, getPublicSettingsOrDefaults } from '@/lib/settings';
 import { tenantSentence } from '@/lib/tenant-copy';
 import { Code2, RefreshCw, ClipboardCheck, GraduationCap, Users, Braces } from 'lucide-react';
 import { copy } from '@ayman/contracts';
@@ -98,7 +98,11 @@ export async function AboutInstructor({
    * الصفحة الرئيسية، ولودر بيرمي وقت `next build` (الـAPI لسه مش صاحي) بيسقّط
    * الصفحة كلها.
    */
-  const settings = await getPublicSettingsOrDefaults();
+  const [settings, branding] = await Promise.all([
+    getPublicSettingsOrDefaults(),
+    /* `'use cache'` ومتقري أصلًا في الروت لايوت — ده إدخال كاش دافي. */
+    getBranding(),
+  ]);
   const about = settings.about;
 
   const bio = body2 ?? (about.bioAr || aymanOnly(c.aboutBody2));
@@ -136,6 +140,7 @@ export async function AboutInstructor({
         <div className="about__portrait">
           <MediaSlot
             kind="portrait"
+            tenantKey={branding.portraitKey}
             alt={tenantName(copy.site.instructor)}
             sizes="(max-width: 1024px) 26rem, 32rem"
           />
