@@ -35,6 +35,7 @@ import { AddSectionForm } from './section-card';
 import { SectionList } from './section-list';
 import { TermPanel } from './term-panel';
 import { ActionError, IDLE } from './action-state';
+import { useFeature } from '../entitlements-context';
 
 const COURSE_STATUS_LABEL = {
   draft: copy.admin.course.statusDraft,
@@ -265,6 +266,7 @@ export function CourseEditor({
   course: AdminCourseDetail;
   taxonomy: Taxonomy;
 }) {
+  const booksOpen = useFeature('books');
   const nextStatus = course.status === 'published' ? 'draft' : 'published';
   const [publishState, publishAction, publishPending] = useActionState<ActionResult, FormData>(
     () => setCourseStatusAction(course.id, nextStatus),
@@ -392,7 +394,10 @@ export function CourseEditor({
             the course's book through a Server Action, and that form is a pure
             controlled form with no data access of its own.
           */
+          /* ستاك مالوش كتب مالوش «كتاب الكورس». `undefined` مش كومبوننت
+             فاضي: `CourseForm` عندها فرع الـslot الغايب خلاص. */
           bookSlot={
+            !booksOpen ? undefined : (
             <CourseBookPanel
               courseId={course.id}
               courseTitle={course.title}
@@ -400,6 +405,7 @@ export function CourseEditor({
               forGeneral={course.forGeneral}
               forLanguages={course.forLanguages}
             />
+            )
           }
         />
 

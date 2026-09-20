@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ArrowUpLeft } from 'lucide-react';
+import type { Entitlements } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
 import { BrandLockup } from '@/components/brand-lockup';
 import { AdminNavList } from './admin-nav-list';
@@ -20,7 +21,15 @@ import { AdminNavList } from './admin-nav-list';
  * In a 260px column that left the link labels with zero width to lay out in,
  * which is why the sidebar rendered as a strip of unlabelled icons.
  */
-export function AppSidebar({ permissions }: { permissions: readonly string[] }) {
+export function AppSidebar({
+  permissions,
+  features,
+}: {
+  permissions: readonly string[];
+  /** مُمرَّرة من اللياوت، زي `permissions`. شوف `admin-nav-list.tsx` لسبب
+   *  إنها prop مش قراءة من البيئة. */
+  features: Entitlements;
+}) {
   return (
     <aside className="hidden border-e border-line bg-surface-2 md:block">
       <div className="sticky top-0 flex h-dvh flex-col gap-6 overflow-y-auto p-4">
@@ -31,7 +40,7 @@ export function AppSidebar({ permissions }: { permissions: readonly string[] }) 
         </Link>
 
         <nav aria-label={copy.admin.title} className="flex-1">
-          <AdminNavList permissions={permissions} />
+          <AdminNavList permissions={permissions} features={features} />
         </nav>
 
         <Link

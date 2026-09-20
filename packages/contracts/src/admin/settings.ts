@@ -486,6 +486,48 @@ export type StoreSettings = z.infer<typeof StoreSettingsSchema>;
  * quietly false. `.prefault()` is Zod 4's spelling of the old behaviour: the
  * value is fed THROUGH the schema.
  */
+/**
+ * «المدرّس» — القسم اللي بيعرّف الطالب على اللي بيشرح له.
+ *
+ * ## ليه ده بقى إعداد بدل كوبي
+ *
+ * الكوبي في `ar.ts` بتقول حقايق عن شخص بعينه: «مهندس شغّال في السوق من ٨
+ * سنين»، «اتخرّج من MTI»، «كان instructor في GDG». دي كانت بتترسم على دومين
+ * كل مدرّس كأنها بتاعته — مش تسريب شكل، **ادّعاءات غلط منسوبة ليه**. اتجيّتت
+ * خلف `aymanOnly()`، والنتيجة إن ستاك المدرّس التاني بقى عنده عنوان من غير
+ * سيرة.
+ *
+ * فالسيرة نزلت للداتابيز: كل مدرّس بيكتب بتاعته من لوحته. وستاك أيمن بيسقط
+ * على الكوبي المكتوبة زي ما هي، فما اتغيّرش عنده ولا بايت.
+ *
+ * ## الشهادات مش نص حر
+ *
+ * `credits` ليستة أسطر قصيرة، كل واحد سؤال وإجابة («درس فين؟» → «حاسبات
+ * بنها»). الشكل ده هو اللي بيعدّي في `llms.txt` كإجابة مفهومة للوكلاء، وهو
+ * كمان اللي بيمنع المدرّس يحط فقرة طويلة في مكان مصمّم لسطر.
+ */
+export const AboutSettingsSchema = z
+  .object({
+    /** الفقرة الأساسية — مين هو وبيشرح إيه. */
+    bioAr: z.string().trim().max(600).default(''),
+    /**
+     * سطور الشهادات. أقصى ٦: القايمة دي بتترسم كتايلات جنب بعض، وفوق كده
+     * بتلف لسطر تالت وتاكل الصفحة على الموبايل.
+     */
+    credits: z
+      .array(
+        z.object({
+          labelAr: z.string().trim().min(1).max(60),
+          noteAr: z.string().trim().min(1).max(200),
+        }),
+      )
+      .max(6)
+      .default([]),
+  })
+  .strict();
+
+export type AboutSettings = z.infer<typeof AboutSettingsSchema>;
+
 export const SiteSettingsSchema = z
   .object({
     branding: BrandingSchema.prefault({}),
@@ -493,24 +535,32 @@ export const SiteSettingsSchema = z
     contact: ContactSchema.prefault({}),
     outreach: OutreachSettingsSchema.prefault({}),
     store: StoreSettingsSchema.prefault({}),
+    about: AboutSettingsSchema.prefault({}),
   })
   .strict();
 
 export type SiteSettings = z.infer<typeof SiteSettingsSchema>;
 
 /** What the public site is allowed to read. Branding has its own endpoint. */
-export const PublicSettingsSchema = z.object({ seo: SeoSchema, contact: ContactSchema }).strict();
+/*
+ * `about` هنا مقصود: القسم بيترسم على الصفحة الرئيسية وصفحة «عن المدرّس»،
+ * والاتنين عامّين. الفرق بينه وبين `store` (اللي **مش** هنا) إن ده كلام
+ * المفروض أي حد يقراه، مش إعداد تشغيلي.
+ */
+export const PublicSettingsSchema = z
+  .object({ seo: SeoSchema, contact: ContactSchema, about: AboutSettingsSchema.prefault({}) })
+  .strict();
 
 export type PublicSettings = z.infer<typeof PublicSettingsSchema>;
 
 /** The same payload as returned over the wire, with the OG image key resolved. */
 export const PublicSettingsReadSchema = z
-  .object({ seo: SeoReadSchema, contact: ContactSchema })
+  .object({ seo: SeoReadSchema, contact: ContactSchema, about: AboutSettingsSchema.prefault({}) })
   .strict();
 
 export type PublicSettingsRead = z.infer<typeof PublicSettingsReadSchema>;
 
-export const SETTINGS_SECTIONS = ['branding', 'seo', 'contact', 'outreach', 'store'] as const;
+export const SETTINGS_SECTIONS = ['branding', 'seo', 'contact', 'outreach', 'store', 'about'] as const;
 export const SettingsSectionSchema = z.enum(SETTINGS_SECTIONS);
 export type SettingsSection = z.infer<typeof SettingsSectionSchema>;
 
@@ -534,4 +584,5 @@ export const SECTION_SCHEMAS = {
    * disagree with itself.
    */
   store: StoreSettingsSchema,
+  about: AboutSettingsSchema,
 } as const;

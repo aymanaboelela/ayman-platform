@@ -129,6 +129,23 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
         }
       />
       {children}
+      {/*
+        ONE footer, and which one it is gets decided inside `<SiteFooter>`
+        rather than here.
+
+        `neon` and `board` render their own (`presets/neon/neon-footer.tsx`
+        and `presets/board/board-footer.tsx`), chosen the same way `page.tsx`
+        chooses the landing page — an `await import()`
+        per preset, `classic` reaching its markup by falling through. The
+        branch is not in this file because this layout is deliberately NOT
+        `async` (see the docblock above, and `(app)/layout.tsx` for the
+        transition it costs); `<SiteFooter>` already awaits its loaders, so the
+        preset read is one more entry in a `Promise.all` it was running anyway.
+
+        Keeping the mount singular is also what keeps `agent-discovery.e2e.ts`
+        true: it asserts the delivered HTML carries exactly one `<footer>`, so
+        a preset footer must REPLACE this one and never render beside it.
+      */}
       <SiteFooter />
       {/*
         المساعد. Mounted per ROUTE GROUP, not at the root — and that is a

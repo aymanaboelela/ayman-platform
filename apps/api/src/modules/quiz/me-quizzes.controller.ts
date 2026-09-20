@@ -3,6 +3,7 @@ import type { StudentMastery, StudentQuizHistory } from '@ayman/contracts';
 import type { StudentExams } from '@ayman/contracts/quiz/scheduled';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { MasteryService } from './mastery.service';
 import { QuizHistoryService } from './quiz-history.service';
 import { ScheduledExamsService } from './scheduled-exams.service';
@@ -88,6 +89,9 @@ export class MeQuizzesController {
    * device clock an hour fast would otherwise show an exam as open while
    * `assertCanAttempt` still returns `quiz_not_open_yet`.
    */
+  /* امتحانات الشهر بس — الراوتين اللي فوق كويزات المحاضرات وامتحان نهاية
+     الكورس، ودول المنصة نفسها مش فيتشر بتتفتح. */
+  @RequireFeature('exams')
   @RequirePermission('quiz:read')
   @Get('exams')
   exams_(@CurrentUser() user: AuthenticatedUser): Promise<StudentExams> {

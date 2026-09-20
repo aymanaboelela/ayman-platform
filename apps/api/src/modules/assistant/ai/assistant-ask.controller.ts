@@ -11,6 +11,7 @@ import { AssistantQuestionService } from './assistant-question.service';
 import { RequireCsrf } from '../../security/require-csrf.decorator';
 import { AssistantAiService } from './assistant-ai.service';
 import { AskDto } from './ask.dto';
+import { RequireFeature } from '../../../auth/decorators/require-feature.decorator';
 
 /**
  * `POST /api/assistant/ask` — the typed question, answered as it is written.
@@ -61,6 +62,7 @@ const ASK_THROTTLE = {
   long: { limit: 60, ttl: seconds(3600) },
 };
 
+@RequireFeature('assistant')
 @Controller('assistant')
 export class AssistantAskController {
   constructor(

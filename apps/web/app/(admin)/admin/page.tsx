@@ -11,8 +11,9 @@ import {
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { getSession } from '@/lib/session';
+import { getEntitlements } from '@/lib/entitlements';
 import { getAdminCourseHeadcount, getAdminOverviewStats } from '@/lib/admin-overview';
-import { ADMIN_NAV, ADMIN_NAV_GROUPS } from '@/components/admin/nav-items';
+import { ADMIN_NAV_GROUPS, visibleNavItems } from '@/components/admin/nav-items';
 import { OverviewQueues } from '@/components/admin/overview-queues';
 import { OverviewCourses } from '@/components/admin/overview-courses';
 
@@ -56,6 +57,9 @@ const QUICK_ACTIONS: { href: string; label: string; icon: LucideIcon; permission
 export default async function AdminOverviewPage() {
   const session = await getSession();
   const permissions = session?.permissions ?? [];
+  // نفس اللي السايدبار بيقراه. الجريد ده تاني سطح لنفس الجدول، والسطح اللي
+  // بيتنسي هو اللي بيسيب تايل لقسم مش موجود.
+  const features = await getEntitlements();
 
   // Two calls, not one, and in parallel: they need different permissions and
   // each degrades on its own — see `getAdminCourseHeadcount`'s own note.
@@ -136,8 +140,11 @@ export default async function AdminOverviewPage() {
 
         <div className="space-y-6">
           {ADMIN_NAV_GROUPS.filter((group) => group.labelAr !== null).map((group) => {
-            const items = ADMIN_NAV.filter(
-              (item) => item.group === group.id && permissions.includes(item.permission),
+            // Same rule as the sidebar, from the same function — see
+            // `visibleNavItems`. This grid is the second surface a hidden
+            // section can leak through.
+            const items = visibleNavItems(permissions, features).filter(
+              (item) => item.group === group.id,
             );
             if (items.length === 0) return null;
 

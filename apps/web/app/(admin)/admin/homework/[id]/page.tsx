@@ -1,3 +1,5 @@
+import { notFound } from 'next/navigation';
+import { getEntitlements } from '@/lib/entitlements';
 import Link from 'next/link';
 import { ArrowRight, BookOpen, MessageCircle, Phone, UserRound } from 'lucide-react';
 // `/copy/admin`, never the root barrel: these screens only ever render
@@ -50,6 +52,14 @@ export default async function AdminHomeworkDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  /*
+   * نفس جيت `/admin/homework` — والـURL ده بيتوصله من غيره. الحكاية كاملة فوق
+   * دالة الصفحة الأب؛ اللي يهم هنا إن صفحة جوّه قسم مقفول لازم تقول نفس
+   * اللي القسم بيقوله، وإلا اللي كتب الـURL بإيده بيلاقي شاشة خطأ من
+   * `adminGet` على راوت بيرد ٤٠٤ بدل ما يلاقي إن مفيش صفحة.
+   */
+  if (!(await getEntitlements()).homework) notFound();
+
   const { id } = await params;
   const submission = await adminGetOrNotFound(
     `/api/admin/homework/${id}`,

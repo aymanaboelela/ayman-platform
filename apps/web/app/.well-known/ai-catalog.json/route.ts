@@ -1,6 +1,7 @@
 import { copy } from '@ayman/contracts';
 import { AGENT_DISCOVERY_PATHS, absoluteDiscoveryUrl } from '@/lib/agents/discovery';
 import { markdownTwinPath } from '@/lib/agents/markdown-routes';
+import { getEntitlements } from '@/lib/entitlements';
 import { SITE_URL } from '@/lib/seo/jsonld';
 import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { tenantName } from '@/lib/tenant';
@@ -88,7 +89,17 @@ const urn = (namespace: string, name: string): string => `urn:air:${host}:${name
  * answers it. Listing «امتحانات الثانوية العامة» would win a match and then
  * hand the agent a site about البكالوريا.
  */
-export function GET(): Response {
+export async function GET(): Promise<Response> {
+  /*
+   * ⚠️ `async` دلوقتي، عشان سطر واحد: مدخل `books.md`.
+   *
+   * الملف ده وعده إنه بيسمّي كل مستند الموقع بينشره. ستاك مالوش كتب،
+   * `/books` بترد ٤٠٤ والتوأم بتاعها كمان — ومدخل فاضل هنا مش سهو صغير: ده
+   * بيدّي للوكيل عنوان بيوصّله لصفحة مش موجودة، فيستنتج إن الموقع بيكذب.
+   * ودي بالظبط الحاجة اللي طبقة الاكتشاف دي متحطّة عشان تمنعها.
+   */
+  const features = await getEntitlements();
+
   const manifest = {
     specVersion: '0.1',
     host: {
@@ -215,6 +226,8 @@ export function GET(): Response {
        * exist. That module is dependency-free by design, so importing it here
        * costs nothing.
        */
+      ...(features.books
+        ? [
       {
         id: urn('docs', 'books'),
         displayName: 'books.md — the printed books, with prices and delivery',
@@ -229,6 +242,8 @@ export function GET(): Response {
           'اطلب كتاب البرمجة أونلاين ويوصل البيت',
         ],
       },
+          ]
+        : []),
       {
         id: urn('docs', 'news-index'),
         displayName: 'news.md — the written curriculum: lessons, glossary and answered exam questions',

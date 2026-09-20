@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -205,5 +206,133 @@ describe('the preset stylesheet', () => {
     // A hex literal ties a preset to a colour, and `accentHue` is meant to
     // keep working underneath every one of them.
     expect(RULES).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+});
+
+/**
+ * The FOOTER switch — the same mechanism, on the component with the widest
+ * reach in the product.
+ *
+ * `page.tsx` chooses a landing page; `<SiteFooter>` chooses a footer, and it
+ * is mounted by `(site)/layout.tsx` under EVERY route in the group plus the
+ * prerendered 404. So the stakes above are all higher here by the number of
+ * pages: a `classic` arm that drifts drifts on twenty screens rather than on
+ * one, and a top-level import of a preset footer hoists that preset's module
+ * graph into the shell every one of those screens is built from.
+ *
+ * ⚠️ These guards exist because the switch above has them and this one did
+ * not. `site-footer.tsx` went from "a file with no branch in it" to "a file
+ * that decides which of three footers a stack gets", and nothing was reading
+ * it — the classic markup could have been moved into a helper, wrapped in a
+ * fragment or handed a prop, and every test in this repo would still have been
+ * green.
+ */
+describe('the footer switch', () => {
+  const FOOTER = readFileSync(join(WEB, 'components', 'site', 'site-footer.tsx'), 'utf8');
+  const CLASSIC_FOOTER_AT = FOOTER.indexOf('  return (\n    <footer className="site-footer">');
+
+  it('still reaches a classic return that starts where it always has', () => {
+    expect(CLASSIC_FOOTER_AT).toBeGreaterThan(-1);
+  });
+
+  /**
+   * Ayman's footer, byte for byte, by digest rather than by literal — it is
+   * 150 lines of JSX and pasting it here would be a second copy of the thing
+   * being protected.
+   *
+   * ⚠️ A failure here is NOT a stale fixture to regenerate. It means the HTML
+   * served to his students changed, and the only change that is allowed is one
+   * he asked for in as many words — «منصتي زي ما هي بالظبط». If that is the
+   * case, the new digest is:
+   *
+   *     node -e "const s=require('fs').readFileSync('apps/web/components/site/site-footer.tsx','utf8');\
+   *     const i=s.indexOf('  return (\\n    <footer className=\\\"site-footer\\\">');\
+   *     console.log(require('crypto').createHash('sha256').update(s.slice(i)).digest('hex'))"
+   */
+  it('still ends in the exact classic footer', () => {
+    const digest = createHash('sha256').update(FOOTER.slice(CLASSIC_FOOTER_AT)).digest('hex');
+    expect(digest).toBe('0abc814aef5f2f4e257366452a0b904122c04945313bc0f17dfe3c68baafa9ae');
+  });
+
+  it('branches on the preset BEFORE the classic return, so classic falls through', () => {
+    for (const preset of LANDING_PRESETS.filter((p) => p !== 'classic')) {
+      const branch = FOOTER.indexOf(`branding.landingPreset === '${preset}'`);
+      expect({ preset, branches: branch !== -1 }).toEqual({ preset, branches: true });
+      expect({ preset, beforeClassic: branch < CLASSIC_FOOTER_AT }).toEqual({
+        preset,
+        beforeClassic: true,
+      });
+    }
+  });
+
+  it('has no branch for classic at all', () => {
+    expect(FOOTER).not.toContain("branding.landingPreset === 'classic'");
+  });
+
+  it('loads the preset footers dynamically, so classic never evaluates them', () => {
+    // Worse here than on the page, and for one reason: the footer is on every
+    // route in the group, so a static import evaluates both preset trees on
+    // every marketing render Ayman's stack serves rather than on one.
+    for (const preset of LANDING_PRESETS.filter((p) => p !== 'classic')) {
+      const module = `@/components/site/presets/${preset}/${preset}-footer`;
+      expect({ preset, dynamic: FOOTER.includes(`await import('${module}')`) }).toEqual({
+        preset,
+        dynamic: true,
+      });
+      expect({ preset, static: FOOTER.includes(`from '${module}'`) }).toEqual({
+        preset,
+        static: false,
+      });
+    }
+  });
+
+  it('reads branding through the tagged loader, so a saved preset reaches the footer', () => {
+    // Same argument the page's own version of this test makes: the read has to
+    // be the tagged `'use cache'` entry, or changing the preset would swap the
+    // landing page and leave the footer under it on the old one.
+    expect(FOOTER).toContain('getBranding()');
+  });
+
+  it('is mounted exactly once, so the document carries exactly one <footer>', () => {
+    // `agent-discovery.e2e.ts` asserts that on the delivered HTML. A preset
+    // footer REPLACES this mount; a second `<SiteFooter />` — or a preset
+    // landing page rendering a footer of its own — breaks a check that only
+    // runs in Playwright, long after the change lands.
+    expect(SITE_LAYOUT.match(/<SiteFooter\s*\/>/g) ?? []).toHaveLength(1);
+    for (const preset of LANDING_PRESETS.filter((p) => p !== 'classic')) {
+      const landing = readFileSync(
+        join(WEB, 'components', 'site', 'presets', preset, `${preset}-landing.tsx`),
+        'utf8',
+      );
+      expect({ preset, footers: (landing.match(/<footer[\s>]/g) ?? []).length }).toEqual({
+        preset,
+        footers: 0,
+      });
+    }
+  });
+
+  /**
+   * Not one `<h*>`, on any of the three.
+   *
+   * The footer is streamed in the shell BEFORE the page's own content, so a
+   * heading here is a heading that precedes the document's `<h1>`. Every
+   * heading was taken out of the classic footer on 2026-09-13 after an
+   * AI-readiness scan scored the site 0/20 on heading order, and a preset
+   * footer is the obvious place for one to come back — a column label looks
+   * exactly like an `<h3>`.
+   */
+  it('puts no heading in any footer', () => {
+    const files = [
+      FOOTER,
+      ...LANDING_PRESETS.filter((p) => p !== 'classic').map((preset) =>
+        readFileSync(
+          join(WEB, 'components', 'site', 'presets', preset, `${preset}-footer.tsx`),
+          'utf8',
+        ),
+      ),
+    ];
+    for (const text of files) {
+      expect(text.replace(/\/\*[\s\S]*?\*\//g, ' ')).not.toMatch(/<h[1-6][\s>]/);
+    }
   });
 });

@@ -59,6 +59,13 @@ export class VideoMirrorService implements OnModuleDestroy {
   private readonly storage: MirrorStorage | null;
   private running = false;
   private renewTimer: NodeJS.Timeout | null = null;
+  /**
+   * السحب من يوتيوب — منفصل عن التخزين نفسه.
+   *
+   * الرفع المباشر والسحب من يوتيوب بيشاركوا نفس الباكت (`VIDEO_MIRROR_*`)،
+   * فتفضية المتغيرات كانت هتقفل الاتنين. ده بيقفل السحب بس.
+   */
+  private readonly pullsFromYouTube: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -68,11 +75,17 @@ export class VideoMirrorService implements OnModuleDestroy {
     @Inject(TRANSCODE_TOOLS)
     private readonly encoder: TranscodeTools = DEFAULT_TRANSCODE_TOOLS,
   ) {
-    this.config = mirrorConfigFrom(loadEnv(process.env));
+    const env = loadEnv(process.env);
+    this.config = mirrorConfigFrom(env);
     this.storage = this.config === null ? null : new MirrorStorage(this.config);
+    this.pullsFromYouTube = env.VIDEO_MIRROR_FROM_YOUTUBE;
 
     if (this.config === null) {
       this.logger.log('video mirror disabled — no bucket configured, players fall back to YouTube');
+    } else if (!this.pullsFromYouTube) {
+      this.logger.log(
+        'السحب من يوتيوب مقفول — الرفع المباشر شغّال، والمحاضرات اللي على يوتيوب بتتفرّج من يوتيوب',
+      );
     }
   }
 
@@ -112,6 +125,15 @@ export class VideoMirrorService implements OnModuleDestroy {
   @Cron(CronExpression.EVERY_MINUTE)
   async tick(): Promise<void> {
     if (this.config === null || this.storage === null) return;
+    /*
+     * ⚠️ الخروج هنا، مش في مكان أبعد.
+     *
+     * المهمة دي بتشتغل كل دقيقة. لما يوتيوب بقى بيرد «Sign in to confirm
+     * you're not a bot» على طلبات السيرفرات، كل تكة كانت بتبدأ سحب، تفشل،
+     * وتسيب قطع ناقصة في الباكت — ٧٬٤٩٢ ملف يتيم اتجمّعوا كده. الخروج قبل أي
+     * استعلام بيخلي التكة مجانية بدل ما تبقى دورة فشل.
+     */
+    if (!this.pullsFromYouTube) return;
     // A tick that overlaps its predecessor inside ONE process would take the
     // lock straight back off itself — the Redis lock guards replicas, this
     // guards the event loop.

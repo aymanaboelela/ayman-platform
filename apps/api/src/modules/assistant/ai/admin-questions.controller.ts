@@ -8,6 +8,7 @@ import {
 import type { ListResponse } from '@ayman/contracts/admin/list';
 import { RequirePermission } from '../../../auth/decorators/require-permission.decorator';
 import { AssistantQuestionService } from './assistant-question.service';
+import { RequireFeature } from '../../../auth/decorators/require-feature.decorator';
 
 /**
  * `GET /api/admin/assistant/questions` — what students typed into المساعد.
@@ -28,6 +29,7 @@ import { AssistantQuestionService } from './assistant-question.service';
  * live bug, kept for the same reason every other admin controller in this
  * codebase states it.
  */
+@RequireFeature('assistant')
 @Controller('admin/assistant')
 export class AdminAssistantQuestionsController {
   constructor(private readonly questions: AssistantQuestionService) {}

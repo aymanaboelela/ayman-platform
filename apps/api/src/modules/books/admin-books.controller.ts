@@ -6,6 +6,7 @@ import { RequirePermission } from '../../auth/decorators/require-permission.deco
 import { RequireCsrf } from '../security/require-csrf.decorator';
 import { AdminBookCreateDto, AdminBookPatchDto } from './books.dto';
 import { BooksService } from './books.service';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
  * «قسم الكتب» — the shelf, from the admin side.
@@ -14,6 +15,8 @@ import { BooksService } from './books.service';
  * somebody has BOUGHT are different objects with different risks. See the note
  * in `permissions.ts` for why that split is worth two more strings.
  */
+// نفس الفيتشر من الناحية التانية: مدرّس مش بيبيع كتب مالوش كتالوج يحرّره.
+@RequireFeature('books')
 @Controller('admin/books')
 @UsePipes(ZodValidationPipe)
 export class AdminBooksController {

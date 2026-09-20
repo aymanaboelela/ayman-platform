@@ -10,6 +10,7 @@ import { isOptOutMessage } from '@ayman/contracts/marketing/render';
 import { Public } from '../../auth/decorators/public.decorator';
 import { loadEnv } from '../../config/env';
 import { CampaignService } from './campaign.service';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
  * `POST /api/marketing/wa/inbound` — the sidecar relaying what a phone typed
@@ -34,6 +35,8 @@ import { CampaignService } from './campaign.service';
  * this into a two-way chat would duplicate المساعد's open chat and give a
  * campaign message a reply button nothing else on the platform has.
  */
+// ويب‌هوك الجهاز. مالوش لازمة من غير جهاز مرتبط، وبيتقفل مع الفيتشر.
+@RequireFeature('marketing.whatsapp')
 @Controller('marketing/wa')
 export class WhatsappInboundController {
   constructor(private readonly campaigns: CampaignService) {}

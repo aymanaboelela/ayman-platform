@@ -8,6 +8,7 @@ import {
 } from '@ayman/contracts/books';
 import { apiGet } from '@/lib/api';
 import { TAG_BOOKS } from '@/lib/cache-tags';
+import { getEntitlements } from '@/lib/entitlements';
 
 /**
  * «قسم الكتب» — the shop, for the page that renders it.
@@ -59,6 +60,24 @@ export async function getBookCatalogOrEmpty(): Promise<BookCatalog> {
   'use cache';
   cacheLife('minutes');
   cacheTag(TAG_BOOKS);
+
+  /*
+   * ستاك مش بيبيع كتب: رفوف فاضية، ومن غير ما نضرب راوت إحنا عارفين إنه
+   * بيرد ٤٠٤ (`@RequireFeature('books')` على `BooksController`).
+   *
+   * والرفوف الفاضية هي الجيت كله تقريبًا: `books-strip`، وبلوكات البريستين،
+   * وقسم الكتب في الداشبورد، وراوت الماركداون — كلهم عندهم فرع
+   * «مفيش كتب» بيرجّع `null` أصلًا. أسعار الشحن بتفضل الحقيقية للسبب
+   * المكتوب تحت: كارت محفوظ في `localStorage` بيحسب مجموعه عليها.
+   */
+  if (!(await getEntitlements()).books) {
+    return {
+      shelves: [],
+      shippingCents: minBookShippingCents(DEFAULT_BOOK_SHIPPING_RATES),
+      shippingRates: DEFAULT_BOOK_SHIPPING_RATES,
+      total: 0,
+    };
+  }
 
   try {
     return await apiGet('/api/books', BookCatalogSchema);

@@ -6,6 +6,7 @@ import { copy } from '@ayman/contracts';
 import { AGENT_DISCOVERY_PATHS } from '@/lib/agents/discovery';
 import { AGENT_SKILLS, skillPath } from '@/lib/agents/skills';
 import { getCatalogOrEmpty } from '@/lib/catalog';
+import { getEntitlements } from '@/lib/entitlements';
 import { getNewsListOrEmpty } from '@/lib/news';
 import { SITE_URL } from '@/lib/seo/jsonld';
 import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
@@ -68,6 +69,9 @@ export async function GET(): Promise<Response> {
   // teaches a crawler the URL is broken and it may not come back soon.
   const { courses } = await getCatalogOrEmpty();
   const { posts } = await getNewsListOrEmpty();
+  /* الصفحات اللي بتعيش جوّه فيتشر. سطر هنا بيوصّل لـ٤٠٤ هو نفس الدريفت
+     اللي `.well-known/ai-catalog.json` بيتكلّم عنه. */
+  const features = await getEntitlements();
 
   const courseLines = courses.map(
     (course) => `- [${course.title}](${url(`/courses/${course.slug}`)}): ${course.subjectNameAr} · ${course.lessonCount} ${copy.catalog.lessonCount}`,
@@ -172,7 +176,11 @@ export async function GET(): Promise<Response> {
      * أبو العلا بكام؟» has a definite published answer and an assistant had to
      * decline it.
      */
-    `- [${tenantSentence(copy.books.metaTitle)}](${url('/books.md')}): ${tenantSentence(copy.books.metaDescription)}`,
+    ...(features.books
+      ? [
+          `- [${tenantSentence(copy.books.metaTitle)}](${url('/books.md')}): ${tenantSentence(copy.books.metaDescription)}`,
+        ]
+      : []),
     /*
      * ⚠️ «إزاي أشترك وأدفع؟» — a question this platform answers every day and
      * no public page did. The checkout is behind auth, so an assistant saw the

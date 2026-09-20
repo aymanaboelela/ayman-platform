@@ -15,6 +15,7 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { copy } from '@ayman/contracts/copy/admin';
 import { extractYouTubeId, type VideoEmbedStatus } from '@ayman/contracts/video';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { LessonService } from './lesson.service';
 import { VideoUploadService } from '../video-mirror/video-upload.service';
 import { YouTubeDurationService } from './youtube-duration.service';
@@ -144,19 +145,30 @@ export class LessonController {
    * because it is the same act. A separate permission would mean a role that
    * can replace a lecture with a link but not with a file, which describes
    * nobody.
+   *
+   * وكلهم على `video.upload` كمان — وهي الفيتشر اللي بتكلّف فلوس: البايتات
+   * بتقعد على R2 بتاعنا وبتتعاد مرة تانية في الإنكودينج. عشان كده افتراضيها
+   * مقفول على أي ستاك مش بتاع أيمن (شوف `defaultForTenant` في الكتالوج).
+   *
+   * ⚠️ `POST lessons/:id/video/mirror` فوق **مش** منهم عن قصد. ده بينسخ
+   * فيديو يوتيوب على R2 عشان التابلت اللي بيحجب يوتيوب — بيشتغل لمحاضرة
+   * مالهاش أي علاقة بالرفع المباشر، وقفله بيكسر تشغيل محاضرات يوتيوب.
    */
+  @RequireFeature('video.upload')
   @RequirePermission('lesson:write')
   @Post('lessons/:id/video/upload')
   startVideoUpload(@Param('id') id: string, @Body() body: StartVideoUploadDto) {
     return this.uploads.start(id, body);
   }
 
+  @RequireFeature('video.upload')
   @RequirePermission('lesson:write')
   @Post('lessons/:id/video/upload/complete')
   completeVideoUpload(@Param('id') id: string, @Body() body: CompleteVideoUploadDto) {
     return this.uploads.complete(id, body);
   }
 
+  @RequireFeature('video.upload')
   @RequirePermission('lesson:write')
   @Post('lessons/:id/video/upload/abort')
   abortVideoUpload(@Param('id') id: string, @Body() body: AbortVideoUploadDto) {
@@ -171,6 +183,7 @@ export class LessonController {
    * called by the screen that just started the upload. `lesson:write` costs
    * nothing here and keeps the diagnostic with the people who can act on it.
    */
+  @RequireFeature('video.upload')
   @RequirePermission('lesson:write')
   @Get('lessons/:id/video/upload/status')
   videoUploadStatus(@Param('id') id: string) {

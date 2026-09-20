@@ -81,6 +81,7 @@
     "./admin/taxonomy": "./src/admin/taxonomy.ts",
     "./admin/media": "./src/admin/media.ts",
     "./admin/flags": "./src/admin/flags.ts",
+    "./admin/entitlements": "./src/admin/entitlements.ts",
     "./admin/navigation": "./src/admin/navigation.ts",
     "./admin/home-blocks": "./src/admin/home-blocks.ts",
     "./quiz/scheduled": "./src/quiz/scheduled.ts",

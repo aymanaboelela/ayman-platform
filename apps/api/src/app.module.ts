@@ -7,6 +7,7 @@ import type Redis from 'ioredis';
 import { LoggerModule } from 'nestjs-pino';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { FeatureGuard } from './auth/guards/feature.guard';
 import { PrivateCacheInterceptor } from './common/http/private-cache.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { ipTrackerFromRequest, trackerFromRequest } from './common/throttle/request-identity';
@@ -47,6 +48,7 @@ import { BookOrdersModule } from './modules/book-orders/book-orders.module';
 import { BooksModule } from './modules/books/books.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { HomeworkModule } from './modules/homework/homework.module';
+import { TenantEntitlementsModule } from './modules/tenant-entitlements/tenant-entitlements.module';
 
 @Module({
   imports: [
@@ -161,10 +163,25 @@ import { HomeworkModule } from './modules/homework/homework.module';
     BookOrdersModule,
     // الواجب — the exercise on a lecture, and the photographs of the answer.
     HomeworkModule,
+    /*
+     * إيه اللي الستاك ده مسموح له يشغّله — المستند الموقّع اللي صاحب
+     * السوفتوير بيصدّره. ⚠️ مش `EntitlementModule` اللي فوق: ده عن وصول
+     * الطالب لكورس، وده عن وصول المدرّس لفيتشر.
+     */
+    TenantEntitlementsModule,
   ],
   controllers: [HealthController],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    /*
+     * الفيتشرز المقفولة على الستاك ده — بترد ٤٠٤ قبل ما الكنترولر يشوف الطلب.
+     *
+     * هنا ومش في `AuthModule` عن قصد: الجارد ده لازم يشتغل على الراوتات
+     * `@Public()` كمان (قسم الكتب ولوحة الشرف عامّين)، و`AuthGuard` بيخرج
+     * بدري عليهم. وكمان `AuthModule` بيجرّ Better Auth الـESM اللي التستات
+     * مابتقدرش تحمّله، والجارد ده مالوش أي تبعية غير `Reflector`.
+     */
+    { provide: APP_GUARD, useClass: FeatureGuard },
     // Every non-`@Public()` response gets `Cache-Control: private, no-store`.
     // The API sent no cache header at all, and the analytics CSV exports —
     // full names, governorates, scores — sit on `.csv` paths, an extension

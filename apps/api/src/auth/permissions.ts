@@ -287,6 +287,25 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission> | '*'> = {
   owner: new Set<Permission>([
     'admin:access',
 
+    /*
+     * المدرّس **طالب على منصته كمان**.
+     *
+     * الرول ده اتكتب كقايمة صلاحيات إدارية بحتة، فطلع مالوش `profile:read`.
+     * النتيجة إن `/api/profile/me` بيرد 403، و`resolveAuthState` في
+     * `proxy.ts` بيفشل مقفول (أي رد مش 200 = «مش مسجّل دخول») — فأول مدرّس
+     * اتحوّل لـ`owner` لقى `/dashboard` بيرميه على `/login` وهو داخل فعلًا،
+     * ولوحة الأدمن شغالة في نفس الوقت. مقيس يوم ٢٠٢٦-٠٩-٢٠.
+     *
+     * فالمدرّس بياخد اللي أي حساب بيحتاجه عشان يبقى موجود على منصته: بروفايله،
+     * وتقدّمه، وتسجيله في كورساته هو عشان يجرّب اللي الطالب بيشوفه. ودي مش
+     * صلاحيات إدارية — الطالب العادي عنده نفسها بالحرف.
+     */
+    'profile:read',
+    'profile:write',
+    'progress:read',
+    'enrollment:read',
+    'enrollment:create',
+
     // Their courses, from writing them to putting them live.
     'course:read',
     'course:read-admin',

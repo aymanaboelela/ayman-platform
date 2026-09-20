@@ -1479,6 +1479,263 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+   The footer — the closing block, on every page in the group
+   --------------------------------------------------------------------------- */
+
+/* ⚠️ WHY THERE IS A FOOTER IN A PRESET STYLESHEET AT ALL.
+
+   `<SiteFooter>` is mounted by `(site)/layout.tsx`, one level ABOVE the page,
+   so before `<BoardFooter>` existed every route in this group ended in the
+   classic footer. «اللوح» was therefore a poster for as long as the visitor
+   stayed on `/` and an ordinary site the moment they pressed «الكورسات» — the
+   preset's whole argument, made and then withdrawn one click later.
+
+   The footer carries `data-preset='board'` itself (`board-footer.tsx`), which
+   is what brings the token block at the top of this section onto it: those
+   properties are declared on the attribute, and the footer is a SIBLING of
+   `<main>`, so it inherits none of them otherwise. That attribute is also the
+   scope every rule below hangs off, so nothing here can reach `classic`.
+
+   ⚠️ It belongs in the BOARD half of this file and must not move below the
+   next banner. The two scans that guard this stylesheet slice it at the banner
+   lines, so a board rule on the far side of that boundary is read as an
+   unscoped rule of the OTHER preset — and writing the banner's own characters
+   into a comment moves the boundary, which is how this block first landed in
+   the wrong half. Name the preset in words here, never in banner glyphs. */
+
+[data-preset='board'].board-foot {
+  background: var(--board-page);
+  color: var(--board-ink);
+}
+
+/* This preset has no blanket margin reset — each section on the landing page
+   zeroes its own, because they are all hand-written headings and leads. The
+   footer is a list of lists, so it takes one scoped to itself rather than
+   twelve `margin: 0` declarations below. */
+[data-preset='board'].board-foot :is(p, ul) {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ---- the deep closing block ---- */
+
+/* The arc is on the TOP edge, the same logical corners `.board-closer` uses
+   and for the same reason: the page opens with a block curving away from the
+   reader and closes with one curving back. `50%` is the HORIZONTAL half, so
+   the two corners meet in the middle and the result is one arc across the
+   whole edge rather than two rounded corners. `overflow: hidden` so the arc
+   actually clips what sits inside it.
+
+   No `@media (prefers-color-scheme)` and no `data-theme` arm: this is the
+   brand, not a surface. See the banner at the top of this section. */
+[data-preset='board'] .board-foot__closer {
+  background: var(--board-slab);
+  color: var(--board-on-slab);
+  /* A scrollbar or a form control that ever lands in here is painted for a
+     dark ground rather than as a white slot in a navy panel. */
+  color-scheme: dark;
+  text-align: center;
+  padding-block: clamp(2.5rem, 6vw, 4rem);
+  border-start-start-radius: 50% var(--board-curve);
+  border-start-end-radius: 50% var(--board-curve);
+  overflow: hidden;
+}
+
+[data-preset='board'] .board-foot__closer .board-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.875rem;
+  /* Clear of the arc, exactly as the landing page's closer is clear of its
+     own — without this the chip sits inside the curve at narrow widths. */
+  padding-block-start: var(--board-curve);
+}
+
+[data-preset='board'] .board-foot__title {
+  max-inline-size: 30rem;
+  font-size: clamp(1.5rem, 4.2vw, 2.25rem);
+  line-height: 1.25;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+}
+
+[data-preset='board'] .board-foot__lead {
+  max-inline-size: 34rem;
+  line-height: 1.8;
+  /* NOT `--site-ink-fg-2`, which is what `classic` uses for this job and
+     measures ≈3.8:1 on `--p-800`. See the banner. */
+  color: var(--board-on-slab-2);
+}
+
+[data-preset='board'] .board-foot__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem 1.5rem;
+  margin-block-start: 0.75rem;
+}
+
+/* The second action is a link, not a second pill. Two pills side by side on a
+   poster ask the reader to make a choice, and this block has one thing to
+   ask; the underline says «this is also clickable» without competing. */
+[data-preset='board'] .board-foot__alt {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.75rem;
+  color: var(--board-on-slab);
+  font-weight: var(--fw-semibold);
+  text-decoration: underline;
+  text-underline-offset: 0.35em;
+  text-decoration-thickness: 1px;
+}
+
+[data-preset='board'] .board-foot__alt:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* ---- the bright half ---- */
+
+[data-preset='board'] .board-foot__body {
+  padding-block-start: clamp(2.25rem, 5vw, 3.5rem);
+  /* The parked launcher's berth, and the number is `sections.css`'s: 3.5rem of
+     button plus the 1.5rem it keeps clear on each side, measured at 390, 768,
+     900 and 1024. The assistant stays pinned to the viewport floor on this
+     preset too, so a footer without this gutter trades covering the wordmark
+     for covering the last row of links. */
+  padding-block-end: 6.5rem;
+  text-align: center;
+}
+
+[data-preset='board'] .board-foot__body .board-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(1.5rem, 3.5vw, 2.25rem);
+}
+
+/* The wordmark at poster size — the classic footer's answer to the same
+   moment is a 13vw watermark with `white-space: nowrap`, calibrated against
+   one particular name's length. That measurement does not survive a
+   `TENANT_DISPLAY_NAME` of any other length, and this preset is selectable by
+   anyone, so the type is clamped and the line is allowed to wrap instead. */
+[data-preset='board'] .board-foot__mark {
+  max-inline-size: 20ch;
+  font-size: clamp(1.75rem, 6vw, 3rem);
+  line-height: 1.15;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--board-ink);
+}
+
+[data-preset='board'] .board-foot__social {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.625rem;
+}
+
+[data-preset='board'] .board-foot__social-link {
+  display: grid;
+  place-items: center;
+  /* 2.75rem is the touch target the rest of the surface uses at phone width,
+     applied at every width here — these are the only icon-only controls in
+     the footer and there is no layout reason to shrink them. */
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--board-line);
+  background: var(--board-card);
+  color: var(--board-ink-2);
+  transition:
+    color 0.18s ease,
+    border-color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+/* `--brand` is written inline per icon (`board-footer.tsx`) from the mark's
+   own hex, so each button lights up in its own brand rather than all five
+   turning the accent colour. */
+[data-preset='board'] .board-foot__social-link:hover {
+  color: var(--brand);
+  border-color: var(--brand);
+  background: var(--board-tint);
+}
+
+[data-preset='board'] .board-foot__cols {
+  display: grid;
+  /* `min(100%, …)` rather than a bare track width: that is what stops a 13rem
+     column from being wider than a 390px viewport, which is the usual way a
+     footer grid puts a horizontal scrollbar on a phone. `auto-fit` then
+     collapses to one centred column on its own, so this needs no breakpoint. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: clamp(1.75rem, 4vw, 2.5rem);
+  inline-size: 100%;
+  align-items: start;
+  justify-items: center;
+}
+
+[data-preset='board'] .board-foot__col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* The same pill every section on this page uses to name itself. It is what
+   lets a column label read as a heading without BEING one — the footer is
+   streamed before the page's `<h1>`, so a real heading here breaks the
+   document outline (see `board-footer.tsx`). */
+[data-preset='board'] .board-foot__chip {
+  margin-block-end: 0.75rem;
+}
+
+[data-preset='board'] .board-foot__link {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.25rem;
+  padding-inline: 0.25rem;
+  color: var(--board-ink-2);
+  line-height: 1.5;
+}
+
+[data-preset='board'] .board-foot__link:hover {
+  color: var(--board-accent-ink);
+}
+
+[data-preset='board'] .board-foot__wa {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: 2.75rem;
+  margin-block-start: 0.5rem;
+  padding-inline: 1rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--board-line);
+  background: var(--board-card);
+  color: var(--board-ink);
+  font-weight: var(--fw-semibold);
+  transition:
+    color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+[data-preset='board'] .board-foot__wa:hover {
+  color: var(--brand);
+  border-color: var(--brand);
+}
+
+[data-preset='board'] .board-foot__rights {
+  padding-block-start: clamp(1rem, 2.5vw, 1.5rem);
+  border-block-start: 1px solid var(--board-line);
+  inline-size: 100%;
+  font-size: var(--fs-text-sm);
+  color: var(--board-ink-2);
+}
+
+
 /* ═══ NEON ════════════════════════════════════════════════════════════════
    «الترمينال» — `branding.landingPreset === 'neon'`.
    Component tree: `components/site/presets/neon/`, rooted on
@@ -2797,13 +3054,28 @@
    header exists.
 
    ── Why it cannot match the classic page ─────────────────────────────────
-   `:has([data-preset='neon'])` matches only a `.site` that CONTAINS the neon
-   `<main>`. Ayman's `<main>` carries `data-layout` and nothing else, and
+   `:has(main[data-preset='neon'])` matches only a `.site` that CONTAINS the
+   neon `<main>`. Ayman's `<main>` carries `data-layout` and nothing else, and
    `lib/landing-preset.test.ts` asserts that the string `data-preset` appears
    nowhere in `page.tsx` at all — so on `classic` this selector has nothing to
-   match and the block is inert. It is also scoped to the LANDING page by
-   construction: `/courses`, `/books` and every other route in the group has
-   no preset root in it, so they keep the theme they have.
+   match and the block is inert.
+
+   ── ⚠️ Why the argument says `main` ──────────────────────────────────────
+   It used to be a bare `[data-preset='neon']`, and it read the same because
+   the landing page's `<main>` was the only element in the repo carrying the
+   attribute. `<NeonFooter>` now carries it too, on EVERY route in the group —
+   and `:has()` is a descendant match, so the bare version would have turned
+   `/courses`, `/books`, `/about` and the 404 dark as a side effect of giving
+   the footer a scope hook. That is a change to a tenant's whole marketing
+   surface arriving through a footer commit, which is precisely the kind of
+   thing nobody would think to look for.
+
+   Naming the element restores the sentence this block was always meant to
+   mean: the LANDING page's shell follows the landing page. It changes nothing
+   that shipped — on the day it was added, `main[data-preset='neon']` and
+   `[data-preset='neon']` selected the same single element — and the footer
+   needs none of it, because it carries its own ground (see the FOOTER banner
+   below).
 
    ── Why `:root:root` ─────────────────────────────────────────────────────
    Specificity, not superstition. `theme.css` declares the dark surface at
@@ -2817,7 +3089,7 @@
    re-read before moving it.
    ═════════════════════════════════════════════════════════════════════════ */
 
-:root:root .site:has([data-preset='neon']) {
+:root:root .site:has(main[data-preset='neon']) {
   --site-bg: var(--ink);
   --site-bg-tint: var(--ink-2);
   --site-card: var(--ink-2);
@@ -2870,3 +3142,256 @@
   object-fit: cover;
 }
 
+
+/* ═══ NEON — the footer ═══════════════════════════════════════════════════
+   «الترمينال»'s footer, rendered by `components/site/presets/neon/neon-footer.tsx`
+   on `<footer class="neon-foot" data-preset="neon">`.
+
+   ── WHY THE PRESET NEEDS A FOOTER OF ITS OWN ─────────────────────────────
+   `<SiteFooter>` is mounted by `(site)/layout.tsx`, one level ABOVE the page,
+   so until this component existed every route in the group ended in the
+   classic footer. On this preset that produced a page contradicting itself:
+   the `:has()` block above repoints the shell's tokens so the nav and footer
+   follow the dark landing page, and that selector can only match on `/`. The
+   same footer markup therefore rendered dark on `/` and light on `/courses`,
+   with nothing in either file to say why.
+
+   This footer does not rely on that block at all. `data-preset='neon'` on the
+   element brings the preset's own root block with it — the `--neon-*` tokens,
+   the dark ground, `color-scheme: dark`, `isolation: isolate`, the scoped
+   margin reset and the circuit traces — so it renders identically under every
+   route and every theme, and would keep doing so if the `:has()` rule were
+   removed tomorrow.
+
+   ── SCOPE ────────────────────────────────────────────────────────────────
+   Every selector below is prefixed `[data-preset='neon']`, exactly like the
+   page's. `neon-landing.test.ts` reads this whole section and pins the ONE
+   exception by name, so there is no room for a second.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* The boundary filament. `::before` on the preset root already draws the
+   circuit traces, so this takes `::after`. Same six lines as
+   `.neon-section::before` and the same reason: a boundary on this preset is a
+   line of LIGHT, not a change of ground — lit in the middle, dark at the ends.
+   The stop order is symmetric, so `to left` renders identically either way and
+   needs no RTL variant. */
+[data-preset='neon'].neon-foot::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 1px;
+  pointer-events: none;
+  background-image: linear-gradient(
+    to left,
+    transparent,
+    color-mix(in oklch, var(--neon-glow), transparent 62%),
+    transparent
+  );
+}
+
+[data-preset='neon'] .neon-foot__inner {
+  position: relative;
+  /* Above the traces, which the root's `::before` paints at z-index 0. */
+  z-index: 1;
+  padding-block-start: clamp(2.5rem, 5vw, 4rem);
+  /* The parked launcher's berth, and the number is `sections.css`'s: 3.5rem of
+     button plus the 1.5rem it keeps clear on each side, measured at 390, 768,
+     900 and 1024. The assistant is pinned to the viewport floor on this preset
+     too, so without this gutter it covers the last row of links. */
+  padding-block-end: 6.5rem;
+}
+
+/* ---------- the closer, as the one lit window ---------- */
+
+/* Same argument `<NeonCta>` makes for the landing page's last frame: on a
+   ground this dark a closing panel cannot be distinguished by a change of
+   background, only by light. `lit` is set in the markup rather than here
+   because it is a property of this window, not of its position. */
+[data-preset='neon'] .neon-foot__cta {
+  max-width: 44rem;
+  margin-inline: auto;
+  text-align: center;
+}
+
+[data-preset='neon'] .neon-foot__cta-title {
+  font-size: clamp(1.375rem, 3.2vw, 1.875rem);
+  line-height: 1.35;
+  font-weight: var(--fw-bold);
+  color: var(--neon-fg);
+}
+
+[data-preset='neon'] .neon-foot__cta-lead {
+  margin-block-start: 0.625rem;
+  line-height: 1.9;
+  color: var(--neon-fg-2);
+}
+
+[data-preset='neon'] .neon-foot__cta-cmds {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-block-start: 1.5rem;
+}
+
+/* ---------- the columns ---------- */
+
+[data-preset='neon'] .neon-foot__grid {
+  display: grid;
+  /* `min(100%, …)` and not a bare track width: that is what stops a 13rem
+     column from being wider than a 390px viewport, which is the usual way a
+     footer grid puts a horizontal scrollbar on a phone. `auto-fit` collapses
+     it to one column on its own, so this section needs no breakpoint at all. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: clamp(1.75rem, 4vw, 3rem);
+  align-items: start;
+  padding-block: clamp(2.5rem, 5vw, 3.5rem);
+}
+
+[data-preset='neon'] .neon-foot__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+
+[data-preset='neon'] .neon-foot__mark {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+/* The prompt in front of the name, so the brand line reads as the shell it is
+   sitting in rather than as a logo dropped on a dark page. */
+[data-preset='neon'] .neon-foot__prompt {
+  font-size: var(--fs-text-sm);
+  color: var(--neon-glow);
+}
+
+/* Clamped and allowed to WRAP. The classic footer closes on a 13vw watermark
+   with `white-space: nowrap`, a measurement calibrated against one particular
+   name's length; any preset is selectable by any instructor, so a longer
+   `TENANT_DISPLAY_NAME` here has to fold rather than leave the viewport. */
+[data-preset='neon'] .neon-foot__name {
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  line-height: 1.25;
+  font-weight: var(--fw-bold);
+  color: var(--neon-fg);
+}
+
+[data-preset='neon'] .neon-foot__social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+[data-preset='neon'] .neon-foot__social-link {
+  display: grid;
+  place-items: center;
+  /* 2.75rem at every width: these are the only icon-only controls in the
+     footer and there is no layout reason to shrink them below the touch
+     target the rest of the surface uses. */
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--neon-line);
+  background: var(--neon-panel);
+  color: var(--neon-fg-2);
+  transition:
+    color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+/* `--brand` is written inline per icon from `inkBrand(mark)` — the variant the
+   registry carries for a surface that is dark in both themes. TikTok's
+   official `#000000` measures 1.08:1 here; its own dark UI uses the cyan, and
+   so does this. */
+[data-preset='neon'] .neon-foot__social-link:hover {
+  color: var(--brand);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
+}
+
+[data-preset='neon'] .neon-foot__col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* A column label, written the way a comment names a section of a file: the
+   `// marker` above the Arabic word. It is a `<p>` and not a heading — the
+   footer is streamed BEFORE the page's `<h1>`, so a real heading here breaks
+   the document outline; see `neon-footer.tsx` for the scan that caught it. */
+[data-preset='neon'] .neon-foot__h {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin-block-end: 0.75rem;
+  font-weight: var(--fw-bold);
+  color: var(--neon-fg);
+}
+
+[data-preset='neon'] .neon-foot__marker {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-regular);
+  color: var(--neon-glow);
+}
+
+[data-preset='neon'] .neon-foot__link {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.25rem;
+  color: var(--neon-fg-2);
+  line-height: 1.5;
+  transition: color 0.18s ease;
+}
+
+[data-preset='neon'] .neon-foot__link:hover {
+  color: var(--neon-glow-2);
+}
+
+[data-preset='neon'] .neon-foot__wa {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: 2.75rem;
+  margin-block-start: 0.75rem;
+  padding-inline: 0.875rem;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--neon-line);
+  background: var(--neon-panel);
+  color: var(--neon-fg);
+  font-weight: var(--fw-semibold);
+  transition:
+    color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+[data-preset='neon'] .neon-foot__wa:hover {
+  color: var(--brand);
+  border-color: var(--brand);
+}
+
+/* ---------- the last line ---------- */
+
+[data-preset='neon'] .neon-foot__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-block-start: clamp(1rem, 2.5vw, 1.5rem);
+  border-block-start: 1px solid var(--neon-line);
+  font-size: var(--fs-text-sm);
+  color: var(--neon-fg-2);
+}
+
+[data-preset='neon'] .neon-foot__rights {
+  color: var(--neon-fg-2);
+}
+
+[data-preset='neon'] .neon-foot__eof {
+  color: var(--neon-trace);
+}

@@ -1,3 +1,5 @@
+import { notFound } from 'next/navigation';
+import { getEntitlements } from '@/lib/entitlements';
 import { Card, CardBody } from '@ayman/ui';
 import { AssistantQuestionSchema } from '@ayman/contracts/assistant/questions';
 import { listResponse } from '@ayman/contracts/admin/list';
@@ -38,6 +40,14 @@ export default async function AdminAssistantQuestionsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  /*
+   * نفس جيت `/admin/inbox` — والـURL ده بيتوصله من غيره. الحكاية كاملة فوق
+   * دالة الصفحة الأب؛ اللي يهم هنا إن صفحة جوّه قسم مقفول لازم تقول نفس
+   * اللي القسم بيقوله، وإلا اللي كتب الـURL بإيده بيلاقي شاشة خطأ من
+   * `adminGet` على راوت بيرد ٤٠٤ بدل ما يلاقي إن مفيش صفحة.
+   */
+  if (!(await getEntitlements()).assistant) notFound();
+
   const params = await searchParams;
   const raw = Array.isArray(params.escalated) ? params.escalated[0] : params.escalated;
   const escalatedOnly = raw === '1';

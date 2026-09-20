@@ -118,3 +118,30 @@ describe('quiz permissions', () => {
     expect(roleHasPermission('editor', 'quiz:read')).toBe(false);
   });
 });
+
+/**
+ * المدرّس لازم يقدر يستخدم منصته كحساب، مش كلوحة إدارة بس.
+ *
+ * `owner` اتكتب كقايمة صلاحيات إدارية، فطلع مالوش `profile:read`. و
+ * `resolveAuthState` في `proxy.ts` بيفشل مقفول — أي رد مش 200 من
+ * `/api/profile/me` بيتقري «مش مسجّل دخول». فأول مدرّس اتحوّل للرول ده لقى
+ * `/dashboard` بيرميه على `/login` وهو داخل، ولوحة الأدمن شغالة في نفس الوقت.
+ *
+ * التست بيقارن بالطالب مش بليستة مكتوبة بالإيد: قايمة بتنسخ قايمة تانية هي
+ * قايمة هتدرِفت. أي صلاحية تتضاف للطالب بكرة وماتتضافش هنا، ده بيولّع.
+ */
+describe('the owner is a student on their own platform', () => {
+  it('carries every permission a student needs to exist', () => {
+    // اللي الطالب بيعمله من غير دفع ولا تسليم — الحد الأدنى للوجود على المنصة.
+    const essentials: Permission[] = [
+      'profile:read',
+      'profile:write',
+      'progress:read',
+      'enrollment:read',
+    ];
+    for (const permission of essentials) {
+      expect(roleHasPermission('student', permission)).toBe(true);
+      expect(roleHasPermission('owner', permission)).toBe(true);
+    }
+  });
+});

@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { getEntitlements } from '@/lib/entitlements';
 import { Plus } from 'lucide-react';
 import { z } from '@ayman/contracts/zod';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -46,6 +48,15 @@ export const metadata = { title: c.title };
  * exam opens.
  */
 export default async function AdminExamsPage() {
+  /*
+   * القسم ده مش موجود على ستاك الفيتشر دي مقفولة فيه — والصف بتاعه في
+   * `ADMIN_NAV` مش بيترسم أصلًا. ده الباب لو حد كتب الـURL بإيده.
+   *
+   * `notFound()` مش ٤٠٣: الصفحة مش «ممنوعة»، هي مش هنا. ونفس الشكل بالحرف
+   * اللي `(admin)/layout.tsx` بيستخدمه، وبيشرح ليه فوقه.
+   */
+  if (!(await getEntitlements()).exams) notFound();
+
   /*
    * Both in parallel. The course list is only for «كرره على كورسات تانية», so
    * making the exam list wait on it would slow the screen down for the reader

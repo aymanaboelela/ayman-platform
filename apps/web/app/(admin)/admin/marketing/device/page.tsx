@@ -1,4 +1,6 @@
 import { WhatsappDeviceSchema } from '@ayman/contracts/marketing/campaign';
+import { notFound } from 'next/navigation';
+import { getEntitlements } from '@/lib/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet } from '@/lib/admin-api';
 import { MarketingTabs } from '../tabs';
@@ -10,6 +12,15 @@ const c = copy.marketing;
 export const metadata = { title: c.deviceTitle };
 
 export default async function MarketingDevicePage() {
+  /*
+   * القسم ده مش موجود على ستاك الفيتشر دي مقفولة فيه — والصف بتاعه في
+   * `ADMIN_NAV` مش بيترسم أصلًا. ده الباب لو حد كتب الـURL بإيده.
+   *
+   * `notFound()` مش ٤٠٣: الصفحة مش «ممنوعة»، هي مش هنا. ونفس الشكل بالحرف
+   * اللي `(admin)/layout.tsx` بيستخدمه، وبيشرح ليه فوقه.
+   */
+  if (!(await getEntitlements())['marketing.whatsapp']) notFound();
+
   const device = await adminGet('/api/admin/marketing/device', WhatsappDeviceSchema);
 
   return (

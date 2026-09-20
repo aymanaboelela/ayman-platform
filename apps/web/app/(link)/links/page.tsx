@@ -15,6 +15,7 @@ import { copy } from '@ayman/contracts';
 import {
 } from '@ayman/contracts/site-profiles';
 import { waMeHref } from '@ayman/contracts/whatsapp';
+import { getEntitlements } from '@/lib/entitlements';
 import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 import { tenantName } from '@/lib/tenant';
 import { tenantSentence } from '@/lib/tenant-copy';
@@ -95,7 +96,10 @@ export async function generateMetadata(): Promise<Metadata> {
  * homepage, which is the specific bug `site-profiles.ts` was created to end.
  */
 export default async function LinksPage() {
-  const { contact } = await getPublicSettingsOrDefaults();
+  const [{ contact }, features] = await Promise.all([
+    getPublicSettingsOrDefaults(),
+    getEntitlements(),
+  ]);
 
   /*
    * The setting first, then THIS DEPLOYMENT's own fallback. There used to be a
@@ -243,13 +247,15 @@ export default async function LinksPage() {
             who arrived from a TikTok comment asking «الكتاب بيتباع فين؟» should
             not have to scroll past a glossary to find out.
           */}
-          <Row
-            href="/books"
-            internal
-            icon={<BookMarked size={20} aria-hidden="true" />}
-            title={c.booksTitle}
-            note={c.booksNote}
-          />
+          {features.books ? (
+            <Row
+              href="/books"
+              internal
+              icon={<BookMarked size={20} aria-hidden="true" />}
+              title={c.booksTitle}
+              note={c.booksNote}
+            />
+          ) : null}
           <Row
             href="/essentials"
             internal

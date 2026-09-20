@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { tenantSentence } from '@/lib/tenant-copy';
 import { copy } from '@ayman/contracts';
 import { JsonLd } from '@/components/seo/json-ld';
 import { BooksShippingChip, BooksShop } from '@/components/site/books-shop';
 import { getBookCatalogOrEmpty } from '@/lib/books';
+import { getEntitlements } from '@/lib/entitlements';
 import { bookListJsonLd, breadcrumbJsonLd } from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
@@ -69,6 +71,16 @@ export async function generateMetadata(): Promise<Metadata> {
  * throw fails the build.
  */
 export default async function BooksPage() {
+  /*
+   * الصفحة نفسها مش موجودة على ستاك الفيتشر دي مقفولة فيه — `notFound()`
+   * مش صفحة فاضية.
+   *
+   * اللودر تحت بيرجّع «مفيش حاجة» أصلًا، وده كان هيسيب عنوان وسطر وصف
+   * لقسم مالوش وجود. و`notFound()` مش ٤٠٣ لنفس السبب المكتوب في
+   * `(admin)/layout.tsx`: الصفحة دي مش «ممنوعة»، هي مش هنا.
+   */
+  if (!(await getEntitlements()).books) notFound();
+
   const [catalog, { contact }] = await Promise.all([
     getBookCatalogOrEmpty(),
     getPublicSettingsOrDefaults(),

@@ -10,6 +10,7 @@ import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/curre
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { IngestTransfersDto } from './payments.dto';
 import { TransfersService } from './transfers.service';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /** One screen's worth. The ledger is read, not paged through — an admin looks
  *  at what has not been explained yet, which is a short list by design. */
@@ -23,6 +24,7 @@ const PAGE_SIZE = 100;
  * and someone trusted to approve a payment is exactly who may say a stray
  * transfer needs no action.
  */
+@RequireFeature('transfers')
 @Controller('admin/transfers')
 export class AdminTransfersController {
   constructor(private readonly transfers: TransfersService) {}

@@ -210,6 +210,27 @@ const schema = z
      */
     VIDEO_MIRROR_CONCURRENCY: z.coerce.number().int().positive().max(4).default(1),
 
+    /**
+     * هل ناخد نسخة من اليوتيوب تلقائيًا؟
+     *
+     * النسخ ده معمول عشان تابلت الوزارة بيحجب يوتيوب، فالمحاضرة بتتسحب وتتحط
+     * عندنا. المشكلة إنه **وقف يشتغل**: يوتيوب بقى بيرد
+     * «Sign in to confirm you're not a bot» على طلبات السيرفرات، فالمهمة
+     * بتحاول كل دقيقة وبتفشل وبتسيب قطع ناقصة في الباكت — ٧٬٤٩٢ ملف يتيم
+     * اتمسحوا يوم ٢٠٢٦-٠٩-٢٠، و١٣ محاولة كلها `failed` وصفر `ready`.
+     *
+     * ⚠️ ده **مش** بيقفل رفع الفيديو المباشر. الاتنين بيشاركوا نفس التخزين
+     * (`VIDEO_MIRROR_*`)، فتفضية المتغيرات كانت هتقفل الاتنين — والرفع المباشر
+     * شغّال وهو الطريق اللي صاحب المنصة بيستخدمه. المفتاح ده بيقفل السحب من
+     * يوتيوب بس.
+     *
+     * `true` هو الافتراضي عشان السلوك ما يتغيّرش على أي ستاك من غير قرار.
+     */
+    VIDEO_MIRROR_FROM_YOUTUBE: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
+
     /* ── المساعد's open chat — `POST /api/assistant/ask` ────────────────
      *
      * ⚠️ ALL THREE ARE OPTIONAL, and the product has to be whole with none of
@@ -324,6 +345,30 @@ const schema = z
         })
         .optional(),
     ),
+    /**
+     * مستند الصلاحيات الموقّع — إيه الفيتشرز اللي الستاك ده مسموح له
+     * يشغّلها. compact JWS، بيتوقّع EdDSA من شاشة التحكّم عند صاحب
+     * السوفتوير، وبيتقرا هنا بمفتاح عام مكمپايل في الصورة.
+     *
+     * ⚠️ **`optionalSecret` وبس — ومحدش بيتحقّق منه هنا، عن قصد.**
+     *
+     * `loadEnv` بترمي على أول مشكلة، و`main.ts` بينده عليها قبل
+     * `NestFactory.create`. يعني لو التوقيع اتفحص من هنا، مستند منتهي
+     * الصلاحية = حاوية API ماقامتش = Traefik بيرد 404 على الدومين كله.
+     * ده حرفيًا نفس شكل حادثة `GROQ_MODEL` المكتوبة فوق، بس بسبب تاريخ
+     * انتهاء بدل سترنج فاضية.
+     *
+     * فاللي بيحصل هنا هو «دي سترنج، ولو فاضية يبقى مش موجودة» وخلاص.
+     * التحقّق الحقيقي في `apps/api/src/common/entitlements.ts`، وهو عمره
+     * ما بيرمي: أي فشل بيرجّع الستاك للافتراضي المعلن و`logger.error`.
+     *
+     * وموجود في السكيما دي أصلًا عشان القاعدة في CLAUDE.md §٥: متغيّر
+     * بيعرف نفسه هنا لازم يبقى في `deploy/tenant.env.example` وفي
+     * `scripts/check-tenant-env.mjs` كمان، وده اللي بيخلّي التلاتة يتحركوا
+     * مع بعض. ⚠️ `TENANT_KEY` نفسه مش هنا — بيتقرا خام في
+     * `common/tenant.ts` — فمتقلّدش ده.
+     */
+    TENANT_ENTITLEMENTS: optionalSecret,
   })
   .refine((data) => !(data.GOOGLE_CLIENT_ID && !data.GOOGLE_CLIENT_SECRET), {
     message: 'GOOGLE_CLIENT_SECRET is required when GOOGLE_CLIENT_ID is set',

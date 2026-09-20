@@ -12,6 +12,7 @@ import { Select } from '@ayman/ui/components/select';
 import { MediaKeyField } from '@/components/admin/media-key-field';
 import { WhatsappButton } from '@/components/admin/whatsapp-button';
 import { patchStudentAction, type ActionResult } from '../actions';
+import { useFeature } from '@/components/admin/entitlements-context';
 
 const IDLE: ActionResult = { ok: true };
 
@@ -31,6 +32,7 @@ export function StudentDetailForm({
   student: AdminStudentDetail;
   governorateOptions: { value: string; label: string }[];
 }) {
+  const honorBoardOpen = useFeature('honorBoard');
   const [state, action, pending] = useActionState<ActionResult, FormData>(
     (_previous, formData) => patchStudentAction(student.id, formData),
     IDLE,
@@ -185,14 +187,19 @@ export function StudentDetailForm({
             up half outside the disc. `shape="round"` crops square and previews
             as a disc — what he approves is what the page shows.
           */}
-          <MediaKeyField
-            name="honorPhotoKey"
-            id="honorPhotoKey"
-            label={copy.admin.students.honorPhoto}
-            hint={copy.admin.students.honorPhotoHint}
-            defaultValue={student.honorPhotoKey}
-            shape="round"
-          />
+          {/* صورة الفايز — ومالهاش أي مكان تتعرض فيه على ستاك اللوحة مقفولة
+              فيه. الحقل بيختفي، والقيمة المحفوظة بتفضل في الصف زي ما هي
+              عشان تشتغل تاني لو الفيتشر اتفتحت. */}
+          {honorBoardOpen ? (
+            <MediaKeyField
+              name="honorPhotoKey"
+              id="honorPhotoKey"
+              label={copy.admin.students.honorPhoto}
+              hint={copy.admin.students.honorPhotoHint}
+              defaultValue={student.honorPhotoKey}
+              shape="round"
+            />
+          ) : null}
 
           <ActionError state={state} />
 

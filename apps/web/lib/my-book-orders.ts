@@ -2,6 +2,7 @@ import { cache } from 'react';
 import { z } from '@ayman/contracts/zod';
 import { BookOrderSchema, type BookOrder } from '@ayman/contracts/book-orders';
 import { apiGetAuthed } from './api-server';
+import { getEntitlements } from '@/lib/entitlements';
 
 /**
  * `GET /api/book-orders/mine` — every printed book this student ever ordered.
@@ -67,7 +68,21 @@ export async function fetchMyBookOrders(): Promise<BookOrder[]> {
   }
 }
 
-export const getMyBookOrdersOrEmpty = cache(fetchMyBookOrders);
+export const getMyBookOrdersOrEmpty = cache(async function getMyBookOrdersOrEmpty(): Promise<
+  BookOrder[]
+> {
+  /*
+   * ستاك مالوش كتب مالوش طلبات كتب. الراوت بيرد ٤٠٤ عليه أصلًا
+   * (`@RequireFeature('books')`) والرد بيبقى `[]` برضه — السطر ده بيوفّر
+   * الطلب، وده مهم على الداشبورد بالذات: العدّاد اللي `lib/exams.ts` بيمسكه.
+   *
+   * ⚠️ وهنا، مش جوّه `fetchMyBookOrders`. الدالة دي `'use cache'` جوّه
+   * `getEntitlements`، و`fetchMyBookOrders` مصدّرة عشان التست يسوقها من غير
+   * ما يقوّم كاش React — `cacheLife()` جوّاها بيرمي في vitest.
+   */
+  if (!(await getEntitlements()).books) return [];
+  return fetchMyBookOrders();
+});
 
 /**
  * Newest first — «oldest-last», which is the order both surfaces show.

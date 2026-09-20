@@ -6,6 +6,7 @@ import { apiGetAuthed } from '@/lib/api-server';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getDashboard } from '@/lib/dashboard';
 import { bandExam, getStudentExamsOrEmpty } from '@/lib/exams';
+import { getEntitlements } from '@/lib/entitlements';
 import { achievementsFor, earnedCount, highestTier } from '@/lib/achievements';
 import {
   firstName,
@@ -125,6 +126,7 @@ export default async function DashboardPage() {
     bookCatalog,
     myBookOrders,
     studentExams,
+    features,
   ] = await Promise.all([
     getDashboard(),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
@@ -238,6 +240,9 @@ export default async function DashboardPage() {
      * against `getTaxonomyOrNull`.
      */
     getStudentExamsOrEmpty(),
+    /* مش طلب تامن: `'use cache'` على تاج واحد، ونص الحاجات اللي فوق
+       بتقراها جوّاها أصلًا. الكلام ده كله في `lib/entitlements.ts`. */
+    getEntitlements(),
   ]);
 
   /*
@@ -404,7 +409,11 @@ export default async function DashboardPage() {
         with the other "not your own work" blocks would be the one case where
         that grouping is wrong: it IS addressed to them.
       */}
-      <InstructorMessageCard />
+      {/* الكارت ده بيفتح ويدجت المساعد بـ`openAssistant()`. لو الفيتشر
+          مقفولة، الويدجت مش متركّب أصلًا (`assistant-slot.tsx`) — فالكارت
+          كان هيبقى زرار مابيعملش حاجة، وهو بالظبط الفخ اللي CLAUDE.md §٢
+          قاعدة ٣ بتحكيه: جيت بيفتح تناقض في الشاشة اللي حواليه. */}
+      {features.assistant ? <InstructorMessageCard /> : null}
 
       {/*
         ## Two columns, and what decides which side a block goes to

@@ -34,6 +34,7 @@ import {
   guestCookieName,
   readCookie,
 } from './guest-token';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
  * `/api/assistant/*` — the visitor's side of المساعد.
@@ -68,6 +69,9 @@ const MESSAGE_THROTTLE = {
   medium: { limit: 10, ttl: seconds(600) },
 };
 
+// المساعد. الراوتات دي `@Public()`، فإخفاء اللانشر في الويب مابيقفلش
+// الباب — ده اللي بيقفله.
+@RequireFeature('assistant')
 @Controller('assistant')
 export class AssistantController {
   private readonly cookieName: string;

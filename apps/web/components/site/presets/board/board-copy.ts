@@ -130,6 +130,18 @@ export const boardCopy = {
     chip: 'أسئلة متكررة',
   },
 
+  /**
+   * The footer — see `<BoardFooter>`.
+   *
+   * One word, and it is first-person plural on purpose: «يلا نبدأ» addresses
+   * nobody's gender, where «ابدأ» would pick one. The rest of this footer's
+   * words are the platform's own (`footer-content.ts`), shared with the other
+   * two presets so three footers cannot disagree about what a column is called.
+   */
+  footer: {
+    chip: 'يلا نبدأ',
+  },
+
   /** The `books` block. */
   books: {
     chip: 'الكتب',

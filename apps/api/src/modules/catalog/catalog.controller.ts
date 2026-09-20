@@ -4,6 +4,7 @@ import { CatalogStreamFilterSchema } from '@ayman/contracts/catalog';
 import type { CatalogCourseDetail, CatalogList } from '@ayman/contracts/catalog';
 import type { HonorBoard } from '@ayman/contracts/admin/exams';
 import { Public } from '../../auth/decorators/public.decorator';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { CatalogService } from './catalog.service';
 
 /**
@@ -71,6 +72,9 @@ export class CatalogController {
    * ⚠️ Declared BELOW `courses/:slug`? No — it is a sibling segment
    * (`catalog/honor-board`), not a `courses/*` one, so nothing can swallow it.
    */
+  /* لوحة الشرف بتتقفل من هنا، على الراوت لوحده مش على الكونترولر: باقي
+     الكتالوج (الكورسات) هو المنصة نفسها ومالوش علاقة بالفيتشر دي. */
+  @RequireFeature('honorBoard')
   @Public()
   @Get('honor-board')
   honorBoard(): Promise<HonorBoard> {

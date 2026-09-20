@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { getEntitlements } from '@/lib/entitlements';
 import { CheckCircle2, Clock3, Images, RotateCcw } from 'lucide-react';
 // `/copy/admin`, never the root barrel: these screens only ever render
 // inside the admin layout, and `copy.admin.*` lives in that module.
@@ -70,6 +72,15 @@ export default async function AdminHomeworkPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  /*
+   * القسم ده مش موجود على ستاك الفيتشر دي مقفولة فيه — والصف بتاعه في
+   * `ADMIN_NAV` مش بيترسم أصلًا. ده الباب لو حد كتب الـURL بإيده.
+   *
+   * `notFound()` مش ٤٠٣: الصفحة مش «ممنوعة»، هي مش هنا. ونفس الشكل بالحرف
+   * اللي `(admin)/layout.tsx` بيستخدمه، وبيشرح ليه فوقه.
+   */
+  if (!(await getEntitlements()).homework) notFound();
+
   const params = await searchParams;
   const raw = Array.isArray(params.filter) ? params.filter[0] : params.filter;
   // Through the schema, never `as HomeworkFilter`: this lands in a query

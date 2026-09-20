@@ -13,6 +13,7 @@ import { Fragment, Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { AppSidebar } from '@/components/admin/app-sidebar';
 import { AdminHeader } from '@/components/admin/admin-header';
+import { AdminEntitlementsProvider } from '@/components/admin/entitlements-context';
 import { InboxAlertsProvider } from '@/components/admin/inbox-alerts';
 import { PaymentsAlertsProvider } from '@/components/admin/payments-alerts';
 import { BookOrdersAlertsProvider } from '@/components/admin/book-orders-alerts';
@@ -23,6 +24,7 @@ import {
   NotificationBellFallback,
 } from '@/components/notifications/notification-bell';
 import { accountIdentityLabel, can, getSession } from '@/lib/session';
+import { getEntitlements } from '@/lib/entitlements';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
 
 /** Never indexed. See `(app)/layout.tsx` for why `robots.txt` alone is not enough. */
@@ -67,16 +69,31 @@ export default async function AdminLayout({ children }: { children: React.ReactN
    * rather than a second provider on the else branch — a session with no inbox
    * has no count, and `useInboxCount()` answering `null` is exactly right.
    */
-  const Alerts = can(session, 'conversation:read') ? InboxAlertsProvider : Fragment;
+  /*
+   * إيه اللي الستاك ده مسموح له يعرضه. بيتقرا مرة هنا وبينزل للسايدبار
+   * وللهيدر (اللي جوّاه الشيت بتاع الموبايل) — التلاتة بيرسموا نفس الجدول،
+   * فلازم يقروا نفس الإجابة.
+   *
+   * وبيتقرا هنا كمان عشان البوّابات تحته: كل `Provider` منهم بيعمل poll كل
+   * ٣٠ ثانية على راوت الفيتشر بتاعته. لو الفيتشر مقفولة والـProvider فاضل،
+   * بيضرب ٤٠٤ للأبد — نفس الفخ المكتوب فوق كل واحد منهم بالحرف، بس بسبب
+   * تاني.
+   */
+  const features = await getEntitlements();
+
+  const Alerts =
+    can(session, 'conversation:read') && features.assistant ? InboxAlertsProvider : Fragment;
   // Same gate, same reasoning, one permission over: a role without
   // `payment:read` would poll a 403 every thirty seconds forever.
   const PaymentsAlerts = can(session, 'payment:read') ? PaymentsAlertsProvider : Fragment;
   // Third of the same shape: a role without `book-order:read` would poll a 403
   // every thirty seconds forever.
-  const BookOrdersAlerts = can(session, 'book-order:read') ? BookOrdersAlertsProvider : Fragment;
+  const BookOrdersAlerts =
+    can(session, 'book-order:read') && features.books ? BookOrdersAlertsProvider : Fragment;
   // Fourth of the same shape, one permission over: a role without
   // `homework:read` would poll a 403 every thirty seconds forever.
-  const HomeworkAlerts = can(session, 'homework:read') ? HomeworkAlertsProvider : Fragment;
+  const HomeworkAlerts =
+    can(session, 'homework:read') && features.homework ? HomeworkAlertsProvider : Fragment;
 
   return (
     <Alerts>
@@ -93,12 +110,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       whatever admin screen he is sitting on.
     */}
     <NotificationStreamProvider>
+    {/* نفس القيمة اللي السايدبار والهيدر بياخدوها كـprop، منزّلة لأي
+        كومبوننت `'use client'` جوّه اللوحة — تاب رفع الفيديو، مؤلّف الصفحة
+        الرئيسية، لوحة كتاب الكورس. شوف `entitlements-context.tsx`. */}
+    <AdminEntitlementsProvider features={features}>
     <div className="product-type min-h-dvh md:grid md:grid-cols-[var(--admin-sidebar-w)_1fr]">
-      <AppSidebar permissions={session.permissions} />
+      <AppSidebar permissions={session.permissions} features={features} />
       <div className="flex min-w-0 flex-col">
         <AdminHeader
           identity={accountIdentityLabel(session)}
           permissions={session.permissions}
+          features={features}
           notifications={
             /* Its own `<Suspense>` so the count never blocks the header —
                same shape as `(app)/layout.tsx`'s slot. */
@@ -116,6 +138,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </div>
     </div>
+    </AdminEntitlementsProvider>
     </NotificationStreamProvider>
     </HomeworkAlerts>
     </BookOrdersAlerts>

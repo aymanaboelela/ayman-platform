@@ -35,6 +35,7 @@ import { ConversationAttachmentService } from './conversation-attachment.service
 import { sendAttachment } from './serve-attachment';
 import { EditMessageDto, ReplyDto, SetReactionDto, SetStatusDto } from './assistant.dto';
 import type { UploadFile } from '../media/media.service';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
  * `/api/admin/conversations` — the instructor's side.
@@ -48,6 +49,8 @@ import type { UploadFile } from '../media/media.service';
  * changes to any route. Collapsing them into `admin:access` would make that a
  * refactor instead.
  */
+// صندوق الوارد هو النص التاني من نفس الفيتشر: مفيش شات، مفيش رسايل ترد عليها.
+@RequireFeature('assistant')
 @Controller('admin/conversations')
 export class AdminInboxController {
   constructor(

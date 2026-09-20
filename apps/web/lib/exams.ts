@@ -1,6 +1,7 @@
 import { cache } from 'react';
 import { StudentExamsSchema, type StudentExam, type StudentExams } from '@ayman/contracts/quiz/scheduled';
 import { apiGetAuthed } from './api-server';
+import { getEntitlements } from './entitlements';
 
 /**
  * `GET /api/me/exams` — «امتحانات الشهر» for every course this student is
@@ -41,6 +42,14 @@ import { apiGetAuthed } from './api-server';
  * Server Components / Server Actions only: `apiGetAuthed` reads `cookies()`.
  */
 export const getStudentExamsOrEmpty = cache(async function getStudentExamsOrEmpty(): Promise<StudentExams> {
+  /* ستاك مالوش امتحانات شهرية: نفس الرد اللي طالبة مالهاش امتحان بتاخده،
+     فـ`<ExamCountdownBand>` و`<MonthlyExamsSection>` الاتنين مابيرسموش
+     حاجة. والأهم إن ده بيوفّر الطلب السابع على الداشبورد — العدّاد اللي
+     الكومنت فوق بيمسكه. */
+  if (!(await getEntitlements()).exams) {
+    return { exams: [], serverTime: new Date().toISOString() };
+  }
+
   try {
     return await apiGetAuthed('/api/me/exams', StudentExamsSchema);
   } catch {

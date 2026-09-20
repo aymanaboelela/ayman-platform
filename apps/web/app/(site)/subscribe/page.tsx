@@ -3,6 +3,7 @@ import { tenantSentence } from '@/lib/tenant-copy';
 import Link from 'next/link';
 import { copy } from '@ayman/contracts';
 import { JsonLd } from '@/components/seo/json-ld';
+import { getEntitlements } from '@/lib/entitlements';
 import { breadcrumbJsonLd, faqPageJsonLd } from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
@@ -47,7 +48,10 @@ export async function generateMetadata(): Promise<Metadata> {
  * recoverable and a failed build is not.
  */
 export default async function SubscribePage() {
-  const { contact } = await getPublicSettingsOrDefaults();
+  const [{ contact }, features] = await Promise.all([
+    getPublicSettingsOrDefaults(),
+    getEntitlements(),
+  ]);
   const rails = subscribeRails(contact);
 
   return (
@@ -97,15 +101,19 @@ export default async function SubscribePage() {
             <p className="site-lead">{c.railsNone}</p>
           )}
 
-          <p className="site-lead">{c.booksNote}</p>
+          {/* السطر والزرار الاتنين عن الكتاب، فبيروحوا مع بعض: ستاك مالوش
+              كتب كان هيسيب جملة بتقول «فيه كتاب» جنب زرار بيرد ٤٠٤. */}
+          {features.books ? <p className="site-lead">{c.booksNote}</p> : null}
 
           <div className="subscribe-ctas">
             <Link href="/courses" className="site-btn site-btn--primary">
               {c.coursesCta}
             </Link>
-            <Link href="/books" className="site-btn">
-              {c.booksCta}
-            </Link>
+            {features.books ? (
+              <Link href="/books" className="site-btn">
+                {c.booksCta}
+              </Link>
+            ) : null}
           </div>
         </div>
       </section>

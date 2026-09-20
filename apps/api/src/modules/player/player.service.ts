@@ -16,6 +16,7 @@ import { mirrorPlaylistUrl, mirrorPosterUrl, youTubeThumbnailUrl } from '@ayman/
 import { VideoMirrorService } from '../video-mirror/video-mirror.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { HomeworkService } from '../homework/homework.service';
+import { isFeatureEnabled } from '../../common/entitlements';
 import { InjectMediaUrl, type MediaUrlResolver } from '../../common/media/media-url';
 import { MEDIA_STORAGE, type MediaStorage } from '../media/storage/media-storage';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
@@ -297,8 +298,12 @@ export class PlayerService {
        *
        * Access was already settled by `require()` above; this call re-reads
        * nothing about entitlement, so the fourth query costs one index hit.
+       *
+       * وعلى ستاك الواجب مقفول فيه، الاستعلام ده مابيحصلش أصلًا و`homework`
+       * بيبقى `null` — وهو نفس اللي بيحصل لمحاضرة من غير واجب، يعني الشاشة
+       * عندها الفرع بتاعه خلاص ومافيش حاجة تتجيّت في الويب.
        */
-      this.homework.forStudent(userId, lessonId),
+      isFeatureEnabled('homework') ? this.homework.forStudent(userId, lessonId) : null,
     ]);
 
     const index = ordered.findIndex((entry) => entry.id === context.lessonId);

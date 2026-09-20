@@ -1,6 +1,8 @@
+import { notFound } from 'next/navigation';
 import { copy } from '@ayman/contracts';
 import { BooksShippingChip, BooksShop } from '@/components/site/books-shop';
 import { getBookCatalogOrEmpty } from '@/lib/books';
+import { getEntitlements } from '@/lib/entitlements';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 // The shop's stylesheet, shared verbatim with `/books`. `store.css` is the
 // adapter that makes it read the app's palette — see the header in that file.
@@ -52,6 +54,16 @@ export const metadata = { title: c.pageTitle };
  * rather than an exception.
  */
 export default async function StorePage() {
+  /*
+   * الصفحة نفسها مش موجودة على ستاك الفيتشر دي مقفولة فيه — `notFound()`
+   * مش صفحة فاضية.
+   *
+   * اللودر تحت بيرجّع «مفيش حاجة» أصلًا، وده كان هيسيب عنوان وسطر وصف
+   * لقسم مالوش وجود. و`notFound()` مش ٤٠٣ لنفس السبب المكتوب في
+   * `(admin)/layout.tsx`: الصفحة دي مش «ممنوعة»، هي مش هنا.
+   */
+  if (!(await getEntitlements()).books) notFound();
+
   const [catalog, { contact }] = await Promise.all([
     getBookCatalogOrEmpty(),
     getPublicSettingsOrDefaults(),

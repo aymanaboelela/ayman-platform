@@ -4,6 +4,7 @@ import { MediaAssetSchema } from '@ayman/contracts/admin/media';
 import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet } from '@/lib/admin-api';
+import { getEntitlements } from '@/lib/entitlements';
 import { BrandingForm } from '../branding-form';
 import { SeoForm } from '../seo-form';
 import { ContactForm } from '../contact-form';
@@ -29,9 +30,10 @@ const MediaListSchema = listResponse(MediaAssetSchema);
  * four.
  */
 export default async function SettingsPage() {
-  const [settings, media] = await Promise.all([
+  const [settings, media, features] = await Promise.all([
     adminGet('/api/admin/settings', SiteSettingsSchema),
     adminGet('/api/admin/media?page=1&perPage=100&includeArchived=false', MediaListSchema),
+    getEntitlements(),
   ]);
 
   return (
@@ -68,14 +70,18 @@ export default async function SettingsPage() {
           </CardBody>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{copy.admin.settings.sectionShipping}</CardTitle>
-          </CardHeader>
-          <CardBody>
-            <ShippingForm defaultValues={settings.store} />
-          </CardBody>
-        </Card>
+        {/* أسعار شحن الكتاب — كارت كامل بيختفي مع فيتشر الكتب. مدرّس مش
+            بيبيع كتب بيبقى عنده حقل بيسأله يوصّل بكام لحد البيت. */}
+        {features.books ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>{copy.admin.settings.sectionShipping}</CardTitle>
+            </CardHeader>
+            <CardBody>
+              <ShippingForm defaultValues={settings.store} />
+            </CardBody>
+          </Card>
+        ) : null}
       </div>
     </>
   );

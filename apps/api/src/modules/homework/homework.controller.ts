@@ -22,6 +22,7 @@ import { RequirePermission } from '../../auth/decorators/require-permission.deco
 import { MediaService, type UploadFile } from '../media/media.service';
 import { HomeworkService } from './homework.service';
 import { SubmitHomeworkDto } from './homework.dto';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
  * الواجب, the student's half.
@@ -32,6 +33,9 @@ import { SubmitHomeworkDto } from './homework.dto';
  * pair (lesson, student) IS the identity of a submission, and an endpoint that
  * accepted an id would need an ownership check this shape does not.
  */
+// الواجب — باب الطالب. لو الفيتشر مقفولة، الـAPI بيرجّع `homework: null`
+// على المحاضرة (شوف `content/lesson.service.ts`) والباب ده مايردّش أصلًا.
+@RequireFeature('homework')
 @Controller('homework')
 export class HomeworkController {
   constructor(

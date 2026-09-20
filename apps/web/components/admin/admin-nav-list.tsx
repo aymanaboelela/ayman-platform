@@ -7,13 +7,14 @@ import { usePathname } from 'next/navigation';
 // because this component only ever renders inside the admin layout
 // (`AppSidebar`, the mobile sheet); see the header note on `copy/admin.ts`
 // for why the same import would be wrong on a student route.
+import type { Entitlements } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { useInboxCount } from './inbox-alerts';
 import { usePaymentsPendingCount } from './payments-alerts';
 import { useBookOrdersUnshippedCount } from './book-orders-alerts';
 import { useHomeworkPendingCount } from './homework-alerts';
-import { ADMIN_NAV, ADMIN_NAV_GROUPS, activeNavItem } from './nav-items';
+import { ADMIN_NAV_GROUPS, activeNavItem, visibleNavItems } from './nav-items';
 
 /** `href` → the live count to badge it with, or `null` for every other link.
  *  One lookup, so a third badge is one more entry here rather than a second
@@ -60,14 +61,29 @@ function badgeLabelFor(href: string, n: number): string {
  */
 export function AdminNavList({
   permissions,
+  features,
   onNavigate,
 }: {
   permissions: readonly string[];
+  /**
+   * إيه اللي الستاك ده مسموح له يعرضه، محسوبة في السيرفر ومتمرّرة كـprop —
+   * زي `permissions` فوقها بالظبط، ولنفس السبب.
+   *
+   * ⚠️ **مش** `process.env.TENANT_ENTITLEMENTS` مقروءة هنا. ده ملف
+   * `'use client'`، والمتغيّر بيبقى `undefined` في المتصفح إلا لو اتحقن في
+   * `next.config.ts` — وساعتها يبقى قيمة وقت بناء، والسيرفر والكلاينت
+   * يرسموا سايدبارين مختلفين لو اتغيّر. الكومنت في `next.config.ts:19` بيحكي
+   * نفس الباج ده لما حصل مع صورة على ستاك تاني.
+   */
+  features: Entitlements;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const active = activeNavItem(pathname);
-  const visible = ADMIN_NAV.filter((item) => permissions.includes(item.permission));
+  // `visibleNavItems`, not an inline filter: the same rule has to run on
+  // `/admin`'s section grid, and a section hidden from one of the two is a
+  // section that still has a door.
+  const visible = visibleNavItems(permissions, features);
   // `null` until the first poll answers, and on any session without an inbox.
   const inboxCount = useInboxCount();
   // Same shape, for the payments review queue — `null` on any session

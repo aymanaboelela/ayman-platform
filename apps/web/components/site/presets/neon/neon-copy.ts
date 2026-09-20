@@ -79,6 +79,38 @@ export const META = {
   score: 'score',
 } as const;
 
+/**
+ * The footer's own Latin chrome — `<NeonFooter>`.
+ *
+ * Separate from `MARKERS` because those name the BLOCKS a tenant composed and
+ * these name three link columns that exist on every stack whatever is in
+ * `home_blocks`. Filing them together would invite a future block type called
+ * `account` to collide with a column.
+ *
+ * `sitemap` and not `pages`: the column is the site's own index, and the word
+ * a reader recognises under a `//` is the one a crawler uses. Every one of
+ * these is rendered through `<Mono hidden>` — `aria-hidden` AND LTR-isolated,
+ * because `// account` dropped bare into an RTL line renders `account //`.
+ */
+export const FOOTER = {
+  /** The window the closer sits in. Not `start.sh`: that filename is the
+      landing page's own closing command (`<NeonCta>`), and two windows on one
+      page claiming the same file reads as a copy-paste rather than as a
+      transcript. */
+  file: 'register.sh',
+  /** The prompt in front of the tenant's name, so the brand line reads as the
+      shell it is sitting in rather than as a logo dropped on a dark page. */
+  prompt: '~$',
+  /** The last line of the document. A transcript ends; a footer that just
+      stops does not. */
+  eof: '// EOF',
+  markers: {
+    pages: 'sitemap',
+    years: 'years',
+    account: 'account',
+  },
+} as const;
+
 export const neonCopy = {
   /**
    * The hero's terminal line falls back to this when the `hero` block carries

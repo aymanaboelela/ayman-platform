@@ -38,6 +38,7 @@ import {
   OptOutCreateDto,
   TestSendDto,
 } from './marketing.dto';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
  * What a test message says when the operator does not write one.
@@ -77,6 +78,9 @@ const DEFAULT_TEST_TEXT = `رسالة تجربة من ${tenantName(copy.site.pla
  * folding it into `/admin/settings` would put it behind `settings:write` —
  * the permission that also changes the site's phone number.
  */
+// الحملات بتتبعت من رقم واتساب حقيقي — الفيتشر دي مقفولة افتراضيًا
+// على أي ستاك مش بتاع أيمن، وبتتفتح بمستند.
+@RequireFeature('marketing.whatsapp')
 @Controller('admin/marketing')
 @UsePipes(ZodValidationPipe)
 export class MarketingController {

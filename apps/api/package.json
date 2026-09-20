@@ -111,7 +111,7 @@
       "^(\\.{1,2}/.*)\\.js$": "$1"
     },
     "transformIgnorePatterns": [
-      "node_modules/\\.pnpm/(?!(htmlparser2|domhandler|domutils|domelementtype|dom-serializer|entities)@)"
+      "node_modules/\\.pnpm/(?!(htmlparser2|domhandler|domutils|domelementtype|dom-serializer|entities|jose)@)"
     ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"

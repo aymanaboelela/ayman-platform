@@ -32,8 +32,24 @@ module.exports = {
     ],
   },
   moduleNameMapper: { '^(\\.{1,2}/.*)\\.js$': '$1' },
+  /*
+   * `jose` is on this allow-list — it is the ONLY entry here that is not an
+   * HTML-parsing dependency, and it is here because jose 6 ships `dist/webapi`
+   * and nothing else: pure ESM, `"type": "module"`, no CommonJS build. swc
+   * compiles this suite to CommonJS, so an untransformed `require('jose')`
+   * dies on the first `export` keyword with `SyntaxError: Unexpected token
+   * 'export'` — pointing at OUR spec's first line, never at jose.
+   *
+   * It became reachable when `common/entitlements.ts` started verifying the
+   * signed feature document, which `TenantEntitlementsModule` pulls into this
+   * matrix. Before that, jose's only importer was `auth/auth.config.ts`, which
+   * no spec loads — which is why this was green while being wrong.
+   *
+   * The same line exists in the unit config (`package.json`), where it cannot
+   * carry this comment.
+   */
   transformIgnorePatterns: [
-    'node_modules/\\.pnpm/(?!(htmlparser2|domhandler|domutils|domelementtype|dom-serializer|entities)@)',
+    'node_modules/\\.pnpm/(?!(htmlparser2|domhandler|domutils|domelementtype|dom-serializer|entities|jose)@)',
   ],
   testEnvironment: 'node',
   // Real network round-trips plus Argon2 verification in the auth matrix.

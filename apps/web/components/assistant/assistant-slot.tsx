@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { getEntitlements } from '@/lib/entitlements';
 import { AssistantWidget } from './assistant-widget';
 
 type AssistantVariant = 'floating' | 'docked';
@@ -40,7 +41,19 @@ export function AssistantSlot({ variant }: { variant?: AssistantVariant }) {
 }
 
 async function AssistantWithContacts({ variant }: { variant?: AssistantVariant }) {
-  const { contact } = await getPublicSettingsOrDefaults();
+  /*
+   * ستاك المساعد مقفول فيه: مفيش لانشر خالص، في التلات لياوتس مرة واحدة
+   * (`(app)`، `(auth)`، `(site)`) — وده المكان الوحيد اللي بيركّبه.
+   *
+   * ⚠️ والجيت هنا جوّه `Suspense` عن قصد: لو اتحط في `AssistantSlot` نفسها
+   * كان اللياوت هيستنى النداء، وهو بالظبط اللي الكومنت فوق بيمنعه.
+   */
+  const [{ contact }, features] = await Promise.all([
+    getPublicSettingsOrDefaults(),
+    getEntitlements(),
+  ]);
+
+  if (!features.assistant) return null;
 
   return (
     <AssistantWidget

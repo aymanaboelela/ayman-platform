@@ -98,6 +98,13 @@ const admin = {
      * send screens, because it is the one that CREATES the reason to send.
      */
     followUp: 'متابعة الطلبة',
+    /**
+     * «منصات المدرّسين» — the control plane, and the ONLY admin section that
+     * is not gated on a permission. Every instructor holds `role: 'admin'`
+     * (= `'*'`) on their own stack, so a permission would render this link for
+     * them too; `aymanOnly` on the nav row is the gate. See `nav-items.ts`.
+     */
+    platforms: 'منصات المدرّسين',
     // ── Sidebar group headings. The nav is eleven links long; ungrouped,
     //    it reads as one undifferentiated list and nobody scans it.
     groupTeaching: 'التدريس',
@@ -1150,6 +1157,7 @@ const admin = {
     '/admin/flags': 'تشغيل وإطفاء مميزات المنصة.',
     '/admin/errors': 'الأخطاء اللي حصلت في المنصة.',
     '/admin/audit': 'مين عمل إيه وإمتى.',
+    '/admin/platforms': 'افتح وأقفل فيتشرز على منصة كل مدرّس.',
   } as Record<string, string | undefined>,
   // ── Task 16 appends more keys under commandPalette (search, groups, empty).
   commandPalette: {
@@ -3336,6 +3344,53 @@ const admin = {
     lead: 'تشغيل أو إيقاف خصائص المنصة من غير أي نشر جديد للكود.',
     toggleSuccess: 'اتحفظت الخاصية',
     toggleFailed: 'مقدرناش نغيّر الخاصية — نحاول تاني',
+  },
+  /**
+   * «منصات المدرّسين» — الشاشة اللي بتوقّع مستند الصلاحيات لستاك مدرّس تاني.
+   *
+   * الكوبي هنا بتتكلم مع صاحب السوفتوير نفسه، مش مع مدرّس ولا طالب — وعشان
+   * كده بتسمّي المتغيّرات ولوحة Dokploy بالاسم. دي الشاشة الوحيدة في اللوحة
+   * اللي القارئ بتاعها بيعرف إن فيه ستاكات تانية أصلًا.
+   */
+  platforms: {
+    title: 'منصات المدرّسين',
+    lead:
+      'كل مدرّس عنده منصة لوحده. من هنا بتقرر الفيتشرز اللي تشتغل عنده، ' +
+      'وبتطلع مستند موقّع بتحطه في إعدادات منصته.',
+    tenantLabel: 'المنصة',
+    tenantHint: 'المفتاح ده لازم يساوي TENANT_KEY بتاع ستاكه بالحرف، وإلا المستند بيترفض.',
+    tenantChoose: 'اختار منصة',
+    noTenants: 'مفيش منصات متسجّلة هنا لسه.',
+    noTenantsHint:
+      'الليستة بتتقرا من CONTROL_PLANE_TENANTS على ستاكك، سطر لكل مدرّس بالشكل ' +
+      'tenant-key=اسم المدرّس.',
+    featuresTitle: 'الفيتشرز',
+    featuresLead: 'علّم اللي تشتغل عنده. اللي مش متعلّم مابيظهرش عنده أصلًا — مش بيرد «ممنوع».',
+    /** الخانة دي بدأت فين — عشان «شيلت العلامة» تبقى قرار واضح، مش نفس
+     *  الشكل في الحالتين. */
+    defaultOn: 'من غير مستند، دي شغّالة عنده.',
+    defaultOff: 'من غير مستند، دي مقفولة عنده.',
+    daysLabel: 'المستند صالح كام يوم',
+    daysHint:
+      'بعدها الستاك بيرجع للافتراضي لوحده — يعني اللي قفلته هنا هيفتح تاني. ' +
+      'جدّده قبل ما يخلص.',
+    sign: 'وقّع المستند',
+    signing: 'بنوقّع…',
+    signFailed: 'مقدرناش نوقّع المستند',
+    /** Both failures point at the same field: مش موجود، أو موجود ومش مفتاح
+     *  Ed25519. اللي هيقرا دي هو صاحب اللوحة نفسه. */
+    missingKey:
+      'مفتاح التوقيع مش موجود أو مش مظبوط. راجع CONTROL_PLANE_PRIVATE_KEY في إعدادات منصتك.',
+    notOwner: 'الشاشة دي بتشتغل على منصة صاحب السوفتوير بس.',
+    tokenTitle: 'المستند',
+    tokenHint:
+      'انسخه وحطه في TENANT_ENTITLEMENTS في إعدادات ستاك المدرّس على Dokploy، ' +
+      'وبعدين اعمل Redeploy للستاك.',
+    tokenRebuildNote:
+      'الستاك لازم يعيد النشر عشان يقرا المستند — إعادة تشغيل الحاوية لوحدها مش كفاية.',
+    expiresAt: 'صالح لحد',
+    copy: 'نسخ',
+    copied: 'اتنسخ',
   },
   navigation: {
     title: 'القوائم',
