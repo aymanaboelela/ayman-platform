@@ -70,7 +70,7 @@ import { IS_AYMAN, TENANT_KEY } from './tenant';
 export const CONTROL_PUBLIC_KEYS: Readonly<Record<string, string>> = {
   'cp-2026-01':
     '-----BEGIN PUBLIC KEY-----\n' +
-    'MCowBQYDK2VwAyEAwqo0WgpmT4vO2Kf1jHd0cvJ/TaUAjlanOtwpGaN59HY=\n' +
+    'MCowBQYDK2VwAyEA8Sn6D1qDVcLFvMqHFZStwF/qqf5t1qjqQ46AJnLO6Lk=\n' +
     '-----END PUBLIC KEY-----\n',
 };
 
