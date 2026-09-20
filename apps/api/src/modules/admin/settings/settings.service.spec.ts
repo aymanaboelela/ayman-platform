@@ -124,7 +124,22 @@ describe('SettingsService', () => {
   it('readPublic never returns branding', async () => {
     const { service } = makeService();
     const result = await service.readPublic();
-    expect(Object.keys(result).sort()).toEqual(['contact', 'seo']);
+
+    /*
+     * الحارس على `branding` بالاسم، مش على قايمة مقفولة.
+     *
+     * كان `toEqual(['contact', 'seo'])`، فأول ما `about` اتضاف للحمولة العامة
+     * التست ولّع — مع إن اللي بيحرسه (إن الهوية البصرية ماتتسربش لمسار عام)
+     * ما اتكسرش. قايمة مقفولة بتقيس «إيه اللي هناك» بدل «إيه اللي ممنوع
+     * يكون هناك»، فبتطلب تعديل مع كل إضافة مشروعة — والتعديل المتكرر هو اللي
+     * بيخلي الحارس يتشال في الآخر.
+     *
+     * `branding` فيه مفاتيح أصول (`faviconAssetId` وإخواته) بتتحل لمفاتيح
+     * تخزين في `readPublicResolved` بس — تسريبها هنا بيدي الواجهة معرّفات
+     * مالهاش معنى، وده بالظبط باج الأيقونة اللي التستات تحت بتحرسه.
+     */
+    expect(result).not.toHaveProperty('branding');
+    expect(Object.keys(result)).toEqual(expect.arrayContaining(['contact', 'seo']));
   });
 
   /**
