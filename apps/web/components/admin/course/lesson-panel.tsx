@@ -33,6 +33,7 @@ import { LessonSettingsForm } from './lesson-settings-form';
 import { VideoPreview } from './video-preview';
 import { VideoUpload } from './video-upload';
 import { fetchYouTubeDuration } from './youtube-duration';
+import { useFeature } from '../entitlements-context';
 
 type Section = AdminCourseDetail['sections'][number];
 type Lesson = Section['lessons'][number];
@@ -72,6 +73,11 @@ export function LessonPanel({
   /** Passed down so the settings form can flag a lesson its course excludes. */
   courseStream?: { forGeneral: boolean; forLanguages: boolean };
 }) {
+  // الواجب فيتشر بتتفتح لكل مدرّس لوحده. `useFeature` وليس prop، عشان
+  // الكومبوننت ده قاعد على عمق أربع كومبوننتات كلهم `'use client'` —
+  // `entitlements-context.tsx` بيشرح ليه.
+  const homeworkOpen = useFeature('homework');
+
   return (
     <div className="mt-2">
       {/*
@@ -125,12 +131,20 @@ export function LessonPanel({
         gate here would recreate exactly the mistake `LessonResource`'s model
         comment records.
       */}
-      <LessonHomeworkForm
-        courseId={courseId}
-        lessonId={lesson.id}
-        homework={lesson.homework}
-        pendingCount={lesson._count.homeworkSubmissions}
-      />
+      {/*
+        ⚠️ ومع ذلك بيفضل يترسم لو المحاضرة عندها واجب متحط قبل كده. قفل
+        الفيتشر بيمنع **واجب جديد**، مابيخفيش واجب قايم ومعاه إجابات طلبة —
+        شاشة بتقول إن المحاضرة مالهاش واجب وهي عندها واحد أسوأ من زرار
+        زيادة.
+      */}
+      {homeworkOpen || lesson.homework ? (
+        <LessonHomeworkForm
+          courseId={courseId}
+          lessonId={lesson.id}
+          homework={lesson.homework}
+          pendingCount={lesson._count.homeworkSubmissions}
+        />
+      ) : null}
 
       <LessonSettingsForm
         lesson={lesson}
@@ -204,8 +218,20 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
    * the first thing an instructor does on this panel is read what is there.
    */
   const router = useRouter();
+  /*
+   * رفع الفيديو مقفول على ستاك مش بتاع أيمن افتراضيًا — البايتات بتقعد على
+   * حسابنا. الراوتات الأربعة اللي بتفتح الرفع وبتقفله بياخدوا
+   * `@RequireFeature('video.upload')`، وده الشكل بتاعها على الشاشة.
+   *
+   * ⚠️ `|| alreadyUploaded`. محاضرة اتترفع فعلًا قبل ما الفيتشر تتقفل لازم
+   * تفضل تعرض حالتها واسم ملفها — إخفاء التاب ساعتها بيخلّي الشاشة تقول إن
+   * المحاضرة على يوتيوب وهي شغّالة من نسخة مرفوعة، وده تناقض المدرّس مش
+   * هيعرف يفسّره.
+   */
+  const alreadyUploaded = lesson.video?.provider === 'upload';
+  const uploadOpen = useFeature('video.upload') || alreadyUploaded;
   const [source, setSource] = useState<'upload' | 'youtube'>(
-    lesson.video?.provider === 'youtube' ? 'youtube' : 'upload',
+    lesson.video?.provider === 'youtube' || !uploadOpen ? 'youtube' : 'upload',
   );
   const [url, setUrl] = useState(
     lesson.video?.provider === 'youtube' ? `https://youtu.be/${lesson.video.externalId}` : '',
@@ -350,10 +376,15 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
         glance — an instructor who thinks they are uploading and is looking at
         a URL field will paste a link into it and wonder why nothing happened.
       */}
+      {/* تاب واحد مش تابين = مفيش اختيار، فالشريط نفسه بيختفي بدل ما يفضل
+          زرار واحد مضغوط مالوش أخ. */}
       <div
         role="tablist"
         aria-label={c.videoUrl}
-        className="inline-flex rounded-lg border border-line bg-surface-2 p-0.5"
+        className={cn(
+          'inline-flex rounded-lg border border-line bg-surface-2 p-0.5',
+          !uploadOpen && 'hidden',
+        )}
       >
         {(['upload', 'youtube'] as const).map((option) => (
           <button
@@ -374,7 +405,7 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
         ))}
       </div>
 
-      {source === 'upload' ? (
+      {source === 'upload' && uploadOpen ? (
         <VideoUpload
           courseId={courseId}
           lessonId={lesson.id}

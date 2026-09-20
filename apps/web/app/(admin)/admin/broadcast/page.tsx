@@ -1,4 +1,6 @@
 import { copy } from '@ayman/contracts/copy/admin';
+import { notFound } from 'next/navigation';
+import { getEntitlements } from '@/lib/entitlements';
 import { BroadcastForm } from './broadcast-form';
 
 const c = copy.admin.broadcast;
@@ -13,7 +15,16 @@ export const metadata = { title: c.title };
  * design argues against a "send to everyone" control living beside its own
  * automated log, and this page is that control, named for what it is.
  */
-export default function AdminBroadcastPage() {
+export default async function AdminBroadcastPage() {
+  /*
+   * القسم ده مش موجود على ستاك الفيتشر دي مقفولة فيه — والصف بتاعه في
+   * `ADMIN_NAV` مش بيترسم أصلًا. ده الباب لو حد كتب الـURL بإيده.
+   *
+   * `notFound()` مش ٤٠٣: الصفحة مش «ممنوعة»، هي مش هنا. ونفس الشكل بالحرف
+   * اللي `(admin)/layout.tsx` بيستخدمه، وبيشرح ليه فوقه.
+   */
+  if (!(await getEntitlements()).broadcast) notFound();
+
   return (
     <>
       <header className="mb-6">

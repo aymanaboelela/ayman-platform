@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error — a dependency-free .mjs script, deliberately untyped so it
 // runs on a bare server before anything is installed.
 import { checkTenantEnv, parseEnvFile } from '../../../scripts/check-tenant-env.mjs';
+import { CONTROL_ISSUER, ENTITLEMENTS_VERSION } from './admin/entitlements';
 
 /**
  * The preflight is the only thing standing between "forgot one variable" and
@@ -34,6 +35,33 @@ const FAKE = {
   adminPassword: `admin-${'w'.repeat(20)}`,
   waToken: `wa-${'0'.repeat(32)}`,
 } as const;
+
+/**
+ * A document-SHAPED `TENANT_ENTITLEMENTS`, assembled at runtime.
+ *
+ * The preflight decodes the payload and reads `sub` and `exp`; it does NOT
+ * verify the signature (the script has no dependencies and no public key by
+ * design), so a run of filler in the third segment is exactly as good as a
+ * real one for what is under test here.
+ *
+ * ⚠️ Built rather than written out for the same reason the passwords above
+ * are: a real compact JWS pasted into a source file is what gitleaks' `jwt`
+ * rule looks for, and gitleaks scans EVERY branch — one literal here fails the
+ * check on every open PR.
+ */
+function fakeDocument(overrides: { sub?: string; exp?: number } = {}): string {
+  const segment = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const header = segment({ alg: 'EdDSA', kid: 'cp-2026-01' });
+  const payload = segment({
+    iss: CONTROL_ISSUER,
+    sub: overrides.sub ?? 'mohamed-hassan',
+    ver: ENTITLEMENTS_VERSION,
+    exp: overrides.exp ?? Math.floor(Date.now() / 1000) + 86_400,
+    features: { 'video.upload': true },
+  });
+  // ٦٤ بايت توقيع Ed25519 = ٨٦ حرف base64url. الطول صح والبايتات مش مهمة.
+  return `${header}.${payload}.${'s'.repeat(86)}`;
+}
 
 /**
  * A tenant config with nothing wrong with it. Each case breaks one thing.
@@ -74,6 +102,10 @@ function goodEnv(): Record<string, string> {
     VAPID_PUBLIC_KEY: 'BPk1',
     VAPID_PRIVATE_KEY: 'vk1',
     VAPID_SUBJECT: 'mailto:admin@mohamedhassan.com',
+    // مستند الصلاحيات. موجود هنا عشان الفكستشر «السليم» يعدّي على مسار
+    // القبول كمان، مش على مسار الغياب بس — وغيابه بردو سليم ومابيقولش حاجة
+    // (ستاك جديد قبل ما يتوقّعله حاجة)، فالتست اللي تحت بيثبّت ده.
+    TENANT_ENTITLEMENTS: fakeDocument(),
   };
 }
 
@@ -223,6 +255,66 @@ describe('checkTenantEnv', () => {
 
       expect(errors).toEqual([]);
       expect(warnings.join(' ')).toContain('المنصة التعليمية');
+    });
+  });
+
+  /**
+   * المستند الموقّع.
+   *
+   * الفحص هنا مابيتحققش من التوقيع — الملف `.mjs` مالوش dependencies عن قصد
+   * ومفيهوش المفتاح العام. بيفك البايلود ويقرا `sub` و`exp`، وهما الغلطتين
+   * اللي بتحصلا فعلًا، والاتنين صامتين تمامًا من غيره: الـAPI بيرفض المستند،
+   * بيكتب سطر في لوج محدش بيفتحه، والمدرّس بيلاقي فيتشر دفع فيها مش موجودة.
+   */
+  describe('the signed entitlements document', () => {
+    it('rejects a document issued for a different instructor', () => {
+      const { errors } = check({ TENANT_ENTITLEMENTS: fakeDocument({ sub: 'mohamed-sabry' }) });
+
+      expect(errors.join(' ')).toContain('mohamed-sabry');
+      expect(errors.join(' ')).toContain('TENANT_KEY');
+    });
+
+    it('rejects a document that has already expired', () => {
+      const yesterday = Math.floor(Date.now() / 1000) - 86_400;
+      const { errors } = check({ TENANT_ENTITLEMENTS: fakeDocument({ exp: yesterday }) });
+
+      expect(errors.join(' ')).toContain('expired');
+    });
+
+    // أكتر غلطة متوقعة في لوحة Dokploy: التوكن اتقص وهو بيتلزق.
+    it('rejects a truncated document', () => {
+      const truncated = fakeDocument().split('.').slice(0, 2).join('.');
+      const { errors } = check({ TENANT_ENTITLEMENTS: truncated });
+
+      expect(errors.join(' ')).toContain('compact JWS');
+    });
+
+    it('accepts a document issued for THIS stack', () => {
+      const { errors } = check({ TENANT_ENTITLEMENTS: fakeDocument({ sub: 'mohamed-hassan' }) });
+
+      expect(errors).toEqual([]);
+    });
+
+    /**
+     * ولا حاجة — لا خطأ ولا تحذير.
+     *
+     * ستاك جديد قبل ما صاحب السوفتوير يوقّعله حاجة بيشتغل بالافتراضي المعلن،
+     * وده إعداد صحيح تمامًا. تحذير بيولّع على كل إعداد سليم بيعلّم اللي بينشر
+     * إن خرج الفحص بيتتجاهل — ونفس الحجة مكتوبة فوق عند `ADMIN_EMAIL`.
+     */
+    it('says nothing at all when no document is set', () => {
+      const { errors, warnings } = check({ TENANT_ENTITLEMENTS: '' });
+
+      expect(errors).toEqual([]);
+      expect(warnings.join(' ')).not.toContain('TENANT_ENTITLEMENTS');
+    });
+
+    // غلطة واحدة، سطر واحد: `TENANT_KEY` غلط معناه رسالة واحدة عنه، مش رسالة
+    // تانية بتقول إن `sub` مابيساويهوش — وهي نتيجة ليه مش عطل مستقل.
+    it('does not pile a second error onto an already-invalid TENANT_KEY', () => {
+      const { errors } = check({ TENANT_KEY: 'Mohamed Hassan' });
+
+      expect(errors).toHaveLength(1);
     });
   });
 

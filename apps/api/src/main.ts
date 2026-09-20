@@ -7,10 +7,25 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { loadEnv } from './config/env';
+import { loadEntitlements } from './common/entitlements';
 
 async function bootstrap(): Promise<void> {
   // Validate before the app is constructed so a bad config fails fast and loudly.
   const env = loadEnv(process.env);
+
+  /*
+   * والمستند بيتحقّق هنا، بعد `loadEnv` وقبل ما التطبيق يتبني.
+   *
+   * ⚠️ لاحظ الفرق بين السطرين: `loadEnv` **بترمي** عن قصد — إعداد غلط لازم
+   * يوقّف الإقلاع بصوت عالي. `loadEntitlements` عمرها ما بترمي، لأن مستند
+   * منتهي أو توقيع غلط مايصحّش يمنع الحاوية من القيام: حاوية API ماقامتش
+   * معناها Traefik بيرد 404 على الدومين كله، يعني منصة مقفولة بالكامل بسبب
+   * متغيّر شغلته يخفي زرار.
+   *
+   * وهنا بالذات، مش في موديول لوحده، عشان القيمة تبقى محسوبة قبل أول
+   * كونستركتور يقراها. الموديول بينده نفس الدالة تاني وهي إدمپوتنت.
+   */
+  await loadEntitlements();
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     // Better Auth needs the raw body on its routes; disabling the global parser

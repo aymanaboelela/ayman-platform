@@ -51,6 +51,8 @@
  *        AND (b.id IS NULL OR NOT b.is_active);
  */
 
+import { isFeatureEnabled } from '../../common/entitlements';
+
 /** The catalogue columns every caller needs, and none it does not. */
 export const COURSE_BOOK_SELECT = {
   id: true,
@@ -98,11 +100,34 @@ export interface CourseBook {
   bookUnitCostCents: number | null;
 }
 
+/** ولا كتاب على الإطلاق — الرد اللي كل قارئ عنده فرع جاهز له. */
+const NO_BOOK: CourseBook = {
+  bookTitle: null,
+  bookPriceCents: null,
+  bookId: null,
+  bookUnitCostCents: null,
+};
+
 export function courseBook(row: {
   book: CourseBookRow | null;
   bookTitle: string | null;
   bookPriceCents: number | null;
 }): CourseBook {
+  /*
+   * ستاك مالوش كتب: الأربع قرّاء بيرجّعوا «مفيش كتاب» من غير ولا فرع جديد
+   * عند أي حد منهم.
+   *
+   * هنا بالذات — مش في كل شاشة — عشان ده نفس السبب اللي الملف ده اتكتب
+   * عشانه: تلات نسخ من `bookTitle !== null` هي بالظبط اللي بتخلّي شاشة
+   * واحدة تفضل على القاعدة القديمة. و`courseBookCtaVisible` في الويب بتقرا
+   * الحقلين دول، فزرار «اطلب الكتاب» بيختفي من صفحة الكورس والداشبورد
+   * ولوحة المحاضرة من غير ما تتلمس ولا واحدة فيهم.
+   *
+   * ولاحظ إن `priceCourseBook` — اللي بيحسب فلوس فعلًا — بيمشي من هنا كمان،
+   * فالقفل مش تجميلي.
+   */
+  if (!isFeatureEnabled('books')) return NO_BOOK;
+
   const { book } = row;
 
   if (book?.isActive) {
@@ -113,7 +138,7 @@ export function courseBook(row: {
           bookId: book.id,
           bookUnitCostCents: book.unitCostCents,
         }
-      : { bookTitle: null, bookPriceCents: null, bookId: null, bookUnitCostCents: null };
+      : NO_BOOK;
   }
 
   return {

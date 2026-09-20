@@ -219,6 +219,10 @@ export function checkTenantEnv(env, options = {}) {
     fail(`TENANT_KEY "${key}" must be lowercase letters, digits and dashes (2–31 chars).`);
   }
 
+  // بيتقرا تحت في فحص مستند الصلاحيات: مقارنة `sub` بمفتاح غلط أصلًا
+  // بتضيف غلطة تانية على نفس السبب.
+  const keyIsValid = key !== '' && key !== 'ayman' && /^[a-z0-9][a-z0-9-]{1,30}$/.test(key);
+
   // ── Database ───────────────────────────────────────────────────────────
   const db = get(env, 'POSTGRES_DB');
   if (db === '') {
@@ -680,6 +684,95 @@ export function checkTenantEnv(env, options = {}) {
       'before it — nobody can sign in to /admin on a fresh database.';
     if (firstDeploy) fail(message);
     else warn(`${message} Re-run with --first-deploy if this stack has not launched yet.`);
+  }
+
+  /*
+   * ── مستند الصلاحيات ────────────────────────────────────────────────────
+   *
+   * `TENANT_ENTITLEMENTS` هو اللي بيقول «المدرّس ده مسموح له يعرض كتب / يرفع
+   * فيديو / يبعت إذاعة». compact JWS موقّع EdDSA، والـAPI بيتحقّق منه محليًا
+   * بمفتاح عام مكمپايل في الصورة (`apps/api/src/common/entitlements.ts`).
+   *
+   * **فاضي مش تحذير.** ده الوضع الصحيح لستاك جديد: الافتراضيات المعلنة
+   * بتشتغل، واللي بيكلّف فلوس (رفع الفيديو، حملات الواتساب، الإذاعة) بيفضل
+   * مقفول لحد ما يتوقّع مستند يفتحه. وتحذير بيولّع على كل إعداد سليم أسوأ من
+   * مفيش تحذير — بيعلّم اللي بينشر إن خرج الفحص بيتتجاهل، فأول تحذير حقيقي
+   * بيعدّي معاه. (نفس الحجة المكتوبة فوق عند `ADMIN_EMAIL`.)
+   *
+   * اللي تحت بيفحص مستند **موجود**: الشكل، وإن `sub` بيساوي `TENANT_KEY`،
+   * وإن `exp` لسه في المستقبل. التوقيع نفسه **مابيتفحصش** — الملف ده مالوش
+   * dependencies عن قصد (بيتشغّل على سيرفر فاضي قبل أي `pnpm install`)
+   * ومفيهوش المفتاح العام.
+   *
+   * والتلات حالات دي بتفشل صامتة من غير الفحص ده: الـAPI بيرفض المستند،
+   * بيكتب سطر في لوج محدش بيفتحه، وبيرجع للافتراضي — فالمدرّس بيفتح لوحته
+   * ويلاقي فيتشر دفع فيها مش موجودة، ومحدش يعرف السبب.
+   */
+  const entitlements = get(env, 'TENANT_ENTITLEMENTS');
+  if (entitlements !== '') {
+    const segments = entitlements.split('.');
+    if (segments.length !== 3) {
+      fail(
+        `TENANT_ENTITLEMENTS has ${segments.length} dot-separated part(s); a compact JWS has ` +
+          `exactly 3. It was probably truncated on the way into the panel.`,
+      );
+    } else {
+      let payload = null;
+      try {
+        payload = JSON.parse(Buffer.from(segments[1], 'base64url').toString('utf8'));
+      } catch {
+        fail('TENANT_ENTITLEMENTS does not decode to JSON — it is not a document this API reads.');
+      }
+      if (payload !== null) {
+        // ⚠️ بس لو `key` نفسه سليم. لو `TENANT_KEY` غلط أصلًا، الرسالة اللي
+        // فوق هي الرسالة — وإن `sub` مابيساويهوش نتيجة ليها مش عطل تاني.
+        // غلطة واحدة، سطر واحد، وإلا اللي بينشر بيدوّر على مشكلتين.
+        if (keyIsValid && payload.sub !== key) {
+          fail(
+            `TENANT_ENTITLEMENTS was issued for "${payload.sub}" but TENANT_KEY is "${key}". ` +
+              `The API checks that too and would REJECT it, so every feature would silently fall ` +
+              `back to the defaults.`,
+          );
+        }
+        // بالثانية، زي `exp` في الـJWT. والمقارنة بالثواني مش بالمللي.
+        const now = Math.floor(Date.now() / 1000);
+        if (typeof payload.exp === 'number' && payload.exp <= now) {
+          fail(
+            `TENANT_ENTITLEMENTS expired on ${new Date(payload.exp * 1000).toISOString()}. An ` +
+              `expired document is rejected exactly like a forged one — sign a new one before ` +
+              `deploying.`,
+          );
+        }
+      }
+    }
+  }
+
+  /*
+   * ── والنص التاني من المستند: مفتاح التوقيع ─────────────────────────────
+   *
+   * `CONTROL_PLANE_PRIVATE_KEY` بيقعد على ستاك أيمن لوحده — هو اللي بتوقّع
+   * بيه شاشة `/admin/platforms`. وجوده في ملف بيئة مدرّس **بيلغي المستند من
+   * أصله**: اللي ماسكه يوقّع لنفسه واحد بيفتح كل فيتشر، والـAPI هيقبله لأن
+   * توقيعه سليم فعلًا.
+   *
+   * وده أسهل غلط في الدنيا: بتنسخ ملف بيئة ستاكك عشان تعمل منه ستاك جديد،
+   * والسطر ده بييجي معاه من غير ما حد يبصّ عليه. `CONTROL_PLANE_TENANTS`
+   * مالوش نفس الخطورة (أسامي وبس) فهو تحذير مش خطأ — بس وجوده على ستاك
+   * مدرّس معناه إن الملف اتنسخ، وده اللي بيخلّي التحذير يستاهل.
+   */
+  if (get(env, 'CONTROL_PLANE_PRIVATE_KEY') !== '') {
+    fail(
+      'CONTROL_PLANE_PRIVATE_KEY is set. That is the key that SIGNS entitlement documents and it ' +
+        "belongs on the owner's stack only — on this one it lets the instructor sign themselves a " +
+        'document that unlocks every feature. Remove it.',
+    );
+  }
+  if (get(env, 'CONTROL_PLANE_TENANTS') !== '') {
+    warn(
+      'CONTROL_PLANE_TENANTS is set on an instructor stack. It does nothing here (the screen that ' +
+        "reads it only renders when TENANT_KEY is ayman) — but it means this file was copied from " +
+        'the owner\'s environment, so check what else came with it.',
+    );
   }
 
   // ── Things that work but will be regretted ─────────────────────────────

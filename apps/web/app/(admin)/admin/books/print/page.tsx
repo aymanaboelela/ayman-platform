@@ -1,3 +1,5 @@
+import { notFound } from 'next/navigation';
+import { getEntitlements } from '@/lib/entitlements';
 import { Fragment } from 'react';
 import Link from 'next/link';
 import './print.css';
@@ -81,6 +83,14 @@ export default async function BookOrdersPrintPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  /*
+   * نفس جيت `/admin/books` — والـURL ده بيتوصله من غيره. الحكاية كاملة فوق
+   * دالة الصفحة الأب؛ اللي يهم هنا إن صفحة جوّه قسم مقفول لازم تقول نفس
+   * اللي القسم بيقوله، وإلا اللي كتب الـURL بإيده بيلاقي شاشة خطأ من
+   * `adminGet` على راوت بيرد ٤٠٤ بدل ما يلاقي إن مفيش صفحة.
+   */
+  if (!(await getEntitlements()).books) notFound();
+
   const params = await searchParams;
   const one = (key: string): string | undefined => {
     const value = Array.isArray(params[key]) ? params[key][0] : params[key];

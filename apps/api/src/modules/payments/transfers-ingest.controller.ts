@@ -6,6 +6,7 @@ import { Public } from '../../auth/decorators/public.decorator';
 import { loadEnv } from '../../config/env';
 import { IngestTransfersDto } from './payments.dto';
 import { TransfersService } from './transfers.service';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
  * `POST /api/ingest/transfers` — what the phone that received the money saw.
@@ -29,6 +30,9 @@ import { TransfersService } from './transfers.service';
  * Accepts `text/plain` as well as JSON — see `transfersIngestBodyParser` for
  * why a device-built JSON body is a liability.
  */
+// باب جهاز الأندرويد. مقفول بتوكن، وبرضه بياخد الجيت: ستاك مش بيستقبل
+// تحويلات مايصحّش يكون عنده مدخل بيكتب في جدوله من بره.
+@RequireFeature('transfers')
 @Controller('ingest')
 export class TransfersIngestController {
   constructor(private readonly transfers: TransfersService) {}

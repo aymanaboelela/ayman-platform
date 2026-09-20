@@ -27,6 +27,7 @@ import {
   RejectBookOrderDto,
 } from './book-orders.dto';
 import { BookOrdersService } from './book-orders.service';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
  * `/admin/books` — الكتاب الورقي, the shipping queue. `book-order:read` sees
@@ -40,6 +41,7 @@ import { BookOrdersService } from './book-orders.service';
  * has already been quoted a number gets, and a shipping clerk should plausibly
  * hold the first and never the second. See the permission catalogue's own note.
  */
+@RequireFeature('books')
 @Controller('admin/book-orders')
 export class AdminBookOrdersController {
   constructor(

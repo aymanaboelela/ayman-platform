@@ -14,6 +14,7 @@ import {
   renderYearMarkdown,
 } from '@/lib/agents/markdown-render';
 import { getBookCatalogOrEmpty } from '@/lib/books';
+import { getEntitlements } from '@/lib/entitlements';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getHomeBlocks } from '@/lib/home-blocks';
 
@@ -101,6 +102,11 @@ export async function GET(
       return markdownResponse(renderSubscribeMarkdown(contact));
     }
     case 'books': {
+      /* ستاك مالوش كتب: التوأم بيرد ٤٠٤ زي الصفحة بالظبط. من غير ده كان
+         هيرجّع مستند «مفيش كتب» على عنوان الصفحة الأصلية بتاعته ٤٠٤ —
+         اتنين بيقولوا حاجتين مختلفتين عن نفس الـURL. */
+      if (!(await getEntitlements()).books) return new Response(null, { status: 404 });
+
       // `getBookCatalogOrEmpty`, like every other loader here: this route is
       // reachable during a build where no API answers, and an empty shop is a
       // document that recovers on the next revalidation.

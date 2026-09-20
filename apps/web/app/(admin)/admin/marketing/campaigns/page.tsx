@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { getEntitlements } from '@/lib/entitlements';
 import { z } from 'zod';
 import { CampaignRowSchema } from '@ayman/contracts/marketing/campaign';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -36,6 +38,15 @@ const timeFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
  * anything running right now, and did the last one finish clean.
  */
 export default async function MarketingCampaignsPage() {
+  /*
+   * القسم ده مش موجود على ستاك الفيتشر دي مقفولة فيه — والصف بتاعه في
+   * `ADMIN_NAV` مش بيترسم أصلًا. ده الباب لو حد كتب الـURL بإيده.
+   *
+   * `notFound()` مش ٤٠٣: الصفحة مش «ممنوعة»، هي مش هنا. ونفس الشكل بالحرف
+   * اللي `(admin)/layout.tsx` بيستخدمه، وبيشرح ليه فوقه.
+   */
+  if (!(await getEntitlements())['marketing.whatsapp']) notFound();
+
   const rows = await adminGet('/api/admin/marketing/campaigns', z.array(CampaignRowSchema));
 
   return (

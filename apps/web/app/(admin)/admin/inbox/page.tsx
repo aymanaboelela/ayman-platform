@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { getEntitlements } from '@/lib/entitlements';
 import { MessageSquareText, Phone, Send, UserRound } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import {
@@ -56,6 +58,15 @@ export default async function AdminInboxPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  /*
+   * القسم ده مش موجود على ستاك الفيتشر دي مقفولة فيه — والصف بتاعه في
+   * `ADMIN_NAV` مش بيترسم أصلًا. ده الباب لو حد كتب الـURL بإيده.
+   *
+   * `notFound()` مش ٤٠٣: الصفحة مش «ممنوعة»، هي مش هنا. ونفس الشكل بالحرف
+   * اللي `(admin)/layout.tsx` بيستخدمه، وبيشرح ليه فوقه.
+   */
+  if (!(await getEntitlements()).assistant) notFound();
+
   const params = await searchParams;
   const raw = Array.isArray(params.filter) ? params.filter[0] : params.filter;
   // Through the schema, not `as InboxFilter`: this value lands in a query

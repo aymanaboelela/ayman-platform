@@ -2,6 +2,7 @@ import {
   ArrowDownLeft,
   AlertTriangle,
   BookMarked,
+  Building2,
   CalendarClock,
   ChartColumn,
   ClipboardList,
@@ -27,7 +28,16 @@ import {
   PackageOpen,
   Wallet,
 } from 'lucide-react';
+import type { Entitlements, FeatureKey } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
+/*
+ * The tenant gate, read here so BOTH consumers of this table get it from one
+ * place. `lib/tenant.ts` is isomorphic — `TENANT_KEY` is inlined into the
+ * client bundle by `next.config.ts`'s `env` block on purpose — so the sidebar
+ * (a client component) and `/admin`'s grid (a server component) reach the same
+ * answer and React has no hydration mismatch to resolve.
+ */
+import { IS_AYMAN } from '@/lib/tenant';
 
 /**
  * Which sidebar block a link sits in. `overview` is its own group of one and
@@ -42,7 +52,48 @@ export interface AdminNavItem {
   icon: LucideIcon;
   /** Rendered only if the session holds this. The API re-checks regardless. */
   permission: string;
+  /**
+   * الفيتشر اللي القسم ده بيعيش جوّاها، لو كان جوّه واحدة.
+   *
+   * مفيش قيمة = القسم ده المنصة نفسها ومابيتقفلش على حد (الكورسات، الطلبة،
+   * الإعدادات). وفيه قيمة = المدرّس اللي الفيتشر دي مقفولة عنده مايشوفش
+   * الصف ده خالص — لا في السايدبار، ولا في جريد `/admin`.
+   *
+   * ⚠️ ودي عكس `aymanOnly` تحت، مش نسخة تانية منها: `aymanOnly` بتقول «ده
+   * لصاحب السوفتوير بس»، ودي بتقول «ده لكل مدرّس فتحهاله». وعشان كده
+   * `aymanOnly` بتتقرا من `TENANT_KEY` المحقون وقت البناء، ودي بتتقرا من
+   * `GET /api/entitlements` — قيمة وقت تشغيل، عشان مستند جديد يوصل
+   * بإعادة تشغيل مش بإعادة بناء.
+   *
+   * وزي `aymanOnly` بالظبط: ده إخفاء مش قفل. القفل `@RequireFeature` على
+   * الكونترولر في الـAPI.
+   */
+  feature?: FeatureKey;
   group: AdminNavGroup;
+  /**
+   * Rendered on Ayman's stack and nowhere else — the control plane, and
+   * anything else that is about the OTHER stacks rather than about this one.
+   *
+   * ## Why this is not a permission
+   *
+   * Every instructor stack creates its first account with `role: 'admin'`
+   * (`apps/api/src/scripts/create-admin.ts`, run from `docker-entrypoint.sh`
+   * on every boot with the `ADMIN_*` pair that `deploy/tenant.env.example`
+   * hands to EVERY tenant), and `admin` is `'*'` in `permissions.ts` — it
+   * picks up any new permission the moment the string is written. So a
+   * `control:sign` invented for this row would be held by Mohamed and by
+   * Adel, on their own stacks, the day it shipped. `IS_AYMAN` is the gate;
+   * a permission here would be a green test guarding nothing.
+   *
+   * ## And why the row stays in the table
+   *
+   * `activeNavItem()` below is what `admin-header.tsx` resolves the breadcrumb
+   * from, so a row removed from `ADMIN_NAV` is a page with a blank title
+   * rather than a page that does not exist. The hiding happens where the list
+   * is RENDERED — `admin-nav-list.tsx` and `/admin`'s section grid — and the
+   * route itself calls `notFound()` on its own.
+   */
+  aymanOnly?: true;
 }
 
 /**
@@ -103,6 +154,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.transfers,
     icon: ArrowDownLeft,
     permission: 'payment:read',
+    feature: 'transfers',
     group: 'teaching',
   },
   {
@@ -124,6 +176,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.books,
     icon: PackageOpen,
     permission: 'book-order:read',
+    feature: 'books',
     group: 'teaching',
   },
   {
@@ -135,6 +188,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.homework,
     icon: NotebookPen,
     permission: 'homework:read',
+    feature: 'homework',
     group: 'teaching',
   },
   {
@@ -153,6 +207,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.monthlyExams,
     icon: CalendarClock,
     permission: 'quiz:write',
+    feature: 'exams',
     group: 'teaching',
   },
   {
@@ -160,6 +215,11 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     // is the other half of one paper: what he sets, and what comes back needing
     // a human. Its own permission, `attempt:grade`, so a role that may author a
     // paper does not automatically hold the pen that moves a student's score.
+    // ⚠️ ومن غير `feature: 'exams'` عن قصد. الشاشة دي بتصحّح **كل** سؤال
+    // مقالي على المنصة — كويزات المحاضرات وامتحان نهاية الكورس كمان، مش
+    // امتحان الشهر بس. والسؤال المقالي اللي ماتصحّحش بيتحسب صفر في مجموع
+    // الطالب، فإخفاؤها مع فيتشر الامتحانات الشهرية كان هيصفّر درجات على
+    // ستاك مالوش امتحانات شهرية أصلًا.
     href: '/admin/grading',
     labelAr: copy.admin.nav.grading,
     icon: SquarePen,
@@ -192,6 +252,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.inbox,
     icon: Inbox,
     permission: 'conversation:read',
+    feature: 'assistant',
     group: 'teaching',
   },
   {
@@ -219,6 +280,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.broadcast,
     icon: MessagesSquare,
     permission: 'conversation:reply',
+    feature: 'broadcast',
     group: 'teaching',
   },
   {
@@ -249,6 +311,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.marketing,
     icon: Megaphone,
     permission: 'marketing:read',
+    feature: 'marketing.whatsapp',
     group: 'marketing',
   },
 
@@ -317,6 +380,22 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     permission: 'audit:read',
     group: 'system',
   },
+  {
+    // منصات المدرّسين. `system`, at the end: it is the only section that is
+    // about stacks OTHER than this one, so it reads last rather than beside
+    // the screens that configure the stack you are standing on.
+    //
+    // `admin:access` is the permission every admin session already holds —
+    // it is here because the field is required and the three consumers filter
+    // on it, NOT because it gates anything. `aymanOnly` is the gate; see the
+    // note on the field.
+    href: '/admin/platforms',
+    labelAr: copy.admin.nav.platforms,
+    icon: Building2,
+    permission: 'admin:access',
+    group: 'system',
+    aymanOnly: true,
+  },
 ] as const;
 
 /** Render order of the sidebar blocks, and the heading each one carries. */
@@ -327,6 +406,34 @@ export const ADMIN_NAV_GROUPS: readonly { id: AdminNavGroup; labelAr: string | n
   { id: 'site', labelAr: copy.admin.nav.groupSite },
   { id: 'system', labelAr: copy.admin.nav.groupSystem },
 ] as const;
+
+/**
+ * The rows a given session may see — the one rule, for every surface.
+ *
+ * Both callers used to spell `ADMIN_NAV.filter((item) =>
+ * permissions.includes(item.permission))` out by hand: the sidebar and the
+ * mobile sheet through `admin-nav-list.tsx`, and `/admin`'s section grid. Two
+ * copies of a visibility rule is how a section ends up hidden from the
+ * sidebar and still sitting as a tile on the overview — which is exactly what
+ * `aymanOnly` would have caused on the day it was added.
+ *
+ * `activeNavItem` deliberately does NOT go through this: the breadcrumb has
+ * to resolve a title for a page you are already standing on, and a route that
+ * renders is a route whose name should appear at the top of it.
+ */
+export function visibleNavItems(
+  permissions: readonly string[],
+  features: Entitlements,
+): readonly AdminNavItem[] {
+  return ADMIN_NAV.filter(
+    (item) =>
+      permissions.includes(item.permission) &&
+      (!item.aymanOnly || IS_AYMAN) &&
+      // مطلوب عن قصد ومالوش قيمة افتراضية: سطح جديد ينسى يمرّره يبقى خطأ
+      // كومبايل، مش قسم بيظهر على ستاك مقفول عنده.
+      (item.feature === undefined || features[item.feature]),
+  );
+}
 
 /**
  * The active link for a path. Longest matching `href` wins, so

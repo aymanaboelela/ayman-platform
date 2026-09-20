@@ -5,6 +5,7 @@ import { Medal, Trophy } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { HonorFace } from '@/components/site/honor-face';
 import { getHonorBoardRounds } from '@/lib/home-blocks';
+import { getEntitlements } from '@/lib/entitlements';
 
 const c = copy.landing.honorBoard;
 
@@ -42,6 +43,16 @@ export default async function HonorBoardArchivePage({
 }: {
   searchParams: Promise<{ round?: string }>;
 }) {
+  /*
+   * الصفحة نفسها مش موجودة على ستاك الفيتشر دي مقفولة فيه — `notFound()`
+   * مش صفحة فاضية.
+   *
+   * اللودر تحت بيرجّع «مفيش حاجة» أصلًا، وده كان هيسيب عنوان وسطر وصف
+   * لقسم مالوش وجود. و`notFound()` مش ٤٠٣ لنفس السبب المكتوب في
+   * `(admin)/layout.tsx`: الصفحة دي مش «ممنوعة»، هي مش هنا.
+   */
+  if (!(await getEntitlements()).honorBoard) notFound();
+
   const [{ round }, board] = await Promise.all([searchParams, getHonorBoardRounds()]);
 
   if (board.periods.length === 0) {

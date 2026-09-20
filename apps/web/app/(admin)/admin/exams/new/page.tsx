@@ -1,3 +1,5 @@
+import { notFound } from 'next/navigation';
+import { getEntitlements } from '@/lib/entitlements';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { z } from '@ayman/contracts/zod';
@@ -25,6 +27,14 @@ export const metadata = { title: c.create };
  * its own preflight behind it.
  */
 export default async function NewExamPage() {
+  /*
+   * نفس جيت `/admin/exams` — والـURL ده بيتوصله من غيره. الحكاية كاملة فوق
+   * دالة الصفحة الأب؛ اللي يهم هنا إن صفحة جوّه قسم مقفول لازم تقول نفس
+   * اللي القسم بيقوله، وإلا اللي كتب الـURL بإيده بيلاقي شاشة خطأ من
+   * `adminGet` على راوت بيرد ٤٠٤ بدل ما يلاقي إن مفيش صفحة.
+   */
+  if (!(await getEntitlements()).exams) notFound();
+
   const courses = await adminGet('/api/admin/courses', CoursePickSchema);
 
   return (

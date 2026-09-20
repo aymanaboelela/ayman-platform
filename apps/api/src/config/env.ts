@@ -324,6 +324,30 @@ const schema = z
         })
         .optional(),
     ),
+    /**
+     * مستند الصلاحيات الموقّع — إيه الفيتشرز اللي الستاك ده مسموح له
+     * يشغّلها. compact JWS، بيتوقّع EdDSA من شاشة التحكّم عند صاحب
+     * السوفتوير، وبيتقرا هنا بمفتاح عام مكمپايل في الصورة.
+     *
+     * ⚠️ **`optionalSecret` وبس — ومحدش بيتحقّق منه هنا، عن قصد.**
+     *
+     * `loadEnv` بترمي على أول مشكلة، و`main.ts` بينده عليها قبل
+     * `NestFactory.create`. يعني لو التوقيع اتفحص من هنا، مستند منتهي
+     * الصلاحية = حاوية API ماقامتش = Traefik بيرد 404 على الدومين كله.
+     * ده حرفيًا نفس شكل حادثة `GROQ_MODEL` المكتوبة فوق، بس بسبب تاريخ
+     * انتهاء بدل سترنج فاضية.
+     *
+     * فاللي بيحصل هنا هو «دي سترنج، ولو فاضية يبقى مش موجودة» وخلاص.
+     * التحقّق الحقيقي في `apps/api/src/common/entitlements.ts`، وهو عمره
+     * ما بيرمي: أي فشل بيرجّع الستاك للافتراضي المعلن و`logger.error`.
+     *
+     * وموجود في السكيما دي أصلًا عشان القاعدة في CLAUDE.md §٥: متغيّر
+     * بيعرف نفسه هنا لازم يبقى في `deploy/tenant.env.example` وفي
+     * `scripts/check-tenant-env.mjs` كمان، وده اللي بيخلّي التلاتة يتحركوا
+     * مع بعض. ⚠️ `TENANT_KEY` نفسه مش هنا — بيتقرا خام في
+     * `common/tenant.ts` — فمتقلّدش ده.
+     */
+    TENANT_ENTITLEMENTS: optionalSecret,
   })
   .refine((data) => !(data.GOOGLE_CLIENT_ID && !data.GOOGLE_CLIENT_SECRET), {
     message: 'GOOGLE_CLIENT_SECRET is required when GOOGLE_CLIENT_ID is set',

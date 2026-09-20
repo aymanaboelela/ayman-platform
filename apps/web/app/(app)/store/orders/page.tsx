@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { PackageOpen } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 import { BookOrderCard } from '@/components/dashboard/my-book-orders-section';
 import { getMyBookOrdersOrEmpty, newestFirst } from '@/lib/my-book-orders';
+import { getEntitlements } from '@/lib/entitlements';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 
 export const metadata: Metadata = { title: copy.books.mine.pageTitle };
@@ -55,6 +57,16 @@ const c = copy.books.mine;
  * page wait for a round trip it does not need to.
  */
 export default async function MyBookOrdersPage() {
+  /*
+   * الصفحة نفسها مش موجودة على ستاك الفيتشر دي مقفولة فيه — `notFound()`
+   * مش صفحة فاضية.
+   *
+   * اللودر تحت بيرجّع «مفيش حاجة» أصلًا، وده كان هيسيب عنوان وسطر وصف
+   * لقسم مالوش وجود. و`notFound()` مش ٤٠٣ لنفس السبب المكتوب في
+   * `(admin)/layout.tsx`: الصفحة دي مش «ممنوعة»، هي مش هنا.
+   */
+  if (!(await getEntitlements()).books) notFound();
+
   const [orders, settings] = await Promise.all([
     getMyBookOrdersOrEmpty(),
     /* `…OrDefaults`, never `getPublicSettings()`: a settings read that throws

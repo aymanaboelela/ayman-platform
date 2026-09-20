@@ -1,3 +1,5 @@
+import { notFound } from 'next/navigation';
+import { getEntitlements } from '@/lib/entitlements';
 import { z } from 'zod';
 import { AdminBookRowSchema } from '@ayman/contracts/admin/books';
 import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
@@ -38,6 +40,14 @@ const TERM_LABEL: Record<BookTerm, string> = {
  * an admin sees here is the shelf they are editing.
  */
 export default async function AdminBooksCatalogPage() {
+  /*
+   * نفس جيت `/admin/books` — والـURL ده بيتوصله من غيره. الحكاية كاملة فوق
+   * دالة الصفحة الأب؛ اللي يهم هنا إن صفحة جوّه قسم مقفول لازم تقول نفس
+   * اللي القسم بيقوله، وإلا اللي كتب الـURL بإيده بيلاقي شاشة خطأ من
+   * `adminGet` على راوت بيرد ٤٠٤ بدل ما يلاقي إن مفيش صفحة.
+   */
+  if (!(await getEntitlements()).books) notFound();
+
   const [books, settings, subjects, courses] = await Promise.all([
     adminGet('/api/admin/books', z.array(AdminBookRowSchema)),
     adminGet('/api/admin/settings', SiteSettingsSchema),

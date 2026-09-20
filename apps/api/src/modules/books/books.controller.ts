@@ -4,6 +4,7 @@ import { Throttle, seconds } from '@nestjs/throttler';
 import type { BookCatalog } from '@ayman/contracts/books';
 import { Public } from '../../auth/decorators/public.decorator';
 import { BooksService } from './books.service';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
  * ⚠️ The same throttle reasoning as `CatalogController` and `NewsController`,
@@ -23,6 +24,9 @@ const BOOKS_THROTTLE = {
 };
 
 /** «قسم الكتب» — the public shop. Read-only; ordering lives on `/book-orders`. */
+// «قسم الكتب» كله بيختفي مع الفيتشر: المتجر عام، فالجيت لازم يعدّي قبل
+// `@Public()` — وده اللي `FeatureGuard` موجود عشانه.
+@RequireFeature('books')
 @Controller('books')
 @UsePipes(ZodValidationPipe)
 export class BooksController {

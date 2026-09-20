@@ -13,6 +13,7 @@ import { OptionalSessionService } from '../../auth/optional-session.service';
 import { RequireCsrf } from '../security/require-csrf.decorator';
 import { CreateBookOrderDto, SubmitBookOrderPaymentDto } from './book-orders.dto';
 import { BookOrdersService } from './book-orders.service';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 interface MulterFile {
   originalname: string;
@@ -68,6 +69,9 @@ const PAYMENT_THROTTLE = {
  * in student's own order history; a guest has no session to list from in the
  * first place) is the one route here that still requires it.
  */
+// الطلب نفسه. إخفاء زرار «اطلب الكتاب» في الويب مش عزل — من غير السطر ده
+// أي حد يعرف الـURL يقدر يعمل طلب على ستاك مالوش كتب أصلًا.
+@RequireFeature('books')
 @Controller('book-orders')
 export class BookOrdersController {
   constructor(

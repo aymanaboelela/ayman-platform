@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { Menu } from 'lucide-react';
+import type { Entitlements } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Kbd } from '@ayman/ui/components/kbd';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@ayman/ui/components/sheet';
@@ -33,11 +34,15 @@ import { activeNavItem } from './nav-items';
 export function AdminHeader({
   identity,
   permissions,
+  features,
   notifications,
 }: {
   /** Email if the account has one, otherwise the phone. Null for neither. */
   identity: string | null;
   permissions: readonly string[];
+  /** للشيت بتاع الموبايل جوّه — وهو نسخة تانية من نفس الليستة، والنسخة
+   *  اللي بتتنسي هي اللي بتفضل بتعرض قسم مقفول. */
+  features: Entitlements;
   /**
    * The notification bell, handed down as an already-rendered Server
    * Component node — it reads the unread count on the server so the badge is
@@ -74,7 +79,11 @@ export function AdminHeader({
               <BrandLockup showTagline={false} />
             </SheetTitle>
             <nav aria-label={copy.admin.title}>
-              <AdminNavList permissions={permissions} onNavigate={() => setMobileOpen(false)} />
+              <AdminNavList
+                permissions={permissions}
+                features={features}
+                onNavigate={() => setMobileOpen(false)}
+              />
             </nav>
           </SheetContent>
         </Sheet>
@@ -113,7 +122,9 @@ export function AdminHeader({
 
         {/* Only for a session that HAS an inbox — the control asks the browser
             for permission to announce messages this admin cannot read. */}
-        {permissions.includes('conversation:read') ? <InboxAlertsToggle /> : null}
+        {permissions.includes('conversation:read') && features.assistant ? (
+          <InboxAlertsToggle />
+        ) : null}
 
         {/* The same bell the student has, with the same feed behind it.
             «فيه حاجة مستنياك» must have ONE place it shows up, or it has

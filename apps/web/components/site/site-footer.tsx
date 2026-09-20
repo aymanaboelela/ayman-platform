@@ -4,6 +4,7 @@ import { copy } from '@ayman/contracts';
 import { SOCIAL_MARKS, SocialIcon, type SocialKey } from '@/components/site/social-icons';
 import { FooterDragons } from '@/components/site/footer-dragons';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { getEntitlements } from '@/lib/entitlements';
 import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 import { tenantName } from '@/lib/tenant';
 import { waMeHref } from '@ayman/contracts/whatsapp';
@@ -110,7 +111,14 @@ const ACCOUNT_LINKS = [
  * own because it redraws the frames the tracks section already fetched.
  */
 export async function SiteFooter() {
-  const { contact } = await getPublicSettingsOrDefaults();
+  const [{ contact }, features] = await Promise.all([
+    getPublicSettingsOrDefaults(),
+    getEntitlements(),
+  ]);
+  /* صف «الكتب» بيختفي مع الفيتشر. الفوتر ده على كل صفحة تسويق، وهو الحتة
+     اللي بتخلّي `/books` مش يتيمة — فلو الصفحة بقت ٤٠٤ وفضل اللينك، ده
+     مش لينك ميت واحد، ده لينك ميت في فوتر كل صفحة. */
+  const pageLinks = PAGE_LINKS.filter((link) => link.href !== '/books' || features.books);
 
   /*
    * Every row comes from the setting, and a row with no destination is
@@ -221,7 +229,7 @@ export async function SiteFooter() {
 
           <nav className="site-footer__col" aria-label={c.footerPages}>
             <p className="site-footer__h">{c.footerPages}</p>
-            {PAGE_LINKS.map((link) => (
+            {pageLinks.map((link) => (
               <Link href={link.href} key={link.href}>
                 {link.label}
               </Link>

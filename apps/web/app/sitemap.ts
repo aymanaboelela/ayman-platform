@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { connection } from 'next/server';
 import { getCatalogOrEmpty } from '@/lib/catalog';
+import { getEntitlements } from '@/lib/entitlements';
 import { getNewsListOrEmpty } from '@/lib/news';
 import { SITE_URL } from '@/lib/seo/jsonld';
 import { sitemapLoc } from '@/lib/seo/sitemap-url';
@@ -51,6 +52,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // entries for one build is recoverable; a build that will not complete is not.
   const { courses } = await getCatalogOrEmpty();
   const { posts } = await getNewsListOrEmpty();
+  /* الصفحات اللي بتعيش جوّه فيتشر. لو الفيتشر مقفولة، الصفحة بترد ٤٠٤ —
+     ونشر URL ميت في السايت‌ماب مش سهو صغير: ده بالظبط «الدريفت» اللي بيخلّي
+     طبقة الاكتشاف بتقول حاجة الموقع مابيقولهاش. */
+  const features = await getEntitlements();
 
   /**
    * `<lastmod>` for the pages that are not a row in a table.
@@ -111,7 +116,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // العلا», so it sits with the catalogue rather than with the hub pages
     // below. `weekly`, not `monthly`: prices and stock move, and a crawler that
     // has cached a withdrawn title is showing a price nobody can pay.
-    { url: `${SITE_URL}/books`, lastModified: coursesModified, changeFrequency: 'weekly', priority: 0.8 },
+    ...(features.books
+      ? [
+          {
+            url: `${SITE_URL}/books`,
+            lastModified: coursesModified,
+            changeFrequency: 'weekly' as const,
+            priority: 0.8,
+          },
+        ]
+      : []),
     // «كل اللينكات» — the URL that lives in the YouTube, Instagram, TikTok and
     // Facebook bios. Listed, and at a modest priority, on purpose: it is a hub
     // of links rather than a page of content, so it should not outrank the

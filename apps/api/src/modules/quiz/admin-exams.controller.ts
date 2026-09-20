@@ -9,6 +9,7 @@ import {
   ExamPublishDto,
 } from './dto/exam.dto';
 import { ScheduledExamsService } from './scheduled-exams.service';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
  * `/api/admin/exams` — «امتحانات الشهر».
@@ -39,6 +40,9 @@ import { ScheduledExamsService } from './scheduled-exams.service';
  * response.json()`, so an unwrapped return turns a successful write into a
  * thrown parse error the client reports as "save failed".
  */
+// امتحانات الشهر — وده بابها الوحيد في اللوحة (`LESSON_KINDS` مافيهاش
+// امتحان شهر عن قصد)، فقفله بيقفل التأليف كله.
+@RequireFeature('exams')
 @Controller('admin/exams')
 @RequirePermission('quiz:write')
 @UsePipes(ZodValidationPipe)

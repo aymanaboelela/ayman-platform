@@ -1,3 +1,4 @@
+import { getEntitlements } from '@/lib/entitlements';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
@@ -54,6 +55,14 @@ export default async function EditExamPage({
 }: {
   params: Promise<{ lessonId: string }>;
 }) {
+  /*
+   * نفس جيت `/admin/exams` — والـURL ده بيتوصله من غيره. الحكاية كاملة فوق
+   * دالة الصفحة الأب؛ اللي يهم هنا إن صفحة جوّه قسم مقفول لازم تقول نفس
+   * اللي القسم بيقوله، وإلا اللي كتب الـURL بإيده بيلاقي شاشة خطأ من
+   * `adminGet` على راوت بيرد ٤٠٤ بدل ما يلاقي إن مفيش صفحة.
+   */
+  if (!(await getEntitlements()).exams) notFound();
+
   const { lessonId } = await params;
 
   /* The list and the course names together — neither needs the other. */

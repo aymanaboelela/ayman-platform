@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Headers, Post, UnauthorizedExcep
 import { Public } from '../../auth/decorators/public.decorator';
 import { loadEnv } from '../../config/env';
 import { CampaignService } from './campaign.service';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
  * `POST /api/marketing/wa/receipt` — the second tick, arriving.
@@ -46,6 +47,7 @@ import { CampaignService } from './campaign.service';
 const REFUSED = 0;
 const DELIVERY_ACK = 3;
 
+@RequireFeature('marketing.whatsapp')
 @Controller('marketing/wa')
 export class WhatsappReceiptController {
   constructor(private readonly campaigns: CampaignService) {}

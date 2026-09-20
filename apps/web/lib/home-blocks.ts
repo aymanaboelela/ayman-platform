@@ -5,8 +5,10 @@ import {
   type HomeBlockList,
   type HomeBlockProps,
 } from '@ayman/contracts/admin/home-blocks';
+import type { Entitlements, FeatureKey } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy';
 import { apiGet } from '@/lib/api';
+import { getEntitlements } from '@/lib/entitlements';
 import { tags } from '@/lib/cache-tags';
 
 const c = copy.landing;
@@ -278,16 +280,47 @@ const FALLBACK: HomeBlockList = asBlockList(STARTER_HOME_BLOCKS);
  * afternoon. Writes call `updateTag(tags.homeBlocks())` and land immediately
  * regardless.
  */
+/**
+ * أنواع البلوكات اللي بتعيش جوّه فيتشر. اللي مش هنا مالوش علاقة بحاجة
+ * بتتفتح وتتقفل — الهيرو والكورسات والأسئلة هم المنصة نفسها.
+ */
+const BLOCK_FEATURE: Partial<Record<HomeBlockProps['type'], FeatureKey>> = {
+  books: 'books',
+  honorBoard: 'honorBoard',
+};
+
+/**
+ * بيشيل بلوكات الفيتشرز المقفولة من الليستة قبل ما ترجع.
+ *
+ * ⚠️ بيتنده على **المخرج**، بعد الـ`try` وبعد الـfallback — مش جوّاه. أول
+ * boot لأي ستاك جديد جدوله `home_blocks` فاضي، يعني الصفحة اللي بتترسم هي
+ * `FALLBACK` المحسوبة على مستوى المودیول؛ فلتر جوّه الـ`try` بس كان
+ * هيسيب بلوك الكتب ولوحة الشرف يترسموا بالظبط على الستاك اللي لسه ما
+ * اتفتحلوش حاجة.
+ *
+ * وبيشيل البلوك كله بدل ما يسيبه يرسم فاضي: `<HonorBoardSection>` بترسم
+ * «أماكن محجوزة» لما مايبقاش فيه أسامي، وده على ستاك مالوش لوحة شرف بيبقى
+ * قسم بيوعد بحاجة عمرها ما هتيجي.
+ */
+function withoutClosedBlocks(blocks: HomeBlockList, features: Entitlements): HomeBlockList {
+  return blocks.filter((block) => {
+    const feature = BLOCK_FEATURE[block.props.type];
+    return feature === undefined || features[feature];
+  });
+}
+
 export async function getHomeBlocks(): Promise<HomeBlockList> {
   'use cache';
   cacheLife('minutes');
   cacheTag(tags.homeBlocks());
 
+  const features = await getEntitlements();
+
   try {
     const blocks = await apiGet('/api/home-blocks', HomeBlockListSchema);
-    return blocks.length > 0 ? blocks : FALLBACK;
+    return withoutClosedBlocks(blocks.length > 0 ? blocks : FALLBACK, features);
   } catch {
-    return FALLBACK;
+    return withoutClosedBlocks(FALLBACK, features);
   }
 }
 
@@ -319,6 +352,12 @@ export async function getHonorBoardRounds(): Promise<HonorBoard> {
   'use cache';
   cacheLife('minutes');
   cacheTag(tags.honorBoard());
+
+  /* الراوت نفسه بيرد ٤٠٤ على ستاك اللوحة مقفولة فيه، فالـ`catch` تحت كان
+     هيكفي. السطر ده موجود عشان ما نبعتش نداء إحنا عارفين إنه هيقع — والفرق
+     مش تجميلي: النداء ده جوّه كاش بيكاش فشله كمان، فالستاك ده كان هيدفع
+     محاولة كل بضع دقايق للأبد. */
+  if (!(await getEntitlements()).honorBoard) return { entries: [], periods: [] };
 
   try {
     return await apiGet('/api/catalog/honor-board', HonorBoardSchema);

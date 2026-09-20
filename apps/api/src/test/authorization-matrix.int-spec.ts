@@ -12,6 +12,7 @@ import {
   type BetterAuthSessionResult,
 } from '../auth/better-auth.token';
 import { AuthGuard } from '../auth/guards/auth.guard';
+import { FeatureGuard } from '../auth/guards/feature.guard';
 import { HealthController } from '../health/health.controller';
 import { SessionController } from '../auth/session.controller';
 import { PrismaClient } from '../generated/prisma/client';
@@ -33,6 +34,7 @@ import { StudentsModule } from '../modules/admin/students/students.module';
 import { AdminTaxonomyModule } from '../modules/admin/taxonomy/admin-taxonomy.module';
 import { MediaModule } from '../modules/media/media.module';
 import { FlagsModule } from '../modules/admin/flags/flags.module';
+import { TenantEntitlementsModule } from '../modules/tenant-entitlements/tenant-entitlements.module';
 import { RolesModule } from '../modules/admin/roles/roles.module';
 import { NavigationModule } from '../modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.module';
@@ -259,6 +261,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         AdminTaxonomyModule,
         MediaModule,
         FlagsModule,
+        // صلاحيات الستاك. مالوش أي تبعية — لا Prisma ولا Redis — فبيدخل هنا
+        // زي ما هو، والـ`onModuleInit` بتاعه بيتحقّق من المستند قبل أول طلب.
+        TenantEntitlementsModule,
         RolesModule,
         NavigationModule,
         HomeBlocksModule,
@@ -272,6 +277,14 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       providers: [
         Reflector,
         { provide: APP_GUARD, useClass: AuthGuard },
+        /*
+         * الجارد التاني اللي البرودكشن بيسجّله (`app.module.ts`). هنا عشان
+         * المصفوفة تبقى نسخة أمينة من ستاك الجوارد الحقيقي — ومقصود إنه
+         * **مايغيّرش ولا صف** تحت: التستات بتجري من غير `TENANT_KEY`، يعني
+         * `IS_AYMAN` صح، يعني كل الفيتشرز مفتوحة و`FeatureGuard` بيعدّي.
+         * أول ما صف يتغيّر هنا، معناه إن جيت فيتشر أثّر على ستاك أيمن.
+         */
+        { provide: APP_GUARD, useClass: FeatureGuard },
         { provide: BETTER_AUTH, useValue: fakeAuth },
         /*
          * التسويق. The controller's three services, listed here rather than
@@ -1477,6 +1490,14 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // And the loop the whole design exists to not close.
     { label: 'role grants write: cannot grant role:grant', method: 'put', path: () => '/api/admin/roles/owner/permissions', actor: 'admin', status: 400, body: () => ({ permissions: ['role:grant'] }) },
 
+    // ── Entitlements — one public read, and no write anywhere ──
+    //
+    // مافيش صف كتابة لأن مافيش راوت كتابة: القيم بتيجي من مستند موقّع في
+    // البيئة، مش من جدول. ده مقصود — الجدول كان هيبقى في قاعدة المدرّس،
+    // وهو ماسك `flags:write` عليها.
+    { label: 'entitlements: anonymous', method: 'get', path: () => '/api/entitlements', actor: 'anonymous', status: 200 },
+    { label: 'entitlements: student', method: 'get', path: () => '/api/entitlements', actor: 'student', status: 200 },
+
     // ── Flags — one public read, admin-only read/write ──
     { label: 'flags public: anonymous', method: 'get', path: () => '/api/flags', actor: 'anonymous', status: 200 },
     { label: 'flags admin read: anonymous', method: 'get', path: () => '/api/admin/flags', actor: 'anonymous', status: 401 },
@@ -2317,6 +2338,15 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
           'GET /api/settings/branding',
           'GET /api/settings/public',
           'GET /api/flags',
+          /*
+           * صلاحيات الستاك. عام لنفس سبب `GET /api/flags` فوقه: اللي بيقراه
+           * هو الرندر، والصفحة الرئيسية بتترسم لزائر مش مسجّل — فبلوك الكتب
+           * لازم ما يترسمش أصلًا بدل ما يترسم ويختفي بعد تسجيل الدخول.
+           *
+           * والرد كله بوليانات عن الستاك نفسه: «بيعرض كتب ولا لأ»، وهي
+           * معلومة أي زائر شايفها بعينه أول ما يفتح الصفحة.
+           */
+          'GET /api/entitlements',
           'GET /api/navigation',
           'GET /api/home-blocks',
           // «نيوز». Reads only, and the service filters `status: 'published'`

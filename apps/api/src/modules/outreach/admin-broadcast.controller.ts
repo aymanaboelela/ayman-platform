@@ -9,6 +9,7 @@ import {
 import { parseRequest } from '../../common/http/parse-request';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { BroadcastService } from './broadcast.service';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
  * `/api/admin/broadcast` — the instructor's own words, sent on purpose.
@@ -38,6 +39,8 @@ const TargetQuerySchema = z
   ])
   .transform((value): BroadcastTarget => value);
 
+// الإذاعة بتوصل لكل الطلبة مرة واحدة — فيتشر بتتفتح، مش بتتفترض.
+@RequireFeature('broadcast')
 @Controller('admin/broadcast')
 export class AdminBroadcastController {
   constructor(private readonly broadcast: BroadcastService) {}

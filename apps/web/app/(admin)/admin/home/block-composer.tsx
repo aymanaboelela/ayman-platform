@@ -45,6 +45,7 @@ import {
   seedDefaultHomeBlocksAction,
   setHomeBlockPublishedAction,
 } from './actions';
+import { useFeature } from '@/components/admin/entitlements-context';
 
 type BlockType = (typeof HOME_BLOCK_TYPES)[number];
 
@@ -304,6 +305,19 @@ function EmptyState() {
 
 export function BlockComposer({ blocks }: { blocks: HomeBlock[] }) {
   const [pendingType, setPendingType] = useState<BlockType | null>(null);
+  /*
+   * بلوك مالوش فيتشر على الستاك ده مش بيتعرض في «ضيف بلوك».
+   *
+   * `getHomeBlocks()` بتفلتره من الصفحة أصلًا، فمن غير السطر ده المدرّس
+   * بيضيف بلوك، بيتحفظ، بيبان في اللستة هنا — وعمره ما بيترسم على الصفحة.
+   * وده باج هيبلّغ عنه، مش قرار هيفهمه.
+   */
+  const booksOpen = useFeature('books');
+  const honorBoardOpen = useFeature('honorBoard');
+  const addableTypes = (Object.keys(TYPE_LABEL) as BlockType[]).filter(
+    (type) =>
+      (type !== 'books' || booksOpen) && (type !== 'honorBoard' || honorBoardOpen),
+  );
 
   if (blocks.length === 0) return <EmptyState />;
 
@@ -315,7 +329,7 @@ export function BlockComposer({ blocks }: { blocks: HomeBlock[] }) {
             <Button type="button">{copy.admin.home.addBlock}</Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
-            {(Object.keys(TYPE_LABEL) as BlockType[]).map((type) => (
+            {addableTypes.map((type) => (
               <DropdownMenuItem key={type} onSelect={() => setPendingType(type)}>
                 {TYPE_LABEL[type]}
               </DropdownMenuItem>

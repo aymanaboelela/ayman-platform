@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { notFound } from 'next/navigation';
+import { getEntitlements } from '@/lib/entitlements';
 import { OptOutRowSchema } from '@ayman/contracts/marketing/campaign';
 import { copy } from '@ayman/contracts/copy/admin';
 import {
@@ -31,6 +33,15 @@ const dateFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', { dateStyle: 'm
  * exists for the numbers that don't: someone who asked by any other channel.
  */
 export default async function MarketingOptOutsPage() {
+  /*
+   * القسم ده مش موجود على ستاك الفيتشر دي مقفولة فيه — والصف بتاعه في
+   * `ADMIN_NAV` مش بيترسم أصلًا. ده الباب لو حد كتب الـURL بإيده.
+   *
+   * `notFound()` مش ٤٠٣: الصفحة مش «ممنوعة»، هي مش هنا. ونفس الشكل بالحرف
+   * اللي `(admin)/layout.tsx` بيستخدمه، وبيشرح ليه فوقه.
+   */
+  if (!(await getEntitlements())['marketing.whatsapp']) notFound();
+
   const rows = await adminGet('/api/admin/marketing/opt-outs', z.array(OptOutRowSchema));
 
   return (

@@ -26,6 +26,7 @@ import { MediaService } from '../media/media.service';
 import { HomeworkService } from './homework.service';
 import { sendImage } from './homework.controller';
 import { ReviewHomeworkDto } from './homework.dto';
+import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
  * الواجب, the instructor's half — «أشوف الواجبات ومين اللي بعت».
@@ -35,6 +36,7 @@ import { ReviewHomeworkDto } from './homework.dto';
  * grade, puts words on a fifteen-year-old's screen under his name, and
  * irreversibly deletes the photographs. Reading does none of those.
  */
+@RequireFeature('homework')
 @Controller('admin/homework')
 export class AdminHomeworkController {
   constructor(

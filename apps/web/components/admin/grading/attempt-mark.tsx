@@ -7,6 +7,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
 import { markAttemptAction } from '@/app/(admin)/admin/grading/actions';
+import { useFeature } from '@/components/admin/entitlements-context';
 
 const c = copy.admin.grading;
 const STARS = [1, 2, 3, 4, 5] as const;
@@ -54,6 +55,7 @@ export function AttemptMark({
   isLate = false,
 }: AttemptMarkProps) {
   const router = useRouter();
+  const honorBoardOpen = useFeature('honorBoard');
   const [pending, startTransition] = useTransition();
   const [rating, setRating] = useState(instructorRating);
   const [onBoard, setOnBoard] = useState(onHonorBoard);
@@ -117,7 +119,9 @@ export function AttemptMark({
         pressing something that can only fail. The STARS stay: «هنصحّح بس مش
         هياخد جايزة» is about the prize, not about the marking.
       */}
-      {isLate ? null : (
+      {/* وعلى ستاك لوحة الشرف مقفولة فيه، الزرار ده مالوش مكان يروحه:
+          `GET /api/catalog/honor-board` بيرد ٤٠٤ والبلوك مش بيترسم. */}
+      {isLate || !honorBoardOpen ? null : (
       <button
         type="button"
         disabled={pending}

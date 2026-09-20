@@ -112,6 +112,14 @@ services:
       # السبب إن الافتراضي fail-closed مش fail-open: النسيان هو الفشل
       # المتوقع، وتمنه هنا إن طلبة مدرّس تاني يكلّموا أيمن على رقمه الشخصي.
       TENANT_KEY: ${TENANT_KEY:-}
+      # مستند الصلاحيات الموقّع — إيه الفيتشرز اللي الستاك ده مسموح له
+      # يشغّلها. فاضي = الافتراضي المعلن، وده حالة صحيحة مش عطل.
+      #
+      # `${VAR:-}` بتدّي سترنج فاضية، و`optionalSecret` في `config/env.ts`
+      # بيقراها كـ«مش موجود» — ولا واحد من الاتنين بيوقّف الإقلاع. والتحقّق
+      # من التوقيع بيحصل بعد الإقلاع خالص، عشان مستند منتهي مايبقاش السبب
+      # إن Traefik يرد 404 على الدومين كله.
+      TENANT_ENTITLEMENTS: ${TENANT_ENTITLEMENTS:-}
       TENANT_YOUTUBE: ${TENANT_YOUTUBE:-}
       TENANT_INSTAGRAM: ${TENANT_INSTAGRAM:-}
       TENANT_TIKTOK: ${TENANT_TIKTOK:-}
@@ -383,6 +391,21 @@ services:
       # ووقت أي عطل في الـAPI بعد كده.
       TENANT_KEY: ${TENANT_KEY:-}
       TENANT_DISPLAY_NAME: ${TENANT_DISPLAY_NAME:-}
+      # ── لوحة التحكّم في منصات المدرّسين — ستاك أيمن وبس ────────────────
+      #
+      # الاتنين دول **مايتحطّوش على ستاك مدرّس**. اللي ماسك المفتاح الخاص
+      # يقدر يوقّع لنفسه مستند بيفتح كل فيتشر، فوجوده على ستاكه بيلغي معنى
+      # المستند كله. `scripts/check-tenant-env.mjs` بيرفض أي ملف بيئة مدرّس
+      # فيه `CONTROL_PLANE_PRIVATE_KEY` عشان كده.
+      #
+      # وقت التشغيل بس، مش build arg: الشاشة (`/admin/platforms`) سيرفر
+      # كومبوننت وأكشن سيرفر، فالقيمتين بيتقروا مع كل طلب — يعني إضافة
+      # مدرّس جديد إعادة تشغيل، مش إعادة بناء. ودي واحدة من الحاجات القليلة
+      # هنا اللي كده.
+      #
+      # `CONTROL_PLANE_TENANTS` سطر لكل مدرّس: `tenant-key=اسم المدرّس`.
+      CONTROL_PLANE_PRIVATE_KEY: ${CONTROL_PLANE_PRIVATE_KEY:-}
+      CONTROL_PLANE_TENANTS: ${CONTROL_PLANE_TENANTS:-}
       TENANT_YOUTUBE: ${TENANT_YOUTUBE:-}
       TENANT_INSTAGRAM: ${TENANT_INSTAGRAM:-}
       TENANT_TIKTOK: ${TENANT_TIKTOK:-}

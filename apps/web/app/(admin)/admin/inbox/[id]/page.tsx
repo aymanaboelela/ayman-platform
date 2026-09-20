@@ -1,3 +1,5 @@
+import { notFound } from 'next/navigation';
+import { getEntitlements } from '@/lib/entitlements';
 import Link from 'next/link';
 import { CornerUpRight, MessageCircle, Phone, UserRound } from 'lucide-react';
 import { copy, formatCopy } from '@ayman/contracts';
@@ -39,6 +41,14 @@ export default async function AdminInboxThreadPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  /*
+   * نفس جيت `/admin/inbox` — والـURL ده بيتوصله من غيره. الحكاية كاملة فوق
+   * دالة الصفحة الأب؛ اللي يهم هنا إن صفحة جوّه قسم مقفول لازم تقول نفس
+   * اللي القسم بيقوله، وإلا اللي كتب الـURL بإيده بيلاقي شاشة خطأ من
+   * `adminGet` على راوت بيرد ٤٠٤ بدل ما يلاقي إن مفيش صفحة.
+   */
+  if (!(await getEntitlements()).assistant) notFound();
+
   const { id } = await params;
   const thread = await adminGetOrNotFound(`/api/admin/conversations/${id}`, AdminConversationDetailSchema);
   const crumbs = assistantPathLabels(thread.entryPath);
