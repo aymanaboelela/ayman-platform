@@ -1,4 +1,6 @@
 import Image from 'next/image';
+import { mediaUrl } from '@ayman/ui/branding';
+import { getBranding } from '@/lib/settings';
 import { copy } from '@ayman/contracts';
 import { IS_AYMAN, tenantName } from '@/lib/tenant';
 
@@ -73,7 +75,17 @@ const POINTS = [c.point1, c.point2, c.point3] as const;
  * state this panel shipped in before the photograph existed, and it is a
  * finished lit stage rather than an empty box.
  */
-export function AuthShowcase() {
+/**
+ * صورة لوحة الدخول — صورة أيمن الثابتة، أو صورة المدرّس المرفوعة.
+ *
+ * كان `IS_AYMAN ?` بس. فعلى ستاك تاني اللوحة كانت بتطلع **سودا**: الظلّ
+ * مكتوب إنه جوّه الفرع عن قصد عشان مايتحطّش فوق فراغ، فالنتيجة عمود أسود جنب
+ * الفورم — وده أول شاشة الطالب بيشوفها.
+ */
+export async function AuthShowcase() {
+  const branding = await getBranding();
+  const photo = IS_AYMAN ? '/brand/auth-library.webp' : (branding.loginKey ? mediaUrl(branding.loginKey) : null);
+
   return (
     <aside className="auth-aside" aria-label={EYEBROW}>
       {/*
@@ -96,10 +108,10 @@ export function AuthShowcase() {
         `display: none` there) and `sizes` already tells the browser so, which
         a preload would override.
       */}
-      {IS_AYMAN ? (
+      {photo ? (
         <>
           <Image
-            src="/brand/auth-library.webp"
+            src={photo}
             alt=""
             fill
             sizes="(min-width: 62rem) 52vw, 1px"

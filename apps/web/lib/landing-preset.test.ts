@@ -39,9 +39,19 @@ const PRESETS_CSS = readFileSync(join(WEB, 'app', '(site)', 'styles', 'presets.c
  * `<main>`, moving the map into a helper, wrapping it in a fragment — all of
  * those are "harmless refactors" that alter the HTML his students are served.
  */
+/*
+ * ⚠️ الوسيط التالت (`branding.heroKey`) إضافة مقصودة، والـHTML ما اتغيّرش.
+ *
+ * `MediaSlot` بقى بيعرض صورة المدرّس المرفوعة مكان الرسمة البديلة. على ستاك
+ * أيمن `heroKey` بيفضل `null` — مفيش صف في `site_settings` بيحطه — فالمكوّن
+ * بيسقط على ملفاته المكتوبة في الكود وبيرسم **نفس البايتات** بالظبط.
+ *
+ * والتمرير مش قراءة: `renderBlock` مش async ومش مكوّن، فنداء `getBranding()`
+ * جوّاها كان هيخلّيها كده ويغيّر شكل الصفحة فعلًا.
+ */
 const CLASSIC_RETURN = `  return (
     <main data-layout={branding.landingLayout}>
-      {blocks.map((block) => renderBlock(block, honorBoard))}
+      {blocks.map((block) => renderBlock(block, honorBoard, branding.heroKey))}
     </main>
   );`;
 

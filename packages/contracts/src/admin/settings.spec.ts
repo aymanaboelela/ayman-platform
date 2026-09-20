@@ -71,16 +71,23 @@ describe('SiteSettingsSchema', () => {
    */
   it('section defaults are PARSED, not passed through raw', () => {
     const parsed = SiteSettingsSchema.parse({});
-    expect(Object.keys(parsed.branding).sort()).toEqual([
-      'accent',
-      'accentHue',
-      'faviconAssetId',
-      'landingLayout',
-      'landingPreset',
-      'logoDarkAssetId',
-      'logoLightAssetId',
-      'radius',
-    ]);
+
+    /*
+     * الحارس على **المعنى** مش على عدد الحقول.
+     *
+     * كانت قايمة مقفولة بالثمن حقول، فأول ما `heroAssetId` وإخواته اتضافوا
+     * التست ولّع — مع إن اللي بيحرسه (إن `.prefault()` بيعدّي القيمة **خلال**
+     * السكيما بدل ما يمرّرها خام) ما اتكسرش. قايمة بتعدّ هي قايمة محتاجة تعديل
+     * مع كل إضافة سليمة، والتعديل المتكرر هو اللي بيخلي الحارس يتشال.
+     *
+     * الحقول الاختيارية لازم تبقى موجودة بقيمة `null` — لو `.prefault()`
+     * اتبدّل بـ`.default()` تاني، المفاتيح دي هتختفي خالص وده اللي بيمسكه.
+     */
+    for (const field of ['faviconAssetId', 'logoLightAssetId', 'logoDarkAssetId'] as const) {
+      expect(parsed.branding).toHaveProperty(field);
+      expect(parsed.branding[field]).toBeNull();
+    }
+    expect(parsed.branding.accent).toBe('amber');
     // A row written before this field existed must keep Ayman's page, so the
     // default has to be `classic` rather than one of the new shapes.
     expect(parsed.branding.landingLayout).toBe('classic');

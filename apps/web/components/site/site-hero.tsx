@@ -23,6 +23,8 @@ const DEFAULT_STATS: HeroStat[] = [
 ];
 
 export interface SiteHeroProps {
+  /** صورة المدرّس للمقدمة، لو رفع واحدة — شوف `MediaSlot`. */
+  heroKey?: string | null;
   eyebrow?: string;
   headline?: string;
   /** The static second line, and the reduced-motion fallback for `rotating`. */
@@ -61,6 +63,7 @@ export function SiteHero({
   secondaryCtaLabel = c.ctaSecondary,
   secondaryCtaHref = '/courses',
   stats = DEFAULT_STATS,
+  heroKey,
 }: SiteHeroProps = {}) {
   const ref = useRef<HTMLElement>(null);
 
@@ -143,6 +146,7 @@ export function SiteHero({
             serves exactly what was asked for. */}
         <MediaSlot
           kind="hero"
+          tenantKey={heroKey}
           alt=""
           priority
           fetchPriority="high"
