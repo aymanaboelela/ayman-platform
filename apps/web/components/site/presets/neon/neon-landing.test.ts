@@ -201,11 +201,17 @@ describe('neon preset — the stylesheet cannot reach the classic page', () => {
   /**
    * EVERY selector is scoped to the preset root.
    *
-   * The one exception is `.site:has([data-preset='neon'])`, which repoints the
-   * shell's tokens so the header and footer do not stay light around a page
-   * that never is. It is scoped BY the attribute rather than under it, it
-   * carries its own note in the stylesheet, and it is pinned here by name so
-   * it cannot quietly become two exceptions.
+   * The one exception is `.site:has(main[data-preset='neon'])`, which repoints
+   * the shell's tokens so the header does not stay light around a page that
+   * never is. It is scoped BY the attribute rather than under it, it carries
+   * its own note in the stylesheet, and it is pinned here by name so it cannot
+   * quietly become two exceptions.
+   *
+   * ⚠️ `main[…]` and not a bare `[…]` — `<NeonFooter>` carries the attribute
+   * too, on every route in the group, and `:has()` is a descendant match. The
+   * bare form would turn `/courses`, `/books` and the 404 dark as a side
+   * effect of giving the footer a scope hook. The footer does not need it
+   * either way: it carries its own ground.
    */
   it('scopes every rule under [data-preset=\'neon\']', () => {
     const css = stripComments(neonSection());
@@ -238,7 +244,7 @@ describe('neon preset — the stylesheet cannot reach the classic page', () => {
       `unscoped selectors in the NEON section — each of these also matches on ` +
         `Ayman's landing page, which downloads this same stylesheet:\n  ` +
         unscoped.join('\n  '),
-    ).toEqual([":root:root .site:has([data-preset='neon'])"]);
+    ).toEqual([":root:root .site:has(main[data-preset='neon'])"]);
   });
 
   /* House rules, and both are silent failures rather than errors: a hex
@@ -260,6 +266,26 @@ describe('neon preset — the stylesheet cannot reach the classic page', () => {
     const rule = css.slice(css.indexOf('.neon-mono {'));
     expect(rule).toMatch(/direction:\s*ltr/);
     expect(rule).toMatch(/unicode-bidi:\s*isolate/);
+  });
+
+  /**
+   * RTL. The document is `dir="rtl"`, so a physical `left`/`right` is a rule
+   * written for the mirror image of this page.
+   *
+   * ⚠️ `board-landing.test.tsx` has carried this check since it was written and
+   * this section never did — the asymmetry only became load-bearing when the
+   * FOOTER moved in here, because a footer is grids and columns and insets
+   * rather than the single-column stack the sections above are. `top`/`bottom`
+   * are deliberately not in the pattern: the block axis does not mirror.
+   */
+  it('positions on the logical axis, never on left or right', () => {
+    const css = stripComments(neonSection());
+    const physical =
+      css.match(
+        /(?<![\w-])(margin|padding|border)-(left|right)\s*:|(?<![\w-])(left|right)\s*:/g,
+      ) ?? [];
+
+    expect(physical).toEqual([]);
   });
 
   /*

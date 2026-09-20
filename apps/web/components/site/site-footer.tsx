@@ -1,100 +1,28 @@
 import Link from 'next/link';
 import { ArrowLeft, Users } from 'lucide-react';
 import { copy } from '@ayman/contracts';
-import { SOCIAL_MARKS, SocialIcon, type SocialKey } from '@/components/site/social-icons';
+import { SOCIAL_MARKS, SocialIcon } from '@/components/site/social-icons';
 import { FooterDragons } from '@/components/site/footer-dragons';
-import { getPublicSettingsOrDefaults } from '@/lib/settings';
+/*
+ * The link tables and the two derivations below used to live in this file.
+ * They moved when `neon` and `board` grew footers of their own: a second copy
+ * of «drop a social row that has no destination» or of the `features.books`
+ * filter is a second place they can drift, on a stack nobody is looking at.
+ * The JSX underneath is untouched — same arrays, same order, same HTML.
+ */
+import {
+  ACCOUNT_LINKS,
+  YEAR_LINKS,
+  footerContent,
+  footerPageLinks,
+  footerSocial,
+} from '@/components/site/footer-content';
+import { getBranding, getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getEntitlements } from '@/lib/entitlements';
-import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 import { tenantName } from '@/lib/tenant';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 
 const c = copy.landing;
-
-/**
- * The instructor's real profiles, as the FALLBACK for a dashboard field that
- * has not been filled in.
- *
- * These four were `https://www.youtube.com/`, `https://www.facebook.com/`,
- * `https://www.tiktok.com/` and `https://www.whatsapp.com/` — every social
- * icon in the footer sent a student to a platform's own front page instead of
- * to him. Same URLs as `SAME_AS` in `lib/seo/jsonld.ts`, and they have to stay
- * that way: `sameAs` asserts to a crawler that this site and those profiles
- * are one entity, and a footer that links somewhere else quietly contradicts
- * the claim.
- *
- * ## The fallback is per-DEPLOYMENT, not shipped
- *
- * There used to be `SOCIAL_FALLBACK = OFFICIAL_PROFILES` — Ayman's accounts,
- * shipped in the image. That is correct for exactly one deployment; on anybody
- * else's it publishes HIS four accounts on their domain, and nothing looks
- * broken, which is the worst kind of wrong.
- *
- * Removing it outright was also wrong, and shipped: `getPublicSettingsOrDefaults()`
- * answers `contact: {}` when the API is unreachable, `next build` runs with no
- * API, and this footer is prerendered — so the first request after every deploy
- * got an `<h2>تابعني</h2>` above an EMPTY list on every marketing page.
- *
- * `TENANT_CONTACT_FALLBACK` is the version that is right in both directions:
- * Ayman's stack still renders his accounts during that window, and any other
- * stack renders its own or nothing at all. See its own header.
- */
-
-const PAGE_LINKS = [
-  { href: '/', label: c.footerHome },
-  { href: '/courses', label: c.coursesCta },
-  { href: '/essentials', label: c.trackEssentialsTitle },
-  // «الكتب». Linked from every page for the reason `/about` gives below —
-  // otherwise it is a sitemap entry nothing points at — and directly under the
-  // catalogue, because the two are the same question asked about two products.
-  { href: '/books', label: copy.books.pageTitle },
-  // `/about` is linked from every page in the site because that is how it gets
-  // crawled and weighted at all — a page in the sitemap that nothing links to
-  // reads as an orphan. The label is his NAME rather than «عن المنصة», so the
-  // anchor text matches the query it exists to answer.
-  // ⚠️ `tenantName`, because `aboutPageTitle` IS the name — literally the
-  // string «أيمن أبو العلا» and nothing else (`copy/ar.ts:1495`). The anchor
-  // text is deliberately a person's name rather than «عن المنصة» so it matches
-  // the query the page answers; on a second instructor's stack that reasoning
-  // holds exactly as written, with a different person in it.
-  { href: '/about', label: tenantName(c.aboutPageTitle) },
-  // `/links` is reached almost entirely from OUTSIDE — it is the URL in four
-  // bios — so it would otherwise be an orphan on this site: in the sitemap,
-  // linked by nothing. That is the shape `/about`'s note above describes, and
-  // it is worth one row here for the same reason.
-  { href: '/links', label: copy.linkhub.pageTitle },
-  // «نيوز» is the section that exists to be FOUND — it ranks for curriculum
-  // queries the catalogue never will. Until this row it was reachable from
-  // `/links` alone: in the sitemap, linked by one page, which is the orphan
-  // shape both notes above describe and the worst possible position for the
-  // one section whose entire job is search. The anchor text is the phrase
-  // people type, not the section's name — see `copy.news.footerLink`.
-  { href: '/news', label: copy.news.footerLink },
-] as const;
-
-const YEAR_LINKS = [
-  { href: '/years/1', label: c.trackYear1Title },
-  { href: '/years/2', label: c.trackYear2Title },
-] as const;
-
-const ACCOUNT_LINKS = [
-  { href: '/register', label: c.footerRegister },
-  { href: '/login', label: c.footerLogin },
-  // In the ACCOUNT column, beside register and log in, because that is where
-  // they are load-bearing: the two links sit next to the buttons that lead to
-  // the form asking a student for their phone number and, optionally, both
-  // parents'. A visitor deciding whether to hand that over can read who is
-  // asking without leaving the decision.
-  //
-  // Reachable from every page is the requirement, not merely present — Google
-  // flagged this site under «الصفحات المضلّلة» (social engineering) on
-  // 2026-08-06 with no sample URLs, and the only structural difference between
-  // this platform and one that would not be flagged was that nothing on it
-  // said who collects the data or why. A policy nothing links to fixes
-  // nothing.
-  { href: '/privacy', label: copy.legal.privacyTitle },
-  { href: '/terms', label: copy.legal.termsTitle },
-] as const;
 
 /**
  * The footer, carrying the page's closing call to action.
@@ -111,32 +39,16 @@ const ACCOUNT_LINKS = [
  * own because it redraws the frames the tracks section already fetched.
  */
 export async function SiteFooter() {
-  const [{ contact }, features] = await Promise.all([
+  const [{ contact }, features, branding] = await Promise.all([
     getPublicSettingsOrDefaults(),
     getEntitlements(),
+    /* الثالثة مجانية عمليًا: `getBranding()` هو `'use cache'` ومتقري أصلًا في
+       الروت لايوت وفي `page.tsx`، فده إدخال كاش دافي في نفس الرندر. */
+    getBranding(),
   ]);
-  /* صف «الكتب» بيختفي مع الفيتشر. الفوتر ده على كل صفحة تسويق، وهو الحتة
-     اللي بتخلّي `/books` مش يتيمة — فلو الصفحة بقت ٤٠٤ وفضل اللينك، ده
-     مش لينك ميت واحد، ده لينك ميت في فوتر كل صفحة. */
-  const pageLinks = PAGE_LINKS.filter((link) => link.href !== '/books' || features.books);
 
-  /*
-   * Every row comes from the setting, and a row with no destination is
-   * DROPPED — never a bare platform root. An icon that links to
-   * `https://www.tiktok.com/` is worse than no icon: it looks like a working
-   * link, and the student who taps it lands on a stranger's feed. The WhatsApp
-   * channel has always been in this list; the other four joined it when the
-   * shipped fallback was removed, for the reason in the docblock above.
-   */
-  const social = (
-    [
-      { key: 'youtube', href: contact.youtube ?? TENANT_CONTACT_FALLBACK.youtube, label: c.footerYoutube },
-      { key: 'instagram', href: contact.instagram ?? TENANT_CONTACT_FALLBACK.instagram, label: c.footerInstagram },
-      { key: 'facebook', href: contact.facebook ?? TENANT_CONTACT_FALLBACK.facebook, label: c.footerFacebook },
-      { key: 'tiktok', href: contact.tiktok ?? TENANT_CONTACT_FALLBACK.tiktok, label: c.footerTiktok },
-      { key: 'whatsapp', href: contact.whatsappChannel ?? TENANT_CONTACT_FALLBACK.whatsappChannel, label: c.footerWhatsappChannel },
-    ] satisfies { key: SocialKey; href: string | null; label: string }[]
-  ).flatMap(({ key, href, label }) => (href ? [{ key, href, label }] : []));
+  const pageLinks = footerPageLinks(features);
+  const social = footerSocial(contact);
 
   /*
    * `wa.me/<number>` built from the stored phone. This link was
@@ -146,6 +58,45 @@ export async function SiteFooter() {
    * numberless URL when the setting is empty.
    */
   const whatsappHref = waMeHref(contact.whatsapp);
+
+  /*
+   * WHICH footer, decided before anything below it runs — and read as one
+   * rule with `page.tsx`, which chooses the landing page the same way.
+   *
+   * ## Why the branch is HERE and not in `(site)/layout.tsx`
+   *
+   * Because that layout is deliberately not `async` and must not become one.
+   * Its own docblock says why: reading anything there blocks every transition
+   * into this route group on a round-trip with the previous page still
+   * mounted. This component is already async and already awaiting two loaders,
+   * so the preset read costs a third entry in the same `Promise.all` and
+   * nothing else. The layout keeps mounting exactly one `<SiteFooter>`, which
+   * is also what keeps `agent-discovery.e2e.ts` true — it asserts the shipped
+   * HTML carries exactly one `<footer>`, so a preset footer must REPLACE this
+   * one rather than render beside it.
+   *
+   * ## Why `await import()` and not a top-level import
+   *
+   * Identical reasoning to `page.tsx`'s, and it bites harder here: the footer
+   * is on EVERY route in `(site)` plus the prerendered 404, not just on `/`.
+   * A static import would evaluate both preset module graphs on every one of
+   * those renders, Ayman's included, and hoist any stylesheet or client
+   * component they reach into the shell — which is how `classic` acquires a
+   * rule nobody wrote for it, with no diff on his own files to point at.
+   *
+   * `classic` falls THROUGH to the return underneath. There is no
+   * `=== 'classic'` arm and there must not be one: that markup is what his
+   * students are served today, and the only acceptable diff on it is none.
+   */
+  if (branding.landingPreset === 'neon') {
+    const { default: NeonFooter } = await import('@/components/site/presets/neon/neon-footer');
+    return <NeonFooter content={footerContent({ contact, features })} />;
+  }
+
+  if (branding.landingPreset === 'board') {
+    const { default: BoardFooter } = await import('@/components/site/presets/board/board-footer');
+    return <BoardFooter content={footerContent({ contact, features })} />;
+  }
 
   return (
     <footer className="site-footer">

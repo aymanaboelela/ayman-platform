@@ -46,7 +46,7 @@ export class SettingsService {
     const settings = await this.read();
     // Explicit projection, not a delete-the-private-keys pass: a new private
     // field added to SiteSettings must never leak by default.
-    return { seo: settings.seo, contact: settings.contact };
+    return { seo: settings.seo, contact: settings.contact, about: settings.about };
   }
 
   /**
@@ -102,6 +102,7 @@ export class SettingsService {
     return {
       seo: { ...settings.seo, ogImageKey: key(keys, settings.seo.ogImageAssetId) },
       contact: settings.contact,
+      about: settings.about,
     };
   }
 

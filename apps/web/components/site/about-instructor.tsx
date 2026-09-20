@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import { aymanOnly, tenantName } from '@/lib/tenant';
+import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { tenantSentence } from '@/lib/tenant-copy';
 import { Code2, RefreshCw, ClipboardCheck, GraduationCap, Users, Braces } from 'lucide-react';
 import { copy } from '@ayman/contracts';
@@ -58,7 +59,7 @@ export interface AboutInstructorProps {
   credits?: readonly AboutCredit[];
 }
 
-export function AboutInstructor({
+export async function AboutInstructor({
   title = tenantSentence(c.aboutTitle),
   body1 = c.aboutBody1,
   /*
@@ -75,12 +76,38 @@ export function AboutInstructor({
    *
    * القسم كله بيختفي لو مفضلش فيه كلام — شوف الشرط على `hasBody` تحت.
    */
-  body2 = aymanOnly(c.aboutBody2),
-  body3 = aymanOnly(c.aboutBody3),
+  body2,
+  body3,
   role = tenantSentence(c.aboutRole),
   chips = DEFAULT_CHIPS,
-  credits = aymanOnly(c.aboutCredits) ?? [],
+  credits,
 }: AboutInstructorProps = {}) {
+  /*
+   * السيرة من **إعدادات المدرّس**، والكوبي المكتوبة سقوط لأيمن وحده.
+   *
+   * `aboutBody2/3` و`aboutCredits` في `ar.ts` حقايق عن شخص بعينه — «٨ سنين في
+   * السوق»، «MTI»، «instructor في GDG». كانت بتترسم على دومين كل مدرّس كأنها
+   * بتاعته، وهي ادّعاءات غلط منسوبة ليه. اتجيّتت خلف `aymanOnly()` فبقى عند
+   * المدرّس التاني عنوان من غير سيرة.
+   *
+   * الحل مش نحذف القسم — ده أول حاجة بتعرّف الطالب على اللي بيشرح له. الحل إن
+   * كل مدرّس يكتب بتاعته من `/admin/settings`، وأيمن يسقط على المكتوبة فما
+   * يتغيّرش عنده ولا بايت.
+   *
+   * `getPublicSettingsOrDefaults` مش `getPublicSettings`: القسم ده بيترسم على
+   * الصفحة الرئيسية، ولودر بيرمي وقت `next build` (الـAPI لسه مش صاحي) بيسقّط
+   * الصفحة كلها.
+   */
+  const settings = await getPublicSettingsOrDefaults();
+  const about = settings.about;
+
+  const bio = body2 ?? (about.bioAr || aymanOnly(c.aboutBody2));
+  const extra = body3 ?? aymanOnly(c.aboutBody3);
+  const lines =
+    credits ??
+    (about.credits.length > 0
+      ? about.credits.map((entry) => ({ label: entry.labelAr, note: entry.noteAr, marks: [] }))
+      : (aymanOnly(c.aboutCredits) ?? []));
   return (
     <section className="site-section site-section--tint" id="about">
       {/* Copy first in the DOM: it carries the heading, so it should also be
@@ -91,8 +118,8 @@ export function AboutInstructor({
         <div className="about__body">
           <h2 className="site-h2">{title}</h2>
           {body1 ? <p className="site-lead">{body1}</p> : null}
-          {body2 ? <p className="site-lead">{body2}</p> : null}
-          {body3 ? <p className="site-lead">{body3}</p> : null}
+          {bio ? <p className="site-lead">{bio}</p> : null}
+          {extra ? <p className="site-lead">{extra}</p> : null}
 
           {chips.length > 0 ? (
             <div className="about__chips">
@@ -124,9 +151,9 @@ export function AboutInstructor({
           anything added to the copy column only makes the two sides less
           equal. A full-width band under both keeps the columns balanced AND
           gives the credentials the width their longest line actually needs. */}
-      {credits.length > 0 ? (
+      {lines.length > 0 ? (
         <div className="site-shell about__credits">
-          {credits.map((credit, index) => (
+          {lines.map((credit, index) => (
             <article className="about__credit" key={credit.label}>
               <span className="about__credit-glyph" aria-hidden="true">
                 {CREDIT_GLYPHS[index % CREDIT_GLYPHS.length]}
