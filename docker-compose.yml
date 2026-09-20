@@ -159,6 +159,9 @@ services:
       VIDEO_MIRROR_ACCESS_KEY_ID: ${VIDEO_MIRROR_ACCESS_KEY_ID:-}
       VIDEO_MIRROR_SECRET_ACCESS_KEY: ${VIDEO_MIRROR_SECRET_ACCESS_KEY:-}
       VIDEO_MIRROR_PUBLIC_URL: ${VIDEO_ORIGIN:-}
+      # السحب من يوتيوب. `false` بيقفله ويسيب **الرفع المباشر شغّال** — الاتنين
+      # بيشاركوا نفس الباكت فتفضية المتغيرات فوق كانت هتقفل الاتنين.
+      VIDEO_MIRROR_FROM_YOUTUBE: ${VIDEO_MIRROR_FROM_YOUTUBE:-true}
       # الشات الذكي بتاع المساعد (`POST /api/assistant/ask`). التلاتة اختياريين:
       # من غيرهم الشات بيفضل شغّال وبيجاوب من نفس الكلام المكتوب في شجرة
       # الأسئلة، وبيحط زرار «أكلّم م. أيمن» على كل رد.
