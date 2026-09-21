@@ -182,6 +182,29 @@ export class CatalogService {
           orderBy: [{ position: 'asc' }, { id: 'asc' }],
           select: { id: true, title: true, priceCents: true },
         },
+        // «الأشهر اللي يقدر يشترك فيها». OPEN ones only, same reasoning as
+        // terms one line up: a closed month is not for sale and offering it
+        // would be a card that 400s on submit.
+        //
+        // Unlike terms, NOT filtered on `priceCents` — a month is priced from
+        // the COURSE's `monthlyPriceCents` (one price for any month), so
+        // requiring a per-month price would hide every month on every course.
+        // The serializer below is what refuses to publish a month on a course
+        // with no monthly price at all.
+        months: {
+          where: { isOpen: true },
+          orderBy: [{ monthIndex: 'asc' }],
+          select: {
+            id: true,
+            monthIndex: true,
+            title: true,
+            priceCents: true,
+            // Published LECTURES only — quizzes are the check on the content,
+            // not the content, and «شهر ٢ — ٥ محاضرات» must count what
+            // `CatalogService` already calls a lesson everywhere else.
+            _count: { select: { lessons: { where: { lesson: { isPublished: true, kind: { not: 'quiz' } } } } } },
+          },
+        },
         sections: {
           // ⚠️ Excluded from the PUBLIC outline. A monthly exam's title is
           // «امتحان نص شهر سبتمبر» — a fact about this month's cohort, on a
@@ -204,6 +227,9 @@ export class CatalogService {
                 isFreePreview: true,
                 forGeneral: true,
                 forLanguages: true,
+                // Which curriculum months open this lecture — see
+                // `CatalogLessonSchema.monthIds` for why this is public.
+                months: { select: { monthId: true } },
                 // `durationSeconds` only. `externalId` is NOT selected — see
                 // the serializer below and `CatalogLessonSchema`.
                 video: { select: { durationSeconds: true } },
@@ -217,6 +243,10 @@ export class CatalogService {
     if (!row) throw new NotFoundException();
 
     const lessons = row.sections.flatMap((section) => section.lessons);
+    // Hoisted so the narrowing survives into the `months` map below — a
+    // ternary on a property access does not narrow the property inside a
+    // closure, and the fallback there is the course price, not a guess.
+    const monthlyPriceCents = row.monthlyPriceCents;
 
     return {
       id: row.id,
@@ -245,6 +275,27 @@ export class CatalogService {
          to `CourseBook` can never leak it onto the site. */
       bookTitle: courseBook(row).bookTitle,
       bookPriceCents: courseBook(row).bookPriceCents,
+      /*
+       * A month is only sellable when there is a price to sell it AT. The
+       * course's own `monthlyPriceCents` is that price — the instructor's
+       * decision was one price for any month — and `CourseMonth.priceCents` is
+       * the reserved per-month override that nothing writes yet.
+       *
+       * With no monthly price the whole list collapses to empty, which is the
+       * correct read and not a special case: the subscribe panel already hides
+       * the «شهر» card entirely when `monthlyPriceCents` is null, so publishing
+       * months beside it would draw a picker for a plan that is not on sale.
+       */
+      months:
+        monthlyPriceCents === null
+          ? []
+          : row.months.map((month) => ({
+              id: month.id,
+              monthIndex: month.monthIndex,
+              title: month.title,
+              lessonCount: month._count.lessons,
+              priceCents: month.priceCents ?? monthlyPriceCents,
+            })),
       terms: row.terms.map((term) => ({
         id: term.id,
         title: term.title,
@@ -273,6 +324,7 @@ export class CatalogService {
           isFreePreview: lesson.isFreePreview,
           forGeneral: lesson.forGeneral,
           forLanguages: lesson.forLanguages,
+          monthIds: lesson.months.map((row) => row.monthId),
           // ⚠️ No video id, for ANY lesson — free preview included.
           //
           // This route is `@Public()`. It used to publish `externalId` for

@@ -4,6 +4,7 @@ import { copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { CourseEntry } from '@/components/site/course-entry';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
+import { LockIcon } from '@/components/player/icons';
 import { formatDuration } from '@/components/site/course-card';
 import {
   isLessonFinished,
@@ -19,6 +20,7 @@ import type {
   RemainingLecture,
 } from '@/lib/course-outline';
 import { LockedExam } from './locked-exam';
+import { MonthLockedDialog } from './month-locked-dialog';
 
 const c = copy.library;
 
@@ -75,6 +77,30 @@ function actionLabel(lesson: OutlineLesson): string {
   return sat ? c.quizDone : c.takeQuiz;
 }
 
+/**
+ * The padlock on a lecture whose curriculum month this student did not buy.
+ *
+ * A sibling of `<LockedExam>` rather than a branch inside it: the two locks
+ * wear the same grey chip so the column of controls stays straight, and say
+ * completely different things when pressed. Kept here rather than in a file of
+ * its own because it is four lines of shape — everything interactive is in
+ * `month-locked-dialog.tsx`, so this stays a Server Component.
+ */
+function LockedMonth({
+  courseSlug,
+  month,
+}: {
+  courseSlug: string;
+  month: OutlineLesson['month'];
+}) {
+  return (
+    <MonthLockedDialog courseSlug={courseSlug} month={month} triggerClassName="chip chip--locked">
+      <LockIcon className="h-4 w-4" />
+      {c.lessonMonthLocked}
+    </MonthLockedDialog>
+  );
+}
+
 function LessonAction({
   lesson,
   courseSlug,
@@ -92,9 +118,25 @@ function LessonAction({
   /** The same waiting-on, by name. Only the locked exam row reads it. */
   left: readonly RemainingLecture[];
 }) {
-  // The ONE row the gate can still close. Every lecture and every lecture quiz
-  // is available from the day the student enrols — see `gate-rule.ts`.
+  /*
+   * `locked` has TWO causes now, and they need opposite dialogs.
+   *
+   * `gate-rule.ts` shuts a row for work that is not done (the course's final
+   * exam, waiting on the lectures) or for a month the subscription does not
+   * cover — and its own rule 2 runs BEFORE the exam rule, so on a course that
+   * sells by curriculum month every unowned lecture and every unowned lecture
+   * quiz can arrive here too. That was impossible before months: «the ONE row
+   * the gate can still close» is what this branch used to say.
+   *
+   * The exam keeps the exam dialog, and the split is by `isExam` rather than
+   * by a reason, because nothing on the wire carries one: `PathNode` reports
+   * `gate: 'locked'` and no `why`. That costs exactly one case — a month buyer
+   * whose FINAL EXAM is shut because they do not own it reads «باقي ٣ محاضرات»
+   * instead of «شهر تاني». Wrong in the same direction the old dialog was,
+   * rather than in a new one, and it needs the same field the month name does.
+   */
   if (lesson.gate === 'locked') {
+    if (!lesson.isExam) return <LockedMonth courseSlug={courseSlug} month={lesson.month} />;
     return (
       <LockedExam
         remaining={Math.max(0, totalLessons - clearedLessons)}
@@ -209,9 +251,9 @@ function LessonRow({
   // locks with one open row at the front answered "where am I" by the shape of
   // the column. Every lecture opens now (`gate-rule.ts`), so the shape says
   // nothing and every row states where the student stands — «بس ابقى علّم عليها
-  // إن هو ما شافهاش». The locked exam is the exception: its chip already reads
-  // «مقفول» two columns over, and «لسه ما امتحنتش» beside it would be a second
-  // answer to a question the row has already answered.
+  // إن هو ما شافهاش». A LOCKED row is the exception: its chip already reads
+  // «مقفول» — or «شهر تاني» — two columns over, and «لسه ما امتحنتش» beside it
+  // would be a second answer to a question the row has already answered.
   //
   // A quiz does NOT restate «المحاضرة ٢»: it is already sitting under that
   // lecture and its own title names it. Repeating the number was what made the

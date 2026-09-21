@@ -539,4 +539,203 @@ describe('EntitlementService', () => {
       await prisma.user.delete({ where: { id: freshUser.id } });
     });
   });
+  /**
+   * «الاشتراك الشهري بقى شهر من المنهج» — `resolveMonthAccess`'s own contract.
+   *
+   * The last case in here is the reason this method re-queries instead of
+   * refining the grant `resolveCourseAccess` picked, and it is worth more than
+   * the other four put together: it is a student who paid for a year, topped up
+   * one month, and must not lose the year for it.
+   */
+  describe('resolveMonthAccess — curriculum months', () => {
+    let monthUserId: string;
+    let monthCourse: { id: string; subjectId: string; requiresGrant: boolean };
+    let monthOneId: string;
+    let monthTwoId: string;
+
+    beforeAll(async () => {
+      const suffix = `${Date.now().toString(36)}-m`;
+      const user = await prisma.user.create({
+        data: { id: `ent-${suffix}`, name: 'طالبة', email: `ent-${suffix}@example.com` },
+      });
+      monthUserId = user.id;
+
+      const system = await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } });
+      const subject = await prisma.subject.findFirstOrThrow();
+      const course = await prisma.course.create({
+        data: {
+          slug: `ent-months-${suffix}`,
+          title: 'كورس بشهور',
+          status: 'published',
+          publishedAt: new Date(),
+          systemId: system.id,
+          year: 2,
+          trackId: null,
+          subjectId: subject.id,
+          instructorId: user.id,
+          requiresGrant: true,
+          monthlyPriceCents: 15000,
+        },
+      });
+      monthCourse = { id: course.id, subjectId: course.subjectId, requiresGrant: true };
+
+      const one = await prisma.courseMonth.create({
+        data: { courseId: course.id, monthIndex: 1, title: 'شهر ١' },
+      });
+      const two = await prisma.courseMonth.create({
+        data: { courseId: course.id, monthIndex: 2, title: 'شهر ٢' },
+      });
+      monthOneId = one.id;
+      monthTwoId = two.id;
+    });
+
+    afterEach(async () => {
+      await prisma.accessGrant.deleteMany({ where: { userId: monthUserId } });
+    });
+
+    afterAll(async () => {
+      await prisma.courseMonth.deleteMany({ where: { courseId: monthCourse.id } });
+      await prisma.course.delete({ where: { id: monthCourse.id } });
+      await prisma.user.delete({ where: { id: monthUserId } });
+    });
+
+    it('a month grant opens a lecture of that month', async () => {
+      const grant = await prisma.accessGrant.create({
+        data: {
+          userId: monthUserId,
+          scope: 'course_month',
+          courseId: monthCourse.id,
+          monthId: monthOneId,
+          source: 'purchase',
+        },
+      });
+
+      expect(await service.resolveMonthAccess(monthUserId, monthCourse, [monthOneId])).toMatchObject({
+        allowed: true,
+        grantId: grant.id,
+      });
+    });
+
+    it('a month grant does NOT open a lecture of another month', async () => {
+      await prisma.accessGrant.create({
+        data: {
+          userId: monthUserId,
+          scope: 'course_month',
+          courseId: monthCourse.id,
+          monthId: monthOneId,
+          source: 'purchase',
+        },
+      });
+
+      expect(await service.resolveMonthAccess(monthUserId, monthCourse, [monthTwoId])).toEqual({
+        allowed: false,
+        reason: 'needs_month_grant',
+      });
+    });
+
+    it('a month grant does NOT open a lecture carrying no month at all', async () => {
+      /*
+       * The instructor's own rule, and the one that stops the back-catalogue
+       * leaking: an untagged lecture reaches term and yearly subscribers and no
+       * monthly one. The opposite default would make every lecture he forgets
+       * to tag a free sample of a month nobody paid for.
+       */
+      await prisma.accessGrant.create({
+        data: {
+          userId: monthUserId,
+          scope: 'course_month',
+          courseId: monthCourse.id,
+          monthId: monthOneId,
+          source: 'purchase',
+        },
+      });
+
+      expect(await service.resolveMonthAccess(monthUserId, monthCourse, [])).toEqual({
+        allowed: false,
+        reason: 'needs_month_grant',
+      });
+    });
+
+    it('a course-wide grant opens every month, and the untagged lectures too', async () => {
+      await prisma.accessGrant.create({
+        data: {
+          userId: monthUserId,
+          scope: 'course',
+          courseId: monthCourse.id,
+          source: 'purchase',
+          validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        },
+      });
+
+      expect(await service.resolveMonthAccess(monthUserId, monthCourse, [monthTwoId])).toMatchObject(
+        { allowed: true },
+      );
+      expect(await service.resolveMonthAccess(monthUserId, monthCourse, [])).toMatchObject({
+        allowed: true,
+      });
+    });
+
+    it('a NEWER month grant does not shadow an OLDER course-wide one', async () => {
+      /*
+       * The case that decides whether this method may take
+       * `resolveCourseAccess`'s answer as input. It may not.
+       *
+       * That method returns exactly ONE grant, `ORDER BY validFrom DESC, id
+       * DESC` — the newest live one, which is not the widest. Here the student
+       * bought a year in September and topped up «شهر ١» today: the month grant
+       * is newer, so it wins that ordering, and any reading that refines the
+       * single winner narrows a paid year down to one month. The student loses
+       * eleven months they hold a live, unrevoked, fully-paid grant for, and no
+       * screen anywhere says why.
+       */
+      const yearly = await prisma.accessGrant.create({
+        data: {
+          userId: monthUserId,
+          scope: 'course',
+          courseId: monthCourse.id,
+          source: 'purchase',
+          validFrom: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+          validUntil: new Date(Date.now() + 300 * 24 * 60 * 60 * 1000),
+        },
+      });
+      await prisma.accessGrant.create({
+        data: {
+          userId: monthUserId,
+          scope: 'course_month',
+          courseId: monthCourse.id,
+          monthId: monthOneId,
+          source: 'purchase',
+        },
+      });
+
+      // The premise: the month grant really is the one resolveCourseAccess picks.
+      expect(await service.resolveCourseAccess(monthUserId, monthCourse.id)).toMatchObject({
+        allowed: true,
+        scope: 'course_month',
+      });
+
+      // And month TWO — which the month grant does not name — stays open anyway.
+      expect(await service.resolveMonthAccess(monthUserId, monthCourse, [monthTwoId])).toMatchObject(
+        { allowed: true, grantId: yearly.id },
+      );
+    });
+
+    it('reports the lapse, not «اشترك في الشهر ده», when every grant is dead', async () => {
+      await prisma.accessGrant.create({
+        data: {
+          userId: monthUserId,
+          scope: 'course_month',
+          courseId: monthCourse.id,
+          monthId: monthOneId,
+          source: 'purchase',
+          revokedAt: new Date(),
+        },
+      });
+
+      expect(await service.resolveMonthAccess(monthUserId, monthCourse, [monthOneId])).toEqual({
+        allowed: false,
+        reason: 'revoked',
+      });
+    });
+  });
 });

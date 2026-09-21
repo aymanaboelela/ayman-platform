@@ -23,14 +23,23 @@ const c = copy.library;
  * WHY the final exam is shut, and what is left to do about it — the one
  * implementation, for every screen that draws the padlock.
  *
- * ## It is the only padlock left
+ * ## It is the padlock waiting on WORK
  *
  * This was `<LessonLockDialog>`, and it explained any locked lesson: it named
  * the exact lesson standing in the way and offered a link to it. That
  * explanation existed for the sequential chain, and the chain is gone (see
  * `gate-rule.ts`) — every lecture and every lecture quiz opens the day a
- * student enrols. `resolveGate` can now return `locked` for exactly one row in
- * a course, so this dialog has exactly one thing to say.
+ * student enrols. For a while that left `resolveGate` able to lock exactly one
+ * row in a course, and this dialog with exactly one thing to say.
+ *
+ * ⚠️ NO LONGER THE ONLY ONE. Curriculum months added a second cause: a lecture
+ * in a month the subscription does not cover is `locked` too, and `resolveGate`
+ * rule 2 runs BEFORE the exam rule, so on a course that sells by month any
+ * lecture and any lecture quiz can arrive locked. That one belongs to
+ * `<MonthLockedDialog>`, which is this dialog's opposite in the way that
+ * matters: it has something to press. Every caller splits on `isExam` — if you
+ * are here because a row showed «باقي ٣ محاضرات» about a lecture no amount of
+ * studying opens, that split is the thing that is missing.
  *
  * ## The button that went with it
  *

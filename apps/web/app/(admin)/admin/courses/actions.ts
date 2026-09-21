@@ -24,13 +24,30 @@ import {
 } from '@ayman/contracts';
 import { VideoEmbedStatusSchema, type VideoEmbedStatus } from '@ayman/contracts/video';
 import {
+  AdminCourseMonthSchema,
+  CourseMonthWriteSchema,
+  LessonMonthsSchema,
+  type CourseMonthWriteInput,
+  type LessonMonthsWriteInput,
+} from '@ayman/contracts/months';
+import {
+  CourseMonthPatchSchema,
+  MONTH_OPEN_BLOCKED_CODE,
+  type CourseMonthPatchInput,
+  AdoptUntaggedLessonsResultSchema,
+  LegacyMonthBackfillResultSchema,
+  type LegacyMonthBackfillResult,
+} from '@ayman/contracts/admin/content-months';
+import { formatCopy } from '@ayman/contracts/format';
+import {
   VideoUploadSessionSchema,
   VideoUploadStatusSchema,
   type VideoUploadSession,
   type VideoUploadStatus,
 } from '@ayman/contracts/admin/video-upload';
 import { copy } from '@ayman/contracts/copy/admin';
-import { apiGetAuthed, apiSend } from '@/lib/api-server';
+import { ApiRequestError } from '@/lib/api';
+import { apiCommand, apiGetAuthed, apiSend } from '@/lib/api-server';
 import { TAG_COURSES, courseTag } from '@/lib/cache-tags';
 import { submitToIndexNow } from '@/lib/seo/indexnow';
 
@@ -181,7 +198,20 @@ export async function createCourseAction(formData: FormData): Promise<void> {
     coverKey: readOptionalText(formData, 'coverKey'),
     requiresGrant: readRequiresGrant(formData),
     monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
-    quarterlyPriceCents: readOptionalPriceCents(formData, 'quarterlyPriceCents'),
+    /*
+     * NO `quarterlyPriceCents`, here or in the update below.
+     *
+     * «٣ شهور» is off the shelf: the field is gone from `course-form.tsx`, and
+     * `CourseService.assertQuarterlyRetired` answers 400 to any non-null
+     * value — so sending one is a save the instructor cannot act on.
+     *
+     * ABSENT rather than an explicit `null`, which is the difference that
+     * matters. On create the schema's own `.default(null)` fills it. On update
+     * `CourseUpdateSchema` is built with `partialWithoutDefaults`, so an
+     * absent key leaves the column exactly where it is — and a price a past
+     * subscription was sold at stays readable to the finance screens instead
+     * of being wiped by the next rename of the course.
+     */
     yearlyPriceCents: readOptionalPriceCents(formData, 'yearlyPriceCents'),
     bookTitle: readOptionalText(formData, 'bookTitle'),
     bookPriceCents: readOptionalPriceCents(formData, 'bookPriceCents'),
@@ -265,7 +295,7 @@ export async function updateCourseAction(
       coverKey: readOptionalText(formData, 'coverKey'),
       requiresGrant: readRequiresGrant(formData),
       monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
-      quarterlyPriceCents: readOptionalPriceCents(formData, 'quarterlyPriceCents'),
+      // No `quarterlyPriceCents` — see the note in `createCourseAction` above.
       yearlyPriceCents: readOptionalPriceCents(formData, 'yearlyPriceCents'),
       bookTitle: readOptionalText(formData, 'bookTitle'),
       bookPriceCents: readOptionalPriceCents(formData, 'bookPriceCents'),
@@ -629,35 +659,301 @@ export async function setTermOpenAction(
   }
 }
 
+// ── شهور المنهج ─────────────────────────────────────────────────
+
+/**
+ * `ActionResult`, plus the one number a month refusal carries.
+ *
+ * `untaggedLessonCount` is PRESENT — even as `0` — exactly when the API
+ * refused to open a month because the course still has published lectures in
+ * no month at all. The panel branches on its presence, not on its value: see
+ * `monthOpenBlocked` below for the case where the number itself is lost.
+ */
+export type MonthActionResult = ActionResult & {
+  untaggedLessonCount?: number;
+  /** The month that was just created, on `createMonthAction` alone.
+   *  `<StartByMonth>` chains straight into `adoptUntaggedLessonsAction` with
+   *  it — the alternative is re-reading the list to find the row it just made,
+   *  which is a round trip to learn something the response already knew. */
+  month?: { id: string };
+};
+
+/**
+ * Was this the «فيه محاضرات من غير شهر» refusal, and how many?
+ *
+ * ⚠️ Read out of the thrown error's TEXT by regex, not by parsing it as JSON.
+ * `apiSend` folds the response body into the message and slices it to 300
+ * characters — and this 409's body carries the whole Arabic sentence, so its
+ * tail (with the closing brace) is routinely cut off and `JSON.parse` would
+ * throw on a body that was perfectly well formed on the wire. The two fields
+ * this needs sit before the cut.
+ *
+ * `null` means «مش الرفض ده»: a duplicate `monthIndex` is a 409 too, and it has to
+ * keep reading as the generic failure. `0` means the code was there and the
+ * number was not — the caller falls back to the count it already holds on the
+ * month row, which is why that count is repeated on every row.
+ */
+function monthOpenBlocked(error: unknown): number | null {
+  if (!(error instanceof Error)) return null;
+  if (!error.message.includes(`"code":"${MONTH_OPEN_BLOCKED_CODE}"`)) return null;
+  const match = /"untaggedLessonCount":\s*(\d+)/.exec(error.message);
+  return match ? Number(match[1]) : 0;
+}
+
+/** The two refusals the month panel renders, and the generic failure for
+ *  everything else — a duplicate month number included, which the panel shows
+ *  as a plain error because the admin can read the numbers on screen. */
+function monthFailure(error: unknown): MonthActionResult {
+  const blocked = monthOpenBlocked(error);
+  // `month.actionFailed` («مااتنفّذش») and not `common.saveFailed» («التغييرات
+  // اترجعت زي ما كانت»): a refused open or a refused rename rolled nothing
+  // back, it simply did not happen, and telling an instructor his work was
+  // reverted when it was not sends him looking for changes to redo.
+  if (blocked === null) return { ok: false, message: copy.admin.month.actionFailed };
+  return {
+    ok: false,
+    // `blocked || …` is not possible here — nothing in this file knows the
+    // month row. At `0` the sentence would read «فيه 0 محاضرة», so the generic
+    // message goes in the toast and the panel renders the real sentence from
+    // its own `untaggedLessonCount`, which arrives on every row for this.
+    message:
+      blocked > 0
+        ? formatCopy(copy.admin.month.blockedByUntagged, { n: blocked })
+        : copy.admin.month.actionFailed,
+    untaggedLessonCount: blocked,
+  };
+}
+
+export async function createMonthAction(
+  courseId: string,
+  input: CourseMonthWriteInput,
+): Promise<MonthActionResult> {
+  try {
+    const body = CourseMonthWriteSchema.parse(input);
+    const month = await apiSend(
+      'POST',
+      `/api/admin/courses/${courseId}/months`,
+      AdminCourseMonthSchema,
+      body,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true, month: { id: month.id } };
+  } catch (error) {
+    return monthFailure(error);
+  }
+}
+
+/**
+ * Rename, renumber, move the date, open or close — all four ride the one PATCH.
+ *
+ * `CourseMonthPatchSchema` and never `CourseMonthWriteSchema.partial()`: a
+ * rename that carried `isOpen: true` underneath it would put a month on sale
+ * that the instructor had deliberately closed. The schema's own note has the
+ * production incident that rule comes from.
+ */
+export async function updateMonthAction(
+  courseId: string,
+  monthId: string,
+  input: CourseMonthPatchInput,
+): Promise<MonthActionResult> {
+  try {
+    const body = CourseMonthPatchSchema.parse(input);
+    await apiSend(
+      'PATCH',
+      `/api/admin/courses/${courseId}/months/${monthId}`,
+      AdminCourseMonthSchema,
+      body,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return monthFailure(error);
+  }
+}
+
+/**
+ * 204 and no body, so `apiCommand` rather than `apiSend` — which would try to
+ * parse a response that does not exist.
+ *
+ * The 409 is PERMANENT: `payment_submission_months` is the record of what a
+ * transfer bought, and its month side is `ON DELETE RESTRICT` so the row can
+ * never be orphaned into an unexplainable payment. `deleteBlockedPaid` says so
+ * and points at closing the month instead, which is what the instructor
+ * actually wants.
+ */
+export async function deleteMonthAction(
+  courseId: string,
+  monthId: string,
+): Promise<ActionResult> {
+  try {
+    await apiCommand('DELETE', `/api/admin/courses/${courseId}/months/${monthId}`);
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    const message =
+      error instanceof ApiRequestError && error.status === 409
+        ? copy.admin.month.deleteBlockedPaid
+        : copy.admin.month.actionFailed;
+    return { ok: false, message };
+  }
+}
+
+/**
+ * «حط كل المحاضرات اللي من غير شهر في الشهر ده» — step one of turning an
+ * existing course over.
+ */
+export async function adoptUntaggedLessonsAction(
+  courseId: string,
+  monthId: string,
+): Promise<{ ok: true; adopted: number } | { ok: false; message: string }> {
+  try {
+    const result = await apiSend(
+      'POST',
+      `/api/admin/courses/${courseId}/months/${monthId}/adopt-untagged`,
+      AdoptUntaggedLessonsResultSchema,
+      undefined,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true, adopted: result.adopted };
+  } catch {
+    return { ok: false, message: copy.admin.month.actionFailed };
+  }
+}
+
+/**
+ * «الي حد اشترك دلوقتي أو قبل كده حطه في الشهر ده» — step two.
+ *
+ * Two presses by design. The first runs with `dryRun` and answers with a
+ * COUNT; the second writes. The instructor is handing out access to students
+ * he cannot see from this screen, so the number goes in front of him before he
+ * commits, the same way «اتقفل الترم، وسحبنا الوصول من {n} طالب» reports the
+ * cascade a term close already caused.
+ */
+export async function openMonthForSubscribersAction(
+  courseId: string,
+  monthId: string,
+  dryRun: boolean,
+): Promise<{ ok: true; result: LegacyMonthBackfillResult } | { ok: false; message: string }> {
+  try {
+    const result = await apiSend(
+      'POST',
+      `/api/admin/courses/${courseId}/months/open-for-subscribers`,
+      LegacyMonthBackfillResultSchema,
+      { monthId, dryRun },
+    );
+    if (!dryRun) {
+      invalidateCourse(courseId);
+      revalidatePath(`/admin/courses/${courseId}`);
+    }
+    return { ok: true, result };
+  } catch {
+    return { ok: false, message: copy.admin.month.actionFailed };
+  }
+}
+
+/**
+ * «الشهر: ٢ — وكمان لشهر ٣» — the whole set, rewritten at once.
+ *
+ * A PUT and not two calls: `LessonMonthsWriteSchema`'s own note says why a
+ * half-applied set is a state nobody chose. The contract also refuses extras
+ * with no primary, so the picker disables them rather than letting a 400
+ * explain it.
+ */
+export async function setLessonMonthsAction(
+  courseId: string,
+  lessonId: string,
+  input: LessonMonthsWriteInput,
+): Promise<ActionResult> {
+  try {
+    await apiSend('PUT', `/api/admin/lessons/${lessonId}/months`, LessonMonthsSchema, input);
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch {
+    return { ok: false, message: copy.admin.month.actionFailed };
+  }
+}
+
 const CreateLessonResultSchema = z.object({ id: z.uuid() });
 
 export type CreateLessonInput = {
   title: string;
   kind: 'video' | 'quiz' | 'attachment' | 'text';
+  /**
+   * «الشهر», answered while the lecture is being written rather than after it.
+   *
+   * Optional, and absent everywhere a course has no months — `scaffoldFirstLesson`
+   * included, which runs before the instructor has configured any.
+   */
+  months?: LessonMonthsWriteInput;
 };
 
+/**
+ * Creates the lecture, then tags it — two calls, because the id the tag hangs
+ * off does not exist until the first one answers.
+ *
+ * The order is the safe one. A lecture created and left untagged is a DRAFT
+ * with no month, which is the state every lecture starts in and which
+ * `CourseMonthService.assertNothingUntagged` already refuses to sell around.
+ * The reverse — reporting success on an untagged lecture — is the one outcome
+ * that must not happen silently, so the months half has its own failure.
+ */
 export async function createLessonAction(
   courseId: string,
   sectionId: string,
   input: CreateLessonInput,
 ): Promise<ActionResult> {
+  let lessonId: string;
   try {
-    await apiSend('POST', `/api/admin/sections/${sectionId}/lessons`, CreateLessonResultSchema, {
-      title: input.title,
-      kind: input.kind,
-      isPublished: false,
-      isFreePreview: false,
-      estimatedSeconds: 0,
-      completionMode: 'manual',
-      completionMinViewSeconds: null,
-      completionPassGrade: null,
-    });
-    invalidateCourse(courseId);
-    revalidatePath(`/admin/courses/${courseId}`);
-    return { ok: true };
+    const lesson = await apiSend(
+      'POST',
+      `/api/admin/sections/${sectionId}/lessons`,
+      CreateLessonResultSchema,
+      {
+        title: input.title,
+        kind: input.kind,
+        isPublished: false,
+        isFreePreview: false,
+        estimatedSeconds: 0,
+        completionMode: 'manual',
+        completionMinViewSeconds: null,
+        completionPassGrade: null,
+      },
+    );
+    lessonId = lesson.id;
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
   }
+
+  // No month picked is not a write. `primaryMonthId: null` with no extras is
+  // what the endpoint already means by «مش متحطلها شهر», and a brand-new
+  // lecture is in exactly that state — the PUT would be a round trip that
+  // changes nothing.
+  const months = input.months;
+  const tagged =
+    months === undefined || months.primaryMonthId === null
+      ? true
+      : await apiSend('PUT', `/api/admin/lessons/${lessonId}/months`, LessonMonthsSchema, months)
+          .then(() => true)
+          .catch(() => false);
+
+  invalidateCourse(courseId);
+  revalidatePath(`/admin/courses/${courseId}`);
+
+  /*
+   * ⚠️ `autosave.error` («مااتحفظش»), never `common.saveFailed`.
+   *
+   * `saveFailed` reads «التغييرات اترجعت زي ما كانت», and here nothing was
+   * rolled back: the lecture exists, it is in the outline, and the only thing
+   * missing is its month. Sending the instructor looking for a lecture that is
+   * on the page in front of them is worse than the terse sentence. Same
+   * distinction `updateCourseAction` draws for its own fallback.
+   */
+  return tagged ? { ok: true } : { ok: false, message: copy.admin.autosave.error };
 }
 
 export async function setLessonPublishedAction(

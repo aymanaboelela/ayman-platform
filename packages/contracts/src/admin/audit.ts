@@ -34,6 +34,15 @@ export const AUDIT_ACTIONS = [
   // closing.
   'term:update',
   'term:close',
+  // شهور المنهج. `month:close` is its own verb for the OPPOSITE reason
+  // `term:close` is: closing a term revokes every live grant for it, and
+  // closing a month revokes nothing at all — it only takes the month off the
+  // shelf. Both are worth naming, and an auditor must be able to tell the
+  // destructive one from the harmless one without reading the metadata.
+  'month:create',
+  'month:update',
+  'month:close',
+  'month:delete',
   'lesson:create',
   'lesson:update',
   'lesson:reorder',

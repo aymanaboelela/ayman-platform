@@ -14,6 +14,7 @@ import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
 import type { SortableHandleProps } from '../sortable-list';
 import { ConfirmButton } from './confirm-button';
 import { LessonPanel } from './lesson-panel';
+import { useCourseMonths } from './month-panel';
 
 type Lesson = AdminCourseDetail['sections'][number]['lessons'][number];
 
@@ -78,6 +79,23 @@ export function LessonCard({
   // student.
   const quizIsEmpty = lesson.kind === 'quiz' && (lesson.quiz?._count.slots ?? 0) === 0;
 
+  /*
+   * A published lecture with no curriculum month, on a course that sells by
+   * one. Nobody on a monthly subscription can see it — an untagged lecture
+   * reaches term and yearly buyers only — and, until every one of them is
+   * tagged, `CourseMonthService` refuses to open ANY month for sale.
+   *
+   * On the ROW, not only in the panel, and that is the whole point: the
+   * instructor finds these by scanning a forty-lecture outline, not by opening
+   * forty panels. The month panel's «ورّيني المحاضرات دي» lists them too; this
+   * is what makes the list unnecessary.
+   *
+   * Silent on a course with no months — there is nothing to be missing from.
+   */
+  const sellsByMonth = useCourseMonths().length > 0;
+  const untagged =
+    sellsByMonth && lesson.isPublished && lesson.kind !== 'quiz' && lesson.months.length === 0;
+
   return (
     <div
       className={cn(
@@ -135,6 +153,7 @@ export function LessonCard({
             {isExam ? ` · ${copy.admin.exam.title}` : ''}
             {lesson.video ? ` · ${lesson.video.externalId}` : ''}
             {quizIsEmpty ? ` · ${copy.admin.exam.noQuestions}` : ''}
+            {untagged ? ` · ${copy.admin.month.untaggedWarning}` : ''}
           </span>
         </span>
 

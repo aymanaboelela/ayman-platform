@@ -40,6 +40,12 @@ export const AUDIT_RESOURCES = {
   courseSection: 'course_sections',
   /// الترم الأول / الترم الثاني.
   courseTerm: 'course_terms',
+  /// «شهر ١» … «شهر ٩» — the slice a monthly subscriber buys. A sibling of
+  /// `courseTerm` and not a reuse of it: a term groups sections and a month
+  /// groups lectures, and closing one revokes access while closing the other
+  /// only takes it off sale. Two resources, because an admin auditing «مين
+  /// قفل شهر ٣» must not have to read term rows to find out.
+  courseMonth: 'course_months',
   lesson: 'lessons',
   enrollment: 'enrollments',
   questionVersion: 'question_versions',

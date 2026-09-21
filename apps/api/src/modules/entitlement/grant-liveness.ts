@@ -55,27 +55,37 @@ export type CourseAccessScope =
   | { scope: Extract<AccessScope, 'platform'> }
   | { scope: Extract<AccessScope, 'course'>; courseId: string }
   | { scope: Extract<AccessScope, 'subject_teacher'>; subjectId: string }
-  | { scope: Extract<AccessScope, 'term'>; courseId: string };
+  | { scope: Extract<AccessScope, 'term'>; courseId: string }
+  | { scope: Extract<AccessScope, 'course_month'>; courseId: string };
 
 /**
  * WHICH SCOPES COUNT for a course — the whole of what `requiresGrant`
  * changes, stated once.
  *
- * A free course is satisfied by any of the four, including the platform-wide
+ * A free course is satisfied by any of the five, including the platform-wide
  * "v1 is free for everyone" grant. A closed one drops `platform`, so it takes
- * a grant naming this course (or its subject, or one of its terms)
- * specifically.
+ * a grant naming this course (or its subject, or one of its terms, or one of
+ * its months) specifically.
  *
- * `term` is in BOTH branches and is matched on `courseId` alone, never
- * `termId` — this answers "does this student have SOME access to this course
- * at all", not "which term". The per-lesson "is it THIS term" question is
- * `EntitlementService.resolveTermAccess`'s alone.
+ * `term` and `course_month` are in BOTH branches and are matched on `courseId`
+ * alone, never on `termId`/`monthId` — this answers "does this student have
+ * SOME access to this course at all", not "which slice of it". The per-lesson
+ * "is it THIS term / THIS month" question belongs to
+ * `EntitlementService.resolveTermAccess` and `resolveMonthAccess`.
+ *
+ * Leaving `course_month` OUT of this list would have been the quiet bug: a
+ * student who bought «شهر ٢» and nothing else would read as having no access
+ * to the course at all, so `enroll()` would refuse them, `EnrollmentService
+ * .listOwn` would drop the course off their dashboard, and
+ * `LessonAccessService.require`'s lapsed-grant check would 403 them out of the
+ * very month they paid for.
  */
 export function courseAccessScopes(course: CourseAccessSubject): CourseAccessScope[] {
   const specific: CourseAccessScope[] = [
     { scope: 'course', courseId: course.id },
     { scope: 'subject_teacher', subjectId: course.subjectId },
     { scope: 'term', courseId: course.id },
+    { scope: 'course_month', courseId: course.id },
   ];
   return course.requiresGrant ? specific : [{ scope: 'platform' }, ...specific];
 }

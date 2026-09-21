@@ -73,6 +73,10 @@ const baseCourse = () => ({
   description: null,
   sections: [],
   terms: [],
+  // A course with no curriculum months — the normal state, and the one that
+  // keeps the original rolling monthly subscription in service. See
+  // `CatalogCourseDetailSchema.months`.
+  months: [],
 });
 
 describe('CatalogCourseDetailSchema.comingSoonNote', () => {

@@ -57,9 +57,21 @@ export function CourseStartButton({
   hasLessons: boolean;
   /** `null` when this plan is not for sale. Public data, safe on the cached page. */
   monthlyPriceCents: number | null;
+  /**
+   * ⚠️ HISTORY, and the only reason this prop still exists.
+   *
+   * «٣ شهور» is off the shelf: the retirement migration NULLs the column,
+   * `SellablePaymentPlanSchema` refuses the plan, and `SubscribePanel` no
+   * longer takes this value at all. It is still read by `priced` below,
+   * because a stack that has not deployed the migration yet may have a course
+   * whose only price is this one — and on that course the button must stay
+   * live and the note must still say «الدروس بتفتح أول ما تدخل», not
+   * «مافيش دروس». The panel is what tells that student there is nothing on
+   * sale, on a live read, which is the one place that sentence can be true.
+   */
   quarterlyPriceCents: number | null;
-  /** A full-year subscription — a FOURTH plan, same public-pricing
-   *  reasoning as the two above. */
+  /** A full-year subscription — same public-pricing reasoning as the two
+   *  above. */
   yearlyPriceCents: number | null;
   /** الترم الأول / الترم الثاني — only OPEN, PRICED ones. Public for the
    *  same reason the prices above are. */
@@ -212,7 +224,6 @@ export function CourseStartButton({
             courseId={courseId}
             slug={slug}
             monthlyPriceCents={monthlyPriceCents}
-            quarterlyPriceCents={quarterlyPriceCents}
             yearlyPriceCents={yearlyPriceCents}
             terms={terms}
             instapay={instapay}

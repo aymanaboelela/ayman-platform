@@ -123,7 +123,34 @@ export class CourseService {
     }
   }
 
+  /**
+   * «٣ شهور» IS OFF THE SHELF — and this is the door that keeps it off.
+   *
+   * `courses.quarterly_price_cents` still exists and is still READ: the
+   * finance screens, every «اشتراكاتي» card and every approved
+   * `payment_submissions` row with `plan: 'quarterly'` are history that has to
+   * keep rendering, which is why `PaymentPlanSchema` still parses the value
+   * and only `SellablePaymentPlanSchema` refuses it. `20260921130000_retire_
+   * quarterly_prices` nulled the column everywhere once.
+   *
+   * Without this check that migration is a one-off that the next save of any
+   * course form undoes — the field is still on `CourseCreateSchema`, so a
+   * stale admin tab, a scripted call or a client this change has not reached
+   * yet puts the price straight back and the «٣ شهور» button returns to the
+   * course page. A 400 is the right answer rather than silently coercing to
+   * `null`: a caller that sent a price meant to sell something, and a write
+   * that quietly drops it is how an instructor ends up believing a plan is
+   * live.
+   *
+   * `null` and absent both pass — clearing a price is exactly what this wants.
+   */
+  private assertQuarterlyRetired(quarterlyPriceCents: number | null | undefined): void {
+    if (quarterlyPriceCents == null) return;
+    throw new BadRequestException('باقة الـ٣ شهور اتوقّفت، فمينفعش يتحطلها سعر. الباقات المتاحة: شهري، ترم، سنة.');
+  }
+
   async create(actorId: string, input: CourseCreateInput): Promise<Course> {
+    this.assertQuarterlyRetired(input.quarterlyPriceCents);
     await this.assertOfferingExists(input);
 
     // Named fields only. Never `data: input` — a spread is how a field that was
@@ -174,6 +201,8 @@ export class CourseService {
   }
 
   async update(id: string, input: CourseUpdateInput): Promise<Course> {
+    this.assertQuarterlyRetired(input.quarterlyPriceCents);
+
     const current = await this.prisma.course.findUnique({
       where: { id },
       select: {
@@ -209,6 +238,11 @@ export class CourseService {
      * do this itself on a partial patch.
      */
     const nextMonthly = input.monthlyPriceCents === undefined ? current.monthlyPriceCents : input.monthlyPriceCents;
+    // Still resolved against the CURRENT row even though a new quarterly price
+    // can no longer be written: a course priced before the retirement migration
+    // ran — on a stack that has not deployed it yet — is still a PRICED course,
+    // and dropping it from this sum would let `requiresGrant: false` through on
+    // a course somebody can still be charged for.
     const nextQuarterly = input.quarterlyPriceCents === undefined ? current.quarterlyPriceCents : input.quarterlyPriceCents;
     const nextYearly = input.yearlyPriceCents === undefined ? current.yearlyPriceCents : input.yearlyPriceCents;
     const willBePriced = nextMonthly != null || nextQuarterly != null || nextYearly != null;
@@ -1049,6 +1083,16 @@ export class CourseService {
                 // empty over existing content is a field the instructor
                 // overwrites without ever being shown what was there.
                 homework: { select: { body: true, maxImages: true, isPublished: true } },
+                // «الشهر: ٢ — وكمان لشهر ٣». The lesson panel's month control
+                // prefills from this, the same way `termId` two levels up
+                // prefills the section's term — there is no per-lesson read
+                // endpoint and `PUT /admin/lessons/:id/months` rewrites the
+                // WHOLE set, so a control that opened empty over an existing
+                // tag would clear it on the next save. That is the exact
+                // failure `text` and `scheduleNote` above already document,
+                // and here it would quietly take a published lecture out of
+                // the month somebody paid for.
+                months: { select: { monthId: true, isPrimary: true } },
                 // The quiz's SHAPE, never its questions. `slots` is what lets
                 // the outline say "this exam has no questions yet" without a
                 // second round trip — and without putting a single answer key

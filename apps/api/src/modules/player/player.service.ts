@@ -106,6 +106,10 @@ export class PlayerService {
                 position: true,
                 estimatedSeconds: true,
                 isFreePreview: true,
+                // Which curriculum months open this lecture — joined below
+                // against the course's OPEN months so a locked row can name
+                // one. See `OutlineLessonSchema.month`.
+                months: { select: { monthId: true } },
                 // The video's real duration wins over the manually-set estimate —
                 // see the `totalEstimatedSeconds` accumulator below. Same
                 // `video: { select: { durationSeconds: true } }` shape
@@ -135,7 +139,33 @@ export class PlayerService {
     // The SAME resolver the access gate uses, so what the outline draws and
     // what the lesson route enforces cannot disagree. The lock the student
     // sees is a render of this; it is not where the decision is made.
-    const gate = await this.gate.resolveCourse(enrollment.id, course.id);
+    const gate = await this.gate.resolveCourse(enrollment.id, course.id, userId);
+
+    /*
+     * The months a padlock may NAME. OPEN ones only, and with the published
+     * lecture count the dialog quotes as what the money buys — the same
+     * `isLecture` predicate every other count on the platform uses.
+     *
+     * Skipped entirely on a course with no months, which is every course until
+     * the instructor configures one, so this endpoint keeps the round-trip
+     * count it has always had for them.
+     */
+    const openMonths = await this.prisma.courseMonth.findMany({
+      where: { courseId: course.id, isOpen: true },
+      select: {
+        id: true,
+        title: true,
+        _count: {
+          select: { lessons: { where: { lesson: { isPublished: true, kind: { not: 'quiz' } } } } },
+        },
+      },
+    });
+    const monthsById = new Map(
+      openMonths.map((month) => [
+        month.id,
+        { id: month.id, title: month.title, lessonCount: month._count.lessons },
+      ]),
+    );
 
     let completedLessons = 0;
     let totalLessons = 0;
@@ -180,6 +210,12 @@ export class PlayerService {
           // race guard rather than an expected branch.
           gate: gate.get(lesson.id) ?? 'locked',
           isExam: lesson.id === course.examLessonId,
+          // Exactly one, and one the course still offers — see
+          // `OutlineLessonSchema.month` for why the other cases are all `null`.
+          month:
+            lesson.months.length === 1
+              ? (monthsById.get(lesson.months[0]!.monthId) ?? null)
+              : null,
         };
       }),
     }));

@@ -26,7 +26,7 @@ describe('HeartbeatService', () => {
   const notifications = new NotificationsService(prisma);
   const service = new HeartbeatService(
     prisma,
-    new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
+    new LessonAccessService(prisma, new LessonGateService(prisma, new EntitlementService(prisma)), new EntitlementService(prisma)),
     new CourseProgressService(notifications),
     new ViewSessionService(),
     notifications,

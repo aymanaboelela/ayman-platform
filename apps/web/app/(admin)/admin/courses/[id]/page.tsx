@@ -6,9 +6,10 @@ import {
   LessonResourceKindSchema,
 } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
+import { AdminCourseMonthSchema, type AdminCourseMonth } from '@ayman/contracts/months';
 import { VideoMirrorStatusSchema, VideoProviderSchema } from '@ayman/contracts/video';
 import { getTaxonomyLiveOrNull, getTaxonomyOrNull } from '@/lib/taxonomy';
-import { apiGetAuthedOrNotFound } from '@/lib/api-server';
+import { apiGetAuthed, apiGetAuthedOrNotFound } from '@/lib/api-server';
 import { CourseEditor } from '@/components/admin/course/course-editor';
 
 const AdminCourseDetailSchema = z.object({
@@ -34,6 +35,10 @@ const AdminCourseDetailSchema = z.object({
   whatsappGroupUrl: z.string().nullable(),
   contentComplete: z.boolean(),
   monthlyPriceCents: z.number().int().nullable(),
+  /** ⚠️ HISTORY ONLY. Nothing on this screen renders it any more — «٣ شهور»
+   *  is off the shelf and `course-form.tsx` has no field for it. Parsed
+   *  because the payload still carries it: a schema that describes the wire is
+   *  how the next reader learns the column is still there. */
   quarterlyPriceCents: z.number().int().nullable(),
   yearlyPriceCents: z.number().int().nullable(),
   bookTitle: z.string().nullable(),
@@ -85,6 +90,20 @@ const AdminCourseDetailSchema = z.object({
              whole course editor. */
           publishAt: z.string().nullable().catch(null),
           description: z.string().nullable().catch(null),
+          /** «الشهر: ٢ — وكمان لشهر ٣». The lesson panel's month control
+           *  prefills from this; `PUT /admin/lessons/:id/months` rewrites the
+           *  WHOLE set, so a control that opened empty over an existing tag
+           *  would clear it on the next save — and quietly take a published
+           *  lecture out of the month somebody paid for.
+           *
+           *  `.catch([])` for the same reason `publishAt` above has one: during
+           *  a rolling deploy this page is served by whichever API container
+           *  answers, and for a minute that is one predating the table. «مفيش
+           *  شهور» degrades to a control the instructor can re-set; a failed
+           *  parse blanks the whole course editor. */
+          months: z
+            .array(z.object({ monthId: z.uuid(), isPrimary: z.boolean() }))
+            .catch([]),
           video: z
             .object({
               externalId: z.string(),
@@ -155,6 +174,33 @@ const AdminCourseDetailSchema = z.object({
 
 export type AdminCourseDetail = z.infer<typeof AdminCourseDetailSchema>;
 
+/**
+ * شهور المنهج, with the two counts the panel is built around.
+ *
+ * A SECOND request rather than a field on the course payload, because the two
+ * numbers on each row — live subscribers and published lectures — are
+ * aggregates `findForAdmin` has no business computing on a query that already
+ * walks every lesson of every section. `CourseMonthService.list` answers the
+ * whole list in four queries however many months there are.
+ *
+ * `null` means «معرفناش نقراهم» and is NOT the same as «مفيش شهور». During a
+ * rolling deploy this route 404s on the container that predates it, and an
+ * empty array there would make `MonthPanel` state, in Arabic, that this course
+ * still sells the old thirty-day month — a sentence that is false and that the
+ * instructor would act on. So a failure renders NO panel at all, which says
+ * nothing rather than something untrue, and the next load restores it.
+ */
+async function monthsOrNull(courseId: string): Promise<AdminCourseMonth[] | null> {
+  try {
+    return await apiGetAuthed(
+      `/api/admin/courses/${courseId}/months`,
+      AdminCourseMonthSchema.array(),
+    );
+  } catch {
+    return null;
+  }
+}
+
 export const metadata = { title: copy.admin.course.edit };
 
 export default async function EditCoursePage({ params }: { params: Promise<{ id: string }> }) {
@@ -167,11 +213,12 @@ export default async function EditCoursePage({ params }: { params: Promise<{ id:
      all, which is the whole point after a restart emptied the shared
      rate-limit bucket and the bare `apiGet` here would have thrown. See
      `lib/taxonomy.ts` and `admin/students/page.tsx`. */
-  const [course, taxonomy] = await Promise.all([
+  const [course, taxonomy, months] = await Promise.all([
     apiGetAuthedOrNotFound(`/api/admin/courses/${id}`, AdminCourseDetailSchema),
     getTaxonomyOrNull().then((t) => t ?? getTaxonomyLiveOrNull()),
+    monthsOrNull(id),
   ]);
   if (!taxonomy) throw new Error('GET /api/taxonomy is unavailable');
 
-  return <CourseEditor course={course} taxonomy={taxonomy} />;
+  return <CourseEditor course={course} taxonomy={taxonomy} months={months} />;
 }

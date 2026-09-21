@@ -1,12 +1,17 @@
 import { isCleared, resolveGate, type GateLesson } from './gate-rule';
 
-function lesson(id: string, state = 'not_started'): GateLesson {
-  return { id, state, kind: 'video' };
+function lesson(id: string, state = 'not_started', owned = true): GateLesson {
+  return { id, state, kind: 'video', owned };
 }
 
 /** A lecture's quiz. In the run, but never part of the exam's prerequisites. */
-function quiz(id: string, state = 'not_started'): GateLesson {
-  return { id, state, kind: 'quiz' };
+function quiz(id: string, state = 'not_started', owned = true): GateLesson {
+  return { id, state, kind: 'quiz', owned };
+}
+
+/** A lecture belonging to a curriculum month this student has not bought. */
+function unowned(id: string, state = 'not_started'): GateLesson {
+  return lesson(id, state, false);
 }
 
 const gateFor = (lessons: GateLesson[], examLessonId: string | null = null) =>
@@ -158,6 +163,43 @@ describe('resolveGate — the exam', () => {
       'exam',
     );
     expect(gate.get('l3')).toBe('available');
+    expect(gate.get('exam')).toBe('locked');
+  });
+});
+
+/**
+ * «الاشتراك الشهري بقى شهر من المنهج» — a lecture the subscription does not
+ * cover draws a padlock instead of an open door that 403s on click.
+ *
+ * The last case here is the one that decides whether this flag could have been
+ * a filter on the query instead: it could not.
+ */
+describe('resolveGate — curriculum months', () => {
+  it('locks a lecture the student does not own', () => {
+    const gate = gateFor([lesson('a'), unowned('b'), lesson('c')]);
+    expect([...gate.values()]).toEqual(['available', 'locked', 'available']);
+  });
+
+  it('leaves an unowned lecture the student already cleared as cleared', () => {
+    // Honest history. A yearly subscription that lapsed does not un-watch the
+    // lectures it paid for, and re-locking finished work reads as losing it.
+    expect(gateFor([unowned('a', 'completed')]).get('a')).toBe('cleared');
+  });
+
+  it('locks an unowned EXAM for not owning it, not for unfinished prerequisites', () => {
+    const gate = gateFor([lesson('a', 'completed'), unowned('exam')], 'exam');
+    expect(gate.get('exam')).toBe('locked');
+  });
+
+  it('keeps an unowned lecture in the exam prerequisite set', () => {
+    /*
+     * The whole reason `owned` is a per-lesson FLAG and not a filter applied to
+     * the query upstream. Filter `b` out and `everyLectureCleared` sees only
+     * `a`, which IS cleared — so a student who bought «شهر ١» alone finishes
+     * its four lectures and the COURSE'S FINAL EXAM opens for them. The one
+     * gate left in this file, defeated by paying less.
+     */
+    const gate = gateFor([lesson('a', 'completed'), unowned('b'), lesson('exam')], 'exam');
     expect(gate.get('exam')).toBe('locked');
   });
 });

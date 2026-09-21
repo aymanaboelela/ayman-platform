@@ -917,6 +917,11 @@ model Course {
   sections           CourseSection[]
   /// الترم الأول / الترم الثاني — see `CourseTerm`'s own doc.
   terms              CourseTerm[]
+  /// «شهر ١» … «شهر ٩» — the SALES slices a monthly subscriber picks between.
+  /// Empty on every course until the instructor configures them, and an empty
+  /// list is what keeps the old rolling-window monthly plan in service — see
+  /// `CourseMonth`'s own doc.
+  months             CourseMonth[]
   lessons            Lesson[]
   enrollments        Enrollment[]
   grants             AccessGrant[]
@@ -1058,6 +1063,126 @@ model CourseTerm {
   @@schema("app")
 }
 
+/// «شهر ١ — أكتوبر» — a SALES slice of one course's LESSONS.
+///
+/// ## Why this is not a `CourseTerm`
+///
+/// A term groups SECTIONS (`CourseSection.termId`); a month groups LESSONS.
+/// The two must be able to disagree: «الترم الأول» has to keep covering every
+/// month inside it, and a section carries exactly one `termId` — so if a month
+/// were a term, a lecture could not be in «الترم الأول» and «شهر ٣» at once,
+/// which is the ordinary case and not an edge one.
+///
+/// The second reason is `TermService.setOpen`. Closing a term bulk-stamps
+/// `revokedAt` on every live grant for it and reopening restores nothing (see
+/// `CourseTerm.isOpen`). That is correct for a term, which closes once. The
+/// instructor takes a month off sale and puts it back roughly nine times a
+/// year, and the same switch would have wiped a paying cohort with no way
+/// back.
+///
+/// ## The empty list is load-bearing
+///
+/// A course with NO months keeps the original monthly plan exactly as it was —
+/// a `scope: course` grant with `validUntil = now + 1 month` — because there is
+/// no month to sell and nothing to pick between. Configuring the first month is
+/// what switches that course over, and `CourseMonthService` refuses to open one
+/// for sale while a published lecture still carries no month: otherwise the
+/// whole back-catalogue opens to whoever buys the cheapest single month, and
+/// every screen looks correct while it happens.
+model CourseMonth {
+  id       String @id @default(uuid(7)) @db.Uuid
+  courseId String @map("course_id") @db.Uuid
+
+  /// The number the instructor speaks in — «شهر ٣». NOT a calendar month and
+  /// NOT a position in a list: months are numbered by the curriculum, they are
+  /// created out of order as often as not, and `3` has to keep meaning «التالت»
+  /// after «شهر ٢» is deleted. 1..12 by CHECK — the school year is nine, and a
+  /// revision or summer month is a real thing that would otherwise be a
+  /// migration against a hot table.
+  monthIndex Int @map("month_index")
+
+  /// «شهر ٣ — نوفمبر». Free text, because the instructor names months the way
+  /// he teaches them and a generated «الشهر الثالث» cannot say «شهر المراجعة».
+  title String
+
+  /// Whether a student may BUY this month right now. Never read by any access
+  /// path — same rule, and same sentence, as `CourseTerm.isOpen`: closing a
+  /// month takes it off the shelf and takes NOTHING from anyone who already
+  /// holds it. There is no bulk revoke behind this switch, deliberately.
+  isOpen Boolean @default(true) @map("is_open")
+
+  /// RESERVED. Always `null` today and nothing reads it: the instructor's
+  /// decision was one price per course for any month, so checkout prices a
+  /// month from `Course.monthlyPriceCents`. The column exists so that per-month
+  /// pricing («شهر المراجعة بـ٢٠٠») is a data change later instead of a
+  /// migration across a table with live money pointing at it. Do NOT add a
+  /// read for it without adding the admin field that sets it — a price only
+  /// half the screens know about is worse than no price.
+  priceCents Int? @map("price_cents")
+
+  /// The calendar date this curriculum month opened, when the instructor
+  /// bothers to set one. Used by exactly two things: the default selection in
+  /// the student's month picker, and the «الشهر الحالي» label in the admin.
+  /// NEVER an access decision — access is decided by reading grants, and a
+  /// month the student paid for does not close because its date passed.
+  startsOn DateTime? @map("starts_on") @db.Date
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  course             Course                   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons            LessonMonth[]
+  accessGrants       AccessGrant[]
+  paymentSubmissions PaymentSubmissionMonth[]
+
+  @@unique([courseId, monthIndex])
+  /// Anchors the composite FKs on `lesson_months` and
+  /// `payment_submission_months` — the same trick as `lessons_id_course_key`.
+  /// Prisma cannot see those FKs and `migrate dev` will offer to drop this
+  /// unique along with them. Never accept.
+  @@unique([id, courseId], map: "course_months_id_course_key")
+  @@map("course_months")
+  @@schema("app")
+}
+
+/// Which months open this lecture.
+///
+/// `isPrimary` is «الشهر بتاع المحاضرة دي» — the one the lesson form shows in
+/// its select, and the one the admin outline groups by. The other rows are
+/// «اداها كمان لشهر ٢ و٣», which the instructor asked for by name: a lecture
+/// that a later month's students need too.
+///
+/// A lecture with NO row here is covered by `platform` / `course` /
+/// `subject_teacher` / `term` grants and by NO month grant — so it reaches
+/// term and yearly subscribers and not monthly ones. That default is the
+/// closed one on purpose: a lecture the instructor forgot to tag stays out of
+/// a month he did not sell it in, rather than leaking into all of them.
+model LessonMonth {
+  lessonId String @map("lesson_id") @db.Uuid
+  monthId  String @map("month_id") @db.Uuid
+
+  /// Denormalised from BOTH sides and LOAD-BEARING. The two composite FKs in
+  /// the hand-written migration point at `lessons(id, course_id)` and
+  /// `course_months(id, course_id)`, so "a lecture is only ever given to a
+  /// month of its own course" is a DATABASE fact rather than a service `if`.
+  /// Identical arrangement, and identical reason, to `ExamCoverage.courseId`.
+  courseId String @map("course_id") @db.Uuid
+
+  isPrimary Boolean @default(false) @map("is_primary")
+
+  lesson Lesson      @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  month  CourseMonth @relation(fields: [monthId], references: [id], onDelete: Cascade)
+
+  @@id([lessonId, monthId])
+  /// ⚠️ The "one primary month per lecture" rule is a PARTIAL unique index
+  /// (`lesson_months_one_primary ... WHERE is_primary`) in the migration, which
+  /// Prisma cannot express at all. It is invisible here; it is real in the
+  /// database. Never "correct" it away.
+  @@index([monthId])
+  @@map("lesson_months")
+  @@schema("app")
+}
+
 model Lesson {
   id        String     @id @default(uuid(7)) @db.Uuid
   /// Denormalised from section.courseId so course-wide queries (lesson counts,
@@ -1171,6 +1296,10 @@ model Lesson {
   coversLessons       ExamCoverage[]       @relation("ExamCoverageExam")
   /// The inverse: which monthly exams carry this lecture on their syllabus.
   coveredByExams      ExamCoverage[]       @relation("ExamCoverageCovered")
+  /// «المحاضرة دي تابعة لشهر كام» — the sales months that open this lecture.
+  /// Empty on every lecture of a course with no months configured, and empty
+  /// is a real, deliberate state even on one that has them — see `LessonMonth`.
+  months              LessonMonth[]
 
   @@unique([sectionId, position], map: "lessons_section_position_key")
   // Backs `courses_exam_lesson_in_same_course` — the composite FK the
@@ -1638,6 +1767,17 @@ enum AccessScope {
   /// scope. `platform`/`course`/`subject_teacher` all cover EVERY term
   /// regardless of open/closed state; only this scope is term-specific.
   term
+  /// Scoped to ONE `CourseMonth` — «شهر ٣». The monthly plan's grant, and the
+  /// reason the monthly plan is no longer a date window.
+  ///
+  /// Satisfies `resolveCourseAccess` on `courseId` alone (so a month-only buyer
+  /// can enrol and counts as "having some access"), and is refined per lesson
+  /// by `EntitlementService.resolveMonthAccess` — which, unlike
+  /// `resolveTermAccess`, does NOT trust the single grant `resolveCourseAccess`
+  /// picked. It unions every live grant instead, because a student can hold a
+  /// month grant AND a wider one at the same time, and the newest is not the
+  /// widest. See that method's own note.
+  course_month
 
   @@map("access_scope")
   @@schema("app")
@@ -1683,6 +1823,16 @@ model AccessGrant {
   /// (denormalised, same as `subjectId` is for `subject_teacher`) so a plain
   /// `courseId` filter still finds every term grant for a course.
   termId                       String?          @map("term_id") @db.Uuid
+  /// Set only for `scope: course_month`. Always paired with `courseId` on that
+  /// scope — denormalised exactly like `termId` is, so a plain `courseId`
+  /// filter (`courseAccessScopes`'s own list) still finds every month grant for
+  /// a course without a join.
+  ///
+  /// A month grant ALWAYS has `validUntil = null`, enforced by
+  /// `access_grants_month_open_ended`: «شهر ٢» is content the student bought,
+  /// not thirty days they rented, and that difference is the entire feature.
+  /// Its only cutoff is `revokedAt`.
+  monthId                      String?          @map("month_id") @db.Uuid
   source                       GrantSource
   scholarshipKind              ScholarshipKind? @map("scholarship_kind")
   validFrom                    DateTime         @default(now()) @map("valid_from")
@@ -1723,6 +1873,7 @@ model AccessGrant {
   course             Course?             @relation(fields: [courseId], references: [id], onDelete: Cascade)
   subject            Subject?            @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   term               CourseTerm?         @relation(fields: [termId], references: [id], onDelete: Cascade)
+  month              CourseMonth?        @relation(fields: [monthId], references: [id], onDelete: Cascade)
   /// Payment submissions this SPECIFIC grant was created or extended by — the
   /// audit link from money to access. Not every grant has one: `admin` and
   /// `auto_free` grants never do.
@@ -1733,6 +1884,9 @@ model AccessGrant {
   /// The bulk-revoke-on-close query's own index: "every live grant for THIS
   /// term" — see `TermService.setOpen`.
   @@index([termId])
+  /// «كام مشترك على الشهر ده» — the admin's per-month subscriber count, which
+  /// the instructor reads while he is writing the lecture.
+  @@index([monthId])
   @@map("access_grants")
   @@schema("app")
 }
@@ -1881,11 +2035,18 @@ model PaymentSubmission {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  user             User              @relation("PaymentSubmissionStudent", fields: [userId], references: [id], onDelete: Cascade)
-  course           Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  reviewedBy       User?             @relation("PaymentSubmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
-  grant            AccessGrant?      @relation(fields: [grantId], references: [id], onDelete: SetNull)
-  term             CourseTerm?       @relation(fields: [termId], references: [id], onDelete: SetNull)
+  user             User                     @relation("PaymentSubmissionStudent", fields: [userId], references: [id], onDelete: Cascade)
+  course           Course                   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  reviewedBy       User?                    @relation("PaymentSubmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  grant            AccessGrant?             @relation(fields: [grantId], references: [id], onDelete: SetNull)
+  term             CourseTerm?              @relation(fields: [termId], references: [id], onDelete: SetNull)
+  /// The months this ONE transfer bought — «عايز شهر ٢ و٣» is one payment, one
+  /// screenshot and one review, not three of each. A join table and not a
+  /// `String[]` of ids: the array has no foreign key, so a money row could
+  /// point at a deleted month, or at a month of a different course, and
+  /// nothing would stop it. `termId` above is a real FK; this is the same
+  /// standard.
+  months           PaymentSubmissionMonth[]
   /// Money given back against this payment — see `Refund`. Never a negative
   /// `amountCents` on this row: the sale is what it was, and the reversal is
   /// its own dated, explained row in a month of its own.
@@ -1895,6 +2056,9 @@ model PaymentSubmission {
   /// every claim an admin reviewed by hand — see `IncomingTransfer`.
   incomingTransfer IncomingTransfer?
 
+  /// Anchors `payment_submission_months_submission_in_course`. Prisma cannot
+  /// see that composite FK and will offer to drop this unique with it.
+  @@unique([id, courseId], map: "payment_submissions_id_course_key")
   /// The review queue: pending first, oldest first — a submission review is
   /// first-come-first-served like a support ticket.
   @@index([status, createdAt])
@@ -1902,6 +2066,30 @@ model PaymentSubmission {
   /// check `PaymentsService.submit` runs before accepting a new one.
   @@index([userId, courseId, status])
   @@map("payment_submissions")
+  @@schema("app")
+}
+
+/// Which months one payment bought. See `PaymentSubmission.months`.
+///
+/// `onDelete: Restrict` on the month side, unlike every other join in this
+/// schema: a month with money pointing at it must not be deletable at all.
+/// `CourseMonthService.remove` answers 409 long before this, and this is the
+/// belt under that brace — the payment record is append-only, and a cascade
+/// here would quietly shorten it.
+model PaymentSubmissionMonth {
+  submissionId String @map("submission_id") @db.Uuid
+  monthId      String @map("month_id") @db.Uuid
+  /// Denormalised from both sides, exactly like `LessonMonth.courseId`, and
+  /// backing the two composite FKs that make "this payment only ever bought
+  /// months of the course it names" structural.
+  courseId     String @map("course_id") @db.Uuid
+
+  submission PaymentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  month      CourseMonth       @relation(fields: [monthId], references: [id], onDelete: Restrict)
+
+  @@id([submissionId, monthId])
+  @@index([monthId])
+  @@map("payment_submission_months")
   @@schema("app")
 }
 
@@ -2368,11 +2556,11 @@ model BookOrder {
   // ── The payment step — step two. `null` until submitted. ──
   /// The Vodafone Cash number the transfer was sent FROM — same convention
   /// as `PaymentSubmission.senderPhone`.
-  senderPhone   String?   @map("sender_phone")
+  senderPhone           String? @map("sender_phone")
   /// The storage KEY of the uploaded screenshot — same convention as
   /// `PaymentSubmission.screenshotKey`, served only through the gated admin
   /// route, never the public `/media/:prefix/:name` path.
-  screenshotKey String?   @map("screenshot_key")
+  screenshotKey         String? @map("screenshot_key")
   /// SHA-256 of the STORED screenshot bytes — the fingerprint that makes one
   /// transfer impossible to spend twice.
   ///
@@ -2391,7 +2579,7 @@ model BookOrder {
   ///
   /// Nullable forever: every order placed before this column existed has none,
   /// and a null must never collide with another null.
-  screenshotSha256 String? @map("screenshot_sha256")
+  screenshotSha256      String? @map("screenshot_sha256")
   /// A 64-bit perceptual hash of the same image, as 16 hex characters.
   ///
   /// Catches what SHA-256 cannot: the same receipt screenshotted again, cropped,
@@ -2399,7 +2587,7 @@ model BookOrder {
   /// distance (see `PHASH_MAX_DISTANCE`), so it is a SUSPICION and not a proof —
   /// which is why a near-match is refused with the same message but only ever
   /// against another order of the SAME student's phone.
-  screenshotPhash String? @map("screenshot_phash")
+  screenshotPhash       String? @map("screenshot_phash")
   /// The transfer's own reference, read off the image — «رقم العملية».
   ///
   /// The only field that identifies the MONEY rather than the picture of it.
@@ -2410,14 +2598,14 @@ model BookOrder {
   /// Null when the OCR could not find one, which is a normal outcome and never
   /// blocks a payment — see `receipt-ocr.ts` for why this reads rather than
   /// judges.
-  screenshotRef String? @map("screenshot_ref")
+  screenshotRef         String? @map("screenshot_ref")
   /// The amount read off the image, in piastres, or null when unreadable.
   ///
   /// Recorded, never enforced: a student who transferred the right money with a
   /// receipt this cannot parse must still be able to pay. It is the admin's
   /// «راجعها» flag — `screenshotAmountCents` disagreeing with `amountCents` is
   /// the one thing worth a human look before a parcel is printed.
-  screenshotAmountCents Int? @map("screenshot_amount_cents")
+  screenshotAmountCents Int?    @map("screenshot_amount_cents")
 
   /// «لسه متأكدش منه» — the order is paid, and something about its receipt
   /// needs a human before the parcel moves.
@@ -2441,10 +2629,10 @@ model BookOrder {
   /// Why, so the admin knows what to look at: `amount_short` or
   /// `duplicate_receipt`. See `book_orders_held_reason_matches_hold`, which
   /// pins the pair together in both directions.
-  heldReason String? @map("held_reason")
+  heldReason      String?   @map("held_reason")
   /// Set the moment the screenshot is submitted — see the model doc for why
   /// this alone is what "paid" means for a book order.
-  paidAt        DateTime? @map("paid_at")
+  paidAt          DateTime? @map("paid_at")
 
   /// «أضفته مجاني» — a book handed over without charging for it: a prize, a
   /// hardship case, a replacement for a copy that arrived damaged.
@@ -4353,13 +4541,13 @@ enum CampaignRecipientStatus {
 /// eviction must not hand a campaign a fresh daily quota, which is the one
 /// failure mode of this feature that cannot be undone.
 model MarketingCampaign {
-  id     String         @id @default(uuid(7)) @db.Uuid
-  name   String         @db.VarChar(120)
+  id      String          @id @default(uuid(7)) @db.Uuid
+  name    String          @db.VarChar(120)
   /// The template, with `{{الاسم}}` / `{{اللينك}}` still in it. Rendered per
   /// recipient at send time — never stored rendered, so a typo can be fixed
   /// in a paused campaign and every remaining message gets the fix.
-  body   String
-  status CampaignStatus @default(draft)
+  body    String
+  status  CampaignStatus  @default(draft)
   /// See `CampaignChannel`. `@default(whatsapp)` is what makes this column
   /// safe to add to a table that already holds finished campaigns.
   channel CampaignChannel @default(whatsapp)
@@ -4389,8 +4577,8 @@ model MarketingCampaign {
   /// otherwise be read as UTC by anything that touches it.
   dayKey      String?   @map("day_key") @db.VarChar(10)
 
-  startedAt   DateTime? @map("started_at")
-  finishedAt  DateTime? @map("finished_at")
+  startedAt    DateTime? @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
   /// Why the runner paused this campaign on its own, when it did.
   ///
   /// NULL for a campaign a human paused — that needs no explanation, they
@@ -4398,10 +4586,10 @@ model MarketingCampaign {
   /// above all for the one that matters: «بعتنا كذا رسالة ومحدش استلم ولا
   /// واحدة». A campaign that stops itself and cannot say why reads as a bug
   /// in the runner, which is how an operator learns to press resume.
-  pausedReason String?  @map("paused_reason") @db.VarChar(200)
-  createdById String?   @map("created_by_id")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  pausedReason String?   @map("paused_reason") @db.VarChar(200)
+  createdById  String?   @map("created_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   image      MediaAsset?          @relation(fields: [imageAssetId], references: [id], onDelete: SetNull)
   createdBy  User?                @relation("MarketingCampaignAuthor", fields: [createdById], references: [id], onDelete: SetNull)

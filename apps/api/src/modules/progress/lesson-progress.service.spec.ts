@@ -25,7 +25,7 @@ describe('LessonProgressService', () => {
   const courseProgress = new CourseProgressService(notifications);
   const service = new LessonProgressService(
     prisma,
-    new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
+    new LessonAccessService(prisma, new LessonGateService(prisma, new EntitlementService(prisma)), new EntitlementService(prisma)),
     courseProgress,
     notifications,
   );
@@ -428,7 +428,7 @@ describe('LessonProgressService.recordQuizResult', () => {
   const notifications = new NotificationsService(prisma);
   const service = new LessonProgressService(
     prisma,
-    new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
+    new LessonAccessService(prisma, new LessonGateService(prisma, new EntitlementService(prisma)), new EntitlementService(prisma)),
     new CourseProgressService(notifications),
     notifications,
   );

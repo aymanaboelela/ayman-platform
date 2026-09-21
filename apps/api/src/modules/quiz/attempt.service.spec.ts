@@ -31,12 +31,12 @@ describe('AttemptService', () => {
   }) as unknown as PrismaService;
   const access = new QuizAccessService(
     prisma,
-    new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
+    new LessonAccessService(prisma, new LessonGateService(prisma, new EntitlementService(prisma)), new EntitlementService(prisma)),
   );
   const events = new AttemptEventsService();
   const progress = new LessonProgressService(
     prisma,
-    new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
+    new LessonAccessService(prisma, new LessonGateService(prisma, new EntitlementService(prisma)), new EntitlementService(prisma)),
     new CourseProgressService(new NotificationsService(prisma)),
     new NotificationsService(prisma),
   );
@@ -45,7 +45,7 @@ describe('AttemptService', () => {
     access,
     events,
     progress,
-    new LessonAccessService(prisma, new LessonGateService(prisma), new EntitlementService(prisma)),
+    new LessonAccessService(prisma, new LessonGateService(prisma, new EntitlementService(prisma)), new EntitlementService(prisma)),
     new NotificationsService(prisma),
   );
   const overdue = new OverdueService(prisma, service);

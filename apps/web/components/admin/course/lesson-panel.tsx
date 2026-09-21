@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useActionState, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { copy } from '@ayman/contracts/copy/admin';
 import { extractYouTubeId, type VideoEmbedStatus } from '@ayman/contracts/video';
 import { Button } from '@ayman/ui/components/button';
@@ -17,6 +18,7 @@ import {
   createLessonAction,
   probeVideoDurationAction,
   removeLessonVideoAction,
+  setLessonMonthsAction,
   setLessonTextAction,
   setLessonVideoAction,
   updateLessonAction,
@@ -30,6 +32,7 @@ import { useAutosave } from './autosave';
 import { ConfirmButton } from './confirm-button';
 import { LessonHomeworkForm } from './lesson-homework-form';
 import { LessonSettingsForm } from './lesson-settings-form';
+import { MonthPicker, useCourseMonths } from './month-panel';
 import { VideoPreview } from './video-preview';
 import { VideoUpload } from './video-upload';
 import { fetchYouTubeDuration } from './youtube-duration';
@@ -91,6 +94,12 @@ export function LessonPanel({
         every other thing about the lecture, saving itself like all of them.
       */}
       <LessonTitleField courseId={courseId} lesson={lesson} />
+
+      {/* «الشهر» sits with the name, not down in the settings panel: it is
+          part of what the lecture IS — which subscription opens it — and on a
+          course that sells by month it decides whether anyone paying monthly
+          can see the thing being written at all. */}
+      <LessonMonthsField courseId={courseId} lesson={lesson} />
 
       {lesson.kind === 'video' ? <LessonVideoForm courseId={courseId} lesson={lesson} /> : null}
       {lesson.kind === 'text' ? <LessonTextForm courseId={courseId} lesson={lesson} /> : null}
@@ -180,6 +189,88 @@ function LessonTitleField({ courseId, lesson }: { courseId: string; lesson: Less
           if (event.target.value.trim().length >= 2) save(event.target.value);
         }}
       />
+    </div>
+  );
+}
+
+/**
+ * «الشهر: ٢ — وكمان لشهر ٣», on the lecture itself.
+ *
+ * Renders NOTHING on a course with no months, which is most of them: that
+ * course still sells the old rolling thirty-day subscription and there is no
+ * question here to answer.
+ *
+ * ## Why it writes on change and not on a debounce
+ *
+ * Every other field in this editor waits for a pause in typing, because typing
+ * is a value being built. Picking a month is a decision that is complete the
+ * instant it is made, and the number beside it — who will see this lecture —
+ * has to be true of what is saved rather than of what is pending.
+ *
+ * ## Why the draft is reverted on failure
+ *
+ * `PUT /admin/lessons/:id/months` rewrites the WHOLE set. A control left
+ * showing a month the server refused would be written the next time ANY part
+ * of this picker changed, so the disagreement would not stay visible — it
+ * would be resolved, silently, in favour of the screen.
+ */
+function LessonMonthsField({ courseId, lesson }: { courseId: string; lesson: Lesson }) {
+  const router = useRouter();
+  const months = useCourseMonths();
+  const [value, setValue] = useState(() => ({
+    primaryMonthId: lesson.months.find((row) => row.isPrimary)?.monthId ?? null,
+    extraMonthIds: lesson.months.filter((row) => !row.isPrimary).map((row) => row.monthId),
+  }));
+  const [pending, setPending] = useState(false);
+
+  if (months.length === 0) return null;
+
+  async function commit(next: { primaryMonthId: string | null; extraMonthIds: string[] }) {
+    const previous = value;
+    setValue(next);
+    setPending(true);
+    const result = await setLessonMonthsAction(courseId, lesson.id, next);
+    setPending(false);
+    if (result.ok) {
+      // The month rows upstairs carry a lesson count and an untagged count,
+      // and this write just changed both.
+      router.refresh();
+      return;
+    }
+    toast.error(result.message);
+    setValue(previous);
+  }
+
+  /*
+   * The single-lecture version of the panel's standing refusal.
+   *
+   * A published lecture in no month reaches term and yearly subscribers and NO
+   * monthly one — which is a legal, deliberate state («مراجعة عامة» belongs
+   * to no month) and is also exactly what blocks every month of this course
+   * from going on sale. So it is a warning and not an error: the panel above
+   * is where it becomes a refusal, and this is where he is standing when he
+   * can fix it.
+   *
+   * Quizzes are excluded, same as every count on this feature: a quiz is not a
+   * lecture, it hangs off one, and it opens with whatever opens its lecture.
+   */
+  const untagged =
+    lesson.isPublished && lesson.kind !== 'quiz' && value.primaryMonthId === null;
+
+  return (
+    <div className="mt-3">
+      <MonthPicker
+        id={lesson.id}
+        months={months}
+        value={value}
+        disabled={pending}
+        onChange={(next) => void commit(next)}
+      />
+      {untagged ? (
+        <p className="mt-1 text-[length:var(--fs-text-xs)] text-[color:var(--err)]">
+          {copy.admin.month.untaggedWarning}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -645,6 +736,42 @@ const LESSON_KINDS = ['video', 'text', 'attachment'] as const;
  * a box would be worse than one save button, not better.
  */
 export function AddLessonForm({ courseId, sectionId }: { courseId: string; sectionId: string }) {
+  const months = useCourseMonths();
+  /*
+   * THE ONE HE ASKED FOR BY NAME.
+   *
+   * «حتى وأنا بضيف محاضرة جديدة، تقولي دي المشتركين مين؟ المشتركين
+   * شهري كام؟» — so the month is answered HERE, while the lecture is being
+   * written, and not later in a panel that has to be opened to be found. The
+   * subscriber count rides along with the select, inside `MonthPicker`.
+   *
+   * State and not a form field, because the count beside it has to react to
+   * the choice. Which means this is one of the two controls on this form that
+   * React 19's post-action reset cannot restore — see the reset below.
+   */
+  const [monthsDraft, setMonthsDraft] = useState<{
+    primaryMonthId: string | null;
+    extraMonthIds: string[];
+  }>({ primaryMonthId: null, extraMonthIds: [] });
+
+  /*
+   * REQUIRED on a course that sells by month — «لما اجي اعمل محاضرة كمان يبقى
+   * فيها ريكويرد كده ده شهر كام».
+   *
+   * Not politeness. A lecture born with no month is invisible to every monthly
+   * subscriber, AND it blocks every month on the course from being opened for
+   * sale (`blockedByUntagged`) — and both of those are discovered later, by
+   * somebody else, on a screen that does not say what caused them. Refusing at
+   * the point of creation is the only refusal here that costs nothing to obey:
+   * the select is already on the form, two inches above the button.
+   *
+   * Enforced by DISABLING the button rather than by a 400. The server cannot
+   * do it anyway — `createLessonAction` creates the lesson first and writes its
+   * months in a second call, because the id does not exist until the first one
+   * answers — so a check there would have to delete a lecture it just made.
+   */
+  const monthMissing = months.length > 0 && monthsDraft.primaryMonthId === null;
+
   const [state, formAction, pending] = useActionState<ActionResult, FormData>(
     async (_previous, formData) => {
       const input: CreateLessonInput = {
@@ -652,40 +779,74 @@ export function AddLessonForm({ courseId, sectionId }: { courseId: string; secti
         // `quiz` is not in `LESSON_KINDS` any more, but the value still arrives
         // as a string from the form — narrow it rather than trusting the DOM.
         kind: (formData.get('kind') as CreateLessonInput['kind']) ?? 'video',
+        months: months.length === 0 ? undefined : monthsDraft,
       };
-      return createLessonAction(courseId, sectionId, input);
+      const result = await createLessonAction(courseId, sectionId, input);
+
+      /*
+       * ⚠️ Reset UNCONDITIONALLY, and reset it HERE.
+       *
+       * React 19 resets the form once its action resolves — success or not —
+       * and a native `<select>` snaps back to its first option, which here is
+       * «من غير شهر». React does not re-render for that, because this state
+       * did not change, so the screen would say «من غير شهر» while the next
+       * lecture was silently created in the month before it. That is the same
+       * defect the `defaultValue` note on the kind select below records, in
+       * the one shape a `defaultValue` cannot fix.
+       */
+      setMonthsDraft({ primaryMonthId: null, extraMonthIds: [] });
+      return result;
     },
     IDLE,
   );
 
   return (
-    <form
-      action={formAction}
-      className="mt-3 flex flex-wrap items-end gap-2 border-t border-line-subtle pt-3"
-    >
-      <div className="min-w-[12rem] flex-1">
-        <Label htmlFor={`new-lesson-title-${sectionId}`}>{c.title}</Label>
-        <Input id={`new-lesson-title-${sectionId}`} name="title" required />
+    <form action={formAction} className="mt-3 space-y-2 border-t border-line-subtle pt-3">
+      {/* Above the row, so «إضافة» stays the last thing on the form. A
+          control that answered «مين هيشوف دي؟» underneath the button that
+          creates the lecture would be read after the press it belongs to. */}
+      {months.length > 0 ? (
+        <MonthPicker
+          id={sectionId}
+          months={months}
+          value={monthsDraft}
+          disabled={pending}
+          onChange={setMonthsDraft}
+        />
+      ) : null}
+
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-[12rem] flex-1">
+          <Label htmlFor={`new-lesson-title-${sectionId}`}>{c.title}</Label>
+          <Input id={`new-lesson-title-${sectionId}`} name="title" required />
+        </div>
+        <div className="w-40">
+          <Label htmlFor={`new-lesson-kind-${sectionId}`}>{c.kind}</Label>
+          {/* `defaultValue`, NOT a controlled `value`. React 19 resets a form
+              when its action resolves, and a controlled `<select>` has no
+              `selected` attribute for that reset to restore — it falls through
+              to the first option instead. That is exactly the «من غير قاعدة»
+              bug, and this is the shape that does not have it. */}
+          <Select id={`new-lesson-kind-${sectionId}`} name="kind" defaultValue="video">
+            {LESSON_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {copy.course.lessonKind[kind]}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <Button type="submit" size="sm" disabled={pending || monthMissing}>
+          {c.new}
+        </Button>
+        {/* Says WHY the button is dead. A disabled control with no sentence
+            beside it is the shape of bug «الـ٢ بتن دول مش شغالين» named. */}
+        {monthMissing ? (
+          <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
+            {copy.admin.month.assignRequired}
+          </p>
+        ) : null}
+        <ActionError state={state} />
       </div>
-      <div className="w-40">
-        <Label htmlFor={`new-lesson-kind-${sectionId}`}>{c.kind}</Label>
-        {/* `defaultValue`, NOT a controlled `value`. React 19 resets a form when
-            its action resolves, and a controlled `<select>` has no `selected`
-            attribute for that reset to restore — it falls through to the first
-            option instead. That is exactly the «من غير قاعدة» bug, and this is
-            the shape that does not have it. */}
-        <Select id={`new-lesson-kind-${sectionId}`} name="kind" defaultValue="video">
-          {LESSON_KINDS.map((kind) => (
-            <option key={kind} value={kind}>
-              {copy.course.lessonKind[kind]}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <Button type="submit" size="sm" disabled={pending}>
-        {c.new}
-      </Button>
-      <ActionError state={state} />
     </form>
   );
 }

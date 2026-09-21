@@ -255,6 +255,24 @@ export const OutlineLessonSchema = z.object({
   gate: GateStateSchema,
   /** True for the course's final exam, which unlocks only when all else clears. */
   isExam: z.boolean(),
+  /**
+   * The curriculum month to NAME when this row is locked, or `null`.
+   *
+   * `gate: 'locked'` has two causes now — the final exam waiting on work, and a
+   * month the subscription does not cover — and they need opposite dialogs.
+   * `isExam` tells them apart; this is what the month one has to say in order
+   * to be worth drawing at all («المحاضرة دي في «شهر ٣»»), and the thing its
+   * CTA carries as `?month=`.
+   *
+   * Resolved SERVER-side, and `null` whenever exactly one OPEN month cannot be
+   * named — the lecture is in none, in several, or in a month that is closed
+   * for subscription. The same three-into-one collapse `buildCourseOutline`
+   * makes for the library outline, for the same reason: picking one of several
+   * would be picking which month to sell on the instructor's behalf.
+   */
+  month: z
+    .object({ id: z.uuid(), title: z.string(), lessonCount: z.number().int().min(0) })
+    .nullable(),
 });
 
 export const OutlineSectionSchema = z.object({

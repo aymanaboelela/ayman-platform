@@ -18,6 +18,11 @@ import { ViewSessionService } from './view-session.service';
   // cycle: `EntitlementModule` (and the `EnrollmentModule` it imports) never
   // imports `ProgressModule`.
   //
+  // `LessonGateService` injects it too, for the curriculum-month slice it draws
+  // padlocks from. Both read the SAME resolver (`resolveMonthSlice`) on purpose:
+  // an outline that computed ownership separately from the route that enforces
+  // it is how a row comes to draw open and then 403 on click.
+  //
   // `NotificationsModule` is imported for «مبروك، خلصت الكورس»:
   // `CourseProgressService` writes the row from inside the caller's
   // transaction, and `HeartbeatService`/`LessonProgressService` announce it

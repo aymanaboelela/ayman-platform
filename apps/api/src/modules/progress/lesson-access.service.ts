@@ -3,6 +3,7 @@ import type { LessonKind } from '@ayman/contracts';
 import { isPrismaDataValidationError } from '../../common/prisma/prisma-errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
+import type { CourseAccessSubject } from '../entitlement/grant-liveness';
 import { EntitlementService, type CourseAccess } from '../entitlement/entitlement.service';
 import { LessonGateService } from './lesson-gate.service';
 
@@ -18,6 +19,24 @@ export interface LessonAccessContext {
    *  no terms configured (or this section was never assigned to one). Only
    *  ever consulted by `require()` — see its own term-gating comment. */
   termId: string | null;
+  /** The curriculum months that open THIS lecture — `LessonMonth` rows, both
+   *  the primary one and the «كمان لشهر ٢ و٣» extras. Empty is a real state
+   *  and means no month grant opens it; see `courseSellsByMonth`. */
+  monthIds: string[];
+  /**
+   * Whether this lecture's course has any `CourseMonth` at all.
+   *
+   * `false` on every course today, and it is what keeps the original rolling
+   * monthly subscription working untouched: with no month to sell there is
+   * nothing to refine, so `require()` skips the month check entirely and this
+   * class behaves exactly as it did before months existed. Configuring the
+   * first month on a course is the single switch that turns the gate on, for
+   * that course and no other.
+   */
+  courseSellsByMonth: boolean;
+  /** The course as `courseAccessScopes` needs to see it. Carried on the
+   *  context because `resolve()` has already selected every column of it. */
+  courseAccessSubject: CourseAccessSubject;
 }
 
 /**
@@ -88,6 +107,41 @@ export class LessonAccessService {
    * exists to close.
    */
   async require(userId: string, lessonId: string): Promise<LessonAccessContext> {
+    const context = await this.requireEntitled(userId, lessonId);
+
+    const available = await this.gate.isAvailable(
+      context.enrollmentId,
+      context.courseId,
+      context.lessonId,
+      userId,
+    );
+    if (!available) {
+      throw new NotFoundException('lesson not found');
+    }
+
+    return context;
+  }
+
+  /**
+   * Everything `require()` checks EXCEPT the progression gate: ownership,
+   * publication, the live grant, the term and the month.
+   *
+   * Split out for `QuizAccessService.assertCanAttempt`, which had no
+   * entitlement check of any kind — it hand-rolled the enrollment predicate and
+   * stopped there, so a student whose subscription had expired could still
+   * start and resume an attempt, and the month gate would have been decorative
+   * on every quiz in the platform. Its own docblock claimed a spec asserted the
+   * two predicates could not drift; the spec only ever covered "no enrollment
+   * at all".
+   *
+   * The progression gate is deliberately NOT in here, and that is the whole
+   * reason this is a second method rather than a flag. The gate can move under
+   * a live attempt — an admin publishes a lecture while a student is sitting
+   * the final exam, and `everyLectureCleared` flips false — and `resume` must
+   * not become a 404 because of something the student had no part in. Same
+   * line `requireOwnership` above already draws, one notch further along.
+   */
+  async requireEntitled(userId: string, lessonId: string): Promise<LessonAccessContext> {
     const context = await this.resolve(userId, lessonId);
 
     /*
@@ -134,13 +188,30 @@ export class LessonAccessService {
       }
     }
 
-    const available = await this.gate.isAvailable(
-      context.enrollmentId,
-      context.courseId,
-      context.lessonId,
-    );
-    if (!available) {
-      throw new NotFoundException('lesson not found');
+    /*
+     * The MONTH re-check — «الاشتراك الشهري بقى شهر من المنهج».
+     *
+     * Runs only for a course the instructor has configured months on, so every
+     * course that has not moved over behaves exactly as it did. Unlike the term
+     * check above it does NOT take `access`: `resolveMonthAccess` re-queries and
+     * unions every live grant rather than refining the single one
+     * `resolveCourseAccess` picked, because a student can hold a month AND a
+     * wider subscription at once and the newest grant is not the widest. Its own
+     * docblock has the case that costs a paying student access.
+     *
+     * A lecture with no month reaches nobody through a month grant — the closed
+     * default, so an untagged lecture cannot leak the back-catalogue into every
+     * month at once.
+     */
+    if (context.courseSellsByMonth) {
+      const monthAccess = await this.entitlement.resolveMonthAccess(
+        userId,
+        context.courseAccessSubject,
+        context.monthIds,
+      );
+      if (!monthAccess.allowed) {
+        throw new ForbiddenException(monthAccess.reason);
+      }
     }
 
     return context;
@@ -175,6 +246,16 @@ export class LessonAccessService {
           course: {
             select: {
               slug: true,
+              // `subjectId` and `requiresGrant` are the rest of what
+              // `courseAccessScopes` needs — selected here so the month check
+              // does not cost a second round trip for a row this query already
+              // touched.
+              subjectId: true,
+              requiresGrant: true,
+              // `take: 1` and not a count: the only question is «فيه شهور
+              // أصلًا», and a course with nine months must not pay for nine
+              // rows on every lesson open.
+              months: { select: { id: true }, take: 1 },
               enrollments: {
                 where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] } },
                 select: { id: true },
@@ -183,6 +264,7 @@ export class LessonAccessService {
             },
           },
           section: { select: { termId: true } },
+          months: { select: { monthId: true } },
           video: { select: { durationSeconds: true } },
         },
       })
@@ -204,6 +286,13 @@ export class LessonAccessService {
       enrollmentId,
       durationSeconds: lesson.video?.durationSeconds ?? 0,
       termId: lesson.section.termId,
+      monthIds: lesson.months.map((row) => row.monthId),
+      courseSellsByMonth: lesson.course.months.length > 0,
+      courseAccessSubject: {
+        id: lesson.courseId,
+        subjectId: lesson.course.subjectId,
+        requiresGrant: lesson.course.requiresGrant,
+      },
     };
   }
 }

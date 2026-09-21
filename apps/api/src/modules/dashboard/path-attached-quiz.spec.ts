@@ -7,6 +7,7 @@ import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
 import { PathService } from './path.service';
+import { EntitlementService } from '../entitlement/entitlement.service';
 
 /**
  * `/api/me/path` for a lesson carrying an ATTACHED quiz — `LessonPanel`'s
@@ -35,7 +36,7 @@ describe('PathService — a quiz attached to a non-quiz-kind lesson', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
-  const service = new PathService(prisma, new LessonGateService(prisma));
+  const service = new PathService(prisma, new LessonGateService(prisma, new EntitlementService(prisma)));
 
   let userId = '';
   let instructorId = '';

@@ -1175,6 +1175,58 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin term open/close: student', method: 'patch', path: () => `/api/admin/terms/${MISSING_UUID}/open`, actor: 'student', status: 403, body: () => ({ isOpen: false }) },
     { label: 'admin term open/close: admin, unknown term', method: 'patch', path: () => `/api/admin/terms/${MISSING_UUID}/open`, actor: 'admin', status: 404, body: () => ({ isOpen: false }) },
 
+    // «شهور المنهج» — `section:write` throughout, the same authority as the
+    // terms above and for the same stated reason (see `CourseMonthController`).
+    // Note there is no `…/open` route to cover: a month's `isOpen` rides the
+    // PATCH, because closing one revokes nothing.
+    { label: 'admin month list: anonymous', method: 'get', path: () => `/api/admin/courses/${scratchCourseId}/months`, actor: 'anonymous', status: 401 },
+    { label: 'admin month list: student', method: 'get', path: () => `/api/admin/courses/${scratchCourseId}/months`, actor: 'student', status: 403 },
+    { label: 'admin month list: admin', method: 'get', path: () => `/api/admin/courses/${scratchCourseId}/months`, actor: 'admin', status: 200 },
+    { label: 'admin month create: anonymous', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months`, actor: 'anonymous', status: 401 },
+    { label: 'admin month create: student', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months`, actor: 'student', status: 403 },
+    {
+      /*
+       * `isOpen: false` deliberately. The open switch refuses with a 409 while
+       * the course still has a published lecture carrying no month, and the
+       * scratch course has exactly one — so `isOpen: true` here would assert
+       * 201 against a row that is CORRECTLY a conflict, and the failure would
+       * read as an authorization regression. The untagged guard is proved in
+       * `course-month.service.spec.ts`, where it is the subject.
+       */
+      label: 'admin month create: admin',
+      method: 'post',
+      path: () => `/api/admin/courses/${scratchCourseId}/months`,
+      actor: 'admin',
+      status: 201,
+      body: () => ({ monthIndex: 1, title: 'شهر من المصفوفة', isOpen: false, startsOn: null }),
+    },
+    // MISSING_UUID rows, same convention as the terms above: the dimension
+    // under test is who gets PAST the guard, and a 404 for the admin proves it.
+    // «حط كل المحاضرات في الشهر ده». The admin row names a month that does not
+    // exist, so it 404s — the matrix asserts who may reach the route, not what
+    // a real adoption does.
+    { label: 'admin month adopt untagged: anonymous', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}/adopt-untagged`, actor: 'anonymous', status: 401 },
+    { label: 'admin month adopt untagged: student', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}/adopt-untagged`, actor: 'student', status: 403 },
+    { label: 'admin month adopt untagged: admin, unknown month', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}/adopt-untagged`, actor: 'admin', status: 404 },
+    // «افتح الشهر ده للمشتركين الحاليين». `dryRun` defaults true, so nothing is
+    // written even on the admin row — and the month is unknown, so it 404s
+    // before it would have counted anybody.
+    { label: 'admin month open for subscribers: anonymous', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/open-for-subscribers`, actor: 'anonymous', status: 401, body: () => ({ monthId: MISSING_UUID }) },
+    { label: 'admin month open for subscribers: student', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/open-for-subscribers`, actor: 'student', status: 403, body: () => ({ monthId: MISSING_UUID }) },
+    { label: 'admin month open for subscribers: admin, unknown month', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/open-for-subscribers`, actor: 'admin', status: 404, body: () => ({ monthId: MISSING_UUID }) },
+    { label: 'admin month update: anonymous', method: 'patch', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}`, actor: 'anonymous', status: 401, body: () => ({ title: 'شهر' }) },
+    { label: 'admin month update: student', method: 'patch', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}`, actor: 'student', status: 403, body: () => ({ title: 'شهر' }) },
+    { label: 'admin month update: admin, unknown month', method: 'patch', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}`, actor: 'admin', status: 404, body: () => ({ title: 'شهر' }) },
+    { label: 'admin month delete: anonymous', method: 'delete', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}`, actor: 'anonymous', status: 401 },
+    { label: 'admin month delete: student', method: 'delete', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}`, actor: 'student', status: 403 },
+    { label: 'admin month delete: admin, unknown month', method: 'delete', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}`, actor: 'admin', status: 404 },
+    // A LESSON path on the months controller — see its own doc for why. The
+    // admin row sends the empty set, which is «شيل الشهور من المحاضرة دي»: a
+    // legal, idempotent write that needs no month to exist first.
+    { label: 'admin lesson months: anonymous', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/months`, actor: 'anonymous', status: 401, body: () => ({ primaryMonthId: null, extraMonthIds: [] }) },
+    { label: 'admin lesson months: student', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/months`, actor: 'student', status: 403, body: () => ({ primaryMonthId: null, extraMonthIds: [] }) },
+    { label: 'admin lesson months: admin', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/months`, actor: 'admin', status: 200, body: () => ({ primaryMonthId: null, extraMonthIds: [] }) },
+
     { label: 'admin lesson reorder: student', method: 'patch', path: () => `/api/admin/sections/${scratchSectionId}/lessons/order`, actor: 'student', status: 403 },
     { label: 'admin lesson create: anonymous', method: 'post', path: () => `/api/admin/sections/${scratchSectionId}/lessons`, actor: 'anonymous', status: 401 },
     { label: 'admin lesson create: student', method: 'post', path: () => `/api/admin/sections/${scratchSectionId}/lessons`, actor: 'student', status: 403 },
@@ -1574,6 +1626,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     },
     { label: 'payment mine: anonymous', method: 'get', path: () => '/api/payments/submissions/me', actor: 'anonymous', status: 401 },
     { label: 'payment mine: student', method: 'get', path: () => '/api/payments/submissions/me', actor: 'student', status: 200 },
+    // «الشهور اللي معايا خلاص» — what the checkout disables in its picker. A
+    // student's own grants, so `student` reads it and `anonymous` does not:
+    // there is nothing here for a visitor with no subscription to see, and the
+    // panel treats a failed read as "nothing owned" rather than breaking.
+    { label: 'payment my months: anonymous', method: 'get', path: () => `/api/payments/courses/${scratchCourseId}/months/mine`, actor: 'anonymous', status: 401 },
+    { label: 'payment my months: student', method: 'get', path: () => `/api/payments/courses/${scratchCourseId}/months/mine`, actor: 'student', status: 200 },
+    { label: 'payment my months: admin', method: 'get', path: () => `/api/payments/courses/${scratchCourseId}/months/mine`, actor: 'admin', status: 200 },
     { label: 'admin transfers list: anonymous', method: 'get', path: () => '/api/admin/transfers', actor: 'anonymous', status: 401 },
     { label: 'admin transfers list: student', method: 'get', path: () => '/api/admin/transfers', actor: 'student', status: 403 },
     { label: 'admin transfers list: admin', method: 'get', path: () => '/api/admin/transfers', actor: 'admin', status: 200 },

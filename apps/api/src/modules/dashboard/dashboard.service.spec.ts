@@ -8,12 +8,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
 import { DashboardService } from './dashboard.service';
 import { EmptyScoreFeed } from './score-feed';
+import { EntitlementService } from '../entitlement/entitlement.service';
 
 describe('DashboardService', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
-  const service = new DashboardService(prisma, new EmptyScoreFeed(), new LessonGateService(prisma));
+  const service = new DashboardService(prisma, new EmptyScoreFeed(), new LessonGateService(prisma, new EntitlementService(prisma)));
 
   let userId = '';
   let strangerId = '';

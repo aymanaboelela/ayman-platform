@@ -15,7 +15,7 @@ describe('PlayerService', () => {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
-  const gate = new LessonGateService(prisma);
+  const gate = new LessonGateService(prisma, new EntitlementService(prisma));
   const service = new PlayerService(
     prisma,
     new LessonAccessService(prisma, gate, new EntitlementService(prisma)),

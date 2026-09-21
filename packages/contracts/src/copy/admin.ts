@@ -358,8 +358,17 @@ const admin = {
     requiresGrantHint:
       'الكورس هيبقى مقفول على أي حد جديد لحد ما تفتحه له بنفسك. الطلبة المشتركين قبل كده هيكمّلوا عادي، والمحاضرات اللي عليها «معاينة مجانية» هتفضل مفتوحة للكل.',
     priceMonthly: 'اشتراك شهري (جنيه)',
+    /**
+     * ⚠️ HISTORY ONLY — there is no «٣ شهور» field on the course form any
+     * more, and `CourseService` refuses a non-null value for it. The string
+     * stays because the label is still needed wherever a PAST quarterly
+     * subscription is listed.
+     */
     priceQuarterly: 'اشتراك ٣ شهور (جنيه)',
     priceYearly: 'اشتراك سنة كاملة (جنيه)',
+    /** Sits under `priceMonthly` on a course that sells by curriculum month:
+     *  the one price buys ONE month, whichever the student picks. */
+    priceMonthlyPerMonth: 'السعر ده لشهر واحد من اللي تحت.',
     priceNotForSale: 'مش للبيع',
     priceHint:
       'سيبهم فاضيين لو الكورس مجاني. أول ما تحط سعر لأي باقة، الكورس بيتقفل أوتوماتيك على أي حد جديد لحد ما يدفع ويتعمله موافقة — بالظبط زي «قفل الكورس ده» فوق.',
@@ -445,6 +454,146 @@ const admin = {
     /** The section editor's own "which term" dropdown. */
     assignLabel: 'الترم',
     unassigned: 'بدون ترم',
+  },
+  /**
+   * «شهور المنهج» — the panel that turns a course's monthly plan from thirty
+   * days into a slice of the syllabus.
+   *
+   * Sibling of `term` above and deliberately NOT folded into it: a term groups
+   * sections and a month groups lectures, closing a term revokes access and
+   * closing a month only takes it off sale. Two panels, because they are two
+   * different promises to the student.
+   */
+  month: {
+    title: 'شهور المنهج',
+    lead: 'الاشتراك الشهري بيفتح شهر من المنهج، مش ٣٠ يوم. كل محاضرة بتتحط في شهر، والطالب بيختار الشهر اللي هيشترك فيه.',
+    empty: 'الكورس ده لسه بيتباع بالاشتراك الشهري القديم — ٣٠ يوم بتفتح الكورس كله. أول شهر تضيفه هنا هو اللي بيغيّر ده.',
+    add: 'شهر جديد',
+    indexLabel: 'رقم الشهر',
+    titleLabel: 'اسم الشهر',
+    startsOnLabel: 'بيبدأ في',
+    startsOnHint: 'اختياري، ومابيقفلش ولا بيفتح حاجة — بيستخدم في الترتيب والعرض بس.',
+    open: 'مفتوح للاشتراك',
+    closed: 'مقفول للاشتراك',
+    toggleLabel: 'فتح/قفل الاشتراك في الشهر',
+    /**
+     * ⚠️ The sentence that keeps the whole feature honest, and the one place
+     * this panel refuses to do what it is asked.
+     *
+     * `{n}` — published lectures carrying no month. Opening a month for sale
+     * while any exist means the FIRST person to buy the cheapest month gets
+     * the entire untagged back-catalogue, and every screen looks correct while
+     * it happens. So the switch refuses, names the number, and the admin has a
+     * link to the lectures in question.
+     */
+    blockedByUntagged: 'فيه {n} محاضرة منشورة من غير شهر. لازم تتحط في شهورها الأول، وإلا اللي هيشترك شهر واحد هيشوفها كلها.',
+    untaggedLink: 'ورّيني المحاضرات دي',
+    /** `{n}` — live, unrevoked subscriptions to THIS month. Not «كام واحد
+     *  دفع»: a refunded or cancelled subscription is money that happened and
+     *  access that did not, and this counts who is reading. */
+    subscribers: '{n} مشترك',
+    subscribersNone: 'لسه محدش مشترك',
+    lessons: '{n} محاضرة',
+    lessonsNone: 'لسه من غير محاضرات',
+    /** The refusal when the month still has money pointing at it — a
+     *  `payment_submission_months` row. Permanent, so it must not read as
+     *  "try again later". */
+    deleteBlockedPaid:
+      'فيه اشتراكات اتدفعت على الشهر ده، فمينفعش يتمسح — اقفله للاشتراك بدل كده والمشتركين الحاليين يفضلوا شايفينه.',
+    delete: 'حذف الشهر',
+    deleteConfirm: 'هيتشال الشهر من كل المحاضرات اللي فيه. الإجراء ده مش هيترجع.',
+    /** The lesson form's own control — the answer to «دي تابعة اشتراك أنهي
+     *  شهر؟», asked at the moment the lecture is written. */
+    assignLabel: 'الشهر',
+    assignNone: 'من غير شهر',
+    /** `{n}` — live subscribers to the month just picked, rendered next to the
+     *  select. The instructor asked for this by name: «تقولي دي المشتركين
+     *  مين؟ المشتركين شهري كام؟» */
+    assignSubscribers: '{n} مشترك هيشوفوا المحاضرة دي',
+    assignSubscribersNone: 'لسه محدش مشترك في الشهر ده',
+    /** «اداها كمان لشهر ٢ و٣» — the extra months, a separate control from the
+     *  primary one because they answer a different question. */
+    extraLabel: 'كمان لشهور',
+    extraHint: 'المحاضرة هتبان كمان لمشتركين الشهور دي، من غير ما تتنقل من شهرها.',
+    /** The warning next to a published lecture with no month on a course that
+     *  DOES sell by month — the single lecture version of `blockedByUntagged`. */
+    untaggedWarning: 'من غير شهر — مشتركين الشهر مش هيشوفوها.',
+    /** The panel's own generic failure, the twin of `term.actionFailed`.
+     *  `common.saveFailed` («التغييرات اترجعت زي ما كانت») is the wrong
+     *  sentence here: a refused open or a refused delete rolled nothing back,
+     *  it simply did not happen. */
+    actionFailed: 'مااتنفّذش، حاول تاني',
+
+    // ── تظبيط كورس شغّال ─────────────────────────────────────────────────
+    /**
+     * Every course on the platform predates curriculum months, so turning one
+     * over is two presses and they must be done in this order: tag the
+     * lectures, then open the month for the people already paying.
+     *
+     * Both say plainly that nothing is taken from anybody, because «تحويل» is
+     * what an instructor will assume and it would be the opposite of the truth.
+     */
+    /**
+     * The one press for a course that has NO months at all — which is every
+     * course on the platform on the day this ships.
+     *
+     * It makes «شهر ١» and puts every lecture in it, because that is the only
+     * shape the first month can have on a course that has been running: all
+     * the content that exists is content the current cohort already paid to
+     * see, and a second month does not exist yet. «كل ده شهر أول.»
+     *
+     * The subscriber step stays separate and counted — this one touches no
+     * access at all, so it needs no number in front of it.
+     */
+    /** The name «شهر ١» is given, not asked for — the instructor renames it in
+     *  place a second later if he wants «شهر ١ — أكتوبر». Asking first would
+     *  put a form between him and the one press. */
+    firstMonthTitle: 'شهر ١',
+    startTitle: 'ابدأ: خلّي الكورس ده بالشهور',
+    startLead:
+      'هنعمل «شهر ١» ونحط فيه كل المحاضرات اللي نزلت لحد دلوقتي. مفيش حاجة بتتغيّر على أي طالب — الشهر بيتعمل مقفول للاشتراك لحد ما تفتحه بنفسك.',
+    startCta: 'اعمل شهر ١ وحط فيه كل المحاضرات',
+    /** `{n}` — lessons adopted. */
+    startDone: 'تمام — «شهر ١» اتعمل و{n} محاضرة اتحطت فيه.',
+    setupTitle: 'تظبيط الكورس على الشهور',
+    setupLead:
+      'الكورس ده شغّال من قبل الشهور، فكل محاضراته لسه من غير شهر. الخطوتين دول بيظبطوه: الأولى بتحط المحاضرات في الشهر، والتانية بتفتح الشهر للناس اللي مشتركة دلوقتي.',
+    setupNote: 'مفيش حاجة بتتسحب من حد — الخطوتين بيزوّدوا بس.',
+    /** `{n}` — lessons with no month at all, drafts and quizzes included. */
+    adoptCta: 'حط الـ{n} محاضرة في الشهر ده',
+    adoptDone: 'تمام — {n} محاضرة بقت في الشهر ده.',
+    adoptNone: 'كل المحاضرات متحطّة في شهورها خلاص.',
+    /**
+     * Says out loud that a quiz is a lesson here, because the instructor does
+     * not think of it as one — and a quiz left with no month is a lecture the
+     * student can watch and then cannot sit.
+     */
+    adoptNote: 'الكويزات والمسودّات بتتحط معاها، عشان الكويز اللي من غير شهر بيتقفل هو كمان.',
+    subscribersCheck: 'شوف هيأثر على كام طالب',
+    /** `{n}` — students with a live paid subscription to this course. */
+    subscribersFound: '{n} طالب مشتركين على الكورس ده دلوقتي.',
+    subscribersNoneFound: 'محدش مشترك على الكورس ده دلوقتي.',
+    subscribersOpen: 'افتح لهم الشهر ده',
+    /** `{n}` — grants actually written, below the student count whenever
+     *  somebody already held this month. */
+    subscribersDone: 'تمام — الشهر اتفتح لـ{n} طالب.',
+    subscribersAlreadyDone: 'كلهم الشهر ده معاهم خلاص.',
+    /** ⚠️ Names who is NOT in it, because «كل المشتركين» is what the sentence
+     *  above reads as. A term buyer's access is its own slice with its own
+     *  cutoff and nothing here changes it. */
+    subscribersScope: 'ده بيشمل اللي مشتركين بالشهر أو الـ٣ شهور أو السنة. مشتركين الترم مالهمش علاقة.',
+
+    /**
+     * ⚠️ Required, on a course that sells by month, at the moment the lecture
+     * is created — «لما اجي اعمل محاضرة كمان يبقى فيها ريكويرد».
+     *
+     * Not politeness. A lecture born with no month is invisible to every
+     * monthly subscriber AND blocks every month on the course from being
+     * opened for sale (`blockedByUntagged`), and both of those are discovered
+     * later, by somebody else. The refusal at the point of creation is the
+     * only one that costs nothing to obey.
+     */
+    assignRequired: 'اختار الشهر الأول — من غيره المحاضرة مش هتوصل لمشتركين الشهر.',
   },
   section: {
     new: 'قسم جديد',
