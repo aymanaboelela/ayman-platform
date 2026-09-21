@@ -34,6 +34,7 @@ import {
   CourseMonthPatchSchema,
   MONTH_OPEN_BLOCKED_CODE,
   type CourseMonthPatchInput,
+  AdoptUntaggedLessonsResultSchema,
   LegacyMonthBackfillResultSchema,
   type LegacyMonthBackfillResult,
 } from '@ayman/contracts/admin/content-months';
@@ -789,7 +790,30 @@ export async function deleteMonthAction(
 }
 
 /**
- * «افتح شهر ١ و٢ و٣ للي اشتركوا ٣ شهور» — the legacy quarterly cohort.
+ * «حط كل المحاضرات اللي من غير شهر في الشهر ده» — step one of turning an
+ * existing course over.
+ */
+export async function adoptUntaggedLessonsAction(
+  courseId: string,
+  monthId: string,
+): Promise<{ ok: true; adopted: number } | { ok: false; message: string }> {
+  try {
+    const result = await apiSend(
+      'POST',
+      `/api/admin/courses/${courseId}/months/${monthId}/adopt-untagged`,
+      AdoptUntaggedLessonsResultSchema,
+      undefined,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true, adopted: result.adopted };
+  } catch {
+    return { ok: false, message: copy.admin.month.actionFailed };
+  }
+}
+
+/**
+ * «الي حد اشترك دلوقتي أو قبل كده حطه في الشهر ده» — step two.
  *
  * Two presses by design. The first runs with `dryRun` and answers with a
  * COUNT; the second writes. The instructor is handing out access to students
@@ -797,33 +821,25 @@ export async function deleteMonthAction(
  * commits, the same way «اتقفل الترم، وسحبنا الوصول من {n} طالب» reports the
  * cascade a term close already caused.
  */
-export async function backfillLegacyMonthsAction(
+export async function openMonthForSubscribersAction(
   courseId: string,
+  monthId: string,
   dryRun: boolean,
 ): Promise<{ ok: true; result: LegacyMonthBackfillResult } | { ok: false; message: string }> {
   try {
     const result = await apiSend(
       'POST',
-      `/api/admin/courses/${courseId}/months/backfill-legacy`,
+      `/api/admin/courses/${courseId}/months/open-for-subscribers`,
       LegacyMonthBackfillResultSchema,
-      { dryRun },
+      { monthId, dryRun },
     );
     if (!dryRun) {
       invalidateCourse(courseId);
       revalidatePath(`/admin/courses/${courseId}`);
     }
     return { ok: true, result };
-  } catch (error) {
-    // The 409 is «شهر ١ و٢ و٣ لازم يكونوا موجودين», which is a real sentence
-    // the instructor can act on — passed through rather than flattened into
-    // the generic failure.
-    return {
-      ok: false,
-      message:
-        error instanceof ApiRequestError && error.status === 409
-          ? copy.admin.month.backfillNeedsThreeMonths
-          : copy.admin.month.actionFailed,
-    };
+  } catch {
+    return { ok: false, message: copy.admin.month.actionFailed };
   }
 }
 

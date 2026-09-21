@@ -51,21 +51,35 @@ export class CourseMonthController {
   }
 
   /**
-   * «افتح شهر ١ و٢ و٣ للي اشتركوا ٣ شهور».
+   * «حط كل المحاضرات اللي من غير شهر في الشهر ده».
+   *
+   * The press that makes an EXISTING course sellable by month: every course on
+   * the platform predates months, so every lesson on it is untagged and no
+   * month can be opened until that is fixed. Quizzes and drafts included — see
+   * the service method, both are access decisions rather than tidiness.
+   */
+  @RequirePermission('section:write')
+  @Post('courses/:courseId/months/:monthId/adopt-untagged')
+  adoptUntagged(@Param('courseId') courseId: string, @Param('monthId') monthId: string) {
+    return this.months.adoptUntaggedLessons(courseId, monthId);
+  }
+
+  /**
+   * «الي حد اشترك دلوقتي أو قبل كده حطه في الشهر ده».
    *
    * A POST that defaults to counting and writing nothing: `dryRun` is `true`
    * unless the body says otherwise, so the panel can put the number of affected
-   * students on screen before the instructor commits to anything. It only ever
-   * INSERTs — see the service method for why nothing is revoked or narrowed.
+   * students on screen before the instructor commits. It only ever INSERTs —
+   * see the service method for why nothing is revoked or narrowed.
    *
    * `section:write` like its neighbours rather than a money permission, even
    * though it hands out access: the act is "finish configuring this course's
    * months", it is per course, and it is only reachable from the month panel.
    */
   @RequirePermission('section:write')
-  @Post('courses/:courseId/months/backfill-legacy')
-  backfillLegacy(@Param('courseId') courseId: string, @Body() body: LegacyMonthBackfillDto) {
-    return this.months.backfillLegacyQuarterly(courseId, body.dryRun);
+  @Post('courses/:courseId/months/open-for-subscribers')
+  openForSubscribers(@Param('courseId') courseId: string, @Body() body: LegacyMonthBackfillDto) {
+    return this.months.openMonthForSubscribers(courseId, body.monthId, body.dryRun);
   }
 
   /** Nested under the course on purpose — see `CourseMonthService.update` on

@@ -12,8 +12,9 @@ import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
 import { Switch } from '@ayman/ui/components/switch';
 import {
-  backfillLegacyMonthsAction,
+  adoptUntaggedLessonsAction,
   createMonthAction,
+  openMonthForSubscribersAction,
   deleteMonthAction,
   updateMonthAction,
 } from '@/app/(admin)/admin/courses/actions';
@@ -466,33 +467,75 @@ export function MonthPanel({
 
       {/* Only once months 1, 2 and 3 exist — before that the button's only
           possible answer is the 409 explaining they do not. */}
-      {[1, 2, 3].every((index) => months.some((month) => month.monthIndex === index)) ? (
-        <LegacyQuarterlyBackfill courseId={courseId} />
+      {months.length > 0 ? (
+        <MonthSetup
+          courseId={courseId}
+          months={months}
+          untaggedLessonCount={untaggedLessonCount}
+        />
       ) : null}
     </section>
   );
 }
 
 /**
- * «مشتركين الـ٣ شهور القدام» — give them months 1, 2 and 3.
+ * «تظبيط الكورس على الشهور» — the two presses that turn an EXISTING course over.
  *
- * TWO presses, and the count between them is the point. The instructor is
- * handing access to students he cannot see from this screen, and «افتح لهم»
- * with no number in front of it is a press nobody can check. The same courtesy
- * `term.closedRevoked` gives in the other direction, where closing a term
- * reports how many students it just cut off.
+ * Every course on the platform predates curriculum months, so every lesson on
+ * it is untagged and no month can be opened for sale until that is fixed.
+ * Doing it lecture by lecture on a course with forty of them is not a
+ * migration path, it is a reason not to migrate.
  *
- * It only ever ADDS — nothing is revoked, narrowed or re-dated — which is what
- * `backfillNote` says out loud, because «تحويل» is what an instructor will
- * assume this does and it would be the opposite of the truth.
+ * In order, and the order is the point:
+ *   ١. put the lectures in the month — quizzes and drafts too, because a quiz
+ *      with no month is a lecture the student can watch and cannot sit;
+ *   ٢. open that month for the people already paying, so nobody notices
+ *      anything changed.
+ *
+ * Step 2 is TWO presses of its own: the first counts, the second writes. The
+ * instructor is handing access to students he cannot see from this screen, and
+ * «افتح لهم» with no number in front of it is a press nobody can check — the
+ * same courtesy `term.closedRevoked` gives in the other direction, where
+ * closing a term reports how many students it just cut off.
+ *
+ * Both steps only ADD, which `setupNote` says out loud: «تحويل» is what an
+ * instructor will assume this does and it would be the opposite of the truth.
  */
-function LegacyQuarterlyBackfill({ courseId }: { courseId: string }) {
+function MonthSetup({
+  courseId,
+  months,
+  untaggedLessonCount,
+}: {
+  courseId: string;
+  months: AdminCourseMonth[];
+  untaggedLessonCount: number;
+}) {
+  const [targetId, setTargetId] = useState(months[0]?.id ?? '');
   const [pending, setPending] = useState(false);
   const [found, setFound] = useState<number | null>(null);
 
-  const run = (dryRun: boolean) => {
+  // A month deleted or renumbered under the picker leaves a stale id; falling
+  // back to the first keeps the buttons pointing at something real.
+  const target = months.find((month) => month.id === targetId) ?? months[0];
+  if (!target) return null;
+
+  const adopt = () => {
     setPending(true);
-    void backfillLegacyMonthsAction(courseId, dryRun).then((result) => {
+    void adoptUntaggedLessonsAction(courseId, target.id).then((result) => {
+      setPending(false);
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
+      toast.success(
+        result.adopted === 0 ? c.adoptNone : formatCopy(c.adoptDone, { n: result.adopted }),
+      );
+    });
+  };
+
+  const openForSubscribers = (dryRun: boolean) => {
+    setPending(true);
+    void openMonthForSubscribersAction(courseId, target.id, dryRun).then((result) => {
       setPending(false);
       if (!result.ok) {
         toast.error(result.message);
@@ -505,38 +548,86 @@ function LegacyQuarterlyBackfill({ courseId }: { courseId: string }) {
       setFound(null);
       toast.success(
         result.result.grantsWritten === 0
-          ? c.backfillAlreadyDone
-          : formatCopy(c.backfillDone, { n: result.result.grantsWritten }),
+          ? c.subscribersAlreadyDone
+          : formatCopy(c.subscribersDone, { n: result.result.grantsWritten }),
       );
     });
   };
 
   return (
     <div className="mt-6 rounded-md border border-line bg-surface-2 p-3">
-      <h3 className="text-[length:var(--fs-text-sm)] font-semibold">{c.backfillTitle}</h3>
+      <h3 className="text-[length:var(--fs-text-sm)] font-semibold">{c.setupTitle}</h3>
       <p className="mt-1 max-w-[42rem] text-[length:var(--fs-text-sm)] text-fg-muted">
-        {c.backfillLead}
+        {c.setupLead}
       </p>
-      <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{c.backfillNote}</p>
+      <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{c.setupNote}</p>
 
-      {found !== null ? (
-        <p className="mt-2 text-[length:var(--fs-text-sm)]">
-          {found === 0 ? c.backfillNone : formatCopy(c.backfillFound, { n: found })}
-        </p>
-      ) : null}
+      <div className="mt-3 max-w-[16rem]">
+        <Label htmlFor="month-setup-target">{c.assignLabel}</Label>
+        <Select
+          id="month-setup-target"
+          value={target.id}
+          onChange={(event) => {
+            setTargetId(event.target.value);
+            // The count belonged to the previous month; keeping it on screen
+            // under a new one would be a number about the wrong thing.
+            setFound(null);
+          }}
+        >
+          {months.map((month) => (
+            <option key={month.id} value={month.id}>
+              {month.title}
+            </option>
+          ))}
+        </Select>
+      </div>
 
-      <div className="mt-2 flex flex-wrap gap-2">
-        <Button type="button" variant="secondary" size="sm" disabled={pending} onClick={() => run(true)}>
-          {c.backfillCheck}
+      {/* ── ١ ── */}
+      <div className="mt-3">
+        <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.adoptNote}</p>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="mt-1"
+          disabled={pending || untaggedLessonCount === 0}
+          onClick={adopt}
+        >
+          {untaggedLessonCount === 0
+            ? c.adoptNone
+            : formatCopy(c.adoptCta, { n: untaggedLessonCount })}
         </Button>
-        {/* Offered only after the count, and only when there is somebody to
-            open them for — a button that would write nothing is a button that
-            teaches the instructor his press does nothing. */}
-        {found !== null && found > 0 ? (
-          <Button type="button" size="sm" disabled={pending} onClick={() => run(false)}>
-            {c.backfillApply}
-          </Button>
+      </div>
+
+      {/* ── ٢ ── */}
+      <div className="mt-4 border-t border-line pt-3">
+        <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.subscribersScope}</p>
+
+        {found !== null ? (
+          <p className="mt-1 text-[length:var(--fs-text-sm)]">
+            {found === 0 ? c.subscribersNoneFound : formatCopy(c.subscribersFound, { n: found })}
+          </p>
         ) : null}
+
+        <div className="mt-1 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={pending}
+            onClick={() => openForSubscribers(true)}
+          >
+            {c.subscribersCheck}
+          </Button>
+          {/* Offered only after the count, and only when there is somebody to
+              open it for — a button that would write nothing teaches the
+              instructor that his press does nothing. */}
+          {found !== null && found > 0 ? (
+            <Button type="button" size="sm" disabled={pending} onClick={() => openForSubscribers(false)}>
+              {c.subscribersOpen}
+            </Button>
+          ) : null}
+        </div>
       </div>
     </div>
   );

@@ -754,6 +754,24 @@ export function AddLessonForm({ courseId, sectionId }: { courseId: string; secti
     extraMonthIds: string[];
   }>({ primaryMonthId: null, extraMonthIds: [] });
 
+  /*
+   * REQUIRED on a course that sells by month — «لما اجي اعمل محاضرة كمان يبقى
+   * فيها ريكويرد كده ده شهر كام».
+   *
+   * Not politeness. A lecture born with no month is invisible to every monthly
+   * subscriber, AND it blocks every month on the course from being opened for
+   * sale (`blockedByUntagged`) — and both of those are discovered later, by
+   * somebody else, on a screen that does not say what caused them. Refusing at
+   * the point of creation is the only refusal here that costs nothing to obey:
+   * the select is already on the form, two inches above the button.
+   *
+   * Enforced by DISABLING the button rather than by a 400. The server cannot
+   * do it anyway — `createLessonAction` creates the lesson first and writes its
+   * months in a second call, because the id does not exist until the first one
+   * answers — so a check there would have to delete a lecture it just made.
+   */
+  const monthMissing = months.length > 0 && monthsDraft.primaryMonthId === null;
+
   const [state, formAction, pending] = useActionState<ActionResult, FormData>(
     async (_previous, formData) => {
       const input: CreateLessonInput = {
@@ -817,9 +835,16 @@ export function AddLessonForm({ courseId, sectionId }: { courseId: string; secti
             ))}
           </Select>
         </div>
-        <Button type="submit" size="sm" disabled={pending}>
+        <Button type="submit" size="sm" disabled={pending || monthMissing}>
           {c.new}
         </Button>
+        {/* Says WHY the button is dead. A disabled control with no sentence
+            beside it is the shape of bug «الـ٢ بتن دول مش شغالين» named. */}
+        {monthMissing ? (
+          <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
+            {copy.admin.month.assignRequired}
+          </p>
+        ) : null}
         <ActionError state={state} />
       </div>
     </form>

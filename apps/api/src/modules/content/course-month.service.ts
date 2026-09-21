@@ -19,6 +19,24 @@ import type { CourseMonth } from '../../generated/prisma/client';
  *  and the student screen is the shape of bug this repeats it to avoid. */
 const PUBLISHED_LECTURE = { isPublished: true, kind: { not: 'quiz' } } as const;
 
+/**
+ * Every published lesson, QUIZZES INCLUDED — what the untagged guard counts,
+ * and what «حط الكل في الشهر ده» adopts.
+ *
+ * ⚠️ Not the same set as `PUBLISHED_LECTURE` one line up, and the difference is
+ * an access bug rather than a cosmetic one. The gate does not care what kind a
+ * lesson is: `resolveMonthAccess` refuses any lesson with no month to a month
+ * subscriber, quiz or not. So a lecture tagged «شهر ١» whose QUIZ was left
+ * untagged is a lecture a month-1 student can watch and then cannot sit — and
+ * the guard, if it counted lectures only, would have reported the course
+ * perfectly tagged while that was true.
+ *
+ * `PUBLISHED_LECTURE` stays lectures-only for the number the STUDENT reads
+ * («شهر ٢ — ٥ محاضرات»), which is the same `isLecture` definition every other
+ * count on the platform uses. Two questions, two sets, on purpose.
+ */
+const PUBLISHED_ANY = { isPublished: true } as const;
+
 /** What `countsFor` gathers once, for however many months the caller holds. */
 interface MonthCounts {
   lessonCountByMonth: ReadonlyMap<string | null, number>;
@@ -358,7 +376,7 @@ export class CourseMonthService {
     // fetched ids: that is the same question asked in a way that grows with
     // the course.
     return this.prisma.lesson.count({
-      where: { courseId, ...PUBLISHED_LECTURE, months: { none: {} } },
+      where: { courseId, ...PUBLISHED_ANY, months: { none: {} } },
     });
   }
 
@@ -410,7 +428,69 @@ export class CourseMonthService {
     };
   }
   /**
-   * «الناس اللي اشتركت ٣ شهور» — give them months 1, 2 and 3.
+   * «حط كل المحاضرات اللي من غير شهر في الشهر ده» — the setup press.
+   *
+   * Every course on the platform predates curriculum months, so every lecture
+   * on it is untagged and NO month can be opened for sale until that is fixed
+   * (see `assertNothingUntagged`). Doing it lecture by lecture on a course with
+   * forty of them is not a migration path, it is a reason not to migrate.
+   *
+   * QUIZZES TOO. `PUBLISHED_ANY` and not `PUBLISHED_LECTURE`: the gate refuses
+   * any lesson with no month to a month subscriber, so a lecture adopted into
+   * «شهر ١» whose quiz was left behind is a lecture the student can watch and
+   * then cannot sit.
+   *
+   * Drafts are adopted as well. A draft that publishes later would otherwise
+   * re-block every month on the course the moment it goes live, and the
+   * instructor would meet that refusal with no idea what changed.
+   *
+   * `isPrimary: true` — these lectures belong to this month, they are not
+   * «كمان لشهر». A lesson that already has ANY month is left alone: this is a
+   * setup action for the untagged, never a reassignment.
+   */
+  async adoptUntaggedLessons(courseId: string, monthId: string): Promise<{ adopted: number }> {
+    const month = await this.prisma.courseMonth.findFirst({
+      where: { id: monthId, courseId },
+      select: { id: true, monthIndex: true },
+    });
+    if (!month) throw new NotFoundException();
+
+    const lessons = await this.prisma.lesson.findMany({
+      where: { courseId, months: { none: {} } },
+      select: { id: true },
+    });
+    if (lessons.length === 0) return { adopted: 0 };
+
+    await this.prisma.lessonMonth.createMany({
+      data: lessons.map((lesson) => ({
+        lessonId: lesson.id,
+        monthId,
+        // Denormalised, and the composite FKs make it structural — see
+        // `LessonMonth.courseId`.
+        courseId,
+        isPrimary: true,
+      })),
+    });
+
+    await this.audit.record({
+      action: 'month:update',
+      resourceType: AUDIT_RESOURCES.courseMonth,
+      resourceId: monthId,
+      outcome: 'success',
+      metadata: {
+        operation: 'adopt-untagged',
+        courseId,
+        monthIndex: month.monthIndex,
+        adopted: lessons.length,
+      },
+    });
+
+    return { adopted: lessons.length };
+  }
+
+  /**
+   * «الي حد اشترك دلوقتي أو قبل كده حطه في الشهر ده» — the other half of the
+   * setup.
    *
    * ## It only ever INSERTs
    *
@@ -418,112 +498,82 @@ export class CourseMonthService {
    * design rather than caution. Their existing course-wide grant is money they
    * paid for a window that has not closed yet; narrowing it the day the
    * instructor configures months would take back access nobody asked to take
-   * back, and it would do it silently, to people who are current on their
-   * payments. So they keep the whole course until their own date runs out, and
-   * they keep months 1–3 permanently after it. Strictly more than they had.
+   * back, and do it silently, to people who are current on their payments. So
+   * they keep the whole course until their own date runs out, and they keep
+   * this month permanently after it. Strictly more than they had.
    *
-   * The instructor's two sentences are both satisfied this way: «الناس اللي
-   * اشتركت قبل كده هتسمع زي ما هي عادي» and «هيشوفوا محاضرات الشهر الأول
-   * والتاني والتالت».
+   * ## Who
    *
-   * ## Who counts as a quarterly buyer
+   * Every student holding a LIVE `scope: course` grant from a purchase —
+   * monthly, «٣ شهور» and yearly alike. Those three bought the whole course by
+   * DATE, and the date is what is being replaced; this is what makes them whole.
    *
-   * An APPROVED `quarterly` submission on this course, plus a live course-wide
-   * grant. The grant row itself carries no plan — `PaymentsService.approve`
-   * EXTENDS one grant across renewals rather than stacking one per payment (see
-   * the model doc on `PaymentSubmission`), so the plan only exists on the
-   * submission. A student who bought quarterly once and monthly since still
-   * qualifies, which is the correct reading of «اللي اشترك ٣ شهور».
+   * `scope: term` buyers are deliberately NOT included. Their access is already
+   * a slice with its own rules and its own cutoff, nothing about it changes
+   * here, and handing a term buyer a permanent month they never asked for
+   * crosses the two axes on somebody who did not choose to be crossed.
    *
-   * ## Why months 1, 2 and 3 and not "the three from the purchase date"
-   *
-   * Because the instructor back-tags an existing catalogue: a lecture recorded
-   * last year and tagged «شهر ٣» today has a `created_at` that says nothing
-   * about which months a past payment was for. Any derivation from dates is a
-   * guess, and the thing it would be guessing about is paid access. He named
-   * the three months himself, so they are the three.
+   * `admin` and `auto_free` grants are out for the same reason in reverse: a
+   * hand-issued grant is whatever the instructor decided it was, and a free
+   * platform grant is not a subscription to anything.
    */
-  async backfillLegacyQuarterly(
+  async openMonthForSubscribers(
     courseId: string,
+    monthId: string,
     dryRun: boolean,
   ): Promise<LegacyMonthBackfillResult> {
-    const course = await this.prisma.course.findUnique({
-      where: { id: courseId },
-      select: { id: true },
-    });
-    if (!course) throw new NotFoundException();
-
-    const months = await this.prisma.courseMonth.findMany({
-      where: { courseId, monthIndex: { in: [1, 2, 3] } },
-      orderBy: { monthIndex: 'asc' },
+    const month = await this.prisma.courseMonth.findFirst({
+      where: { id: monthId, courseId },
       select: { id: true, monthIndex: true },
     });
-    if (months.length < 3) {
-      // Refused rather than partially applied: giving a quarterly buyer two of
-      // the three months is a state nobody chose and nothing would ever
-      // correct, because a second press would find them already served.
-      throw new ConflictException(
-        'لازم شهر ١ و٢ و٣ يكونوا موجودين على الكورس قبل ما تفتحهم لمشتركين الـ٣ شهور',
-      );
-    }
-    const monthIds = months.map((month) => month.id);
+    if (!month) throw new NotFoundException();
 
     const now = new Date();
-    const buyers = await this.prisma.paymentSubmission.findMany({
+    const subscribers = await this.prisma.accessGrant.findMany({
       where: {
         courseId,
-        plan: 'quarterly',
-        status: 'approved',
-        user: {
-          accessGrants: {
-            some: {
-              scope: 'course',
-              courseId,
-              revokedAt: null,
-              OR: [{ validUntil: null }, { validUntil: { gt: now } }],
-            },
-          },
-        },
+        scope: 'course',
+        source: 'purchase',
+        revokedAt: null,
+        OR: [{ validUntil: null }, { validUntil: { gt: now } }],
       },
       distinct: ['userId'],
       select: { userId: true },
     });
 
-    if (dryRun || buyers.length === 0) {
-      return { students: buyers.length, monthIds, grantsWritten: 0, dryRun };
+    if (dryRun || subscribers.length === 0) {
+      return { students: subscribers.length, monthIds: [monthId], grantsWritten: 0, dryRun };
     }
 
-    // `skipDuplicates` is not enough on its own — `access_grants` has no unique
-    // on (userId, scope, monthId), deliberately, because a revoked grant and a
-    // live one for the same month are both legitimate history. So the rows
-    // already held are read first and subtracted.
+    // Read first rather than relying on `skipDuplicates`: `access_grants` has
+    // no unique on (userId, scope, monthId) — deliberately, because a revoked
+    // grant and a live one for the same month are both legitimate history — so
+    // a second press would otherwise stack duplicates.
     const held = await this.prisma.accessGrant.findMany({
       where: {
         scope: 'course_month',
         courseId,
-        monthId: { in: monthIds },
+        monthId,
         revokedAt: null,
-        userId: { in: buyers.map((buyer) => buyer.userId) },
+        userId: { in: subscribers.map((row) => row.userId) },
       },
-      select: { userId: true, monthId: true },
+      select: { userId: true },
     });
-    const heldKeys = new Set(held.map((row) => `${row.userId}:${row.monthId}`));
+    const heldBy = new Set(held.map((row) => row.userId));
 
-    const rows = buyers.flatMap((buyer) =>
-      monthIds
-        .filter((monthId) => !heldKeys.has(`${buyer.userId}:${monthId}`))
-        .map((monthId) => ({
-          userId: buyer.userId,
-          scope: 'course_month' as const,
-          courseId,
-          monthId,
-          source: 'purchase' as const,
-          // NEVER a date. `access_grants_month_open_ended` is a CHECK, and one
-          // written here would roll the whole backfill back with a 23514.
-          validUntil: null,
-          note: 'legacy: ٣ شهور → شهر ١ ٢ ٣',
-        })),
-    );
+    const rows = subscribers
+      .filter((row) => !heldBy.has(row.userId))
+      .map((row) => ({
+        userId: row.userId,
+        scope: 'course_month' as const,
+        courseId,
+        monthId,
+        source: 'purchase' as const,
+        // NEVER a date. `access_grants_month_open_ended` is a CHECK, and one
+        // written here would roll the whole thing back with a 23514.
+        validUntil: null,
+        note: `setup: المشتركين الحاليين → شهر ${month.monthIndex}`,
+      }));
 
     if (rows.length > 0) {
       await this.prisma.accessGrant.createMany({ data: rows });
@@ -532,17 +582,23 @@ export class CourseMonthService {
     await this.audit.record({
       action: 'month:update',
       resourceType: AUDIT_RESOURCES.courseMonth,
-      resourceId: courseId,
+      resourceId: monthId,
       outcome: 'success',
       metadata: {
-        operation: 'legacy-quarterly-backfill',
+        operation: 'open-month-for-subscribers',
         courseId,
-        students: buyers.length,
+        monthIndex: month.monthIndex,
+        students: subscribers.length,
         grantsWritten: rows.length,
       },
     });
 
-    return { students: buyers.length, monthIds, grantsWritten: rows.length, dryRun: false };
+    return {
+      students: subscribers.length,
+      monthIds: [monthId],
+      grantsWritten: rows.length,
+      dryRun: false,
+    };
   }
 
 }

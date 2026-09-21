@@ -72,24 +72,31 @@ export const MonthDeleteBlockedSchema = z.object({
 export type MonthDeleteBlocked = z.infer<typeof MonthDeleteBlockedSchema>;
 
 /**
- * «الناس القديمة» — what happens to the students who bought «٣ شهور» before
- * the package came off the shelf.
+ * «الناس اللي اشتركت» — open ONE month for every student who already has a
+ * live subscription to this course.
  *
- * The instructor's own answer: «هيشوفوا محاضرات الشهر الأول والشهر التاني
- * والشهر التالت». So a quarterly buyer is GIVEN months 1, 2 and 3 — given, not
- * converted. Nothing is revoked, nothing is updated, no `valid_until` moves:
- * their existing course-wide grant stays live until the date they paid through,
- * and these three grants are still theirs afterwards.
+ * The instructor's own words, on the day he set the first course up: «الي حد
+ * اشترك دلوقتي أو قبل كده، كل ده شهر أول — حطهم في الشهر الأول». At that point
+ * every lecture on the course is «شهر ١» and there is no «شهر ٢» yet, so this
+ * hands the existing cohort exactly what they can already see and changes
+ * nothing for anybody.
+ *
+ * GIVEN, not converted. Nothing is revoked, nothing is updated, no
+ * `valid_until` moves: their course-wide grant stays live until the date they
+ * paid through, and this month is still theirs afterwards.
  *
  * ## Why this is a button and not a migration
  *
  * A migration runs on every stack at boot, before the instructor has created a
- * single month — there would be no months 1, 2 and 3 to grant. It also cannot
- * be looked at first. This runs per course, after the months exist, and
- * `dryRun` is what puts the numbers on screen before anything is written.
+ * single month — there would be no month to open. It also cannot be looked at
+ * first. This runs per course, after the month exists, and `dryRun` is what
+ * puts the number of affected students on screen before anything is written.
  */
 export const LegacyMonthBackfillSchema = z
   .object({
+    /** Which month to open. The instructor picks it; there is no default,
+     *  because "the first one" is a guess on a course numbered from 3. */
+    monthId: z.uuid(),
     /** `true` counts and writes nothing — the default, so a mis-wired client
      *  cannot grant access by omission. */
     dryRun: z.boolean().default(true),
@@ -98,16 +105,26 @@ export const LegacyMonthBackfillSchema = z
 export type LegacyMonthBackfillInput = z.infer<typeof LegacyMonthBackfillSchema>;
 
 export const LegacyMonthBackfillResultSchema = z.object({
-  /** Distinct students with an approved «٣ شهور» payment on this course and a
-   *  live course-wide grant to go with it. */
+  /** Distinct students holding a live `scope: course` purchase grant on this
+   *  course — monthly, «٣ شهور» and yearly alike. Term buyers are not counted;
+   *  see the service method for why. */
   students: z.number().int().min(0),
-  /** The month ids they were given — months 1, 2 and 3, in that order. */
+  /** The month that was opened. An array for the wire's sake — it was three
+   *  ids when this only served «٣ شهور» buyers, and a caller reading
+   *  `monthIds[0]` keeps working either way. */
   monthIds: z.array(z.uuid()),
-  /** Grants actually written. Below `students × 3` whenever somebody already
-   *  held one of the three: the backfill never writes a second live grant for
-   *  a month a student already has. `0` on a dry run. */
+  /** Grants actually written. Below `students` whenever somebody already held
+   *  this month: it never writes a second live grant for one. `0` on a dry run. */
   grantsWritten: z.number().int().min(0),
   /** `true` when nothing was written because this was a dry run. */
   dryRun: z.boolean(),
 });
 export type LegacyMonthBackfillResult = z.infer<typeof LegacyMonthBackfillResultSchema>;
+
+/** «حط كل المحاضرات اللي من غير شهر في الشهر ده» — the setup press that makes
+ *  a course sellable by month at all. See `CourseMonthService.adoptUntagged
+ *  Lessons`; quizzes and drafts are adopted too, and both for access reasons. */
+export const AdoptUntaggedLessonsResultSchema = z.object({
+  adopted: z.number().int().min(0),
+});
+export type AdoptUntaggedLessonsResult = z.infer<typeof AdoptUntaggedLessonsResultSchema>;

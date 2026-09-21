@@ -138,10 +138,32 @@ describe('CourseMonthService', () => {
       expect(await prisma.courseMonth.count({ where: { courseId } })).toBe(0);
     });
 
-    it('counts only PUBLISHED lectures — a draft and a quiz are neither sold nor untagged', async () => {
+    it('counts a published QUIZ too — the gate does not care what kind it is', async () => {
+      /*
+       * `resolveMonthAccess` refuses ANY lesson with no month to a month
+       * subscriber, quiz included. So a lecture tagged «شهر ١» whose quiz was
+       * left untagged is a lecture the student can watch and then cannot sit —
+       * and a guard that counted lectures only would have reported the course
+       * perfectly tagged while that was true.
+       */
+      const { courseId, sectionId } = await makeCourse();
+      await makeLesson(courseId, sectionId, { kind: 'quiz' });
+
+      const failure = await service
+        .create(courseId, { monthIndex: 1, title: 'شهر ١', isOpen: true, startsOn: null })
+        .catch((error: unknown) => error);
+
+      expect(failure).toBeInstanceOf(ConflictException);
+      expect((failure as ConflictException).getResponse()).toMatchObject({
+        untaggedLessonCount: 1,
+      });
+    });
+
+    it('does not count a DRAFT — it is not on sale and nobody can meet it', async () => {
+      // It is adopted by «حط الكل في الشهر ده» all the same, so that publishing
+      // it later does not re-block every month on the course.
       const { courseId, sectionId } = await makeCourse();
       await makeLesson(courseId, sectionId, { isPublished: false });
-      await makeLesson(courseId, sectionId, { kind: 'quiz' });
 
       const month = await service.create(courseId, {
         monthIndex: 1,
@@ -410,15 +432,87 @@ describe('CourseMonthService', () => {
     });
   });
   /**
-   * «الناس اللي اشتركت ٣ شهور» — the legacy cohort.
+   * The two setup presses that make an EXISTING course sellable by month.
    *
-   * The assertion that matters is the NEGATIVE one: the student's original
-   * course-wide grant comes out of this untouched, same `validUntil`, same
-   * `revokedAt: null`. If that ever stops being true, somebody who is current
-   * on their payments loses access the day the instructor presses a button.
+   * The assertion that matters in the second suite is the NEGATIVE one: the
+   * student's original course-wide grant comes out untouched, same
+   * `validUntil`, same `revokedAt: null`. If that ever stops being true,
+   * somebody current on their payments loses access the day the instructor
+   * presses a button.
    */
-  describe('backfillLegacyQuarterly', () => {
-    async function makeQuarterlyBuyer(courseId: string, validUntil: Date | null) {
+  describe('adoptUntaggedLessons', () => {
+    it('adopts every untagged lesson, QUIZZES and drafts included', async () => {
+      const { courseId, sectionId } = await makeCourse();
+      const lecture = await makeLesson(courseId, sectionId);
+      const quiz = await makeLesson(courseId, sectionId, { kind: 'quiz' });
+      const draft = await makeLesson(courseId, sectionId, { isPublished: false });
+      const month = await service.create(courseId, {
+        monthIndex: 1,
+        title: 'شهر ١',
+        isOpen: false,
+        startsOn: null,
+      });
+
+      expect(await service.adoptUntaggedLessons(courseId, month.id)).toEqual({ adopted: 3 });
+
+      const rows = await prisma.lessonMonth.findMany({
+        where: { monthId: month.id },
+        select: { lessonId: true, isPrimary: true },
+      });
+      expect(rows.map((row) => row.lessonId).sort()).toEqual([lecture, quiz, draft].sort());
+      // A quiz left behind is a lecture the student can watch and cannot sit.
+      expect(rows.every((row) => row.isPrimary)).toBe(true);
+    });
+
+    it('leaves a lesson that already has a month alone', async () => {
+      const { courseId, sectionId } = await makeCourse();
+      const lessonId = await makeLesson(courseId, sectionId);
+      const one = await service.create(courseId, {
+        monthIndex: 1,
+        title: 'شهر ١',
+        isOpen: false,
+        startsOn: null,
+      });
+      const two = await service.create(courseId, {
+        monthIndex: 2,
+        title: 'شهر ٢',
+        isOpen: false,
+        startsOn: null,
+      });
+      await service.setLessonMonths(lessonId, { primaryMonthId: two.id, extraMonthIds: [] });
+
+      // Setup for the untagged, never a reassignment.
+      expect(await service.adoptUntaggedLessons(courseId, one.id)).toEqual({ adopted: 0 });
+      expect(await prisma.lessonMonth.count({ where: { lessonId, monthId: two.id } })).toBe(1);
+    });
+
+    it('is what unblocks opening the month for sale', async () => {
+      const { courseId, sectionId } = await makeCourse();
+      await makeLesson(courseId, sectionId);
+      const month = await service.create(courseId, {
+        monthIndex: 1,
+        title: 'شهر ١',
+        isOpen: false,
+        startsOn: null,
+      });
+
+      await expect(service.update(courseId, month.id, { isOpen: true })).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+
+      await service.adoptUntaggedLessons(courseId, month.id);
+      expect(await service.update(courseId, month.id, { isOpen: true })).toMatchObject({
+        isOpen: true,
+      });
+    });
+  });
+
+  describe('openMonthForSubscribers', () => {
+    async function makeSubscriber(
+      courseId: string,
+      plan: 'monthly' | 'quarterly' | 'yearly',
+      validUntil: Date | null,
+    ) {
       const userId = await makeStudent();
       const grant = await prisma.accessGrant.create({
         data: {
@@ -438,9 +532,9 @@ describe('CourseMonthService', () => {
         data: {
           userId,
           courseId,
-          plan: 'quarterly',
+          plan,
           status: 'approved',
-          amountCents: 30000,
+          amountCents: 15000,
           screenshotKey: 'k',
           grantId: grant.id,
         },
@@ -448,51 +542,50 @@ describe('CourseMonthService', () => {
       return { userId, grantId: grant.id };
     }
 
-    async function makeMonths(courseId: string, indexes: number[]) {
-      for (const monthIndex of indexes) {
-        await prisma.courseMonth.create({
-          data: { courseId, monthIndex, title: `شهر ${monthIndex}` },
-        });
-      }
+    async function makeMonth(courseId: string, monthIndex: number) {
+      return service.create(courseId, {
+        monthIndex,
+        title: `شهر ${monthIndex}`,
+        isOpen: false,
+        startsOn: null,
+      });
     }
 
-    it('refuses until months 1, 2 and 3 all exist', async () => {
-      const { courseId } = await makeCourse();
-      await makeMonths(courseId, [1, 2]);
-
-      await expect(service.backfillLegacyQuarterly(courseId, false)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
-    });
+    const future = () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
     it('counts without writing on a dry run', async () => {
       const { courseId } = await makeCourse();
-      await makeMonths(courseId, [1, 2, 3]);
-      await makeQuarterlyBuyer(courseId, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+      const month = await makeMonth(courseId, 1);
+      await makeSubscriber(courseId, 'monthly', future());
 
-      const result = await service.backfillLegacyQuarterly(courseId, true);
-
-      expect(result).toMatchObject({ students: 1, grantsWritten: 0, dryRun: true });
+      expect(await service.openMonthForSubscribers(courseId, month.id, true)).toMatchObject({
+        students: 1,
+        grantsWritten: 0,
+        dryRun: true,
+      });
       expect(await prisma.accessGrant.count({ where: { courseId, scope: 'course_month' } })).toBe(0);
     });
 
-    it('gives each buyer the three months WITHOUT touching their original grant', async () => {
+    it('opens the month WITHOUT touching the grant they paid for', async () => {
       const { courseId } = await makeCourse();
-      await makeMonths(courseId, [1, 2, 3]);
-      const validUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-      const { userId, grantId } = await makeQuarterlyBuyer(courseId, validUntil);
+      const month = await makeMonth(courseId, 1);
+      const validUntil = future();
+      const { userId, grantId } = await makeSubscriber(courseId, 'monthly', validUntil);
 
-      const result = await service.backfillLegacyQuarterly(courseId, false);
-      expect(result).toMatchObject({ students: 1, grantsWritten: 3, dryRun: false });
-
-      const monthGrants = await prisma.accessGrant.findMany({
-        where: { userId, courseId, scope: 'course_month' },
-        select: { monthId: true, validUntil: true, revokedAt: true },
+      expect(await service.openMonthForSubscribers(courseId, month.id, false)).toMatchObject({
+        students: 1,
+        grantsWritten: 1,
+        dryRun: false,
       });
-      expect(monthGrants).toHaveLength(3);
-      // The CHECK would have rolled the whole thing back, but asserting it
-      // here is what names the rule: a month is content, not thirty days.
-      expect(monthGrants.every((grant) => grant.validUntil === null)).toBe(true);
+
+      const written = await prisma.accessGrant.findFirstOrThrow({
+        where: { userId, courseId, scope: 'course_month', monthId: month.id },
+        select: { validUntil: true, revokedAt: true },
+      });
+      // The CHECK would have rolled the whole thing back, but asserting it here
+      // is what names the rule: a month is content, not thirty days.
+      expect(written.validUntil).toBeNull();
+      expect(written.revokedAt).toBeNull();
 
       const original = await prisma.accessGrant.findUniqueOrThrow({
         where: { id: grantId },
@@ -502,59 +595,85 @@ describe('CourseMonthService', () => {
       expect(original.validUntil?.getTime()).toBe(validUntil.getTime());
     });
 
-    it('is idempotent — a second press writes nothing', async () => {
+    it('takes «٣ شهور» and yearly buyers too — they all bought the course by DATE', async () => {
       const { courseId } = await makeCourse();
-      await makeMonths(courseId, [1, 2, 3]);
-      await makeQuarterlyBuyer(courseId, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+      const month = await makeMonth(courseId, 1);
+      await makeSubscriber(courseId, 'monthly', future());
+      await makeSubscriber(courseId, 'quarterly', future());
+      await makeSubscriber(courseId, 'yearly', future());
 
-      await service.backfillLegacyQuarterly(courseId, false);
-      const second = await service.backfillLegacyQuarterly(courseId, false);
-
-      expect(second).toMatchObject({ students: 1, grantsWritten: 0 });
-      expect(await prisma.accessGrant.count({ where: { courseId, scope: 'course_month' } })).toBe(3);
+      expect(await service.openMonthForSubscribers(courseId, month.id, false)).toMatchObject({
+        students: 3,
+        grantsWritten: 3,
+      });
     });
 
-    it('skips a buyer whose subscription already lapsed', async () => {
-      // They are not «الناس اللي اشتركت» any more — they are somebody who has
-      // to subscribe again, and handing them three months free would be a
-      // refund nobody authorised.
+    it('is idempotent — a second press writes nothing', async () => {
       const { courseId } = await makeCourse();
-      await makeMonths(courseId, [1, 2, 3]);
-      await makeQuarterlyBuyer(courseId, new Date(Date.now() - 24 * 60 * 60 * 1000));
+      const month = await makeMonth(courseId, 1);
+      await makeSubscriber(courseId, 'monthly', future());
 
-      expect(await service.backfillLegacyQuarterly(courseId, false)).toMatchObject({
+      await service.openMonthForSubscribers(courseId, month.id, false);
+      expect(await service.openMonthForSubscribers(courseId, month.id, false)).toMatchObject({
+        students: 1,
+        grantsWritten: 0,
+      });
+      expect(await prisma.accessGrant.count({ where: { courseId, scope: 'course_month' } })).toBe(1);
+    });
+
+    it('skips a subscription that already lapsed', async () => {
+      // They are not «اللي مشترك» any more — they are somebody who has to
+      // subscribe again, and a free month would be a refund nobody authorised.
+      const { courseId } = await makeCourse();
+      const month = await makeMonth(courseId, 1);
+      await makeSubscriber(courseId, 'monthly', new Date(Date.now() - 24 * 60 * 60 * 1000));
+
+      expect(await service.openMonthForSubscribers(courseId, month.id, false)).toMatchObject({
         students: 0,
         grantsWritten: 0,
       });
     });
 
-    it('ignores a monthly buyer — only «٣ شهور» is being made good', async () => {
+    it('leaves a TERM buyer out of it', async () => {
+      // Their access is already a slice with its own cutoff, nothing here
+      // changes it, and a permanent month they never asked for crosses the two
+      // axes on somebody who did not choose to be crossed.
       const { courseId } = await makeCourse();
-      await makeMonths(courseId, [1, 2, 3]);
-      const userId = await makeStudent();
-      const grant = await prisma.accessGrant.create({
-        data: {
-          userId,
-          scope: 'course',
-          courseId,
-          source: 'purchase',
-          validUntil: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
-        },
-        select: { id: true },
+      const month = await makeMonth(courseId, 1);
+      const term = await prisma.courseTerm.create({
+        data: { courseId, title: 'الترم الأول', position: 0 },
       });
-      await prisma.paymentSubmission.create({
-        data: {
-          userId,
-          courseId,
-          plan: 'monthly',
-          status: 'approved',
-          amountCents: 15000,
-          screenshotKey: 'k',
-          grantId: grant.id,
-        },
+      const userId = await makeStudent();
+      await prisma.accessGrant.create({
+        data: { userId, scope: 'term', courseId, termId: term.id, source: 'purchase' },
       });
 
-      expect(await service.backfillLegacyQuarterly(courseId, false)).toMatchObject({ students: 0 });
+      expect(await service.openMonthForSubscribers(courseId, month.id, false)).toMatchObject({
+        students: 0,
+      });
+    });
+
+    it('leaves an ADMIN-issued grant out of it', async () => {
+      const { courseId } = await makeCourse();
+      const month = await makeMonth(courseId, 1);
+      const userId = await makeStudent();
+      await prisma.accessGrant.create({
+        data: { userId, scope: 'course', courseId, source: 'admin' },
+      });
+
+      expect(await service.openMonthForSubscribers(courseId, month.id, false)).toMatchObject({
+        students: 0,
+      });
+    });
+
+    it('404s on a month of another course', async () => {
+      const a = await makeCourse();
+      const b = await makeCourse();
+      const month = await makeMonth(b.courseId, 1);
+
+      await expect(
+        service.openMonthForSubscribers(a.courseId, month.id, true),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 

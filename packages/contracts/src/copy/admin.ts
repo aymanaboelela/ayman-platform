@@ -524,34 +524,54 @@ const admin = {
      *  it simply did not happen. */
     actionFailed: 'مااتنفّذش، حاول تاني',
 
-    // ── «الناس اللي اشتركت ٣ شهور» ────────────────────────────────────────
+    // ── تظبيط كورس شغّال ─────────────────────────────────────────────────
     /**
-     * The button that hands months 1, 2 and 3 to the students who bought the
-     * «٣ شهور» package before it came off the shelf.
+     * Every course on the platform predates curriculum months, so turning one
+     * over is two presses and they must be done in this order: tag the
+     * lectures, then open the month for the people already paying.
      *
-     * Two presses: the first counts, the second writes. The instructor is
-     * giving access to students he cannot see from this screen, so the number
-     * goes in front of him first — the same courtesy `closedRevoked` gives when
-     * a term close takes access away.
+     * Both say plainly that nothing is taken from anybody, because «تحويل» is
+     * what an instructor will assume and it would be the opposite of the truth.
      */
-    backfillTitle: 'مشتركين الـ٣ شهور القدام',
-    backfillLead:
-      'باقة الـ٣ شهور اتشالت من البيع، واللي اشتركوا فيها قبل كده لسه معاهم الكورس كله لحد ما مدتهم تخلص. الزرار ده بيديهم شهر ١ و٢ و٣ كمان، فيفضلوا شايفينهم بعد ما المدة تنتهي.',
-    backfillCheck: 'شوف هيأثر على كام طالب',
-    /** `{n}` — students who qualify. */
-    backfillFound: '{n} طالب اشتركوا ٣ شهور على الكورس ده.',
-    backfillNone: 'محدش اشترك ٣ شهور على الكورس ده.',
-    backfillApply: 'افتح لهم شهر ١ و٢ و٣',
-    /** `{n}` — grants actually written, which is below «students × ٣» whenever
-     *  somebody already held one of the three. */
-    backfillDone: 'تمام — اتفتح {n} شهر للطلبة دول.',
-    /** Nothing was written because every one of them already had the three. */
-    backfillAlreadyDone: 'كلهم معاهم الشهور التلاتة خلاص.',
-    backfillNeedsThreeMonths:
-      'لازم شهر ١ و٢ و٣ يكونوا موجودين على الكورس الأول، وبعدين تفتحهم لمشتركين الـ٣ شهور.',
-    /** ⚠️ Says what this does NOT do, because «تحويل» is what an instructor
-     *  will assume and it would be the opposite of the truth. */
-    backfillNote: 'مفيش حاجة بتتسحب من حد — ده بيزوّد بس.',
+    setupTitle: 'تظبيط الكورس على الشهور',
+    setupLead:
+      'الكورس ده شغّال من قبل الشهور، فكل محاضراته لسه من غير شهر. الخطوتين دول بيظبطوه: الأولى بتحط المحاضرات في الشهر، والتانية بتفتح الشهر للناس اللي مشتركة دلوقتي.',
+    setupNote: 'مفيش حاجة بتتسحب من حد — الخطوتين بيزوّدوا بس.',
+    /** `{n}` — lessons with no month at all, drafts and quizzes included. */
+    adoptCta: 'حط الـ{n} محاضرة في الشهر ده',
+    adoptDone: 'تمام — {n} محاضرة بقت في الشهر ده.',
+    adoptNone: 'كل المحاضرات متحطّة في شهورها خلاص.',
+    /**
+     * Says out loud that a quiz is a lesson here, because the instructor does
+     * not think of it as one — and a quiz left with no month is a lecture the
+     * student can watch and then cannot sit.
+     */
+    adoptNote: 'الكويزات والمسودّات بتتحط معاها، عشان الكويز اللي من غير شهر بيتقفل هو كمان.',
+    subscribersCheck: 'شوف هيأثر على كام طالب',
+    /** `{n}` — students with a live paid subscription to this course. */
+    subscribersFound: '{n} طالب مشتركين على الكورس ده دلوقتي.',
+    subscribersNoneFound: 'محدش مشترك على الكورس ده دلوقتي.',
+    subscribersOpen: 'افتح لهم الشهر ده',
+    /** `{n}` — grants actually written, below the student count whenever
+     *  somebody already held this month. */
+    subscribersDone: 'تمام — الشهر اتفتح لـ{n} طالب.',
+    subscribersAlreadyDone: 'كلهم الشهر ده معاهم خلاص.',
+    /** ⚠️ Names who is NOT in it, because «كل المشتركين» is what the sentence
+     *  above reads as. A term buyer's access is its own slice with its own
+     *  cutoff and nothing here changes it. */
+    subscribersScope: 'ده بيشمل اللي مشتركين بالشهر أو الـ٣ شهور أو السنة. مشتركين الترم مالهمش علاقة.',
+
+    /**
+     * ⚠️ Required, on a course that sells by month, at the moment the lecture
+     * is created — «لما اجي اعمل محاضرة كمان يبقى فيها ريكويرد».
+     *
+     * Not politeness. A lecture born with no month is invisible to every
+     * monthly subscriber AND blocks every month on the course from being
+     * opened for sale (`blockedByUntagged`), and both of those are discovered
+     * later, by somebody else. The refusal at the point of creation is the
+     * only one that costs nothing to obey.
+     */
+    assignRequired: 'اختار الشهر الأول — من غيره المحاضرة مش هتوصل لمشتركين الشهر.',
   },
   section: {
     new: 'قسم جديد',

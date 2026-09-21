@@ -1202,12 +1202,18 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     },
     // MISSING_UUID rows, same convention as the terms above: the dimension
     // under test is who gets PAST the guard, and a 404 for the admin proves it.
-    // «افتح شهر ١ ٢ ٣ للي اشتركوا ٣ شهور». `dryRun` defaults true, so the
-    // admin row here counts and writes nothing — the matrix asserts who may
-    // reach the route, not what a real backfill does.
-    { label: 'admin month backfill: anonymous', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/backfill-legacy`, actor: 'anonymous', status: 401, body: () => ({}) },
-    { label: 'admin month backfill: student', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/backfill-legacy`, actor: 'student', status: 403, body: () => ({}) },
-    { label: 'admin month backfill: admin, months 1-3 missing', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/backfill-legacy`, actor: 'admin', status: 409, body: () => ({}) },
+    // «حط كل المحاضرات في الشهر ده». The admin row names a month that does not
+    // exist, so it 404s — the matrix asserts who may reach the route, not what
+    // a real adoption does.
+    { label: 'admin month adopt untagged: anonymous', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}/adopt-untagged`, actor: 'anonymous', status: 401 },
+    { label: 'admin month adopt untagged: student', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}/adopt-untagged`, actor: 'student', status: 403 },
+    { label: 'admin month adopt untagged: admin, unknown month', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}/adopt-untagged`, actor: 'admin', status: 404 },
+    // «افتح الشهر ده للمشتركين الحاليين». `dryRun` defaults true, so nothing is
+    // written even on the admin row — and the month is unknown, so it 404s
+    // before it would have counted anybody.
+    { label: 'admin month open for subscribers: anonymous', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/open-for-subscribers`, actor: 'anonymous', status: 401, body: () => ({ monthId: MISSING_UUID }) },
+    { label: 'admin month open for subscribers: student', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/open-for-subscribers`, actor: 'student', status: 403, body: () => ({ monthId: MISSING_UUID }) },
+    { label: 'admin month open for subscribers: admin, unknown month', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/open-for-subscribers`, actor: 'admin', status: 404, body: () => ({ monthId: MISSING_UUID }) },
     { label: 'admin month update: anonymous', method: 'patch', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}`, actor: 'anonymous', status: 401, body: () => ({ title: 'شهر' }) },
     { label: 'admin month update: student', method: 'patch', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}`, actor: 'student', status: 403, body: () => ({ title: 'شهر' }) },
     { label: 'admin month update: admin, unknown month', method: 'patch', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}`, actor: 'admin', status: 404, body: () => ({ title: 'شهر' }) },
