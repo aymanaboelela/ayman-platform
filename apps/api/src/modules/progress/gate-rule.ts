@@ -19,6 +19,18 @@ export interface GateLesson {
   state: string;
   /** `Lesson.kind`. Only `quiz` is treated specially — see `isLecture`. */
   kind: string;
+  /**
+   * Whether the student's subscription covers this lecture's curriculum
+   * month — `true` for every lesson of a course that does not sell by month,
+   * which is what keeps this rule inert everywhere it has not been turned on.
+   *
+   * Carried per lesson rather than filtered out UPSTREAM, and that is the
+   * whole point of the flag. Dropping unowned lessons from `GateInput.lessons`
+   * would empty them out of `everyLectureCleared` too, so a student who bought
+   * «شهر ٢» alone would clear their four lectures and unlock the COURSE'S
+   * FINAL EXAM — the one gate in this file, defeated by paying less.
+   */
+  owned: boolean;
 }
 
 /**
@@ -56,12 +68,18 @@ export function isCleared(state: string): boolean {
  *
  * The rules, in the order they apply:
  *
- *   1. Already cleared → `cleared`, whatever else is true.
- *   2. The EXAM is available only when every other published LECTURE is
+ *   1. Already cleared → `cleared`, whatever else is true. Including a lesson
+ *      the subscription no longer covers: that is honest history, and
+ *      re-locking work the student finished would read as losing it.
+ *   2. Not covered by the subscription → `locked`. «المحاضرة دي تابعة لشهر
+ *      تاني» — the row draws with a padlock and a way to buy that month,
+ *      rather than as an open door that 403s on click, which is what a term
+ *      subscriber still gets on the other term.
+ *   3. The EXAM is available only when every other published LECTURE is
  *      cleared. This is the one rule left that reads more than the lesson in
  *      front of it, and it is why `examLessonId` is a column rather than a
  *      convention about position.
- *   3. Everything else → `available`.
+ *   4. Everything else → `available`.
  *
  * ## Why there is no chain any more
  *
@@ -114,6 +132,14 @@ export function resolveGate(input: GateInput): Map<string, GateState> {
   for (const lesson of input.lessons) {
     if (isCleared(lesson.state)) {
       result.set(lesson.id, 'cleared');
+      continue;
+    }
+
+    // Before the exam rule, so a month buyer sees the final exam locked for the
+    // reason that is actually true for them — they do not own it — rather than
+    // as "finish the other lectures first", which they cannot do.
+    if (!lesson.owned) {
+      result.set(lesson.id, 'locked');
       continue;
     }
 

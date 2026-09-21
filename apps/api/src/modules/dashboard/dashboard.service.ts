@@ -269,7 +269,7 @@ export class DashboardService {
       // lecture clears.
       Promise.all(
         candidateExams.map(async (row) => {
-          const gate = await this.lessonGate.resolveCourse(row.id, row.course.id);
+          const gate = await this.lessonGate.resolveCourse(row.id, row.course.id, userId);
           return { enrollmentId: row.id, state: gate.get(row.course.examLessonId as string) };
         }),
       ),

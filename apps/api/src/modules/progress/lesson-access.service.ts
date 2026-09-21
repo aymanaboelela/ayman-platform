@@ -3,6 +3,7 @@ import type { LessonKind } from '@ayman/contracts';
 import { isPrismaDataValidationError } from '../../common/prisma/prisma-errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
+import type { CourseAccessSubject } from '../entitlement/grant-liveness';
 import { EntitlementService, type CourseAccess } from '../entitlement/entitlement.service';
 import { LessonGateService } from './lesson-gate.service';
 
@@ -18,6 +19,24 @@ export interface LessonAccessContext {
    *  no terms configured (or this section was never assigned to one). Only
    *  ever consulted by `require()` — see its own term-gating comment. */
   termId: string | null;
+  /** The curriculum months that open THIS lecture — `LessonMonth` rows, both
+   *  the primary one and the «كمان لشهر ٢ و٣» extras. Empty is a real state
+   *  and means no month grant opens it; see `courseSellsByMonth`. */
+  monthIds: string[];
+  /**
+   * Whether this lecture's course has any `CourseMonth` at all.
+   *
+   * `false` on every course today, and it is what keeps the original rolling
+   * monthly subscription working untouched: with no month to sell there is
+   * nothing to refine, so `require()` skips the month check entirely and this
+   * class behaves exactly as it did before months existed. Configuring the
+   * first month on a course is the single switch that turns the gate on, for
+   * that course and no other.
+   */
+  courseSellsByMonth: boolean;
+  /** The course as `courseAccessScopes` needs to see it. Carried on the
+   *  context because `resolve()` has already selected every column of it. */
+  courseAccessSubject: CourseAccessSubject;
 }
 
 /**
@@ -134,10 +153,37 @@ export class LessonAccessService {
       }
     }
 
+    /*
+     * The MONTH re-check — «الاشتراك الشهري بقى شهر من المنهج».
+     *
+     * Runs only for a course the instructor has configured months on, so every
+     * course that has not moved over behaves exactly as it did. Unlike the term
+     * check above it does NOT take `access`: `resolveMonthAccess` re-queries and
+     * unions every live grant rather than refining the single one
+     * `resolveCourseAccess` picked, because a student can hold a month AND a
+     * wider subscription at once and the newest grant is not the widest. Its own
+     * docblock has the case that costs a paying student access.
+     *
+     * A lecture with no month reaches nobody through a month grant — the closed
+     * default, so an untagged lecture cannot leak the back-catalogue into every
+     * month at once.
+     */
+    if (context.courseSellsByMonth) {
+      const monthAccess = await this.entitlement.resolveMonthAccess(
+        userId,
+        context.courseAccessSubject,
+        context.monthIds,
+      );
+      if (!monthAccess.allowed) {
+        throw new ForbiddenException(monthAccess.reason);
+      }
+    }
+
     const available = await this.gate.isAvailable(
       context.enrollmentId,
       context.courseId,
       context.lessonId,
+      userId,
     );
     if (!available) {
       throw new NotFoundException('lesson not found');
@@ -175,6 +221,16 @@ export class LessonAccessService {
           course: {
             select: {
               slug: true,
+              // `subjectId` and `requiresGrant` are the rest of what
+              // `courseAccessScopes` needs — selected here so the month check
+              // does not cost a second round trip for a row this query already
+              // touched.
+              subjectId: true,
+              requiresGrant: true,
+              // `take: 1` and not a count: the only question is «فيه شهور
+              // أصلًا», and a course with nine months must not pay for nine
+              // rows on every lesson open.
+              months: { select: { id: true }, take: 1 },
               enrollments: {
                 where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] } },
                 select: { id: true },
@@ -183,6 +239,7 @@ export class LessonAccessService {
             },
           },
           section: { select: { termId: true } },
+          months: { select: { monthId: true } },
           video: { select: { durationSeconds: true } },
         },
       })
@@ -204,6 +261,13 @@ export class LessonAccessService {
       enrollmentId,
       durationSeconds: lesson.video?.durationSeconds ?? 0,
       termId: lesson.section.termId,
+      monthIds: lesson.months.map((row) => row.monthId),
+      courseSellsByMonth: lesson.course.months.length > 0,
+      courseAccessSubject: {
+        id: lesson.courseId,
+        subjectId: lesson.course.subjectId,
+        requiresGrant: lesson.course.requiresGrant,
+      },
     };
   }
 }

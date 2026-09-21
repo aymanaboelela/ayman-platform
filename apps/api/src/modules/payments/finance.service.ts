@@ -17,7 +17,7 @@ import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EXPIRING_SOON_WINDOW_MS, financeStatusFor } from './finance-status';
-import type { Prisma } from '../../generated/prisma/client';
+import type { AccessScope, Prisma } from '../../generated/prisma/client';
 
 /**
  * «الاشتراكات والإيرادات» — who has paid, how much, and when it runs out.
@@ -57,11 +57,16 @@ export class FinanceService {
 
     const base: Prisma.AccessGrantWhereInput = {
       source: 'purchase',
-      // `term` alongside `course`: a term-scoped subscription is exactly as
-      // real a live subscription as a course-wide one, and belongs on this
-      // screen — see `statusForGrant`'s own note on how it never lapses by
-      // date the way a course-wide one does.
-      scope: { in: ['course', 'term'] },
+      // `term` and `course_month` alongside `course`: a term-scoped or
+      // month-scoped subscription is exactly as real a live subscription as a
+      // course-wide one, and belongs on this screen — see `statusForGrant`'s
+      // own note on how neither lapses by date the way a course-wide one does.
+      //
+      // Leaving `course_month` out would have made every monthly subscriber
+      // sold under the new model invisible on the one screen that answers «مين
+      // مشترك» — the money would be in the submissions table and the access
+      // would be live, and this page would show neither.
+      scope: { in: ['course', 'term', 'course_month'] },
       // A manually revoked grant is no longer a subscription anybody is
       // paying for — the same reason `PaymentsService.approve` only ever
       // looks at `revokedAt: null` when deciding whether to extend one. For
@@ -89,7 +94,14 @@ export class FinanceService {
       // `year`/`stream` — same as before this feature, these three tiles
       // are the GLOBAL numbers, not "how many match the current filter".
       this.prisma.accessGrant.count({
-        where: { ...base, OR: [{ scope: 'course', validUntil: { gt: now } }, { scope: 'term' }] },
+        where: {
+          ...base,
+          OR: [
+            { scope: 'course', validUntil: { gt: now } },
+            { scope: 'term' },
+            { scope: 'course_month' },
+          ],
+        },
       }),
       // Term grants never sit in the "expiring soon" window — nothing here
       // reads `CourseTerm.isOpen` as a countdown, so this stays `scope:
@@ -244,9 +256,15 @@ export class FinanceService {
   ): Promise<AdminFinanceRow> {
     const grant = await this.findMutableGrant(grantId);
 
-    if (grant.scope === 'term' && input.validUntil !== null) {
+    // A month grant is in here with `term` for the same reason and one extra:
+    // `access_grants_month_open_ended` is a CHECK, so without this branch the
+    // update below would not be refused with a sentence — it would be a 23514
+    // and a 500 on the money screen.
+    if (OPEN_ENDED_SCOPES.has(grant.scope) && input.validUntil !== null) {
       throw new BadRequestException(
-        'a term grant has no calendar expiry — its cutoff is revokedAt, stamped when the term closes',
+        grant.scope === 'term'
+          ? 'a term grant has no calendar expiry — its cutoff is revokedAt, stamped when the term closes'
+          : 'a month grant has no calendar expiry — «شهر ٢» is content the student bought, not thirty days they rented',
       );
     }
 
@@ -768,11 +786,12 @@ function computeFilterCounts(grants: readonly GrantRowWithCourse[]): AdminFinanc
 }
 
 /**
- * A `term` grant is always `'active'` while it is on this screen at all —
- * the base query's `revokedAt: null` is the only gate it is ever subject to
- * (closing the term is what sets that), and it has no `validUntil` to
- * measure a countdown against. Only a `course` grant goes through the real
- * date math.
+ * A `term` or `course_month` grant is always `'active'` while it is on this
+ * screen at all — the base query's `revokedAt: null` is the only gate either is
+ * ever subject to, and neither has a `validUntil` to measure a countdown
+ * against (`access_grants_month_open_ended` makes that a database rule for
+ * months, not a convention). Only a `course` grant goes through the real date
+ * math.
  *
  * A `course` grant's `validUntil` is `null` for the same reason a `term`
  * grant's always is: `editDates` deliberately allows `validUntil: null` on a
@@ -781,11 +800,13 @@ function computeFilterCounts(grants: readonly GrantRowWithCourse[]): AdminFinanc
  * same state back without crashing, not just accept writing it. Treated as
  * `'active'`, the same as a term grant with no calendar expiry of its own.
  */
+const OPEN_ENDED_SCOPES: ReadonlySet<AccessScope> = new Set(['term', 'course_month']);
+
 function statusForGrant(
-  grant: { scope: 'course' | 'term' | 'platform' | 'subject_teacher' | 'unassigned'; validUntil: Date | null },
+  grant: { scope: AccessScope; validUntil: Date | null },
   now: Date,
 ): AdminFinanceRow['status'] {
-  if (grant.scope === 'term' || grant.validUntil === null) return 'active';
+  if (OPEN_ENDED_SCOPES.has(grant.scope) || grant.validUntil === null) return 'active';
   return financeStatusFor(grant.validUntil, now);
 }
 
@@ -796,12 +817,19 @@ function statusWhere(
 ): Prisma.AccessGrantWhereInput {
   switch (status) {
     case 'expired':
-      // A term grant can never be expired — see `statusForGrant`.
+      // Neither a term nor a month grant can ever be expired — see
+      // `statusForGrant`.
       return { scope: 'course', validUntil: { lt: now } };
     case 'expiring_soon':
       return { scope: 'course', validUntil: { gte: now, lte: soon } };
     case 'active':
-      return { OR: [{ scope: 'course', validUntil: { gt: soon } }, { scope: 'term' }] };
+      return {
+        OR: [
+          { scope: 'course', validUntil: { gt: soon } },
+          { scope: 'term' },
+          { scope: 'course_month' },
+        ],
+      };
     default:
       return {};
   }

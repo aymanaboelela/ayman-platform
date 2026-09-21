@@ -135,7 +135,7 @@ export class PlayerService {
     // The SAME resolver the access gate uses, so what the outline draws and
     // what the lesson route enforces cannot disagree. The lock the student
     // sees is a render of this; it is not where the decision is made.
-    const gate = await this.gate.resolveCourse(enrollment.id, course.id);
+    const gate = await this.gate.resolveCourse(enrollment.id, course.id, userId);
 
     let completedLessons = 0;
     let totalLessons = 0;

@@ -1,7 +1,8 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AccessGrant, AccessScope } from '../../generated/prisma/client';
-import { courseAccessScopes, grantLiveness } from './grant-liveness';
+import { courseAccessScopes, grantLiveness, type CourseAccessSubject } from './grant-liveness';
+import { monthSliceOf, sliceCoversLesson, type MonthSlice } from './month-access';
 
 /**
  * The return type is an OBJECT in both directions. A `boolean` here is the seed
@@ -39,7 +40,20 @@ export type CourseAccess =
          * `no_grant`: a different sentence («لازم تشترك في الترم ده») and a
          * different admin action.
          */
-        | 'needs_term_grant';
+        | 'needs_term_grant'
+        /**
+         * The month twin of `needs_term_grant`: this student holds a live
+         * grant for the course, but every one of them is `scope: course_month`
+         * for a month that does NOT include this lecture — «المحاضرة دي تابعة
+         * لشهر تاني».
+         *
+         * Also what a lecture with no month at all answers to a month-only
+         * buyer. That is the closed default the instructor chose: an untagged
+         * lecture reaches term and yearly subscribers and no monthly one, so a
+         * lecture he forgot to tag stays out of a month he never sold it in
+         * rather than leaking into every month at once.
+         */
+        | 'needs_month_grant';
     };
 
 /** Human-readable provenance on the auto-created grant, for the audit trail. */
@@ -219,6 +233,99 @@ export class EntitlementService {
     }
 
     return fallback;
+  }
+
+  /**
+   * The per-MONTH refinement of `resolveCourseAccess`, called only by
+   * `LessonAccessService.require` and only for a course that has months
+   * configured.
+   *
+   * ## Why this does NOT take the already-resolved `courseAccess`
+   *
+   * `resolveTermAccess` next door does, and says why: `require()` already has
+   * it, and recomputing risks the two disagreeing under a concurrent write.
+   * That reasoning is sound for terms and WRONG for months, because of one
+   * difference in how the two are sold.
+   *
+   * A student holds at most one term at a time in practice. A student can
+   * easily hold «شهر ٢» AND a live yearly subscription — he renews the year in
+   * March and tops up a month he missed, or an admin hands him a course grant
+   * while he already owns two months. `resolveCourseAccess` returns exactly
+   * ONE grant, `ORDER BY validFrom DESC, id DESC` — the NEWEST live one, which
+   * is not the WIDEST. Refining that single winner would mean the month he
+   * bought last Tuesday silently narrows the year he paid for in September:
+   * the student loses access he holds a live, unrevoked, fully-paid grant for,
+   * and no screen anywhere says why.
+   *
+   * So this re-queries and UNIONS. The verdict is "does ANY live grant open
+   * this lecture", never "does the winning grant open it". It can only ever
+   * allow more than the single-winner form, never less, which is the direction
+   * a mistake here has to fail in.
+   *
+   * (The same shadowing exists on the term path today and is not fixed here:
+   * fixing it changes what a live term buyer can reach, which is its own
+   * change with its own evidence.)
+   */
+  async resolveMonthAccess(
+    userId: string,
+    course: CourseAccessSubject,
+    lessonMonthIds: readonly string[],
+  ): Promise<CourseAccess> {
+    const slice = await this.resolveMonthSlice(userId, course);
+    if (sliceCoversLesson(slice, lessonMonthIds)) {
+      return { allowed: true, grantId: slice.grantId, scope: slice.scope, validUntil: null };
+    }
+
+    // A live subscription to a DIFFERENT month outranks a stale one as the
+    // explanation. «انتهى اشتراكك» would be a lie to a student whose
+    // subscription is live and simply not for this lecture, and it would send
+    // them to renew something they already hold.
+    if (slice.everything || slice.monthIds.size > 0 || slice.lapsed === null) {
+      return { allowed: false, reason: 'needs_month_grant' };
+    }
+    return { allowed: false, reason: slice.lapsed };
+  }
+
+  /**
+   * The same verdict as `resolveMonthAccess`, for a WHOLE outline at once.
+   *
+   * `LessonGateService` draws every lesson of a course in one pass and would
+   * otherwise ask per lesson. Both callers reduce the same grants with the same
+   * pure function (`monthSliceOf`), which is the point — an outline that drew a
+   * row open and then 403'd on click, or drew a padlock on something already
+   * paid for, is what two hand-rolled loops produce.
+   */
+  async resolveMonthSlice(
+    userId: string,
+    course: CourseAccessSubject,
+  ): Promise<MonthSlice & { grantId: string; scope: AccessScope }> {
+    const grants = await this.prisma.accessGrant.findMany({
+      where: { userId, OR: courseAccessScopes(course) },
+      orderBy: [{ validFrom: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        scope: true,
+        monthId: true,
+        validFrom: true,
+        validUntil: true,
+        revokedAt: true,
+      },
+    });
+
+    const now = new Date();
+    const slice = monthSliceOf(grants, now);
+    // Provenance for the allow path: `CourseAccess` promises a grant id that
+    // an admin can audit the decision against, and the slice is a union rather
+    // than one grant. The first live one that contributed to it is the honest
+    // answer — the list is already ordered newest-first.
+    const contributing =
+      grants.find((grant) => grantLiveness(grant, now) === 'live') ?? grants[0];
+
+    return {
+      ...slice,
+      grantId: contributing?.id ?? '',
+      scope: contributing?.scope ?? 'course_month',
+    };
   }
 
   /**

@@ -59,8 +59,20 @@ export const SubmitPaymentSchema = z
     courseId: z.uuid(),
     plan: PaymentPlanSchema,
     /** Which of the course's terms this claim is for — required for
-     *  `plan: 'term'`, and only ever `null` for the other two plans. */
+     *  `plan: 'term'`, and only ever `null` for the other plans. */
     termId: z.uuid().nullable().default(null),
+    /**
+     * «عايز شهر ٢ و٣» — the curriculum months this ONE transfer buys.
+     *
+     * Empty on every plan but `monthly`, and empty is also legal ON `monthly`:
+     * a course the instructor has not configured months for still sells the
+     * original rolling thirty-day subscription, and the panel sends no months
+     * for it. `PaymentsService.submit` is what refuses an empty list on a
+     * course that DOES sell by month — the schema cannot know which kind of
+     * course this id names, and a rule split across both would be enforced in
+     * neither.
+     */
+    monthIds: z.uuid().array().max(12).default([]),
     /** The Vodafone Cash number the transfer was sent FROM — may differ
      *  from the student's own account phone (a parent's line, for example).
      *  Normalised to E.164, same rule as every other phone field. */
@@ -71,6 +83,14 @@ export const SubmitPaymentSchema = z
   .refine((value) => (value.plan === 'term') === (value.termId !== null), {
     message: 'لازم تختار الترم اللي هتشترك فيه',
     path: ['termId'],
+  })
+  .refine((value) => value.plan === 'monthly' || value.monthIds.length === 0, {
+    message: 'الشهور بتتحدد مع الاشتراك الشهري بس',
+    path: ['monthIds'],
+  })
+  .refine((value) => new Set(value.monthIds).size === value.monthIds.length, {
+    message: 'فيه شهر مكرر',
+    path: ['monthIds'],
   });
 export type SubmitPaymentInput = z.infer<typeof SubmitPaymentSchema>;
 

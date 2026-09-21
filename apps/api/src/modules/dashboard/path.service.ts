@@ -120,7 +120,7 @@ export class PathService {
     // One gate resolution per course, in parallel — not one per lesson.
     const gates = await Promise.all(
       enrollments.map((enrollment) =>
-        this.gate.resolveCourse(enrollment.id, enrollment.course.id),
+        this.gate.resolveCourse(enrollment.id, enrollment.course.id, userId),
       ),
     );
 

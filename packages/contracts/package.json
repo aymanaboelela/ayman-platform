@@ -27,6 +27,7 @@
     "./notifications": "./src/notifications.ts",
     "./notifications/push": "./src/notifications/push.ts",
     "./payments": "./src/payments.ts",
+    "./months": "./src/months.ts",
     "./homework": "./src/homework.ts",
     "./copy/homework": "./src/copy/homework.ts",
     "./books": "./src/books.ts",
