@@ -15,7 +15,7 @@ describe('QuizAccessService.assertCanAttempt', () => {
   }) as unknown as PrismaService;
   const lessonAccess = new LessonAccessService(
     prisma,
-    new LessonGateService(prisma),
+    new LessonGateService(prisma, new EntitlementService(prisma)),
     new EntitlementService(prisma),
   );
   const service = new QuizAccessService(prisma, lessonAccess);
@@ -55,6 +55,70 @@ describe('QuizAccessService.assertCanAttempt', () => {
     await expect(
       lessonAccess.require(fixture.studentId, fixture.lessonId),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  /*
+   * The hole this file's docblock claimed was already closed, and was not.
+   *
+   * Until `requireEntitled` was wired in, nothing on the attempt path read
+   * `AccessGrant` at all: the enrollment row was the whole check, and an
+   * enrollment outlives the subscription behind it (nothing writes
+   * `expired` — the lapsed row stays `active`). So a student whose paid term
+   * ran out last spring could still start the course's final exam.
+   */
+  it('denies once the grant behind the enrollment has expired', async () => {
+    fixture = await seedQuizFixture(prisma, {});
+    await prisma.course.update({
+      where: { id: fixture.courseId },
+      data: { requiresGrant: true },
+    });
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const grant = await prisma.accessGrant.create({
+      data: {
+        userId: fixture.studentId,
+        scope: 'course',
+        courseId: fixture.courseId,
+        source: 'purchase',
+        validFrom: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+        validUntil: yesterday,
+      },
+      select: { id: true },
+    });
+
+    await expect(service.assertCanAttempt(fixture.studentId, fixture.quizId)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    // The drift contract this file's docblock asserts, actually asserted:
+    // whatever `LessonAccessService` refuses, the attempt path refuses too.
+    await expect(
+      lessonAccess.requireEntitled(fixture.studentId, fixture.lessonId),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    await prisma.accessGrant.delete({ where: { id: grant.id } });
+  });
+
+  it('allows again once that grant is live', async () => {
+    fixture = await seedQuizFixture(prisma, {});
+    await prisma.course.update({
+      where: { id: fixture.courseId },
+      data: { requiresGrant: true },
+    });
+    const grant = await prisma.accessGrant.create({
+      data: {
+        userId: fixture.studentId,
+        scope: 'course',
+        courseId: fixture.courseId,
+        source: 'purchase',
+        validUntil: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+      select: { id: true },
+    });
+
+    await expect(service.assertCanAttempt(fixture.studentId, fixture.quizId)).resolves.toMatchObject(
+      { id: fixture.quizId },
+    );
+
+    await prisma.accessGrant.delete({ where: { id: grant.id } });
   });
 
   it('denies when the lesson is unpublished', async () => {
@@ -115,7 +179,7 @@ describe('QuizAccessService.getLessonOverview', () => {
   }) as unknown as PrismaService;
   const lessonAccess = new LessonAccessService(
     prisma,
-    new LessonGateService(prisma),
+    new LessonGateService(prisma, new EntitlementService(prisma)),
     new EntitlementService(prisma),
   );
   const service = new QuizAccessService(prisma, lessonAccess);

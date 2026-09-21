@@ -29,7 +29,7 @@ describe('LessonAccessService — live grant re-check', () => {
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
   const entitlement = new EntitlementService(prisma);
-  const service = new LessonAccessService(prisma, new LessonGateService(prisma), entitlement);
+  const service = new LessonAccessService(prisma, new LessonGateService(prisma, new EntitlementService(prisma)), entitlement);
   const audit = new AuditService(prisma);
   const notifications = new NotificationsService(prisma);
   // `/admin/finance`'s "edit dates" super-admin override — see the test
@@ -299,7 +299,7 @@ describe('LessonAccessService — term gate', () => {
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
   const entitlement = new EntitlementService(prisma);
-  const service = new LessonAccessService(prisma, new LessonGateService(prisma), entitlement);
+  const service = new LessonAccessService(prisma, new LessonGateService(prisma, new EntitlementService(prisma)), entitlement);
   const terms = new TermService(prisma, new AuditService(prisma));
 
   let instructorId = '';

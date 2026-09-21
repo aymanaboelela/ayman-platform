@@ -27,6 +27,7 @@ type LapsedReason = Exclude<GrantLiveness, 'live'>;
 
 /** Just the columns the slice is computed from — a Prisma row or a fixture. */
 export interface MonthScopedGrant extends GrantWindow {
+  id: string;
   scope: AccessScope;
   monthId: string | null;
 }
@@ -43,8 +44,19 @@ export interface MonthScopedGrant extends GrantWindow {
  * months, which is the leak the instructor's own rule closes.
  */
 export type MonthSlice =
-  | { everything: true }
-  | { everything: false; monthIds: ReadonlySet<string>; lapsed: LapsedReason | null };
+  /** `grantId` is the WIDE grant that made it everything — the term, the year,
+   *  the admin grant. Carried because `CourseAccess` promises an id an admin
+   *  can audit the decision against, and "the newest live grant" is the wrong
+   *  answer to that: it is routinely a month grant that had nothing to do with
+   *  the allow. */
+  | { everything: true; grantId: string }
+  | {
+      everything: false;
+      monthIds: ReadonlySet<string>;
+      /** Which grant opened each month, for the same provenance reason. */
+      grantIdByMonth: ReadonlyMap<string, string>;
+      lapsed: LapsedReason | null;
+    };
 
 /**
  * Reduce a student's grants for ONE course to what they open.
@@ -63,7 +75,7 @@ export type MonthSlice =
  * direction a mistake here has to fail in.
  */
 export function monthSliceOf(grants: readonly MonthScopedGrant[], now: Date): MonthSlice {
-  const monthIds = new Set<string>();
+  const grantIdByMonth = new Map<string, string>();
   let lapsed: LapsedReason | null = null;
 
   for (const grant of grants) {
@@ -78,12 +90,22 @@ export function monthSliceOf(grants: readonly MonthScopedGrant[], now: Date): Mo
     // الترم ده كله مفتوح», and the same for the year. A `term` grant is
     // narrowed on the TERM axis by `resolveTermAccess`; narrowing it again
     // here would shut «شهر ٣» for the person who bought the term it sits in.
-    if (grant.scope !== 'course_month') return { everything: true };
+    if (grant.scope !== 'course_month') return { everything: true, grantId: grant.id };
 
-    if (grant.monthId !== null) monthIds.add(grant.monthId);
+    // First writer wins, and the list arrives newest-first — so a month bought
+    // twice reports the newer grant, which is the one an admin looking at it
+    // would expect to find.
+    if (grant.monthId !== null && !grantIdByMonth.has(grant.monthId)) {
+      grantIdByMonth.set(grant.monthId, grant.id);
+    }
   }
 
-  return { everything: false, monthIds, lapsed };
+  return {
+    everything: false,
+    monthIds: new Set(grantIdByMonth.keys()),
+    grantIdByMonth,
+    lapsed,
+  };
 }
 
 /**
@@ -101,4 +123,25 @@ export function sliceCoversLesson(
 ): boolean {
   if (slice.everything) return true;
   return lessonMonthIds.some((id) => slice.monthIds.has(id));
+}
+
+/**
+ * WHICH grant opened this lecture — `null` when none did.
+ *
+ * Separate from `sliceCoversLesson` because the two callers need different
+ * things: the outline needs a boolean per row and would throw the id away, and
+ * the single-lesson path needs the id for `CourseAccess`'s audit promise.
+ * Reading "the newest live grant" instead is what made a yearly subscriber's
+ * allow report the id of an unrelated month grant they bought yesterday.
+ */
+export function grantOpeningLesson(
+  slice: MonthSlice,
+  lessonMonthIds: readonly string[],
+): string | null {
+  if (slice.everything) return slice.grantId;
+  for (const id of lessonMonthIds) {
+    const grantId = slice.grantIdByMonth.get(id);
+    if (grantId !== undefined) return grantId;
+  }
+  return null;
 }

@@ -7,6 +7,7 @@ import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
 import { PathService } from './path.service';
+import { EntitlementService } from '../entitlement/entitlement.service';
 
 /**
  * What `/api/me/path` says about a course the instructor has taken down while
@@ -37,7 +38,7 @@ describe('PathService — a course unpublished under an enrolled student', () =>
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
-  const service = new PathService(prisma, new LessonGateService(prisma));
+  const service = new PathService(prisma, new LessonGateService(prisma, new EntitlementService(prisma)));
 
   let userId = '';
   let instructorId = '';

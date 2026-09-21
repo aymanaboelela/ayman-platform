@@ -44,10 +44,26 @@ export class QuizAccessService {
    * (same `ACTIVE_ENROLLMENT_STATUSES` constant). That is deliberate and it is
    * the ONE place it is duplicated, because collapsing quiz publication + open
    * window + attempt limit into `LessonAccessService` would push quiz
-   * semantics into the player module. The contract is therefore:
-   * `quiz-access.service.spec.ts` asserts that a lesson denied by
-   * `LessonAccessService.require` is also denied here, so the two predicates
-   * cannot drift. A caller with no active enrollment gets a single generic
+   * semantics into the player module.
+   *
+   * ⚠️ THAT DUPLICATION WAS NOT THE WHOLE STORY, AND THE GAP WAS REAL. This
+   * docblock used to claim `quiz-access.service.spec.ts` asserted that a lesson
+   * denied by `LessonAccessService.require` is also denied here, so the two
+   * predicates could not drift. The spec only ever covered «no enrollment at
+   * all». Nothing on this path ever looked at `AccessGrant` — so a student
+   * whose subscription had expired months ago could still start and resume
+   * attempts, including the course's final exam, and a curriculum-month gate
+   * would have been decorative on every quiz on the platform.
+   *
+   * So the enrollment predicate below stays (one query, no fetch-then-`if`),
+   * and `LessonAccessService.requireEntitled` now runs on top of it for the
+   * part this file was never going to get right by copying: the live grant, the
+   * term and the month. `requireEntitled` and not `require` deliberately — the
+   * progression gate can move under a live attempt, and resuming one must not
+   * become impossible because an admin published a lecture mid-exam. See that
+   * method's own note.
+   *
+   * A caller with no active enrollment gets a single generic
    * `quiz_not_accessible` 403 — never a 404 that would distinguish "no such
    * quiz" from "not enrolled", which is an enumeration oracle over the whole
    * catalogue. Every non-attempt quiz read (`GET /api/quiz/lessons/:lessonId`,
@@ -90,6 +106,30 @@ export class QuizAccessService {
 
     if (!quiz) {
       throw new ForbiddenException({ code: 'quiz_not_accessible' });
+    }
+
+    /*
+     * The entitlement half. Its `ForbiddenException` reasons — `expired`,
+     * `revoked`, `needs_term_grant`, `needs_month_grant` — are allowed
+     * straight through rather than flattened into `quiz_not_accessible`,
+     * because they are not an enumeration oracle: the query above already
+     * required an active enrollment in this course, so the caller has proven
+     * they belong here and the honest reason is what lets the client show
+     * «المحاضرة دي تابعة لشهر تاني» instead of a dead end.
+     *
+     * A `NotFoundException` IS flattened. `requireEntitled` re-resolves the
+     * lesson with the same publication + enrollment predicate the query above
+     * used, so a 404 here can only be a race with an unpublish — and letting
+     * it out would turn this endpoint's deliberate 403 shape into a 404 that
+     * tells a stranger which quiz ids are real.
+     */
+    try {
+      await this.lessonAccess.requireEntitled(userId, quiz.lessonId);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw new ForbiddenException({ code: 'quiz_not_accessible' });
+      }
+      throw error;
     }
 
     const now = new Date();

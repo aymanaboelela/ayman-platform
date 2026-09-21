@@ -2,7 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AccessGrant, AccessScope } from '../../generated/prisma/client';
 import { courseAccessScopes, grantLiveness, type CourseAccessSubject } from './grant-liveness';
-import { monthSliceOf, sliceCoversLesson, type MonthSlice } from './month-access';
+import { grantOpeningLesson, monthSliceOf, type MonthSlice } from './month-access';
 
 /**
  * The return type is an OBJECT in both directions. A `boolean` here is the seed
@@ -272,14 +272,20 @@ export class EntitlementService {
     lessonMonthIds: readonly string[],
   ): Promise<CourseAccess> {
     const slice = await this.resolveMonthSlice(userId, course);
-    if (sliceCoversLesson(slice, lessonMonthIds)) {
-      return { allowed: true, grantId: slice.grantId, scope: slice.scope, validUntil: null };
+
+    const grantId = grantOpeningLesson(slice, lessonMonthIds);
+    if (grantId !== null) {
+      // `validUntil: null` unconditionally, and that is correct for every
+      // grant that can reach here: a month grant has no expiry by CHECK, and a
+      // wider grant that is still LIVE has, by definition, not reached its own.
+      // The lapsed case never gets an `allowed: true` to carry a date on.
+      return { allowed: true, grantId, scope: 'course_month', validUntil: null };
     }
 
     // A live subscription to a DIFFERENT month outranks a stale one as the
     // explanation. «انتهى اشتراكك» would be a lie to a student whose
-    // subscription is live and simply not for this lecture, and it would send
-    // them to renew something they already hold.
+    // subscription is live and simply is not for this lecture, and it would
+    // send them to renew something they already hold.
     if (slice.everything || slice.monthIds.size > 0 || slice.lapsed === null) {
       return { allowed: false, reason: 'needs_month_grant' };
     }
@@ -295,10 +301,7 @@ export class EntitlementService {
    * row open and then 403'd on click, or drew a padlock on something already
    * paid for, is what two hand-rolled loops produce.
    */
-  async resolveMonthSlice(
-    userId: string,
-    course: CourseAccessSubject,
-  ): Promise<MonthSlice & { grantId: string; scope: AccessScope }> {
+  async resolveMonthSlice(userId: string, course: CourseAccessSubject): Promise<MonthSlice> {
     const grants = await this.prisma.accessGrant.findMany({
       where: { userId, OR: courseAccessScopes(course) },
       orderBy: [{ validFrom: 'desc' }, { id: 'desc' }],
@@ -312,20 +315,7 @@ export class EntitlementService {
       },
     });
 
-    const now = new Date();
-    const slice = monthSliceOf(grants, now);
-    // Provenance for the allow path: `CourseAccess` promises a grant id that
-    // an admin can audit the decision against, and the slice is a union rather
-    // than one grant. The first live one that contributed to it is the honest
-    // answer — the list is already ordered newest-first.
-    const contributing =
-      grants.find((grant) => grantLiveness(grant, now) === 'live') ?? grants[0];
-
-    return {
-      ...slice,
-      grantId: contributing?.id ?? '',
-      scope: contributing?.scope ?? 'course_month',
-    };
+    return monthSliceOf(grants, new Date());
   }
 
   /**

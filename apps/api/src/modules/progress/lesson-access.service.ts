@@ -107,6 +107,41 @@ export class LessonAccessService {
    * exists to close.
    */
   async require(userId: string, lessonId: string): Promise<LessonAccessContext> {
+    const context = await this.requireEntitled(userId, lessonId);
+
+    const available = await this.gate.isAvailable(
+      context.enrollmentId,
+      context.courseId,
+      context.lessonId,
+      userId,
+    );
+    if (!available) {
+      throw new NotFoundException('lesson not found');
+    }
+
+    return context;
+  }
+
+  /**
+   * Everything `require()` checks EXCEPT the progression gate: ownership,
+   * publication, the live grant, the term and the month.
+   *
+   * Split out for `QuizAccessService.assertCanAttempt`, which had no
+   * entitlement check of any kind — it hand-rolled the enrollment predicate and
+   * stopped there, so a student whose subscription had expired could still
+   * start and resume an attempt, and the month gate would have been decorative
+   * on every quiz in the platform. Its own docblock claimed a spec asserted the
+   * two predicates could not drift; the spec only ever covered "no enrollment
+   * at all".
+   *
+   * The progression gate is deliberately NOT in here, and that is the whole
+   * reason this is a second method rather than a flag. The gate can move under
+   * a live attempt — an admin publishes a lecture while a student is sitting
+   * the final exam, and `everyLectureCleared` flips false — and `resume` must
+   * not become a 404 because of something the student had no part in. Same
+   * line `requireOwnership` above already draws, one notch further along.
+   */
+  async requireEntitled(userId: string, lessonId: string): Promise<LessonAccessContext> {
     const context = await this.resolve(userId, lessonId);
 
     /*
@@ -177,16 +212,6 @@ export class LessonAccessService {
       if (!monthAccess.allowed) {
         throw new ForbiddenException(monthAccess.reason);
       }
-    }
-
-    const available = await this.gate.isAvailable(
-      context.enrollmentId,
-      context.courseId,
-      context.lessonId,
-      userId,
-    );
-    if (!available) {
-      throw new NotFoundException('lesson not found');
     }
 
     return context;

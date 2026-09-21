@@ -31,7 +31,7 @@ describe('progression gate enforcement', () => {
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
 
-  const gate = new LessonGateService(prisma);
+  const gate = new LessonGateService(prisma, new EntitlementService(prisma));
   const access = new LessonAccessService(prisma, gate, new EntitlementService(prisma));
   const player = new PlayerService(
     prisma,
