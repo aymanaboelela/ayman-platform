@@ -1978,8 +1978,12 @@
 }
 
 /*
-  The plan picker — up to four cards (monthly/quarterly/term/yearly), side
-  by side rather than stacked one-per-line.
+  The plan picker — up to three cards (monthly/term/yearly), side by side
+  rather than stacked one-per-line.
+
+  It was four until «٣ شهور» came off the shelf. The grid below is unchanged
+  and deliberately so: two columns is what fits the modal's own width, and an
+  odd count already spanned its last card across the row before this.
 
   Two columns by default: this panel sits inside a modal
   (`<CourseStartButton>`'s `<Dialog>`) that is itself capped narrow, so even

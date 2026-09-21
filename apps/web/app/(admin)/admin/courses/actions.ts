@@ -34,6 +34,8 @@ import {
   CourseMonthPatchSchema,
   MONTH_OPEN_BLOCKED_CODE,
   type CourseMonthPatchInput,
+  LegacyMonthBackfillResultSchema,
+  type LegacyMonthBackfillResult,
 } from '@ayman/contracts/admin/content-months';
 import { formatCopy } from '@ayman/contracts/format';
 import {
@@ -695,7 +697,11 @@ function monthOpenBlocked(error: unknown): number | null {
  *  as a plain error because the admin can read the numbers on screen. */
 function monthFailure(error: unknown): MonthActionResult {
   const blocked = monthOpenBlocked(error);
-  if (blocked === null) return { ok: false, message: copy.admin.common.saveFailed };
+  // `month.actionFailed` («مااتنفّذش») and not `common.saveFailed» («التغييرات
+  // اترجعت زي ما كانت»): a refused open or a refused rename rolled nothing
+  // back, it simply did not happen, and telling an instructor his work was
+  // reverted when it was not sends him looking for changes to redo.
+  if (blocked === null) return { ok: false, message: copy.admin.month.actionFailed };
   return {
     ok: false,
     // `blocked || …` is not possible here — nothing in this file knows the
@@ -705,7 +711,7 @@ function monthFailure(error: unknown): MonthActionResult {
     message:
       blocked > 0
         ? formatCopy(copy.admin.month.blockedByUntagged, { n: blocked })
-        : copy.admin.common.saveFailed,
+        : copy.admin.month.actionFailed,
     untaggedLessonCount: blocked,
   };
 }
@@ -777,8 +783,47 @@ export async function deleteMonthAction(
     const message =
       error instanceof ApiRequestError && error.status === 409
         ? copy.admin.month.deleteBlockedPaid
-        : copy.admin.common.saveFailed;
+        : copy.admin.month.actionFailed;
     return { ok: false, message };
+  }
+}
+
+/**
+ * «افتح شهر ١ و٢ و٣ للي اشتركوا ٣ شهور» — the legacy quarterly cohort.
+ *
+ * Two presses by design. The first runs with `dryRun` and answers with a
+ * COUNT; the second writes. The instructor is handing out access to students
+ * he cannot see from this screen, so the number goes in front of him before he
+ * commits, the same way «اتقفل الترم، وسحبنا الوصول من {n} طالب» reports the
+ * cascade a term close already caused.
+ */
+export async function backfillLegacyMonthsAction(
+  courseId: string,
+  dryRun: boolean,
+): Promise<{ ok: true; result: LegacyMonthBackfillResult } | { ok: false; message: string }> {
+  try {
+    const result = await apiSend(
+      'POST',
+      `/api/admin/courses/${courseId}/months/backfill-legacy`,
+      LegacyMonthBackfillResultSchema,
+      { dryRun },
+    );
+    if (!dryRun) {
+      invalidateCourse(courseId);
+      revalidatePath(`/admin/courses/${courseId}`);
+    }
+    return { ok: true, result };
+  } catch (error) {
+    // The 409 is «شهر ١ و٢ و٣ لازم يكونوا موجودين», which is a real sentence
+    // the instructor can act on — passed through rather than flattened into
+    // the generic failure.
+    return {
+      ok: false,
+      message:
+        error instanceof ApiRequestError && error.status === 409
+          ? copy.admin.month.backfillNeedsThreeMonths
+          : copy.admin.month.actionFailed,
+    };
   }
 }
 
@@ -801,7 +846,7 @@ export async function setLessonMonthsAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch {
-    return { ok: false, message: copy.admin.common.saveFailed };
+    return { ok: false, message: copy.admin.month.actionFailed };
   }
 }
 

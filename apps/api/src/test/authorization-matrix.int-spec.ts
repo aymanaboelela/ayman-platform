@@ -1202,6 +1202,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     },
     // MISSING_UUID rows, same convention as the terms above: the dimension
     // under test is who gets PAST the guard, and a 404 for the admin proves it.
+    // «افتح شهر ١ ٢ ٣ للي اشتركوا ٣ شهور». `dryRun` defaults true, so the
+    // admin row here counts and writes nothing — the matrix asserts who may
+    // reach the route, not what a real backfill does.
+    { label: 'admin month backfill: anonymous', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/backfill-legacy`, actor: 'anonymous', status: 401, body: () => ({}) },
+    { label: 'admin month backfill: student', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/backfill-legacy`, actor: 'student', status: 403, body: () => ({}) },
+    { label: 'admin month backfill: admin, months 1-3 missing', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/backfill-legacy`, actor: 'admin', status: 409, body: () => ({}) },
     { label: 'admin month update: anonymous', method: 'patch', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}`, actor: 'anonymous', status: 401, body: () => ({ title: 'شهر' }) },
     { label: 'admin month update: student', method: 'patch', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}`, actor: 'student', status: 403, body: () => ({ title: 'شهر' }) },
     { label: 'admin month update: admin, unknown month', method: 'patch', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}`, actor: 'admin', status: 404, body: () => ({ title: 'شهر' }) },
@@ -1614,6 +1620,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     },
     { label: 'payment mine: anonymous', method: 'get', path: () => '/api/payments/submissions/me', actor: 'anonymous', status: 401 },
     { label: 'payment mine: student', method: 'get', path: () => '/api/payments/submissions/me', actor: 'student', status: 200 },
+    // «الشهور اللي معايا خلاص» — what the checkout disables in its picker. A
+    // student's own grants, so `student` reads it and `anonymous` does not:
+    // there is nothing here for a visitor with no subscription to see, and the
+    // panel treats a failed read as "nothing owned" rather than breaking.
+    { label: 'payment my months: anonymous', method: 'get', path: () => `/api/payments/courses/${scratchCourseId}/months/mine`, actor: 'anonymous', status: 401 },
+    { label: 'payment my months: student', method: 'get', path: () => `/api/payments/courses/${scratchCourseId}/months/mine`, actor: 'student', status: 200 },
+    { label: 'payment my months: admin', method: 'get', path: () => `/api/payments/courses/${scratchCourseId}/months/mine`, actor: 'admin', status: 200 },
     { label: 'admin transfers list: anonymous', method: 'get', path: () => '/api/admin/transfers', actor: 'anonymous', status: 401 },
     { label: 'admin transfers list: student', method: 'get', path: () => '/api/admin/transfers', actor: 'student', status: 403 },
     { label: 'admin transfers list: admin', method: 'get', path: () => '/api/admin/transfers', actor: 'admin', status: 200 },

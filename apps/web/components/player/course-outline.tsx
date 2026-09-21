@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Lock } from 'lucide-react';
 import { copy, type CourseOutline } from '@ayman/contracts';
 import type { BookShippingRates } from '@ayman/contracts/books';
 import { Badge, cn } from '@ayman/ui';
@@ -13,6 +13,7 @@ import {
   type RemainingLecture,
 } from '@/lib/course-outline';
 import { LockedExam } from '@/components/library/locked-exam';
+import { MonthLockedDialog } from '@/components/library/month-locked-dialog';
 import { BookOrderButton } from '@/components/site/book-order-button';
 import { courseBookCtaVisible } from '@/lib/course-book';
 import { LessonKindIcon } from './lesson-kind-icon';
@@ -163,10 +164,21 @@ function LectureEntry({
   const { lecture, quizzes } = entry;
 
   if (lecture.gate === 'locked') {
-    // The one row the gate can still close — the course's final exam. Never
-    // nested under anything (an exam is excluded from `groupIntoEntries`'
-    // quiz-adjacency rule), so it stays a plain row: there is nothing to
-    // reveal by expanding it, only a reason it will not open yet.
+    /*
+     * `locked` has TWO causes, and they need opposite dialogs — the same split
+     * `library/course-outline.tsx` makes, and for the same reason.
+     *
+     * The final exam is waiting on WORK and the dialog it opens has nothing to
+     * offer but a dismiss. A lecture in a month the subscription does not cover
+     * is waiting on a PAYMENT, and the whole point of drawing a padlock rather
+     * than hiding the row is that there is something to press. Sending a
+     * month-locked row into `<LockedExam>` told the student «باقي ٣ محاضرات»
+     * about a lecture no amount of studying would open.
+     *
+     * Either way it stays a plain row: an exam is excluded from
+     * `groupIntoEntries`' quiz-adjacency rule and a locked lecture has nothing
+     * to reveal by expanding it, only a reason it will not open yet.
+     */
     return (
       <li className="mb-2">
         <div className="lesson-row lesson-row--locked">
@@ -176,12 +188,23 @@ function LectureEntry({
           <div className="lesson-row__text">
             <p className="lesson-row__title">{lecture.title}</p>
           </div>
-          <LockedExam
-            remaining={remaining}
-            total={totalLessons}
-            left={left}
-            courseSlug={courseSlug}
-          />
+          {lecture.isExam ? (
+            <LockedExam
+              remaining={remaining}
+              total={totalLessons}
+              left={left}
+              courseSlug={courseSlug}
+            />
+          ) : (
+            <MonthLockedDialog
+              courseSlug={courseSlug}
+              month={lecture.month}
+              triggerClassName="chip chip--locked"
+            >
+              <Lock className="h-4 w-4" />
+              {c.lessonMonthLocked}
+            </MonthLockedDialog>
+          )}
         </div>
       </li>
     );

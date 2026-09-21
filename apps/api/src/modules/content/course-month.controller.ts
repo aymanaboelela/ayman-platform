@@ -1,6 +1,9 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, UsePipes } from '@nestjs/common';
 import { CourseMonthWriteSchema, LessonMonthsWriteSchema } from '@ayman/contracts/months';
-import { CourseMonthPatchSchema } from '@ayman/contracts/admin/content-months';
+import {
+  CourseMonthPatchSchema,
+  LegacyMonthBackfillSchema,
+} from '@ayman/contracts/admin/content-months';
 import { createZodDto, ZodValidationPipe } from 'nestjs-zod';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { CourseMonthService } from './course-month.service';
@@ -16,6 +19,7 @@ import { CourseMonthService } from './course-month.service';
 class CreateCourseMonthDto extends createZodDto(CourseMonthWriteSchema) {}
 class UpdateCourseMonthDto extends createZodDto(CourseMonthPatchSchema) {}
 class SetLessonMonthsDto extends createZodDto(LessonMonthsWriteSchema) {}
+class LegacyMonthBackfillDto extends createZodDto(LegacyMonthBackfillSchema) {}
 
 /**
  * «شهور المنهج». `section:write` throughout, exactly like `TermController`
@@ -44,6 +48,24 @@ export class CourseMonthController {
   @Post('courses/:courseId/months')
   create(@Param('courseId') courseId: string, @Body() body: CreateCourseMonthDto) {
     return this.months.create(courseId, body);
+  }
+
+  /**
+   * «افتح شهر ١ و٢ و٣ للي اشتركوا ٣ شهور».
+   *
+   * A POST that defaults to counting and writing nothing: `dryRun` is `true`
+   * unless the body says otherwise, so the panel can put the number of affected
+   * students on screen before the instructor commits to anything. It only ever
+   * INSERTs — see the service method for why nothing is revoked or narrowed.
+   *
+   * `section:write` like its neighbours rather than a money permission, even
+   * though it hands out access: the act is "finish configuring this course's
+   * months", it is per course, and it is only reachable from the month panel.
+   */
+  @RequirePermission('section:write')
+  @Post('courses/:courseId/months/backfill-legacy')
+  backfillLegacy(@Param('courseId') courseId: string, @Body() body: LegacyMonthBackfillDto) {
+    return this.months.backfillLegacyQuarterly(courseId, body.dryRun);
   }
 
   /** Nested under the course on purpose — see `CourseMonthService.update` on

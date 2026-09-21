@@ -69,3 +69,22 @@ export function isPrismaRecordNotFound(error: unknown): boolean {
 export function isUniqueViolation(error: unknown): boolean {
   return typeof error === 'object' && error !== null && (error as { code?: string }).code === 'P2002';
 }
+
+/**
+ * A FOREIGN KEY constraint rejected the write — Prisma's `P2003`.
+ *
+ * Duck-typed on `.code` like its neighbours, and here rather than in the one
+ * service that first needed it because the situations it stands for are not
+ * one feature's: a `ON DELETE RESTRICT` parent that still has children, and a
+ * composite FK asserting two rows belong to the same course
+ * (`lesson_months_month_in_course`, `exam_coverage_*_in_course`).
+ *
+ * Every call site that catches this has ALSO pre-checked the same condition in
+ * application code, and that is the intended arrangement rather than
+ * belt-and-braces: reaching this predicate means a concurrent write beat the
+ * check, and a sentence is a better answer to that race than the 500 an
+ * unhandled `P2003` becomes.
+ */
+export function isForeignKeyViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: string }).code === 'P2003';
+}

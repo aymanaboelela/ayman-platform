@@ -70,3 +70,44 @@ export const MonthDeleteBlockedSchema = z.object({
   paidSubmissionCount: z.number().int().min(1),
 });
 export type MonthDeleteBlocked = z.infer<typeof MonthDeleteBlockedSchema>;
+
+/**
+ * «الناس القديمة» — what happens to the students who bought «٣ شهور» before
+ * the package came off the shelf.
+ *
+ * The instructor's own answer: «هيشوفوا محاضرات الشهر الأول والشهر التاني
+ * والشهر التالت». So a quarterly buyer is GIVEN months 1, 2 and 3 — given, not
+ * converted. Nothing is revoked, nothing is updated, no `valid_until` moves:
+ * their existing course-wide grant stays live until the date they paid through,
+ * and these three grants are still theirs afterwards.
+ *
+ * ## Why this is a button and not a migration
+ *
+ * A migration runs on every stack at boot, before the instructor has created a
+ * single month — there would be no months 1, 2 and 3 to grant. It also cannot
+ * be looked at first. This runs per course, after the months exist, and
+ * `dryRun` is what puts the numbers on screen before anything is written.
+ */
+export const LegacyMonthBackfillSchema = z
+  .object({
+    /** `true` counts and writes nothing — the default, so a mis-wired client
+     *  cannot grant access by omission. */
+    dryRun: z.boolean().default(true),
+  })
+  .strict();
+export type LegacyMonthBackfillInput = z.infer<typeof LegacyMonthBackfillSchema>;
+
+export const LegacyMonthBackfillResultSchema = z.object({
+  /** Distinct students with an approved «٣ شهور» payment on this course and a
+   *  live course-wide grant to go with it. */
+  students: z.number().int().min(0),
+  /** The month ids they were given — months 1, 2 and 3, in that order. */
+  monthIds: z.array(z.uuid()),
+  /** Grants actually written. Below `students × 3` whenever somebody already
+   *  held one of the three: the backfill never writes a second live grant for
+   *  a month a student already has. `0` on a dry run. */
+  grantsWritten: z.number().int().min(0),
+  /** `true` when nothing was written because this was a dry run. */
+  dryRun: z.boolean(),
+});
+export type LegacyMonthBackfillResult = z.infer<typeof LegacyMonthBackfillResultSchema>;

@@ -4,40 +4,14 @@ import {
   MONTH_DELETE_BLOCKED_CODE,
   MONTH_OPEN_BLOCKED_CODE,
   type CourseMonthPatchInput,
+  type LegacyMonthBackfillResult,
 } from '@ayman/contracts/admin/content-months';
 import { copy } from '@ayman/contracts/copy/admin';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
-import { isUniqueViolation } from '../../common/prisma/prisma-errors';
+import { isForeignKeyViolation, isUniqueViolation } from '../../common/prisma/prisma-errors';
 import type { CourseMonth } from '../../generated/prisma/client';
-
-/**
- * A FOREIGN KEY rejected the write — Prisma's `P2003`.
- *
- * Duck-typed on `.code`, the same convention `isUniqueViolation` and its
- * neighbours in `common/prisma/prisma-errors.ts` already use. It is local to
- * this file rather than added there because the two FKs it stands for are
- * both this feature's own: `payment_submission_months`'s `ON DELETE RESTRICT`
- * month side, and the composite `lesson_months_month_in_course` that refuses a
- * month belonging to another course. Both are pre-checked below, so reaching
- * this predicate means a concurrent write beat the check — a sentence is still
- * a better answer than the 500 an unhandled `P2003` becomes.
- */
-function isForeignKeyViolation(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && (error as { code?: string }).code === 'P2003';
-}
-
-/**
- * ⚠️ `AUDIT_RESOURCES` has no `courseMonth` entry yet, and
- * `apps/api/src/modules/admin/admin.constants.ts` is not this change's to
- * edit. `AuditInput.resourceType` is a plain `string`, so the literal records
- * correctly today and the audit viewer's filter — which is the whole reason a
- * month gets its own resource type rather than being buried in `courses` —
- * already works on it. Fold this into `AUDIT_RESOURCES` as `courseMonth` the
- * moment that file is in hand.
- */
-const AUDIT_RESOURCE_COURSE_MONTH = 'course_months';
 
 /** Published LECTURES — quizzes excluded. The same `isLecture` definition
  *  `CatalogService` counts months with and `CourseMonthSchema.lessonCount`
@@ -145,14 +119,12 @@ export class CourseMonthService {
       throw error;
     }
 
-    // Same "one action, `operation` in metadata" convention `TermService` and
-    // `SectionService` use — see `AUDIT_ACTIONS`' own note on `term:update`.
     await this.audit.record({
-      action: 'course:update',
-      resourceType: AUDIT_RESOURCE_COURSE_MONTH,
+      action: 'month:create',
+      resourceType: AUDIT_RESOURCES.courseMonth,
       resourceId: month.id,
       outcome: 'success',
-      metadata: { operation: 'month:create', courseId, monthIndex: month.monthIndex, title: month.title },
+      metadata: { courseId, monthIndex: month.monthIndex, title: month.title },
     });
 
     return toAdminMonth(course, month, await this.countsFor(courseId, [month.id]));
@@ -194,12 +166,21 @@ export class CourseMonthService {
       throw error;
     }
 
+    /*
+     * `month:close` is its own verb and `month:update` covers everything else,
+     * REOPENING included — the same asymmetry `AUDIT_ACTIONS` draws between
+     * `term:update` and `term:close`, inverted. Closing a term revokes every
+     * live grant for it; closing a month revokes nothing at all and only takes
+     * it off the shelf. Both still deserve a verb, because closing a month is
+     * the press that stops the money, and an auditor answering «مين قفل شهر ٣»
+     * should not have to unpack metadata to find it.
+     */
     await this.audit.record({
-      action: 'course:update',
-      resourceType: AUDIT_RESOURCE_COURSE_MONTH,
+      action: input.isOpen === false ? 'month:close' : 'month:update',
+      resourceType: AUDIT_RESOURCES.courseMonth,
       resourceId: monthId,
       outcome: 'success',
-      metadata: { operation: 'month:update', courseId, changed: Object.keys(input) },
+      metadata: { courseId, changed: Object.keys(input) },
     });
 
     return toAdminMonth(course, month, await this.countsFor(courseId, [month.id]));
@@ -239,11 +220,11 @@ export class CourseMonthService {
     }
 
     await this.audit.record({
-      action: 'course:update',
-      resourceType: AUDIT_RESOURCE_COURSE_MONTH,
+      action: 'month:delete',
+      resourceType: AUDIT_RESOURCES.courseMonth,
       resourceId: monthId,
       outcome: 'success',
-      metadata: { operation: 'month:delete', courseId, monthIndex: month.monthIndex },
+      metadata: { courseId, monthIndex: month.monthIndex },
     });
   }
 
@@ -428,4 +409,140 @@ export class CourseMonthService {
       untaggedLessonCount,
     };
   }
+  /**
+   * «الناس اللي اشتركت ٣ شهور» — give them months 1, 2 and 3.
+   *
+   * ## It only ever INSERTs
+   *
+   * No `UPDATE`, no `revokedAt`, no `validUntil` touched, and that is the whole
+   * design rather than caution. Their existing course-wide grant is money they
+   * paid for a window that has not closed yet; narrowing it the day the
+   * instructor configures months would take back access nobody asked to take
+   * back, and it would do it silently, to people who are current on their
+   * payments. So they keep the whole course until their own date runs out, and
+   * they keep months 1–3 permanently after it. Strictly more than they had.
+   *
+   * The instructor's two sentences are both satisfied this way: «الناس اللي
+   * اشتركت قبل كده هتسمع زي ما هي عادي» and «هيشوفوا محاضرات الشهر الأول
+   * والتاني والتالت».
+   *
+   * ## Who counts as a quarterly buyer
+   *
+   * An APPROVED `quarterly` submission on this course, plus a live course-wide
+   * grant. The grant row itself carries no plan — `PaymentsService.approve`
+   * EXTENDS one grant across renewals rather than stacking one per payment (see
+   * the model doc on `PaymentSubmission`), so the plan only exists on the
+   * submission. A student who bought quarterly once and monthly since still
+   * qualifies, which is the correct reading of «اللي اشترك ٣ شهور».
+   *
+   * ## Why months 1, 2 and 3 and not "the three from the purchase date"
+   *
+   * Because the instructor back-tags an existing catalogue: a lecture recorded
+   * last year and tagged «شهر ٣» today has a `created_at` that says nothing
+   * about which months a past payment was for. Any derivation from dates is a
+   * guess, and the thing it would be guessing about is paid access. He named
+   * the three months himself, so they are the three.
+   */
+  async backfillLegacyQuarterly(
+    courseId: string,
+    dryRun: boolean,
+  ): Promise<LegacyMonthBackfillResult> {
+    const course = await this.prisma.course.findUnique({
+      where: { id: courseId },
+      select: { id: true },
+    });
+    if (!course) throw new NotFoundException();
+
+    const months = await this.prisma.courseMonth.findMany({
+      where: { courseId, monthIndex: { in: [1, 2, 3] } },
+      orderBy: { monthIndex: 'asc' },
+      select: { id: true, monthIndex: true },
+    });
+    if (months.length < 3) {
+      // Refused rather than partially applied: giving a quarterly buyer two of
+      // the three months is a state nobody chose and nothing would ever
+      // correct, because a second press would find them already served.
+      throw new ConflictException(
+        'لازم شهر ١ و٢ و٣ يكونوا موجودين على الكورس قبل ما تفتحهم لمشتركين الـ٣ شهور',
+      );
+    }
+    const monthIds = months.map((month) => month.id);
+
+    const now = new Date();
+    const buyers = await this.prisma.paymentSubmission.findMany({
+      where: {
+        courseId,
+        plan: 'quarterly',
+        status: 'approved',
+        user: {
+          accessGrants: {
+            some: {
+              scope: 'course',
+              courseId,
+              revokedAt: null,
+              OR: [{ validUntil: null }, { validUntil: { gt: now } }],
+            },
+          },
+        },
+      },
+      distinct: ['userId'],
+      select: { userId: true },
+    });
+
+    if (dryRun || buyers.length === 0) {
+      return { students: buyers.length, monthIds, grantsWritten: 0, dryRun };
+    }
+
+    // `skipDuplicates` is not enough on its own — `access_grants` has no unique
+    // on (userId, scope, monthId), deliberately, because a revoked grant and a
+    // live one for the same month are both legitimate history. So the rows
+    // already held are read first and subtracted.
+    const held = await this.prisma.accessGrant.findMany({
+      where: {
+        scope: 'course_month',
+        courseId,
+        monthId: { in: monthIds },
+        revokedAt: null,
+        userId: { in: buyers.map((buyer) => buyer.userId) },
+      },
+      select: { userId: true, monthId: true },
+    });
+    const heldKeys = new Set(held.map((row) => `${row.userId}:${row.monthId}`));
+
+    const rows = buyers.flatMap((buyer) =>
+      monthIds
+        .filter((monthId) => !heldKeys.has(`${buyer.userId}:${monthId}`))
+        .map((monthId) => ({
+          userId: buyer.userId,
+          scope: 'course_month' as const,
+          courseId,
+          monthId,
+          source: 'purchase' as const,
+          // NEVER a date. `access_grants_month_open_ended` is a CHECK, and one
+          // written here would roll the whole backfill back with a 23514.
+          validUntil: null,
+          note: 'legacy: ٣ شهور → شهر ١ ٢ ٣',
+        })),
+    );
+
+    if (rows.length > 0) {
+      await this.prisma.accessGrant.createMany({ data: rows });
+    }
+
+    await this.audit.record({
+      action: 'month:update',
+      resourceType: AUDIT_RESOURCES.courseMonth,
+      resourceId: courseId,
+      outcome: 'success',
+      metadata: {
+        operation: 'legacy-quarterly-backfill',
+        courseId,
+        students: buyers.length,
+        grantsWritten: rows.length,
+      },
+    });
+
+    return { students: buyers.length, monthIds, grantsWritten: rows.length, dryRun: false };
+  }
+
 }

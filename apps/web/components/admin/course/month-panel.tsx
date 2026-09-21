@@ -12,6 +12,7 @@ import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
 import { Switch } from '@ayman/ui/components/switch';
 import {
+  backfillLegacyMonthsAction,
   createMonthAction,
   deleteMonthAction,
   updateMonthAction,
@@ -462,7 +463,82 @@ export function MonthPanel({
       )}
 
       <AddMonthForm courseId={courseId} months={months} />
+
+      {/* Only once months 1, 2 and 3 exist — before that the button's only
+          possible answer is the 409 explaining they do not. */}
+      {[1, 2, 3].every((index) => months.some((month) => month.monthIndex === index)) ? (
+        <LegacyQuarterlyBackfill courseId={courseId} />
+      ) : null}
     </section>
+  );
+}
+
+/**
+ * «مشتركين الـ٣ شهور القدام» — give them months 1, 2 and 3.
+ *
+ * TWO presses, and the count between them is the point. The instructor is
+ * handing access to students he cannot see from this screen, and «افتح لهم»
+ * with no number in front of it is a press nobody can check. The same courtesy
+ * `term.closedRevoked` gives in the other direction, where closing a term
+ * reports how many students it just cut off.
+ *
+ * It only ever ADDS — nothing is revoked, narrowed or re-dated — which is what
+ * `backfillNote` says out loud, because «تحويل» is what an instructor will
+ * assume this does and it would be the opposite of the truth.
+ */
+function LegacyQuarterlyBackfill({ courseId }: { courseId: string }) {
+  const [pending, setPending] = useState(false);
+  const [found, setFound] = useState<number | null>(null);
+
+  const run = (dryRun: boolean) => {
+    setPending(true);
+    void backfillLegacyMonthsAction(courseId, dryRun).then((result) => {
+      setPending(false);
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
+      if (dryRun) {
+        setFound(result.result.students);
+        return;
+      }
+      setFound(null);
+      toast.success(
+        result.result.grantsWritten === 0
+          ? c.backfillAlreadyDone
+          : formatCopy(c.backfillDone, { n: result.result.grantsWritten }),
+      );
+    });
+  };
+
+  return (
+    <div className="mt-6 rounded-md border border-line bg-surface-2 p-3">
+      <h3 className="text-[length:var(--fs-text-sm)] font-semibold">{c.backfillTitle}</h3>
+      <p className="mt-1 max-w-[42rem] text-[length:var(--fs-text-sm)] text-fg-muted">
+        {c.backfillLead}
+      </p>
+      <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{c.backfillNote}</p>
+
+      {found !== null ? (
+        <p className="mt-2 text-[length:var(--fs-text-sm)]">
+          {found === 0 ? c.backfillNone : formatCopy(c.backfillFound, { n: found })}
+        </p>
+      ) : null}
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button type="button" variant="secondary" size="sm" disabled={pending} onClick={() => run(true)}>
+          {c.backfillCheck}
+        </Button>
+        {/* Offered only after the count, and only when there is somebody to
+            open them for — a button that would write nothing is a button that
+            teaches the instructor his press does nothing. */}
+        {found !== null && found > 0 ? (
+          <Button type="button" size="sm" disabled={pending} onClick={() => run(false)}>
+            {c.backfillApply}
+          </Button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

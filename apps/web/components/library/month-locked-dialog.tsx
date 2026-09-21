@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
-import { cn } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
 import { Button } from '@ayman/ui/components/button';
 import {
   Dialog,

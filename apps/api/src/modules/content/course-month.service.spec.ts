@@ -409,4 +409,153 @@ describe('CourseMonthService', () => {
       expect(after.courseSellsByMonth).toBe(true);
     });
   });
+  /**
+   * «الناس اللي اشتركت ٣ شهور» — the legacy cohort.
+   *
+   * The assertion that matters is the NEGATIVE one: the student's original
+   * course-wide grant comes out of this untouched, same `validUntil`, same
+   * `revokedAt: null`. If that ever stops being true, somebody who is current
+   * on their payments loses access the day the instructor presses a button.
+   */
+  describe('backfillLegacyQuarterly', () => {
+    async function makeQuarterlyBuyer(courseId: string, validUntil: Date | null) {
+      const userId = await makeStudent();
+      const grant = await prisma.accessGrant.create({
+        data: {
+          userId,
+          scope: 'course',
+          courseId,
+          source: 'purchase',
+          // Backdated, because `access_grants_window_ordered` refuses a window
+          // that ends before it starts — and the lapsed case below is exactly
+          // a `validUntil` in the past.
+          validFrom: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000),
+          validUntil,
+        },
+        select: { id: true },
+      });
+      await prisma.paymentSubmission.create({
+        data: {
+          userId,
+          courseId,
+          plan: 'quarterly',
+          status: 'approved',
+          amountCents: 30000,
+          screenshotKey: 'k',
+          grantId: grant.id,
+        },
+      });
+      return { userId, grantId: grant.id };
+    }
+
+    async function makeMonths(courseId: string, indexes: number[]) {
+      for (const monthIndex of indexes) {
+        await prisma.courseMonth.create({
+          data: { courseId, monthIndex, title: `شهر ${monthIndex}` },
+        });
+      }
+    }
+
+    it('refuses until months 1, 2 and 3 all exist', async () => {
+      const { courseId } = await makeCourse();
+      await makeMonths(courseId, [1, 2]);
+
+      await expect(service.backfillLegacyQuarterly(courseId, false)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+    });
+
+    it('counts without writing on a dry run', async () => {
+      const { courseId } = await makeCourse();
+      await makeMonths(courseId, [1, 2, 3]);
+      await makeQuarterlyBuyer(courseId, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+
+      const result = await service.backfillLegacyQuarterly(courseId, true);
+
+      expect(result).toMatchObject({ students: 1, grantsWritten: 0, dryRun: true });
+      expect(await prisma.accessGrant.count({ where: { courseId, scope: 'course_month' } })).toBe(0);
+    });
+
+    it('gives each buyer the three months WITHOUT touching their original grant', async () => {
+      const { courseId } = await makeCourse();
+      await makeMonths(courseId, [1, 2, 3]);
+      const validUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      const { userId, grantId } = await makeQuarterlyBuyer(courseId, validUntil);
+
+      const result = await service.backfillLegacyQuarterly(courseId, false);
+      expect(result).toMatchObject({ students: 1, grantsWritten: 3, dryRun: false });
+
+      const monthGrants = await prisma.accessGrant.findMany({
+        where: { userId, courseId, scope: 'course_month' },
+        select: { monthId: true, validUntil: true, revokedAt: true },
+      });
+      expect(monthGrants).toHaveLength(3);
+      // The CHECK would have rolled the whole thing back, but asserting it
+      // here is what names the rule: a month is content, not thirty days.
+      expect(monthGrants.every((grant) => grant.validUntil === null)).toBe(true);
+
+      const original = await prisma.accessGrant.findUniqueOrThrow({
+        where: { id: grantId },
+        select: { validUntil: true, revokedAt: true },
+      });
+      expect(original.revokedAt).toBeNull();
+      expect(original.validUntil?.getTime()).toBe(validUntil.getTime());
+    });
+
+    it('is idempotent — a second press writes nothing', async () => {
+      const { courseId } = await makeCourse();
+      await makeMonths(courseId, [1, 2, 3]);
+      await makeQuarterlyBuyer(courseId, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+
+      await service.backfillLegacyQuarterly(courseId, false);
+      const second = await service.backfillLegacyQuarterly(courseId, false);
+
+      expect(second).toMatchObject({ students: 1, grantsWritten: 0 });
+      expect(await prisma.accessGrant.count({ where: { courseId, scope: 'course_month' } })).toBe(3);
+    });
+
+    it('skips a buyer whose subscription already lapsed', async () => {
+      // They are not «الناس اللي اشتركت» any more — they are somebody who has
+      // to subscribe again, and handing them three months free would be a
+      // refund nobody authorised.
+      const { courseId } = await makeCourse();
+      await makeMonths(courseId, [1, 2, 3]);
+      await makeQuarterlyBuyer(courseId, new Date(Date.now() - 24 * 60 * 60 * 1000));
+
+      expect(await service.backfillLegacyQuarterly(courseId, false)).toMatchObject({
+        students: 0,
+        grantsWritten: 0,
+      });
+    });
+
+    it('ignores a monthly buyer — only «٣ شهور» is being made good', async () => {
+      const { courseId } = await makeCourse();
+      await makeMonths(courseId, [1, 2, 3]);
+      const userId = await makeStudent();
+      const grant = await prisma.accessGrant.create({
+        data: {
+          userId,
+          scope: 'course',
+          courseId,
+          source: 'purchase',
+          validUntil: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+        },
+        select: { id: true },
+      });
+      await prisma.paymentSubmission.create({
+        data: {
+          userId,
+          courseId,
+          plan: 'monthly',
+          status: 'approved',
+          amountCents: 15000,
+          screenshotKey: 'k',
+          grantId: grant.id,
+        },
+      });
+
+      expect(await service.backfillLegacyQuarterly(courseId, false)).toMatchObject({ students: 0 });
+    });
+  });
+
 });

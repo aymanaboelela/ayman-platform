@@ -518,6 +518,40 @@ const admin = {
     /** The warning next to a published lecture with no month on a course that
      *  DOES sell by month — the single lecture version of `blockedByUntagged`. */
     untaggedWarning: 'من غير شهر — مشتركين الشهر مش هيشوفوها.',
+    /** The panel's own generic failure, the twin of `term.actionFailed`.
+     *  `common.saveFailed` («التغييرات اترجعت زي ما كانت») is the wrong
+     *  sentence here: a refused open or a refused delete rolled nothing back,
+     *  it simply did not happen. */
+    actionFailed: 'مااتنفّذش، حاول تاني',
+
+    // ── «الناس اللي اشتركت ٣ شهور» ────────────────────────────────────────
+    /**
+     * The button that hands months 1, 2 and 3 to the students who bought the
+     * «٣ شهور» package before it came off the shelf.
+     *
+     * Two presses: the first counts, the second writes. The instructor is
+     * giving access to students he cannot see from this screen, so the number
+     * goes in front of him first — the same courtesy `closedRevoked` gives when
+     * a term close takes access away.
+     */
+    backfillTitle: 'مشتركين الـ٣ شهور القدام',
+    backfillLead:
+      'باقة الـ٣ شهور اتشالت من البيع، واللي اشتركوا فيها قبل كده لسه معاهم الكورس كله لحد ما مدتهم تخلص. الزرار ده بيديهم شهر ١ و٢ و٣ كمان، فيفضلوا شايفينهم بعد ما المدة تنتهي.',
+    backfillCheck: 'شوف هيأثر على كام طالب',
+    /** `{n}` — students who qualify. */
+    backfillFound: '{n} طالب اشتركوا ٣ شهور على الكورس ده.',
+    backfillNone: 'محدش اشترك ٣ شهور على الكورس ده.',
+    backfillApply: 'افتح لهم شهر ١ و٢ و٣',
+    /** `{n}` — grants actually written, which is below «students × ٣» whenever
+     *  somebody already held one of the three. */
+    backfillDone: 'تمام — اتفتح {n} شهر للطلبة دول.',
+    /** Nothing was written because every one of them already had the three. */
+    backfillAlreadyDone: 'كلهم معاهم الشهور التلاتة خلاص.',
+    backfillNeedsThreeMonths:
+      'لازم شهر ١ و٢ و٣ يكونوا موجودين على الكورس الأول، وبعدين تفتحهم لمشتركين الـ٣ شهور.',
+    /** ⚠️ Says what this does NOT do, because «تحويل» is what an instructor
+     *  will assume and it would be the opposite of the truth. */
+    backfillNote: 'مفيش حاجة بتتسحب من حد — ده بيزوّد بس.',
   },
   section: {
     new: 'قسم جديد',
