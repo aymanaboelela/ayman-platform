@@ -720,6 +720,65 @@ describe('EntitlementService', () => {
       );
     });
 
+    it('never resumes into a lecture the student does not own', async () => {
+      /*
+       * «نبدأ الكورس» landing on a padlock is the worst possible first press,
+       * and for a RETURNING student it is worse still: `lastLessonId` is where
+       * they stopped watching, so somebody whose yearly lapsed and who then
+       * bought «شهر ١» would be sent back to the «شهر ٢» lecture they were on,
+       * every single time.
+       */
+      const section = await prisma.courseSection.create({
+        data: { courseId: monthCourse.id, title: 'الوحدة', position: 1, isPublished: true },
+      });
+      const inOne = await prisma.lesson.create({
+        data: {
+          courseId: monthCourse.id,
+          sectionId: section.id,
+          title: 'محاضرة شهر ١',
+          kind: 'text',
+          position: 1,
+          isPublished: true,
+          months: { create: { monthId: monthOneId, courseId: monthCourse.id, isPrimary: true } },
+        },
+        select: { id: true },
+      });
+      const inTwo = await prisma.lesson.create({
+        data: {
+          courseId: monthCourse.id,
+          sectionId: section.id,
+          title: 'محاضرة شهر ٢',
+          kind: 'text',
+          position: 2,
+          isPublished: true,
+          months: { create: { monthId: monthTwoId, courseId: monthCourse.id, isPrimary: true } },
+        },
+        select: { id: true },
+      });
+
+      await prisma.accessGrant.create({
+        data: {
+          userId: monthUserId,
+          scope: 'course_month',
+          courseId: monthCourse.id,
+          monthId: monthOneId,
+          source: 'purchase',
+        },
+      });
+      // Where they stopped is in the month they do NOT own.
+      await prisma.enrollment.upsert({
+        where: { userId_courseId: { userId: monthUserId, courseId: monthCourse.id } },
+        create: { userId: monthUserId, courseId: monthCourse.id, lastLessonId: inTwo.id },
+        update: { status: 'active', lastLessonId: inTwo.id },
+      });
+
+      const result = await service.enroll(monthUserId, monthCourse.id);
+      expect(result.resumeLessonId).toBe(inOne.id);
+
+      await prisma.enrollment.deleteMany({ where: { courseId: monthCourse.id } });
+      await prisma.courseSection.delete({ where: { id: section.id } });
+    });
+
     it('reports the lapse, not «اشترك في الشهر ده», when every grant is dead', async () => {
       await prisma.accessGrant.create({
         data: {

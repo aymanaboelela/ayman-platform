@@ -325,9 +325,63 @@ export class EntitlementService {
    * published before its content lands), and the caller renders it as a
    * disabled button rather than navigating to `/lessons/null`.
    */
-  private async firstLessonId(courseId: string): Promise<string | null> {
+  /**
+   * Where «نبدأ الكورس» actually lands — the last lesson they were on, or the
+   * course's opening one, but never a lesson their subscription does not open.
+   *
+   * ## Why the filter is here and not only in the gate
+   *
+   * `LessonAccessService.require` would refuse it a moment later, correctly,
+   * with a 403 — and the student would have pressed a button that took them to
+   * a padlock. Worse for the returning one: `lastLessonId` is where they
+   * stopped watching, so a student whose yearly subscription lapsed and who
+   * then bought «شهر ٢» would be sent straight back to the «شهر ٥» lecture
+   * they were on, every single time they pressed the button.
+   *
+   * On a course with no months this is exactly the old two-line behaviour —
+   * `monthSliceOf` on a student with any course-wide grant returns
+   * `everything`, and a course with no `lesson_months` rows has nothing to
+   * filter against either way.
+   */
+  private async resumableLessonId(
+    courseId: string,
+    userId: string,
+    course: CourseAccessSubject,
+    lastLessonId: string | null,
+  ): Promise<string | null> {
+    const slice = await this.resolveMonthSlice(userId, course);
+    if (slice.everything) return lastLessonId ?? (await this.firstLessonId(courseId));
+
+    const owned = [...slice.monthIds];
+    if (lastLessonId !== null) {
+      const stillOwned = await this.prisma.lesson.findFirst({
+        where: { id: lastLessonId, courseId, months: { some: { monthId: { in: owned } } } },
+        select: { id: true },
+      });
+      if (stillOwned) return stillOwned.id;
+    }
+
+    return this.firstLessonId(courseId, owned);
+  }
+
+  /**
+   * The course's opening lesson, optionally narrowed to a set of months.
+   *
+   * `ownedMonthIds` is `null` for "no narrowing" — a course-wide subscriber,
+   * or a course that has no months at all. An EMPTY array is not the same
+   * thing and must not be treated as one: it means the student owns no month
+   * here, so no lesson qualifies and the honest answer is `null`.
+   */
+  private async firstLessonId(courseId: string, ownedMonthIds: string[] | null = null): Promise<string | null> {
     const lesson = await this.prisma.lesson.findFirst({
-      where: { courseId, isPublished: true, section: { isPublished: true } },
+      where: {
+        courseId,
+        isPublished: true,
+        section: { isPublished: true },
+        ...(ownedMonthIds === null
+          ? {}
+          : { months: { some: { monthId: { in: ownedMonthIds } } } }),
+      },
       orderBy: [
         { section: { position: 'asc' } },
         { section: { id: 'asc' } },
@@ -360,7 +414,9 @@ export class EntitlementService {
   ): Promise<{ enrollmentId: string; access: CourseAccess; resumeLessonId: string | null }> {
     const course = await this.prisma.course.findUnique({
       where: { id: courseId },
-      select: { id: true, status: true, requiresGrant: true },
+      // `subjectId` is for the month slice below — `courseAccessScopes` needs
+      // it, and this row is already being read.
+      select: { id: true, status: true, subjectId: true, requiresGrant: true },
     });
     if (!course || course.status !== 'published') throw new NotFoundException();
 
@@ -409,8 +465,10 @@ export class EntitlementService {
       enrollmentId: enrollment.id,
       access,
       // Where they stopped wins; the opening lesson is the fallback for a
-      // first enrollment.
-      resumeLessonId: enrollment.lastLessonId ?? (await this.firstLessonId(courseId)),
+      // first enrollment — and BOTH are filtered by the months this student
+      // owns, because «نبدأ» landing on a padlock is the worst possible first
+      // press. See `resumableLessonId`.
+      resumeLessonId: await this.resumableLessonId(courseId, userId, course, enrollment.lastLessonId),
     };
   }
 

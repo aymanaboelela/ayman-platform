@@ -46,17 +46,19 @@ describe('MonthLockedDialog', () => {
   });
 
   /**
-   * `?month=` is not decoration. `proxy.ts` 307s `/courses/:slug` to
-   * `/library/:slug` for any student with live access, and owning ONE month
-   * makes that true — so a bare course link here returns them to the page they
-   * pressed it from. The parameter is what the proxy exempts on.
+   * The checkout ROUTE, not the course page.
+   *
+   * The student in front of this padlock owns a month already, so
+   * `CourseStartButton`'s 403 — the only other way into the panel — never
+   * fires for them, and `proxy.ts` would have sent `/courses/:slug` to their
+   * library anyway. `?month=` is the preselection on top of that.
    */
-  it('offers the month, carrying the id the proxy exempts on', () => {
+  it('offers the checkout route with the month preselected', () => {
     open({ courseSlug: 'programming-y1', month: { id: 'm-3', title: 'شهر ٣', lessonCount: 5 } });
 
     expect(screen.getByRole('link', { name: c.lockedMonthCta })).toHaveAttribute(
       'href',
-      '/courses/programming-y1?month=m-3',
+      '/courses/programming-y1/subscribe?month=m-3',
     );
   });
 
@@ -68,12 +70,16 @@ describe('MonthLockedDialog', () => {
     expect(screen.queryAllByRole('link')).toHaveLength(0);
   });
 
-  /** And the same when the course IS known but the month is not: that link
-   *  would be a bare `/courses/:slug`, which the proxy bounces straight back. */
-  it('drops the CTA when no month can be named', () => {
+  /** A lecture in several months — or in one that is closed — still gets the
+   *  CTA. The picker opens with nothing chosen, which is the honest screen:
+   *  naming one of several would be picking which month to sell. */
+  it('still offers the checkout when no single month can be named', () => {
     open({ courseSlug: 'programming-y1' });
 
-    expect(screen.queryAllByRole('link')).toHaveLength(0);
+    expect(screen.getByRole('link', { name: c.lockedMonthCta })).toHaveAttribute(
+      'href',
+      '/courses/programming-y1/subscribe',
+    );
   });
 
   it('actually closes when the dismiss is pressed', () => {
