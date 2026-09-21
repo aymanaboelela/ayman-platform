@@ -454,7 +454,10 @@ export function MonthPanel({
       ) : null}
 
       {months.length === 0 ? (
-        <p className="max-w-[42rem] text-fg-muted">{c.empty}</p>
+        <>
+          <p className="max-w-[42rem] text-fg-muted">{c.empty}</p>
+          <StartByMonth courseId={courseId} />
+        </>
       ) : (
         <ul className="flex flex-col gap-2">
           {months.map((month) => (
@@ -475,6 +478,69 @@ export function MonthPanel({
         />
       ) : null}
     </section>
+  );
+}
+
+/**
+ * The ONE press for a course with no months at all — which is every course on
+ * the platform the day this ships.
+ *
+ * It makes «شهر ١» CLOSED and puts every lesson in it, and it does both in one
+ * go because there is only one shape the first month of a running course can
+ * have: everything that exists is content the current cohort already paid to
+ * see, and there is no «شهر ٢» yet. «كل ده شهر أول.»
+ *
+ * Closed, so nothing changes for anybody until the instructor decides it does
+ * — and opening it is refused anyway until the adoption below has run, which
+ * is the other half of why the two are one button and not two.
+ */
+function StartByMonth({ courseId }: { courseId: string }) {
+  const [pending, setPending] = useState(false);
+
+  const start = () => {
+    setPending(true);
+    void createMonthAction(courseId, {
+      monthIndex: 1,
+      title: copy.admin.month.firstMonthTitle,
+      // Never open on creation. `CourseMonthService` would refuse it anyway
+      // while a lecture is untagged — and on this course that is every lecture,
+      // including the ones this very press is about to tag.
+      isOpen: false,
+      startsOn: null,
+    })
+      .then((created) => {
+        if (!created.ok) {
+          setPending(false);
+          toast.error(created.message);
+          return null;
+        }
+        return created.month?.id ?? null;
+      })
+      .then(async (monthId) => {
+        if (monthId === null) return;
+        const adopted = await adoptUntaggedLessonsAction(courseId, monthId);
+        setPending(false);
+        if (!adopted.ok) {
+          // The month exists and the lectures did not move. Said plainly
+          // rather than as a generic failure: the instructor is now one press
+          // away from finishing it by hand, on the panel that just appeared.
+          toast.error(adopted.message);
+          return;
+        }
+        toast.success(formatCopy(c.startDone, { n: adopted.adopted }));
+      });
+  };
+
+  return (
+    <div className="mt-3 rounded-md border border-line bg-surface-2 p-3">
+      <h3 className="text-[length:var(--fs-text-sm)] font-semibold">{c.startTitle}</h3>
+      <p className="mt-1 max-w-[42rem] text-[length:var(--fs-text-sm)] text-fg-muted">
+        {c.startLead}
+      </p>
+      <Button type="button" size="sm" className="mt-2" disabled={pending} onClick={start}>
+        {c.startCta}
+      </Button>
+    </div>
   );
 }
 

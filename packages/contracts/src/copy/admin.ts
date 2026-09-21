@@ -533,6 +533,28 @@ const admin = {
      * Both say plainly that nothing is taken from anybody, because «تحويل» is
      * what an instructor will assume and it would be the opposite of the truth.
      */
+    /**
+     * The one press for a course that has NO months at all — which is every
+     * course on the platform on the day this ships.
+     *
+     * It makes «شهر ١» and puts every lecture in it, because that is the only
+     * shape the first month can have on a course that has been running: all
+     * the content that exists is content the current cohort already paid to
+     * see, and a second month does not exist yet. «كل ده شهر أول.»
+     *
+     * The subscriber step stays separate and counted — this one touches no
+     * access at all, so it needs no number in front of it.
+     */
+    /** The name «شهر ١» is given, not asked for — the instructor renames it in
+     *  place a second later if he wants «شهر ١ — أكتوبر». Asking first would
+     *  put a form between him and the one press. */
+    firstMonthTitle: 'شهر ١',
+    startTitle: 'ابدأ: خلّي الكورس ده بالشهور',
+    startLead:
+      'هنعمل «شهر ١» ونحط فيه كل المحاضرات اللي نزلت لحد دلوقتي. مفيش حاجة بتتغيّر على أي طالب — الشهر بيتعمل مقفول للاشتراك لحد ما تفتحه بنفسك.',
+    startCta: 'اعمل شهر ١ وحط فيه كل المحاضرات',
+    /** `{n}` — lessons adopted. */
+    startDone: 'تمام — «شهر ١» اتعمل و{n} محاضرة اتحطت فيه.',
     setupTitle: 'تظبيط الكورس على الشهور',
     setupLead:
       'الكورس ده شغّال من قبل الشهور، فكل محاضراته لسه من غير شهر. الخطوتين دول بيظبطوه: الأولى بتحط المحاضرات في الشهر، والتانية بتفتح الشهر للناس اللي مشتركة دلوقتي.',

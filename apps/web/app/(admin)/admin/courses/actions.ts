@@ -669,7 +669,14 @@ export async function setTermOpenAction(
  * no month at all. The panel branches on its presence, not on its value: see
  * `monthOpenBlocked` below for the case where the number itself is lost.
  */
-export type MonthActionResult = ActionResult & { untaggedLessonCount?: number };
+export type MonthActionResult = ActionResult & {
+  untaggedLessonCount?: number;
+  /** The month that was just created, on `createMonthAction` alone.
+   *  `<StartByMonth>` chains straight into `adoptUntaggedLessonsAction` with
+   *  it — the alternative is re-reading the list to find the row it just made,
+   *  which is a round trip to learn something the response already knew. */
+  month?: { id: string };
+};
 
 /**
  * Was this the «فيه محاضرات من غير شهر» refusal, and how many?
@@ -723,10 +730,15 @@ export async function createMonthAction(
 ): Promise<MonthActionResult> {
   try {
     const body = CourseMonthWriteSchema.parse(input);
-    await apiSend('POST', `/api/admin/courses/${courseId}/months`, AdminCourseMonthSchema, body);
+    const month = await apiSend(
+      'POST',
+      `/api/admin/courses/${courseId}/months`,
+      AdminCourseMonthSchema,
+      body,
+    );
     invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
-    return { ok: true };
+    return { ok: true, month: { id: month.id } };
   } catch (error) {
     return monthFailure(error);
   }
