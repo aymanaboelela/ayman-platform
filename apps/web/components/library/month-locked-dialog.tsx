@@ -117,32 +117,30 @@ export function MonthLockedDialog({
         </DialogHeader>
 
         <DialogFooter>
-          {courseSlug && month ? (
+          {courseSlug ? (
             /*
-              The course page is the ONLY route on the platform that sells:
-              `<CourseStartButton>` there opens `<SubscribePanel>` on its 403
-              branch.
-
-              ⚠️ `?month=` IS LOAD-BEARING, and not only as a preselection.
-              `proxy.ts`'s `resolveEnrolledCourseRedirect` 307s `/courses/:slug`
-              to `/library/:slug` for any enrollment whose `accessActive` is
-              true — and a month grant makes it true, because
-              `courseAccessScopes` counts one as access to the course (it has
-              to, or that student could not enrol at all). So without this
-              parameter a student who owns «شهر ٢» and taps the padlock on a
-              «شهر ٣» lecture is returned to the page they pressed it from:
-              exactly the dead control «الـ٢ بتن دول مش شغالين» named on the
-              exam dialog. The proxy exempts a request that names a month,
-              because typing the course URL is "take me to my library" and
-              arriving with a month named is a deliberate request to buy one.
-
-              Dropped entirely when the month cannot be named — a bare
-              `/courses/:slug` here would be bounced, and a CTA that returns
-              you to where you pressed it is worse than no CTA. That student
-              reads `lockedMonthBodyPlain` and the dismiss.
+              `/courses/:slug/subscribe` and NOT the course page, and that is
+              the whole reason this CTA works at all.
+ 
+              The course page sells through `<CourseStartButton>`, which opens
+              the panel when `POST /enroll` answers 403 — and the student
+              standing in front of this padlock does not get a 403. They own
+              «شهر ٢»; they are enrolled; their access is live. The enroll would
+              answer 200 and walk them into a lesson, and `proxy.ts` would have
+              redirected them to their library before that. A link there is a
+              control that returns you to where you pressed it: exactly the dead
+              button «الـ٢ بتن دول مش شغالين» named on the exam dialog.
+ 
+              `?month=` is the preselection, so somebody who pressed «الاشتراك
+              في الشهر ده» on «شهر ٣» does not then hunt «شهر ٣» in a list of
+              nine. Left off when no single month can be named — the picker
+              then opens with nothing chosen, which is the right screen for a
+              lecture that sits in several months or in one that is closed.
             */
             <Link
-              href={`/courses/${encodeURIComponent(courseSlug)}?month=${encodeURIComponent(month.id)}`}
+              href={`/courses/${encodeURIComponent(courseSlug)}/subscribe${
+                month ? `?month=${encodeURIComponent(month.id)}` : ''
+              }`}
               // The same amber solid the library page's «كمّل» link wears —
               // `<Button>` is a real `<button>` with no `asChild`, and a
               // `<button>` that navigates is a control screen readers announce

@@ -258,7 +258,16 @@ export function SubscribePanel({
   terms: CatalogCourseTerm[];
   /** E.164, or `null` when the admin has not configured one yet. */
   instapay: string | null;
-  onCancel: () => void;
+  /**
+   * Close the panel — `undefined` when there is nothing to close.
+   *
+   * Two callers, two shapes. Inside `<CourseStartButton>`'s dialog this hides
+   * the panel and leaves the course page standing behind it. On
+   * `/courses/:slug/subscribe` the panel IS the page, so a cancel that hid it
+   * would leave a blank screen; that route has its own «رجوع» link at the top
+   * and passes nothing here.
+   */
+  onCancel?: () => void;
 }) {
   // Starts in `checking`, not `choose`: a student who already has a
   // submission sitting in the review queue for THIS course must see that —
@@ -554,9 +563,11 @@ export function SubscribePanel({
         >
           {copy.subscribe.retry}
         </Button>
-        <button type="button" className="course-subscribe__cancel" onClick={onCancel}>
-          {copy.subscribe.back}
-        </button>
+        {onCancel ? (
+          <button type="button" className="course-subscribe__cancel" onClick={onCancel}>
+            {copy.subscribe.back}
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -834,9 +845,11 @@ export function SubscribePanel({
             />
           ) : null}
         </div>
-        <button type="button" className="course-subscribe__cancel" onClick={onCancel}>
-          {copy.subscribe.back}
-        </button>
+        {onCancel ? (
+          <button type="button" className="course-subscribe__cancel" onClick={onCancel}>
+            {copy.subscribe.back}
+          </button>
+        ) : null}
       </div>
     );
   }
