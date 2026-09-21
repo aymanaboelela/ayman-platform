@@ -17,8 +17,14 @@ export default function DevicesPage() {
       <h1 className="mb-2 text-[length:var(--fs-title-1)] font-semibold">
         {copy.settings.devices.title}
       </h1>
-      <p className="mb-8 text-[length:var(--fs-text-base)] text-fg-muted">
+      <p className="mb-2 text-[length:var(--fs-text-base)] text-fg-muted">
         {copy.settings.devices.subtitle}
+      </p>
+      {/* The limit, stated on the one screen that can do something about it.
+          A student refused at the login page is sent here; arriving to a list
+          that never mentions a limit would read as two screens disagreeing. */}
+      <p className="mb-8 text-[length:var(--fs-text-sm)] text-fg-muted">
+        {copy.settings.devices.limitNote}
       </p>
       <DevicesList />
     </main>

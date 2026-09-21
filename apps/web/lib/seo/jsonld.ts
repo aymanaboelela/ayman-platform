@@ -6,6 +6,7 @@ import { SAME_AS } from '@ayman/contracts/site-profiles';
 import { mediaUrl } from '@ayman/ui/branding';
 import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
 import { aymanOnly, IS_AYMAN, tenantName } from '@/lib/tenant';
+import { tenantSentence } from '@/lib/tenant-copy';
 import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 
@@ -771,7 +772,12 @@ interface EntityRef {
 const personRef = (): EntityRef => ({
   '@id': PERSON_ID,
   '@type': 'Person',
-  name: copy.site.name,
+  // ⚠️ Gated, exactly like `organizationRef()` below it and missed for the
+  // same reason the SHORT organization reference was missed: the full `Person`
+  // node above gates its `name`, and this is the two-line version of it that
+  // actually ships — emitted as `author` / `instructor` on every course,
+  // article and glossary page on the site.
+  name: tenantName(copy.site.name),
 });
 
 const organizationRef = (): EntityRef => ({
@@ -994,7 +1000,10 @@ export function bookListJsonLd(
     '@context': 'https://schema.org',
     '@type': 'ItemList',
     '@id': absolute('/books#books'),
-    name: copy.books.metaTitle,
+    // «كتب أيمن أبو العلا — اطلبها وتوصلك البيت» as the name of the ItemList
+    // Google reads off `/books`. The `<title>` of that page is already gated;
+    // the structured data beside it was not.
+    name: tenantSentence(copy.books.metaTitle),
     itemListElement: books.map((book, index) => ({
       '@type': 'ListItem',
       position: index + 1,

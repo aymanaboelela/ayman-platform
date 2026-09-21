@@ -14,6 +14,7 @@
     "./copy": "./src/copy/ar.ts",
     "./copy/admin": "./src/copy/admin.ts",
     "./copy/outreach": "./src/copy/outreach.ts",
+    "./copy/tenant-sentence": "./src/copy/tenant-sentence.ts",
     "./onboarding": "./src/onboarding.ts",
     "./auth": "./src/auth.ts",
     "./profile": "./src/profile.ts",

@@ -4,6 +4,7 @@ import { copy } from '@ayman/contracts/copy';
 import { formatCopy, formatMark } from '@ayman/contracts/format';
 import type { StudentExam } from '@ayman/contracts/quiz/scheduled';
 import { quizHref } from '@/lib/quiz-links';
+import { tenantSentence } from '@/lib/tenant-copy';
 
 const c = copy.dashboard.exams;
 
@@ -109,7 +110,8 @@ function ClosedExamRow({ exam }: { exam: StudentExam }) {
           outOf: formatMark(exam.gradeOutOf),
         })
       : exam.hasSat
-        ? copy.quiz.essayPending
+        ? // Names the marker — see `components/quiz/result-header.tsx`.
+          tenantSentence(copy.quiz.essayPending)
         : c.missed;
 
   return (

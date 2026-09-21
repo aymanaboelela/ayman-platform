@@ -59,7 +59,7 @@
      and not only for the big ones. */
   --lh-accent: var(--p-400);
   --lh-accent-soft: color-mix(in oklch, var(--p-500), transparent 86%);
-  --lh-on-accent: oklch(0.18 0.02 50);
+  --lh-on-accent: var(--on-accent-ink);
 
   /* ---- geometry ----
      One column, phone-width, centred at every viewport. A bio link is read on
@@ -407,20 +407,12 @@
    a button rather than a destination. */
 .linkhub__row--primary {
   border-color: transparent;
-  background: linear-gradient(
-    to left,
-    oklch(0.640 0.190 48),
-    oklch(0.575 0.180 45)
-  );
+  background: linear-gradient(to left, var(--p-600), var(--accent-cta));
   box-shadow: 0 8px 24px rgb(var(--p-rgb) / 0.28);
 }
 
 .linkhub__row--primary:hover {
-  background: linear-gradient(
-    to left,
-    oklch(0.680 0.192 50),
-    oklch(0.615 0.184 46)
-  );
+  background: linear-gradient(to left, var(--accent-cta-lift), var(--accent-cta-lift-deep));
   border-color: transparent;
   box-shadow: 0 10px 30px rgb(var(--p-rgb) / 0.36);
 }

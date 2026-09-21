@@ -8,9 +8,17 @@
  * the default — prints white on white, and nobody finds out until the printer
  * has finished. So this sheet carries its own palette: paper is paper.
  *
- * The gold is the platform's own accent (`--a-9`, oklch(0.770 0.152 72)) written
- * out as hex, because that is the one colour Ayman's material is recognisable
- * by and this page ends up in a print shop's hands.
+ * The gold WAS the platform's own accent (`--a-9`, oklch(0.770 0.152 72))
+ * written out as hex, because that is the one colour Ayman's material is
+ * recognisable by and this page ends up in a print shop's hands.
+ *
+ * Which is exactly why it could not stay a literal. Every teacher runs this
+ * same page, and every teacher's packing lists were coming out of the printer
+ * in HIS gold. `--print-gold*` in `packages/ui/src/tokens/color.css` holds the
+ * same three values byte for byte — the ink, the rule and the wash are
+ * unchanged on this stack — and is re-cut at the tenant's hue for anyone
+ * else. Still a fixed palette, still independent of the admin's dark theme;
+ * just not fixed to one person.
  *
  * ## Why `visibility` and not `display`
  *
@@ -24,9 +32,9 @@
 .packing-sheet {
   --ink: #16130d;
   --ink-soft: #5b554a;
-  --gold: #eaa33c;
-  --gold-deep: #b9761a;
-  --gold-wash: #fdf4e3;
+  --gold: var(--print-gold);
+  --gold-deep: var(--print-gold-deep);
+  --gold-wash: var(--print-gold-wash);
   --rule: #d8d2c6;
 
   background: #fff;

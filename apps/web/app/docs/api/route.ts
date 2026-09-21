@@ -1,6 +1,7 @@
 import { copy } from '@ayman/contracts';
 import { AGENT_DISCOVERY_PATHS, PUBLIC_API_ENDPOINTS } from '@/lib/agents/discovery';
 import { SITE_URL } from '@/lib/seo/jsonld';
+import { tenantName } from '@/lib/tenant';
 
 /**
  * `service-doc` — the prose companion to `/openapi.json`.
@@ -23,7 +24,10 @@ function body(): string {
     (endpoint) => `### \`GET ${endpoint.path}\`\n\n${endpoint.summary}\n\n\`\`\`\ncurl ${url(endpoint.path)}\n\`\`\``,
   ).join('\n\n');
 
-  return `# ${copy.site.platformName} — public API
+  // The H1 of the page an agent reads to learn whose API this is. It is
+  // served from every stack's own domain, so it has to name every stack's own
+  // platform — see the `contact.name` note in `openapi.json/route.ts`.
+  return `# ${tenantName(copy.site.platformName)} — public API
 
 Read-only access to the published course catalog. No key, no session, no CORS
 preflight to worry about — these are the same endpoints the site's own pages read.

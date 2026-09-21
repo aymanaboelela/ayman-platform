@@ -13,6 +13,7 @@ import type { MyHomeworkSubmission, StudentHomework } from '@ayman/contracts/hom
 import { Button } from '@ayman/ui/components/button';
 import { cn } from '@ayman/ui/lib/cn';
 import { uploadHomeworkImage } from '@/lib/upload-client';
+import { tenantSentence } from '@/lib/tenant-copy';
 import { submitHomeworkAction } from '@/app/(app)/courses/[slug]/lessons/[lessonId]/homework-actions';
 
 const c = copy.homework;
@@ -318,7 +319,12 @@ function Verdict({ submission }: { submission: MyHomeworkSubmission }) {
 
       {submission.reviewNote ? (
         <div className="mt-3.5 border-t border-line pt-3">
-          <p className="text-[length:var(--fs-text-sm)] font-semibold text-fg">{c.note}</p>
+          {/* «رد مهندس أيمن» — the heading over a note the instructor typed
+              about this student's own work, so it has to be the instructor who
+              typed it. Same for the «مستني مراجعة» chip below. */}
+          <p className="text-[length:var(--fs-text-sm)] font-semibold text-fg">
+            {tenantSentence(c.note)}
+          </p>
           <p className="mt-1 whitespace-pre-line text-[length:var(--fs-text-base)] leading-relaxed text-fg">
             {submission.reviewNote}
           </p>
@@ -342,7 +348,7 @@ const STATUS_STYLE = {
 } as const;
 
 const STATUS_LABEL = {
-  submitted: c.statusPending,
+  submitted: tenantSentence(c.statusPending),
   accepted: c.statusAccepted,
   needs_work: c.statusNeedsWork,
 } as const;

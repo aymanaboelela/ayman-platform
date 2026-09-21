@@ -8,9 +8,14 @@ import { Float } from '@react-three/drei/core/Float';
 import { useRef } from 'react';
 import type { Mesh } from 'three';
 import * as tokens from '@ayman/ui/tokens';
+import { useRampHex } from '@/lib/ramp-color';
 
 function Polyhedron() {
   const ref = useRef<Mesh>(null);
+  /* The HOOK, not `rampHex`: this colour ends up in prerendered markup, and a
+     value the server computes as the amber literal and the client computes as
+     the tenant's is exactly the pair React mismatches on while hydrating. */
+  const accent = useRampHex(500, tokens.color.accentSolidHex);
 
   useFrame((_, delta) => {
     if (!ref.current) return;
@@ -24,7 +29,7 @@ function Polyhedron() {
       <icosahedronGeometry args={[1.15, 1]} />
       {/* Wireframe over the near-black base reads as an engineering instrument.
           `meshBasicMaterial` needs no lights, which removes an entire render pass. */}
-      <meshBasicMaterial color={tokens.color.accentSolidHex} wireframe />
+      <meshBasicMaterial color={accent} wireframe />
     </mesh>
   );
 }

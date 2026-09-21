@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { CatalogCourseDetailSchema, CatalogListSchema, copy } from '@ayman/contracts';
 import { PUBLIC_API_ENDPOINTS, absoluteDiscoveryUrl } from '@/lib/agents/discovery';
 import { SITE_URL } from '@/lib/seo/jsonld';
+import { tenantName } from '@/lib/tenant';
 
 /**
  * `service-desc` — the OpenAPI 3.1 description of the public catalog API.
@@ -45,7 +46,7 @@ export function GET(): Response {
   const document = {
     openapi: '3.1.0',
     info: {
-      title: `${copy.site.platformName} — public catalog API`,
+      title: `${tenantName(copy.site.platformName)} — public catalog API`,
       version: '1.0.0',
       summary: 'Read-only, unauthenticated access to the published course catalog.',
       description: [
@@ -57,7 +58,11 @@ export function GET(): Response {
         'reachable with an API key, and no API key is issued — see /auth.md.',
       ].join('\n'),
       termsOfService: absoluteDiscoveryUrl('authDoc'),
-      contact: { name: copy.site.instructor, url: `${SITE_URL}/about` },
+      // ⚠️ `contact.name` is a PUBLISHED CLAIM about who to reach, in a
+      // machine-readable document, served from this deployment's own domain —
+      // and it was naming him on all of them. Gated like every other name in
+      // the two agent-facing documents (`/docs/api`, `/index.md`).
+      contact: { name: tenantName(copy.site.instructor), url: `${SITE_URL}/about` },
     },
     /**
      * This origin, not the Nest host. Single-origin invariant: the API is only

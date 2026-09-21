@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { CornerUpRight, Send } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
+import { tenantSentence } from '@/lib/tenant-copy';
 import {
   MESSAGE_MAX,
   type AssistantTranscriptTurn,
@@ -197,7 +198,7 @@ export function AssistantEscalate({
       */}
       {transcript && transcript.length > 0 ? (
         <p className="text-[length:var(--fs-text-xs)] leading-[1.7] text-fg-muted">
-          {c.transcriptNote}
+          {tenantSentence(c.transcriptNote)}
         </p>
       ) : null}
 

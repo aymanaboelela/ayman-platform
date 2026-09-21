@@ -17,6 +17,10 @@ interface AuthErrorBody {
   message?: string;
   /** Only ever set alongside `code: 'ACCOUNT_BANNED'` — see `BANNED_ACCOUNT_CODE`. */
   reason?: string;
+  /** Only ever set alongside `code: 'ACCOUNT_LOCKED'` — see `LOCKED_ACCOUNT_CODE`. */
+  retryAfterSeconds?: number;
+  /** Ditto: this is not the account's first lockout, so the UI offers WhatsApp. */
+  repeated?: boolean;
 }
 
 /**
@@ -50,6 +54,35 @@ export const BANNED_ACCOUNT_CODE = 'ACCOUNT_BANNED';
 export const PHONE_TAKEN_CODE = 'PHONE_ALREADY_REGISTERED';
 
 /**
+ * «الدخول مقفول ١٠ دقايق» — the one refusal the login UI may name WITHOUT a
+ * verified password, and the only one.
+ *
+ * The exception is narrower than it looks, and it is safe for a reason that
+ * belongs to the server rather than to this file: the API emits this for the
+ * counter keyed on the string that was typed, and a failed attempt fills that
+ * counter for an address nobody owns exactly as it does for a real one. Six
+ * wrong guesses against a made-up address return this same code with the same
+ * number of minutes, so it answers no question about who is registered. The
+ * account-wide lock — the one that only exists for real students — is refused
+ * with the generic 401 unless the password verified first.
+ * `api/src/auth/login-security.service.ts` holds the argument in full.
+ *
+ * Do not widen this to any refusal that distinguishes a real account from an
+ * imaginary one.
+ */
+export const LOCKED_ACCOUNT_CODE = 'ACCOUNT_LOCKED';
+
+/**
+ * «الحساب مفتوح على جهازين خلاص».
+ *
+ * Emitted only after the submitted password has verified, exactly like
+ * `BANNED_ACCOUNT_CODE` and for the identical reason — before that point it
+ * would answer "does this account exist, and is somebody using it", which is a
+ * better oracle than the one S1 closes.
+ */
+export const DEVICE_LIMIT_CODE = 'DEVICE_LIMIT_REACHED';
+
+/**
  * Carries the raw status/code for logging or future branching, but callers
  * in this codebase must NOT surface `.message` to the user — it can be a
  * library-specific string. The one exception, `sign-in/email`, is already
@@ -73,12 +106,25 @@ export class AuthRequestError extends Error {
    * and it is the whole point of showing them anything at all.
    */
   readonly reason?: string;
+  /**
+   * Seconds left on the soft lock, when `code === LOCKED_ACCOUNT_CODE`.
+   *
+   * A number rather than a rendered string, so the rounding decision stays in
+   * the one place that knows the copy: the form rounds UP to whole minutes,
+   * because telling somebody to come back in nine when the lock lifts in nine
+   * and a half buys a second refusal and a support message.
+   */
+  readonly retryAfterSeconds?: number;
+  /** Ditto — not the account's first lockout, so the form offers WhatsApp. */
+  readonly repeated?: boolean;
 
   constructor(status: number, body: AuthErrorBody) {
     super(body.message ?? `auth request failed with ${status}`);
     this.status = status;
     this.code = body.code;
     this.reason = body.reason;
+    this.retryAfterSeconds = body.retryAfterSeconds;
+    this.repeated = body.repeated;
   }
 }
 

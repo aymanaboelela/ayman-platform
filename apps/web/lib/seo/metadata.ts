@@ -152,7 +152,19 @@ export async function buildMetadata(input: PageMetaInput): Promise<Metadata> {
   const title = input.title !== undefined ? input.title : { absolute: siteTitle };
   /** Flattened for OG/Twitter, which take a string and know nothing of templates. */
   const flatTitle = input.title !== undefined ? `${input.title} | ${PLATFORM_NAME}` : siteTitle;
-  const description = input.description ?? (adminDescription || copy.seo.description);
+  /*
+   * ⚠️ `SITE_DESCRIPTION`, not `copy.seo.description`.
+   *
+   * The line above it gets this right — `adminTitle || SITE_TITLE` — and this
+   * one reached past the gated constant to the raw copy string, which is the
+   * whole reason `SITE_DESCRIPTION` exists eighty lines up. The effect was
+   * that every page WITHOUT a description of its own, on a stack whose admin
+   * had not typed one into /admin/settings, published «منصة المهندس أيمن أبو
+   * العلا لتعليم…» as its `<meta name="description">`, its `og:description`
+   * and its `twitter:description`. That is every page of a new tenant's site
+   * on the day it launches, which is the day Google crawls it.
+   */
+  const description = input.description ?? (adminDescription || SITE_DESCRIPTION);
   const url = `${SITE_URL}${input.path}`;
   const markdownTwin = markdownTwinPath(input.path);
   /*

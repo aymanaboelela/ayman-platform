@@ -22,7 +22,8 @@ import { runtime } from './neon-format';
  *
  * What is left is the same QUESTION answered from the tenant's own data:
  *
- *   · the mark they uploaded (`logoDarkAssetId`, then `logoLightAssetId`),
+ *   · their own PHOTOGRAPH (`portraitAssetId`), and the mark they uploaded
+ *     (`logoDarkAssetId`, then `logoLightAssetId`) when there is no photograph,
  *   · the name their stack is deployed under,
  *   · what they have actually published — courses, lectures, total runtime.
  *
@@ -41,11 +42,29 @@ import { runtime } from './neon-format';
  * With no logo uploaded either, the mark falls back to the drawn `</>`
  * monogram the hero uses. Same reasoning, stated there: a bordered empty box
  * is not a designed empty state.
+ *
+ * ## The portrait REPLACES the mark rather than joining it
+ *
+ * ⚠️ The paragraph above used to say a photograph could not travel to this
+ * preset, and it was right about `<MediaSlot kind="portrait">` — that resolves
+ * AYMAN's studio portrait out of `lib/brand-assets.ts`, and its stand-in is
+ * his page's art. It was never right about `branding.portraitAssetId`, which
+ * is a file THIS deployment's admin uploaded to their own media library and is
+ * exactly the same class of thing as the `logoDarkAssetId` this section has
+ * been reading all along. That field simply had no reader on any preset, so a
+ * portrait an instructor uploaded and wired went nowhere at all.
+ *
+ * It takes the mark's place instead of standing beside it because the question
+ * this window answers is `whoami`, and it has ONE answer. A face and a logo in
+ * the same card are two brands arguing; the logo already opens the page in
+ * `<NeonHero>`, which is where a mark belongs.
  */
 export async function NeonInstructor({ level }: { level: 1 | 2 }) {
   const [branding, { courses }] = await Promise.all([getBranding(), getCatalogOrEmpty()]);
 
   const logoKey = branding.logoDarkKey ?? branding.logoLightKey;
+  /* Their own face first, their mark second, the drawn monogram last. */
+  const portraitKey = branding.portraitKey;
   const name = tenantName(copy.site.name);
 
   const lessons = courses.reduce((total, course) => total + course.lessonCount, 0);
@@ -65,18 +84,46 @@ export async function NeonInstructor({ level }: { level: 1 | 2 }) {
         <div className="neon-who">
           <NeonWindow file={neonCopy.instructorFile} lit>
             <div className="neon-who__body">
-              <span className="neon-who__mark" data-drawn={logoKey ? undefined : 'true'}>
-                {logoKey ? (
-                  /* Fixed 88×88 with `object-fit: contain` in the stylesheet —
-                     the intrinsic ratio of an uploaded logo is unknowable here
-                     and the box has to be reserved before the bytes land. No
-                     `priority`: this sits most of a screen below the fold and
-                     the hero's own mark is the one on the LCP path. */
-                  <Image src={mediaUrl(logoKey)} alt="" width={88} height={88} sizes="88px" />
-                ) : (
-                  <span aria-hidden="true">&lt;/&gt;</span>
-                )}
-              </span>
+              {portraitKey ? (
+                /*
+                  ١٦٠×٢١٣ — ٣:٤، نفس نسبة `BRAND_ASSET_RATIO.portrait` ونفس
+                  اللي اترفع فعلًا (٩١٢×١٢١٦ على ستاك، ٩١٤×١٢٠٠ على التاني)،
+                  فالـ`cover` مابيقصّش حاجة.
+
+                  `flex: none` جاي من الستايل: `.neon-who__body` فليكس بـ
+                  `flex-wrap`، فعلى الموبايل الصورة بتفضل ١٦٠ والنص بينزل
+                  تحتها بدل ما الاتنين يتخنقوا.
+
+                  `alt=""` مش إهمال — الاسم مكتوب بالنص جنبها في
+                  `.neon-who__name`، وصورة alt-ها اسم المدرّس جنب اسم المدرّس
+                  هي نفس الكلمتين مرتين لقارئ الشاشة.
+
+                  مفيش `priority`: القسم ده تحت الطيّة بشاشة كاملة تقريبًا،
+                  ولوجو الهيرو هو اللي على مسار الـLCP.
+                */
+                <span className="neon-who__portrait">
+                  <Image
+                    src={mediaUrl(portraitKey)}
+                    alt=""
+                    width={160}
+                    height={213}
+                    sizes="160px"
+                  />
+                </span>
+              ) : (
+                <span className="neon-who__mark" data-drawn={logoKey ? undefined : 'true'}>
+                  {logoKey ? (
+                    /* Fixed 88×88 with `object-fit: contain` in the stylesheet —
+                       the intrinsic ratio of an uploaded logo is unknowable here
+                       and the box has to be reserved before the bytes land. No
+                       `priority`: this sits most of a screen below the fold and
+                       the hero's own mark is the one on the LCP path. */
+                    <Image src={mediaUrl(logoKey)} alt="" width={88} height={88} sizes="88px" />
+                  ) : (
+                    <span aria-hidden="true">&lt;/&gt;</span>
+                  )}
+                </span>
+              )}
 
               <div className="neon-who__text">
                 <p className="neon-who__name">{name}</p>

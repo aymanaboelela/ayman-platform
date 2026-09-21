@@ -59,9 +59,24 @@ export type BrandAsset = {
 /**
  * Intrinsic aspect ratios the fallbacks reserve, so a later photo swap does not
  * move anything on the page. Chosen from the reference layout's real boxes.
+ *
+ * ⚠️ This table stopped being documentation the day `<MediaSlot>` started
+ * reading it. It was exported and consumed by NOTHING, so a stale number here
+ * cost nothing — and now it is the `width`/`height` pair every uploaded
+ * instructor photo is declared at, which is what `next/image` reserves space
+ * from. A wrong ratio here is a jump on first paint, not a comment.
  */
 export const BRAND_ASSET_RATIO: Record<BrandAssetKind, number> = {
-  hero: 4 / 5,
+  /**
+   * 3:2, not the 4:5 this claimed while nothing read it.
+   *
+   * 4:5 was measured off a hero whose photograph occupied the inline-start
+   * HALF. That hero is gone: the image is FULL BLEED behind the copy now —
+   * `.hero__media` is `position: absolute; inset: 0` — and both the registered
+   * composite (1536×1024) and every hero an instructor has actually uploaded
+   * (1200×800, measured on two stacks) are 3:2.
+   */
+  hero: 3 / 2,
   cutout: 3 / 4,
   /**
    * 3:4, not the 4:5 this used to reserve — the registered portrait is a phone
@@ -207,36 +222,30 @@ const GENERIC_ASSET_KINDS: ReadonlySet<BrandAssetKind> = new Set(['logo']);
  * a new branch, because "the photography does not exist yet" was the state this
  * whole file was written around.
  *
- * ## ⚠️ THE GATE IS ONLY AS STRONG AS THE SERVER RENDER, AND HERE THAT IS NOT
- * ##    ENOUGH — SEE `next.config.ts`
+ * ## The client-bundle hole this used to warn about — CLOSED
  *
- * `TENANT_KEY` carries no `NEXT_PUBLIC_` prefix, so it is read correctly while
- * the RSC payload is produced and is simply ABSENT from the browser bundle,
- * where `TENANT_KEY` falls back to `'ayman'` and `IS_AYMAN` therefore falls
- * back OPEN to `true`. `site-nav.tsx` carries the same warning about the name
- * gate and concludes that the server HTML is what matters — that conclusion
- * does NOT transfer to this function, and the difference is the one that bites:
+ * `TENANT_KEY` carries no `NEXT_PUBLIC_` prefix, so for a while it was read
+ * correctly while the RSC payload was produced and was simply ABSENT from the
+ * browser bundle, where it fell back to `'ayman'` and `IS_AYMAN` therefore
+ * fell back OPEN to `true`. That mattered more here than for a name: a name
+ * lands on an ATTRIBUTE and React does not re-patch attribute mismatches
+ * during hydration, but an asset decides WHICH ELEMENT EXISTS — `<Image
+ * src="/brand/hero-ai-dragon-2.webp">` versus the `<HeroFallback>` stage —
+ * and React discards a structurally mismatched subtree and re-renders it from
+ * the client. His photograph appeared on somebody else's landing page a few
+ * hundred milliseconds after first paint.
  *
- * a name lands on an ATTRIBUTE (`alt`, `aria-label`), and React does not
- * re-patch attribute mismatches during hydration. An asset lands on WHICH
- * ELEMENT EXISTS — `<Image src="/brand/hero-ai-dragon-2.webp">` versus the
- * `<HeroFallback>` stage. That is a structural mismatch, React discards the
- * server subtree and re-renders it from the client, and his photograph appears
- * on somebody else's landing page a few hundred milliseconds after first paint.
+ * `next.config.ts` now carries `env: { TENANT_KEY, TENANT_DISPLAY_NAME }`,
+ * which inlines both into the client bundle exactly the way a `NEXT_PUBLIC_`
+ * variable is inlined, and the Dockerfile already passed the build args. So
+ * the three `'use client'` call sites — `site-hero.tsx`, `site-nav.tsx`,
+ * `year-tracks.tsx` — are as gated in the browser as they are on the server,
+ * and a fourth is no longer a thing to avoid.
  *
- * Three `'use client'` files pull this function into the browser bundle today:
- * `site-hero.tsx` (`hero`), `site-nav.tsx` (`mark`), and `year-tracks.tsx`
- * (`cutout`, plus the three track posters through `<TrackCardView>`). The
- * server-rendered surfaces — `about-instructor.tsx`, `instructor-profile.tsx`,
- * `/links` — are already airtight.
- *
- * ⚠️ IT CANNOT BE CLOSED FROM INSIDE THIS FILE. Nothing written here changes
- * whether the bundler has a value to substitute. The fix is one line where the
- * build is configured — `env: { TENANT_KEY: process.env.TENANT_KEY ?? '' }` in
- * `next.config.ts`, which inlines it into the client bundle exactly the way a
- * `NEXT_PUBLIC_` variable is inlined, and the Dockerfile already passes the
- * build arg. Until that lands, treat a non-`ayman` landing page as leaking
- * above the fold, and do NOT add a fourth client call site.
+ * ⚠️ It is inlined at BUILD time. Changing `TENANT_KEY` on a running container
+ * changes nothing until the image is rebuilt — see the note in
+ * `next.config.ts`, and the runbook's warning about the same for
+ * `TENANT_DISPLAY_NAME`.
  */
 export function getBrandAsset(kind: BrandAssetKind): BrandAsset | undefined {
   const asset = brandAssets[kind];

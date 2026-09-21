@@ -1,4 +1,5 @@
 import { copy } from '@ayman/contracts/copy';
+import { tenantSentence } from '@/lib/tenant-copy';
 import {
   ASSISTANT_NODES,
   isAssistantNodeId,
@@ -43,7 +44,14 @@ function labelFor(path: readonly string[], index: number): string | null {
    * the honest thing is to drop the crumb rather than invent a label — a blank
    * breadcrumb and a crash are both worse than a shorter trail.
    */
-  return choice ? copy.assistant.choices[choice.id] : null;
+  /*
+   * Gated: one of the labels IS the name («أكلّم أيمن»), and this function
+   * feeds two surfaces that both outlive the click — the trail inside the
+   * widget and the breadcrumbs on `/admin/inbox`, where the instructor reads
+   * back the route a student walked. A crumb naming the wrong instructor is
+   * read by the one person certain to notice.
+   */
+  return choice ? tenantSentence(copy.assistant.choices[choice.id]) : null;
 }
 
 /**

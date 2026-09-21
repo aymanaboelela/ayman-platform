@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { contrastRatio, isInGamut, oklchToRgb, readableInk } from './oklch';
 import {
+  EMBER_STEPS,
   PRIMARY_STEPS,
   accentRamp,
   describeRamp,
+  emberDeclarations,
+  literalDeclarations,
   primaryRamp,
   rampDeclarations,
   type Theme,
@@ -270,5 +273,144 @@ describe('rampDeclarations', () => {
         }
       }
     }
+  });
+});
+
+/** `oklch(L C H)` back to numbers, for asserting on what actually gets written. */
+function parse(value: string): { l: number; c: number; h: number } {
+  const match = /^oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)$/.exec(value);
+  if (!match) throw new Error(`not an oklch value: ${value}`);
+  return { l: Number(match[1]), c: Number(match[2]), h: Number(match[3]) };
+}
+
+const WHITE = { r: 1, g: 1, b: 1 };
+
+/**
+ * The generated ember ramp has to hold the same contracts the hand-tuned one
+ * documents, on every hue rather than on hue 35.
+ *
+ * `tokens/color.css` lists eight measured ratios under "Measured, not chosen
+ * by eye". Four of them are contracts a reader depends on, and they are the
+ * four asserted here — on the QUANTIZED values, because rounding to three
+ * decimals is not contrast-preserving and a solve that lands exactly on the
+ * target gets written a hair under it.
+ *
+ * The fifth documented number, `--e-700` against `--a-9` at 3.43:1, is NOT
+ * asserted. It is the colour-blind separation between the structure ramp and
+ * the accent, and it is a property of amber specifically: it comes from the
+ * 0.30 of lightness between `--a-9` at L 0.770 and `--e-700` at L 0.470. Every
+ * other accent is darker — the shipped blue's `--a-9` is L 0.620 — so the gap
+ * narrows for reasons that predate any of this, and it measures about 1.9:1 on
+ * the blue slot as shipped today. Writing an assertion that the current code
+ * cannot pass would only mean disabling it.
+ */
+describe('the generated ember ramp is readable on every hue', () => {
+  const step = (hue: number, value: number) =>
+    parse(new Map(emberDeclarations(hue)).get(`--e-${value}`)!);
+
+  it.each(ALL_HUES)('hue %i: ember text clears 4.5:1 in both themes', (hue) => {
+    // `--e-ink` is step 600 on paper and step 300 on #08090A.
+    expect(contrastRatio(oklchToRgb(step(hue, 600)), LIGHT_BG)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(oklchToRgb(step(hue, 300)), DARK_BG)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(ALL_HUES)('hue %i: the stage bands carry white text', (hue) => {
+    // `--e-stage` is step 700 on paper and step 800 on #08090A, and both carry
+    // white — a band with unreadable text on it is the whole study surface.
+    expect(contrastRatio(oklchToRgb(step(hue, 700)), WHITE)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(oklchToRgb(step(hue, 800)), WHITE)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('emits all eleven steps, so a consumer cannot fall through to the shipped amber', () => {
+    const emitted = emberDeclarations(258).map(([property]) => property);
+
+    expect(emitted).toEqual(EMBER_STEPS.map((value) => `--e-${value}`));
+  });
+
+  it('every step is inside sRGB, so no two neighbours clip to the same corner', () => {
+    for (const hue of ALL_HUES) {
+      for (const [property, value] of emberDeclarations(hue)) {
+        expect(isInGamut(parse(value)), `${property} at hue ${hue}`).toBe(true);
+      }
+    }
+  });
+
+  it('stays a neighbour of the accent rather than a second brand', () => {
+    // 37° below, which is what hue 35 is to the accent's 72. The whole
+    // argument in `tokens/color.css` for replacing violet with ember is that
+    // structure must read as the same family as the accent.
+    expect(step(72, 500).h).toBe(35);
+    expect(step(258, 500).h).toBe(221);
+  });
+});
+
+describe('the warm literals follow the tenant too', () => {
+  it.each(ALL_HUES)('hue %i: white on the marketing CTA clears 4.5:1', (hue) => {
+    // The stylesheet documents this fill at 4.68:1 and notes that the step
+    // above it measures 4.24:1 and fails axe. Rotating alone lands at 4.07:1
+    // around hue 171, which is why the fill is re-solved rather than moved.
+    const cta = parse(new Map(literalDeclarations(hue, 1, 'light')).get('--accent-cta')!);
+
+    expect(contrastRatio(oklchToRgb(cta), WHITE)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(ALL_HUES)('hue %i: the CTA hover stays DARKER than the fill in light', (hue) => {
+    // A button that gets lighter when you press it reads as broken. The hover
+    // takes whatever lightness shift the fill's contrast solve needed, so the
+    // pair cannot cross over.
+    const light = new Map(literalDeclarations(hue, 1, 'light'));
+
+    expect(parse(light.get('--accent-cta-hover')!).l).toBeLessThan(parse(light.get('--accent-cta')!).l);
+  });
+
+  it('re-cuts the print gold, which is the one colour that leaves the building', () => {
+    // A teacher's packing lists and shipping labels are printed from their own
+    // admin and handed to a print shop.
+    const gold = parse(new Map(literalDeclarations(258, 1, 'light')).get('--print-gold')!);
+
+    expect(gold.h).toBe(258);
+    // The lightness is carried across unchanged — it is what makes the sheet
+    // legible on paper with the backgrounds turned off.
+    expect(gold.l).toBe(0.767);
+  });
+
+  it('emits the ink-panel triplets as bare R G B, not as a colour function', () => {
+    // `rgb(var(--ink-key-rgb) / 0.26)` only works on a decomposed triplet.
+    const light = new Map(literalDeclarations(258, 1, 'light'));
+
+    expect(light.get('--ink-key-rgb')).toMatch(/^\d{1,3} \d{1,3} \d{1,3}$/);
+    expect(light.get('--ink-bounce-rgb')).toMatch(/^\d{1,3} \d{1,3} \d{1,3}$/);
+  });
+
+  it('emits the theme-dependent pair in dark and nothing else', () => {
+    // Everything else is declared once in `tokens/color.css` and inherited, so
+    // writing it into the dark rules too would be two places to drift.
+    expect(literalDeclarations(258, 1, 'dark').map(([property]) => property)).toEqual([
+      '--accent-cta',
+      '--accent-cta-hover',
+    ]);
+  });
+
+  it('holds the shipped literal at amber, within a rounding step', () => {
+    // The table stores these as OKLCH measured from the hexes in the
+    // stylesheets. If a number there is wrong, this is where it shows: at
+    // Ayman's own hue the rotation is a no-op and the output must be the
+    // colour the stylesheet shipped.
+    const light = new Map(literalDeclarations(72, 1, 'light'));
+    const near = (value: string, expected: { r: number; g: number; b: number }) => {
+      const { r, g, b } = oklchToRgb(parse(value));
+      const channels = [r, g, b].map((channel) => Math.round(channel * 255));
+
+      for (const [index, channel] of channels.entries()) {
+        expect(Math.abs(channel - [expected.r, expected.g, expected.b][index]!)).toBeLessThanOrEqual(2);
+      }
+    };
+
+    near(light.get('--ink-warm')!, { r: 0x17, g: 0x12, b: 0x08 });
+    near(light.get('--print-gold')!, { r: 0xea, g: 0xa3, b: 0x3c });
+    near(light.get('--print-gold-deep')!, { r: 0xb9, g: 0x76, b: 0x1a });
+    near(light.get('--print-gold-wash')!, { r: 0xfd, g: 0xf4, b: 0xe3 });
+    expect(light.get('--ink-key-rgb')).toBe('255 138 25');
+    expect(light.get('--ink-bounce-rgb')).toBe('252 191 38');
   });
 });

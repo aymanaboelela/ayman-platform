@@ -1,6 +1,9 @@
+import Image from 'next/image';
+import { mediaUrl } from '@ayman/ui/branding';
 import { copy } from '@ayman/contracts/copy';
 import { tenantName } from '@/lib/tenant';
 import { getCatalogOrEmpty } from '@/lib/catalog';
+import { getBranding } from '@/lib/settings';
 import { BoardHeading } from './board-heading';
 import { boardCopy } from './board-copy';
 
@@ -25,6 +28,27 @@ import { boardCopy } from './board-copy';
  *   courses nobody can buy, presented as the catalogue. It is right for
  *   `classic` (his catalogue is full, so the fallback only ever shows locally)
  *   and wrong the moment the platform is somebody's first week.
+ *
+ * ## The photograph came back, from a DIFFERENT field
+ *
+ * ⚠️ The bullet above is still true and must stay true: nothing in
+ * `lib/brand-assets.ts` is reachable from this directory, and
+ * `board-landing.test.tsx` enforces that by scanning the source. What it was
+ * never about is `branding.portraitAssetId` — a file THIS deployment's admin
+ * uploaded to their own media library, resolved to a storage key by the API,
+ * and the exact same class of thing as the `logoDarkAssetId` `<BoardMark>` has
+ * been drawing on the opener panel since the preset shipped. The two were
+ * conflated because the classic section reaches its portrait through the
+ * registry, so "no portrait here" read as a rule about portraits when it was a
+ * rule about HIS portrait.
+ *
+ * It goes in THIS band and not in `about`. The decision written into
+ * `board-about.tsx` — that every pixel of that section is a word the tenant
+ * typed into /admin/home — is still correct and is not weakened here: a
+ * biography block that silently grows a photograph is a block whose output no
+ * longer matches its form. This band is the opposite: its whole job is to
+ * answer who is teaching, it already prints a name and three figures that
+ * nobody typed, and a face is the most literal answer it can give.
  *
  * ## So it is rebuilt as an identity band, and it stays REAL
  *
@@ -51,7 +75,11 @@ import { boardCopy } from './board-copy';
  * not.
  */
 export async function BoardInstructor({ level }: { level: 1 | 2 }) {
-  const { courses } = await getCatalogOrEmpty();
+  /* `getBranding()` هنا وكمان في `<BoardLanding>`، وده مجاني: لودر
+     `'use cache'` متعلّم بـ`tags.settings('branding')`، فالنداءين رن واحد.
+     الوصول للبراندنج من جوّه القسم أنضف من تمريره في `renderBoardBlock`،
+     لأن التست بيرندر القسم ده لوحده. */
+  const [{ courses }, branding] = await Promise.all([getCatalogOrEmpty(), getBranding()]);
 
   const lessons = courses.reduce((sum, course) => sum + course.lessonCount, 0);
   const hours = Math.round(courses.reduce((sum, course) => sum + course.totalSeconds, 0) / 3600);
@@ -78,6 +106,29 @@ export async function BoardInstructor({ level }: { level: 1 | 2 }) {
         />
 
         <div className="board-id">
+          {branding.portraitKey ? (
+            /*
+              ١٩٢×٢٥٦ — ٣:٤، نفس نسبة الملفات المرفوعة فعلًا (٩١٢×١٢١٦ و
+              ٩١٤×١٢٠٠)، فمفيش قصّ. دايرة كانت هتقصّ ٣:٤ لمربع من النص، واللي
+              في النص في بورتريه واقف مش الوش بالضرورة — فصندوق واقف بنفس نسبة
+              الملف هو الاختيار اللي مابيراهنش على تكوين صورة محدش شافها.
+
+              فوق الاسم عشان `.board-id` عمود في النص: «اللوح» كله متمركز،
+              وصورة جنب النص هنا كانت هتبقى تكوين من بريست تاني.
+
+              `alt=""`: الاسم مكتوب تحتيها مباشرة في `.board-id__name`.
+            */
+            <span className="board-id__portrait">
+              <Image
+                src={mediaUrl(branding.portraitKey)}
+                alt=""
+                width={192}
+                height={256}
+                sizes="192px"
+              />
+            </span>
+          ) : null}
+
           {/* `copy.site.instructor` is the FALLBACK argument, never the value:
               `tenantName()` returns it only on the stack whose `TENANT_KEY` is
               `ayman`. Reading `copy.site.instructor` directly here is precisely

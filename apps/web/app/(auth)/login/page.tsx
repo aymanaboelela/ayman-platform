@@ -1,8 +1,11 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { copy } from '@ayman/contracts';
+import { waMeHref } from '@ayman/contracts/whatsapp';
 import { LoginForm } from '@/components/auth/login-form';
 import { safeNext, withNext } from '@/lib/safe-next';
+import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 
 export const metadata: Metadata = { title: copy.auth.login.title };
 
@@ -62,6 +65,27 @@ export default async function LoginPage({
   const next = safeNext(params.next);
   const socialError = socialErrorMessage(params.error);
 
+  /**
+   * The instructor's own support number, for the two refusals that end in
+   * «كلّم المدرّس» — a repeated lockout and the two-device limit.
+   *
+   * `contact.whatsapp` and NOT `whatsappChannel`: the channel is a broadcast
+   * nobody can answer in, and this is the number the footer's «كلّمنا» button
+   * already dials (the dashboard's book-orders section resolves the same one
+   * the same way).
+   *
+   * `getPublicSettingsOrDefaults` rather than `getPublicSettings`, because
+   * this page is prerendered and the throwing version would make an
+   * unreachable API during `docker build` a failed deploy. Its catch returns
+   * every contact field null, which is also what the first request after every
+   * deploy sees — hence the `TENANT_CONTACT_FALLBACK` behind it, gated on
+   * `TENANT_KEY` so a second instructor's stack falls back to THEIR number or
+   * to nothing at all, never to Ayman's. With neither, the link is not
+   * rendered and the sentence still stands on its own.
+   */
+  const settings = await getPublicSettingsOrDefaults();
+  const supportHref = waMeHref(settings.contact.whatsapp ?? TENANT_CONTACT_FALLBACK.whatsapp);
+
   return (
     <>
       <header className="auth-head">
@@ -94,7 +118,7 @@ export default async function LoginPage({
         </p>
       ) : null}
 
-      <LoginForm next={next} />
+      <LoginForm next={next} supportHref={supportHref} />
 
       <p className="auth-switch">
         {copy.auth.switch.noAccount}{' '}

@@ -3,6 +3,7 @@ import type { Correctness } from '@ayman/contracts/quiz/attempt';
 import type { QuestionType } from '@ayman/contracts/quiz/question';
 import { cn } from '@ayman/ui/lib/cn';
 import { SafeHtml } from '@/components/content/safe-html';
+import { tenantSentence } from '@/lib/tenant-copy';
 
 export interface ReviewQuestionOption {
   id: string;
@@ -38,7 +39,9 @@ const CORRECTNESS_LABEL: Record<Correctness, string> = {
   correct: copy.quiz.correct,
   partial: copy.quiz.partial,
   incorrect: copy.quiz.incorrect,
-  needsGrading: copy.quiz.needsGrading,
+  // «لسه عند مهندس أيمن للتصحيح» — the verdict chip on an essay answer, so
+  // it names whoever has not marked it yet. See `components/quiz/result-header.tsx`.
+  needsGrading: tenantSentence(copy.quiz.needsGrading),
   unanswered: copy.quiz.notAnswered,
 };
 

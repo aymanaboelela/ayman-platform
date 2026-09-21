@@ -9,10 +9,11 @@ import { IS_AYMAN } from '@/lib/tenant';
  *
  * ## Why anything needs this
  *
- * Four places on the marketing surface paint with the brand orange through an
- * API that takes a COLOUR VALUE and not a CSS declaration: two WebGL fluids
- * that interpolate between colours inside a shader, and `ElectricBorder`, which
- * assigns straight to `ctx.strokeStyle`. None of them can resolve a custom
+ * Several places paint with the brand orange through an API that takes a
+ * COLOUR VALUE and not a CSS declaration: two WebGL fluids that interpolate
+ * between colours inside a shader, `ElectricBorder`, which assigns straight to
+ * `ctx.strokeStyle`, and the two `atmosphere/` scenes, which hand a hex to an
+ * `ogl` uniform and a three.js material. None of them can resolve a custom
  * property — a canvas context has no cascade to look it up in — so each carried
  * a hardcoded amber literal with a comment explaining why it could not be a
  * token. That reasoning was right and its conclusion was one tenant too narrow:
@@ -49,14 +50,15 @@ import { IS_AYMAN } from '@/lib/tenant';
  * stack this cannot classify keeps the amber it already had, and amber on a
  * page whose ramp is amber is right rather than merely harmless.
  *
- * ⚠️ `IS_AYMAN` is read from `process.env.TENANT_KEY`, which Next does NOT
- * inline into client bundles — only `NEXT_PUBLIC_*` and `next.config`'s `env`
- * survive, and `process` in the browser is a polyfill whose `env` is empty. So
- * in the browser this currently resolves to `true` on every stack and the
- * derivation never runs. It is correct on the server, it is correct everywhere
- * the moment `TENANT_KEY` is exposed to the client, and it cannot change
- * Ayman's colours in either state — but until that line exists, a tenant who
- * picks a hue keeps four amber flourishes.
+ * ⚠️ This used to carry a warning that `IS_AYMAN` resolves to `true` in the
+ * browser on every stack, because `process.env.TENANT_KEY` is not inlined into
+ * client bundles. That line exists now — `next.config.ts` lists `TENANT_KEY`
+ * and `TENANT_DISPLAY_NAME` under `env`, which Next inlines at BUILD time — so
+ * the derivation does run in the browser and a tenant's flourishes follow
+ * their ramp. Do not reason from the old note.
+ *
+ * What still holds: the value is baked per image, so changing `TENANT_KEY` in
+ * a running container changes nothing until it is rebuilt.
  */
 
 /** One rung of the `--p-*` ramp, named the way `tokens/color.css` names it. */

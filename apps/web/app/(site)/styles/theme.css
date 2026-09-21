@@ -54,9 +54,17 @@
      clears WCAG AA for the 15px body-weight label the buttons actually use.
      The obvious brighter orange one step up (`oklch(0.600 …)`, #d25200) comes
      out at 4.24:1 and fails — the axe run in `e2e/a11y.e2e.ts` catches it, so
-     do not lighten this without re-measuring. */
-  --site-accent-solid: oklch(0.575 0.180 45);
-  --site-accent-solid-hover: oklch(0.525 0.172 44);
+     do not lighten this without re-measuring.
+
+     The value moved to `--accent-cta` in `tokens/color.css`, unchanged, for
+     one reason: it was written here THREE times (this block, the dark block,
+     and the `prefers-color-scheme: light` copy that has to beat a `dark`
+     attribute), and a literal in a `.site`-scoped block is not reachable from
+     the `<style>` the server injects at `:root`. So a teacher on blue got a
+     blue product and an orange call-to-action. Contrast is re-solved per hue
+     against the same 4.5 target — see `WARM_LITERALS` in `packages/ui`. */
+  --site-accent-solid: var(--accent-cta);
+  --site-accent-solid-hover: var(--accent-cta-hover);
   --site-on-accent: #ffffff;
 
   --site-shadow-sm: 0 1px 2px rgb(var(--p-rgb) / 0.06), 0 2px 8px rgb(var(--p-rgb) / 0.05);
@@ -132,9 +140,9 @@
      (7.2:1) instead of a dark fill with white text. Keeping the light-mode
      fill here would need it darker still to hold contrast, and a dark orange
      button on a dark page reads as disabled. */
-  --site-accent-solid: oklch(0.720 0.175 55);
-  --site-accent-solid-hover: oklch(0.780 0.165 58);
-  --site-on-accent: oklch(0.180 0.020 50);
+  --site-accent-solid: var(--accent-cta);
+  --site-accent-solid-hover: var(--accent-cta-hover);
+  --site-on-accent: var(--on-accent-ink);
   --site-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --site-shadow-md: 0 8px 24px rgb(0 0 0 / 0.45);
   --site-shadow-lg: 0 24px 60px rgb(0 0 0 / 0.55);
@@ -156,8 +164,8 @@
     --site-fg-2: var(--n-11);
     --site-accent-text: var(--p-700);
     --site-accent-text-strong: var(--p-800);
-    --site-accent-solid: oklch(0.575 0.180 45);
-    --site-accent-solid-hover: oklch(0.525 0.172 44);
+    --site-accent-solid: var(--accent-cta);
+    --site-accent-solid-hover: var(--accent-cta-hover);
     --site-on-accent: #ffffff;
     --site-shadow-sm: 0 1px 2px rgb(var(--p-rgb) / 0.06), 0 2px 8px rgb(var(--p-rgb) / 0.05);
     --site-shadow-md: 0 6px 16px rgb(var(--p-rgb) / 0.09), 0 2px 6px rgb(var(--p-rgb) / 0.06);
@@ -377,7 +385,7 @@
 
 .site-btn--light {
   background: #fff;
-  color: oklch(0.22 0.02 60);
+  color: var(--on-light-ink);
 }
 
 .site-btn--light:hover {

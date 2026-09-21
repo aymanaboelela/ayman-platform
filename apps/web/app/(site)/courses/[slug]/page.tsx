@@ -27,6 +27,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { CourseArticles } from '@/components/site/course-articles';
 import { yearLabelAr } from '@/lib/year-label';
 import { lessonCountLabel } from '@/lib/course-groups';
+import { tenantSentence } from '@/lib/tenant-copy';
 import { formatDuration } from '@/components/site/course-card';
 import { CourseCover } from '@/components/site/course-cover';
 import { CourseStartButton } from '@/components/site/course-start-button';
@@ -118,12 +119,18 @@ export async function generateMetadata({
      */
     description:
       course.lessonCount > 0
-        ? formatCopy(copy.seo.courseDescription, {
-            // `lessonCountLabel` carries the NUMBER and the noun in the right
-            // Arabic plural — the template must not add «محاضرة» itself.
-            lessons: lessonCountLabel(course.lessonCount),
-            year: yearLabelAr(course.year),
-          })
+        ? // ⚠️ Gated: the sentence ends «مع المهندس أيمن أبو العلا.», and it
+          // is the `<meta name="description">` and the share card of EVERY
+          // course page. A title is proof-read by whoever opens the tab; a
+          // description is read by Google — see `lib/seo/metadata.ts`.
+          tenantSentence(
+            formatCopy(copy.seo.courseDescription, {
+              // `lessonCountLabel` carries the NUMBER and the noun in the right
+              // Arabic plural — the template must not add «محاضرة» itself.
+              lessons: lessonCountLabel(course.lessonCount),
+              year: yearLabelAr(course.year),
+            }),
+          )
         : (course.subtitle ?? course.description ?? copy.site.tagline),
     path: `/courses/${course.slug}`,
     // A course IS an article-like object with a subject and an author, and

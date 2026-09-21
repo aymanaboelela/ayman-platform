@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { copy } from './copy/admin';
 
 /**
  * No shipped default may carry one instructor's real-world identity.
@@ -135,10 +136,6 @@ const GATED_AT_POINT_OF_USE: readonly { path: string; gate: string }[] = [
   // an `IS_AYMAN ?` on `description`, swapped whole rather than interpolated
   // because `tenantName()` returns an Arabic name and this sentence is English.
   { path: 'apps/web/lib/agents/skills.ts', gate: 'IS_AYMAN' },
-  // `representativeQueries` — the search phrases the catalog claims to answer.
-  // Hamza-less on purpose: it is how students actually type it. Verified:
-  // `...(IS_AYMAN ? ['ايمن ابو العلا برمجة'] : [])`, and the `name` beside it
-  // goes through `tenantName(copy.site.platformName)`.
   // `OUTREACH_SIGNATURE` — «مهندس أيمن», the short form he signs the one
   // self-introducing greeting with. Verified: it is the FALLBACK ARGUMENT and
   // never the value. No pool entry carries a name; the greeting carries
@@ -329,14 +326,20 @@ const ALLOWED_FILES = new Set([
   join('apps', 'api', 'src', 'scripts', 'finance-reconcile.ts'),
 
   /*
-   * ── Rendered by nothing ─────────────────────────────────────────────────
+   * ── `code-lab.tsx` used to sit here, and it is why this block is short ──
    *
-   * `code-lab.tsx` already reads `TENANT_DISPLAY_NAME` and falls back to the
-   * name only for Ayman's own stack, and its own docblock records that no
-   * route renders the component today. Listed rather than rewritten so the
-   * gate that IS there is not mistaken for an oversight.
+   * Its entry said the component «already reads `TENANT_DISPLAY_NAME` and
+   * falls back to the name only for Ayman's own stack». That is the exact
+   * thing the failure message below calls not-a-gate — the literal was `||
+   * 'أيمن'`, one unset variable away from printing him — and the entry read as
+   * reassuring for as long as nobody opened the file. It was harmless only
+   * because no route renders the component, which the entry ALSO said, and
+   * which is the sentence that should have been the whole entry.
+   *
+   * It has since become a precedent twice: `ai-catalog.json/route.ts` cited it
+   * by name while copying the pattern. So the file now calls `tenantName()`
+   * like everything else, carries no literal, and needs no entry at all.
    */
-  join('apps', 'web', 'components', 'site', 'code-lab.tsx'),
 
   /*
    * ── Gated at the element, not in the stylesheet ─────────────────────────
@@ -448,7 +451,17 @@ function walkShallow(dir: string, out: string[]): string[] {
  * scheme's, so a line of nothing but URLs is kept whole.
  */
 function stripComments(source: string): string {
-  const withoutBlocks = source.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  /*
+   * A block comment becomes its own length in spaces and newlines rather than
+   * a single space, so an index into the stripped text is still an index into
+   * the original. The literal suites below only ever ask `includes()` and do
+   * not care — the consumer sweep at the bottom reports FILE AND LINE, and a
+   * collapsed docblock moved every line number after it by however many lines
+   * the comment was long.
+   */
+  const withoutBlocks = source.replace(/\/\*[\s\S]*?\*\//g, (block) =>
+    block.replace(/[^\n]/g, ' '),
+  );
   return withoutBlocks
     .split('\n')
     .map((line) => {
@@ -579,4 +592,451 @@ describe('the instructor’s name', () => {
       ).toEqual([]);
     });
   }
+});
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * THE CONSUMER SWEEP — the other half, and the half that was missing
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The same question, asked from the other end: not «which file WRITES his
+ * name», but «which file READS a copy key that contains it, without a gate».
+ *
+ * ## Why the scan above could never have caught this
+ *
+ * `copy/ar.ts` is exempt from every needle loop (see `IDENTITY_SOURCE_TABLES`),
+ * and that exemption is correct — the table is where the name is SUPPOSED to
+ * live. The consumer is the thing that has to gate it. But a consumer carries
+ * no literal for a text search to find:
+ *
+ *     const c = copy.assistant;        // assistant-widget.tsx:155
+ *     …
+ *     <span>{c.subtitle}</span>        // assistant-widget.tsx:814
+ *
+ * `assistant-widget.tsx` is scanned, is on no allow-list, and is CLEAN by
+ * every check above — while rendering «ولو مالقيتش اللي بتدوّر عليه بوصّلك
+ * لأيمن» at the top of another instructor's support panel, six hundred lines
+ * below two constants in the same file that gate the name correctly. The name
+ * travels from an exempt file, through a property access, into a scanned and
+ * blameless one. No list of spellings and no extra file extension reaches it.
+ *
+ * Thirty-two more reads were hiding underneath that one, and the worst of them
+ * was not on a page at all: `assistant-knowledge.ts` handed ten of the written
+ * answers to the model verbatim — «الأسئلة المقالية بيصحّحها أيمن بنفسه» —
+ * where a corpus-only deployment quotes them back to the student as fact.
+ *
+ * ## What this does instead
+ *
+ * Three mechanical steps, no hand-kept inventory of keys:
+ *
+ * 1. Walk the copy object itself and collect the DOTTED PATH of every string
+ *    whose value carries a spelling from `NAME_LITERALS`. That is the list —
+ *    derived, so a key reworded to include the name joins it the same day, and
+ *    a key reworded to drop it leaves.
+ * 2. Walk the same roots the literal scan walks, resolving the one alias shape
+ *    every consumer in this repo uses (`const c = copy.assistant;`) against
+ *    the real object, so a read is only counted when the path EXISTS.
+ * 3. Fail on any read that is not inside `tenantName(` / `tenantSentence(` /
+ *    `tenantFaq(` / `aymanOnly(`, and not inside a conditional on `IS_AYMAN`,
+ *    `TENANT_KEY` or `SEEDS_OFFICIAL_SEO`.
+ *
+ * ## What it still cannot see, stated plainly
+ *
+ * It reads text, not types. It cannot follow a tainted string through a
+ * function argument into another module, it resolves aliases one level deep,
+ * and for a whole TABLE read (`copy.assistant.knowledge.map(…)`) it can only
+ * see that the expression consuming the table mentions a gate — not that every
+ * element goes through one. Those are the seams, and `GATED_BY_THE_RECEIVING_
+ * COMPONENT` below is where the first of them is written down by hand.
+ *
+ * The version of this that has no seams is a TYPE: brand the tainted keys so
+ * `{c.subtitle}` in JSX is a compile error rather than a finding here. That is
+ * worth doing and is not what this is. This is the check that can exist today,
+ * and it is the difference between thirty-three leaks and none.
+ */
+
+/** Gate calls. A read inside one of these parens has been through the swap. */
+const COPY_GATES = ['tenantName', 'tenantSentence', 'tenantFaq', 'aymanOnly'] as const;
+
+/**
+ * Identifiers that decide WHICH STACK this is, at the head of a conditional.
+ *
+ * `IS_AYMAN` and `TENANT_KEY` are the two tenant switches. `SEEDS_OFFICIAL_SEO`
+ * is the third and is not named for them: it is `INHERITS_OFFICIAL_PROFILES`
+ * from `seed-data/tenant-contact.ts`, the one decision that governs whether a
+ * database gets his settings row seeded into it at all — and `seed.ts` reads
+ * `copy.seo.defaultTitle` behind exactly that ternary, on purpose, with a long
+ * note explaining that a seeded title BEAT the tenant-aware fallback on the
+ * page. A gate that is not spelled `IS_AYMAN` is still a gate.
+ */
+const TENANT_SWITCHES = ['IS_AYMAN', 'TENANT_KEY', 'SEEDS_OFFICIAL_SEO'] as const;
+
+/**
+ * The gate modules themselves, which necessarily read what they gate.
+ *
+ * `tenant-sentence.ts` holds the ordered list of spellings; the two
+ * `tenant-copy.ts` files pass `copy.site.name` to `tenantName()` as the
+ * fallback argument. Exempting them is not a promise about a consumer — there
+ * is no consumer here. It is the same shape as excluding a dictionary from a
+ * spell-check.
+ */
+const COPY_GATE_MODULES = new Set(
+  [
+    'packages/contracts/src/copy/tenant-sentence.ts',
+    'apps/web/lib/tenant-copy.ts',
+    'apps/api/src/common/tenant-copy.ts',
+  ].map(repoPath),
+);
+
+/**
+ * Reads whose gate is in the component they are HANDED TO, one hop away.
+ *
+ * ⚠️ Every line here is a promise, and the docblock on `GATED_AT_POINT_OF_USE`
+ * records what this repo's promises have been worth. Open the file, find the
+ * call, then leave the entry.
+ *
+ * `wraps` is what keeps the assertion below from being one of those promises.
+ * Naming the gate alone would pass on a file that calls `tenantSentence()` on
+ * some OTHER string — which is exactly the shape of the bug this whole sweep
+ * exists for, `assistant-widget.tsx` gating two constants and rendering a
+ * third raw. Naming the ARGUMENT means the check is `tenantSentence(body)`,
+ * the expression that actually has to be there. It still cannot prove the
+ * prop reaching that expression is the one this page passed; one hop is the
+ * limit of a text scan, and the entry is a promise about that hop.
+ *
+ * `/privacy` and `/terms` hand their section bodies to `<LegalSection>`, and
+ * `components/site/legal-page.tsx` renders every one of them through
+ * `tenantSentence()`. The gate sits there ON PURPOSE and that file says why in
+ * as many words: a per-page gate is a list somebody has to remember to add to,
+ * and these are the two pages that name a data controller and a copyright
+ * holder. Pulling the gate back onto the pages to satisfy this sweep would
+ * trade a property that holds for new sections automatically for one that
+ * holds until the next section is written.
+ */
+const GATED_BY_THE_RECEIVING_COMPONENT: readonly {
+  path: string;
+  key: string;
+  renderedBy: string;
+  gate: string;
+  /** The identifier the gate is called ON, inside `renderedBy`. */
+  wraps: string;
+}[] = [
+  {
+    path: 'apps/web/app/(site)/privacy/page.tsx',
+    key: 'legal.ownerBody',
+    renderedBy: 'apps/web/components/site/legal-page.tsx',
+    gate: 'tenantSentence',
+    wraps: 'body',
+  },
+  {
+    path: 'apps/web/app/(site)/terms/page.tsx',
+    key: 'legal.ownerBody',
+    renderedBy: 'apps/web/components/site/legal-page.tsx',
+    gate: 'tenantSentence',
+    wraps: 'body',
+  },
+  {
+    path: 'apps/web/app/(site)/terms/page.tsx',
+    key: 'legal.termsContentBody',
+    renderedBy: 'apps/web/components/site/legal-page.tsx',
+    gate: 'tenantSentence',
+    wraps: 'body',
+  },
+];
+
+/** A read this sweep has been told about. */
+const isHandedOff = (path: string, key: string): boolean =>
+  GATED_BY_THE_RECEIVING_COMPONENT.some(
+    (entry) => repoPath(entry.path) === path && entry.key === key,
+  );
+
+/**
+ * Every dotted path in the copy table whose value carries a spelling.
+ *
+ * `taintedLeaves` are the strings themselves. `taintedTables` are the objects
+ * and arrays ABOVE them — `assistant.knowledge`, `assistant.script` — because
+ * a consumer that maps the whole table never names the leaf, and the elements
+ * it hands on are the same strings.
+ */
+const taintedLeaves = new Set<string>();
+const taintedTables = new Set<string>();
+(function collect(node: unknown, path: string[]): boolean {
+  if (typeof node === 'string') {
+    if (!NAME_LITERALS.some(({ literal }) => node.includes(literal))) return false;
+    taintedLeaves.add(path.join('.'));
+    return true;
+  }
+  if (node === null || typeof node !== 'object') return false;
+  let any = false;
+  for (const [key, value] of Object.entries(node)) if (collect(value, [...path, key])) any = true;
+  if (any && path.length > 0) taintedTables.add(path.join('.'));
+  return any;
+})(copy, []);
+
+/**
+ * Walk a dotted path against the real object, consuming as far as it goes.
+ *
+ * Resolving against the VALUE rather than against a list of strings is what
+ * makes `copy.assistant.knowledge.map` resolve to the table (`map` is not a
+ * key, so the walk stops) while `c.somethingElse` on an alias resolves to
+ * nothing at all. A local variable that happens to share a name with an alias
+ * therefore drops out instead of being reported.
+ */
+function resolveCopyPath(base: readonly string[], segments: readonly string[]): string[] | null {
+  const path = [...base];
+  let node: unknown = base.reduce<unknown>(
+    (current, key) =>
+      current !== null && typeof current === 'object'
+        ? (current as Record<string, unknown>)[key]
+        : undefined,
+    copy,
+  );
+  let consumed = 0;
+  for (const segment of segments) {
+    if (node === null || typeof node !== 'object') break;
+    if (!Object.prototype.hasOwnProperty.call(node, segment)) break;
+    node = (node as Record<string, unknown>)[segment];
+    path.push(segment);
+    consumed++;
+  }
+  return consumed > 0 ? path : null;
+}
+
+/** `[start, end]` of every gate call's parentheses. */
+function gateCallSpans(source: string): [number, number][] {
+  const spans: [number, number][] = [];
+  for (const gate of COPY_GATES) {
+    const opener = new RegExp(`\\b${gate}\\s*\\(`, 'g');
+    let match: RegExpExecArray | null;
+    while ((match = opener.exec(source))) {
+      let depth = 0;
+      let at = match.index + match[0].length - 1;
+      for (; at < source.length; at++) {
+        if (source[at] === '(') depth++;
+        else if (source[at] === ')' && --depth === 0) break;
+      }
+      spans.push([match.index, at]);
+    }
+  }
+  return spans;
+}
+
+/**
+ * `[start, end]` of every `<switch> ? … : …`, from the switch to the end of
+ * the conditional.
+ *
+ * The end is found by walking forward to the first `;` or `,` at depth zero,
+ * or to the closer of a bracket this expression is inside — which is what
+ * makes `...(IS_AYMAN ? { keywords: [...copy.seo.keywords] } : {})` one span
+ * rather than three.
+ */
+function conditionalSpans(source: string): [number, number][] {
+  const spans: [number, number][] = [];
+  const switches = new RegExp(`\\b(?:${TENANT_SWITCHES.join('|')})\\b`, 'g');
+  let match: RegExpExecArray | null;
+  while ((match = switches.exec(source))) {
+    // Up to the `?`, and only if nothing has ended the expression first.
+    const ahead = source.slice(match.index, match.index + 60);
+    const question = ahead.indexOf('?');
+    if (question === -1 || /[;{}]/.test(ahead.slice(0, question))) continue;
+    let depth = 0;
+    let at = match.index + question + 1;
+    for (; at < source.length; at++) {
+      const char = source[at] ?? '';
+      if ('([{'.includes(char)) depth++;
+      else if (')]}'.includes(char)) {
+        if (depth === 0) break;
+        depth--;
+      } else if ((char === ';' || char === ',') && depth === 0) break;
+    }
+    spans.push([match.index, at]);
+  }
+  return spans;
+}
+
+/** The expression that CONSUMES a table read — `…knowledge.filter(…).map(…)`. */
+function consumingExpression(source: string, from: number): string {
+  let depth = 0;
+  let at = from;
+  for (; at < source.length; at++) {
+    const char = source[at] ?? '';
+    if ('([{'.includes(char)) depth++;
+    else if (')]}'.includes(char)) {
+      if (depth === 0) break;
+      depth--;
+    } else if ((char === ';' || char === ',') && depth === 0) break;
+  }
+  return source.slice(from, at);
+}
+
+interface Declaration {
+  name: string;
+  start: number;
+  end: number;
+}
+
+/** `const NAME = …` — name, and the span of the initialiser. */
+function declarations(source: string): Declaration[] {
+  const found: Declaration[] = [];
+  /*
+   * `[^=\n]*` allows a `;` between the name and the `=`, because a TYPE
+   * ANNOTATION contains them: `const DEFAULT_HOME_BLOCKS: readonly { key:
+   * string; props: HomeBlockProps }[] = […]`. Excluding `;` here silently
+   * skipped exactly the declarations that are long enough to need one, which
+   * is to say the tables. The newline is the real boundary — an `=` that ends
+   * up on the next line is a declaration this does not claim to have found.
+   */
+  const declaration = /\b(?:const|let)\s+([A-Za-z_$][\w$]*)[^=\n]*=/g;
+  let match: RegExpExecArray | null;
+  while ((match = declaration.exec(source))) {
+    let depth = 0;
+    let at = match.index + match[0].length;
+    for (; at < source.length; at++) {
+      const char = source[at] ?? '';
+      if ('([{'.includes(char)) depth++;
+      else if (')]}'.includes(char)) {
+        if (depth === 0) break;
+        depth--;
+      } else if (char === ';' && depth === 0) break;
+    }
+    found.push({ name: match[1] ?? '', start: match.index + match[0].length, end: at });
+  }
+  return found;
+}
+
+const isInside = (spans: readonly [number, number][], at: number): boolean =>
+  spans.some(([start, end]) => at > start && at < end);
+
+/** Only files that could read the table at all. */
+const IMPORTS_COPY = /from\s+'(?:@ayman\/contracts(?:\/copy[\w/-]*)?|[./]+copy\/(?:ar|admin))'/;
+
+/** Consumers: everything the literal scan walks, minus the tables and the gates. */
+const consumerFiles = files.filter(
+  (path) => !IDENTITY_SOURCE_TABLES.includes(path) && !COPY_GATE_MODULES.has(path),
+);
+
+interface Finding {
+  path: string;
+  line: number;
+  read: string;
+  key: string;
+}
+
+function sweep(): Finding[] {
+  const findings: Finding[] = [];
+  for (const path of consumerFiles) {
+    if (!IMPORTS_COPY.test(readFileSync(join(REPO_ROOT, path), 'utf8'))) continue;
+    const source = sourceOf(path);
+    const spans = [...gateCallSpans(source), ...conditionalSpans(source)];
+    const declared = declarations(source);
+
+    /**
+     * ONE level of aliasing, which is the only level this repo uses: eighty-odd
+     * files open with `const c = copy.<something>;` and read `c.key` from
+     * there. Two levels would need a resolver; nothing here asks for one.
+     */
+    const bases: [string, string[]][] = [['copy', []]];
+    const alias = /(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*copy((?:\.[A-Za-z_$][\w$]*)+)\s*;/g;
+    let aliasMatch: RegExpExecArray | null;
+    while ((aliasMatch = alias.exec(source))) {
+      const resolved = resolveCopyPath([], (aliasMatch[2] ?? '').slice(1).split('.'));
+      if (resolved) bases.push([aliasMatch[1] ?? '', resolved]);
+    }
+
+    /** Every read of this identifier outside its own declaration is gated. */
+    const readsAllGated = (name: string): boolean => {
+      // An exported constant can be read from a file this function cannot see.
+      // Comments are already stripped, so a docblock naming it does not count.
+      const elsewhere = consumerFiles.some(
+        (other) => other !== path && new RegExp(`\\b${name}\\b`).test(sourceOf(other)),
+      );
+      if (elsewhere) return false;
+      const mine = declared.filter((entry) => entry.name === name);
+      const uses = new RegExp(`\\b${name}\\b`, 'g');
+      let use: RegExpExecArray | null;
+      let seen = 0;
+      while ((use = uses.exec(source))) {
+        if (mine.some((entry) => use!.index >= entry.start && use!.index < entry.end)) continue;
+        if (mine.some((entry) => use!.index < entry.start && entry.start - use!.index < 200))
+          continue; // the `const NAME` of the declaration itself
+        seen++;
+        if (!isInside(spans, use.index)) return false;
+      }
+      return seen > 0;
+    };
+
+    for (const [base, basePath] of bases) {
+      const reads = new RegExp(`\\b${base}((?:\\.[A-Za-z_$][\\w$]*)+)`, 'g');
+      let read: RegExpExecArray | null;
+      while ((read = reads.exec(source))) {
+        // `keyof typeof copy.assistant.script` is a TYPE. It renders nothing.
+        if (/\btypeof\s+$/.test(source.slice(Math.max(0, read.index - 12), read.index))) continue;
+        const resolved = resolveCopyPath(basePath, (read[1] ?? '').slice(1).split('.'));
+        if (!resolved) continue;
+        const key = resolved.join('.');
+        const leaf = taintedLeaves.has(key);
+        const table = taintedTables.has(key);
+        if (!leaf && !table) continue;
+        // `const c = copy.assistant;` is a hand-off, not a render.
+        if (base === 'copy' && table && bases.some(([, aliased]) => aliased.join('.') === key))
+          continue;
+        if (isInside(spans, read.index)) continue;
+        // A whole-table read: the best this can see is that the expression
+        // consuming it goes through a gate. See the docblock's last section.
+        if (table && new RegExp(`\\b(?:${COPY_GATES.join('|')})\\s*\\(`).test(consumingExpression(source, read.index)))
+          continue;
+        const holder = declared.find(
+          (entry) => read!.index >= entry.start && read!.index < entry.end,
+        );
+        if (holder && readsAllGated(holder.name)) continue;
+        if (isHandedOff(path, key)) continue;
+        findings.push({
+          path,
+          line: source.slice(0, read.index).split('\n').length,
+          read: `${base}${read[1]}`,
+          key,
+        });
+      }
+    }
+  }
+  return findings;
+}
+
+describe('a copy key that carries the name is never read without a gate', () => {
+  it('finds consumers to check at all', () => {
+    // Without this the sweep passes vacuously the day the import regex stops
+    // matching — the copy table is imported under four different specifiers.
+    expect(taintedLeaves.size).toBeGreaterThan(50);
+    expect(
+      consumerFiles.filter((path) =>
+        IMPORTS_COPY.test(readFileSync(join(REPO_ROOT, path), 'utf8')),
+      ).length,
+    ).toBeGreaterThan(100);
+  });
+
+  it('every hand-off entry still shows the gate wrapping the prop', () => {
+    for (const { path, key, renderedBy, gate, wraps } of GATED_BY_THE_RECEIVING_COMPONENT) {
+      expect(
+        sourceOf(repoPath(renderedBy)).replace(/\s+/g, ''),
+        `${path} reads \`${key}\` ungated because ${renderedBy} renders it through ` +
+          `\`${gate}(${wraps})\`, and that call is no longer in that file's code. ` +
+          `Either the gate moved — update the entry — or it is gone and both legal ` +
+          `pages are publishing the wrong data controller.`,
+      ).toContain(`${gate}(${wraps})`);
+    }
+  });
+
+  it('has no ungated read anywhere under the scanned roots', () => {
+    const findings = sweep();
+    expect(
+      findings.map(({ path, line, read, key }) => `${path}:${line}  ${read}  (copy.${key})`),
+      `A copy key whose VALUE contains the instructor's name is read here and ` +
+        `rendered as-is. Wrap it: \`tenantName()\` when the key IS a name, ` +
+        `\`tenantSentence()\` when the name sits inside a sentence, \`aymanOnly()\` ` +
+        `when the string is a fact about him that no substitution makes true. ` +
+        `The grep above cannot see this class of leak — the literal is in ` +
+        `copy/ar.ts, which is exempt, and the file that prints it contains no ` +
+        `spelling of the name at all.`,
+    ).toEqual([]);
+  });
 });

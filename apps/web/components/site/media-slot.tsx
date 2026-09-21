@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import { copy } from '@ayman/contracts/copy';
-import { getBrandAsset, type BrandAssetKind } from '@/lib/brand-assets';
+import { BRAND_ASSET_RATIO, getBrandAsset, type BrandAssetKind } from '@/lib/brand-assets';
 import { mediaUrl } from '@ayman/ui/branding';
 import { tenantName } from '@/lib/tenant';
 
@@ -12,8 +12,15 @@ import { tenantName } from '@/lib/tenant';
  * رفع صور في مكتبته. الخريطة دي هي الوصلة: الصورة اللي رفعها تتعرض مكان
  * الرسمة، وستاك أيمن يفضل على ملفاته زي ما هو.
  *
- * الخانات اللي مش هنا (`logo`, `mark`, `cutout`, وتايلات التراك) مالهاش حقل
- * لسه — بتسقط على الرسمة البديلة، وهي مصمّمة تبقى شكل نهائي مش مكان فاضي.
+ * `mark` بقى ليه مصدر كمان — بس مش حقل بتاعه: الدايرة في التوب‌بار بتاخد
+ * `logoDarkKey ?? logoLightKey`، يعني نفس الملف اللي البريستات بترسمه. السبب
+ * مكتوب في `site-brand-slot.tsx`: الهيدر ده بيقعد على أرضيتين (غامقة فوق
+ * الهيرو، و`--site-nav-card` الأبيض بعد ما يتثبّت)، ومفيش غير ملف واحد مرفوع،
+ * فبيتحط في الخانة اللي بتنجّي أي رسمة على أي أرضية — دايرة ٣٦px بـ`cover`
+ * ورا حلقة.
+ *
+ * الخانات اللي مش هنا (`logo`, `cutout`, وتايلات التراك) مالهاش حقل لسه —
+ * بتسقط على الرسمة البديلة، وهي مصمّمة تبقى شكل نهائي مش مكان فاضي.
  */
 
 
@@ -87,11 +94,26 @@ export function MediaSlot({
    * `undefined` أصلًا (متجيّت بـ`aymanOnly`) — فالصورة المرفوعة هي الوحيدة.
    */
   if (tenantKey) {
+    /*
+     * المقاس من جدول النسب، مش رقمين ثابتين.
+     *
+     * كان `width={1200} height={kind === 'portrait' ? 1600 : 800}` — يعني ٣:٢
+     * لكل خانة غير البورتريه، **بما فيها `mark` و`logo`**. و`mark` دايرة ١:١،
+     * و`logo` لوكاب ٣:١. الأبعاد دي هي اللي `next/image` بيحجز بيها المكان قبل
+     * ما البايتات تنزل، فخانة متعرّفة غلط = قفزة في أول رندر.
+     *
+     * الصورة المرفوعة أبعادها الحقيقية مش في پيلود الإعدادات (نفس اللي
+     * `<BoardMark>` و`<CourseCover>` مكتوب فيهم بالحرف)، فالمطلوب هنا **نسبة**
+     * صح مش قياس صح — وكل خانة `object-fit` بتاعها في الـCSS بيتكفّل بالباقي.
+     */
+    const width = 1200;
+    const height = Math.round(width / BRAND_ASSET_RATIO[kind]);
+
     return (
       <Image
         src={mediaUrl(tenantKey)}
-        width={1200}
-        height={kind === 'portrait' ? 1600 : 800}
+        width={width}
+        height={height}
         alt={alt}
         priority={priority}
         fetchPriority={fetchPriority}

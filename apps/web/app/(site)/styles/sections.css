@@ -1831,7 +1831,7 @@
 
 .track--active .track__go {
   margin-top: 1.25rem;
-  color: oklch(0.22 0.02 60);
+  color: var(--on-light-ink);
 }
 
 /* ==========================================================================
