@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import {
+  accountThrottleKey,
   emailIdentifier,
   phoneIdentifier,
   throttleKeyFor,
@@ -275,6 +276,36 @@ describe('StudentsService.setPassword', () => {
 
     expect(loginThrottle.isLocked(phoneKey)).toBe(false);
     expect(loginThrottle.isLocked(emailKey)).toBe(false);
+  });
+
+  /**
+   * And the third bucket, which is the one that now actually holds the door
+   * shut.
+   *
+   * The account-wide lock (`accountThrottleKey`) is what makes six failures on
+   * a phone refuse the email box too. Clearing only the two identifier keys
+   * would rebuild the exact bug the test above exists for — one layer down,
+   * and invisible to the admin who has just set the password and watched it
+   * save.
+   */
+  it('drops the account-wide lock as well, not only the two identifier buckets', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: 'u1',
+      role: 'student',
+      email: 'shrouk@example.com',
+      phoneNumber: '+201153689519',
+    });
+
+    const accountKey = accountThrottleKey('u1');
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      loginThrottle.recordFailure(accountKey, '203.0.113.7');
+    }
+    expect(loginThrottle.isLocked(accountKey)).toBe(true);
+
+    await service.setPassword('u1', 'a-real-password', 'actor');
+
+    expect(loginThrottle.isLocked(accountKey)).toBe(false);
   });
 
   // A phone-only account has `email: null` (the placeholder is stripped before

@@ -74,6 +74,7 @@ import { siWhatsapp } from 'simple-icons';
 import { copy } from '@ayman/contracts/copy';
 import { tenantName } from '@/lib/tenant';
 import { IS_AYMAN } from '@/lib/tenant';
+import { tenantSentence } from '@/lib/tenant-copy';
 import type {
   AssistantTranscriptTurn,
   ConversationThread,
@@ -810,8 +811,17 @@ export function AssistantWidget({
                 <span className="block text-[length:var(--fs-text-sm)] font-semibold">
                   {c.title}
                 </span>
+                {/*
+                  ⚠️ Gated, and it is the line that proved a gate in a file is
+                  not a gate on a screen. `THREAD_TITLE` and `CONTACT_LABEL`
+                  above were both fixed; this sat six hundred lines below them
+                  saying «ولو مالقيتش اللي بتدوّر عليه بوصّلك لأيمن» directly
+                  over a footer button reading «أكلّم محمد صبري». One panel,
+                  two instructors, and the student is being told which one to
+                  trust by whichever line they read second.
+                */}
                 <span className="mt-0.5 block text-[length:var(--fs-text-xs)] opacity-80">
-                  {c.subtitle}
+                  {tenantSentence(c.subtitle)}
                 </span>
               </span>
               <button
@@ -926,7 +936,7 @@ export function AssistantWidget({
                 <div className="flex flex-1 flex-col items-center gap-3 overflow-y-auto px-6 py-10 text-center">
                   <CheckCircle2 className="size-9 text-accent" aria-hidden="true" />
                   <p className="text-[length:var(--fs-text-base)] font-semibold text-fg">
-                    {c.escalate.sentTitle}
+                    {tenantSentence(c.escalate.sentTitle)}
                   </p>
                   <p className="text-[length:var(--fs-text-sm)] leading-[1.7] text-fg-muted">
                     {c.escalate.sentBody}

@@ -147,9 +147,9 @@
      hero applies: a warm-tinted stage under a warm accent turns the whole
      frame into one sepia wash and the orange stops reading as a colour. */
   background:
-    radial-gradient(72% 52% at 78% 2%, rgb(255 138 26 / 0.26), transparent 62%),
-    radial-gradient(58% 46% at 6% 100%, rgb(251 191 36 / 0.13), transparent 60%),
-    linear-gradient(158deg, #171208 0%, #0b0a08 58%, #08090a 100%);
+    radial-gradient(72% 52% at 78% 2%, rgb(var(--ink-key-rgb) / 0.26), transparent 62%),
+    radial-gradient(58% 46% at 6% 100%, rgb(var(--ink-bounce-rgb) / 0.13), transparent 60%),
+    linear-gradient(158deg, var(--ink-warm) 0%, #0b0a08 58%, #08090a 100%);
   color: #fff;
 }
 
@@ -192,7 +192,7 @@
       rgb(8 9 10 / 0.6) 58%,
       rgb(8 9 10 / 0.12) 100%
     ),
-    radial-gradient(72% 52% at 78% 2%, rgb(255 138 26 / 0.12), transparent 62%);
+    radial-gradient(72% 52% at 78% 2%, rgb(var(--ink-key-rgb) / 0.12), transparent 62%);
 }
 
 .auth-aside__inner {
@@ -215,7 +215,7 @@
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   letter-spacing: 0;
-  color: oklch(0.845 0.13 78);
+  color: var(--ink-accent);
 }
 
 .auth-aside__title {
@@ -252,8 +252,8 @@
   border-radius: 999px;
   display: grid;
   place-items: center;
-  background: rgb(255 138 26 / 0.18);
-  color: oklch(0.845 0.13 78);
+  background: rgb(var(--ink-key-rgb) / 0.18);
+  color: var(--ink-accent);
 }
 
 /* ===========================================================================

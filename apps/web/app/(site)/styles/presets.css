@@ -3111,11 +3111,11 @@
   --site-accent-solid: var(--p-500);
   --site-accent-solid-hover: var(--p-400);
   --site-on-accent: var(--ink);
-  /* `theme.css`'s light shadows are `rgb(var(--p-rgb) / …)`, and `--p-rgb` is
-     the one part of the brand ramp `rampDeclarations()` does NOT regenerate
-     per hue — it stays the shipped amber triplet forever. An orange-tinted
-     shadow under a violet tenant's header is a colour nobody chose, so these
-     become plain black, which is what a dark surface wants anyway. */
+  /* `theme.css`'s light shadows are `rgb(var(--p-rgb) / …)`. That note used to
+     say `--p-rgb` is the one part of the ramp nothing regenerates; it is
+     generated per hue now (measured on a live tenant stack: `19 155 191`), so
+     the tint would follow the brand. These stay plain black anyway — a
+     coloured shadow on a dark surface is mud whatever the colour. */
   --site-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --site-shadow-md: 0 8px 24px rgb(0 0 0 / 0.45);
   --site-shadow-lg: 0 24px 60px rgb(0 0 0 / 0.55);

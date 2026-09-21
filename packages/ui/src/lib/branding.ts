@@ -1,5 +1,10 @@
 import type { AccentSlot, RadiusSlot } from '@ayman/contracts/admin/settings';
-import { rampDeclarations } from './ramp';
+import {
+  emberDeclarations,
+  literalDeclarations,
+  primaryDeclarations,
+  rampDeclarations,
+} from './ramp';
 
 /** The four accent steps: 9 solid, 10 solid-hover, 11 low-contrast text, 12 high-contrast. */
 export type AccentRamp = readonly [string, string, string, string];
@@ -118,6 +123,73 @@ export const RADIUS_RAMPS: Record<RadiusSlot, { xs: number; sm: number; md: numb
 };
 
 /**
+ * What each slot means to the parts of the scheme a slot could never reach.
+ *
+ * ## The gap this closes
+ *
+ * Picking a slot rewrites four properties — `--a-9…--a-12` — and nothing else.
+ * Everything else brand-coloured in this product (`--p-*`, `--p-rgb`, the
+ * ember structure ramp `--e-*`, and the warm literals in `WARM_LITERALS`) is
+ * the shipped amber, declared once in `tokens/color.css` and never rewritten.
+ * So "blue" has always meant "blue buttons on an orange site".
+ *
+ * Measured on `mr-mohammedadel.com`, whose row says `accent: blue`: `--a-9` is
+ * the hand-tuned blue and `--p-500` computes to `#F28318`. His landing page
+ * uses the `board` preset, which builds every solid block out of `--p-800`
+ * and `--p-900` — so his home page is orange slabs under a blue button.
+ *
+ * ## Where the numbers come from
+ *
+ * `hue` is the slot's OWN `--a-9` hue, read out of `ACCENT_RAMPS` above, so
+ * the generated half is the same colour as the half that already worked.
+ *
+ * `chromaScale` is that ramp's chroma against amber's 0.152, and it exists for
+ * `slate`. Slate is a near-grey on purpose (chroma 0.020); generating its
+ * `--p-*` and `--e-*` at full chroma would hand a teacher who deliberately
+ * picked "no colour" a saturated blue landing page. The four saturated slots
+ * sit slightly ABOVE amber and are left there — the per-step gamut clamp is
+ * what actually bounds them.
+ *
+ * ⚠️ `amber` is in this table but is NEVER used from it. It is the shipped
+ * default, and the one scheme that must render as literally nothing — see
+ * `tenantScheme`.
+ */
+export const ACCENT_SLOT_SCHEMES: Record<AccentSlot, { hue: number; chromaScale: number }> = {
+  amber: { hue: 72, chromaScale: 1 },
+  cyan: { hue: 205, chromaScale: 0.72 },
+  blue: { hue: 258, chromaScale: 1.12 },
+  violet: { hue: 300, chromaScale: 1.12 },
+  magenta: { hue: 340, chromaScale: 1.12 },
+  slate: { hue: 250, chromaScale: 0.13 },
+};
+
+/**
+ * The hue the DERIVED half of the scheme is cut from, or `null` for the one
+ * configuration that must emit nothing at all.
+ *
+ * `null` is Ayman: `accent: amber` with no `accentHue`, which is what his row
+ * says and what every row said before the hue field existed. His `--p-*`,
+ * `--e-*` and warm literals are the hand-tuned values in `tokens/color.css`
+ * and there is no generator that reproduces them — `primaryRamp(72)` puts step
+ * 500 at `#D29748` where the shipped ramp reaches `#F28318` by drifting its
+ * hue to 56 and 48 through the middle steps. So the default emits nothing and
+ * the shipped file stands, byte for byte.
+ *
+ * Fail-closed in the right direction, too: a configuration this cannot
+ * classify keeps the colours it already had.
+ */
+function tenantScheme(
+  accent: AccentSlot,
+  accentHue: number | null | undefined,
+): { hue: number; chromaScale: number } | null {
+  if (typeof accentHue === 'number' && Number.isFinite(accentHue)) {
+    return { hue: accentHue, chromaScale: 1 };
+  }
+  if (accent === 'amber') return null;
+  return ACCENT_SLOT_SCHEMES[accent] ?? null;
+}
+
+/**
  * A12: the renderer asserts its OWN output. Values come from the tables above,
  * so this can only fire if someone adds a ramp entry containing something other
  * than a colour function — which is exactly the mistake worth catching, because
@@ -173,16 +245,16 @@ function declarations(pairs: ReadonlyArray<readonly [string, string]>): string {
 export function renderBrandingStyle(branding: {
   accent: AccentSlot;
   /**
-   * A tenant's own hue, 0–359. When set it OVERRIDES `accent` and the whole
-   * scheme is generated — including the eleven `--p-*` steps, which the slot
-   * path cannot reach.
+   * A tenant's own hue, 0–359. When set it OVERRIDES `accent` and the accent
+   * ramp is GENERATED rather than looked up.
    *
-   * That gap is the reason this exists. `--p-50…--p-950` is a hand-tuned amber
-   * in `../tokens/color.css` that nothing has ever rewritten, so choosing
-   * `blue` turns 145 usages blue and leaves 116 amber — and the heaviest of
-   * those 116 are the landing page's own stylesheets. The slot path still
-   * behaves exactly that way, deliberately: changing it would change Ayman's
-   * live site. A hue is the opt-in to the whole scheme moving together.
+   * ⚠️ It is no longer what decides whether the rest of the scheme moves.
+   * `--p-*`, `--e-*` and the warm literals used to ride on this flag, which
+   * meant a teacher who picked `blue` from the swatch — no hue — got blue
+   * buttons and an orange everything-else. They ride on `tenantScheme` now,
+   * which says yes to every configuration except the shipped amber default.
+   * A hue is the opt-in to a colour that is not one of the six, and nothing
+   * more.
    */
   accentHue?: number | null;
   radius: RadiusSlot;
@@ -213,12 +285,39 @@ export function renderBrandingStyle(branding: {
 
   const hue = branding.accentHue;
   const generated = typeof hue === 'number' && Number.isFinite(hue);
+  const scheme = tenantScheme(branding.accent, hue);
+
+  /**
+   * The accent ramp comes from the hue when there is one and from the slot
+   * table otherwise — a slot's four values are hand-tuned and re-deriving them
+   * would repaint a brand somebody picked from a swatch.
+   *
+   * Everything else comes from `scheme`, which is `null` only for the shipped
+   * amber default. `--p-*` is the one overlap: `rampDeclarations` already
+   * emits it on the hue path, so the slot path adds it separately rather than
+   * emitting it twice.
+   */
+  const derived = (theme: 'light' | 'dark'): ReadonlyArray<readonly [string, string]> => {
+    if (!scheme) return [];
+    const literals = literalDeclarations(scheme.hue, scheme.chromaScale, theme);
+    if (theme === 'dark') return literals;
+
+    return [
+      ...(generated ? [] : primaryDeclarations(scheme.hue, scheme.chromaScale)),
+      ...emberDeclarations(scheme.hue, scheme.chromaScale),
+      ...literals,
+    ];
+  };
 
   const light = declarations([
     ...(generated ? rampDeclarations(hue, 'light') : ramp(accent.light)),
+    ...derived('light'),
     ...radiusPairs,
   ]);
-  const dark = declarations(generated ? rampDeclarations(hue, 'dark') : ramp(accent.dark));
+  const dark = declarations([
+    ...(generated ? rampDeclarations(hue, 'dark') : ramp(accent.dark)),
+    ...derived('dark'),
+  ]);
 
   return (
     `:root:root{${light}}` +

@@ -43,27 +43,42 @@ afterEach(() => {
 const OTHER = { TENANT_KEY: 'mohamed-sabry', TENANT_DISPLAY_NAME: 'منصة محمد صبري' };
 
 /**
- * Every sentence in this group that is rendered through the gate, at the path
- * its component reads it from.
+ * EVERY sentence in the copy table that carries his name, found by walking the
+ * table rather than by listing paths.
  *
- * ⚠️ ADD A LINE HERE WHEN YOU ADD A CALL SITE. A sentence routed through
- * `tenantSentence()` and left off this list is a sentence nothing checks.
+ * ## The hand-kept list this replaces, and what it cost
+ *
+ * There were five entries here — the privacy note, two link-hub strings and
+ * two `/about` strings — under a warning reading «⚠️ ADD A LINE HERE WHEN YOU
+ * ADD A CALL SITE». Nobody did. The assistant, the quiz results, the homework
+ * card, the notification feed, the course meta description and the three
+ * agent-facing markdown documents were all gated or written afterwards, and
+ * none of their sentences were ever checked by anything. The list was accurate
+ * about the five and silent about the rest, which is the failure mode of every
+ * inventory somebody has to remember to update.
+ *
+ * So it is derived. A string that gains the name joins this set the same day,
+ * a string that loses it leaves, and the only way to be missing from it is to
+ * not contain the name at all.
+ *
+ * ## What this proves and what it does not
+ *
+ * It proves the SWAP works — that `nameForms` knows every spelling the table
+ * actually uses. It cannot prove a call site calls it; nothing on the web side
+ * can see that. The consumer sweep in
+ * `packages/contracts/src/tenant-identity-leak.spec.ts` is the other half, and
+ * it fails on a read that never reaches this function at all.
  */
-const GATED_SENTENCES: readonly { where: string; text: string }[] = [
-  // `components/onboarding/onboarding-form.tsx` — the privacy disclosure under
-  // every step of the sign-up form. Ranked first here for the same reason it is
-  // ranked first in the work: it is the only one that makes a PROMISE about
-  // where a minor's phone number goes.
-  { where: 'onboarding.privacyNote', text: copy.onboarding.privacyNote },
-  // `app/(link)/links/page.tsx` — the `<meta name="description">` of the one URL
-  // that goes in a bio, and the `/about` row's title on the same page.
-  { where: 'linkhub.description', text: copy.linkhub.description },
-  { where: 'linkhub.aboutTitle', text: copy.linkhub.aboutTitle },
-  // `app/(site)/about/page.tsx` — the `<title>` and the meta description of the
-  // page whose whole subject is the instructor.
-  { where: 'landing.aboutPageRoleTitle', text: copy.landing.aboutPageRoleTitle },
-  { where: 'landing.aboutPageDescription', text: copy.landing.aboutPageDescription },
-];
+const NAMED_SENTENCES: readonly { where: string; text: string }[] = (function collect(
+  node: unknown,
+  path: string[],
+): { where: string; text: string }[] {
+  if (typeof node === 'string') {
+    return /أيمن/.test(node) ? [{ where: path.join('.'), text: node }] : [];
+  }
+  if (node === null || typeof node !== 'object') return [];
+  return Object.entries(node).flatMap(([key, value]) => collect(value, [...path, key]));
+})(copy, []);
 
 /**
  * The needles, derived from the copy table rather than typed out.
@@ -85,7 +100,7 @@ const NAME_NEEDLES = [
 describe('tenantSentence on Ayman’s own stack', () => {
   it('hands every sentence back untouched', async () => {
     const { tenantSentence } = await loadWith({});
-    for (const { where, text } of GATED_SENTENCES) {
+    for (const { where, text } of NAMED_SENTENCES) {
       expect(tenantSentence(text), where).toBe(text);
     }
   });
@@ -101,7 +116,7 @@ describe('tenantSentence on Ayman’s own stack', () => {
 describe('tenantSentence on any other stack', () => {
   it('leaves no spelling of the name in any gated sentence', async () => {
     const { tenantSentence } = await loadWith(OTHER);
-    for (const { where, text } of GATED_SENTENCES) {
+    for (const { where, text } of NAMED_SENTENCES) {
       const rendered = tenantSentence(text);
       for (const needle of NAME_NEEDLES) {
         expect(
@@ -135,6 +150,66 @@ describe('tenantSentence on any other stack', () => {
     const rendered = tenantSentence(copy.onboarding.privacyNote);
     expect(rendered).toContain('المنصة');
     for (const needle of NAME_NEEDLES) expect(rendered.includes(needle)).toBe(false);
+  });
+
+  it('leaves no honorific stranded in front of the new name', async () => {
+    /*
+     * The other half of «the swap worked»: it has to READ.
+     *
+     * The copy says «رد مهندس أيمن», «أكلّم م. أيمن», «منصة أ. أيمن أبو
+     * العلا» — the title is part of the phrase, not decoration around it. A
+     * list that knew only the bare first name would swap inside those and
+     * leave «رد مهندس منصة محمد صبري»: grammatical nonsense, and a second
+     * title in front of a display name that usually carries one already. That
+     * is why `copy.site.nameForms` lists the honorific forms at all, and this
+     * is that reasoning as an assertion rather than as a comment.
+     */
+    const { tenantSentence } = await loadWith(OTHER);
+    const stranded = new RegExp(`(?:المهندس|مهندس|م\\.|أ\\.)\\s*${OTHER.TENANT_DISPLAY_NAME}`);
+    for (const { where, text } of NAMED_SENTENCES) {
+      const rendered = tenantSentence(text);
+      expect(
+        stranded.test(rendered),
+        `${where} reads «${rendered}» — the honorific in front of the name was ` +
+          `not part of the form that matched, so it is now a title attached to ` +
+          `somebody else's. Add the whole phrase to copy.site.nameForms.`,
+      ).toBe(false);
+    }
+  });
+
+  it('does not double the preposition the copy glues onto the name', async () => {
+    /*
+     * The swap has to leave a WORD behind, and «ل» is the one letter in this
+     * table that is written as part of the next one.
+     *
+     * Two spellings reach the swap. «بوصّلك لأيمن» is ل + a bare name, and
+     * putting «المنصة» there writes «لالمنصة». «رسالة للمهندس أيمن» is ل +
+     * «المهندس أيمن» with the alif already elided, and because `nameForms`
+     * matches from «مهندس» onwards the swap lands INSIDE the «لل» and writes
+     * «لللمنصة». The first was found and fixed; the second was still there,
+     * behind the one string in the table nothing renders today.
+     *
+     * Asserted over every named sentence and for both replacement shapes — one
+     * that carries the definite article and one that does not — because which
+     * of the two a deployment gets is decided by whether an environment
+     * variable was set.
+     */
+    for (const display of [OTHER.TENANT_DISPLAY_NAME, 'المنصة']) {
+      const { tenantSentence } = await loadWith(
+        display === 'المنصة' ? { TENANT_KEY: 'mohamed-sabry' } : OTHER,
+      );
+      for (const { where, text } of NAMED_SENTENCES) {
+        const rendered = tenantSentence(text);
+        for (const artefact of [`لل${display}`, ...(display.startsWith('ال') ? [`ل${display}`] : [])]) {
+          expect(
+            rendered.includes(artefact),
+            `${where} reads «${rendered}» — the preposition was already glued to ` +
+              `the old name and the replacement was dropped in behind it, so the ` +
+              `sentence now carries «${artefact}», which is not a word.`,
+          ).toBe(false);
+        }
+      }
+    }
   });
 
   it('swaps the longest form first, so no fragment of the old name is left behind', async () => {

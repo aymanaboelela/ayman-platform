@@ -13,6 +13,7 @@ import {
 import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { attemptHref, reviewHref } from '@/lib/quiz-links';
+import { tenantSentence } from '@/lib/tenant-copy';
 import { StatTile } from '@/components/dashboard/stat-tile';
 import { StartAttemptButton } from '@/components/quiz/start-attempt-button';
 
@@ -320,7 +321,8 @@ function AttemptRow({
         </Link>
         <span className="attempt-row__meta">
           {attempt.scaledScore === null
-            ? c.essayPending
+            ? // Names the marker — see `components/quiz/result-header.tsx`.
+              tenantSentence(c.essayPending)
             : pending
               ? formatCopy(c.pendingRowMeta, {
                   earned: formatMark(attempt.scaledScore),

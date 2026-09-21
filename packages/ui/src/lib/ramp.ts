@@ -223,14 +223,310 @@ export function accentRamp(hue: number, theme: Theme): readonly [Oklch, Oklch, O
 }
 
 /** The eleven `--p-*` steps. One set, shared by both themes, as today. */
-export function primaryRamp(hue: number): readonly Oklch[] {
-  const peak = maxChroma(PRIMARY_PEAK_LIGHTNESS, hue) * CHROMA_SAFETY;
+export function primaryRamp(hue: number, chromaScale = 1): readonly Oklch[] {
+  const peak = maxChroma(PRIMARY_PEAK_LIGHTNESS, hue) * CHROMA_SAFETY * chromaScale;
 
   return PRIMARY_LIGHTNESS.map((lightness, index) => ({
     l: lightness,
     c: chromaAt(lightness, hue, PRIMARY_SHAPE[index] as number, peak),
     h: hue,
   }));
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Everything below here is the SECOND half of a tenant's colours — the half
+   that used to be amber no matter who the teacher was.
+
+   `accentRamp` and `primaryRamp` above cover `--a-*` and `--p-*`. What was
+   missing is everything that is warm for a reason other than being a ramp
+   step: the study surface's ember structure ramp, and a dozen literals sitting
+   in stylesheets that could not be written as a token because the token did
+   not exist yet.
+
+   Measured on the live stacks before this existed: `mr-mohammedadel.com` ships
+   `--a-9: oklch(0.620 0.170 258)` (blue, correct) next to `--p-500: #F28318`
+   and `--p-rgb: 214 96 22` (amber, wrong), and its whole `board` landing page
+   is built out of `--p-800`/`--p-900`. One page, two brands.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/** The hue `tokens/color.css` calls "the accent". Every offset below is measured from it. */
+const AMBER_ACCENT_HUE = 72;
+
+/**
+ * Ember sits 37° BELOW the accent — hue 35 against the accent's 72.
+ *
+ * The docblock in `tokens/color.css` states the relationship the ramp has to
+ * hold: "the primary's own neighbour … so it is unmistakably the same family,
+ * and DEEP where the accent is bright". A fixed hue 35 satisfies that for
+ * exactly one teacher. The OFFSET satisfies it for all of them, and it is the
+ * part that was actually designed — the family resemblance, not the number.
+ */
+const EMBER_HUE_OFFSET = -37;
+
+export const EMBER_STEPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950] as const;
+
+/**
+ * The shipped ember ladder, lifted step for step from `tokens/color.css`.
+ *
+ * The LIGHTNESS column is the whole contrast guarantee. That file lists eight
+ * measured ratios against it (white on `--e-700` at 7.30:1, `--e-600` on the
+ * page at 5.04:1, `--e-300` on the dark page at 11.37:1, and the 3.43:1
+ * separation from `--a-9` that keeps the surface readable in greyscale), and
+ * every one of them is a function of lightness far more than of hue — which is
+ * why the ladder is carried across unchanged rather than re-solved per hue.
+ * `ramp.test.ts` re-measures all four contracts on all 360 hues, so "far more
+ * than" is a claim under test rather than an assumption.
+ *
+ * Chroma is clamped per step the same way `primaryRamp` clamps: a hue's
+ * ceiling moves with lightness, and a value over it is silently clipped by the
+ * browser into a step its neighbour is indistinguishable from.
+ */
+const EMBER_LIGHTNESS = [
+  0.977, 0.946, 0.902, 0.828, 0.745, 0.66, 0.552, 0.47, 0.392, 0.325, 0.222,
+] as const;
+
+const EMBER_CHROMA = [
+  0.009, 0.026, 0.048, 0.07, 0.12, 0.17, 0.171, 0.14, 0.113, 0.089, 0.055,
+] as const;
+
+/**
+ * Which step is read as TEXT, and against which page.
+ *
+ * `tokens/color.css` re-points `--e-ink` per theme: step 600 on paper, step
+ * 300 on #08090A. Those two are the only ember steps a reader has to resolve
+ * glyph shapes out of, so they are the only two that are SOLVED rather than
+ * placed — everything else on the ladder is a band or a wash carrying white,
+ * and a band is a UI component, not body text.
+ *
+ * Without the solve, measured across all 360 hues: step 600 bottoms out at
+ * 4.38:1 around hue 182. A shortfall that small looks like nothing on screen
+ * and still fails the axe run in `apps/web/e2e/study-surface-a11y.e2e.ts`.
+ */
+const EMBER_INK_STEP: Record<Theme, number> = { light: 6, dark: 3 };
+
+/** The eleven `--e-*` steps for a tenant's hue. */
+export function emberRamp(hue: number, chromaScale = 1): readonly Oklch[] {
+  const emberHue = (((hue + EMBER_HUE_OFFSET) % 360) + 360) % 360;
+
+  const placed: Oklch[] = EMBER_LIGHTNESS.map((lightness, index) => ({
+    l: lightness,
+    c: Math.min(
+      (EMBER_CHROMA[index] as number) * chromaScale,
+      maxChroma(lightness, emberHue) * CHROMA_SAFETY,
+    ),
+    h: emberHue,
+  }));
+
+  // `peak` is 1 because the ember chroma column is absolute, not a shape — so
+  // `chromaAt` inside the solver reduces to the same clamp applied above.
+  for (const theme of ['light', 'dark'] as const) {
+    const index = EMBER_INK_STEP[theme];
+    placed[index] = solveForContrast(
+      emberHue,
+      theme,
+      (EMBER_CHROMA[index] as number) * chromaScale,
+      1,
+      TEXT_CONTRAST_TARGET,
+      EMBER_LIGHTNESS[index] as number,
+    );
+  }
+  return placed;
+}
+
+/**
+ * A shipped literal, and the token that now carries it.
+ *
+ * ## Why a literal existed at all, and why it still does
+ *
+ * Each of these is a colour a stylesheet needed in a place a ramp step could
+ * not reach — a gradient stop, an alpha wash that needs a bare `R G B`
+ * triplet, a print sheet that must not follow the admin's dark theme. Every
+ * one has a comment where it lives explaining that. The comments were right.
+ * Their conclusion was one teacher too narrow: the value has to be CONCRETE,
+ * it does not have to be AMBER.
+ *
+ * ## Why the literal stays the default and this only OVERRIDES it
+ *
+ * There is no derivation that reproduces these numbers. They are hand-picked
+ * values sitting NEAR a rung rather than on it — `--site-accent-solid` is
+ * `oklch(0.575 0.180 45)` where `--p-700` is `oklch(0.545 0.165 43)` — and the
+ * brief is that Ayman's site does not change by a byte. So the literal stays
+ * where it is, as the declared value of a token, and a tenant who is not the
+ * shipped default gets this table re-cut at their hue on top of it.
+ *
+ * ## Why rotation rather than re-solving
+ *
+ * Lightness and chroma are kept and only the hue moves, because lightness is
+ * what every measured contrast in those files depends on. `--site-accent-solid`
+ * is documented at exactly 4.68:1 for white text, with the note that the step
+ * above it measures 4.24:1 and fails the axe run; holding L holds the ratio
+ * (within about 2%, re-measured for all 360 hues in `ramp.test.ts`), while
+ * re-solving would move it off a value somebody measured on purpose.
+ *
+ * The offset from `AMBER_ACCENT_HUE` is preserved rather than the absolute
+ * hue, so the family relationships survive: the CTA stays 27° below the
+ * accent, the key light 16° below, the bounce 12° above.
+ *
+ * `light`/`dark` mirror how `tokens/color.css` declares the token. `dark: null`
+ * means the token is declared ONCE there, so it is emitted in the light rule
+ * only and inherited — writing it into all three rules would be two more
+ * places to drift.
+ */
+type WarmLiteral = {
+  readonly token: string;
+  readonly light: Oklch;
+  readonly dark: Oklch | null;
+  /** Emit `R G B` instead of `oklch()`, for the `rgb(var(--x) / alpha)` washes. */
+  readonly triplet?: true;
+  /**
+   * Light theme only: this fill carries WHITE label text and the ratio is in
+   * the stylesheet as a number somebody measured. Holding lightness holds the
+   * ratio for most hues and not for all of them — rotating
+   * `--site-accent-solid`'s documented 4.68:1 lands at 4.07:1 around hue 171,
+   * which is under the bar `e2e/a11y.e2e.ts` enforces with axe. So the fill is
+   * darkened, and ONLY as far as the target needs.
+   */
+  readonly whiteTextLight?: number;
+  /**
+   * Light theme only: take whatever lightness shift the named token needed.
+   *
+   * A hover state is a fixed distance below its fill. Solving the fill without
+   * moving the hover can put the hover ABOVE it on a bad hue, and a button
+   * that gets lighter when you press it reads as broken rather than as a hover.
+   */
+  readonly followsLight?: string;
+};
+
+const WARM_LITERALS: readonly WarmLiteral[] = [
+  /* The marketing surface's solid CTA, and its hover. `(site)/styles/theme.css`
+     declares both three times over (base, explicit-dark, and a
+     `prefers-color-scheme: light` copy that has to beat a `dark` attribute) —
+     all three now read this token, so the four-copy drift risk goes with it. */
+  {
+    token: '--accent-cta',
+    light: { l: 0.575, c: 0.18, h: 45 },
+    dark: { l: 0.72, c: 0.175, h: 55 },
+    whiteTextLight: TEXT_CONTRAST_TARGET,
+  },
+  {
+    token: '--accent-cta-hover',
+    light: { l: 0.525, c: 0.172, h: 44 },
+    dark: { l: 0.78, c: 0.165, h: 58 },
+    followsLight: '--accent-cta',
+  },
+  /* The two stops of the link hub's one solid row, on hover. Brighter than the
+     CTA pair by design — it is the only button on that page. */
+  { token: '--accent-cta-lift', light: { l: 0.68, c: 0.192, h: 50 }, dark: null },
+  { token: '--accent-cta-lift-deep', light: { l: 0.615, c: 0.184, h: 46 }, dark: null },
+  /* Near-black text that sits ON an accent fill (dark theme) and on white
+     (`.site-btn--light`). Chroma 0.02 — barely a tint, and rotated anyway:
+     a warm near-black on a blue brand is still the wrong warmth. */
+  { token: '--on-accent-ink', light: { l: 0.18, c: 0.02, h: 50 }, dark: null },
+  { token: '--on-light-ink', light: { l: 0.22, c: 0.02, h: 60 }, dark: null },
+  /* The ink panel's lighting — the key light, the bounce off the far corner,
+     and the warm corner of the stage gradient itself. `(auth)/auth.css` paints
+     the sign-in aside with all three, which makes them the FIRST colour every
+     student on every stack sees. Measured from the shipped literals:
+     `rgb(255 138 26)`, `rgb(251 191 36)` and `#171208`. */
+  { token: '--ink-key-rgb', light: { l: 0.748, c: 0.177, h: 56 }, dark: null, triplet: true },
+  { token: '--ink-bounce-rgb', light: { l: 0.837, c: 0.164, h: 84 }, dark: null, triplet: true },
+  { token: '--ink-warm', light: { l: 0.185, c: 0.021, h: 84 }, dark: null },
+  /* Accent text ON an ink panel. This is the dark theme's `--a-11` written
+     out, because an ink panel is dark in BOTH themes and `var(--a-11)` would
+     hand it the light theme's dark orange half the time. */
+  { token: '--ink-accent', light: { l: 0.845, c: 0.13, h: 78 }, dark: null },
+  /* The print sheets. `books/print/print.css` says it in as many words: "the
+     one colour Ayman's material is recognisable by, and this page ends up in a
+     print shop's hands". Every teacher's packing lists and shipping labels
+     were coming out of the printer in his gold. */
+  { token: '--print-gold', light: { l: 0.767, c: 0.142, h: 72 }, dark: null },
+  { token: '--print-gold-deep', light: { l: 0.623, c: 0.128, h: 68 }, dark: null },
+  { token: '--print-gold-wash', light: { l: 0.97, c: 0.024, h: 83 }, dark: null },
+];
+
+/** The shipped literal moved to `hue`, keeping the lightness every measurement depends on. */
+function rotate({ l, c, h }: Oklch, hue: number, chromaScale: number): Oklch {
+  const rotated = (((hue + (h - AMBER_ACCENT_HUE)) % 360) + 360) % 360;
+  return atLightness({ l, c: c * chromaScale, h }, l, rotated);
+}
+
+/**
+ * The same colour at a different lightness and hue, with chroma re-clamped
+ * ONLY if it no longer fits.
+ *
+ * Re-clamping at all is the load-bearing half: a hue's gamut ceiling moves
+ * with lightness, so carrying a chroma across unchanged is how a solver
+ * returns a colour the browser silently clips.
+ *
+ * Clamping only when NEEDED is the other half, and it is why this is not the
+ * same `Math.min(c, ceiling * CHROMA_SAFETY)` the ramps use. `CHROMA_SAFETY`
+ * shaves 3% off everything it touches, which is the right shape of margin for
+ * a value a solver placed near the boundary and the wrong one for a literal
+ * that is already displayable: `rgb(255 138 26)` sits exactly ON the sRGB edge
+ * (its red channel is 255), so a blanket shave rewrote Ayman's own key light
+ * as `253 139 36` — a colour nobody asked for, in the one place that must not
+ * move.
+ */
+function atLightness({ c, h }: Oklch, lightness: number, hue = h): Oklch {
+  const fits = isInGamut({ l: lightness, c, h: hue });
+  return { l: lightness, c: fits ? c : maxChroma(lightness, hue) * CHROMA_SAFETY, h: hue };
+}
+
+/**
+ * Darkened only as far as `target` requires, and not at all when it already
+ * clears — the same discipline as `solveForContrast`, against white rather
+ * than against the page.
+ */
+function darkenForWhiteText(color: Oklch, target: number): Oklch {
+  const white = { r: 1, g: 1, b: 1 };
+  const ratioAt = (lightness: number) =>
+    contrastRatio(oklchToRgb(atLightness(color, lightness)), white);
+
+  if (ratioAt(color.l) >= target) return color;
+  if (ratioAt(0) < target) return atLightness(color, 0);
+
+  let low = 0;
+  let high = color.l;
+  for (let step = 0; step < 20; step += 1) {
+    const middle = (low + high) / 2;
+    if (ratioAt(middle) >= target) low = middle;
+    else high = middle;
+  }
+  return atLightness(color, low);
+}
+
+/**
+ * `quantize`, then keep walking lightness until what actually gets WRITTEN
+ * still clears the contract.
+ *
+ * Rounding to three decimals is not contrast-preserving, and the solvers above
+ * return the value that EXACTLY meets their target — so a solve that lands on
+ * 4.500:1 is written as 4.490:1 and is under the bar it existed to clear. This
+ * was measured, not imagined: the CTA fill bottomed out at 4.4904 on hue 233
+ * with the solve in place and the rounding un-checked.
+ *
+ * `direction` is which way "more readable" lies: darker on a light ground,
+ * lighter on a dark one.
+ */
+function quantizeClearing(
+  color: Oklch,
+  clears: (candidate: Oklch) => boolean,
+  direction: -1 | 1,
+): Oklch {
+  let candidate = quantize(color);
+
+  for (let step = 0; step < 40 && !clears(candidate); step += 1) {
+    const lightness = Math.min(1, Math.max(0, candidate.l + direction * 0.001));
+    if (lightness === candidate.l) break;
+    candidate = quantize(atLightness(candidate, lightness));
+  }
+  return candidate;
+}
+
+/** `R G B`, the shape `rgb(var(--x) / alpha)` needs. */
+function triplet(color: Oklch): string {
+  const { r, g, b } = oklchToRgb(color);
+  return `${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)}`;
 }
 
 /**
@@ -330,6 +626,120 @@ export function describeRamp(hue: number): RampReport {
   return { hue, fillContrast, textContrast, inkOnFill, inkContrast, allInGamut, warnings };
 }
 
+/**
+ * The eleven `--p-*` steps plus `--p-rgb`, as CSS pairs.
+ *
+ * Split out of `rampDeclarations` because the SLOT path needs it too. A slot
+ * keeps its hand-tuned `--a-9…--a-12` — those four values are the brand a
+ * teacher picked from a swatch and nothing should re-derive them — but it has
+ * never written `--p-*` at all, and that is the single biggest source of
+ * somebody else's orange on a teacher's site: 264 usages, including the whole
+ * `board` preset, fall through to the amber shipped in `tokens/color.css`.
+ *
+ * `chromaScale` exists for `slate`, whose accent is a near-grey (chroma 0.020
+ * against amber's 0.152). Generating its ramp at full chroma would hand a
+ * teacher who deliberately picked "no colour" a saturated blue.
+ */
+export function primaryDeclarations(
+  hue: number,
+  chromaScale = 1,
+): ReadonlyArray<readonly [string, string]> {
+  const pairs: Array<readonly [string, string]> = [];
+  const ramp = primaryRamp(hue, chromaScale);
+
+  ramp.forEach((color, index) => {
+    pairs.push([`--p-${PRIMARY_STEPS[index]}`, formatOklch(quantize(color))]);
+  });
+
+  /**
+   * `--p-rgb` — the same colour again as a bare `R G B` triplet.
+   *
+   * `tokens/color.css` declares it once as `214 96 22` (amber `--p-600`) for
+   * the `rgb(var(--p-rgb) / alpha)` washes: the glows, the tinted shadows and
+   * the soft fills across the landing page and the link hub. It is the one
+   * brand value that is not an `oklch()` string, because a CSS custom
+   * property cannot be given an alpha without being decomposed first.
+   *
+   * Not emitting it was the bug: a tenant on a blue hue got blue everywhere
+   * the ramp reaches and ORANGE glows everywhere the washes do. Nothing
+   * errors; the page is simply two brands at once.
+   *
+   * Step 600 to match what the file already ships, and the QUANTIZED colour
+   * so this triplet and `--p-600` are the same colour rather than two
+   * roundings of one.
+   */
+  const washSource = quantize(ramp[6] as Oklch);
+  const { r, g, b } = oklchToRgb(washSource);
+  pairs.push(['--p-rgb', `${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)}`]);
+
+  return pairs;
+}
+
+/** The eleven `--e-*` steps, as CSS pairs. Theme-independent, like `--p-*`. */
+export function emberDeclarations(
+  hue: number,
+  chromaScale = 1,
+): ReadonlyArray<readonly [string, string]> {
+  const ramp = emberRamp(hue, chromaScale);
+
+  return ramp.map((color, index) => {
+    const theme = index === EMBER_INK_STEP.light ? 'light' : index === EMBER_INK_STEP.dark ? 'dark' : null;
+    const written = theme
+      ? quantizeClearing(
+          color,
+          (candidate) =>
+            contrastRatio(oklchToRgb(candidate), PAGE_BACKGROUND[theme]) >= TEXT_CONTRAST_TARGET,
+          theme === 'light' ? -1 : 1,
+        )
+      : quantize(color);
+
+    return [`--e-${EMBER_STEPS[index]}`, formatOklch(written)] as const;
+  });
+}
+
+/**
+ * The warm literals, re-cut at the tenant's hue.
+ *
+ * `theme` picks which half of a theme-dependent entry to emit; the
+ * theme-independent ones come out with `light` and are inherited by the dark
+ * rules, exactly as `tokens/color.css` declares them.
+ */
+export function literalDeclarations(
+  hue: number,
+  chromaScale: number,
+  theme: Theme,
+): ReadonlyArray<readonly [string, string]> {
+  const pairs: Array<readonly [string, string]> = [];
+  const shifts = new Map<string, number>();
+
+  for (const literal of WARM_LITERALS) {
+    const source = theme === 'dark' ? literal.dark : literal.light;
+    if (!source) continue;
+
+    const color = rotate(source, hue, chromaScale);
+
+    let written: Oklch;
+
+    if (theme === 'light' && literal.whiteTextLight !== undefined) {
+      const target = literal.whiteTextLight;
+      written = quantizeClearing(
+        darkenForWhiteText(color, target),
+        (candidate) => contrastRatio(oklchToRgb(candidate), { r: 1, g: 1, b: 1 }) >= target,
+        -1,
+      );
+      shifts.set(literal.token, written.l - color.l);
+    } else if (theme === 'light' && literal.followsLight) {
+      const shift = shifts.get(literal.followsLight) ?? 0;
+      written = quantize(shift === 0 ? color : atLightness(color, Math.max(0, color.l + shift)));
+    } else {
+      written = quantize(color);
+    }
+
+    pairs.push([literal.token, literal.triplet ? triplet(written) : formatOklch(written)]);
+  }
+  return pairs;
+}
+
 /** The generated ramps as CSS custom-property pairs, ready for `renderBrandingStyle`. */
 export function rampDeclarations(
   hue: number,
@@ -345,35 +755,7 @@ export function rampDeclarations(
 
   // The `--p-*` ramp is theme-independent today, so it is emitted with the
   // light block only — writing it twice would be two chances to drift.
-  if (theme === 'light') {
-    const ramp = primaryRamp(hue);
-    ramp.forEach((color, index) => {
-      pairs.push([`--p-${PRIMARY_STEPS[index]}`, formatOklch(quantize(color))]);
-    });
+  if (theme === 'light') pairs.push(...primaryDeclarations(hue));
 
-    /**
-     * `--p-rgb` — the same colour again as a bare `R G B` triplet.
-     *
-     * `tokens/color.css` declares it once as `214 96 22` (amber `--p-600`) for
-     * the `rgb(var(--p-rgb) / alpha)` washes: the glows, the tinted shadows and
-     * the soft fills across the landing page and the link hub. It is the one
-     * brand value that is not an `oklch()` string, because a CSS custom
-     * property cannot be given an alpha without being decomposed first.
-     *
-     * Not emitting it was the bug: a tenant on a blue hue got blue everywhere
-     * the ramp reaches and ORANGE glows everywhere the washes do. Nothing
-     * errors; the page is simply two brands at once.
-     *
-     * Step 600 to match what the file already ships, and the QUANTIZED colour
-     * so this triplet and `--p-600` are the same colour rather than two
-     * roundings of one.
-     */
-    const washSource = quantize(ramp[6] as Oklch);
-    const { r, g, b } = oklchToRgb(washSource);
-    pairs.push([
-      '--p-rgb',
-      `${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)}`,
-    ]);
-  }
   return pairs;
 }

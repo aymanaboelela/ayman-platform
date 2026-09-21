@@ -13,6 +13,7 @@ import {
   type LoginIdentifier,
   type StoredCredential,
 } from './credential-check.service';
+import { DEVICE_LIMIT_ERROR, MAX_DEVICES_PER_ACCOUNT, type DeviceLimitGate } from './device-limit';
 import type { LoginSecurityService } from './login-security.service';
 import { planPhoneNormalization } from './phone-identity';
 import type { PrismaClient } from '../generated/prisma/client';
@@ -187,6 +188,7 @@ export function createAuthBeforeHook(
   loginSecurity: LoginSecurityService,
   bannedAccounts: BannedAccountLookup,
   registeredPhones: RegisteredPhoneLookup,
+  deviceLimit: DeviceLimitGate,
 ) {
   return createAuthMiddleware(async (ctx) => {
     /**
@@ -293,6 +295,23 @@ export function createAuthBeforeHook(
     }
 
     /**
+     * القفل — the one refusal this flow names before a password has verified,
+     * and the reasoning for the exception is in `LoginSecurityService`'s
+     * header rather than here, because it is a property of WHICH bucket
+     * produced it: the identifier bucket fills identically for an address
+     * that has no account, so «مقفول ١٠ دقايق» answers nothing about who is
+     * registered. The account bucket, which does only exist for real
+     * students, never reaches this branch — it is refused silently unless the
+     * password verified first.
+     *
+     * 429 rather than 401 so the one distinguishable login response is not
+     * hiding inside the status every other failure shares.
+     */
+    if (result.outcome === 'locked') {
+      throw new APIError('TOO_MANY_REQUESTS', result.responseBody);
+    }
+
+    /**
      * حظر, checked ONLY after the password has been verified — and that
      * ordering is the entire security argument, not an implementation detail.
      *
@@ -330,6 +349,39 @@ export function createAuthBeforeHook(
           code: BANNED_ACCOUNT_ERROR,
           message: 'This account has been suspended',
           reason: ban.reason,
+        });
+      }
+
+      /**
+       * حد الأجهزة — the friendly half, exactly as حظر is split, and for the
+       * identical reason.
+       *
+       * The control that actually HOLDS is
+       * `databaseHooks.session.create.before` in `auth.config.ts`: it covers
+       * sign-up and Google as well, and it can only answer «Failed to create
+       * session». This block covers the two sign-in routes and turns that into
+       * a sentence with a way out in it — «الحساب مفتوح على جهازين خلاص»
+       * plus the instructor's WhatsApp link, which the WEB attaches from
+       * `settings.contact.whatsapp`. The number is never written into an API
+       * message: it differs per stack, and a literal here would be a tenant
+       * leak the identity guard would catch.
+       *
+       * After the password has verified, like the ban above — otherwise the
+       * login box would answer "does this account exist and is it in use",
+       * which is a better oracle than the one S1 closes.
+       *
+       * Both halves ask `deviceLimit.admits` with the same two arguments, so
+       * they cannot disagree. The user agent comes off the request headers
+       * here and off the session row there; Better Auth copies one to the
+       * other (`internal-adapter.mjs`: `userAgent: headers?.get("user-agent")`),
+       * so they are the same string.
+       */
+      const admitted = await deviceLimit.admits(result.userId, ctx.headers?.get('user-agent'));
+      if (!admitted) {
+        throw new APIError('FORBIDDEN', {
+          code: DEVICE_LIMIT_ERROR,
+          message: 'Device limit reached for this account',
+          limit: MAX_DEVICES_PER_ACCOUNT,
         });
       }
     }

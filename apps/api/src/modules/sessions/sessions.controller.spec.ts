@@ -150,8 +150,11 @@ describe('SessionsController (e2e)', () => {
       const userId = await createTestUser();
       const sessionId1 = await createSessionRow(userId);
       const sessionId2 = await createSessionRow(userId);
-      const deviceId1 = await createDevice(userId, sessionId1);
-      const deviceId2 = await createDevice(userId, sessionId2);
+      // Distinct names on purpose: the list is one entry per DEVICE now, so
+      // two rows sharing a name are one phone signed in twice, not two
+      // devices. The test below pins that half.
+      const deviceId1 = await createDevice(userId, sessionId1, { deviceName: 'Chrome على macOS' });
+      const deviceId2 = await createDevice(userId, sessionId2, { deviceName: 'Safari على iOS' });
 
       app = await buildApp(async () => sessionResultFor(userId, sessionId2));
       const res = await request(app.getHttpServer()).get('/sessions').expect(200);
@@ -163,6 +166,58 @@ describe('SessionsController (e2e)', () => {
       const other = res.body.find((d: { id: string }) => d.id === deviceId1);
       expect(current.isCurrent).toBe(true);
       expect(other.isCurrent).toBe(false);
+    });
+
+    /**
+     * The correction that makes «أجهزتي» readable again, and the one the
+     * two-device limit is built on.
+     *
+     * A row is written per SIGN-IN, sessions last 90 days and nothing signs a
+     * student out, so one phone accumulates a row per login — measured on the
+     * dev cohort, one student has 459 of them, every card saying «Chrome على
+     * Android». Grouping by device name turns that back into one card, and
+     * `auth/device-limit.ts` counts exactly this same group: what a student
+     * can see and remove has to be what the gate counts, or removing a device
+     * would not free a slot and the limit would be a permanent lock.
+     */
+    it('collapses repeated sign-ins from one device into a single entry', async () => {
+      const userId = await createTestUser();
+      const first = await createSessionRow(userId);
+      const second = await createSessionRow(userId);
+      const third = await createSessionRow(userId);
+      await createDevice(userId, first, { deviceName: 'Chrome على Android' });
+      await createDevice(userId, second, { deviceName: 'Chrome على Android' });
+      await createDevice(userId, third, { deviceName: 'Chrome على Android' });
+
+      app = await buildApp(async () => sessionResultFor(userId, third));
+      const res = await request(app.getHttpServer()).get('/sessions').expect(200);
+
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].deviceName).toBe('Chrome على Android');
+      // The group holds the current session, so the card is marked — even
+      // though it also stands for two older sign-ins that are not current.
+      expect(res.body[0].isCurrent).toBe(true);
+    });
+
+    /**
+     * The 38 orphans measured in the dev database: rows still marked active
+     * whose session no longer exists. They are excluded by the JOIN rather
+     * than erased — a mass `UPDATE ... SET revoked_at` over thousands of rows
+     * on three live databases is a write that cannot be tested first and
+     * cannot be undone, and a WHERE clause is both.
+     */
+    it('omits a device whose session is gone', async () => {
+      const userId = await createTestUser();
+      const live = await createSessionRow(userId);
+      await createDevice(userId, live, { deviceName: 'Chrome على macOS' });
+      // No `sessions` row for this one at all — exactly the orphan shape.
+      await createDevice(userId, `sess-${randomUUID()}`, { deviceName: 'Edge على Windows' });
+
+      app = await buildApp(async () => sessionResultFor(userId, live));
+      const res = await request(app.getHttpServer()).get('/sessions').expect(200);
+
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].deviceName).toBe('Chrome على macOS');
     });
 
     it("IDOR: user A's list never contains user B's device", async () => {
@@ -214,6 +269,46 @@ describe('SessionsController (e2e)', () => {
       // returns nothing and AuthGuard denies with 401.
       const session = await prisma.session.findUnique({ where: { id: sessionId } });
       expect(session).toBeNull();
+    });
+
+    /**
+     * «شيل جهاز عشان تضيف جديد» has to actually free the slot.
+     *
+     * The card a student presses stands for every un-revoked sign-in from that
+     * device, and with 90-day sessions there are routinely dozens. Revoking
+     * only the representative row would tick the card off the screen while the
+     * other sessions stayed valid — and, since `device-limit.ts` counts the
+     * same group, would leave the device still occupying its place. The
+     * two-device limit would then be a permanent lock whose only exit is a
+     * WhatsApp message.
+     */
+    it('revoking a device ends every session that device is holding', async () => {
+      const userId = await createTestUser();
+      const first = await createSessionRow(userId);
+      const second = await createSessionRow(userId);
+      const other = await createSessionRow(userId);
+      const deviceId = await createDevice(userId, first, { deviceName: 'Chrome على Android' });
+      const sameDeviceAgain = await createDevice(userId, second, {
+        deviceName: 'Chrome على Android',
+      });
+      const untouched = await createDevice(userId, other, { deviceName: 'Safari على iOS' });
+
+      app = await buildApp(async () => sessionResultFor(userId, other));
+      await request(app.getHttpServer()).delete(`/sessions/${deviceId}`).expect(204);
+
+      // Both rows of the group revoked, and both sessions actually gone.
+      for (const id of [deviceId, sameDeviceAgain]) {
+        expect((await prisma.sessionDevice.findUnique({ where: { id } }))?.revokedAt).not.toBeNull();
+      }
+      expect(await prisma.session.findUnique({ where: { id: first } })).toBeNull();
+      expect(await prisma.session.findUnique({ where: { id: second } })).toBeNull();
+
+      // The OTHER device is untouched — a group revoke is scoped to its name,
+      // not to the account.
+      expect(
+        (await prisma.sessionDevice.findUnique({ where: { id: untouched } }))?.revokedAt,
+      ).toBeNull();
+      expect(await prisma.session.findUnique({ where: { id: other } })).not.toBeNull();
     });
 
     it(

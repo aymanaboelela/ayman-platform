@@ -24,6 +24,7 @@ import {
 } from '@ayman/contracts/admin/students';
 import { ARGON2_OPTIONS } from '../../../auth/argon2-options';
 import {
+  accountThrottleKey,
   emailIdentifier,
   phoneIdentifier,
   throttleKeyFor,
@@ -614,7 +615,7 @@ export class StudentsService {
      * ...and then let them actually USE it, which is the half that was
      * missing.
      *
-     * `login-throttle.service` locks an account for 15 minutes after 10 failed
+     * `login-throttle.service` locks an account for 10 minutes after 6 failed
      * attempts, and `credential-check.service`'s `throttleKeyFor` namespaces
      * that ledger BY IDENTIFIER KIND — `phone:+2010…` and `email:…` are two
      * independent buckets for one student, deliberately (see that function).
@@ -625,12 +626,19 @@ export class StudentsService {
      * that bucket was never touched. It reads exactly like a set-password that
      * did not save, and it is what this method is usually called to fix.
      *
-     * So both buckets are dropped here. Only the two identifiers this account
+     * So all THREE buckets are dropped here. The two identifiers this account
      * can actually sign in with, normalised the same way the sign-in path
      * normalises them, or the key would not match the one a failed attempt
-     * wrote: `users.phone_number` is already E.164 (`planPhoneNormalization`
-     * rewrites the body before anything stores it), and the email is folded to
-     * lower case by `emailIdentifier`.
+     * wrote (`users.phone_number` is already E.164 — `planPhoneNormalization`
+     * rewrites the body before anything stores it — and the email is folded to
+     * lower case by `emailIdentifier`) — plus `accountThrottleKey`, the
+     * account-wide bucket those same failures also filled.
+     *
+     * The third one is not optional and it is the easiest to forget: the
+     * account bucket is what makes a phone lockout hold on the email box, so
+     * leaving it standing here rebuilds the exact bug this block was written
+     * to fix, one layer down and invisible to the admin who just set the
+     * password.
      *
      * Not inside the transaction and not awaited-then-checked: this is an
      * in-memory Map delete that cannot fail, and a password that was written
@@ -642,6 +650,7 @@ export class StudentsService {
     if (target.email) {
       loginThrottle.clear(throttleKeyFor(emailIdentifier(target.email)));
     }
+    loginThrottle.clear(accountThrottleKey(userId));
 
     /**
      * Every existing session goes with the password.

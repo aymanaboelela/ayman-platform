@@ -3,6 +3,7 @@ import { GraduationCap, Sparkles, Trophy } from 'lucide-react';
 import { copy, formatCopy, type QuizHistoryRow } from '@ayman/contracts';
 import { ChevronForward } from '@/components/player/icons';
 import { quizHref, reviewHref } from '@/lib/quiz-links';
+import { tenantSentence } from '@/lib/tenant-copy';
 import { SpotIllustration } from './spot-illustration';
 
 const c = copy.dashboard;
@@ -120,7 +121,8 @@ function ExamRow({ row }: { row: QuizHistoryRow }) {
           {row.quizTitle}
         </Link>
         <span className="attempt-row__meta">
-          {row.bestPercent === null ? copy.quiz.essayPending : `${row.bestPercent}%`}
+          {/* Names the marker — see `components/quiz/result-header.tsx`. */}
+          {row.bestPercent === null ? tenantSentence(copy.quiz.essayPending) : `${row.bestPercent}%`}
           {canImprove ? ` · ${c.examsImproveHint}` : ''}
         </span>
       </span>

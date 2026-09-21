@@ -44,9 +44,9 @@
 
   --ink: #16130d;
   --ink-soft: #5b554a;
-  --gold: #eaa33c;
-  --gold-deep: #b9761a;
-  --gold-wash: #fdf4e3;
+  --gold: var(--print-gold);
+  --gold-deep: var(--print-gold-deep);
+  --gold-wash: var(--print-gold-wash);
   --rule: #c9c2b4;
 
   background: #fff;

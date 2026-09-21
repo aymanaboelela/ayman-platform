@@ -1,5 +1,7 @@
 import { copy, formatCopy } from '@ayman/contracts';
 import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
+import { tenantName } from '@/lib/tenant';
+import { tenantSentence } from '@/lib/tenant-copy';
 import type {
   CatalogCourse,
   CatalogCourseDetail,
@@ -221,7 +223,13 @@ export function renderHomeMarkdown(
       : null;
 
   return join([
-    `# ${copy.site.platformName}`,
+    /*
+      * ⚠️ Every name on this surface is gated, and the note under
+      * `SITE_DESCRIPTION` below says why in full: a page is read by a person
+      * who can tell it is wrong, and this is quoted back as fact. The H1, the
+      * instructor line and the `/about` link were the three that were not.
+      */
+    `# ${tenantName(copy.site.platformName)}`,
     `> ${copy.site.tagline}`,
     /*
      * ⚠️ `SITE_DESCRIPTION`, not `copy.seo.description`. This surface is read by
@@ -249,8 +257,8 @@ export function renderHomeMarkdown(
       ? courses.map((course) => courseLine(course)).join('\n')
       : `${copy.catalog.empty} — ${url('/courses')}`,
     `## ${copy.landing.instructorTitle}`,
-    `**${copy.landing.instructorName}** — ${copy.landing.instructorBody}`,
-    `[${copy.landing.aboutTitle}](${url('/about')})`,
+    `**${tenantName(copy.landing.instructorName)}** — ${copy.landing.instructorBody}`,
+    `[${tenantSentence(copy.landing.aboutTitle)}](${url('/about')})`,
     faq,
     footer('/', copy.agents.contentNote),
   ]);
@@ -279,7 +287,12 @@ export function renderAboutMarkdown(): string {
     .join('\n\n');
 
   return join([
-    `# ${copy.landing.aboutPageTitle}`,
+    // `aboutPageTitle` is the BARE name and nothing else, so `tenantName()` is
+    // the right gate for it — the same call `/about/page.tsx` makes for its
+    // `<title>`. (`llms.txt` reaches the same string through `tenantSentence()`
+    // because it is inside a link label there; both land on the same answer,
+    // which is the point: this is the H1 of the HTML page's twin.)
+    `# ${tenantName(copy.landing.aboutPageTitle)}`,
     `> ${copy.landing.aboutPageLead}`,
     copy.landing.aboutBody1,
     copy.landing.aboutBody2,
@@ -477,7 +490,10 @@ export function renderBooksMarkdown(catalog: BookCatalog): string {
     .join('\n\n');
 
   return join([
-    `# ${b.metaTitle}`,
+    // «كتب أيمن أبو العلا — اطلبها وتوصلك البيت». The HTML `/books` gates the
+    // same string for its `<title>`; `bookListJsonLd()` gates it for the
+    // `ItemList` name. This is the third reader of it.
+    `# ${tenantSentence(b.metaTitle)}`,
     `> ${b.metaDescription}`,
     b.lead,
     /*
@@ -591,7 +607,7 @@ export function renderNewsPostMarkdown(post: NewsPostDetail): string {
      * went out, which is a fact about nothing.
      */
     [
-      `**${copy.agents.metaAuthor}:** ${copy.site.instructor}`,
+      `**${copy.agents.metaAuthor}:** ${tenantName(copy.site.instructor)}`,
       `**${copy.news.published}:** ${post.publishedAt.slice(0, 10)}`,
       post.updatedAt.slice(0, 10) !== post.publishedAt.slice(0, 10)
         ? `**${copy.agents.metaUpdated}:** ${post.updatedAt.slice(0, 10)}`

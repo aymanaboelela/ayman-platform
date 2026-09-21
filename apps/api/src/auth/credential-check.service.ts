@@ -65,18 +65,47 @@ export function phoneIdentifier(phone: string): LoginIdentifier {
 }
 
 /**
- * The throttle bucket an attempt counts against.
+ * The FIRST of the two buckets an attempt counts against: the identifier
+ * exactly as it was submitted.
  *
- * Namespaced by kind, which means an account reachable BOTH ways gets two
- * buckets and therefore twice the guess budget of an email-only account. That
- * is a real if bounded weakening and it is accepted deliberately: the
- * alternative is resolving the identifier to a user id before deciding whether
- * to refuse, and `isLocked` runs before any database lookup precisely so a
- * locked account cannot be probed. Each bucket still locks at the same
- * threshold, and no existing email login is weakened.
+ * Namespaced by kind, and deliberately consulted before any database lookup —
+ * that ordering is what keeps a locked account from being probed, and it is
+ * also what makes this bucket safe to describe out loud (see
+ * `LOCKED_LOGIN_ERROR` in `login-security.service.ts`): it exists for an
+ * identifier that has no account exactly as it exists for one that does, so
+ * "this string is locked" answers no question about who is registered.
+ *
+ * On its own it left an account reachable two ways with twice the guess budget
+ * of an email-only one — lock the phone, walk in through the email. That was
+ * documented and accepted here for one reason: refusing account-wide needs a
+ * user id, and resolving one before refusing would undo the ordering above.
+ * `accountThrottleKey` closes it without touching that ordering.
  */
 export function throttleKeyFor(identifier: LoginIdentifier): string {
   return `${identifier.kind}:${identifier.value}`;
+}
+
+/**
+ * The SECOND bucket: the account, whichever identifier reached it.
+ *
+ * Six failures against one student now lock that student, not merely the box
+ * they were typed into — «واحد يتقفل بالموبايل ويعدّي بالإيميل» is the hole
+ * the lock exists to close, and a per-identifier lock never closed it.
+ *
+ * It is filled and consulted only AFTER `verifyLoginCredential` has done its
+ * one lookup and its one Argon2 verify, so it costs no extra round trip and
+ * shifts no timing. And unlike the identifier bucket, this one exists ONLY for
+ * accounts that are real — which is why `LoginSecurityService` refuses on it
+ * silently, with the generic error, unless the submitted password has already
+ * verified. Announcing it to anyone else would answer the question the
+ * identifier bucket carefully does not: it would say that two different
+ * identifiers are the same person.
+ *
+ * The `user:` prefix cannot collide with `email:`/`phone:` — one ledger, three
+ * disjoint namespaces.
+ */
+export function accountThrottleKey(userId: string): string {
+  return `user:${userId}`;
 }
 
 /**
@@ -124,10 +153,34 @@ export async function verifyLoginCredential(
   lookup: CredentialLookup,
 ): Promise<CredentialCheckResult> {
   const credential = await lookup.findCredential(identifier);
-  const hashToVerify = credential?.passwordHash ?? DUMMY_PASSWORD_HASH;
-  const valid = await argon2.verify(hashToVerify, password).catch(() => false);
+  const valid = await verifyPassword(credential, password);
   if (credential && valid) {
     return { success: true, userId: credential.userId };
   }
   return { success: false };
+}
+
+/**
+ * The verify half of `verifyLoginCredential`, split out so a caller that
+ * already holds the credential row does not have to look it up twice.
+ *
+ * `LoginSecurityService` is that caller, and the reason it needs the row
+ * rather than the verdict is `accountThrottleKey`: the account-wide lock has
+ * to count failures against an account, and a function that only names the
+ * account on SUCCESS can never tell it which one just failed. Doing the
+ * lookup there and the verify here keeps that knowledge inside the one class
+ * that already decides what a failure is allowed to say — rather than putting
+ * a user id on a shared result type, where the next caller would serialise it
+ * and undo S1 in a line nobody reviewed.
+ *
+ * The cost guarantee lives HERE, not at the call site: a null credential
+ * still pays exactly one Argon2 verify, against `DUMMY_PASSWORD_HASH`. There
+ * is no path through this function that skips it.
+ */
+export async function verifyPassword(
+  credential: StoredCredential | null,
+  password: string,
+): Promise<boolean> {
+  const hashToVerify = credential?.passwordHash ?? DUMMY_PASSWORD_HASH;
+  return argon2.verify(hashToVerify, password).catch(() => false);
 }

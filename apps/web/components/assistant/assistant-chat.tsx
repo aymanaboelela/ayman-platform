@@ -22,6 +22,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
+import { tenantSentence } from '@/lib/tenant-copy';
 import { ASK_QUESTION_MAX, type AskAction } from '@ayman/contracts/assistant/ask';
 /*
  * TYPE-ONLY, both of them — `@ayman/contracts/assistant/conversation` carries
@@ -451,8 +452,15 @@ function Welcome({ onPick }: { onPick: (question: string) => void }) {
         "what am I even talking to", asked and answered before the first
         question.
       */}
+      {/*
+        ⚠️ Gated — «ولو مش كفاية، م. أيمن تحت» is a pointer to a PERSON, and
+        the person it points at is the one whose button sits directly beneath
+        it. The four lines in this component that name him are the whole of
+        the handoff story a student reads, start to finish: what this is, that
+        it is being sent, that it arrived, and who is going to answer.
+      */}
       <p className="max-w-[18rem] text-[length:var(--fs-text-xs)] leading-[1.7] text-fg-faint">
-        {c.disclaimer}
+        {tenantSentence(c.disclaimer)}
       </p>
     </div>
   );
@@ -603,7 +611,7 @@ function HandoffCard({
           className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none"
           aria-hidden="true"
         />
-        {c.handoffSending}
+        {tenantSentence(c.handoffSending)}
       </p>
     );
   }
@@ -613,7 +621,7 @@ function HandoffCard({
       <>
         <p className="flex items-center gap-2 text-[length:var(--fs-text-sm)] font-medium text-fg">
           <CheckCircle2 className="size-4 shrink-0 text-accent" aria-hidden="true" />
-          {c.handoffSentTitle}
+          {tenantSentence(c.handoffSentTitle)}
         </p>
         <p className="mt-1 text-[length:var(--fs-text-xs)] leading-[1.7] text-fg-muted">
           {c.handoffSentBody}
@@ -647,7 +655,7 @@ function HandoffCard({
         {failed ? c.handoffFailedTitle : c.handoffIdentityTitle}
       </p>
       <p className="mt-1 text-[length:var(--fs-text-xs)] leading-[1.7] text-fg-muted">
-        {failed ? c.handoffFailedBody : c.handoffIdentityBody}
+        {failed ? c.handoffFailedBody : tenantSentence(c.handoffIdentityBody)}
       </p>
       <button
         type="button"
@@ -659,7 +667,7 @@ function HandoffCard({
         )}
       >
         <Send className="size-3.5" aria-hidden="true" />
-        {c.escalateAction}
+        {tenantSentence(c.escalateAction)}
       </button>
     </>
   );

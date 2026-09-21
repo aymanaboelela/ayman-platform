@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { Copy, Eraser, Play, RotateCcw } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
+import { tenantName } from '@/lib/tenant';
 import { runCode, type RunResult } from '@/lib/run-code';
 
 const c = copy.landing;
@@ -10,17 +11,25 @@ const c = copy.landing;
 /**
  * The instructor this deployment belongs to, for the starter snippet.
  *
- * The example printed «منصة المهندس أيمن» from a literal. Nothing renders this
- * component today — it is the only file in the app that still hardcoded the
- * name, and it survived precisely because it is unused. The moment somebody
- * wires it up on a second instructor's stack it teaches their students to
- * print somebody else's name.
+ * ## The fallback that pretended to be a gate
  *
- * `TENANT_DISPLAY_NAME` is already passed to the web container and baked as a
- * build arg; `NEXT_PUBLIC_` is not needed because the value is substituted
- * into a STRING here, at module load, not read in the browser.
+ * This read `TENANT_DISPLAY_NAME` and fell back to a literal «أيمن», and it
+ * sat on `tenant-identity-leak.spec.ts`'s allow-list described as gated — the
+ * exact shape that spec's own failure message calls out: «a fallback to his
+ * name is not a gate; a stack that forgets the variable prints him». It was
+ * harmless only because nothing renders this component, and it became a
+ * PRECEDENT anyway: `app/.well-known/ai-catalog.json/route.ts` cited it in as
+ * many words while copying the pattern.
+ *
+ * `tenantName()` is the real thing. A stack with no `TENANT_DISPLAY_NAME` now
+ * prints «المنصة» in the snippet instead of his name, and the file carries no
+ * literal for the leak scan to find — so it needs no allow-list entry at all.
+ *
+ * The snippet's second line lost the word «المهندس» with it: the value is now
+ * a full name on every stack, and «منصة المهندس أيمن أبو العلا» would be a
+ * title in front of a name that already reads as one.
  */
-const INSTRUCTOR = (process.env.TENANT_DISPLAY_NAME ?? '').trim() || 'أيمن';
+const INSTRUCTOR = tenantName(copy.site.name);
 
 /** The starter snippets behind the toolbar's picker. */
 const EXAMPLES: readonly { label: string; code: string }[] = [
@@ -29,7 +38,7 @@ const EXAMPLES: readonly { label: string; code: string }[] = [
     code: `console.log("أهلاً يا مبرمج 👋");
 
 const name = "${INSTRUCTOR}";
-console.log(\`منصة المهندس \${name}\`);
+console.log(\`منصة \${name}\`);
 
 const a = 7;
 const b = 5;

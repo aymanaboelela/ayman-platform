@@ -187,27 +187,40 @@ describe('the shipped hand-tuned ramps', () => {
   });
 
   /**
-   * Five shipped tokens ask for more chroma than sRGB can show at their
+   * Ten shipped tokens ask for more chroma than sRGB can show at their
    * lightness and hue, so the browser clips them.
    *
    * This is RECORDED rather than asserted away, and not fixed here. Each one
    * is somebody's tuned value on a live site, and changing it changes how the
-   * platform looks — a decision, not a cleanup. What the list buys is that a
-   * SIXTH one fails this test, which is the only way anybody would ever find
-   * out: a clipped colour does not throw, it just renders slightly duller than
-   * written, and only on the hues where it happens.
+   * platform looks — a decision, not a cleanup. What the list buys is that an
+   * ELEVENTH one fails this test, which is the only way anybody would ever
+   * find out: a clipped colour does not throw, it just renders slightly duller
+   * than written, and only on the hues where it happens.
    *
    * The worst is `--a-12` in the dark theme, 0.090 against a 0.074 ceiling.
+   *
+   * ⚠️ The five `--accent-cta*` entries are not NEW clipping. They are the
+   * `--site-accent-solid` family, which sat in `(site)/styles/theme.css` and
+   * `(link)/styles/linkhub.css` — outside anything this test could see — and
+   * clipped there exactly as they clip here. Promoting them to tokens is what
+   * brought them into view, and they are carried across byte for byte because
+   * they are Ayman's live CTA; re-tuning them is a separate decision with
+   * `e2e/a11y.e2e.ts` attached to it.
    */
   const KNOWN_CLIPPING = [
-    'oklch(0.520 0.120 62)', // amber --a-11, light  (ceiling 0.1197)
-    'oklch(0.545 0.165 43)', // --p-700              (ceiling 0.1614)
-    'oklch(0.640 0.190 48)', // --p-600              (ceiling 0.1743)
-    'oklch(0.920 0.090 80)', // amber --a-12, dark   (ceiling 0.0743)
-    'oklch(0.985 0.014 78)', // --p-50               (ceiling 0.0128)
+    'oklch(0.520 0.120 62)', // amber --a-11, light       (ceiling 0.1197)
+    'oklch(0.545 0.165 43)', // --p-700                   (ceiling 0.1614)
+    'oklch(0.640 0.190 48)', // --p-600                   (ceiling 0.1743)
+    'oklch(0.920 0.090 80)', // amber --a-12, dark        (ceiling 0.0743)
+    'oklch(0.985 0.014 78)', // --p-50                    (ceiling 0.0128)
+    'oklch(0.575 0.180 45)', // --accent-cta, light
+    'oklch(0.525 0.172 44)', // --accent-cta-hover, light
+    'oklch(0.780 0.165 58)', // --accent-cta-hover, dark
+    'oklch(0.680 0.192 50)', // --accent-cta-lift
+    'oklch(0.615 0.184 46)', // --accent-cta-lift-deep
   ];
 
-  it('clip in exactly the five places already known, and nowhere new', () => {
+  it('clip in exactly the ten places already known, and nowhere new', () => {
     const clipped = [...new Set(literals.filter((color) => !isInGamut(color)).map((c) => c.text))];
 
     expect(clipped.sort()).toEqual([...KNOWN_CLIPPING].sort());

@@ -10,6 +10,8 @@ import { Button } from '@ayman/ui/components/button';
 import {
   AuthRequestError,
   BANNED_ACCOUNT_CODE,
+  DEVICE_LIMIT_CODE,
+  LOCKED_ACCOUNT_CODE,
   signInWithEmail,
   signInWithPhone,
 } from '@/lib/auth-client';
@@ -18,14 +20,56 @@ import { FormField } from './form-field';
 import { AuthProviders } from './auth-providers';
 
 /**
+ * What the form is refusing with, and whether the way out is a WhatsApp
+ * message rather than another attempt.
+ *
+ * A shape rather than a string because two of the four refusals end in a link
+ * the student should actually press, and building an `<a>` into a copy string
+ * would put markup in the copy table — the one place this codebase keeps free
+ * of it.
+ */
+interface FormRefusal {
+  message: string;
+  /** Render the instructor's WhatsApp link under the message. */
+  contactTeacher: boolean;
+}
+
+/**
+ * Whole minutes, rounded UP, in the one grammatical form Arabic wants for that
+ * number. The lock is ten minutes, so `minutes` is 1-10 and every case here is
+ * reachable; a single «{n} دقيقة» would be wrong for nine of the ten.
+ */
+function lockedMessage(retryAfterSeconds: number | undefined): string {
+  const minutes = Math.max(1, Math.ceil((retryAfterSeconds ?? 0) / 60));
+  if (minutes === 1) return copy.auth.errors.loginLockedOneMinute;
+  if (minutes === 2) return copy.auth.errors.loginLockedTwoMinutes;
+  return formatCopy(copy.auth.errors.loginLocked, { minutes });
+}
+
+/**
  * `next` arrives as a prop from the page's Server Component rather than from
  * `useSearchParams()` here. Reading it on the server keeps this component out
  * of the Suspense/`cacheComponents` dance a client-side search-params read
  * would require, and means the value is validated by `safeNext` once, before it
  * is ever rendered into a link.
  */
-export function LoginForm({ next }: { next?: string | null }) {
-  const [formError, setFormError] = useState<string | null>(null);
+/**
+ * `supportHref` is the instructor's own `wa.me` link, resolved on the server
+ * from `settings.contact.whatsapp` and passed down — never a literal here.
+ * The number differs on every stack, so a constant in this file would ship one
+ * instructor's WhatsApp to all three, which is exactly what
+ * `tenant-identity-leak.spec.ts` exists to catch. `null` when the setting is
+ * unset, and the link is then simply not rendered (`waMeHref` already refuses
+ * to build a `wa.me` URL with no number in it).
+ */
+export function LoginForm({
+  next,
+  supportHref,
+}: {
+  next?: string | null;
+  supportHref?: string | null;
+}) {
+  const [formError, setFormError] = useState<FormRefusal | null>(null);
   const {
     register,
     handleSubmit,
@@ -68,8 +112,8 @@ export function LoginForm({ next }: { next?: string | null }) {
        * the caught error's status/message are still never inspected for them.
        */
       if (error instanceof AuthRequestError && error.code === BANNED_ACCOUNT_CODE) {
-        setFormError(
-          [
+        setFormError({
+          message: [
             copy.auth.errors.loginBanned,
             error.reason
               ? formatCopy(copy.auth.errors.loginBannedReason, { reason: error.reason })
@@ -78,11 +122,56 @@ export function LoginForm({ next }: { next?: string | null }) {
           ]
             .filter(Boolean)
             .join(' '),
-        );
+          contactTeacher: true,
+        });
         return;
       }
 
-      setFormError(copy.auth.errors.login);
+      /*
+       * القفل — the one refusal named WITHOUT a verified password, and the
+       * exception is narrower than it looks.
+       *
+       * The API only emits this for the counter keyed on the string that was
+       * typed, and a failed attempt fills that counter for an address nobody
+       * owns exactly as it does for a real one — six wrong guesses against a
+       * made-up address come back with this same code and the same number of
+       * minutes. So it distinguishes nothing about who is registered, which is
+       * the only thing the rule below protects. The account-wide lock, which
+       * DOES only exist for real students, arrives as the generic 401 unless
+       * the password verified first. See `LOCKED_ACCOUNT_CODE`.
+       */
+      if (error instanceof AuthRequestError && error.code === LOCKED_ACCOUNT_CODE) {
+        setFormError({
+          message: [
+            lockedMessage(error.retryAfterSeconds),
+            // Second lockout and after: another ten minutes of guessing will
+            // not produce a password they do not have, and the instructor can
+            // reset it in seconds.
+            error.repeated ? copy.auth.errors.loginLockedRepeated : null,
+          ]
+            .filter(Boolean)
+            .join(' '),
+          contactTeacher: error.repeated === true,
+        });
+        return;
+      }
+
+      /*
+       * حد الأجهزة. Emitted only after the password verified (same rule as
+       * حظر above), so it leaks nothing — and the way out does not need
+       * anybody's help, which is why the action line comes before the link.
+       */
+      if (error instanceof AuthRequestError && error.code === DEVICE_LIMIT_CODE) {
+        setFormError({
+          message: [copy.auth.errors.loginDeviceLimit, copy.auth.errors.loginDeviceLimitAction].join(
+            ' ',
+          ),
+          contactTeacher: true,
+        });
+        return;
+      }
+
+      setFormError({ message: copy.auth.errors.login, contactTeacher: false });
       return;
     }
     const destination = await resolvePostLoginDestination(next);
@@ -153,9 +242,27 @@ export function LoginForm({ next }: { next?: string | null }) {
       />
 
       {formError && (
-        <p role="alert" className="text-[length:var(--fs-text-sm)] text-[color:var(--err)]">
-          {formError}
-        </p>
+        /*
+          One `role="alert"` on the CONTAINER, not on the paragraph, so a
+          screen reader announces the sentence and the link it ends with as one
+          message. Two alerts in a row would read the second over the first.
+        */
+        <div role="alert" className="space-y-1 text-[length:var(--fs-text-sm)] text-[color:var(--err)]">
+          <p>{formError.message}</p>
+          {/* Only when there is somewhere for it to go — `waMeHref` returns
+              null for an unset number, and a bare `wa.me` link opens
+              WhatsApp's marketing page rather than a chat. */}
+          {formError.contactTeacher && supportHref ? (
+            <a
+              className="inline-block underline"
+              href={supportHref}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {copy.auth.errors.loginContactTeacher}
+            </a>
+          ) : null}
+        </div>
       )}
 
       {/* Disabled while the request is in flight — this is also what keeps

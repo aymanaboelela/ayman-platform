@@ -1,4 +1,5 @@
 import { copy } from '@ayman/contracts/copy';
+import { swapInstructorName } from '@ayman/contracts/copy/tenant-sentence';
 import { IS_AYMAN, tenantName } from '@/lib/tenant';
 
 /**
@@ -37,62 +38,49 @@ import { IS_AYMAN, tenantName } from '@/lib/tenant';
  * identical string object it was given — not a rebuilt one that happens to
  * match. That is deliberate belt and braces: the replacement below is a no-op
  * on his stack by construction anyway (`tenantName(x)` IS `x` there), and the
- * early return means no future edit to `NAME_FORMS` can make that stop being
+ * early return means no future edit to `nameForms` can make that stop being
  * true for him.
  *
- * ## ⚠️ IT ONLY SWAPS THE SPELLINGS IT KNOWS
+ * ## ⚠️ IT ONLY SWAPS THE SPELLINGS `copy.site.nameForms` LISTS
  *
- * This is a substring replacement over the three name forms the copy table
- * itself publishes. A sentence that spells the name any other way — the
- * hamza-less «ايمن ابو العلا» that `ai-catalog.json` carries for search, a
- * first name on its own, a Latin transliteration — passes through untouched
- * and leaks silently, because nothing here can fail loudly.
+ * This is a substring replacement over a list, and a sentence that spells the
+ * name some way the list does not carry passes through untouched and leaks
+ * silently, because nothing here can fail loudly. That is not a hypothetical:
+ * the list held three WORDMARK forms for a year — «أيمن أبو العلا» and its two
+ * dressed-up cousins — while the copy students actually read says «بوصّلك
+ * لأيمن» and «عند مهندس أيمن للتصحيح». Thirty-odd sentences ran through this
+ * function, matched nothing, and rendered his name on somebody else's domain.
+ * The honorific and bare-first-name forms were added to `copy.site.nameForms`
+ * because of it; its docblock is where the reasoning lives.
  *
- * That is why `tenant-copy.test.ts` does not test this function against
- * invented input. It tests it against THE EXACT STRINGS the call sites pass —
- * the privacy note, the link-hub description, the `/about` title and FAQ — and
- * asserts that no form of the name survives in any of them. Adding a call site
- * means adding its string to that list; if the sentence spells him differently,
- * the test goes red instead of the page going wrong.
+ * Two checks stand behind that, and they answer different questions.
+ * `tenant-copy.test.ts` asks whether the swap WORKS, against the exact strings
+ * the call sites pass rather than invented input. The consumer sweep in
+ * `packages/contracts/src/tenant-identity-leak.spec.ts` asks the other half —
+ * whether a call site exists that never calls this at all — by deriving every
+ * copy key whose value carries the name and failing on any read of one that is
+ * not wrapped in a gate. The first cannot see a missing call site; the second
+ * cannot see a missing spelling.
  */
-
-/**
- * Every form of the name the copy table publishes, longest first.
- *
- * ⚠️ THE ORDER IS LOAD-BEARING. «منصة أيمن أبو العلا» and «المهندس أيمن أبو
- * العلا» both CONTAIN «أيمن أبو العلا», so replacing the bare name first would
- * leave «منصة محمد حسن» sitting behind the word «منصة» that was already there
- * — «منصة منصة محمد حسن» — and would leave «المهندس» stranded in front of a
- * name that is not an engineer's. Sorting by length descending means the most
- * specific form always matches first, and it keeps working when a fourth form
- * is added to `copy.site`.
- */
-const NAME_FORMS: readonly string[] = [
-  copy.site.platformName,
-  copy.site.instructor,
-  copy.site.name,
-].sort((a, b) => b.length - a.length);
 
 /**
  * One sentence from the copy table, with his name swapped for this
  * deployment's.
  *
- * Returns the argument untouched on his stack. Anywhere else every known form
- * of the name becomes `TENANT_DISPLAY_NAME`, or «المنصة» when a deployment has
- * not set one — the same two answers `tenantName()` gives, so a page that mixes
- * the two calls cannot end up saying two different names.
+ * Returns the argument untouched on his stack. Anywhere else every spelling
+ * `copy.site.nameForms` publishes becomes `TENANT_DISPLAY_NAME`, or «المنصة»
+ * when a deployment has not set one — the same two answers `tenantName()`
+ * gives, so a page that mixes the two calls cannot end up saying two different
+ * names.
+ *
+ * The ordered list and the loop itself live in
+ * `@ayman/contracts/copy/tenant-sentence`, shared with the API's gate. What
+ * stays here is the only thing that differs between the two: which stack this
+ * is.
  */
 export function tenantSentence(sentence: string): string {
   if (IS_AYMAN) return sentence;
-  let out = sentence;
-  for (const form of NAME_FORMS) {
-    // `split`/`join` rather than `replaceAll`: the forms are data from the copy
-    // table, and `replace` with a string needle only swaps the FIRST match —
-    // `aboutPageDescription` opens with «مين أيمن أبو العلا؟» and names him
-    // again further in.
-    out = out.split(form).join(tenantName(form));
-  }
-  return out;
+  return swapInstructorName(sentence, tenantName(copy.site.name));
 }
 
 /**

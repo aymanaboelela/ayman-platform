@@ -67,6 +67,53 @@ export const copy = {
     platformName: 'منصة أيمن أبو العلا',
     tagline: 'البرمجة وعلوم الحاسب — نظام البكالوريا المصرية',
     instructor: 'المهندس أيمن أبو العلا',
+    /**
+     * EVERY spelling of the name that appears INSIDE a sentence in this table.
+     *
+     * ## Why the four names above are not enough
+     *
+     * `tenantSentence()` is a substring swap, and for a year it knew only
+     * `platformName`, `instructor` and `name` — the three forms a WORDMARK
+     * uses. Almost nothing a student reads is written that way. The copy says
+     * «بوصّلك لأيمن», «م. أيمن تحت», «عند مهندس أيمن للتصحيح» — the first name
+     * on its own, usually with a one-letter clitic glued to the front of it —
+     * and not one of those contains any of the three. So the swap ran, found
+     * nothing, and handed the sentence back with his name still in it. That is
+     * how «إجابات سريعة، ولو مالقيتش اللي بتدوّر عليه بوصّلك لأيمن.» came to sit
+     * at the top of another instructor's assistant, one line above a button
+     * that correctly read «أكلّم محمد صبري».
+     *
+     * ## Longest first, and the honorific is part of the form
+     *
+     * The list is sorted by length at the point of use, so «المهندس أيمن أبو
+     * العلا» matches before «أيمن أبو العلا» matches before «أيمن». That
+     * ordering is what stops a swap leaving a fragment behind, and it is also
+     * why the honorific forms are listed at all: «مهندس أيمن» has to be
+     * consumed WHOLE, or «رد مهندس أيمن» becomes «رد مهندس منصة محمد حسن» —
+     * a title stranded in front of a name that already carries one.
+     *
+     * ## The bare first name is last, and it is the one that needs watching
+     *
+     * «أيمن» alone catches «لأيمن», «وأيمن», «بأيمن» — Arabic glues those
+     * prefixes straight onto the name, so there is no word boundary to anchor
+     * on and nothing narrower would match. It is also the Arabic for
+     * «right-hand», so a sentence about «الزر الأيمن» would be mangled by it.
+     * No such sentence exists in this table today, and the fix if one is ever
+     * written is to re-word that sentence — not to drop this entry, which is
+     * the only thing standing between a tenant's student and «لأيمن».
+     */
+    nameForms: [
+      'المهندس أيمن أبو العلا',
+      'منصة أيمن أبو العلا',
+      'م. أيمن أبو العلا',
+      'أ. أيمن أبو العلا',
+      'أيمن أبو العلا',
+      'المهندس أيمن',
+      'مهندس أيمن',
+      'م. أيمن',
+      'أ. أيمن',
+      'أيمن',
+    ] as const,
   },
 
   /**
@@ -804,6 +851,77 @@ export const copy = {
       /** Prefixes the admin's own words. `{reason}` is operator-authored. */
       loginBannedReason: 'السبب: {reason}',
       loginBannedContact: 'ولو فيه غلط، كلمة للمدرّس وهيتظبط.',
+
+      /**
+       * القفل بعد ٦ محاولات غلط — the THIRD documented exception, and the one
+       * that needs its reasoning stated because it is shown BEFORE any
+       * password has verified, which the two above are not.
+       *
+       * It is safe for a reason particular to which counter produced it. The
+       * lock the student sees here is the one keyed on the string they typed,
+       * and a failed attempt fills that counter whether or not the address
+       * belongs to anybody — six wrong guesses against an address nobody owns
+       * produce this identical sentence, with the identical number of
+       * minutes. So it answers no question about who is registered, which is
+       * the only thing S1 is protecting. The OTHER lock — the account-wide
+       * one, which exists only for real students — is refused silently with
+       * the generic line above unless the password verified first, precisely
+       * because naming it would say that two identifiers are one person.
+       * `login-security.service.ts` holds the full argument.
+       *
+       * Why say it at all: a student who is refused with «البريد أو كلمة
+       * المرور مش مظبوطين» while locked has no way to tell a lock from a
+       * wrong password, so they keep typing — which is both the worst thing
+       * for them and the most expensive thing for the server (every attempt
+       * is a 19 MiB Argon2 hash).
+       *
+       * `{minutes}` is rounded UP from the seconds the API returns: telling
+       * someone to come back in 9 when the lock lifts in 9½ earns a second
+       * refusal and a support message.
+       *
+       * Passive («اتكتبت»), not «إنت كتبت» — the platform never asks whether a
+       * student is a boy or a girl, so nothing addressed to them may inflect.
+       *
+       * Three forms because Arabic counts in three: ١ «دقيقة», ٢ «دقيقتين»,
+       * and ٣-١٠ «دقايق». The lock is ten minutes, so those are the only
+       * cases that exist — a single `{minutes} دقيقة` would read wrong for
+       * nine of the ten.
+       */
+      loginLocked: 'اتكتبت كلمة سر غلط كذا مرة، فالدخول مقفول {minutes} دقايق للأمان.',
+      /** Singular, for the last minute of the wait. */
+      loginLockedOneMinute: 'اتكتبت كلمة سر غلط كذا مرة، فالدخول مقفول دقيقة للأمان.',
+      /** The dual — Arabic has one, and «٢ دقايق» is not it. */
+      loginLockedTwoMinutes: 'اتكتبت كلمة سر غلط كذا مرة، فالدخول مقفول دقيقتين للأمان.',
+      /**
+       * Second lockout and after. At this point the student is not mistyping
+       * — they do not have the password — and another ten minutes of guessing
+       * will not produce it. The instructor can reset it in seconds from the
+       * students screen, so the fastest way out IS the message.
+       *
+       * The link itself is attached by the form from
+       * `settings.contact.whatsapp`, never written into this string: the
+       * number is different on every instructor's stack, and a literal here
+       * would ship one teacher's number to all three.
+       */
+      loginLockedRepeated: 'اتقفل تاني؟ يبقى كلمة سر الحساب محتاجة تتظبط.',
+      /** The label on the WhatsApp link, shared by the lock and device lines. */
+      loginContactTeacher: 'كلّم المدرّس على واتساب',
+
+      /**
+       * حد الأجهزة — shown only after a correct password, exactly like the ban
+       * above, so it is not an enumeration signal either. The API's
+       * enforcement point cannot say any of this (it can only refuse the
+       * session write), which is why the message and the refusal are two
+       * separate pieces of code that ask the same question — see
+       * `auth/device-limit.ts`.
+       *
+       * Names the way out first, because there is one and it does not need
+       * anybody's help: «أجهزتي» in the settings closes a device and frees the
+       * slot immediately.
+       */
+      loginDeviceLimit: 'الحساب مفتوح على جهازين خلاص، ومش بنسمح بأكتر من كده.',
+      loginDeviceLimitAction:
+        'من «أجهزتي» في الإعدادات، أي جهاز يتقفل والمكان يفضى على طول.',
     },
   },
   /**
@@ -1147,6 +1265,16 @@ export const copy = {
       revokeCurrentConfirm: 'ده الجهاز اللي إنت عليه دلوقتي — لو قفلته هيتسجّل خروجك فورًا. تمام؟',
       revokeError: 'مقدرناش نقفل الجهاز. نحاول تاني.',
       empty: 'مفيش أجهزة مفتوحة دلوقتي',
+      /**
+       * The limit, stated on the screen that can do something about it.
+       *
+       * A student who meets the gate on the login page is told the number and
+       * pointed here; arriving to a list with no mention of a limit would read
+       * as the two screens disagreeing. «قفل» is the noun, not the imperative
+       * — the platform never asks whether a student is a boy or a girl, so the
+       * copy does not inflect.
+       */
+      limitNote: 'الحساب بيفتح على جهازين بالكتير — قفل أي جهاز هنا بيفضّي مكان لواحد جديد.',
     },
   },
   home: {
@@ -4141,6 +4269,27 @@ export const copy = {
         a: 'المهندس أيمن أبو العلا — مدرّس البرمجة وعلوم الحاسب للمرحلة الثانوية، ومهندس برمجيات شغّال في السوق من ٨ سنين. صفحة «عن المنصة» فيها التفاصيل.',
       },
     ] as const,
+
+    /**
+     * The `knowledge` ids that state a fact about the PERSON, not the product.
+     *
+     * Everything else in that array survives a name swap: «رسالة لأيمن وهيتظبط»
+     * is a process, and it stays true with any instructor's name in it. This
+     * one does not. «مهندس برمجيات شغّال في السوق من ٨ سنين» is a CV, and
+     * swapping the name in front of it does not make it true — it publishes a
+     * career a second instructor has not had, in the platform's own voice, to a
+     * student who asked who was teaching them.
+     *
+     * So the entry is DROPPED rather than rewritten on any other stack, the
+     * same way `aymanOnly()` drops his photograph instead of substituting
+     * somebody else's. The corpus is not left silent by it: `platformFacts()`
+     * in `assistant-knowledge.ts` answers «المنصة دي بتاعة إيه؟» and «أقدر
+     * أكلّم حد؟» with the tenant's own name on every stack.
+     *
+     * ⚠️ A new entry that states a qualification, a number of years, a degree
+     * or an address belongs on this list the day it is written.
+     */
+    knowledgePersonal: ['whoIsAyman'] as const,
 
     /**
      * The footer strip, on EVERY screen of the panel.

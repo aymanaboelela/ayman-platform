@@ -1,5 +1,6 @@
 import { copy } from '@ayman/contracts/copy';
-import { tenantName } from '../../../common/tenant';
+import { IS_AYMAN, tenantName } from '../../../common/tenant';
+import { tenantSentence } from '../../../common/tenant-copy';
 import {
   ASSISTANT_NODES,
   ASSISTANT_ROOT,
@@ -68,6 +69,18 @@ export interface KnowledgeEntry {
 }
 
 /**
+ * The entries a swap cannot rescue, so they are dropped instead.
+ *
+ * A name inside a sentence can be substituted; a CV cannot. `whoIsAyman`
+ * answers «مين أيمن أبو العلا؟» with «مهندس برمجيات شغّال في السوق من ٨ سنين»
+ * — run that through `tenantSentence()` and المساعد states another
+ * instructor's years of experience as a fact, to the student who asked who was
+ * teaching them. `copy.assistant.knowledgePersonal` is where the decision
+ * lives, beside the sentence it is about; this is only the lookup.
+ */
+const PERSONAL_IDS: ReadonlySet<string> = new Set(copy.assistant.knowledgePersonal);
+
+/**
  * The written corpus — everything المساعد knows that the TREE does not say.
  *
  * `copy.assistant.knowledge` is where it lives, beside every other string a
@@ -77,11 +90,28 @@ export interface KnowledgeEntry {
  * «نسيت كلمة السر», «الدرس مش بيفتح», «مش عندي إيميل».
  */
 function writtenFacts(): KnowledgeEntry[] {
-  return copy.assistant.knowledge.map((entry) => ({
-    id: entry.id,
-    question: entry.q,
-    answer: entry.a,
-  }));
+  /*
+   * ⚠️ `tenantSentence`, on BOTH halves of every entry.
+   *
+   * `platformFacts()` below was gated first and this was left beside it, which
+   * is the split that makes a screen argue with itself: a student on another
+   * instructor's stack asked «بياناتي بتروح فين؟» and was told «بياناتك محفوظة
+   * عند أيمن أبو العلا وبس» — while the entry two lines down correctly named
+   * theirs. Ten of the twenty-six answers name him, and they are not page
+   * furniture: «الأسئلة المقالية بيصحّحها أيمن بنفسه» is a statement about who
+   * marks the paper, quoted to the student who is waiting for the mark.
+   *
+   * The QUESTION is swapped too. «مين أيمن أبو العلا؟» is what the model
+   * matches against, so leaving it would keep his name in the retrieval index
+   * of a platform that is not his.
+   */
+  return copy.assistant.knowledge
+    .filter((entry) => IS_AYMAN || !PERSONAL_IDS.has(entry.id))
+    .map((entry) => ({
+      id: entry.id,
+      question: tenantSentence(entry.q),
+      answer: tenantSentence(entry.a),
+    }));
 }
 
 /**
@@ -135,7 +165,11 @@ function scriptEntries(): KnowledgeEntry[] {
   const questionFor = new Map<AssistantNodeId, string>();
   for (const id of Object.keys(ASSISTANT_NODES) as AssistantNodeId[]) {
     for (const choice of ASSISTANT_NODES[id].choices) {
-      if (isNextChoice(choice)) questionFor.set(choice.next, copy.assistant.choices[choice.id]);
+      // The choice labels are questions the model matches against, and one of
+      // them IS the name — «أكلّم أيمن». See `writtenFacts` for why the
+      // question side matters as much as the answer side.
+      if (isNextChoice(choice))
+        questionFor.set(choice.next, tenantSentence(copy.assistant.choices[choice.id]));
     }
   }
 
@@ -162,7 +196,10 @@ function scriptEntries(): KnowledgeEntry[] {
     entries.push({
       id,
       question: questionFor.get(id) ?? copy.assistant.title,
-      answer: copy.assistant.script[id],
+      // Eight of these paragraphs end at «أوصّلك لأيمن». They are the answers
+      // المساعد quotes most often, because the tree is what a student walks
+      // when they do not know what to type.
+      answer: tenantSentence(copy.assistant.script[id]),
     });
   }
   return entries;

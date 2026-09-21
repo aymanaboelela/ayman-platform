@@ -23,6 +23,7 @@ import { loadEnv } from '../config/env';
 import { PrismaClient } from '../generated/prisma/client';
 import { SessionDeviceService } from '../modules/sessions/session-device.service';
 import { ARGON2_OPTIONS } from './argon2-options';
+import { createDeviceLimitGate } from './device-limit';
 import {
   PrismaBannedAccountLookup,
   PrismaRegisteredPhoneLookup,
@@ -89,6 +90,14 @@ const registeredPhoneLookup = new PrismaRegisteredPhoneLookup(prisma);
 // (its own `PrismaService`) for the controller side — see that module's
 // comment for why one class can be constructed both ways.
 const sessionDeviceService = new SessionDeviceService(prisma);
+
+// ── حد الأجهزة: «آخره two devices» ─────────────────────────────────────────
+// Gated on `sessions.enforceDeviceLimit`, which the gate reads through Prisma
+// and caches for 30s — `FlagsService` is a Nest provider and this file has no
+// injector, the same constraint `login-throttle.instance.ts` records. Off by
+// declaration, so nothing changes on any stack until an instructor switches it
+// on from the flags screen.
+const deviceLimitGate = createDeviceLimitGate(prisma);
 
 /**
  * Generates Apple's `client_secret`: a short-lived ES256 JWT signed with the
@@ -479,7 +488,12 @@ export const auth = betterAuth({
   // Auth's own handler ever runs so no library-specific message reaches the
   // client.
   hooks: {
-    before: createAuthBeforeHook(loginSecurityService, bannedAccountLookup, registeredPhoneLookup),
+    before: createAuthBeforeHook(
+      loginSecurityService,
+      bannedAccountLookup,
+      registeredPhoneLookup,
+      deviceLimitGate,
+    ),
   },
 
   // ── Task 7: أجهزتي — populate SessionDevice on every session creation ────
@@ -581,6 +595,29 @@ export const auth = betterAuth({
             select: { bannedAt: true },
           });
           if (user?.bannedAt) return false;
+
+          /**
+           * حد الأجهزة — the ENFORCING half, here for the same reason the ban
+           * is: this is the only choke point every session passes through.
+           * `createAuthBeforeHook` covers `/sign-in/email` and
+           * `/sign-in/phone-number`, which leaves Google — and an account
+           * already on two devices signing in with Google would otherwise walk
+           * straight past a limit the instructor was told holds everywhere.
+           *
+           * Sign-up reaches this too (Better Auth mints a session the moment
+           * the row is written) and is unaffected by construction: a brand new
+           * account has no live sessions, so `admits` is trivially true.
+           * Worth stating because a bug in the COUNT would surface here as
+           * «مقدرناش نعمل الحساب» on registration — the loudest possible
+           * failure and the hardest to attribute.
+           *
+           * Fails OPEN on a read error, inside `CachedFlag`/`admits`: a flag
+           * or device query that times out must not turn into a platform
+           * nobody can log into.
+           */
+          const admitted = await deviceLimitGate.admits(session.userId, session.userAgent);
+          if (!admitted) return false;
+
           return { data: session };
         },
         after: async (session) => {

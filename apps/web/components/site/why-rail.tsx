@@ -14,6 +14,7 @@ import {
 import { copy } from '@ayman/contracts/copy';
 import { gsap } from '@/lib/gsap';
 import { useGsap } from '@/components/motion/use-gsap';
+import { tenantSentence } from '@/lib/tenant-copy';
 
 const c = copy.landing;
 
@@ -83,7 +84,12 @@ const DEFAULT_ITEMS: WhyRailItem[] = [
  */
 export function WhyRail({
   title = c.whyTitle,
-  titleAccent = c.whyTitleAccent,
+  // ⚠️ Gated even though `home-blocks.ts` passes this prop on every stack it
+  // renders from: a DEFAULT is the value nobody chose, which is exactly the
+  // one nobody proof-reads. «ليه أذاكر… مع المهندس أيمن؟» reaching a tenant's
+  // landing page would need only one admin-composed block that left the
+  // accent empty.
+  titleAccent = tenantSentence(c.whyTitleAccent),
   lead = c.whyLead,
   leadSecondary = c.whyLeadSecondary,
   items = DEFAULT_ITEMS,

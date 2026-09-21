@@ -22,7 +22,8 @@ import { tenantName } from '@/lib/tenant';
  *
  * ## Why the fallback is the NAME and not something generic
  *
- * Exactly the rule `code-lab.tsx` already follows — a GATED fallback. Ayman's
+ * `tenantName(fallback)` hands the fallback back on HIS stack and
+ * `TENANT_DISPLAY_NAME` (or «المنصة») on every other one. Ayman's
  * own stack does not set `TENANT_DISPLAY_NAME`, and these queries are how
  * assistants decide this site answers «كتاب أيمن أبو العلا بكام». Falling back
  * to «المنصة» would quietly cost him the match this document exists to win,

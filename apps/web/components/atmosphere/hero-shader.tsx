@@ -3,6 +3,7 @@
 import { Mesh, Program, Renderer, Triangle } from 'ogl';
 import { useEffect, useRef } from 'react';
 import * as tokens from '@ayman/ui/tokens';
+import { rampHex } from '@/lib/ramp-color';
 
 /** A full-screen triangle. Cheaper than a quad: one primitive, no diagonal seam. */
 const VERTEX = /* glsl */ `
@@ -99,7 +100,14 @@ export default function HeroShader({ frozen }: { frozen: boolean }) {
       uniforms: {
         uTime: { value: 0 },
         uResolution: { value: [1, 1] },
-        uAccent: { value: hexToRgbTriplet(tokens.color.accentSolidHex) },
+        /* `rampHex` rather than the token, so a second instructor's field is
+           lit by THEIR colour. Read here and not through `useRampHex` on
+           purpose: this runs inside the effect that builds the GL context, so
+           the ramp is already on `document.documentElement` by now and there
+           is nothing in the markup for React to compare. Making it reactive
+           would put a colour in this effect's dependencies, and this effect
+           owns a WebGL context it tears down on cleanup. */
+        uAccent: { value: hexToRgbTriplet(rampHex(500, tokens.color.accentSolidHex)) },
         uIntensity: { value: 0.16 },
       },
     });

@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { copy } from '@ayman/contracts/copy';
 import { Button } from '@ayman/ui/components/button';
+import { tenantSentence } from '@/lib/tenant-copy';
 import {
   Dialog,
   DialogClose,
@@ -62,7 +63,10 @@ export function CourseClosedDialog({
       <DialogContent closeLabel={copy.common.close}>
         <DialogHeader>
           <DialogTitle>{c.closedTitle}</DialogTitle>
-          <DialogDescription>{c.closedBody}</DialogDescription>
+          {/* «م. أيمن بيعدّل فيه دلوقتي» — the student is being told WHO is
+              working on the course they cannot open, so the name has to be
+              the one whose course it is. */}
+          <DialogDescription>{tenantSentence(c.closedBody)}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <DialogClose asChild>

@@ -165,6 +165,73 @@
   --a-11: oklch(0.520 0.120 62);
   --a-12: oklch(0.300 0.060 60);
 
+  /* ── the warm LITERALS, promoted to tokens ───────────────────────────────
+
+     Every value below was, until now, typed into a stylesheet as a hex or an
+     `oklch()` triple, each with a comment explaining why it could not be a
+     ramp step: a gradient stop, an alpha wash that needs a bare `R G B`
+     triplet, a print sheet that must not follow the admin's dark theme, a
+     panel that is dark in BOTH themes so `var(--a-11)` would be wrong half the
+     time. Those comments were right.
+
+     Their conclusion was one teacher too narrow. The value has to be
+     CONCRETE; it does not have to be AMBER. A second instructor's stack ran
+     the whole product on their own blue and then painted the sign-in aside,
+     the marketing CTA, the link hub's one button and every printed packing
+     list in this orange — because a literal is not reachable from the
+     `<style>` the server injects, and a literal was all there was.
+
+     ⚠️ THE VALUES HERE ARE THE SHIPPED ONES, BYTE FOR BYTE. That is the whole
+     design: Ayman's row is `accent: amber` with no `accentHue`, `tenantScheme`
+     returns null for it, and nothing is injected — so his pages compute
+     exactly what they computed before this block existed. Anyone else gets
+     `WARM_LITERALS` in `../lib/ramp.ts` re-cut at their hue, laid over the top.
+     Change a number here and you have changed a live site with money on it.
+
+     The consumer of each is named so this block cannot quietly outlive them. */
+
+  /* The marketing surface's solid CTA and its hover — `(site)/styles/theme.css`,
+     which declares them in three blocks and now reads this token in all three.
+     Theme-dependent: light is a dark fill under white text (4.68:1, measured,
+     and the step above it fails axe at 4.24:1); dark inverts to a bright fill
+     under near-black. */
+  --accent-cta:       oklch(0.575 0.180 45);
+  --accent-cta-hover: oklch(0.525 0.172 44);
+
+  /* The two stops of the link hub's one solid row on hover — `(link)/styles/linkhub.css`.
+     Brighter than the CTA pair on purpose: it is the only button on that page. */
+  --accent-cta-lift:      oklch(0.680 0.192 50);
+  --accent-cta-lift-deep: oklch(0.615 0.184 46);
+
+  /* Near-black text that sits ON an accent fill (`--site-on-accent` in dark,
+     `--lh-on-accent` always) and on white (`.site-btn--light`). Chroma 0.02 is
+     barely a tint and is rotated anyway — a WARM near-black on a blue brand is
+     still the wrong warmth, and it is the one that shows on a big fill. */
+  --on-accent-ink: oklch(0.180 0.020 50);
+  --on-light-ink:  oklch(0.22 0.02 60);
+
+  /* The ink panel's lighting, for the surfaces that paint their own stage
+     rather than reading `--ink`: `(auth)/auth.css` builds the sign-in aside
+     out of all four. That panel is the FIRST screen every student on every
+     stack sees, which is why it is listed first among the things this block
+     exists for.
+
+     `--ink-accent` is the DARK theme's `--a-11` written out, because an ink
+     panel is dark in both themes and `var(--a-11)` would hand it the light
+     theme's deep orange half the time. */
+  --ink-key-rgb:    255 138 26;
+  --ink-bounce-rgb: 251 191 36;
+  --ink-warm:       #171208;
+  --ink-accent:     oklch(0.845 0.13 78);
+
+  /* The print sheets — `admin/books/print/print.css` and `admin/books/labels/labels.css`.
+     That file says it in as many words: "the one colour Ayman's material is
+     recognisable by, and this page ends up in a print shop's hands". Which is
+     exactly why every other teacher's shipping labels must not carry it. */
+  --print-gold:      #eaa33c;
+  --print-gold-deep: #b9761a;
+  --print-gold-wash: #fdf4e3;
+
   /* semantic — never brand, never decorative.
 
      ⚠️ These are LIGHT-MODE values, retuned to clear 4.5:1 text contrast
@@ -212,6 +279,10 @@
     --a-10: oklch(0.820 0.150 76);
     --a-11: oklch(0.845 0.130 78);
     --a-12: oklch(0.920 0.090 80);
+    /* Dark inverts the CTA: a bright fill with near-black text instead of a
+       dark fill with white text. See the light block for the rest. */
+    --accent-cta:       oklch(0.720 0.175 55);
+    --accent-cta-hover: oklch(0.780 0.165 58);
     /* Dark-mode semantic values (I5) — kept byte-identical between this block
        and the explicit `:root[data-theme="dark"]` block below;
        `tokens.test.ts` asserts the two dark blocks stay identical. */
@@ -254,6 +325,10 @@
   --a-10: oklch(0.820 0.150 76);
   --a-11: oklch(0.845 0.130 78);
   --a-12: oklch(0.920 0.090 80);
+  /* Dark inverts the CTA: a bright fill with near-black text instead of a
+     dark fill with white text. See the light block for the rest. */
+  --accent-cta:       oklch(0.720 0.175 55);
+  --accent-cta-hover: oklch(0.780 0.165 58);
   /* Dark-mode semantic values (I5) — kept byte-identical between this block
      and the explicit `:root[data-theme="dark"]` block below;
      `tokens.test.ts` asserts the two dark blocks stay identical. */

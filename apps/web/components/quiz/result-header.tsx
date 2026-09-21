@@ -1,4 +1,5 @@
 import { copy, formatCopy, formatMark } from '@ayman/contracts';
+import { tenantSentence } from '@/lib/tenant-copy';
 import { Badge } from '@ayman/ui';
 
 export interface ResultHeaderProps {
@@ -115,15 +116,24 @@ export function ResultHeader({
         <div className="flex flex-col gap-1">
           {/* `text-fg`, not muted: this is the sentence the whole change is
               for, and a grey line under a big number gets skipped. */}
+          {/*
+            ⚠️ Both of the pending lines name the marker, and this is the
+            screen where that matters most: a student reading «باقي ٥٠ درجة
+            لسه عند مهندس أيمن بيصحّحها بنفسه» on another instructor's platform
+            has been handed a receipt for a paper the named person has never
+            seen. `notification-view.ts` reached the same conclusion about the
+            NOTIFICATION for this same mark and dropped the detail line; here
+            the sentence is the screen, so it is swapped rather than dropped.
+          */}
           <p className="text-fg">
-            {formatCopy(copy.quiz.pendingRest, { marks: formatMark(pendingOutOf) })}
+            {tenantSentence(formatCopy(copy.quiz.pendingRest, { marks: formatMark(pendingOutOf) }))}
           </p>
           <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
             {copy.quiz.pendingWillArrive}
           </p>
         </div>
       ) : needsGrading ? (
-        <p className="text-fg-muted">{copy.quiz.essayPending}</p>
+        <p className="text-fg-muted">{tenantSentence(copy.quiz.essayPending)}</p>
       ) : band ? (
         <p className="text-fg">{band}</p>
       ) : null}
