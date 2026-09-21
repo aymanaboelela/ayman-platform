@@ -395,38 +395,6 @@ export function BrandingForm({ defaultValues, assets }: BrandingFormProps) {
       />
 
       <SettingsField
-        name="landingLayout"
-        label={copy.admin.settings.landingLayout}
-        description={copy.admin.settings.landingLayoutHint}
-        issues={issues}
-        render={(controlProps) => (
-          <RadioGroup
-            {...controlProps}
-            value={form.watch('landingLayout') ?? defaultValues.landingLayout}
-            onValueChange={(value) =>
-              form.setValue('landingLayout', value as Branding['landingLayout'], {
-                shouldValidate: true,
-              })
-            }
-            aria-label={copy.admin.settings.landingLayout}
-          >
-            {LANDING_LAYOUTS.map((layout) => (
-              <label key={layout} className="flex items-start gap-3 py-1">
-                <RadioGroupItem value={layout} />
-                <LayoutPreview layout={layout} />
-                <span className="flex flex-col">
-                  <span className="text-fg">{LAYOUT_LABEL[layout].name}</span>
-                  <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
-                    {LAYOUT_LABEL[layout].hint}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </RadioGroup>
-        )}
-      />
-
-      <SettingsField
         name="radius"
         label={copy.admin.settings.radius}
         issues={issues}

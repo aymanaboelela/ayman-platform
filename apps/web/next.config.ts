@@ -30,9 +30,17 @@ const nextConfig: NextConfig = {
    * .webp">` versus `<HeroFallback>`). A structural mismatch makes React throw
    * the server subtree away and re-render from the client, so Ayman's
    * photograph would appear on somebody else's landing page a few hundred
-   * milliseconds after first paint. Three `'use client'` components reach
-   * `getBrandAsset`: `site-hero.tsx` (hero), `site-nav.tsx` (mark) and
-   * `year-tracks.tsx` (the three track posters).
+   * milliseconds after first paint. Three `'use client'` trees reach
+   * `getBrandAsset`: `site-hero.tsx` (hero), `year-tracks.tsx` (the cut-out,
+   * plus the three track posters through `track-card.tsx`) and
+   * `brand-lockup.tsx` (the mark, on all five signed-in surfaces).
+   *
+   * ⚠️ `site-nav.tsx` used to be on that list and no longer is — its two marks
+   * now arrive as an already-rendered node from `<SiteBrandSlot>`, a Server
+   * Component. That REMOVED a reader from the client bundle; it did not remove
+   * the requirement, because `brand-lockup.tsx` took its place and reaches
+   * further. Keep this list honest: it is the only written record of which
+   * bundles this `env` block is load-bearing for.
    *
    * `env` rather than renaming them `NEXT_PUBLIC_*`: the names are already
    * written into `docker-compose.yml`, the Dockerfile build args, every
