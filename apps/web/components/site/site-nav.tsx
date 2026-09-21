@@ -7,7 +7,6 @@ import { copy } from '@ayman/contracts/copy';
 import { ScrollTrigger } from '@/lib/gsap';
 import { tenantName } from '@/lib/tenant';
 import { useGsap } from '@/components/motion/use-gsap';
-import { MediaSlot } from '@/components/site/media-slot';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 /**
@@ -82,7 +81,23 @@ const SITE_NAME = tenantName(copy.site.name);
  * to sit over, so the route answers the question the DOM probe answers, one
  * render earlier and without needing JavaScript to have run at all.
  */
-export function SiteNav({ accountSlot }: { accountSlot: ReactNode }) {
+export function SiteNav({
+  accountSlot,
+  brandSlot,
+}: {
+  accountSlot: ReactNode;
+  /**
+   * The round mark and the wordmark, already rendered.
+   *
+   * ⚠️ A NODE, for the same reason `accountSlot` is one. This component is
+   * `'use client'`, so it cannot `await getBranding()` to find out whether the
+   * instructor uploaded a logo — and the two `<MediaSlot>` calls that used to
+   * sit here inline therefore had no way to be handed a key, which is why a
+   * second instructor's header showed the first letter of their name in a
+   * 36px circle no matter what they uploaded. See `<SiteBrandSlot>`.
+   */
+  brandSlot: ReactNode;
+}) {
   const ref = useRef<HTMLElement>(null);
   const pathname = usePathname();
   /** The only route that renders `<SiteHero>` — see the note above. */
@@ -140,19 +155,16 @@ export function SiteNav({ accountSlot }: { accountSlot: ReactNode }) {
     >
       <div className="site-nav__inner">
         <div className="site-nav__start">
+          {/*
+            The LINK stays here and its contents stream in. `aria-label` is the
+            reason the split lands on this boundary and not one element higher:
+            the label is the brand announced to a screen reader, it is resolved
+            at module load from `tenantName()`, and it must be in the very
+            first HTML this header emits rather than arriving with a settings
+            read that could be slow or could fail.
+          */}
           <Link href="/" className="site-nav__logo" aria-label={SITE_NAME}>
-            {/*
-              The portrait is decorative here, not informative: the wordmark
-              immediately after it states the name, and the Link already carries
-              an aria-label. An alt describing the photo would make a screen
-              reader announce the same brand twice, so it is empty by intent.
-
-              `sizes` is pinned to the rendered box — the default '100vw' would
-              have the browser pick a candidate for a full-width image and pull
-              the largest one for a 36px circle.
-            */}
-            <MediaSlot kind="mark" alt="" className="site-mark" sizes="36px" />
-            <MediaSlot kind="logo" alt={SITE_NAME} />
+            {brandSlot}
           </Link>
           <ThemeToggle />
         </div>

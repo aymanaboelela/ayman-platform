@@ -1,5 +1,3 @@
-import { copy } from './ar';
-
 /**
  * The substitution itself, with no opinion about which stack is running.
  *
@@ -23,10 +21,27 @@ import { copy } from './ar';
  * Nothing here reads `process.env`, which is the reason it CAN live in
  * `contracts`: the package is imported by scripts and by the edge, and a
  * module that decided the tenant would decide it at the wrong moment.
+ *
+ * ## ⚠️ AND NOTHING HERE IMPORTS ANYTHING, WHICH IS ALSO DELIBERATE
+ *
+ * The spellings are PASSED IN rather than read from `./ar`, even though this
+ * file sits next to it and the list has exactly one producer. The import cost
+ * a green CI run to learn: `package.json` publishes this module as raw
+ * TypeScript (`"./copy/tenant-sentence": "./src/copy/tenant-sentence.ts"`),
+ * and the loader that ends up reading it on the production server resolves
+ * relative specifiers the Node ESM way — no extension, no file. Every test
+ * passed, `tsc` passed, and `next start` died with
+ * «Cannot find module …/copy/ar imported from …/copy/tenant-sentence.ts»,
+ * which reads like a missing file rather than a missing `.js`.
+ *
+ * Both callers already import the copy table — they are the copy gates — so
+ * handing the forms over costs them a single argument, and this module keeps
+ * the one property that makes it safe to load from anywhere: it has nothing
+ * to resolve.
  */
 
 /**
- * Every spelling to look for, longest first.
+ * The spellings to look for, longest first.
  *
  * ⚠️ THE ORDER IS LOAD-BEARING, and the copy table's `nameForms` docblock
  * explains what each form is for. Sorting here rather than trusting the table
@@ -35,9 +50,9 @@ import { copy } from './ar';
  * «أيمن أبو العلا», which must be consumed before «أيمن», or a swap leaves a
  * fragment of the old name sitting in front of the new one.
  */
-export const INSTRUCTOR_NAME_FORMS: readonly string[] = [...copy.site.nameForms].sort(
-  (a, b) => b.length - a.length,
-);
+export function sortNameForms(forms: readonly string[]): readonly string[] {
+  return [...forms].sort((a, b) => b.length - a.length);
+}
 
 /**
  * One sentence with every known spelling of the instructor's name replaced.
@@ -54,9 +69,13 @@ export const INSTRUCTOR_NAME_FORMS: readonly string[] = [...copy.site.nameForms]
  * checks the swap against THE REAL STRINGS the call sites pass, the second
  * refuses to let a call site exist without passing through a gate at all.
  */
-export function swapInstructorName(sentence: string, replacement: string): string {
+export function swapInstructorName(
+  sentence: string,
+  replacement: string,
+  forms: readonly string[],
+): string {
   let out = sentence;
-  for (const form of INSTRUCTOR_NAME_FORMS) out = out.split(form).join(replacement);
+  for (const form of sortNameForms(forms)) out = out.split(form).join(replacement);
   return joinLam(out, replacement);
 }
 

@@ -466,6 +466,62 @@ describe('BoardInstructor — the empty catalogue', () => {
   });
 });
 
+describe('BoardInstructor — the instructor’s own photograph', () => {
+  /**
+   * `branding.portraitAssetId` has been on the write schema, in the database
+   * and resolved to a storage key by the API the whole time — and no preset
+   * read it, so an instructor who uploaded their own photograph and wired it
+   * into the slot got nothing at all. Measured on a live «اللوح» stack:
+   * `mohamed-adel-1.webp`, 914×1200, attached, and the landing page contained
+   * zero `<img>` elements.
+   *
+   * ⚠️ This is NOT the registry the guard below forbids. `lib/brand-assets.ts`
+   * is Ayman's photography; this is a file this deployment's own admin
+   * uploaded to their own media library — the same class of thing as the
+   * `logoDarkAssetId` `<BoardMark>` has drawn since the preset shipped.
+   */
+  it('draws the uploaded portrait in the identity band', async () => {
+    getBranding.mockResolvedValue(branding({ portraitKey: 'cc/adel.webp' }));
+
+    const { container } = render(await BoardInstructor({ level: 2 }));
+    const img = container.querySelector('.board-id__portrait img');
+
+    expect(img, 'a wired portrait must reach the page').toBeTruthy();
+    expect(img?.getAttribute('src')).toContain('cc/adel.webp');
+    /* The name is stated directly underneath — a described photo would
+       announce the same brand twice. */
+    expect(img?.getAttribute('alt')).toBe('');
+  });
+
+  /** The band's job is to say who is teaching, and it answers that on a stack
+   *  with no photography exactly as it did before: name, then a sentence. */
+  it('renders no image at all when nothing is uploaded', async () => {
+    const { container } = render(await BoardInstructor({ level: 2 }));
+
+    expect(container.querySelector('.board-id__portrait')).toBeNull();
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('.board-id__name')).toBeTruthy();
+  });
+
+  /**
+   * ⚠️ `about` DOES NOT INHERIT IT, and that is a decision and not an
+   * oversight — `board-about.tsx` says every pixel of that section is a word
+   * the tenant typed into /admin/home, and a biography block that silently
+   * grows a photograph is a block whose output no longer matches its form.
+   */
+  it('leaves the about block to the words the admin typed', async () => {
+    getBranding.mockResolvedValue(branding({ portraitKey: 'cc/adel.webp' }));
+
+    const page = await BoardLanding({
+      blocks: [block({ type: 'about', titleAr: 'مين أنا', body1Ar: 'سطر', body2Ar: '', roleAr: '', chipsAr: [] })],
+      honorBoard: [],
+    });
+    const { container } = render(sectionAt(page, 0));
+
+    expect(container.querySelector('img')).toBeNull();
+  });
+});
+
 describe('BoardHonors — the empty board', () => {
   /**
    * `<HonorBoardSection>` draws four outlined empty places, which is right for

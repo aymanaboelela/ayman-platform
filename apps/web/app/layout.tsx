@@ -5,6 +5,7 @@ import { mediaUrl, renderBrandingStyle } from '@ayman/ui/branding';
 import { plexArabic, plexMono } from '@/lib/fonts';
 import { getBranding } from '@/lib/settings';
 import { PREPAINT_SCRIPT } from '@/lib/security/prepaint-script';
+import { BrandMarkProvider } from '@/components/brand-mark-provider';
 import { MotionProvider } from '@/components/motion/motion-provider';
 import { RouteProgress } from '@/components/motion/route-progress';
 import { JsonLd } from '@/components/seo/json-ld';
@@ -198,7 +199,25 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         */}
         <NuqsAdapter>
           <MotionProvider>
-            <RouteProgress>{children}</RouteProgress>
+            {/*
+              The instructor's own uploaded mark, read ONCE here and readable
+              from every `<BrandLockup>` in the product.
+
+              It is read here because `branding` is already awaited three lines
+              up — for the inline branding `<style>` and the favicon — and
+              `getBranding()` is a `'use cache'` loader, so this costs nothing.
+              The alternative was plumbing a key through `(app)/layout.tsx`,
+              which is deliberately NOT `async`, into two client components.
+              See `components/brand-mark-provider.tsx`.
+
+              `logoDarkKey` first, matching the marketing nav and both landing
+              presets: the two slots are theme variants of one mark, and the
+              surfaces that render it — a 38px circle on a dark rail, on a dark
+              admin sidebar, on the dark auth panel — want the dark-ground one.
+            */}
+            <BrandMarkProvider markKey={branding.logoDarkKey ?? branding.logoLightKey}>
+              <RouteProgress>{children}</RouteProgress>
+            </BrandMarkProvider>
           </MotionProvider>
         </NuqsAdapter>
         {/*

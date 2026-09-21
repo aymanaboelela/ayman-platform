@@ -43,8 +43,16 @@ const DIR = import.meta.dirname;
 const WEB = join(DIR, '..', '..', '..', '..');
 const PRESETS_CSS = join(WEB, 'app', '(site)', 'styles', 'presets.css');
 
+/*
+ * ⚠️ `.test.ts` AND `.test.tsx`. The exclusion used to name only the first,
+ * which held for exactly as long as every test beside this one was a source
+ * scan. The moment a RENDER test landed here — `neon-instructor.test.tsx`,
+ * which must build a `BrandingRead` fixture and stub `next/image` — the guards
+ * below would have scanned it as preset source and reported a test's own
+ * imports as this preset's leaks.
+ */
 const sourceFiles = readdirSync(DIR)
-  .filter((name) => /\.tsx?$/.test(name) && !name.endsWith('.test.ts'))
+  .filter((name) => /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name))
   .map((name) => ({ name, text: readFileSync(join(DIR, name), 'utf8') }));
 
 const landing = readFileSync(join(DIR, 'neon-landing.tsx'), 'utf8');

@@ -1,6 +1,25 @@
+/*
+ * `'use client'`, and it is a formality rather than a change of nature.
+ *
+ * Four of the six call sites — `student-rail.tsx`, `student-topbar.tsx`
+ * (twice), `admin-header.tsx` — are already `'use client'`, so this component
+ * has always been compiled into the browser bundle there. The directive makes
+ * that true for the other two as well, which is what lets it read
+ * `useBrandMark()` instead of being handed a key by six separate callers, two
+ * of which sit under a layout that must not become `async`.
+ *
+ * Nothing it reads is server-only: `getBrandAsset` is gated on `TENANT_KEY`,
+ * which `next.config.ts` inlines into the client bundle exactly the way a
+ * `NEXT_PUBLIC_` variable is inlined — see the long note in
+ * `lib/brand-assets.ts` about the hole that closed.
+ */
+'use client';
+
 import Image from 'next/image';
 import { copy } from '@ayman/contracts/copy';
+import { mediaUrl } from '@ayman/ui/branding';
 import { getBrandAsset } from '@/lib/brand-assets';
+import { useBrandMark } from '@/components/brand-mark-provider';
 import { tenantName } from '@/lib/tenant';
 
 /**
@@ -10,8 +29,16 @@ import { tenantName } from '@/lib/tenant';
  * surface renders the brand through this one component (app header and its
  * mobile sheet, admin header, admin sidebar, both auth columns), so the mark
  * only ever changes here. The monogram is still the fallback, and still a
- * finished answer rather than a placeholder, for whenever the registry has no
- * `mark` entry.
+ * finished answer rather than a placeholder, for whenever neither the
+ * deployment's own uploaded logo nor the registry has a mark.
+ *
+ * ⚠️ «WHENEVER THE REGISTRY HAS NO ENTRY» USED TO BE THE ONLY CONDITION, and
+ * that sentence was measured wrong on every stack but his. `getBrandAsset`
+ * gates the `mark` with `aymanOnly()`, so on a second instructor's deployment
+ * the monogram was not a rare missing-file case — it was the DEFAULT render,
+ * on all five signed-in surfaces, permanently, no matter what that instructor
+ * uploaded to /admin/settings. The uploaded mark now fills it; see
+ * `components/brand-mark-provider.tsx` for why the key arrives ambiently.
  *
  * ⚠️ It is a CIRCLE here, matching the marketing nav, while the monogram
  * fallback keeps its 11px squircle. That is not an inconsistency: an accent
@@ -29,9 +56,20 @@ export function BrandLockup({
   tone = 'surface',
   showTagline = true,
   compact = false,
+  markKey,
 }: {
   tone?: 'surface' | 'ink';
   showTagline?: boolean;
+  /**
+   * Override the mark this lockup draws, instead of the one the app is
+   * deployed under.
+   *
+   * Nothing in the product passes it — the ambient read through
+   * `useBrandMark()` is the whole point, because six callers across three
+   * route groups would otherwise each have to remember. It exists for tests,
+   * which render this component with no provider above it.
+   */
+  markKey?: string | null;
   /**
    * Portrait only — the name and tagline are dropped entirely.
    *
@@ -49,7 +87,23 @@ export function BrandLockup({
    */
   compact?: boolean;
 }) {
+  /*
+   * صورة المدرّس الأول، وملفات أيمن بعدها — نفس ترتيب `<MediaSlot>` بالحرف.
+   *
+   * على ستاك أيمن المفتاحين دول `null` في `site_settings` (اتشافوا على
+   * البرودكشن)، فبيسقط على `getBrandAsset('mark')` — صورته — وما بيتغيّرش عنده
+   * ولا بايت. وعلى أي ستاك تاني `getBrandAsset` بيرجّع `undefined` أصلًا
+   * (متجيّت بـ`aymanOnly`)، فاللي كان بيترسم هو المونوجرام `</>` في خمس شاشات
+   * بعد الدخول: توب‌بار الطالب، السهم الجانبي، هيدر الأدمن، سايدبار الأدمن،
+   * وعمود الدخول.
+   *
+   * والترتيب ده مقصود كمان لو أيمن رفع لوجو بكرة: الرفع فعل صريح، والمفروض
+   * يكسب على الملف المكتوب في الكود.
+   */
+  const ambientMark = useBrandMark();
+  const uploaded = markKey === undefined ? ambientMark : markKey;
   const mark = getBrandAsset('mark');
+  const hasImage = Boolean(uploaded) || Boolean(mark);
 
   return (
     <span className="brand" data-tone={tone} data-compact={compact ? 'true' : undefined}>
@@ -60,10 +114,20 @@ export function BrandLockup({
         twice.
       */}
       <span
-        className={mark ? 'brand__mark brand__mark--photo' : 'brand__mark'}
+        className={hasImage ? 'brand__mark brand__mark--photo' : 'brand__mark'}
         aria-hidden="true"
       >
-        {mark ? (
+        {uploaded ? (
+          /*
+            38×38 declared, which is what `.brand__mark--photo img` renders and
+            what `sizes` already said. Square because this box is square: the
+            intrinsic ratio of an uploaded file is not in the settings payload
+            (the same fact `<BoardMark>` and `<CourseCover>` are both written
+            around), and `object-fit: cover` behind `overflow: hidden` performs
+            the circular crop on whatever shape arrives.
+          */
+          <Image src={mediaUrl(uploaded)} width={38} height={38} alt="" sizes="38px" />
+        ) : mark ? (
           <Image src={mark.src} width={mark.width} height={mark.height} alt="" sizes="38px" />
         ) : (
           <>&lt;/&gt;</>

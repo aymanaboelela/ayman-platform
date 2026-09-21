@@ -59,9 +59,24 @@ export type BrandAsset = {
 /**
  * Intrinsic aspect ratios the fallbacks reserve, so a later photo swap does not
  * move anything on the page. Chosen from the reference layout's real boxes.
+ *
+ * ⚠️ This table stopped being documentation the day `<MediaSlot>` started
+ * reading it. It was exported and consumed by NOTHING, so a stale number here
+ * cost nothing — and now it is the `width`/`height` pair every uploaded
+ * instructor photo is declared at, which is what `next/image` reserves space
+ * from. A wrong ratio here is a jump on first paint, not a comment.
  */
 export const BRAND_ASSET_RATIO: Record<BrandAssetKind, number> = {
-  hero: 4 / 5,
+  /**
+   * 3:2, not the 4:5 this claimed while nothing read it.
+   *
+   * 4:5 was measured off a hero whose photograph occupied the inline-start
+   * HALF. That hero is gone: the image is FULL BLEED behind the copy now —
+   * `.hero__media` is `position: absolute; inset: 0` — and both the registered
+   * composite (1536×1024) and every hero an instructor has actually uploaded
+   * (1200×800, measured on two stacks) are 3:2.
+   */
+  hero: 3 / 2,
   cutout: 3 / 4,
   /**
    * 3:4, not the 4:5 this used to reserve — the registered portrait is a phone

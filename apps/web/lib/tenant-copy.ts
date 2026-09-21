@@ -80,7 +80,7 @@ import { IS_AYMAN, tenantName } from '@/lib/tenant';
  */
 export function tenantSentence(sentence: string): string {
   if (IS_AYMAN) return sentence;
-  return swapInstructorName(sentence, tenantName(copy.site.name));
+  return swapInstructorName(sentence, tenantName(copy.site.name), copy.site.nameForms);
 }
 
 /**

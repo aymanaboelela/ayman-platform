@@ -488,6 +488,72 @@ export function BrandingForm({ defaultValues, assets }: BrandingFormProps) {
         )}
       />
 
+      {/*
+        ⚠️ THE THREE INSTRUCTOR PHOTOGRAPHS, AND THIS FORM IS WHY THEY WERE
+        INVISIBLE.
+
+        `heroAssetId`, `portraitAssetId` and `loginAssetId` have been on
+        `BrandingSchema` — stored, validated, resolved to storage keys by the
+        API and read by `<SiteHero>`, `<AboutInstructor>` and
+        `<AuthShowcase>` — with no control anywhere in the dashboard. The only
+        way an instructor's own photographs ever reached their own site was
+        somebody else sending a `PATCH` by hand, which is not a feature, and
+        which meant every one of those screens fell back to a stand-in for as
+        long as nobody did.
+
+        They sit after the logo and favicon because those two are the site's
+        identity and these three are its photography; and each carries a hint
+        saying WHERE it lands, because «صورة المدرّس» describes all three and
+        they are neither the same shape nor interchangeable.
+      */}
+      <SettingsField
+        name="heroAssetId"
+        label={copy.admin.settings.heroImage}
+        description={copy.admin.settings.heroImageHint}
+        issues={issues}
+        render={(controlProps) => (
+          <AssetPicker
+            {...controlProps}
+            slot="hero"
+            assets={assets}
+            value={form.watch('heroAssetId') ?? null}
+            onChange={(value) => form.setValue('heroAssetId', value, { shouldValidate: true })}
+          />
+        )}
+      />
+
+      <SettingsField
+        name="portraitAssetId"
+        label={copy.admin.settings.portraitImage}
+        description={copy.admin.settings.portraitImageHint}
+        issues={issues}
+        render={(controlProps) => (
+          <AssetPicker
+            {...controlProps}
+            slot="portrait"
+            assets={assets}
+            value={form.watch('portraitAssetId') ?? null}
+            onChange={(value) => form.setValue('portraitAssetId', value, { shouldValidate: true })}
+          />
+        )}
+      />
+
+      <SettingsField
+        name="loginAssetId"
+        label={copy.admin.settings.loginImage}
+        description={copy.admin.settings.loginImageHint}
+        issues={issues}
+        render={(controlProps) => (
+          <AssetPicker
+            {...controlProps}
+            slot="login"
+            assets={assets}
+            value={form.watch('loginAssetId') ?? null}
+            onChange={(value) => form.setValue('loginAssetId', value, { shouldValidate: true })}
+          />
+        )}
+      />
+
       <div>
         <Button type="submit" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting ? copy.admin.common.saving : copy.admin.common.save}

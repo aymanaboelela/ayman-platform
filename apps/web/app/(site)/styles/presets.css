@@ -1025,6 +1025,28 @@
   text-align: center;
 }
 
+/* صورة المدرّس، فوق اسمه — ١٢rem × ١٦rem = ١٩٢×٢٥٦، يعني ٣:٤ بالحرف.
+
+   `cover` هنا تأمين مش قصّ: الملفات المرفوعة نفسها ٣:٤. والـ`.board-id`
+   عمود متمركز، فالصورة بتقعد في النص زي كل حاجة تانية في البريست ده.
+
+   الحواف `--r-lg` مش `--r-full`: دايرة كانت هتقصّ مربع من نص بورتريه واقف،
+   واللي في النص مش الوش بالضرورة. */
+[data-preset='board'] .board-id__portrait {
+  display: block;
+  inline-size: 12rem;
+  block-size: 16rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--board-line);
+  overflow: hidden;
+}
+
+[data-preset='board'] .board-id__portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 [data-preset='board'] .board-id__name {
   margin: 0;
   font-size: clamp(1.5rem, 3.6vw, 2.25rem);
@@ -2698,6 +2720,32 @@
   height: 100%;
   object-fit: contain;
   padding: 0.625rem;
+}
+
+/* صورة المدرّس، لما يكون رافع واحدة — بتقعد مكان تايل الـ٨٨ بالظبط.
+
+   ١٠rem × ١٣.٣٣٣rem = ١٦٠×٢١٣، يعني ٣:٤ بالحرف، فالـ`cover` هنا تأمين مش
+   قصّ: الملفات المرفوعة نفسها ٣:٤. `flex: none` عشان `.neon-who__body`
+   فليكس بـ`flex-wrap` — الصورة تفضل بمقاسها والنص ينزل تحتها على الموبايل
+   بدل ما الاتنين يتضغطوا.
+
+   مفيش `padding` هنا — ده الفرق بين صورة وعلامة. تايل اللوجو جوّاه هامش
+   عشان الرسمة تتنفّس؛ البورتريه بيملا صندوقه. */
+[data-preset='neon'] .neon-who__portrait {
+  display: block;
+  flex: none;
+  inline-size: 10rem;
+  block-size: 13.333rem;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklch, var(--neon-glow), transparent 62%);
+  background-color: color-mix(in oklch, var(--neon-deep), transparent 35%);
+  overflow: hidden;
+}
+
+[data-preset='neon'] .neon-who__portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* `flex: 1 1 16rem` with `min-width: 0` — the column wraps under the mark on a

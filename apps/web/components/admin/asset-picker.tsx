@@ -33,6 +33,25 @@ const SLOT_ASPECT = {
   favicon: 1,
   share: 1.91,
   logo: 'source',
+  /**
+   * The three instructor photographs, and each one's number is the box the
+   * page actually reserves for it.
+   *
+   * `portrait` is 3:4 because that is what every surface that draws it is
+   * built at — `BRAND_ASSET_RATIO.portrait`, `.about__portrait` on classic,
+   * `.neon-who__portrait` and `.board-id__portrait` on the two presets. A
+   * cropper offering any other shape here would hand those boxes a file they
+   * have to trim, on the one image where the subject's head is the thing being
+   * trimmed.
+   *
+   * `hero` and `login` are `'source'` — full-bleed backgrounds behind
+   * `object-fit: cover`, so the crop that matters is done by the viewport and
+   * not by us. Forcing a ratio here would throw away pixels the widest
+   * breakpoint would have used.
+   */
+  hero: 'source',
+  portrait: 3 / 4,
+  login: 'source',
 } as const;
 
 export type AssetSlot = keyof typeof SLOT_ASPECT;

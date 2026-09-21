@@ -8,6 +8,7 @@ import { BlankPageProbe } from '@/components/site/blank-page-probe';
 import { SplashCursorMount } from '@/components/site/splash-cursor-mount';
 import { SiteNav } from '@/components/site/site-nav';
 import { SiteAccountSlot, SiteAccountSlotFallback } from '@/components/site/site-account-slot';
+import { SiteBrandSlot, SiteBrandSlotFallback } from '@/components/site/site-brand-slot';
 import { SiteFooter } from '@/components/site/site-footer';
 import { SpecularButtons } from '@/components/site/specular-buttons';
 import './styles/theme.css';
@@ -125,6 +126,21 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
         accountSlot={
           <Suspense fallback={<SiteAccountSlotFallback />}>
             <SiteAccountSlot />
+          </Suspense>
+        }
+        /*
+          The instructor's own mark, on the same contract as `accountSlot`
+          above and for the same reason: this layout is deliberately not
+          `async` (see the docblock), and `<SiteNav>` is `'use client'`, so a
+          settings read can only reach the header as an already-rendered node.
+
+          Its fallback is not a skeleton — it is this header's previous markup
+          exactly, so nothing shifts when the boundary resolves. See
+          `<SiteBrandSlotFallback>`.
+        */
+        brandSlot={
+          <Suspense fallback={<SiteBrandSlotFallback />}>
+            <SiteBrandSlot />
           </Suspense>
         }
       />
