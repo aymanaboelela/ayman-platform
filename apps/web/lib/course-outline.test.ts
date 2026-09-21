@@ -9,8 +9,16 @@ import {
   nestedQuizIds,
 } from './course-outline';
 
-function lesson(id: string, kind: PathNode['kind'] = 'video') {
-  return { id, title: id, kind, estimatedSeconds: 0, isFreePreview: false, durationSeconds: 600 };
+function lesson(id: string, kind: PathNode['kind'] = 'video', monthIds: string[] = []) {
+  return {
+    id,
+    title: id,
+    kind,
+    estimatedSeconds: 0,
+    isFreePreview: false,
+    durationSeconds: 600,
+    monthIds,
+  };
 }
 
 function course(sections: Array<{ id: string; lessons: ReturnType<typeof lesson>[] }>) {
@@ -31,7 +39,17 @@ function course(sections: Array<{ id: string; lessons: ReturnType<typeof lesson>
     updatedAt: '2026-01-01T00:00:00.000Z',
     description: null,
     sections: sections.map((s) => ({ ...s, title: s.id, summary: null })),
+    months: [] as CatalogCourseDetail['months'],
   } as CatalogCourseDetail;
+}
+
+/** A course that sells by curriculum month — `months` carries OPEN months only,
+ *  exactly as `CatalogService` serialises them. */
+function courseWithMonths(
+  sections: Array<{ id: string; lessons: ReturnType<typeof lesson>[] }>,
+  months: CatalogCourseDetail['months'],
+) {
+  return { ...course(sections), months } as CatalogCourseDetail;
 }
 
 function node(
@@ -281,6 +299,50 @@ describe('buildCourseOutline — a quiz belongs to its lecture', () => {
     });
 
     expect(outline.sections[0]!.entries[0]!.quizzes[0]!.state).toBe('failed');
+  });
+});
+
+/**
+ * Which month a padlock may NAME. Three different "no" answers collapse to one
+ * `null` on purpose — see `OutlineLesson.month`.
+ */
+describe('buildCourseOutline — the month a padlock can name', () => {
+  const months = [
+    { id: 'm2', monthIndex: 2, title: 'شهر ٢', lessonCount: 4, priceCents: 15000 },
+    { id: 'm3', monthIndex: 3, title: 'شهر ٣', lessonCount: 5, priceCents: 15000 },
+  ] as CatalogCourseDetail['months'];
+
+  const monthOf = (lessons: ReturnType<typeof lesson>[]) =>
+    buildCourseOutline({
+      course: courseWithMonths([{ id: 's1', lessons }], months),
+      path: null,
+    }).sections[0]!.entries[0]!.lecture.month;
+
+  it('names the month when a lecture is in exactly one the course offers', () => {
+    expect(monthOf([lesson('l1', 'video', ['m3'])])).toEqual({
+      id: 'm3',
+      monthIndex: 3,
+      title: 'شهر ٣',
+      lessonCount: 5,
+      priceCents: 15000,
+    });
+  });
+
+  it('names none when the lecture carries no month', () => {
+    expect(monthOf([lesson('l1')])).toBeNull();
+  });
+
+  it('names none when the lecture is in SEVERAL — «اداها كمان لشهر ٣»', () => {
+    // Picking one of them would be picking which month to sell on the
+    // instructor's behalf.
+    expect(monthOf([lesson('l1', 'video', ['m2', 'm3'])])).toBeNull();
+  });
+
+  it('names none when the month is closed for subscription', () => {
+    // `CatalogCourseDetail.months` carries OPEN months only, so a closed one
+    // simply does not resolve — and a CTA pointing at a month nobody can buy
+    // is worse than the vaguer sentence.
+    expect(monthOf([lesson('l1', 'video', ['m9'])])).toBeNull();
   });
 });
 

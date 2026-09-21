@@ -12,8 +12,19 @@ import type { PathCourse, PathNode } from '@ayman/contracts/path';
  * This file used to carry `blockerFor`, which named the lesson standing in
  * front of a locked one. It has been deleted along with the sequential chain
  * it served (`gate-rule.ts`): every lecture and every lecture quiz opens the
- * day a student enrols, and the exam — the one row `resolveGate` can still
- * close — is blocked by the whole course rather than by any nameable lesson.
+ * day a student enrols, and the exam is blocked by the whole course rather
+ * than by any nameable lesson.
+ *
+ * ⚠️ The exam is no longer the ONLY row `resolveGate` can close, and this
+ * paragraph said it was. A course whose instructor has configured curriculum
+ * months shuts every lecture in a month the student did not buy — `gate-rule`
+ * rule 2, ahead of the exam rule. `gate: 'locked'` on a non-exam row therefore
+ * means «شهر تاني», and `course-outline.tsx` draws it with its own padlock.
+ *
+ * Nothing here can tell the two apart beyond `isExam`, and nothing can NAME
+ * the month: `gate` arrives without a reason, `CatalogLessonSchema` carries no
+ * `monthIds`, and `PathNodeSchema` carries none either. See
+ * `month-locked-dialog.tsx` for the field that would close both gaps at once.
  *
  * What the padlock was doing, besides refusing, was telling the student where
  * they were: a run of locks with one open row at the front answered "where am
@@ -47,6 +58,22 @@ export interface OutlineLesson {
    * perform — which is exactly what «أنا أصلاً ممتحن» was about.
    */
   state: string | null;
+  /**
+   * The curriculum month to NAME on this lecture's padlock, or `null`.
+   *
+   * `null` in three different situations that all lead to the same sentence
+   * («المحاضرة دي في شهر مش داخل في اشتراكك»), and that is why they are not
+   * told apart: the course sells no months, the lecture is tagged with none,
+   * or it is tagged with more than one — «اداها كمان لشهر ٣» is a real thing
+   * the instructor does, and picking one of several to sell would be picking
+   * for him.
+   *
+   * A month the course does not OFFER — closed for subscription — also lands
+   * here as `null`, which is the honest outcome: `CatalogCourseDetail.months`
+   * carries only open months, and naming a month a student cannot buy is a CTA
+   * that goes nowhere.
+   */
+  month: { id: string; title: string; lessonCount: number } | null;
 }
 
 /**
@@ -301,6 +328,7 @@ export function buildCourseOutline({
 }): CourseOutline {
   const nodes = path?.nodes ?? [];
   const byId = new Map(nodes.map((node) => [node.id, node]));
+  const monthsById = new Map(course.months.map((month) => [month.id, month]));
 
   /**
    * ⚠️ `index` counts LECTURES, and is incremented only for them.
@@ -326,6 +354,13 @@ export function buildCourseOutline({
       gate,
       index,
       state: node?.state ?? null,
+      // Exactly one, and it has to be one the course still offers — see the
+      // field's own note for why the other cases are deliberately the same
+      // answer rather than four different sentences.
+      month:
+        lesson.monthIds.length === 1
+          ? (monthsById.get(lesson.monthIds[0] as string) ?? null)
+          : null,
     };
   };
 

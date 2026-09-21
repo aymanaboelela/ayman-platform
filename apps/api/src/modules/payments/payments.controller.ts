@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Post, UploadedFile, UseInterceptors, UsePipes } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Post, UploadedFile, UseInterceptors, UsePipes } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { memoryStorage } from 'multer';
@@ -52,5 +52,27 @@ export class PaymentsController {
   @Get('submissions/me')
   listMine(@CurrentUser() user: AuthenticatedUser): Promise<PaymentSubmission[]> {
     return this.payments.listMine(user.id);
+  }
+
+  /**
+   * «الشهور اللي معاه خلاص» — which curriculum months of this course the
+   * student can already open, so the checkout can disable those cards
+   * («معاه اشتراك خلاص») instead of taking money for them twice.
+   *
+   * Under `payment:submit` and not a catalog permission: it answers a
+   * question about THIS student's own purchases, which is exactly what that
+   * self-scoped permission covers — and `user.id` comes off the session here,
+   * never the URL, same as every other method on this controller.
+   *
+   * `ParseUUIDPipe` so a junk `courseId` is a 400 at the door rather than a
+   * Prisma error from inside the service.
+   */
+  @RequirePermission('payment:submit')
+  @Get('courses/:courseId/months/mine')
+  ownedMonths(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('courseId', ParseUUIDPipe) courseId: string,
+  ): Promise<{ ownedMonthIds: string[] }> {
+    return this.payments.listOwnedMonths(user.id, courseId);
   }
 }

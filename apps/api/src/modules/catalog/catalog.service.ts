@@ -227,6 +227,9 @@ export class CatalogService {
                 isFreePreview: true,
                 forGeneral: true,
                 forLanguages: true,
+                // Which curriculum months open this lecture — see
+                // `CatalogLessonSchema.monthIds` for why this is public.
+                months: { select: { monthId: true } },
                 // `durationSeconds` only. `externalId` is NOT selected — see
                 // the serializer below and `CatalogLessonSchema`.
                 video: { select: { durationSeconds: true } },
@@ -321,6 +324,7 @@ export class CatalogService {
           isFreePreview: lesson.isFreePreview,
           forGeneral: lesson.forGeneral,
           forLanguages: lesson.forLanguages,
+          monthIds: lesson.months.map((row) => row.monthId),
           // ⚠️ No video id, for ANY lesson — free preview included.
           //
           // This route is `@Public()`. It used to publish `externalId` for

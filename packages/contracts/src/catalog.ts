@@ -45,6 +45,21 @@ export const CatalogLessonSchema = z.object({
    */
   forGeneral: z.boolean(),
   forLanguages: z.boolean(),
+  /**
+   * «المحاضرة دي تابعة لشهر كام» — the curriculum months that open this
+   * lecture, as ids into this course's own `months` list.
+   *
+   * PUBLIC, and in the same class as `forGeneral` one line up: it is course
+   * STRUCTURE, not a fact about the student looking at it, so it costs the
+   * cached document nothing and unlocks nothing. What it buys is the only
+   * thing that lets a padlock say WHICH month — without it the locked-lecture
+   * dialog can only say «شهر مش داخل في اشتراكك», which names nothing to buy.
+   *
+   * Empty on every lesson of a course with no months, and a real state even on
+   * one that has them: an untagged lecture reaches term and yearly subscribers
+   * and no monthly one.
+   */
+  monthIds: z.array(z.uuid()),
 });
 
 export const CatalogSectionSchema = z.object({

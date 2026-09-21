@@ -288,6 +288,28 @@ async function resolveEnrolledCourseRedirect(request: NextRequest): Promise<URL 
   const slug = courseSlugFromPath(request.nextUrl.pathname);
   if (!slug || !hasSessionCookie(request)) return null;
 
+  /*
+   * ⚠️ «عايز أشتري شهر تاني» — the one case where a student WITH live access
+   * still needs the public course page.
+   *
+   * `accessActive` below is true for a student who owns «شهر ٢» and nothing
+   * else, because `courseAccessScopes` counts a `course_month` grant as access
+   * to the course (it has to — otherwise that student could not enrol, and
+   * their dashboard would lose the course). So the padlock on a «شهر ٣»
+   * lecture offers «الاشتراك في الشهر ده», the link goes to `/courses/:slug`,
+   * and this redirect returns them to the page they pressed it from. A dead
+   * control, and the same failure `exam-locked-dialog.tsx` was rewritten over.
+   *
+   * The `?month=` parameter is what tells the two apart. Typing the course URL
+   * is still "take me to my library"; arriving with a month named is a
+   * deliberate request for the checkout, and it is the only thing that carries
+   * one — the padlock's CTA puts it there and the subscribe panel preselects
+   * from it. Matched on presence, not value: a wrong id renders the ordinary
+   * picker, which is harmless, and validating it here would mean this proxy
+   * needs to know what the course sells.
+   */
+  if (request.nextUrl.searchParams.has('month')) return null;
+
   const cookie = request.headers.get('cookie');
   try {
     const response = await fetch(`${API_ORIGIN}/api/enrollments`, {

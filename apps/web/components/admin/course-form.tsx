@@ -60,7 +60,10 @@ export type CourseDefaults = {
   contentComplete: boolean;
   /** EGP cents — `null` means that plan is not for sale on this course. */
   monthlyPriceCents: number | null;
-  quarterlyPriceCents: number | null;
+  /* No `quarterlyPriceCents`. «٣ شهور» is off the shelf: the API refuses a
+     non-null value and this form has no field for it, so a default it could
+     never render would only invite someone to add one back. The column and its
+     history are still read by the finance screens. */
   yearlyPriceCents: number | null;
   /** الكتاب الورقي — `null` means this course has no book to order. Both
    *  set or both `null`, never one alone — see `courses_book_needs_price_
@@ -78,6 +81,18 @@ type Props = {
    * `ActionResult`-returning update action.
    */
   action: (formData: FormData) => unknown;
+  /**
+   * The course has «شهور المنهج» configured, so the one monthly price buys ONE
+   * of them rather than thirty days of everything — `priceMonthlyPerMonth`
+   * under the field says so.
+   *
+   * ANY month, open or closed: closing every month takes the plan off sale, it
+   * does not put the old rolling window back. `CourseMonthService` and
+   * `PaymentsService.submit` both key on the same "has any month" test, and a
+   * third reading of it on this screen is how a price ends up meaning two
+   * different things on two pages.
+   */
+  sellsByMonth?: boolean;
   /**
    * `create` keeps an explicit «إضافة» button: there is no course to save into
    * until it is pressed, so autosaving is not merely unnecessary, it is
@@ -132,7 +147,6 @@ type Draft = {
    * sends.
    */
   monthlyPrice: string;
-  quarterlyPrice: string;
   yearlyPrice: string;
   /** `''` is «مفيش كتاب لهذا الكورس». Trimmed to `null` on the way out,
    *  same convention as `emphasisNote`. */
@@ -171,7 +185,6 @@ function formDataOf(draft: Draft): FormData {
   data.set('coverKey', draft.coverKey ?? '');
   data.set('stream', draft.stream);
   const monthlyPriceCents = priceCentsOf(draft.monthlyPrice);
-  const quarterlyPriceCents = priceCentsOf(draft.quarterlyPrice);
   const yearlyPriceCents = priceCentsOf(draft.yearlyPrice);
   // The hidden-false convention `readRequiresGrant` expects: an unchecked box
   // submits nothing on a real form, so the pair has to be explicit here.
@@ -180,14 +193,14 @@ function formDataOf(draft: Draft): FormData {
   // the box — `CourseService.update` enforces the same rule server-side
   // (`courses_priced_requires_grant`), so sending anything else here would
   // only earn a 400 the checkbox never explained.
-  const closed =
-    draft.requiresGrant ||
-    monthlyPriceCents !== null ||
-    quarterlyPriceCents !== null ||
-    yearlyPriceCents !== null;
+  // `quarterlyPriceCents` is not in this test any more, and it does not need
+  // to be: the migration nulled the column on every course, so it can no
+  // longer be the only price a course carries.
+  const closed = draft.requiresGrant || monthlyPriceCents !== null || yearlyPriceCents !== null;
   data.set('requiresGrant', closed ? 'true' : 'false');
   data.set('monthlyPriceCents', monthlyPriceCents === null ? '' : String(monthlyPriceCents));
-  data.set('quarterlyPriceCents', quarterlyPriceCents === null ? '' : String(quarterlyPriceCents));
+  // No `quarterlyPriceCents` key at all — `createCourseAction` reads none, and
+  // an absent key on the PATCH is what leaves a past price where it is.
   data.set('yearlyPriceCents', yearlyPriceCents === null ? '' : String(yearlyPriceCents));
   // Both set or both blank — a title with no price (or a price with no
   // title) trips `courses_book_needs_price_and_title` server-side, so an
@@ -239,7 +252,14 @@ function formDataOf(draft: Draft): FormData {
  * The editor now holds one draft and writes it on change. Nothing to reset,
  * nothing to press twice.
  */
-export function CourseForm({ taxonomy, defaults, action, mode = 'create', bookSlot }: Props) {
+export function CourseForm({
+  taxonomy,
+  defaults,
+  action,
+  mode = 'create',
+  bookSlot,
+  sellsByMonth = false,
+}: Props) {
   const [draft, setDraft] = useState<Draft>(() => ({
     title: defaults?.title ?? '',
     slug: defaults?.slug ?? '',
@@ -260,8 +280,6 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create', bookSl
     contentComplete: defaults?.contentComplete ?? false,
     monthlyPrice:
       defaults?.monthlyPriceCents != null ? String(defaults.monthlyPriceCents / 100) : '',
-    quarterlyPrice:
-      defaults?.quarterlyPriceCents != null ? String(defaults.quarterlyPriceCents / 100) : '',
     yearlyPrice: defaults?.yearlyPriceCents != null ? String(defaults.yearlyPriceCents / 100) : '',
     bookTitle: defaults?.bookTitle ?? '',
     bookPrice: defaults?.bookPriceCents != null ? String(defaults.bookPriceCents / 100) : '',
@@ -561,7 +579,13 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create', bookSl
         title={copy.admin.course.sectionPricing}
         note={copy.admin.course.sectionPricingNote}
       >
-        <div className="grid gap-4 sm:grid-cols-3">
+        {/* TWO plans, not three. «٣ شهور» is off the shelf — the instructor took
+            it off — and the field is gone rather than disabled: a disabled box
+            still reads as a plan that exists, and the API now answers 400 to
+            any value in it. Every PAST quarterly subscription keeps working and
+            keeps being listed; see `copy.admin.course.priceQuarterly`, which is
+            still the label those rows are rendered with. */}
+        <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="monthlyPrice">{copy.admin.course.priceMonthly}</Label>
             <Input
@@ -572,17 +596,14 @@ export function CourseForm({ taxonomy, defaults, action, mode = 'create', bookSl
               value={draft.monthlyPrice}
               onChange={(event) => update({ monthlyPrice: event.target.value })}
             />
-          </div>
-          <div>
-            <Label htmlFor="quarterlyPrice">{copy.admin.course.priceQuarterly}</Label>
-            <Input
-              id="quarterlyPrice"
-              dir="ltr"
-              inputMode="decimal"
-              placeholder={copy.admin.course.priceNotForSale}
-              value={draft.quarterlyPrice}
-              onChange={(event) => update({ quarterlyPrice: event.target.value })}
-            />
+            {/* Under the field, not in `priceHint` at the bottom of the block:
+                it is true of this one input and false of the other, and a
+                course that does not sell by month must not read it. */}
+            {sellsByMonth ? (
+              <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+                {copy.admin.course.priceMonthlyPerMonth}
+              </p>
+            ) : null}
           </div>
           <div>
             <Label htmlFor="yearlyPrice">{copy.admin.course.priceYearly}</Label>

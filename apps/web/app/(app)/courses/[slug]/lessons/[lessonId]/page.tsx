@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
-import { CourseOutlineSchema, LessonPlayerSchema } from '@ayman/contracts';
+import { CourseOutlineSchema, LessonPlayerSchema, type CourseOutline } from '@ayman/contracts';
 import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
@@ -34,33 +34,59 @@ function nullOn404(error: unknown): null {
 }
 
 /**
- * The lesson-body fetch's OWN 404 handler, plus a 403 branch `nullOn404`
- * does not have.
+ * A 403 from the player, REMEMBERED rather than acted on where it lands.
  *
- * A 403 here is new: `LessonAccessService.require()` now re-checks the live
- * `AccessGrant` behind this enrollment, not just the enrollment row's status,
- * so an expired/revoked subscription throws instead of silently continuing to
- * serve the lesson. That is a DIFFERENT situation from "not found" or
- * "locked by progression" — this student was already inside the course and
- * lost access — so it gets its own answer rather than falling through to the
- * generic `(app)/error.tsx` boundary or the progression-lock redirect below.
+ * This used to redirect to `/courses/:slug` from inside the `.catch`, on one
+ * reading of a 403: `LessonAccessService.require()` re-checks the live
+ * `AccessGrant` behind the enrollment, so an expired or revoked subscription
+ * throws instead of silently serving the lesson, and the public course page is
+ * the only page that sells — «ابدأ الكورس» there re-runs
+ * `EntitlementService.enroll`, throws the same 403, and `CourseStartButton`
+ * turns it into the subscribe modal.
  *
- * The public course page is where that answer already lives: clicking
- * «ابدأ الكورس» there re-runs `EntitlementService.enroll`, which throws this
- * SAME 403 and is what `CourseStartButton` turns into the subscribe modal —
- * for EVERY 403 now, not only a priced one. That branch used to fall back to
- * `copy.course.lockedError` for a course its cached props said was free, which
- * was wrong for any course priced in the preceding hour; the panel reads the
- * live price itself instead. Sending the student back there reuses that
- * handling rather than building a second copy of it on this page.
+ * That reading is now one of TWO. `requireEntitled` also throws 403
+ * `needs_month_grant` for a lecture in a curriculum month this student did not
+ * buy — a student whose subscription is perfectly live, who owns other months
+ * of this very course, and for whom «the course you were in is gone, here is
+ * the sales page» is simply false. Worse, it does not even land: `proxy.ts`
+ * 307s `/courses/:slug` back to `/library/:slug` for any enrollment with live
+ * access, and a month grant is live access.
+ *
+ * So the status is carried out of the `catch` and answered below, once the
+ * outline — which is fetched in the same breath and knows this student's real
+ * gate on every row — has arrived.
  */
-function redirectOnLapsedAccess(slug: string) {
-  return (error: unknown): null => {
-    if (error instanceof ApiRequestError && error.status === 403) {
-      redirect(`/courses/${encodeURIComponent(slug)}`);
-    }
-    return nullOn404(error);
-  };
+const FORBIDDEN = 'forbidden';
+
+function forbiddenOn403(error: unknown): typeof FORBIDDEN | null {
+  if (error instanceof ApiRequestError && error.status === 403) return FORBIDDEN;
+  return nullOn404(error);
+}
+
+/**
+ * Does this student hold SOME of this course and not this lesson — or none of
+ * it at all?
+ *
+ * The honest version of this question is the 403's own `reason`, and it is not
+ * readable here: `apiGetAuthed` throws `ApiRequestError(status, path)` and
+ * drops the body (only `apiPost` keeps one). So it is answered from the
+ * outline instead, which is the same `resolveGate` run the refusal came from:
+ * this lesson drawn `locked` while something else in the course is not means
+ * the student demonstrably owns part of the course — a month lock.
+ *
+ * ⚠️ The `some open` half is load-bearing, not a tidiness check. A student
+ * whose subscription has LAPSED on a month-selling course also has every
+ * lesson locked (`resolveMonthSlice` unions live grants and finds none), and
+ * sending that student to `/library/:slug` would put the checkout back outside
+ * the loop `EnrollmentService.listOwn`'s own note describes — «الطالب اللي
+ * اشتراكه خلص مش قادر يدفع». Everything locked → they need the sales page.
+ */
+function ownsPartOfCourse(outline: CourseOutline, lessonId: string): boolean {
+  const lessons = outline.sections.flatMap((section) => section.lessons);
+  return (
+    lessons.some((lesson) => lesson.id === lessonId && lesson.gate === 'locked') &&
+    lessons.some((lesson) => lesson.id !== lessonId && lesson.gate !== 'locked')
+  );
 }
 
 export default async function LessonPage({
@@ -74,11 +100,9 @@ export default async function LessonPage({
   // lesson navigations and the lesson body is not. Both are authenticated —
   // the guard's 404 for "not enrolled" is exactly what makes `notFound()`
   // below a rendering decision rather than an authorization one.
-  const [outline, payload, settings, shippingRates] = await Promise.all([
+  const [outline, result, settings, shippingRates] = await Promise.all([
     apiGetAuthed(`/api/courses/${slug}/outline`, CourseOutlineSchema).catch(nullOn404),
-    apiGetAuthed(`/api/lessons/${lessonId}/player`, LessonPlayerSchema).catch(
-      redirectOnLapsedAccess(slug),
-    ),
+    apiGetAuthed(`/api/lessons/${lessonId}/player`, LessonPlayerSchema).catch(forbiddenOn403),
     // The Vodafone Cash number `CourseOutlineSidebar`'s own «اطلب الكتاب»
     // link needs — `…OrDefaults` so a settings read that throws does not
     // take a student's lesson down; the button already handles `null` (`c.noNumber`).
@@ -91,6 +115,26 @@ export default async function LessonPage({
   // No outline means the course is not theirs to see at all — not enrolled, or
   // no such course. A 404 is the honest answer and stays one.
   if (!outline) notFound();
+
+  /*
+   * The 403, answered now that the outline is in hand.
+   *
+   * «شهر تاني» → `/library/:slug`, which is the one screen that draws this
+   * lecture with the month padlock and a dialog offering the month itself.
+   * Anything else → the public course page, which is the only page that sells
+   * a renewal. Both are a redirect rather than a rendered explanation, because
+   * both explanations already exist one route over and two copies of either
+   * would drift.
+   */
+  if (result === FORBIDDEN) {
+    redirect(
+      ownsPartOfCourse(outline, lessonId)
+        ? `/library/${encodeURIComponent(slug)}`
+        : `/courses/${encodeURIComponent(slug)}`,
+    );
+  }
+
+  const payload = result;
 
   /*
    * An outline WITHOUT a player payload is a different situation, and it used

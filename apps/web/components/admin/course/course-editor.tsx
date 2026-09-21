@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Archive, ArchiveRestore, ExternalLink, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useActionState, useState } from 'react';
 import { toast } from 'sonner';
+import type { AdminCourseMonth } from '@ayman/contracts/months';
 import type { Taxonomy } from '@ayman/contracts/taxonomy';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Badge } from '@ayman/ui/components/badge';
@@ -33,6 +34,7 @@ import { CourseBookPanel } from '../books/course-book-panel';
 import { SaveIndicator } from './save-indicator';
 import { AddSectionForm } from './section-card';
 import { SectionList } from './section-list';
+import { CourseMonthsProvider, MonthPanel } from './month-panel';
 import { TermPanel } from './term-panel';
 import { ActionError, IDLE } from './action-state';
 import { useFeature } from '../entitlements-context';
@@ -262,9 +264,18 @@ function CourseOverflowMenu({ courseId, status }: { courseId: string; status: Co
 export function CourseEditor({
   course,
   taxonomy,
+  months,
 }: {
   course: AdminCourseDetail;
   taxonomy: Taxonomy;
+  /**
+   * شهور المنهج, or `null` when the request for them failed — see
+   * `monthsOrNull` in the page. `null` is not «مفيش شهور»: the panel would
+   * then tell the instructor, in Arabic, that this course still sells the old
+   * thirty-day month, which may be untrue and which he would act on. So the
+   * panel is simply absent for that one render.
+   */
+  months: AdminCourseMonth[] | null;
 }) {
   const booksOpen = useFeature('books');
   const nextStatus = course.status === 'published' ? 'draft' : 'published';
@@ -285,172 +296,194 @@ export function CourseEditor({
       material), because creating a row is an act and setting a field is not.
     */
     <AutosaveProvider>
-      <div className="space-y-8">
-        {/*
-          The editor's own bar, sticky under the admin header.
+      {/* The months ride a context rather than a prop chain: the lecture's own
+          «الشهر» control is five `'use client'` components below this one, and a
+          control that renders EMPTY over an existing tag clears it on its next
+          save. `month-panel.tsx` has the full note. */}
+      <CourseMonthsProvider months={months ?? []}>
+        <div className="space-y-8">
+          {/*
+            The editor's own bar, sticky under the admin header.
 
-          It used to be a column floated to the end of the first row, so every
-          control on it — including «انشر الكورس كله», the one press that
-          changes what a student can see — scrolled away as soon as you began
-          editing a course forty lectures long. Now the state (title, slug,
-          حالة, the autosave read-out) and the acts (معاينة، نشر، ⋯) travel
-          with the page.
-        */}
-        <div className="editor-bar">
-          <div className="min-w-0">
-            <h1 className="truncate text-[length:var(--fs-title-3)] font-semibold">
-              {course.title}
-            </h1>
-            <div className="mt-1 flex min-w-0 items-center gap-2">
-              <Badge tone={STATUS_TONE[course.status]}>{COURSE_STATUS_LABEL[course.status]}</Badge>
-              <span className="mono truncate text-[length:var(--fs-mono-label)] text-fg-muted">
-                {course.slug}
-              </span>
+            It used to be a column floated to the end of the first row, so every
+            control on it — including «انشر الكورس كله», the one press that
+            changes what a student can see — scrolled away as soon as you began
+            editing a course forty lectures long. Now the state (title, slug,
+            حالة, the autosave read-out) and the acts (معاينة، نشر، ⋯) travel
+            with the page.
+          */}
+          <div className="editor-bar">
+            <div className="min-w-0">
+              <h1 className="truncate text-[length:var(--fs-title-3)] font-semibold">
+                {course.title}
+              </h1>
+              <div className="mt-1 flex min-w-0 items-center gap-2">
+                <Badge tone={STATUS_TONE[course.status]}>{COURSE_STATUS_LABEL[course.status]}</Badge>
+                <span className="mono truncate text-[length:var(--fs-mono-label)] text-fg-muted">
+                  {course.slug}
+                </span>
+              </div>
+            </div>
+
+            <div className="editor-bar__actions">
+              <SaveIndicator />
+              {/* Only on a published course — the public page is a 404 while it
+                  is still a draft, so the link would teach the instructor that
+                  their own course is broken. */}
+              {course.status === 'published' ? (
+                <Link
+                  href={`/courses/${course.slug}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="chip chip--quiet"
+                >
+                  <ExternalLink className="size-4" aria-hidden="true" />
+                  {copy.admin.course.preview}
+                </Link>
+              ) : null}
+              {/*
+                Publishing is one press now, and it reaches the whole tree — see
+                `PublishCourseButton`. UNPUBLISHING stays the plain status flip:
+                taking a course off the catalog is a single, reversible decision
+                about the course itself, and cascading it down to every lesson
+                would silently discard the per-lecture arrangement an instructor
+                had built.
+
+                An archived course gets neither — it goes back to draft from the
+                «⋯» menu first, so that the "at least one published lesson" check
+                `setStatus('published')` enforces is never skipped.
+              */}
+              {course.status === 'archived' ? null : course.status === 'published' ? (
+                <form action={publishAction}>
+                  <Button type="submit" variant="secondary" size="sm" disabled={publishPending}>
+                    {copy.admin.course.unpublish}
+                  </Button>
+                </form>
+              ) : (
+                <PublishCourseButton courseId={course.id} onSkipped={setSkipped} />
+              )}
+              <CourseOverflowMenu courseId={course.id} status={course.status} />
             </div>
           </div>
 
-          <div className="editor-bar__actions">
-            <SaveIndicator />
-            {/* Only on a published course — the public page is a 404 while it
-                is still a draft, so the link would teach the instructor that
-                their own course is broken. */}
-            {course.status === 'published' ? (
-              <Link
-                href={`/courses/${course.slug}`}
-                target="_blank"
-                rel="noreferrer"
-                className="chip chip--quiet"
-              >
-                <ExternalLink className="size-4" aria-hidden="true" />
-                {copy.admin.course.preview}
-              </Link>
-            ) : null}
-            {/*
-              Publishing is one press now, and it reaches the whole tree — see
-              `PublishCourseButton`. UNPUBLISHING stays the plain status flip:
-              taking a course off the catalog is a single, reversible decision
-              about the course itself, and cascading it down to every lesson
-              would silently discard the per-lecture arrangement an instructor
-              had built.
-
-              An archived course gets neither — it goes back to draft from the
-              «⋯» menu first, so that the "at least one published lesson" check
-              `setStatus('published')` enforces is never skipped.
-            */}
-            {course.status === 'archived' ? null : course.status === 'published' ? (
-              <form action={publishAction}>
-                <Button type="submit" variant="secondary" size="sm" disabled={publishPending}>
-                  {copy.admin.course.unpublish}
-                </Button>
-              </form>
-            ) : (
-              <PublishCourseButton courseId={course.id} onSkipped={setSkipped} />
-            )}
-            <CourseOverflowMenu courseId={course.id} status={course.status} />
+          {/* Under the bar, not inside it: both are reports that can run to
+              several lines, and a sticky bar that grows a paragraph tall covers
+              the fields the instructor is reading it about. */}
+          <div className="space-y-2 empty:hidden">
+            <ActionError state={publishState} />
+            <PublishReport skipped={skipped} />
           </div>
-        </div>
 
-        {/* Under the bar, not inside it: both are reports that can run to
-            several lines, and a sticky bar that grows a paragraph tall covers
-            the fields the instructor is reading it about. */}
-        <div className="space-y-2 empty:hidden">
-          <ActionError state={publishState} />
-          <PublishReport skipped={skipped} />
-        </div>
+          <CourseForm
+            taxonomy={taxonomy}
+            defaults={{
+              slug: course.slug,
+              title: course.title,
+              subtitle: course.subtitle,
+              description: course.description,
+              systemId: course.systemId,
+              year: course.year,
+              trackId: course.trackId,
+              subjectId: course.subjectId,
+              coverKey: course.coverKey,
+              whatsappGroupUrl: course.whatsappGroupUrl,
+              requiresGrant: course.requiresGrant,
+              emphasis: course.emphasis,
+              emphasisNote: course.emphasisNote,
+              comingSoonNote: course.comingSoonNote,
+              scheduleNote: course.scheduleNote,
+              contentComplete: course.contentComplete,
+              monthlyPriceCents: course.monthlyPriceCents,
+              /* No `quarterlyPriceCents` — the form has no field for it any
+                 more. The payload still carries it; nothing on this screen
+                 renders it. */
+              yearlyPriceCents: course.yearlyPriceCents,
+              bookTitle: course.bookTitle,
+              bookPriceCents: course.bookPriceCents,
+              forGeneral: course.forGeneral,
+              forLanguages: course.forLanguages,
+            }}
+            action={updateCourseAction.bind(null, course.id)}
+            mode="edit"
+            /* «السعر ده لشهر واحد» under the monthly price — on a course with
+               months that one number buys ONE month, whichever the student
+               picks, and the field says «اشتراك شهري» either way. Any month,
+               not an open one: closing them all takes the plan off sale, it does
+               not put the thirty-day window back. */
+            sellsByMonth={(months?.length ?? 0) > 0}
+            /*
+              «أضيف كتاب من جوه الكورس» — the SAME dialog `/admin/books/catalog`
+              opens, with this course preselected and locked. Passed as a slot
+              rather than rendered inside `CourseForm` because the panel reads
+              the course's book through a Server Action, and that form is a pure
+              controlled form with no data access of its own.
+            */
+            /* ستاك مالوش كتب مالوش «كتاب الكورس». `undefined` مش كومبوننت
+               فاضي: `CourseForm` عندها فرع الـslot الغايب خلاص. */
+            bookSlot={
+              !booksOpen ? undefined : (
+              <CourseBookPanel
+                courseId={course.id}
+                courseTitle={course.title}
+                courseYear={course.year}
+                forGeneral={course.forGeneral}
+                forLanguages={course.forLanguages}
+              />
+              )
+            }
+          />
 
-        <CourseForm
-          taxonomy={taxonomy}
-          defaults={{
-            slug: course.slug,
-            title: course.title,
-            subtitle: course.subtitle,
-            description: course.description,
-            systemId: course.systemId,
-            year: course.year,
-            trackId: course.trackId,
-            subjectId: course.subjectId,
-            coverKey: course.coverKey,
-            whatsappGroupUrl: course.whatsappGroupUrl,
-            requiresGrant: course.requiresGrant,
-            emphasis: course.emphasis,
-            emphasisNote: course.emphasisNote,
-            comingSoonNote: course.comingSoonNote,
-            scheduleNote: course.scheduleNote,
-            contentComplete: course.contentComplete,
-            monthlyPriceCents: course.monthlyPriceCents,
-            quarterlyPriceCents: course.quarterlyPriceCents,
-            yearlyPriceCents: course.yearlyPriceCents,
-            bookTitle: course.bookTitle,
-            bookPriceCents: course.bookPriceCents,
-            forGeneral: course.forGeneral,
-            forLanguages: course.forLanguages,
-          }}
-          action={updateCourseAction.bind(null, course.id)}
-          mode="edit"
-          /*
-            «أضيف كتاب من جوه الكورس» — the SAME dialog `/admin/books/catalog`
-            opens, with this course preselected and locked. Passed as a slot
-            rather than rendered inside `CourseForm` because the panel reads
-            the course's book through a Server Action, and that form is a pure
-            controlled form with no data access of its own.
-          */
-          /* ستاك مالوش كتب مالوش «كتاب الكورس». `undefined` مش كومبوننت
-             فاضي: `CourseForm` عندها فرع الـslot الغايب خلاص. */
-          bookSlot={
-            !booksOpen ? undefined : (
-            <CourseBookPanel
-              courseId={course.id}
-              courseTitle={course.title}
-              courseYear={course.year}
-              forGeneral={course.forGeneral}
-              forLanguages={course.forLanguages}
-            />
-            )
-          }
-        />
-
-        {/*
-        Above the outline, not below it. The exam is the course's SHAPE — the
-        thing every other lesson is gated against — and it sat at the bottom of
-        the page as a footnote, reachable only after scrolling past forty
-        lessons. Its band also states the gate rule with a live number, which
-        is worth reading before you start publishing, not after.
-      */}
-        <CourseExamGate course={course} />
-
-        {/*
-          Beside the exam gate, above the outline: both are statements about
-          whether this course is FIT to be seen, which is what you want to read
-          before publishing rather than after a student writes in.
+          {/*
+          Above the outline, not below it. The exam is the course's SHAPE — the
+          thing every other lesson is gated against — and it sat at the bottom of
+          the page as a footnote, reachable only after scrolling past forty
+          lessons. Its band also states the gate rule with a live number, which
+          is worth reading before you start publishing, not after.
         */}
-        <VideoCheckButton courseId={course.id} />
+          <CourseExamGate course={course} />
 
-        <TermPanel courseId={course.id} terms={course.terms} />
+          {/*
+            Beside the exam gate, above the outline: both are statements about
+            whether this course is FIT to be seen, which is what you want to read
+            before publishing rather than after a student writes in.
+          */}
+          <VideoCheckButton courseId={course.id} />
 
-        <section>
-          <h2 className="mb-3 text-[length:var(--fs-title-4)] font-semibold">
-            {copy.course.content}
-          </h2>
-          {course.sections.length === 0 ? (
-            <p className="text-fg-muted">{copy.admin.section.empty}</p>
-          ) : (
-            <SectionList
-              // Remounts only when the section SET changes, never on a pure
-              // reorder — same reasoning as the lesson list's key.
-              key={course.sections.map((section) => section.id).join(',')}
-              courseId={course.id}
-              sections={course.sections}
-              terms={course.terms}
-              examLessonId={course.examLessonId}
-              courseStream={{
-                forGeneral: course.forGeneral,
-                forLanguages: course.forLanguages,
-              }}
-            />
+          <TermPanel courseId={course.id} terms={course.terms} />
+
+          {/* Under the terms, above the outline: both answer «الكورس ده بيتباع
+              إزاي؟», and both have to be read before arranging the lectures they
+              slice. Absent entirely when the list could not be read — see the
+              `months` prop. */}
+          {months === null ? null : (
+            <MonthPanel courseId={course.id} months={months} sections={course.sections} />
           )}
-          <AddSectionForm courseId={course.id} />
-        </section>
-      </div>
+
+          <section>
+            <h2 className="mb-3 text-[length:var(--fs-title-4)] font-semibold">
+              {copy.course.content}
+            </h2>
+            {course.sections.length === 0 ? (
+              <p className="text-fg-muted">{copy.admin.section.empty}</p>
+            ) : (
+              <SectionList
+                // Remounts only when the section SET changes, never on a pure
+                // reorder — same reasoning as the lesson list's key.
+                key={course.sections.map((section) => section.id).join(',')}
+                courseId={course.id}
+                sections={course.sections}
+                terms={course.terms}
+                examLessonId={course.examLessonId}
+                courseStream={{
+                  forGeneral: course.forGeneral,
+                  forLanguages: course.forLanguages,
+                }}
+              />
+            )}
+            <AddSectionForm courseId={course.id} />
+          </section>
+        </div>
+      </CourseMonthsProvider>
     </AutosaveProvider>
   );
 }

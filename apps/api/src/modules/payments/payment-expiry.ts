@@ -55,6 +55,14 @@ export function addMonthsClamped(date: Date, months: number): Date {
  *
  * See the model doc on `PaymentSubmission` for why this EXTENDS the one live
  * grant rather than stacking a second one.
+ *
+ * ⚠️ A MONTH purchase must never reach this function. «شهر ٢» is content the
+ * student bought and not thirty days they rented, so a `scope: course_month`
+ * grant has no `validUntil` at all — `access_grants_month_open_ended` is a
+ * CHECK, so a date computed here and written there is not a wrong expiry but
+ * a 23514 that rolls the entire approval back. `PaymentsService.approve`
+ * branches on the submission's own `payment_submission_months` rows before
+ * calling this; see `writeMonthGrants`.
  */
 export function computeApprovalValidUntil(
   plan: PaymentPlan,
