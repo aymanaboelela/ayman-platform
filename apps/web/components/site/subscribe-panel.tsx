@@ -279,25 +279,6 @@ export function SubscribePanel({
    * that sells no months at all.
    */
   const [selectedMonthIds, setSelectedMonthIds] = useState<string[]>([]);
-  /**
-   * Whether the arriving URL asked for a specific month, and which.
-   *
-   * The padlock on a locked lecture links to `/courses/:slug?month=<id>`, and
-   * that parameter does two jobs. `proxy.ts` exempts a request carrying it from
-   * the redirect that would otherwise bounce an enrolled student back to their
-   * library (see that file's own note); and here it is the preselection, so a
-   * student who pressed «الاشتراك في الشهر ده» on «شهر ٣» does not then have to
-   * find «شهر ٣» again in a list of nine.
-   *
-   * Read from `window.location` in an effect, NOT with `useSearchParams()`.
-   * That hook opts the whole route out of static rendering unless it is wrapped
-   * in its own `<Suspense>`, and this panel is mounted deep inside a page that
-   * has no reason to pay for that — one string on mount is all it needs.
-   */
-  const [requestedMonthId, setRequestedMonthId] = useState<string | null>(null);
-  useEffect(() => {
-    setRequestedMonthId(new URLSearchParams(window.location.search).get('month'));
-  }, []);
   /** What the student already holds — read live beside everything else below,
    *  and `[]` when that read fails. The server refuses a month it has already
    *  sold either way (`submit()` runs the same check), so the worst a failed
@@ -499,24 +480,6 @@ export function SubscribePanel({
    * day a month gets a price of its own, and on that day this line is already
    * reading the number the server will charge from the same rows.
    */
-  /*
-   * The preselection, applied once the live month list has landed and only
-   * while the student has chosen nothing themselves.
-   *
-   * Checked against `months` rather than trusted: the id sits in a URL anybody
-   * can type or edit, and selecting a month that is closed, sold out to this
-   * student already, or belongs to another course entirely would show a total
-   * they cannot pay and then 400 on a submit they did nothing to earn. An id
-   * that does not resolve simply leaves the picker empty, which is the screen
-   * they would have got with no parameter at all.
-   */
-  useEffect(() => {
-    if (requestedMonthId === null) return;
-    if (!months.some((month) => month.id === requestedMonthId)) return;
-    if (ownedMonthIds.includes(requestedMonthId)) return;
-    setSelectedMonthIds((current) => (current.length > 0 ? current : [requestedMonthId]));
-  }, [requestedMonthId, months, ownedMonthIds]);
-
   const selectedMonthsTotalCents = months.reduce(
     (sum, month) => (selectedMonthIds.includes(month.id) ? sum + month.priceCents : sum),
     0,
@@ -612,6 +575,40 @@ export function SubscribePanel({
   const localNumber = railNumber ? localEgyptianDigits(railNumber) : '';
   const railName = rail === 'vodafoneCash' ? copy.subscribe.railVodafoneCash : copy.subscribe.railInstapay;
 
+  /**
+   * «الاشتراك في الشهر ده» — the month the student arrived asking for.
+   *
+   * The padlock on a locked lecture links to `/courses/:slug?month=<id>`, and
+   * that parameter does two jobs. `proxy.ts` exempts a request carrying it from
+   * the redirect that would otherwise bounce an enrolled student back to their
+   * library (see that file's own note); and here it is the preselection, so
+   * somebody who pressed «الاشتراك في الشهر ده» on «شهر ٣» does not then have
+   * to find «شهر ٣» again in a list of nine.
+   *
+   * Read in the CLICK HANDLER, not in an effect and not with
+   * `useSearchParams()`. An effect that sets state on mount is a cascading
+   * render the lint rule refuses on sight; `useSearchParams()` opts the whole
+   * route out of static rendering unless it is wrapped in its own
+   * `<Suspense>`, which this page has no other reason to pay for. By the time
+   * anyone can press «شهر», `months` has already landed — the card does not
+   * render until prices do — so the handler is the one place where the answer
+   * is both available and needed.
+   *
+   * Validated against `months` rather than trusted: the id sits in a URL
+   * anybody can type, and selecting a month that is closed, already owned, or
+   * from another course entirely would show a total the student cannot pay and
+   * then 400 on a submit they did nothing to earn. An id that does not resolve
+   * just leaves the picker empty, which is the screen they would have seen
+   * with no parameter at all.
+   */
+  function preselectedMonthIds(): string[] {
+    const requested = new URLSearchParams(window.location.search).get('month');
+    if (requested === null) return [];
+    if (!months.some((month) => month.id === requested)) return [];
+    if (ownedMonthIds.includes(requested)) return [];
+    return [requested];
+  }
+
   function choosePlan(next: SellablePaymentPlan) {
     setPlan(next);
     setError(null);
@@ -628,6 +625,9 @@ export function SubscribePanel({
      */
     if (next === 'monthly' && months.length > 0) {
       setTermId(null);
+      // Empty unless the URL named a month, and empty is the ordinary case —
+      // see `preselectedMonthIds`.
+      setSelectedMonthIds((current) => (current.length > 0 ? current : preselectedMonthIds()));
       setStep('chooseMonths');
       return;
     }
