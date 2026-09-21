@@ -1927,6 +1927,21 @@ export const copy = {
     lessonStarted: 'لسه ما خلصتهاش',
     lessonQuizNew: 'لسه ما امتحنتش',
     lessonLocked: 'مقفول',
+    /**
+     * The row badge for a lecture in a curriculum month the student did not
+     * buy — «شهر تاني», not «مقفول».
+     *
+     * A separate word from `lessonLocked` because the two are different facts
+     * and lead to different actions. «مقفول» is the final exam waiting on work
+     * the student can go and do. This one is waiting on a payment, and saying
+     * «مقفول» about it would send someone hunting the lecture that is
+     * supposedly in the way — which is the exact dead end
+     * `lockedExamTitle`'s own note describes the old dialog causing.
+     *
+     * STATE and not instruction, same rule as `lessonNew` above: «شهر تاني»
+     * inflects for nobody.
+     */
+    lessonMonthLocked: 'شهر تاني',
     exam: 'الامتحان النهائي',
     notEnrolledTitle: 'نبدأ الكورس عشان المحاضرات تتفتح',
     notEnrolledBody: 'الكورس مجاني بالكامل — دوسة على «نبدأ» وأول محاضرة بتتفتح على طول.',
@@ -2017,6 +2032,37 @@ export const copy = {
      * «تمام». `exam-gate-dialog.tsx` states the rule; this one broke it.
      */
     lockedClose: 'تمام',
+
+    // ── the locked-MONTH dialog ──────────────────────────────────────────
+    /**
+     * The second lock in the product, and the first one money opens.
+     *
+     * It is its own dialog rather than a third body on `lockedExamTitle`'s,
+     * because that dialog's whole design rests on having nothing to offer —
+     * one control, dismiss, no navigation (see its note). This one has exactly
+     * the opposite shape: there IS something the student can press, it is the
+     * month's own subscribe link, and it is the reason the padlock is worth
+     * drawing at all instead of hiding the row.
+     *
+     * ⚠️ The verb is a masdar throughout. «اشترك» is an imperative and has to
+     * pick a gender; the platform never asks whether the student is a boy or a
+     * girl, so the copy must not guess — the same rule `lessonNew` is written
+     * to, and the list in `outreach/compose.spec.ts` is the enforcement.
+     */
+    lockedMonthTitle: 'المحاضرة دي تابعة لشهر تاني',
+    /**
+     * `{month}` — the month's own title as the instructor named it («شهر ٣ —
+     * نوفمبر»), never a number we render ourselves. `{count}` is how many
+     * lectures that month opens, so the sentence says what the money buys
+     * rather than just what it unlocks right now.
+     */
+    lockedMonthBody: 'المحاضرة دي في «{month}». الاشتراك في الشهر ده بيفتحها هي و{count} محاضرة معاها.',
+    /** When the lecture sits in more than one month, or in none we can name —
+     *  the dialog still has to say something true. */
+    lockedMonthBodyPlain: 'المحاضرة دي في شهر مش داخل في اشتراكك الحالي.',
+    lockedMonthCta: 'الاشتراك في الشهر ده',
+    /** The dismiss, same slot and same reasoning as `lockedClose`. */
+    lockedMonthClose: 'مش دلوقتي',
   },
   /** `/settings/section` — changing the year after onboarding. */
   section: {
@@ -2369,9 +2415,19 @@ export const copy = {
      * type, the way a real pricing card does.
      */
     planMonthlyLabel: 'شهر',
+    /**
+     * ⚠️ HISTORY ONLY. «٣ شهور» is off the shelf — `quarterlyPriceCents` is
+     * NULL on every course and `SellablePaymentPlanSchema` refuses the plan —
+     * but hundreds of past submissions and live grants still carry it, and the
+     * admin payments list, the finance filters and a student's own
+     * «اشتراكاتي» card all have to name it. Deleting this string would 500
+     * those screens on perfectly valid history.
+     *
+     * It is NOT a card any more. Nothing in the subscribe panel reads it.
+     */
     planQuarterlyLabel: '٣ شهور',
-    /** A full-year subscription — the fourth card, same date-based expiry
-     *  treatment as monthly/quarterly. */
+    /** A full-year subscription — the third card, date-based expiry, not the
+     *  open-ended treatment `term` and the monthly months get. */
     planYearlyLabel: 'سنة كاملة',
     /**
      * The plan-picker's own term card. When the course sells exactly ONE
@@ -2385,6 +2441,38 @@ export const copy = {
      *  when the course sells more than one (no single number to show yet). */
     planTermFromPrice: 'من {price} جنيه',
     chooseTermTitle: 'اختار الترم',
+
+    // ── «شهر» when the course sells by curriculum month ──────────────────
+    /**
+     * The screen «شهر» leads to on a course whose instructor has configured
+     * months. On a course that has NOT, the «شهر» card is still the old
+     * one-price subscription and goes straight to payment — one array
+     * (`CatalogCourseDetail.months`) decides which, and there is no second
+     * flag to disagree with it.
+     */
+    chooseMonthsTitle: 'اختار الشهور',
+    /**
+     * Says the thing that is actually new, because a student who subscribed
+     * last year will otherwise assume «شهر» still means thirty days: the month
+     * is a slice of the CURRICULUM, and it does not run out.
+     *
+     * Masdar, no imperative — see `lockedMonthTitle`'s note.
+     */
+    chooseMonthsHint: 'كل شهر بيفتح محاضراته هو، ومابيخلصش بعد مدة. ينفع اختيار أكتر من شهر في تحويل واحد.',
+    /** `{count}` — published lectures in this month. */
+    monthCardLessons: '{count} محاضرة',
+    /** A month the instructor opened for sale before writing into it. Shown
+     *  rather than hidden: pre-selling a month is his decision to make, and a
+     *  card that silently disappears is not a decision anybody can see. */
+    monthCardEmpty: 'لسه مانزلتش محاضرات',
+    /** The month is already covered by something the student holds — a live
+     *  month grant, or a term/yearly subscription. The card is disabled. */
+    monthCardOwned: 'معاه اشتراك خلاص',
+    /** `{price}` — EGP, already formatted. The running total under the
+     *  picker, which is the only place a multi-month choice shows its cost. */
+    monthsTotal: 'الإجمالي: {price} جنيه',
+    monthsContinue: 'كمّل الدفع',
+    monthsRequired: 'لازم اختيار شهر واحد على الأقل',
     /** `{price}` is EGP, already formatted — shared by every plan card
      *  (monthly/quarterly/yearly and a single-term course) and every row of
      *  the term picker. One template so a price never reads differently
