@@ -101,26 +101,52 @@ test.describe('quiz attempt → submit → review', () => {
     // The demo quiz is UNTIMED, so there is no timer to assert — the runner
     // is confirmed by its navigator instead. The timed path is covered by
     // the exam below, which the seed gives a real duration.
-    await expect(page.getByRole('navigation', { name: 'خريطة الأسئلة' })).toBeVisible();
+    const navigator = page.getByRole('navigation', { name: 'خريطة الأسئلة' });
+    await expect(navigator).toBeVisible();
 
-    // 3. Answer three of five (this fixture has >=3 questions); flag one;
-    // reload; assert the same answers, order, flag and a continuing timer.
-    const firstOptionLabel = page.locator('label').first();
-    await firstOptionLabel.click();
-    await page.getByRole('button', { name: 'التالي' }).click();
-    await page.locator('label').first().click();
-    await page.getByRole('button', { name: 'علّم السؤال' }).click(); // flag this one
-    await page.getByRole('button', { name: 'التالي' }).click();
-    await page.locator('label').first().click();
+    /*
+     * How many questions this fixture has, ASKED rather than assumed — and the
+     * assumption was WRONG in a way that made the test pass for the wrong
+     * reason.
+     *
+     * It used to answer a hard-coded three, saying «three of five». The seed
+     * creates THREE (`seed-admin.ts`, `for (i = 0; i < 3; …)`), so it answered
+     * all of them and then asserted the submit dialog still warned about
+     * unanswered ones. That warning can only appear if an answer is MISSING —
+     * so the green runs were the ones where the autosave lost an answer across
+     * the reload, and the red runs were the ones where persistence worked.
+     * The assertion this test exists to make was backwards.
+     *
+     * And a red shard here is not merely a red test: `deploy to production` is
+     * gated on the whole playwright job, so each time it flaked it stranded
+     * production on the previous commit until somebody noticed.
+     */
+    const questionCount = await navigator.getByRole('button').count();
+    expect(questionCount).toBeGreaterThanOrEqual(2);
+    // Leave exactly ONE unanswered whatever the count, so the dialog in step 4
+    // always has something to report.
+    const toAnswer = Math.min(3, questionCount - 1);
+    const flagAt = Math.min(1, toAnswer - 1);
+
+    // 3. Answer all but one; flag one of them; reload; assert the same
+    // answers, order, flag and a continuing timer.
+    for (let i = 0; i < toAnswer; i += 1) {
+      await page.locator('label').first().click();
+      if (i === flagAt) await page.getByRole('button', { name: 'علّم السؤال' }).click();
+      if (i < toAnswer - 1) await page.getByRole('button', { name: 'التالي' }).click();
+    }
 
     // Let the autosave flush (blur/navigation already triggers it, this is belt-and-braces).
     await page.waitForTimeout(500);
     const urlBeforeReload = page.url();
     await page.reload();
     await expect(page).toHaveURL(urlBeforeReload);
-    await expect(page.getByRole('navigation', { name: 'خريطة الأسئلة' })).toBeVisible();
+    await expect(navigator).toBeVisible();
 
-    // 4. Submit → dialog reports 2 unanswered → cancel → answer the rest → submit → confirm.
+    // 4. Submit → dialog reports what is left → cancel → answer the rest →
+    // submit → confirm. The COUNT stays a `\d+`: how many survive the reload
+    // is the autosave's business, and pinning a number here would turn this
+    // into a persistence race rather than the dialog check it is.
     await page.getByRole('button', { name: 'تسليم الامتحان' }).first().click();
     await expect(page.getByText(/لسه فيه \d+ سؤال من غير إجابة/)).toBeVisible();
     await page.getByRole('button', { name: 'الرجوع للأسئلة' }).click();
@@ -128,7 +154,7 @@ test.describe('quiz attempt → submit → review', () => {
     // Answer whatever chips were unanswered, then submit again.
     // (Exact navigation depends on the seeded question count; this walks the
     // navigator left to right filling anything still empty.)
-    const navButtons = page.getByRole('navigation', { name: 'خريطة الأسئلة' }).getByRole('button');
+    const navButtons = navigator.getByRole('button');
     const count = await navButtons.count();
     for (let i = 0; i < count; i += 1) {
       await navButtons.nth(i).click();
