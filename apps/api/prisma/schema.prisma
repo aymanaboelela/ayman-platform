@@ -201,6 +201,10 @@ model User {
   refundsIssued              Refund[]
   /// Permissions this account opened up to a role — see `RolePermissionGrant`.
   permissionGrantsIssued     RolePermissionGrant[]   @relation("RolePermissionGrantIssuer")
+  /// تكريمات بالإيد على لوحة الشرف — دي بتاعت الطالب، وبتروح مع حسابه.
+  honorPins                  HonorBoardPin[]         @relation("HonorBoardPinStudent")
+  /// وده اللي حطّهم. `SetNull`، فمسح حساب الأدمن بيسيب التكريم مكانه.
+  honorPinsCreated           HonorBoardPin[]         @relation("HonorBoardPinAuthor")
 
   @@unique([email])
   @@map("users")
@@ -933,6 +937,9 @@ model Course {
   /// carries it. At most one — `books.course_id` is UNIQUE, so a course can
   /// never end up with two entries quoting two prices.
   book               Book?
+  /// شارة الكورس اللي بتتطبع على كارت لوحة الشرف — «تانية بكالوريا — لغات».
+  /// `SetNull` هناك: كورس اتمسح مايشيلش تكريم حصل فيه.
+  honorPins          HonorBoardPin[]
 
   // `courses_priced_requires_grant` (hand-written into the migration, same
   // convention as `courses_note_needs_emphasis`) enforces that a course with
@@ -3414,6 +3421,86 @@ model QuizAttempt {
   @@schema("app")
 }
 
+/// لوحة الشرف بالإيد — صف بيحطه المدرّس بنفسه، من غير ورقة امتحان وراه.
+///
+/// ## ليه الجدول ده موجود أصلاً
+///
+/// اللوحة اتولدت من `quiz_attempts.honor_board_at`: المدرّس بيثبّت ورقة
+/// اتصحّحت، واللوحة بتتبني من الورق المثبّت. ده بيغطّي «الأوائل في امتحان
+/// الشهر» وبس. واللي اتطلب أوسع من كده: حد يتكرّم على حاجة الورق مابيعرفهاش
+/// — انتظام، تحسّن، الأول على الدفعة، مشروع — وبتاريخ المدرّس هو اللي
+/// بيختاره، مش تاريخ ما داس الزرار.
+///
+/// فالجدولين بيعيشوا جنب بعض عن قصد: الورقة المثبّتة بتفضل بتتقري من
+/// `honor_board_at` (وبتجيب الدرجة معاها)، والصف ده بيتحط بالإيد. واللوحة
+/// العامة بتدمج الاتنين في نفس الدور.
+///
+/// ## ⚠️ الصف ده بينشر اسم قاصر على صفحة عامة
+///
+/// نفس تحذير `honor_board_at` بالحرف، وأقوى: هنا مفيش حتى امتحان بيبرّر
+/// الاسم. مفيش حاجة بتكتب في الجدول ده غير دوسة أدمن على شاشة
+/// `/admin/honor-board`، وعمره ما هيتولّد من درجة ولا من ترتيب.
+model HonorBoardPin {
+  id     String @id @default(uuid(7)) @db.Uuid
+  userId String @map("user_id")
+
+  /// اليوم اللي الدور ده اتحسب عليه — والمدرّس هو اللي بيكتبه.
+  ///
+  /// `honor_board_at` بيتختم `now()` عشان الثبّيت على ورقة هو حدث بيحصل
+  /// دلوقتي. ده العكس: «حطّه على لوحة أول أكتوبر» جملة بتتقال بعد أول أكتوبر
+  /// بأسبوع، والشاشة بتسأل عن التاريخ. بيتخزّن Timestamptz وبيتبوّب بتوقيت
+  /// القاهرة زيه بالظبط (`toHonorBoardRounds`)، فالصفين بيقعوا في نفس الدور
+  /// لما يكونوا في نفس اليوم المصري.
+  honoredAt DateTime @map("honored_at") @db.Timestamptz(3)
+
+  /// المركز جوّه `course_label`. رقم مكتوب بالإيد، مش محسوب.
+  ///
+  /// اللوحة المتولّدة من الورق بتمشي على الترتيب وبتدّي ١، ٢، ٣ — عشان
+  /// الدرجة موجودة. هنا مفيش درجة تترتّب، فالمدرّس بيقول «ده الأول».
+  /// CHECKـه ١..١٠ في الميجريشن: أربع خانات بتتعرض على الصفحة الرئيسية،
+  /// والباقي بيتشاف في الأرشيف.
+  rank Int @db.SmallInt
+
+  /// الكورس اللي التكريم ده اتحسب فيه، أو null.
+  ///
+  /// اللوحة بتجري **سباق لكل كورس** — الأول في «تانية لغات» والأول في «تانية
+  /// عربي» الاتنين الأول، وده اللي بيخلّي `rank` له معنى أصلاً. لما يكون null
+  /// بنرجع لسنة الطالب وشعبته من بروفايله، وده لسه بيدّي نفس الشكل: «تانية
+  /// بكالوريا — لغات».
+  ///
+  /// `onDelete: SetNull` مش Cascade: كورس اتمسح بعد سنة مايشيلش تكريم حصل.
+  courseId String? @map("course_id") @db.Uuid
+
+  /// السطر اللي تحت الاسم على الكارت — «الأول على الدفعة»، «انتظام كامل».
+  /// الورقة المثبّتة بتحط عنوان المحاضرة مكانه.
+  reason String
+
+  /// صورة للتكريم ده بالذات، أو null فبنرجع لـ`student_profiles.honor_photo_key`.
+  ///
+  /// العمود اللي في البروفايل هو «صورة الطالب على اللوحة» بشكل عام، وده
+  /// بيسمح بصورة مختلفة لدور معيّن من غير ما يمسح دي. مفتاح تخزين مش لينك،
+  /// لنفس سبب العمود التاني.
+  ///
+  /// ⚠️ مش ظاهر لـ`MediaService.usage()` — نفس الفخ المكتوب على `honorPhotoKey`.
+  photoKey String? @map("photo_key")
+
+  /// مين حطّه. `SetNull` عشان مسح حساب أدمن مايمسحش تكريم طالب.
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user      User    @relation("HonorBoardPinStudent", fields: [userId], references: [id], onDelete: Cascade)
+  course    Course? @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  createdBy User?   @relation("HonorBoardPinAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  /// اللوحة بتتقري بالتاريخ، الأحدث الأول — نفس شكل القراية بتاعة الأرشيف.
+  @@index([honoredAt(sort: Desc)])
+  /// «الطالب ده متكرّم قبل كده؟» — اللي بيغذّي كارت الداشبورد بتاعه.
+  @@index([userId, honoredAt(sort: Desc)])
+  @@map("honor_board_pins")
+  @@schema("app")
+}
+
 /// The mutable half of the hybrid store: one row per question per attempt, so
 /// the results screen is a single join. `questionVersionId` and `optionOrder`
 /// are SNAPSHOTS taken at attempt creation and are never re-derived.
@@ -4009,6 +4096,20 @@ enum NotificationKind {
   /// in the student's own thread, exactly like `instructor_message`, because
   /// that is where they can be answered.
   homework_reviewed
+  /// STUDENT — «اسمك على لوحة الشرف». An admin added this student to the
+  /// board by hand (`HonorBoardPin`), and this is the only way they would
+  /// ever learn: the board is a PUBLIC page they have no reason to open, and
+  /// nothing on their own screens changes when a row is written.
+  ///
+  /// Carries `pinId`, so the feed can resolve the round, the place and the
+  /// reason fresh at read time — the same rule every other kind follows, and
+  /// it matters more here because all three are editable after the fact.
+  ///
+  /// NOT emitted for a pinned exam paper (`quiz_attempts.honor_board_at`).
+  /// That student already got `quiz_graded` for the same paper, and a second
+  /// notification about the same result is noise; the hand-added row is the
+  /// one with nothing else announcing it.
+  honor_board_listed
 
   @@map("notification_kind")
   @@schema("app")

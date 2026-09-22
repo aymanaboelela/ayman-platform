@@ -73,6 +73,10 @@ export const AUDIT_RESOURCES = {
   /// اتمسحت», and a deletion of somebody's uploaded work is exactly the kind of
   /// irreversible act the audit filter exists to be able to answer for.
   homeworkSubmission: 'homework_submissions',
+  /// لوحة الشرف — الصف اللي المدرّس حطّه بإيده. نوع لوحده عشان «مين نشر اسم
+  /// الطالب ده على الصفحة الرئيسية» لازم تبقى فلتر واحد على شاشة الأوديت،
+  /// ومسح الصف بيخلّي سطر الأوديت هو الأثر الوحيد إنه كان موجود.
+  honorBoardPin: 'honor_board_pins',
 } as const;
 
 export type AuditResource = (typeof AUDIT_RESOURCES)[keyof typeof AUDIT_RESOURCES];

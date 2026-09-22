@@ -110,9 +110,13 @@ export default async function HonorBoardArchivePage({
                     <span className="honor-archive__rail-date">
                       {dateFormatter.format(new Date(period.pinnedAt))}
                     </span>
-                    <span className="honor-archive__rail-exam">
-                      {period.examTitles.join(' · ')}
-                    </span>
+                    {/* لوحة كلها بالإيد مالهاش اسم امتحان، والسطر بيتشال
+                        خالص بدل ما يفضل فاضي وياخد مسافته. */}
+                    {period.titles.length > 0 && (
+                      <span className="honor-archive__rail-exam">
+                        {period.titles.join(' · ')}
+                      </span>
+                    )}
                   </Link>
                 </li>
               );
@@ -138,7 +142,7 @@ export default async function HonorBoardArchivePage({
                   board it was. */}
               <HonorFace name={entry.studentName} photoKey={entry.photoKey} />
               <span className="honor-board__slot-name">{entry.studentName}</span>
-              <span className="honor-board__slot-quiz">{entry.quizTitle}</span>
+              <span className="honor-board__slot-quiz">{entry.title}</span>
             </li>
           ))}
         </ul>

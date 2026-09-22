@@ -38,6 +38,7 @@ import { TenantEntitlementsModule } from '../modules/tenant-entitlements/tenant-
 import { RolesModule } from '../modules/admin/roles/roles.module';
 import { NavigationModule } from '../modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from '../modules/admin/home-blocks/home-blocks.module';
+import { AdminHonorBoardModule } from '../modules/admin/honor-board/honor-board.module';
 import { NewsModule } from '../modules/news/news.module';
 import { AuditReadModule } from '../modules/admin/audit/audit-read.module';
 import { CohortAnalyticsModule } from '../modules/analytics/analytics.module';
@@ -148,6 +149,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
   let homeBlockId: string;
   let newsPostId: string;
   let navItemId: string;
+  let honorPinId: string;
   const FLAG_KEY = 'catalog.showComingSoon';
 
   function sessionFor(userId: string, role: 'student' | 'admin'): BetterAuthSessionResult {
@@ -267,6 +269,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         RolesModule,
         NavigationModule,
         HomeBlocksModule,
+        // لوحة الشرف بالإيد. بيجرّ `NotificationsModule` معاه (الصف بيبعت
+        // إشعار للطالب)، وهو موجود هنا أصلاً من `OutreachModule` تحت.
+        AdminHonorBoardModule,
         NewsModule,
         AuditReadModule,
         CohortAnalyticsModule,
@@ -543,6 +548,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       data: { labelAr: 'مصفوفة', href: '/matrix', position: 999 },
     });
     navItemId = navItem.id;
+    // تكريم على لوحة الشرف، عشان صفوف PATCH/DELETE تحت تلاقي id حقيقي —
+    // ٤٠٤ على id متخيّل كان هيعدّي جنب ٤٠٣ من غير ما يثبت حاجة.
+    const honorPin = await prisma.honorBoardPin.create({
+      data: {
+        userId: studentId,
+        honoredAt: new Date('2026-09-17T12:00:00+02:00'),
+        rank: 1,
+        reason: 'مصفوفة',
+      },
+    });
+    honorPinId = honorPin.id;
 
     anonApp = await buildApp(async () => null);
     studentApp = await buildApp(async () => sessionFor(studentId, 'student'));
@@ -561,6 +577,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     await owner.homeBlock.delete({ where: { id: homeBlockId } }).catch(() => undefined);
     await owner.newsPost.delete({ where: { id: newsPostId } }).catch(() => undefined);
     await owner.navigationItem.delete({ where: { id: navItemId } }).catch(() => undefined);
+    await owner.honorBoardPin.delete({ where: { id: honorPinId } }).catch(() => undefined);
     await owner.sessionDevice.deleteMany({ where: { id: { in: [studentDeviceId, otherDeviceId] } } });
     await owner.enrollment.deleteMany({ where: { courseId: { in: [courseId, scratchCourseId] } } });
     await owner.lesson.deleteMany({ where: { courseId: { in: [courseId, scratchCourseId] } } });
@@ -1496,6 +1513,28 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'home-blocks restore: student', method: 'post', path: () => `/api/admin/home-blocks/${homeBlockId}/restore`, actor: 'student', status: 403 },
     { label: 'home-blocks order: anonymous', method: 'post', path: () => '/api/admin/home-blocks/order', actor: 'anonymous', status: 401 },
     { label: 'home-blocks order: student', method: 'post', path: () => '/api/admin/home-blocks/order', actor: 'student', status: 403 },
+
+    /*
+     * ── لوحة الشرف بالإيد ──────────────────────────────────────────────
+     *
+     * كل صف هنا بينشر — أو بيشيل — اسم طالب قاصر من صفحة عامة، فالتلات
+     * مستويات لازم يبقوا مثبّتين: مش مسجّل ٤٠١، طالب ٤٠٣، أدمن ٢٠٠.
+     *
+     * والبحث (`/students`) على نفس الدرجة: هو كشف أسماء وتليفونات لو اتفتح،
+     * وهو ورا `honor:read` مش ورا «أي حد داخل».
+     */
+    { label: 'honor-board read: anonymous', method: 'get', path: () => '/api/admin/honor-board', actor: 'anonymous', status: 401 },
+    { label: 'honor-board read: student', method: 'get', path: () => '/api/admin/honor-board', actor: 'student', status: 403 },
+    { label: 'honor-board read: admin', method: 'get', path: () => '/api/admin/honor-board', actor: 'admin', status: 200 },
+    { label: 'honor-board student search: anonymous', method: 'get', path: () => '/api/admin/honor-board/students?q=مص', actor: 'anonymous', status: 401 },
+    { label: 'honor-board student search: student', method: 'get', path: () => '/api/admin/honor-board/students?q=مص', actor: 'student', status: 403 },
+    { label: 'honor-board student search: admin', method: 'get', path: () => '/api/admin/honor-board/students?q=مص', actor: 'admin', status: 200 },
+    { label: 'honor-board create: anonymous', method: 'post', path: () => '/api/admin/honor-board', actor: 'anonymous', status: 401 },
+    { label: 'honor-board create: student', method: 'post', path: () => '/api/admin/honor-board', actor: 'student', status: 403 },
+    { label: 'honor-board patch: anonymous', method: 'patch', path: () => `/api/admin/honor-board/${honorPinId}`, actor: 'anonymous', status: 401 },
+    { label: 'honor-board patch: student', method: 'patch', path: () => `/api/admin/honor-board/${honorPinId}`, actor: 'student', status: 403 },
+    { label: 'honor-board delete: anonymous', method: 'delete', path: () => `/api/admin/honor-board/${honorPinId}`, actor: 'anonymous', status: 401 },
+    { label: 'honor-board delete: student', method: 'delete', path: () => `/api/admin/honor-board/${honorPinId}`, actor: 'student', status: 403 },
 
     // ── «نيوز» — two public reads, admin-only everything else ──
     //

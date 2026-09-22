@@ -104,6 +104,16 @@ export const NOTIFICATION_KINDS = [
    */
   'homework_submitted',
   'homework_reviewed',
+  /**
+   * STUDENT — «اسمك على لوحة الشرف».
+   *
+   * الكِند الوحيد اللي الطالب مالوش أي طريقة تانية يعرف بيه: اللوحة صفحة
+   * عامة مالوش سبب يفتحها، ومفيش حاجة على شاشاته بتتغيّر لما صف يتكتب.
+   *
+   * بيتبعت للصف اللي المدرّس حطّه بإيده بس (`honor_board_pins`). الورقة
+   * المثبّتة واخدة `quiz_graded` على نفس النتيجة، وإشعار تاني عليها دوشة.
+   */
+  'honor_board_listed',
 ] as const;
 
 const base = {
@@ -407,6 +417,29 @@ export const HomeworkReviewedNotificationSchema = z.object({
   grade: z.number().min(0).max(100).nullable(),
 });
 
+/**
+ * STUDENT — «اسمك على لوحة الشرف».
+ *
+ * كل حاجة هنا بتتحل وقت القراية من `honor_board_pins` زي أي عنوان تاني على
+ * الفيد، ومهم هنا أكتر: المركز والسبب والتاريخ كلهم بيتعدّلوا بعد ما الصف
+ * يتكتب، وإشعار محفور فيه «المركز التاني» كان هيفضل يقول كده بعد ما يبقى
+ * الأول.
+ *
+ * ⚠️ مفيش اسم الطالب هنا. الفيد ده بتاعه هو، والكارت بيقول «اسمك»، فاسمه
+ * فيه معلومة زيادة على صف بيتخزّن.
+ */
+export const HonorBoardListedNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('honor_board_listed'),
+  pinId: z.uuid(),
+  /** مفتاح الدور — الكارت بيوصّل على `/honor-board?round=…` بيه. */
+  day: z.string(),
+  rank: z.number().int().min(1),
+  /** «تانية بكالوريا — لغات»، أو فاضية. */
+  courseLabel: z.string(),
+  reason: z.string(),
+});
+
 export const NotificationSchema = z.discriminatedUnion('kind', [
   QuizGradedNotificationSchema,
   ExtraAttemptNotificationSchema,
@@ -425,6 +458,7 @@ export const NotificationSchema = z.discriminatedUnion('kind', [
   CourseCompletedNotificationSchema,
   HomeworkSubmittedNotificationSchema,
   HomeworkReviewedNotificationSchema,
+  HonorBoardListedNotificationSchema,
 ]);
 
 export const NotificationFeedSchema = z.object({

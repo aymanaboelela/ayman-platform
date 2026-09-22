@@ -38,6 +38,7 @@ import { PendingExamsCard } from '@/components/dashboard/pending-exams-card';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { NextUpBlock } from '@/components/dashboard/next-up-block';
 import { InstructorMessageCard } from '@/components/dashboard/instructor-message-card';
+import { HonorBoardCard } from '@/components/dashboard/honor-board-card';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
 import { TipOfDayCard } from '@/components/dashboard/tip-of-day-card';
 import { WhatsappChannelCard } from '@/components/dashboard/whatsapp-channel-card';
@@ -414,6 +415,22 @@ export default async function DashboardPage() {
           كان هيبقى زرار مابيعملش حاجة، وهو بالظبط الفخ اللي CLAUDE.md §٢
           قاعدة ٣ بتحكيه: جيت بيفتح تناقض في الشاشة اللي حواليه. */}
       {features.assistant ? <InstructorMessageCard /> : null}
+
+      {/*
+        «مبروك! اسمك على لوحة الشرف» — تحت رسالة المهندس وفوق كل حاجة تانية.
+
+        نفس منطق الكارت اللي فوقه بالظبط: ده خبر مخصوص بالطالب ده، عمره
+        أسبوعين بالكتير، وبعدها بيختفي لوحده من السيرفر. فوق كل بلوك ثابت في
+        الصفحة طول ما هو موجود، ومش في العمود الجانبي — «اسمك اتنشر» مش من نوع
+        «حاجات مش شغلك» اللي الجنب بيجمّعها.
+
+        ⚠️ ورا `features.honorBoard`: ستاك مقفول فيه الفيتشر مالوش صفحة لوحة
+        أصلاً، والزرار كان هيودّي على `notFound()` — نفس فخ قاعدة ٣ في
+        CLAUDE.md §٢ اللي الكارت اللي فوق اتلفّ فيه.
+      */}
+      {features.honorBoard && dashboard.honorBoard ? (
+        <HonorBoardCard standing={dashboard.honorBoard} />
+      ) : null}
 
       {/*
         ## Two columns, and what decides which side a block goes to

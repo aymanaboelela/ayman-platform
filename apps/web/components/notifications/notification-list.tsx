@@ -104,6 +104,12 @@ function iconFor(entry: StudentNotification) {
     case 'homework_submitted':
     case 'homework_reviewed':
       return NotebookPen;
+
+    /* لوحة الشرف — نفس الكأس اللي في عنوان القسم على الصفحة الرئيسية
+       (`honor-board-section.tsx`). صف بيودّي على اللوحة لازم يبقى شكله
+       اللوحة. */
+    case 'honor_board_listed':
+      return Trophy;
   }
 }
 

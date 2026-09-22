@@ -87,6 +87,7 @@
     "./admin/entitlements": "./src/admin/entitlements.ts",
     "./admin/navigation": "./src/admin/navigation.ts",
     "./admin/home-blocks": "./src/admin/home-blocks.ts",
+    "./admin/honor-board": "./src/admin/honor-board.ts",
     "./quiz/scheduled": "./src/quiz/scheduled.ts",
     "./admin/exams": "./src/admin/exams.ts"
   },

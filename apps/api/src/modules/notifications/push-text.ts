@@ -260,7 +260,44 @@ export function pushPayloadFor(entry: StudentNotification): PushPayload | null {
         tag: 'ayman-instructor-message',
       };
 
+    /*
+      لوحة الشرف — «اسمك عليها».
+
+      على الليستة دي لأقوى سبب فيها كلها: الطالب مالوش أي طريقة تانية يعرف.
+      اللوحة صفحة عامة مالوش سبب يفتحها، ومفيش حاجة على شاشاته بتتغيّر لما
+      اسمه يتحط عليها — فالـpush مش «تنبيه إضافي»، ده الخبر نفسه.
+
+      مفيش اسم مدرّس هنا، فالسطرين بيتشحنوا زي ما هما على أي ستاك — مش زي
+      `homework_reviewed` فوق.
+
+      `tag` لكل تكريم لوحده: اتنين في شهر حاجتين حصلوا، ودمجهم في سطر واحد
+      بيمسح واحد فيهم.
+    */
+    case 'honor_board_listed':
+      return {
+        title: c.honorBoardListed,
+        body: formatCopy(c.honorBoardListedDetail, {
+          rank: rankWord(entry.rank),
+          reason: entry.reason,
+        }),
+        // دور اللوحة بتاعه، مش أول الصفحة — صفحة الأرشيف بتفتح على الدور
+        // اللي في `?round=`.
+        url: `/honor-board?round=${entry.day}`,
+        tag: `ayman-honor-${entry.pinId}`,
+      };
+
     default:
       return null;
   }
+}
+
+/**
+ * «المركز الأول» — الكلمة، مش الرقم.
+ *
+ * رقم لاتيني جوّه سطر عربي على شاشة قفل بيتقلب (`unicode-bidi` مش موجود في
+ * التراي)، والكلمة بتتقري صح في كل مكان. مركز أكبر من الليستة بيرجّع نص
+ * فاضي، و`formatCopy` بتسيب الشرطة — أحسن من «المركز undefined».
+ */
+function rankWord(rank: number): string {
+  return copy.landing.honorBoard.placeRanks[rank - 1] ?? '';
 }

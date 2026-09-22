@@ -653,6 +653,27 @@ export const PendingExamSchema = z.object({
 });
 export type PendingExam = z.infer<typeof PendingExamSchema>;
 
+/**
+ * تكريم واحد على لوحة الشرف، من ناحية الطالب صاحبه.
+ *
+ * مفيش اسمه فيه: الحمولة دي بتاعته هو والكارت بيقول «اسمك»، فاسمه هنا
+ * معلومة زيادة على حاجة بتتبعت على الشبكة من غير سبب.
+ */
+export const HonorStandingSchema = z.object({
+  /** `YYYY-MM-DD` بتوقيت القاهرة — الزرار بيودّي على `/honor-board?round=` بيه. */
+  day: z.string(),
+  honoredAt: z.iso.datetime(),
+  rank: z.number().int().min(1),
+  /** «تانية بكالوريا — لغات»، أو فاضية. */
+  courseLabel: z.string(),
+  /** اللي المدرّس كتبه بنفسه على الكارت. */
+  reason: z.string(),
+  /** كام مرة اتكرّم — الكارت مابيقولهاش النهارده، والرقم هنا عشان الشاشة
+   *  تعرف تقول «تاني مرة» من غير ريكويست تاني. */
+  total: z.number().int().min(1),
+});
+export type HonorStanding = z.infer<typeof HonorStandingSchema>;
+
 export const DashboardSchema = z.object({
   continueWatching: ContinueWatchingSchema.nullable(),
   enrolledCourses: z.array(EnrolledCourseSchema),
@@ -672,6 +693,22 @@ export const DashboardSchema = z.object({
    * have not finished a course yet or have already sat its exam.
    */
   pendingExams: z.array(PendingExamSchema),
+  /**
+   * «إنت على لوحة الشرف» — آخر تكريم بالإيد للطالب ده، أو `null`.
+   *
+   * اللوحة صفحة عامة مالوش سبب يفتحها، فمن غير السطر ده اسمه ممكن يفضل
+   * منشور وهو مايعرفش. الإشعار بيقول مرة واحدة ساعة ما يحصل؛ ده الكارت اللي
+   * بيفضل على الشاشة شوية بعدها.
+   *
+   * `.default(null)` مش شكليات: الداشبورد بتتـparse على الويب، وفي نص
+   * الديبلوي الويب بيبقى جديد والـAPI لسه قديم — حقل مطلوب هنا كان بيرمي
+   * على كل حمولة قديمة ويفضّي الصفحة كلها.
+   *
+   * الورقة المثبّتة (`honor_board_at`) مش هنا عن قصد: الطالب ده واخد
+   * `quiz_graded` على نفس النتيجة، والكارت ده بيتكلّم عن اللي مفيش غيره
+   * بيقوله.
+   */
+  honorBoard: HonorStandingSchema.nullable().default(null),
 });
 
 export type LessonProgressState = z.infer<typeof LessonProgressStateSchema>;

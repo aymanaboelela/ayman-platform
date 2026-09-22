@@ -377,7 +377,36 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         href: `/courses/${entry.courseSlug}/lessons/${entry.lessonId}`,
       };
     }
+
+    /*
+     * لوحة الشرف — «اسمك عليها».
+     *
+     * بيروح على **دور اللوحة** بتاعه، مش على أول صفحة الأرشيف: اللوحة
+     * بتتغيّر كل امتحان، وبعد شهرين الاسم اللي الإشعار بيتكلّم عنه بيبقى
+     * في دور تاني تحت. `?round=` بيفتح نفس اللوحة اللي كان عليها.
+     *
+     * مفيش اسم مدرّس في ولا سطر هنا، فمفيش بوابة `IS_AYMAN` — التهنئة
+     * بتتشحن زي ما هي على أي ستاك.
+     */
+    case 'honor_board_listed':
+      return {
+        title: c.honorBoardListed,
+        detail: formatCopy(c.honorBoardListedDetail, {
+          rank: rankWord(entry.rank),
+          reason: entry.reason,
+        }),
+        // الشارة — «تانية بكالوريا — لغات». فاضية على تكريم مالوش كورس
+        // ولا سنة في البروفايل، والسطر بيفضل فاضي زي أي عنوان مش موجود.
+        subtitle: entry.courseLabel,
+        href: `/honor-board?round=${entry.day}`,
+      };
   }
+}
+
+/** «المركز الأول» — الكلمة مش الرقم، عشان مايبقاش فيه رقم لاتيني جوّه سطر
+ *  عربي. مركز أكبر من الليستة بيرجّع فاضي بدل «المركز undefined». */
+function rankWord(rank: number): string {
+  return copy.landing.honorBoard.placeRanks[rank - 1] ?? '';
 }
 
 /**

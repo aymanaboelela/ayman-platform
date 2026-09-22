@@ -19,7 +19,7 @@ const BASE: HonorBoardEntry = {
   studentName: 'زياد أيمن',
   avatarKey: 'https://lh3.googleusercontent.com/selfie',
   photoKey: null,
-  quizTitle: 'امتحان نص الشهر الأول',
+  title: 'امتحان نص الشهر الأول',
   courseLabel: 'تانية بكالوريا — عربي',
   rank: 1,
   scaledScore: 100,

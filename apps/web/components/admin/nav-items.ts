@@ -18,6 +18,7 @@ import {
   Send,
   Settings,
   SquarePen,
+  Trophy,
   Users,
   UserRoundSearch,
   type LucideIcon,
@@ -224,6 +225,20 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.grading,
     icon: SquarePen,
     permission: 'attempt:grade',
+    group: 'teaching',
+  },
+  {
+    // لوحة الشرف — تحت التصحيح مباشرة، وده مقصود: الورقة بتتثبّت من الشاشة
+    // اللي فوق، والصف اليدوي بيتحط من دي، والاتنين بيطلعوا على نفس اللوحة
+    // العامة. حد بيدوّر على «مين على اللوحة» بيلاقي الشاشتين جنب بعض.
+    //
+    // `feature: 'honorBoard'` زي الراوت بالظبط: ستاك مقفول فيه الفيتشر مالوش
+    // لوحة ولا أرشيف، والشاشة كانت هتبقى زرار بيكتب في جدول مالوش قارئ.
+    href: '/admin/honor-board',
+    labelAr: copy.admin.nav.honorBoard,
+    icon: Trophy,
+    permission: 'honor:read',
+    feature: 'honorBoard',
     group: 'teaching',
   },
   {

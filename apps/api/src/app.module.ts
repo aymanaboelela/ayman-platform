@@ -35,6 +35,7 @@ import { FlagsModule } from './modules/admin/flags/flags.module';
 import { RolesModule } from './modules/admin/roles/roles.module';
 import { NavigationModule } from './modules/admin/navigation/navigation.module';
 import { HomeBlocksModule } from './modules/admin/home-blocks/home-blocks.module';
+import { AdminHonorBoardModule } from './modules/admin/honor-board/honor-board.module';
 import { MarketingModule } from './modules/marketing/marketing.module';
 import { NewsModule } from './modules/news/news.module';
 import { AuditReadModule } from './modules/admin/audit/audit-read.module';
@@ -149,6 +150,7 @@ import { TenantEntitlementsModule } from './modules/tenant-entitlements/tenant-e
     RolesModule,
     NavigationModule,
     HomeBlocksModule,
+    AdminHonorBoardModule,
     MarketingModule,
     NewsModule,
     AuditReadModule,
