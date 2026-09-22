@@ -84,7 +84,7 @@ export function NeonHonorBoard({
                     </span>
                     <span className="neon-board__who">
                       <span className="neon-board__name">{entry.studentName}</span>
-                      <span className="neon-board__quiz">{entry.quizTitle}</span>
+                      <span className="neon-board__quiz">{entry.title}</span>
                     </span>
                     <span className="neon-board__leader" aria-hidden="true" />
                     {/*
@@ -92,10 +92,17 @@ export function NeonHonorBoard({
                       line: without the isolate the bidi algorithm reorders it
                       to «100/95», which is a different — and much better —
                       mark than the student actually got.
+
+                      ⚠️ مفيش درجة على الصف اللي اتحط بالإيد — «الأول على
+                      الدفعة» مالهاش ٤٧ من ٥٠. «0/0» كان هيتقري «جاب صفر» على
+                      صفحة عامة بتسمّي طالب، فالسطر كله بيختفي والخط اللي
+                      قبله بيكمّل لآخر الصف.
                     */}
-                    <Mono className="neon-board__score">
-                      {`${formatMark(entry.scaledScore)}/${formatMark(entry.gradeOutOf)}`}
-                    </Mono>
+                    {entry.scaledScore !== null && entry.gradeOutOf !== null ? (
+                      <Mono className="neon-board__score">
+                        {`${formatMark(entry.scaledScore)}/${formatMark(entry.gradeOutOf)}`}
+                      </Mono>
+                    ) : null}
                   </li>
                 ))}
               </ol>

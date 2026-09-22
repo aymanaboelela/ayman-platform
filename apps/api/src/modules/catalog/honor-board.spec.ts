@@ -1,5 +1,11 @@
 import { HonorBoardPeriodSchema } from '@ayman/contracts/admin/exams';
-import { courseChip, toHonorBoardRounds, type PinnedAttempt } from './honor-board';
+import {
+  chipFromProfile,
+  courseChip,
+  toHonorBoardRounds,
+  type ManualPin,
+  type PinnedAttempt,
+} from './honor-board';
 
 /**
  * No database here on purpose — see the module header. These assert the three
@@ -48,6 +54,21 @@ describe('courseChip', () => {
     // The foundation course is one of these, and «تانية بكالوريا — عربي ولغات»
     // would be a label claiming a distinction the race did not make.
     expect(courseChip({ year: 2, forGeneral: true, forLanguages: true })).toBe('تانية بكالوريا');
+  });
+
+  it('names THIRD year, and stays silent on a year it has no name for', () => {
+    /*
+     * `onboarding.ts` بيقبل `.min(1).max(3)`، وفيه دلوقتي طلبة وكورسات في
+     * التالتة. الجيت الثنائي القديم كان بيطبع «تانية بكالوريا» تحتيهم على
+     * صفحة عامة — غلط ما بيبانش غير لصاحب الاسم.
+     */
+    expect(courseChip({ year: 3, forGeneral: true, forLanguages: false })).toBe(
+      'تالتة بكالوريا — عربي',
+    );
+    expect(courseChip({ year: 3, forGeneral: true, forLanguages: true })).toBe('تالتة بكالوريا');
+    // سنة مش من التلاتة = مفيش شارة، مش شارة مخمّنة.
+    expect(courseChip({ year: 4, forGeneral: true, forLanguages: false })).toBe('');
+    expect(courseChip({ year: 0, forGeneral: true, forLanguages: false })).toBe('');
   });
 });
 
@@ -98,7 +119,7 @@ describe('toHonorBoardRounds', () => {
       pin({ name: 'ب', at: '2026-09-17T04:01:00Z', title: 'امتحان نص الشهر الأول' }),
       pin({ name: 'ج', at: '2026-09-17T04:02:00Z', title: 'Mid-Month Exam 1' }),
     ]);
-    expect(round.examTitles).toEqual(['امتحان نص الشهر الأول', 'Mid-Month Exam 1']);
+    expect(round.titles).toEqual(['امتحان نص الشهر الأول', 'Mid-Month Exam 1']);
   });
 
   it('clamps a paper that outscores its own total', () => {
@@ -132,5 +153,195 @@ describe('toHonorBoardRounds', () => {
 
   it('is empty for an empty board rather than throwing', () => {
     expect(toHonorBoardRounds([])).toEqual([]);
+  });
+});
+
+/** A hand-added row — `honor_board_pins`, the board without a paper behind it. */
+function hand(over: {
+  name: string;
+  at: string;
+  rank: number;
+  reason?: string;
+  course?: { year: number; forGeneral: boolean; forLanguages: boolean } | null;
+  photo?: string | null;
+  profilePhoto?: string | null;
+  year?: number | null;
+  stream?: string | null;
+}): ManualPin {
+  return {
+    honoredAt: new Date(over.at),
+    rank: over.rank,
+    reason: over.reason ?? 'الأول على الدفعة',
+    photoKey: over.photo ?? null,
+    course: over.course === undefined ? ARABIC : over.course,
+    user: {
+      image: null,
+      studentProfile: {
+        fullName: over.name,
+        honorPhotoKey: over.profilePhoto ?? null,
+        year: over.year ?? 2,
+        schoolStream: over.stream ?? 'general',
+      },
+    },
+  };
+}
+
+describe('chipFromProfile', () => {
+  it('names the year and the stream off the student, not off a course', () => {
+    expect(chipFromProfile({ year: 2, schoolStream: 'languages' })).toBe('تانية بكالوريا — لغات');
+    expect(chipFromProfile({ year: 1, schoolStream: 'general' })).toBe('أولى بكالوريا — عربي');
+  });
+
+  it('drops the stream half for a profile that never answered', () => {
+    // `school_stream` is nullable for the students who predate the question.
+    // «تانية بكالوريا — عربي» on one of them would be the card stating a fact
+    // nobody ever gave it.
+    expect(chipFromProfile({ year: 2, schoolStream: null })).toBe('تانية بكالوريا');
+  });
+
+  it('names a third-year student third year', () => {
+    // ٣٩ طالب في الداتابيز المحلية سنتهم ٣. الكارت بتاعهم كان بيقول «تانية».
+    expect(chipFromProfile({ year: 3, schoolStream: 'general' })).toBe('تالتة بكالوريا — عربي');
+    expect(chipFromProfile({ year: 3, schoolStream: null })).toBe('تالتة بكالوريا');
+  });
+
+  it('is empty with no year at all', () => {
+    // The card leaves the chip line out rather than guessing a year.
+    expect(chipFromProfile({ year: null, schoolStream: 'general' })).toBe('');
+    expect(chipFromProfile(null)).toBe('');
+  });
+});
+
+describe('toHonorBoardRounds — the two sources on one board', () => {
+  it('files a hand-added row in the same round as a paper pinned that day', () => {
+    // THE reason both sources bucket on the Cairo day: «كمّل الدور بواحد
+    // تاني» has to land on the board that is already up, not open a second
+    // round dated the same afternoon.
+    const rounds = toHonorBoardRounds(
+      [pin({ name: 'زياد', at: '2026-09-17T04:00:00Z' })],
+      [hand({ name: 'ندى', at: '2026-09-17T18:00:00Z', rank: 2 })],
+    );
+
+    expect(rounds).toHaveLength(1);
+    expect(rounds[0].entries.map((e) => e.studentName)).toEqual(['زياد', 'ندى']);
+  });
+
+  it('lets a hand-added first place take the place, and walks the paper past it', () => {
+    /*
+     * The instructor typed 1 for ندى on a round whose exam already had a
+     * first place. The stated place WINS and زياد's paper becomes التاني.
+     *
+     * The alternative — both cards reading «المركز الأول» in the SAME course
+     * — is the one outcome the board must never print: two firsts are honest
+     * across عربي and لغات because they never sat the same paper, and a
+     * contradiction inside one course. The instructor can see the effective
+     * place on `/admin/honor-board`, which warns before it happens.
+     */
+    const [round] = toHonorBoardRounds(
+      [pin({ name: 'زياد', at: '2026-09-17T04:00:00Z' })],
+      [hand({ name: 'ندى', at: '2026-09-17T18:00:00Z', rank: 1 })],
+    );
+    expect(round.entries.map((e) => [e.studentName, e.rank])).toEqual([
+      ['ندى', 1],
+      ['زياد', 2],
+    ]);
+  });
+
+  it('walks a derived place PAST one a hand-added row has claimed', () => {
+    // Two papers and a hand-added second place. Without the skip the second
+    // paper is also numbered 2 and one board carries two «المركز التاني» in
+    // the same course, which is a result that does not exist.
+    const [round] = toHonorBoardRounds(
+      [
+        pin({ name: 'زياد', at: '2026-09-17T04:00:00Z' }),
+        pin({ name: 'كيرلس', at: '2026-09-17T04:01:00Z' }),
+      ],
+      [hand({ name: 'ندى', at: '2026-09-17T18:00:00Z', rank: 2 })],
+    );
+    expect(round.entries.map((e) => [e.studentName, e.rank])).toEqual([
+      ['زياد', 1],
+      ['ندى', 2],
+      ['كيرلس', 3],
+    ]);
+  });
+
+  it('sorts a round by place, so the rank words read downwards', () => {
+    const [round] = toHonorBoardRounds(
+      [],
+      [
+        hand({ name: 'تالت', at: '2026-09-17T18:00:00Z', rank: 3 }),
+        hand({ name: 'أول', at: '2026-09-17T18:01:00Z', rank: 1 }),
+        hand({ name: 'تاني', at: '2026-09-17T18:02:00Z', rank: 2 }),
+      ],
+    );
+    expect(round.entries.map((e) => e.studentName)).toEqual(['أول', 'تاني', 'تالت']);
+  });
+
+  it('leaves the mark null on a hand-added row', () => {
+    // «الأول على الدفعة» has no 47/50. A zero would read as «جاب صفر» on a
+    // public card about a named student.
+    const [round] = toHonorBoardRounds([], [hand({ name: 'ندى', at: '2026-09-17T18:00:00Z', rank: 1 })]);
+    expect(round.entries[0]).toMatchObject({ scaledScore: null, gradeOutOf: null, percent: null });
+    expect(() => HonorBoardPeriodSchema.parse(round)).not.toThrow();
+  });
+
+  it('falls back from the pin photo to the profile photo, then to nothing', () => {
+    const [round] = toHonorBoardRounds(
+      [],
+      [
+        hand({ name: 'أ', at: '2026-09-17T18:00:00Z', rank: 1, photo: 'ab/pin.webp', profilePhoto: 'cd/profile.webp' }),
+        hand({ name: 'ب', at: '2026-09-17T18:01:00Z', rank: 2, profilePhoto: 'cd/profile.webp' }),
+        hand({ name: 'ج', at: '2026-09-17T18:02:00Z', rank: 3 }),
+      ],
+    );
+    expect(round.entries.map((e) => e.photoKey)).toEqual(['ab/pin.webp', 'cd/profile.webp', null]);
+  });
+
+  it('labels a courseless pin from the student own year and stream', () => {
+    // «الأول على الدفعة» is not a course race, but the chip still has to say
+    // which year — otherwise أولى and تانية stand side by side as if they ran
+    // together.
+    const [round] = toHonorBoardRounds(
+      [],
+      [hand({ name: 'ندى', at: '2026-09-17T18:00:00Z', rank: 1, course: null, year: 1, stream: 'languages' })],
+    );
+    expect(round.entries[0].courseLabel).toBe('أولى بكالوريا — لغات');
+  });
+
+  it('puts the reason on the card line the exam title uses', () => {
+    const [round] = toHonorBoardRounds(
+      [],
+      [hand({ name: 'ندى', at: '2026-09-17T18:00:00Z', rank: 1, reason: 'انتظام كامل' })],
+    );
+    expect(round.entries[0].title).toBe('انتظام كامل');
+  });
+
+  it('keeps the reasons OUT of the rail, and the exam names in', () => {
+    /*
+     * `titles` بيتطبع تحت التاريخ في الريل الجنبي، وسطره هو
+     * `titles.join(' · ')`. السبب على الكارت، مش في الريل: لوحة فيها تلات
+     * أسماء بالإيد كانت بتطبع تلات جمل كاملة مركونة في كارت عرضه ٢٥٠ بكسل.
+     */
+    const [round] = toHonorBoardRounds(
+      [pin({ name: 'زياد', at: '2026-09-17T09:00:00Z', title: 'امتحان الشهر' })],
+      [
+        hand({ name: 'ندى', at: '2026-09-17T18:00:00Z', rank: 1, reason: 'الأولى على الدفعة' }),
+        hand({ name: 'مريم', at: '2026-09-17T18:00:00Z', rank: 2, reason: 'أحسن تقدّم في الترم' }),
+      ],
+    );
+    expect(round.titles).toEqual(['امتحان الشهر']);
+    // والسبب لسه على الكارت بتاع صاحبه.
+    expect(round.entries.map((e) => e.title)).toEqual(
+      expect.arrayContaining(['الأولى على الدفعة', 'أحسن تقدّم في الترم']),
+    );
+  });
+
+  it('leaves the rail line empty for a round that is all hand-added', () => {
+    // التاريخ لوحده هو اللي بيفرّقها، وهو مكتوب فوقه أصلًا.
+    const [round] = toHonorBoardRounds(
+      [],
+      [hand({ name: 'ندى', at: '2026-09-17T18:00:00Z', rank: 1, reason: 'انتظام كامل' })],
+    );
+    expect(round.titles).toEqual([]);
   });
 });

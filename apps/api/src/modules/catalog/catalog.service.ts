@@ -370,6 +370,42 @@ export class CatalogService {
    * into a class list.
    */
   async honorBoard(): Promise<HonorBoard> {
+    /*
+     * الصفوف اللي المدرّس حطّها بإيده — المصدر التاني للّوحة.
+     *
+     * ريكويست لوحده مش join: مفيش علاقة بين الجدولين أصلاً (ده بالظبط
+     * سبب وجوده — تكريم من غير ورقة)، والدمج بيحصل في `toHonorBoardRounds`
+     * على اليوم المصري.
+     *
+     * نفس سقف الـ400 اللي فوق ونفس السبب: الأرشيف بيقرا من نفس النتيجة،
+     * و٢٤ دور × أربع خانات = ٩٦، والباقي مساحة لدور اتملا بكرم.
+     */
+    const pins = await this.prisma.honorBoardPin.findMany({
+      orderBy: [{ honoredAt: 'desc' }, { rank: 'asc' }],
+      take: 400,
+      select: {
+        honoredAt: true,
+        rank: true,
+        reason: true,
+        photoKey: true,
+        course: { select: { year: true, forGeneral: true, forLanguages: true } },
+        user: {
+          select: {
+            image: true,
+            studentProfile: {
+              select: {
+                fullName: true,
+                honorPhotoKey: true,
+                // الشارة لما مايكونش فيه كورس — «أولى بكالوريا — لغات».
+                year: true,
+                schoolStream: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
     const rows = await this.prisma.quizAttempt.findMany({
       where: { honorBoardAt: { not: null }, state: 'submitted' },
       orderBy: [
@@ -443,7 +479,7 @@ export class CatalogService {
      * from the `orderBy` above — and `toHonorBoardRounds` ranks by walking
      * it. That ordering is the contract between the two; see its header.
      */
-    const periods = toHonorBoardRounds(eligible);
+    const periods = toHonorBoardRounds(eligible, pins);
 
     return { entries: periods[0]?.entries ?? [], periods };
   }

@@ -5,8 +5,12 @@ import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
 import { SCORE_FEED, type ScoreFeed } from './score-feed';
 import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
+import { chipFromProfile, courseChip, honorDayKey } from '../catalog/honor-board';
 
 const RECENT_SCORE_LIMIT = 5;
+
+/** قد إيه «مبروك» تفضل على الشاشة — أسبوعين. اقرا `honorStandingFor`. */
+const HONOR_CARD_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class DashboardService {
@@ -32,6 +36,16 @@ export class DashboardService {
       taken further apart than these do.
     */
     const scores = this.scores.recentFor(userId, RECENT_SCORE_LIMIT);
+
+    /*
+      «إنت على لوحة الشرف» — آخر تكريم بالإيد، وعددهم.
+
+      متبدي هنا لنفس سبب `scores` فوق: مالوش علاقة بأي حاجة تحت، ومستنيه في
+      نص الاستعلامات التانية يخسّر لفة. ومتحسوب **قبل** فرع «مفيش اشتراكات»
+      كمان — الطالب ممكن يكون متكرّم على حاجة مالهاش كورس أصلاً («الأول على
+      الدفعة»)، والكارت هو الحاجة الوحيدة اللي بتقول له.
+    */
+    const honorBoard = this.honorStandingFor(userId);
 
     const enrollments = await this.prisma.enrollment.findMany({
       where: {
@@ -157,6 +171,7 @@ export class DashboardService {
         recentScores: [],
         totalWatchedSeconds: 0,
         pendingExams: [],
+        honorBoard: await honorBoard,
       };
     }
 
@@ -375,6 +390,54 @@ export class DashboardService {
       recentScores: await scores,
       totalWatchedSeconds: watchedAgg._sum.watchedSeconds ?? 0,
       pendingExams,
+      honorBoard: await honorBoard,
+    };
+  }
+
+  /**
+   * آخر تكريم على لوحة الشرف للطالب ده، أو `null`.
+   *
+   * ## ليه أسبوعين
+   *
+   * الكارت ده «مبروك»، والمبروك ليها تاريخ صلاحية: كارت تهنئة على حاجة حصلت
+   * من شهرين بيبقى أثاث، والأثاث مابيتشافش — ولما ييجي تكريم جديد بعده الكارت
+   * اللي ثابت من زمان مابيلفتش. نفس القاعدة اللي `instructorMessage` ماشي
+   * عليها: بيظهر وهو لسه خبر.
+   *
+   * ⚠️ `total` بيتعدّ على التكريمات **كلها** مش اللي جوّه الشباك، لأنه إجابة
+   * سؤال تاني: «اتكرّم كام مرة»، وده مش بيقل بمرور الوقت.
+   */
+  private async honorStandingFor(userId: string): Promise<Dashboard['honorBoard']> {
+    const since = new Date(Date.now() - HONOR_CARD_WINDOW_MS);
+    const [latest, total] = await Promise.all([
+      this.prisma.honorBoardPin.findFirst({
+        where: { userId, honoredAt: { gte: since } },
+        // ورا التاريخ: `id` uuid7، يعني ترتيبه زمني، فاتنين في نفس اليوم
+        // (وكلهم بيتخزّنوا الساعة ١٢ ظهرًا بالظبط — اقرا `instantFor`) ليهم
+        // ترتيب ثابت بدل ما الصف يتبدّل بين ريكويست والتاني.
+        orderBy: [{ honoredAt: 'desc' }, { id: 'desc' }],
+        select: {
+          honoredAt: true,
+          rank: true,
+          reason: true,
+          course: { select: { year: true, forGeneral: true, forLanguages: true } },
+          user: { select: { studentProfile: { select: { year: true, schoolStream: true } } } },
+        },
+      }),
+      this.prisma.honorBoardPin.count({ where: { userId } }),
+    ]);
+
+    if (!latest) return null;
+
+    return {
+      day: honorDayKey(latest.honoredAt),
+      honoredAt: latest.honoredAt.toISOString(),
+      rank: latest.rank,
+      courseLabel: latest.course
+        ? courseChip(latest.course)
+        : chipFromProfile(latest.user.studentProfile),
+      reason: latest.reason,
+      total,
     };
   }
 }

@@ -108,7 +108,7 @@ export function BoardHonors({
 
                 <span className="board-honor__name">{entry.studentName}</span>
 
-                <span className="board-honor__quiz">{entry.quizTitle}</span>
+                <span className="board-honor__quiz">{entry.title}</span>
               </li>
             ))}
           </ul>

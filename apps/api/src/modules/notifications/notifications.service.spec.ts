@@ -354,6 +354,58 @@ describe('NotificationsService', () => {
     expect(entry.courseSlug).toBe(courseSlug);
   });
 
+  it('puts an honor-board pin IN THE FEED, not just in the table', async () => {
+    /*
+     * الإشعار ده مالوش `lessonId`، و`toEntry` فيها بوابة
+     * `if (!lessonId) return null` قبل الـ`switch` اللي بيرندر الأنواع
+     * المربوطة بدرس. أول نسخة حطّت الكيس ده **جوّه** الـ`switch`: الصف كان
+     * بيتكتب صح، والعدّاد الأحمر كان بيعدّه، والفيد كان بيرميه — الطالبة
+     * تدوس على «٩+» وتلاقي نفس الشاشة.
+     *
+     * فالتست ده بيقرا الفيد، مش بيتأكد إن `emit` اتنادت.
+     */
+    const pin = await prisma.honorBoardPin.create({
+      data: {
+        userId,
+        honoredAt: new Date('2026-09-17T12:00:00+02:00'),
+        rank: 2,
+        reason: 'انتظام كامل',
+      },
+    });
+    await prisma.$transaction((tx) =>
+      service.emit(tx, { userId, kind: 'honor_board_listed', pinId: pin.id }),
+    );
+
+    const feed = await service.feed(userId, 20);
+    expect(() => NotificationFeedSchema.parse(feed)).not.toThrow();
+    expect(feed.entries).toHaveLength(1);
+    const entry = feed.entries[0]!;
+    expect(entry.kind).toBe('honor_board_listed');
+    if (entry.kind !== 'honor_board_listed') throw new Error('unreachable');
+    // المركز والسبب بيتقروا من الصف وقت القراية، فتعديلهم بعد كده بيبان.
+    expect(entry.rank).toBe(2);
+    expect(entry.reason).toBe('انتظام كامل');
+    expect(entry.day).toBe('2026-09-17');
+
+    await prisma.honorBoardPin.delete({ where: { id: pin.id } });
+  });
+
+  it('drops the congratulation when the pin behind it was removed', async () => {
+    // «مبروك، اسمك على لوحة الشرف» على تكريم اتشال جملة غلط، ومفيش حتة
+    // تودّي لها — الصف بيتشال من الفيد، والصفحة بتفضل شغّالة.
+    const pin = await prisma.honorBoardPin.create({
+      data: { userId, honoredAt: new Date('2026-09-17T12:00:00+02:00'), rank: 1, reason: 'الأول' },
+    });
+    await prisma.$transaction((tx) =>
+      service.emit(tx, { userId, kind: 'honor_board_listed', pinId: pin.id }),
+    );
+    await prisma.honorBoardPin.delete({ where: { id: pin.id } });
+
+    const feed = await service.feed(userId, 20);
+    expect(() => NotificationFeedSchema.parse(feed)).not.toThrow();
+    expect(feed.entries).toHaveLength(0);
+  });
+
   it('resolves a page of mixed course kinds in ONE courses query, not one per row', async () => {
     /*
       `course_completed` joined `COURSE_KINDS`, and the failure mode a new

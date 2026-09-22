@@ -10,6 +10,15 @@ import { PushService } from './push.service';
 import { pushPayloadFor } from './push-text';
 import type { Prisma } from '../../generated/prisma/client';
 import { deliveryDaysFor } from '../book-orders/delivery-days';
+import { chipFromProfile, courseChip, honorDayKey } from '../catalog/honor-board';
+
+/** ما بيتقري من `honor_board_pins` وقت قراية الفيد — الصف، مش نسخة منه. */
+interface HonorPinFacts {
+  day: string;
+  rank: number;
+  reason: string;
+  courseLabel: string;
+}
 
 /**
  * What the emitter is given.
@@ -111,7 +120,16 @@ export type EmitInput =
       courseId: string;
       homeworkStatus: 'accepted' | 'needs_work';
       grade: number | null;
-    };
+    }
+  /**
+   * STUDENT — «اسمك على لوحة الشرف».
+   *
+   * `pinId` وبس. المركز والسبب والتاريخ كلهم بيتحلّوا وقت القراية من
+   * `honor_board_pins`، وده مش اتباع للقاعدة عشان القاعدة — الصف ده تحديدًا
+   * بيتعدّل بعد ما يتكتب (المدرّس بيصلّح مركز أو سبب)، وإشعار محفور فيه
+   * «المركز التاني» كان هيفضل بيقول كده بعد ما يبقى الأول.
+   */
+  | { userId: string; kind: 'honor_board_listed'; pinId: string };
 
 /** The kinds whose title is resolved from a lesson at read time. */
 const LESSON_KINDS = new Set([
@@ -486,9 +504,63 @@ export class NotificationsService {
       }
     }
 
+    /*
+      «إنت على اللوحة» — الصف نفسه، مش نسخة منه.
+      
+      المركز والسبب والتاريخ كلهم بيتعدّلوا بعد ما الإشعار يتكتب، فبيتقروا من
+      `honor_board_pins` هنا. ريكويست واحد للصفحة كلها، زي `names` فوق.
+      
+      صف اتمسح مابيرجّعش حاجة، و`toEntry` بيرمي الإشعار — «مبروك، اسمك على
+      اللوحة» على تكريم اتشال بقى جملة غلط، ومش فيه حاجة تودّي لها.
+    */
+    const honorPinIds = [
+      ...new Set(
+        page
+          .filter((row) => row.kind === 'honor_board_listed')
+          .map((row) => payloadString(row.payload, 'pinId'))
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+
+    const honorPins = new Map<string, HonorPinFacts>();
+    if (honorPinIds.length > 0) {
+      const pins = await this.prisma.honorBoardPin.findMany({
+        where: { id: { in: honorPinIds } },
+        select: {
+          id: true,
+          honoredAt: true,
+          rank: true,
+          reason: true,
+          course: { select: { year: true, forGeneral: true, forLanguages: true } },
+          user: {
+            select: { studentProfile: { select: { year: true, schoolStream: true } } },
+          },
+        },
+      });
+      for (const pin of pins) {
+        honorPins.set(pin.id, {
+          day: honorDayKey(pin.honoredAt),
+          rank: pin.rank,
+          reason: pin.reason,
+          courseLabel: pin.course
+            ? courseChip(pin.course)
+            : chipFromProfile(pin.user.studentProfile),
+        });
+      }
+    }
+
     const entries = page
       .map((row) =>
-        toEntry(row, titles, courseTitles, courseSlugs, names, bookTitles, bookOrderDays),
+        toEntry(
+          row,
+          titles,
+          courseTitles,
+          courseSlugs,
+          names,
+          bookTitles,
+          bookOrderDays,
+          honorPins,
+        ),
       )
       // A notification whose lesson has since been deleted has nothing left to
       // point at. Dropping it beats rendering a row that navigates to a 404 —
@@ -641,6 +713,9 @@ function toEntry(
    *  no lines left, which is not a reason to drop the row. */
   bookTitles: Map<string, string>,
   bookOrderDays: Map<string, number>,
+  /** Pin id → the place, the reason and the round, read fresh — all three are
+   *  editable after the row is written. Missing for a pin since deleted. */
+  honorPins: Map<string, HonorPinFacts>,
 ): StudentNotification | null {
   const base = {
     id: row.id,
@@ -830,6 +905,24 @@ function toEntry(
     const courseSlug = courseSlugs.get(courseId);
     if (!courseTitle || !courseSlug) return null;
     return { ...base, kind: 'subscription_cancelled', courseId, courseTitle, courseSlug, reason };
+  }
+
+  /*
+   * ⚠️ فوق بوابة الدرس اللي تحت، مش جوّه الـ`switch` بتاعها.
+   *
+   * التكريم مالوش `lessonId`، و`if (!lessonId) return null` بترمي أي صف
+   * مالوش واحد **قبل** ما الـ`switch` يشتغل أصلًا. لما الكيس ده كان جوّه،
+   * الإشعار كان بيتكتب في الداتابيز، والعدّاد الأحمر كان بيعدّه، والفيد
+   * كان بيرميه — الطالبة تدوس على «٩+» وتلاقي الشاشة زي ما هي.
+   */
+  if (row.kind === 'honor_board_listed') {
+    const pinId = payloadString(row.payload, 'pinId');
+    if (!pinId) return null;
+    const facts = honorPins.get(pinId);
+    // التكريم اتشال. «مبروك، اسمك على لوحة الشرف» على حاجة مابقتش موجودة
+    // جملة غلط، ومفيش حتة تودّي لها.
+    if (!facts) return null;
+    return { ...base, kind: 'honor_board_listed', pinId, ...facts };
   }
 
   const lessonId = payloadString(row.payload, 'lessonId');

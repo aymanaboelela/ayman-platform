@@ -462,7 +462,16 @@ export const HonorBoardEntrySchema = z.object({
    * which is what every card showed before photos existed at all.
    */
   photoKey: z.string().nullable(),
-  quizTitle: z.string(),
+  /**
+   * السطر اللي تحت الاسم على الكارت.
+   *
+   * كان اسمه `quizTitle` وهو عنوان الامتحان، وده لسه صح للورقة المثبّتة.
+   * بس اللوحة بقى فيها صف بيتحط بالإيد كمان (`honor_board_pins`) ومالوش
+   * امتحان أصلاً — «الأول على الدفعة»، «انتظام كامل» — فاسم الحقل بقى
+   * بيكذب على نص اللوحة. ده نفس المكان على الكارت، باسم بيوصف مكانه مش
+   * مصدره.
+   */
+  title: z.string(),
   /** Which course this place was won in — «تانية بكالوريا — لغات».
    *
    *  The board runs ONE RACE PER COURSE, not one race overall, so `rank`
@@ -475,9 +484,20 @@ export const HonorBoardEntrySchema = z.object({
    *  same board are both `rank: 1` when they are firsts of different courses,
    *  and that is the intended reading. */
   rank: z.number().int().min(1),
-  scaledScore: z.number(),
-  gradeOutOf: z.number(),
-  percent: z.number().min(0).max(100),
+  /**
+   * الدرجة — أو `null` على الصف اللي اتحط بالإيد.
+   *
+   * التلاتة دول بيجوا من ورقة اتصحّحت، والتكريم اليدوي مالوش ورقة: «الأول
+   * على الدفعة» مالهاش ٤٧ من ٥٠. صفر هنا كان هيتقري «جاب صفر»، فالغياب
+   * بيتقال `null` والكارت بيسيب الخانة فاضية بدل ما يخترع رقم.
+   *
+   * ⚠️ التلاتة بيغيبوا مع بعض أو بيبقوا موجودين مع بعض. أي كارت بيقرا
+   * `percent` لازم يتعامل مع `null` — بريست «الترمينال» بيطبع
+   * `scaledScore/gradeOutOf` وبيخفي السطر كله لما ما يكونش فيه درجة.
+   */
+  scaledScore: z.number().nullable(),
+  gradeOutOf: z.number().nullable(),
+  percent: z.number().min(0).max(100).nullable(),
 });
 export type HonorBoardEntry = z.infer<typeof HonorBoardEntrySchema>;
 
@@ -496,6 +516,13 @@ export type HonorBoardEntry = z.infer<typeof HonorBoardEntrySchema>;
  * The cost is honest and small: pinning a fifth name a day later files it as
  * its own round. Unpinning and re-pinning it moves it back, which is two
  * clicks on a screen the instructor is already on.
+ *
+ * ## والصف اللي بالإيد بيختار يومه
+ *
+ * `honor_board_pins.honored_at` بيتكتب من الشاشة، مش `now()` — وده الفرق
+ * الوحيد. بيتبوّب بنفس التوقيت المصري، فتكريم يدوي على نفس يوم الورقة
+ * المثبّتة بيقع في نفس الدور بالظبط، وده اللي بيخلّي «كمّل الدور بواحد
+ * تاني» ممكنة من غير ما يتفك ويترجّع.
  */
 export const HonorBoardPeriodSchema = z.object({
   /** `YYYY-MM-DD`, bucketed in CAIRO — a board pinned at 00:30 Cairo belongs
@@ -503,8 +530,10 @@ export const HonorBoardPeriodSchema = z.object({
   key: z.string(),
   /** The newest pin in the round, so the archive can print a real date. */
   pinnedAt: z.iso.datetime(),
-  /** The exams this round covers, deduplicated and in card order. */
-  examTitles: z.array(z.string()),
+  /** اللي الدور ده اتكرّم عليه، من غير تكرار وبترتيب الكروت — عنوان امتحان
+   *  للورقة المثبّتة، وسبب التكريم للصف اللي اتحط بالإيد. كان `examTitles`،
+   *  واتغيّر لنفس سبب `title` فوق: مش كل صف عليه ورا امتحان. */
+  titles: z.array(z.string()),
   entries: z.array(HonorBoardEntrySchema),
 });
 export type HonorBoardPeriod = z.infer<typeof HonorBoardPeriodSchema>;

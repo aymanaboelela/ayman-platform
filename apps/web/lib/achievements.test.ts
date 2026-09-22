@@ -33,6 +33,7 @@ function dashboard(courses: EnrolledCourse[] = []): Dashboard {
     enrolledCourses: courses,
     recentScores: [],
     totalWatchedSeconds: 0,
+    honorBoard: null,
     pendingExams: [],
   };
 }

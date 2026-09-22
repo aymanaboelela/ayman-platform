@@ -227,6 +227,14 @@ export const PERMISSIONS = [
   // screen from giving themselves the rest of the platform.
   'role:read',
   'role:grant',
+  // لوحة الشرف — «حط حد بإيدك».
+  //
+  // اتنين مش واحد، والفرق حقيقي هنا: `honor:read` بيفتح شاشة بتقول مين على
+  // اللوحة دلوقتي، و`honor:write` بينشر اسم طالب قاصر وصورته على صفحة أي حد
+  // على النت بيقراها. مساعد بيراجع اللوحة من غير ما ينشر عليها بقى سطر واحد
+  // في `ROLE_PERMISSIONS` وصفر تغيير في الراوتس.
+  'honor:read',
+  'honor:write',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -351,6 +359,12 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission> | '*'> = {
     // `course:publish` already makes.
     'news:read',
     'news:write',
+
+    // لوحة الشرف بتاعت طلبته. الفيتشر نفسه مفتوح افتراضيًا لكل ستاك
+    // (`FEATURE_DECLARATIONS`)، والقرار «مين يتحط عليها» قرار المدرّس
+    // بطبيعته — زي ما `home:write` بيخلّي شكل صفحته قراره.
+    'honor:read',
+    'honor:write',
 
     'analytics:read',
   ]),

@@ -50,6 +50,7 @@ function dashboard(overrides: Partial<Dashboard> = {}): Dashboard {
     enrolledCourses: [],
     recentScores: [],
     totalWatchedSeconds: 0,
+    honorBoard: null,
     pendingExams: [],
     ...overrides,
   };

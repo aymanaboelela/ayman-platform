@@ -148,7 +148,7 @@ export function HonorBoardSection({ entries = [] }: { entries?: HonorBoardEntry[
                 */}
                 <HonorFace name={entry.studentName} photoKey={entry.photoKey} />
                 <span className="honor-board__slot-name">{entry.studentName}</span>
-                <span className="honor-board__slot-quiz">{entry.quizTitle}</span>
+                <span className="honor-board__slot-quiz">{entry.title}</span>
               </li>
             ))}
           </ul>
