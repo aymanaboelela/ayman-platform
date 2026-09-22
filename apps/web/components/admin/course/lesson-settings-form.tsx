@@ -1,14 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { type StreamChoice, streamChoiceOf, streamFlagsOf } from '@ayman/contracts/content';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
 import { Switch } from '@ayman/ui/components/switch';
 import type { ActionResult, UpdateLessonInput } from '@/app/(admin)/admin/courses/actions';
-import { StreamChoiceField } from '@/components/admin/stream-choice';
 import { useAutosave } from './autosave';
 import { PublishCountdown } from './publish-countdown';
 
@@ -55,7 +53,6 @@ type Draft = {
   mode: CompletionMode;
   minViewSeconds: string;
   passGrade: string;
-  stream: StreamChoice;
   /** `datetime-local`'s own format — `2026-09-12T20:00`, no zone. See
    *  `toInstant` for why that is not what gets sent. */
   publishAt: string;
@@ -103,7 +100,6 @@ function draftOf(lesson: LessonSettings): Draft {
     mode: lesson.completionMode,
     minViewSeconds: String(lesson.completionMinViewSeconds ?? DEFAULT_MIN_VIEW_SECONDS),
     passGrade: String(lesson.completionPassGrade ?? DEFAULT_PASS_GRADE),
-    stream: streamChoiceOf(lesson),
     publishAt: toLocalInput(lesson.publishAt),
     description: lesson.description ?? '',
   };
@@ -122,7 +118,19 @@ function payloadOf(draft: Draft): UpdateLessonInput {
   return {
     isFreePreview: draft.isFreePreview,
     estimatedSeconds: toNumber(draft.estimatedSeconds),
-    ...streamFlagsOf(draft.stream),
+    /*
+     * ⚠️ NOT SENT ANY MORE, and the omission is the point.
+     *
+     * «شيل بتاع اللغات والعام دي من هنا، مش محتاجينها في حاجة». The per-lesson
+     * pair was never an entitlement — `Lesson.forGeneral`'s own model note says
+     * it is «a label and a filter», the course's pair is what actually
+     * describes the audience, and in practice every lecture inherited it.
+     *
+     * The COLUMNS stay and so does every value already in them: `LessonUpdate
+     * Schema` is a partial, so an absent key leaves the row alone. Sending the
+     * flags from a control that no longer exists would have quietly rewritten
+     * whatever an instructor once set to whatever the default computed to.
+     */
     completionMode: draft.mode,
     completionMinViewSeconds: needsViewSeconds ? toNumber(draft.minViewSeconds) : null,
     completionPassGrade: needsPassGrade ? toNumber(draft.passGrade) : null,
@@ -167,16 +175,9 @@ function payloadOf(draft: Draft): UpdateLessonInput {
  */
 export function LessonSettingsForm({
   lesson,
-  courseStream,
   onSave,
 }: {
   lesson: LessonSettings;
-  /**
-   * The course's own pair, so the form can point out a lesson labelled for an
-   * audience its course excludes. Optional because the unit test renders this
-   * form alone; when absent, no warning is possible and none is shown.
-   */
-  courseStream?: { forGeneral: boolean; forLanguages: boolean };
   onSave: (input: UpdateLessonInput) => Promise<ActionResult>;
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(lesson));
@@ -191,20 +192,8 @@ export function LessonSettingsForm({
   const needsViewSeconds = draft.mode === 'on_view';
   const needsPassGrade = draft.mode === 'on_grade' || draft.mode === 'on_pass';
 
-  /*
-   * Reads the DRAFT, not the stored row. It used to read the saved lesson so
-   * the warning would not flash mid-decision, but the audience is three
-   * exclusive radios — one click, never a decision held half-made — and under
-   * autosave the draft becomes the stored pair a moment later anyway. Reading
-   * the stored pair now would mean the warning describes the PREVIOUS choice.
-   */
-  const flags = streamFlagsOf(draft.stream);
-  const overlapsCourse =
-    (flags.forGeneral && courseStream?.forGeneral) ||
-    (flags.forLanguages && courseStream?.forLanguages);
-
   return (
-    <div className="mt-4 space-y-3 border-t border-line-subtle pt-4">
+    <div className="mt-3 space-y-2 border-t border-line-subtle pt-3">
       <h5 className="text-[length:var(--fs-text-sm)] font-medium text-fg">{c.settings}</h5>
 
       {/*
@@ -268,7 +257,7 @@ export function LessonSettingsForm({
         <Label htmlFor={`description-${lesson.id}`}>{c.description}</Label>
         <textarea
           id={`description-${lesson.id}`}
-          rows={4}
+          rows={2}
           maxLength={2000}
           value={draft.description}
           onChange={(event) => update({ description: event.target.value })}
@@ -276,17 +265,6 @@ export function LessonSettingsForm({
         />
         <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.descriptionHint}</p>
       </div>
-
-      <StreamChoiceField
-        idPrefix={`lesson-stream-${lesson.id}`}
-        defaults={lesson}
-        onChange={(stream) => update({ stream })}
-      />
-      {courseStream && !overlapsCourse ? (
-        <p className="stream-warning" role="status">
-          {copy.stream.lessonOutsideCourse}
-        </p>
-      ) : null}
 
       <div className="flex flex-wrap items-end gap-4">
         <div className="flex items-center gap-2 pb-2">

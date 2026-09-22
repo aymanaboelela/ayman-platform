@@ -89,7 +89,6 @@ export function SectionCard({
   examLessonId,
   defaultOpen,
   handleProps,
-  courseStream,
 }: {
   courseId: string;
   section: Section;
@@ -98,8 +97,6 @@ export function SectionCard({
   examLessonId: string | null;
   defaultOpen: boolean;
   handleProps: SortableHandleProps;
-  /** The course's pair, so a lesson labelled outside it can be flagged. */
-  courseStream?: { forGeneral: boolean; forLanguages: boolean };
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(defaultOpen);
@@ -242,7 +239,6 @@ export function SectionCard({
             sectionId={section.id}
             examLessonId={examLessonId}
             lessons={section.lessons}
-            courseStream={courseStream}
           />
         )}
 

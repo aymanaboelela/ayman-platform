@@ -261,6 +261,16 @@ export function LessonResources({
   const [dragDepth, setDragDepth] = useState(0);
   /** Bumped after a successful add, to remount and so clear the text fields. */
   const [formKey, setFormKey] = useState(0);
+  /*
+   * FOLDED by default — see `copy.admin.resources.addOpen`.
+   *
+   * Not `<details>`: the form owns controlled state (`kind` decides which
+   * fields render AND which submit branch runs), and a native disclosure that
+   * keeps a half-filled form alive in the DOM while hidden is how a stale
+   * `kind` reaches a submit nobody meant to make. Unmounting it is also what
+   * makes cancelling mean «ابدأ من أول» rather than «اخفيها».
+   */
+  const [adding, setAdding] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const uploading = progress !== null;
 
@@ -389,6 +399,11 @@ export function LessonResources({
         component over. Submitting by hand keeps the browser's `required`
         checks, which run before `submit` fires, and skips the reset.
       */}
+      {!adding ? (
+        <button type="button" className="chip chip--quiet" onClick={() => setAdding(true)}>
+          {c.addOpen}
+        </button>
+      ) : (
       <form
         key={formKey}
         onSubmit={(event) => {
@@ -542,12 +557,23 @@ export function LessonResources({
           >
             {c.add}
           </Button>
+          {/* Unmounts the form, which is also what throws the half-filled
+              draft away — see `adding`'s own note on why this is not a
+              `<details>`. */}
+          <button
+            type="button"
+            className="chip chip--quiet"
+            onClick={() => setAdding(false)}
+          >
+            {c.addCancel}
+          </button>
           {isFileKind && !uploaded && !uploading ? (
             <span className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.needsFile}</span>
           ) : null}
         </div>
         <ActionError state={state} />
       </form>
+      )}
     </section>
   );
 }

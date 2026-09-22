@@ -518,6 +518,19 @@ const admin = {
     /** The warning next to a published lecture with no month on a course that
      *  DOES sell by month — the single lecture version of `blockedByUntagged`. */
     untaggedWarning: 'من غير شهر — مشتركين الشهر مش هيشوفوها.',
+    /**
+     * `{month}` — which month opens this lecture, ON THE OUTLINE ROW.
+     *
+     * «دي تبقى في الدرس نفسه، يبقى في مكان يبقى المحاضرة دي مفتوحة في الشهر
+     * الفلاني». The panel already knows; the row is where he reads it, because
+     * scanning forty lectures for «دي في شهر كام؟» is the actual question and
+     * opening forty panels is not an answer to it.
+     */
+    rowMonth: 'مفتوحة في {month}',
+    /** `{n}` — how many EXTRA months also open it, on top of the one named.
+     *  Appended rather than listed: the row has one line, and «+٢» is enough
+     *  to tell him to open the lecture and look. */
+    rowMonthExtra: '+{n}',
     /** The panel's own generic failure, the twin of `term.actionFailed`.
      *  `common.saveFailed` («التغييرات اترجعت زي ما كانت») is the wrong
      *  sentence here: a refused open or a refused delete rolled nothing back,
@@ -1137,6 +1150,17 @@ const admin = {
     title: 'مواد الدرس',
     hint: 'المواد بتتعلّق على أي نوع محاضرة — فيديو، نص، أو مرفقات.',
     add: 'أضف مادة',
+    /**
+     * The disclosure that keeps the add form FOLDED until it is wanted.
+     *
+     * «كله واخد مساحة كبيرة». The form is a kind picker, a file drop, a
+     * description box and a button — four controls' worth of height under
+     * every lecture, permanently, on a screen whose actual job is the outline.
+     * Adding a material is something an instructor does once per lecture;
+     * reading the outline is what they do all day.
+     */
+    addOpen: '+ أضف مادة',
+    addCancel: 'إلغاء',
     kind: 'النوع',
     kindPresentation: 'بريزنتيشن أساسي',
     /**
@@ -1969,6 +1993,10 @@ const admin = {
   },
   filterAccess: 'طريقة الدخول',
   accessFilterLabels: {
+    /** History, not a live state — see `StudentListQuery.access`. Worded as
+     *  «خالص» and not «مش مشترك» for exactly that reason: a student whose
+     *  subscription lapsed IS unsubscribed and is NOT in this bucket. */
+    never_paid: 'مدفعش خالص',
     hand_opened: 'اتفتح بالإيد',
     comped: 'اتسجّل مجاني',
     paid: 'مدفوع',
@@ -2730,6 +2758,20 @@ const admin = {
     addressLineBuilding: '، عمارة {building}',
     altPhoneLabel: 'موبايل تاني',
     senderPhoneLabel: 'حوّل من',
+    /*
+     * ── التاريخ على الكارت: يوم الدفع، مش يوم ما الفورم اتملا ──────────
+     *
+     * الكارت كان بيطبع `createdAt` أصلع من غير كلمة قبله، وده تاريخ خطوة
+     * العنوان — اللحظة اللي الطالب فيها لسه ما دفعش حاجة. والسؤال اللي
+     * بيتسأل على الشاشة دي كل يوم هو «الفلوس دي وصلت إمتى»، مش «ملا الفورم
+     * إمتى». التاريخين ممكن يفرقوا بأيام لما حد يسيب السلة ويرجع يدفع بعدين.
+     *
+     * والليبل مش زينة: الطلب اللي لسه `address_only` مالوش `paidAt` أصلًا،
+     * فبيقع على `createdAt` — ومن غير كلمة تفرّق، الكارتين بيبقوا شكل واحد
+     * وبيقولوا حاجتين مختلفتين.
+     */
+    paidAtLabel: 'دفع',
+    placedAtLabel: 'كتب العنوان',
     screenshotAlt: 'صورة تحويل {student}',
     whatsapp: 'واتساب',
     ship: 'اتشحن',

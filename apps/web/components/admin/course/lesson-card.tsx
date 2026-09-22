@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
 import {
@@ -55,7 +56,6 @@ export function LessonCard({
   isExam,
   isNested = false,
   handleProps,
-  courseStream,
 }: {
   courseId: string;
   lesson: Lesson;
@@ -68,8 +68,6 @@ export function LessonCard({
    */
   isNested?: boolean;
   handleProps: SortableHandleProps;
-  /** The course's pair, so a lesson labelled outside it can be flagged. */
-  courseStream?: { forGeneral: boolean; forLanguages: boolean };
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -92,9 +90,30 @@ export function LessonCard({
    *
    * Silent on a course with no months — there is nothing to be missing from.
    */
-  const sellsByMonth = useCourseMonths().length > 0;
+  const months = useCourseMonths();
+  const sellsByMonth = months.length > 0;
   const untagged =
     sellsByMonth && lesson.isPublished && lesson.kind !== 'quiz' && lesson.months.length === 0;
+
+  /*
+   * «مفتوحة في شهر ٢» on the row itself.
+   *
+   * The PRIMARY month is the one named — it is «الشهر بتاع المحاضرة دي», the
+   * one the lesson form's select holds — and the extras are a count beside it
+   * rather than a list, because this is one line in a forty-row outline and
+   * «+٢» is enough to say «افتحها وشوف».
+   *
+   * Falls back to the first row when nothing is marked primary: a lecture
+   * adopted by «حط كل المحاضرات في الشهر ده» is always primary, but a set
+   * written by an older client need not be, and a row that silently says
+   * nothing is worse than one that names a month it does have.
+   */
+  const primaryMonthId =
+    lesson.months.find((row) => row.isPrimary)?.monthId ?? lesson.months[0]?.monthId;
+  const rowMonth = primaryMonthId
+    ? (months.find((month) => month.id === primaryMonthId)?.title ?? null)
+    : null;
+  const extraMonthCount = Math.max(0, lesson.months.length - 1);
 
   return (
     <div
@@ -154,6 +173,13 @@ export function LessonCard({
             {lesson.video ? ` · ${lesson.video.externalId}` : ''}
             {quizIsEmpty ? ` · ${copy.admin.exam.noQuestions}` : ''}
             {untagged ? ` · ${copy.admin.month.untaggedWarning}` : ''}
+            {rowMonth
+              ? ` · ${formatCopy(copy.admin.month.rowMonth, { month: rowMonth })}${
+                  extraMonthCount > 0
+                    ? ` ${formatCopy(copy.admin.month.rowMonthExtra, { n: extraMonthCount })}`
+                    : ''
+                }`
+              : ''}
           </span>
         </span>
 
@@ -217,7 +243,7 @@ export function LessonCard({
 
       {open ? (
         <div className="border-t border-line-subtle px-3 pb-3">
-          <LessonPanel courseId={courseId} lesson={lesson} courseStream={courseStream} />
+          <LessonPanel courseId={courseId} lesson={lesson} />
         </div>
       ) : null}
     </div>
