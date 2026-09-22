@@ -874,6 +874,13 @@ jobs:
     concurrency:
       group: deploy-production
       cancel-in-progress: false
+    # Stated rather than inherited. The wait step below reads this workflow's
+    # own run history to recognise the two-merges-in-a-row case, and a repo
+    # whose default token is write-all or contents-only would otherwise decide
+    # that for us — silently, and differently on a fork.
+    permissions:
+      contents: read
+      actions: read
     steps:
       # The full webhook URL, secret because the token in its path IS the
       # credential — anyone holding it can trigger a deploy. Add it under
@@ -1169,6 +1176,11 @@ jobs:
       # the moment the request is accepted, which is the same false comfort as
       # having no deploy step at all.
       - name: Wait for production to serve this commit
+        # Only the two-merges-in-a-row check uses it, and only to read this
+        # workflow's own run history. Everything else in the step talks to
+        # production over plain HTTPS and needs no credential at all.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # ── What this step is actually for ────────────────────────────────
           #
@@ -1372,6 +1384,72 @@ jobs:
             fi
           done
 
+          # ── Was this commit ALREADY shipped, by the run before this one? ──
+          #
+          # Dokploy clones `main` HEAD at BUILD time, not the SHA whose webhook
+          # fired — this file says so 400 lines up, where it is described as
+          # what "has quietly been covering" collapsed runs. It cuts the other
+          # way too, and that way is a red check on a correct production.
+          #
+          # Two merges close together: run A (older commit) fires its trigger,
+          # Dokploy clones `main`, and by then HEAD is commit B. The image it
+          # builds IS B. Run B then starts, takes a "before" fingerprint that
+          # is already its own build, fires a trigger Dokploy has nothing to do
+          # for — its last build was that SHA — and times out against a
+          # production that has been serving B the whole time.
+          #
+          # Measured on 2026-09-22: #426 merged 07:36:15, #425's deploy built
+          # it, the API came up 07:47:11 carrying #426, and #426's own gate ran
+          # 08:14 → 08:30 and failed. `/api/admin/honor-board` answered 401 on
+          # production throughout, while an unrouted sibling answered 404 — the
+          # code was live before the step that denied it started.
+          #
+          # The test has to be "the previous build's CLONE contained this
+          # commit", not "the API booted after this commit". A build that
+          # STARTED before the merge and finished after it boots late with a
+          # pre-merge clone, and treating that as shipped is exactly the false
+          # pass this step exists to prevent. So: the previous deploy job must
+          # have STARTED after this commit was pushed, AND the API must have
+          # been up since after that (which `started_before` already shows,
+          # since it never moved during the loop).
+          #
+          # Everything here is best-effort. Any missing fact, any failed call,
+          # falls through to the diagnosis below — this block can turn a
+          # failure into a pass, never a pass into a failure.
+          if [ -z "$was_down" ] && [ "$restart_at" -eq 0 ] && [ -n "$started_before" ]; then
+            pushed=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" \
+              --jq '.commit.committer.date' 2>/dev/null || true)
+            # The newest deploy job on main that is not this run's. Scoped to
+            # THIS workflow's push runs: `/actions/runs` returns every
+            # workflow, and `rerun` has been the newest thing on main before
+            # now. `per_page` is small on purpose — only the run immediately
+            # before this one can have built this commit, and a longer history
+            # just invites a match on something unrelated.
+            prev_started=''
+            for run_id in $(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=5" \
+              --jq '.workflow_runs[].id' 2>/dev/null || true); do
+              [ "$run_id" = "$GITHUB_RUN_ID" ] && continue
+              prev_started=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs" \
+                --jq '.jobs[] | select(.name == "deploy to production") | .started_at' \
+                2>/dev/null || true)
+              [ -n "$prev_started" ] && break
+            done
+
+            # ISO-8601 with a literal Z on both sides, so `>` on strings IS a
+            # comparison of instants. `date -d` would be the honest way to say
+            # this and is one more thing that can fail on a runner.
+            if [ -n "$pushed" ] && [ -n "$prev_started" ] \
+              && [ "$prev_started" \> "$pushed" ] && [ "$started_before" \> "$prev_started" ]; then
+              echo "this commit was pushed at $pushed"
+              echo "the deploy before this one started at $prev_started — AFTER it, so its clone of main HEAD contained this commit"
+              echo "and the API answering now has been up since $started_before, which is after that build started"
+              echo "Deployed: an earlier run's build already shipped this commit. Dokploy had nothing left to do for this one."
+              echo "::warning::production was already serving this commit before this job began — two merges landed close enough together that the first build picked up the second commit."
+              landed
+            fi
+          fi
+
           # Two different incidents, and they used to print the same sentence —
           # including on a run where the loop had ALREADY logged the restart it
           # then denied. A message that contradicts the log above it teaches
@@ -1389,7 +1467,7 @@ jobs:
             echo "::error::The API container came up and the web one did not follow. That is a half-deployed stack, not an unchanged one — check the compose's Deployments tab for the web service specifically."
           else
             echo "::error::after $((limit*10))s production still serves fingerprint $before AND the API never restarted."
-            echo "::error::Both signals are unchanged, so this is not the no-client-change case — the Dokploy rebuild did not land at all. Check the compose's Deployments tab."
+            echo "::error::Both signals are unchanged, and the check above ruled out an earlier run having already shipped this commit — so the Dokploy rebuild did not land at all. Check the compose's Deployments tab."
           fi
           # The two halves of the diagnosis, together. "Production never
           # changed" AND "we could not even ask" is a different incident from
