@@ -134,6 +134,18 @@ export const AboutPropsSchema = z.object({
   body2Ar: z.string().max(600).default(''),
   roleAr: z.string().max(120).default(''),
   chipsAr: z.array(z.string().min(1).max(40)).max(4).default([]),
+  /**
+   * A picture for the section, chosen from the admin's own media library.
+   *
+   * ⚠️ THIS IS AN ID, AND AN ID CANNOT BE TURNED INTO A URL. `mediaUrl()`
+   * takes the row's `storage_key`, and the two are not interconvertible —
+   * deriving one from the other is what 404'd every admin-chosen favicon for
+   * months (see `BrandingReadSchema`). So the API resolves it server-side and
+   * publishes the answer as `imageKey` on the block, the same way branding
+   * does for its own slots. A renderer reads `imageKey`; nothing renders from
+   * this field directly.
+   */
+  imageAssetId: z.uuid().nullable().default(null),
 });
 
 export const StatsPropsSchema = z.object({
@@ -224,6 +236,23 @@ export const HomeBlockSchema = z.object({
   position: z.number().int(),
   isPublished: z.boolean(),
   props: HomeBlockPropsSchema,
+  /**
+   * The storage key behind whichever asset id the props carry — resolved by
+   * the API, never written by a client.
+   *
+   * It exists because a block payload holds an asset's UUID and a renderer
+   * needs a URL, and `mediaUrl()` takes the row's `storage_key`. That gap is
+   * why `hero.imageAssetId` sat unread by every preset since it shipped: the
+   * comment in `board-panel.tsx` spelled out the choice as «a new resolved
+   * field on `HomeBlockSchema` or an uncached fetch on the LCP path», and this
+   * is the first of the two.
+   *
+   * `null` covers all three of: the block type has no asset, the admin chose
+   * none, and the chosen one has since been deleted. A renderer treats them
+   * the same — draw the section without a picture — so none of them needs
+   * telling apart here.
+   */
+  imageKey: z.string().nullable().default(null),
 });
 
 export const HomeBlockListSchema = z.array(HomeBlockSchema);

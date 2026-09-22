@@ -3810,6 +3810,8 @@ const admin = {
     aboutBody2: 'الفقرة التانية',
     aboutRole: 'الصفة تحت الاسم',
     aboutChips: 'الوسوم',
+    aboutImage: 'صورة القسم',
+    aboutImageHint: 'اختيارية، وبتظهر بالعرض فوق الكلام. من غيرها القسم بيبان كلام بس.',
     addChip: 'أضف وسم',
   },
   audit: {

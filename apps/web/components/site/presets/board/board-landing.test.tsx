@@ -176,6 +176,7 @@ function block(props: HomeBlockProps): HomeBlock {
     key: `${props.type}-${blockSeq}`,
     position: blockSeq,
     isPublished: true,
+    imageKey: null,
     props,
   };
 }
@@ -513,7 +514,7 @@ describe('BoardInstructor — the instructor’s own photograph', () => {
     getBranding.mockResolvedValue(branding({ portraitKey: 'cc/adel.webp' }));
 
     const page = await BoardLanding({
-      blocks: [block({ type: 'about', titleAr: 'مين أنا', body1Ar: 'سطر', body2Ar: '', roleAr: '', chipsAr: [] })],
+      blocks: [block({ type: 'about', titleAr: 'مين أنا', body1Ar: 'سطر', body2Ar: '', roleAr: '', chipsAr: [], imageAssetId: null })],
       honorBoard: [],
     });
     const { container } = render(sectionAt(page, 0));

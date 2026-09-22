@@ -2695,6 +2695,35 @@
   max-width: 46rem;
 }
 
+/*
+  The `about` block's optional picture.
+
+  2:1 and `cover`: the ratio is fixed here rather than left to the file so the
+  section keeps its height whatever the admin uploads — a column that reflows
+  when a picture is swapped is the thing this page's grid is built to avoid.
+  The picker offers a 1.91:1 crop, which lands inside this box with nothing
+  visibly trimmed.
+
+  The border and the inset shadow are the same treatment `.neon-window` gets,
+  because this sits directly above one: a photograph with no frame reads as a
+  different page from the terminal chrome it is stacked on.
+*/
+[data-preset='neon'] .neon-about__figure {
+  margin-block-end: 1rem;
+  overflow: hidden;
+  border: 1px solid var(--neon-line);
+  border-radius: var(--radius-lg);
+  background: var(--neon-panel);
+}
+
+[data-preset='neon'] .neon-about__image {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  aspect-ratio: 2 / 1;
+  object-fit: cover;
+}
+
 [data-preset='neon'] .neon-who__body {
   display: flex;
   flex-wrap: wrap;
