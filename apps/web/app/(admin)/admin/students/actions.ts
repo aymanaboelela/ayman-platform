@@ -198,10 +198,23 @@ export async function adminSubscribeAction(userId: string, formData: FormData): 
   try {
     const screenshotKeyRaw = String(formData.get('screenshotKey') ?? '');
     const termIdRaw = String(formData.get('termId') ?? '');
+    /*
+     * A comma-joined hidden field, not repeated checkbox `name`s.
+     *
+     * The checkboxes in the dialog are CONTROLLED — the running total beside
+     * them reads the same state — so their values never reach the FormData at
+     * all. One hidden field built from that state is the only shape where what
+     * the admin sees added up and what the payload carries cannot disagree.
+     *
+     * `.filter(Boolean)` because `''.split(',')` is `['']`, and a single empty
+     * string would reach `z.uuid()` and 400 on every non-month plan.
+     */
+    const monthIdsRaw = String(formData.get('monthIds') ?? '');
     const body = AdminManualSubscribeSchema.parse({
       courseId: String(formData.get('courseId') ?? ''),
       plan: String(formData.get('plan') ?? ''),
       termId: termIdRaw.length > 0 ? termIdRaw : null,
+      monthIds: monthIdsRaw.split(',').filter(Boolean),
       isFree: formData.get('isFree') === 'true',
       screenshotKey: screenshotKeyRaw.length > 0 ? screenshotKeyRaw : null,
     });

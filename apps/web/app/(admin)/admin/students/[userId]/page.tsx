@@ -145,6 +145,16 @@ export default async function StudentDetailPage({
               priceCents: z.number().int().nullable(),
             }),
           ),
+          // شهور المنهج — the monthly plan's own choices on a course that
+          // sells by month. Empty on every course that does not.
+          months: z.array(
+            z.object({
+              id: z.string(),
+              monthIndex: z.number().int(),
+              title: z.string(),
+              isOpen: z.boolean(),
+            }),
+          ),
         }),
       ),
     ),
@@ -187,6 +197,9 @@ export default async function StudentDetailPage({
       // manual-subscribe path is a deliberate override, unlike the
       // student-facing flow. See `SubscriptionSection`'s own doc.
       terms: course.terms.filter((term) => term.priceCents !== null),
+      // Every month, open or closed, for the same override reason the terms
+      // above are — the API does not gate on `isOpen` here either.
+      months: course.months,
     }));
 
   /* ⚠️ `getTaxonomyOrNull()`, not `apiGet('/api/taxonomy', …)` — the throwing

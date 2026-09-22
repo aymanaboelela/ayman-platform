@@ -959,6 +959,14 @@ export class CourseService {
           orderBy: [{ position: 'asc' }, { id: 'asc' }],
           select: { id: true, title: true, isOpen: true, priceCents: true },
         },
+        // And its month options, for the same screen and the same reason.
+        // CLOSED ones included: that form is the admin override, and «حوّلي
+        // فلوس وأنا قافل الشهر» is the case it exists for. `isOpen` rides
+        // along so the option can say so.
+        months: {
+          orderBy: [{ monthIndex: 'asc' }],
+          select: { id: true, monthIndex: true, title: true, isOpen: true },
+        },
       },
     });
   }

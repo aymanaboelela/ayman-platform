@@ -1935,6 +1935,13 @@ const admin = {
    *  admin says WHICH one. */
   subscribePlanTermLabel: 'ترم',
   subscribeTermLabel: 'الترم',
+  /** The month picker on the manual-subscribe dialog — «شهري» on a course
+   *  that sells by curriculum month. Multi-select, same as checkout, and it
+   *  offers CLOSED months too: this dialog is the admin override. */
+  subscribeMonthsLabel: 'الشهور',
+  subscribeMonthsHint: 'اختار الشهور اللي التحويل ده دفع تمنها.',
+  subscribeMonthClosedBadge: 'مقفول للاشتراك',
+  subscribeMonthsRequired: 'لازم شهر واحد على الأقل',
   /** Offered even for a CLOSED term — the admin override, see
    *  `SubscribableTerm`'s own doc. */
   subscribeTermClosedBadge: 'مقفول',
@@ -2259,6 +2266,15 @@ const admin = {
      *  Term`'s model doc: an independent plan, not a replacement for the
      *  others. */
     planTerm: 'ترم — {term}',
+    /**
+     * `{month}` — the badge on a `scope: course_month` subscription row.
+     *
+     * NAMED and not just «شهري», because one payment for «شهر ٢ و٣» is two
+     * grants and therefore two rows with the same date and the same amount.
+     * Without the month on each of them the panel reads as the same payment
+     * recorded twice.
+     */
+    planMonth: 'شهر — {month}',
     /** `{n}` — how many approved submissions this student had before this one. */
     approvedBefore: 'دفع قبل كده {n} مرة',
     approvedBeforeNone: 'أول اشتراك ليه',

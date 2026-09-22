@@ -1114,6 +1114,7 @@ describe('PaymentsService', () => {
         courseId: monthlyOnlyCourseId,
         plan: 'monthly',
         isFree: false,
+        monthIds: [],
         screenshotKey: null,
       });
 
@@ -1156,6 +1157,7 @@ describe('PaymentsService', () => {
         courseId: bothPlansCourseId,
         plan: 'quarterly',
         isFree: true,
+        monthIds: [],
         screenshotKey: null,
       });
 
@@ -1180,6 +1182,7 @@ describe('PaymentsService', () => {
         courseId: bothPlansCourseId,
         plan: 'monthly',
         isFree: false,
+        monthIds: [],
         screenshotKey: null,
       });
       const firstValidUntil = first.find((row) => row.courseId === bothPlansCourseId)!.validUntil!;
@@ -1188,6 +1191,7 @@ describe('PaymentsService', () => {
         courseId: bothPlansCourseId,
         plan: 'quarterly',
         isFree: false,
+        monthIds: [],
         screenshotKey: null,
       });
       const secondValidUntil = second.find((row) => row.courseId === bothPlansCourseId)!.validUntil!;
@@ -1200,12 +1204,91 @@ describe('PaymentsService', () => {
       expect(new Date(secondValidUntil).getTime()).toBeGreaterThan(new Date(firstValidUntil).getTime());
     });
 
+    /*
+     * «شهري» in the admin has to mean «شهري» in checkout, and it did not.
+     *
+     * This route wrote the old course-wide dated grant regardless, so
+     * recording a WhatsApp transfer as monthly on a month-selling course
+     * opened EVERY lecture — `/admin/finance` called it a monthly
+     * subscription, and nothing on any screen said the two halves disagreed.
+     */
+    it('writes MONTH grants on a course that sells by month, not a dated course grant', async () => {
+      const rows = await service.adminManualSubscribe(adminId, studentId, {
+        courseId: monthCourseId,
+        plan: 'monthly',
+        isFree: false,
+        monthIds: [monthOneId, monthTwoId],
+        screenshotKey: null,
+      });
+
+      const monthGrants = await prisma.accessGrant.findMany({
+        where: { userId: studentId, courseId: monthCourseId, scope: 'course_month' },
+        select: { monthId: true, validUntil: true, source: true },
+      });
+      expect(monthGrants).toHaveLength(2);
+      expect(monthGrants.map((grant) => grant.monthId).sort()).toEqual(
+        [monthOneId, monthTwoId].sort(),
+      );
+      // Never a date. `access_grants_month_open_ended` is a CHECK, so one
+      // written here would have rolled the whole transaction back.
+      expect(monthGrants.every((grant) => grant.validUntil === null)).toBe(true);
+
+      // And NOT the course-wide grant this route used to write.
+      expect(
+        await prisma.accessGrant.count({
+          where: { userId: studentId, courseId: monthCourseId, scope: 'course' },
+        }),
+      ).toBe(0);
+
+      const submission = await prisma.paymentSubmission.findFirstOrThrow({
+        where: { userId: studentId, courseId: monthCourseId },
+        select: { id: true, amountCents: true, months: { select: { monthId: true } } },
+      });
+      // Two months at the course's ONE monthly price — the instructor's own
+      // decision, so a multiplication and never a sum of per-month prices.
+      expect(submission.amountCents).toBe(10000 * 2);
+      expect(submission.months).toHaveLength(2);
+      expect(rows.some((row) => row.courseId === monthCourseId)).toBe(true);
+
+      await prisma.paymentSubmissionMonth.deleteMany({ where: { submissionId: submission.id } });
+      await prisma.paymentSubmission.deleteMany({ where: { id: submission.id } });
+      await prisma.accessGrant.deleteMany({
+        where: { userId: studentId, courseId: monthCourseId },
+      });
+      await prisma.enrollment.deleteMany({ where: { userId: studentId, courseId: monthCourseId } });
+    });
+
+    it('refuses a monthly entry with no month chosen on a month-selling course', async () => {
+      await expect(
+        service.adminManualSubscribe(adminId, studentId, {
+          courseId: monthCourseId,
+          plan: 'monthly',
+          isFree: false,
+          monthIds: [],
+          screenshotKey: null,
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('refuses months on a course that does not sell by month', async () => {
+      await expect(
+        service.adminManualSubscribe(adminId, studentId, {
+          courseId: monthlyOnlyCourseId,
+          plan: 'monthly',
+          isFree: false,
+          monthIds: [monthOneId],
+          screenshotKey: null,
+        }),
+      ).rejects.toThrow();
+    });
+
     it("refuses a plan the course doesn't sell", async () => {
       await expect(
         service.adminManualSubscribe(adminId, studentId, {
           courseId: monthlyOnlyCourseId,
           plan: 'quarterly',
           isFree: false,
+          monthIds: [],
           screenshotKey: null,
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -1217,6 +1300,7 @@ describe('PaymentsService', () => {
           courseId: randomUUID(),
           plan: 'monthly',
           isFree: false,
+          monthIds: [],
           screenshotKey: null,
         }),
       ).rejects.toBeInstanceOf(NotFoundException);
@@ -1228,6 +1312,7 @@ describe('PaymentsService', () => {
           courseId: monthlyOnlyCourseId,
           plan: 'monthly',
           isFree: false,
+          monthIds: [],
           screenshotKey: null,
         }),
       ).rejects.toBeInstanceOf(NotFoundException);
@@ -1241,6 +1326,7 @@ describe('PaymentsService', () => {
         plan: 'term',
         termId: closedTermId,
         isFree: true,
+        monthIds: [],
         screenshotKey: null,
       });
 
@@ -1262,6 +1348,7 @@ describe('PaymentsService', () => {
           plan: 'term',
           termId: termAId,
           isFree: true,
+          monthIds: [],
           screenshotKey: null,
         }),
       ).rejects.toBeInstanceOf(NotFoundException);
@@ -1274,6 +1361,7 @@ describe('PaymentsService', () => {
         courseId: monthlyOnlyCourseId,
         plan: 'monthly',
         isFree: false,
+        monthIds: [],
         screenshotKey: null,
       });
       const grantId = created.find((row) => row.courseId === monthlyOnlyCourseId)!.id;
@@ -1299,6 +1387,7 @@ describe('PaymentsService', () => {
         courseId: monthlyOnlyCourseId,
         plan: 'monthly',
         isFree: false,
+        monthIds: [],
         screenshotKey: null,
       });
       const grantId = created.find((row) => row.courseId === monthlyOnlyCourseId)!.id;
@@ -1314,6 +1403,7 @@ describe('PaymentsService', () => {
         courseId: monthlyOnlyCourseId,
         plan: 'monthly',
         isFree: false,
+        monthIds: [],
         screenshotKey: null,
       });
       const grantId = created.find((row) => row.courseId === monthlyOnlyCourseId)!.id;
@@ -1330,6 +1420,7 @@ describe('PaymentsService', () => {
         courseId: monthlyOnlyCourseId,
         plan: 'monthly',
         isFree: false,
+        monthIds: [],
         screenshotKey: null,
       });
 
