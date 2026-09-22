@@ -81,7 +81,14 @@ beforeEach(() => {
 let seq = 0;
 function block(props: HomeBlockProps): HomeBlock {
   seq += 1;
-  return { id: `block-${seq}`, key: `${props.type}-${seq}`, position: seq, isPublished: true, props };
+  return {
+    id: `block-${seq}`,
+    key: `${props.type}-${seq}`,
+    position: seq,
+    isPublished: true,
+    props,
+    imageKey: null,
+  };
 }
 
 const HERO: HomeBlockProps = {

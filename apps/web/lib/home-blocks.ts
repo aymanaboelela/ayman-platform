@@ -112,6 +112,9 @@ export const DEFAULT_HOME_BLOCKS: readonly { key: string; props: HomeBlockProps 
       body2Ar: c.aboutBody2,
       roleAr: c.aboutRole,
       chipsAr: [c.aboutChip1, c.aboutChip2, c.aboutChip3],
+      // No picture: these defaults run on a stack whose admin has chosen
+      // nothing, and there is no asset that belongs to every instructor.
+      imageAssetId: null,
     },
   },
 
@@ -237,6 +240,9 @@ function asBlockList(
   return blocks.map((block, index) => ({
     id: `default-${block.key}`,
     key: block.key,
+    // Nothing here names an asset, so there is no key to resolve — see the
+    // `imageAssetId: null` above.
+    imageKey: null,
     position: index,
     isPublished: true,
     props: block.props,

@@ -335,6 +335,8 @@ function renderNeonBlock(block: HomeBlock, honorBoard: HonorBoardEntry[], level:
           body2={props.body2Ar}
           role={props.roleAr}
           chips={props.chipsAr}
+          imageKey={block.imageKey}
+          blockKey={block.key}
           level={level}
         />
       );

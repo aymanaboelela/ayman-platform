@@ -15,7 +15,9 @@ import {
   WhyRailPropsSchema,
   type HomeBlockProps,
 } from '@ayman/contracts/admin/home-blocks';
+import type { MediaAsset } from '@ayman/contracts/admin/media';
 import { copy } from '@ayman/contracts/copy/admin';
+import { AssetPicker } from '@/components/admin/asset-picker';
 import { Button } from '@ayman/ui/components/button';
 import { DialogFooter } from '@ayman/ui/components/dialog';
 import { Input } from '@ayman/ui/components/input';
@@ -329,9 +331,14 @@ export function BooksForm({ defaultValues, onSubmit }: BlockFormProps<BooksInput
 
 type AboutInput = z.input<typeof AboutPropsSchema>;
 
-export function AboutForm({ defaultValues, onSubmit }: BlockFormProps<AboutInput>) {
+export function AboutForm({
+  defaultValues,
+  onSubmit,
+  assets,
+}: BlockFormProps<AboutInput> & { assets: readonly MediaAsset[] }) {
   const form = useForm<AboutInput>({ resolver: zodResolver(AboutPropsSchema), defaultValues });
   const chips = useFieldArray({ control: form.control, name: 'chipsAr' as never });
+  const imageAssetId = form.watch('imageAssetId') ?? null;
 
   async function submit(values: AboutInput) {
     await onSubmit(AboutPropsSchema.parse(values));
@@ -351,6 +358,18 @@ export function AboutForm({ defaultValues, onSubmit }: BlockFormProps<AboutInput
       <Row id="about-role" label={h.aboutRole}>
         <Input id="about-role" {...form.register('roleAr')} />
       </Row>
+
+      <div className="space-y-2">
+        <Label htmlFor="about-image">{h.aboutImage}</Label>
+        <AssetPicker
+          id="about-image"
+          slot="share"
+          value={imageAssetId}
+          assets={assets}
+          onChange={(next) => form.setValue('imageAssetId', next, { shouldDirty: true })}
+        />
+        <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{h.aboutImageHint}</p>
+      </div>
 
       <div className="space-y-2">
         <Label>{h.aboutChips}</Label>

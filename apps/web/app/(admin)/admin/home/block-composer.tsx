@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 import { toast } from 'sonner';
 import type { HomeBlock, HomeBlockProps, HOME_BLOCK_TYPES } from '@ayman/contracts/admin/home-blocks';
+import type { MediaAsset } from '@ayman/contracts/admin/media';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Badge } from '@ayman/ui/components/badge';
 import { Button } from '@ayman/ui/components/button';
@@ -95,14 +96,28 @@ const DEFAULT_PROPS: Record<BlockType, HomeBlockProps> = {
   instructor: { type: 'instructor' },
   yearTracks: { type: 'yearTracks' },
   honorBoard: { type: 'honorBoard' },
-  about: { type: 'about', titleAr: '', body1Ar: '', body2Ar: '', roleAr: '', chipsAr: [] },
+  about: { type: 'about', titleAr: '', body1Ar: '', body2Ar: '', roleAr: '', chipsAr: [], imageAssetId: null },
   stats: { type: 'stats', titleAr: '', items: [{ labelAr: '', value: '' }] },
   testimonials: { type: 'testimonials', titleAr: '', items: [{ nameAr: '', bodyAr: '', avatarAssetId: null }] },
   faq: { type: 'faq', eyebrowAr: '', titleAr: '', items: [{ questionAr: '', answerAr: '' }] },
   cta: { type: 'cta', headlineAr: '', leadAr: '', ctaLabelAr: '', ctaHref: '/register' },
 };
 
+/**
+ * The media library, for the one block type that can carry a picture.
+ *
+ * A context rather than a prop because the only consumer is `<AboutForm>`,
+ * four hops down through two dialogs and a sortable row — every component in
+ * between would be carrying a list it has no use for. This mirrors
+ * `BrandMarkProvider`, which exists for the same shape of problem.
+ *
+ * The default is empty, so a form rendered outside the provider (a test, a
+ * future screen) shows a picker with nothing in it rather than throwing.
+ */
+const AssetsContext = createContext<readonly MediaAsset[]>([]);
+
 function PropsForm({ props, onSubmit }: { props: HomeBlockProps; onSubmit: (next: HomeBlockProps) => Promise<void> }) {
+  const assets = useContext(AssetsContext);
   switch (props.type) {
     case 'hero':
       return <HeroForm defaultValues={props} onSubmit={onSubmit} />;
@@ -117,7 +132,7 @@ function PropsForm({ props, onSubmit }: { props: HomeBlockProps; onSubmit: (next
     case 'honorBoard':
       return <PlacementOnlyForm defaultValues={props} onSubmit={onSubmit} />;
     case 'about':
-      return <AboutForm defaultValues={props} onSubmit={onSubmit} />;
+      return <AboutForm defaultValues={props} onSubmit={onSubmit} assets={assets} />;
     case 'stats':
       return <StatsForm defaultValues={props} onSubmit={onSubmit} />;
     case 'testimonials':
@@ -303,7 +318,7 @@ function EmptyState() {
   );
 }
 
-export function BlockComposer({ blocks }: { blocks: HomeBlock[] }) {
+export function BlockComposer({ blocks, assets }: { blocks: HomeBlock[]; assets: readonly MediaAsset[] }) {
   const [pendingType, setPendingType] = useState<BlockType | null>(null);
   /*
    * بلوك مالوش فيتشر على الستاك ده مش بيتعرض في «ضيف بلوك».
@@ -322,6 +337,7 @@ export function BlockComposer({ blocks }: { blocks: HomeBlock[] }) {
   if (blocks.length === 0) return <EmptyState />;
 
   return (
+    <AssetsContext.Provider value={assets}>
     <div className="space-y-4">
       <div className="flex justify-end">
         <DropdownMenu>
@@ -368,5 +384,6 @@ export function BlockComposer({ blocks }: { blocks: HomeBlock[] }) {
         )}
       />
     </div>
+    </AssetsContext.Provider>
   );
 }
