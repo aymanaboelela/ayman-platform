@@ -1169,6 +1169,12 @@ jobs:
       # the moment the request is accepted, which is the same false comfort as
       # having no deploy step at all.
       - name: Wait for production to serve this commit
+        env:
+          # Empty on anything that is not a push (a manual re-run keeps the
+          # original push payload, which is what we want). The check that uses
+          # it skips itself when it is empty, so no event shape can break this
+          # step — it only ever loses the fast exit.
+          HEAD_COMMIT_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
         run: |
           # ── What this step is actually for ────────────────────────────────
           #
@@ -1295,6 +1301,40 @@ jobs:
             echo "fingerprint before deploy: $before"
           fi
           echo "api started before deploy: ${started_before:-<field not present yet>}"
+
+          # ## When Dokploy's own autoDeploy got there first
+          #
+          # Dokploy watches this repo itself, so on a merge it starts building
+          # BEFORE this job reaches this step. When its build wins, production
+          # is ALREADY serving this commit by the time the step above takes its
+          # "before" fingerprint — and then nothing can change during the wait,
+          # because there is nothing left to deploy. This step called that
+          # "stranded" and went red, for 900s, on a production that was
+          # perfectly current. It happened on 453daa3 (2026-09-22) and cost
+          # half a day of chasing a Dokploy outage that was not there, while
+          # `uptime` repeated the same false alarm every four hours.
+          #
+          # `startedAt` settles it with no build arg: it is the boot time of
+          # the process answering, and Dokploy recreates the API container on
+          # every deploy. A production that booted AFTER this commit was made
+          # cannot be running a build that predates it.
+          #
+          # This is evidence, not proof — an OOM restart moves `startedAt`
+          # too — so it only decides the case it was written for: production
+          # newer than the commit, which is exactly when "nothing changed" has
+          # an innocent explanation. A production that booted BEFORE the commit
+          # still goes through the whole wait and still fails below.
+          head_ts="${HEAD_COMMIT_TIMESTAMP:-}"
+          if [ -z "$was_down" ] && [ -n "$started_before" ] && [ -n "$head_ts" ]; then
+            boot_at=$(date -u -d "$started_before" +%s 2>/dev/null || echo 0)
+            commit_at=$(date -u -d "$head_ts" +%s 2>/dev/null || echo 0)
+            if [ "$boot_at" -gt 0 ] && [ "$commit_at" -gt 0 ] && [ "$boot_at" -ge "$commit_at" ]; then
+              echo "production booted at $started_before — AFTER this commit was made at $head_ts."
+              echo "So it is already serving this commit or newer: Dokploy's own GitHub integration"
+              echo "shipped the merge before this job looked. There is nothing left to wait for."
+              landed
+            fi
+          fi
 
           # ## Why the deadline moves
           #
