@@ -13,6 +13,7 @@ import {
   adoptableLadder,
   chooseRenditions,
   clientArgs,
+  cookiesArgs,
   hlsArgs,
   mirrorVideo,
   type MirrorTools,
@@ -272,6 +273,37 @@ describe('which YouTube client the mirror asks', () => {
   it('passes no client flag at all for `default`', () => {
     expect(clientArgs('default')).toEqual([]);
     expect(clientArgs('visionos')).toEqual(['--extractor-args', 'youtube:player_client=visionos']);
+  });
+
+  it('passes no cookie flag when there is no jar', () => {
+    expect(cookiesArgs(undefined)).toEqual([]);
+    expect(cookiesArgs('/tmp/ck/cookies.txt')).toEqual(['--cookies', '/tmp/ck/cookies.txt']);
+  });
+
+  /*
+   * On 2026-09-23 every one of `YT_CLIENTS` answered «Sign in to confirm
+   * you're not a bot» from the production VPS, so the chain had nothing left
+   * to fall through to. The jar is what yt-dlp's own error names, and it is
+   * useless unless it reaches EVERY call: a probe that authenticates and a
+   * download that does not is a run that finds a ladder and then cannot fetch
+   * one byte of it.
+   */
+  it('sends the cookie jar on the probe AND on every download', async () => {
+    const calls: string[][] = [];
+    const base = tools({ visionos: { formats: formats(360, 720) } }, calls);
+    const result = await mirrorVideo('aaaaaaaaaaa', {
+      ...base,
+      cookiesFile: '/tmp/ck/cookies.txt',
+    });
+    await result.cleanup();
+
+    const ytCalls = calls.filter((c) => !c.includes('-hls_segment_filename'));
+    expect(ytCalls.length).toBeGreaterThan(1);
+    for (const call of ytCalls) {
+      const at = call.indexOf('--cookies');
+      expect(at).toBeGreaterThan(-1);
+      expect(call[at + 1]).toBe('/tmp/ck/cookies.txt');
+    }
   });
 
   it('walks past a refused client, and downloads with the one that answered', async () => {
