@@ -69,12 +69,9 @@ const c = copy.admin.lesson;
 export function LessonPanel({
   courseId,
   lesson,
-  courseStream,
 }: {
   courseId: string;
   lesson: Lesson;
-  /** Passed down so the settings form can flag a lesson its course excludes. */
-  courseStream?: { forGeneral: boolean; forLanguages: boolean };
 }) {
   // الواجب فيتشر بتتفتح لكل مدرّس لوحده. `useFeature` وليس prop، عشان
   // الكومبوننت ده قاعد على عمق أربع كومبوننتات كلهم `'use client'` —
@@ -157,7 +154,6 @@ export function LessonPanel({
 
       <LessonSettingsForm
         lesson={lesson}
-        courseStream={courseStream}
         onSave={(input) => updateLessonAction(courseId, lesson.id, input)}
       />
     </div>

@@ -47,7 +47,7 @@ export interface StudentListQuery {
   /** «مين اللي مسجّلهم مجاني؟» — see the contract's own note on
    *  `StudentListQuerySchema.access` for what each bucket means and why the
    *  automatic `platform` grant is deliberately not one of them. */
-  access: 'hand_opened' | 'comped' | 'paid' | null;
+  access: 'never_paid' | 'hand_opened' | 'comped' | 'paid' | null;
   stream: 'general' | 'languages' | 'unset' | null;
 }
 
@@ -129,6 +129,25 @@ function toDetail(record: DetailRecord): AdminStudentDetail {
  */
 function accessFilter(access: StudentListQuery['access']): Prisma.StudentProfileWhereInput {
   if (access === null) return {};
+
+  /*
+   * «مدفعش ولا جنيه» — history, and the one bucket here that reads no grant at
+   * all.
+   *
+   * `isFree: false` is load-bearing twice over. An admin-recorded منحة goes
+   * through the same review flow and lands an `approved` submission, so a
+   * filter on `status` alone would call a comped student a payer. And a
+   * `hand_opened` student has no submission whatsoever, so this correctly
+   * keeps them in — they never paid either, which is the whole question.
+   *
+   * NOT the complement of `paid`: a lapsed subscriber holds no live grant and
+   * is still not in here. See `StudentListQuery.access`.
+   */
+  if (access === 'never_paid') {
+    return {
+      user: { paymentSubmissions: { none: { status: 'approved', isFree: false } } },
+    };
+  }
 
   const live: Prisma.AccessGrantWhereInput = {
     scope: 'course',

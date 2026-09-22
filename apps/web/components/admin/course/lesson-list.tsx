@@ -34,14 +34,11 @@ export function SortableLessonList({
   sectionId,
   examLessonId,
   lessons,
-  courseStream,
 }: {
   courseId: string;
   sectionId: string;
   examLessonId: string | null;
   lessons: Lesson[];
-  /** The course's pair, so a lesson labelled outside it can be flagged. */
-  courseStream?: { forGeneral: boolean; forLanguages: boolean };
 }) {
   /**
    * Which rows are a lecture's quiz, and therefore belong UNDER it.
@@ -73,7 +70,6 @@ export function SortableLessonList({
           isExam={lesson.id === examLessonId}
           isNested={nested.has(lesson.id)}
           handleProps={handleProps}
-          courseStream={courseStream}
         />
       )}
       announcements={{

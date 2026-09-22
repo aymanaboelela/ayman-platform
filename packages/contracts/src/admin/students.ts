@@ -531,7 +531,7 @@ function toArray(value: unknown): unknown[] {
 /** The `access` filter's values, exported for the URL parser the way
  *  `STUDENT_LIST_QUERY_SORT_KEYS` already is — one definition, so a new
  *  bucket cannot exist in the API and be unreachable from the UI. */
-export const STUDENT_ACCESS_FILTERS = ['hand_opened', 'comped', 'paid'] as const;
+export const STUDENT_ACCESS_FILTERS = ['never_paid', 'hand_opened', 'comped', 'paid'] as const;
 
 /** عربي / لغات / مش متسجّل — exported for the URL parser and the filter's own
  *  option list, the same way `STUDENT_ACCESS_FILTERS` is, so a value cannot
@@ -560,11 +560,25 @@ export const StudentListQuerySchema = z.object({
    *   through the review flow, so it IS on the subscription panel, but it is
    *   still «مجاني» and belongs in the same answer.
    * - `paid` — holds a live `purchase` grant that was actually paid for.
+   * - `never_paid` — «الطلبة اللي مدفعوش ولا جنيه». No approved submission that
+   *   was actually paid for, EVER.
    *
-   * ⚠️ Scoped to `scope: 'course'` grants only. The automatic `platform`
-   * grant is held by every student who ever enrolled in anything and says
-   * nothing about a paid course; including it would put all 500 accounts in
-   * the "free" bucket and make the filter useless.
+   * ⚠️ `never_paid` is on a DIFFERENT AXIS from the other three and that is
+   * deliberate, not an oversight. They ask «هو داخل إزاي دلوقتي؟» and are all
+   * about a LIVE grant; this one asks «هو دفع قبل كده؟» and is about history.
+   * So it is not the complement of `paid`: a student whose subscription lapsed
+   * last month is in neither bucket — they hold no live grant and they have
+   * certainly paid — and that is the honest answer to both questions.
+   *
+   * It also ignores grants entirely, which is what makes it true for the two
+   * cases that matter most: a `hand_opened` student never paid, and neither
+   * did a `comped` one. Both belong in «مدفعش خالص», and a definition built on
+   * grants would have had to special-case them.
+   *
+   * ⚠️ The other three are scoped to `scope: 'course'` grants only. The
+   * automatic `platform` grant is held by every student who ever enrolled in
+   * anything and says nothing about a paid course; including it would put all
+   * 500 accounts in the "free" bucket and make the filter useless.
    */
   access: z.enum(STUDENT_ACCESS_FILTERS).nullable().default(null),
   /**
