@@ -52,6 +52,13 @@ export interface SubscribableTerm {
   priceCents: number | null;
 }
 
+export interface SubscribableMonth {
+  id: string;
+  monthIndex: number;
+  title: string;
+  isOpen: boolean;
+}
+
 export interface SubscribableCourse {
   id: string;
   title: string;
@@ -61,6 +68,15 @@ export interface SubscribableCourse {
   /** Priced terms only — see the page's own filter. Offered here even
    *  CLOSED: this is the admin override, unlike the student-facing flow. */
   terms: SubscribableTerm[];
+  /**
+   * شهور المنهج. EMPTY on a course that does not sell by month, and that
+   * emptiness is what keeps «شهري» here meaning the old rolling thirty days
+   * on those courses — exactly as `PaymentsService.adminManualSubscribe`
+   * decides it, and keyed on the same fact.
+   *
+   * Closed months included, same override as `terms`.
+   */
+  months: SubscribableMonth[];
 }
 
 /** `termId` is only meaningful for `plan: 'term'` — every other plan prices
@@ -167,6 +183,12 @@ function SubscriptionRow({
           <span className="truncate text-[length:var(--fs-text-sm)] text-fg">{row.courseTitle}</span>
           {row.plan === 'term' ? (
             <Badge tone="neutral">{formatCopy(cp.planTerm, { term: row.termTitle ?? '' })}</Badge>
+          ) : row.monthId !== null ? (
+            /* Keyed on `monthId`, NOT on `plan`: the plan reads `monthly` for
+               both monthly products, and the old rolling one has no month to
+               name. The grant's own scope is the only thing that tells them
+               apart, and `monthId` is that scope on the wire. */
+            <Badge tone="neutral">{formatCopy(cp.planMonth, { month: row.monthTitle ?? '' })}</Badge>
           ) : row.plan ? (
             <Badge tone="neutral">{PLAN_LABEL[row.plan]}</Badge>
           ) : null}
@@ -254,12 +276,28 @@ function SubscribeDialog({
   const course = courses.find((entry) => entry.id === courseId);
   const [plan, setPlan] = useState<PaymentPlan>(plansOfferedBy(course)[0] ?? 'monthly');
   const [termId, setTermId] = useState<string>(course?.terms[0]?.id ?? '');
+  /*
+   * «شهري» is two different products here too, keyed on the SAME fact the API
+   * and the gate key on: the course having any `CourseMonth` at all. A course
+   * with none still sells the rolling thirty days and this picker never
+   * renders for it.
+   */
+  const [monthIds, setMonthIds] = useState<string[]>([]);
   const [isFree, setIsFree] = useState(false);
   const [confirmedPaid, setConfirmedPaid] = useState(false);
   const [file, setFile] = useState<File | null>(null);
 
   const plans = plansOfferedBy(course);
-  const priceCents = planPriceFor(course, plan, plan === 'term' ? termId : null);
+  const sellsByMonth = (course?.months.length ?? 0) > 0;
+  const buysMonths = plan === 'monthly' && sellsByMonth;
+  const perPlanPriceCents = planPriceFor(course, plan, plan === 'term' ? termId : null);
+  // One price for any month — the instructor's own decision — so the total is
+  // a multiplication, exactly as `monthPurchaseAmountCents` computes it
+  // server-side. Two places, one rule; the server's is the one that counts.
+  const priceCents =
+    buysMonths && perPlanPriceCents !== null
+      ? perPlanPriceCents * monthIds.length
+      : perPlanPriceCents;
 
   function handleCourseChange(nextCourseId: string) {
     setCourseId(nextCourseId);
@@ -267,6 +305,10 @@ function SubscribeDialog({
     const nextPlans = plansOfferedBy(nextCourse);
     if (!nextPlans.includes(plan)) setPlan(nextPlans[0] ?? 'monthly');
     setTermId(nextCourse?.terms[0]?.id ?? '');
+    // The months belonged to the previous course. Carrying them over would
+    // submit ids the API refuses as «not on sale on this course» — a 400 the
+    // admin did nothing to earn.
+    setMonthIds([]);
   }
 
   function handlePlanChange(nextPlan: PaymentPlan) {
@@ -314,7 +356,11 @@ function SubscribeDialog({
   // only means "no course selected at all" (an empty `courses` list, guarded
   // by the caller) — the submit button stays disabled either way. For
   // `plan: 'term'` it also means no term is selected yet.
-  const canSubmit = priceCents !== null && (plan !== 'term' || termId !== '') && (isFree || confirmedPaid);
+  const canSubmit =
+    priceCents !== null &&
+    (plan !== 'term' || termId !== '') &&
+    (!buysMonths || monthIds.length > 0) &&
+    (isFree || confirmedPaid);
 
   return (
     <Dialog
@@ -339,6 +385,7 @@ function SubscribeDialog({
           <input type="hidden" name="courseId" value={courseId} />
           <input type="hidden" name="plan" value={plan} />
           <input type="hidden" name="termId" value={plan === 'term' ? termId : ''} />
+          <input type="hidden" name="monthIds" value={buysMonths ? monthIds.join(',') : ''} />
           <input type="hidden" name="isFree" value={String(isFree)} />
 
           <div>
@@ -392,6 +439,43 @@ function SubscribeDialog({
               is chosen. Every priced term is offered, open or closed: this
               dialog is the admin override (see `SubscribableTerm`'s own
               doc), unlike the student-facing subscribe panel. */}
+          {/* Which months, specifically. Every month is offered, open or
+              closed — the same override `subscribe-term` below documents, and
+              «حوّلي فلوس وأنا قافل الشهر» is the case it exists for. */}
+          {buysMonths ? (
+            <fieldset>
+              <legend className="text-[length:var(--fs-text-sm)] font-medium">
+                {c.subscribeMonthsLabel}
+              </legend>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                {(course?.months ?? []).map((month) => (
+                  <label
+                    key={month.id}
+                    className="flex items-center gap-1.5 text-[length:var(--fs-text-sm)]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={monthIds.includes(month.id)}
+                      onChange={(event) =>
+                        setMonthIds((current) =>
+                          event.target.checked
+                            ? [...current, month.id]
+                            : current.filter((id) => id !== month.id),
+                        )
+                      }
+                    />
+                    {month.isOpen
+                      ? month.title
+                      : `${month.title} (${c.subscribeMonthClosedBadge})`}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+                {monthIds.length === 0 ? c.subscribeMonthsRequired : c.subscribeMonthsHint}
+              </p>
+            </fieldset>
+          ) : null}
+
           {plan === 'term' ? (
             <div>
               <Label htmlFor="subscribe-term">{c.subscribeTermLabel}</Label>

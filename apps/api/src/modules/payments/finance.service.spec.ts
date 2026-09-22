@@ -188,6 +188,7 @@ describe('FinanceService', () => {
       plan: 'monthly',
       termId: null,
       isFree: false,
+      monthIds: [],
       screenshotKey: null,
     });
     // A second call against the SAME student+course extends the existing
@@ -198,6 +199,7 @@ describe('FinanceService', () => {
       plan: 'monthly',
       termId: null,
       isFree: false,
+      monthIds: [],
       screenshotKey: null,
     });
 
@@ -206,6 +208,7 @@ describe('FinanceService', () => {
       plan: 'quarterly',
       termId: null,
       isFree: true,
+      monthIds: [],
       screenshotKey: null,
     });
 
@@ -214,6 +217,7 @@ describe('FinanceService', () => {
       plan: 'yearly',
       termId: null,
       isFree: false,
+      monthIds: [],
       screenshotKey: null,
     });
 
@@ -222,6 +226,7 @@ describe('FinanceService', () => {
       plan: 'term',
       termId: termAId,
       isFree: false,
+      monthIds: [],
       screenshotKey: null,
     });
   });

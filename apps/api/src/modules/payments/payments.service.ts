@@ -991,10 +991,18 @@ export class PaymentsService {
         select: {
           id: true,
           status: true,
+          // The rest of what `courseAccessScopes` needs, for the owned-months
+          // read below.
+          subjectId: true,
+          requiresGrant: true,
           monthlyPriceCents: true,
           quarterlyPriceCents: true,
           yearlyPriceCents: true,
           terms: { select: { id: true, title: true, priceCents: true } },
+          // EVERY month, open or not — `isOpen` is deliberately not a gate on
+          // this route. See `AdminManualSubscribeSchema.monthIds`. Selected
+          // anyway because `MonthOfferingCourse` carries it.
+          months: { select: { id: true, isOpen: true } },
         },
       }),
     ]);
@@ -1015,12 +1023,51 @@ export class PaymentsService {
       throw new BadRequestException('this course does not sell that plan');
     }
 
+    /*
+      «شهري» here has to mean what «شهري» means in checkout, and until this
+      branch existed it did not.
+ 
+      `submit()` already keys the two monthly products on the course having ANY
+      `CourseMonth` row — the same fact `LessonAccessService.require` gates on.
+      This route did not, so recording a WhatsApp transfer as «شهري» on a
+      month-selling course wrote the old course-wide dated grant: it opens
+      EVERY lecture, `/admin/finance` calls it a monthly subscription, and the
+      student got more than anybody sold them with no screen saying so.
+ 
+      Unlike `submit()`, the chosen months are not required to be OPEN — this
+      is the admin override, the same precedent `term` above already sets by
+      not checking `isOpen` either.
+    */
+    const courseSellsByMonth = course.months.length > 0;
+    const buysMonths = input.plan === 'monthly' && courseSellsByMonth;
+
+    if (input.plan === 'monthly' && !courseSellsByMonth && input.monthIds.length > 0) {
+      throw new BadRequestException('this course does not sell by curriculum month');
+    }
+
+    let monthIds: string[] = [];
+    if (buysMonths) {
+      const refusal = checkMonthSelection({
+        requested: input.monthIds,
+        onSale: new Set(course.months.map((month) => month.id)),
+        // Months this student already holds — the one failure here that costs
+        // somebody real money and is otherwise invisible, because the grant
+        // write is idempotent and nothing downstream would complain.
+        owned: new Set(await this.ownedMonthIds(userId, course)),
+      });
+      if (refusal) throw new BadRequestException(monthSelectionMessage(refusal));
+      monthIds = [...input.monthIds];
+    }
+
     const now = new Date();
     const { existingGrant, validUntil } =
-      input.plan === 'term'
+      input.plan === 'term' || buysMonths
         ? { existingGrant: null, validUntil: null }
         : await this.resolvePurchaseExpiry(userId, input.courseId, input.plan, now);
-    const amountCents = amountCollectedCents(planPriceCents, input.isFree);
+    const amountCents = amountCollectedCents(
+      buysMonths ? monthPurchaseAmountCents(planPriceCents, monthIds.length) : planPriceCents,
+      input.isFree,
+    );
 
     const submissionId = await this.prisma.$transaction(async (tx) => {
       const grantId =
@@ -1031,6 +1078,15 @@ export class PaymentsService {
               // Non-null here — guaranteed above by the schema refine plus
               // the `term === null` guard.
               termId: (term as { id: string }).id,
+              adminId,
+              now,
+              note: `manual: recorded by admin ${adminId}`,
+            })
+          : buysMonths
+          ? await this.writeMonthGrants(tx, {
+              userId,
+              courseId: input.courseId,
+              monthIds,
               adminId,
               now,
               note: `manual: recorded by admin ${adminId}`,
@@ -1051,6 +1107,12 @@ export class PaymentsService {
           courseId: input.courseId,
           plan: input.plan,
           termId: term?.id ?? null,
+          // The months this one payment bought — the same join the student
+          // flow writes, so `/admin/finance` and the student's own card read
+          // one shape.
+          months: buysMonths
+            ? { createMany: { data: monthIds.map((monthId) => ({ monthId, courseId: input.courseId })) } }
+            : undefined,
           amountCents,
           isFree: input.isFree,
           // Neither has a meaningful value for a row the admin creates
@@ -1091,6 +1153,7 @@ export class PaymentsService {
         courseId: input.courseId,
         plan: input.plan,
         termId: term?.id ?? null,
+        monthIds,
         isFree: input.isFree,
         amountCents,
         validUntil: validUntil ? validUntil.toISOString() : null,
@@ -1328,7 +1391,10 @@ export class PaymentsService {
    */
   async adminListSubscriptions(userId: string): Promise<AdminSubscriptionRow[]> {
     const grants = await this.prisma.accessGrant.findMany({
-      where: { userId, scope: { in: ['course', 'term'] }, source: 'purchase' },
+      // `course_month` alongside the other two: a hand-recorded month payment
+      // is exactly as real a subscription, and leaving it out meant the admin
+      // pressed «اشترك» and the panel below showed nothing at all.
+      where: { userId, scope: { in: ['course', 'term', 'course_month'] }, source: 'purchase' },
       // Live ones first, soonest-expiring first within each group — the
       // subscription most worth a glance leads, same convention as the
       // finance screen's own ordering. A `null` `validUntil` (every term
@@ -1342,8 +1408,10 @@ export class PaymentsService {
         validUntil: true,
         revokedAt: true,
         createdAt: true,
+        monthId: true,
         course: { select: { title: true } },
         term: { select: { title: true } },
+        month: { select: { title: true } },
         // The most recent APPROVED submission behind this grant — see
         // `FinanceService.list`'s identical join for why `take: 1` is
         // correct here too.
@@ -1357,7 +1425,7 @@ export class PaymentsService {
     });
 
     return grants
-      // `scope: { in: ['course', 'term'] }` guarantees `courseId`/`course`,
+      // Every scope in the filter guarantees `courseId`/`course`,
       // but the type system cannot see that — same defensive filter
       // `FinanceService.list` uses.
       .filter(
@@ -1373,6 +1441,8 @@ export class PaymentsService {
           plan: latest?.plan ?? null,
           termId: grant.termId,
           termTitle: grant.term?.title ?? null,
+          monthId: grant.monthId,
+          monthTitle: grant.month?.title ?? null,
           amountCents: latest?.amountCents ?? null,
           isFree: latest?.isFree ?? null,
           validUntil: grant.validUntil?.toISOString() ?? null,

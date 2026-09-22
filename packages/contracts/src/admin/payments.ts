@@ -97,6 +97,20 @@ export const AdminSubscriptionRowSchema = z.object({
   /** Which term this grant is for — set exactly when `plan = 'term'`. */
   termId: z.string().nullable(),
   termTitle: z.string().nullable(),
+  /**
+   * Which curriculum month this grant is for — set exactly on a
+   * `scope: course_month` grant, and `null` on every other row.
+   *
+   * ⚠️ One PAYMENT can open several months, and each month is its own grant,
+   * so «شهر ٢ و٣» is TWO rows on this panel with the same `createdAt` and the
+   * same `amountCents`. That is the honest shape: cancelling is per grant, so
+   * a single row covering both would hide a control the admin needs. The
+   * amount repeating is the one thing to read carefully, and it is why
+   * `monthTitle` is rendered — two rows with no distinguishing label would
+   * look like the payment was recorded twice.
+   */
+  monthId: z.string().nullable(),
+  monthTitle: z.string().nullable(),
   /** What the term is worth — the course's own plan price, regardless of
    *  `isFree`. See the model note on `PaymentSubmission.amountCents`. */
   amountCents: z.number().int().nullable(),
@@ -130,6 +144,21 @@ export const AdminManualSubscribeSchema = z
      *  student-facing flow is: this is the admin override, matching
      *  `CourseAccessSection`'s own precedent for course-wide grants. */
     termId: z.uuid().nullable().default(null),
+    /**
+     * «شهر ٢ و٣» — which curriculum months this hand-recorded payment bought.
+     *
+     * Empty on every plan but `monthly`, and empty is legal ON `monthly` too:
+     * a course the instructor never configured months for still sells the
+     * original rolling thirty days. `PaymentsService.adminManualSubscribe` is
+     * what refuses an empty list on a course that DOES sell by month — the
+     * schema cannot know which kind of course this id names.
+     *
+     * ⚠️ Deliberately NOT gated on the month being OPEN, unlike the
+     * student-facing flow. Same precedent `termId` one line up already sets:
+     * this is the admin override, and «حوّلي فلوس وأنا قافل الشهر» is exactly
+     * the case he needs it for.
+     */
+    monthIds: z.uuid().array().max(12).default([]),
     /** `true` comps the term — same plan-length expiry, just never counted
      *  as revenue. `false` records money that already changed hands. */
     isFree: z.boolean(),
@@ -143,6 +172,14 @@ export const AdminManualSubscribeSchema = z
   .refine((value) => (value.plan === 'term') === (value.termId !== null), {
     message: 'لازم تختار الترم',
     path: ['termId'],
+  })
+  .refine((value) => value.plan === 'monthly' || value.monthIds.length === 0, {
+    message: 'الشهور بتتحدد مع الاشتراك الشهري بس',
+    path: ['monthIds'],
+  })
+  .refine((value) => new Set(value.monthIds).size === value.monthIds.length, {
+    message: 'فيه شهر مكرر',
+    path: ['monthIds'],
   });
 export type AdminManualSubscribe = z.infer<typeof AdminManualSubscribeSchema>;
 
