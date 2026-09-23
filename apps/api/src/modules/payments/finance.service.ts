@@ -139,7 +139,7 @@ export class FinanceService {
 
     // `courseId`/`course` are nullable on `AccessGrant` in general (a
     // `subject_teacher` grant has no single course) but never for a row
-    // THIS where clause can return — `scope: { in: ['course', 'term'] }`
+    // THIS where clause can return — every scope the base query allows
     // guarantees the course either way. A row missing course info is
     // dropped rather than rendered with a blank cell — the type system
     // cannot see the guarantee the query makes, but nothing here should
