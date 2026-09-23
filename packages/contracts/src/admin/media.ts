@@ -10,14 +10,50 @@ import { z } from '@ayman/contracts/zod';
  *
  * GIF is allowed but is re-encoded to animated WebP like everything else.
  */
+/*
+ * ## HEIC — وليه كان لازم يتضاف
+ *
+ * الآيفون بيصوّر HEIC افتراضيًا. الطالبة بتصوّر ورقة الحل وبتدوس رفع، وبيجيلها
+ * «ده مش ملف صورة» — وهي فعلًا صوّرت صورة. الرسالة صح تقنيًا وغلط تمامًا من
+ * ناحيتها، ومفيش حاجة على الشاشة بتقولها تعمل إيه بدل كده.
+ *
+ * ومش خطر جديد: المسار ده **بيعيد الترميز** لكل حاجة بتعدّي عليه (اقرا
+ * `MediaService`)، وإعادة الترميز هي الحماية الحقيقية — بتطلّع WebP نضيف،
+ * وبتوقّع أي polyglot، وبتشيل كل بلوكات EXIF/GPS. وصورة متصوّرة بتليفون
+ * طالبة، بلوك الـGPS فيها مش قلق نظري.
+ *
+ * والسقف بتاع البكسلات (`MAX_INPUT_PIXELS`) هو اللي بيحد قنبلة فك الضغط،
+ * وهو نفسه لكل الصيغ.
+ *
+ * ⚠️ SVG لسه غايب ولازم يفضل غايب — ده مستند بيشغّل سكريبت، مش صورة.
+ */
 export const ALLOWED_UPLOAD_MIME = [
   'image/png',
   'image/jpeg',
   'image/webp',
   'image/avif',
   'image/gif',
+  'image/heic',
+  'image/heif',
+  // «sequence» هي الـLive Photo. `file-type` بيفرّقها، وبنقبلها عن قصد:
+  // الطالبة مش عارفة إن تليفونها كتب تتابع بدل صورة، والنتيجة عندنا صورة
+  // ساكنة في الحالتين — `MULTI_FRAME_MIME` مش شايلاهم، فـsharp بياخد
+  // الإطار الأساسي وبس، وده بالظبط ورقة الحل.
+  'image/heic-sequence',
+  'image/heif-sequence',
 ] as const;
-export const ALLOWED_UPLOAD_EXT = ['png', 'jpg', 'jpeg', 'webp', 'avif', 'gif'] as const;
+// `file-type` بيرجّع `heic` لكل صيغ HEIF، بس الامتداد اللي على التليفون
+// ممكن يبقى `.heif` — والبوابة الأولى بتقرا الاسم، فالاتنين لازم يبقوا هنا.
+export const ALLOWED_UPLOAD_EXT = [
+  'png',
+  'jpg',
+  'jpeg',
+  'webp',
+  'avif',
+  'gif',
+  'heic',
+  'heif',
+] as const;
 
 /** Enforced at the app AND (in production) at the reverse proxy. */
 export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;

@@ -4,6 +4,20 @@ import { MediaService } from './media.service';
 import type { MediaStorage } from './storage/media-storage';
 
 /** A real, tiny PNG — enough for sharp to decode and re-encode for real. */
+/*
+ * جسم صورة يعرف sharp يفكّه، بتتقدّم على إنها HEIC.
+ *
+ * الكاشف متعمولّه mock في التستات دي، فاللي بيتقرر هنا هو **القايمة
+ * المسموحة** مش فك ترميز HEIC — و`sharp` المبني محليًا مش مضمون يبقى معاه
+ * libheif أصلًا، فبناء HEIC حقيقي كان هيخلّي التست يقع حسب الجهاز.
+ *
+ * إن الإنتاج بيفك HEIC حاجة تانية خالص، واتأكدت منها على السيرفر نفسه:
+ * `sharp.format.heif.input.buffer === true` على libvips 8.18.3.
+ */
+async function makeHeicLikePng(): Promise<Buffer> {
+  return makePng();
+}
+
 async function makePng(): Promise<Buffer> {
   return sharp({
     create: { width: 4, height: 4, channels: 3, background: { r: 10, g: 20, b: 30 } },
@@ -182,6 +196,47 @@ describe('MediaService.upload', () => {
       service.upload({ originalname: 'broken.gif', buffer: notActuallyAGif, size: notActuallyAGif.length }),
     ).rejects.toThrow('file could not be processed as an image');
     expect(storage.put).not.toHaveBeenCalled();
+  });
+
+  /*
+   * ## HEIC — صورة الآيفون
+   *
+   * الآيفون بيصوّر HEIC افتراضيًا، والقايمة مكانتش شايلاه. الطالبة بتصوّر
+   * ورقة الحل وبتدوس رفع وبيجيلها «ده مش ملف صورة» — وهي فعلًا صوّرت صورة.
+   *
+   * التستات دي بتثبّت الحتة اللي بتهم: **الاتساع مايوسّعش الثغرة**. البوابتين
+   * لسه مقفولتين، والخارج لسه WebP — يعني HEIC بيتقبل زي أي صورة تانية
+   * بالظبط، مش كاستثناء.
+   */
+  it('accepts an iPhone HEIC and stores it as WebP like everything else', async () => {
+    const { service, prisma } = makeService({ mime: 'image/heic', ext: 'heic' });
+    const buffer = await makeHeicLikePng();
+    await service.upload({ originalname: 'IMG_4213.HEIC', buffer, size: buffer.length });
+
+    const created = prisma.mediaAsset.create.mock.calls[0]?.[0] as { data: { mime: string } };
+    expect(created.data.mime).toBe('image/webp');
+  });
+
+  /* الامتداد `.heif` موجود على تليفونات كمان، والبوابة الأولى بتقرا الاسم. */
+  it('accepts the .heif spelling too, not only .heic', async () => {
+    const { service } = makeService({ mime: 'image/heif', ext: 'heic' });
+    const buffer = await makeHeicLikePng();
+    await expect(
+      service.upload({ originalname: 'photo.heif', buffer, size: buffer.length }),
+    ).resolves.toBeDefined();
+  });
+
+  /*
+   * ⚠️ التوسيع مايفتحش باب.
+   *
+   * ملف اسمه `.heic` وجواه تنفيذي لسه بيتوقّع عند البوابة التانية — الاسم
+   * مابيعديش، والبايتات هي اللي بتتقرا.
+   */
+  it('still blocks an executable renamed .heic — the bytes decide, not the name', async () => {
+    const { service } = makeService(null);
+    await expect(
+      service.upload({ originalname: 'evil.heic', buffer: Buffer.from('MZ\x90\x00'), size: 4 }),
+    ).rejects.toThrow('file contents are not an allowed image type');
   });
 
   it('rejects a real PNG buffer whose filename claims .svg — gate 1 blocks it before sniffing', async () => {

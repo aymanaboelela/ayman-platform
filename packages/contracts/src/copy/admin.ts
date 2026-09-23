@@ -3546,8 +3546,10 @@ const admin = {
      * mapped in `MediaKeyField.uploadReason`.
      */
     uploadTooLarge: 'الصورة كبيرة أوي — الحد الأقصى ٨ ميجا. صغّرها وحاول تاني.',
-    uploadBadType:
-      'نوع الملف ده مش مدعوم. المدعوم PNG أو JPG أو WEBP. صور الآيفون (HEIC) لازم تتحوّل الأول.',
+    /** صور الآيفون (HEIC) بقت بتتقبل وبتتحوّل على السيرفر لوحدها — الجملة
+     *  اللي كانت بتقول «لازم تتحوّل الأول» بقت غلط، والأسوأ إنها كانت
+     *  بتحوّل مشكلتنا لشغل على اللي بيرفع. */
+    uploadBadType: 'نوع الملف ده مش مدعوم. ابعت صورة (PNG أو JPG أو WEBP أو HEIC).',
     uploadUnreadable: 'مقدرناش نقرا الملف ده كصورة. يمكن يكون مش صورة سليمة.',
     /**
      * A dropped connection, NOT a refusal — so the wording sends the
