@@ -3956,12 +3956,25 @@
   background: var(--st-wash);
 }
 
+/* ⚠️ NO forced `aspect-ratio`, and that is the fix rather than a preference.
+   
+   It used to be `4 / 3` with `object-fit: cover`, which works only while every
+   upload happens to be landscape. An admin who picks a square headshot — which
+   is what the picker offers for a face — gets a 1:1 image poured into a 4:3
+   box, and `cover` takes the difference off the TOP and bottom: the crop lands
+   on his hairline and the section ships a portrait of a man missing the top of
+   his head.
+   
+   The box takes its ratio from the picture instead. `max-block-size` is what
+   keeps a tall portrait from running past the prose beside it, and `contain`
+   inside that cap letterboxes onto `--st-wash` rather than cropping — an
+   admin's chosen photograph is never silently trimmed. */
 [data-preset='studio'] .st-about__image {
   display: block;
   inline-size: 100%;
   block-size: auto;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
+  max-block-size: 30rem;
+  object-fit: contain;
 }
 
 [data-preset='studio'] .st-pills {
