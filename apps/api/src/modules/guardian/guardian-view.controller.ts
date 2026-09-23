@@ -5,12 +5,14 @@ import { Public } from '../../auth/decorators/public.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { GuardianSessionService } from './guardian-session.service';
+import { GuardianReportService, type GuardianReport } from './guardian-report.service';
 import { readCookie } from '../assistant/guest-token';
 import { GUARDIAN_COOKIE } from './guardian-cookie';
 
 export interface GuardianView {
   student: { name: string; year: number | null };
   dashboard: Dashboard;
+  report: GuardianReport;
 }
 
 /**
@@ -32,6 +34,7 @@ export class GuardianViewController {
   constructor(
     private readonly sessions: GuardianSessionService,
     private readonly dashboard: DashboardService,
+    private readonly report: GuardianReportService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -64,7 +67,18 @@ export class GuardianViewController {
 
     return {
       student: { name: profile.fullName, year: profile.year },
-      dashboard: await this.dashboard.forUser(session.studentUserId),
+      // بالتوازي: الاتنين قرايات مستقلة، وتسلسلهم كان بيضاعف انتظار
+      // الصفحة الوحيدة اللي الأب بيفتحها.
+      ...(await this.both(session.studentUserId)),
     };
+  }
+
+  /** القرايتين مع بعض — اقرا مكان النداء. */
+  private async both(userId: string): Promise<{ dashboard: Dashboard; report: GuardianReport }> {
+    const [dashboard, report] = await Promise.all([
+      this.dashboard.forUser(userId),
+      this.report.forStudent(userId),
+    ]);
+    return { dashboard, report };
   }
 }
