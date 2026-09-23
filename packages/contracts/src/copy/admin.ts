@@ -494,8 +494,11 @@ const admin = {
      * it happens. So the switch refuses, names the number, and the admin has a
      * link to the lectures in question.
      */
-    blockedByUntagged: 'فيه {n} محاضرة منشورة من غير شهر. لازم تتحط في شهورها الأول، وإلا اللي هيشترك شهر واحد هيشوفها كلها.',
-    untaggedLink: 'ورّيني المحاضرات دي',
+    /** `{n}` — كل درس منشور من غير شهر، **والكويزات جوّاهم**: السيرفر بيعدّهم
+     *  في `countUntagged`، والشاشة بقت تعدّهم زيه. عشان كده «درس» مش
+     *  «محاضرة» — الرقم كان بيقول محاضرات وبيشمل كويزات. */
+    blockedByUntagged: 'فيه {n} درس منشور من غير شهر. لازم يتحطوا في شهورهم الأول، وإلا اللي هيشترك شهر واحد هيشوفهم كلهم.',
+    untaggedLink: 'ورّيني الدروس دي',
     /** `{n}` — live, unrevoked subscriptions to THIS month. Not «كام واحد
      *  دفع»: a refunded or cancelled subscription is money that happened and
      *  access that did not, and this counts who is reading. */

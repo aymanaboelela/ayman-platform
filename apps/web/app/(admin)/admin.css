@@ -749,3 +749,93 @@
 .admin-lesson--nested .lesson-row__title {
   font-size: var(--fs-text-sm);
 }
+
+/* ── شهور المنهج ──────────────────────────────────────────────────────────
+ *
+ * الشهور كانت قايمة طولية، صف كامل العرض لكل شهر وفيه سبع عناصر تحكّم. ده
+ * كان مقبول وإنت عندك شهر أو اتنين؛ الكورس اللي عنده عشرة بقى البانل عنده
+ * حيطة بتدفع محتوى الكورس تحت الشاشة — وهي أكتر حاجة المدرّس بيفتح الصفحة
+ * عشانها.
+ *
+ * بقت شبكة من كروت بتتفتح: الملخّص فيه الاسم والعدد والحالة، والتحكّم بيبان
+ * لما تفتح. عشرة شهور بقوا أربع صفوف بدل عشرة، والتحكّم موجود كله زي ما هو.
+ */
+.month-grid {
+  display: grid;
+  gap: var(--s-2);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 40rem) {
+  .month-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 72rem) {
+  .month-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* الكارت المفتوح بياخد الصف كله: التحكّم جوّاه أعرض من عمود واحد، ولو فضل
+ * في عموده كان هيلف على أربع سطور جنب كارتين مقفولين. */
+.month-grid > li:has(> details[open]) {
+  grid-column: 1 / -1;
+}
+
+.month-card {
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--color-surface-2);
+}
+
+.month-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-4);
+  cursor: pointer;
+  /* المثلث الافتراضي بيتلخبط في RTL؛ الحالة على الشمال هي المؤشّر. */
+  list-style: none;
+}
+
+.month-card__head::-webkit-details-marker {
+  display: none;
+}
+
+.month-card__title {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-text-sm);
+  color: var(--color-fg);
+}
+
+.month-card__meta {
+  flex-shrink: 0;
+  font-size: var(--fs-text-xs);
+  color: var(--color-fg-muted);
+}
+
+/* «مقفول» رمادي و«مفتوح» عنبري — الحالة الوحيدة اللي بتفرق من بعيد، وهي
+ * السؤال اللي المدرّس بيفتح البانل عشانه: الشهر ده معروض للبيع ولا لأ. */
+.month-card__state {
+  flex-shrink: 0;
+  padding: 0.125rem var(--s-2);
+  border-radius: var(--r-xs);
+  background: var(--color-surface-3);
+  color: var(--color-fg-muted);
+  font-size: var(--fs-text-xs);
+}
+
+/* الأكسنت عندنا بيبدأ من `--a-9` (نغمات صلبة)، مفيش نغمة خلفية خفيفة زي
+ * `--a-3`. فالحالة المفتوحة بتتعلّم بالنص والإطار، مش بخلفية ملوّنة —
+ * والنتيجة أهدى على عشر كروت جنب بعض على أي حال. */
+.month-card__state--on {
+  border: var(--hairline) solid var(--a-9);
+  background: transparent;
+  color: var(--a-11);
+}
