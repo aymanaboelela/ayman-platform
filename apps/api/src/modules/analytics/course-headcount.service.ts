@@ -41,11 +41,29 @@ interface HeadcountRow {
  * `FinanceService.list` filters `source: 'purchase'`, which is right for a
  * money screen and wrong for this one — a grant an admin opened by hand is
  * real access held by a real student, and counting it is the difference
- * between this strip and «الاشتراكات والإيرادات». `scope in ('course','term')`
- * matches the finance screen's own base filter: a `subject_teacher` or
- * `platform` grant is not a subscription to any particular course, and
- * counting the platform one would report every registered student as a
- * subscriber to every free course.
+ * between this strip and «الاشتراكات والإيرادات». The scope list matches the
+ * finance screen's own base filter: a `subject_teacher` or `platform` grant is
+ * not a subscription to any particular course, and counting the platform one
+ * would report every registered student as a subscriber to every free course.
+ *
+ * ## ⚠️ و`course_month` جوّه القايمة — وغيابه كان بيقلّل الرقم للتلت
+ *
+ * اللي اشترى «شهر ٢» مشترك في الكورس ده بنفس معنى اللي اشترى الترم بالظبط:
+ * دفع، وعنده وصول حي، وبيتفرّج. القايمة كانت `('course','term')` لأنها
+ * اتكتبت قبل ما الشهور توجد.
+ *
+ * وبقى واقع يوم ٢٠٢٦-٠٩-٢٣، لما أربع كورسات اتنقلت للشهور في يوم واحد:
+ *
+ *     تانية (عربي)  ٦٦ على الشاشة  ←  ١٧٧ الحقيقة
+ *     تانية (لغات)  ٣٧              ←  ٨٤
+ *     أولى (عام)    ١٦              ←  ٢٨
+ *
+ * والرقم ده اللي المدرّس بيقرا منه «الكورس ده ماشي ولا لأ». رقم بيقول تلت
+ * الحقيقة مش رقم ناقص — هو رقم بيدي قرار غلط.
+ *
+ * ونفس الغياب بالحرف كان في `FinanceService.findMutableGrant` — الشاشة
+ * بتعرض اشتراكات الشهور وماتقدرش تلمسها. كل عدّاد وكل فلتر اتكتب قبل
+ * الشهور لازم يتراجع.
  */
 @Injectable()
 export class CourseHeadcountService {
@@ -75,7 +93,7 @@ export class CourseHeadcountService {
         SELECT g."course_id", count(DISTINCT g."user_id")::int AS n
         FROM "app"."access_grants" g
         ${studentJoins('g."user_id"')}
-        WHERE g."scope" IN ('course', 'term')
+        WHERE g."scope" IN ('course', 'term', 'course_month')
           AND g."course_id" IS NOT NULL
           AND g."revoked_at" IS NULL
           AND g."valid_from" <= ${now}

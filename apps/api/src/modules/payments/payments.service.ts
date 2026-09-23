@@ -1345,10 +1345,22 @@ export class PaymentsService {
   ): Promise<AdminSubscriptionRow[]> {
     const grant = await this.prisma.accessGrant.findFirst({
       // `userId` in the WHERE, so a grant id from another student's account
-      // cannot be cancelled through this student's URL. `scope: 'term'`
-      // included alongside `'course'` — this is the same manual-subscribe
-      // section's own cancel button, for either kind of grant it can create.
-      where: { id: grantId, userId, scope: { in: ['course', 'term'] }, source: 'purchase' },
+      // cannot be cancelled through this student's URL. `term` and
+      // `course_month` alongside `course` — this is the same manual-subscribe
+      // section's own cancel button, for every kind of grant it can create.
+      //
+      // ⚠️ `course_month` was missing, and that route 404'd on the commonest
+      // grant on the platform the day four courses moved to months. The web
+      // UI now cancels through `FinanceService` instead (it asks about the
+      // refund too), so nothing calls this any more — but the endpoint is
+      // still exposed, and an endpoint that refuses the ordinary case is a
+      // trap for whoever finds it next.
+      where: {
+        id: grantId,
+        userId,
+        scope: { in: ['course', 'term', 'course_month'] },
+        source: 'purchase',
+      },
       select: { id: true, revokedAt: true, courseId: true },
     });
     if (!grant) throw new NotFoundException();
