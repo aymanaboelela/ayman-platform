@@ -1,6 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Dashboard, EnrolledCourse, LessonKind, PendingExam } from '@ayman/contracts';
+import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { courseAccessScopes } from '../entitlement/grant-liveness';
+import { monthSliceOf } from '../entitlement/month-access';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
 import { SCORE_FEED, type ScoreFeed } from './score-feed';
@@ -126,11 +129,23 @@ export class DashboardService {
             // already reached 100, and the card showed a finished-course
             // badge over what looked like an untouched one. The two counts
             // must walk the same set `recalculate` does, or they drift.
+            // ⚠️ والشهور — الباب التالت لنفس الانجراف اللي الكومنت فوق بيشرحه.
+            //
+            // على كورس بيتباع بالشهور، اللي دافع «شهر ١» مايقدرش يفتح محاضرات
+            // شهر ٢، ومع ذلك كانت بتتعد هنا. فالكارت كان هيقول «٦ من ١١» جنب
+            // شريط على ١٠٠٪، والاتنين صح كل واحد على مجموعته — وده بالظبط
+            // الانجراف اللي `recalculate` بيتصلح عشانه.
+            //
+            // `subjectId`/`requiresGrant` بيوصلوا لـ`courseAccessScopes`،
+            // و`months` بتقول الكورس ده بيتباع بالشهور ولا لأ.
+            subjectId: true,
+            requiresGrant: true,
             _count: {
               select: {
                 lessons: {
                   where: { isPublished: true, section: { isPublished: true }, kind: { not: 'quiz' } },
                 },
+                months: true,
               },
             },
           },
@@ -213,6 +228,24 @@ export class DashboardService {
     // expiry per course, the summed watch time behind «ساعات التعلم», and the
     // exam gate + progress state behind «امتحانات في انتظارك». Sequentially
     // these were five full round trips to Postgres; together they are one wait.
+    /*
+     * الشهور اللي الطالب ماسكها، لكل كورس بيتباع بالشهور.
+     *
+     * استعلام واحد لكل الكورسات: الداشبورد بتاعة طالب واحد، فالـgrants بتتقرا
+     * مرة وبتتقسّم في الذاكرة. `Map` فاضية = مفيش كورس محتاج تقييد، وده
+     * الغالب.
+     *
+     * نفس `monthSliceOf` اللي البوابة و`recalculate` بيستعملوه — تالت قارئ
+     * لنفس الدالة، وده المقصود منها أصلًا.
+     */
+    const monthFilters = await this.monthFiltersByCourse(userId, enrollments);
+    const lessonsOf = (courseId: string): Prisma.LessonWhereInput => ({
+      isPublished: true,
+      section: { isPublished: true },
+      kind: { not: 'quiz' },
+      ...(monthFilters.get(courseId) ?? {}),
+    });
+
     const [completedByEnrollment, resumeProgress, purchaseGrants, watchedAgg, examProgressRows, examGates] =
       await Promise.all([
       this.prisma.lessonProgress.groupBy({
@@ -225,7 +258,13 @@ export class DashboardService {
           // completion inside an unpublished section could count here but
           // not there (or vice versa) and the displayed fraction would
           // disagree with `progressPercent` again in the other direction.
-          lesson: { isPublished: true, section: { isPublished: true }, kind: { not: 'quiz' } },
+          // ⚠️ `OR` لكل اشتراك على حدة، مش فلتر واحد: الطالب ممكن يكون ماسك
+          // «شهر ١» في كورس وترم كامل في كورس تاني، وفلتر واحد كان هيطبّق
+          // تقييد كورس على كورس تاني.
+          OR: enrollments.map((row) => ({
+            enrollmentId: row.id,
+            lesson: lessonsOf(row.course.id),
+          })),
         },
         _count: { _all: true },
       }),
@@ -293,6 +332,33 @@ export class DashboardService {
     const completedCounts = new Map(
       completedByEnrollment.map((row) => [row.enrollmentId, row._count._all]),
     );
+
+    /*
+     * المقام، بنفس `lessonsOf` بتاع البسط بالحرف.
+     *
+     * بقى استعلام لوحده بدل `course._count.lessons` المدمج، لأن العدّ المدمج
+     * فلتره ثابت في الاستعلام ومايعرفش يتغيّر حسب شهور الطالب. والاتنين
+     * بيتبنوا من نفس الدالة دلوقتي، فمايقدروش ينجرفوا.
+     *
+     * الكورسات اللي مالهاش شهور بتاخد نفس الفلتر القديم بالظبط، فالرقم عندها
+     * ما اتغيرش.
+     */
+    const lessonTotals = new Map(
+      (
+        await this.prisma.lesson.groupBy({
+          by: ['courseId'],
+          // `courseId` في كل فرع — `lessonsOf` مابتحطّهوش لأن البسط بيقيّد
+          // بالـ`enrollmentId` بدله، وهنا مفيش حاجة تقيّد غيره.
+          where: {
+            OR: enrollments.map((row) => ({
+              courseId: row.course.id,
+              ...lessonsOf(row.course.id),
+            })),
+          },
+          _count: { _all: true },
+        })
+      ).map((row) => [row.courseId, row._count._all]),
+    );
     const subscriptionExpiry = new Map(
       purchaseGrants
         .filter((grant): grant is typeof grant & { courseId: string } => grant.courseId !== null)
@@ -314,7 +380,7 @@ export class DashboardService {
         published,
         progressPercent: Number(row.progressPercent),
         completedLessons: completedCounts.get(row.id) ?? 0,
-        totalLessons: row.course._count.lessons,
+        totalLessons: lessonTotals.get(row.course.id) ?? 0,
         // Null while closed. `enrolledCourseHref` builds «نكمّل» out of this,
         // and the rail builds its row link out of the same helper, so a value
         // here is two more presses into a refusal.
@@ -439,5 +505,60 @@ export class DashboardService {
       reason: latest.reason,
       total,
     };
+  }
+
+  /**
+   * لكل كورس بيتباع بالشهور: القطعة اللي بتقصر العدّ على اللي الطالب ماسكه.
+   *
+   * استعلام واحد لكل الـgrants — الداشبورد بتاعة طالب واحد، فالتقسيم بيحصل
+   * في الذاكرة. والكورسات اللي مالهاش شهور مابتدخلش الـ`Map` أصلًا، فـ
+   * `lessonsOf` بترجّع نفس الفلتر القديم بالحرف.
+   *
+   * والترم والسنة مابيدخلوش كمان (`slice.everything`) — دول بيفتحوا كل حاجة،
+   * والمحاضرة من غير شهر كمان.
+   */
+  private async monthFiltersByCourse(
+    userId: string,
+    enrollments: readonly {
+      course: { id: string; subjectId: string; requiresGrant: boolean; _count: { months: number } };
+    }[],
+  ): Promise<Map<string, Prisma.LessonWhereInput>> {
+    const byMonth = enrollments.filter((row) => row.course._count.months > 0);
+    if (byMonth.length === 0) return new Map();
+
+    const grants = await this.prisma.accessGrant.findMany({
+      where: {
+        userId,
+        OR: byMonth.flatMap((row) => courseAccessScopes(row.course)),
+      },
+      orderBy: [{ validFrom: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        scope: true,
+        courseId: true,
+        monthId: true,
+        validFrom: true,
+        validUntil: true,
+        revokedAt: true,
+      },
+    });
+
+    const now = new Date();
+    const filters = new Map<string, Prisma.LessonWhereInput>();
+    for (const { course } of byMonth) {
+      /*
+       * ⚠️ `courseId === null` بتعدّي: دي الـgrants الأوسع (`platform`،
+       * `subject_teacher`) اللي مش مربوطة بكورس بعينه، و`courseAccessScopes`
+       * طلبها عن قصد. تصفيتها هنا كانت هتشيل بالظبط الـgrants اللي معناها
+       * «كل حاجة مفتوحة».
+       */
+      const mine = grants.filter(
+        (grant) => grant.courseId === null || grant.courseId === course.id,
+      );
+      const slice = monthSliceOf(mine, now);
+      if (slice.everything) continue;
+      filters.set(course.id, { months: { some: { monthId: { in: [...slice.monthIds] } } } });
+    }
+    return filters;
   }
 }

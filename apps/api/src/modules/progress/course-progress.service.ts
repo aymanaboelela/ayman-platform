@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
+import { courseAccessScopes } from '../entitlement/grant-liveness';
+import { monthSliceOf } from '../entitlement/month-access';
 
 /** Anything with a `lesson`, `lessonProgress` and `enrollment` delegate — the
  *  PrismaService itself or a transaction client, interchangeably. */
@@ -100,7 +102,28 @@ export class CourseProgressService {
      * set `resolveGate` walks: what moves the student forward and what counts
      * as progress are now the same list.
      */
+    /*
+     * ⚠️ والشهور — «مقام بيعدّ محاضرات البسط مايقدرش يوصلها مستحيل يتحقق»،
+     * وهي الجملة اللي فوق بالحرف، بس من باب تالت.
+     *
+     * على كورس بيتباع بالشهور، الطالب اللي دافع «شهر ١» مايقدرش يفتح محاضرات
+     * شهر ٢ — ومع ذلك كانت في مقامه. يعني اللي خلّص شهره بالكامل كان بيشوف
+     * «خلصت ١٠٠٪» لحد ما المدرّس ينزّل أول محاضرة في شهر ٢، وبعدين تنزل
+     * لـ«٥٥٪» لوحدها وهو ماعملش حاجة، ومايقدرش يوصل ١٠٠ تاني **أبدًا**.
+     * و`finished` عمره ما يبقى `true`، فالكورس مايخرجش من «اللي لسه شغال
+     * عليه» ولا يتختم `completedAt`.
+     *
+     * الباج ده كان نايم طول ما المحتوى كله في شهر واحد؛ أول محاضرة في شهر ٢
+     * هي اللي بتصحّيه.
+     *
+     * والمحاضرة من غير شهر بتتشال من المقام كمان لنفس السبب: على كورس بيتباع
+     * بالشهور هي مابتوصلش لصاحب شهر أصلًا (الافتراضي المقفول في
+     * `sliceCoversLesson`)، فعدّها كان هيخلّي ١٠٠٪ مستحيلة بنفس الشكل.
+     */
+    const monthFilter = await this.monthDenominator(tx, enrollmentId, courseId);
+
     const reachable = {
+      ...monthFilter,
       courseId,
       isPublished: true,
       section: { isPublished: true },
@@ -192,5 +215,66 @@ export class CourseProgressService {
     }
 
     return { percent, completedNow: justFinished ? enrollment.userId : null };
+  }
+
+  /**
+   * القطعة اللي بتقصر المقام على اللي الطالب دافع فيه فعلًا.
+   *
+   * `{}` في الحالة الطبيعية، وهي أغلب الحالات: كورس مش بيتباع بالشهور، أو
+   * طالب ماسك ترم/سنة/الكورس كله. ساعتها المقام هو الكورس كله زي ما كان
+   * بالظبط، والدالة دي استعلامين رخاص وخلاص.
+   *
+   * ⚠️ نفس `monthSliceOf` اللي البوابة بتستعمله، مش لوب تاني بإيدي. البوابة
+   * والنسبة لو اختلفوا، الطالب بيشوف شريط مايكملش على محاضرات هو فاتحها، أو
+   * ١٠٠٪ وهو لسه قدامه حاجات — والاتنين بيقروا كأن الموقع بايظ.
+   */
+  private async monthDenominator(
+    tx: PrismaLike,
+    enrollmentId: string,
+    courseId: string,
+  ): Promise<Prisma.LessonWhereInput> {
+    const course = await tx.course.findUnique({
+      where: { id: courseId },
+      select: {
+        id: true,
+        subjectId: true,
+        requiresGrant: true,
+        _count: { select: { months: true } },
+      },
+    });
+    // مفيش شهور = مفيش سؤال. الكورس بيتباع زي ما كان.
+    if (course === null || course._count.months === 0) return {};
+
+    const enrollment = await tx.enrollment.findUnique({
+      where: { id: enrollmentId },
+      select: { userId: true },
+    });
+    if (enrollment === null) return {};
+
+    const grants = await tx.accessGrant.findMany({
+      where: { userId: enrollment.userId, OR: courseAccessScopes(course) },
+      orderBy: [{ validFrom: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        scope: true,
+        monthId: true,
+        validFrom: true,
+        validUntil: true,
+        revokedAt: true,
+      },
+    });
+
+    const slice = monthSliceOf(grants, new Date());
+    // ترم أو سنة أو الكورس كله: بيفتحوا كل حاجة، والمحاضرة من غير شهر كمان.
+    if (slice.everything) return {};
+
+    /*
+     * `some` وبس — مفيش `OR` بيسمح بالمحاضرة اللي من غير شهر.
+     *
+     * دي نفس القاعدة اللي في `sliceCoversLesson`: المحاضرة اللي المدرّس
+     * ماعلّمهاش مابتوصلش لصاحب شهر. لو عدّيناها هنا كان المقام هيعد حاجة
+     * البسط مايقدرش يوصلها — وهو بالظبط الشكل اللي الدالة دي بتتصلح عشانه.
+     */
+    return { months: { some: { monthId: { in: [...slice.monthIds] } } } };
   }
 }
