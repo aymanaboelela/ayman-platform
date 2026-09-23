@@ -23,6 +23,7 @@ import { formatCopy } from '@ayman/contracts';
 import { copy } from '@ayman/contracts/copy/admin';
 import { z } from 'zod';
 import { BroadcastResponseSchema } from '@ayman/contracts/outreach/broadcast';
+import { AdminFinanceRowSchema } from '@ayman/contracts/admin/finance';
 import { AdminApiError, adminSend, adminSendVoid } from '@/lib/admin-api';
 
 export type ActionResult = { ok: true } | { ok: false; message: string };
@@ -239,18 +240,42 @@ export async function adminSubscribeAction(userId: string, formData: FormData): 
 /** Cancels a subscription this section (or a genuine approval) created. The
  *  grant is stamped `revokedAt`, never deleted — see `PaymentsService
  *  .adminCancelSubscription`. */
+/**
+ * إلغاء اشتراك من صفحة الطالب — ومعاه الاسترداد، اختياري.
+ *
+ * ## ليه مسار شاشة الفلوس مش المسار القديم
+ *
+ * كان فيه طريقين للإلغاء: `DELETE /students/:id/subscriptions/:grantId`
+ * (من هنا، من غير سبب ومن غير فلوس)، و`POST /finance/:grantId/cancel`
+ * (من شاشة الفلوس، بسبب وباسترداد اختياري). والأدمن بيلغي من **هنا** —
+ * فالطريق اللي فيه الاسترداد هو اللي محدش بيعدّي عليه.
+ *
+ * فبقى طريق واحد. والمكسب مش بس إن الاسترداد بقى متاح: الإلغاء من هنا كان
+ * **من غير سبب مكتوب** خالص، يعني صف ملغي في الداتابيز ومحدش يعرف ليه بعد
+ * شهرين.
+ *
+ * ## والإلغاء لسه مش استرداد
+ *
+ * `refundCents: null` هو الافتراضي وهو الحالة الغالبة: قطع الوصول عن طالب
+ * حاجة، ورجوع فلوسه حاجة تانية. لو الاسترداد اتفهم من الإلغاء، كل إلغاء
+ * تأديبي كان هينقّص «صافي الربح» من غير ما حد يقصد.
+ */
 export async function adminCancelSubscriptionAction(
   userId: string,
   grantId: string,
+  input: { reason: string; refundCents: number | null },
 ): Promise<ActionResult> {
   try {
     await adminSend(
-      'DELETE',
-      `/api/admin/students/${userId}/subscriptions/${grantId}`,
-      undefined,
-      z.array(AdminSubscriptionRowSchema),
+      'POST',
+      `/api/admin/finance/${grantId}/cancel`,
+      { reason: input.reason, showToStudent: false, refundCents: input.refundCents },
+      AdminFinanceRowSchema,
     );
     revalidatePath(`/admin/students/${userId}`);
+    // نفس الصف على شاشة الفلوس — والاسترداد بيحرّك تيلات «النظرة العامة».
+    revalidatePath('/admin/finance');
+    revalidatePath('/admin/finance/subscriptions');
     return { ok: true };
   } catch (error) {
     return {

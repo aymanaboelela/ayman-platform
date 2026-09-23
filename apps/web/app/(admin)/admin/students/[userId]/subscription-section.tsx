@@ -20,6 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@ayman/ui/components/dialog';
+import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { RadioGroup, RadioGroupItem } from '@ayman/ui/components/radio-group';
 import { Select } from '@ayman/ui/components/select';
@@ -199,7 +200,15 @@ function SubscriptionRow({
         </span>
       </span>
 
-      {isLive ? <CancelButton userId={userId} grantId={row.id} courseTitle={row.courseTitle} /> : null}
+      {isLive ? (
+        <CancelButton
+          userId={userId}
+          grantId={row.id}
+          courseTitle={row.courseTitle}
+          amountCents={row.amountCents}
+          isFree={row.isFree}
+        />
+      ) : null}
     </li>
   );
 }
@@ -208,19 +217,54 @@ function CancelButton({
   userId,
   grantId,
   courseTitle,
+  amountCents,
+  isFree,
 }: {
   userId: string;
   grantId: string;
   courseTitle: string;
+  amountCents: number | null;
+  isFree: boolean | null;
 }) {
   const [open, setOpen] = useState(false);
+  /*
+   * «رجعتله فلوسه؟» — مقفول افتراضيًا، والافتراضي ده هو بيت القصيد.
+   *
+   * الإلغاء والاسترداد قرارين: قطع الوصول عن طالب غشّ بيحتفظ بكل قرش،
+   * والفلوس اللي رجعت فعلًا هي بس اللي المفروض تسيب الإجمالي. لو الاسترداد
+   * اتفهم من الإلغاء، كل إلغاء تأديبي كان هينقّص «صافي الربح» بالصمت.
+   *
+   * ونفس الكلام حرفيًا مكتوب في `finance-row-actions.tsx` — الشاشتين بقوا
+   * على نفس الراوت، فلازم يبقوا على نفس القاعدة كمان.
+   */
+  const [refunding, setRefunding] = useState(false);
+  // نص مش رقم: حقل رقمي بيحوّل مع كل حرف مابينفعش يتفضّى، و«٢٥» وهي في طريقها
+  // لـ«٢٥٠» مالهاش لازمة تترفض وهو بيكتب.
+  const [refundPounds, setRefundPounds] = useState('');
+  const [reason, setReason] = useState('');
+
+  // أكبر مبلغ ممكن يرجع: اللي الاشتراك ده جمعه. الصف الموهوب مالوش فلوس ورا،
+  // فالسقف صفر والسؤال نفسه مالوش معنى. السقف الحقيقي على السيرفر — ده تلميح.
+  const maxRefundPounds = Math.max(0, Math.floor((isFree ? 0 : (amountCents ?? 0)) / 100));
+  const refundValue = Number(refundPounds);
+  const refundIsValid =
+    refundPounds.trim().length > 0 &&
+    Number.isFinite(refundValue) &&
+    refundValue > 0 &&
+    refundValue <= maxRefundPounds;
+
   // Closed from inside the action, not a `useEffect` — see `BanDialog`'s own
   // note in `account-access-section.tsx` for why.
   const [state, action, pending] = useActionState<ActionResult, FormData>(async () => {
-    const result = await adminCancelSubscriptionAction(userId, grantId);
+    const result = await adminCancelSubscriptionAction(userId, grantId, {
+      reason: reason.trim(),
+      refundCents: refunding && refundIsValid ? Math.round(refundValue * 100) : null,
+    });
     if (result.ok) setOpen(false);
     return result;
   }, IDLE);
+
+  const canSubmit = reason.trim().length > 0 && (!refunding || refundIsValid);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -240,6 +284,46 @@ function CancelButton({
             {c.cancelSubscriptionBody}
           </p>
 
+          {/* السبب إجباري — نفس قاعدة شاشة الفلوس: إلغاء من غير سبب مكتوب
+              محدش يقدر يراجعه بعد شهرين، والإلغاء من هنا كان بيتم من غير
+              أي سبب خالص. */}
+          <div>
+            <Label htmlFor="cancel-reason">{c.cancelReasonLabel}</Label>
+            <Input
+              id="cancel-reason"
+              value={reason}
+              maxLength={400}
+              onChange={(event) => setReason(event.target.value)}
+            />
+          </div>
+
+          {maxRefundPounds > 0 ? (
+            <div className="rounded-sm border border-line-subtle p-3">
+              <label className="flex items-center gap-2 text-[length:var(--fs-text-sm)]">
+                <Checkbox
+                  checked={refunding}
+                  onCheckedChange={(checked) => setRefunding(checked === true)}
+                />
+                {c.cancelRefundAsk}
+              </label>
+              {refunding ? (
+                <div className="mt-2">
+                  <Label htmlFor="cancel-refund">{c.cancelRefundLabel}</Label>
+                  <Input
+                    id="cancel-refund"
+                    dir="ltr"
+                    inputMode="numeric"
+                    value={refundPounds}
+                    onChange={(event) => setRefundPounds(event.target.value)}
+                  />
+                  <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+                    {formatCopy(c.cancelRefundMax, { max: maxRefundPounds })}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {!state.ok ? (
             <p role="alert" aria-live="polite" className="text-[length:var(--fs-text-xs)] text-err">
               {state.message}
@@ -252,7 +336,7 @@ function CancelButton({
                 {copy.admin.actions.cancel}
               </Button>
             </DialogClose>
-            <Button type="submit" variant="danger" disabled={pending}>
+            <Button type="submit" variant="danger" disabled={pending || !canSubmit}>
               {pending ? copy.admin.actions.saving : c.cancelSubscriptionConfirm}
             </Button>
           </DialogFooter>
