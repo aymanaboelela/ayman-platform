@@ -3765,8 +3765,20 @@
    the buttons on separate screens. On a laptop the clamp lands near the fold
    without ever cutting a paragraph in half. */
 
+/* ⚠️ `--site-nav-h` IS PART OF THE TOP PADDING, and leaving it out was the
+   bug.
+   
+   `<SiteNav>` is `position: fixed`, so it is out of flow and the hero owes it
+   the space. Measured on the live page at rest: the nav ended at 84px and the
+   opener's first line started at 40px — 44 pixels of the chip and the top of
+   the headline sitting UNDER the floating header, on the one screen nobody
+   can scroll past.
+   
+   `board` already does this («the panel owes it»); this preset did not, and
+   the gap only shows once there is content at the very top of the opener
+   rather than a centred block with air above it. */
 [data-preset='studio'] .st-hero {
-  padding-block-start: clamp(2.5rem, 7vw, 5rem);
+  padding-block-start: calc(var(--site-nav-h) + clamp(1.5rem, 5vw, 3rem));
   background: linear-gradient(180deg, var(--st-wash), var(--st-paper) 72%);
   overflow: hidden;
 }
