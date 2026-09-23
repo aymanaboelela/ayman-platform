@@ -28,6 +28,7 @@ import {
   NotebookPen,
   PackageOpen,
   Wallet,
+  ShieldCheck,
 } from 'lucide-react';
 import type { Entitlements, FeatureKey } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -369,6 +370,20 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: Newspaper,
     permission: 'news:read',
     group: 'site',
+  },
+  {
+    // «المساعد يقدر يعمل إيه». في `system` جنب الفلاجات وسجل التدقيق: التلاتة
+    // بيتسألوا عن المنصة نفسها مش عن التدريس.
+    //
+    // `role:read` مش `admin:access` — الصفحة دي بتقرر مين يوصل لفلوسك، فاللي
+    // بيفتحها لازم يكون متداله الصلاحية دي بعينها. وهي مش في `grantable`
+    // أصلًا (`NEVER_GRANTABLE`)، يعني مساعد اتفتحتله الشاشة مايقدرش يدّي
+    // نفسه باقي المنصة.
+    href: '/admin/roles',
+    labelAr: copy.admin.nav.roles,
+    icon: ShieldCheck,
+    permission: 'role:read',
+    group: 'system',
   },
   {
     href: '/admin/flags',
