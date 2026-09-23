@@ -230,6 +230,30 @@ export function clientArgs(client: string): string[] {
   return client === 'default' ? [] : ['--extractor-args', `youtube:player_client=${client}`];
 }
 
+/*
+ * ## When the client chain itself stops being enough
+ *
+ * `YT_CLIENTS` exists because the JS-free clients had no attestation
+ * challenge to put in front of us. On 2026-09-23 that stopped being true from
+ * this server: ALL FIVE — visionos, android_vr, tv_simply, mweb and default —
+ * answered the same «Sign in to confirm you're not a bot», so the chain had
+ * nothing left to fall through to and the bucket held zero objects while
+ * every one of the 14 rows in `lesson_videos` sat at `failed`.
+ *
+ * A cookie jar is what yt-dlp's own error names, and it is the only lever
+ * left that is ours to pull: the refusal is about the ADDRESS we call from,
+ * and we cannot change that.
+ *
+ * It is deliberately NOT one of the five all-or-nothing variables. Those five
+ * are all-or-nothing because half of them is a bucket nobody can read; this
+ * one is a strict improvement when present and costs nothing when absent —
+ * without it the mirror behaves exactly as it did before, which on a host
+ * YouTube does not mind (a laptop, CI, a residential range) still works.
+ */
+export function cookiesArgs(cookiesFile: string | undefined): string[] {
+  return cookiesFile === undefined ? [] : ['--cookies', cookiesFile];
+}
+
 /** yt-dlp's own one-line reason, for an error an admin has to read. */
 function refusal(error: unknown): string {
   const stderr = (error as { stderr?: string }).stderr ?? '';
@@ -256,6 +280,13 @@ export interface MirrorTools {
    * on a ministry tablet can tell the difference.
    */
   readonly maxPixels?: number;
+  /**
+   * Path to a Netscape-format cookie jar, or `undefined` for none.
+   *
+   * Written by the caller and removed by it — this module only reads the
+   * path. See `cookiesArgs` for why it is optional rather than required.
+   */
+  readonly cookiesFile?: string;
   /** Seam for the specs — production always runs the real `execFile`. */
   readonly exec: typeof run;
 }
@@ -351,7 +382,14 @@ export async function mirrorVideo(
       try {
         const probe = await tools.exec(
           tools.ytDlp,
-          ['--dump-single-json', '--no-playlist', '--no-warnings', ...clientArgs(candidate), url],
+          [
+            '--dump-single-json',
+            '--no-playlist',
+            '--no-warnings',
+            ...cookiesArgs(tools.cookiesFile),
+            ...clientArgs(candidate),
+            url,
+          ],
           { timeout: tools.timeoutMs, maxBuffer: 64 * 1024 * 1024 },
         );
         stdout = probe.stdout;
@@ -393,6 +431,7 @@ export async function mirrorVideo(
           rendition.formatId,
           '--no-playlist',
           '--no-warnings',
+          ...cookiesArgs(tools.cookiesFile),
           ...clientArgs(client),
           '-o',
           file,
@@ -411,6 +450,7 @@ export async function mirrorVideo(
         chosen.audioFormatId,
         '--no-playlist',
         '--no-warnings',
+        ...cookiesArgs(tools.cookiesFile),
         ...clientArgs(client),
         '-o',
         audioFile,

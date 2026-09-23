@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Inject, Injectable, Logger, Optional, type OnModuleDestroy } from '@nestjs/common';
@@ -56,6 +56,8 @@ const RETRY_BACKOFF_MS = 20 * 60_000;
 export class VideoMirrorService implements OnModuleDestroy {
   private readonly logger = new Logger(VideoMirrorService.name);
   private readonly config: MirrorConfig | null;
+  /** The Netscape cookie jar's CONTENTS, or `null`. Never logged. */
+  private readonly cookies: string | null;
   private readonly storage: MirrorStorage | null;
   private running = false;
   private renewTimer: NodeJS.Timeout | null = null;
@@ -79,6 +81,8 @@ export class VideoMirrorService implements OnModuleDestroy {
     this.config = mirrorConfigFrom(env);
     this.storage = this.config === null ? null : new MirrorStorage(this.config);
     this.pullsFromYouTube = env.VIDEO_MIRROR_FROM_YOUTUBE;
+    const cookies = env.VIDEO_MIRROR_COOKIES;
+    this.cookies = typeof cookies === 'string' && cookies.length > 0 ? cookies : null;
 
     if (this.config === null) {
       this.logger.log('video mirror disabled — no bucket configured, players fall back to YouTube');
@@ -348,7 +352,40 @@ export class VideoMirrorService implements OnModuleDestroy {
       return;
     }
 
-    const result = await mirrorVideo(youtubeId, this.tools);
+    /*
+     * The cookie jar lives on disk only for the length of one video.
+     *
+     * yt-dlp takes a PATH, not a blob, and the jar is the one thing here that
+     * is a live credential — a session YouTube would honour for anyone who
+     * read the file. So it is written 0600 inside the per-run temp dir, and
+     * the `finally` removes it whether the mirror succeeded, threw, or timed
+     * out. Nothing logs it and nothing keeps it between videos.
+     *
+     * `env.VIDEO_MIRROR_COOKIES` absent is the ordinary path, not an error —
+     * `cookiesArgs` then passes nothing and the run is exactly what it was
+     * before this existed.
+     */
+    let cookiesDir: string | null = null;
+    let tools = this.tools;
+    if (this.cookies !== null) {
+      cookiesDir = await mkdtemp(join(tmpdir(), `mirror-ck-${youtubeId}-`));
+      const cookiesFile = join(cookiesDir, 'cookies.txt');
+      await writeFile(
+        cookiesFile,
+        this.cookies.endsWith('\n') ? this.cookies : `${this.cookies}\n`,
+        { mode: 0o600 },
+      );
+      tools = { ...this.tools, cookiesFile };
+    }
+
+    let result: Awaited<ReturnType<typeof mirrorVideo>>;
+    try {
+      result = await mirrorVideo(youtubeId, tools);
+    } finally {
+      if (cookiesDir !== null) {
+        await rm(cookiesDir, { recursive: true, force: true }).catch(() => undefined);
+      }
+    }
 
     try {
       // Clear first. A re-mirror whose ladder lost a rung would otherwise
