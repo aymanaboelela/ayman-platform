@@ -165,8 +165,28 @@ export function StudioHero({
                 </code>
               ))}
             </pre>
+            {/*
+              The output line, and the page's one piece of orchestrated motion.
+
+              It arrives a beat after the code does, with the caret above it
+              blinking until it lands — so the panel shows a program RUNNING
+              rather than a screenshot of one. That is the headline's claim
+              («البرمجة أسهل ما تتخيّل») demonstrated in the only place on the
+              page where demonstrating it is possible.
+
+              ⚠️ The element is NOT parked at `opacity: 0` waiting on
+              anything. The from-state lives in the keyframes with
+              `animation-fill-mode: backwards`, so with animations disabled —
+              reduced motion, or a browser that never runs them — the line is
+              simply there, read at rest. A page whose content depends on an
+              animation having fired is a page that is blank for the readers
+              who most need it not to be.
+            */}
             <p className="st-code__out">
-              <span className="st-code__out-l">&gt;</span> {studioCopy.heroCodeOut}
+              <span className="st-code__out-l" aria-hidden="true">
+                &gt;
+              </span>{' '}
+              {studioCopy.heroCodeOut}
             </p>
           </figure>
         </div>

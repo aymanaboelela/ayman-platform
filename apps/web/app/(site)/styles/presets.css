@@ -4232,3 +4232,95 @@
   color: var(--st-ink-2);
   font-size: var(--fs-text-sm);
 }
+
+/* ── the one orchestrated moment ──────────────────────────────────────────
+
+   The opener arrives in four steps and then the page is still. There is no
+   scroll-triggered entrance anywhere below it, and no hover flourish beyond
+   the two border colours already declared above: a fade-and-slide on every
+   section is the most recognisable generated-page tell there is, and it also
+   costs a reader who is skimming the thing they came for.
+
+   What the sequence is FOR: the panel beside the photograph shows a program
+   running. The code is there, the caret blinks, and the line it prints lands
+   a beat later — which is the headline's claim demonstrated rather than
+   asserted, in the only place on this page where demonstrating it is
+   possible.
+
+   ## ⚠️ NOTHING HERE IS PARKED AT `opacity: 0`
+
+   Every from-state lives in a `@keyframes` block and reaches the element only
+   through `animation-fill-mode: backwards`, so the resting state IS the
+   styled state. With animations disabled — `prefers-reduced-motion`, which
+   `tokens/motion.css` already clamps to 0.01ms, or a browser that never runs
+   them — the opener is simply present and readable. A page whose words depend
+   on an animation having fired is blank for exactly the readers who can least
+   afford it, and that is also what the thumbnail and the first shared frame
+   would catch.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes st-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+}
+
+@keyframes st-portrait-in {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem);
+  }
+}
+
+@keyframes st-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+[data-preset='studio'] .st-hero__copy > * {
+  animation: st-rise 520ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+}
+
+/* Staggered by position rather than by a class per line: the opener's copy is
+   a short, fixed stack, and a nth-child ramp keeps the delays in one place
+   instead of scattering them across the markup. */
+[data-preset='studio'] .st-hero__copy > :nth-child(1) { animation-delay: 40ms; }
+[data-preset='studio'] .st-hero__copy > :nth-child(2) { animation-delay: 110ms; }
+[data-preset='studio'] .st-hero__copy > :nth-child(3) { animation-delay: 180ms; }
+[data-preset='studio'] .st-hero__copy > :nth-child(4) { animation-delay: 250ms; }
+[data-preset='studio'] .st-hero__copy > :nth-child(5) { animation-delay: 320ms; }
+
+[data-preset='studio'] .st-hero__portrait {
+  animation: st-portrait-in 700ms cubic-bezier(0.22, 0.61, 0.36, 1) 140ms backwards;
+}
+
+[data-preset='studio'] .st-code {
+  animation: st-rise 520ms cubic-bezier(0.22, 0.61, 0.36, 1) 420ms backwards;
+}
+
+/* The caret sits at the end of the last code line and blinks while the panel
+   waits — three blinks, then it stops. An indefinite one would be a moving
+   object on a page that is otherwise still, which is a thing the eye keeps
+   returning to for no reason.
+   
+   This is the ONE element whose resting state is invisible, and it is the one
+   element that is pure ornament: `::after` on a `<code>`, carrying no text. A
+   caret frozen mid-page with nothing typing is noise; absent, nothing is
+   lost. Every element that carries WORDS rests visible. */
+[data-preset='studio'] .st-code__line:last-child::after {
+  content: '';
+  display: inline-block;
+  inline-size: 0.5em;
+  block-size: 1.1em;
+  margin-inline-start: 0.15em;
+  translate: 0 0.18em;
+  background: var(--st-accent);
+  animation: st-blink 760ms steps(1, end) 3 520ms backwards;
+  opacity: 0;
+}
+
+[data-preset='studio'] .st-code__out {
+  animation: st-rise 420ms cubic-bezier(0.22, 0.61, 0.36, 1) 2.6s backwards;
+}
