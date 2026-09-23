@@ -1,5 +1,7 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import type { BrandingRead } from '@ayman/contracts/admin/settings';
+import { mediaUrl } from '@ayman/ui/branding';
 import { BoardMark } from './board-mark';
 
 /**
@@ -176,10 +178,41 @@ export function BoardPanel({
           currently shows; it is declining to be the first place a half-built
           field appears to work.
 
-          What stands in the figure's place is the tenant's own branding mark,
-          which IS resolved (`branding.logoDarkKey`) — see `<BoardMark>`.
+          `branding.heroKey` IS resolved, and it is what stands here now: the
+          instructor's own photograph, at the size the panel can give it.
         */}
-        <BoardMark branding={branding} name={name} />
+        {branding.heroKey ? (
+          /*
+            The mark drops to a strip above the photograph when there is one.
+            It used to BE the figure — a 22rem-wide logo centred in the panel —
+            and that was the right answer only while there was nothing else to
+            put there. A student choosing a teacher is choosing a person, and a
+            mascot at hero size in front of a face that is not on the page is
+            the panel arguing for the brand over the person teaching.
+
+            `aria-hidden` on the wrapper: the name is the page's `<h1>`
+            directly above, so the photograph carries no information a reader
+            who cannot see it is missing.
+          */
+          <>
+            <div className="board-mark board-mark--strip">
+              <BoardMark branding={branding} name={name} />
+            </div>
+            <div className="board-figure" aria-hidden="true">
+              <Image
+                className="board-figure__img"
+                src={mediaUrl(branding.heroKey)}
+                alt=""
+                width={900}
+                height={1104}
+                sizes="(min-width: 48rem) 26rem, 70vw"
+                priority
+              />
+            </div>
+          </>
+        ) : (
+          <BoardMark branding={branding} name={name} />
+        )}
       </div>
     </section>
   );
