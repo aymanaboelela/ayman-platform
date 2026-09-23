@@ -194,10 +194,16 @@ export function BoardPanel({
             directly above, so the photograph carries no information a reader
             who cannot see it is missing.
           */
+          /*
+            No mark above the photograph.
+            
+            It was a strip here for one release, on the theory that a brand
+            needs its mark on the opener. It does not: the wordmark is already
+            in the header, three centimetres above, and a second copy of the
+            same mascot between the headline and the face was the opener
+            saying the same thing twice — which is what it looked like.
+          */
           <>
-            <div className="board-mark board-mark--strip">
-              <BoardMark branding={branding} name={name} />
-            </div>
             <div className="board-figure" aria-hidden="true">
               <Image
                 className="board-figure__img"
