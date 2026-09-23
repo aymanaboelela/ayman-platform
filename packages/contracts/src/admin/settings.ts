@@ -162,12 +162,29 @@ export type LandingLayout = z.infer<typeof LandingLayoutSchema>;
  *                 design and no pale flash on the way into one.
  *   · `board`   — «اللوح». Solid colour blocks, everything centred, bright —
  *                 closer to a poster than to a product site.
+ *   · `studio`  — «الاستوديو». Light ground, the instructor's own photograph
+ *                 at full height in the opener, and one dark band on the
+ *                 whole page spent on enrolling. Mono type appears only where
+ *                 there is real code.
  *
- * The two alternates live in their own page components under
+ * ## Why `studio` exists when `neon` was already the programming one
+ *
+ * `neon` dresses the page as a terminal — `$`, a caret, `about.md`, mono
+ * labels on every section. That is a senior developer's aesthetic, and the
+ * page it sits on is selling a first programming course to fifteen-year-olds
+ * whose headline promise is «البرمجة أسهل ما تتخيّل». The chrome argued
+ * against the copy: it says «this is a world you are not in yet» to exactly
+ * the reader who needs to be told the opposite.
+ *
+ * It is also dark, and so is `classic`'s opener, and `board` is a solid
+ * colour field. Three instructors sharing one market had three pages that all
+ * read as low-light. `studio` is the one that is not.
+ *
+ * The three alternates live in their own page components under
  * `apps/web/components/site/presets/`, imported ONLY inside their own branch,
- * so choosing `classic` neither loads nor evaluates a byte of either.
+ * so choosing `classic` neither loads nor evaluates a byte of any of them.
  */
-export const LANDING_PRESETS = ['classic', 'neon', 'board'] as const;
+export const LANDING_PRESETS = ['classic', 'neon', 'board', 'studio'] as const;
 export const LandingPresetSchema = z.enum(LANDING_PRESETS);
 export type LandingPreset = z.infer<typeof LandingPresetSchema>;
 

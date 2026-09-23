@@ -3472,3 +3472,763 @@
 [data-preset='neon'] .neon-foot__eof {
   color: var(--neon-trace);
 }
+
+/* ═══ STUDIO ══════════════════════════════════════════════════════════════
+   «الاستوديو» — `branding.landingPreset === 'studio'`
+
+   The one landing preset that is LIGHT. `classic` opens on a dark stage and
+   `board` is a solid colour field, so three instructors sharing one market had
+   three low-light pages; this is the one that is not, and that is the single
+   biggest thing separating it from the other two at a glance.
+
+   ## Everything here is derived, nothing is a literal
+
+   The palette is the tenant's own `--p-*` ramp, which `renderBrandingStyle`
+   rotates from `branding.accentHue`. Writing a green here would make this
+   preset green for every tenant who picks it — the point is that it is
+   whatever hue they chose, at the light end of it.
+
+   `--st-ink` is the ramp's darkest step rather than a neutral black: text in a
+   near-black tinted by the brand hue sits in the same family as the accent, so
+   the page reads as one colour with a range rather than as black plus a
+   highlight. That is also why the section rules are `--p-100` and not grey.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+[data-preset='studio'] {
+  --st-paper: var(--n-1);
+  --st-ink: var(--p-950);
+  --st-ink-2: color-mix(in oklch, var(--p-950), transparent 32%);
+  --st-accent: var(--p-700);
+  --st-accent-lift: var(--p-600);
+  --st-wash: var(--p-50);
+  --st-rule: var(--p-100);
+  --st-deep: var(--p-950);
+  --st-on-deep: var(--n-1);
+  --st-shell: 76rem;
+
+  background: var(--st-paper);
+  color: var(--st-ink);
+}
+
+/* One measure for the whole page. `--st-shell` is wider than `--w-prose`
+   because it holds grids; prose inside it is narrowed again per-block. */
+[data-preset='studio'] .st-shell {
+  margin-inline: auto;
+  max-inline-size: var(--st-shell);
+  padding-inline: 1.5rem;
+}
+
+[data-preset='studio'] .st-shell--narrow {
+  max-inline-size: 48rem;
+}
+
+[data-preset='studio'] .st-section {
+  padding-block: clamp(3.5rem, 9vw, 7rem);
+}
+
+/* The hairline between sections, drawn by the section rather than by a
+   separate element so an admin reordering blocks never leaves a stray rule at
+   the top or bottom of the page. `:first-of-type` keeps it off the one that
+   follows the opener, where the photograph is already the boundary. */
+[data-preset='studio'] .st-section + .st-section > .st-shell {
+  border-block-start: 1px solid var(--st-rule);
+  padding-block-start: clamp(3.5rem, 9vw, 7rem);
+}
+
+[data-preset='studio'] .st-section + .st-section {
+  padding-block-start: 0;
+}
+
+/* ── heading ───────────────────────────────────────────────────────────── */
+
+[data-preset='studio'] .st-head {
+  margin-block-end: 2.5rem;
+  max-inline-size: 46rem;
+}
+
+/* Sentence case, accent colour, a short rule beside it — deliberately NOT a
+   tracked-out uppercase eyebrow. Arabic has no uppercase, so that treatment is
+   Latin typography borrowed onto a page that does not read left to right. */
+[data-preset='studio'] .st-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-block-end: 0.75rem;
+  color: var(--st-accent);
+  font-size: var(--fs-text-sm);
+  font-weight: 600;
+}
+
+[data-preset='studio'] .st-chip::after {
+  content: '';
+  flex: 0 0 2.5rem;
+  block-size: 1px;
+  background: currentColor;
+  opacity: 0.45;
+}
+
+[data-preset='studio'] .st-head__title {
+  font-size: var(--fs-title-1);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+[data-preset='studio'] .st-head__lead {
+  margin-block-start: 0.875rem;
+  color: var(--st-ink-2);
+  font-size: var(--fs-text-lg);
+  line-height: 1.75;
+}
+
+[data-preset='studio'] .st-prose {
+  max-inline-size: var(--w-prose);
+  margin-block-start: 1rem;
+  line-height: 1.85;
+}
+
+[data-preset='studio'] .st-empty {
+  color: var(--st-ink-2);
+}
+
+/* ── buttons ───────────────────────────────────────────────────────────── */
+
+[data-preset='studio'] .st-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 3rem;
+  padding-inline: 1.75rem;
+  border-radius: 999px;
+  font-weight: 600;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+[data-preset='studio'] .st-btn--solid {
+  background: var(--st-accent);
+  color: var(--st-paper);
+}
+
+[data-preset='studio'] .st-btn--solid:hover {
+  background: var(--st-ink);
+}
+
+[data-preset='studio'] .st-btn--quiet {
+  border: 1px solid var(--st-rule);
+  color: var(--st-ink);
+}
+
+[data-preset='studio'] .st-btn--quiet:hover {
+  border-color: var(--st-accent);
+}
+
+[data-preset='studio'] .st-btn--light {
+  background: var(--st-on-deep);
+  color: var(--st-deep);
+}
+
+[data-preset='studio'] .st-section__foot {
+  margin-block-start: 2.5rem;
+}
+
+/* ── the opener ────────────────────────────────────────────────────────────
+
+   The photograph is the design. Two columns: the promise on one, the
+   instructor at full height on the other, with the code panel overlapping the
+   bottom of the portrait so the two read as one object rather than as a photo
+   beside a box.
+
+   `min-block-size` and not a fixed `100svh`: the copy column decides the
+   height on a phone, where a viewport-tall opener would put the headline and
+   the buttons on separate screens. On a laptop the clamp lands near the fold
+   without ever cutting a paragraph in half. */
+
+[data-preset='studio'] .st-hero {
+  padding-block-start: clamp(2.5rem, 7vw, 5rem);
+  background: linear-gradient(180deg, var(--st-wash), var(--st-paper) 72%);
+  overflow: hidden;
+}
+
+[data-preset='studio'] .st-hero__grid {
+  display: grid;
+  gap: clamp(2rem, 5vw, 4rem);
+  align-items: end;
+  min-block-size: min(38rem, 76svh);
+}
+
+@media (min-width: 60rem) {
+  [data-preset='studio'] .st-hero__grid {
+    /* Copy wider than the stage: the words are what a reader arriving from a
+       search result needs first, and a 1:1 split would set the headline at a
+       measure too narrow for Arabic display type. */
+    grid-template-columns: 1.15fr 1fr;
+  }
+}
+
+[data-preset='studio'] .st-hero__copy {
+  padding-block-end: clamp(2rem, 5vw, 4rem);
+  align-self: center;
+}
+
+[data-preset='studio'] .st-hero__title {
+  font-size: var(--fs-display-2);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+[data-preset='studio'] .st-hero__second {
+  margin-block-start: 0.75rem;
+  color: var(--st-accent);
+  font-size: var(--fs-title-3);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+[data-preset='studio'] .st-hero__lead {
+  max-inline-size: 34rem;
+  margin-block-start: 1.25rem;
+  color: var(--st-ink-2);
+  font-size: var(--fs-text-lg);
+  line-height: 1.8;
+}
+
+[data-preset='studio'] .st-hero__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block-start: 2rem;
+}
+
+[data-preset='studio'] .st-hero__stats,
+[data-preset='studio'] .st-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(1.5rem, 4vw, 3rem);
+  margin-block-start: 2.5rem;
+}
+
+[data-preset='studio'] .st-stat__n,
+[data-preset='studio'] .st-figure__n {
+  font-size: var(--fs-title-2);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+[data-preset='studio'] .st-stat__l,
+[data-preset='studio'] .st-figure__l {
+  margin-block-start: 0.25rem;
+  color: var(--st-ink-2);
+  font-size: var(--fs-text-sm);
+}
+
+/* The stage holds the portrait and the code panel in one stacking context so
+   the panel can overlap the photograph's lower edge. */
+[data-preset='studio'] .st-hero__stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-block-size: 100%;
+}
+
+/* Bled off the bottom: the photograph runs out of the section rather than
+   sitting in a frame inside it, which is what makes it read as the page's
+   subject instead of as an illustration on it. */
+[data-preset='studio'] .st-hero__portrait {
+  display: block;
+  inline-size: 100%;
+  max-inline-size: 34rem;
+  block-size: auto;
+  margin-inline: auto;
+  margin-block-end: -1px;
+  object-fit: contain;
+  object-position: bottom;
+}
+
+/* ── the code panel ──────────────────────────────────────────────────────── */
+
+[data-preset='studio'] .st-code {
+  position: relative;
+  z-index: 1;
+  max-inline-size: 22rem;
+  margin-block-start: -4rem;
+  padding: 1rem 1.125rem;
+  border: 1px solid var(--st-rule);
+  border-radius: var(--radius-lg);
+  background: var(--st-paper);
+  box-shadow: var(--shadow-md);
+}
+
+/* With no photograph the panel has nothing to overlap, so it sits on its own
+   baseline instead of pulling up into empty space. */
+[data-preset='studio'] .st-hero:not([data-has-portrait]) .st-code {
+  margin-block-start: 0;
+}
+
+[data-preset='studio'] .st-code__cap {
+  margin-block-end: 0.625rem;
+  color: var(--st-accent);
+  font-size: var(--fs-text-sm);
+  font-weight: 600;
+}
+
+[data-preset='studio'] .st-code__body {
+  display: grid;
+  gap: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+}
+
+[data-preset='studio'] .st-code__line {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* The Arabic comment is set back to RTL inside the LTR block: it is prose, and
+   left-to-right Arabic reads as broken to anyone who reads Arabic. */
+[data-preset='studio'] .st-code__comment {
+  display: block;
+  color: var(--st-ink-2);
+  font-family: var(--font-sans);
+}
+
+[data-preset='studio'] .st-code__out {
+  margin-block-start: 0.75rem;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px dashed var(--st-rule);
+  color: var(--st-ink);
+  font-size: var(--fs-text-sm);
+}
+
+[data-preset='studio'] .st-code__out-l {
+  color: var(--st-accent);
+  font-family: var(--font-mono);
+}
+
+/* ── about ─────────────────────────────────────────────────────────────────
+
+   Two columns, and consecutive `about` blocks alternate which side the picture
+   takes. `:nth-of-type` rather than a prop: which block comes second is a fact
+   about the composed page, and threading an index through the data path for a
+   purely visual rhythm would put layout state where content lives. */
+
+[data-preset='studio'] .st-about__grid {
+  display: grid;
+  gap: clamp(1.5rem, 4vw, 3rem);
+  align-items: center;
+}
+
+@media (min-width: 60rem) {
+  [data-preset='studio'] .st-about[data-figure] .st-about__grid {
+    grid-template-columns: 1.1fr 1fr;
+  }
+
+  /* The second one flips. `order` and not `direction`, which would also
+     reverse the text inside it. */
+  [data-preset='studio'] .st-about:nth-of-type(even)[data-figure] .st-about__figure {
+    order: -1;
+  }
+}
+
+[data-preset='studio'] .st-about .st-head {
+  margin-block-end: 0;
+}
+
+[data-preset='studio'] .st-about__figure {
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--st-wash);
+}
+
+[data-preset='studio'] .st-about__image {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+[data-preset='studio'] .st-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block-start: 1.5rem;
+}
+
+[data-preset='studio'] .st-pill {
+  padding: 0.375rem 0.875rem;
+  border: 1px solid var(--st-rule);
+  border-radius: 999px;
+  color: var(--st-ink-2);
+  font-size: var(--fs-text-sm);
+}
+
+/* ── reasons ───────────────────────────────────────────────────────────────
+
+   A list with rules between the rows, not a grid of cards. These are eight
+   statements of one argument rather than eight things to choose between, and
+   identical bordered boxes with identical shadows say «pick one». */
+
+[data-preset='studio'] .st-reasons {
+  display: grid;
+  gap: 0;
+}
+
+@media (min-width: 48rem) {
+  [data-preset='studio'] .st-reasons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: clamp(2rem, 5vw, 4rem);
+  }
+}
+
+[data-preset='studio'] .st-reason {
+  padding-block: 1.5rem;
+  border-block-start: 1px solid var(--st-rule);
+}
+
+[data-preset='studio'] .st-reason__t {
+  font-size: var(--fs-title-4);
+  font-weight: 650;
+}
+
+[data-preset='studio'] .st-reason__b {
+  margin-block-start: 0.5rem;
+  color: var(--st-ink-2);
+  line-height: 1.8;
+}
+
+/* ── courses ───────────────────────────────────────────────────────────── */
+
+[data-preset='studio'] .st-courses {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+}
+
+[data-preset='studio'] .st-course__link {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--st-rule);
+  border-radius: var(--radius-lg);
+  background: var(--st-paper);
+  transition: border-color 160ms ease;
+}
+
+[data-preset='studio'] .st-course__link:hover {
+  border-color: var(--st-accent);
+}
+
+/* ⚠️ The fixed ratio is on the box that has NO cover. `<CourseArt>` returns a
+   composed panel that needs a parent height in that case, and a bare `<img>`
+   at `height: auto` when a cover exists — keeping 16/9 on the second clips a
+   3:2 poster by a fifth of its height, taking the top off its title. */
+[data-preset='studio'] .st-course__art {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--st-wash);
+}
+
+[data-preset='studio'] .st-course__art--bleed {
+  aspect-ratio: auto;
+}
+
+[data-preset='studio'] .st-course__body {
+  padding: 1rem 1.125rem 1.25rem;
+}
+
+[data-preset='studio'] .st-course__t {
+  font-size: var(--fs-title-4);
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+[data-preset='studio'] .st-course__price {
+  margin-block-start: 0.5rem;
+  color: var(--st-accent);
+  font-weight: 600;
+}
+
+/* ── years ─────────────────────────────────────────────────────────────── */
+
+[data-preset='studio'] .st-years {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+}
+
+[data-preset='studio'] .st-year__link {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  border: 1px solid var(--st-rule);
+  border-radius: var(--radius-lg);
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+[data-preset='studio'] .st-year__link:hover {
+  border-color: var(--st-accent);
+  background: var(--st-wash);
+}
+
+[data-preset='studio'] .st-year__n {
+  color: var(--st-accent);
+  font-size: var(--fs-title-1);
+  font-weight: 700;
+  line-height: 1;
+}
+
+[data-preset='studio'] .st-year__t {
+  font-weight: 600;
+}
+
+[data-preset='studio'] .st-year__c {
+  margin-inline-start: auto;
+  color: var(--st-ink-2);
+  font-size: var(--fs-text-sm);
+}
+
+/* ── faq ───────────────────────────────────────────────────────────────── */
+
+[data-preset='studio'] .st-q {
+  border-block-start: 1px solid var(--st-rule);
+}
+
+[data-preset='studio'] .st-q:last-child {
+  border-block-end: 1px solid var(--st-rule);
+}
+
+[data-preset='studio'] .st-q__q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 1.25rem;
+  cursor: pointer;
+  font-size: var(--fs-text-lg);
+  font-weight: 600;
+  list-style: none;
+}
+
+/* The default marker is a left-pointing triangle the browser does not flip in
+   RTL, so it is replaced with a sign that has no handedness. */
+[data-preset='studio'] .st-q__q::-webkit-details-marker {
+  display: none;
+}
+
+[data-preset='studio'] .st-q__q::after {
+  content: '+';
+  flex: none;
+  color: var(--st-accent);
+  font-size: var(--fs-title-3);
+  font-weight: 400;
+  line-height: 1;
+}
+
+[data-preset='studio'] .st-q[open] .st-q__q::after {
+  content: '−';
+}
+
+[data-preset='studio'] .st-q__a {
+  padding-block-end: 1.25rem;
+  max-inline-size: var(--w-prose);
+  color: var(--st-ink-2);
+  line-height: 1.85;
+}
+
+/* ── rows: quotes and honours ──────────────────────────────────────────── */
+
+[data-preset='studio'] .st-rows {
+  display: grid;
+  gap: 0;
+}
+
+[data-preset='studio'] .st-quote,
+[data-preset='studio'] .st-honor {
+  padding-block: 1.5rem;
+  border-block-start: 1px solid var(--st-rule);
+}
+
+[data-preset='studio'] .st-quote__b {
+  max-inline-size: var(--w-prose);
+  font-size: var(--fs-text-lg);
+  line-height: 1.8;
+}
+
+/* The marks are drawn, not typed: a literal « in the text is read aloud by a
+   screen reader and survives a copy-paste of the sentence. */
+[data-preset='studio'] .st-quote__b::before {
+  content: '«';
+  color: var(--st-accent);
+}
+
+[data-preset='studio'] .st-quote__b::after {
+  content: '»';
+  color: var(--st-accent);
+}
+
+[data-preset='studio'] .st-quote__n {
+  margin-block-start: 0.5rem;
+  color: var(--st-ink-2);
+  font-size: var(--fs-text-sm);
+}
+
+[data-preset='studio'] .st-honor {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+[data-preset='studio'] .st-honor__r {
+  flex: none;
+  color: var(--st-accent);
+  font-weight: 700;
+}
+
+[data-preset='studio'] .st-honor__n {
+  font-weight: 600;
+}
+
+[data-preset='studio'] .st-honor__note {
+  margin-inline-start: auto;
+  color: var(--st-ink-2);
+  font-size: var(--fs-text-sm);
+}
+
+/* ── the close ─────────────────────────────────────────────────────────────
+
+   The only dark band on the page. It is the strongest contrast move a light
+   ground has and it can only be spent once, so it is spent on the single
+   moment the page exists for. A second dark section above this one would cost
+   this one its meaning. */
+
+[data-preset='studio'] .st-close {
+  margin-block-start: clamp(3.5rem, 9vw, 7rem);
+  padding-block: clamp(4rem, 10vw, 7rem);
+  background: var(--st-deep);
+  color: var(--st-on-deep);
+}
+
+[data-preset='studio'] .st-close__inner {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 1rem;
+}
+
+[data-preset='studio'] .st-close__t {
+  max-inline-size: 24ch;
+  font-size: var(--fs-title-1);
+  font-weight: 700;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+[data-preset='studio'] .st-close__l {
+  max-inline-size: 46ch;
+  color: color-mix(in oklch, var(--st-on-deep), transparent 22%);
+  font-size: var(--fs-text-lg);
+  line-height: 1.75;
+}
+
+[data-preset='studio'] .st-close .st-btn {
+  margin-block-start: 0.75rem;
+}
+
+/* ── the floor ─────────────────────────────────────────────────────────────
+
+   Keyboard focus is visible on the light ground and on the dark band both, and
+   the only transitions on the page are the two hover states above — which
+   `prefers-reduced-motion` turns off along with everything else the app
+   animates. */
+
+[data-preset='studio'] :focus-visible {
+  outline: 2px solid var(--st-accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+[data-preset='studio'] .st-close :focus-visible {
+  outline-color: var(--st-on-deep);
+}
+
+/* No `prefers-reduced-motion` block here on purpose. `tokens/motion.css`
+   already clamps every transition on the page to 0.01ms, and this file is
+   imported LAST — a second copy would be the `!important` this file's own
+   banner rules out, restating a rule that is already in force. */
+
+/* ── the footer ───────────────────────────────────────────────────────────
+
+   A directory, not a second invitation: `.st-close` sits immediately above it
+   and is the one dark band on the page. `--st-wash` and not `--st-deep` —
+   two deep fields in a row would cost the closing panel the contrast this
+   preset saves for exactly that moment. */
+
+[data-preset='studio'].st-foot {
+  padding-block: clamp(3rem, 7vw, 4.5rem);
+  background: var(--st-wash);
+  color: var(--st-ink);
+}
+
+[data-preset='studio'] .st-foot__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block-end: 2rem;
+  border-block-end: 1px solid var(--st-rule);
+}
+
+[data-preset='studio'] .st-foot__name {
+  font-size: var(--fs-title-3);
+  font-weight: 700;
+}
+
+[data-preset='studio'] .st-foot__social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+[data-preset='studio'] .st-foot__s:hover,
+[data-preset='studio'] .st-foot__l:hover {
+  color: var(--st-accent);
+}
+
+[data-preset='studio'] .st-foot__cols {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  padding-block: 2rem;
+}
+
+[data-preset='studio'] .st-foot__ct {
+  margin-block-end: 0.75rem;
+  font-weight: 650;
+}
+
+[data-preset='studio'] .st-foot__cl {
+  display: grid;
+  gap: 0.5rem;
+  color: var(--st-ink-2);
+}
+
+[data-preset='studio'] .st-foot__contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding-block-end: 2rem;
+}
+
+[data-preset='studio'] .st-foot__rights {
+  padding-block-start: 1.5rem;
+  border-block-start: 1px solid var(--st-rule);
+  color: var(--st-ink-2);
+  font-size: var(--fs-text-sm);
+}

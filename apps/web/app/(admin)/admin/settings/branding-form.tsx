@@ -102,6 +102,10 @@ const PRESET_LABEL: Record<(typeof LANDING_PRESETS)[number], { name: string; hin
     name: copy.admin.settings.landingPresetBoard,
     hint: copy.admin.settings.landingPresetBoardHint,
   },
+  studio: {
+    name: copy.admin.settings.landingPresetStudio,
+    hint: copy.admin.settings.landingPresetStudioHint,
+  },
 };
 
 const LAYOUT_LABEL: Record<(typeof LANDING_LAYOUTS)[number], { name: string; hint: string }> = {
