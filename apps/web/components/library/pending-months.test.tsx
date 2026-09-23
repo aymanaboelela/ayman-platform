@@ -85,4 +85,28 @@ describe('the pending-month line', () => {
     view([]);
     expect(screen.queryByText(/بتتجهّز/)).toBeNull();
   });
+
+  /*
+   * رسمة، مش سطر رمادي — ومكتوب ليه في `spot-illustration.tsx` نفسه:
+   * «مستطيل رمادي مش بيتفرق عن حاجة بايظة». والحتة دي بالذات هي اللي الطالب
+   * بيدوّر فيها على فلوسه، فلو الجواب باهت هو مش هيقراه على إنه جواب.
+   */
+  it('draws it as a real empty state, not a grey line', () => {
+    const { container } = render(
+      <CourseOutlineView
+        outline={OUTLINE}
+        courseSlug="course"
+        courseId="c-1"
+        pendingMonths={['شهر ٢']}
+      />,
+    );
+
+    expect(screen.getByText(c.ownedMonthsPendingTitle)).toBeTruthy();
+    expect(container.querySelector('.empty')).toBeTruthy();
+    // `aria-hidden` — الجملة تحتها بتقول نفس الحاجة بالكلام، فالقارئ الصوتي
+    // مايعيدهاش. نفس قاعدة باقي الرسومات.
+    const spot = container.querySelector('svg.spot');
+    expect(spot).toBeTruthy();
+    expect(spot?.getAttribute('aria-hidden')).toBe('true');
+  });
 });
