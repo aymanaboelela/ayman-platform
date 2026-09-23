@@ -59,6 +59,14 @@ describe('FinanceService', () => {
   let studentYearlyId = '';
   let studentTermId = '';
   let monthlyCourseId = '';
+  /** كورس بيتباع بالشهور — الحالة اللي الشاشة كانت بتعرضها وماتلمسهاش. */
+  let monthSellingCourseId = '';
+  let monthOne = '';
+  let monthTwo = '';
+  /** تلات طلبة على الكورس ده — واحد لكل تست، عشان ما يخدوش من رصيد بعض. */
+  let studentMc = '';
+  let studentM2 = '';
+  let studentM3 = '';
   let quarterlyCourseId = '';
   let yearlyCourseId = '';
   let termCourseId = '';
@@ -98,6 +106,9 @@ describe('FinanceService', () => {
     studentQuarterlyId = await makeStudent('q');
     studentYearlyId = await makeStudent('y');
     studentTermId = await makeStudent('t');
+    studentMc = await makeStudent('mc');
+    studentM2 = await makeStudent('m2');
+    studentM3 = await makeStudent('m3');
 
     // Year 1, «عام» only — monthly plan, genuinely paid, renewed once.
     monthlyCourseId = (
@@ -116,6 +127,35 @@ describe('FinanceService', () => {
           requiresGrant: true,
           monthlyPriceCents: 10000,
         },
+      })
+    ).id;
+
+    monthSellingCourseId = (
+      await prisma.course.create({
+        data: {
+          slug: `fin-months-${stamp}`,
+          title: 'كورس بالشهور',
+          status: 'published',
+          publishedAt: new Date(),
+          systemId: system.id,
+          subjectId: subject.id,
+          year: 1,
+          forGeneral: true,
+          forLanguages: false,
+          instructorId: adminId,
+          requiresGrant: true,
+          monthlyPriceCents: 10000,
+        },
+      })
+    ).id;
+    monthOne = (
+      await prisma.courseMonth.create({
+        data: { courseId: monthSellingCourseId, monthIndex: 1, title: 'شهر ١' },
+      })
+    ).id;
+    monthTwo = (
+      await prisma.courseMonth.create({
+        data: { courseId: monthSellingCourseId, monthIndex: 2, title: 'شهر ٢' },
       })
     ).id;
 
@@ -239,7 +279,17 @@ describe('FinanceService', () => {
     await prisma.enrollment.deleteMany({ where: { userId: { in: userIds } } });
     // Never `deleteMany` on `audit_log` — INSERT-only at the database level.
     await prisma.course.deleteMany({
-      where: { id: { in: [monthlyCourseId, quarterlyCourseId, yearlyCourseId, termCourseId] } },
+      where: {
+        id: {
+          in: [
+            monthlyCourseId,
+            monthSellingCourseId,
+            quarterlyCourseId,
+            yearlyCourseId,
+            termCourseId,
+          ],
+        },
+      },
     });
     await prisma.user.deleteMany({ where: { id: { in: [...userIds, adminId] } } });
     await prisma.$disconnect();
@@ -637,5 +687,134 @@ describe('FinanceService', () => {
         refundCents: 99_999_999,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  /*
+   * اشتراك الشهر على شاشة الفلوس: ظاهر من زمان، ومكانش ينفع يتلمس.
+   *
+   * `list` بتعرض `course_month` من يوم ما الشهور نزلت — كومنتها بيقول إن
+   * إخفاءهم كان «هيخلي كل مشترك شهري غير مرئي على الشاشة الوحيدة اللي
+   * بتجاوب على مين مشترك». بس كل **تعديل** كان بيعدّي على `findMutableGrant`،
+   * وهناك كانوا بيرجعوا 404. يعني الصف على الشاشة، والأزرار على الصف، وأول
+   * دوسة بتقول «مش موجود».
+   *
+   * وبقى واقع يوم ٢٣ سبتمبر ٢٠٢٦: أربع كورسات اتنقلت للشهور، و٢٨٧ اشتراك حي
+   * بقى `course_month` في يوم واحد — كلهم مش قابلين للإلغاء ولا الاسترداد،
+   * والعلامة الوحيدة توست بيقول 404.
+   */
+  describe('a month subscription on the money screen', () => {
+    async function monthGrantOf(userId: string): Promise<string> {
+      const grant = await prisma.accessGrant.findFirstOrThrow({
+        where: { userId, scope: 'course_month', revokedAt: null },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+      return grant.id;
+    }
+
+    it('can be cancelled, where it used to 404', async () => {
+      const student = studentMc;
+      await payments.adminManualSubscribe(adminId, student, {
+        courseId: monthSellingCourseId,
+        plan: 'monthly',
+        termId: null,
+        monthIds: [monthOne, monthTwo],
+        isFree: false,
+        screenshotKey: null,
+      });
+
+      const grantId = await monthGrantOf(student);
+      const row = await finance.cancel(adminId, grantId, {
+        reason: 'طلب الطالب',
+        showToStudent: false,
+        refundCents: null,
+      });
+
+      expect(row.cancelReason).toBe('طلب الطالب');
+      const after = await prisma.accessGrant.findUniqueOrThrow({ where: { id: grantId } });
+      expect(after.revokedAt).not.toBeNull();
+    });
+
+    /*
+     * ⚠️ الشهر اللي مش أول واحد.
+     *
+     * دفعة واحدة بتشتري «شهر ١ و٢»، و`grantId` عمود واحد — فبيتحط على أول
+     * شهر وبس. `resolveRefund` كان بيدوّر بـ`grantId` لوحده، فالصف التاني
+     * كان بيرجع «مفيش دفعة متسجلة على الاشتراك ده» — وهو صف اتدفع فيه فعلًا،
+     * وشكله على الشاشة زي اللي جنبه بالظبط.
+     */
+    it('refunds from the SECOND month, whose row never carried the payment', async () => {
+      const student = studentM2;
+      await payments.adminManualSubscribe(adminId, student, {
+        courseId: monthSellingCourseId,
+        plan: 'monthly',
+        termId: null,
+        monthIds: [monthOne, monthTwo],
+        isFree: false,
+        screenshotKey: null,
+      });
+
+      // الصف اللي «مالوش» دفعة: الشهر التاني.
+      const second = await prisma.accessGrant.findFirstOrThrow({
+        where: { userId: student, scope: 'course_month', monthId: monthTwo, revokedAt: null },
+        select: { id: true },
+      });
+
+      await finance.cancel(adminId, second.id, {
+        reason: 'رجعتله فلوسه',
+        showToStudent: false,
+        refundCents: 10_000,
+      });
+
+      const refunds = await prisma.refund.findMany({
+        where: { submission: { userId: student } },
+        select: { amountCents: true },
+      });
+      expect(refunds).toHaveLength(1);
+      expect(refunds[0]?.amountCents).toBe(10_000);
+    });
+
+    /*
+     * والسقف واحد للدفعة كلها، مش لكل شهر.
+     *
+     * الدفعة اشترت شهرين بـ٢٠٠ جنيه. لو كل صف كان بيقرا سقفه لوحده كان ينفع
+     * يترجّع ٢٠٠ من ده و٢٠٠ من ده — ٤٠٠ من دفعة ٢٠٠.
+     */
+    it('counts one cap for the whole payment, not one per month', async () => {
+      const student = studentM3;
+      await payments.adminManualSubscribe(adminId, student, {
+        courseId: monthSellingCourseId,
+        plan: 'monthly',
+        termId: null,
+        monthIds: [monthOne, monthTwo],
+        isFree: false,
+        screenshotKey: null,
+      });
+
+      const first = await prisma.accessGrant.findFirstOrThrow({
+        where: { userId: student, scope: 'course_month', monthId: monthOne, revokedAt: null },
+        select: { id: true },
+      });
+      const second = await prisma.accessGrant.findFirstOrThrow({
+        where: { userId: student, scope: 'course_month', monthId: monthTwo, revokedAt: null },
+        select: { id: true },
+      });
+
+      // ١٥٠ من أصل ٢٠٠ — عدّت.
+      await finance.cancel(adminId, first.id, {
+        reason: 'جزء',
+        showToStudent: false,
+        refundCents: 15_000,
+      });
+
+      // فاضل ٥٠. طلب ١٠٠ من الصف التاني لازم يترفض.
+      await expect(
+        finance.cancel(adminId, second.id, {
+          reason: 'الباقي وزيادة',
+          showToStudent: false,
+          refundCents: 10_000,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
   });
 });

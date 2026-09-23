@@ -448,8 +448,46 @@ export class FinanceService {
     const amountCents = input.refundCents;
     if (amountCents == null) throw new BadRequestException('no refund amount');
 
+    /*
+     * ⚠️ الشهر التاني والتالت مش بيشيلوا الدفعة — وكانوا بيرجعوا «مفيش دفعة».
+     *
+     * دفعة واحدة ممكن تشتري «شهر ٢ و٣» (`PaymentSubmissionMonth`)، بس
+     * `grantId` عمود واحد — و`writeMonthGrants` بيحطّه على **أول** شهر
+     * (أقل `monthIndex`) وبس. فالبحث بـ`grantId` لوحده بيلاقي الدفعة على صف
+     * وبيرجع فاضي على الصفين اللي جنبه، والصفوف التلاتة على نفس الشاشة
+     * وشكلهم واحد.
+     *
+     * فبنسأل السؤال الصح: **أنهي دفعة اشترت الشهر ده؟** — ودي `monthId`
+     * بتجاوب عليها مباشرة. ولاحظ إن ده مش بيوسّع السقف: الدفعة اللي اشترت
+     * تلات شهور سقفها واحد للتلاتة (`alreadyRefunded` بتشوف كل استردادها)،
+     * فاسترداد من أي صف فيهم بيخصم من نفس الرصيد.
+     */
+    const grantRow = await this.prisma.accessGrant.findUnique({
+      where: { id: grantId },
+      select: { monthId: true, userId: true, courseId: true },
+    });
+
     const submissions = await this.prisma.paymentSubmission.findMany({
-      where: { grantId, status: 'approved' },
+      where:
+        // `courseId === null` مستحيل على `course_month` (الـscope نفسه بيلزمه)،
+        // بس النوع مايعرفش — والسقوط للبحث الضيق أأمن من `as`.
+        grantRow?.monthId == null || grantRow.courseId === null
+          ? { grantId, status: 'approved' }
+          : {
+              status: 'approved',
+              /*
+               * ⚠️ `userId` و`courseId` مش زيادة — من غيرهم الشرط بيقرا
+               * دفعات **طلبة تانيين**.
+               *
+               * «الشهر ده» مش مفتاح فريد لدفعة: كل اللي اشتروا «شهر ٢» في
+               * الكورس ده عندهم صف بنفس `monthId`. فالسقف كان هيتحسب من
+               * فلوسهم كلهم، ويسمح باسترداد أكبر من اللي الطالب ده دفعه
+               * أصلًا — والتست اللي تحت مسكها.
+               */
+              userId: grantRow.userId,
+              courseId: grantRow.courseId,
+              OR: [{ grantId }, { months: { some: { monthId: grantRow.monthId } } }],
+            },
       orderBy: { createdAt: 'desc' },
       select: { id: true, amountCents: true, isFree: true, refunds: { select: { amountCents: true } } },
     });
@@ -481,21 +519,41 @@ export class FinanceService {
     return { submissionId: latest.id, amountCents };
   }
 
-  /** Shared ownership/shape check for every mutation above — a grant id
-   *  from outside this screen's own domain (wrong scope, wrong source, or
-   *  the rare `courseId: null` row `hasCourse` already excludes from `list`)
-   *  404s rather than being half-accepted. */
+  /**
+   * Shared ownership/shape check for every mutation above — a grant id from
+   * outside this screen's own domain (wrong scope, wrong source, or the rare
+   * `courseId: null` row `hasCourse` already excludes from `list`) 404s rather
+   * than being half-accepted.
+   *
+   * ⚠️ `course_month` belongs here, and its absence made the screen lie.
+   *
+   * `list` has shown month subscriptions since the day months shipped — its
+   * own comment says leaving them out «would have made every monthly
+   * subscriber invisible on the one screen that answers مين مشترك». But every
+   * MUTATION went through here, and here they 404'd. So the row was on the
+   * screen, its buttons were on the row, and pressing one said «مش موجود».
+   *
+   * `editDates` had already been written for them: `OPEN_ENDED_SCOPES` holds
+   * `course_month` and there is a whole branch with its own Arabic sentence
+   * about «شهر ٢ مش تلاتين يوم» — a branch this query made unreachable. The
+   * intent was here all along; the door was shut.
+   *
+   * It stopped being theoretical on 2026-09-23, when the four curriculum
+   * courses moved to months and 287 live subscriptions became `course_month`
+   * in one afternoon. Every one of them was uncancellable and unrefundable
+   * from the money screen, and the only sign was a 404 toast.
+   */
   private async findMutableGrant(grantId: string): Promise<{
     id: string;
     userId: string;
     courseId: string;
-    scope: 'course' | 'term';
+    scope: 'course' | 'term' | 'course_month';
     validFrom: Date;
     validUntil: Date | null;
     revokedAt: Date | null;
   }> {
     const grant = await this.prisma.accessGrant.findFirst({
-      where: { id: grantId, scope: { in: ['course', 'term'] }, source: 'purchase' },
+      where: { id: grantId, scope: { in: ['course', 'term', 'course_month'] }, source: 'purchase' },
       select: {
         id: true,
         userId: true,
@@ -507,7 +565,11 @@ export class FinanceService {
       },
     });
     if (!grant || grant.courseId === null) throw new NotFoundException();
-    return { ...grant, courseId: grant.courseId, scope: grant.scope as 'course' | 'term' };
+    return {
+      ...grant,
+      courseId: grant.courseId,
+      scope: grant.scope as 'course' | 'term' | 'course_month',
+    };
   }
 
   /**
