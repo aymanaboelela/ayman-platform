@@ -5,6 +5,7 @@ import { cn } from '@ayman/ui';
 import { CourseEntry } from '@/components/site/course-entry';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
 import { LockIcon } from '@/components/player/icons';
+import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { formatDuration } from '@/components/site/course-card';
 import {
   isLessonFinished,
@@ -479,9 +480,25 @@ export function CourseOutlineView({
         * الطالب دافع في إيه.
         */}
       {pendingMonths.length > 0 ? (
-        <p className="rounded-sm border border-line-subtle bg-surface-2 p-3 text-[length:var(--fs-text-sm)] text-fg-muted">
-          {c.ownedMonthsPending.replace('{months}', pendingMonths.join(' و'))}
-        </p>
+        /*
+         * `.empty` وبرسمة، مش سطر رمادي.
+         *
+         * ده نفس القرار اللي مكتوب في `spot-illustration.tsx` و`study.css`:
+         * «مستطيل رمادي مش بيتفرق عن حاجة بايظة». والحتة دي بالذات هي اللي
+         * الطالب بيدوّر فيها على فلوسه — لو الجواب باهت، هو مش هيقراه على إنه
+         * جواب.
+         *
+         * ورسمة `preparing` مش `courses`: الكورس الفاضي حالة **وقفة** (روح
+         * مكان تاني)، والشهر الفاضي حالة **شغل ماشي** (دفعت، والمحاضرات
+         * جاية) — ونفس الرسمة للاتنين كانت هتقول الحاجة الغلط.
+         */
+        <section className="empty mb-6">
+          <SpotIllustration name="preparing" />
+          <p className="empty__title">{c.ownedMonthsPendingTitle}</p>
+          <p className="empty__body mx-auto max-w-[34rem]">
+            {c.ownedMonthsPending.replace('{months}', pendingMonths.join(' و'))}
+          </p>
+        </section>
       ) : null}
 
       {outline.sections.map((section) => (

@@ -18,7 +18,7 @@
  * repetition, and none of them carry information the sentence does not.
  */
 
-export type SpotName = 'courses' | 'exams' | 'scores' | 'topics';
+export type SpotName = 'courses' | 'exams' | 'scores' | 'topics' | 'preparing';
 
 export function SpotIllustration({ name }: { name: SpotName }) {
   return (
@@ -38,6 +38,8 @@ export function SpotIllustration({ name }: { name: SpotName }) {
         <Exams />
       ) : name === 'topics' ? (
         <Topics />
+      ) : name === 'preparing' ? (
+        <Preparing />
       ) : (
         <Scores />
       )}
@@ -55,6 +57,35 @@ function Courses() {
       {/* The spine marks: two short rules that make the blocks read as books
           rather than as bars on a chart. */}
       <path d="M38 56 h6 M43 44 h6 M50 32 h6" className="spot__mark" />
+    </g>
+  );
+}
+
+/**
+ * محاضرات نص طريقها — «الشهر ده بيتجهّز».
+ *
+ * الشهر الفاضي مش زي الكورس الفاضي، ولا ينفع ياخد نفس الرسمة. الكورس الفاضي
+ * حالة **وقفة**: مفيش حاجة، والطالب يروح مكان تاني. الشهر الفاضي حالة
+ * **شغل ماشي**: هو دافع فيه، والمحاضرات جاية.
+ *
+ * فالرسمة ماشية من تحت لفوق: الصف اللي تحت متكمّل (`spot__solid`)، واللي
+ * فوقه أقل، واللي فوق خالص خط فاضي لسه — الشكل بيقول «في النص» من غير كلمة.
+ * والعنبري (`spot__accent`) على الصف اللي بيتشتغل فيه دلوقتي، لأنه الحاجة
+ * الحية الوحيدة في الصورة.
+ */
+function Preparing() {
+  return (
+    <g>
+      {/* خلّصت */}
+      <rect x="30" y="54" width="58" height="10" rx="3" className="spot__solid" />
+      {/* بتتشتغل دلوقتي — العنصر الحي الوحيد */}
+      <rect x="30" y="40" width="38" height="10" rx="3" className="spot__accent" />
+      {/* لسه — إطار فاضي، مش كتلة */}
+      <rect x="30" y="26" width="58" height="10" rx="3" className="spot__line" />
+      {/* تلات نقط: «وكمان» — نفس الإيماءة اللي الشاشة بتقولها بالكلام. */}
+      <circle cx="74" cy="45" r="2" className="spot__accent-fill" />
+      <circle cx="81" cy="45" r="2" className="spot__accent-fill" />
+      <circle cx="88" cy="45" r="2" className="spot__accent-fill" />
     </g>
   );
 }
