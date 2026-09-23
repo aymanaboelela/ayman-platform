@@ -29,6 +29,7 @@ import { ContentModule } from '../modules/content/content.module';
 import { CatalogModule } from '../modules/catalog/catalog.module';
 import { PlayerModule } from '../modules/player/player.module';
 import { DashboardModule } from '../modules/dashboard/dashboard.module';
+import { GuardianModule } from '../modules/guardian/guardian.module';
 import { SettingsModule } from '../modules/admin/settings/settings.module';
 import { StudentsModule } from '../modules/admin/students/students.module';
 import { AdminTaxonomyModule } from '../modules/admin/taxonomy/admin-taxonomy.module';
@@ -258,6 +259,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         CatalogModule,
         PlayerModule,
         DashboardModule,
+        // بوابة ولي الأمر. الموديولات هنا بتتسجّل بالإيد مش من `AppModule`،
+        // فصف في المصفوفة من غير موديوله بيرجّع 404 — «الراوت مش موجود» مش
+        // «الحارس رفضه»، وهو بالظبط العكس اللي الصف بيتأكد منه.
+        GuardianModule,
         SettingsModule,
         StudentsModule,
         AdminTaxonomyModule,
@@ -873,6 +878,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'guardian sign-in: a malformed code is refused on SHAPE (400)', method: 'post', path: () => '/api/guardian/sign-in', actor: 'anonymous', status: 400, body: () => ({ code: 'short' }) },
     { label: 'guardian sign-in: a signed-in student is not turned away', method: 'post', path: () => '/api/guardian/sign-in', actor: 'student', status: 401, body: () => ({ code: 'ABCDEFGHJKMNPQRSTUVWXYZ234' }) },
     { label: 'guardian sign-out: anonymous, always fine', method: 'post', path: () => '/api/guardian/sign-out', actor: 'anonymous', status: 201 },
+    // والقراية نفسها: من غير كوكي بوابة، 401. الطالب المسجّل دخوله بياخد
+    // نفس الرد — جلسة الطالب مش بديل عن جلسة ولي الأمر، والعكس.
+    { label: 'guardian view: anonymous has no session to read', method: 'get', path: () => '/api/guardian/me', actor: 'anonymous', status: 401 },
+    { label: 'guardian view: a student session is not a guardian session', method: 'get', path: () => '/api/guardian/me', actor: 'student', status: 401 },
 
     // ── المساعد: the visitor side is PUBLIC on purpose ──────────────────
     // These are the only public routes in the product that WRITE, which is
@@ -2427,6 +2436,18 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       expect(publicRoutes).toEqual(
         [
           'GET /api/health',
+          /*
+           * بوابة ولي الأمر: التلاتة `@Public()` عن قصد، لأن اللي بيدخل
+           * **مالوش حساب** — الحارس العادي بيدوّر على جلسة طالب ومالوش
+           * معنى عليه. الكود هو اللي بيثبت إنه مصرّح له، وبيتفحص في الخدمة
+           * مع الحد على المحاولات؛ و`/me` بيتحقق من التوقيع في كل طلب.
+           *
+           * والاتنين اللي بيكتبوا كوكي عليهم `@RequireCsrf()` كمان — نفس
+           * اللي راوتس المساعد ماشية عليه.
+           */
+          'POST /api/guardian/sign-in',
+          'POST /api/guardian/sign-out',
+          'GET /api/guardian/me',
           'GET /api/taxonomy',
           'GET /api/catalog/courses',
           'GET /api/catalog/courses/:slug',
