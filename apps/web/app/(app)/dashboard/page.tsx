@@ -41,6 +41,7 @@ import { InstructorMessageCard } from '@/components/dashboard/instructor-message
 import { HonorBoardCard } from '@/components/dashboard/honor-board-card';
 import { StartHereCard } from '@/components/dashboard/start-here-card';
 import { TipOfDayCard } from '@/components/dashboard/tip-of-day-card';
+import { GuardianCodeCard } from '@/components/dashboard/guardian-code-card';
 import { WhatsappChannelCard } from '@/components/dashboard/whatsapp-channel-card';
 import { CourseGroupCard } from '@/components/player/course-group-card';
 import { LibraryCourseCard } from '@/components/library/library-course-card';
@@ -698,6 +699,21 @@ export default async function DashboardPage() {
             button leaves the product.
           */}
           <WhatsappChannelCard href={settings.contact.whatsappChannel} variant="aside" flush />
+
+          {/*
+            «كود ولي الأمر» — الحاجة الوحيدة على الصفحة اللي الطالب بياخدها
+            ويدّيها لحد تاني.
+
+            تحت كارت القناة عن قصد: الاتنين بيوصلوا حد **برّه** المنصة —
+            القناة بتوصل الطالب لما يكون مش فاتح، وده بيوصل أبوه أصلًا. وباقي
+            الصفحة كله بيوصف اللي قدام الشاشة دلوقتي.
+
+            بيختفي خالص لو مفيش بروفايل: الحساب اللي لسه ما كمّلش التسجيل
+            مالوش كود، وكارت فاضي بيسأل أسئلة أكتر ما بيجاوب.
+          */}
+          {me.profile?.guardianCode ? (
+            <GuardianCodeCard code={me.profile.guardianCode} />
+          ) : null}
 
           {/*
             «جروب الدفعة» — one per enrolled course that HAS one.

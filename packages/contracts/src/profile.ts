@@ -34,6 +34,18 @@ export const ProfileMeSchema = z.object({
     .looseObject({
       fullName: z.string().optional(),
       phone: z.string().optional(),
+      /**
+       * «كود ولي الأمر» — بيتعرض على داشبورد الطالب عشان يديه لأبوه.
+       *
+       * ⚠️ ده **مفتاح** بيفتح سجل الطالب كامل لأي حد معاه، فالراوت الوحيد
+       * اللي بيبعته هو `/profile/me` — بتاع صاحب الحساب نفسه. اللوحة العامة
+       * بتاعة لوحة الشرف بتختار `fullName` و`honorPhotoKey` وبس (اتراجعت)،
+       * وأي شاشة جديدة بتعرض طالب لازم تفضل كده.
+       *
+       * `.optional()` زي باقي الحقول: الحساب اللي لسه ما اتعملّهوش بروفايل
+       * مالوش كود، والكارت مابيظهرش بدل ما الصفحة تقع.
+       */
+      guardianCode: z.string().optional(),
       schoolName: z.string().nullable().optional(),
       governorateCode: z.string().optional(),
       year: z.number().int().nullable().optional(),
