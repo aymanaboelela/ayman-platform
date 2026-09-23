@@ -1809,11 +1809,14 @@
    `prefers-reduced-motion` is handled on top: `tokens/motion.css` clamps every
    animation to 0.01ms, which lands each element on its resting state at once.
 
-   The panel is deliberately NOT in here. It is the first thing on the page and
-   it is already on screen at load, so a scroll timeline would either fire
-   instantly — a flash for no reason — or never fire at all and leave the
-   opener faded. The opener's own entrance belongs to a document timeline, and
-   this preset does not have one.
+   The panel is not in here, and that is still right: it is on screen at load,
+   so a scroll timeline would either fire instantly — a flash for no reason —
+   or never fire and leave the opener faded.
+   
+   ⚠️ But «not a scroll timeline» is not the same as «no entrance», and
+   reading it that way is what left the first screen — the one the reader
+   actually looks at — completely still while everything below it moved. The
+   opener's entrance is on the DOCUMENT timeline, below this block.
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* Same correction as «الاستوديو»'s: 1rem of travel is sixteen pixels, which
@@ -4434,10 +4437,17 @@
   }
 }
 
+@keyframes st-hero-enter {
+  from {
+    opacity: 0;
+    transform: translateY(2.25rem);
+  }
+}
+
 @keyframes st-portrait-in {
   from {
     opacity: 0;
-    transform: translateY(1.5rem);
+    transform: translateY(2.75rem) scale(0.96);
   }
 }
 
@@ -4447,21 +4457,32 @@
   }
 }
 
+/* ⚠️ `st-hero-enter`, NOT `st-rise`.
+   
+   The scroll reveals share `st-rise`, and it was doing double duty here: the
+   opener is on screen at load, so its entrance is the one the reader watches
+   from the first frame rather than catching mid-scroll. It can afford — and
+   needs — a longer, further move than a section sliding past. Sharing one
+   keyframe meant tuning the reveals could only ever make the opener worse,
+   or the other way round. */
 [data-preset='studio'] .st-hero__copy > * {
-  animation: st-rise 520ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+  animation: st-hero-enter 680ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
 }
 
 /* Staggered by position rather than by a class per line: the opener's copy is
    a short, fixed stack, and a nth-child ramp keeps the delays in one place
    instead of scattering them across the markup. */
-[data-preset='studio'] .st-hero__copy > :nth-child(1) { animation-delay: 40ms; }
-[data-preset='studio'] .st-hero__copy > :nth-child(2) { animation-delay: 110ms; }
-[data-preset='studio'] .st-hero__copy > :nth-child(3) { animation-delay: 180ms; }
-[data-preset='studio'] .st-hero__copy > :nth-child(4) { animation-delay: 250ms; }
-[data-preset='studio'] .st-hero__copy > :nth-child(5) { animation-delay: 320ms; }
+[data-preset='studio'] .st-hero__copy > :nth-child(1) { animation-delay: 60ms; }
+[data-preset='studio'] .st-hero__copy > :nth-child(2) { animation-delay: 155ms; }
+[data-preset='studio'] .st-hero__copy > :nth-child(3) { animation-delay: 250ms; }
+[data-preset='studio'] .st-hero__copy > :nth-child(4) { animation-delay: 345ms; }
+[data-preset='studio'] .st-hero__copy > :nth-child(5) { animation-delay: 440ms; }
 
+/* After the words, for the same reason «اللوح»'s figure is: it is the biggest
+   object in the frame, and a big object moving first pulls the eye off the
+   line it is there to introduce. */
 [data-preset='studio'] .st-hero__portrait {
-  animation: st-portrait-in 700ms cubic-bezier(0.22, 0.61, 0.36, 1) 140ms backwards;
+  animation: st-portrait-in 860ms cubic-bezier(0.22, 0.61, 0.36, 1) 380ms backwards;
 }
 
 [data-preset='studio'] .st-code {
@@ -4823,4 +4844,57 @@ body:has(main[data-preset='board']) .site-nav--over {
 body:has(main[data-preset='board']) .site-nav--pinned {
   background: var(--board-slab);
   border-block-end: 1px solid color-mix(in oklch, var(--board-on-slab), transparent 86%);
+}
+
+/* ── the opener arrives ───────────────────────────────────────────────────
+
+   A page-load sequence on «اللوح»'s panel, on the document timeline.
+
+   The scroll reveals above cover everything the reader scrolls TO. They could
+   never cover the one screen that is already there when the page paints, and
+   for two releases that screen — the only one every visitor sees — was the
+   stillest part of the page.
+
+   The order is the order the sentence is read in: the chip that names the
+   subject, the name, the line under it, the buttons, then the photograph. The
+   picture comes LAST on purpose: it is the biggest object in the frame, and a
+   big object moving first pulls the eye away from the words it is supposed to
+   introduce.
+
+   ⚠️ Every from-state is a keyframe reached through `backwards` fill, never a
+   rule on the element, so the opener is fully present when animations do not
+   run — reduced motion, or a browser that skipped them. `tokens/motion.css`
+   clamps these to 0.01ms, which lands each line at rest immediately.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes board-enter {
+  from {
+    opacity: 0;
+    transform: translateY(1.25rem);
+  }
+}
+
+@keyframes board-enter-figure {
+  from {
+    opacity: 0;
+    transform: translateY(2.5rem) scale(0.94);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-preset='board'] .board-panel__inner > * {
+    animation: board-enter 620ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+  }
+
+  [data-preset='board'] .board-panel__inner > :nth-child(1) { animation-delay: 60ms; }
+  [data-preset='board'] .board-panel__inner > :nth-child(2) { animation-delay: 150ms; }
+  [data-preset='board'] .board-panel__inner > :nth-child(3) { animation-delay: 240ms; }
+  [data-preset='board'] .board-panel__inner > :nth-child(4) { animation-delay: 330ms; }
+  [data-preset='board'] .board-panel__inner > :nth-child(5) { animation-delay: 420ms; }
+
+  /* The photograph gets its own, slower and further, and it lands after the
+     words — see the note above for why the biggest object goes last. */
+  [data-preset='board'] .board-figure {
+    animation: board-enter-figure 820ms cubic-bezier(0.22, 0.61, 0.36, 1) 480ms backwards;
+  }
 }
