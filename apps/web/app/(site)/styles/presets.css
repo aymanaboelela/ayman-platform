@@ -1813,10 +1813,12 @@
    this preset does not have one.
    ══════════════════════════════════════════════════════════════════════════ */
 
+/* Same correction as «الاستوديو»'s: 1rem of travel is sixteen pixels, which
+   on a phone reads as a slow paint rather than as motion. */
 @keyframes board-rise {
   from {
     opacity: 0;
-    transform: translateY(1rem);
+    transform: translateY(2rem) scale(0.98);
   }
 }
 
@@ -1845,6 +1847,27 @@
       animation: board-rise 520ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
       animation-timeline: view();
       animation-range: entry 6% cover 30%;
+    }
+
+    /* The stagger for items sitting side by side — see the long note in the
+       STUDIO section for why this is `animation-range-start` and not
+       `animation-delay`, which on a view timeline is measured in range units
+       and leaves the animation unfinished. */
+    [data-preset='board'] .board-courses > :nth-child(2),
+    [data-preset='board'] .board-features > :nth-child(2),
+    [data-preset='board'] .board-years > :nth-child(2) {
+      animation-range: entry 12% cover 36%;
+    }
+
+    [data-preset='board'] .board-courses > :nth-child(3),
+    [data-preset='board'] .board-features > :nth-child(3),
+    [data-preset='board'] .board-years > :nth-child(3) {
+      animation-range: entry 18% cover 42%;
+    }
+
+    [data-preset='board'] .board-courses > :nth-child(n + 4),
+    [data-preset='board'] .board-features > :nth-child(n + 4) {
+      animation-range: entry 24% cover 48%;
     }
 
     /* The closer asks for the account, so it gets the one larger move. */
@@ -4383,10 +4406,16 @@
    would catch.
    ══════════════════════════════════════════════════════════════════════════ */
 
+/* ⚠️ The travel used to be 0.75rem, and on a phone that is twelve pixels —
+   the element was technically animating and nobody could tell. It reads as a
+   page that is slightly slow to paint rather than as a page with motion.
+   
+   1.75rem plus a 2% scale is the smallest move that registers as deliberate
+   at arm's length, which is where this page is read. */
 @keyframes st-rise {
   from {
     opacity: 0;
-    transform: translateY(0.75rem);
+    transform: translateY(1.75rem) scale(0.98);
   }
 }
 
@@ -4588,6 +4617,66 @@ body:has(main[data-preset='studio']) .site-nav--over .site-btn--outline {
       animation-range: entry 6% cover 30%;
     }
 
+    /* ── the stagger, and why it is `animation-range-start` ──────────────
+    
+       Items stacked DOWN a page already stagger for free: each one enters
+       the scrollport at a different moment, so its own view timeline starts
+       later. Items sitting side by side in a row do not — three course cards
+       cross the threshold together and rise as one slab, which is the moment
+       this reads as a block moving rather than as cards arriving.
+       
+       ⚠️ `animation-delay` cannot fix it. On a view timeline the delay is
+       measured in RANGE units, not seconds, and mixing the two gives items
+       whose animation never completes. Shifting `animation-range-start`
+       later per column is the same idea expressed in the timeline's own
+       units: card two begins its rise slightly deeper into the scroll than
+       card one.
+       
+       Capped at the fourth item: past that the last card in a wide row would
+       still be waiting when the row is already well up the screen. */
+    [data-preset='studio'] .st-courses > :nth-child(2),
+    [data-preset='studio'] .st-years > :nth-child(2),
+    [data-preset='studio'] .st-reasons > :nth-child(2) {
+      animation-range: entry 12% cover 36%;
+    }
+
+    [data-preset='studio'] .st-courses > :nth-child(3),
+    [data-preset='studio'] .st-years > :nth-child(3),
+    [data-preset='studio'] .st-reasons > :nth-child(3) {
+      animation-range: entry 18% cover 42%;
+    }
+
+    [data-preset='studio'] .st-courses > :nth-child(n + 4),
+    [data-preset='studio'] .st-reasons > :nth-child(n + 4) {
+      animation-range: entry 24% cover 48%;
+    }
+
+    /* The pills and the section's closing button were the two things with no
+       motion at all on a page that now has it everywhere else — they read as
+       forgotten rather than as restrained. */
+    [data-preset='studio'] .st-pill {
+      animation: st-rise 460ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+      animation-timeline: view();
+      animation-range: entry 8% cover 32%;
+    }
+
+    [data-preset='studio'] .st-pill:nth-child(2) {
+      animation-range: entry 13% cover 37%;
+    }
+
+    [data-preset='studio'] .st-pill:nth-child(n + 3) {
+      animation-range: entry 18% cover 42%;
+    }
+
+    /* The chip's rule draws itself out beside the word rather than fading in
+       with it — the one place on this page where the motion says something
+       about the thing moving: a line being ruled under a section heading. */
+    [data-preset='studio'] .st-section .st-chip::after {
+      animation: st-rule-out 620ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+      animation-timeline: view();
+      animation-range: entry 12% cover 34%;
+    }
+
     /* The closing band is the page's one dark field and the one thing it
        asks for, so it gets a slower, larger move than anything above it —
        the only place on the page where the motion is meant to be noticed. */
@@ -4599,10 +4688,17 @@ body:has(main[data-preset='studio']) .site-nav--over .site-btn--outline {
   }
 }
 
+@keyframes st-rule-out {
+  from {
+    flex-basis: 0;
+    opacity: 0;
+  }
+}
+
 @keyframes st-rise-far {
   from {
     opacity: 0;
-    transform: translateY(1.75rem);
+    transform: translateY(3rem) scale(0.96);
   }
 }
 
