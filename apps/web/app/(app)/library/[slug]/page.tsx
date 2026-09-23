@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { ArrowRight, Clock, Layers, Play } from 'lucide-react';
 import { LearningPathSchema, copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
+import { z } from '@ayman/contracts/zod';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getCourse } from '@/lib/catalog';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
@@ -85,6 +86,10 @@ export async function generateMetadata({
  */
 export const unstable_dynamicStaleTime = 5;
 
+/** `/api/payments/courses/:id/months/mine` — نفس شكل الرد اللي
+ *  `subscribe-panel.tsx` بيقراه، متكرر هنا لأنه سطرين مش عقد مشترك. */
+const OwnedMonthsSchema = z.object({ ownedMonthIds: z.uuid().array() });
+
 export default async function LibraryCoursePage({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
 
@@ -98,6 +103,33 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
 
   const pathCourse = path.courses.find((entry) => entry.id === course.id) ?? null;
   const outline = buildCourseOutline({ course, path: pathCourse });
+
+  /*
+   * «محاضرات شهر ٢ بتتجهّز» — للطالب اللي دفع في شهر لسه فاضي.
+   *
+   * الـoutline متجمّع بالأقسام مش بالشهور، فالشهر الفاضي مالوش ولا صف يتعرض.
+   * من غير السطر ده اللي دفع «شهر ٢» بيفتح الصفحة دي ويلاقي محاضرات شهر ١
+   * مقفولة وخلاص — مفيش أي ذكر للحاجة اللي هو دافع فيها. الشكل ده مش «لسه
+   * بيتجهّز»، الشكل ده «الفلوس راحت».
+   *
+   * سلسلة تانية بعد الـ`Promise.all` عن قصد: محتاجة `course.id` اللي لسه
+   * متأكدين منه فوق، والشهور بتيجي مع `course` أصلًا — فدي مكالمة واحدة
+   * زيادة وبس.
+   *
+   * وبتفشل بهدوء: `[]` معناها مفيش سطر، وهو نفس اللي بيحصل للطالب اللي مالوش
+   * شهور فاضية. سطر طمأنة ضايع أرخص من صفحة بتقع.
+   */
+  const ownedMonthIds = await apiGetAuthed(
+    `/api/payments/courses/${course.id}/months/mine`,
+    OwnedMonthsSchema,
+  )
+    .then((result) => new Set(result.ownedMonthIds))
+    .catch(() => new Set<string>());
+
+  // `course.months` هي المفتوحة للبيع بس، وبتشيل عدد المحاضرات المنشورة.
+  const emptyOwnedMonths = course.months
+    .filter((month) => ownedMonthIds.has(month.id) && month.lessonCount === 0)
+    .map((month) => month.title);
 
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
@@ -293,7 +325,12 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
           course.quarterlyPriceCents === null &&
           course.yearlyPriceCents === null &&
           course.terms.length === 0)) ? (
-        <CourseOutlineView outline={outline} courseSlug={course.slug} courseId={course.id} />
+        <CourseOutlineView
+          outline={outline}
+          courseSlug={course.slug}
+          courseId={course.id}
+          pendingMonths={emptyOwnedMonths}
+        />
       ) : null}
     </main>
   );

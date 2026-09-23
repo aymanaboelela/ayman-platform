@@ -430,8 +430,12 @@ export function CourseOutlineView({
   outline,
   courseSlug,
   courseId,
+  pendingMonths,
 }: {
   outline: CourseOutline;
+  /** أسماء الشهور اللي الطالب دفع فيها ولسه فاضية. `[]` في الحالة الطبيعية —
+   *  الحساب في `library/[slug]/page.tsx`، لأن الملكية بتيجي من السيرفر. */
+  pendingMonths: string[];
   courseSlug: string;
   /** Needed only by the not-enrolled rows, which enroll on click. */
   courseId: string;
@@ -464,6 +468,21 @@ export function CourseOutlineView({
           {c.lessonCount.replace('{n}', String(outline.totalLessons))}
         </span>
       </div>
+
+      {/*
+        * «محاضرات شهر ٢ بتتجهّز» — للطالب اللي دفع في شهر لسه فاضي.
+        *
+        * فوق القايمة مش تحتها: هو بيدوّر على حاجة مش موجودة، والإجابة لازم
+        * تيجي قبل ما يقرا قايمة كلها أقفال ويستنتج إن فلوسه ضاعت.
+        *
+        * الشهور بتتحسب على السيرفر (`emptyOwnedMonths`) — العميل مايعرفش
+        * الطالب دافع في إيه.
+        */}
+      {pendingMonths.length > 0 ? (
+        <p className="rounded-sm border border-line-subtle bg-surface-2 p-3 text-[length:var(--fs-text-sm)] text-fg-muted">
+          {c.ownedMonthsPending.replace('{months}', pendingMonths.join(' و'))}
+        </p>
+      ) : null}
 
       {outline.sections.map((section) => (
         <Unit

@@ -2005,6 +2005,17 @@ export const copy = {
     // ── a course card ────────────────────────────────────────────────────
     /** `{n}` is a lesson count. */
     lessonCount: '{n} محاضرة',
+    /**
+     * `{months}` — الشهور اللي دفع فيها ولسه فاضية، بفاصلة بينهم.
+     *
+     * على صفحة الكورس نفسها، للطالب اللي **دفع خلاص**. الـoutline متجمّع
+     * بالأقسام مش بالشهور، فالشهر الفاضي مالوش ولا صف — واللي دفع «شهر ٢»
+     * كان بيفتح ويلاقي محاضرات شهر ١ مقفولة وبس، من غير أي ذكر لفلوسه.
+     *
+     * الصيغة واحدة للمفرد والجمع عن قصد: «شهر ٢» و«شهر ٢ و٣» الاتنين بيقروا
+     * صح وراها، وجملة تانية للجمع كانت هتزوّد سطر عشان فاصلة.
+     */
+    ownedMonthsPending: 'محاضرات {months} بتتجهّز — هتلاقيها هنا أول ما تنزل.',
     percentDone: 'خلصت {percent}%',
     notStarted: 'لسه ماابتديتش',
     courseDone: 'خلصت الكورس',
@@ -2604,10 +2615,18 @@ export const copy = {
     chooseMonthsHint: 'كل شهر بيفتح محاضراته هو، ومابيخلصش بعد مدة. ينفع اختيار أكتر من شهر في تحويل واحد.',
     /** `{count}` — published lectures in this month. */
     monthCardLessons: '{count} محاضرة',
-    /** A month the instructor opened for sale before writing into it. Shown
-     *  rather than hidden: pre-selling a month is his decision to make, and a
-     *  card that silently disappears is not a decision anybody can see. */
-    monthCardEmpty: 'لسه مانزلتش محاضرات',
+    /**
+     * A month the instructor opened for sale before writing into it. Shown
+     * rather than hidden: pre-selling a month is his decision to make, and a
+     * card that silently disappears is not a decision anybody can see.
+     *
+     * «بيتجهّز» and not «لسه مانزلتش محاضرات». Both are true; only one of them
+     * is an answer. The student reading this card is deciding whether to pay
+     * for a month that is empty TODAY, and «nothing uploaded yet» tells him
+     * what is missing without telling him it is coming — which is the sentence
+     * that makes a paid card look like a mistake.
+     */
+    monthCardEmpty: 'محاضراته بتتجهّز',
     /** The month is already covered by something the student holds — a live
      *  month grant, or a term/yearly subscription. The card is disabled. */
     monthCardOwned: 'معاه اشتراك خلاص',
