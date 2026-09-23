@@ -75,6 +75,36 @@ export async function removeHonorPinAction(id: string): Promise<ActionResult> {
 }
 
 /**
+ * شيل ورقة امتحان من اللوحة، من الشاشة دي بدل ما تروح لشاشة التصحيح.
+ *
+ * نفس الراوت اللي شاشة التصحيح بتستعمله (`PATCH /admin/attempts/:id/mark`)
+ * وبيكتب نفس الحقل (`quizAttempts.honorBoardAt`) — مش قرار تاني موازي،
+ * فمفيش شاشتين ممكن يختلفوا على اسم واحد.
+ *
+ * `instructorRating` مش متبعت خالص: الدالة اللي ورا الراوت بتعدّل الحقل
+ * اللي اتبعت بس (`!== undefined`)، وبعت `null` معاه كان هيمسح تقييم
+ * المدرّس للورقة في نفس الدوسة — وده مالوش أي علاقة بشيل الاسم من اللوحة.
+ *
+ * وبيعمل revalidate للشاشتين: الاسم اللي اتشال من هنا لازم يختفي من شاشة
+ * التصحيح كمان، وإلا المدرّس يرجعلها ويلاقي السويتش لسه مولّع.
+ */
+export async function unpinExamFromBoardAction(attemptId: string): Promise<ActionResult> {
+  try {
+    await adminSend(
+      'PATCH',
+      `/api/admin/attempts/${attemptId}/mark`,
+      { onHonorBoard: false },
+      z.object({ instructorRating: z.number().nullable(), onHonorBoard: z.boolean() }),
+    );
+    afterWrite();
+    revalidatePath(`/admin/grading/${attemptId}`);
+    return { ok: true };
+  } catch {
+    return { ok: false, message: c.removeFailed };
+  }
+}
+
+/**
  * البحث عن طالب من جوّه الديالوج.
  *
  * Server Action مش `fetch` من المتصفح: الراوت ورا `honor:read` وبياخد كوكي

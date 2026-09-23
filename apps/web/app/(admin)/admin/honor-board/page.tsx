@@ -10,6 +10,7 @@ import { adminGet } from '@/lib/admin-api';
 import { getEntitlements } from '@/lib/entitlements';
 import { HonorPinDialog } from './honor-pin-dialog';
 import { HonorPinActions } from './honor-pin-actions';
+import { HonorExamActions } from './honor-exam-actions';
 import { HonorFaceThumb } from './honor-face-thumb';
 
 const c = copy.admin.honorBoard;
@@ -195,6 +196,15 @@ export default async function AdminHonorBoardPage() {
                           >
                             {c.examOpen}
                           </Link>
+                          {/* الصفوف دي كانت الوحيدة على الشاشة اللي مالهاش
+                              زرار غير «افتح الورقة»، والرسالة فوقها بتقول
+                              «بيتشالوا من شاشة تصحيح الورق» — يعني بتوصّف
+                              رحلة مش بتدّي مخرج. واللي بيبص على اللوحة هنا
+                              هو نفسه اللي عايز يشيل اسم منها. */}
+                          <HonorExamActions
+                            attemptId={row.attemptId}
+                            name={row.studentName}
+                          />
                         </li>
                       ))}
                     </ul>
