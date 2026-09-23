@@ -463,6 +463,38 @@
    settings payload, so the component passes a placeholder ratio and these two
    caps are what actually decide the size — a square mark and a wide lockup
    both land correctly without anyone declaring which it was. */
+/* The mark as a STRIP, which is what it becomes once a photograph shares the
+   panel with it. Capped at a third of its old height: it is a brand mark
+   above a face now, not the thing the panel is built around. */
+[data-preset='board'] .board-mark--strip {
+  margin-block-start: 0;
+  margin-block-end: 0.5rem;
+}
+
+[data-preset='board'] .board-mark--strip .board-mark__img {
+  max-inline-size: min(100%, 9rem);
+  max-block-size: clamp(2rem, 5vw, 2.75rem);
+}
+
+/* The instructor, at the size the panel can give. `contain` and not `cover`:
+   the upload is a cut-out on transparency, so there is no background to crop
+   INTO — cover would trim the subject itself to fill a box. */
+[data-preset='board'] .board-figure {
+  display: flex;
+  justify-content: center;
+  inline-size: 100%;
+  margin-block-start: clamp(1rem, 3vw, 1.75rem);
+  margin-block-end: calc(-1 * clamp(1rem, 4vw, 3rem));
+}
+
+[data-preset='board'] .board-figure__img {
+  inline-size: auto;
+  block-size: auto;
+  max-inline-size: min(100%, 26rem);
+  max-block-size: clamp(16rem, 42vw, 26rem);
+  object-fit: contain;
+}
+
 [data-preset='board'] .board-mark__img {
   inline-size: auto;
   block-size: auto;
@@ -1757,6 +1789,72 @@
   color: var(--board-ink-2);
 }
 
+
+
+/* ── «اللوح» يترسم مع القراية ──────────────────────────────────────────────
+
+   Same mechanism as «الاستوديو»'s, and the same safety: scroll-driven
+   animations behind `@supports`, so a browser without them gets the page
+   exactly as it was — everything present, nothing moving.
+
+   ⚠️ That guard is the whole reason this is safe to add to a page that
+   already ships. Every from-state below is `opacity: 0`, and the failure mode
+   of a scroll reveal is a page that is permanently BLANK for whoever the
+   effect did not reach. Putting the rules inside the feature query means they
+   only exist where the timeline that ends them also exists.
+
+   `prefers-reduced-motion` is handled on top: `tokens/motion.css` clamps every
+   animation to 0.01ms, which lands each element on its resting state at once.
+
+   The panel is deliberately NOT in here. It is the first thing on the page and
+   it is already on screen at load, so a scroll timeline would either fire
+   instantly — a flash for no reason — or never fire at all and leave the
+   opener faded. The opener's own entrance belongs to a document timeline, and
+   this preset does not have one.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes board-rise {
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* A section's head and its body arrive together: the section is one
+       thought, and staggering a heading against its own lead makes a reader
+       wait for a sentence that is already there. */
+    [data-preset='board'] .board-band .board-head,
+    [data-preset='board'] .board-about,
+    [data-preset='board'] .board-id,
+    [data-preset='board'] .board-faq,
+    [data-preset='board'] .board-figures {
+      animation: board-rise 600ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 34%;
+    }
+
+    /* The lists stagger, because their items ARE separate objects. */
+    [data-preset='board'] .board-course,
+    [data-preset='board'] .board-feature,
+    [data-preset='board'] .board-year,
+    [data-preset='board'] .board-book,
+    [data-preset='board'] .board-honor,
+    [data-preset='board'] .board-quote {
+      animation: board-rise 520ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+      animation-timeline: view();
+      animation-range: entry 6% cover 30%;
+    }
+
+    /* The closer asks for the account, so it gets the one larger move. */
+    [data-preset='board'] .board-closer > * {
+      animation: board-rise 720ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+      animation-timeline: view();
+      animation-range: entry 4% cover 42%;
+    }
+  }
+}
 
 /* ═══ NEON ════════════════════════════════════════════════════════════════
    «الترمينال» — `branding.landingPreset === 'neon'`.

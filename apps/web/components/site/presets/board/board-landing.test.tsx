@@ -844,7 +844,20 @@ describe('board preset — the stylesheet cannot reach the classic page', () => 
    * element too many. «منصتي زي ما هي بالظبط».
    */
   it('scopes every rule under [data-preset=\'board\']', () => {
-    const css = stripComments(boardSection());
+    /*
+     * ⚠️ `@keyframes` bodies come out FIRST, and the neon guard has always
+     * done this while this one did not.
+     *
+     * A keyframe's stops are `from`, `to` and percentages. They are not
+     * selectors — nothing on Ayman's page can match `from` — but they sit in
+     * exactly the `something {` shape the scan below looks for, so the first
+     * legitimate animation added to this section failed the guard for a
+     * reason that had nothing to do with scope.
+     */
+    const css = stripComments(boardSection()).replace(
+      /@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g,
+      ' ',
+    );
     const unscoped: string[] = [];
     let buffer = '';
 
