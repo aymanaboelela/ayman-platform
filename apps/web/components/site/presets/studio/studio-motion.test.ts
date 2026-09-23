@@ -56,7 +56,7 @@ describe('the studio opener is readable with no animation at all', () => {
     expect(parked).toEqual(["[data-preset='studio'] .st-code__line:last-child::after"]);
   });
 
-  it('uses backwards fill on every entrance, so the delay never hides content', () => {
+  it('fills backwards on every entrance, so the delay never hides content', () => {
     const css = stripComments(studioSection());
 
     const animations = [...css.matchAll(/animation:\s*st-([a-z-]+)[^;]*;/g)].map(
@@ -65,12 +65,20 @@ describe('the studio opener is readable with no animation at all', () => {
 
     expect(animations.length).toBeGreaterThan(0);
 
-    // `backwards` is what applies the keyframe's from-state DURING the delay.
-    // Without it a delayed entrance shows the element at rest, then snaps it
-    // back to the start when the animation begins — a visible flicker on
-    // every load.
+    // What matters is that the from-state applies DURING the delay: without
+    // it a delayed entrance shows the element at rest, then snaps back to the
+    // start when the animation begins — a visible flicker on every load.
+    //
+    // `backwards` and `both` both do that. `both` is what the scroll-driven
+    // reveals use and it is the correct one there: they also need `forwards`,
+    // or an element sits at its from-state again once its range is behind the
+    // scrollport. An earlier version of this test named only `backwards` and
+    // failed the correct declaration — it was asserting a SPELLING rather
+    // than the property, which is the mistake it exists to catch elsewhere.
     for (const declaration of animations) {
-      expect(declaration, `${declaration} is missing \`backwards\``).toContain('backwards');
+      expect(declaration, `${declaration} fills neither backwards nor both`).toMatch(
+        /\b(backwards|both)\b/,
+      );
     }
   });
 
