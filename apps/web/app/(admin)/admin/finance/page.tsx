@@ -190,12 +190,15 @@ export default async function FinanceOverviewPage() {
         </p>
       ) : null}
 
-      {overview.expensesByCategory.length > 0 ? (
+      {/* القسم بيبان لو فيه مصروفات **أو** استردادات: شهر مفيهوش مصروفات
+          وفيه فلوس رجعت لسه عنده إجابة على «الفلوس راحت فين»، وإخفاؤها كان
+          هيخلّي المبلغ الوحيد اللي خرج غير مرئي. */}
+      {overview.expensesByCategory.length > 0 || overview.refundsTotalCents > 0 ? (
         <section className="mt-6">
           <h2 className="text-[length:var(--fs-title-3)] font-medium text-fg">
             {c.expensesByCategory}
           </h2>
-          <ul className="mt-3 flex flex-col gap-2">
+          <ul className="mt-3 flex flex-col gap-2 empty:hidden">
             {overview.expensesByCategory.map((entry) => {
               const share =
                 overview.expensesTotalCents > 0
@@ -225,6 +228,27 @@ export default async function FinanceOverviewPage() {
               );
             })}
           </ul>
+
+          {/* الفلوس اللي رجعت، جنب المصروفات ومش واحدة منهم.
+              `صافي الربح = (الإيرادات − الاستردادات) − المصروفات`، فضمّها
+              للمجموع كان هيخصمها مرتين. السطر تحتها بيقول ده، لأن رقم بيبان
+              هنا ومش داخل في المجموع لازم يفسّر نفسه وإلا يقرا كغلط. */}
+          {overview.refundsTotalCents > 0 ? (
+            <div className="mt-3 border-t border-line-subtle pt-3">
+              <div className="flex items-center gap-3">
+                <span className="w-32 shrink-0 text-[length:var(--fs-text-sm)] text-fg">
+                  {c.refundsRow}
+                </span>
+                <span className="flex-1" />
+                <span className="w-28 shrink-0 text-end text-[length:var(--fs-text-sm)] tabular-nums text-fg">
+                  {egp(overview.refundsTotalCents)}
+                </span>
+              </div>
+              <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+                {c.refundsRowNote}
+              </p>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
