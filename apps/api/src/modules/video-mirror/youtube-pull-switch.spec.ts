@@ -35,8 +35,26 @@ const BASE = {
 };
 
 describe('VIDEO_MIRROR_FROM_YOUTUBE', () => {
-  it('defaults to on, so no stack changes behaviour without a decision', () => {
-    expect(loadEnv({ ...BASE, ...STORAGE }).VIDEO_MIRROR_FROM_YOUTUBE).toBe(true);
+  /*
+   * The default used to be ON, «so no stack changes behaviour without a
+   * decision». It is OFF now, and the reasons are two:
+   *
+   * 1. The decision exists — the platform owner asked for direct upload and
+   *    said he does not want the YouTube pull.
+   * 2. ON was not enabling a feature. All five clients answer «Sign in to
+   *    confirm you're not a bot» from this server, so it was enabling a job
+   *    that fails every minute and leaves half-written parts in the bucket.
+   *
+   * Turning it back on is one variable, and `VIDEO_MIRROR_COOKIES` is what
+   * makes it succeed when it is.
+   */
+  it('defaults to OFF, because the pull cannot succeed from a data-centre IP', () => {
+    expect(loadEnv({ ...BASE, ...STORAGE }).VIDEO_MIRROR_FROM_YOUTUBE).toBe(false);
+  });
+
+  it('still turns ON for a stack that asks for it', () => {
+    const env = loadEnv({ ...BASE, ...STORAGE, VIDEO_MIRROR_FROM_YOUTUBE: 'true' });
+    expect(env.VIDEO_MIRROR_FROM_YOUTUBE).toBe(true);
   });
 
   it('turns the pull off while the storage stays configured', () => {
@@ -48,7 +66,7 @@ describe('VIDEO_MIRROR_FROM_YOUTUBE', () => {
     expect(env.VIDEO_MIRROR_ACCESS_KEY_ID).toBe('id');
   });
 
-  it('reads only the exact string, so a typo does not silently disable the pull', () => {
+  it('reads only the exact string, so a typo does not silently flip the pull', () => {
     expect(() => loadEnv({ ...BASE, ...STORAGE, VIDEO_MIRROR_FROM_YOUTUBE: 'no' })).toThrow();
     expect(() => loadEnv({ ...BASE, ...STORAGE, VIDEO_MIRROR_FROM_YOUTUBE: '0' })).toThrow();
   });
