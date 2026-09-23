@@ -82,6 +82,43 @@ describe('the studio opener is readable with no animation at all', () => {
     }
   });
 
+  it('leaves the shell to the theme instead of pinning it', () => {
+    const css = stripComments(studioSection());
+
+    // «الترمينال» pins `.site`'s tokens dark unconditionally, because that
+    // preset's defining claim is that it never turns light. This one is light
+    // by DEFAULT and honours the toggle, so its shell block must be scoped to
+    // one theme — an unscoped `:root:root .site:has(…)` is (0,4,0) and beats
+    // `theme.css`'s dark block at (0,3,0), which would leave a reader who
+    // chose dark with a dark page inside a white header.
+    const shell = css.match(/:root:root[^{]*\.site:has\(main\[data-preset='studio'\]\)[^{]*\{/);
+
+    expect(shell, 'the studio shell block is missing').not.toBeNull();
+    expect(shell![0], 'the studio shell block is not scoped to a theme').toContain(
+      "data-theme='light'",
+    );
+  });
+
+  it('defines a dark value for every fixed studio token', () => {
+    const css = stripComments(studioSection());
+
+    // A token written as a literal light value and never redefined is the
+    // classic unreadable-in-dark bug: `--st-ink: var(--p-950)` is near-black
+    // text, which on a dark ground is text on its own colour.
+    // Anchored on the SELECTOR, not on a word in the banner: `stripComments`
+    // has already removed the banner by the time this runs, and an index of
+    // -1 silently slices to the last character — which is how an earlier
+    // version of this test passed against an empty string.
+    // The selector is the FIRST arm of a two-arm list, so it is followed by a
+    // comma and a newline rather than by a brace.
+    const at = css.indexOf("[data-theme='dark'] [data-preset='studio'],");
+    expect(at, 'the dark block is missing').toBeGreaterThan(-1);
+    const dark = css.slice(at);
+    for (const token of ['--st-ink', '--st-ink-2', '--st-accent', '--st-wash', '--st-rule', '--st-deep', '--st-on-deep']) {
+      expect(dark, `${token} has no dark value`).toContain(`${token}:`);
+    }
+  });
+
   it('never loops an animation forever', () => {
     const css = stripComments(studioSection());
 
