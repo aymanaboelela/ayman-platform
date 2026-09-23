@@ -3737,11 +3737,24 @@
 /* Bled off the bottom: the photograph runs out of the section rather than
    sitting in a frame inside it, which is what makes it read as the page's
    subject instead of as an illustration on it. */
+/* ⚠️ `max-block-size` is what stops the crop, and it was missing.
+   
+   `block-size: auto` on a portrait inside a stage shorter than the picture
+   makes the picture win: it overflows upward, `.st-hero`'s `overflow: hidden`
+   takes the difference off the TOP, and the result is a framed box with the
+   top of his head cut off — which is what shipped and what the screenshot
+   caught.
+   
+   Bounding the height to the stage and letting `contain` letterbox inside it
+   keeps the whole subject on screen at every viewport, and `object-position:
+   bottom` spends the slack at the top, where the background is, rather than
+   on his chin. */
 [data-preset='studio'] .st-hero__portrait {
   display: block;
   inline-size: 100%;
   max-inline-size: 34rem;
   block-size: auto;
+  max-block-size: min(34rem, 62svh);
   margin-inline: auto;
   margin-block-end: -1px;
   object-fit: contain;
@@ -4323,4 +4336,145 @@
 
 [data-preset='studio'] .st-code__out {
   animation: st-rise 420ms cubic-bezier(0.22, 0.61, 0.36, 1) 2.6s backwards;
+}
+
+/* ── the shell around a LIGHT page ────────────────────────────────────────
+
+   The same problem `neon` solves at the other end of the scale, and it has to
+   be solved the same way.
+
+   `<SiteNav>` and `<SiteFooter>` are SIBLINGS of `<main>`, not descendants, so
+   no selector rooted at `[data-preset='studio']` can reach them. They read
+   `--site-bg` / `--site-card` / `--site-fg`, which follow `data-theme` — so a
+   reader on the dark theme gets a dark header, then an unbroken light page,
+   then a dark footer, on the one preset whose defining claim is that it is
+   light. Measured on the live stack: a dark brown band across the top of the
+   first screen with «تسجيل الدخول» set in near-black on it.
+
+   This re-points the `.site` surface's own semantic tokens at the light
+   values, exactly as the NEON block re-points them at the dark ones. No
+   selector here names a nav or a footer class, so nothing is restyled: the
+   same components render, reading the same token names, which now resolve to
+   light values. A future change to the header cannot break this, because this
+   does not know the header exists.
+
+   `:root:root` for specificity: `theme.css` declares the dark surface at
+   (0,3,0), and a plain `.site:has(…)` is (0,2,0) and loses. `main[…]` and not
+   a bare `[…]`, because `<StudioFooter>` carries the attribute too on every
+   route in the group and `:has()` is a descendant match — the bare form would
+   turn `/courses` and the 404 light as a side effect of giving the footer a
+   scope hook. */
+
+:root:root .site:has(main[data-preset='studio']) {
+  --site-bg: var(--n-1);
+  --site-bg-tint: var(--p-50);
+  --site-card: var(--n-1);
+  --site-card-2: var(--p-50);
+  --site-nav-card: var(--n-1);
+  --site-line: var(--p-100);
+  --site-line-strong: var(--p-200);
+  --site-fg: var(--p-950);
+  --site-fg-2: color-mix(in oklch, var(--p-950), transparent 32%);
+}
+
+/* ⚠️ `.site-nav--over` is set from `[data-site-hero]`'s scroll position alone
+   (`site-nav.tsx`), and `.st-hero` carries that attribute — so the nav
+   believes it is floating over a DARK stage and paints the wordmark and the
+   outline button white. On this preset it is floating over paper, and white
+   on paper is nothing at all.
+
+   The same fix `editorial` already carries for the same reason, reached the
+   same way: through the page, because the nav is not a descendant. */
+body:has(main[data-preset='studio']) .site-nav--over .wordmark__name,
+body:has(main[data-preset='studio']) .site-nav--over .wordmark__tag {
+  color: var(--site-fg);
+}
+
+body:has(main[data-preset='studio']) .site-nav--over .site-btn--outline {
+  border-color: var(--p-200);
+  color: var(--site-fg);
+}
+
+/* ── the page reveals as you read it ──────────────────────────────────────
+
+   Sections arrive as they enter the viewport, and the whole thing is CSS:
+   `animation-timeline: view()` drives each animation from the element's own
+   position in the scrollport, so there is no observer, no scroll listener and
+   no JavaScript on a page whose LCP is a photograph.
+
+   ## ⚠️ IT IS ALL INSIDE `@supports`, AND THAT IS THE SAFETY
+
+   A browser without scroll-driven animations skips this block entirely and
+   gets the page it had before: everything present, nothing moving. That
+   matters more here than usual, because the failure mode of a scroll reveal
+   is a page that is permanently BLANK for whoever the effect did not reach —
+   and the from-state of every keyframe below is `opacity: 0`.
+
+   Putting the reveals behind the feature query rather than behind
+   `prefers-reduced-motion` alone is what makes that impossible: the rules only
+   exist where the timeline that ends them also exists.
+
+   Reduced motion is handled on top of it: `tokens/motion.css` clamps every
+   animation to 0.01ms, which lands each element on its resting state
+   immediately — visible, un-animated, in place.
+
+   ## The range is short on purpose
+
+   `entry 10% cover 34%` finishes the reveal while the section is still
+   arriving, so nothing is still fading in once it is where the eye is. A
+   longer range reads as lag rather than as motion — the section you are
+   reading is still becoming opaque.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* Headings, prose and the section footer rise together as a block — the
+       section is one thought, and staggering its own paragraphs against each
+       other makes a reader wait for a sentence that is already there. */
+    [data-preset='studio'] .st-section .st-head,
+    [data-preset='studio'] .st-section .st-prose,
+    [data-preset='studio'] .st-section .st-pills,
+    [data-preset='studio'] .st-section__foot,
+    [data-preset='studio'] .st-about__figure,
+    [data-preset='studio'] .st-faq,
+    [data-preset='studio'] .st-figures {
+      animation: st-rise 600ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 34%;
+    }
+
+    /* The lists stagger, because their items ARE separate objects and the
+       eye reads them one after another. `--i` is set per item below rather
+       than with `nth-child` ramps for every list length: one custom property
+       and one rule covers a course grid of three and a reason list of eight.
+
+       The delay is expressed as a slice of the SAME range, not as
+       `animation-delay` — a delay on a view timeline is measured in range
+       units, and mixing the two produces items that never finish. */
+    [data-preset='studio'] .st-course,
+    [data-preset='studio'] .st-reason,
+    [data-preset='studio'] .st-year,
+    [data-preset='studio'] .st-quote,
+    [data-preset='studio'] .st-honor {
+      animation: st-rise 520ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+      animation-timeline: view();
+      animation-range: entry 6% cover 30%;
+    }
+
+    /* The closing band is the page's one dark field and the one thing it
+       asks for, so it gets a slower, larger move than anything above it —
+       the only place on the page where the motion is meant to be noticed. */
+    [data-preset='studio'] .st-close__inner > * {
+      animation: st-rise-far 760ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+      animation-timeline: view();
+      animation-range: entry 4% cover 42%;
+    }
+  }
+}
+
+@keyframes st-rise-far {
+  from {
+    opacity: 0;
+    transform: translateY(1.75rem);
+  }
 }
