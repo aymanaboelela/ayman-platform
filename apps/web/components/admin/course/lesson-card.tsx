@@ -92,8 +92,18 @@ export function LessonCard({
    */
   const months = useCourseMonths();
   const sellsByMonth = months.length > 0;
-  const untagged =
-    sellsByMonth && lesson.isPublished && lesson.kind !== 'quiz' && lesson.months.length === 0;
+  /*
+   * ⚠️ من غير `kind !== 'quiz'` — الشريحة لازم تمشي مع السيرفر.
+   *
+   * `countUntagged` بيعدّ كل درس منشور (`PUBLISHED_ANY`، وكومنته بيقول
+   * «QUIZZES INCLUDED»). استثناء الكويز هنا كان بيدّي الحالة اللي مالهاش
+   * مخرج: السيرفر يرفض يفتح الشهر ويقول «فيه ١ من غير شهر»، وولا سطر على
+   * الشاشة عليه علامة.
+   *
+   * والكويز من غير شهر بيتقفل على مشترك الشهر زي المحاضرة بالظبط — يتفرّج
+   * على المحاضرة وبعدين مايعرفش يمتحن عليها.
+   */
+  const untagged = sellsByMonth && lesson.isPublished && lesson.months.length === 0;
 
   /*
    * «مفتوحة في شهر ٢» on the row itself.

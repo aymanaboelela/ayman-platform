@@ -86,10 +86,24 @@ function nextFreeIndex(months: AdminCourseMonth[]): number {
  * make the API's own count reach zero, and a list that disagrees with the
  * number above it is a list that can never be finished.
  */
-function untaggedLessons(sections: Section[]): { section: Section; lesson: Lesson }[] {
+/*
+ * ⚠️ الكويزات جوّه، مش برّه — ولازم تفضل كده.
+ *
+ * السيرفر بيعدّ **كل** درس منشور في `countUntagged` (`PUBLISHED_ANY`، وكومنته
+ * بيقول «QUIZZES INCLUDED» بالحرف). القايمة دي كانت بتستثنيهم.
+ *
+ * يعني كويز منشور من غير شهر كان بيدّي الشكل ده: السيرفر يرفض يفتح أي شهر
+ * ويقول «فيه ١ من غير شهر»، والشاشة تفتح القايمة وتوريه **فاضية**. المدرّس
+ * متقاله صلّح حاجة ومش متوريّاله هي فين — وده طريق مقفول مالوش مخرج من
+ * اللوحة خالص.
+ *
+ * والكويز من غير شهر مش حالة نظرية: هو بيتقفل على مشترك الشهر زي المحاضرة
+ * بالظبط، يعني الطالب يتفرّج على المحاضرة وبعدين مايعرفش يمتحن عليها.
+ */
+export function untaggedLessons(sections: Section[]): { section: Section; lesson: Lesson }[] {
   return sections.flatMap((section) =>
     section.lessons
-      .filter((lesson) => lesson.isPublished && lesson.kind !== 'quiz' && lesson.months.length === 0)
+      .filter((lesson) => lesson.isPublished && lesson.months.length === 0)
       .map((lesson) => ({ section, lesson })),
   );
 }
