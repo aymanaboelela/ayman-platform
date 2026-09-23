@@ -4365,7 +4365,23 @@
    turn `/courses` and the 404 light as a side effect of giving the footer a
    scope hook. */
 
-:root:root .site:has(main[data-preset='studio']) {
+/* ⚠️ These are the LIGHT values and they are scoped to the light theme, which
+   is the difference between this block and the NEON one above it.
+   
+   `neon` pins the shell dark unconditionally, because that preset's defining
+   claim is that it never turns light. `studio` makes no such claim: it is
+   light by default and it honours the reader's toggle, so pinning the shell
+   here would leave a reader who chose dark with a dark page inside a white
+   header — the same bug this block exists to fix, pointing the other way.
+   
+   ⚠️ `[data-theme='light']` is the right test HERE, and it is the opposite of
+   the convention most pages use. On this site the SERVER stamps
+   `data-theme="light"` explicitly (`app/layout.tsx`), and `theme.css` reads
+   dark as `:root:not([data-theme='light'])` — so the absence of the attribute
+   means DARK, not "follow the system". Scoping to light is what lets the dark
+   block in `theme.css` stand untouched; without it this selector's (0,4,0)
+   would beat that block's (0,3,0) and pin the shell light in both themes. */
+:root:root[data-theme='light'] .site:has(main[data-preset='studio']) {
   --site-bg: var(--n-1);
   --site-bg-tint: var(--p-50);
   --site-card: var(--n-1);
@@ -4477,4 +4493,66 @@ body:has(main[data-preset='studio']) .site-nav--over .site-btn--outline {
     opacity: 0;
     transform: translateY(1.75rem);
   }
+}
+
+/* ── «الاستوديو» after dark ───────────────────────────────────────────────
+
+   The preset is light by DEFAULT, not light by definition — that is the whole
+   difference between it and «الترمينال», which pins the shell dark and has no
+   light variant to design because it refuses to have one.
+
+   This redefines only the `--st-*` tokens that were written as fixed values.
+   `--st-paper` and the `--n-*` behind it already flip with the theme, so the
+   ground needs nothing; what needed saying is everything that was pinned to
+   the ramp's DARK end and now has to sit at its light end instead.
+
+   ⚠️ Read as «dark unless explicitly light», matching `theme.css`. The server
+   stamps `data-theme="light"` when that is the choice, so the absence of the
+   attribute means dark here — the inverse of the usual convention, and the
+   thing to check first if a rule in this file applies in the wrong theme.
+
+   ## The one dark band becomes the one LIT band
+
+   `.st-close` is the page's single contrast move: on paper it is a deep field
+   of the brand colour, and the argument for spending it once still holds when
+   the ground is already dark — it just has to invert. It becomes the lightest
+   surface on the page rather than the darkest, so it is still the one place
+   the eye is pulled to, still on the section that asks for the account. A
+   deep band on a dark page would be the one section that disappears.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root[data-theme='dark'] [data-preset='studio'],
+:root:not([data-theme='light']) [data-preset='studio'] {
+  --st-ink: var(--n-12);
+  --st-ink-2: var(--n-11);
+  /* Step 400, not 700: the dark end of the ramp is unreadable on a dark
+     ground. This is the same inversion `theme.css` makes for
+     `--site-accent-text`, for the same reason. */
+  --st-accent: var(--p-400);
+  --st-accent-lift: var(--p-300);
+  --st-wash: var(--n-2);
+  --st-rule: var(--border);
+  --st-deep: var(--p-100);
+  --st-on-deep: var(--p-950);
+}
+
+/* The opener's wash runs the other way too: on paper it is a tint fading OUT
+   to the ground, and on a dark ground a tint that light would be a stripe. */
+:root[data-theme='dark'] [data-preset='studio'] .st-hero,
+:root:not([data-theme='light']) [data-preset='studio'] .st-hero {
+  background: linear-gradient(180deg, var(--n-2), var(--st-paper) 72%);
+}
+
+/* The code panel sits ON the ground in light mode and needs lifting off it in
+   dark, or a bordered box of exactly the page colour reads as nothing. */
+:root[data-theme='dark'] [data-preset='studio'] .st-code,
+:root:not([data-theme='light']) [data-preset='studio'] .st-code {
+  background: var(--n-2);
+}
+
+/* The footer is a wash of the accent on paper; on a dark ground that same
+   role is the step above the page, which is what `--n-2` already is. */
+:root[data-theme='dark'] [data-preset='studio'].st-foot,
+:root:not([data-theme='light']) [data-preset='studio'].st-foot {
+  background: var(--n-2);
 }
