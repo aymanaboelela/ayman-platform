@@ -4,6 +4,7 @@ import type { Entitlements } from '@ayman/contracts/admin/entitlements';
 import type { PublicSettingsRead } from '@ayman/contracts/admin/settings';
 import type { SocialKey } from '@/components/site/social-icons';
 import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
+import { IS_AYMAN } from '@/lib/tenant';
 import { tenantName } from '@/lib/tenant';
 
 const c = copy.landing;
@@ -155,12 +156,36 @@ export const ACCOUNT_LINKS = [
 ] as const;
 
 /**
- * صف «الكتب» بيختفي مع الفيتشر. الفوتر ده على كل صفحة تسويق، وهو الحتة اللي
- * بتخلّي `/books` مش يتيمة — فلو الصفحة بقت ٤٠٤ وفضل اللينك، ده مش لينك ميت
- * واحد، ده لينك ميت في فوتر كل صفحة.
+ * تلات صفوف بيتشالوا على ستاك مش بتاع أيمن، وسطر رابع بيتشال مع الفيتشر.
+ *
+ * ## ليه دول بالذات
+ *
+ * التلاتة دول أقسام **بتاعة أيمن**، مش فيتشرز بتاعة المنصة:
+ *
+ * · `/essentials` — «التأسيس»، مسار بنى عليه هو بمحتواه هو. على ستاك تاني
+ *   الصفحة موجودة وفاضية.
+ * · `/links` — صفحة اللينكات، والرابط اللي في **باياته هو** على أربع منصات.
+ *   الكومنت فوق بيقول إنها «بتتوصل من بره تقريبًا بالكامل» — وde صح عنده،
+ *   ومعناه على ستاك تاني إنها صفحة محدش بيدخلها من أي مكان.
+ * · `/books` — كان متفلتر بالفيتشر أصلًا، وده الصح ومكمّل: الفيتشر بيقول
+ *   «المتجر شغّال»، والبوابة دي بتقول «الكتب دي بتاعة مين».
+ *
+ * ⚠️ **وشيل اللينك من الفوتر لوحده مش كفاية.** `app/sitemap.ts` عنده ليستة
+ * **خاصة** مكتوبة بإيد — مش بيقرا `PAGE_LINKS` — فصف بيتشال من هنا وبيفضل
+ * هناك بيدي محرّك البحث صفحة فاضية على دومين مدرّس تاني ويسيبه يشيلها بنفسه،
+ * وده أسوأ من لينك ميت. الصفوف اللي هناك متبوّبة بنفس البوابة.
+ *
+ * وسبب وجود الفلتر أصلًا لسه قايم: الفوتر ده على كل صفحة تسويق، فلينك ميت
+ * فيه مش لينك ميت واحد — ده لينك ميت في فوتر كل صفحة.
  */
+const AYMAN_ONLY_PAGES: readonly string[] = ['/essentials', '/links'];
+
 export function footerPageLinks(features: Entitlements): readonly FooterLink[] {
-  return PAGE_LINKS.filter((link) => link.href !== '/books' || features.books);
+  return PAGE_LINKS.filter((link) => {
+    if (link.href === '/books') return features.books && IS_AYMAN;
+    if (AYMAN_ONLY_PAGES.includes(link.href)) return IS_AYMAN;
+    return true;
+  });
 }
 
 /**

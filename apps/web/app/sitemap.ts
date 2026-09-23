@@ -4,6 +4,7 @@ import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getEntitlements } from '@/lib/entitlements';
 import { getNewsListOrEmpty } from '@/lib/news';
 import { SITE_URL } from '@/lib/seo/jsonld';
+import { IS_AYMAN } from '@/lib/tenant';
 import { sitemapLoc } from '@/lib/seo/sitemap-url';
 import { isYearIndexable } from '@/lib/seo/year-visibility';
 
@@ -107,7 +108,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/about`, lastModified: EDITORIAL_LAST_MODIFIED, changeFrequency: 'monthly', priority: 0.9 },
     // Static, entirely self-contained, and the natural landing page for
     // "تعلم البرمجة" style queries that are not brand searches.
-    { url: `${SITE_URL}/essentials`, lastModified: EDITORIAL_LAST_MODIFIED, changeFrequency: 'monthly', priority: 0.6 },
+    // ⚠️ أيمن بس. «التأسيس» مسار بمحتواه هو؛ على ستاك تاني الصفحة موجودة
+    // وفاضية، وإعلانها في الخريطة بيطلب من جوجل يزحف على فراغ ويسيبه يشيله
+    // بنفسه. نفس البوابة في `footerPageLinks`.
+    ...(IS_AYMAN
+      ? [
+          {
+            url: `${SITE_URL}/essentials`,
+            lastModified: EDITORIAL_LAST_MODIFIED,
+            changeFrequency: 'monthly' as const,
+            priority: 0.6,
+          },
+        ]
+      : []),
     // «إزاي أشترك؟» — the answer to a high-intent question that had no public
     // page at all. `monthly`: the steps change when the checkout does, which is
     // rarely, and the rails it names are read live rather than written here.
@@ -116,7 +129,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // العلا», so it sits with the catalogue rather than with the hub pages
     // below. `weekly`, not `monthly`: prices and stock move, and a crawler that
     // has cached a withdrawn title is showing a price nobody can pay.
-    ...(features.books
+    // ⚠️ `IS_AYMAN` جنب الفيتشر: الفيتشر بيقول «المتجر شغّال»، والبوابة
+    // بتقول «الكتب دي بتاعة مين».
+    ...(features.books && IS_AYMAN
       ? [
           {
             url: `${SITE_URL}/books`,
@@ -133,7 +148,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // like «قناة أيمن أبو العلا على واتساب», and a URL printed in four public
     // bios is one a crawler will find regardless. Better to declare it than to
     // have it discovered.
-    { url: `${SITE_URL}/links`, lastModified: EDITORIAL_LAST_MODIFIED, changeFrequency: 'monthly', priority: 0.5 },
+    // ⚠️ أيمن بس، والحجة اللي فوق هي نفسها السبب: الصفحة دي بتتبرر بإنها
+    // اللينك اللي في **باياته هو** على أربع منصات. على ستاك تاني مفيش بايو
+    // بيشاور عليها، فهي هب لينكات محدش بيدخله من أي مكان.
+    ...(IS_AYMAN
+      ? [
+          {
+            url: `${SITE_URL}/links`,
+            lastModified: EDITORIAL_LAST_MODIFIED,
+            changeFrequency: 'monthly' as const,
+            priority: 0.5,
+          },
+        ]
+      : []),
     // Low priority — nobody searches for these — but present, and that is the
     // point. Google flagged this site under «الصفحات المضلّلة» on 2026-08-06
     // with no sample URLs, and the platform's onboarding asks a minor for

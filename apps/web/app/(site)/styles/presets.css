@@ -550,9 +550,12 @@
    Feature cards — `whyRail`
    --------------------------------------------------------------------------- */
 
+/* Same correction as the year tiles below. At a 19rem floor these six ran as
+   a single 996px column on a 1267px screen — most of the section was scroll.
+   12rem gives two columns from about 400px up. */
 [data-preset='board'] .board-features {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
   gap: var(--board-gap);
   margin: 0;
   padding: 0;
@@ -614,9 +617,19 @@
    Year tiles — the loudest object on the page
    --------------------------------------------------------------------------- */
 
+/* ⚠️ The floor is what decides the column count, and 16rem was too high.
+   
+   `minmax(min(100%, 16rem), 1fr)` asks for columns of at least 256px. Measured
+   on the live page: the list is 445px wide, two of those need 512px plus the
+   gap, so the grid quietly dropped to ONE column and the two year tiles
+   stacked — on a section whose whole content is «pick your year», where
+   seeing both at once is the point.
+   
+   9rem fits two from about 304px upward and still collapses to one on a
+   genuinely narrow phone, which is the behaviour `auto-fit` exists for. */
 [data-preset='board'] .board-years {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
   gap: var(--board-gap);
   margin: 0;
   padding: 0;
