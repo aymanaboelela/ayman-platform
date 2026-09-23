@@ -10,10 +10,29 @@ import { CourseProgressService } from './course-progress.service';
  * assert the SHAPE of the two counts rather than a percentage, because the
  * shape is the thing that was wrong.
  */
-function makeTx(enrollment: { userId?: string; completedAt?: Date | null } = {}) {
+/**
+ * `monthCount` — كام شهر على الكورس. الافتراضي صفر، يعني كورس مش بيتباع
+ * بالشهور: `monthDenominator` بيخرج من أول استعلام والمقام هو الكورس كله،
+ * وهو السلوك اللي كل التستات اللي تحت اتكتبت عليه.
+ *
+ * `grants` بتتقرا بس لما `monthCount > 0`.
+ */
+function makeTx(
+  enrollment: { userId?: string; completedAt?: Date | null } = {},
+  options: { monthCount?: number; grants?: unknown[] } = {},
+) {
   const tx = {
     lesson: { count: jest.fn(async () => 0) },
     lessonProgress: { count: jest.fn(async () => 0) },
+    course: {
+      findUnique: jest.fn(async () => ({
+        id: 'c1',
+        subjectId: 's1',
+        requiresGrant: true,
+        _count: { months: options.monthCount ?? 0 },
+      })),
+    },
+    accessGrant: { findMany: jest.fn(async () => options.grants ?? []) },
     enrollment: {
       // Read BEFORE the update, for `completedAt` (have we already said it?)
       // and `userId` (who is the student?) — see the service's own note.
@@ -21,6 +40,7 @@ function makeTx(enrollment: { userId?: string; completedAt?: Date | null } = {})
         userId: enrollment.userId ?? 'u1',
         completedAt: enrollment.completedAt ?? null,
       })),
+      findUnique: jest.fn(async () => ({ userId: enrollment.userId ?? 'u1' })),
       update: jest.fn(async () => ({})),
     },
     notification: { create: jest.fn(async () => ({})) },
@@ -226,5 +246,86 @@ describe('CourseProgressService.recalculate — the course_completed edge', () =
     );
     expect(notifications.emit).not.toHaveBeenCalled();
     expect(result.completedNow).toBeNull();
+  });
+
+  /*
+   * «خلصت ١٠٠٪» بتنزل لـ«٥٥٪» لوحدها، والطالب ماعملش حاجة.
+   *
+   * على كورس بيتباع بالشهور، اللي دافع «شهر ١» مايقدرش يفتح محاضرات شهر ٢ —
+   * ومع ذلك كانت في مقامه. يعني اللي خلّص شهره كان شايف ١٠٠٪، وأول ما المدرّس
+   * ينزّل محاضرة في شهر ٢ النسبة بتقع، **ومايقدرش يوصل ١٠٠ تاني أبدًا**.
+   *
+   * ونفس الشكل بيمنع `completedAt` إنه يتختم، فالكورس مايخرجش من «اللي لسه
+   * شغال عليه» ولا يوصله «مبروك» — والباج ده كان نايم طول ما المحتوى كله في
+   * شهر واحد.
+   */
+  describe('the denominator on a course that sells by month', () => {
+    const live = { validFrom: new Date('2026-01-01'), validUntil: null, revokedAt: null };
+
+    it('counts only the months the student holds', async () => {
+      const tx = makeTx(
+        {},
+        {
+          monthCount: 3,
+          grants: [{ id: 'g1', scope: 'course_month', monthId: 'm1', ...live }],
+        },
+      );
+      tx.lesson.count.mockResolvedValueOnce(4);
+      tx.lessonProgress.count.mockResolvedValueOnce(4);
+
+      const result = await makeService().recalculate(tx as never, 'e1', 'c1');
+
+      // ١٠٠٪ وهو ماسك شهر واحد من تلاتة — وده الصح، شهره خلص.
+      expect(result.percent).toBe(100);
+      const where = tx.lesson.count.mock.calls[0]?.[0]?.where as Record<string, unknown>;
+      expect(where.months).toEqual({ some: { monthId: { in: ['m1'] } } });
+    });
+
+    /*
+     * والبسط لازم ياخد نفس القطعة. مقام متقفّل على شهر وبسط بيعدّ الكورس كله
+     * بيدّي نسبة فوق الـ١٠٠ — وهي أوضح من الباج الأصلي بس من نفس السبب.
+     */
+    it('applies the same month filter to the numerator', async () => {
+      const tx = makeTx(
+        {},
+        {
+          monthCount: 3,
+          grants: [{ id: 'g1', scope: 'course_month', monthId: 'm2', ...live }],
+        },
+      );
+      await makeService().recalculate(tx as never, 'e1', 'c1');
+
+      const denominator = tx.lesson.count.mock.calls[0]?.[0]?.where as Record<string, unknown>;
+      const numerator = tx.lessonProgress.count.mock.calls[0]?.[0]?.where as {
+        lesson: Record<string, unknown>;
+      };
+      expect(numerator.lesson).toEqual(denominator);
+    });
+
+    /*
+     * الترم والسنة بيفتحوا كل حاجة — **والمحاضرة من غير شهر كمان**. قصر
+     * مقامهم على الشهور كان هيخفي المحاضرات اللي المدرّس ماعلّمهاش من نسبة
+     * ناس دافعة فيها.
+     */
+    it('leaves a term or yearly subscriber counting the whole course', async () => {
+      const tx = makeTx(
+        {},
+        { monthCount: 3, grants: [{ id: 'g1', scope: 'term', monthId: null, ...live }] },
+      );
+      await makeService().recalculate(tx as never, 'e1', 'c1');
+
+      const where = tx.lesson.count.mock.calls[0]?.[0]?.where as Record<string, unknown>;
+      expect(where.months).toBeUndefined();
+    });
+
+    /* الكورس اللي المدرّس ماعملّهوش شهور مابيتغيّرش عنه ولا بايت. */
+    it('does not even ask about grants when the course has no months', async () => {
+      const tx = makeTx({}, { monthCount: 0 });
+      await makeService().recalculate(tx as never, 'e1', 'c1');
+
+      expect(tx.accessGrant.findMany).not.toHaveBeenCalled();
+      const where = tx.lesson.count.mock.calls[0]?.[0]?.where as Record<string, unknown>;
+      expect(where.months).toBeUndefined();
+    });
   });
 });
