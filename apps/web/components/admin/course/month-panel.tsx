@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { AdminCourseMonth } from '@ayman/contracts/months';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
+import { cn } from '@ayman/ui/lib/cn';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
@@ -280,8 +281,39 @@ function MonthRow({ courseId, month }: { courseId: string; month: AdminCourseMon
   }
 
   return (
-    <li className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-line-subtle bg-surface-2 p-3">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+    /*
+     * كارت بيتفتح، مش صف كامل العرض.
+     *
+     * الشهر الواحد فيه سبع عناصر تحكّم — رقم، اسم، تاريخ، عدّادين، مفتاح،
+     * ومسح. ده كان مقبول وإنت عندك شهر أو اتنين؛ بعشرة بقى **حيطة** بتدفع
+     * محتوى الكورس تحت الشاشة، وهي أكتر حاجة المدرّس بيفتح الصفحة عشانها.
+     *
+     * `<details>` مش لوح جانبي: الطيّ عنصر HTML أصلي، شغّال من غير جافاسكريبت
+     * ولا حالة، والكيبورد والقارئ الصوتي عارفينه خلاص. و`InlineTitle`
+     * و`ConfirmButton` الاتنين مكتوب في كومنتاتهم إنهم بيشتغلوا جوّه
+     * `<summary>` — يعني النمط ده متوقّع في الملف ده أصلًا.
+     *
+     * و`name` واحد للكل: المتصفح بيقفل اللي مفتوح لما تفتح غيره، فمهما بقى
+     * عندك شهور يفضل فيه واحد مفتوح بس.
+     */
+    <li>
+      <details name={`month-${courseId}`} className="month-card">
+        <summary className="month-card__head">
+          {/* الملخّص: الاسم والحالة، من غير أي عنصر تحكّم — دي بتتفتح. */}
+          <span className="month-card__title">{month.title}</span>
+          <span className="month-card__meta">
+            {month.lessonCount === 0
+              ? c.lessonsNone
+              : formatCopy(c.lessons, { n: month.lessonCount })}
+          </span>
+          <span
+            className={cn('month-card__state', month.isOpen && 'month-card__state--on')}
+          >
+            {month.isOpen ? c.open : c.closed}
+          </span>
+        </summary>
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-line-subtle p-3">
         <MonthIndexField courseId={courseId} month={month} />
         <InlineTitle
           value={month.title}
@@ -295,7 +327,7 @@ function MonthRow({ courseId, month }: { courseId: string; month: AdminCourseMon
         <MonthStartsOnField courseId={courseId} month={month} />
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 px-3 pb-3">
         {/* The two numbers he asked to see. «لسه من غير محاضرات» and «لسه محدش
             مشترك» are their own sentences rather than a «٠»: a zero reads as a
             measurement that failed, and both of these are ordinary states a
@@ -339,6 +371,7 @@ function MonthRow({ courseId, month }: { courseId: string; month: AdminCourseMon
           }}
         />
       </div>
+      </details>
     </li>
   );
 }
@@ -473,7 +506,17 @@ export function MonthPanel({
           <StartByMonth courseId={courseId} />
         </>
       ) : (
-        <ul className="flex flex-col gap-2">
+        /*
+         * صندوق واحد فيه شبكة، مش قايمة طولها الشاشة.
+         *
+         * بعشرة شهور القايمة الطولية كانت بتدفع محتوى الكورس تحت الشاشة.
+         * الشبكة بتاخد العرض اللي موجود أصلًا — تلات أعمدة على شاشة عريضة
+         * يعني عشرة شهور في أربع صفوف بدل عشرة.
+         *
+         * والإطار حواليهم عشان يقروا كـ**حاجة واحدة** في الصفحة، مش عشر
+         * حاجات ورا بعض: الشهور مجموعة، والمدرّس بيفتح واحد فيهم لما يحتاج.
+         */
+        <ul className="month-grid">
           {months.map((month) => (
             <MonthRow key={month.id} courseId={courseId} month={month} />
           ))}
