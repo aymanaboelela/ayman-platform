@@ -16,6 +16,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { REDIS, RedisModule } from './redis/redis.module';
 import { TaxonomyModule } from './modules/taxonomy/taxonomy.module';
 import { ProfileModule } from './modules/profile/profile.module';
+import { GuardianModule } from './modules/guardian/guardian.module';
 import { SecurityModule } from './modules/security/security.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { EnrollmentModule } from './modules/enrollment/enrollment.module';
@@ -130,6 +131,7 @@ import { TenantEntitlementsModule } from './modules/tenant-entitlements/tenant-e
     AuditModule,
     TaxonomyModule,
     ProfileModule,
+    GuardianModule,
     SessionsModule,
     SecurityModule,
     AuthModule,

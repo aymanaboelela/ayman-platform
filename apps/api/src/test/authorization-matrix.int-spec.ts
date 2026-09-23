@@ -861,6 +861,19 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       body: () => ({ endpoint: 'https://push.example/x' }),
     },
 
+    // ── بوابة ولي الأمر: عامة عن قصد، لأن اللي بيدخل مالوش حساب ─────────
+    //
+    // ولي الأمر مش مستخدم على المنصة — الكود هو اللي بيثبت إنه مصرّح له.
+    // فالصفوف دي بتثبت إن الحارس مش بيطرده، وإن الرفض بيبقى على **الكود**
+    // (401) أو على **الشكل** (400)، مش على الهوية.
+    //
+    // والطالب المسجّل دخوله بيوصل نفس الراوت: الأب بيستعمل تليفون ابنه كتير،
+    // وجلسة موجودة مالهاش تمنع بوابة تانية على نفس المتصفح.
+    { label: 'guardian sign-in: anonymous with a wrong code is 401, not 403', method: 'post', path: () => '/api/guardian/sign-in', actor: 'anonymous', status: 401, body: () => ({ code: 'ABCDEFGHJKMNPQRSTUVWXYZ234' }) },
+    { label: 'guardian sign-in: a malformed code is refused on SHAPE (400)', method: 'post', path: () => '/api/guardian/sign-in', actor: 'anonymous', status: 400, body: () => ({ code: 'short' }) },
+    { label: 'guardian sign-in: a signed-in student is not turned away', method: 'post', path: () => '/api/guardian/sign-in', actor: 'student', status: 401, body: () => ({ code: 'ABCDEFGHJKMNPQRSTUVWXYZ234' }) },
+    { label: 'guardian sign-out: anonymous, always fine', method: 'post', path: () => '/api/guardian/sign-out', actor: 'anonymous', status: 201 },
+
     // ── المساعد: the visitor side is PUBLIC on purpose ──────────────────
     // These are the only public routes in the product that WRITE, which is
     // why they carry `@RequireCsrf()` on top of `@Public()`. CSRF is not what
