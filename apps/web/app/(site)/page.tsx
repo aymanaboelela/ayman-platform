@@ -166,6 +166,14 @@ export default async function HomePage() {
     return <BoardLanding blocks={blocks} honorBoard={honorBoard} />;
   }
 
+  if (branding.landingPreset === 'studio') {
+    // Kept on ONE line: `landing-preset.test.ts` asserts the specifier appears
+    // inside a literal `await import('…')`, so wrapping it hides the import
+    // from the guard that exists to prove `classic` never evaluates it.
+    const { default: StudioLanding } = await import('@/components/site/presets/studio/studio-landing');
+    return <StudioLanding blocks={blocks} honorBoard={honorBoard} />;
+  }
+
   /*
    * The page's SHAPE, chosen per instructor from /admin/settings.
    *

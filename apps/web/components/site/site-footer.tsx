@@ -98,6 +98,11 @@ export async function SiteFooter() {
     return <BoardFooter content={footerContent({ contact, features })} />;
   }
 
+  if (branding.landingPreset === 'studio') {
+    const { default: StudioFooter } = await import('@/components/site/presets/studio/studio-footer');
+    return <StudioFooter content={footerContent({ contact, features })} />;
+  }
+
   return (
     <footer className="site-footer">
       <div className="site-footer__glow" aria-hidden="true" />

@@ -1540,6 +1540,8 @@ const admin = {
     landingPresetNeonHint: 'صفحة غامقة على طول، ما بتفتحش مع الوضع الفاتح، بخط كمبيوتر وسطور مضيّة.',
     landingPresetBoard: 'اللوح',
     landingPresetBoardHint: 'بلوكات لون صريحة ورا بعض، الكلام كله في النص، ألوان فاقعة وخط كبير.',
+    landingPresetStudio: 'الاستوديو',
+    landingPresetStudioHint: 'صفحة فاتحة، صورتك فيها كبيرة من أول الشاشة، وكود حقيقي جنبها.',
     /** The landing page's shape — a different page, not the same page recoloured. */
     landingLayout: 'شكل الصفحة الرئيسية',
     landingLayoutHint:
