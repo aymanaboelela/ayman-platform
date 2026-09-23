@@ -19,6 +19,7 @@
     "./auth": "./src/auth.ts",
     "./profile": "./src/profile.ts",
     "./sessions": "./src/sessions.ts",
+    "./guardian": "./src/guardian.ts",
     "./video": "./src/video.ts",
     "./admin/video-upload": "./src/admin/video-upload.ts",
     "./content": "./src/content.ts",

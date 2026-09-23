@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { copy } from '@ayman/contracts';
 import { waMeHref } from '@ayman/contracts/whatsapp';
-import { LoginForm } from '@/components/auth/login-form';
+import { LoginTabs } from '@/components/auth/login-tabs';
 import { safeNext, withNext } from '@/lib/safe-next';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
@@ -118,7 +118,7 @@ export default async function LoginPage({
         </p>
       ) : null}
 
-      <LoginForm next={next} supportHref={supportHref} />
+      <LoginTabs next={next} supportHref={supportHref} />
 
       <p className="auth-switch">
         {copy.auth.switch.noAccount}{' '}

@@ -16,6 +16,7 @@ import {
   isProtectedRoute,
   resolveMarkdownRewrite,
   type AuthState,
+  isGuardianRoute,
 } from './proxy';
 
 const directive = (policy: string, name: string): string =>
@@ -72,8 +73,20 @@ function authedAppRoutes(): string[] {
 }
 
 describe('every authed (app) page is behind the redirect', () => {
+  /*
+   * ⚠️ `/guardian` بوابته تانية، مش استثناء.
+   *
+   * `PROTECTED_PREFIXES` بتفحص جلسة **الطالب**، وولي الأمر مالوش واحدة —
+   * فحطّه في القايمة كان هيرميه على صفحة الدخول للأبد وهو داخل صح.
+   *
+   * وهو **مش** مكشوف: `isGuardianRoute` بيتفحص في `proxy()` قبل منطق
+   * الطالب كله، والزيارة من غير كوكي البوابة بتتحوّل على `/login` — نفس
+   * النتيجة اللي الحارس ده موجود عشانها بالظبط، من باب تاني.
+   */
   it('has a PROTECTED_PREFIXES entry for each one', () => {
-    const unprotected = authedAppRoutes().filter((route) => !isProtectedRoute(route));
+    const unprotected = authedAppRoutes().filter(
+      (route) => !isProtectedRoute(route) && !isGuardianRoute(route),
+    );
     expect(
       unprotected,
       `these (app) pages call apiGetAuthed but are not protected — an anonymous visitor reaches the page, the fetch 401s, and they get an error screen instead of the sign-in form: ${unprotected.join(', ')}`,

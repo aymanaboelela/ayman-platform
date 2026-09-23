@@ -213,6 +213,18 @@ export function courseSlugFromPath(pathname: string): string | null {
  */
 const SESSION_COOKIE_NAMES = ['__Host-session_token', 'session_token'] as const;
 
+/** كوكي بوابة ولي الأمر. الاسمين لنفس سبب اللي فوق: `__Host-` بيلزم
+ *  `Secure`، و`Secure` مابيشتغلش على `http://localhost`. */
+const GUARDIAN_COOKIE_NAMES = ['__Host-guardian_token', 'guardian_token'] as const;
+
+function hasGuardianCookie(request: NextRequest): boolean {
+  return GUARDIAN_COOKIE_NAMES.some((name) => request.cookies.has(name));
+}
+
+export function isGuardianRoute(pathname: string): boolean {
+  return pathname === '/guardian' || pathname.startsWith('/guardian/');
+}
+
 function hasSessionCookie(request: NextRequest): boolean {
   return SESSION_COOKIE_NAMES.some((name) => request.cookies.has(name));
 }
@@ -470,6 +482,22 @@ async function resolveAuthState(request: NextRequest): Promise<AuthState> {
  */
 async function resolveRedirect(request: NextRequest): Promise<URL | null> {
   const { pathname } = request.nextUrl;
+  /*
+   * بوابة ولي الأمر — بابها لوحده، وقبل منطق الطالب كله.
+   *
+   * ⚠️ `/guardian` **مش** في `PROTECTED_PREFIXES` عن قصد: القايمة دي بتفحص
+   * جلسة **الطالب**، والأب مالوش واحدة — فكان هيترمي على صفحة الدخول
+   * للأبد، وهو داخل صح.
+   *
+   * والفحص هنا وجود الكوكي وبس، مش التوقيع: نفس اللي `hasSessionCookie`
+   * بيعمله للطالب بالحرف، ولنفس السبب — ده بوّاب رخيص بيمنع زيارة مجهولة
+   * من رحلة كاملة للسيرفر، والتحقق الحقيقي بيحصل في الـAPI على كل قراية.
+   * كوكي مزوّرة بتعدّي من هنا وبترجع فاضية من هناك.
+   */
+  if (isGuardianRoute(pathname)) {
+    return hasGuardianCookie(request) ? null : new URL('/login', request.url);
+  }
+
   // Auth routes need the auth state too — for them the redirect fires when the
   // visitor IS authenticated, which is the opposite trigger to every other row
   // of the matrix, so they cannot be short-circuited away here.

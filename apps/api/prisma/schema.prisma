@@ -532,6 +532,20 @@ model StudentProfile {
   /// (defaulting to `general`) would be the profile claiming a fact nobody
   /// ever told it.
   schoolStream          SchoolStream? @map("school_stream")
+  /// «كود ولي الأمر» — الباب اللي بيدخل منه الأب يشوف ابنه.
+  ///
+  /// ⚠️ ده **مفتاح، مش رقم تعريف**. اللي معاه بيشوف سجل الطالب كامل: اتفرّج
+  /// على إيه، سلّم كام واجب، درجاته، وغلط في إيه. فنفس قواعد كلمة السر
+  /// بتنطبق عليه — مستحيل يتخمّن، وينفع يتغيّر لو اتشارك غلط.
+  ///
+  /// ٢٦ حرف من أبجدية ٣٢ = ١٣٠ بت. والأبجدية ناقصة `0/O` و`1/I/L` عن قصد:
+  /// الابن بيقرا الكود من الشاشة والأب بيكتبه في تليفون، والحروف دي بتتلخبط
+  /// في الخطوط. شيلناهم، فالغلط بيبقى غلط حقيقي مش لبس في القراية.
+  ///
+  /// `@default` في الداتابيز (`app.new_guardian_code()`) مش في التطبيق:
+  /// صف بيتعمل من ميجريشن أو من سكريبت لازم ياخد كوده كمان، والتطبيق لوحده
+  /// مش بوابة كل الكتابات.
+  guardianCode          String        @unique @default(dbgenerated("app.new_guardian_code()")) @map("guardian_code")
   fatherPhone           String?       @map("father_phone") @db.Citext
   /// No longer collected — onboarding asks for the father's number only. Kept
   /// so the numbers students already gave are not thrown away.
