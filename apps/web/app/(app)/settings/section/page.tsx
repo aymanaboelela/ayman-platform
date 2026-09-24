@@ -63,6 +63,7 @@ export default async function SectionSettingsPage() {
             gender: me.profile.gender,
             phone: me.profile.phone,
             governorateCode: me.profile.governorateCode,
+            cityId: me.profile.cityId,
             schoolName: me.profile.schoolName,
             schoolStream: me.profile.schoolStream,
             year: me.profile.year,

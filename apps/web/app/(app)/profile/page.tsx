@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Award, Clock, Layers, Target } from 'lucide-react';
 import { ProfileMeSchema, StudentQuizHistorySchema, copy } from '@ayman/contracts';
+import { cityNameAr } from '@ayman/contracts/cities';
 import { Skeleton } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getActivity } from '@/lib/activity';
@@ -170,7 +171,13 @@ async function Identity() {
       <dl className="mt-6 grid gap-4 border-t border-line-subtle pt-5 sm:grid-cols-2 lg:grid-cols-4">
         <Field label={c.fieldPhone} value={profile?.phone ?? null} ltr />
         <Field label={c.fieldSchool} value={profile?.schoolName ?? null} />
-        <Field label={c.fieldGovernorate} value={governorate} />
+        {/* The city rides on the governorate's line — «القاهرة · مدينة نصر» —
+            rather than taking a fifth cell in a four-column row. A profile
+            from before «المدينة» shows the governorate alone. */}
+        <Field
+          label={c.fieldGovernorate}
+          value={[governorate, cityNameAr(profile?.cityId)].filter(Boolean).join(' · ') || null}
+        />
         {/* The taxonomy's own label, through the same helper `/library` and the
             dashboard band read — see below for the local table it replaces. */}
         <Field label={c.fieldYear} value={identityOf(me, taxonomy)?.yearLabelAr ?? null} />

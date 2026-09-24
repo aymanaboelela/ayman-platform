@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { OnboardingSchema, type Onboarding } from '@ayman/contracts/onboarding';
 import type { Taxonomy } from '@ayman/contracts/taxonomy';
@@ -11,6 +11,7 @@ import { Button } from '@ayman/ui/components/button';
 import { apiPatch, ApiRequestError } from '@/lib/api';
 import { fixedSectionFor, offeredYearOptions } from '@/lib/section-defaults';
 import { GENDER_OPTIONS, SCHOOL_STREAM_OPTIONS, governorateOptions } from '@/lib/profile-options';
+import { cityOptions } from '@/lib/city-options';
 import { FixedSectionNote } from '@/components/onboarding/fixed-section-note';
 import { SelectField, type SelectOption } from '@/components/onboarding/select-field';
 import { FormField } from '@/components/auth/form-field';
@@ -24,6 +25,7 @@ export interface ProfileDefaults {
   gender?: 'male' | 'female' | null;
   phone?: string;
   governorateCode?: string;
+  cityId?: number | null;
   schoolName?: string | null;
   schoolStream?: 'general' | 'languages' | null;
   year?: number | null;
@@ -91,6 +93,8 @@ export function ProfileForm({
   const {
     register,
     handleSubmit,
+    control,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<Onboarding>({
     resolver: zodResolver(OnboardingSchema),
@@ -106,6 +110,9 @@ export function ProfileForm({
       gender: defaults.gender ?? undefined,
       phone: defaults.phone,
       governorateCode: defaults.governorateCode,
+      // Null for every profile that predates «المدينة» — the blank option,
+      // and `OnboardingSchema` requires it, so the first save asks for it.
+      cityId: defaults.cityId ?? undefined,
       schoolName: defaults.schoolName ?? undefined,
       schoolStream: defaults.schoolStream ?? undefined,
       year: defaults.year ?? undefined,
@@ -114,6 +121,8 @@ export function ProfileForm({
   });
 
   const yearOptions: SelectOption[] = offeredYearOptions(taxonomy);
+  // `useWatch`, not `watch()` — see the same line in `OnboardingForm`.
+  const cities = cityOptions(useWatch({ control, name: 'governorateCode' }));
 
   async function onSubmit(values: Onboarding) {
     setFormError(null);
@@ -200,7 +209,22 @@ export function ProfileForm({
           placeholder={copy.onboarding.governoratePlaceholder}
           options={governorateOptions(taxonomy)}
           errorMessage={errors.governorateCode?.message}
-          {...register('governorateCode')}
+          {...register('governorateCode', {
+            // The same rule as the wizard: a city belongs to one governorate.
+            onChange: () => setValue('cityId', undefined as unknown as number),
+          })}
+        />
+        <SelectField
+          label={copy.onboarding.city}
+          placeholder={
+            cities.length > 0 ? copy.onboarding.cityPlaceholder : copy.onboarding.cityNeedsGovernorate
+          }
+          options={cities}
+          disabled={cities.length === 0}
+          errorMessage={errors.cityId?.message}
+          {...register('cityId', {
+            setValueAs: (value: string) => (value === '' ? undefined : Number(value)),
+          })}
         />
         <FormField
           label={copy.onboarding.schoolName}

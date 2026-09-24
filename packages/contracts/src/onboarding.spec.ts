@@ -9,6 +9,8 @@ function basePayload(overrides: Record<string, unknown> = {}): Record<string, un
     gender: 'male',
     phone: validEgyptianPhone,
     governorateCode: '01',
+    // «15 مايو» — a Cairo id, so the base payload passes `refineCity`.
+    cityId: 1,
     schoolName: 'مدرسة النصر',
     schoolStream: 'general',
     fatherPhone: '01098765432',
@@ -25,7 +27,30 @@ function withoutKey(key: string): Record<string, unknown> {
 }
 
 describe('OnboardingSchema', () => {
-  it.each(['schoolStream', 'fatherPhone', 'schoolName', 'year'])('requires %s', (key) => {
+  it('accepts the base payload', () => {
+    expect(OnboardingSchema.safeParse(basePayload()).success).toBe(true);
+  });
+
+  it('rejects a blank city with the Arabic message, not zod\'s English default', () => {
+    const result = OnboardingSchema.safeParse(withoutKey('cityId'));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const issue = result.error.issues.find((i) => i.path[0] === 'cityId');
+      expect(issue?.message).toBe('لازم نحدد المدينة');
+    }
+  });
+
+  /** A well-typed payload that is a false record — the server sees this schema too. */
+  it('rejects a city that is not in the chosen governorate', () => {
+    // 1 is «15 مايو», in القاهرة; 02 is الإسكندرية.
+    const result = OnboardingSchema.safeParse(basePayload({ governorateCode: '02' }));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.path[0])).toContain('cityId');
+    }
+  });
+
+  it.each(['schoolStream', 'fatherPhone', 'schoolName', 'year', 'cityId'])('requires %s', (key) => {
     expect(OnboardingSchema.safeParse(withoutKey(key)).success).toBe(false);
   });
 

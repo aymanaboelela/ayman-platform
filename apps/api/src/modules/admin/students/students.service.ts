@@ -22,6 +22,7 @@ import {
   expectedDeleteIdentity,
   deleteIdentityMatches,
 } from '@ayman/contracts/admin/students';
+import { cityBelongsTo, cityNameAr } from '@ayman/contracts/cities';
 import { ARGON2_OPTIONS } from '../../../auth/argon2-options';
 import {
   accountThrottleKey,
@@ -57,6 +58,7 @@ const DETAIL_SELECT = {
   phone: true,
   gender: true,
   governorateCode: true,
+  cityId: true,
   year: true,
   schoolName: true,
   schoolStream: true,
@@ -103,6 +105,10 @@ function toDetail(record: DetailRecord): AdminStudentDetail {
     onboardingCompleted: record.onboardingCompletedAt != null,
     createdAt: record.createdAt.toISOString(),
     role: record.user.role,
+    cityId: record.cityId,
+    // Resolved from the static list, not a join — there is no `cities` table
+    // (see `student_profiles.city_id` in schema.prisma for why).
+    cityNameAr: cityNameAr(record.cityId),
     schoolName: record.schoolName,
     schoolStream: record.schoolStream,
     fatherPhone: record.fatherPhone,
@@ -499,9 +505,20 @@ export class StudentsService {
   async patch(userId: string, input: AdminStudentPatch): Promise<AdminStudentDetail> {
     const existing = await this.prisma.studentProfile.findUnique({
       where: { userId },
-      select: { userId: true, year: true, trackId: true },
+      select: { userId: true, year: true, trackId: true, governorateCode: true },
     });
     if (!existing) throw new NotFoundException();
+
+    // A city belongs to ONE governorate, and this form can send either field
+    // without the other. So the check is against the governorate the row will
+    // END with, and moving the governorate without naming a city clears the
+    // old one rather than leaving «مدينة نصر» filed under الإسكندرية.
+    const nextGovernorate = input.governorateCode ?? existing.governorateCode;
+    if (input.cityId != null && !cityBelongsTo(nextGovernorate, input.cityId)) {
+      throw new BadRequestException('cityId does not belong to the governorate');
+    }
+    const governorateMoved =
+      input.governorateCode !== undefined && input.governorateCode !== existing.governorateCode;
 
     // The DB CHECK (year 1 has no track) would reject this anyway, but a 400
     // with a real message beats a 500 wrapping a raw constraint violation.
@@ -514,6 +531,7 @@ export class StudentsService {
 
     const profileData: Prisma.StudentProfileUpdateInput = {
       ...profileInput,
+      ...(governorateMoved && input.cityId === undefined ? { cityId: null } : {}),
       ...(phone !== undefined ? { phone } : {}),
     };
     const userData: Prisma.UserUpdateInput = {

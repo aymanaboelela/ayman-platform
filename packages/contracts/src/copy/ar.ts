@@ -494,6 +494,13 @@ export const copy = {
     phonePlaceholder: 'مثال: 01012345678',
     governorate: 'المحافظة',
     governoratePlaceholder: 'محافظتك',
+    /** «المدينة», under the governorate — see `cityId` in `onboarding.ts`.
+     *  The placeholder is a prompt, not the label again (see the note on
+     *  `genderPlaceholder` above), and while no governorate is chosen it says
+     *  why the list is empty rather than looking broken. */
+    city: 'المدينة',
+    cityPlaceholder: 'مدينتك أو حيّك',
+    cityNeedsGovernorate: 'بعد المحافظة',
     schoolName: 'اسم المدرسة',
     /*
      * Was the literal word «اختياري», which stopped being true when the field
@@ -570,6 +577,9 @@ export const copy = {
      *  position off `aria-valuenow`/`aria-valuemax`, so no interpolated
      *  "step 2 of 4" string has to exist in two places. */
     progressLabel: 'تقدّمك في تكميل البيانات',
+    /** Under each numbered disc of the stepper. `{n}` is already in
+     *  Arabic-Indic digits by the time it is substituted. */
+    stepLabel: 'الخطوة {n}',
     submit: 'حفظ ونكمّل',
     submitPending: 'جارٍ الحفظ…',
     submitError: 'مقدرناش نحفظ بياناتك. مراجعة سريعة ونحاول تاني.',
@@ -5508,7 +5518,7 @@ export const copy = {
      * requires has to change this line in the same commit.
      */
     collectProfileBody:
-      'الاسم الكامل، النوع، رقم الهاتف، المحافظة، اسم المدرسة، ونوع المدرسة (عام ولا لغات) والصف الدراسي. دي بنستخدمها عشان نعرف نعرضلك الكورسات اللي تخص صفك بالظبط.',
+      'الاسم الكامل، النوع، رقم الهاتف، المحافظة والمدينة، اسم المدرسة، ونوع المدرسة (عام ولا لغات) والصف الدراسي. دي بنستخدمها عشان نعرف نعرضلك الكورسات اللي تخص صفك بالظبط.',
     collectParents: 'رقم تليفون ولي الأمر',
     /**
      * Same correction, and a bigger one: this described TWO optional fields

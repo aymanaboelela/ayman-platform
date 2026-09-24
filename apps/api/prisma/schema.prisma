@@ -525,6 +525,14 @@ model StudentProfile {
   /// the mirror stays shaped like the original.
   phoneVerifiedAt       DateTime?     @map("phone_verified_at")
   governorateCode       String        @map("governorate_code") @db.Char(2)
+  /// «المدينة» — an id from `packages/contracts/src/cities.ts`, the static list
+  /// the onboarding schema validates against (it must belong to
+  /// `governorateCode`; `refineCity` checks that on the form AND in the API,
+  /// which validates with the same schema). No FK and no `cities` table on
+  /// purpose: reference rows arrive through the boot-time seed, which is
+  /// non-fatal, and an empty table on a new tenant's database would have
+  /// rejected every sign-up. Nullable for the rows that predate the question.
+  cityId                Int?          @map("city_id")
   schoolName            String?       @map("school_name")
   /// Nullable for the rows that predate the question, NOT because it is
   /// optional — onboarding requires it from here on. A student onboarded

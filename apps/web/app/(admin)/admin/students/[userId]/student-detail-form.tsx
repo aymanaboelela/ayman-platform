@@ -12,6 +12,7 @@ import { Select } from '@ayman/ui/components/select';
 import { MediaKeyField } from '@/components/admin/media-key-field';
 import { WhatsappButton } from '@/components/admin/whatsapp-button';
 import { patchStudentAction, type ActionResult } from '../actions';
+import { GovernorateCityFields } from './governorate-city-fields';
 import { useFeature } from '@/components/admin/entitlements-context';
 
 const IDLE: ActionResult = { ok: true };
@@ -145,16 +146,11 @@ export function StudentDetailForm({
               <Label htmlFor="schoolName">{copy.admin.students.schoolName}</Label>
               <Input id="schoolName" name="schoolName" defaultValue={student.schoolName ?? ''} />
             </div>
-            <div>
-              <Label htmlFor="governorateCode">{copy.onboarding.governorate}</Label>
-              <Select id="governorateCode" name="governorateCode" defaultValue={student.governorateCode}>
-                {governorateOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            <GovernorateCityFields
+              defaultGovernorateCode={student.governorateCode}
+              defaultCityId={student.cityId}
+              governorateOptions={governorateOptions}
+            />
             <div>
               <Label htmlFor="year">{copy.admin.students.columnYear}</Label>
               <Select id="year" name="year" defaultValue={student.year ?? ''}>

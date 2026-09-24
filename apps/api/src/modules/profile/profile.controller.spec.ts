@@ -7,6 +7,7 @@ import { APP_GUARD, Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import { PrismaPg } from '@prisma/adapter-pg';
 import request from 'supertest';
+import { citiesOf } from '@ayman/contracts/cities';
 import { AuthGuard } from '../../auth/guards/auth.guard';
 import { BETTER_AUTH, type BetterAuthLike, type BetterAuthSessionResult } from '../../auth/better-auth.token';
 import { PrismaClient } from '../../generated/prisma/client';
@@ -106,6 +107,9 @@ describe('ProfileController (e2e)', () => {
       gender: 'male',
       phone: randomEgyptianPhoneLocal(),
       governorateCode,
+      // A city OF that governorate — `refineCity` rejects any other pairing,
+      // and `governorateCode` is whichever row `findFirst` returned.
+      cityId: citiesOf(governorateCode)[0]!.id,
       // Required by `OnboardingSchema`. Left out, every case here 400s at the
       // DTO pipe before the controller is reached — which is the whole reason
       // they live in the shared factory rather than in each case.
