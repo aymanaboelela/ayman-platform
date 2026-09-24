@@ -1,4 +1,14 @@
-import { Body, Controller, Post, Req, Res, UnauthorizedException, UsePipes } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpException,
+  HttpStatus,
+  Post,
+  Req,
+  Res,
+  UnauthorizedException,
+  UsePipes,
+} from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import type { Request, Response } from 'express';
 import { Public } from '../../auth/decorators/public.decorator';
@@ -31,7 +41,8 @@ export class GuardianController {
    * بروكسي في الطريق، وفي تاريخ المتصفح، وفي الـ`Referer` لأي صورة على
    * الصفحة اللي بعدها. والكود ده مفتاح.
    *
-   * و`401` واحدة لكل الأسباب — اقرا `signIn` نفسها.
+   * و`401` واحدة لكل الأسباب — اقرا `signIn` نفسها. الاستثناء `429` لما
+   * العنوان يتقفل، و`details.retryAfterSeconds` (الفلتر بيعدّي السكالرز تحت `details`) عشان الفورم يقول «استنى كام».
    */
   @Public()
   @RequireCsrf()
@@ -46,10 +57,23 @@ export class GuardianController {
      * غيره كل الطلبات كانت هتيجي من عنوان Traefik الواحد، والعدّاد كان
      * هيقفل على كل الآباء مع بعض بدل ما يعدّ كل واحد لوحده.
      */
-    const token = await this.sessions.signIn(body.code, request.ip ?? 'unknown');
-    if (!token) throw new UnauthorizedException('guardian code not accepted');
+    const result = await this.sessions.signIn(body.code, request.ip ?? 'unknown');
+    if (!result.ok) {
+      if (result.retryAfterSeconds) {
+        response.setHeader('Retry-After', String(result.retryAfterSeconds));
+        throw new HttpException(
+          {
+            code: 'guardian_locked',
+            message: 'guardian sign-in locked',
+            retryAfterSeconds: result.retryAfterSeconds,
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+      throw new UnauthorizedException('guardian code not accepted');
+    }
 
-    response.cookie(GUARDIAN_COOKIE, token, guardianCookieOptions());
+    response.cookie(GUARDIAN_COOKIE, result.token, guardianCookieOptions());
     return { ok: true };
   }
 
