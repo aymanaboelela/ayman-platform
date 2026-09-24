@@ -60,6 +60,37 @@ const CourseRowSchema = z.object({
 
 export type ActionResult = { ok: true } | { ok: false; message: string };
 
+/** The HTTP status of a failed write — `ApiRequestError` carries it, and
+ *  `apiSend` folds it into its message as «failed with 409». */
+function failedStatus(error: unknown): number | null {
+  if (error instanceof ApiRequestError) return error.status;
+  if (!(error instanceof Error)) return null;
+  const match = /failed with (\d{3})/.exec(error.message);
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * A sentence the instructor can read, for any failed write on this page.
+ *
+ * These actions used to return `error.message` as it came, which for
+ * `apiSend` is «PATCH /api/admin/sections/<uuid> failed with 400: {"statusCode"…»
+ * — and that string went straight into a toast, an inline error and, for an
+ * autosaved field, the sticky save indicator, which grew a paragraph of JSON
+ * over the fields it was reporting on.
+ *
+ * The API's own message is kept when it is ARABIC: refusals like «القسم ده فيه
+ * محاضرة عليها محاولات امتحان…» are written for him and name the fix. Anything
+ * else — English validation text, a truncated body — becomes the fallback.
+ */
+function arabicError(error: unknown, fallback: string = copy.admin.common.actionFailed): string {
+  if (failedStatus(error) === 429) return copy.admin.common.rateLimited;
+  if (error instanceof Error) {
+    const match = /"message":"([^"]+)"/.exec(error.message);
+    if (match?.[1] && /[\u0600-\u06FF]/.test(match[1])) return match[1];
+  }
+  return fallback;
+}
+
 function readTrackId(formData: FormData): string | null {
   const value = formData.get('trackId');
   return typeof value === 'string' && value.length > 0 ? value : null;
@@ -495,7 +526,7 @@ export async function reorderLessonsAction(
     invalidateCourse(courseId);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -515,25 +546,38 @@ export async function reorderSectionsAction(
     invalidateCourse(courseId);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
 const CreateSectionResultSchema = z.object({ id: z.uuid() });
 
-export async function createSectionAction(courseId: string, title: string): Promise<ActionResult> {
+/**
+ * `termId` rides on the create itself — `SectionCreateSchema` takes it — so a
+ * section made for «الترم التاني» is born there, instead of being made in no
+ * term and moved with the header's dropdown afterwards.
+ *
+ * Returns the new id so the form can open that section and put the cursor in
+ * its «عنوان المحاضرة»: the next thing anyone does with a new section is add a
+ * lecture to it.
+ */
+export async function createSectionAction(
+  courseId: string,
+  title: string,
+  termId: string | null = null,
+): Promise<{ ok: true; sectionId: string } | { ok: false; message: string }> {
   try {
-    await apiSend(
+    const section = await apiSend(
       'POST',
       `/api/admin/courses/${courseId}/sections`,
       CreateSectionResultSchema,
-      { title, summary: null, isPublished: false },
+      { title, summary: null, isPublished: false, termId },
     );
     invalidateCourse(courseId);
     revalidatePath(`/admin/courses/${courseId}`);
-    return { ok: true };
+    return { ok: true, sectionId: section.id };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -553,7 +597,7 @@ export async function setSectionPublishedAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -568,7 +612,7 @@ export async function updateSectionAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -595,10 +639,13 @@ export async function deleteSectionAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    const message =
-      error instanceof Error && error.message.includes('failed with 409')
-        ? copy.admin.section.deleteBlockedAttempts
-        : copy.admin.common.saveFailed;
+    // The shelf refusal is written in Arabic by the API and names its own fix;
+    // the attempts refusal is not, and gets the sentence that points at
+    // unpublishing instead.
+    const message = arabicError(
+      error,
+      failedStatus(error) === 409 ? copy.admin.section.deleteBlockedAttempts : copy.admin.common.actionFailed,
+    );
     return { ok: false, message };
   }
 }
@@ -615,7 +662,7 @@ export async function createTermAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -630,7 +677,7 @@ export async function updateTermAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -655,7 +702,7 @@ export async function setTermOpenAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true, revokedGrantCount: result.revokedGrantCount };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -741,6 +788,31 @@ export async function createMonthAction(
     return { ok: true, month: { id: month.id } };
   } catch (error) {
     return monthFailure(error);
+  }
+}
+
+/**
+ * «كمّل الشهور لحد شهر ١٠» — every missing month, CLOSED, in one request.
+ *
+ * One route and not nine `createMonthAction`s in a loop: the API throttles a
+ * session at ten requests a second, and a loop that half-fills the year and
+ * then 429s leaves a panel with a gap in the middle of it.
+ */
+export async function fillMonthsAction(courseId: string, upTo = 10): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'POST',
+      `/api/admin/courses/${courseId}/months/fill`,
+      AdminCourseMonthSchema.array(),
+      { upTo },
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    const message =
+      failedStatus(error) === 409 ? copy.admin.month.fillNeedsFirst : arabicError(error, copy.admin.month.actionFailed);
+    return { ok: false, message };
   }
 }
 
@@ -926,7 +998,7 @@ export async function createLessonAction(
     );
     lessonId = lesson.id;
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 
   // No month picked is not a write. `primaryMonthId: null` with no extras is
@@ -945,15 +1017,13 @@ export async function createLessonAction(
   revalidatePath(`/admin/courses/${courseId}`);
 
   /*
-   * ⚠️ `autosave.error` («مااتحفظش»), never `common.saveFailed`.
-   *
-   * `saveFailed` reads «التغييرات اترجعت زي ما كانت», and here nothing was
-   * rolled back: the lecture exists, it is in the outline, and the only thing
-   * missing is its month. Sending the instructor looking for a lecture that is
-   * on the page in front of them is worse than the terse sentence. Same
-   * distinction `updateCourseAction` draws for its own fallback.
+   * ⚠️ Says the lecture EXISTS. Nothing was rolled back: it is in the outline,
+   * and the only thing missing is its month. The terse «مااتحفظش» this used to
+   * return read as «nothing happened», so he typed the title again and pressed
+   * again — and got a second lecture beside an untagged draft that would block
+   * every month the moment it was published.
    */
-  return tagged ? { ok: true } : { ok: false, message: copy.admin.autosave.error };
+  return tagged ? { ok: true } : { ok: false, message: copy.admin.lesson.createdWithoutMonth };
 }
 
 export async function setLessonPublishedAction(
@@ -969,7 +1039,7 @@ export async function setLessonPublishedAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -1017,7 +1087,7 @@ export async function updateLessonAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -1058,7 +1128,7 @@ export async function removeLessonVideoAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -1117,7 +1187,7 @@ export async function startVideoUploadAction(
     );
     return { ok: true, session };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -1137,7 +1207,7 @@ export async function completeVideoUploadAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -1157,7 +1227,7 @@ export async function abortVideoUploadAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -1216,7 +1286,7 @@ export async function setLessonVideoAction(
     if (error instanceof Error && error.message.includes('failed with 422')) {
       return { ok: false, message: copy.admin.lesson.durationUnavailable };
     }
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -1233,7 +1303,7 @@ export async function setLessonTextAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -1266,7 +1336,7 @@ export async function setLessonHomeworkAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -1286,7 +1356,7 @@ export async function removeLessonHomeworkAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -1363,7 +1433,7 @@ export async function updateResourceAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -1377,7 +1447,7 @@ export async function removeResourceAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -1400,7 +1470,7 @@ export async function reorderResourcesAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }
 
@@ -1444,6 +1514,6 @@ export async function setCourseExamAction(
     revalidatePath(`/admin/courses/${courseId}`);
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: arabicError(error) };
   }
 }

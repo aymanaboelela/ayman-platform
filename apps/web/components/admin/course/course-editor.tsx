@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import type { AdminCourseMonth } from '@ayman/contracts/months';
 import type { Taxonomy } from '@ayman/contracts/taxonomy';
 import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
 import { Badge } from '@ayman/ui/components/badge';
 import { Button } from '@ayman/ui/components/button';
 import {
@@ -34,8 +35,8 @@ import { CourseBookPanel } from '../books/course-book-panel';
 import { SaveIndicator } from './save-indicator';
 import { AddSectionForm } from './section-card';
 import { SectionList } from './section-list';
-import { CourseMonthsProvider, MonthPanel } from './month-panel';
-import { TermPanel } from './term-panel';
+import { CourseMonthsProvider, MonthPanel, StartByMonth } from './month-panel';
+import { TermPriceFields, TermsBox } from './term-panel';
 import { ActionError, IDLE } from './action-state';
 import { useFeature } from '../entitlements-context';
 
@@ -288,6 +289,14 @@ export function CourseEditor({
   // instant it was produced.
   const [skipped, setSkipped] = useState<SkippedLesson[]>([]);
 
+  /* «السعر ده لشهر واحد» under the monthly price — on a course with months
+     that one number buys ONE month, whichever the student picks. Any month,
+     not an open one: closing them all takes the plan off sale, it does not
+     put the thirty-day window back. */
+  const sellsByMonth = (months?.length ?? 0) > 0;
+  const sellsBySlice = sellsByMonth || course.terms.length > 0;
+  const openMonths = months?.filter((month) => month.isOpen).length ?? 0;
+
   return (
     /*
       Everything under here saves itself, and reports into the ONE indicator
@@ -300,7 +309,7 @@ export function CourseEditor({
           «الشهر» control is five `'use client'` components below this one, and a
           control that renders EMPTY over an existing tag clears it on its next
           save. `month-panel.tsx` has the full note. */}
-      <CourseMonthsProvider months={months ?? []}>
+      <CourseMonthsProvider months={months}>
         <div className="space-y-8">
           {/*
             The editor's own bar, sticky under the admin header.
@@ -355,7 +364,19 @@ export function CourseEditor({
               */}
               {course.status === 'archived' ? null : course.status === 'published' ? (
                 <form action={publishAction}>
-                  <Button type="submit" variant="secondary" size="sm" disabled={publishPending}>
+                  {/* Asks first. A draft course is a 404 to every enrolled
+                      student — paying ones included — and this sits on a
+                      sticky bar that is always under the cursor; publish-all,
+                      archive and delete all asked, this alone did not. */}
+                  <Button
+                    type="submit"
+                    variant="secondary"
+                    size="sm"
+                    disabled={publishPending}
+                    onClick={(event) => {
+                      if (!window.confirm(copy.admin.course.unpublishConfirm)) event.preventDefault();
+                    }}
+                  >
                     {copy.admin.course.unpublish}
                   </Button>
                 </form>
@@ -405,12 +426,43 @@ export function CourseEditor({
             }}
             action={updateCourseAction.bind(null, course.id)}
             mode="edit"
-            /* «السعر ده لشهر واحد» under the monthly price — on a course with
-               months that one number buys ONE month, whichever the student
-               picks, and the field says «اشتراك شهري» either way. Any month,
-               not an open one: closing them all takes the plan off sale, it does
-               not put the thirty-day window back. */
-            sellsByMonth={(months?.length ?? 0) > 0}
+            sellsByMonth={sellsByMonth}
+            sellsTerms={course.terms.some((term) => term.priceCents !== null)}
+            /* Each term's price with the other prices, and — on a course still
+               sold by the thirty-day month — the one press that turns it over
+               to curriculum months. */
+            pricingSlot={
+              <>
+                <TermPriceFields courseId={course.id} terms={course.terms} />
+                {/* Only on a course that actually sells a monthly plan — on a
+                    free, yearly-only or term-only course «الاشتراك الشهري العادي»
+                    is not true, and turning it over to months means nothing. */}
+                {months !== null && months.length === 0 && course.monthlyPriceCents !== null ? (
+                  <StartByMonth courseId={course.id} />
+                ) : null}
+              </>
+            }
+            termsSlot={<TermsBox courseId={course.id} terms={course.terms} />}
+            /* Absent both when the months could not be read (see the `months`
+               prop) and on a course with none — that one gets a single line in
+               the pricing block instead of a box saying there is nothing here. */
+            monthsSlot={
+              months !== null && months.length > 0 ? (
+                <MonthPanel
+                  courseId={course.id}
+                  months={months}
+                  sections={course.sections}
+                  monthlyPriced={course.monthlyPriceCents !== null}
+                />
+              ) : undefined
+            }
+            monthsAside={
+              months !== null && months.length > 0 ? (
+                <Badge tone={openMonths > 0 ? 'ok' : 'neutral'}>
+                  {formatCopy(copy.admin.month.openCount, { open: openMonths, total: months.length })}
+                </Badge>
+              ) : undefined
+            }
             /*
               «أضيف كتاب من جوه الكورس» — the SAME dialog `/admin/books/catalog`
               opens, with this course preselected and locked. Passed as a slot
@@ -434,49 +486,45 @@ export function CourseEditor({
           />
 
           {/*
-          Above the outline, not below it. The exam is the course's SHAPE — the
-          thing every other lesson is gated against — and it sat at the bottom of
-          the page as a footnote, reachable only after scrolling past forty
-          lessons. Its band also states the gate rule with a live number, which
-          is worth reading before you start publishing, not after.
-        */}
-          <CourseExamGate course={course} />
-
-          {/*
-            Beside the exam gate, above the outline: both are statements about
-            whether this course is FIT to be seen, which is what you want to read
-            before publishing rather than after a student writes in.
+            What used to stand between the form and the outline — the exam band,
+            the video check, the terms panel and the months panel, four boxes in
+            a row — is gone from here: terms and months are blocks of the form,
+            beside the prices they are sold at; the video check is a button on
+            the outline's own heading; the final exam is the outline's last row.
+            «الصفحة دي مليانة بوكس» was, first of all, this stretch.
           */}
-          <VideoCheckButton courseId={course.id} />
-
-          <TermPanel courseId={course.id} terms={course.terms} />
-
-          {/* Under the terms, above the outline: both answer «الكورس ده بيتباع
-              إزاي؟», and both have to be read before arranging the lectures they
-              slice. Absent entirely when the list could not be read — see the
-              `months` prop. */}
-          {months === null ? null : (
-            <MonthPanel courseId={course.id} months={months} sections={course.sections} />
-          )}
-
           <section>
-            <h2 className="mb-3 text-[length:var(--fs-title-4)] font-semibold">
-              {copy.course.content}
-            </h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-[length:var(--fs-title-4)] font-semibold">{copy.course.content}</h2>
+              {/* On the outline's heading because it is a statement about the
+                  outline — which of these lectures will not play. */}
+              <VideoCheckButton courseId={course.id} />
+            </div>
             {course.sections.length === 0 ? (
               <p className="text-fg-muted">{copy.admin.section.empty}</p>
             ) : (
               <SectionList
                 // Remounts only when the section SET changes, never on a pure
-                // reorder — same reasoning as the lesson list's key.
-                key={course.sections.map((section) => section.id).join(',')}
+                // reorder — SORTED, because the joined ids in server order
+                // changed on every reorder too, and the remount that followed
+                // the drag collapsed every section he had open.
+                key={course.sections
+                  .map((section) => section.id)
+                  .sort()
+                  .join(',')}
                 courseId={course.id}
                 sections={course.sections}
                 terms={course.terms}
                 examLessonId={course.examLessonId}
               />
             )}
-            <AddSectionForm courseId={course.id} />
+            <AddSectionForm courseId={course.id} terms={course.terms} />
+
+            {/* The course's last step, where it sits for the student too —
+                after every section, not above them as a heading. */}
+            <div className="mt-6">
+              <CourseExamGate course={course} sellsBySlice={sellsBySlice} />
+            </div>
           </section>
         </div>
       </CourseMonthsProvider>

@@ -98,7 +98,9 @@ test.describe('admin course builder', () => {
      * The whole point of the button: an instructor should not have to build
      * the scaffolding by hand first. It creates its own section.
      */
-    await expect(page.getByText(copy.admin.exam.gateNoLessons)).toBeVisible();
+    // A course with no final exam says so — optional, not a gate rule for an
+    // exam that does not exist, which is what this line used to assert.
+    await expect(page.getByText(copy.admin.exam.noneYet)).toBeVisible();
     await page.getByRole('button', { name: copy.admin.exam.scaffold }).click();
 
     // One press lands on the question builder — not on a settings tab, and not
@@ -121,7 +123,12 @@ test.describe('admin course builder', () => {
     // href to the path the redirect landed on is what makes «one press lands
     // on the question builder» mean the course page agrees.
     await expect(openExam).toHaveAttribute('href', scaffoldedQuizPath);
-    await expect(page.getByText(copy.admin.exam.noQuestions).first()).toBeVisible();
+    // Scoped to the exam row: it sits at the foot of the outline now, so an
+    // unscoped `.first()` finds the exam LECTURE's own row first — inside its
+    // section, which starts collapsed.
+    // `.first()` for the streaming duplicate the lesson-row assertion below
+    // describes: this page is partially prerendered.
+    await expect(page.locator('.exam-row').getByText(copy.admin.exam.noQuestions).first()).toBeVisible();
     await expect(page.getByRole('button', { name: copy.admin.exam.scaffold })).toHaveCount(0);
 
     /* ── inline rename ─────────────────────────────────────────────────────
@@ -219,6 +226,10 @@ test.describe('admin course builder', () => {
       .locator('.unit')
       .filter({ has: page.getByRole('button', { name: EXAM_SECTION_TITLE }) })
       .first();
+    // Wait for the card BEFORE counting its disclosure: `count()` does not
+    // wait, and taken while the page is still streaming it answered 0 — the
+    // click was skipped and the row below stayed hidden for its whole timeout.
+    await expect(examCard).toBeVisible({ timeout: AFTER_SERVER_ACTION });
     const expand = examCard.getByRole('button', { name: copy.admin.section.expand });
     if ((await expand.count()) > 0) await expand.click();
 

@@ -78,19 +78,20 @@ export function SortableLessonList({
         dropped: (position) => `${copy.admin.reorder.dropped} ${position}`,
         cancelled: copy.admin.reorder.cancelled,
       }}
+      /* The status only — «اسحب عشان ترتّب» is said ONCE, above the section
+         list. Printed again over every section's lectures it was the same
+         sentence a dozen times down one page. The live region stays: it is
+         what tells him a drag here actually saved. */
       statusSlot={(status) => (
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{copy.admin.reorder.hint}</p>
-          <p
-            aria-live="polite"
-            className={cn(
-              'mono text-[length:var(--fs-mono-label)]',
-              status === 'error' ? 'text-err' : 'text-fg-muted',
-            )}
-          >
-            {STATUS_LABEL[status]}
-          </p>
-        </div>
+        <p
+          aria-live="polite"
+          className={cn(
+            'mono mb-1 min-h-[1lh] text-end text-[length:var(--fs-mono-label)]',
+            status === 'error' ? 'text-err' : 'text-fg-muted',
+          )}
+        >
+          {STATUS_LABEL[status]}
+        </p>
       )}
     />
   );
