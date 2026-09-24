@@ -44,8 +44,8 @@ export const color = {
    *  by eye. */
   accentSolidHex: '#EFA22C',
   ok: 'oklch(0.68 0.16 150)',
-  err: 'oklch(0.62 0.20 25)',
+  err: 'oklch(0.645 0.20 25)',
   warn: 'oklch(0.75 0.14 85)',
   info: 'oklch(0.62 0.14 245)',
-  darkBase: '#08090A',
+  darkBase: '#0C0C18',
 } as const;
