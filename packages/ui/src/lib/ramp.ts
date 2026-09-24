@@ -72,7 +72,7 @@ export type Theme = 'light' | 'dark';
 /** `--n-1` in each theme: the page behind everything. */
 const PAGE_BACKGROUND: Record<Theme, Rgb> = {
   light: { r: 0xfd / 255, g: 0xfc / 255, b: 0xfb / 255 },
-  dark: { r: 0x08 / 255, g: 0x09 / 255, b: 0x0a / 255 },
+  dark: { r: 0x0c / 255, g: 0x0c / 255, b: 0x18 / 255 },
 };
 
 /** Step 11 is body text on the page. Below this it is not readable. */

@@ -268,13 +268,21 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    /* Warm-leaning from step 2 up. `--n-1` stays #08090A — the page base is a
-       true near-black stage in both surfaces, and warming it is what turns a
-       dark UI sepia. Everything ELEVATED above it carries the warmth instead,
-       which is exactly how the landing hero is lit. */
-    --n-1: #08090A; --n-2: #100F0E; --n-3: #171512; --n-4: #1F1C18;
-    --n-5: #26221D; --n-6: #29251F; --n-7: #332E27; --n-8: #423C33;
-    --n-9: #78716A; --n-10: #8A837B; --n-11: #B4ACA3; --n-12: #F1EEEB;
+    /* Ink-navy, not warm. Ayman sent a competitor's dark theme with «استخدم
+       درجة اللون دي في الدارك، اللونين دول» and these are its two colours
+       sampled off the screenshot: `--n-1` #0C0C18 is the page and `--n-2`
+       #1B1B24 is every card, bar and row sitting on it — the step a
+       `bg-surface-2` Card reads. The old ramp was warm-leaning near-black
+       (#08090A → #100F0E), and two steps that close read as one flat sheet;
+       this pair is a visible ladder, page → object.
+
+       The rest of the ramp is re-cut on the same hue (≈ 245°, very low chroma)
+       and stays monotonic in luma, so every "step N means job N" contract
+       above holds. Text steps 9–12 are lifted a hair so `--n-10` (faint text)
+       still clears 4.5:1 on the brighter `--n-2`. */
+    --n-1: #0C0C18; --n-2: #1B1B24; --n-3: #22222D; --n-4: #292935;
+    --n-5: #30303D; --n-6: #343442; --n-7: #3E3E4D; --n-8: #4F4F60;
+    --n-9: #7C7C8D; --n-10: #9090A0; --n-11: #B8B8C6; --n-12: #F1F1F6;
     --a-9:  oklch(0.780 0.150 74);
     --a-10: oklch(0.820 0.150 76);
     --a-11: oklch(0.845 0.130 78);
@@ -287,7 +295,7 @@
        and the explicit `:root[data-theme="dark"]` block below;
        `tokens.test.ts` asserts the two dark blocks stay identical. */
     --ok:   oklch(0.68 0.16 150);
-    --err:  oklch(0.62 0.20 25);
+    --err:  oklch(0.645 0.20 25); /* was 0.62 — 4.26:1 on the new #1B1B24 card */
     --warn: oklch(0.75 0.14 85);
     --info: oklch(0.62 0.14 245);
     --border-subtle: #FFFFFF12;
@@ -314,13 +322,21 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  /* Warm-leaning from step 2 up. `--n-1` stays #08090A — the page base is a
-       true near-black stage in both surfaces, and warming it is what turns a
-       dark UI sepia. Everything ELEVATED above it carries the warmth instead,
-       which is exactly how the landing hero is lit. */
-  --n-1: #08090A; --n-2: #100F0E; --n-3: #171512; --n-4: #1F1C18;
-  --n-5: #26221D; --n-6: #29251F; --n-7: #332E27; --n-8: #423C33;
-  --n-9: #78716A; --n-10: #8A837B; --n-11: #B4ACA3; --n-12: #F1EEEB;
+  /* Ink-navy, not warm. Ayman sent a competitor's dark theme with «استخدم
+     درجة اللون دي في الدارك، اللونين دول» and these are its two colours
+     sampled off the screenshot: `--n-1` #0C0C18 is the page and `--n-2`
+     #1B1B24 is every card, bar and row sitting on it — the step a
+     `bg-surface-2` Card reads. The old ramp was warm-leaning near-black
+     (#08090A → #100F0E), and two steps that close read as one flat sheet;
+     this pair is a visible ladder, page → object.
+
+     The rest of the ramp is re-cut on the same hue (≈ 245°, very low chroma)
+     and stays monotonic in luma, so every "step N means job N" contract
+     above holds. Text steps 9–12 are lifted a hair so `--n-10` (faint text)
+     still clears 4.5:1 on the brighter `--n-2`. */
+  --n-1: #0C0C18; --n-2: #1B1B24; --n-3: #22222D; --n-4: #292935;
+  --n-5: #30303D; --n-6: #343442; --n-7: #3E3E4D; --n-8: #4F4F60;
+  --n-9: #7C7C8D; --n-10: #9090A0; --n-11: #B8B8C6; --n-12: #F1F1F6;
   --a-9:  oklch(0.780 0.150 74);
   --a-10: oklch(0.820 0.150 76);
   --a-11: oklch(0.845 0.130 78);
@@ -333,7 +349,7 @@
      and the explicit `:root[data-theme="dark"]` block below;
      `tokens.test.ts` asserts the two dark blocks stay identical. */
   --ok:   oklch(0.68 0.16 150);
-  --err:  oklch(0.62 0.20 25);
+  --err:  oklch(0.645 0.20 25); /* was 0.62 — 4.26:1 on the new #1B1B24 card */
   --warn: oklch(0.75 0.14 85);
   --info: oklch(0.62 0.14 245);
   --border-subtle: #FFFFFF12;

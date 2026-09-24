@@ -181,12 +181,12 @@ describe('design tokens', () => {
     expect(selectorText).toMatch(/:where\(\[lang="ar"\]\)/);
   });
 
-  it('the dark base is exactly #08090A (--n-1 in the explicit dark block), never pure black', () => {
+  it('the dark base is exactly #0C0C18 (--n-1 in the explicit dark block), never pure black', () => {
     const colorCss = css('color');
     const attrBody = extract(colorCss, ATTR_DARK_BLOCK) ?? '';
     const n1 = attrBody.match(/--n-1:\s*(#[0-9A-Fa-f]{6})/);
     expect(n1).not.toBeNull();
-    expect((n1 as RegExpMatchArray)[1]!.toUpperCase()).toBe('#08090A');
+    expect((n1 as RegExpMatchArray)[1]!.toUpperCase()).toBe('#0C0C18');
   });
 
   it('keeps the light neutral ramp monotonically non-increasing in luma from n-1 to n-12', () => {
