@@ -32,7 +32,16 @@ import { signOut } from '@/lib/auth-client';
  * `onClick` is composed rather than overwritten for the same reason — the
  * incoming handler is how Radix learns the item was activated.
  */
-export function SignOutButton({ className, onClick, ...rest }: ComponentProps<'button'>) {
+export function SignOutButton({
+  className,
+  onClick,
+  well = false,
+  ...rest
+}: ComponentProps<'button'> & {
+  /** Seat the icon in a `.nav-pill__well` tile, for the phone drawer, where
+   *  this row has to look like the navigation rows above it. */
+  well?: boolean;
+}) {
   const [pending, setPending] = useState(false);
 
   async function handleClick() {
@@ -70,7 +79,13 @@ export function SignOutButton({ className, onClick, ...rest }: ComponentProps<'b
         className,
       )}
     >
-      <LogOut className="size-4 shrink-0" aria-hidden="true" />
+      {well ? (
+        <span className="nav-pill__well" aria-hidden="true">
+          <LogOut className="size-4" />
+        </span>
+      ) : (
+        <LogOut className="size-4 shrink-0" aria-hidden="true" />
+      )}
       {pending ? copy.nav.loggingOut : copy.nav.logout}
     </button>
   );

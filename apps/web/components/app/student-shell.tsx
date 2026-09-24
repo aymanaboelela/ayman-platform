@@ -56,12 +56,15 @@ export function StudentShell({
   courses,
   notifications,
   accountMenu,
+  drawerAccount,
   assistant,
   children,
 }: {
   courses: ReactNode;
   notifications: ReactNode;
   accountMenu: ReactNode;
+  /** The signed-in identity at the foot of the phone drawer — see `DrawerAccount`. */
+  drawerAccount?: ReactNode;
   /**
    * «المساعد», as a control in the TOPBAR rather than a disc floating over the
    * page — «في الداشبورد… خليها جنب النوتيفيكيشن فوق».
@@ -138,6 +141,7 @@ export function StudentShell({
           courses={courses}
           notifications={notifications}
           accountMenu={accountMenu}
+          drawerAccount={drawerAccount}
           assistant={assistant}
         />
         {/*

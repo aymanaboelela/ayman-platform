@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
-import { ArrowUpLeft, Menu } from 'lucide-react';
+import { ArrowUpLeft, Menu, SunMoon } from 'lucide-react';
 // Subpaths, not the root barrels. This bar renders on every `(app)` route, so
 // a barrel import here is a client reference on every signed-in page: the
 // contracts barrel alone is 539 KB raw / 128 KB gzip of zod schemas, a
@@ -13,6 +13,7 @@ import { ArrowUpLeft, Menu } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@ayman/ui/components/sheet';
 import { BrandLockup } from '@/components/brand-lockup';
+import { SignOutButton } from '@/components/sign-out-button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { StudentNavFooterList, StudentNavList } from './student-nav-list';
 import { activeStudentNav } from './student-nav-items';
@@ -43,11 +44,14 @@ export function StudentTopbar({
   courses,
   notifications,
   accountMenu,
+  drawerAccount,
   assistant,
 }: {
   courses: ReactNode;
   notifications: ReactNode;
   accountMenu: ReactNode;
+  /** Pinned to the foot of the phone drawer — see `DrawerAccount`. */
+  drawerAccount?: ReactNode;
   /** «المساعد», beside the bell — see `StudentShell`'s prop for why it moved here. */
   assistant?: ReactNode;
 }) {
@@ -150,63 +154,89 @@ export function StudentTopbar({
                 // 44px minimum on a phone, which is the size a thumb actually
                 // hits. It measured 36×36 — under every touch-target guideline
                 // there is, on the control that opens ALL navigation.
-                className="flex h-11 shrink-0 items-center gap-1.5 rounded-md px-2 text-[length:var(--fs-text-sm)] font-medium text-fg-muted transition-colors duration-[160ms] hover:bg-surface-3 hover:text-fg md:hidden"
+                //
+                // `.topbar__menu` gives it the drawer's own vocabulary — a
+                // tinted pill with the glyph in a solid disc — so the control
+                // and the panel it opens read as one object. See globals.css.
+                className="topbar__menu md:hidden"
               >
-                <Menu className="size-5" aria-hidden="true" />
+                <span className="topbar__menu-disc" aria-hidden="true">
+                  <Menu className="size-4" />
+                </span>
                 {copy.nav.menuLabel}
               </button>
             </SheetTrigger>
-            <SheetContent closeLabel={copy.common.close} className="md:hidden">
-              <SheetTitle className="mb-5 block">
+            {/*
+              The drawer is a column of OBJECTS now, not a list of links: every
+              row carries its icon in a tinted tile, the current page is a solid
+              tile on a tinted row, and the account it all belongs to is a card
+              pinned to the foot. «المينو في الموبايل بيبقى كده بشكل حلو» — sent
+              with a competitor's drawer, the same idea in this tenant's accent.
+
+              `p-0 gap-0`: the panel's own 16px inset moved onto `.drawer__body`,
+              so the account card can span the full width and stay pinned while
+              the list above it scrolls. All of it is `.drawer`-scoped CSS in
+              globals.css — the rail and the admin sheet share `.nav-pill`, and
+              neither is meant to change with this.
+            */}
+            <SheetContent closeLabel={copy.common.close} className="drawer gap-0 p-0 md:hidden">
+              <SheetTitle className="drawer__brand">
                 <BrandLockup showTagline={false} />
               </SheetTitle>
 
-              <nav aria-label={copy.nav.mainNav}>
-                <StudentNavList onNavigate={() => setOpen(false)} />
-              </nav>
+              <div className="drawer__body">
+                <nav aria-label={copy.nav.mainNav}>
+                  <StudentNavList onNavigate={() => setOpen(false)} />
+                </nav>
 
-              <div className="mt-5">
-                <p className="eyebrow px-3 pb-2 text-fg-muted">{copy.nav.railCourses}</p>
-                {/*
-                  The same Server Component node the rail renders. React renders
-                  the element in both places; `getDashboard` is `cache()`-wrapped
-                  so the two cost one round-trip, not two.
+                <div className="drawer__section">
+                  <p className="drawer__eyebrow">{copy.nav.railCourses}</p>
+                  {/*
+                    The same Server Component node the rail renders. React
+                    renders the element in both places; `getDashboard` is
+                    `cache()`-wrapped so the two cost one round-trip, not two.
 
-                  ⚠️ The `rail__label` class it carries is scoped to the rail's
-                  collapsed state via `html[data-rail]`, which also matches
-                  here. That is intentional and harmless: a collapsed rail on a
-                  desktop viewport and this sheet are never on screen together
-                  (`md:hidden`), so nothing can hide the sheet's own list.
-                */}
-                {courses}
-              </div>
+                    ⚠️ The `rail__label` class it carries is scoped to the rail's
+                    collapsed state via `html[data-rail]`, which also matches
+                    here. That is intentional and harmless: a collapsed rail on a
+                    desktop viewport and this sheet are never on screen together
+                    (`md:hidden`), so nothing can hide the sheet's own list.
+                  */}
+                  {courses}
+                </div>
 
-              <div className="mt-5 border-t border-line pt-4">
-                <StudentNavFooterList onNavigate={() => setOpen(false)} />
-                <Link
-                  href="/"
-                  onClick={() => setOpen(false)}
-                  className="flex h-10 items-center gap-3 rounded-md px-3 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:bg-surface-3 hover:text-fg"
-                >
-                  <ArrowUpLeft className="size-4 shrink-0" aria-hidden="true" />
-                  {copy.nav.backToSite}
-                </Link>
+                <div className="drawer__section drawer__section--rule">
+                  <StudentNavFooterList onNavigate={() => setOpen(false)} />
+                  <Link href="/" onClick={() => setOpen(false)} className="nav-pill">
+                    <span className="nav-pill__well" aria-hidden="true">
+                      <ArrowUpLeft className="size-4" />
+                    </span>
+                    <span className="nav-pill__label">{copy.nav.backToSite}</span>
+                  </Link>
 
-                {/* The theme switch, which the bar gave up so the menu button
-                    could carry its label — see the note beside it above. It is
-                    the only control in this drawer that does not navigate, so
-                    it sits below the divider with «الموقع الرئيسي» rather than
-                    in the nav list, and it deliberately does NOT close the
-                    sheet: changing the theme is something you do to look at,
-                    and shutting the panel to show you the result would hide the
-                    thing that just changed. */}
-                <div className="mt-3 flex items-center justify-between gap-3 rounded-md px-3 py-1">
-                  <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
-                    {copy.theme.toggle}
-                  </span>
-                  <ThemeToggle />
+                  {/* The theme switch, which the bar gave up so the menu button
+                      could carry its label — see the note beside it below. It is
+                      the only control in this drawer that does not navigate, and
+                      it deliberately does NOT close the sheet: changing the theme
+                      is something you do to look at, and shutting the panel to
+                      show you the result would hide the thing that just changed.
+
+                      Drawn as a row with a well like its neighbours, the switch
+                      at the far end; the row itself is not the control, so the
+                      label is a plain span and the pill keeps its own name. */}
+                  <div className="nav-pill drawer__theme">
+                    <span className="nav-pill__well" aria-hidden="true">
+                      <SunMoon className="size-4" />
+                    </span>
+                    <span className="nav-pill__label">{copy.theme.toggle}</span>
+                    <ThemeToggle className="drawer__theme-switch" />
+                  </div>
+
+                  <SignOutButton well className="nav-pill nav-pill--danger" />
                 </div>
               </div>
+
+              {drawerAccount}
             </SheetContent>
           </Sheet>
 
