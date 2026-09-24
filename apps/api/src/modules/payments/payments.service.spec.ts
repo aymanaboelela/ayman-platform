@@ -278,6 +278,8 @@ describe('PaymentsService', () => {
         },
       },
     });
+    // And anything a single test made on its own (the all-months-closed course).
+    await prisma.course.deleteMany({ where: { instructorId: adminId } });
     await prisma.user.deleteMany({ where: { id: { in: [studentId, strangerId, adminId] } } });
     await prisma.$disconnect();
   });
@@ -426,6 +428,43 @@ describe('PaymentsService', () => {
       expect(months.map((row) => row.monthId).sort()).toEqual([monthOneId, monthTwoId].sort());
       // Denormalised on every row — it is what the composite FK checks.
       expect(months.every((row) => row.courseId === monthCourseId)).toBe(true);
+    });
+
+    it('refuses the monthly plan outright when EVERY month is closed, and still sells the year', async () => {
+      // «فيه شهور، ومفيش ولا واحد مفتوح» — nothing to buy. The storefront no
+      // longer offers the card (`monthlyOnSale`), so this is a stale tab; it
+      // must not read as the student forgetting to pick a month.
+      const closedCourse = await prisma.course.create({
+        data: {
+          slug: `pay-closed-months-${Date.now().toString(36)}`,
+          title: 'كورس شهوره كلها مقفولة',
+          status: 'published',
+          publishedAt: new Date(),
+          systemId: (await prisma.course.findUniqueOrThrow({ where: { id: monthCourseId } })).systemId,
+          subjectId: (await prisma.course.findUniqueOrThrow({ where: { id: monthCourseId } })).subjectId,
+          year: 3,
+          instructorId: adminId,
+          requiresGrant: true,
+          monthlyPriceCents: 10000,
+          yearlyPriceCents: 90000,
+        },
+      });
+      const closed = await prisma.courseMonth.create({
+        data: { courseId: closedCourse.id, monthIndex: 1, title: 'شهر ١', isOpen: false },
+      });
+      const claim = (plan: 'monthly' | 'yearly', monthIds: string[]) =>
+        service.submit(studentId, {
+          courseId: closedCourse.id,
+          plan,
+          termId: null,
+          monthIds,
+          senderPhone: '01012345678',
+          screenshotKey: validScreenshotKey(),
+        });
+
+      await expect(claim('monthly', [])).rejects.toThrow(/not open for subscription right now/);
+      await expect(claim('monthly', [closed.id])).rejects.toThrow(/not open for subscription right now/);
+      await expect(claim('yearly', [])).resolves.toMatchObject({ amountCents: 90000 });
     });
 
     it('refuses an empty selection on a course that sells by month', async () => {

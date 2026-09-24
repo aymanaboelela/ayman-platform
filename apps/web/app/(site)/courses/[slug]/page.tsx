@@ -20,6 +20,7 @@ import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getBookShippingRates } from '@/lib/books';
 import { formatCopy } from '@ayman/contracts/format';
 import { formatEGP } from '@/lib/price';
+import { monthlyForSaleCents } from '@/lib/monthly-sale';
 import { RichText } from '@/components/content/rich-text';
 import { JsonLd } from '@/components/seo/json-ld';
 import { breadcrumbJsonLd, courseJsonLd } from '@/lib/seo/jsonld';
@@ -290,7 +291,12 @@ export default async function CourseDetailPage({ params }: { params: Promise<Par
             <div className="course-aside__price">
               {course.monthlyPriceCents !== null ? (
                 <span className="course-aside__price-row">
-                  {formatCopy(copy.course.priceMonthly, { price: formatEGP(course.monthlyPriceCents) })}
+                  {formatCopy(
+                    monthlyForSaleCents(course) === null
+                      ? copy.course.priceMonthlyClosed
+                      : copy.course.priceMonthly,
+                    { price: formatEGP(course.monthlyPriceCents) },
+                  )}
                 </span>
               ) : null}
               {course.quarterlyPriceCents !== null ? (

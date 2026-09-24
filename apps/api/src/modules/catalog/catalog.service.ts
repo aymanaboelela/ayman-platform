@@ -9,6 +9,7 @@ import type {
 import { PrismaService } from '../../prisma/prisma.service';
 import { toHonorBoardRounds } from './honor-board';
 import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
+import { monthlyPlanOnSale } from '../payments/month-grants';
 
 /**
  * "Published" is a THREE-level condition: the course, its section, and the
@@ -68,6 +69,8 @@ export class CatalogService {
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
+        // Every month's open flag, for `monthlyOnSale` — at most twelve rows.
+        months: { select: { isOpen: true } },
         bookTitle: true,
         contentComplete: true,
         bookPriceCents: true,
@@ -109,6 +112,10 @@ export class CatalogService {
       emphasis: row.emphasis,
       emphasisNote: row.emphasisNote,
       monthlyPriceCents: row.monthlyPriceCents,
+      monthlyOnSale: monthlyPlanOnSale(row.monthlyPriceCents, {
+        total: row.months.length,
+        open: row.months.filter((month) => month.isOpen).length,
+      }),
       quarterlyPriceCents: row.quarterlyPriceCents,
       yearlyPriceCents: row.yearlyPriceCents,
       /* `bookId` is deliberately dropped: it is what `priceCourseBook` needs in
@@ -191,6 +198,9 @@ export class CatalogService {
         // requiring a per-month price would hide every month on every course.
         // The serializer below is what refuses to publish a month on a course
         // with no monthly price at all.
+        // ANY month, open or closed: «has months, none open» and «has no months»
+        // are the same empty `months` below, and `monthlyOnSale` tells them apart.
+        _count: { select: { months: true } },
         months: {
           where: { isOpen: true },
           orderBy: [{ monthIndex: 'asc' }],
@@ -267,6 +277,7 @@ export class CatalogService {
       comingSoonNote: row.comingSoonNote,
       contentComplete: row.contentComplete,
       monthlyPriceCents: row.monthlyPriceCents,
+      monthlyOnSale: monthlyPlanOnSale(row.monthlyPriceCents, { total: row._count.months, open: row.months.length }),
       quarterlyPriceCents: row.quarterlyPriceCents,
       yearlyPriceCents: row.yearlyPriceCents,
       /* `bookId` is deliberately dropped: it is what `priceCourseBook` needs in

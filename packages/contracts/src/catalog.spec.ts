@@ -133,3 +133,43 @@ describe('CatalogCourseSchema.bookTitle/bookPriceCents', () => {
     expect(CatalogCourseSchema.safeParse(rest).success).toBe(false);
   });
 });
+
+describe('CatalogCourseSchema.monthlyOnSale', () => {
+  const base = {
+    id: '019fc7d2-65d3-77bc-9352-8abe447f584c',
+    slug: 'c',
+    title: 'ك',
+    subtitle: null,
+    systemSlug: 'bacalorya',
+    systemNameAr: 'ب',
+    year: 2,
+    trackLabelAr: null,
+    subjectNameAr: 'م',
+    coverKey: null,
+    lessonCount: 1,
+    totalSeconds: 60,
+    forGeneral: true,
+    forLanguages: true,
+    emphasis: null,
+    emphasisNote: null,
+    comingSoonNote: null,
+    contentComplete: false,
+    monthlyPriceCents: 25000,
+    quarterlyPriceCents: null,
+    yearlyPriceCents: null,
+    bookTitle: null,
+    bookPriceCents: null,
+    publishedAt: '2026-03-01T10:00:00.000Z',
+    updatedAt: '2026-03-01T10:00:00.000Z',
+  };
+
+  it('reads a payload WITHOUT the field as on sale — an older API mid-deploy', () => {
+    const parsed = CatalogCourseSchema.safeParse(base);
+    expect(parsed.success && parsed.data.monthlyOnSale).toBe(true);
+  });
+
+  it('keeps an explicit false — a course sold by month with none open', () => {
+    const parsed = CatalogCourseSchema.safeParse({ ...base, monthlyOnSale: false });
+    expect(parsed.success && parsed.data.monthlyOnSale).toBe(false);
+  });
+});

@@ -73,6 +73,26 @@ export function monthSelectionMessage(refusal: MonthSelectionRefusal): string {
 }
 
 /**
+ * Can the MONTHLY plan be bought right now — the one definition, shared by the
+ * catalog (what the storefront offers) and `submit()` (what it accepts).
+ *
+ * A course with no curriculum months sells the old thirty-day plan whenever it
+ * has a price. A course WITH months sells one month at a time, so with every
+ * month closed there is nothing to buy: the storefront drew the «شهر» card
+ * anyway, and the claim it sent was refused after the student had already
+ * uploaded a transfer screenshot.
+ *
+ * ⚠️ This is «for sale», never «paid». A closed monthly-only course is still a
+ * paid course; every «is it free?» reading keeps reading the price.
+ */
+export function monthlyPlanOnSale(
+  monthlyPriceCents: number | null,
+  months: { total: number; open: number },
+): boolean {
+  return monthlyPriceCents !== null && (months.total === 0 || months.open > 0);
+}
+
+/**
  * What one transfer for these months costs.
  *
  * One price for any month (`Course.monthlyPriceCents`) is the instructor's own

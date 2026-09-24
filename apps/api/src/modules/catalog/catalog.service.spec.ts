@@ -245,6 +245,62 @@ describe('CatalogService', () => {
     });
   });
 
+  /*
+   * «فيه شهور، ومفيش ولا واحد مفتوح» — the monthly plan is priced and not for
+   * sale. The price must stay (every «is it free?» check reads it); the flag
+   * is what tells the storefront there is nothing to buy.
+   */
+  describe('monthlyOnSale', () => {
+    let original: { requiresGrant: boolean; monthlyPriceCents: number | null };
+    beforeAll(async () => {
+      original = await prisma.course.findUniqueOrThrow({
+        where: { id: publishedCourseId },
+        select: { requiresGrant: true, monthlyPriceCents: true },
+      });
+      await prisma.course.update({
+        where: { id: publishedCourseId },
+        data: { requiresGrant: true, monthlyPriceCents: 25000 },
+      });
+    });
+    afterEach(async () => {
+      await prisma.courseMonth.deleteMany({ where: { courseId: publishedCourseId } });
+    });
+    afterAll(async () => {
+      await prisma.course.update({ where: { id: publishedCourseId }, data: original });
+    });
+
+    const listed = async () =>
+      (await service.list()).courses.find((course) => course.id === publishedCourseId);
+
+    it('is on sale with no months at all — the old thirty-day plan', async () => {
+      expect((await service.findBySlug(publishedSlug)).monthlyOnSale).toBe(true);
+      expect((await listed())?.monthlyOnSale).toBe(true);
+    });
+
+    it('is OFF sale when every month is closed — and the price is still there', async () => {
+      await prisma.courseMonth.create({
+        data: { courseId: publishedCourseId, monthIndex: 1, title: 'شهر ١', isOpen: false },
+      });
+      const detail = await service.findBySlug(publishedSlug);
+      expect(detail.monthlyOnSale).toBe(false);
+      expect(detail.monthlyPriceCents).toBe(25000);
+      expect(detail.months).toEqual([]);
+      expect((await listed())?.monthlyOnSale).toBe(false);
+      expect(CatalogCourseDetailSchema.safeParse(detail).success).toBe(true);
+    });
+
+    it('is on sale again the moment one month opens', async () => {
+      await prisma.courseMonth.create({
+        data: { courseId: publishedCourseId, monthIndex: 1, title: 'شهر ١', isOpen: false },
+      });
+      await prisma.courseMonth.create({
+        data: { courseId: publishedCourseId, monthIndex: 2, title: 'شهر ٢', isOpen: true },
+      });
+      expect((await service.findBySlug(publishedSlug)).monthlyOnSale).toBe(true);
+      expect((await listed())?.monthlyOnSale).toBe(true);
+    });
+  });
+
   // Regression: `list()`'s own `select` and return mapping used to omit
   // `bookTitle`/`bookPriceCents` entirely — present on `findBySlug` (the
   // course page reads them fine) but silently `undefined` on `list()` (the
