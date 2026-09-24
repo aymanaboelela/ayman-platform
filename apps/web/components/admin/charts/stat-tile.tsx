@@ -25,12 +25,22 @@ export function StatTile({
   value,
   context,
   accent = false,
+  tint,
   href,
 }: {
   label: string;
   value: string;
   context?: string;
   accent?: boolean;
+  /**
+   * A categorical colour (`var(--viz-N)`) for a tile that stands for one
+   * series of a chart beside it — «شهر» on the tile and on the bars has to be
+   * the same hue, or the reader matches them by reading instead of by eye.
+   * A dot carries the identity and a wash of the same hue carries the group;
+   * the figure itself stays `text-fg`, because a number tinted to match reads
+   * at a fraction of the contrast.
+   */
+  tint?: string;
   /**
    * Where this number LIVES — the screen that lists the rows it counts.
    *
@@ -46,6 +56,13 @@ export function StatTile({
   const body = (
     <>
       <p className="flex items-center gap-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+        {tint ? (
+          <span
+            aria-hidden="true"
+            className="me-0.5 size-2 shrink-0 rounded-full"
+            style={{ background: tint }}
+          />
+        ) : null}
         {label}
         {href ? (
           <ChevronLeft
@@ -67,10 +84,27 @@ export function StatTile({
     'block rounded-lg border p-4',
     accent
       ? 'border-[color-mix(in_oklch,var(--a-9),transparent_66%)] bg-[color-mix(in_oklch,var(--a-9),transparent_94%)]'
-      : 'border-line bg-surface-2',
+      : tint
+        ? null
+        : 'border-line bg-surface-2',
   );
+  // Inline, not an arbitrary class: the hue arrives as a value, and Tailwind
+  // only generates classes it can read in the source.
+  const style =
+    tint && !accent
+      ? {
+          borderColor: `color-mix(in oklch, ${tint}, transparent 60%)`,
+          background: `color-mix(in oklch, ${tint}, transparent 91%)`,
+        }
+      : undefined;
 
-  if (!href) return <div className={shell}>{body}</div>;
+  if (!href) {
+    return (
+      <div className={shell} style={style}>
+        {body}
+      </div>
+    );
+  }
 
   return (
     <Link
@@ -82,8 +116,11 @@ export function StatTile({
         'group transition-colors duration-[160ms] ease-out',
         accent
           ? 'hover:border-[color-mix(in_oklch,var(--a-9),transparent_40%)]'
-          : 'hover:border-line-strong hover:bg-surface-3',
+          : tint
+            ? null
+            : 'hover:border-line-strong hover:bg-surface-3',
       )}
+      style={style}
     >
       {body}
     </Link>

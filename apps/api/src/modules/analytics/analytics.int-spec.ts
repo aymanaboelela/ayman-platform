@@ -347,6 +347,149 @@ describe('analytics (integration)', () => {
     }
   });
 
+  /*
+   * «مشتركين بإيه» — one student per shape the plan split has to get right:
+   *
+   *   0  three months bought in ONE transfer    → شهر, once, paid
+   *   1  a term imported as `purchase`, no row  → ترم, paid, and bought 60 days ago
+   *   2  a yearly course grant the admin comped → سنة, NOT paid
+   *   3  a hand-opened course grant             → من غير باقة, NOT paid
+   *      …plus a quarterly one, revoked         → not live, but it happened
+   *
+   * and the instructor on a month of his own course, who must not count.
+   */
+  it('splits live subscribers by plan, counting students rather than grants', async () => {
+    const [s0, s1, s2, s3] = userIds as [string, string, string, string];
+    const past = new Date(Date.now() - 60 * 86_400_000);
+
+    const months = await Promise.all(
+      [1, 2, 3].map((monthIndex) =>
+        prisma.courseMonth.create({ data: { courseId, monthIndex, title: `شهر ${monthIndex}` } }),
+      ),
+    );
+    const term = await prisma.courseTerm.create({
+      data: { courseId, title: 'الترم الأول', position: 1 },
+    });
+
+    const monthGrants = await Promise.all(
+      months.map((month) =>
+        prisma.accessGrant.create({
+          data: { userId: s0, scope: 'course_month', courseId, monthId: month.id, source: 'purchase' },
+        }),
+      ),
+    );
+    const termGrant = await prisma.accessGrant.create({
+      data: {
+        userId: s1,
+        scope: 'term',
+        courseId,
+        termId: term.id,
+        source: 'purchase',
+        validFrom: past,
+        createdAt: past,
+      },
+    });
+    const yearly = await prisma.accessGrant.create({
+      data: {
+        userId: s2,
+        scope: 'course',
+        courseId,
+        source: 'purchase',
+        validUntil: new Date(Date.now() + 300 * 86_400_000),
+      },
+    });
+    const handOpened = await prisma.accessGrant.create({
+      data: { userId: s3, scope: 'course', courseId, source: 'admin' },
+    });
+    const quarterly = await prisma.accessGrant.create({
+      data: { userId: s3, scope: 'course', courseId, source: 'purchase', revokedAt: new Date() },
+    });
+    const staff = await prisma.accessGrant.create({
+      data: {
+        userId: `an-author-${suffix}`,
+        scope: 'course_month',
+        courseId,
+        monthId: months[0]!.id,
+        source: 'admin',
+      },
+    });
+
+    const paid = { status: 'approved' as const, reviewedAt: new Date(), courseId };
+    // `grant_id` names only the FIRST month — `writeMonthGrants` stamps one of
+    // the grants it wrote, and `payment_submission_months` is the real record.
+    const monthly = await prisma.paymentSubmission.create({
+      data: {
+        ...paid,
+        userId: s0,
+        plan: 'monthly',
+        amountCents: 30_000,
+        grantId: monthGrants[0]!.id,
+        months: {
+          create: months.map((month) => ({ monthId: month.id, courseId })),
+        },
+      },
+    });
+    const comped = await prisma.paymentSubmission.create({
+      data: { ...paid, userId: s2, plan: 'yearly', amountCents: 100_000, isFree: true, grantId: yearly.id },
+    });
+    const retired = await prisma.paymentSubmission.create({
+      data: { ...paid, userId: s3, plan: 'quarterly', amountCents: 50_000, grantId: quarterly.id },
+    });
+
+    try {
+      const result = await overview.build({ days: 30, courseId });
+      expect(() => AnalyticsOverviewSchema.parse(result)).not.toThrow();
+
+      const plans = Object.fromEntries(
+        result.subscriptions.byPlan.map((row) => [row.plan, { live: row.live, started: row.started }]),
+      );
+      expect(plans).toEqual({
+        // Three grants, one student.
+        monthly: { live: 1, started: 1 },
+        // Live, but bought before the window.
+        term: { live: 1, started: 0 },
+        yearly: { live: 1, started: 1 },
+        // Revoked the same day — no longer live, still something that happened.
+        quarterly: { live: 0, started: 1 },
+        unspecified: { live: 1, started: 1 },
+      });
+
+      expect(result.subscriptions.live).toBe(4);
+      // 0 paid; 1 is `purchase` with no payment row and must not read as
+      // comped; 2 was comped with `is_free`; 3 was opened by hand.
+      expect(result.subscriptions.livePaid).toBe(2);
+      expect(result.subscriptions.started).toBe(3);
+
+      const longer = await overview.build({ days: 90, courseId });
+      expect(longer.subscriptions.byPlan.find((row) => row.plan === 'term')?.started).toBe(1);
+
+      // The strip on the dashboard and this section must be one number.
+      const row = (await headcount.list()).find((candidate) => candidate.courseId === courseId);
+      expect(row!.subscribed).toBe(result.subscriptions.live);
+    } finally {
+      // Payments first: `payment_submission_months` RESTRICTs the months.
+      await prisma.paymentSubmission.deleteMany({
+        where: { id: { in: [monthly.id, comped.id, retired.id] } },
+      });
+      await prisma.accessGrant.deleteMany({
+        where: {
+          id: {
+            in: [
+              ...monthGrants.map((grant) => grant.id),
+              termGrant.id,
+              yearly.id,
+              handOpened.id,
+              quarterly.id,
+              staff.id,
+            ],
+          },
+        },
+      });
+      await prisma.courseMonth.deleteMany({ where: { courseId } });
+      await prisma.courseTerm.deleteMany({ where: { courseId } });
+    }
+  });
+
   it('counts a student who has enrolled in nothing — «إجمالي الطلبة» is not «المشتركين»', async () => {
     // The bug, in one assertion: `total` required an active enrollment, so the
     // headline read lower than the denominator printed under the meters and

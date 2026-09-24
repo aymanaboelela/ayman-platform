@@ -131,7 +131,58 @@ export const GovernorateBreakdownSchema = z.object({
 });
 export type GovernorateBreakdown = z.infer<typeof GovernorateBreakdownSchema>;
 
+/**
+ * «مشتركين بإيه» — the plan a subscription was sold on.
+ *
+ * The first three are the ones on sale, in the order the instructor names
+ * them. `quarterly` is off the shelf (`retire_quarterly_prices`) but its
+ * grants are still live until their `valid_until`, so it stays in the enum —
+ * narrowing it would make every render that meets an old row throw at the
+ * parse. The renderer hides it once it reads zero.
+ *
+ * `unspecified` is a `scope: course` grant with no payment behind it: opened
+ * by hand, by a code or a coupon. Its plan is not written anywhere, and
+ * guessing one from the length of `valid_until` would print a confident
+ * number the data cannot back — so it gets its own honest row instead.
+ */
+export const SUBSCRIPTION_PLAN_BUCKETS = [
+  'monthly',
+  'term',
+  'yearly',
+  'quarterly',
+  'unspecified',
+] as const;
+export type SubscriptionPlanBucket = (typeof SUBSCRIPTION_PLAN_BUCKETS)[number];
+
+export const SubscriptionPlanCountSchema = z.object({
+  plan: z.enum(SUBSCRIPTION_PLAN_BUCKETS),
+  /** Students holding a LIVE subscription on this plan right now. */
+  live: z.number().int().min(0),
+  /** Students who subscribed or renewed on this plan inside the window. */
+  started: z.number().int().min(0),
+});
+export type SubscriptionPlanCount = z.infer<typeof SubscriptionPlanCountSchema>;
+
 export const AnalyticsOverviewSchema = z.object({
+  /**
+   * STUDENTS, never grants. A monthly buyer holds one `course_month` grant per
+   * month bought, so counting rows would report a four-month student as
+   * four subscribers. `live` is the same integer `CourseHeadcountRow.subscribed`
+   * reports for a course — the spec holds the two together.
+   *
+   * `byPlan` is not a partition: a student on a month of one course and a
+   * term of another is in both rows, so the rows can sum past `live`. `live`
+   * and `livePaid` ARE distinct students, and are what the headline reads.
+   */
+  subscriptions: z.object({
+    live: z.number().int().min(0),
+    /** …of whom this many hold at least one live subscription that was PAID
+     *  for. The rest were comped — free-flagged, or opened by hand. */
+    livePaid: z.number().int().min(0),
+    started: z.number().int().min(0),
+    /** Every bucket, zeros included, in `SUBSCRIPTION_PLAN_BUCKETS` order. */
+    byPlan: z.array(SubscriptionPlanCountSchema),
+  }),
   students: z.object({
     /**
      * Every student, enrolled or not — the same population `/admin/students`

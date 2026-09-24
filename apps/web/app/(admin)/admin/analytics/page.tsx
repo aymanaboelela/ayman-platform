@@ -1,6 +1,10 @@
 import type { SearchParams } from 'nuqs/server';
 import { z } from 'zod';
-import { AnalyticsOverviewSchema, GRADE_BANDS } from '@ayman/contracts/admin/analytics';
+import {
+  AnalyticsOverviewSchema,
+  GRADE_BANDS,
+  type SubscriptionPlanBucket,
+} from '@ayman/contracts/admin/analytics';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts';
 import { adminGet } from '@/lib/admin-api';
@@ -19,7 +23,12 @@ import {
   num,
   pct,
 } from '@/components/admin/charts/format';
-import { ordinalColor, sequentialColor, seriesColor } from '@/components/admin/charts/palette';
+import {
+  MUTED,
+  ordinalColor,
+  sequentialColor,
+  seriesColor,
+} from '@/components/admin/charts/palette';
 import { Section } from '@/components/admin/charts/section';
 import { AnalyticsNav } from './analytics-nav';
 import { FilterBar } from './filter-bar';
@@ -28,6 +37,31 @@ import { overviewCache, safeWindow } from './search-params';
 const c = copy.analytics;
 
 const CourseOptionSchema = z.object({ id: z.string(), title: z.string() });
+
+/**
+ * One hue per plan, fixed by the PLAN and not by its position on screen — so
+ * «شهر» is the same colour on the tile, on the bar and in the table view
+ * whether or not «٣ شهور» happens to be showing today. «من غير باقة» is not a
+ * plan, and takes the muted slot that says so.
+ */
+const PLAN_COLOR: Record<SubscriptionPlanBucket, string> = {
+  monthly: seriesColor(0),
+  term: seriesColor(1),
+  yearly: seriesColor(2),
+  quarterly: seriesColor(3),
+  unspecified: MUTED,
+};
+
+/** The three on sale are always drawn, zeros included — «سنة: ٠» is an answer.
+ *  The other two appear only while they hold somebody. */
+const ALWAYS_SHOWN: ReadonlySet<SubscriptionPlanBucket> = new Set(['monthly', 'term', 'yearly']);
+
+/** Literal class names, because Tailwind only generates what it can read. */
+const TILE_COLUMNS: Record<number, string> = {
+  4: 'lg:grid-cols-4',
+  5: 'lg:grid-cols-5',
+  6: 'lg:grid-cols-6',
+};
 
 export const metadata = { title: c.title };
 
@@ -40,7 +74,7 @@ export const metadata = { title: c.title };
  * from a broken one.
  *
  * Reading order is deliberate and is the argument the page makes:
- *   1. who is here            (headcount, activity)
+ *   1. who is here            (headcount, activity, and on which plan)
  *   2. did they watch         (rate, hours, how far they got)
  *   3. did they sit the exam  (participation, scores, bands, time)
  *   4. when, and who exactly  (the trend, then the cohort splits)
@@ -67,7 +101,13 @@ export default async function AnalyticsOverviewPage({
     adminGet('/api/admin/courses', z.array(CourseOptionSchema)),
   ]);
 
-  const { students, video, quiz } = overview;
+  const { students, subscriptions, video, quiz } = overview;
+
+  const plans = subscriptions.byPlan
+    .filter((row) => ALWAYS_SHOWN.has(row.plan) || row.live > 0 || row.started > 0)
+    .map((row) => ({ ...row, label: c.plan[row.plan], color: PLAN_COLOR[row.plan] }));
+  const planLiveSum = plans.reduce((sum, row) => sum + row.live, 0);
+  const showsUnspecified = plans.some((row) => row.plan === 'unspecified');
 
   const engagementSlices = overview.engagement.map((slice, index) => ({
     key: slice.segment,
@@ -177,6 +217,119 @@ export default async function AnalyticsOverviewPage({
             href={`/admin/analytics/students${courseQuery}${courseQuery ? '&' : '?'}sort=lastActiveAt&dir=desc`}
           />
           <StatTile label={c.newLast30} value={num(students.newLast30)} href="/admin/students" />
+        </div>
+      </Section>
+
+      {/*
+        «مشتركين بإيه». Its own band right under the headcount, because it is
+        the same question one step further — not «كام واحد» but «على إيه».
+        Counts STUDENTS on every tile (a four-month buyer holds four grants),
+        and the total is its own distinct count rather than the sum of the
+        plans, which double-counts anyone on two. No tile links anywhere: the
+        subscriptions screen lists paid grants only, so a hand-opened one would
+        make the number on the far side smaller than the one pressed.
+      */}
+      <Section
+        title={c.sectionPlansTitle}
+        lead={c.sectionPlansLead}
+        href="/admin/finance/subscriptions"
+        linkLabel={c.goToSubscriptions}
+      >
+        <div
+          className={`mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 ${TILE_COLUMNS[plans.length + 1] ?? 'lg:grid-cols-6'}`}
+        >
+          <StatTile
+            label={c.subscribersLive}
+            value={num(subscriptions.live)}
+            context={formatCopy(c.subscribersStarted, { n: num(subscriptions.started) })}
+            accent
+          />
+          {plans.map((row) => (
+            <StatTile
+              key={row.plan}
+              label={row.label}
+              value={num(row.live)}
+              tint={row.color}
+              context={
+                subscriptions.live > 0
+                  ? formatCopy(c.planShareOfLive, { p: pct(row.live / subscriptions.live) })
+                  : undefined
+              }
+            />
+          ))}
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-lg border border-line bg-surface-2 p-4 sm:p-5">
+            <Meter
+              label={c.paidRate}
+              fraction={
+                subscriptions.live > 0 ? subscriptions.livePaid / subscriptions.live : null
+              }
+              numerator={subscriptions.livePaid}
+              denominator={subscriptions.live}
+              color="var(--viz-1)"
+            />
+            <dl className="mt-4 grid grid-cols-2 gap-3">
+              <Figure label={c.paidCount} value={num(subscriptions.livePaid)} />
+              <Figure
+                label={c.compedCount}
+                value={num(subscriptions.live - subscriptions.livePaid)}
+              />
+            </dl>
+            <div className="mt-5 border-t border-line-subtle pt-4">
+              <BarList
+                ariaLabel={c.subscribersLive}
+                rows={plans.map((row) => ({
+                  key: row.plan,
+                  label: row.label,
+                  value: row.live,
+                  display: num(row.live),
+                  displayNote:
+                    subscriptions.live > 0 ? pct(row.live / subscriptions.live) : c.unknown,
+                  color: row.color,
+                }))}
+              />
+            </div>
+            {showsUnspecified || planLiveSum > subscriptions.live ? (
+              <div className="mt-4 flex flex-col gap-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+                {showsUnspecified ? <p>{c.unspecifiedHint}</p> : null}
+                {planLiveSum > subscriptions.live ? <p>{c.plansOverlapHint}</p> : null}
+              </div>
+            ) : null}
+          </div>
+
+          <ChartCard
+            title={c.plansStarted}
+            hint={c.plansStartedHint}
+            isEmpty={subscriptions.started === 0}
+            rows={plans.map((row) => ({
+              label: row.label,
+              value: num(row.started),
+              color: row.color,
+            }))}
+          >
+            <div className="flex flex-col gap-5">
+              <p className="flex items-baseline gap-2">
+                <span className="text-[length:var(--fs-title-1)] font-semibold leading-none text-fg">
+                  {num(subscriptions.started)}
+                </span>
+                <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
+                  {c.plansStarted}
+                </span>
+              </p>
+              <BarList
+                ariaLabel={c.plansStarted}
+                rows={plans.map((row) => ({
+                  key: row.plan,
+                  label: row.label,
+                  value: row.started,
+                  display: num(row.started),
+                  color: row.color,
+                }))}
+              />
+            </div>
+          </ChartCard>
         </div>
       </Section>
 
