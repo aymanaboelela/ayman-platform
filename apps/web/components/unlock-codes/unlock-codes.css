@@ -1,0 +1,600 @@
+/* =============================================================================
+   «كود الكورس» — `/codes`, the course page's «عندك كود؟» card, and the success
+   screen after a code opens something.
+
+   Warm and loud on purpose. This is the moment a student who paid on WhatsApp
+   sees what they paid for arrive — a grey form here reads as «did it work?»,
+   and the answer has to be visible from across the room. Brand amber for the
+   thing to press, ember for structure, the viz hues for the five kinds of
+   thing a code can open (so «وحدة» and «محاضرة» are told apart by colour
+   before they are read).
+
+   Every colour is a token or a `color-mix` of one, so the page follows the
+   tenant's hue and the dark theme without a second set of rules.
+   ========================================================================== */
+
+/* ── the hero band ──────────────────────────────────────────────────────── */
+.uc-hero {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 1.25rem;
+  align-items: center;
+  padding: 1.75rem 1.5rem 2.25rem;
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in oklab, var(--p-300) 55%, transparent) 0%, transparent 60%),
+    radial-gradient(90% 80% at 0% 100%, color-mix(in oklab, var(--e-500) 45%, transparent) 0%, transparent 65%),
+    linear-gradient(135deg, var(--p-600) 0%, var(--e-600) 100%);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+}
+@media (min-width: 768px) {
+  .uc-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 19rem);
+    padding: 2.25rem 2.5rem 2.75rem;
+  }
+}
+/* A faint grid of dots — the same «printed ticket» texture the art carries. */
+.uc-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgb(255 255 255 / 0.18) 1px, transparent 1.5px);
+  background-size: 18px 18px;
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.9), transparent 85%);
+  pointer-events: none;
+}
+.uc-hero > * { position: relative; }
+
+.uc-hero__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.18);
+  border: 1px solid rgb(255 255 255 / 0.28);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  backdrop-filter: blur(6px);
+}
+.uc-hero__title {
+  margin-top: 0.9rem;
+  font-size: var(--fs-title-1);
+  line-height: 1.25;
+  font-weight: var(--fw-bold);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.uc-hero__lead {
+  margin-top: 0.6rem;
+  max-width: 34rem;
+  font-size: var(--fs-text-base);
+  line-height: 1.8;
+  color: rgb(255 255 255 / 0.9);
+}
+.uc-hero__art {
+  justify-self: center;
+  width: min(100%, 19rem);
+  filter: drop-shadow(0 18px 24px rgb(0 0 0 / 0.22));
+}
+@media (prefers-reduced-motion: no-preference) {
+  .uc-hero__art { animation: uc-float 6s var(--ease-out) infinite alternate; }
+}
+@keyframes uc-float {
+  from { transform: translateY(0) rotate(-1.5deg); }
+  to   { transform: translateY(-8px) rotate(1deg); }
+}
+
+/* ── the illustration's own paints (SVG, aria-hidden) ───────────────────── */
+.uc-art .uc-art__glow    { fill: rgb(255 255 255 / 0.16); }
+.uc-art .uc-art__ticket  { fill: url(#uc-ticket-fill); }
+.uc-art .uc-art__stop-a  { stop-color: var(--p-300); }
+.uc-art .uc-art__stop-b  { stop-color: var(--p-500); }
+.uc-art .uc-art__edge    { fill: none; stroke: rgb(255 255 255 / 0.55); stroke-width: 2; }
+.uc-art .uc-art__perf    { stroke: rgb(255 255 255 / 0.7); stroke-width: 2.5; stroke-dasharray: 2 7; stroke-linecap: round; }
+.uc-art .uc-art__slot    { fill: rgb(255 255 255 / 0.92); }
+.uc-art .uc-art__char    { fill: var(--e-800); font-family: var(--font-mono); font-weight: 700; font-size: 15px; }
+.uc-art .uc-art__lock    { fill: var(--ink); }
+.uc-art .uc-art__keyhole { fill: var(--a-9); }
+.uc-art .uc-art__shackle { fill: none; stroke: var(--n-5); stroke-width: 9; stroke-linecap: round; }
+.uc-art .uc-art__spark-1 { fill: #fff; }
+.uc-art .uc-art__spark-2 { fill: var(--a-9); }
+.uc-art .uc-art__spark-3 { fill: var(--p-200); }
+.uc-art .uc-art__dot-1   { fill: var(--viz-2); }
+.uc-art .uc-art__dot-2   { fill: var(--viz-4); }
+.uc-art .uc-art__dot-3   { fill: #fff; }
+.uc-art .uc-art__tag     { fill: var(--ok); }
+.uc-art .uc-art__tick    { fill: none; stroke: #fff; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
+@media (prefers-reduced-motion: no-preference) {
+  .uc-art .uc-art__spark-1,
+  .uc-art .uc-art__spark-2,
+  .uc-art .uc-art__spark-3 {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: uc-twinkle 2.4s var(--ease-out) infinite;
+  }
+  .uc-art .uc-art__spark-2 { animation-delay: 0.8s; }
+  .uc-art .uc-art__spark-3 { animation-delay: 1.6s; }
+}
+@keyframes uc-twinkle {
+  0%, 100% { transform: scale(0.7); opacity: 0.6; }
+  50%      { transform: scale(1.15); opacity: 1; }
+}
+
+/* ── the main card ──────────────────────────────────────────────────────── */
+.uc-card {
+  position: relative;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+}
+/* The form and its side column ride up over the hero's bottom edge on wide
+   screens, so the band and the form read as one object rather than a banner
+   and a form below it. */
+@media (min-width: 1024px) {
+  .uc-lift { margin-top: -2.75rem; }
+}
+.uc-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.uc-card__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--p-500) 16%, transparent);
+  color: var(--p-600);
+}
+.uc-card__title {
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg);
+}
+.uc-card__lead {
+  margin-top: 0.15rem;
+  font-size: var(--fs-text-sm);
+  color: var(--color-fg-muted);
+  line-height: 1.7;
+}
+
+/* ── the six boxes ──────────────────────────────────────────────────────── */
+.uc-code {
+  position: relative;
+  margin-top: 1.25rem;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+/* The real input sits over the boxes, invisible, so the phone's keyboard,
+   paste, autofill and the screen reader all see one ordinary text field. */
+.uc-code__input {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  opacity: 0;
+  font-size: 16px; /* under 16px, iOS zooms the whole page on focus */
+  caret-color: transparent;
+  cursor: text;
+}
+.uc-code__boxes {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(0.35rem, 1.6vw, 0.7rem);
+}
+.uc-code__box {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 5 / 6;
+  max-block-size: 4.75rem;
+  border-radius: var(--r-md);
+  border: 2px solid var(--color-line-strong);
+  background: var(--color-surface-1);
+  font-family: var(--font-mono);
+  font-size: clamp(1.4rem, 5.5vw, 2.1rem);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+  transition:
+    border-color var(--d-hover) var(--ease-out),
+    background var(--d-hover) var(--ease-out),
+    transform var(--d-hover) var(--ease-pop);
+}
+.uc-code__box.is-filled {
+  border-color: color-mix(in oklab, var(--p-500) 70%, transparent);
+  background: color-mix(in oklab, var(--p-500) 9%, var(--color-surface-1));
+}
+.uc-code__box.is-active {
+  border-color: var(--p-500);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--p-500) 22%, transparent);
+}
+.uc-code__box.is-active:not(.is-filled)::after {
+  content: '';
+  inline-size: 2px;
+  block-size: 45%;
+  border-radius: 2px;
+  background: var(--p-500);
+  animation: uc-caret 1s steps(1) infinite;
+}
+@keyframes uc-caret { 50% { opacity: 0; } }
+.uc-code.is-error .uc-code__box { border-color: var(--err); }
+@media (prefers-reduced-motion: no-preference) {
+  .uc-code.is-error .uc-code__boxes { animation: uc-shake 0.36s var(--ease-out); }
+  .uc-code__box.is-filled { animation: uc-pop 0.18s var(--ease-pop); }
+}
+@keyframes uc-shake {
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+@keyframes uc-pop {
+  from { transform: scale(0.88); }
+  to   { transform: scale(1); }
+}
+
+.uc-hint {
+  margin-top: 0.7rem;
+  font-size: var(--fs-text-sm);
+  color: var(--color-fg-muted);
+}
+.uc-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--err) 11%, transparent);
+  color: var(--err);
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+}
+
+.uc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.1rem;
+}
+.uc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-block-size: 2.9rem;
+  padding-inline: 1.25rem;
+  border-radius: var(--r-md);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  transition:
+    background var(--d-hover) var(--ease-out),
+    transform var(--d-hover) var(--ease-out),
+    opacity var(--d-hover) var(--ease-out);
+}
+.uc-btn:active { transform: translateY(1px); }
+.uc-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.uc-btn--primary {
+  flex: 1 1 12rem;
+  background: var(--a-9);
+  color: #1a1206;
+  box-shadow: 0 6px 16px color-mix(in oklab, var(--a-9) 35%, transparent);
+}
+.uc-btn--primary:not(:disabled):hover { background: var(--a-10); }
+.uc-btn--ghost {
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-1);
+  color: var(--color-fg);
+}
+.uc-btn--ghost:hover { background: var(--color-surface-3); }
+.uc-btn--wa {
+  background: #1faa59;
+  color: #fff;
+}
+.uc-btn--wa:hover { background: #178f4a; }
+.uc-spin { animation: uc-spin 0.8s linear infinite; }
+@keyframes uc-spin { to { transform: rotate(360deg); } }
+
+/* ── success ────────────────────────────────────────────────────────────── */
+.uc-success {
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+  padding-top: 0.5rem;
+}
+.uc-success__badge {
+  display: grid;
+  place-items: center;
+  margin-inline: auto;
+  inline-size: 4.5rem;
+  block-size: 4.5rem;
+  border-radius: var(--r-full);
+  background: var(--ok);
+  color: #fff;
+  box-shadow: 0 0 0 10px color-mix(in oklab, var(--ok) 16%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .uc-success__badge { animation: uc-badge 0.55s var(--ease-pop) both; }
+}
+@keyframes uc-badge {
+  0%   { transform: scale(0.3); opacity: 0; }
+  70%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.uc-success__title {
+  margin-top: 1rem;
+  font-size: var(--fs-title-2);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+}
+.uc-success__lead {
+  margin-top: 0.35rem;
+  font-size: var(--fs-text-base);
+  color: var(--color-fg-muted);
+}
+.uc-success .uc-actions { justify-content: center; }
+
+/* Confetti — twenty-four spans, each with its own hue, drift and delay set
+   inline. Pure CSS, gone after one pass, and absent entirely for anybody who
+   asked the OS for less motion. */
+.uc-confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.uc-confetti span {
+  position: absolute;
+  inset-block-start: -12px;
+  inline-size: 8px;
+  block-size: 13px;
+  border-radius: 2px;
+  opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .uc-confetti span { animation: uc-fall 1.9s var(--ease-out) forwards; }
+}
+@keyframes uc-fall {
+  0%   { opacity: 1; transform: translate3d(0, 0, 0) rotate(0deg); }
+  100% { opacity: 0; transform: translate3d(var(--dx, 0), 360px, 0) rotate(var(--rot, 540deg)); }
+}
+
+/* ── what opened: one row per piece ─────────────────────────────────────── */
+.uc-opened {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+  text-align: start;
+}
+.uc-item {
+  --uc-hue: var(--viz-1);
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in oklab, var(--uc-hue) 28%, transparent);
+  background: color-mix(in oklab, var(--uc-hue) 8%, var(--color-surface-1));
+}
+.uc-item--course  { --uc-hue: var(--p-500); }
+.uc-item--term    { --uc-hue: var(--viz-3); }
+.uc-item--month   { --uc-hue: var(--viz-4); }
+.uc-item--section { --uc-hue: var(--viz-2); }
+.uc-item--lesson  { --uc-hue: var(--viz-1); }
+.uc-item__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--r-sm);
+  background: var(--uc-hue);
+  color: #fff;
+}
+.uc-item__body { min-inline-size: 0; flex: 1; }
+.uc-item__kind {
+  display: inline-block;
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: color-mix(in oklab, var(--uc-hue) 80%, var(--color-fg));
+}
+.uc-item__title {
+  display: block;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg);
+  overflow-wrap: anywhere;
+}
+.uc-item__meta {
+  display: block;
+  font-size: var(--fs-text-xs);
+  color: var(--color-fg-muted);
+}
+
+/* ── the side column: steps and the WhatsApp card ───────────────────────── */
+.uc-steps { display: grid; gap: 0.85rem; margin-top: 1rem; counter-reset: uc-step; }
+.uc-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+  color: var(--color-fg);
+}
+.uc-step__n {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 1.9rem;
+  block-size: 1.9rem;
+  border-radius: var(--r-full);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-text-sm);
+  color: #fff;
+}
+.uc-step:nth-child(1) .uc-step__n { background: var(--viz-1); }
+.uc-step:nth-child(2) .uc-step__n { background: var(--viz-2); }
+.uc-step:nth-child(3) .uc-step__n { background: var(--viz-4); }
+.uc-step:nth-child(4) .uc-step__n { background: var(--ok); }
+
+.uc-wa {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  padding: 1.25rem;
+  background:
+    radial-gradient(80% 70% at 100% 0%, rgb(255 255 255 / 0.22), transparent 60%),
+    linear-gradient(140deg, #25d366 0%, #128c7e 100%);
+  color: #fff;
+}
+.uc-wa__title { font-size: var(--fs-title-4); font-weight: var(--fw-bold); }
+.uc-wa__body { margin-top: 0.35rem; font-size: var(--fs-text-sm); line-height: 1.75; color: rgb(255 255 255 / 0.92); }
+.uc-wa__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  inline-size: 100%;
+  margin-top: 1rem;
+  min-block-size: 2.75rem;
+  border-radius: var(--r-md);
+  background: #fff;
+  color: #0e6b4a;
+  font-weight: var(--fw-bold);
+  transition: transform var(--d-hover) var(--ease-out);
+}
+.uc-wa__btn:hover { transform: translateY(-1px); }
+
+/* ── history ────────────────────────────────────────────────────────────── */
+.uc-history { display: grid; gap: 0.85rem; margin-top: 1rem; }
+@media (min-width: 768px) { .uc-history { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.uc-ticket {
+  position: relative;
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+}
+/* The two half-circle notches a paper ticket has — cut from the page colour. */
+.uc-ticket::before,
+.uc-ticket::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 3.35rem;
+  inline-size: 16px;
+  block-size: 16px;
+  border-radius: var(--r-full);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-line);
+}
+.uc-ticket::before { inset-inline-start: -9px; }
+.uc-ticket::after  { inset-inline-end: -9px; }
+.uc-ticket.is-revoked { opacity: 0.6; }
+.uc-ticket__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-block-end: 0.75rem;
+  border-block-end: 2px dashed var(--color-line);
+}
+.uc-ticket__code {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-lg);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.18em;
+  color: var(--p-600);
+}
+.uc-ticket.is-revoked .uc-ticket__code { text-decoration: line-through; color: var(--color-fg-muted); }
+.uc-ticket__course {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg);
+}
+.uc-ticket__date { font-size: var(--fs-text-xs); color: var(--color-fg-muted); }
+.uc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--r-full);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+}
+.uc-badge--ok  { background: color-mix(in oklab, var(--ok) 15%, transparent); color: var(--ok); }
+.uc-badge--off { background: color-mix(in oklab, var(--err) 12%, transparent); color: var(--err); }
+
+.uc-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.uc-chip {
+  --uc-hue: var(--viz-1);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-inline-size: 100%;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--uc-hue) 13%, transparent);
+  color: color-mix(in oklab, var(--uc-hue) 75%, var(--color-fg));
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+}
+.uc-chip--course  { --uc-hue: var(--p-500); }
+.uc-chip--term    { --uc-hue: var(--viz-3); }
+.uc-chip--month   { --uc-hue: var(--viz-4); }
+.uc-chip--section { --uc-hue: var(--viz-2); }
+.uc-chip--lesson  { --uc-hue: var(--viz-1); }
+.uc-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.uc-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 1.1rem 1.25rem;
+  border-radius: var(--r-lg);
+  border: 2px dashed color-mix(in oklab, var(--p-500) 30%, var(--color-line));
+  background: color-mix(in oklab, var(--p-500) 5%, transparent);
+  color: var(--color-fg-muted);
+  font-size: var(--fs-text-sm);
+}
+
+/* ── the compact card on a course page ──────────────────────────────────── */
+.uc-mini {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklab, var(--p-500) 30%, var(--color-line));
+  background:
+    radial-gradient(70% 90% at 100% 0%, color-mix(in oklab, var(--p-400) 18%, transparent), transparent 70%),
+    var(--color-surface-2);
+  padding: 1.25rem;
+}
+.uc-mini .uc-code { margin-top: 1rem; }
+.uc-mini .uc-code__box { max-block-size: 3.6rem; font-size: clamp(1.2rem, 4.5vw, 1.6rem); }
+.uc-mini__single {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px dashed var(--color-line);
+  font-size: var(--fs-text-sm);
+  color: var(--color-fg-muted);
+}
+.uc-mini__wa {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: var(--fw-semibold);
+  color: #128c7e;
+}
+.uc-mini__wa:hover { text-decoration: underline; }

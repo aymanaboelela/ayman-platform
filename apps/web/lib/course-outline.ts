@@ -74,6 +74,14 @@ export interface OutlineLesson {
    * that goes nowhere.
    */
   month: { id: string; title: string; lessonCount: number } | null;
+  /**
+   * Whether a padlock on this row is a MONTH's — the course sells by month or
+   * the lecture carries one. `false` means the only way this row is locked is
+   * that the student holds codes for OTHER lectures, and «شهر تاني» would name
+   * a month that does not exist. Optional so a hand-built row reads as the
+   * month case it always was.
+   */
+  lockedByMonth?: boolean;
 }
 
 /**
@@ -361,6 +369,7 @@ export function buildCourseOutline({
         lesson.monthIds.length === 1
           ? (monthsById.get(lesson.monthIds[0] as string) ?? null)
           : null,
+      lockedByMonth: course.months.length > 0 || lesson.monthIds.length > 0,
     };
   };
 

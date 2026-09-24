@@ -131,6 +131,12 @@ model User {
   enrollments    Enrollment[]
   accessGrants   AccessGrant[]   @relation("AccessGrantSubject")
   grantsIssued   AccessGrant[]   @relation("AccessGrantIssuer")
+  /// «أكواد الفتح» — the codes this admin generated, the one this student
+  /// redeemed, and the ones this admin pulled. Three names because a code has
+  /// three different people on it and none of them is the same column.
+  unlockCodesCreated  UnlockCode[] @relation("UnlockCodeCreator")
+  unlockCodesRedeemed UnlockCode[] @relation("UnlockCodeRedeemer")
+  unlockCodesRevoked  UnlockCode[] @relation("UnlockCodeRevoker")
 
   // Plan 5 — question bank
   questionBankEntries        QuestionBankEntry[]
@@ -951,6 +957,7 @@ model Course {
   lessons            Lesson[]
   enrollments        Enrollment[]
   grants             AccessGrant[]
+  unlockCodes        UnlockCode[]
   // Articles whose call to action points at this course.
   newsPosts          NewsPost[]
   paymentSubmissions PaymentSubmission[]
@@ -998,6 +1005,11 @@ model CourseSection {
   course  Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
   term    CourseTerm? @relation(fields: [termId], references: [id], onDelete: SetNull)
   lessons Lesson[]
+  /// A `scope: section` grant opens every published lecture in this unit —
+  /// including one added after the code was redeemed, which is what «الوحدة
+  /// الأولى» means to the student who paid for it.
+  accessGrants    AccessGrant[]
+  unlockCodeItems UnlockCodeItem[]
 
   // Re-created as DEFERRABLE INITIALLY DEFERRED in the hand-written migration
   // (Task 3, Step 7). Prisma cannot express deferrability and does not
@@ -1085,6 +1097,7 @@ model CourseTerm {
   course             Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
   sections           CourseSection[]
   accessGrants       AccessGrant[]
+  unlockCodeItems    UnlockCodeItem[]
   paymentSubmissions PaymentSubmission[]
 
   @@unique([courseId, position])
@@ -1162,6 +1175,7 @@ model CourseMonth {
   course             Course                   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   lessons            LessonMonth[]
   accessGrants       AccessGrant[]
+  unlockCodeItems    UnlockCodeItem[]
   paymentSubmissions PaymentSubmissionMonth[]
 
   @@unique([courseId, monthIndex])
@@ -1329,6 +1343,10 @@ model Lesson {
   /// Empty on every lecture of a course with no months configured, and empty
   /// is a real, deliberate state even on one that has them — see `LessonMonth`.
   months              LessonMonth[]
+  /// «فتح بكود» — `scope: lesson` grants on this ONE lecture, with its quiz
+  /// and its homework (both hang off this same `lessonId`).
+  accessGrants        AccessGrant[]
+  unlockCodeItems     UnlockCodeItem[]
 
   @@unique([sectionId, position], map: "lessons_section_position_key")
   // Backs `courses_exam_lesson_in_same_course` — the composite FK the
@@ -1763,8 +1781,13 @@ enum EnrollmentStatus {
 }
 
 /// How the enrollment came to exist. v1 wrote only `free`; `purchase` is now
-/// written too, by `PaymentsService` on an approved submission. The rest
-/// remain reserved for the access-code and coupon flows.
+/// written too, by `PaymentsService` on an approved submission, and `code` by
+/// `UnlockCodesService.redeem`. `coupon` is still reserved.
+///
+/// `code` is load-bearing, not provenance: an enrollment minted by a code is
+/// the one case where the enrollment row is NOT the key to the whole course.
+/// `EntitlementService.resolveContentAccess` reads it to decide that a student
+/// holding nothing but code grants reaches exactly what the codes opened.
 enum EnrollmentSource {
   free
   manual
@@ -1807,6 +1830,15 @@ enum AccessScope {
   /// month grant AND a wider one at the same time, and the newest is not the
   /// widest. See that method's own note.
   course_month
+  /// «فتح بكود» — ONE unit (`CourseSection`) of a course, every lecture in it.
+  /// Only ever written by `UnlockCodesService.redeem`. Deliberately NOT in
+  /// `courseAccessScopes`: this is not access to the course, and every list,
+  /// counter and money screen that reads that function must keep not seeing
+  /// it. The lesson gate reads it through `resolveContentAccess` instead.
+  section
+  /// «فتح بكود» — ONE lecture (`Lesson`), with the quiz and the homework that
+  /// hang off it. Same rules as `section`.
+  lesson
 
   @@map("access_scope")
   @@schema("app")
@@ -1862,6 +1894,14 @@ model AccessGrant {
   /// not thirty days they rented, and that difference is the entire feature.
   /// Its only cutoff is `revokedAt`.
   monthId                      String?          @map("month_id") @db.Uuid
+  /// Set only for `scope: section`, paired with `courseId` like `termId` is.
+  sectionId                    String?          @map("section_id") @db.Uuid
+  /// Set only for `scope: lesson`, paired with `courseId` like `termId` is.
+  lessonId                     String?          @map("lesson_id") @db.Uuid
+  /// The code this grant was opened by — set on every `source: access_code`
+  /// grant, whatever its scope. It is how «اسحب اللي فتحه الكود ده» finds
+  /// exactly the grants to revoke and nothing else the student holds.
+  unlockCodeId                 String?          @map("unlock_code_id") @db.Uuid
   source                       GrantSource
   scholarshipKind              ScholarshipKind? @map("scholarship_kind")
   validFrom                    DateTime         @default(now()) @map("valid_from")
@@ -1903,6 +1943,9 @@ model AccessGrant {
   subject            Subject?            @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   term               CourseTerm?         @relation(fields: [termId], references: [id], onDelete: Cascade)
   month              CourseMonth?        @relation(fields: [monthId], references: [id], onDelete: Cascade)
+  section            CourseSection?      @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  lesson             Lesson?             @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  unlockCode         UnlockCode?         @relation(fields: [unlockCodeId], references: [id], onDelete: SetNull)
   /// Payment submissions this SPECIFIC grant was created or extended by — the
   /// audit link from money to access. Not every grant has one: `admin` and
   /// `auto_free` grants never do.
@@ -1916,7 +1959,92 @@ model AccessGrant {
   /// «كام مشترك على الشهر ده» — the admin's per-month subscriber count, which
   /// the instructor reads while he is writing the lecture.
   @@index([monthId])
+  /// The lesson gate's own read: «أي أكواد فتح عند الطالب ده على الكورس ده».
+  @@index([userId, courseId, scope])
+  @@index([unlockCodeId])
   @@map("access_grants")
+  @@schema("app")
+}
+
+/// «كود فتح» — ستة حروف وأرقام بيعملها الأدمن لكورس واحد، وبيفتح حتة محددة منه
+/// (الكورس كله، ترم، شهر، وحدة، أو محاضرة) لأول طالب يكتبه. بعدها الكود خلص.
+///
+/// The code is the ONLY secret. It is single-use by construction, not by a
+/// check: `redeem` is one conditional UPDATE (`redeemed_at IS NULL AND
+/// revoked_at IS NULL`), so two students racing the same code get one row
+/// each from Postgres and only one of them gets it back.
+///
+/// Nothing here opens anything by itself. Redeeming turns every item into an
+/// ordinary `AccessGrant` with `source: access_code` and `unlockCodeId` set,
+/// so the lesson gate, the quiz and the homework read grants exactly as they
+/// already do, and pulling a code is stamping `revokedAt` on those grants.
+model UnlockCode {
+  id               String    @id @default(uuid(7)) @db.Uuid
+  /// Six characters from `ABCDEFGHJKMNPQRSTUVWXYZ23456789` — the guardian
+  /// code's alphabet, with 0/O/1/I/L gone because a student reads this off a
+  /// WhatsApp message and types it. Shape enforced by CHECK.
+  code             String    @unique @db.VarChar(6)
+  courseId         String    @map("course_id") @db.Uuid
+  /// «الكورس كله» — a `scope: course` grant, open-ended. Items are ignored
+  /// (and never written) when this is set.
+  wholeCourse      Boolean   @default(false) @map("whole_course")
+  /// What the student paid for it, for the admin's own list. A record, not a
+  /// charge: no money moves through this table and finance does not read it.
+  priceCents       Int?      @map("price_cents")
+  note             String?
+  createdByUserId  String?   @map("created_by_user_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  redeemedByUserId String?   @map("redeemed_by_user_id")
+  redeemedAt       DateTime? @map("redeemed_at")
+  /// An unused code that can no longer be redeemed, or a used one whose
+  /// grants were pulled. Either way the code is finished.
+  revokedAt        DateTime? @map("revoked_at")
+  revokedByUserId  String?   @map("revoked_by_user_id")
+
+  course     Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdBy  User?            @relation("UnlockCodeCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  redeemedBy User?            @relation("UnlockCodeRedeemer", fields: [redeemedByUserId], references: [id], onDelete: SetNull)
+  revokedBy  User?            @relation("UnlockCodeRevoker", fields: [revokedByUserId], references: [id], onDelete: SetNull)
+  items      UnlockCodeItem[]
+  grants     AccessGrant[]
+
+  @@index([courseId, createdAt])
+  @@index([createdAt])
+  @@index([redeemedByUserId])
+  @@map("unlock_codes")
+  @@schema("app")
+}
+
+enum UnlockItemKind {
+  term
+  month
+  section
+  lesson
+
+  @@map("unlock_item_kind")
+  @@schema("app")
+}
+
+/// One piece of what a code opens. Exactly the column named by `kind` is set
+/// (CHECK). A target that is deleted takes its item with it — a code for a
+/// lecture that no longer exists opens nothing rather than something else.
+model UnlockCodeItem {
+  id        String         @id @default(uuid(7)) @db.Uuid
+  codeId    String         @map("code_id") @db.Uuid
+  kind      UnlockItemKind
+  termId    String?        @map("term_id") @db.Uuid
+  monthId   String?        @map("month_id") @db.Uuid
+  sectionId String?        @map("section_id") @db.Uuid
+  lessonId  String?        @map("lesson_id") @db.Uuid
+
+  code    UnlockCode     @relation(fields: [codeId], references: [id], onDelete: Cascade)
+  term    CourseTerm?    @relation(fields: [termId], references: [id], onDelete: Cascade)
+  month   CourseMonth?   @relation(fields: [monthId], references: [id], onDelete: Cascade)
+  section CourseSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  lesson  Lesson?        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([codeId])
+  @@map("unlock_code_items")
   @@schema("app")
 }
 

@@ -148,6 +148,9 @@ export const PROTECTED_PREFIXES = [
     is written.
   */
   '/notifications',
+  // «كود الكورس» — redeeming is a write on the student's own account, and
+  // the page reads their history with `apiGetAuthed`.
+  '/codes',
 ] as const;
 
 /**

@@ -30,6 +30,7 @@ import { CatalogModule } from '../modules/catalog/catalog.module';
 import { PlayerModule } from '../modules/player/player.module';
 import { DashboardModule } from '../modules/dashboard/dashboard.module';
 import { GuardianModule } from '../modules/guardian/guardian.module';
+import { UnlockCodesModule } from '../modules/unlock-codes/unlock-codes.module';
 import { SettingsModule } from '../modules/admin/settings/settings.module';
 import { StudentsModule } from '../modules/admin/students/students.module';
 import { AdminTaxonomyModule } from '../modules/admin/taxonomy/admin-taxonomy.module';
@@ -263,6 +264,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // فصف في المصفوفة من غير موديوله بيرجّع 404 — «الراوت مش موجود» مش
         // «الحارس رفضه»، وهو بالظبط العكس اللي الصف بيتأكد منه.
         GuardianModule,
+        // «أكواد الفتح» — موديول كامل لنفس السبب اللي فوق: `UnlockAttemptsService`
+        // محتاج ريديس، والموديول بيجيبه من غير ما الفيكستشر يعرف.
+        UnlockCodesModule,
         SettingsModule,
         StudentsModule,
         AdminTaxonomyModule,
@@ -2251,6 +2255,30 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin expenses patch: student', method: 'patch', path: () => `/api/admin/expenses/${randomUUID()}`, actor: 'student', status: 403 },
     { label: 'admin expenses delete: anonymous', method: 'delete', path: () => `/api/admin/expenses/${randomUUID()}`, actor: 'anonymous', status: 401 },
     { label: 'admin expenses delete: student', method: 'delete', path: () => `/api/admin/expenses/${randomUUID()}`, actor: 'student', status: 403 },
+    // «أكواد الفتح» — the admin half is `payment:*`, the student half is the
+    // student's own `enrollment:*`.
+    { label: 'unlock codes list: anonymous', method: 'get', path: () => '/api/admin/unlock-codes', actor: 'anonymous', status: 401 },
+    { label: 'unlock codes list: student', method: 'get', path: () => '/api/admin/unlock-codes', actor: 'student', status: 403 },
+    { label: 'unlock codes list: admin', method: 'get', path: () => '/api/admin/unlock-codes', actor: 'admin', status: 200 },
+    { label: 'unlock codes courses: anonymous', method: 'get', path: () => '/api/admin/unlock-codes/courses', actor: 'anonymous', status: 401 },
+    { label: 'unlock codes courses: student', method: 'get', path: () => '/api/admin/unlock-codes/courses', actor: 'student', status: 403 },
+    { label: 'unlock codes courses: admin', method: 'get', path: () => '/api/admin/unlock-codes/courses', actor: 'admin', status: 200 },
+    { label: 'unlock codes tree: anonymous', method: 'get', path: () => `/api/admin/unlock-codes/courses/${randomUUID()}/tree`, actor: 'anonymous', status: 401 },
+    { label: 'unlock codes tree: student', method: 'get', path: () => `/api/admin/unlock-codes/courses/${randomUUID()}/tree`, actor: 'student', status: 403 },
+    { label: 'unlock codes tree: admin, unknown course', method: 'get', path: () => `/api/admin/unlock-codes/courses/${randomUUID()}/tree`, actor: 'admin', status: 404 },
+    { label: 'unlock codes create: anonymous', method: 'post', path: () => '/api/admin/unlock-codes', actor: 'anonymous', status: 401 },
+    { label: 'unlock codes create: student', method: 'post', path: () => '/api/admin/unlock-codes', actor: 'student', status: 403 },
+    { label: 'unlock codes revoke: anonymous', method: 'post', path: () => `/api/admin/unlock-codes/${randomUUID()}/revoke`, actor: 'anonymous', status: 401 },
+    { label: 'unlock codes revoke: student', method: 'post', path: () => `/api/admin/unlock-codes/${randomUUID()}/revoke`, actor: 'student', status: 403 },
+    { label: 'unlock codes revoke: admin, unknown code', method: 'post', path: () => `/api/admin/unlock-codes/${randomUUID()}/revoke`, actor: 'admin', status: 404 },
+    { label: 'unlock codes delete: anonymous', method: 'delete', path: () => `/api/admin/unlock-codes/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'unlock codes delete: student', method: 'delete', path: () => `/api/admin/unlock-codes/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'my unlock codes: anonymous', method: 'get', path: () => '/api/me/unlock-codes', actor: 'anonymous', status: 401 },
+    { label: 'my unlock codes: student', method: 'get', path: () => '/api/me/unlock-codes', actor: 'student', status: 200 },
+    { label: 'redeem unlock code: anonymous', method: 'post', path: () => '/api/me/unlock-codes/redeem', actor: 'anonymous', status: 401, body: () => ({ code: 'ZZZZZZ' }) },
+    // Passes the gate and reaches the service, which has no such code.
+    { label: 'redeem unlock code: student, unknown code', method: 'post', path: () => '/api/me/unlock-codes/redeem', actor: 'student', status: 404, body: () => ({ code: 'ZZZZZZ' }) },
+    { label: 'redeem unlock code: student, malformed code is refused on SHAPE (400)', method: 'post', path: () => '/api/me/unlock-codes/redeem', actor: 'student', status: 400, body: () => ({ code: 'O0I1' }) },
   ];
 
   it.each(MATRIX.map((row) => [row.label, row] as const))('%s', async (_label, row) => {

@@ -7,6 +7,7 @@ import {
   Route,
   Sprout,
   Terminal,
+  Ticket,
   UserRound,
   type LucideIcon,
 } from 'lucide-react';
@@ -41,6 +42,13 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
   { href: '/path', labelAr: copy.nav.path, icon: Route },
   { href: '/results', labelAr: copy.nav.results, icon: BarChart3 },
   { href: '/library', labelAr: copy.nav.courses, icon: BookMarked },
+  /*
+   * «كود الكورس» — right under the courses, because that is where a student
+   * who just got a code on WhatsApp looks first: «فين أحط الكود؟». A code
+   * opens a piece of a course, so it belongs with the courses, not with the
+   * account settings in the footer.
+   */
+  { href: '/codes', labelAr: copy.nav.unlockCodes, icon: Ticket },
   { href: '/foundations', labelAr: copy.nav.essentials, icon: Sprout },
   /*
    * `/store`, NOT `/books`, and the difference is the whole point of the
