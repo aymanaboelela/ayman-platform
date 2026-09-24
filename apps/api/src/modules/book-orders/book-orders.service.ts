@@ -3701,9 +3701,20 @@ export class BookOrdersService {
               {
                 title: row.course?.bookTitle ?? row.course?.title ?? 'طلب من غير كتاب مسجّل',
                 quantity: 1,
+                year: address.year,
+                stream: courseStream,
               },
             ]
-          : row.items.map((item) => ({ title: item.titleAr, quantity: item.quantity }));
+          : row.items.map((item) => ({
+              title: item.titleAr,
+              quantity: item.quantity,
+              /* The SAME chain as the sheet's line below — the book's own صف
+                 and edition, the order's course as the fallback — so the card
+                 and the row it is reconciled against can never name a
+                 different book. */
+              year: item.book?.year ?? address.year,
+              stream: item.book ? streamLabel[streamChoiceOf(item.book)] : courseStream,
+            }));
 
       /* The editions in the box, deduplicated and in the sheet's own order
          (عربي, then لغات) so two cards never disagree about which comes first.

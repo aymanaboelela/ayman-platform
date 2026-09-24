@@ -10,6 +10,9 @@ import {
   AdminBookOrderFilterSchema,
   AdminBookOrderStreamSchema,
   PackingListSchema,
+  bookOrderYearWord,
+  type PackingLabel,
+  type PackingListYear,
 } from '@ayman/contracts/admin/book-orders';
 import { z } from 'zod';
 import { adminGet } from '@/lib/admin-api';
@@ -51,6 +54,131 @@ const addressLine = (parts: Array<string | null>, separator: string): string =>
     .filter((part): part is string => typeof part === 'string' && /[\p{L}\p{N}]/u.test(part))
     .map((part) => part.trim())
     .join(separator);
+
+/** «أولى بكالوريا» — the same words the order card on `/admin/books` uses. */
+const yearName = (year: number | null): string =>
+  year === null ? c.printYearsNone : formatCopy(c.yearOption, { year: bookOrderYearWord(year) ?? '' });
+
+/** The editions in the sheet's own order: عربي, لغات, «عربي ولغات», then none. */
+const STREAM_ORDER = [site.stream.general, site.stream.languages, site.stream.both, ''];
+
+/**
+ * The card's chips, one per (صف, edition) with the quantities summed — two
+ * lines for the same book in one order are one chip reading «2×», not two.
+ *
+ * `null` when the API did not send the per-book fields (a web container that
+ * came up before its API during a deploy); the card then falls back to the
+ * edition-only chips it printed before.
+ */
+function bookChips(label: PackingLabel): Array<{ key: string; text: string; quantity: number; known: boolean }> | null {
+  if (label.items.some((item) => item.stream === undefined)) return null;
+  const chips = new Map<string, { key: string; text: string; quantity: number; known: boolean; year: number | null; stream: string }>();
+  for (const item of label.items) {
+    const year = item.year ?? null;
+    const stream = item.stream ?? '';
+    const key = `${year ?? '-'}|${stream}`;
+    const existing = chips.get(key);
+    if (existing) {
+      existing.quantity += item.quantity;
+      continue;
+    }
+    const text =
+      stream === ''
+        ? year === null
+          ? c.labelsStreamUnknown
+          : `${yearName(year)} · ${c.labelsStreamUnknown}`
+        : year === null
+          ? formatCopy(c.labelsStream, { stream })
+          : formatCopy(c.labelsBook, { year: yearName(year), stream });
+    chips.set(key, { key, text, quantity: item.quantity, known: stream !== '', year, stream });
+  }
+  return [...chips.values()]
+    .sort(
+      (a, b) =>
+        (a.year ?? 99) - (b.year ?? 99) || STREAM_ORDER.indexOf(a.stream) - STREAM_ORDER.indexOf(b.stream),
+    )
+    .map(({ key, text, quantity, known }) => ({ key, text, quantity, known }));
+}
+
+/**
+ * «فوق في جدول» — الصف down the side, the edition across the top, COPIES in
+ * every cell, and a total on both edges.
+ *
+ * Built from `list.years`, which the API counts from the same lines the cards
+ * are made of, so the table and the stack of cards under it cannot disagree.
+ * Only the editions that actually occur get a column: a run with no «عربي
+ * ولغات» book does not print an empty one.
+ */
+function SummaryTable({
+  years,
+  orders,
+  copies,
+}: {
+  years: PackingListYear[];
+  orders: number;
+  copies: number;
+}) {
+  const streams = STREAM_ORDER.filter((stream) =>
+    years.some((year) => year.streams.some((entry) => (entry.label || '') === stream)),
+  );
+  const cell = (year: PackingListYear, stream: string) =>
+    year.streams.find((entry) => (entry.label || '') === stream)?.copies ?? 0;
+  const columnTotal = (stream: string) => years.reduce((n, year) => n + cell(year, stream), 0);
+
+  return (
+    <section className="label-summary">
+      <header className="label-summary__head">
+        <h1>{c.labelsSummaryTitle}</h1>
+        <div className="label-summary__totals">
+          <span>
+            <b>{orders}</b>
+            {c.labelsSummaryStudents}
+          </span>
+          <span>
+            <b>{copies}</b>
+            {c.labelsSummaryCopies}
+          </span>
+        </div>
+      </header>
+      <table className="label-summary__table">
+        <thead>
+          <tr>
+            <th scope="col">{c.labelsSummaryYear}</th>
+            {streams.map((stream) => (
+              <th key={stream || 'none'} scope="col">
+                {stream || c.printNoStream}
+              </th>
+            ))}
+            <th scope="col">{c.labelsSummaryTotal}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {years.map((year) => (
+            <tr key={year.year ?? 'none'}>
+              <th scope="row">{yearName(year.year)}</th>
+              {streams.map((stream) => (
+                <td key={stream || 'none'}>{cell(year, stream) || '—'}</td>
+              ))}
+              <td className="label-summary__total">{year.copies}</td>
+            </tr>
+          ))}
+        </tbody>
+        {years.length > 1 ? (
+          <tfoot>
+            <tr>
+              <th scope="row">{c.labelsSummaryTotal}</th>
+              {streams.map((stream) => (
+                <td key={stream || 'none'}>{columnTotal(stream)}</td>
+              ))}
+              <td className="label-summary__total">{copies}</td>
+            </tr>
+          </tfoot>
+        ) : null}
+      </table>
+      <p className="label-summary__note">{c.labelsSummaryNote}</p>
+    </section>
+  );
+}
 
 /**
  * `/admin/books/labels` — «كروت الشحن»: one card per parcel, four to an A4
@@ -150,7 +278,11 @@ export default async function BookOrderLabelsPage({
         </span>
       </div>
 
-      {list.labels.length === 0 ? <p className="label-empty">{c.printEmpty}</p> : null}
+      {list.labels.length === 0 ? (
+        <p className="label-empty">{c.printEmpty}</p>
+      ) : (
+        <SummaryTable years={list.years} orders={list.orders} copies={list.copies} />
+      )}
 
       <div className="label-grid">
         {list.labels.map((label) => (
@@ -238,11 +370,32 @@ export default async function BookOrderLabelsPage({
                 <small>{c.labelsCopies}</small>
               </span>
               <span className="label-card__streams">
-                {/* NEVER blank. A line typed over the phone carries no
+                {/* One chip per BOOK now — «أولى بكالوريا · عربي» — because
+                    one box can hold أولى عربي and تانية لغات, and «كتاب عربي»
+                    + «كتاب لغات» could not say which year each one was.
+
+                    NEVER blank. A line typed over the phone carries no
                     catalogue book (`bookId: null`), so no edition can be
                     derived — and an empty slot reads identically to a broken
                     card. Say which it is. */}
-                {label.streams.length === 0 ? (
+                {bookChips(label)?.map((chip) => (
+                  <span
+                    key={chip.key}
+                    className={
+                      chip.known
+                        ? 'label-card__stream'
+                        : 'label-card__stream label-card__stream--unknown'
+                    }
+                  >
+                    {chip.quantity > 1 ? (
+                      <b className="label-card__qty" dir="ltr">
+                        {formatCopy(c.labelsBookQty, { n: String(chip.quantity) })}
+                      </b>
+                    ) : null}
+                    {chip.text}
+                  </span>
+                )) ??
+                (label.streams.length === 0 ? (
                   <span className="label-card__stream label-card__stream--unknown">
                     {c.labelsStreamUnknown}
                   </span>
@@ -252,7 +405,7 @@ export default async function BookOrderLabelsPage({
                       {formatCopy(c.labelsStream, { stream })}
                     </span>
                   ))
-                )}
+                ))}
               </span>
               <span className="label-card__date">{shipDate(label.createdAt)}</span>
             </footer>

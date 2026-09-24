@@ -2192,6 +2192,11 @@ describe('BookOrdersService', () => {
          and reads «لغات». Deduplicated, and ordered عربي → لغات → both, so two
          cards never disagree about which comes first. */
       expect(multi?.streams).toEqual(['لغات', 'عربي ولغات']);
+      /* …and each BOOK carries its own edition, because the card now prints a
+         chip per book — «أولى عربي» and «تانية لغات» in one box are two
+         different things to pick off two different piles. */
+      expect(multi?.items.map((item) => item.stream).sort()).toEqual(['عربي ولغات', 'لغات'].sort());
+      for (const item of multi?.items ?? []) expect(item).toHaveProperty('year');
     }, 20_000);
 
     it('still gives a card to an order whose lines were all removed', async () => {
