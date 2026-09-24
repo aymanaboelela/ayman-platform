@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EntitlementService } from '../entitlement/entitlement.service';
-import { sliceCoversLesson } from '../entitlement/month-access';
+import { isMonthlyExamLesson } from '@ayman/contracts/quiz/monthly-exam';
+import { sliceCoversLesson, sliceCoversMonthlyExam } from '../entitlement/month-access';
 import { resolveGate, type GateState } from './gate-rule';
 
 /**
@@ -56,7 +57,14 @@ export class LessonGateService {
         // lectures count toward the exam's prerequisite set. `months` is what
         // the month slice is matched against — selected here rather than in a
         // second query so the outline stays two round trips.
-        select: { id: true, kind: true, months: { select: { monthId: true } } },
+        // `section.title` marks a monthly exam, which is owned by any live
+        // subscription rather than by its (absent) month — `isMonthlyExamLesson`.
+        select: {
+          id: true,
+          kind: true,
+          months: { select: { monthId: true } },
+          section: { select: { title: true } },
+        },
       }),
       this.prisma.lessonProgress.findMany({
         where: { enrollmentId },
@@ -95,10 +103,12 @@ export class LessonGateService {
         state: stateByLesson.get(lesson.id) ?? 'not_started',
         owned:
           slice === null ||
-          sliceCoversLesson(
-            slice,
-            lesson.months.map((row) => row.monthId),
-          ),
+          (isMonthlyExamLesson(lesson.kind, lesson.section.title)
+            ? sliceCoversMonthlyExam(slice)
+            : sliceCoversLesson(
+                slice,
+                lesson.months.map((row) => row.monthId),
+              )),
       })),
     });
   }

@@ -56,6 +56,7 @@ export function LessonCard({
   lesson,
   isExam,
   isNested = false,
+  onShelf = false,
   handleProps,
 }: {
   courseId: string;
@@ -68,6 +69,13 @@ export function LessonCard({
    * ownership is adjacency and not a stored field.
    */
   isNested?: boolean;
+  /**
+   * On the «امتحانات الشهر» shelf. A quiz there is a monthly exam, opened by
+   * any live subscription to the course and never by month — so it has no
+   * «من غير شهر» warning and no «مفتوحة في شهر N» (a tag an old adopt press
+   * may have left on it decides nothing any more).
+   */
+  onShelf?: boolean;
   handleProps: SortableHandleProps;
 }) {
   const router = useRouter();
@@ -123,7 +131,9 @@ export function LessonCard({
    * والكويز من غير شهر بيتقفل على مشترك الشهر زي المحاضرة بالظبط — يتفرّج
    * على المحاضرة وبعدين مايعرفش يمتحن عليها.
    */
-  const untagged = sellsByMonth && lesson.isPublished && lesson.months.length === 0;
+  const monthlyExam = onShelf && lesson.kind === 'quiz';
+  const untagged =
+    sellsByMonth && !monthlyExam && lesson.isPublished && lesson.months.length === 0;
 
   /*
    * «مفتوحة في شهر ٢» on the row itself.
@@ -138,12 +148,13 @@ export function LessonCard({
    * written by an older client need not be, and a row that silently says
    * nothing is worse than one that names a month it does have.
    */
-  const primaryMonthId =
-    lesson.months.find((row) => row.isPrimary)?.monthId ?? lesson.months[0]?.monthId;
+  const primaryMonthId = monthlyExam
+    ? undefined
+    : (lesson.months.find((row) => row.isPrimary)?.monthId ?? lesson.months[0]?.monthId);
   const rowMonth = primaryMonthId
     ? (months.find((month) => month.id === primaryMonthId)?.title ?? null)
     : null;
-  const extraMonthCount = Math.max(0, lesson.months.length - 1);
+  const extraMonthCount = monthlyExam ? 0 : Math.max(0, lesson.months.length - 1);
 
   return (
     <div
@@ -269,7 +280,7 @@ export function LessonCard({
 
       {open ? (
         <div className="border-t border-line-subtle px-3 pb-3">
-          <LessonPanel courseId={courseId} lesson={lesson} />
+          <LessonPanel courseId={courseId} lesson={lesson} monthlyExam={monthlyExam} />
         </div>
       ) : null}
     </div>

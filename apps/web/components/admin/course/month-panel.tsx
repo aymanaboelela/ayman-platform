@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import type { AdminCourseMonth } from '@ayman/contracts/months';
 import { copy } from '@ayman/contracts/copy/admin';
+import { isMonthlyExamLesson } from '@ayman/contracts/quiz/monthly-exam';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import { Label } from '@ayman/ui/components/label';
@@ -143,7 +144,16 @@ function nextFreeIndex(months: AdminCourseMonth[]): number {
 export function untaggedLessons(sections: Section[]): { section: Section; lesson: Lesson }[] {
   return sections.flatMap((section) =>
     section.lessons
-      .filter((lesson) => lesson.isPublished && lesson.months.length === 0)
+      // Monthly exams are not untagged, they are untaggable — any live
+      // subscription opens them, and the server's count leaves them out
+      // (`isMonthlyExamLesson`). Listed here, they were names he could never
+      // fix under a number that did not include them.
+      .filter(
+        (lesson) =>
+          lesson.isPublished &&
+          lesson.months.length === 0 &&
+          !isMonthlyExamLesson(lesson.kind, section.title),
+      )
       .map((lesson) => ({ section, lesson })),
   );
 }

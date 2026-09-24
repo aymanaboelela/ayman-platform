@@ -5,6 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import { AuditService } from '../../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EntitlementService } from '../entitlement/entitlement.service';
@@ -500,5 +501,138 @@ describe('LessonAccessService — term gate', () => {
     });
     // Term B was never closed — its grant is untouched.
     await expect(service.require(userId, lessonBId)).resolves.toMatchObject({ lessonId: lessonBId });
+  });
+});
+
+/**
+ * «أي حد مشترك في الكورس، من غير فلوس زيادة» — a monthly exam is opened by ANY
+ * live subscription to the course, and never by curriculum month.
+ *
+ * It is an untagged quiz on the «امتحانات الشهر» shelf, and read as a lecture
+ * it was closed to every month buyer: the dashboard showed the card and the
+ * start answered 403 needs_month_grant.
+ */
+describe('LessonAccessService — monthly exam shelf', () => {
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  }) as unknown as PrismaService;
+  const entitlement = new EntitlementService(prisma);
+  const service = new LessonAccessService(prisma, new LessonGateService(prisma, new EntitlementService(prisma)), entitlement);
+
+  let instructorId = '';
+  let systemId = '';
+  let subjectId = '';
+
+  beforeAll(async () => {
+    await prisma.$connect();
+    systemId = (await prisma.educationSystem.findFirstOrThrow({ where: { slug: 'bacalorya' } })).id;
+    subjectId = (await prisma.subject.findFirstOrThrow()).id;
+    const stamp = Date.now();
+    instructorId = (
+      await prisma.user.create({
+        data: { id: `lam-instr-${stamp}`, name: 'مدرس', email: `lam-instr-${stamp}@t.test` },
+      })
+    ).id;
+  });
+
+  afterAll(async () => {
+    await prisma.course.deleteMany({ where: { instructorId } });
+    await prisma.user.deleteMany({ where: { id: { startsWith: 'lam-stu-' } } });
+    await prisma.user.delete({ where: { id: instructorId } }).catch(() => undefined);
+    await prisma.$disconnect();
+  });
+
+  /** A closed course sold by month (months 1 and 2), a month-2 lecture, the
+   *  shelf with one published exam, and an enrolled student with no grant. */
+  async function makeFixture() {
+    const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const student = await prisma.user.create({
+      data: { id: `lam-stu-${stamp}`, name: 'طالب', email: `lam-stu-${stamp}@t.test` },
+    });
+    const course = await prisma.course.create({
+      data: {
+        slug: `lam-course-${stamp}`,
+        title: 'كورس بالشهور',
+        status: 'published',
+        publishedAt: new Date(),
+        systemId,
+        year: 2,
+        subjectId,
+        instructorId,
+        requiresGrant: true,
+      },
+    });
+    const month1 = await prisma.courseMonth.create({
+      data: { courseId: course.id, monthIndex: 1, title: 'شهر ١', isOpen: true },
+    });
+    const month2 = await prisma.courseMonth.create({
+      data: { courseId: course.id, monthIndex: 2, title: 'شهر ٢', isOpen: true },
+    });
+    const unit = await prisma.courseSection.create({
+      data: { courseId: course.id, title: 'الوحدة', position: 0, isPublished: true },
+    });
+    const lecture = await prisma.lesson.create({
+      data: {
+        courseId: course.id,
+        sectionId: unit.id,
+        title: 'محاضرة شهر ٢',
+        kind: 'text',
+        position: 0,
+        isPublished: true,
+        text: { create: { bodyHtml: '<p>محتوى</p>' } },
+      },
+    });
+    await prisma.lessonMonth.create({ data: { lessonId: lecture.id, monthId: month2.id, courseId: course.id, isPrimary: true } });
+    const shelf = await prisma.courseSection.create({
+      data: { courseId: course.id, title: EXAM_SHELF_TITLE, position: 1, isPublished: true },
+    });
+    const exam = await prisma.lesson.create({
+      data: { courseId: course.id, sectionId: shelf.id, title: 'امتحان نص الشهر', kind: 'quiz', position: 0, isPublished: true },
+    });
+    await prisma.enrollment.create({
+      data: { userId: student.id, courseId: course.id, source: 'free', status: 'active' },
+    });
+    return { userId: student.id, courseId: course.id, month1Id: month1.id, lectureId: lecture.id, examId: exam.id };
+  }
+
+  it('a month-1 buyer sits the monthly exam, and still cannot open the month-2 lecture', async () => {
+    const { userId, courseId, month1Id, lectureId, examId } = await makeFixture();
+    await prisma.accessGrant.create({
+      data: { userId, scope: 'course_month', courseId, monthId: month1Id, source: 'purchase' },
+    });
+
+    await expect(service.require(userId, examId)).resolves.toMatchObject({ lessonId: examId, isMonthlyExam: true });
+    await expect(service.require(userId, lectureId)).rejects.toMatchObject({
+      constructor: ForbiddenException,
+      message: 'needs_month_grant',
+    });
+  });
+
+  it('a term buyer sits it too — a term cannot narrow an exam that belongs to the course', async () => {
+    const { userId, courseId, examId } = await makeFixture();
+    const term = await prisma.courseTerm.create({ data: { courseId, title: 'الترم الأول', position: 0 } });
+    await prisma.accessGrant.create({
+      data: { userId, scope: 'term', courseId, termId: term.id, source: 'purchase' },
+    });
+    await expect(service.require(userId, examId)).resolves.toMatchObject({ lessonId: examId });
+  });
+
+  it('a student whose only month grant was revoked does not — and is told why', async () => {
+    const { userId, courseId, month1Id, examId } = await makeFixture();
+    await prisma.accessGrant.create({
+      data: { userId, scope: 'course_month', courseId, monthId: month1Id, source: 'purchase', revokedAt: new Date() },
+    });
+    await expect(service.require(userId, examId)).rejects.toMatchObject({
+      constructor: ForbiddenException,
+      message: 'revoked',
+    });
+  });
+
+  it('an enrolled student with no subscription at all does not', async () => {
+    const { userId, examId } = await makeFixture();
+    await expect(service.require(userId, examId)).rejects.toMatchObject({
+      constructor: ForbiddenException,
+      message: 'needs_course_grant',
+    });
   });
 });

@@ -69,9 +69,12 @@ const c = copy.admin.lesson;
 export function LessonPanel({
   courseId,
   lesson,
+  monthlyExam = false,
 }: {
   courseId: string;
   lesson: Lesson;
+  /** A monthly exam has no month to pick — see `isMonthlyExamLesson`. */
+  monthlyExam?: boolean;
 }) {
   // الواجب فيتشر بتتفتح لكل مدرّس لوحده. `useFeature` وليس prop، عشان
   // الكومبوننت ده قاعد على عمق أربع كومبوننتات كلهم `'use client'` —
@@ -101,11 +104,13 @@ export function LessonPanel({
           deleted — left an open panel showing «من غير شهر» under a row that
           said «مفتوحة في شهر ١», and its next save would write the stale set
           back. */}
-      <LessonMonthsField
-        key={lesson.months.map((row) => `${row.monthId}:${row.isPrimary ? 1 : 0}`).join(',')}
-        courseId={courseId}
-        lesson={lesson}
-      />
+      {monthlyExam ? null : (
+        <LessonMonthsField
+          key={lesson.months.map((row) => `${row.monthId}:${row.isPrimary ? 1 : 0}`).join(',')}
+          courseId={courseId}
+          lesson={lesson}
+        />
+      )}
 
       {lesson.kind === 'video' ? <LessonVideoForm courseId={courseId} lesson={lesson} /> : null}
       {lesson.kind === 'text' ? <LessonTextForm courseId={courseId} lesson={lesson} /> : null}
