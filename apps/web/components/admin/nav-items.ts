@@ -18,6 +18,7 @@ import {
   Send,
   Settings,
   SquarePen,
+  TicketCheck,
   Trophy,
   Users,
   UserRoundSearch,
@@ -167,6 +168,18 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     href: '/admin/finance',
     labelAr: copy.admin.nav.finance,
     icon: Coins,
+    permission: 'payment:read',
+    group: 'teaching',
+  },
+  {
+    // «أكواد الفتح» — under the money pair because it IS a sale, just one
+    // agreed on WhatsApp instead of claimed through the checkout: the price
+    // on each code is what the student paid. `payment:read` to see the list,
+    // like the two above; creating and pulling a code is `payment:review`,
+    // checked by the API and by the page before it renders the controls.
+    href: '/admin/unlock-codes',
+    labelAr: copy.admin.nav.unlockCodes,
+    icon: TicketCheck,
     permission: 'payment:read',
     group: 'teaching',
   },

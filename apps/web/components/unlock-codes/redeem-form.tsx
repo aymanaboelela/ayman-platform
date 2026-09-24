@@ -146,7 +146,9 @@ export function RedeemForm({ compact = false }: { compact?: boolean }) {
   const active = Math.min(value.length, UNLOCK_CODE_LENGTH - 1);
 
   return (
-    <form onSubmit={submit} noValidate>
+    // `method="post"`: a press before hydration submits natively, and a GET
+    // would put the code in the URL — the history, the logs, the Referer.
+    <form method="post" onSubmit={submit} noValidate>
       <div className={cn('uc-code', error && 'is-error')}>
         <input
           ref={inputRef}
