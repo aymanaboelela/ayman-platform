@@ -1,11 +1,13 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { LessonKind } from '@ayman/contracts';
+import type { EnrollmentSource } from '../../generated/prisma/client';
 import { isMonthlyExamLesson } from '@ayman/contracts/quiz/monthly-exam';
 import { isPrismaDataValidationError } from '../../common/prisma/prisma-errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import type { CourseAccessSubject } from '../entitlement/grant-liveness';
 import { EntitlementService, type CourseAccess } from '../entitlement/entitlement.service';
+import { contentGrantOpening } from '../entitlement/content-access';
 import { LessonGateService } from './lesson-gate.service';
 
 export interface LessonAccessContext {
@@ -13,7 +15,12 @@ export interface LessonAccessContext {
   kind: LessonKind;
   courseId: string;
   courseSlug: string;
+  /** The unit this lecture sits in — what a `scope: section` code names. */
+  sectionId: string;
   enrollmentId: string;
+  /** How that enrollment came to exist. `code` means a code minted it, and
+   *  is what `resolveContentAccess` reads to close what no code named. */
+  enrollmentSource: EnrollmentSource;
   /** 0 when unknown — auto-completion is then impossible by design. */
   durationSeconds: number;
   /** The term this lesson's SECTION belongs to, or `null` when the course has
@@ -149,6 +156,34 @@ export class LessonAccessService {
     const context = await this.resolve(userId, lessonId);
 
     /*
+     * «فتح بكود» — FIRST, and it short-circuits.
+     *
+     * A lecture a live code grant names is open, whatever else is true: the
+     * month subscriber who bought lecture 7 of «شهر ٢» by code must not meet
+     * the month check below and be told it belongs to a month they did not
+     * buy, and the student whose yearly subscription lapsed keeps the lecture
+     * they paid for separately. A code grant is content bought outright, like
+     * a month grant, so it has no window of its own to re-check here.
+     *
+     * Then the other half: a student whose ONLY standing on this course is
+     * codes gets nothing a code did not name. Without this the enrollment the
+     * code had to create would open the whole course (see `ContentAccess`).
+     * `needs_course_grant` is the refusal every other closed-course door
+     * already speaks, so the player's existing «اشترك» handling applies.
+     */
+    const content = await this.entitlement.resolveContentAccess(
+      userId,
+      context.courseAccessSubject,
+      context.enrollmentSource,
+    );
+    if (contentGrantOpening(content.slice, { id: context.lessonId, sectionId: context.sectionId })) {
+      return context;
+    }
+    if (content.codeOnly) {
+      throw new ForbiddenException('needs_course_grant');
+    }
+
+    /*
      * The live-grant re-check. `resolve()` above only proves the ENROLLMENT
      * row is active — it never looks at `AccessGrant.validUntil`, and neither
      * did anything else on this path (see this class's own docblock:
@@ -251,6 +286,7 @@ export class LessonAccessService {
           id: true,
           kind: true,
           courseId: true,
+          sectionId: true,
           course: {
             select: {
               slug: true,
@@ -266,7 +302,7 @@ export class LessonAccessService {
               months: { select: { id: true }, take: 1 },
               enrollments: {
                 where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] } },
-                select: { id: true },
+                select: { id: true, source: true },
                 take: 1,
               },
             },
@@ -281,8 +317,8 @@ export class LessonAccessService {
         throw error;
       });
 
-    const enrollmentId = lesson?.course.enrollments[0]?.id;
-    if (!lesson || !enrollmentId) {
+    const enrollment = lesson?.course.enrollments[0];
+    if (!lesson || !enrollment) {
       throw new NotFoundException('lesson not found');
     }
 
@@ -291,7 +327,9 @@ export class LessonAccessService {
       kind: lesson.kind as LessonKind,
       courseId: lesson.courseId,
       courseSlug: lesson.course.slug,
-      enrollmentId,
+      sectionId: lesson.sectionId,
+      enrollmentId: enrollment.id,
+      enrollmentSource: enrollment.source,
       durationSeconds: lesson.video?.durationSeconds ?? 0,
       termId: lesson.section.termId,
       monthIds: lesson.months.map((row) => row.monthId),

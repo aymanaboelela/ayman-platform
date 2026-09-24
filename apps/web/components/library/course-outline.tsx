@@ -90,14 +90,21 @@ function actionLabel(lesson: OutlineLesson): string {
 function LockedMonth({
   courseSlug,
   month,
+  byMonth,
 }: {
   courseSlug: string;
   month: OutlineLesson['month'];
+  byMonth: boolean;
 }) {
   return (
-    <MonthLockedDialog courseSlug={courseSlug} month={month} triggerClassName="chip chip--locked">
+    <MonthLockedDialog
+      courseSlug={courseSlug}
+      month={month}
+      byMonth={byMonth}
+      triggerClassName="chip chip--locked"
+    >
       <LockIcon className="h-4 w-4" />
-      {c.lessonMonthLocked}
+      {byMonth ? c.lessonMonthLocked : c.lessonLocked}
     </MonthLockedDialog>
   );
 }
@@ -137,7 +144,11 @@ function LessonAction({
    * rather than in a new one, and it needs the same field the month name does.
    */
   if (lesson.gate === 'locked') {
-    if (!lesson.isExam) return <LockedMonth courseSlug={courseSlug} month={lesson.month} />;
+    if (!lesson.isExam) {
+      return (
+        <LockedMonth courseSlug={courseSlug} month={lesson.month} byMonth={lesson.lockedByMonth ?? true} />
+      );
+    }
     return (
       <LockedExam
         remaining={Math.max(0, totalLessons - clearedLessons)}

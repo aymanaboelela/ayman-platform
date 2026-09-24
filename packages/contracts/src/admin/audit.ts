@@ -366,6 +366,15 @@ export const AUDIT_ACTIONS = [
   'expense:create',
   'expense:update',
   'expense:delete',
+  // «أكواد الفتح». On their own `resourceType` (`unlock_codes`) so «مين عمل
+  // الكود ده» and «مين سحب اللي فتحه» are one filter each. `redeem` is the
+  // STUDENT's action and is recorded too: it is the moment content opened
+  // without a payment row behind it, and the audit row is the only place that
+  // says who typed which code from which session.
+  'unlock-code:create',
+  'unlock-code:redeem',
+  'unlock-code:revoke',
+  'unlock-code:delete',
   // الواجب. The first two are AUTHORING (the questions on a lecture) and sit on
   // the `lessons` resource with every other edit to a lecture's content; the
   // last two are MARKING and sit on `homework_submissions`, because the

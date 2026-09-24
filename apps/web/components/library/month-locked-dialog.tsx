@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import { Ticket } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
@@ -67,6 +68,7 @@ export function MonthLockedDialog({
   children,
   triggerClassName,
   triggerLabel,
+  byMonth = true,
 }: {
   /**
    * The month to NAME, or `null` to say the true-but-vaguer thing.
@@ -93,10 +95,19 @@ export function MonthLockedDialog({
   triggerClassName?: string;
   /** The trigger's accessible name, when `children` is not readable as one. */
   triggerLabel?: string;
+  /**
+   * `false` on a course that sells no months — where the only way a lecture is
+   * locked is that the student holds codes for OTHER lectures. «تابعة لشهر
+   * تاني» would name a month that does not exist, so the dialog says what is
+   * true instead and sells the course rather than a month.
+   */
+  byMonth?: boolean;
 }) {
-  const body = month
-    ? formatCopy(c.lockedMonthBody, { month: month.title, count: month.lessonCount })
-    : c.lockedMonthBodyPlain;
+  const body = !byMonth
+    ? c.lockedContentBody
+    : month
+      ? formatCopy(c.lockedMonthBody, { month: month.title, count: month.lessonCount })
+      : c.lockedMonthBodyPlain;
 
   return (
     <Dialog>
@@ -112,7 +123,7 @@ export function MonthLockedDialog({
           shipped. */}
       <DialogContent closeLabel={copy.common.close}>
         <DialogHeader>
-          <DialogTitle>{c.lockedMonthTitle}</DialogTitle>
+          <DialogTitle>{byMonth ? c.lockedMonthTitle : c.lockedContentTitle}</DialogTitle>
           <DialogDescription>{body}</DialogDescription>
         </DialogHeader>
 
@@ -151,9 +162,24 @@ export function MonthLockedDialog({
                 'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
               )}
             >
-              {c.lockedMonthCta}
+              {byMonth ? c.lockedMonthCta : c.lockedContentCta}
             </Link>
           ) : null}
+
+          {/* «عندك كود؟» — the other way in. A lecture bought on WhatsApp opens
+              with a code, and the padlock is exactly where a student holding
+              one gets stuck. Same outlined weight as a secondary action. */}
+          <Link
+            href="/codes"
+            className={cn(
+              'inline-flex h-10 items-center justify-center gap-1.5 rounded-sm border border-line px-4',
+              'text-[length:var(--fs-text-sm)] font-medium text-fg',
+              'transition-colors duration-[160ms] ease-out hover:bg-surface-3',
+            )}
+          >
+            <Ticket className="size-4" aria-hidden="true" />
+            {copy.unlockCodes.lockedCta}
+          </Link>
 
           <DialogClose asChild>
             <Button variant="secondary">{c.lockedMonthClose}</Button>

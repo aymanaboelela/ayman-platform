@@ -63,6 +63,8 @@ export const AUDIT_RESOURCES = {
   /// audit viewer's filter is how "who wrote this number into the books" gets
   /// answered, and folding spend in with orders would bury it.
   expense: 'expenses',
+  /// «أكواد الفتح» — see `UnlockCode`.
+  unlockCode: 'unlock_codes',
   /// «قسم الكتب» — the catalogue. Its own resource type and not `book_orders`,
   /// because the audit viewer's filter is how "who changed a price" is answered,
   /// and folding the two together would bury every catalogue edit inside a list

@@ -67,7 +67,15 @@ describe('MonthLockedDialog', () => {
   it('drops the CTA rather than rendering it dead', () => {
     open();
 
-    expect(screen.queryAllByRole('link')).toHaveLength(0);
+    expect(screen.queryByRole('link', { name: c.lockedMonthCta })).toBeNull();
+  });
+
+  /** «عندك كود؟» needs no course to point at — `/codes` is one page for all
+   *  of them — so it survives when the checkout CTA is dropped. */
+  it('always offers the way in with a code', () => {
+    open();
+
+    expect(screen.getByRole('link', { name: copy.unlockCodes.lockedCta })).toHaveAttribute('href', '/codes');
   });
 
   /** A lecture in several months — or in one that is closed — still gets the

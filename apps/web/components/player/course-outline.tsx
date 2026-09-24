@@ -151,10 +151,14 @@ function LectureEntry({
   remaining,
   totalLessons,
   left,
+  byMonth,
 }: {
   entry: Entry;
   courseSlug: string;
   activeLessonId: string;
+  /** Whether this course sells by month at all — the padlock says «شهر
+   *  تاني» only when there is a month to name. See `MonthLockedDialog`. */
+  byMonth: boolean;
   /** What the locked exam is still waiting on — course-wide, not this entry's. */
   remaining: number;
   totalLessons: number;
@@ -199,10 +203,11 @@ function LectureEntry({
             <MonthLockedDialog
               courseSlug={courseSlug}
               month={lecture.month}
+              byMonth={byMonth}
               triggerClassName="chip chip--locked"
             >
               <Lock className="h-4 w-4" />
-              {c.lessonMonthLocked}
+              {byMonth ? c.lessonMonthLocked : c.lessonLocked}
             </MonthLockedDialog>
           )}
         </div>
@@ -279,6 +284,11 @@ export function CourseOutlineSidebar({
   // Same list the library outline builds, off the flat payload this screen
   // already has — the locked exam explains itself identically in both places.
   const left = remainingLectures(outline.sections.flatMap((section) => section.lessons));
+  // A lecture carrying a month anywhere means the course sells by month; none
+  // at all means a padlock here is a code-only student's, not a month's.
+  const byMonth = outline.sections.some((section) =>
+    section.lessons.some((lesson) => lesson.month !== null),
+  );
   // Title, price and placement — the same predicate the public course page and
   // `EnrolledCourseCard` read, so the linked book's `showOnCourse` cannot end
   // up honoured on two surfaces out of three.
@@ -358,6 +368,7 @@ export function CourseOutlineSidebar({
                   remaining={remaining}
                   totalLessons={outline.totalLessons}
                   left={left}
+                  byMonth={byMonth}
                   key={entry.lecture.id}
                 />
               ))}

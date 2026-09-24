@@ -18,6 +18,7 @@ import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
 import { formatDuration } from '@/components/site/course-card';
 import { RichText } from '@/components/content/rich-text';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
+import { RedeemCard } from '@/components/unlock-codes/redeem-card';
 
 const c = copy.library;
 
@@ -297,6 +298,19 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
         course page is more often looking for «فين الجروب» than for the syllabus
         they have already read. Renders nothing for a course with no group.
       */}
+      {/*
+        «عندك كود؟» — for every course with something in it, enrolled or not: the
+        student who owns «شهر ١» and bought one lecture from «شهر ٢» is exactly
+        as likely to be standing here with a code as somebody who owns nothing
+        yet. Above the group card, because a code in hand is the more urgent
+        of the two.
+      */}
+      {outline.totalLessons > 0 ? (
+        <div className="mb-8 max-w-[40rem]">
+          <RedeemCard whatsapp={contact.whatsapp} courseTitle={course.title} />
+        </div>
+      ) : null}
+
       {pathCourse?.whatsappGroupUrl ? (
         <div className="mb-8 max-w-[28rem]">
           <CourseGroupCard url={pathCourse.whatsappGroupUrl} />

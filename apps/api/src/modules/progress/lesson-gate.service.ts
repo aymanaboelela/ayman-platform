@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { EntitlementService } from '../entitlement/entitlement.service';
 import { isMonthlyExamLesson } from '@ayman/contracts/quiz/monthly-exam';
 import { sliceCoversLesson, sliceCoversMonthlyExam } from '../entitlement/month-access';
+import { contentGrantOpening } from '../entitlement/content-access';
 import { resolveGate, type GateState } from './gate-rule';
 
 /**
@@ -34,7 +35,7 @@ export class LessonGateService {
     courseId: string,
     userId: string,
   ): Promise<Map<string, GateState>> {
-    const [course, lessons, progress] = await Promise.all([
+    const [course, lessons, progress, enrollment] = await Promise.all([
       this.prisma.course.findUnique({
         where: { id: courseId },
         // `subjectId` and `requiresGrant` are what `courseAccessScopes` needs;
@@ -62,6 +63,7 @@ export class LessonGateService {
         select: {
           id: true,
           kind: true,
+          sectionId: true,
           months: { select: { monthId: true } },
           section: { select: { title: true } },
         },
@@ -70,6 +72,9 @@ export class LessonGateService {
         where: { enrollmentId },
         select: { lessonId: true, state: true },
       }),
+      // `source` only — whether a code minted this enrollment, which is what
+      // decides if codes are all this student holds here. By primary key.
+      this.prisma.enrollment.findUnique({ where: { id: enrollmentId }, select: { source: true } }),
     ]);
 
     const stateByLesson = new Map(progress.map((row) => [row.lessonId, row.state as string]));
@@ -91,6 +96,20 @@ export class LessonGateService {
           })
         : null;
 
+    /*
+     * «فتح بكود» — lectures a live code grant names are owned outright, and a
+     * student whose only standing here is codes owns nothing else. The same
+     * two facts, from the same function, that `LessonAccessService
+     * .requireEntitled` decides one lecture with — so a padlock here and a
+     * refusal there cannot disagree.
+     */
+    const subject = course
+      ? { id: courseId, subjectId: course.subjectId, requiresGrant: course.requiresGrant }
+      : null;
+    const content = subject
+      ? await this.entitlement.resolveContentAccess(userId, subject, enrollment?.source ?? null)
+      : null;
+
     return resolveGate({
       // A course row that vanished mid-request cannot lock a student out of
       // content: with no exam pointer nothing is gated, since the ownership
@@ -102,13 +121,15 @@ export class LessonGateService {
         kind: lesson.kind,
         state: stateByLesson.get(lesson.id) ?? 'not_started',
         owned:
-          slice === null ||
-          (isMonthlyExamLesson(lesson.kind, lesson.section.title)
-            ? sliceCoversMonthlyExam(slice)
-            : sliceCoversLesson(
-                slice,
-                lesson.months.map((row) => row.monthId),
-              )),
+          (content !== null && contentGrantOpening(content.slice, lesson) !== null) ||
+          (!content?.codeOnly &&
+            (slice === null ||
+              (isMonthlyExamLesson(lesson.kind, lesson.section.title)
+                ? sliceCoversMonthlyExam(slice)
+                : sliceCoversLesson(
+                    slice,
+                    lesson.months.map((row) => row.monthId),
+                  )))),
       })),
     });
   }

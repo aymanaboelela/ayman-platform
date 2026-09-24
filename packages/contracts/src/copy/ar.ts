@@ -365,6 +365,8 @@ export const copy = {
     /** «قسم الكتب» — the shop, in the student's rail and the mobile sheet. */
     books: 'الكتب',
     playground: 'تجربة الكود',
+    /** «كود الكورس» — where a code bought on WhatsApp gets typed in. */
+    unlockCodes: 'كود الكورس',
     devices: 'أجهزتي',
     account: 'الحساب',
     accountMenu: 'قائمة الحساب',
@@ -2254,6 +2256,12 @@ export const copy = {
     lockedMonthCta: 'الاشتراك في الشهر ده',
     /** The dismiss, same slot and same reasoning as `lockedClose`. */
     lockedMonthClose: 'مش دلوقتي',
+    /** The same dialog on a course with no months: what is open here is a set
+     *  of lectures opened by code, and the two ways to the rest are another
+     *  code or the course itself. */
+    lockedContentTitle: 'المحاضرة دي لسه مقفولة',
+    lockedContentBody: 'المفتوح على الحساب في الكورس ده محاضرات محددة بس. المحاضرة دي ممكن فتحها بكود، أو بالاشتراك في الكورس كله.',
+    lockedContentCta: 'الاشتراك في الكورس',
   },
   /** `/settings/section` — changing the year after onboarding. */
   section: {
@@ -5986,6 +5994,71 @@ export const copy = {
       /** The «×٢» on a line inside the card. */
       lineQuantity: '×{quantity}',
     },
+  },
+  /**
+   * «كود الكورس» — `/codes`, the course page's «عندك كود؟» card, and the
+   * padlock dialog's shortcut.
+   *
+   * ⚠️ One string for every student: no imperative on a button (masdar —
+   * «تفعيل الكود»), no «عايز/حابب». See `no-gendered-address` in the header.
+   */
+  unlockCodes: {
+    pageTitle: 'كود الكورس',
+    eyebrow: 'فتح بكود',
+    title: 'كود واحد… والمحاضرة مفتوحة',
+    lead: 'الكود ٦ حروف وأرقام بيوصل على واتساب بعد الدفع. بمجرد كتابته هنا، اللي فيه بيتفتح على الحساب على طول.',
+    inputLabel: 'كود الفتح',
+    inputHint: 'حروف إنجليزي وأرقام — الحروف الصغيرة والمسافات مش مشكلة.',
+    submit: 'تفعيل الكود',
+    submitting: 'بنفعّل الكود…',
+    paste: 'لصق',
+    errors: {
+      invalid: 'الكود ده مش موجود. ممكن حرف اتكتب غلط — مراجعته حرف حرف.',
+      used: 'الكود ده اتستخدم قبل كده. كل كود بيشتغل مرة واحدة بس لطالب واحد.',
+      revoked: 'الكود ده اتلغى. للاستفسار، التواصل على واتساب.',
+      course_unavailable: 'الكورس بتاع الكود ده لسه مش متاح. الكود محفوظ وصالح — المحاولة تاني أول ما الكورس ينزل.',
+      locked: 'محاولات غلط كتير ورا بعض. المحاولة تاني بعد {minutes} دقيقة.',
+      shape: 'الكود ٦ حروف وأرقام.',
+      network: 'مقدرناش نوصل للسيرفر دلوقتي. المحاولة تاني بعد شوية.',
+    },
+    successBadge: 'اتفتح',
+    successTitle: 'تم! الكود اشتغل',
+    successLead: 'اللي في الكود بقى على الحساب في «{course}».',
+    successStart: 'يلا نبدأ',
+    successAnother: 'تفعيل كود تاني',
+    successCourse: 'صفحة الكورس',
+    kind: {
+      course: 'الكورس كله',
+      term: 'ترم',
+      month: 'شهر',
+      section: 'وحدة',
+      lesson: 'محاضرة',
+    },
+    lessonCount: '{count} محاضرة',
+    withExtras: 'بالكويز والواجب',
+    open: 'فتح',
+    comingSoon: 'بتنزل قريب',
+    historyTitle: 'اتفتح بأكواد قبل كده',
+    historyEmpty: 'لسه مفيش أكواد اتفعّلت على الحساب ده.',
+    historyRevoked: 'اتلغى',
+    historyOn: '{date}',
+    stepsTitle: 'الكود بيشتغل إزاي؟',
+    steps: [
+      'التواصل على واتساب واختيار المحاضرة أو الوحدة',
+      'الدفع وإرسال صورة التحويل',
+      'الكود بيوصل في رسالة',
+      'كتابته هنا — والمحتوى يتفتح فورًا',
+    ],
+    buyTitle: 'محاضرة واحدة بس؟',
+    buyBody: 'ممكن شراء محاضرة لوحدها بالكويز والواجب بتوعها، أو كذا محاضرة، أو وحدة، أو ترم، أو الكورس كله — والكود بيوصل في رسالة.',
+    buyCta: 'التواصل على واتساب',
+    whatsappMessage: 'السلام عليكم، بخصوص شراء محاضرة بكود',
+    whatsappMessageCourse: 'السلام عليكم، بخصوص شراء محاضرة بكود من كورس «{course}»',
+    cardTitle: 'عندك كود؟',
+    cardLead: 'كود الفتح بيفتح محاضرة أو وحدة أو ترم من الكورس ده — مرة واحدة ولطالب واحد.',
+    cardSingle: 'محاضرة واحدة بس؟ التواصل على واتساب والكود يوصل في رسالة.',
+    cardCta: 'تفعيل كود',
+    lockedCta: 'عندك كود؟',
   },
 } as const;
 

@@ -1,7 +1,18 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { AccessGrant, AccessScope } from '../../generated/prisma/client';
-import { courseAccessScopes, grantLiveness, type CourseAccessSubject } from './grant-liveness';
+import type { AccessGrant, AccessScope, EnrollmentSource } from '../../generated/prisma/client';
+import {
+  courseAccessScopes,
+  grantLiveness,
+  hasLiveCourseAccess,
+  type CourseAccessSubject,
+} from './grant-liveness';
+import {
+  CONTENT_SCOPES,
+  EMPTY_CONTENT_SLICE,
+  contentSliceOf,
+  type ContentAccess,
+} from './content-access';
 import {
   grantOpeningLesson,
   grantOpeningMonthlyExam,
@@ -338,6 +349,58 @@ export class EntitlementService {
     });
 
     return monthSliceOf(grants, new Date());
+  }
+
+  /**
+   * «فتح بكود» — which units and lectures this student's codes open on one
+   * course, and whether codes are ALL they hold there. See `ContentAccess` for
+   * why the second half exists.
+   *
+   * One indexed read (`access_grants (user_id, course_id, scope)`) for every
+   * student, and it is empty for nearly all of them. The second read — is
+   * there a live course-wide grant — only happens for an enrollment a code
+   * created, on a course that needs a grant at all: a free course is open to
+   * everyone, so a code on one narrows nothing.
+   *
+   * @param enrollmentSource the caller's own enrollment's `source`, already
+   *   selected by both callers. `null` when unknown, which never restricts.
+   */
+  async resolveContentAccess(
+    userId: string,
+    course: CourseAccessSubject,
+    enrollmentSource: EnrollmentSource | null,
+  ): Promise<ContentAccess> {
+    const now = new Date();
+    const grants = await this.prisma.accessGrant.findMany({
+      where: { userId, courseId: course.id, scope: { in: [...CONTENT_SCOPES] } },
+      select: {
+        id: true,
+        scope: true,
+        sectionId: true,
+        lessonId: true,
+        validFrom: true,
+        validUntil: true,
+        revokedAt: true,
+      },
+    });
+    const slice = grants.length > 0 ? contentSliceOf(grants, now) : EMPTY_CONTENT_SLICE;
+
+    if (enrollmentSource !== 'code' || !course.requiresGrant) {
+      return { slice, codeOnly: false };
+    }
+
+    const wide = await this.prisma.accessGrant.findMany({
+      where: { userId, OR: courseAccessScopes(course) },
+      select: {
+        scope: true,
+        courseId: true,
+        subjectId: true,
+        validFrom: true,
+        validUntil: true,
+        revokedAt: true,
+      },
+    });
+    return { slice, codeOnly: !hasLiveCourseAccess(wide, course, now) };
   }
 
   /**
