@@ -373,6 +373,7 @@ export function SectionCard({
             sectionId={section.id}
             examLessonId={examLessonId}
             lessons={section.lessons}
+            onShelf={isShelf}
           />
         )}
 

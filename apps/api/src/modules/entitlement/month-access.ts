@@ -126,6 +126,27 @@ export function sliceCoversLesson(
 }
 
 /**
+ * Does this slice open a MONTHLY EXAM — any live subscription to the course?
+ *
+ * The exam's own month tags are not consulted: a monthly exam belongs to the
+ * course, never to a curriculum month (see `isMonthlyExamLesson`). Anybody
+ * holding a live grant — a month, a term, the year — sits it; a slice with no
+ * live grant at all (lapsed, revoked, never bought) does not.
+ */
+export function sliceCoversMonthlyExam(slice: MonthSlice): boolean {
+  return slice.everything || slice.monthIds.size > 0;
+}
+
+/** The grant that opens a monthly exam for `sliceCoversMonthlyExam` — the wide
+ *  one when there is one, else the newest month grant (the list arrives
+ *  newest-first, and the map keeps that order). */
+export function grantOpeningMonthlyExam(slice: MonthSlice): string | null {
+  if (slice.everything) return slice.grantId;
+  for (const grantId of slice.grantIdByMonth.values()) return grantId;
+  return null;
+}
+
+/**
  * WHICH grant opened this lecture — `null` when none did.
  *
  * Separate from `sliceCoversLesson` because the two callers need different

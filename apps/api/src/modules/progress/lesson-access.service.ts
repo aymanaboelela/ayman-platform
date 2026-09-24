@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { LessonKind } from '@ayman/contracts';
+import { isMonthlyExamLesson } from '@ayman/contracts/quiz/monthly-exam';
 import { isPrismaDataValidationError } from '../../common/prisma/prisma-errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
@@ -37,6 +38,9 @@ export interface LessonAccessContext {
   /** The course as `courseAccessScopes` needs to see it. Carried on the
    *  context because `resolve()` has already selected every column of it. */
   courseAccessSubject: CourseAccessSubject;
+  /** A quiz on the «امتحانات الشهر» shelf — opened by any live subscription to
+   *  the course rather than by month (see `isMonthlyExamLesson`). */
+  isMonthlyExam: boolean;
 }
 
 /**
@@ -176,7 +180,8 @@ export class LessonAccessService {
      * `TermService.setOpen`) and surfaces here as `reason: 'revoked'`, the
      * exact same word a lapsed course subscription already throws above.
      */
-    if (context.termId !== null) {
+    // A monthly exam belongs to the whole course; a term cannot narrow it.
+    if (context.termId !== null && !context.isMonthlyExam) {
       const termAccess = await this.entitlement.resolveTermAccess(
         userId,
         context.courseId,
@@ -208,6 +213,9 @@ export class LessonAccessService {
         userId,
         context.courseAccessSubject,
         context.monthIds,
+        // «أي حد مشترك في الكورس» — a monthly exam is never tagged with a
+        // month, and read as a lecture it was locked to every month buyer.
+        { monthlyExam: context.isMonthlyExam },
       );
       if (!monthAccess.allowed) {
         throw new ForbiddenException(monthAccess.reason);
@@ -263,7 +271,7 @@ export class LessonAccessService {
               },
             },
           },
-          section: { select: { termId: true } },
+          section: { select: { termId: true, title: true } },
           months: { select: { monthId: true } },
           video: { select: { durationSeconds: true } },
         },
@@ -293,6 +301,7 @@ export class LessonAccessService {
         subjectId: lesson.course.subjectId,
         requiresGrant: lesson.course.requiresGrant,
       },
+      isMonthlyExam: isMonthlyExamLesson(lesson.kind, lesson.section.title),
     };
   }
 }

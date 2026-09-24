@@ -4,6 +4,7 @@ import 'dotenv/config';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { MONTH_DELETE_BLOCKED_CODE, MONTH_OPEN_BLOCKED_CODE } from '@ayman/contracts/admin/content-months';
+import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
@@ -283,6 +284,47 @@ describe('CourseMonthService', () => {
       await expect(service.update(otherCourseId, month.id, { title: 'مش بتاعك' })).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+  });
+
+  describe('monthly exams are untaggable, not untagged', () => {
+    async function shelfExam(courseId: string) {
+      const shelf = await prisma.courseSection.create({
+        data: { courseId, title: EXAM_SHELF_TITLE, position: 90, isPublished: true },
+      });
+      const exam = await prisma.lesson.create({
+        data: { courseId, sectionId: shelf.id, title: 'امتحان نص الشهر', kind: 'quiz', position: 0, isPublished: true },
+      });
+      return exam.id;
+    }
+
+    it('a published monthly exam does not block opening a month', async () => {
+      const { courseId } = await makeCourse();
+      await shelfExam(courseId);
+      const month = await service.create(courseId, { monthIndex: 1, title: 'شهر ١', isOpen: false, startsOn: null });
+      expect(month.untaggedLessonCount).toBe(0);
+      await expect(service.update(courseId, month.id, { isOpen: true })).resolves.toMatchObject({ isOpen: true });
+    });
+
+    it('adopt leaves the exam out — tagged into one month it would open for that month only', async () => {
+      const { courseId, sectionId } = await makeCourse();
+      const examId = await shelfExam(courseId);
+      const lectureId = await makeLesson(courseId, sectionId);
+      const month = await service.create(courseId, { monthIndex: 1, title: 'شهر ١', isOpen: false, startsOn: null });
+
+      await expect(service.adoptUntaggedLessons(courseId, month.id)).resolves.toEqual({ adopted: 1 });
+      expect(await prisma.lessonMonth.count({ where: { lessonId: lectureId } })).toBe(1);
+      expect(await prisma.lessonMonth.count({ where: { lessonId: examId } })).toBe(0);
+    });
+
+    it('still counts a lecture somebody put on the shelf — only the QUIZ there is an exam', async () => {
+      const { courseId } = await makeCourse();
+      const shelf = await prisma.courseSection.create({
+        data: { courseId, title: EXAM_SHELF_TITLE, position: 90, isPublished: true },
+      });
+      await makeLesson(courseId, shelf.id);
+      const month = await service.create(courseId, { monthIndex: 1, title: 'شهر ١', isOpen: false, startsOn: null });
+      expect(month.untaggedLessonCount).toBe(1);
     });
   });
 

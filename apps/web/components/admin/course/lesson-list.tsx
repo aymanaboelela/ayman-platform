@@ -34,11 +34,14 @@ export function SortableLessonList({
   sectionId,
   examLessonId,
   lessons,
+  onShelf = false,
 }: {
   courseId: string;
   sectionId: string;
   examLessonId: string | null;
   lessons: Lesson[];
+  /** The «امتحانات الشهر» shelf — its quizzes carry no month. */
+  onShelf?: boolean;
 }) {
   /**
    * Which rows are a lecture's quiz, and therefore belong UNDER it.
@@ -69,6 +72,7 @@ export function SortableLessonList({
           lesson={lesson}
           isExam={lesson.id === examLessonId}
           isNested={nested.has(lesson.id)}
+          onShelf={onShelf}
           handleProps={handleProps}
         />
       )}

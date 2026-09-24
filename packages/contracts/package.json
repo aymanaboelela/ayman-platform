@@ -90,6 +90,7 @@
     "./admin/home-blocks": "./src/admin/home-blocks.ts",
     "./admin/honor-board": "./src/admin/honor-board.ts",
     "./quiz/scheduled": "./src/quiz/scheduled.ts",
+    "./quiz/monthly-exam": "./src/quiz/monthly-exam.ts",
     "./admin/exams": "./src/admin/exams.ts"
   },
   "scripts": {

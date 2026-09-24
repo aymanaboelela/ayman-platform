@@ -7,6 +7,7 @@ import {
   type LegacyMonthBackfillResult,
 } from '@ayman/contracts/admin/content-months';
 import { copy } from '@ayman/contracts/copy/admin';
+import { MONTHLY_EXAM_LESSON } from '@ayman/contracts/quiz/monthly-exam';
 import { formatCopy } from '@ayman/contracts/format';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
@@ -442,8 +443,13 @@ export class CourseMonthService {
     // `months: { none: {} }` — «منشورة ومالهاش ولا شهر». Not a `NOT IN` over
     // fetched ids: that is the same question asked in a way that grows with
     // the course.
+    //
+    // ⚠️ Monthly exams are NOT untagged, they are untaggable: an exam belongs
+    // to the course, and any live subscription opens it (`isMonthlyExamLesson`).
+    // Counted here, every published one blocked every month from going on
+    // sale — «فيه ١ درس من غير شهر» — with no month it could ever be put in.
     return this.prisma.lesson.count({
-      where: { courseId, ...PUBLISHED_ANY, months: { none: {} } },
+      where: { courseId, ...PUBLISHED_ANY, months: { none: {} }, NOT: MONTHLY_EXAM_LESSON },
     });
   }
 
@@ -522,8 +528,10 @@ export class CourseMonthService {
     });
     if (!month) throw new NotFoundException();
 
+    // Monthly exams stay out: tagged into one month, an exam for the whole
+    // course was opened to that month's buyers only.
     const lessons = await this.prisma.lesson.findMany({
-      where: { courseId, months: { none: {} } },
+      where: { courseId, months: { none: {} }, NOT: MONTHLY_EXAM_LESSON },
       select: { id: true },
     });
     if (lessons.length === 0) return { adopted: 0 };

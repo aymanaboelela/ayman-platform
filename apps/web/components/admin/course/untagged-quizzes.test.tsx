@@ -49,6 +49,19 @@ describe('untaggedLessons', () => {
     expect(untaggedLessons(tagged)).toHaveLength(0);
   });
 
+  /* امتحان الشهر مالوش شهر أصلًا — أي اشتراك شغّال بيفتحه، والسيرفر مش بيعدّه. */
+  it('leaves out a quiz on the «امتحانات الشهر» shelf, and only a quiz', () => {
+    const shelf = [
+      {
+        id: 's-shelf',
+        title: 'امتحانات الشهر',
+        lessons: [lesson({ id: 'exam-1', kind: 'quiz' }), lesson({ id: 'v-on-shelf' })],
+      } as Section,
+    ];
+    const found = untaggedLessons(shelf).map((row) => row.lesson.id);
+    expect(found).toEqual(['v-on-shelf']);
+  });
+
   /* المسودّة مش منشورة، فمحدش بيستناها — ولا السيرفر بيعدّها. */
   it('ignores an unpublished draft, lecture or quiz', () => {
     const drafts = sections([

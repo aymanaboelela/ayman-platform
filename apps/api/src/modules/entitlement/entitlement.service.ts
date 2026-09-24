@@ -2,7 +2,12 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AccessGrant, AccessScope } from '../../generated/prisma/client';
 import { courseAccessScopes, grantLiveness, type CourseAccessSubject } from './grant-liveness';
-import { grantOpeningLesson, monthSliceOf, type MonthSlice } from './month-access';
+import {
+  grantOpeningLesson,
+  grantOpeningMonthlyExam,
+  monthSliceOf,
+  type MonthSlice,
+} from './month-access';
 
 /**
  * The return type is an OBJECT in both directions. A `boolean` here is the seed
@@ -270,8 +275,25 @@ export class EntitlementService {
     userId: string,
     course: CourseAccessSubject,
     lessonMonthIds: readonly string[],
+    /**
+     * A monthly exam (`isMonthlyExamLesson`): opened by ANY live grant on the
+     * course, whatever months it carries — «أي حد مشترك في الكورس». Its month
+     * tags, if an old adopt press wrote some, are ignored.
+     */
+    options: { monthlyExam?: boolean } = {},
   ): Promise<CourseAccess> {
     const slice = await this.resolveMonthSlice(userId, course);
+
+    if (options.monthlyExam) {
+      const examGrantId = grantOpeningMonthlyExam(slice);
+      if (examGrantId !== null) {
+        return { allowed: true, grantId: examGrantId, scope: 'course_month', validUntil: null };
+      }
+      // Not «تابعة لشهر تاني» — there is no other month to buy for an exam.
+      // What is missing is a live subscription to the course at all.
+      if (!slice.everything && slice.lapsed !== null) return { allowed: false, reason: slice.lapsed };
+      return { allowed: false, reason: course.requiresGrant ? 'needs_course_grant' : 'no_grant' };
+    }
 
     const grantId = grantOpeningLesson(slice, lessonMonthIds);
     if (grantId !== null) {
