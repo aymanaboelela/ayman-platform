@@ -69,9 +69,47 @@ export async function adminGet<T>(path: string, schema: ZodType<T>): Promise<T> 
     resolve(path),
     bound({ headers: await authHeaders(), cache: 'no-store' }),
   );
-  if (!response.ok) throw new Error(`GET ${path} failed with ${response.status}`);
+  /*
+   * `AdminApiError`, not a bare `Error`, and for the reason that class's own
+   * banner already gives for writes: a caller that needs to tell «forbidden»
+   * from «broken» cannot do it by parsing a message string.
+   *
+   * ⚠️ This is load-bearing on a page that reads several routes at once. A
+   * panel the operator's ROLE was never meant to reach answers 403, and with
+   * no status on the throw the page cannot render that one panel as «not
+   * yours» — so the whole screen dies instead. Measured on both instructor
+   * stacks: `/admin/students/{id}` returned 200 while `…/subscriptions` and
+   * `…/conversation` returned 403, and the page showed «حصلت مشكلة» empty.
+   */
+  if (!response.ok) {
+    throw new AdminApiError(`GET ${path} failed with ${response.status}`, response.status, null);
+  }
   return schema.parse(await response.json());
 }
+
+/**
+ * `adminGet` for a panel the CURRENT OPERATOR may not be allowed to see.
+ *
+ * Returns `null` on 403 and rethrows everything else. 403 is the one status
+ * here that is not a fault: `ROLE_PERMISSIONS` in the API gives `owner` a
+ * curated set on purpose — money and conversations are grantable rather than
+ * default — so an instructor opening a student hits it BY DESIGN, every time.
+ *
+ * ⚠️ `null` means «not yours to see», never «empty». The caller renders a
+ * panel that says so; falling back to the empty state would tell an
+ * instructor their student has no subscription and has never written, which
+ * is a lie the page cannot tell apart from the truth.
+ */
+export async function adminGetOrForbidden<T>(
+  path: string,
+  schema: ZodType<T>,
+): Promise<T | null> {
+  try {
+    return await adminGet(path, schema);
+  } catch (error) {
+    if (error instanceof AdminApiError && error.status === 403) return null;
+    throw error;
+  }
 
 /**
  * `adminGet` for a page whose whole subject is ONE record — a student, a
@@ -97,6 +135,8 @@ export async function adminGet<T>(path: string, schema: ZodType<T>): Promise<T> 
  * 500 is a fault and must not be dressed up as a missing row — that is how a
  * broken endpoint becomes an invisible empty page.
  */
+}
+
 /**
  * `adminGet` that answers `null` instead of throwing when the record is not
  * there — for a page that has something better to render than the 404 page.

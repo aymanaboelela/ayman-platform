@@ -1657,6 +1657,9 @@ const admin = {
     landingPresetBoardHint: 'بلوكات لون صريحة ورا بعض، الكلام كله في النص، ألوان فاقعة وخط كبير.',
     landingPresetStudio: 'الاستوديو',
     landingPresetStudioHint: 'صفحة فاتحة، صورتك فيها كبيرة من أول الشاشة، وكود حقيقي جنبها.',
+    /** لوحة القارئ مش من صلاحيته — مش «فاضية». اللي بيقراها المدرّس نفسه. */
+    panelForbidden: 'القسم ده مش مفتوح لحسابك',
+    panelForbiddenHint: 'الصلاحية دي بتتمنح من إعدادات الصلاحيات.',
     /** The landing page's shape — a different page, not the same page recoloured. */
     landingLayout: 'شكل الصفحة الرئيسية',
     landingLayoutHint:
