@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -39,6 +39,9 @@ import {
   readOnboardingDraft,
   useOnboardingDraft,
 } from './use-onboarding-draft';
+
+/** `useSyncExternalStore` with nothing to subscribe to — see `hydrated` below. */
+const subscribeNothing = () => () => {};
 
 /** Ties the guardian-phone `<FieldNote>` to the input it explains. */
 const PARENT_PHONE_NOTE_ID = 'father-phone-why';
@@ -181,7 +184,28 @@ export function OnboardingForm({
     the latter and skips the whole component.
   */
   const governorateCode = useWatch({ control, name: 'governorateCode' });
-  const cities = cityOptions(governorateCode);
+
+  /*
+    ⚠️ The city list is the one thing on this form RENDERED from a draft value.
+
+    The draft is read from `sessionStorage`, which the server does not have:
+    after a reload mid-wizard the server paints a disabled city select with
+    only «بعد المحافظة» while the client's first render — which already has
+    the draft's governorate — paints fifty options. That is a hydration
+    mismatch, and React throws the whole boundary away to re-render it.
+
+    `hydrated` is false on the server AND during hydration, true from the
+    next render on, so the first client render matches the server's exactly
+    and the options arrive one render later. Every other draft value reaches
+    the DOM through react-hook-form's refs, not through render output, which
+    is why nothing else needs this.
+  */
+  const hydrated = useSyncExternalStore(
+    subscribeNothing,
+    () => true,
+    () => false,
+  );
+  const cities = cityOptions(hydrated ? governorateCode : undefined);
 
   const isLastStep = stepIndex === STEPS.length - 1;
 
@@ -383,7 +407,13 @@ export function OnboardingForm({
             {/* Disabled until there is a governorate to list cities for, and
                 the placeholder says so — an enabled select with nothing in
                 it reads as broken. */}
+            {/* Keyed on its option set, so a new list is a new `<select>`:
+                react-hook-form writes the stored value into an element when it
+                REGISTERS it, and a restored city id set on the empty
+                pre-hydration select matched no option and was dropped from the
+                DOM while the form still held it. */}
             <SelectField
+              key={hydrated ? (governorateCode ?? 'none') : 'server'}
               variant="pill"
               icon={MapPin}
               label={copy.onboarding.city}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { startTransition, useActionState } from 'react';
 import type { AdminStudentDetail } from '@ayman/contracts/admin/students';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Badge } from '@ayman/ui/components/badge';
@@ -102,7 +102,33 @@ export function StudentDetailForm({
           ) : null}
         </dl>
 
-        <form action={action} className="max-w-[var(--w-prose)] space-y-3">
+        {/*
+          `onSubmit` + `startTransition`, NOT `action={action}`.
+
+          React 19 calls `form.reset()` when a form ACTION settles. The
+          governorate and city are controlled selects (the city's options are
+          the governorate's value — see `GovernorateCityFields`), and a
+          controlled select has no `selected` attribute for a native reset to
+          restore: after every save both snapped to their first option while
+          React state held the real ones, and the NEXT save — any save, even of
+          the phone — silently moved the student to the first governorate and
+          erased the city. `lesson-settings-form.tsx` documents the same bug.
+
+          Dispatching from `onSubmit` never enters the form-action path, so
+          there is no reset; the uncontrolled inputs keep what was just saved,
+          which is also what the row now holds. `method="post"` for the window
+          before hydration, where a bare form would submit as GET and put a
+          phone number in the URL.
+        */}
+        <form
+          method="post"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const formData = new FormData(event.currentTarget);
+            startTransition(() => action(formData));
+          }}
+          className="max-w-[var(--w-prose)] space-y-3"
+        >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <Label htmlFor="fullName">{copy.admin.students.fullName}</Label>

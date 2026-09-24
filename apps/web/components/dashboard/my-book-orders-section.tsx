@@ -149,7 +149,7 @@ export function BookOrderCard({
           style={{
             ['--tone' as string]: status.tone,
             color: 'var(--tone)',
-            background: 'color-mix(in oklch, var(--tone) 12%, var(--n-1))',
+            background: 'color-mix(in oklab, var(--tone) 12%, var(--n-1))',
             boxShadow: 'inset 0 0 0 var(--hairline) color-mix(in oklch, var(--tone) 35%, transparent)',
           }}
         >

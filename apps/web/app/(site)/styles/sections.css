@@ -3609,7 +3609,7 @@
 .honor-board__slot--filled {
   border-style: solid;
   border-color: color-mix(in oklch, var(--a-9) 35%, transparent);
-  background: color-mix(in oklch, var(--a-9) 6%, var(--site-card-2));
+  background: color-mix(in oklab, var(--a-9) 6%, var(--site-card-2));
 }
 
 /* The face of a filled place — the instructor's photograph of the winner, or
@@ -3637,7 +3637,7 @@
      an oval — on the one element whose whole job is to be a circle. */
   flex-shrink: 0;
   border-radius: var(--r-full);
-  background: color-mix(in oklch, var(--a-9) 18%, var(--site-card));
+  background: color-mix(in oklab, var(--a-9) 18%, var(--site-card));
   box-shadow: 0 0 0 1px color-mix(in oklch, var(--a-9) 45%, transparent);
   color: var(--a-11);
   /* Scaled with the disc. Two letters set at the old size inside a 7rem circle
