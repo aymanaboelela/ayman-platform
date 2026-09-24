@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, useTransition } from 'react';
-import { Bell } from 'lucide-react';
+import { ArrowLeft, Bell, BellRing, CheckCheck, Clock } from 'lucide-react';
 import type { StudentNotification } from '@ayman/contracts/notifications';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -19,12 +19,55 @@ import {
   markNotificationReadAction,
 } from '@/app/(app)/notifications/actions';
 import { describeNotification, formatNotificationTime } from '@/lib/notification-view';
+import { iconFor, toneFor } from './notification-icon';
 import { useLiveUnread } from './notification-stream';
+import './notification-panel.css';
 
 const c = copy.notifications;
 
 /** How many the panel shows before «شوف الكل» takes over. */
 const PANEL_SIZE = 8;
+
+const TIME = new Intl.DateTimeFormat('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' });
+const DAY = new Intl.DateTimeFormat('ar-EG-u-nu-latn', { day: 'numeric', month: 'short' });
+
+/** Midnight of the day `ms` falls on, in the viewer's own zone. */
+function dayStart(ms: number): number {
+  const date = new Date(ms);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+type Group = { label: string; entries: StudentNotification[] };
+
+/**
+ * «النهارده / امبارح / قبل كده», against the clock at the moment the rows
+ * ARRIVED — `now` is captured in the load handler, never read during render,
+ * so the render stays pure (see `formatNotificationTime`'s note on why a
+ * clock read in render is a hydration bug here).
+ */
+function groupByDay(entries: StudentNotification[], now: number): Group[] {
+  const today = dayStart(now);
+  const yesterday = today - 24 * 60 * 60 * 1000;
+  const groups: Group[] = [
+    { label: c.groupToday, entries: [] },
+    { label: c.groupYesterday, entries: [] },
+    { label: c.groupEarlier, entries: [] },
+  ];
+  for (const entry of entries) {
+    const at = new Date(entry.createdAt).getTime();
+    groups[at >= today ? 0 : at >= yesterday ? 1 : 2]!.entries.push(entry);
+  }
+  return groups.filter((group) => group.entries.length > 0);
+}
+
+/** Today and yesterday say only the time — the group header already said
+ *  the day. Older rows carry the date too. */
+function rowTime(iso: string, now: number): string {
+  const at = new Date(iso).getTime();
+  const yesterday = dayStart(now) - 24 * 60 * 60 * 1000;
+  return at >= yesterday ? TIME.format(at) : `${DAY.format(at)} · ${TIME.format(at)}`;
+}
 
 /**
  * The bell, its badge, and the panel behind it.
@@ -76,6 +119,9 @@ export function NotificationBellClient({ unread }: { unread: number }) {
   // placeholder. An empty array is a real answer — the student has no
   // notifications — and gets the designed empty panel instead.
   const [entries, setEntries] = useState<StudentNotification[] | null>(null);
+  // The clock at the moment the rows arrived — what the day groups are cut
+  // against. Set beside `entries`, in the handler, so render never reads it.
+  const [loadedAt, setLoadedAt] = useState(0);
   const [failed, setFailed] = useState(false);
   // A ref, not state: this guards against a second read being started by a
   // fast close-then-open while the first is still in flight, and it must be
@@ -94,7 +140,9 @@ export function NotificationBellClient({ unread }: { unread: number }) {
       // 62 KB. See that file. A chunk that fails to arrive lands in the same
       // `catch` as a request that fails, and means the same thing on screen.
       const { loadNotificationFeed } = await import('./notification-feed');
-      setEntries((await loadNotificationFeed(PANEL_SIZE)).entries);
+      const feed = await loadNotificationFeed(PANEL_SIZE);
+      setLoadedAt(Date.now());
+      setEntries(feed.entries);
     } catch {
       // Keep whatever is already on screen, exactly as `<NotificationList>`
       // does when page three fails: replacing readable rows with an error
@@ -174,27 +222,20 @@ export function NotificationBellClient({ unread }: { unread: number }) {
         ) : null}
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-[min(22rem,calc(100vw-2rem))] p-0">
-        <div className="flex items-center justify-between gap-3 border-b border-line-subtle px-3 py-2">
-          <p className="text-[length:var(--fs-text-sm)] font-medium text-fg">{c.panelTitle}</p>
+      <DropdownMenuContent align="end" className="np w-[min(25rem,calc(100vw-1.5rem))] p-0">
+        <div className="np__head">
+          <span className="np__bell" aria-hidden="true">
+            {count > 0 ? <BellRing className="size-5" /> : <Bell className="size-5" />}
+          </span>
+          <div className="min-w-0">
+            <p className="np__title">{c.panelTitle}</p>
+            <span className={cn('np__pill', count === 0 && 'np__pill--quiet')}>
+              {count > 0 ? formatCopy(c.panelUnread, { n: count }) : c.panelAllRead}
+            </span>
+          </div>
           {count > 0 ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={markAll}
-              className={cn(
-                // The text is the whole control — there is no box to enlarge,
-                // so the hit area is just its line box: about 24px, and the
-                // smallest target in the student area. `min-h-11` (44px)
-                // grows the box around the same glyphs at the same size and
-                // weight. The header grows with it on phones, which is the
-                // price of the target and cheaper than a tap that lands
-                // between «الإشعارات» and this and does nothing. Released
-                // above `md`, where a pointer does not need the slack.
-                'inline-flex items-center min-h-11 md:min-h-0',
-                'text-[length:var(--fs-text-sm)] text-accent-text transition-opacity hover:underline disabled:opacity-60',
-              )}
-            >
+            <button type="button" disabled={pending} onClick={markAll} className="np__markall">
+              <CheckCheck className="size-4" aria-hidden="true" />
               {pending ? c.markingAll : c.markAllRead}
             </button>
           ) : null}
@@ -203,59 +244,64 @@ export function NotificationBellClient({ unread }: { unread: number }) {
         {entries === null && !failed ? <PanelPlaceholder /> : null}
 
         {entries !== null && entries.length === 0 ? (
-          <div className="px-4 py-8 text-center">
-            <p className="text-[length:var(--fs-text-sm)] text-fg">{c.empty}</p>
-            <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{c.emptyHint}</p>
+          <div className="np__empty">
+            <span className="np__empty-icon" aria-hidden="true">
+              <Bell className="size-6" />
+            </span>
+            <p className="text-[length:var(--fs-text-base)] font-semibold text-fg">{c.empty}</p>
+            <p className="max-w-[18rem] text-[length:var(--fs-text-sm)] text-fg-muted">{c.emptyHint}</p>
           </div>
         ) : null}
 
         {entries !== null && entries.length > 0 ? (
-          <ul className="max-h-[60vh] overflow-y-auto">
-            {entries.map((entry) => {
-              const view = describeNotification(entry);
-              return (
-                <li key={entry.id} className="border-b border-line-subtle last:border-b-0">
-                  <button
-                    type="button"
-                    onClick={() => openEntry(entry, view.href)}
-                    className={cn(
-                      'flex w-full items-start gap-3 px-3 py-3 text-start',
-                      'transition-colors duration-[160ms] ease-out hover:bg-surface-3',
-                    )}
-                  >
-                    {/* The unread dot. Decorative — "غير مقروء" is not
-                        announced, because the panel is opened to read them
-                        and every row a student has not opened carries it. */}
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        'mt-1.5 size-2 shrink-0 rounded-full',
-                        entry.readAt ? 'bg-transparent' : 'bg-accent',
-                      )}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[length:var(--fs-text-sm)] text-fg">
-                        {view.title}
-                      </span>
-                      <span className="block truncate text-[length:var(--fs-text-sm)] text-fg-muted">
-                        {view.subtitle}
-                      </span>
-                      <span className="mono block text-[length:var(--fs-mono-label)] text-fg-faint">
-                        {formatNotificationTime(entry.createdAt)}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="np__body">
+            {groupByDay(entries, loadedAt).map((group) => (
+              <section key={group.label} aria-label={group.label}>
+                <p className="np__group">{group.label}</p>
+                <ul>
+                  {group.entries.map((entry) => {
+                    const view = describeNotification(entry);
+                    const Icon = iconFor(entry);
+                    const unread = !entry.readAt;
+                    return (
+                      <li key={entry.id}>
+                        <button
+                          type="button"
+                          onClick={() => openEntry(entry, view.href)}
+                          data-tone={toneFor(entry)}
+                          className={cn('np__row', unread && 'is-unread')}
+                        >
+                          <span className="np__icon" aria-hidden="true">
+                            <Icon className="size-[1.15rem]" />
+                          </span>
+                          <span className="np__text">
+                            <span className="np__rtitle">{view.title}</span>
+                            <span className="np__rsub">{view.subtitle}</span>
+                            <span className="np__time">
+                              <Clock className="size-3" aria-hidden="true" />
+                              <time dateTime={entry.createdAt}>
+                                {loadedAt ? rowTime(entry.createdAt, loadedAt) : formatNotificationTime(entry.createdAt)}
+                              </time>
+                            </span>
+                          </span>
+                          {/* Decorative — the panel is opened to read them, and
+                              every row not yet opened carries it. */}
+                          {unread ? <span className="np__dot" aria-hidden="true" /> : null}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+          </div>
         ) : null}
 
         {failed ? (
           <p
             role="alert"
             className={cn(
-              'px-4 text-center text-[length:var(--fs-text-sm)] text-[color:var(--err)]',
+              'bg-surface-1 px-4 text-center text-[length:var(--fs-text-sm)] text-[color:var(--err)]',
               // Nothing above it when the very first read is the one that
               // failed, so it carries the panel body's own padding; when it
               // sits under rows we already have, a rule separates it from
@@ -267,13 +313,10 @@ export function NotificationBellClient({ unread }: { unread: number }) {
           </p>
         ) : null}
 
-        <div className="border-t border-line-subtle p-2">
-          <Link
-            href="/notifications"
-            onClick={() => setOpen(false)}
-            className="block rounded-sm px-2 py-1.5 text-center text-[length:var(--fs-text-sm)] text-accent-text hover:bg-surface-3"
-          >
-            {c.seeAll}
+        <div className="np__foot">
+          <Link href="/notifications" onClick={() => setOpen(false)} className="np__all">
+            {c.seeAllLong}
+            <ArrowLeft className="size-4" aria-hidden="true" />
           </Link>
         </div>
       </DropdownMenuContent>
@@ -318,28 +361,24 @@ function PanelPlaceholder() {
       <p role="status" className="sr-only">
         {c.loading}
       </p>
-      <ul aria-hidden="true">
+      <div className="np__body" aria-hidden="true">
         {[0, 1, 2].map((row) => (
-          <li key={row} className="border-b border-line-subtle last:border-b-0">
-            <div className="flex w-full items-start gap-3 px-3 py-3">
-              {/* Holds the unread dot's column so the bars start where the
-                  text will, not 20px further in. */}
-              <span className="mt-1.5 size-2 shrink-0 rounded-full bg-transparent" />
-              <span className="min-w-0 flex-1">
-                <span className="block text-[length:var(--fs-text-sm)]">
-                  <Skeleton width="wide" className="inline-block h-[0.7em] align-middle" />
-                </span>
-                <span className="block text-[length:var(--fs-text-sm)]">
-                  <Skeleton width="full" className="inline-block h-[0.7em] align-middle" />
-                </span>
-                <span className="mono block text-[length:var(--fs-mono-label)]">
-                  <Skeleton className="inline-block h-[0.7em] w-16 align-middle" />
-                </span>
+          <div key={row} className="np__row">
+            <Skeleton className="size-10 shrink-0 rounded-[var(--r-md)]" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[length:var(--fs-text-sm)]">
+                <Skeleton width="wide" className="inline-block h-[0.7em] align-middle" />
               </span>
-            </div>
-          </li>
+              <span className="block text-[length:var(--fs-text-xs)]">
+                <Skeleton width="full" className="inline-block h-[0.7em] align-middle" />
+              </span>
+              <span className="block text-[length:var(--fs-text-xs)]">
+                <Skeleton className="inline-block h-[0.7em] w-16 align-middle" />
+              </span>
+            </span>
+          </div>
         ))}
-      </ul>
+      </div>
     </>
   );
 }

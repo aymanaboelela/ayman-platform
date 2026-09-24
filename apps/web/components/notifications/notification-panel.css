@@ -1,0 +1,221 @@
+/* =============================================================================
+   The bell's panel — «شكله ابن ناس».
+
+   The old panel was a plain list of grey lines: every row the same weight, the
+   same colour, a date in monospace under each. Scanning it for «مين مستني رد»
+   meant reading every line. Now a row is scanned before it is read: a tinted
+   icon tile carries the KIND (see `toneFor`), an unread row sits on a warm wash
+   with a bold title, and the list is cut into «النهارده / امبارح / قبل كده».
+
+   Every colour is a token or a `color-mix` of one, so the dark theme and each
+   tenant's hue come for free.
+   ========================================================================== */
+
+.np {
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ── header ─────────────────────────────────────────────────────────────── */
+.np__head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.85rem 1rem;
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in oklab, var(--p-500) 14%, transparent), transparent 70%),
+    var(--color-surface-2);
+  border-bottom: 1px solid var(--color-line-subtle);
+}
+.np__bell {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--p-500) 16%, transparent);
+  color: var(--p-600);
+}
+.np__title {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg);
+  line-height: 1.3;
+}
+.np__pill {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.15rem;
+  padding: 0.05rem 0.55rem;
+  border-radius: var(--r-full);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  background: color-mix(in oklab, var(--p-500) 18%, transparent);
+  color: var(--p-600);
+}
+.np__pill--quiet {
+  background: color-mix(in oklab, var(--ok) 14%, transparent);
+  color: var(--ok);
+}
+.np__markall {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-inline-start: auto;
+  min-block-size: 2.75rem;
+  padding-inline: 0.7rem;
+  border-radius: var(--r-md);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--a-11);
+  transition: background var(--d-hover) var(--ease-out);
+}
+.np__markall:hover { background: color-mix(in oklab, var(--a-9) 14%, transparent); }
+.np__markall:disabled { opacity: 0.6; }
+@media (min-width: 768px) { .np__markall { min-block-size: 2.25rem; } }
+
+/* ── body ───────────────────────────────────────────────────────────────── */
+.np__body {
+  max-block-size: min(62vh, 32rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.35rem 0.5rem 0.5rem;
+  background: var(--color-surface-1);
+}
+.np__group {
+  position: sticky;
+  inset-block-start: -0.35rem;
+  z-index: 1;
+  padding: 0.55rem 0.5rem 0.35rem;
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.02em;
+  color: var(--color-fg-muted);
+  background: var(--color-surface-1);
+}
+
+.np__row {
+  --nt: var(--viz-5);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  inline-size: 100%;
+  margin-block: 0.15rem;
+  padding: 0.7rem 0.7rem;
+  border-radius: var(--r-md);
+  text-align: start;
+  transition:
+    background var(--d-hover) var(--ease-out),
+    transform var(--d-hover) var(--ease-out);
+}
+.np__row:hover { background: var(--color-surface-3); }
+.np__row:focus-visible { outline: 2px solid var(--p-500); outline-offset: -2px; }
+.np__row.is-unread {
+  background: color-mix(in oklab, var(--a-9) 9%, var(--color-surface-1));
+}
+.np__row.is-unread:hover {
+  background: color-mix(in oklab, var(--a-9) 15%, var(--color-surface-1));
+}
+
+.np__row[data-tone='answer']  { --nt: var(--viz-5); }
+.np__row[data-tone='marked']  { --nt: var(--viz-3); }
+.np__row[data-tone='money']   { --nt: var(--viz-6); }
+.np__row[data-tone='win']     { --nt: var(--viz-1); }
+.np__row[data-tone='problem'] { --nt: var(--err); }
+.np__row[data-tone='parcel']  { --nt: var(--viz-2); }
+.np__row[data-tone='message'] { --nt: var(--viz-4); }
+
+.np__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--nt) 15%, transparent);
+  color: var(--nt);
+}
+.np__row.is-unread .np__icon {
+  background: var(--nt);
+  color: #fff;
+  box-shadow: 0 4px 10px color-mix(in oklab, var(--nt) 30%, transparent);
+}
+
+.np__text { min-inline-size: 0; flex: 1; }
+.np__rtitle {
+  display: block;
+  font-size: var(--fs-text-sm);
+  line-height: 1.6;
+  color: var(--color-fg);
+}
+.np__row.is-unread .np__rtitle { font-weight: var(--fw-semibold); }
+.np__rsub {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-text-xs);
+  color: var(--color-fg-muted);
+}
+.np__time {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.3rem;
+  font-size: var(--fs-text-xs);
+  color: var(--color-fg-muted);
+}
+.np__dot {
+  flex-shrink: 0;
+  inline-size: 0.55rem;
+  block-size: 0.55rem;
+  margin-top: 0.45rem;
+  border-radius: var(--r-full);
+  background: var(--a-9);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--a-9) 25%, transparent);
+}
+
+/* ── empty ──────────────────────────────────────────────────────────────── */
+.np__empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: 2rem 1.25rem 2.25rem;
+  text-align: center;
+  background: var(--color-surface-1);
+}
+.np__empty-icon {
+  display: grid;
+  place-items: center;
+  inline-size: 3.5rem;
+  block-size: 3.5rem;
+  margin-bottom: 0.4rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--p-500) 12%, transparent);
+  color: var(--p-600);
+}
+
+/* ── footer ─────────────────────────────────────────────────────────────── */
+.np__foot {
+  padding: 0.5rem;
+  border-top: 1px solid var(--color-line-subtle);
+  background: var(--color-surface-2);
+}
+.np__all {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-block-size: 2.5rem;
+  border-radius: var(--r-md);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-line);
+  transition: background var(--d-hover) var(--ease-out);
+}
+.np__all:hover { background: var(--color-surface-3); }

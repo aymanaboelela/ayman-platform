@@ -3970,6 +3970,17 @@ export const copy = {
     bell: 'الإشعارات',
     bellWithUnread: 'الإشعارات — {n} جديدة',
     panelTitle: 'الإشعارات',
+    /** The pill beside the panel's title — «٣ جديدة». */
+    panelUnread: '{n} جديدة',
+    /** «كله مقري» — the same pill when nothing is waiting. */
+    panelAllRead: 'كله مقري',
+    /** Day groups inside the panel. */
+    groupToday: 'النهارده',
+    groupYesterday: 'امبارح',
+    groupEarlier: 'قبل كده',
+    /** The panel footer — wider than the bare «الكل» the full page's own
+     *  header link keeps. */
+    seeAllLong: 'كل الإشعارات',
     markAllRead: 'علّم الكل كمقروء',
     markingAll: 'بنعلّم…',
     seeAll: 'الكل',
