@@ -1,8 +1,9 @@
+import type { CSSProperties } from 'react';
+import { Check } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
-import { cn } from '@ayman/ui/lib/cn';
 
 /**
- * Where you are in the form, as segments rather than a percentage.
+ * Where you are in the form, as numbered stations on a rail.
  *
  * The steps here are a genuine sequence, not four boxes in an arbitrary
  * order — the track list cannot be offered before a system and a year are
@@ -10,9 +11,14 @@ import { cn } from '@ayman/ui/lib/cn';
  * even ask next. That is the only reason this exists; a progress bar on a
  * form whose parts are independent would be decoration.
  *
- * Segments, not a percentage: four steps means the honest readings are 0/25/
- * 50/75/100, and a bar that only ever lands on those five values is a worse
- * version of four marks. The count is also small enough to show directly.
+ * Stations rather than the four thin segments it used to be: Ayman sent a
+ * competitor's wizard — a numbered disc per step on a thick rail, a tick on
+ * the ones behind you, «الخطوة n» under each — and asked for the same idea in
+ * this platform's colours. Four is still small enough to show every one.
+ *
+ * `role="progressbar"` stays on the rail and the stations are `aria-hidden`:
+ * the position is carried by `aria-valuenow`/`aria-valuemax`, exactly as
+ * before, so a screen reader hears one control rather than four numbers.
  */
 export function StepProgress({
   currentStep,
@@ -23,29 +29,42 @@ export function StepProgress({
   totalSteps: number;
   title: string;
 }) {
+  // How far the filled part of the rail reaches, as a fraction of the
+  // distance between the first and last disc — 0 on step 1, 1 on the last.
+  const reach = totalSteps > 1 ? (currentStep - 1) / (totalSteps - 1) : 1;
+
   return (
-    <div className="space-y-2">
+    <div className="stepper">
       <div
         role="progressbar"
         aria-label={copy.onboarding.progressLabel}
         aria-valuemin={1}
         aria-valuemax={totalSteps}
         aria-valuenow={currentStep}
-        // The position is exposed through the ARIA values above, so the
-        // segments themselves carry no text and need none.
-        className="flex gap-1.5"
+        className="stepper__rail"
+        style={{ '--stepper-count': totalSteps, '--stepper-reach': reach } as CSSProperties}
       >
-        {Array.from({ length: totalSteps }, (_, index) => (
-          <span
-            key={index}
-            className={cn(
-              'h-1 flex-1 rounded-xs transition-colors duration-[var(--d-hover)] ease-[var(--ease)]',
-              index < currentStep ? 'bg-accent' : 'bg-surface-4',
-            )}
-          />
-        ))}
+        {Array.from({ length: totalSteps }, (_, index) => {
+          const step = index + 1;
+          const state = step < currentStep ? 'done' : step === currentStep ? 'current' : 'todo';
+          return (
+            <div key={step} className="stepper__station" data-state={state} aria-hidden="true">
+              <span className="stepper__disc">
+                {state === 'done' ? <Check className="size-4" strokeWidth={3} /> : digits(step)}
+              </span>
+              <span className="stepper__label">
+                {copy.onboarding.stepLabel.replace('{n}', digits(step))}
+              </span>
+            </div>
+          );
+        })}
       </div>
-      <p className="text-[length:var(--fs-mono-label)] text-fg-muted mono">{title}</p>
+      <p className="stepper__title">{title}</p>
     </div>
   );
+}
+
+/** Arabic-Indic, like «خطوة ١ من ٣» everywhere else in the product's copy. */
+function digits(value: number): string {
+  return value.toLocaleString('ar-EG');
 }

@@ -57,6 +57,7 @@ const DRAFT_FIELDS = [
   'gender',
   'phone',
   'governorateCode',
+  'cityId',
   'schoolName',
   'schoolStream',
   'year',

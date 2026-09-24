@@ -2710,6 +2710,371 @@
 }
 
 /* ---------------------------------------------------------------------------
+   .onb-form — the onboarding wizard's own look.
+
+   Ayman sent a competitor's sign-up step and asked for «نفس الفكرة» in this
+   platform's colours: numbered stations on a rail, the gender as two picture
+   cards, every field a tall rounded box with its label sitting on it as a tab
+   and an icon at the far end, and next/back as pills with an arrow disc.
+
+   Scoped to `.onb-form` and to the opt-in `variant="pill"` fields, so /login,
+   /register and the profile editor — which render the same components — do
+   not move with it.
+
+   The washes are the tenant's accent at low alpha on a light page and neutral
+   steps on a dark one, for the reason `.drawer` gives: amber over ink-navy
+   mixes to brown.
+   --------------------------------------------------------------------------- */
+.onb-form {
+  --onb-wash: color-mix(in oklch, var(--a-9), transparent 88%);
+  --onb-wash-strong: color-mix(in oklch, var(--a-9), transparent 76%);
+  --onb-halo: color-mix(in oklch, var(--a-9), transparent 72%);
+}
+
+:root[data-theme='dark'] .onb-form {
+  --onb-wash: var(--n-4);
+  --onb-wash-strong: var(--n-6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .onb-form {
+    --onb-wash: var(--n-4);
+    --onb-wash-strong: var(--n-6);
+  }
+}
+
+/* ── the stepper ─────────────────────────────────────────────────────────── */
+
+.stepper {
+  --stepper-disc: 2.75rem;
+  --stepper-bar: 0.875rem;
+  display: grid;
+  gap: var(--s-16);
+}
+
+/* One column per station, the disc centred in it; the rail runs from the
+   centre of the first column to the centre of the last, and the filled part
+   is that length times `--stepper-reach` (0 on step 1, 1 on the last). Both
+   are set inline by `StepProgress`. */
+.stepper__rail {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--stepper-count), minmax(0, 1fr));
+}
+
+.stepper__rail::before,
+.stepper__rail::after {
+  content: '';
+  position: absolute;
+  inset-block-start: calc((var(--stepper-disc) - var(--stepper-bar)) / 2);
+  inset-inline-start: calc(100% / var(--stepper-count) / 2);
+  block-size: var(--stepper-bar);
+  border-radius: var(--r-full);
+}
+
+.stepper__rail::before {
+  inline-size: calc(100% - 100% / var(--stepper-count));
+  background: var(--onb-wash-strong);
+}
+
+.stepper__rail::after {
+  inline-size: calc((100% - 100% / var(--stepper-count)) * var(--stepper-reach));
+  background: var(--a-9);
+  transition: inline-size var(--d-hover) var(--ease);
+}
+
+.stepper__station {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-8);
+}
+
+.stepper__disc {
+  display: grid;
+  place-items: center;
+  inline-size: var(--stepper-disc);
+  block-size: var(--stepper-disc);
+  border-radius: var(--r-full);
+  background: var(--onb-wash-strong);
+  color: var(--n-11);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  transition:
+    background-color var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease);
+}
+
+.stepper__station[data-state='done'] .stepper__disc,
+.stepper__station[data-state='current'] .stepper__disc {
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+}
+
+/* The current station gets a halo, so "where am I" does not depend on
+   telling a filled disc from a ticked one. */
+.stepper__station[data-state='current'] .stepper__disc {
+  box-shadow: 0 0 0 5px var(--onb-halo);
+}
+
+.stepper__label {
+  font-size: var(--fs-mono-label);
+  font-weight: var(--fw-semibold);
+  color: var(--n-10);
+  white-space: nowrap;
+}
+
+.stepper__station[data-state='current'] .stepper__label {
+  color: var(--n-12);
+}
+
+.stepper__title {
+  font-size: var(--fs-text-lg);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+/* ── «النوع» as two cards ───────────────────────────────────────────────── */
+
+.gender-pick {
+  min-inline-size: 0;
+  /* Inline only: the block margin belongs to the wizard's `space-y-*` stack,
+     and an unlayered `margin: 0` here beats that utility. */
+  margin-inline: 0;
+  padding: 0;
+  border: 0;
+}
+
+.gender-pick > legend {
+  margin-block-end: var(--s-8);
+  padding: 0;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+}
+
+.gender-pick__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-12);
+}
+
+.gender-pick__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-8);
+  padding: var(--s-12) var(--s-8) var(--s-16);
+  border: 2px solid transparent;
+  border-radius: var(--r-lg);
+  background: var(--onb-wash);
+  cursor: pointer;
+  transition:
+    border-color var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease);
+}
+
+.gender-pick__card:hover {
+  border-color: var(--onb-wash-strong);
+}
+
+.gender-pick__card:has(:checked) {
+  border-color: var(--a-9);
+  background: var(--onb-wash-strong);
+  box-shadow: 0 0 0 4px var(--onb-halo);
+}
+
+/* The radio is `sr-only`, so the card has to show where the keyboard is. */
+.gender-pick__card:has(:focus-visible) {
+  outline: 2px solid var(--a-9);
+  outline-offset: 3px;
+}
+
+.gender-pick:has([aria-invalid='true']) .gender-pick__card {
+  border-color: var(--err);
+}
+
+.gender-pick__art {
+  inline-size: min(100%, 8.5rem);
+  block-size: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+.gender-pick__label {
+  font-size: var(--fs-text-lg);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.gender-pick__tick {
+  position: absolute;
+  inset-block-start: var(--s-8);
+  inset-inline-end: var(--s-8);
+  display: none;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border-radius: var(--r-full);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+}
+
+.gender-pick__card:has(:checked) .gender-pick__tick {
+  display: grid;
+}
+
+/* ── the pill fields (`FormField` / `SelectField` with `variant="pill"`) ── */
+
+.field--pill {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The label is a TAB on the field: same wash, joined to it, so the two read
+   as one object. The field's own corner under the tab is squared off to
+   meet it. */
+.field--pill .field__label {
+  align-self: flex-start;
+  padding: var(--s-4) var(--s-12) var(--s-2);
+  border-start-start-radius: var(--r-lg);
+  border-start-end-radius: var(--r-lg);
+  background: var(--onb-wash);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+}
+
+.field__box {
+  position: relative;
+}
+
+/* 16px type on every width — the iOS-zoom floor `FormField` explains. */
+.field__control {
+  display: block;
+  inline-size: 100%;
+  block-size: 3.25rem;
+  padding-inline: var(--s-16) 3rem;
+  border: 1.5px solid transparent;
+  border-radius: var(--r-lg);
+  border-start-start-radius: 0;
+  background: var(--onb-wash);
+  color: var(--n-12);
+  font-size: 1rem;
+  font-weight: var(--fw-semibold);
+  transition:
+    border-color var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease);
+}
+
+.field__control::placeholder {
+  color: var(--n-10);
+  font-weight: var(--fw-regular);
+}
+
+.field__control:focus {
+  outline: none;
+  border-color: var(--a-9);
+  box-shadow: 0 0 0 3px var(--onb-halo);
+}
+
+.field__control[aria-invalid='true'] {
+  border-color: var(--err);
+}
+
+.field__control:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* The native arrow is off and `SelectField` draws a chevron between the
+   text and the icon instead — one glyph on every browser. */
+.field__control--select {
+  appearance: none;
+  padding-inline-end: 5rem;
+  cursor: pointer;
+}
+
+/* Nothing chosen yet: the placeholder option is what the closed select
+   shows, and at the field's semibold it read as an answer. */
+.field__control--select:has(> option[value='']:checked) {
+  color: var(--n-10);
+  font-weight: var(--fw-regular);
+}
+
+/* A phone number is typed LTR inside the RTL page, so its START is the side
+   the icon sits on (the box's inline END). Flip the padding to match rather
+   than letting the digits run under the glyph. */
+.field__control[dir='ltr'] {
+  padding-inline: 3rem var(--s-16);
+}
+
+.field__icon,
+.field__chevron {
+  position: absolute;
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  pointer-events: none;
+}
+
+.field__icon {
+  inset-inline-end: var(--s-16);
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  color: var(--a-11);
+}
+
+.field__chevron {
+  inset-inline-end: 3rem;
+  inline-size: 1rem;
+  block-size: 1rem;
+  color: var(--n-11);
+}
+
+.field__error {
+  margin-block-start: var(--s-4);
+  font-size: var(--fs-text-xs);
+  color: var(--err);
+}
+
+/* ── next / back ────────────────────────────────────────────────────────── */
+
+/* Pills with the arrow in a disc on the side it points to; the label stays
+   centred whichever side that is. */
+.onb-form .onb-btn {
+  position: relative;
+  block-size: 3.25rem;
+  min-inline-size: 8.5rem;
+  padding-inline: 3.25rem;
+  border-radius: var(--r-full);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+}
+
+.onb-btn__disc {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 0.4375rem;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  inline-size: 2.375rem;
+  block-size: 2.375rem;
+  border-radius: var(--r-full);
+  background: var(--onb-wash-strong);
+}
+
+.onb-btn--primary .onb-btn__disc {
+  inset-inline-start: auto;
+  inset-inline-end: 0.4375rem;
+  background: color-mix(in oklch, var(--on-accent-ink), transparent 86%);
+}
+
+/* ---------------------------------------------------------------------------
    .pay-choice — «هتحوّل بإيه؟», the first step of every checkout.
 
    Two rails, two marks, one «التالي». See

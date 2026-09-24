@@ -22,10 +22,14 @@ afterEach(() => {
 
 describe('readOnboardingDraft', () => {
   it('restores what the student typed', () => {
-    write({ fullName: 'سلمى محمد', phone: '01012345678', year: 2 });
+    write({ fullName: 'سلمى محمد', phone: '01012345678', governorateCode: '01', cityId: 1, year: 2 });
     expect(readOnboardingDraft()).toEqual({
       fullName: 'سلمى محمد',
       phone: '01012345678',
+      governorateCode: '01',
+      // A number, and it survives as one — the city select is registered
+      // with `setValueAs` → number, exactly like the year.
+      cityId: 1,
       year: 2,
     });
   });
