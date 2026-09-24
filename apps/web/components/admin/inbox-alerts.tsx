@@ -99,7 +99,10 @@ export function InboxAlertsProvider({ children }: { children: ReactNode }) {
     const body =
       arrived === 1 ? c.alertBodyOne : formatCopy(c.alertBodyMany, { n: arrived });
 
+    // One toast that updates, never a stack — see the note on the live
+    // stream's toast in `notification-stream.tsx` for what a stack costs.
     toast(c.alertTitle, {
+      id: 'inbox-alert',
       description: body,
       action: { label: c.alertOpen, onClick: () => window.location.assign('/admin/inbox') },
     });

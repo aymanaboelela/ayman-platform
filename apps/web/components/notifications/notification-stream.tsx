@@ -110,10 +110,28 @@ export function NotificationStreamProvider({ children }: { children: ReactNode }
       setUnread(event.unread);
 
       const view = describeNotification(event.notification);
-      toast(view.title, {
-        description: view.subtitle,
-        action: { label: c.liveOpen, onClick: () => router.push(view.href) },
-      });
+      /*
+        ⚠️ Only in a tab someone is LOOKING at, and one toast per kind.
+
+        sonner pauses every toast's close timer while `document.hidden`, so in
+        a background tab nothing ever leaves: an admin tab open all day in the
+        background collected one toast per student question, homework and
+        payment — thousands — and every new one re-rendered all the others,
+        each handed its own copy of the whole list. That is the growth that
+        took the tab down («Aw, Snap», code 5 — the renderer out of memory).
+        The OS notification just below is what reaches a hidden tab; the badge
+        count above still updates either way.
+
+        `id` per kind: a burst of five student questions replaces one toast
+        instead of stacking five, the same collapse `tag` gives the OS tray.
+      */
+      if (document.visibilityState === 'visible') {
+        toast(view.title, {
+          id: `live-${event.notification.kind}`,
+          description: view.subtitle,
+          action: { label: c.liveOpen, onClick: () => router.push(view.href) },
+        });
+      }
 
       /*
         The OS notification — the half that reaches someone whose tab is in the
@@ -176,28 +194,54 @@ export function NotificationStreamProvider({ children }: { children: ReactNode }
   }, []);
 
   useEffect(() => {
-    // Same-origin, so the session cookie rides along with no configuration —
-    // `EventSource` cannot set headers, which is exactly why the endpoint is
-    // authenticated by cookie like every other route rather than by a token.
-    let source: EventSource;
-    try {
-      source = new EventSource('/api/me/notifications/stream');
-    } catch {
-      // No EventSource (an ancient browser, a locked-down webview). The bell
-      // still works; it just updates on navigation instead of instantly.
-      return;
-    }
+    let source: EventSource | null = null;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    let failures = 0;
+    let disposed = false;
 
-    source.onmessage = (event: MessageEvent<string>) => onEvent.current(event);
-    /*
-      Deliberately empty. `EventSource` reconnects on its own, with backoff,
-      and it emits `error` on every one of those attempts — logging or toasting
-      here would turn a laptop waking from sleep into a wall of errors about a
-      connection that is about to come back by itself.
-    */
-    source.onerror = () => undefined;
+    const open = () => {
+      // Same-origin, so the session cookie rides along with no configuration —
+      // `EventSource` cannot set headers, which is exactly why the endpoint is
+      // authenticated by cookie like every other route rather than by a token.
+      try {
+        source = new EventSource('/api/me/notifications/stream');
+      } catch {
+        // No EventSource (an ancient browser, a locked-down webview). The bell
+        // still works; it just updates on navigation instead of instantly.
+        return;
+      }
+      source.onopen = () => {
+        failures = 0;
+      };
+      source.onmessage = (event: MessageEvent<string>) => onEvent.current(event);
+      /*
+        Silent — `EventSource` reconnects on its own after a dropped connection
+        and emits `error` on every attempt, and toasting that would turn a
+        laptop waking from sleep into a wall of errors.
 
-    return () => source.close();
+        ⚠️ Except that it does NOT retry when the reconnect gets an HTTP error:
+        it goes to CLOSED for good. That is every deploy — Traefik answers 404
+        or 502 while the new container comes up — so an admin tab open across a
+        deploy lost its live updates until a manual refresh («ديما لازم أعمل
+        ريفرش»). A CLOSED stream is reopened here, backing off from 5s to a
+        minute with jitter, so a hundred tabs do not all knock at once.
+      */
+      source.onerror = () => {
+        if (disposed || source === null || source.readyState !== EventSource.CLOSED) return;
+        source.close();
+        source = null;
+        failures += 1;
+        const ceiling = Math.min(60_000, 5_000 * 2 ** (failures - 1));
+        retry = setTimeout(open, ceiling / 2 + Math.random() * (ceiling / 2));
+      };
+    };
+
+    open();
+    return () => {
+      disposed = true;
+      if (retry !== null) clearTimeout(retry);
+      source?.close();
+    };
   }, []);
 
   return <LiveUnreadContext.Provider value={unread}>{children}</LiveUnreadContext.Provider>;
