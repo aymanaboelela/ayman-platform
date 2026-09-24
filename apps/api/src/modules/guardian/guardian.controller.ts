@@ -13,6 +13,7 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import type { Request, Response } from 'express';
 import { Public } from '../../auth/decorators/public.decorator';
 import { RequireCsrf } from '../security/require-csrf.decorator';
+import { clientIpFromRequest } from '../../common/throttle/request-identity';
 import { GuardianSignInDto } from './guardian.dto';
 import { GuardianSessionService } from './guardian-session.service';
 import { GUARDIAN_COOKIE, guardianCookieOptions } from './guardian-cookie';
@@ -53,11 +54,15 @@ export class GuardianController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<{ ok: true }> {
     /*
-     * `request.ip` بيقرا `X-Forwarded-For` لأن `trust proxy` مضبوط — ومن
-     * غيره كل الطلبات كانت هتيجي من عنوان Traefik الواحد، والعدّاد كان
-     * هيقفل على كل الآباء مع بعض بدل ما يعدّ كل واحد لوحده.
+     * ⚠️ `clientIpFromRequest` مش `request.ip`.
+     *
+     * `trust proxy` مضبوط على هوب واحد، والبرودكشن فيه اتنين (Cloudflare ثم
+     * Traefik) — فـ`request.ip` كان **عنوان الـedge بتاع Cloudflare**، واحد
+     * لكل الآباء اللي بيعدّوا من نفس الـPoP. يعني خمس أكواد غلط من أي حد في
+     * مصر كانت بتقفل البوابة على الكل، والقفل بيكبر لحد ساعة. الـ
+     * `cf-connecting-ip` هو العميل الحقيقي — اقرا الدالة نفسها.
      */
-    const result = await this.sessions.signIn(body.code, request.ip ?? 'unknown');
+    const result = await this.sessions.signIn(body.code, clientIpFromRequest(request));
     if (!result.ok) {
       if (result.retryAfterSeconds) {
         response.setHeader('Retry-After', String(result.retryAfterSeconds));
