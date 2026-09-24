@@ -48,6 +48,9 @@ export const ProfileMeSchema = z.object({
       guardianCode: z.string().optional(),
       schoolName: z.string().nullable().optional(),
       governorateCode: z.string().optional(),
+      /** An id in `@ayman/contracts/cities`; null for a profile that predates
+       *  «المدينة» — see `cityId` in `onboarding.ts`. */
+      cityId: z.number().int().nullable().optional(),
       year: z.number().int().nullable().optional(),
       /**
        * Added by `/library`, which groups the catalog by (year, track) and has

@@ -68,6 +68,12 @@ export type AdminStudentRow = z.infer<typeof AdminStudentRowSchema>;
 export const AdminStudentDetailSchema = AdminStudentRowSchema.extend({
   role: z.string(),
   schoolName: z.string().nullable(),
+  /** «المدينة» — an id in `@ayman/contracts/cities` and its name. Both null
+   *  for a profile onboarded before the question existed, and after an admin
+   *  moves the governorate without choosing a city (the old one is cleared
+   *  rather than left filed under the wrong governorate). */
+  cityId: z.number().int().nullable(),
+  cityNameAr: z.string().nullable(),
   /** Null for every profile onboarded before the question existed — «مش متسجّل»
    *  rather than a guess. Required for everyone who onboards from now on. */
   schoolStream: SchoolStreamSchema.nullable(),
@@ -154,6 +160,12 @@ export const AdminStudentPatchSchema = z
     fullName: z.string().min(2).max(120).optional(),
     schoolName: z.string().max(160).nullable().optional(),
     governorateCode: z.string().length(2).optional(),
+    /**
+     * Null clears it. Whether it belongs to the governorate is checked in the
+     * service, which is the one place that knows the governorate the row will
+     * END with when only one of the two is sent.
+     */
+    cityId: z.number().int().positive().nullable().optional(),
     year: z.number().int().min(1).max(3).nullable().optional(),
     /** Same nullable shape as the row it edits — see `AdminStudentDetailSchema`. */
     schoolStream: SchoolStreamSchema.nullable().optional(),

@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import type { Onboarding } from '@ayman/contracts';
+import { citiesOf } from '@ayman/contracts/cities';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProfileService } from './profile.service';
@@ -58,6 +59,7 @@ describe('ProfileService', () => {
       gender: 'male',
       phone: randomEgyptianPhone(),
       governorateCode,
+      cityId: citiesOf(governorateCode)[0]!.id,
       // Both required since the wizard stopped asking for four academic
       // dropdowns and started asking for these instead. Present in the BASE
       // payload rather than in the tests that care, so every case below keeps

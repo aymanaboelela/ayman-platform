@@ -1,5 +1,6 @@
 import { z } from '@ayman/contracts/zod';
 import { egyptianPhone } from '@ayman/contracts/phone';
+import { cityBelongsTo } from '@ayman/contracts/cities';
 
 export const GenderSchema = z.enum(['male', 'female']);
 
@@ -33,6 +34,23 @@ const OnboardingShapeSchema = z
     gender: GenderSchema,
     phone: egyptianPhone('رقم الهاتف مطلوب'),
     governorateCode: z.string().length(2, 'لازم نحدد المحافظة'),
+    /**
+     * «المدينة», under the governorate — an id from `@ayman/contracts/cities`.
+     *
+     * Required for a NEW submission, the same call the year made: a column
+     * that is optional on the form is a column half the cohort never fills,
+     * and «القاهرة» alone does not tell an admin whether a student is in مدينة
+     * نصر or in حلوان. Students onboarded before this have a null
+     * `city_id`; the profile editor submits this same schema, so the first
+     * time one of them saves «بياناتك» they are asked for it there.
+     *
+     * `z.number({ error })` for the reason `year` gives below: the form's
+     * select yields `undefined` for "nothing chosen", which fails the TYPE
+     * check and would otherwise print zod's English default.
+     *
+     * Whether it belongs to `governorateCode` is `refineCity`'s job, below.
+     */
+    cityId: z.number({ error: 'لازم نحدد المدينة' }).int().positive(),
     /**
      * Required. It was optional, on the reasoning that the STREAM (عام/لغات)
      * is what filters content and the name is only ever read by a human — but
@@ -199,7 +217,32 @@ function refineSection(data: SectionFields, ctx: z.RefinementCtx): void {
   }
 }
 
-export const OnboardingSchema = OnboardingShapeSchema.superRefine(refineSection);
+/**
+ * The city has to be a city OF the governorate — «مدينة نصر» under
+ * الإسكندرية is a well-typed payload and a false record.
+ *
+ * On `OnboardingSchema` only, NOT in `refineSection`: that one is shared with
+ * `StudentSectionSchema`, which carries neither field. The API validates with
+ * this same schema (`OnboardingDto`), so this is the server-side check too,
+ * not just the form's.
+ */
+function refineCity(
+  data: { governorateCode: string; cityId: number },
+  ctx: z.RefinementCtx,
+): void {
+  if (!cityBelongsTo(data.governorateCode, data.cityId)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['cityId'],
+      message: 'المدينة دي مش في المحافظة اللي اخترناها',
+    });
+  }
+}
+
+export const OnboardingSchema = OnboardingShapeSchema.superRefine((data, ctx) => {
+  refineSection(data, ctx);
+  refineCity(data, ctx);
+});
 
 /**
  * `PATCH /api/profile/section` — the student changing their year/track after

@@ -41,6 +41,14 @@ function readOptionalYear(formData: FormData): number | null | undefined {
   return Number(raw);
 }
 
+/** Same three-way reading as the year: absent → untouched, blank → cleared. */
+function readOptionalCityId(formData: FormData): number | null | undefined {
+  if (!formData.has('cityId')) return undefined;
+  const raw = formData.get('cityId');
+  if (raw === '' || raw === null) return null;
+  return Number(raw);
+}
+
 /**
  * Student profile fields only — `role` has no place in this action, let
  * alone its payload (A4). A student PATCHing `{ role: 'admin' }` onto their
@@ -54,6 +62,7 @@ export async function patchStudentAction(userId: string, formData: FormData): Pr
       fullName: readOptionalText(formData, 'fullName') || undefined,
       schoolName: readOptionalText(formData, 'schoolName'),
       governorateCode: (readOptionalText(formData, 'governorateCode') as string | undefined) || undefined,
+      cityId: readOptionalCityId(formData),
       year: readOptionalYear(formData),
       schoolStream: readOptionalText(formData, 'schoolStream'),
       // Required — `student-detail-form.tsx` renders it as an always-present

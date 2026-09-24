@@ -274,6 +274,9 @@ export class ProfileService {
       gender: input.gender,
       phone: input.phone,
       governorateCode: input.governorateCode,
+      // Already checked against `governorateCode` by `OnboardingSchema`'s
+      // `refineCity` — the DTO is that schema, so nothing reaches here unpaired.
+      cityId: input.cityId,
       schoolName: input.schoolName ?? null,
       schoolStream: input.schoolStream,
       fatherPhone: input.fatherPhone,
