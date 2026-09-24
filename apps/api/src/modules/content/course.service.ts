@@ -245,7 +245,15 @@ export class CourseService {
     // a course somebody can still be charged for.
     const nextQuarterly = input.quarterlyPriceCents === undefined ? current.quarterlyPriceCents : input.quarterlyPriceCents;
     const nextYearly = input.yearlyPriceCents === undefined ? current.yearlyPriceCents : input.yearlyPriceCents;
-    const willBePriced = nextMonthly != null || nextQuarterly != null || nextYearly != null;
+    // A priced TERM prices the course too. `TermService` closes the course the
+    // moment one is priced; without this the next course PATCH — any field,
+    // from an editor tab whose draft still said «مفتوح» — sent
+    // `requiresGrant: false` and reopened a course that was being sold by term.
+    const pricedTerms = await this.prisma.courseTerm.count({
+      where: { courseId: id, priceCents: { not: null } },
+    });
+    const willBePriced =
+      nextMonthly != null || nextQuarterly != null || nextYearly != null || pricedTerms > 0;
 
     let requiresGrantWrite = input.requiresGrant;
     if (willBePriced) {
@@ -1012,7 +1020,18 @@ export class CourseService {
         // straight from this, no separate list endpoint.
         terms: {
           orderBy: [{ position: 'asc' }, { id: 'asc' }],
-          select: { id: true, title: true, position: true, isOpen: true, priceCents: true },
+          select: {
+            id: true,
+            title: true,
+            position: true,
+            isOpen: true,
+            priceCents: true,
+            // Live term grants — exactly the rows `TermService.setOpen` would
+            // revoke. The close confirmation names this number BEFORE the
+            // press, instead of the toast reporting it after the access is
+            // already gone for good.
+            _count: { select: { accessGrants: { where: { scope: 'term', revokedAt: null } } } },
+          },
         },
         sections: {
           orderBy: [{ position: 'asc' }, { id: 'asc' }],

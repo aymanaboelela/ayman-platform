@@ -77,6 +77,49 @@ describe('TermService', () => {
     expect(updated.isOpen).toBe(true);
   });
 
+  describe('a priced term closes the course, like any other price', () => {
+    async function openCourse() {
+      const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      const offering = await prisma.subjectOffering.findFirstOrThrow({ where: { year: 2 } });
+      const course = await prisma.course.create({
+        data: {
+          slug: `term-open-${suffix}`,
+          title: 'كورس مفتوح',
+          systemId: offering.systemId,
+          year: 2,
+          trackId: offering.trackId,
+          subjectId: offering.subjectId,
+          instructorId,
+          requiresGrant: false,
+        },
+      });
+      return course.id;
+    }
+
+    it('creating a priced term closes an open course', async () => {
+      const id = await openCourse();
+      await service.create(id, { title: 'الترم الأول', priceCents: 45000 });
+      const course = await prisma.course.findUniqueOrThrow({ where: { id } });
+      expect(course.requiresGrant).toBe(true);
+    });
+
+    it('an UNPRICED term changes nothing — it is not for sale', async () => {
+      const id = await openCourse();
+      await service.create(id, { title: 'الترم الأول', priceCents: null });
+      const course = await prisma.course.findUniqueOrThrow({ where: { id } });
+      expect(course.requiresGrant).toBe(false);
+    });
+
+    it('pricing an existing term closes the course; clearing the price does not reopen it', async () => {
+      const id = await openCourse();
+      const term = await service.create(id, { title: 'الترم الأول', priceCents: null });
+      await service.update(term.id, { priceCents: 45000 });
+      expect((await prisma.course.findUniqueOrThrow({ where: { id } })).requiresGrant).toBe(true);
+      await service.update(term.id, { priceCents: null });
+      expect((await prisma.course.findUniqueOrThrow({ where: { id } })).requiresGrant).toBe(true);
+    });
+  });
+
   describe('setOpen — the bulk-revoke-on-close action', () => {
     async function makeTermWithGrants(count: number) {
       const term = await service.create(courseId, { title: `ترم للاختبار ${Date.now()}`, priceCents: 45000 });

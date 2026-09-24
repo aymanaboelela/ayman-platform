@@ -61,6 +61,7 @@ export class TermService {
       outcome: 'success',
       metadata: { operation: 'create', courseId, title: term.title },
     });
+    if (term.priceCents !== null) await this.closeCoursePricedByTerm(courseId);
 
     return term;
   }
@@ -68,7 +69,10 @@ export class TermService {
   /** Title/price only — see `TermUpdateSchema`'s own note on why `isOpen`
    *  is deliberately not accepted here. */
   async update(id: string, input: TermUpdateInput): Promise<CourseTerm> {
-    const term = await this.prisma.courseTerm.findUnique({ where: { id }, select: { id: true } });
+    const term = await this.prisma.courseTerm.findUnique({
+      where: { id },
+      select: { id: true, courseId: true },
+    });
     if (!term) throw new NotFoundException();
 
     const updated = await this.prisma.courseTerm.update({
@@ -86,8 +90,38 @@ export class TermService {
       outcome: 'success',
       metadata: { operation: 'update', changed: Object.keys(input) },
     });
+    if (updated.priceCents !== null) await this.closeCoursePricedByTerm(term.courseId);
 
     return updated;
+  }
+
+  /**
+   * A priced term closes the course, exactly as a monthly or yearly price does.
+   *
+   * It did not. The auto-close lived in the course form (monthly or yearly set
+   * → `requiresGrant`) and in `courses_priced_requires_grant`, and neither
+   * knew terms exist — so a course sold ONLY by term («الترم الأول ٤٥٠») stayed
+   * open to everyone, while the storefront still offered the term and the
+   * checkout still took money for it. The copy on the pricing block has always
+   * said «أي سعر بتحطه بيقفل الكورس»; this is what makes it true for terms.
+   *
+   * Only ever closes. Taking a price OFF does not reopen the course, the same
+   * as clearing a monthly price does not: opening a paid course to everybody
+   * is a decision, not a side effect of emptying a field.
+   */
+  private async closeCoursePricedByTerm(courseId: string): Promise<void> {
+    const { count } = await this.prisma.course.updateMany({
+      where: { id: courseId, requiresGrant: false },
+      data: { requiresGrant: true },
+    });
+    if (count === 0) return;
+    await this.audit.record({
+      action: 'course:update',
+      resourceType: AUDIT_RESOURCES.course,
+      resourceId: courseId,
+      outcome: 'success',
+      metadata: { changed: ['requiresGrant'], reason: 'term_priced' },
+    });
   }
 
   /**

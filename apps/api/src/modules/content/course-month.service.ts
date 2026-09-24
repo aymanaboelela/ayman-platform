@@ -7,6 +7,7 @@ import {
   type LegacyMonthBackfillResult,
 } from '@ayman/contracts/admin/content-months';
 import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -36,6 +37,14 @@ const PUBLISHED_LECTURE = { isPublished: true, kind: { not: 'quiz' } } as const;
  * count on the platform uses. Two questions, two sets, on purpose.
  */
 const PUBLISHED_ANY = { isPublished: true } as const;
+
+/** «شهر ٣», not «شهر 3» — the title every other month on the course was
+ *  given (`copy.admin.month.firstMonthTitle`). Mapped by hand rather than
+ *  through `Intl`: a runtime built with small-icu formats `ar-EG` in Latin
+ *  digits, and a title is stored, so it must not depend on the server. */
+function toArabicDigits(value: number): string {
+  return String(value).replace(/\d/g, (digit) => '٠١٢٣٤٥٦٧٨٩'[Number(digit)] ?? digit);
+}
 
 /** What `countsFor` gathers once, for however many months the caller holds. */
 interface MonthCounts {
@@ -146,6 +155,64 @@ export class CourseMonthService {
     });
 
     return toAdminMonth(course, month, await this.countsFor(courseId, [month.id]));
+  }
+
+  /**
+   * «خليها عشر أشهر موجودين قدامي وأقدر أفتح اللي أنا عايزه» — every month
+   * from 1 to `upTo` that the course does not have yet, in one call.
+   *
+   * CLOSED, every one of them, and that is what makes this safe to press: a
+   * closed month is invisible to students (the catalog, the checkout picker
+   * and the padlocks all read open months only), so filling the year in
+   * changes nothing anybody can buy or see until he opens one.
+   *
+   * ⚠️ Refused on a course with NO months. Selling by month keys on «the course
+   * has any month row», open or not — checkout, the gate and the lesson form
+   * all flip on the first one — so this must never be the press that turns a
+   * course over. `StartByMonth` does that explicitly (month 1, adopt, then
+   * this), and only after it has made month 1.
+   *
+   * One transaction and `skipDuplicates`, so a double press or a month made in
+   * another tab between the read and the write is a no-op rather than a 409 on
+   * the unique index. Named «شهر ٣» and not asked for: he renames in place.
+   */
+  async fill(courseId: string, upTo: number): Promise<AdminCourseMonth[]> {
+    const course = await this.requireCourse(courseId);
+    const taken = await this.prisma.courseMonth.findMany({
+      where: { courseId },
+      select: { monthIndex: true },
+    });
+    if (taken.length === 0) {
+      throw new ConflictException(copy.admin.month.fillNeedsFirst);
+    }
+
+    const takenIndexes = new Set(taken.map((row) => row.monthIndex));
+    const missing = Array.from({ length: upTo }, (_, offset) => offset + 1).filter(
+      (monthIndex) => !takenIndexes.has(monthIndex),
+    );
+
+    if (missing.length > 0) {
+      const created = await this.prisma.courseMonth.createManyAndReturn({
+        data: missing.map((monthIndex) => ({
+          courseId,
+          monthIndex,
+          title: formatCopy(copy.admin.month.defaultTitle, { n: toArabicDigits(monthIndex) }),
+          isOpen: false,
+        })),
+        skipDuplicates: true,
+      });
+      for (const month of created) {
+        await this.audit.record({
+          action: 'month:create',
+          resourceType: AUDIT_RESOURCES.courseMonth,
+          resourceId: month.id,
+          outcome: 'success',
+          metadata: { courseId, monthIndex: month.monthIndex, title: month.title, via: 'fill' },
+        });
+      }
+    }
+
+    return this.list(course.id);
   }
 
   /**

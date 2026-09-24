@@ -286,6 +286,44 @@ describe('CourseMonthService', () => {
     });
   });
 
+  describe('fill — «خليها عشر أشهر موجودين قدامي»', () => {
+    it('makes every missing month up to 10, CLOSED and named, around the ones that exist', async () => {
+      const { courseId } = await makeCourse();
+      await service.create(courseId, { monthIndex: 1, title: 'شهر ١ — أكتوبر', isOpen: false, startsOn: null });
+      await service.create(courseId, { monthIndex: 4, title: 'مراجعة', isOpen: false, startsOn: null });
+
+      const months = await service.fill(courseId, 10);
+
+      expect(months.map((month) => month.monthIndex)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      // The two he made keep their names; the new ones are «شهر N» in the
+      // digits the rest of the page uses.
+      expect(months[0]?.title).toBe('شهر ١ — أكتوبر');
+      expect(months[3]?.title).toBe('مراجعة');
+      expect(months[1]?.title).toBe('شهر ٢');
+      expect(months[9]?.title).toBe('شهر ١٠');
+      // Closed, every one — nothing a student can see or buy has changed.
+      expect(months.every((month) => !month.isOpen)).toBe(true);
+    });
+
+    it('is idempotent — a second press adds nothing', async () => {
+      const { courseId } = await makeCourse();
+      await service.create(courseId, { monthIndex: 1, title: 'شهر ١', isOpen: false, startsOn: null });
+      await service.fill(courseId, 10);
+      await service.fill(courseId, 10);
+      expect(await prisma.courseMonth.count({ where: { courseId } })).toBe(10);
+    });
+
+    it('refuses a course with no months — filling must never turn a course over', async () => {
+      const { courseId } = await makeCourse();
+      await expect(service.fill(courseId, 10)).rejects.toBeInstanceOf(ConflictException);
+      expect(await prisma.courseMonth.count({ where: { courseId } })).toBe(0);
+    });
+
+    it('404s on a course that does not exist', async () => {
+      await expect(service.fill(MISSING_UUID, 10)).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
   describe('delete', () => {
     it('refuses with a sentence — not a 500 — when a transfer already bought the month', async () => {
       const { courseId } = await makeCourse();

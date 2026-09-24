@@ -1247,6 +1247,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin month adopt untagged: anonymous', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}/adopt-untagged`, actor: 'anonymous', status: 401 },
     { label: 'admin month adopt untagged: student', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}/adopt-untagged`, actor: 'student', status: 403 },
     { label: 'admin month adopt untagged: admin, unknown month', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/${MISSING_UUID}/adopt-untagged`, actor: 'admin', status: 404 },
+    // «كمّل الشهور لحد شهر ١٠». The admin row names a course that does not
+    // exist, so it 404s — on the scratch course it would WRITE nine months, and
+    // whether it did would depend on the row above having run first.
+    { label: 'admin month fill: anonymous', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/fill`, actor: 'anonymous', status: 401, body: () => ({ upTo: 10 }) },
+    { label: 'admin month fill: student', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/months/fill`, actor: 'student', status: 403, body: () => ({ upTo: 10 }) },
+    { label: 'admin month fill: admin, unknown course', method: 'post', path: () => `/api/admin/courses/${MISSING_UUID}/months/fill`, actor: 'admin', status: 404, body: () => ({ upTo: 10 }) },
     // «افتح الشهر ده للمشتركين الحاليين». `dryRun` defaults true, so nothing is
     // written even on the admin row — and the month is unknown, so it 404s
     // before it would have counted anybody.

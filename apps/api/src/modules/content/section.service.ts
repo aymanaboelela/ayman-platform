@@ -140,9 +140,21 @@ export class SectionService {
   async remove(id: string): Promise<{ id: string }> {
     const section = await this.prisma.courseSection.findUnique({
       where: { id },
-      select: { id: true, courseId: true, position: true },
+      select: { id: true, courseId: true, position: true, title: true, _count: { select: { lessons: true } } },
     });
     if (!section) throw new NotFoundException();
+
+    // The «امتحانات الشهر» shelf, with exams on it. The delete cascades
+    // section → lesson → quiz, so every monthly exam not yet sat — windows,
+    // coverage, papers — went with it, behind the generic «حذف القسم»
+    // dialog. The editor no longer offers it; this is the refusal behind that.
+    // An EMPTY shelf may go: the next exam recreates it.
+    if (section.title === EXAM_SHELF_TITLE && section._count.lessons > 0) {
+      throw new ConflictException({
+        code: 'exam_shelf_cannot_be_deleted',
+        message: 'ده رف امتحانات الشهر وعليه امتحانات — امسح الامتحانات من صفحة «امتحانات الشهر» الأول.',
+      });
+    }
 
     // One cascade further out than the lesson guard: section → lessons →
     // quizzes → attempts. Same permanent refusal, and see `LessonService.remove`
