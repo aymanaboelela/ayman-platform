@@ -57,14 +57,18 @@ export function MessageAttachmentView({
      * is seeked end to end), which is exactly why the recorder's own count
      * travels with the message and is printed beside it.
      *
-     * `preload="metadata"`: a thread with twenty voice notes must not pull
-     * twenty audio files the moment it opens, and the controls still render.
+     * `preload="none"`: a thread with twenty voice notes must not pull
+     * twenty audio files — or hold twenty media players — the moment it opens.
+     * It was `metadata`, which still opens a player per note to read a
+     * duration nobody needs from it: the recorder's own count is printed
+     * beside the control, and the admin's thread view renders its whole
+     * history at once, in a tab that stays open all day.
      */
     return (
       <div className="mt-1 flex flex-col gap-1">
         <audio
           controls
-          preload="metadata"
+          preload="none"
           src={attachment.path}
           className="w-full max-w-[16rem]"
         />
@@ -97,6 +101,11 @@ export function MessageAttachmentView({
           // decodes, and an unbounded portrait photo makes the transcript
           // scroll past the reply box on a phone.
           className="max-h-[22rem] w-auto max-w-full object-contain"
+          // A long thread's photos decode only as they scroll into view — a
+          // decoded phone photo is megabytes, and the admin's thread view has
+          // no window on how many it renders.
+          loading="lazy"
+          decoding="async"
         />
       </a>
     );

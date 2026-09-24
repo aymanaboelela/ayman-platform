@@ -104,10 +104,32 @@ export function Clarity() {
    * pages a student reads, and they are where a recording is genuinely useful
    * for finding out what confused somebody.
    */
-  const paused = (pathname?.startsWith('/admin') ?? false) || isAttemptRoute(pathname ?? '');
+  const inAdmin = pathname?.startsWith('/admin') ?? false;
+  const paused = inAdmin || isAttemptRoute(pathname ?? '');
 
   useEffect(() => {
     if (!PROJECT_ID) return;
+
+    /*
+     * ⚠️ Into the admin with the recorder already loaded: reload, don't stop.
+     *
+     * `clarity('stop')` does not hold. The tag wraps `history.pushState`, and
+     * on every URL change it stops and then RESTARTS itself 250ms later — so
+     * after one visit to the public site in the same tab, every click in the
+     * admin turned recording back on. Recording the admin is the privacy
+     * problem the note above names, and on its biggest screens (thousands of
+     * rows, and the router keeps earlier pages mounted too) it is also a
+     * document-wide observer serialising every mutation for the rest of the
+     * day — memory a long-lived admin tab does not have to spare.
+     *
+     * A full load of the admin URL is the one state with no recorder in it:
+     * `init` is never called on an admin entry. It happens once per tab, on
+     * the rare walk from the site into the dashboard.
+     */
+    if (inAdmin && document.getElementById('clarity-script')) {
+      window.location.reload();
+      return;
+    }
 
     /*
      * Not initialised on a paused entry, and NOT started later either — the
@@ -124,7 +146,7 @@ export function Clarity() {
     const clarity = (window as unknown as { clarity?: ClarityApi }).clarity;
     if (typeof clarity !== 'function') return;
     clarity(paused ? 'stop' : 'start');
-  }, [paused]);
+  }, [paused, inAdmin]);
 
   return null;
 }
