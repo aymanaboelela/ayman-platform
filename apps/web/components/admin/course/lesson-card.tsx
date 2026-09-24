@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
@@ -71,6 +72,25 @@ export function LessonCard({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [publishPending, setPublishPending] = useState(false);
+
+  /* A press with a result. It was a form action that dropped `{ ok: false }`
+     on the floor and was never disabled, so a refused publish looked like a
+     click that did nothing — and three more clicks queued three more PATCHes. */
+  async function togglePublished() {
+    setPublishPending(true);
+    try {
+      const result = await setLessonPublishedAction(courseId, lesson.id, !lesson.isPublished);
+      if (result.ok) router.refresh();
+      else toast.error(result.message);
+    } catch {
+      // A dropped connection or a stale action id after a deploy REJECTS
+      // instead of returning `ok: false` — and left the chip disabled.
+      toast.error(copy.admin.common.actionFailed);
+    } finally {
+      setPublishPending(false);
+    }
+  }
 
   // A quiz lesson with no slots cannot be answered. Saying so on the row is
   // what stops an instructor publishing an empty exam and finding out from a
@@ -140,6 +160,10 @@ export function LessonCard({
       <div
         className="lesson-row cursor-pointer"
         onClick={(event) => {
+          // A click inside the delete dialog bubbles here through React's
+          // portal — its text and its overlay are not in this row's DOM at
+          // all, and toggled the panel behind the dialog.
+          if (!event.currentTarget.contains(event.target as Node)) return;
           // Anything the instructor could have MEANT to press keeps its own
           // behaviour: the drag handle, the four chips, the inline title's
           // rename button and its input, the confirm dialog's trigger.
@@ -180,7 +204,8 @@ export function LessonCard({
           <span className="mono block text-[length:var(--fs-mono-label)] text-fg-muted">
             {copy.course.lessonKind[lesson.kind]}
             {isExam ? ` · ${copy.admin.exam.title}` : ''}
-            {lesson.video ? ` · ${lesson.video.externalId}` : ''}
+            {/* Not the video id: for an uploaded lecture that is 32 characters
+                of hex, and on YouTube it is a code nobody reads off a row. */}
             {quizIsEmpty ? ` · ${copy.admin.exam.noQuestions}` : ''}
             {untagged ? ` · ${copy.admin.month.untaggedWarning}` : ''}
             {rowMonth
@@ -209,26 +234,17 @@ export function LessonCard({
             </Link>
           ) : null}
 
-          <form
-            action={async () => {
-              const result = await setLessonPublishedAction(
-                courseId,
-                lesson.id,
-                !lesson.isPublished,
-              );
-              if (result.ok) router.refresh();
-            }}
+          {/* Amber when the next press PUBLISHES — that is the action the page
+              wants. Quiet ember once it is live, because unpublishing is a
+              correction, not the goal. */}
+          <button
+            type="button"
+            disabled={publishPending}
+            onClick={() => void togglePublished()}
+            className={cn('chip', lesson.isPublished ? 'chip--done' : 'chip--solid')}
           >
-            {/* Amber when the next press PUBLISHES — that is the action the
-                page wants. Quiet ember once it is live, because unpublishing
-                is a correction, not the goal. */}
-            <button
-              type="submit"
-              className={cn('chip', lesson.isPublished ? 'chip--done' : 'chip--solid')}
-            >
-              {lesson.isPublished ? copy.admin.course.unpublish : copy.admin.course.publish}
-            </button>
-          </form>
+            {lesson.isPublished ? copy.admin.course.unpublish : copy.admin.course.publish}
+          </button>
 
           <span aria-hidden="true" className="row-actions__sep" />
 

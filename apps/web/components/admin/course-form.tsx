@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import {
   type CourseEmphasis,
@@ -19,6 +19,7 @@ import { MediaKeyField } from '@/components/admin/media-key-field';
 import { StreamChoiceField } from '@/components/admin/stream-choice';
 import { useAutosave } from '@/components/admin/course/autosave';
 import { FieldCount, FormSection } from '@/components/admin/form-section';
+import { parsePounds } from '@/lib/pounds';
 
 export type CourseDefaults = {
   slug: string;
@@ -109,6 +110,28 @@ type Props = {
    * could not fill.
    */
   bookSlot?: ReactNode;
+  /**
+   * Rendered INSIDE «الاشتراك والتسعير», under the monthly and yearly fields:
+   * each term's price, and — on a course not yet sold by month — the one press
+   * that turns it over. Every price the course sells at, in one block. A slot
+   * for the same reason as `bookSlot`: those write through their own Server
+   * Actions, and this form has no data access. Edit-only.
+   */
+  pricingSlot?: ReactNode;
+  /** «الترمين» — the small box under the book. Edit-only, like the book. */
+  termsSlot?: ReactNode;
+  /** «شهور المنهج» — the month tiles, wide, right after the selling blocks.
+   *  Absent when the months could not be read (see `monthsOrNull`). */
+  monthsSlot?: ReactNode;
+  /** A chip in the months block's head — «مفتوح: ٢ من ١٠». */
+  monthsAside?: ReactNode;
+  /**
+   * Any term carries a price. A priced term closes the course exactly as a
+   * monthly or yearly price does — `TermService` closes it server-side the
+   * moment one is priced — so the lock below has to read as closed too, and
+   * `formDataOf` must never send it open again.
+   */
+  sellsTerms?: boolean;
 };
 
 type Draft = {
@@ -156,13 +179,20 @@ type Draft = {
   bookPrice: string;
 };
 
-/** `''` → `null`; a whole-pounds string → EGP cents. Never negative. */
+/** `''` → `null`; pounds → EGP cents. Arabic-Indic digits read as digits.
+ *  Unreadable text is `null` HERE only because `update` refuses to save while
+ *  any price field is unreadable — see `pricesReadable`. */
 function priceCentsOf(pounds: string): number | null {
-  const trimmed = pounds.trim();
-  if (trimmed === '') return null;
-  const value = Number(trimmed);
-  if (!Number.isFinite(value) || value < 0) return null;
-  return Math.round(value * 100);
+  const parsed = parsePounds(pounds);
+  return parsed.kind === 'valid' ? parsed.cents : null;
+}
+
+/** Every price field holds a number or nothing. A typo is neither, and it
+ *  used to save as «مش للبيع» — the plan came off sale under a «اتحفظ». */
+function pricesReadable(draft: Draft): boolean {
+  return [draft.monthlyPrice, draft.yearlyPrice, draft.bookPrice].every(
+    (text) => parsePounds(text).kind !== 'invalid',
+  );
 }
 
 /**
@@ -170,7 +200,7 @@ function priceCentsOf(pounds: string): number | null {
  * cannot disagree about what a course payload contains. The keys are the ones
  * `createCourseAction`/`updateCourseAction` read out of `FormData`.
  */
-function formDataOf(draft: Draft): FormData {
+function formDataOf(draft: Draft, sellsTerms = false): FormData {
   const data = new FormData();
   data.set('title', draft.title);
   data.set('slug', draft.slug);
@@ -196,7 +226,8 @@ function formDataOf(draft: Draft): FormData {
   // `quarterlyPriceCents` is not in this test any more, and it does not need
   // to be: the migration nulled the column on every course, so it can no
   // longer be the only price a course carries.
-  const closed = draft.requiresGrant || monthlyPriceCents !== null || yearlyPriceCents !== null;
+  const closed =
+    draft.requiresGrant || monthlyPriceCents !== null || yearlyPriceCents !== null || sellsTerms;
   data.set('requiresGrant', closed ? 'true' : 'false');
   data.set('monthlyPriceCents', monthlyPriceCents === null ? '' : String(monthlyPriceCents));
   // No `quarterlyPriceCents` key at all — `createCourseAction` reads none, and
@@ -258,6 +289,11 @@ export function CourseForm({
   action,
   mode = 'create',
   bookSlot,
+  pricingSlot,
+  termsSlot,
+  monthsSlot,
+  monthsAside,
+  sellsTerms = false,
   sellsByMonth = false,
 }: Props) {
   const [draft, setDraft] = useState<Draft>(() => ({
@@ -285,6 +321,48 @@ export function CourseForm({
     bookPrice: defaults?.bookPriceCents != null ? String(defaults.bookPriceCents / 100) : '',
   }));
   const [saving, setSaving] = useState(false);
+  /*
+   * The LATEST draft, for `update` to build on — not the one this render
+   * closed over.
+   *
+   * The cover picker calls `onChange` when its UPLOAD finishes, from a
+   * closure captured when the upload started. Built on the render-time
+   * `draft`, that call re-applied every field as it was before the upload:
+   * a title or price typed while the image was going up snapped back on
+   * screen and was autosaved over the value that had just been saved.
+   */
+  const draftRef = useRef(draft);
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  /* The latest `sellsTerms`, for the same reason: `update` can run from a
+     closure captured before a term was priced, and must not send the course
+     open on its strength. */
+  const sellsTermsRef = useRef(sellsTerms);
+  useEffect(() => {
+    sellsTermsRef.current = sellsTerms;
+  }, [sellsTerms]);
+
+  /*
+   * The SERVER closed the course, so the draft learns it.
+   *
+   * `TermService` closes a course the moment one of its terms is priced, and
+   * that write happens outside this form. The draft kept its mount-time «مفتوح»
+   * — so clearing the term price afterwards showed the lock UNticked over a
+   * closed course, and the next edit to any field sent `requiresGrant: false`
+   * and opened it to everyone. Only the closing direction is followed: an
+   * open from the server is what his own untick just saved.
+   *
+   * Adjusted during render, React's documented shape for «a prop changed»,
+   * rather than in an effect that would paint the stale box first.
+   */
+  const serverClosed = defaults?.requiresGrant ?? false;
+  const [seenServerClosed, setSeenServerClosed] = useState(serverClosed);
+  if (serverClosed !== seenServerClosed) {
+    setSeenServerClosed(serverClosed);
+    if (serverClosed && !draft.requiresGrant) setDraft({ ...draft, requiresGrant: true });
+  }
 
   const { save } = useAutosave<FormData>({
     onSave: async (formData) => {
@@ -300,13 +378,33 @@ export function CourseForm({
   });
 
   function update(patch: Partial<Draft>) {
-    const next = { ...draft, ...patch };
+    const next = { ...draftRef.current, ...patch };
+    /*
+     * A price closes the course, and the lock box now SAYS so: typing one
+     * ticks it. It used to stay unticked while the save sent it closed, and
+     * the same act then had two outcomes — clearing the price in the same
+     * visit made the course free, clearing it after a reload kept it closed.
+     * Now both keep it closed; opening a paid course is his own untick.
+     */
+    if (
+      sellsTermsRef.current ||
+      priceCentsOf(next.monthlyPrice) !== null ||
+      priceCentsOf(next.yearlyPrice) !== null
+    ) {
+      next.requiresGrant = true;
+    }
+    draftRef.current = next;
     setDraft(next);
     // A course with no title or slug cannot be PATCHed — `CourseUpdateSchema`
     // requires both to be non-empty — and a half-cleared field on the way to a
     // new value is not a request to save nothing.
-    if (mode === 'edit' && next.title.length > 0 && next.slug.length > 0) {
-      save(formDataOf(next));
+    if (
+      mode === 'edit' &&
+      next.title.length > 0 &&
+      next.slug.length > 0 &&
+      pricesReadable(next)
+    ) {
+      save(formDataOf(next, sellsTermsRef.current));
     }
   }
 
@@ -349,6 +447,20 @@ export function CourseForm({
   const legacyBookTitle = draft.bookTitle.trim();
   const legacyBookPriceCents = priceCentsOf(draft.bookPrice);
   const hasLegacyBook = legacyBookTitle !== '' || legacyBookPriceCents !== null;
+  const hasBook = Boolean(bookSlot) || hasLegacyBook;
+  // The book and the terms share one cell beside pricing; with neither (the
+  // create page) pricing takes the whole row back.
+  const hasSide = hasBook || Boolean(termsSlot);
+
+  const monthlyInvalid = parsePounds(draft.monthlyPrice).kind === 'invalid';
+  const yearlyInvalid = parsePounds(draft.yearlyPrice).kind === 'invalid';
+  // A priced term locks the box only once the course IS closed: a course left
+  // open by a term priced before terms closed anything shows the truth —
+  // unticked — until the next edit closes it (`update` above).
+  const closedByPrice =
+    priceCentsOf(draft.monthlyPrice) !== null ||
+    priceCentsOf(draft.yearlyPrice) !== null ||
+    (sellsTerms && draft.requiresGrant);
 
   const fields = (
     <>
@@ -546,9 +658,11 @@ export function CourseForm({
         />
       </FormSection>
 
+      {/* Half a row, beside the taxonomy block. It was `wide`, and a wide
+          block after a half one leaves the other half of that row empty — the
+          preview is 18rem at most and never needed the width. */}
       <FormSection
         index={3}
-        wide
         title={copy.admin.course.sectionCover}
         note={copy.admin.course.sectionCoverNote}
       >
@@ -575,7 +689,7 @@ export function CourseForm({
       */}
       <FormSection
         index={4}
-        wide
+        wide={!hasSide}
         title={copy.admin.course.sectionPricing}
         note={copy.admin.course.sectionPricingNote}
       >
@@ -594,8 +708,14 @@ export function CourseForm({
               inputMode="decimal"
               placeholder={copy.admin.course.priceNotForSale}
               value={draft.monthlyPrice}
+              aria-invalid={monthlyInvalid || undefined}
               onChange={(event) => update({ monthlyPrice: event.target.value })}
             />
+            {monthlyInvalid ? (
+              <p className="mt-1 text-[length:var(--fs-text-xs)] text-err">
+                {copy.admin.course.priceInvalid}
+              </p>
+            ) : null}
             {/* Under the field, not in `priceHint` at the bottom of the block:
                 it is true of this one input and false of the other, and a
                 course that does not sell by month must not read it. */}
@@ -613,10 +733,20 @@ export function CourseForm({
               inputMode="decimal"
               placeholder={copy.admin.course.priceNotForSale}
               value={draft.yearlyPrice}
+              aria-invalid={yearlyInvalid || undefined}
               onChange={(event) => update({ yearlyPrice: event.target.value })}
             />
+            {yearlyInvalid ? (
+              <p className="mt-1 text-[length:var(--fs-text-xs)] text-err">
+                {copy.admin.course.priceInvalid}
+              </p>
+            ) : null}
           </div>
         </div>
+
+        {/* الترم الأول / التاني — each term's price, here with the others
+            rather than four panels down. */}
+        {pricingSlot}
         <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
           {copy.admin.course.priceHint}
         </p>
@@ -634,18 +764,24 @@ export function CourseForm({
         <div className="rounded-[var(--r-md)] border border-line-subtle bg-surface-3 p-3">
           <input type="hidden" name="requiresGrant" value="false" />
           <label className="flex items-start gap-2">
+            {/* The EFFECTIVE state. It showed `draft.requiresGrant` alone, so a
+                course with a price read as open while every save sent it
+                closed; and unticking it on a priced course did nothing. */}
             <input
               type="checkbox"
               name="requiresGrant"
               value="true"
-              checked={draft.requiresGrant}
+              checked={closedByPrice || draft.requiresGrant}
+              disabled={closedByPrice}
               onChange={(event) => update({ requiresGrant: event.target.checked })}
               className="mt-1"
             />
             <span>
               <span className="block text-fg">{copy.admin.course.requiresGrant}</span>
               <span className="block text-[length:var(--fs-text-sm)] text-fg-muted">
-                {copy.admin.course.requiresGrantHint}
+                {closedByPrice
+                  ? copy.admin.course.requiresGrantByPrice
+                  : copy.admin.course.requiresGrantHint}
               </span>
             </span>
           </label>
@@ -667,7 +803,16 @@ export function CourseForm({
         already carry it. On the create page neither is true, so there is
         nothing here to show and the block is absent rather than empty.
       */}
-      {bookSlot || hasLegacyBook ? (
+      {/*
+        The book and the terms, stacked in ONE cell beside the pricing block —
+        «حطهم في جنب بوكس كده صغير تحت بتاعت الكتاب». A wrapper and not two
+        grid cells: two half cells after a half-width pricing block would put
+        the terms on the next row beside nothing, and the whole point is that
+        everything the course sells is read in one glance.
+      */}
+      {hasSide ? (
+      <div className="form-stack__side">
+      {hasBook ? (
         <FormSection
           index={5}
           title={copy.admin.course.sectionBook}
@@ -732,6 +877,26 @@ export function CourseForm({
         </FormSection>
       ) : null}
 
+      {termsSlot ? (
+        <FormSection index={6} title={copy.admin.term.title} note={copy.admin.term.lead}>
+          {termsSlot}
+        </FormSection>
+      ) : null}
+      </div>
+      ) : null}
+
+      {monthsSlot ? (
+        <FormSection
+          index={7}
+          wide
+          title={copy.admin.month.title}
+          note={copy.admin.month.lead}
+          aside={monthsAside}
+        >
+          {monthsSlot}
+        </FormSection>
+      ) : null}
+
       {/*
         The card's badge — and it is NOT an access control, which is why the
         hint says so in the instructor's own words, and why this block is the
@@ -744,7 +909,8 @@ export function CourseForm({
         as a bug where one that greys out reads as a dependency.
       */}
       <FormSection
-        index={6}
+        index={8}
+        wide
         title={copy.admin.course.sectionExtras}
         note={copy.admin.course.sectionExtrasNote}
       >
@@ -935,16 +1101,25 @@ export function CourseForm({
         editor, where the form stayed mounted and was pressed twice, and the
         editor has no form at all now.
 
-        `formData` comes from the DOM rather than from `formDataOf(draft)`
-        because every field below carries its `name` — the two agree, and using
-        the browser's own is one fewer thing to keep in step.
+        The payload is `formDataOf(draft)`, NOT the DOM's own FormData. It
+        used to be the DOM's, on the belief that every field carried its
+        `name` — and the price fields never did, so a course created with
+        «اشتراك شهري ٢٥٠» was created with no price at all, silently. One
+        builder for both paths is what this file's `formDataOf` note already
+        promised.
 
         The result is READ. It used to be `void action(formData)`, so a save
         that failed looked exactly like one that worked.
       */
-      action={async (formData) => {
+      action={async () => {
+        // A typo in a price is not «مش للبيع» — refuse it here, on the page,
+        // instead of creating the course without the plan.
+        if (!pricesReadable(draftRef.current)) {
+          toast.error(copy.admin.course.priceInvalid);
+          return;
+        }
         setSaving(true);
-        const result = await action(formData);
+        const result = await action(formDataOf(draftRef.current));
         setSaving(false);
         if (result && typeof result === 'object' && 'ok' in result) {
           const outcome = result as { ok: boolean; message?: string };

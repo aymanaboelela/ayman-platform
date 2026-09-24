@@ -56,6 +56,11 @@ const AdminCourseDetailSchema = z.object({
       position: z.number().int(),
       isOpen: z.boolean(),
       priceCents: z.number().int().nullable(),
+      /** Live term grants — what closing this term would revoke. Optional:
+       *  during a rolling deploy the API answering may predate the field, and
+       *  a missing count must degrade to a confirmation without a number, not
+       *  to a failed parse that blanks the whole editor. */
+      _count: z.object({ accessGrants: z.number().int() }).optional().catch(undefined),
     }),
   ),
   sections: z.array(

@@ -137,6 +137,13 @@ const admin = {
     deleteConfirm: 'الإجراء ده مش هيترجع.',
     required: 'الحقل ده مطلوب',
     publish: 'نشر',
+    /** The course editor's generic refusal — in place of the API's own
+     *  «PATCH /api/admin/… failed with 400: {…}», which used to reach the
+     *  toast, the inline error and the sticky save indicator verbatim. */
+    actionFailed: 'مااتنفّذش — حاول تاني.',
+    /** A 429 from the API's per-session throttle: the press was fine, it was
+     *  just the eleventh in a second. */
+    rateLimited: 'طلبات كتير ورا بعض — استنى ثواني وجرّب تاني.',
   },
   /**
    * The course editor's ONE status read-out, which replaced the «حفظ» button
@@ -299,6 +306,9 @@ const admin = {
     statusArchived: 'مؤرشف',
     publish: 'نشر',
     unpublish: 'رجّعه مسودة',
+    /** Asked before the course leaves the catalog — every enrolled student,
+     *  paying ones included, gets a 404 on it until it is published again. */
+    unpublishConfirm: 'لو رجّعت الكورس مسودة، كل الطلبة المشتركين فيه مش هيقدروا يفتحوه لحد ما تنشره تاني. تمام؟',
     publishBlocked: 'لازم يكون فيه محاضرة منشورة واحدة على الأقل',
     /**
      * THE one button.
@@ -379,8 +389,14 @@ const admin = {
      *  the one price buys ONE month, whichever the student picks. */
     priceMonthlyPerMonth: 'السعر ده لشهر واحد من اللي تحت.',
     priceNotForSale: 'مش للبيع',
+    /** A price field holding something that is not a number. It used to save
+     *  as «مش للبيع» and take the plan off sale under a «اتحفظ». */
+    priceInvalid: 'السعر لازم يبقى رقم بس — ماتحفظش.',
+    /** Under «قفل الكورس ده» while any price is set: the box is checked and
+     *  cannot be unchecked, because a priced course is closed by definition. */
+    requiresGrantByPrice: 'مقفول تلقائي عشان فيه سعر — امسح الأسعار الأول لو عايزه مجاني.',
     priceHint:
-      'سيبهم فاضيين لو الكورس مجاني. أول ما تحط سعر لأي باقة، الكورس بيتقفل أوتوماتيك على أي حد جديد لحد ما يدفع ويتعمله موافقة — بالظبط زي «قفل الكورس ده» فوق.',
+      'سيبهم فاضيين لو الكورس مجاني. أول ما تحط سعر لأي باقة — شهر أو سنة أو ترم — الكورس بيتقفل أوتوماتيك على أي حد جديد لحد ما يدفع ويتعمله موافقة.',
     /** الكتاب الورقي — entirely independent of the subscription prices
      *  above; a free course can sell a book, and a priced one can sell none. */
     bookTitle: 'اسم الكتاب',
@@ -445,14 +461,38 @@ const admin = {
    */
   term: {
     title: 'الترمين',
-    lead: 'قسّم محتوى الكورس لترمين — كل قسم تقدر تحطه جوه ترم، والسويتش هنا بيفتح أو يقفل البيع والوصول للترم ده بس.',
-    empty: 'الكورس ده لسه من غير ترمين.',
+    lead: 'كل قسم في الكورس بيتحط في ترم. السعر بتاع كل ترم في «الاشتراك والتسعير».',
+    empty: 'الكورس ده لسه من غير ترمات.',
     titleLabel: 'اسم الترم',
     priceLabel: 'سعر الترم',
-    open: 'مفتوح',
+    /** `{term}` — the label of each term's price field in the pricing block,
+     *  e.g. «سعر الترم الأول (جنيه)». */
+    priceOf: 'سعر {term} (جنيه)',
+    open: 'مفتوح للبيع',
+    /** Open, but with no price: the storefront lists only priced terms, so
+     *  «مفتوح» alone read as «بيتباع» and it was not. */
+    openNoPrice: 'مفتوح — بس من غير سعر',
     closed: 'مقفول',
     toggleLabel: 'فتح/قفل الترم',
     addTerm: 'ترم جديد',
+    /** The two school terms are one press each, named for him. */
+    firstTitle: 'الترم الأول',
+    secondTitle: 'الترم التاني',
+    /** `{term}` — «ضيف «الترم التاني»». */
+    addNamed: 'ضيف «{term}»',
+    addAnother: '+ ترم تالت باسم تاني',
+    /**
+     * The close confirmation. Closing revokes every live grant behind the term
+     * and reopening does NOT restore them — it used to be one click on a
+     * switch, with the count arriving afterwards in a toast.
+     */
+    closeTitle: 'نقفل «{term}»؟',
+    closeBody: 'قفل الترم بيوقف بيعه، وبيسحب الوصول من كل اللي اشتروه — ولو فتحته تاني الوصول ده مش بيرجع لوحده.',
+    /** `{n}` — live term grants, i.e. exactly what the close will revoke. */
+    closeHolders: '{n} طالب هيتسحب منهم الترم ده دلوقتي.',
+    closeHoldersNone: 'محدش مشترك في الترم ده لسه.',
+    closeHoldersUnknown: 'اللي اشتروا الترم ده هيتسحب منهم.',
+    closeConfirm: 'اقفل الترم',
     /** `{n}` — how many students just lost live access. Shown the instant a
      *  term closes, so the admin sees the cascade actually happened rather
      *  than trusting a switch that flipped silently. */
@@ -475,16 +515,27 @@ const admin = {
    */
   month: {
     title: 'شهور المنهج',
-    lead: 'الاشتراك الشهري بيفتح شهر من المنهج، مش ٣٠ يوم. كل محاضرة بتتحط في شهر، والطالب بيختار الشهر اللي هيشترك فيه.',
-    empty: 'الكورس ده لسه بيتباع بالاشتراك الشهري القديم — ٣٠ يوم بتفتح الكورس كله. أول شهر تضيفه هنا هو اللي بيغيّر ده.',
-    add: 'شهر جديد',
-    indexLabel: 'رقم الشهر',
+    lead: 'الطالب بيشترك في شهر من المنهج، مش ٣٠ يوم. افتح الشهر اللي عايز تبيعه — المقفول محدش بيشوفه.',
+    empty: 'الكورس ده بيتباع بالاشتراك الشهري العادي — ٣٠ يوم بتفتح الكورس كله.',
+    add: '+ شهر جديد',
     titleLabel: 'اسم الشهر',
-    startsOnLabel: 'بيبدأ في',
-    startsOnHint: 'اختياري، ومابيقفلش ولا بيفتح حاجة — بيستخدم في الترتيب والعرض بس.',
     open: 'مفتوح للاشتراك',
-    closed: 'مقفول للاشتراك',
+    closed: 'مقفول',
     toggleLabel: 'فتح/قفل الاشتراك في الشهر',
+    /** `{month}` — the tile's own name, so ten identical «اتحفظ» toasts in a
+     *  row still say which switch moved. Closing says what it does NOT do,
+     *  because the term switch next door revokes and this one never has. */
+    openedToast: '«{month}» اتفتح للاشتراك.',
+    closedToast: '«{month}» اتقفل للاشتراك — اللي معاهم يفضلوا شايفينه.',
+    /** `{n}` — «١٠». The one press that fills the school year in, closed. */
+    fillCta: 'كمّل الشهور لحد شهر {n}',
+    /** The months block's head chip — how many are on sale, at a glance. */
+    openCount: 'مفتوح {open} من {total}',
+    fillDone: 'تمام — الشهور الناقصة اتعملت، ومقفولة لحد ما تفتحها.',
+    /** Rename, delete and «شهر جديد» live behind this — rare acts, and ten
+     *  delete buttons on ten tiles was the wall he called «مليانة بوكس». */
+    edit: 'تعديل الأسماء والحذف',
+    editDone: 'خلصت',
     /**
      * ⚠️ The sentence that keeps the whole feature honest, and the one place
      * this panel refuses to do what it is asked.
@@ -507,6 +558,9 @@ const admin = {
     subscribersNone: 'لسه محدش مشترك',
     lessons: '{n} محاضرة',
     lessonsNone: 'لسه من غير محاضرات',
+    /** `{n}` — lectures in the month still in draft; the count before it is
+     *  the published ones, which is what the student sees. */
+    lessonsDrafts: '{n} مسودة',
     /** The refusal when the month still has money pointing at it — a
      *  `payment_submission_months` row. Permanent, so it must not read as
      *  "try again later". */
@@ -527,6 +581,9 @@ const admin = {
      *  primary one because they answer a different question. */
     extraLabel: 'كمان لشهور',
     extraHint: 'المحاضرة هتبان كمان لمشتركين الشهور دي، من غير ما تتنقل من شهرها.',
+    /** The link «كمان لشهور» folds behind — nine checkboxes under every
+     *  lecture is a lot of page for a choice most lectures never make. */
+    extraShow: '+ تفتح كمان في شهور تانية؟',
     /** The warning next to a published lecture with no month on a course that
      *  DOES sell by month — the single lecture version of `blockedByUntagged`. */
     untaggedWarning: 'من غير شهر — مشتركين الشهر مش هيشوفوها.',
@@ -574,18 +631,32 @@ const admin = {
      *  place a second later if he wants «شهر ١ — أكتوبر». Asking first would
      *  put a form between him and the one press. */
     firstMonthTitle: 'شهر ١',
-    startTitle: 'ابدأ: خلّي الكورس ده بالشهور',
-    startLead:
-      'هنعمل «شهر ١» ونحط فيه كل المحاضرات اللي نزلت لحد دلوقتي. مفيش حاجة بتتغيّر على أي طالب — الشهر بيتعمل مقفول للاشتراك لحد ما تفتحه بنفسك.',
-    startCta: 'اعمل شهر ١ وحط فيه كل المحاضرات',
-    /** `{n}` — lessons adopted. */
-    startDone: 'تمام — «شهر ١» اتعمل و{n} محاضرة اتحطت فيه.',
-    setupTitle: 'تظبيط الكورس على الشهور',
-    setupLead:
-      'الكورس ده شغّال من قبل الشهور، فكل محاضراته لسه من غير شهر. الخطوتين دول بيظبطوه: الأولى بتحط المحاضرات في الشهر، والتانية بتفتح الشهر للناس اللي مشتركة دلوقتي.',
-    setupNote: 'مفيش حاجة بتتسحب من حد — الخطوتين بيزوّدوا بس.',
-    /** `{n}` — lessons with no month at all, drafts and quizzes included. */
-    adoptCta: 'حط الـ{n} محاضرة في الشهر ده',
+    /** `{n}` in Arabic-Indic digits — the name every month after the first is
+     *  born with, same shape as `firstMonthTitle`. Renamed in place. */
+    defaultTitle: 'شهر {n}',
+    /** The 409 when «كمّل الشهور» is pressed on a course with no months at
+     *  all — filling the year in must never be what turns a course over. */
+    fillNeedsFirst: 'الكورس ده لسه مش بيتباع بالشهور — ابدأ بشهر ١ الأول.',
+    startCta: 'خلّي الكورس بالشهور',
+    /** `{n}` — lessons adopted into «شهر ١». The other nine months are made
+     *  in the same press, closed, and the sentence says so. */
+    startDone: 'تمام — ١٠ شهور اتعملوا مقفولين، و{n} محاضرة اتحطت في «شهر ١». افتح «شهر ١» عشان الاشتراك الشهري يتباع.',
+    /** The fill after it failed: month 1 exists, the other nine do not yet. */
+    startDoneFirstOnly: 'اتعمل «شهر ١» و{n} محاضرة اتحطت فيه، بس باقي الشهور ما اتعملتش — دوس «كمّل الشهور» تحت.',
+    startConfirm: 'هنعمل ١٠ شهور مقفولين ونحط كل محاضرات الكورس في «شهر ١». الاشتراك الشهري بعدها بيفتح شهر مش ٣٠ يوم، ومش هيتباع لحد ما تفتح شهر. تمام؟',
+    /** Every month closed on a course with a monthly price. */
+    noneOpenWarning: 'مفيش ولا شهر مفتوح — يعني الاشتراك الشهري مش متاح للطلبة دلوقتي. افتح الشهر اللي عايز تبيعه.',
+    setupNote: 'مفيش حاجة بتتسحب من حد — ده بيزوّد بس.',
+    /** The untagged notice's own fix: the select's label and the button. No
+     *  number on the button — adopting takes drafts too, and the count above it
+     *  is published lessons only. */
+    adoptInto: 'حطهم في',
+    adoptCtaShort: 'حط كل الدروس اللي من غير شهر',
+    /** The fold at the bottom of the panel — the one-time tool for moving an
+     *  EXISTING course's subscribers onto months. Needed once per course. */
+    toolsTitle: 'أدوات لكورس كان شغّال قبل الشهور',
+    toolsLead:
+      'لو الكورس ده كان بيتباع بالاشتراك القديم قبل ما يبقى بالشهور، الأداة دي بتدّي الناس اللي مشتركة فيه دلوقتي الشهر اللي تختاره — عشان محدش يحس إن حاجة اتغيّرت. مش محتاجها غير مرة واحدة.',
     adoptDone: 'تمام — {n} محاضرة بقت في الشهر ده.',
     adoptNone: 'كل المحاضرات متحطّة في شهورها خلاص.',
     /**
@@ -618,6 +689,9 @@ const admin = {
      * later, by somebody else. The refusal at the point of creation is the
      * only one that costs nothing to obey.
      */
+    /** Beside a disabled «محاضرة جديدة» when the month list could not be read
+     *  — creating then would put the lecture in no month, silently. */
+    unknownRefresh: 'مقدرناش نقرا شهور الكورس — اعمل ريفرش للصفحة قبل ما تضيف محاضرة.',
     assignRequired: 'اختار الشهر الأول — من غيره المحاضرة مش هتوصل لمشتركين الشهر.',
   },
   section: {
@@ -640,9 +714,25 @@ const admin = {
     // header is no longer a `<summary>`.
     expand: 'فتح القسم',
     collapse: 'اطوِ القسم',
+    /**
+     * The header's own «+», beside the section's name — visible whether the
+     * section is open or not. «كلمة محاضرة جديدة أصلًا مش ظاهرة، مقفول عليا»:
+     * the only way in was a form at the bottom of a body that starts closed.
+     *
+     * ⚠️ Not «محاضرة جديدة». That is the create button's name inside the same
+     * `.unit`, and the e2e presses it by role and name, scoped to the section —
+     * a second button answering to it would fail strict mode.
+     */
+    addLesson: 'ضيف محاضرة',
+    /** Inside the «امتحانات الشهر» shelf, where the lecture form used to be. */
+    shelfNote: 'هنا امتحانات نص وآخر الشهر — بتتعمل وتتعدّل من صفحة «امتحانات الشهر».',
   },
   lesson: {
     new: 'محاضرة جديدة',
+    /** The create landed and the month write after it did not. The lecture
+     *  is on the page — this must not read as «nothing happened», or the
+     *  next press makes a duplicate. */
+    createdWithoutMonth: 'المحاضرة اتعملت، بس الشهر بتاعها ماتحطّش — افتحها واختار الشهر.',
 
     /* ── ينزل الساعة ٨ ─────────────────────────────────────────────────────
      *
@@ -921,11 +1011,9 @@ const admin = {
     pendingBadgeLabel: '{n} حل مستني مراجعة',
   },
   exam: {
-    title: 'امتحان الكورس',
-    hint: 'محاضرة من نوع «اختبار» تبقى امتحان الكورس النهائي. مش بتتفتح للطالب غير لما كل المحاضرات التانية تخلص، ولازم النجاح فيها عشان الكورس يتحسب خلص.',
+    title: 'امتحان الكورس النهائي',
     none: 'من غير امتحان',
     save: 'حفظ',
-    noQuizLessons: 'لازم تعمل محاضرة من نوع «اختبار» الأول.',
     current: 'الامتحان الحالي',
     scaffold: 'أضف امتحان الكورس',
     open: 'فتح الامتحان',
@@ -935,15 +1023,34 @@ const admin = {
     questionCount: 'سؤال',
     noQuestions: 'لسه من غير أسئلة',
     /**
-     * The gate line, rendered as `{gateLocked} ٢٤ {gateLessonUnit}`.
-     * The number is computed from the course's own published lessons, so it
-     * moves as the instructor publishes — which is what teaches the rule
-     * better than a paragraph would.
+     * The line when the course has NO final exam — which is most courses, and
+     * a legitimate state rather than a gap.
+     *
+     * It used to state a gate rule anyway: «هيتفتح للطالب بعد ما يخلّص ٦
+     * محاضرة», for an exam that did not exist, at the top of the page in the
+     * loudest band on it. «امتحان الكورس هيفتح بعد ست محاضرات. طب دي ليه؟».
+     * Now it says what the thing is and that it is optional, and points at
+     * the monthly exams — the ones he actually sets.
      */
-    gateLocked: 'هيتفتح للطالب بعد ما يخلّص',
-    gateLessonUnit: 'محاضرة',
-    gateNoLessons: 'مفيش محاضرات منشورة لسه، فالامتحان هيتفتح للطالب على طول',
+    noneYet: 'مفيش امتحان نهائي للكورس ده — ده اختياري.',
+    /** Appended only on stacks with the `exams` feature. */
+    noneYetMonthly: 'امتحانات نص وآخر الشهر ليها صفحتها لوحدها.',
+    /** The link to `/admin/exams`, shown only on stacks with the feature. */
+    monthlyLink: 'امتحانات الشهر',
+    /**
+     * The gate, stated true. `{n}` counts what `gate-rule.ts` actually waits
+     * on: published LECTURES in published sections — quizzes excluded, which
+     * is why the number used to read higher than anything he could count.
+     */
+    gateRule: 'بيتفتح للطالب لما يخلّص كل محاضرات الكورس المنشورة — دلوقتي {n} محاضرة (الكويزات مش محسوبة).',
+    /** Appended on a course sold by month or term: an unowned lecture can
+     *  never be cleared, so a one-slice buyer never reaches the final. */
+    gateSliceNote: 'واللي مشترك شهر أو ترم لوحده مش هيوصله غير لما يبقى معاه الكورس كله.',
+    gateNoLessons: 'مفيش محاضرات منشورة لسه، فالامتحان هيتفتح للطالب أول ما تنشره.',
     draft: 'لسه مسودة',
+    /** The exam is live only when its quiz, its lesson AND its section are
+     *  all published — the gate never sees a lesson in a draft section. */
+    hidden: 'مش ظاهر للطلبة لسه — انشره من القسم بتاعه.',
   },
   /**
    * امتحانات نص/آخر الشهر — its own namespace, deliberately NOT folded into

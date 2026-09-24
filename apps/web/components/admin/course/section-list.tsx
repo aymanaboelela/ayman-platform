@@ -24,7 +24,9 @@ const STATUS_LABEL: Record<ReorderStatus, string> = {
  * plain `.map()`. Reordering was implemented, tested, and unreachable.
  *
  * Only the first section opens by default: a twelve-section course rendered
- * fully expanded is a page nobody can navigate.
+ * fully expanded is a page nobody can navigate. An EMPTY section opens too —
+ * its body is nothing but the «محاضرة جديدة» form, and a section that starts
+ * closed over the only thing you can do in it read as «مقفول عليا».
  */
 export function SectionList({
   courseId,
@@ -48,7 +50,7 @@ export function SectionList({
           section={section}
           terms={terms}
           examLessonId={examLessonId}
-          defaultOpen={section.id === sections[0]?.id}
+          defaultOpen={section.id === sections[0]?.id || section.lessons.length === 0}
           handleProps={handleProps}
         />
       )}
