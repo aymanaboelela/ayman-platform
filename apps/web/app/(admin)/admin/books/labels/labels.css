@@ -58,6 +58,102 @@
   padding: 6mm;
 }
 
+/* ── The summary on top of the first sheet ──────────────────────────────────
+   «فوق في جدول» — how many students, how many copies, and how many of each
+   book: الصف down the side, the edition across. It is what gets checked
+   against the print run BEFORE the cards are cut, so it prints with the cards
+   rather than living only on the screen. `break-inside: avoid` keeps it whole;
+   the first sheet then carries three cards instead of four. */
+.label-summary {
+  margin-block-end: 5mm;
+  padding: 4mm 5mm;
+  border: 1.5px solid var(--gold);
+  border-radius: 4px;
+  break-inside: avoid;
+}
+
+.label-summary__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6mm;
+  margin-block-end: 3mm;
+}
+
+.label-summary__head h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.label-summary__totals {
+  display: flex;
+  gap: 3mm;
+}
+
+.label-summary__totals span {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 1mm 3.5mm;
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  background: var(--gold-wash);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.label-summary__totals b {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--gold-deep);
+}
+
+.label-summary__table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.label-summary__table th,
+.label-summary__table td {
+  padding: 1.6mm 2.5mm;
+  border: 1px solid var(--rule);
+  text-align: center;
+}
+
+.label-summary__table thead th {
+  background: var(--gold-wash);
+  font-weight: 800;
+}
+
+.label-summary__table tbody th,
+.label-summary__table tfoot th {
+  text-align: start;
+  font-weight: 700;
+}
+
+.label-summary__table td {
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.label-summary__table tfoot th,
+.label-summary__table tfoot td,
+.label-summary__total {
+  background: var(--gold-wash);
+  color: var(--gold-deep);
+}
+
+.label-summary__note {
+  margin: 2mm 0 0;
+  font-size: 9.5px;
+  color: var(--ink-soft);
+}
+
 .label-empty {
   padding: 16mm 0;
   text-align: center;
@@ -287,6 +383,9 @@
 }
 
 .label-card__stream {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
   padding: 0.8mm 2.5mm;
   border: 1px solid var(--rule);
   border-radius: 3px;
@@ -303,6 +402,14 @@
   It must survive printing, where colour usually does not: the border style
   carries the meaning, so a black-and-white laser still shows it.
 */
+/* «2×» — only when the same book is in the box more than once. The space
+   after it comes from the chip's `gap`, not a margin: the badge is an LTR
+   isolate, so its own `margin-inline-end` lands on the wrong side of it. */
+.label-card__qty {
+  color: var(--gold-deep);
+  unicode-bidi: isolate;
+}
+
 .label-card__stream--unknown {
   border-style: dashed;
   font-weight: 600;
@@ -359,7 +466,12 @@
      browser whose «طباعة الخلفيات» is off — which is all of them, by default. */
   .label-card__ref,
   .label-card__count,
-  .label-card__row--where dd {
+  .label-card__row--where dd,
+  .label-summary__totals span,
+  .label-summary__table thead th,
+  .label-summary__table tfoot th,
+  .label-summary__table tfoot td,
+  .label-summary__total {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

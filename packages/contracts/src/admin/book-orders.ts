@@ -769,9 +769,29 @@ export const PackingLabelSchema = z.object({
   street: z.string(),
   building: z.string().nullable(),
   note: z.string(),
-  /** Every title in this parcel with its quantity. Read by the packing SHEET's
-   *  own reconciliation, and deliberately not by the card — see `streams`. */
-  items: z.array(z.object({ title: z.string(), quantity: z.number().int() })),
+  /**
+   * Every title in this parcel with its quantity, and — since the card started
+   * printing one chip PER BOOK — the صف and the edition of each.
+   *
+   * «اكتب في الكارد نفسه سنة أولى عربي ولا سنة أولى لغات… ممكن طالب يطلب
+   * كتاب عربي سنة أولى وكتاب لغات سنة تانية». `streams` below answers «which
+   * editions are in the box» but not WHICH YEAR each one is, and a box holding
+   * أولى عربي + تانية لغات is exactly the box that gets packed wrong from two
+   * loose chips. Same resolution chain as the sheet's own line: the BOOK's
+   * year and edition, the order's course as the fallback, and null / '' when
+   * neither exists — never an invented one.
+   *
+   * `.optional()` on the two additions so a web container that lands a minute
+   * before its API during a deploy still parses the old shape.
+   */
+  items: z.array(
+    z.object({
+      title: z.string(),
+      quantity: z.number().int(),
+      year: z.number().int().nullable().optional(),
+      stream: z.string().optional(),
+    }),
+  ),
   /**
    * The EDITIONS in this parcel — «عربي», «لغات», or both.
    *

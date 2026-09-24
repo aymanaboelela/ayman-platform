@@ -3412,6 +3412,26 @@ const admin = {
      * the packer check, not to leave a blank or invent «عربي».
      */
     labelsStreamUnknown: 'الطبعة مش محددة — راجعها',
+    /**
+     * One chip PER BOOK on the card — «أولى بكالوريا · عربي». `{year}` is
+     * `yearOption` already filled in, `{stream}` is «عربي» / «لغات» / «عربي
+     * ولغات». A box can hold أولى عربي and تانية لغات at once, and two loose
+     * chips «كتاب عربي» + «كتاب لغات» could not say which year each was.
+     */
+    labelsBook: '{year} · {stream}',
+    /** Before the chip when a book is in the box more than once — «2×». */
+    labelsBookQty: '{n}×',
+    /**
+     * The table on top of the first sheet — «فوق في جدول: كام طالب، كام نسخة،
+     * وكام كتاب سنة أولى عربي وأولى لغات وتانية عربي وتانية لغات».
+     */
+    labelsSummaryTitle: 'ملخص الشحنة',
+    labelsSummaryStudents: 'طالب',
+    labelsSummaryCopies: 'نسخة',
+    labelsSummaryYear: 'الصف',
+    labelsSummaryTotal: 'الإجمالي',
+    /** Under the table, because «كتاب» there means a physical copy. */
+    labelsSummaryNote: 'الأرقام دي نسخ: الكتاب اللي اتطلب منه نسختين بيتعدّ اتنين.',
 
     /* ── صفحة الطباعة ─────────────────────────────────────────────────────── */
     printTitle: 'طلبات الكتب — لستة الشحن',
