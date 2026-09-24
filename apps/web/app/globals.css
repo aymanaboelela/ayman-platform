@@ -2475,6 +2475,241 @@
    which it does: it is the one child that is not `.rail__label`. */
 
 /* ---------------------------------------------------------------------------
+   .drawer — the student's navigation on a phone.
+
+   Sent as a competitor's drawer with «المينو في الموبايل بيبقى كده بشكل حلو»:
+   the brand centred at the top, every row an icon TILE plus a word, the current
+   page a solid tile on a tinted row, the theme switch and sign-out as rows of
+   the same kind, and the account it all belongs to as a card at the foot.
+
+   Everything here is scoped to `.drawer`. `.nav-pill` is shared with the
+   desktop rail and the admin sidebar, and those keep their own look: the rail
+   runs at 36px wells beside 19px labels on purpose, and the admin sheet was not
+   part of this ask.
+
+   The colours are this tenant's accent, never a literal — Ayman's stack gets
+   amber tiles, a blue tenant gets blue ones — which is the whole of
+   «بس هتغير اللون».
+   --------------------------------------------------------------------------- */
+.drawer,
+.topbar__menu {
+  /* The drawer's three washes, named so the dark theme can swap them.
+
+     On the light page they are the accent at low alpha — the reference's
+     lavender tiles, in this tenant's colour. On the dark page the same alpha
+     over ink-navy mixes amber into BROWN: measured, a 16% amber tile on
+     #1B1B24 reads as a muddy olive rather than as a tint. So dark takes them
+     from the neutral ladder instead and leaves the accent to the glyph and the
+     solid current-page tile, which is also how the reference's dark theme
+     draws its rows. */
+  --drawer-tile: color-mix(in oklch, var(--a-9), transparent 84%);
+  --drawer-hover: color-mix(in oklch, var(--a-9), transparent 92%);
+  --drawer-current: color-mix(in oklch, var(--a-9), transparent 80%);
+  --drawer-card: color-mix(in oklch, var(--a-9), transparent 84%);
+}
+
+:root[data-theme='dark'] :is(.drawer, .topbar__menu) {
+  --drawer-tile: var(--n-4);
+  --drawer-hover: var(--n-3);
+  --drawer-current: var(--n-4);
+  --drawer-card: var(--n-3);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) :is(.drawer, .topbar__menu) {
+    --drawer-tile: var(--n-4);
+    --drawer-hover: var(--n-3);
+    --drawer-current: var(--n-4);
+    --drawer-card: var(--n-3);
+  }
+}
+
+.drawer {
+  /* The panel is 20rem at most; the reference is closer to a full sheet, and
+     the account card at the foot needs the width for a name. */
+  inline-size: min(86vw, 21.5rem);
+  overflow: hidden;
+}
+
+.drawer__brand {
+  display: flex;
+  justify-content: center;
+  padding: var(--s-20) var(--s-48) var(--s-16);
+  border-block-end: var(--hairline) solid var(--border-subtle);
+}
+
+/* The list scrolls; the account card below it does not. */
+.drawer__body {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--s-12);
+}
+
+.drawer__section {
+  margin-block-start: var(--s-16);
+}
+
+.drawer__section--rule {
+  padding-block-start: var(--s-12);
+  border-block-start: var(--hairline) solid var(--border-subtle);
+}
+
+.drawer__eyebrow {
+  padding-inline: var(--s-12);
+  padding-block-end: var(--s-4);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-10);
+}
+
+.drawer .nav-pill {
+  gap: var(--s-12);
+  min-block-size: 3.5rem;
+  padding-inline: var(--s-8);
+  border-radius: var(--r-lg);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+}
+
+.drawer .nav-pill__well {
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: var(--r-lg);
+  border-color: transparent;
+  background: var(--drawer-tile);
+  color: var(--a-11);
+}
+
+.drawer .nav-pill__well svg {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+
+.drawer .nav-pill:hover {
+  background: var(--drawer-hover);
+  color: var(--n-12);
+}
+
+/* The current page: a tinted row, and the tile goes SOLID. The rail's start
+   bar is dropped here — the panel has no border for it to read as pulled out
+   of, and the solid tile already answers "where am I" from across the room. */
+.drawer .nav-pill[aria-current='page'] {
+  background: var(--drawer-current);
+  color: var(--n-12);
+  font-weight: var(--fw-bold);
+}
+
+.drawer .nav-pill[aria-current='page']::before {
+  content: none;
+}
+
+.drawer .nav-pill[aria-current='page'] .nav-pill__well {
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  box-shadow: var(--shadow-sm);
+}
+
+/* The theme row is not a link — it holds one. The switch goes to the far end. */
+.drawer__theme,
+.drawer__theme:hover {
+  background: none;
+  cursor: default;
+}
+
+.drawer__theme-switch {
+  margin-inline-start: auto;
+}
+
+/* تسجيل الخروج — the one row that ends something, so it is the one row in red.
+   `SignOutButton` brings Tailwind utilities for its other home in the account
+   menu; `.nav-pill` is unlayered and wins over them, and these three lines are
+   the only ones that have to say anything different. */
+.drawer .nav-pill--danger {
+  inline-size: 100%;
+  color: var(--err);
+}
+
+.drawer .nav-pill--danger .nav-pill__well {
+  background: var(--err);
+  /* `--ink-fg`, not `--n-1`: the glyph must stay light on red in BOTH themes,
+     and `--n-1` turns near-black in dark. */
+  color: var(--ink-fg);
+}
+
+.drawer .nav-pill--danger:hover {
+  background: color-mix(in oklch, var(--err), transparent 90%);
+  color: var(--err);
+}
+
+/* Who is signed in — pinned under the scrolling list, full-bleed. */
+.drawer__account {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--s-12);
+  margin: 0 var(--s-12) var(--s-12);
+  padding: var(--s-12);
+  border-radius: var(--r-lg);
+  background: var(--drawer-card);
+}
+
+.drawer__account-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.drawer__account-id {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+  unicode-bidi: isolate;
+  font-size: var(--fs-mono-label);
+  color: var(--n-10);
+}
+
+/* The bar's trigger for all of the above, in the same vocabulary: a tinted pill
+   with the glyph in a solid disc. It keeps its word — «القائمة» is there
+   because the students this is for had not learned the hamburger, and
+   `student-shell.e2e.ts` measures that it still fits a 360px row. */
+.topbar__menu {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--s-8);
+  block-size: 2.75rem;
+  padding-inline: var(--s-4) var(--s-12);
+  border-radius: var(--r-full);
+  border: var(--hairline) solid color-mix(in oklch, var(--a-9), transparent 60%);
+  background: var(--drawer-tile);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+  transition: background-color var(--d-hover) var(--ease);
+}
+
+.topbar__menu:hover {
+  background: var(--drawer-current);
+}
+
+.topbar__menu-disc {
+  display: grid;
+  place-items: center;
+  inline-size: 2.125rem;
+  block-size: 2.125rem;
+  border-radius: var(--r-full);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+}
+
+/* ---------------------------------------------------------------------------
    .pay-choice — «هتحوّل بإيه؟», the first step of every checkout.
 
    Two rails, two marks, one «التالي». See

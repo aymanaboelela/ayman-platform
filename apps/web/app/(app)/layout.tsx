@@ -25,6 +25,7 @@ import '../next-up.css';
 // same reason `next-up.css` is not.
 import '../exam-band.css';
 import { AccountMenu, AccountMenuFallback } from '@/components/app/account-menu';
+import { DrawerAccount } from '@/components/app/drawer-account';
 import {
   NotificationBell,
   NotificationBellFallback,
@@ -115,6 +116,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <Suspense fallback={<AccountMenuFallback />}>
           <ChromeUnlessAttempt>
             <AccountMenu />
+          </ChromeUnlessAttempt>
+        </Suspense>
+      }
+      drawerAccount={
+        // No fallback: it sits at the foot of a drawer that is closed on first
+        // paint, and the session read has always landed by the time a thumb
+        // opens it.
+        <Suspense fallback={null}>
+          <ChromeUnlessAttempt>
+            <DrawerAccount />
           </ChromeUnlessAttempt>
         </Suspense>
       }
