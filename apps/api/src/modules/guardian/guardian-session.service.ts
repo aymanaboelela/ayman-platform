@@ -22,9 +22,31 @@ export const GUARDIAN_SECRET = Symbol('GUARDIAN_SECRET');
  * العدّ بالـIP مش بالكود: العدّ بالكود بيدّي أي حد طريقة يقفل بوابة أي
  * طالب — يكتب كود غلط عشرين مرة والأب الحقيقي يتقفل عليه. ده **حرمان
  * خدمة** مجاني، والعدّ بالعنوان بيخلّي التكلفة على اللي بيحاول.
+ *
+ * ## قفل بيكبر
+ *
+ * كل `FAILS_PER_LOCK` غلطات → قفل، وكل قفل أطول من اللي قبله: دقيقة، خمسة،
+ * ربع ساعة، ساعة. الأب اللي غلط في حرف بيستنى دقيقة؛ والسكريبت اللي بيجرّب
+ * أكواد متسرّبة بيوصل لساعة بعد ٢٠ محاولة، وبيفضل عندها.
+ *
+ * والغلطات بس هي اللي بتتعدّ — الدخول الصح مش بيقرّب حد من القفل. كانت
+ * كل محاولة بتتعدّ، فأب بيفتح كل يوم من نفس الشبكة كان بيستهلك الحد.
  */
-const MAX_ATTEMPTS = 20;
-const ATTEMPT_WINDOW_SECONDS = 15 * 60;
+const FAILS_PER_LOCK = 5;
+/** الغلطات الأقدم من كده ماتتعدّش — خمسة غلط في أسبوع مش هجوم. */
+const FAIL_WINDOW_SECONDS = 15 * 60;
+/** مدة كل قفل بالترتيب. بعد آخر واحدة بيفضل عليها. */
+const LOCK_LADDER_SECONDS = [60, 5 * 60, 15 * 60, 60 * 60];
+/**
+ * أد إيه العنوان بيفتكر إنه اتقفل قبل كده. يوم: اللي اتقفل الصبح ورجع
+ * بالليل بيكمّل من مكانه في السلّم، مش من الدقيقة الأولى.
+ */
+const LOCK_MEMORY_SECONDS = 24 * 60 * 60;
+
+/** نتيجة `signIn`. */
+export type GuardianSignInResult =
+  | { ok: true; token: string }
+  | { ok: false; retryAfterSeconds?: number };
 
 export interface GuardianSession {
   /** الطالب اللي الجلسة دي بتشوفه. مفيش غيره. */
@@ -75,25 +97,36 @@ export class GuardianSessionService {
    * الكود → توكن، أو `null`.
    *
    * ⚠️ **سبب واحد للرفض، مهما كان الغلط.** الكود اللي مش موجود والحساب
-   * المحظور والمحاولات اللي خلصت — كلهم بيرجعوا `null`. رسايل مختلفة كانت
-   * هتخلّي اللي بيحاول يعرف إن الكود ده صح بس الحساب متقفل، وده معلومة
-   * عن حساب مش بتاعه.
+   * المحظور بيرجعوا نفس الحاجة. رسايل مختلفة كانت هتخلّي اللي بيحاول يعرف
+   * إن الكود ده صح بس الحساب متقفل، وده معلومة عن حساب مش بتاعه.
+   *
+   * القفل هو الاستثناء الوحيد اللي بيتقال (`retryAfterSeconds`)، وده آمن
+   * لأنه على **العنوان**: بيقول «إنت غلطت كتير»، مش حاجة عن أي كود.
+   *
+   * ⚠️ والقفل بيتفحص **قبل** الكود: كود صح وقت القفل بيترفض برضه. لو كان
+   * بيعدّي، القفل كان هيبقى عدّاد بس — السكريبت يكمّل تجريب ويعرف إنه
+   * لقى واحد صح من الرد.
    */
-  async signIn(code: string, ip: string): Promise<string | null> {
-    if (!(await this.underLimit(ip))) return null;
+  async signIn(code: string, ip: string): Promise<GuardianSignInResult> {
+    const lockedFor = await this.lockedFor(ip);
+    if (lockedFor > 0) return { ok: false, retryAfterSeconds: lockedFor };
 
     const profile = await this.prisma.studentProfile.findUnique({
       where: { guardianCode: code.trim().toUpperCase() },
       select: { userId: true, user: { select: { bannedAt: true } } },
     });
 
-    if (!profile || profile.user.bannedAt !== null) return null;
+    if (!profile || profile.user.bannedAt !== null) {
+      const retryAfterSeconds = await this.recordFailure(ip);
+      return retryAfterSeconds ? { ok: false, retryAfterSeconds } : { ok: false };
+    }
 
-    return new SignJWT({ sub: profile.userId, kind: 'guardian' })
+    const token = await new SignJWT({ sub: profile.userId, kind: 'guardian' })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime(`${SESSION_DAYS}d`)
       .sign(this.secret);
+    return { ok: true, token };
   }
 
   /** التوكن → الطالب، أو `null` لو منتهي أو متلاعب فيه أو مش بتاع البوابة دي. */
@@ -110,22 +143,45 @@ export class GuardianSessionService {
   }
 
   /**
-   * عدّاد المحاولات بالعنوان. `INCR` + `EXPIRE` على أول واحدة — نافذة
-   * منزلقة تقريبية، وهي كفاية: الغرض إن محاولات كتير من مكان واحد تبقى
-   * غالية، مش قياس دقيق.
+   * الثواني الباقية على قفل العنوان ده، أو صفر.
    *
    * ولو ريديس وقع، الدخول **بيعدّي**: الكود نفسه ١٣٠ بت، وقفل البوابة على
    * كل الآباء عشان عدّاد مش شغّال بيكلّف أكتر مما بيحمي.
    */
-  private async underLimit(ip: string): Promise<boolean> {
-    const key = `guardian:attempt:${ip}`;
+  private async lockedFor(ip: string): Promise<number> {
     try {
-      const count = await this.redis.incr(key);
-      if (count === 1) await this.redis.expire(key, ATTEMPT_WINDOW_SECONDS);
-      return count <= MAX_ATTEMPTS;
+      const ms = await this.redis.pttl(`guardian:lock:${ip}`);
+      return ms > 0 ? Math.ceil(ms / 1000) : 0;
     } catch (error) {
       this.logger.warn({ err: error }, 'guardian attempt counter unavailable — allowing');
-      return true;
+      return 0;
+    }
+  }
+
+  /**
+   * بيعدّ غلطة، ولو دي الخامسة بيقفل العنوان ويرجّع مدة القفل بالثواني.
+   *
+   * العدّاد بيتمسح مع كل قفل، فالخمسة اللي بعده بتبدأ من الصفر — واللي بيكبر
+   * هو `level`، مش العدّاد.
+   */
+  private async recordFailure(ip: string): Promise<number | null> {
+    const failKey = `guardian:fail:${ip}`;
+    const levelKey = `guardian:level:${ip}`;
+    try {
+      const fails = await this.redis.incr(failKey);
+      if (fails === 1) await this.redis.expire(failKey, FAIL_WINDOW_SECONDS);
+      if (fails < FAILS_PER_LOCK) return null;
+
+      const level = await this.redis.incr(levelKey);
+      await this.redis.expire(levelKey, LOCK_MEMORY_SECONDS);
+      const seconds = LOCK_LADDER_SECONDS[Math.min(level, LOCK_LADDER_SECONDS.length) - 1]!;
+      await this.redis.set(`guardian:lock:${ip}`, '1', 'EX', seconds);
+      await this.redis.del(failKey);
+      this.logger.warn({ ip, level, seconds }, 'guardian sign-in locked for address');
+      return seconds;
+    } catch (error) {
+      this.logger.warn({ err: error }, 'guardian attempt counter unavailable — allowing');
+      return null;
     }
   }
 }
