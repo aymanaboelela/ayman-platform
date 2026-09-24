@@ -52,12 +52,42 @@ describe('the owner baseline', () => {
     }
   });
 
-  it('cannot touch money, the audit trail, or the platform itself', () => {
+  it('can SEE its own students money and messages, and move neither', () => {
+    /*
+     * The line moved once, deliberately, and this is where it sits now.
+     *
+     * `payment:read` and `conversation:read` used to be on the forbidden list
+     * below, on the reasoning that money belongs to whoever operates the
+     * platform rather than to the teaching. That reasoning describes a stack
+     * with an operator AND instructors on it. On a single-teacher stack it
+     * describes somebody who is not there: the instructor IS the business, the
+     * subscriptions are their revenue and the messages are addressed to them.
+     *
+     * ⚠️ What actually forced it: the escape hatch was welded shut. These were
+     * documented as grantable, but `role:grant` is not in the owner set either
+     * and there is no second account on those stacks — so nobody could ever
+     * grant them. Measured on both live instructor stacks:
+     * `GET /api/admin/roles/owner/permissions` answered 403. And the student
+     * page reads both routes, so every student on both platforms opened to a
+     * dead screen.
+     */
+    for (const permission of ['payment:read', 'conversation:read'] as const) {
+      expectFor(permission, roleHasPermission('owner', permission), true);
+    }
+
+    // READING is the whole of it. Approving a payment moves money and closing
+    // a thread ends somebody's complaint — different authorities, still shut.
+    for (const permission of ['payment:review', 'conversation:close'] as const) {
+      expectFor(permission, roleHasPermission('owner', permission), false);
+    }
+  });
+
+  it('cannot touch the books, the audit trail, or the platform itself', () => {
     // The split the role exists for: what is theirs to run, against what
-    // belongs to whoever operates the platform.
+    // belongs to whoever operates the platform. Everything here is either
+    // about OTHER people's stacks, or a record that must not be editable by
+    // the person it is a record of.
     for (const permission of [
-      'payment:read',
-      'payment:review',
       'book-order:read',
       'expense:read',
       'expense:write',
@@ -127,12 +157,20 @@ describe('student is unaffected', () => {
 });
 
 describe('granting at runtime', () => {
+  /*
+   * ⚠️ `audit:read`, not `payment:read`, and the swap is the point.
+   *
+   * These cases need a permission the owner baseline genuinely does NOT hold,
+   * and `payment:read` stopped being one when the instructor was given sight
+   * of their own students' subscriptions. A test that grants something already
+   * held still goes green — it just stops testing granting.
+   */
   it('opens a permission the baseline does not hold', () => {
-    expect(roleHasPermission('owner', 'payment:read')).toBe(false);
+    expect(roleHasPermission('owner', 'audit:read')).toBe(false);
 
-    grant('owner', 'payment:read');
+    grant('owner', 'audit:read');
 
-    expect(roleHasPermission('owner', 'payment:read')).toBe(true);
+    expect(roleHasPermission('owner', 'audit:read')).toBe(true);
   });
 
   it('shows up in the list the client renders from', () => {
@@ -151,10 +189,10 @@ describe('granting at runtime', () => {
   });
 
   it('closes again when the grant goes away', () => {
-    grant('owner', 'payment:read');
+    grant('owner', 'audit:read');
     setRuntimeGrants(new Map());
 
-    expect(roleHasPermission('owner', 'payment:read')).toBe(false);
+    expect(roleHasPermission('owner', 'audit:read')).toBe(false);
   });
 
   it('cannot invent a permission that is not in the catalogue', () => {
@@ -181,8 +219,14 @@ describe('grantablePermissions', () => {
   const grantable = new Set(grantablePermissions('owner'));
 
   it('offers the things an operator would plausibly open up', () => {
+    /*
+     * `payment:read` is NOT in this list any more, and its absence is correct
+     * rather than an omission: the owner baseline now holds it, and the case
+     * below («never offers something the role already has») is what takes it
+     * out. Approving a payment is still here — seeing the money and moving it
+     * are the two different authorities that split was always about.
+     */
     for (const permission of [
-      'payment:read',
       'payment:review',
       'book-order:read',
       'student:write',
