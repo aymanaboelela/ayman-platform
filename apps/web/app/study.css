@@ -806,7 +806,7 @@
    as "not yet", never as "not for you". */
 .badge--earned {
   border-color: color-mix(in oklch, var(--badge-metal) 45%, transparent);
-  background: color-mix(in oklch, var(--badge-metal) 10%, var(--n-3));
+  background: color-mix(in oklab, var(--badge-metal) 10%, var(--n-3));
 }
 
 .badge--earned .badge__disc {
@@ -1104,7 +1104,7 @@ details[open] > .unit__head .unit__chevron,
    to respond to being pointed at; every other row still does.
    --------------------------------------------------------------------------- */
 .outline-row--current {
-  background: color-mix(in oklch, var(--a-9) 14%, var(--n-2));
+  background: color-mix(in oklab, var(--a-9) 14%, var(--n-2));
 }
 
 /* ---------------------------------------------------------------------------
@@ -1369,10 +1369,10 @@ details[open] > .unit__head .unit__chevron,
    few percent of `--a-9`) rather than inventing a second set of amber alphas. */
 .chip--accent {
   border: var(--hairline) solid color-mix(in oklch, var(--a-9) 45%, transparent);
-  background: color-mix(in oklch, var(--a-9) 8%, var(--n-1));
+  background: color-mix(in oklab, var(--a-9) 8%, var(--n-1));
   color: var(--a-11);
 }
-.chip--accent:hover { background: color-mix(in oklch, var(--a-9) 16%, var(--n-1)); }
+.chip--accent:hover { background: color-mix(in oklab, var(--a-9) 16%, var(--n-1)); }
 
 /* «راجع» on a lesson already cleared. Ember, not green, for the reason
    `.lesson-row--done` gives above — and quieter than `--solid`, because
@@ -2192,12 +2192,12 @@ details[open] > .unit__head .unit__chevron,
 .attempt-row--counts,
 .attempt-row--action {
   border-color: color-mix(in oklch, var(--a-9) 45%, transparent);
-  background: color-mix(in oklch, var(--a-9) 6%, var(--n-1));
+  background: color-mix(in oklab, var(--a-9) 6%, var(--n-1));
 }
 
 .attempt-row--counts:hover,
 .attempt-row--action:hover {
-  background: color-mix(in oklch, var(--a-9) 10%, var(--n-1));
+  background: color-mix(in oklab, var(--a-9) 10%, var(--n-1));
 }
 
 .attempt-row--counts .attempt-row__well,
@@ -2266,13 +2266,13 @@ details[open] > .unit__head .unit__chevron,
 }
 
 .verdict--pass {
-  background: color-mix(in oklch, var(--ok) 12%, var(--n-1));
+  background: color-mix(in oklab, var(--ok) 12%, var(--n-1));
   box-shadow: inset 0 0 0 var(--hairline) color-mix(in oklch, var(--ok) 35%, transparent);
   color: var(--ok);
 }
 
 .verdict--fail {
-  background: color-mix(in oklch, var(--err) 12%, var(--n-1));
+  background: color-mix(in oklab, var(--err) 12%, var(--n-1));
   box-shadow: inset 0 0 0 var(--hairline) color-mix(in oklch, var(--err) 35%, transparent);
   color: var(--err);
 }
@@ -2287,7 +2287,7 @@ details[open] > .unit__head .unit__chevron,
    (the queue badge, `.chip--solid`, the grading screen's running total), and
    green/red stay reserved for a decision that has actually been made. */
 .verdict--pending {
-  background: color-mix(in oklch, var(--a-9) 12%, var(--n-1));
+  background: color-mix(in oklab, var(--a-9) 12%, var(--n-1));
   box-shadow: inset 0 0 0 var(--hairline) color-mix(in oklch, var(--a-9) 35%, transparent);
   color: var(--a-11);
 }
@@ -2379,7 +2379,7 @@ details[open] > .unit__head .unit__chevron,
   block-size: 6px;
   overflow: hidden;
   border-radius: var(--r-xs);
-  background: color-mix(in oklch, var(--err) 22%, var(--n-3));
+  background: color-mix(in oklab, var(--err) 22%, var(--n-3));
 }
 
 .topic-row__fill {
@@ -2754,13 +2754,13 @@ details[open] > .unit__head .unit__chevron,
    meaning anything by the time there is one. */
 .runner-clock--warn {
   border-color: color-mix(in oklch, var(--warn) 45%, transparent);
-  background: color-mix(in oklch, var(--warn) 10%, var(--n-1));
+  background: color-mix(in oklab, var(--warn) 10%, var(--n-1));
   color: var(--warn);
 }
 
 .runner-clock--critical {
   border-color: color-mix(in oklch, var(--err) 50%, transparent);
-  background: color-mix(in oklch, var(--err) 12%, var(--n-1));
+  background: color-mix(in oklab, var(--err) 12%, var(--n-1));
   color: var(--err);
 }
 
@@ -2803,7 +2803,7 @@ details[open] > .unit__head .unit__chevron,
    option row just to paint a border. */
 .runner-option:has(:checked) {
   border-color: var(--a-9);
-  background: color-mix(in oklch, var(--a-9) 8%, var(--n-1));
+  background: color-mix(in oklab, var(--a-9) 8%, var(--n-1));
 }
 
 .runner-option:has(:disabled) {
@@ -2926,7 +2926,7 @@ details[open] > .unit__head .unit__chevron,
    glance at twenty chips. */
 .nav-chip--current {
   border-color: var(--a-9);
-  background: color-mix(in oklch, var(--a-9) 12%, var(--n-1));
+  background: color-mix(in oklab, var(--a-9) 12%, var(--n-1));
   color: var(--n-12);
   box-shadow: 0 0 0 2px color-mix(in oklch, var(--a-9) 40%, transparent);
 }

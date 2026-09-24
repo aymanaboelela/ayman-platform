@@ -158,7 +158,7 @@ export function StudentTopbar({
                 // `.topbar__menu` gives it the drawer's own vocabulary — a
                 // tinted pill with the glyph in a solid disc — so the control
                 // and the panel it opens read as one object. See globals.css.
-                className="topbar__menu md:hidden"
+                className="topbar__menu inline-flex md:hidden"
               >
                 <span className="topbar__menu-disc" aria-hidden="true">
                   <Menu className="size-4" />

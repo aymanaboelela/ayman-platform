@@ -2561,7 +2561,9 @@
   padding-block-end: var(--s-4);
   font-size: var(--fs-text-sm);
   font-weight: var(--fw-semibold);
-  color: var(--n-10);
+  /* `--n-11`, not `--n-10`: that step is placeholder-only and misses 4.5:1
+     on the light washes. Same for the two small labels below. */
+  color: var(--n-11);
 }
 
 .drawer .nav-pill {
@@ -2613,8 +2615,8 @@
 }
 
 /* The theme row is not a link — it holds one. The switch goes to the far end. */
-.drawer__theme,
-.drawer__theme:hover {
+.drawer .nav-pill.drawer__theme,
+.drawer .nav-pill.drawer__theme:hover {
   background: none;
   cursor: default;
 }
@@ -2672,7 +2674,7 @@
   text-align: start;
   unicode-bidi: isolate;
   font-size: var(--fs-mono-label);
-  color: var(--n-10);
+  color: var(--n-11);
 }
 
 /* The bar's trigger for all of the above, in the same vocabulary: a tinted pill
@@ -2680,7 +2682,9 @@
    because the students this is for had not learned the hamburger, and
    `student-shell.e2e.ts` measures that it still fits a 360px row. */
 .topbar__menu {
-  display: inline-flex;
+  /* No `display` here: the element carries `inline-flex md:hidden`, and an
+     unlayered `display` in this file would beat the `md:hidden` utility and
+     put a phone-only button (onto an empty drawer) on every desktop bar. */
   flex-shrink: 0;
   align-items: center;
   gap: var(--s-8);
@@ -2822,7 +2826,7 @@
 .stepper__label {
   font-size: var(--fs-mono-label);
   font-weight: var(--fw-semibold);
-  color: var(--n-10);
+  color: var(--n-11);
   white-space: nowrap;
 }
 
@@ -3011,6 +3015,11 @@
    than letting the digits run under the glyph. */
 .field__control[dir='ltr'] {
   padding-inline: 3rem var(--s-16);
+  /* …and the squared corner under the label tab: the tab sits top-RIGHT in
+     this RTL page, which is the START-start corner for RTL and the start-END
+     corner for an LTR element. */
+  border-start-start-radius: var(--r-lg);
+  border-start-end-radius: 0;
 }
 
 .field__icon,
