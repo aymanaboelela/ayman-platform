@@ -9,6 +9,7 @@ import { AuditService } from '../../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { MediaService } from '../media/media.service';
 import { PaymentsService } from './payments.service';
+import { AdminFinanceListSchema } from '@ayman/contracts/admin/finance';
 import { FinanceService } from './finance.service';
 
 /**
@@ -63,10 +64,11 @@ describe('FinanceService', () => {
   let monthSellingCourseId = '';
   let monthOne = '';
   let monthTwo = '';
-  /** تلات طلبة على الكورس ده — واحد لكل تست، عشان ما يخدوش من رصيد بعض. */
+  /** طالب لكل تست على الكورس ده، عشان ما يخدوش من رصيد بعض. */
   let studentMc = '';
   let studentM2 = '';
   let studentM3 = '';
+  let studentM4 = '';
   let quarterlyCourseId = '';
   let yearlyCourseId = '';
   let termCourseId = '';
@@ -109,6 +111,7 @@ describe('FinanceService', () => {
     studentMc = await makeStudent('mc');
     studentM2 = await makeStudent('m2');
     studentM3 = await makeStudent('m3');
+    studentM4 = await makeStudent('m4');
 
     // Year 1, «عام» only — monthly plan, genuinely paid, renewed once.
     monthlyCourseId = (
@@ -711,6 +714,29 @@ describe('FinanceService', () => {
       });
       return grant.id;
     }
+
+    /*
+     * ⚠️ الرد لازم يعدّي على العقد اللي الشاشة بتعمله `parse`.
+     *
+     * العقد كان `scope: ['course', 'term']`، فأول صف شهر في الرد كان بيوقّع
+     * `/admin/finance/subscriptions` كلها «الصفحة وقعت». السيرفر كان سليم،
+     * والتستات كلها خضرا، لأن محدش كان بيقرا الرد بعين الشاشة.
+     */
+    it('lists a month row in a shape the screen can parse', async () => {
+      const student = studentM4;
+      await payments.adminManualSubscribe(adminId, student, {
+        courseId: monthSellingCourseId,
+        plan: 'monthly',
+        termId: null,
+        monthIds: [monthOne],
+        isFree: false,
+        screenshotKey: null,
+      });
+
+      const listed = await finance.list({ page: 1, perPage: PER_PAGE, sort: 'paid_desc' });
+      expect(listed.rows.some((r) => r.userId === student && r.scope === 'course_month')).toBe(true);
+      expect(() => AdminFinanceListSchema.parse(listed)).not.toThrow();
+    });
 
     it('can be cancelled, where it used to 404', async () => {
       const student = studentMc;

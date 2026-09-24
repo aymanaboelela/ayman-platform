@@ -108,7 +108,15 @@ export const AdminFinanceRowSchema = z.object({
    *  of this to edit. Exposed here (unlike on the wire before this feature)
    *  so the edit-dates panel has a starting value to prefill. */
   validFrom: z.iso.datetime(),
-  scope: z.enum(['course', 'term']),
+  /**
+   * ⚠️ `course_month` لازم يفضل هنا طول ما `FinanceService.list` بيرجّعه.
+   *
+   * الشاشة بتعمل `parse` على الرد كله، فصف واحد بقيمة مش في الـenum كان
+   * بيوقّع الصفحة كلها «الصفحة وقعت» — مش الصف لوحده. ده اللي حصل لما
+   * الاشتراك الشهري بقى شهر من المنهج (#420): السيرفر بدأ يرجّع الشهور، وده
+   * فضل `['course', 'term']`.
+   */
+  scope: z.enum(['course', 'term', 'course_month']),
   status: FinanceStatusSchema,
   /** How many APPROVED submissions stand behind this grant, minus one — `0`
    *  for a subscription paid exactly once, `1` for a student who renewed it

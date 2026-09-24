@@ -666,9 +666,10 @@ function toRow(grant: GrantRowWithCourse, now: Date, refundedCents: number): Adm
     isFree: latest?.isFree ?? null,
     validUntil: grant.validUntil?.toISOString() ?? null,
     validFrom: grant.validFrom.toISOString(),
-    // Guaranteed one of these two by the base query's `scope: { in: ['course',
-    // 'term'] }` — see `FinanceService.list`'s own note on `hasCourse`.
-    scope: grant.scope as 'course' | 'term',
+    // Guaranteed one of these three by the base query's `scope: { in: [...] }`
+    // — see `FinanceService.list`'s own note on `hasCourse`. The cast used to
+    // say two, and the contract believed it; see `AdminFinanceRowSchema.scope`.
+    scope: grant.scope as 'course' | 'term' | 'course_month',
     status: statusForGrant(grant, now),
     renewalCount: Math.max(0, grant._count.paymentSubmissions - 1),
     cancelReason: grant.cancelReason,
