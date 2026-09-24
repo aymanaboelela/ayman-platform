@@ -1101,17 +1101,20 @@ export function CourseForm({
         editor, where the form stayed mounted and was pressed twice, and the
         editor has no form at all now.
 
-        The payload is `formDataOf(draft)`, NOT the DOM's own FormData. It
-        used to be the DOM's, on the belief that every field carried its
-        `name` — and the price fields never did, so a course created with
-        «اشتراك شهري ٢٥٠» was created with no price at all, silently. One
-        builder for both paths is what this file's `formDataOf` note already
-        promised.
+        `formData` comes from the DOM rather than from `formDataOf(draft)`,
+        and that is load-bearing: the subject `<select>` shows its first option
+        while the draft still holds `''` until it is changed, so only the DOM
+        knows which subject a course created in one pass belongs to.
+
+        ⚠️ The price fields carry no `name` — they hold pounds, the payload
+        wants cents — so the cents ride hidden inputs rendered for this path
+        (rendered just after the fields, below). Without them a course created with «اشتراك
+        شهري ٢٥٠» was created with no price at all, silently.
 
         The result is READ. It used to be `void action(formData)`, so a save
         that failed looked exactly like one that worked.
       */
-      action={async () => {
+      action={async (formData) => {
         // A typo in a price is not «مش للبيع» — refuse it here, on the page,
         // instead of creating the course without the plan.
         if (!pricesReadable(draftRef.current)) {
@@ -1119,7 +1122,7 @@ export function CourseForm({
           return;
         }
         setSaving(true);
-        const result = await action(formDataOf(draftRef.current));
+        const result = await action(formData);
         setSaving(false);
         if (result && typeof result === 'object' && 'ok' in result) {
           const outcome = result as { ok: boolean; message?: string };
@@ -1130,6 +1133,16 @@ export function CourseForm({
       className="form-stack"
     >
       {fields}
+      {/* The prices in CENTS, for the DOM payload above — and the lock as
+          sent, because a disabled checkbox submits nothing and the hidden
+          `false` beside it would otherwise be the last `requiresGrant`. */}
+      <input
+        type="hidden"
+        name="monthlyPriceCents"
+        value={priceCentsOf(draft.monthlyPrice) ?? ''}
+      />
+      <input type="hidden" name="yearlyPriceCents" value={priceCentsOf(draft.yearlyPrice) ?? ''} />
+      {closedByPrice ? <input type="hidden" name="requiresGrant" value="true" /> : null}
       {/* Sticks to the bottom of the viewport rather than the bottom of the
           document: the create form is now six panels tall, and a submit button
           at the end of it is a scroll away from every field that could still
