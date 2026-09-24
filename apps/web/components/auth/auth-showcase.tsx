@@ -7,7 +7,7 @@ import { IS_AYMAN, tenantName } from '@/lib/tenant';
 const c = copy.auth.aside;
 
 /**
- * The panel's eyebrow — «منصة أ. أيمن أبو العلا» on his stack — resolved once.
+ * The panel's eyebrow — «المهندس أيمن أبو العلا» on his stack — resolved once.
  *
  * ⚠️ `tenantName()` and NOT the sentence-level swap in `lib/tenant-copy.ts`,
  * because this string is a brand lockup written in words rather than a sentence

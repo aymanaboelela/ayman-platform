@@ -791,7 +791,7 @@ export const copy = {
     },
     /** The dark showcase panel beside the form on /login and /register. */
     aside: {
-      eyebrow: 'منصة أ. أيمن أبو العلا',
+      eyebrow: 'المهندس أيمن أبو العلا',
       title: 'حسابك هو مكان مذاكرتك كله',
       body: 'الكورسات، الدروس اللي خلصت، درجاتك في كل اختبار، وآخر حتة في المذاكرة — كله بيستناك جوه.',
       point1: 'كل كورساتك في صفحة واحدة',
