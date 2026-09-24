@@ -5,9 +5,10 @@ import type {
   DailyPoint,
   EngagementSlice,
   GovernorateBreakdown,
+  SubscriptionPlanBucket,
   YearBreakdown,
 } from '@ayman/contracts/admin/analytics';
-import { GRADE_BANDS } from '@ayman/contracts/admin/analytics';
+import { GRADE_BANDS, SUBSCRIPTION_PLAN_BUCKETS } from '@ayman/contracts/admin/analytics';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 import {
@@ -108,6 +109,9 @@ export class OverviewService {
     const byLesson = query.courseId
       ? Prisma.sql`AND l."course_id" = ${query.courseId}::uuid`
       : Prisma.empty;
+    const byGrant = query.courseId
+      ? Prisma.sql`AND g."course_id" = ${query.courseId}::uuid`
+      : Prisma.empty;
     /*
      * The course filter, for the ONE query that counts students rather than
      * enrollments. It cannot be `byEnrollment`: `scoped` deliberately does not
@@ -123,17 +127,27 @@ export class OverviewService {
             AND e2."course_id" = ${query.courseId}::uuid)`
       : Prisma.empty;
 
-    const [students, video, quiz, distributions, engagement, daily, byYear, byGovernorate] =
-      await Promise.all([
-        this.students(since7, since30, byEnrollment, byLesson, inCourse),
-        this.video(byEnrollment, byLesson),
-        this.quiz(byLesson),
-        this.distributions(byLesson),
-        this.engagement(byEnrollment, byLesson),
-        this.daily(since, byEnrollment, byLesson),
-        this.byYear(byEnrollment, byLesson),
-        this.byGovernorate(byEnrollment, byLesson),
-      ]);
+    const [
+      students,
+      subscriptions,
+      video,
+      quiz,
+      distributions,
+      engagement,
+      daily,
+      byYear,
+      byGovernorate,
+    ] = await Promise.all([
+      this.students(since7, since30, byEnrollment, byLesson, inCourse),
+      this.subscriptions(new Date(now), since, byGrant),
+      this.video(byEnrollment, byLesson),
+      this.quiz(byLesson),
+      this.distributions(byLesson),
+      this.engagement(byEnrollment, byLesson),
+      this.daily(since, byEnrollment, byLesson),
+      this.byYear(byEnrollment, byLesson),
+      this.byGovernorate(byEnrollment, byLesson),
+    ]);
 
     /*
      * `eligible` is `students.enrolled` — the same integer, not a second query
@@ -144,6 +158,7 @@ export class OverviewService {
     const eligible = students.enrolled;
 
     return {
+      subscriptions,
       students,
       video: { ...video, eligible, watchRate: rate(video.watchers, eligible) },
       quiz: { ...quiz, participationRate: rate(quiz.participants, eligible) },
@@ -223,6 +238,134 @@ export class OverviewService {
       newLast30: row?.new_30 ?? 0,
       activeLast7: row?.active_7 ?? 0,
       activeLast30: row?.active_30 ?? 0,
+    };
+  }
+
+  /**
+   * «مشتركين بإيه» — live subscribers by plan, and who subscribed in the window.
+   *
+   * ## The population is `CourseHeadcountService`'s, to the letter
+   *
+   * Same scope list (`course`, `term`, `course_month` — the wide `platform` and
+   * `subject_teacher` scopes are not a subscription to any course, and the
+   * platform one would make every registered student a subscriber), same
+   * "live" (`revoked_at` NULL, started, and `valid_until` NULL or ahead), same
+   * `studentJoins`, and no `source` filter: a grant opened by hand is real
+   * access held by a real student. So `live` on a course is the SAME integer
+   * the headcount strip prints for it — `analytics.int-spec.ts` holds the two
+   * together, because the day they drift the instructor has two «مشتركين» for
+   * one course and no way to tell which to believe.
+   *
+   * ## Students, not grants
+   *
+   * `count(DISTINCT user_id)` everywhere. A monthly buyer holds one
+   * `course_month` grant per month bought — counting rows reported a
+   * four-month student as four subscribers.
+   *
+   * ## Where the plan comes from
+   *
+   *   course_month  → شهر, always. The scope IS the monthly plan.
+   *   term          → ترم, always.
+   *   course        → the plan on the latest approved payment behind it. That
+   *                   is the only place a course-wide grant's plan is written
+   *                   — the old date-window monthly, the yearly, the retired
+   *                   quarterly all look alike on the grant itself.
+   *                   With no payment (opened by hand, a code, a coupon) it
+   *                   is `unspecified`: inferring «سنة» from a 365-day window
+   *                   would be a guess printed as a count.
+   *
+   * The payment is found through `grant_id` — or, for a month, through
+   * `payment_submission_months`: one transfer that bought three months stamps
+   * `grant_id` with the FIRST month's grant only (`writeMonthGrants`), and the
+   * other two would fall back to `source` — so three months an admin comped
+   * together would count one free and two paid.
+   *
+   * ## Paid vs comped
+   *
+   * Paid = the payment behind it is not `is_free`; with no payment row at all,
+   * `source = 'purchase'`. The second half is not a nicety — hundreds of live
+   * term grants were imported as `purchase` with no submission, and reading
+   * them as free would call most of the paying cohort comped.
+   *
+   * ## «في الفترة دي» counts what happened, revoked or not
+   *
+   * `started_at` is the latest of the grant's creation and the approval of the
+   * latest payment on it — so a renewal (which extends the SAME course grant
+   * rather than writing a new one) counts as subscribing in the window, which
+   * is what it is. A grant revoked since is still counted: a closed term
+   * revokes every grant on it at once, and «مين اشترك الشهر اللي فات» must not
+   * read zero the morning after.
+   */
+  private async subscriptions(
+    now: Date,
+    since: Date,
+    byGrant: Prisma.Sql,
+  ): Promise<AnalyticsOverview['subscriptions']> {
+    const rows = await this.prisma.$queryRaw<
+      { plan: string | null; live: number; live_paid: number; started: number }[]
+    >(Prisma.sql`
+      WITH subs AS (
+        SELECT
+          g."user_id",
+          CASE
+            WHEN g."scope" = 'course_month' THEN 'monthly'
+            WHEN g."scope" = 'term' THEN 'term'
+            ELSE coalesce(pay."plan", 'unspecified')
+          END AS plan,
+          CASE WHEN pay."plan" IS NOT NULL THEN NOT pay."is_free"
+               ELSE g."source" = 'purchase' END AS paid,
+          (g."revoked_at" IS NULL
+            AND g."valid_from" <= ${now}
+            AND (g."valid_until" IS NULL OR g."valid_until" > ${now})) AS live,
+          greatest(g."created_at", pay."at") AS started_at
+        FROM "app"."access_grants" g
+        ${studentJoins('g."user_id"')}
+        LEFT JOIN LATERAL (
+          SELECT s."plan"::text AS plan, s."is_free",
+                 coalesce(s."reviewed_at", s."created_at") AS at
+          FROM "app"."payment_submissions" s
+          WHERE s."user_id" = g."user_id"
+            AND s."course_id" = g."course_id"
+            AND s."status" = 'approved'
+            AND (s."grant_id" = g."id"
+              OR (g."month_id" IS NOT NULL AND EXISTS (
+                SELECT 1 FROM "app"."payment_submission_months" m
+                WHERE m."submission_id" = s."id" AND m."month_id" = g."month_id")))
+          ORDER BY at DESC, s."id" DESC
+          LIMIT 1
+        ) pay ON TRUE
+        WHERE g."scope" IN ('course', 'term', 'course_month')
+          AND g."course_id" IS NOT NULL ${byGrant}
+      )
+      -- One pass for the per-plan rows AND the distinct totals: the empty
+      -- grouping set is the whole population with plan NULL, and it has to be
+      -- its own count(DISTINCT) — summing the plan rows double-counts anyone
+      -- on two plans.
+      SELECT plan,
+             count(DISTINCT "user_id") FILTER (WHERE live)::int AS live,
+             count(DISTINCT "user_id") FILTER (WHERE live AND paid)::int AS live_paid,
+             count(DISTINCT "user_id") FILTER (WHERE started_at >= ${since})::int AS started
+      FROM subs
+      GROUP BY GROUPING SETS ((plan), ())
+    `);
+
+    const total = rows.find((row) => row.plan === null);
+    const byPlan = new Map(
+      rows.flatMap((row) => (row.plan === null ? [] : [[row.plan, row] as const])),
+    );
+
+    return {
+      live: total?.live ?? 0,
+      livePaid: total?.live_paid ?? 0,
+      started: total?.started ?? 0,
+      // Walks the contract's list rather than the rows, so a plan the SQL
+      // might one day emit that the enum does not know is dropped here
+      // instead of 500ing the whole page at the web edge's parse.
+      byPlan: SUBSCRIPTION_PLAN_BUCKETS.map((plan: SubscriptionPlanBucket) => ({
+        plan,
+        live: byPlan.get(plan)?.live ?? 0,
+        started: byPlan.get(plan)?.started ?? 0,
+      })),
     };
   }
 

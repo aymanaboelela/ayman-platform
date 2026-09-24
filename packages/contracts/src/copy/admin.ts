@@ -4651,6 +4651,35 @@ const analytics = {
   // destination, never as «اعرف أكتر», so the reader knows before pressing.
   sectionWhoTitle: 'مين موجود',
   sectionWhoLead: 'الطلبة المشتركين، ومين منهم لسه بيذاكر فعلًا.',
+  sectionPlansTitle: 'مشتركين بإيه',
+  sectionPlansLead:
+    'اللي عندهم اشتراك شغال دلوقتي حسب الباقة، واللي اشتركوا أو جدّدوا في الفترة المختارة فوق.',
+  goToSubscriptions: 'صفحة الاشتراكات',
+  subscribersLive: 'مشتركين دلوقتي',
+  subscribersStarted: '{n} اشتركوا في الفترة دي',
+  /** Under each plan's count: its share of «مشتركين دلوقتي». */
+  planShareOfLive: '{p} من المشتركين',
+  plan: {
+    monthly: 'شهر',
+    term: 'ترم',
+    yearly: 'سنة',
+    /** Off the shelf; shown only while old subscriptions on it are still
+     *  live or started inside the window. */
+    quarterly: '٣ شهور',
+    /** A course grant with no payment behind it — the plan was never written
+     *  anywhere, so the screen says so instead of guessing one. */
+    unspecified: 'من غير باقة',
+  },
+  paidRate: 'نسبة اللي دفعوا',
+  paidCount: 'دفعوا',
+  compedCount: 'مجاني أو بإيد الأدمن',
+  unspecifiedHint: '«من غير باقة» = اشتراك اتفتح بإيد الأدمن أو بكود، من غير دفعة مربوطة بيه.',
+  /** Only rendered when the plan counts really do add up past the total. */
+  plansOverlapHint:
+    'اللي عندهم باقتين في كورسين مختلفين بيتحسبوا في الاتنين، فمجموع الباقات بيعدّي العدد الكلي.',
+  plansStarted: 'اشتركوا أو جدّدوا في الفترة دي',
+  plansStartedHint:
+    'كل اللي اتفتحلهم اشتراك أو اتجدّد في الفترة المختارة — حتى لو اتقفل بعدها، زي ترم خلص.',
   sectionWatchTitle: 'شافوا الفيديوهات؟',
   sectionWatchLead: 'كل رقم هنا مقسوم على عدد المشتركين النشطين، والمقام مكتوب جنبه.',
   sectionQuizTitle: 'حلّوا الامتحانات؟',
