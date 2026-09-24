@@ -30,6 +30,7 @@ import {
   monthPurchaseAmountCents,
   monthSelectionMessage,
   pendingClaimsBlocking,
+  monthlyPlanOnSale,
 } from './month-grants';
 // Pure readers, not injected services — `PaymentsModule` is not widened for
 // them and `EntitlementService` is not reachable from here. They are imported
@@ -169,6 +170,22 @@ export class PaymentsService {
     // primary key, having already told the student what to transfer.
     const requestedMonthIds = [...new Set(input.monthIds ?? [])];
     const isMonthPurchase = input.plan === 'monthly' && courseSellsByMonth;
+
+    // The storefront no longer offers «شهر» when every month is closed
+    // (`monthlyOnSale`), so this is a stale tab or a hand-written request —
+    // refused here, before the month picker's own «pick at least one» reads as
+    // the student's mistake.
+    // (A course with no monthly price at all keeps its own refusal below.)
+    if (
+      isMonthPurchase &&
+      course.monthlyPriceCents !== null &&
+      !monthlyPlanOnSale(course.monthlyPriceCents, {
+        total: course.months.length,
+        open: course.months.filter((month) => month.isOpen).length,
+      })
+    ) {
+      throw new BadRequestException('the monthly plan of this course is not open for subscription right now');
+    }
 
     if (input.plan === 'monthly' && !courseSellsByMonth && requestedMonthIds.length > 0) {
       // The panel only sends months when `CatalogCourseDetail.months` came back

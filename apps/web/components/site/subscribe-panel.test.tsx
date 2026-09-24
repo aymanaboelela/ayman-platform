@@ -179,6 +179,29 @@ describe('SubscribePanel', () => {
     expect(screen.queryByText(copy.subscribe.noPlans)).toBeNull();
   });
 
+  it('offers no «شهر» when every month of the course is closed, and still sells the year', async () => {
+    // Priced, sold by month, no month open: the card could only fail at
+    // checkout — there was no month to put in the claim.
+    respondWith({
+      course: liveCourse({ monthlyOnSale: false, yearlyPriceCents: 90000 }),
+      settings: liveSettings(),
+    });
+
+    render(<Panel />);
+
+    expect(await screen.findByText(copy.subscribe.planYearlyLabel)).toBeTruthy();
+    expect(screen.queryByText(copy.subscribe.planMonthlyLabel)).toBeNull();
+  });
+
+  it('says the sale is not open on a course sold by month alone with no month open', async () => {
+    respondWith({ course: liveCourse({ monthlyOnSale: false }), settings: liveSettings() });
+
+    render(<Panel />);
+
+    expect(await screen.findByText(copy.subscribe.noPlans)).toBeTruthy();
+    expect(screen.queryByText(copy.subscribe.planMonthlyLabel)).toBeNull();
+  });
+
   it('offers a term the cached page had not heard of', async () => {
     // `terms` on the public payload is filtered to OPEN, PRICED terms, so a
     // term opened this morning is absent from an entry written last night.

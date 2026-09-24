@@ -85,6 +85,11 @@ export interface CourseForJsonLd {
    * costs.
    */
   monthlyPriceCents: number | null;
+  /** `CatalogCourse.monthlyOnSale` — false when the course sells by month and
+   *  no month is open. Optional only because a cached payload may predate it;
+   *  it marks the monthly Offer out of stock, and never touches whether the
+   *  course is free. */
+  monthlyOnSale?: boolean;
   quarterlyPriceCents: number | null;
   yearlyPriceCents: number | null;
   /**
@@ -687,9 +692,15 @@ function streamLabel(item: { forGeneral: boolean; forLanguages: boolean }): stri
  * ever moves, this line becomes a claim nothing checks.
  */
 function courseOffers(course: CourseForJsonLd) {
-  const plans: Array<{ name: string; cents: number }> = [];
+  const plans: Array<{ name: string; cents: number; closed?: boolean }> = [];
   if (course.monthlyPriceCents !== null) {
-    plans.push({ name: copy.subscribe.planMonthlyLabel, cents: course.monthlyPriceCents });
+    // Kept, and marked OutOfStock below, when no month is open — dropped, it
+    // could empty `offers` and publish the free offer for a paid course.
+    plans.push({
+      name: copy.subscribe.planMonthlyLabel,
+      cents: course.monthlyPriceCents,
+      closed: course.monthlyOnSale === false,
+    });
   }
   if (course.quarterlyPriceCents !== null) {
     plans.push({ name: copy.subscribe.planQuarterlyLabel, cents: course.quarterlyPriceCents });
@@ -724,7 +735,7 @@ function courseOffers(course: CourseForJsonLd) {
     category: 'Subscription',
     price: egpPrice(plan.cents),
     priceCurrency: 'EGP',
-    availability,
+    availability: plan.closed ? 'https://schema.org/OutOfStock' : availability,
     url: absolute(`/courses/${course.slug}`),
   }));
 }

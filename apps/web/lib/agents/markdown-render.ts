@@ -15,6 +15,7 @@ import { AGENT_DISCOVERY_PATHS } from '@/lib/agents/discovery';
 import { ESSENTIAL_TERMS } from '@/lib/essentials-terms';
 import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
 import { formatDuration } from '@/lib/format';
+import { monthlyForSaleCents } from '@/lib/monthly-sale';
 import { subscribeRails, subscribeSteps } from '@/lib/subscribe-steps';
 import { coursePriceBadge, formatEGP } from '@/lib/price';
 import { SITE_URL } from '@/lib/seo/jsonld';
@@ -111,8 +112,14 @@ function footer(canonicalPath: string, note: string): string {
  */
 function coursePrice(course: CatalogCourseDetail): string {
   const plans = [
+    // The page's own wording when no month is open — the plan is priced and
+    // not buyable, and saying only the price would send an agent to a card
+    // that is not there.
     course.monthlyPriceCents !== null
-      ? formatCopy(copy.course.priceMonthly, { price: formatEGP(course.monthlyPriceCents) })
+      ? formatCopy(
+          monthlyForSaleCents(course) === null ? copy.course.priceMonthlyClosed : copy.course.priceMonthly,
+          { price: formatEGP(course.monthlyPriceCents) },
+        )
       : null,
     course.quarterlyPriceCents !== null
       ? formatCopy(copy.course.priceQuarterly, { price: formatEGP(course.quarterlyPriceCents) })

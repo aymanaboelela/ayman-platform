@@ -1,4 +1,25 @@
-import { checkMonthSelection, monthPurchaseAmountCents, pendingClaimsBlocking } from './month-grants';
+import {
+  checkMonthSelection,
+  monthlyPlanOnSale,
+  monthPurchaseAmountCents,
+  pendingClaimsBlocking,
+} from './month-grants';
+
+describe('monthlyPlanOnSale', () => {
+  it('sells the old thirty-day plan on a priced course with no months', () => {
+    expect(monthlyPlanOnSale(25000, { total: 0, open: 0 })).toBe(true);
+  });
+  it('sells by month while at least one month is open', () => {
+    expect(monthlyPlanOnSale(25000, { total: 10, open: 1 })).toBe(true);
+  });
+  it('sells nothing when every month is closed — there is no month to buy', () => {
+    expect(monthlyPlanOnSale(25000, { total: 10, open: 0 })).toBe(false);
+  });
+  it('sells nothing without a price, open months or not', () => {
+    expect(monthlyPlanOnSale(null, { total: 2, open: 2 })).toBe(false);
+    expect(monthlyPlanOnSale(null, { total: 0, open: 0 })).toBe(false);
+  });
+});
 
 /**
  * The pure half of buying «شهر من المنهج».

@@ -2413,6 +2413,10 @@ export const copy = {
     /** `{price}` is EGP, already formatted. Stacked with `priceQuarterly`
      *  as its own row when the course sells both plans. */
     priceMonthly: '{price} ج / الشهر',
+    /** The same row when the course sells by curriculum month and every month
+     *  is closed — the price is real, there is just nothing to buy yet. Said,
+     *  not hidden: a paid course with no price line reads as a free one. */
+    priceMonthlyClosed: '{price} ج / الشهر — مفيش شهر مفتوح للاشتراك دلوقتي',
     priceQuarterly: '{price} ج / ٣ شهور',
     /** A full-year subscription — same row shape as the two above. */
     priceYearly: '{price} ج / السنة',

@@ -158,6 +158,7 @@ function course(n: number, overrides: Partial<CatalogCourse> = {}): CatalogCours
     emphasis: null,
     emphasisNote: null,
     monthlyPriceCents: 25000,
+    monthlyOnSale: true,
     quarterlyPriceCents: null,
     yearlyPriceCents: null,
     bookTitle: null,

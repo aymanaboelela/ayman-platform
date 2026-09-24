@@ -114,6 +114,10 @@ type Step =
  */
 type LivePlans = {
   monthlyPriceCents: number | null;
+  /** `CatalogCourse.monthlyOnSale` — false on a course sold by month with
+   *  every month closed. Read as `!== false`: a tab of the previous build can
+   *  pair this component with the old catalog schema, which strips the key. */
+  monthlyOnSale: boolean;
   yearlyPriceCents: number | null;
   terms: CatalogCourseTerm[];
   months: CourseMonth[];
@@ -398,6 +402,7 @@ export function SubscribePanel({
         const live = courseResult.value;
         setLivePlans({
           monthlyPriceCents: live.monthlyPriceCents,
+          monthlyOnSale: live.monthlyOnSale !== false,
           yearlyPriceCents: live.yearlyPriceCents,
           terms: live.terms,
           // OPEN months only, and already empty when the course has no monthly
@@ -465,7 +470,22 @@ export function SubscribePanel({
    * come from the same place — and the props are unreachable from here under
    * their original names. See `LivePlans` for the whole argument.
    */
-  const monthlyPriceCents = livePlans ? livePlans.monthlyPriceCents : cachedMonthly;
+  /*
+   * The monthly price AS SOLD HERE — `null` when there is no month to buy.
+   *
+   * A course sold by curriculum month with every month closed still has its
+   * price, but the «شهر» card it drew could only fail: no month to pick, and a
+   * claim the server refuses after the transfer screenshot is already up. With
+   * the plan off sale, the card is gone, and a course sold by month alone
+   * reaches `noPlans` («لسه مش مفتوح») instead. This component is the SALE
+   * and only the sale — «is the course paid?» is answered elsewhere, from the
+   * price.
+   */
+  const monthlyPriceCents = livePlans
+    ? livePlans.monthlyOnSale
+      ? livePlans.monthlyPriceCents
+      : null
+    : cachedMonthly;
   const yearlyPriceCents = livePlans ? livePlans.yearlyPriceCents : cachedYearly;
   const terms = livePlans ? livePlans.terms : cachedTerms;
   const instapay = liveInstapay !== undefined ? liveInstapay : cachedInstapay;

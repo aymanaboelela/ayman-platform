@@ -21,6 +21,7 @@ const course = (over: Partial<CatalogCourse>): CatalogCourse => ({
   emphasis: null,
   emphasisNote: null,
   monthlyPriceCents: null,
+  monthlyOnSale: true,
   quarterlyPriceCents: null,
   yearlyPriceCents: null,
   bookTitle: null,

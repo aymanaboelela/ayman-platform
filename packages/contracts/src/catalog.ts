@@ -126,6 +126,24 @@ export const CatalogCourseSchema = z.object({
     .int()
     .nullable()
     .describe('Egyptian piastres. 15000 is 150 EGP (ج.م). null when this plan is not for sale.'),
+  /**
+   * Can the monthly plan be BOUGHT right now — as opposed to «does it have a
+   * price». `false` on a course sold by curriculum month with every month
+   * closed: the price still stands and the course is still paid, but there is
+   * no month to buy, and the «شهر» card that used to show anyway always failed
+   * at checkout.
+   *
+   * ⚠️ Read it only through the price (`monthlyForSaleCents` on the web), never
+   * alone, and never for «is this course free?» — that question stays on the
+   * price. `.default(true)`: an older API or a cached payload without the field
+   * reads as the behaviour before it existed.
+   */
+  monthlyOnSale: z
+    .boolean()
+    .default(true)
+    .describe(
+      'Whether the monthly plan can be bought right now. false when the course sells by curriculum month and no month is open; monthlyPriceCents still states the price and the course is still paid.',
+    ),
   quarterlyPriceCents: z
     .number()
     .int()
@@ -192,8 +210,10 @@ export const CatalogCourseDetailSchema = CatalogCourseSchema.extend({
    * EMPTY is the normal state and is load-bearing: a course with no months is
    * still sold on the old rolling monthly plan, and the subscribe panel shows
    * the plain «شهر» card it always did. A non-empty list is what turns that
-   * card into a picker. One array, two behaviours, no second flag to keep in
-   * sync with it.
+   * card into a picker. This says WHICH months; `monthlyOnSale` says WHETHER
+   * «شهر» is sold at all — empty with `monthlyOnSale: false` is a course sold
+   * by month with none open, the one state this array alone could not tell
+   * from a course with no months.
    */
   months: z.array(CourseMonthSchema),
   sections: z.array(CatalogSectionSchema),
