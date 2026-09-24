@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath } from '@/lib/revalidate-screen';
 import { adminSendVoid } from '@/lib/admin-api';
 
 export type ErrorActionResult = { ok: true } | { ok: false; message: string };

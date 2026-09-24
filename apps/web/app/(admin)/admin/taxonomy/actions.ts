@@ -1,6 +1,7 @@
 'use server';
 
-import { revalidatePath, updateTag } from 'next/cache';
+import { updateTag } from 'next/cache';
+import { revalidatePath } from '@/lib/revalidate-screen';
 import {
   AcademicYearPatchSchema,
   GovernoratePatchSchema,

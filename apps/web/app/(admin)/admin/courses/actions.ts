@@ -1,6 +1,7 @@
 'use server';
 
-import { revalidatePath, updateTag } from 'next/cache';
+import { updateTag } from 'next/cache';
+import { revalidatePath } from '@/lib/revalidate-screen';
 import { redirect } from 'next/navigation';
 import { after } from 'next/server';
 import { z } from 'zod';

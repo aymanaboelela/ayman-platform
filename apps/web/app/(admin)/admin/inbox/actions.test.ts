@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('next/headers', () => ({
   headers: async () => new Headers({ cookie: '__Host-csrf=token' }),
 }));
-vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), refresh: vi.fn() }));
 
 const { replyAction, setStatusAction } = await import('./actions');
 const { revalidatePath } = await import('next/cache');
