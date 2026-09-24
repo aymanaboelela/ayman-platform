@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath } from '@/lib/revalidate-screen';
 import { z } from 'zod';
 import { MediaAssetSchema } from '@ayman/contracts/admin/media';
 import {

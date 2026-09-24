@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath } from '@/lib/revalidate-screen';
 import { z } from 'zod';
 import { IngestTransfersResultSchema, type IngestTransfersResult } from '@ayman/contracts/admin/transfers';
 import { adminSend } from '@/lib/admin-api';

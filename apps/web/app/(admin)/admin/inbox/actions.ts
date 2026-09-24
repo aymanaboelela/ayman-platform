@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath } from '@/lib/revalidate-screen';
 import { copy } from '@ayman/contracts/copy';
 import {
   EditMessageSchema,
