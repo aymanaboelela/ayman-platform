@@ -1,4 +1,5 @@
 import type { InputHTMLAttributes } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '@ayman/ui/lib/cn';
 
 export interface FormFieldProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -14,6 +15,14 @@ export interface FormFieldProps extends InputHTMLAttributes<HTMLInputElement> {
    * something in anyway.
    */
   hint?: string;
+  /**
+   * `pill` is the onboarding wizard's look: the label as a tab sitting on a
+   * tall rounded field, with `icon` at the far end. Everything else keeps the
+   * plain field — the variant is opt-in so /login, /register and the profile
+   * editor do not change with it. Styles are `.field--pill` in globals.css.
+   */
+  variant?: 'plain' | 'pill';
+  icon?: LucideIcon;
 }
 
 /**
@@ -29,6 +38,8 @@ export function FormField({
   hint,
   id,
   className,
+  variant = 'plain',
+  icon: Icon,
   'aria-describedby': callerDescribedBy,
   ...props
 }: FormFieldProps) {
@@ -55,43 +66,65 @@ export function FormField({
   const describedBy =
     [errorId, hintId, callerDescribedBy].filter(Boolean).join(' ') || undefined;
 
+  const pill = variant === 'pill';
+
+  const control = (
+    /* 16px on phones, 15px from `md` up. This is a hand-rolled `<input>`
+       rather than `@ayman/ui`'s `Input`, so it does not inherit that
+       component's iOS-zoom fix and has to spell the same pair out — and
+       because the size lives on the element as a utility, no
+       `input { font-size: 1rem }` rule in `@layer base` could have reached
+       it either. Below 16px iOS Safari zooms the viewport on focus and
+       never zooms back, which lands hardest here: /login, /register and the
+       onboarding wizard are the phone-first screens that gate entry to the
+       product. `h-10` pins the height, so the extra pixel of type does not
+       move this field's box at all. Full reasoning in
+       packages/ui/src/components/input.tsx. `.field__control` keeps the
+       same 16px floor for the pill variant. */
+    <input
+      id={fieldId}
+      aria-invalid={errorMessage ? true : undefined}
+      aria-describedby={describedBy}
+      className={cn(
+        pill
+          ? 'field__control'
+          : [
+              'block h-10 w-full rounded-sm border bg-surface-2 px-3 text-[1rem] text-fg md:text-[length:var(--fs-text-base)]',
+              'placeholder:text-fg-faint',
+              'transition-colors duration-[var(--d-hover)] ease-[var(--ease)]',
+              errorMessage ? 'border-[color:var(--err)]' : 'border-line',
+            ],
+        className,
+      )}
+      {...props}
+    />
+  );
+
   return (
-    <div className="space-y-1.5">
+    <div className={pill ? 'field field--pill' : 'space-y-1.5'}>
       <label
         htmlFor={fieldId}
-        className="block text-[length:var(--fs-text-sm)] font-medium text-fg"
+        className={
+          pill ? 'field__label' : 'block text-[length:var(--fs-text-sm)] font-medium text-fg'
+        }
       >
         {label}
       </label>
-      {/* 16px on phones, 15px from `md` up. This is a hand-rolled `<input>`
-          rather than `@ayman/ui`'s `Input`, so it does not inherit that
-          component's iOS-zoom fix and has to spell the same pair out — and
-          because the size lives on the element as a utility, no
-          `input { font-size: 1rem }` rule in `@layer base` could have reached
-          it either. Below 16px iOS Safari zooms the viewport on focus and
-          never zooms back, which lands hardest here: /login, /register and the
-          onboarding wizard are the phone-first screens that gate entry to the
-          product. `h-10` pins the height, so the extra pixel of type does not
-          move this field's box at all. Full reasoning in
-          packages/ui/src/components/input.tsx. */}
-      <input
-        id={fieldId}
-        aria-invalid={errorMessage ? true : undefined}
-        aria-describedby={describedBy}
-        className={cn(
-          'block h-10 w-full rounded-sm border bg-surface-2 px-3 text-[1rem] text-fg md:text-[length:var(--fs-text-base)]',
-          'placeholder:text-fg-faint',
-          'transition-colors duration-[var(--d-hover)] ease-[var(--ease)]',
-          errorMessage ? 'border-[color:var(--err)]' : 'border-line',
-          className,
-        )}
-        {...props}
-      />
+      {pill ? (
+        <div className="field__box">
+          {control}
+          {Icon ? <Icon className="field__icon" aria-hidden="true" /> : null}
+        </div>
+      ) : (
+        control
+      )}
       {errorMessage && (
         <p
           id={errorId}
           role="alert"
-          className="text-[length:var(--fs-text-xs)] text-[color:var(--err)]"
+          className={
+            pill ? 'field__error' : 'text-[length:var(--fs-text-xs)] text-[color:var(--err)]'
+          }
         >
           {errorMessage}
         </p>

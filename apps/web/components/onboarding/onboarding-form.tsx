@@ -2,8 +2,19 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ShieldCheck } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import {
+  ArrowLeft,
+  ArrowRight,
+  GraduationCap,
+  Landmark,
+  Languages,
+  MapPin,
+  Phone,
+  School,
+  ShieldCheck,
+  UserRound,
+} from 'lucide-react';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { OnboardingSchema, type Onboarding } from '@ayman/contracts/onboarding';
 import type { Taxonomy } from '@ayman/contracts/taxonomy';
@@ -14,15 +25,13 @@ import { apiPatch, ApiRequestError } from '@/lib/api';
 import { safeNext } from '@/lib/safe-next';
 import { tenantSentence } from '@/lib/tenant-copy';
 import { fixedSectionFor, offeredYearOptions } from '@/lib/section-defaults';
-import {
-  GENDER_OPTIONS,
-  SCHOOL_STREAM_OPTIONS,
-  governorateOptions as governorateOptionsFor,
-} from '@/lib/profile-options';
+import { SCHOOL_STREAM_OPTIONS, governorateOptions as governorateOptionsFor } from '@/lib/profile-options';
+import { cityOptions } from '@/lib/city-options';
 import { FormField } from '../auth/form-field';
 import { PhoneField } from '../auth/phone-field';
 import { SelectField, type SelectOption } from './select-field';
 import { FieldNote } from './field-note';
+import { GenderCards } from './gender-cards';
 import { IdentityHeader } from './identity-header';
 import { StepProgress } from './step-progress';
 import {
@@ -45,7 +54,10 @@ const PARENT_PHONE_NOTE_ID = 'father-phone-why';
  */
 const STEPS = [
   { title: copy.onboarding.step1Title, fields: ['fullName', 'gender', 'phone'] },
-  { title: copy.onboarding.step2Title, fields: ['governorateCode', 'schoolName', 'schoolStream'] },
+  {
+    title: copy.onboarding.step2Title,
+    fields: ['governorateCode', 'cityId', 'schoolName', 'schoolStream'],
+  },
   { title: copy.onboarding.step3Title, fields: ['year'] },
   { title: copy.onboarding.step4Title, fields: ['fatherPhone'] },
 ] as const satisfies ReadonlyArray<{
@@ -72,7 +84,7 @@ const PHONE_STEP = STEPS.findIndex((step) => (step.fields as readonly string[]).
  * every remaining text field on the form is required, so none of them wants a
  * blank coerced away from the `.min(1)` message that explains it.
  */
-function emptyToUndefinedYear(value: string): number | undefined {
+function emptyToUndefinedNumber(value: string): number | undefined {
   return value === '' ? undefined : Number(value);
 }
 
@@ -112,7 +124,9 @@ export function OnboardingForm({
     handleSubmit,
     trigger,
     watch,
+    control,
     setError,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<Onboarding>({
     resolver: zodResolver(OnboardingSchema),
@@ -157,6 +171,17 @@ export function OnboardingForm({
   const governorateOptions: SelectOption[] = governorateOptionsFor(taxonomy);
 
   const yearOptions: SelectOption[] = offeredYearOptions(taxonomy);
+
+  /*
+    «المدينة» takes its options from the governorate above it, so this one
+    field re-renders the form when the governorate changes — nothing else
+    does, which is why it subscribes to this key alone rather than to the
+    whole form (see `useOnboardingDraft` on why that matters here).
+    `useWatch`, not `watch(name)`: the React compiler cannot memoise around
+    the latter and skips the whole component.
+  */
+  const governorateCode = useWatch({ control, name: 'governorateCode' });
+  const cities = cityOptions(governorateCode);
 
   const isLastStep = stepIndex === STEPS.length - 1;
 
@@ -276,7 +301,9 @@ export function OnboardingForm({
       method="post"
       onSubmit={handleSubmit(onSubmit)}
       noValidate
-      className="space-y-6"
+      // `onb-form` scopes the wizard's own look — the stepper, the cards, the
+      // pill fields and the arrow buttons — in globals.css.
+      className="onb-form space-y-6"
       /**
        * Enter must not submit from steps 1-3. A single-step form can treat
        * Enter as "submit"; a wizard cannot, or the first press on the first
@@ -308,23 +335,28 @@ export function OnboardingForm({
         <CardBody className="space-y-5">
           <div hidden={stepIndex !== 0} className="space-y-5">
             <FormField
+              variant="pill"
+              icon={UserRound}
               label={copy.onboarding.fullName}
               placeholder={copy.onboarding.fullNamePlaceholder}
               autoComplete="name"
               errorMessage={errors.fullName?.message}
               {...register('fullName')}
             />
-            <SelectField
-              label={copy.onboarding.gender}
-              placeholder={copy.onboarding.genderPlaceholder}
-              options={GENDER_OPTIONS}
+            {/* Two pictures instead of a two-word `<select>` — see
+                `GenderCards`. Its own Arabic message for the same reason the
+                select had one: an enum that receives nothing produces zod's
+                English "Invalid option". */}
+            <GenderCards
+              registration={register('gender')}
               errorMessage={errors.gender ? copy.onboarding.genderError : undefined}
-              {...register('gender')}
             />
             {/* `PhoneField`, not `FormField`: the number is rewritten to Latin
                 digits as it is typed. The parser has always accepted ٠١٠ —
                 this is so the student can SEE that it did. */}
             <PhoneField
+              variant="pill"
+              icon={Phone}
               label={copy.onboarding.phone}
               autoComplete="tel"
               placeholder={copy.onboarding.phonePlaceholder}
@@ -335,13 +367,37 @@ export function OnboardingForm({
 
           <div hidden={stepIndex !== 1} className="space-y-5">
             <SelectField
+              variant="pill"
+              icon={Landmark}
               label={copy.onboarding.governorate}
               placeholder={copy.onboarding.governoratePlaceholder}
               options={governorateOptions}
               errorMessage={errors.governorateCode?.message}
-              {...register('governorateCode')}
+              {...register('governorateCode', {
+                // A city belongs to ONE governorate: changing the governorate
+                // empties the city rather than keeping an id `refineCity`
+                // would reject on submit, several steps from here.
+                onChange: () => setValue('cityId', undefined as unknown as number),
+              })}
+            />
+            {/* Disabled until there is a governorate to list cities for, and
+                the placeholder says so — an enabled select with nothing in
+                it reads as broken. */}
+            <SelectField
+              variant="pill"
+              icon={MapPin}
+              label={copy.onboarding.city}
+              placeholder={
+                cities.length > 0 ? copy.onboarding.cityPlaceholder : copy.onboarding.cityNeedsGovernorate
+              }
+              options={cities}
+              disabled={cities.length === 0}
+              errorMessage={errors.cityId?.message}
+              {...register('cityId', { setValueAs: emptyToUndefinedNumber })}
             />
             <FormField
+              variant="pill"
+              icon={School}
               label={copy.onboarding.schoolName}
               placeholder={copy.onboarding.schoolNamePlaceholder}
               errorMessage={errors.schoolName?.message}
@@ -356,6 +412,8 @@ export function OnboardingForm({
                 "Invalid option" in English, and there is nothing useful to
                 translate per-value. */}
             <SelectField
+              variant="pill"
+              icon={Languages}
               label={copy.onboarding.schoolStream}
               placeholder={copy.onboarding.schoolStreamPlaceholder}
               options={SCHOOL_STREAM_OPTIONS}
@@ -390,11 +448,13 @@ export function OnboardingForm({
           */}
           <div hidden={stepIndex !== 2} className="space-y-5">
             <SelectField
+              variant="pill"
+              icon={GraduationCap}
               label={copy.onboarding.year}
               placeholder={copy.onboarding.yearPlaceholder}
               options={yearOptions}
               errorMessage={errors.year?.message}
-              {...register('year', { setValueAs: emptyToUndefinedYear })}
+              {...register('year', { setValueAs: emptyToUndefinedNumber })}
             />
           </div>
 
@@ -418,6 +478,8 @@ export function OnboardingForm({
                 The student's own phone on step 1 is registered the same way,
                 for the same reason. */}
             <PhoneField
+              variant="pill"
+              icon={Phone}
               label={copy.onboarding.fatherPhone}
               placeholder={copy.onboarding.phonePlaceholder}
               errorMessage={errors.fatherPhone?.message}
@@ -436,7 +498,13 @@ export function OnboardingForm({
 
       <div className="flex gap-3">
         {stepIndex > 0 && (
-          <Button type="button" variant="secondary" onClick={goBack}>
+          <Button type="button" variant="secondary" className="onb-btn" onClick={goBack}>
+            {/* Each arrow points the way the button MOVES you in this RTL
+                form: back is towards the start (→), forward towards the end
+                (←) — and the disc sits on the side it points to. */}
+            <span className="onb-btn__disc" aria-hidden="true">
+              <ArrowRight className="size-4" />
+            </span>
             {copy.onboarding.back}
           </Button>
         )}
@@ -449,12 +517,28 @@ export function OnboardingForm({
             unmount/remount, so that click hits a detached node and does
             nothing instead. */}
         {isLastStep ? (
-          <Button key="submit" type="submit" className="flex-1" disabled={isSubmitting}>
+          <Button
+            key="submit"
+            type="submit"
+            className="onb-btn onb-btn--primary flex-1"
+            disabled={isSubmitting}
+          >
             {isSubmitting ? copy.onboarding.submitPending : copy.onboarding.submit}
+            <span className="onb-btn__disc" aria-hidden="true">
+              <ArrowLeft className="size-4" />
+            </span>
           </Button>
         ) : (
-          <Button key="next" type="button" className="flex-1" onClick={() => void goNext()}>
+          <Button
+            key="next"
+            type="button"
+            className="onb-btn onb-btn--primary flex-1"
+            onClick={() => void goNext()}
+          >
             {copy.onboarding.next}
+            <span className="onb-btn__disc" aria-hidden="true">
+              <ArrowLeft className="size-4" />
+            </span>
           </Button>
         )}
       </div>

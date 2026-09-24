@@ -148,10 +148,10 @@ export async function loginAsAdmin(page: Page): Promise<void> {
 }
 
 /**
- * The minimum set OnboardingSchema actually requires (fullName, gender,
- * phone, governorateCode — everything else, including system/year/track, is
- * `.optional()`). Filled with the FIRST real option on every select so the
- * test has no dependency on the seeded taxonomy's exact labels or ordering.
+ * Everything the wizard asks for, answered with the FIRST real option on
+ * every select so the test has no dependency on the seeded taxonomy's exact
+ * labels or ordering. The city is the first of whichever governorate that
+ * turned out to be — its options come from the governorate, not the seed.
  */
 export async function completeMinimalOnboarding(
   page: Page,
@@ -227,13 +227,18 @@ export async function completeMinimalOnboarding(
   const next = main.getByRole('button', { name: copy.onboarding.next });
 
   await fullNameField.fill(student.name);
-  await main.getByLabel(copy.onboarding.gender).selectOption({ index: 1 });
+  // A picture card, not a select: the radio inside is `sr-only`, so the
+  // visible word is what a thumb — and this test — presses.
+  await main.getByText(copy.onboarding.genderMale, { exact: true }).click();
   await main.getByLabel(copy.onboarding.phone).fill(student.phone);
   await next.click();
 
   const governorate = main.getByLabel(copy.onboarding.governorate);
   await expect(governorate).toBeVisible();
   await governorate.selectOption({ index: 1 });
+  // Enabled only once there is a governorate; its first real option is a city
+  // OF that governorate by construction.
+  await main.getByLabel(copy.onboarding.city, { exact: true }).selectOption({ index: 1 });
   await main.getByLabel(copy.onboarding.schoolName).fill('مدرسة الاختبار الثانوية');
   await main.getByLabel(copy.onboarding.schoolStream).selectOption('general');
   await next.click();

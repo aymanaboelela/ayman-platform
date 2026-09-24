@@ -39,30 +39,32 @@ test.describe('onboarding wizard', () => {
     // Advancing with step 1 incomplete reports step 1 — and says nothing about
     // steps the student has not been shown.
     await main.getByRole('button', { name: copy.onboarding.next }).click();
-    // Scoped to role=alert: `genderError` is the same string as the select's
-    // own empty option, so matching on text alone also matches the option.
+    // Scoped to role=alert, so the assertion is about the error line and not
+    // any other text on the step.
     await expect(
       main.getByRole('alert').filter({ hasText: copy.onboarding.genderError }),
     ).toBeVisible();
     await expect(main.getByLabel(copy.onboarding.governorate)).toBeHidden();
 
     await nameField.fill('طالب اختبار');
-    await main.getByLabel(copy.onboarding.gender).selectOption('male');
+    await main.getByText(copy.onboarding.genderMale, { exact: true }).click();
+    await expect(main.getByRole('radio', { name: copy.onboarding.genderMale })).toBeChecked();
     await main.getByLabel(copy.onboarding.phone).fill('01011122233');
     await main.getByRole('button', { name: copy.onboarding.next }).click();
 
     await expect(main.getByLabel(copy.onboarding.governorate)).toBeVisible();
 
-    // Step 2 gates on BOTH its required fields, not just the first one: the
-    // school stream (مدرسة عام ولا لغات) is required, so a filled governorate
-    // is no longer enough to move on. Unlike `genderError`, this message is
-    // not also the select's placeholder, so no role scoping is needed to tell
-    // the alert apart from an option.
+    // Step 2 gates on ALL its required fields, not just the first one: the
+    // city and the school stream (مدرسة عام ولا لغات) are required, so a filled
+    // governorate is no longer enough to move on.
     await main.getByLabel(copy.onboarding.governorate).selectOption({ index: 1 });
     await main.getByRole('button', { name: copy.onboarding.next }).click();
     await expect(
       main.getByRole('alert').filter({ hasText: copy.onboarding.schoolStreamError }),
     ).toBeVisible();
+    // «المدينة» is required too, and it is the one field whose options only
+    // exist once the governorate is chosen.
+    await expect(main.getByRole('alert').filter({ hasText: 'لازم نحدد المدينة' })).toBeVisible();
     await expect(main.getByLabel(copy.onboarding.year)).toBeHidden();
 
     // Back must not validate and must not discard: a student correcting an
