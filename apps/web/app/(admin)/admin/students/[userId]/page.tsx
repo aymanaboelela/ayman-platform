@@ -12,7 +12,7 @@ import { StudentAnalyticsDetailSchema } from '@ayman/contracts/admin/analytics';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Skeleton } from '@ayman/ui/components/skeleton';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
-import { adminGet } from '@/lib/admin-api';
+import { adminGet, adminGetOrForbidden } from '@/lib/admin-api';
 import { StudentRecord } from '@/components/admin/students/student-record';
 import { WhatsappButton } from '@/components/admin/whatsapp-button';
 import { StudentDetailForm } from './student-detail-form';
@@ -48,6 +48,26 @@ export const metadata = { title: copy.admin.students.detailTitle };
  * Swallowing the reason is deliberate here and nowhere else: there is exactly
  * one thing to do with any failure, which is render the panel that says so.
  */
+/**
+ * The panel a section becomes when the operator's role does not reach it.
+ *
+ * Dashed like the analytics fallback beside it, because it is the same kind of
+ * thing: a place where content would be, that this reader cannot have. It says
+ * WHY and where the permission comes from — «nothing here» with no reason is
+ * indistinguishable from a bug, which is what sent this page to the person who
+ * reported it.
+ */
+function ForbiddenPanel() {
+  return (
+    <div className="rounded-lg border border-dashed border-line p-6 text-center">
+      <p className="text-fg-muted">{copy.admin.settings.panelForbidden}</p>
+      <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+        {copy.admin.settings.panelForbiddenHint}
+      </p>
+    </div>
+  );
+}
+
 async function StudentRecordSection({ userId }: { userId: string }) {
   let record;
   try {
@@ -158,7 +178,19 @@ export default async function StudentDetailPage({
         }),
       ),
     ),
-    adminGet(`/api/admin/students/${userId}/subscriptions`, z.array(AdminSubscriptionRowSchema)),
+    /*
+     * ⚠️ `OrForbidden`, and this one is not optional.
+     *
+     * `ROLE_PERMISSIONS` gives `owner` a curated set on purpose: money is
+     * grantable, not default. So on EVERY instructor stack this route answers
+     * 403 for the person whose platform it is — and inside a bare
+     * `Promise.all` one rejected read takes the whole page with it. Measured
+     * on both: `/admin/students/{id}` was 200 and the screen was «حصلت مشكلة».
+     */
+    adminGetOrForbidden(
+      `/api/admin/students/${userId}/subscriptions`,
+      z.array(AdminSubscriptionRowSchema),
+    ),
     adminGet(`/api/admin/students/${userId}/history`, z.array(StudentHistoryEntrySchema)),
     /*
      * The thread with this student, beside the five reads above rather than in
@@ -166,12 +198,21 @@ export default async function StudentDetailPage({
      * a Suspense fallback for a panel that resolves as fast as the profile
      * form does would only make the column shuffle after paint.
      *
-     * Unlike `StudentRecordSection` it is NOT allowed to fail quietly — a 403
-     * here means this operator does not hold `conversation:read`, which is a
-     * real answer the page should surface rather than a panel that silently
-     * pretends the student has never written.
+     * Unlike `StudentRecordSection` it does not fail SILENTLY — a 403 here
+     * means this operator does not hold `conversation:read`, which is a real
+     * answer the page should surface rather than a panel that pretends the
+     * student has never written.
+     *
+     * ⚠️ «Surface it» means «say so in this panel», NOT «throw». It threw,
+     * inside this `Promise.all`, so the one permission an instructor is not
+     * given by default took down their entire student screen. `owner` never
+     * holds `conversation:read` — see `ROLE_PERMISSIONS` — so this was not an
+     * edge case on those stacks, it was every student, every time.
      */
-    adminGet(`/api/admin/students/${userId}/conversation`, AdminStudentConversationSchema),
+    adminGetOrForbidden(
+      `/api/admin/students/${userId}/conversation`,
+      AdminStudentConversationSchema,
+    ),
   ]);
 
   const closedCourses = courses
@@ -245,15 +286,27 @@ export default async function StudentDetailPage({
           <RoleChangeSection student={student} />
           <SetPasswordSection student={student} />
           <CourseAccessSection userId={userId} grants={grants} closedCourses={closedCourses} />
-          <SubscriptionSection
-            userId={userId}
-            subscriptions={subscriptions}
-            courses={subscribableCourses}
-          />
+          {/* `null` is «not yours to see», never «empty» — see
+              `adminGetOrForbidden`. Rendering the section's own empty state
+              here would tell an instructor their student has no subscription,
+              which is a different and false statement. */}
+          {subscriptions === null ? (
+            <ForbiddenPanel />
+          ) : (
+            <SubscriptionSection
+              userId={userId}
+              subscriptions={subscriptions}
+              courses={subscribableCourses}
+            />
+          )}
           {/* Above `AccountAccessSection`, with the everyday controls: talking
               to a student is the most ordinary thing on this page, and the
               panel below it is where the destructive ones start. */}
-          <ConversationSection userId={userId} conversation={conversation} />
+          {conversation === null ? (
+            <ForbiddenPanel />
+          ) : (
+            <ConversationSection userId={userId} conversation={conversation} />
+          )}
           {/* LAST in the column, deliberately. Two of its three controls are
               destructive and one is irreversible, so it sits below the
               everyday ones rather than beside them — an operator scrolling to
