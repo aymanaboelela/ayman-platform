@@ -168,6 +168,21 @@ describe('CourseService', () => {
     expect(after.status).toBe('draft');
   });
 
+  it('refuses to open a course that a priced TERM still sells, and closes it on any other edit', async () => {
+    const course = await service.create(adminId, input());
+    await prisma.courseTerm.create({
+      data: { courseId: course.id, title: 'الترم الأول', position: 0, priceCents: 45000 },
+    });
+
+    await expect(service.update(course.id, { requiresGrant: false })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    // An edit that says nothing about access closes it, the way a monthly
+    // price does — the course is priced, whoever typed the price.
+    const updated = await service.update(course.id, { subtitle: 'سطر' });
+    expect(updated.requiresGrant).toBe(true);
+  });
+
   it('404s on an unknown id rather than returning null', async () => {
     await expect(service.findForAdmin(crypto.randomUUID())).rejects.toBeInstanceOf(NotFoundException);
   });

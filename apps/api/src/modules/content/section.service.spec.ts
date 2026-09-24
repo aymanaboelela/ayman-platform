@@ -3,6 +3,7 @@
 import 'dotenv/config';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import { AuditService } from '../../audit/audit.service';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -89,6 +90,22 @@ describe('SectionService', () => {
       select: { position: true },
     });
     expect(remaining.position).toBe(firstPosition);
+  });
+
+  it('refuses to delete the «امتحانات الشهر» shelf while exams are on it, and allows it empty', async () => {
+    const shelf = await prisma.courseSection.create({
+      data: { courseId, title: EXAM_SHELF_TITLE, position: 90, isPublished: true },
+    });
+    const exam = await prisma.lesson.create({
+      data: { courseId, sectionId: shelf.id, title: 'امتحان نص الشهر', kind: 'quiz', position: 0 },
+    });
+
+    await expect(service.remove(shelf.id)).rejects.toBeInstanceOf(ConflictException);
+    expect(await prisma.lesson.count({ where: { id: exam.id } })).toBe(1);
+
+    await prisma.lesson.delete({ where: { id: exam.id } });
+    await service.remove(shelf.id);
+    expect(await prisma.courseSection.count({ where: { id: shelf.id } })).toBe(0);
   });
 
   it('404s on a section that does not exist', async () => {

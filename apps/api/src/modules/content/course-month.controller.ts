@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, UsePipes } from '@nestjs/common';
-import { CourseMonthWriteSchema, LessonMonthsWriteSchema } from '@ayman/contracts/months';
+import { CourseMonthWriteSchema, LessonMonthsWriteSchema, MonthIndexSchema } from '@ayman/contracts/months';
+import { z } from '@ayman/contracts/zod';
 import {
   CourseMonthPatchSchema,
   LegacyMonthBackfillSchema,
@@ -20,6 +21,12 @@ class CreateCourseMonthDto extends createZodDto(CourseMonthWriteSchema) {}
 class UpdateCourseMonthDto extends createZodDto(CourseMonthPatchSchema) {}
 class SetLessonMonthsDto extends createZodDto(LessonMonthsWriteSchema) {}
 class LegacyMonthBackfillDto extends createZodDto(LegacyMonthBackfillSchema) {}
+
+/** «كمّل الشهور لحد شهر ١٠». Local for the same reason as the DTOs above, and
+ *  `10` by default because that is the school year he asked for by name —
+ *  «خليها مثلًا عشر أشهر». */
+const CourseMonthFillSchema = z.object({ upTo: MonthIndexSchema.default(10) }).strict();
+class FillCourseMonthsDto extends createZodDto(CourseMonthFillSchema) {}
 
 /**
  * «شهور المنهج». `section:write` throughout, exactly like `TermController`
@@ -80,6 +87,17 @@ export class CourseMonthController {
   @Post('courses/:courseId/months/open-for-subscribers')
   openForSubscribers(@Param('courseId') courseId: string, @Body() body: LegacyMonthBackfillDto) {
     return this.months.openMonthForSubscribers(courseId, body.monthId, body.dryRun);
+  }
+
+  /**
+   * Every missing month from 1 to `upTo`, CLOSED, in one call — see
+   * `CourseMonthService.fill`. Refused (409) on a course with no months: this
+   * fills a year in, it never turns a course over to selling by month.
+   */
+  @RequirePermission('section:write')
+  @Post('courses/:courseId/months/fill')
+  fill(@Param('courseId') courseId: string, @Body() body: FillCourseMonthsDto) {
+    return this.months.fill(courseId, body.upTo);
   }
 
   /** Nested under the course on purpose — see `CourseMonthService.update` on
