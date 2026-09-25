@@ -6073,6 +6073,84 @@ export const copy = {
     cardCta: 'تفعيل كود',
     lockedCta: 'عندك كود؟',
   },
+  /**
+   * «السناتر» — the student's half: «نوع الدراسة», «نوع الحضور», the weekly
+   * slot, and the ID card the scanner on the centre's door reads.
+   *
+   * ⚠️ One string serves boys and girls and the platform never asks which, so
+   * nothing here is an imperative or a second-person verb («اختار»، «استخدم»،
+   * «عايز»): a masdar («اختيار الميعاد»), a passive («بيتقري»), or a noun
+   * with ـك («ميعادك»), which is spelled the same for both.
+   */
+  centers: {
+    /** «نوع الدراسة» — ثانوي عام أو أزهري. Not «مدرستك» (عام/لغات), which is
+     *  a different split and already asked on step 2. */
+    studyType: 'نوع الدراسة',
+    studyGeneral: 'عام',
+    studyGeneralHint: 'ثانوي عام',
+    studyAzhari: 'أزهري',
+    studyAzhariHint: 'ثانوي أزهري',
+    studyTypeError: 'لازم نحدد نوع الدراسة',
+
+    /** Only asked on a stack that has a centre with a slot — see
+     *  `CentersListSchema`. */
+    attendance: 'نوع الحضور',
+    attendanceOnline: 'أونلاين',
+    attendanceOnlineHint: 'على المنصة، من أي مكان',
+    attendanceCenter: 'سنتر',
+    attendanceCenterHint: 'حصة كل أسبوع في السنتر',
+    attendanceError: 'لازم نحدد نوع الحضور',
+
+    /** The heading on `/settings/section` over all three questions. */
+    groupTitle: 'الدراسة والحضور',
+
+    slotsTitle: 'اختيار الميعاد المناسب',
+    slotsHint: 'ميعاد واحد في الأسبوع — وتغييره متاح في أي وقت من «بياناتك».',
+    /** «سنتر» picked, and no slot open to this year. Says what still works
+     *  rather than leaving an empty box under the question. */
+    slotsEmpty: 'مفيش مواعيد سنتر متاحة للصف ده دلوقتي — الحضور «أونلاين» شغّال لحد ما مواعيد جديدة تنزل.',
+    slotError: 'لازم نحدد ميعاد السنتر',
+    /** `{price}` is whole pounds, Western digits. */
+    slotPrice: 'الحصة {price} جنيه',
+    /** Arabic counts one, two and three-to-ten differently from eleven up. */
+    seatsOne: 'فاضل مكان واحد',
+    seatsTwo: 'فاضل مكانين',
+    seatsFew: 'فاضل {n} أماكن',
+    seatsMany: 'فاضل {n} مكان',
+    /** The chip on a slot that takes no new bookings — the admin's switch, or
+     *  no seat left. The card stays visible so the student sees it exists. */
+    slotFull: 'فل',
+    /** On the slot this student already holds: it stays selectable even when
+     *  it is «فل», because the full seat is theirs. */
+    slotCurrent: 'ميعادك',
+    mapLink: 'الموقع على الخريطة',
+    /**
+     * The save came back 409 `center_slot_full`: somebody took the last seat
+     * between the list loading and the press. The list is refetched as this
+     * shows, so the card that was picked now wears «فل».
+     */
+    slotFullError: 'الميعاد ده اتملى — ممكن اختيار ميعاد تاني من المواعيد اللي فاضلة.',
+    /** 404 `center_slot_not_found` — the admin closed it meanwhile. */
+    slotGoneError: 'الميعاد ده مبقاش متاح — ممكن اختيار ميعاد تاني.',
+    /** 400 `center_slot_other_year` — the year changed under a picked slot. */
+    slotOtherYearError: 'الميعاد ده لصف تاني — ممكن اختيار ميعاد من مواعيد الصف ده.',
+    /** Under the wizard when a slot refusal walks it back to the slot step. */
+    slotConflictHint: 'رجعنا لخطوة الميعاد — المواعيد اتحدّثت.',
+
+    // ── «كارت الحضور» on /profile ──────────────────────────────────────────
+    cardTitle: 'كارت الحضور',
+    cardSubtitle: 'الكود ده بيتقري على باب السنتر لتسجيل الحضور.',
+    /** `{id}` is the student number. Latin on purpose — it is what the person
+     *  at the door types when the scanner fails, and what the barcode says. */
+    cardId: 'ID: {id}',
+    /** Accessible names for the two codes. `{code}` is e.g. `ST4373`. */
+    cardQrLabel: 'كود QR لتسجيل الحضور: {code}',
+    cardBarcodeLabel: 'باركود لتسجيل الحضور: {code}',
+    cardBooking: 'ميعاد السنتر',
+    cardNoBooking: 'الحضور «سنتر»، ولسه مفيش ميعاد محجوز.',
+    cardPickSlot: 'اختيار الميعاد من «بياناتك»',
+    cardOnline: 'الحضور أونلاين — والكود نفسه بيشتغل في أي حصة في السنتر.',
+  },
 } as const;
 
 export type Copy = typeof copy;

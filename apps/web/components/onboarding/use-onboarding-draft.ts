@@ -61,6 +61,12 @@ const DRAFT_FIELDS = [
   'schoolName',
   'schoolStream',
   'year',
+  'studyType',
+  'attendanceMode',
+  // A slot id is only a preselection: the list it is matched against comes
+  // fresh from the API, and a stale or forged id matches no card and fails
+  // the step's check like an empty answer.
+  'centerSlotId',
   'fatherPhone',
 ] as const satisfies ReadonlyArray<keyof Onboarding>;
 

@@ -400,9 +400,37 @@ describe('applyBaseSecurityHeaders', () => {
     expect(bare.get('Permissions-Policy')).toContain('microphone=()');
   });
 
+  /**
+   * The door scanner's one dependency outside its own component — the same
+   * failure the microphone had: a denied feature is refused before the browser
+   * asks, so the scanner would read «مسموحش بالكاميرا» on every deployed build
+   * while working in any local check that skipped the proxy.
+   */
+  it('grants the camera to the admin panel, and to nothing else', () => {
+    const admin = new Headers();
+    applyBaseSecurityHeaders(admin, false, { microphone: true, camera: true });
+    expect(admin.get('Permissions-Policy')).toContain('camera=(self)');
+    expect(admin.get('Permissions-Policy')).toContain('microphone=(self)');
+
+    const student = new Headers();
+    applyBaseSecurityHeaders(student, false, { microphone: false, camera: false });
+    expect(student.get('Permissions-Policy')).toContain('camera=()');
+
+    // The default is the DENIAL, and granting the microphone alone must not
+    // drag the camera along with it.
+    const micOnly = new Headers();
+    applyBaseSecurityHeaders(micOnly, false, { microphone: true });
+    expect(micOnly.get('Permissions-Policy')).toContain('camera=()');
+
+    const bare = new Headers();
+    applyBaseSecurityHeaders(bare, false);
+    expect(bare.get('Permissions-Policy')).toContain('camera=()');
+  });
+
   it('routes: only /admin and its descendants get the grant', () => {
     expect(isAdminRoute('/admin')).toBe(true);
     expect(isAdminRoute('/admin/inbox/abc')).toBe(true);
+    expect(isAdminRoute('/admin/centers/scan')).toBe(true);
     expect(isAdminRoute('/administration')).toBe(false);
     expect(isAdminRoute('/dashboard')).toBe(false);
   });

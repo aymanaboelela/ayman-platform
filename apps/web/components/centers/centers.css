@@ -1,0 +1,582 @@
+/* =============================================================================
+   «السناتر» — «نوع الدراسة» / «نوع الحضور» as cards, the weekly-slot picker
+   (the wizard's third step and «بياناتك»), and «كارت الحضور» on /profile.
+
+   The cards speak the wizard's language — the same wash, the same amber ring
+   and tick on the chosen one as `.gender-pick` — but carry their own copy of
+   the washes, because «بياناتك» renders them outside `.onb-form`, where
+   `--onb-wash` does not exist.
+
+   Every colour is a token or a `color-mix` of one. The washes go neutral in
+   dark mode for the reason `.onb-form` gives: amber over ink-navy is brown.
+   ========================================================================== */
+
+.ctr-scope,
+.ctr-id {
+  --ctr-wash: color-mix(in oklab, var(--a-9) 10%, transparent);
+  --ctr-wash-strong: color-mix(in oklab, var(--a-9) 20%, transparent);
+  --ctr-halo: color-mix(in oklab, var(--a-9) 28%, transparent);
+}
+
+:root[data-theme='dark'] .ctr-scope,
+:root[data-theme='dark'] .ctr-id {
+  --ctr-wash: var(--n-4);
+  --ctr-wash-strong: var(--n-6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .ctr-scope,
+  :root:not([data-theme='light']) .ctr-id {
+    --ctr-wash: var(--n-4);
+    --ctr-wash-strong: var(--n-6);
+  }
+}
+
+/* ── the choice cards ───────────────────────────────────────────────────── */
+
+.ctr-choice {
+  min-inline-size: 0;
+  /* Inline only — the block rhythm belongs to the form's `space-y-*`. */
+  margin-inline: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ctr-choice > legend {
+  margin-block-end: var(--s-8);
+  padding: 0;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+}
+
+.ctr-choice__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-12);
+}
+
+.ctr-choice__card {
+  --ctr-hue: var(--a-9);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-16) var(--s-8);
+  border: 2px solid transparent;
+  border-radius: var(--r-lg);
+  background: var(--ctr-wash);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease);
+}
+
+/* One hue per answer, so «عام» and «أزهري» are told apart before they are
+   read. Slots come from the chart palette, which was built to stay
+   distinguishable in pairs. */
+.ctr-choice__card[data-hue='1'] { --ctr-hue: var(--viz-1); }
+.ctr-choice__card[data-hue='2'] { --ctr-hue: var(--viz-2); }
+.ctr-choice__card[data-hue='3'] { --ctr-hue: var(--viz-3); }
+.ctr-choice__card[data-hue='4'] { --ctr-hue: var(--viz-4); }
+.ctr-choice__card[data-hue='5'] { --ctr-hue: var(--viz-5); }
+.ctr-choice__card[data-hue='6'] { --ctr-hue: var(--viz-6); }
+
+.ctr-choice__card:hover {
+  border-color: var(--ctr-wash-strong);
+}
+
+.ctr-choice__card:has(:checked) {
+  border-color: var(--a-9);
+  background: var(--ctr-wash-strong);
+  box-shadow: 0 0 0 4px var(--ctr-halo);
+}
+
+/* The radio is `sr-only`, so the card shows where the keyboard is. */
+.ctr-choice__card:has(:focus-visible) {
+  outline: 2px solid var(--a-9);
+  outline-offset: 3px;
+}
+
+.ctr-choice:has([aria-invalid='true']) .ctr-choice__card {
+  border-color: var(--err);
+}
+
+.ctr-choice__icon {
+  display: grid;
+  place-items: center;
+  inline-size: 3rem;
+  block-size: 3rem;
+  margin-block-end: var(--s-4);
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--ctr-hue) 16%, transparent);
+  color: var(--ctr-hue);
+  transition: background-color var(--d-hover) var(--ease);
+}
+
+.ctr-choice__card:has(:checked) .ctr-choice__icon {
+  background: color-mix(in oklab, var(--ctr-hue) 30%, transparent);
+}
+
+.ctr-choice__label {
+  font-size: var(--fs-text-lg);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.ctr-choice__hint {
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+.ctr-choice__tick,
+.ctr-slot__tick {
+  position: absolute;
+  inset-block-start: var(--s-8);
+  inset-inline-end: var(--s-8);
+  display: none;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border-radius: var(--r-full);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+}
+
+.ctr-choice__card:has(:checked) .ctr-choice__tick,
+.ctr-slot:has(:checked) .ctr-slot__tick {
+  display: grid;
+}
+
+/* ── the slot picker ────────────────────────────────────────────────────── */
+
+.ctr-slots {
+  display: grid;
+  gap: var(--s-16);
+  padding: var(--s-16);
+  border: 1px solid color-mix(in oklab, var(--a-9) 35%, transparent);
+  border-radius: var(--r-lg);
+  background: color-mix(in oklab, var(--a-9) 5%, transparent);
+}
+
+.ctr-slots__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-12);
+}
+
+.ctr-slots__badge {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--r-full);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+}
+
+.ctr-slots__title {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.ctr-slots__hint {
+  font-size: var(--fs-text-xs);
+  line-height: var(--lh-text-xs);
+  color: var(--n-11);
+}
+
+.ctr-slots__empty {
+  padding: var(--s-12) var(--s-16);
+  border: 1px dashed color-mix(in oklab, var(--a-9) 45%, transparent);
+  border-radius: var(--r-lg);
+  background: var(--ctr-wash);
+  font-size: var(--fs-text-sm);
+  line-height: var(--lh-text-sm);
+  color: var(--n-11);
+}
+
+.ctr-center {
+  display: grid;
+  gap: var(--s-8);
+}
+
+.ctr-center__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8) var(--s-12);
+}
+
+.ctr-center__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-md);
+  background: linear-gradient(135deg, var(--p-500), var(--e-stage));
+  color: var(--ink-fg);
+}
+
+.ctr-center__name {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.ctr-center__address {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+.ctr-center__map {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-block-size: 2.75rem;
+  padding-inline: var(--s-8);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--a-11);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* One column on a phone, two once each card has room for a whole line of
+   chips — `min()` so the track can never be wider than the box. */
+.ctr-center__slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: var(--s-8);
+}
+
+.ctr-slot {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  padding-inline-end: 2.5rem;
+  border: 2px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-2);
+  cursor: pointer;
+  transition:
+    border-color var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease);
+}
+
+.ctr-slot:hover {
+  border-color: color-mix(in oklab, var(--a-9) 45%, transparent);
+}
+
+.ctr-slot:has(:checked) {
+  border-color: var(--a-9);
+  background: var(--ctr-wash);
+  box-shadow: 0 0 0 4px var(--ctr-halo);
+}
+
+.ctr-slot:has(:focus-visible) {
+  outline: 2px solid var(--a-9);
+  outline-offset: 3px;
+}
+
+.ctr-slots:has([aria-invalid='true']) .ctr-slot:not([data-closed]) {
+  border-color: var(--err);
+}
+
+/* Visible, so the student knows it exists and why it cannot be had — but it
+   reads as shut. */
+.ctr-slot[data-closed] {
+  border-style: dashed;
+  background: transparent;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.ctr-slot[data-closed]:hover {
+  border-color: var(--border);
+}
+
+.ctr-slot__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--a-9) 16%, transparent);
+  color: var(--a-11);
+}
+
+.ctr-slot[data-closed] .ctr-slot__icon {
+  background: var(--ctr-wash);
+  color: var(--n-10);
+}
+
+.ctr-slot__body {
+  display: grid;
+  gap: var(--s-8);
+  min-inline-size: 0;
+}
+
+.ctr-slot__time {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.ctr-slot__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4);
+}
+
+.ctr-chip {
+  --chip: var(--a-9);
+  display: inline-flex;
+  align-items: center;
+  padding: var(--s-2) var(--s-8);
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--chip) 14%, transparent);
+  color: var(--n-12);
+  font-size: var(--fs-mono-label);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-mono-label);
+  white-space: nowrap;
+}
+
+.ctr-chip[data-tone='label'] { --chip: var(--viz-4); }
+.ctr-chip[data-tone='price'] { --chip: var(--viz-6); }
+.ctr-chip[data-tone='seats'] { --chip: var(--viz-5); }
+.ctr-chip[data-tone='mine'] { --chip: var(--a-9); }
+/* The card's facts wear the hue their answer wore on the choice card. */
+.ctr-chip[data-tone='general'] { --chip: var(--viz-5); }
+.ctr-chip[data-tone='azhari'] { --chip: var(--viz-6); }
+.ctr-chip[data-tone='online'] { --chip: var(--viz-2); }
+.ctr-chip[data-tone='center'] { --chip: var(--viz-3); }
+.ctr-chip[data-tone='full'] {
+  --chip: var(--err);
+  color: var(--err);
+}
+
+/* ── «كارت الحضور» ──────────────────────────────────────────────────────── */
+
+.ctr-id {
+  max-inline-size: 34rem;
+  overflow: hidden;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-2);
+  box-shadow: var(--shadow-md);
+}
+
+/* The issuer's band: brand amber into the ember stage, with the dotted
+   «printed card» texture the unlock-code ticket uses. `--e-stage` is the
+   surface built to carry light text in both themes, so the band needs no
+   dark-mode twin. */
+.ctr-id__band {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-12);
+  padding: var(--s-16) var(--s-20) 2.75rem;
+  background:
+    radial-gradient(110% 120% at 100% 0%, color-mix(in oklab, var(--p-300) 55%, transparent) 0%, transparent 60%),
+    linear-gradient(135deg, var(--p-600) 0%, var(--e-stage) 100%);
+  color: var(--ink-fg);
+}
+
+.ctr-id__band::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(color-mix(in oklab, var(--ink-fg) 22%, transparent) 1px, transparent 1.5px);
+  background-size: 16px 16px;
+  mask-image: linear-gradient(to bottom, black, transparent 90%);
+  pointer-events: none;
+}
+
+.ctr-id__band > * {
+  position: relative;
+}
+
+.ctr-id__issuer {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  min-inline-size: 0;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+}
+
+.ctr-id__issuer > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ctr-id__kind {
+  flex-shrink: 0;
+  padding: var(--s-2) var(--s-12);
+  border: 1px solid color-mix(in oklab, var(--ink-fg) 35%, transparent);
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--ink-fg) 16%, transparent);
+  font-size: var(--fs-mono-label);
+  font-weight: var(--fw-semibold);
+}
+
+/* The avatar sits ON the band's lower edge, like the photo on a real card.
+   `position` so it paints over the band, which is positioned for its
+   texture and would otherwise stack on top of it. */
+.ctr-id__who {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s-12);
+  margin-block-start: -2rem;
+  padding-inline: var(--s-20);
+}
+
+.ctr-id__photo {
+  flex-shrink: 0;
+  border-radius: var(--r-full);
+  box-shadow: 0 0 0 4px var(--n-2);
+}
+
+.ctr-id__name {
+  min-inline-size: 0;
+  padding-block-end: var(--s-4);
+  font-size: var(--fs-text-lg);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+  overflow-wrap: anywhere;
+}
+
+.ctr-id__facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8);
+  padding: var(--s-12) var(--s-20) 0;
+}
+
+/* «ID: 4373» — Latin and digits inside an RTL card, isolated so the colon
+   stays between the two. */
+.ctr-id__number {
+  direction: ltr;
+  unicode-bidi: isolate;
+  padding: var(--s-4) var(--s-12);
+  border-radius: var(--r-md);
+  background: var(--ctr-wash-strong);
+  color: var(--n-12);
+  font-family: var(--font-mono);
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.04em;
+}
+
+/* The codes are printed black on white in BOTH themes: a scanner reads
+   contrast, not the theme, and a light-on-dark barcode is one most door
+   scanners refuse. `--ink` and `--ink-fg` are the two tokens that do not
+   flip with the theme. */
+.ctr-id__codes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-16);
+  /* Tighter than the rest of the card on purpose: a five-digit student
+     number is a 264px barcode, and on a 360px phone this is the box it has
+     to fit in at two whole pixels per module. */
+  margin: var(--s-16) var(--s-16) var(--s-20);
+  padding: var(--s-12);
+  border-radius: var(--r-lg);
+  background: var(--ink-fg);
+  color: var(--ink);
+}
+
+.ctr-id__qr {
+  inline-size: 8.5rem;
+  block-size: 8.5rem;
+  flex-shrink: 0;
+}
+
+.ctr-id__barcode {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-4);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+/* Its width is set in whole pixels per module by the component; this only
+   stops it overflowing a phone narrower than that. */
+.ctr-id__bars {
+  max-inline-size: 100%;
+  block-size: 4.5rem;
+}
+
+.ctr-id__payload {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.3em;
+}
+
+.ctr-id__slot {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  margin: calc(var(--s-4) * -1) var(--s-20) var(--s-20);
+  padding: var(--s-12);
+  border-radius: var(--r-lg);
+  background: var(--ctr-wash);
+}
+
+.ctr-id__slot-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--r-full);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+}
+
+.ctr-id__slot-label {
+  font-size: var(--fs-mono-label);
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+}
+
+.ctr-id__slot-value {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.ctr-id__slot-link {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.75rem;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--a-11);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

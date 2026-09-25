@@ -27,6 +27,15 @@ import { tenantSentence } from '@/lib/tenant-copy';
 import { fixedSectionFor, offeredYearOptions } from '@/lib/section-defaults';
 import { SCHOOL_STREAM_OPTIONS, governorateOptions as governorateOptionsFor } from '@/lib/profile-options';
 import { cityOptions } from '@/lib/city-options';
+import { StudyAttendanceFields } from '@/components/centers/attendance-fields';
+import {
+  attendancePayload,
+  centerFieldErrors,
+  slotRefusal,
+  slotsForYear,
+  type CenterFieldName,
+} from '@/components/centers/center-form';
+import { useCenters } from '@/components/centers/use-centers';
 import { FormField } from '../auth/form-field';
 import { PhoneField } from '../auth/phone-field';
 import { SelectField, type SelectOption } from './select-field';
@@ -50,10 +59,15 @@ const PARENT_PHONE_NOTE_ID = 'father-phone-why';
  * Which fields each step owns, so "can I move forward" can be answered by
  * validating exactly that step and nothing after it.
  *
- * Step 3 lists only `year` because the year is the only thing it asks. The
- * system, the track and the elective subject are filled from the taxonomy on
- * submit (`@/lib/section-defaults`) — this platform has one answer for each of
- * them — so there is nothing on that step for `trigger` to gate on.
+ * Step 3 asks the year, «نوع الدراسة» and — on a stack with a centre — «نوع
+ * الحضور» and the slot. The system, the track and the elective subject are
+ * filled from the taxonomy on submit (`@/lib/section-defaults`) — this
+ * platform has one answer for each of them — so there is nothing on that step
+ * for `trigger` to gate on for those.
+ *
+ * The three centre fields are listed so `trigger` re-checks their SHAPE, but
+ * the schema has them optional; whether they are answered is
+ * `centerFieldErrors`' call — see `components/centers/center-form.ts`.
  */
 const STEPS = [
   { title: copy.onboarding.step1Title, fields: ['fullName', 'gender', 'phone'] },
@@ -61,7 +75,10 @@ const STEPS = [
     title: copy.onboarding.step2Title,
     fields: ['governorateCode', 'cityId', 'schoolName', 'schoolStream'],
   },
-  { title: copy.onboarding.step3Title, fields: ['year'] },
+  {
+    title: copy.onboarding.step3Title,
+    fields: ['year', 'studyType', 'attendanceMode', 'centerSlotId'],
+  },
   { title: copy.onboarding.step4Title, fields: ['fatherPhone'] },
 ] as const satisfies ReadonlyArray<{
   title: string;
@@ -72,6 +89,12 @@ const STEPS = [
  *  student back to it. Derived rather than written as `0`, so re-ordering the
  *  wizard cannot silently point the one server-side error at the wrong step. */
 const PHONE_STEP = STEPS.findIndex((step) => (step.fields as readonly string[]).includes('phone'));
+
+/** Which step owns the slot — where a «الميعاد ده اتملى» sends the wizard
+ *  back to, derived for the same reason as `PHONE_STEP`. */
+const CENTER_STEP = STEPS.findIndex((step) =>
+  (step.fields as readonly string[]).includes('centerSlotId'),
+);
 
 /**
  * A native `<select>` reports an empty string for "nothing chosen", never
@@ -130,6 +153,8 @@ export function OnboardingForm({
     control,
     setError,
     setValue,
+    clearErrors,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<Onboarding>({
     resolver: zodResolver(OnboardingSchema),
@@ -207,6 +232,26 @@ export function OnboardingForm({
   );
   const cities = cityOptions(hydrated ? governorateCode : undefined);
 
+  /*
+    «نوع الحضور» is asked only when this stack has a centre. The list is read
+    in the browser after mount, so the question never takes part in hydration;
+    until it arrives — or if it never does — the stack is treated as online.
+    The slots are narrowed to the year picked just above them, because the API
+    cannot: this student has no stored year yet.
+  */
+  const { centers, reload: reloadCenters } = useCenters();
+  const attendanceVisible = centers !== null && centers.length > 0;
+  const slots = slotsForYear(centers ?? [], useWatch({ control, name: 'year' }));
+
+  /** The step-3 answers the schema cannot demand — see `center-form.ts`. */
+  function checkCenterFields(): boolean {
+    const issues = centerFieldErrors(getValues(), { attendanceVisible, slots });
+    for (const [field, message] of Object.entries(issues)) {
+      setError(field as CenterFieldName, { type: 'required', message });
+    }
+    return Object.keys(issues).length === 0;
+  }
+
   const isLastStep = stepIndex === STEPS.length - 1;
 
   /**
@@ -216,7 +261,10 @@ export function OnboardingForm({
    */
   async function goNext() {
     const valid = await trigger([...STEPS[stepIndex]!.fields]);
-    if (!valid) return;
+    // After `trigger`, which clears these fields' errors when their shape is
+    // fine — the «is it answered» check has to land on top of that.
+    const centersValid = stepIndex !== CENTER_STEP || checkCenterFields();
+    if (!valid || !centersValid) return;
     setFormError(null);
     setStepIndex((index) => Math.min(index + 1, STEPS.length - 1));
   }
@@ -230,16 +278,42 @@ export function OnboardingForm({
 
   async function onSubmit(values: Onboarding) {
     setFormError(null);
+    // The centre list can change between step 3 and here (it is refetched on
+    // a refusal), so the slot is re-checked where it is sent.
+    if (!checkCenterFields()) {
+      setStepIndex(CENTER_STEP);
+      return;
+    }
     try {
       // The three answers the student was never asked for, resolved from the
       // taxonomy and written LAST so they win over whatever the form holds —
       // nothing on screen registers them, but a spread that lost to `values`
       // would be a silent no-op the moment one of them ever did.
+      //
+      // The attendance pair goes after `values` for the same reason: with no
+      // centre on screen it is «أونلاين», whatever a stale draft still holds.
       await apiPatch('/api/profile/onboarding', {
         ...values,
         ...fixedSectionFor(taxonomy, values.year),
+        ...attendancePayload(values, { attendanceVisible, whenHidden: 'online' }),
       });
     } catch (error) {
+      /*
+       * A refused SLOT — somebody took the last seat while this student was
+       * typing their guardian's number, or the admin closed it. Walk back to
+       * the slot step with the reason under the list, and refetch it so the
+       * card that was picked now says «فل». Checked before the phone branch
+       * below because both can be a 409; only `payload.code` tells them apart.
+       */
+      const refusal = slotRefusal(error);
+      if (refusal) {
+        setValue('centerSlotId', null);
+        setError('centerSlotId', { type: 'server', message: refusal }, { shouldFocus: false });
+        setStepIndex(CENTER_STEP);
+        setFormError(copy.centers.slotConflictHint);
+        reloadCenters();
+        return;
+      }
       /*
        * ## The 409 is about the STUDENT'S OWN number, and it used to be shown
        *    under the guardian's.
@@ -453,7 +527,9 @@ export function OnboardingForm({
           </div>
 
           {/*
-            One question, and now genuinely only one thing on the screen.
+            The year, then «نوع الدراسة» and — on a stack with a centre — «نوع
+            الحضور»: questions whose answers differ between students. What is
+            NOT here is anything with one right answer.
 
             The system, the track and the subject used to be three more selects
             here, each with exactly one right answer (see
@@ -485,6 +561,16 @@ export function OnboardingForm({
               options={yearOptions}
               errorMessage={errors.year?.message}
               {...register('year', { setValueAs: emptyToUndefinedNumber })}
+            />
+            {/* «نوع الدراسة» always; «نوع الحضور» and the slot only on a
+                stack with a centre. Shared with «بياناتك». */}
+            <StudyAttendanceFields
+              control={control}
+              register={register}
+              clearErrors={clearErrors}
+              errors={errors}
+              attendanceVisible={attendanceVisible}
+              slots={slots}
             />
           </div>
 

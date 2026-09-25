@@ -54,6 +54,17 @@ export function StudentDetailForm({
         </div>
 
         <dl className="grid grid-cols-1 gap-2 text-[length:var(--fs-text-sm)] sm:grid-cols-2">
+          {/* «ID» — the short number the centre's card carries (QR and
+              barcode). Read-only: it is issued once and printed. */}
+          <div>
+            <dt className="text-fg-muted">{copy.admin.centers.student.studentNumber}</dt>
+            <dd
+              dir="ltr"
+              className="font-mono text-[length:var(--fs-title-4)] font-semibold tabular-nums text-fg [unicode-bidi:isolate] text-end"
+            >
+              {student.studentNumber}
+            </dd>
+          </div>
           <div>
             <dt className="text-fg-muted">{copy.admin.students.memberSince}</dt>
             <dd className="text-fg">{new Date(student.createdAt).toLocaleDateString('ar-EG')}</dd>
@@ -196,6 +207,33 @@ export function StudentDetailForm({
                 <option value="general">{copy.stream.general}</option>
                 <option value="languages">{copy.stream.languages}</option>
               </Select>
+            </div>
+            {/* «نوع الدراسة» / «نوع الحضور» — nullable like the stream above:
+                a student onboarded before the questions existed is «مش
+                متسجّل», not a guess. */}
+            <div>
+              <Label htmlFor="studyType">{copy.admin.centers.student.studyType}</Label>
+              <Select id="studyType" name="studyType" defaultValue={student.studyType ?? ''}>
+                <option value="">{copy.admin.centers.student.unknown}</option>
+                <option value="general">{copy.admin.centers.student.studyTypes.general}</option>
+                <option value="azhari">{copy.admin.centers.student.studyTypes.azhari}</option>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="attendanceMode">{copy.admin.centers.student.attendanceMode}</Label>
+              <Select
+                id="attendanceMode"
+                name="attendanceMode"
+                defaultValue={student.attendanceMode ?? ''}
+                aria-describedby="attendanceMode-hint"
+              >
+                <option value="">{copy.admin.centers.student.unknown}</option>
+                <option value="online">{copy.admin.centers.student.attendanceModes.online}</option>
+                <option value="center">{copy.admin.centers.student.attendanceModes.center}</option>
+              </Select>
+              <p id="attendanceMode-hint" className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+                {copy.admin.centers.student.attendanceModeHint}
+              </p>
             </div>
           </div>
 

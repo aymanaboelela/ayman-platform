@@ -30,6 +30,9 @@ import {
   PackageOpen,
   Wallet,
   ShieldCheck,
+  School,
+  ScanLine,
+  HandCoins,
 } from 'lucide-react';
 import type { Entitlements, FeatureKey } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -47,7 +50,7 @@ import { IS_AYMAN } from '@/lib/tenant';
  * renders above the headings, because it is the destination the crumb trail
  * always starts from rather than a peer of the sections.
  */
-export type AdminNavGroup = 'overview' | 'teaching' | 'marketing' | 'site' | 'system';
+export type AdminNavGroup = 'overview' | 'teaching' | 'centers' | 'marketing' | 'site' | 'system';
 
 export interface AdminNavItem {
   href: string;
@@ -333,6 +336,42 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   },
 
   {
+    // «السناتر» — the centres and their weekly slots. A group of its own and
+    // not three more rows under «التدريس»: the person who opens these is often
+    // not the one who teaches — whoever stands at a centre's door holds
+    // `center:attendance` and may hold nothing else, and a sidebar that buries
+    // their one screen inside a list of teaching tools is one they cannot find.
+    //
+    // No `feature` on purpose. A stack with no centre simply has an empty
+    // list here; the student side hides the question by data, not by a flag.
+    href: '/admin/centers',
+    labelAr: copy.admin.nav.centers,
+    icon: School,
+    permission: 'center:read',
+    group: 'centers',
+  },
+  {
+    // The door. `center:attendance` alone, deliberately — the one permission
+    // an assistant at the door is given, so this row must not ask for
+    // `center:read` on top of it.
+    href: '/admin/centers/scan',
+    labelAr: copy.admin.nav.centersScan,
+    icon: ScanLine,
+    permission: 'center:attendance',
+    group: 'centers',
+  },
+  {
+    // Here and not under «الاشتراكات والإيرادات»: `/admin/finance` is
+    // `payment:read`, and a role that may read the centre money is not
+    // thereby a role that may read subscription revenue.
+    href: '/admin/centers/finance',
+    labelAr: copy.admin.nav.centersFinance,
+    icon: HandCoins,
+    permission: 'center:read',
+    group: 'centers',
+  },
+
+  {
     // التسويق — الرسايل اللي بتخرج برّه المنصة. مجموعتها لوحدها ومش تحت
     // «التدريس»: دي مش رسالة بمناسبة حصلت للطالب جوه المنصة (ده outreach
     // فوق) — دي حملة بتتبعت لحد أصلاً برّه.
@@ -445,6 +484,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
 export const ADMIN_NAV_GROUPS: readonly { id: AdminNavGroup; labelAr: string | null }[] = [
   { id: 'overview', labelAr: null },
   { id: 'teaching', labelAr: copy.admin.nav.groupTeaching },
+  { id: 'centers', labelAr: copy.admin.nav.groupCenters },
   { id: 'marketing', labelAr: copy.admin.nav.groupMarketing },
   { id: 'site', labelAr: copy.admin.nav.groupSite },
   { id: 'system', labelAr: copy.admin.nav.groupSystem },

@@ -254,6 +254,15 @@ export async function completeMinimalOnboarding(
   const year = main.getByLabel(copy.onboarding.year);
   await expect(year).toBeVisible();
   await year.selectOption({ index: 1 });
+  // «نوع الدراسة» is required on the same step. A card, like the gender: the
+  // radio is `sr-only`, so the visible word is what gets pressed — scoped to
+  // its own group, because «عام» is also an option of step 2's school select.
+  await main
+    .getByRole('group', { name: copy.centers.studyType })
+    .getByText(copy.centers.studyGeneral, { exact: true })
+    .click();
+  // «نوع الحضور» is NOT answered here: it only appears on a stack with a
+  // centre, and the e2e database has none — the wizard sends «أونلاين».
   await next.click();
 
   const fatherPhone = main.getByLabel(copy.onboarding.fatherPhone);

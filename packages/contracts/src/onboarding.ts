@@ -262,7 +262,7 @@ function refineCenter(
   ctx: z.RefinementCtx,
 ): void {
   if (data.attendanceMode === 'center' && !data.centerSlotId) {
-    ctx.addIssue({ code: 'custom', path: ['centerSlotId'], message: 'اختار ميعاد السنتر' });
+    ctx.addIssue({ code: 'custom', path: ['centerSlotId'], message: 'لازم نحدد ميعاد السنتر' });
   }
 }
 
