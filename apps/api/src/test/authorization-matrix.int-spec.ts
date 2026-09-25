@@ -878,9 +878,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     //
     // والطالب المسجّل دخوله بيوصل نفس الراوت: الأب بيستعمل تليفون ابنه كتير،
     // وجلسة موجودة مالهاش تمنع بوابة تانية على نفس المتصفح.
-    { label: 'guardian sign-in: anonymous with a wrong code is 401, not 403', method: 'post', path: () => '/api/guardian/sign-in', actor: 'anonymous', status: 401, body: () => ({ code: 'ABCDEFGHJKMNPQRSTUVWXYZ234' }) },
+    { label: 'guardian sign-in: anonymous with a wrong code is 401, not 403', method: 'post', path: () => '/api/guardian/sign-in', actor: 'anonymous', status: 401, body: () => ({ code: 'AB2#CD' }) },
     { label: 'guardian sign-in: a malformed code is refused on SHAPE (400)', method: 'post', path: () => '/api/guardian/sign-in', actor: 'anonymous', status: 400, body: () => ({ code: 'short' }) },
-    { label: 'guardian sign-in: a signed-in student is not turned away', method: 'post', path: () => '/api/guardian/sign-in', actor: 'student', status: 401, body: () => ({ code: 'ABCDEFGHJKMNPQRSTUVWXYZ234' }) },
+    { label: 'guardian sign-in: a signed-in student is not turned away', method: 'post', path: () => '/api/guardian/sign-in', actor: 'student', status: 401, body: () => ({ code: 'AB2#CD' }) },
     { label: 'guardian sign-out: anonymous, always fine', method: 'post', path: () => '/api/guardian/sign-out', actor: 'anonymous', status: 201 },
     // والقراية نفسها: من غير كوكي بوابة، 401. الطالب المسجّل دخوله بياخد
     // نفس الرد — جلسة الطالب مش بديل عن جلسة ولي الأمر، والعكس.

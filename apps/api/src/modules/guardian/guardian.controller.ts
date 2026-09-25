@@ -9,6 +9,7 @@ import {
   UnauthorizedException,
   UsePipes,
 } from '@nestjs/common';
+import { Throttle, seconds } from '@nestjs/throttler';
 import { ZodValidationPipe } from 'nestjs-zod';
 import type { Request, Response } from 'express';
 import { Public } from '../../auth/decorators/public.decorator';
@@ -17,6 +18,16 @@ import { clientIpFromRequest } from '../../common/throttle/request-identity';
 import { GuardianSignInDto } from './guardian.dto';
 import { GuardianSessionService } from './guardian-session.service';
 import { GUARDIAN_COOKIE, guardianCookieOptions } from './guardian-cookie';
+
+/**
+ * سقف تحت قفل المحاولات، للحظة اللي ريديس فيها واقع والقفل بيعدّي كل حاجة.
+ * الكود ٦ خانات بس، فمن غير سقف كان التخمين مفتوح ساعتها. أب بيدخل مرتين
+ * في اليوم بعيد عنه جدًا؛ السكريبت لأ.
+ */
+const GUARDIAN_SIGN_IN_THROTTLE = {
+  short: { limit: 5, ttl: seconds(10) },
+  medium: { limit: 20, ttl: seconds(600) },
+};
 
 /**
  * بوابة ولي الأمر — الدخول والخروج.
@@ -47,6 +58,7 @@ export class GuardianController {
    */
   @Public()
   @RequireCsrf()
+  @Throttle(GUARDIAN_SIGN_IN_THROTTLE)
   @Post('sign-in')
   async signIn(
     @Body() body: GuardianSignInDto,
