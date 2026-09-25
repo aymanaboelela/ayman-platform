@@ -138,7 +138,7 @@ describe('resolveLoginIdentifier', () => {
 describe('RegisterSchema', () => {
   function basePayload(overrides: Record<string, unknown> = {}) {
     return {
-      name: 'أحمد محمد',
+      name: 'أحمد محمد علي',
       phone: '01012345678',
       password: 'correcthorsebatterystaple',
       confirmPassword: 'correcthorsebatterystaple',

@@ -46,7 +46,7 @@ test.describe('onboarding wizard', () => {
     ).toBeVisible();
     await expect(main.getByLabel(copy.onboarding.governorate)).toBeHidden();
 
-    await nameField.fill('طالب اختبار');
+    await nameField.fill('طالب اختبار تجريبي');
     await main.getByText(copy.onboarding.genderMale, { exact: true }).click();
     await expect(main.getByRole('radio', { name: copy.onboarding.genderMale })).toBeChecked();
     await main.getByLabel(copy.onboarding.phone).fill('01011122233');
@@ -70,7 +70,7 @@ test.describe('onboarding wizard', () => {
     // Back must not validate and must not discard: a student correcting an
     // earlier answer cannot be blocked by the step they are leaving.
     await main.getByRole('button', { name: copy.onboarding.back }).click();
-    await expect(nameField).toHaveValue('طالب اختبار');
+    await expect(nameField).toHaveValue('طالب اختبار تجريبي');
   });
 
   test('shows who you are signing up as', async ({ page }) => {

@@ -15,6 +15,7 @@ import {
 } from './credential-check.service';
 import { DEVICE_LIMIT_ERROR, MAX_DEVICES_PER_ACCOUNT, type DeviceLimitGate } from './device-limit';
 import type { LoginSecurityService } from './login-security.service';
+import { planFullNameCheck } from './full-name-check';
 import { planPhoneNormalization } from './phone-identity';
 import type { PrismaClient } from '../generated/prisma/client';
 
@@ -176,6 +177,9 @@ export class PrismaRegisteredPhoneLookup implements RegisteredPhoneLookup {
  */
 export const PHONE_TAKEN_ERROR = 'PHONE_ALREADY_REGISTERED' as const;
 
+/** A name that fails `FullNameSchema` — the message says which rule. */
+export const INVALID_FULL_NAME_ERROR = 'INVALID_FULL_NAME' as const;
+
 /**
  * Better Auth allows exactly ONE top-level `hooks.before` (see
  * `api/dispatch.mjs`'s `getHooks`: the option is a single function, registered
@@ -207,6 +211,19 @@ export function createAuthBeforeHook(
       });
     }
 
+    /**
+     * The name, on sign-up and `/update-user` — «ثلاثي على الأقل», one script.
+     * See `./full-name-check`. Checked before the phone lookup below because
+     * it needs no database round trip.
+     */
+    const namePlan = planFullNameCheck(ctx.path, ctx.body);
+    if (namePlan.action === 'reject') {
+      throw new APIError('BAD_REQUEST', {
+        code: INVALID_FULL_NAME_ERROR,
+        message: namePlan.message,
+      });
+    }
+
     let normalizedPhone: string | null = null;
     let rewrite: { context: { body: Record<string, unknown> } } | undefined;
     if (plan.action === 'rewrite') {
@@ -226,6 +243,16 @@ export function createAuthBeforeHook(
              * it never reaches the database.
              */
             ...(plan.email ? { email: plan.email } : {}),
+          },
+        },
+      };
+    }
+    if (namePlan.action === 'rewrite') {
+      rewrite = {
+        context: {
+          body: {
+            ...(rewrite?.context.body ?? (ctx.body as Record<string, unknown>)),
+            name: namePlan.name,
           },
         },
       };

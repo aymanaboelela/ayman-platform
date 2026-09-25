@@ -46,7 +46,7 @@ export function uniqueStudent() {
   return {
     email: `student-${stamp}-${Math.random().toString(36).slice(2, 8)}@e2e.test`,
     password: 'correct-horse-battery-staple-1', // gitleaks:allow -- fixed, well-known test-only password (XKCD 936), not a secret
-    name: 'طالب اختبار',
+    name: 'طالب اختبار تجريبي',
     phone: `010${line}`,
     // A DIFFERENT operator prefix from `phone`, so a fixture that fills the
     // father's number into the student's field (or the reverse) fails visibly
