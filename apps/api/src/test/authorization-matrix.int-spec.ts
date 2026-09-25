@@ -1448,6 +1448,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'student history: student', method: 'get', path: () => `/api/admin/students/${studentId}/history`, actor: 'student', status: 403 },
     { label: 'student history: admin', method: 'get', path: () => `/api/admin/students/${studentId}/history`, actor: 'admin', status: 200 },
 
+    // «الأجهزة المفتوحة» على صفحة الطالب. نفس تدرّج `student:read` اللي فوقه
+    // بالظبط — مجهول 401، طالب 403، أدمن 200 — لأن الراوت على نفس الصلاحية.
+    { label: 'student sessions: anonymous', method: 'get', path: () => `/api/admin/students/${studentId}/sessions`, actor: 'anonymous', status: 401 },
+    { label: 'student sessions: student', method: 'get', path: () => `/api/admin/students/${studentId}/sessions`, actor: 'student', status: 403 },
+    { label: 'student sessions: admin', method: 'get', path: () => `/api/admin/students/${studentId}/sessions`, actor: 'admin', status: 200 },
+
     // ── Course grants — opening a CLOSED course for one student. Reads take
     // `student:read`, writes `student:write`; a student may not see or change
     // their own entitlements, which is the point of the whole table. ──

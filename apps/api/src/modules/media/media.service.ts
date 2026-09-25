@@ -57,6 +57,22 @@ const HEIF_MIME = new Set<string>([
 ] satisfies readonly (typeof ALLOWED_UPLOAD_MIME)[number][]);
 
 /**
+ * Can this build of sharp open these bytes at all?
+ *
+ * A header parse, not a decode — `metadata()` is what the pipeline below calls
+ * anyway, so the cost is one extra read of the first few kilobytes rather than
+ * a second full decode.
+ */
+async function sharpCanDecode(input: Buffer): Promise<boolean> {
+  try {
+    await sharp(input).metadata();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * HEIC/HEIF in, JPEG out, through the ffmpeg already in the runtime image.
  *
  * ⚠️ **THROUGH TEMP FILES, NOT PIPES**, and that is not a style preference.
@@ -258,79 +274,55 @@ export class MediaService {
       would claim a capability that does not exist.
     */
     /*
-     * HEIC becomes JPEG before sharp ever sees it.
+     * HEIC goes through ffmpeg — but only if `sharp` could not open it itself.
      *
-     * ## Why this is needed even though HEIC is on the allowlist
+     * ## The bug
      *
-     * The allowlist lets it past gate 2 — and then `sharp` cannot open it, so
-     * the upload died at `metadata()` below with «file could not be processed
-     * as an image». Reproduced against the live API: a 1200×1600 HEIC answered
-     * 400 while the same picture as PNG answered 201.
+     * `image/heic` is on the allowlist, so it clears both gates, and then
+     * `sharp` cannot decode it and the upload dies at `metadata()` with «file
+     * could not be processed as an image». Reproduced against the live API: a
+     * 1200×1600 HEIC answered 400 while the same picture as PNG answered 201.
+     * Every photo an iPhone takes is HEIC by default.
      *
-     * The cause is upstream and not fixable by configuration: sharp's prebuilt
-     * libvips ships WITHOUT libheif, deliberately, because of the HEVC patent
-     * position. Adding the Debian package does not help — the prebuilt binary
-     * is what runs, and rebuilding sharp from source against a system libvips
-     * is a heavy, fragile change to the image for one input format.
+     * The cause is upstream: sharp's prebuilt libvips ships WITHOUT libheif,
+     * deliberately, over the HEVC patent position. Installing a Debian package
+     * does not change which binary runs.
      *
-     * ## Why ffmpeg
+     * ## ⚠️ Why this TRIES FIRST instead of transcoding every HEIC
      *
-     * It is ALREADY in the runtime image (`apps/api/Dockerfile`, installed for
-     * video), it decodes HEVC, and it costs one subprocess on the rare upload
-     * that needs it. Nothing new is added to the image or to `package.json`.
+     * Because HEIC support in sharp is decided at BUILD time, and the two
+     * environments disagree. The macOS dev machine's libvips decodes it; the
+     * Debian prebuilt in the runtime image does not. Measured both ways.
      *
-     * ## Why it matters more than it looks
+     * An unconditional transcode makes the whole upload path depend on ffmpeg
+     * being present — and the unit-test environment does not have it, so every
+     * HEIC case went red for a reason that has nothing to do with the code.
+     * Trying sharp first means the subprocess is spawned only where it is
+     * actually needed, which is exactly the environment that has ffmpeg
+     * installed (`apps/api/Dockerfile`, already there for video).
      *
-     * Every photo an iPhone takes is HEIC by default. Safari usually transcodes
-     * on pick and the browser-side compressor catches the rest — but only where
-     * the BROWSER can decode HEIC, which Android Chrome cannot. So a student on
-     * Android sharing a picture taken on an iPhone, or anyone whose share sheet
-     * hands over the original, hit a hard rejection that told them their photo
-     * was «not an image file».
+     * ⚠️ It also keeps the existing specs honest rather than passing by luck:
+     * they hand this method a PNG and mock the signature service into calling
+     * it HEIC, so with sharp asked first they exercise the path they always
+     * described — and a REAL HEIC, which `heic-transcode.spec.ts` supplies,
+     * exercises the fallback.
      */
-    const buffer = HEIF_MIME.has(detected.mime)
-      ? await transcodeToJpeg(file.buffer).catch(() => {
-          throw new BadRequestException('file could not be processed as an image');
-        })
-      : file.buffer;
+    const decodable = await sharpCanDecode(file.buffer);
+    const buffer =
+      decodable || !HEIF_MIME.has(detected.mime)
+        ? file.buffer
+        : await transcodeToJpeg(file.buffer).catch(() => {
+            throw new BadRequestException('file could not be processed as an image');
+          });
 
     let pipeline = sharp(buffer, {
       limitInputPixels: MAX_INPUT_PIXELS,
-      // Never for a transcode: the JPEG that comes back is a single frame, and
-      // asking for pages on it makes sharp read a container that is not there.
-      animated: !HEIF_MIME.has(detected.mime) && MULTI_FRAME_MIME.has(detected.mime),
+      // A transcode returns one JPEG frame, so asking for pages on it would
+      // have sharp read a container that is not there.
+      animated: buffer === file.buffer && MULTI_FRAME_MIME.has(detected.mime),
       failOn: 'error',
     });
 
-    /*
-     * `.rotate()` with no argument applies the EXIF orientation and then
-     * discards the metadata. That is what a photo straight off a phone needs,
-     * and it is why the call is here at all — but there is exactly one shape
-     * of input it must NOT be applied to.
-     *
-     * libvips holds an animation as a single tall strip of frames. It can
-     * mirror that strip and it can turn it through 180°, because both are the
-     * same operation applied per frame; it cannot turn it through 90° or 270°,
-     * because a quarter turn has nowhere to put the rows. sharp refuses rather
-     * than guessing — `Rotate is not supported for multi-page images` — and
-     * that throw lands in the catch below, so the uploader is told «file could
-     * not be processed as an image» about a file that is a perfectly good
-     * animation. Measured on sharp 0.35.3 / libvips 8.18.3 against a 4-frame
-     * animated WebP: EXIF orientations 1–4 encode fine, 5–8 every one throws.
-     * Those four are precisely the orientations that carry a quarter turn.
-     *
-     * The decision is therefore made on the FILE, not on its MIME. `animated`
-     * above is a *request* to read every frame; whether there is more than one
-     * is a property of the upload. Most WebP uploads are ordinary stills, they
-     * do carry orientation tags, and keying this off `detected.mime` would
-     * quietly stop correcting them. `metadata()` reads the header off the
-     * instance the pipeline already holds, so the check costs a header parse
-     * rather than a second decode.
-     *
-     * What is given up is the orientation correction on a multi-frame upload
-     * — which no encoder that writes animated GIF emits in the first place,
-     * GIF having no EXIF block to put it in.
-     */
     const probe = await pipeline.metadata().catch(() => {
       throw new BadRequestException('file could not be processed as an image');
     });
