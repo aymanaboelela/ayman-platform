@@ -1,8 +1,14 @@
 import { accountIdentityLabel, getSession } from '@/lib/session';
+import { BrandLockup } from '@/components/brand-lockup';
 import { UserAvatar } from './user-avatar';
 
 /**
- * Who is signed in, pinned to the foot of the phone's navigation drawer.
+ * Who is signed in, at the HEAD of the phone's navigation drawer.
+ *
+ * It used to be a card at the foot, under the brand lockup at the top — so the
+ * first thing the drawer said was the instructor's name, on a screen about the
+ * student's own account. «حط الأكونت اللي فاتح بيه بدل اسم أيمن أبو العلا
+ * فوق». The brand is still the first thing on the bar behind the sheet.
  *
  * On a phone the account control in the bar is a 36px face and a chevron, and
  * the drawer — the one screen that lists everything the student can do — never
@@ -16,7 +22,9 @@ import { UserAvatar } from './user-avatar';
  */
 export async function DrawerAccount() {
   const session = await getSession();
-  if (!session) return null;
+  // Unreachable behind `proxy.ts`, but a signed-out render must not leave the
+  // head of the drawer empty.
+  if (!session) return <BrandLockup showTagline={false} />;
 
   const identity = accountIdentityLabel(session);
 
