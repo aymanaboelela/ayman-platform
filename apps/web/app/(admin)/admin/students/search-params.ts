@@ -30,6 +30,17 @@ export const studentsSearchParams = {
     .withDefault('createdAt')
     .withOptions({ shallow: false }),
   dir: parseAsStringLiteral(['asc', 'desc'] as const).withDefault('desc').withOptions({ shallow: false }),
+  /**
+   * ⚠️ `''` عن قصد — من غير فلتر، زي ما الشاشة دي كانت بالظبط.
+   *
+   * الفلتر نفسه اتضاف عشان شاشة الفريق تسأل «مين مش طالب». ولو حطّيت
+   * `'student'` هنا كنت هغيّر سلوك شاشة الطلبة في نفس التغيير: المدرّس
+   * ومساعدينه هيختفوا منها. ده ممكن يكون الصح، بس ده قرار تاني ومالوش علاقة
+   * بشاشة الفريق — فالافتراضي هنا هو اللي كان.
+   */
+  role: parseAsStringLiteral(['', 'staff', 'student'] as const)
+    .withDefault('')
+    .withOptions({ shallow: false }),
   /** «مين اللي مسجّلهم مجاني؟» — null (the default) means "do not filter on
    *  how they got in", not "paid". See `StudentListQuerySchema.access`. */
   access: parseAsStringLiteral(STUDENT_ACCESS_FILTERS).withOptions({ shallow: false }),

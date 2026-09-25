@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, type ChangeEvent } from 'react';
 
 import { copy } from '@ayman/contracts/copy/admin';
-import { Button } from '@ayman/ui/button';
-import { Input } from '@ayman/ui/input';
-import { Label } from '@ayman/ui/label';
+import { Button } from '@ayman/ui/components/button';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
 
 import { searchAccountsAction, setStaffRoleAction } from './actions';
 
@@ -125,7 +125,7 @@ export function StaffSection({ members, currentUserId }: { members: StaffMember[
           value={term}
           autoComplete="off"
           placeholder={c.searchPlaceholder}
-          onChange={(event) => search(event.target.value)}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => search(event.target.value)}
           className="mt-1.5"
         />
 
@@ -169,7 +169,7 @@ export function StaffSection({ members, currentUserId }: { members: StaffMember[
               value={reason}
               autoComplete="off"
               placeholder={c.reasonPlaceholder}
-              onChange={(event) => setReason(event.target.value)}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => setReason(event.target.value)}
               className="mt-1.5"
             />
             <Button

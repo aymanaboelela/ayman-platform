@@ -22,29 +22,34 @@ import { AdminRoleChangeSchema, AdminStaffRoleSchema, StudentListQuerySchema } f
 describe('AdminStaffRoleSchema', () => {
   it('بتقبل owner وstudent', () => {
     for (const role of ['owner', 'student'] as const) {
-      expect(AdminStaffRoleSchema.safeParse({ role, reason: 'مساعد جديد' }).success).toBe(true);
+      expect(AdminStaffRoleSchema.safeParse({ role, reason: 'مساعد جديد للمتابعة' }).success).toBe(true);
     }
   });
 
   it('⚠️ بترفض admin — وده كل سبب وجودها', () => {
-    const r = AdminStaffRoleSchema.safeParse({ role: 'admin', reason: 'محاولة' });
+    const r = AdminStaffRoleSchema.safeParse({ role: 'admin', reason: 'محاولة تصعيد' });
     expect(r.success).toBe(false);
   });
 
   it('بتطلب سبب — «مين خلّى ده مساعد وليه» بيتسأل بعد شهور', () => {
     expect(AdminStaffRoleSchema.safeParse({ role: 'owner' }).success).toBe(false);
-    expect(AdminStaffRoleSchema.safeParse({ role: 'owner', reason: 'ا' }).success).toBe(false);
+    // ٨ أحرف — نفس حد الباب الواسع بالظبط، مش رقم تاني.
+    expect(AdminStaffRoleSchema.safeParse({ role: 'owner', reason: 'قصير' }).success).toBe(false);
   });
 
   it('strict — مفيش حقل زيادة بيعدّي', () => {
-    const r = AdminStaffRoleSchema.safeParse({ role: 'owner', reason: 'مساعد', extra: 1 });
+    const r = AdminStaffRoleSchema.safeParse({ role: 'owner', reason: 'مساعد جديد للمتابعة', extra: 1 });
     expect(r.success).toBe(false);
   });
 
   it('والباب الواسع لسه بيقبل admin — مش المفروض نقفله، هو أداة المشغّل', () => {
     // لو ده وقع يبقى حد ضيّق السكيما الغلط: إنشاء أول مدرّس على ستاك جديد
     // بيمرّ من هنا.
-    expect(AdminRoleChangeSchema.safeParse({ role: 'admin', reason: 'مشغّل' }).success).toBe(true);
+    // ⚠️ السبب هنا لازم يعدّي الـ٨ أحرف كمان — أول نسخة من التست ده بعتت
+    // «مشغّل» (٥ أحرف) وفشلت، وكان شكلها إن السكيما بترفض `admin`. مكانتش.
+    expect(
+      AdminRoleChangeSchema.safeParse({ role: 'admin', reason: 'تعيين مشغّل جديد' }).success,
+    ).toBe(true);
   });
 });
 
