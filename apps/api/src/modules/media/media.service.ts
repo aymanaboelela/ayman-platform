@@ -42,6 +42,87 @@ const MULTI_FRAME_MIME = new Set<string>([
   'image/avif',
 ] satisfies readonly (typeof ALLOWED_UPLOAD_MIME)[number][]);
 
+/**
+ * The containers `sharp` is on the allowlist for and cannot actually open.
+ *
+ * Derived from the same contract constant as the set above, so a format added
+ * there has to be classified here too rather than silently falling into the
+ * «sharp handles it» path and 400ing every upload of that type.
+ */
+const HEIF_MIME = new Set<string>([
+  'image/heic',
+  'image/heif',
+  'image/heic-sequence',
+  'image/heif-sequence',
+] satisfies readonly (typeof ALLOWED_UPLOAD_MIME)[number][]);
+
+/**
+ * HEIC/HEIF in, JPEG out, through the ffmpeg already in the runtime image.
+ *
+ * ⚠️ **THROUGH TEMP FILES, NOT PIPES**, and that is not a style preference.
+ *
+ * HEIF is an ISO-BMFF container: the frame offsets live in a box the demuxer
+ * seeks to, so it cannot be read from a stream. Measured — `-i pipe:0` on a
+ * valid HEIC exits 176 with «Not yet implemented in FFmpeg, patches welcome»,
+ * which is indistinguishable from a corrupt upload if you only check the code.
+ * The same picture as a file converts in one call.
+ *
+ * ⚠️ `-frames:v 1` and not a plain convert: a HEIC *sequence* (a Live Photo,
+ * or a burst) holds many frames, and without the cap ffmpeg writes one JPEG
+ * per frame. A still is what the platform stores for every other format too.
+ *
+ * `-q:v 2` is near-lossless: this is an intermediate that sharp re-encodes to
+ * WebP straight after, so a lower setting would only buy generation loss on a
+ * student's homework photo.
+ *
+ * The 20s cap is a guard rather than a budget — a phone photo decodes in well
+ * under a second, and the ceiling exists so a crafted file cannot hold a
+ * worker open. Both files are removed on every path, including that one.
+ */
+async function transcodeToJpeg(input: Buffer): Promise<Buffer> {
+  const { spawn } = await import('node:child_process');
+  const { mkdtemp, readFile, rm, writeFile } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+
+  const dir = await mkdtemp(join(tmpdir(), 'heif-'));
+  const source = join(dir, 'in');
+  const target = join(dir, 'out.jpg');
+
+  try {
+    await writeFile(source, input);
+
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        'ffmpeg',
+        ['-hide_banner', '-loglevel', 'error', '-y', '-i', source,
+         '-frames:v', '1', '-q:v', '2', target],
+        { stdio: ['ignore', 'ignore', 'pipe'] },
+      );
+
+      let stderr = '';
+      const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);
+
+      child.stderr.on('data', (c: Buffer) => {
+        stderr = (stderr + c.toString()).slice(0, 500);
+      });
+      child.on('error', (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        if (code === 0) resolve();
+        else reject(new Error(`ffmpeg exited ${code}: ${stderr}`));
+      });
+    });
+
+    return await readFile(target);
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 export interface UploadFile {
   originalname: string;
   buffer: Buffer;
@@ -176,9 +257,48 @@ export class MediaService {
       be animated (APNG); libvips does not decode APNG frames, so listing it
       would claim a capability that does not exist.
     */
-    let pipeline = sharp(file.buffer, {
+    /*
+     * HEIC becomes JPEG before sharp ever sees it.
+     *
+     * ## Why this is needed even though HEIC is on the allowlist
+     *
+     * The allowlist lets it past gate 2 — and then `sharp` cannot open it, so
+     * the upload died at `metadata()` below with «file could not be processed
+     * as an image». Reproduced against the live API: a 1200×1600 HEIC answered
+     * 400 while the same picture as PNG answered 201.
+     *
+     * The cause is upstream and not fixable by configuration: sharp's prebuilt
+     * libvips ships WITHOUT libheif, deliberately, because of the HEVC patent
+     * position. Adding the Debian package does not help — the prebuilt binary
+     * is what runs, and rebuilding sharp from source against a system libvips
+     * is a heavy, fragile change to the image for one input format.
+     *
+     * ## Why ffmpeg
+     *
+     * It is ALREADY in the runtime image (`apps/api/Dockerfile`, installed for
+     * video), it decodes HEVC, and it costs one subprocess on the rare upload
+     * that needs it. Nothing new is added to the image or to `package.json`.
+     *
+     * ## Why it matters more than it looks
+     *
+     * Every photo an iPhone takes is HEIC by default. Safari usually transcodes
+     * on pick and the browser-side compressor catches the rest — but only where
+     * the BROWSER can decode HEIC, which Android Chrome cannot. So a student on
+     * Android sharing a picture taken on an iPhone, or anyone whose share sheet
+     * hands over the original, hit a hard rejection that told them their photo
+     * was «not an image file».
+     */
+    const buffer = HEIF_MIME.has(detected.mime)
+      ? await transcodeToJpeg(file.buffer).catch(() => {
+          throw new BadRequestException('file could not be processed as an image');
+        })
+      : file.buffer;
+
+    let pipeline = sharp(buffer, {
       limitInputPixels: MAX_INPUT_PIXELS,
-      animated: MULTI_FRAME_MIME.has(detected.mime),
+      // Never for a transcode: the JPEG that comes back is a single frame, and
+      // asking for pages on it makes sharp read a container that is not there.
+      animated: !HEIF_MIME.has(detected.mime) && MULTI_FRAME_MIME.has(detected.mime),
       failOn: 'error',
     });
 
