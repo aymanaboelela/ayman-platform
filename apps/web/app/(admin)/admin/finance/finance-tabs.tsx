@@ -1,13 +1,19 @@
 import Link from 'next/link';
 import { copy } from '@ayman/contracts/copy/admin';
 import { cn } from '@ayman/ui';
+import { can, getSession } from '@/lib/session';
 
 const c = copy.admin.finance;
 
 export const FINANCE_TABS = [
-  { href: '/admin/finance', label: c.tabOverview },
-  { href: '/admin/finance/subscriptions', label: c.tabSubscriptions },
-  { href: '/admin/finance/expenses', label: c.tabExpenses },
+  { href: '/admin/finance', label: c.tabOverview, permission: null },
+  { href: '/admin/finance/subscriptions', label: c.tabSubscriptions, permission: null },
+  { href: '/admin/finance/expenses', label: c.tabExpenses, permission: null },
+  // The centres' money is its own screen under `/admin/centers` — this is a
+  // door to it, not a fourth half of these accounts. Gated because the three
+  // above are what every finance reader holds and this one is `center:read`:
+  // a tab that opens onto a 403 is worse than no tab.
+  { href: '/admin/centers/finance', label: c.tabCenters, permission: 'center:read' },
 ] as const;
 
 export type FinanceTabHref = (typeof FINANCE_TABS)[number]['href'];
@@ -24,12 +30,18 @@ export type FinanceTabHref = (typeof FINANCE_TABS)[number]['href'];
  *
  * A Server Component: the caller knows which tab it is, and shipping
  * `usePathname` for a highlight would be the whole client runtime for a border
- * colour. Same shape and same reasoning as `BooksTabs`.
+ * colour. Same shape and same reasoning as `BooksTabs`. Async only for the one
+ * permission-gated tab; `getSession` is per-request cached, so the page that
+ * already read it pays nothing.
  */
-export function FinanceTabs({ active }: { active: FinanceTabHref }) {
+export async function FinanceTabs({ active }: { active: FinanceTabHref }) {
+  const session = await getSession();
+  const tabs = FINANCE_TABS.filter(
+    (tab) => tab.permission === null || can(session, tab.permission),
+  );
   return (
     <nav className="mt-4 flex flex-wrap gap-1.5" aria-label={c.title}>
-      {FINANCE_TABS.map((tab) => (
+      {tabs.map((tab) => (
         <Link
           key={tab.href}
           href={tab.href}

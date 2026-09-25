@@ -25,6 +25,7 @@ import { AccountAccessSection } from './account-access-section';
 import { HistorySection } from './history-section';
 import { ConversationSection } from './conversation-section';
 import { DevicesSection } from './devices-section';
+import { CenterAttendanceSection } from './center-attendance-section';
 
 export const metadata = { title: copy.admin.students.detailTitle };
 
@@ -290,7 +291,16 @@ export default async function StudentDetailPage({
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
-        <StudentDetailForm student={student} governorateOptions={governorateOptions} />
+        <div className="flex min-w-0 flex-col gap-6">
+          <StudentDetailForm student={student} governorateOptions={governorateOptions} />
+          {/* Its own boundary: two more reads the profile form must not wait
+              on, and a section that renders nothing on a stack with no
+              centre — so its fallback is nothing too, not a skeleton that
+              would flash and vanish. */}
+          <Suspense fallback={null}>
+            <CenterAttendanceSection userId={userId} />
+          </Suspense>
+        </div>
         <div className="flex flex-col gap-6">
           <RoleChangeSection student={student} />
           <SetPasswordSection student={student} />

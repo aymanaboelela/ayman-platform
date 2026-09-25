@@ -176,11 +176,13 @@ export function isProtectedRoute(pathname: string): boolean {
 }
 
 /**
- * The admin panel — the only part of this app that asks for a microphone.
+ * The admin panel — the only part of this app that asks for a microphone or a
+ * camera.
  *
- * `VoiceRecorder` lives in the inbox thread and has no counterpart in the
- * student's panel by design, so the `Permissions-Policy` grant follows the
- * same shape: one prefix, not `self` on every response.
+ * `VoiceRecorder` lives in the inbox thread and the door scanner at
+ * `/admin/centers/scan`; neither has a counterpart in the student's panel by
+ * design, so the `Permissions-Policy` grants follow the same shape: one
+ * prefix, not `self` on every response.
  */
 export function isAdminRoute(pathname: string): boolean {
   return pathname === '/admin' || pathname.startsWith('/admin/');
@@ -840,7 +842,7 @@ const CSP_HEADER_NAME = CSP_ENFORCING
 export function applyBaseSecurityHeaders(
   headers: Headers,
   dev: boolean,
-  { microphone = false }: { microphone?: boolean } = {},
+  { microphone = false, camera = false }: { microphone?: boolean; camera?: boolean } = {},
 ): void {
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -869,7 +871,12 @@ export function applyBaseSecurityHeaders(
     // check that skipped the proxy. Granting it to `self` restores the
     // PROMPT, not the access — the student panel never sees it, because
     // nothing there records.
-    `camera=(), microphone=(${microphone ? 'self' : ''}), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=(), display-capture=(), browsing-topics=(), interest-cohort=(), fullscreen=(self "https://www.youtube-nocookie.com" "https://www.youtube.com")`,
+    // `camera` is the third, on the same terms and for the same reason: the
+    // door scanner (`/admin/centers/scan`) reads a student's QR through the
+    // phone's camera, and `camera=()` made `getUserMedia` refuse before the
+    // assistant at the door was ever asked. `self` on the admin panel only —
+    // no student screen opens a camera.
+    `camera=(${camera ? 'self' : ''}), microphone=(${microphone ? 'self' : ''}), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=(), display-capture=(), browsing-topics=(), interest-cohort=(), fullscreen=(self "https://www.youtube-nocookie.com" "https://www.youtube.com")`,
   );
   headers.set('X-DNS-Prefetch-Control', 'off');
   /**
@@ -1181,7 +1188,8 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const response = NextResponse.next({
     request: { headers: stampPathname(request.headers, pathname) },
   });
-  applyBaseSecurityHeaders(response.headers, DEV, { microphone: isAdminRoute(pathname) });
+  const admin = isAdminRoute(pathname);
+  applyBaseSecurityHeaders(response.headers, DEV, { microphone: admin, camera: admin });
   response.headers.set(CSP_HEADER_NAME, buildAuthenticatedCsp('', DEV));
   /**
    * The third and last layer keeping the signed-in area out of search results,

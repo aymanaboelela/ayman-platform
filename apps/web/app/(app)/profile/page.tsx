@@ -1,8 +1,9 @@
-import { Suspense } from 'react';
+import { Suspense, cache } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Award, Clock, Layers, Target } from 'lucide-react';
 import { ProfileMeSchema, StudentQuizHistorySchema, copy } from '@ayman/contracts';
+import { MyCenterBookingSchema } from '@ayman/contracts/centers';
 import { cityNameAr } from '@ayman/contracts/cities';
 import { Skeleton } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
@@ -18,10 +19,19 @@ import { AvatarForm } from '@/components/profile/avatar-form';
 import { DevicesList } from '@/components/settings/devices-list';
 import { QuizScoreBars } from '@/components/profile/quiz-score-bars';
 import { ScoreTrend } from '@/components/results/score-trend';
+import { AttendanceCard } from '@/components/centers/attendance-card';
 
 export const metadata: Metadata = { title: copy.profile.title };
 
 const c = copy.profile;
+
+/**
+ * `/api/profile/me`, once per request. The identity panel and «كارت الحضور»
+ * both need it and stream in separate boundaries; `apiGetAuthed`'s bounded
+ * fetch carries an abort signal, which opts it out of Next's own request
+ * dedupe, so without this it is two round trips for one row.
+ */
+const getMe = cache(() => apiGetAuthed('/api/profile/me', ProfileMeSchema));
 
 /**
  * The student's own profile: who they are, a photo they can change, what they
@@ -57,6 +67,14 @@ export default function ProfilePage() {
 
       <Suspense fallback={<IdentitySkeleton />}>
         <Identity />
+      </Suspense>
+
+      {/* Its own boundary: the card waits on the booking read, and the
+          panel above must not. No skeleton — for a profile with no student
+          number it renders nothing, and a placeholder that then vanishes is
+          worse than a section that arrives. */}
+      <Suspense fallback={null}>
+        <AttendanceCardSection />
       </Suspense>
 
       <section className="mb-8">
@@ -150,11 +168,7 @@ async function Identity() {
     like any other unset field, which is exactly what this card already does
     for a student who never filled it in.
   */
-  const [session, me, taxonomy] = await Promise.all([
-    getSession(),
-    apiGetAuthed('/api/profile/me', ProfileMeSchema),
-    getTaxonomyOrNull(),
-  ]);
+  const [session, me, taxonomy] = await Promise.all([getSession(), getMe(), getTaxonomyOrNull()]);
 
   if (!session) return null;
 
@@ -194,6 +208,48 @@ async function Identity() {
       >
         {c.fieldsEdit}
       </Link>
+    </section>
+  );
+}
+
+/**
+ * «كارت الحضور» — the student number as a big ID, a QR and a barcode, and the
+ * centre slot they hold. Rendered for every profile that has a student
+ * number, because the number exists for every student whether or not this
+ * stack has a centre yet.
+ *
+ * The booking read is allowed to fail: the codes are the point of the card
+ * and they need only the number, so a flaky `/api/me/center-booking` costs
+ * the slot line, not the card — and with no `error.tsx` under `app/`, a throw
+ * here would cost the whole profile.
+ */
+async function AttendanceCardSection() {
+  const [session, me, booking] = await Promise.all([
+    getSession(),
+    getMe(),
+    apiGetAuthed('/api/me/center-booking', MyCenterBookingSchema).then(
+      (result) => result.booking,
+      () => null,
+    ),
+  ]);
+
+  const studentNumber = me.profile?.studentNumber;
+  if (!session || !me.profile || studentNumber === undefined) return null;
+
+  return (
+    <section className="mb-8">
+      <h2 className="mb-1 text-[length:var(--fs-title-3)] font-medium text-fg">
+        {copy.centers.cardTitle}
+      </h2>
+      <p className="mb-4 text-[length:var(--fs-text-sm)] text-fg-muted">{copy.centers.cardSubtitle}</p>
+      <AttendanceCard
+        name={me.profile.fullName ?? session.name}
+        image={session.image}
+        studentNumber={studentNumber}
+        studyType={me.profile.studyType ?? null}
+        attendanceMode={me.profile.attendanceMode ?? null}
+        booking={booking}
+      />
     </section>
   );
 }

@@ -296,7 +296,10 @@ export async function apiPatch(path: string, body: unknown): Promise<unknown> {
   const payload: unknown = await response.json().catch(() => undefined);
 
   if (!response.ok) {
-    throw new ApiRequestError(response.status, path);
+    // The body rides along for the one caller that branches on it: the
+    // profile save, where a 409 is either the phone or a centre slot that
+    // filled up, and only `payload.code` tells them apart.
+    throw new ApiRequestError(response.status, path, payload);
   }
 
   return payload;

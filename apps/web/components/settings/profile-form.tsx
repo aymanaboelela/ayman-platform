@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { OnboardingSchema, type Onboarding } from '@ayman/contracts/onboarding';
+import type { AttendanceMode, CenterView, StudyType } from '@ayman/contracts/centers';
 import type { Taxonomy } from '@ayman/contracts/taxonomy';
 import { copy } from '@ayman/contracts/copy';
 import { Button } from '@ayman/ui/components/button';
@@ -16,6 +17,15 @@ import { FixedSectionNote } from '@/components/onboarding/fixed-section-note';
 import { SelectField, type SelectOption } from '@/components/onboarding/select-field';
 import { FormField } from '@/components/auth/form-field';
 import { PhoneField } from '@/components/auth/phone-field';
+import { StudyAttendanceFields } from '@/components/centers/attendance-fields';
+import {
+  attendancePayload,
+  centerFieldErrors,
+  slotRefusal,
+  slotsForYear,
+  type CenterFieldName,
+} from '@/components/centers/center-form';
+import { useCenters } from '@/components/centers/use-centers';
 
 const c = copy.section;
 
@@ -30,6 +40,10 @@ export interface ProfileDefaults {
   schoolStream?: 'general' | 'languages' | null;
   year?: number | null;
   fatherPhone?: string | null;
+  studyType?: StudyType | null;
+  attendanceMode?: AttendanceMode | null;
+  /** The slot of the live centre booking, from `/api/me/center-booking`. */
+  centerSlotId?: string | null;
 }
 
 /**
@@ -83,9 +97,12 @@ export interface ProfileDefaults {
 export function ProfileForm({
   taxonomy,
   defaults,
+  initialCenters,
 }: {
   taxonomy: Taxonomy;
   defaults: ProfileDefaults;
+  /** `/api/centers` as the server read it; `null` if that read failed. */
+  initialCenters: CenterView[] | null;
 }) {
   const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);
@@ -95,6 +112,9 @@ export function ProfileForm({
     handleSubmit,
     control,
     setValue,
+    setError,
+    clearErrors,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<Onboarding>({
     resolver: zodResolver(OnboardingSchema),
@@ -117,6 +137,11 @@ export function ProfileForm({
       schoolStream: defaults.schoolStream ?? undefined,
       year: defaults.year ?? undefined,
       fatherPhone: defaults.fatherPhone ?? undefined,
+      // Null for every profile saved before these were asked — the cards
+      // start unselected and the first save asks, as «المدينة» did.
+      studyType: defaults.studyType ?? undefined,
+      attendanceMode: defaults.attendanceMode ?? undefined,
+      centerSlotId: defaults.centerSlotId ?? undefined,
     },
   });
 
@@ -124,17 +149,54 @@ export function ProfileForm({
   // `useWatch`, not `watch()` — see the same line in `OnboardingForm`.
   const cities = cityOptions(useWatch({ control, name: 'governorateCode' }));
 
+  const { centers, reload: reloadCenters } = useCenters(initialCenters);
+  const attendanceVisible = centers !== null && centers.length > 0;
+  const slots = slotsForYear(centers ?? [], useWatch({ control, name: 'year' }));
+  /*
+    With the question hidden, «keep» unless the student is plainly online: a
+    list that failed to load, or a centre that was closed under a booked
+    student, must not quietly give their seat away because they saved a new
+    school name. The API keeps what is stored when both keys are absent.
+  */
+  const whenHidden =
+    centers === null || defaults.attendanceMode === 'center' ? 'keep' : 'online';
+
+  /** The answers the schema cannot demand — see `center-form.ts`. */
+  function checkCenterFields(): boolean {
+    const issues = centerFieldErrors(getValues(), {
+      attendanceVisible,
+      slots,
+      currentSlotId: defaults.centerSlotId,
+    });
+    for (const [field, message] of Object.entries(issues)) {
+      setError(field as CenterFieldName, { type: 'required', message });
+    }
+    return Object.keys(issues).length === 0;
+  }
+
   async function onSubmit(values: Onboarding) {
     setFormError(null);
+    if (!checkCenterFields()) return;
     try {
       // `fixedSectionFor` LAST, so the three answers nobody is asked for — the
       // system, the track, the elective — win over whatever the form holds.
-      // Same order and same reason as the wizard's submit.
+      // Same order and same reason as the wizard's submit. The attendance
+      // pair likewise, so a hidden question sends what `whenHidden` says.
       await apiPatch('/api/profile/onboarding', {
         ...values,
         ...fixedSectionFor(taxonomy, values.year),
+        ...attendancePayload(values, { attendanceVisible, whenHidden }),
       });
     } catch (error) {
+      // A refused slot shares the 409 with the phone; `payload.code` decides.
+      const refusal = slotRefusal(error);
+      if (refusal) {
+        setValue('centerSlotId', null);
+        setError('centerSlotId', { type: 'server', message: refusal });
+        setFormError(refusal);
+        reloadCenters();
+        return;
+      }
       setFormError(
         error instanceof ApiRequestError && error.status === 409
           ? copy.onboarding.phoneConflictError
@@ -154,7 +216,10 @@ export function ProfileForm({
       // `method="post"` — see `auth/login-form.tsx`. This one carries the
       // student's name, school and section, which do not belong in a URL.
       method="post"
-      onSubmit={handleSubmit(onSubmit)}
+      // The invalid branch runs the centre check too, so a missing «نوع
+      // الدراسة» shows up in the same press as a missing school name rather
+      // than on the next one.
+      onSubmit={handleSubmit(onSubmit, () => void checkCenterFields())}
       className="space-y-8"
       noValidate
     >
@@ -256,6 +321,18 @@ export function ProfileForm({
         <p className="rounded-lg border border-line bg-surface-2 px-4 py-3 text-[length:var(--fs-text-sm)] text-fg-muted">
           {c.keepsProgress}
         </p>
+      </Group>
+
+      <Group title={copy.centers.groupTitle}>
+        <StudyAttendanceFields
+          control={control}
+          register={register}
+          clearErrors={clearErrors}
+          errors={errors}
+          attendanceVisible={attendanceVisible}
+          slots={slots}
+          currentSlotId={defaults.centerSlotId}
+        />
       </Group>
 
       {formError ? (

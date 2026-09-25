@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ProfileMeSchema, copy } from '@ayman/contracts';
+import { CentersListSchema, MyCenterBookingSchema } from '@ayman/contracts/centers';
+import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { ProfileForm } from '@/components/settings/profile-form';
@@ -26,9 +28,27 @@ export const metadata: Metadata = { title: c.title };
  * their answer is invalid, for a field that offered them nothing to choose.
  */
 export default async function SectionSettingsPage() {
-  const [taxonomy, me] = await Promise.all([
+  const [taxonomy, me, centers, booking] = await Promise.all([
     getTaxonomyOrNull(),
     apiGetAuthed('/api/profile/me', ProfileMeSchema),
+    /*
+      The centre list costs the page nothing if it fails: `null` hides «نوع
+      الحضور» and the form then leaves the stored answer alone (see
+      `whenHidden` in `ProfileForm`), and the browser gets one more try.
+    */
+    apiGetAuthed('/api/centers', CentersListSchema).then(
+      (list) => list.centers,
+      () => null,
+    ),
+    /*
+      404 is «no profile yet», which the redirect below already handles; any
+      other failure is rethrown, because a form that does not know the booked
+      slot would ask a centre student to pick one again — and could move them.
+    */
+    apiGetAuthed('/api/me/center-booking', MyCenterBookingSchema).catch((error: unknown) => {
+      if (error instanceof ApiRequestError && error.status === 404) return null;
+      throw error;
+    }),
   ]);
 
   // `PATCH /profile/section` 404s without a profile, and the wizard is the
@@ -68,7 +88,11 @@ export default async function SectionSettingsPage() {
             schoolStream: me.profile.schoolStream,
             year: me.profile.year,
             fatherPhone: me.profile.fatherPhone,
+            studyType: me.profile.studyType,
+            attendanceMode: me.profile.attendanceMode,
+            centerSlotId: booking?.booking?.slotId ?? null,
           }}
+          initialCenters={centers}
         />
       )}
 

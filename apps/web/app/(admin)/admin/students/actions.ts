@@ -73,11 +73,18 @@ export async function patchStudentAction(userId: string, formData: FormData): Pr
       // `null` — the one gesture that takes a child's photo back off the
       // public board has to actually write the removal, not send `undefined`.
       honorPhotoKey: readOptionalText(formData, 'honorPhotoKey'),
+      // «نوع الدراسة» / «نوع الحضور». '' is «مش متسجّل» → `null`, same as the
+      // stream; the schema refuses anything outside the two enums.
+      studyType: readOptionalText(formData, 'studyType'),
+      attendanceMode: readOptionalText(formData, 'attendanceMode'),
     });
 
     await adminSend('PATCH', `/api/admin/students/${userId}`, body, AdminStudentDetailSchema);
     revalidatePath(`/admin/students/${userId}`);
     revalidatePath('/admin/students');
+    // «أونلاين» releases a centre seat in the same write — the slot's bookings
+    // and counts under `/admin/centers` changed with it.
+    if (body.attendanceMode === 'online') revalidatePath('/admin/centers', 'layout');
     return { ok: true };
   } catch (error) {
     if (error instanceof AdminApiError && error.status === 409) {
