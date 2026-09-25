@@ -4848,11 +4848,45 @@ body:has(main[data-preset='board']) .site-nav--over {
   border-block-end-color: transparent;
 }
 
-/* Once pinned it needs its own ground again, because what is behind it is now
-   whatever section the reader has scrolled to. */
+/* ⚠️ `--p-900` AND `--ink-fg`, NOT `--board-slab` AND `--board-on-slab`.
+   
+   Those two are declared on `[data-preset='board']`, which is the `<main>`.
+   The nav is its SIBLING, so neither resolves here — and a `background:
+   var(--undefined)` is not a fallback, it is an invalid declaration that
+   leaves the element transparent.
+   
+   Measured on the live page at scroll 0, light theme: `--board-slab` read
+   «not defined» on the nav, the computed background was `rgba(0, 0, 0, 0)`,
+   and the wordmark was `rgb(26, 23, 20)` — near-black text on the deep blue
+   panel showing through. The platform's own name was invisible on its own
+   home page, and only in light mode, because that is the only theme whose
+   default nav text is dark.
+   
+   `--p-900` is on `:root` (written by `renderBrandingStyle`) and `--ink-fg`
+   is a global token, so both are in scope for a sibling of `<main>`. Same
+   ramp, same colour, reachable from here. */
 body:has(main[data-preset='board']) .site-nav--pinned {
-  background: var(--board-slab);
-  border-block-end: 1px solid color-mix(in oklch, var(--board-on-slab), transparent 86%);
+  background: var(--p-900);
+  border-block-end: 1px solid color-mix(in oklch, var(--ink-fg), transparent 86%);
+}
+
+/* The wordmark over a slab is light in BOTH themes, and it has to be said
+   twice because the two states are styled by different rules: `--over` is
+   already white from `media.css`, `--pinned` falls back to the theme's own
+   near-black. On this preset the ground behind the nav is the brand slab in
+   either state, so the text follows the ground and not the theme. */
+body:has(main[data-preset='board']) .site-nav--pinned .wordmark__name {
+  color: var(--ink-fg);
+}
+
+body:has(main[data-preset='board']) .site-nav--pinned .wordmark__tag {
+  color: color-mix(in oklch, var(--ink-fg), transparent 38%);
+}
+
+/* And the outline button beside it, for the same reason. */
+body:has(main[data-preset='board']) .site-nav--pinned .site-btn--outline {
+  border-color: color-mix(in oklch, var(--ink-fg), transparent 72%);
+  color: var(--ink-fg);
 }
 
 /* ── the opener arrives ───────────────────────────────────────────────────
