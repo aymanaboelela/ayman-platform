@@ -4912,3 +4912,97 @@ body:has(main[data-preset='board']) .site-nav--pinned {
     animation: board-enter-figure 820ms cubic-bezier(0.22, 0.61, 0.36, 1) 480ms backwards;
   }
 }
+
+/* ── الكود في افتتاحية «اللوح» ────────────────────────────────────────────
+
+   الافتتاحية كانت بلاطة زرقا فيها كلام وزراير وصورة، وبتقرا مسطّحة: مفيش فيها
+   حاجة تخص المادة اللي بتتباع. تلات سطور بايثون بتشتغل هي أقصر حاجة ممكن تقول
+   «ده اللي هتتعلمه» من غير ما تقولها بالكلام.
+
+   ⚠️ **مش نسخة من `.st-code`.** هناك اللوحة بتطلع على ورق أبيض فبتاخد حد وظل؛
+   هنا هي مساحة أغمق شوية محفورة في البلاطة نفسها، من غير ظل ولا حد فاتح — ظل
+   على حقل لون صلب هو بالظبط الحاجة اللي البريست ده مبني على إنه مالوش.
+
+   `--board-plate` هي نفس الدرجة اللي البانل الختامي بيستخدمها، فالحفر ده لون
+   موجود في الپاليت مش لون جديد اتخترع للوحة دي.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+[data-preset='board'] .board-code {
+  inline-size: min(100%, 26rem);
+  margin-block-start: clamp(1.25rem, 3vw, 2rem);
+  margin-inline: auto;
+  padding: 1rem 1.125rem;
+  border-radius: var(--radius-lg);
+  background: var(--board-plate);
+  text-align: start;
+}
+
+[data-preset='board'] .board-code__cap {
+  margin-block-end: 0.625rem;
+  color: var(--board-on-slab-2);
+  font-size: var(--fs-text-sm);
+  font-weight: 600;
+}
+
+[data-preset='board'] .board-code__body {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--board-on-slab);
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+}
+
+[data-preset='board'] .board-code__line {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* التعليق بيرجع RTL جوّه البلوك اللي اتقلب LTR: ده كلام، وعربي من الشمال
+   لليمين بيتقري مكسور لأي حد بيقرا عربي. */
+[data-preset='board'] .board-code__comment {
+  display: block;
+  color: var(--board-on-slab-2);
+  font-family: var(--font-sans);
+}
+
+[data-preset='board'] .board-code__out {
+  margin-block-start: 0.75rem;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid color-mix(in oklch, var(--board-on-slab), transparent 86%);
+  color: var(--board-on-slab);
+  font-size: var(--fs-text-sm);
+}
+
+[data-preset='board'] .board-code__caret {
+  color: var(--board-on-slab-2);
+  font-family: var(--font-mono);
+}
+
+/* على شاشة عريضة الكود بيقعد **جنب** الصورة مش تحتها: البانل في النص، والعمودين
+   بيدّوا الافتتاحية عرض بدل عمود واحد طويل. */
+@media (min-width: 64rem) {
+  [data-preset='board'] .board-panel__inner:has(.board-code):has(.board-portrait) {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    justify-items: center;
+    column-gap: clamp(1.5rem, 4vw, 3rem);
+  }
+
+  /* الكلام والزراير بيفضلوا في العمود الأول على عرضه الكامل. */
+  [data-preset='board'] .board-panel__inner:has(.board-code):has(.board-portrait) > *:not(.board-code):not(.board-portrait) {
+    grid-column: 1 / -1;
+  }
+
+  [data-preset='board'] .board-panel__inner:has(.board-code) .board-code {
+    grid-column: 1;
+    margin-block-start: 0;
+  }
+
+  [data-preset='board'] .board-panel__inner:has(.board-code) .board-portrait {
+    grid-column: 2;
+    margin-block-start: 0;
+  }
+}
