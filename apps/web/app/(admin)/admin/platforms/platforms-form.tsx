@@ -185,7 +185,18 @@ export function PlatformsForm({ tenants, features }: PlatformsFormProps) {
           <Card>
             <CardBody className="divide-y divide-line-subtle">
               {features.map((feature) => {
-                const on = form.watch(`features.${feature.key}`) === true;
+                /*
+                  ⚠️ The WHOLE `features` object, never `features.${key}`.
+                  Two keys carry a dot — `marketing.whatsapp`, `video.upload` —
+                  and react-hook-form reads a dot in a field path as nesting:
+                  `setValue('features.video.upload', true)` wrote
+                  `{ video: { upload: true } }`, the schema's
+                  `record(string, boolean)` refused the object under `video`,
+                  and the submit died in validation with no field to show the
+                  error on. Ticking «رفع الفيديو» or «حملات الواتساب» made the
+                  sign button do nothing at all.
+                */
+                const on = form.watch('features')[feature.key] === true;
                 return (
                   <label key={feature.key} className="flex items-center justify-between gap-4 py-3">
                     <span className="min-w-0">
@@ -217,7 +228,10 @@ export function PlatformsForm({ tenants, features }: PlatformsFormProps) {
                     <Checkbox
                       checked={on}
                       onCheckedChange={(checked) =>
-                        form.setValue(`features.${feature.key}`, checked === true)
+                        form.setValue('features', {
+                          ...form.getValues('features'),
+                          [feature.key]: checked === true,
+                        })
                       }
                       aria-label={feature.nameAr}
                     />
