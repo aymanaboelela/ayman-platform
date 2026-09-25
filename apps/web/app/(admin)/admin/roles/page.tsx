@@ -3,6 +3,9 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { Card, CardBody } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { PermissionGrid } from './permission-grid';
+import { StaffSection } from './staff-section';
+import { getSession } from '@/lib/session';
+import { z } from '@ayman/contracts/zod';
 
 const c = copy.admin.roles;
 
@@ -21,16 +24,41 @@ export const metadata = { title: c.title };
  * من غير كاش — اللي بيعدّل صلاحية لازم يشوف كتابته هو، مش حالة قديمة.
  */
 export default async function RolesPage() {
-  const roles = await Promise.all(
-    GRANTABLE_ROLES.map((role) =>
-      adminGet(`/api/admin/roles/${role}/permissions`, RoleGrantsReadSchema),
+  const [roles, staff, session] = await Promise.all([
+    Promise.all(
+      GRANTABLE_ROLES.map((role) =>
+        adminGet(`/api/admin/roles/${role}/permissions`, RoleGrantsReadSchema),
+      ),
     ),
-  );
+    /*
+     * الفريق الحالي — من قايمة الطلبة بفلتر `role=staff`.
+     *
+     * مش endpoint جديد: القايمة أصلًا بترجّع الدور في كل صف وبتدوّر بالاسم
+     * والموبايل والإيميل، فنسخة تانية من نفس الاستعلام كانت هتدرِفت عنها.
+     *
+     * `staff` معناها «أي حد مش طالب» — دور رابع يتضاف بكرة هيبان هنا من غير
+     * ما حد يفتكر يعدّل الشاشة دي.
+     */
+    adminGet(
+      '/api/admin/students?page=1&perPage=50&role=staff',
+      z.object({
+        rows: z.array(z.object({ id: z.string(), fullName: z.string(), phone: z.string() })),
+      }),
+    ),
+    getSession(),
+  ]);
 
   return (
     <>
       <h1 className="mb-1 text-[length:var(--fs-title-2)] font-semibold text-fg">{c.title}</h1>
       <p className="mb-6 max-w-[var(--w-prose)] text-fg-muted">{c.lead}</p>
+
+      <div className="mb-8">
+        <StaffSection
+          members={staff.rows.map((r) => ({ id: r.id, name: r.fullName, phone: r.phone }))}
+          currentUserId={session?.id ?? ''}
+        />
+      </div>
 
       <div className="space-y-6">
         {roles.map((grants) => (
