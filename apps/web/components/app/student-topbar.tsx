@@ -50,7 +50,7 @@ export function StudentTopbar({
   courses: ReactNode;
   notifications: ReactNode;
   accountMenu: ReactNode;
-  /** Pinned to the foot of the phone drawer — see `DrawerAccount`. */
+  /** The head of the phone drawer — see `DrawerAccount`. */
   drawerAccount?: ReactNode;
   /** «المساعد», beside the bell — see `StudentShell`'s prop for why it moved here. */
   assistant?: ReactNode;
@@ -170,19 +170,23 @@ export function StudentTopbar({
               The drawer is a column of OBJECTS now, not a list of links: every
               row carries its icon in a tinted tile, the current page is a solid
               tile on a tinted row, and the account it all belongs to is a card
-              pinned to the foot. «المينو في الموبايل بيبقى كده بشكل حلو» — sent
+              at the head. «المينو في الموبايل بيبقى كده بشكل حلو» — sent
               with a competitor's drawer, the same idea in this tenant's accent.
 
               `p-0 gap-0`: the panel's own 16px inset moved onto `.drawer__body`,
-              so the account card can span the full width and stay pinned while
-              the list above it scrolls. All of it is `.drawer`-scoped CSS in
+              so the account card can span the full width and stay put while the
+              list below it scrolls. All of it is `.drawer`-scoped CSS in
               globals.css — the rail and the admin sheet share `.nav-pill`, and
               neither is meant to change with this.
             */}
             <SheetContent closeLabel={copy.common.close} className="drawer gap-0 p-0 md:hidden">
-              <SheetTitle className="drawer__brand">
-                <BrandLockup showTagline={false} />
-              </SheetTitle>
+              {/* The ACCOUNT on top, not the brand — «حط الأكونت اللي فاتح بيه
+                  بدل اسم أيمن أبو العلا فوق». The brand is already the first
+                  thing on the bar behind this sheet; the drawer is where a
+                  family's shared phone answers «مين اللي فاتح دلوقتي». The
+                  title stays for screen readers, which announce it on open. */}
+              <SheetTitle className="sr-only">{copy.nav.menuLabel}</SheetTitle>
+              <div className="drawer__head">{drawerAccount ?? <BrandLockup showTagline={false} />}</div>
 
               <div className="drawer__body">
                 <nav aria-label={copy.nav.mainNav}>
@@ -235,8 +239,6 @@ export function StudentTopbar({
                   <SignOutButton well className="nav-pill nav-pill--danger" />
                 </div>
               </div>
-
-              {drawerAccount}
             </SheetContent>
           </Sheet>
 

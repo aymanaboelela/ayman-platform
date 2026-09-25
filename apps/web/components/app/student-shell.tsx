@@ -63,7 +63,7 @@ export function StudentShell({
   courses: ReactNode;
   notifications: ReactNode;
   accountMenu: ReactNode;
-  /** The signed-in identity at the foot of the phone drawer — see `DrawerAccount`. */
+  /** The signed-in identity at the head of the phone drawer — see `DrawerAccount`. */
   drawerAccount?: ReactNode;
   /**
    * «المساعد», as a control in the TOPBAR rather than a disc floating over the

@@ -6034,6 +6034,11 @@ export const copy = {
       confirmReceived: 'استلمت الكتاب',
       confirmReceivedHint: 'دوس هنا أول ما يوصلك، عشان نعرف إنه وصل فعلاً.',
       confirmReceivedWorking: 'بنسجّل…',
+      /** The question before it is recorded — «يطلعله بوب أب يأكد عليها». */
+      confirmReceivedAsk: 'الكتاب وصلك فعلاً؟',
+      confirmReceivedAskBody: 'أول ما نسجّل إنه وصل، الطلب بيتقفل ويتنقل لقايمة الكتب اللي اتسلّمت.',
+      confirmReceivedYes: 'أيوه، وصلني',
+      confirmReceivedNo: 'لسه',
       /** الطلب اتقفل ونزل تحت «وصلك» — بيتقال مرة واحدة وبعدها الكرت نفسه
        *  بيقول الباقي. */
       confirmReceivedDone: 'تمام، سجّلناها. مبروك الكتاب!',
