@@ -16,6 +16,7 @@
     "./copy/outreach": "./src/copy/outreach.ts",
     "./copy/tenant-sentence": "./src/copy/tenant-sentence.ts",
     "./onboarding": "./src/onboarding.ts",
+    "./full-name": "./src/full-name.ts",
     "./cities": "./src/cities.ts",
     "./auth": "./src/auth.ts",
     "./profile": "./src/profile.ts",

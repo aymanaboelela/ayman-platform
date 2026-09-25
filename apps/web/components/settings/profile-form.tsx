@@ -228,6 +228,7 @@ export function ProfileForm({
           label={copy.onboarding.fullName}
           placeholder={copy.onboarding.fullNamePlaceholder}
           autoComplete="name"
+          hint={copy.onboarding.fullNameHint}
           errorMessage={errors.fullName?.message}
           {...register('fullName')}
         />

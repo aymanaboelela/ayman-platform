@@ -1,5 +1,6 @@
 import { z } from '@ayman/contracts/zod';
 import { egyptianPhone, normalizeEgyptianPhone } from '@ayman/contracts/phone';
+import { FullNameSchema } from '@ayman/contracts/full-name';
 
 /**
  * No relative imports in this file, on purpose — same reason as
@@ -131,7 +132,8 @@ const OptionalAuthEmailSchema = z
 
 export const RegisterSchema = z
   .object({
-    name: z.string().trim().min(2, 'الاسم الكامل مطلوب').max(120, 'الاسم طويل جدًا'),
+    /** Three parts, one script — see `@ayman/contracts/full-name`. */
+    name: FullNameSchema,
     /**
      * The account's identity. Required, normalised to E.164 here so the value
      * that reaches `/sign-up/email` is already in the exact form

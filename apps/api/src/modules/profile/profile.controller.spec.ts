@@ -111,7 +111,7 @@ describe('ProfileController (e2e)', () => {
 
   function validPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
     return {
-      fullName: 'طالب تجريبي',
+      fullName: 'طالب تجريبي للاختبار',
       gender: 'male',
       phone: randomEgyptianPhoneLocal(),
       governorateCode,

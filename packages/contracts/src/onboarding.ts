@@ -2,6 +2,7 @@ import { z } from '@ayman/contracts/zod';
 import { AttendanceModeSchema, StudyTypeSchema } from '@ayman/contracts/centers';
 import { egyptianPhone } from '@ayman/contracts/phone';
 import { cityBelongsTo } from '@ayman/contracts/cities';
+import { FullNameSchema } from '@ayman/contracts/full-name';
 
 export const GenderSchema = z.enum(['male', 'female']);
 
@@ -31,7 +32,13 @@ export const OnboardingSystemSchema = z.enum(['bacalorya', 'thanaweya_amma']);
 
 const OnboardingShapeSchema = z
   .object({
-    fullName: z.string().trim().min(2, 'الاسم الكامل مطلوب').max(120),
+    /**
+     * The same rule the register form applies, because «بياناتك» submits this
+     * schema too — without it a student could register as «أحمد محمد علي» and
+     * save «aa» a minute later. A student whose stored name predates the rule
+     * is asked to complete it the first time they save their profile.
+     */
+    fullName: FullNameSchema,
     gender: GenderSchema,
     phone: egyptianPhone('رقم الهاتف مطلوب'),
     governorateCode: z.string().length(2, 'لازم نحدد المحافظة'),

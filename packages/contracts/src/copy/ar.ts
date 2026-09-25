@@ -474,6 +474,7 @@ export const copy = {
       'الرقم ده عشان نقدر نتواصل مع ولي أمرك عن مستواك لو احتجنا. مابنستعملهوش في أي حاجة تانية.',
     fullName: 'الاسم الكامل',
     fullNamePlaceholder: 'الاسم بالكامل',
+    fullNameHint: 'ثلاثي على الأقل، بالعربي أو بالإنجليزي',
     gender: 'النوع',
     /**
      * The blank option, and it must not repeat its own label.
@@ -741,6 +742,8 @@ export const copy = {
     },
     fields: {
       name: 'الاسم الكامل',
+      /** Said up front, so the rule is not first met as an error. */
+      nameHint: 'ثلاثي على الأقل، بالعربي أو بالإنجليزي',
       /**
        * The account's identity now. The label says «موبايل» rather than
        * «هاتف» because that is the word a student uses about the thing in
