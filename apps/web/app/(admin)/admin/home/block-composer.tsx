@@ -92,7 +92,7 @@ const DEFAULT_PROPS: Record<BlockType, HomeBlockProps> = {
     ],
   },
   courseGrid: { type: 'courseGrid', titleAr: '', leadAr: '', ctaLabelAr: '', courseIds: [], limit: 6 },
-  books: { type: 'books', titleAr: '', leadAr: '', ctaLabelAr: '', limit: 3 },
+  books: { type: 'books', titleAr: '', leadAr: '', ctaLabelAr: '', limit: 4 },
   instructor: { type: 'instructor' },
   yearTracks: { type: 'yearTracks' },
   honorBoard: { type: 'honorBoard' },

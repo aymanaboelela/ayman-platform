@@ -99,7 +99,13 @@ export const BooksPropsSchema = z.object({
   titleAr: z.string().min(2).max(80),
   leadAr: lead,
   ctaLabelAr: z.string().max(40).default(''),
-  limit: z.number().int().min(1).max(12).default(3),
+  /**
+   * 4, the whole curriculum: two years × عربي/لغات. This default WINS over the
+   * component's own `STRIP_LIMIT` — the block is parsed before it reaches
+   * `<BooksStrip>`, so `props.limit` is never undefined — and at 3 it cut the
+   * fourth book off the home page while `books-strip.tsx` said 4.
+   */
+  limit: z.number().int().min(1).max(12).default(4),
 });
 
 /** Placement-only — see the module comment. */

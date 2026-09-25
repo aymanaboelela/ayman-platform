@@ -5946,6 +5946,10 @@ export const copy = {
      * turns the change that follows into an answer rather than a surprise.
      */
     shippingByGovernorate: 'على حسب المحافظة',
+    /** Only on an order the admin discounted — the row that makes «الكتب» +
+     *  «الشحن» add up to the total above them. `{price}` */
+    discount: 'خصم',
+    discountValue: '− {price}',
     total: 'الإجمالي',
     /** The TOTAL row in the same "no address yet" state — the lowest it can
      *  possibly be, said as a floor rather than as a price. `{price}` */
