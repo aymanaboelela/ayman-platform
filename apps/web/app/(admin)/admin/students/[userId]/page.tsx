@@ -13,6 +13,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { Skeleton } from '@ayman/ui/components/skeleton';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { adminGet, adminGetOrForbidden } from '@/lib/admin-api';
+import { SessionDeviceListSchema } from '@ayman/contracts/sessions';
 import { StudentRecord } from '@/components/admin/students/student-record';
 import { WhatsappButton } from '@/components/admin/whatsapp-button';
 import { StudentDetailForm } from './student-detail-form';
@@ -23,6 +24,7 @@ import { SubscriptionSection } from './subscription-section';
 import { AccountAccessSection } from './account-access-section';
 import { HistorySection } from './history-section';
 import { ConversationSection } from './conversation-section';
+import { DevicesSection } from './devices-section';
 
 export const metadata = { title: copy.admin.students.detailTitle };
 
@@ -139,7 +141,7 @@ export default async function StudentDetailPage({
    * overlap; they serve different controls for different reasons and neither
    * is a subset built from the other.
    */
-  const [student, taxonomy, grants, courses, subscriptions, history, conversation] =
+  const [student, taxonomy, grants, courses, subscriptions, history, conversation, devices] =
     await Promise.all([
     adminGet(`/api/admin/students/${userId}`, AdminStudentDetailSchema),
     getTaxonomyOrNull(),
@@ -213,6 +215,13 @@ export default async function StudentDetailPage({
       `/api/admin/students/${userId}/conversation`,
       AdminStudentConversationSchema,
     ),
+
+    /*
+     * الأجهزة اللي الحساب مفتوح عليها. `OrForbidden` زي اللي فوقه: الراوت
+     * على `student:read` فأي حد فاتح الصفحة دي عنده الصلاحية — بس القاعدة
+     * اللي الصفحة بقت ماشية عليها إن لوحة مرفوضة تتقال، مش تموّت الصفحة.
+     */
+    adminGetOrForbidden(`/api/admin/students/${userId}/sessions`, SessionDeviceListSchema),
   ]);
 
   const closedCourses = courses
@@ -307,6 +316,7 @@ export default async function StudentDetailPage({
           ) : (
             <ConversationSection userId={userId} conversation={conversation} />
           )}
+          {devices === null ? <ForbiddenPanel /> : <DevicesSection devices={devices} />}
           {/* LAST in the column, deliberately. Two of its three controls are
               destructive and one is irreversible, so it sits below the
               everyday ones rather than beside them — an operator scrolling to

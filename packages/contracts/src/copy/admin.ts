@@ -1664,6 +1664,10 @@ const admin = {
     /** لوحة القارئ مش من صلاحيته — مش «فاضية». اللي بيقراها المدرّس نفسه. */
     panelForbidden: 'القسم ده مش مفتوح لحسابك',
     panelForbiddenHint: 'الصلاحية دي بتتمنح من إعدادات الصلاحيات.',
+    /** أجهزة الطالب في صفحته عند الأدمن — مش «أجهزتي»، دي بتاعت حد تاني. */
+    studentDevices: 'الأجهزة المفتوحة',
+    studentDevicesHint: 'الحساب مسموح له بجهازين. الطالب بيقفل أي جهاز من «أجهزتي».',
+    studentDevicesEmpty: 'مفيش أجهزة مفتوحة دلوقتي.',
     /** The landing page's shape — a different page, not the same page recoloured. */
     landingLayout: 'شكل الصفحة الرئيسية',
     landingLayoutHint:

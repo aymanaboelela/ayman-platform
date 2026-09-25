@@ -3,9 +3,10 @@ import { StudentHistoryService } from './student-history.service';
 import { StudentsController } from './students.controller';
 import { StudentsService } from './students.service';
 
+import { SessionDeviceService } from '../../sessions/session-device.service';
 @Module({
   controllers: [StudentsController],
-  providers: [StudentsService, StudentHistoryService],
+  providers: [StudentsService, StudentHistoryService, SessionDeviceService],
   exports: [StudentsService],
 })
 export class StudentsModule {}
