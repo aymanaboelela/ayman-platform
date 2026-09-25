@@ -51,13 +51,39 @@ describe('HEIC من تليفون', () => {
    * وده كمان بيفسّر ليه الباج عاش: محدش كان يقدر يشوفه على جهازه.
    */
 
-  it('ffmpeg موجود في البيئة', () => {
-    // الحل كله قايم عليه، وهو متسطّب في `apps/api/Dockerfile` للفيديو.
-    // لو البيئة مالهاش ffmpeg، الفيتشر مش هيشتغل وde أحسن مكان نعرف فيه.
-    expect(() => execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' })).not.toThrow();
+  /*
+   * ⚠️ العقد هنا هو **صورة الإنتاج**، مش الجهاز اللي التست ماشي عليه.
+   *
+   * أول نسخة كانت بتشغّل `ffmpeg -version` وتتأكد إنها ما ترميش. طلعت حمرا في
+   * CI — الرَنر مالهوش ffmpeg — وخضرا محليًا وفي الصورة. يعني كانت بتقيس
+   * البيئة مش الكود، وبتوقّع PR لسبب مالوش علاقة باللي اتغيّر.
+   *
+   * اللي لازم يفضل صح إن **الحاوية اللي الكود بيشتغل فيها** فيها ffmpeg،
+   * وده سؤال عن ملف مش عن الجهاز الحالي. لو حد شال السطر ده من الـDockerfile
+   * عشان يخفّف الصورة، التست ده بيقع — وده بالظبط اللحظة اللي المفروض نعرف
+   * فيها.
+   */
+  it('صورة الإنتاج بتسطّب ffmpeg — ومن غيره الفيتشر ده مايشتغلش', () => {
+    const dockerfile = readFileSync(join(__dirname, '..', '..', '..', 'Dockerfile'), 'utf8');
+    const runtime = dockerfile.slice(dockerfile.indexOf('AS runtime'));
+    expect(runtime).toMatch(/apt-get install[^\n]*ffmpeg|install[^\n]*\bffmpeg\b/);
   });
 
-  it('وبعد ما يعدّي على ffmpeg، sharp بيفتحه ويطلّع WebP', async () => {
+  /*
+   * بيتخطّى على جهاز مالهوش ffmpeg (رَنر CI) وبيشتغل على اللي عنده (التطوير،
+   * وصورة الإنتاج). الكيس اللي فوق هو اللي بيحرس الاعتماد نفسه؛ ده بيحرس إن
+   * الأوامر صح — والاتنين مع بعض بيغطّوا اللي كان بيتغطّى بواحد كان بيوقّع CI.
+   */
+  const hasFfmpeg = (() => {
+    try {
+      execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+
+  (hasFfmpeg ? it : it.skip)('وبعد ما يعدّي على ffmpeg، sharp بيفتحه ويطلّع WebP', async () => {
     const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');
     const dir = mkdtempSync(join(tmpdir(), 'heic-spec-'));
