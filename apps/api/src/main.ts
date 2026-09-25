@@ -4,6 +4,7 @@ import 'dotenv/config';
 import { RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import type { NextFunction, Request, Response } from 'express';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { loadEnv } from './config/env';
@@ -51,6 +52,15 @@ async function bootstrap(): Promise<void> {
   // A specific hop count, never `true`. With `true`, a client can spoof
   // X-Forwarded-For and become un-throttleable.
   app.set('trust proxy', 1);
+
+  // Nothing under `/api` is a page, and Search Console had `/api/health` in
+  // «لم تتم فهرستها». Traefik routes `/api` straight here, past Next, so the
+  // web app's `noindex` rules never see these responses. `/media` is not
+  // matched: it is a different origin, and its images may appear in search.
+  app.use('/api', (_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('X-Robots-Tag', 'noindex');
+    next();
+  });
 
   /**
    * ⚠️ Without this, every graceful-shutdown hook in the codebase is DEAD CODE.
