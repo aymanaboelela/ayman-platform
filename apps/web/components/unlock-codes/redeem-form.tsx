@@ -1,6 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ChangeEvent,
+  type CSSProperties,
+  type FormEvent,
+} from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -76,6 +84,11 @@ function confettiPieces(): CSSProperties[] {
  * the student presses the button: every wrong code costs a strike on the
  * server's attempt ladder, so auto-submitting on the sixth character would
  * spend strikes on half-corrected typos.
+ *
+ * `compact` (the course page's card) drops the boxes for one plain field with
+ * the button beside it. Six 3.6rem boxes, a hint line and a full-width button
+ * made that card taller than the course it sat above; `/codes` is the page
+ * built around the code, and keeps them.
  */
 export function RedeemForm({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
@@ -145,30 +158,67 @@ export function RedeemForm({ compact = false }: { compact?: boolean }) {
   const complete = value.length === UNLOCK_CODE_LENGTH;
   const active = Math.min(value.length, UNLOCK_CODE_LENGTH - 1);
 
+  const field = {
+    ref: inputRef,
+    value,
+    onChange: (event: ChangeEvent<HTMLInputElement>) => update(event.target.value),
+    'aria-label': c.inputLabel,
+    'aria-describedby': 'uc-hint',
+    'aria-invalid': error ? true : undefined,
+    autoComplete: 'one-time-code',
+    autoCapitalize: 'characters',
+    autoCorrect: 'off',
+    spellCheck: false,
+    inputMode: 'text',
+    enterKeyHint: 'go',
+    dir: 'ltr',
+    maxLength: UNLOCK_CODE_LENGTH + 6,
+    disabled: pending,
+  } as const;
+
+  const submitButton = (
+    <button type="submit" className="uc-btn uc-btn--primary" disabled={pending || !complete}>
+      {pending ? (
+        <Loader2 className="uc-spin size-5" aria-hidden="true" />
+      ) : (
+        <KeyRound className="size-5" aria-hidden="true" />
+      )}
+      {pending ? c.submitting : c.submit}
+    </button>
+  );
+
+  if (compact) {
+    return (
+      <form method="post" onSubmit={submit} noValidate>
+        <div className="uc-inline">
+          <input {...field} className={cn('uc-field', error && 'is-error')} placeholder={c.fieldPlaceholder} />
+          {submitButton}
+        </div>
+        {error ? (
+          <p className="uc-error" role="alert">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            {error}
+          </p>
+        ) : (
+          // Still read out with the field; only the line under it is gone.
+          <p id="uc-hint" className="sr-only">
+            {c.inputHint}
+          </p>
+        )}
+      </form>
+    );
+  }
+
   return (
     // `method="post"`: a press before hydration submits natively, and a GET
     // would put the code in the URL — the history, the logs, the Referer.
     <form method="post" onSubmit={submit} noValidate>
       <div className={cn('uc-code', error && 'is-error')}>
         <input
-          ref={inputRef}
+          {...field}
           className="uc-code__input"
-          value={value}
-          onChange={(event) => update(event.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          aria-label={c.inputLabel}
-          aria-describedby="uc-hint"
-          aria-invalid={error ? true : undefined}
-          autoComplete="one-time-code"
-          autoCapitalize="characters"
-          autoCorrect="off"
-          spellCheck={false}
-          inputMode="text"
-          enterKeyHint="go"
-          dir="ltr"
-          maxLength={UNLOCK_CODE_LENGTH + 6}
-          disabled={pending}
         />
         <div className="uc-code__boxes" aria-hidden="true">
           {Array.from({ length: UNLOCK_CODE_LENGTH }, (_, index) => (
@@ -198,15 +248,8 @@ export function RedeemForm({ compact = false }: { compact?: boolean }) {
       )}
 
       <div className="uc-actions">
-        <button type="submit" className="uc-btn uc-btn--primary" disabled={pending || !complete}>
-          {pending ? (
-            <Loader2 className="uc-spin size-5" aria-hidden="true" />
-          ) : (
-            <KeyRound className="size-5" aria-hidden="true" />
-          )}
-          {pending ? c.submitting : c.submit}
-        </button>
-        {canPaste && !compact ? (
+        {submitButton}
+        {canPaste ? (
           <button type="button" className="uc-btn uc-btn--ghost" onClick={paste} disabled={pending}>
             <ClipboardPaste className="size-5" aria-hidden="true" />
             {c.paste}

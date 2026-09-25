@@ -570,22 +570,79 @@
 .uc-mini {
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
   border-radius: var(--r-lg);
   border: 1px solid color-mix(in oklab, var(--p-500) 30%, var(--color-line));
   background:
     radial-gradient(70% 90% at 100% 0%, color-mix(in oklab, var(--p-400) 18%, transparent), transparent 70%),
     var(--color-surface-2);
-  padding: 1.25rem;
+  padding: 0.9rem;
 }
-.uc-mini .uc-code { margin-top: 1rem; }
-.uc-mini .uc-code__box { max-block-size: 3.6rem; font-size: clamp(1.2rem, 4.5vw, 1.6rem); }
+.uc-mini .uc-card__head { align-items: flex-start; }
+.uc-mini .uc-card__icon { inline-size: 2.25rem; block-size: 2.25rem; }
+.uc-mini .uc-card__icon svg { inline-size: 1.15rem; block-size: 1.15rem; }
+.uc-mini .uc-card__title { font-size: var(--fs-text-base); font-weight: var(--fw-bold); }
+.uc-mini .uc-card__lead { line-height: 1.6; }
+
+/* One field and its button on one line. The field's huge grow factor keeps
+   the button at its own width while they share the line; once the card is
+   too narrow for both, the button wraps and fills the row by itself. */
+.uc-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.uc-inline .uc-btn--primary {
+  flex: 1 0 auto;
+  min-block-size: 2.6rem;
+  padding-inline: 1rem;
+  font-size: var(--fs-text-sm);
+}
+.uc-field {
+  flex: 999 1 9rem;
+  min-inline-size: 0;
+  min-block-size: 2.6rem;
+  padding-inline: 0.75rem;
+  border-radius: var(--r-md);
+  border: 1.5px solid var(--color-line-strong);
+  background: var(--color-surface-1);
+  color: var(--color-fg);
+  font-family: var(--font-mono);
+  font-size: 16px; /* under 16px, iOS zooms the whole page on focus */
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.3em;
+  text-align: center;
+  direction: ltr;
+  unicode-bidi: isolate;
+  transition:
+    border-color var(--d-hover) var(--ease-out),
+    box-shadow var(--d-hover) var(--ease-out);
+}
+.uc-field::placeholder {
+  font-family: var(--font-sans);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-regular);
+  letter-spacing: 0;
+  color: var(--color-fg-muted);
+}
+.uc-field:focus {
+  outline: none;
+  border-color: var(--p-500);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--p-500) 22%, transparent);
+}
+.uc-field.is-error { border-color: var(--err); }
+.uc-field:disabled { opacity: 0.6; }
+
 .uc-mini__single {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-top: 1rem;
-  padding-top: 0.9rem;
+  /* Down to the card's floor when it is stretched beside the month card. */
+  margin-top: auto;
+  padding-top: 0.75rem;
   border-top: 1px dashed var(--color-line);
   font-size: var(--fs-text-sm);
   color: var(--color-fg-muted);
