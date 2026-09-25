@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { copy } from '@ayman/contracts';
+import { formatCopy } from '@ayman/contracts/format';
 import type { LessonProgressDto } from '@ayman/contracts/progress';
 import { afterEach, describe, expect, it } from 'vitest';
 import { QuizLesson } from './quiz-lesson';
@@ -95,6 +96,27 @@ describe('QuizLesson', () => {
 
     expect(screen.queryByText(c.quizYourScore)).not.toBeInTheDocument();
     expect(screen.getByText(c.quizIntro)).toBeInTheDocument();
+  });
+
+  it('prints what the paper holds before it is opened', () => {
+    render(
+      <QuizLesson
+        lessonId={LESSON}
+        progress={progress()}
+        facts={{ questionCount: 10, durationSeconds: 900, passPercent: 50 }}
+      />,
+    );
+
+    expect(screen.getByText(formatCopy(c.quizFactQuestions, { count: 10 }))).toBeInTheDocument();
+    expect(screen.getByText(formatCopy(c.quizFactMinutes, { count: 15 }))).toBeInTheDocument();
+    expect(screen.getByText(formatCopy(c.quizFactPass, { percent: 50 }))).toBeInTheDocument();
+  });
+
+  it('says an untimed paper is untimed, and drops the facts an older API did not send', () => {
+    render(<QuizLesson lessonId={LESSON} progress={progress()} facts={{ durationSeconds: null }} />);
+
+    expect(screen.getByText(c.quizFactUntimed)).toBeInTheDocument();
+    expect(screen.queryByText(/سؤال/)).not.toBeInTheDocument();
   });
 
   it('rounds the stored fraction for display only', () => {

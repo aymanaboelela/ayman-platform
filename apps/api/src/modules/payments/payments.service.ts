@@ -389,7 +389,10 @@ export class PaymentsService {
    * what they already own in a course an admin has just unpublished deserves
    * the true answer, and there is nothing to sell them here to protect.
    */
-  async listOwnedMonths(userId: string, courseId: string): Promise<{ ownedMonthIds: string[] }> {
+  async listOwnedMonths(
+    userId: string,
+    courseId: string,
+  ): Promise<{ ownedMonthIds: string[]; coversAll: boolean; pending: boolean }> {
     const course = await this.prisma.course.findUnique({
       where: { id: courseId },
       select: {
@@ -401,7 +404,14 @@ export class PaymentsService {
     });
     if (!course) throw new NotFoundException();
 
-    return { ownedMonthIds: await this.ownedMonthIds(userId, course) };
+    // `pending` — a claim for this course already waiting in the review queue.
+    // `submit()` refuses a second one, so the library's «شهور جديدة اتفتحت»
+    // card says «بيتراجع» instead of offering a button that ends there.
+    const [ownership, pending] = await Promise.all([
+      this.monthOwnership(userId, course),
+      this.prisma.paymentSubmission.count({ where: { userId, courseId, status: 'pending' } }),
+    ]);
+    return { ...ownership, pending: pending > 0 };
   }
 
   /**
@@ -422,6 +432,21 @@ export class PaymentsService {
    * already covered, and a closed month has no card.
    */
   private async ownedMonthIds(userId: string, course: MonthOfferingCourse): Promise<string[]> {
+    return (await this.monthOwnership(userId, course)).ownedMonthIds;
+  }
+
+  /**
+   * `coversAll` is the WIDE case said out loud: a term, «٣ شهور», a year or an
+   * admin grant opens every month, and the picker used to answer that by
+   * drawing every card with a padlock and «اتشترى قبل كده» — which a term
+   * student reads as «شهر ٢ مقفول عليّا». The screen needs to know it is the
+   * whole course that is covered, not a list of months that happens to be
+   * complete, so it can say so once instead of locking each card.
+   */
+  private async monthOwnership(
+    userId: string,
+    course: MonthOfferingCourse,
+  ): Promise<{ ownedMonthIds: string[]; coversAll: boolean }> {
     const grants = await this.prisma.accessGrant.findMany({
       where: { userId, OR: courseAccessScopes(course) },
       select: { id: true, scope: true, monthId: true, validFrom: true, validUntil: true, revokedAt: true },
@@ -429,7 +454,9 @@ export class PaymentsService {
 
     const slice = monthSliceOf(grants, new Date());
     const onSale = course.months.filter((month) => month.isOpen).map((month) => month.id);
-    return slice.everything ? onSale : onSale.filter((id) => slice.monthIds.has(id));
+    return slice.everything
+      ? { ownedMonthIds: onSale, coversAll: true }
+      : { ownedMonthIds: onSale.filter((id) => slice.monthIds.has(id)), coversAll: false };
   }
 
   async adminList(query: AdminPaymentQuery): Promise<{ rows: AdminPaymentRow[]; rowCount: number }> {

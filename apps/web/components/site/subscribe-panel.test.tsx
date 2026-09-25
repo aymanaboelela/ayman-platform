@@ -112,6 +112,7 @@ function respondWith({
   settings,
   submissions = [],
   ownedMonthIds,
+  coversAll = false,
 }: {
   course?: unknown;
   settings?: unknown;
@@ -119,12 +120,14 @@ function respondWith({
   /** `undefined` makes the months read REJECT — a signed-out visitor, or a
    *  429. The picker has to draw anyway. */
   ownedMonthIds?: string[];
+  /** A term / year / «٣ شهور» subscription — every month already open. */
+  coversAll?: boolean;
 }) {
   apiGet.mockImplementation((path: string) => {
     if (path === OWNED_MONTHS_PATH) {
       return ownedMonthIds === undefined
         ? Promise.reject(new Error('unauthorized'))
-        : Promise.resolve({ ownedMonthIds });
+        : Promise.resolve({ ownedMonthIds, coversAll });
     }
     if (path === '/api/payments/submissions/me') return Promise.resolve(submissions);
     if (path.startsWith('/api/catalog/courses/')) {
@@ -532,5 +535,107 @@ describe('curriculum months', () => {
     // these ids; a checkout that posted a total would be a checkout a student
     // could edit.
     expect(Object.keys(body)).not.toContain('amountCents');
+  });
+});
+
+/**
+ * The link names the months, and the panel opens on them.
+ *
+ * «شهور جديدة اتفتحت» sends `?month=a,b`; a lecture's padlock sends `?month=a`.
+ * Either way the student has already answered «أنهي شهر» by pressing the
+ * button, so the plan grid is skipped and the months are ticked.
+ */
+describe('months named in the link', () => {
+  afterEach(() => {
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('opens on the month picker with every named month already chosen', async () => {
+    window.history.replaceState({}, '', `/?month=${MONTH_ONE.id},${MONTH_TWO.id}`);
+    respondWith({
+      course: liveCourse({ months: [MONTH_ONE, MONTH_TWO] }),
+      settings: liveSettings(),
+      ownedMonthIds: [],
+    });
+
+    render(<Panel />);
+
+    await screen.findByText(copy.subscribe.chooseMonthsTitle);
+    expect(screen.queryByText(copy.subscribe.planMonthlyLabel)).toBeNull();
+    expect(screen.getByRole('button', { name: new RegExp(MONTH_ONE.title) })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: new RegExp(MONTH_TWO.title) })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByText(formatCopy(copy.subscribe.monthsTotal, { price: '400' }))).toBeTruthy();
+  });
+
+  it('drops a named month the student already holds', async () => {
+    window.history.replaceState({}, '', `/?month=${MONTH_ONE.id},${MONTH_TWO.id}`);
+    respondWith({
+      course: liveCourse({ months: [MONTH_ONE, MONTH_TWO] }),
+      settings: liveSettings(),
+      ownedMonthIds: [MONTH_ONE.id],
+    });
+
+    render(<Panel />);
+
+    await screen.findByText(copy.subscribe.chooseMonthsTitle);
+    expect(screen.getByRole('button', { name: new RegExp(MONTH_TWO.title) })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByText(formatCopy(copy.subscribe.monthsTotal, { price: '200' }))).toBeTruthy();
+  });
+
+  it('ignores an id that is not on sale here and shows the plan grid', async () => {
+    window.history.replaceState({}, '', '/?month=55555555-5555-4555-8555-555555555555');
+    respondWith({
+      course: liveCourse({ months: [MONTH_ONE, MONTH_TWO] }),
+      settings: liveSettings(),
+      ownedMonthIds: [],
+    });
+
+    render(<Panel />);
+
+    expect(await screen.findByText(copy.subscribe.planMonthlyLabel)).toBeTruthy();
+  });
+});
+
+/**
+ * A term, «٣ شهور» or a year opens every month. The picker used to answer that
+ * with a padlock and «اتشترى قبل كده» on every card — «شهر ٢ مقفول عليّا».
+ */
+describe('a subscription that already opens every month', () => {
+  it('says so once, and offers no «شهر» card', async () => {
+    respondWith({
+      course: liveCourse({ months: [MONTH_ONE, MONTH_TWO], yearlyPriceCents: 150000 }),
+      settings: liveSettings(),
+      ownedMonthIds: [MONTH_ONE.id, MONTH_TWO.id],
+      coversAll: true,
+    });
+
+    render(<Panel />);
+
+    expect(await screen.findByText(copy.subscribe.coversAllNote)).toBeTruthy();
+    expect(screen.queryByText(copy.subscribe.planMonthlyLabel)).toBeNull();
+    expect(screen.getByText(copy.subscribe.planYearlyLabel)).toBeTruthy();
+  });
+
+  it('keeps the «شهر» card on a course that does not sell by month', async () => {
+    respondWith({
+      course: liveCourse(),
+      settings: liveSettings(),
+      ownedMonthIds: [],
+      coversAll: true,
+    });
+
+    render(<Panel />);
+
+    expect(await screen.findByText(copy.subscribe.planMonthlyLabel)).toBeTruthy();
+    expect(screen.queryByText(copy.subscribe.coversAllNote)).toBeNull();
   });
 });

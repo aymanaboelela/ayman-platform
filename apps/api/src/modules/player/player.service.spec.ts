@@ -282,6 +282,59 @@ describe('PlayerService', () => {
 
     // `CourseOutlineSidebar`'s own «اطلب الكتاب» link — same pair the
     // catalog and the dashboard read — gates on this.
+    /*
+     * «شهور جديدة اتفتحت». «شهر ٢» opened with no lecture in it had no padlock
+     * anywhere, so a student holding «شهر ١» had no way to buy it — the outline
+     * is where the card that sells it reads from.
+     */
+    describe('monthOffer', () => {
+      let monthOneId = '';
+      let monthTwoId = '';
+
+      beforeAll(async () => {
+        await prisma.course.update({
+          where: { id: courseId },
+          data: { monthlyPriceCents: 15000, requiresGrant: true },
+        });
+        monthOneId = (await prisma.courseMonth.create({ data: { courseId, monthIndex: 1, title: 'شهر ١' } })).id;
+        monthTwoId = (await prisma.courseMonth.create({ data: { courseId, monthIndex: 2, title: 'شهر ٢' } })).id;
+      });
+
+      afterEach(async () => {
+        await prisma.accessGrant.deleteMany({ where: { userId, courseId } });
+      });
+
+      afterAll(async () => {
+        await prisma.courseMonth.deleteMany({ where: { courseId } });
+        await prisma.course.update({
+          where: { id: courseId },
+          data: { monthlyPriceCents: null, requiresGrant: false },
+        });
+      });
+
+      it('offers the open month the student does not hold, priced, even with no lecture in it', async () => {
+        await prisma.accessGrant.create({
+          data: { userId, scope: 'course_month', courseId, monthId: monthOneId, source: 'purchase' },
+        });
+
+        const outline = await service.outline(userId, courseSlug);
+
+        expect(outline.monthOffer).toEqual({
+          months: [{ id: monthTwoId, title: 'شهر ٢', lessonCount: 0, priceCents: 15000 }],
+          pending: false,
+        });
+        expect(() => CourseOutlineSchema.parse(outline)).not.toThrow();
+      });
+
+      it('offers nothing to a subscription that already opens every month', async () => {
+        await prisma.accessGrant.create({
+          data: { userId, scope: 'course', courseId, source: 'admin' },
+        });
+
+        expect((await service.outline(userId, courseSlug)).monthOffer).toBeNull();
+      });
+    });
+
     describe('book', () => {
       afterEach(async () => {
         await prisma.course.update({

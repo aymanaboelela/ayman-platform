@@ -1973,6 +1973,10 @@
 }
 
 .course-subscribe__title {
+  /* Its own colour, not inherited: on `/courses/:slug/subscribe` the panel
+     sits inside a dark hero whose white text made this title vanish into the
+     light card. */
+  color: var(--color-fg);
   font-weight: var(--fw-semibold);
   text-align: center;
 }
@@ -2297,6 +2301,18 @@
   background: color-mix(in oklch, var(--warn), transparent 92%);
   color: var(--warn);
   font-size: var(--fs-text-sm);
+}
+
+/* «اشتراكك الحالي فاتح كل شهور الكورس» — good news, so the `--ok` tone. It
+   replaces a row of month cards that each wore a padlock. */
+.course-subscribe__covered {
+  padding: 0.75rem 0.875rem;
+  border-radius: 0.625rem;
+  border: 1px solid color-mix(in oklch, var(--ok), transparent 62%);
+  background: color-mix(in oklch, var(--ok), transparent 90%);
+  color: var(--ok);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
 }
 
 

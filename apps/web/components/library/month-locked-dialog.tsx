@@ -2,21 +2,19 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Ticket } from 'lucide-react';
+import { CalendarPlus, PlayCircle, Ticket } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
-import { cn } from '@ayman/ui/lib/cn';
-import { Button } from '@ayman/ui/components/button';
 import {
   Dialog,
   DialogClose,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@ayman/ui/components/dialog';
+import './locked-dialog.css';
 
 const c = copy.library;
 
@@ -121,18 +119,43 @@ export function MonthLockedDialog({
           دلوقتي»): two controls sharing one accessible name is the bug
           `exam-gate-dialog.tsx` states the rule about and the exam dialog
           shipped. */}
-      <DialogContent closeLabel={copy.common.close}>
-        <DialogHeader>
-          <DialogTitle>{byMonth ? c.lockedMonthTitle : c.lockedContentTitle}</DialogTitle>
-          <DialogDescription>{body}</DialogDescription>
+      <DialogContent closeLabel={copy.common.close} className="lock-dialog">
+        {/* The band on top is the picture the old dialog did not have: three
+            lines of grey text and three buttons that wrapped onto two rows at
+            phone width read as an error, not as «ده شهر تاني وده مكانه». */}
+        <div className="lock-dialog__band" aria-hidden="true">
+          <LockedMonthArt />
+        </div>
+
+        <DialogHeader className="lock-dialog__head">
+          <DialogTitle className="lock-dialog__title">
+            {byMonth ? c.lockedMonthTitle : c.lockedContentTitle}
+          </DialogTitle>
+          <DialogDescription className="lock-dialog__body">{body}</DialogDescription>
         </DialogHeader>
 
-        <DialogFooter>
+        {byMonth && month ? (
+          <p className="lock-dialog__month">
+            <span className="lock-dialog__month-name">{month.title}</span>
+            <span className="lock-dialog__month-count">
+              <PlayCircle className="size-3.5" aria-hidden="true" />
+              {month.lessonCount > 0
+                ? formatCopy(copy.subscribe.monthCardLessons, { count: month.lessonCount })
+                : copy.subscribe.monthCardEmpty}
+            </span>
+          </p>
+        ) : null}
+
+        {/* Stacked, never a row. Three controls side by side do not fit 360px
+            in Arabic, and a flex row that wraps drops the dismiss under the
+            checkout at a different width on every phone. One full-width
+            action, then the two quiet ones sharing a line. */}
+        <div className="lock-dialog__actions">
           {courseSlug ? (
             /*
               `/courses/:slug/subscribe` and NOT the course page, and that is
               the whole reason this CTA works at all.
- 
+
               The course page sells through `<CourseStartButton>`, which opens
               the panel when `POST /enroll` answers 403 — and the student
               standing in front of this padlock does not get a 403. They own
@@ -141,7 +164,7 @@ export function MonthLockedDialog({
               redirected them to their library before that. A link there is a
               control that returns you to where you pressed it: exactly the dead
               button «الـ٢ بتن دول مش شغالين» named on the exam dialog.
- 
+
               `?month=` is the preselection, so somebody who pressed «الاشتراك
               في الشهر ده» on «شهر ٣» does not then hunt «شهر ٣» in a list of
               nine. Left off when no single month can be named — the picker
@@ -152,40 +175,74 @@ export function MonthLockedDialog({
               href={`/courses/${encodeURIComponent(courseSlug)}/subscribe${
                 month ? `?month=${encodeURIComponent(month.id)}` : ''
               }`}
-              // The same amber solid the library page's «كمّل» link wears —
-              // `<Button>` is a real `<button>` with no `asChild`, and a
-              // `<button>` that navigates is a control screen readers announce
-              // wrong.
-              className={cn(
-                'inline-flex h-10 items-center justify-center rounded-sm bg-accent px-4',
-                'text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]',
-                'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
-              )}
+              // A link, not `<Button>`: `<Button>` is a real `<button>` with no
+              // `asChild`, and a `<button>` that navigates is a control screen
+              // readers announce wrong.
+              className="lock-dialog__cta"
             >
+              <CalendarPlus className="size-[18px]" aria-hidden="true" />
               {byMonth ? c.lockedMonthCta : c.lockedContentCta}
             </Link>
           ) : null}
 
-          {/* «عندك كود؟» — the other way in. A lecture bought on WhatsApp opens
-              with a code, and the padlock is exactly where a student holding
-              one gets stuck. Same outlined weight as a secondary action. */}
-          <Link
-            href="/codes"
-            className={cn(
-              'inline-flex h-10 items-center justify-center gap-1.5 rounded-sm border border-line px-4',
-              'text-[length:var(--fs-text-sm)] font-medium text-fg',
-              'transition-colors duration-[160ms] ease-out hover:bg-surface-3',
-            )}
-          >
-            <Ticket className="size-4" aria-hidden="true" />
-            {copy.unlockCodes.lockedCta}
-          </Link>
+          <div className="lock-dialog__row">
+            {/* «عندك كود؟» — the other way in. A lecture bought on WhatsApp
+                opens with a code, and the padlock is exactly where a student
+                holding one gets stuck. */}
+            <Link href="/codes" className="lock-dialog__alt">
+              <Ticket className="size-4" aria-hidden="true" />
+              {copy.unlockCodes.lockedCta}
+            </Link>
 
-          <DialogClose asChild>
-            <Button variant="secondary">{c.lockedMonthClose}</Button>
-          </DialogClose>
-        </DialogFooter>
+            <DialogClose className="lock-dialog__alt lock-dialog__alt--quiet">
+              {c.lockedMonthClose}
+            </DialogClose>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * A calendar page with the next month's number on it and a padlock hanging off
+ * its corner — «ده شهر تاني» said as a picture before it is read. Colours are
+ * classes, so both themes and every tenant's hue come from the tokens.
+ */
+function LockedMonthArt() {
+  return (
+    <svg className="lock-dialog__art" viewBox="0 0 160 112" focusable="false">
+      <ellipse cx="80" cy="102" rx="54" ry="6" className="lock-art__shadow" />
+      {/* the page behind — last month, already open */}
+      <g transform="rotate(-8 58 60)">
+        <rect x="26" y="26" width="64" height="66" rx="10" className="lock-art__page lock-art__page--back" />
+        <rect x="26" y="26" width="64" height="16" rx="8" className="lock-art__ring lock-art__ring--back" />
+        <path d="M44 66 l8 8 l16 -18" className="lock-art__tick" />
+      </g>
+      {/* the page in front — the month this lecture sits in */}
+      <g transform="rotate(6 100 58)">
+        <rect x="66" y="20" width="68" height="72" rx="11" className="lock-art__page" />
+        <rect x="66" y="20" width="68" height="18" rx="9" className="lock-art__ring" />
+        <rect x="66" y="30" width="68" height="8" className="lock-art__ring" />
+        <circle cx="82" cy="20" r="3.5" className="lock-art__hole" />
+        <circle cx="118" cy="20" r="3.5" className="lock-art__hole" />
+        <rect x="78" y="48" width="10" height="8" rx="2" className="lock-art__day" />
+        <rect x="95" y="48" width="10" height="8" rx="2" className="lock-art__day" />
+        <rect x="112" y="48" width="10" height="8" rx="2" className="lock-art__day" />
+        <rect x="78" y="62" width="10" height="8" rx="2" className="lock-art__day" />
+        <rect x="95" y="62" width="10" height="8" rx="2" className="lock-art__day lock-art__day--on" />
+        <rect x="112" y="62" width="10" height="8" rx="2" className="lock-art__day" />
+      </g>
+      {/* the padlock */}
+      <g transform="translate(112 58)">
+        <path d="M6 14 v-6 a10 10 0 0 1 20 0 v6" className="lock-art__shackle" />
+        <rect x="0" y="13" width="32" height="26" rx="7" className="lock-art__body" />
+        <circle cx="16" cy="24" r="3.5" className="lock-art__key" />
+        <rect x="14.5" y="25" width="3" height="7" rx="1.5" className="lock-art__key" />
+      </g>
+      <circle cx="30" cy="18" r="3" className="lock-art__spark" />
+      <circle cx="144" cy="30" r="2.5" className="lock-art__spark lock-art__spark--b" />
+      <path d="M140 92 l3 -6 l3 6 l-3 6 z" className="lock-art__spark" />
+    </svg>
   );
 }

@@ -10,7 +10,7 @@ const c = copy.player.group;
  * ## Three WhatsApp entry points on this platform, and they are not the same
  *
  * `WhatsappChannelCard` (dashboard) is the one broadcast CHANNEL, which nobody
- * can reply into. `CourseHelpCard` (below this one) is a DM to him about this
+ * can reply into. The help tile in `CourseQuickLinks` is a DM to him about this
  * course. This is the COHORT — the people sitting the same lectures — and it
  * is the only one of the three that is per-course: «كل كورس بيبقى ليه جروب غير
  * الجروب الأساسي الكبير الرسمي».

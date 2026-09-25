@@ -937,11 +937,15 @@ describe('PaymentsService', () => {
 
       expect(await service.listOwnedMonths(studentId, monthCourseId)).toEqual({
         ownedMonthIds: [monthTwoId],
+        coversAll: false,
+        pending: false,
       });
       // Another student's purchase is not this student's — `userId` comes off
       // the session, never the URL.
       expect(await service.listOwnedMonths(strangerId, monthCourseId)).toEqual({
         ownedMonthIds: [],
+        coversAll: false,
+        pending: false,
       });
     });
 
@@ -961,6 +965,9 @@ describe('PaymentsService', () => {
       // The closed month has no card in the picker, so it is not something
       // this answer has to say anything about.
       expect(owned.ownedMonthIds).not.toContain(closedMonthId);
+      // And it says WHY, so the picker can say «اشتراكك فاتح كل الشهور» once
+      // instead of padlocking every card.
+      expect(owned.coversAll).toBe(true);
     });
 
     it('drops a revoked month grant — `revokedAt` is a month subscription\'s only cutoff', async () => {
@@ -980,6 +987,25 @@ describe('PaymentsService', () => {
 
       expect(await service.listOwnedMonths(studentId, monthCourseId)).toEqual({
         ownedMonthIds: [],
+        coversAll: false,
+        pending: false,
+      });
+    });
+
+    it('says a claim for the course is waiting in the review queue', async () => {
+      await service.submit(studentId, {
+        courseId: monthCourseId,
+        plan: 'monthly',
+        termId: null,
+        monthIds: [monthOneId],
+        senderPhone: '01012345678',
+        screenshotKey: validScreenshotKey(),
+      });
+
+      expect(await service.listOwnedMonths(studentId, monthCourseId)).toEqual({
+        ownedMonthIds: [],
+        coversAll: false,
+        pending: true,
       });
     });
 
