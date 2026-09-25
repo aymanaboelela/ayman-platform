@@ -45,6 +45,8 @@ export interface StudentListQuery {
   track: string[];
   sort: string;
   dir: 'asc' | 'desc';
+  /** `''` من غير فلتر · `staff` أي حد مش طالب · `student` الطلبة بس. */
+  role: '' | 'staff' | 'student';
   /** «مين اللي مسجّلهم مجاني؟» — see the contract's own note on
    *  `StudentListQuerySchema.access` for what each bucket means and why the
    *  automatic `platform` grant is deliberately not one of them. */
@@ -220,6 +222,18 @@ export class StudentsService {
             ],
           }
         : {}),
+      /*
+       * فلتر الدور — «الفريق» مقابل «الطلبة».
+       *
+       * `staff` هي «مش طالب» مش ليستة أدوار مكتوبة: لو اتضاف دور رابع بكرة،
+       * شاشة الفريق بتلاقيه من غير ما حد يفتكر يعدّلها. والعكس بيضمن إن قايمة
+       * الطلبة مابتعرضش المدرّس نفسه ولا مساعدينه.
+       *
+       * ⚠️ `''` بيسيب الـwhere زي ما هي — كل استدعاء موجود دلوقتي بيرجّع نفس
+       * اللي كان بيرجّعه بالحرف.
+       */
+      ...(query.role === 'staff' ? { user: { role: { not: 'student' } } } : {}),
+      ...(query.role === 'student' ? { user: { role: 'student' } } : {}),
       ...(query.governorate.length > 0 ? { governorateCode: { in: query.governorate } } : {}),
       ...(query.year.length > 0 ? { year: { in: query.year } } : {}),
       ...(query.track.length > 0 ? { trackId: { in: query.track } } : {}),

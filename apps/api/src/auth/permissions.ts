@@ -69,6 +69,23 @@ export const PERMISSIONS = [
   'student:read',
   'student:write',
   'student:role-change',
+  /*
+   * تعيين مساعد — وهي **مش** `student:role-change` ومينفعش تبقى هي.
+   *
+   * `changeRole` بياخد `admin | owner | student`، فحد ماسك
+   * `student:role-change` يقدر يعمل أدمن كامل. عشان كده الصلاحية دي مستثناة
+   * من `grantablePermissions` خالص — الكيس اللي بيحرسها مكتوب فيه «حساب تاني
+   * يترقّى لأدمن»، وده طريق تصعيد مش صلاحية.
+   *
+   * لكن المدرّس محتاج يضيف مساعد على منصته هو، وده طلب معقول ومالوش علاقة
+   * بالتصعيد. الصلاحية دي هي الطلب ده لوحده: الراوت اللي وراها بيكتب `owner`
+   * أو `student` **بس** — و`admin` مش في السكيما بتاعته أصلًا، فمفيش طريق
+   * منها لأدمن حتى لو حد غلط بعد كده.
+   *
+   * ⚠️ مضافة لـ`owner` في `ROLE_PERMISSIONS` بالأساس، مش grantable. الفرق
+   * مقصود: دي قدرة المدرّس على إدارة فريقه هو، مش حاجة المشغّل بيفتحها له.
+   */
+  'staff:manage',
   // Blocking and removing an account. Split from `student:write` — and from
   // each other — on the same principle as every other pair in this catalogue:
   // editing a student's year is an ordinary correction, locking them out is a
@@ -400,6 +417,19 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission> | '*'> = {
      */
     'payment:read',
     'conversation:read',
+
+    /*
+     * فريقه هو.
+     *
+     * المدرّس بيشتغل معاه ناس — واحد بيرد على الرسايل، واحد بيصحّح. من غير
+     * ده، إضافة مساعد محتاجة حساب `admin`، ومفيش واحد على ستاكه: اتقاس،
+     * `GET /api/admin/roles/owner/permissions` رد 403 عند صبري وعادل.
+     *
+     * ⚠️ **مش `student:role-change`.** دي بتوصّل لـ`changeRole` اللي بياخد
+     * `admin` كمان، فهي طريق تصعيد ومستثناة من كل منح. الراوت اللي ورا
+     * الصلاحية دي بيكتب `owner` أو `student` بس، والـ`admin` مش في سكيماه.
+     */
+    'staff:manage',
   ]),
   // RECONCILED: this is the accumulated set from Plans 2–5. Keep it in sync
   // with the assertion in permissions.spec.ts; shrinking it is a silent

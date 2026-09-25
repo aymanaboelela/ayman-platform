@@ -240,6 +240,34 @@ export const AdminStudentSetPasswordSchema = z
 
 export type AdminStudentSetPassword = z.infer<typeof AdminStudentSetPasswordSchema>;
 
+/**
+ * تعيين مساعد — دورين بس، و`admin` مش فيهم.
+ *
+ * ## ليه سكيما تانية بدل ما نعيد استخدام `AdminRoleChangeSchema`
+ *
+ * لأن اللي بيفرّق بين العمليتين هو **اللي مش مسموح**، مش اللي مسموح. السكيما
+ * اللي تحت بتقبل `admin` عن قصد — هي أداة المشغّل. والشاشة اللي المدرّس
+ * بيستخدمها مايصحّش تقدر تكتبها مهما حصل، لا بخطأ في الواجهة ولا بطلب
+ * مصنوع بالإيد.
+ *
+ * ⚠️ الحماية في **السكيما** مش في الكومبوننت. حارس في الواجهة بيقف قدام
+ * الزرار؛ `z.enum` هنا بيقف قدام أي `POST` توصل للراوت، وde الفرق بين
+ * «صعب» و«مستحيل» — نفس منطق `TENANT_KEY` في CLAUDE.md.
+ */
+export const AdminStaffRoleSchema = z
+  .object({
+    role: z.enum(['owner', 'student']),
+    /*
+     * نفس `reason` اللي تغيير الدور العادي بيطلبه، ومطلوب هنا بنفس الدرجة.
+     * «مين خلّى ده مساعد وليه» سؤال بيتسأل بعد شهور، وسجل التدقيق هو المكان
+     * الوحيد اللي بيجاوبه.
+     */
+    reason: z.string().trim().min(3, 'اكتب سبب مختصر').max(280),
+  })
+  .strict();
+
+export type AdminStaffRole = z.infer<typeof AdminStaffRoleSchema>;
+
 export const AdminRoleChangeSchema = z
   .object({
     /**
@@ -565,6 +593,16 @@ export const StudentListQuerySchema = z.object({
   governorate: z.preprocess(toArray, z.array(z.string().length(2))).default([]),
   year: z.preprocess(toArray, z.array(z.coerce.number().int())).default([]),
   track: z.preprocess(toArray, z.array(z.string())).default([]),
+  /**
+   * فلتر الدور — «ورّيني الفريق» مقابل «ورّيني الطلبة».
+   *
+   * `''` معناه من غير فلتر، وde الافتراضي عشان كل استدعاء موجود دلوقتي يفضل
+   * بيرجّع نفس اللي كان بيرجّعه بالحرف.
+   *
+   * `staff` مش دور — هي «أي حد مش طالب». شاشة الفريق بتسأل السؤال ده، ولو
+   * اتضاف دور رابع بكرة هيبان فيها من غير ما حد يفتكر يعدّلها.
+   */
+  role: z.enum(['', 'staff', 'student']).default(''),
   sort: z.enum(['createdAt', 'fullName', 'governorate']).default('createdAt'),
   dir: z.enum(['asc', 'desc']).default('desc'),
   /**
