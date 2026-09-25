@@ -203,6 +203,14 @@ export const PERMISSIONS = [
   // `ROLE_PERMISSIONS` and zero route changes.
   'expense:read',
   'expense:write',
+  // «السناتر». Three, because they are three different people in practice:
+  // whoever reads the attendance sheet and the centre money (`read`), whoever
+  // sets up centres and slots and moves bookings (`write`), and the assistant
+  // standing at the door with a phone who should be able to scan cards and
+  // nothing else (`attendance`).
+  'center:read',
+  'center:write',
+  'center:attendance',
   // الواجب — the exercise on a lecture and the photographs of the answer.
   //
   // `homework:submit` is self-scoped, the same principle as `payment:submit`

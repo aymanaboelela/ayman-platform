@@ -137,6 +137,11 @@ model User {
   unlockCodesCreated  UnlockCode[] @relation("UnlockCodeCreator")
   unlockCodesRedeemed UnlockCode[] @relation("UnlockCodeRedeemer")
   unlockCodesRevoked  UnlockCode[] @relation("UnlockCodeRevoker")
+  /// «السناتر» — the student's group bookings, the classes they attended,
+  /// and (for an admin) the scans they made at the door.
+  centerBookings    CenterBooking[]
+  attendanceRecords AttendanceRecord[] @relation("AttendanceStudent")
+  attendanceScans   AttendanceRecord[] @relation("AttendanceScanner")
 
   // Plan 5 — question bank
   questionBankEntries        QuestionBankEntry[]
@@ -340,6 +345,26 @@ enum SchoolStream {
   general
   languages
 
+  @@schema("app")
+}
+
+/// «نوع الدراسة» — ثانوي عام أو أزهري. مش `SchoolStream` (عربي/لغات): ده
+/// سؤال تاني خالص، والكلمة «عام» في الاتنين بتفرق بالسؤال اللي فوقها.
+enum StudyType {
+  general
+  azhari
+
+  @@map("study_type")
+  @@schema("app")
+}
+
+/// «نوع الحضور» — أونلاين من البيت، أو في سنتر. `center` معناه إن فيه حجز
+/// في `CenterBooking`؛ الاختيار نفسه مابيظهرش أصلًا على ستاك مالوش سناتر.
+enum AttendanceMode {
+  online
+  center
+
+  @@map("attendance_mode")
   @@schema("app")
 }
 
@@ -608,6 +633,15 @@ model StudentProfile {
   /// and `home_blocks`. Deleting the asset from «الوسائط» takes the bytes and
   /// leaves this key pointing at nothing — same hazard as `User.image`.
   honorPhotoKey String? @map("honor_photo_key")
+
+  /// «نوع الدراسة» (عام/أزهري). `null` على كل طالب اتسجّل قبل ما السؤال يتضاف.
+  studyType      StudyType?      @map("study_type")
+  /// «نوع الحضور» (أونلاين/سنتر). `null` = ماتسألش؛ بيتقري كأونلاين.
+  attendanceMode AttendanceMode? @map("attendance_mode")
+  /// «ID: 4373» — رقم قصير ثابت للطالب، هو اللي في الباركود والـQR على
+  /// ملفه، وهو اللي السنتر بيقراه على الباب. مش سر (عكس `guardianCode`):
+  /// بيفتح تسجيل حضور بس، ومن حساب أدمن. من sequence في الداتابيز.
+  studentNumber  Int             @unique @default(dbgenerated("nextval('app.student_number_seq')")) @map("student_number")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1963,6 +1997,139 @@ model AccessGrant {
   @@index([userId, courseId, scope])
   @@index([unlockCodeId])
   @@map("access_grants")
+  @@schema("app")
+}
+
+/// «السنتر» — مكان حضور حقيقي (سنتر الخديوي، spark…). ستاك مالوش ولا سنتر
+/// شغّال مابيسألش الطالب «أونلاين ولا سنتر» أصلًا، فالفيتشر كلها بتظهر بالداتا
+/// مش ببوابة: لكل المدرّسين، ومحدش بيشوفها غير اللي ضاف سنتر.
+model Center {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String
+  address   String?
+  phone     String?
+  mapUrl    String?  @map("map_url")
+  /// مقفول = مايظهرش للطالب وهو بيحجز، والحجوزات والحضور القديم زي ما هم.
+  isActive  Boolean  @default(true) @map("is_active")
+  position  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  slots CenterSlot[]
+
+  @@map("centers")
+  @@schema("app")
+}
+
+/// «ميعاد» في سنتر — مجموعة ثابتة كل أسبوع: يوم وساعة بداية وساعة نهاية
+/// بتوقيت القاهرة. ده اللي الطالب بيحجز فيه، واللي الحضور بيتسجّل عليه.
+model CenterSlot {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  centerId    String   @map("center_id") @db.Uuid
+  /// «مجموعة ١» — اختياري؛ من غيره الميعاد بيتعرض بالسنتر واليوم والساعة.
+  label       String?
+  /// ٠ = الأحد … ٦ = السبت، بتوقيت `Africa/Cairo`.
+  dayOfWeek   Int      @map("day_of_week")
+  /// دقايق من نص الليل — ١٤:٠٠ = ٨٤٠. عمودين أرقام مش `time` عشان المقارنة
+  /// والترتيب مايحتاجوش timezone خالص.
+  startMinute Int      @map("start_minute")
+  endMinute   Int      @map("end_minute")
+  /// الصف اللي المجموعة ليه (١ = أولى…). `null` = مفتوحة لكل الصفوف.
+  year        Int?
+  /// أقصى عدد حجوزات. `null` = مفيش حد.
+  capacity    Int?
+  /// «فل خلاص» بإيد الأدمن — بيقفل الحجز حتى لو فيه أماكن.
+  isFull      Boolean  @default(false) @map("is_full")
+  isActive    Boolean  @default(true) @map("is_active")
+  /// سعر الحصة الواحدة. بيتنسخ على كل حضور وقت ما يتسجّل (`feeCents`)، فتغيير
+  /// السعر بكرة مابيغيّرش فلوس امبارح.
+  priceCents  Int?     @map("price_cents")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  center   Center              @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  bookings CenterBooking[]
+  sessions AttendanceSession[]
+
+  @@index([centerId])
+  @@map("center_slots")
+  @@schema("app")
+}
+
+enum CenterBookingStatus {
+  active
+  cancelled
+
+  @@map("center_booking_status")
+  @@schema("app")
+}
+
+/// حجز طالب في ميعاد. حجز واحد شغّال لكل طالب (UNIQUE جزئي في الميجريشن)؛
+/// لو غيّر الميعاد القديم بيتلغي والجديد بيتكتب — فالتاريخ بيفضل موجود، وده
+/// اللي بيخلّي «غايب» تتحسب صح على المواعيد اللي كان فيها بس.
+model CenterBooking {
+  id          String              @id @default(uuid(7)) @db.Uuid
+  slotId      String              @map("slot_id") @db.Uuid
+  userId      String              @map("user_id")
+  status      CenterBookingStatus @default(active)
+  createdAt   DateTime            @default(now()) @map("created_at")
+  cancelledAt DateTime?           @map("cancelled_at")
+
+  slot CenterSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([slotId, status])
+  @@index([userId, status])
+  @@map("center_bookings")
+  @@schema("app")
+}
+
+/// حصة واحدة: ميعاد + تاريخ. بتتعمل مع أول طالب يتسجّل حضوره اليوم ده —
+/// يوم مافيهوش ولا تسجيل مالوش حصة، وده بالظبط معنى «إجازة»: محدش بيتحسب
+/// غايب فيه.
+model AttendanceSession {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  slotId    String   @map("slot_id") @db.Uuid
+  /// اليوم بتوقيت القاهرة.
+  date      DateTime @db.Date
+  createdAt DateTime @default(now()) @map("created_at")
+
+  slot    CenterSlot         @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  records AttendanceRecord[]
+
+  @@unique([slotId, date])
+  @@map("attendance_sessions")
+  @@schema("app")
+}
+
+enum AttendanceMethod {
+  scan
+  manual
+
+  @@map("attendance_method")
+  @@schema("app")
+}
+
+/// «حضر» — طالب في حصة. مرة واحدة لكل طالب في الحصة (UNIQUE)، فمسحة تانية
+/// على نفس الباركود بترجع «اتسجّل قبل كده» مش صف تاني.
+model AttendanceRecord {
+  id              String           @id @default(uuid(7)) @db.Uuid
+  sessionId       String           @map("session_id") @db.Uuid
+  userId          String           @map("user_id")
+  scannedAt       DateTime         @default(now()) @map("scanned_at")
+  scannedByUserId String?          @map("scanned_by_user_id")
+  method          AttendanceMethod @default(scan)
+  /// اللي الحصة دي كلّفت الطالب — سعر الميعاد وقت التسجيل. ده اللي بيدخل
+  /// في حسابات السنتر.
+  feeCents        Int?             @map("fee_cents")
+
+  session   AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user      User              @relation("AttendanceStudent", fields: [userId], references: [id], onDelete: Cascade)
+  scannedBy User?             @relation("AttendanceScanner", fields: [scannedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, userId])
+  @@index([userId])
+  @@map("attendance_records")
   @@schema("app")
 }
 

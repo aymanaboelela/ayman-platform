@@ -76,6 +76,13 @@ export const ProfileMeSchema = z.object({
        * response that predates this field still parses.
        */
       schoolStream: z.enum(['general', 'languages']).nullable().optional(),
+      /** «نوع الدراسة» / «نوع الحضور» — null for a profile saved before the
+       *  questions existed. */
+      studyType: z.enum(['general', 'azhari']).nullable().optional(),
+      attendanceMode: z.enum(['online', 'center']).nullable().optional(),
+      /** «ID» on the profile and in the barcode — see `StudentProfile
+       *  .studentNumber`. */
+      studentNumber: z.number().int().optional(),
       /**
        * Named by `/settings/section`, which stopped being a one-select page
        * and became the student's own «بياناتك» editor. The endpoint behind it

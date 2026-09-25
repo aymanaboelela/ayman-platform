@@ -65,6 +65,11 @@ export const AUDIT_RESOURCES = {
   expense: 'expenses',
   /// «أكواد الفتح» — see `UnlockCode`.
   unlockCode: 'unlock_codes',
+  /// «السناتر» — see `CentersService`.
+  center: 'centers',
+  centerSlot: 'center_slots',
+  centerBooking: 'center_bookings',
+  attendanceRecord: 'attendance_records',
   /// «قسم الكتب» — the catalogue. Its own resource type and not `book_orders`,
   /// because the audit viewer's filter is how "who changed a price" is answered,
   /// and folding the two together would bury every catalogue edit inside a list

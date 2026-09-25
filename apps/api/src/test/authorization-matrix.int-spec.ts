@@ -31,6 +31,7 @@ import { PlayerModule } from '../modules/player/player.module';
 import { DashboardModule } from '../modules/dashboard/dashboard.module';
 import { GuardianModule } from '../modules/guardian/guardian.module';
 import { UnlockCodesModule } from '../modules/unlock-codes/unlock-codes.module';
+import { CentersModule } from '../modules/centers/centers.module';
 import { SettingsModule } from '../modules/admin/settings/settings.module';
 import { StudentsModule } from '../modules/admin/students/students.module';
 import { AdminTaxonomyModule } from '../modules/admin/taxonomy/admin-taxonomy.module';
@@ -267,6 +268,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // «أكواد الفتح» — موديول كامل لنفس السبب اللي فوق: `UnlockAttemptsService`
         // محتاج ريديس، والموديول بيجيبه من غير ما الفيكستشر يعرف.
         UnlockCodesModule,
+        // «السناتر» — same reason as the two above.
+        CentersModule,
         SettingsModule,
         StudentsModule,
         AdminTaxonomyModule,
@@ -2285,6 +2288,43 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // Passes the gate and reaches the service, which has no such code.
     { label: 'redeem unlock code: student, unknown code', method: 'post', path: () => '/api/me/unlock-codes/redeem', actor: 'student', status: 404, body: () => ({ code: 'ZZZZZZ' }) },
     { label: 'redeem unlock code: student, malformed code is refused on SHAPE (400)', method: 'post', path: () => '/api/me/unlock-codes/redeem', actor: 'student', status: 400, body: () => ({ code: 'O0I1' }) },
+    // «السناتر» — admin routes are `center:*` (admin holds all); the student
+    // pair is the student's own `profile:read`.
+    { label: 'centers list: anonymous', method: 'get', path: () => '/api/admin/centers', actor: 'anonymous', status: 401 },
+    { label: 'centers list: student', method: 'get', path: () => '/api/admin/centers', actor: 'student', status: 403 },
+    { label: 'centers list: admin', method: 'get', path: () => '/api/admin/centers', actor: 'admin', status: 200 },
+    { label: 'centers finance: anonymous', method: 'get', path: () => '/api/admin/centers/finance', actor: 'anonymous', status: 401 },
+    { label: 'centers finance: student', method: 'get', path: () => '/api/admin/centers/finance', actor: 'student', status: 403 },
+    { label: 'centers finance: admin', method: 'get', path: () => '/api/admin/centers/finance', actor: 'admin', status: 200 },
+    { label: 'centers scan: anonymous', method: 'post', path: () => '/api/admin/centers/attendance/scan', actor: 'anonymous', status: 401 },
+    { label: 'centers scan: student', method: 'post', path: () => '/api/admin/centers/attendance/scan', actor: 'student', status: 403 },
+    { label: 'centers manual attendance: anonymous', method: 'post', path: () => '/api/admin/centers/attendance/manual', actor: 'anonymous', status: 401 },
+    { label: 'centers manual attendance: student', method: 'post', path: () => '/api/admin/centers/attendance/manual', actor: 'student', status: 403 },
+    { label: 'centers remove attendance: anonymous', method: 'delete', path: () => `/api/admin/centers/attendance/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'centers remove attendance: student', method: 'delete', path: () => `/api/admin/centers/attendance/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'centers student attendance: anonymous', method: 'get', path: () => `/api/admin/centers/students/${randomUUID()}/attendance`, actor: 'anonymous', status: 401 },
+    { label: 'centers student attendance: student', method: 'get', path: () => `/api/admin/centers/students/${randomUUID()}/attendance`, actor: 'student', status: 403 },
+    { label: 'centers set booking: anonymous', method: 'put', path: () => `/api/admin/centers/students/${randomUUID()}/booking`, actor: 'anonymous', status: 401 },
+    { label: 'centers set booking: student', method: 'put', path: () => `/api/admin/centers/students/${randomUUID()}/booking`, actor: 'student', status: 403 },
+    { label: 'centers slot bookings: anonymous', method: 'get', path: () => `/api/admin/centers/slots/${randomUUID()}/bookings`, actor: 'anonymous', status: 401 },
+    { label: 'centers slot bookings: student', method: 'get', path: () => `/api/admin/centers/slots/${randomUUID()}/bookings`, actor: 'student', status: 403 },
+    { label: 'centers slot sheet: anonymous', method: 'get', path: () => `/api/admin/centers/slots/${randomUUID()}/attendance`, actor: 'anonymous', status: 401 },
+    { label: 'centers slot sheet: student', method: 'get', path: () => `/api/admin/centers/slots/${randomUUID()}/attendance`, actor: 'student', status: 403 },
+    { label: 'centers patch slot: anonymous', method: 'patch', path: () => `/api/admin/centers/slots/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'centers patch slot: student', method: 'patch', path: () => `/api/admin/centers/slots/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'centers delete slot: anonymous', method: 'delete', path: () => `/api/admin/centers/slots/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'centers delete slot: student', method: 'delete', path: () => `/api/admin/centers/slots/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'centers create: anonymous', method: 'post', path: () => '/api/admin/centers', actor: 'anonymous', status: 401 },
+    { label: 'centers create: student', method: 'post', path: () => '/api/admin/centers', actor: 'student', status: 403 },
+    { label: 'centers patch: anonymous', method: 'patch', path: () => `/api/admin/centers/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'centers patch: student', method: 'patch', path: () => `/api/admin/centers/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'centers delete: anonymous', method: 'delete', path: () => `/api/admin/centers/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'centers delete: student', method: 'delete', path: () => `/api/admin/centers/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'centers create slot: anonymous', method: 'post', path: () => `/api/admin/centers/${randomUUID()}/slots`, actor: 'anonymous', status: 401 },
+    { label: 'centers create slot: student', method: 'post', path: () => `/api/admin/centers/${randomUUID()}/slots`, actor: 'student', status: 403 },
+    { label: 'centers public list: anonymous', method: 'get', path: () => '/api/centers', actor: 'anonymous', status: 401 },
+    { label: 'centers public list: student', method: 'get', path: () => '/api/centers', actor: 'student', status: 200 },
+    { label: 'my center booking: anonymous', method: 'get', path: () => '/api/me/center-booking', actor: 'anonymous', status: 401 },
   ];
 
   it.each(MATRIX.map((row) => [row.label, row] as const))('%s', async (_label, row) => {

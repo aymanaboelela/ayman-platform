@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MediaModule } from '../media/media.module';
+import { CentersModule } from '../centers/centers.module';
 import { ProfileController } from './profile.controller';
 import { ProfileService } from './profile.service';
 
@@ -11,7 +12,7 @@ import { ProfileService } from './profile.service';
  * exactly the case where getting it wrong matters most.
  */
 @Module({
-  imports: [MediaModule],
+  imports: [MediaModule, CentersModule],
   controllers: [ProfileController],
   providers: [ProfileService],
 })
