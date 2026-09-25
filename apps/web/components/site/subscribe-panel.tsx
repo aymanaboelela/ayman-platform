@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { BookOpen, CalendarClock, CalendarRange, ImagePlus } from 'lucide-react';
+import { BookOpen, CalendarClock, CalendarRange, ImagePlus, Lock } from 'lucide-react';
 import { z } from '@ayman/contracts/zod';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -206,10 +206,21 @@ function MonthCard({
       disabled={owned}
       aria-pressed={selected}
       onClick={onToggle}
-      className={cn('pay-choice__card', selected && 'pay-choice__card--on')}
+      className={cn(
+        'pay-choice__card',
+        selected && 'pay-choice__card--on',
+        owned && 'pay-choice__card--owned',
+      )}
     >
+      {/* A padlock and a green «اتشترى قبل كده», not just a faded card: a
+          faded card reads as «مش متاح» and sends the student to ask why. */}
+      {owned ? (
+        <span className="pay-choice__lock" aria-hidden="true">
+          <Lock className="size-4" />
+        </span>
+      ) : null}
       <span className="pay-choice__label">{month.title}</span>
-      <span className="pay-choice__off">
+      <span className={owned ? 'pay-choice__owned' : 'pay-choice__off'}>
         {owned
           ? copy.subscribe.monthCardOwned
           : month.lessonCount > 0

@@ -84,14 +84,17 @@ export default async function CourseSubscribePage({ params }: { params: Promise<
           own note on why the props were never enough), and `months` has no
           cached twin at all.
         */}
-        <SubscribePanel
-          courseId={course.id}
-          slug={course.slug}
-          monthlyPriceCents={course.monthlyPriceCents}
-          yearlyPriceCents={course.yearlyPriceCents}
-          terms={course.terms}
-          instapay={settings.contact.instapay}
-        />
+        {/* Room under the title — the panel sat flush against «اشتراك الكورس». */}
+        <div className="mt-6 md:mt-8">
+          <SubscribePanel
+            courseId={course.id}
+            slug={course.slug}
+            monthlyPriceCents={course.monthlyPriceCents}
+            yearlyPriceCents={course.yearlyPriceCents}
+            terms={course.terms}
+            instapay={settings.contact.instapay}
+          />
+        </div>
       </div>
     </main>
   );

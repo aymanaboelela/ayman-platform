@@ -3,6 +3,7 @@ import type { Dashboard, EnrolledCourse, LessonKind, PendingExam } from '@ayman/
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { courseAccessScopes } from '../entitlement/grant-liveness';
+import { lessonFilterWithCodes, resolveContentAccess } from '../entitlement/content-access-query';
 import { monthSliceOf } from '../entitlement/month-access';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
@@ -74,6 +75,9 @@ export class DashboardService {
       orderBy: { updatedAt: 'desc' },
       select: {
         id: true,
+        // «فتح بكود» — whether a code minted this enrollment; see
+        // `lessonFilterWithCodes` for what it changes in the counts.
+        source: true,
         progressPercent: true,
         lastLessonId: true,
         updatedAt: true,
@@ -239,11 +243,26 @@ export class DashboardService {
      * لنفس الدالة، وده المقصود منها أصلًا.
      */
     const monthFilters = await this.monthFiltersByCourse(userId, enrollments);
+    /*
+     * «فتح بكود» — the lectures a code opened are counted too, and for a
+     * student who holds nothing BUT codes on a course they are the whole
+     * count. Before this a code-only student on a month-selling course had
+     * zero lectures in the denominator and the card said «قريبًا» over the
+     * lecture they had just paid for. Same function the gate uses, so the
+     * count and the padlocks cannot disagree.
+     */
+    const reachFilters = new Map<string, Prisma.LessonWhereInput | undefined>();
+    await Promise.all(
+      enrollments.map(async (row) => {
+        const content = await resolveContentAccess(this.prisma, userId, row.course, row.source);
+        reachFilters.set(row.course.id, lessonFilterWithCodes(monthFilters.get(row.course.id), content));
+      }),
+    );
     const lessonsOf = (courseId: string): Prisma.LessonWhereInput => ({
       isPublished: true,
       section: { isPublished: true },
       kind: { not: 'quiz' },
-      ...(monthFilters.get(courseId) ?? {}),
+      ...(reachFilters.get(courseId) ?? {}),
     });
 
     const [completedByEnrollment, resumeProgress, purchaseGrants, watchedAgg, examProgressRows, examGates] =

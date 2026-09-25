@@ -1,18 +1,9 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AccessGrant, AccessScope, EnrollmentSource } from '../../generated/prisma/client';
-import {
-  courseAccessScopes,
-  grantLiveness,
-  hasLiveCourseAccess,
-  type CourseAccessSubject,
-} from './grant-liveness';
-import {
-  CONTENT_SCOPES,
-  EMPTY_CONTENT_SLICE,
-  contentSliceOf,
-  type ContentAccess,
-} from './content-access';
+import { courseAccessScopes, grantLiveness, type CourseAccessSubject } from './grant-liveness';
+import type { ContentAccess } from './content-access';
+import { resolveContentAccess } from './content-access-query';
 import {
   grantOpeningLesson,
   grantOpeningMonthlyExam,
@@ -370,37 +361,7 @@ export class EntitlementService {
     course: CourseAccessSubject,
     enrollmentSource: EnrollmentSource | null,
   ): Promise<ContentAccess> {
-    const now = new Date();
-    const grants = await this.prisma.accessGrant.findMany({
-      where: { userId, courseId: course.id, scope: { in: [...CONTENT_SCOPES] } },
-      select: {
-        id: true,
-        scope: true,
-        sectionId: true,
-        lessonId: true,
-        validFrom: true,
-        validUntil: true,
-        revokedAt: true,
-      },
-    });
-    const slice = grants.length > 0 ? contentSliceOf(grants, now) : EMPTY_CONTENT_SLICE;
-
-    if (enrollmentSource !== 'code' || !course.requiresGrant) {
-      return { slice, codeOnly: false };
-    }
-
-    const wide = await this.prisma.accessGrant.findMany({
-      where: { userId, OR: courseAccessScopes(course) },
-      select: {
-        scope: true,
-        courseId: true,
-        subjectId: true,
-        validFrom: true,
-        validUntil: true,
-        revokedAt: true,
-      },
-    });
-    return { slice, codeOnly: !hasLiveCourseAccess(wide, course, now) };
+    return resolveContentAccess(this.prisma, userId, course, enrollmentSource);
   }
 
   /**
