@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { BrandingRead } from '@ayman/contracts/admin/settings';
 import { mediaUrl } from '@ayman/ui/branding';
 import { BoardMark } from './board-mark';
+import { boardCopy } from './board-copy';
 
 /**
  * The opener of «اللوح»: one solid block of the brand colour with a curved
@@ -204,6 +205,46 @@ export function BoardPanel({
             saying the same thing twice — which is what it looked like.
           */
           <>
+            {/*
+              الكود جنب الصورة، ومكانه بعد الزراير عن قصد.
+              
+              الافتتاحية كانت بلاطة زرقا فيها كلام وزراير وصورة — تقرا مسطّحة
+              لأن مفيش فيها حاجة تخص **المادة** اللي بتتباع. تلات سطور بايثون
+              بتشتغل هي أقصر حاجة ممكن تقول «ده اللي هتتعلمه» من غير ما تقولها
+              بالكلام.
+              
+              ⚠️ مش نسخة من «الاستوديو». هناك اللوحة بتطلع على ورق أبيض وبتاخد
+              ظل وحواف؛ هنا هي مساحة أغمق شوية جوّه البلاطة نفسها، من غير ظل —
+              لأن ظل على لون صلب هو بالظبط الحاجة اللي البريست ده مالوش.
+            */}
+            <figure className="board-code">
+              <figcaption className="board-code__cap">{boardCopy.heroCode.label}</figcaption>
+              {/*
+                `dir="ltr"` مش رفاهية: الصفحة عربي فالاتجاه الموروث RTL، وRTL
+                على `print("أهلاً يا", name)` بيقلب ترتيب الأقواس والعلامات
+                حوالين النص العربي لحاجة مش الكود اللي حد كتبه.
+              */}
+              <pre className="board-code__body" dir="ltr">
+                {boardCopy.heroCode.lines.map((line) => (
+                  <code className="board-code__line" key={line.comment ?? line.code ?? ''}>
+                    {line.comment ? (
+                      <span className="board-code__comment" dir="rtl">
+                        {line.comment}
+                      </span>
+                    ) : (
+                      line.code
+                    )}
+                  </code>
+                ))}
+              </pre>
+              <p className="board-code__out">
+                <span className="board-code__caret" aria-hidden="true">
+                  &gt;
+                </span>{' '}
+                {boardCopy.heroCode.out}
+              </p>
+            </figure>
+
             <div className="board-portrait" aria-hidden="true">
               <Image
                 className="board-portrait__img"
