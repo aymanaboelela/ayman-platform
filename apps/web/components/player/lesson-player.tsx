@@ -114,7 +114,7 @@ export function LessonPlayerView({ payload }: LessonPlayerProps) {
       ) : null}
 
       {payload.lesson.kind === 'quiz' ? (
-        <QuizLesson lessonId={payload.lesson.id} progress={progress} />
+        <QuizLesson lessonId={payload.lesson.id} progress={progress} facts={payload.quiz} />
       ) : null}
 
       {/*
@@ -125,7 +125,12 @@ export function LessonPlayerView({ payload }: LessonPlayerProps) {
         `variant="attached"`, which swaps the copy rather than the mechanics.
       */}
       {payload.lesson.kind !== 'quiz' && payload.quiz ? (
-        <QuizLesson lessonId={payload.lesson.id} progress={progress} variant="attached" />
+        <QuizLesson
+          lessonId={payload.lesson.id}
+          progress={progress}
+          variant="attached"
+          facts={payload.quiz}
+        />
       ) : null}
 
       {/*

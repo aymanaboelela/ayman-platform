@@ -13,6 +13,7 @@ import { CourseCover } from '@/components/library/course-cover';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
 import { CourseOutlineView } from '@/components/library/course-outline';
 import { CourseGroupCard } from '@/components/player/course-group-card';
+import { MonthOfferCard } from '@/components/player/month-offer-card';
 import { CourseStartButton } from '@/components/site/course-start-button';
 import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
 import { formatDuration } from '@/components/site/course-card';
@@ -89,7 +90,11 @@ export const unstable_dynamicStaleTime = 5;
 
 /** `/api/payments/courses/:id/months/mine` — نفس شكل الرد اللي
  *  `subscribe-panel.tsx` بيقراه، متكرر هنا لأنه سطرين مش عقد مشترك. */
-const OwnedMonthsSchema = z.object({ ownedMonthIds: z.uuid().array() });
+const OwnedMonthsSchema = z.object({
+  ownedMonthIds: z.uuid().array(),
+  coversAll: z.boolean().default(false),
+  pending: z.boolean().default(false),
+});
 
 export default async function LibraryCoursePage({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
@@ -120,17 +125,43 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
    * وبتفشل بهدوء: `[]` معناها مفيش سطر، وهو نفس اللي بيحصل للطالب اللي مالوش
    * شهور فاضية. سطر طمأنة ضايع أرخص من صفحة بتقع.
    */
-  const ownedMonthIds = await apiGetAuthed(
+  const ownership = await apiGetAuthed(
     `/api/payments/courses/${course.id}/months/mine`,
     OwnedMonthsSchema,
-  )
-    .then((result) => new Set(result.ownedMonthIds))
-    .catch(() => new Set<string>());
+  ).catch(() => null);
+  const ownedMonthIds = new Set(ownership?.ownedMonthIds ?? []);
 
   // `course.months` هي المفتوحة للبيع بس، وبتشيل عدد المحاضرات المنشورة.
   const emptyOwnedMonths = course.months
     .filter((month) => ownedMonthIds.has(month.id) && month.lessonCount === 0)
     .map((month) => month.title);
+
+  /*
+   * «شهور جديدة اتفتحت» — الشهور المفتوحة اللي الطالب لسه ماخدهاش، وده الباب
+   * الوحيد ليها: الـproxy بيرجّع الطالب المشترك من صفحة الكورس لهنا، والقفل
+   * بتاع الشهر بيتعرض على محاضرة بس — فشهر اتفتح ولسه مفيهوش محاضرات مالوش
+   * أي زرار في أي حتة.
+   *
+   * مفيش عرض لو القراية وقعت (مش هنبيع شهر يمكن يكون معاه)، ولا لو اشتراكه
+   * شامل كل الشهور (ترم، سنة، «٣ شهور»)، ولا لو الطالب مش مشترك أصلًا — ده
+   * عنده زرار الاشتراك فوق.
+   */
+  const offerMonths =
+    ownership && !ownership.coversAll && outline.enrolled
+      ? course.months.filter((month) => !ownedMonthIds.has(month.id))
+      : [];
+  const monthOffer =
+    offerMonths.length > 0
+      ? {
+          months: offerMonths.map((month) => ({
+            id: month.id,
+            title: month.title,
+            lessonCount: month.lessonCount,
+            priceCents: month.priceCents,
+          })),
+          pending: ownership?.pending ?? false,
+        }
+      : null;
 
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
@@ -305,6 +336,12 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
         yet. Above the group card, because a code in hand is the more urgent
         of the two.
       */}
+      {monthOffer ? (
+        <div className="mb-8 max-w-[40rem]">
+          <MonthOfferCard courseSlug={course.slug} offer={monthOffer} />
+        </div>
+      ) : null}
+
       {outline.totalLessons > 0 ? (
         <div className="mb-8 max-w-[40rem]">
           <RedeemCard whatsapp={contact.whatsapp} courseTitle={course.title} />

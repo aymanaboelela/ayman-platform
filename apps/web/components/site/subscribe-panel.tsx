@@ -40,7 +40,27 @@ const MY_SUBMISSIONS_SCHEMA = z.array(PaymentSubmissionSchema);
  * inline shape and nothing else consumes it yet; the day a second screen needs
  * it, it belongs in the package.
  */
-const OWNED_MONTHS_SCHEMA = z.object({ ownedMonthIds: z.uuid().array() });
+const OWNED_MONTHS_SCHEMA = z.object({
+  ownedMonthIds: z.uuid().array(),
+  /** A term, «٣ شهور», a year or an admin grant — every month is open. */
+  coversAll: z.boolean().default(false),
+});
+
+/**
+ * The months the link asked for — `?month=a` from a lecture's padlock, or
+ * `?month=a,b` from the «شهور جديدة اتفتحت» card — kept only when they are on
+ * sale here and not already held. The id sits in a URL anybody can type, and
+ * a month that is closed, owned or from another course would show a total
+ * the student cannot pay and then 400 on a submit they did nothing to earn.
+ */
+function requestedMonthIds(months: readonly { id: string }[], owned: readonly string[]): string[] {
+  const raw = new URLSearchParams(window.location.search).get('month');
+  if (!raw) return [];
+  const asked = new Set(raw.split(',').map((id) => id.trim()));
+  return months
+    .map((month) => month.id)
+    .filter((id) => asked.has(id) && !owned.includes(id));
+}
 
 type Step =
   | 'checking'
@@ -308,6 +328,9 @@ export function SubscribePanel({
    *  sold either way (`submit()` runs the same check), so the worst a failed
    *  read costs is a card that looks selectable and is not. */
   const [ownedMonthIds, setOwnedMonthIds] = useState<string[]>([]);
+  /** Every month is already open — see `OWNED_MONTHS_SCHEMA`. The «شهر» card
+   *  gives way to one sentence saying so. */
+  const [coversAll, setCoversAll] = useState(false);
   const [senderPhone, setSenderPhone] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -430,6 +453,7 @@ export function SubscribePanel({
       // since it is the one that offers to sell them a month twice.
       if (ownedMonthsResult.status === 'fulfilled') {
         setOwnedMonthIds(ownedMonthsResult.value.ownedMonthIds);
+        setCoversAll(ownedMonthsResult.value.coversAll);
       }
 
       if (settingsResult.status === 'fulfilled') {
@@ -459,6 +483,27 @@ export function SubscribePanel({
         if (latest?.status === 'rejected') setRejection(latest.rejectionReason);
         if (latest?.status === 'approved' && latest.validUntil !== null) {
           setPreviouslyLapsed(new Date(latest.validUntil).getTime() < Date.now());
+        }
+      }
+      /*
+       * The link named the months — a lecture's padlock, or the «شهور جديدة
+       * اتفتحت» card — so the panel opens ON them, already ticked, instead of
+       * on a plan grid whose question the student has just answered by
+       * pressing «الاشتراك في الشهر ده».
+       */
+      if (courseResult.status === 'fulfilled') {
+        const live = courseResult.value;
+        const owned = ownedMonthsResult.status === 'fulfilled' ? ownedMonthsResult.value : null;
+        const wanted =
+          live.monthlyOnSale !== false && live.monthlyPriceCents !== null && !owned?.coversAll
+            ? requestedMonthIds(live.months, owned?.ownedMonthIds ?? [])
+            : [];
+        if (wanted.length > 0) {
+          setPlan('monthly');
+          setTermId(null);
+          setSelectedMonthIds(wanted);
+          setStep('chooseMonths');
+          return;
         }
       }
       // A failed check must never block checkout — worst case, a student sees
@@ -644,11 +689,7 @@ export function SubscribePanel({
    * with no parameter at all.
    */
   function preselectedMonthIds(): string[] {
-    const requested = new URLSearchParams(window.location.search).get('month');
-    if (requested === null) return [];
-    if (!months.some((month) => month.id === requested)) return [];
-    if (ownedMonthIds.includes(requested)) return [];
-    return [requested];
+    return requestedMonthIds(months, ownedMonthIds);
   }
 
   function choosePlan(next: SellablePaymentPlan) {
@@ -816,6 +857,9 @@ export function SubscribePanel({
     // `terms` (see the `terms.length > 1` guard below).
     const cheapestTermCents =
       terms.length > 1 ? Math.min(...terms.map((term) => term.priceCents)) : null;
+    // A course sold by curriculum month, to somebody whose subscription already
+    // opens every month: the «شهر» card could only lead to a grid of padlocks.
+    const monthCardCovered = coversAll && months.length > 0;
 
     return (
       <div className="course-subscribe">
@@ -829,9 +873,10 @@ export function SubscribePanel({
         {previouslyLapsed ? (
           <p className="course-subscribe__lapsed">{copy.subscribe.previouslySubscribedLapsed}</p>
         ) : null}
+        {monthCardCovered ? <p className="course-subscribe__covered">{copy.subscribe.coversAllNote}</p> : null}
         <p className="course-subscribe__title">{copy.subscribe.choosePlan}</p>
         <div className="course-subscribe__plans">
-          {monthlyPriceCents !== null ? (
+          {monthlyPriceCents !== null && !monthCardCovered ? (
             <PlanCard
               icon={<CalendarClock className="size-6" strokeWidth={2} />}
               name={copy.subscribe.planMonthlyLabel}

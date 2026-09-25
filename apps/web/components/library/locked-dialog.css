@@ -1,0 +1,177 @@
+/* =============================================================================
+   «المحاضرة دي تابعة لشهر تاني» — the month padlock's dialog.
+
+   It used to be three lines of grey text over three buttons in a flex row, and
+   at phone width the row wrapped: «الاشتراك في الشهر ده» on one line, «عندك
+   كود؟» and «مش دلوقتي» on the next, each a different width. It read as an
+   error message. Now it is a coloured band with a picture, the month named on
+   a chip, one full-width action and the two quiet ones sharing a line.
+
+   Every colour is a token or a `color-mix` of one — both themes and each
+   tenant's hue come for free.
+   ========================================================================== */
+
+.lock-dialog {
+  /* The band bleeds to the top edge; the dialog keeps its own scroll cap. */
+  padding-top: 0;
+}
+
+/* ── the band ───────────────────────────────────────────────────────────── */
+.lock-dialog__band {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin-inline: -1.25rem;
+  margin-bottom: 1rem;
+  border-start-start-radius: calc(var(--r-lg) - 1px);
+  border-start-end-radius: calc(var(--r-lg) - 1px);
+  overflow: hidden;
+  padding: 1.1rem 1rem 0.4rem;
+  background:
+    radial-gradient(90% 120% at 100% 0%, color-mix(in oklab, var(--p-400) 38%, transparent), transparent 62%),
+    radial-gradient(80% 110% at 0% 100%, color-mix(in oklab, var(--a-9) 30%, transparent), transparent 60%),
+    linear-gradient(160deg, color-mix(in oklab, var(--p-500) 16%, var(--color-surface-2)), var(--color-surface-2));
+  border-bottom: 1px solid var(--color-line-subtle);
+}
+.lock-dialog__band::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(color-mix(in oklab, var(--p-500) 22%, transparent) 1px, transparent 1.5px);
+  background-size: 16px 16px;
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.8), transparent 90%);
+  pointer-events: none;
+}
+.lock-dialog__art {
+  position: relative;
+  inline-size: min(100%, 12rem);
+  block-size: auto;
+  filter: drop-shadow(0 10px 16px color-mix(in oklab, var(--p-700) 22%, transparent));
+}
+
+.lock-art__shadow { fill: color-mix(in oklab, var(--p-700) 16%, transparent); }
+.lock-art__page { fill: var(--color-surface-1); stroke: var(--color-line); stroke-width: 1.5; }
+.lock-art__page--back { fill: color-mix(in oklab, var(--ok) 8%, var(--color-surface-1)); }
+.lock-art__ring { fill: var(--p-500); }
+.lock-art__ring--back { fill: var(--ok); }
+.lock-art__hole { fill: var(--color-surface-1); }
+.lock-art__tick {
+  fill: none;
+  stroke: var(--ok);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.lock-art__day { fill: color-mix(in oklab, var(--p-500) 16%, transparent); }
+.lock-art__day--on { fill: var(--a-9); }
+.lock-art__shackle {
+  fill: none;
+  stroke: var(--e-600);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.lock-art__body { fill: var(--a-9); stroke: color-mix(in oklab, var(--a-11) 60%, transparent); stroke-width: 1.5; }
+.lock-art__key { fill: #1a1206; }
+.lock-art__spark { fill: var(--a-9); opacity: 0.85; }
+.lock-art__spark--b { fill: var(--p-400); }
+
+/* ── words ──────────────────────────────────────────────────────────────── */
+.lock-dialog__head {
+  align-items: center;
+  margin-bottom: 0.9rem;
+  text-align: center;
+}
+.lock-dialog__title {
+  font-size: var(--fs-title-4);
+  line-height: 1.4;
+  text-wrap: balance;
+}
+.lock-dialog__body {
+  max-inline-size: 30ch;
+  line-height: 1.8;
+  text-wrap: pretty;
+}
+
+.lock-dialog__month {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-bottom: 1.1rem;
+}
+.lock-dialog__month-name {
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--p-500) 14%, transparent);
+  color: var(--p-600);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+.lock-dialog__month-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--a-9) 16%, transparent);
+  color: var(--a-11);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+}
+
+/* ── actions ────────────────────────────────────────────────────────────── */
+.lock-dialog__actions {
+  display: grid;
+  gap: 0.6rem;
+}
+.lock-dialog__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-block-size: 3rem;
+  padding-inline: 1rem;
+  border-radius: var(--r-md);
+  background: var(--a-9);
+  color: #1a1206;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  box-shadow: 0 6px 16px color-mix(in oklab, var(--a-9) 32%, transparent);
+  transition:
+    background var(--d-hover) var(--ease-out),
+    transform var(--d-hover) var(--ease-out);
+}
+.lock-dialog__cta:hover { background: var(--a-10); }
+.lock-dialog__cta:active { transform: translateY(1px); }
+.lock-dialog__cta:focus-visible { outline: 2px solid var(--p-500); outline-offset: 2px; }
+
+.lock-dialog__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+.lock-dialog__alt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-block-size: 2.75rem;
+  padding-inline: 0.75rem;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in oklab, var(--p-500) 35%, var(--color-line));
+  background: color-mix(in oklab, var(--p-500) 7%, var(--color-surface-1));
+  color: var(--p-600);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  transition: background var(--d-hover) var(--ease-out);
+}
+.lock-dialog__alt:hover { background: color-mix(in oklab, var(--p-500) 14%, var(--color-surface-1)); }
+.lock-dialog__alt:focus-visible { outline: 2px solid var(--p-500); outline-offset: 2px; }
+.lock-dialog__alt--quiet {
+  border-color: var(--color-line);
+  background: var(--color-surface-1);
+  color: var(--color-fg-muted);
+}
+.lock-dialog__alt--quiet:hover { background: var(--color-surface-3); color: var(--color-fg); }

@@ -646,4 +646,52 @@ describe('LessonService', () => {
     });
   });
 
+  describe('a new lesson and the month it lands in', () => {
+    const base = {
+      kind: 'quiz' as const,
+      isPublished: true,
+      isFreePreview: false,
+      estimatedSeconds: 0,
+      completionMode: 'manual' as const,
+      completionMinViewSeconds: null,
+      completionPassGrade: null,
+    };
+
+    it('takes the month of the lesson above it, so no subscriber finds it padlocked', async () => {
+      // «واجب الدرس الرابع — الجزء التاني» went live in no month at all, and a
+      // lesson in no month is closed to every monthly subscriber.
+      const section = await prisma.courseSection.create({
+        data: { courseId, title: 'الوحدة الأولى', position: 5 },
+      });
+      const month = await prisma.courseMonth.create({ data: { courseId, monthIndex: 1, title: 'شهر ١' } });
+      const lecture = await service.create(section.id, { ...base, title: 'الدرس الرابع', kind: 'text' });
+      await prisma.lessonMonth.create({
+        data: { lessonId: lecture.id, monthId: month.id, courseId, isPrimary: true },
+      });
+
+      const homework = await service.create(section.id, { ...base, title: 'واجب الدرس الرابع' });
+
+      const rows = await prisma.lessonMonth.findMany({ where: { lessonId: homework.id } });
+      expect(rows.map((row) => [row.monthId, row.isPrimary])).toEqual([[month.id, true]]);
+    });
+
+    it('leaves a lesson untagged on a course that sells no months', async () => {
+      const other = await prisma.course.create({
+        data: {
+          slug: `les-nomonth-${Date.now().toString(36)}`,
+          title: 'كورس',
+          systemId: (await prisma.course.findUniqueOrThrow({ where: { id: courseId } })).systemId,
+          year: 2,
+          trackId: (await prisma.course.findUniqueOrThrow({ where: { id: courseId } })).trackId,
+          subjectId: (await prisma.course.findUniqueOrThrow({ where: { id: courseId } })).subjectId,
+          instructorId: userId,
+        },
+      });
+      const section = await prisma.courseSection.create({ data: { courseId: other.id, title: 'قسم', position: 0 } });
+
+      const lesson = await service.create(section.id, { ...base, title: 'كويز' });
+
+      expect(await prisma.lessonMonth.count({ where: { lessonId: lesson.id } })).toBe(0);
+    });
+  });
 });

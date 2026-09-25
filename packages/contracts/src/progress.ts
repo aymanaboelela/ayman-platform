@@ -369,6 +369,38 @@ export const CourseOutlineSchema = z.object({
    * lock on — see `resolveGate`, which no longer gates anything else.
    */
   examLessonId: z.string().nullable(),
+  /**
+   * «شهور جديدة اتفتحت» — the OPEN months of this course the student does not
+   * hold yet, for the card that sells them from inside the course.
+   *
+   * It is the only door there is. `proxy.ts` sends an enrolled student from
+   * the course page to their library, and the month padlock only exists on a
+   * lecture — so «شهر ٢» opened with no lecture in it yet had no padlock, no
+   * page and no button anywhere a student holding «شهر ١» could reach. Every
+   * one of them was locked out of buying it.
+   *
+   * `null` when there is nothing to offer: a course that does not sell by
+   * month, a student whose term / year / «٣ شهور» already opens every month,
+   * or one who owns every open month. `pending` says a claim for this course
+   * is waiting in the review queue, which the checkout would refuse a second
+   * of anyway. Defaulted so a web build that lands before its API still parses.
+   */
+  monthOffer: z
+    .object({
+      months: z
+        .array(
+          z.object({
+            id: z.uuid(),
+            title: z.string(),
+            lessonCount: z.number().int().min(0),
+            priceCents: z.number().int().min(0),
+          }),
+        )
+        .min(1),
+      pending: z.boolean(),
+    })
+    .nullable()
+    .default(null),
 });
 
 export const PlayerResourceSchema = z.object({
@@ -491,7 +523,18 @@ export const LessonPlayerSchema = z.object({
    * lecture can carry a short bonus quiz alongside its own completion rule.
    * Null when no quiz exists yet, or when one exists but is still a draft.
    */
-  quiz: z.object({ id: z.string() }).nullable(),
+  quiz: z
+    .object({
+      id: z.string(),
+      /** Questions on the first paper — one per slot, a pool slot included.
+       *  Optional so a web build that lands before its API still parses. */
+      questionCount: z.number().int().min(0).optional(),
+      /** The time limit; `null` = untimed. */
+      durationSeconds: z.number().int().min(0).nullable().optional(),
+      /** The pass mark, as a percentage. */
+      passPercent: z.number().min(0).max(100).optional(),
+    })
+    .nullable(),
   resources: z.array(PlayerResourceSchema),
   progress: LessonProgressSchema,
   previous: LessonNeighbourSchema,

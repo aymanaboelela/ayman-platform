@@ -24,6 +24,8 @@ import { LessonAccessService } from '../progress/lesson-access.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
 import { toProgressDto, type ProgressRow } from '../progress/progress.mapper';
 import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
+import { courseAccessScopes } from '../entitlement/grant-liveness';
+import { monthSliceOf } from '../entitlement/month-access';
 
 interface FlatLesson {
   id: string;
@@ -84,6 +86,11 @@ export class PlayerService {
         // fetch — the player's sidebar and `/library/[slug]` — and it is
         // stable across lesson navigations, which the lesson body is not.
         whatsappGroupUrl: true,
+        // `monthOffer` — the price a month sells at, and the pair
+        // `courseAccessScopes` needs to read which months are already held.
+        monthlyPriceCents: true,
+        subjectId: true,
+        requiresGrant: true,
         enrollments: {
           where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] } },
           select: { id: true, progressPercent: true, lastLessonId: true },
@@ -152,9 +159,11 @@ export class PlayerService {
      */
     const openMonths = await this.prisma.courseMonth.findMany({
       where: { courseId: course.id, isOpen: true },
+      orderBy: [{ monthIndex: 'asc' }],
       select: {
         id: true,
         title: true,
+        priceCents: true,
         _count: {
           select: { lessons: { where: { lesson: { isPublished: true, kind: { not: 'quiz' } } } } },
         },
@@ -240,7 +249,46 @@ export class PlayerService {
       totalLessons,
       totalEstimatedSeconds,
       examLessonId: course.examLessonId,
+      monthOffer: await this.monthOffer(userId, course, openMonths),
     };
+  }
+
+  /**
+   * The open months this student does not hold — see `CourseOutline.monthOffer`.
+   *
+   * Read with the SAME `courseAccessScopes` + `monthSliceOf` pair the padlock
+   * and the checkout use, so the card can never offer a month the checkout
+   * would refuse as «معاه خلاص», or hide one the padlock is still on. Two small
+   * indexed reads, and none at all on a course that does not sell by month.
+   */
+  private async monthOffer(
+    userId: string,
+    course: { id: string; subjectId: string; requiresGrant: boolean; monthlyPriceCents: number | null },
+    openMonths: readonly { id: string; title: string; priceCents: number | null; _count: { lessons: number } }[],
+  ): Promise<CourseOutline['monthOffer']> {
+    const price = course.monthlyPriceCents;
+    if (price === null || !course.requiresGrant || openMonths.length === 0) return null;
+
+    const [grants, pending] = await Promise.all([
+      this.prisma.accessGrant.findMany({
+        where: { userId, OR: courseAccessScopes(course) },
+        select: { id: true, scope: true, monthId: true, validFrom: true, validUntil: true, revokedAt: true },
+      }),
+      this.prisma.paymentSubmission.count({ where: { userId, courseId: course.id, status: 'pending' } }),
+    ]);
+
+    const slice = monthSliceOf(grants, new Date());
+    if (slice.everything) return null;
+
+    const months = openMonths
+      .filter((month) => !slice.monthIds.has(month.id))
+      .map((month) => ({
+        id: month.id,
+        title: month.title,
+        lessonCount: month._count.lessons,
+        priceCents: month.priceCents ?? price,
+      }));
+    return months.length > 0 ? { months, pending: pending > 0 } : null;
   }
 
   /**
@@ -287,7 +335,18 @@ export class PlayerService {
           // see `LessonPanel`'s admin-side comment. Selected here so a quiz
           // attached to e.g. a video lesson can be surfaced by the player too;
           // gated on `isPublished` below, same rule `lessonIsReady` uses.
-          quiz: { select: { id: true, isPublished: true } },
+          // The numbers the exam's doorway prints — «١٠ أسئلة · ١٥ دقيقة ·
+          // النجاح من ٥٠٪». Slots on the FIRST paper only: the improvement
+          // paper is a second sitting, not more questions.
+          quiz: {
+            select: {
+              id: true,
+              isPublished: true,
+              durationSeconds: true,
+              passPercent: true,
+              _count: { select: { slots: { where: { paper: 'original' } } } },
+            },
+          },
           resources: {
             orderBy: [{ position: 'asc' }, { id: 'asc' }],
             select: {
@@ -423,7 +482,14 @@ export class PlayerService {
       homework,
       // Draft quizzes stay invisible to students, same gate `lessonIsReady`
       // applies when deciding a `kind: 'quiz'` lesson is publishable.
-      quiz: lesson.quiz?.isPublished ? { id: lesson.quiz.id } : null,
+      quiz: lesson.quiz?.isPublished
+        ? {
+            id: lesson.quiz.id,
+            questionCount: lesson.quiz._count.slots,
+            durationSeconds: lesson.quiz.durationSeconds,
+            passPercent: Number(lesson.quiz.passPercent),
+          }
+        : null,
       resources: lesson.resources.map((resource) => {
         const isFile = resource.kind === 'presentation' || resource.kind === 'document';
         return {
