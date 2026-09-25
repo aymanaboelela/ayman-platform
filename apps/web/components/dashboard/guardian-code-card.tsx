@@ -18,7 +18,7 @@ const c = copy.dashboard.guardianCode;
  *
  * ## ومكتوب `ltr` ومتباعد
  *
- * ٢٦ حرف لاتيني جوّه صفحة عربي بتتقلب من غير `dir="ltr"` — والكود المقلوب
+ * ٦ خانات لاتيني ورموز جوّه صفحة عربي بتتقلب من غير `dir="ltr"` — والكود المقلوب
  * كود تاني خالص. والتباعد (`tracking`) عشان اللي بيقرا من الشاشة ويكتب في
  * تليفون: ده الاستخدام الفعلي، والأبجدية نفسها اتشالت منها `0/O` و`1/I/L`
  * لنفس السبب.
@@ -63,7 +63,8 @@ export function GuardianCodeCard({ code }: { code: string }) {
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <code
           dir="ltr"
-          className="mono select-all rounded-sm border border-line bg-surface-1 px-3 py-2 text-[length:var(--fs-text-sm)] tracking-[0.18em] text-fg"
+          // ٦ خانات بس، فبقى كبير ومتباعد: بيتقري بصوت عالي أو بيتنقل بالعين.
+          className="mono select-all rounded-sm border border-line bg-surface-1 px-4 py-2 text-[length:var(--fs-title-3)] font-semibold tracking-[0.3em] text-fg"
         >
           {code}
         </code>

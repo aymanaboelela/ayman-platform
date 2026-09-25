@@ -34,7 +34,7 @@ function lockedMessage(retryAfterSeconds: number): string {
  *
  * ## `dir="ltr"` وتكبير تلقائي
  *
- * الكود ٢٦ حرف لاتيني والصفحة عربي، فمن غير `dir` بيتقلب وهو بيتكتب. والأب
+ * الكود ٦ خانات لاتيني ورموز والصفحة عربي، فمن غير `dir` بيتقلب وهو بيتكتب. والأب
  * بيكتب في تليفون كيبورده بيبدأ صغير — والتكبير هنا عشان يشوف اللي كتبه زي
  * ما هو مخزّن، مش عشان الفحص (العقد بيكبّر برضه على السيرفر).
  */
@@ -124,7 +124,7 @@ export function GuardianCodeForm() {
           maxLength={GUARDIAN_CODE_LENGTH + 6}
           value={code}
           onChange={(event) => setCode(event.target.value.toUpperCase())}
-          className="mono tracking-[0.12em]"
+          className="mono text-center text-[length:var(--fs-title-4)] tracking-[0.35em]"
         />
       </div>
 
