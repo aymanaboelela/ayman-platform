@@ -34,92 +34,58 @@ function expectFor(label: string, actual: boolean, expected: boolean): void {
 afterEach(() => setRuntimeGrants(new Map()));
 
 describe('the owner baseline', () => {
-  it('can run its own teaching without anybody granting anything', () => {
+  it('runs the same system Ayman does, without anybody granting anything', () => {
+    /*
+     * «عادل وصبري بيستخدموا السيستم شبهي». There is nobody above the
+     * instructor on their stack to grant the rest, so the rest is theirs:
+     * answering a student, approving a transfer, issuing a code, shipping a
+     * book. Measured on both live stacks before this: each answered 403.
+     */
     for (const permission of [
       'admin:access',
       'course:create',
       'course:publish',
-      'lesson:write',
-      'quiz:write',
       'quiz:grade',
-      'student:read',
       'homework:review',
       'settings:write',
-      'home:write',
-      'analytics:read',
-    ] as const) {
-      expectFor(permission, roleHasPermission('owner', permission), true);
-    }
-  });
-
-  it('can SEE its own students money and messages, and move neither', () => {
-    /*
-     * The line moved once, deliberately, and this is where it sits now.
-     *
-     * `payment:read` and `conversation:read` used to be on the forbidden list
-     * below, on the reasoning that money belongs to whoever operates the
-     * platform rather than to the teaching. That reasoning describes a stack
-     * with an operator AND instructors on it. On a single-teacher stack it
-     * describes somebody who is not there: the instructor IS the business, the
-     * subscriptions are their revenue and the messages are addressed to them.
-     *
-     * ⚠️ What actually forced it: the escape hatch was welded shut. These were
-     * documented as grantable, but `role:grant` is not in the owner set either
-     * and there is no second account on those stacks — so nobody could ever
-     * grant them. Measured on both live instructor stacks:
-     * `GET /api/admin/roles/owner/permissions` answered 403. And the student
-     * page reads both routes, so every student on both platforms opened to a
-     * dead screen.
-     */
-    for (const permission of ['payment:read', 'conversation:read'] as const) {
-      expectFor(permission, roleHasPermission('owner', permission), true);
-    }
-
-    // READING is the whole of it. Approving a payment moves money and closing
-    // a thread ends somebody's complaint — different authorities, still shut.
-    for (const permission of ['payment:review', 'conversation:close'] as const) {
-      expectFor(permission, roleHasPermission('owner', permission), false);
-    }
-  });
-
-  it('cannot touch the books, the audit trail, or the platform itself', () => {
-    // The split the role exists for: what is theirs to run, against what
-    // belongs to whoever operates the platform. Everything here is either
-    // about OTHER people's stacks, or a record that must not be editable by
-    // the person it is a record of.
-    for (const permission of [
+      'payment:read',
+      'payment:review',
+      'conversation:read',
+      'conversation:reply',
+      'conversation:close',
       'book-order:read',
-      'expense:read',
+      'book-order:ship',
       'expense:write',
-      'audit:read',
-      'diagnostics:read',
-      'flags:write',
-      'taxonomy:write',
-      'marketing:send',
-      'marketing:device',
-      'outreach:read',
-    ] as const) {
-      expectFor(permission, roleHasPermission('owner', permission), false);
-    }
-  });
-
-  it('cannot do anything irreversible to a student account', () => {
-    for (const permission of [
+      'center:write',
+      'center:attendance',
       'student:write',
-      'student:ban',
-      'student:delete',
       'student:set-password',
-      'student:role-change',
+      'outreach:read',
+      'marketing:send',
+      'flags:write',
+      'audit:read',
     ] as const) {
+      expectFor(permission, roleHasPermission('owner', permission), true);
+    }
+  });
+
+  it('holds no part of articles — «شيل من عندهم بتاعت المقالات بس»', () => {
+    for (const permission of ['news:read', 'news:write', 'news:publish'] as const) {
       expectFor(permission, roleHasPermission('owner', permission), false);
     }
   });
 
-  it('can write news but not publish it', () => {
-    // The same split `course:publish` already makes: writing a page and
-    // putting it on the public internet are different authorities.
-    expect(roleHasPermission('owner', 'news:write')).toBe(true);
-    expect(roleHasPermission('owner', 'news:publish')).toBe(false);
+  it('holds none of the ways to give articles back to itself', () => {
+    // Granting `news:*` to the owner role, or promoting a second account to
+    // `admin`, would each undo the line above.
+    for (const permission of ['role:read', 'role:grant', 'student:role-change'] as const) {
+      expectFor(permission, roleHasPermission('owner', permission), false);
+    }
+  });
+
+  it('holds everything else, including a permission added later', () => {
+    // Inverted on purpose — see `OWNER_WITHHELD`.
+    expect(permissionsForRole('owner')).toHaveLength(PERMISSIONS.length - 6);
   });
 
   it('holds strictly less than admin', () => {
@@ -149,7 +115,7 @@ describe('admin is unaffected by any of this', () => {
 describe('student is unaffected', () => {
   it('keeps exactly its own set, and gains nothing from an owner grant', () => {
     const before = permissionsForRole('student');
-    grant('owner', 'payment:read', 'audit:read');
+    grant('owner', 'payment:read', 'news:publish');
 
     expect(permissionsForRole('student')).toEqual(before);
     expect(roleHasPermission('student', 'payment:read')).toBe(false);
@@ -158,7 +124,7 @@ describe('student is unaffected', () => {
 
 describe('granting at runtime', () => {
   /*
-   * ⚠️ `audit:read`, not `payment:read`, and the swap is the point.
+   * ⚠️ `news:publish`, not `payment:read`, and the swap is the point.
    *
    * These cases need a permission the owner baseline genuinely does NOT hold,
    * and `payment:read` stopped being one when the instructor was given sight
@@ -166,11 +132,11 @@ describe('granting at runtime', () => {
    * held still goes green — it just stops testing granting.
    */
   it('opens a permission the baseline does not hold', () => {
-    expect(roleHasPermission('owner', 'audit:read')).toBe(false);
+    expect(roleHasPermission('owner', 'news:publish')).toBe(false);
 
-    grant('owner', 'audit:read');
+    grant('owner', 'news:publish');
 
-    expect(roleHasPermission('owner', 'audit:read')).toBe(true);
+    expect(roleHasPermission('owner', 'news:publish')).toBe(true);
   });
 
   it('shows up in the list the client renders from', () => {
@@ -181,7 +147,7 @@ describe('granting at runtime', () => {
 
   it('keeps the catalogue order rather than appending', () => {
     // The client renders from this list, and a grant must not reorder it.
-    grant('owner', 'payment:read', 'audit:read');
+    grant('owner', 'payment:read', 'news:publish');
     const listed = permissionsForRole('owner');
     const expected = PERMISSIONS.filter((permission) => listed.includes(permission));
 
@@ -189,10 +155,10 @@ describe('granting at runtime', () => {
   });
 
   it('closes again when the grant goes away', () => {
-    grant('owner', 'audit:read');
+    grant('owner', 'news:publish');
     setRuntimeGrants(new Map());
 
-    expect(roleHasPermission('owner', 'audit:read')).toBe(false);
+    expect(roleHasPermission('owner', 'news:publish')).toBe(false);
   });
 
   it('cannot invent a permission that is not in the catalogue', () => {
@@ -202,9 +168,9 @@ describe('granting at runtime', () => {
   });
 
   it('never widens an unknown role', () => {
-    grant('superuser' as Role, 'audit:read');
+    grant('superuser' as Role, 'news:publish');
 
-    expect(roleHasPermission('superuser', 'audit:read')).toBe(false);
+    expect(roleHasPermission('superuser', 'news:publish')).toBe(false);
   });
 
   it('reports what is loaded', () => {
@@ -218,23 +184,11 @@ describe('granting at runtime', () => {
 describe('grantablePermissions', () => {
   const grantable = new Set(grantablePermissions('owner'));
 
-  it('offers the things an operator would plausibly open up', () => {
-    /*
-     * `payment:read` is NOT in this list any more, and its absence is correct
-     * rather than an omission: the owner baseline now holds it, and the case
-     * below («never offers something the role already has») is what takes it
-     * out. Approving a payment is still here — seeing the money and moving it
-     * are the two different authorities that split was always about.
-     */
-    for (const permission of [
-      'payment:review',
-      'book-order:read',
-      'student:write',
-      'news:publish',
-      'audit:read',
-    ] as const) {
-      expectFor(permission, grantable.has(permission), true);
-    }
+  it('offers the one thing the owner is kept out of: articles', () => {
+    // Everything else is already in the baseline, and the role/escalation
+    // permissions are never grantable — so an operator's only choice left is
+    // whether this instructor writes articles after all.
+    expect([...grantable].sort()).toEqual(['news:publish', 'news:read', 'news:write']);
   });
 
   it('never offers the permission that hands out permissions', () => {
@@ -293,13 +247,12 @@ describe('the two escalation paths are not offered at all', () => {
     expect(grantablePermissions('owner')).not.toContain('student:set-password');
   });
 
-  it('still offers the merely-destructive ones, which are a real decision', () => {
-    // Ban and delete stay grantable on purpose: an operator who ticks them has
-    // decided a support desk may use them, and neither yields a credential.
-    const grantable = grantablePermissions('owner');
-
-    expect(grantable).toContain('student:ban');
-    expect(grantable).toContain('student:delete');
+  it('leaves the merely-destructive ones with the instructor, who is the operator', () => {
+    // Ban and delete were grantable once, for an operator to hand a support
+    // desk. On a single-teacher stack the instructor IS the operator, so they
+    // are in the baseline — and neither yields a credential.
+    expect(roleHasPermission('owner', 'student:ban')).toBe(true);
+    expect(roleHasPermission('owner', 'student:delete')).toBe(true);
   });
 
   it('cannot be reached by writing them through the API either', () => {

@@ -276,131 +276,49 @@ export type Role = 'admin' | 'owner' | 'student';
  * grants them to `student`, so adding an `editor` role later is one entry in
  * this map and zero changes anywhere else.
  */
+/**
+ * What an instructor does NOT hold on their own stack — and nothing else.
+ *
+ * `owner` used to be a hand-picked list, written for a stack with an operator
+ * above the instructor: money, messages, books, publishing and student
+ * accounts were the operator's, «grantable» later. On a single-teacher stack
+ * that operator does not exist, and the grants screen needs `role:grant`,
+ * which the owner did not hold — so «later» was never. Measured on Sabry's
+ * and Adel's stacks on 2026-09-25: they could read a student's message and
+ * not answer it, see a transfer and not approve it, and could not issue a
+ * single unlock code.
+ *
+ * The platform owner's rule, in his words: «عادل وصبري بيستخدموا السيستم
+ * شبهي… بس شيل من عندهم بتاعت المقالات بس». So the list is inverted —
+ * everything in the catalogue, minus:
+ *
+ *   · `news:*` — articles are his call, not theirs;
+ *   · `role:read` / `role:grant` / `student:role-change` — the three ways to
+ *     give a permission back: grant `news:*` to the owner role, or promote a
+ *     second account to `admin`. Holding any of them would undo the line
+ *     above.
+ *
+ * ⚠️ Inverted means a permission added to the catalogue later reaches the
+ * instructor the day it ships — which is the rule («زيي»). Paid features
+ * stay behind `@RequireFeature` and the signed entitlements document; a
+ * permission does not switch on a feature the stack is not entitled to.
+ */
+const OWNER_WITHHELD = new Set<Permission>([
+  'news:read',
+  'news:write',
+  'news:publish',
+  'role:read',
+  'role:grant',
+  'student:role-change',
+]);
+
 const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission> | '*'> = {
   admin: '*',
   /**
-   * What an instructor can do on day one, before anybody grants them anything.
-   *
-   * The line is «what is YOURS to run» against «what is the platform's». Every
-   * entry here is about their own teaching — their courses, their lessons,
-   * their quizzes, their students' work, and the look of their own site. An
-   * owner who had none of this would sign in on launch day to a dashboard that
-   * does nothing, which is not a safe default, it is a broken one.
-   *
-   * What is deliberately ABSENT is everything that is either irreversible,
-   * about money, or about the platform rather than the teaching: reading or
-   * deciding payments, book orders, expenses, the audit trail, diagnostics,
-   * feature flags, the shared curriculum taxonomy, WhatsApp campaigns, and
-   * every destructive action on a student account (ban, delete, password
-   * reset, role change). Those are grantable — see `grantablePermissions` —
-   * and granting one is a decision somebody makes, not a default.
-   *
-   * ⚠️ Adding a permission to the CATALOGUE does not add it here, and that
-   * asymmetry is the feature. `admin: '*'` picks up every future permission
-   * automatically; this list picks up none. A new screen therefore reaches the
-   * operator on the day it ships and the instructor on the day it is opened.
+   * The instructor on their own stack — the same system Ayman runs, minus
+   * articles. See `OWNER_WITHHELD`.
    */
-  owner: new Set<Permission>([
-    'admin:access',
-
-    /*
-     * المدرّس **طالب على منصته كمان**.
-     *
-     * الرول ده اتكتب كقايمة صلاحيات إدارية بحتة، فطلع مالوش `profile:read`.
-     * النتيجة إن `/api/profile/me` بيرد 403، و`resolveAuthState` في
-     * `proxy.ts` بيفشل مقفول (أي رد مش 200 = «مش مسجّل دخول») — فأول مدرّس
-     * اتحوّل لـ`owner` لقى `/dashboard` بيرميه على `/login` وهو داخل فعلًا،
-     * ولوحة الأدمن شغالة في نفس الوقت. مقيس يوم ٢٠٢٦-٠٩-٢٠.
-     *
-     * فالمدرّس بياخد اللي أي حساب بيحتاجه عشان يبقى موجود على منصته: بروفايله،
-     * وتقدّمه، وتسجيله في كورساته هو عشان يجرّب اللي الطالب بيشوفه. ودي مش
-     * صلاحيات إدارية — الطالب العادي عنده نفسها بالحرف.
-     */
-    'profile:read',
-    'profile:write',
-    'progress:read',
-    'enrollment:read',
-    'enrollment:create',
-
-    // Their courses, from writing them to putting them live.
-    'course:read',
-    'course:read-admin',
-    'course:create',
-    'course:update',
-    'course:publish',
-    'course:delete',
-    'section:write',
-    'section:reorder',
-    'lesson:write',
-    'lesson:reorder',
-
-    // Their question bank and their quizzes, including marking.
-    'question:read',
-    'question:write',
-    'quiz:read',
-    'quiz:write',
-    'quiz:grade',
-    'attempt:read',
-    'attempt:grade',
-
-    // Their students' work. `student:read` only — the register is theirs to
-    // SEE; banning, deleting and resetting a password are not.
-    'student:read',
-    'enrollment:read',
-    'progress:read',
-    'homework:read',
-    'homework:review',
-
-    // How their own site looks and reads. Without these a new instructor
-    // cannot replace the neutral starter page with their own.
-    'settings:read',
-    'settings:write',
-    'home:read',
-    'home:write',
-    'media:read',
-    'media:write',
-    'nav:read',
-    'taxonomy:read',
-
-    // Their own writing. `news:publish` is NOT here: putting a page on the
-    // public internet is split from writing it, the same split
-    // `course:publish` already makes.
-    'news:read',
-    'news:write',
-
-    // لوحة الشرف بتاعت طلبته. الفيتشر نفسه مفتوح افتراضيًا لكل ستاك
-    // (`FEATURE_DECLARATIONS`)، والقرار «مين يتحط عليها» قرار المدرّس
-    // بطبيعته — زي ما `home:write` بيخلّي شكل صفحته قراره.
-    'honor:read',
-    'honor:write',
-
-    'analytics:read',
-
-    /*
-     * فلوس طلبته ورسايلهم — **قراءة بس**.
-     *
-     * دول كانوا بره القايمة دي عن قصد، والحجة المكتوبة فوق إن الفلوس «بتاعة
-     * المنصة مش بتاعة التدريس» وإنها **قابلة للمنح** لما حد يقرّر. الحجة دي
-     * صح على ستاك فيه مشغّل ومدرّسين؛ على ستاك مدرّس واحد هي بتوصف حد مش
-     * موجود.
-     *
-     * ⚠️ **وطريق المنح نفسه مقفول هناك.** `role:read` و`role:grant` مش في
-     * القايمة دي كمان، فحساب المدرّس مايقدرش يمنح لنفسه، ومفيش حساب تاني على
-     * الستاك. اتقاس: `GET /api/admin/roles/owner/permissions` رد **403** على
-     * الستاكين. يعني «قابلة للمنح» كانت بتعني عمليًا «مقفولة للأبد».
-     *
-     * والأثر اللي وصل للمستخدم: صفحة أي طالب عند صبري وعادل كانت بتموت،
-     * لأن اللوحتين دول بيقروا الراوتين دول.
-     *
-     * القراءة بس، والنص التاني لأ: `payment:review` (اللي بيوافق على دفعة)
-     * و`conversation:close` لسه بره — دول بيحرّكوا فلوس أو بيقفلوا شكوى، وde
-     * قرارات مختلفة عن «أشوف اشتراكات طلبتي».
-     *
-     * ⚠️ ستاك أيمن ما اتغيّرش: دوره `admin: '*'`، فهو ماخدهم من الأول.
-     */
-    'payment:read',
-    'conversation:read',
-  ]),
+  owner: new Set<Permission>(PERMISSIONS.filter((permission) => !OWNER_WITHHELD.has(permission))),
   // RECONCILED: this is the accumulated set from Plans 2–5. Keep it in sync
   // with the assertion in permissions.spec.ts; shrinking it is a silent
   // regression that only shows up as a 403 for a legitimate student.
