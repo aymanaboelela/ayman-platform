@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UsePipes } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../../auth/decorators/current-user.decorator';
+import { SessionDeviceService } from '../../sessions/session-device.service';
 import { RequirePermission } from '../../../auth/decorators/require-permission.decorator';
 import { StudentHistoryService } from './student-history.service';
 import { StudentsService } from './students.service';
@@ -21,6 +22,7 @@ export class StudentsController {
   constructor(
     private readonly students: StudentsService,
     private readonly history: StudentHistoryService,
+    private readonly sessionDevices: SessionDeviceService,
   ) {}
 
   @RequirePermission('student:read')
@@ -55,6 +57,23 @@ export class StudentsController {
   @Get(':userId/history')
   listHistory(@Param('userId') userId: string) {
     return this.history.list(userId);
+  }
+
+  /**
+   * الأجهزة اللي الحساب مفتوح عليها دلوقتي.
+   *
+   * `student:read` وخلاص — ده نفس اللي بيفتح صفحة الطالب، ومفيش سبب يخلّي
+   * «مين فاتح الحساب» صلاحية منفصلة عن «شوف الحساب». الحد جهازين، فالمدرّس
+   * بيتسأل «ليه الطالب مش قادر يدخل» وde المكان اللي بيجاوب.
+   *
+   * ⚠️ قراءة بس. قفل جهاز لسه للطالب من «أجهزتي» — `revokeOwn` بيركّب الملكية
+   * في الـWHERE نفسه عشان مايبقاش فيه طريق يقفل جهاز حد تاني، وراوت أدمن هنا
+   * كان هيفتح الطريق ده من غير ما يبقى مطلوب.
+   */
+  @RequirePermission('student:read')
+  @Get(':userId/sessions')
+  listSessions(@Param('userId') userId: string) {
+    return this.sessionDevices.listFor(userId);
   }
 
   /*

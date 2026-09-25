@@ -465,8 +465,17 @@
    both land correctly without anyone declaring which it was. */
 /* The instructor, at the size the panel can give. `contain` and not `cover`:
    the upload is a cut-out on transparency, so there is no background to crop
-   INTO — cover would trim the subject itself to fill a box. */
-[data-preset='board'] .board-figure {
+   INTO — cover would trim the subject itself to fill a box.
+   
+   ⚠️ `board-portrait`, and it was `board-figure` for one release.
+   
+   `.board-figure` ALREADY EXISTED further down this file — it is one stat in
+   the panel's figure row, and it carries `border-inline-start` as the rule
+   BETWEEN two stats. So the photograph inherited a separator meant for a
+   column beside it and shipped with a vertical hairline down its right edge.
+   Both rules matched, the later one won, and nothing in either file looked
+   wrong on its own. */
+[data-preset='board'] .board-portrait {
   display: flex;
   justify-content: center;
   inline-size: 100%;
@@ -474,7 +483,7 @@
   margin-block-end: calc(-1 * clamp(1rem, 4vw, 3rem));
 }
 
-[data-preset='board'] .board-figure__img {
+[data-preset='board'] .board-portrait__img {
   inline-size: auto;
   block-size: auto;
   max-inline-size: min(100%, 32rem);
@@ -4893,8 +4902,13 @@ body:has(main[data-preset='board']) .site-nav--pinned {
   [data-preset='board'] .board-panel__inner > :nth-child(5) { animation-delay: 420ms; }
 
   /* The photograph gets its own, slower and further, and it lands after the
-     words — see the note above for why the biggest object goes last. */
-  [data-preset='board'] .board-figure {
+     words — see the note above for why the biggest object goes last.
+     
+     ⚠️ `.board-portrait`. This said `.board-figure` while the portrait carried
+     that class, and renaming the portrait without this line would have left
+     the entrance animating the STAT ROW instead — a rule that still matches
+     something, still runs, and is silently pointed at the wrong element. */
+  [data-preset='board'] .board-portrait {
     animation: board-enter-figure 820ms cubic-bezier(0.22, 0.61, 0.36, 1) 480ms backwards;
   }
 }

@@ -127,6 +127,27 @@ export class SessionDeviceService {
    * `now() AT TIME ZONE 'UTC'`. Whatever a given stack's timezone happens to
    * be is not something a liveness check may depend on.
    */
+  /**
+   * The same list, read by an operator about somebody else.
+   *
+   * Delegates rather than duplicating the query, and that is the point: the
+   * liveness rule (`expires_at > now() AT TIME ZONE 'UTC'`), the grouping by
+   * device name and the ordering are the definition of «which devices is this
+   * account open on». A second copy would drift, and the shape it would drift
+   * into is an admin screen quietly disagreeing with what the student sees on
+   * their own «أجهزتي» page about their own account.
+   *
+   * ⚠️ `undefined` for the current session, always. «The device you are on» is
+   * a fact about the READER's browser; an operator looking at a student has no
+   * session in that student's list, and passing their own id would compare an
+   * admin's session against a student's rows. The empty-string fallback in the
+   * query below makes that match nothing, but relying on a fallback to be
+   * wrong-but-harmless is not the same as not asking the question.
+   */
+  listFor(userId: string): Promise<SessionDeviceView[]> {
+    return this.listOwn(userId, undefined);
+  }
+
   async listOwn(userId: string, currentSessionId: string | undefined): Promise<SessionDeviceView[]> {
     const rows = await this.prisma.$queryRaw<
       {

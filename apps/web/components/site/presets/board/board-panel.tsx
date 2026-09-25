@@ -204,9 +204,9 @@ export function BoardPanel({
             saying the same thing twice — which is what it looked like.
           */
           <>
-            <div className="board-figure" aria-hidden="true">
+            <div className="board-portrait" aria-hidden="true">
               <Image
-                className="board-figure__img"
+                className="board-portrait__img"
                 src={mediaUrl(branding.heroKey)}
                 alt=""
                 width={900}

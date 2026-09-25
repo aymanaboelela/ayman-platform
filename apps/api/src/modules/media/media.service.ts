@@ -42,6 +42,103 @@ const MULTI_FRAME_MIME = new Set<string>([
   'image/avif',
 ] satisfies readonly (typeof ALLOWED_UPLOAD_MIME)[number][]);
 
+/**
+ * The containers `sharp` is on the allowlist for and cannot actually open.
+ *
+ * Derived from the same contract constant as the set above, so a format added
+ * there has to be classified here too rather than silently falling into the
+ * «sharp handles it» path and 400ing every upload of that type.
+ */
+const HEIF_MIME = new Set<string>([
+  'image/heic',
+  'image/heif',
+  'image/heic-sequence',
+  'image/heif-sequence',
+] satisfies readonly (typeof ALLOWED_UPLOAD_MIME)[number][]);
+
+/**
+ * Can this build of sharp open these bytes at all?
+ *
+ * A header parse, not a decode — `metadata()` is what the pipeline below calls
+ * anyway, so the cost is one extra read of the first few kilobytes rather than
+ * a second full decode.
+ */
+async function sharpCanDecode(input: Buffer): Promise<boolean> {
+  try {
+    await sharp(input).metadata();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * HEIC/HEIF in, JPEG out, through the ffmpeg already in the runtime image.
+ *
+ * ⚠️ **THROUGH TEMP FILES, NOT PIPES**, and that is not a style preference.
+ *
+ * HEIF is an ISO-BMFF container: the frame offsets live in a box the demuxer
+ * seeks to, so it cannot be read from a stream. Measured — `-i pipe:0` on a
+ * valid HEIC exits 176 with «Not yet implemented in FFmpeg, patches welcome»,
+ * which is indistinguishable from a corrupt upload if you only check the code.
+ * The same picture as a file converts in one call.
+ *
+ * ⚠️ `-frames:v 1` and not a plain convert: a HEIC *sequence* (a Live Photo,
+ * or a burst) holds many frames, and without the cap ffmpeg writes one JPEG
+ * per frame. A still is what the platform stores for every other format too.
+ *
+ * `-q:v 2` is near-lossless: this is an intermediate that sharp re-encodes to
+ * WebP straight after, so a lower setting would only buy generation loss on a
+ * student's homework photo.
+ *
+ * The 20s cap is a guard rather than a budget — a phone photo decodes in well
+ * under a second, and the ceiling exists so a crafted file cannot hold a
+ * worker open. Both files are removed on every path, including that one.
+ */
+async function transcodeToJpeg(input: Buffer): Promise<Buffer> {
+  const { spawn } = await import('node:child_process');
+  const { mkdtemp, readFile, rm, writeFile } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+
+  const dir = await mkdtemp(join(tmpdir(), 'heif-'));
+  const source = join(dir, 'in');
+  const target = join(dir, 'out.jpg');
+
+  try {
+    await writeFile(source, input);
+
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        'ffmpeg',
+        ['-hide_banner', '-loglevel', 'error', '-y', '-i', source,
+         '-frames:v', '1', '-q:v', '2', target],
+        { stdio: ['ignore', 'ignore', 'pipe'] },
+      );
+
+      let stderr = '';
+      const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);
+
+      child.stderr.on('data', (c: Buffer) => {
+        stderr = (stderr + c.toString()).slice(0, 500);
+      });
+      child.on('error', (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        if (code === 0) resolve();
+        else reject(new Error(`ffmpeg exited ${code}: ${stderr}`));
+      });
+    });
+
+    return await readFile(target);
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 export interface UploadFile {
   originalname: string;
   buffer: Buffer;
@@ -176,41 +273,56 @@ export class MediaService {
       be animated (APNG); libvips does not decode APNG frames, so listing it
       would claim a capability that does not exist.
     */
-    let pipeline = sharp(file.buffer, {
+    /*
+     * HEIC goes through ffmpeg — but only if `sharp` could not open it itself.
+     *
+     * ## The bug
+     *
+     * `image/heic` is on the allowlist, so it clears both gates, and then
+     * `sharp` cannot decode it and the upload dies at `metadata()` with «file
+     * could not be processed as an image». Reproduced against the live API: a
+     * 1200×1600 HEIC answered 400 while the same picture as PNG answered 201.
+     * Every photo an iPhone takes is HEIC by default.
+     *
+     * The cause is upstream: sharp's prebuilt libvips ships WITHOUT libheif,
+     * deliberately, over the HEVC patent position. Installing a Debian package
+     * does not change which binary runs.
+     *
+     * ## ⚠️ Why this TRIES FIRST instead of transcoding every HEIC
+     *
+     * Because HEIC support in sharp is decided at BUILD time, and the two
+     * environments disagree. The macOS dev machine's libvips decodes it; the
+     * Debian prebuilt in the runtime image does not. Measured both ways.
+     *
+     * An unconditional transcode makes the whole upload path depend on ffmpeg
+     * being present — and the unit-test environment does not have it, so every
+     * HEIC case went red for a reason that has nothing to do with the code.
+     * Trying sharp first means the subprocess is spawned only where it is
+     * actually needed, which is exactly the environment that has ffmpeg
+     * installed (`apps/api/Dockerfile`, already there for video).
+     *
+     * ⚠️ It also keeps the existing specs honest rather than passing by luck:
+     * they hand this method a PNG and mock the signature service into calling
+     * it HEIC, so with sharp asked first they exercise the path they always
+     * described — and a REAL HEIC, which `heic-transcode.spec.ts` supplies,
+     * exercises the fallback.
+     */
+    const decodable = await sharpCanDecode(file.buffer);
+    const buffer =
+      decodable || !HEIF_MIME.has(detected.mime)
+        ? file.buffer
+        : await transcodeToJpeg(file.buffer).catch(() => {
+            throw new BadRequestException('file could not be processed as an image');
+          });
+
+    let pipeline = sharp(buffer, {
       limitInputPixels: MAX_INPUT_PIXELS,
-      animated: MULTI_FRAME_MIME.has(detected.mime),
+      // A transcode returns one JPEG frame, so asking for pages on it would
+      // have sharp read a container that is not there.
+      animated: buffer === file.buffer && MULTI_FRAME_MIME.has(detected.mime),
       failOn: 'error',
     });
 
-    /*
-     * `.rotate()` with no argument applies the EXIF orientation and then
-     * discards the metadata. That is what a photo straight off a phone needs,
-     * and it is why the call is here at all — but there is exactly one shape
-     * of input it must NOT be applied to.
-     *
-     * libvips holds an animation as a single tall strip of frames. It can
-     * mirror that strip and it can turn it through 180°, because both are the
-     * same operation applied per frame; it cannot turn it through 90° or 270°,
-     * because a quarter turn has nowhere to put the rows. sharp refuses rather
-     * than guessing — `Rotate is not supported for multi-page images` — and
-     * that throw lands in the catch below, so the uploader is told «file could
-     * not be processed as an image» about a file that is a perfectly good
-     * animation. Measured on sharp 0.35.3 / libvips 8.18.3 against a 4-frame
-     * animated WebP: EXIF orientations 1–4 encode fine, 5–8 every one throws.
-     * Those four are precisely the orientations that carry a quarter turn.
-     *
-     * The decision is therefore made on the FILE, not on its MIME. `animated`
-     * above is a *request* to read every frame; whether there is more than one
-     * is a property of the upload. Most WebP uploads are ordinary stills, they
-     * do carry orientation tags, and keying this off `detected.mime` would
-     * quietly stop correcting them. `metadata()` reads the header off the
-     * instance the pipeline already holds, so the check costs a header parse
-     * rather than a second decode.
-     *
-     * What is given up is the orientation correction on a multi-frame upload
-     * — which no encoder that writes animated GIF emits in the first place,
-     * GIF having no EXIF block to put it in.
-     */
     const probe = await pipeline.metadata().catch(() => {
       throw new BadRequestException('file could not be processed as an image');
     });
