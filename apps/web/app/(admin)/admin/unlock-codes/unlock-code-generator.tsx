@@ -119,6 +119,15 @@ export function UnlockCodeGenerator({ courses }: { courses: readonly AdminUnlock
 
   const [quantityText, setQuantityText] = useState('1');
   const [priceText, setPriceText] = useState('');
+  /*
+   * «مجاني» حالة صريحة، مش خانة فاضية.
+   *
+   * `priceCents` كان اختياري من الأول وخانة فاضية بتسجّل `null` صح — بس
+   * الليستة كانت بتعرضها «—»، واللي بيبص عليها مايعرفش لو دي منحة مقصودة
+   * ولا سعر حد نسي يكتبه. الفرق ده مهم لأن الكود المجاني بيتبعت لطالب
+   * **مش هيدفع**، والمدرّس محتاج يفتكر ده بعد شهر.
+   */
+  const [isFree, setIsFree] = useState(false);
   const [note, setNote] = useState('');
 
   const [pending, setPending] = useState(false);
@@ -159,7 +168,7 @@ export function UnlockCodeGenerator({ courses }: { courses: readonly AdminUnlock
 
   const somethingPicked = wholeCourse || picked.length > 0;
   const canSubmit =
-    tree !== null && somethingPicked && price.kind !== 'invalid' && !pending;
+    tree !== null && somethingPicked && (isFree || price.kind !== 'invalid') && !pending;
 
   function clearPicks() {
     setWholeCourse(false);
@@ -199,7 +208,9 @@ export function UnlockCodeGenerator({ courses }: { courses: readonly AdminUnlock
       wholeCourse,
       items: wholeCourse ? [] : picked.map(({ kind, id }) => ({ kind, id })),
       quantity,
-      priceCents: price.kind === 'valid' ? price.cents : null,
+      // `isFree` بتكسب على أي حاجة مكتوبة: لو حد كتب رقم وبعدين اختار مجاني،
+      // المقصود هو الاختيار الأخير مش اللي فاضل في الخانة.
+      priceCents: isFree || price.kind !== 'valid' ? null : price.cents,
       note: note.trim() === '' ? null : note.trim(),
     };
     setPending(true);
@@ -421,12 +432,27 @@ export function UnlockCodeGenerator({ courses }: { courses: readonly AdminUnlock
                     inputMode="decimal"
                     dir="ltr"
                     autoComplete="off"
-                    value={priceText}
-                    invalid={price.kind === 'invalid'}
+                    value={isFree ? '' : priceText}
+                    disabled={isFree}
+                    invalid={!isFree && price.kind === 'invalid'}
                     onChange={(event) => setPriceText(event.target.value)}
-                    className="h-11 rounded-lg bg-surface-1 text-start tabular-nums [unicode-bidi:isolate]"
+                    className="h-11 rounded-lg bg-surface-1 text-start tabular-nums [unicode-bidi:isolate] disabled:opacity-50"
                   />
-                  <p className="mt-1.5 text-[length:var(--fs-text-xs)] text-fg-muted">{c.priceHint}</p>
+                  {/* جنب الخانة مش فوقها: ده اختيار بيخص المبلغ، وفوقها كان
+                      هيبقى سؤال تاني منفصل. */}
+                  <label className="mt-2 flex items-center gap-2 text-[length:var(--fs-text-sm)]">
+                    <input
+                      type="checkbox"
+                      id="unlock-price-free"
+                      checked={isFree}
+                      onChange={(event) => setIsFree(event.target.checked)}
+                      className="size-4 accent-[var(--accent-cta)]"
+                    />
+                    <span>{c.priceFree}</span>
+                  </label>
+                  <p className="mt-1.5 text-[length:var(--fs-text-xs)] text-fg-muted">
+                    {isFree ? c.priceFreeHint : c.priceHint}
+                  </p>
                 </div>
 
                 <div className="min-w-0">
