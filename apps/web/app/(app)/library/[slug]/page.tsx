@@ -336,15 +336,18 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
         yet. Above the group card, because a code in hand is the more urgent
         of the two.
       */}
-      {monthOffer ? (
-        <div className="mb-8 max-w-[40rem]">
-          <MonthOfferCard courseSlug={course.slug} offer={monthOffer} />
-        </div>
-      ) : null}
-
-      {outline.totalLessons > 0 ? (
-        <div className="mb-8 max-w-[40rem]">
-          <RedeemCard whatsapp={contact.whatsapp} courseTitle={course.title} />
+      {/*
+        Side by side when both are there and the column has room for two
+        (`auto-fit` measures the column, not the viewport — the rail takes a
+        third of a laptop screen), stacked on a phone. `data-count` is what
+        lets a lone card keep a card's width instead of stretching to 56rem.
+      */}
+      {monthOffer || outline.totalLessons > 0 ? (
+        <div className="course-offers mb-8" data-count={monthOffer && outline.totalLessons > 0 ? 2 : 1}>
+          {monthOffer ? <MonthOfferCard courseSlug={course.slug} offer={monthOffer} /> : null}
+          {outline.totalLessons > 0 ? (
+            <RedeemCard whatsapp={contact.whatsapp} courseTitle={course.title} />
+          ) : null}
         </div>
       ) : null}
 

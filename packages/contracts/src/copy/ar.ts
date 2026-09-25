@@ -6069,6 +6069,9 @@ export const copy = {
     lead: 'الكود ٦ حروف وأرقام بيوصل على واتساب بعد الدفع. بمجرد كتابته هنا، اللي فيه بيتفتح على الحساب على طول.',
     inputLabel: 'كود الفتح',
     inputHint: 'حروف إنجليزي وأرقام — الحروف الصغيرة والمسافات مش مشكلة.',
+    /** The single field on a course page's «عندك كود؟» card, where the hint
+     *  line under it was dropped to keep the card short. */
+    fieldPlaceholder: 'الكود — ٦ حروف وأرقام',
     submit: 'تفعيل الكود',
     submitting: 'بنفعّل الكود…',
     paste: 'لصق',

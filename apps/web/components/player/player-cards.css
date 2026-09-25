@@ -157,6 +157,36 @@
 .qz-door__cta:active { transform: translateY(1px); }
 .qz-door__cta:focus-visible { outline: 2px solid var(--p-500); outline-offset: 2px; }
 
+/* ── the course page's offer row: «شهر ٢ اتفتح» beside «عندك كود؟» ─────────
+   One card is a card's width; two share a row once the column fits two
+   21rem cards and stack below that. `auto-fit` answers from the column
+   itself, which is the only honest measure inside the app shell — `md`
+   and `lg` are viewport widths and the rail eats a third of a laptop. */
+.course-offers {
+  display: grid;
+  gap: 1rem;
+  max-inline-size: 30rem;
+}
+.course-offers[data-count='2'] {
+  max-inline-size: 58rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 21rem), 1fr));
+}
+/* Tighter than the same card on the lesson page, where it stands alone.
+   Side by side the two stretch to one height, so the button row sits on
+   the card's floor instead of floating mid-card. */
+.course-offers .mo-card {
+  grid-template-rows: auto auto 1fr;
+  gap: 0.7rem;
+  padding: 0.9rem;
+}
+.course-offers .mo-card__foot { align-self: end; }
+.course-offers .mo-card__icon { inline-size: 2.25rem; block-size: 2.25rem; }
+.course-offers .mo-card__icon svg { inline-size: 1.15rem; block-size: 1.15rem; }
+.course-offers .mo-card__title { font-size: var(--fs-text-base); }
+.course-offers .mo-card__lead { line-height: 1.6; }
+.course-offers .mo-card__single { padding: 0.45rem 0.7rem; }
+.course-offers .mo-card__cta { min-block-size: 2.5rem; font-size: var(--fs-text-sm); }
+
 /* ── «شهور جديدة اتفتحت» ────────────────────────────────────────────────── */
 .mo-card {
   position: relative;
