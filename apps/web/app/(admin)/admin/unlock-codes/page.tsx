@@ -589,8 +589,25 @@ function CreatedCell({ row, bare = false }: { row: AdminUnlockCodeRow; bare?: bo
 }
 
 function Price({ cents }: { cents: number | null }) {
+  /*
+   * `null` هو «مجاني»، مش «فاضي».
+   *
+   * كان بيتعرض «—» رمادية، وde كان بيخلط حالتين مختلفتين تمامًا: منحة مقصودة
+   * لطالب مش هيدفع، وسعر حد نسي يكتبه. الاتنين بيتكتبوا `null` في الجدول،
+   * فالشاشة هي المكان الوحيد اللي ممكن تفرّق فيه — والمولّد بقى بيسأل
+   * السؤال ده صراحةً.
+   *
+   * مش لون تحذير: المنحة قرار عادي، مش حاجة ناقصة.
+   */
+  if (cents === null) {
+    return (
+      <span className="rounded-md bg-surface-2 px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
+        {c.priceFree}
+      </span>
+    );
+  }
   // «ج» after the number, like every other money cell in the admin.
-  return cents === null ? <span className="text-fg-faint">—</span> : <>{formatEGP(cents)} ج</>;
+  return <>{formatEGP(cents)} ج</>;
 }
 
 function PagerLink({ href, children }: { href: string | null; children: ReactNode }) {
