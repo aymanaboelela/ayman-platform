@@ -15,6 +15,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { MediaService } from '../media/media.service';
 import { ProfileController } from './profile.controller';
 import { ProfileService } from './profile.service';
+import { CentersService } from '../centers/centers.service';
+import { AuditService } from '../../audit/audit.service';
 
 // Full-stack e2e: real Nest HTTP pipeline (guard → Zod DTO pipe → controller
 // → service), real seeded Postgres, only the Better Auth session lookup is
@@ -81,6 +83,12 @@ describe('ProfileController (e2e)', () => {
             },
           },
         },
+        // «السناتر» — the save books a centre slot through this. The real
+        // service against the same database: these payloads carry no
+        // `attendanceMode`, so it is never reached, and if one ever does the
+        // booking should really happen rather than hit a stub.
+        { provide: AuditService, useValue: new AuditService(prisma) },
+        CentersService,
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: BETTER_AUTH, useValue: fakeAuth },
       ],
