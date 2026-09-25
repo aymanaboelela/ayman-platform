@@ -793,6 +793,33 @@ export function BookOrderPanel({
       </p>
 
       {/*
+        What the number above is made of, on the screen that asks for it. The
+        address step showed «الكتب / الشحن» and this one dropped it, so «٦٠٠
+        جنيه» arrived one screen after «٤٥٠» with nothing naming the ١٥٠ —
+        the «اتحاسبت زيادة؟» call the order's four-number breakdown exists to
+        prevent. The ORDER's frozen figures, never the live quote: they are what
+        the transfer has to match. No total row; the big number is the total.
+      */}
+      {order ? (
+        <div className="books-checkout__summary">
+          <div className="books-cart__row">
+            <span>{copy.books.subtotal}</span>
+            <span>{formatEGP(order.itemsCents)}</span>
+          </div>
+          <div className="books-cart__row">
+            <span>{copy.books.shipping}</span>
+            <span>{formatShipping(order.shippingCents, copy.books.shippingFree)}</span>
+          </div>
+          {order.discountCents > 0 ? (
+            <div className="books-cart__row">
+              <span>{copy.books.discount}</span>
+              <span>{formatCopy(copy.books.discountValue, { price: formatEGP(order.discountCents) })}</span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/*
         ⚠️ WHERE THE PARCEL IS GOING, on the screen that asks for money.
 
         This line is the reason resuming can land here instead of on the address
