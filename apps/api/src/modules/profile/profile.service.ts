@@ -8,6 +8,7 @@ import type { Onboarding, StudentSection } from '@ayman/contracts';
 import { Prisma, type StudentProfile } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MediaService, type UploadFile } from '../media/media.service';
+import { CentersService } from '../centers/centers.service';
 
 export interface ProfileMeResponse {
   userId: string;
@@ -23,6 +24,7 @@ export class ProfileService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly media: MediaService,
+    private readonly centers: CentersService,
   ) {}
 
   async getMe(userId: string): Promise<ProfileMeResponse> {
@@ -289,6 +291,10 @@ export class ProfileService {
       trackId,
       electiveSubjectId,
       onboardingCompletedAt: existing?.onboardingCompletedAt ?? new Date(),
+      // Absent = keep what is stored (an older client that never asked); see
+      // `OnboardingShapeSchema`'s note on why these are optional on the wire.
+      ...(input.studyType !== undefined ? { studyType: input.studyType } : {}),
+      ...(input.attendanceMode !== undefined ? { attendanceMode: input.attendanceMode } : {}),
     };
 
     try {
@@ -314,11 +320,24 @@ export class ProfileService {
           where: { id: userId },
           data: { phoneNumber: input.phone },
         });
-        return tx.studentProfile.upsert({
+        const profile = await tx.studentProfile.upsert({
           where: { userId },
           create: { userId, ...data },
           update: data,
         });
+        /*
+         * «سنتر» books the slot in the SAME transaction, so a student is never
+         * saved as «سنتر» with no seat, nor holds a seat while saved as
+         * «أونلاين». A full slot throws here and the whole save is refused with
+         * `center_slot_full` — the form says «الميعاد ده فل» instead of saving
+         * half an answer. «أونلاين» releases any seat they held.
+         */
+        if (input.attendanceMode === 'center') {
+          await this.centers.setBookingTx(tx, userId, input.centerSlotId ?? null, { year });
+        } else if (input.attendanceMode === 'online') {
+          await this.centers.setBookingTx(tx, userId, null);
+        }
+        return profile;
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === PRISMA_UNIQUE_VIOLATION) {

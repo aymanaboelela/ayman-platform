@@ -375,6 +375,20 @@ export const AUDIT_ACTIONS = [
   'unlock-code:redeem',
   'unlock-code:revoke',
   'unlock-code:delete',
+  // «السناتر». Door scans are NOT here — each one is already a row in
+  // `attendance_records` carrying who scanned it; auditing every card read at
+  // a busy door would be the audit log's biggest writer for no new fact. What
+  // IS here is every hand edit: a centre or slot changed, a booking moved by
+  // an admin, attendance written or deleted by hand.
+  'center:create',
+  'center:update',
+  'center:delete',
+  'center-slot:create',
+  'center-slot:update',
+  'center-slot:delete',
+  'center-booking:set',
+  'attendance:record',
+  'attendance:remove',
   // الواجب. The first two are AUTHORING (the questions on a lecture) and sit on
   // the `lessons` resource with every other edit to a lecture's content; the
   // last two are MARKING and sit on `homework_submissions`, because the

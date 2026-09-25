@@ -1,4 +1,5 @@
 import { z } from '@ayman/contracts/zod';
+import { AttendanceModeSchema, StudyTypeSchema } from '@ayman/contracts/centers';
 import { egyptianPhone, isPlaceholderEmail, normalizeEgyptianPhone } from '@ayman/contracts/phone';
 
 /**
@@ -77,6 +78,11 @@ export const AdminStudentDetailSchema = AdminStudentRowSchema.extend({
   /** Null for every profile onboarded before the question existed — «مش متسجّل»
    *  rather than a guess. Required for everyone who onboards from now on. */
   schoolStream: SchoolStreamSchema.nullable(),
+  /** «نوع الدراسة» / «نوع الحضور» — null before the questions existed. */
+  studyType: StudyTypeSchema.nullable(),
+  attendanceMode: AttendanceModeSchema.nullable(),
+  /** The short «ID» the centre's barcode carries. */
+  studentNumber: z.number().int(),
   fatherPhone: z.string().nullable(),
   /** No longer collected; still shown, because the students who gave one
    *  before the form stopped asking are the reason it is worth showing. */
@@ -205,6 +211,8 @@ export const AdminStudentPatchSchema = z
      * nothing renders as initials rather than as a broken page.
      */
     honorPhotoKey: z.string().max(200).nullable().optional(),
+    studyType: StudyTypeSchema.nullable().optional(),
+    attendanceMode: AttendanceModeSchema.nullable().optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, { message: 'no fields to update' });

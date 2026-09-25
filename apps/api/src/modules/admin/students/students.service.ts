@@ -62,6 +62,9 @@ const DETAIL_SELECT = {
   year: true,
   schoolName: true,
   schoolStream: true,
+  studyType: true,
+  attendanceMode: true,
+  studentNumber: true,
   fatherPhone: true,
   motherPhone: true,
   honorPhotoKey: true,
@@ -111,6 +114,9 @@ function toDetail(record: DetailRecord): AdminStudentDetail {
     cityNameAr: cityNameAr(record.cityId),
     schoolName: record.schoolName,
     schoolStream: record.schoolStream,
+    studyType: record.studyType,
+    attendanceMode: record.attendanceMode,
+    studentNumber: record.studentNumber,
     fatherPhone: record.fatherPhone,
     motherPhone: record.motherPhone,
     electiveSubjectNameAr: record.electiveSubject?.subject.nameAr ?? null,
@@ -545,6 +551,16 @@ export class StudentsService {
     }
     if (Object.keys(userData).length > 0) {
       writes.push(this.prisma.user.update({ where: { id: userId }, data: userData }));
+    }
+    // «أونلاين» and a live centre booking contradict each other; switching the
+    // student to online here releases their seat in the same transaction.
+    if (input.attendanceMode === 'online') {
+      writes.push(
+        this.prisma.centerBooking.updateMany({
+          where: { userId, status: 'active' },
+          data: { status: 'cancelled', cancelledAt: new Date() },
+        }),
+      );
     }
 
     try {

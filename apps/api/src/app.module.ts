@@ -50,6 +50,7 @@ import { BookOrdersModule } from './modules/book-orders/book-orders.module';
 import { BooksModule } from './modules/books/books.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { UnlockCodesModule } from './modules/unlock-codes/unlock-codes.module';
+import { CentersModule } from './modules/centers/centers.module';
 import { HomeworkModule } from './modules/homework/homework.module';
 import { TenantEntitlementsModule } from './modules/tenant-entitlements/tenant-entitlements.module';
 
@@ -166,6 +167,7 @@ import { TenantEntitlementsModule } from './modules/tenant-entitlements/tenant-e
     BooksModule,
     ExpensesModule,
     UnlockCodesModule,
+    CentersModule,
     BookOrdersModule,
     // الواجب — the exercise on a lecture, and the photographs of the answer.
     HomeworkModule,

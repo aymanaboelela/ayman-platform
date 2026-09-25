@@ -9,6 +9,8 @@ import { citiesOf } from '@ayman/contracts/cities';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProfileService } from './profile.service';
+import { CentersService } from '../centers/centers.service';
+import { AuditService } from '../../audit/audit.service';
 
 // Integration test against the real seeded database, same rationale as
 // TaxonomyService's own spec: mocking the DB here would only prove a mock of
@@ -75,7 +77,11 @@ describe('ProfileService', () => {
       adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
     }) as PrismaService;
     await prisma.$connect();
-    service = new ProfileService(prisma);
+    service = new ProfileService(
+      prisma,
+      undefined as never,
+      new CentersService(prisma, new AuditService(prisma)),
+    );
 
     const governorates = await prisma.governorate.findMany({
       orderBy: { sortOrder: 'asc' },
@@ -237,6 +243,39 @@ describe('ProfileService', () => {
       // before the write, not a partial save with the number rolled back.
       const after = await prisma.user.findUnique({ where: { id: userId } });
       expect(after?.phoneNumber).toBe(first.phone);
+    });
+
+    it('«سنتر» books the slot in the same save, «أونلاين» gives the seat back, and a full slot refuses the save', async () => {
+      const center = await prisma.center.create({ data: { name: 'سنتر اختبار' } });
+      const slot = await prisma.centerSlot.create({
+        data: { centerId: center.id, dayOfWeek: 6, startMinute: 840, endMinute: 960, capacity: 1 },
+      });
+      try {
+        const first = await createTestUser();
+        await service.completeOnboarding(
+          first,
+          validOnboarding({ studyType: 'azhari', attendanceMode: 'center', centerSlotId: slot.id }),
+        );
+        const saved = await prisma.studentProfile.findUniqueOrThrow({ where: { userId: first } });
+        expect(saved).toMatchObject({ studyType: 'azhari', attendanceMode: 'center' });
+        expect(await prisma.centerBooking.count({ where: { userId: first, status: 'active' } })).toBe(1);
+
+        // The one seat is taken: a second student's save is refused whole.
+        const second = await createTestUser();
+        await expect(
+          service.completeOnboarding(second, validOnboarding({ attendanceMode: 'center', centerSlotId: slot.id })),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(await prisma.studentProfile.findUnique({ where: { userId: second } })).toBeNull();
+
+        // Switching to online releases it, and the second student gets it.
+        const phone = saved.phone;
+        await service.completeOnboarding(first, validOnboarding({ phone, attendanceMode: 'online' }));
+        expect(await prisma.centerBooking.count({ where: { userId: first, status: 'active' } })).toBe(0);
+        await service.completeOnboarding(second, validOnboarding({ attendanceMode: 'center', centerSlotId: slot.id }));
+        expect(await prisma.centerBooking.count({ where: { userId: second, status: 'active' } })).toBe(1);
+      } finally {
+        await prisma.center.delete({ where: { id: center.id } });
+      }
     });
 
     it('still lets the wizard set the phone the first time', async () => {

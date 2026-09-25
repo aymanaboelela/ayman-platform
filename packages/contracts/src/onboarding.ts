@@ -1,4 +1,5 @@
 import { z } from '@ayman/contracts/zod';
+import { AttendanceModeSchema, StudyTypeSchema } from '@ayman/contracts/centers';
 import { egyptianPhone } from '@ayman/contracts/phone';
 import { cityBelongsTo } from '@ayman/contracts/cities';
 
@@ -115,6 +116,22 @@ const OnboardingShapeSchema = z
     year: z.number({ error: 'لازم نحدد الصف الدراسي' }).int().min(1).max(3),
     trackId: z.string().min(1).optional(),
     electiveSubjectId: z.string().min(1).optional(),
+    /**
+     * «نوع الدراسة» (عام/أزهري) and «نوع الحضور» (أونلاين/سنتر).
+     *
+     * OPTIONAL on the wire, required by the forms: a client built before
+     * these existed (a stale tab, the mobile app) must still be able to save,
+     * and the service keeps whatever is stored when a field is absent. The
+     * web forms always send both.
+     */
+    studyType: StudyTypeSchema.optional(),
+    attendanceMode: AttendanceModeSchema.optional(),
+    /**
+     * The slot booked when `attendanceMode` is `center` — refused at the
+     * service if it is full, inactive, or for another year. `null` clears the
+     * booking (switching to أونلاين does that too).
+     */
+    centerSlotId: z.uuid().nullable().optional(),
   })
   // Reject unrecognized keys outright rather than silently stripping them —
   // this is what actually closes S11 (mass assignment). A payload carrying
@@ -239,9 +256,20 @@ function refineCity(
   }
 }
 
+/** «سنتر» with no slot is half an answer — the form must say which one. */
+function refineCenter(
+  data: { attendanceMode?: 'online' | 'center'; centerSlotId?: string | null },
+  ctx: z.RefinementCtx,
+): void {
+  if (data.attendanceMode === 'center' && !data.centerSlotId) {
+    ctx.addIssue({ code: 'custom', path: ['centerSlotId'], message: 'اختار ميعاد السنتر' });
+  }
+}
+
 export const OnboardingSchema = OnboardingShapeSchema.superRefine((data, ctx) => {
   refineSection(data, ctx);
   refineCity(data, ctx);
+  refineCenter(data, ctx);
 });
 
 /**
