@@ -3,6 +3,7 @@ import type { Prisma } from '../../generated/prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { courseAccessScopes } from '../entitlement/grant-liveness';
 import { monthSliceOf } from '../entitlement/month-access';
+import { lessonFilterWithCodes, resolveContentAccess } from '../entitlement/content-access-query';
 
 /** Anything with a `lesson`, `lessonProgress` and `enrollment` delegate — the
  *  PrismaService itself or a transaction client, interchangeably. */
@@ -242,14 +243,21 @@ export class CourseProgressService {
         _count: { select: { months: true } },
       },
     });
-    // مفيش شهور = مفيش سؤال. الكورس بيتباع زي ما كان.
-    if (course === null || course._count.months === 0) return {};
+    if (course === null) return {};
 
     const enrollment = await tx.enrollment.findUnique({
       where: { id: enrollmentId },
-      select: { userId: true },
+      select: { userId: true, source: true },
     });
     if (enrollment === null) return {};
+
+    /*
+     * «فتح بكود» — المحاضرات اللي الكود فتحها بتتعد في المقام، ولطالب كل اللي
+     * معاه أكواد هي المقام كله. نفس الدالة اللي البوابة والداشبورد بيقروا بيها.
+     */
+    const content = await resolveContentAccess(tx, enrollment.userId, course, enrollment.source);
+    // مفيش شهور = مفيش سؤال شهور. الكورس بيتباع زي ما كان — إلا لو فيه أكواد.
+    if (course._count.months === 0) return lessonFilterWithCodes(undefined, content) ?? {};
 
     const grants = await tx.accessGrant.findMany({
       where: { userId: enrollment.userId, OR: courseAccessScopes(course) },
@@ -266,7 +274,7 @@ export class CourseProgressService {
 
     const slice = monthSliceOf(grants, new Date());
     // ترم أو سنة أو الكورس كله: بيفتحوا كل حاجة، والمحاضرة من غير شهر كمان.
-    if (slice.everything) return {};
+    if (slice.everything) return lessonFilterWithCodes(undefined, content) ?? {};
 
     /*
      * `some` وبس — مفيش `OR` بيسمح بالمحاضرة اللي من غير شهر.
@@ -275,6 +283,8 @@ export class CourseProgressService {
      * ماعلّمهاش مابتوصلش لصاحب شهر. لو عدّيناها هنا كان المقام هيعد حاجة
      * البسط مايقدرش يوصلها — وهو بالظبط الشكل اللي الدالة دي بتتصلح عشانه.
      */
-    return { months: { some: { monthId: { in: [...slice.monthIds] } } } };
+    return (
+      lessonFilterWithCodes({ months: { some: { monthId: { in: [...slice.monthIds] } } } }, content) ?? {}
+    );
   }
 }

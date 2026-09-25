@@ -318,12 +318,16 @@ describe('CourseProgressService.recalculate — the course_completed edge', () =
       expect(where.months).toBeUndefined();
     });
 
-    /* الكورس اللي المدرّس ماعملّهوش شهور مابيتغيّرش عنه ولا بايت. */
-    it('does not even ask about grants when the course has no months', async () => {
+    /* الكورس اللي المدرّس ماعملّهوش شهور مابيتغيّرش عنه ولا بايت — السؤال
+       الوحيد اللي بيتسأل هو «فيه أكواد فتح؟»، مش سؤال الشهور. */
+    it('asks only about unlock codes, never about months, when the course has no months', async () => {
       const tx = makeTx({}, { monthCount: 0 });
       await makeService().recalculate(tx as never, 'e1', 'c1');
 
-      expect(tx.accessGrant.findMany).not.toHaveBeenCalled();
+      const queries = tx.accessGrant.findMany.mock.calls.map(
+        (call) => (call as unknown as [{ where: Record<string, unknown> }])[0].where,
+      );
+      expect(queries).toEqual([expect.objectContaining({ scope: { in: ['section', 'lesson'] } })]);
       const where = tx.lesson.count.mock.calls[0]?.[0]?.where as Record<string, unknown>;
       expect(where.months).toBeUndefined();
     });

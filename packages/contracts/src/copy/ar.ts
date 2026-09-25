@@ -2678,7 +2678,9 @@ export const copy = {
     monthCardEmpty: 'محاضراته بتتجهّز',
     /** The month is already covered by something the student holds — a live
      *  month grant, or a term/yearly subscription. The card is disabled. */
-    monthCardOwned: 'معاه اشتراك خلاص',
+    /** A month this student already holds — passive, so it reads the same
+     *  to a boy and a girl («معاه» did not). */
+    monthCardOwned: 'اتشترى قبل كده',
     /** `{price}` — EGP, already formatted. The running total under the
      *  picker, which is the only place a multi-month choice shows its cost. */
     monthsTotal: 'الإجمالي: {price} جنيه',

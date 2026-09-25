@@ -3151,6 +3151,35 @@
   opacity: 0.55;
 }
 
+/* A month already bought: locked, but clearly NOT broken — full opacity, a
+   dashed edge, a padlock and a green «اتشترى قبل كده». */
+.pay-choice__card--owned:disabled {
+  position: relative;
+  opacity: 1;
+  border-style: dashed;
+  background: color-mix(in oklab, var(--ok) 7%, var(--n-1));
+}
+.pay-choice__lock {
+  position: absolute;
+  inset-block-start: 0.5rem;
+  inset-inline-end: 0.5rem;
+  display: grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--ok) 16%, transparent);
+  color: var(--ok);
+}
+.pay-choice__owned {
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--ok) 15%, transparent);
+  color: var(--ok);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+}
+
 /* Sized by HEIGHT, so two wordmarks with different aspect ratios sit on the
    same optical line — the InstaPay mark is 5:1 and the Vodafone one 4:1. */
 .pay-choice__logo {
