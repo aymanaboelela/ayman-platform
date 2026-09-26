@@ -120,7 +120,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </Suspense>
       }
       drawerAccount={
-        // No fallback: it sits at the foot of a drawer that is closed on first
+        // No fallback: it sits at the head of a drawer that is closed on first
         // paint, and the session read has always landed by the time a thumb
         // opens it.
         <Suspense fallback={null}>

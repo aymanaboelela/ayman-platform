@@ -445,6 +445,47 @@ const nextConfig: NextConfig = {
         source: '/:icon(favicon\\.ico|icon\\.png|apple-icon\\.png)',
         headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000' }],
       },
+      /**
+       * `noindex` on the files that are not pages: the agent-discovery layer,
+       * the sitemap, and Next's own fonts and chunks.
+       *
+       * Search Console listed ten of them under «تم الزحف إلى الصفحة - لم تتم
+       * فهرستها حاليًا» and failed the validation — the sitemap, a woff2,
+       * `/llms.txt`, `/openapi.json`… Google reaches them through the links
+       * `llms.txt` and the api-catalog publish, crawls them, and then has
+       * nothing to do with a font or a JSON document. `noindex` moves them to
+       * «مستبعدة بواسطة علامة noindex», which is what they are.
+       *
+       * `noindex` alone, never `nofollow`: `llms.txt` and the catalogs exist to
+       * be followed. And this does not stop a crawler reading them — agents
+       * and Google's sitemap reader both fetch a `noindex` file normally.
+       *
+       * The markdown twins go in by their `.md` URL only (`/books.md`,
+       * `/index.md` were in the report too): each one duplicates a page that IS
+       * indexed. The `Accept: text/markdown` twin arrives on the page's own URL,
+       * so it cannot be matched here — and must not be.
+       *
+       * ⚠️ Every source here must be a path that can NEVER be a page. A rule on
+       * a page path is captured into its cached shell (the ⚠️ block above), and
+       * on a page it would also de-index the page itself. No route ends in
+       * `.md`; `proxy.ts` 404s a `.md` URL that has no twin.
+       *
+       * Left out on purpose: the favicon and `/brand/` images. «لم تتم فهرستها»
+       * is their normal state in this report, and `noindex` on an image takes
+       * it out of Google Images and the result's site icon.
+       */
+      ...[
+        '/_next/static/:path*',
+        '/sitemap.xml',
+        '/llms.txt',
+        '/openapi.json',
+        '/docs/api',
+        '/:path(.+\\.md)',
+        '/.well-known/:path*',
+      ].map((source) => ({
+        source,
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex' }],
+      })),
     ];
   },
 

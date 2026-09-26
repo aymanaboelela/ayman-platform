@@ -1627,15 +1627,16 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       actor: 'admin',
       status: 200,
       /*
-       * ⚠️ `audit:read`, not `payment:read`.
+       * ⚠️ `news:publish` — the only kind of thing still openable.
        *
        * This row proves an admin may WRITE the grant table at all, so its body
-       * has to name something still openable. `payment:read` stopped being one
-       * when the owner baseline took it on — the route rejects a permission the
-       * role already holds, so this row began answering 400 and read like a
-       * broken endpoint rather than a stale fixture.
+       * has to name something the owner does not already hold; the route
+       * rejects a permission the role has, and the row then answers 400 and
+       * reads like a broken endpoint rather than a stale fixture. It was
+       * `payment:read`, then `audit:read`; since the owner baseline became
+       * «everything but articles», only `news:*` is left to grant.
        */
-      body: () => ({ permissions: ['audit:read'] }),
+      body: () => ({ permissions: ['news:publish'] }),
     },
     // `admin` is not a grantable role — it already holds everything, so a row
     // for it would change nothing and reads like it might.

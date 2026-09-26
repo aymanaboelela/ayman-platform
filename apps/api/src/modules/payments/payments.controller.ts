@@ -72,7 +72,7 @@ export class PaymentsController {
   ownedMonths(
     @CurrentUser() user: AuthenticatedUser,
     @Param('courseId', ParseUUIDPipe) courseId: string,
-  ): Promise<{ ownedMonthIds: string[] }> {
+  ): Promise<{ ownedMonthIds: string[]; coversAll: boolean; pending: boolean }> {
     return this.payments.listOwnedMonths(user.id, courseId);
   }
 }

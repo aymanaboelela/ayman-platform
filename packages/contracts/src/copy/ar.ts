@@ -474,6 +474,7 @@ export const copy = {
       'الرقم ده عشان نقدر نتواصل مع ولي أمرك عن مستواك لو احتجنا. مابنستعملهوش في أي حاجة تانية.',
     fullName: 'الاسم الكامل',
     fullNamePlaceholder: 'الاسم بالكامل',
+    fullNameHint: 'ثلاثي على الأقل، بالعربي أو بالإنجليزي',
     gender: 'النوع',
     /**
      * The blank option, and it must not repeat its own label.
@@ -741,6 +742,8 @@ export const copy = {
     },
     fields: {
       name: 'الاسم الكامل',
+      /** Said up front, so the rule is not first met as an error. */
+      nameHint: 'ثلاثي على الأقل، بالعربي أو بالإنجليزي',
       /**
        * The account's identity now. The label says «موبايل» rather than
        * «هاتف» because that is the word a student uses about the thing in
@@ -2245,11 +2248,11 @@ export const copy = {
     lockedMonthTitle: 'المحاضرة دي تابعة لشهر تاني',
     /**
      * `{month}` — the month's own title as the instructor named it («شهر ٣ —
-     * نوفمبر»), never a number we render ourselves. `{count}` is how many
-     * lectures that month opens, so the sentence says what the money buys
-     * rather than just what it unlocks right now.
+     * نوفمبر»), never a number we render ourselves. The COUNT is on the chip
+     * under it now — «هي و{count} محاضرة معاها» added this lecture to a count
+     * that already held it, so a month of two read as three.
      */
-    lockedMonthBody: 'المحاضرة دي في «{month}». الاشتراك في الشهر ده بيفتحها هي و{count} محاضرة معاها.',
+    lockedMonthBody: 'المحاضرة دي في «{month}». الاشتراك في الشهر ده بيفتح كل محاضراته — اللي نزل واللي لسه هينزل.',
     /** When the lecture sits in more than one month, or in none we can name —
      *  the dialog still has to say something true. */
     lockedMonthBodyPlain: 'المحاضرة دي في شهر مش داخل في اشتراكك الحالي.',
@@ -2609,7 +2612,7 @@ export const copy = {
     railChange: 'غيّر طريقة التحويل',
     cta: 'اشترك دلوقتي',
     title: 'اشتراك الكورس',
-    choosePlan: 'اختار الباقة',
+    choosePlan: 'الباقات المتاحة',
     /**
      * The plan-picker's CARDS — one short duration word/name per card, the
      * price rendered separately underneath via `priceLine`. Kept apart from
@@ -2653,7 +2656,7 @@ export const copy = {
      * (`CatalogCourseDetail.months`) decides which, and there is no second
      * flag to disagree with it.
      */
-    chooseMonthsTitle: 'اختار الشهور',
+    chooseMonthsTitle: 'الشهور المتاحة',
     /**
      * Says the thing that is actually new, because a student who subscribed
      * last year will otherwise assume «شهر» still means thirty days: the month
@@ -2681,6 +2684,12 @@ export const copy = {
     /** A month this student already holds — passive, so it reads the same
      *  to a boy and a girl («معاه» did not). */
     monthCardOwned: 'اتشترى قبل كده',
+    /**
+     * A term, «٣ شهور», a year or an admin grant opens EVERY month. The picker
+     * used to answer that by padlocking every card «اتشترى قبل كده», which a
+     * term student read as «شهر ٢ مقفول عليّا». Said once, instead.
+     */
+    coversAllNote: 'اشتراكك الحالي فاتح كل شهور الكورس — مفيش شهر محتاج اشتراك.',
     /** `{price}` — EGP, already formatted. The running total under the
      *  picker, which is the only place a multi-month choice shows its cost. */
     monthsTotal: 'الإجمالي: {price} جنيه',
@@ -3139,6 +3148,16 @@ export const copy = {
     download: 'تحميل المحاضرة',
     quizIntro: 'الدرس ده اختبار — نبدأه في أي وقت.',
     quizCta: 'نبدأ الاختبار',
+    /* The exam doorway's band and chips. Masdar and first-person plural, like
+       every student-facing line here — «جاهز؟» would be addressing a boy. */
+    quizEyebrow: 'اختبار',
+    quizAttachedEyebrow: 'كويز',
+    quizReadyTitle: 'وقت الاختبار',
+    quizAttachedReadyTitle: 'كويز سريع على المحاضرة',
+    quizFactQuestions: '{count} سؤال',
+    quizFactMinutes: '{count} دقيقة',
+    quizFactUntimed: 'من غير وقت محدد',
+    quizFactPass: 'النجاح من {percent}%',
     courseProgress: 'تقدّمك في الكورس',
     lessonsCompleted: 'درس خلص من',
     autoCompleteHint: 'الدرس بيتقفل لوحده لما توصل لآخر الفيديو وتكون شُفت معظمه.',
@@ -3221,7 +3240,38 @@ export const copy = {
     group: {
       title: 'جروب الدفعة',
       lead: 'جروب الواتساب الخاص بطلبة الكورس ده — الأسئلة والتنبيهات بينزلوا فيه.',
+      /** The short line under the title in the compact, side-by-side card. */
+      short: 'أسئلة وتنبيهات الدفعة',
       cta: 'دخول الجروب',
+    },
+
+    /**
+     * The group and help cards side by side, with a switch to fold them away —
+     * «كبار أوي… يبقوا جنب بعض، ويبقى فيه زرار يخفيهم ويرجّعهم».
+     */
+    quickLinks: {
+      title: 'الجروب والمساعدة',
+      hide: 'إخفاء',
+      show: 'إظهار',
+      helpShort: 'سؤال عن الكورس؟',
+    },
+
+    /**
+     * «شهور جديدة اتفتحت» — the card that sells the months a student does not
+     * hold yet, from inside the course. See `CourseOutline.monthOffer` for why
+     * it is the only door there is.
+     */
+    monthOffer: {
+      eyebrow: 'اتفتح جديد',
+      titleOne: '«{month}» اتفتح',
+      titleMany: 'شهور جديدة اتفتحت',
+      leadOne: 'الاشتراك في الشهر بيفتح كل محاضراته — اللي نزل واللي لسه هينزل.',
+      leadMany: 'تحديد الشهور المطلوبة، والدفع مرة واحدة.',
+      total: 'الإجمالي {price}',
+      ctaOne: 'الاشتراك في الشهر ده',
+      ctaMany: 'الاشتراك في الشهور دي',
+      noneChosen: 'لازم شهر واحد على الأقل',
+      pending: 'طلب الاشتراك بيتراجع — الشهر بيتفتح أول ما يتأكد.',
     },
   },
 
@@ -5899,6 +5949,10 @@ export const copy = {
      * turns the change that follows into an answer rather than a surprise.
      */
     shippingByGovernorate: 'على حسب المحافظة',
+    /** Only on an order the admin discounted — the row that makes «الكتب» +
+     *  «الشحن» add up to the total above them. `{price}` */
+    discount: 'خصم',
+    discountValue: '− {price}',
     total: 'الإجمالي',
     /** The TOTAL row in the same "no address yet" state — the lowest it can
      *  possibly be, said as a floor rather than as a price. `{price}` */
@@ -5987,6 +6041,11 @@ export const copy = {
       confirmReceived: 'استلمت الكتاب',
       confirmReceivedHint: 'دوس هنا أول ما يوصلك، عشان نعرف إنه وصل فعلاً.',
       confirmReceivedWorking: 'بنسجّل…',
+      /** The question before it is recorded — «يطلعله بوب أب يأكد عليها». */
+      confirmReceivedAsk: 'الكتاب وصلك فعلاً؟',
+      confirmReceivedAskBody: 'أول ما نسجّل إنه وصل، الطلب بيتقفل ويتنقل لقايمة الكتب اللي اتسلّمت.',
+      confirmReceivedYes: 'أيوه، وصلني',
+      confirmReceivedNo: 'لسه',
       /** الطلب اتقفل ونزل تحت «وصلك» — بيتقال مرة واحدة وبعدها الكرت نفسه
        *  بيقول الباقي. */
       confirmReceivedDone: 'تمام، سجّلناها. مبروك الكتاب!',
@@ -6022,6 +6081,9 @@ export const copy = {
     lead: 'الكود ٦ حروف وأرقام بيوصل على واتساب بعد الدفع. بمجرد كتابته هنا، اللي فيه بيتفتح على الحساب على طول.',
     inputLabel: 'كود الفتح',
     inputHint: 'حروف إنجليزي وأرقام — الحروف الصغيرة والمسافات مش مشكلة.',
+    /** The single field on a course page's «عندك كود؟» card, where the hint
+     *  line under it was dropped to keep the card short. */
+    fieldPlaceholder: 'الكود — ٦ حروف وأرقام',
     submit: 'تفعيل الكود',
     submitting: 'بنفعّل الكود…',
     paste: 'لصق',

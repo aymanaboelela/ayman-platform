@@ -109,6 +109,7 @@ export function RegisterForm({ next }: { next?: string | null }) {
         label={copy.auth.fields.name}
         type="text"
         autoComplete="name"
+        hint={copy.auth.fields.nameHint}
         errorMessage={errors.name?.message}
         {...register('name')}
       />

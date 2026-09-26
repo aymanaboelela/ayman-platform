@@ -5,8 +5,8 @@ import { apiGetAuthed } from '@/lib/api-server';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getBookShippingRates } from '@/lib/books';
 import { sanitizeRichText } from '@/lib/sanitize-html';
-import { CourseHelpCard } from '@/components/player/course-help-card';
-import { CourseGroupCard } from '@/components/player/course-group-card';
+import { CourseQuickLinks } from '@/components/player/course-quick-links';
+import { MonthOfferCard } from '@/components/player/month-offer-card';
 import { LessonHomework } from '@/components/player/lesson-homework';
 import { LessonDescription } from '@/components/player/lesson-description';
 import { CourseOutlineSidebar } from '@/components/player/course-outline';
@@ -281,6 +281,11 @@ export default async function LessonPage({
           meta does what `truncate` says — it truncates.
         */}
         <div className="flex min-w-0 flex-col gap-4">
+          {/* «شهور جديدة اتفتحت» — first in the column, above the outline: it
+              is the only door to a month the student does not hold yet, and a
+              door at the bottom of a long outline is a door nobody finds.
+              Renders nothing when there is nothing to offer. */}
+          <MonthOfferCard courseSlug={outline.course.slug} offer={outline.monthOffer} />
           <CourseOutlineSidebar
             outline={outline}
             activeLessonId={payload.lesson.id}
@@ -288,13 +293,14 @@ export default async function LessonPage({
             instapay={settings.contact.instapay}
             vodafoneCash={settings.contact.vodafoneCash}
           />
-          {/* «جروب الدفعة» — ABOVE the help card, deliberately. That one is a
-              DM to him, which is the last resort; this is the room the student's
-              own classmates are in, which is the first place a question about a
-              lecture actually gets answered. Renders nothing when the course
-              has no group, which is the default. */}
-          <CourseGroupCard url={outline.course.whatsappGroupUrl} />
-          <CourseHelpCard whatsapp={settings.contact.whatsapp} />
+          {/* «جروب الدفعة» first, then «تحتاج مساعدة؟» — the room the
+              student's own classmates are in is the first place a question
+              about a lecture gets answered, and a DM to him is the last resort.
+              Side by side and foldable; each renders nothing when unset. */}
+          <CourseQuickLinks
+            groupUrl={outline.course.whatsappGroupUrl}
+            whatsapp={settings.contact.whatsapp}
+          />
         </div>
       </div>
     </main>

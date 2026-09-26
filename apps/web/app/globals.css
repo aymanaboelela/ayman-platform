@@ -1973,6 +1973,10 @@
 }
 
 .course-subscribe__title {
+  /* Its own colour, not inherited: on `/courses/:slug/subscribe` the panel
+     sits inside a dark hero whose white text made this title vanish into the
+     light card. */
+  color: var(--color-fg);
   font-weight: var(--fw-semibold);
   text-align: center;
 }
@@ -2299,6 +2303,18 @@
   font-size: var(--fs-text-sm);
 }
 
+/* «اشتراكك الحالي فاتح كل شهور الكورس» — good news, so the `--ok` tone. It
+   replaces a row of month cards that each wore a padlock. */
+.course-subscribe__covered {
+  padding: 0.75rem 0.875rem;
+  border-radius: 0.625rem;
+  border: 1px solid color-mix(in oklch, var(--ok), transparent 62%);
+  background: color-mix(in oklch, var(--ok), transparent 90%);
+  color: var(--ok);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+}
+
 
 /* ---------------------------------------------------------------------------
    THE PRODUCT TYPE SCALE — one step up from the marketing site's.
@@ -2480,7 +2496,8 @@
    Sent as a competitor's drawer with «المينو في الموبايل بيبقى كده بشكل حلو»:
    the brand centred at the top, every row an icon TILE plus a word, the current
    page a solid tile on a tinted row, the theme switch and sign-out as rows of
-   the same kind, and the account it all belongs to as a card at the foot.
+   the same kind, and the account it all belongs to as a card at the head
+   (it was the brand there, until «حط الأكونت اللي فاتح بيه بدل اسم أيمن»).
 
    Everything here is scoped to `.drawer`. `.nav-pill` is shared with the
    desktop rail and the admin sidebar, and those keep their own look: the rail
@@ -2526,15 +2543,19 @@
 
 .drawer {
   /* The panel is 20rem at most; the reference is closer to a full sheet, and
-     the account card at the foot needs the width for a name. */
+     the account card at the head needs the width for a name. */
   inline-size: min(86vw, 21.5rem);
   overflow: hidden;
 }
 
-.drawer__brand {
+/* The head: the signed-in account, clear of the sheet's close button at the
+   inline end. */
+.drawer__head {
   display: flex;
   justify-content: center;
-  padding: var(--s-20) var(--s-48) var(--s-16);
+  flex-shrink: 0;
+  padding: var(--s-12);
+  padding-inline-end: var(--s-48);
   border-block-end: var(--hairline) solid var(--border-subtle);
 }
 
@@ -2649,10 +2670,10 @@
 /* Who is signed in — pinned under the scrolling list, full-bleed. */
 .drawer__account {
   display: flex;
-  flex-shrink: 0;
+  flex: 1 1 auto;
+  min-inline-size: 0;
   align-items: center;
   gap: var(--s-12);
-  margin: 0 var(--s-12) var(--s-12);
   padding: var(--s-12);
   border-radius: var(--r-lg);
   background: var(--drawer-card);

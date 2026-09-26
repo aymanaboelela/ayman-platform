@@ -6,6 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { copy } from '@ayman/contracts/copy/admin';
+import { isMonthlyExamLesson } from '@ayman/contracts/quiz/monthly-exam';
 import type { HomeworkWriteInput } from '@ayman/contracts/homework';
 import type {
   LessonCreateInput,
@@ -74,7 +75,7 @@ export class LessonService {
     // at the database level too.
     const section = await this.prisma.courseSection.findUnique({
       where: { id: sectionId },
-      select: { id: true, courseId: true },
+      select: { id: true, courseId: true, position: true, title: true },
     });
     if (!section) throw new NotFoundException();
 
@@ -104,6 +105,8 @@ export class LessonService {
       },
     });
 
+    if (!isMonthlyExamLesson(lesson.kind, section.title)) await this.inheritMonths(lesson.id, section);
+
     await this.audit.record({
       action: 'lesson:create',
       resourceType: AUDIT_RESOURCES.lesson,
@@ -113,6 +116,51 @@ export class LessonService {
     });
 
     return lesson;
+  }
+
+  /**
+   * A new lesson lands in the month of the lesson above it.
+   *
+   * An untagged lesson is closed to EVERY monthly subscriber
+   * (`sliceCoversLesson` reads the empty set as «في ولا شهر»), and nothing
+   * says so: `assertNothingUntagged` only runs when a month is OPENED, so a
+   * quiz added to «شهر ١» after it went on sale slipped past it. That is how
+   * «واجب الدرس الرابع — الجزء التاني» shipped padlocked for every student who
+   * had paid for the month its lecture sits in, with «المحاضرة دي تابعة لشهر
+   * تاني» on it and no month that would ever open it.
+   *
+   * So the default is the neighbour's month — the nearest tagged lesson at or
+   * above this one in reading order — and the month picker on the lesson is
+   * still there for the one that really belongs to the next month. A course
+   * with no months has no tagged neighbour and nothing happens. Monthly exams
+   * stay untagged on purpose — any live subscription opens them — which is why
+   * the caller skips them.
+   */
+  private async inheritMonths(
+    lessonId: string,
+    section: { id: string; courseId: string; position: number },
+  ): Promise<void> {
+    const neighbour = await this.prisma.lesson.findFirst({
+      where: {
+        courseId: section.courseId,
+        id: { not: lessonId },
+        months: { some: {} },
+        OR: [{ sectionId: section.id }, { section: { position: { lt: section.position } } }],
+      },
+      orderBy: [{ section: { position: 'desc' } }, { position: 'desc' }, { id: 'desc' }],
+      select: { months: { select: { monthId: true, isPrimary: true } } },
+    });
+    if (!neighbour) return;
+
+    await this.prisma.lessonMonth.createMany({
+      data: neighbour.months.map((row) => ({
+        lessonId,
+        monthId: row.monthId,
+        courseId: section.courseId,
+        isPrimary: row.isPrimary,
+      })),
+      skipDuplicates: true,
+    });
   }
 
   async update(id: string, input: LessonUpdateInput) {
