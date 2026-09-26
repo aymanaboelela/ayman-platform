@@ -1,7 +1,7 @@
 import { GRANTABLE_ROLES, RoleGrantsReadSchema } from '@ayman/contracts/admin/roles';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Card, CardBody } from '@ayman/ui';
-import { adminGet } from '@/lib/admin-api';
+import { adminGet, adminGetOrForbidden } from '@/lib/admin-api';
 import { PermissionGrid } from './permission-grid';
 import { StaffSection } from './staff-section';
 import { getSession } from '@/lib/session';
@@ -25,9 +25,21 @@ export const metadata = { title: c.title };
  */
 export default async function RolesPage() {
   const [roles, staff, session] = await Promise.all([
+    /*
+     * ⚠️ `OrForbidden` — و`role:read` **محجوبة عن المدرّس** في
+     * `OWNER_WITHHELD`، فالقراءة دي بترد 403 على كل ستاك مدرّس، دايمًا.
+     *
+     * وde كان بيقتل الصفحة كلها: `Promise.all` من غير `catch` معناها إن رفض
+     * واحد بياخد الشاشة معاه. اتقاس على الحي — `/admin/roles` رد 200 بصفحة
+     * **فاضية** عند صبري وعادل، وجدول الصلاحيات وقسم الفريق الاتنين مابانوش.
+     *
+     * جدول الصلاحيات نفسه مالوش معنى للمدرّس أصلًا: هو بيفتح صلاحيات لرول،
+     * وde قرار المشغّل. اللي يخصه هو قسم الفريق — فالجدول بيختفي والقسم
+     * بيفضل، بدل ما الاتنين يروحوا.
+     */
     Promise.all(
       GRANTABLE_ROLES.map((role) =>
-        adminGet(`/api/admin/roles/${role}/permissions`, RoleGrantsReadSchema),
+        adminGetOrForbidden(`/api/admin/roles/${role}/permissions`, RoleGrantsReadSchema),
       ),
     ),
     /*
@@ -61,7 +73,7 @@ export default async function RolesPage() {
       </div>
 
       <div className="space-y-6">
-        {roles.map((grants) => (
+        {roles.filter((grants) => grants !== null).map((grants) => (
           <Card key={grants.role}>
             <CardBody>
               <PermissionGrid grants={grants} />
