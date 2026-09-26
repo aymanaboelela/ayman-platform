@@ -1,10 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Dashboard, EnrolledCourse, LessonKind, PendingExam } from '@ayman/contracts';
+import type {
+  Dashboard,
+  DashboardMonthOffer,
+  EnrolledCourse,
+  LessonKind,
+  PendingExam,
+} from '@ayman/contracts';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { courseAccessScopes } from '../entitlement/grant-liveness';
 import { lessonFilterWithCodes, resolveContentAccess } from '../entitlement/content-access-query';
-import { monthSliceOf } from '../entitlement/month-access';
+import { monthSliceOf, type MonthSlice } from '../entitlement/month-access';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { LessonGateService } from '../progress/lesson-gate.service';
 import { SCORE_FEED, type ScoreFeed } from './score-feed';
@@ -144,6 +150,10 @@ export class DashboardService {
             // و`months` بتقول الكورس ده بيتباع بالشهور ولا لأ.
             subjectId: true,
             requiresGrant: true,
+            // سعر الشهر — بيوصل لـ`monthOffersFor` تحت كـfallback لشهر مالوش
+            // سعر بذاته، ونفس الوقت هو الإشارة إن الكورس ده بيتباع بالشهر
+            // أصلًا. `PlayerService.monthOffer` بيقرا نفس العمودين بالحرف.
+            monthlyPriceCents: true,
             _count: {
               select: {
                 lessons: {
@@ -190,6 +200,7 @@ export class DashboardService {
         recentScores: [],
         totalWatchedSeconds: 0,
         pendingExams: [],
+        monthOffers: [],
         honorBoard: await honorBoard,
       };
     }
@@ -242,7 +253,31 @@ export class DashboardService {
      * نفس `monthSliceOf` اللي البوابة و`recalculate` بيستعملوه — تالت قارئ
      * لنفس الدالة، وده المقصود منها أصلًا.
      */
-    const monthFilters = await this.monthFiltersByCourse(userId, enrollments);
+    const monthSlices = await this.monthSlicesByCourse(userId, enrollments);
+    /*
+     * القطعة بتتحوّل لفلتر عدّ هنا، مش جوّه الدالة، عشان الشريحة نفسها تفضل
+     * متاحة لـ`monthOffersFor` تحت — الاتنين محتاجين نفس الجواب، والقراية
+     * تانية للـgrants كانت هتبقى نفس الاستعلام مرتين على نفس الصفحة.
+     *
+     * والترم والسنة مابيدخلوش الـ`Map` (`slice.everything`)، فـ`lessonsOf`
+     * بترجّع نفس الفلتر القديم بالحرف زي ما كانت.
+     */
+    const monthFilters = new Map<string, Prisma.LessonWhereInput>();
+    for (const [courseId, slice] of monthSlices) {
+      if (slice.everything) continue;
+      monthFilters.set(courseId, { months: { some: { monthId: { in: [...slice.monthIds] } } } });
+    }
+    /*
+     * «شهر جديد اتفتح» — ابتدى من غير انتظار، لنفس سبب `scores` و`honorBoard`
+     * فوق: بيقرا الشهور المفتوحة والطلبات المعلّقة، ومالوش علاقة بأي حاجة في
+     * الـ`Promise.all` اللي تحت، فمستنيه في نصهم كان بيخسّر لفة كاملة.
+     *
+     * ومش محتاجة `catch` زي `scores`: الفرع الوحيد اللي بيرجّع من غير انتظار
+     * («مفيش اشتراكات») فوق السطر ده، فالـpromise دي دايمًا بيتم انتظارها في
+     * الـ`return` — مفيش رفض بيروح في الفراغ.
+     */
+    const monthOffers = this.monthOffersFor(userId, enrollments, monthSlices);
+
     /*
      * «فتح بكود» — the lectures a code opened are counted too, and for a
      * student who holds nothing BUT codes on a course they are the whole
@@ -475,6 +510,7 @@ export class DashboardService {
       recentScores: await scores,
       totalWatchedSeconds: watchedAgg._sum.watchedSeconds ?? 0,
       pendingExams,
+      monthOffers: await monthOffers,
       honorBoard: await honorBoard,
     };
   }
@@ -527,21 +563,25 @@ export class DashboardService {
   }
 
   /**
-   * لكل كورس بيتباع بالشهور: القطعة اللي بتقصر العدّ على اللي الطالب ماسكه.
+   * لكل كورس بيتباع بالشهور: القطعة اللي الطالب ماسكها فيه.
    *
    * استعلام واحد لكل الـgrants — الداشبورد بتاعة طالب واحد، فالتقسيم بيحصل
    * في الذاكرة. والكورسات اللي مالهاش شهور مابتدخلش الـ`Map` أصلًا، فـ
    * `lessonsOf` بترجّع نفس الفلتر القديم بالحرف.
    *
-   * والترم والسنة مابيدخلوش كمان (`slice.everything`) — دول بيفتحوا كل حاجة،
-   * والمحاضرة من غير شهر كمان.
+   * ⚠️ دي كانت بترجّع فلتر Prisma جاهز وبتاكل صفوف `slice.everything` في
+   * السكّة. بقت بترجّع القطعة نفسها **لكل** كورس بالشهور، بـ`everything` وكل
+   * حاجة، لأن فيه قارئ تاني دلوقتي: `monthOffersFor` محتاج يفرّق بين «ماسك
+   * الترم كله» (مايتعرضش عليه حاجة) و«مش ماسك حاجة لايف» (ده محتاج يجدّد، مش
+   * يعرف إن فيه شهر جديد) — والفلتر كان بيخلط التلاتة في «مش في الـMap».
+   * التحويل لفلتر بقى عند المستدعي، وسلوك العدّ ما اتغيّرش.
    */
-  private async monthFiltersByCourse(
+  private async monthSlicesByCourse(
     userId: string,
     enrollments: readonly {
       course: { id: string; subjectId: string; requiresGrant: boolean; _count: { months: number } };
     }[],
-  ): Promise<Map<string, Prisma.LessonWhereInput>> {
+  ): Promise<Map<string, MonthSlice>> {
     const byMonth = enrollments.filter((row) => row.course._count.months > 0);
     if (byMonth.length === 0) return new Map();
 
@@ -563,7 +603,7 @@ export class DashboardService {
     });
 
     const now = new Date();
-    const filters = new Map<string, Prisma.LessonWhereInput>();
+    const slices = new Map<string, MonthSlice>();
     for (const { course } of byMonth) {
       /*
        * ⚠️ `courseId === null` بتعدّي: دي الـgrants الأوسع (`platform`،
@@ -574,10 +614,108 @@ export class DashboardService {
       const mine = grants.filter(
         (grant) => grant.courseId === null || grant.courseId === course.id,
       );
-      const slice = monthSliceOf(mine, now);
-      if (slice.everything) continue;
-      filters.set(course.id, { months: { some: { monthId: { in: [...slice.monthIds] } } } });
+      slices.set(course.id, monthSliceOf(mine, now));
     }
-    return filters;
+    return slices;
+  }
+
+  /**
+   * «شهر جديد اتفتح» — صف لكل كورس عليه حاجة تتعرض على الطالب ده فعلًا.
+   *
+   * أربع شروط، وكل واحد فيهم بيشيل حالة الشريط فيها غلط:
+   *
+   * 1. **`status: 'published'`** — كورس المدرّس نزّله عشان يعدّل لسه بيبان في
+   *    «كورساتي» (شوف الـ`where` بتاع `enrollment` فوق)، بس الشيك أوت بيرفضه.
+   *    عرض شهر فيه = زرار بيودّي على باب مقفول.
+   * 2. **`monthlyPriceCents !== null` و`requiresGrant`** — الكورس بيتباع
+   *    بالشهر أصلًا. نفس العمودين بالحرف اللي `PlayerService.monthOffer`
+   *    بيقراهم، عشان الكارت اللي جوّه الكورس والشريط اللي فوق الداشبورد
+   *    مايختلفوش على إن فيه حاجة للبيع.
+   * 3. **`!slice.everything`** — اللي اشترك ترم أو سنة أو «٣ شهور» بيفتح كل
+   *    الشهور، فمفيش حاجة تتعرض عليه. ده كان مطلوب بالنص.
+   * 4. **`slice.monthIds.size > 0`** — وده الشرط اللي بيفرّق الشريط ده عن
+   *    كارت الكورس. الشريط بيتكلّم مع اللي **دافع بالشهر**: «إنت في شهر ١
+   *    وشهر ٢ اتفتح». اللي مادفعش خالص، واللي اشتراكه خلص أو اتسحب، الاتنين
+   *    `monthIds` فاضية عندهم — والأول الكاتالوج بيكلّمه والتاني محتاج يجدّد،
+   *    ومفيش واحد فيهم الجملة دي بتقول له حاجة صح.
+   *
+   * استعلامين مجمّعين لكل الكورسات مع بعض، ومفيش أي واحد فيهم لو مفيش مرشّح —
+   * وده الغالب على كل طالب في كورس بالترم.
+   */
+  private async monthOffersFor(
+    userId: string,
+    enrollments: readonly {
+      course: {
+        id: string;
+        slug: string;
+        title: string;
+        status: string;
+        requiresGrant: boolean;
+        monthlyPriceCents: number | null;
+      };
+    }[],
+    slices: ReadonlyMap<string, MonthSlice>,
+  ): Promise<DashboardMonthOffer[]> {
+    const candidates = enrollments.filter(({ course }) => {
+      if (course.status !== 'published') return false;
+      if (course.monthlyPriceCents === null || !course.requiresGrant) return false;
+      const slice = slices.get(course.id);
+      return slice !== undefined && !slice.everything && slice.monthIds.size > 0;
+    });
+    if (candidates.length === 0) return [];
+
+    const courseIds = candidates.map(({ course }) => course.id);
+    const [openMonths, pendingRows] = await Promise.all([
+      /* نفس الـ`select` و`orderBy` بتاع `PlayerService.outline` بالحرف — بالشهور
+         المفتوحة بس، والعدّ على المحاضرات المنشورة (الكويز فحص المحاضرة اللي
+         فوقه، مش صف الطالب بيعدّه). */
+      this.prisma.courseMonth.findMany({
+        where: { courseId: { in: courseIds }, isOpen: true },
+        orderBy: [{ monthIndex: 'asc' }],
+        select: {
+          id: true,
+          courseId: true,
+          title: true,
+          priceCents: true,
+          _count: {
+            select: { lessons: { where: { lesson: { isPublished: true, kind: { not: 'quiz' } } } } },
+          },
+        },
+      }),
+      /* الطلبات المعلّقة، مجمّعة — الشيك أوت بيرفض طلب تاني على نفس الكورس،
+         فالصف بيقول «بيتراجع» بدل ما يعرض زرار الرفض في آخره. */
+      this.prisma.paymentSubmission.groupBy({
+        by: ['courseId'],
+        where: { userId, courseId: { in: courseIds }, status: 'pending' },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const pending = new Set(pendingRows.map((row) => row.courseId));
+
+    const offers: DashboardMonthOffer[] = [];
+    for (const { course } of candidates) {
+      // موجودة بالتأكيد: الفلتر فوق رفض أي كورس مالوش قطعة.
+      const slice = slices.get(course.id) as Extract<MonthSlice, { everything: false }>;
+      const months = openMonths
+        .filter((month) => month.courseId === course.id && !slice.monthIds.has(month.id))
+        .map((month) => ({
+          id: month.id,
+          title: month.title,
+          lessonCount: month._count.lessons,
+          // سعر الشهر بذاته لو المدرّس حطّه، وإلا سعر الكورس الشهري — نفس
+          // الترتيب اللي `PlayerService.monthOffer` بيتبعه.
+          priceCents: month.priceCents ?? (course.monthlyPriceCents as number),
+        }));
+      if (months.length === 0) continue;
+      offers.push({
+        courseId: course.id,
+        courseSlug: course.slug,
+        courseTitle: course.title,
+        months,
+        pending: pending.has(course.id),
+      });
+    }
+    return offers;
   }
 }

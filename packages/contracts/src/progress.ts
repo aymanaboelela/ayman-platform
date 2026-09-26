@@ -717,6 +717,51 @@ export const HonorStandingSchema = z.object({
 });
 export type HonorStanding = z.infer<typeof HonorStandingSchema>;
 
+/**
+ * «شهر جديد اتفتح» — كورس بيتباع بالشهور، الطالب ماسك فيه شهر على الأقل، وفيه
+ * شهر مفتوح تاني هو مش ماسكه.
+ *
+ * ## الشرط اللي بيخلّي ده مش نفس `CourseOutline.monthOffer`
+ *
+ * الكارت اللي جوّه الكورس بيعرض على أي حد مش ماسك الشهر — بيشمل اللي مادفعش
+ * حاجة أصلًا، وده صح هناك: هو الباب الوحيد للشراء من جوّه الكورس.
+ *
+ * ده لأ. الشريط اللي فوق الداشبورد بيتكلّم مع اللي **دافع بالشهر** بس — «إنت
+ * مشترك في شهر ١، وشهر ٢ اتفتح». فاللي مادفعش خالص مابيشوفهوش (الكاتالوج
+ * والكورس بيكلّموه أصلًا)، واللي اشتراكه خلص مابيشوفهوش كمان — ده محتاج يجدّد،
+ * مش يعرف إن فيه شهر جديد. الاتنين بيطلعوا من نفس الشرط:
+ * `slice.monthIds.size > 0` — الشهور اللايف اللي ماسكها، مش الصفوف اللي في
+ * الجدول (شوف `monthSliceOf`).
+ *
+ * واللي اشترك ترم أو سنة أو «٣ شهور» مابيشوفهوش خالص: `slice.everything`
+ * بيفتح كل الشهور، فمفيش حاجة تتعرض عليه. ودي كانت مطلوبة بالنص.
+ *
+ * ## ليه الكورس جوّه الصف
+ *
+ * الطالب ممكن يكون في كورسين بالشهور، وكل واحد شهوره المفتوحة بتاعته. صف لكل
+ * كورس، والعنوان جوّاه، عشان «شهر ٢ اتفتح» لوحدها على شاشة فيها كورسين ماتقولش
+ * شهر ٢ بتاع مين.
+ */
+export const DashboardMonthOfferSchema = z.object({
+  courseId: z.string(),
+  courseSlug: z.string(),
+  courseTitle: z.string(),
+  months: z
+    .array(
+      z.object({
+        id: z.uuid(),
+        title: z.string(),
+        lessonCount: z.number().int().min(0),
+        priceCents: z.number().int().min(0),
+      }),
+    )
+    .min(1),
+  /** طلب اشتراك على الكورس ده مستنّي في المراجعة — الشيك أوت بيرفض التاني
+   *  أصلًا، فالشريط بيقول الحالة بدل ما يوَدّي على باب مقفول. */
+  pending: z.boolean(),
+});
+export type DashboardMonthOffer = z.infer<typeof DashboardMonthOfferSchema>;
+
 export const DashboardSchema = z.object({
   continueWatching: ContinueWatchingSchema.nullable(),
   enrolledCourses: z.array(EnrolledCourseSchema),
@@ -751,6 +796,15 @@ export const DashboardSchema = z.object({
    * `quiz_graded` على نفس النتيجة، والكارت ده بيتكلّم عن اللي مفيش غيره
    * بيقوله.
    */
+  /**
+   * «شهر جديد اتفتح» — صف لكل كورس فيه شهر مفتوح الطالب مش ماسكه، وهو ماسك
+   * فيه شهر. فاضية للأغلبية الساحقة؛ شوف `DashboardMonthOfferSchema`.
+   *
+   * `.default([])` لنفس سبب `honorBoard` تحت بالحرف: الويب بيـparse الحمولة،
+   * وفي نص الديبلوي الويب بيبقى جديد والـAPI لسه قديم — حقل مطلوب هنا كان
+   * بيرمي على كل حمولة قديمة ويفضّي الصفحة كلها.
+   */
+  monthOffers: z.array(DashboardMonthOfferSchema).default([]),
   honorBoard: HonorStandingSchema.nullable().default(null),
 });
 

@@ -594,4 +594,117 @@ describe('DashboardService', () => {
       expect(dashboard.totalWatchedSeconds).toBe(150);
     });
   });
+
+  /*
+   * «شهر جديد اتفتح» — الشريط اللي فوق الداشبورد.
+   *
+   * الكيسات اللي بتهم هنا مش «بيعرض الشهر» — دي `PlayerService.monthOffer`
+   * مغطّيها. اللي هنا هو **مين مايشوفهوش**، لأن ده الفرق الوحيد بين الاتنين:
+   * كارت الكورس بيعرض على أي حد مش ماسك الشهر، والشريط ده بيتكلّم مع اللي دافع
+   * بالشهر بس. تالت وراين تحت هُمّ الفيتشر، مش حالات طرفية.
+   */
+  describe('monthOffers', () => {
+    let monthOneId = '';
+    let monthTwoId = '';
+
+    beforeAll(async () => {
+      await prisma.course.update({
+        where: { id: courseId },
+        data: { monthlyPriceCents: 15000, requiresGrant: true },
+      });
+      monthOneId = (
+        await prisma.courseMonth.create({ data: { courseId, monthIndex: 1, title: 'شهر ١' } })
+      ).id;
+      monthTwoId = (
+        await prisma.courseMonth.create({ data: { courseId, monthIndex: 2, title: 'شهر ٢' } })
+      ).id;
+    });
+
+    afterEach(async () => {
+      await prisma.accessGrant.deleteMany({ where: { userId, courseId } });
+    });
+
+    afterAll(async () => {
+      await prisma.courseMonth.deleteMany({ where: { courseId } });
+      await prisma.course.update({
+        where: { id: courseId },
+        data: { monthlyPriceCents: null, requiresGrant: false },
+      });
+    });
+
+    it('tells a student holding «شهر ١» that «شهر ٢» opened, with the course on the row', async () => {
+      await prisma.accessGrant.create({
+        data: { userId, scope: 'course_month', courseId, monthId: monthOneId, source: 'purchase' },
+      });
+
+      const dashboard = await service.forUser(userId);
+
+      expect(dashboard.monthOffers).toEqual([
+        {
+          courseId,
+          courseSlug,
+          courseTitle: 'كورس البرمجة',
+          months: [{ id: monthTwoId, title: 'شهر ٢', lessonCount: 0, priceCents: 15000 }],
+          pending: false,
+        },
+      ]);
+      expect(() => DashboardSchema.parse(dashboard)).not.toThrow();
+    });
+
+    /* المطلوب بالنص: «لو اشترك ترم أو ٣ شهور قبل كده مش هتظهره من الآخر». */
+    it('says nothing to a subscription that already opens every month', async () => {
+      await prisma.accessGrant.create({
+        data: { userId, scope: 'course', courseId, source: 'admin' },
+      });
+
+      expect((await service.forUser(userId)).monthOffers).toEqual([]);
+    });
+
+    /*
+     * ⚠️ الكيس اللي بيفرّق الشريط ده عن كارت الكورس.
+     *
+     * `PlayerService.monthOffer` بيعرض الشهر على اللي مادفعش حاجة — وده صح
+     * هناك، هو الباب الوحيد من جوّه الكورس. الشريط ده لأ: «إنت في شهر ١ وشهر ٢
+     * اتفتح» جملة مالهاش معنى لحد مش في ولا شهر. ده بيخرج من
+     * `slice.monthIds.size > 0`، ولو الشرط ده اتشال التست ده هو اللي بيقع.
+     */
+    it('says nothing to an enrolled student who holds no month at all', async () => {
+      expect((await service.forUser(userId)).monthOffers).toEqual([]);
+    });
+
+    /*
+     * واللي اشتراكه خلص كمان. `monthSliceOf` بيعدّي أي grant مش لايف، فالقطعة
+     * بتطلع فاضية — وده صح: الطالب ده محتاج يجدّد، مش يعرف إن فيه شهر جديد.
+     * `revokedAt` هنا لأنه أسرع تعبير عن «مش لايف»؛ الميعاد المنتهي بيمشي في
+     * نفس الفرع داخل `grantLiveness`.
+     */
+    it('says nothing when the month the student held was revoked', async () => {
+      await prisma.accessGrant.create({
+        data: {
+          userId,
+          scope: 'course_month',
+          courseId,
+          monthId: monthOneId,
+          source: 'purchase',
+          revokedAt: new Date(),
+        },
+      });
+
+      expect((await service.forUser(userId)).monthOffers).toEqual([]);
+    });
+
+    /* شهر مقفول مش «اتفتح». الشريط بيقرا `isOpen` بس، زي الكارت بالحرف. */
+    it('does not offer a month the instructor has not opened yet', async () => {
+      await prisma.courseMonth.update({ where: { id: monthTwoId }, data: { isOpen: false } });
+      await prisma.accessGrant.create({
+        data: { userId, scope: 'course_month', courseId, monthId: monthOneId, source: 'purchase' },
+      });
+
+      try {
+        expect((await service.forUser(userId)).monthOffers).toEqual([]);
+      } finally {
+        await prisma.courseMonth.update({ where: { id: monthTwoId }, data: { isOpen: true } });
+      }
+    });
+  });
 });
