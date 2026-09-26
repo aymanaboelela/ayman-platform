@@ -493,8 +493,9 @@ test.describe('student shell', () => {
  *
  * ## المقياس
  *
- * «تسجيل الخروج» هو آخر حاجة في العمود. لو وصلت له بالسكرول، يبقى كل اللي
- * فوقه موصول. وده مقياس **الوصول**، مش مقياس `overflow` — لو حد رجّع
+ * «الموقع الرئيسي» هو آخر حاجة في عمود الريل — تسجيل الخروج مش هنا، هو في
+ * قائمة الحساب في التوب بار. لو وصلت لآخر حاجة بالسكرول، يبقى كل اللي فوقها
+ * موصول. وده مقياس **الوصول**، مش مقياس `overflow` — لو حد رجّع
  * `overflow-hidden` بكرة، ده اللي بيقع.
  */
 test.describe('rail on a short window', () => {
@@ -509,13 +510,13 @@ test.describe('rail on a short window', () => {
     await page.goto('/dashboard');
 
     const rail = page.locator('.rail');
-    const signOut = rail.getByRole('button', { name: copy.nav.logout });
+    const last = rail.getByRole('link', { name: copy.nav.backToSite });
 
     // موجود في الـDOM…
-    await expect(signOut).toHaveCount(1);
+    await expect(last).toHaveCount(1);
     // …وبيوصَل له. `scrollIntoViewIfNeeded` بيفشل لو الأب مش بيعمل سكرول.
-    await signOut.scrollIntoViewIfNeeded();
-    await expect(signOut).toBeInViewport();
+    await last.scrollIntoViewIfNeeded();
+    await expect(last).toBeInViewport();
   });
 
   test('never collapses the course list to nothing', async ({ page }) => {
