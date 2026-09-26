@@ -78,21 +78,35 @@ test.describe('student tab bar', () => {
     await page.goto('/dashboard');
 
     /*
-     * المسافة تحت المحتوى (`.shell main { padding-block-end }`) هي اللي
-     * بتمنع الشريط إنه يغطّي آخر حاجة في الصفحة. بتتقاس على الصفحة وهي
-     * منزّلة لآخرها: فوق الشريط بيبقى فوق المحتوى طبيعي، وتحت بس هو اللي
-     * ممكن يخبّي حاجة.
+     * المسافة تحت المحتوى (`.shell main { padding-block-end }`) هي اللي بتمنع
+     * الشريط إنه يغطّي آخر حاجة في الصفحة. بتتقاس على الصفحة وهي منزّلة
+     * لآخرها: فوق الشريط بيبقى فوق المحتوى طبيعي، وتحت بس هو اللي ممكن يخبّي.
+     *
+     * ⚠️ المقياس هو **المحتوى**، مش `main` نفسه. أول نسخة من التست ده قاست
+     * `main.boundingBox()` ووقعت في CI على ٧٤٠ مقابل ٦٨٤ — وكانت محقّة:
+     * الـ`padding-block-end` جوّه صندوق `main`، فحرفه السفلي بيوصل لآخر
+     * الشاشة عن حق والمسافة شغّالة. اللي مايتغطّاش هو أولاده، فدول اللي
+     * بيتقاسوا.
      */
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 
     const barBox = await page.locator('.tabbar').boundingBox();
-    const mainBox = await page.locator('.shell main').boundingBox();
     expect(barBox).not.toBeNull();
-    expect(mainBox).not.toBeNull();
-    if (!barBox || !mainBox) return;
+    if (!barBox) return;
 
-    // آخر المحتوى بيخلص فوق الشريط، مش تحته.
-    expect(mainBox.y + mainBox.height).toBeLessThanOrEqual(barBox.y + 1);
+    // أوطى حرف في أي عنصر جوّه `main` — مش آخر ابن بس، عشان ترتيب الـDOM مش
+    // شرط يبقى ترتيب الشاشة.
+    const contentBottom = await page.locator('.shell main').evaluate((main) => {
+      let lowest = 0;
+      for (const child of Array.from(main.children)) {
+        const box = child.getBoundingClientRect();
+        if (box.height > 0) lowest = Math.max(lowest, box.bottom);
+      }
+      return lowest;
+    });
+
+    expect(contentBottom).toBeGreaterThan(0);
+    expect(contentBottom).toBeLessThanOrEqual(barBox.y + 1);
   });
 
   test('is absent on a desktop viewport, where the rail carries these links', async ({ page }) => {
