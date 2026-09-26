@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   STUDENT_NAV,
+  STUDENT_TABS,
   activeStudentNav,
   isAttemptRoute,
   isRailForcedCollapsed,
@@ -129,5 +130,58 @@ describe('isRailForcedCollapsed', () => {
 
   it('is false on the catalog', () => {
     expect(isRailForcedCollapsed('/courses')).toBe(false);
+  });
+});
+
+/*
+ * الشريط السفلي بتاع الفون. الأربعة دول مشتقّين من `STUDENT_NAV` ومش مكتوبين
+ * تاني، والتستات دي بتحرس الحتة اللي بتنكسر في صمت: صف اتشال من الجدول، أو
+ * `tab` اتشال من صف، والشريط بيطلع فيه خرم — والخرم بيبان كتصميم بتلات تابات.
+ */
+describe('STUDENT_TABS', () => {
+  it('is exactly four — the width of a 360px screen decides this, not taste', () => {
+    // خمسة على ٣٦٠ بكسل = ٧٢ بكسل للتاب، وده أقل من هدف لمس ٤٤ + كلمة عربي
+    // جنبه. زيادة تاب معناها شيل واحد.
+    expect(STUDENT_TABS).toHaveLength(4);
+  });
+
+  it('carries the four daily destinations, in thumb order', () => {
+    // الترتيب مش ترتيب الريل: «نتائجي» تالت في الريل وآخر حاجة هنا. الريل
+    // بيتقرا من فوق لتحت على رواقة؛ الإيد لأ.
+    expect(STUDENT_TABS.map((item) => item.href)).toEqual([
+      '/dashboard',
+      '/path',
+      '/library',
+      '/results',
+    ]);
+  });
+
+  it('only ever contains rows the table itself marked as tabs', () => {
+    for (const tab of STUDENT_TABS) {
+      const row = STUDENT_NAV.find((item) => item.href === tab.href);
+      expect(row?.tab).toBe(true);
+    }
+  });
+
+  it('never contains a footer row', () => {
+    // «أجهزتي» و«حسابي الشخصي» زيارات مقصودة، مش وجهات يومية — ومكانهم فوتر
+    // الريل. لو واحد فيهم اتعلّم بـ`tab` بالغلط، ده اللي بيقع.
+    expect(STUDENT_TABS.every((item) => item.footer !== true)).toBe(true);
+  });
+
+  it('leaves every other primary link to the menu, with none lost', () => {
+    // القسمة اللي الشيت بيرسمها: `only="rest"` + `only="tabs"` لازم يساووا
+    // اللينكات الأساسية كلها. صف يقع من الاتنين = لينك مش موجود في أي مكان على
+    // الفون.
+    const primary = STUDENT_NAV.filter((item) => !item.footer);
+    const rest = primary.filter((item) => item.tab !== true);
+
+    expect(rest.length + STUDENT_TABS.length).toBe(primary.length);
+    expect(rest.map((item) => item.href)).toEqual([
+      '/codes',
+      '/foundations',
+      '/store',
+      '/playground',
+    ]);
   });
 });

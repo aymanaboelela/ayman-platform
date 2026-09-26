@@ -20,14 +20,35 @@ export interface StudentNavItem {
   /** `true` when the item is only ever reached deliberately, not while
    *  studying — it renders in the rail's footer rather than its main list. */
   footer?: boolean;
+  /**
+   * `true` when the item earns a slot in the phone's bottom bar.
+   *
+   * FOUR of them, and the number is the constraint rather than a preference: a
+   * 360px screen divided five ways leaves 72px a tab, which is under the 44px
+   * target plus a readable Arabic word beside it. Adding a fifth means taking
+   * one out.
+   *
+   * The four are the ones a student opens on a normal evening — «حسابي» to see
+   * where they are, «مساري» for what is next, «الكورسات» to watch, «نتائجي» for
+   * the mark. Everything else («التأسيس»، «تجربة الكود»، «كود الكورس»،
+   * «الكتب») is a deliberate visit, and a deliberate visit is what a menu is
+   * for.
+   */
+  tab?: boolean;
 }
 
 /**
- * The signed-in student's navigation, in render order. One table, three
- * consumers: the desktop rail, the mobile sheet, and the topbar's current-page
- * title. Three copies of this list would drift within a week — the admin side
- * learned that already (`components/admin/nav-items.ts`), and this file
- * deliberately mirrors its shape so the two are read the same way.
+ * The signed-in student's navigation, in render order. One table, FOUR
+ * consumers: the desktop rail, the mobile sheet, the phone's bottom bar, and
+ * the topbar's current-page title. Four copies of this list would drift within
+ * a week — the admin side learned that already
+ * (`components/admin/nav-items.ts`), and this file deliberately mirrors its
+ * shape so the two are read the same way.
+ *
+ * `tab` picks the bottom bar's four; `footer` picks the rail's footer group.
+ * Neither is computed at a call site, so no two consumers can disagree about
+ * which group a row is in — `STUDENT_TABS` below is the only reader of the
+ * first, and `StudentNavFooterList` of the second.
  *
  * Icons are lucide components, never emoji (Global Constraint 9).
  *
@@ -38,10 +59,10 @@ export interface StudentNavItem {
  * permissions for a single row.
  */
 export const STUDENT_NAV: readonly StudentNavItem[] = [
-  { href: '/dashboard', labelAr: copy.nav.dashboard, icon: LayoutDashboard },
-  { href: '/path', labelAr: copy.nav.path, icon: Route },
-  { href: '/results', labelAr: copy.nav.results, icon: BarChart3 },
-  { href: '/library', labelAr: copy.nav.courses, icon: BookMarked },
+  { href: '/dashboard', labelAr: copy.nav.dashboard, icon: LayoutDashboard, tab: true },
+  { href: '/path', labelAr: copy.nav.path, icon: Route, tab: true },
+  { href: '/results', labelAr: copy.nav.results, icon: BarChart3, tab: true },
+  { href: '/library', labelAr: copy.nav.courses, icon: BookMarked, tab: true },
   /*
    * «كود الكورس» — right under the courses, because that is where a student
    * who just got a code on WhatsApp looks first: «فين أحط الكود؟». A code
@@ -73,6 +94,29 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
   { href: '/profile', labelAr: copy.nav.profile, icon: UserRound, footer: true },
   { href: '/settings/devices', labelAr: copy.nav.devices, icon: MonitorSmartphone, footer: true },
 ] as const;
+
+/**
+ * The phone's bottom bar, derived from the table above and never written twice.
+ *
+ * ⚠️ ORDER MATTERS and it is not the rail's. The bar reads right-to-left like
+ * the rest of the product, and «حسابي» — where a student lands after signing
+ * in — has to be the outermost thumb-reachable slot, then «مساري»،
+ * «الكورسات»، «نتائجي». The rail's order puts «نتائجي» third because a rail is
+ * scanned top to bottom at leisure; a thumb is not.
+ */
+export const STUDENT_TABS: readonly StudentNavItem[] = [
+  '/dashboard',
+  '/path',
+  '/library',
+  '/results',
+].map((href) => {
+  const item = STUDENT_NAV.find((entry) => entry.href === href && entry.tab === true);
+  /* Throws at import time, not at render: a typo here would otherwise ship a
+     bar with a hole in it, and the hole looks like a deliberate three-tab
+     design. `student-nav-items.test.ts` asserts the two stay in step. */
+  if (!item) throw new Error(`STUDENT_TABS: ${href} مش متعلّم بـtab في STUDENT_NAV`);
+  return item;
+});
 
 /**
  * Routes that light a nav entry they do not live under.

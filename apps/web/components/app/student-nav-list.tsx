@@ -5,10 +5,14 @@ import { usePathname } from 'next/navigation';
 import { STUDENT_NAV, activeStudentNav } from './student-nav-items';
 
 /**
- * The rail's primary links, shared verbatim with the mobile sheet — one list,
- * one active-state rule, rendered twice. The admin surface arrived at the same
- * arrangement (`components/admin/admin-nav-list.tsx`) after the sheet and the
- * sidebar drifted apart.
+ * The rail's primary links, shared with the mobile sheet — one list, one
+ * active-state rule, rendered more than once. The admin surface arrived at the
+ * same arrangement (`components/admin/admin-nav-list.tsx`) after the sheet and
+ * the sidebar drifted apart.
+ *
+ * `only` splits the sheet into two groups without splitting the table: see the
+ * prop's own note. The rail passes nothing and gets the whole list, exactly as
+ * before.
  *
  * `activeStudentNav` decides what is current, rather than each item testing
  * the pathname itself: with per-item `startsWith` both `/courses` and
@@ -24,16 +28,40 @@ import { STUDENT_NAV, activeStudentNav } from './student-nav-items';
 export function StudentNavList({
   onNavigate,
   className,
+  only,
 }: {
   onNavigate?: () => void;
   className?: string;
+  /**
+   * تقسيم الشيت بتاع الفون لمجموعتين، من نفس الجدول.
+   *
+   * `undefined` = كل اللينكات الأساسية، وده اللي الريل بيطلبه: عمود واحد على
+   * الشاشة الكبيرة مفيهوش زحمة.
+   *
+   * `'rest'` = اللي **مش** في الشريط السفلي («التأسيس»، «كود الكورس»،
+   * «الكتب»، «تجربة الكود»). دي الحاجات اللي القائمة هي مكانها الوحيد، فبقت
+   * أول اللي الطالب يشوفه لما يفتحها.
+   *
+   * `'tabs'` = الأربعة اللي في الشريط. مانزلوش من الشيت — نزلوا **تحت** بعنوان
+   * بس. شيلهم خالص كان بيوفّر أربع صفوف، والتمن إن طالب دوّر على «نتائجي» في
+   * القائمة ومالقاهاش؛ الشريط تحته فيه والاتنين بنفس البريك بوينت، بس «دوّرت
+   * ومالقيتش» إحساس مايستاهلش أربع صفوف.
+   */
+  only?: 'tabs' | 'rest';
 }) {
   const pathname = usePathname();
   const active = activeStudentNav(pathname);
 
+  const items = STUDENT_NAV.filter((item) => {
+    if (item.footer) return false;
+    if (only === 'tabs') return item.tab === true;
+    if (only === 'rest') return item.tab !== true;
+    return true;
+  });
+
   return (
     <ul className={['flex flex-col gap-1', className].filter(Boolean).join(' ')}>
-      {STUDENT_NAV.filter((item) => !item.footer).map((item) => {
+      {items.map((item) => {
         const isActive = active?.href === item.href;
         return (
           <li key={item.href}>
