@@ -2454,6 +2454,126 @@
   background: var(--a-9);
 }
 
+/* ---------------------------------------------------------------------------
+   .tabbar — أربع وجهات مثبّتة تحت الشاشة، على الموبايل بس.
+
+   ## ليه هو موجود
+
+   «أهم شي الموبايل لأن معظم الناس موبايل». وقبله كان الهامبرجر هو المدخل
+   **الوحيد** لكل حاجة على الفون: تلات لمسات وقراية في شيت طوله شاشة ونص عشان
+   تشوف نتيجتك. الشريط ده بيخلّي أربع صفحات على لمسة، والقائمة بتفضل مكان
+   الباقي — مفيش حاجة اتشالت منها.
+
+   ## الأمبر هنا مش خرق لقاعدة «فعل واحد»
+
+   `study.css` بيقول: الأمبر هو اللي بيتدوس. والقاعدة التانية — زرار أمبر
+   **مملي** واحد على الشاشة — بتتكلم عن الـCTA بتاع الصفحة. التاب النشط مش
+   CTA: ده **مكانك**، ودي الوظيفة التانية للأمبر اللي `study.css` نفسه بيسمّيها
+   («plus the current position» — نفس اللي شريط تقدّم المحاضرة وعدّاد المسار
+   بياخدوه). فالأمبر هنا على التاب الواقف عليه، والتلاتة التانية رمادي.
+
+   ولا بياخد خلفية مملية: تينت + الأيقونة والكلمة أمبر. زرار مملي تحت الشاشة
+   كان هيسحب العين من الـCTA بتاع الصفحة نفسها، وده الحاجة الوحيدة اللي القاعدة
+   دي موجودة تمنعها.
+
+   ## المسافة تحته
+
+   مفيش `env(safe-area-inset-bottom)` هنا **عن قصد**. الإنسِت بيرجّع صفر من غير
+   `viewport-fit=cover`، والـ`cover` مش مضبوط في `app/layout.tsx` — سفاري
+   بيبعّد المحتوى عن شريط الهوم لوحده في الحالة الافتراضية. إضافة الإنسِت لوحده
+   كانت هتبقى كود ميت، وإضافة `cover` معاه بتخلّي **كل** حاجة على الحرف في
+   التطبيق مسؤولة عن إنستها بنفسها — على جهاز مفيش عندي منه واحد أجربه.
+
+   ## والمساحة اللي بيقعد فيها كانت محجوزة قبله
+
+   `.shell main` عنده `padding-block-end: 5.5rem` تحت `md` من قبل الشريط ده
+   (فوق في الملف) — كانت للمساعد وهو لسه قرص طايح. المساعد بقى في التوب بار
+   والمسافة فضلت، فالشريط قعد فيها من غير ما يغطّي آخر حاجة في أي صفحة.
+
+   ## RTL
+
+   خصائص منطقية بس، و`.tabbar__list` جريد بأربع أعمدة متساوية — فالترتيب بيقلب
+   مع الاتجاه لوحده ومفيش ولا `left` ولا `right` في الملف.
+   --------------------------------------------------------------------------- */
+.tabbar {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: 40;
+  background: var(--n-1);
+  border-block-start: var(--hairline) solid var(--border-subtle);
+}
+
+/* نفس رخصة `.topbar`: الشفافية والبلور على الأجهزة اللي فيها ماوس بس، عشان
+   `backdrop-filter` على فون متوسط بيكلّف فريمات في السكرول. */
+@media (pointer: fine) {
+  .tabbar {
+    background: color-mix(in oklch, var(--n-1), transparent 20%);
+    backdrop-filter: blur(var(--header-blur));
+  }
+}
+
+.tabbar__list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.tabbar__cell {
+  min-width: 0;
+}
+
+/* ٣.٥rem = ٥٦ بكسل. WCAG 2.5.5 و آبل و جوجل التلاتة بيطلبوا ٤٤ على الأقل،
+   والزيادة هنا عشان الأيقونة والكلمة فوق بعض جوّه نفس الهدف. */
+.tabbar__tab {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  min-block-size: 3.5rem;
+  padding-block: var(--s-4);
+  padding-inline: var(--s-2);
+  color: var(--n-11);
+  transition: color var(--d-hover) var(--ease);
+}
+
+/* الكلمة صغيرة ومقرويّة: `--fs-text-sm` جوّه `.product-type` بتنزل على ١٥
+   بكسل، واللي تحتها كان بيبقى نص مايتقراش على فون في إيد. سطر واحد دايمًا —
+   «الكورسات» و«نتائجي» الاتنين بيدخلوا في ٩٠ بكسل، والقطع لو حصل أحسن من
+   كلمة بتلف على سطرين وتكبّر الشريط. */
+.tabbar__label {
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  line-height: 1.2;
+}
+
+/* «إنت هنا» — تينت وأمبر، مفيش خلفية مملية. اقرا الحجة فوق. */
+.tabbar__tab[data-active] {
+  color: var(--a-11);
+}
+
+/* الخط اللي فوق التاب النشط بيقعد على حرف الشريط نفسه، فبيقرا كـtab مطلوع من
+   البوردر — نفس فكرة `.nav-pill[aria-current]::before` بالظبط، بس مقلوبة
+   للمحور الأفقي لأن الشريط ده أفقي. */
+.tabbar__tab[data-active]::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 25%;
+  block-size: 3px;
+  border-radius: 999px;
+  background: var(--a-9);
+}
+
+.tabbar__tab[data-active] .tabbar__label {
+  font-weight: var(--fw-semibold);
+}
+
 /* The count on «الوارد» / «المدفوعات» / «الكتب». Pushed to the far end, and
    it keeps its amber fill in every state — a badge that changes colour with
    the row would read as part of the row rather than as a number owed. */

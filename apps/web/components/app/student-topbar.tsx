@@ -189,8 +189,28 @@ export function StudentTopbar({
               <div className="drawer__head">{drawerAccount ?? <BrandLockup showTagline={false} />}</div>
 
               <div className="drawer__body">
+                {/*
+                  مجموعتين، مش ليستة واحدة — و`<StudentTabBar>` هو السبب.
+
+                  الشريط السفلي بقى شايل «حسابي» و«مساري» و«الكورسات»
+                  و«نتائجي» على لمسة واحدة، فالقائمة مبقتش المدخل الوحيد ليهم.
+                  اللي فضل مالوش مدخل غيرها — «التأسيس»، «كود الكورس»،
+                  «الكتب»، «تجربة الكود» — بقى أول اللي بيتقابل، والأربعة
+                  التانية نزلوا تحت بعنوان.
+
+                  نازلين، مش مشيلين. أربع صفوف أقل مايستاهلوش طالب يدوّر على
+                  «نتائجي» في القائمة ومايلاقيهاش — حتى وهي على بعد لمسة تحت
+                  إيده. و`only` بيقسّم من نفس الجدول، فمفيش صف يقدر يقع من
+                  الاتنين.
+                */}
                 <nav aria-label={copy.nav.mainNav}>
-                  <StudentNavList onNavigate={() => setOpen(false)} />
+                  <p className="drawer__eyebrow">{copy.nav.menuMore}</p>
+                  <StudentNavList only="rest" onNavigate={() => setOpen(false)} />
+
+                  <div className="drawer__section">
+                    <p className="drawer__eyebrow">{copy.nav.menuQuick}</p>
+                    <StudentNavList only="tabs" onNavigate={() => setOpen(false)} />
+                  </div>
                 </nav>
 
                 <div className="drawer__section">

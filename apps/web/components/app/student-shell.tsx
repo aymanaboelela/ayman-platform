@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { NotificationStreamProvider } from '@/components/notifications/notification-stream';
 import { isAttemptRoute, isRailForcedCollapsed } from './student-nav-items';
 import { StudentRail } from './student-rail';
+import { StudentTabBar } from './student-tab-bar';
 import { StudentTopbar } from './student-topbar';
 
 /**
@@ -165,6 +166,20 @@ export function StudentShell({
           {children}
         </div>
       </div>
+      {/*
+        الشريط السفلي — موبايل بس (`md:hidden` جوّاه)، وبرّه العمود اللي فوق
+        عشان يبقى مثبّت على الشاشة لا على المحتوى.
+
+        المكان اللي بياخده محسوب خلاص: `.shell main` عنده
+        `padding-block-end: 5.5rem` تحت `md` من قبل الشريط ده — كان محجوز
+        للمساعد لما كان قرص طايح فوق الصفحة. المساعد بقى في التوب بار، والمسافة
+        فضلت، فالشريط قعد فيها من غير ما يغطّي آخر حاجة في أي صفحة.
+
+        ومابيرسمش على `/quizzes/:id/attempt/:id` لأن الشِل كله مش بيترسم هناك
+        (الفرع فوق) — وده مقصود: امتحان بالوقت والتنقّل الدايم جنبه لمسة غلط
+        واحدة من الخروج منه.
+      */}
+      <StudentTabBar />
     </div>
     </NotificationStreamProvider>
   );
