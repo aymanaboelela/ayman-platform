@@ -14,6 +14,7 @@ import { cn } from '@ayman/ui/lib/cn';
 import { adminGet } from '@/lib/admin-api';
 import { GradingQueueRow } from '@/components/admin/grading/queue-row';
 import { ResultRow } from '@/components/admin/grading/result-row';
+import { AdminEmpty } from '@/components/admin/admin-empty';
 
 /** Day and month, Western digits — the same rule every date here follows. No
  *  year: the list is the last sixty days of sittings. */
@@ -217,9 +218,7 @@ export default async function AdminGradingPage({
         queue.length === 0 ? (
           /* An empty queue is the GOOD state here, not a missing-data state — no
              «اعمل واحد» prompt, because there is nothing for him to create. */
-          <div className="mt-5 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-12 text-center">
-            <p className="text-[length:var(--fs-title-4)] font-medium text-fg">{c.empty}</p>
-          </div>
+          <AdminEmpty spot="homework" title={c.empty} />
         ) : (
           /* `<ol>` rather than `<ul>`: `ManualGradingService.queue` orders
              oldest-first and the position IS information — a paper waiting
@@ -397,11 +396,10 @@ export default async function AdminGradingPage({
               ))}
             </ol>
           ) : (
-            <div className="mt-5 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-12 text-center">
-              <p className="text-[length:var(--fs-title-4)] font-medium text-fg">
-                {tab === 'marked' ? c.emptyMarked : tab === 'late' ? c.emptyLate : c.emptyTop}
-              </p>
-            </div>
+            <AdminEmpty
+              spot="homework"
+              title={tab === 'marked' ? c.emptyMarked : tab === 'late' ? c.emptyLate : c.emptyTop}
+            />
           )}
             </div>
           </div>

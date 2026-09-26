@@ -1,3 +1,5 @@
+import type { ReactElement } from 'react';
+
 /**
  * The small drawings that sit in an empty state.
  *
@@ -18,7 +20,24 @@
  * repetition, and none of them carry information the sentence does not.
  */
 
-export type SpotName = 'courses' | 'exams' | 'scores' | 'topics' | 'preparing';
+export type SpotName =
+  | 'courses'
+  | 'exams'
+  | 'scores'
+  | 'topics'
+  | 'preparing'
+  /* ── اللي تحت للوحة التحكم ────────────────────────────────────────────
+     نفس الملف ونفس الكلاسات، مش نسخة تانية: `(admin)/layout.tsx` بيستورد
+     `study.css` أصلًا (السطر ٨)، فالـ`.spot` شغّالة هناك من غير ما يتنقل
+     حاجة. وجدول واحد معناه إن الرسمة اللي المدرّس بيشوفها في «المدفوعات»
+     مرسومة بنفس القلم اللي الطالب بيشوفه في «نتايجي». */
+  | 'payments'
+  | 'transfers'
+  | 'orders'
+  | 'homework'
+  | 'codes'
+  | 'people'
+  | 'inbox';
 
 export function SpotIllustration({ name }: { name: SpotName }) {
   return (
@@ -32,17 +51,7 @@ export function SpotIllustration({ name }: { name: SpotName }) {
       {/* The ground line every spot sits on, so the three read as a set. */}
       <path d="M18 72 H102" className="spot__ground" />
 
-      {name === 'courses' ? (
-        <Courses />
-      ) : name === 'exams' ? (
-        <Exams />
-      ) : name === 'topics' ? (
-        <Topics />
-      ) : name === 'preparing' ? (
-        <Preparing />
-      ) : (
-        <Scores />
-      )}
+      {SPOTS[name]()}
     </svg>
   );
 }
@@ -127,6 +136,118 @@ function Scores() {
       <rect x="34" y="50" width="14" height="18" rx="3" className="spot__line" />
       <rect x="53" y="38" width="14" height="30" rx="3" className="spot__solid" />
       <rect x="72" y="26" width="14" height="42" rx="3" className="spot__accent" />
+    </g>
+  );
+}
+
+/**
+ * الاسم → الرسمة.
+ *
+ * جدول بدل سلسلة `? :` — كانت خمس حالات وبقت اتناشر، والسلسلة على اتناشر
+ * بتبقى سطر واحد مالوش آخر، وأسهل حاجة فيها إن واحدة تقع في الآخر كـ
+ * fallback من غير ما حد ياخد باله. الجدول بيخلّي التايب سكريبت يرفض اسم
+ * مالوش رسمة.
+ */
+const SPOTS: Record<SpotName, () => ReactElement> = {
+  courses: Courses,
+  exams: Exams,
+  scores: Scores,
+  topics: Topics,
+  preparing: Preparing,
+  payments: Payments,
+  transfers: Transfers,
+  orders: Orders,
+  homework: Homework,
+  codes: Codes,
+  people: People,
+  inbox: Inbox,
+};
+
+/** ورقة فيها مبلغ وعليها ختم — «مفيش طلبات اشتراك دلوقتي». */
+function Payments() {
+  return (
+    <g>
+      <rect x="30" y="22" width="48" height="44" rx="4" className="spot__solid" />
+      <path d="M38 34 h24 M38 43 h18" className="spot__mark" />
+      {/* الجنيه: دايرة عنبري وعليها علامة — العنصر الحي الوحيد. */}
+      <circle cx="80" cy="54" r="12" className="spot__accent-fill" />
+      <path d="M76 60 h9 M77 48 v11 M74 54 h8" className="spot__accent-glyph" />
+    </g>
+  );
+}
+
+/** سهم داخل صندوق — «مفيش تحويلات واردة». */
+function Transfers() {
+  return (
+    <g>
+      <rect x="26" y="40" width="68" height="26" rx="4" className="spot__solid" />
+      <path d="M36 52 h20 M36 58 h12" className="spot__mark" />
+      {/* السهم نازل جوّه الصندوق: «جاي لك»، مش «رايح». */}
+      <circle cx="78" cy="34" r="13" className="spot__accent-fill" />
+      <path d="M78 27 v13 M72 34 l6 6 l6 -6" className="spot__accent-glyph" />
+    </g>
+  );
+}
+
+/** كرتونة مقفولة — «مفيش طلبات كتب». */
+function Orders() {
+  return (
+    <g>
+      <rect x="30" y="36" width="60" height="30" rx="3" className="spot__solid" />
+      {/* الشريط اللاصق في النص، وهو اللي بيخلّي المستطيل يقرا كعلبة. */}
+      <path d="M60 36 v30" className="spot__mark" />
+      <rect x="30" y="26" width="60" height="12" rx="3" className="spot__line" />
+      <circle cx="84" cy="30" r="8" className="spot__accent-fill" />
+    </g>
+  );
+}
+
+/** ورقة وقلم — «مفيش واجبات مستنية تصحيح». */
+function Homework() {
+  return (
+    <g>
+      <rect x="28" y="22" width="44" height="44" rx="4" className="spot__solid" />
+      <path d="M36 34 h26 M36 43 h20 M36 52 h23" className="spot__mark" />
+      {/* القلم مايل على حرف الورقة. */}
+      <path d="M72 56 l18 -18 l6 6 l-18 18 l-8 2 z" className="spot__accent" />
+    </g>
+  );
+}
+
+/** تذكرة مقصوصة — «مفيش أكواد». */
+function Codes() {
+  return (
+    <g>
+      <rect x="26" y="34" width="68" height="28" rx="5" className="spot__accent" />
+      {/* القصّتين على الجنبين هُمّ اللي بيقولوا «تذكرة» مش «مستطيل». */}
+      <circle cx="26" cy="48" r="5" className="spot__ground-fill" />
+      <circle cx="94" cy="48" r="5" className="spot__ground-fill" />
+      <path d="M60 38 v20" className="spot__mark" />
+      <path d="M36 48 h14" className="spot__mark" />
+    </g>
+  );
+}
+
+/** راسين — «مفيش طلبة في النتيجة دي». */
+function People() {
+  return (
+    <g>
+      <circle cx="46" cy="36" r="10" className="spot__solid" />
+      <path d="M30 64 a16 16 0 0 1 32 0 z" className="spot__solid" />
+      <circle cx="76" cy="40" r="8" className="spot__accent" />
+      <path d="M64 64 a12 12 0 0 1 24 0 z" className="spot__accent" />
+    </g>
+  );
+}
+
+/** ظرف مفتوح — «مفيش رسايل». */
+function Inbox() {
+  return (
+    <g>
+      <rect x="28" y="30" width="64" height="36" rx="4" className="spot__solid" />
+      {/* الطيّة: خطين من الحرفين لوسط الظرف. */}
+      <path d="M28 34 l32 20 l32 -20" className="spot__mark" />
+      <circle cx="84" cy="30" r="9" className="spot__accent-fill" />
     </g>
   );
 }

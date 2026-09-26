@@ -12,6 +12,7 @@ import { Badge } from '@ayman/ui/components/badge';
 import { adminGet } from '@/lib/admin-api';
 import { formatEGPExact } from '@/lib/price';
 import { ListControl } from '@/components/admin/list-controls';
+import { AdminEmpty } from '@/components/admin/admin-empty';
 import { DismissTransferButton, IngestTransfersBox } from './transfer-actions';
 
 const c = copy.admin.transfers;
@@ -81,12 +82,7 @@ export default async function AdminTransfersPage({
       </div>
 
       {rowCount === 0 ? (
-        <div className="mt-5 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-12 text-center">
-          <p className="text-[length:var(--fs-title-4)] font-medium text-fg">{c.empty}</p>
-          <p className="mx-auto mt-2 max-w-[34rem] text-[length:var(--fs-text-sm)] text-fg-muted">
-            {c.emptyHint}
-          </p>
-        </div>
+        <AdminEmpty spot="transfers" title={c.empty} hint={c.emptyHint} />
       ) : (
         <ul className="mt-5 flex flex-col gap-2.5">
           {rows.map((row) => (

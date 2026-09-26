@@ -838,3 +838,51 @@ div.unit[data-open] > .unit__head:hover {
   font-size: var(--fs-text-xs);
   color: var(--n-11);
 }
+
+/* ---------------------------------------------------------------------------
+   .admin-empty — الحالة الفاضية في اللوحة.
+
+   ## اللي اتغيّر
+
+   كانت علبة `border-dashed` فيها سطرين رماديين. على الثيم الغامق دي بتقرا
+   كصفحة **ما حمّلتش** مش كمكان مستنّي يتملى — نفس الجملة اللي `.spot` في
+   `study.css` اتكتبت عشانها على شاشة الطالب.
+
+   بقت واش إمبر خفيف بحدود متصلة، وفوقها رسمة. الحدود المتصلة مش تفصيلة:
+   المتقطّعة هي اللي بتقول «هنا كان المفروض يبقى فيه حاجة وماجتش»، والمتصلة
+   بتقول «ده صندوق فاضي». الفرق ده هو كل الشكوى.
+
+   ## الألوان من نفس الطبقة
+
+   `--e-tint` و`--e-tint-line` — نفس اللي `.dash-hero` و`.exam-band` و
+   `.month-news` قاعدين عليه، ونفس اللي الرسمة نفسها بترسم بيه. مفيش لون
+   جديد اتضاف للوحة، والثيم الغامق بياخدهم لوحده.
+   --------------------------------------------------------------------------- */
+.admin-empty {
+  margin-block-start: var(--s-20);
+  padding: var(--s-32) var(--s-24);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--e-tint-line);
+  background: var(--e-tint);
+  text-align: center;
+}
+
+.admin-empty__title {
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-fg);
+}
+
+.admin-empty__hint {
+  margin-inline: auto;
+  margin-block-start: var(--s-8);
+  max-inline-size: 34rem;
+  font-size: var(--fs-text-sm);
+  color: var(--ink-fg-2);
+}
+
+.admin-empty__action {
+  display: flex;
+  justify-content: center;
+  margin-block-start: var(--s-16);
+}
