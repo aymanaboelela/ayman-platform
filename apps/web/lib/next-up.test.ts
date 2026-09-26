@@ -50,6 +50,7 @@ function dashboard(
     enrolledCourses: courses,
     recentScores: [],
     totalWatchedSeconds: 0,
+    monthOffers: [],
     honorBoard: null,
     pendingExams,
   };

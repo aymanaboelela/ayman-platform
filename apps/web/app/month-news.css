@@ -1,0 +1,227 @@
+/* ===========================================================================
+   .month-news — «شهر جديد اتفتح»، فوق الداشبورد.
+
+   ## ليه ملف لوحده
+
+   نفس القاعدة اللي `exam-band.css` و`next-up.css` كاتبينها في راسهم: `study.css`
+   هي المفردات **المشتركة** للسطح المسجّل، وشرط الدخول فيها إن الكلاس مستخدم في
+   أكتر من صفحة. اللي تحت كله كومبوننت واحد على شاشة واحدة. وبيتحمّل من
+   `(app)/layout.tsx` جنب `study.css` و`exam-band.css`، لأن اللاياوت هو الطريق
+   الوحيد لأي ستايل شيت للصفحة.
+
+   ## شريط، مش باند تالت
+
+   فوقه `.dash-hero` و— في أيام الامتحان — `.exam-band`، والاتنين على
+   `--e-stage` بالجراديينت والدوت فيلد. تالت واحد بنفس الأرضية كان هيقرا كإعلان
+   مركون على الصفحة، وده بالظبط الاعتراض اللي `exam-band.css` بيرد عليه لما
+   بيقول ليه هو وا لهيرو نفس الأرضية.
+
+   فده على `--e-tint`: نفس العيلة، إمبر، **بنية** — بس واش بجسم كارت
+   و`--e-tint-line` كحدود. التوكن ده معمول للشغلانة دي بالحرف (شوف تعليقه في
+   `color.css`)، والنتيجة إن الشريط تابع للباندين اللي فوقه بدل ما ينافسهم.
+
+   ## الأمبر، والفعل الواحد
+
+   `--a-9` على `.month-news__cta` وبس. أي حاجة تانية هنا مش بتتدوس، فمفيش سبب
+   تصرف عليها أمبر — نفس السطر اللي `study.css` بيقوله: «الأمبر هو اللي
+   بيتدوس»، والطالب اتعلّم الحاجة الواحدة دي على كل شاشة.
+
+   و`[data-quiet]` بيشيل الأمبر خالص ويرجّع لينك على حدود. الكومبوننت بيحط
+   السمة دي لما يكون فيه امتحان شهر **مفتوح** — الصفحة بتوقّف `<NextUpBlock>`
+   في اللحظة دي لنفس السبب، فالشاشة تفضل عليها زرار أمبر واحد، وهو «ادخل
+   الامتحان». الشهر مش بيقفل الليلة؛ الامتحان بيقفل.
+
+   الأخضر والأحمر بتاع الكويز ومش موجودين هنا: مفيش درجة في الشريط ده.
+
+   ## RTL
+
+   خصائص منطقية بس، زي `study.css` و`exam-band.css`. مفيش يمين ولا شمال في
+   الملف ده، و`ayman/no-physical-direction` مش معموله استثناء.
+   =========================================================================== */
+
+.month-news {
+  border-radius: var(--r-lg);
+  border: 1px solid var(--e-tint-line);
+  background: var(--e-tint);
+  padding: var(--s-20);
+  display: grid;
+  gap: var(--s-8);
+}
+
+@media (min-width: 48rem) {
+  .month-news {
+    padding: var(--s-24);
+  }
+}
+
+/* الآيبرو مونو وأمبر — نفس الرخصة اللي `.dash-hero__schedule-title` و
+   `.exam-band__eyebrow` واخدينها: لابل صغير فوق سطح مفيش فيه صفوف بتتدوس،
+   موجود عشان سطر واحد لوحده مايقراش كجملة حد سابها. */
+.month-news__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--a-11);
+  letter-spacing: 0.04em;
+}
+
+.month-news__title {
+  font-size: var(--fs-text-lg);
+  font-weight: var(--fw-bold);
+  color: var(--ink-fg);
+  line-height: 1.35;
+}
+
+@media (min-width: 48rem) {
+  .month-news__title {
+    font-size: var(--fs-title-4);
+  }
+}
+
+.month-news__lead {
+  font-size: var(--fs-text-sm);
+  color: var(--ink-fg-2);
+}
+
+.month-news__list {
+  display: grid;
+  gap: var(--s-12);
+  margin-block-start: var(--s-12);
+}
+
+/* الصف: إيه على أول السطر، الفلوس والزرار على آخره. بيتكسر لعمود على الموبايل
+   لأن الزرار لازم ياخد العرض كله هناك — هدف لمس ٤٤ بكسل في نص سطر بيبقى صعب. */
+.month-news__row {
+  display: grid;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  border-radius: var(--r-md);
+  border: 1px solid var(--hairline);
+  background: var(--ink);
+}
+
+@media (min-width: 40rem) {
+  .month-news__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--s-16);
+  }
+}
+
+.month-news__what {
+  display: grid;
+  gap: var(--s-4);
+  min-width: 0;
+}
+
+.month-news__course {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-fg);
+}
+
+/* «اشتراكه خلص» على الصف نفسه، لما الشاشة فيها كورس خلص وكورس لسه شغّال —
+   العنوان فوق مايقدرش يقول الاتنين. رمادي وهادي عن قصد: ده وصف حالة، مش تنبيه،
+   واللي بيتدوس هو الزرار على آخر الصف. */
+.month-news__lapsed {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: var(--s-8);
+  padding: var(--s-2) var(--s-8);
+  border-radius: var(--r-full);
+  border: 1px solid var(--hairline);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  color: var(--ink-fg-2);
+}
+
+.month-news__months {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+}
+
+.month-news__month {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-4) var(--s-8);
+  border-radius: var(--r-full);
+  border: 1px solid var(--e-tint-line);
+  background: var(--e-tint);
+  font-size: var(--fs-text-xs);
+  color: var(--ink-fg-2);
+}
+
+.month-news__month-name {
+  font-weight: var(--fw-semibold);
+  color: var(--ink-fg);
+}
+
+.month-news__month-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+}
+
+.month-news__act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-12);
+}
+
+/* السعر لاتيني جوّه عربي — `direction: ltr` و`unicode-bidi: isolate` مش
+   تزويق: «١٢٠ ج.م» جنب كلام عربي بيتقلب من غير العزل. نفس اللي `formatEGP`
+   بيتعامل معاه في كل مكان تاني. */
+.month-news__total {
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-fg);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.month-news__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-8);
+  block-size: 2.75rem;
+  padding-inline: var(--s-20);
+  border-radius: var(--r-full);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  border: 1px solid transparent;
+  transition: filter var(--d-hover) var(--ease);
+}
+
+.month-news__cta:hover {
+  filter: brightness(1.06);
+}
+
+/* امتحان مفتوح: الأمبر بقى بتاع «ادخل الامتحان»، فالشريط ده بيمشي من غيره. */
+.month-news__cta[data-quiet] {
+  background: transparent;
+  color: var(--ink-fg);
+  border-color: var(--border-strong);
+}
+
+.month-news__cta[data-quiet]:hover {
+  filter: none;
+  background: var(--e-tint);
+}
+
+.month-news__pending {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-8);
+  font-size: var(--fs-text-sm);
+  color: var(--ink-fg-2);
+}
