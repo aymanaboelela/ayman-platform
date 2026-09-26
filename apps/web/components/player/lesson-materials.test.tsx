@@ -1,6 +1,6 @@
 /* `fireEvent` مش `userEvent`: التاني مش في `package.json` ومحدش في الريبو
    بيستخدمه، فكان هيفشل في CI على import مش على سلوك. */
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { PlayerResource } from '@ayman/contracts/progress';
@@ -35,6 +35,20 @@ const resource = (id: string, title: string): PlayerResource => ({
   downloadPath: `/api/lessons/r/${id}/download`,
 });
 
+/*
+ * ⚠️ زرار الطيّ بالتحديد، مش `getByRole('button')`.
+ *
+ * اللوحة المفتوحة جوّاها زراير بتاعتها (تحميل، فتح)، فالاستعلام العام فشل
+ * بـ«عناصر متعددة» — وde كمان كان بيثبت إن القسم مفتوح وهو المفروض يتأكد
+ * منه. `aria-controls` هو المقبض اللي بيسمّي الزرار ده لوحده، وهو نفس الحاجة
+ * اللي قارئ الشاشة بيقراها.
+ */
+function toggle(container: HTMLElement): HTMLElement {
+  const el = container.querySelector('button[aria-controls="lesson-materials"]');
+  if (!el) throw new Error('زرار الطيّ مش موجود');
+  return el as HTMLElement;
+}
+
 afterEach(cleanup);
 
 describe('مرفقات المحاضرة', () => {
@@ -54,16 +68,16 @@ describe('مرفقات المحاضرة', () => {
   });
 
   it('الزرار بيقول إنه مفتوح، عشان قارئ الشاشة يعرف نفس الحاجة', () => {
-    render(<LessonMaterials resources={[resource('a', 'ملزمة')]} />);
+    const { container } = render(<LessonMaterials resources={[resource('a', 'ملزمة')]} />);
 
-    expect(screen.getByRole('button').getAttribute('aria-expanded')).toBe('true');
+    expect(toggle(container).getAttribute('aria-expanded')).toBe('true');
   });
 
   it('ولسه بيتقفل — اللي مش عايزه بيطويه', () => {
     const { container } = render(<LessonMaterials resources={[resource('a', 'ملزمة')]} />);
 
     // دوسة واحدة لازم تطويه فعلًا — «الزرار موجود» مش إثبات إنه بيشتغل.
-    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(toggle(container));
     expect(container.querySelector('#lesson-materials')).toBeNull();
   });
 
