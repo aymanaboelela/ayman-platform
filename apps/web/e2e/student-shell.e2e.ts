@@ -479,3 +479,61 @@ test.describe('student shell', () => {
     expect(topOfPage).toBe(report!.top);
   });
 });
+
+/**
+ * الريل على شباك قصير — الشكوى: «السايد بار مش بيسكرول».
+ *
+ * ## اللي كان بيحصل
+ *
+ * البراند + سبع لينكات + الفوتر لوحدهم بيعدّوا ارتفاع شباك قصير. الأب كان
+ * `overflow-hidden` بحجّة إن الأثاث الثابت «لازم يفضل على الشاشة» — وهي حجّة
+ * بتفترض إن فيه مكان. لما مايبقاش، `overflow-hidden` معناه «مش هتوصلها»:
+ * الليستة بتقف عند «التأسيس» والفوتر كله (أجهزتي، الموقع الرئيسي، الخروج) مش
+ * موجود ومفيش طريقة توصله.
+ *
+ * ## المقياس
+ *
+ * «تسجيل الخروج» هو آخر حاجة في العمود. لو وصلت له بالسكرول، يبقى كل اللي
+ * فوقه موصول. وده مقياس **الوصول**، مش مقياس `overflow` — لو حد رجّع
+ * `overflow-hidden` بكرة، ده اللي بيقع.
+ */
+test.describe('rail on a short window', () => {
+  test.skip(() => test.info().project.name !== 'desktop', 'مفيش ريل تحت md');
+
+  test('scrolls to the footer instead of clipping it', async ({ page }) => {
+    const student = uniqueStudent();
+    await registerAndOnboard(page, student);
+
+    // ٦٠٠ بكسل ارتفاع — لابتوب صغير بشباك مش متكبّر، وهو اللي في الصورة.
+    await page.setViewportSize({ width: 1280, height: 600 });
+    await page.goto('/dashboard');
+
+    const rail = page.locator('.rail');
+    const signOut = rail.getByRole('button', { name: copy.nav.logout });
+
+    // موجود في الـDOM…
+    await expect(signOut).toHaveCount(1);
+    // …وبيوصَل له. `scrollIntoViewIfNeeded` بيفشل لو الأب مش بيعمل سكرول.
+    await signOut.scrollIntoViewIfNeeded();
+    await expect(signOut).toBeInViewport();
+  });
+
+  test('never collapses the course list to nothing', async ({ page }) => {
+    const student = uniqueStudent();
+    await registerAndOnboard(page, student);
+    await enrollInDemoCourse(page);
+
+    await page.setViewportSize({ width: 1280, height: 600 });
+    await page.goto('/dashboard');
+
+    /*
+     * `min-h-0` كان بيسمح للمنطقة دي تتكمش لصفر على شباك قصير: عنوان
+     * «كورساتي» ظاهر وتحته ولا كورس، والطالب بيقراها كإنه مش مشترك في حاجة.
+     * الأرضية (`min-h-32`) هي اللي بتمنع ده.
+     */
+    const box = await page.locator('.rail__courses').boundingBox();
+    expect(box).not.toBeNull();
+    if (!box) return;
+    expect(box.height).toBeGreaterThan(40);
+  });
+});

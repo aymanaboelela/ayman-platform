@@ -44,16 +44,30 @@ export function StudentRail({ courses, forcedCollapsed }: { courses: ReactNode; 
        تبقى كاملة وعشان يبقى فيه ممسك مستقر لقياس العرض. */
     <aside className="rail hidden border-e border-line bg-surface-2 md:block">
       {/*
-        `overflow-hidden`, not `overflow-y-auto`.
+        بيعمل سكرول لما **مايبقاش فيه مكان**، ومش بيعمل قبل كده.
 
-        This container used to scroll as a whole, which meant the course list
-        below could grow past the viewport and paint straight through the
-        footer links — a student with a dozen enrolments saw "أجهزتي" and
-        "الموقع الرئيسي" printed on top of their own course titles. Scrolling
-        belongs to the course list alone (see below); the brand, the primary
-        nav and the footer are fixed furniture and must always be on screen.
+        ## اللي كان مكتوب هنا، وليه كان ناقص نص
+
+        كان `overflow-hidden` بحجّة: «السكرول بتاع ليستة الكورسات لوحدها؛
+        البراند والتنقّل والفوتر أثاث ثابت لازم يفضل على الشاشة». والحجة دي
+        حلّت باج حقيقي — طالب عنده اتناشر كورس كانت ليستته بتتطبع **فوق**
+        «أجهزتي» و«الموقع الرئيسي».
+
+        بس «لازم يفضل على الشاشة» مش قرار — ده **افتراض** إن فيه مكان. وعلى
+        شباك قصير مفيش: البراند + ٧ لينكات + الفوتر لوحدهم بيعدّوا الارتفاع،
+        فالمتصفح كان بيقص — والمقصوص كان آخر التنقّل والفوتر كله. اللي في
+        الصورة: الليستة بتقف عند «التأسيس» ومفيش طريقة توصل لاللي بعدها.
+        `overflow-hidden` معناه «مش هتوصلها»، مش «هتفضل على الشاشة».
+
+        ## وليه الباج القديم مش بيرجع
+
+        سببه إن الليستة **ماكانش عندها سكرول بتاعها**. دلوقتي عندها
+        (`min-h-0 flex-1 overflow-y-auto` تحت)، فهي بتمتص فيضانها بنفسها —
+        والحالة الطبيعية مابيبقاش فيه حاجة للأب يعملها سكرول أصلًا، والسلوك
+        زي ما هو بالحرف. الأب بيتحرّك في حالة واحدة بس: لما الأثاث الثابت
+        لوحده مش دخل، وساعتها السكرول هو **الطريقة الوحيدة** توصل للفوتر.
       */}
-      <div className="sticky top-0 flex h-dvh flex-col gap-4 overflow-hidden p-3">
+      <div className="sticky top-0 flex h-dvh flex-col gap-4 overflow-y-auto overscroll-contain p-3">
         {/* `rail__head` — CSS stacks this into a column once the rail is
             collapsed, because the brand and the toggle do not both fit across
             a 76px track. See `globals.css`. */}
@@ -88,14 +102,29 @@ export function StudentRail({ courses, forcedCollapsed }: { courses: ReactNode; 
           The heading stays put and only the list under it scrolls, so the
           student never loses the label telling them what they are looking at.
         */}
-        <div className="flex min-h-0 flex-1 flex-col">
+        {/*
+          ⚠️ `min-h-32` (٨rem) مش `min-h-0`، وده النص التاني من التصليح.
+
+          `min-h-0` معناه «اتكمشي لأي حاجة» — وعلى شباك قصير اللي بيحصل إنها
+          بتتكمش لـ**صفر**: عنوان «كورساتي» ظاهر وتحته ولا كورس. الطالب بيقرا
+          دي كإنه مش مشترك في حاجة.
+
+          الأرضية دي بتخلّي الليستة تفضل بتوري صف أو اتنين، والزيادة بتروح
+          للأب يعملها سكرول — وده بالظبط اللي الأب بقى قادر عليه فوق.
+        */}
+        <div className="flex min-h-32 flex-1 flex-col">
           {/* `.nav-group__head`, not `.eyebrow`. The eyebrow is `--fs-mono-label`
               — 13px — and it was labelling the tallest, most-read list in the
               rail from underneath the size of a footnote. This is the same
               object the admin sidebar's group headings use, so the two rails
               caption their groups identically. */}
           <p className="rail__label nav-group__head shrink-0">{copy.nav.railCourses}</p>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{courses}</div>
+          {/* `rail__courses` ممسك، مش ستايل: الأب بقى بيعمل سكرول هو كمان،
+              فـ«الحاوية اللي بتعمل سكرول جوّه الريل» بقت اتنين — والتست محتاج
+              يشاور على دي بالذات. */}
+          <div className="rail__courses min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            {courses}
+          </div>
         </div>
 
         <div className="flex flex-col gap-1 border-t border-line pt-2">
