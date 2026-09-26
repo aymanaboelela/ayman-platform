@@ -8,6 +8,7 @@ import { StudentsService } from './students.service';
 import {
   AdminGrantCreateDto,
   AdminRoleChangeDto,
+  AdminStaffRoleDto,
   AdminStudentBanDto,
   AdminStudentBulkDeleteDto,
   AdminStudentDeleteDto,
@@ -136,6 +137,30 @@ export class StudentsController {
     @Body() body: AdminStudentSetPasswordDto,
   ) {
     return this.students.setPassword(userId, body.newPassword, user.id);
+  }
+
+  /**
+   * تعيين مساعد أو رجوعه طالب — الباب الضيّق.
+   *
+   * نفس `changeRole` تحته، بسكيما مالهاش `admin`. الفرق ده هو كل الحكاية:
+   * `student:role-change` بتوصّل لراوت بيقبل `admin`، فهي طريق تصعيد
+   * ومستثناة من كل منح — وبكده المدرّس ماكانش يقدر يضيف مساعد خالص.
+   *
+   * ⚠️ الحماية في السكيما مش في الشرط. ماكتبتش `if (body.role === 'admin')
+   * throw` لأن ده بيسيب الباب موجود وبيحطّ عليه حارس؛ `z.enum(['owner',
+   * 'student'])` معناها إن `admin` مش قيمة الراوت ده يعرف يقراها أصلًا.
+   *
+   * و`changeRole` نفسه لسه بيمنع تغيير دورك إنت وتنزيل آخر أدمن — الحمايتين
+   * دول بتنطبقوا هنا كمان لأن ده نفس الاستدعاء.
+   */
+  @RequirePermission('staff:manage')
+  @Post(':userId/staff-role')
+  setStaffRole(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId') userId: string,
+    @Body() body: AdminStaffRoleDto,
+  ) {
+    return this.students.changeRole(userId, body, user.id);
   }
 
   @RequirePermission('student:role-change')

@@ -1,6 +1,7 @@
 import {
   AdminGrantCreateSchema,
   AdminRoleChangeSchema,
+  AdminStaffRoleSchema,
   AdminStudentBanSchema,
   AdminStudentBulkDeleteSchema,
   AdminStudentDeleteSchema,
@@ -20,6 +21,9 @@ export class StudentListQueryDto extends createZodDto(StudentListQuerySchema) {}
 export class AdminStudentPatchDto extends createZodDto(AdminStudentPatchSchema) {}
 export class AdminStudentSetPasswordDto extends createZodDto(AdminStudentSetPasswordSchema) {}
 export class AdminRoleChangeDto extends createZodDto(AdminRoleChangeSchema) {}
+
+/** دورين بس، و`admin` مش فيهم — شوف `AdminStaffRoleSchema`. */
+export class AdminStaffRoleDto extends createZodDto(AdminStaffRoleSchema) {}
 export class AdminGrantCreateDto extends createZodDto(AdminGrantCreateSchema) {}
 export class AdminStudentBanDto extends createZodDto(AdminStudentBanSchema) {}
 export class AdminStudentDeleteDto extends createZodDto(AdminStudentDeleteSchema) {}

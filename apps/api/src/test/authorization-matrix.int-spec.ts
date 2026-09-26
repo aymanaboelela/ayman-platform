@@ -1457,6 +1457,18 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'student sessions: student', method: 'get', path: () => `/api/admin/students/${studentId}/sessions`, actor: 'student', status: 403 },
     { label: 'student sessions: admin', method: 'get', path: () => `/api/admin/students/${studentId}/sessions`, actor: 'admin', status: 200 },
 
+    /*
+     * الباب الضيّق لتعيين مساعد. `staff:manage` — والمدرّس ماسكها بالأساس،
+     * فde أول راوت في الملف ده الـ`owner` بيعدّي منه والـ`student` لأ.
+     *
+     * ⚠️ والصف اللي بعده هو اللي بيهم فعلًا: `admin` مرفوض بـ400 من السكيما
+     * نفسها، مش بشرط في الكود. لو حد وسّع `AdminStaffRoleSchema` بعدين،
+     * الصف ده بيقع.
+     */
+    { label: 'staff role: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/staff-role`, actor: 'anonymous', status: 401, body: () => ({ role: 'owner', reason: 'مساعد' }) },
+    { label: 'staff role: student', method: 'post', path: () => `/api/admin/students/${studentId}/staff-role`, actor: 'student', status: 403, body: () => ({ role: 'owner', reason: 'مساعد' }) },
+    { label: 'staff role: admin cannot mint an admin through it', method: 'post', path: () => `/api/admin/students/${studentId}/staff-role`, actor: 'admin', status: 400, body: () => ({ role: 'admin', reason: 'محاولة' }) },
+
     // ── Course grants — opening a CLOSED course for one student. Reads take
     // `student:read`, writes `student:write`; a student may not see or change
     // their own entitlements, which is the point of the whole table. ──

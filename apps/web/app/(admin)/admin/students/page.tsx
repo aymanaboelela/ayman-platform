@@ -33,6 +33,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
   for (const year of query.year) params.append('year', String(year));
   for (const track of query.track) params.append('track', track);
   if (query.access) params.set('access', query.access);
+  if (query.role) params.set('role', query.role);
 
   /**
    * ⚠️ `getTaxonomyOrNull()`, NOT `apiGet('/api/taxonomy', …)`.

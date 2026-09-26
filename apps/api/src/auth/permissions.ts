@@ -69,6 +69,27 @@ export const PERMISSIONS = [
   'student:read',
   'student:write',
   'student:role-change',
+  /*
+   * تعيين مساعد — وهي **مش** `student:role-change` ومينفعش تبقى هي.
+   *
+   * `changeRole` بياخد `admin | owner | student`، فحد ماسك
+   * `student:role-change` يقدر يعمل أدمن كامل. عشان كده الصلاحية دي مستثناة
+   * من `grantablePermissions` خالص — الكيس اللي بيحرسها مكتوب فيه «حساب تاني
+   * يترقّى لأدمن»، وده طريق تصعيد مش صلاحية.
+   *
+   * لكن المدرّس محتاج يضيف مساعد على منصته هو، وده طلب معقول ومالوش علاقة
+   * بالتصعيد. الصلاحية دي هي الطلب ده لوحده: الراوت اللي وراها بيكتب `owner`
+   * أو `student` **بس** — و`admin` مش في السكيما بتاعته أصلًا، فمفيش طريق
+   * منها لأدمن حتى لو حد غلط بعد كده.
+   *
+   * ⚠️ **مش في `OWNER_WITHHELD`، وده اللي بيدّيها للمدرّس.**
+   *
+   * الرول بقى «كل حاجة ماعدا المحجوب»، فصلاحية جديدة بتوصله تلقائيًا ما لم
+   * تتحجب صراحةً. والمحجوب دلوقتي هو المقالات و`role:read`/`role:grant`
+   * و`student:role-change` — التلاتة الأخيرة دول بالظبط سبب وجود الصلاحية
+   * دي: طريق تغيير الأدوار مقفول عليه، وده الباب الضيّق اللي بيفضل مفتوح.
+   */
+  'staff:manage',
   // Blocking and removing an account. Split from `student:write` — and from
   // each other — on the same principle as every other pair in this catalogue:
   // editing a student's year is an ordinary correction, locking them out is a
