@@ -146,8 +146,9 @@ export function LessonPlayerView({ payload }: LessonPlayerProps) {
         slides underneath it.
       */}
       {payload.lesson.kind !== 'attachment' && payload.resources.length > 0 ? (
-        // Closed by default now. See `<LessonMaterials>` for why: a PDF that
-        // renders itself under every video is a page nobody asked for.
+        // مفتوح افتراضيًا — شوف `<LessonMaterials>` للسبب: المرفق بيتحط لما
+        // يكون فيه حاجة تستاهل، والمحاضرة اللي مالهاش مرفقات مابترسمش القسم
+        // أصلًا، فالقفل كان بيخبّي ملف المدرّس رفعه عشان يتقرا.
         <LessonMaterials resources={payload.resources} />
       ) : null}
 

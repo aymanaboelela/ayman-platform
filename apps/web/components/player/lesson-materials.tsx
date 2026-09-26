@@ -37,7 +37,21 @@ import { DownloadIcon } from './icons';
  * same information for assistive tech and none of the trouble.
  */
 export function LessonMaterials({ resources }: { resources: PlayerResource[] }) {
-  const [open, setOpen] = useState(false);
+  /*
+   * ⚠️ مفتوح افتراضيًا، وكان مقفول.
+   *
+   * الحجة اللي قفلته كانت «PDF بيترسم نفسه تحت كل فيديو صفحة محدش طلبها» —
+   * وهي صح لو المرفقات بتتحط على كل محاضرة. بس مش ده اللي بيحصل: المدرّس
+   * بيرفع ملف لما يكون فيه ملف يستاهل، والمحاضرات اللي مالهاش مرفقات
+   * الكومبوننت ده أصلًا مابيترسمش فيها (السطر اللي تحت).
+   *
+   * فالمقايضة مش «صفحة أطول» ضد «صفحة أقصر» — هي «الطالب يشوف الملف» ضد
+   * «الطالب يعرف إن فيه ملف لو خطر في باله يدوس». والمدرّس رفعه عشان يتقرا.
+   *
+   * لسه بيتقفل: الزرار مكانه، فاللي مش عايزه بيطويه. اللي اتغيّر هو اللي
+   * بيحصل من غير ما حد يعمل حاجة.
+   */
+  const [open, setOpen] = useState(true);
   if (resources.length === 0) return null;
 
   return (
