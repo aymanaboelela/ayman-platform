@@ -24,6 +24,10 @@ import '../next-up.css';
 // stylesheet in this app reaches a page, and not shared with `(admin)` for the
 // same reason `next-up.css` is not.
 import '../exam-band.css';
+// `.month-news` — «شهر جديد اتفتح», الشريط اللي بيقول للطالب الدافع بالشهر إن
+// فيه شهر تاني مفتوح. نفس الحجة بالحرف: كومبوننت واحد، شاشة واحدة، فملف لوحده
+// بيتحمّل من هنا.
+import '../month-news.css';
 import { AccountMenu, AccountMenuFallback } from '@/components/app/account-menu';
 import { DrawerAccount } from '@/components/app/drawer-account';
 import {

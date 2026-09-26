@@ -594,4 +594,193 @@ describe('DashboardService', () => {
       expect(dashboard.totalWatchedSeconds).toBe(150);
     });
   });
+
+  /*
+   * «شهر جديد اتفتح» — الشريط اللي فوق الداشبورد.
+   *
+   * الكيسات اللي بتهم هنا مش «بيعرض الشهر» — دي `PlayerService.monthOffer`
+   * مغطّيها. اللي هنا هو **مين بيشوفه ومين لأ**، لأن ده الفرق الوحيد بين
+   * الاتنين: كارت الكورس بيعرض على أي حد مش ماسك الشهر، والشريط ده بيتكلّم مع
+   * اللي دفع بس — ماسك دلوقتي، أو خلص.
+   *
+   * وتلات كيسات فيهم `monthIds` فاضية وبيختلفوا في الجواب («خلص» أيوه،
+   * «اتسحب» لأ، «عمره ما دفع» لأ)، فدول متاخدين واحد واحد.
+   */
+  describe('monthOffers', () => {
+    let monthOneId = '';
+    let monthTwoId = '';
+
+    beforeAll(async () => {
+      await prisma.course.update({
+        where: { id: courseId },
+        data: { monthlyPriceCents: 15000, requiresGrant: true },
+      });
+      monthOneId = (
+        await prisma.courseMonth.create({ data: { courseId, monthIndex: 1, title: 'شهر ١' } })
+      ).id;
+      monthTwoId = (
+        await prisma.courseMonth.create({ data: { courseId, monthIndex: 2, title: 'شهر ٢' } })
+      ).id;
+    });
+
+    afterEach(async () => {
+      await prisma.accessGrant.deleteMany({ where: { userId, courseId } });
+    });
+
+    afterAll(async () => {
+      await prisma.courseMonth.deleteMany({ where: { courseId } });
+      await prisma.course.update({
+        where: { id: courseId },
+        data: { monthlyPriceCents: null, requiresGrant: false },
+      });
+    });
+
+    it('tells a student holding «شهر ١» that «شهر ٢» opened, with the course on the row', async () => {
+      await prisma.accessGrant.create({
+        data: { userId, scope: 'course_month', courseId, monthId: monthOneId, source: 'purchase' },
+      });
+
+      const dashboard = await service.forUser(userId);
+
+      expect(dashboard.monthOffers).toEqual([
+        {
+          courseId,
+          courseSlug,
+          courseTitle: 'كورس البرمجة',
+          months: [{ id: monthTwoId, title: 'شهر ٢', lessonCount: 0, priceCents: 15000 }],
+          pending: false,
+          lapsed: false,
+        },
+      ]);
+      expect(() => DashboardSchema.parse(dashboard)).not.toThrow();
+    });
+
+    /* المطلوب بالنص: «لو اشترك ترم أو ٣ شهور مش هتظهره من الآخر» — وده وهو
+       **شغّال**؛ اللي خلص كيس تاني تحت. */
+    it('says nothing to a LIVE subscription that already opens every month', async () => {
+      await prisma.accessGrant.create({
+        data: { userId, scope: 'course', courseId, source: 'admin' },
+      });
+
+      expect((await service.forUser(userId)).monthOffers).toEqual([]);
+    });
+
+    /*
+     * ⚠️ الكيس اللي بيفرّق الشريط ده عن كارت الكورس.
+     *
+     * `PlayerService.monthOffer` بيعرض الشهر على اللي مادفعش حاجة — وده صح
+     * هناك، هو الباب الوحيد من جوّه الكورس. الشريط ده لأ: «إنت في شهر ١ وشهر ٢
+     * اتفتح» جملة مالهاش معنى لحد مش في ولا شهر. ده بيخرج من
+     * `slice.monthIds.size > 0`، ولو الشرط ده اتشال التست ده هو اللي بيقع.
+     */
+    it('says nothing to an enrolled student who holds no month at all', async () => {
+      expect((await service.forUser(userId)).monthOffers).toEqual([]);
+    });
+
+    /*
+     * ⚠️ الترم اتقفل → **بيشوفه**، وده اللي المدرّس طلبه بالنص: «لو الترم خلص
+     * يبدأ يشوفها عادي».
+     *
+     * و«اتقفل» على المنصة دي اسمه `revoked` مش `expired`:
+     * `TermService.setOpen(false)` بيختم `revoked_at` على كل grant بـ
+     * `scope: term` في الترم ده. الفيكستشر هنا بيعمل نفس الحتة بالإيد بدل ما
+     * يستدعي السيرفس، عشان التست يبقى عن `monthOffersFor` مش عن قفل الترم.
+     *
+     * والصف اللي بيطلع مختلف: كل الكورس مقفول عليه، فـ`months` فيها **الشهور
+     * المفتوحة كلها** مش الجديد فيهم بس، و`lapsed: true` عشان الكوبي تقول
+     * «اشتراكك خلص» بدل «شهر ٢ اتفتح» — الجملة التانية كذب في الحالة دي.
+     */
+    it('starts offering again once the term was closed under the student', async () => {
+      const term = await prisma.courseTerm.create({
+        data: { courseId, position: 1, title: 'الترم الأول', isOpen: false },
+      });
+      await prisma.accessGrant.create({
+        data: {
+          userId,
+          scope: 'term',
+          courseId,
+          termId: term.id,
+          source: 'purchase',
+          revokedAt: new Date(),
+        },
+      });
+
+      try {
+        const [offer, ...rest] = (await service.forUser(userId)).monthOffers;
+
+        expect(rest).toEqual([]);
+        expect(offer?.lapsed).toBe(true);
+        // الاتنين، مش «شهر ٢» بس — مفيش حاجة مفتوحة عليه دلوقتي.
+        expect(offer?.months.map((month) => month.id).sort()).toEqual(
+          [monthOneId, monthTwoId].sort(),
+        );
+      } finally {
+        await prisma.accessGrant.deleteMany({ where: { userId, courseId } });
+        await prisma.courseTerm.delete({ where: { id: term.id } });
+      }
+    });
+
+    /*
+     * والشهر اللي اتسحب كمان.
+     *
+     * ⚠️ منح الشهور مايقدروش يخلصوا بتاريخ: `access_grants_month_open_ended`
+     * بيفرض `validUntil = null` عليهم، لأن «شهر ٢» محتوى اتشترى مش تلاتين يوم
+     * اتأجروا. فالطريق الوحيد إنه يفقده هو `revokedAt` — وعشان كده الشرط في
+     * `monthOffersFor` بيقبل `revoked`، ولو اتقصّر على `expired` التست ده
+     * والتست اللي فوقه الاتنين بيقعوا.
+     */
+    it('starts offering again after the month the student held was revoked', async () => {
+      await prisma.accessGrant.create({
+        data: {
+          userId,
+          scope: 'course_month',
+          courseId,
+          monthId: monthOneId,
+          source: 'purchase',
+          revokedAt: new Date(),
+        },
+      });
+
+      const offers = (await service.forUser(userId)).monthOffers;
+
+      expect(offers).toHaveLength(1);
+      expect(offers[0]?.lapsed).toBe(true);
+    });
+
+    /*
+     * ⚠️ الاستثناء الوحيد: دافع ومستنّي تاريخ البداية.
+     *
+     * `not_yet_valid` — الفلوس اتدفعت والـgrant موجود، بس `validFrom` في
+     * المستقبل. «اشتراكك خلص» في وشه غلط، والزرار بيبيعه حاجة معاه. لو الشرط
+     * اتوسّع لـ`lapsed !== null` التست ده هو اللي بيقع.
+     */
+    it('says nothing to a student whose paid subscription has not started yet', async () => {
+      await prisma.accessGrant.create({
+        data: {
+          userId,
+          scope: 'course_month',
+          courseId,
+          monthId: monthOneId,
+          source: 'purchase',
+          validFrom: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+
+      expect((await service.forUser(userId)).monthOffers).toEqual([]);
+    });
+
+    /* شهر مقفول مش «اتفتح». الشريط بيقرا `isOpen` بس، زي الكارت بالحرف. */
+    it('does not offer a month the instructor has not opened yet', async () => {
+      await prisma.courseMonth.update({ where: { id: monthTwoId }, data: { isOpen: false } });
+      await prisma.accessGrant.create({
+        data: { userId, scope: 'course_month', courseId, monthId: monthOneId, source: 'purchase' },
+      });
+
+      try {
+        expect((await service.forUser(userId)).monthOffers).toEqual([]);
+      } finally {
+        await prisma.courseMonth.update({ where: { id: monthTwoId }, data: { isOpen: true } });
+      }
+    });
+  });
 });

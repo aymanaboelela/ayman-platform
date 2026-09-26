@@ -31,6 +31,7 @@ import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card'
 import { ExamCountdownBand } from '@/components/dashboard/exam-countdown-band';
 import { ExamsSection } from '@/components/dashboard/exams-section';
 import { MonthlyExamsSection } from '@/components/dashboard/monthly-exams-section';
+import { MonthNewsBand } from '@/components/dashboard/month-news-band';
 import { BooksSection } from '@/components/dashboard/books-section';
 import { MyBookOrdersSection } from '@/components/dashboard/my-book-orders-section';
 import { MasteryCard } from '@/components/dashboard/mastery-card';
@@ -371,6 +372,29 @@ export default async function DashboardPage() {
         that ambiguity is the safe way round.
       */}
       <ExamCountdownBand exam={monthlyExam} serverTime={studentExams.serverTime} />
+
+      {/*
+        «شهر جديد اتفتح» — تحت الباند، وفوق «ناقصك كده وتخلص».
+
+        تحت الامتحان وليس فوقه: الامتحان **بميعاد**، بيفتح الجمعة ٨ ويقفل، وطالب
+        دوّس عليه بالغلط مافيش جلسة تانية يلحقها (`attemptAllowance` واحد). الشهر
+        مش كده — بيفضل مفتوح لحد ما المدرّس يقفله. فاللي بيقفل النهارده بياخد
+        المكان اللي فوق.
+
+        وفوق «ناقصك كده وتخلص» لأن ده فلوس والتاني تقدّم. الطالب اللي شهره التاني
+        اتفتح وهو مش ماسكه، أهم حاجة يعرفها إن فيه محاضرات مقفولة عليه — «فاضلك
+        درسين» في الشهر اللي خلّصه بتبقى الجملة التانية، مش الأولى.
+
+        `quiet` لما يكون فيه امتحان مفتوح: الشاشة عليها زرار أمبر واحد بس، وفي
+        الساعات دي هو «ادخل الامتحان». نفس السبب اللي الصفحة بتوقّف
+        `<NextUpBlock>` عشانه تحت بالظبط — بس ده بيهدّى وماينزلش، لأن الفلوس
+        والباب الوحيد ليها مايختفوش عشان فيه امتحان.
+
+        مابيرسمش حاجة خالص للأغلبية الساحقة: الأراي فاضية لأي حد مش دافع بالشهر،
+        أو ماسك الترم، أو ماسك كل الشهور المفتوحة. الشرط كله في
+        `DashboardMonthOfferSchema`.
+      */}
+      <MonthNewsBand offers={dashboard.monthOffers} quiet={monthlyExam?.phase === 'open'} />
 
       {/* «ناقصك كده وتخلص» — the band above states the percentage, this states
           what to do about it. Directly under the hero because those two are one
