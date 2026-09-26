@@ -38,7 +38,11 @@ import { StudentNavFooterList, StudentNavList } from './student-nav-list';
  */
 export function StudentRail({ courses, forcedCollapsed }: { courses: ReactNode; forcedCollapsed: boolean }) {
   return (
-    <aside className="hidden border-e border-line bg-surface-2 md:block">
+    /* `rail` هو جذر البلوك اللي `rail__head` و`rail__label` و`rail__brand` و
+       `rail__item` كلهم فروعه — كان ناقص، والستايل شيت كان بيوصل للفروع من غير
+       ما يبقى فيه كلاس على الأب. مفيش قاعدة CSS عليه دلوقتي؛ موجود عشان التسمية
+       تبقى كاملة وعشان يبقى فيه ممسك مستقر لقياس العرض. */
+    <aside className="rail hidden border-e border-line bg-surface-2 md:block">
       {/*
         `overflow-hidden`, not `overflow-y-auto`.
 
