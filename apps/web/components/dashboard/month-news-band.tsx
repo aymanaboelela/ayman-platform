@@ -19,10 +19,17 @@ const c = copy.dashboard.monthNews;
  *
  * ## اللي مايشوفهوش، وده نص الفيتشر
  *
- * الـAPI بيقرّر، مش الكومبوننت: اللي اشترك ترم أو سنة أو «٣ شهور» مايشوفهوش
- * خالص، واللي مادفعش بالشهر أصلًا كمان. الشرط الكامل وسببه في
- * `DashboardMonthOfferSchema`، ومكتوب مرة واحدة هناك عشان الكارت والشريط
- * مايختلفوش.
+ * الـAPI بيقرّر، مش الكومبوننت: اللي اشتراكه في الترم أو السنة **شغّال**
+ * مايشوفهوش (ماسك كل الشهور أصلًا)، واللي عمره ما دفع كمان. الجدول الكامل
+ * بالحالات الستة في `DashboardMonthOfferSchema`، ومكتوب هناك مرة واحدة عشان
+ * الكارت والشريط مايختلفوش.
+ *
+ * ## و«خلص» حالة تانية، بكوبي تانية
+ *
+ * الترم لما ينتهي الطالب بيرجع يشوف الشريط — ده مطلوب. بس عنده الكورس كله
+ * مقفول، و`months` بتبقى **كل** الشهور المفتوحة مش الجديد فيهم، فـ«شهر ٢
+ * اتفتح» كانت هتكون كذب. `lapsed` بيقلب العنوان والسطر لـ«اشتراكك خلص».
+ * الزرار واللينك زي ما هُمّ: نفس الباب، ومعنى مختلف.
  *
  * ## اللون، وقاعدة «فعل واحد على الشاشة»
  *
@@ -44,20 +51,34 @@ export function MonthNewsBand({
 }) {
   if (offers.length === 0) return null;
 
+  /*
+   * كل الصفوف خلصت اشتراكها = العنوان بيتكلّم عن التجديد. صف واحد شغّال وسطه
+   * معناه فيه شهر جديد فعلًا على كورس لسه مفتوح، والجملة العامة («شهور جديدة
+   * اتفتحت») صح للحالتين مع بعض — أما «اشتراكك خلص» فوق كورس شغّال فلأ.
+   */
+  const allLapsed = offers.every((offer) => offer.lapsed);
+
   return (
     <section className="month-news mb-6" aria-labelledby="month-news-title">
       <p className="month-news__eyebrow">
         <Sparkles className="size-3.5" aria-hidden="true" />
-        {c.eyebrow}
+        {allLapsed ? c.lapsedEyebrow : c.eyebrow}
       </p>
       <h2 className="month-news__title" id="month-news-title">
-        {offers.length === 1 ? titleOf(offers[0]!) : c.titleMany}
+        {allLapsed ? c.lapsedTitle : offers.length === 1 ? titleOf(offers[0]!) : c.titleMany}
       </h2>
-      <p className="month-news__lead">{c.lead}</p>
+      <p className="month-news__lead">{allLapsed ? c.lapsedLead : c.lead}</p>
 
       <ul className="month-news__list">
         {offers.map((offer) => (
-          <MonthNewsRow key={offer.courseId} offer={offer} quiet={quiet} />
+          <MonthNewsRow
+            key={offer.courseId}
+            offer={offer}
+            quiet={quiet}
+            /* العنوان فوق قال «اشتراكك خلص» خلاص، فالشيب على الصف تكرار.
+               بيظهر بس لما الشاشة مخلوطة — كورس خلص وكورس لسه شغّال. */
+            showLapsed={offer.lapsed && !allLapsed}
+          />
         ))}
       </ul>
     </section>
@@ -73,7 +94,15 @@ export function MonthNewsBand({
  * سيرفر كومبوننت من غير أي جافاسكريبت؛ الـtoggles اللي في `MonthOfferCard`
  * مكانها الصح جوّه الكورس، مش في إشعار فوق الصفحة.
  */
-function MonthNewsRow({ offer, quiet }: { offer: DashboardMonthOffer; quiet: boolean }) {
+function MonthNewsRow({
+  offer,
+  quiet,
+  showLapsed,
+}: {
+  offer: DashboardMonthOffer;
+  quiet: boolean;
+  showLapsed: boolean;
+}) {
   const total = offer.months.reduce((sum, month) => sum + month.priceCents, 0);
   const href = `/courses/${encodeURIComponent(offer.courseSlug)}/subscribe?month=${offer.months
     .map((month) => encodeURIComponent(month.id))
@@ -85,6 +114,7 @@ function MonthNewsRow({ offer, quiet }: { offer: DashboardMonthOffer; quiet: boo
       <div className="month-news__what">
         <span className="month-news__course">
           {formatCopy(c.course, { course: offer.courseTitle })}
+          {showLapsed ? <span className="month-news__lapsed">{c.lapsedChip}</span> : null}
         </span>
         <span className="month-news__months">
           {offer.months.map((month) => (

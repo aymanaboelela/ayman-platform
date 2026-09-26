@@ -123,6 +123,21 @@
   color: var(--ink-fg);
 }
 
+/* «اشتراكه خلص» على الصف نفسه، لما الشاشة فيها كورس خلص وكورس لسه شغّال —
+   العنوان فوق مايقدرش يقول الاتنين. رمادي وهادي عن قصد: ده وصف حالة، مش تنبيه،
+   واللي بيتدوس هو الزرار على آخر الصف. */
+.month-news__lapsed {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: var(--s-8);
+  padding: var(--s-2) var(--s-8);
+  border-radius: var(--r-full);
+  border: 1px solid var(--hairline);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  color: var(--ink-fg-2);
+}
+
 .month-news__months {
   display: flex;
   flex-wrap: wrap;

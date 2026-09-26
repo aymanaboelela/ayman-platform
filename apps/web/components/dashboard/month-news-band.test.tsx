@@ -19,6 +19,7 @@ function offer(over: Partial<DashboardMonthOffer> = {}): DashboardMonthOffer {
     courseTitle: 'كورس البرمجة',
     months: [TWO],
     pending: false,
+    lapsed: false,
     ...over,
   };
 }
@@ -110,5 +111,54 @@ describe('MonthNewsBand', () => {
     render(<MonthNewsBand offers={[offer()]} />);
 
     expect(screen.getByRole('link', { name: c.ctaOne })).not.toHaveAttribute('data-quiet');
+  });
+
+  /*
+   * ⚠️ اشتراكه خلص: `months` بتبقى **كل** الشهور المفتوحة مش الجديد فيهم، فـ
+   * «شهر ٢ اتفتح» كانت هتكون كذب. العنوان بيقول «اشتراكك خلص»، واللينك زي ما
+   * هو — نفس الباب، معنى مختلف.
+   */
+  it('says the subscription ended instead of naming a new month', () => {
+    render(<MonthNewsBand offers={[offer({ lapsed: true, months: [TWO, THREE] })]} />);
+
+    expect(screen.getByRole('heading', { name: c.lapsedTitle })).toBeTruthy();
+    expect(screen.getByText(c.lapsedLead)).toBeTruthy();
+    expect(screen.queryByText(c.lead)).toBeNull();
+    expect(screen.getByRole('link', { name: c.ctaMany })).toHaveAttribute(
+      'href',
+      `/courses/programming-y2/subscribe?month=${TWO.id},${THREE.id}`,
+    );
+  });
+
+  /*
+   * شاشة مخلوطة: كورس خلص وكورس لسه شغّال. العنوان مايقدرش يقول الاتنين، فبيقول
+   * الجملة العامة، والصف اللي خلص بيقول حالته بنفسه. من غير الشيب ده الشاشة
+   * كانت هتعرض على الطالب شهر على كورس هو مقفول عليه بالكامل ومش بتقول له.
+   */
+  it('marks the lapsed row when another course is still running', () => {
+    render(
+      <MonthNewsBand
+        offers={[
+          offer(),
+          offer({ courseId: 'c2', courseSlug: 'ai-y3', courseTitle: 'الذكاء الاصطناعي', lapsed: true }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: c.titleMany })).toBeTruthy();
+    // مرة واحدة بس — على الصف اللي خلص، مش على الاتنين.
+    expect(screen.getAllByText(c.lapsedChip)).toHaveLength(1);
+  });
+
+  /* وكل الصفوف خلصت = العنوان بيقولها، والشيب على الصف بيبقى تكرار. */
+  it('does not repeat the chip on every row when they have all lapsed', () => {
+    render(
+      <MonthNewsBand
+        offers={[offer({ lapsed: true }), offer({ courseId: 'c2', courseSlug: 'ai-y3', lapsed: true })]}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: c.lapsedTitle })).toBeTruthy();
+    expect(screen.queryByText(c.lapsedChip)).toBeNull();
   });
 });

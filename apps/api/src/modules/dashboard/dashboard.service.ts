@@ -633,11 +633,19 @@ export class DashboardService {
    *    مايختلفوش على إن فيه حاجة للبيع.
    * 3. **`!slice.everything`** — اللي اشترك ترم أو سنة أو «٣ شهور» بيفتح كل
    *    الشهور، فمفيش حاجة تتعرض عليه. ده كان مطلوب بالنص.
-   * 4. **`slice.monthIds.size > 0`** — وده الشرط اللي بيفرّق الشريط ده عن
-   *    كارت الكورس. الشريط بيتكلّم مع اللي **دافع بالشهر**: «إنت في شهر ١
-   *    وشهر ٢ اتفتح». اللي مادفعش خالص، واللي اشتراكه خلص أو اتسحب، الاتنين
-   *    `monthIds` فاضية عندهم — والأول الكاتالوج بيكلّمه والتاني محتاج يجدّد،
-   *    ومفيش واحد فيهم الجملة دي بتقول له حاجة صح.
+   * 4. **ماسك شهر لايف، أو اشتراكه خلص** — وده الشرط اللي بيفرّق الشريط ده عن
+   *    كارت الكورس. الكارت بيعرض على أي حد مش ماسك الشهر، بيشمل اللي عمره ما
+   *    دفع؛ الشريط ده بيتكلّم مع اللي **دفع** بس.
+   *
+   *    و«خلص» جوّه الشرط عن قصد: الترم لما ينتهي الطالب بيرجع يشتري، والشريط
+   *    هو المكان اللي بيقول له إن فيه شهور مفتوحة.
+   *
+   *    ⚠️ و«خلص» هنا `revoked` **و**`expired`، مش `expired` لوحده. على المنصة
+   *    دي `TermService.setOpen(false)` بيختم `revoked_at` على كل grant
+   *    بـ`scope: term`، ومنح الشهور `validUntil` بتاعها مقفول على `null`
+   *    بـ`access_grants_month_open_ended` — فشرط على `expired` لوحده كان
+   *    هيعدّي التستات وما يشتغلش ولا مرة على الحقيقي. `not_yet_valid` بس هو
+   *    اللي برّه. الجدول الكامل في `DashboardMonthOfferSchema`.
    *
    * استعلامين مجمّعين لكل الكورسات مع بعض، ومفيش أي واحد فيهم لو مفيش مرشّح —
    * وده الغالب على كل طالب في كورس بالترم.
@@ -660,7 +668,8 @@ export class DashboardService {
       if (course.status !== 'published') return false;
       if (course.monthlyPriceCents === null || !course.requiresGrant) return false;
       const slice = slices.get(course.id);
-      return slice !== undefined && !slice.everything && slice.monthIds.size > 0;
+      if (slice === undefined || slice.everything) return false;
+      return slice.monthIds.size > 0 || slice.lapsed === 'revoked' || slice.lapsed === 'expired';
     });
     if (candidates.length === 0) return [];
 
@@ -714,6 +723,10 @@ export class DashboardService {
         courseTitle: course.title,
         months,
         pending: pending.has(course.id),
+        /* مش ماسك ولا شهر لايف = اشتراكه خلص (الفلتر فوق رفض أي سبب تاني).
+           الكوبي بتتغيّر على ده: «شهر ٢ اتفتح» كذب لحد كل الكورس مقفول عليه،
+           و`months` عنده فوق دي **كل** الشهور المفتوحة مش الجديد فيهم. */
+        lapsed: slice.monthIds.size === 0,
       });
     }
     return offers;
