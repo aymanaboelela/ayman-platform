@@ -16,6 +16,7 @@ import { listResponse } from '@ayman/contracts/admin/list';
 import { z } from '@ayman/contracts/zod';
 import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
+import { AdminEmpty } from '@/components/admin/admin-empty';
 import { CreateHomeworkDialog } from './create-homework-dialog';
 
 const c = copy.admin.homework;
@@ -132,12 +133,7 @@ export default async function AdminHomeworkPage({
       </nav>
 
       {rowCount === 0 ? (
-        <div className="mt-5 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-12 text-center">
-          <p className="text-[length:var(--fs-title-4)] font-medium text-fg">{c.empty}</p>
-          <p className="mx-auto mt-2 max-w-[34rem] text-[length:var(--fs-text-sm)] text-fg-muted">
-            {c.emptyHint}
-          </p>
-        </div>
+        <AdminEmpty spot="homework" title={c.empty} hint={c.emptyHint} />
       ) : (
         <ul className="mt-5 flex flex-col gap-2.5">
           {rows.map((row) => (

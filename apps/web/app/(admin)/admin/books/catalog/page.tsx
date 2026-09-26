@@ -11,6 +11,7 @@ import { formatEGP } from '@/lib/price';
 import { StreamBadge } from '@/components/stream-badge';
 import { BookFormDialog } from '@/components/admin/books/book-form-dialog';
 import { bookPlacementLabels } from '@/components/admin/books/book-payload';
+import { AdminEmpty } from '@/components/admin/admin-empty';
 import { BooksTabs } from '../books-tabs';
 import { BookRowActions } from './book-row-actions';
 import { ShippingFeeForm } from './shipping-fee-form';
@@ -111,12 +112,7 @@ export default async function AdminBooksCatalogPage() {
       </div>
 
       {books.length === 0 ? (
-        <div className="mt-5 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-12 text-center">
-          <p className="text-[length:var(--fs-title-4)] font-medium text-fg">{c.catalogEmpty}</p>
-          <p className="mx-auto mt-2 max-w-[34rem] text-[length:var(--fs-text-sm)] text-fg-muted">
-            {c.catalogEmptyHint}
-          </p>
-        </div>
+        <AdminEmpty spot="orders" title={c.catalogEmpty} hint={c.catalogEmptyHint} />
       ) : (
         <ul className="mt-5 flex flex-col gap-2.5">
           {books.map((book) => (

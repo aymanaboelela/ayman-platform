@@ -17,6 +17,19 @@
  *                     width on hydration, which is a visible layout jump on
  *                     every page load for anyone who has collapsed it.
  *
+ *                     ⚠️ It now writes `'expanded'` as well, and the absence of
+ *                     the attribute means «مختارش» — not «مفتوح». That is what
+ *                     lets the stylesheet pick a default from the WIDTH: a
+ *                     296px rail on an 820px iPad leaves 524px of content, so
+ *                     the tablet range starts collapsed while a laptop starts
+ *                     open. A student who presses the toggle writes an explicit
+ *                     value and is never overridden again.
+ *
+ *                     The old contract stored only `'collapsed'`, so there was
+ *                     no way to say «فاتحه بإيدي» — and a width-based default
+ *                     would have trapped anyone who wanted it open on a
+ *                     tablet. `lib/rail.ts` documents the three states.
+ *
  * Both are attributes read by CSS alone. Neither is React state, and that is
  * deliberate: a preference the server cannot read (it lives in `localStorage`)
  * can only avoid a flash by being applied before React exists. The components
@@ -43,4 +56,4 @@
  * expanded rail, everything still usable.
  */
 export const PREPAINT_SCRIPT =
-  `(function(){try{var d=document.documentElement;d.setAttribute('data-theme',localStorage.getItem('theme')==='dark'?'dark':'light');if(localStorage.getItem('rail')==='collapsed'){d.setAttribute('data-rail','collapsed');}}catch(e){}})();`;
+  `(function(){try{var d=document.documentElement;d.setAttribute('data-theme',localStorage.getItem('theme')==='dark'?'dark':'light');var r=localStorage.getItem('rail');if(r==='collapsed'||r==='expanded'){d.setAttribute('data-rail',r);}}catch(e){}})();`;

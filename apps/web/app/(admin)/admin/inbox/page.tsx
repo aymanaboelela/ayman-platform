@@ -17,6 +17,7 @@ import { assistantPathLabels } from '@/lib/assistant-path';
 import { InboxStatusChip, inboxTimeFormatter } from './status-chip';
 import { InboxTabs } from './inbox-tabs';
 import { ListControl } from '@/components/admin/list-controls';
+import { AdminEmpty } from '@/components/admin/admin-empty';
 
 const c = copy.assistant.inbox;
 const RowsSchema = listResponse(AdminConversationRowSchema);
@@ -136,12 +137,7 @@ export default async function AdminInboxPage({
       </div>
 
       {rowCount === 0 ? (
-        <div className="mt-5 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-12 text-center">
-          <p className="text-[length:var(--fs-title-4)] font-medium text-fg">{c.empty}</p>
-          <p className="mx-auto mt-2 max-w-[34rem] text-[length:var(--fs-text-sm)] text-fg-muted">
-            {c.emptyHint}
-          </p>
-        </div>
+        <AdminEmpty spot="inbox" title={c.empty} hint={c.emptyHint} />
       ) : (
         <ul className="mt-5 flex flex-col gap-2.5">
           {rows.map((row) => {

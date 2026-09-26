@@ -3000,6 +3000,11 @@ details[open] > .unit__head .unit__chevron,
   stroke-width: 1.5;
 }
 .spot__accent-fill { fill: var(--a-9); }
+
+/* لون أرضية اللوحة نفسها، للقصّات — القُصّتين في تذكرة «أكواد الفتح» لازم
+   يبانوا كنُقَط مقطوعة من الشكل، مش كدواير مرسومة عليه. `--e-tint` هو نفس
+   الواش اللي `.spot__solid` قاعد عليه، فالدايرة بتختفي في الخلفية. */
+.spot__ground-fill { fill: var(--e-tint); }
 .spot__accent-glyph {
   fill: none;
   stroke: #1a1206;

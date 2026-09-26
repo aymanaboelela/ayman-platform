@@ -1283,6 +1283,61 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+   التابلت الرأسي: الريل بيبدأ مقفول.
+
+   ## الرقم اللي خلّى ده يتعمل
+
+   الريل ٢٩٦ بكسل. آيباد رأسي عرضه ٨٢٠، يعني ٨٢٠ − ٢٩٦ = **٥٢٤ بكسل للمحتوى** —
+   عرض فون على تابلت، والطالب دافع تمن الشاشة الكبيرة. بالريل مقفول بيبقى ٧٤٤.
+
+   ٦٤rem (١٠٢٤) هو الحد، ونفس الرقم مكتوب في `RAIL_EXPANDS_FROM_PX` في
+   `lib/rail.ts` — **الاتنين لازم يفضلوا واحد**، وإلا الزرار بيقول «اقفل» على
+   ريل مقفول في المدى اللي بينهم، والسكرين ريدر بيقرا الغلط. فيه تست بيقرا
+   الملفين ويقارن.
+
+   آيباد برو ١٢.٩ رأسي عرضه ١٠٢٤ بالظبط فبياخد الريل مفتوح (١٠٢٤ − ٢٩٦ = ٧٢٨،
+   مساحة محترمة). وأي آيباد أفقي فوق ١٠٢٤ برضه.
+
+   ## `:not([data-rail='expanded'])` مش `[data-rail='collapsed']`
+
+   الفرق هو الفيتشر. العقد القديم كان قيمة واحدة (`'collapsed'`) والغياب معناه
+   «مفتوح»، فمفيش قيمة تقول «فاتحها بإيدي» — والافتراضي بالعرض كان هيحبس اللي
+   عايزها مفتوحة على التابلت. بقى الغياب معناه «مختارش»، والصريح بيغلب العرض.
+   اقرا `lib/rail.ts`.
+
+   ## والتصريحات متكرّرة عن قصد
+
+   نفس الخمس قواعد اللي فوق مكتوبة تاني بالسيليكتور ده. البديل كان إضافة
+   سيليكتور تالت لكل واحدة من التمانية فوق — وكل واحدة فيهم هتحتاج ميديا كويري
+   متداخلة لوحدها لأنها جوّه `min-width: 48rem` أصلًا. بلوك واحد بيتقرا في مكان
+   واحد أنضف من تمن قواعد كل واحدة فيها شرطين.
+   --------------------------------------------------------------------------- */
+@media (min-width: 48rem) and (max-width: 63.999rem) {
+  html:not([data-rail='expanded']) .shell {
+    grid-template-columns: var(--rail-w-collapsed) minmax(0, 1fr);
+  }
+
+  html:not([data-rail='expanded']) .rail__label {
+    display: none;
+  }
+
+  html:not([data-rail='expanded']) .rail__brand .brand__text {
+    display: none;
+  }
+
+  html:not([data-rail='expanded']) .rail__head {
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: var(--s-8);
+  }
+
+  html:not([data-rail='expanded']) .rail__item {
+    justify-content: center;
+    padding-inline: 0;
+  }
+}
+
 /* The one motion in the shell. Width, not `transform`: the content column is
    a grid track that must actually resize, and there is nothing to composite
    against. 160ms matches every other hover/state transition in the product. */
