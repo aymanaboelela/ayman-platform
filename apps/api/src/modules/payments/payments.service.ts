@@ -491,6 +491,12 @@ export class PaymentsService {
           reviewedAt: true,
           course: { select: { id: true, title: true } },
           term: { select: { id: true, title: true } },
+          /* الشهور اللي الدفعة بتشتريها — مرتّبة بترتيب المنهج، مش بترتيب
+             ما اتكتبوا. الأدمن بيقرا «شهر ٢ و٣»، و«شهر ٣ و٢» بتبان كغلطة. */
+          months: {
+            orderBy: { month: { monthIndex: 'asc' } },
+            select: { month: { select: { id: true, title: true } } },
+          },
           user: { select: { name: true, email: true, phoneNumber: true } },
         },
       }),
@@ -521,6 +527,7 @@ export class PaymentsService {
         plan: row.plan,
         termId: row.term?.id ?? null,
         termTitle: row.term?.title ?? null,
+        months: row.months.map((link) => ({ id: link.month.id, title: link.month.title })),
         amountCents: row.amountCents,
         senderPhone: row.senderPhone,
         isFree: row.isFree,

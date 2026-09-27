@@ -48,6 +48,20 @@ export const AdminPaymentRowSchema = z.object({
   /** `null` unless `plan = 'term'`. */
   termId: z.uuid().nullable(),
   termTitle: z.string().nullable(),
+  /**
+   * «شهر ٢ و٣» — الشهور اللي الدفعة دي بتشتريها، بالترتيب.
+   *
+   * فاضية لأي خطة تانية، وللكورسات اللي مابتتباعش بالشهور.
+   *
+   * ⚠️ الصف كان فيه `termTitle` وبس. الأدمن اللي بيراجع تحويل بيشوف المبلغ
+   * والاسم والسكرين شوت — ومايعرفش **الفلوس دي تفتح كام شهر**. وهو بالظبط
+   * الرقم اللي الموافقة بتتقاس عليه: ٣٠٠ جنيه صح على شهرين وغلط على شهر.
+   * الجدول (`PaymentSubmissionMonth`) موجود من ساعة ما الخطة الشهرية اتعملت،
+   * واللي كان ناقص هو إنه يوصل للشاشة.
+   */
+  months: z
+    .array(z.object({ id: z.uuid(), title: z.string() }))
+    .default([]),
   amountCents: z.number().int(),
   /** The Vodafone Cash number the transfer was sent FROM — the number an
    *  admin actually reconciles against, and often not `studentPhone`. `null`
