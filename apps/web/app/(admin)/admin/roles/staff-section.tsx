@@ -8,8 +8,10 @@ import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 
 import { searchAccountsAction, setStaffRoleAction } from './actions';
+import { MemberPermissions } from './member-permissions';
 
 const c = copy.admin.roles.staff;
+const member = copy.admin.roles.member;
 
 export interface StaffMember {
   id: string;
@@ -42,6 +44,14 @@ export function StaffSection({ members, currentUserId }: { members: StaffMember[
   const [reason, setReason] = useState('');
   const [picked, setPicked] = useState<Found | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  /*
+   * المساعد اللي لوحة صلاحياته مفتوحة — واحد بس.
+   *
+   * لوحة لكل واحد مفتوحة في نفس الوقت معناها كل واحدة بتجيب صلاحياتها من
+   * السيرفر، وشاشة بتقرا منها قرار عن حساب واحد. الواحد المفتوح بيجيب طلب
+   * واحد ساعة ما يتفتح.
+   */
+  const [openMember, setOpenMember] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const search = (value: string) => {
@@ -105,14 +115,37 @@ export function StaffSection({ members, currentUserId }: { members: StaffMember[
                 // بدل ما يتعرض ويرجع خطأ.
                 <span className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.you}</span>
               ) : (
-                <Button
-                  variant="ghost"
-                  disabled={pending}
-                  onClick={() => apply(m.id, 'student', c.removed)}
-                >
-                  {pending ? c.removing : c.remove}
-                </Button>
+                <>
+                  <Button
+                    variant="secondary"
+                    aria-expanded={openMember === m.id}
+                    onClick={() => setOpenMember((current) => (current === m.id ? null : m.id))}
+                  >
+                    {openMember === m.id ? member.close : member.open}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    disabled={pending}
+                    onClick={() => apply(m.id, 'student', c.removed)}
+                  >
+                    {pending ? c.removing : c.remove}
+                  </Button>
+                </>
               )}
+
+              {/*
+                * اللوحة تحت الصف بعرضه الكامل — مش مودال.
+                *
+                * ⚠️ مودال هنا كان بيكسر الشل: كل مودال Radix بيبعت التوب بار
+                * والريل لأول الصفحة (`scroll-lock-unsticks-the-shell`). والقرار
+                * ده كمان بيتاخد بالمقارنة — إنك تشوف باقي الفريق وإنت بتقفل
+                * على واحد مفيد، والمودال بيخبّيهم.
+                */}
+              {openMember === m.id ? (
+                <div className="w-full basis-full">
+                  <MemberPermissions userId={m.id} name={m.name} />
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>

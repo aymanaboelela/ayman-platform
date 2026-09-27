@@ -4,6 +4,10 @@ import { revalidatePath } from '@/lib/revalidate-screen';
 import { z } from '@ayman/contracts/zod';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet, adminSend } from '@/lib/admin-api';
+import {
+  UserPermissionsReadSchema,
+  type UserPermissionsRead,
+} from '@ayman/contracts/admin/roles';
 
 const c = copy.admin.roles;
 
@@ -105,5 +109,55 @@ export async function setStaffRoleAction(
     return { ok: true };
   } catch {
     return { ok: false, message: c.staff.failed };
+  }
+}
+
+/**
+ * صلاحيات مساعد بعينه.
+ *
+ * بتتحمّل عند الطلب مش مع الصفحة: الفريق ممكن يبقى عشرة، وجيب صلاحيات
+ * عشرة حسابات مقدّمًا عشان يمكن حد يفتح واحد فيهم = عشر طلبات على السيرفر
+ * بتتحرق في كل مرة الشاشة تتفتح.
+ */
+export async function getMemberPermissionsAction(
+  userId: string,
+): Promise<{ ok: true; data: UserPermissionsRead } | { ok: false; message: string }> {
+  try {
+    const data = await adminGet(
+      `/api/admin/staff/${encodeURIComponent(userId)}/permissions`,
+      UserPermissionsReadSchema,
+    );
+    return { ok: true, data };
+  } catch {
+    return { ok: false, message: c.member.loadFailed };
+  }
+}
+
+/**
+ * حفظ صلاحيات المساعد — **الحالة النهائية**، زي أخته اللي فوق.
+ *
+ * الشاشة بتبعت اللي المفروض يملكه بالكامل، والسيرفر بيحسب الفرق عن أساس
+ * الرول ويكتب صفوف الفتح والقفل. الفرق التراكمي بين تمن أقسام وعشرات
+ * الشيك بوكسات والداتابيز أسهل حاجة يغلط فيها.
+ *
+ * ⚠️ `revalidatePath` مش كفاية لوحده هنا: القفل بيسري من الكاش اللي في
+ * الميموري على السيرفر (`refresh()` جوّه الخدمة)، وde بيحصل قبل ما الرد
+ * يرجع. الـrevalidate للشاشة، مش للقفل.
+ */
+export async function setMemberPermissionsAction(
+  userId: string,
+  permissions: string[],
+): Promise<ActionResult> {
+  try {
+    await adminSend(
+      'PUT',
+      `/api/admin/staff/${encodeURIComponent(userId)}/permissions`,
+      { permissions },
+      z.object({ allowed: z.array(z.string()), withheld: z.array(z.string()) }),
+    );
+    revalidatePath('/admin/roles');
+    return { ok: true };
+  } catch {
+    return { ok: false, message: c.member.saveFailed };
   }
 }
