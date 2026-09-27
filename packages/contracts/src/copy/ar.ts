@@ -410,6 +410,7 @@ export const copy = {
     railCourses: 'كورساتي',
     railCoursesEmpty: 'لسه مفيش كورسات',
     results: 'نتائجي',
+    rank: 'ترتيبي',
     profile: 'بروفايلي',
     railAllCourses: 'كل الكورسات',
     collapseRail: 'اطوِ القائمة',
@@ -3956,6 +3957,69 @@ export const copy = {
   },
 
   /** Slice 2 — `/results`, the student's own quiz history. */
+  /**
+   * «ترتيبي على الدفعة» — `/rank`.
+   *
+   * ⚠️ ولا جملة هنا بتتصرّف لولد أو بنت: مفيش «إنت»، ولا «معاك/ليك»، ولا أمر
+   * («سلّم»، «حل»). بدالهم اسم فعل («تسليم كل واجب»)، وـك على اسم («ترتيبك»،
+   * «ناقصك»، «نقاطك»)، وجملة اسمية. والطالب التاني على الشاشة «من الدفعة»، مش
+   * «زميل».
+   */
+  rank: {
+    eyebrow: 'ترتيبي',
+    title: 'ترتيبك على الدفعة',
+    subtitle: 'كل كويز وامتحان وواجب بيتحسب نقط، والنقط هي اللي بترتّب الدفعة.',
+    heroPill: 'ترتيبك في {cohort}',
+    heroPillPlain: 'ترتيبك على الدفعة',
+    /** الرقم الكبير بيتقري «المركز ٢٥». */
+    place: 'المركز',
+    of: 'من {size} في الدفعة',
+    betterThan: 'أحسن من {percent}% من الدفعة',
+    firstPlace: 'الأول على الدفعة',
+    nextRank: 'ناقصك {points} نقطة على المركز اللي قبلك',
+    holdFirst: 'المركز الأول — والمهم دلوقتي الحفاظ عليه',
+    averageLabel: 'متوسطك',
+    averageHint: 'الكويزات والامتحانات والواجبات مع بعض',
+    noneYet: 'لسه',
+    points: 'نقطة',
+    statPoints: 'نقاطك',
+    statQuizzes: 'متوسط الكويزات',
+    statQuizzesHint: '{count} كويز · {full} علامة كاملة',
+    statExams: 'امتحانات نص الشهر',
+    statExamsHint: '{count} امتحان · بنقط مضاعفة',
+    statHomework: 'الواجبات المتسلّمة',
+    statHomeworkHint: '{accepted} اتقبل',
+    levelTitle: 'مستواك',
+    levelNext: 'ناقصك {points} نقطة على مستوى «{name}»',
+    levelTop: 'أعلى مستوى على المنصة',
+    levelPathTitle: 'طريق المستويات',
+    levelLocked: 'مقفول لسه',
+    levelDone: 'اتعدّى',
+    levelNow: 'مستواك دلوقتي',
+    podiumTitle: 'الأوائل على الدفعة',
+    podiumEmpty: 'لسه محدش جمع نقط، وأول كويز يتحل هيفتح المنصة.',
+    ladderTitle: 'اللي حواليك في الترتيب',
+    ladderMe: 'مكانك',
+    ladderOther: 'من الدفعة',
+    climbTitle: 'الطريق لفوق',
+    climbLead: 'كل حاجة من دول بتزوّد نقطك، وكل نقطة خطوة ناحية المركز اللي قدّامك.',
+    climbHomeworkTitle: 'تسليم كل واجب',
+    climbHomeworkBody: '{submitted} نقطة على التسليم نفسه، ولحد {accepted} كمان لما يتقبل.',
+    climbHomeworkOwed: 'عندك {count} واجب مستني التسليم',
+    climbQuizTitle: 'الكويز بالعلامة الكاملة',
+    climbQuizBody: 'درجة الكويز بالمية هي نقطها، والـ100% عليها {bonus} نقطة بونص.',
+    climbExamTitle: 'امتحان نص الشهر بالضعف',
+    climbExamBody: 'كل درجة فيه بنقطتين، والورقة الكاملة عليها {bonus} بونص — يعني {max} نقطة.',
+    climbPending: '{count} ورقة لسه بتتصحح، ونقطك هتزيد أول ما تتصحح.',
+    climbCta: 'على المسار',
+    upTo: 'لحد +{points}',
+    noYearTitle: 'محتاجين نعرف سنتك الدراسية',
+    noYearBody: 'الترتيب بيتحسب وسط اللي في نفس سنتك، والسنة بتتحدد من البروفايل.',
+    noYearCta: 'فتح البروفايل',
+    zeroTitle: 'السباق لسه في أوله',
+    zeroBody: 'أول كويز يتحل أو واجب يتسلّم هو أول خطوة على اللوحة.',
+    liveNote: 'ترتيبك بيتحسب لحظيًا مع كل فتحة للصفحة، والدفعة بتتحدّث كل كام دقيقة.',
+  },
   results: {
     eyebrow: '03 / نتائجي',
     title: 'نتائجي',

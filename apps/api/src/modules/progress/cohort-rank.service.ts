@@ -293,9 +293,20 @@ function stats(row: ScoreRow): Omit<CohortRank['me'], 'rank' | 'betterThanPercen
 /**
  * «ملك سعيد ذكي محمد» ← «ملك سعيد». أول اسمين كفاية تعرف بيهم زميلك، والباقي
  * مالوش لازمة يسافر على الشبكة لطالب تاني.
+ *
+ * «عبد» و«أبو» مش اسم لوحدهم: «مريم عبد الرحمن» لو اتقصّت على كلمتين بتبقى
+ * «مريم عبد». فبيتلزقوا في الكلمة اللي بعدهم قبل العدّ.
  */
+const NAME_PREFIXES = new Set(['عبد', 'أبو', 'ابو']);
+
 export function shortName(fullName: string): string {
-  return fullName.trim().split(/\s+/).slice(0, 2).join(' ');
+  const parts: string[] = [];
+  for (const word of fullName.trim().split(/\s+/)) {
+    const last = parts.at(-1);
+    if (last !== undefined && NAME_PREFIXES.has(last)) parts[parts.length - 1] = `${last} ${word}`;
+    else parts.push(word);
+  }
+  return parts.slice(0, 2).join(' ');
 }
 
 /**

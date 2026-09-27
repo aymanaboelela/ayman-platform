@@ -269,5 +269,8 @@ describe('shortName', () => {
   it('keeps the first two words', () => {
     expect(shortName('  ملك   سعيد ذكي محمد ')).toBe('ملك سعيد');
     expect(shortName('Amr')).toBe('Amr');
+    // «عبد» مش اسم لوحده.
+    expect(shortName('مريم عبد الرحمن علي')).toBe('مريم عبد الرحمن');
+    expect(shortName('عبد الله محمد سيد')).toBe('عبد الله محمد');
   });
 });
