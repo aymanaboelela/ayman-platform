@@ -48,6 +48,7 @@
     "./admin/book-orders-packing-ids": "./src/admin/book-orders-packing-ids.ts",
     "./admin/homework-pending-count": "./src/admin/homework-pending-count.ts",
     "./admin/finance": "./src/admin/finance.ts",
+    "./admin/finance-daily": "./src/admin/finance-daily.ts",
     "./admin/expenses": "./src/admin/expenses.ts",
     "./admin/unlock-codes": "./src/admin/unlock-codes.ts",
     "./admin/centers": "./src/admin/centers.ts",
