@@ -295,7 +295,7 @@ export function StaffSection({
           <ul className="mt-3 divide-y divide-line rounded-lg border border-line">
             {found.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center gap-3 p-3">
-"                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1">
                   <p className="font-medium text-fg [overflow-wrap:anywhere]">{r.name}</p>
                   <p dir="ltr" className="text-[length:var(--fs-text-sm)] text-fg-muted [unicode-bidi:isolate]">
                     {r.phone}

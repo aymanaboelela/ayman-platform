@@ -67,6 +67,9 @@ describe('staff search', () => {
     await waitFor(() => expect(screen.getByText('أمجد سامي')).toBeInTheDocument());
     expect(searched).toHaveBeenCalledWith('امجد');
     expect(screen.queryByText(c.failed)).not.toBeInTheDocument();
+    // الصف كله بالحرف — اسم، موبايل، زرار. أول نسخة من الإصلاح كان فيها `"`
+    // شارد في الـJSX، وماطلعش غير في المتصفح.
+    expect(screen.getByText('أمجد سامي').closest('li')?.textContent).toBe(`أمجد سامي+201010017537${c.add}`);
   });
 
   it('says the search failed — not that a role change did', async () => {
