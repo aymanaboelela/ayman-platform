@@ -1,4 +1,5 @@
 import { GRANTABLE_ROLES, RoleGrantsReadSchema } from '@ayman/contracts/admin/roles';
+import { STAFF_ROLE_REASON_MIN } from '@ayman/contracts/admin/students';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Card, CardBody } from '@ayman/ui';
 import { adminGet, adminGetOrForbidden } from '@/lib/admin-api';
@@ -54,7 +55,9 @@ export default async function RolesPage() {
     adminGet(
       '/api/admin/students?page=1&perPage=50&role=staff',
       z.object({
-        rows: z.array(z.object({ id: z.string(), fullName: z.string(), phone: z.string() })),
+        rows: z.array(
+          z.object({ id: z.string(), fullName: z.string(), phone: z.string(), role: z.string() }),
+        ),
       }),
     ),
     getSession(),
@@ -67,8 +70,9 @@ export default async function RolesPage() {
 
       <div className="mb-8">
         <StaffSection
-          members={staff.rows.map((r) => ({ id: r.id, name: r.fullName, phone: r.phone }))}
+          members={staff.rows.map((r) => ({ id: r.id, name: r.fullName, phone: r.phone, role: r.role }))}
           currentUserId={session?.id ?? ''}
+          reasonMin={STAFF_ROLE_REASON_MIN}
         />
       </div>
 

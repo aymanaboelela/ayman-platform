@@ -152,6 +152,9 @@ export class StudentsController {
    *
    * و`changeRole` نفسه لسه بيمنع تغيير دورك إنت وتنزيل آخر أدمن — الحمايتين
    * دول بتنطبقوا هنا كمان لأن ده نفس الاستدعاء.
+   *
+   * و`setStaffRole` قبله بيرفض أي هدف دوره `admin`: الباب ده مابيعملش أدمن،
+   * ومابيشيلش أدمن كمان.
    */
   @RequirePermission('staff:manage')
   @Post(':userId/staff-role')
@@ -160,7 +163,7 @@ export class StudentsController {
     @Param('userId') userId: string,
     @Body() body: AdminStaffRoleDto,
   ) {
-    return this.students.changeRole(userId, body, user.id);
+    return this.students.setStaffRole(userId, body, user.id);
   }
 
   @RequirePermission('student:role-change')
