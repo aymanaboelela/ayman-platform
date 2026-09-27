@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 // `/copy/admin`, not the plain `/copy` this used to import — needed for
 // `copy.admin.payments.pendingBadgeLabel` below. Safe here specifically
 // because this component only ever renders inside the admin layout
@@ -79,6 +79,8 @@ export function AdminNavList({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  /* للجيب المسبق على الـhover بس — شوف الكومنت على `prefetch={false}` تحت. */
+  const router = useRouter();
   const active = activeNavItem(pathname);
   // `visibleNavItems`, not an inline filter: the same rule has to run on
   // `/admin`'s section grid, and a section hidden from one of the two is a
@@ -127,6 +129,28 @@ export function AdminNavList({
                   <li key={item.href}>
                     <Link
                       href={item.href}
+                      /*
+                       * ⚠️ مقفول عن قصد.
+                       *
+                       * الشريط ده ٢٥ لينك، وكلهم ظاهرين على طول — و`<Link>`
+                       * افتراضيًا بيجيب الراوت أول ما يدخل الشاشة. المقاس على
+                       * البرودكشن (صفحة تعديل كورس واحدة): **٨٤ طلب prefetch
+                       * لعشرين راوت** — يعني ٦٤ منهم مكرر، وفيه راوتس اتجابت
+                       * ٤ و٧ مرات في نفس التحميلة. ١٦٧ طلب إجمالي للصفحة، ٨٤
+                       * منهم دول.
+                       *
+                       * وكل واحد فيهم رندر كامل على السيرفر لصفحة أدمن
+                       * مالهاش لازمة — على نفس الجهاز اللي بيبني التلات
+                       * ستاكات، وهو أصلًا المختنق (شوف `new-tenant.md`).
+                       *
+                       * التنقّل مابيبطّأش: `onMouseEnter` تحت بيجيب الراوت
+                       * ساعة ما الماوس يقرب، وده قبل الدوسة بمية مللي على
+                       * الأقل. وعلى الموبايل مفيش hover أصلًا، والشيت بيتقفل
+                       * على الدوسة — فالجيب المسبق هناك كان بيتحرق كله.
+                       */
+                      prefetch={false}
+                      onMouseEnter={() => router.prefetch(item.href)}
+                      onFocus={() => router.prefetch(item.href)}
                       onClick={onNavigate}
                       aria-current={isActive ? 'page' : undefined}
                       // `.nav-pill` — the same object the student rail wears.
