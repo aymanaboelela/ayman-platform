@@ -178,6 +178,7 @@ export class PermissionGrantsService implements OnModuleInit, OnModuleDestroy {
     role: string,
     permissions: readonly string[],
     actorUserId: string | null,
+    actorPermissions: ReadonlySet<string>,
   ): Promise<{ allowed: string[]; withheld: string[] }> {
     if (role === 'admin') {
       throw new Error('حساب الأدمن بياخد كل الصلاحيات، والقفل عليه مالوش أثر');
@@ -205,6 +206,25 @@ export class PermissionGrantsService implements OnModuleInit, OnModuleDestroy {
 
     const wanted = new Set(permissions);
     const baseline = new Set<string>(permissionsForRole(role));
+
+    /*
+     * ⚠️ مفيش حد يدّي حاجة هو نفسه مش ماسكها.
+     *
+     * من غير السطور دي الشاشة دي كانت طريق تصعيد كامل: المدرّس محجوب عنه
+     * `role:grant` و`news:write` و`student:role-change` (`OWNER_WITHHELD`)،
+     * بس هو ماسك `staff:manage` — فكان يقدر يفتحهم **لمساعده**، والمساعد يعمل
+     * اللي هو ممنوع منه. و`role:grant` أوحشهم: المساعد بعدها يفتح أي حاجة
+     * لأي رول، والأساس كله في `permissions.ts` يبقى ديكور.
+     *
+     * والقفل مش محتاج الشرط ده: إنك تشيل صلاحية مش تصعيد، مهما كنت ماسك إيه.
+     * فالفحص على الفتح بس — الفرق عن الأساس في الاتجاه الواحد.
+     */
+    const escalating = [...wanted].filter(
+      (permission) => !baseline.has(permission) && !actorPermissions.has(permission),
+    );
+    if (escalating.length > 0) {
+      throw new Error(`مش ماسك الصلاحيات دي عشان تفتحها لحد: ${escalating.join(', ')}`);
+    }
 
     const rows = PERMISSIONS.filter(
       (permission) => wanted.has(permission) !== baseline.has(permission),

@@ -157,3 +157,54 @@ describe('replaceForUser — مين ينفع يتظبط', () => {
     expect(guard('owner')).toBeNull();
   });
 });
+
+/**
+ * التصعيد — «مفيش حد يدّي حاجة هو نفسه مش ماسكها».
+ *
+ * ⚠️ ده كان باب مفتوح على الآخر، ومكانه بالظبط اللي بيخلّيه خطير: المدرّس
+ * محجوب عنه `role:grant` و`news:write` و`student:role-change`
+ * (`OWNER_WITHHELD`)، بس ماسك `staff:manage` — فكان يقدر يفتحهم **لمساعده**،
+ * والمساعد يعمل اللي هو ممنوع منه.
+ *
+ * و`role:grant` أوحشهم: المساعد بعدها يفتح أي صلاحية لأي رول، والأساس كله في
+ * `permissions.ts` يبقى ديكور.
+ */
+describe('replaceForUser — التصعيد', () => {
+  /* نفس منطق الفحص اللي في الخدمة، من غير داتابيز. */
+  function escalating(
+    wanted: readonly string[],
+    baseline: readonly string[],
+    actorHolds: readonly string[],
+  ): string[] {
+    const base = new Set(baseline);
+    const actor = new Set(actorHolds);
+    return wanted.filter((permission) => !base.has(permission) && !actor.has(permission));
+  }
+
+  it('refuses to open a permission the writer does not hold', () => {
+    // المدرّس مش ماسك `role:grant`، وبيحاول يفتحها لمساعده.
+    expect(escalating(['role:grant'], ['course:read'], ['staff:manage', 'course:read'])).toEqual([
+      'role:grant',
+    ]);
+  });
+
+  it('allows opening a permission the writer does hold', () => {
+    expect(escalating(['expense:read'], ['course:read'], ['expense:read'])).toEqual([]);
+  });
+
+  it('never blocks a withhold — taking access away is not escalation', () => {
+    /*
+     * الأساس فيه `news:write` والطلب مافيهوش، يعني قفل. الفحص على الفتح بس،
+     * فمابيلمسش الحالة دي — حتى لو اللي بيكتب مش ماسك `news:write` أصلًا.
+     */
+    expect(escalating([], ['news:write'], [])).toEqual([]);
+  });
+
+  it('lets the baseline through even when the writer lacks it', () => {
+    /*
+     * صلاحية في أساس الرول ومش مع اللي بيكتب: مش فتح جديد، دي حالة الحساب
+     * الطبيعية. لو الفحص رماها كان أي حفظ بيقع على مساعد اتقفل عليه قسم.
+     */
+    expect(escalating(['news:write'], ['news:write'], [])).toEqual([]);
+  });
+});

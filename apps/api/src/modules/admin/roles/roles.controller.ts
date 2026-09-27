@@ -124,12 +124,29 @@ export class RolesController {
     });
     if (!user) throw new NotFoundException();
 
+    /*
+     * صلاحيات **اللي بيكتب** — الفحص إنه مايفتحش حاجة هو نفسه مش ماسكها.
+     *
+     * استعلام زيادة، وde مقصود: الرول لوحده مش كفاية. اللي بيكتب ممكن يكون
+     * مساعد اتقفل عليه قسم بقرار على حسابه، و`permissionsForUser` هو اللي
+     * بيقرا الطبقتين — الرول والقرار اللي عليه.
+     */
+    const actorUserId = currentActor().actorUserId;
+    const actor = actorUserId
+      ? await this.prisma.user.findUnique({
+          where: { id: actorUserId },
+          select: { id: true, role: true },
+        })
+      : null;
+    if (!actor) throw new BadRequestException('مش عارفين مين بيكتب');
+
     try {
       return await this.grants.replaceForUser(
         user.id,
         user.role,
         body.permissions,
-        currentActor().actorUserId,
+        actor.id,
+        new Set(permissionsForUser(actor.id, actor.role)),
       );
     } catch (error) {
       throw new BadRequestException(error instanceof Error ? error.message : 'invalid');

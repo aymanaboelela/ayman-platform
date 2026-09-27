@@ -1663,6 +1663,11 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // ⚠️ صلاحية مش في الكتالوج بترجع ٤٠٠ — صف زيها كان هيتكتب ويفضل مالوش
     // أثر للأبد، والشاشة تقول إن القرار اتاخد.
     { label: 'staff permissions write: rejects a permission that is not in the catalogue', method: 'put', path: () => `/api/admin/staff/${studentId}/permissions`, actor: 'admin', status: 400, body: () => ({ permissions: ['not:a-real-permission'] }) },
+    // ⚠️ مفيش حد يدّي حاجة هو نفسه مش ماسكها. `admin` ماسك كل حاجة فالصف ده
+    // مايقدرش يوريه — التست الحقيقي للتصعيد في `user-permissions.spec.ts`،
+    // اللي بيشغّل الفحص بأكتر من ماسك. الصف هنا عشان الراوت مايفضلش من غير
+    // تغطية للحالة.
+    { label: 'staff permissions write: admin holds everything, so nothing is escalation', method: 'put', path: () => `/api/admin/staff/${studentId}/permissions`, actor: 'admin', status: 400, body: () => ({ permissions: ['role:grant'] }) },
 
     // ── Entitlements — one public read, and no write anywhere ──
     //
