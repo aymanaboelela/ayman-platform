@@ -212,6 +212,10 @@ model User {
   refundsIssued              Refund[]
   /// Permissions this account opened up to a role — see `RolePermissionGrant`.
   permissionGrantsIssued     RolePermissionGrant[]   @relation("RolePermissionGrantIssuer")
+  /// الصلاحيات اللي الحساب ده اتفتحت أو اتقفلت عليه، والصلاحيات اللي هو
+  /// فتحها أو قفلها على غيره. شوف `UserPermissionOverride`.
+  permissionOverrides        UserPermissionOverride[] @relation("UserPermissionOverrideSubject")
+  permissionOverridesIssued  UserPermissionOverride[] @relation("UserPermissionOverrideIssuer")
   /// تكريمات بالإيد على لوحة الشرف — دي بتاعت الطالب، وبتروح مع حسابه.
   honorPins                  HonorBoardPin[]         @relation("HonorBoardPinStudent")
   /// وده اللي حطّهم. `SetNull`، فمسح حساب الأدمن بيسيب التكريم مكانه.
@@ -3938,6 +3942,48 @@ model RolePermissionGrant {
   @@id([role, permission])
   @@index([role])
   @@map("role_permission_grants")
+  @@schema("app")
+}
+
+/// صلاحية مفتوحة أو مقفولة على **حساب بعينه**، فوق أساس الرول.
+///
+/// ## ليه لكل حساب، مش لكل رول
+///
+/// `RolePermissionGrant` فوق بيفتح على الرول كله. وده مايقدرش يجاوب على
+/// الطلب: المساعدين كلهم رول `owner`، فقفل «المصروفات» على الرول بيقفلها على
+/// كل المساعدين مرة واحدة. والمدرّس عايز واحد يشوف الفلوس وواحد لأ.
+///
+/// ## و«يقفل» جديدة
+///
+/// `RolePermissionGrant` **بيفتح بس** — مكتوب في `permissions.ts` إن مفيش
+/// آلية تشيل صلاحية من الأساس. والحجة هناك سليمة وبتتكلم عن الرولات: صف
+/// بيشيل `course:read` من مدرّس بيبان كمنصة بايظة مش كقرار.
+///
+/// بس أساس `owner` هو «كل حاجة إلا المقالات»، فمن غير «يقفل» مفيش أي طريقة
+/// تعمل مساعد محدود. والفرق إن ده على **حساب** والقرار ظاهر على نفس الشاشة
+/// اللي اتاخد منها — مش قاعدة عامة بتتفاجئ بيها.
+///
+/// `admin` مالوش دعوة بالجدول ده خالص: بياخد `'*'` قبل ما يوصل هنا، فالمدرّس
+/// مايقدرش يقفل على نفسه بالغلط.
+model UserPermissionOverride {
+  userId     String @map("user_id")
+  /// نص `resource:action` من الكتالوج. بيتحقق منه وقت الكتابة بس — صلاحية
+  /// اتشالت من الكتالوج مالازمش توقّف الـAPI عن القيام، والحل بيتجاهلها.
+  permission String
+  /// `true` = افتح، `false` = اقفل. صف واحد لكل (حساب، صلاحية).
+  allow      Boolean
+
+  setAt       DateTime @default(now()) @map("set_at")
+  /// `SetNull` زي `RolePermissionGrant`: مسح الأدمن اللي قفل حاجة مالازمش
+  /// يفتحها تاني في صمت.
+  setByUserId String?  @map("set_by_user_id")
+  setBy       User?    @relation("UserPermissionOverrideIssuer", fields: [setByUserId], references: [id], onDelete: SetNull)
+
+  user User @relation("UserPermissionOverrideSubject", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, permission])
+  @@index([userId])
+  @@map("user_permission_overrides")
   @@schema("app")
 }
 
