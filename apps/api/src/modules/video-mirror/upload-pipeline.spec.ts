@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  UPLOAD_CRF,
   UPLOAD_ID_RE,
   UPLOAD_LADDER,
   isVideoExternalId,
@@ -9,7 +10,15 @@ import {
   uploadPartSize,
   uploadSourceKey,
 } from '@ayman/contracts/video';
-import { posterArgs, readProbe, transcodeArgs } from './upload-pipeline';
+import {
+  posterArgs,
+  readMasterVariants,
+  readMediaPlaylist,
+  readProbe,
+  transcodeArgs,
+  variantBandwidth,
+  withMeasuredBandwidth,
+} from './upload-pipeline';
 
 /** An ffprobe payload, narrowed to the fields `readProbe` reads. */
 function probeJson(options: {
@@ -133,9 +142,17 @@ describe('transcodeArgs', () => {
     expect(args.filter((arg) => arg === '0:a:0')).toHaveLength(rungs.length);
   });
 
-  it('gives every rung its own bitrate and its own audio bitrate', () => {
-    expect(joined).toContain('-b:v:0 3200k');
-    expect(joined).toContain('-b:v:3 500k');
+  /*
+   * Constant quality with a ceiling. A `-b:v` here is the old fixed target
+   * back: every still slide paid for motion, and the bucket stored twice what
+   * the picture needed.
+   */
+  it('encodes at constant quality, capped per rung, with no bitrate target', () => {
+    expect(joined).toContain(`-crf:v ${UPLOAD_CRF}`);
+    expect(args.some((arg) => arg.startsWith('-b:v'))).toBe(false);
+    expect(joined).toContain('-maxrate:v:0 4200k');
+    expect(joined).toContain('-bufsize:v:0 8400k');
+    expect(joined).toContain('-maxrate:v:3 700k');
     expect(joined).toContain('-b:a:0 128k');
     expect(joined).toContain('-b:a:3 64k');
   });
@@ -175,6 +192,106 @@ describe('transcodeArgs', () => {
 
   it('passes the thread cap through, so a shared VPS can be told to hold back', () => {
     expect(transcodeArgs('/tmp/src', rungs, '/tmp/out', true, 2).join(' ')).toContain('-threads 2');
+  });
+});
+
+/*
+ * Real ffmpeg 8 output for a capped-CRF 720p/360p ladder. It advertises each
+ * rung's CEILING (2.4 Mbit/s + audio), which is what held students a rung or
+ * two below what their connection could carry.
+ */
+const FFMPEG_MASTER = [
+  '#EXTM3U',
+  '#EXT-X-VERSION:7',
+  '#EXT-X-STREAM-INF:BANDWIDTH=2538248,AVERAGE-BANDWIDTH=2002897,RESOLUTION=1280x720,CODECS="avc1.64001f,mp4a.40.2"',
+  '0/index.m3u8',
+  '',
+  '#EXT-X-STREAM-INF:BANDWIDTH=790372,RESOLUTION=640x360,CODECS="avc1.64001e,mp4a.40.2"',
+  '1/index.m3u8',
+  '',
+].join('\n');
+
+const MEDIA_PLAYLIST = [
+  '#EXTM3U',
+  '#EXT-X-VERSION:7',
+  '#EXT-X-TARGETDURATION:6',
+  '#EXT-X-PLAYLIST-TYPE:VOD',
+  '#EXT-X-MAP:URI="init_0.mp4"',
+  '#EXTINF:6.000000,',
+  'seg_000.m4s',
+  '#EXTINF:6.000000,',
+  'seg_001.m4s',
+  '#EXTINF:1.500000,',
+  'seg_002.m4s',
+  '#EXT-X-ENDLIST',
+].join('\n');
+
+describe('measured bandwidth', () => {
+  it('reads segments and durations, never the init map', () => {
+    const media = readMediaPlaylist(MEDIA_PLAYLIST);
+    expect(media.targetDurationSeconds).toBe(6);
+    expect(media.segments).toEqual([
+      { uri: 'seg_000.m4s', durationSeconds: 6 },
+      { uri: 'seg_001.m4s', durationSeconds: 6 },
+      { uri: 'seg_002.m4s', durationSeconds: 1.5 },
+    ]);
+  });
+
+  it('lists the variants in master order', () => {
+    expect(readMasterVariants(FFMPEG_MASTER)).toEqual(['0/index.m3u8', '1/index.m3u8']);
+  });
+
+  it('takes the peak over runs of 0.5–1.5× the target, and the mean over all', () => {
+    const bandwidth = variantBandwidth(
+      [
+        { durationSeconds: 6, bytes: 750_000 }, // 1.0 Mbit/s
+        { durationSeconds: 6, bytes: 1_500_000 }, // 2.0 Mbit/s
+        // Short and dense: 4 Mbit/s alone, but 1.5 s is under half the target
+        // so it does not count alone. With the one before it (7.5 s) it is
+        // 2.4 Mbit/s — the real peak.
+        { durationSeconds: 1.5, bytes: 750_000 },
+      ],
+      6,
+    );
+    expect(bandwidth).toEqual({ peak: 2_400_000, average: 1_777_778 });
+  });
+
+  it('falls back to the mean for a clip shorter than half a segment', () => {
+    expect(variantBandwidth([{ durationSeconds: 2, bytes: 250_000 }], 6)).toEqual({
+      peak: 1_000_000,
+      average: 1_000_000,
+    });
+  });
+
+  it('refuses to invent a number for an empty variant', () => {
+    expect(variantBandwidth([], 6)).toBeNull();
+  });
+
+  it('replaces BANDWIDTH and AVERAGE-BANDWIDTH and leaves everything else alone', () => {
+    const rewritten = withMeasuredBandwidth(
+      FFMPEG_MASTER,
+      new Map([
+        ['0/index.m3u8', { peak: 1_900_000, average: 1_100_000 }],
+        ['1/index.m3u8', { peak: 420_000, average: 300_000 }],
+      ]),
+    );
+    expect(rewritten).toContain(
+      '#EXT-X-STREAM-INF:BANDWIDTH=1900000,AVERAGE-BANDWIDTH=1100000,RESOLUTION=1280x720,CODECS="avc1.64001f,mp4a.40.2"',
+    );
+    // ffmpeg 5.1 — the version in the API image — may not write the average
+    // at all; it is inserted, not skipped.
+    expect(rewritten).toContain(
+      '#EXT-X-STREAM-INF:BANDWIDTH=420000,AVERAGE-BANDWIDTH=300000,RESOLUTION=640x360,CODECS="avc1.64001e,mp4a.40.2"',
+    );
+    expect(readMasterVariants(rewritten)).toEqual(['0/index.m3u8', '1/index.m3u8']);
+  });
+
+  it('keeps what ffmpeg wrote for a variant it could not measure', () => {
+    const rewritten = withMeasuredBandwidth(
+      FFMPEG_MASTER,
+      new Map([['1/index.m3u8', { peak: 420_000, average: 300_000 }]]),
+    );
+    expect(rewritten).toContain('BANDWIDTH=2538248,AVERAGE-BANDWIDTH=2002897,');
   });
 });
 
