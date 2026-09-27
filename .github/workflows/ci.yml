@@ -1147,14 +1147,49 @@ jobs:
             # Same payload shape as his: Dokploy matches the pushed branch
             # against the stack's configured branch and answers "Branch Not
             # Match" if it cannot find one, so the ref has to be real.
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+            #
+            # ⚠️ THE BODY IS READ, and that is the fix rather than tidying.
+            #
+            # This wrote `-o /dev/null` and judged the call on the status code
+            # alone. Dokploy answers **200** to a webhook it then does nothing
+            # with — "Branch Not Match", an unknown token, a stack already
+            # mid-deploy — so "HTTP 200 — asked" was printed for a stack that
+            # never built.
+            #
+            # Observed 2026-09-27, on the server: `sabry-platform`'s newest
+            # deployment row was eleven hours old while every merge that day
+            # logged `HTTP 200 — asked`. Not one row had been created. The
+            # trigger was reaching *something* and that something was not a
+            # deploy, and nothing in this log could say so.
+            #
+            # A tenant stack silently eleven hours behind is the whole failure
+            # this job exists to prevent, so the body is captured and printed.
+            body=$(curl -s --max-time 30 \
+              -o /tmp/tenant-deploy-body.txt -w '%{http_code}' \
               -X POST "$url" \
               -H 'content-type: application/json' \
               -H 'x-github-event: push' \
               -d "{\"ref\":\"refs/heads/main\"}" || echo "000")
+            code="$body"
+            # First 200 characters only: it is a diagnostic, and a stack that
+            # answers with an HTML error page must not bury the log.
+            answer=$(head -c 200 /tmp/tenant-deploy-body.txt 2>/dev/null | tr '\n' ' ')
+            rm -f /tmp/tenant-deploy-body.txt
 
             case "$code" in
-              2*) echo "stack $asked: HTTP $code — asked" ;;
+              2*)
+                echo "stack $asked: HTTP $code — asked. answered: ${answer:-<empty>}"
+                # The known no-op answers. Dokploy returns 200 for all of
+                # them, so only the TEXT distinguishes "building" from
+                # "ignored", and being late here is exactly the direction that
+                # costs a day.
+                case "$answer" in
+                  *"Branch Not Match"*|*"not match"*|*"Not Found"*|*"not found"*|*"Unauthorized"*|*"error"*)
+                    echo "::warning::stack $asked: Dokploy answered 200 and did NOT start a build (${answer}). Check that stack's webhook URL in DOKPLOY_TENANT_DEPLOY_URLS against its Deployments tab."
+                    failed=$((failed + 1))
+                    ;;
+                esac
+                ;;
               000)
                 echo "::warning::stack $asked: curl could not reach its webhook (DNS, TLS, timeout or refused)."
                 failed=$((failed + 1))
