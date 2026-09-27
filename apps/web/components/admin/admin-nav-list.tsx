@@ -14,6 +14,7 @@ import { useInboxCount } from './inbox-alerts';
 import { usePaymentsPendingCount } from './payments-alerts';
 import { useBookOrdersUnshippedCount } from './book-orders-alerts';
 import { useHomeworkPendingCount } from './homework-alerts';
+import { useGradingPendingCount } from './grading-alerts';
 import { ADMIN_NAV_GROUPS, activeNavItem, visibleNavItems } from './nav-items';
 
 /** `href` → the live count to badge it with, or `null` for every other link.
@@ -25,6 +26,7 @@ function badgeCountFor(
   paymentsCount: number | null,
   bookOrdersCount: number | null,
   homeworkCount: number | null,
+  gradingCount: number | null,
 ): number | null {
   if (href === '/admin/inbox') return inboxCount;
   if (href === '/admin/payments') return paymentsCount;
@@ -33,6 +35,9 @@ function badgeCountFor(
   if (href === '/admin/books') return bookOrdersCount;
   // Answers waiting on a mark — a student is on the other end of this one too.
   if (href === '/admin/homework') return homeworkCount;
+  // Papers with an essay nobody has marked — the student is holding a zero on
+  // it until somebody does. The same number the «محتاج تصحيح» tab prints.
+  if (href === '/admin/grading') return gradingCount;
   return null;
 }
 
@@ -47,6 +52,9 @@ function badgeLabelFor(href: string, n: number): string {
   }
   if (href === '/admin/homework') {
     return formatCopy(copy.admin.homework.pendingBadgeLabel, { n });
+  }
+  if (href === '/admin/grading') {
+    return formatCopy(copy.admin.grading.pendingBadgeLabel, { n });
   }
   return formatCopy(copy.assistant.inbox.badgeLabel, { n });
 }
@@ -96,6 +104,9 @@ export function AdminNavList({
   // And for answers awaiting a mark — `null` on any session without
   // `homework:read`.
   const homeworkCount = useHomeworkPendingCount();
+  // And for papers awaiting a mark — `null` on any session without
+  // `attempt:grade`.
+  const gradingCount = useGradingPendingCount();
 
   return (
     <div className="flex flex-col gap-5">
@@ -123,6 +134,7 @@ export function AdminNavList({
                   paymentsCount,
                   bookOrdersCount,
                   homeworkCount,
+                  gradingCount,
                 );
                 const badge = rawCount !== null && rawCount > 0 ? rawCount : null;
                 return (
