@@ -44,3 +44,41 @@ export const RoleGrantsReadSchema = z.object({
 });
 
 export type RoleGrantsRead = z.infer<typeof RoleGrantsReadSchema>;
+
+/**
+ * صلاحيات **حساب** بعينه — الشاشة اللي المدرّس بيقفل منها المصروفات على
+ * مساعد من غير ما يلمس باقي المساعدين.
+ *
+ * ## ليه مش نفس شكل `RoleGrantsRead`
+ *
+ * ده بيتكلم عن حساب مش رول، وفيه حالة تالتة: `withheld`. الرول بيفتح بس
+ * (شوف `grantablePermissions`)، والحساب بيفتح **ويقفل** — وده اللي بيخلّي
+ * مساعد محدود ممكن أصلًا، لأن أساس `owner` هو «كل حاجة إلا المقالات».
+ */
+export const UserPermissionsReadSchema = z.object({
+  userId: z.string(),
+  name: z.string(),
+  role: z.string(),
+  /** اللي الحساب ماسكه فعلًا دلوقتي — الأساس + المفتوح − المقفول. */
+  effective: z.array(z.string()),
+  /** اللي الرول بيديهوله من غير أي تدخّل. الشاشة بتوريه كخلفية للقرار. */
+  baseline: z.array(z.string()),
+  /** قرارات صريحة اتاخدت على الحساب ده. */
+  allowed: z.array(z.string()),
+  withheld: z.array(z.string()),
+});
+export type UserPermissionsRead = z.infer<typeof UserPermissionsReadSchema>;
+
+/**
+ * الكتابة: الشاشة بتبعت اللي المفروض الحساب يملكه **بالكامل**، والسيرفر
+ * بيحسب الفرق عن الأساس ويكتب صفوف الفتح والقفل.
+ *
+ * ⚠️ بتبعت الحالة النهائية مش «افتح دي» / «اقفل دي»، وده مقصود: الشاشة فيها
+ * تمن أقسام وعشرات الشيك بوكسات، والفرق التراكمي بينهم وبين الداتابيز أسهل
+ * حاجة يغلط فيها. الحالة النهائية بتخلّي إعادة الإرسال بنفس القيم لا تعمل
+ * حاجة.
+ */
+export const UserPermissionsWriteSchema = z
+  .object({ permissions: z.array(z.string()).max(500) })
+  .strict();
+export type UserPermissionsWrite = z.infer<typeof UserPermissionsWriteSchema>;

@@ -126,3 +126,34 @@ describe('permissionsForUser', () => {
     expect(held).toEqual(catalogueOrder);
   });
 });
+
+/**
+ * الحساب اللي ينفع يتظبط من الشاشة دي.
+ *
+ * ⚠️ التستات دي اتكتبت بعد ما **مصفوفة الصلاحيات كشفت الحتة**: صف فيها كتب
+ * `permissions: []` على حساب **طالب**، فاتكتبله «اقفل» لكل حاجة في أساسه،
+ * وإحدى عشر تست بعده وقعوا بـ403 لأن الطالب اتسحبت منه صلاحياته.
+ *
+ * على البرودكشن ده كان طالب دافع بيتقفل عليه حسابه من غير أي شاشة تقول ليه،
+ * ومن غير أي خطأ في أي لوج.
+ */
+describe('replaceForUser — مين ينفع يتظبط', () => {
+  /* الدالة دي منطق خالص، فالتست بيستدعي نفس الشروط من غير داتابيز. */
+  function guard(role: string): string | null {
+    if (role === 'admin') return 'حساب الأدمن بياخد كل الصلاحيات، والقفل عليه مالوش أثر';
+    if (role !== 'owner') return 'الصلاحيات دي بتتظبط لحسابات الفريق بس';
+    return null;
+  }
+
+  it('refuses a student account', () => {
+    expect(guard('student')).toBe('الصلاحيات دي بتتظبط لحسابات الفريق بس');
+  });
+
+  it('refuses an admin account', () => {
+    expect(guard('admin')).toContain('الأدمن');
+  });
+
+  it('allows a staff account', () => {
+    expect(guard('owner')).toBeNull();
+  });
+});

@@ -1,11 +1,30 @@
-import { BadRequestException, Body, Controller, Get, Param, Put, UsePipes } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Put,
+  UsePipes,
+} from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
-import { GrantableRoleSchema, type RoleGrantsRead } from '@ayman/contracts/admin/roles';
+import {
+  GrantableRoleSchema,
+  type RoleGrantsRead,
+  type UserPermissionsRead,
+} from '@ayman/contracts/admin/roles';
 import { RequirePermission } from '../../../auth/decorators/require-permission.decorator';
 import { PermissionGrantsService } from '../../../auth/permission-grants.service';
-import { grantablePermissions, permissionsForRole, type Role } from '../../../auth/permissions';
+import {
+  grantablePermissions,
+  permissionsForRole,
+  permissionsForUser,
+  type Role,
+} from '../../../auth/permissions';
+import { PrismaService } from '../../../prisma/prisma.service';
 import { currentActor } from '../../../audit/audit-context';
-import { RoleGrantsWriteDto } from './roles.dto';
+import { RoleGrantsWriteDto, UserPermissionsWriteDto } from './roles.dto';
 
 /**
  * «الصلاحيات» — opening a feature up to the instructor who runs this stack.
@@ -18,7 +37,10 @@ import { RoleGrantsWriteDto } from './roles.dto';
 @Controller()
 @UsePipes(ZodValidationPipe)
 export class RolesController {
-  constructor(private readonly grants: PermissionGrantsService) {}
+  constructor(
+    private readonly grants: PermissionGrantsService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @RequirePermission('role:read')
   @Get('admin/roles/:role/permissions')
@@ -60,6 +82,57 @@ export class RolesController {
       // The service throws for a permission that is not grantable — a 400,
       // not a 500: the caller sent something wrong and can be told which.
       throw new BadRequestException(error instanceof Error ? error.message : 'invalid grant');
+    }
+  }
+
+  /**
+   * صلاحيات حساب بعينه — «المساعد ده يشوف إيه».
+   *
+   * `staff:manage` مش `role:grant`: ده بيتكلم عن **فرد** في الفريق، وهي نفس
+   * الصلاحية اللي بتضيفه وبتشيله. ولسه مقفولة على `admin` زي أختها، لنفس
+   * السبب المكتوب فوق — حد يقدر يوصل للشاشة دي يقدر يفتح على نفسه كل حاجة.
+   */
+  @RequirePermission('staff:manage')
+  @Get('admin/staff/:userId/permissions')
+  async readUser(@Param('userId') userId: string): Promise<UserPermissionsRead> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, role: true },
+    });
+    if (!user) throw new NotFoundException();
+
+    const { allowed, withheld } = await this.grants.listForUser(user.id);
+
+    return {
+      userId: user.id,
+      name: user.name,
+      role: user.role,
+      // من نفس الدالة اللي الجارد بيقرا منها — الشاشة مايصحش تحسبها بنفسها.
+      effective: [...permissionsForUser(user.id, user.role)],
+      baseline: [...permissionsForRole(user.role)],
+      allowed,
+      withheld,
+    };
+  }
+
+  @RequirePermission('staff:manage')
+  @Put('admin/staff/:userId/permissions')
+  async writeUser(@Param('userId') userId: string, @Body() body: UserPermissionsWriteDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    });
+    if (!user) throw new NotFoundException();
+
+    try {
+      return await this.grants.replaceForUser(
+        user.id,
+        user.role,
+        body.permissions,
+        currentActor().actorUserId,
+      );
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'invalid');
     }
   }
 }
