@@ -86,6 +86,25 @@ describe('member permissions', () => {
     expect(screen.getAllByText(c.countAll).length).toBe(PERMISSION_CATEGORIES.length - 1);
   });
 
+  it('fills the placeholders instead of printing them', async () => {
+    render(<MemberPermissions userId="u1" name="محمد" />);
+
+    await waitFor(() => expect(screen.getByText(FINANCE.titleAr)).toBeInTheDocument());
+
+    /*
+     * ⚠️ العنوان والعدّاد الاتنين بيعدّوا على `formatCopy`، ومفتاح غلط فيه
+     * مابيوقّعش حاجة — بيطبع `{name}` على الشاشة زي ما هو. حرف ناقص في
+     * المفتاح بيوصل للمدرّس كنص مكسور في عنوان لوحة بياخد منها قرار.
+     */
+    expect(screen.getByText('صلاحيات محمد')).toBeInTheDocument();
+    expect(screen.queryByText(/\{name\}/)).not.toBeInTheDocument();
+
+    // والعدّاد: نقفل صلاحية واحدة من «الفلوس» فيبقى «٩ من ١٠» مش «{on} من {all}».
+    fireEvent.click(screen.getAllByRole('button', { name: c.open })[0]!);
+    fireEvent.click(screen.getAllByRole('checkbox')[1]!);
+    expect(screen.queryByText(/\{on\}|\{all\}/)).not.toBeInTheDocument();
+  });
+
   it('warns that the decision has not landed until it is saved', async () => {
     render(<MemberPermissions userId="u1" name="محمد" />);
 
