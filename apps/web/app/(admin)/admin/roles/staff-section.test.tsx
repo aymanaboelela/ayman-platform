@@ -32,6 +32,7 @@ afterEach(() => {
 });
 
 const c = copy.admin.roles.staff;
+const member = copy.admin.roles.member;
 
 const MEMBERS = [
   { id: 'me', name: 'صاحب المنصة', phone: '01000000001', role: 'admin' },
@@ -178,8 +179,58 @@ describe('removing an assistant', () => {
 
     // تلاتة في الفريق، واحد بس مساعد: زرار «شيله» واحد، و«الصلاحيات» واحد.
     expect(screen.getAllByRole('button', { name: c.remove })).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: copy.admin.roles.member.open })).toHaveLength(1);
-    expect(screen.getAllByText(c.roleAdmin)).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: member.open })).toHaveLength(1);
+    expect(screen.getAllByText(member.adminHasEverything)).toHaveLength(2);
     expect(screen.getByText(c.you)).toBeInTheDocument();
+  });
+});
+
+/**
+ * مين بيستاهل زرار «الصلاحيات».
+ *
+ * ⚠️ التست ده اتكتب بعد ما البرودكشن كشف الحتة: ليستة الفريق بتتجاب بـ
+ * `role=staff`، اللي معناها «أي حد مش طالب» — فحسابات **الأدمن** بتظهر
+ * فيها. وعلى منصة أيمن التلات حسابات كلهم أدمن.
+ *
+ * فالزرار كان معروض على حاجة مستحيل تتحفظ: تدوس، تقفل «الفلوس»، تحفظ،
+ * وتاخد «مقدرناش نحفظ» — من غير ما تعرف إن ده مش هيشتغل أبدًا، لأن
+ * `userHasPermission` بيرجّع `true` للأدمن قبل ما يبص على جدول القفل أصلًا.
+ */
+describe('the staff list', () => {
+  it('offers the permissions button for an assistant', () => {
+    render(
+      <StaffSection
+        members={[{ id: 'u1', name: 'محمد', phone: '0100', role: 'owner' }]}
+        currentUserId="me"
+        reasonMin={8}
+      />,
+    );
+    expect(screen.getByRole('button', { name: member.open })).toBeInTheDocument();
+  });
+
+  it('never offers it for an admin account, and says why', () => {
+    render(
+      <StaffSection
+        members={[{ id: 'u2', name: 'أيمن', phone: '0100', role: 'admin' }]}
+        currentUserId="me"
+        reasonMin={8}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: member.open })).not.toBeInTheDocument();
+    // والسبب مكتوب — مش زرار مقفول من غير تفسير.
+    expect(screen.getByText(member.adminHasEverything)).toBeInTheDocument();
+  });
+
+  it('does not offer removal on an admin account either', () => {
+    render(
+      <StaffSection
+        members={[{ id: 'u2', name: 'أيمن', phone: '0100', role: 'admin' }]}
+        currentUserId="me"
+        reasonMin={8}
+      />,
+    );
+    // ⚠️ كان بيتعرض هنا، والسيرفر دلوقتي بيرفض شيل أدمن من الباب ده
+    // (`setStaffRole` → 403). زرار بيوعد بحاجة مش هتحصل أوحش من مفيش زرار.
+    expect(screen.queryByRole('button', { name: c.remove })).not.toBeInTheDocument();
   });
 });

@@ -18,7 +18,7 @@ export interface StaffMember {
   id: string;
   name: string;
   phone: string;
-  /** `admin` بيتعرض من غير أزرار — شوف `staff.roleAdmin`. */
+  /** `owner` للمساعد، `admin` لصاحب المنصة — شوف الكومنت على الزرار تحت. */
   role: string;
 }
 
@@ -169,16 +169,28 @@ export function StaffSection({
                 </p>
               </div>
               <span className="rounded-md bg-surface-2 px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
-                {m.role === 'admin' ? c.roleAdmin : c.roleOwner}
+                {m.role === 'admin' ? member.adminHasEverything : c.roleOwner}
               </span>
               {m.id === currentUserId ? (
                 // `changeRole` بيرفض إنك تغيّر دورك إنت — فالزرار مايتعرضش
                 // بدل ما يتعرض ويرجع خطأ.
                 <span className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.you}</span>
               ) : m.role === 'admin' ? null : (
-                // ⚠️ الأدمن من غير أزرار: القفل على الحساب مابيوصلوش (بياخد
-                // `'*'` قبل الجدول)، والسيرفر بيرفض شيله من الباب ده
-                // (`setStaffRole`). زرار هنا كان هيوعد بحاجة مش هتحصل.
+                /*
+                 * ⚠️ حساب الأدمن من غير أزرار خالص، وده مش إخفاء تجميلي.
+                 *
+                 * «الصلاحيات»: `userHasPermission` بيرجّع `true` للأدمن **قبل**
+                 * ما يبص على جدول القفل أصلًا، فأي قرار بيتكتب عليه مالوش أثر،
+                 * والسيرفر بيرفض الحفظ (`replaceForUser`). واللي كشف ده إن
+                 * الليستة `role=staff` — «أي حد مش طالب» — وعلى البرودكشن
+                 * التلات حسابات كلها أدمن: تدوس، تقفل قسم، تحفظ، وتاخد «مقدرناش
+                 * نحفظ» من غير ما تعرف إن ده مش هيشتغل أبدًا.
+                 *
+                 * «شيله من الفريق»: السيرفر بيرفض شيل أدمن من الباب ده
+                 * (`setStaffRole` → 403) — الأدمن بيتدار من صفحة الطالب.
+                 *
+                 * والسبب مكتوب في البادج جنب الاسم، مش زرار مقفول من غير تفسير.
+                 */
                 <>
                   <Button
                     variant="secondary"
@@ -244,7 +256,7 @@ export function StaffSection({
                 * ده كمان بيتاخد بالمقارنة — إنك تشوف باقي الفريق وإنت بتقفل
                 * على واحد مفيد، والمودال بيخبّيهم.
                 */}
-              {openMember === m.id ? (
+              {openMember === m.id && m.role !== 'admin' ? (
                 <div className="w-full basis-full">
                   <MemberPermissions userId={m.id} name={m.name} />
                 </div>

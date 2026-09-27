@@ -1668,6 +1668,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // اللي بيشغّل الفحص بأكتر من ماسك. الصف هنا عشان الراوت مايفضلش من غير
     // تغطية للحالة.
     { label: 'staff permissions write: admin holds everything, so nothing is escalation', method: 'put', path: () => `/api/admin/staff/${studentId}/permissions`, actor: 'admin', status: 400, body: () => ({ permissions: ['role:grant'] }) },
+    // ⚠️ ومفيش حد يعدّل صلاحيات نفسه. الشاشة بتخبّي الزرار، بس الشاشة مش
+    // الحارس — وعلى ستاكات المدرّسين التانيين الحساب الوحيد هو المدرّس
+    // نفسه برول `owner`، ومفيش `admin` يرجّعه لو قفل على نفسه.
+    { label: 'staff permissions write: refuses to edit your own account', method: 'put', path: () => `/api/admin/staff/${adminId}/permissions`, actor: 'admin', status: 400, body: () => ({ permissions: [] }) },
 
     // ── Entitlements — one public read, and no write anywhere ──
     //
