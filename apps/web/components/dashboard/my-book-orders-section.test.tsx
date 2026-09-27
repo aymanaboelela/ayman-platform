@@ -251,3 +251,34 @@ function line(titleAr: string) {
     forLanguages: null, year: null,
   };
 }
+
+/*
+ * «كمّل الدفع» — الباب اللي الجملة اللي فوقه بتطلبه.
+ *
+ * `noteAddressOnly` بتقول «كمّل الدفع وهنجهّزه على طول» من زمان، وماكانش
+ * تحتها حاجة تتدوس. الطالب بيقرا أمر ومفيش طريقة ينفّذه.
+ */
+describe('the unpaid order’s way forward', () => {
+  it('offers «كمّل الدفع» on an order that was never paid', () => {
+    render(<MyBookOrdersSection orders={[order({ status: 'address_only' })]} supportHref={SUPPORT} />);
+
+    expect(screen.getByRole('link', { name: copy.books.mine.resumeCta })).toHaveAttribute(
+      'href',
+      '/store/orders/0198c3a2-0000-7000-8000-000000000001/pay',
+    );
+  });
+
+  /*
+   * ⚠️ أي حالة تانية الفلوس فيها اتدفعت، وزرار «كمّل الدفع» عليها بيوعد بحاجة
+   * مش موجودة — والصفحة اللي وراه بترد `notFound()` أصلًا. لو الشرط اتشال،
+   * ده اللي بيقع.
+   */
+  it.each(['paid', 'printing', 'shipped', 'delivered', 'rejected'] as const)(
+    'offers nothing to press on a %s order',
+    (status) => {
+      render(<MyBookOrdersSection orders={[order({ status })]} supportHref={SUPPORT} />);
+
+      expect(screen.queryByRole('link', { name: copy.books.mine.resumeCta })).toBeNull();
+    },
+  );
+});
