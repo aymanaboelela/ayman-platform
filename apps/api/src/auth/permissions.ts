@@ -486,6 +486,95 @@ function isKnownRole(role: string): role is Role {
 }
 
 /**
+ * القفل والفتح على **حساب بعينه**، فوق الرول.
+ *
+ * ## ليه الطبقة دي موجودة
+ *
+ * أساس `owner` هو «كل حاجة إلا المقالات»، والمساعدين كلهم `owner`. فمن غير
+ * الطبقة دي مفيش أي طريقة تعمل مساعد محدود: المنح فوق **بتفتح بس**، والقفل
+ * على الرول بيقفل على كل المساعدين مرة واحدة.
+ *
+ * ## ونفس سبب `runtimeGrants` في إنها في الذاكرة
+ *
+ * `userHasPermission` بيتنده على كل ريكويست. قراية جدول هنا معناها رحلة
+ * للداتابيز قدام كل طلب مصادَق. فالجدول بيتحمّل في الذاكرة و
+ * `PermissionGrantsService` بيحدّثه — نفس الميكانيزم بالحرف.
+ *
+ * ## فاضية = مفيش قفل، مش مفيش صلاحيات
+ *
+ * عملية ماقدرتش توصل للداتابيز بتدّي الأساس زي ما هو — مش أقل ومش أكتر.
+ * الاتجاه ده مقصود: مساعد بيشوف المصروفات دقيقة زيادة أهون من مدرّس اتقفلت
+ * عليه منصته كلها لأن قراية جدول فشلت.
+ */
+let userOverrides: ReadonlyMap<string, { allow: ReadonlySet<string>; deny: ReadonlySet<string> }> =
+  new Map();
+
+/** بيستبدل الجدول كله. بيتنده من `PermissionGrantsService`. */
+export function setUserPermissionOverrides(
+  next: ReadonlyMap<string, { allow: ReadonlySet<string>; deny: ReadonlySet<string> }>,
+): void {
+  userOverrides = next;
+}
+
+/** اللي متحمّل دلوقتي لحساب واحد — للشاشة وللتستات. */
+export function userOverridesFor(userId: string): {
+  allow: readonly string[];
+  deny: readonly string[];
+} {
+  const entry = userOverrides.get(userId);
+  return { allow: [...(entry?.allow ?? [])], deny: [...(entry?.deny ?? [])] };
+}
+
+/**
+ * القرار الحقيقي: هل الحساب ده بيملك الصلاحية دي؟
+ *
+ * ⚠️ `admin` بيرجع `true` **قبل** ما يبص على القفل خالص. المدرّس هو `admin`
+ * على ستاكه، وحساب يقدر يقفل على نفسه حاجة هو حساب ممكن يحبس صاحبه برّه
+ * منصته — ومفيش شاشة تفتحها تاني وقتها.
+ *
+ * وترتيب الباقي: القفل بيغلب الفتح. صف «اقفل» موجود = لأ، مهما كان الأساس
+ * أو المنح بيقولوا إيه. ده الاتجاه الوحيد اللي بيخلّي «قفلتها» تعني قفلتها.
+ */
+export function userHasPermission(
+  userId: string | undefined | null,
+  role: string | undefined | null,
+  permission: string,
+): boolean {
+  if (role === 'admin') return true;
+  if (!userId) return roleHasPermission(role, permission);
+
+  const entry = userOverrides.get(userId);
+  if (entry?.deny.has(permission)) return false;
+  if (entry?.allow.has(permission)) return true;
+  return roleHasPermission(role, permission);
+}
+
+/**
+ * الليستة النهائية لحساب — اللي الويب بيرسم منها.
+ *
+ * لازم تتفق مع `userHasPermission` بالحرف: لو الشاشة رسمت زرار الـAPI بترفضه،
+ * الطالب بيدوس ويتقال له لأ؛ ولو خبّت حاجة الـAPI بتسمح بيها، المساعد فقد
+ * شغله من غير سبب ظاهر. الاتنين بيقروا من نفس الخريطة.
+ */
+export function permissionsForUser(
+  userId: string | undefined | null,
+  role: string | undefined | null,
+): readonly Permission[] {
+  if (role === 'admin') return PERMISSIONS;
+  const base = permissionsForRole(role);
+  if (!userId) return base;
+
+  const entry = userOverrides.get(userId);
+  if (!entry || (entry.allow.size === 0 && entry.deny.size === 0)) return base;
+
+  const held = new Set(base);
+  for (const permission of entry.allow) held.add(permission as Permission);
+  for (const permission of entry.deny) held.delete(permission as Permission);
+  // من الكتالوج، عشان الترتيب يفضل ترتيبه ومايدخلش نص مش منه.
+  return PERMISSIONS.filter((permission) => held.has(permission));
+}
+
+/**
  * Whether `role` grants `permission`. An unrecognised or missing role holds
  * no permissions — fail closed, same principle as the guard's S12 handling.
  */

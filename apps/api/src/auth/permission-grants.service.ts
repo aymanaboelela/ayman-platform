@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   grantablePermissions,
   setRuntimeGrants,
+  setUserPermissionOverrides,
   type Permission,
   type Role,
 } from './permissions';
@@ -98,6 +99,34 @@ export class PermissionGrantsService implements OnModuleInit, OnModuleDestroy {
       set.add(row.permission as Permission);
     }
     setRuntimeGrants(next);
+    await this.refreshUserOverrides();
+  }
+
+  /**
+   * القفل والفتح لكل حساب، في نفس دورة التحديث.
+   *
+   * الجدول ده صغير بطبعه: صفوفه بتتكتب لحسابات الفريق بس، وهُمّ أفراد
+   * معدودين — فقرايته كلها مرة واحدة أرخص من فهرسة أي حاجة.
+   *
+   * ⚠️ ومش في نفس الاستعلام مع المنح فوق عن قصد: لو القراية دي فشلت، المنح
+   * اللي اتحمّلت خلاص تفضل مكانها بدل ما الاتنين يرجعوا فاضيين. وفاضي هنا
+   * معناه «مفيش قفل» — يعني المساعد بيشوف أكتر، مش أقل.
+   */
+  private async refreshUserOverrides(): Promise<void> {
+    const rows = await this.prisma.userPermissionOverride.findMany({
+      select: { userId: true, permission: true, allow: true },
+    });
+
+    const next = new Map<string, { allow: Set<string>; deny: Set<string> }>();
+    for (const row of rows) {
+      let entry = next.get(row.userId);
+      if (!entry) {
+        entry = { allow: new Set<string>(), deny: new Set<string>() };
+        next.set(row.userId, entry);
+      }
+      (row.allow ? entry.allow : entry.deny).add(row.permission);
+    }
+    setUserPermissionOverrides(next);
   }
 
   /** What a role currently holds beyond its baseline, from the database. */
