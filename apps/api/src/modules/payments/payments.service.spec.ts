@@ -1170,6 +1170,50 @@ describe('PaymentsService', () => {
       const { rows: approvedRows } = await service.adminList({ status: 'approved', page: 1, perPage: 50 });
       expect(approvedRows.some((row) => row.id === approved.id)).toBe(true);
     });
+
+    /*
+     * ⚠️ الأدمن بيوافق على تحويل وهو شايف المبلغ والاسم والسكرين شوت — ومن غير
+     * السطر ده مش شايف **الفلوس دي تفتح كام شهر**. و٤٥٠ جنيه صح على تلات شهور
+     * وغلط على واحد، فالرقم ده هو اللي القرار بيتقاس عليه.
+     *
+     * الجدول (`PaymentSubmissionMonth`) موجود من ساعة ما الخطة الشهرية اتعملت.
+     * اللي كان ناقص هو إنه يوصل للصف.
+     */
+    it('names the months a transfer buys, in curriculum order', async () => {
+      const claim = await service.submit(studentId, {
+        courseId: monthCourseId,
+        plan: 'monthly',
+        termId: null,
+        // مقلوبين عن قصد: الترتيب اللي بيوصل للشاشة لازم يبقى ترتيب المنهج،
+        // مش ترتيب ما الطالب دوس. «شهر ٢ و١» بتبان كغلطة للأدمن.
+        monthIds: [monthTwoId, monthOneId],
+        senderPhone: '01012345678',
+        screenshotKey: validScreenshotKey(),
+      });
+
+      const { rows } = await service.adminList({ status: 'pending', page: 1, perPage: 50 });
+      const row = rows.find((entry) => entry.id === claim.id);
+
+      expect(row).toBeDefined();
+      expect(row!.months.map((month) => month.title)).toEqual([
+        'شهر ١ — سبتمبر',
+        'شهر ٢ — أكتوبر',
+      ]);
+    });
+
+    /* وخطة مش شهرية مابتجيبش شهور — الأراي فاضية، مش `null`، فالشاشة
+       مابتحتاجش فرع. */
+    it('leaves months empty for a plan that does not buy them', async () => {
+      const claim = await service.submit(studentId, {
+        courseId: monthlyOnlyCourseId,
+        plan: 'monthly',
+        senderPhone: '01012345678',
+        screenshotKey: validScreenshotKey(),
+      });
+
+      const { rows } = await service.adminList({ status: 'pending', page: 1, perPage: 50 });
+      expect(rows.find((entry) => entry.id === claim.id)?.months).toEqual([]);
+    });
   });
 
   describe('adminManualSubscribe', () => {

@@ -2650,6 +2650,19 @@ const admin = {
      * recorded twice.
      */
     planMonth: 'شهر — {month}',
+    /**
+     * صف المراجعة لما الدفعة تشتري شهور بعينها: «شهرين — شهر ٢، شهر ٣».
+     *
+     * `{count}` بيتكتب بالعربي (شهر / شهرين / ٣ شهور) عشان «٢ شهر» مش عربي،
+     * و`{months}` أسماء الشهور زي ما المدرّس كتبها.
+     *
+     * ⚠️ الرقم ده هو اللي الموافقة بتتقاس عليه: ٣٠٠ جنيه صح على شهرين وغلط
+     * على شهر. قبل كده الصف كان بيقول «شهر» وخلاص مهما كانوا كام.
+     */
+    planMonths: '{count} — {months}',
+    planMonthsOne: 'شهر',
+    planMonthsTwo: 'شهرين',
+    planMonthsMany: '{count} شهور',
     /** `{n}` — how many approved submissions this student had before this one. */
     approvedBefore: 'دفع قبل كده {n} مرة',
     approvedBeforeNone: 'أول اشتراك ليه',
