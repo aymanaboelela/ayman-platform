@@ -235,6 +235,37 @@ export function BookOrderCard({
       <p className="mt-3 text-[length:var(--fs-text-sm)] text-fg-muted">{status.note}</p>
 
       {/*
+        الباب اللي الجملة اللي فوق بتطلبه.
+
+        `noteAddressOnly` بتقول «كمّل الدفع وهنجهّزه على طول» من زمان، وماكانش
+        تحتها حاجة تتدوس. `POST /api/book-orders/:id/payment` موجود من الأول —
+        اللي كان بيوصله `localStorage` على المتصفح اللي الطلب اتعمل منه، وده
+        كافي لزائر قفل التاب ومش كافي لطالب مسجّل فتح الموبايل.
+
+        لينك مش زرار: ده تنقّل لصفحة، والطالب بيستاهل الضغط الطويل والفتح في
+        تاب والزرار الخلفي. والصفحة بتتأكد إن الطلب بتاعه وإنه لسه
+        `address_only` قبل ما ترسم حاجة.
+
+        على `address_only` بس. أي حالة تانية الفلوس فيها اتدفعت، والزرار
+        هيوعد بحاجة مش موجودة.
+      */}
+      {order.status === 'address_only' ? (
+        <Link
+          href={`${MY_BOOK_ORDERS_HREF}/${order.id}/pay`}
+          /* نفس تشكيلة `<StartHereCard>` للخطوة التالية بالحرف — الأمبر هو
+             لون الفعل على السطح ده، والصف ده هو الحاجة الوحيدة اللي بتتدوس
+             في الكارت. */
+          className={cn(
+            'mt-3 inline-flex shrink-0 items-center justify-center gap-1.5 rounded-sm px-3 py-2',
+            'text-[length:var(--fs-text-sm)] font-medium',
+            'bg-accent text-[#1A1206] hover:bg-accent-hover',
+          )}
+        >
+          {c.resumeCta}
+        </Link>
+      ) : null}
+
+      {/*
         The admin's own words, VERBATIM, under a prefix that marks them as a
         quote and not as ours — the same rule `payment_rejected` follows in the
         notification feed. `rejectionReason` is non-null exactly when

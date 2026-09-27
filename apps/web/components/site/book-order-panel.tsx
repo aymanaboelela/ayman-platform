@@ -75,6 +75,11 @@ type Step = 'checking' | 'address' | 'payment' | 'submitting' | 'success' | 'alr
  * silently re-showing a payment step there is nothing left to pay for. The
  * entry is cleared the moment payment actually succeeds, and also when a
  * remembered id turns out to be stale — see `lib/book-order-storage.ts`.
+ *
+ * ## واستئناف تاني، من «كتبي»
+ *
+ * `resumeOrderId` بيعدّي على اللوكال ستوريج خالص. الحالة مختلفة: الطالب داخل
+ * بحسابه وبيبصّ على طلب مربوط بيه، فالمعرّف جاي من السيرفر. شوف البروب نفسه.
  */
 export function BookOrderPanel({
   courseId,
@@ -83,6 +88,7 @@ export function BookOrderPanel({
   shippingRates,
   instapay,
   vodafoneCash,
+  resumeOrderId,
   onCancel,
 }: {
   /**
@@ -118,6 +124,21 @@ export function BookOrderPanel({
   instapay: string | null;
   /** The wallet number — a second live destination, see `ContactSchema`. */
   vodafoneCash: string | null;
+  /**
+   * طلب موجود بالفعل، نكمّله — «كمّل الدفع» من «كتبي».
+   *
+   * لما تتبعت، اللوكال ستوريج مابيتقراش خالص: الطالب داخل بحسابه وبيبصّ على
+   * طلبه هو، فالمعرّف وصل من السيرفر مش من المتصفح. ودي الفرق بين الحالتين:
+   *
+   * - **الاستئناف القديم** (زائر قفل التاب) — الطلب مالوش صاحب غير معرّفه،
+   *   واللوكال ستوريج هو الحبل الوحيد. شغّال زي ما هو ومالمسّتوش.
+   * - **ده** — الطالب مسجّل والطلب مربوط بحسابه. صف بيقول «لسه ماتدفعش»
+   *   وتحته مفيش زرار كان بيخلّي الجملة دي بلا معنى، وده اللي اتشكى منه.
+   *
+   * الباب نفسه كان موجود من الأول: `POST /api/book-orders/:id/payment` بيحرّك
+   * الطلب من `address_only` لـ`paid`. اللي كان ناقص هو اللينك ليه.
+   */
+  resumeOrderId?: string;
   onCancel: () => void;
 }) {
   /*
@@ -222,7 +243,9 @@ export function BookOrderPanel({
   // there is exactly one place that decides the resolved step.
   useEffect(() => {
     let cancelled = false;
-    const storedOrderId = readInProgressBookOrder(storageKey);
+    /* المعرّف الصريح بيغلب اللوكال ستوريج: الطالب طالب الطلب ده بالذات من
+       «كتبي»، فقراية حاجة تانية من المتصفح كانت هتفتحله طلب غيره. */
+    const storedOrderId = resumeOrderId ?? readInProgressBookOrder(storageKey);
     const lookup = storedOrderId
       ? apiGet(`/api/book-orders/${storedOrderId}`, BookOrderSchema)
       : Promise.resolve(null);
@@ -296,7 +319,7 @@ export function BookOrderPanel({
     return () => {
       cancelled = true;
     };
-  }, [storageKey]);
+  }, [storageKey, resumeOrderId]);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const next = event.target.files?.[0] ?? null;
