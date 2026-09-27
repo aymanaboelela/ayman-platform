@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readdir, rm, stat } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { dirname, join, relative } from 'node:path';
 import { promisify } from 'node:util';
-import { ladderFor, type LadderRung } from '@ayman/contracts/video';
+import { UPLOAD_CRF, ladderFor, type LadderRung } from '@ayman/contracts/video';
 import { DEFAULT_TOOLS, type MirrorResult, type MirrorTools } from './mirror-pipeline';
 
 const run = promisify(execFile);
@@ -26,11 +26,17 @@ const run = promisify(execFile);
  *     midnight being ready at half past is fine; the site going sluggish
  *     while it happens is not.
  *
- * `-preset veryfast` is deliberate and is not a compromise on the picture. At
- * a fixed bitrate a slower preset buys perhaps 10% efficiency for 4× the CPU,
- * and the content here — slides, code on screen, a talking head — is the kind
- * x264 already handles well. The bitrate ladder is where the quality decision
- * actually lives, and it is in `@ayman/contracts/video` where it can be read.
+ * `-preset medium`, measured rather than assumed (2026-09-28, a real lecture,
+ * constant quality): `slow` came out 1–2% smaller than `medium` at the same
+ * VMAF for 2–3× the CPU, so it buys nothing. `veryfast` was the old choice and
+ * made sense at a fixed bitrate, where the preset only nudges quality; at
+ * constant quality a faster preset spends more bits on the same picture,
+ * which is the one thing this change exists to stop. The quality decision
+ * itself is `UPLOAD_CRF` in `@ayman/contracts/video`.
+ *
+ * The price is time: an hour of lecture costs two to three times the CPU it
+ * did under `veryfast`. Still one video at a time, still niced — a lecture is
+ * ready later, and the site does not notice.
  *
  * ── On shelling out ───────────────────────────────────────────────────────
  * Same contract as the mirror: `execFile` with an ARGUMENT ARRAY, no shell,
@@ -151,8 +157,6 @@ export function transcodeArgs(
   );
 
   const videoCodec = rungs.flatMap((rung, i) => [
-    `-b:v:${i}`,
-    `${rung.videoKbps}k`,
     `-maxrate:v:${i}`,
     `${rung.maxKbps}k`,
     // Two seconds of headroom. Bigger buffers look better on paper and make
@@ -192,7 +196,7 @@ export function transcodeArgs(
     '-c:v',
     'libx264',
     '-preset',
-    'veryfast',
+    'medium',
     // `high` — universally decodable on hardware since roughly 2010, and the
     // profile every phone in an Egyptian classroom accelerates.
     '-profile:v',
@@ -202,6 +206,10 @@ export function transcodeArgs(
     // lecture encoding perfectly and being a black screen on half the class.
     '-pix_fmt',
     'yuv420p',
+    // Constant quality with a per-rung ceiling, never a bitrate target: see
+    // `UPLOAD_LADDER`.
+    '-crf:v',
+    String(UPLOAD_CRF),
     ...videoCodec,
     '-force_key_frames:v',
     `expr:gte(t,n_forced*${SEGMENT_SECONDS})`,
@@ -260,6 +268,154 @@ export function posterArgs(source: string, atSeconds: number, outFile: string): 
   ];
 }
 
+/**
+ * ── What the master playlist promises each rung costs ─────────────────────
+ *
+ * The player picks a rung by comparing the student's measured bandwidth with
+ * each variant's `BANDWIDTH`, and it steps UP only when the connection covers
+ * that number with room to spare. ffmpeg fills it from the stream's declared
+ * rate — and a constant-quality stream has none, so it falls back to the
+ * CEILING. A 1080p lecture that averages 1.4 Mbit/s would then advertise
+ * ~4.7, and a student on a 4 Mbit/s line would be held at 480p for a picture
+ * their connection could carry at 1080p. The smaller files would have bought
+ * a worse lecture.
+ *
+ * So once the ladder is written, each variant's numbers are replaced with
+ * what its segments actually weigh: `BANDWIDTH` as RFC 8216 §4.3.4.2 defines
+ * it (the peak over any run of segments lasting 0.5–1.5× the target
+ * duration) and `AVERAGE-BANDWIDTH` as the whole-file mean.
+ */
+export interface SegmentSize {
+  readonly durationSeconds: number;
+  readonly bytes: number;
+}
+
+export interface VariantBandwidth {
+  /** bit/s — `BANDWIDTH`. */
+  readonly peak: number;
+  /** bit/s — `AVERAGE-BANDWIDTH`. */
+  readonly average: number;
+}
+
+export function variantBandwidth(
+  segments: readonly SegmentSize[],
+  targetDurationSeconds: number,
+): VariantBandwidth | null {
+  let totalBytes = 0;
+  let totalSeconds = 0;
+  for (const segment of segments) {
+    totalBytes += segment.bytes;
+    totalSeconds += segment.durationSeconds;
+  }
+  if (totalSeconds <= 0) return null;
+  const average = Math.ceil((totalBytes * 8) / totalSeconds);
+
+  let peak = 0;
+  for (let i = 0; i < segments.length; i += 1) {
+    let bytes = 0;
+    let seconds = 0;
+    for (let j = i; j < segments.length; j += 1) {
+      bytes += segments[j]!.bytes;
+      seconds += segments[j]!.durationSeconds;
+      if (seconds > 1.5 * targetDurationSeconds) break;
+      if (seconds >= 0.5 * targetDurationSeconds) {
+        peak = Math.max(peak, Math.ceil((bytes * 8) / seconds));
+      }
+    }
+  }
+  // A clip shorter than half a segment has no qualifying run; its mean is the
+  // only honest number. And a peak below the mean is not a peak.
+  return { peak: Math.max(peak, average), average };
+}
+
+/** The target duration and segment list of one media playlist. */
+export function readMediaPlaylist(text: string): {
+  targetDurationSeconds: number;
+  segments: { uri: string; durationSeconds: number }[];
+} {
+  let targetDurationSeconds = 0;
+  const segments: { uri: string; durationSeconds: number }[] = [];
+  let pending: number | null = null;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (line.startsWith('#EXT-X-TARGETDURATION:')) {
+      targetDurationSeconds = Number(line.slice('#EXT-X-TARGETDURATION:'.length));
+    } else if (line.startsWith('#EXTINF:')) {
+      pending = Number.parseFloat(line.slice('#EXTINF:'.length));
+    } else if (line !== '' && !line.startsWith('#') && pending !== null) {
+      segments.push({ uri: line, durationSeconds: pending });
+      pending = null;
+    }
+  }
+  return { targetDurationSeconds, segments };
+}
+
+/** The variant URIs a master playlist lists, in order. */
+export function readMasterVariants(master: string): string[] {
+  const uris: string[] = [];
+  let expectingUri = false;
+  for (const raw of master.split('\n')) {
+    const line = raw.trim();
+    if (line.startsWith('#EXT-X-STREAM-INF:')) expectingUri = true;
+    else if (expectingUri && line !== '' && !line.startsWith('#')) {
+      uris.push(line);
+      expectingUri = false;
+    }
+  }
+  return uris;
+}
+
+/**
+ * `master` with each measured variant's `BANDWIDTH` and `AVERAGE-BANDWIDTH`
+ * replaced. A variant missing from `measured` keeps what ffmpeg wrote.
+ *
+ * The attributes are matched only right after `:` or `,` — `BANDWIDTH` is a
+ * suffix of `AVERAGE-BANDWIDTH`, and `CODECS="avc1…,mp4a…"` has a comma of its
+ * own, so neither a bare match nor splitting on commas is safe.
+ */
+export function withMeasuredBandwidth(
+  master: string,
+  measured: ReadonlyMap<string, VariantBandwidth>,
+): string {
+  const lines = master.split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!lines[i]!.startsWith('#EXT-X-STREAM-INF:')) continue;
+    let j = i + 1;
+    while (j < lines.length && (lines[j]!.trim() === '' || lines[j]!.startsWith('#'))) j += 1;
+    const bandwidth = measured.get(lines[j]?.trim() ?? '');
+    if (bandwidth === undefined) continue;
+
+    let inf = lines[i]!.replace(/(?<=[:,])BANDWIDTH=\d+/, `BANDWIDTH=${bandwidth.peak}`);
+    inf = /(?<=[:,])AVERAGE-BANDWIDTH=\d+/.test(inf)
+      ? inf.replace(/(?<=[:,])AVERAGE-BANDWIDTH=\d+/, `AVERAGE-BANDWIDTH=${bandwidth.average}`)
+      : inf.replace(
+          /(?<=[:,])BANDWIDTH=\d+/,
+          `BANDWIDTH=${bandwidth.peak},AVERAGE-BANDWIDTH=${bandwidth.average}`,
+        );
+    lines[i] = inf;
+  }
+  return lines.join('\n');
+}
+
+/** Measure every variant under `outDir` and rewrite its `master.m3u8`. */
+async function measureMasterBandwidth(outDir: string): Promise<void> {
+  const masterPath = join(outDir, 'master.m3u8');
+  const master = await readFile(masterPath, 'utf8');
+  const measured = new Map<string, VariantBandwidth>();
+  for (const uri of readMasterVariants(master)) {
+    const playlistPath = join(outDir, uri);
+    const media = readMediaPlaylist(await readFile(playlistPath, 'utf8'));
+    const sizes: SegmentSize[] = [];
+    for (const segment of media.segments) {
+      const { size } = await stat(join(dirname(playlistPath), segment.uri));
+      sizes.push({ durationSeconds: segment.durationSeconds, bytes: size });
+    }
+    const bandwidth = variantBandwidth(sizes, media.targetDurationSeconds);
+    if (bandwidth !== null) measured.set(uri, bandwidth);
+  }
+  await writeFile(masterPath, withMeasuredBandwidth(master, measured));
+}
+
 /** Recursively list files under `dir`, as paths relative to it. */
 async function listFiles(dir: string, root = dir): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -297,9 +453,12 @@ export const DEFAULT_TRANSCODE_TOOLS: TranscodeTools = {
   // second literal of the same fields is a second place to forget one.
   ...DEFAULT_TOOLS,
   ffprobe: 'ffprobe',
-  // An encode is far slower than a remux; a two-hour lecture at four rungs
-  // legitimately runs past the mirror's half hour.
-  timeoutMs: 6 * 60 * 60_000,
+  // An encode is far slower than a remux, and `medium` is two to three times
+  // `veryfast`: an hour of lecture can take up to two hours of niced CPU on a
+  // busy VPS, and the upload cap admits four-hour files. A timeout exists to
+  // kill a HUNG ffmpeg, not a slow one — failing a lecture at 90% is worse
+  // than a late one.
+  timeoutMs: 12 * 60 * 60_000,
   threads: 0,
   renice: process.platform === 'linux',
 };
@@ -357,6 +516,10 @@ export async function transcodeUpload(
     tools.ffmpeg,
     transcodeArgs(sourceFile, rungs, outDir, probe.hasAudio, tools.threads),
   );
+
+  // The master ffmpeg wrote already plays — it only advertises each rung's
+  // ceiling. So a failure here costs a cautious rung choice, never a lecture.
+  await measureMasterBandwidth(outDir).catch(() => undefined);
 
   onStage?.('poster');
   // A poster is a nicety; a lecture that encoded fine must not be failed
