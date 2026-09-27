@@ -806,6 +806,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // authorization question, even where the URL shape is identical.
     { label: 'activity feed: anonymous', method: 'get', path: () => '/api/me/activity', actor: 'anonymous', status: 401 },
     { label: 'activity feed: student', method: 'get', path: () => '/api/me/activity', actor: 'student', status: 200 },
+    // «ترتيبي على الدفعة» — `progress:read` زي الـfeed اللي فوقه، ومن غير id في
+    // الرابط. صفوفه لوحدها لنفس السبب: كل راوت لازم يتسمّى.
+    { label: 'cohort rank: anonymous', method: 'get', path: () => '/api/me/rank', actor: 'anonymous', status: 401 },
+    { label: 'cohort rank: student', method: 'get', path: () => '/api/me/rank', actor: 'student', status: 200 },
     // Notifications (slice 4), guarded by `profile:read` for the two reads and
     // `profile:write` for the two writes — deliberately NOT `quiz:read`, even
     // though two of the three kinds are emitted by the quiz engine: the list is
