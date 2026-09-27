@@ -894,30 +894,45 @@ div.unit[data-open] > .unit__head:hover {
    Every object here carries ONE hue, handed in as `--tile-hue` / `--chip-hue`
    from the chart palette — the same slot the matching series wears in the
    charts, so «تجديد» is the same blue on the tile, the column, the chip and the
-   student's timeline. The wash is a mix toward transparent, never a second
-   colour, so both themes get it from the one token.
+   student's timeline. A wash toward `transparent` can mix in any space; a wash
+   toward a NEUTRAL mixes in `oklab` — the dark neutrals are navy, and `oklch`
+   would swing a green over them toward violet (`neutral-mix-space.test.ts`).
    --------------------------------------------------------------------------- */
 .money-tile,
-.money-course {
+.money-course,
+.money-stat {
   --tile-hue: var(--viz-1);
 }
 
-.money-chip {
-  --chip-hue: var(--viz-1);
+/* The small figure on a student's page — a label over a value, always
+   stacked: it lives in a column a third of the screen wide. Its own class and
+   not `.money-tile` with utilities on top, because this file is unlayered and
+   wins over every Tailwind utility — `flex-col` on a `.money-tile` was
+   silently overruled by the tile's own row layout. */
+.money-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-inline-size: 0;
+  padding: var(--s-12);
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid color-mix(in oklch, var(--tile-hue), transparent 62%);
+  background: color-mix(in oklab, var(--tile-hue), var(--n-2) 92%);
 }
 
 .money-tile {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  gap: var(--s-12);
+  gap: var(--s-8) var(--s-12);
   padding: var(--s-16);
   border-color: color-mix(in oklch, var(--tile-hue), transparent 62%);
-  background: color-mix(in oklch, var(--tile-hue), var(--n-2) 92%);
+  background: color-mix(in oklab, var(--tile-hue), var(--n-2) 92%);
 }
 
 .money-tile--loud {
   border-color: color-mix(in oklch, var(--tile-hue), transparent 40%);
-  background: color-mix(in oklch, var(--tile-hue), var(--n-2) 84%);
+  background: color-mix(in oklab, var(--tile-hue), var(--n-2) 84%);
 }
 
 .money-tile__well {
@@ -928,12 +943,12 @@ div.unit[data-open] > .unit__head:hover {
   block-size: 2.5rem;
   border-radius: var(--r-lg);
   background: color-mix(in oklch, var(--tile-hue), transparent 78%);
-  color: color-mix(in oklch, var(--tile-hue), var(--n-12) 25%);
+  color: color-mix(in oklab, var(--tile-hue), var(--n-12) 25%);
 }
 
 .money-tile__value {
   margin-block-start: var(--s-4);
-  font-size: var(--fs-title-2);
+  font-size: var(--fs-title-3);
   font-weight: var(--fw-semibold);
   line-height: 1.1;
   color: var(--n-12);
@@ -944,7 +959,7 @@ div.unit[data-open] > .unit__head:hover {
 .money-course {
   padding: var(--s-16);
   border-block-start: 3px solid var(--tile-hue);
-  background: color-mix(in oklch, var(--tile-hue), var(--n-2) 95%);
+  background: color-mix(in oklab, var(--tile-hue), var(--n-2) 95%);
 }
 
 .money-chip {
@@ -953,8 +968,11 @@ div.unit[data-open] > .unit__head:hover {
   gap: var(--s-4);
   padding: 2px var(--s-8);
   border-radius: var(--r-full);
-  border: var(--hairline) solid color-mix(in oklch, var(--chip-hue), transparent 55%);
-  background: color-mix(in oklch, var(--chip-hue), transparent 85%);
+  /* The hue is INHERITED when the chip does not set its own — a kind chip
+     inside a `.pay-row` wears the row's colour. A default declared on the
+     chip itself would shadow that, which is exactly what it first did. */
+  border: var(--hairline) solid color-mix(in oklch, var(--chip-hue, var(--viz-1)), transparent 55%);
+  background: color-mix(in oklch, var(--chip-hue, var(--viz-1)), transparent 85%);
   color: var(--n-12);
   font-size: var(--fs-text-xs);
   white-space: nowrap;
@@ -969,12 +987,24 @@ div.unit[data-open] > .unit__head:hover {
   font-variant-numeric: tabular-nums;
 }
 
+/* Two tiles to a row on a phone, so the well sits above the figure there and
+   beside it from a tablet up. */
+@media (min-width: 640px) {
+  .money-tile {
+    flex-direction: row;
+  }
+
+  .money-tile__value {
+    font-size: var(--fs-title-2);
+  }
+}
+
 /* ── يوم بيوم ────────────────────────────────────────────────────────────────
    A list, not a <table>: on a phone each day has to fold onto two lines with
    its own labels, and a table cannot do that without becoming a second
    component. On a wide screen the same rows snap to one grid under a head row,
    which is the table he reads. */
-.money-days__head {
+.money-days .money-days__head {
   display: none;
 }
 
@@ -1022,21 +1052,18 @@ div.unit[data-open] > .unit__head:hover {
   color: var(--n-12);
 }
 
-/* The disclosure mark — a chevron drawn from two borders, pointing at the
-   reading direction when closed and down when open. */
-.money-day summary .money-day__date::before {
-  content: '';
+/* The disclosure mark — `ChevronLeft`, which points the way the page reads
+   (forward, in RTL), turned to point down once the day is open. */
+.money-day__chev {
   flex-shrink: 0;
-  inline-size: 0.45rem;
-  block-size: 0.45rem;
-  border-inline-start: 2px solid var(--n-10);
-  border-block-end: 2px solid var(--n-10);
-  transform: rotate(45deg);
+  inline-size: 1rem;
+  block-size: 1rem;
+  color: var(--n-10);
   transition: transform var(--d-hover) var(--ease);
 }
 
-.money-day details[open] > summary .money-day__date::before {
-  transform: rotate(-45deg);
+.money-day details[open] > summary .money-day__chev {
+  transform: rotate(-90deg);
 }
 
 .money-day__subs {
@@ -1051,6 +1078,8 @@ div.unit[data-open] > .unit__head:hover {
 .money-day__figure {
   display: flex;
   flex-direction: column;
+  /* Two to a line on a phone — a 2×2 of money, net last. */
+  flex: 1 1 40%;
   min-inline-size: 5.5rem;
   font-size: var(--fs-text-sm);
 }
@@ -1093,7 +1122,7 @@ div.unit[data-open] > .unit__head:hover {
 }
 
 @media (min-width: 768px) {
-  .money-days__head,
+  .money-days .money-days__head,
   .money-day__grid {
     display: grid;
     grid-template-columns:
@@ -1164,7 +1193,7 @@ div.unit[data-open] > .unit__head:hover {
   padding: var(--s-12) var(--s-16);
   border-radius: var(--r-lg);
   border: var(--hairline) solid color-mix(in oklch, var(--chip-hue), transparent 60%);
-  background: color-mix(in oklch, var(--chip-hue), var(--n-2) 93%);
+  background: color-mix(in oklab, var(--chip-hue), var(--n-2) 93%);
 }
 
 .pay-row::before {

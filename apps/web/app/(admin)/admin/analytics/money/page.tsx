@@ -4,6 +4,7 @@ import {
   ArrowUpLeft,
   BookOpen,
   CalendarDays,
+  ChevronLeft,
   Coins,
   Gift,
   RefreshCw,
@@ -217,7 +218,7 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
         ))}
       </nav>
 
-      <section className="mb-8 grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3">
+      <section className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-3">
         <MoneyTile
           icon={Wallet}
           hue="var(--a-9)"
@@ -234,7 +235,9 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
           label={`${c.tileWindow} · ${RANGE_LABEL[days]}`}
           value={formatAmount(totals.netCents)}
           context={formatCopy(c.tileWindowContext, {
-            amount: formatAmount(Math.round(totals.netCents / Math.max(1, daily.length))),
+            // Whole pounds: an average is an estimate, and «571.67» claims a
+            // precision the figure does not have.
+            amount: formatAmount(Math.round(totals.netCents / Math.max(1, daily.length) / 100) * 100),
           })}
         />
         <MoneyTile
@@ -253,7 +256,9 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
         />
         <MoneyTile
           icon={Undo2}
-          hue="var(--viz-4)"
+          // The state colour, not a series slot: rose is course 4's hue on the
+          // chart right under this tile, and money going OUT is a state.
+          hue="var(--err)"
           label={c.tileRefunds}
           value={formatAmount(totals.refundCents === 0 ? 0 : -totals.refundCents)}
           context={c.tileRefundsContext}
@@ -261,7 +266,9 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
         {report.includesBooks ? (
           <MoneyTile
             icon={BookOpen}
-            hue="var(--viz-3)"
+            // Not a chart slot either — books are not a series on this page's
+            // charts, and violet is course 3's.
+            hue="var(--e-ink)"
             label={c.tileBooks}
             value={formatAmount(totals.bookCents)}
             context={formatCopy(c.tileBooksContext, { n: formatCount(totals.bookCount) })}
@@ -368,9 +375,11 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
                 day.bookCents === 0 &&
                 day.refundCents === 0 &&
                 day.freeCount === 0;
+              const expandable = !quiet && day.byCourse.length > 0;
               const summary = (
                 <>
                   <span className="money-day__date">
+                    {expandable ? <ChevronLeft className="money-day__chev" aria-hidden="true" /> : null}
                     {title}
                   </span>
                   {quiet ? (
@@ -409,7 +418,7 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
                 </>
               );
 
-              if (quiet || day.byCourse.length === 0) {
+              if (!expandable) {
                 return (
                   <li key={day.date} className={cn('money-day', quiet && 'money-day--quiet')}>
                     <div className="money-day__grid">{summary}</div>
@@ -429,7 +438,7 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
                             className="size-2.5 shrink-0 rounded-[3px]"
                             style={{ background: colorOf(cell.courseId) }}
                           />
-                          <span className="min-w-0 flex-1 truncate text-fg">
+                          <span className="min-w-0 flex-[1_1_80%] truncate text-fg sm:flex-1">
                             {titleOf.get(cell.courseId) ?? '—'}
                           </span>
                           <span className="text-fg-muted">

@@ -138,7 +138,7 @@ export function StackedColumns({
                   >
                     <div
                       role="tooltip"
-                      className="w-max max-w-56 rounded-md border border-line bg-surface-1 px-2.5 py-1.5 text-[length:var(--fs-text-xs)] shadow-md"
+                      className="w-max max-w-72 rounded-md border border-line bg-surface-1 px-2.5 py-1.5 text-[length:var(--fs-text-xs)] shadow-md"
                     >
                       <p className="text-fg-muted">{column.title}</p>
                       <p className="tabular font-semibold text-fg">{format(total)}</p>

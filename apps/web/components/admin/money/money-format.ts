@@ -11,10 +11,19 @@ const c = copy.admin.money;
  */
 const COUNT = new Intl.NumberFormat('ar-EG-u-nu-latn', { maximumFractionDigits: 0 });
 
-/** Piastres → «1,250 ج», sign kept. `formatEGPExact`, never the rounding
- *  one: this screen prints figures that are meant to add up. */
+/**
+ * Piastres → «1,250 ج», sign kept. `formatEGPExact`, never the rounding one:
+ * this screen prints figures that are meant to add up.
+ *
+ * A negative is wrapped in a left-to-right isolate (LRI … PDI). Bare, the
+ * minus is a neutral in an Arabic paragraph and bidi moves it to the far side
+ * of the digits — «100−» — which is how a refund reads as a hundred. The
+ * isolate is inside the STRING because this value also lands in tooltips and
+ * the table view, where no wrapping element exists to carry `dir`.
+ */
 export function formatAmount(cents: number): string {
-  return `${cents < 0 ? '−' : ''}${formatEGPExact(Math.abs(cents))} ${c.currency}`;
+  const figure = formatEGPExact(Math.abs(cents));
+  return cents < 0 ? `\u2066−${figure}\u2069 ${c.currency}` : `${figure} ${c.currency}`;
 }
 
 export function formatCount(n: number): string {

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@ayman/ui/lib/cn';
@@ -22,11 +23,26 @@ const TABS = [
 export function AnalyticsNavLinks({ showMoney }: { showMoney: boolean }) {
   const pathname = usePathname();
   const tabs = TABS.filter((tab) => showMoney || !tab.money);
+  const navRef = useRef<HTMLElement>(null);
+
+  // On a phone the fourth tab is past the edge, and landing on it with its
+  // label cut in half reads as broken. Bring the current tab into the strip —
+  // `nearest` on both axes, so a tab already in view moves nothing and the
+  // page itself never scrolls.
+  useEffect(() => {
+    navRef.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [pathname]);
 
   return (
     // `overflow-x-auto`: four tabs are wider than a 360px phone, and a nav
     // that wraps puts the active underline on a second row nobody reads.
-    <nav className="mb-6 flex gap-1 overflow-x-auto border-b border-line" aria-label={c.title}>
+    <nav
+      ref={navRef}
+      className="mb-6 flex gap-1 overflow-x-auto border-b border-line"
+      aria-label={c.title}
+    >
       {tabs.map((tab) => {
         const active = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href);
         return (

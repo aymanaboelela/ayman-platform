@@ -127,7 +127,7 @@ export async function PaymentsSection({ userId }: { userId: string }) {
             <Stat
               label={c.studentRefunded}
               value={data.totals.refundedCents > 0 ? formatAmount(-data.totals.refundedCents) : '—'}
-              hue="var(--viz-4)"
+              hue="var(--err)"
             />
             <Stat label={c.studentNet} value={formatAmount(data.totals.netCents)} hue="var(--viz-2)" />
             <Stat
@@ -165,7 +165,7 @@ export async function PaymentsSection({ userId }: { userId: string }) {
                     {row.refundedCents > 0 ? (
                       <span
                         className="money-chip"
-                        style={{ '--chip-hue': 'var(--viz-4)' } as React.CSSProperties}
+                        style={{ '--chip-hue': 'var(--err)' } as React.CSSProperties}
                       >
                         <Undo2 className="size-3.5" aria-hidden="true" />
                         {formatCopy(c.refundedNote, { amount: formatAmount(row.refundedCents) })}
@@ -190,10 +190,7 @@ export async function PaymentsSection({ userId }: { userId: string }) {
 
 function Stat({ label, value, hue }: { label: string; value: string; hue: string }) {
   return (
-    <div
-      className="money-tile flex-col gap-1 rounded-lg border p-3"
-      style={{ '--tile-hue': hue } as React.CSSProperties}
-    >
+    <div className="money-stat" style={{ '--tile-hue': hue } as React.CSSProperties}>
       <dt className="text-[length:var(--fs-text-xs)] text-fg-muted">{label}</dt>
       <dd className="tabular text-[length:var(--fs-title-4)] font-semibold text-fg">{value}</dd>
     </div>

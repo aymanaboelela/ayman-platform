@@ -3176,8 +3176,9 @@ const admin = {
     studentRenewals: 'التجديدات',
     studentEmpty: 'مفيش ولا دفعة لحد دلوقتي.',
     kindNew: 'اشتراك جديد',
-    /** `{n}` — which renewal this is (2 = the first renewal). */
-    kindRenewal: 'تجديد — المرة رقم {n}',
+    /** `{n}` — which paid purchase of this course this is (2 = the first
+     *  renewal), so «الدفعة رقم ٣» says plainly it is the third time. */
+    kindRenewal: 'تجديد — الدفعة رقم {n} للكورس ده',
     kindFree: 'ببلاش',
     viaInstapay: 'إنستاباي — اتقبل لوحده',
     viaManual: 'اتسجّل بإيد الأدمن',
