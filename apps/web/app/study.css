@@ -222,8 +222,9 @@
 
    ## The shape: greeting and dial share row 1, everything else spans
 
-   Row 1 is `minmax(0, 1fr) auto` — the identity cluster at the inline start,
-   the dial at the end. Rows 2 and 3 span `1 / -1`: the three figures, then
+   Row 1 is the identity cluster at the inline start, the dial at the end,
+   and between them `<HeroScene>` — the drawing, in a column that is exactly
+   the gap (see the grid template below). Rows 2 and 3 span `1 / -1`: the three figures, then
    «مواعيد المحاضرات». Both are full-width for the same reason, and it is a
    measured one rather than a taste: three `.tile`s want ~190px each before the
    number and the label stop sharing a line, and the strip was asked for in the
@@ -247,15 +248,26 @@
    The hole the 90rem rule existed to fill is filled anyway, and better: row 2
    is now a full-width band of three lit tiles rather than a line of small
    grey text, so the band no longer reads as two clusters with ember between
-   them at ANY width. `.dash-hero__art` covers what is left of row 1's middle,
-   which is the job it was drawn for.
+   them at ANY width. What is left of row 1's middle is now `<HeroScene>`'s
+   own column, with `.dash-hero__art`'s rings still behind the dial.
 
    The dial takes `align-self: center` on its own row rather than spanning two;
    it is one object and it centres on the greeting beside it. */
 @media (min-width: 48rem) {
   .dash-hero {
     padding: var(--s-32);
-    grid-template-columns: minmax(0, 1fr) auto;
+    /* Greeting, DRAWING, dial. The middle column is the gap between the other
+       two made into a real cell, so `<HeroScene>` fills exactly the ember that
+       used to sit empty there and can never overlap a long school chip —
+       `dashboard-hero.tsx` has the argument.
+
+       `minmax(0, auto)` rather than `auto` for the greeting: the grid still
+       grows it to its max-content before the `1fr` sees any space (flexible
+       tracks are expanded LAST), but its floor is 0 rather than min-content,
+       and a school name in a `nowrap` chip has a min-content wider than a
+       768px band. With a bare `auto` that chip could force the band wider than
+       its own box; with this it ellipsises, as it did before. */
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
     align-items: center;
     gap: var(--s-32);
     /* Tighter than the column gap: the figures are a continuation of the
@@ -269,7 +281,7 @@
   }
 
   .dash-hero__aside {
-    grid-column: 2;
+    grid-column: 3;
     grid-row: 1;
     align-self: center;
   }
@@ -350,6 +362,220 @@
   stroke-width: 1.5;
 }
 
+/* ---------------------------------------------------------------------------
+   The drawing — `<HeroScene>` between the greeting and the dial, and
+   `<HeroSparks>` in the corner where the band stacks.
+
+   «عايز صور وأشكال وشغل حلو هنا». The component carries the what and the why
+   of the grid cell; this block is size, paint and motion.
+
+   ## Paint: four white steps and the brand amber, nothing else
+
+   The same rule as the rings above and `.course-art`'s shapes: on an ember
+   ground that is dark in both themes, white alphas are the ground lighter and
+   amber is the product's own "you are here" colour. No new hue can clash with
+   the band because none is introduced.
+   --------------------------------------------------------------------------- */
+.dash-hero__scene {
+  display: none;
+}
+
+@media (min-width: 48rem) {
+  .dash-hero__scene {
+    position: relative;
+    z-index: 0;
+    display: block;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: stretch;
+    min-block-size: 7.5rem;
+    /* A container so the drawing can leave when its gap gets too narrow to
+       hold it — see the query below. Inline-size only: the cell's height is
+       the row's, which the greeting and the dial decide. */
+    container-type: inline-size;
+  }
+
+  /* Absolutely filled, so the SVG's aspect ratio can never make row 1 taller:
+     `meet` scales the whole drawing into whatever box the cell is. */
+  .dash-hero__scene > svg {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    overflow: visible;
+  }
+}
+
+/* Under ~10rem the rocket is a smudge and the books are a stripe, so the
+   corner version (planet, rocket, sparkles) stands in; under ~4.5rem even
+   that is a speck, and an empty gap of ember is better than a drawing too
+   small to read as one. */
+.dash-hero__scene-mini {
+  display: none;
+}
+
+@container (max-width: 10rem) {
+  .dash-hero__scene-full {
+    display: none;
+  }
+
+  .dash-hero__scene-mini {
+    display: block;
+  }
+}
+
+@container (max-width: 4.5rem) {
+  .dash-hero__scene-mini {
+    display: none;
+  }
+}
+
+.dash-hero__sparks {
+  position: absolute;
+  z-index: 0;
+  inset-block-start: var(--s-8);
+  inset-inline-end: var(--s-8);
+  inline-size: 6.5rem;
+  block-size: auto;
+  /* Quieter than the wide scene: here the drawing shares a row with the
+     greeting rather than having a cell of its own, and a long first name can
+     run underneath the rocket. */
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+@media (min-width: 48rem) {
+  .dash-hero__sparks {
+    display: none;
+  }
+}
+
+.dash-hero__fill-2 { fill: rgb(255 255 255 / 0.14); }
+.dash-hero__fill-3 { fill: rgb(255 255 255 / 0.30); }
+.dash-hero__fill-4 { fill: rgb(255 255 255 / 0.90); }
+.dash-hero__fill-amber { fill: var(--a-9); }
+
+/* A book's spine: the band's own deep ember, laid over the cover's end. */
+.dash-hero__spine {
+  fill: var(--e-stage-deep);
+  opacity: 0.4;
+}
+
+.dash-hero__line {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.42);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dash-hero__trail {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.5);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 1.5 7;
+}
+
+.dash-hero__tassel {
+  fill: none;
+  stroke: var(--a-9);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.dash-hero__flame { fill: var(--a-9); }
+.dash-hero__window {
+  fill: var(--e-stage-deep);
+  stroke: var(--a-9);
+  stroke-width: 1.6;
+}
+
+.dash-hero__spark { fill: rgb(255 255 255 / 0.88); }
+.dash-hero__spark--amber { fill: var(--a-9); }
+
+/* ## Motion
+
+   Seven small things, all `transform`/`opacity` except the trail's dash
+   offset, and all of it gone under `prefers-reduced-motion` — not slowed,
+   absent, which is what `motion.css`'s backstop would do anyway. Nothing
+   moves more than a few pixels and nothing loops faster than half a second,
+   because these sit beside the text a student reads first on every visit.
+
+   `transform-box: fill-box` on every SVG child that scales or turns: without
+   it the origin is the SVG's own (0, 0), and a sparkle "twinkling" around the
+   corner of the viewBox swings across the whole drawing. */
+@media (prefers-reduced-motion: no-preference) {
+  .dash-hero__orbit {
+    animation: dash-hero-orbit 40s linear infinite;
+  }
+
+  .dash-hero__rocket {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: dash-hero-bob 3.6s var(--ease) infinite alternate;
+  }
+
+  .dash-hero__flame {
+    transform-box: fill-box;
+    transform-origin: 50% 0;
+    animation: dash-hero-flame 0.45s ease-in-out infinite alternate;
+  }
+
+  .dash-hero__trail {
+    animation: dash-hero-trail 2.2s linear infinite;
+  }
+
+  .dash-hero__planet {
+    animation: dash-hero-float 7s var(--ease) infinite alternate;
+  }
+
+  .dash-hero__spark {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: dash-hero-twinkle 2.8s ease-in-out infinite;
+  }
+
+  /* Staggered, so the sky never pulses in unison. Negative delays start each
+     one mid-cycle rather than holding it still for its first second. */
+  g:nth-of-type(2n) > .dash-hero__spark {
+    animation-delay: -1.2s;
+  }
+
+  g:nth-of-type(3n) > .dash-hero__spark {
+    animation-duration: 3.6s;
+    animation-delay: -2.1s;
+  }
+}
+
+@keyframes dash-hero-orbit {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes dash-hero-bob {
+  from { transform: translate(0, 0); }
+  to { transform: translate(0, -4px); }
+}
+
+@keyframes dash-hero-flame {
+  from { transform: scaleY(0.8); opacity: 0.85; }
+  to { transform: scaleY(1.15); opacity: 1; }
+}
+
+@keyframes dash-hero-trail {
+  to { stroke-dashoffset: -17; }
+}
+
+@keyframes dash-hero-float {
+  from { transform: translateY(0); }
+  to { transform: translateY(-3px); }
+}
+
+@keyframes dash-hero-twinkle {
+  0%, 100% { opacity: 0.45; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
 .dash-hero__id {
   position: relative;
   z-index: 1;
@@ -363,8 +589,84 @@
    the ember band in BOTH themes and every neutral step inverts between them. */
 .dash-hero__avatar {
   flex-shrink: 0;
-  border-color: rgb(255 255 255 / 0.35) !important;
-  box-shadow: 0 0 0 4px rgb(255 255 255 / 0.10);
+  /* No `!important`, and there used to be one: the wrapper's `border-line` is
+     a Tailwind utility, which lives in a cascade layer, and this file is
+     unlayered — it wins on that alone. */
+  border-color: rgb(255 255 255 / 0.45);
+  border-width: 2px;
+  box-shadow:
+    0 0 0 4px rgb(255 255 255 / 0.10),
+    0 6px 18px rgb(0 0 0 / 0.22);
+}
+
+/* The portrait's own box: the orbit and the camera chip are positioned
+   against it, not against the band. */
+.dash-hero__portrait {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+/* A dashed amber ring 14px outside the face, with one sparkle riding it. It
+   turns (below, motion permitting) — the only moving thing near the words, so
+   it is slow: one revolution in forty seconds reads as alive, not as busy. */
+.dash-hero__orbit {
+  position: absolute;
+  inset: -14px;
+  inline-size: calc(100% + 28px);
+  block-size: calc(100% + 28px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dash-hero__orbit circle {
+  fill: none;
+  stroke: var(--a-9);
+  stroke-opacity: 0.7;
+  stroke-width: 1.4;
+  stroke-dasharray: 2 5;
+  stroke-linecap: round;
+}
+
+.dash-hero__orbit-star {
+  fill: var(--a-9);
+}
+
+/* «تغيير صورتك», as a camera on the portrait's lower inline-end edge — only
+   rendered while there is no photo. 28px drawn, 44px touched: the extra is an
+   inset pseudo-element, so the hit area grows without the chip growing. */
+.dash-hero__photo-cta {
+  position: absolute;
+  inset-block-end: -2px;
+  inset-inline-end: -4px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: var(--r-full);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  box-shadow:
+    0 0 0 3px var(--e-stage-deep),
+    0 2px 6px rgb(0 0 0 / 0.25);
+  transition: transform var(--d-hover) var(--ease-out);
+}
+
+.dash-hero__photo-cta::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+.dash-hero__photo-cta:hover {
+  transform: scale(1.08);
+}
+
+.dash-hero__photo-cta:focus-visible {
+  outline: var(--focus-ring-width) solid var(--ink-fg);
+  outline-offset: 2px;
 }
 
 .dash-hero__text {
