@@ -54,7 +54,17 @@ export default async function RolesPage() {
     adminGet(
       '/api/admin/students?page=1&perPage=50&role=staff',
       z.object({
-        rows: z.array(z.object({ id: z.string(), fullName: z.string(), phone: z.string() })),
+        rows: z.array(
+          z.object({
+            id: z.string(),
+            fullName: z.string(),
+            phone: z.string(),
+            // ⚠️ الدور لازم يعدّي للشاشة. `role=staff` معناها «أي حد مش
+            // طالب» — فحساب **أدمن** بيظهر في الليستة دي، وصلاحياته مش
+            // بتتظبط من هنا. من غير الحقل ده الشاشة مابتعرفش تفرّق.
+            role: z.string(),
+          }),
+        ),
       }),
     ),
     getSession(),
@@ -67,7 +77,12 @@ export default async function RolesPage() {
 
       <div className="mb-8">
         <StaffSection
-          members={staff.rows.map((r) => ({ id: r.id, name: r.fullName, phone: r.phone }))}
+          members={staff.rows.map((r) => ({
+            id: r.id,
+            name: r.fullName,
+            phone: r.phone,
+            role: r.role,
+          }))}
           currentUserId={session?.id ?? ''}
         />
       </div>
