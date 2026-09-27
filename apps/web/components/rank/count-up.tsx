@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 /**
  * رقم بيتعدّ لحد قيمته — «المركز» بينزل من حجم الدفعة لحد ترتيب الطالب،
@@ -24,34 +24,43 @@ export function CountUp({
   durationMs?: number;
   className?: string;
 }) {
-  const [value, setValue] = useState(to);
-  const frame = useRef<number | null>(null);
+  const node = useRef<HTMLSpanElement>(null);
 
+  /*
+   * الرقم بيتكتب في الـDOM على طول مش من state: ستين رندر في الثانية لرقم
+   * واحد شغل مالوش لازمة، والـeffect مابيغيّرش حاجة React بتعرفها — آخر فريم
+   * بيكتب `to`، اللي هو نفس اللي السيرفر رندره.
+   */
   useEffect(() => {
-    if (from === to) return;
+    const el = node.current;
+    if (!el || from === to) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
+    let frame = 0;
     const start = performance.now();
     const step = (now: number) => {
       const t = Math.min(1, (now - start) / durationMs);
       // easeOutExpo: سريع في الأول وبيهدى على الرقم الأخير، عشان العين تلحق تقراه.
       const eased = t === 1 ? 1 : 1 - 2 ** (-10 * t);
-      setValue(Math.round(from + (to - from) * eased));
-      if (t < 1) frame.current = requestAnimationFrame(step);
+      el.textContent = FORMAT.format(Math.round(from + (to - from) * eased));
+      if (t < 1) frame = requestAnimationFrame(step);
     };
-    setValue(from);
-    frame.current = requestAnimationFrame(step);
+    frame = requestAnimationFrame(step);
 
     // الراوتر بيسيب الـDOM ويعيد الـeffects لما الطالب يرجع للصفحة
-    // (`router-keeps-the-dom-reruns-effects`)، فالـframe القديم لازم يتلغي.
+    // (`router-keeps-the-dom-reruns-effects`)، فالفريم القديم لازم يتلغي، والرقم
+    // يرجع لقيمته لو الإلغاء جه في النص.
     return () => {
-      if (frame.current !== null) cancelAnimationFrame(frame.current);
+      cancelAnimationFrame(frame);
+      el.textContent = FORMAT.format(to);
     };
   }, [from, to, durationMs]);
 
   return (
-    <span className={className} aria-hidden="true">
-      {value.toLocaleString('en-US')}
+    <span ref={node} className={className} aria-hidden="true">
+      {FORMAT.format(to)}
     </span>
   );
 }
+
+const FORMAT = new Intl.NumberFormat('en-US');
