@@ -85,6 +85,7 @@
     "./admin/audit": "./src/admin/audit.ts",
     "./admin/settings": "./src/admin/settings.ts",
     "./admin/roles": "./src/admin/roles.ts",
+    "./admin/permission-categories": "./src/admin/permission-categories.ts",
     "./admin/list": "./src/admin/list.ts",
     "./admin/students": "./src/admin/students.ts",
     "./admin/attempts": "./src/admin/attempts.ts",

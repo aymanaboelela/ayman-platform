@@ -1644,6 +1644,31 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // And the loop the whole design exists to not close.
     { label: 'role grants write: cannot grant role:grant', method: 'put', path: () => '/api/admin/roles/owner/permissions', actor: 'admin', status: 400, body: () => ({ permissions: ['role:grant'] }) },
 
+    // ── صلاحيات حساب بعينه — «المساعد ده يشوف إيه» ──
+    //
+    // `staff:manage`، نفس الصلاحية اللي بتضيف الفرد وبتشيله. ومقفولة على
+    // `admin` زي أختها: حد يوصل للشاشة دي يقدر يفتح على نفسه كل حاجة.
+    { label: 'staff permissions read: anonymous', method: 'get', path: () => `/api/admin/staff/${studentId}/permissions`, actor: 'anonymous', status: 401 },
+    { label: 'staff permissions read: student', method: 'get', path: () => `/api/admin/staff/${studentId}/permissions`, actor: 'student', status: 403 },
+    { label: 'staff permissions read: admin', method: 'get', path: () => `/api/admin/staff/${studentId}/permissions`, actor: 'admin', status: 200 },
+    { label: 'staff permissions write: anonymous', method: 'put', path: () => `/api/admin/staff/${studentId}/permissions`, actor: 'anonymous', status: 401, body: () => ({ permissions: [] }) },
+    { label: 'staff permissions write: student', method: 'put', path: () => `/api/admin/staff/${studentId}/permissions`, actor: 'student', status: 403, body: () => ({ permissions: [] }) },
+    // ⚠️ ٤٠٠ مش ٢٠٠، والسبب إن الصف ده هو اللي كشف الحتة دي: أول ما كتب
+    // `[]` على حساب طالب، اتكتبله «اقفل» لكل حاجة في أساسه، وإحدى عشر تست
+    // بعده وقعوا بـ403. على البرودكشن ده كان طالب بيتقفل عليه حسابه من غير
+    // أي شاشة تقول ليه. الراوت بقى بيرفض أي حساب مش من الفريق.
+    { label: 'staff permissions write: refuses an account that is not staff', method: 'put', path: () => `/api/admin/staff/${studentId}/permissions`, actor: 'admin', status: 400, body: () => ({ permissions: [] }) },
+    // حساب مش موجود = ٤٠٤، مش ٥٠٠ ولا صف يتكتب على معرّف مخترع.
+    { label: 'staff permissions read: unknown account', method: 'get', path: () => '/api/admin/staff/nobody-at-all/permissions', actor: 'admin', status: 404 },
+    // ⚠️ صلاحية مش في الكتالوج بترجع ٤٠٠ — صف زيها كان هيتكتب ويفضل مالوش
+    // أثر للأبد، والشاشة تقول إن القرار اتاخد.
+    { label: 'staff permissions write: rejects a permission that is not in the catalogue', method: 'put', path: () => `/api/admin/staff/${studentId}/permissions`, actor: 'admin', status: 400, body: () => ({ permissions: ['not:a-real-permission'] }) },
+    // ⚠️ مفيش حد يدّي حاجة هو نفسه مش ماسكها. `admin` ماسك كل حاجة فالصف ده
+    // مايقدرش يوريه — التست الحقيقي للتصعيد في `user-permissions.spec.ts`،
+    // اللي بيشغّل الفحص بأكتر من ماسك. الصف هنا عشان الراوت مايفضلش من غير
+    // تغطية للحالة.
+    { label: 'staff permissions write: admin holds everything, so nothing is escalation', method: 'put', path: () => `/api/admin/staff/${studentId}/permissions`, actor: 'admin', status: 400, body: () => ({ permissions: ['role:grant'] }) },
+
     // ── Entitlements — one public read, and no write anywhere ──
     //
     // مافيش صف كتابة لأن مافيش راوت كتابة: القيم بتيجي من مستند موقّع في

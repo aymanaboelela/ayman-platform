@@ -2,7 +2,10 @@ import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@ne
 import { PrismaService } from '../prisma/prisma.service';
 import {
   grantablePermissions,
+  PERMISSIONS,
+  permissionsForRole,
   setRuntimeGrants,
+  setUserPermissionOverrides,
   type Permission,
   type Role,
 } from './permissions';
@@ -98,6 +101,149 @@ export class PermissionGrantsService implements OnModuleInit, OnModuleDestroy {
       set.add(row.permission as Permission);
     }
     setRuntimeGrants(next);
+    await this.refreshUserOverrides();
+  }
+
+  /**
+   * القفل والفتح لكل حساب، في نفس دورة التحديث.
+   *
+   * الجدول ده صغير بطبعه: صفوفه بتتكتب لحسابات الفريق بس، وهُمّ أفراد
+   * معدودين — فقرايته كلها مرة واحدة أرخص من فهرسة أي حاجة.
+   *
+   * ⚠️ ومش في نفس الاستعلام مع المنح فوق عن قصد: لو القراية دي فشلت، المنح
+   * اللي اتحمّلت خلاص تفضل مكانها بدل ما الاتنين يرجعوا فاضيين. وفاضي هنا
+   * معناه «مفيش قفل» — يعني المساعد بيشوف أكتر، مش أقل.
+   */
+  private async refreshUserOverrides(): Promise<void> {
+    const rows = await this.prisma.userPermissionOverride.findMany({
+      select: { userId: true, permission: true, allow: true },
+    });
+
+    const next = new Map<string, { allow: Set<string>; deny: Set<string> }>();
+    for (const row of rows) {
+      let entry = next.get(row.userId);
+      if (!entry) {
+        entry = { allow: new Set<string>(), deny: new Set<string>() };
+        next.set(row.userId, entry);
+      }
+      (row.allow ? entry.allow : entry.deny).add(row.permission);
+    }
+    setUserPermissionOverrides(next);
+  }
+
+  /**
+   * قرارات الصلاحيات المكتوبة على حساب بعينه.
+   *
+   * بيرجّع الاتنين منفصلين لأن الشاشة محتاجة تفرّق: «ده مفتوح لأن الرول
+   * بيديهوله» غير «ده مفتوح لأنك فتحته».
+   */
+  async listForUser(userId: string): Promise<{ allowed: string[]; withheld: string[] }> {
+    const rows = await this.prisma.userPermissionOverride.findMany({
+      where: { userId },
+      select: { permission: true, allow: true },
+      orderBy: { permission: 'asc' },
+    });
+    return {
+      allowed: rows.filter((row) => row.allow).map((row) => row.permission),
+      withheld: rows.filter((row) => !row.allow).map((row) => row.permission),
+    };
+  }
+
+  /**
+   * بيخلّي الحساب يملك **بالظبط** `permissions`، وبيسري في نفس اللحظة.
+   *
+   * ## الفرق عن الأساس هو اللي بيتكتب
+   *
+   * الشاشة بتبعت الحالة النهائية، والسيرفر بيقارنها بأساس الرول:
+   *
+   *   في الطلب ومش في الأساس  →  صف «افتح»
+   *   في الأساس ومش في الطلب  →  صف «اقفل»
+   *   الاتنين متفقين            →  مفيش صف
+   *
+   * والصف اللي بيتفق مع الأساس بيتشال، مش بيتكتب: صف بيقول «افتح» لحاجة
+   * مفتوحة أصلًا بيتقرا بعد شهر كأن حد اتخد قرار، وهو مجرد ضوضاء.
+   *
+   * ## الكتابة كلها في ترانزاكشن واحدة
+   *
+   * نص القرارات اتكتبت ونص لأ = مساعد بصلاحيات محدش اختارها. والتحديث
+   * بيتنده **بعد** الترانزاكشن وقبل ما الرد يرجع، فاللي دوس «حفظ» يعرف إن
+   * القرار سرى في العملية دي.
+   *
+   * ⚠️ `admin` مرفوض من هنا: `userHasPermission` بيرجّع `true` قبل ما يبص
+   * على الجدول أصلًا، فصف عليه بيكون كذب صامت — الشاشة تقول «مقفول» والقفل
+   * مالوش أثر.
+   */
+  async replaceForUser(
+    userId: string,
+    role: string,
+    permissions: readonly string[],
+    actorUserId: string | null,
+    actorPermissions: ReadonlySet<string>,
+  ): Promise<{ allowed: string[]; withheld: string[] }> {
+    if (role === 'admin') {
+      throw new Error('حساب الأدمن بياخد كل الصلاحيات، والقفل عليه مالوش أثر');
+    }
+    /*
+     * ⚠️ حسابات الفريق بس.
+     *
+     * الشاشة دي بتتكلم عن مساعد، وصلاحيات الطالب بتيجي من روله — مفيش سبب
+     * مشروع تتعدّل بالإيد من هنا.
+     *
+     * واللي كشف ده تست: صف في مصفوفة الصلاحيات كتب `permissions: []` على
+     * حساب طالب، فاتكتبله صف «اقفل» لكل حاجة في أساس الطالب — وبعدها إحدى
+     * عشر تست تانية وقعت بـ403، لأن الطالب اتسحبت منه كل صلاحياته. على
+     * البرودكشن ده كان هيبقى طالب مقفول عليه حسابه من غير أي شاشة تقول ليه.
+     */
+    if (role !== 'owner') {
+      throw new Error('الصلاحيات دي بتتظبط لحسابات الفريق بس');
+    }
+
+    const known = new Set<string>(PERMISSIONS);
+    const unknown = permissions.filter((permission) => !known.has(permission));
+    if (unknown.length > 0) {
+      throw new Error(`صلاحيات مش في الكتالوج: ${unknown.join(', ')}`);
+    }
+
+    const wanted = new Set(permissions);
+    const baseline = new Set<string>(permissionsForRole(role));
+
+    /*
+     * ⚠️ مفيش حد يدّي حاجة هو نفسه مش ماسكها.
+     *
+     * من غير السطور دي الشاشة دي كانت طريق تصعيد كامل: المدرّس محجوب عنه
+     * `role:grant` و`news:write` و`student:role-change` (`OWNER_WITHHELD`)،
+     * بس هو ماسك `staff:manage` — فكان يقدر يفتحهم **لمساعده**، والمساعد يعمل
+     * اللي هو ممنوع منه. و`role:grant` أوحشهم: المساعد بعدها يفتح أي حاجة
+     * لأي رول، والأساس كله في `permissions.ts` يبقى ديكور.
+     *
+     * والقفل مش محتاج الشرط ده: إنك تشيل صلاحية مش تصعيد، مهما كنت ماسك إيه.
+     * فالفحص على الفتح بس — الفرق عن الأساس في الاتجاه الواحد.
+     */
+    const escalating = [...wanted].filter(
+      (permission) => !baseline.has(permission) && !actorPermissions.has(permission),
+    );
+    if (escalating.length > 0) {
+      throw new Error(`مش ماسك الصلاحيات دي عشان تفتحها لحد: ${escalating.join(', ')}`);
+    }
+
+    const rows = PERMISSIONS.filter(
+      (permission) => wanted.has(permission) !== baseline.has(permission),
+    ).map((permission) => ({
+      userId,
+      permission,
+      allow: wanted.has(permission),
+      setByUserId: actorUserId,
+    }));
+
+    await this.prisma.$transaction([
+      this.prisma.userPermissionOverride.deleteMany({ where: { userId } }),
+      ...(rows.length > 0
+        ? [this.prisma.userPermissionOverride.createMany({ data: rows })]
+        : []),
+    ]);
+
+    await this.refresh();
+    return this.listForUser(userId);
   }
 
   /** What a role currently holds beyond its baseline, from the database. */

@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { CurrentUser, type AuthenticatedUser } from './decorators/current-user.decorator';
-import { type Permission, permissionsForRole } from './permissions';
+import { type Permission, permissionsForUser } from './permissions';
 
 export interface SessionResponse {
   id: string;
@@ -59,7 +59,9 @@ export class SessionController {
       name: user.name,
       image: user.image ?? null,
       role: user.role,
-      permissions: permissionsForRole(user.role),
+      /* بتاعة الحساب، مش بتاعة الرول: الشاشة لازم تخبّي اللي الـAPI هيرفضه،
+         وإلا المساعد بيدوس زرار ويتقال له «مش من حقك». */
+      permissions: permissionsForUser(user.id, user.role),
     };
   }
 }

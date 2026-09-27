@@ -13,7 +13,7 @@ import type { AuthenticatedSession } from '../decorators/current-session.decorat
 import type { AuthenticatedUser } from '../decorators/current-user.decorator';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { PERMISSION_KEY } from '../decorators/require-permission.decorator';
-import { roleHasPermission } from '../permissions';
+import { userHasPermission } from '../permissions';
 
 // Deliberately not `import type { Request } from 'express'`: this guard
 // only ever touches `headers`, so a minimal structural type avoids adding a
@@ -104,7 +104,10 @@ export class AuthGuard implements CanActivate {
       context.getClass(),
     ]);
 
-    if (requiredPermission && !roleHasPermission(result.user.role, requiredPermission)) {
+    /* `userHasPermission` مش `roleHasPermission`: القفل على حساب بعينه هو
+       الطريقة الوحيدة لعمل مساعد محدود — المساعدين كلهم رول `owner`، وأساسه
+       «كل حاجة إلا المقالات». شوف `permissions.ts`. */
+    if (requiredPermission && !userHasPermission(result.user.id, result.user.role, requiredPermission)) {
       throw new ForbiddenException();
     }
 
