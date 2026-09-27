@@ -17,6 +17,8 @@ export interface StaffMember {
   id: string;
   name: string;
   phone: string;
+  /** `owner` للمساعد، `admin` لصاحب المنصة — شوف الكومنت على الزرار تحت. */
+  role: string;
 }
 
 interface Found {
@@ -116,13 +118,32 @@ export function StaffSection({ members, currentUserId }: { members: StaffMember[
                 <span className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.you}</span>
               ) : (
                 <>
-                  <Button
-                    variant="secondary"
-                    aria-expanded={openMember === m.id}
-                    onClick={() => setOpenMember((current) => (current === m.id ? null : m.id))}
-                  >
-                    {openMember === m.id ? member.close : member.open}
-                  </Button>
+                  {/*
+                    * ⚠️ حساب الأدمن مالوش زرار صلاحيات، وده مش إخفاء تجميلي.
+                    *
+                    * `userHasPermission` بيرجّع `true` للأدمن **قبل** ما يبص
+                    * على جدول القفل أصلًا، فأي قرار بيتكتب عليه مالوش أثر.
+                    * والسيرفر بيرفض الحفظ عشان كده (`replaceForUser`).
+                    *
+                    * واللي كشف ده إن الليستة دي `role=staff` — يعني «أي حد
+                    * مش طالب» — فحسابات الأدمن بتظهر فيها. على البرودكشن
+                    * التلات حسابات كلها أدمن، فالزرار كان معروض على حاجة
+                    * مستحيل تتحفظ: تدوس، تقفل قسم، تحفظ، وتاخد «مقدرناش
+                    * نحفظ» من غير ما تعرف إن ده مش هيشتغل أبدًا.
+                    */}
+                  {m.role === 'admin' ? (
+                    <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
+                      {member.adminHasEverything}
+                    </span>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      aria-expanded={openMember === m.id}
+                      onClick={() => setOpenMember((current) => (current === m.id ? null : m.id))}
+                    >
+                      {openMember === m.id ? member.close : member.open}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     disabled={pending}
@@ -141,7 +162,7 @@ export function StaffSection({ members, currentUserId }: { members: StaffMember[
                 * ده كمان بيتاخد بالمقارنة — إنك تشوف باقي الفريق وإنت بتقفل
                 * على واحد مفيد، والمودال بيخبّيهم.
                 */}
-              {openMember === m.id ? (
+              {openMember === m.id && m.role !== 'admin' ? (
                 <div className="w-full basis-full">
                   <MemberPermissions userId={m.id} name={m.name} />
                 </div>
