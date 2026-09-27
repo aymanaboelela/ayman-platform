@@ -870,7 +870,7 @@ div.unit[data-open] > .unit__head:hover {
 .admin-empty__title {
   font-size: var(--fs-title-4);
   font-weight: var(--fw-semibold);
-  color: var(--ink-fg);
+  color: var(--n-12);
 }
 
 .admin-empty__hint {
@@ -878,7 +878,7 @@ div.unit[data-open] > .unit__head:hover {
   margin-block-start: var(--s-8);
   max-inline-size: 34rem;
   font-size: var(--fs-text-sm);
-  color: var(--ink-fg-2);
+  color: var(--n-11);
 }
 
 .admin-empty__action {

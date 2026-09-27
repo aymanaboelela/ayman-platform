@@ -33,6 +33,22 @@
 
    الأخضر والأحمر بتاع الكويز ومش موجودين هنا: مفيش درجة في الشريط ده.
 
+   ## ⚠️ ولا توكن من عيلة `--ink-*` هنا
+
+   الملف ده اتكتب أول مرة بـ`--ink` للصف و`--ink-fg` للنص، والنتيجة كانت صف
+   **أسود** في نص لوحة وردي فاتحة وعنوان أبيض عليها مش باين.
+
+   والاسم هو اللي غشّ: `--ink` مش «لون الحبر». `color.css` بيقول عليها حرفيًا
+   «Panels that stay dark in BOTH themes» — الهيرو، شبابيك الكود، كروم المحرر.
+   و`--ink-fg` هي الأبيض اللي بيتكتب **فوقها**. فالاتنين صح، بس في مكان تاني
+   خالص.
+
+   واختبار التوكنز عدّى عليها وهو أخضر، لأنه بيسأل «التوكن ده معرّف؟» مش
+   «التوكن ده صح؟» — والاتنين معرّفين.
+
+   النص هنا من الرمادي: `--n-12` للأساسي و`--n-11` للتانوي، والاتنين بيقلبوا
+   مع الثيم. والأسطح `--n-1`.
+
    ## RTL
 
    خصائص منطقية بس، زي `study.css` و`exam-band.css`. مفيش يمين ولا شمال في
@@ -71,7 +87,7 @@
 .month-news__title {
   font-size: var(--fs-text-lg);
   font-weight: var(--fw-bold);
-  color: var(--ink-fg);
+  color: var(--n-12);
   line-height: 1.35;
 }
 
@@ -83,7 +99,7 @@
 
 .month-news__lead {
   font-size: var(--fs-text-sm);
-  color: var(--ink-fg-2);
+  color: var(--n-11);
 }
 
 .month-news__list {
@@ -100,7 +116,12 @@
   padding: var(--s-12);
   border-radius: var(--r-md);
   border: 1px solid var(--hairline);
-  background: var(--ink);
+  /* ⚠️ `--n-1` مش `--ink`.
+     `--ink` اسمه بيغُشّ: مش «لون الحبر»، ده **مسرح بيفضل غامق في الثيمين**
+     (الهيرو، شبابيك الكود، كروم المحرر) — مكتوبة كده في `color.css` نفسه.
+     فالصف طلع أسود في نص لوحة وردي فاتحة. `--n-1` هو السطح اللي فوق، وبيقلب
+     مع الثيم زي ما المفروض. */
+  background: var(--n-1);
 }
 
 @media (min-width: 40rem) {
@@ -120,7 +141,7 @@
 .month-news__course {
   font-size: var(--fs-text-sm);
   font-weight: var(--fw-semibold);
-  color: var(--ink-fg);
+  color: var(--n-12);
 }
 
 /* «اشتراكه خلص» على الصف نفسه، لما الشاشة فيها كورس خلص وكورس لسه شغّال —
@@ -135,7 +156,7 @@
   border: 1px solid var(--hairline);
   font-size: var(--fs-text-xs);
   font-weight: var(--fw-medium);
-  color: var(--ink-fg-2);
+  color: var(--n-11);
 }
 
 .month-news__months {
@@ -153,12 +174,12 @@
   border: 1px solid var(--e-tint-line);
   background: var(--e-tint);
   font-size: var(--fs-text-xs);
-  color: var(--ink-fg-2);
+  color: var(--n-11);
 }
 
 .month-news__month-name {
   font-weight: var(--fw-semibold);
-  color: var(--ink-fg);
+  color: var(--n-12);
 }
 
 .month-news__month-meta {
@@ -181,7 +202,7 @@
   font-family: var(--font-mono);
   font-size: var(--fs-text-sm);
   font-weight: var(--fw-semibold);
-  color: var(--ink-fg);
+  color: var(--n-12);
   direction: ltr;
   unicode-bidi: isolate;
 }
@@ -209,7 +230,7 @@
 /* امتحان مفتوح: الأمبر بقى بتاع «ادخل الامتحان»، فالشريط ده بيمشي من غيره. */
 .month-news__cta[data-quiet] {
   background: transparent;
-  color: var(--ink-fg);
+  color: var(--n-12);
   border-color: var(--border-strong);
 }
 
@@ -223,5 +244,5 @@
   align-items: center;
   gap: var(--s-8);
   font-size: var(--fs-text-sm);
-  color: var(--ink-fg-2);
+  color: var(--n-11);
 }
