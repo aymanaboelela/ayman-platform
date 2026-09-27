@@ -9,6 +9,11 @@ export const FINANCE_TABS = [
   { href: '/admin/finance', label: c.tabOverview, permission: null },
   { href: '/admin/finance/subscriptions', label: c.tabSubscriptions, permission: null },
   { href: '/admin/finance/expenses', label: c.tabExpenses, permission: null },
+  // «يوم بيوم» lives under «التحليلات» (`/admin/analytics/money`) — a door to
+  // it, like «السناتر» below, for whoever comes looking from the money side.
+  // `payment:read` because that is what its API asks for; the screens above
+  // are read by roles that may not hold it.
+  { href: '/admin/analytics/money', label: c.tabDaily, permission: 'payment:read' },
   // The centres' money is its own screen under `/admin/centers` — this is a
   // door to it, not a fourth half of these accounts. Gated because the three
   // above are what every finance reader holds and this one is `center:read`:

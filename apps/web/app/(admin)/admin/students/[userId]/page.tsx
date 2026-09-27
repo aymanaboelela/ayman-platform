@@ -26,6 +26,7 @@ import { HistorySection } from './history-section';
 import { ConversationSection } from './conversation-section';
 import { DevicesSection } from './devices-section';
 import { CenterAttendanceSection } from './center-attendance-section';
+import { PaymentsSection, PaymentsSectionSkeleton } from './payments-section';
 
 export const metadata = { title: copy.admin.students.detailTitle };
 
@@ -293,6 +294,13 @@ export default async function StudentDetailPage({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="flex min-w-0 flex-col gap-6">
           <StudentDetailForm student={student} governorateOptions={governorateOptions} />
+          {/* «الاشتراكات والفلوس» — every payment, new or renewal. In the wide
+              column, under the profile: it is a read, and it is the longest
+              one on the page after the record below. Its own boundary so the
+              form above never waits on it. */}
+          <Suspense fallback={<PaymentsSectionSkeleton />}>
+            <PaymentsSection userId={userId} />
+          </Suspense>
           {/* Its own boundary: two more reads the profile form must not wait
               on, and a section that renders nothing on a stack with no
               centre — so its fallback is nothing too, not a skeleton that

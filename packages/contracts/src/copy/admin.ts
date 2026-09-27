@@ -2819,6 +2819,10 @@ const admin = {
     /** The centres' money lives at `/admin/centers/finance`; the tab is a door
      *  to it, shown only to a session holding `center:read`. */
     tabCenters: 'السناتر',
+    /** The daily view lives under «التحليلات» (`/admin/analytics/money`); this
+     *  tab is a door to it for a reader who comes looking from the money side,
+     *  same shape as «السناتر» above. */
+    tabDaily: 'يوم بيوم',
     /* ── «النظرة العامة» ────────────────────────────────────────────────── */
     overviewTitle: 'النظرة العامة',
     overviewSubtitle: 'دخل كام، صرف كام، وفضل كام.',
@@ -3077,6 +3081,112 @@ const admin = {
     bookRevenueSectionTitle: 'الكتاب الورقي — منفصل عن الاشتراكات',
     tileBookRevenue: 'إجمالي إيرادات الكتب',
     tileBookPaidCount: 'كتب مدفوعة',
+  },
+
+  /**
+   * «الفلوس يوم بيوم» — `/admin/analytics/money`, and the payments timeline on
+   * a student's page. Every figure on it is the API's; see
+   * `packages/contracts/src/admin/finance-daily.ts` for what counts as money
+   * and what «تجديد» means.
+   */
+  money: {
+    title: 'الفلوس والاشتراكات يوم بيوم',
+    lead: 'كل يوم دخل كام، مين اشترك في أنهي كورس، وكام واحد جدّد. الأيام بتوقيت القاهرة، والفلوس هي نفس فلوس «الحسابات».',
+    rangeLabel: 'الفترة',
+    /** The closed list of windows, as pills. */
+    range7: 'آخر ٧ أيام',
+    range30: 'آخر ٣٠ يوم',
+    range90: 'آخر ٩٠ يوم',
+    /** Suffix on every amount — the same «ج» `/admin/finance` prints. */
+    currency: 'ج',
+    today: 'النهارده',
+    yesterday: 'امبارح',
+
+    /* ── the tiles ──────────────────────────────────────────────────────── */
+    tileToday: 'دخل النهارده',
+    /** `{amount}` — yesterday's net, already formatted with its «ج». */
+    tileTodayContext: 'امبارح: {amount}',
+    tileWindow: 'صافي الفترة',
+    /** `{amount}` — the window's net divided by its days. */
+    tileWindowContext: 'في المتوسط {amount} في اليوم',
+    tileNew: 'اشتراكات جديدة',
+    /** `{n}` — distinct students who paid anything in the window. */
+    tileNewContext: '{n} طالب دفعوا في الفترة',
+    tileRenewals: 'تجديدات',
+    /** `{n}` — distinct students with at least one renewal. */
+    tileRenewalsContext: '{n} طالب جدّدوا',
+    tileRefunds: 'فلوس رجعت',
+    tileRefundsContext: 'بتتخصم في يومها، مش في يوم الدفع',
+    tileBooks: 'دخل الكتب',
+    /** `{n}` — paid book orders in the window. */
+    tileBooksContext: '{n} طلب كتاب',
+    tileNoBooks: 'الكتب مش محسوبة هنا',
+    tileNoBooksContext: 'صلاحية الكتب مش معاك، فالأرقام دي اشتراكات بس.',
+    /** `{n}` — comped subscriptions: real access, no money. */
+    freeNote: 'واتفتح {n} اشتراك ببلاش — مش محسوبين في الفلوس.',
+
+    /* ── the charts ─────────────────────────────────────────────────────── */
+    chartIncomeTitle: 'فلوس الاشتراكات كل يوم',
+    chartIncomeHint: 'كل عمود يوم، ومقسوم على الكورسات. قبل المرتجع — المرتجع والصافي في الجدول تحت.',
+    chartSubsTitle: 'الاشتراكات كل يوم',
+    chartSubsHint: 'جديد = أول دفعة للكورس ده من الحساب ده. تجديد = حساب دفع للكورس ده قبل كده ودفع تاني (زي شهر ٢ بعد شهر ١).',
+    seriesNew: 'جديد',
+    seriesRenewal: 'تجديد',
+    /** The fold for courses past the fourth — never a generated fifth hue. */
+    otherCourses: 'كورسات تانية',
+    books: 'الكتب',
+    /** Tooltip total line. */
+    total: 'الإجمالي',
+    empty: 'مفيش ولا اشتراك مدفوع في الفترة دي.',
+
+    /* ── per course ─────────────────────────────────────────────────────── */
+    coursesTitle: 'كل كورس في الفترة',
+    coursesLead: 'مين اشترك في أنهي كورس، ودفعوا كام، واشتروا أنهي شهور.',
+    /** `{n}` subscriptions · `{s}` distinct students. */
+    courseCounts: '{n} اشتراك · {s} طالب',
+    /** `{p}` — this course's share of the window's subscription money. */
+    courseShare: '{p} من فلوس الاشتراكات',
+    courseNew: 'جديد {n}',
+    courseRenewal: 'تجديد {n}',
+    courseFree: 'ببلاش {n}',
+    /** «شهر ٢ · ١٢» — what was bought, and how many times. */
+    itemCount: '{label} · {n}',
+    openCourse: 'افتح الكورس',
+
+    /* ── day by day ─────────────────────────────────────────────────────── */
+    daysTitle: 'يوم بيوم بالتفصيل',
+    daysLead: 'دوس على أي يوم تشوف كل كورس دخّل كام فيه.',
+    colDay: 'اليوم',
+    colSubscriptions: 'اشتراكات',
+    colSubscriptionMoney: 'فلوس الاشتراكات',
+    colBooks: 'الكتب',
+    colRefunds: 'رجع',
+    colNet: 'الصافي',
+    /** `{n}` — subscriptions that day. */
+    daySubscriptions: '{n} اشتراك',
+    dayNothing: 'مفيش حاجة',
+    dayCourseCount: '{n} اشتراك',
+
+    /* ── one student's payments (`/admin/students/:id`) ─────────────────── */
+    studentTitle: 'الاشتراكات والفلوس',
+    studentLead: 'كل دفعة اتقبلت: لأنهي كورس، اتشترى إيه، اتدفع كام وإمتى — وكانت اشتراك جديد ولا تجديد.',
+    studentPaid: 'اتدفع',
+    studentRefunded: 'اترجّع',
+    studentNet: 'الصافي',
+    studentRenewals: 'التجديدات',
+    studentEmpty: 'مفيش ولا دفعة لحد دلوقتي.',
+    kindNew: 'اشتراك جديد',
+    /** `{n}` — which renewal this is (2 = the first renewal). */
+    kindRenewal: 'تجديد — المرة رقم {n}',
+    kindFree: 'ببلاش',
+    viaInstapay: 'إنستاباي — اتقبل لوحده',
+    viaManual: 'اتسجّل بإيد الأدمن',
+    viaReview: 'اتراجع واتقبل',
+    /** `{amount}` — money given back against this payment. */
+    refundedNote: 'رجع منها {amount}',
+    /** `{months}` — «شهر ١، شهر ٢». */
+    boughtMonths: '{months}',
+    goToDaily: 'الفلوس يوم بيوم',
   },
 
   /** «أكواد الفتح» — `/admin/unlock-codes`. */
@@ -4966,6 +5076,8 @@ const analytics = {
   navOverview: 'نظرة عامة',
   navLessons: 'تحليل الدروس',
   navStudents: 'تحليل الطلبة',
+  /** `/admin/analytics/money` — shown only to a session holding `payment:read`. */
+  navMoney: 'الفلوس يوم بيوم',
 
   // ── the window / filter bar ────────────────────────────────────────────
   window: 'الفترة',

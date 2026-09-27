@@ -23,6 +23,14 @@ export const overviewSearchParams = {
 };
 export const overviewCache = createSearchParamsCache(overviewSearchParams);
 
+/** «الفلوس يوم بيوم». `days` is snapped to the API's closed list by the page
+ *  (`FINANCE_DAILY_WINDOWS`), the same way `safeWindow` below snaps this
+ *  screen's siblings. */
+export const moneySearchParams = {
+  days: parseAsInteger.withDefault(30).withOptions({ shallow: false }),
+};
+export const moneyCache = createSearchParamsCache(moneySearchParams);
+
 export const lessonsSearchParams = {
   courseId: parseAsString.withDefault('').withOptions({ shallow: false }),
   q: parseAsString.withDefault('').withOptions({ shallow: false, throttleMs: 400 }),
