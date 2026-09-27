@@ -17,8 +17,23 @@ import { toast } from 'sonner';
 // signed-in page. `client-barrel.test.ts` fails the build for it.
 import { copy } from '@ayman/contracts/copy';
 import { describeNotification } from '@/lib/notification-view';
+import { emitQueueFrame, emitStreamDown, emitStreamOpen } from './live-bus';
 
 const c = copy.notifications;
+
+/**
+ * How long a stream may go without a single frame before it is presumed dead.
+ *
+ * The server writes a heartbeat every 25 seconds (`HEARTBEAT_MS` in
+ * `notifications.controller.ts`), so three missed in a row is not a quiet
+ * minute — it is a connection the browser still believes is open and nothing
+ * will ever arrive on: a laptop that slept, a phone radio that changed
+ * networks, a proxy that dropped the upstream without closing the socket.
+ * `EventSource` has no timeout of its own and would sit there forever, and
+ * every live screen on top of it would sit there too, believing it.
+ */
+const SILENCE_MS = 75_000;
+const WATCHDOG_MS = 30_000;
 
 /** The unread count as the stream last reported it, or `null` when nothing has
  *  arrived yet — in which case the server-rendered number is still the truth. */
@@ -66,8 +81,9 @@ export function useLiveUnread(): number | null {
  * It does NOT call `router.refresh()`. That would re-run every server
  * component on the page — including the ones fetching a course, a lesson or a
  * quiz — for an event whose whole payload is already in hand. The screens that
- * need their own numbers moved (the payments queue, the shipping queue) own
- * pollers that already do it.
+ * need their own rows moved listen for a `queue` frame on `live-bus.ts` and
+ * re-read just those rows (the payments desk); the others (the shipping queue)
+ * still own a poller.
  */
 export function NotificationStreamProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -105,6 +121,16 @@ export function NotificationStreamProvider({ children }: { children: ReactNode }
       // will render it correctly on the next read.
       if (!parsed.success) return;
       const event = parsed.data;
+      /*
+        An admin queue moved — «a payment request just arrived» reaching
+        `/admin/payments` without a refresh. Not a notification: no toast, no
+        badge of the bell's; the screens that draw that queue listen on the
+        bus and re-read their own rows. See `live-bus.ts`.
+      */
+      if (event.type === 'queue') {
+        emitQueueFrame(event.queue, event.waiting);
+        return;
+      }
       if (event.type !== 'notification') return;
 
       setUnread(event.unread);
@@ -198,6 +224,8 @@ export function NotificationStreamProvider({ children }: { children: ReactNode }
     let retry: ReturnType<typeof setTimeout> | null = null;
     let failures = 0;
     let disposed = false;
+    // Any frame at all, the heartbeat included — see `SILENCE_MS`.
+    let lastFrameAt = Date.now();
 
     const open = () => {
       // Same-origin, so the session cookie rides along with no configuration —
@@ -212,8 +240,15 @@ export function NotificationStreamProvider({ children }: { children: ReactNode }
       }
       source.onopen = () => {
         failures = 0;
+        lastFrameAt = Date.now();
+        // Every (re)connect, not just the first: whatever was published while
+        // the connection was down is gone, and the live screens re-read.
+        emitStreamOpen();
       };
-      source.onmessage = (event: MessageEvent<string>) => onEvent.current(event);
+      source.onmessage = (event: MessageEvent<string>) => {
+        lastFrameAt = Date.now();
+        onEvent.current(event);
+      };
       /*
         Silent — `EventSource` reconnects on its own after a dropped connection
         and emits `error` on every attempt, and toasting that would turn a
@@ -227,6 +262,9 @@ export function NotificationStreamProvider({ children }: { children: ReactNode }
         minute with jitter, so a hundred tabs do not all knock at once.
       */
       source.onerror = () => {
+        // Down either way — the browser reconnecting on its own included. The
+        // `onopen` that ends it is what tells the live screens to re-read.
+        emitStreamDown();
         if (disposed || source === null || source.readyState !== EventSource.CLOSED) return;
         source.close();
         source = null;
@@ -237,10 +275,30 @@ export function NotificationStreamProvider({ children }: { children: ReactNode }
     };
 
     open();
+
+    /*
+      The silent death `onerror` never reports. A stream that has said nothing
+      for `SILENCE_MS` is closed and opened again, now, without the backoff: a
+      dead socket is not a server outage, and if the server IS down the new
+      stream fails with an HTTP error and falls into the backoff above anyway.
+      Waiting first would only stretch the window in which every live screen
+      is quietly wrong.
+    */
+    const watchdog = setInterval(() => {
+      if (disposed || source === null || source.readyState !== EventSource.OPEN) return;
+      if (Date.now() - lastFrameAt < SILENCE_MS) return;
+      source.close();
+      source = null;
+      emitStreamDown();
+      open();
+    }, WATCHDOG_MS);
+
     return () => {
       disposed = true;
+      clearInterval(watchdog);
       if (retry !== null) clearTimeout(retry);
       source?.close();
+      emitStreamDown();
     };
   }, []);
 
