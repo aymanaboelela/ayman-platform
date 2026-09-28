@@ -420,6 +420,10 @@ services:
       # `CONTROL_PLANE_TENANTS` سطر لكل مدرّس: `tenant-key=اسم المدرّس`.
       CONTROL_PLANE_PRIVATE_KEY: ${CONTROL_PLANE_PRIVATE_KEY:-}
       CONTROL_PLANE_TENANTS: ${CONTROL_PLANE_TENANTS:-}
+      # «فيديوهات المدرّسين — المساحة والتكلفة»: API token بصلاحية
+      # «Account Analytics: Read» على حساب كلاودفلير بتاعك. قراية بس، ولستاكك
+      # بس — فاضي على أي ستاك تاني والشاشة بتقول إنها مش متظبطة.
+      CONTROL_PLANE_CF_TOKEN: ${CONTROL_PLANE_CF_TOKEN:-}
       TENANT_YOUTUBE: ${TENANT_YOUTUBE:-}
       TENANT_INSTAGRAM: ${TENANT_INSTAGRAM:-}
       TENANT_TIKTOK: ${TENANT_TIKTOK:-}

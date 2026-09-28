@@ -4935,6 +4935,23 @@ const admin = {
    * اللي القارئ بتاعها بيعرف إن فيه ستاكات تانية أصلًا.
    */
   platforms: {
+    /**
+     * «كل مدرّس رفع كام جيجا ويتكلّف كام في الشهر» — to bill each teacher for
+     * the storage that lands on the owner's Cloudflare account.
+     */
+    usageTitle: 'فيديوهات المدرّسين — المساحة والتكلفة',
+    usageLead: 'الأرقام من كلاودفلير نفسه — نفس اللي الفاتورة بتتحسب منه. التخزين بـ٠٫٠١٥ دولار للجيجا في الشهر، والمشاهدة ببلاش.',
+    usageSelf: 'منصتك',
+    usageTeacher: 'المدرّس',
+    usageStored: 'متخزّن دلوقتي',
+    usageFiles: 'ملف',
+    usageThisMonth: 'الشهر ده لحد دلوقتي',
+    usageLastMonth: 'الشهر اللي فات',
+    usageTotal: 'الإجمالي',
+    usageFreeTier: 'أول ١٠ جيجا في الحساب كله ببلاش كل شهر، فالفاتورة الحقيقية ممكن تبقى أقل من الإجمالي ده.',
+    usageNotConfigured: 'الشاشة دي محتاجة مفتاح قراية من كلاودفلير عشان تجيب الأرقام.',
+    usageNotConfiguredHint: 'اعمل API Token بصلاحية «Account Analytics: Read» على حسابك، وحطه في إعدادات ستاكك باسم:',
+    usageFailed: 'كلاودفلير مردّش دلوقتي — جرّب تاني بعد شوية.',
     title: 'منصات المدرّسين',
     lead:
       'كل مدرّس عنده منصة لوحده. من هنا بتقرر الفيتشرز اللي تشتغل عنده، ' +

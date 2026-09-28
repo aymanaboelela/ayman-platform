@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { FEATURE_DECLARATIONS } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -5,6 +6,7 @@ import { Card, CardBody } from '@ayman/ui';
 import { controlPlaneTenants } from '@/lib/control-plane';
 import { IS_AYMAN } from '@/lib/tenant';
 import { PlatformsForm } from './platforms-form';
+import { VideoUsage } from './video-usage';
 
 export const metadata = { title: copy.admin.platforms.title };
 
@@ -71,6 +73,11 @@ export default function PlatformsPage() {
       ) : (
         <PlatformsForm tenants={tenants} features={FEATURE_DECLARATIONS} />
       )}
+
+      {/* Streamed: Cloudflare can take a second, and the signing form above must not wait for it. */}
+      <Suspense fallback={null}>
+        <VideoUsage tenants={tenants} />
+      </Suspense>
     </>
   );
 }

@@ -770,6 +770,12 @@ export function checkTenantEnv(env, options = {}) {
         'document that unlocks every feature. Remove it.',
     );
   }
+  if (get(env, 'CONTROL_PLANE_CF_TOKEN') !== '') {
+    fail(
+      "CONTROL_PLANE_CF_TOKEN is set. It reads the OWNER's Cloudflare account analytics and " +
+        "belongs on the owner's stack only. Remove it.",
+    );
+  }
   if (get(env, 'CONTROL_PLANE_TENANTS') !== '') {
     warn(
       'CONTROL_PLANE_TENANTS is set on an instructor stack. It does nothing here (the screen that ' +
