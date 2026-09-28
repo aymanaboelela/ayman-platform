@@ -34,6 +34,8 @@ const AdminCourseDetailSchema = z.object({
    *  editor's field opens empty and its next autosave clears the column. */
   whatsappGroupUrl: z.string().nullable(),
   contentComplete: z.boolean(),
+  /** Same reason again: parsed here or the switch opens off and autosaves off. */
+  watermarkPhone: z.boolean(),
   monthlyPriceCents: z.number().int().nullable(),
   /** ⚠️ HISTORY ONLY. Nothing on this screen renders it any more — «٣ شهور»
    *  is off the shelf and `course-form.tsx` has no field for it. Parsed
@@ -127,6 +129,11 @@ const AdminCourseDetailSchema = z.object({
               mirrorStatus: VideoMirrorStatusSchema,
               /** The instructor's own filename, shown back to them. */
               sourceName: z.string().nullable(),
+              /** «قص الفيديو». Defaults so an API a minute behind this build still parses. */
+              trimStartSeconds: z.number().int().nullable().default(null),
+              trimEndSeconds: z.number().int().nullable().default(null),
+              trimCuts: z.array(z.object({ from: z.number(), to: z.number() })).nullable().catch(null).default(null),
+              fullDurationSeconds: z.number().int().nullable().default(null),
             })
             .nullable(),
           // Prefills the body editor. See `findForAdmin` for why its absence

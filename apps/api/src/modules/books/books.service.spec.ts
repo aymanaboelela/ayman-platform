@@ -114,6 +114,43 @@ describe('BooksService', () => {
     });
 
     /*
+     * «غيّر السنة كاملة للترم الأول» — the production fix for the two year-1
+     * books is exactly this PATCH, made from the admin form. The heading a
+     * student reads a book under is `shelf[term]`, so the assertion is that
+     * the book LEAVES one band and ARRIVES in the other, not merely that the
+     * column changed.
+     */
+    it('moves a book from «السنة كاملة» to «الترم الأول» when its term is patched', async () => {
+      const id = await track({
+        slug: `cat-move-${stamp}`,
+        titleAr: 'كتاب اتسجل سنوي',
+        subjectId,
+        year: 1,
+        term: 'full',
+        priceCents: 15_000,
+      });
+
+      const band = async () => {
+        const shelf = (await service.catalog()).shelves.find(
+          (entry) => entry.subjectId === subjectId,
+        );
+        return {
+          first: mine(shelf?.first ?? []).map((book) => book.id),
+          full: mine(shelf?.full ?? []).map((book) => book.id),
+        };
+      };
+
+      expect((await band()).full).toContain(id);
+
+      const patched = await service.patch(adminId, id, { term: 'first' });
+      expect(patched.term).toBe('first');
+
+      const after = await band();
+      expect(after.first).toContain(id);
+      expect(after.full).not.toContain(id);
+    });
+
+    /*
      * «لو المادة مفيش ليها كتاب مش هضيفه». The shape of `catalog()` is what
      * guarantees this — shelves are built FROM the books, so an empty one is
      * not constructible — and this is the assertion that would fail the day
@@ -343,6 +380,32 @@ describe('BooksService', () => {
       expect(patched.forGeneral).toBe(true);
       expect(patched.forLanguages).toBe(false);
       expect(patched.showOnLanding).toBe(true);
+    });
+
+    /*
+     * One course, one book at a time — `books.course_id` is UNIQUE and the
+     * admin form greys out a taken course on that basis. The way a second-term
+     * volume takes a course over is the two-step the form's hint describes:
+     * the first book lets go, then the second is linked. Both halves are
+     * asserted, and the link is released at the end so the tests below can
+     * claim the same course.
+     */
+    it('refuses a course another book holds, and hands it over once that book lets go', async () => {
+      const firstTerm = await service.create(adminId, input({ courseId, term: 'first' }));
+      created.push(firstTerm.id);
+      const secondTerm = await service.create(adminId, input({ courseId: null, term: 'second' }));
+      created.push(secondTerm.id);
+
+      await expect(
+        service.patch(adminId, secondTerm.id, { courseId }),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      await service.patch(adminId, firstTerm.id, { courseId: null });
+      const linked = await service.patch(adminId, secondTerm.id, { courseId });
+      expect(linked.courseId).toBe(courseId);
+      expect(linked.courseTitle).not.toBeNull();
+
+      await service.patch(adminId, secondTerm.id, { courseId: null });
     });
 
     /*

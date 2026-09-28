@@ -8,11 +8,13 @@ import {
   ClipboardList,
   Coins,
   FileImage,
+  Film,
   Flag,
   GraduationCap,
   Home,
   Inbox,
   LayoutDashboard,
+  LibraryBig,
   ListTree,
   ScrollText,
   Send,
@@ -134,6 +136,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     group: 'teaching',
   },
   {
+    // «الفيديوهات» — every uploaded lecture and what storing it costs. Same
+    // `feature` as the upload itself: a stack that cannot upload has nothing
+    // to list, and the route 404s there anyway.
+    href: '/admin/videos',
+    labelAr: copy.admin.nav.videos,
+    icon: Film,
+    permission: 'course:read-admin',
+    feature: 'video.upload',
+    group: 'teaching',
+  },
+  {
     href: '/admin/students',
     labelAr: copy.admin.nav.students,
     icon: Users,
@@ -185,6 +198,23 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.unlockCodes,
     icon: TicketCheck,
     permission: 'payment:read',
+    group: 'teaching',
+  },
+  {
+    // «الكتب» — the shelf: every title, its cover, its course, its term and
+    // its price. It was only ever the second TAB of the queue below, and the
+    // owner asked for «صفحة في الداشبورد أختار فيها الكتاب» while standing one
+    // tab away from it. Its own row, above the queue it feeds.
+    //
+    // `book:read` and not `book-order:read`: what is on sale and what somebody
+    // bought are separate permissions in `permissions.ts`, and this screen is
+    // the first one. `activeNavItem` takes the LONGEST matching prefix, so on
+    // `/admin/books/catalog` this row lights up and the queue's does not.
+    href: '/admin/books/catalog',
+    labelAr: copy.admin.nav.bookCatalog,
+    icon: LibraryBig,
+    permission: 'book:read',
+    feature: 'books',
     group: 'teaching',
   },
   {

@@ -23,6 +23,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { buildReorderSql } from './reorder.sql';
 import { YouTubeDurationService } from './youtube-duration.service';
 import { VideoMirrorService } from '../video-mirror/video-mirror.service';
+import { VideoArchiveService } from '../video-mirror/video-archive.service';
+import { Prisma } from '../../generated/prisma/client';
+import { effectiveSeconds, trimProblem, type VideoTrim } from '@ayman/contracts/video';
 
 /** Prisma's code for a unique constraint or partial unique index violation. */
 function isUniqueViolation(error: unknown): boolean {
@@ -67,6 +70,8 @@ export class LessonService {
     // «النسخة اللي عندنا». Used for two things and nothing else: re-queuing a
     // video whose id changed, and answering «حاول تاني».
     private readonly mirror: VideoMirrorService,
+    // «احتفظ بيه» / «امسحه خالص» when an uploaded video leaves its lesson.
+    private readonly archive: VideoArchiveService,
   ) {}
 
   async create(sectionId: string, input: LessonCreateInput) {
@@ -338,17 +343,108 @@ export class LessonService {
     return { lessonId, mirrorStatus: 'pending' };
   }
 
-  async removeVideo(lessonId: string): Promise<{ lessonId: string }> {
+  /**
+   * Take the video off the lesson. For an UPLOADED video, `keep` decides what
+   * happens to its files: kept in «محفوظة» to be put back later, or deleted
+   * for good. Before `keep` existed the row went and the files stayed in the
+   * bucket with nothing pointing at them — paid for, and listed nowhere.
+   */
+  async removeVideo(lessonId: string, keep = true): Promise<{ lessonId: string }> {
     await this.assertKind(lessonId, 'video');
+    const row = await this.prisma.lessonVideo.findUnique({
+      where: { lessonId },
+      select: {
+        provider: true,
+        externalId: true,
+        sourceName: true,
+        durationSeconds: true,
+        mirrorHeight: true,
+        mirrorBytes: true,
+        mirrorStatus: true,
+        posterKey: true,
+        fullDurationSeconds: true,
+        lesson: { select: { title: true, section: { select: { course: { select: { title: true } } } } } },
+      },
+    });
     await this.prisma.lessonVideo.delete({ where: { lessonId } }).catch(() => undefined);
+
+    if (row !== null && row.provider === 'upload') {
+      await this.archive.release(
+        row,
+        // Nothing half-encoded is worth keeping.
+        keep && row.mirrorStatus === 'ready',
+        { lessonTitle: row.lesson.title, courseTitle: row.lesson.section.course.title },
+      );
+    }
+
     await this.audit.record({
       action: 'lesson:update',
       resourceType: AUDIT_RESOURCES.lesson,
       resourceId: lessonId,
       outcome: 'success',
-      metadata: { operation: 'removeVideo' },
+      metadata: { operation: 'removeVideo', kept: row?.provider === 'upload' ? keep : null },
     });
     return { lessonId };
+  }
+
+  /**
+   * «قص الفيديو» — save what the student sees of an uploaded lecture, or
+   * (`null`) put the whole video back.
+   *
+   * Nothing is re-encoded; the player applies it. `duration_seconds` becomes
+   * the length the student will actually watch — every course total and the
+   * completion rule already read that column — and the original length is
+   * kept in `full_duration_seconds` so the trim can always be undone.
+   */
+  async setTrim(lessonId: string, trim: VideoTrim | null): Promise<{ durationSeconds: number }> {
+    const row = await this.prisma.lessonVideo.findUnique({
+      where: { lessonId },
+      select: { provider: true, mirrorStatus: true, durationSeconds: true, fullDurationSeconds: true },
+    });
+    if (row === null || row.provider !== 'upload' || row.mirrorStatus !== 'ready') {
+      throw new BadRequestException('القص للفيديو المرفوع بس، وبعد ما يجهز');
+    }
+    const full = row.fullDurationSeconds ?? row.durationSeconds;
+    const whole = trim === null || (trim.start === 0 && trim.end === null && trim.cuts.length === 0);
+
+    let durationSeconds: number;
+    if (whole) {
+      durationSeconds = full;
+      await this.prisma.lessonVideo.update({
+        where: { lessonId },
+        data: {
+          trimStartSeconds: null,
+          trimEndSeconds: null,
+          trimCuts: Prisma.DbNull,
+          fullDurationSeconds: null,
+          durationSeconds,
+        },
+      });
+    } else {
+      const cuts = [...trim.cuts].sort((a, b) => a.from - b.from);
+      const problem = trimProblem({ ...trim, cuts }, full);
+      if (problem !== null) throw new BadRequestException(problem);
+      durationSeconds = effectiveSeconds({ ...trim, cuts }, full);
+      await this.prisma.lessonVideo.update({
+        where: { lessonId },
+        data: {
+          trimStartSeconds: trim.start === 0 ? null : trim.start,
+          trimEndSeconds: trim.end,
+          trimCuts: cuts.length === 0 ? Prisma.DbNull : cuts,
+          fullDurationSeconds: full,
+          durationSeconds,
+        },
+      });
+    }
+
+    await this.audit.record({
+      action: 'lesson:update',
+      resourceType: AUDIT_RESOURCES.lesson,
+      resourceId: lessonId,
+      outcome: 'success',
+      metadata: { operation: 'trimVideo', trim: whole ? null : trim, durationSeconds },
+    });
+    return { durationSeconds };
   }
 
   /** Sanitized on WRITE. The stored row is safe even if a future renderer is not. */

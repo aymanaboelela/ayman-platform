@@ -59,6 +59,7 @@ export type CourseDefaults = {
   whatsappGroupUrl: string | null;
   /** اكتمل نزول المحتوى — gates «خلصت الكورس» on the student's screens. */
   contentComplete: boolean;
+  watermarkPhone: boolean;
   /** EGP cents — `null` means that plan is not for sale on this course. */
   monthlyPriceCents: number | null;
   /* No `quarterlyPriceCents`. «٣ شهور» is off the shelf: the API refuses a
@@ -163,6 +164,7 @@ type Draft = {
    *  clears the column, same convention as `scheduleNote` above. */
   whatsappGroupUrl: string;
   contentComplete: boolean;
+  watermarkPhone: boolean;
   /**
    * EGP POUNDS, as text — `''` is «مش للبيع». The wire fields are cents;
    * `formDataOf` is the one place that multiplies by 100, so the draft never
@@ -263,6 +265,7 @@ function formDataOf(draft: Draft, sellsTerms = false): FormData {
   // nothing at all, and a missing key means "leave it alone" on the update
   // endpoint, not "set it false".
   data.set('contentComplete', draft.contentComplete ? 'true' : 'false');
+  data.set('watermarkPhone', draft.watermarkPhone ? 'true' : 'false');
   return data;
 }
 
@@ -314,6 +317,7 @@ export function CourseForm({
     scheduleNote: defaults?.scheduleNote ?? '',
     whatsappGroupUrl: defaults?.whatsappGroupUrl ?? '',
     contentComplete: defaults?.contentComplete ?? false,
+    watermarkPhone: defaults?.watermarkPhone ?? false,
     monthlyPrice:
       defaults?.monthlyPriceCents != null ? String(defaults.monthlyPriceCents / 100) : '',
     yearlyPrice: defaults?.yearlyPriceCents != null ? String(defaults.yearlyPriceCents / 100) : '',
@@ -942,6 +946,30 @@ export function CourseForm({
               <span className="block text-fg">{copy.admin.course.contentComplete}</span>
               <span className="block text-[length:var(--fs-text-sm)] text-fg-muted">
                 {copy.admin.course.contentCompleteHint}
+              </span>
+            </span>
+          </label>
+        </div>
+
+        {/*
+          The name over an uploaded lecture is always drawn; the phone number
+          with it is this switch, course by course, and it starts off.
+        */}
+        <div className="rounded-[var(--r-md)] border border-line-subtle bg-surface-3 p-3">
+          <input type="hidden" name="watermarkPhone" value="false" />
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              name="watermarkPhone"
+              value="true"
+              checked={draft.watermarkPhone}
+              onChange={(event) => update({ watermarkPhone: event.target.checked })}
+              className="mt-1"
+            />
+            <span>
+              <span className="block text-fg">{copy.admin.course.watermarkPhone}</span>
+              <span className="block text-[length:var(--fs-text-sm)] text-fg-muted">
+                {copy.admin.course.watermarkPhoneHint}
               </span>
             </span>
           </label>

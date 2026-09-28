@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * Required beside every product `page.tsx` by `lib/loading-coverage.test.ts`,
@@ -18,6 +19,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <div className="mx-auto flex min-h-[100dvh] max-w-md flex-col items-center justify-center gap-6 px-6">
+      <RouteLoadingWatchdog />
       <Skeleton className="size-[72px] rounded-full" />
 
       <div className="flex w-full flex-col items-center gap-2">

@@ -41,8 +41,10 @@ import {
 } from '@ayman/contracts/admin/content-months';
 import { formatCopy } from '@ayman/contracts/format';
 import {
+  VideoUploadResumedSchema,
   VideoUploadSessionSchema,
   VideoUploadStatusSchema,
+  type VideoUploadResumed,
   type VideoUploadSession,
   type VideoUploadStatus,
 } from '@ayman/contracts/admin/video-upload';
@@ -152,6 +154,13 @@ function readContentComplete(formData: FormData): boolean {
   return values[values.length - 1] === 'true';
 }
 
+/** «اظهر رقم الطالب على الفيديو». The same hidden-false pair; off is the safe
+ *  fallback, because a number shown by mistake cannot be un-shown. */
+function readWatermarkPhone(formData: FormData): boolean {
+  const values = formData.getAll('watermarkPhone');
+  return values[values.length - 1] === 'true';
+}
+
 /**
  * The card's badge, or `null` for «من غير شارة».
  *
@@ -227,6 +236,7 @@ export async function createCourseAction(formData: FormData): Promise<void> {
     scheduleNote: readOptionalText(formData, 'scheduleNote'),
     whatsappGroupUrl: readOptionalText(formData, 'whatsappGroupUrl'),
     contentComplete: readContentComplete(formData),
+    watermarkPhone: readWatermarkPhone(formData),
     coverKey: readOptionalText(formData, 'coverKey'),
     requiresGrant: readRequiresGrant(formData),
     monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
@@ -324,6 +334,7 @@ export async function updateCourseAction(
       scheduleNote: readOptionalText(formData, 'scheduleNote'),
       whatsappGroupUrl: readOptionalText(formData, 'whatsappGroupUrl'),
       contentComplete: readContentComplete(formData),
+      watermarkPhone: readWatermarkPhone(formData),
       coverKey: readOptionalText(formData, 'coverKey'),
       requiresGrant: readRequiresGrant(formData),
       monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
@@ -1118,11 +1129,13 @@ export async function deleteLessonAction(
 export async function removeLessonVideoAction(
   courseId: string,
   lessonId: string,
+  /** An uploaded video only: keep its files in «محفوظة» (default) or delete them. */
+  keep = true,
 ): Promise<ActionResult> {
   try {
     await apiSend(
       'DELETE',
-      `/api/admin/lessons/${lessonId}/video`,
+      `/api/admin/lessons/${lessonId}/video?keep=${keep ? 'true' : 'false'}`,
       z.object({ lessonId: z.uuid() }),
     );
     invalidateCourse(courseId);
@@ -1177,13 +1190,72 @@ export async function probeVideoDurationAction(
 
 export async function startVideoUploadAction(
   lessonId: string,
-  input: { fileName: string; sizeBytes: number; contentType: string },
+  input: { fileName: string; sizeBytes: number; contentType: string; keepPrevious?: boolean },
 ): Promise<{ ok: true; session: VideoUploadSession } | { ok: false; message: string }> {
   try {
     const session = await apiSend(
       'POST',
       `/api/admin/lessons/${lessonId}/video/upload`,
       VideoUploadSessionSchema,
+      input,
+    );
+    return { ok: true, session };
+  } catch (error) {
+    return { ok: false, message: arabicError(error) };
+  }
+}
+
+/**
+ * «قص الفيديو» — save the cut (or `null` for the whole video). The course's
+ * cache goes too: `duration_seconds` just changed, and every card that sums
+ * the course length reads it.
+ */
+/**
+ * The playlist URL of an uploaded lecture, for the editor's own preview.
+ *
+ * Asked of the server because `NEXT_PUBLIC_VIDEO_ORIGIN` is a RUNTIME variable
+ * here — the Dockerfile never declares it as a build arg, so it is not inlined
+ * into client bundles and `proxy.ts` reads it per request too. Built from the
+ * id and the configured origin, never from a stored string.
+ */
+export async function videoPreviewUrlAction(externalId: string): Promise<string | null> {
+  const origin = (process.env.NEXT_PUBLIC_VIDEO_ORIGIN ?? '').replace(/\/+$/, '');
+  if (origin === '' || !/^[0-9a-f]{32}$/.test(externalId)) return null;
+  return `${origin}/v/${externalId}/master.m3u8`;
+}
+
+export async function setVideoTrimAction(
+  courseId: string,
+  lessonId: string,
+  trim: { start: number; end: number | null; cuts: { from: number; to: number }[] } | null,
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'PUT',
+      `/api/admin/lessons/${lessonId}/video/trim`,
+      z.object({ durationSeconds: z.number() }),
+      { trim },
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: arabicError(error) };
+  }
+}
+
+/**
+ * «كمّل الرفع» — re-open a session the tab lost. See `VideoUploadService.resume`.
+ */
+export async function resumeVideoUploadAction(
+  lessonId: string,
+  input: { videoId: string; uploadId: string; sizeBytes: number },
+): Promise<{ ok: true; session: VideoUploadResumed } | { ok: false; message: string }> {
+  try {
+    const session = await apiSend(
+      'POST',
+      `/api/admin/lessons/${lessonId}/video/upload/resume`,
+      VideoUploadResumedSchema,
       input,
     );
     return { ok: true, session };

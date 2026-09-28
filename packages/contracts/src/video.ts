@@ -425,9 +425,63 @@ export function mirrorPosterUrl(baseUrl: string, externalId: string): string {
  * only managed 480p because that is all YouTube had should not be announced
  * as 1080p.
  */
+/* ── «قص الفيديو» ──────────────────────────────────────────────────────────
+ *
+ * What the student sees of an uploaded lecture: where it starts, where it
+ * ends, and parts cut out of the middle. Applied by the PLAYER; the files are
+ * never re-encoded, which is what makes a cut instant and every cut
+ * reversible («عشان لو حبيت أرجّعه تاني»). Whole seconds, on the ORIGINAL
+ * timeline.
+ */
+export const VideoCutSchema = z.object({
+  from: z.number().int().nonnegative(),
+  to: z.number().int().positive(),
+});
+export type VideoCut = z.infer<typeof VideoCutSchema>;
+
+export const VideoTrimSchema = z.object({
+  start: z.number().int().nonnegative(),
+  /** `null` = the video's own end. */
+  end: z.number().int().positive().nullable(),
+  cuts: z.array(VideoCutSchema).max(50),
+});
+export type VideoTrim = z.infer<typeof VideoTrimSchema>;
+
+/** The shortest a trimmed lecture may be — a guard against a slip, not a policy. */
+export const MIN_TRIMMED_SECONDS = 5;
+
+/**
+ * Why a trim is not valid against a video of `fullSeconds`, or `null` when
+ * it is. Shared by the editor (to say so before saving) and the API (which
+ * refuses it regardless). Arabic, because it is shown to the instructor.
+ */
+export function trimProblem(trim: VideoTrim, fullSeconds: number): string | null {
+  const end = trim.end ?? fullSeconds;
+  if (trim.start >= end) return 'البداية لازم تبقى قبل النهاية';
+  if (end > fullSeconds) return 'النهاية بعد آخر الفيديو';
+  let previous = trim.start;
+  for (const cut of trim.cuts) {
+    if (cut.to <= cut.from) return 'في قطع نهايته قبل بدايته';
+    if (cut.from < previous) return 'القطع متداخلة أو مش مرتبة';
+    if (cut.to > end) return 'في قطع بعد نهاية الفيديو';
+    previous = cut.to;
+  }
+  if (effectiveSeconds(trim, fullSeconds) < MIN_TRIMMED_SECONDS) return 'اللي فاضل من الفيديو قصير أوي';
+  return null;
+}
+
+/** How long the student will actually watch. */
+export function effectiveSeconds(trim: VideoTrim, fullSeconds: number): number {
+  const end = trim.end ?? fullSeconds;
+  const cut = trim.cuts.reduce((sum, part) => sum + (part.to - part.from), 0);
+  return Math.max(0, end - trim.start - cut);
+}
+
 export const PlayerVideoMirrorSchema = z.object({
   hlsUrl: z.string().startsWith('https://'),
   maxHeight: z.number().int().positive(),
+  /** «قص الفيديو», or `null` for the whole video. Optional so an older API still parses. */
+  trim: VideoTrimSchema.nullable().optional(),
 });
 export type PlayerVideoMirror = z.infer<typeof PlayerVideoMirrorSchema>;
 

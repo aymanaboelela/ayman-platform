@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * The article skeleton.
@@ -11,6 +12,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <div aria-hidden="true">
+      <RouteLoadingWatchdog />
       <article className="site-shell article">
         <header className="article__head">
           <Skeleton width="narrow" className="mb-6 h-3" />

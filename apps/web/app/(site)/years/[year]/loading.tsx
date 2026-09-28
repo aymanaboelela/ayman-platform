@@ -1,10 +1,12 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /** Mirrors the year listing: centred title, filter pills, then the card grid
  *  inside its panel. A Server Component, so it ships in the SSR'd HTML. */
 export default function Loading() {
   return (
     <div aria-hidden="true">
+      <RouteLoadingWatchdog />
       <header className="page-head site-shell">
         <Skeleton width="narrow" className="mx-auto h-9" />
       </header>

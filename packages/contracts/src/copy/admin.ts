@@ -59,6 +59,7 @@ const admin = {
     roles: 'الصلاحيات',
     news: 'نيوز',
     media: 'مكتبة الوسائط',
+    videos: 'الفيديوهات',
     errors: 'الأعطال',
     audit: 'سجل النشاط',
     settings: 'الإعدادات',
@@ -82,6 +83,14 @@ const admin = {
     unlockCodes: 'أكواد الفتح',
     /** الكتاب الورقي — the shipping queue. */
     books: 'طلبات الكتب',
+    /**
+     * «الكتب» — the SHELF: every title, its cover, its course, its term and its
+     * price. It used to be reachable only as the second tab inside «طلبات
+     * الكتب», and «عايز صفحة في الداشبورد أختار فيها الكتاب» was asked by the
+     * person who had been one tab away from it for weeks. A sidebar row of its
+     * own, directly above the queue it feeds.
+     */
+    bookCatalog: 'الكتب',
     /**
      * الواجب — the review queue. In the teaching group, directly under the
      * inbox pair: it is the third screen where somebody is waiting on an
@@ -268,6 +277,10 @@ const admin = {
      * moves when it flips.
      */
     contentComplete: 'المنهج نزل كله',
+    /** The switch beside the name drawn over an uploaded lecture. */
+    watermarkPhone: 'اظهر رقم الطالب على الفيديو',
+    watermarkPhoneHint:
+      'اسم الطالب بيظهر دايمًا على الفيديو المرفوع وبيتحرك. علّمها لو عايز رقمه يظهر جنبه كمان — عشان لو حد صوّر الشاشة ونزّلها يبان مين.',
     contentCompleteHint:
       'سيبها فاضية طول ما لسه فيه محاضرات جاية. لغاية ما تعلّمها، الطالب اللي خلّص اللي نازل هيقرا «خلّصت اللي نزل» مش «خلصت الكورس».',
     /** The «⋯» trigger in the editor bar: archive, delete, and the video check. */
@@ -817,7 +830,60 @@ const admin = {
      * it is not will sit through an upload they no longer want.
      */
     videoUploadCancelHint: 'لو ألغيت، الفيديو القديم هيرجع زي ما كان',
-    videoUploadKeepOpen: 'سيب الصفحة مفتوحة لحد ما الرفع يخلص',
+    videoUploadKeepOpen: 'تقدر تتنقل في لوحة التحكم والرفع شغال — بس متقفلش التاب.',
+    /** «٣٫٢ ميجا/ث · فاضل ٤ دقايق · ١٢٠ من ٤٠٠ ميجا» — what YouTube Studio shows. */
+    videoUploadSpeed: '{speed}/ث',
+    videoUploadEta: 'فاضل {time}',
+    videoUploadOf: '{sent} من {total}',
+    videoUploadEtaSeconds: '{n} ثانية',
+    videoUploadEtaMinutes: '{n} دقيقة',
+    videoUploadEtaHours: '{h} ساعة و{m} دقيقة',
+    /**
+     * «كمّل الرفع». The tab closed, the laptop slept, the line dropped — and
+     * the parts already in the bucket are still there. Picking the SAME file
+     * sends only the rest.
+     */
+    videoUploadResumeTitle: 'الرفع اتقطع عند {percent}٪',
+    videoUploadInterrupted: 'الرفع ده اتقطع قبل ما يخلص',
+    videoUploadResumeHint: 'اختار نفس الملف تاني وهنكمّل من اللي وقف عنده، مش من الأول.',
+    videoUploadResumePick: 'اختار نفس الملف وكمّل',
+    videoUploadNotSameFile: 'ده مش نفس الملف اللي كان بيترفع — اختار نفس الملف، أو ابدأ رفع جديد.',
+    videoUploadStartOver: 'ابدأ رفع جديد',
+    /** The corner card that follows the upload around the whole dashboard. */
+    videoUploadDockTitle: 'رفع الفيديو',
+    videoUploadDockProcessing: 'اترفع — بيتجهّز دلوقتي',
+    videoUploadDockOpen: 'افتح الكورس',
+    /**
+     * «امسحه خالص ولا استبدله بس» — asked every time an uploaded video leaves
+     * its lesson, by a new upload or by «شيل الفيديو». Keep is the default:
+     * a choice nobody made must never be the one that cannot be undone.
+     */
+    videoReplaceKeepTitle: 'الفيديو اللي عليها دلوقتي:',
+    videoKeepOld: 'احتفظ بيه في «الفيديوهات» — أقدر أرجّعه بعدين',
+    videoDeleteOld: 'امسحه خالص من السيرفر',
+    removeUploadedTitle: 'تشيل الفيديو ده من المحاضرة؟',
+    removeUploadedBody:
+      'المحاضرة هتفضل موجودة من غير فيديو. الفيديو نفسه تحب نعمل فيه إيه؟',
+    removeUploadedKeep: 'شيله واحتفظ بيه',
+    removeUploadedDelete: 'شيله وامسحه خالص',
+    /**
+     * «قص الفيديو» — YouTube Studio's trim, for an uploaded lecture. The file
+     * is never touched: the player skips what is cut, so every cut undoes.
+     */
+    trimTitle: 'قص الفيديو',
+    trimHint: 'شغّل الفيديو ووقّفه عند المكان اللي عايزه، وبعدين دوس الزرار. الفيديو الأصلي مش بيتمسح منه حاجة — تقدر ترجّعه كامل في أي وقت.',
+    trimSetStart: 'البداية من هنا',
+    trimSetEnd: 'النهاية هنا',
+    trimCutFrom: 'اقطع من هنا',
+    trimCutTo: 'لحد هنا',
+    trimCutCancel: 'إلغاء القطع',
+    trimCutItem: 'مقطوع من {from} لـ {to}',
+    trimRemoveCut: 'رجّع الجزء ده',
+    trimResult: 'الطالب هيشوف {after} من أصل {before}',
+    trimSave: 'احفظ القص',
+    trimReset: 'رجّع الفيديو كامل',
+    trimSaved: 'القص اتحفظ',
+    trimResetDone: 'الفيديو رجع كامل',
     videoUploadSource: 'الملف الأصلي',
     title: 'عنوان المحاضرة',
     kind: 'النوع',
@@ -1547,6 +1613,7 @@ const admin = {
     '/admin/transfers': 'الفلوس اللي وصلت فعلاً على إنستاباي.',
     '/admin/finance': 'الإيرادات والمصروفات وصافي الربح.',
     '/admin/unlock-codes': 'كود لطالب بيفتح محاضرة أو وحدة أو الكورس كله — ومين استخدم إيه.',
+    '/admin/books/catalog': 'كل كتاب: غلافه وسعره، تبع أنهي كورس، والترم بتاعه.',
     '/admin/books': 'طلبات الكتاب المدفوعة اللي لسه ما اتشحنتش.',
     '/admin/attempts': 'محاولات الامتحانات ودرجاتها.',
     '/admin/analytics': 'أداء الطلبة وأصعب الأسئلة.',
@@ -4366,7 +4433,18 @@ const admin = {
     fieldTerm: 'الترم',
     fieldCourse: 'الكورس المرتبط (اختياري)',
     fieldCourseNone: 'من غير كورس',
-    fieldCourseHint: 'لو الكتاب ده هو كتاب كورس، اربطه بيه — الكورس الواحد ليه كتاب واحد بس.',
+    fieldCourseHint:
+      'لو الكتاب ده هو كتاب كورس، اربطه بيه — وهيظهر للطالب في صفحة الكورس. الكورس الواحد ليه كتاب واحد في نفس الوقت: عشان تربط كتاب الترم التاني، شيل الربط من كتاب الترم الأول الأول.',
+    /** `{title}` — the book that already holds this course. Beside a DISABLED
+     *  option, so the picker says why it will not take it instead of letting
+     *  the save come back with a conflict. */
+    fieldCourseTaken: 'مربوط بـ«{title}»',
+    /** After a course that is not published — offered only because THIS book
+     *  is already linked to it, so the picker does not silently show «من غير
+     *  كورس» for a link that exists. */
+    fieldCourseDraft: 'مش منشور',
+    /** `{label}` the course, `{note}` the two notes above joined by « · ». */
+    fieldCourseWithNote: '{label} ({note})',
     fieldPrice: 'السعر (ج)',
     fieldComparePrice: 'السعر قبل الخصم (ج، اختياري)',
     fieldComparePriceHint: 'لازم يكون أعلى من السعر الحالي، وإلا الخصم يبقى كذب.',
@@ -4409,10 +4487,41 @@ const admin = {
     termFirst: 'الترم الأول',
     termSecond: 'الترم التاني',
     termFull: 'السنة كاملة',
+    /** Under the three term buttons — what the choice actually DOES, because
+     *  «السنة كاملة» printed over two first-term books is how this was asked. */
+    fieldTermHint: 'ده العنوان اللي الكتاب بيظهر تحته في قسم الكتب.',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * The editor's sections, and the list's summary. «صفحة أختار فيها الكتاب،
+     * تبع أنهي كورس، وأحط الصورة وكل الداتا بتاعته».
+     * ════════════════════════════════════════════════════════════════════
+     */
+    sectionBasics: 'بيانات الكتاب',
+    sectionCourse: 'الكورس والصف والترم',
+    sectionPricing: 'السعر والمخزون',
+    sectionCover: 'صورة الكتاب',
+    sectionVisibility: 'الظهور',
+    /** Under the cover field: the crop is portrait because every surface that
+     *  shows a book shows it as a 3×4 jacket. */
+    fieldCoverHint: 'بيتقص بالطول ٣×٤، بنفس شكل الكارت في قسم الكتب.',
+    /** On a NEW book only — the slug follows the title until it is edited. */
+    fieldSlugAutoHint: 'بيتكتب لوحده من اسم الكتاب — غيّره لو حابب.',
+    /** `{n}` titles in the catalogue, `{active}` of them on sale. */
+    catalogSummary: '{n} كتاب · {active} معروض',
+    catalogCourseLabel: 'الكورس',
+    catalogNoCourse: 'مش مربوط بكورس',
+    /** `{n}` copies left, when stock is counted. */
+    catalogStockLeft: '{n} في المخزن',
+    /** `{price}` already formatted by `formatEGP`. */
+    catalogPrice: '{price} ج',
 
     catalogSave: 'احفظ',
     catalogSaving: 'بيتحفظ…',
     catalogSaveFailed: 'مقدرناش نحفظ الكتاب — نحاول تاني',
+    /** A 409 from the API: the slug, or the course, is another book's. The form
+     *  greys out a taken course, so this is almost always the slug. */
+    catalogConflict: 'الرابط ده أو الكورس ده مستخدم في كتاب تاني — غيّره وجرّب تاني.',
     catalogDelete: 'امسح',
     catalogDeleteConfirm: 'نمسح الكتاب ده؟ الطلبات اللي اشترته هتفضل زي ما هي.',
     catalogDeleteFailed: 'مقدرناش نمسح الكتاب — نحاول تاني',
@@ -4816,6 +4925,64 @@ const admin = {
    * So the wording is aimed at triage and not at reassurance: what broke, where,
    * how many students, how recently, and is it still happening.
    */
+  /**
+   * «الفيديوهات» — every uploaded lecture and what the bucket holds for it.
+   *
+   * Written for the question the owner actually asked: «إيه اللي متخزّن وبكام،
+   * وأمسح إيه». So the numbers lead, the leftovers are named as money being
+   * paid for nothing, and the delete says plainly that it cannot be undone.
+   */
+  videos: {
+    eyebrow: 'المحتوى',
+    title: 'الفيديوهات',
+    subtitle: 'كل فيديو اترفع على المنصة، حجمه قد إيه، وفي أنهي محاضرة.',
+    statTotal: 'المساحة كلها',
+    statCount: 'فيديو في محاضرات',
+    statCost: 'تكلفة التخزين في الشهر تقريبًا',
+    statCostHint: 'التخزين بـ٠٫٠١٥ دولار للجيجا في الشهر، والمشاهدة ببلاش.',
+    unitGb: 'جيجا',
+    unitMb: 'ميجا',
+    storageUnread: 'مقدرناش نقرا التخزين دلوقتي — المساحة هنا من غير الملفات الزيادة.',
+    listTitle: 'في المحاضرات',
+    empty: 'لسه مفيش فيديو اترفع.',
+    emptyHint: 'أول محاضرة تترفع من صفحة الكورس هتظهر هنا بحجمها.',
+    openLesson: 'افتح المحاضرة',
+    status: {
+      uploading: 'بيترفع',
+      pending: 'مستني دوره',
+      mirroring: 'بيتجهز',
+      ready: 'جاهز',
+      failed: 'وقع',
+      disabled: 'متوقف',
+    },
+    quality: '{height}p',
+    orphansTitle: 'ملفات من غير محاضرة',
+    orphansHint:
+      'دي فيديوهات محاضرتها أو الكورس بتاعها اتمسح، والملفات فضلت في التخزين بتتحسب كل شهر. مسحها مش هيأثر على أي طالب.',
+    orphanLabel: 'فيديو من غير محاضرة',
+    delete: 'امسح',
+    deleteTitle: 'تمسح الفيديو ده؟',
+    deleteBody:
+      'الملفات هتتمسح من التخزين خالص، والمحاضرة هتفضل موجودة من غير فيديو. مفيش رجوع في الخطوة دي.',
+    deleteOrphanBody: 'الملفات دي مش مربوطة بأي محاضرة. هتتمسح من التخزين خالص، ومفيش رجوع.',
+    /** «محفوظة» — taken off a lesson but kept, to be put back. */
+    archivedTitle: 'محفوظة',
+    archivedHint: 'فيديوهات اتشالت من محاضراتها بس اتحفظت. تقدر ترجّع أي واحد لأي محاضرة فيديو، أو تمسحه خالص.',
+    archivedFrom: 'كانت على: {lesson} — {course}',
+    restore: 'رجّعه لمحاضرة',
+    restoreTitle: 'ترجّع الفيديو ده لأنهي محاضرة؟',
+    restoreBody: 'لو المحاضرة عليها فيديو دلوقتي، هيتحفظ هنا مكانه — مش هيتمسح.',
+    restorePick: 'اختار المحاضرة',
+    restoreHasVideo: '(عليها فيديو)',
+    restoreConfirm: 'رجّعه',
+    restored: 'الفيديو رجع للمحاضرة',
+    deleteArchivedBody: 'الفيديو ده هيتمسح من التخزين خالص، ومش هتقدر ترجّعه تاني.',
+    deleteConfirm: 'امسح نهائيًا',
+    back: 'رجوع',
+    deleted: 'اتمسح الفيديو',
+    busy: 'الفيديو ده لسه بيترفع أو بيتجهز — استنى لما يخلص',
+    errorGeneric: 'حصلت مشكلة ومقدرناش نمسح. جرّب تاني.',
+  },
   errors: {
     eyebrow: 'المراقبة',
     title: 'الأعطال',

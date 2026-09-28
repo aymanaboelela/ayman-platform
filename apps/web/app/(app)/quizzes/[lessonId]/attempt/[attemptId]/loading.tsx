@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * The live attempt runner.
@@ -35,6 +36,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
+      <RouteLoadingWatchdog />
       <div className="runner">
         <div className="runner__main">
           {/* Where am I, and how long have I got — the two questions the bar

@@ -95,6 +95,11 @@ export interface VideoLessonProps {
   resumeAt: number;
   onProgress: (response: HeartbeatResponse) => void;
   onError: () => void;
+  /**
+   * Who is watching, for the name drawn over OUR copy of the lecture. `null`
+   * for no watermark. YouTube's frame is not ours to draw on.
+   */
+  watermark?: string | null;
 }
 
 /**
@@ -141,6 +146,7 @@ export function VideoLesson({
   resumeAt,
   onProgress,
   onError,
+  watermark = null,
 }: VideoLessonProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -190,7 +196,17 @@ export function VideoLesson({
    * playing.
    */
   const [plainFrame, setPlainFrame] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
+  const [nativeFullscreen, setFullscreen] = useState(false);
+  /**
+   * «ملء الشاشة» where the page cannot ask for it: the iPhone. Safari there
+   * only fullscreens a bare <video>, through its own player — which drops
+   * everything drawn over the picture, the viewer's name included. So on a
+   * phone that has no `requestFullscreen`, the shell is pinned over the whole
+   * viewport instead: the picture fills the screen, turning the phone sideways
+   * turns it with it, and the name stays on it.
+   */
+  const [pseudoFullscreen, setPseudoFullscreen] = useState(false);
+  const fullscreen = nativeFullscreen || pseudoFullscreen;
   /**
    * Our own copy could not play, so YouTube gets its turn after all.
    *
@@ -300,6 +316,11 @@ export function VideoLesson({
     const shell = shellRef.current;
     if (!shell) return;
 
+    if (typeof shell.requestFullscreen !== 'function') {
+      setPseudoFullscreen((on) => !on);
+      return;
+    }
+
     if (document.fullscreenElement) {
       // Unlock BEFORE leaving, while the lock is still ours to release —
       // afterwards the call is a no-op and the phone can stay sideways.
@@ -327,6 +348,10 @@ export function VideoLesson({
     const syncFullscreen = () => setFullscreen(document.fullscreenElement === shellRef.current);
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code === 'Escape') {
+        setPseudoFullscreen(false);
+        return;
+      }
       if (event.code !== 'KeyF' || event.metaKey || event.ctrlKey || event.altKey) return;
 
       // Never steal the key from someone typing — a quiz answer, a search box,
@@ -563,6 +588,7 @@ export function VideoLesson({
         // border and radius go too — a rounded rectangle with a hairline round
         // it is furniture for a card, not for a screen.
         fullscreen ? 'h-full' : 'aspect-video rounded-lg border border-line',
+        pseudoFullscreen && 'fixed inset-0 z-[60] h-dvh w-screen bg-black',
       )}
     >
       <div ref={mountRef} className="absolute inset-0 h-full w-full" />
@@ -583,6 +609,9 @@ export function VideoLesson({
           posterUrl={posterFailed ? null : video.posterUrl}
           startAt={startedAt}
           onPlayer={setPlayer}
+          fullscreen={fullscreen}
+          onToggleFullscreen={toggleFullscreen}
+          watermark={watermark}
           onFatal={() => {
             setMirrorFailed(true);
             if (isUpload) {
@@ -614,7 +643,7 @@ export function VideoLesson({
         it, so the rest of the frame still belongs to the embed — this is one
         small target in a corner, not a layer over the video.
       */}
-      {activated ? (
+      {activated && !(useMirror && video.mirror) ? (
         <button
           type="button"
           onClick={toggleFullscreen}

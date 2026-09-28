@@ -12,6 +12,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
+  ListPartsCommand,
   PutObjectCommand,
   S3Client,
   UploadPartCommand,
@@ -21,7 +22,7 @@ import type { MirrorConfig } from './mirror-config';
 import { adoptableLadder } from './mirror-pipeline';
 
 /**
- * Content types for the three extensions an HLS ladder is made of.
+ * Content types for the extensions an HLS ladder is made of.
  *
  * These are not cosmetic. A playlist served as `application/octet-stream` is
  * downloaded rather than played by Safari, and a segment with the wrong type
@@ -32,6 +33,9 @@ import { adoptableLadder } from './mirror-pipeline';
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
   '.m3u8': 'application/vnd.apple.mpegurl',
   '.m4s': 'video/iso.segment',
+  // An encrypted upload's segments — ffmpeg cannot encrypt fMP4 (see
+  // `transcodeArgs`), so those lectures are MPEG-TS.
+  '.ts': 'video/mp2t',
   '.mp4': 'video/mp4',
   '.jpg': 'image/jpeg',
 };
@@ -69,6 +73,19 @@ export class MirrorStorage {
       // R2 has no regions, but the SDK refuses to sign without one.
       region: 'auto',
       endpoint: config.endpoint,
+      /*
+       * ⚠️ PATH-style — `https://<account>.r2.cloudflarestorage.com/<bucket>/…`.
+       *
+       * The SDK's default is virtual-hosted, which puts the bucket in the
+       * HOST: `https://<bucket>.<account>.r2…`. The pre-signed part URLs the
+       * admin's browser PUTs to were therefore on a host the CSP never
+       * allowed — `connect-src` carries the endpoint as configured
+       * (`NEXT_PUBLIC_VIDEO_UPLOAD_ORIGIN` = `VIDEO_MIRROR_ENDPOINT`) — and
+       * every part died as «part failed: network» at 0%. Browser upload had
+       * never once worked in production; the only proof ever run was curl,
+       * which has no CSP. Found by uploading a real file through the admin.
+       */
+      forcePathStyle: true,
       credentials: {
         accessKeyId: config.accessKeyId,
         secretAccessKey: config.secretAccessKey,
@@ -183,6 +200,19 @@ export class MirrorStorage {
    * every time.
    */
   async listMirroredIds(): Promise<Set<string>> {
+    return this.listIdsUnder('v');
+  }
+
+  /**
+   * Every upload id that still has an ORIGINAL file in the bucket. The worker
+   * deletes it once the ladder is up, so an id here is a lecture that never
+   * finished encoding — or one whose lesson was deleted before it did.
+   */
+  async listSourceIds(): Promise<Set<string>> {
+    return this.listIdsUnder('raw');
+  }
+
+  private async listIdsUnder(root: 'v' | 'raw'): Promise<Set<string>> {
     const ids = new Set<string>();
     let token: string | undefined;
 
@@ -190,19 +220,49 @@ export class MirrorStorage {
       const listed = await this.s3.send(
         new ListObjectsV2Command({
           Bucket: this.config.bucket,
-          Prefix: 'v/',
+          Prefix: `${root}/`,
           Delimiter: '/',
           ContinuationToken: token,
         }),
       );
       for (const entry of listed.CommonPrefixes ?? []) {
-        const id = entry.Prefix?.slice('v/'.length).replace(/\/$/, '');
+        const id = entry.Prefix?.slice(`${root}/`.length).replace(/\/$/, '');
         if (id !== undefined && id.length > 0) ids.add(id);
       }
       token = listed.IsTruncated === true ? listed.NextContinuationToken : undefined;
     } while (token !== undefined);
 
     return ids;
+  }
+
+  /**
+   * Total size and newest write under one prefix. One listing per prefix, so
+   * it is for the handful of folders no lesson points at — never for every
+   * lecture, whose sizes are already on their rows.
+   */
+  async prefixUsage(prefix: string): Promise<{ bytes: number; lastModified: Date | null }> {
+    let bytes = 0;
+    let lastModified: Date | null = null;
+    let token: string | undefined;
+
+    do {
+      const listed = await this.s3.send(
+        new ListObjectsV2Command({
+          Bucket: this.config.bucket,
+          Prefix: `${prefix}/`,
+          ContinuationToken: token,
+        }),
+      );
+      for (const object of listed.Contents ?? []) {
+        bytes += object.Size ?? 0;
+        if (object.LastModified !== undefined && (lastModified === null || object.LastModified > lastModified)) {
+          lastModified = object.LastModified;
+        }
+      }
+      token = listed.IsTruncated === true ? listed.NextContinuationToken : undefined;
+    } while (token !== undefined);
+
+    return { bytes, lastModified };
   }
 
   /**
@@ -304,8 +364,23 @@ export class MirrorStorage {
     partCount: number,
     expiresInSeconds: number,
   ): Promise<{ partNumber: number; url: string }[]> {
+    return this.presignPartNumbers(
+      key,
+      uploadId,
+      Array.from({ length: partCount }, (_, index) => index + 1),
+      expiresInSeconds,
+    );
+  }
+
+  /** The same, for chosen parts only — «كمّل الرفع» re-signs just the missing ones. */
+  async presignPartNumbers(
+    key: string,
+    uploadId: string,
+    partNumbers: readonly number[],
+    expiresInSeconds: number,
+  ): Promise<{ partNumber: number; url: string }[]> {
     const parts: { partNumber: number; url: string }[] = [];
-    for (let partNumber = 1; partNumber <= partCount; partNumber += 1) {
+    for (const partNumber of partNumbers) {
       const url = await getSignedUrl(
         this.s3,
         new UploadPartCommand({
@@ -317,6 +392,44 @@ export class MirrorStorage {
         { expiresIn: expiresInSeconds },
       );
       parts.push({ partNumber, url });
+    }
+    return parts;
+  }
+
+  /**
+   * The parts S3 already holds for an open upload, with their ETags.
+   *
+   * A part is listed only once its PUT finished — a part that was cut off
+   * halfway is simply absent — so what comes back here is exactly what does
+   * not need sending again. `null` when the upload no longer exists (it was
+   * completed, aborted, or reaped by the bucket's multipart rule).
+   */
+  async listParts(
+    key: string,
+    uploadId: string,
+  ): Promise<{ partNumber: number; etag: string; size: number }[] | null> {
+    const parts: { partNumber: number; etag: string; size: number }[] = [];
+    let marker: string | undefined;
+    try {
+      do {
+        const listed = await this.s3.send(
+          new ListPartsCommand({
+            Bucket: this.config.bucket,
+            Key: key,
+            UploadId: uploadId,
+            PartNumberMarker: marker,
+          }),
+        );
+        for (const part of listed.Parts ?? []) {
+          if (part.PartNumber !== undefined && part.ETag !== undefined) {
+            parts.push({ partNumber: part.PartNumber, etag: part.ETag, size: part.Size ?? 0 });
+          }
+        }
+        marker = listed.IsTruncated === true ? listed.NextPartNumberMarker : undefined;
+      } while (marker !== undefined);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'NoSuchUpload') return null;
+      throw error;
     }
     return parts;
   }

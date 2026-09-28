@@ -27,6 +27,8 @@ import {
   SetLessonTextDto,
   AbortVideoUploadDto,
   CompleteVideoUploadDto,
+  ResumeVideoUploadDto,
+  SetVideoTrimDto,
   SetLessonVideoDto,
   StartVideoUploadDto,
   UpdateLessonDto,
@@ -110,10 +112,19 @@ export class LessonController {
     return this.lessons.setVideo(id, body);
   }
 
+  /** «قص الفيديو» — the player applies it; the files are never touched. */
+  @RequireFeature('video.upload')
+  @RequirePermission('lesson:write')
+  @Put('lessons/:id/video/trim')
+  setVideoTrim(@Param('id') id: string, @Body() body: SetVideoTrimDto) {
+    return this.lessons.setTrim(id, body.trim);
+  }
+
+  /** `?keep=false` deletes an uploaded video's files; anything else keeps them in «محفوظة». */
   @RequirePermission('lesson:write')
   @Delete('lessons/:id/video')
-  removeVideo(@Param('id') id: string) {
-    return this.lessons.removeVideo(id);
+  removeVideo(@Param('id') id: string, @Query('keep') keep?: string) {
+    return this.lessons.removeVideo(id, keep !== 'false');
   }
 
   /**
@@ -166,6 +177,13 @@ export class LessonController {
   @Post('lessons/:id/video/upload/complete')
   completeVideoUpload(@Param('id') id: string, @Body() body: CompleteVideoUploadDto) {
     return this.uploads.complete(id, body);
+  }
+
+  @RequireFeature('video.upload')
+  @RequirePermission('lesson:write')
+  @Post('lessons/:id/video/upload/resume')
+  resumeVideoUpload(@Param('id') id: string, @Body() body: ResumeVideoUploadDto) {
+    return this.uploads.resume(id, body);
   }
 
   @RequireFeature('video.upload')

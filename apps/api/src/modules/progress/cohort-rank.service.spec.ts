@@ -169,8 +169,9 @@ describe('CohortRankService', () => {
     expect(() => CohortRankSchema.parse(top)).not.toThrow();
     expect(top.me.points).toBe(220);
     expect(top.me.rank).toBe(1);
-    // ملك، علا، نور، والساكت. اللي مش مشترك في حاجة والأدمن برّه.
-    expect(top.cohort?.size).toBe(4);
+    // عدد الدفعة مابيتبعتش خالص — مش بس مش معروض.
+    expect(top.cohort).toEqual({ label: expect.any(String) });
+    expect(JSON.stringify(top)).not.toContain('"size"');
     expect(top.pointsToNextRank).toBeNull();
     expect(top.me.betterThanPercent).toBe(100);
   });
@@ -231,7 +232,6 @@ describe('CohortRankService', () => {
 
     expect(admin.me.points).toBe(120 + 250);
     expect(admin.me.rank).toBe(1);
-    expect(admin.cohort?.size).toBe(5);
   });
 });
 

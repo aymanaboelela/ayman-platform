@@ -28,7 +28,8 @@ import {
 } from '@ayman/contracts/rank';
 import { StatTile } from '@/components/dashboard/stat-tile';
 import { CountUp } from '@/components/rank/count-up';
-import { LevelGem, RankArt } from '@/components/rank/rank-art';
+import { RankArt } from '@/components/rank/rank-art';
+import { HAS_DRAGONS, LevelIcon, PodiumDragon } from '@/components/rank/rank-dragon';
 import { apiGetAuthed } from '@/lib/api-server';
 import '@/components/rank/rank.css';
 
@@ -129,7 +130,6 @@ export default async function RankPage() {
 
 function Hero({ data, level }: { data: CohortRank; level: RankLevelProgress }) {
   const rank = data.me.rank ?? 1;
-  const size = data.cohort?.size ?? 1;
   const top = rank <= 3 && data.me.points > 0 ? rank : undefined;
 
   return (
@@ -159,12 +159,13 @@ function Hero({ data, level }: { data: CohortRank; level: RankLevelProgress }) {
           <span className="rk-hero__place-label">{c.place}</span>
           <span className="rk-hero__rank">
             <span className="rk-hero__hash">#</span>
-            <CountUp from={Math.min(size, rank + 60)} to={rank} />
+            {/* العدّ بيبدأ من رقم ثابت فوق المركز، مش من حجم الدفعة — الحجم
+                مابيوصلش للصفحة أصلًا. */}
+            <CountUp from={rank + 30} to={rank} />
           </span>
           <span className="sr-only">{rank}</span>
           {top === 1 ? <Crown className="rk-hero__crown" aria-hidden="true" /> : null}
         </p>
-        <p className="rk-hero__of">{formatCopy(c.of, { size: NUM.format(size) })}</p>
 
         <div className="rk-hero__chips">
           {/* «أحسن من 100%» للأول بتتقري غلط، والشريحة اللي جنبها بتقول «المركز
@@ -195,7 +196,7 @@ function Hero({ data, level }: { data: CohortRank; level: RankLevelProgress }) {
       <div className="rk-hero__visual">
         <RankArt level={level.key} />
         <span className="rk-hero__level">
-          <LevelGem level={level.key} className="size-5" />
+          <LevelIcon level={level.key} className="size-5" />
           {level.nameAr}
         </span>
       </div>
@@ -230,7 +231,7 @@ function LevelCard({ level, points }: { level: RankLevelProgress; points: number
   return (
     <div className="rk-card rk-level" data-level={level.key}>
       <div className="rk-level__head">
-        <LevelGem level={level.key} className="rk-level__gem" />
+        <LevelIcon level={level.key} className="rk-level__gem" />
         <div>
           <p className="rk-card__label">{c.levelTitle}</p>
           <p className="rk-level__name">{level.nameAr}</p>
@@ -326,10 +327,15 @@ function Podium({ podium }: { podium: CohortRank['podium'] }) {
                 data-me={row.isMe || undefined}
                 style={{ '--d': slot } as CSSProperties}
               >
-                <span className="rk-podium__avatar">
-                  {row.rank === 1 ? <Crown className="rk-podium__crown" aria-hidden="true" /> : null}
-                  {initials(row.name)}
-                </span>
+                {HAS_DRAGONS ? (
+                  // عند أيمن: تنين بحجم المركز بدل الدايرة — الأول الكبير.
+                  <PodiumDragon place={Math.min(row.rank, 3) as 1 | 2 | 3} />
+                ) : (
+                  <span className="rk-podium__avatar">
+                    {row.rank === 1 ? <Crown className="rk-podium__crown" aria-hidden="true" /> : null}
+                    {initials(row.name)}
+                  </span>
+                )}
                 <span className="rk-podium__name">{row.isMe ? c.ladderMe : row.name}</span>
                 <span className="rk-podium__points">
                   {NUM.format(row.points)} {c.points}
@@ -477,7 +483,7 @@ function LevelPath({ level }: { level: RankLevelProgress }) {
           return (
             <li key={entry.key} className="rk-path__step" data-state={state} data-level={entry.key}>
               <span className="rk-path__gem">
-                <LevelGem level={entry.key} className="size-9" />
+                <LevelIcon level={entry.key} className="size-9" />
                 {state === 'locked' ? <Lock className="rk-path__lock" aria-hidden="true" /> : null}
               </span>
               <span className="rk-path__name">{entry.nameAr}</span>

@@ -221,6 +221,9 @@ const courseWritableShape = {
   /** اكتمل نزول المحتوى. `false` on create — a brand-new course has nothing
    *  in it, so it certainly is not finished. */
   contentComplete: z.boolean().default(false),
+  /** اظهر رقم الطالب على الفيديو. Off on create — the name alone is drawn
+   *  until the instructor turns this on for the course. */
+  watermarkPhone: z.boolean().default(false),
   /**
    * Subscription prices, EGP CENTS — `null` means that plan is not for sale.
    * Independent of each other; a course can sell any subset of them.

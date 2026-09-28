@@ -1,5 +1,6 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
 import { copy } from '@ayman/contracts/copy/admin';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * The queue's footprint while the read is in flight.
@@ -12,6 +13,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 export default function Loading() {
   return (
     <>
+      <RouteLoadingWatchdog />
       <h1 className="text-[length:var(--fs-title-2)] font-semibold text-fg">
         {copy.admin.homework.queueTitle}
       </h1>

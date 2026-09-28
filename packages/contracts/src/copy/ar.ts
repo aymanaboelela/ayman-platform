@@ -1024,6 +1024,19 @@ export const copy = {
      * («السؤال ٣»); it is not a sentence and must stay short enough to be both.
      */
     question: 'السؤال',
+    /**
+     * The toast a route skeleton raises when it has been on screen far longer
+     * than a healthy load takes — see `components/route-loading-watchdog.tsx`.
+     *
+     * It says what is true and nothing more: the page is slow. Not «مفيش نت»
+     * (the connection is usually fine — a stalled request or a deploy is the
+     * common cause) and not «حصلت مشكلة» (nothing has failed yet, and the page
+     * may still land a second later). The action is the one thing that clears
+     * every cause at once, and it is what students were already doing by hand:
+     * «ولما أعمل refresh بيفتح على طول».
+     */
+    slowLoad: 'الصفحة بتاخد وقت أطول من العادي.',
+    slowLoadReload: 'نحمّلها من الأول',
   },
   /**
    * Cross-cutting accessibility strings that belong to no single feature —
@@ -2389,6 +2402,58 @@ export const copy = {
     pythonNoPackages: 'المكتبات الخارجية زي numpy مش متاحة هنا — بايثون الأساسية بس.',
     resetRuntime: 'نبدأ من نضيف',
     timeout: 'الكود أخد وقت طويل واتوقف. غالبًا فيه حلقة مالهاش نهاية.',
+
+    // ── الهيرو ────────────────────────────────────────────────────────────
+    heroPill: 'ملعب البرمجة',
+    /** `{n}` is the number of ready-made examples across every language. */
+    heroExamples: '{n} مثال جاهز',
+    heroLocal: 'بيشتغل جوّه المتصفّح',
+
+    // ── HTML + CSS ────────────────────────────────────────────────────────
+    web: 'HTML + CSS',
+    /** The two file tabs of the HTML language. Shown as file names. */
+    filesLabel: 'الملفات',
+    preview: 'المعاينة',
+    previewFrameTitle: 'معاينة الصفحة',
+    previewEmpty: 'دوسة على «تشغيل» والصفحة بتتبني هنا.',
+    /** A noun on purpose — every button name containing «تشغيل» would also
+     *  match the e2e suite's `getByRole('button', { name: c.run })`. */
+    previewRefresh: 'تحديث المعاينة',
+    previewLive: 'تحديث تلقائي',
+    previewScriptNote: 'الصفحة فيها JavaScript — التحديث بيحصل مع «تشغيل» بس.',
+    previewHung: 'الصفحة علّقت ومردّتش، فاتقفلت. غالبًا فيه حلقة مالهاش نهاية.',
+    /** `{href}` is the link the student's page tried to open. */
+    previewLinkBlocked: 'الروابط مش بتفتح جوّه المعاينة: {href}',
+    /** `{href}` is what the page tried to load from outside (a CDN, an image URL). */
+    previewRequestBlocked: 'المعاينة مابتحمّلش حاجة من برّه — اتمنع: {href}',
+    previewSandboxNote:
+      'الصفحة بتشتغل في صندوق مقفول: مابتوصلش للإنترنت ولا لحسابك، فأي صورة لازم تبقى SVG أو ألوان CSS أو إيموجي.',
+    console: 'الكونسول',
+
+    // ── حالة التشغيل ───────────────────────────────────────────────────────
+    statusIdle: 'في الانتظار',
+    /** `{ms}` is how long the run took, in milliseconds. */
+    statusDone: 'خلص في {ms} مللي ثانية',
+    statusError: 'فيه غلطة',
+    statusRendered: 'الصفحة اتبنت',
+    shortcut: 'اختصار: Ctrl + Enter',
+
+    // ── مكتبة الأمثلة ─────────────────────────────────────────────────────
+    galleryEyebrow: 'أمثلة جاهزة للتشغيل',
+    galleryTitle: 'مكتبة الأمثلة',
+    galleryLead:
+      'كل مثال بيشتغل زي ما هو. دوسة على «تجربة» والكود بيتحط في المحرّر ويشتغل على طول — وبعدها يتعدّل براحتك.',
+    galleryFilterLabel: 'نوع الأمثلة',
+    /** `{lang}` is a language name — the chips' accessible names, kept apart
+     *  from the editor's own language buttons. */
+    galleryFilterAria: 'أمثلة {lang}',
+    /** A noun, not «جرّب»: the imperative has a gender, the platform never
+     *  asks which one the student is. */
+    tryExample: 'تجربة',
+    /** `{title}` is the example's title. */
+    tryExampleAria: 'تجربة مثال: {title}',
+    /** On the card of the example currently loaded in the editor. */
+    inEditor: 'في المحرّر',
   },
   /**
    * مدارس عام / مدارس لغات.
@@ -3039,6 +3104,27 @@ export const copy = {
      */
     enterFullscreen: 'ملء الشاشة',
     exitFullscreen: 'خروج من ملء الشاشة',
+    /**
+     * Our own player's controls — the uploaded lectures, where the browser's
+     * built-in bar was replaced so nothing on it offers «تنزيل», and so the
+     * name over the picture stays there in fullscreen too.
+     */
+    controls: {
+      play: 'تشغيل',
+      pause: 'إيقاف مؤقت',
+      mute: 'كتم الصوت',
+      unmute: 'تشغيل الصوت',
+      volume: 'الصوت',
+      seek: 'مكان الفيديو',
+      back: 'رجوع ١٠ ثواني',
+      forward: 'قدّام ١٠ ثواني',
+      settings: 'الإعدادات',
+      speed: 'السرعة',
+      speedNormal: 'عادي',
+      quality: 'الجودة',
+      qualityAuto: 'تلقائي',
+      qualityAutoNow: 'تلقائي ({height}p)',
+    },
     outline: 'محتوى الكورس',
     previous: 'الدرس السابق',
     next: 'الدرس التالي',
@@ -3388,6 +3474,13 @@ export const copy = {
     /** Same distinction as `library.courseUpToDate`. */
     courseUpToDate: 'خلّصت اللي نزل',
     nothingOpen: 'مفيش حاجة مفتوحة دلوقتي',
+    /** الهيرو اللي فوق الصفحة. «نكمّل» جمع شامل — مش أمر لولد ولا لبنت. */
+    heroNext: 'نكمّل: {title}',
+    heroLeft: 'فاضل {n} محاضرة',
+    heroCourses: '{n} كورس',
+    heroAllDone: 'كل اللي نزل خلص — برافو',
+    /** آخر محطة في كل كورس. */
+    finish: 'خط النهاية',
 
     // ── a course the instructor has taken down ───────────────────────────
     /**
@@ -4067,7 +4160,6 @@ export const copy = {
     heroPillPlain: 'ترتيبك على الدفعة',
     /** الرقم الكبير بيتقري «المركز ٢٥». */
     place: 'المركز',
-    of: 'من {size} في الدفعة',
     betterThan: 'أحسن من {percent}% من الدفعة',
     firstPlace: 'الأول على الدفعة',
     nextRank: 'ناقصك {points} نقطة على المركز اللي قبلك',
@@ -4751,7 +4843,7 @@ export const copy = {
       {
         id: 'playground',
         q: 'تجربة الكود دي إيه؟',
-        a: 'صفحة «تجربة الكود»: كود بيتكتب ويشتغل على طول في المتصفح. مافيش حاجة بتتحفظ ولا بتتصحّح — المكان ده للتجريب بس.',
+        a: 'صفحة «تجربة الكود»: كود JavaScript وPython بيتكتب ويشتغل على طول في المتصفح، وصفحات HTML وCSS بتتشاف وهي بتتبني، ومعاها مكتبة أمثلة جاهزة. مافيش حاجة بتتحفظ ولا بتتصحّح — المكان ده للتجريب بس.',
       },
 
       // ── الامتحانات والنتايج ─────────────────────────────────────────

@@ -7,6 +7,8 @@ import { ProgressModule } from '../progress/progress.module';
 import { VideoMirrorModule } from '../video-mirror/video-mirror.module';
 import { PlayerController } from './player.controller';
 import { PlayerService } from './player.service';
+import { VideoKeyController } from './video-key.controller';
+import { VideoKeyService } from './video-key.service';
 
 // `MediaModule` is imported for its `MEDIA_STORAGE` binding only — the player
 // streams resource bytes itself rather than redirecting to the public media
@@ -18,8 +20,14 @@ import { PlayerService } from './player.service';
   // `VideoMirrorModule` for the mirror's public origin — the player reads it
   // to build playlist URLs and never writes anything through it.
   imports: [ProgressModule, EnrollmentModule, MediaModule, HomeworkModule, VideoMirrorModule],
-  controllers: [PlayerController],
-  providers: [PlayerService, { provide: MEDIA_URL_RESOLVER, useClass: EnvMediaUrlResolver }],
+  // `VideoKeyController` here and not in `video-mirror`: handing out a key is an
+  // access decision, and `LessonAccessService` is this module's to use.
+  controllers: [PlayerController, VideoKeyController],
+  providers: [
+    PlayerService,
+    VideoKeyService,
+    { provide: MEDIA_URL_RESOLVER, useClass: EnvMediaUrlResolver },
+  ],
   exports: [PlayerService, MEDIA_URL_RESOLVER],
 })
 export class PlayerModule {}

@@ -57,8 +57,10 @@ test.describe('learning path', () => {
 
     // Available nodes are real links; locked ones render a non-navigating
     // span. The demo lesson is available, so it must be reachable.
+    // جوّه الخريطة بس: زرار «نكمّل: …» في الهيرو بيحمل نفس العنوان عن قصد،
+    // فالمطابقة الجزئية بتاعة `name` كانت هتعدّ لينكين.
     await expect(
-      page.getByRole('link', { name: 'اختبار تجريبي' }).filter({ visible: true }),
+      page.locator('ol.path-run').getByRole('link', { name: 'اختبار تجريبي' }).filter({ visible: true }),
     ).toHaveCount(1);
 
     const results = await new AxeBuilder({ page })

@@ -1744,6 +1744,15 @@
   border-radius: var(--r-full);
 }
 
+/* A book jacket, previewed at the 3/4 every book card is drawn at — so the
+   crop the admin approves in the dialog is the picture the shop shows. 12rem
+   wide makes it 16rem tall, about the height of the 18rem 16/9 cover above,
+   so the form does not grow a screen taller for a book. */
+.media-key__preview--book {
+  inline-size: min(12rem, 100%);
+  aspect-ratio: 3 / 4;
+}
+
 .media-key__empty {
   padding-inline: 1rem;
   font-size: var(--fs-text-sm);

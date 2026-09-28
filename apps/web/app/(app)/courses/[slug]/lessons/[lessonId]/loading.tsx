@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * The lesson player.
@@ -33,6 +34,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 sm:py-8">
+      <RouteLoadingWatchdog />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8">
         <div className="min-w-0">
           {/* `space-y-6` is `<LessonPlayerView>`'s own wrapper: the player, the

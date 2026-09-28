@@ -12,7 +12,7 @@ import type {
 // cannot resolve an extensionless barrel re-export at real runtime, even
 // though tests/build stay green). Every other apps/api module follows this
 // same rule for `@ayman/contracts/content`, `/catalog`, `/video`.
-import { mirrorPlaylistUrl, mirrorPosterUrl, youTubeThumbnailUrl } from '@ayman/contracts/video';
+import { mirrorPlaylistUrl, mirrorPosterUrl, youTubeThumbnailUrl, VideoTrimSchema } from '@ayman/contracts/video';
 import { VideoMirrorService } from '../video-mirror/video-mirror.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { HomeworkService } from '../homework/homework.service';
@@ -69,6 +69,7 @@ export class PlayerService {
         title: true,
         examLessonId: true,
         contentComplete: true,
+        watermarkPhone: true,
         // Gates `CourseOutlineSidebar`'s own «اطلب الكتاب» link. Same three
         // fields the catalog and the dashboard read, resolved by the same
         // `courseBook()` — the catalogue row when it is live, the legacy pair
@@ -239,6 +240,7 @@ export class PlayerService {
         coverKey: course.coverKey,
         subjectNameAr: course.subject.nameAr,
         contentComplete: course.contentComplete,
+        watermarkPhone: course.watermarkPhone,
         whatsappGroupUrl: course.whatsappGroupUrl,
       },
       sections,
@@ -328,6 +330,10 @@ export class PlayerService {
               // YouTube. Two columns and no join — see `mirror` below.
               mirrorStatus: true,
               mirrorHeight: true,
+              // «قص الفيديو».
+              trimStartSeconds: true,
+              trimEndSeconds: true,
+              trimCuts: true,
             },
           },
           text: { select: { bodyHtml: true } },
@@ -474,6 +480,17 @@ export class PlayerService {
                 ? {
                     hlsUrl: mirrorPlaylistUrl(base, lesson.video.externalId),
                     maxHeight: lesson.video.mirrorHeight,
+                    // «قص الفيديو» — applied by the player, on the original timeline.
+                    trim:
+                      lesson.video.trimStartSeconds === null &&
+                      lesson.video.trimEndSeconds === null &&
+                      lesson.video.trimCuts === null
+                        ? null
+                        : {
+                            start: lesson.video.trimStartSeconds ?? 0,
+                            end: lesson.video.trimEndSeconds,
+                            cuts: VideoTrimSchema.shape.cuts.catch([]).parse(lesson.video.trimCuts),
+                          },
                   }
                 : null,
           }

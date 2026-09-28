@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * A Server Component, so this skeleton ships inside the SSR'd HTML. It mirrors
@@ -52,6 +53,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
+      <RouteLoadingWatchdog />
       {/* `.dash-hero` without `__art`: the band's own gradient and hairline,
           with placeholder bars where the greeting and the dial will be.
 

@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * The article index skeleton. A Server Component, so it ships inside the SSR'd
@@ -11,6 +12,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <div aria-hidden="true">
+      <RouteLoadingWatchdog />
       <header className="page-head site-shell">
         <Skeleton width="narrow" className="mb-4 h-3" />
         <Skeleton width="wide" className="mb-3 h-10" />

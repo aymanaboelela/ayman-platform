@@ -916,6 +916,13 @@ model Course {
   /// is about whether what exists is all there will be.
   contentComplete Boolean @default(false) @map("content_complete")
 
+  /// «اظهر رقم الطالب على الفيديو» — per course, set by the instructor.
+  ///
+  /// The student's NAME is always drawn over an uploaded lecture; the phone
+  /// number is drawn too only where this is on. Off by default: the owner's
+  /// call was «شيله، وخليه من إعدادات الكورس».
+  watermarkPhone Boolean @default(false) @map("watermark_phone")
+
   /// «جروب الدفعة» — the WhatsApp group for THIS course's cohort, or NULL for
   /// a course that does not have one.
   ///
@@ -1505,6 +1512,19 @@ model LessonVideo {
 
   lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
+  /// «قص الفيديو» — what the STUDENT sees of an uploaded lecture, applied by
+  /// the player. The files are never touched: the owner's ask was a cut he can
+  /// take back, and a re-encode would be neither instant nor reversible.
+  /// Seconds on the ORIGINAL timeline; `null` start/end means the video's own.
+  trimStartSeconds    Int?  @map("trim_start_seconds")
+  trimEndSeconds      Int?  @map("trim_end_seconds")
+  /// Parts cut out of the middle: `[{ "from": 120, "to": 185 }, …]`, sorted.
+  trimCuts            Json? @map("trim_cuts")
+  /// The untrimmed length, kept once a trim is saved, because
+  /// `duration_seconds` then holds what the student will actually watch —
+  /// the number every course total and progress rule already reads.
+  fullDurationSeconds Int?  @map("full_duration_seconds")
+
   /// The worker's claim query: status + age, nothing else. Partial, because
   /// `ready` is the steady state of every row and indexing it would be an
   /// index of the whole table to find the handful that are not.
@@ -1514,6 +1534,30 @@ model LessonVideo {
   /// otherwise get wrong once there are thousands of `ready` rows.
   @@index([provider, mirrorStatus, mirrorAt], map: "lesson_videos_mirror_provider_idx")
   @@map("lesson_videos")
+  @@schema("app")
+}
+
+/// «محفوظة» — an uploaded lecture taken off its lesson but KEPT, so it can be
+/// put back on a lesson later. The owner's ask: «لو مسحته تقولي امسحه خالص من
+/// السيرفر ولا استبدله بس، عشان لو حبيت أرجّعه تاني».
+///
+/// The files stay in the bucket under `v/<externalId>/` exactly as they were;
+/// this row is what makes them a video again instead of anonymous leftovers —
+/// the details a lesson needs to play it without re-reading the bucket.
+/// Keyed by the upload id: a video is kept once, whichever lesson it left.
+model ArchivedVideo {
+  externalId      String   @id @map("external_id")
+  sourceName      String?  @map("source_name")
+  durationSeconds Int      @map("duration_seconds")
+  mirrorHeight    Int?     @map("mirror_height")
+  mirrorBytes     BigInt?  @map("mirror_bytes")
+  posterKey       String?  @map("poster_key")
+  /// Where it came from — shown so the owner can tell two kept videos apart.
+  fromLessonTitle String?  @map("from_lesson_title")
+  fromCourseTitle String?  @map("from_course_title")
+  archivedAt      DateTime @default(now()) @map("archived_at") @db.Timestamptz(3)
+
+  @@map("archived_videos")
   @@schema("app")
 }
 

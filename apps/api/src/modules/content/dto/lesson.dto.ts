@@ -1,3 +1,5 @@
+import { VideoTrimSchema } from '@ayman/contracts/video';
+import { z } from '@ayman/contracts/zod';
 import {
   LessonCreateSchema,
   LessonResourceInputSchema,
@@ -10,6 +12,7 @@ import { LessonVideoInputSchema } from '@ayman/contracts/video';
 import {
   VideoUploadAbortSchema,
   VideoUploadCompleteSchema,
+  VideoUploadResumeSchema,
   VideoUploadStartSchema,
 } from '@ayman/contracts/admin/video-upload';
 import { createZodDto } from 'nestjs-zod';
@@ -34,6 +37,7 @@ export class SetLessonTextDto extends createZodDto(LessonTextInputSchema) {}
  */
 export class StartVideoUploadDto extends createZodDto(VideoUploadStartSchema) {}
 export class CompleteVideoUploadDto extends createZodDto(VideoUploadCompleteSchema) {}
+export class ResumeVideoUploadDto extends createZodDto(VideoUploadResumeSchema) {}
 export class AbortVideoUploadDto extends createZodDto(VideoUploadAbortSchema) {}
 /**
  * Same input/output asymmetry as `SetLessonVideoDto` above, for the same
@@ -45,3 +49,6 @@ export class AbortVideoUploadDto extends createZodDto(VideoUploadAbortSchema) {}
 export class AddResourceDto extends createZodDto(LessonResourceInputSchema) {}
 export class UpdateResourceDto extends createZodDto(LessonResourceUpdateSchema) {}
 export class ReorderDto extends createZodDto(ReorderSchema) {}
+
+/** «قص الفيديو» — `trim: null` puts the whole video back. */
+export class SetVideoTrimDto extends createZodDto(z.object({ trim: VideoTrimSchema.nullable() }).strict()) {}

@@ -44,6 +44,12 @@ export const VideoUploadStartSchema = z
      * a video; this only spares the admin an hour of uploading a PDF.
      */
     contentType: z.enum(UPLOAD_VIDEO_MIME),
+    /**
+     * The video this upload REPLACES, once it lands: keep it in «محفوظة» so it
+     * can be put back, or delete its files. Keep by default — a choice nobody
+     * made must never be the one that cannot be undone.
+     */
+    keepPrevious: z.boolean().default(true),
   })
   .strict();
 export type VideoUploadStart = z.infer<typeof VideoUploadStartSchema>;
@@ -104,6 +110,35 @@ export const VideoUploadAbortSchema = z
 export type VideoUploadAbort = z.infer<typeof VideoUploadAbortSchema>;
 
 /**
+ * «كمّل الرفع» — pick the same file again after the tab closed or the line
+ * dropped, and send only what the bucket does not already have.
+ *
+ * `sizeBytes` is the browser's claim that this is the same file, checked
+ * against what was declared when the upload opened: a different file of a
+ * different size must not be stitched onto the first one's parts.
+ */
+export const VideoUploadResumeSchema = z
+  .object({
+    videoId: z.string().regex(UPLOAD_ID_RE),
+    uploadId: z.string().min(1),
+    sizeBytes: z.number().int().positive(),
+  })
+  .strict();
+export type VideoUploadResume = z.infer<typeof VideoUploadResumeSchema>;
+
+/** A session re-opened: fresh URLs for the missing parts, and the ETags of the rest. */
+export const VideoUploadResumedSchema = z.object({
+  videoId: z.string().regex(UPLOAD_ID_RE),
+  uploadId: z.string().min(1),
+  partSizeBytes: z.number().int().positive(),
+  /** Only the parts still to send — empty when every part is already up. */
+  parts: z.array(VideoUploadPartSchema),
+  done: z.array(z.object({ partNumber: z.number().int().positive(), etag: z.string().min(1) })),
+  expiresAt: z.string(),
+});
+export type VideoUploadResumed = z.infer<typeof VideoUploadResumedSchema>;
+
+/**
  * What the admin screen polls while the encode runs.
  *
  * `progress` is a coarse 0–100 written by the worker between ffmpeg passes,
@@ -119,3 +154,78 @@ export const VideoUploadStatusSchema = z.object({
   error: z.string().nullable(),
 });
 export type VideoUploadStatus = z.infer<typeof VideoUploadStatusSchema>;
+
+/* ── «الفيديوهات» — every uploaded lecture, and what it costs ─────────────
+ *
+ * The one screen that answers «إيه اللي متخزّن عندنا وبكام». Until it existed,
+ * a deleted lesson (or section, or course) took its database row with it and
+ * left the files in the bucket — billed every month and listed nowhere.
+ */
+
+/** An upload a lesson still points at. */
+export const VideoLibraryItemSchema = z.object({
+  videoId: z.string(),
+  status: VideoMirrorStatusSchema,
+  sourceName: z.string().nullable(),
+  durationSeconds: z.number().int().nonnegative().nullable(),
+  maxHeight: z.number().int().positive().nullable(),
+  /** What the bucket holds for it — the ladder once ready, else the original. */
+  sizeBytes: z.number().int().nonnegative().nullable(),
+  updatedAt: z.string(),
+  lessonId: z.string(),
+  lessonTitle: z.string(),
+  courseId: z.string(),
+  courseTitle: z.string(),
+  sectionTitle: z.string(),
+});
+export type VideoLibraryItem = z.infer<typeof VideoLibraryItemSchema>;
+
+/** Files in the bucket that no lesson points at any more. */
+export const VideoLibraryOrphanSchema = z.object({
+  videoId: z.string(),
+  sizeBytes: z.number().int().nonnegative(),
+  lastModified: z.string().nullable(),
+});
+export type VideoLibraryOrphan = z.infer<typeof VideoLibraryOrphanSchema>;
+
+/** «محفوظة» — taken off its lesson but kept, to be put back on one later. */
+export const VideoLibraryArchivedSchema = z.object({
+  videoId: z.string(),
+  sourceName: z.string().nullable(),
+  durationSeconds: z.number().int().nonnegative(),
+  maxHeight: z.number().int().positive().nullable(),
+  sizeBytes: z.number().int().nonnegative().nullable(),
+  fromLessonTitle: z.string().nullable(),
+  fromCourseTitle: z.string().nullable(),
+  archivedAt: z.string(),
+});
+export type VideoLibraryArchived = z.infer<typeof VideoLibraryArchivedSchema>;
+
+/** A video lesson a kept video can be put back on. */
+export const VideoLibraryTargetSchema = z.object({
+  lessonId: z.string(),
+  lessonTitle: z.string(),
+  courseTitle: z.string(),
+  sectionTitle: z.string(),
+  /** It already has a video — putting this one back keeps that one in «محفوظة». */
+  hasVideo: z.boolean(),
+});
+export type VideoLibraryTarget = z.infer<typeof VideoLibraryTargetSchema>;
+
+export const VideoRestoreSchema = z.object({ lessonId: z.uuid() }).strict();
+export type VideoRestore = z.infer<typeof VideoRestoreSchema>;
+
+export const VideoLibrarySchema = z.object({
+  items: z.array(VideoLibraryItemSchema),
+  archived: z.array(VideoLibraryArchivedSchema),
+  targets: z.array(VideoLibraryTargetSchema),
+  orphans: z.array(VideoLibraryOrphanSchema),
+  /** Every byte under `v/` and `raw/` — what the bill is computed from. */
+  totalBytes: z.number().int().nonnegative(),
+  /**
+   * `false` when the bucket could not be listed: the lesson rows are still
+   * shown, but orphans and the total are unknown rather than zero.
+   */
+  storageRead: z.boolean(),
+});
+export type VideoLibrary = z.infer<typeof VideoLibrarySchema>;

@@ -1,5 +1,6 @@
 import { Card, CardBody } from '@ayman/ui/components/card';
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * A Server Component skeleton — no client JS needed to show it, it streams
@@ -11,6 +12,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function AdminOverviewLoading() {
   return (
     <>
+      <RouteLoadingWatchdog />
       <Skeleton width="narrow" className="h-8" />
       <Skeleton width="wide" className="mt-3 h-4" />
 

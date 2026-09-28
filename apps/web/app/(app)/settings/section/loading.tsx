@@ -1,9 +1,11 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /** Mirrors the real page: header, then the two selects that are always shown. */
 export default function Loading() {
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-10 md:py-12">
+      <RouteLoadingWatchdog />
       <div className="mb-8 space-y-3">
         <Skeleton width="narrow" className="h-3" />
         <Skeleton width="wide" className="h-8" />
