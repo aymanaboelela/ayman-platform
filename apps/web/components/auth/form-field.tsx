@@ -1,5 +1,8 @@
-import type { InputHTMLAttributes } from 'react';
-import type { LucideIcon } from 'lucide-react';
+'use client';
+
+import { useState, type InputHTMLAttributes } from 'react';
+import { Eye, EyeOff, type LucideIcon } from 'lucide-react';
+import { copy } from '@ayman/contracts/copy';
 import { cn } from '@ayman/ui/lib/cn';
 
 export interface FormFieldProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -68,6 +71,16 @@ export function FormField({
 
   const pill = variant === 'pill';
 
+  /*
+   * خانة كلمة السر بعين تظهرها وتخفيها — على الموبايل بالذات، حرف غلط في
+   * باسورد مش باين هو أشهر سبب لـ«الباسورد غلط» في الدخول والتسجيل. بتبدأ
+   * مخفية دايمًا، والنوع بس اللي بيتغيّر: `autoComplete` ومدير الباسوردات
+   * بيفضلوا شايفينها خانة باسورد.
+   */
+  const isPassword = props.type === 'password';
+  const [shown, setShown] = useState(false);
+  const inputType = isPassword && shown ? 'text' : props.type;
+
   const control = (
     /* 16px on phones, 15px from `md` up. This is a hand-rolled `<input>`
        rather than `@ayman/ui`'s `Input`, so it does not inherit that
@@ -94,11 +107,26 @@ export function FormField({
               'transition-colors duration-[var(--d-hover)] ease-[var(--ease)]',
               errorMessage ? 'border-[color:var(--err)]' : 'border-line',
             ],
+        isPassword && 'pe-11',
         className,
       )}
       {...props}
+      type={inputType}
     />
   );
+
+  const eye = isPassword ? (
+    <button
+      type="button"
+      onClick={() => setShown((value) => !value)}
+      aria-label={shown ? copy.auth.fields.hidePassword : copy.auth.fields.showPassword}
+      aria-pressed={shown}
+      aria-controls={fieldId}
+      className="absolute inset-y-0 end-0 grid w-10 place-items-center rounded-e-sm text-fg-muted transition-colors hover:text-fg focus-visible:text-fg"
+    >
+      {shown ? <EyeOff className="size-[1.1rem]" aria-hidden="true" /> : <Eye className="size-[1.1rem]" aria-hidden="true" />}
+    </button>
+  ) : null;
 
   return (
     <div className={pill ? 'field field--pill' : 'space-y-1.5'}>
@@ -113,7 +141,12 @@ export function FormField({
       {pill ? (
         <div className="field__box">
           {control}
-          {Icon ? <Icon className="field__icon" aria-hidden="true" /> : null}
+          {eye ?? (Icon ? <Icon className="field__icon" aria-hidden="true" /> : null)}
+        </div>
+      ) : isPassword ? (
+        <div className="relative">
+          {control}
+          {eye}
         </div>
       ) : (
         control
