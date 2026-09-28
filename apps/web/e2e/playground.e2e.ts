@@ -59,9 +59,11 @@ test.describe('playground', () => {
     await page.getByRole('button', { name: c.run }).click();
 
     // The exact message is the engine's and differs between browsers; what
-    // matters is that SOMETHING is reported where the output goes.
-    const output = page.getByRole('region').filter({ hasText: c.output });
-    await expect(page.locator('[class*="--err"]').first().or(output)).toBeVisible();
+    // matters is that SOMETHING is reported where the output goes. (The
+    // console is a labelled region now, so an `.or(region)` fallback would
+    // match it as well as the error and trip strict mode — the error line
+    // inside the live region is the stronger assertion anyway.)
+    await expect(page.locator('[aria-live="polite"] [class*="--err"]').first()).toBeVisible();
   });
 
   test('a runaway loop is killed rather than freezing the tab', async ({ page }) => {
@@ -106,6 +108,17 @@ test.describe('playground', () => {
     await registerAndOnboard(page, student);
     await page.goto('/playground');
     await expect(page.getByRole('heading', { name: c.title, level: 1 })).toBeVisible();
+    // The shell fades every route in (`route-fade-in`, 220ms). Axe measured
+    // mid-fade blends every muted line into the background and reports
+    // contrast the settled page does not have — wait for the page, not for
+    // the transition. (The hero's own loops are infinite and never "finish",
+    // so only the route fade is waited on.)
+    await page.waitForFunction(() =>
+      document
+        .getAnimations()
+        .filter((a) => (a as CSSAnimation).animationName === 'route-fade-in')
+        .every((a) => a.playState === 'finished'),
+    );
 
     const results = await new AxeBuilder({ page }).analyze();
     expect(
@@ -147,6 +160,8 @@ test.describe('playground — HTML + CSS', () => {
     await registerAndOnboard(page, student);
     await page.goto('/playground');
 
+    // The gallery opens on the editor's language; the pages are one chip away.
+    await page.getByRole('button', { name: c.galleryFilterAria.replace('{lang}', c.web) }).click();
     await page
       .getByRole('button', { name: c.tryExampleAria.replace('{title}', 'عدّاد تفاعلي') })
       .click();

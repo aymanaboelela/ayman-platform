@@ -45,7 +45,7 @@
   height: 1.35rem;
   padding-inline: 0.3rem;
   border-radius: var(--r-xs);
-  background: var(--lang);
+  background: color-mix(in oklab, var(--lang), #000 30%);
   color: #fff;
   font-family: var(--font-mono);
   font-size: 0.68rem;
@@ -54,9 +54,13 @@
   direction: ltr;
   unicode-bidi: isolate;
 }
-/* Amber carries dark ink, the way the accent button does — white on amber is
-   the one pairing in this palette that fails contrast. */
-.pg-badge[data-lang='js'] { color: var(--on-light-ink); }
+/* The badge is 11px type, so it needs the full 4.5:1 — the raw chart hue
+   carries neither white nor ink at that size. Blue and rose go darker under
+   white; amber goes lighter under dark ink, the way the accent button does. */
+.pg-badge[data-lang='js'] {
+  background: color-mix(in oklab, var(--pg-js), #fff 38%);
+  color: var(--on-light-ink);
+}
 
 /* ── Hero ───────────────────────────────────────────────────────────────── */
 .pg-hero {
@@ -347,7 +351,7 @@ button.pg-file:hover { background: var(--n-3); color: var(--n-12); }
 .pg-files__meta {
   font-family: var(--font-mono);
   font-size: var(--fs-mono-label);
-  color: var(--n-10);
+  color: var(--n-11);
 }
 .pg-files__pick { margin-inline-start: auto; }
 .pg-files__pick select {
@@ -388,7 +392,7 @@ button.pg-file:hover { background: var(--n-3); color: var(--n-12); }
   padding-inline: 0.5rem 0.6rem;
   background: color-mix(in oklab, var(--lang) 6%, var(--n-2));
   border-inline-end: 1px solid var(--border-subtle);
-  color: var(--n-10);
+  color: var(--n-11);
   text-align: end;
   user-select: none;
 }
@@ -459,7 +463,7 @@ button.pg-file:hover { background: var(--n-3); color: var(--n-12); }
   margin-inline-start: auto;
   font-family: var(--font-mono);
   font-size: var(--fs-mono-label);
-  color: var(--n-10);
+  color: var(--n-11);
   direction: ltr;
   unicode-bidi: isolate;
 }
@@ -837,7 +841,7 @@ button.pg-file:hover { background: var(--n-3); color: var(--n-12); }
   align-items: center;
   gap: 0.4rem;
   font-size: var(--fs-text-xs);
-  color: var(--n-10);
+  color: var(--n-11);
 }
 .pg-card__meta-name { direction: ltr; unicode-bidi: isolate; }
 .pg-card__here {
