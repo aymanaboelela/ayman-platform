@@ -1,12 +1,17 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import {
-  abortVideoUploadAction,
-  completeVideoUploadAction,
-  resumeVideoUploadAction,
-  startVideoUploadAction,
-} from '@/app/(admin)/admin/courses/actions';
+
+/*
+ * The Server Actions, loaded on first USE and never at import.
+ *
+ * `UploadDock` mounts this module on every admin screen through the layout,
+ * and `courses/actions.ts` reaches Zod and half the contracts package — a
+ * static import here put all of it into the client bundle of every route
+ * under `/admin` (`lib/client-barrel.test.ts` is the guard that caught it).
+ * Nobody needs those bytes until they actually pick a file.
+ */
+const actions = () => import('@/app/(admin)/admin/courses/actions');
 
 /**
  * ══════════════════════════════════════════════════════════════════════════
@@ -321,6 +326,7 @@ async function run(
 
   try {
     const parts = await sendParts(lessonId, file, session.partSizeBytes, session.parts, session.done ?? [], controller.signal);
+    const { completeVideoUploadAction } = await actions();
     const completed = await completeVideoUploadAction(courseId, lessonId, {
       videoId: session.videoId,
       uploadId: session.uploadId,
@@ -345,15 +351,19 @@ async function run(
 
 /** A fresh upload. The caller has already refused wrong types and oversized files. */
 export function startUpload(courseId: string, lessonId: string, file: File, contentType: string): Promise<void> {
-  return run(courseId, lessonId, file, () =>
-    startVideoUploadAction(lessonId, { fileName: file.name, sizeBytes: file.size, contentType }),
+  return run(courseId, lessonId, file, async () =>
+    (await actions()).startVideoUploadAction(lessonId, { fileName: file.name, sizeBytes: file.size, contentType }),
   );
 }
 
 /** «كمّل الرفع» — the same file, after the tab lost it. */
 export function resumeUpload(lessonId: string, file: File, saved: SavedUpload): Promise<void> {
-  return run(saved.courseId, lessonId, file, () =>
-    resumeVideoUploadAction(lessonId, { videoId: saved.videoId, uploadId: saved.uploadId, sizeBytes: file.size }),
+  return run(saved.courseId, lessonId, file, async () =>
+    (await actions()).resumeVideoUploadAction(lessonId, {
+      videoId: saved.videoId,
+      uploadId: saved.uploadId,
+      sizeBytes: file.size,
+    }),
   );
 }
 
@@ -370,6 +380,7 @@ export async function cancelUpload(courseId: string, lessonId: string): Promise<
   entries.delete(lessonId);
   emit();
   if (session !== null) {
+    const { abortVideoUploadAction } = await actions();
     await abortVideoUploadAction(courseId, lessonId, { videoId: session.videoId, uploadId: session.uploadId });
   }
 }
