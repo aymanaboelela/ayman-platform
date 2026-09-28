@@ -819,7 +819,13 @@
    3 · Why — a pinned rail the cards travel along
    ========================================================================== */
 
-.rail {
+/* ⚠️ `why-rail`، مش `rail`. `.rail` هو اسم القايمة الجانبية بتاعة الطالب
+   (`student-rail.tsx`)، والملف ده بيفضل محمّل بعد ما الطالب يتنقّل من الصفحة
+   الرئيسية للداشبورد من غير ريفرش. الـ`.rail` بتاع هنا — مش جوّه layer — كان
+   بيكسب على utilities بتاعة Tailwind اللي جوّه layer، فالقايمة بقت
+   `min-height: 100svh` و`align-items: center` ومحتواها نازل لنص الصفحة، وsticky
+   وقف. `site-css-scope.test.ts` بيمنع الاسم يرجع. */
+.why-rail {
   /* The pin measures this section, so it must be exactly one viewport tall —
      any taller and the pin starts late, any shorter and it releases early. */
   min-height: 100svh;
@@ -829,19 +835,19 @@
   padding-block: clamp(2.5rem, 5vw, 4rem);
 }
 
-.rail__inner {
+.why-rail__inner {
   width: 100%;
   max-width: var(--site-shell);
   margin-inline: auto;
   padding-inline: clamp(1rem, 4vw, 3.5rem);
 }
 
-.rail__head {
+.why-rail__head {
   max-width: 44rem;
   margin-bottom: clamp(1.5rem, 3vw, 2.5rem);
 }
 
-.rail__lead-2 {
+.why-rail__lead-2 {
   display: none;
   margin-top: 0.75rem;
   max-width: 34rem;
@@ -853,7 +859,7 @@
 /* The window the track slides behind. It breaks out of the shell to the full
    viewport width so cards enter and leave at the screen edge rather than at an
    arbitrary gutter — the padding on the track restores the reading margin. */
-.rail__viewport {
+.why-rail__viewport {
   position: relative;
   width: 100vw;
   margin-inline: calc(50% - 50vw);
@@ -863,13 +869,13 @@
 /* The viewport is focusable (see the note in `why-rail.tsx`), so it needs a
    visible ring — inset, because the element is full-bleed and an outset ring
    would be clipped at the screen edge. */
-.rail__viewport:focus-visible {
+.why-rail__viewport:focus-visible {
   outline: var(--focus-ring-width) solid var(--site-accent-solid);
   outline-offset: calc(var(--focus-ring-width) * -1);
   border-radius: 1.25rem;
 }
 
-.rail__track {
+.why-rail__track {
   display: flex;
   gap: clamp(1rem, 2vw, 1.5rem);
   padding-inline: clamp(1rem, 4vw, 3.5rem);
@@ -878,7 +884,7 @@
   will-change: transform;
 }
 
-.rail__card {
+.why-rail__card {
   flex: 0 0 auto;
   width: clamp(15rem, 24vw, 21rem);
   display: flex;
@@ -898,13 +904,13 @@
 /* Set by the per-card ScrollTrigger as it crosses the middle of the viewport.
    Kept as a class toggle rather than a scrubbed tween so the transition above
    owns the easing and the card never stutters with the scroll. */
-.rail__card.is-active {
+.why-rail__card.is-active {
   transform: translateY(-0.75rem);
   border-color: var(--site-line-strong);
   box-shadow: var(--site-shadow-lg);
 }
 
-.rail__n {
+.why-rail__n {
   font-family: var(--font-mono);
   font-size: 0.75rem;
   letter-spacing: 0.18em;
@@ -912,7 +918,7 @@
   direction: ltr;
 }
 
-.rail__icon {
+.why-rail__icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -927,19 +933,19 @@
     color 0.5s var(--ease);
 }
 
-.rail__card.is-active .rail__icon {
+.why-rail__card.is-active .why-rail__icon {
   color: var(--site-on-accent);
   background: var(--site-accent-solid);
 }
 
-.rail__card-title {
+.why-rail__card-title {
   margin-top: 1.25rem;
   font-size: var(--fs-title-3);
   font-weight: var(--fw-bold);
   color: var(--site-fg);
 }
 
-.rail__card-body {
+.why-rail__card-body {
   margin-top: 0.5rem;
   font-size: var(--fs-text-sm);
   line-height: 1.75;
@@ -948,7 +954,7 @@
 
 /* ---- progress ---- */
 
-.rail__progress {
+.why-rail__progress {
   position: relative;
   display: flex;
   align-items: center;
@@ -956,7 +962,7 @@
   margin-top: clamp(1.5rem, 3vw, 2.5rem);
 }
 
-.rail__progress::before {
+.why-rail__progress::before {
   content: '';
   flex: 1;
   height: 2px;
@@ -964,7 +970,7 @@
   background: var(--site-line-strong);
 }
 
-.rail__progress-fill {
+.why-rail__progress-fill {
   position: absolute;
   inset-inline-start: 0;
   /* Sits on top of the ::before track, which ends where the counter begins. */
@@ -977,7 +983,7 @@
   background: linear-gradient(to left, var(--p-500), var(--p-700));
 }
 
-.rail__counter {
+.why-rail__counter {
   flex: none;
   font-family: var(--font-mono);
   font-size: var(--fs-text-sm);
@@ -986,7 +992,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.rail__counter b {
+.why-rail__counter b {
   color: var(--site-accent-text);
   /* Plex Mono, which ships 400/500/600 and has no 700 face — see `lib/fonts.ts`.
      Asking for `--fw-bold` here selected the 600 file anyway, and before
@@ -2887,7 +2893,7 @@
    ========================================================================== */
 
 @media (min-width: 64rem) {
-  .rail__lead-2 {
+  .why-rail__lead-2 {
     display: block;
   }
 }
@@ -2908,29 +2914,29 @@
   /* No pin below the breakpoint (see `why-rail.tsx`) — hijacking the only
      scroll gesture a phone has is hostile. The rail becomes a normal swipeable
      scroller instead, with snap points so it still stops on whole cards. */
-  .rail {
+  .why-rail {
     min-height: 0;
     display: block;
   }
 
-  .rail__viewport {
+  .why-rail__viewport {
     overflow-x: auto;
     scroll-snap-type: x mandatory;
     scrollbar-width: none;
   }
 
-  .rail__viewport::-webkit-scrollbar {
+  .why-rail__viewport::-webkit-scrollbar {
     display: none;
   }
 
-  .rail__card {
+  .why-rail__card {
     width: min(78vw, 20rem);
     scroll-snap-align: center;
   }
 
   /* The counter and fill are driven by the pinned ScrollTrigger, which does not
      exist here; the native scrollbar affordance replaces them. */
-  .rail__progress {
+  .why-rail__progress {
     display: none;
   }
 

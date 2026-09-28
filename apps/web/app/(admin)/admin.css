@@ -886,3 +886,94 @@ div.unit[data-open] > .unit__head:hover {
   justify-content: center;
   margin-block-start: var(--s-16);
 }
+
+/* ---------------------------------------------------------------------------
+   .live-* — a list that redraws itself (`components/admin/use-live-queue.ts`).
+
+   «طلب الدفع يظهر لوحده من غير ريفرش» — `/admin/payments` and
+   `/admin/transfers`. Two jobs:
+
+   1. Say the list IS live, so an admin stops pressing refresh out of habit:
+      a small chip, only while the stream is actually connected. A chip that
+      says «مباشر» over a dead connection would be worse than no chip.
+   2. Make a row that just arrived findable. The queue's default order is
+      oldest-first, so a new claim lands at the BOTTOM — the strip above the
+      list says one arrived and scrolls to it, and the row itself carries the
+      accent until it has been on screen a while.
+
+   Accent (--a-*), not ember: a new claim is the thing to act on next. The
+   entrance is transform + opacity and under 400ms; the tint leaves on a
+   colour transition. The token file's reduced-motion backstop covers both.
+   --------------------------------------------------------------------------- */
+.live-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8);
+  margin-block-start: var(--s-12);
+  min-block-size: 1.75rem;
+}
+
+.live-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-2) var(--s-8);
+  border-radius: var(--r-full);
+  border: var(--hairline) solid color-mix(in oklch, var(--ok), transparent 65%);
+  background: color-mix(in oklch, var(--ok), transparent 90%);
+  font-size: var(--fs-text-xs);
+  color: var(--ok);
+}
+
+.live-chip__dot {
+  inline-size: 0.45rem;
+  block-size: 0.45rem;
+  border-radius: var(--r-full);
+  background: var(--ok);
+}
+
+.live-arrivals {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-8);
+  padding: var(--s-2) var(--s-4) var(--s-2) var(--s-12);
+  border-radius: var(--r-full);
+  border: var(--hairline) solid var(--a-9);
+  background: color-mix(in oklch, var(--a-9), transparent 86%);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--a-11);
+  animation: live-in 280ms var(--ease-out);
+}
+
+.live-arrivals__show {
+  padding: var(--s-2) var(--s-12);
+  border-radius: var(--r-full);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  font-size: var(--fs-text-xs);
+}
+
+.live-arrivals__show:hover {
+  background: var(--a-10);
+}
+
+.live-row {
+  transition:
+    background-color 400ms var(--ease-out),
+    border-color 400ms var(--ease-out);
+}
+
+.live-row[data-fresh] {
+  border-color: var(--a-9);
+  background-color: color-mix(in oklab, var(--a-9), var(--n-2) 88%);
+  animation: live-in 320ms var(--ease-out);
+}
+
+@keyframes live-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}

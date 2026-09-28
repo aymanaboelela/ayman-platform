@@ -52,12 +52,15 @@ export function StaffSection({
   members,
   currentUserId,
   reasonMin,
+  founderId,
 }: {
   members: StaffMember[];
   currentUserId: string;
   /** `STAFF_ROLE_REASON_MIN` — بييجي من الصفحة عشان الكومبوننت مايسحبش Zod
    *  للمتصفح عشان رقم واحد. */
   reasonMin: number;
+  /** أقدم حساب مش-طالب — صلاحياته مقفولة على السيرفر، شوف `page.tsx`. */
+  founderId?: string;
 }) {
   const [term, setTerm] = useState('');
   const [found, setFound] = useState<Found[] | null>(null);
@@ -192,13 +195,21 @@ export function StaffSection({
                  * والسبب مكتوب في البادج جنب الاسم، مش زرار مقفول من غير تفسير.
                  */
                 <>
-                  <Button
-                    variant="secondary"
-                    aria-expanded={openMember === m.id}
-                    onClick={() => setOpenMember((current) => (current === m.id ? null : m.id))}
-                  >
-                    {openMember === m.id ? member.close : member.open}
-                  </Button>
+                  {/* صاحب الستاك: السيرفر بيرفض أي قفل على صلاحياته (#504)، فمكان
+                      الزرار جملة بتقول ليه. */}
+                  {m.id === founderId ? (
+                    <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
+                      {member.adminHasEverything}
+                    </span>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      aria-expanded={openMember === m.id}
+                      onClick={() => setOpenMember((current) => (current === m.id ? null : m.id))}
+                    >
+                      {openMember === m.id ? member.close : member.open}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     disabled={pending}
@@ -256,7 +267,7 @@ export function StaffSection({
                 * ده كمان بيتاخد بالمقارنة — إنك تشوف باقي الفريق وإنت بتقفل
                 * على واحد مفيد، والمودال بيخبّيهم.
                 */}
-              {openMember === m.id && m.role !== 'admin' ? (
+              {openMember === m.id && m.role !== 'admin' && m.id !== founderId ? (
                 <div className="w-full basis-full">
                   <MemberPermissions userId={m.id} name={m.name} />
                 </div>

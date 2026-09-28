@@ -71,7 +71,7 @@ export default function Loading() {
         <div className="dash-hero__id">
           <span
             aria-hidden="true"
-            className="size-16 shrink-0 rounded-full bg-[rgb(255_255_255/0.14)]"
+            className="size-18 shrink-0 rounded-full bg-[rgb(255_255_255/0.14)]"
           />
           <div className="min-w-0 flex-1 space-y-3">
             <span aria-hidden="true" className="block h-3 w-24 rounded bg-[rgb(255_255_255/0.14)]" />

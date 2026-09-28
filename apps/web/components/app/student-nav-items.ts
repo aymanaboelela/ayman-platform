@@ -8,6 +8,7 @@ import {
   Sprout,
   Terminal,
   Ticket,
+  Trophy,
   UserRound,
   type LucideIcon,
 } from 'lucide-react';
@@ -62,6 +63,12 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
   { href: '/dashboard', labelAr: copy.nav.dashboard, icon: LayoutDashboard, tab: true },
   { href: '/path', labelAr: copy.nav.path, icon: Route, tab: true },
   { href: '/results', labelAr: copy.nav.results, icon: BarChart3, tab: true },
+  /*
+   * «ترتيبي» — جنب «نتائجي» لأنه نفس السؤال من زاوية تانية: «درجاتي كام» ثم
+   * «أنا فين وسط دفعتي». مش tab: الشريط اللي تحت أربعة بالعدد (شوف `tab`
+   * فوق)، فعلى الموبايل بيبقى في «حاجات تانية».
+   */
+  { href: '/rank', labelAr: copy.nav.rank, icon: Trophy },
   { href: '/library', labelAr: copy.nav.courses, icon: BookMarked, tab: true },
   /*
    * «كود الكورس» — right under the courses, because that is where a student

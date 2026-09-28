@@ -106,11 +106,11 @@ export function WhyRail({
     ({ scope, reduced }) => {
       if (reduced) return;
 
-      const viewport = scope.querySelector<HTMLElement>('.rail__viewport');
-      const track = scope.querySelector<HTMLElement>('.rail__track');
-      const progress = scope.querySelector<HTMLElement>('.rail__progress-fill');
-      const counter = scope.querySelector<HTMLElement>('.rail__counter-now');
-      const cards = gsap.utils.toArray<HTMLElement>('.rail__card', scope);
+      const viewport = scope.querySelector<HTMLElement>('.why-rail__viewport');
+      const track = scope.querySelector<HTMLElement>('.why-rail__track');
+      const progress = scope.querySelector<HTMLElement>('.why-rail__progress-fill');
+      const counter = scope.querySelector<HTMLElement>('.why-rail__counter-now');
+      const cards = gsap.utils.toArray<HTMLElement>('.why-rail__card', scope);
       if (!viewport || !track || cards.length === 0) return;
 
       // `matchMedia` rather than a bare width check: it tears the pin down and
@@ -181,14 +181,14 @@ export function WhyRail({
   );
 
   return (
-    <section className="site-section site-section--tint rail" ref={ref}>
-      <div className="rail__inner">
-        <header className="rail__head">
+    <section className="site-section site-section--tint why-rail" ref={ref}>
+      <div className="why-rail__inner">
+        <header className="why-rail__head">
           <h2 className="site-h2">
             {title} {titleAccent ? <span className="site-accent">{titleAccent}</span> : null}
           </h2>
           {lead ? <p className="site-lead">{lead}</p> : null}
-          {leadSecondary ? <p className="rail__lead-2">{leadSecondary}</p> : null}
+          {leadSecondary ? <p className="why-rail__lead-2">{leadSecondary}</p> : null}
         </header>
 
         {/*
@@ -200,27 +200,27 @@ export function WhyRail({
           in. Above the breakpoint it is one harmless extra stop on a region
           that holds eight headings.
         */}
-        <div className="rail__viewport" tabIndex={0} role="group" aria-label={c.whyListLabel}>
-          <ol className="rail__track">
+        <div className="why-rail__viewport" tabIndex={0} role="group" aria-label={c.whyListLabel}>
+          <ol className="why-rail__track">
             {items.map((item, i) => (
-              <li className="rail__card" key={`${item.titleAr}-${i}`}>
-                <span className="rail__n" aria-hidden="true">
+              <li className="why-rail__card" key={`${item.titleAr}-${i}`}>
+                <span className="why-rail__n" aria-hidden="true">
                   {String(i + 1).padStart(2, '0')}
                 </span>
-                <span className="rail__icon" aria-hidden="true">
+                <span className="why-rail__icon" aria-hidden="true">
                   {ICONS[i % ICONS.length]}
                 </span>
-                <h3 className="rail__card-title">{item.titleAr}</h3>
-                <p className="rail__card-body">{item.bodyAr}</p>
+                <h3 className="why-rail__card-title">{item.titleAr}</h3>
+                <p className="why-rail__card-body">{item.bodyAr}</p>
               </li>
             ))}
           </ol>
         </div>
 
-        <div className="rail__progress" aria-hidden="true">
-          <span className="rail__progress-fill" />
-          <span className="rail__counter">
-            <b className="rail__counter-now">1</b> / {items.length}
+        <div className="why-rail__progress" aria-hidden="true">
+          <span className="why-rail__progress-fill" />
+          <span className="why-rail__counter">
+            <b className="why-rail__counter-now">1</b> / {items.length}
           </span>
         </div>
       </div>

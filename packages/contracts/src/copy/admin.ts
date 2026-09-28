@@ -1256,6 +1256,9 @@ const admin = {
   },
   grading: {
     title: 'تصحيح الورق',
+    /** The `sr-only` sentence beside the sidebar badge. `{n}` is the number of
+     *  PAPERS, the same one the «محتاج تصحيح» tab prints. */
+    pendingBadgeLabel: '{n} ورقة محتاجة تصحيح',
     lead: 'الأسئلة المقالية اللي مستنية درجة منك. لحد ما تتصحح، الطالب واخد فيها صفر.',
     empty: 'مفيش ورق مستني تصحيح.',
     /** `{n}` — ungraded answers on one paper. */
@@ -2775,6 +2778,21 @@ const admin = {
     /** An admin-comped term — never counted as revenue. See the model note
      *  on `PaymentSubmission.isFree`. */
     freeBadge: 'مجاني',
+    /* ── live — the queue redraws itself (`use-live-queue.ts`) ─────────── */
+    /** The chip beside the list while the live stream is connected. */
+    liveOn: 'مباشر',
+    /** Its `title` — what «مباشر» promises, for whoever hovers it. */
+    liveOnHint: 'الطلبات الجديدة بتظهر هنا لوحدها من غير ريفرش',
+    /** On a row that arrived while the screen was open. */
+    freshBadge: 'جديد',
+    /** The strip above the list when rows arrive — the default order is
+     *  oldest-first, so a new claim lands at the BOTTOM, out of sight. Three
+     *  forms, because «١ طلب» and «٢ طلب» are not Arabic. */
+    arrivedOne: 'وصل طلب جديد',
+    arrivedTwo: 'وصل طلبين جداد',
+    arrivedMany: 'وصل {n} طلبات جديدة',
+    /** The strip's button: scrolls to the first new row. */
+    arrivedShow: 'وريني',
   },
   /**
    * «التحويلات الواردة» — the ledger of money that actually landed, read off
@@ -2840,6 +2858,11 @@ const admin = {
      *  different question the admin will ask when the total looks wrong. */
     pasteResult:
       'اتقرا {read} · جديد {created} · فتح كورسات {matched} · متكرر {duplicates} · مش مقروء {unreadable}',
+    /* ── live — same treatment as the review queue beside it ───────────── */
+    liveOnHint: 'التحويلات الجديدة بتظهر هنا لوحدها من غير ريفرش',
+    arrivedOne: 'وصل تحويل جديد',
+    arrivedTwo: 'وصل تحويلين جداد',
+    arrivedMany: 'وصل {n} تحويلات جديدة',
   },
   finance: {
     eyebrow: 'الحسابات',

@@ -12,6 +12,7 @@ import { Label } from '@ayman/ui/components/label';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { SafeHtml } from '@/components/content/safe-html';
 import { gradeAnswerAction } from '@/app/(admin)/admin/grading/actions';
+import { useRefreshGradingPendingCount } from '@/components/admin/grading-alerts';
 
 const c = copy.admin.grading;
 
@@ -84,6 +85,13 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
   const [feedback, setFeedback] = useState(question.feedbackHtml ?? '');
   const [status, setStatus] = useState<'idle' | 'saved' | 'failed'>('idle');
   const [pending, startTransition] = useTransition();
+  /*
+   * The sidebar badge, corrected NOW rather than on the next 30-second tick —
+   * marking the last open answer takes the whole paper off the count, and an
+   * instructor who just emptied the queue should not keep seeing «1» beside
+   * «تصحيح الورق». Same reason «الواجبات» refreshes its own.
+   */
+  const refreshPendingCount = useRefreshGradingPendingCount();
 
   const parsed = Number(mark);
   /*
@@ -123,6 +131,7 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
       setMark(formatMark(Math.min(Math.max(parsed, 0), question.maxMark)));
       setStatus('saved');
       onGraded(result.scaledScore);
+      refreshPendingCount();
     });
   }
 

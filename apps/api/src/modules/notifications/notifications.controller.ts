@@ -1,14 +1,17 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Res, UsePipes } from '@nestjs/common';
 import type { Response } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
-import type {
-  NotificationEvent,
-  NotificationFeed,
-  UnreadCount,
+import {
+  LIVE_QUEUES,
+  type LiveQueue,
+  type NotificationEvent,
+  type NotificationFeed,
+  type UnreadCount,
 } from '@ayman/contracts/notifications';
 import type { PushPublicKey } from '@ayman/contracts/notifications/push';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
+import { userHasPermission, type Permission } from '../../auth/permissions';
 import { NotificationsService } from './notifications.service';
 import { NotificationsRealtimeService } from './notifications-realtime.service';
 import { PushService } from './push.service';
@@ -24,6 +27,17 @@ import { PushSubscribeDto, PushUnsubscribeDto } from './push.dto';
  * asking.
  */
 const HEARTBEAT_MS = 25_000;
+
+/**
+ * Who may hear each admin queue on their stream — the SAME permission that
+ * guards the list the frame tells them to re-read. A frame carries only a
+ * count, but a count of pending payments is still the desk's business, and
+ * answering «who may know» twice, in two different places, is how the two
+ * answers drift apart.
+ */
+const QUEUE_PERMISSION: Record<LiveQueue, Permission> = {
+  payments: 'payment:read',
+};
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
@@ -102,6 +116,29 @@ export class NotificationsController {
 
     const unsubscribe = this.realtime.subscribe(user.id, send);
 
+    /*
+      The admin queues this account may hear — «a payment request just
+      arrived» reaching `/admin/payments` without a refresh.
+
+      On THIS connection rather than a second stream per screen: every admin
+      tab already holds this one open for the bell, and a second long-lived
+      request per tab would double what Traefik and Cloudflare hold open for
+      nothing. The heartbeat, the headers against buffering and the client's
+      reconnect below all already work, in production, on this route.
+
+      Asked twice. Once here, so a student's stream never even subscribes; and
+      again per frame, because a stream stays open for hours and an assistant
+      whose `payment:read` is locked mid-shift (`permission-grants`) must stop
+      hearing the desk at the next frame, not at their next reload.
+    */
+    const queueUnsubscribes = LIVE_QUEUES.filter((queue) =>
+      userHasPermission(user.id, user.role, QUEUE_PERMISSION[queue]),
+    ).map((queue) =>
+      this.realtime.subscribeQueue(queue, (event) => {
+        if (userHasPermission(user.id, user.role, QUEUE_PERMISSION[queue])) send(event);
+      }),
+    );
+
     const heartbeat = setInterval(() => {
       send({ type: 'ping' });
     }, HEARTBEAT_MS);
@@ -117,6 +154,7 @@ export class NotificationsController {
     response.on('close', () => {
       clearInterval(heartbeat);
       unsubscribe();
+      for (const off of queueUnsubscribes) off();
       response.end();
     });
   }

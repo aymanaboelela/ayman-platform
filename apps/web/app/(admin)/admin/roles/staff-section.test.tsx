@@ -221,6 +221,36 @@ describe('the staff list', () => {
     expect(screen.getByText(member.adminHasEverything)).toBeInTheDocument();
   });
 
+  it('never offers it for the stack owner either', () => {
+    /*
+     * ⚠️ الحالة دي هي اللي بتحصل عند عادل وصبري: المدرّس والمساعد **نفس
+     * الرول** (`owner`)، فمن غير العلامة دي المساعد كان بيشوف زرار على
+     * المدرّس — ولو قفل عليه، مفيش حساب `admin` هناك يرجّعه.
+     */
+    render(
+      <StaffSection
+        members={[{ id: 'teacher', name: 'عادل', phone: '0100', role: 'owner' }]}
+        currentUserId="assistant"
+        founderId="teacher"
+        reasonMin={8}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: member.open })).not.toBeInTheDocument();
+    expect(screen.getByText(member.adminHasEverything)).toBeInTheDocument();
+  });
+
+  it('still offers it for an assistant who is not the stack owner', () => {
+    render(
+      <StaffSection
+        members={[{ id: 'assistant', name: 'محمد', phone: '0100', role: 'owner' }]}
+        currentUserId="teacher"
+        founderId="teacher"
+        reasonMin={8}
+      />,
+    );
+    expect(screen.getByRole('button', { name: member.open })).toBeInTheDocument();
+  });
+
   it('does not offer removal on an admin account either', () => {
     render(
       <StaffSection

@@ -68,6 +68,10 @@ export class TransfersService {
     let duplicates = 0;
     let matched = 0;
     let unreadable = 0;
+    // Whether the LEDGER changed — a new row, or an SMS row upgraded by its
+    // notification. A capture of nothing but repeats changes nothing any
+    // admin screen shows, and must not make every open one re-read.
+    let changed = false;
 
     for (const transfer of parsed) {
       if (transfer.amountCents === null) {
@@ -97,6 +101,7 @@ export class TransfersService {
             rawLine: transfer.rawLine,
           },
         });
+        changed = true;
         // It could not be settled before: an SMS names nobody. Now it can.
         if (await this.settle(held.id, transfer.amountCents, transfer.senderHandle)) matched += 1;
         continue;
@@ -106,6 +111,12 @@ export class TransfersService {
       created += 1;
       if (await this.settle(row.id, transfer.amountCents, transfer.senderHandle)) matched += 1;
     }
+
+    // «التحويلات الواردة» redraws live, like the review queue beside it. The
+    // claims this capture approved already announced themselves one by one
+    // (`approveFromTransfer`); this is for the ledger rows that approved
+    // nothing — the ones an admin actually has to look at.
+    if (created > 0 || changed) await this.payments.announceDesk();
 
     await this.audit.record({
       action: 'transfer:ingest',
@@ -285,10 +296,14 @@ export class TransfersService {
     // The transfer paid for this claim, which is now approved. Linking it
     // keeps the ledger honest — otherwise the money would sit under «محتاجة
     // مراجعة» forever, for a payment that has already been settled.
-    await this.prisma.incomingTransfer.updateMany({
+    const linked = await this.prisma.incomingTransfer.updateMany({
       where: { id: candidate.id, matchedSubmissionId: null },
       data: { matchedSubmissionId: submissionId },
     });
+    // The approval announced the desk BEFORE this ran (the controller calls
+    // it after `approve()` returns), so the ledger screen redrew with the
+    // transfer still «محتاجة مراجعة». Once more, now that it is not.
+    if (linked.count > 0) await this.payments.announceDesk();
   }
 
   /** The admin ledger. `unmatched` first-class, because money nobody can
@@ -390,10 +405,11 @@ export class TransfersService {
    *  the platform. Stamped, never deleted: the row is still the record that
    *  money arrived. */
   async dismiss(adminId: string, transferId: string): Promise<void> {
-    await this.prisma.incomingTransfer.updateMany({
+    const dismissed = await this.prisma.incomingTransfer.updateMany({
       where: { id: transferId, dismissedAt: null },
       data: { dismissedAt: new Date() },
     });
+    if (dismissed.count > 0) await this.payments.announceDesk();
 
     await this.audit.record({
       action: 'transfer:dismiss',

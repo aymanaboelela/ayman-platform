@@ -119,7 +119,7 @@
     and `overflow-y: clip` would silently kill vertical scrolling on the whole
     document.
 
-    This does NOT touch deliberate horizontal scrollers: `.rail__viewport`, wide
+    This does NOT touch deliberate horizontal scrollers: `.why-rail__viewport`, wide
     tables and code blocks scroll inside their own `overflow-x: auto` boxes, and
     a clip on the root has no effect on a descendant's own scroll container.
     Decorative art that hangs past the edge (the landing page's canvas is 500px
@@ -708,6 +708,75 @@
 
 .route-fade {
   animation: route-fade-in 220ms var(--ease-out) both;
+}
+
+/* ── The student's avatar ─────────────────────────────────────────────────────
+
+   `components/app/user-avatar.tsx`: a figure on the student's own colour,
+   ALWAYS painted, with the photo laid over it when there is one. The component
+   carries the reason; the short version is that a photo layer which never
+   paints (in flight, failed unheard, transparent) used to leave an empty ring
+   on three screens at once.
+
+   Here, not in `study.css`: the avatar is also drawn by the marketing header's
+   account slot and the admin door scanner, and `study.css` does not load on
+   `(site)`.
+
+   Same construction as `.course-art` below — per-theme lightness and chroma,
+   only the hue per student (inline `--avatar-h`), and nothing on top but white
+   alphas, so no hue the wheel can produce clashes with the figure. */
+.user-avatar {
+  --avatar-l1: 0.74;
+  --avatar-c1: 0.12;
+  --avatar-l2: 0.52;
+  --avatar-c2: 0.15;
+
+  position: relative;
+  isolation: isolate;
+  display: inline-block;
+  vertical-align: middle;
+  overflow: hidden;
+  background:
+    radial-gradient(90% 70% at 30% 12%, rgb(255 255 255 / 0.3) 0%, transparent 60%),
+    linear-gradient(
+      150deg,
+      oklch(var(--avatar-l1) var(--avatar-c1) var(--avatar-h)) 0%,
+      oklch(var(--avatar-l2) var(--avatar-c2) var(--avatar-h)) 100%
+    );
+  color: rgb(255 255 255 / 0.94);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .user-avatar {
+    --avatar-l1: 0.64;
+    --avatar-l2: 0.42;
+  }
+}
+
+:root[data-theme='dark'] .user-avatar {
+  --avatar-l1: 0.64;
+  --avatar-l2: 0.42;
+}
+
+/* Both layers fill the disc exactly. The figure's shoulders run off the bottom
+   edge on purpose — `overflow: hidden` above is what crops them, the way a
+   passport photo crops at the chest. */
+.user-avatar__figure,
+.user-avatar__photo {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.user-avatar__figure {
+  /* A soft drop under the head, so the figure reads as a shape standing in
+     front of the colour rather than a hole cut out of it. */
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.14));
+}
+
+.user-avatar__photo {
+  object-fit: cover;
 }
 
 /* ── Course artwork ──────────────────────────────────────────────────────────
