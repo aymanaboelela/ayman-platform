@@ -8,6 +8,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 // screen for a badge nobody but this poll reads.
 import { parseAdminPaymentsPendingCount } from '@ayman/contracts/admin/payments-pending-count';
 import { apiGetNarrow } from '@/lib/api';
+import { onStreamOpen, subscribeQueue } from '@/components/notifications/live-bus';
 
 /** Same cadence as `InboxAlertsProvider` — one poll while the tab is in
  *  front, paused while it is hidden. */
@@ -70,6 +71,20 @@ export function useRefreshPaymentsPendingCount(): () => void {
  * No toast and no OS notification here, unlike `InboxAlertsProvider` — a
  * payment claim sitting in the queue is not a message someone is waiting on
  * an answer to arrive; the badge itself is the whole ask.
+ *
+ * ## Live, with the poll as the floor
+ *
+ * The number mostly arrives on the live stream now: every write that changes
+ * the queue publishes a `payments` queue frame carrying the pending count
+ * (`PaymentsService.announceDesk`), and this sets it straight from the frame
+ * — no request at all. A claim approved by ANOTHER admin, or by a transfer
+ * with nobody at the keyboard, leaves the badge the moment it happens instead
+ * of up to thirty seconds later.
+ *
+ * The poll stays, unchanged, because the stream can be quietly unable to
+ * deliver (Redis down, a proxy holding a dead socket until the watchdog
+ * notices) and still look connected. It is what makes "live" degrade to
+ * "thirty seconds late" rather than to "wrong until reload".
  */
 export function PaymentsAlertsProvider({ children }: { children: ReactNode }) {
   const [count, setCount] = useState<number | null>(null);
@@ -100,9 +115,22 @@ export function PaymentsAlertsProvider({ children }: { children: ReactNode }) {
     const timer = window.setInterval(tick, POLL_MS);
     document.addEventListener('visibilitychange', tick);
 
+    // The frame IS the answer — absolute, like the poll's — so the badge moves
+    // even in a hidden tab, and without a request.
+    const offFrame = subscribeQueue('payments', setCount);
+    // A reconnect means frames were lost while it was down. The mount read
+    // above covers the stream's FIRST open, so only a later one re-reads.
+    let opens = 0;
+    const offOpen = onStreamOpen(() => {
+      opens += 1;
+      if (opens > 1) tick();
+    });
+
     return () => {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', tick);
+      offFrame();
+      offOpen();
     };
   }, [refresh]);
 

@@ -492,6 +492,24 @@ export type UnreadCount = z.infer<typeof UnreadCountSchema>;
    --------------------------------------------------------------------------- */
 
 /**
+ * The admin work queues that announce themselves on the live stream.
+ *
+ * A queue is not a notification. A notification is a row with a reader and a
+ * read-state; a queue frame is «the list you are looking at moved — here is
+ * how many are waiting now». Nothing is stored, and a tab that misses one
+ * converges on the next, because `waiting` is absolute like `unread`.
+ *
+ * `payments` is the whole desk: the review queue on `/admin/payments` AND the
+ * ledger on `/admin/transfers`, because a transfer landing is what approves a
+ * claim on its own — the two screens move together or they contradict each
+ * other. `waiting` is always the PENDING CLAIMS count, the number the
+ * sidebar's «المدفوعات» badge draws.
+ */
+export const LIVE_QUEUES = ['payments'] as const;
+export const LiveQueueSchema = z.enum(LIVE_QUEUES);
+export type LiveQueue = z.infer<typeof LiveQueueSchema>;
+
+/**
  * One frame on `GET /api/me/notifications/stream` (Server-Sent Events).
  *
  * ## Why SSE and not a WebSocket
@@ -524,6 +542,20 @@ export const NotificationEventSchema = z.discriminatedUnion('type', [
    * never opened — the client believes it is live and stops polling.
    */
   z.object({ type: z.literal('ping') }),
+  /**
+   * An admin queue moved — see `LIVE_QUEUES`. Only ever written to a stream
+   * whose owner holds the queue's permission (`notifications.controller.ts`),
+   * and it carries a count, never a row: the screen re-reads the rows through
+   * the same guarded endpoint it rendered them from.
+   *
+   * A build that predates a queue name fails this parse and drops the frame,
+   * exactly like an unknown notification kind — its poll still converges.
+   */
+  z.object({
+    type: z.literal('queue'),
+    queue: LiveQueueSchema,
+    waiting: z.number().int().min(0),
+  }),
 ]);
 
 export type NotificationEvent = z.infer<typeof NotificationEventSchema>;

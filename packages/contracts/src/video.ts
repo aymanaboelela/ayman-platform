@@ -492,25 +492,36 @@ export function uploadSourceKey(uploadId: string): string {
  * network: 360p is what plays on 3G at the back of a classroom, and 1080p is
  * what a slide full of code needs to be readable at all.
  *
- * The bitrates are H.264 High-profile targets for screen-and-speaker content,
- * which is what a lecture is — largely static frames with sharp text. They are
- * deliberately below the usual "web video" numbers for the same heights: those
- * are chosen for motion, and spending them here buys nothing a student can see.
+ * There is no bitrate TARGET per rung, only a ceiling. Every rung is encoded
+ * at one constant quality (`UPLOAD_CRF`) and x264 spends bits where the picture
+ * changes — which is what YouTube does. A lecture is mostly a still slide with
+ * a cursor on it, so a fixed target paid for motion that never came: measured
+ * on a real lecture (2026-09-28), the old 3200 kbit/s 1080p rung stored
+ * 1.41 GB/h at VMAF 89.6, and constant quality stored 0.65 GB/h at 89.1 — half
+ * the bucket and half the student's data bundle for a difference no eye sees.
+ *
+ * `maxKbps` caps a busy scene (a screen full of scrolling code) so one segment
+ * cannot outgrow what the rung's connection was chosen for.
  */
 export interface LadderRung {
   readonly height: number;
-  /** Video bitrate target, kbit/s. */
-  readonly videoKbps: number;
   /** Ceiling for the rate control, kbit/s. Head-room for a busy scene. */
   readonly maxKbps: number;
   readonly audioKbps: number;
 }
 
+/**
+ * x264's constant-quality factor for every rung. 23 is x264's own default and
+ * the point where text on a slide stays sharp; each step up is ~12% smaller
+ * and visibly softer on code, so it is not a free dial.
+ */
+export const UPLOAD_CRF = 23;
+
 export const UPLOAD_LADDER: readonly LadderRung[] = [
-  { height: 1080, videoKbps: 3200, maxKbps: 4200, audioKbps: 128 },
-  { height: 720, videoKbps: 1800, maxKbps: 2400, audioKbps: 128 },
-  { height: 480, videoKbps: 900, maxKbps: 1200, audioKbps: 96 },
-  { height: 360, videoKbps: 500, maxKbps: 700, audioKbps: 64 },
+  { height: 1080, maxKbps: 4200, audioKbps: 128 },
+  { height: 720, maxKbps: 2400, audioKbps: 128 },
+  { height: 480, maxKbps: 1200, audioKbps: 96 },
+  { height: 360, maxKbps: 700, audioKbps: 64 },
 ];
 
 /**

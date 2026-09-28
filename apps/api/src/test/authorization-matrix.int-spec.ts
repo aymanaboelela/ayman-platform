@@ -809,6 +809,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // authorization question, even where the URL shape is identical.
     { label: 'activity feed: anonymous', method: 'get', path: () => '/api/me/activity', actor: 'anonymous', status: 401 },
     { label: 'activity feed: student', method: 'get', path: () => '/api/me/activity', actor: 'student', status: 200 },
+    // «ترتيبي على الدفعة» — `progress:read` زي الـfeed اللي فوقه، ومن غير id في
+    // الرابط. صفوفه لوحدها لنفس السبب: كل راوت لازم يتسمّى.
+    { label: 'cohort rank: anonymous', method: 'get', path: () => '/api/me/rank', actor: 'anonymous', status: 401 },
+    { label: 'cohort rank: student', method: 'get', path: () => '/api/me/rank', actor: 'student', status: 200 },
     // Notifications (slice 4), guarded by `profile:read` for the two reads and
     // `profile:write` for the two writes — deliberately NOT `quiz:read`, even
     // though two of the three kinds are emitted by the quiz engine: the list is
@@ -1671,6 +1675,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // اللي بيشغّل الفحص بأكتر من ماسك. الصف هنا عشان الراوت مايفضلش من غير
     // تغطية للحالة.
     { label: 'staff permissions write: admin holds everything, so nothing is escalation', method: 'put', path: () => `/api/admin/staff/${studentId}/permissions`, actor: 'admin', status: 400, body: () => ({ permissions: ['role:grant'] }) },
+    // ⚠️ ومفيش حد يعدّل صلاحيات نفسه. الشاشة بتخبّي الزرار، بس الشاشة مش
+    // الحارس — وعلى ستاكات المدرّسين التانيين الحساب الوحيد هو المدرّس
+    // نفسه برول `owner`، ومفيش `admin` يرجّعه لو قفل على نفسه.
+    { label: 'staff permissions write: refuses to edit your own account', method: 'put', path: () => `/api/admin/staff/${adminId}/permissions`, actor: 'admin', status: 400, body: () => ({ permissions: [] }) },
 
     // ── Entitlements — one public read, and no write anywhere ──
     //
@@ -2455,6 +2463,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // be swallowed as an attempt id — the matrix covers both, which is what
       // makes that ordering a tested property rather than a comment.
       'GET /api/admin/grading-queue',
+      'GET /api/admin/grading-queue/count',
       'GET /api/admin/grading-results',
       'PATCH /api/admin/attempts/:attemptId/mark',
       'GET /api/admin/attempts/:attemptId/grading',

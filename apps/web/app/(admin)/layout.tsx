@@ -18,6 +18,7 @@ import { InboxAlertsProvider } from '@/components/admin/inbox-alerts';
 import { PaymentsAlertsProvider } from '@/components/admin/payments-alerts';
 import { BookOrdersAlertsProvider } from '@/components/admin/book-orders-alerts';
 import { HomeworkAlertsProvider } from '@/components/admin/homework-alerts';
+import { GradingAlertsProvider } from '@/components/admin/grading-alerts';
 import { NotificationStreamProvider } from '@/components/notifications/notification-stream';
 import {
   NotificationBell,
@@ -94,12 +95,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // `homework:read` would poll a 403 every thirty seconds forever.
   const HomeworkAlerts =
     can(session, 'homework:read') && features.homework ? HomeworkAlertsProvider : Fragment;
+  // Fifth, and the one with NO feature gate: «تصحيح الورق» is the essay queue
+  // for every quiz on the platform, not a part of monthly exams — see the nav
+  // row. `attempt:grade` is what the count route requires.
+  const GradingAlerts = can(session, 'attempt:grade') ? GradingAlertsProvider : Fragment;
 
   return (
     <Alerts>
     <PaymentsAlerts>
     <BookOrdersAlerts>
     <HomeworkAlerts>
+    <GradingAlerts>
     {/*
       The same live stream the student shell mounts, on the admin side.
 
@@ -140,6 +146,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     </div>
     </AdminEntitlementsProvider>
     </NotificationStreamProvider>
+    </GradingAlerts>
     </HomeworkAlerts>
     </BookOrdersAlerts>
     </PaymentsAlerts>

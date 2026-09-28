@@ -54,11 +54,38 @@ export default async function RolesPage() {
     adminGet(
       '/api/admin/students?page=1&perPage=50&role=staff',
       z.object({
-        rows: z.array(z.object({ id: z.string(), fullName: z.string(), phone: z.string() })),
+        rows: z.array(
+          z.object({
+            id: z.string(),
+            fullName: z.string(),
+            phone: z.string(),
+            // ⚠️ الدور لازم يعدّي للشاشة. `role=staff` معناها «أي حد مش
+            // طالب» — فحساب **أدمن** بيظهر في الليستة دي، وصلاحياته مش
+            // بتتظبط من هنا. من غير الحقل ده الشاشة مابتعرفش تفرّق.
+            role: z.string(),
+            // عشان نعرف مين أقدم حساب — شوف `founderId` تحت.
+            createdAt: z.string(),
+          }),
+        ),
       }),
     ),
     getSession(),
   ]);
+
+  /*
+   * صاحب الستاك — أقدم حساب مش-طالب.
+   *
+   * السيرفر بيرفض أي تعديل على صلاحياته (`RolesController`)، والشاشة
+   * مالهاش لازمة تعرض زرار بيرجع ٤٠٠ دايمًا.
+   *
+   * ⚠️ بيتحسب من نفس الليستة المعروضة، وهي `perPage=50`. لو الفريق بقى أكبر
+   * من كده والأقدم وقع بره الصفحة، أسوأ حاجة تحصل إن الزرار يتعرض على حد
+   * محمي ويرجع الخطأ — **مش** إن الحماية تتفك. الحارس في السيرفر.
+   */
+  const founderId = staff.rows.reduce<{ id: string; at: string } | null>(
+    (oldest, row) => (!oldest || row.createdAt < oldest.at ? { id: row.id, at: row.createdAt } : oldest),
+    null,
+  )?.id;
 
   return (
     <>
@@ -67,8 +94,14 @@ export default async function RolesPage() {
 
       <div className="mb-8">
         <StaffSection
-          members={staff.rows.map((r) => ({ id: r.id, name: r.fullName, phone: r.phone }))}
+          members={staff.rows.map((r) => ({
+            id: r.id,
+            name: r.fullName,
+            phone: r.phone,
+            role: r.role,
+          }))}
           currentUserId={session?.id ?? ''}
+          founderId={founderId}
         />
       </div>
 

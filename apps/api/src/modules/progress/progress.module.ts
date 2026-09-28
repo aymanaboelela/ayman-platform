@@ -8,6 +8,8 @@ import { LessonGateService } from './lesson-gate.service';
 import { LessonProgressService } from './lesson-progress.service';
 import { ActivityController } from './activity.controller';
 import { ActivityService } from './activity.service';
+import { CohortRankService } from './cohort-rank.service';
+import { RankController } from './rank.controller';
 import { ProgressController } from './progress.controller';
 import { ViewSessionService } from './view-session.service';
 
@@ -30,7 +32,7 @@ import { ViewSessionService } from './view-session.service';
   // imports nothing but `PrismaModule`, and notifications never reach back
   // into progress to ask what happened; they are told.
   imports: [EntitlementModule, NotificationsModule],
-  controllers: [ProgressController, ActivityController],
+  controllers: [ProgressController, ActivityController, RankController],
   providers: [
     LessonAccessService,
     LessonGateService,
@@ -39,6 +41,7 @@ import { ViewSessionService } from './view-session.service';
     LessonProgressService,
     ViewSessionService,
     ActivityService,
+    CohortRankService,
   ],
   // `LessonProgressService` is exported so Plan 5's `QuizModule` can inject
   // it and call `recordQuizResult` — the only way a quiz result becomes

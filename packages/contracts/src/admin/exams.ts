@@ -289,6 +289,16 @@ export const AdminGradingQueueSchema = z.object({
 export type AdminGradingQueue = z.infer<typeof AdminGradingQueueSchema>;
 
 /**
+ * `GET /api/admin/grading-queue/count` — how many PAPERS are waiting, which is
+ * `AdminGradingQueue['rows'].length` by construction (both read one `where` in
+ * `ManualGradingService`). The sidebar reads it through the hand-narrowed
+ * `parseAdminGradingPendingCount` in `./grading-pending-count`, never through
+ * this schema — see that module's header for why.
+ */
+export const AdminGradingPendingCountSchema = z.object({ pending: z.number().int().min(0) });
+export type AdminGradingPendingCount = z.infer<typeof AdminGradingPendingCountSchema>;
+
+/**
  * ── «اتصحّح خلاص» و«الأوائل» ─────────────────────────────────────────────────
  *
  * The two sections the grading screen was missing. Marking a paper made it

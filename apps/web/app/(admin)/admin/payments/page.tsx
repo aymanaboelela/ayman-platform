@@ -1,25 +1,11 @@
-import Link from 'next/link';
 import { copy } from '@ayman/contracts/copy/admin';
-import { formatCopy } from '@ayman/contracts/format';
-import {
-  AdminPaymentListSchema,
-  AdminPaymentSortSchema,
-  type AdminPaymentRow,
-} from '@ayman/contracts/admin/payments';
-import { Badge } from '@ayman/ui/components/badge';
+import { AdminPaymentListSchema, AdminPaymentSortSchema } from '@ayman/contracts/admin/payments';
 import { PaymentSubmissionStatusSchema, type PaymentSubmissionStatus } from '@ayman/contracts/payments';
 import { adminGet } from '@/lib/admin-api';
-import { formatEGP } from '@/lib/price';
-import { WhatsappButton } from '@/components/admin/whatsapp-button';
-import { PaymentReviewActions } from './review-actions';
-import { PaymentScreenshotThumbnail } from './screenshot-thumbnail';
-import { ListControl, ListPager } from '@/components/admin/list-controls';
-import { AdminEmpty } from '@/components/admin/admin-empty';
+import { ListControl } from '@/components/admin/list-controls';
+import { PaymentsLiveList } from './payments-live-list';
 
 const c = copy.admin.payments;
-/** The pager's three words live with the books screen's own list controls —
- *  one vocabulary for every paged admin list, not one per screen. */
-const cb = copy.admin.books;
 
 export const metadata = { title: c.title };
 
@@ -34,48 +20,6 @@ const FILTERS: { value: PaymentSubmissionStatus | 'all'; label: string }[] = [
   { value: 'rejected', label: c.filterRejected },
   { value: 'all', label: c.filterAll },
 ];
-
-const PLAN_LABEL: Record<Exclude<AdminPaymentRow['plan'], 'term'>, string> = {
-  monthly: c.planMonthly,
-  quarterly: c.planQuarterly,
-  yearly: c.planYearly,
-};
-
-/**
- * «شهرين — شهر ٢، شهر ٣» — العربي بيعُد تلات طرق، والرقم المجرّد مش واحدة منهم.
- *
- * «٢ شهر» مش جملة عربية، و«٢ شهور» كمان لأ. المثنى كلمة لوحده.
- */
-function monthsPhrase(count: number): string {
-  if (count === 1) return c.planMonthsOne;
-  if (count === 2) return c.planMonthsTwo;
-  return formatCopy(c.planMonthsMany, { count });
-}
-
-/**
- * الخطة زي ما الأدمن محتاج يقراها وهو بيوافق.
- *
- * `term` بيسمّي الترم، والشهور بتسمّي نفسها وعددها — وده اللي كان ناقص. الأدمن
- * كان بيشوف «شهر» على دفعة بتشتري تلات شهور، والمبلغ جنبها لوحده مش كفاية
- * يفرّق: ٤٥٠ صح على تلاتة وغلط على واحد.
- *
- * والترتيب من السيرفر (`monthIndex`)، مش من هنا — «شهر ٣ و٢» بتبان كغلطة.
- */
-function planLabel(row: AdminPaymentRow): string {
-  if (row.plan === 'term') return formatCopy(c.planTerm, { term: row.termTitle ?? '' });
-  if (row.months.length > 0) {
-    return formatCopy(c.planMonths, {
-      count: monthsPhrase(row.months.length),
-      months: row.months.map((month) => month.title).join('، '),
-    });
-  }
-  return PLAN_LABEL[row.plan];
-}
-
-const dateFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
 
 /**
  * `/admin/payments` — the Vodafone Cash review queue.
@@ -104,11 +48,9 @@ export default async function AdminPaymentsPage({
   const sort = AdminPaymentSortSchema.catch('oldest').parse(one('sort'));
   const page = Math.max(1, Number(one('page') ?? 1) || 1);
 
-  const { rows, rowCount } = await adminGet(
-    `/api/admin/payments/submissions?perPage=${PER_PAGE}&page=${page}&sort=${sort}` +
-      (status === 'all' ? '' : `&status=${status}`),
-    AdminPaymentListSchema,
-  );
+  const query =
+    `perPage=${PER_PAGE}&page=${page}&sort=${sort}` + (status === 'all' ? '' : `&status=${status}`);
+  const initial = await adminGet(`/api/admin/payments/submissions?${query}`, AdminPaymentListSchema);
 
   return (
     <>
@@ -146,90 +88,19 @@ export default async function AdminPaymentsPage({
         />
       </div>
 
-      {rowCount === 0 ? (
-        <AdminEmpty spot="payments" title={c.empty} hint={c.emptyHint} />
-      ) : (
-        <ul className="mt-5 flex flex-col gap-2.5">
-          {rows.map((row) => (
-            <li
-              key={row.id}
-              className="flex flex-col gap-3 rounded-xl border border-line bg-surface-2 p-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    href={`/admin/students/${row.userId}`}
-                    className="text-[length:var(--fs-text-base)] font-semibold text-fg underline decoration-dotted decoration-fg-faint underline-offset-4 hover:text-accent-text hover:decoration-solid"
-                  >
-                    {row.studentName}
-                  </Link>
-                  <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
-                    {planLabel(row)}
-                  </span>
-                  <span className="rounded-full border border-line px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
-                    {row.approvedBefore > 0
-                      ? formatCopy(c.approvedBefore, { n: row.approvedBefore })
-                      : c.approvedBeforeNone}
-                  </span>
-                  {/* An admin-comped term — never counted as revenue on
-                      `/admin/finance`. See the model note on
-                      `PaymentSubmission.isFree`. */}
-                  {row.isFree ? <Badge tone="accent">{c.freeBadge}</Badge> : null}
-                </div>
-                <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
-                  {row.courseTitle}
-                </p>
-                <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--fs-text-xs)] text-fg-faint">
-                  <span className="mono">{formatEGP(row.amountCents)} ج</span>
-                  {/* The number to reconcile against the real Vodafone Cash
-                      log — often not the student's own account phone below,
-                      which is why it carries its own label and this one
-                      doesn't: unlabelled reads as "the student's number",
-                      which `studentPhone` already is. `null` for a row
-                      `adminManualSubscribe` created directly — there is no
-                      transfer to reconcile, so this says so instead of a
-                      blank value after the label. */}
-                  <span dir="ltr" className="font-medium text-fg">
-                    {row.senderPhone ? `${c.senderPhoneLabel}: ${row.senderPhone}` : c.recordedManually}
-                  </span>
-                  {row.studentPhone ? <span dir="ltr">{row.studentPhone}</span> : null}
-                  {row.studentEmail ? <span dir="ltr">{row.studentEmail}</span> : null}
-                  <time dateTime={row.createdAt}>{dateFormatter.format(new Date(row.createdAt))}</time>
-                </p>
-                {row.status === 'rejected' && row.rejectionReason ? (
-                  <p className="mt-1.5 text-[length:var(--fs-text-sm)] text-err">
-                    {row.rejectionReason}
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="flex shrink-0 items-center gap-2">
-                {/* Only when there is one to open — `adminManualSubscribe`
-                    rows usually have none, and requesting the screenshot
-                    route for a row without one would just 404. */}
-                {row.hasScreenshot ? (
-                  <PaymentScreenshotThumbnail
-                    id={row.id}
-                    alt={formatCopy(c.screenshotAlt, { student: row.studentName })}
-                  />
-                ) : null}
-                {/* The student's own account phone, not `senderPhone` above —
-                    reconciling a Vodafone Cash transfer is one reason to
-                    reach out, but not the only one, so this follows the
-                    student rather than the payment. Renders nothing when
-                    `studentPhone` is unusable — see `WhatsappButton`. */}
-                <WhatsappButton phone={row.studentPhone} label={c.whatsapp} size="sm" />
-                {row.status === 'pending' ? <PaymentReviewActions id={row.id} /> : null}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      <ListPager
+      {/*
+        The rows, and everything that keeps them current without a refresh —
+        see `PaymentsLiveList`. Keyed on the query so a filter, sort or page
+        change starts a fresh list rather than lighting up every row of the
+        new view as «جديد».
+      */}
+      <PaymentsLiveList
+        key={query}
+        initial={initial}
+        query={query}
+        status={status}
         page={page}
         perPage={PER_PAGE}
-        rowCount={rowCount}
-        labels={{ previous: cb.pagerPrevious, next: cb.pagerNext, of: cb.pagerOf }}
       />
     </>
   );

@@ -343,6 +343,11 @@ describe('quiz module authorization matrix', () => {
     { label: 'admin grading queue: anonymous', method: 'GET', path: () => `/api/admin/grading-queue`, role: 'anonymous', status: 401 },
     { label: 'admin grading queue: student', method: 'GET', path: () => `/api/admin/grading-queue`, role: 'student', status: 403 },
     { label: 'admin grading queue: admin', method: 'GET', path: () => `/api/admin/grading-queue`, role: 'admin', status: 200 },
+    // The sidebar badge's count. Only a number, but the number of a
+    // classmate's unmarked papers is still not a student's to read.
+    { label: 'admin grading queue count: anonymous', method: 'GET', path: () => `/api/admin/grading-queue/count`, role: 'anonymous', status: 401 },
+    { label: 'admin grading queue count: student', method: 'GET', path: () => `/api/admin/grading-queue/count`, role: 'student', status: 403 },
+    { label: 'admin grading queue count: admin', method: 'GET', path: () => `/api/admin/grading-queue/count`, role: 'admin', status: 200 },
     { label: 'admin grading results: anonymous', method: 'GET', path: () => `/api/admin/grading-results`, role: 'anonymous', status: 401 },
     { label: 'admin grading results: student', method: 'GET', path: () => `/api/admin/grading-results`, role: 'student', status: 403 },
     { label: 'admin grading results: admin', method: 'GET', path: () => `/api/admin/grading-results`, role: 'admin', status: 200 },

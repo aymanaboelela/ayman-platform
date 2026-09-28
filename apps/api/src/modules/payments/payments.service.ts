@@ -68,6 +68,28 @@ export class PaymentsService {
     private readonly media: MediaService,
   ) {}
 
+  /**
+   * «The payments desk moved» — the live signal `/admin/payments`, its
+   * sidebar badge and `/admin/transfers` redraw on, without anyone pressing
+   * refresh. Called after every write that changes which claims are pending
+   * (or, from `TransfersService`, what sits on the ledger beside them).
+   *
+   * The count rides along so the badge needs no request of its own: it is the
+   * same `status: 'pending'` count the list endpoint returns as `rowCount`.
+   *
+   * AFTER the commit and never throwing, for the reason `announce` is: a
+   * screen that misses this redraws on its next poll, and nobody's payment
+   * may fail over a list redrawing late.
+   */
+  async announceDesk(): Promise<void> {
+    try {
+      const waiting = await this.prisma.paymentSubmission.count({ where: { status: 'pending' } });
+      await this.notifications.announceQueue('payments', waiting);
+    } catch {
+      // Deliberately swallowed — see above. The write already committed.
+    }
+  }
+
   /** Step one of the two-step upload — see the header note in `payments.ts`. */
   async uploadScreenshot(file: UploadFile): Promise<{ screenshotKey: string }> {
     const image = await this.media.uploadPrivateImage(file, SCREENSHOT_PREFIX);
@@ -302,6 +324,9 @@ export class PaymentsService {
 
     // AFTER the commit, never inside it. See `NotificationsService.announce`.
     await this.notifications.announceAll(admins);
+    // The bell above says «a request arrived»; this is what puts the ROW on
+    // the review screen an admin may already be looking at.
+    await this.announceDesk();
 
     await this.audit.record({
       action: 'payment:submit',
@@ -955,6 +980,9 @@ export class PaymentsService {
       throws.
     */
     await this.notifications.announce(submission.userId);
+    // And the other side of the same decision: the row leaves every OTHER
+    // admin's queue, not just the one that pressed «وافق».
+    await this.announceDesk();
 
     await this.audit.record({
       action: 'payment:approve',
@@ -1193,6 +1221,8 @@ export class PaymentsService {
     // The admin subscribed them by hand; the student still gets told, live,
     // exactly as they would from a reviewed claim.
     await this.notifications.announce(userId);
+    // Never pending, but it is a row on the «اتوافق عليها» and «الكل» views.
+    await this.announceDesk();
 
     await this.audit.record({
       action: 'payment:admin-subscribe',
@@ -1348,6 +1378,10 @@ export class PaymentsService {
 
     // AFTER the commit, never inside it — see `NotificationsService.announce`.
     await this.notifications.announce(submission.userId);
+    // Nobody clicked anything, so no admin screen would ever learn of this
+    // one without it — the claim just sat there «قيد المراجعة» after the
+    // money had already approved it.
+    await this.announceDesk();
 
     await this.audit.record({
       action: 'payment:auto-approve',
@@ -1547,6 +1581,7 @@ export class PaymentsService {
     // Same as the approval above: the student learns instantly, on whatever
     // page they happen to be sitting on.
     await this.notifications.announce(submission.userId);
+    await this.announceDesk();
 
     await this.audit.record({
       action: 'payment:reject',

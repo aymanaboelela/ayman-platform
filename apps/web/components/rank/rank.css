@@ -1,0 +1,666 @@
+/* =============================================================================
+   «ترتيبي على الدفعة» — `/rank`.
+
+   ملوّنة بصوت عالي، عن قصد. دي الشاشة اللي الطالب بيفتحها عشان يحس إنه في
+   سباق، وصفحة رمادي فيها رقم بتتقري كتقرير مش كسباق. فالهيرو بالتلات ألوان
+   الزاهية من طبقة الـviz (بنفسجي، أزرق، تيل) مع وردي، والمستويات كل واحد
+   بلونه، والميداليات دهب وفضة وبرونز.
+
+   كل لون توكن أو `color-mix` من توكن، فالصفحة بتمشي مع الثيم الغامق من غير
+   نسخة تانية. الأبيض الصريح بس على الهيرو، لأن أرضيته غامقة في الثيمين.
+
+   الحركة كلها جوّه `prefers-reduced-motion: no-preference`، والصفحة من غيرها
+   كاملة: كل حاجة بتتحرك بتبدأ من شكلها النهائي لو الحركة مقفولة.
+   ========================================================================== */
+
+/* ── ألوان المستويات ────────────────────────────────────────────────────── */
+.rk [data-level='bronze'],
+.rk-hero[data-level='bronze'] { --lvl: var(--e-500); }
+.rk [data-level='silver'],
+.rk-hero[data-level='silver'] { --lvl: color-mix(in oklab, var(--viz-5) 30%, var(--n-9)); }
+.rk [data-level='gold'],
+.rk-hero[data-level='gold'] { --lvl: var(--print-gold); }
+.rk [data-level='platinum'],
+.rk-hero[data-level='platinum'] { --lvl: var(--viz-2); }
+.rk [data-level='diamond'],
+.rk-hero[data-level='diamond'] { --lvl: var(--viz-5); }
+.rk [data-level='master'],
+.rk-hero[data-level='master'] { --lvl: var(--viz-3); }
+.rk [data-level='legend'],
+.rk-hero[data-level='legend'] { --lvl: var(--viz-4); }
+
+.rk {
+  --rk-gold: var(--print-gold);
+  --rk-gold-hi: color-mix(in oklab, var(--print-gold), #fff 45%);
+  --rk-gold-lo: var(--print-gold-deep);
+  --rk-silver: color-mix(in oklab, color-mix(in oklab, var(--viz-5) 20%, var(--n-9)), #fff 30%);
+  --rk-bronze: var(--e-500);
+}
+
+/* ── الهيرو ─────────────────────────────────────────────────────────────── */
+.rk-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  display: grid;
+  gap: 1.25rem;
+  align-items: center;
+  padding: 1.75rem 1.25rem 2rem;
+  border-radius: var(--r-lg);
+  color: #fff;
+  background:
+    radial-gradient(90% 80% at 100% 0%, color-mix(in oklab, var(--viz-4) 70%, transparent) 0%, transparent 60%),
+    radial-gradient(80% 90% at 0% 100%, color-mix(in oklab, var(--viz-2) 75%, transparent) 0%, transparent 62%),
+    linear-gradient(135deg, var(--viz-3) 0%, var(--viz-5) 100%);
+  box-shadow: var(--shadow-md);
+}
+@media (min-width: 768px) {
+  .rk-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 17rem);
+    padding: 2.25rem 2.5rem;
+  }
+}
+/* نقط خفيفة فوق الجريدينت — «لوحة نتايج» مش حيطة ملوّنة. */
+.rk-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(rgb(255 255 255 / 0.16) 1px, transparent 1.5px);
+  background-size: 20px 20px;
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.9), transparent 90%);
+}
+
+.rk-hero__shapes { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.rk-shape { position: absolute; display: block; }
+.rk-shape--ring {
+  inset-block-start: -3rem;
+  inset-inline-start: 38%;
+  width: 10rem;
+  height: 10rem;
+  border-radius: 50%;
+  border: 14px solid rgb(255 255 255 / 0.1);
+}
+.rk-shape--blob {
+  inset-block-end: -4rem;
+  inset-inline-end: -3rem;
+  width: 14rem;
+  height: 14rem;
+  border-radius: 42% 58% 60% 40% / 45% 40% 60% 55%;
+  background: color-mix(in oklab, var(--viz-4) 45%, transparent);
+  filter: blur(2px);
+}
+.rk-shape--dot {
+  inset-block-start: 22%;
+  inset-inline-end: 44%;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--viz-1), #fff 30%);
+}
+.rk-shape--tri {
+  inset-block-end: 14%;
+  inset-inline-start: 46%;
+  width: 0;
+  height: 0;
+  border-inline: 12px solid transparent;
+  border-block-end: 20px solid rgb(255 255 255 / 0.28);
+}
+.rk-shape--plus {
+  inset-block-start: 14%;
+  inset-inline-start: 6%;
+  width: 1.1rem;
+  height: 1.1rem;
+  background:
+    linear-gradient(rgb(255 255 255 / 0.5), rgb(255 255 255 / 0.5)) center / 100% 3px no-repeat,
+    linear-gradient(rgb(255 255 255 / 0.5), rgb(255 255 255 / 0.5)) center / 3px 100% no-repeat;
+}
+
+.rk-hero__copy { min-width: 0; }
+.rk-hero__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.18);
+  border: 1px solid rgb(255 255 255 / 0.3);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  backdrop-filter: blur(6px);
+}
+.rk-hero__title {
+  margin-top: 0.9rem;
+  font-size: var(--fs-title-1);
+  font-weight: var(--fw-bold);
+  line-height: 1.3;
+}
+.rk-hero__place {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+.rk-hero__place-label {
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  color: rgb(255 255 255 / 0.85);
+}
+/* رقم لاتيني و«#» جوّه سطر عربي: من غير العزل ده الـ# بيتقلب على يمين الرقم. */
+.rk-hero__rank {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+  font-size: clamp(4rem, 14vw, 6.5rem);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
+}
+.rk-hero__hash { font-size: 0.5em; opacity: 0.7; margin-inline-end: 0.05em; vertical-align: 0.6em; }
+.rk-hero__crown {
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--rk-gold-hi);
+  filter: drop-shadow(0 4px 10px rgb(0 0 0 / 0.3));
+  align-self: flex-start;
+}
+.rk-hero__of {
+  margin-top: 0.35rem;
+  font-size: var(--fs-text-lg);
+  font-weight: var(--fw-semibold);
+  color: rgb(255 255 255 / 0.92);
+}
+.rk-hero__chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+.rk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--r-full);
+  background: rgb(0 0 0 / 0.18);
+  border: 1px solid rgb(255 255 255 / 0.22);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+.rk-chip--glow {
+  background: var(--rk-gold);
+  border-color: transparent;
+  color: var(--on-light-ink);
+  box-shadow: 0 6px 18px color-mix(in oklab, var(--rk-gold) 45%, transparent);
+}
+.rk-hero__zero {
+  margin-top: 0.75rem;
+  max-width: 32rem;
+  line-height: 1.8;
+  color: rgb(255 255 255 / 0.9);
+}
+
+.rk-hero__visual {
+  position: relative;
+  justify-self: center;
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  width: min(62%, 11rem);
+}
+@media (min-width: 768px) {
+  .rk-hero__visual { width: min(100%, 15rem); }
+}
+.rk-hero__level {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: -0.75rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.95);
+  color: var(--on-light-ink);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-text-sm);
+  box-shadow: var(--shadow-md);
+}
+
+/* ── رسمة الكاس ─────────────────────────────────────────────────────────── */
+.rk-art { width: 100%; height: auto; overflow: visible; filter: drop-shadow(0 18px 22px rgb(0 0 0 / 0.22)); }
+.rk-art__halo { fill: rgb(255 255 255 / 0.1); }
+.rk-art__halo--inner { fill: rgb(255 255 255 / 0.12); }
+.rk-art__laurel { fill: color-mix(in oklab, var(--viz-6), #fff 20%); }
+.rk-art__base { fill: var(--lvl, var(--e-500)); }
+.rk-art__spark { transform-box: fill-box; transform-origin: center; }
+
+/* ── المستوى والقرص ─────────────────────────────────────────────────────── */
+.rk-row { display: grid; gap: 1rem; }
+@media (min-width: 768px) {
+  .rk-row { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+  .rk-row--even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+
+.rk-card {
+  position: relative;
+  min-width: 0;
+  padding: 1.25rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  box-shadow: var(--shadow-sm);
+}
+.rk-card__label { font-size: var(--fs-text-sm); color: var(--color-fg-muted); }
+.rk-card__title,
+.rk-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+}
+.rk-card__title { margin-bottom: 1rem; }
+.rk-card__title svg,
+.rk-section-title svg { color: var(--viz-3); }
+
+.rk-level {
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in oklab, var(--lvl) 22%, transparent) 0%, transparent 60%),
+    var(--color-surface-2);
+  border-color: color-mix(in oklab, var(--lvl) 40%, var(--color-line));
+}
+.rk-level__head { display: flex; align-items: center; gap: 0.85rem; }
+.rk-level__gem { width: 3.25rem; height: 3.25rem; flex: none; }
+.rk-level__name { font-size: var(--fs-title-2); font-weight: var(--fw-bold); color: var(--color-fg); line-height: 1.2; }
+.rk-level__points {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-title-2);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+  font-variant-numeric: tabular-nums;
+}
+.rk-level__unit { font-family: inherit; font-size: var(--fs-text-sm); font-weight: var(--fw-medium); color: var(--color-fg-muted); }
+.rk-level__track {
+  position: relative;
+  height: 0.8rem;
+  margin-top: 1.1rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--lvl) 16%, var(--color-surface-1));
+  overflow: hidden;
+}
+.rk-level__fill {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: var(--rk-fill);
+  border-radius: inherit;
+  background: linear-gradient(to left, var(--lvl), color-mix(in oklab, var(--lvl), #fff 35%));
+}
+/* خط لمعة بيعدّي على الشريط — «بيتملى»، مش واقف. */
+.rk-level__fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.5) 50%, transparent 80%);
+  transform: translateX(120%);
+}
+.rk-level__next { margin-top: 0.6rem; font-size: var(--fs-text-sm); font-weight: var(--fw-semibold); color: var(--color-fg-muted); }
+
+.rk-avg { display: grid; justify-items: center; align-content: center; gap: 0.25rem; text-align: center; }
+.rk-avg__ring { width: 9rem; height: 9rem; transform: rotate(-90deg); }
+.rk-avg__track { fill: none; stroke: color-mix(in oklab, var(--viz-3) 14%, var(--color-surface-1)); stroke-width: 12; }
+.rk-avg__arc { fill: none; stroke: url(#rk-ring); stroke-width: 12; stroke-linecap: round; }
+.rk-avg__dial { position: relative; width: 9rem; height: 9rem; }
+.rk-avg__center { position: absolute; inset: 0; display: grid; place-content: center; }
+.rk-avg__value {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+  font-size: var(--fs-title-1);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+}
+.rk-avg__label { font-size: var(--fs-text-sm); font-weight: var(--fw-semibold); color: var(--color-fg-muted); }
+.rk-avg__hint { font-size: var(--fs-text-xs); color: var(--color-fg-muted); }
+
+/* ── الأوائل ────────────────────────────────────────────────────────────── */
+.rk-podium {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 0.6rem;
+  padding-top: 1.25rem;
+}
+.rk-podium__slot { display: grid; justify-items: center; gap: 0.3rem; text-align: center; min-width: 0; }
+.rk-podium__slot[data-place='1'] { --medal: var(--rk-gold); --pillar: 8.5rem; }
+.rk-podium__slot[data-place='2'] { --medal: var(--rk-silver); --pillar: 6.25rem; }
+.rk-podium__slot[data-place='3'] { --medal: var(--rk-bronze); --pillar: 4.75rem; }
+.rk-podium__avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, color-mix(in oklab, var(--medal), #fff 35%), var(--medal));
+  color: var(--on-light-ink);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-text-base);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--medal) 30%, transparent), var(--shadow-sm);
+}
+.rk-podium__slot[data-place='1'] .rk-podium__avatar { width: 4.25rem; height: 4.25rem; }
+.rk-podium__crown {
+  position: absolute;
+  inset-block-start: -1.45rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--rk-gold);
+  fill: color-mix(in oklab, var(--rk-gold), #fff 30%);
+}
+.rk-podium__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-text-sm);
+  color: var(--color-fg);
+}
+.rk-podium__points { font-size: var(--fs-text-xs); color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+.rk-podium__pillar {
+  display: grid;
+  place-items: start center;
+  width: 100%;
+  height: var(--pillar);
+  padding-top: 0.6rem;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  background: linear-gradient(to bottom, var(--medal), color-mix(in oklab, var(--medal) 55%, transparent));
+  transform-origin: bottom;
+}
+.rk-podium__rank {
+  font-family: var(--font-mono);
+  font-size: var(--fs-title-1);
+  font-weight: var(--fw-bold);
+  color: rgb(255 255 255 / 0.95);
+  text-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+}
+.rk-podium__slot[data-me] .rk-podium__avatar { outline: 3px solid var(--viz-3); outline-offset: 3px; }
+.rk-podium__slot[data-me] .rk-podium__name { color: var(--viz-3); }
+.rk-empty { padding: 1.5rem 0.5rem; text-align: center; color: var(--color-fg-muted); line-height: 1.8; }
+
+/* ── اللي حواليك ────────────────────────────────────────────────────────── */
+.rk-ladder { display: grid; gap: 0.5rem; }
+.rk-ladder__row {
+  display: grid;
+  grid-template-columns: 3.25rem minmax(0, 5.5rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--r-md);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-line);
+}
+.rk-ladder__rank {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+}
+.rk-ladder__who { font-size: var(--fs-text-sm); color: var(--color-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rk-ladder__bar { position: relative; height: 0.5rem; border-radius: var(--r-full); background: color-mix(in oklab, var(--viz-5) 12%, transparent); overflow: hidden; }
+.rk-ladder__bar > span {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: var(--rk-fill);
+  border-radius: inherit;
+  background: var(--viz-5);
+}
+.rk-ladder__points { font-family: var(--font-mono); font-weight: var(--fw-semibold); color: var(--color-fg); font-variant-numeric: tabular-nums; }
+.rk-ladder__row[data-me] {
+  background: linear-gradient(135deg, var(--viz-3), var(--viz-5));
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 8px 22px color-mix(in oklab, var(--viz-3) 35%, transparent);
+}
+.rk-ladder__row[data-me] .rk-ladder__rank,
+.rk-ladder__row[data-me] .rk-ladder__points { color: #fff; }
+.rk-ladder__row[data-me] .rk-ladder__who { color: rgb(255 255 255 / 0.95); font-weight: var(--fw-bold); }
+.rk-ladder__row[data-me] .rk-ladder__bar { background: rgb(255 255 255 / 0.25); }
+.rk-ladder__row[data-me] .rk-ladder__bar > span { background: var(--rk-gold-hi); }
+.rk-ladder__next {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--rk-gold) 16%, transparent);
+  color: var(--color-fg);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+.rk-ladder__next svg { color: var(--rk-gold-lo); flex: none; }
+
+/* ── الطريق لفوق ────────────────────────────────────────────────────────── */
+.rk-climb__head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 0.75rem; }
+.rk-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  border-radius: var(--r-full);
+  background: var(--accent-cta);
+  color: var(--on-accent-ink);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-text-sm);
+  transition: background-color var(--d-hover) var(--ease-out), transform var(--d-hover) var(--ease-out);
+}
+.rk-cta:hover { background: var(--accent-cta-hover); transform: translateY(-1px); }
+
+.rk-climb { display: grid; gap: 0.85rem; margin-top: 1rem; }
+@media (min-width: 768px) { .rk-climb { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.rk-tip[data-kind='homework'] { --tip: var(--viz-6); }
+.rk-tip[data-kind='quiz'] { --tip: var(--viz-5); }
+.rk-tip[data-kind='exam'] { --tip: var(--viz-4); }
+.rk-tip {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 0.45rem;
+  padding: 1.1rem;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklab, var(--tip) 35%, var(--color-line));
+  background:
+    radial-gradient(120% 120% at 100% 0%, color-mix(in oklab, var(--tip) 16%, transparent) 0%, transparent 65%),
+    var(--color-surface-2);
+  transition: transform var(--d-hover) var(--ease-out), box-shadow var(--d-hover) var(--ease-out);
+}
+.rk-tip:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.rk-tip__icon {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: var(--r-md);
+  background: var(--tip);
+  color: #fff;
+  box-shadow: 0 6px 16px color-mix(in oklab, var(--tip) 40%, transparent);
+}
+.rk-tip__badge {
+  position: absolute;
+  inset-block-start: 1.1rem;
+  inset-inline-end: 1.1rem;
+  direction: rtl;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--tip) 16%, transparent);
+  color: var(--color-fg);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-bold);
+}
+.rk-tip__title { margin-top: 0.3rem; font-size: var(--fs-text-lg); font-weight: var(--fw-bold); color: var(--color-fg); }
+.rk-tip__body { font-size: var(--fs-text-sm); line-height: 1.8; color: var(--color-fg-muted); }
+.rk-tip__alert {
+  margin-top: 0.2rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--tip) 14%, transparent);
+  color: var(--color-fg);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+.rk-pending {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--info) 12%, transparent);
+  color: var(--color-fg);
+  font-size: var(--fs-text-sm);
+}
+.rk-pending svg { color: var(--info); flex: none; }
+
+/* ── طريق المستويات ─────────────────────────────────────────────────────── */
+.rk-path {
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(6.5rem, 1fr);
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.25rem 0.1rem 0.75rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+.rk-path__step {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  padding: 0.9rem 0.5rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  text-align: center;
+  scroll-snap-align: center;
+}
+.rk-path__gem { position: relative; display: grid; place-items: center; }
+.rk-path__lock {
+  position: absolute;
+  inset-block-end: -0.2rem;
+  inset-inline-end: -0.4rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0.15rem;
+  border-radius: 50%;
+  background: var(--color-surface-1);
+  color: var(--color-fg-muted);
+  border: 1px solid var(--color-line);
+}
+.rk-path__name { font-weight: var(--fw-bold); color: var(--color-fg); }
+.rk-path__min { font-size: var(--fs-text-xs); color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+.rk-path__state { font-size: var(--fs-text-xs); font-weight: var(--fw-semibold); color: var(--color-fg-muted); }
+.rk-path__step[data-state='done'] { border-color: color-mix(in oklab, var(--lvl) 45%, var(--color-line)); }
+.rk-path__step[data-state='done'] .rk-path__state { color: var(--ok); }
+.rk-path__step[data-state='now'] {
+  border-color: var(--lvl);
+  background:
+    radial-gradient(100% 100% at 50% 0%, color-mix(in oklab, var(--lvl) 26%, transparent) 0%, transparent 70%),
+    var(--color-surface-2);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--lvl) 25%, transparent), var(--shadow-md);
+}
+.rk-path__step[data-state='now'] .rk-path__state { color: var(--color-fg); }
+.rk-path__step[data-state='locked'] .rk-gem { filter: grayscale(1); opacity: 0.4; }
+
+/* ── الجوهرة ────────────────────────────────────────────────────────────── */
+.rk-gem { overflow: visible; }
+.rk-gem__body { fill: var(--lvl); }
+.rk-gem__facet { fill: color-mix(in oklab, var(--lvl), #000 18%); }
+.rk-gem__top { fill: color-mix(in oklab, var(--lvl), #fff 35%); }
+
+.rk-live {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 2rem;
+  font-size: var(--fs-text-xs);
+  color: var(--color-fg-muted);
+  text-align: center;
+}
+
+/* ── الكونفيتي — للتلاتة الأوائل بس ─────────────────────────────────────── */
+.rk-confetti { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.rk-confetti i {
+  position: absolute;
+  inset-block-start: -1rem;
+  inset-inline-start: calc(var(--i) * 7% + 2%);
+  width: 0.5rem;
+  height: 0.8rem;
+  border-radius: 2px;
+  opacity: 0;
+  background: var(--rk-gold-hi);
+}
+.rk-confetti i:nth-child(3n) { background: var(--viz-4); }
+.rk-confetti i:nth-child(3n + 1) { background: #fff; width: 0.4rem; height: 0.4rem; border-radius: 50%; }
+.rk-confetti i:nth-child(4n) { background: var(--viz-2); }
+
+/* ── الحركة ─────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  .rk-hero { animation: rk-rise 600ms var(--ease-out) both; }
+  .rk-shape--ring { animation: rk-float 9s ease-in-out infinite; }
+  .rk-shape--blob { animation: rk-morph 12s ease-in-out infinite; }
+  .rk-shape--dot { animation: rk-float 5s ease-in-out infinite reverse; }
+  .rk-shape--tri { animation: rk-spin 14s linear infinite; }
+  .rk-shape--plus { animation: rk-spin 8s linear infinite reverse; }
+
+  .rk-art__cup { transform-box: fill-box; transform-origin: 50% 100%; animation: rk-bob 3.6s ease-in-out infinite; }
+  .rk-art__shine { animation: rk-shine 3.2s ease-in-out 800ms infinite; }
+  .rk-art__halo { transform-box: fill-box; transform-origin: center; animation: rk-pulse 3.6s ease-in-out infinite; }
+  .rk-art__spark { animation: rk-twinkle 2.4s ease-in-out infinite; }
+  .rk-art__spark--2 { animation-delay: 400ms; }
+  .rk-art__spark--3 { animation-delay: 900ms; }
+  .rk-art__spark--4 { animation-delay: 1300ms; }
+  .rk-art__spark--5 { animation-delay: 1700ms; }
+  .rk-hero__crown { animation: rk-bob 2.4s ease-in-out infinite; }
+
+  .rk-confetti i { animation: rk-fall 2.8s var(--ease-out) calc(var(--i) * 110ms + 300ms) 2 both; }
+
+  .rk-level__fill { animation: rk-fill 1.2s var(--ease-out) 300ms both; }
+  .rk-level__fill::after { animation: rk-sweep 2.8s ease-in-out 1.6s infinite; }
+  .rk-avg__arc { animation: rk-ring 1.4s var(--ease-out) 300ms both; }
+
+  .rk-podium__pillar { animation: rk-grow 900ms var(--ease-pop) calc(var(--d) * 140ms + 200ms) both; }
+  .rk-podium__avatar { animation: rk-pop 500ms var(--ease-pop) calc(var(--d) * 140ms + 700ms) both; }
+  .rk-ladder__row { animation: rk-slide 480ms var(--ease-out) calc(var(--d) * 70ms + 200ms) both; }
+  .rk-ladder__bar > span { animation: rk-fill 900ms var(--ease-out) calc(var(--d) * 70ms + 400ms) both; }
+  .rk-path__step[data-state='now'] .rk-gem { animation: rk-bob 2.8s ease-in-out infinite; }
+}
+
+@keyframes rk-rise { from { opacity: 0; transform: translateY(12px); } }
+@keyframes rk-float { 50% { transform: translateY(-12px); } }
+@keyframes rk-morph {
+  50% { border-radius: 58% 42% 40% 60% / 55% 60% 40% 45%; transform: translate(-10px, -8px) rotate(12deg); }
+}
+@keyframes rk-spin { to { transform: rotate(360deg); } }
+@keyframes rk-bob { 50% { transform: translateY(-6px); } }
+@keyframes rk-shine { 0%, 60% { transform: translateX(-60px); } 100% { transform: translateX(170px); } }
+@keyframes rk-pulse { 50% { transform: scale(1.06); opacity: 0.7; } }
+@keyframes rk-twinkle { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.25; transform: scale(0.6); } }
+@keyframes rk-fall {
+  0% { opacity: 1; transform: translateY(0) rotate(0); }
+  100% { opacity: 0; transform: translateY(22rem) rotate(540deg); }
+}
+@keyframes rk-fill { from { width: 0; } }
+@keyframes rk-sweep { 0% { transform: translateX(120%); } 60%, 100% { transform: translateX(-120%); } }
+@keyframes rk-ring { from { stroke-dashoffset: var(--rk-ring-len); } }
+@keyframes rk-grow { from { transform: scaleY(0); } }
+@keyframes rk-pop { from { opacity: 0; transform: scale(0.4); } }
+@keyframes rk-slide { from { opacity: 0; transform: translateX(-14px); } }

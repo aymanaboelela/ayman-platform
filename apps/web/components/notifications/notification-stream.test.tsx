@@ -8,6 +8,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('@/lib/push-subscribe', () => ({ ensurePushSubscribed: () => Promise.resolve() }));
 
 import { NotificationStreamProvider } from './notification-stream';
+import { isStreamConnected, onStreamOpen, subscribeQueue } from './live-bus';
 
 /** A stand-in `EventSource` the test drives by hand. */
 class FakeEventSource {
@@ -99,6 +100,76 @@ describe('NotificationStreamProvider', () => {
     first.onerror?.();
     expect(FakeEventSource.instances).toHaveLength(1);
     vi.advanceTimersByTime(5_000);
+    expect(FakeEventSource.instances).toHaveLength(2);
+  });
+
+  it('hands a queue frame to the bus — no toast, the review screen redraws instead', async () => {
+    setVisibility('visible');
+    const heard: number[] = [];
+    const off = subscribeQueue('payments', (waiting) => heard.push(waiting));
+    render(<NotificationStreamProvider>{null}</NotificationStreamProvider>);
+    const source = FakeEventSource.instances[0]!;
+
+    await act(async () => {
+      source.onmessage?.({
+        data: JSON.stringify({ type: 'queue', queue: 'payments', waiting: 4 }),
+      } as MessageEvent<string>);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    off();
+    expect(heard).toEqual([4]);
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('tells the live screens when it (re)connects and when it drops', () => {
+    let opens = 0;
+    const off = onStreamOpen(() => {
+      opens += 1;
+    });
+    const view = render(<NotificationStreamProvider>{null}</NotificationStreamProvider>);
+    const source = FakeEventSource.instances[0]!;
+
+    source.readyState = FakeEventSource.OPEN;
+    act(() => source.onopen?.());
+    expect(isStreamConnected()).toBe(true);
+    expect(opens).toBe(1);
+
+    // The browser reconnecting on its own is still "down" until it is back.
+    source.readyState = FakeEventSource.CONNECTING;
+    act(() => source.onerror?.());
+    expect(isStreamConnected()).toBe(false);
+
+    source.readyState = FakeEventSource.OPEN;
+    act(() => source.onopen?.());
+    expect(opens).toBe(2);
+
+    view.unmount();
+    off();
+    expect(isStreamConnected()).toBe(false);
+  });
+
+  it('reopens a stream that went silent — no heartbeat for over a minute is a dead socket, not a quiet one', () => {
+    vi.useFakeTimers();
+    render(<NotificationStreamProvider>{null}</NotificationStreamProvider>);
+    const first = FakeEventSource.instances[0]!;
+    first.readyState = FakeEventSource.OPEN;
+    act(() => first.onopen?.());
+
+    // Heartbeats keep it alive.
+    for (let i = 0; i < 4; i += 1) {
+      act(() => {
+        vi.advanceTimersByTime(25_000);
+        first.onmessage?.({ data: JSON.stringify({ type: 'ping' }) } as MessageEvent<string>);
+      });
+    }
+    expect(FakeEventSource.instances).toHaveLength(1);
+
+    // Then nothing at all.
+    act(() => {
+      vi.advanceTimersByTime(120_000);
+    });
+    expect(first.readyState).toBe(FakeEventSource.CLOSED);
     expect(FakeEventSource.instances).toHaveLength(2);
   });
 
