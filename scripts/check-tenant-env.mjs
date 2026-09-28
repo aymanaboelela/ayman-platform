@@ -438,6 +438,9 @@ export function checkTenantEnv(env, options = {}) {
     { name: 'Google sign-in', keys: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'] },
     { name: 'web push', keys: ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'] },
     { name: 'WhatsApp', keys: ['WA_SERVICE_URL', 'WA_TOKEN'] },
+    // Not enforced at boot — the API cannot see the web's key — and the worse
+    // half is silent: a secret with no site key makes every sign-up fail.
+    { name: 'Turnstile (the bot check on sign-up)', keys: ['TURNSTILE_SITE_KEY', 'TURNSTILE_SECRET_KEY'] },
   ];
   for (const { name, keys } of GROUPS) {
     const set = keys.filter((key) => get(env, key) !== '');

@@ -32,6 +32,7 @@ import {
 } from './login-security.hook';
 import { LoginSecurityService } from './login-security.service';
 import { loginThrottle } from './login-throttle.instance';
+import { createTurnstileCheck } from './human-check';
 import { OTP_PATHS_WITHOUT_DELIVERY } from './phone-identity';
 
 const env = loadEnv(process.env);
@@ -534,6 +535,7 @@ export const auth = betterAuth({
       bannedAccountLookup,
       registeredPhoneLookup,
       deviceLimitGate,
+      env.TURNSTILE_SECRET_KEY ? createTurnstileCheck(env.TURNSTILE_SECRET_KEY) : null,
     ),
   },
 

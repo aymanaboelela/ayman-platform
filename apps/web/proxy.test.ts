@@ -671,7 +671,7 @@ describe('CSP builders', () => {
       // would silently restore the dead-player bug for the students who need
       // the fallback in the first place.
       expect(directive(policy, 'frame-src')).toBe(
-        "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://drive.google.com https://docs.google.com",
+        "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://drive.google.com https://docs.google.com https://challenges.cloudflare.com",
       );
       // `toContain`, not `toBe`: the media origin is appended from an env var
       // and is asserted on its own above. Pinning the whole string here would

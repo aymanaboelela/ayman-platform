@@ -14,6 +14,9 @@ export default async function RegisterPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const next = safeNext((await searchParams).next);
+  // Read per request, not baked at build: this page is already dynamic (it
+  // awaits `searchParams`), and the key is per stack — see `lib/turnstile.ts`.
+  const turnstileSiteKey = process.env.TURNSTILE_SITE_KEY?.trim() || null;
 
   return (
     <>
@@ -22,7 +25,7 @@ export default async function RegisterPage({
         <p className="auth-head__sub">{copy.auth.register.subtitle}</p>
       </header>
 
-      <RegisterForm next={next} />
+      <RegisterForm next={next} turnstileSiteKey={turnstileSiteKey} />
 
       <p className="auth-switch">
         {copy.auth.switch.haveAccount}{' '}

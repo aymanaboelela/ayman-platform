@@ -53,6 +53,9 @@ export const BANNED_ACCOUNT_CODE = 'ACCOUNT_BANNED';
  */
 export const PHONE_TAKEN_CODE = 'PHONE_ALREADY_REGISTERED';
 
+/** The «مش روبوت» check refused the sign-up — see `lib/turnstile.ts`. */
+export const HUMAN_CHECK_FAILED_CODE = 'HUMAN_CHECK_FAILED';
+
 /**
  * «الدخول مقفول ١٠ دقايق» — the one refusal the login UI may name WITHOUT a
  * verified password, and the only one.
@@ -128,7 +131,7 @@ export class AuthRequestError extends Error {
   }
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
+async function post<T>(path: string, body: unknown, headers: Record<string, string> = {}): Promise<T> {
   const response = await fetch(path, {
     method: 'POST',
     // Same-origin fetch already sends cookies by default in every current
@@ -136,7 +139,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     // implicitly — the whole point of this file is that auth depends on
     // that cookie.
     credentials: 'same-origin',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify(body),
   });
 
@@ -184,8 +187,11 @@ export function signUpWithPhone(input: {
   email?: string;
   password: string;
   phoneNumber: string;
-}): Promise<{ token: string; user: AuthUser }> {
-  return post('/api/auth/sign-up/email', input);
+}, captchaToken?: string | null): Promise<{ token: string; user: AuthUser }> {
+  // The Turnstile token rides in a header, not the body: `/sign-up/email`
+  // parses its body into the user row, and a stray field is not something to
+  // hand it. See `apps/api/src/auth/human-check.ts`.
+  return post('/api/auth/sign-up/email', input, captchaToken ? { 'x-captcha-response': captchaToken } : {});
 }
 
 export function signInWithEmail(input: {
