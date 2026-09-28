@@ -888,6 +888,327 @@ div.unit[data-open] > .unit__head:hover {
 }
 
 /* ---------------------------------------------------------------------------
+   «الفلوس يوم بيوم» — `/admin/analytics/money`, and the payments timeline on a
+   student's page.
+
+   Every object here carries ONE hue, handed in as `--tile-hue` / `--chip-hue`
+   from the chart palette — the same slot the matching series wears in the
+   charts, so «تجديد» is the same blue on the tile, the column, the chip and the
+   student's timeline. A wash toward `transparent` can mix in any space; a wash
+   toward a NEUTRAL mixes in `oklab` — the dark neutrals are navy, and `oklch`
+   would swing a green over them toward violet (`neutral-mix-space.test.ts`).
+   --------------------------------------------------------------------------- */
+.money-tile,
+.money-course,
+.money-stat {
+  --tile-hue: var(--viz-1);
+}
+
+/* The small figure on a student's page — a label over a value, always
+   stacked: it lives in a column a third of the screen wide. Its own class and
+   not `.money-tile` with utilities on top, because this file is unlayered and
+   wins over every Tailwind utility — `flex-col` on a `.money-tile` was
+   silently overruled by the tile's own row layout. */
+.money-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-inline-size: 0;
+  padding: var(--s-12);
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid color-mix(in oklch, var(--tile-hue), transparent 62%);
+  background: color-mix(in oklab, var(--tile-hue), var(--n-2) 92%);
+}
+
+.money-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-8) var(--s-12);
+  padding: var(--s-16);
+  border-color: color-mix(in oklch, var(--tile-hue), transparent 62%);
+  background: color-mix(in oklab, var(--tile-hue), var(--n-2) 92%);
+}
+
+.money-tile--loud {
+  border-color: color-mix(in oklch, var(--tile-hue), transparent 40%);
+  background: color-mix(in oklab, var(--tile-hue), var(--n-2) 84%);
+}
+
+.money-tile__well {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--r-lg);
+  background: color-mix(in oklch, var(--tile-hue), transparent 78%);
+  color: color-mix(in oklab, var(--tile-hue), var(--n-12) 25%);
+}
+
+.money-tile__value {
+  margin-block-start: var(--s-4);
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-semibold);
+  line-height: 1.1;
+  color: var(--n-12);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.money-course {
+  padding: var(--s-16);
+  border-block-start: 3px solid var(--tile-hue);
+  background: color-mix(in oklab, var(--tile-hue), var(--n-2) 95%);
+}
+
+.money-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: 2px var(--s-8);
+  border-radius: var(--r-full);
+  /* The hue is INHERITED when the chip does not set its own — a kind chip
+     inside a `.pay-row` wears the row's colour. A default declared on the
+     chip itself would shadow that, which is exactly what it first did. */
+  border: var(--hairline) solid color-mix(in oklch, var(--chip-hue, var(--viz-1)), transparent 55%);
+  background: color-mix(in oklch, var(--chip-hue, var(--viz-1)), transparent 85%);
+  color: var(--n-12);
+  font-size: var(--fs-text-xs);
+  white-space: nowrap;
+}
+
+.money-item {
+  padding: 2px var(--s-8);
+  border-radius: var(--r-full);
+  background: var(--n-3);
+  color: var(--n-11);
+  font-size: var(--fs-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Two tiles to a row on a phone, so the well sits above the figure there and
+   beside it from a tablet up. */
+@media (min-width: 640px) {
+  .money-tile {
+    flex-direction: row;
+  }
+
+  .money-tile__value {
+    font-size: var(--fs-title-2);
+  }
+}
+
+/* ── يوم بيوم ────────────────────────────────────────────────────────────────
+   A list, not a <table>: on a phone each day has to fold onto two lines with
+   its own labels, and a table cannot do that without becoming a second
+   component. On a wide screen the same rows snap to one grid under a head row,
+   which is the table he reads. */
+.money-days .money-days__head {
+  display: none;
+}
+
+.money-day {
+  border-block-start: var(--hairline) solid var(--border-subtle);
+}
+
+.money-day:first-child {
+  border-block-start: 0;
+}
+
+.money-day__grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8) var(--s-16);
+  padding: var(--s-12) var(--s-16);
+}
+
+.money-day summary {
+  list-style: none;
+  cursor: pointer;
+  transition: background-color var(--d-hover) var(--ease);
+}
+
+.money-day summary::-webkit-details-marker {
+  display: none;
+}
+
+.money-day summary:hover {
+  background: var(--n-3);
+}
+
+.money-day summary:focus-visible {
+  outline: var(--focus-ring-width) solid var(--a-9);
+  outline-offset: calc(var(--focus-ring-width) * -1);
+}
+
+.money-day__date {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  flex-basis: 100%;
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+/* The disclosure mark — `ChevronLeft`, which points the way the page reads
+   (forward, in RTL), turned to point down once the day is open. */
+.money-day__chev {
+  flex-shrink: 0;
+  inline-size: 1rem;
+  block-size: 1rem;
+  color: var(--n-10);
+  transition: transform var(--d-hover) var(--ease);
+}
+
+.money-day details[open] > summary .money-day__chev {
+  transform: rotate(-90deg);
+}
+
+.money-day__subs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-4) var(--s-8);
+  flex-basis: 100%;
+  font-size: var(--fs-text-sm);
+}
+
+.money-day__figure {
+  display: flex;
+  flex-direction: column;
+  /* Two to a line on a phone — a 2×2 of money, net last. */
+  flex: 1 1 40%;
+  min-inline-size: 5.5rem;
+  font-size: var(--fs-text-sm);
+}
+
+.money-day__label {
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+.money-day__blank {
+  display: none;
+}
+
+.money-day__quiet {
+  font-size: var(--fs-text-sm);
+  color: var(--n-10);
+}
+
+.money-day--quiet .money-day__date {
+  flex-basis: auto;
+  font-weight: var(--fw-regular);
+  color: var(--n-11);
+}
+
+.money-day__courses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+  padding: var(--s-4) var(--s-16) var(--s-16);
+  background: var(--n-3);
+}
+
+.money-day__course {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-4) var(--s-12);
+  padding-block: var(--s-4);
+  font-size: var(--fs-text-sm);
+}
+
+@media (min-width: 768px) {
+  .money-days .money-days__head,
+  .money-day__grid {
+    display: grid;
+    grid-template-columns:
+      minmax(12rem, 1.5fr) minmax(11rem, 1.5fr)
+      repeat(4, minmax(6rem, 1fr));
+    column-gap: var(--s-16);
+  }
+
+  .money-days__head {
+    padding: var(--s-8) var(--s-16);
+    background: var(--n-3);
+    font-size: var(--fs-text-xs);
+    color: var(--n-11);
+  }
+
+  .money-day__date,
+  .money-day__subs {
+    flex-basis: auto;
+  }
+
+  .money-day__label {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .money-day__blank {
+    display: block;
+  }
+
+  .money-day__quiet {
+    grid-column: 2 / -1;
+  }
+
+  .money-day__courses {
+    padding-inline-start: calc(var(--s-16) + 1.2rem);
+  }
+}
+
+/* ── One student's payments ─────────────────────────────────────────────────
+   A timeline: a rail down the start edge, one node per payment in the hue of
+   its kind — new, renewal or comped — so a run of renewals reads as one colour
+   before a single word is. */
+.pay-timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-12);
+  padding-inline-start: var(--s-20);
+}
+
+.pay-timeline::before {
+  content: '';
+  position: absolute;
+  inset-block: var(--s-8);
+  inset-inline-start: 0.4rem;
+  inline-size: 2px;
+  border-radius: var(--r-full);
+  background: var(--border);
+}
+
+.pay-row {
+  --chip-hue: var(--viz-6);
+  position: relative;
+  padding: var(--s-12) var(--s-16);
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid color-mix(in oklch, var(--chip-hue), transparent 60%);
+  background: color-mix(in oklab, var(--chip-hue), var(--n-2) 93%);
+}
+
+.pay-row::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 1.05rem;
+  inset-inline-start: calc(-1 * var(--s-20) + 0.1rem);
+  inline-size: 0.65rem;
+  block-size: 0.65rem;
+  border-radius: var(--r-full);
+  background: var(--chip-hue);
+  box-shadow: 0 0 0 3px var(--n-2);
+}
+
+/* ---------------------------------------------------------------------------
    .live-* — a list that redraws itself (`components/admin/use-live-queue.ts`).
 
    «طلب الدفع يظهر لوحده من غير ريفرش» — `/admin/payments` and

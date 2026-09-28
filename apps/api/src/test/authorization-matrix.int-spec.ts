@@ -80,6 +80,7 @@ import { AdminFinanceController } from '../modules/payments/admin-finance.contro
 import { PaymentsService } from '../modules/payments/payments.service';
 import { TransfersService } from '../modules/payments/transfers.service';
 import { FinanceService } from '../modules/payments/finance.service';
+import { FinanceDailyService } from '../modules/payments/finance-daily.service';
 import { BookOrdersController } from '../modules/book-orders/book-orders.controller';
 import { AdminBookOrdersController } from '../modules/book-orders/admin-book-orders.controller';
 import { BookOrdersService } from '../modules/book-orders/book-orders.service';
@@ -372,6 +373,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         PaymentsService,
         TransfersService,
         FinanceService,
+        // «الفلوس يوم بيوم» — `AdminFinanceController`'s second dependency.
+        FinanceDailyService,
         BookOrdersService,
         BooksService,
         // `AdminBroadcastController`'s dependency. Listed for the reason the
@@ -1921,6 +1924,19 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin finance list: anonymous', method: 'get', path: () => '/api/admin/finance', actor: 'anonymous', status: 401 },
     { label: 'admin finance list: student', method: 'get', path: () => '/api/admin/finance', actor: 'student', status: 403 },
     { label: 'admin finance list: admin', method: 'get', path: () => '/api/admin/finance', actor: 'admin', status: 200 },
+    // «الفلوس يوم بيوم». Money per day and per course — `payment:read`, same
+    // as the list above, and the 403 is the row that matters.
+    { label: 'admin finance daily: anonymous', method: 'get', path: () => '/api/admin/finance/daily', actor: 'anonymous', status: 401 },
+    { label: 'admin finance daily: student', method: 'get', path: () => '/api/admin/finance/daily', actor: 'student', status: 403 },
+    { label: 'admin finance daily: admin', method: 'get', path: () => '/api/admin/finance/daily?days=7', actor: 'admin', status: 200 },
+    // A window off the closed list is a 400, not a scan of the whole table.
+    { label: 'admin finance daily: admin, unknown window', method: 'get', path: () => '/api/admin/finance/daily?days=365', actor: 'admin', status: 400 },
+    // One student's payments. A student reading their OWN id here would still
+    // be reading the admin's view of their money; the 403 does not depend on
+    // whose id it is.
+    { label: 'admin finance student payments: anonymous', method: 'get', path: () => `/api/admin/finance/students/${studentId}`, actor: 'anonymous', status: 401 },
+    { label: 'admin finance student payments: student', method: 'get', path: () => `/api/admin/finance/students/${studentId}`, actor: 'student', status: 403 },
+    { label: 'admin finance student payments: admin', method: 'get', path: () => `/api/admin/finance/students/${studentId}`, actor: 'admin', status: 200 },
     /*
      * The EXACT request `apps/web/app/(admin)/admin/finance/page.tsx` sends
      * on every load — `perPage=200` is not one of `PAGE_SIZES`

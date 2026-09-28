@@ -11,6 +11,7 @@ import { TransfersIngestController } from './transfers-ingest.controller';
 import { transfersIngestBodyParser } from './transfers-ingest.body';
 import { PaymentsService } from './payments.service';
 import { FinanceService } from './finance.service';
+import { FinanceDailyService } from './finance-daily.service';
 import { SubscriptionExpirySweeper } from './subscription-expiry-sweeper.service';
 import { TransfersService } from './transfers.service';
 
@@ -27,6 +28,7 @@ import { TransfersService } from './transfers.service';
   providers: [
     PaymentsService,
     FinanceService,
+    FinanceDailyService,
     SubscriptionExpirySweeper,
     TransfersService,
   ],

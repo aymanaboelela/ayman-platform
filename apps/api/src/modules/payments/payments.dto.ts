@@ -12,11 +12,13 @@ import {
   AdminFinanceEditDatesSchema,
   AdminFinanceQuerySchema,
 } from '@ayman/contracts/admin/finance';
+import { FinanceDailyQuerySchema } from '@ayman/contracts/admin/finance-daily';
 
 export class SubmitPaymentDto extends createZodDto(SubmitPaymentSchema) {}
 export class RejectPaymentDto extends createZodDto(RejectPaymentSchema) {}
 export class AdminPaymentQueryDto extends createZodDto(AdminPaymentQuerySchema) {}
 export class AdminFinanceQueryDto extends createZodDto(AdminFinanceQuerySchema) {}
+export class AdminFinanceDailyQueryDto extends createZodDto(FinanceDailyQuerySchema) {}
 export class AdminManualSubscribeDto extends createZodDto(AdminManualSubscribeSchema) {}
 export class AdminFinanceEditAmountDto extends createZodDto(AdminFinanceEditAmountSchema) {}
 export class AdminFinanceEditDatesDto extends createZodDto(AdminFinanceEditDatesSchema) {}
