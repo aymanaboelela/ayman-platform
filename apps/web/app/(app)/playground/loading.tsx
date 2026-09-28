@@ -1,9 +1,11 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /** Mirrors the two-panel split so the layout does not jump when it hydrates. */
 export default function Loading() {
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
+      <RouteLoadingWatchdog />
       <div className="mb-6 space-y-3">
         <Skeleton width="narrow" className="h-3" />
         <Skeleton width="wide" className="h-8" />

@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * The bio page's shape: a circle, three centred lines, then three groups of
@@ -24,6 +25,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <div aria-hidden="true" className="linkhub__page linkhub__page--loading">
+      <RouteLoadingWatchdog />
       <div className="linkhub__head">
         <Skeleton className="h-28 w-28 rounded-full" />
         <Skeleton width="narrow" className="mt-3 h-7" />

@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * A Server Component, so this skeleton ships inside the SSR'd HTML. Also
@@ -38,6 +39,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <main className="welcome-page">
+      <RouteLoadingWatchdog />
       <div className="welcome-scene">
         {/* The band is a real, opaque surface, so it is drawn rather than
             skeletoned — a grey rectangle here would flash a different COLOUR

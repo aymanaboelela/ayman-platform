@@ -1,9 +1,11 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /** Mirrors the page: back link, header, progress panel, then two outline cards. */
 export default function Loading() {
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
+      <RouteLoadingWatchdog />
       <Skeleton width="narrow" className="mb-6 h-4" />
 
       <div className="mb-8 space-y-3">

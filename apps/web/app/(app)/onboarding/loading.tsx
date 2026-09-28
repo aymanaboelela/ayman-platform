@@ -1,5 +1,6 @@
 import { Card, CardBody, CardHeader } from '@ayman/ui/components/card';
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * A Server Component, so this skeleton ships inside the SSR'd HTML. Also
@@ -11,6 +12,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
+      <RouteLoadingWatchdog />
       <div className="mb-8 space-y-3">
         <Skeleton width="wide" className="h-8" />
         <Skeleton width="narrow" className="h-4" />

@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * The shop skeleton. A Server Component, so it ships inside the SSR'd HTML
@@ -18,6 +19,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <div aria-hidden="true" className="books-page">
+      <RouteLoadingWatchdog />
       <section className="books-hero">
         <div className="site-shell">
           <Skeleton width="narrow" className="mb-4 h-6" />

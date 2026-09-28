@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * `/privacy` genuinely suspends — it reads `getPublicSettingsOrDefaults()` for
@@ -16,6 +17,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <div aria-hidden="true">
+      <RouteLoadingWatchdog />
       <header className="page-head">
         <div className="site-shell">
           <Skeleton width="narrow" className="mx-auto mb-4 h-9" />

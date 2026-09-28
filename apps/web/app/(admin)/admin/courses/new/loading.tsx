@@ -1,9 +1,11 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /** Required by `cacheComponents` — see `../loading.tsx` for the full rationale. */
 export default function Loading() {
   return (
     <>
+      <RouteLoadingWatchdog />
       <Skeleton width="narrow" className="mb-6 h-8" />
       <div className="max-w-[var(--w-prose)] space-y-5">
         {Array.from({ length: 6 }, (_, i) => (

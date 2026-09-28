@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * A Server Component, so this ships inside the SSR'd HTML. Bar widths vary
@@ -11,6 +12,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <div aria-hidden="true">
+      <RouteLoadingWatchdog />
       <header className="page-head site-shell">
         <Skeleton width="narrow" className="mx-auto mb-3 h-9" />
         <Skeleton width="wide" className="mx-auto h-4" />

@@ -1,10 +1,12 @@
 import { Card, CardBody } from '@ayman/ui/components/card';
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /** Required by `cacheComponents` — see `../loading.tsx` for the full rationale. */
 export default function Loading() {
   return (
     <div className="space-y-10">
+      <RouteLoadingWatchdog />
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
           <Skeleton width="wide" className="h-7" />

@@ -94,6 +94,24 @@ describe('loading.tsx coverage', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('puts a ceiling on every skeleton', () => {
+    // A `loading.tsx` is a Suspense fallback, and a fallback waits forever for
+    // whatever it is waiting on. «بتقعد تحمّل على طول، ولما أعمل refresh بتفتح»
+    // was the dashboard's skeleton outliving a chunk that was never going to
+    // arrive — see `components/route-loading-watchdog.tsx`. The guard only
+    // works where it is mounted, so it is mounted in all of them, admin and
+    // `dev/` included: a skeleton nobody can escape is the same bug on every
+    // surface.
+    const offenders = withLoading
+      .map((d) => join(d, readdirSync(d).find((f) => /^loading\.tsx?$/.test(f))!))
+      .filter((f) => !/<RouteLoadingWatchdog\s*\/>/.test(readFileSync(f, 'utf8')))
+      .map((f) => relative(APP_DIR, f));
+    expect(
+      offenders,
+      `these loading.tsx files never render <RouteLoadingWatchdog />: ${offenders.join(', ')}`,
+    ).toEqual([]);
+  });
+
   it('never reaches a skeleton through the @ayman/ui root barrel', () => {
     // The root `loading.tsx` sits in EVERY route's segment tree, so whatever it
     // imports becomes a client reference on effectively every route manifest in

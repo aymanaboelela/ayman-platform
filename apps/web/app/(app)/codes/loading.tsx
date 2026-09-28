@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /** The settled page's regions in order — the hero band, the form card beside
  *  the steps column, then the history — so nothing jumps when the one authed
@@ -6,6 +7,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-6 md:px-6 md:py-10">
+      <RouteLoadingWatchdog />
       <div className="h-56 rounded-lg bg-surface-3 md:h-64" />
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_21rem]">
         <div className="space-y-4 rounded-lg border border-line bg-surface-2 p-6">

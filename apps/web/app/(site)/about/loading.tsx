@@ -1,9 +1,11 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /** Header, then the reused instructor section's two-column shape. */
 export default function Loading() {
   return (
     <div aria-hidden="true">
+      <RouteLoadingWatchdog />
       <div className="page-head site-shell">
         <Skeleton width="wide" className="h-10" />
         <Skeleton width="narrow" className="mt-3 h-5" />

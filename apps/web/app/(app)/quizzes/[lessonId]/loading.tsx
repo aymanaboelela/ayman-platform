@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * A Server Component, so the skeleton is in the SSR'd HTML — the 180ms
@@ -10,6 +11,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <main className="mx-auto max-w-[var(--w-prose)] px-6 py-10">
+      <RouteLoadingWatchdog />
       <div className="mb-6 flex items-center gap-3">
         <Skeleton width="narrow" className="h-6 rounded-full" />
         <Skeleton width="wide" className="h-7" />

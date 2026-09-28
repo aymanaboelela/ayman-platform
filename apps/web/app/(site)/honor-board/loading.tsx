@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * The archive skeleton. A Server Component, so it ships inside the SSR'd HTML
@@ -12,6 +13,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <div aria-hidden="true" className="honor-archive site-shell">
+      <RouteLoadingWatchdog />
       <header className="honor-archive__head">
         <Skeleton width="narrow" className="mb-4 h-3" />
         <Skeleton width="wide" className="mb-3 h-10" />

@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * أجهزتي — a list of session rows, each with a device label, a last-seen
@@ -10,6 +11,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <main className="mx-auto max-w-[var(--w-prose)] px-6 py-10">
+      <RouteLoadingWatchdog />
       <div className="mb-8 space-y-3">
         <Skeleton width="narrow" className="h-3" />
         <Skeleton width="wide" className="h-8" />

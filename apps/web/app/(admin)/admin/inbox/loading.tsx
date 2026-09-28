@@ -1,5 +1,6 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
 import { copy } from '@ayman/contracts';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * The inbox list's footprint while the read is in flight.
@@ -12,6 +13,7 @@ import { copy } from '@ayman/contracts';
 export default function Loading() {
   return (
     <>
+      <RouteLoadingWatchdog />
       <div className="h-4 w-16" />
       <h1 className="mt-1 text-[length:var(--fs-title-2)] font-semibold text-fg">
         {copy.assistant.inbox.title}
