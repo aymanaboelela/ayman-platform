@@ -7,6 +7,7 @@ import {
   markdownRenderPath,
   pathFromMarkdownSuffix,
 } from './lib/agents/markdown-routes';
+import { forwardClientIp } from './lib/client-ip';
 import { JS_RUNNER_CSP, JS_RUNNER_PATH } from './lib/js-runner';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
 import { stampPathname } from './lib/request-pathname';
@@ -464,7 +465,9 @@ async function resolveAuthState(request: NextRequest): Promise<AuthState> {
   const cookie = request.headers.get('cookie');
   try {
     const response = await fetch(`${API_ORIGIN}/api/profile/me`, {
-      headers: cookie ? { cookie } : {},
+      // The visitor's IP, or every student shares one throttle bucket — see
+      // `lib/client-ip.ts`.
+      headers: { ...(cookie ? { cookie } : {}), ...forwardClientIp(request.headers) },
       cache: 'no-store',
       signal: AbortSignal.timeout(3000),
     });

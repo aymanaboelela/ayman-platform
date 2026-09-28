@@ -32,6 +32,7 @@ import {
 } from './login-security.hook';
 import { LoginSecurityService } from './login-security.service';
 import { loginThrottle } from './login-throttle.instance';
+import { OTP_PATHS_WITHOUT_DELIVERY } from './phone-identity';
 
 const env = loadEnv(process.env);
 const isProduction = env.NODE_ENV === 'production';
@@ -170,6 +171,26 @@ export const auth = betterAuth({
   // named this as the intended use ("Better Auth reads this for
   // trusted-origin/cookie config") — this was the missing wiring.
   trustedOrigins: [env.APP_URL],
+
+  // The phone plugin's OTP routes store a real code even though `sendOTP`
+  // refuses to send one — see `OTP_PATHS_WITHOUT_DELIVERY` for how that became
+  // a password-less way into an account, and why the before-hook checks too.
+  disabledPaths: [...OTP_PATHS_WITHOUT_DELIVERY],
+
+  // Better Auth's defaults (on in production only, per-process memory store)
+  // with one rule changed. The stock sign-up rule is 3 per 10 s with nothing
+  // above it — ~26,000 accounts a day from one address. 20 an hour replaces it
+  // (a custom rule overrides the stock one, it does not stack), which still
+  // lets a centre register a room of students over its wifi one after another.
+  // Memory, not Redis, on purpose: Redis is the throttler's fail-closed store,
+  // and sign-in must not stop working the moment it blips; a deploy resetting
+  // these counters costs nothing. Only meaningful now that the key is the real
+  // client — see `advanced.ipAddress` below.
+  rateLimit: {
+    customRules: {
+      '/sign-up/email': { window: 60 * 60, max: 20 },
+    },
+  },
 
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
 
@@ -446,6 +467,26 @@ export const auth = betterAuth({
     // production without disturbing the `__Host-` arrangement.
     defaultCookieAttributes: {
       secure: isProduction,
+    },
+    // Whose request is this — the one question the rate limiter and the
+    // session's `ipAddress` both ask, and in production it had no answer.
+    //
+    // The default reads `x-forwarded-for` and gives up unless it holds exactly
+    // ONE address (see `session-device.service.ts`); behind Cloudflare, Traefik
+    // and Next's rewrite it holds several. With no IP, Better Auth keys every
+    // caller into ONE `no-trusted-ip|<path>` bucket — 3 requests per 10 s on
+    // `/sign-in/*` and `/sign-up/*` for the whole stack. One script sending a
+    // request every three seconds locked every student out of signing in.
+    //
+    // `cf-connecting-ip` is set by Cloudflare to the single address it saw, and
+    // since the host firewall admits only Cloudflare's ranges, a client cannot
+    // reach the origin without passing through it — so the header can no
+    // longer be forged. (It could before; don't copy this onto a host that is
+    // reachable directly.) Next's rewrite forwards it unchanged. Locally and in
+    // CI there is no Cloudflare, so the value is absent and Better Auth falls
+    // back as it always did. IPv6 is grouped by /64 by default.
+    ipAddress: {
+      ipAddressHeaders: ['cf-connecting-ip'],
     },
     cookies: {
       session_token: {

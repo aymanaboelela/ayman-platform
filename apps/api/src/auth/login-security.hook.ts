@@ -16,7 +16,8 @@ import {
 import { DEVICE_LIMIT_ERROR, MAX_DEVICES_PER_ACCOUNT, type DeviceLimitGate } from './device-limit';
 import type { LoginSecurityService } from './login-security.service';
 import { planFullNameCheck } from './full-name-check';
-import { planPhoneNormalization } from './phone-identity';
+import { isClosedOtpPath, planPhoneNormalization } from './phone-identity';
+import { ipBucket } from '../common/throttle/request-identity';
 import type { PrismaClient } from '../generated/prisma/client';
 
 /**
@@ -83,6 +84,14 @@ function sleep(ms: number): Promise<void> {
  * placeholder still keys correctly per-process for the throttle's purposes.
  */
 export function resolveClientIp(headers: Headers | undefined): string {
+  // Behind Cloudflare the right-most hop below is the Cloudflare EDGE, not the
+  // student — so the IP half of the login throttle was one bucket per PoP.
+  // `cf-connecting-ip` is the client, and cannot be forged now that the origin
+  // admits only Cloudflare (see `clientIpFromRequest`). The hop logic stays for
+  // local and CI, where there is no Cloudflare.
+  const cf = headers?.get('cf-connecting-ip')?.trim();
+  if (cf) return ipBucket(cf);
+
   const raw = headers?.get('x-forwarded-for');
   if (raw) {
     const hops = raw
@@ -195,6 +204,13 @@ export function createAuthBeforeHook(
   deviceLimit: DeviceLimitGate,
 ) {
   return createAuthMiddleware(async (ctx) => {
+    // `disabledPaths` already 404s these at the router; this catches the same
+    // endpoints reached by a path spelling that string compare misses, and any
+    // server-side `auth.api.*` call. See `OTP_PATHS_WITHOUT_DELIVERY`.
+    if (isClosedOtpPath(ctx.path)) {
+      throw new APIError('NOT_FOUND');
+    }
+
     /**
      * Phone normalisation runs FIRST and on every path, because sign-in reads
      * the value it produces and sign-up stores it. Returning a `context` from

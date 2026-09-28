@@ -28,6 +28,12 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       adapter: new PrismaPg({
         connectionString: process.env.DATABASE_URL,
         max: Number(process.env.DATABASE_POOL_MAX ?? 20),
+        // pg's default is to wait FOREVER for a free connection. Under a burst
+        // every request past the 20th queued behind the pool with no limit, so
+        // a slow minute became a pile of hung sockets that outlived the burst.
+        // Ten seconds and the request fails with an error instead — the same
+        // ceiling `transactionOptions.timeout` already puts on a transaction.
+        connectionTimeoutMillis: 10_000,
       }),
       transactionOptions: {
         maxWait: 5000,

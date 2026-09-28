@@ -27,6 +27,8 @@ import { GUARDIAN_COOKIE, guardianCookieOptions } from './guardian-cookie';
 const GUARDIAN_SIGN_IN_THROTTLE = {
   short: { limit: 5, ttl: seconds(10) },
   medium: { limit: 20, ttl: seconds(600) },
+  // الاتنين اللي فوق على الكوكي، والكوكي بتتغيّر بسهولة؛ ده على عنوان الجهاز.
+  ip: { limit: 60, ttl: seconds(600) },
 };
 
 /**

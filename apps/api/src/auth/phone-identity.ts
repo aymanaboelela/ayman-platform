@@ -33,6 +33,44 @@ import { normalizeEgyptianPhone, placeholderEmailForPhone } from '@ayman/contrac
 export const PHONE_SIGN_UP_PATH = '/sign-up/email';
 
 /**
+ * The phone plugin's OTP routes, closed at the router until a code can be
+ * DELIVERED.
+ *
+ * `sendOTP` throwing (see `auth.config.ts`) looked like it closed them, and it
+ * did not. Better Auth writes the code to `verification` BEFORE it calls
+ * `sendOTP` (`plugins/phone-number/routes.mjs`, `createVerificationValue` then
+ * `opts.sendOTP`), and nothing rolls that write back when the call throws. So
+ * `/send-otp` answered 501 while a valid six-digit code for ANY number sat in
+ * the table for five minutes — and `/verify` turns a right guess into a full
+ * session (`createSession(user.id)`), no password involved.
+ * `/request-password-reset` is worse: with no `sendPasswordResetOTP` it never
+ * even errors, it stores the code and returns `{ status: true }`, and
+ * `/reset-password` then overwrites the password for a right guess.
+ *
+ * Three guesses per code, a new code on demand: guessing is slow, not
+ * impossible, and it reaches admin accounts that have a phone.
+ *
+ * `disabledPaths` is checked before the rate limiter and before routing
+ * (`api/index.mjs`, `onRequest`), so these return 404 without touching the
+ * database. The before-hook refuses them too, because `disabledPaths` compares
+ * the raw URL path and `ctx.path` is the matched endpoint — the second check is
+ * what a percent-encoded variant of the path would meet.
+ *
+ * When a WhatsApp Business number can deliver codes, remove the path from here
+ * in the same change that implements `sendOTP` — never before.
+ */
+export const OTP_PATHS_WITHOUT_DELIVERY = [
+  '/phone-number/send-otp',
+  '/phone-number/verify',
+  '/phone-number/request-password-reset',
+  '/phone-number/reset-password',
+] as const;
+
+export function isClosedOtpPath(path: string): boolean {
+  return (OTP_PATHS_WITHOUT_DELIVERY as readonly string[]).includes(path);
+}
+
+/**
  * The sign-in and OTP routes. These NORMALISE but never reject, because a
  * rejection here would be a client-observable branch that "wrong password"
  * does not have — see the `reject`/`ignore` split below.

@@ -1,7 +1,8 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import type { ZodType } from 'zod';
 import { ApiRequestError, apiFetch } from './api';
+import { forwardClientIp } from './client-ip';
 import { CSRF_COOKIE, CSRF_HEADER } from './csrf';
 
 /**
@@ -25,7 +26,11 @@ import { CSRF_COOKIE, CSRF_HEADER } from './csrf';
 export async function apiGetAuthed<T>(path: string, schema: ZodType<T>): Promise<T> {
   const cookieStore = await cookies();
   const response = await apiFetch(path, {
-    headers: { accept: 'application/json', cookie: cookieStore.toString() },
+    headers: {
+      accept: 'application/json',
+      cookie: cookieStore.toString(),
+      ...forwardClientIp(await headers()),
+    },
     cache: 'no-store',
   });
 
@@ -56,7 +61,11 @@ export async function apiGetAuthed<T>(path: string, schema: ZodType<T>): Promise
 export async function apiGetAuthedOrNotFound<T>(path: string, schema: ZodType<T>): Promise<T> {
   const cookieStore = await cookies();
   const response = await apiFetch(path, {
-    headers: { accept: 'application/json', cookie: cookieStore.toString() },
+    headers: {
+      accept: 'application/json',
+      cookie: cookieStore.toString(),
+      ...forwardClientIp(await headers()),
+    },
     cache: 'no-store',
   });
 
@@ -91,6 +100,7 @@ export async function apiCommand(
       accept: 'application/json',
       [CSRF_HEADER]: cookieStore.get(CSRF_COOKIE)?.value ?? 'server-action',
       cookie: cookieStore.toString(),
+      ...forwardClientIp(await headers()),
     },
     cache: 'no-store',
   });
@@ -127,6 +137,7 @@ export async function apiSend<T>(
       'content-type': 'application/json',
       [CSRF_HEADER]: cookieStore.get(CSRF_COOKIE)?.value ?? 'server-action',
       cookie: cookieStore.toString(),
+      ...forwardClientIp(await headers()),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: 'no-store',

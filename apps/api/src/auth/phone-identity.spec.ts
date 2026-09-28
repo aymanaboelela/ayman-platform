@@ -1,4 +1,9 @@
-import { planPhoneNormalization, PHONE_SIGN_UP_PATH } from './phone-identity';
+import {
+  isClosedOtpPath,
+  OTP_PATHS_WITHOUT_DELIVERY,
+  planPhoneNormalization,
+  PHONE_SIGN_UP_PATH,
+} from './phone-identity';
 
 /**
  * The pure half of the sign-up/sign-in phone handling, split out for the same
@@ -190,5 +195,29 @@ describe('planPhoneNormalization', () => {
         });
       },
     );
+  });
+});
+
+describe('isClosedOtpPath — the OTP routes stay shut until a code can be delivered', () => {
+  it.each(OTP_PATHS_WITHOUT_DELIVERY)('closes %s', (path) => {
+    expect(isClosedOtpPath(path)).toBe(true);
+  });
+
+  it('covers every route that stores or redeems a code', () => {
+    // A code stored for a number nobody receives is a guessable password:
+    // send-otp/verify mint a session, request-password-reset/reset-password
+    // replace the password. Dropping any one of them reopens the hole.
+    expect([...OTP_PATHS_WITHOUT_DELIVERY].sort()).toEqual([
+      '/phone-number/request-password-reset',
+      '/phone-number/reset-password',
+      '/phone-number/send-otp',
+      '/phone-number/verify',
+    ]);
+  });
+
+  it('leaves password sign-in and sign-up alone', () => {
+    expect(isClosedOtpPath('/sign-in/phone-number')).toBe(false);
+    expect(isClosedOtpPath(PHONE_SIGN_UP_PATH)).toBe(false);
+    expect(isClosedOtpPath('/sign-in/email')).toBe(false);
   });
 });

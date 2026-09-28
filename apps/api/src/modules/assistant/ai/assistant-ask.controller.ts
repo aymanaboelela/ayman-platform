@@ -60,6 +60,12 @@ const ASK_THROTTLE = {
   short: { limit: 2, ttl: seconds(6) },
   medium: { limit: 20, ttl: seconds(600) },
   long: { limit: 60, ttl: seconds(3600) },
+  // The three above key on the session cookie, which a script can omit or
+  // change per request. Every answer here is a paid model call, so the ceiling
+  // that cannot be reset that way — the client's address — is the one that
+  // bounds the bill. Generous, because mobile carriers put many students
+  // behind one address.
+  ip: { limit: 120, ttl: seconds(3600) },
 };
 
 @RequireFeature('assistant')

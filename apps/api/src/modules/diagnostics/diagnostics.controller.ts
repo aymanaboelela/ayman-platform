@@ -54,7 +54,9 @@ export class DiagnosticsController {
    * exists for the abusive case, not the failing one.
    */
   @Public()
-  @Throttle({ default: { limit: 20, ttl: seconds(60) } })
+  // `ip`, not `default`: this app has no throttler named `default`, so the old
+  // override limited nothing (see `THROTTLER_NAMES`).
+  @Throttle({ ip: { limit: 20, ttl: seconds(60) } })
   @Post()
   @HttpCode(204)
   @UsePipes(ZodValidationPipe)

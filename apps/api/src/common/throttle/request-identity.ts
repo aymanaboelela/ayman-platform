@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isIPv4, isIPv6 } from 'node:net';
 
 /**
  * Both spellings of the Better Auth session cookie: the `__Host-` prefixed
@@ -42,21 +43,54 @@ function readCookie(cookieHeader: string, name: string): string | undefined {
  * 2026-08-15). So for every request that actually came through Cloudflare —
  * which is all real traffic — this is trustworthy.
  *
- * ⚠️ It is trustworthy BECAUSE the request came through Cloudflare, and the
- * origin currently also answers on its own IP, where nothing sets or strips
- * this header. Somebody hitting the origin directly can therefore put anything
- * here. That is not a regression — reaching the origin directly already
- * bypasses every edge control, and the limiter it would be evading is one that
- * could previously be evaded from anywhere with a single cookie. Closing the
- * origin to Cloudflare's ranges is what makes this airtight, and it is the
- * outstanding infrastructure task.
+ * It is trustworthy BECAUSE the request came through Cloudflare. Since
+ * 2026-09-28 the host firewall (Hostinger's, in front of the VM) admits 80/443
+ * from Cloudflare's ranges only, so there is no other way in. Before that the
+ * origin answered on its own IP, where anyone could set this header — so don't
+ * carry this reasoning to a host that is reachable directly.
+ *
+ * The value is a rate-limit KEY, not an address to display: IPv6 comes back
+ * as its /64 (see `ipBucket`), because every caller of this function uses it to
+ * count attempts.
  */
 export function clientIpFromRequest(request: ThrottleRequest): string {
   const raw = request.headers?.['cf-connecting-ip'];
   const header = Array.isArray(raw) ? raw[0] : raw;
   const trimmed = header?.trim();
-  if (trimmed) return trimmed;
-  return request.ip ?? 'unknown';
+  if (trimmed) return ipBucket(trimmed);
+  return request.ip ? ipBucket(request.ip) : 'unknown';
+}
+
+/**
+ * One bucket per subscriber, not per address.
+ *
+ * An ISP hands an IPv6 customer at least a /64 — 2^64 addresses, every one of
+ * them theirs. Keyed on the full address, one household can mint a fresh bucket
+ * per request and walk straight through the `ip` ceiling, the guardian lock and
+ * the unlock-code lock. Masking to /64 gives that household one key, which is
+ * what Better Auth's own limiter does (`normalizeIP`, `ipv6Subnet: 64`).
+ *
+ * IPv4 is left alone; an IPv4-mapped IPv6 (`::ffff:1.2.3.4`, what Node reports
+ * for a v4 client on a dual-stack socket) is unwrapped to the IPv4 it carries,
+ * so the same client does not get two buckets depending on the socket.
+ */
+export function ipBucket(ip: string): string {
+  const lower = ip.trim().toLowerCase();
+  if (isIPv4(lower)) return lower;
+  if (!isIPv6(lower)) return lower;
+
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(lower);
+  if (mapped?.[1] && isIPv4(mapped[1])) return mapped[1];
+
+  const [head = '', tail] = lower.split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  const groups =
+    tail === undefined ? left : [...left, ...Array(8 - left.length - right.length).fill('0'), ...right];
+  return `${groups
+    .slice(0, 4)
+    .map((g) => g.padStart(4, '0'))
+    .join(':')}::/64`;
 }
 
 /**
@@ -142,9 +176,12 @@ export function trackerFromRequest(request: ThrottleRequest): string {
   }
 
   // Anonymous traffic (login, catalog) still needs a bucket, and the IP is
-  // the only identity available. `unknown` is explicit rather than letting an
-  // undefined tracker silently merge every such request into one key.
-  return `ip:${request.ip ?? 'unknown'}`;
+  // the only identity available. The CLIENT's IP — `request.ip` is the
+  // Cloudflare edge, so keying on it put every guest routed through one PoP
+  // into one bucket: a public route limited to 1 per 10 s was 1 per 10 s for
+  // all of them. `unknown` is explicit rather than letting an undefined tracker
+  // silently merge every such request into one key.
+  return `ip:${clientIpFromRequest(request)}`;
 }
 
 /**

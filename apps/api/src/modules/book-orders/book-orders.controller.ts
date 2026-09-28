@@ -35,6 +35,11 @@ const CREATE_THROTTLE = {
   short: { limit: 1, ttl: seconds(10) },
   medium: { limit: 3, ttl: seconds(600) },
   long: { limit: 10, ttl: seconds(3600) },
+  // The three above key on the session cookie, which is never validated, so a
+  // guest script resets them by changing it. The client's address cannot be
+  // reset that way, and each order here is an upload, an image decode and
+  // an audit row.
+  ip: { limit: 30, ttl: seconds(3600) },
 };
 
 /** Cheaper than `create` — no new row, just a field update on one that
@@ -42,6 +47,9 @@ const CREATE_THROTTLE = {
 const PAYMENT_THROTTLE = {
   short: { limit: 1, ttl: seconds(5) },
   medium: { limit: 5, ttl: seconds(600) },
+  // Per address, for the reason on `CREATE_THROTTLE` — and each payment
+  // queues an OCR read and notifies the admins.
+  ip: { limit: 30, ttl: seconds(600) },
 };
 
 /**
