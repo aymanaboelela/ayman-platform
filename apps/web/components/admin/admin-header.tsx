@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
-import { Menu } from 'lucide-react';
+import { Menu, Search } from 'lucide-react';
 import type { Entitlements } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Kbd } from '@ayman/ui/components/kbd';
@@ -109,15 +109,26 @@ export function AdminHeader({
         </nav>
       </div>
 
+      {/*
+        * ⚠️ العرض هنا عرض العمود، مش الشاشة: من `md` الريل واخد ٢٦٠ بكسل، فعند
+        * ٧٦٨ الهيدر ٥٠٨ بس. المجموعة دي كانت ٥١٤ و`shrink-0`، فكانت بتطلع بره
+        * الشمال — «تسجيل الخروج» بيتقص، والبريدكرمب بيتعصر لصفر. اتقاس: من
+        * ٧٦٨ لـ١٠٢٤ كل صفحات اللوحة كانت بتعدّي العرض.
+        *
+        * فزرار البحث السريع أيقونة لحد `xl`، والإيميل من `xl` مش `lg` — عند
+        * ١٠٢٤ الإيميل لوحده كان بيزوّد ٣ بكسل عن العرض.
+        */}
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <button
           type="button"
           onClick={() => setPaletteOpen(true)}
+          aria-label={copy.admin.commandPalette.trigger}
           className="hidden items-center gap-2 rounded-md border border-line px-2.5 py-1.5 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] hover:bg-surface-3 hover:text-fg sm:flex"
         >
-          <span>{copy.admin.commandPalette.trigger}</span>
-          <Kbd>⌘</Kbd>
-          <Kbd>K</Kbd>
+          <Search className="size-4 xl:hidden" aria-hidden="true" />
+          <span className="hidden xl:inline">{copy.admin.commandPalette.trigger}</span>
+          <Kbd className="hidden xl:inline-flex">⌘</Kbd>
+          <Kbd className="hidden xl:inline-flex">K</Kbd>
         </button>
 
         {/* Only for a session that HAS an inbox — the control asks the browser
@@ -134,7 +145,7 @@ export function AdminHeader({
 
         <ThemeToggle />
 
-        <span className="hidden max-w-[14rem] truncate text-[length:var(--fs-text-sm)] text-fg-muted lg:inline">
+        <span className="hidden max-w-[14rem] truncate text-[length:var(--fs-text-sm)] text-fg-muted xl:inline">
           {copy.admin.signedInAs} {identity}
         </span>
 

@@ -12,6 +12,7 @@ import {
   type AdminGrantCreate,
   type AdminGrantRow,
   type AdminRoleChange,
+  type AdminStaffRole,
   type AdminStudentBulkDeleteFailure,
   type AdminStudentBulkDeleteResult,
   type AdminStudentDeleteBlocker,
@@ -32,6 +33,7 @@ import {
 } from '../../../auth/credential-check.service';
 import { loginThrottle } from '../../../auth/login-throttle.instance';
 import { AuditService } from '../../../audit/audit.service';
+import { escapeLike, foldArabic, FOLD_FROM, FOLD_TO } from '../../../common/arabic-fold';
 import { isUniqueViolation } from '../../../common/prisma/prisma-errors';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { Prisma } from '../../../generated/prisma/client';
@@ -212,11 +214,16 @@ export class StudentsService {
     const sortKey = Object.hasOwn(STUDENT_SORT_COLUMNS, query.sort) ? query.sort : 'createdAt';
     const column = STUDENT_SORT_COLUMNS[sortKey as keyof typeof STUDENT_SORT_COLUMNS];
 
+    const foldedNames = query.q ? await this.foldedNameMatches(query.q) : [];
+
     const where: Prisma.StudentProfileWhereInput = {
       ...(query.q
         ? {
             OR: [
               { fullName: { contains: query.q, mode: 'insensitive' } },
+              // «امجد» لـ«أمجد» — شوف `foldedNameMatches`. فاضية في الغالب،
+              // وساعتها الـwhere هو هو زي قبل الطي بالحرف.
+              ...(foldedNames.length > 0 ? [{ userId: { in: foldedNames } }] : []),
               { phone: { contains: query.q } },
               { user: { email: { contains: query.q, mode: 'insensitive' } } },
             ],
@@ -231,9 +238,13 @@ export class StudentsService {
        *
        * ⚠️ `''` بيسيب الـwhere زي ما هي — كل استدعاء موجود دلوقتي بيرجّع نفس
        * اللي كان بيرجّعه بالحرف.
+       *
+       * ⚠️ جوّه `AND` مش مفتاح `user` على المستوى الأول: `accessFilter` تحت
+       * بيرجّع `{ user: … }` هو كمان، والـspread التاني كان بيمسح الأول —
+       * `role=student&access=paid` كان هيرجّع المساعدين اللي دافعين.
        */
-      ...(query.role === 'staff' ? { user: { role: { not: 'student' } } } : {}),
-      ...(query.role === 'student' ? { user: { role: 'student' } } : {}),
+      ...(query.role === 'staff' ? { AND: [{ user: { role: { not: 'student' } } }] } : {}),
+      ...(query.role === 'student' ? { AND: [{ user: { role: 'student' } }] } : {}),
       ...(query.governorate.length > 0 ? { governorateCode: { in: query.governorate } } : {}),
       ...(query.year.length > 0 ? { year: { in: query.year } } : {}),
       ...(query.track.length > 0 ? { trackId: { in: query.track } } : {}),
@@ -269,7 +280,7 @@ export class StudentsService {
           // `bannedAt` on the LIST too, not just the detail: an admin scanning
           // the table needs to see which accounts are locked out without
           // opening each one.
-          user: { select: { email: true, bannedAt: true } },
+          user: { select: { email: true, bannedAt: true, role: true } },
           governorate: { select: { nameAr: true } },
           system: { select: { slug: true } },
           track: { select: { labelAr: true } },
@@ -294,8 +305,34 @@ export class StudentsService {
         onboardingCompleted: record.onboardingCompletedAt != null,
         createdAt: record.createdAt.toISOString(),
         bannedAt: record.user.bannedAt?.toISOString() ?? null,
+        role: record.user.role,
       })),
     };
+  }
+
+  /**
+   * الطلبة اللي اسمهم بيطابق البحث **بعد طي الهمزة** ومابيطابقش قبله.
+   *
+   * `contains` في Prisma مابيقبلش دالة على العمود، فالطي بيحصل هنا في استعلام
+   * لوحده بيرجّع ids، والـwhere بياخدهم كـ`userId in`. ومحصور في اللي الحرفي
+   * فوّته (`NOT ILIKE`) عشان الليستة تفضل صغيرة: «احمد» بترجّع «أحمد» بس، مش
+   * كل «احمد» تاني الـ`contains` لاقاه أصلًا.
+   *
+   * ⚠️ على الاسم بس. الموبايل أرقام والإيميل لاتيني — مفيش حاجة تتطوي. وكلمة
+   * من غير حرف عربي (رقم أو إيميل) مابتعملش الاستعلام ده خالص.
+   */
+  private async foldedNameMatches(q: string): Promise<string[]> {
+    const needle = foldArabic(q);
+    if (needle.trim().length < 2 || !/[\u0600-\u06FF]/u.test(needle)) return [];
+    const folded = `%${escapeLike(needle)}%`;
+    const literal = `%${escapeLike(q)}%`;
+    const rows = await this.prisma.$queryRaw<{ user_id: string }[]>`
+      SELECT "user_id"
+      FROM "app"."student_profiles"
+      WHERE lower(translate("full_name", ${FOLD_FROM}, ${FOLD_TO})) LIKE ${folded}
+        AND "full_name" NOT ILIKE ${literal}
+    `;
+    return rows.map((row) => row.user_id);
   }
 
   async detail(userId: string): Promise<AdminStudentDetail> {
@@ -763,6 +800,27 @@ export class StudentsService {
    *     admins and no way back in;
    *   - demoting the last remaining admin is refused for the same reason.
    */
+  /**
+   * باب شاشة «الفريق» — `changeRole` بشرط زيادة: الأدمن مش من الفريق ده.
+   *
+   * السكيما (`AdminStaffRoleSchema`) بتمنع إن حد **يبقى** أدمن من هنا. ده
+   * نصّها التاني: محدش **يتشال** من الأدمن من هنا. من غيره، مساعد اتفتحله
+   * `staff:manage` يقدر يرجّع أدمن طالب طول ما فيه أدمن تاني — والأدمن هو
+   * اللي فتحله الصلاحية أصلًا.
+   */
+  async setStaffRole(
+    userId: string,
+    input: AdminStaffRole,
+    actorUserId: string,
+  ): Promise<{ role: string }> {
+    const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!target) throw new NotFoundException();
+    if (target.role === 'admin') {
+      throw new ForbiddenException('an admin is not managed from the team screen');
+    }
+    return this.changeRole(userId, input, actorUserId);
+  }
+
   async changeRole(
     userId: string,
     input: AdminRoleChange,

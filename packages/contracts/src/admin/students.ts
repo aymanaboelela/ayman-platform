@@ -62,6 +62,14 @@ export const AdminStudentRowSchema = z.object({
    * account works fine" over WhatsApp.
    */
   bannedAt: z.string().nullable(),
+  /**
+   * الدور — على الصف، مش التفاصيل بس.
+   *
+   * قسم «الفريق» في `/admin/roles` بيقرا الليستة دي بفلتر `role=staff`، وكان
+   * بيعرض كل واحد فيها «مساعد» بزرار «الصلاحيات» — الأدمن كمان، والقفل على
+   * الحساب مابيوصلش للأدمن أصلًا. الشاشة محتاجة تفرّق، والصف هو اللي بيوصلها.
+   */
+  role: z.string(),
 });
 
 export type AdminStudentRow = z.infer<typeof AdminStudentRowSchema>;
@@ -254,6 +262,15 @@ export type AdminStudentSetPassword = z.infer<typeof AdminStudentSetPasswordSche
  * الزرار؛ `z.enum` هنا بيقف قدام أي `POST` توصل للراوت، وde الفرق بين
  * «صعب» و«مستحيل» — نفس منطق `TENANT_KEY` في CLAUDE.md.
  */
+/**
+ * أقل طول لسبب تغيير الدور — رقم واحد للسكيما والشاشة.
+ *
+ * ⚠️ الشاشة كانت كاتبة ٣ من دماغها والسيرفر بيطلب ٨، فسبب من ٤–٧ حروف كان
+ * بيفتح الزرار وبيرجع 400 برسالة «مقدرناش نغيّر الدور» — من غير ما حد يعرف
+ * ليه. الرقم هنا والشاشة بتاخده من هنا.
+ */
+export const STAFF_ROLE_REASON_MIN = 8;
+
 export const AdminStaffRoleSchema = z
   .object({
     role: z.enum(['owner', 'student']),
@@ -269,7 +286,7 @@ export const AdminStaffRoleSchema = z
      * «السبب» بيبقى معناه مختلف حسب أنهي شاشة اتفتحت — وde فرق مالوش أي سبب
      * غير إني كتبت الرقم من دماغي أول مرة.
      */
-    reason: z.string().trim().min(8, 'اكتب سبب مختصر').max(500),
+    reason: z.string().trim().min(STAFF_ROLE_REASON_MIN, 'اكتب سبب مختصر').max(500),
   })
   .strict();
 

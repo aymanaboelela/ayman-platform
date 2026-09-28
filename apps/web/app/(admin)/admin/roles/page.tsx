@@ -1,4 +1,5 @@
 import { GRANTABLE_ROLES, RoleGrantsReadSchema } from '@ayman/contracts/admin/roles';
+import { STAFF_ROLE_REASON_MIN } from '@ayman/contracts/admin/students';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Card, CardBody } from '@ayman/ui';
 import { adminGet, adminGetOrForbidden } from '@/lib/admin-api';
@@ -101,6 +102,7 @@ export default async function RolesPage() {
             role: r.role,
           }))}
           currentUserId={session?.id ?? ''}
+          reasonMin={STAFF_ROLE_REASON_MIN}
           founderId={founderId}
         />
       </div>

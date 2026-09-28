@@ -8,6 +8,8 @@ import {
   UserPermissionsReadSchema,
   type UserPermissionsRead,
 } from '@ayman/contracts/admin/roles';
+import { AdminStaffRoleSchema, STAFF_ROLE_REASON_MIN } from '@ayman/contracts/admin/students';
+import { formatCopy } from '@ayman/contracts/format';
 
 const c = copy.admin.roles;
 
@@ -51,39 +53,42 @@ export async function setRolePermissionsAction(
  * البحث عن حساب عشان يتضاف للفريق.
  *
  * بيستخدم قايمة الطلبة اللي موجودة — هي أصلًا بتدوّر بالاسم والموبايل
- * والإيميل، وبترجّع الدور في كل صف. أي endpoint بحث تاني كان هيبقى نسخة تانية
- * من نفس الاستعلام تدرِفت عنه.
+ * والإيميل. أي endpoint بحث تاني كان هيبقى نسخة تانية من نفس الاستعلام
+ * تدرِفت عنه.
+ *
+ * ## `role=student` على السيرفر، مش فلتر هنا
+ *
+ * «اللي في الفريق خلاص مش نتيجة» — عرضه بيدي زرار «ضيفه» لحد هو فيه. الفلتر
+ * ده كان هنا على `r.role`، والقايمة **ماكانتش بترجّع `role` أصلًا** — فالسكيما
+ * كانت بتقع على أول صف، والـ`catch` بيبلعها. يعني أي بحث بيلاقي حد كان بيطلع
+ * «مقدرناش نغيّر الدور»، وأي بحث مابيلاقيش كان بيطلع «مفيش حساب». البحث
+ * ماكانش بيشتغل ولا مرة. السيرفر عنده الفلتر ده من الأول (`role`)، والتمن
+ * صفوف بتبقى تمن طلبة، مش تمنية ناقص المساعدين.
  *
  * ⚠️ حرفين على الأقل. بحث بحرف واحد على قاعدة فيها آلاف الطلبة بيرجّع نص
  * الجدول، وde مش نتيجة — ده صفحة بتتحمّل بالغلط.
  */
 export async function searchAccountsAction(
   q: string,
-): Promise<{ ok: true; rows: { id: string; name: string; phone: string; role: string }[] } | { ok: false; message: string }> {
+): Promise<{ ok: true; rows: { id: string; name: string; phone: string }[] } | { ok: false; message: string }> {
   const term = q.trim();
   if (term.length < 2) return { ok: true, rows: [] };
 
   try {
-    const params = new URLSearchParams({ page: '1', perPage: '8', q: term });
+    const params = new URLSearchParams({ page: '1', perPage: '8', q: term, role: 'student' });
     const res = await adminGet(
       `/api/admin/students?${params.toString()}`,
       z.object({
-        rows: z.array(
-          z.object({
-            id: z.string(),
-            fullName: z.string(),
-            phone: z.string(),
-            role: z.string(),
-          }),
-        ),
+        rows: z.array(z.object({ id: z.string(), fullName: z.string(), phone: z.string() })),
       }),
     );
     return {
       ok: true,
-      rows: res.rows.map((r) => ({ id: r.id, name: r.fullName, phone: r.phone, role: r.role })),
+      rows: res.rows.map((r) => ({ id: r.id, name: r.fullName, phone: r.phone })),
     };
   } catch {
-    return { ok: false, message: c.staff.failed };
+    // رسالة البحث، مش رسالة تغيير الدور — شوف `staff.searchFailed`.
+    return { ok: false, message: c.staff.searchFailed };
   }
 }
 
@@ -98,11 +103,22 @@ export async function setStaffRoleAction(
   role: 'owner' | 'student',
   reason: string,
 ): Promise<ActionResult> {
+  /*
+   * نفس السكيما اللي السيرفر بيقرا بيها، قبل ما الطلب يطلع.
+   *
+   * سبب قصير كان بيرجع 400 وبيتحوّل لـ«مقدرناش نغيّر الدور» — رسالة مابتقولش
+   * إن العيب في السبب. هنا بيرجع الكلام اللي يتصلّح بيه.
+   */
+  const body = AdminStaffRoleSchema.safeParse({ role, reason });
+  if (!body.success) {
+    return { ok: false, message: formatCopy(c.staff.reasonTooShort, { min: STAFF_ROLE_REASON_MIN }) };
+  }
+
   try {
     await adminSend(
       'POST',
       `/api/admin/students/${encodeURIComponent(userId)}/staff-role`,
-      { role, reason },
+      body.data,
       z.object({ role: z.string() }),
     );
     revalidatePath('/admin/roles');

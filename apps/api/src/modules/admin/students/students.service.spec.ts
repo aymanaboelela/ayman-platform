@@ -51,6 +51,8 @@ function makeService() {
     questionVersion: { count: jest.fn(async () => 0) },
     newsPost: { count: jest.fn(async () => 0) },
     $transaction: jest.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
+    // `list()`'s hamza-folded name match — the only raw read in the service.
+    $queryRaw: jest.fn(async () => [] as { user_id: string }[]),
   };
   return { service: new StudentsService(prisma as never, audit as never), prisma, audit };
 }
@@ -87,6 +89,105 @@ describe('StudentsService.list', () => {
     const result = await service.list(BASE_QUERY);
     expect(result.rowCount).toBe(137);
     expect(result.rows).toHaveLength(20);
+  });
+
+  it('carries each row\'s role, so the team screen can tell an admin from an assistant', async () => {
+    const { service, prisma } = makeService();
+    prisma.studentProfile.findMany.mockResolvedValueOnce([
+      {
+        userId: 'u1',
+        fullName: 'أمجد',
+        phone: '+201000000000',
+        gender: 'male',
+        governorateCode: '01',
+        year: 2,
+        onboardingCompletedAt: null,
+        createdAt: new Date(),
+        user: { email: null, bannedAt: null, role: 'owner' },
+        governorate: { nameAr: 'القاهرة' },
+        system: null,
+        track: null,
+      },
+    ] as never);
+
+    const result = await service.list({ ...BASE_QUERY, role: 'staff' } as never);
+    expect(result.rows[0]?.role).toBe('owner');
+  });
+
+  /**
+   * «امجد» في البحث، و«أمجد» في الداتابيز.
+   *
+   * ده كان بحث قسم «الفريق» على الحي: الاسم اتكتب من غير همزة وماطلعش. الطي
+   * نفسه متقاس في `common/arabic-fold.spec.ts` قصاد Postgres؛ هنا اللي بيتقاس
+   * إن الـids اللي الاستعلام رجّعها **بتوصل للـwhere**.
+   */
+  it('matches a hamza-less search against a name written with the hamza', async () => {
+    const { service, prisma } = makeService();
+    prisma.$queryRaw.mockResolvedValueOnce([{ user_id: 'amgad-with-hamza' }]);
+
+    await service.list({ ...BASE_QUERY, q: 'امجد' } as never);
+
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    const where = (prisma.studentProfile.findMany.mock.calls[0] as unknown as [{ where: { OR: unknown[] } }])[0].where;
+    expect(where.OR).toContainEqual({ fullName: { contains: 'امجد', mode: 'insensitive' } });
+    expect(where.OR).toContainEqual({ userId: { in: ['amgad-with-hamza'] } });
+  });
+
+  it('leaves the where exactly as it was when folding finds nothing extra', async () => {
+    const { service, prisma } = makeService();
+
+    await service.list({ ...BASE_QUERY, q: 'امجد' } as never);
+
+    const where = (prisma.studentProfile.findMany.mock.calls[0] as unknown as [{ where: { OR: unknown[] } }])[0].where;
+    expect(where.OR).toHaveLength(3);
+  });
+
+  it('does not run the folded match for a phone number or an email', async () => {
+    const { service, prisma } = makeService();
+
+    await service.list({ ...BASE_QUERY, q: '0101234' } as never);
+    await service.list({ ...BASE_QUERY, q: 'amgad@x.com' } as never);
+
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('keeps the role filter when an access filter is applied too', async () => {
+    // Both used to be a top-level `user` key, and the second spread erased the
+    // first — `role=student&access=paid` would have listed paying assistants.
+    const { service, prisma } = makeService();
+
+    await service.list({ ...BASE_QUERY, role: 'student', access: 'paid', stream: null } as never);
+
+    const where = (prisma.studentProfile.findMany.mock.calls[0] as unknown as [{ where: Record<string, unknown> }])[0].where;
+    expect(where.AND).toEqual([{ user: { role: 'student' } }]);
+    expect(where.user).toBeDefined();
+  });
+});
+
+describe('StudentsService.setStaffRole', () => {
+  it('refuses to touch an admin — the team screen neither makes nor unmakes one', async () => {
+    const { service, prisma, audit } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({ role: 'admin' });
+    prisma.user.count.mockResolvedValueOnce(5);
+
+    await expect(
+      service.setStaffRole('target', { role: 'student', reason: 'a real reason' }, 'actor'),
+    ).rejects.toThrow(ForbiddenException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+
+  it('moves an assistant back to student, with the reason in the audit entry', async () => {
+    const { service, prisma, audit } = makeService();
+    prisma.user.findUnique.mockResolvedValue({ role: 'owner' });
+
+    await expect(
+      service.setStaffRole('target', { role: 'student', reason: 'خلص شغله معانا' }, 'actor'),
+    ).resolves.toEqual({ role: 'student' });
+    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'target' }, data: { role: 'student' } });
+    expect(audit.record.mock.calls[0][0]).toMatchObject({
+      metadata: { from: 'owner', to: 'student', reason: 'خلص شغله معانا' },
+    });
   });
 });
 
