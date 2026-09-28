@@ -1522,6 +1522,30 @@ model LessonVideo {
   @@schema("app")
 }
 
+/// «محفوظة» — an uploaded lecture taken off its lesson but KEPT, so it can be
+/// put back on a lesson later. The owner's ask: «لو مسحته تقولي امسحه خالص من
+/// السيرفر ولا استبدله بس، عشان لو حبيت أرجّعه تاني».
+///
+/// The files stay in the bucket under `v/<externalId>/` exactly as they were;
+/// this row is what makes them a video again instead of anonymous leftovers —
+/// the details a lesson needs to play it without re-reading the bucket.
+/// Keyed by the upload id: a video is kept once, whichever lesson it left.
+model ArchivedVideo {
+  externalId      String   @id @map("external_id")
+  sourceName      String?  @map("source_name")
+  durationSeconds Int      @map("duration_seconds")
+  mirrorHeight    Int?     @map("mirror_height")
+  mirrorBytes     BigInt?  @map("mirror_bytes")
+  posterKey       String?  @map("poster_key")
+  /// Where it came from — shown so the owner can tell two kept videos apart.
+  fromLessonTitle String?  @map("from_lesson_title")
+  fromCourseTitle String?  @map("from_course_title")
+  archivedAt      DateTime @default(now()) @map("archived_at") @db.Timestamptz(3)
+
+  @@map("archived_videos")
+  @@schema("app")
+}
+
 /// 1:1 with a lesson. `bodyHtml` is ALWAYS sanitize-html output — nothing
 /// writes this column without going through sanitizeRichText().
 model LessonText {

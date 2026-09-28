@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { RedisModule } from '../../redis/redis.module';
 import { VideoLibraryController } from './video-library.controller';
+import { VideoArchiveService } from './video-archive.service';
 import { VideoLibraryService } from './video-library.service';
 import { VideoMirrorService } from './video-mirror.service';
 import { VideoUploadService } from './video-upload.service';
@@ -33,7 +34,7 @@ import { VideoUploadService } from './video-upload.service';
    */
   imports: [PrismaModule, RedisModule],
   controllers: [VideoLibraryController],
-  providers: [VideoMirrorService, VideoUploadService, VideoLibraryService],
-  exports: [VideoMirrorService, VideoUploadService],
+  providers: [VideoMirrorService, VideoUploadService, VideoLibraryService, VideoArchiveService],
+  exports: [VideoMirrorService, VideoUploadService, VideoArchiveService],
 })
 export class VideoMirrorModule {}

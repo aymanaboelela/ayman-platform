@@ -35,6 +35,7 @@ import { LessonSettingsForm } from './lesson-settings-form';
 import { defaultMonthId, MonthPicker, useCourseMonths, useCourseMonthsKnown } from './month-panel';
 import { VideoPreview } from './video-preview';
 import { VideoUpload } from './video-upload';
+import { RemoveUploadedVideo } from './remove-uploaded-video';
 import { fetchYouTubeDuration } from './youtube-duration';
 import { useFeature } from '../entitlements-context';
 
@@ -661,6 +662,19 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
             can open once the encode is done.
           */}
           {lesson.video?.provider === 'youtube' ? <VideoPreview externalId={savedId} /> : null}
+          {lesson.video?.provider === 'upload' ? (
+            <RemoveUploadedVideo
+              courseId={courseId}
+              lessonId={lesson.id}
+              onRemoved={() => {
+                setRemoved(true);
+                setUrl('');
+                setDuration('');
+                setEmbed(null);
+                probedId.current = null;
+              }}
+            />
+          ) : (
           <ConfirmButton
             className="chip chip--quiet"
             label={c.removeVideo}
@@ -681,6 +695,7 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
               return result;
             }}
           />
+          )}
         </div>
       ) : null}
     </div>

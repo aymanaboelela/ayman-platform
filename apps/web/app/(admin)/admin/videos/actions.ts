@@ -49,3 +49,29 @@ export async function deleteVideoAction(
   revalidatePath('/admin/videos');
   return { ok: true };
 }
+
+/**
+ * «رجّعه لمحاضرة» — put a kept video back on a video lesson. Whatever that
+ * lesson plays now is kept in its place by the API, never deleted.
+ */
+export async function restoreVideoAction(videoId: string, lessonId: string): Promise<VideoActionResult> {
+  try {
+    await adminSend(
+      'POST',
+      `/api/admin/videos/${encodeURIComponent(videoId)}/restore`,
+      { lessonId },
+      z.object({ videoId: z.string(), lessonId: z.string() }),
+    );
+  } catch (error) {
+    const body = error instanceof AdminApiError ? error.payload : null;
+    const message =
+      body !== null && typeof body === 'object' && 'message' in body && typeof body.message === 'string'
+        ? body.message
+        : '';
+    return { ok: false, message: /[\u0600-\u06FF]/.test(message) ? message : copy.admin.videos.errorGeneric };
+  }
+  // The lesson's course is not known here; the catalog tag covers every card.
+  updateTag(TAG_COURSES);
+  revalidatePath('/admin/videos');
+  return { ok: true };
+}

@@ -33,10 +33,13 @@ export function DeleteVideoButton({
   videoId,
   courseId,
   disabled = false,
+  body,
 }: {
   videoId: string;
   courseId: string | null;
   disabled?: boolean;
+  /** Overrides the dialog text — a kept video is not a «leftover». */
+  body?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -78,7 +81,7 @@ export function DeleteVideoButton({
       <DialogContent closeLabel={copy.common.close}>
         <DialogHeader>
           <DialogTitle>{c.deleteTitle}</DialogTitle>
-          <DialogDescription>{courseId === null ? c.deleteOrphanBody : c.deleteBody}</DialogDescription>
+          <DialogDescription>{body ?? (courseId === null ? c.deleteOrphanBody : c.deleteBody)}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <DialogClose asChild>

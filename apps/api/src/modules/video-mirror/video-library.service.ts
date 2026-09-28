@@ -11,6 +11,7 @@ import { UPLOAD_ID_RE, isVideoExternalId, mirrorPrefix, uploadSourceKey } from '
 import { AuditService } from '../../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
+import { VideoArchiveService } from './video-archive.service';
 import { VideoMirrorService } from './video-mirror.service';
 import { VideoUploadService } from './video-upload.service';
 
@@ -42,6 +43,7 @@ export class VideoLibraryService {
     private readonly mirror: VideoMirrorService,
     private readonly uploads: VideoUploadService,
     private readonly audit: AuditService,
+    private readonly archive: VideoArchiveService,
   ) {}
 
   async list(): Promise<VideoLibrary> {
@@ -90,18 +92,126 @@ export class VideoLibraryService {
       sectionTitle: row.lesson.section.title,
     }));
 
-    const listed = items.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0);
-    const orphans = await this.orphans().catch((error: unknown) => {
+    const kept = await this.prisma.archivedVideo.findMany({ orderBy: { archivedAt: 'desc' } });
+    const archived = kept.map((row) => ({
+      videoId: row.externalId,
+      sourceName: row.sourceName,
+      durationSeconds: row.durationSeconds,
+      maxHeight: row.mirrorHeight,
+      sizeBytes: row.mirrorBytes === null ? null : Number(row.mirrorBytes),
+      fromLessonTitle: row.fromLessonTitle,
+      fromCourseTitle: row.fromCourseTitle,
+      archivedAt: row.archivedAt.toISOString(),
+    }));
+
+    // Every video lesson a kept video could be put back on, drafts included.
+    const lessons = await this.prisma.lesson.findMany({
+      where: { kind: 'video' },
+      orderBy: [{ section: { course: { title: 'asc' } } }, { section: { position: 'asc' } }, { position: 'asc' }],
+      select: {
+        id: true,
+        title: true,
+        video: { select: { lessonId: true } },
+        section: { select: { title: true, course: { select: { title: true } } } },
+      },
+    });
+    const targets = lessons.map((lesson) => ({
+      lessonId: lesson.id,
+      lessonTitle: lesson.title,
+      courseTitle: lesson.section.course.title,
+      sectionTitle: lesson.section.title,
+      hasVideo: lesson.video !== null,
+    }));
+
+    const listed =
+      items.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0) +
+      archived.reduce((sum, video) => sum + (video.sizeBytes ?? 0), 0);
+    const orphans = await this.orphans(new Set(archived.map((video) => video.videoId))).catch((error: unknown) => {
       this.logger.warn({ err: error }, 'video library could not read the bucket');
       return null;
     });
 
     return {
       items,
+      archived,
+      targets,
       orphans: orphans ?? [],
       totalBytes: listed + (orphans ?? []).reduce((sum, orphan) => sum + orphan.sizeBytes, 0),
       storageRead: orphans !== null,
     };
+  }
+
+  /**
+   * «رجّعه لمحاضرة» — put a kept video on a video lesson.
+   *
+   * Whatever that lesson plays now is KEPT in its place, never deleted: the
+   * owner asked for a way back, and a restore that silently threw away the
+   * video it displaced would be the one-way door he asked not to have.
+   */
+  async restore(videoId: string, lessonId: string): Promise<{ videoId: string; lessonId: string }> {
+    const kept = await this.prisma.archivedVideo.findUnique({ where: { externalId: videoId } });
+    if (kept === null) throw new NotFoundException('الفيديو ده مش في «محفوظة»');
+
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      select: {
+        kind: true,
+        title: true,
+        section: { select: { course: { select: { id: true, title: true } } } },
+        video: {
+          select: {
+            provider: true,
+            externalId: true,
+            sourceName: true,
+            durationSeconds: true,
+            mirrorHeight: true,
+            mirrorBytes: true,
+            mirrorStatus: true,
+            posterKey: true,
+          },
+        },
+      },
+    });
+    if (lesson === null) throw new NotFoundException('المحاضرة مش موجودة');
+    if (lesson.kind !== 'video') throw new BadRequestException('دي مش محاضرة فيديو');
+    if (lesson.video?.mirrorStatus === 'uploading' || lesson.video?.mirrorStatus === 'mirroring') {
+      throw new ConflictException('المحاضرة دي عليها فيديو لسه بيترفع أو بيتجهز — استنى لما يخلص');
+    }
+
+    const data = {
+      provider: 'upload' as const,
+      externalId: kept.externalId,
+      sourceName: kept.sourceName,
+      durationSeconds: kept.durationSeconds,
+      mirrorHeight: kept.mirrorHeight,
+      mirrorBytes: kept.mirrorBytes,
+      posterKey: kept.posterKey,
+      mirrorStatus: 'ready' as const,
+      mirrorError: null,
+      mirrorProgress: 100,
+      mirrorAttempts: 0,
+    };
+    await this.prisma.$transaction([
+      this.prisma.lessonVideo.upsert({ where: { lessonId }, create: { lessonId, ...data }, update: data }),
+      this.prisma.archivedVideo.delete({ where: { externalId: videoId } }),
+    ]);
+
+    const displaced = lesson.video;
+    if (displaced !== null && displaced.provider === 'upload' && displaced.externalId !== videoId) {
+      await this.archive.release(displaced, displaced.mirrorStatus === 'ready', {
+        lessonTitle: lesson.title,
+        courseTitle: lesson.section.course.title,
+      });
+    }
+
+    await this.audit.record({
+      action: 'lesson:update',
+      resourceType: AUDIT_RESOURCES.lesson,
+      resourceId: lessonId,
+      outcome: 'success',
+      metadata: { operation: 'restoreVideo', videoId, displaced: displaced?.externalId ?? null },
+    });
+    return { videoId, lessonId };
   }
 
   /**
@@ -111,7 +221,7 @@ export class VideoLibraryService {
    * `v/<youtubeId>/` too, and the same YouTube video can sit on several
    * lessons — its folder is in use as long as one of them exists.
    */
-  private async orphans(): Promise<VideoLibraryOrphan[]> {
+  private async orphans(kept: ReadonlySet<string> = new Set()): Promise<VideoLibraryOrphan[]> {
     const storage = this.mirror.objectStorage;
     if (storage === null) return [];
 
@@ -123,7 +233,7 @@ export class VideoLibraryService {
     ]);
     const used = new Set(referenced.map((row) => row.externalId));
     const ids = [...new Set([...ladders, ...sources])].filter(
-      (id) => !used.has(id) && !parked.has(id) && isVideoExternalId(id),
+      (id) => !used.has(id) && !parked.has(id) && !kept.has(id) && isVideoExternalId(id),
     );
 
     const orphans: VideoLibraryOrphan[] = [];
@@ -198,6 +308,7 @@ export class VideoLibraryService {
       await this.prisma.lessonVideo.deleteMany({ where: { externalId: videoId, provider: 'upload' } });
     }
 
+    await this.prisma.archivedVideo.deleteMany({ where: { externalId: videoId } });
     await storage.deletePrefix(mirrorPrefix(videoId));
     if (UPLOAD_ID_RE.test(videoId)) await storage.deleteObject(uploadSourceKey(videoId));
 

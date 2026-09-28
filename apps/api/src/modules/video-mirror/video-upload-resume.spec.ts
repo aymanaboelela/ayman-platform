@@ -6,6 +6,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { uploadPartCount, uploadPartSize } from '@ayman/contracts/video';
 import type Redis from 'ioredis';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { VideoArchiveService } from './video-archive.service';
 import type { VideoMirrorService } from './video-mirror.service';
 import { VideoUploadService } from './video-upload.service';
 
@@ -37,6 +38,7 @@ function build(listed: { partNumber: number; etag: string; size: number }[] | nu
       },
     } as unknown as VideoMirrorService,
     {} as unknown as Redis,
+    {} as unknown as VideoArchiveService,
   );
   return { service, signed };
 }

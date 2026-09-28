@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { AlertTriangle, Clock3, Film, FolderX, HardDrive, Wallet } from 'lucide-react';
+import { AlertTriangle, Archive, Clock3, Film, FolderX, HardDrive, Wallet } from 'lucide-react';
 import {
   VideoLibrarySchema,
+  type VideoLibraryArchived,
   type VideoLibraryItem,
   type VideoLibraryOrphan,
+  type VideoLibraryTarget,
 } from '@ayman/contracts/admin/video-upload';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
@@ -13,6 +15,7 @@ import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { getEntitlements } from '@/lib/entitlements';
 import { DeleteVideoButton } from './delete-video-button';
+import { RestoreVideoButton } from './restore-video-button';
 
 const c = copy.admin.videos;
 
@@ -79,7 +82,10 @@ const STATUS_TONE: Record<VideoLibraryItem['status'], string> = {
 export default async function AdminVideosPage() {
   if (!(await getEntitlements())['video.upload']) notFound();
 
-  const { items, orphans, totalBytes, storageRead } = await adminGet('/api/admin/videos', VideoLibrarySchema);
+  const { items, archived, targets, orphans, totalBytes, storageRead } = await adminGet(
+    '/api/admin/videos',
+    VideoLibrarySchema,
+  );
   const monthly = (totalBytes / 1e9) * USD_PER_GB_MONTH;
 
   return (
@@ -108,6 +114,8 @@ export default async function AdminVideosPage() {
           {c.storageUnread}
         </p>
       )}
+
+      {archived.length > 0 ? <Archived videos={archived} targets={targets} /> : null}
 
       {orphans.length > 0 ? <Orphans orphans={orphans} /> : null}
 
@@ -283,6 +291,73 @@ function Orphans({ orphans }: { orphans: VideoLibraryOrphan[] }) {
             <DeleteVideoButton videoId={orphan.videoId} courseId={null} />
           </li>
         ))}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * «محفوظة» — taken off a lesson but kept. Blue, not the amber of the leftovers
+ * below: these are not money being wasted, they are the way back the owner
+ * asked for.
+ */
+function Archived({ videos, targets }: { videos: VideoLibraryArchived[]; targets: VideoLibraryTarget[] }) {
+  return (
+    <section className="mt-6 rounded-xl border border-[color-mix(in_oklab,var(--info)_35%,var(--border))] bg-[color-mix(in_oklab,var(--info)_5%,var(--n-2))] p-4">
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden="true"
+          className="grid size-10 shrink-0 place-items-center rounded-lg bg-[color-mix(in_oklab,var(--info)_16%,var(--n-2))] text-info"
+        >
+          <Archive className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[length:var(--fs-title-4)] font-semibold text-fg">{c.archivedTitle}</h2>
+          <p className="mt-1 text-[length:var(--fs-text-sm)] leading-relaxed text-fg-muted">{c.archivedHint}</p>
+        </div>
+      </div>
+
+      <ul className="mt-3 flex flex-col gap-2">
+        {videos.map((video) => {
+          const length = duration(video.durationSeconds > 0 ? video.durationSeconds : null);
+          return (
+            <li
+              key={video.videoId}
+              className="flex flex-col gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2.5 sm:flex-row sm:items-center"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-[length:var(--fs-text-sm)] font-medium text-fg">
+                  {video.fromLessonTitle !== null
+                    ? formatCopy(c.archivedFrom, { lesson: video.fromLessonTitle, course: video.fromCourseTitle ?? '' })
+                    : (video.sourceName ?? c.orphanLabel)}
+                </p>
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[length:var(--fs-text-xs)] text-fg-muted">
+                  <Size bytes={video.sizeBytes} />
+                  {video.maxHeight !== null ? (
+                    <span dir="ltr" className="mono">
+                      {formatCopy(c.quality, { height: video.maxHeight })}
+                    </span>
+                  ) : null}
+                  {length !== null ? (
+                    <span dir="ltr" className="mono tabular">
+                      {length}
+                    </span>
+                  ) : null}
+                  <span className="tabular">{stamp.format(new Date(video.archivedAt))}</span>
+                  {video.sourceName ? (
+                    <span dir="ltr" className="mono truncate text-fg-subtle">
+                      {video.sourceName}
+                    </span>
+                  ) : null}
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <RestoreVideoButton videoId={video.videoId} targets={targets} />
+                <DeleteVideoButton videoId={video.videoId} courseId={null} body={c.deleteArchivedBody} />
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

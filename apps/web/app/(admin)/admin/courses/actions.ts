@@ -1129,11 +1129,13 @@ export async function deleteLessonAction(
 export async function removeLessonVideoAction(
   courseId: string,
   lessonId: string,
+  /** An uploaded video only: keep its files in «محفوظة» (default) or delete them. */
+  keep = true,
 ): Promise<ActionResult> {
   try {
     await apiSend(
       'DELETE',
-      `/api/admin/lessons/${lessonId}/video`,
+      `/api/admin/lessons/${lessonId}/video?keep=${keep ? 'true' : 'false'}`,
       z.object({ lessonId: z.uuid() }),
     );
     invalidateCourse(courseId);
@@ -1188,7 +1190,7 @@ export async function probeVideoDurationAction(
 
 export async function startVideoUploadAction(
   lessonId: string,
-  input: { fileName: string; sizeBytes: number; contentType: string },
+  input: { fileName: string; sizeBytes: number; contentType: string; keepPrevious?: boolean },
 ): Promise<{ ok: true; session: VideoUploadSession } | { ok: false; message: string }> {
   try {
     const session = await apiSend(
