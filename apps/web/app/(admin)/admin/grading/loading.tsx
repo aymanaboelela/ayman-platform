@@ -1,6 +1,7 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
 // `/copy/admin`, never the root barrel — same rule as the page it stands in for.
 import { copy } from '@ayman/contracts/copy/admin';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 const c = copy.admin.grading;
 
@@ -19,6 +20,7 @@ const c = copy.admin.grading;
 export default function Loading() {
   return (
     <>
+      <RouteLoadingWatchdog />
       <h1 className="text-[length:var(--fs-title-2)] font-semibold text-fg">{c.title}</h1>
       <p className="mt-1 max-w-[44rem] text-[length:var(--fs-text-sm)] text-fg-muted">{c.lead}</p>
 

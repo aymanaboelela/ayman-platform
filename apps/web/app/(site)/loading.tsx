@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * The landing skeleton. A Server Component, so it ships inside the SSR'd HTML.
@@ -31,6 +32,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <div aria-hidden="true">
+      <RouteLoadingWatchdog />
       <section className="hero">
         <div className="hero__body">
           <div className="hero__copy" style={{ gridColumn: 2, width: '100%' }}>

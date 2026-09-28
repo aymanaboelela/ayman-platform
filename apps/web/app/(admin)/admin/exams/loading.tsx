@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * A Server Component skeleton — no client JS needed to show it, so it streams
@@ -11,6 +12,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function AdminExamsLoading() {
   return (
     <>
+      <RouteLoadingWatchdog />
       <Skeleton width="narrow" className="h-8" />
       <Skeleton width="wide" className="mt-3 h-4" />
 

@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * A Server Component skeleton, required by `cacheComponents`: the page below
@@ -15,6 +16,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <>
+      <RouteLoadingWatchdog />
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div className="flex-1 space-y-2">
           <Skeleton width="narrow" className="h-8 max-w-64" />

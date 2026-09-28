@@ -1,8 +1,10 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 export default function Loading() {
   return (
     <main className="mx-auto max-w-[var(--w-prose)] px-6 py-10">
+      <RouteLoadingWatchdog />
       <Skeleton width="wide" className="mb-6 h-7" />
       <div className="mb-6 space-y-3 rounded-lg border border-line bg-surface-2 p-5">
         <Skeleton width="narrow" className="h-3" />

@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * The login skeleton plus two fields (name and password confirmation), so the
@@ -9,6 +10,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <>
+      <RouteLoadingWatchdog />
       <div className="space-y-2">
         <Skeleton width="wide" className="h-8" />
         <Skeleton width="narrow" className="h-4" />

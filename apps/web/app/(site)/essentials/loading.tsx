@@ -1,10 +1,12 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /** Mirrors the essentials page: tinted hero band, then the term-card grid.
  *  A Server Component, so it ships in the SSR'd HTML. */
 export default function Loading() {
   return (
     <div aria-hidden="true">
+      <RouteLoadingWatchdog />
       <section className="essentials-hero">
         <div className="site-shell">
           <Skeleton className="mx-auto mb-4 h-7 w-32 rounded-full" />

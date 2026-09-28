@@ -1,9 +1,11 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /** The thread's footprint: a header card, a few messages, and the reply box. */
 export default function Loading() {
   return (
     <div aria-hidden="true">
+      <RouteLoadingWatchdog />
       <Skeleton className="h-4 w-28" />
       <Skeleton className="mt-4 h-32 rounded-xl" />
       <div className="mt-5 flex flex-col gap-3">

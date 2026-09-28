@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * Mirrors the page: the hero band, then the two panes, so nothing jumps when
@@ -12,6 +13,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
+      <RouteLoadingWatchdog />
       <Skeleton className="h-56 rounded-lg md:h-64" />
       <div className="mt-6 grid gap-4 xl:grid-cols-2">
         {Array.from({ length: 2 }, (_, index) => (

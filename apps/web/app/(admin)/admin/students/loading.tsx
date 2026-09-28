@@ -1,11 +1,13 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
 import { copy } from '@ayman/contracts';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 const ROW_WIDTHS = ['full', 'wide', 'narrow', 'wide', 'full', 'narrow'] as const;
 
 export default function StudentsLoading() {
   return (
     <>
+      <RouteLoadingWatchdog />
       <Skeleton width="narrow" className="mb-4 h-8" />
       <div className="mb-4">
         <Skeleton width="narrow" className="h-9 max-w-72" />

@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * The root skeleton — the fallback for any segment that has no closer
@@ -48,6 +49,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <div aria-hidden="true" className="mx-auto max-w-[var(--w-shell)] px-6 py-10">
+      <RouteLoadingWatchdog />
       <div className="mb-8 space-y-3">
         <Skeleton width="narrow" className="h-3" />
         <Skeleton width="wide" className="h-8" />

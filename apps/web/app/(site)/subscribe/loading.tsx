@@ -1,4 +1,5 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
+import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
 /**
  * Mirrors the subscribe page: eyebrow, title, lead, then the seven numbered
@@ -11,6 +12,7 @@ import { Skeleton } from '@ayman/ui/components/skeleton';
 export default function Loading() {
   return (
     <div aria-hidden="true">
+      <RouteLoadingWatchdog />
       <section className="site-section">
         <div className="site-shell">
           <Skeleton className="mb-4 h-5 w-24 rounded-full" />

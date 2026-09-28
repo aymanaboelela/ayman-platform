@@ -1023,6 +1023,19 @@ export const copy = {
      * («السؤال ٣»); it is not a sentence and must stay short enough to be both.
      */
     question: 'السؤال',
+    /**
+     * The toast a route skeleton raises when it has been on screen far longer
+     * than a healthy load takes — see `components/route-loading-watchdog.tsx`.
+     *
+     * It says what is true and nothing more: the page is slow. Not «مفيش نت»
+     * (the connection is usually fine — a stalled request or a deploy is the
+     * common cause) and not «حصلت مشكلة» (nothing has failed yet, and the page
+     * may still land a second later). The action is the one thing that clears
+     * every cause at once, and it is what students were already doing by hand:
+     * «ولما أعمل refresh بيفتح على طول».
+     */
+    slowLoad: 'الصفحة بتاخد وقت أطول من العادي.',
+    slowLoadReload: 'نحمّلها من الأول',
   },
   /**
    * Cross-cutting accessibility strings that belong to no single feature —
