@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<title>معاينة</title>
+</head>
+<body>
+<script>
+/*
+ * The HTML playground's preview frame — an empty page that becomes the
+ * student's page.
+ *
+ * It is loaded ONLY inside `components/playground/html-preview.tsx`'s
+ * `<iframe sandbox="allow-scripts allow-forms">`, and `proxy.ts` serves it
+ * with its own enforced policy (`lib/html-preview.ts`): an opaque origin via
+ * the CSP `sandbox` directive, no network of any kind, and `frame-ancestors
+ * 'self'`. Read that file for why this is a document of its own and not a
+ * `srcdoc`.
+ *
+ * The handshake is one message each way and then this script is gone:
+ *
+ *   frame  → parent   { type: 'pg:ready' }
+ *   parent → frame    { type: 'pg:render', token, doc }
+ *   frame  → parent   { type: 'pg:rendered', token }
+ *
+ * `document.open()` replaces this page with the student's document in place,
+ * so the policy above stays attached to it (a navigation would have started
+ * over with a new one). It also erases every listener, which is why a frame
+ * renders exactly once — the playground makes a fresh frame for every run,
+ * which is also what stops the previous run's timers from carrying on.
+ */
+(function () {
+  // Opened directly in a tab: there is nobody to talk to. The CSP sandbox
+  // already puts this page in an opaque origin, so there is nothing to protect
+  // either — it simply stays blank.
+  if (window.parent === window) return;
+
+  // `location.origin` is this URL's origin — the site's — even though the
+  // DOCUMENT's origin is opaque. So it names the one parent allowed to feed
+  // this frame, and the one parent its replies may be delivered to.
+  var home = location.origin;
+
+  window.addEventListener('message', function onMessage(event) {
+    if (event.source !== window.parent || event.origin !== home) return;
+    var data = event.data;
+    if (!data || data.type !== 'pg:render' || typeof data.doc !== 'string') return;
+    window.removeEventListener('message', onMessage);
+    var token = String(data.token);
+    document.open();
+    document.write(data.doc);
+    document.close();
+    window.parent.postMessage({ type: 'pg:rendered', token: token }, home);
+  });
+
+  window.parent.postMessage({ type: 'pg:ready' }, home);
+})();
+</script>
+</body>
+</html>
