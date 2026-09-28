@@ -7,7 +7,7 @@ import { Gamepad2, ListChecks, Sparkles } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import type { GameBanks } from '@ayman/contracts/quiz/game';
-import { Button } from '@ayman/ui';
+import { Button } from '@ayman/ui/components/button';
 import { BulkImportDialog } from '@/components/admin/quiz/bulk-import-dialog';
 import { ensureGameBankAction } from './actions';
 
