@@ -24,7 +24,9 @@ import { uploadBookOrderScreenshot } from '@/lib/upload-client';
 import { formatEGP, formatShipping } from '@/lib/price';
 import {
   CART_ORDER_KEY,
+  cartKeyOf,
   clearInProgressBookOrder,
+  orderMatchesCart,
   readInProgressBookOrder,
   saveInProgressBookOrder,
 } from '@/lib/book-order-storage';
@@ -151,6 +153,9 @@ export function BookOrderPanel({
    * nobody will ever read again. See `book-order-storage.ts`.
    */
   const storageKey = courseId ?? CART_ORDER_KEY;
+  /* The shop's basket, comparable — `null` on the course flow and on «كتبي»,
+     where the order to resume is the one asked for. See `orderMatchesCart`. */
+  const cartKey = items && resumeOrderId === undefined ? cartKeyOf(items) : null;
 
   // Only used once, on the success path — see the ⚠️ there.
   const router = useRouter();
@@ -257,7 +262,14 @@ export function BookOrderPanel({
           setStep('address');
           return;
         }
-        setOrder(fetched);
+        /*
+         * ⚠️ A remembered order for a DIFFERENT basket is not resumed — see
+         * `orderMatchesCart`. Its address is still prefilled below, so the
+         * student presses «التالي» once and gets an order for what is in the
+         * basket now; the old unpaid one stays `address_only` in the queue.
+         */
+        const otherBasket = cartKey !== null && !orderMatchesCart(fetched.items, cartKey);
+        if (!otherBasket) setOrder(fetched);
         if (fetched.status === 'address_only') {
           /*
            * ⚠️ The ADDRESS step, not the payment one, and the prefill below is
@@ -303,11 +315,12 @@ export function BookOrderPanel({
            * «تعديل العنوان» beside it, so the parcel's destination is on screen
            * AND nobody retypes it.
            */
-          setStep('payment');
+          setStep(otherBasket ? 'address' : 'payment');
         } else {
           // Already `paid`/`shipped` — nothing left to resume.
           clearInProgressBookOrder(storageKey);
-          setStep('alreadyOrdered');
+          // …and «إنت طلبت قبل كده» is about THAT basket, not this one.
+          setStep(otherBasket ? 'address' : 'alreadyOrdered');
         }
       })
       .catch(() => {
@@ -319,7 +332,7 @@ export function BookOrderPanel({
     return () => {
       cancelled = true;
     };
-  }, [storageKey, resumeOrderId]);
+  }, [storageKey, resumeOrderId, cartKey]);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const next = event.target.files?.[0] ?? null;

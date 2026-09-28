@@ -1,6 +1,8 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
+  cartKeyOf,
   clearInProgressBookOrder,
+  orderMatchesCart,
   readInProgressBookOrder,
   saveInProgressBookOrder,
 } from './book-order-storage';
@@ -66,5 +68,33 @@ describe('book order storage', () => {
     saveInProgressBookOrder(courseA, orderId);
     saveInProgressBookOrder(courseA, secondOrderId);
     expect(readInProgressBookOrder(courseA)).toBe(secondOrderId);
+  });
+});
+
+describe('orderMatchesCart', () => {
+  const A = '00000000-0000-4000-8000-00000000000a';
+  const B = '00000000-0000-4000-8000-00000000000b';
+
+  it('is the same basket whatever the order of the lines', () => {
+    const cart = cartKeyOf([
+      { bookId: A, quantity: 1 },
+      { bookId: B, quantity: 2 },
+    ]);
+    expect(orderMatchesCart([{ bookId: B, quantity: 2 }, { bookId: A, quantity: 1 }], cart)).toBe(true);
+  });
+
+  it('is NOT the same basket once a quantity changed — the ×1 order under a ×2 basket', () => {
+    const cart = cartKeyOf([{ bookId: A, quantity: 2 }]);
+    expect(orderMatchesCart([{ bookId: A, quantity: 1 }], cart)).toBe(false);
+  });
+
+  it('is NOT the same basket with a book added or removed', () => {
+    const cart = cartKeyOf([{ bookId: A, quantity: 1 }]);
+    expect(orderMatchesCart([{ bookId: A, quantity: 1 }, { bookId: B, quantity: 1 }], cart)).toBe(false);
+    expect(orderMatchesCart([], cart)).toBe(false);
+  });
+
+  it('never matches a line whose book was deleted', () => {
+    expect(orderMatchesCart([{ bookId: null, quantity: 1 }], cartKeyOf([{ bookId: A, quantity: 1 }]))).toBe(false);
   });
 });

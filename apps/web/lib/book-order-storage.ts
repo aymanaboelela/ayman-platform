@@ -84,3 +84,40 @@ export function clearInProgressBookOrder(scope: string): void {
     /* Nothing to clean up if storage is unavailable. */
   }
 }
+
+/**
+ * A basket, as one comparable string: `bookId:copies`, one per book, sorted.
+ *
+ * A string so the panel can hold it as an effect dependency — the `items` array
+ * it is built from is a new object on every render of the shop.
+ */
+export function cartKeyOf(lines: readonly { bookId: string | null; quantity: number }[]): string {
+  const copies = new Map<string, number>();
+  for (const line of lines) {
+    // A deleted book's line has no id; `''` matches no basket line, which is right.
+    const id = line.bookId ?? '';
+    copies.set(id, (copies.get(id) ?? 0) + line.quantity);
+  }
+  return [...copies]
+    .map(([id, n]) => `${id}:${n}`)
+    .sort()
+    .join(',');
+}
+
+/**
+ * Is the order remembered under `CART_ORDER_KEY` still the basket on screen?
+ *
+ * ⚠️ The key outlives the basket. It is ONE key however the basket changes, so
+ * the order under it is the basket as it was when the address was given. A
+ * student who gave an address for one copy, went back and made it two, then
+ * pressed «اطلب» again was resumed straight onto the ONE-copy order: «×2» on
+ * the line above, «الكتب ١٥٠ + الشحن ١٥٠ = ٣٠٠» in the box, and a transfer
+ * made for that. Books and copies only — the prices are the order's own, frozen
+ * when it was placed, and may differ from today's.
+ */
+export function orderMatchesCart(
+  orderLines: readonly { bookId: string | null; quantity: number }[],
+  cartKey: string,
+): boolean {
+  return cartKeyOf(orderLines) === cartKey;
+}
