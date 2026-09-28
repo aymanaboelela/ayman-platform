@@ -144,14 +144,19 @@ export class VideoMirrorService implements OnModuleDestroy {
   async tick(): Promise<void> {
     if (this.config === null || this.storage === null) return;
     /*
-     * ⚠️ الخروج هنا، مش في مكان أبعد.
+     * ⚠️ `pullsFromYouTube` مقفول مش معناه إن التكة تخرج.
      *
-     * المهمة دي بتشتغل كل دقيقة. لما يوتيوب بقى بيرد «Sign in to confirm
-     * you're not a bot» على طلبات السيرفرات، كل تكة كانت بتبدأ سحب، تفشل،
-     * وتسيب قطع ناقصة في الباكت — ٧٬٤٩٢ ملف يتيم اتجمّعوا كده. الخروج قبل أي
-     * استعلام بيخلي التكة مجانية بدل ما تبقى دورة فشل.
+     * كانت بتخرج هنا — عشان لما يوتيوب بقى بيرد «Sign in to confirm you're
+     * not a bot»، كل تكة كانت بتبدأ سحب يفشل ويسيب قطع ناقصة (٧٬٤٩٢ ملف يتيم).
+     * بس المحاضرات المرفوعة بتتعمل **في نفس الطابور ده**، فالخروج كان بيوقف
+     * الرفع المباشر كمان. وعشان كده الـcompose فضل `true` افتراضيًا بعد ما
+     * الكود بقى `false` (#431) — لإن `false` كان هيسيب كل فيديو مرفوع
+     * `pending` للأبد. والنتيجة: السحب الفاشل وكشف الباكت كل دقيقة فضلوا
+     * شغّالين على كل ستاك، وده اللي طلع في «فيديوهات المدرّسين» كـ١٣٤ ألف
+     * طلب Class A في الشهر على باكت فيه ٣٨ ملف.
+     *
+     * دلوقتي المفتاح بيقفل يوتيوب بس، جوّه `step()`.
      */
-    if (!this.pullsFromYouTube) return;
     // A tick that overlaps its predecessor inside ONE process would take the
     // lock straight back off itself — the Redis lock guards replicas, this
     // guards the event loop.
@@ -201,9 +206,13 @@ export class VideoMirrorService implements OnModuleDestroy {
      * `uploading` is absent from every branch and that is the point — the
      * bytes are still arriving from the admin's browser and there is nothing
      * yet to package.
+     *
+     * With YouTube pulls off, only uploads are claimed: a YouTube row would be
+     * a download bound to fail and leave half a ladder behind.
      */
     const claimed = await this.prisma.lessonVideo.findFirst({
       where: {
+        ...(this.pullsFromYouTube ? {} : { provider: 'upload' }),
         OR: [
           { mirrorStatus: 'pending' },
           {
@@ -232,7 +241,9 @@ export class VideoMirrorService implements OnModuleDestroy {
     });
 
     if (claimed === null) {
-      await this.adoptSweep();
+      // The sweep adopts YouTube ladders only, and costs a bucket listing
+      // (Class A) every minute — for nothing, with YouTube off.
+      if (this.pullsFromYouTube) await this.adoptSweep();
       return;
     }
 
