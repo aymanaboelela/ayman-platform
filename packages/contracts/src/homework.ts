@@ -1,5 +1,5 @@
 import { z } from '@ayman/contracts/zod';
-import { HOMEWORK_KEY_PATTERN } from './admin/media';
+import { HOMEWORK_KEY_PATTERN } from '@ayman/contracts/admin/media';
 
 /**
  * الواجب — the exercise set on a lecture, the photographs of the answer, and
