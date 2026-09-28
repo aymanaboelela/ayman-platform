@@ -1,5 +1,4 @@
-/* ====================================================================
-/* ---------------------------------------------------------------------------
+/* ===========================================================================
    Admin-only objects, layered on `app/study.css`.
 
    Entry requirement is the same as study.css's: a class here is used by more
@@ -1208,7 +1207,8 @@ div.unit[data-open] > .unit__head:hover {
   background: var(--chip-hue);
   box-shadow: 0 0 0 3px var(--n-2);
 }
-=======
+
+/* ---------------------------------------------------------------------------
    .live-* — a list that redraws itself (`components/admin/use-live-queue.ts`).
 
    «طلب الدفع يظهر لوحده من غير ريفرش» — `/admin/payments` and
