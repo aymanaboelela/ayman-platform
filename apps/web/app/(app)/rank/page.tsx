@@ -129,7 +129,6 @@ export default async function RankPage() {
 
 function Hero({ data, level }: { data: CohortRank; level: RankLevelProgress }) {
   const rank = data.me.rank ?? 1;
-  const size = data.cohort?.size ?? 1;
   const top = rank <= 3 && data.me.points > 0 ? rank : undefined;
 
   return (
@@ -159,12 +158,13 @@ function Hero({ data, level }: { data: CohortRank; level: RankLevelProgress }) {
           <span className="rk-hero__place-label">{c.place}</span>
           <span className="rk-hero__rank">
             <span className="rk-hero__hash">#</span>
-            <CountUp from={Math.min(size, rank + 60)} to={rank} />
+            {/* العدّ بيبدأ من رقم ثابت فوق المركز، مش من حجم الدفعة — الحجم
+                مابيوصلش للصفحة أصلًا. */}
+            <CountUp from={rank + 30} to={rank} />
           </span>
           <span className="sr-only">{rank}</span>
           {top === 1 ? <Crown className="rk-hero__crown" aria-hidden="true" /> : null}
         </p>
-        <p className="rk-hero__of">{formatCopy(c.of, { size: NUM.format(size) })}</p>
 
         <div className="rk-hero__chips">
           {/* «أحسن من 100%» للأول بتتقري غلط، والشريحة اللي جنبها بتقول «المركز

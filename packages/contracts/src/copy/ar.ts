@@ -3986,7 +3986,6 @@ export const copy = {
     heroPillPlain: 'ترتيبك على الدفعة',
     /** الرقم الكبير بيتقري «المركز ٢٥». */
     place: 'المركز',
-    of: 'من {size} في الدفعة',
     betterThan: 'أحسن من {percent}% من الدفعة',
     firstPlace: 'الأول على الدفعة',
     nextRank: 'ناقصك {points} نقطة على المركز اللي قبلك',

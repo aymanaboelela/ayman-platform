@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Coins,
   FileImage,
+  Film,
   Flag,
   GraduationCap,
   Home,
@@ -130,6 +131,17 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     // whose session reached this component. The route itself requires
     // `course:read-admin`; the sidebar must ask for the same thing.
     permission: 'course:read-admin',
+    group: 'teaching',
+  },
+  {
+    // «الفيديوهات» — every uploaded lecture and what storing it costs. Same
+    // `feature` as the upload itself: a stack that cannot upload has nothing
+    // to list, and the route 404s there anyway.
+    href: '/admin/videos',
+    labelAr: copy.admin.nav.videos,
+    icon: Film,
+    permission: 'course:read-admin',
+    feature: 'video.upload',
     group: 'teaching',
   },
   {

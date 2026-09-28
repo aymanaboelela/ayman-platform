@@ -167,12 +167,6 @@
   filter: drop-shadow(0 4px 10px rgb(0 0 0 / 0.3));
   align-self: flex-start;
 }
-.rk-hero__of {
-  margin-top: 0.35rem;
-  font-size: var(--fs-text-lg);
-  font-weight: var(--fw-semibold);
-  color: rgb(255 255 255 / 0.92);
-}
 .rk-hero__chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
 .rk-chip {
   display: inline-flex;

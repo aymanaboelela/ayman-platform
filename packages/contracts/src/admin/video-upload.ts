@@ -119,3 +119,49 @@ export const VideoUploadStatusSchema = z.object({
   error: z.string().nullable(),
 });
 export type VideoUploadStatus = z.infer<typeof VideoUploadStatusSchema>;
+
+/* ── «الفيديوهات» — every uploaded lecture, and what it costs ─────────────
+ *
+ * The one screen that answers «إيه اللي متخزّن عندنا وبكام». Until it existed,
+ * a deleted lesson (or section, or course) took its database row with it and
+ * left the files in the bucket — billed every month and listed nowhere.
+ */
+
+/** An upload a lesson still points at. */
+export const VideoLibraryItemSchema = z.object({
+  videoId: z.string(),
+  status: VideoMirrorStatusSchema,
+  sourceName: z.string().nullable(),
+  durationSeconds: z.number().int().nonnegative().nullable(),
+  maxHeight: z.number().int().positive().nullable(),
+  /** What the bucket holds for it — the ladder once ready, else the original. */
+  sizeBytes: z.number().int().nonnegative().nullable(),
+  updatedAt: z.string(),
+  lessonId: z.string(),
+  lessonTitle: z.string(),
+  courseId: z.string(),
+  courseTitle: z.string(),
+  sectionTitle: z.string(),
+});
+export type VideoLibraryItem = z.infer<typeof VideoLibraryItemSchema>;
+
+/** Files in the bucket that no lesson points at any more. */
+export const VideoLibraryOrphanSchema = z.object({
+  videoId: z.string(),
+  sizeBytes: z.number().int().nonnegative(),
+  lastModified: z.string().nullable(),
+});
+export type VideoLibraryOrphan = z.infer<typeof VideoLibraryOrphanSchema>;
+
+export const VideoLibrarySchema = z.object({
+  items: z.array(VideoLibraryItemSchema),
+  orphans: z.array(VideoLibraryOrphanSchema),
+  /** Every byte under `v/` and `raw/` — what the bill is computed from. */
+  totalBytes: z.number().int().nonnegative(),
+  /**
+   * `false` when the bucket could not be listed: the lesson rows are still
+   * shown, but orphans and the total are unknown rather than zero.
+   */
+  storageRead: z.boolean(),
+});
+export type VideoLibrary = z.infer<typeof VideoLibrarySchema>;
