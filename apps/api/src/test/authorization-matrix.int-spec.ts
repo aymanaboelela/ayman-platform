@@ -803,6 +803,24 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // however closely it resembles one already listed.
     { label: 'monthly exams: anonymous', method: 'get', path: () => '/api/me/exams', actor: 'anonymous', status: 401 },
     { label: 'monthly exams: student', method: 'get', path: () => '/api/me/exams', actor: 'student', status: 200 },
+    // «تحدّي الأسئلة» — `quiz:read` + فيتشر `quizGame` (مفتوحة هنا لأن التستات
+    // بتجري كستاك أيمن). سؤال مش في بنك الطالب بيرجّع 404 مش الإجابة.
+    { label: 'game round: anonymous', method: 'get', path: () => '/api/me/game/round', actor: 'anonymous', status: 401 },
+    { label: 'game round: student', method: 'get', path: () => '/api/me/game/round', actor: 'student', status: 200 },
+    { label: 'game hub: anonymous', method: 'get', path: () => '/api/me/game/hub', actor: 'anonymous', status: 401 },
+    // «أسئلة الألعاب» في الأدمن — `question:write` زي بنك الأسئلة.
+    { label: 'admin game banks: student', method: 'get', path: () => '/api/admin/game-banks', actor: 'student', status: 403 },
+    { label: 'admin game banks: admin', method: 'get', path: () => '/api/admin/game-banks', actor: 'admin', status: 200 },
+    { label: 'admin game bank ensure: student', method: 'post', path: () => `/api/admin/game-banks/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin game bank ensure: admin, unknown course', method: 'post', path: () => `/api/admin/game-banks/${randomUUID()}`, actor: 'admin', status: 404 },
+    { label: 'game hub: student', method: 'get', path: () => '/api/me/game/hub', actor: 'student', status: 200 },
+    { label: 'game voice: anonymous', method: 'get', path: () => `/api/me/game/voice/${randomUUID()}/stem`, actor: 'anonymous', status: 401 },
+    // من غير مفتاح Azure (زي CI) أو برّه بنك الطالب — 404 في الحالتين.
+    { label: 'game voice: student', method: 'get', path: () => `/api/me/game/voice/${randomUUID()}/stem`, actor: 'student', status: 404 },
+    { label: 'game lifeline: anonymous', method: 'post', path: () => '/api/me/game/lifeline', actor: 'anonymous', status: 401, body: () => ({ questionId: randomUUID(), kind: 'fifty' }) },
+    { label: 'game lifeline: student, question outside their pool', method: 'post', path: () => '/api/me/game/lifeline', actor: 'student', status: 404, body: () => ({ questionId: randomUUID(), kind: 'audience' }) },
+    { label: 'game answer: anonymous', method: 'post', path: () => '/api/me/game/answer', actor: 'anonymous', status: 401, body: () => ({ questionId: randomUUID(), optionId: null }) },
+    { label: 'game answer: student, question outside their pool', method: 'post', path: () => '/api/me/game/answer', actor: 'student', status: 404, body: () => ({ questionId: randomUUID(), optionId: null }) },
     // Same again for the activity feed, guarded by `progress:read` — the READ
     // half of the pair the heartbeat writes. Its own rows for the same reason
     // the quiz history has its own: a different permission is a different

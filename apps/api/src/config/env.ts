@@ -169,6 +169,15 @@ const schema = z
      *
      * Unset means no check, which is where every stack starts.
      */
+    /**
+     * صوت «من سيربح المليون» — Azure Speech، الصوت المصري «شاكر»
+     * (`ar-EG-ShakirNeural`). الاتنين اختياريين: من غيرهم اللعبة بتقرا
+     * بصوت المتصفح. `optionalSecret` للسبب اللي فوق: `${VAR:-}` في
+     * docker-compose بيبعت سترينج فاضية.
+     */
+    AZURE_SPEECH_KEY: optionalSecret,
+    /** `westeurope`، `uaenorth`… — الريجن اللي الـSpeech resource اتعمل فيه. */
+    AZURE_SPEECH_REGION: optionalSecret,
     TURNSTILE_SECRET_KEY: optionalSecret,
 
     /** Where uploaded, re-encoded bytes live on disk (Task 13). */

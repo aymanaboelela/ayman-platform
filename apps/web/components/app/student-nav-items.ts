@@ -2,6 +2,7 @@ import {
   BarChart3,
   BookMarked,
   BookOpen,
+  Gamepad2,
   LayoutDashboard,
   MonitorSmartphone,
   Route,
@@ -13,6 +14,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
+import { aymanOnly } from '@/lib/tenant';
 
 export interface StudentNavItem {
   href: string;
@@ -69,6 +71,11 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * فوق)، فعلى الموبايل بيبقى في «حاجات تانية».
    */
   { href: '/rank', labelAr: copy.nav.rank, icon: Trophy },
+  /*
+   * «تحدّي الأسئلة» — لأيمن بس (اتطلبت كده). `aymanOnly` بيشيل الصف كله على
+   * أي ستاك تاني، والصفحة والـAPI عليهم حارس `quizGame` كمان.
+   */
+  ...(aymanOnly(true) ? [{ href: '/game', labelAr: copy.nav.game, icon: Gamepad2 }] : []),
   { href: '/library', labelAr: copy.nav.courses, icon: BookMarked, tab: true },
   /*
    * «كود الكورس» — right under the courses, because that is where a student

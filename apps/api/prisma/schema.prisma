@@ -1019,6 +1019,8 @@ model Course {
   // convention as `courses_note_needs_emphasis`) enforces that a course with
   // either price set also has `requiresGrant = true` — see the note on
   // `monthlyPriceCents` above.
+  /// «أسئلة الألعاب» بتاعة الكورس — شوف `QuestionCategory.gameCourseId`.
+  gameQuestionBank QuestionCategory? @relation("GameQuestionBank")
   @@index([status, publishedAt])
   @@index([systemId, year, trackId, subjectId])
   @@map("courses")
@@ -3365,10 +3367,14 @@ model QuestionCategory {
   name       String
   sortOrder  Int                @default(0) @map("sort_order")
   createdAt  DateTime           @default(now()) @map("created_at")
+  /// «أسئلة الألعاب» — لو مربوط بكورس، الألعاب بتسحب من أسئلة التصنيف ده
+  /// لطلبة الكورس. واحد بس لكل كورس. NULL = تصنيف عادي.
+  gameCourseId String?           @unique @map("game_course_id") @db.Uuid
 
-  parent   QuestionCategory?   @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
-  children QuestionCategory[]  @relation("CategoryTree")
-  entries  QuestionBankEntry[]
+  parent     QuestionCategory?   @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children   QuestionCategory[]  @relation("CategoryTree")
+  entries    QuestionBankEntry[]
+  gameCourse Course?             @relation("GameQuestionBank", fields: [gameCourseId], references: [id], onDelete: SetNull)
 
   @@index([parentId])
   @@map("question_categories")
