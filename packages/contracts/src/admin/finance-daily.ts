@@ -71,11 +71,21 @@ export const FinanceDaySchema = z.object({
   bookCents: cents,
   /** Money given back THAT day, whichever day the sale was. */
   refundCents: cents,
-  /** `subscriptionCents + bookCents − refundCents`. Can be negative. */
+  /**
+   * «شحن المحفظة» — real money that came into wallets that day (net of paid
+   * credits taken back). A subscription paid FROM the wallet adds nothing to
+   * `subscriptionCents`: its money is counted here, the day it was topped up.
+   */
+  walletCents: cents,
+  /** `subscriptionCents + bookCents + walletCents − refundCents`. Can be negative. */
   netCents: cents,
+  /** Every subscription approved that day, wallet-paid ones included — they
+   *  are real subscriptions, they are just not new money. */
   subscriptionCount: count,
   newCount: count,
   renewalCount: count,
+  /** Of `subscriptionCount`, how many were paid from the wallet. */
+  walletPaidCount: count,
   /** Comped subscriptions opened that day — real access, no money. */
   freeCount: count,
   bookCount: count,
@@ -132,10 +142,12 @@ export const AdminFinanceDailySchema = z.object({
     subscriptionCents: cents,
     bookCents: cents,
     refundCents: cents,
+    walletCents: cents,
     netCents: cents,
     subscriptionCount: count,
     newCount: count,
     renewalCount: count,
+    walletPaidCount: count,
     /** Distinct students with at least one renewal in the window. */
     renewingStudents: count,
     /** Distinct students with at least one paid subscription in the window. */
@@ -161,8 +173,10 @@ export type StudentPaymentKind = z.infer<typeof StudentPaymentKindSchema>;
 
 /** How the payment reached the platform. `instapay` — matched to a transfer
  *  and approved with nobody looking; `manual` — recorded by an admin from the
- *  student's page; `review` — a claim an admin approved from the queue. */
-export const StudentPaymentViaSchema = z.enum(['instapay', 'manual', 'review']);
+ *  student's page; `review` — a claim an admin approved from the queue;
+ *  `wallet` — paid from the student's wallet, so NOT new money (it was counted
+ *  when the wallet was topped up). */
+export const StudentPaymentViaSchema = z.enum(['instapay', 'manual', 'review', 'wallet']);
 export type StudentPaymentVia = z.infer<typeof StudentPaymentViaSchema>;
 
 export const StudentPaymentRowSchema = z.object({
@@ -189,8 +203,12 @@ export type StudentPaymentRow = z.infer<typeof StudentPaymentRowSchema>;
 
 export const AdminStudentPaymentsSchema = z.object({
   totals: z.object({
-    /** Paid, before refunds. */
+    /** Paid in real money, before refunds. Wallet-paid subscriptions are NOT
+     *  in here — see `walletPaidCents`. */
     paidCents: cents,
+    /** Subscriptions paid from the wallet, at their price. The money itself is
+     *  on the wallet's own statement, where it came in. */
+    walletPaidCents: cents,
     refundedCents: cents,
     netCents: cents,
     paymentCount: count,

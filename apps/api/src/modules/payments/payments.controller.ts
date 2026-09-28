@@ -6,7 +6,9 @@ import { MAX_UPLOAD_BYTES } from '@ayman/contracts/admin/media';
 import type { PaymentSubmission } from '@ayman/contracts/payments';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
+import type { WalletPurchaseResult } from '@ayman/contracts/wallet';
 import { SubmitPaymentDto } from './payments.dto';
+import { WalletPurchaseDto } from '../wallet/wallet.dto';
 import { PaymentsService } from './payments.service';
 
 interface MulterFile {
@@ -46,6 +48,22 @@ export class PaymentsController {
     @Body() body: SubmitPaymentDto,
   ): Promise<PaymentSubmission> {
     return this.payments.submit(user.id, body);
+  }
+
+  /**
+   * «ادفع من المحفظة» — the same purchase `submissions` records, paid from the
+   * student's wallet instead of by a transfer. Here and not under `/wallet`
+   * because it is a SUBSCRIPTION first: it goes through the same rules and the
+   * same grant writers as a claim, see `PaymentsService.purchaseFromWallet`.
+   */
+  @RequirePermission('payment:submit')
+  @UsePipes(ZodValidationPipe)
+  @Post('wallet-purchase')
+  purchaseFromWallet(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: WalletPurchaseDto,
+  ): Promise<WalletPurchaseResult> {
+    return this.payments.purchaseFromWallet(user.id, body);
   }
 
   @RequirePermission('payment:submit')

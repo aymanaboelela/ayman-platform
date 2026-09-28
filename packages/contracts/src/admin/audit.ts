@@ -420,6 +420,26 @@ export const AUDIT_ACTIONS = [
   'honor:add',
   'honor:update',
   'honor:remove',
+  /*
+   * «المحفظة» — every movement of a student's money, each its own action so
+   * «مين شحنله» and «مين خصم منه» are filters, not metadata searches. Each is
+   * written INSIDE the transaction that writes the ledger row (`recordTx`),
+   * so there is no wallet movement without its audit row and no audit row for
+   * a movement that rolled back.
+   *
+   * `topup-submit` and `purchase` are written by the STUDENT, like
+   * `payment:submit`. `code-redeem` is the money half of `unlock-code:redeem`
+   * on a wallet code — its own row, because «الكود ده حط كام في محفظة مين»
+   * is a money question the unlock-code log cannot answer.
+   */
+  'wallet:topup-submit',
+  'wallet:topup-approve',
+  'wallet:topup-reject',
+  'wallet:admin-credit',
+  'wallet:admin-debit',
+  'wallet:code-redeem',
+  'wallet:purchase',
+  'wallet:refund',
 ] as const;
 
 export const AuditActionSchema = z.enum(AUDIT_ACTIONS);

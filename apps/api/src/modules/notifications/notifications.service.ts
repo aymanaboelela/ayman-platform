@@ -130,7 +130,15 @@ export type EmitInput =
    * بيتعدّل بعد ما يتكتب (المدرّس بيصلّح مركز أو سبب)، وإشعار محفور فيه
    * «المركز التاني» كان هيفضل بيقول كده بعد ما يبقى الأول.
    */
-  | { userId: string; kind: 'honor_board_listed'; pinId: string };
+  | { userId: string; kind: 'honor_board_listed'; pinId: string }
+  /**
+   * «المحفظة». Amounts are numbers, not prose, so they are stored — a sum of
+   * money does not get renamed after the fact the way a title does. The
+   * student's NAME on the admin kind is still resolved at read time.
+   */
+  | { userId: string; kind: 'wallet_topup_submitted'; topupId: string; amountCents: number }
+  | { userId: string; kind: 'wallet_credited'; amountCents: number; source: 'topup' | 'admin' | 'refund' }
+  | { userId: string; kind: 'wallet_topup_rejected'; topupId: string; amountCents: number; reason: string };
 
 /** The kinds whose title is resolved from a lesson at read time. */
 const LESSON_KINDS = new Set([
@@ -415,7 +423,21 @@ export class NotificationsService {
       .map((row) => payloadString(row.payload, 'submissionId'))
       .filter((id): id is string => id !== null);
 
+    // «طلب شحن المحفظة» — keyed by the top-up id in the same map, for the
+    // same reason as the homework ids above: uuid7s from their own table.
+    const topupIds = page
+      .filter((row) => row.kind === 'wallet_topup_submitted')
+      .map((row) => payloadString(row.payload, 'topupId'))
+      .filter((id): id is string => id !== null);
+
     const names = new Map<string, string>();
+    if (topupIds.length > 0) {
+      const topups = await this.prisma.walletTopup.findMany({
+        where: { id: { in: topupIds } },
+        select: { id: true, user: { select: { name: true } } },
+      });
+      for (const topup of topups) names.set(topup.id, topup.user.name);
+    }
     if (submissionIds.length > 0) {
       const submissions = await this.prisma.paymentSubmission.findMany({
         where: { id: { in: submissionIds } },
@@ -814,6 +836,40 @@ function toEntry(
       // account behind it has since been deleted.
       studentName: names.get(submissionId) ?? '',
     };
+  }
+
+  /*
+   * «المحفظة» — none of the three names a lesson or a course, so they are
+   * answered here, before the lesson lookup below would drop them.
+   */
+  if (row.kind === 'wallet_topup_submitted') {
+    const topupId = payloadString(row.payload, 'topupId');
+    const amountCents = payloadNumber(row.payload, 'amountCents');
+    if (!topupId || amountCents === null) return null;
+    return {
+      ...base,
+      kind: 'wallet_topup_submitted',
+      topupId,
+      amountCents,
+      // An account deleted since still leaves a request worth knowing about.
+      studentName: names.get(topupId) ?? '',
+    };
+  }
+
+  if (row.kind === 'wallet_credited') {
+    const amountCents = payloadNumber(row.payload, 'amountCents');
+    const source = payloadString(row.payload, 'source');
+    if (amountCents === null) return null;
+    if (source !== 'topup' && source !== 'admin' && source !== 'refund') return null;
+    return { ...base, kind: 'wallet_credited', amountCents, source };
+  }
+
+  if (row.kind === 'wallet_topup_rejected') {
+    const topupId = payloadString(row.payload, 'topupId');
+    const amountCents = payloadNumber(row.payload, 'amountCents');
+    const reason = payloadString(row.payload, 'reason');
+    if (!topupId || amountCents === null || !reason) return null;
+    return { ...base, kind: 'wallet_topup_rejected', topupId, amountCents, reason };
   }
 
   if (row.kind === 'book_order_placed') {

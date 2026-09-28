@@ -114,6 +114,20 @@ export const NOTIFICATION_KINDS = [
    * المثبّتة واخدة `quiz_graded` على نفس النتيجة، وإشعار تاني عليها دوشة.
    */
   'honor_board_listed',
+  /**
+   * «المحفظة» — one ADMIN kind and two STUDENT kinds.
+   *
+   * `wallet_topup_submitted` is the top-up desk's alert, the same fan-out as
+   * `payment_submitted` (everyone holding `payment:read`). `wallet_credited`
+   * says money arrived in the student's wallet — an approved request, an
+   * admin's credit, a refund of a cancelled wallet purchase — and
+   * `wallet_topup_rejected` carries the admin's reason, exactly as
+   * `payment_rejected` does. Amounts are numbers on the payload; nothing about
+   * a sum of money gets renamed after the fact.
+   */
+  'wallet_topup_submitted',
+  'wallet_credited',
+  'wallet_topup_rejected',
 ] as const;
 
 const base = {
@@ -440,6 +454,41 @@ export const HonorBoardListedNotificationSchema = z.object({
   reason: z.string(),
 });
 
+/** ADMIN — a student sent a wallet top-up request. `studentName` resolved at
+ *  read time, like `payment_submitted`'s. */
+export const WalletTopupSubmittedNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('wallet_topup_submitted'),
+  topupId: z.uuid(),
+  amountCents: z.number().int(),
+  studentName: z.string(),
+});
+
+/**
+ * Where money that landed in a wallet came from — the card says a different
+ * sentence for each. `code` is not here: the student typed the code and is
+ * looking at the success screen already.
+ */
+export const WalletCreditSourceSchema = z.enum(['topup', 'admin', 'refund']);
+export type WalletCreditSource = z.infer<typeof WalletCreditSourceSchema>;
+
+/** STUDENT — «اتشحنلك ٢٠٠ جنيه في المحفظة». */
+export const WalletCreditedNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('wallet_credited'),
+  amountCents: z.number().int(),
+  source: WalletCreditSourceSchema,
+});
+
+/** STUDENT — a top-up request turned down, with the admin's own words. */
+export const WalletTopupRejectedNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('wallet_topup_rejected'),
+  topupId: z.uuid(),
+  amountCents: z.number().int(),
+  reason: z.string(),
+});
+
 export const NotificationSchema = z.discriminatedUnion('kind', [
   QuizGradedNotificationSchema,
   ExtraAttemptNotificationSchema,
@@ -459,6 +508,9 @@ export const NotificationSchema = z.discriminatedUnion('kind', [
   HomeworkSubmittedNotificationSchema,
   HomeworkReviewedNotificationSchema,
   HonorBoardListedNotificationSchema,
+  WalletTopupSubmittedNotificationSchema,
+  WalletCreditedNotificationSchema,
+  WalletTopupRejectedNotificationSchema,
 ]);
 
 export const NotificationFeedSchema = z.object({
@@ -504,8 +556,13 @@ export type UnreadCount = z.infer<typeof UnreadCountSchema>;
  * claim on its own — the two screens move together or they contradict each
  * other. `waiting` is always the PENDING CLAIMS count, the number the
  * sidebar's «المدفوعات» badge draws.
+ *
+ * `wallet-topups` is «طلبات الشحن» — the wallet's own review queue on
+ * `/admin/wallet/requests`, heard by the same `payment:read`. Its own queue and
+ * not part of `payments`, because `waiting` is a COUNT and the two sidebar
+ * badges count different rows.
  */
-export const LIVE_QUEUES = ['payments'] as const;
+export const LIVE_QUEUES = ['payments', 'wallet-topups'] as const;
 export const LiveQueueSchema = z.enum(LIVE_QUEUES);
 export type LiveQueue = z.infer<typeof LiveQueueSchema>;
 
