@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { AdminBookCreateSchema } from '@ayman/contracts/admin/books';
-import { bookFormPayload, bookPlacementLabels, type BookFormValues } from './book-payload';
+import { AdminBookCreateSchema, BookSlugSchema } from '@ayman/contracts/admin/books';
+import {
+  bookFormPayload,
+  bookPlacementLabels,
+  courseChoices,
+  slugFromTitle,
+  type BookFormValues,
+  type CourseOption,
+} from './book-payload';
 
 /**
  * The two rules in the add-book form that are not "render a field".
@@ -120,5 +127,78 @@ describe('bookPlacementLabels', () => {
     expect(
       bookPlacementLabels({ showOnLanding: true, showOnCourse: true, courseId: COURSE }),
     ).toHaveLength(2);
+  });
+});
+
+describe('bookFormPayload — الترم', () => {
+  it('sends the term the picker holds — «الترم الأول» is `first`, not the `full` default', () => {
+    // The production fix for the two year-1 books is exactly this field, so
+    // the value has to survive the trip from the form to the PATCH unchanged.
+    expect(bookFormPayload(values({ term: 'first' }))?.term).toBe('first');
+    expect(bookFormPayload(values({ term: 'second' }))?.term).toBe('second');
+    expect(bookFormPayload(values({ term: 'full' }))?.term).toBe('full');
+  });
+});
+
+describe('slugFromTitle', () => {
+  it('turns an Arabic title into a hyphenated handle the slug schema accepts', () => {
+    const slug = slugFromTitle('كتاب أولى بكالوريا برمجة عربي');
+    expect(slug).toBe('كتاب-أولى-بكالوريا-برمجة-عربي');
+    expect(BookSlugSchema.safeParse(slug).success).toBe(true);
+  });
+
+  it('drops the characters that would turn a shared link into a different URL', () => {
+    // `/` and `.` are what the schema forbids; `#`, `?` and `%` are legal there
+    // and still break a pasted `/books#book-…` link.
+    expect(slugFromTitle(' كتاب 2.0 / مراجعة #1? 50% ')).toBe('كتاب-2-0-مراجعة-1-50');
+  });
+
+  it('lower-cases Latin and never ends on a hyphen after the length cap', () => {
+    expect(slugFromTitle('Python Basics')).toBe('python-basics');
+    const long = slugFromTitle(`${'ا'.repeat(79)} ب`);
+    expect(long.length).toBeLessThanOrEqual(80);
+    expect(long.endsWith('-')).toBe(false);
+  });
+});
+
+describe('courseChoices', () => {
+  const course = (patch: Partial<CourseOption> & { id: string }): CourseOption => ({
+    title: 'البرمجة',
+    year: 1,
+    forGeneral: true,
+    forLanguages: false,
+    status: 'published',
+    ...patch,
+  });
+  const OTHER = '22222222-2222-4222-8222-222222222222';
+  const DRAFT = '33333333-3333-4333-8333-333333333333';
+
+  it('greys out a course another book holds, and names that book', () => {
+    const [choice] = courseChoices([course({ id: COURSE })], null, {
+      [COURSE]: 'كتاب الترم الأول',
+    });
+    expect(choice?.disabled).toBe(true);
+    expect(choice?.label).toContain('كتاب الترم الأول');
+  });
+
+  it('keeps THIS book’s own course pickable — it is not «taken» by itself', () => {
+    const [choice] = courseChoices([course({ id: COURSE })], COURSE, {
+      [COURSE]: 'الكتاب ده نفسه',
+    });
+    expect(choice?.disabled).toBe(false);
+    expect(choice?.label).not.toContain('الكتاب ده نفسه');
+  });
+
+  it('offers published courses only — plus the draft this book is already linked to', () => {
+    const courses = [course({ id: OTHER }), course({ id: DRAFT, status: 'draft' })];
+    expect(courseChoices(courses, null, {}).map((choice) => choice.id)).toEqual([OTHER]);
+    // Without the linked draft in the list the `<select>` would show «من غير
+    // كورس» over a link that exists.
+    expect(courseChoices(courses, DRAFT, {}).map((choice) => choice.id)).toEqual([OTHER, DRAFT]);
+  });
+
+  it('passes a status-less list (the course editor’s locked form) straight through', () => {
+    const { status: _status, ...bare } = course({ id: OTHER });
+    expect(courseChoices([bare], null, {})).toHaveLength(1);
   });
 });

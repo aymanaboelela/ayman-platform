@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { Eye, EyeOff, Trash2 } from 'lucide-react';
 import type { AdminBookRow } from '@ayman/contracts/admin/books';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Button } from '@ayman/ui/components/button';
@@ -49,9 +50,22 @@ export function BookRowActions({ book }: { book: AdminBookRow }) {
   return (
     <div className="flex items-center gap-2">
       <Button type="button" variant="secondary" size="sm" onClick={toggleActive} disabled={pending}>
+        {book.isActive ? (
+          <EyeOff size={15} aria-hidden="true" />
+        ) : (
+          <Eye size={15} aria-hidden="true" />
+        )}
         {book.isActive ? c.catalogHide : c.catalogShow}
       </Button>
-      <Button type="button" variant="ghost" size="sm" onClick={remove} disabled={pending}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={remove}
+        disabled={pending}
+        className="hover:text-[color:var(--err)]"
+      >
+        <Trash2 size={15} aria-hidden="true" />
         {c.catalogDelete}
       </Button>
       {error ? (
