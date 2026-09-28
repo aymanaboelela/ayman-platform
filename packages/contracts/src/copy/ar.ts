@@ -2388,6 +2388,56 @@ export const copy = {
     pythonNoPackages: 'المكتبات الخارجية زي numpy مش متاحة هنا — بايثون الأساسية بس.',
     resetRuntime: 'نبدأ من نضيف',
     timeout: 'الكود أخد وقت طويل واتوقف. غالبًا فيه حلقة مالهاش نهاية.',
+
+    // ── الهيرو ────────────────────────────────────────────────────────────
+    heroPill: 'ملعب البرمجة',
+    /** `{n}` is the number of ready-made examples across every language. */
+    heroExamples: '{n} مثال جاهز',
+    heroLocal: 'بيشتغل جوّه المتصفّح',
+
+    // ── HTML + CSS ────────────────────────────────────────────────────────
+    web: 'HTML + CSS',
+    /** The two file tabs of the HTML language. Shown as file names. */
+    filesLabel: 'الملفات',
+    preview: 'المعاينة',
+    previewFrameTitle: 'معاينة الصفحة',
+    previewEmpty: 'دوسة على «تشغيل» والصفحة بتتبني هنا.',
+    /** A noun on purpose — every button name containing «تشغيل» would also
+     *  match the e2e suite's `getByRole('button', { name: c.run })`. */
+    previewRefresh: 'تحديث المعاينة',
+    previewLive: 'تحديث تلقائي',
+    previewScriptNote: 'الصفحة فيها JavaScript — التحديث بيحصل مع «تشغيل» بس.',
+    previewHung: 'الصفحة علّقت ومردّتش، فاتقفلت. غالبًا فيه حلقة مالهاش نهاية.',
+    /** `{href}` is the link the student's page tried to open. */
+    previewLinkBlocked: 'الروابط مش بتفتح جوّه المعاينة: {href}',
+    previewSandboxNote:
+      'الصفحة بتشتغل في صندوق مقفول: مابتوصلش للإنترنت ولا لحسابك، فأي صورة لازم تبقى SVG أو ألوان CSS أو إيموجي.',
+    console: 'الكونسول',
+
+    // ── حالة التشغيل ───────────────────────────────────────────────────────
+    statusIdle: 'في الانتظار',
+    /** `{ms}` is how long the run took, in milliseconds. */
+    statusDone: 'خلص في {ms} مللي ثانية',
+    statusError: 'فيه غلطة',
+    statusRendered: 'الصفحة اتبنت',
+    shortcut: 'اختصار: Ctrl + Enter',
+
+    // ── مكتبة الأمثلة ─────────────────────────────────────────────────────
+    galleryEyebrow: 'أمثلة جاهزة للتشغيل',
+    galleryTitle: 'مكتبة الأمثلة',
+    galleryLead:
+      'كل مثال بيشتغل زي ما هو. دوسة على «تجربة» والكود بيتحط في المحرّر ويشتغل على طول — وبعدها يتعدّل براحتك.',
+    galleryFilterLabel: 'نوع الأمثلة',
+    /** `{lang}` is a language name — the chips' accessible names, kept apart
+     *  from the editor's own language buttons. */
+    galleryFilterAria: 'أمثلة {lang}',
+    /** A noun, not «جرّب»: the imperative has a gender, the platform never
+     *  asks which one the student is. */
+    tryExample: 'تجربة',
+    /** `{title}` is the example's title. */
+    tryExampleAria: 'تجربة مثال: {title}',
+    /** On the card of the example currently loaded in the editor. */
+    inEditor: 'في المحرّر',
   },
   /**
    * مدارس عام / مدارس لغات.
@@ -4662,7 +4712,7 @@ export const copy = {
       {
         id: 'playground',
         q: 'تجربة الكود دي إيه؟',
-        a: 'صفحة «تجربة الكود»: كود بيتكتب ويشتغل على طول في المتصفح. مافيش حاجة بتتحفظ ولا بتتصحّح — المكان ده للتجريب بس.',
+        a: 'صفحة «تجربة الكود»: كود JavaScript وPython بيتكتب ويشتغل على طول في المتصفح، وصفحات HTML وCSS بتتشاف وهي بتتبني، ومعاها مكتبة أمثلة جاهزة. مافيش حاجة بتتحفظ ولا بتتصحّح — المكان ده للتجريب بس.',
       },
 
       // ── الامتحانات والنتايج ─────────────────────────────────────────

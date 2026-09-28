@@ -87,6 +87,20 @@ test.describe('playground', () => {
     await expect(editorOf(page)).toHaveValue(/for \(/);
   });
 
+  test('runs an example straight from the gallery', async ({ page }) => {
+    const student = uniqueStudent();
+    await registerAndOnboard(page, student);
+    await page.goto('/playground');
+
+    // «تجربة» loads the program AND runs it — the widest line of the pyramid
+    // is the proof that it executed, not just that the text was pasted in.
+    await page
+      .getByRole('button', { name: c.tryExampleAria.replace('{title}', 'هرم نجوم') })
+      .click();
+    await expect(editorOf(page)).toHaveValue(/"\*"\.repeat/);
+    await expect(page.locator('[aria-live="polite"]').getByText('*'.repeat(15), { exact: true })).toBeVisible();
+  });
+
   test('has no serious or critical axe violations', async ({ page }) => {
     const student = uniqueStudent();
     await registerAndOnboard(page, student);
@@ -97,5 +111,85 @@ test.describe('playground', () => {
     expect(
       results.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical'),
     ).toEqual([]);
+  });
+});
+
+/**
+ * The HTML + CSS tab: the student's page in a sandboxed frame.
+ *
+ * The containment itself is asserted on the headers in `proxy.test.ts` and on
+ * the constants in `lib/html-preview.test.ts`. What only a browser can prove is
+ * that the two layers actually hold together at runtime — that a `<script>` in
+ * the page RUNS, and that the same script cannot touch the student's cookies,
+ * storage, this page, or the network.
+ */
+test.describe('playground — HTML + CSS', () => {
+  const live = (page: import('@playwright/test').Page) => page.frameLocator('iframe[data-state="live"]');
+
+  test('renders the page the student wrote, styled by their stylesheet', async ({ page }) => {
+    const student = uniqueStudent();
+    await registerAndOnboard(page, student);
+    await page.goto('/playground');
+
+    await page.getByRole('button', { name: c.web, exact: true }).click();
+    await editorOf(page).fill('<h1 id="t">صفحتي الأولى</h1>');
+    await page.getByRole('button', { name: 'style.css' }).click();
+    await editorOf(page).fill('h1 { color: rgb(1, 2, 3); }');
+    await page.getByRole('button', { name: c.run }).click();
+
+    const heading = live(page).getByRole('heading', { name: 'صفحتي الأولى' });
+    await expect(heading).toBeVisible();
+    await expect(heading).toHaveCSS('color', 'rgb(1, 2, 3)');
+  });
+
+  test('a page example from the gallery renders', async ({ page }) => {
+    const student = uniqueStudent();
+    await registerAndOnboard(page, student);
+    await page.goto('/playground');
+
+    await page
+      .getByRole('button', { name: c.tryExampleAria.replace('{title}', 'عدّاد تفاعلي') })
+      .click();
+    // Its <script> runs: the + button changes the number.
+    await live(page).getByRole('button', { name: '+' }).click();
+    await live(page).getByRole('button', { name: '+' }).click();
+    await expect(live(page).locator('#value')).toHaveText('2');
+  });
+
+  test('the page cannot reach the session, this page, or the network', async ({ page }) => {
+    const student = uniqueStudent();
+    await registerAndOnboard(page, student);
+    await page.goto('/playground');
+    await page.getByRole('button', { name: c.web, exact: true }).click();
+
+    const frame = page.locator('iframe[data-state]').first();
+    await expect(frame).toHaveAttribute('sandbox', /allow-scripts/);
+    expect(await frame.getAttribute('sandbox')).not.toContain('allow-same-origin');
+
+    // Each probe is ATTEMPTED, not inspected: a SecurityError from the real
+    // call proves more than the absence of a flag.
+    await editorOf(page).fill(
+      [
+        '<p>probe</p>',
+        '<script>',
+        'var r = [];',
+        'try { r.push("cookie:" + document.cookie); } catch (e) { r.push("cookie-blocked:" + e.name); }',
+        'try { localStorage.setItem("x", "1"); r.push("storage-open"); } catch (e) { r.push("storage-blocked:" + e.name); }',
+        'try { r.push("parent:" + parent.document.title); } catch (e) { r.push("parent-blocked:" + e.name); }',
+        'console.log(r.join(" "));',
+        'fetch("/api/session", { credentials: "include" })',
+        '  .then(function () { console.log("REACHED THE NETWORK"); })',
+        '  .catch(function (e) { console.log("fetch-blocked:" + e.name); });',
+        '</script>',
+      ].join('\n'),
+    );
+    await page.getByRole('button', { name: c.run }).click();
+
+    const consoleOut = page.locator('.pg-mini-console');
+    await expect(consoleOut).toContainText('cookie-blocked:SecurityError');
+    await expect(consoleOut).toContainText('storage-blocked:SecurityError');
+    await expect(consoleOut).toContainText('parent-blocked:SecurityError');
+    await expect(consoleOut).toContainText('fetch-blocked:TypeError');
+    await expect(consoleOut).not.toContainText('REACHED THE NETWORK');
   });
 });
