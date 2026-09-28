@@ -104,6 +104,35 @@ export const VideoUploadAbortSchema = z
 export type VideoUploadAbort = z.infer<typeof VideoUploadAbortSchema>;
 
 /**
+ * «كمّل الرفع» — pick the same file again after the tab closed or the line
+ * dropped, and send only what the bucket does not already have.
+ *
+ * `sizeBytes` is the browser's claim that this is the same file, checked
+ * against what was declared when the upload opened: a different file of a
+ * different size must not be stitched onto the first one's parts.
+ */
+export const VideoUploadResumeSchema = z
+  .object({
+    videoId: z.string().regex(UPLOAD_ID_RE),
+    uploadId: z.string().min(1),
+    sizeBytes: z.number().int().positive(),
+  })
+  .strict();
+export type VideoUploadResume = z.infer<typeof VideoUploadResumeSchema>;
+
+/** A session re-opened: fresh URLs for the missing parts, and the ETags of the rest. */
+export const VideoUploadResumedSchema = z.object({
+  videoId: z.string().regex(UPLOAD_ID_RE),
+  uploadId: z.string().min(1),
+  partSizeBytes: z.number().int().positive(),
+  /** Only the parts still to send — empty when every part is already up. */
+  parts: z.array(VideoUploadPartSchema),
+  done: z.array(z.object({ partNumber: z.number().int().positive(), etag: z.string().min(1) })),
+  expiresAt: z.string(),
+});
+export type VideoUploadResumed = z.infer<typeof VideoUploadResumedSchema>;
+
+/**
  * What the admin screen polls while the encode runs.
  *
  * `progress` is a coarse 0–100 written by the worker between ffmpeg passes,

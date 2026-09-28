@@ -27,6 +27,7 @@ import {
   SetLessonTextDto,
   AbortVideoUploadDto,
   CompleteVideoUploadDto,
+  ResumeVideoUploadDto,
   SetLessonVideoDto,
   StartVideoUploadDto,
   UpdateLessonDto,
@@ -166,6 +167,13 @@ export class LessonController {
   @Post('lessons/:id/video/upload/complete')
   completeVideoUpload(@Param('id') id: string, @Body() body: CompleteVideoUploadDto) {
     return this.uploads.complete(id, body);
+  }
+
+  @RequireFeature('video.upload')
+  @RequirePermission('lesson:write')
+  @Post('lessons/:id/video/upload/resume')
+  resumeVideoUpload(@Param('id') id: string, @Body() body: ResumeVideoUploadDto) {
+    return this.uploads.resume(id, body);
   }
 
   @RequireFeature('video.upload')

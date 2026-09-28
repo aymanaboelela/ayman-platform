@@ -821,7 +821,29 @@ const admin = {
      * it is not will sit through an upload they no longer want.
      */
     videoUploadCancelHint: 'لو ألغيت، الفيديو القديم هيرجع زي ما كان',
-    videoUploadKeepOpen: 'سيب الصفحة مفتوحة لحد ما الرفع يخلص',
+    videoUploadKeepOpen: 'تقدر تتنقل في لوحة التحكم والرفع شغال — بس متقفلش التاب.',
+    /** «٣٫٢ ميجا/ث · فاضل ٤ دقايق · ١٢٠ من ٤٠٠ ميجا» — what YouTube Studio shows. */
+    videoUploadSpeed: '{speed}/ث',
+    videoUploadEta: 'فاضل {time}',
+    videoUploadOf: '{sent} من {total}',
+    videoUploadEtaSeconds: '{n} ثانية',
+    videoUploadEtaMinutes: '{n} دقيقة',
+    videoUploadEtaHours: '{h} ساعة و{m} دقيقة',
+    /**
+     * «كمّل الرفع». The tab closed, the laptop slept, the line dropped — and
+     * the parts already in the bucket are still there. Picking the SAME file
+     * sends only the rest.
+     */
+    videoUploadResumeTitle: 'الرفع اتقطع عند {percent}٪',
+    videoUploadInterrupted: 'الرفع ده اتقطع قبل ما يخلص',
+    videoUploadResumeHint: 'اختار نفس الملف تاني وهنكمّل من اللي وقف عنده، مش من الأول.',
+    videoUploadResumePick: 'اختار نفس الملف وكمّل',
+    videoUploadNotSameFile: 'ده مش نفس الملف اللي كان بيترفع — اختار نفس الملف، أو ابدأ رفع جديد.',
+    videoUploadStartOver: 'ابدأ رفع جديد',
+    /** The corner card that follows the upload around the whole dashboard. */
+    videoUploadDockTitle: 'رفع الفيديو',
+    videoUploadDockProcessing: 'اترفع — بيتجهّز دلوقتي',
+    videoUploadDockOpen: 'افتح الكورس',
     videoUploadSource: 'الملف الأصلي',
     title: 'عنوان المحاضرة',
     kind: 'النوع',

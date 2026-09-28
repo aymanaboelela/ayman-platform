@@ -18,6 +18,7 @@ import { InboxAlertsProvider } from '@/components/admin/inbox-alerts';
 import { PaymentsAlertsProvider } from '@/components/admin/payments-alerts';
 import { BookOrdersAlertsProvider } from '@/components/admin/book-orders-alerts';
 import { HomeworkAlertsProvider } from '@/components/admin/homework-alerts';
+import { UploadDock } from '@/components/admin/upload-dock';
 import { GradingAlertsProvider } from '@/components/admin/grading-alerts';
 import { NotificationStreamProvider } from '@/components/notifications/notification-stream';
 import {
@@ -143,6 +144,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         */}
         <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </div>
+      {/* «رفع الفيديو» in the corner, on every admin screen — see `UploadDock`. */}
+      <UploadDock />
     </div>
     </AdminEntitlementsProvider>
     </NotificationStreamProvider>

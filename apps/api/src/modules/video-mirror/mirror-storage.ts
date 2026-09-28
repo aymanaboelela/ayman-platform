@@ -12,6 +12,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
+  ListPartsCommand,
   PutObjectCommand,
   S3Client,
   UploadPartCommand,
@@ -347,8 +348,23 @@ export class MirrorStorage {
     partCount: number,
     expiresInSeconds: number,
   ): Promise<{ partNumber: number; url: string }[]> {
+    return this.presignPartNumbers(
+      key,
+      uploadId,
+      Array.from({ length: partCount }, (_, index) => index + 1),
+      expiresInSeconds,
+    );
+  }
+
+  /** The same, for chosen parts only — «كمّل الرفع» re-signs just the missing ones. */
+  async presignPartNumbers(
+    key: string,
+    uploadId: string,
+    partNumbers: readonly number[],
+    expiresInSeconds: number,
+  ): Promise<{ partNumber: number; url: string }[]> {
     const parts: { partNumber: number; url: string }[] = [];
-    for (let partNumber = 1; partNumber <= partCount; partNumber += 1) {
+    for (const partNumber of partNumbers) {
       const url = await getSignedUrl(
         this.s3,
         new UploadPartCommand({
@@ -360,6 +376,44 @@ export class MirrorStorage {
         { expiresIn: expiresInSeconds },
       );
       parts.push({ partNumber, url });
+    }
+    return parts;
+  }
+
+  /**
+   * The parts S3 already holds for an open upload, with their ETags.
+   *
+   * A part is listed only once its PUT finished — a part that was cut off
+   * halfway is simply absent — so what comes back here is exactly what does
+   * not need sending again. `null` when the upload no longer exists (it was
+   * completed, aborted, or reaped by the bucket's multipart rule).
+   */
+  async listParts(
+    key: string,
+    uploadId: string,
+  ): Promise<{ partNumber: number; etag: string; size: number }[] | null> {
+    const parts: { partNumber: number; etag: string; size: number }[] = [];
+    let marker: string | undefined;
+    try {
+      do {
+        const listed = await this.s3.send(
+          new ListPartsCommand({
+            Bucket: this.config.bucket,
+            Key: key,
+            UploadId: uploadId,
+            PartNumberMarker: marker,
+          }),
+        );
+        for (const part of listed.Parts ?? []) {
+          if (part.PartNumber !== undefined && part.ETag !== undefined) {
+            parts.push({ partNumber: part.PartNumber, etag: part.ETag, size: part.Size ?? 0 });
+          }
+        }
+        marker = listed.IsTruncated === true ? listed.NextPartNumberMarker : undefined;
+      } while (marker !== undefined);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'NoSuchUpload') return null;
+      throw error;
     }
     return parts;
   }
