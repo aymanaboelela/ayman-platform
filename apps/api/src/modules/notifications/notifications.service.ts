@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import type {
+  LiveQueue,
   NotificationFeed,
   StudentNotification,
 } from '@ayman/contracts/notifications';
@@ -638,6 +639,20 @@ export class NotificationsService {
    *  event is told to everybody holding a permission. */
   async announceAll(userIds: readonly string[]): Promise<void> {
     await Promise.all(userIds.map((userId) => this.announce(userId)));
+  }
+
+  /**
+   * «The `queue` list moved» — to every admin tab allowed to see it, however
+   * many admins there are, as one publish. See `LIVE_QUEUES` for what a queue
+   * frame is and is not.
+   *
+   * Like `announce`: AFTER the caller's commit, never inside it, and never
+   * throws — a screen that misses this frame catches up on its next poll, and
+   * a payment must not fail over a list that redraws late. Absent `realtime`
+   * (the hand-built fixtures, see the constructor) it does nothing at all.
+   */
+  async announceQueue(queue: LiveQueue, waiting: number): Promise<void> {
+    await this.realtime?.publishQueue(queue, waiting);
   }
 
   async unreadCount(userId: string): Promise<number> {

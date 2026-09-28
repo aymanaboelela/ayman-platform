@@ -1,12 +1,30 @@
 import { Inject, Injectable, Logger, Optional, type OnApplicationShutdown } from '@nestjs/common';
 import Redis from 'ioredis';
-import type { NotificationEvent } from '@ayman/contracts/notifications';
+import type { LiveQueue, NotificationEvent } from '@ayman/contracts/notifications';
 import { REDIS } from '../../redis/redis.module';
 
 /** One channel per recipient. Namespaced so it cannot collide with the
  *  throttler's keys on the same Redis. */
 function channelFor(userId: string): string {
   return `notif:${userId}`;
+}
+
+/**
+ * One channel per admin QUEUE, not per admin.
+ *
+ * A queue frame says the same thing to everyone allowed to hear it, so it is
+ * published ONCE and every stream holding the permission listens — rather than
+ * resolving the recipients and publishing per user the way `emitToPermission`
+ * has to for a notification ROW. On the dev database that difference is
+ * 2,656 publishes per click; on a stack with one teacher it is still the
+ * difference between «one PUBLISH» and «one query and a loop».
+ *
+ * Its own prefix, and one a user id can never produce: better-auth ids are
+ * nanoids, which never contain a colon, so `notif:<id>` and `notif-queue:<q>`
+ * cannot name the same channel.
+ */
+function queueChannelFor(queue: LiveQueue): string {
+  return `notif-queue:${queue}`;
 }
 
 type Listener = (event: NotificationEvent) => void;
@@ -48,8 +66,9 @@ export class NotificationsRealtimeService implements OnApplicationShutdown {
    *  serves a stream (a worker, a test) never opens one. */
   private subscriber: Redis | null = null;
 
-  /** userId → the open streams for that user. A student with the site open in
-   *  two tabs has two, and both must be fed. */
+  /** Redis CHANNEL → the open streams listening on it. A student with the site
+   *  open in two tabs has two on their own channel, and both must be fed; an
+   *  admin tab is also on each queue channel it may hear. */
   private readonly listeners = new Map<string, Set<Listener>>();
 
   /**
@@ -74,14 +93,25 @@ export class NotificationsRealtimeService implements OnApplicationShutdown {
    * transaction it must not lose over a delivery optimisation.
    */
   async publish(userId: string, event: NotificationEvent): Promise<void> {
-    if (!this.redis) return;
-    try {
-      await this.redis.publish(channelFor(userId), JSON.stringify(event));
-    } catch (error) {
-      this.logger.warn(
-        `could not publish a notification for ${userId}: ${(error as Error).message}`,
-      );
-    }
+    await this.publishOn(channelFor(userId), event, `a notification for ${userId}`);
+  }
+
+  /**
+   * «The `queue` list moved; `waiting` are waiting now» — to every stream,
+   * anywhere in the cluster, that subscribed to the queue.
+   *
+   * WHO may subscribe is not decided here: `NotificationsController.stream`
+   * asks the permission before it calls `subscribeQueue`, and again before it
+   * writes each frame. This class only moves bytes.
+   *
+   * Never throws, for the reason `publish` does not.
+   */
+  async publishQueue(queue: LiveQueue, waiting: number): Promise<void> {
+    await this.publishOn(
+      queueChannelFor(queue),
+      { type: 'queue', queue, waiting },
+      `the ${queue} queue`,
+    );
   }
 
   /**
@@ -90,29 +120,48 @@ export class NotificationsRealtimeService implements OnApplicationShutdown {
    * away leaves a listener behind for the lifetime of the process.
    */
   subscribe(userId: string, listener: Listener): () => void {
-    const existing = this.listeners.get(userId);
+    return this.subscribeOn(channelFor(userId), listener);
+  }
+
+  /** `subscribe`, for a queue channel. Same contract: call the returned
+   *  function when the response closes. */
+  subscribeQueue(queue: LiveQueue, listener: Listener): () => void {
+    return this.subscribeOn(queueChannelFor(queue), listener);
+  }
+
+  private async publishOn(channel: string, event: NotificationEvent, what: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      await this.redis.publish(channel, JSON.stringify(event));
+    } catch (error) {
+      this.logger.warn(`could not publish ${what}: ${(error as Error).message}`);
+    }
+  }
+
+  private subscribeOn(channel: string, listener: Listener): () => void {
+    const existing = this.listeners.get(channel);
     if (existing) {
       existing.add(listener);
     } else {
-      this.listeners.set(userId, new Set([listener]));
-      void this.redisSubscribe(channelFor(userId));
+      this.listeners.set(channel, new Set([listener]));
+      void this.redisSubscribe(channel);
     }
 
     return () => {
-      const set = this.listeners.get(userId);
+      const set = this.listeners.get(channel);
       if (!set) return;
       set.delete(listener);
       if (set.size > 0) return;
-      // Last tab for this user on this instance — stop paying for the channel.
-      this.listeners.delete(userId);
-      void this.redisUnsubscribe(channelFor(userId));
+      // Last tab on this channel on this instance — stop paying for it.
+      this.listeners.delete(channel);
+      void this.redisUnsubscribe(channel);
     };
   }
 
-  /** Test seam and the local delivery path: hands an event to every listener
-   *  registered on THIS instance. */
-  private deliver(userId: string, raw: string): void {
-    const set = this.listeners.get(userId);
+  /** The local delivery path: hands an event to every listener registered on
+   *  THIS instance for `channel`. */
+  private deliver(channel: string, raw: string): void {
+    const set = this.listeners.get(channel);
     if (!set || set.size === 0) return;
 
     let event: NotificationEvent;
@@ -125,7 +174,10 @@ export class NotificationsRealtimeService implements OnApplicationShutdown {
       return;
     }
 
-    for (const listener of set) {
+    // A copy: a listener whose response has just closed unsubscribes from
+    // INSIDE this loop, and deleting from the Set being iterated would skip
+    // the next listener.
+    for (const listener of [...set]) {
       try {
         listener(event);
       } catch (error) {
@@ -151,9 +203,10 @@ export class NotificationsRealtimeService implements OnApplicationShutdown {
       maxRetriesPerRequest: null,
     });
 
+    // Keyed by the channel itself, so a user's channel and a queue's channel
+    // go through the one delivery path without either parsing the other's name.
     subscriber.on('message', (channel: string, raw: string) => {
-      const userId = channel.slice('notif:'.length);
-      if (userId) this.deliver(userId, raw);
+      this.deliver(channel, raw);
     });
     subscriber.on('error', (error: Error) => {
       this.logger.warn(`notification subscriber error: ${error.message}`);

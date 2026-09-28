@@ -198,6 +198,7 @@ export const AdminManualSubscribeSchema = z
 export type AdminManualSubscribe = z.infer<typeof AdminManualSubscribeSchema>;
 
 export const AdminPaymentListSchema = listResponse(AdminPaymentRowSchema);
+export type AdminPaymentList = z.infer<typeof AdminPaymentListSchema>;
 
 export const RejectPaymentSchema = z
   .object({
