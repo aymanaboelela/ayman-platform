@@ -1,0 +1,386 @@
+/* =============================================================================
+   «مساري» — `/path`.
+
+   نفس لغة «ترتيبي» (`components/rank/rank.css`): هيرو بجريدينت زاهي من طبقة
+   الـviz، وكل كورس بلونه، والمحطة اللي عليها الدور كهرماني — لون «اضغط هنا»
+   في المنتج كله.
+
+   كل كورس بياخد لون من خمسة (`data-hue` 0–4، `path-hues.ts`)، والريل على
+   الجنب والراس والمحطات والنقط كلهم بيقروا نفس `--hue`، فالكورس الواحد لون
+   واحد في الشاشة كلها.
+
+   كل الحركة جوّه `prefers-reduced-motion: no-preference`، والصفحة من غيرها
+   كاملة.
+   ========================================================================== */
+
+[data-hue='0'] { --hue: var(--viz-3); }
+[data-hue='1'] { --hue: var(--viz-5); }
+[data-hue='2'] { --hue: var(--viz-2); }
+[data-hue='3'] { --hue: var(--viz-4); }
+[data-hue='4'] { --hue: var(--viz-6); }
+
+/* ── الهيرو ─────────────────────────────────────────────────────────────── */
+.pth-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  display: grid;
+  gap: 1rem;
+  align-items: center;
+  padding: 1.5rem 1.25rem 1.75rem;
+  border-radius: var(--r-lg);
+  color: #fff;
+  background:
+    radial-gradient(90% 90% at 100% 0%, color-mix(in oklab, var(--viz-2) 70%, transparent) 0%, transparent 60%),
+    radial-gradient(80% 90% at 0% 100%, color-mix(in oklab, var(--viz-4) 55%, transparent) 0%, transparent 62%),
+    linear-gradient(135deg, var(--viz-5) 0%, var(--viz-3) 100%);
+  box-shadow: var(--shadow-md);
+}
+@media (min-width: 768px) {
+  .pth-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 17rem);
+    padding: 2rem 2.5rem;
+  }
+}
+.pth-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(rgb(255 255 255 / 0.16) 1px, transparent 1.5px);
+  background-size: 20px 20px;
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.9), transparent 90%);
+}
+.pth-hero__shapes { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.pth-shape { position: absolute; display: block; }
+.pth-shape--ring {
+  inset-block-start: -3.5rem;
+  inset-inline-start: 34%;
+  width: 10rem;
+  height: 10rem;
+  border-radius: 50%;
+  border: 14px solid rgb(255 255 255 / 0.1);
+}
+.pth-shape--blob {
+  inset-block-end: -4.5rem;
+  inset-inline-end: -3rem;
+  width: 13rem;
+  height: 13rem;
+  border-radius: 42% 58% 60% 40% / 45% 40% 60% 55%;
+  background: color-mix(in oklab, var(--viz-4) 40%, transparent);
+}
+.pth-shape--dot {
+  inset-block-start: 20%;
+  inset-inline-end: 46%;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--viz-1), #fff 30%);
+}
+
+.pth-hero__copy { min-width: 0; }
+.pth-hero__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.18);
+  border: 1px solid rgb(255 255 255 / 0.3);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  backdrop-filter: blur(6px);
+}
+/* رقم لاتيني جوّه صفحة عربي: من غير العزل ده الـ% بتتقلب قبل الرقم. */
+.pth-hero__percent {
+  display: flex;
+  align-items: baseline;
+  gap: 0.15rem;
+  margin-top: 0.75rem;
+  direction: ltr;
+  unicode-bidi: isolate;
+  justify-content: flex-end;
+  width: fit-content;
+  font-family: var(--font-mono);
+  font-size: clamp(3.5rem, 11vw, 5.5rem);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
+}
+.pth-hero__unit { font-size: 0.45em; opacity: 0.8; }
+.pth-hero__bar {
+  position: relative;
+  height: 0.75rem;
+  margin-top: 1rem;
+  max-width: 32rem;
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.2);
+  overflow: hidden;
+}
+.pth-hero__bar > span {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: var(--pth-fill);
+  border-radius: inherit;
+  background: linear-gradient(to left, var(--a-9), color-mix(in oklab, var(--a-9), #fff 45%));
+  box-shadow: 0 0 14px color-mix(in oklab, var(--a-9) 70%, transparent);
+}
+.pth-hero__chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+.pth-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: var(--r-full);
+  background: rgb(0 0 0 / 0.18);
+  border: 1px solid rgb(255 255 255 / 0.22);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+.pth-hero__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  margin-top: 1.1rem;
+  padding: 0.65rem 1.1rem;
+  border-radius: var(--r-full);
+  background: var(--accent-cta);
+  color: var(--on-accent-ink);
+  font-weight: var(--fw-bold);
+  box-shadow: 0 8px 22px color-mix(in oklab, var(--accent-cta) 45%, transparent);
+  transition: background-color var(--d-hover) var(--ease-out), transform var(--d-hover) var(--ease-out);
+}
+.pth-hero__cta:hover { background: var(--accent-cta-hover); transform: translateY(-1px); }
+.pth-hero__visual { justify-self: center; width: min(62%, 11rem); }
+@media (min-width: 768px) { .pth-hero__visual { width: 100%; } }
+
+/* ── رسمة الطريق ────────────────────────────────────────────────────────── */
+.pth-art { width: 100%; height: auto; overflow: visible; filter: drop-shadow(0 16px 20px rgb(0 0 0 / 0.2)); }
+.pth-art__sun { fill: color-mix(in oklab, var(--a-9), #fff 25%); }
+.pth-art__cloud { fill: rgb(255 255 255 / 0.55); }
+.pth-art__hill { fill: color-mix(in oklab, var(--viz-6), #fff 12%); }
+.pth-art__hill--back { fill: color-mix(in oklab, var(--viz-2), #fff 25%); opacity: 0.75; }
+.pth-art__road { fill: none; stroke: rgb(255 255 255 / 0.4); stroke-width: 12; stroke-linecap: round; }
+.pth-art__road-done { fill: none; stroke: var(--a-9); stroke-width: 12; stroke-linecap: round; }
+.pth-art__lane { fill: none; stroke: #fff; stroke-width: 1.5; stroke-dasharray: 3 4; opacity: 0.85; }
+.pth-art__stop { fill: #fff; stroke: var(--viz-3); stroke-width: 3; }
+.pth-art__flag path { fill: var(--viz-4); }
+.pth-art__spark { transform-box: fill-box; transform-origin: center; }
+
+/* ── الريل ──────────────────────────────────────────────────────────────── */
+.pth-rail { display: grid; gap: 0.6rem; }
+.pth-rail__item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklab, var(--hue) 25%, var(--color-line));
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in oklab, var(--hue) 12%, transparent) 0%, transparent 65%),
+    var(--color-surface-2);
+  color: var(--color-fg);
+  transition: transform var(--d-hover) var(--ease-out), box-shadow var(--d-hover) var(--ease-out);
+}
+.pth-rail__item:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.pth-rail__item[data-current] {
+  border-color: var(--hue);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--hue) 22%, transparent), var(--shadow-sm);
+}
+.pth-rail__title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+.pth-rail__meta {
+  display: block;
+  margin-top: 0.1rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  color: var(--color-fg-muted);
+}
+.pth-rail__bar {
+  position: relative;
+  display: block;
+  height: 0.3rem;
+  margin-top: 0.4rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--hue) 14%, transparent);
+  overflow: hidden;
+}
+.pth-rail__bar > span {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: var(--pth-fill);
+  border-radius: inherit;
+  background: var(--hue);
+}
+
+/* ── راس الكورس ─────────────────────────────────────────────────────────── */
+.pth-course__head {
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklab, var(--hue) 35%, var(--color-line));
+  background:
+    radial-gradient(90% 160% at 0% 50%, color-mix(in oklab, var(--hue) 18%, transparent) 0%, transparent 70%),
+    var(--color-surface-2);
+  box-shadow: var(--shadow-sm);
+}
+/* شريط بلون الكورس على الحافة — «ده كورس جديد» من غير ما تقرا. */
+.pth-course__head::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 5px;
+  background: linear-gradient(to bottom, var(--hue), color-mix(in oklab, var(--hue), #fff 40%));
+}
+
+/* ── المحطات ────────────────────────────────────────────────────────────── */
+.pth-stop {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  transition: transform var(--d-hover) var(--ease-out), box-shadow var(--d-hover) var(--ease-out);
+}
+.pth-stop[data-exam] { border-radius: var(--r-lg); }
+.pth-stop[data-state='available'] {
+  background: var(--color-surface-2);
+  border-color: color-mix(in oklab, var(--hue) 55%, var(--color-line));
+  color: var(--hue);
+  box-shadow: var(--shadow-sm);
+}
+.pth-stop[data-state='cleared'] {
+  background: color-mix(in oklab, var(--hue) 18%, var(--color-surface-2));
+  border-color: var(--hue);
+  color: color-mix(in oklab, var(--hue), #000 15%);
+}
+.pth-stop[data-state='locked'] {
+  background: var(--color-surface-1);
+  border-style: dashed;
+  border-color: var(--color-line-strong, var(--color-line));
+  color: var(--color-fg-muted);
+}
+.pth-stop[data-state='current'] {
+  width: 4.75rem;
+  height: 4.75rem;
+  background: linear-gradient(135deg, color-mix(in oklab, var(--a-9), #fff 25%), var(--a-9));
+  color: var(--on-accent-ink);
+  box-shadow: 0 10px 26px color-mix(in oklab, var(--a-9) 50%, transparent);
+}
+/* الهالة حوالين المحطة اللي عليها الدور. */
+.pth-stop[data-state='current']::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: inherit;
+  border: 3px solid color-mix(in oklab, var(--a-9) 55%, transparent);
+}
+.pth-stop-link:hover .pth-stop { transform: translateY(-3px) scale(1.04); box-shadow: var(--shadow-md); }
+.pth-stop-link:hover .pth-stop__title { color: var(--hue); }
+
+.pth-stop__title {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg);
+  transition: color var(--d-hover) var(--ease-out);
+}
+.pth-stop__title[data-state='locked'] { color: var(--color-fg-muted); font-weight: var(--fw-medium); }
+.pth-stop__title[data-state='current'] { font-weight: var(--fw-bold); }
+.pth-stop__meta {
+  display: inline-block;
+  padding: 0.1rem 0.55rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--hue) 12%, transparent);
+  color: var(--color-fg-muted);
+  font-size: var(--fs-mono-label);
+}
+
+.pth-badge {
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--r-full);
+  background: var(--accent-cta);
+  color: var(--on-accent-ink);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-bold);
+  box-shadow: 0 6px 16px color-mix(in oklab, var(--accent-cta) 40%, transparent);
+}
+
+.pth-dot {
+  display: block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-surface-4, var(--color-line));
+}
+.pth-dot[data-done] { background: var(--hue); }
+
+.pth-finish {
+  display: grid;
+  place-items: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  border: 2px dashed color-mix(in oklab, var(--hue) 45%, var(--color-line));
+  background: var(--color-surface-1);
+  color: color-mix(in oklab, var(--hue) 70%, var(--color-fg-muted));
+}
+.pth-finish[data-done] {
+  border: 0;
+  background: linear-gradient(135deg, color-mix(in oklab, var(--print-gold), #fff 40%), var(--print-gold));
+  color: var(--on-light-ink);
+  box-shadow: 0 10px 24px color-mix(in oklab, var(--print-gold) 45%, transparent);
+}
+.pth-finish__label {
+  margin-top: 0.5rem;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg-muted);
+}
+
+/* ── الحركة ─────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  .pth-hero { animation: pth-rise 600ms var(--ease-out) both; }
+  .pth-shape--ring { animation: pth-float 9s ease-in-out infinite; }
+  .pth-shape--blob { animation: pth-morph 12s ease-in-out infinite; }
+  .pth-shape--dot { animation: pth-float 5s ease-in-out infinite reverse; }
+  .pth-hero__bar > span { animation: pth-fill 1.2s var(--ease-out) 300ms both; }
+  .pth-art__road-done { animation: pth-road 1.6s var(--ease-out) 300ms both; }
+  .pth-art__cloud { animation: pth-drift 14s ease-in-out infinite; }
+  .pth-art__cloud--2 { animation-duration: 18s; animation-direction: reverse; }
+  .pth-art__flag { transform-box: fill-box; transform-origin: 0% 100%; animation: pth-wave 2.4s ease-in-out infinite; }
+  .pth-art__spark { animation: pth-twinkle 2.4s ease-in-out infinite; }
+  .pth-art__spark--2 { animation-delay: 700ms; }
+  .pth-art__spark--3 { animation-delay: 1400ms; }
+  .pth-rail__bar > span { animation: pth-fill 1s var(--ease-out) 200ms both; }
+  .pth-stop[data-state='current']::after { animation: pth-pulse 2.2s ease-out infinite; }
+  .pth-badge { animation: pth-bob 2.4s ease-in-out infinite; }
+}
+
+@keyframes pth-rise { from { opacity: 0; transform: translateY(12px); } }
+@keyframes pth-float { 50% { transform: translateY(-12px); } }
+@keyframes pth-morph {
+  50% { border-radius: 58% 42% 40% 60% / 55% 60% 40% 45%; transform: translate(-10px, -8px) rotate(12deg); }
+}
+@keyframes pth-fill { from { width: 0; } }
+@keyframes pth-road { from { stroke-dasharray: 0 100; } }
+@keyframes pth-drift { 50% { transform: translateX(14px); } }
+@keyframes pth-wave { 50% { transform: skewY(-6deg) scaleX(0.92); } }
+@keyframes pth-twinkle { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.25; transform: scale(0.6); } }
+@keyframes pth-pulse {
+  0% { transform: scale(0.92); opacity: 1; }
+  100% { transform: scale(1.18); opacity: 0; }
+}
+@keyframes pth-bob { 50% { transform: translateY(-3px); } }

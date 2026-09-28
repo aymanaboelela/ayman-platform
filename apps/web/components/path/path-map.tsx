@@ -9,6 +9,8 @@ import { lessonStateLabel } from '@/lib/course-outline';
 import { CheckIcon, LockIcon } from '@/components/player/icons';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
 import { ProgressRing } from '@/components/progress-ring';
+import { Trophy } from 'lucide-react';
+import { PATH_HUES } from './path-hues';
 
 const c = copy.path;
 
@@ -28,10 +30,11 @@ const c = copy.path;
  *
  * ## The four states, and why exactly one of them is filled
  *
- *   · current   — filled amber, one size up, badged. The single thing this
- *                 screen exists to point at.
- *   · cleared   — amber ring, amber check. Present, obviously done, quiet.
- *   · available — neutral ring, the lesson's KIND icon. Its meta line is what
+ *   · current   — filled amber, one size up, badged, with a pulsing halo. The
+ *                 single thing this screen exists to point at.
+ *   · cleared   — a light wash of the COURSE's hue and a check in it
+ *                 (`path.css`, `data-hue`). Present, obviously done, quiet.
+ *   · available — white, ringed in the course's hue, the lesson's KIND icon. Its meta line is what
  *                 says whether the student has actually been there; the ring
  *                 alone cannot, and since `gate-rule.ts` removed the chain
  *                 almost every stop on a course is in this state.
@@ -69,13 +72,18 @@ function offset(wave: number): CSSProperties {
   return { '--wave': wave } as CSSProperties;
 }
 
-function Connector({ from, to }: { from: number; to: number }) {
+/**
+ * النقط بين محطتين. `done` لما المحطة اللي قبلها اتقفلت: الجزء اللي اتمشى من
+ * الطريق بياخد لون الكورس، واللي لسه رمادي — نفس فكرة الطريق في رسمة الهيرو.
+ */
+function Connector({ from, to, done }: { from: number; to: number; done: boolean }) {
   return (
     <span aria-hidden="true" className="flex flex-col items-center gap-2 py-3">
       {DOT_STOPS.map((t) => (
         <span
           key={t}
-          className="path-run__at size-1.5 rounded-full bg-surface-4"
+          className="path-run__at pth-dot"
+          data-done={done || undefined}
           style={offset(from + (to - from) * t)}
         />
       ))}
@@ -83,11 +91,13 @@ function Connector({ from, to }: { from: number; to: number }) {
   );
 }
 
+// الألوان كلها في `path.css` تحت `.pth-stop[data-state]` — الأيقونة بتورث
+// `currentColor` من الدايرة، فمفيش لون مكتوب هنا يختلف عن اللي هناك.
 function stopIcon(node: PathNode, isCurrent: boolean) {
-  if (isCurrent) return <LessonKindIcon kind={node.kind} className="h-7 w-7 text-[#1A1206]" />;
-  if (node.gate === 'cleared') return <CheckIcon className="h-7 w-7 text-accent-text" />;
-  if (node.gate === 'locked') return <LockIcon className="h-6 w-6 text-fg-muted" />;
-  return <LessonKindIcon kind={node.kind} className="h-6 w-6 text-fg" />;
+  if (isCurrent) return <LessonKindIcon kind={node.kind} className="h-7 w-7" />;
+  if (node.gate === 'cleared') return <CheckIcon className="h-7 w-7" />;
+  if (node.gate === 'locked') return <LockIcon className="h-6 w-6" />;
+  return <LessonKindIcon kind={node.kind} className="h-6 w-6" />;
 }
 
 /**
@@ -143,38 +153,31 @@ function PathStop({
   // The exam and nothing else: it is the one row `resolveGate` can still close.
   const locked = node.gate === 'locked';
 
+  /*
+   * الدايرة. الحالات الأربعة زي ما هي، بس بقت ملوّنة بلون الكورس (`data-hue`
+   * على الـsection):
+   *
+   *   · current   — كهرماني مليان، أكبر مقاس، بهالة بتنبض. لسه هي الحاجة
+   *                 الوحيدة المليانة بلون قوي، فمفيش تعادل مع اللي خلص.
+   *   · cleared   — لون الكورس فاتح وعلامة صح بلونه الغامق.
+   *   · available — أبيض بإطار ملوّن والأيقونة بلون الكورس.
+   *   · locked    — رمادي بخط متقطّع.
+   *
+   * الامتحان لسه شكل مختلف (مربع مدوّر) مش لون مختلف.
+   */
+  const state = isCurrent ? 'current' : node.gate;
   const disc = (
-    <span
-      className={cn(
-        'flex items-center justify-center border-2 transition-colors duration-[160ms] ease-out',
-        // The exam is a different SHAPE, not a different colour — a rounded
-        // square among circles, so it is distinguishable without spending
-        // another hue on a screen that already rations them.
-        node.isExam ? 'rounded-lg' : 'rounded-full',
-        isCurrent
-          ? 'size-[4.5rem] border-transparent bg-accent'
-          : 'size-16 bg-surface-2',
-        !isCurrent && node.gate === 'cleared' && 'border-accent',
-        !isCurrent && node.gate === 'available' && 'border-line-strong',
-        !isCurrent && locked && 'border-line',
-      )}
-    >
+    <span className="pth-stop" data-state={state} data-exam={node.isExam || undefined}>
       {stopIcon(node, isCurrent)}
     </span>
   );
 
   const label = (
     <>
-      <span
-        className={cn(
-          'text-[length:var(--fs-text-sm)]',
-          locked ? 'text-fg-muted' : 'text-fg',
-          isCurrent && 'font-medium',
-        )}
-      >
+      <span className="pth-stop__title" data-state={state}>
         {node.title}
       </span>
-      <span className="mono text-[length:var(--fs-mono-label)] text-fg-muted">
+      <span className="pth-stop__meta" data-kind={node.kind}>
         {stopMeta(node)}
       </span>
     </>
@@ -200,9 +203,7 @@ function PathStop({
    * one stop — and it means the badge, the disc and the title are one target.
    */
   const badge = isCurrent ? (
-    <span className="mono rounded-sm bg-accent px-2.5 py-1 text-[length:var(--fs-mono-label)] text-[#1A1206]">
-      {c.startHere}
-    </span>
+    <span className="pth-badge">{c.startHere}</span>
   ) : null;
 
   return (
@@ -259,11 +260,7 @@ function PathStop({
       ) : (
         <Link
           href={`/courses/${courseSlug}/lessons/${node.lessonId}`}
-          className={cn(
-            stack,
-            'rounded-lg outline-offset-4',
-            'transition-colors duration-[160ms] ease-out hover:text-accent-text',
-          )}
+          className={cn(stack, 'pth-stop-link rounded-lg outline-offset-4')}
         >
           {disc}
           {label}
@@ -278,7 +275,7 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
   const isDone = course.totalLessons > 0 && course.clearedLessons === course.totalLessons;
 
   return (
-    <section>
+    <section className="pth-course" data-hue={index % PATH_HUES}>
       {/* The course's own header, as a card rather than a bare heading: it is
           the thing the rail links to, so it has to be findable after a jump.
 
@@ -291,7 +288,7 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
 
           `overflow-hidden` on the header, not on the art: the scene has to be
           clipped by the panel's own radius or it squares off the corner. */}
-      <header className="panel relative mb-2 flex items-center gap-4 overflow-hidden py-4 pe-5">
+      <header className="pth-course__head relative mb-2 flex items-center gap-4 overflow-hidden py-4 pe-5">
         <span className="relative hidden aspect-[4/3] w-20 shrink-0 self-stretch overflow-hidden sm:block">
           <CourseArt
             coverKey={course.coverKey}
@@ -433,11 +430,22 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
                 isCurrent={node.id === course.nextLessonId}
                 wave={waveAt(nodeIndex)}
               />
-              {nodeIndex < course.nodes.length - 1 ? (
-                <Connector from={waveAt(nodeIndex)} to={waveAt(nodeIndex + 1)} />
-              ) : null}
+              {/* بعد آخر درس كمان: الطريق بيكمّل لحد خط النهاية تحت. */}
+              <Connector
+                from={waveAt(nodeIndex)}
+                to={nodeIndex < course.nodes.length - 1 ? waveAt(nodeIndex + 1) : 0}
+                done={node.gate === 'cleared'}
+              />
             </li>
           ))}
+          {/* خط النهاية — مش درس ولا لينك، علامة إن الكورس ليه آخر. بيتملى
+              دهبي لما الكورس يخلص. */}
+          <li className="flex flex-col items-center" aria-hidden="true">
+            <span className="pth-finish" data-done={isDone || undefined}>
+              <Trophy className="size-7" />
+            </span>
+            <span className="pth-finish__label">{isDone ? c.courseDone : c.finish}</span>
+          </li>
         </ol>
       )}
     </section>

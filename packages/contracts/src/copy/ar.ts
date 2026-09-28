@@ -3387,6 +3387,13 @@ export const copy = {
     /** Same distinction as `library.courseUpToDate`. */
     courseUpToDate: 'خلّصت اللي نزل',
     nothingOpen: 'مفيش حاجة مفتوحة دلوقتي',
+    /** الهيرو اللي فوق الصفحة. «نكمّل» جمع شامل — مش أمر لولد ولا لبنت. */
+    heroNext: 'نكمّل: {title}',
+    heroLeft: 'فاضل {n} محاضرة',
+    heroCourses: '{n} كورس',
+    heroAllDone: 'كل اللي نزل خلص — برافو',
+    /** آخر محطة في كل كورس. */
+    finish: 'خط النهاية',
 
     // ── a course the instructor has taken down ───────────────────────────
     /**

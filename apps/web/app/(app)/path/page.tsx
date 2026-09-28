@@ -1,12 +1,15 @@
+import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Route } from 'lucide-react';
-import { LearningPathSchema, copy } from '@ayman/contracts';
+import { ArrowLeft, BookOpenCheck, Flag, Route } from 'lucide-react';
+import { LearningPathSchema, copy, type LearningPath } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { apiGetAuthed } from '@/lib/api-server';
 import { CourseRail } from '@/components/path/course-rail';
 import { PathMap } from '@/components/path/path-map';
-import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
+import { PathArt } from '@/components/path/path-art';
+import { CountUp } from '@/components/rank/count-up';
+import '@/components/path/path.css';
 
 const c = copy.path;
 
@@ -51,11 +54,6 @@ export default async function PathPage() {
     );
   }
 
-  const summary = c.summary
-    .replace('{cleared}', String(path.clearedLessons))
-    .replace('{total}', String(path.totalLessons))
-    .replace('{courses}', String(path.courses.length));
-
   return (
     <main className="mx-auto w-full max-w-[var(--w-app)] px-6 py-10 md:py-12">
       <header className="study-head">
@@ -65,36 +63,14 @@ export default async function PathPage() {
       </header>
 
       {/*
-        "Here is where you are", and it must not look like the panels under it.
+        «إنت فين» — هيرو ملوّن مش شريط.
 
-        The ember tint rather than a full `.stage`: a stage carries a
-        title-1, and the `<h1>` two lines above it is already a title-1 — two
-        of them stacked leaves the page with two openings and no top. The tint
-        does the same job at the right weight, and the disc marks the object as
-        chrome (this is the statement ABOUT your courses, not one of them).
-
-        The one amber pair on it is the percentage and the bar it labels, which
-        is amber's other job: where you are.
+        كان شريط مصبوغ خفيف بـ«٤ من ١٧» وبار رفيع، وده بالظبط الشكل اللي
+        بيتقري تقرير مش مشوار. دلوقتي نفس لغة «ترتيبي»: جريدينت زاهي، نسبة كبيرة
+        بتتعدّ، طريق مرسوم بيتملى لحد نسبتك، وزرار واحد: «نكمّل» على الدرس اللي
+        عليه الدور. ده أهم سطر في الصفحة، فبقى أول حاجة.
       */}
-      <section className="mb-8 rounded-lg border border-study-line bg-study-tint px-5 py-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span
-              aria-hidden="true"
-              className="grid size-10 shrink-0 place-items-center rounded-md bg-stage text-[color:var(--ink-fg)]"
-            >
-              <Route className="size-5" />
-            </span>
-            <p className="min-w-0 text-[length:var(--fs-title-4)] font-medium text-fg">
-              {summary}
-            </p>
-          </div>
-          <p className="mono tabular shrink-0 text-[length:var(--fs-mono-label)] text-accent-text">
-            {c.percentComplete.replace('{percent}', String(path.percent))}
-          </p>
-        </div>
-        <LessonProgressBar percent={path.percent} label={c.title} />
-      </section>
+      <PathHero path={path} />
 
       {/* Two columns, mirroring the reference's shape. The rail is a plain
           list rather than a second nav landmark — the global header already
@@ -143,5 +119,67 @@ export default async function PathPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+function PathHero({ path }: { path: LearningPath }) {
+  const summary = c.summary
+    .replace('{cleared}', String(path.clearedLessons))
+    .replace('{total}', String(path.totalLessons))
+    .replace('{courses}', String(path.courses.length));
+  const left = Math.max(0, path.totalLessons - path.clearedLessons);
+
+  // الدرس اللي عليه الدور: نفس اللي المحطة المليانة في الخريطة بتشاور عليه.
+  // كورس مقفول مؤقتًا مالوش زرار — الدرس جوّاه بيرجّع 404.
+  const course = path.courses.find((entry) => entry.id === path.currentCourseId);
+  const next = course?.published ? course.nodes.find((node) => node.id === course.nextLessonId) : undefined;
+
+  return (
+    <section className="pth-hero mb-8">
+      <div className="pth-hero__shapes" aria-hidden="true">
+        <span className="pth-shape pth-shape--ring" />
+        <span className="pth-shape pth-shape--blob" />
+        <span className="pth-shape pth-shape--dot" />
+      </div>
+
+      <div className="pth-hero__copy">
+        <span className="pth-hero__pill">
+          <Route className="size-3.5" aria-hidden="true" />
+          {summary}
+        </span>
+
+        <p className="pth-hero__percent">
+          <CountUp to={Math.round(path.percent)} />
+          <span className="pth-hero__unit">%</span>
+          <span className="sr-only">{c.percentComplete.replace('{percent}', String(path.percent))}</span>
+        </p>
+
+        <div className="pth-hero__bar" aria-hidden="true">
+          <span style={{ '--pth-fill': `${path.percent}%` } as CSSProperties} />
+        </div>
+
+        <div className="pth-hero__chips">
+          <span className="pth-chip">
+            <BookOpenCheck className="size-3.5" aria-hidden="true" />
+            {c.heroCourses.replace('{n}', String(path.courses.length))}
+          </span>
+          <span className="pth-chip">
+            <Flag className="size-3.5" aria-hidden="true" />
+            {left > 0 ? c.heroLeft.replace('{n}', String(left)) : c.heroAllDone}
+          </span>
+        </div>
+
+        {next && course ? (
+          <Link href={`/courses/${course.slug}/lessons/${next.lessonId}`} className="pth-hero__cta">
+            <span className="min-w-0 truncate">{c.heroNext.replace('{title}', next.title)}</span>
+            <ArrowLeft className="size-4 shrink-0" aria-hidden="true" />
+          </Link>
+        ) : null}
+      </div>
+
+      <div className="pth-hero__visual">
+        <PathArt percent={path.percent} />
+      </div>
+    </section>
   );
 }
