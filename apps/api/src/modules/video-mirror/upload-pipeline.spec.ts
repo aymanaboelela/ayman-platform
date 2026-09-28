@@ -19,6 +19,7 @@ import {
   variantBandwidth,
   withMeasuredBandwidth,
 } from './upload-pipeline';
+import { videoKey, videoKeyUri } from './video-key';
 
 /** An ffprobe payload, narrowed to the fields `readProbe` reads. */
 function probeJson(options: {
@@ -350,5 +351,38 @@ describe('upload part sizing', () => {
   it('covers the whole file — the last part is what is left over', () => {
     const size = 700 * 1024 * 1024 + 13;
     expect(uploadPartCount(size) * uploadPartSize(size)).toBeGreaterThanOrEqual(size);
+  });
+});
+
+describe('transcodeArgs — encrypted', () => {
+  const rungs = ladderFor(1080);
+  const plain = transcodeArgs('/tmp/src', rungs, '/tmp/out', true, 0);
+  const encrypted = transcodeArgs('/tmp/src', rungs, '/tmp/out', true, 0, '/tmp/work/video.keyinfo');
+
+  /*
+   * ffmpeg refuses an encrypted fMP4 («Encrypted fmp4 not yet supported»), so
+   * the one thing that must never happen is the key flag riding along with
+   * fmp4 — that is an encode that fails after the whole upload.
+   */
+  it('switches to MPEG-TS with the key file, and only when there is one', () => {
+    expect(encrypted[encrypted.indexOf('-hls_segment_type') + 1]).toBe('mpegts');
+    expect(encrypted[encrypted.indexOf('-hls_key_info_file') + 1]).toBe('/tmp/work/video.keyinfo');
+    expect(encrypted.join(' ')).toContain('seg_%03d.ts');
+    expect(plain[plain.indexOf('-hls_segment_type') + 1]).toBe('fmp4');
+    expect(plain).not.toContain('-hls_key_info_file');
+  });
+});
+
+describe('videoKey', () => {
+  it('is 16 bytes, stable for one video, and different for the next', () => {
+    const one = videoKey('s'.repeat(40), 'a'.repeat(32));
+    expect(one).toHaveLength(16);
+    expect(videoKey('s'.repeat(40), 'a'.repeat(32)).equals(one)).toBe(true);
+    expect(videoKey('s'.repeat(40), 'b'.repeat(32)).equals(one)).toBe(false);
+    expect(videoKey('t'.repeat(40), 'a'.repeat(32)).equals(one)).toBe(false);
+  });
+
+  it('points players at the SITE, never at the bucket', () => {
+    expect(videoKeyUri('https://x.com/', 'a'.repeat(32))).toBe(`https://x.com/api/videos/${'a'.repeat(32)}/key`);
   });
 });

@@ -137,8 +137,20 @@ export function transcodeArgs(
   outDir: string,
   hasAudio: boolean,
   threads: number,
+  /**
+   * ffmpeg's `-hls_key_info_file`: key URI, key file, one per line. When
+   * given, every segment is AES-128 encrypted — see `video-key.ts`.
+   *
+   * ⚠️ Encryption forces MPEG-TS segments. ffmpeg's HLS muxer refuses an
+   * encrypted fMP4 outright («Encrypted fmp4 not yet supported»), measured
+   * on 8.1. TS with AES-128 is also the one combination every player a
+   * student has ever used plays: hls.js decrypts and transmuxes it, and
+   * Safari has played it natively since HLS existed.
+   */
+  keyInfoFile: string | null = null,
 ): string[] {
   const n = rungs.length;
+  const encrypted = keyInfoFile !== null;
 
   const splits = rungs.map((_, i) => `[s${i}]`).join('');
   const scales = rungs
@@ -225,7 +237,8 @@ export function transcodeArgs(
     '-hls_playlist_type',
     'vod',
     '-hls_segment_type',
-    'fmp4',
+    encrypted ? 'mpegts' : 'fmp4',
+    ...(encrypted ? ['-hls_key_info_file', keyInfoFile] : []),
     '-hls_flags',
     'independent_segments',
     '-master_pl_name',
@@ -233,7 +246,7 @@ export function transcodeArgs(
     '-var_stream_map',
     varStreamMap,
     '-hls_segment_filename',
-    join(outDir, '%v', 'seg_%03d.m4s'),
+    join(outDir, '%v', encrypted ? 'seg_%03d.ts' : 'seg_%03d.m4s'),
     join(outDir, '%v', 'index.m3u8'),
   ];
 }
@@ -475,6 +488,8 @@ export async function transcodeUpload(
   workDir: string,
   tools: TranscodeTools = DEFAULT_TRANSCODE_TOOLS,
   onStage?: (stage: 'probing' | 'encoding' | 'poster') => void,
+  /** Encrypt every segment with this key, fetched by players from `uri`. */
+  encryption: { key: Buffer; uri: string } | null = null,
 ): Promise<TranscodeResult> {
   const exec = (bin: string, args: readonly string[]): Promise<unknown> =>
     tools.renice
@@ -511,10 +526,23 @@ export async function transcodeUpload(
     await mkdir(join(outDir, String(i)), { recursive: true });
   }
 
+  /*
+   * The key goes in `workDir`, NEVER in `outDir`: everything under `outDir`
+   * is uploaded to the public bucket as it stands, and a key file sitting
+   * beside the segments it protects would make the encryption decoration.
+   */
+  let keyInfoFile: string | null = null;
+  if (encryption !== null) {
+    const keyFile = join(workDir, 'video.key');
+    keyInfoFile = join(workDir, 'video.keyinfo');
+    await writeFile(keyFile, encryption.key, { mode: 0o600 });
+    await writeFile(keyInfoFile, `${encryption.uri}\n${keyFile}\n`, { mode: 0o600 });
+  }
+
   onStage?.('encoding');
   await exec(
     tools.ffmpeg,
-    transcodeArgs(sourceFile, rungs, outDir, probe.hasAudio, tools.threads),
+    transcodeArgs(sourceFile, rungs, outDir, probe.hasAudio, tools.threads, keyInfoFile),
   );
 
   // The master ffmpeg wrote already plays — it only advertises each rung's
