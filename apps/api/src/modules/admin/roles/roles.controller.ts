@@ -19,6 +19,7 @@ import { RequirePermission } from '../../../auth/decorators/require-permission.d
 import { PermissionGrantsService } from '../../../auth/permission-grants.service';
 import {
   grantablePermissions,
+  PERMISSIONS,
   permissionsForRole,
   permissionsForUser,
   type Role,
@@ -200,7 +201,10 @@ export class RolesController {
     if (outranks) {
       throw new ForbiddenException('الحساب ده ماسك صلاحيات إنت مش ماسكها');
     }
-    const beyondActor = body.permissions.filter((p) => !actorHeld.has(p));
+    // Only catalogue permissions: an unknown string is a malformed request, and
+    // `replaceForUser` answers that with its own 400 naming it.
+    const catalogue = new Set<string>(PERMISSIONS);
+    const beyondActor = body.permissions.filter((p) => catalogue.has(p) && !actorHeld.has(p));
     if (beyondActor.length > 0) {
       throw new ForbiddenException(`مش ماسك الصلاحيات دي عشان تفتحها لحد: ${beyondActor.join(', ')}`);
     }

@@ -342,7 +342,8 @@ describe('StudentsService.changeRole', () => {
 
   it('refuses demoting the last remaining admin', async () => {
     const { service, prisma } = makeService();
-    prisma.user.findUnique.mockResolvedValueOnce({ role: 'admin' });
+    // The target, then the actor (`refuseIfOutranked`): an admin demoting an admin.
+    prisma.user.findUnique.mockResolvedValueOnce({ role: 'admin' }).mockResolvedValueOnce({ role: 'admin' });
     prisma.user.count.mockResolvedValueOnce(1);
 
     await expect(
@@ -353,7 +354,7 @@ describe('StudentsService.changeRole', () => {
 
   it('allows demoting an admin when at least one other admin remains, and writes one audit entry', async () => {
     const { service, prisma, audit } = makeService();
-    prisma.user.findUnique.mockResolvedValueOnce({ role: 'admin' });
+    prisma.user.findUnique.mockResolvedValueOnce({ role: 'admin' }).mockResolvedValueOnce({ role: 'admin' });
     prisma.user.count.mockResolvedValueOnce(2);
 
     const result = await service.changeRole(
@@ -405,7 +406,9 @@ describe('StudentsService.ban', () => {
 
   it('refuses to ban the last remaining admin', async () => {
     const { service, prisma } = makeService();
-    prisma.user.findUnique.mockResolvedValueOnce({ role: 'admin', bannedAt: null });
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ role: 'admin', bannedAt: null })
+      .mockResolvedValueOnce({ role: 'admin' });
     prisma.user.count.mockResolvedValueOnce(1);
 
     await expect(service.ban('target', 'a real reason', 'actor')).rejects.toThrow(ForbiddenException);
@@ -416,7 +419,9 @@ describe('StudentsService.ban', () => {
     // Otherwise two admins who are both banned would each look like "not the
     // last", and the platform ends up with zero people who can sign in.
     const { service, prisma } = makeService();
-    prisma.user.findUnique.mockResolvedValueOnce({ role: 'admin', bannedAt: null });
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ role: 'admin', bannedAt: null })
+      .mockResolvedValueOnce({ role: 'admin' });
     prisma.user.count.mockResolvedValueOnce(2);
 
     await service.ban('target', 'a real reason', 'actor').catch(() => undefined);
@@ -473,6 +478,28 @@ describe('StudentsService.ban', () => {
     const { service } = makeService();
     await expect(service.ban('missing', 'a real reason', 'actor')).rejects.toThrow();
   });
+
+  // An assistant is an `owner`, and `owner` holds `student:ban` — which used to
+  // be enough to ban an admin whenever there were two of them.
+  it('refuses an owner banning an admin, however many admins there are', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ role: 'admin', bannedAt: null })
+      .mockResolvedValueOnce({ role: 'owner' });
+    prisma.user.count.mockResolvedValue(5);
+
+    await expect(service.ban('target', 'a real reason', 'actor')).rejects.toThrow(ForbiddenException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.session.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('still lets an owner ban a student — that is what the permission is for', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({ role: 'student', bannedAt: null });
+
+    await service.ban('target', 'a real reason', 'actor').catch(() => undefined);
+    expect(prisma.user.update).toHaveBeenCalled();
+  });
 });
 
 describe('StudentsService.unban', () => {
@@ -480,7 +507,7 @@ describe('StudentsService.unban', () => {
     // Leaving `bannedReason` behind would show a stale reason beside an active
     // account the next time anyone opened the record.
     const { service, prisma } = makeService();
-    prisma.user.findUnique.mockResolvedValueOnce({ bannedAt: new Date() });
+    prisma.user.findUnique.mockResolvedValueOnce({ bannedAt: new Date(), role: 'student' });
 
     await service.unban('target', 'actor').catch(() => undefined);
 
@@ -492,7 +519,7 @@ describe('StudentsService.unban', () => {
 
   it('does not resurrect sessions', async () => {
     const { service, prisma } = makeService();
-    prisma.user.findUnique.mockResolvedValueOnce({ bannedAt: new Date() });
+    prisma.user.findUnique.mockResolvedValueOnce({ bannedAt: new Date(), role: 'student' });
 
     await service.unban('target', 'actor').catch(() => undefined);
     expect(prisma.session.deleteMany).not.toHaveBeenCalled();
@@ -795,9 +822,12 @@ describe('StudentsService.removeMany', () => {
      * already happened, which only holds if these run in sequence.
      */
     const { service, prisma } = makeService();
+    // Each account: its own row, then the actor's (`refuseIfOutranked`) — an admin.
     prisma.user.findUnique
       .mockResolvedValueOnce({ email: 'one@x.test', name: 'One', role: 'admin' })
-      .mockResolvedValueOnce({ email: 'two@x.test', name: 'Two', role: 'admin' });
+      .mockResolvedValueOnce({ role: 'admin' })
+      .mockResolvedValueOnce({ email: 'two@x.test', name: 'Two', role: 'admin' })
+      .mockResolvedValueOnce({ role: 'admin' });
     prisma.user.count.mockResolvedValueOnce(2).mockResolvedValueOnce(1);
 
     const result = await service.removeMany({ userIds: ['one', 'two'], reason: REASON }, 'actor');
