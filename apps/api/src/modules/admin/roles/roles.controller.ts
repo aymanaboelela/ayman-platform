@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   NotFoundException,
   Param,
@@ -182,13 +183,35 @@ export class RolesController {
       throw new BadRequestException('ده حساب صاحب المنصة، وصلاحياته مش بتتقفل');
     }
 
+    /*
+     * ⚠️ ومفيش حد يعدّل حساب ماسك حاجة هو مش ماسكها.
+     *
+     * المساعد `owner` زي المدرّس بالظبط، والفرق قرارات على حسابه. فمساعد
+     * متقفل عليه قسم وسايبينله `staff:manage` كان يقدر يقفل على **المدرّس
+     * نفسه** — ولو قفل عليه `staff:manage` محدش يرجّعها على ستاك مالوش أدمن.
+     * وكان يقدر يفتح لمساعد تاني قسم هو نفسه مقفول عليه، لأن فحص التصعيد في
+     * `replaceForUser` بيعدّي أي حاجة في أساس الرول.
+     *
+     * القاعدة: الهدف صلاحياته كلها جوّه صلاحياتك، والنتيجة كمان جوّه
+     * صلاحياتك. الأدمن ماسك كل حاجة، فعنده الشرطين دول دايمًا صح.
+     */
+    const actorHeld = new Set<string>(permissionsForUser(actor.id, actor.role));
+    const outranks = permissionsForUser(user.id, user.role).some((p) => !actorHeld.has(p));
+    if (outranks) {
+      throw new ForbiddenException('الحساب ده ماسك صلاحيات إنت مش ماسكها');
+    }
+    const beyondActor = body.permissions.filter((p) => !actorHeld.has(p));
+    if (beyondActor.length > 0) {
+      throw new ForbiddenException(`مش ماسك الصلاحيات دي عشان تفتحها لحد: ${beyondActor.join(', ')}`);
+    }
+
     try {
       return await this.grants.replaceForUser(
         user.id,
         user.role,
         body.permissions,
         actor.id,
-        new Set(permissionsForUser(actor.id, actor.role)),
+        actorHeld,
       );
     } catch (error) {
       throw new BadRequestException(error instanceof Error ? error.message : 'invalid');

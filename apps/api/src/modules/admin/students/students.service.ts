@@ -31,6 +31,7 @@ import {
   throttleKeyFor,
 } from '../../../auth/credential-check.service';
 import { loginThrottle } from '../../../auth/login-throttle.instance';
+import { permissionsForRole, permissionsForUser } from '../../../auth/permissions';
 import { AuditService } from '../../../audit/audit.service';
 import { isUniqueViolation } from '../../../common/prisma/prisma-errors';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -763,6 +764,50 @@ export class StudentsService {
    *     admins and no way back in;
    *   - demoting the last remaining admin is refused for the same reason.
    */
+  /**
+   * The one question ban, delete and role changes skip: may THIS actor do this
+   * to THAT account?
+   *
+   * The permission check answers «may they ban/delete at all». It does not
+   * answer who. `owner` holds `student:ban`, `student:delete` and
+   * `staff:manage`, and so does every assistant — an assistant is an `owner`
+   * with some permissions withheld on their account. So an assistant could ban
+   * or delete an admin (only the LAST admin was protected), or ban, demote or
+   * delete the instructor who appointed them.
+   *
+   * The rule: a non-admin may act on a staff account only if every permission
+   * that account holds, they hold too. Nobody outranks an admin but an admin.
+   * Students are out of scope — acting on students is what the permission
+   * itself is for. Returns the refusal as a message, or null.
+   */
+  private async refuseIfOutranked(
+    actorUserId: string,
+    target: { id: string; role: string },
+  ): Promise<string | null> {
+    if (target.role === 'student') return null;
+
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorUserId },
+      select: { role: true },
+    });
+    if (actor?.role === 'admin') return null;
+    if (target.role === 'admin') return 'only an admin can do this to an admin account';
+    if (!(await this.actorHoldsAll(actorUserId, permissionsForUser(target.id, target.role)))) {
+      return 'this account holds permissions you do not';
+    }
+    return null;
+  }
+
+  private async actorHoldsAll(actorUserId: string, permissions: readonly string[]): Promise<boolean> {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorUserId },
+      select: { role: true },
+    });
+    if (!actor) return false;
+    const held = new Set<string>(permissionsForUser(actorUserId, actor.role));
+    return permissions.every((permission) => held.has(permission));
+  }
+
   async changeRole(
     userId: string,
     input: AdminRoleChange,
@@ -774,6 +819,16 @@ export class StudentsService {
 
     const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
     if (!target) throw new NotFoundException();
+
+    const refusal = await this.refuseIfOutranked(actorUserId, { id: userId, role: target.role });
+    if (refusal) throw new ForbiddenException(refusal);
+
+    // Making someone staff hands them the whole `owner` baseline. An assistant
+    // with part of it withheld could otherwise appoint a second account with
+    // none of it withheld — escalation by proxy.
+    if (input.role !== 'student' && !(await this.actorHoldsAll(actorUserId, permissionsForRole(input.role)))) {
+      throw new ForbiddenException('you cannot appoint someone with permissions you do not hold');
+    }
 
     if (target.role === 'admin' && input.role !== 'admin') {
       const admins = await this.prisma.user.count({ where: { role: 'admin' } });
@@ -834,6 +889,9 @@ export class StudentsService {
     });
     if (!target) throw new NotFoundException();
 
+    const refusal = await this.refuseIfOutranked(actorUserId, { id: userId, role: target.role });
+    if (refusal) throw new ForbiddenException(refusal);
+
     if (target.role === 'admin') {
       const admins = await this.prisma.user.count({
         where: { role: 'admin', bannedAt: null },
@@ -877,9 +935,12 @@ export class StudentsService {
   async unban(userId: string, actorUserId: string): Promise<AdminStudentDetail> {
     const target = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { bannedAt: true },
+      select: { bannedAt: true, role: true },
     });
     if (!target) throw new NotFoundException();
+
+    const refusal = await this.refuseIfOutranked(actorUserId, { id: userId, role: target.role });
+    if (refusal) throw new ForbiddenException(refusal);
 
     await this.prisma.user.update({
       where: { id: userId },
@@ -963,6 +1024,8 @@ export class StudentsService {
           throw new BadRequestException('confirmation email does not match this account');
         case 'last-admin':
           throw new ForbiddenException('cannot delete the last remaining admin');
+        case 'outranked':
+          throw new ForbiddenException('this account holds permissions you do not');
         case 'authored-content':
           throw new ConflictException({
             message: 'this account owns authored content and cannot be deleted',
@@ -1091,6 +1154,10 @@ export class StudentsService {
     // file carries the reasoning and the measurement.
     if (confirmIdentity !== undefined && !deleteIdentityMatches(confirmIdentity, expected)) {
       return { ok: false, reason: 'email-mismatch', name: target.name };
+    }
+
+    if (await this.refuseIfOutranked(actorUserId, { id: userId, role: target.role })) {
+      return { ok: false, reason: 'outranked', name: target.name };
     }
 
     if (target.role === 'admin') {
