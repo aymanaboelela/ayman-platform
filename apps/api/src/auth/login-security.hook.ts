@@ -211,6 +211,23 @@ export function createAuthBeforeHook(
       throw new APIError('NOT_FOUND');
     }
 
+    // `image` is written by two things only: the avatar upload (our own
+    // storage key) and Google sign-in (an https URL). `/update-user` accepted
+    // any string, and the next avatar upload ARCHIVES whatever asset the old
+    // value names (`ProfileService.setAvatar`) — so a student could set it to a
+    // course cover's key and have the platform take the cover down.
+    if (
+      ctx.path === '/update-user' &&
+      typeof ctx.body === 'object' &&
+      ctx.body !== null &&
+      'image' in ctx.body
+    ) {
+      throw new APIError('BAD_REQUEST', {
+        code: 'IMAGE_NOT_EDITABLE',
+        message: 'الصورة بتتغيّر من رفع صورة الحساب بس',
+      });
+    }
+
     /**
      * Phone normalisation runs FIRST and on every path, because sign-in reads
      * the value it produces and sign-up stores it. Returning a `context` from
