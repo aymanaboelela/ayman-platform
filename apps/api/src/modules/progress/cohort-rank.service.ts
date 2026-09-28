@@ -79,7 +79,8 @@ export class CohortRankService {
     const placed = standing(cached.rows, { userId, name: shortName(me.full_name), points: me.points });
 
     return {
-      cohort: { label, size: cached.rows.filter((row) => row.userId !== userId).length + 1 },
+      // من غير `size` — شوف `CohortRankSchema.cohort`.
+      cohort: { label },
       me: { ...stats(me), ...placed.me },
       pointsToNextRank: placed.pointsToNextRank,
       podium: placed.podium,
