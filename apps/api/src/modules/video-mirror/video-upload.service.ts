@@ -11,6 +11,8 @@ import type Redis from 'ioredis';
 import type {
   VideoUploadAbort,
   VideoUploadComplete,
+  VideoUploadResume,
+  VideoUploadResumed,
   VideoUploadSession,
   VideoUploadStart,
   VideoUploadStatus,
@@ -199,6 +201,55 @@ export class VideoUploadService {
       uploadId,
       partSizeBytes,
       parts,
+      expiresAt: new Date(Date.now() + SIGNED_URL_TTL_SECONDS * 1000).toISOString(),
+    };
+  }
+
+  /**
+   * «كمّل الرفع» — the same file, picked again after the tab closed or the
+   * connection dropped: fresh URLs for the parts the bucket does not have,
+   * and the ETags of the ones it does, so the browser sends only the rest.
+   *
+   * YouTube cannot keep uploading from a closed tab either — the bytes are on
+   * the instructor's disk. What it does, and what this does, is not make them
+   * start an hour-long upload over from zero.
+   */
+  async resume(lessonId: string, input: VideoUploadResume): Promise<VideoUploadResumed> {
+    const storage = this.storage();
+    await this.requireSession(lessonId, input.videoId);
+
+    const row = await this.prisma.lessonVideo.findUnique({
+      where: { lessonId },
+      select: { sourceBytes: true },
+    });
+    if (row?.sourceBytes === null || row?.sourceBytes === undefined || Number(row.sourceBytes) !== input.sizeBytes) {
+      throw new BadRequestException('ده مش نفس الملف اللي كان بيترفع — اختار نفس الملف');
+    }
+
+    const key = uploadSourceKey(input.videoId);
+    const uploaded = await storage.listParts(key, input.uploadId);
+    if (uploaded === null) {
+      throw new NotFoundException('الرفع ده وقته خلص — ابدأ من الأول');
+    }
+
+    const total = uploadPartCount(input.sizeBytes);
+    const partSizeBytes = uploadPartSize(input.sizeBytes);
+    const expected = (partNumber: number): number =>
+      partNumber < total ? partSizeBytes : input.sizeBytes - partSizeBytes * (total - 1);
+    // Only parts that arrived WHOLE count as done; anything else is sent again.
+    const done = uploaded.filter((part) => part.partNumber <= total && part.size === expected(part.partNumber));
+    const have = new Set(done.map((part) => part.partNumber));
+    const missing = Array.from({ length: total }, (_, index) => index + 1).filter((n) => !have.has(n));
+
+    const parts = await storage.presignPartNumbers(key, input.uploadId, missing, SIGNED_URL_TTL_SECONDS);
+    this.logger.log({ lessonId, videoId: input.videoId, done: done.length, missing: missing.length }, 'video upload resumed');
+
+    return {
+      videoId: input.videoId,
+      uploadId: input.uploadId,
+      partSizeBytes,
+      parts,
+      done: done.map(({ partNumber, etag }) => ({ partNumber, etag })),
       expiresAt: new Date(Date.now() + SIGNED_URL_TTL_SECONDS * 1000).toISOString(),
     };
   }

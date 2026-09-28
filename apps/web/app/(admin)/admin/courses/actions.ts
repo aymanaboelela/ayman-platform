@@ -41,8 +41,10 @@ import {
 } from '@ayman/contracts/admin/content-months';
 import { formatCopy } from '@ayman/contracts/format';
 import {
+  VideoUploadResumedSchema,
   VideoUploadSessionSchema,
   VideoUploadStatusSchema,
+  type VideoUploadResumed,
   type VideoUploadSession,
   type VideoUploadStatus,
 } from '@ayman/contracts/admin/video-upload';
@@ -1193,6 +1195,26 @@ export async function startVideoUploadAction(
       'POST',
       `/api/admin/lessons/${lessonId}/video/upload`,
       VideoUploadSessionSchema,
+      input,
+    );
+    return { ok: true, session };
+  } catch (error) {
+    return { ok: false, message: arabicError(error) };
+  }
+}
+
+/**
+ * «كمّل الرفع» — re-open a session the tab lost. See `VideoUploadService.resume`.
+ */
+export async function resumeVideoUploadAction(
+  lessonId: string,
+  input: { videoId: string; uploadId: string; sizeBytes: number },
+): Promise<{ ok: true; session: VideoUploadResumed } | { ok: false; message: string }> {
+  try {
+    const session = await apiSend(
+      'POST',
+      `/api/admin/lessons/${lessonId}/video/upload/resume`,
+      VideoUploadResumedSchema,
       input,
     );
     return { ok: true, session };
