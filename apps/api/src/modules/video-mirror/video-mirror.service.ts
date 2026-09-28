@@ -16,6 +16,7 @@ import {
   transcodeUpload,
   type TranscodeTools,
 } from './upload-pipeline';
+import { videoKey, videoKeyUri } from './video-key';
 
 /** One mirror at a time across the platform, however many API replicas exist. */
 const LOCK_KEY = 'ayman:video-mirror:worker';
@@ -68,6 +69,9 @@ export class VideoMirrorService implements OnModuleDestroy {
    * فتفضية المتغيرات كانت هتقفل الاتنين. ده بيقفل السحب بس.
    */
   private readonly pullsFromYouTube: boolean;
+  /** Root of every uploaded lecture's key, and where players fetch it. See `video-key.ts`. */
+  private readonly keySecret: string;
+  private readonly appUrl: string;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -81,6 +85,8 @@ export class VideoMirrorService implements OnModuleDestroy {
     this.config = mirrorConfigFrom(env);
     this.storage = this.config === null ? null : new MirrorStorage(this.config);
     this.pullsFromYouTube = env.VIDEO_MIRROR_FROM_YOUTUBE;
+    this.keySecret = env.BETTER_AUTH_SECRET;
+    this.appUrl = env.APP_URL;
     const cookies = env.VIDEO_MIRROR_COOKIES;
     this.cookies = typeof cookies === 'string' && cookies.length > 0 ? cookies : null;
 
@@ -91,6 +97,14 @@ export class VideoMirrorService implements OnModuleDestroy {
         'السحب من يوتيوب مقفول — الرفع المباشر شغّال، والمحاضرات اللي على يوتيوب بتتفرّج من يوتيوب',
       );
     }
+  }
+
+  /**
+   * The AES-128 key an uploaded lecture's segments are encrypted with. Only
+   * ever handed out by `GET /api/videos/:id/key`, after the access check.
+   */
+  videoKey(videoId: string): Buffer {
+    return videoKey(this.keySecret, videoId);
   }
 
   /** True when a bucket is configured. Read by the player and admin services. */
@@ -473,9 +487,17 @@ export class VideoMirrorService implements OnModuleDestroy {
       await storage.downloadTo(sourceKey, sourceFile);
 
       await setProgress(15);
-      const result = await transcodeUpload(sourceFile, work, this.encoder, (stage) => {
-        void setProgress(stage === 'encoding' ? 20 : stage === 'poster' ? 85 : 15);
-      });
+      // Every upload is encrypted from now on — «مينفعش حد ينزّل الفيديو».
+      // Lectures encoded before this stay plain and keep playing as they are.
+      const result = await transcodeUpload(
+        sourceFile,
+        work,
+        this.encoder,
+        (stage) => {
+          void setProgress(stage === 'encoding' ? 20 : stage === 'poster' ? 85 : 15);
+        },
+        { key: this.videoKey(uploadId), uri: videoKeyUri(this.appUrl, uploadId) },
+      );
 
       try {
         await setProgress(90);

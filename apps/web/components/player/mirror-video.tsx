@@ -238,6 +238,20 @@ export function MirrorVideo({
         });
         instance.on(Hls.Events.ERROR, (_event, data) => {
           if (!data.fatal) return;
+          /*
+           * The KEY, not the bytes. An encrypted lecture's key comes from
+           * our API with the student's session, and a refusal there — the
+           * session expired, the subscription lapsed — is an answer, not a
+           * dropped packet. `startLoad()` below would ask for it again
+           * forever behind a spinner; this says it could not play instead.
+           */
+          if (
+            data.details === Hls.ErrorDetails.KEY_LOAD_ERROR ||
+            data.details === Hls.ErrorDetails.KEY_LOAD_TIMEOUT
+          ) {
+            onFatal();
+            return;
+          }
           // Fatal network and media errors are recoverable often enough that
           // hls.js ships the recovery calls. Only give up when it does not.
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {

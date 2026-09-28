@@ -21,7 +21,7 @@ import type { MirrorConfig } from './mirror-config';
 import { adoptableLadder } from './mirror-pipeline';
 
 /**
- * Content types for the three extensions an HLS ladder is made of.
+ * Content types for the extensions an HLS ladder is made of.
  *
  * These are not cosmetic. A playlist served as `application/octet-stream` is
  * downloaded rather than played by Safari, and a segment with the wrong type
@@ -32,6 +32,9 @@ import { adoptableLadder } from './mirror-pipeline';
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
   '.m3u8': 'application/vnd.apple.mpegurl',
   '.m4s': 'video/iso.segment',
+  // An encrypted upload's segments — ffmpeg cannot encrypt fMP4 (see
+  // `transcodeArgs`), so those lectures are MPEG-TS.
+  '.ts': 'video/mp2t',
   '.mp4': 'video/mp4',
   '.jpg': 'image/jpeg',
 };
