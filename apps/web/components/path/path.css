@@ -366,7 +366,9 @@
   .pth-art__spark--3 { animation-delay: 1400ms; }
   .pth-rail__bar > span { animation: pth-fill 1s var(--ease-out) 200ms both; }
   .pth-stop[data-state='current']::after { animation: pth-pulse 2.2s ease-out infinite; }
-  .pth-badge { animation: pth-bob 2.4s ease-in-out infinite; }
+  /* الشارة مابتتحركش لوحدها عن قصد: حاجة بتتهز على طول مش «stable» عند
+     Playwright، فمابيعرفش يدوس عليها (`student-course-entry.e2e.ts`) — والهالة
+     اللي حوالين الدايرة كفاية تشاور على المكان. */
 }
 
 @keyframes pth-rise { from { opacity: 0; transform: translateY(12px); } }
@@ -383,4 +385,3 @@
   0% { transform: scale(0.92); opacity: 1; }
   100% { transform: scale(1.18); opacity: 0; }
 }
-@keyframes pth-bob { 50% { transform: translateY(-3px); } }
