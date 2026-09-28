@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { ShowScore } from './show-score';
 
 type Cue = 'tick' | 'go' | 'right' | 'combo' | 'wrong' | 'end';
 
@@ -40,12 +41,35 @@ export function useGameSound() {
   // والمتصفح بيقرا الاختيار المحفوظ من غير رندر زيادة ولا hydration mismatch.
   const enabled = useSyncExternalStore(subscribe, readPreference, () => true);
   const context = useRef<AudioContext | null>(null);
+  const score = useRef<ShowScore | null>(null);
 
   const unlock = useCallback(() => {
-    if (context.current) return;
+    if (context.current) {
+      // اتعمل قبل كده بس المتصفح ساب الـcontext «suspended» (تاب اتقفل
+      // ورجع، أو Safari). الدوسة دي هي الفرصة الوحيدة نصحّيه فيها.
+      if (context.current.state === 'suspended') void context.current.resume();
+      return;
+    }
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (Ctor) context.current = new Ctor();
+    if (!Ctor) return;
+    context.current = new Ctor();
+    score.current = new ShowScore(context.current);
   }, []);
+
+  /**
+   * موسيقى «المليون» (`show-score.ts`). كل نداء بيعدّي من هنا عشان زرار
+   * «الصوت» يقفلها هي كمان، ومن غير context (المتصفح مالوش WebAudio) بتسكت
+   * واللعبة شغّالة عادي.
+   */
+  const show = useCallback(
+    (run: (score: ShowScore) => void) => {
+      const ctx = context.current;
+      if (!enabled || !ctx || !score.current) return;
+      if (ctx.state === 'suspended') void ctx.resume();
+      run(score.current);
+    },
+    [enabled],
+  );
 
   const play = useCallback(
     (cue: Cue) => {
@@ -72,6 +96,7 @@ export function useGameSound() {
   );
 
   const toggle = useCallback(() => {
+    if (readPreference()) score.current?.stopAll(0.2);
     try {
       window.localStorage.setItem(STORAGE_KEY, readPreference() ? 'off' : 'on');
     } catch {
@@ -83,13 +108,15 @@ export function useGameSound() {
   // الراوتر بيسيب الصفحة في الـDOM لما الطالب يمشي؛ الـcontext لازم يتقفل.
   useEffect(
     () => () => {
+      score.current?.stopAll(0.05);
+      score.current = null;
       void context.current?.close();
       context.current = null;
     },
     [],
   );
 
-  return useMemo(() => ({ enabled, play, unlock, toggle }), [enabled, play, unlock, toggle]);
+  return useMemo(() => ({ enabled, play, show, unlock, toggle }), [enabled, play, show, unlock, toggle]);
 }
 
 export type GameSound = ReturnType<typeof useGameSound>;
