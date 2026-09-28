@@ -865,6 +865,24 @@ const admin = {
       'المحاضرة هتفضل موجودة من غير فيديو. الفيديو نفسه تحب نعمل فيه إيه؟',
     removeUploadedKeep: 'شيله واحتفظ بيه',
     removeUploadedDelete: 'شيله وامسحه خالص',
+    /**
+     * «قص الفيديو» — YouTube Studio's trim, for an uploaded lecture. The file
+     * is never touched: the player skips what is cut, so every cut undoes.
+     */
+    trimTitle: 'قص الفيديو',
+    trimHint: 'شغّل الفيديو ووقّفه عند المكان اللي عايزه، وبعدين دوس الزرار. الفيديو الأصلي مش بيتمسح منه حاجة — تقدر ترجّعه كامل في أي وقت.',
+    trimSetStart: 'البداية من هنا',
+    trimSetEnd: 'النهاية هنا',
+    trimCutFrom: 'اقطع من هنا',
+    trimCutTo: 'لحد هنا',
+    trimCutCancel: 'إلغاء القطع',
+    trimCutItem: 'مقطوع من {from} لـ {to}',
+    trimRemoveCut: 'رجّع الجزء ده',
+    trimResult: 'الطالب هيشوف {after} من أصل {before}',
+    trimSave: 'احفظ القص',
+    trimReset: 'رجّع الفيديو كامل',
+    trimSaved: 'القص اتحفظ',
+    trimResetDone: 'الفيديو رجع كامل',
     videoUploadSource: 'الملف الأصلي',
     title: 'عنوان المحاضرة',
     kind: 'النوع',

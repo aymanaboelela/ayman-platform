@@ -36,6 +36,7 @@ import { defaultMonthId, MonthPicker, useCourseMonths, useCourseMonthsKnown } fr
 import { VideoPreview } from './video-preview';
 import { VideoUpload } from './video-upload';
 import { RemoveUploadedVideo } from './remove-uploaded-video';
+import { VideoTrimEditor } from './video-trim-editor';
 import { fetchYouTubeDuration } from './youtube-duration';
 import { useFeature } from '../entitlements-context';
 
@@ -511,6 +512,7 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
       </div>
 
       {source === 'upload' && uploadOpen ? (
+        <>
         <VideoUpload
           courseId={courseId}
           lessonId={lesson.id}
@@ -525,6 +527,38 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
           // places on this screen read the same row.
           onDone={() => router.refresh()}
         />
+        {/*
+          «قص الفيديو» — only once the lecture is ready: there is nothing to
+          watch, and so nothing to cut, while it uploads or encodes.
+        */}
+        {lesson.video?.provider === 'upload' && lesson.video.mirrorStatus === 'ready' ? (
+          <details className="mt-3">
+            <summary className="cursor-pointer text-[length:var(--fs-text-sm)] font-medium text-accent-text">
+              {copy.admin.lesson.trimTitle}
+            </summary>
+            <div className="mt-2">
+              <VideoTrimEditor
+                courseId={courseId}
+                lessonId={lesson.id}
+                externalId={lesson.video.externalId}
+                fullSeconds={lesson.video.fullDurationSeconds ?? lesson.video.durationSeconds}
+                saved={
+                  lesson.video.trimStartSeconds === null &&
+                  lesson.video.trimEndSeconds === null &&
+                  lesson.video.trimCuts === null
+                    ? null
+                    : {
+                        start: lesson.video.trimStartSeconds ?? 0,
+                        end: lesson.video.trimEndSeconds,
+                        cuts: lesson.video.trimCuts ?? [],
+                      }
+                }
+                onSaved={() => router.refresh()}
+              />
+            </div>
+          </details>
+        ) : null}
+        </>
       ) : (
       <>
       <div className="flex flex-wrap items-end gap-2">

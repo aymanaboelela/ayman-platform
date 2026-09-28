@@ -10,6 +10,7 @@ import type { VideoLibrary, VideoLibraryOrphan } from '@ayman/contracts/admin/vi
 import { UPLOAD_ID_RE, isVideoExternalId, mirrorPrefix, uploadSourceKey } from '@ayman/contracts/video';
 import { AuditService } from '../../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '../../generated/prisma/client';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { VideoArchiveService } from './video-archive.service';
 import { VideoMirrorService } from './video-mirror.service';
@@ -168,6 +169,7 @@ export class VideoLibraryService {
             mirrorBytes: true,
             mirrorStatus: true,
             posterKey: true,
+            fullDurationSeconds: true,
           },
         },
       },
@@ -190,6 +192,11 @@ export class VideoLibraryService {
       mirrorError: null,
       mirrorProgress: 100,
       mirrorAttempts: 0,
+      // Back whole: a trim belonged to the lesson the video used to be on.
+      trimStartSeconds: null,
+      trimEndSeconds: null,
+      trimCuts: Prisma.DbNull,
+      fullDurationSeconds: null,
     };
     await this.prisma.$transaction([
       this.prisma.lessonVideo.upsert({ where: { lessonId }, create: { lessonId, ...data }, update: data }),

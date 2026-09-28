@@ -1510,6 +1510,19 @@ model LessonVideo {
 
   lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
+  /// «قص الفيديو» — what the STUDENT sees of an uploaded lecture, applied by
+  /// the player. The files are never touched: the owner's ask was a cut he can
+  /// take back, and a re-encode would be neither instant nor reversible.
+  /// Seconds on the ORIGINAL timeline; `null` start/end means the video's own.
+  trimStartSeconds    Int?  @map("trim_start_seconds")
+  trimEndSeconds      Int?  @map("trim_end_seconds")
+  /// Parts cut out of the middle: `[{ "from": 120, "to": 185 }, …]`, sorted.
+  trimCuts            Json? @map("trim_cuts")
+  /// The untrimmed length, kept once a trim is saved, because
+  /// `duration_seconds` then holds what the student will actually watch —
+  /// the number every course total and progress rule already reads.
+  fullDurationSeconds Int?  @map("full_duration_seconds")
+
   /// The worker's claim query: status + age, nothing else. Partial, because
   /// `ready` is the steady state of every row and indexing it would be an
   /// index of the whole table to find the handful that are not.
