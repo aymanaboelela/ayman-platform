@@ -19,6 +19,7 @@ import type {
 } from '@ayman/contracts/admin/video-upload';
 import { UPLOAD_ID_RE, uploadPartCount, uploadPartSize, uploadSourceKey } from '@ayman/contracts/video';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '../../generated/prisma/client';
 import { REDIS } from '../../redis/redis.module';
 import { VideoArchiveService } from './video-archive.service';
 import { VideoMirrorService } from './video-mirror.service';
@@ -74,6 +75,10 @@ interface ReplacedVideo {
   keepPrevious?: boolean;
   lessonTitle?: string | null;
   courseTitle?: string | null;
+  trimStartSeconds?: number | null;
+  trimEndSeconds?: number | null;
+  trimCuts?: unknown;
+  fullDurationSeconds?: number | null;
 }
 
 @Injectable()
@@ -148,6 +153,10 @@ export class VideoUploadService {
         mirrorHeight: true,
         mirrorBytes: true,
         sourceName: true,
+        trimStartSeconds: true,
+        trimEndSeconds: true,
+        trimCuts: true,
+        fullDurationSeconds: true,
         lesson: { select: { title: true, section: { select: { course: { select: { title: true } } } } } },
       },
     });
@@ -208,6 +217,11 @@ export class VideoUploadService {
         mirrorProgress: 0,
         sourceBytes: BigInt(input.sizeBytes),
         sourceName: input.fileName,
+        // A new video starts whole — the old one's cut belongs to the old one.
+        trimStartSeconds: null,
+        trimEndSeconds: null,
+        trimCuts: Prisma.DbNull,
+        fullDurationSeconds: null,
       },
     });
 
@@ -336,6 +350,10 @@ export class VideoUploadService {
           mirrorBytes: previous.mirrorBytes == null ? null : BigInt(previous.mirrorBytes),
           mirrorProgress: null,
           sourceName: previous.sourceName,
+          trimStartSeconds: previous.trimStartSeconds ?? null,
+          trimEndSeconds: previous.trimEndSeconds ?? null,
+          trimCuts: previous.trimCuts == null ? Prisma.DbNull : (previous.trimCuts as Prisma.InputJsonValue),
+          fullDurationSeconds: previous.fullDurationSeconds ?? null,
         },
       });
       await this.redis.del(REPLACED_KEY(input.videoId)).catch(() => undefined);
@@ -443,6 +461,7 @@ export class VideoUploadService {
         mirrorHeight: previous.mirrorHeight,
         mirrorBytes: previous.mirrorBytes == null ? null : BigInt(previous.mirrorBytes),
         posterKey: previous.posterKey,
+        fullDurationSeconds: previous.fullDurationSeconds ?? null,
       },
       keep,
       { lessonTitle: previous.lessonTitle ?? null, courseTitle: previous.courseTitle ?? null },

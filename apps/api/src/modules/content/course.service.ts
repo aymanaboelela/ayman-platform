@@ -1088,6 +1088,11 @@ export class CourseService {
                     provider: true,
                     mirrorStatus: true,
                     sourceName: true,
+                    // «قص الفيديو» — the editor opens on the cut already saved.
+                    trimStartSeconds: true,
+                    trimEndSeconds: true,
+                    trimCuts: true,
+                    fullDurationSeconds: true,
                   },
                 },
                 // The editor prefills its textarea from this. Without it the

@@ -1,3 +1,5 @@
+import { VideoTrimSchema } from '@ayman/contracts/video';
+import { z } from '@ayman/contracts/zod';
 import {
   LessonCreateSchema,
   LessonResourceInputSchema,
@@ -47,3 +49,6 @@ export class AbortVideoUploadDto extends createZodDto(VideoUploadAbortSchema) {}
 export class AddResourceDto extends createZodDto(LessonResourceInputSchema) {}
 export class UpdateResourceDto extends createZodDto(LessonResourceUpdateSchema) {}
 export class ReorderDto extends createZodDto(ReorderSchema) {}
+
+/** «قص الفيديو» — `trim: null` puts the whole video back. */
+export class SetVideoTrimDto extends createZodDto(z.object({ trim: VideoTrimSchema.nullable() }).strict()) {}

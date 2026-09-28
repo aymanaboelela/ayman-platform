@@ -11,11 +11,12 @@ import {
   type ReactNode,
 } from 'react';
 import { Pause, Play, RotateCcw, RotateCw, Settings, Volume2, VolumeX } from 'lucide-react';
-import type { PlayerVideoMirror } from '@ayman/contracts/video';
+import { effectiveSeconds, type PlayerVideoMirror, type VideoTrim } from '@ayman/contracts/video';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
 import type { YouTubePlayer } from '@/lib/youtube';
+import { skipCuts, trimWindow, watchedAt } from '@/lib/video-trim';
 import { FullscreenIcon } from './icons';
 import './mirror-video.css';
 
@@ -104,12 +105,16 @@ const SPEED_KEY = 'ayman:player:speed';
  * player. An adapter rather than a second heartbeat: the completion rules
  * are subtle, already written and already tested.
  */
-function adapt(element: HTMLVideoElement): YouTubePlayer {
+function adapt(element: HTMLVideoElement, trim: VideoTrim | null): YouTubePlayer {
+  const full = () => (Number.isFinite(element.duration) ? element.duration : 0);
   return {
     getCurrentTime: () => element.currentTime,
-    getDuration: () => (Number.isFinite(element.duration) ? element.duration : 0),
+    // «قص الفيديو»: the lecture ENDS where the instructor cut it, so completion
+    // is reached there — not at the end of a file the student never sees.
+    getDuration: () => trimWindow(trim, full()).end,
     getPlayerState: () => {
       if (element.ended) return YT_ENDED;
+      if (trim?.end != null && element.currentTime >= trim.end - 0.25) return YT_ENDED;
       return element.paused ? YT_PAUSED : YT_PLAYING;
     },
     playVideo: () => void element.play().catch(() => undefined),
@@ -180,6 +185,8 @@ export function MirrorVideo({
   const [menuOpen, setMenuOpen] = useState(false);
   const [controlsShown, setControlsShown] = useState(true);
   const [flash, setFlash] = useState<'back' | 'forward' | null>(null);
+  /** «قص الفيديو» — what of the file the student sees. `null` = all of it. */
+  const trim = mirror.trim ?? null;
 
   useEffect(() => {
     const element = ref.current;
@@ -207,7 +214,7 @@ export function MirrorVideo({
       }
       element.src = mirror.hlsUrl;
       element.playbackRate = preferred;
-      onPlayer(adapt(element));
+      onPlayer(adapt(element, trim));
     };
 
     void import('hls.js')
@@ -268,7 +275,7 @@ export function MirrorVideo({
         instance.loadSource(mirror.hlsUrl);
         instance.attachMedia(element);
         element.playbackRate = preferred;
-        onPlayer(adapt(element));
+        onPlayer(adapt(element, trim));
       })
       .catch(() => {
         // The chunk itself did not arrive — the element may still manage.
@@ -318,11 +325,12 @@ export function MirrorVideo({
   const seekBy = useCallback((delta: number) => {
     const element = ref.current;
     if (!element) return;
-    const end = Number.isFinite(element.duration) ? element.duration : element.currentTime + delta;
-    element.currentTime = Math.min(Math.max(0, element.currentTime + delta), end);
+    const full = Number.isFinite(element.duration) ? element.duration : element.currentTime + delta;
+    const { start, end } = trimWindow(trim, full);
+    element.currentTime = skipCuts(Math.min(Math.max(start, element.currentTime + delta), end), trim);
     setFlash(delta < 0 ? 'back' : 'forward');
     setTimeout(() => setFlash(null), 450);
-  }, []);
+  }, [trim]);
 
   const chooseSpeed = useCallback((value: number) => {
     const element = ref.current;
@@ -418,8 +426,13 @@ export function MirrorVideo({
     [menuOpen, togglePlay, reveal, seekBy, barVisible, paused],
   );
 
-  const played = duration > 0 ? (time / duration) * 100 : 0;
-  const loaded = duration > 0 ? (buffered / duration) * 100 : 0;
+  // The bar spans only what the student sees: `[start, end]` of the file.
+  const window_ = trimWindow(trim, duration);
+  const span = window_.end - window_.start;
+  const played = span > 0 ? Math.min(100, Math.max(0, ((time - window_.start) / span) * 100)) : 0;
+  const loaded = span > 0 ? Math.min(100, Math.max(0, ((buffered - window_.start) / span) * 100)) : 0;
+  const shownTime = watchedAt(Math.min(time, window_.end), trim);
+  const shownDuration = trim === null ? duration : effectiveSeconds(trim, duration);
   const qualityLabel =
     level === -1
       ? autoHeight !== null
@@ -467,7 +480,20 @@ export function MirrorVideo({
         onWaiting={() => setWaiting(true)}
         onPlaying={() => setWaiting(false)}
         onCanPlay={() => setWaiting(false)}
-        onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)}
+        onTimeUpdate={(event) => {
+          const element = event.currentTarget;
+          const t = element.currentTime;
+          if (trim !== null) {
+            // Over a cut, and to a stop where the lecture was cut short.
+            const skipped = skipCuts(t, trim);
+            if (skipped !== t) element.currentTime = skipped;
+            if (trim.end !== null && t >= trim.end && !element.paused) {
+              element.pause();
+              element.currentTime = trim.end;
+            }
+          }
+          setTime(element.currentTime);
+        }}
         onDurationChange={(event) => {
           const value = event.currentTarget.duration;
           setDuration(Number.isFinite(value) ? value : 0);
@@ -484,9 +510,11 @@ export function MirrorVideo({
         onLoadedMetadata={(event) => {
           // One seek, on the first metadata event only: `loadedmetadata` fires
           // again on every quality change in the native Safari path.
-          if (seeked || startAt <= 0) return;
+          // The instructor's start wins over a resume point before it.
+          const target = skipCuts(Math.max(startAt, trim?.start ?? 0), trim);
+          if (seeked || target <= 0) return;
           setSeeked(true);
-          event.currentTarget.currentTime = startAt;
+          event.currentTarget.currentTime = target;
         }}
       />
 
@@ -539,16 +567,16 @@ export function MirrorVideo({
         <input
           type="range"
           className="mv-timeline"
-          min={0}
-          max={duration || 0}
+          min={window_.start}
+          max={window_.end || 0}
           step={0.1}
-          value={Math.min(time, duration || 0)}
+          value={Math.min(Math.max(time, window_.start), window_.end || 0)}
           aria-label={c.seek}
-          aria-valuetext={`${clock(time)} / ${clock(duration)}`}
+          aria-valuetext={`${clock(shownTime)} / ${clock(shownDuration)}`}
           style={{ '--mv-played': `${played}%`, '--mv-buffered': `${Math.max(played, loaded)}%` } as CSSProperties}
           onChange={(event) => {
             const element = ref.current;
-            if (element) element.currentTime = Number(event.currentTarget.value);
+            if (element) element.currentTime = skipCuts(Number(event.currentTarget.value), trim);
             reveal();
           }}
         />
@@ -590,7 +618,7 @@ export function MirrorVideo({
             }}
           />
           <span className="mono tabular ms-1 whitespace-nowrap text-[length:var(--fs-text-xs)] text-white/90">
-            {clock(time)} / {clock(duration)}
+            {clock(shownTime)} / {clock(shownDuration)}
           </span>
 
           <span className="ms-auto" />

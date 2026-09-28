@@ -129,6 +129,11 @@ const AdminCourseDetailSchema = z.object({
               mirrorStatus: VideoMirrorStatusSchema,
               /** The instructor's own filename, shown back to them. */
               sourceName: z.string().nullable(),
+              /** «قص الفيديو». Defaults so an API a minute behind this build still parses. */
+              trimStartSeconds: z.number().int().nullable().default(null),
+              trimEndSeconds: z.number().int().nullable().default(null),
+              trimCuts: z.array(z.object({ from: z.number(), to: z.number() })).nullable().catch(null).default(null),
+              fullDurationSeconds: z.number().int().nullable().default(null),
             })
             .nullable(),
           // Prefills the body editor. See `findForAdmin` for why its absence

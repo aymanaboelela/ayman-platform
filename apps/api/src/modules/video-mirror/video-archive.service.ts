@@ -11,6 +11,8 @@ export interface KeptVideo {
   mirrorHeight: number | null;
   mirrorBytes: bigint | null;
   posterKey: string | null;
+  /** Set when the video was trimmed: `durationSeconds` is then the trimmed length. */
+  fullDurationSeconds?: number | null;
 }
 
 /**
@@ -51,7 +53,8 @@ export class VideoArchiveService {
         create: {
           externalId: video.externalId,
           sourceName: video.sourceName,
-          durationSeconds: video.durationSeconds,
+          // The whole video is what is kept; a trim belongs to the lesson it was on.
+          durationSeconds: video.fullDurationSeconds ?? video.durationSeconds,
           mirrorHeight: video.mirrorHeight,
           mirrorBytes: video.mirrorBytes,
           posterKey: video.posterKey,

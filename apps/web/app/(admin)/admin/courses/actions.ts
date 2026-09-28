@@ -1206,6 +1206,45 @@ export async function startVideoUploadAction(
 }
 
 /**
+ * «قص الفيديو» — save the cut (or `null` for the whole video). The course's
+ * cache goes too: `duration_seconds` just changed, and every card that sums
+ * the course length reads it.
+ */
+/**
+ * The playlist URL of an uploaded lecture, for the editor's own preview.
+ *
+ * Asked of the server because `NEXT_PUBLIC_VIDEO_ORIGIN` is a RUNTIME variable
+ * here — the Dockerfile never declares it as a build arg, so it is not inlined
+ * into client bundles and `proxy.ts` reads it per request too. Built from the
+ * id and the configured origin, never from a stored string.
+ */
+export async function videoPreviewUrlAction(externalId: string): Promise<string | null> {
+  const origin = (process.env.NEXT_PUBLIC_VIDEO_ORIGIN ?? '').replace(/\/+$/, '');
+  if (origin === '' || !/^[0-9a-f]{32}$/.test(externalId)) return null;
+  return `${origin}/v/${externalId}/master.m3u8`;
+}
+
+export async function setVideoTrimAction(
+  courseId: string,
+  lessonId: string,
+  trim: { start: number; end: number | null; cuts: { from: number; to: number }[] } | null,
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'PUT',
+      `/api/admin/lessons/${lessonId}/video/trim`,
+      z.object({ durationSeconds: z.number() }),
+      { trim },
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: arabicError(error) };
+  }
+}
+
+/**
  * «كمّل الرفع» — re-open a session the tab lost. See `VideoUploadService.resume`.
  */
 export async function resumeVideoUploadAction(

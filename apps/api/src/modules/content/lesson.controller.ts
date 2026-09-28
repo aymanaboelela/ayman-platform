@@ -28,6 +28,7 @@ import {
   AbortVideoUploadDto,
   CompleteVideoUploadDto,
   ResumeVideoUploadDto,
+  SetVideoTrimDto,
   SetLessonVideoDto,
   StartVideoUploadDto,
   UpdateLessonDto,
@@ -109,6 +110,14 @@ export class LessonController {
   @Put('lessons/:id/video')
   setVideo(@Param('id') id: string, @Body() body: SetLessonVideoDto) {
     return this.lessons.setVideo(id, body);
+  }
+
+  /** «قص الفيديو» — the player applies it; the files are never touched. */
+  @RequireFeature('video.upload')
+  @RequirePermission('lesson:write')
+  @Put('lessons/:id/video/trim')
+  setVideoTrim(@Param('id') id: string, @Body() body: SetVideoTrimDto) {
+    return this.lessons.setTrim(id, body.trim);
   }
 
   /** `?keep=false` deletes an uploaded video's files; anything else keeps them in «محفوظة». */
