@@ -28,6 +28,27 @@ const ACCEPT = ALLOWED_UPLOAD_EXT.map((ext) => `.${ext}`).join(',');
  */
 const COVER_ASPECT = 16 / 9;
 
+/**
+ * A book jacket — the third real surface, and the reason `shape` is now a
+ * closed map rather than a boolean.
+ *
+ * Every place a book is drawn (the `/books` and `/store` cards, the landing
+ * strip, the dashboard's «كتبك», both presets) is a `3 / 4` box, because a
+ * book is taller than it is wide. The book form was the one caller still
+ * cropping at 16/9: a jacket cut to a landscape strip and then stretched over
+ * a portrait card by `object-fit: cover` keeps a band across its middle and
+ * loses the title printed at the top. Cropping here at the shape it will be
+ * SHOWN is the same rule the round honour-board photo follows.
+ */
+const ASPECT: Record<MediaKeyShape, number> = {
+  cover: COVER_ASPECT,
+  round: 1,
+  book: 3 / 4,
+};
+
+/** How a picked picture will be shown — which is what it is cropped to. */
+export type MediaKeyShape = 'cover' | 'round' | 'book';
+
 /** The closed set of upload failures, in Arabic an instructor can act on. */
 function uploadReason(reason: UploadFailure): string {
   const m = copy.admin.media;
@@ -84,9 +105,9 @@ export function MediaKeyField({
    * How the picture will actually be SHOWN, which decides both the crop frame
    * and the preview — a round field crops square and previews as a disc, so
    * what the admin approves in the dialog is what the student sees. Defaults
-   * to the 16/9 cover every earlier caller expects.
+   * to the 16/9 cover every earlier caller expects; `book` is the 3/4 jacket.
    */
-  shape?: 'cover' | 'round';
+  shape?: MediaKeyShape;
   /**
    * The autosaving editors have no submit to read `FormData` on, so they pass
    * this and write the key themselves. It fires on a successful upload and on
@@ -210,7 +231,13 @@ export function MediaKeyField({
           if (file) setPicked(file);
         }}
       >
-        <div className={cn('media-key__preview', shape === 'round' && 'media-key__preview--round')}>
+        <div
+          className={cn(
+            'media-key__preview',
+            shape === 'round' && 'media-key__preview--round',
+            shape === 'book' && 'media-key__preview--book',
+          )}
+        >
           {storageKey ? (
             // A raw <img>: media-origin uploads are not in next.config's
             // `remotePatterns`, so the optimiser would reject them — the same
@@ -299,7 +326,7 @@ export function MediaKeyField({
           {picked ? (
             <CoverCropper
               file={picked}
-              aspect={shape === 'round' ? 1 : COVER_ASPECT}
+              aspect={ASPECT[shape]}
               onCancel={clearPick}
               onCropped={(cropped) => {
                 clearPick();

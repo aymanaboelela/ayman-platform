@@ -2,8 +2,26 @@ import type { AdminBookCreateInput } from '@ayman/contracts/admin/books';
 import type { BookTerm } from '@ayman/contracts/books';
 import { streamFlagsOf, type StreamChoice } from '@ayman/contracts/content';
 import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
 
 const c = copy.admin.books;
+
+/**
+ * A course this book may be linked to.
+ *
+ * `year` and the stream pair ride along because the label needs them — see
+ * `courseOptionLabel` for why a picker without them is a picker whose wrong
+ * answer cannot be corrected. `status` is optional because the course editor
+ * mounts the form with a LOCKED course and no list at all.
+ */
+export interface CourseOption {
+  id: string;
+  title: string;
+  year: number;
+  forGeneral: boolean;
+  forLanguages: boolean;
+  status?: string;
+}
 
 /**
  * «توحدلي المكان اللي أضيف فيه الكتاب» — the ONE add-book form's logic, pulled
@@ -166,4 +184,97 @@ export function bookPlacementLabels(book: {
      book whose course was unlinked would otherwise print a place it is not. */
   if (book.showOnCourse && book.courseId !== null) labels.push(c.placementCourse);
   return labels.length === 0 ? [c.placementShopOnly] : labels;
+}
+
+/**
+ * A URL handle from the title, for a NEW book — «كتاب أولى بكالوريا برمجة
+ * عربي» → «كتاب-أولى-بكالوريا-برمجة-عربي».
+ *
+ * The slug was a required, empty field at the top of the create form, and the
+ * first thing it asked of someone adding a book was a URL rule
+ * (`BookSlugSchema`: no spaces, dots or slashes). It still exists and can
+ * still be edited — `/books#book-{slug}` links are shared on WhatsApp, so it
+ * has to be stable once published — but on create it now follows the title
+ * until the admin types into it.
+ *
+ * Letters and digits of ANY script survive; every other run becomes one `-`.
+ * That is stricter than the schema needs (it forbids only `/`, `.` and
+ * whitespace), and on purpose: `#`, `?` and `%` are legal there and still turn
+ * a pasted link into a different URL.
+ */
+export function slugFromTitle(title: string): string {
+  return title
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+    .replace(/-+$/, '');
+}
+
+/** One `<option>` in «الكورس المرتبط». */
+export interface CourseChoice {
+  id: string;
+  label: string;
+  /** Held by ANOTHER book — shown, greyed, and saying which one. */
+  disabled: boolean;
+}
+
+/**
+ * The course picker's options for one book.
+ *
+ * ## One book per course, one course per book — and why that is still right
+ *
+ * `books.course_id` is UNIQUE, and this picker keeps it that way rather than
+ * asking for a join table. Every surface that shows a course's book reads ONE:
+ * the course page's «اطلب الكتاب», the dashboard card, the player outline, and
+ * `BookOrdersService.priceCourseBook`, which CHARGES a course-page order from
+ * that single row (`courseBook()` in the API). A course holding two books would
+ * need a rule for which one that button sells — a pricing decision, not a
+ * schema one — and a book in two courses is not a real object here: the عربي
+ * and لغات editions are different printed books with different rows.
+ *
+ * A second-term volume therefore takes the course over from the first-term one
+ * when the term turns — unlink, then link — and `fieldCourseHint` says so.
+ *
+ * ## What this function adds on top of the list
+ *
+ *   · A course another book already holds is DISABLED and names that book. It
+ *     used to be pickable, and the save came back with a generic «مقدرناش
+ *     نحفظ» from the API's 409 — the admin had no way to learn why.
+ *   · Only published courses are offered (a draft's book has nothing to point
+ *     at yet), EXCEPT the one this book is already linked to. Dropping that one
+ *     made the `<select>` show «من غير كورس» over a link that exists — and a
+ *     save from that screen would have looked like it unlinked the book.
+ */
+export function courseChoices(
+  courses: readonly CourseOption[],
+  currentCourseId: string | null,
+  takenBy: Readonly<Record<string, string>>,
+): CourseChoice[] {
+  return courses
+    .filter(
+      (course) =>
+        course.status === undefined ||
+        course.status === 'published' ||
+        course.id === currentCourseId,
+    )
+    .map((course) => {
+      const holder = course.id === currentCourseId ? undefined : takenBy[course.id];
+      const draft = course.status !== undefined && course.status !== 'published';
+      const suffix = [
+        draft ? c.fieldCourseDraft : null,
+        holder !== undefined ? formatCopy(c.fieldCourseTaken, { title: holder }) : null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(' · ');
+      return {
+        id: course.id,
+        label:
+          suffix === ''
+            ? courseOptionLabel(course)
+            : formatCopy(c.fieldCourseWithNote, { label: courseOptionLabel(course), note: suffix }),
+        disabled: holder !== undefined,
+      };
+    });
 }

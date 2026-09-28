@@ -84,6 +84,14 @@ const admin = {
     /** الكتاب الورقي — the shipping queue. */
     books: 'طلبات الكتب',
     /**
+     * «الكتب» — the SHELF: every title, its cover, its course, its term and its
+     * price. It used to be reachable only as the second tab inside «طلبات
+     * الكتب», and «عايز صفحة في الداشبورد أختار فيها الكتاب» was asked by the
+     * person who had been one tab away from it for weeks. A sidebar row of its
+     * own, directly above the queue it feeds.
+     */
+    bookCatalog: 'الكتب',
+    /**
      * الواجب — the review queue. In the teaching group, directly under the
      * inbox pair: it is the third screen where somebody is waiting on an
      * answer from him, and the only one where the answer is a mark.
@@ -1534,6 +1542,7 @@ const admin = {
     '/admin/transfers': 'الفلوس اللي وصلت فعلاً على إنستاباي.',
     '/admin/finance': 'الإيرادات والمصروفات وصافي الربح.',
     '/admin/unlock-codes': 'كود لطالب بيفتح محاضرة أو وحدة أو الكورس كله — ومين استخدم إيه.',
+    '/admin/books/catalog': 'كل كتاب: غلافه وسعره، تبع أنهي كورس، والترم بتاعه.',
     '/admin/books': 'طلبات الكتاب المدفوعة اللي لسه ما اتشحنتش.',
     '/admin/attempts': 'محاولات الامتحانات ودرجاتها.',
     '/admin/analytics': 'أداء الطلبة وأصعب الأسئلة.',
@@ -4353,7 +4362,18 @@ const admin = {
     fieldTerm: 'الترم',
     fieldCourse: 'الكورس المرتبط (اختياري)',
     fieldCourseNone: 'من غير كورس',
-    fieldCourseHint: 'لو الكتاب ده هو كتاب كورس، اربطه بيه — الكورس الواحد ليه كتاب واحد بس.',
+    fieldCourseHint:
+      'لو الكتاب ده هو كتاب كورس، اربطه بيه — وهيظهر للطالب في صفحة الكورس. الكورس الواحد ليه كتاب واحد في نفس الوقت: عشان تربط كتاب الترم التاني، شيل الربط من كتاب الترم الأول الأول.',
+    /** `{title}` — the book that already holds this course. Beside a DISABLED
+     *  option, so the picker says why it will not take it instead of letting
+     *  the save come back with a conflict. */
+    fieldCourseTaken: 'مربوط بـ«{title}»',
+    /** After a course that is not published — offered only because THIS book
+     *  is already linked to it, so the picker does not silently show «من غير
+     *  كورس» for a link that exists. */
+    fieldCourseDraft: 'مش منشور',
+    /** `{label}` the course, `{note}` the two notes above joined by « · ». */
+    fieldCourseWithNote: '{label} ({note})',
     fieldPrice: 'السعر (ج)',
     fieldComparePrice: 'السعر قبل الخصم (ج، اختياري)',
     fieldComparePriceHint: 'لازم يكون أعلى من السعر الحالي، وإلا الخصم يبقى كذب.',
@@ -4396,10 +4416,39 @@ const admin = {
     termFirst: 'الترم الأول',
     termSecond: 'الترم التاني',
     termFull: 'السنة كاملة',
+    /** Under the three term buttons — what the choice actually DOES, because
+     *  «السنة كاملة» printed over two first-term books is how this was asked. */
+    fieldTermHint: 'ده العنوان اللي الكتاب بيظهر تحته في قسم الكتب.',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * The editor's sections, and the list's summary. «صفحة أختار فيها الكتاب،
+     * تبع أنهي كورس، وأحط الصورة وكل الداتا بتاعته».
+     * ════════════════════════════════════════════════════════════════════
+     */
+    sectionBasics: 'بيانات الكتاب',
+    sectionCourse: 'الكورس والصف والترم',
+    sectionPricing: 'السعر والمخزون',
+    sectionCover: 'الغلاف',
+    sectionVisibility: 'الظهور',
+    /** Under the cover field: the crop is portrait because every surface that
+     *  shows a book shows it as a 3×4 jacket. */
+    fieldCoverHint: 'بيتقص بالطول ٣×٤، بنفس شكل الكارت في قسم الكتب.',
+    /** On a NEW book only — the slug follows the title until it is edited. */
+    fieldSlugAutoHint: 'بيتكتب لوحده من اسم الكتاب — غيّره لو حابب.',
+    /** `{n}` titles in the catalogue, `{active}` of them on sale. */
+    catalogSummary: '{n} كتاب · {active} معروض',
+    catalogCourseLabel: 'الكورس',
+    catalogNoCourse: 'مش مربوط بكورس',
+    /** `{n}` copies left, when stock is counted. */
+    catalogStockLeft: '{n} في المخزن',
 
     catalogSave: 'احفظ',
     catalogSaving: 'بيتحفظ…',
     catalogSaveFailed: 'مقدرناش نحفظ الكتاب — نحاول تاني',
+    /** A 409 from the API: the slug, or the course, is another book's. The form
+     *  greys out a taken course, so this is almost always the slug. */
+    catalogConflict: 'الرابط ده أو الكورس ده مستخدم في كتاب تاني — غيّره وجرّب تاني.',
     catalogDelete: 'امسح',
     catalogDeleteConfirm: 'نمسح الكتاب ده؟ الطلبات اللي اشترته هتفضل زي ما هي.',
     catalogDeleteFailed: 'مقدرناش نمسح الكتاب — نحاول تاني',

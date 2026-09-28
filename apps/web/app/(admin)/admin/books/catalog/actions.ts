@@ -14,8 +14,8 @@ import {
 import type { BookShippingRates } from '@ayman/contracts/books';
 import { SiteSettingsSchema, StoreSettingsSchema } from '@ayman/contracts/admin/settings';
 import { copy } from '@ayman/contracts/copy/admin';
-import { adminGet, adminSend } from '@/lib/admin-api';
-import { TAG_BOOKS } from '@/lib/cache-tags';
+import { AdminApiError, adminGet, adminSend } from '@/lib/admin-api';
+import { TAG_BOOKS, TAG_COURSES } from '@/lib/cache-tags';
 
 const c = copy.admin.books;
 
@@ -41,10 +41,37 @@ export type ActionResult = { ok: true } | { ok: false; message: string };
  * `revalidatePath('/admin/books/catalog')` alongside it, because the admin list
  * is an uncached `adminGet` on a Server Component and needs the segment
  * re-rendered rather than a tag expired.
+ *
+ * ## And `TAG_COURSES`, because the course page quotes the book too
+ *
+ * `/courses/[slug]`'s «اطلب الكتاب» prints the linked book's TITLE and PRICE,
+ * read through `courseBook()` inside the catalogue payload — and that payload
+ * is cached on `TAG_COURSES` for hours (`lib/catalog.ts`), not on `TAG_BOOKS`.
+ * So renaming or repricing a book here, or linking it to a course, updated the
+ * shop at once and left every course page quoting the old book until the
+ * cache ran out. The checkout itself was never wrong (`SubscribePanel` and the
+ * order route read live), but a page advertising 250 for a book that costs
+ * 150 is the page a parent screenshots. Same pair the course editor expires on
+ * every write (`admin/courses/actions.ts`).
  */
 function invalidate(): void {
   updateTag(TAG_BOOKS);
+  updateTag(TAG_COURSES);
   revalidatePath('/admin/books/catalog');
+}
+
+/**
+ * The form's message for a failed save.
+ *
+ * A 409 is the one failure with a cause the admin can fix — the slug or the
+ * course is another book's (`BooksService.assertSlugFree` /
+ * `assertCourseFree`). It gets its own sentence; everything else stays the
+ * generic one, never the raw error, for the reason `AdminApiError` gives.
+ */
+function saveFailure(error: unknown): string {
+  return error instanceof AdminApiError && error.status === 409
+    ? c.catalogConflict
+    : c.catalogSaveFailed;
 }
 
 export async function createBookAction(input: AdminBookCreateInput): Promise<ActionResult> {
@@ -53,11 +80,11 @@ export async function createBookAction(input: AdminBookCreateInput): Promise<Act
     await adminSend('POST', '/api/admin/books', body, AdminBookRowSchema);
     invalidate();
     return { ok: true };
-  } catch {
+  } catch (error) {
     // Never the raw `AdminApiError`/`ZodError` message — see `AdminApiError`'s
     // own doc on why that used to leak a route, a status and a JSON body into
     // this Arabic RTL screen.
-    return { ok: false, message: c.catalogSaveFailed };
+    return { ok: false, message: saveFailure(error) };
   }
 }
 
@@ -75,8 +102,8 @@ export async function patchBookAction(
     );
     invalidate();
     return { ok: true };
-  } catch {
-    return { ok: false, message: c.catalogSaveFailed };
+  } catch (error) {
+    return { ok: false, message: saveFailure(error) };
   }
 }
 
