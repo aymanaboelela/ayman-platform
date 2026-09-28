@@ -30,6 +30,7 @@
     "./catalog": "./src/catalog.ts",
     "./progress": "./src/progress.ts",
     "./activity": "./src/activity.ts",
+    "./rank": "./src/rank.ts",
     "./notifications": "./src/notifications.ts",
     "./notifications/push": "./src/notifications/push.ts",
     "./payments": "./src/payments.ts",
