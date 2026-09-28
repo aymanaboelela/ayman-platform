@@ -68,26 +68,70 @@ export function Millionaire({
   const [busy, setBusy] = useState(false);
   // صفر = لسه مابدأش؛ أول فريم في التايمر بيحط الموعد.
   const deadline = useRef(0);
-  const speech = useSpeech();
+  // الموسيقى بتوطى تحت القراية وبترجع بعدها — `show` نفسه بيتجاهل لو الصوت مقفول.
+  const duck = useCallback((on: boolean) => sound.show((score) => score.duck(on)), [sound]);
+  const speech = useSpeech(duck);
 
   const question = round.questions[index];
   const secured = index === 0 ? 0 : ladder[index - 1]!;
   const safeFloor = floorAt(ladder, index);
 
-  // كل سؤال جديد: التايمر من الأول، والقراية.
+  // كل سؤال جديد: «دخلة» السؤال (هوا طالع وضربة)، وبعدها القراية فوق فرشة
+  // التوتر. القراية بتستنى الدخلة تخلص عشان الصوت مايتغطّاش.
   useEffect(() => {
     if (!question || phase !== 'question') return;
-    speech.read({ questionId: question.id, stemHtml: question.stemHtml, options: question.options, n: index + 1, server: voice });
+    sound.show((score) => {
+      score.setUrgent(false);
+      score.intro();
+    });
+    const timer = window.setTimeout(() => {
+      sound.show((score) => score.startBed(size > 1 ? index / (size - 1) : 0));
+      speech.read({ questionId: question.id, stemHtml: question.stemHtml, options: question.options, n: index + 1, server: voice });
+    }, 1000);
+    return () => window.clearTimeout(timer);
     // القراية مرة واحدة لكل سؤال — مش مع كل تغيير في الحالة.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question?.id]);
+
+  // الموبايل: السلّم شريط أفقي، والسؤال الحالي لازم يفضل في النص منه.
+  // `scrollLeft` بس — `scrollIntoView` كان هيحرّك الصفحة كلها لفوق.
+  const ladderRef = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    const strip = ladderRef.current;
+    const rung = strip?.querySelector<HTMLElement>('[data-now]');
+    if (!strip || !rung || strip.scrollWidth <= strip.clientWidth) return;
+    strip.scrollTo({ left: rung.offsetLeft - (strip.clientWidth - rung.offsetWidth) / 2, behavior: 'smooth' });
+  }, [index]);
+
+  // آخر ١٠ ثواني: التكّة بتتضاعف.
+  const urgent = phase === 'question' && left <= 10;
+  useEffect(() => {
+    sound.show((score) => score.setUrgent(urgent));
+  }, [urgent, sound]);
+
+  // «الصوت» اتفتح تاني في نص سؤال: الموسيقى ترجع من مكانها في اللعبة.
+  // (القفل نفسه بيسكّتها في `toggle`.) أول رندر مش «اتفتح» — الدخلة فوق بتبدأها.
+  const wasEnabled = useRef(sound.enabled);
+  useEffect(() => {
+    if (sound.enabled && !wasEnabled.current) {
+      if (phase === 'question') sound.show((score) => score.startBed(size > 1 ? index / (size - 1) : 0));
+      else if (phase === 'locked' || phase === 'checking') sound.show((score) => score.startTension());
+    }
+    wasEnabled.current = sound.enabled;
+    // بيتفرج على الزرار بس، مش على كل تغيير في الحالة.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sound.enabled]);
+
+  // الموسيقى بتسكت لما الطالب يمشي من الصفحة (الراوتر بيسيب الكومبوننت).
+  useEffect(() => () => sound.show((score) => score.stopAll(0.1)), [sound]);
 
   const finish = useCallback(
     (kind: Outcome, points: number) => {
       speech.stop();
       setOutcome({ kind, points });
       setPhase('over');
-      sound.play(kind === 'lost' ? 'wrong' : 'end');
+      // الخسارة اتسمعت خلاص وقت الكشف؛ هنا بس الفوز والانسحاب.
+      if (kind !== 'lost') sound.show((score) => score.finale(kind === 'won'));
     },
     [speech, sound],
   );
@@ -106,7 +150,8 @@ export function Millionaire({
         ]);
         setRight(result.rightOptionIds);
         setPhase('reveal');
-        sound.play(result.correct ? (index >= 9 ? 'combo' : 'right') : 'wrong');
+        const milestone = (MILLIONAIRE_SAFE_STEPS as readonly number[]).includes(index + 1) || index + 1 >= size;
+        sound.show((score) => (result.correct ? score.right(milestone) : score.wrong()));
         window.setTimeout(() => {
           if (!result.correct) {
             finish('lost', safeFloor);
@@ -124,6 +169,8 @@ export function Millionaire({
           }
         }, result.correct ? 1800 : 2600);
       } catch {
+        // السؤال رجع مفتوح — والفرشة ترجع معاه بدل التوتر.
+        sound.show((score) => score.startBed(size > 1 ? index / (size - 1) : 0));
         setPhase('question');
       } finally {
         setBusy(false);
@@ -156,13 +203,22 @@ export function Millionaire({
     // شايل اللي فاضل عشان «لأ، لسه» يكمّل منه.
     setChosen(optionId);
     setPhase('locked');
-    sound.play('tick');
+    // الاختيار بيتبدّل وهو مقفول (دوسة على اختيار تاني) — التوتر مابيبدأش من الأول.
+    if (phase === 'question') {
+      sound.show((score) => {
+        score.lock();
+        score.startTension();
+      });
+    } else {
+      sound.play('tick');
+    }
   };
 
   const cancelLock = () => {
     deadline.current = performance.now() + left * 1000;
     setChosen(null);
     setPhase('question');
+    sound.show((score) => score.startBed(size > 1 ? index / (size - 1) : 0));
   };
 
   const lifeline = async (kind: 'fifty' | 'audience') => {
@@ -173,7 +229,7 @@ export function Millionaire({
       setUsed((u) => ({ ...u, [kind]: true }));
       if (kind === 'fifty') setRemoved(result.removeOptionIds);
       else setVotes(result.votes);
-      sound.play('go');
+      sound.show((score) => score.lifeline());
     } finally {
       setBusy(false);
     }
@@ -247,8 +303,24 @@ export function Millionaire({
   const voteOf = (optionId: string) => votes.find((vote) => vote.optionId === optionId)?.percent;
 
   return (
-    <section className="gm-stage mln" data-phase={phase}>
+    <section
+      className="gm-stage mln"
+      data-phase={phase}
+      data-verdict={phase === 'reveal' ? (chosen !== null && right.includes(chosen) ? 'right' : 'wrong') : undefined}
+    >
       <Backdrop />
+      {/* كشافات المسرح: بتتمايل على السؤال، وبتقلب دهبي وقت «إجابة نهائية»،
+          وأخضر أو أحمر وقت الكشف — زي أرضية البرنامج. */}
+      <div className="mln-lights" aria-hidden="true">
+        {Array.from({ length: 5 }, (_, i) => (
+          <i key={i} style={{ '--i': i } as CSSProperties} />
+        ))}
+      </div>
+      <div className="mln-floor" aria-hidden="true" />
+      <div className="mln-intro" key={`intro-${question.id}`} aria-hidden="true">
+        <span>{formatCopy(c.mlnQuestion, { n: index + 1 })}</span>
+        <strong>{NUM.format(ladder[index]!)}</strong>
+      </div>
       <div className="mln-layout">
         <div className="mln-main">
           <header className="mln-top">
@@ -367,7 +439,13 @@ export function Millionaire({
 
           {phase === 'reveal' ? (
             <p className="mln-verdict" data-right={right.includes(chosen ?? '') || undefined} role="status">
-              {chosen === null ? c.mlnTimeUp : right.includes(chosen) ? c.mlnRight : c.mlnWrong}
+              {chosen === null
+                ? c.mlnTimeUp
+                : !right.includes(chosen)
+                  ? c.mlnWrong
+                  : (MILLIONAIRE_SAFE_STEPS as readonly number[]).includes(index + 1) && index + 1 < size
+                    ? formatCopy(c.mlnSafeReached, { points: NUM.format(ladder[index]!) })
+                    : c.mlnRight}
             </p>
           ) : null}
 
@@ -393,6 +471,11 @@ export function Millionaire({
                 {c.mlnWalk}
               </button>
             )}
+            {speech.stuck ? (
+              <p className="mln-stuck" role="status">
+                {c.mlnSpeechStuck}
+              </p>
+            ) : null}
             <div className="mln-toggles">
               <button type="button" className="gm-sound" onClick={speech.toggle} aria-pressed={speech.enabled} disabled={!speech.supported}>
                 {speech.enabled ? <Mic className="size-4" aria-hidden="true" /> : <MicOff className="size-4" aria-hidden="true" />}
@@ -403,7 +486,7 @@ export function Millionaire({
           </footer>
         </div>
 
-        <ol className="mln-ladder" aria-label="السلّم">
+        <ol className="mln-ladder" aria-label="السلّم" ref={ladderRef}>
           {ladder
             .map((points, i) => ({ points, step: i + 1 }))
             .reverse()

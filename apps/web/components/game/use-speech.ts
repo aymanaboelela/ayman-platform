@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 
 const STORAGE_KEY = 'game:voice';
 const LETTERS = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'];
@@ -17,6 +17,27 @@ const listeners = new Set<() => void>();
 function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+function notify() {
+  for (const listener of listeners) listener();
+}
+
+/**
+ * المتصفح استلم الجمل ومانطقش ولا واحدة، حتى بعد محاولة تانية. Chrome على
+ * الماك بيدخل الحالة دي بعد فترة ولكل المواقع — `speak()` بيرجع عادي، ومفيش
+ * `error`، ومفيش صوت. الحالة دي بتظهر للطالب جملة بدل ما الزرار يبان بايظ.
+ */
+let stuck = false;
+function setStuck(next: boolean) {
+  if (stuck === next) return;
+  stuck = next;
+  notify();
+}
+
+/** مين عايز يعرف القراية شغّالة دلوقتي ولا لأ (الموسيقى بتوطى تحتها). */
+const speakingListeners = new Set<(on: boolean) => void>();
+function speaking(on: boolean) {
+  for (const listener of speakingListeners) listener(on);
 }
 
 /** نص من HTML السؤال — القراية مالهاش دعوة بالوسوم. */
@@ -35,6 +56,8 @@ let pending: number | null = null;
 /** الصوت الحقيقي (Azure): قطعة بتشتغل، واللي بعدها مستنية. */
 let audio: HTMLAudioElement | null = null;
 let clips: string[] = [];
+/** مراقب «اتقالت ولا لأ» — بيتلغي مع أي `stop()`. */
+let watchdog: number | null = null;
 
 function arabicVoice(): SpeechSynthesisVoice | undefined {
   const voices = window.speechSynthesis.getVoices();
@@ -69,8 +92,17 @@ function withVoices(run: () => void) {
  *   · الـutterance اللي محدش ماسكه بيتمسح — `queue` فوق.
  * متصفح مابيدعمش القراية أصلًا الزرار بيتقفل (`supported`) واللعبة شغّالة عادي.
  */
-export function useSpeech() {
+export function useSpeech(onSpeaking?: (on: boolean) => void) {
   const enabled = useSyncExternalStore(subscribe, readPreference, () => true);
+  const isStuck = useSyncExternalStore(subscribe, () => stuck, () => false);
+
+  useEffect(() => {
+    if (!onSpeaking) return;
+    speakingListeners.add(onSpeaking);
+    return () => {
+      speakingListeners.delete(onSpeaking);
+    };
+  }, [onSpeaking]);
   const supported = useSyncExternalStore(
     subscribe,
     () => 'speechSynthesis' in window,
@@ -78,6 +110,9 @@ export function useSpeech() {
   );
 
   const stop = useCallback(() => {
+    if (watchdog !== null) window.clearTimeout(watchdog);
+    watchdog = null;
+    speaking(false);
     clips = [];
     if (audio) {
       audio.onended = null;
@@ -94,28 +129,61 @@ export function useSpeech() {
 
   const speakBrowser = useCallback((stemHtml: string, optionsHtml: string[], n: number) => {
     if (!('speechSynthesis' in window)) return;
-    {
-      const lines = [
-        `السؤال ${n}. ${textOf(stemHtml)}`,
-        ...optionsHtml.map((html, i) => `${LETTERS[i] ?? ''}: ${textOf(html)}.`),
-      ];
-      pending = window.setTimeout(() => {
-        pending = null;
-        withVoices(() => {
-          const synth = window.speechSynthesis;
-          const voice = arabicVoice();
-          queue = lines.map((line) => {
-            const utterance = new SpeechSynthesisUtterance(line);
-            if (voice) utterance.voice = voice;
-            utterance.lang = voice?.lang ?? 'ar-EG';
-            utterance.rate = 0.95;
-            return utterance;
-          });
-          synth.resume();
-          for (const utterance of queue) synth.speak(utterance);
+    const lines = [
+      `السؤال ${n}. ${textOf(stemHtml)}`,
+      ...optionsHtml.map((html, i) => `${LETTERS[i] ?? ''}: ${textOf(html)}.`),
+    ];
+    /**
+     * `attempt` التانية بعد `cancel()` + `resume()`: ده اللي بيفك Chrome لما
+     * يكون علّق من جملة قديمة. لو التانية كمان ماطلعتش، `stuck` — والطالب
+     * بيشوف ليه، بدل زرار بيتداس ومايعملش حاجة.
+     */
+    const say = (attempt: number) => {
+      withVoices(() => {
+        const synth = window.speechSynthesis;
+        const voice = arabicVoice();
+        let started = false;
+        queue = lines.map((line, i) => {
+          const utterance = new SpeechSynthesisUtterance(line);
+          if (voice) utterance.voice = voice;
+          utterance.lang = voice?.lang ?? 'ar-EG';
+          utterance.rate = 0.95;
+          utterance.onstart = () => {
+            if (started) return;
+            started = true;
+            if (watchdog !== null) window.clearTimeout(watchdog);
+            watchdog = null;
+            setStuck(false);
+            speaking(true);
+          };
+          if (i === lines.length - 1) {
+            utterance.onend = () => speaking(false);
+          }
+          utterance.onerror = () => speaking(false);
+          return utterance;
         });
-      }, 150);
-    }
+        synth.resume();
+        for (const utterance of queue) synth.speak(utterance);
+        watchdog = window.setTimeout(() => {
+          watchdog = null;
+          if (started) return;
+          synth.cancel();
+          if (attempt === 0) {
+            pending = window.setTimeout(() => {
+              pending = null;
+              say(1);
+            }, 250);
+          } else {
+            queue = [];
+            setStuck(true);
+          }
+        }, 2200);
+      });
+    };
+    pending = window.setTimeout(() => {
+      pending = null;
+      say(0);
+    }, 150);
   }, []);
 
   /**
@@ -145,22 +213,32 @@ export function useSpeech() {
         return el;
       });
       clips = [];
+      const fallback = () => {
+        stop();
+        speakBrowser(input.stemHtml, optionsHtml, input.n);
+      };
+      // أول قطعة ماشتغلتش في ٥ ثواني (Azure بطيء أو النت واقع): صوت المتصفح
+      // أحسن من سكوت والتايمر شغّال.
+      watchdog = window.setTimeout(() => {
+        watchdog = null;
+        fallback();
+      }, 5000);
       const playNext = () => {
         const el = elements.shift();
         if (!el) {
           audio = null;
+          speaking(false);
           return;
         }
         audio = el;
-        el.onended = playNext;
-        el.onerror = () => {
-          stop();
-          speakBrowser(input.stemHtml, optionsHtml, input.n);
+        el.onplaying = () => {
+          if (watchdog !== null) window.clearTimeout(watchdog);
+          watchdog = null;
+          speaking(true);
         };
-        el.play().catch(() => {
-          stop();
-          speakBrowser(input.stemHtml, optionsHtml, input.n);
-        });
+        el.onended = playNext;
+        el.onerror = fallback;
+        el.play().catch(fallback);
       };
       playNext();
     },
@@ -175,8 +253,11 @@ export function useSpeech() {
       /* مش مهم */
     }
     if (!next) stop();
-    for (const listener of listeners) listener();
+    notify();
   }, [stop]);
 
-  return useMemo(() => ({ enabled, supported, read, stop, toggle }), [enabled, supported, read, stop, toggle]);
+  return useMemo(
+    () => ({ enabled, supported, stuck: isStuck, read, stop, toggle }),
+    [enabled, supported, isStuck, read, stop, toggle],
+  );
 }
