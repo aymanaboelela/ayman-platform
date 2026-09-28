@@ -40,7 +40,16 @@ interface Found {
  * الأكشن بينده `staff-role` اللي سكيماه `z.enum(['owner', 'student'])`. حتى لو
  * حد بعت طلب بإيده بـ`admin`، السيرفر مش هيعرف يقراها. الشاشة مش هي الحارس.
  */
-export function StaffSection({ members, currentUserId }: { members: StaffMember[]; currentUserId: string }) {
+export function StaffSection({
+  members,
+  currentUserId,
+  founderId,
+}: {
+  members: StaffMember[];
+  currentUserId: string;
+  /** أقدم حساب مش-طالب — صلاحياته مقفولة على السيرفر، شوف `page.tsx`. */
+  founderId?: string;
+}) {
   const [term, setTerm] = useState('');
   const [found, setFound] = useState<Found[] | null>(null);
   const [reason, setReason] = useState('');
@@ -131,7 +140,7 @@ export function StaffSection({ members, currentUserId }: { members: StaffMember[
                     * مستحيل تتحفظ: تدوس، تقفل قسم، تحفظ، وتاخد «مقدرناش
                     * نحفظ» من غير ما تعرف إن ده مش هيشتغل أبدًا.
                     */}
-                  {m.role === 'admin' ? (
+                  {m.role === 'admin' || m.id === founderId ? (
                     <span className="text-[length:var(--fs-text-sm)] text-fg-muted">
                       {member.adminHasEverything}
                     </span>
@@ -162,7 +171,7 @@ export function StaffSection({ members, currentUserId }: { members: StaffMember[
                 * ده كمان بيتاخد بالمقارنة — إنك تشوف باقي الفريق وإنت بتقفل
                 * على واحد مفيد، والمودال بيخبّيهم.
                 */}
-              {openMember === m.id && m.role !== 'admin' ? (
+              {openMember === m.id && m.role !== 'admin' && m.id !== founderId ? (
                 <div className="w-full basis-full">
                   <MemberPermissions userId={m.id} name={m.name} />
                 </div>

@@ -208,3 +208,64 @@ describe('replaceForUser — التصعيد', () => {
     expect(escalating(['news:write'], ['news:write'], [])).toEqual([]);
   });
 });
+
+/**
+ * صاحب الستاك — «أقدم حساب مش-طالب».
+ *
+ * ⚠️ القاعدة دي موجودة عشان على ستاكات المدرّسين التانيين المدرّس والمساعد
+ * **نفس الرول** (`owner`)، والمساعد بياخد `staff:manage` في أساسه. يعني أول
+ * مساعد يتضاف كان يقدر يقفل على المدرّس — ومفيش حساب `admin` هناك يرجّعه.
+ *
+ * اتقاس على الحي: عادل وصبري عندهم **حساب واحد بس، رولُه `owner`**.
+ */
+describe('founder — مين ماينفعش يتقفل عليه', () => {
+  interface Account {
+    id: string;
+    role: string;
+    createdAt: string;
+  }
+
+  /* نفس منطق الاستعلام: أقدم حساب مش-طالب. */
+  function founderOf(accounts: readonly Account[]): string | null {
+    const staff = accounts
+      .filter((a) => a.role !== 'student')
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return staff[0]?.id ?? null;
+  }
+
+  it('picks the teacher, not the assistant added later', () => {
+    expect(
+      founderOf([
+        { id: 'assistant', role: 'owner', createdAt: '2026-09-01' },
+        { id: 'teacher', role: 'owner', createdAt: '2026-01-01' },
+      ]),
+    ).toBe('teacher');
+  });
+
+  it('ignores students, however old their account is', () => {
+    /*
+     * ⚠️ من غير الفلتر ده، أقدم طالب مسجّل (٢٠٢٥) كان هيبقى «صاحب الستاك»،
+     * والمدرّس الحقيقي يفضل مكشوف.
+     */
+    expect(
+      founderOf([
+        { id: 'old-student', role: 'student', createdAt: '2025-01-01' },
+        { id: 'teacher', role: 'owner', createdAt: '2026-01-01' },
+      ]),
+    ).toBe('teacher');
+  });
+
+  it('is the admin on a stack that has one', () => {
+    // منصة أيمن: حسابين أدمن. الأقدم فيهم هو صاحب الستاك.
+    expect(
+      founderOf([
+        { id: 'admin-2', role: 'admin', createdAt: '2026-05-01' },
+        { id: 'admin-1', role: 'admin', createdAt: '2024-01-01' },
+      ]),
+    ).toBe('admin-1');
+  });
+
+  it('is nobody on a stack with no staff yet', () => {
+    expect(founderOf([{ id: 's', role: 'student', createdAt: '2025-01-01' }])).toBeNull();
+  });
+});
