@@ -8,6 +8,7 @@ import {
   pathFromMarkdownSuffix,
 } from './lib/agents/markdown-routes';
 import { forwardClientIp } from './lib/client-ip';
+import { HTML_PREVIEW_CSP, HTML_PREVIEW_PATH } from './lib/html-preview';
 import { JS_RUNNER_CSP, JS_RUNNER_PATH } from './lib/js-runner';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
 import { stampPathname } from './lib/request-pathname';
@@ -1096,6 +1097,30 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     // capability while pretending to consider it — and the whole point of this
     // response is that the capability is granted deliberately and narrowly.
     response.headers.set('Content-Security-Policy', JS_RUNNER_CSP);
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    return response;
+  }
+
+  /*
+   * The HTML playground's preview frame — the ONE document on this origin that
+   * our own pages may frame, and it runs whatever the student wrote.
+   *
+   * Same early exit as the runner above and for the same reasons: a static
+   * file, no session, nothing to redirect. Its policy (`HTML_PREVIEW_CSP`,
+   * reasoning in `lib/html-preview.ts`) is enforced, never report-only, and it
+   * REPLACES the site's rather than adding to it — the site-wide policy on this
+   * response would re-impose `frame-ancestors 'none'` and blank the preview.
+   * The `sandbox` directive in it is what keeps the document in an opaque
+   * origin even when someone opens it outside the playground.
+   *
+   * `X-Frame-Options` goes from DENY to SAMEORIGIN for browsers that predate
+   * `frame-ancestors`; everywhere else the CSP directive wins and says the same.
+   */
+  if (request.nextUrl.pathname === HTML_PREVIEW_PATH) {
+    const response = NextResponse.next();
+    applyBaseSecurityHeaders(response.headers, DEV);
+    response.headers.set('Content-Security-Policy', HTML_PREVIEW_CSP);
+    response.headers.set('X-Frame-Options', 'SAMEORIGIN');
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
     return response;
   }
