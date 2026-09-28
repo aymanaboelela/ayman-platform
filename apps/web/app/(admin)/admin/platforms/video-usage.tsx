@@ -1,3 +1,4 @@
+import { connection } from 'next/server';
 import { HardDrive } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { cn } from '@ayman/ui';
@@ -17,6 +18,10 @@ function usd(value: number): string {
  * screen is opened a few times a month, to send a bill.
  */
 export async function VideoUsage({ tenants }: { tenants: readonly { key: string; name: string }[] }) {
+  // Request-time, never prerendered: the numbers depend on today's date and
+  // on Cloudflare's answer now. Cache Components refuses a `new Date()` in a
+  // server component that has not first said so (`next-prerender-current-time`).
+  await connection();
   const result = await tenantVideoUsage([{ key: 'ayman', name: c.usageSelf }, ...tenants]);
 
   return (

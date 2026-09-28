@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { FEATURE_DECLARATIONS } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -35,7 +36,7 @@ export const metadata = { title: copy.admin.platforms.title };
  * and the admin subtree is forced dynamic by `getSession()` in the layout
  * anyway.
  */
-export default async function PlatformsPage() {
+export default function PlatformsPage() {
   if (!IS_AYMAN) notFound();
 
   const tenants = controlPlaneTenants();
@@ -73,7 +74,10 @@ export default async function PlatformsPage() {
         <PlatformsForm tenants={tenants} features={FEATURE_DECLARATIONS} />
       )}
 
-      <VideoUsage tenants={tenants} />
+      {/* Streamed: Cloudflare can take a second, and the signing form above must not wait for it. */}
+      <Suspense fallback={null}>
+        <VideoUsage tenants={tenants} />
+      </Suspense>
     </>
   );
 }
