@@ -155,6 +155,9 @@ export const PROTECTED_PREFIXES = [
   // «كود الكورس» — redeeming is a write on the student's own account, and
   // the page reads their history with `apiGetAuthed`.
   '/codes',
+  // «المحفظة» — a student's own balance and statement, read with
+  // `apiGetAuthed`; a signed-out visitor has no wallet to show.
+  '/wallet',
 ] as const;
 
 /**

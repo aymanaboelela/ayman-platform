@@ -16,6 +16,7 @@ import { AdminHeader } from '@/components/admin/admin-header';
 import { AdminEntitlementsProvider } from '@/components/admin/entitlements-context';
 import { InboxAlertsProvider } from '@/components/admin/inbox-alerts';
 import { PaymentsAlertsProvider } from '@/components/admin/payments-alerts';
+import { WalletTopupsAlertsProvider } from '@/components/admin/wallet-topups-alerts';
 import { BookOrdersAlertsProvider } from '@/components/admin/book-orders-alerts';
 import { HomeworkAlertsProvider } from '@/components/admin/homework-alerts';
 import { UploadDock } from '@/components/admin/upload-dock';
@@ -88,6 +89,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Same gate, same reasoning, one permission over: a role without
   // `payment:read` would poll a 403 every thirty seconds forever.
   const PaymentsAlerts = can(session, 'payment:read') ? PaymentsAlertsProvider : Fragment;
+  // «طلبات الشحن» — the same desk's second queue, the same permission.
+  const WalletTopupsAlerts = can(session, 'payment:read') ? WalletTopupsAlertsProvider : Fragment;
   // Third of the same shape: a role without `book-order:read` would poll a 403
   // every thirty seconds forever.
   const BookOrdersAlerts =
@@ -104,6 +107,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <Alerts>
     <PaymentsAlerts>
+    <WalletTopupsAlerts>
     <BookOrdersAlerts>
     <HomeworkAlerts>
     <GradingAlerts>
@@ -152,6 +156,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     </GradingAlerts>
     </HomeworkAlerts>
     </BookOrdersAlerts>
+    </WalletTopupsAlerts>
     </PaymentsAlerts>
     </Alerts>
   );

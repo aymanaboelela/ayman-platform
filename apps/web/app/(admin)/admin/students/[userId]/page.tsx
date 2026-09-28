@@ -27,6 +27,7 @@ import { ConversationSection } from './conversation-section';
 import { DevicesSection } from './devices-section';
 import { CenterAttendanceSection } from './center-attendance-section';
 import { PaymentsSection, PaymentsSectionSkeleton } from './payments-section';
+import { WalletSection } from './wallet-section';
 
 export const metadata = { title: copy.admin.students.detailTitle };
 
@@ -300,6 +301,11 @@ export default async function StudentDetailPage({
               form above never waits on it. */}
           <Suspense fallback={<PaymentsSectionSkeleton />}>
             <PaymentsSection userId={userId} />
+          </Suspense>
+          {/* «المحفظة» — right under the payments: a wallet purchase shows in
+              both, and the money for it only here. Its own boundary. */}
+          <Suspense fallback={null}>
+            <WalletSection userId={userId} />
           </Suspense>
           {/* Its own boundary: two more reads the profile form must not wait
               on, and a section that renders nothing on a stack with no

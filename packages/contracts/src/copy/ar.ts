@@ -367,6 +367,7 @@ export const copy = {
     playground: 'تجربة الكود',
     /** «كود الكورس» — where a code bought on WhatsApp gets typed in. */
     unlockCodes: 'كود الكورس',
+    wallet: 'المحفظة',
     devices: 'أجهزتي',
     account: 'الحساب',
     accountMenu: 'قائمة الحساب',
@@ -2881,6 +2882,20 @@ export const copy = {
      *  number rather than reloading the page, so a student who arrived a
      *  minute before the admin finished does not lose their place. */
     retry: 'جرّب تاني',
+    /** «الدفع من المحفظة» — the card above the rails when the wallet has money. */
+    walletTitle: 'الدفع من المحفظة',
+    walletBalance: 'رصيدك {balance} جنيه',
+    walletCovers: 'الرصيد يكفي — الاشتراك بيتفعّل على طول، من غير تحويل ولا صورة.',
+    walletShort: 'الرصيد ناقص {missing} جنيه عن سعر الاشتراك.',
+    walletPay: 'الدفع من المحفظة — {price} جنيه',
+    walletPaying: 'بندفع من المحفظة…',
+    walletTopup: 'شحن المحفظة بالفرق',
+    walletOr: 'أو الدفع بالتحويل العادي',
+    walletSuccess: 'تم! الاشتراك اتفعّل من المحفظة، والرصيد الباقي {balance} جنيه.',
+    walletSuccessOpen: 'فتح الكورس',
+    walletInsufficient: 'الرصيد مابقاش يكفي — ممكن يكون اتصرف في اشتراك تاني.',
+    walletOwned: 'الاشتراك ده موجود على الحساب خلاص.',
+    walletGeneric: 'الدفع من المحفظة ماتمّش — نجرّب تاني.',
     /** Brief, while the panel checks for an existing submission on open. */
     checking: 'لحظة واحدة…',
     /** My own past claims for this course — shown above the plan picker. */
@@ -4532,6 +4547,18 @@ export const copy = {
     /** السطر اللي تحته، وهو نفسه جسم الـpush. `{reason}` هو اللي المدرّس
      *  كتبه على الكارت — «الأول على الدفعة»، «انتظام كامل». */
     honorBoardListedDetail: '{rank} — {reason}',
+    /**
+     * «المحفظة». `{amount}` is whole pounds, Western digits. The student's
+     * two rows name the money, not the person — the feed is theirs.
+     */
+    walletCreditedTopup: 'اتشحنلك {amount} جنيه في المحفظة',
+    walletCreditedAdmin: 'اتضافلك {amount} جنيه في المحفظة',
+    walletCreditedRefund: 'رجعلك {amount} جنيه في المحفظة',
+    walletTopupRejected: 'طلب شحن المحفظة ({amount} جنيه) مااتقبلش',
+    /** ADMIN — `{name}` at the end, same reason as `paymentSubmitted`. */
+    walletTopupSubmitted: 'طلب شحن محفظة بـ{amount} جنيه — {name}',
+    walletQueue: 'طلبات الشحن',
+    walletSubtitle: 'المحفظة',
     /** Relative time, e.g. "من ٣ ساعات" — `{value}` is already formatted. */
     ago: 'من {value}',
   },
@@ -6422,6 +6449,11 @@ export const copy = {
     successStart: 'يلا نبدأ',
     successAnother: 'تفعيل كود تاني',
     successCourse: 'صفحة الكورس',
+    /** A WALLET code — it opens nothing, it adds money. */
+    walletTitle: 'المحفظة اتشحنت!',
+    walletLead: 'الكود ضاف {amount} جنيه للمحفظة.',
+    walletBalance: 'رصيد المحفظة دلوقتي {balance} جنيه',
+    walletOpen: 'المحفظة',
     kind: {
       course: 'الكورس كله',
       term: 'ترم',
@@ -6454,6 +6486,94 @@ export const copy = {
     cardSingle: 'محاضرة واحدة بس؟ التواصل على واتساب والكود يوصل في رسالة.',
     cardCta: 'تفعيل كود',
     lockedCta: 'عندك كود؟',
+  },
+  /**
+   * «المحفظة» — `/wallet`, the checkout's «الدفع من المحفظة» card, and the
+   * statement.
+   *
+   * ⚠️ One string for every student, like the rest of this file: masdar on
+   * every button («شحن»، «إرسال»، «نسخ»), no imperative («اشحن»، «ابعت»), and
+   * ـك only on a NOUN («رصيدك»، «طلبك»), never on a verb.
+   */
+  wallet: {
+    pageTitle: 'المحفظة',
+    eyebrow: 'محفظة المنصة',
+    balanceLabel: 'الرصيد المتاح',
+    currency: 'جنيه',
+    heroLead: 'شحنة واحدة، وبعدها الاشتراك في أي كورس أو شهر بضغطة — من غير تحويل وصورة كل مرة.',
+    pending: '{amount} جنيه في الطريق — بيتراجعوا دلوقتي',
+    topupTitle: 'شحن المحفظة',
+    topupLead: 'تلات طرق للشحن — اختيار الأنسب:',
+    methods: {
+      code: 'كود شحن',
+      instapay: 'إنستاباي',
+      vodafone_cash: 'فودافون كاش',
+    },
+    methodHints: {
+      code: 'كود ٦ حروف بيوصل في رسالة — والمبلغ بيتضاف فورًا',
+      instapay: 'تحويل على رقم إنستاباي وصورة الإيصال',
+      vodafone_cash: 'تحويل من فودافون كاش وصورة الإيصال',
+    },
+    methodUnavailable: 'مش متاح دلوقتي',
+    codeTitle: 'كود شحن المحفظة',
+    codeLead: 'نفس الخانة بتفعّل أكواد الكورسات كمان — الكود بيتقري ويتفعّل على طول.',
+    amountLabel: 'المبلغ بالجنيه',
+    amountQuick: 'مبالغ جاهزة',
+    instructions: 'تحويل {amount} جنيه على الرقم ده من {rail}، وبعدها رفع صورة الإيصال هنا.',
+    instructionsNoAmount: 'تحويل المبلغ على الرقم ده من {rail}، وبعدها رفع صورة الإيصال هنا.',
+    copyNumber: 'نسخ الرقم',
+    copied: 'اتنسخ',
+    senderLabel: {
+      instapay: 'الرقم أو عنوان إنستاباي اللي اتحوّل منه',
+      vodafone_cash: 'رقم فودافون كاش اللي اتحوّل منه',
+    },
+    senderPlaceholder: {
+      instapay: 'name@instapay أو 01xxxxxxxxx',
+      vodafone_cash: '01xxxxxxxxx',
+    },
+    noteLabel: 'ملاحظة (اختياري)',
+    notePlaceholder: 'مثلًا: التحويل من حساب ماما',
+    screenshotLabel: 'صورة إيصال التحويل',
+    screenshotPick: 'اختيار صورة الإيصال',
+    screenshotChange: 'تغيير',
+    submit: 'إرسال طلب الشحن',
+    submitting: 'بنبعت الطلب…',
+    sentTitle: 'طلب الشحن وصل!',
+    sentLead: 'هيتراجع في أقرب وقت، والرصيد بيتضاف والإشعار بيوصل أول ما يتقبل.',
+    sentAnother: 'طلب شحن تاني',
+    backToCheckout: 'الرجوع للاشتراك',
+    missingNote: 'ناقص {amount} جنيه عشان الاشتراك — المبلغ متكتب جاهز.',
+    errors: {
+      amount: 'المبلغ لازم يبقى بين ١٠ و٥٠٬٠٠٠ جنيه',
+      sender: 'الرقم أو العنوان اللي اتحوّل منه مطلوب',
+      screenshot: 'صورة الإيصال مطلوبة',
+      upload: 'الصورة ماترفعتش — نجرّب تاني',
+      tooMany: 'فيه ٣ طلبات شحن لسه بتتراجع — أول ما يتراجعوا ممكن طلب جديد',
+      generic: 'حصلت مشكلة — نجرّب تاني بعد شوية',
+    },
+    requestsTitle: 'طلبات الشحن',
+    status: {
+      pending: 'بيتراجع',
+      approved: 'اتشحن',
+      rejected: 'مااتقبلش',
+    },
+    requestAmount: '{amount} جنيه',
+    approvedAmount: 'اتشحن {amount} جنيه',
+    historyTitle: 'حركة المحفظة',
+    historyEmpty: 'لسه مفيش أي حركة على المحفظة — أول شحنة بتظهر هنا.',
+    balanceAfter: 'الرصيد بعدها {amount} جنيه',
+    kind: {
+      admin_credit: 'شحن من الإدارة',
+      code_topup: 'كود شحن',
+      transfer_topup: 'شحن بالتحويل',
+      refund: 'فلوس رجعت من اشتراك',
+      course_purchase: 'اشتراك',
+      admin_debit: 'خصم من الإدارة',
+    },
+    via: {
+      instapay: 'إنستاباي',
+      vodafone_cash: 'فودافون كاش',
+    },
   },
   /**
    * «السناتر» — the student's half: «نوع الدراسة», «نوع الحضور», the weekly

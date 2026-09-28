@@ -400,7 +400,49 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         subtitle: entry.courseLabel,
         href: `/honor-board?round=${entry.day}`,
       };
+
+    case 'wallet_credited':
+      return {
+        title: formatCopy(
+          entry.source === 'topup'
+            ? c.walletCreditedTopup
+            : entry.source === 'refund'
+              ? c.walletCreditedRefund
+              : c.walletCreditedAdmin,
+          { amount: pounds(entry.amountCents) },
+        ),
+        detail: null,
+        subtitle: c.walletSubtitle,
+        href: '/wallet',
+      };
+
+    case 'wallet_topup_rejected':
+      return {
+        title: formatCopy(c.walletTopupRejected, { amount: pounds(entry.amountCents) }),
+        // The admin's own words, like a rejected payment.
+        detail: entry.reason,
+        subtitle: c.walletSubtitle,
+        href: '/wallet',
+      };
+
+    case 'wallet_topup_submitted':
+      return {
+        title: formatCopy(c.walletTopupSubmitted, {
+          amount: pounds(entry.amountCents),
+          name: entry.studentName,
+        }),
+        detail: null,
+        subtitle: c.walletQueue,
+        href: '/admin/wallet/requests',
+      };
   }
+}
+
+/** Piastres → whole pounds with Western digits, the way every price on the
+ *  platform reads. Local rather than `lib/price` so the bell's module stays a
+ *  leaf with no formatter state of its own to share. */
+function pounds(cents: number): string {
+  return String(Math.round(cents / 100));
 }
 
 /** «المركز الأول» — الكلمة مش الرقم، عشان مايبقاش فيه رقم لاتيني جوّه سطر

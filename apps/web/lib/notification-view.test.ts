@@ -301,6 +301,45 @@ describe('describeNotification — course_completed', () => {
   });
 });
 
+describe('describeNotification — the wallet', () => {
+  const at = { id: 'n9', createdAt: '2026-03-01T10:00:00.000Z', readAt: null };
+
+  it('says where money that arrived came from, in pounds, and opens the wallet', () => {
+    const topup = describeNotification({ ...at, kind: 'wallet_credited', amountCents: 25_000, source: 'topup' });
+    const refund = describeNotification({ ...at, kind: 'wallet_credited', amountCents: 5_050, source: 'refund' });
+
+    expect(topup.title).toBe('اتشحنلك 250 جنيه في المحفظة');
+    expect(refund.title).toContain('51');
+    expect(topup.href).toBe('/wallet');
+  });
+
+  it('carries the admin’s own reason on a refused request', () => {
+    const view = describeNotification({
+      ...at,
+      kind: 'wallet_topup_rejected',
+      topupId: '0196a1e0-0000-7000-8000-000000000001',
+      amountCents: 10_000,
+      reason: 'الصورة مش واضحة',
+    });
+
+    expect(view.detail).toBe('الصورة مش واضحة');
+    expect(view.title).toContain('100');
+  });
+
+  it('sends the admin to the top-up queue', () => {
+    const view = describeNotification({
+      ...at,
+      kind: 'wallet_topup_submitted',
+      topupId: '0196a1e0-0000-7000-8000-000000000002',
+      amountCents: 30_000,
+      studentName: 'منة',
+    });
+
+    expect(view.href).toBe('/admin/wallet/requests');
+    expect(view.title).toContain('منة');
+  });
+});
+
 describe('formatNotificationTime', () => {
   it('renders an absolute date and time, not a relative one', () => {
     const rendered = formatNotificationTime('2026-03-01T10:00:00.000Z');

@@ -126,7 +126,7 @@ export default async function FinanceOverviewPage() {
           حسابها كذا، والكتب حسابها الفعلي بقى تكسب فيها كذا». The gross sits
           under each as the subtraction that produced it, so the figure can be
           checked rather than trusted. */}
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
           label={c.tileSubscriptionNet}
           value={egp(overview.subscriptionNetRevenueCents)}
@@ -138,6 +138,18 @@ export default async function FinanceOverviewPage() {
                 })
               : undefined
           }
+        />
+        {/* «شحن المحفظة» — its own stream, beside the other two. A
+            subscription paid from the wallet is NOT in «الاشتراكات»: its
+            money is this tile, counted once, the day it came in. */}
+        <StatTile
+          label={c.tileWallet}
+          value={egp(overview.walletRevenueCents)}
+          href="/admin/wallet"
+          context={formatCopy(c.tileWalletContext, {
+            spent: egp(overview.walletSpentCents),
+            held: egp(overview.walletBalanceCents),
+          })}
         />
         <StatTile
           label={c.tileBookNet}
@@ -265,6 +277,7 @@ export default async function FinanceOverviewPage() {
                   <th className="p-2 text-start font-medium">{c.monthColumn}</th>
                   <th className="p-2 text-end font-medium">{c.monthSubscriptions}</th>
                   <th className="p-2 text-end font-medium">{c.monthBooks}</th>
+                  <th className="p-2 text-end font-medium">{c.monthWallet}</th>
                   {hasRefunds ? (
                     <th className="p-2 text-end font-medium">{c.monthRefunds}</th>
                   ) : null}
@@ -281,6 +294,9 @@ export default async function FinanceOverviewPage() {
                     </td>
                     <td className="p-2 text-end tabular-nums text-fg-muted">
                       {egp(month.bookRevenueCents)}
+                    </td>
+                    <td className="p-2 text-end tabular-nums text-fg-muted">
+                      {egp(month.walletRevenueCents)}
                     </td>
                     {hasRefunds ? (
                       <td className="p-2 text-end tabular-nums text-fg-muted">

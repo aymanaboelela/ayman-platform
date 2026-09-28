@@ -21,6 +21,7 @@ import {
   Plus,
   RotateCcw,
   Sparkles,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react';
 import type {
@@ -46,11 +47,25 @@ import { parsePounds } from '@/lib/pounds';
 import { createUnlockCodesAction, loadCourseTreeAction } from './actions';
 import { copyText } from './clipboard';
 import { CopyCodeButton } from './code-row-actions';
-import { CodeText, KIND_META, KindChip, TINT_CARD, TINT_WELL, TONE_TEXT, tone } from './unlock-ui';
+import {
+  CodeText,
+  KIND_META,
+  KindChip,
+  TINT_CARD,
+  TINT_WELL,
+  TONE_TEXT,
+  WALLET_TONE,
+  WalletChip,
+  tone,
+} from './unlock-ui';
+import { formatEGP } from '@/lib/price';
 
 const c = copy.admin.unlockCodes;
 
 const MAX_QUANTITY = 50;
+
+/** Round amounts a teacher actually sells a wallet code for — tapped, not typed. */
+const WALLET_QUICK_POUNDS = [50, 100, 200, 500] as const;
 
 interface Picks {
   terms: ReadonlySet<string>;
@@ -130,6 +145,16 @@ export function UnlockCodeGenerator({ courses }: { courses: readonly AdminUnlock
   const [isFree, setIsFree] = useState(false);
   const [note, setNote] = useState('');
 
+  /*
+   * «كود يفتح كورس» or «كود شحن محفظة». A wallet code has no course and no
+   * pieces — an amount, whether it was paid for, a count and a note — so the
+   * two are two short forms behind one switch rather than one long form with
+   * half its steps greyed out.
+   */
+  const [mode, setMode] = useState<'course' | 'wallet'>('course');
+  const [walletText, setWalletText] = useState('');
+  const [walletPaid, setWalletPaid] = useState(true);
+
   const [pending, setPending] = useState(false);
   const [created, setCreated] = useState<AdminUnlockCodeRow[] | null>(null);
   const [origin, setOrigin] = useState('');
@@ -141,6 +166,9 @@ export function UnlockCodeGenerator({ courses }: { courses: readonly AdminUnlock
     Math.max(1, Number.parseInt(toAsciiDigits(quantityText), 10) || 1),
   );
   const price = parsePounds(priceText);
+  const walletAmount = parsePounds(walletText);
+  const walletCents = walletAmount.kind === 'valid' ? walletAmount.cents : 0;
+  const canSubmitWallet = walletCents >= 100 && walletCents <= 10_000_000 && !pending;
 
   const picked = useMemo(() => {
     const items: { kind: UnlockItemKind; id: string; title: string }[] = [];
@@ -211,6 +239,35 @@ export function UnlockCodeGenerator({ courses }: { courses: readonly AdminUnlock
       // `isFree` بتكسب على أي حاجة مكتوبة: لو حد كتب رقم وبعدين اختار مجاني،
       // المقصود هو الاختيار الأخير مش اللي فاضل في الخانة.
       priceCents: isFree || price.kind !== 'valid' ? null : price.cents,
+      walletCreditCents: null,
+      walletCreditPaid: true,
+      note: note.trim() === '' ? null : note.trim(),
+    };
+    setPending(true);
+    const result = await createUnlockCodesAction(input);
+    setPending(false);
+    if (!result.ok) {
+      toast.error(result.message);
+      return;
+    }
+    setOrigin(window.location.origin);
+    setCreated(result.codes);
+    router.refresh();
+  }
+
+  async function submitWallet() {
+    if (!canSubmitWallet) {
+      if (!pending) toast.error(c.walletAmountRequired);
+      return;
+    }
+    const input: AdminUnlockCodeCreateInput = {
+      courseId: null,
+      wholeCourse: false,
+      items: [],
+      quantity,
+      priceCents: null,
+      walletCreditCents: walletCents,
+      walletCreditPaid: walletPaid,
       note: note.trim() === '' ? null : note.trim(),
     };
     setPending(true);
@@ -233,6 +290,7 @@ export function UnlockCodeGenerator({ courses }: { courses: readonly AdminUnlock
     setQuantityText('1');
     setPriceText('');
     setNote('');
+    setWalletText('');
   }
 
   const selectedCourse = courses.find((course) => course.id === courseId);
@@ -264,6 +322,133 @@ export function UnlockCodeGenerator({ courses }: { courses: readonly AdminUnlock
         <ReadyPanel codes={created} origin={origin} onAgain={again} />
       ) : (
         <div className="divide-y divide-line-subtle">
+          <ModeSwitch mode={mode} onChange={setMode} />
+          {mode === 'wallet' ? (
+            <>
+              {/* ── Wallet 1 — how much, and was it paid for ─────────────── */}
+              <Step n={1} title={c.walletStep1} done={walletCents >= 100}>
+                <div className="grid gap-4 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
+                  <div className="min-w-0">
+                    <Label htmlFor="unlock-wallet-amount">{c.walletAmount}</Label>
+                    <Input
+                      id="unlock-wallet-amount"
+                      inputMode="decimal"
+                      dir="ltr"
+                      autoComplete="off"
+                      value={walletText}
+                      invalid={walletAmount.kind === 'invalid'}
+                      onChange={(event) => setWalletText(event.target.value)}
+                      className="h-12 rounded-lg bg-surface-1 text-center text-[1.25rem] font-semibold tabular-nums [unicode-bidi:isolate]"
+                    />
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {WALLET_QUICK_POUNDS.map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          style={tone(WALLET_TONE)}
+                          aria-pressed={walletText === String(value)}
+                          onClick={() => setWalletText(String(value))}
+                          className={cn(
+                            'h-9 rounded-full px-3.5 text-[length:var(--fs-text-sm)] font-semibold tabular-nums',
+                            walletText === String(value)
+                              ? 'bg-[color:var(--uc-tone)] text-[color:var(--n-1)]'
+                              : TINT_CARD,
+                          )}
+                        >
+                          {value} ج
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-[length:var(--fs-text-xs)] text-fg-muted">{c.walletAmountHint}</p>
+                  </div>
+                  <fieldset className="m-0 min-w-0 border-0 p-0">
+                    <legend className="mb-1.5 text-[length:var(--fs-text-sm)] font-medium text-fg">
+                      {c.walletKindLabel}
+                    </legend>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <PaidChoice
+                        on={walletPaid}
+                        color="var(--ok)"
+                        title={c.walletPaid}
+                        hint={c.walletPaidHint}
+                        onPick={() => setWalletPaid(true)}
+                      />
+                      <PaidChoice
+                        on={!walletPaid}
+                        color="var(--viz-4)"
+                        title={c.walletGift}
+                        hint={c.walletGiftHint}
+                        onPick={() => setWalletPaid(false)}
+                      />
+                    </div>
+                  </fieldset>
+                </div>
+              </Step>
+
+              {/* ── Wallet 2 — how many, and a note ──────────────────────── */}
+              <Step n={2} title={c.walletStep2} done={false}>
+                <div className="grid gap-4 md:grid-cols-[auto_minmax(0,1fr)]">
+                  <div>
+                    <Label htmlFor="unlock-wallet-quantity">{c.quantity}</Label>
+                    <div className="flex h-11 w-fit items-stretch overflow-hidden rounded-lg border border-line bg-surface-1">
+                      <StepperButton
+                        icon={Minus}
+                        label={c.quantityLess}
+                        disabled={quantity <= 1}
+                        onClick={() => setQuantityText(String(Math.max(1, quantity - 1)))}
+                      />
+                      <input
+                        id="unlock-wallet-quantity"
+                        inputMode="numeric"
+                        dir="ltr"
+                        value={quantityText}
+                        onChange={(event) => setQuantityText(event.target.value.slice(0, 3))}
+                        onBlur={() => setQuantityText(String(quantity))}
+                        className="w-14 border-x border-line bg-transparent text-center text-[1.125rem] font-semibold tabular-nums text-fg [unicode-bidi:isolate] focus:bg-surface-2 focus:outline-none"
+                      />
+                      <StepperButton
+                        icon={Plus}
+                        label={c.quantityMore}
+                        disabled={quantity >= MAX_QUANTITY}
+                        onClick={() => setQuantityText(String(Math.min(MAX_QUANTITY, quantity + 1)))}
+                      />
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <Label htmlFor="unlock-wallet-note">{c.note}</Label>
+                    <Input
+                      id="unlock-wallet-note"
+                      value={note}
+                      maxLength={500}
+                      placeholder={c.notePlaceholder}
+                      onChange={(event) => setNote(event.target.value)}
+                      className="h-11 rounded-lg bg-surface-1"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                  <Button
+                    onClick={() => void submitWallet()}
+                    disabled={!canSubmitWallet}
+                    className="h-12 w-full px-6 text-[length:var(--fs-text-base)] font-semibold sm:w-auto"
+                  >
+                    {pending ? (
+                      <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Wallet className="size-5" aria-hidden="true" />
+                    )}
+                    {pending
+                      ? c.generating
+                      : quantity > 1
+                        ? formatCopy(c.generateMany, { count: quantity })
+                        : c.generate}
+                  </Button>
+                </div>
+              </Step>
+            </>
+          ) : (
+          <>
           {/* ── Step 1 — the course ─────────────────────────────────────── */}
           <Step n={1} title={c.step1} done={tree !== null}>
             <label className="block max-w-xl">
@@ -496,9 +681,91 @@ export function UnlockCodeGenerator({ courses }: { courses: readonly AdminUnlock
               </div>
             </Step>
           ) : null}
+          </>
+          )}
         </div>
       )}
     </section>
+  );
+}
+
+/** «كود يفتح كورس» / «كود شحن محفظة» — two big targets, one pressed. */
+function ModeSwitch({
+  mode,
+  onChange,
+}: {
+  mode: 'course' | 'wallet';
+  onChange: (mode: 'course' | 'wallet') => void;
+}) {
+  const options = [
+    { key: 'course' as const, icon: KeyRound, color: 'var(--a-9)', title: c.modeCourse, hint: c.modeCourseHint },
+    { key: 'wallet' as const, icon: Wallet, color: WALLET_TONE, title: c.modeWallet, hint: c.modeWalletHint },
+  ];
+  return (
+    <div className="px-4 py-4 sm:px-6" role="group" aria-label={c.modeLabel}>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {options.map((option) => {
+          const Icon = option.icon;
+          const on = mode === option.key;
+          return (
+            <button
+              key={option.key}
+              type="button"
+              aria-pressed={on}
+              style={tone(option.color)}
+              onClick={() => onChange(option.key)}
+              className={cn(
+                'flex items-center gap-3 rounded-lg border-2 p-3 text-start transition-colors duration-200',
+                on
+                  ? 'border-[color:var(--uc-tone)] bg-[color-mix(in_oklab,var(--uc-tone)_13%,var(--n-2))]'
+                  : 'border-dashed border-[color-mix(in_oklab,var(--uc-tone)_40%,var(--border))] bg-surface-1 hover:bg-[color-mix(in_oklab,var(--uc-tone)_6%,var(--n-1))]',
+              )}
+            >
+              <span className={cn('grid size-10 shrink-0 place-items-center rounded-lg', TINT_WELL)}>
+                <Icon className="size-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-semibold text-fg">{option.title}</span>
+                <span className="block text-[length:var(--fs-text-xs)] text-fg-muted">{option.hint}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** «مدفوعة» / «هدية» — the one question the money screens care about. */
+function PaidChoice({
+  on,
+  color,
+  title,
+  hint,
+  onPick,
+}: {
+  on: boolean;
+  color: string;
+  title: string;
+  hint: string;
+  onPick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      style={tone(color)}
+      onClick={onPick}
+      className={cn(
+        'flex min-h-[4.25rem] flex-col items-start justify-center gap-0.5 rounded-lg border-2 px-3 py-2 text-start transition-colors duration-200',
+        on
+          ? 'border-[color:var(--uc-tone)] bg-[color-mix(in_oklab,var(--uc-tone)_12%,var(--n-2))]'
+          : 'border-line bg-surface-1 hover:border-[color-mix(in_oklab,var(--uc-tone)_45%,var(--border))]',
+      )}
+    >
+      <span className={cn('font-semibold', on ? TONE_TEXT : 'text-fg')}>{title}</span>
+      <span className="text-[length:var(--fs-text-xs)] leading-snug text-fg-muted">{hint}</span>
+    </button>
   );
 }
 
@@ -1028,14 +1295,16 @@ function ReadyPanel({
 
   const content = contentSummary(first);
   const many = codes.length > 1;
+  const course = first.course;
+  const walletAmount = formatEGP(first.walletCreditCents ?? 0);
 
   function shareHref(code: string): string {
-    const text = formatCopy(c.shareText, {
-      content,
-      course: first!.course.title,
-      code,
-      url: `${origin}/codes`,
-    });
+    // A wallet code is typed on the wallet page, where the balance it adds is
+    // right there to see; a course code on «كود الكورس».
+    const text =
+      course === null
+        ? formatCopy(c.walletShareText, { amount: walletAmount, code, url: `${origin}/wallet` })
+        : formatCopy(c.shareText, { content, course: course.title, code, url: `${origin}/codes` });
     return `https://wa.me/?text=${encodeURIComponent(text)}`;
   }
 
@@ -1058,9 +1327,22 @@ function ReadyPanel({
           <PartyPopper className="size-6" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
+          {course === null ? (
+            <>
+              <p className="inline-flex max-w-full items-center gap-1.5 text-[length:var(--fs-text-sm)] font-semibold text-fg">
+                <Wallet className="size-4 shrink-0 text-[color:var(--viz-6)]" aria-hidden="true" />
+                {c.walletLine}
+              </p>
+              <WalletChip
+                label={formatCopy(c.walletChip, { amount: walletAmount })}
+                giftLabel={first.walletCreditPaid ? null : c.walletGiftChip}
+              />
+            </>
+          ) : (
+          <>
           <p className="inline-flex max-w-full items-center gap-1.5 text-[length:var(--fs-text-sm)] font-semibold text-fg">
             <BookOpen className="size-4 shrink-0 text-accent-text" aria-hidden="true" />
-            <span className="truncate">{first.course.title}</span>
+            <span className="truncate">{course.title}</span>
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {first.wholeCourse ? (
@@ -1077,6 +1359,8 @@ function ReadyPanel({
               ))
             )}
           </div>
+          </>
+          )}
         </div>
       </div>
 

@@ -104,7 +104,10 @@ export function CodeRowActions({ row }: { row: AdminUnlockCodeRow }) {
           run={() => revokeUnlockCodeAction(row.id)}
         />
       ) : null}
-      {row.status === 'used' ? (
+      {/* A USED wallet code already put money in a wallet that may be spent —
+          the API refuses to pull it, and the correction is a «خصم» on the
+          student's wallet. So it offers nothing here, like a pulled one. */}
+      {row.status === 'used' && row.course !== null ? (
         <ConfirmAction
           trigger={
             <>

@@ -11,6 +11,7 @@ import {
   Ticket,
   Trophy,
   UserRound,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
@@ -84,6 +85,13 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * account settings in the footer.
    */
   { href: '/codes', labelAr: copy.nav.unlockCodes, icon: Ticket },
+  /*
+   * «المحفظة» — right under «كود الكورس», and for the same reason: it is the
+   * other thing a student does with money a teacher sent them (a wallet code
+   * is typed here too). Not a tab: the bottom bar is four by count, so on a
+   * phone it lives in «حاجات تانية».
+   */
+  { href: '/wallet', labelAr: copy.nav.wallet, icon: Wallet },
   { href: '/foundations', labelAr: copy.nav.essentials, icon: Sprout },
   /*
    * `/store`, NOT `/books`, and the difference is the whole point of the
