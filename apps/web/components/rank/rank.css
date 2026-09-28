@@ -590,6 +590,37 @@
   text-align: center;
 }
 
+/* ── التنانين (أيمن بس — `rank-dragon.tsx`) ───────────────────────────── */
+.rk-dragon {
+  display: block;
+  width: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 14px rgb(0 0 0 / 0.18));
+  transform-origin: 50% 100%;
+}
+/* الأول الكبير، التاني أصغر، التالت أصغر — زي الصورة بالظبط. */
+.rk-dragon[data-place='1'] { height: 7.5rem; margin-bottom: -0.4rem; }
+.rk-dragon[data-place='2'] { height: 5.25rem; }
+.rk-dragon[data-place='3'] { height: 4.25rem; }
+@media (min-width: 768px) {
+  .rk-dragon[data-place='1'] { height: 9rem; }
+  .rk-dragon[data-place='2'] { height: 6.25rem; }
+  .rk-dragon[data-place='3'] { height: 5rem; }
+}
+.rk-podium__slot[data-me] .rk-dragon { filter: drop-shadow(0 0 10px color-mix(in oklab, var(--viz-3) 60%, transparent)); }
+
+.rk-dragon--level { object-fit: contain; }
+.rk-path__step[data-level='legend'] .rk-dragon--level { width: 3.75rem; height: 3.75rem; }
+/* «أسطورة» كارت ناري: الهدف اللي آخر الطريق لازم يبان هدف. */
+.rk-path__step[data-level='legend'] {
+  background:
+    radial-gradient(110% 110% at 50% 0%, color-mix(in oklab, var(--e-500) 22%, transparent) 0%, transparent 70%),
+    var(--color-surface-2);
+  border-color: color-mix(in oklab, var(--e-500) 45%, var(--color-line));
+}
+/* مقفول، بس بلونه: التنين هو الجايزة، ورمادي مابيشدّش حد. */
+.rk-path__step[data-state='locked'] .rk-dragon { opacity: 0.9; }
+
 /* ── الكونفيتي — للتلاتة الأوائل بس ─────────────────────────────────────── */
 .rk-confetti { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
 .rk-confetti i {
@@ -636,6 +667,13 @@
   .rk-ladder__row { animation: rk-slide 480ms var(--ease-out) calc(var(--d) * 70ms + 200ms) both; }
   .rk-ladder__bar > span { animation: rk-fill 900ms var(--ease-out) calc(var(--d) * 70ms + 400ms) both; }
   .rk-path__step[data-state='now'] .rk-gem { animation: rk-bob 2.8s ease-in-out infinite; }
+  .rk-dragon[data-place] { animation: rk-pop 600ms var(--ease-pop) calc(var(--d) * 140ms + 700ms) both, rk-bob 3.2s ease-in-out calc(var(--d) * 300ms + 1.4s) infinite; }
+  .rk-dragon[data-place='1'] { animation: rk-pop 600ms var(--ease-pop) 700ms both, rk-roar 3.2s ease-in-out 1.4s infinite; }
+  .rk-path__step[data-level='legend'] .rk-dragon--level { animation: rk-bob 3s ease-in-out infinite; }
+}
+@keyframes rk-roar {
+  0%, 100% { transform: translateY(0) scale(1); filter: drop-shadow(0 10px 14px rgb(0 0 0 / 0.18)); }
+  50% { transform: translateY(-5px) scale(1.03); filter: drop-shadow(0 0 18px color-mix(in oklab, var(--print-gold) 70%, transparent)); }
 }
 
 @keyframes rk-rise { from { opacity: 0; transform: translateY(12px); } }
