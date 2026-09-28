@@ -268,6 +268,10 @@ const admin = {
      * moves when it flips.
      */
     contentComplete: 'المنهج نزل كله',
+    /** The switch beside the name drawn over an uploaded lecture. */
+    watermarkPhone: 'اظهر رقم الطالب على الفيديو',
+    watermarkPhoneHint:
+      'اسم الطالب بيظهر دايمًا على الفيديو المرفوع وبيتحرك. علّمها لو عايز رقمه يظهر جنبه كمان — عشان لو حد صوّر الشاشة ونزّلها يبان مين.',
     contentCompleteHint:
       'سيبها فاضية طول ما لسه فيه محاضرات جاية. لغاية ما تعلّمها، الطالب اللي خلّص اللي نازل هيقرا «خلّصت اللي نزل» مش «خلصت الكورس».',
     /** The «⋯» trigger in the editor bar: archive, delete, and the video check. */

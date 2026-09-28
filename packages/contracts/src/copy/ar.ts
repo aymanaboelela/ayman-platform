@@ -3038,6 +3038,27 @@ export const copy = {
      */
     enterFullscreen: 'ملء الشاشة',
     exitFullscreen: 'خروج من ملء الشاشة',
+    /**
+     * Our own player's controls — the uploaded lectures, where the browser's
+     * built-in bar was replaced so nothing on it offers «تنزيل», and so the
+     * name over the picture stays there in fullscreen too.
+     */
+    controls: {
+      play: 'تشغيل',
+      pause: 'إيقاف مؤقت',
+      mute: 'كتم الصوت',
+      unmute: 'تشغيل الصوت',
+      volume: 'الصوت',
+      seek: 'مكان الفيديو',
+      back: 'رجوع ١٠ ثواني',
+      forward: 'قدّام ١٠ ثواني',
+      settings: 'الإعدادات',
+      speed: 'السرعة',
+      speedNormal: 'عادي',
+      quality: 'الجودة',
+      qualityAuto: 'تلقائي',
+      qualityAutoNow: 'تلقائي ({height}p)',
+    },
     outline: 'محتوى الكورس',
     previous: 'الدرس السابق',
     next: 'الدرس التالي',

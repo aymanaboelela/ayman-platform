@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { CourseOutlineSchema, LessonPlayerSchema, type CourseOutline } from '@ayman/contracts';
 import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
+import { getSession } from '@/lib/session';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getBookShippingRates } from '@/lib/books';
 import { sanitizeRichText } from '@/lib/sanitize-html';
@@ -100,7 +101,7 @@ export default async function LessonPage({
   // lesson navigations and the lesson body is not. Both are authenticated —
   // the guard's 404 for "not enrolled" is exactly what makes `notFound()`
   // below a rendering decision rather than an authorization one.
-  const [outline, result, settings, shippingRates] = await Promise.all([
+  const [outline, result, settings, shippingRates, viewer] = await Promise.all([
     apiGetAuthed(`/api/courses/${slug}/outline`, CourseOutlineSchema).catch(nullOn404),
     apiGetAuthed(`/api/lessons/${lessonId}/player`, LessonPlayerSchema).catch(forbiddenOn403),
     // The Vodafone Cash number `CourseOutlineSidebar`'s own «اطلب الكتاب»
@@ -110,6 +111,10 @@ export default async function LessonPage({
     /* The delivery fee «اطلب الكتاب» quotes. `'use cache'` on one coarse tag,
        so this is not a per-view request — see `getBookShippingRates`. */
     getBookShippingRates(),
+    /* Who is watching — for the name over OUR copy of an uploaded lecture.
+       `getSession` is `cache()`d per request and `proxy.ts` has already paid
+       for it, so this is not a second round trip. */
+    getSession().catch(() => null),
   ]);
 
   // No outline means the course is not theirs to see at all — not enrolled, or
@@ -203,7 +208,18 @@ export default async function LessonPage({
             first pixel of content, and the title reads as its caption, which
             is what it is.
           */}
-          <LessonPlayerView payload={lesson} />
+          <LessonPlayerView
+            payload={lesson}
+            /* The name always; the phone number only where the instructor
+               switched it on for this course («اظهر رقم الطالب على الفيديو»). */
+            watermark={
+              viewer === null
+                ? null
+                : [viewer.name, outline.course.watermarkPhone ? viewer.phoneNumber : null]
+                    .filter(Boolean)
+                    .join(' · ')
+            }
+          />
 
           <h1 className="mt-5 text-[length:var(--fs-title-3)] font-semibold">
             {payload.lesson.title}

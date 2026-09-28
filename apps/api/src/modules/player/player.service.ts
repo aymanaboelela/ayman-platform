@@ -69,6 +69,7 @@ export class PlayerService {
         title: true,
         examLessonId: true,
         contentComplete: true,
+        watermarkPhone: true,
         // Gates `CourseOutlineSidebar`'s own «اطلب الكتاب» link. Same three
         // fields the catalog and the dashboard read, resolved by the same
         // `courseBook()` — the catalogue row when it is live, the legacy pair
@@ -239,6 +240,7 @@ export class PlayerService {
         coverKey: course.coverKey,
         subjectNameAr: course.subject.nameAr,
         contentComplete: course.contentComplete,
+        watermarkPhone: course.watermarkPhone,
         whatsappGroupUrl: course.whatsappGroupUrl,
       },
       sections,

@@ -916,6 +916,13 @@ model Course {
   /// is about whether what exists is all there will be.
   contentComplete Boolean @default(false) @map("content_complete")
 
+  /// «اظهر رقم الطالب على الفيديو» — per course, set by the instructor.
+  ///
+  /// The student's NAME is always drawn over an uploaded lecture; the phone
+  /// number is drawn too only where this is on. Off by default: the owner's
+  /// call was «شيله، وخليه من إعدادات الكورس».
+  watermarkPhone Boolean @default(false) @map("watermark_phone")
+
   /// «جروب الدفعة» — the WhatsApp group for THIS course's cohort, or NULL for
   /// a course that does not have one.
   ///

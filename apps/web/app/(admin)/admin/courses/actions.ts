@@ -152,6 +152,13 @@ function readContentComplete(formData: FormData): boolean {
   return values[values.length - 1] === 'true';
 }
 
+/** «اظهر رقم الطالب على الفيديو». The same hidden-false pair; off is the safe
+ *  fallback, because a number shown by mistake cannot be un-shown. */
+function readWatermarkPhone(formData: FormData): boolean {
+  const values = formData.getAll('watermarkPhone');
+  return values[values.length - 1] === 'true';
+}
+
 /**
  * The card's badge, or `null` for «من غير شارة».
  *
@@ -227,6 +234,7 @@ export async function createCourseAction(formData: FormData): Promise<void> {
     scheduleNote: readOptionalText(formData, 'scheduleNote'),
     whatsappGroupUrl: readOptionalText(formData, 'whatsappGroupUrl'),
     contentComplete: readContentComplete(formData),
+    watermarkPhone: readWatermarkPhone(formData),
     coverKey: readOptionalText(formData, 'coverKey'),
     requiresGrant: readRequiresGrant(formData),
     monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
@@ -324,6 +332,7 @@ export async function updateCourseAction(
       scheduleNote: readOptionalText(formData, 'scheduleNote'),
       whatsappGroupUrl: readOptionalText(formData, 'whatsappGroupUrl'),
       contentComplete: readContentComplete(formData),
+      watermarkPhone: readWatermarkPhone(formData),
       coverKey: readOptionalText(formData, 'coverKey'),
       requiresGrant: readRequiresGrant(formData),
       monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
