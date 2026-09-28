@@ -313,7 +313,7 @@ export function UnlockCodeGenerator({ courses }: { courses: readonly AdminUnlock
             {created ? (created.length > 1 ? formatCopy(c.readyManyTitle, { count: created.length }) : c.readyTitle) : c.createTitle}
           </h2>
           <p className="mt-0.5 text-[length:var(--fs-text-sm)] text-fg-muted">
-            {created ? c.readyLead : c.createLead}
+            {created ? c.readyLead : mode === 'wallet' ? c.modeWalletHint : c.createLead}
           </p>
         </div>
       </header>

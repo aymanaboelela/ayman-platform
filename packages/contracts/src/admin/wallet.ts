@@ -78,7 +78,7 @@ export const AdminWalletDebitSchema = z
   .object({
     amountCents: z.number().int().min(100, 'أقل مبلغ جنيه واحد').max(WALLET_MAX_ADMIN_CENTS),
     reducesIncome: z.boolean(),
-    note: z.string().trim().min(3, 'اكتب سبب الخصم').max(300),
+    note: z.string().trim().min(3, 'لازم سبب للخصم').max(300),
     idempotencyKey: z.uuid(),
   })
   .strict();

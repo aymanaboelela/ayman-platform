@@ -18,11 +18,11 @@ export function WalletArt({ className }: { className?: string }) {
       <circle className="wl-art__dot" cx="160" cy="130" r="3.5" />
       <g className="wl-art__coin-2">
         <circle className="wl-art__coin" cx="196" cy="58" r="17" />
-        <path className="wl-art__coin-mark" d="M196 49v18M190 53h9a4 4 0 0 1 0 8h-6a4 4 0 0 0 0 8h9" />
+        <circle className="wl-art__coin-mark" cx="196" cy="58" r="9" />
       </g>
       <g className="wl-art__coin-3">
         <circle className="wl-art__coin" cx="40" cy="48" r="13" />
-        <path className="wl-art__coin-mark" d="M40 41v14" />
+        <circle className="wl-art__coin-mark" cx="40" cy="48" r="6.5" />
       </g>
     </svg>
   );

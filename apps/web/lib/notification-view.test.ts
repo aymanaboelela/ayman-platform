@@ -308,7 +308,7 @@ describe('describeNotification — the wallet', () => {
     const topup = describeNotification({ ...at, kind: 'wallet_credited', amountCents: 25_000, source: 'topup' });
     const refund = describeNotification({ ...at, kind: 'wallet_credited', amountCents: 5_050, source: 'refund' });
 
-    expect(topup.title).toBe('اتشحنلك 250 جنيه في المحفظة');
+    expect(topup.title).toBe('اتشحن 250 جنيه في المحفظة');
     expect(refund.title).toContain('51');
     expect(topup.href).toBe('/wallet');
   });

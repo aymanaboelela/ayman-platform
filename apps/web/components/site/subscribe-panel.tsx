@@ -914,7 +914,8 @@ export function SubscribePanel({
 
   if (step === 'walletSuccess') {
     return (
-      <div className="wl-pay__success" role="status">
+      // Inside the panel's own card, not bare on the page band behind it.
+      <div className="course-subscribe wl-pay__success" role="status">
         <span className="wl-sent__badge">
           <Check className="size-8" strokeWidth={3} aria-hidden="true" />
         </span>

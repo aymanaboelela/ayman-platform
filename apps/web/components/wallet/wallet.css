@@ -103,8 +103,13 @@
 }
 .wl-hero__art {
   justify-self: center;
-  width: min(100%, 15rem);
+  /* Smaller on a phone: the band's job there is the number, and a picture
+     taller than the balance pushes the top-up form below the fold. */
+  width: min(55%, 10rem);
   filter: drop-shadow(0 18px 24px rgb(0 0 0 / 0.22));
+}
+@media (min-width: 768px) {
+  .wl-hero__art { width: min(100%, 15rem); }
 }
 @media (prefers-reduced-motion: no-preference) {
   .wl-hero__art { animation: wl-float 5s var(--ease-out) infinite alternate; }
@@ -184,8 +189,16 @@
   display: grid;
   gap: 0.75rem;
 }
+/* Three across once there is room — and then each card stands on its end
+   (icon over the name), because three side-by-side rows in a ~560px column
+   squeeze the hint into a word per line. */
 @media (min-width: 640px) {
   .wl-methods { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .wl-method {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
 }
 .wl-method {
   --wl-hue: var(--viz-1);

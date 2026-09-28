@@ -370,7 +370,7 @@ export default async function UnlockCodesPage({
                       <StatusBadge status={row.status} label={c.status[row.status]} />
                     </td>
                     <td className="whitespace-nowrap px-3 py-3.5 text-end font-semibold tabular-nums text-fg">
-                      <Price cents={row.priceCents} />
+                      <CodePrice row={row} />
                     </td>
                     <td className="px-3 py-3.5">
                       <CreatedCell row={row} />
@@ -446,7 +446,7 @@ function CodeCard({ row, canWrite }: { row: AdminUnlockCodeRow; canWrite: boolea
             {c.columns.price}
           </dt>
           <dd className="mt-0.5 font-semibold tabular-nums text-fg">
-            <Price cents={row.priceCents} />
+            <CodePrice row={row} />
           </dd>
         </div>
         <div className="min-w-0">
@@ -469,6 +469,14 @@ function CodeCard({ row, canWrite }: { row: AdminUnlockCodeRow; canWrite: boolea
       )}
     </article>
   );
+}
+
+/** «المبلغ» — what a course code was sold for, or what a wallet code adds.
+ *  A wallet code has no sale price of its own, and «مجاني» there would read
+ *  as a code worth nothing. */
+function CodePrice({ row }: { row: AdminUnlockCodeRow }) {
+  if (row.course === null) return <>{formatEGP(row.walletCreditCents ?? 0)} ج</>;
+  return <Price cents={row.priceCents} />;
 }
 
 /** What the code is FOR: the course and the pieces it opens, or — for a

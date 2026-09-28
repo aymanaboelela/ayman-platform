@@ -157,8 +157,8 @@ function TopupRow({ row, fresh, canReview }: { row: AdminWalletTopupRow; fresh: 
             ) : null}
           </p>
           <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--fs-text-xs)] text-fg-faint">
-            <span dir="ltr" className="font-medium text-fg">
-              {formatCopy(c.sender, { sender: row.sender })}
+            <span className="font-medium text-fg">
+              {c.senderFrom} <bdi dir="ltr">{row.sender}</bdi>
             </span>
             {row.studentPhone ? <span dir="ltr">{row.studentPhone}</span> : null}
             <span className="inline-flex items-center gap-1">

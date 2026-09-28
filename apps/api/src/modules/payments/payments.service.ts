@@ -461,7 +461,9 @@ export class PaymentsService {
           kind: 'course_purchase',
           amountCents,
           idempotencyKey: input.idempotencyKey,
-          note: `course ${course.id}`,
+          // No note: the submission this debit paid for points back at it
+          // (`walletTransactionId`), and names the course on every statement.
+          note: null,
         });
 
         // Re-checked under the lock — see the method note.

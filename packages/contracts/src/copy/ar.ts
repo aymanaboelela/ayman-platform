@@ -4551,9 +4551,9 @@ export const copy = {
      * «المحفظة». `{amount}` is whole pounds, Western digits. The student's
      * two rows name the money, not the person — the feed is theirs.
      */
-    walletCreditedTopup: 'اتشحنلك {amount} جنيه في المحفظة',
-    walletCreditedAdmin: 'اتضافلك {amount} جنيه في المحفظة',
-    walletCreditedRefund: 'رجعلك {amount} جنيه في المحفظة',
+    walletCreditedTopup: 'اتشحن {amount} جنيه في المحفظة',
+    walletCreditedAdmin: 'اتضاف {amount} جنيه للمحفظة',
+    walletCreditedRefund: 'رجع {amount} جنيه للمحفظة',
     walletTopupRejected: 'طلب شحن المحفظة ({amount} جنيه) مااتقبلش',
     /** ADMIN — `{name}` at the end, same reason as `paymentSubmitted`. */
     walletTopupSubmitted: 'طلب شحن محفظة بـ{amount} جنيه — {name}',
@@ -6425,7 +6425,7 @@ export const copy = {
     pageTitle: 'كود الكورس',
     eyebrow: 'فتح بكود',
     title: 'كود واحد… والمحاضرة مفتوحة',
-    lead: 'الكود ٦ حروف وأرقام بيوصل على واتساب بعد الدفع. بمجرد كتابته هنا، اللي فيه بيتفتح على الحساب على طول.',
+    lead: 'الكود ٦ حروف وأرقام بيوصل على واتساب بعد الدفع. بمجرد كتابته هنا، اللي فيه بيتفتح على الحساب على طول — ولو كود شحن، المبلغ بيتضاف للمحفظة.',
     inputLabel: 'كود الفتح',
     inputHint: 'حروف إنجليزي وأرقام — الحروف الصغيرة والمسافات مش مشكلة.',
     /** The single field on a course page's «عندك كود؟» card, where the hint
@@ -6528,7 +6528,7 @@ export const copy = {
       vodafone_cash: 'رقم فودافون كاش اللي اتحوّل منه',
     },
     senderPlaceholder: {
-      instapay: 'name@instapay أو 01xxxxxxxxx',
+      instapay: 'name@instapay',
       vodafone_cash: '01xxxxxxxxx',
     },
     noteLabel: 'ملاحظة (اختياري)',

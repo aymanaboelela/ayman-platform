@@ -113,7 +113,7 @@ export const SubmitWalletTopupSchema = z
       .min(WALLET_MIN_TOPUP_CENTS, 'أقل مبلغ للشحن ١٠ جنيه')
       .max(WALLET_MAX_TOPUP_CENTS, 'المبلغ ده كبير أوي على شحنة واحدة'),
     /** The number (Vodafone Cash) or InstaPay address the money came FROM. */
-    sender: z.string().trim().min(3, 'اكتب الرقم أو عنوان إنستاباي اللي اتحوّل منه').max(120),
+    sender: z.string().trim().min(3, 'الرقم أو عنوان إنستاباي اللي اتحوّل منه مطلوب').max(120),
     note: z.string().trim().max(300).nullable().default(null),
     screenshotKey: z.string().min(1).max(255),
   })
