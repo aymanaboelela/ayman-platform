@@ -319,7 +319,13 @@ export function MediaKeyField({
         same file again fires no change event and the field looks dead.
       */}
       <Dialog open={picked !== null} onOpenChange={(open) => (open ? null : clearPick())}>
-        <DialogContent closeLabel={copy.admin.media.cropCancel} className="max-w-[34rem]">
+        {/* Narrower for a book: the frame fills the dialog's width at the
+            crop's own ratio, and a 34rem-wide 3/4 frame is 45rem TALL — the
+            confirm button ends up below the fold on a laptop. */}
+        <DialogContent
+          closeLabel={copy.admin.media.cropCancel}
+          className={shape === 'book' ? 'max-w-[26rem]' : 'max-w-[34rem]'}
+        >
           <DialogHeader>
             <DialogTitle>{copy.admin.media.cropTitle}</DialogTitle>
           </DialogHeader>

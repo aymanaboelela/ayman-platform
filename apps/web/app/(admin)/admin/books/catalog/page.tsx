@@ -138,10 +138,15 @@ export default async function AdminBooksCatalogPage() {
 
       <BooksTabs active="/admin/books/catalog" />
 
-      <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
-        {/* The delivery fee lives HERE and not under a fifth settings tab,
-            because it is a price and this is the prices screen. */}
-        <ShippingFeeForm rates={settings.store?.shippingRates ?? DEFAULT_BOOK_SHIPPING_RATES} />
+      {/* «كتاب جديد» at the top of the list it adds to — it used to sit under
+          the delivery-fee form, a full-width block that pushed the books
+          themselves below the fold on a laptop. */}
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
+          {books.length === 0
+            ? null
+            : formatCopy(c.catalogSummary, { n: books.length, active: activeCount })}
+        </p>
         <BookFormDialog
           book={null}
           subjects={subjects}
@@ -154,9 +159,6 @@ export default async function AdminBooksCatalogPage() {
         <AdminEmpty spot="orders" title={c.catalogEmpty} hint={c.catalogEmptyHint} />
       ) : (
         <>
-          <p className="mt-5 text-[length:var(--fs-text-sm)] text-fg-muted">
-            {formatCopy(c.catalogSummary, { n: books.length, active: activeCount })}
-          </p>
 
           {BOOK_TERMS.map((term) => {
             const inTerm = books.filter((book) => book.term === term);
@@ -199,6 +201,13 @@ export default async function AdminBooksCatalogPage() {
           })}
         </>
       )}
+
+      {/* The delivery fee lives on this screen and not under a fifth settings
+          tab, because it is a price and this is the prices screen — but UNDER
+          the shelf: it changes a few times a year, the books change weekly. */}
+      <div className="mt-8">
+        <ShippingFeeForm rates={settings.store?.shippingRates ?? DEFAULT_BOOK_SHIPPING_RATES} />
+      </div>
     </>
   );
 }
@@ -229,7 +238,10 @@ function BookRow({
           judges the shelf as the student will see it. */}
       <span
         className={cn(
-          'relative block aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-[var(--r-sm)] border border-line bg-surface-3 sm:w-20',
+          /* `self-start`: the row is a flex line that STRETCHES its items, and a
+             stretched height wins over `aspect-ratio` — on a phone, where the
+             details wrap to twice the height, the jacket became a tall strip. */
+          'relative block aspect-[3/4] w-16 shrink-0 self-start overflow-hidden rounded-[var(--r-sm)] border border-line bg-surface-3 sm:w-20',
           !book.isActive && 'opacity-60',
         )}
       >
@@ -259,11 +271,11 @@ function BookRow({
               large and in the action colour. */}
           <p className="flex items-baseline gap-2">
             <span className="mono text-[length:var(--fs-title-4)] font-semibold text-accent-text">
-              {formatEGP(book.priceCents)}
+              {formatCopy(c.catalogPrice, { price: formatEGP(book.priceCents) })}
             </span>
             {book.comparePriceCents !== null ? (
               <span className="mono text-[length:var(--fs-text-sm)] text-fg-faint line-through">
-                {formatEGP(book.comparePriceCents)}
+                {formatCopy(c.catalogPrice, { price: formatEGP(book.comparePriceCents) })}
               </span>
             ) : null}
           </p>
@@ -360,7 +372,12 @@ function BookRow({
             }
           />
           <BookRowActions book={book} />
-          <span className="mono ms-auto text-[length:var(--fs-text-xs)] text-fg-faint" dir="ltr">
+          {/* The shareable anchor — a desktop nicety; on a phone it wraps to two
+              lines of monospace under the buttons and says nothing new. */}
+          <span
+            className="mono ms-auto hidden text-[length:var(--fs-text-xs)] text-fg-faint sm:inline"
+            dir="ltr"
+          >
             /books#book-{book.slug}
           </span>
         </div>

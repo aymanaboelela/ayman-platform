@@ -4429,7 +4429,7 @@ const admin = {
     sectionBasics: 'بيانات الكتاب',
     sectionCourse: 'الكورس والصف والترم',
     sectionPricing: 'السعر والمخزون',
-    sectionCover: 'الغلاف',
+    sectionCover: 'صورة الكتاب',
     sectionVisibility: 'الظهور',
     /** Under the cover field: the crop is portrait because every surface that
      *  shows a book shows it as a 3×4 jacket. */
@@ -4442,6 +4442,8 @@ const admin = {
     catalogNoCourse: 'مش مربوط بكورس',
     /** `{n}` copies left, when stock is counted. */
     catalogStockLeft: '{n} في المخزن',
+    /** `{price}` already formatted by `formatEGP`. */
+    catalogPrice: '{price} ج',
 
     catalogSave: 'احفظ',
     catalogSaving: 'بيتحفظ…',

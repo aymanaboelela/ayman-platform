@@ -98,7 +98,7 @@ function initialValues(
  * every one of those fields and presented them as twenty inputs in one column
  * of a 420px dialog — the term, which decides the heading a student reads the
  * book under, was the third `<select>` in a row of three. It is now five
- * labelled blocks (the book, where it belongs, what it costs, its cover, where
+ * labelled blocks (the book, where it belongs, its cover, what it costs, where
  * it shows) in a dialog wide enough for two columns on a laptop and one on a
  * phone, and the term is three coloured buttons rather than a dropdown.
  *
@@ -401,6 +401,23 @@ export function BookFormDialog({
             </div>
           </FormSection>
 
+          <FormSection icon={ImageIcon} title={c.sectionCover}>
+            {/* The SAME control a course cover uses, so a book jacket goes
+                through the identical upload + sharp re-encode path rather than
+                a second, unvalidated one — and stores a storage KEY, never a
+                URL. `shape="book"` is the one difference: it crops at the 3/4
+                every book card is drawn at, where the course default is 16/9. */}
+            <MediaKeyField
+              name="coverKey"
+              id={`${idBase}-cover`}
+              label={c.fieldCover}
+              hint={c.fieldCoverHint}
+              shape="book"
+              defaultValue={values.coverKey}
+              onChange={(coverKey) => set({ coverKey })}
+            />
+          </FormSection>
+
           <FormSection icon={Tag} title={c.sectionPricing}>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
@@ -507,23 +524,6 @@ export function BookFormDialog({
             <p id={`${idBase}-stock-hint`} className="text-[length:var(--fs-text-xs)] text-fg-muted">
               {c.fieldStockHint}
             </p>
-          </FormSection>
-
-          <FormSection icon={ImageIcon} title={c.sectionCover}>
-            {/* The SAME control a course cover uses, so a book jacket goes
-                through the identical upload + sharp re-encode path rather than
-                a second, unvalidated one — and stores a storage KEY, never a
-                URL. `shape="book"` is the one difference: it crops at the 3/4
-                every book card is drawn at, where the course default is 16/9. */}
-            <MediaKeyField
-              name="coverKey"
-              id={`${idBase}-cover`}
-              label={c.fieldCover}
-              hint={c.fieldCoverHint}
-              shape="book"
-              defaultValue={values.coverKey}
-              onChange={(coverKey) => set({ coverKey })}
-            />
           </FormSection>
 
           <FormSection icon={Eye} title={c.sectionVisibility}>
