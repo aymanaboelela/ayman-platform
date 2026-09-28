@@ -16,6 +16,7 @@ import {
 import { DEVICE_LIMIT_ERROR, MAX_DEVICES_PER_ACCOUNT, type DeviceLimitGate } from './device-limit';
 import type { LoginSecurityService } from './login-security.service';
 import { planFullNameCheck } from './full-name-check';
+import { HUMAN_CHECK_HEADER, type HumanCheck } from './human-check';
 import { isClosedOtpPath, planPhoneNormalization } from './phone-identity';
 import { ipBucket } from '../common/throttle/request-identity';
 import type { PrismaClient } from '../generated/prisma/client';
@@ -189,6 +190,9 @@ export const PHONE_TAKEN_ERROR = 'PHONE_ALREADY_REGISTERED' as const;
 /** A name that fails `FullNameSchema` — the message says which rule. */
 export const INVALID_FULL_NAME_ERROR = 'INVALID_FULL_NAME' as const;
 
+/** Sign-up without a valid Turnstile token — see `./human-check`. */
+export const HUMAN_CHECK_FAILED_ERROR = 'HUMAN_CHECK_FAILED' as const;
+
 /**
  * Better Auth allows exactly ONE top-level `hooks.before` (see
  * `api/dispatch.mjs`'s `getHooks`: the option is a single function, registered
@@ -202,6 +206,8 @@ export function createAuthBeforeHook(
   bannedAccounts: BannedAccountLookup,
   registeredPhones: RegisteredPhoneLookup,
   deviceLimit: DeviceLimitGate,
+  /** Null when the stack has no Turnstile secret — then sign-up is unchecked. */
+  humanCheck: HumanCheck | null = null,
 ) {
   return createAuthMiddleware(async (ctx) => {
     // `disabledPaths` already 404s these at the router; this catches the same
@@ -209,6 +215,23 @@ export function createAuthBeforeHook(
     // server-side `auth.api.*` call. See `OTP_PATHS_WITHOUT_DELIVERY`.
     if (isClosedOtpPath(ctx.path)) {
       throw new APIError('NOT_FOUND');
+    }
+
+    // `image` is written by two things only: the avatar upload (our own
+    // storage key) and Google sign-in (an https URL). `/update-user` accepted
+    // any string, and the next avatar upload ARCHIVES whatever asset the old
+    // value names (`ProfileService.setAvatar`) — so a student could set it to a
+    // course cover's key and have the platform take the cover down.
+    if (
+      ctx.path === '/update-user' &&
+      typeof ctx.body === 'object' &&
+      ctx.body !== null &&
+      'image' in ctx.body
+    ) {
+      throw new APIError('BAD_REQUEST', {
+        code: 'IMAGE_NOT_EDITABLE',
+        message: 'الصورة بتتغيّر من رفع صورة الحساب بس',
+      });
     }
 
     /**
@@ -294,6 +317,22 @@ export function createAuthBeforeHook(
      * guarantee and this is the message. Removing the index because of this
      * check would be the mistake.
      */
+    /*
+     * «مش روبوت» — before anything else on sign-up is looked up, including
+     * whether the number is taken: that answer is a registered-phones oracle,
+     * and it should cost a script a solved challenge per question too.
+     */
+    if (ctx.path === '/sign-up/email' && humanCheck) {
+      const token = ctx.headers?.get(HUMAN_CHECK_HEADER);
+      const ip = ctx.headers?.get('cf-connecting-ip')?.trim() || null;
+      if (!(await humanCheck.verify(token, ip))) {
+        throw new APIError('FORBIDDEN', {
+          code: HUMAN_CHECK_FAILED_ERROR,
+          message: 'human check failed',
+        });
+      }
+    }
+
     if (ctx.path === '/sign-up/email' && normalizedPhone !== null) {
       if (await registeredPhones.isTaken(normalizedPhone)) {
         throw new APIError('UNPROCESSABLE_ENTITY', {

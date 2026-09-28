@@ -9,6 +9,7 @@ import {
   type MyHomeworkSubmission,
   type StudentHomework,
 } from '@ayman/contracts/homework';
+import { HOMEWORK_KEY_PATTERN } from '@ayman/contracts/admin/media';
 import { pickHomeworkSuggestions } from '@ayman/contracts/copy/homework';
 import type { ListResponse } from '@ayman/contracts/admin/list';
 import { AuditService } from '../../audit/audit.service';
@@ -126,6 +127,11 @@ export class HomeworkService {
     // only the storage can say it is a key to something, and a fabricated one
     // would otherwise become a permanent broken thumbnail on his review screen.
     for (const image of input.images) {
+      // The schema already refuses anything but an `hw/` key; checked again
+      // here because this service is what deletes them later.
+      if (!HOMEWORK_KEY_PATTERN.test(image.storageKey)) {
+        throw new BadRequestException('not a homework image');
+      }
       const stat = await this.storage.stat(image.storageKey);
       if (!stat) throw new BadRequestException('image was not uploaded');
     }

@@ -854,6 +854,12 @@ export const copy = {
       registerPhoneTaken: 'الرقم ده ليه حساب عندنا بالفعل.',
       /** The way out, rendered as the link beside it. */
       registerPhoneTakenAction: 'ادخل بالرقم ده',
+      /**
+       * The Turnstile check did not pass — a challenge left unsolved, a token
+       * that expired, or Cloudflare unreachable. Named because the generic
+       * line blames the fields, and nothing in the fields is wrong.
+       */
+      registerHumanCheck: 'التأكد إن الطلب من إنسان ماكملش. ثواني والتسجيل يشتغل تاني.',
 
       /**
        * حظر — the ONE documented exception to the rule stated above, and it

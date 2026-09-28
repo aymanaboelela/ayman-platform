@@ -167,6 +167,8 @@ describe('PushService', () => {
       expect(webpush.sendNotification).toHaveBeenCalledWith(
         { endpoint: 'https://a', keys: { p256dh: 'p1', auth: 'a1' } },
         JSON.stringify(payload),
+        // A push service that never answers must not hold the caller open.
+        { timeout: 10_000 },
       );
     });
 

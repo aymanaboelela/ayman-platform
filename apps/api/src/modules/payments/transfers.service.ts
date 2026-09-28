@@ -84,7 +84,7 @@ export class TransfersService {
       const held = await this.prisma.incomingTransfer.findFirst({
         where: { amountCents: transfer.amountCents, createdAt: { gte: since } },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, senderHandle: true, matchedSubmissionId: true },
+        select: { id: true, senderHandle: true, matchedSubmissionId: true, receivedAt: true },
       });
 
       if (held) {
@@ -103,13 +103,15 @@ export class TransfersService {
         });
         changed = true;
         // It could not be settled before: an SMS names nobody. Now it can.
-        if (await this.settle(held.id, transfer.amountCents, transfer.senderHandle)) matched += 1;
+        if (await this.settle(held.id, transfer.amountCents, transfer.senderHandle, held.receivedAt)) {
+          matched += 1;
+        }
         continue;
       }
 
       const row = await this.store(transfer, receivedAt);
       created += 1;
-      if (await this.settle(row.id, transfer.amountCents, transfer.senderHandle)) matched += 1;
+      if (await this.settle(row.id, transfer.amountCents, transfer.senderHandle, receivedAt)) matched += 1;
     }
 
     // «التحويلات الواردة» redraws live, like the review queue beside it. The
@@ -162,9 +164,11 @@ export class TransfersService {
    * feature work from day one instead of after a month of manual approvals,
    * and it is the weaker of the two: a personal transfer of exactly 250,
    * arriving while exactly one student has a pending 250 claim, would approve
-   * that claim. The bound on the damage is that something must be outstanding
-   * and match to the piastre, and the `IncomingTransfer` row records what was
-   * believed and why.
+   * that claim. The bound on the damage is that something must be outstanding,
+   * match to the piastre, and have been filed around the time the money
+   * arrived (a waiting bait claim does not qualify — see
+   * `UNKNOWN_SENDER_CLAIM_SLACK_MS`), and the `IncomingTransfer` row records
+   * what was believed and why.
    *
    * An SMS settles nothing either way — it names no sender, so "exactly one
    * claim at this amount" would be the only test, and money arriving for a
@@ -175,6 +179,7 @@ export class TransfersService {
     transferId: string,
     amountCents: number,
     senderHandle: string | null,
+    receivedAt: Date,
   ): Promise<boolean> {
     if (senderHandle === null) return false;
 
@@ -183,7 +188,11 @@ export class TransfersService {
       select: { userId: true },
     });
 
-    const owner = known ? { userId: known.userId } : {};
+    // Known: that student's own claims. Unknown: only claims filed around the
+    // time this money arrived — see `UNKNOWN_SENDER_CLAIM_SLACK_MS`.
+    const owner = known
+      ? { userId: known.userId }
+      : { createdAt: { gte: new Date(receivedAt.getTime() - UNKNOWN_SENDER_CLAIM_SLACK_MS) } };
 
     const claims = await this.prisma.paymentSubmission.findMany({
       where: { status: 'pending', amountCents, ...owner },
@@ -440,6 +449,23 @@ const DEDUPE_DAYS = 30;
  * is why the caller also refuses to act on more than one candidate.
  */
 const LEARN_WINDOW_DAYS = 3;
+
+/**
+ * How long before the money a claim may have been filed and still be matched
+ * to a sender the platform has never seen.
+ *
+ * Without it, a student could file a claim at a popular price with a junk
+ * screenshot and leave it waiting: the next first-time payer's notification
+ * found exactly one pending claim at that amount — the bait — approved it, and
+ * bound the payer's address to the bait's owner, so every later transfer from
+ * that payer settled the wrong student's claims too.
+ *
+ * An honest claim is filed AFTER the transfer it shows (it is a screenshot of
+ * it), so it always passes. The slack is for the phone's clock and for the
+ * rare student who uploads while the transfer is still going through. A known
+ * address needs no window — it already says whose money this is.
+ */
+const UNKNOWN_SENDER_CLAIM_SLACK_MS = 10 * 60 * 1000;
 
 /** Prisma's unique-constraint code, narrowed by shape rather than by importing
  *  the error class: the generated client's error types are not part of its

@@ -7,14 +7,28 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { RegisterSchema, type Register } from '@ayman/contracts/auth';
 import { copy } from '@ayman/contracts/copy';
 import { Button } from '@ayman/ui/components/button';
-import { AuthRequestError, PHONE_TAKEN_CODE, signUpWithPhone } from '@/lib/auth-client';
+import {
+  AuthRequestError,
+  HUMAN_CHECK_FAILED_CODE,
+  PHONE_TAKEN_CODE,
+  signUpWithPhone,
+} from '@/lib/auth-client';
+import { useTurnstile } from '@/lib/turnstile';
 import { withNext } from '@/lib/safe-next';
 import { FormField } from './form-field';
 import { AuthProviders } from './auth-providers';
 
 /** `next` comes from the page's Server Component — see `LoginForm`'s note. */
-export function RegisterForm({ next }: { next?: string | null }) {
+export function RegisterForm({
+  next,
+  turnstileSiteKey = null,
+}: {
+  next?: string | null;
+  /** The stack's Turnstile site key, or null when it has none — see `lib/turnstile.ts`. */
+  turnstileSiteKey?: string | null;
+}) {
   const [formError, setFormError] = useState<string | null>(null);
+  const { setContainer: setTurnstileBox, getToken, reset: resetTurnstile } = useTurnstile(turnstileSiteKey);
   /** Set alongside the «الرقم ده ليه حساب» message — it renders a link, not text. */
   const [offerLogin, setOfferLogin] = useState(false);
   const {
@@ -26,6 +40,16 @@ export function RegisterForm({ next }: { next?: string | null }) {
   async function onSubmit(values: Register) {
     setFormError(null);
     setOfferLogin(false);
+
+    let captchaToken: string | null;
+    try {
+      captchaToken = await getToken();
+    } catch {
+      resetTurnstile();
+      setFormError(copy.auth.errors.registerHumanCheck);
+      return;
+    }
+
     try {
       // `confirmPassword` exists only to drive the client-side match check
       // in `RegisterSchema` — Better Auth's `/sign-up/email` route has no
@@ -47,8 +71,16 @@ export function RegisterForm({ next }: { next?: string | null }) {
         ...(values.email ? { email: values.email } : {}),
         password: values.password,
         phoneNumber: values.phone,
-      });
+      }, captchaToken);
     } catch (error) {
+      // A token is spent by the attempt whether it succeeded or not.
+      resetTurnstile();
+
+      if (error instanceof AuthRequestError && error.code === HUMAN_CHECK_FAILED_CODE) {
+        setFormError(copy.auth.errors.registerHumanCheck);
+        return;
+      }
+
       /**
        * ⚠️ ONE failure is named, and it is named on purpose.
        *
@@ -168,6 +200,11 @@ export function RegisterForm({ next }: { next?: string | null }) {
           )}
         </p>
       )}
+
+      {/* Turnstile's box — empty and zero-height unless Cloudflare decides it
+          needs a click (`appearance: 'interaction-only'`). Not rendered at all
+          on a stack with no key. */}
+      {turnstileSiteKey && <div ref={setTurnstileBox} className="flex justify-center" />}
 
       <Button type="submit" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? copy.auth.actions.registerPending : copy.auth.actions.register}

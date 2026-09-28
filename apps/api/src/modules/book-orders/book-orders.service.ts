@@ -1854,9 +1854,19 @@ export class BookOrdersService {
         ],
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      select: ORDER_SELECT,
+      select: { ...ORDER_SELECT, userId: true },
     });
-    return rows.map((row) => this.toBookOrder(row));
+    return rows.map((row) => {
+      const order = this.toBookOrder(row);
+      /* A phone on this platform is not verified — nobody is sent a code — so
+         an account can be REGISTERED on a number whose owner once checked out
+         as a guest and never signed up. The link above then shows that
+         stranger the guest's order. Status, books and dates are what «طلباتي»
+         is for; the street and the second number are not, and they are the
+         part worth stealing. Blanked on the phone-linked rows only — an order
+         the account placed itself is shown whole. */
+      return row.userId === null ? { ...order, addressStreet: '', altPhone: '' } : order;
+    });
   }
 
   /**

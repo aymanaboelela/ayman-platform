@@ -640,7 +640,10 @@ function sharedCspDirectives(dev: boolean): string[] {
     // fallback exists to replace, with nothing in the console but a CSP
     // violation nobody is reading. Same construction guarantee as the nocookie
     // host: rebuilt from the stored 11-char id against a hardcoded origin.
-    "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://drive.google.com https://docs.google.com",
+    //
+    // `challenges.cloudflare.com` is Turnstile's widget on /register — the
+    // loader is in `script-src`, the box itself is this iframe.
+    "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://drive.google.com https://docs.google.com https://challenges.cloudflare.com",
     // ⚠️ `static.cloudflareinsights.com` is not a dependency this app chose.
     // Cloudflare INJECTS its Web Analytics beacon into the HTML at the edge,
     // after the origin has responded — so it appears in the browser and never
@@ -771,6 +774,10 @@ export function buildPublicCsp(dev: boolean): string {
     // them keeps a wildcard out of `script-src`, which is the directive that
     // actually matters for XSS.
     'https://scripts.clarity.ms',
+    // Cloudflare Turnstile's loader, for the «مش روبوت» check on /register
+    // (`lib/turnstile.ts`). Its widget is an iframe from the same host — see
+    // `frame-src`. Only fetched on a stack with a site key.
+    'https://challenges.cloudflare.com',
   ];
   if (dev) scriptSrc.push("'unsafe-eval'");
   return [scriptSrc.join(' '), ...sharedCspDirectives(dev)].join('; ');

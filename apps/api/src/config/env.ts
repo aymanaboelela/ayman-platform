@@ -159,6 +159,18 @@ const schema = z
      */
     INSTAPAY_INGEST_TOKEN: optionalSecret,
 
+    /**
+     * Cloudflare Turnstile's SECRET — the server half of the «مش روبوت» check on
+     * `/sign-up/email` (`auth/human-check.ts`). The site key is the web's
+     * (`TURNSTILE_SITE_KEY`), and the two go in together or not at all:
+     * a secret with no site key means the server demands a token no browser
+     * was asked for, and every registration fails. `check-tenant-env.mjs`
+     * refuses that half.
+     *
+     * Unset means no check, which is where every stack starts.
+     */
+    TURNSTILE_SECRET_KEY: optionalSecret,
+
     /** Where uploaded, re-encoded bytes live on disk (Task 13). */
     MEDIA_ROOT: z.string().min(1).default('./.media'),
 

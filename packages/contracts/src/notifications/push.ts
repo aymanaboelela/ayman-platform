@@ -24,9 +24,34 @@ import { z } from '@ayman/contracts/zod';
  * service URL — opaque, and the natural dedup key: re-subscribing the same
  * browser reliably returns the same one.
  */
+/**
+ * The push services a real browser subscribes to — Chrome, Edge (and every
+ * Chromium) via FCM or WNS, Firefox via Mozilla, Safari via Apple.
+ *
+ * The server POSTs to this URL on every notification, so an unrestricted
+ * `z.url()` let any signed-in account aim the API at anything it can reach —
+ * an internal container, the metadata service, or a host that never answers
+ * and holds a bulk admin action open. HTTPS to a known push host, nothing
+ * else. A new browser vendor is one line here.
+ */
+const PUSH_HOSTS = ['fcm.googleapis.com', 'updates.push.services.mozilla.com', 'web.push.apple.com'];
+const PUSH_HOST_SUFFIXES = ['.notify.windows.com', '.push.apple.com'];
+
+export function isPushServiceEndpoint(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'https:' || url.port !== '' || url.username || url.password) return false;
+  const host = url.hostname.toLowerCase();
+  return PUSH_HOSTS.includes(host) || PUSH_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+}
+
 export const PushSubscribeSchema = z
   .object({
-    endpoint: z.url(),
+    endpoint: z.url().max(2048).refine(isPushServiceEndpoint, 'not a browser push service'),
     keys: z.object({
       p256dh: z.string().min(1),
       auth: z.string().min(1),

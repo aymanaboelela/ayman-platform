@@ -39,7 +39,7 @@ describe('homework review contract', () => {
 
 describe('homework submission contract', () => {
   it('needs at least one page and refuses more than the ceiling', () => {
-    const page = { storageKey: 'hw/ab/x.webp', sizeBytes: 100 };
+    const page = { storageKey: 'hw/ab/00000000-0000-7000-8000-000000000001.webp', sizeBytes: 100 };
     expect(HomeworkSubmitSchema.safeParse({ images: [] }).success).toBe(false);
     expect(HomeworkSubmitSchema.safeParse({ images: [page] }).success).toBe(true);
     expect(
@@ -145,4 +145,25 @@ describe('the notes he picks from', () => {
       expect(line).toMatch(/[.،]/u);
     }
   });
+});
+
+describe('HomeworkImageInputSchema — only a homework photo', () => {
+  const uuid = '00000000-0000-7000-8000-000000000001';
+
+  it('accepts a key minted by the homework upload', async () => {
+    const { HomeworkImageInputSchema } = await import('./homework');
+    expect(
+      HomeworkImageInputSchema.safeParse({ storageKey: `hw/00/${uuid}.webp`, sizeBytes: 10 }).success,
+    ).toBe(true);
+  });
+
+  // A resubmit deletes the previous submission's keys, so any key accepted
+  // here is a key a student could have erased: a course cover, a payment proof.
+  it.each([`00/${uuid}.webp`, `payment-proof/00/${uuid}.webp`, `hw/../00/${uuid}.webp`, 'hw/x'])(
+    'refuses %s',
+    async (storageKey) => {
+      const { HomeworkImageInputSchema } = await import('./homework');
+      expect(HomeworkImageInputSchema.safeParse({ storageKey, sizeBytes: 10 }).success).toBe(false);
+    },
+  );
 });

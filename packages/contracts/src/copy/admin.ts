@@ -2689,6 +2689,7 @@ const admin = {
     bulkDeleteReasonSelf: 'حسابك إنت',
     bulkDeleteReasonLastAdmin: 'آخر مسؤول',
     bulkDeleteReasonAuthored: 'مؤلف محتوى',
+    bulkDeleteReasonOutranked: 'صلاحياته أعلى منك',
     bulkDeleteReasonMissing: 'اتمسح قبل كده',
   },
   payments: {

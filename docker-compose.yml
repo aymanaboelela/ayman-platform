@@ -223,6 +223,9 @@ services:
       # everything, which is the intended default: مفيش موافقة أوتوماتيك من
       # غير ما حد يظبط التوكن بنفسه.
       INSTAPAY_INGEST_TOKEN: ${INSTAPAY_INGEST_TOKEN:-}
+      # «مش روبوت» على التسجيل — السر هنا والمفتاح العام في الويب تحت.
+      # فاضي = مفيش تحقق، وده الافتراضي.
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       ADMIN_NAME: ${ADMIN_NAME:-}
@@ -376,6 +379,9 @@ services:
       # ونفس الكلام على مضيف الرفع — وقت التشغيل، مش build arg بس.
       NEXT_PUBLIC_VIDEO_UPLOAD_ORIGIN: ${VIDEO_MIRROR_ENDPOINT:-}
       CSP_ENFORCE: ${CSP_ENFORCE:-}
+      # المفتاح العام بتاع Turnstile — وقت التشغيل، صفحة التسجيل بتقراه لكل
+      # طلب. لازم مع `TURNSTILE_SECRET_KEY` في الـapi أو ولا واحد.
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
       # ── هوية الستاك ───────────────────────────────────────────────────
       #
       # وقت التشغيل **و** وقت البناء (شوف `build.args` فوق والسبب المكتوب
