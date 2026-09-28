@@ -206,7 +206,11 @@ function PaymentRow({ row, fresh }: { row: AdminPaymentRow; fresh: boolean }) {
               transfer to reconcile, so this says so instead of a
               blank value after the label. */}
           <span dir="ltr" className="font-medium text-fg">
-            {row.senderPhone ? `${c.senderPhoneLabel}: ${row.senderPhone}` : c.recordedManually}
+            {row.senderPhone
+              ? `${c.senderPhoneLabel}: ${row.senderPhone}`
+              : row.paidFromWallet
+                ? c.paidFromWallet
+                : c.recordedManually}
           </span>
           {row.studentPhone ? <span dir="ltr">{row.studentPhone}</span> : null}
           {row.studentEmail ? <span dir="ltr">{row.studentEmail}</span> : null}

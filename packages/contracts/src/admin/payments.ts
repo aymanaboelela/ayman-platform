@@ -77,6 +77,10 @@ export const AdminPaymentRowSchema = z.object({
   /** An admin-comped term — never real revenue. See the model note on
    *  `PaymentSubmission.isFree`. */
   isFree: z.boolean(),
+  /** Paid from the student's wallet — approved the moment it was bought, no
+   *  transfer and no screenshot behind it. `.default(false)` so a response
+   *  from a build that predates the wallet still parses. */
+  paidFromWallet: z.boolean().default(false),
   /** Whether there is a screenshot to open — the student-facing flow always
    *  has one, `adminManualSubscribe` usually does not. Lets the UI skip
    *  requesting `GET .../screenshot` for a row that has none, rather than

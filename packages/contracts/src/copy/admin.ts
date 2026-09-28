@@ -2861,6 +2861,9 @@ const admin = {
      *  Vodafone Cash number to reconcile, so this fills `senderPhoneLabel`'s
      *  usual slot instead of a blank. */
     recordedManually: 'اشتراك مسجّل يدويًا',
+    /** A subscription the student bought from the wallet — nothing to review,
+     *  and nothing to reconcile against a transfer. */
+    paidFromWallet: 'اتدفع من المحفظة',
     /** An admin-comped term — never counted as revenue. See the model note
      *  on `PaymentSubmission.isFree`. */
     freeBadge: 'مجاني',
@@ -3215,6 +3218,11 @@ const admin = {
     cancelRefundAmountLabel: 'رجعتله كام؟ (بالجنيه)',
     /** `{max}` — the cap, shown while he types instead of as a 400 after. */
     cancelRefundMax: 'أقصى مبلغ {max} ج',
+    /** A subscription paid FROM the wallet: the refund goes back INTO it. */
+    cancelRefundToWallet: 'الاشتراك ده اتدفع من المحفظة — المبلغ بيرجع للمحفظة، مش كاش.',
+    /** The chip beside the amount, and why the amount cannot be edited. */
+    walletChip: 'من المحفظة',
+    editAmountWallet: 'الاشتراك ده اتدفع من المحفظة، فمبلغه هو اللي اتخصم منها. لو فيه فلوس هترجع، يبقى «إلغاء» مع استرداد وهترجع للمحفظة.',
     /** Under the amount column when money went back. `{amount}` — the total
      *  refunded against this subscription, across every payment behind it. */
     rowRefunded: 'رجع منها {amount}',

@@ -165,6 +165,12 @@ export function FinanceRowActions({ row }: { row: AdminFinanceRow }) {
           <div className="flex flex-col gap-4">
             <section className="flex flex-col gap-2 rounded-sm border border-line-subtle p-3">
               <p className="text-[length:var(--fs-text-sm)] font-medium text-fg">{c.editAmountSection}</p>
+              {/* The API refuses to rewrite a wallet purchase's amount — it IS
+                  the debit on the student's ledger — so the form is not drawn. */}
+              {row.paidFromWallet ? (
+                <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.editAmountWallet}</p>
+              ) : (
+              <>
               <Label htmlFor="edit-amount">{c.editAmountLabel}</Label>
               <Input
                 id="edit-amount"
@@ -187,6 +193,8 @@ export function FinanceRowActions({ row }: { row: AdminFinanceRow }) {
               >
                 {savingAmount ? c.editAmountSaving : c.editAmountSave}
               </Button>
+              </>
+              )}
             </section>
 
             <section className="flex flex-col gap-2 rounded-sm border border-line-subtle p-3">
@@ -288,6 +296,11 @@ export function FinanceRowActions({ row }: { row: AdminFinanceRow }) {
                 <span className="text-[length:var(--fs-text-xs)] text-fg-muted">
                   {formatCopy(c.cancelRefundMax, { max: String(maxRefundPounds) })}
                 </span>
+                {row.paidFromWallet ? (
+                  <span className="text-[length:var(--fs-text-xs)] font-medium text-fg">
+                    {c.cancelRefundToWallet}
+                  </span>
+                ) : null}
               </label>
             ) : null}
           </div>
