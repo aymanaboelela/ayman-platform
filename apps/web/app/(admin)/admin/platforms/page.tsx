@@ -5,6 +5,7 @@ import { Card, CardBody } from '@ayman/ui';
 import { controlPlaneTenants } from '@/lib/control-plane';
 import { IS_AYMAN } from '@/lib/tenant';
 import { PlatformsForm } from './platforms-form';
+import { VideoUsage } from './video-usage';
 
 export const metadata = { title: copy.admin.platforms.title };
 
@@ -34,7 +35,7 @@ export const metadata = { title: copy.admin.platforms.title };
  * and the admin subtree is forced dynamic by `getSession()` in the layout
  * anyway.
  */
-export default function PlatformsPage() {
+export default async function PlatformsPage() {
   if (!IS_AYMAN) notFound();
 
   const tenants = controlPlaneTenants();
@@ -71,6 +72,8 @@ export default function PlatformsPage() {
       ) : (
         <PlatformsForm tenants={tenants} features={FEATURE_DECLARATIONS} />
       )}
+
+      <VideoUsage tenants={tenants} />
     </>
   );
 }
