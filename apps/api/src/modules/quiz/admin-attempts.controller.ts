@@ -10,6 +10,7 @@ import {
   AdminGradeAnswerDto,
   AdminGradingResultsQueryDto,
 } from './dto/exam.dto';
+import type { AdminGradingPendingCount } from '@ayman/contracts/admin/exams';
 import { ManualGradingService } from './manual-grading.service';
 
 /**
@@ -153,6 +154,22 @@ export class AdminAttemptsController {
   @Get('grading-queue')
   gradingQueue() {
     return this.grading.queue();
+  }
+
+  /**
+   * The sidebar badge on «تصحيح الورق» — the same number the «محتاج تصحيح»
+   * tab prints, as one integer.
+   *
+   * Its own route rather than the badge polling `grading-queue` above: that
+   * one returns every waiting paper with the student's name and the lesson
+   * title, and the poll runs every thirty seconds on every admin screen. Same
+   * permission, because it is the same backlog — a role that cannot open the
+   * queue has no use for knowing how long it is.
+   */
+  @RequirePermission('attempt:grade')
+  @Get('grading-queue/count')
+  async gradingQueueCount(): Promise<AdminGradingPendingCount> {
+    return { pending: await this.grading.pendingCount() };
   }
 
   /**

@@ -2447,6 +2447,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // be swallowed as an attempt id — the matrix covers both, which is what
       // makes that ordering a tested property rather than a comment.
       'GET /api/admin/grading-queue',
+      'GET /api/admin/grading-queue/count',
       'GET /api/admin/grading-results',
       'PATCH /api/admin/attempts/:attemptId/mark',
       'GET /api/admin/attempts/:attemptId/grading',

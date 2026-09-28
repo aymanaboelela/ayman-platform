@@ -1256,6 +1256,9 @@ const admin = {
   },
   grading: {
     title: 'تصحيح الورق',
+    /** The `sr-only` sentence beside the sidebar badge. `{n}` is the number of
+     *  PAPERS, the same one the «محتاج تصحيح» tab prints. */
+    pendingBadgeLabel: '{n} ورقة محتاجة تصحيح',
     lead: 'الأسئلة المقالية اللي مستنية درجة منك. لحد ما تتصحح، الطالب واخد فيها صفر.',
     empty: 'مفيش ورق مستني تصحيح.',
     /** `{n}` — ungraded answers on one paper. */

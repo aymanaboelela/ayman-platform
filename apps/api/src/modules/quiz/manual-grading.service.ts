@@ -20,6 +20,21 @@ import { clamp, fractionToState, roundMark } from './grading/fraction';
 import { splitPendingMarks } from './grading/mark-split';
 import { GRADED_STATES } from './analytics.service';
 
+/**
+ * «محتاج تصحيح» — an answer a human still owes a mark, on a paper that has
+ * actually been handed in.
+ *
+ * ONE definition, read by both `queue()` (the tab on `/admin/grading`) and
+ * `pendingCount()` (the sidebar badge beside «تصحيح الورق»). They used to be
+ * one query in one place; the badge is a second reader, and two copies of a
+ * `where` drift — the day one of them learns about a new attempt state, the
+ * sidebar says 20 while the tab says 19 and nobody can tell which is lying.
+ */
+const PENDING_GRADING_WHERE = {
+  state: 'needs_grading',
+  attempt: { state: { in: [...GRADED_STATES] } },
+} satisfies Prisma.AttemptQuestionWhereInput;
+
 /** One row of the `results` raw query, before it is turned into the wire
  *  shape. Postgres hands `numeric` back as a Prisma `Decimal`, so every money-
  *  shaped column is read through `Number(...)` in `toGradedRow`. */
@@ -107,10 +122,7 @@ export class ManualGradingService {
   async queue(): Promise<AdminGradingQueue> {
     const pending = await this.prisma.attemptQuestion.groupBy({
       by: ['attemptId'],
-      where: {
-        state: 'needs_grading',
-        attempt: { state: { in: [...GRADED_STATES] } },
-      },
+      where: PENDING_GRADING_WHERE,
       _count: { _all: true },
       // What the unmarked answers are WORTH, not only how many there are. «٢
       // سؤال» is the same sentence whether it is two marks or fifty, and on a
@@ -159,6 +171,25 @@ export class ManualGradingService {
         gradeOutOf: Number(a.gradeOutOf),
       })),
     };
+  }
+
+  /**
+   * How many PAPERS are waiting — the number on the sidebar badge.
+   *
+   * Papers, not answers: it has to equal `queue().rows.length`, which is what
+   * the «محتاج تصحيح» tab prints beside its own label. A badge of 34 (answers)
+   * over a tab of 20 (papers) would read as two different backlogs.
+   *
+   * The same `groupBy` the queue runs, minus the second read of names and
+   * titles — this is polled every thirty seconds from every admin screen, and
+   * the badge needs the count, not the rows.
+   */
+  async pendingCount(): Promise<number> {
+    const papers = await this.prisma.attemptQuestion.groupBy({
+      by: ['attemptId'],
+      where: PENDING_GRADING_WHERE,
+    });
+    return papers.length;
   }
 
   /**
