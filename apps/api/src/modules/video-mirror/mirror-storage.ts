@@ -73,6 +73,19 @@ export class MirrorStorage {
       // R2 has no regions, but the SDK refuses to sign without one.
       region: 'auto',
       endpoint: config.endpoint,
+      /*
+       * ⚠️ PATH-style — `https://<account>.r2.cloudflarestorage.com/<bucket>/…`.
+       *
+       * The SDK's default is virtual-hosted, which puts the bucket in the
+       * HOST: `https://<bucket>.<account>.r2…`. The pre-signed part URLs the
+       * admin's browser PUTs to were therefore on a host the CSP never
+       * allowed — `connect-src` carries the endpoint as configured
+       * (`NEXT_PUBLIC_VIDEO_UPLOAD_ORIGIN` = `VIDEO_MIRROR_ENDPOINT`) — and
+       * every part died as «part failed: network» at 0%. Browser upload had
+       * never once worked in production; the only proof ever run was curl,
+       * which has no CSP. Found by uploading a real file through the admin.
+       */
+      forcePathStyle: true,
       credentials: {
         accessKeyId: config.accessKeyId,
         secretAccessKey: config.secretAccessKey,
