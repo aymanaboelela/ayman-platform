@@ -33,6 +33,9 @@ export const PREVIEW_CONSOLE_LIMIT = 300;
  * - A click on a link is stopped and reported. Following it would navigate the
  *   frame away from the student's page to somewhere that is not their code.
  *   In-page `#anchors` still scroll, because that is a thing pages do.
+ * - Whatever the policy refuses (an `<img src="https://…">`, a CDN script) is
+ *   reported by name. Otherwise the picture is simply missing and the only
+ *   explanation is a console the student cannot open on a phone.
  *
  * Replies go to `location.origin` — this URL's origin, i.e. the site — never
  * `*`: the only window that should hear them is the playground that framed it.
@@ -49,6 +52,7 @@ const BOOT = [
   'window.addEventListener("unhandledrejection",function(e){var r=e.reason;p("error",[r&&r.message?r.message:String(r)])});',
   'document.addEventListener("click",function(e){var a=e.target&&e.target.closest?e.target.closest("a[href]"):null;',
   'if(!a)return;var h=a.getAttribute("href")||"";if(h.charAt(0)==="#")return;e.preventDefault();p("link",[h])},true);',
+  'document.addEventListener("securitypolicyviolation",function(e){p("blocked",[e.blockedURI||e.effectiveDirective])});',
   '})();',
 ].join('');
 

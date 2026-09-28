@@ -753,10 +753,11 @@ export function Playground() {
 
 /** One line of the page's console. Always TEXT — it is the page's to write. */
 function WebLine({ line }: { line: PreviewLine }) {
-  if (line.level === 'link') {
+  if (line.level === 'link' || line.level === 'blocked') {
+    const template = line.level === 'link' ? c.previewLinkBlocked : c.previewRequestBlocked;
     return (
       <div dir="auto" className="pg-line pg-line--note">
-        {c.previewLinkBlocked.replace('{href}', line.text)}
+        {template.replace('{href}', line.text)}
       </div>
     );
   }

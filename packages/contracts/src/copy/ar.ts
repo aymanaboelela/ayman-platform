@@ -2410,6 +2410,8 @@ export const copy = {
     previewHung: 'الصفحة علّقت ومردّتش، فاتقفلت. غالبًا فيه حلقة مالهاش نهاية.',
     /** `{href}` is the link the student's page tried to open. */
     previewLinkBlocked: 'الروابط مش بتفتح جوّه المعاينة: {href}',
+    /** `{href}` is what the page tried to load from outside (a CDN, an image URL). */
+    previewRequestBlocked: 'المعاينة مابتحمّلش حاجة من برّه — اتمنع: {href}',
     previewSandboxNote:
       'الصفحة بتشتغل في صندوق مقفول: مابتوصلش للإنترنت ولا لحسابك، فأي صورة لازم تبقى SVG أو ألوان CSS أو إيموجي.',
     console: 'الكونسول',

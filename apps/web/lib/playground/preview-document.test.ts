@@ -78,7 +78,14 @@ describe('previewBootScript', () => {
   });
 
   it('forwards console, errors and alert, and stops links leaving the page', () => {
-    for (const hook of ['console[l]=', 'window.alert=', '"error"', '"unhandledrejection"', 'closest("a[href]")']) {
+    for (const hook of [
+      'console[l]=',
+      'window.alert=',
+      '"error"',
+      '"unhandledrejection"',
+      'closest("a[href]")',
+      '"securitypolicyviolation"',
+    ]) {
       expect(boot).toContain(hook);
     }
   });

@@ -4,7 +4,7 @@ import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { HTML_PREVIEW_PATH, HTML_PREVIEW_SANDBOX } from '@/lib/html-preview';
 import { composePreviewDocument } from '@/lib/playground/preview-document';
 
-export type PreviewLevel = 'log' | 'info' | 'warn' | 'error' | 'alert' | 'link';
+export type PreviewLevel = 'log' | 'info' | 'warn' | 'error' | 'alert' | 'link' | 'blocked';
 
 export interface PreviewLine {
   level: PreviewLevel;
@@ -17,7 +17,7 @@ export interface PreviewRequest {
   css: string;
 }
 
-const LEVELS: ReadonlySet<string> = new Set(['log', 'info', 'warn', 'error', 'alert', 'link']);
+const LEVELS: ReadonlySet<string> = new Set(['log', 'info', 'warn', 'error', 'alert', 'link', 'blocked']);
 
 /**
  * How long a frame gets to finish parsing the student's page before it is
@@ -96,6 +96,9 @@ export function HtmlPreview({
     if (!request) return;
     const id = ++seq.current;
     latest.current = id;
+    // Anything still pending is superseded by this run and will never render.
+    for (const key of docs.current.keys()) docs.current.delete(key);
+    for (const key of startedAt.current.keys()) startedAt.current.delete(key);
     docs.current.set(id, composePreviewDocument({ html: request.html, css: request.css, token: String(id) }));
     startedAt.current.set(id, performance.now());
     // Keep what is on screen until the new one is ready; drop any other run
