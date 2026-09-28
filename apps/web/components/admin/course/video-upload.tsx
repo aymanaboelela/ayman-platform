@@ -67,6 +67,8 @@ export function VideoUpload({
    */
   const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
   const [startedOver, setStartedOver] = useState(false);
+  /** «احتفظ بيه / امسحه خالص» for the video a new upload replaces. Keep by default. */
+  const [keepOld, setKeepOld] = useState(true);
   const saved: SavedUpload | null =
     hydrated && !startedOver && (current?.status === 'uploading' || entry?.phase === 'error')
       ? savedUpload(lessonId)
@@ -131,7 +133,7 @@ export function VideoUpload({
     const contentType = (UPLOAD_VIDEO_MIME as readonly string[]).includes(file.type) ? file.type : 'video/mp4';
     // A fresh upload's own failure must be resumable again.
     setStartedOver(false);
-    void startUpload(courseId, lessonId, file, contentType);
+    void startUpload(courseId, lessonId, file, contentType, keepOld);
   }
 
   const uploading = entry?.phase === 'uploading';
@@ -232,6 +234,25 @@ export function VideoUpload({
             {c.videoUploadStartOver}
           </button>
         </div>
+      ) : null}
+
+      {/*
+        Replacing a finished lecture: ask what happens to the one on it now,
+        BEFORE the file is picked — once the new one lands, the old one is
+        either kept in «الفيديوهات» or gone.
+      */}
+      {!resumable && current?.status === 'ready' ? (
+        <fieldset className="mb-3 rounded-md border border-line bg-surface-2 p-3">
+          <legend className="px-1 text-[length:var(--fs-text-xs)] font-semibold text-fg">{c.videoReplaceKeepTitle}</legend>
+          <label className="flex items-center gap-2 py-1 text-[length:var(--fs-text-sm)] text-fg">
+            <input type="radio" name={`keep-${lessonId}`} checked={keepOld} onChange={() => setKeepOld(true)} />
+            {c.videoKeepOld}
+          </label>
+          <label className="flex items-center gap-2 py-1 text-[length:var(--fs-text-sm)] text-err">
+            <input type="radio" name={`keep-${lessonId}`} checked={!keepOld} onChange={() => setKeepOld(false)} />
+            {c.videoDeleteOld}
+          </label>
+        </fieldset>
       ) : null}
 
       <label

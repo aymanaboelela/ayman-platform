@@ -111,10 +111,11 @@ export class LessonController {
     return this.lessons.setVideo(id, body);
   }
 
+  /** `?keep=false` deletes an uploaded video's files; anything else keeps them in «محفوظة». */
   @RequirePermission('lesson:write')
   @Delete('lessons/:id/video')
-  removeVideo(@Param('id') id: string) {
-    return this.lessons.removeVideo(id);
+  removeVideo(@Param('id') id: string, @Query('keep') keep?: string) {
+    return this.lessons.removeVideo(id, keep !== 'false');
   }
 
   /**

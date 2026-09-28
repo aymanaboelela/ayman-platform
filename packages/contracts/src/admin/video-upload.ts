@@ -44,6 +44,12 @@ export const VideoUploadStartSchema = z
      * a video; this only spares the admin an hour of uploading a PDF.
      */
     contentType: z.enum(UPLOAD_VIDEO_MIME),
+    /**
+     * The video this upload REPLACES, once it lands: keep it in «محفوظة» so it
+     * can be put back, or delete its files. Keep by default — a choice nobody
+     * made must never be the one that cannot be undone.
+     */
+    keepPrevious: z.boolean().default(true),
   })
   .strict();
 export type VideoUploadStart = z.infer<typeof VideoUploadStartSchema>;
@@ -182,8 +188,37 @@ export const VideoLibraryOrphanSchema = z.object({
 });
 export type VideoLibraryOrphan = z.infer<typeof VideoLibraryOrphanSchema>;
 
+/** «محفوظة» — taken off its lesson but kept, to be put back on one later. */
+export const VideoLibraryArchivedSchema = z.object({
+  videoId: z.string(),
+  sourceName: z.string().nullable(),
+  durationSeconds: z.number().int().nonnegative(),
+  maxHeight: z.number().int().positive().nullable(),
+  sizeBytes: z.number().int().nonnegative().nullable(),
+  fromLessonTitle: z.string().nullable(),
+  fromCourseTitle: z.string().nullable(),
+  archivedAt: z.string(),
+});
+export type VideoLibraryArchived = z.infer<typeof VideoLibraryArchivedSchema>;
+
+/** A video lesson a kept video can be put back on. */
+export const VideoLibraryTargetSchema = z.object({
+  lessonId: z.string(),
+  lessonTitle: z.string(),
+  courseTitle: z.string(),
+  sectionTitle: z.string(),
+  /** It already has a video — putting this one back keeps that one in «محفوظة». */
+  hasVideo: z.boolean(),
+});
+export type VideoLibraryTarget = z.infer<typeof VideoLibraryTargetSchema>;
+
+export const VideoRestoreSchema = z.object({ lessonId: z.uuid() }).strict();
+export type VideoRestore = z.infer<typeof VideoRestoreSchema>;
+
 export const VideoLibrarySchema = z.object({
   items: z.array(VideoLibraryItemSchema),
+  archived: z.array(VideoLibraryArchivedSchema),
+  targets: z.array(VideoLibraryTargetSchema),
   orphans: z.array(VideoLibraryOrphanSchema),
   /** Every byte under `v/` and `raw/` — what the bill is computed from. */
   totalBytes: z.number().int().nonnegative(),

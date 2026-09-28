@@ -1,4 +1,6 @@
-import { Controller, Delete, Get, Param } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, UsePipes } from '@nestjs/common';
+import { createZodDto, ZodValidationPipe } from 'nestjs-zod';
+import { VideoRestoreSchema } from '@ayman/contracts/admin/video-upload';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { VideoLibraryService } from './video-library.service';
@@ -16,7 +18,10 @@ import { VideoLibraryService } from './video-library.service';
  * `lesson:write`, the same as removing a video from its lesson, because for a
  * video a lesson uses it IS that act, plus the bytes.
  */
+class VideoRestoreDto extends createZodDto(VideoRestoreSchema) {}
+
 @Controller('admin')
+@UsePipes(ZodValidationPipe)
 export class VideoLibraryController {
   constructor(private readonly library: VideoLibraryService) {}
 
@@ -25,6 +30,14 @@ export class VideoLibraryController {
   @Get('videos')
   list() {
     return this.library.list();
+  }
+
+  /** «رجّعه لمحاضرة» — a kept video back on a lesson. `lesson:write`, like putting any video on one. */
+  @RequireFeature('video.upload')
+  @RequirePermission('lesson:write')
+  @Post('videos/:videoId/restore')
+  restore(@Param('videoId') videoId: string, @Body() body: VideoRestoreDto) {
+    return this.library.restore(videoId, body.lessonId);
   }
 
   @RequireFeature('video.upload')

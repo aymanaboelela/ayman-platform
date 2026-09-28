@@ -23,6 +23,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { buildReorderSql } from './reorder.sql';
 import { YouTubeDurationService } from './youtube-duration.service';
 import { VideoMirrorService } from '../video-mirror/video-mirror.service';
+import { VideoArchiveService } from '../video-mirror/video-archive.service';
 
 /** Prisma's code for a unique constraint or partial unique index violation. */
 function isUniqueViolation(error: unknown): boolean {
@@ -67,6 +68,8 @@ export class LessonService {
     // «النسخة اللي عندنا». Used for two things and nothing else: re-queuing a
     // video whose id changed, and answering «حاول تاني».
     private readonly mirror: VideoMirrorService,
+    // «احتفظ بيه» / «امسحه خالص» when an uploaded video leaves its lesson.
+    private readonly archive: VideoArchiveService,
   ) {}
 
   async create(sectionId: string, input: LessonCreateInput) {
@@ -338,15 +341,45 @@ export class LessonService {
     return { lessonId, mirrorStatus: 'pending' };
   }
 
-  async removeVideo(lessonId: string): Promise<{ lessonId: string }> {
+  /**
+   * Take the video off the lesson. For an UPLOADED video, `keep` decides what
+   * happens to its files: kept in «محفوظة» to be put back later, or deleted
+   * for good. Before `keep` existed the row went and the files stayed in the
+   * bucket with nothing pointing at them — paid for, and listed nowhere.
+   */
+  async removeVideo(lessonId: string, keep = true): Promise<{ lessonId: string }> {
     await this.assertKind(lessonId, 'video');
+    const row = await this.prisma.lessonVideo.findUnique({
+      where: { lessonId },
+      select: {
+        provider: true,
+        externalId: true,
+        sourceName: true,
+        durationSeconds: true,
+        mirrorHeight: true,
+        mirrorBytes: true,
+        mirrorStatus: true,
+        posterKey: true,
+        lesson: { select: { title: true, section: { select: { course: { select: { title: true } } } } } },
+      },
+    });
     await this.prisma.lessonVideo.delete({ where: { lessonId } }).catch(() => undefined);
+
+    if (row !== null && row.provider === 'upload') {
+      await this.archive.release(
+        row,
+        // Nothing half-encoded is worth keeping.
+        keep && row.mirrorStatus === 'ready',
+        { lessonTitle: row.lesson.title, courseTitle: row.lesson.section.course.title },
+      );
+    }
+
     await this.audit.record({
       action: 'lesson:update',
       resourceType: AUDIT_RESOURCES.lesson,
       resourceId: lessonId,
       outcome: 'success',
-      metadata: { operation: 'removeVideo' },
+      metadata: { operation: 'removeVideo', kept: row?.provider === 'upload' ? keep : null },
     });
     return { lessonId };
   }

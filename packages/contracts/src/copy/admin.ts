@@ -852,6 +852,19 @@ const admin = {
     videoUploadDockTitle: 'رفع الفيديو',
     videoUploadDockProcessing: 'اترفع — بيتجهّز دلوقتي',
     videoUploadDockOpen: 'افتح الكورس',
+    /**
+     * «امسحه خالص ولا استبدله بس» — asked every time an uploaded video leaves
+     * its lesson, by a new upload or by «شيل الفيديو». Keep is the default:
+     * a choice nobody made must never be the one that cannot be undone.
+     */
+    videoReplaceKeepTitle: 'الفيديو اللي عليها دلوقتي:',
+    videoKeepOld: 'احتفظ بيه في «الفيديوهات» — أقدر أرجّعه بعدين',
+    videoDeleteOld: 'امسحه خالص من السيرفر',
+    removeUploadedTitle: 'تشيل الفيديو ده من المحاضرة؟',
+    removeUploadedBody:
+      'المحاضرة هتفضل موجودة من غير فيديو. الفيديو نفسه تحب نعمل فيه إيه؟',
+    removeUploadedKeep: 'شيله واحتفظ بيه',
+    removeUploadedDelete: 'شيله وامسحه خالص',
     videoUploadSource: 'الملف الأصلي',
     title: 'عنوان المحاضرة',
     kind: 'النوع',
@@ -4920,6 +4933,18 @@ const admin = {
     deleteBody:
       'الملفات هتتمسح من التخزين خالص، والمحاضرة هتفضل موجودة من غير فيديو. مفيش رجوع في الخطوة دي.',
     deleteOrphanBody: 'الملفات دي مش مربوطة بأي محاضرة. هتتمسح من التخزين خالص، ومفيش رجوع.',
+    /** «محفوظة» — taken off a lesson but kept, to be put back. */
+    archivedTitle: 'محفوظة',
+    archivedHint: 'فيديوهات اتشالت من محاضراتها بس اتحفظت. تقدر ترجّع أي واحد لأي محاضرة فيديو، أو تمسحه خالص.',
+    archivedFrom: 'كانت على: {lesson} — {course}',
+    restore: 'رجّعه لمحاضرة',
+    restoreTitle: 'ترجّع الفيديو ده لأنهي محاضرة؟',
+    restoreBody: 'لو المحاضرة عليها فيديو دلوقتي، هيتحفظ هنا مكانه — مش هيتمسح.',
+    restorePick: 'اختار المحاضرة',
+    restoreHasVideo: '(عليها فيديو)',
+    restoreConfirm: 'رجّعه',
+    restored: 'الفيديو رجع للمحاضرة',
+    deleteArchivedBody: 'الفيديو ده هيتمسح من التخزين خالص، ومش هتقدر ترجّعه تاني.',
     deleteConfirm: 'امسح نهائيًا',
     back: 'رجوع',
     deleted: 'اتمسح الفيديو',

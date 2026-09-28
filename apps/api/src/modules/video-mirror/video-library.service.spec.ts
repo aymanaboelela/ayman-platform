@@ -9,6 +9,7 @@ import type { AuditService } from '../../audit/audit.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { VideoLibraryService } from './video-library.service';
 import type { VideoMirrorService } from './video-mirror.service';
+import type { VideoArchiveService } from './video-archive.service';
 import type { VideoUploadService } from './video-upload.service';
 
 const UP = (c: string): string => c.repeat(32);
@@ -27,14 +28,58 @@ function build(options: {
   ladders?: Record<string, number>;
   sources?: Record<string, number>;
   parked?: string[];
+  kept?: string[];
 }) {
   const rows = [...options.rows];
   const ladders = { ...(options.ladders ?? {}) };
   const sources = { ...(options.sources ?? {}) };
   const log: string[] = [];
 
+  const kept = [...(options.kept ?? [])];
+  const released: { id: string; keep: boolean }[] = [];
+  const upserts: string[] = [];
   const prisma = {
+    archivedVideo: {
+      findMany: async () =>
+        kept.map((externalId) => ({
+          externalId,
+          sourceName: 'old.mp4',
+          durationSeconds: 60,
+          mirrorHeight: 720,
+          mirrorBytes: 10n,
+          posterKey: null,
+          fromLessonTitle: 'قديم',
+          fromCourseTitle: 'برمجة',
+          archivedAt: new Date('2026-09-01T00:00:00Z'),
+        })),
+      findUnique: async (args: { where: { externalId: string } }) =>
+        kept.includes(args.where.externalId)
+          ? { externalId: args.where.externalId, sourceName: 'old.mp4', durationSeconds: 60, mirrorHeight: 720, mirrorBytes: 10n, posterKey: null }
+          : null,
+      delete: async () => ({}),
+      deleteMany: async (args: { where: { externalId: string } }) => {
+        log.push(`kept:${args.where.externalId}`);
+        return { count: 1 };
+      },
+    },
+    lesson: {
+      findMany: async () => [],
+      findUnique: async (args: { where: { id: string } }) =>
+        args.where.id === 'l9'
+          ? {
+              kind: 'video',
+              title: 'درس ٩',
+              section: { course: { id: 'c1', title: 'برمجة' } },
+              video: { provider: 'upload', externalId: UP('8'), sourceName: 'x.mp4', durationSeconds: 5, mirrorHeight: 720, mirrorBytes: 1n, mirrorStatus: 'ready', posterKey: null },
+            }
+          : null,
+    },
+    $transaction: async (ops: unknown[]) => ops,
     lessonVideo: {
+      upsert: async (args: { update: { externalId: string } }) => {
+        upserts.push(args.update.externalId);
+        return {};
+      },
       findMany: async (args: { where?: { provider?: string; externalId?: string } }) =>
         rows
           .filter((row) => args.where?.provider === undefined || row.provider === args.where.provider)
@@ -83,8 +128,13 @@ function build(options: {
     { objectStorage: storage } as unknown as VideoMirrorService,
     { parkedReplacedIds: async () => new Set(options.parked ?? []) } as unknown as VideoUploadService,
     { record: async (entry: unknown) => audits.push(entry) } as unknown as AuditService,
+    {
+      release: async (video: { externalId: string }, keep: boolean) => {
+        released.push({ id: video.externalId, keep });
+      },
+    } as unknown as VideoArchiveService,
   );
-  return { service, log, audits, rows };
+  return { service, log, audits, rows, released, upserts };
 }
 
 const row = (lessonId: string, externalId: string, extra: Partial<Row> = {}): Row => ({
@@ -130,14 +180,14 @@ describe('VideoLibraryService.remove', () => {
   it('deletes the rows before the files, then the original too', async () => {
     const { service, log, audits } = build({ rows: [row('l1', UP('a'))], ladders: { [UP('a')]: 10 } });
     await expect(service.remove(UP('a'))).resolves.toEqual({ videoId: UP('a'), lessonIds: ['l1'] });
-    expect(log).toEqual([`rows:${UP('a')}`, `files:v/${UP('a')}`, `source:raw/${UP('a')}/source`]);
+    expect(log).toEqual([`rows:${UP('a')}`, `kept:${UP('a')}`, `files:v/${UP('a')}`, `source:raw/${UP('a')}/source`]);
     expect(audits).toHaveLength(1);
   });
 
   it('deletes a leftover folder no lesson uses', async () => {
     const { service, log } = build({ rows: [], ladders: { [UP('c')]: 300 } });
     await expect(service.remove(UP('c'))).resolves.toEqual({ videoId: UP('c'), lessonIds: [] });
-    expect(log).toEqual([`files:v/${UP('c')}`, `source:raw/${UP('c')}/source`]);
+    expect(log).toEqual([`kept:${UP('c')}`, `files:v/${UP('c')}`, `source:raw/${UP('c')}/source`]);
   });
 
   it('refuses a YouTube lecture — its copy is what the blocked tablets watch', async () => {
@@ -162,5 +212,31 @@ describe('VideoLibraryService.remove', () => {
     const { service } = build({ rows: [] });
     await expect(service.remove(UP('f'))).rejects.toBeInstanceOf(NotFoundException);
     await expect(service.remove('../etc')).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('«محفوظة»', () => {
+  it('lists kept videos apart, and never offers their folders as leftovers', async () => {
+    const { service } = build({ rows: [], ladders: { [UP('9')]: 10, [UP('c')]: 300 }, kept: [UP('9')] });
+    const library = await service.list();
+    expect(library.archived.map((video) => video.videoId)).toEqual([UP('9')]);
+    expect(library.orphans.map((orphan) => orphan.videoId)).toEqual([UP('c')]);
+  });
+
+  /*
+   * The way back must not be a one-way door itself: whatever the lesson was
+   * playing is KEPT, never deleted, when a kept video takes its place.
+   */
+  it('puts a kept video back, and keeps the one it displaces', async () => {
+    const { service, upserts, released } = build({ rows: [], kept: [UP('9')] });
+    await expect(service.restore(UP('9'), 'l9')).resolves.toEqual({ videoId: UP('9'), lessonId: 'l9' });
+    expect(upserts).toEqual([UP('9')]);
+    expect(released).toEqual([{ id: UP('8'), keep: true }]);
+  });
+
+  it('deleting a kept video removes its row and its files', async () => {
+    const { service, log } = build({ rows: [], ladders: { [UP('9')]: 10 }, kept: [UP('9')] });
+    await service.remove(UP('9'));
+    expect(log).toEqual([`kept:${UP('9')}`, `files:v/${UP('9')}`, `source:raw/${UP('9')}/source`]);
   });
 });

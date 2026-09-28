@@ -350,9 +350,21 @@ async function run(
 }
 
 /** A fresh upload. The caller has already refused wrong types and oversized files. */
-export function startUpload(courseId: string, lessonId: string, file: File, contentType: string): Promise<void> {
+export function startUpload(
+  courseId: string,
+  lessonId: string,
+  file: File,
+  contentType: string,
+  /** The video this one replaces: keep it in «محفوظة», or delete it for good. */
+  keepPrevious = true,
+): Promise<void> {
   return run(courseId, lessonId, file, async () =>
-    (await actions()).startVideoUploadAction(lessonId, { fileName: file.name, sizeBytes: file.size, contentType }),
+    (await actions()).startVideoUploadAction(lessonId, {
+      fileName: file.name,
+      sizeBytes: file.size,
+      contentType,
+      keepPrevious,
+    }),
   );
 }
 
