@@ -42,8 +42,11 @@ export function Millionaire({
   refetch,
   onExit,
   sound,
+  voice,
 }: {
   round: GameRound;
+  /** الستاك عليه صوت حقيقي (Azure)؟ — من `GameHub.voice`. */
+  voice: boolean;
   refetch: () => Promise<GameRound>;
   onExit: () => void;
   sound: GameSound;
@@ -74,7 +77,7 @@ export function Millionaire({
   // كل سؤال جديد: التايمر من الأول، والقراية.
   useEffect(() => {
     if (!question || phase !== 'question') return;
-    speech.read(question.stemHtml, question.options.map((option) => option.bodyHtml), index + 1);
+    speech.read({ questionId: question.id, stemHtml: question.stemHtml, options: question.options, n: index + 1, server: voice });
     // القراية مرة واحدة لكل سؤال — مش مع كل تغيير في الحالة.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question?.id]);
@@ -275,7 +278,9 @@ export function Millionaire({
               <button
                 type="button"
                 className="mln-life"
-                onClick={() => speech.read(question.stemHtml, question.options.map((o) => o.bodyHtml), index + 1)}
+                onClick={() =>
+                  speech.read({ questionId: question.id, stemHtml: question.stemHtml, options: question.options, n: index + 1, server: voice })
+                }
                 aria-label={c.mlnRead}
                 title={c.mlnRead}
                 disabled={!speech.supported}

@@ -14,6 +14,7 @@ import {
 } from '@ayman/contracts/quiz/game';
 import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import { Prisma } from '../../generated/prisma/client';
+import { azureSpeech } from './game-voice.config';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /** «سهل» لو ٧٠٪ من اللي جاوبوه جابوه صح، و«صعب» لو أقل من ٤٠٪. */
@@ -54,6 +55,9 @@ const MILLIONAIRE_MIX: Record<GameLevel, Record<GameLevel, number>> = {
  * — بأحدث نسخة جاهزة، إلا لو اتسأل في نسخة معيّنة فهي اللي بتدخل. أيمن طلبها
  * كده بالنص: «من كل الأسئلة اللي في الكويز اللي امتحنها قبل كده».
  *
+ * ومعاهم «أسئلة الألعاب» اللي المدرّس ضافها لكل كورس من لوحة التحكم (تصنيف
+ * في البنك مربوط بالكورس — `QuestionCategory.gameCourseId`)، لطلبة الكورس.
+ *
  * وماعدا أي سؤال داخل في امتحان شهر أو امتحان كورس لسه جاي والطالب
  * ماسلّموش: slot مباشر أو تصنيف بيسحب منه. من غيرها اللعبة كانت هتبقى حل
  * نموذجي للامتحان قبل ما يتعمل.
@@ -79,6 +83,7 @@ export class GameService {
     return {
       total: pool.size,
       courses: [...byCourse.values()].sort((a, b) => countOf(b) - countOf(a)),
+      voice: azureSpeech() !== null,
     };
   }
 
@@ -187,10 +192,15 @@ export class GameService {
     );
   }
 
-  /** الاختيارات بـ`fraction` — بس لسؤال في بنك الطالب؛ غير كده 404 مش الإجابة. */
-  private async optionsInPool(userId: string, questionId: string) {
+  /** سؤال مش في بنك الطالب = 404 — مش الإجابة، ومش صوته. */
+  async assertInPool(userId: string, questionId: string): Promise<void> {
     const pool = await this.pool(userId);
     if (!pool.has(questionId)) throw new NotFoundException();
+  }
+
+  /** الاختيارات بـ`fraction` — بس لسؤال في بنك الطالب؛ غير كده 404 مش الإجابة. */
+  private async optionsInPool(userId: string, questionId: string) {
+    await this.assertInPool(userId, questionId);
     return this.prisma.questionOption.findMany({
       where: { questionVersionId: questionId },
       select: { id: true, fraction: true },
@@ -242,19 +252,41 @@ export class GameService {
             ORDER BY v."version" DESC LIMIT 1
           ) lv ON true
         ),
+        from_quizzes AS (
+          SELECT x.vid, l."course_id"
+          FROM (
+            SELECT vid, "quiz_id" FROM seen
+            UNION SELECT vid, "quiz_id" FROM slotted WHERE vid IS NOT NULL
+            UNION SELECT vid, "quiz_id" FROM pooled
+          ) x
+          JOIN "app"."quizzes" qz ON qz."id" = x."quiz_id"
+          JOIN "app"."lessons" l ON l."id" = qz."lesson_id"
+        ),
+        -- «أسئلة الألعاب» اللي المدرّس ضافها للكورس (تصنيف مربوط بيه)، لطالب
+        -- مشترك في الكورس ده دلوقتي.
+        from_game_bank AS (
+          SELECT lv."id" AS vid, qc."game_course_id" AS course_id
+          FROM "app"."question_categories" qc
+          JOIN "app"."enrollments" e
+            ON e."course_id" = qc."game_course_id" AND e."user_id" = ${userId} AND e."status" = 'active'
+          JOIN "app"."question_bank_entries" be ON be."category_id" = qc."id"
+          JOIN LATERAL (
+            SELECT v."id" FROM "app"."question_versions" v
+            WHERE v."bank_entry_id" = be."id" AND v."status" = 'ready'
+            ORDER BY v."version" DESC LIMIT 1
+          ) lv ON true
+          WHERE qc."game_course_id" IS NOT NULL
+        ),
         allq AS (
-          SELECT vid, "quiz_id" FROM seen
-          UNION SELECT vid, "quiz_id" FROM slotted WHERE vid IS NOT NULL
-          UNION SELECT vid, "quiz_id" FROM pooled
+          SELECT vid, "course_id" FROM from_quizzes
+          UNION SELECT vid, course_id FROM from_game_bank
         )
-        SELECT DISTINCT ON (q.vid) q.vid, l."course_id", co."title" AS course_title,
+        SELECT DISTINCT ON (q.vid) q.vid, q."course_id", co."title" AS course_title,
           v."bank_entry_id", be."category_id"
         FROM allq q
         JOIN "app"."question_versions" v ON v."id" = q.vid AND v."type" IN ('mcq_single', 'true_false')
         JOIN "app"."question_bank_entries" be ON be."id" = v."bank_entry_id"
-        JOIN "app"."quizzes" qz ON qz."id" = q."quiz_id"
-        JOIN "app"."lessons" l ON l."id" = qz."lesson_id"
-        JOIN "app"."courses" co ON co."id" = l."course_id"
+        JOIN "app"."courses" co ON co."id" = q."course_id"
         WHERE (SELECT count(*) FROM "app"."question_options" o WHERE o."question_version_id" = v."id") >= 2
           AND EXISTS (SELECT 1 FROM "app"."question_options" o WHERE o."question_version_id" = v."id" AND o."fraction" > 0)
         ORDER BY q.vid

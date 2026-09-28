@@ -9,7 +9,7 @@ import '@/components/game/game.css';
 
 const c = copy.game;
 
-export const metadata: Metadata = { title: c.title };
+export const metadata: Metadata = { title: c.hubTitle };
 
 /**
  * «تحدّي الأسئلة».

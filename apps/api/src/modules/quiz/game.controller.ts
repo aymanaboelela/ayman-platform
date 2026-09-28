@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Query, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, Header, HttpCode, Param, ParseUUIDPipe, Post, Query, StreamableFile, UsePipes } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import type { GameAnswerResult, GameHub, GameLifelineResult, GameRound } from '@ayman/contracts/quiz/game';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
@@ -6,6 +6,7 @@ import { RequireFeature } from '../../auth/decorators/require-feature.decorator'
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { GameAnswerDto, GameLifelineDto, GameRoundQueryDto } from './dto/game-answer.dto';
 import { GameService } from './game.service';
+import { GameVoiceService } from './game-voice.service';
 import { NoAnswerLeak } from './interceptors/no-answer-leak.decorator';
 
 /**
@@ -20,7 +21,10 @@ import { NoAnswerLeak } from './interceptors/no-answer-leak.decorator';
 @RequireFeature('quizGame')
 @RequirePermission('quiz:read')
 export class GameController {
-  constructor(private readonly game: GameService) {}
+  constructor(
+    private readonly game: GameService,
+    private readonly voice: GameVoiceService,
+  ) {}
 
   /** صفحة الألعاب: الكورسات اللي فيها أسئلة، وكام سؤال في كل مستوى. */
   @Get('hub')
@@ -56,5 +60,21 @@ export class GameController {
   @Post('lifeline')
   lifeline(@CurrentUser() user: AuthenticatedUser, @Body() body: GameLifelineDto): Promise<GameLifelineResult> {
     return this.game.lifeline(user.id, body);
+  }
+
+  /**
+   * صوت قطعة من السؤال (`stem`، id اختيار، أو `letter-<n>`) — MP3. 404 لو
+   * الستاك مالوش مفتاح Azure، والمتصفح ساعتها بيقرا بصوته. متكاش عند
+   * المتصفح أسبوع: نفس السؤال بنفس النص = نفس الصوت.
+   */
+  @Get('voice/:questionId/:part')
+  @Header('Content-Type', 'audio/mpeg')
+  @Header('Cache-Control', 'private, max-age=604800, immutable')
+  async clip(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('questionId', ParseUUIDPipe) questionId: string,
+    @Param('part') part: string,
+  ): Promise<StreamableFile> {
+    return new StreamableFile(await this.voice.clip(user.id, questionId, part));
   }
 }

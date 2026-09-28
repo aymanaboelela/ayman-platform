@@ -43,7 +43,8 @@ export const GAME_RULES: Record<
   { questions: number; lives: number; seconds: Record<GameLevel, number> }
 > = {
   race: { questions: 10, lives: 3, seconds: { easy: 25, medium: 20, hard: 15 } },
-  millionaire: { questions: 15, lives: 1, seconds: { easy: 45, medium: 35, hard: 25 } },
+  // المليون أطول: القراية لوحدها بتاخد ١٥–٢٠ ثانية قبل ما الطالب يبدأ يفكّر.
+  millionaire: { questions: 15, lives: 1, seconds: { easy: 60, medium: 50, hard: 40 } },
   survival: { questions: 30, lives: 1, seconds: { easy: 25, medium: 20, hard: 15 } },
 };
 
@@ -124,6 +125,8 @@ export type GameRoundQuery = z.infer<typeof GameRoundQuerySchema>;
 /** صفحة الألعاب: الكورسات اللي فيها أسئلة، وكام سؤال في كل مستوى. */
 export const GameHubSchema = z.object({
   total: z.number().int().min(0),
+  /** فيه صوت حقيقي (Azure) على الستاك ده؟ لو لأ، اللعبة بتقرا بصوت المتصفح. */
+  voice: z.boolean(),
   courses: z.array(
     z.object({
       id: z.string(),
@@ -147,3 +150,17 @@ export const GameLifelineResultSchema = z.object({
   votes: z.array(z.object({ optionId: z.string(), percent: z.number().int().min(0).max(100) })),
 });
 export type GameLifelineResult = z.infer<typeof GameLifelineResultSchema>;
+
+/** `GET /api/admin/game-banks` — «أسئلة الألعاب» لكل كورس. */
+export const GameBankRowSchema = z.object({
+  courseId: z.string(),
+  courseTitle: z.string(),
+  /** `null` لحد ما أول سؤال يتضاف — التصنيف بيتعمل ساعتها. */
+  categoryId: z.string().nullable(),
+  /** أسئلة جاهزة (منشورة) بتدخل الألعاب. */
+  ready: z.number().int().min(0),
+});
+export const GameBanksSchema = z.object({ rows: z.array(GameBankRowSchema) });
+export type GameBanks = z.infer<typeof GameBanksSchema>;
+export const GameBankEnsureResultSchema = z.object({ categoryId: z.string(), categoryName: z.string() });
+export type GameBankEnsureResult = z.infer<typeof GameBankEnsureResultSchema>;

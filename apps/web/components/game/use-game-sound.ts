@@ -51,6 +51,8 @@ export function useGameSound() {
     (cue: Cue) => {
       const ctx = context.current;
       if (!enabled || !ctx) return;
+      // Safari وChrome ساعات بيسيبوه «suspended» لحد دوسة تانية — بنصحّيه.
+      if (ctx.state === 'suspended') void ctx.resume();
       let at = ctx.currentTime;
       for (const [frequency, duration] of CUES[cue]) {
         const osc = ctx.createOscillator();
@@ -58,7 +60,7 @@ export function useGameSound() {
         osc.type = cue === 'wrong' ? 'sawtooth' : 'triangle';
         osc.frequency.value = frequency;
         gain.gain.setValueAtTime(0.0001, at);
-        gain.gain.exponentialRampToValueAtTime(0.12, at + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.25, at + 0.01);
         gain.gain.exponentialRampToValueAtTime(0.0001, at + duration);
         osc.connect(gain).connect(ctx.destination);
         osc.start(at);

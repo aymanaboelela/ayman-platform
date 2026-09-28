@@ -33,6 +33,7 @@ import {
   School,
   ScanLine,
   HandCoins,
+  Gamepad2,
 } from 'lucide-react';
 import type { Entitlements, FeatureKey } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -256,6 +257,16 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: Trophy,
     permission: 'honor:read',
     feature: 'honorBoard',
+    group: 'teaching',
+  },
+  {
+    // «أسئلة الألعاب» — `quizGame` مقفولة افتراضيًا على أي ستاك غير أيمن،
+    // والأسئلة بتتكتب ببنك الأسئلة فنفس صلاحيته.
+    href: '/admin/games',
+    labelAr: copy.admin.nav.games,
+    icon: Gamepad2,
+    permission: 'question:write',
+    feature: 'quizGame',
     group: 'teaching',
   },
   {

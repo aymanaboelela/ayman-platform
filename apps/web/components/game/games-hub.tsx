@@ -100,7 +100,7 @@ export function GamesHub({ hub }: { hub: GameHub }) {
   if (round && round.questions.length > 0) {
     const exit = () => setRound(null);
     return round.mode === 'millionaire' ? (
-      <Millionaire key={round.questions[0]!.id} round={round} refetch={fetchRound} onExit={exit} sound={sound} />
+      <Millionaire key={round.questions[0]!.id} round={round} refetch={fetchRound} onExit={exit} sound={sound} voice={hub.voice} />
     ) : (
       <QuizGame key={round.questions[0]!.id} round={round} refetch={fetchRound} onExit={exit} sound={sound} />
     );

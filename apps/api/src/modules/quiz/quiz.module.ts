@@ -24,14 +24,18 @@ import { QuizScoreFeed } from './quiz-score-feed';
 import { ScheduledExamsService } from './scheduled-exams.service';
 import { AttemptEventsService } from './attempt-events.service';
 import { AttemptService } from './attempt.service';
+import { AdminGameBanksController } from './admin-game-banks.controller';
+import { GameBanksService } from './game-banks.service';
+import { MediaModule } from '../media/media.module';
 import { GameController } from './game.controller';
+import { GameVoiceService } from './game-voice.service';
 import { GameService } from './game.service';
 
 @Module({
   // `ProgressModule` is imported (not just re-exported) so `AttemptService`
   // can inject Plan 4's `LessonProgressService` — the only way a quiz result
   // becomes lesson progress (Task 12).
-  imports: [PrismaModule, ProgressModule, NotificationsModule],
+  imports: [PrismaModule, ProgressModule, NotificationsModule, MediaModule],
   controllers: [
     AdminQuestionsController,
     AdminQuizzesController,
@@ -41,6 +45,7 @@ import { GameService } from './game.service';
     AdminAnalyticsController,
     AdminExamsController,
     GameController,
+    AdminGameBanksController,
   ],
   providers: [
     MasteryService,
@@ -57,6 +62,8 @@ import { GameService } from './game.service';
     ScheduledExamsService,
     ManualGradingService,
     GameService,
+    GameBanksService,
+    GameVoiceService,
     // Registering an APP_* provider from inside a feature module still applies
     // it globally (Nest hoists APP_* providers) — every future controller that
     // renders a question is covered the moment it adds @NoAnswerLeak(), with
