@@ -1,0 +1,647 @@
+/* =============================================================================
+   «المحفظة» — `/wallet`, and the «الدفع من المحفظة» card on the checkout.
+
+   A money screen that has to look like money arriving, not a form. The
+   balance is the loudest thing on the page (teal→violet band, a big number in
+   the brand's own weight), the three ways to top up are three differently
+   coloured objects you can tell apart before reading them, and every line of
+   the statement is a green «+» or a rose «−» with an icon for what it was.
+
+   Tokens only (and `color-mix` of tokens) — the tenant's hue and the dark
+   theme follow without a second set of rules. RTL throughout: every offset is
+   `inset-inline-*`, and the Latin digits of an amount are isolated `ltr`.
+   ========================================================================== */
+
+/* ── the balance band ───────────────────────────────────────────────────── */
+.wl-hero {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 1.25rem;
+  align-items: center;
+  padding: 1.75rem 1.5rem 2.25rem;
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(110% 90% at 100% 0%, color-mix(in oklab, var(--viz-6) 55%, transparent) 0%, transparent 60%),
+    radial-gradient(90% 80% at 0% 100%, color-mix(in oklab, var(--viz-3) 55%, transparent) 0%, transparent 65%),
+    linear-gradient(135deg, var(--viz-2) 0%, var(--viz-5) 100%);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+}
+@media (min-width: 768px) {
+  .wl-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 17rem);
+    padding: 2.25rem 2.5rem 2.75rem;
+  }
+}
+.wl-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgb(255 255 255 / 0.16) 1px, transparent 1.5px);
+  background-size: 18px 18px;
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.85), transparent 85%);
+  pointer-events: none;
+}
+.wl-hero > * { position: relative; }
+
+.wl-hero__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.18);
+  border: 1px solid rgb(255 255 255 / 0.28);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+.wl-hero__label {
+  margin-top: 1rem;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: rgb(255 255 255 / 0.85);
+}
+.wl-hero__balance {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+  line-height: 1.1;
+}
+.wl-hero__amount {
+  font-size: clamp(2.5rem, 9vw, 3.75rem);
+  font-weight: var(--fw-bold);
+  letter-spacing: -0.02em;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+.wl-hero__currency {
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-semibold);
+  color: rgb(255 255 255 / 0.9);
+}
+.wl-hero__lead {
+  margin-top: 0.75rem;
+  max-width: 32rem;
+  font-size: var(--fs-text-base);
+  line-height: 1.8;
+  color: rgb(255 255 255 / 0.92);
+}
+.wl-hero__pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.85rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--viz-1) 80%, #fff 20%);
+  color: var(--ink);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+.wl-hero__art {
+  justify-self: center;
+  /* Smaller on a phone: the band's job there is the number, and a picture
+     taller than the balance pushes the top-up form below the fold. */
+  width: min(55%, 10rem);
+  filter: drop-shadow(0 18px 24px rgb(0 0 0 / 0.22));
+}
+@media (min-width: 768px) {
+  .wl-hero__art { width: min(100%, 15rem); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .wl-hero__art { animation: wl-float 5s var(--ease-out) infinite alternate; }
+  .wl-art .wl-art__coin-2 { animation: wl-bob 2.6s var(--ease-out) infinite alternate; }
+  .wl-art .wl-art__coin-3 { animation: wl-bob 3.1s var(--ease-out) 0.4s infinite alternate; }
+}
+@keyframes wl-float {
+  from { transform: translateY(0) rotate(-2deg); }
+  to   { transform: translateY(-8px) rotate(1.5deg); }
+}
+@keyframes wl-bob {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-6px); }
+}
+
+/* the illustration's paints */
+.wl-art .wl-art__glow    { fill: rgb(255 255 255 / 0.14); }
+.wl-art .wl-art__back    { fill: var(--viz-3); }
+.wl-art .wl-art__body    { fill: var(--viz-1); }
+.wl-art .wl-art__flap    { fill: color-mix(in oklab, var(--viz-1) 75%, var(--ink) 25%); }
+.wl-art .wl-art__clasp   { fill: #fff; }
+.wl-art .wl-art__dot     { fill: var(--viz-1); }
+.wl-art .wl-art__note    { fill: var(--viz-6); }
+.wl-art .wl-art__note-2  { fill: color-mix(in oklab, var(--viz-6) 70%, #fff 30%); }
+.wl-art .wl-art__coin    { fill: color-mix(in oklab, var(--viz-1) 70%, #fff 30%); stroke: var(--viz-1); stroke-width: 3; }
+.wl-art .wl-art__coin-mark { fill: none; stroke: color-mix(in oklab, var(--viz-1) 60%, var(--ink) 40%); stroke-width: 3; stroke-linecap: round; }
+.wl-art .wl-art__coin-2,
+.wl-art .wl-art__coin-3 { transform-box: fill-box; transform-origin: center; }
+
+/* the column under the band rides up over its edge on wide screens */
+@media (min-width: 1024px) {
+  .wl-lift { margin-top: -2.5rem; }
+}
+
+/* ── cards ──────────────────────────────────────────────────────────────── */
+.wl-card {
+  position: relative;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+@media (min-width: 640px) {
+  .wl-card { padding: 1.5rem; }
+}
+.wl-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  margin-bottom: 1.1rem;
+}
+.wl-card__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--viz-2) 16%, transparent);
+  color: var(--viz-2);
+}
+.wl-card__title {
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+}
+.wl-card__lead {
+  margin-top: 0.2rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+  color: var(--color-fg-muted);
+}
+
+/* ── the three ways to top up ───────────────────────────────────────────── */
+.wl-methods {
+  display: grid;
+  gap: 0.75rem;
+}
+/* Three across once there is room — and then each card stands on its end
+   (icon over the name), because three side-by-side rows in a ~560px column
+   squeeze the hint into a word per line. */
+@media (min-width: 640px) {
+  .wl-methods { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .wl-method {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+}
+.wl-method {
+  --wl-hue: var(--viz-1);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 4.5rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--r-md);
+  border: 2px solid color-mix(in oklab, var(--wl-hue) 30%, var(--color-line));
+  background: color-mix(in oklab, var(--wl-hue) 8%, var(--color-surface-1));
+  color: var(--color-fg);
+  text-align: start;
+  cursor: pointer;
+  transition: border-color 150ms var(--ease-out), background 150ms var(--ease-out), transform 150ms var(--ease-out);
+}
+.wl-method:hover:not(:disabled) {
+  border-color: var(--wl-hue);
+  transform: translateY(-1px);
+}
+.wl-method:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--wl-hue) 55%, transparent);
+  outline-offset: 2px;
+}
+.wl-method[aria-pressed='true'] {
+  border-color: var(--wl-hue);
+  background: color-mix(in oklab, var(--wl-hue) 18%, var(--color-surface-1));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--wl-hue) 22%, transparent);
+}
+.wl-method:disabled { opacity: 0.55; cursor: not-allowed; }
+.wl-method--code          { --wl-hue: var(--viz-1); }
+.wl-method--instapay      { --wl-hue: var(--viz-3); }
+.wl-method--vodafone_cash { --wl-hue: var(--viz-4); }
+.wl-method__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: var(--r-full);
+  background: var(--wl-hue);
+  color: #fff;
+}
+.wl-method__body { display: grid; gap: 0.1rem; min-width: 0; }
+.wl-method__name {
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-text-base);
+}
+.wl-method__hint {
+  font-size: var(--fs-text-xs);
+  line-height: 1.5;
+  color: var(--color-fg-muted);
+}
+.wl-method__check {
+  position: absolute;
+  inset-block-start: 0.5rem;
+  inset-inline-end: 0.5rem;
+  color: var(--wl-hue);
+}
+
+.wl-panel {
+  margin-top: 1.1rem;
+  padding: 1.1rem;
+  border-radius: var(--r-md);
+  border: 1px dashed color-mix(in oklab, var(--viz-2) 45%, var(--color-line));
+  background: var(--color-surface-1);
+}
+.wl-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+}
+.wl-panel__lead {
+  margin-block: 0.25rem 0.9rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+  color: var(--color-fg-muted);
+}
+
+.wl-form { display: grid; gap: 1rem; }
+.wl-field { display: grid; gap: 0.4rem; }
+.wl-field__label {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg);
+}
+.wl-input {
+  width: 100%;
+  min-height: 2.9rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  color: var(--color-fg);
+  font-size: var(--fs-text-base);
+}
+.wl-input:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--viz-2) 40%, transparent);
+  outline-offset: 1px;
+  border-color: var(--viz-2);
+}
+.wl-input--amount {
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  direction: ltr;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.wl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.wl-chip {
+  min-height: 2.4rem;
+  padding: 0.35rem 0.95rem;
+  border-radius: var(--r-full);
+  border: 1px solid color-mix(in oklab, var(--viz-2) 40%, var(--color-line));
+  background: color-mix(in oklab, var(--viz-2) 8%, var(--color-surface-2));
+  color: var(--color-fg);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.wl-chip[aria-pressed='true'] {
+  background: var(--viz-2);
+  border-color: var(--viz-2);
+  color: #fff;
+}
+
+.wl-number {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--viz-3) 10%, var(--color-surface-2));
+  border: 1px solid color-mix(in oklab, var(--viz-3) 30%, var(--color-line));
+}
+.wl-number__brand { height: 1.5rem; width: auto; }
+.wl-number__digits {
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.04em;
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fg);
+}
+.wl-instructions {
+  font-size: var(--fs-text-sm);
+  line-height: 1.8;
+  color: var(--color-fg);
+}
+
+.wl-upload {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  min-height: 4rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--r-md);
+  border: 2px dashed color-mix(in oklab, var(--viz-2) 45%, var(--color-line));
+  background: color-mix(in oklab, var(--viz-2) 6%, var(--color-surface-2));
+  color: var(--color-fg);
+  text-align: start;
+  cursor: pointer;
+}
+.wl-upload:hover { border-color: var(--viz-2); }
+.wl-upload__preview {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+}
+.wl-upload__icon {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: var(--r-sm);
+  background: color-mix(in oklab, var(--viz-2) 18%, transparent);
+  color: var(--viz-2);
+}
+.wl-upload__text { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: var(--fs-text-sm); }
+.wl-upload__change { font-size: var(--fs-text-xs); font-weight: var(--fw-semibold); color: var(--viz-2); }
+
+.wl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 0.6rem 1.25rem;
+  border-radius: var(--r-md);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-text-base);
+  cursor: pointer;
+  transition: background 150ms var(--ease-out), transform 150ms var(--ease-out);
+}
+.wl-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.wl-btn--primary {
+  background: var(--a-9);
+  color: #1a1206;
+  border: 0;
+  box-shadow: 0 6px 16px color-mix(in oklab, var(--a-9) 35%, transparent);
+}
+.wl-btn--primary:hover:not(:disabled) { background: var(--a-10); }
+.wl-btn--wallet {
+  background: linear-gradient(135deg, var(--viz-2), var(--viz-5));
+  color: #fff;
+  border: 0;
+  box-shadow: 0 6px 16px color-mix(in oklab, var(--viz-5) 35%, transparent);
+}
+.wl-btn--wallet:hover:not(:disabled) { transform: translateY(-1px); }
+.wl-btn--ghost {
+  background: transparent;
+  color: var(--color-fg);
+  border: 1px solid var(--color-line);
+}
+.wl-btn--block { width: 100%; }
+
+.wl-error {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--err) 12%, transparent);
+  color: var(--err);
+  font-size: var(--fs-text-sm);
+  line-height: 1.6;
+}
+.wl-note {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--viz-1) 14%, transparent);
+  color: var(--color-fg);
+  font-size: var(--fs-text-sm);
+  line-height: 1.6;
+}
+
+.wl-sent {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem 1rem;
+  text-align: center;
+}
+.wl-sent__badge {
+  display: grid;
+  place-items: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--r-full);
+  background: var(--ok);
+  color: #fff;
+  box-shadow: 0 0 0 8px color-mix(in oklab, var(--ok) 18%, transparent);
+}
+.wl-sent__title { margin-top: 0.5rem; font-size: var(--fs-title-3); font-weight: var(--fw-bold); }
+.wl-sent__lead { max-width: 28rem; color: var(--color-fg-muted); line-height: 1.7; }
+
+/* ── requests and the statement ─────────────────────────────────────────── */
+.wl-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg);
+}
+.wl-requests { display: grid; gap: 0.6rem; margin-top: 0.85rem; }
+.wl-request {
+  --wl-tone: var(--viz-1);
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in oklab, var(--wl-tone) 30%, var(--color-line));
+  border-inline-start: 4px solid var(--wl-tone);
+  background: var(--color-surface-2);
+}
+.wl-request--approved { --wl-tone: var(--ok); }
+.wl-request--rejected { --wl-tone: var(--err); }
+.wl-request__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.wl-request__amount { font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; }
+.wl-request__meta { font-size: var(--fs-text-xs); color: var(--color-fg-muted); }
+.wl-request__reason { font-size: var(--fs-text-sm); color: var(--err); line-height: 1.6; }
+.wl-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--r-full);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-bold);
+  background: color-mix(in oklab, var(--wl-tone) 16%, transparent);
+  color: var(--wl-tone);
+}
+
+.wl-statement {
+  margin-top: 0.85rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  overflow: hidden;
+}
+.wl-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+}
+.wl-row + .wl-row { border-top: 1px solid var(--color-line); }
+.wl-row__icon {
+  --wl-tone: var(--ok);
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--wl-tone) 16%, transparent);
+  color: var(--wl-tone);
+}
+.wl-row__icon--out { --wl-tone: var(--err); }
+.wl-row__icon--course_purchase { --wl-tone: var(--viz-3); }
+.wl-row__icon--code_topup { --wl-tone: var(--viz-1); }
+.wl-row__body { display: grid; gap: 0.1rem; min-width: 0; }
+.wl-row__title {
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg);
+  overflow-wrap: anywhere;
+}
+.wl-row__meta {
+  font-size: var(--fs-text-xs);
+  color: var(--color-fg-muted);
+}
+.wl-row__amount {
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+  white-space: nowrap;
+  color: var(--ok);
+}
+.wl-row__amount--out { color: var(--err); }
+.wl-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+  padding: 1rem;
+  border-radius: var(--r-md);
+  border: 1px dashed var(--color-line);
+  color: var(--color-fg-muted);
+}
+.wl-code-tag {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+/* ── the checkout's «الدفع من المحفظة» card ─────────────────────────────── */
+.wl-pay {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: var(--r-lg);
+  border: 2px solid color-mix(in oklab, var(--viz-2) 45%, var(--color-line));
+  background:
+    radial-gradient(90% 120% at 100% 0%, color-mix(in oklab, var(--viz-6) 14%, transparent) 0%, transparent 70%),
+    color-mix(in oklab, var(--viz-2) 7%, var(--color-surface-2));
+}
+.wl-pay__head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.wl-pay__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--r-full);
+  background: linear-gradient(135deg, var(--viz-2), var(--viz-5));
+  color: #fff;
+}
+.wl-pay__title { font-weight: var(--fw-bold); color: var(--color-fg); }
+.wl-pay__balance { font-size: var(--fs-text-sm); color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+.wl-pay__verdict {
+  display: flex;
+  gap: 0.5rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.6;
+  color: var(--ok);
+}
+.wl-pay__verdict--short { color: var(--color-fg); }
+.wl-pay__meter {
+  height: 0.5rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--viz-2) 14%, var(--color-surface-1));
+  overflow: hidden;
+}
+.wl-pay__meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--viz-2), var(--viz-6));
+}
+.wl-pay__or {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+  font-size: var(--fs-text-sm);
+  color: var(--color-fg-muted);
+}
+.wl-pay__or::before,
+.wl-pay__or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-line);
+}
+.wl-pay__success {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  padding: 1.25rem 0.75rem;
+  text-align: center;
+}

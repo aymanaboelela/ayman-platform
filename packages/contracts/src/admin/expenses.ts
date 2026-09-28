@@ -139,6 +139,13 @@ export const FinanceMonthSchema = z.object({
    */
   subscriptionRefundsCents: z.number().int(),
   bookRefundsCents: z.number().int(),
+  /**
+   * «شحن المحفظة» — money that came INTO wallets this month and was real money
+   * (`WalletTransaction.countsAsIncome`), net of paid credits taken back. A
+   * subscription paid FROM the wallet is not in `subscriptionRevenueCents`:
+   * this is where that money was counted, once, the day it arrived.
+   */
+  walletRevenueCents: z.number().int(),
   /** revenue − refunds − expenses, for this month alone. May be negative — a
    *  month that bought a print run and sold nothing really did lose money, and
    *  rounding that up to zero is how a ledger starts lying. */
@@ -163,6 +170,23 @@ export const AdminFinanceOverviewSchema = z.object({
    */
   subscriptionRevenueCents: z.number().int(),
   bookRevenueCents: z.number().int(),
+  /**
+   * «شحن المحفظة» — real money that came into students' wallets, all time,
+   * net of paid credits taken back. The third revenue stream, and part of
+   * `revenueTotalCents`.
+   *
+   * ⚠️ `subscriptionRevenueCents` above EXCLUDES subscriptions paid from the
+   * wallet. The money for those was counted here, on the day it was topped up;
+   * counting the purchase too would report every wallet-funded subscription
+   * twice. `walletSpentCents` says how much of this has since been spent.
+   */
+  walletRevenueCents: z.number().int(),
+  /** Subscriptions bought FROM the wallet, all time, at their price. Not
+   *  revenue (see above) — shown so «الناس صرفت كام من المحفظة» is answerable. */
+  walletSpentCents: z.number().int(),
+  /** What students hold in their wallets right now: counted as income already,
+   *  not yet spent on anything. */
+  walletBalanceCents: z.number().int(),
   revenueTotalCents: z.number().int(),
   /**
    * Money given back, all time, per stream — see `Refund`. Always positive;

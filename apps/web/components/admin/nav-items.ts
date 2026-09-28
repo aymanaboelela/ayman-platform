@@ -36,6 +36,8 @@ import {
   ScanLine,
   HandCoins,
   Gamepad2,
+  PiggyBank,
+  BanknoteArrowUp,
 } from 'lucide-react';
 import type { Entitlements, FeatureKey } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -197,6 +199,28 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     href: '/admin/unlock-codes',
     labelAr: copy.admin.nav.unlockCodes,
     icon: TicketCheck,
+    permission: 'payment:read',
+    group: 'teaching',
+  },
+  {
+    // «شحن المحفظة» — find a student, see the balance, put money in (or take
+    // a wrong credit back out). Beside the codes: a wallet code is made on
+    // that screen, and both are money that reaches a student without a
+    // checkout. `payment:read` to look; moving money is `payment:review`,
+    // checked by the API and by the page before it draws the forms.
+    href: '/admin/wallet',
+    labelAr: copy.admin.nav.wallet,
+    icon: PiggyBank,
+    permission: 'payment:read',
+    group: 'teaching',
+  },
+  {
+    // «طلبات الشحن» — the live queue of InstaPay / Vodafone Cash top-ups, with
+    // its own badge. Its own row and not a tab of the desk above because it is
+    // a QUEUE, like «المدفوعات»: someone is waiting on a decision.
+    href: '/admin/wallet/requests',
+    labelAr: copy.admin.nav.walletRequests,
+    icon: BanknoteArrowUp,
     permission: 'payment:read',
     group: 'teaching',
   },

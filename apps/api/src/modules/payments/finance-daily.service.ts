@@ -67,6 +67,8 @@ interface SubmissionRow {
   course_title: string;
   amount_cents: number;
   is_free: boolean;
+  /** Paid from the wallet — a subscription, and not new money. */
+  from_wallet: boolean;
   plan: PaymentPlan;
   term_id: string | null;
   term_title: string | null;
@@ -78,6 +80,11 @@ interface BookDayRow {
   day: string;
   cents: bigint | number | null;
   n: number;
+}
+
+interface WalletDayRow {
+  day: string;
+  cents: bigint | number | null;
 }
 
 interface RefundDayRow {
@@ -94,6 +101,7 @@ interface StudentRow {
   term_title: string | null;
   amount_cents: number;
   is_free: boolean;
+  from_wallet: boolean;
   paid_at: string;
   day: string;
   nth: number | null;
@@ -130,10 +138,12 @@ function emptyDay(date: string): FinanceDay {
     subscriptionCents: 0,
     bookCents: 0,
     refundCents: 0,
+    walletCents: 0,
     netCents: 0,
     subscriptionCount: 0,
     newCount: 0,
     renewalCount: 0,
+    walletPaidCount: 0,
     freeCount: 0,
     bookCount: 0,
     byCourse: [],
@@ -176,11 +186,12 @@ export class FinanceDailyService {
      */
     const lowerBound = new Date(`${shiftDay(from, -1)}T00:00:00Z`);
 
-    const [submissions, books, refunds] = await Promise.all([
+    const [submissions, books, refunds, wallet] = await Promise.all([
       this.prisma.$queryRaw<SubmissionRow[]>(Prisma.sql`
         WITH ${paidRank(Prisma.empty)}
         SELECT s."id", s."user_id", s."course_id", c."title" AS course_title,
-               s."amount_cents", s."is_free", s."plan"::text AS plan,
+               s."amount_cents", s."is_free", (s."wallet_transaction_id" IS NOT NULL) AS from_wallet,
+               s."plan"::text AS plan,
                s."term_id", t."title" AS term_title,
                ${cairoDay(PAID_AT)} AS day,
                pr."nth"
@@ -216,6 +227,21 @@ export class FinanceDailyService {
                COALESCE(SUM(r."amount_cents") FILTER (WHERE r."book_order_id" IS NOT NULL), 0) AS book
         FROM "app"."refunds" r
         WHERE r."occurred_on" >= ${from}::date
+        GROUP BY 1
+      `),
+      /*
+       * «شحن المحفظة» — money that came into wallets and was real money
+       * (`WALLET_INCOME_WHERE`), on the Cairo day it arrived. Signed, so a paid
+       * credit taken back comes off its own day. This is where a wallet-paid
+       * subscription's money was counted; the subscription itself adds none.
+       */
+      this.prisma.$queryRaw<WalletDayRow[]>(Prisma.sql`
+        SELECT ${cairoDay('w."created_at"')} AS day,
+               COALESCE(SUM(w."amount_cents"), 0) AS cents
+        FROM "app"."wallet_transactions" w
+        WHERE w."counts_as_income" = true
+          AND w."created_at" >= ${lowerBound}
+          AND ${cairoDay('w."created_at"')} >= ${from}
         GROUP BY 1
       `),
     ]);
@@ -279,8 +305,12 @@ export class FinanceDailyService {
       }
 
       const renewal = (row.nth ?? 1) > 1;
-      day.subscriptionCents += row.amount_cents;
+      // A wallet-paid subscription is counted as a subscription and adds NO
+      // money: its money is `walletCents`, on the day it was topped up.
+      const cash = row.from_wallet ? 0 : row.amount_cents;
+      day.subscriptionCents += cash;
       day.subscriptionCount += 1;
+      if (row.from_wallet) day.walletPaidCount += 1;
       if (renewal) day.renewalCount += 1;
       else day.newCount += 1;
 
@@ -294,12 +324,12 @@ export class FinanceDailyService {
         amountCents: 0,
       };
       cell.count += 1;
-      cell.amountCents += row.amount_cents;
+      cell.amountCents += cash;
       if (renewal) cell.renewalCount += 1;
       else cell.newCount += 1;
       cells.set(row.course_id, cell);
 
-      acc.course.amountCents += row.amount_cents;
+      acc.course.amountCents += cash;
       acc.course.count += 1;
       if (renewal) acc.course.renewalCount += 1;
       else acc.course.newCount += 1;
@@ -353,9 +383,15 @@ export class FinanceDailyService {
       day.refundCents += toNumber(row.sub) + (options.includeBooks ? toNumber(row.book) : 0);
     }
 
+    for (const row of wallet) {
+      const day = byDay.get(row.day);
+      if (!day) continue;
+      day.walletCents += toNumber(row.cents);
+    }
+
     const daily = keys.map((key) => {
       const day = byDay.get(key)!;
-      day.netCents = day.subscriptionCents + day.bookCents - day.refundCents;
+      day.netCents = day.subscriptionCents + day.bookCents + day.walletCents - day.refundCents;
       day.byCourse = [...(dayCourse.get(key)?.values() ?? [])].sort(
         (a, b) => b.amountCents - a.amountCents || b.count - a.count,
       );
@@ -392,10 +428,12 @@ export class FinanceDailyService {
         subscriptionCents: sum((d) => d.subscriptionCents),
         bookCents: sum((d) => d.bookCents),
         refundCents: sum((d) => d.refundCents),
+        walletCents: sum((d) => d.walletCents),
         netCents: sum((d) => d.netCents),
         subscriptionCount: sum((d) => d.subscriptionCount),
         newCount: sum((d) => d.newCount),
         renewalCount: sum((d) => d.renewalCount),
+        walletPaidCount: sum((d) => d.walletPaidCount),
         renewingStudents: renewing.size,
         payingStudents: paying.size,
         freeCount: sum((d) => d.freeCount),
@@ -416,6 +454,7 @@ export class FinanceDailyService {
       WITH ${paidRank(Prisma.sql`AND s."user_id" = ${userId}`)}
       SELECT s."id", s."course_id", c."title" AS course_title, s."plan"::text AS plan,
              t."title" AS term_title, s."amount_cents", s."is_free",
+             (s."wallet_transaction_id" IS NOT NULL) AS from_wallet,
              to_char(${Prisma.raw(PAID_AT)}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS paid_at,
              ${cairoDay(PAID_AT)} AS day,
              pr."nth",
@@ -437,11 +476,13 @@ export class FinanceDailyService {
     const months = await this.monthsFor(rows.map((row) => row.id));
 
     const payments: StudentPaymentRow[] = rows.map((row) => {
-      const via: StudentPaymentVia = row.instapay
-        ? 'instapay'
-        : row.sender_phone === null
-          ? 'manual'
-          : 'review';
+      const via: StudentPaymentVia = row.from_wallet
+        ? 'wallet'
+        : row.instapay
+          ? 'instapay'
+          : row.sender_phone === null
+            ? 'manual'
+            : 'review';
       return {
         submissionId: row.id,
         courseId: row.course_id,
@@ -464,12 +505,22 @@ export class FinanceDailyService {
     });
 
     const paid = payments.filter((row) => !row.isFree);
-    const paidCents = paid.reduce((total, row) => total + row.amountCents, 0);
+    // Real money only — a wallet purchase's money is on the wallet's statement,
+    // where it came in. Summing both would count it twice on one page.
+    const paidCents = paid
+      .filter((row) => row.via !== 'wallet')
+      .reduce((total, row) => total + row.amountCents, 0);
+    const walletPaidCents = paid
+      .filter((row) => row.via === 'wallet')
+      .reduce((total, row) => total + row.amountCents, 0);
+    // `refunds` rows only (money that LEFT): a wallet-paid subscription is
+    // refunded into the wallet and never appears in that table.
     const refundedCents = payments.reduce((total, row) => total + row.refundedCents, 0);
 
     return {
       totals: {
         paidCents,
+        walletPaidCents,
         refundedCents,
         netCents: paidCents - refundedCents,
         paymentCount: paid.length,

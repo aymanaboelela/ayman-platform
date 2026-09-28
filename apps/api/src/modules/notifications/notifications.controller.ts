@@ -37,6 +37,8 @@ const HEARTBEAT_MS = 25_000;
  */
 const QUEUE_PERMISSION: Record<LiveQueue, Permission> = {
   payments: 'payment:read',
+  // «طلبات الشحن» — the same authority that opens the top-up review screen.
+  'wallet-topups': 'payment:read',
 };
 
 /**

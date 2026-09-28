@@ -81,6 +81,10 @@ const admin = {
     /** «أكواد الفتح» — a six-character code that opens a lecture, a unit, a
      *  term or the whole course for the one student who types it. */
     unlockCodes: 'أكواد الفتح',
+    /** «المحفظة» — the desk (find a student, credit or debit) and the live
+     *  queue of InstaPay / Vodafone Cash top-up requests. */
+    wallet: 'شحن المحفظة',
+    walletRequests: 'طلبات الشحن',
     /** الكتاب الورقي — the shipping queue. */
     books: 'طلبات الكتب',
     /**
@@ -2857,6 +2861,9 @@ const admin = {
      *  Vodafone Cash number to reconcile, so this fills `senderPhoneLabel`'s
      *  usual slot instead of a blank. */
     recordedManually: 'اشتراك مسجّل يدويًا',
+    /** A subscription the student bought from the wallet — nothing to review,
+     *  and nothing to reconcile against a transfer. */
+    paidFromWallet: 'اتدفع من المحفظة',
     /** An admin-comped term — never counted as revenue. See the model note
      *  on `PaymentSubmission.isFree`. */
     freeBadge: 'مجاني',
@@ -2984,6 +2991,14 @@ const admin = {
      *  حسابها كذا، والكتب حسابها الفعلي». «صافي» rather than «إيراد» is the
      *  whole distinction: what came in, minus what went back out. */
     tileSubscriptionNet: 'صافي الاشتراكات',
+    /** «شحن المحفظة» — the third stream: real money that came into wallets.
+     *  A subscription paid FROM the wallet is not in «الاشتراكات» — its money
+     *  is here, counted the day it arrived. */
+    tileWallet: 'شحن المحفظة',
+    /** `{spent}` — spent from wallets on subscriptions; `{held}` — still in
+     *  students' wallets. Both already inside the tile's figure. */
+    tileWalletContext: 'اتصرف منها {spent} على اشتراكات · مع الطلبة دلوقتي {held}',
+    monthWallet: 'شحن المحفظة',
     tileBookNet: 'صافي الكتب',
     /** Under the two nets, only while there is anything to explain — the
      *  difference between the gross above and the net beside it. */
@@ -3203,6 +3218,11 @@ const admin = {
     cancelRefundAmountLabel: 'رجعتله كام؟ (بالجنيه)',
     /** `{max}` — the cap, shown while he types instead of as a 400 after. */
     cancelRefundMax: 'أقصى مبلغ {max} ج',
+    /** A subscription paid FROM the wallet: the refund goes back INTO it. */
+    cancelRefundToWallet: 'الاشتراك ده اتدفع من المحفظة — المبلغ بيرجع للمحفظة، مش كاش.',
+    /** The chip beside the amount, and why the amount cannot be edited. */
+    walletChip: 'من المحفظة',
+    editAmountWallet: 'الاشتراك ده اتدفع من المحفظة، فمبلغه هو اللي اتخصم منها. لو فيه فلوس هترجع، يبقى «إلغاء» مع استرداد وهترجع للمحفظة.',
     /** Under the amount column when money went back. `{amount}` — the total
      *  refunded against this subscription, across every payment behind it. */
     rowRefunded: 'رجع منها {amount}',
@@ -3258,6 +3278,14 @@ const admin = {
     tileBooks: 'دخل الكتب',
     /** `{n}` — paid book orders in the window. */
     tileBooksContext: '{n} طلب كتاب',
+    /** «شحن المحفظة» — real money that came into wallets in the window. */
+    tileWallet: 'شحن المحفظة',
+    /** `{n}` — subscriptions paid FROM the wallet: not new money, counted when
+     *  the wallet was topped up. */
+    tileWalletContext: '{n} اشتراك اتدفع من المحفظة — فلوسه محسوبة وقت الشحن',
+    /** The day row's chips. */
+    dayWallet: 'محفظة',
+    dayWalletPaid: 'من المحفظة {n}',
     tileNoBooks: 'الكتب مش محسوبة هنا',
     tileNoBooksContext: 'صلاحية الكتب مش معاك، فالأرقام دي اشتراكات بس.',
     /** `{n}` — comped subscriptions: real access, no money. */
@@ -3321,6 +3349,10 @@ const admin = {
     viaInstapay: 'إنستاباي — اتقبل لوحده',
     viaManual: 'اتسجّل بإيد الأدمن',
     viaReview: 'اتراجع واتقبل',
+    /** Paid from the wallet — the money is on the wallet's statement, where it
+     *  came in, so it is not in «اتدفع» above. */
+    viaWallet: 'من المحفظة — مش فلوس جديدة',
+    studentWalletPaid: 'من المحفظة',
     /** `{amount}` — money given back against this payment. */
     refundedNote: 'رجع منها {amount}',
     /** `{months}` — «شهر ١، شهر ٢». */
@@ -3442,6 +3474,180 @@ const admin = {
     prev: 'السابق',
     next: 'التالي',
     pageOf: 'صفحة {page} من {pages}',
+    /* ── «كود شحن المحفظة» ─────────────────────────────────────────────── */
+    modeLabel: 'نوع الكود',
+    modeCourse: 'كود يفتح كورس',
+    modeCourseHint: 'محاضرة، وحدة، شهر، ترم أو الكورس كله',
+    modeWallet: 'كود شحن محفظة',
+    modeWalletHint: 'مبلغ بيتضاف للمحفظة أول ما الكود يتفعّل',
+    walletStep1: 'قيمة الكود',
+    walletAmount: 'المبلغ بالجنيه',
+    walletAmountHint: 'المبلغ ده بيتضاف للمحفظة أول ما الكود يتفعّل — مرة واحدة ولطالب واحد.',
+    walletAmountRequired: 'لازم مبلغ للكود (جنيه على الأقل)',
+    walletKindLabel: 'فلوس الكود ده…',
+    walletPaid: 'مدفوعة',
+    walletPaidHint: 'اتدفعت (كاش أو تحويل) — بتتحسب دخل يوم تفعيل الكود',
+    walletGift: 'هدية / تعويض',
+    walletGiftHint: 'مفيش فلوس دخلت — بتتضاف للمحفظة ومابتتحسبش دخل',
+    walletStep2: 'العدد والملاحظة',
+    /** On the list and the ready panel. `{amount}` — whole pounds. */
+    walletChip: 'شحن محفظة {amount} ج',
+    walletGiftChip: 'هدية',
+    walletLine: 'كود شحن محفظة',
+    walletShareText:
+      'كود شحن المحفظة بـ{amount} جنيه:\n\n*{code}*\n\nالتفعيل من صفحة «المحفظة» في الحساب: {url}\nالكود بيشتغل مرة واحدة بس.',
+    filterKind: 'النوع',
+    kindAll: 'كل الأكواد',
+    kindCourse: 'أكواد الكورسات',
+    kindWallet: 'أكواد المحفظة',
+  },
+
+  /**
+   * «المحفظة» — `/admin/wallet` (the desk), `/admin/wallet/[userId]` (one
+   * student's wallet), `/admin/wallet/requests` (the live top-up queue), and
+   * the «المحفظة» panel on a student's page.
+   *
+   * Admin copy follows the student rule too: masdar on buttons, nothing that
+   * genders the student being described.
+   */
+  wallet: {
+    eyebrow: 'الفلوس',
+    title: 'شحن المحفظة',
+    lead: 'البحث عن طالب وفتح محفظته: الرصيد، الشحن، والخصم — وكل حركة بتتسجل ومابتتمسحش.',
+    searchLabel: 'البحث بالاسم أو الموبايل أو الإيميل',
+    searchPlaceholder: 'اسم الطالب أو رقمه…',
+    searching: 'بندوّر…',
+    recentTitle: 'آخر محافظ اتحركت',
+    resultsTitle: 'نتايج البحث',
+    noResults: 'مفيش طالب بالاسم أو الرقم ده.',
+    emptyRecent: 'لسه مفيش ولا محفظة اتحركت — أول شحنة بتبان هنا.',
+    tileHeld: 'رصيد الطلبة كله',
+    /** `{n}` wallets holding money. */
+    tileHeldContext: '{n} محفظة فيها فلوس',
+    tilePending: 'طلبات شحن مستنية',
+    /** `{amount}` — «١٬٢٠٠ ج». */
+    tilePendingContext: '{amount} مستنية مراجعة',
+    open: 'فتح المحفظة',
+    balance: 'الرصيد',
+    /** `{date}` — when the wallet last moved. */
+    lastMoved: 'آخر حركة {date}',
+    neverMoved: 'مفيش حركة لسه',
+    back: 'رجوع للبحث',
+    balanceLabel: 'رصيد المحفظة',
+    pendingNote: '{amount} في طلبات شحن مستنية مراجعة',
+    /** `{amount}` — money this wallet brought in as income, net. */
+    incomeNote: 'دخل منها كفلوس حقيقية {amount}',
+    studentPage: 'صفحة الطالب',
+    requestsLink: 'طلبات الشحن',
+    creditTitle: 'شحن المحفظة',
+    creditLead: 'المبلغ بيتضاف على طول، وإشعار بيوصل على الحساب.',
+    amount: 'المبلغ بالجنيه',
+    kindLabel: 'الفلوس دي…',
+    paid: 'مدفوعة',
+    paidHint: 'وصلت كاش أو بتحويل — بتتحسب دخل النهارده',
+    gift: 'هدية / تعويض',
+    giftHint: 'مفيش فلوس دخلت — مابتتحسبش دخل',
+    kindRequired: 'لازم نحدد: مدفوعة ولا هدية؟',
+    note: 'ملاحظة (اختياري)',
+    notePlaceholder: 'مثلًا: دفع كاش في السنتر',
+    /** `{amount}` — «٢٠٠ ج». */
+    creditSubmit: 'شحن {amount}',
+    creditSubmitEmpty: 'شحن',
+    crediting: 'بيتشحن…',
+    creditDone: 'اتشحن {amount} — الرصيد دلوقتي {balance}',
+    debitTitle: 'خصم من المحفظة',
+    debitLead: 'لتصحيح شحنة غلط، أو لو الفلوس رجعت كاش. الرصيد مابينزلش تحت الصفر.',
+    debitToggle: 'خصم من المحفظة',
+    reducesIncome: 'بيتخصم من الدخل',
+    reducesIncomeHint: 'اللي بيتخصم كان متحسوب دخل — شحنة مدفوعة غلط أو فلوس رجعت كاش',
+    keepsIncome: 'مالوش دعوة بالدخل',
+    keepsIncomeHint: 'اللي بيتخصم كان هدية',
+    reason: 'السبب',
+    reasonPlaceholder: 'مثلًا: الشحنة اتكتبت مرتين',
+    reasonRequired: 'لازم سبب للخصم',
+    debitSubmit: 'خصم {amount}',
+    debitSubmitEmpty: 'خصم',
+    debiting: 'بيتخصم…',
+    debitDone: 'اتخصم {amount} — الرصيد دلوقتي {balance}',
+    amountRequired: 'المبلغ لازم يبقى جنيه على الأقل',
+    insufficient: 'الرصيد مايكفيش — المتاح {balance}',
+    failed: 'حصلت مشكلة — نجرّب تاني',
+    statementTitle: 'حركة المحفظة',
+    statementEmpty: 'لسه مفيش أي حركة على المحفظة دي.',
+    incomeChip: 'دخل',
+    giftChip: 'مش دخل',
+    /** `{name}` — the admin who pressed the button. */
+    by: 'بواسطة {name}',
+    kind: {
+      admin_credit: 'شحن بإيد الأدمن',
+      code_topup: 'كود شحن',
+      transfer_topup: 'طلب شحن اتقبل',
+      refund: 'فلوس رجعت من اشتراك',
+      course_purchase: 'اشتراك من المحفظة',
+      admin_debit: 'خصم بإيد الأدمن',
+    },
+    via: {
+      instapay: 'إنستاباي',
+      vodafone_cash: 'فودافون كاش',
+    },
+    /* ── the student page's panel ───────────────────────────────────────── */
+    sectionTitle: 'المحفظة',
+    sectionLead: 'الرصيد وآخر الحركات. الشحن والخصم من صفحة المحفظة.',
+    sectionOpen: 'شحن / خصم',
+    sectionEmpty: 'مفيش أي حركة على المحفظة لحد دلوقتي.',
+    /* ── «طلبات الشحن» ─────────────────────────────────────────────────── */
+    requestsTitle: 'طلبات شحن المحفظة',
+    requestsLead: 'طلبات الطلبة بإنستاباي وفودافون كاش بتظهر هنا لوحدها من غير ريفرش. مراجعة الصورة والمبلغ، وبعدين قبول أو رفض.',
+    filterStatus: 'الحالة',
+    filterPending: 'مستنية',
+    filterApproved: 'اتقبلت',
+    filterRejected: 'اترفضت',
+    filterAll: 'الكل',
+    sortLabel: 'الترتيب',
+    sortOldest: 'الأقدم الأول',
+    sortNewest: 'الأحدث الأول',
+    status: {
+      pending: 'مستني',
+      approved: 'اتقبل',
+      rejected: 'اترفض',
+    },
+    requested: 'المطلوب {amount}',
+    approvedAmount: 'اتشحن {amount}',
+    /** Followed by the sender, isolated left-to-right. */
+    senderFrom: 'من:',
+    currentBalance: 'الرصيد الحالي {amount}',
+    reviewedBy: 'المراجعة: {name}',
+    screenshot: 'صورة الإيصال',
+    /** `{student}` — the name on the row. */
+    screenshotAlt: 'إيصال تحويل {student}',
+    approve: 'قبول وشحن',
+    approveTitle: 'قبول طلب الشحن',
+    approveAmount: 'المبلغ اللي وصل فعلًا (بالجنيه)',
+    approveAmountHint: 'لو المبلغ في الصورة مختلف عن المكتوب، تعديله هنا قبل القبول.',
+    approveConfirm: 'تأكيد وشحن {amount}',
+    approving: 'بيتقبل…',
+    approvedToast: 'اتقبل واتشحن {amount}',
+    reject: 'رفض',
+    rejectTitle: 'رفض طلب الشحن',
+    rejectReason: 'السبب — بيظهر للطالب',
+    rejectPlaceholder: 'مثلًا: المبلغ ماوصلش لحد دلوقتي',
+    rejectConfirm: 'تأكيد الرفض',
+    rejecting: 'بيترفض…',
+    cancel: 'رجوع',
+    alreadyReviewed: 'الطلب ده اتراجع خلاص.',
+    empty: 'مفيش طلبات شحن مستنية دلوقتي.',
+    emptyHint: 'أول ما طالب يبعت طلب شحن هيظهر هنا لوحده.',
+    emptyFiltered: 'مفيش طلبات بالفلتر ده.',
+    /** `{n}` — the sidebar badge's screen-reader label. */
+    pendingBadgeLabel: '{n} طلب شحن مستني',
+    liveOn: 'لايف',
+    liveOnHint: 'الطلبات الجديدة بتظهر لوحدها',
+    arrivedOne: 'وصل طلب جديد',
+    arrivedTwo: 'وصل طلبين جداد',
+    arrivedMany: 'وصل {n} طلبات جديدة',
+    arrivedShow: 'عرض',
+    freshBadge: 'جديد',
+    whatsapp: 'واتساب',
   },
 
   /**

@@ -354,6 +354,14 @@ export default async function AdminFinancePage({
                       : row.amountCents !== null
                         ? `${formatEGP(row.amountCents)} ج`
                         : c.noPayment}
+                    {/* Paid from the wallet — a real subscription, and not in
+                        the revenue total above: that money was counted when it
+                        came into the wallet. */}
+                    {row.paidFromWallet ? (
+                      <span className="mt-0.5 block w-fit rounded-full bg-[color-mix(in_oklab,var(--viz-6)_16%,var(--n-2))] px-2 py-0.5 text-[length:var(--fs-text-xs)] font-semibold text-fg">
+                        {c.walletChip}
+                      </span>
+                    ) : null}
                     {/* What came back, under what went in. Only when there is
                         something — a «رجع ٠ ج» on every row is a column of
                         noise, and this is the rare case by a wide margin. */}

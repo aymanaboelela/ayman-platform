@@ -8,6 +8,7 @@ import {
   Layers,
   MonitorPlay,
   Ticket,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react';
 import type { UnlockCodeStatus } from '@ayman/contracts/admin/unlock-codes';
@@ -127,6 +128,44 @@ export function CodeText({ code, className }: { code: string; className?: string
       )}
     >
       {code}
+    </span>
+  );
+}
+
+/** A wallet code's colour — teal, the wallet's own on every screen it has. */
+export const WALLET_TONE = 'var(--viz-6)';
+
+/**
+ * «شحن محفظة ٢٠٠ ج» — what a WALLET code carries, in the place a course code
+ * shows the course and its pieces. A second, quieter pill says «هدية» when the
+ * code was not paid for, because that is the one fact about it the money
+ * screens treat differently.
+ */
+export function WalletChip({ label, giftLabel }: { label: string; giftLabel: string | null }) {
+  return (
+    <span className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+      <span
+        style={tone(WALLET_TONE)}
+        className={cn(
+          'inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full px-2.5 py-1',
+          'text-[length:var(--fs-text-xs)] font-semibold text-fg',
+          TINT_CARD,
+        )}
+      >
+        <Wallet className="size-3.5 shrink-0 text-[color:var(--uc-tone)]" aria-hidden="true" />
+        <span className="min-w-0 truncate">{label}</span>
+      </span>
+      {giftLabel ? (
+        <span
+          style={tone('var(--viz-4)')}
+          className={cn(
+            'inline-flex items-center rounded-full px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium text-fg',
+            TINT_CARD,
+          )}
+        >
+          {giftLabel}
+        </span>
+      ) : null}
     </span>
   );
 }

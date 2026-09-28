@@ -26,19 +26,37 @@ export const AdminUnlockItemInputSchema = z
  */
 export const AdminUnlockCodeCreateSchema = z
   .object({
-    courseId: z.uuid(),
+    /** `null` for a WALLET code — see `walletCreditCents`. */
+    courseId: z.uuid().nullable(),
     wholeCourse: z.boolean().default(false),
     items: z.array(AdminUnlockItemInputSchema).max(300).default([]),
     quantity: z.number().int().min(1).max(50).default(1),
     /** Piastres the student paid, for the list. A record, never a charge. */
     priceCents: z.number().int().min(0).max(100_000_000).nullable().default(null),
+    /**
+     * «كود شحن المحفظة» — piastres the code puts in the wallet of whoever
+     * redeems it. Set exactly when `courseId` is null: a code opens a course
+     * OR fills a wallet, never both (the database says so too).
+     */
+    walletCreditCents: z.number().int().min(100).max(10_000_000).nullable().default(null),
+    /** «مدفوع» — the admin was paid for this code, so redeeming it is income
+     *  on the day it is redeemed. `false` is a gift: money in the wallet that
+     *  never shows up as income. */
+    walletCreditPaid: z.boolean().default(true),
     note: z.string().trim().max(500).nullable().default(null),
   })
   .strict()
-  .refine((value) => value.wholeCourse || value.items.length > 0, {
-    message: 'اختار الكود يفتح إيه',
-    path: ['items'],
-  });
+  .refine((value) => (value.courseId === null) !== (value.walletCreditCents === null), {
+    message: 'الكود يا يفتح كورس يا يشحن المحفظة',
+    path: ['walletCreditCents'],
+  })
+  .refine(
+    (value) =>
+      value.courseId === null
+        ? !value.wholeCourse && value.items.length === 0
+        : value.wholeCourse || value.items.length > 0,
+    { message: 'اختار الكود يفتح إيه', path: ['items'] },
+  );
 export type AdminUnlockCodeCreateInput = z.infer<typeof AdminUnlockCodeCreateSchema>;
 
 export const UnlockCodeStatusSchema = z.enum(['unused', 'used', 'revoked']);
@@ -57,10 +75,14 @@ export type AdminUnlockCodeItem = z.infer<typeof AdminUnlockCodeItemSchema>;
 export const AdminUnlockCodeRowSchema = z.object({
   id: z.uuid(),
   code: z.string(),
-  course: UnlockCourseRefSchema,
+  /** `null` on a wallet code. */
+  course: UnlockCourseRefSchema.nullable(),
   wholeCourse: z.boolean(),
   items: z.array(AdminUnlockCodeItemSchema),
   priceCents: z.number().int().nullable(),
+  /** «كود شحن» — what it puts in the wallet; `null` on a course code. */
+  walletCreditCents: z.number().int().nullable(),
+  walletCreditPaid: z.boolean(),
   note: z.string().nullable(),
   status: UnlockCodeStatusSchema,
   createdAt: z.iso.datetime(),
@@ -88,6 +110,8 @@ export type AdminUnlockCodeList = z.infer<typeof AdminUnlockCodeListSchema>;
 export const AdminUnlockCodeQuerySchema = ListQuerySchema.extend({
   status: z.enum(['all', 'unused', 'used', 'revoked']).default('all'),
   courseId: z.uuid().optional(),
+  /** `wallet` — only the wallet codes; `course` — only the course ones. */
+  kind: z.enum(['all', 'course', 'wallet']).default('all'),
 }).omit({ dir: true });
 export type AdminUnlockCodeQuery = z.infer<typeof AdminUnlockCodeQuerySchema>;
 

@@ -20,6 +20,7 @@ import {
   PlayCircle,
   RotateCcw,
   TriangleAlert,
+  Wallet,
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -32,6 +33,7 @@ import {
 } from '@ayman/contracts/unlock-codes';
 import { cn } from '@ayman/ui/lib/cn';
 import { ApiRequestError, apiPost } from '@/lib/api';
+import { formatEGPExact } from '@/lib/price';
 import { KIND_ICON } from './kind-icons';
 
 const c = copy.unlockCodes;
@@ -271,12 +273,54 @@ function RedeemSuccess({
 }) {
   const [pieces] = useState(confettiPieces);
   const titleRef = useRef<HTMLHeadingElement>(null);
-  const lessonHref = (lessonId: string) =>
-    `/courses/${encodeURIComponent(result.course.slug)}/lessons/${lessonId}`;
+  const course = result.course;
 
   // Focus moves to the news, so a screen reader announces it and a keyboard
   // user is not left on a button that no longer exists.
   useEffect(() => titleRef.current?.focus(), []);
+
+  /*
+   * «كود شحن» — it opened nothing and added money. The same celebration, the
+   * amount instead of a list of lectures, and the way to the wallet.
+   */
+  if (course === null) {
+    return (
+      <div className="uc-success" role="status">
+        <div className="uc-confetti" aria-hidden="true">
+          {pieces.map((style, index) => (
+            <span key={index} style={style} />
+          ))}
+        </div>
+        <div className="uc-success__badge">
+          <Wallet className="size-9" strokeWidth={2.5} aria-hidden="true" />
+        </div>
+        <h2 ref={titleRef} tabIndex={-1} className="uc-success__title outline-none">
+          {c.walletTitle}
+        </h2>
+        <p className="uc-success__lead">
+          {formatCopy(c.walletLead, { amount: formatEGPExact(result.walletCreditCents ?? 0) })}
+        </p>
+        {result.walletBalanceCents !== null ? (
+          <p className="uc-success__lead">
+            {formatCopy(c.walletBalance, { balance: formatEGPExact(result.walletBalanceCents) })}
+          </p>
+        ) : null}
+        <div className="uc-actions">
+          <Link href="/wallet" className="uc-btn uc-btn--primary">
+            <Wallet className="size-5" aria-hidden="true" />
+            {c.walletOpen}
+          </Link>
+          <button type="button" className="uc-btn uc-btn--ghost" onClick={onAnother}>
+            <RotateCcw className="size-5" aria-hidden="true" />
+            {c.successAnother}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const lessonHref = (lessonId: string) =>
+    `/courses/${encodeURIComponent(course.slug)}/lessons/${lessonId}`;
 
   return (
     <div className="uc-success" role="status">
@@ -292,7 +336,7 @@ function RedeemSuccess({
       <h2 ref={titleRef} tabIndex={-1} className="uc-success__title outline-none">
         {c.successTitle}
       </h2>
-      <p className="uc-success__lead">{formatCopy(c.successLead, { course: result.course.title })}</p>
+      <p className="uc-success__lead">{formatCopy(c.successLead, { course: course.title })}</p>
 
       <ul className="uc-opened">
         {result.opened.map((item, index) => {
@@ -332,7 +376,7 @@ function RedeemSuccess({
         ) : null}
         {compact ? null : (
           <Link
-            href={`/library/${encodeURIComponent(result.course.slug)}`}
+            href={`/library/${encodeURIComponent(course.slug)}`}
             className="uc-btn uc-btn--ghost"
           >
             <GraduationCap className="size-5" aria-hidden="true" />

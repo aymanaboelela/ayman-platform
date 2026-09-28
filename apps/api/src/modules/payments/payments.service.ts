@@ -38,6 +38,8 @@ import {
 // must not offer (or charge for) a month the gate would have opened anyway.
 import { courseAccessScopes } from '../entitlement/grant-liveness';
 import { monthSliceOf } from '../entitlement/month-access';
+import type { WalletPurchaseInput, WalletPurchaseResult } from '@ayman/contracts/wallet';
+import { debitWallet } from '../wallet/wallet-ledger';
 
 /** The prefix `POST /payments/screenshot` stores under — see the model note
  *  on `PaymentSubmission.screenshotKey` in schema.prisma for why this must
@@ -49,6 +51,13 @@ const SCREENSHOT_PREFIX = 'payment-proof';
  *  thing back. Never escapes the method — a lost race is a `null` return, not
  *  an error: the work was already done, correctly, by whoever won. */
 class AlreadySettled extends Error {}
+
+/** A wallet purchase refused for a reason the checkout names — see
+ *  `WalletPurchaseErrorSchema`. `insufficient` comes from the ledger itself
+ *  (`WalletInsufficientError`), with the live balance attached. */
+function walletRefusal(reason: 'already_owned'): ConflictException {
+  return new ConflictException({ code: `wallet_${reason}`, message: reason });
+}
 
 /** Just what `courseAccessScopes` and the month picker need off a course —
  *  a Prisma row from either caller, never the whole model. */
@@ -96,17 +105,29 @@ export class PaymentsService {
     return { screenshotKey: image.storageKey };
   }
 
-  /** Step two — the actual claim, referencing the key from step one. */
-  async submit(userId: string, input: SubmitPaymentInput): Promise<PaymentSubmission> {
-    if (!input.screenshotKey.startsWith(`${SCREENSHOT_PREFIX}/`)) {
-      // Not an authorization check — `uploadPrivateImage` already scoped the
-      // bytes to a key no OTHER route can serve. This only refuses a caller
-      // who skipped step one and handed back a key from an unrelated feature
-      // (a message attachment, a course cover), which would otherwise create
-      // a submission an admin approves by looking at someone else's picture.
-      throw new BadRequestException('screenshotKey was not issued by POST /payments/screenshot');
-    }
-
+  /**
+   * Everything a SALE has to agree on before any money moves — the plan is
+   * still sold, the course is published, the term is open, the months are on
+   * sale and not already owned, no claim for the same thing is waiting, and
+   * the price, derived here and never taken from the client.
+   *
+   * One method for both ways of paying — a transfer claim (`submit`) and the
+   * wallet (`purchaseFromWallet`) — because a second copy of these rules is a
+   * second opinion about what a student may buy and for how much, and the two
+   * would drift the first time either was edited.
+   */
+  private async resolvePurchase(
+    userId: string,
+    input: Pick<SubmitPaymentInput, 'courseId' | 'plan' | 'termId' | 'monthIds'>,
+  ): Promise<{
+    course: { id: string; title: string };
+    /** What `monthOwnership` needs, for a caller that re-checks under a lock. */
+    offering: MonthOfferingCourse;
+    term: { id: string; title: string } | null;
+    amountCents: number;
+    isMonthPurchase: boolean;
+    requestedMonthIds: string[];
+  }> {
     if (!SellablePaymentPlanSchema.safeParse(input.plan).success) {
       /*
         «٣ شهور» came off the shelf — the instructor took it off — and this is
@@ -270,6 +291,30 @@ export class PaymentsService {
       );
     }
 
+    return {
+      course: { id: course.id, title: course.title },
+      offering: course,
+      term: term ? { id: term.id, title: term.title } : null,
+      amountCents,
+      isMonthPurchase,
+      requestedMonthIds,
+    };
+  }
+
+  /** Step two — the actual claim, referencing the key from step one. */
+  async submit(userId: string, input: SubmitPaymentInput): Promise<PaymentSubmission> {
+    if (!input.screenshotKey.startsWith(`${SCREENSHOT_PREFIX}/`)) {
+      // Not an authorization check — `uploadPrivateImage` already scoped the
+      // bytes to a key no OTHER route can serve. This only refuses a caller
+      // who skipped step one and handed back a key from an unrelated feature
+      // (a message attachment, a course cover), which would otherwise create
+      // a submission an admin approves by looking at someone else's picture.
+      throw new BadRequestException('screenshotKey was not issued by POST /payments/screenshot');
+    }
+
+    const { course, term, amountCents, isMonthPurchase, requestedMonthIds } =
+      await this.resolvePurchase(userId, input);
+
     /*
       The submission and the alert about it are ONE transaction.
 
@@ -358,6 +403,266 @@ export class PaymentsService {
       rejectionReason: null,
       validUntil: null,
       createdAt: submission.createdAt.toISOString(),
+    };
+  }
+
+  /**
+   * «ادفع من المحفظة» — the same sale `submit()` records, paid from the
+   * student's wallet instead of by a transfer, so it needs nobody to review it.
+   *
+   * ## It reaches exactly what an approved transfer reaches
+   *
+   * `resolvePurchase` decides what may be bought and for how much (the rules
+   * `submit()` runs, not a copy of them), and the grant is written by the same
+   * `writeMonthGrants` / `writeTermGrant` / `writePurchaseGrant` `approve()`
+   * uses. The submission is created already `approved`, the way
+   * `adminManualSubscribe` creates one, so `/admin/finance`, the student's own
+   * history and every «is subscribed» reader see an ordinary subscription —
+   * marked `walletTransactionId`, which is what keeps it out of every revenue
+   * SUM (the money was counted when it came into the wallet).
+   *
+   * ## Why nothing can be charged twice
+   *
+   * The debit is the FIRST write in the transaction, and it takes the wallet's
+   * row lock. A second purchase by the same student — a double press with a
+   * fresh key, a second tab — waits on that lock, and everything after it
+   * (whether the term or the months are already held, the current expiry to
+   * extend) is read AFTER the lock, inside the transaction, so it sees what the
+   * first purchase committed. A retry with the SAME key dies on the ledger's
+   * UNIQUE and is answered with the first purchase's own result.
+   */
+  async purchaseFromWallet(userId: string, input: WalletPurchaseInput): Promise<WalletPurchaseResult> {
+    const replay = await this.walletPurchaseReplay(userId, input.idempotencyKey);
+    if (replay) return replay;
+
+    const { course, offering, term, amountCents, isMonthPurchase, requestedMonthIds } =
+      await this.resolvePurchase(userId, input);
+
+    // Ordered by `monthIndex`, so the grant stamped on the submission is the
+    // same one `approve()` would stamp — see `writeMonthGrants`.
+    const monthIds = isMonthPurchase
+      ? (
+          await this.prisma.courseMonth.findMany({
+            where: { courseId: course.id, id: { in: requestedMonthIds } },
+            orderBy: { monthIndex: 'asc' },
+            select: { id: true },
+          })
+        ).map((month) => month.id)
+      : [];
+
+    const now = new Date();
+    const note = `wallet: purchase`;
+
+    let result: { submissionId: string; validUntil: Date | null; balanceCents: number };
+    try {
+      result = await this.prisma.$transaction(async (tx) => {
+        const debit = await debitWallet(tx, {
+          userId,
+          kind: 'course_purchase',
+          amountCents,
+          idempotencyKey: input.idempotencyKey,
+          // No note: the submission this debit paid for points back at it
+          // (`walletTransactionId`), and names the course on every statement.
+          note: null,
+        });
+
+        // Re-checked under the lock — see the method note.
+        if (input.plan === 'term' && term) {
+          const held = await tx.accessGrant.count({
+            where: { userId, courseId: course.id, termId: term.id, scope: 'term', revokedAt: null },
+          });
+          if (held > 0) throw walletRefusal('already_owned');
+        }
+        if (isMonthPurchase) {
+          const { ownedMonthIds } = await this.monthOwnership(userId, offering, tx);
+          if (monthIds.some((id) => ownedMonthIds.includes(id))) throw walletRefusal('already_owned');
+        }
+
+        let validUntil: Date | null = null;
+        let grantId: string;
+        if (isMonthPurchase) {
+          grantId = await this.writeMonthGrants(tx, {
+            userId,
+            courseId: course.id,
+            monthIds,
+            adminId: null,
+            now,
+            note,
+          });
+        } else if (input.plan === 'term') {
+          grantId = await this.writeTermGrant(tx, {
+            userId,
+            courseId: course.id,
+            // Non-null for `plan: 'term'` — `resolvePurchase` refuses otherwise.
+            termId: (term as { id: string }).id,
+            adminId: null,
+            now,
+            note,
+          });
+        } else {
+          // `resolvePurchaseExpiry`'s read, done on `tx` after the lock so two
+          // renewals in a row extend one after the other instead of both
+          // extending the same old expiry.
+          const existing = await tx.accessGrant.findFirst({
+            where: { userId, courseId: course.id, scope: 'course', source: 'purchase', revokedAt: null },
+            select: { id: true, validUntil: true },
+          });
+          validUntil = computeApprovalValidUntil(
+            input.plan as CourseWidePlan,
+            now,
+            existing?.validUntil ?? null,
+          );
+          grantId = await this.writePurchaseGrant(tx, {
+            userId,
+            courseId: course.id,
+            adminId: null,
+            now,
+            validUntil,
+            existingGrant: existing ? { id: existing.id } : null,
+            note,
+          });
+        }
+
+        const submission = await tx.paymentSubmission.create({
+          data: {
+            userId,
+            courseId: course.id,
+            plan: input.plan,
+            termId: term?.id ?? null,
+            months:
+              monthIds.length > 0
+                ? { createMany: { data: monthIds.map((monthId) => ({ monthId, courseId: course.id })) } }
+                : undefined,
+            amountCents,
+            isFree: false,
+            // No transfer, no screenshot — the wallet row IS the proof.
+            senderPhone: null,
+            screenshotKey: null,
+            status: 'approved',
+            // Nobody reviewed it; the ledger row says what did.
+            reviewedByUserId: null,
+            reviewedAt: now,
+            grantId,
+            walletTransactionId: debit.id,
+          },
+          select: { id: true },
+        });
+
+        await this.notifications.emit(tx, {
+          userId,
+          kind: 'payment_approved',
+          courseId: course.id,
+          validUntil: validUntil ? validUntil.toISOString() : null,
+        });
+
+        await this.audit.recordTx(tx, {
+          action: 'wallet:purchase',
+          resourceType: AUDIT_RESOURCES.paymentSubmission,
+          resourceId: submission.id,
+          outcome: 'success',
+          metadata: {
+            userId,
+            courseId: course.id,
+            plan: input.plan,
+            termId: term?.id ?? null,
+            monthIds,
+            amountCents,
+            walletTransactionId: debit.id,
+            balanceAfterCents: debit.balanceAfterCents,
+            grantId,
+            validUntil: validUntil ? validUntil.toISOString() : null,
+          },
+        });
+
+        return { submissionId: submission.id, validUntil, balanceCents: debit.balanceAfterCents };
+      });
+    } catch (error) {
+      /*
+       * The same key pressed twice at once: the second transaction either dies
+       * on the ledger's UNIQUE (the balance covered both) or is refused by the
+       * balance the first one left (it did not). Either way, if the key now
+       * names a committed purchase, that purchase IS the answer.
+       */
+      const again = await this.walletPurchaseReplay(userId, input.idempotencyKey);
+      if (again) return again;
+      throw error;
+    }
+
+    await this.notifications.announce(userId);
+    // Never pending, but it is a row on the «اتوافق عليها» and «الكل» views.
+    await this.announceDesk();
+
+    return {
+      submission: {
+        id: result.submissionId,
+        courseId: course.id,
+        courseTitle: course.title,
+        plan: input.plan,
+        termId: term?.id ?? null,
+        termTitle: term?.title ?? null,
+        amountCents,
+        senderPhone: null,
+        status: 'approved',
+        rejectionReason: null,
+        validUntil: result.validUntil ? result.validUntil.toISOString() : null,
+        createdAt: now.toISOString(),
+      },
+      balanceCents: result.balanceCents,
+    };
+  }
+
+  /**
+   * The purchase an idempotency key already paid for, answered again — or
+   * `null` when the key is new. A key found on ANOTHER student's ledger is
+   * refused rather than answered: that is not a retry.
+   */
+  private async walletPurchaseReplay(
+    userId: string,
+    idempotencyKey: string,
+  ): Promise<WalletPurchaseResult | null> {
+    const row = await this.prisma.walletTransaction.findUnique({
+      where: { idempotencyKey },
+      select: {
+        userId: true,
+        kind: true,
+        purchase: {
+          select: {
+            id: true,
+            plan: true,
+            amountCents: true,
+            createdAt: true,
+            course: { select: { id: true, title: true } },
+            term: { select: { id: true, title: true } },
+            grant: { select: { validUntil: true } },
+          },
+        },
+      },
+    });
+    if (!row) return null;
+    if (row.userId !== userId || row.kind !== 'course_purchase' || !row.purchase) {
+      throw new ConflictException('this request key was already used');
+    }
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { userId },
+      select: { balanceCents: true },
+    });
+    const submission = row.purchase;
+    return {
+      submission: {
+        id: submission.id,
+        courseId: submission.course.id,
+        courseTitle: submission.course.title,
+        plan: submission.plan,
+        termId: submission.term?.id ?? null,
+        termTitle: submission.term?.title ?? null,
+        amountCents: submission.amountCents,
+        senderPhone: null,
+        status: 'approved',
+        rejectionReason: null,
+        validUntil: submission.grant?.validUntil?.toISOString() ?? null,
+        createdAt: submission.createdAt.toISOString(),
+      },
+      balanceCents: wallet?.balanceCents ?? 0,
     };
   }
 
@@ -471,8 +776,11 @@ export class PaymentsService {
   private async monthOwnership(
     userId: string,
     course: MonthOfferingCourse,
+    // A transaction client when the answer has to be read AFTER a lock the
+    // caller holds — see `purchaseFromWallet`. Everyone else reads live.
+    client: Pick<Prisma.TransactionClient, 'accessGrant'> = this.prisma,
   ): Promise<{ ownedMonthIds: string[]; coversAll: boolean }> {
-    const grants = await this.prisma.accessGrant.findMany({
+    const grants = await client.accessGrant.findMany({
       where: { userId, OR: courseAccessScopes(course) },
       select: { id: true, scope: true, monthId: true, validFrom: true, validUntil: true, revokedAt: true },
     });
@@ -510,6 +818,7 @@ export class PaymentsService {
           senderPhone: true,
           screenshotKey: true,
           isFree: true,
+          walletTransactionId: true,
           status: true,
           rejectionReason: true,
           createdAt: true,
@@ -556,6 +865,7 @@ export class PaymentsService {
         amountCents: row.amountCents,
         senderPhone: row.senderPhone,
         isFree: row.isFree,
+        paidFromWallet: row.walletTransactionId !== null,
         hasScreenshot: row.screenshotKey !== null,
         status: row.status,
         rejectionReason: row.rejectionReason,

@@ -100,6 +100,10 @@ export const AdminFinanceRowSchema = z.object({
    *  `null` alongside `plan`/`amountCents` for the same edge case: no
    *  approved submission behind this grant to read it from. */
   isFree: z.boolean().nullable(),
+  /** «من المحفظة» — that same latest payment was paid from the student's
+   *  wallet. Its money was counted as income when the wallet was topped up, so
+   *  it is NOT in `summary.revenueTotalCents` or the selection's revenue. */
+  paidFromWallet: z.boolean().default(false),
   /** `null` for a `plan: 'term'` row — it never expires by date, only by an
    *  admin closing the term (see `AccessGrant.validUntil`'s own note). */
   validUntil: z.iso.datetime().nullable(),
@@ -203,7 +207,7 @@ export const AdminFinanceSelectionSchema = z.object({
    */
   studentCount: z.number().int().min(0),
   /** Sum of the LATEST approved payment behind each matching grant, excluding
-   *  comped ones. See the ⚠️ above — this is not a slice of `revenueTotalCents`. */
+   *  comped ones and wallet-paid ones (not new money). See the ⚠️ above — this is not a slice of `revenueTotalCents`. */
   revenueCents: z.number().int().min(0),
   /** Comped subscriptions in the selection — «مجاني». Counted off the same
    *  `isFree` flag the `free` plan filter uses, so the two always agree. */
@@ -260,7 +264,9 @@ export const AdminFinanceSelectionSchema = z.object({
 export type AdminFinanceSelection = z.infer<typeof AdminFinanceSelectionSchema>;
 
 export const AdminFinanceSummarySchema = z.object({
-  /** Sum of `amountCents` across every APPROVED submission ever, not scoped
+  /** Sum of `amountCents` across every APPROVED, paid-in-money submission
+   *  ever (wallet-paid ones are counted on the wallet's day instead — see
+   *  `SUBSCRIPTION_CASH_WHERE`), not scoped
    *  to a calendar month — Ayman's own correction: a fresh month starting
    *  the tile back at zero read as money vanishing, not as "this month's
    *  revenue starting over". Never a grant-created count — a renewal shows

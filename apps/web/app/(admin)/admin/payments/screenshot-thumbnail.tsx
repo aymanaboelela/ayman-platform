@@ -30,9 +30,19 @@ import { copy } from '@ayman/contracts/copy/admin';
  * never `target="_blank"`. A new tab leaves the review queue's scroll
  * position and its pending/approved filter behind; a lightbox does not.
  */
-export function PaymentScreenshotThumbnail({ id, alt }: { id: string; alt: string }) {
+export function PaymentScreenshotThumbnail({
+  id,
+  alt,
+  src: override,
+}: {
+  id: string;
+  alt: string;
+  /** Another gated screenshot route — the wallet's top-up queue uses the same
+   *  thumbnail and lightbox for its own receipts. */
+  src?: string;
+}) {
   const [open, setOpen] = useState(false);
-  const src = `/api/admin/payments/submissions/${id}/screenshot`;
+  const src = override ?? `/api/admin/payments/submissions/${id}/screenshot`;
 
   // Escape closes it — the keyboard-only path to the same place the ✕ and the
   // backdrop click both lead. Only listens while actually open, so this never

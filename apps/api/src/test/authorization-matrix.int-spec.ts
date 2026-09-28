@@ -89,6 +89,12 @@ import { AdminBooksController } from '../modules/books/admin-books.controller';
 import { ExpensesController } from '../modules/expenses/expenses.controller';
 import { ExpensesService } from '../modules/expenses/expenses.service';
 import { FinanceOverviewService } from '../modules/expenses/finance-overview.service';
+import { WalletController } from '../modules/wallet/wallet.controller';
+import {
+  AdminWalletController,
+  AdminWalletTopupsController,
+} from '../modules/wallet/admin-wallet.controller';
+import { WalletService } from '../modules/wallet/wallet.service';
 import { BooksService } from '../modules/books/books.service';
 
 import { enumerateRoutes, type RouteRef } from './route-inventory';
@@ -248,6 +254,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // same reason: `ExpensesService` and `FinanceOverviewService` reach for
         // Prisma and `AuditService`, both already available from `AuditModule`.
         ExpensesController,
+        // «المحفظة» — by class, same reasoning as the payments controllers:
+        // `WalletService` needs Prisma, `AuditService` and
+        // `NotificationsService`, and the top-up screenshot route needs
+        // `MediaService`; all four are already available here.
+        WalletController,
+        AdminWalletController,
+        AdminWalletTopupsController,
       ],
       imports: [
         DiscoveryModule,
@@ -386,6 +399,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         FollowUpService,
         ExpensesService,
         FinanceOverviewService,
+        WalletService,
       ],
     })
     class FixtureModule {}
@@ -1794,6 +1808,58 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       }),
       status: 404,
     },
+    // «ادفع من المحفظة» — the same `payment:submit` gate as the claim above.
+    { label: 'wallet purchase: anonymous', method: 'post', path: () => '/api/payments/wallet-purchase', actor: 'anonymous', status: 401 },
+    {
+      label: 'wallet purchase: student, unknown course',
+      method: 'post',
+      path: () => '/api/payments/wallet-purchase',
+      actor: 'student',
+      // Through the gate, then 404 on a course that does not exist — before
+      // any money is touched.
+      body: () => ({ courseId: randomUUID(), plan: 'monthly', idempotencyKey: randomUUID() }),
+      status: 404,
+    },
+    // «المحفظة» — the student's own wallet, `payment:submit`, id off the session.
+    { label: 'wallet mine: anonymous', method: 'get', path: () => '/api/wallet', actor: 'anonymous', status: 401 },
+    { label: 'wallet mine: student', method: 'get', path: () => '/api/wallet', actor: 'student', status: 200 },
+    { label: 'wallet balance: anonymous', method: 'get', path: () => '/api/wallet/balance', actor: 'anonymous', status: 401 },
+    { label: 'wallet balance: student', method: 'get', path: () => '/api/wallet/balance', actor: 'student', status: 200 },
+    { label: 'wallet top-up: anonymous', method: 'post', path: () => '/api/wallet/topups', actor: 'anonymous', status: 401 },
+    {
+      label: 'wallet top-up: student, foreign screenshot key',
+      method: 'post',
+      path: () => '/api/wallet/topups',
+      actor: 'student',
+      // Through the gate and refused by the service's own key check — a
+      // request whose picture did not come from the payment upload.
+      body: () => ({ method: 'instapay', amountCents: 10000, sender: 'someone@instapay', screenshotKey: 'covers/x.webp' }),
+      status: 400,
+    },
+    // «شحن المحفظة» — `payment:read` to look, `payment:review` to move money.
+    { label: 'admin wallets search: anonymous', method: 'get', path: () => '/api/admin/wallets', actor: 'anonymous', status: 401 },
+    { label: 'admin wallets search: student', method: 'get', path: () => '/api/admin/wallets', actor: 'student', status: 403 },
+    { label: 'admin wallets search: admin', method: 'get', path: () => '/api/admin/wallets?q=zz', actor: 'admin', status: 200 },
+    { label: 'admin wallet: anonymous', method: 'get', path: () => `/api/admin/wallets/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin wallet: student', method: 'get', path: () => `/api/admin/wallets/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin wallet: admin, unknown student', method: 'get', path: () => `/api/admin/wallets/${randomUUID()}`, actor: 'admin', status: 404 },
+    { label: 'admin wallet credit: anonymous', method: 'post', path: () => `/api/admin/wallets/${randomUUID()}/credit`, actor: 'anonymous', status: 401 },
+    { label: 'admin wallet credit: student', method: 'post', path: () => `/api/admin/wallets/${randomUUID()}/credit`, actor: 'student', status: 403, body: () => ({ amountCents: 10000, paid: true, idempotencyKey: randomUUID() }) },
+    { label: 'admin wallet credit: admin, unknown student', method: 'post', path: () => `/api/admin/wallets/${randomUUID()}/credit`, actor: 'admin', status: 404, body: () => ({ amountCents: 10000, paid: true, idempotencyKey: randomUUID() }) },
+    { label: 'admin wallet debit: anonymous', method: 'post', path: () => `/api/admin/wallets/${randomUUID()}/debit`, actor: 'anonymous', status: 401 },
+    { label: 'admin wallet debit: student', method: 'post', path: () => `/api/admin/wallets/${randomUUID()}/debit`, actor: 'student', status: 403, body: () => ({ amountCents: 10000, reducesIncome: false, note: 'غلطة', idempotencyKey: randomUUID() }) },
+    // «طلبات الشحن».
+    { label: 'admin wallet top-ups: anonymous', method: 'get', path: () => '/api/admin/wallet-topups', actor: 'anonymous', status: 401 },
+    { label: 'admin wallet top-ups: student', method: 'get', path: () => '/api/admin/wallet-topups', actor: 'student', status: 403 },
+    { label: 'admin wallet top-ups: admin', method: 'get', path: () => '/api/admin/wallet-topups?status=pending&perPage=10', actor: 'admin', status: 200 },
+    { label: 'admin wallet top-up screenshot: anonymous', method: 'get', path: () => `/api/admin/wallet-topups/${randomUUID()}/screenshot`, actor: 'anonymous', status: 401 },
+    { label: 'admin wallet top-up screenshot: student', method: 'get', path: () => `/api/admin/wallet-topups/${randomUUID()}/screenshot`, actor: 'student', status: 403 },
+    { label: 'admin wallet top-up screenshot: admin, unknown', method: 'get', path: () => `/api/admin/wallet-topups/${randomUUID()}/screenshot`, actor: 'admin', status: 404 },
+    { label: 'admin wallet top-up approve: anonymous', method: 'post', path: () => `/api/admin/wallet-topups/${randomUUID()}/approve`, actor: 'anonymous', status: 401 },
+    { label: 'admin wallet top-up approve: student', method: 'post', path: () => `/api/admin/wallet-topups/${randomUUID()}/approve`, actor: 'student', status: 403, body: () => ({}) },
+    { label: 'admin wallet top-up approve: admin, unknown', method: 'post', path: () => `/api/admin/wallet-topups/${randomUUID()}/approve`, actor: 'admin', status: 404, body: () => ({}) },
+    { label: 'admin wallet top-up reject: anonymous', method: 'post', path: () => `/api/admin/wallet-topups/${randomUUID()}/reject`, actor: 'anonymous', status: 401 },
+    { label: 'admin wallet top-up reject: student', method: 'post', path: () => `/api/admin/wallet-topups/${randomUUID()}/reject`, actor: 'student', status: 403, body: () => ({ reason: 'مش واضح' }) },
     { label: 'payment mine: anonymous', method: 'get', path: () => '/api/payments/submissions/me', actor: 'anonymous', status: 401 },
     { label: 'payment mine: student', method: 'get', path: () => '/api/payments/submissions/me', actor: 'student', status: 200 },
     // «الشهور اللي معايا خلاص» — what the checkout disables in its picker. A

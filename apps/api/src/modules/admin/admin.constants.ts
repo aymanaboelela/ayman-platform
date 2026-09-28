@@ -68,6 +68,13 @@ export const AUDIT_RESOURCES = {
   expense: 'expenses',
   /// «أكواد الفتح» — see `UnlockCode`.
   unlockCode: 'unlock_codes',
+  /// «المحفظة» — one ledger row (a credit, a debit, a purchase, a refund).
+  /// Its own resource and not `payment_submissions`: «مين حط فلوس في محفظة
+  /// الطالب ده» has to be one filter, and most of these rows have no
+  /// submission at all.
+  walletTransaction: 'wallet_transactions',
+  /// «طلبات الشحن» — the InstaPay / Vodafone Cash top-up requests.
+  walletTopup: 'wallet_topups',
   /// «السناتر» — see `CentersService`.
   center: 'centers',
   centerSlot: 'center_slots',

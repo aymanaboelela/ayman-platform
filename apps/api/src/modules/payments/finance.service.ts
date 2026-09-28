@@ -17,6 +17,8 @@ import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EXPIRING_SOON_WINDOW_MS, financeStatusFor } from './finance-status';
+import { SUBSCRIPTION_CASH_WHERE } from './subscription-cash';
+import { creditWallet } from '../wallet/wallet-ledger';
 import type { AccessScope, Prisma } from '../../generated/prisma/client';
 
 /**
@@ -110,19 +112,17 @@ export class FinanceService {
         where: { ...base, scope: 'course', validUntil: { gte: now, lte: soon } },
       }),
       this.prisma.paymentSubmission.aggregate({
-        where: {
-          status: 'approved',
-          // Never counts an admin-comped term — `countsAsRevenue`'s own note
-          // is why this is a direct `isFree: false` filter rather than
-          // trusting `amountCents = 0` alone.
-          //
-          // No `reviewedAt` date bound — this used to be scoped to the
-          // current calendar month and reset to zero on the 1st, which read
-          // as money vanishing rather than as a monthly figure starting
-          // over. Ayman's own correction: the tile is a running total, not
-          // a month-to-date one.
-          isFree: false,
-        },
+        // Never counts an admin-comped term (`countsAsRevenue`'s own note is
+        // why `isFree: false` is explicit), and never a subscription paid
+        // from the wallet — that money was counted the day it came into the
+        // wallet. `SUBSCRIPTION_CASH_WHERE` is the one definition.
+        //
+        // No `reviewedAt` date bound — this used to be scoped to the
+        // current calendar month and reset to zero on the 1st, which read
+        // as money vanishing rather than as a monthly figure starting
+        // over. Ayman's own correction: the tile is a running total, not
+        // a month-to-date one.
+        where: SUBSCRIPTION_CASH_WHERE,
         _sum: { amountCents: true },
       }),
       // Money given back against subscriptions, all time — the same grain as
@@ -209,9 +209,18 @@ export class FinanceService {
     const latest = await this.prisma.paymentSubmission.findFirst({
       where: { grantId: grant.id, status: 'approved' },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, amountCents: true, isFree: true },
+      select: { id: true, amountCents: true, isFree: true, walletTransactionId: true },
     });
     if (!latest) throw new NotFoundException('no approved payment behind this grant');
+    if (latest.walletTransactionId !== null) {
+      // The amount of a wallet purchase IS the debit on the student's ledger —
+      // rewriting it here would make the two disagree, and «مجاني» on money
+      // that really left the wallet is a CHECK violation. Giving money back is
+      // «إلغاء» with a refund, which returns it to the wallet.
+      throw new BadRequestException(
+        'الاشتراك ده اتدفع من المحفظة — لو عايز ترجّع فلوس، اعمل إلغاء مع استرداد وهترجع للمحفظة',
+      );
+    }
 
     await this.prisma.paymentSubmission.update({
       where: { id: latest.id },
@@ -367,7 +376,42 @@ export class FinanceService {
         },
       });
 
-      if (refund !== null) {
+      if (refund !== null && refund.toWallet) {
+        /*
+         * A subscription paid FROM the wallet refunds INTO the wallet. No
+         * `Refund` row: that table subtracts from revenue, and this sale was
+         * never revenue (see `SUBSCRIPTION_CASH_WHERE`) — the money was
+         * counted once, when it came in, and it is still the student's.
+         */
+        const row = await creditWallet(tx, {
+          userId: grant.userId,
+          kind: 'refund',
+          amountCents: refund.amountCents,
+          refundOfSubmissionId: refund.submissionId,
+          actorUserId: adminId,
+          note: input.reason,
+        });
+        await this.notifications.emit(tx, {
+          userId: grant.userId,
+          kind: 'wallet_credited',
+          amountCents: refund.amountCents,
+          source: 'refund',
+        });
+        await this.audit.recordTx(tx, {
+          action: 'wallet:refund',
+          resourceType: AUDIT_RESOURCES.walletTransaction,
+          resourceId: row.id,
+          outcome: 'success',
+          metadata: {
+            adminId,
+            userId: grant.userId,
+            grantId: grant.id,
+            submissionId: refund.submissionId,
+            amountCents: refund.amountCents,
+            balanceAfterCents: row.balanceAfterCents,
+          },
+        });
+      } else if (refund !== null) {
         await tx.refund.create({
           data: {
             submissionId: refund.submissionId,
@@ -395,6 +439,10 @@ export class FinanceService {
       }
     });
 
+    if (refund?.toWallet || input.showToStudent) {
+      await this.notifications.announce(grant.userId);
+    }
+
     await this.audit.record({
       action: 'payment:finance-cancel',
       resourceType: 'access_grant',
@@ -412,6 +460,7 @@ export class FinanceService {
         // submission, or the course they hang off has been deleted.
         refundCents: refund?.amountCents ?? null,
         refundSubmissionId: refund?.submissionId ?? null,
+        refundToWallet: refund?.toWallet ?? false,
       },
     });
 
@@ -444,7 +493,7 @@ export class FinanceService {
   private async resolveRefund(
     grantId: string,
     input: AdminFinanceCancelInput,
-  ): Promise<{ submissionId: string; amountCents: number }> {
+  ): Promise<{ submissionId: string; amountCents: number; toWallet: boolean }> {
     const amountCents = input.refundCents;
     if (amountCents == null) throw new BadRequestException('no refund amount');
 
@@ -489,7 +538,14 @@ export class FinanceService {
               OR: [{ grantId }, { months: { some: { monthId: grantRow.monthId } } }],
             },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, amountCents: true, isFree: true, refunds: { select: { amountCents: true } } },
+      select: {
+        id: true,
+        amountCents: true,
+        isFree: true,
+        walletTransactionId: true,
+        refunds: { select: { amountCents: true } },
+        walletRefunds: { select: { amountCents: true } },
+      },
     });
 
     const latest = submissions[0];
@@ -497,10 +553,34 @@ export class FinanceService {
       throw new BadRequestException('مفيش دفعة متسجلة على الاشتراك ده ترجّع منها');
     }
 
-    const collected = submissions
+    /*
+     * «اتدفع من المحفظة» — the refund goes back to the WALLET, capped by what
+     * this one purchase took out of it minus what has already gone back.
+     * Kept apart from the cash cap below on purpose: wallet money was never
+     * revenue here, so it must neither raise the cash cap nor be refunded as
+     * cash.
+     */
+    if (latest.walletTransactionId !== null) {
+      const backAlready = latest.walletRefunds.reduce((sum, row) => sum + row.amountCents, 0);
+      const refundableToWallet = latest.amountCents - backAlready;
+      if (refundableToWallet <= 0) {
+        throw new BadRequestException('الاشتراك ده مفيهوش فلوس تترجّع');
+      }
+      if (amountCents > refundableToWallet) {
+        throw new BadRequestException(
+          `أكبر مبلغ ممكن يرجع للمحفظة هو ${Math.floor(refundableToWallet / 100)} جنيه`,
+        );
+      }
+      return { submissionId: latest.id, amountCents, toWallet: true };
+    }
+
+    // Cash only: a wallet-paid renewal on the same grant is not money this
+    // subscription collected, and must not widen what may be refunded as cash.
+    const cashSubmissions = submissions.filter((submission) => submission.walletTransactionId === null);
+    const collected = cashSubmissions
       .filter((submission) => !submission.isFree)
       .reduce((sum, submission) => sum + submission.amountCents, 0);
-    const alreadyRefunded = submissions.reduce(
+    const alreadyRefunded = cashSubmissions.reduce(
       (sum, submission) =>
         sum + submission.refunds.reduce((inner, refund) => inner + refund.amountCents, 0),
       0,
@@ -516,7 +596,7 @@ export class FinanceService {
       );
     }
 
-    return { submissionId: latest.id, amountCents };
+    return { submissionId: latest.id, amountCents, toWallet: false };
   }
 
   /**
@@ -590,12 +670,20 @@ export class FinanceService {
 
     const submissions = await this.prisma.paymentSubmission.findMany({
       where: { grantId: { in: [...grantIds] }, status: 'approved' },
-      select: { grantId: true, refunds: { select: { amountCents: true } } },
+      select: {
+        grantId: true,
+        refunds: { select: { amountCents: true } },
+        // Money a wallet-paid subscription gave back to the wallet — the same
+        // «رجعله كام» for the admin, whichever way it went back.
+        walletRefunds: { select: { amountCents: true } },
+      },
     });
 
     for (const submission of submissions) {
       if (submission.grantId === null) continue;
-      const total = submission.refunds.reduce((sum, refund) => sum + refund.amountCents, 0);
+      const total =
+        submission.refunds.reduce((sum, refund) => sum + refund.amountCents, 0) +
+        submission.walletRefunds.reduce((sum, refund) => sum + refund.amountCents, 0);
       if (total === 0) continue;
       byGrant.set(submission.grantId, (byGrant.get(submission.grantId) ?? 0) + total);
     }
@@ -636,7 +724,7 @@ const GRANT_SELECT = {
     where: { status: 'approved' },
     orderBy: { createdAt: 'desc' },
     take: 1,
-    select: { plan: true, amountCents: true, reviewedAt: true, isFree: true },
+    select: { plan: true, amountCents: true, reviewedAt: true, isFree: true, walletTransactionId: true },
   },
   // Every approved submission, counted — `renewalCount` below is this minus
   // one. A filtered relation `_count`, not a second query per grant.
@@ -664,6 +752,7 @@ function toRow(grant: GrantRowWithCourse, now: Date, refundedCents: number): Adm
     amountCents: latest?.amountCents ?? null,
     paidAt: latest?.reviewedAt?.toISOString() ?? null,
     isFree: latest?.isFree ?? null,
+    paidFromWallet: latest !== null && latest.walletTransactionId !== null,
     validUntil: grant.validUntil?.toISOString() ?? null,
     validFrom: grant.validFrom.toISOString(),
     // Guaranteed one of these three by the base query's `scope: { in: [...] }`
@@ -722,7 +811,9 @@ function computeSelection(
       if (latest.isFree) freeCount += 1;
       else {
         paidCount += 1;
-        revenueCents += latest.amountCents;
+        // A wallet purchase is a paid subscription and NOT new money — see
+        // `SUBSCRIPTION_CASH_WHERE`. Counted as paid, summed as nothing.
+        if (latest.walletTransactionId === null) revenueCents += latest.amountCents;
       }
     }
 
@@ -746,7 +837,7 @@ function computeSelection(
     bucket.students.add(grant.userId);
     if (latest !== null) {
       if (latest.isFree) bucket.freeCount += 1;
-      else bucket.revenueCents += latest.amountCents;
+      else if (latest.walletTransactionId === null) bucket.revenueCents += latest.amountCents;
     }
     byCourse.set(grant.courseId, bucket);
   }

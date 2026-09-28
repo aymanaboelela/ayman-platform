@@ -33,6 +33,7 @@ const VIA_LABEL: Record<StudentPaymentVia, string> = {
   instapay: c.viaInstapay,
   manual: c.viaManual,
   review: c.viaReview,
+  wallet: c.viaWallet,
 };
 
 /** Day, month and year with the time — a student's history spans terms, so
@@ -130,6 +131,15 @@ export async function PaymentsSection({ userId }: { userId: string }) {
               hue="var(--err)"
             />
             <Stat label={c.studentNet} value={formatAmount(data.totals.netCents)} hue="var(--viz-2)" />
+            {/* Subscriptions bought from the wallet — not in «اتدفع»: that money
+                is on the wallet's own statement, where it came in. */}
+            {data.totals.walletPaidCents > 0 ? (
+              <Stat
+                label={c.studentWalletPaid}
+                value={formatAmount(data.totals.walletPaidCents)}
+                hue="var(--viz-2)"
+              />
+            ) : null}
             <Stat
               label={c.studentRenewals}
               value={formatCount(data.totals.renewalCount)}

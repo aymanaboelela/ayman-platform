@@ -12,6 +12,15 @@ import {
   BOOK_REVENUE_SQL,
   BOOK_REVENUE_WHERE,
 } from '../book-orders/book-revenue';
+import {
+  SUBSCRIPTION_CASH_WHERE,
+  WALLET_INCOME_WHERE,
+  subscriptionCashSql,
+} from '../payments/subscription-cash';
+
+/** `SUBSCRIPTION_CASH_WHERE` for the raw month-by-month query, over alias `p`.
+ *  Same safety argument as `BOOK_REVENUE_RAW`: a constant, never request data. */
+const SUBSCRIPTION_CASH_RAW = Prisma.raw(subscriptionCashSql('p'));
 
 /** The shared predicate as a raw SQL fragment. `Prisma.raw` is safe here and
  *  only here: `BOOK_REVENUE_SQL` is a module-level constant with no interpolation
@@ -56,6 +65,7 @@ function isoDate(value: Date): string {
 interface MonthlyRow {
   month: string;
   subscription: bigint | number | null;
+  wallet: bigint | number | null;
   books: bigint | number | null;
   expenses: bigint | number | null;
   subscriptionRefunds: bigint | number | null;
@@ -121,29 +131,54 @@ export class FinanceOverviewService {
   constructor(private readonly prisma: PrismaService) {}
 
   async overview(): Promise<AdminFinanceOverview> {
-    const [subscriptionRevenue, bookRevenue, expenseGroups, cost, refunds, months] =
-      await Promise.all([
-        this.prisma.paymentSubmission.aggregate({
-          // Identical to the revenue tile's filter — see the class doc.
-          where: { status: 'approved', isFree: false },
-          _sum: { amountCents: true },
-        }),
-        this.prisma.bookOrder.aggregate({
-          where: BOOK_REVENUE_WHERE,
-          _sum: { amountCents: true },
-        }),
-        this.prisma.expense.groupBy({
-          by: ['category'],
-          _sum: { amountCents: true },
-        }),
-        this.bookCostOfSales(),
-        this.refundTotals(),
-        this.monthly(),
-      ]);
+    const [
+      subscriptionRevenue,
+      bookRevenue,
+      expenseGroups,
+      cost,
+      refunds,
+      months,
+      walletIncome,
+      walletSpent,
+      walletHeld,
+    ] = await Promise.all([
+      this.prisma.paymentSubmission.aggregate({
+        // Identical to the revenue tile's filter — see the class doc. A
+        // subscription paid from the wallet is NOT in here: its money is
+        // `walletIncome` below, counted the day it came in.
+        where: SUBSCRIPTION_CASH_WHERE,
+        _sum: { amountCents: true },
+      }),
+      this.prisma.bookOrder.aggregate({
+        where: BOOK_REVENUE_WHERE,
+        _sum: { amountCents: true },
+      }),
+      this.prisma.expense.groupBy({
+        by: ['category'],
+        _sum: { amountCents: true },
+      }),
+      this.bookCostOfSales(),
+      this.refundTotals(),
+      this.monthly(),
+      // «شحن المحفظة» — the third stream. Signed: a paid credit taken back
+      // comes off. See `WALLET_INCOME_WHERE`.
+      this.prisma.walletTransaction.aggregate({
+        where: WALLET_INCOME_WHERE,
+        _sum: { amountCents: true },
+      }),
+      // Spent from wallets on subscriptions — for the reader, not the sum.
+      this.prisma.paymentSubmission.aggregate({
+        where: { status: 'approved', walletTransactionId: { not: null } },
+        _sum: { amountCents: true },
+      }),
+      // Held by students right now.
+      this.prisma.wallet.aggregate({ _sum: { balanceCents: true } }),
+    ]);
 
     const subscriptionRevenueCents = subscriptionRevenue._sum.amountCents ?? 0;
     const bookRevenueCents = bookRevenue._sum.amountCents ?? 0;
-    const revenueTotalCents = subscriptionRevenueCents + bookRevenueCents;
+    const walletRevenueCents = walletIncome._sum.amountCents ?? 0;
+    const revenueTotalCents = subscriptionRevenueCents + bookRevenueCents + walletRevenueCents;
 
     const { subscriptionRefundsCents, bookRefundsCents } = refunds;
     const refundsTotalCents = subscriptionRefundsCents + bookRefundsCents;
@@ -179,6 +214,9 @@ export class FinanceOverviewService {
     return {
       subscriptionRevenueCents,
       bookRevenueCents,
+      walletRevenueCents,
+      walletSpentCents: walletSpent._sum.amountCents ?? 0,
+      walletBalanceCents: walletHeld._sum.balanceCents ?? 0,
       revenueTotalCents,
       subscriptionRefundsCents,
       bookRefundsCents,
@@ -352,11 +390,17 @@ export class FinanceOverviewService {
         (
           SELECT COALESCE(SUM(p."amount_cents"), 0)
           FROM "app"."payment_submissions" p
-          WHERE p."status" = 'approved'
-            AND p."is_free" = false
+          WHERE ${SUBSCRIPTION_CASH_RAW}
             AND p."reviewed_at" >= a.starts
             AND p."reviewed_at" <  a.starts + INTERVAL '1 month'
         ) AS subscription,
+        (
+          SELECT COALESCE(SUM(w."amount_cents"), 0)
+          FROM "app"."wallet_transactions" w
+          WHERE w."counts_as_income" = true
+            AND w."created_at" >= a.starts
+            AND w."created_at" <  a.starts + INTERVAL '1 month'
+        ) AS wallet,
         (
           SELECT COALESCE(SUM(o."amount_cents"), 0)
           FROM "app"."book_orders" o
@@ -390,6 +434,7 @@ export class FinanceOverviewService {
 
     return rows.map((row) => {
       const subscriptionRevenueCents = toNumber(row.subscription);
+      const walletRevenueCents = toNumber(row.wallet);
       const bookRevenueCents = toNumber(row.books);
       const expensesCents = toNumber(row.expenses);
       const subscriptionRefundsCents = toNumber(row.subscriptionRefunds);
@@ -401,6 +446,7 @@ export class FinanceOverviewService {
         expensesCents,
         subscriptionRefundsCents,
         bookRefundsCents,
+        walletRevenueCents,
         // May be negative, and is left that way: a month that bought a print
         // run and sold nothing really did lose money — and a month whose only
         // movement was refunding an earlier one is genuinely negative too,
@@ -408,7 +454,8 @@ export class FinanceOverviewService {
         // on the sale's.
         netCents:
           subscriptionRevenueCents +
-          bookRevenueCents -
+          bookRevenueCents +
+          walletRevenueCents -
           subscriptionRefundsCents -
           bookRefundsCents -
           expensesCents,
@@ -488,6 +535,7 @@ export class FinanceOverviewService {
     section('الدخل');
     line('اشتراكات', o.subscriptionRevenueCents);
     line('كتب', o.bookRevenueCents);
+    line('شحن المحفظة', o.walletRevenueCents);
     line('إجمالي الدخل', o.revenueTotalCents, true);
     summary.addRow({});
     section('المرتجعات');
@@ -520,6 +568,12 @@ export class FinanceOverviewService {
         label: `⚠️ ${o.bookCostUnknownCount} سطر مالوش سعر تكلفة — المكسب فوق أعلى من الحقيقي`,
       });
     }
+    summary.addRow({});
+    /* Same «للعِلم» treatment: both figures are already inside «شحن المحفظة»
+     * above (spent or still held), and adding either would count it twice. */
+    section('المحفظة (للعِلم — مش داخلة في الصافي فوق)');
+    line('اتصرف من المحفظة على اشتراكات', o.walletSpentCents);
+    line('رصيد الطلبة في المحافظ دلوقتي', o.walletBalanceCents);
 
     const ledger = workbook.addWorksheet('المصروفات', { views: [{ rightToLeft: true }] });
     ledger.columns = [
@@ -554,6 +608,7 @@ export class FinanceOverviewService {
       { header: 'الشهر', key: 'month', width: 12 },
       { header: 'اشتراكات', key: 'subs', width: 14, style: { numFmt: MONEY } },
       { header: 'كتب', key: 'books', width: 14, style: { numFmt: MONEY } },
+      { header: 'شحن المحفظة', key: 'wallet', width: 14, style: { numFmt: MONEY } },
       { header: 'مرتجعات', key: 'refunds', width: 14, style: { numFmt: MONEY } },
       { header: 'مصروفات', key: 'expenses', width: 14, style: { numFmt: MONEY } },
       { header: 'الصافي', key: 'net', width: 14, style: { numFmt: MONEY } },
@@ -564,6 +619,7 @@ export class FinanceOverviewService {
         month: m.month,
         subs: pounds(m.subscriptionRevenueCents),
         books: pounds(m.bookRevenueCents),
+        wallet: pounds(m.walletRevenueCents),
         refunds: pounds(m.subscriptionRefundsCents + m.bookRefundsCents),
         expenses: pounds(m.expensesCents),
         net: pounds(m.netCents),

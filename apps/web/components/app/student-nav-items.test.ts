@@ -181,6 +181,7 @@ describe('STUDENT_TABS', () => {
       '/rank',
       '/game',
       '/codes',
+      '/wallet',
       '/foundations',
       '/store',
       '/playground',

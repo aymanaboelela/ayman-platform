@@ -39,6 +39,7 @@ import {
   TINT_CARD,
   TINT_WELL,
   TONE_TEXT,
+  WalletChip,
   tone,
 } from './unlock-ui';
 
@@ -62,8 +63,12 @@ const dateTime = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
 });
 const when = (iso: string) => dateTime.format(new Date(iso));
 
+type KindFilter = 'all' | 'course' | 'wallet';
+
 interface View {
   status: Filter;
+  /** «أكواد الكورسات» / «أكواد المحفظة» — see `AdminUnlockCodeQuerySchema.kind`. */
+  kind: KindFilter;
   courseId: string | undefined;
   q: string;
   page: number;
@@ -76,6 +81,7 @@ function hrefFor(view: View, patch: Partial<View>): string {
   const next = { ...view, page: 1, ...patch };
   const query = new URLSearchParams();
   if (next.status !== 'all') query.set('status', next.status);
+  if (next.kind !== 'all') query.set('kind', next.kind);
   if (next.courseId) query.set('courseId', next.courseId);
   if (next.q) query.set('q', next.q);
   if (next.page > 1) query.set('page', String(next.page));
@@ -108,6 +114,7 @@ export default async function UnlockCodesPage({
   const rawCourse = one('courseId');
   const view: View = {
     status: FILTERS.includes(rawStatus as Filter) ? (rawStatus as Filter) : 'all',
+    kind: one('kind') === 'course' || one('kind') === 'wallet' ? (one('kind') as KindFilter) : 'all',
     // Validated here because the API's `z.uuid()` answers a pasted half-id
     // with a 400, and that 400 would take the whole screen down with it.
     courseId: rawCourse && z.uuid().safeParse(rawCourse).success ? rawCourse : undefined,
@@ -121,6 +128,7 @@ export default async function UnlockCodesPage({
     status: view.status,
   });
   if (view.courseId) query.set('courseId', view.courseId);
+  if (view.kind !== 'all') query.set('kind', view.kind);
   if (view.q) query.set('q', view.q);
 
   const [session, list, courseOptions] = await Promise.all([
@@ -133,7 +141,8 @@ export default async function UnlockCodesPage({
 
   const total = list.counts.unused + list.counts.used + list.counts.revoked;
   const pages = Math.max(1, Math.ceil(list.rowCount / PER_PAGE));
-  const filtered = view.status !== 'all' || view.courseId !== undefined || view.q !== '';
+  const filtered =
+    view.status !== 'all' || view.kind !== 'all' || view.courseId !== undefined || view.q !== '';
 
   return (
     <>
@@ -229,6 +238,16 @@ export default async function UnlockCodesPage({
         </nav>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end lg:ms-auto">
+          <ListControl
+            name="kind"
+            label={c.filterKind}
+            value={view.kind === 'all' ? '' : view.kind}
+            options={[
+              { value: '', label: c.kindAll },
+              { value: 'course', label: c.kindCourse },
+              { value: 'wallet', label: c.kindWallet },
+            ]}
+          />
           <ListControl
             name="courseId"
             label={c.step1}
@@ -341,8 +360,7 @@ export default async function UnlockCodesPage({
                       </div>
                     </td>
                     <td className="max-w-[20rem] px-3 py-3.5">
-                      <CourseLine title={row.course.title} />
-                      <ContentChips row={row} />
+                      <CodeTarget row={row} />
                       <NoteLine note={row.note} />
                     </td>
                     <td className="px-3 py-3.5">
@@ -352,7 +370,7 @@ export default async function UnlockCodesPage({
                       <StatusBadge status={row.status} label={c.status[row.status]} />
                     </td>
                     <td className="whitespace-nowrap px-3 py-3.5 text-end font-semibold tabular-nums text-fg">
-                      <Price cents={row.priceCents} />
+                      <CodePrice row={row} />
                     </td>
                     <td className="px-3 py-3.5">
                       <CreatedCell row={row} />
@@ -411,8 +429,7 @@ function CodeCard({ row, canWrite }: { row: AdminUnlockCodeRow; canWrite: boolea
       </div>
 
       <div className="px-4">
-        <CourseLine title={row.course.title} />
-        <ContentChips row={row} />
+        <CodeTarget row={row} />
         <NoteLine note={row.note} />
       </div>
 
@@ -429,7 +446,7 @@ function CodeCard({ row, canWrite }: { row: AdminUnlockCodeRow; canWrite: boolea
             {c.columns.price}
           </dt>
           <dd className="mt-0.5 font-semibold tabular-nums text-fg">
-            <Price cents={row.priceCents} />
+            <CodePrice row={row} />
           </dd>
         </div>
         <div className="min-w-0">
@@ -451,6 +468,33 @@ function CodeCard({ row, canWrite }: { row: AdminUnlockCodeRow; canWrite: boolea
         <div className="pb-4" />
       )}
     </article>
+  );
+}
+
+/** «المبلغ» — what a course code was sold for, or what a wallet code adds.
+ *  A wallet code has no sale price of its own, and «مجاني» there would read
+ *  as a code worth nothing. */
+function CodePrice({ row }: { row: AdminUnlockCodeRow }) {
+  if (row.course === null) return <>{formatEGP(row.walletCreditCents ?? 0)} ج</>;
+  return <Price cents={row.priceCents} />;
+}
+
+/** What the code is FOR: the course and the pieces it opens, or — for a
+ *  wallet code — the amount it puts in a wallet. */
+function CodeTarget({ row }: { row: AdminUnlockCodeRow }) {
+  if (row.course === null) {
+    return (
+      <WalletChip
+        label={formatCopy(c.walletChip, { amount: formatEGP(row.walletCreditCents ?? 0) })}
+        giftLabel={row.walletCreditPaid ? null : c.walletGiftChip}
+      />
+    );
+  }
+  return (
+    <>
+      <CourseLine title={row.course.title} />
+      <ContentChips row={row} />
+    </>
   );
 }
 

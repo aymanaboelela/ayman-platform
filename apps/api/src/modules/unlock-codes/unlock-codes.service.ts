@@ -31,6 +31,7 @@ import { CONTENT_SCOPES } from '../entitlement/content-access';
 import { courseAccessScopes, hasLiveCourseAccess } from '../entitlement/grant-liveness';
 import { generateUnlockCode } from './unlock-code-generator';
 import { UnlockAttemptsService } from './unlock-attempts.service';
+import { creditWallet, isUniqueViolation as isLedgerUniqueViolation } from '../wallet/wallet-ledger';
 
 /** Everything a row needs, selected once and shared by every reader. */
 const CODE_SELECT = {
@@ -38,6 +39,8 @@ const CODE_SELECT = {
   code: true,
   wholeCourse: true,
   priceCents: true,
+  walletCreditCents: true,
+  walletCreditPaid: true,
   note: true,
   createdAt: true,
   redeemedAt: true,
@@ -69,6 +72,8 @@ function statusOf(code: { redeemedAt: Date | null; revokedAt: Date | null }): Un
 }
 
 function itemsOf(code: CodeRecord): AdminUnlockCodeItem[] {
+  // A wallet code opens nothing — it adds money. See `walletCreditCents`.
+  if (code.course === null) return [];
   if (code.wholeCourse) {
     return [{ kind: 'course', id: code.course.id, title: code.course.title, parentTitle: null }];
   }
@@ -99,6 +104,8 @@ function toRow(code: CodeRecord): AdminUnlockCodeRow {
     wholeCourse: code.wholeCourse,
     items: itemsOf(code),
     priceCents: code.priceCents,
+    walletCreditCents: code.walletCreditCents,
+    walletCreditPaid: code.walletCreditPaid,
     note: code.note,
     status: statusOf(code),
     createdAt: code.createdAt.toISOString(),
@@ -240,12 +247,25 @@ export class UnlockCodesService {
   /* ── admin: generate / list / pull / delete ─────────────────────────── */
 
   async create(adminId: string, input: AdminUnlockCodeCreateInput): Promise<{ codes: AdminUnlockCodeRow[] }> {
-    const course = await this.prisma.course
-      .findUnique({ where: { id: input.courseId }, select: { id: true } })
-      .catch(() => null);
-    if (!course) throw new NotFoundException('course not found');
+    /*
+     * «كود شحن المحفظة» — no course, no items, an amount. The schema already
+     * refuses the mixed shapes; this is the service agreeing with it before
+     * the database CHECK has to.
+     */
+    const courseId = input.courseId;
+    const walletCreditCents = courseId === null ? input.walletCreditCents : null;
+    if (courseId === null && (walletCreditCents === null || input.wholeCourse || input.items.length > 0)) {
+      throw new BadRequestException({ code: 'unlock_wallet_shape', message: 'a wallet code carries an amount and nothing else' });
+    }
+    if (courseId !== null) {
+      const course = await this.prisma.course
+        .findUnique({ where: { id: courseId }, select: { id: true } })
+        .catch(() => null);
+      if (!course) throw new NotFoundException('course not found');
+    }
 
-    const items = input.wholeCourse ? [] : await this.validatedItems(input.courseId, input.items);
+    const items =
+      courseId === null || input.wholeCourse ? [] : await this.validatedItems(courseId, input.items);
 
     /*
      * A collision on six characters is rare (a few hundred live codes in 887
@@ -265,9 +285,11 @@ export class UnlockCodesService {
               await tx.unlockCode.create({
                 data: {
                   code,
-                  courseId: input.courseId,
-                  wholeCourse: input.wholeCourse,
+                  courseId,
+                  wholeCourse: courseId === null ? false : input.wholeCourse,
                   priceCents: input.priceCents,
+                  walletCreditCents,
+                  walletCreditPaid: input.walletCreditPaid,
                   note: input.note,
                   createdByUserId: adminId,
                   items: { create: items },
@@ -291,11 +313,13 @@ export class UnlockCodesService {
       outcome: 'success',
       metadata: {
         adminId,
-        courseId: input.courseId,
+        courseId,
         codes: created.map((row) => row.code),
         wholeCourse: input.wholeCourse,
         items: items.length,
         priceCents: input.priceCents,
+        walletCreditCents,
+        walletCreditPaid: walletCreditCents === null ? null : input.walletCreditPaid,
       },
     });
 
@@ -333,7 +357,14 @@ export class UnlockCodesService {
   }
 
   async list(query: AdminUnlockCodeQuery): Promise<AdminUnlockCodeList> {
-    const scope: Prisma.UnlockCodeWhereInput = query.courseId ? { courseId: query.courseId } : {};
+    const byCourse: Prisma.UnlockCodeWhereInput = query.courseId ? { courseId: query.courseId } : {};
+    const byKind: Prisma.UnlockCodeWhereInput =
+      query.kind === 'wallet'
+        ? { courseId: null }
+        : query.kind === 'course'
+          ? { courseId: { not: null } }
+          : {};
+    const scope: Prisma.UnlockCodeWhereInput = { AND: [byCourse, byKind] };
     const statusWhere: Record<AdminUnlockCodeQuery['status'], Prisma.UnlockCodeWhereInput> = {
       all: {},
       unused: { redeemedAt: null, revokedAt: null },
@@ -386,13 +417,31 @@ export class UnlockCodesService {
     const now = new Date();
     const result = await this.prisma.$transaction(async (tx) => {
       const code = await tx.unlockCode
-        .findUnique({ where: { id }, select: { id: true, courseId: true, redeemedByUserId: true, revokedAt: true } })
+        .findUnique({
+          where: { id },
+          select: { id: true, courseId: true, redeemedAt: true, redeemedByUserId: true, revokedAt: true },
+        })
         .catch(() => null);
       if (!code) throw new NotFoundException('unlock code not found');
       if (code.revokedAt !== null) return { pulled: 0, enrollmentRevoked: false, already: true };
+      if (code.courseId === null && code.redeemedAt !== null) {
+        /*
+         * A USED wallet code already put money in a wallet — and that money
+         * may be spent. Pulling it here would have to either drive a balance
+         * below zero or quietly take back less than it gave. Taking money back
+         * is a deliberate «خصم» on the student's wallet, where the admin sees
+         * the balance first.
+         */
+        throw new ConflictException({
+          code: 'unlock_wallet_code_used',
+          message: 'a used wallet code is corrected with a wallet debit, not revoked',
+        });
+      }
 
       await tx.unlockCode.update({ where: { id }, data: { revokedAt: now, revokedByUserId: adminId } });
-      if (code.redeemedByUserId === null) return { pulled: 0, enrollmentRevoked: false, already: false };
+      if (code.redeemedByUserId === null || code.courseId === null) {
+        return { pulled: 0, enrollmentRevoked: false, already: false };
+      }
 
       const { count: pulled } = await tx.accessGrant.updateMany({
         where: { unlockCodeId: id, revokedAt: null },
@@ -497,6 +546,8 @@ export class UnlockCodesService {
         id: true,
         courseId: true,
         wholeCourse: true,
+        walletCreditCents: true,
+        walletCreditPaid: true,
         redeemedAt: true,
         redeemedByUserId: true,
         revokedAt: true,
@@ -520,11 +571,14 @@ export class UnlockCodesService {
       if (found.redeemedByUserId === userId) return this.describeRedeemed(found.id);
       return miss('used', HttpStatus.CONFLICT);
     }
+    if (found.courseId === null) return this.redeemWalletCode(userId, code, found);
+
     // Not the student's fault and not a guess: no strike, and the code is not
     // spent — it will work the moment the course is published.
-    if (found.course.status !== 'published') {
+    if (found.course?.status !== 'published') {
       throw refusal('course_unavailable', HttpStatus.CONFLICT);
     }
+    const courseId = found.courseId;
 
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
@@ -536,7 +590,7 @@ export class UnlockCodesService {
 
       const base = {
         userId,
-        courseId: found.courseId,
+        courseId,
         source: 'access_code' as const,
         unlockCodeId: found.id,
         grantedByUserId: found.createdByUserId,
@@ -570,11 +624,11 @@ export class UnlockCodesService {
        * because codes are now what this student holds here.
        */
       const enrollment = await tx.enrollment.findUnique({
-        where: { userId_courseId: { userId, courseId: found.courseId } },
+        where: { userId_courseId: { userId, courseId } },
         select: { id: true, status: true },
       });
       if (!enrollment) {
-        await tx.enrollment.create({ data: { userId, courseId: found.courseId, source: 'code' } });
+        await tx.enrollment.create({ data: { userId, courseId, source: 'code' } });
       } else if (!(ACTIVE_ENROLLMENT_STATUSES as readonly string[]).includes(enrollment.status)) {
         await tx.enrollment.update({
           where: { id: enrollment.id },
@@ -588,22 +642,103 @@ export class UnlockCodesService {
       resourceType: AUDIT_RESOURCES.unlockCode,
       resourceId: found.id,
       outcome: 'success',
-      metadata: { userId, courseId: found.courseId, code },
+      metadata: { userId, courseId, code },
     });
 
     return this.describeRedeemed(found.id);
   }
 
+  /**
+   * «كود شحن» — the money half of `redeem`, after the lock, the lookup and the
+   * strike rules above have all run exactly as for a course code.
+   *
+   * Two guards against crediting twice, either sufficient: the code is spent
+   * with the same conditional UPDATE a course code uses (two students racing
+   * the same code — one gets zero rows), and the ledger's UNIQUE on
+   * `unlock_code_id` means no code can ever write a second credit.
+   *
+   * `countsAsIncome` is what the admin said when he made the code: «مدفوع»
+   * is income on the day it is redeemed, a gift never is.
+   */
+  private async redeemWalletCode(
+    userId: string,
+    code: string,
+    found: { id: string; walletCreditCents: number | null; walletCreditPaid: boolean },
+  ): Promise<RedeemUnlockCodeResponse> {
+    const amountCents = found.walletCreditCents;
+    if (amountCents === null) throw refusal('invalid', HttpStatus.NOT_FOUND);
+
+    const now = new Date();
+    let balanceCents: number;
+    try {
+      balanceCents = await this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.unlockCode.updateMany({
+          where: { id: found.id, redeemedAt: null, revokedAt: null },
+          data: { redeemedAt: now, redeemedByUserId: userId },
+        });
+        if (count === 0) throw refusal('used', HttpStatus.CONFLICT);
+
+        const row = await creditWallet(tx, {
+          userId,
+          kind: 'code_topup',
+          amountCents,
+          countsAsIncome: found.walletCreditPaid,
+          unlockCodeId: found.id,
+        });
+        await this.audit.recordTx(tx, {
+          action: 'wallet:code-redeem',
+          resourceType: AUDIT_RESOURCES.walletTransaction,
+          resourceId: row.id,
+          outcome: 'success',
+          metadata: {
+            userId,
+            unlockCodeId: found.id,
+            code,
+            amountCents,
+            countsAsIncome: found.walletCreditPaid,
+            balanceAfterCents: row.balanceAfterCents,
+          },
+        });
+        return row.balanceAfterCents;
+      });
+    } catch (error) {
+      if (isLedgerUniqueViolation(error)) throw refusal('used', HttpStatus.CONFLICT);
+      throw error;
+    }
+
+    await this.audit.record({
+      action: 'unlock-code:redeem',
+      resourceType: AUDIT_RESOURCES.unlockCode,
+      resourceId: found.id,
+      outcome: 'success',
+      metadata: { userId, courseId: null, code, walletCreditCents: amountCents },
+    });
+
+    return {
+      code,
+      course: null,
+      opened: [],
+      startLessonId: null,
+      walletCreditCents: amountCents,
+      walletBalanceCents: balanceCents,
+    };
+  }
+
   async listMine(userId: string): Promise<MyUnlockCodes> {
     const codes = await this.prisma.unlockCode.findMany({
-      where: { redeemedByUserId: userId },
+      // Course codes only — a wallet code is on the wallet's own statement,
+      // and «الحاجات اللي فتحتها بكود» is a list of things it opened.
+      where: { redeemedByUserId: userId, courseId: { not: null } },
       orderBy: [{ redeemedAt: 'desc' }, { id: 'desc' }],
       take: 100,
       select: CODE_SELECT,
     });
-    const outlines = await this.outlines([...new Set(codes.map((c) => c.course.id))]);
+    const withCourse = codes.filter(
+      (code): code is CodeRecord & { course: NonNullable<CodeRecord['course']> } => code.course !== null,
+    );
+    const outlines = await this.outlines([...new Set(withCourse.map((c) => c.course.id))]);
     return {
-      items: codes.map((code) => ({
+      items: withCourse.map((code) => ({
         code: code.code,
         redeemedAt: code.redeemedAt!.toISOString(),
         course: code.course,
@@ -615,6 +750,24 @@ export class UnlockCodesService {
 
   private async describeRedeemed(id: string): Promise<RedeemUnlockCodeResponse> {
     const code = await this.prisma.unlockCode.findUniqueOrThrow({ where: { id }, select: CODE_SELECT });
+    if (code.course === null) {
+      // The same student pressing a wallet code twice gets its success screen
+      // again — the amount it added and the balance now, not a second credit.
+      const wallet = code.redeemedBy
+        ? await this.prisma.wallet.findUnique({
+            where: { userId: code.redeemedBy.id },
+            select: { balanceCents: true },
+          })
+        : null;
+      return {
+        code: code.code,
+        course: null,
+        opened: [],
+        startLessonId: null,
+        walletCreditCents: code.walletCreditCents,
+        walletBalanceCents: wallet?.balanceCents ?? null,
+      };
+    }
     const outline = (await this.outlines([code.course.id])).get(code.course.id) ?? [];
     const opened = this.opened(code, outline);
     return {
@@ -622,6 +775,8 @@ export class UnlockCodesService {
       course: code.course,
       opened,
       startLessonId: opened.find((item) => item.lessonId !== null)?.lessonId ?? null,
+      walletCreditCents: null,
+      walletBalanceCents: null,
     };
   }
 

@@ -12,6 +12,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { useInboxCount } from './inbox-alerts';
 import { usePaymentsPendingCount } from './payments-alerts';
+import { useWalletTopupsPendingCount } from './wallet-topups-alerts';
 import { useBookOrdersUnshippedCount } from './book-orders-alerts';
 import { useHomeworkPendingCount } from './homework-alerts';
 import { useGradingPendingCount } from './grading-alerts';
@@ -27,8 +28,10 @@ function badgeCountFor(
   bookOrdersCount: number | null,
   homeworkCount: number | null,
   gradingCount: number | null,
+  walletTopupsCount: number | null,
 ): number | null {
   if (href === '/admin/inbox') return inboxCount;
+  if (href === '/admin/wallet/requests') return walletTopupsCount;
   if (href === '/admin/payments') return paymentsCount;
   // Parcels that are paid for and not yet shipped — somebody is waiting on the
   // other end of this one too, which is the rule this list's badges follow.
@@ -44,6 +47,9 @@ function badgeCountFor(
 /** The `sr-only` sentence beside a badge — worded per screen, same as the
  *  count itself. */
 function badgeLabelFor(href: string, n: number): string {
+  if (href === '/admin/wallet/requests') {
+    return formatCopy(copy.admin.wallet.pendingBadgeLabel, { n });
+  }
   if (href === '/admin/payments') {
     return formatCopy(copy.admin.payments.pendingBadgeLabel, { n });
   }
@@ -107,6 +113,7 @@ export function AdminNavList({
   // And for papers awaiting a mark — `null` on any session without
   // `attempt:grade`.
   const gradingCount = useGradingPendingCount();
+  const walletTopupsCount = useWalletTopupsPendingCount();
 
   return (
     <div className="flex flex-col gap-5">
@@ -135,6 +142,7 @@ export function AdminNavList({
                   bookOrdersCount,
                   homeworkCount,
                   gradingCount,
+                  walletTopupsCount,
                 );
                 const badge = rawCount !== null && rawCount > 0 ? rawCount : null;
                 return (

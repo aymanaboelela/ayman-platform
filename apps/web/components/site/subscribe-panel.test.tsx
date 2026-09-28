@@ -113,10 +113,13 @@ function respondWith({
   submissions = [],
   ownedMonthIds,
   coversAll = false,
+  walletBalanceCents,
 }: {
   course?: unknown;
   settings?: unknown;
   submissions?: unknown[];
+  /** `undefined` makes the wallet read reject — no session, no wallet card. */
+  walletBalanceCents?: number;
   /** `undefined` makes the months read REJECT — a signed-out visitor, or a
    *  429. The picker has to draw anyway. */
   ownedMonthIds?: string[];
@@ -130,6 +133,11 @@ function respondWith({
         : Promise.resolve({ ownedMonthIds, coversAll });
     }
     if (path === '/api/payments/submissions/me') return Promise.resolve(submissions);
+    if (path === '/api/wallet/balance') {
+      return walletBalanceCents === undefined
+        ? Promise.reject(new Error('unauthorized'))
+        : Promise.resolve({ balanceCents: walletBalanceCents, pendingTopupCents: 0 });
+    }
     if (path.startsWith('/api/catalog/courses/')) {
       return course === undefined
         ? Promise.reject(new Error('unreachable'))
@@ -637,5 +645,67 @@ describe('a subscription that already opens every month', () => {
 
     expect(await screen.findByText(copy.subscribe.planMonthlyLabel)).toBeTruthy();
     expect(screen.queryByText(copy.subscribe.coversAllNote)).toBeNull();
+  });
+});
+
+describe('paying from the wallet', () => {
+  async function openCheckout(walletBalanceCents: number | undefined) {
+    respondWith({ course: liveCourse(), settings: liveSettings(), walletBalanceCents });
+    render(<Panel />);
+    const monthly = await screen.findByText(copy.subscribe.planMonthlyLabel);
+    fireEvent.click(monthly.closest('button') as HTMLButtonElement);
+    await screen.findByText(copy.subscribe.railQuestion);
+  }
+
+  it('asks first when the wallet covers the price, and pays with one press', async () => {
+    await openCheckout(25_000);
+    apiPost.mockResolvedValue({
+      submission: { id: 'x' },
+      balanceCents: 5_000,
+    });
+
+    const pay = screen.getByRole('button', { name: new RegExp(copy.subscribe.walletTitle) });
+    fireEvent.click(pay);
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalledTimes(1));
+    const [path, , body] = apiPost.mock.calls[0] as [string, unknown, Record<string, unknown>];
+    expect(path).toBe('/api/payments/wallet-purchase');
+    // What was picked, never an amount — the server charges its own price.
+    expect(body).toMatchObject({ courseId: COURSE_ID, plan: 'monthly', monthIds: [] });
+    expect(body).not.toHaveProperty('amountCents');
+    expect(typeof body.idempotencyKey).toBe('string');
+    expect(await screen.findByText(new RegExp(copy.subscribe.walletSuccessOpen))).toBeTruthy();
+  });
+
+  it('sends the SAME key again after a failed press, so a lost response cannot charge twice', async () => {
+    await openCheckout(25_000);
+    apiPost.mockRejectedValueOnce(new Error('network'));
+
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.walletTitle) }));
+    await screen.findByText(copy.subscribe.walletGeneric);
+    apiPost.mockResolvedValueOnce({ submission: { id: 'x' }, balanceCents: 5_000 });
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.walletTitle) }));
+
+    await waitFor(() => expect(apiPost).toHaveBeenCalledTimes(2));
+    const keys = apiPost.mock.calls.map((call) => (call[2] as { idempotencyKey: string }).idempotencyKey);
+    expect(keys[0]).toBe(keys[1]);
+  });
+
+  it('says how much is missing and links to topping up the difference', async () => {
+    await openCheckout(5_000);
+
+    expect(screen.getByText(formatCopy(copy.subscribe.walletShort, { missing: '150' }))).toBeTruthy();
+    const topup = screen.getByRole('link', { name: new RegExp(copy.subscribe.walletTopup) });
+    expect(topup.getAttribute('href')).toContain('/wallet?amount=15000');
+    expect(screen.queryByRole('button', { name: new RegExp(copy.subscribe.walletTitle) })).toBeNull();
+  });
+
+  it('shows the checkout exactly as before with an empty wallet or no session', async () => {
+    await openCheckout(0);
+    expect(screen.queryByText(copy.subscribe.walletTitle)).toBeNull();
+    cleanup();
+
+    await openCheckout(undefined);
+    expect(screen.queryByText(copy.subscribe.walletTitle)).toBeNull();
   });
 });

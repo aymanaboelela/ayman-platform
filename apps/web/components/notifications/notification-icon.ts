@@ -102,6 +102,13 @@ export function iconFor(entry: StudentNotification) {
        اللوحة. */
     case 'honor_board_listed':
       return Trophy;
+    // «المحفظة» — the same `Wallet` a payment draws for money arriving and a
+    // request waiting, and the same `CircleAlert` a refused payment draws.
+    case 'wallet_credited':
+    case 'wallet_topup_submitted':
+      return Wallet;
+    case 'wallet_topup_rejected':
+      return CircleAlert;
   }
 }
 
@@ -125,11 +132,14 @@ export function toneFor(entry: StudentNotification): NotificationTone {
       return 'marked';
     case 'payment_approved':
     case 'payment_submitted':
+    case 'wallet_credited':
+    case 'wallet_topup_submitted':
       return 'money';
     case 'course_completed':
     case 'honor_board_listed':
       return 'win';
     case 'payment_rejected':
+    case 'wallet_topup_rejected':
     case 'subscription_cancelled':
     case 'subscription_expiring_soon':
     case 'book_order_rejected':

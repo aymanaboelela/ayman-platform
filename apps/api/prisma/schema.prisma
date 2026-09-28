@@ -220,6 +220,14 @@ model User {
   honorPins                  HonorBoardPin[]         @relation("HonorBoardPinStudent")
   /// وده اللي حطّهم. `SetNull`، فمسح حساب الأدمن بيسيب التكريم مكانه.
   honorPinsCreated           HonorBoardPin[]         @relation("HonorBoardPinAuthor")
+  /// «المحفظة» — see `Wallet`. `Cascade` from here, like every other money
+  /// row a student owns (`paymentSubmissions` above does the same).
+  wallet                     Wallet?
+  walletTopups               WalletTopup[]           @relation("WalletTopupStudent")
+  walletTopupsReviewed       WalletTopup[]           @relation("WalletTopupReviewer")
+  /// Ledger rows an admin entered by hand. `SetNull`: deleting the admin
+  /// keeps the money and loses only the name — same as `refundsIssued`.
+  walletTransactionsEntered  WalletTransaction[]     @relation("WalletTransactionActor")
 
   @@unique([email])
   @@map("users")
@@ -2201,13 +2209,26 @@ model UnlockCode {
   /// code's alphabet, with 0/O/1/I/L gone because a student reads this off a
   /// WhatsApp message and types it. Shape enforced by CHECK.
   code             String    @unique @db.VarChar(6)
-  courseId         String    @map("course_id") @db.Uuid
+  /// `null` on a WALLET code and only there — `unlock_codes_one_target`
+  /// makes «a course code» and «a wallet code» exactly the two shapes a row
+  /// can have. See `walletCreditCents`.
+  courseId         String?   @map("course_id") @db.Uuid
   /// «الكورس كله» — a `scope: course` grant, open-ended. Items are ignored
   /// (and never written) when this is set.
   wholeCourse      Boolean   @default(false) @map("whole_course")
   /// What the student paid for it, for the admin's own list. A record, not a
   /// charge: no money moves through this table and finance does not read it.
   priceCents       Int?      @map("price_cents")
+  /// «كود شحن المحفظة» — piastres this code puts in the wallet of whoever
+  /// redeems it. Set exactly when `courseId` is null (CHECK). Unlike
+  /// `priceCents` above this one DOES move money: redeeming writes a
+  /// `code_topup` row in `wallet_transactions`, UNIQUE on the code, so a
+  /// retried redeem can never credit twice.
+  walletCreditCents Int?     @map("wallet_credit_cents")
+  /// «مدفوع» vs «هدية» — whether the admin was paid for this code. Copied onto
+  /// the ledger row as `countsAsIncome` when it is redeemed; a gift code puts
+  /// money in the wallet without ever being reported as income.
+  walletCreditPaid Boolean   @default(true) @map("wallet_credit_paid")
   note             String?
   createdByUserId  String?   @map("created_by_user_id")
   createdAt        DateTime  @default(now()) @map("created_at")
@@ -2218,12 +2239,15 @@ model UnlockCode {
   revokedAt        DateTime? @map("revoked_at")
   revokedByUserId  String?   @map("revoked_by_user_id")
 
-  course     Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course     Course?          @relation(fields: [courseId], references: [id], onDelete: Cascade)
   createdBy  User?            @relation("UnlockCodeCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   redeemedBy User?            @relation("UnlockCodeRedeemer", fields: [redeemedByUserId], references: [id], onDelete: SetNull)
   revokedBy  User?            @relation("UnlockCodeRevoker", fields: [revokedByUserId], references: [id], onDelete: SetNull)
   items      UnlockCodeItem[]
   grants     AccessGrant[]
+  /// The credit a wallet code wrote when it was redeemed — at most one, by
+  /// the UNIQUE on `wallet_transactions.unlock_code_id`.
+  walletTransaction WalletTransaction?
 
   @@index([courseId, createdAt])
   @@index([createdAt])
@@ -2392,6 +2416,22 @@ model PaymentSubmission {
   /// type error anywhere to catch it.
   isFree Boolean @default(false) @map("is_free")
 
+  /// «اتدفع من المحفظة» — the `course_purchase` debit that paid for this
+  /// subscription, or `null` for every payment that brought money IN.
+  ///
+  /// ⚠️ A row with this set is NOT revenue. The money was counted once
+  /// already, on the day it entered the wallet (see
+  /// `WalletTransaction.countsAsIncome`); counting the sale again would report
+  /// every wallet-funded subscription twice. Every revenue sum over this table
+  /// therefore filters `wallet_transaction_id IS NULL` — the shared predicate
+  /// is `SUBSCRIPTION_CASH_WHERE` / `SUBSCRIPTION_CASH_SQL` in
+  /// `payments/subscription-cash.ts`, and nothing should retype it.
+  ///
+  /// It is still an ordinary APPROVED submission in every other respect —
+  /// the grant, the renewal numbering, the student's own history, the finance
+  /// list — because it is a real subscription; it just is not new cash.
+  walletTransactionId String? @unique @map("wallet_transaction_id") @db.Uuid
+
   status PaymentSubmissionStatus @default(pending)
 
   /// Admin-authored, shown to the student. `null` unless `status = rejected`.
@@ -2429,6 +2469,10 @@ model PaymentSubmission {
   /// recognised the sender and approved it with nobody looking. `null` for
   /// every claim an admin reviewed by hand — see `IncomingTransfer`.
   incomingTransfer IncomingTransfer?
+  /// See `walletTransactionId`.
+  walletTransaction WalletTransaction? @relation("WalletPurchase", fields: [walletTransactionId], references: [id], onDelete: NoAction)
+  /// Wallet refunds given back against this payment — see `WalletTransaction.refundOfSubmissionId`.
+  walletRefunds     WalletTransaction[] @relation("WalletRefund")
 
   /// Anchors `payment_submission_months_submission_in_course`. Prisma cannot
   /// see that composite FK and will offer to drop this unique with it.
@@ -4225,6 +4269,174 @@ model Refund {
   @@schema("app")
 }
 
+/// «المحفظة» — one row per student whose wallet ever moved.
+///
+/// ## A ledger, and this row is only its running total
+///
+/// The truth is `wallet_transactions`: every credit and every debit, signed,
+/// append-only (a trigger refuses UPDATE of any money column and any DELETE
+/// that is not a cascade from the account itself). `balanceCents` here is the
+/// SUM of those rows for this user, kept in step in the SAME transaction as
+/// every row that changes it — `wallet-ledger.ts` is the only writer.
+///
+/// It exists for one reason: a debit has to be refused atomically when the
+/// money is not there. `UPDATE wallets SET balance_cents = balance_cents - x
+/// WHERE user_id = … AND balance_cents >= x` is one row-locked statement, so
+/// two purchases racing for the same 300 EGP cannot both pass — the second
+/// finds zero rows. `wallets_balance_non_negative` is the backstop under it.
+model Wallet {
+  userId       String   @id @map("user_id")
+  balanceCents Int      @default(0) @map("balance_cents")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@map("wallets")
+  @@schema("app")
+}
+
+/// What moved the money. The SIGN is fixed per kind by CHECK
+/// (`wallet_transactions_sign_by_kind`): the first four only ever add, the
+/// last two only ever take.
+enum WalletTransactionKind {
+  /// An admin typed an amount on «شحن المحفظة».
+  admin_credit
+  /// A wallet code («كود شحن») was redeemed — `unlockCodeId` names it.
+  code_topup
+  /// An InstaPay / Vodafone Cash top-up request was approved — `topupId`.
+  transfer_topup
+  /// Money given back to the wallet after a wallet-paid subscription was
+  /// cancelled with a refund — `refundOfSubmissionId`.
+  refund
+  /// A course / term / month bought from the wallet. The submission it paid
+  /// for points back here (`PaymentSubmission.walletTransactionId`).
+  course_purchase
+  /// An admin took money out — a correction of a wrong credit, or cash handed
+  /// back to the student.
+  admin_debit
+
+  @@map("wallet_transaction_kind")
+  @@schema("app")
+}
+
+/// One movement of one student's wallet. Piastres, SIGNED: a credit is
+/// positive and a debit negative, so a balance is `SUM(amount_cents)`.
+///
+/// ## Income is decided per row, once, when the money enters
+///
+/// `countsAsIncome` is what `/admin/finance` sums — on `created_at`'s Cairo
+/// day — as «شحن المحفظة». A top-up that brought real money in is income on
+/// the day it arrived; an admin's gift or compensation is not; and spending
+/// the wallet on a course is NEVER income (CHECK), because that money was
+/// already counted when it came in. An `admin_debit` may carry it too, with a
+/// negative amount: cash handed back, or a paid credit entered by mistake,
+/// comes off income on the day it happened — the same «its own date» rule a
+/// `Refund` follows.
+///
+/// ## Why a double credit is impossible rather than unlikely
+///
+/// Each source of money has its own UNIQUE: `topupId` (one credit per
+/// approved request), `unlockCodeId` (one per code), and `idempotencyKey`
+/// (one per press of an admin's «اشحن» or a student's «ادفع من المحفظة» —
+/// the browser mints it once per form). A retry, a double click or two admins
+/// on the same request all end in a unique violation that the service reads
+/// as «already done» and answers with the row that won.
+model WalletTransaction {
+  id                   String                @id @default(uuid(7)) @db.Uuid
+  userId               String                @map("user_id")
+  kind                 WalletTransactionKind
+  amountCents          Int                   @map("amount_cents")
+  /// The wallet's balance right after this row — what «الرصيد بعدها» on the
+  /// statement reads, without a window function over the whole history.
+  balanceAfterCents    Int                   @map("balance_after_cents")
+  countsAsIncome       Boolean               @default(false) @map("counts_as_income")
+  topupId              String?               @unique @map("topup_id") @db.Uuid
+  unlockCodeId         String?               @unique @map("unlock_code_id") @db.Uuid
+  refundOfSubmissionId String?               @map("refund_of_submission_id") @db.Uuid
+  idempotencyKey       String?               @unique @map("idempotency_key") @db.Uuid
+  /// The admin who pressed the button; `null` for a row the STUDENT caused
+  /// (a code, a purchase) or one whose admin account was since deleted.
+  actorUserId          String?               @map("actor_user_id")
+  note                 String?
+  createdAt            DateTime              @default(now()) @map("created_at")
+
+  wallet             Wallet             @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  actor              User?              @relation("WalletTransactionActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  topup              WalletTopup?       @relation(fields: [topupId], references: [id], onDelete: NoAction)
+  unlockCode         UnlockCode?        @relation(fields: [unlockCodeId], references: [id], onDelete: NoAction)
+  refundOfSubmission PaymentSubmission? @relation("WalletRefund", fields: [refundOfSubmissionId], references: [id], onDelete: SetNull)
+  /// The subscription this debit bought — see `PaymentSubmission.walletTransactionId`.
+  purchase           PaymentSubmission? @relation("WalletPurchase")
+
+  /// The statement: one student, newest first.
+  @@index([userId, createdAt(sort: Desc)])
+  /// Finance's day-by-day scan of income rows.
+  @@index([createdAt])
+  @@index([refundOfSubmissionId])
+  @@map("wallet_transactions")
+  @@schema("app")
+}
+
+enum WalletTopupMethod {
+  instapay
+  vodafone_cash
+
+  @@map("wallet_topup_method")
+  @@schema("app")
+}
+
+/// «عايز أشحن المحفظة» — a student's claim to have sent money over InstaPay
+/// or Vodafone Cash, with the screenshot, waiting on an admin.
+///
+/// ## Why its own table and not a `PaymentSubmission` with a purpose flag
+///
+/// `PaymentSubmission` is a claim FOR A COURSE: `course_id` and `plan` are
+/// NOT NULL, approval writes an `AccessGrant`, and seven revenue queries,
+/// the renewal numbering and the InstaPay matcher all read it as «money for a
+/// subscription». A top-up has no course, no plan and grants nothing — it
+/// only moves money into the wallet. Folding it in would mean a nullable
+/// `course_id` under every one of those readers, each one a place to forget
+/// the new case. The review SHAPE is copied instead — same statuses, same
+/// private screenshot, same live desk — and approval writes exactly one
+/// `transfer_topup` ledger row (UNIQUE on `topup_id`).
+model WalletTopup {
+  id                  String                  @id @default(uuid(7)) @db.Uuid
+  userId              String                  @map("user_id")
+  method              WalletTopupMethod
+  /// What the student SAYS they sent. Student input, unlike a course claim's
+  /// amount — there is no price to derive it from.
+  amountCents         Int                     @map("amount_cents")
+  /// What the admin actually credited on approval — usually the same, and
+  /// the one that counts. `null` until approved.
+  approvedAmountCents Int?                    @map("approved_amount_cents")
+  /// The number or InstaPay address the money came FROM — what the admin
+  /// reconciles against the receiving account, same role as
+  /// `PaymentSubmission.senderPhone`.
+  sender              String
+  /// Anything else the student wanted to say («حوّلت من حساب ماما»).
+  note                String?
+  /// Same private prefix and the same gated route discipline as
+  /// `PaymentSubmission.screenshotKey` — never the public media route.
+  screenshotKey       String                  @map("screenshot_key")
+  status              PaymentSubmissionStatus @default(pending)
+  rejectionReason     String?                 @map("rejection_reason")
+  reviewedByUserId    String?                 @map("reviewed_by_user_id")
+  reviewedAt          DateTime?               @map("reviewed_at")
+  createdAt           DateTime                @default(now()) @map("created_at")
+
+  user        User               @relation("WalletTopupStudent", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy  User?              @relation("WalletTopupReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  transaction WalletTransaction?
+
+  /// The review queue — pending first, oldest first.
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@map("wallet_topups")
+  @@schema("app")
+}
+
 enum HomeBlockType {
   hero
   whyRail
@@ -4523,6 +4735,17 @@ enum NotificationKind {
   /// notification about the same result is noise; the hand-added row is the
   /// one with nothing else announcing it.
   honor_board_listed
+  /// «المحفظة» — three moments, one per direction of the top-up desk.
+  ///
+  /// `wallet_topup_submitted` is ADMIN-facing, the same fan-out as
+  /// `payment_submitted` (everyone holding `payment:read`). The other two are
+  /// the STUDENT's: money arrived (an approved request, an admin's credit, a
+  /// refund of a cancelled wallet purchase), or a request was turned down with
+  /// the admin's own reason. The payload carries amounts and ids only; the
+  /// student's name is resolved at read time like every other admin kind.
+  wallet_topup_submitted
+  wallet_credited
+  wallet_topup_rejected
 
   @@map("notification_kind")
   @@schema("app")

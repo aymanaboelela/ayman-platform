@@ -71,10 +71,18 @@ export const UnlockCourseRefSchema = z.object({
 
 export const RedeemUnlockCodeResponseSchema = z.object({
   code: z.string(),
-  course: UnlockCourseRefSchema,
+  /** `null` for a WALLET code — it opens no course, it adds money. */
+  course: UnlockCourseRefSchema.nullable(),
   opened: z.array(UnlockOpenedItemSchema),
   /** The first lecture of the first piece — the success screen's main button. */
   startLessonId: z.uuid().nullable(),
+  /**
+   * «كود شحن المحفظة» — piastres this code put in the wallet, and the balance
+   * right after. Both `null` on a course code. `.default(null)` so a response
+   * from a build that predates wallet codes still parses.
+   */
+  walletCreditCents: z.number().int().nullable().default(null),
+  walletBalanceCents: z.number().int().nullable().default(null),
 });
 export type RedeemUnlockCodeResponse = z.infer<typeof RedeemUnlockCodeResponseSchema>;
 

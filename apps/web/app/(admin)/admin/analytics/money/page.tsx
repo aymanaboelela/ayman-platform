@@ -9,6 +9,7 @@ import {
   Gift,
   RefreshCw,
   Undo2,
+  PiggyBank,
   UserPlus,
   Wallet,
   type LucideIcon,
@@ -52,6 +53,8 @@ const RANGE_LABEL: Record<FinanceDailyWindow, string> = {
  *  validated on, and the courses only ever take 1–4. */
 const NEW_COLOR = 'var(--viz-6)';
 const RENEWAL_COLOR = 'var(--viz-5)';
+/** «شحن المحفظة» — teal, the wallet's own colour on its screens. */
+const WALLET_COLOR = 'var(--viz-2)';
 const OTHER = '__other';
 
 /** How many courses get a hue of their own. Past four, the rest fold into one
@@ -218,7 +221,7 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
         ))}
       </nav>
 
-      <section className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <section className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MoneyTile
           icon={Wallet}
           hue="var(--a-9)"
@@ -262,6 +265,13 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
           label={c.tileRefunds}
           value={formatAmount(totals.refundCents === 0 ? 0 : -totals.refundCents)}
           context={c.tileRefundsContext}
+        />
+        <MoneyTile
+          icon={PiggyBank}
+          hue={WALLET_COLOR}
+          label={c.tileWallet}
+          value={formatAmount(totals.walletCents)}
+          context={formatCopy(c.tileWalletContext, { n: formatCount(totals.walletPaidCount) })}
         />
         {report.includesBooks ? (
           <MoneyTile
@@ -374,6 +384,7 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
                 day.subscriptionCount === 0 &&
                 day.bookCents === 0 &&
                 day.refundCents === 0 &&
+                day.walletCents === 0 &&
                 day.freeCount === 0;
               const expandable = !quiet && day.byCourse.length > 0;
               const summary = (
@@ -398,6 +409,19 @@ function MoneyReport({ report, days }: { report: AdminFinanceDaily; days: Financ
                         {day.renewalCount > 0 ? (
                           <span className="money-chip" style={{ '--chip-hue': RENEWAL_COLOR } as React.CSSProperties}>
                             {c.seriesRenewal} {formatCount(day.renewalCount)}
+                          </span>
+                        ) : null}
+                        {day.walletPaidCount > 0 ? (
+                          <span className="money-chip" style={{ '--chip-hue': WALLET_COLOR } as React.CSSProperties}>
+                            {formatCopy(c.dayWalletPaid, { n: formatCount(day.walletPaidCount) })}
+                          </span>
+                        ) : null}
+                        {/* The wallet's money that day — part of «الصافي»,
+                            and the only place a wallet-paid subscription's
+                            money ever shows up. */}
+                        {day.walletCents !== 0 ? (
+                          <span className="money-chip" style={{ '--chip-hue': WALLET_COLOR } as React.CSSProperties}>
+                            {c.dayWallet} {formatAmount(day.walletCents)}
                           </span>
                         ) : null}
                       </span>

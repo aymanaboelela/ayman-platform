@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { BookOpen, CalendarClock, CalendarRange, ImagePlus, Lock } from 'lucide-react';
+import { BookOpen, CalendarClock, CalendarRange, Check, ImagePlus, Lock } from 'lucide-react';
 import { z } from '@ayman/contracts/zod';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -9,6 +9,7 @@ import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { CatalogCourseDetailSchema, type CatalogCourseTerm } from '@ayman/contracts/catalog';
 import { PublicSettingsReadSchema } from '@ayman/contracts/admin/settings';
 import { PaymentSubmissionSchema, type PaymentSubmission } from '@ayman/contracts/payments';
+import { WalletBalanceSchema, WalletPurchaseResultSchema } from '@ayman/contracts/wallet';
 // The SUBPATH, never the root barrel — `lib/client-barrel.test.ts` fails the
 // build on a root-barrel import from a `'use client'` file.
 import type { CourseMonth, SellablePaymentPlan } from '@ayman/contracts/months';
@@ -21,6 +22,10 @@ import { uploadPaymentScreenshot } from '@/lib/upload-client';
 import { formatEGP } from '@/lib/price';
 import { PaymentBrand, type PaymentRail } from './payment-brand';
 import { PaymentMethodChoice } from './payment-method-choice';
+import { WalletPayCard } from '@/components/wallet/wallet-pay-card';
+import { newIdempotencyKey } from '@/lib/idempotency-key';
+import { formatEGPExact } from '@/lib/price';
+import '@/components/wallet/wallet.css';
 
 /** `+201021196367` → `٠١٠٢١١٩٦٣٦٧`-shaped local digits, what a Vodafone Cash
  *  transfer screen actually asks a student to dial. */
@@ -72,6 +77,8 @@ type Step =
   | 'chooseMonths'
   | 'form'
   | 'submitting'
+  /** Paid from the wallet — access is already open, nothing to review. */
+  | 'walletSuccess'
   | 'success';
 
 /**
@@ -369,6 +376,21 @@ export function SubscribePanel({
   // panel thirty seconds before the admin finished setting the price gets the
   // price without losing the dialog, the course, or their place on the page.
   const [attempt, setAttempt] = useState(0);
+  /**
+   * «المحفظة» — the balance, read live with everything else when the panel
+   * opens. `null` for a visitor with no session (the read 401s) and for a
+   * failed read: the wallet card simply does not appear and the transfer
+   * checkout is exactly what it always was.
+   */
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  /**
+   * ONE key for this checkout's wallet payment, minted when the panel mounts.
+   * A double press or a retry after a dropped response sends the same key, and
+   * the server answers with the purchase it already made instead of charging
+   * again. Kept across a failed attempt on purpose: a failure that DID commit
+   * (the response was lost) is then answered with its own result.
+   */
+  const [walletKey] = useState(newIdempotencyKey);
   // The clipboard write's own fallback target — see `copyNumber` below.
   const numberInputRef = useRef<HTMLInputElement>(null);
   // The native file input is visually hidden (`sr-only`) — this is what the
@@ -420,7 +442,7 @@ export function SubscribePanel({
     let cancelled = false;
 
     async function load() {
-      const [mineResult, courseResult, settingsResult, ownedMonthsResult] =
+      const [mineResult, courseResult, settingsResult, ownedMonthsResult, walletResult] =
         await Promise.allSettled([
           apiGet('/api/payments/submissions/me', MY_SUBMISSIONS_SCHEMA),
           apiGet(`/api/catalog/courses/${encodeURIComponent(slug)}`, CatalogCourseDetailSchema),
@@ -429,8 +451,11 @@ export function SubscribePanel({
             `/api/payments/courses/${encodeURIComponent(courseId)}/months/mine`,
             OWNED_MONTHS_SCHEMA,
           ),
+          apiGet('/api/wallet/balance', WalletBalanceSchema),
         ]);
       if (cancelled) return;
+
+      setWalletBalance(walletResult.status === 'fulfilled' ? walletResult.value.balanceCents : null);
 
       if (courseResult.status === 'fulfilled') {
         const live = courseResult.value;
@@ -796,6 +821,47 @@ export function SubscribePanel({
     }
   }
 
+  /**
+   * «الدفع من المحفظة» — the same plan, term and months a transfer claim would
+   * carry, and no transfer. The server re-derives the price and re-checks
+   * everything `submit` is checked for; this only says what was picked.
+   */
+  async function payFromWallet() {
+    if (!plan) return;
+    setError(null);
+    setStep('submitting');
+    try {
+      const result = await apiPost('/api/payments/wallet-purchase', WalletPurchaseResultSchema, {
+        courseId,
+        plan,
+        termId,
+        monthIds: selectedMonthIds,
+        idempotencyKey: walletKey,
+      });
+      setWalletBalance(result.balanceCents);
+      setStep('walletSuccess');
+    } catch (caught) {
+      const payload =
+        caught instanceof ApiRequestError
+          ? ((caught.payload ?? {}) as { code?: unknown; details?: { balanceCents?: unknown } })
+          : {};
+      if (payload.code === 'wallet_insufficient') {
+        // The balance moved since the panel opened — show the live one, and
+        // the card redraws as «ناقص كام» with the top-up link.
+        const live = Number(payload.details?.balanceCents);
+        if (Number.isFinite(live)) setWalletBalance(live);
+        setError(copy.subscribe.walletInsufficient);
+      } else if (payload.code === 'wallet_already_owned') {
+        setError(copy.subscribe.walletOwned);
+      } else if (caught instanceof ApiRequestError && caught.status === 409) {
+        setError(copy.subscribe.alreadyPending);
+      } else {
+        setError(copy.subscribe.walletGeneric);
+      }
+      setStep('form');
+    }
+  }
+
   async function submit() {
     if (!plan) return;
     const normalizedPhone = normalizeEgyptianPhone(senderPhone);
@@ -844,6 +910,23 @@ export function SubscribePanel({
       }
       setStep('form');
     }
+  }
+
+  if (step === 'walletSuccess') {
+    return (
+      // Inside the panel's own card, not bare on the page band behind it.
+      <div className="course-subscribe wl-pay__success" role="status">
+        <span className="wl-sent__badge">
+          <Check className="size-8" strokeWidth={3} aria-hidden="true" />
+        </span>
+        <p className="course-subscribe__success">
+          {formatCopy(copy.subscribe.walletSuccess, { balance: formatEGPExact(walletBalance ?? 0) })}
+        </p>
+        <a href={`/library/${encodeURIComponent(slug)}`} className="wl-btn wl-btn--primary">
+          {copy.subscribe.walletSuccessOpen}
+        </a>
+      </div>
+    );
   }
 
   if (step === 'success') {
@@ -1054,6 +1137,30 @@ export function SubscribePanel({
         transfer number on screen while the student is still deciding which app
         to open — which is the exact confusion this step exists to remove.
       */}
+      {/*
+        «الدفع من المحفظة» — asked FIRST when there is money in the wallet, and
+        only then: a student with an empty wallet sees the checkout exactly as
+        it always was. Hidden once a rail is picked — the student has answered
+        «بالتحويل» by then.
+      */}
+      {!railConfirmed && walletBalance !== null && walletBalance > 0 && amountCents !== null ? (
+        <WalletPayCard
+          balanceCents={walletBalance}
+          priceCents={amountCents}
+          paying={submitting}
+          onPay={payFromWallet}
+          topupHref={`/wallet?amount=${Math.max(0, amountCents - walletBalance)}&back=${encodeURIComponent(
+            `/courses/${slug}/subscribe`,
+          )}`}
+        />
+      ) : null}
+
+      {!railConfirmed && error ? (
+        <p role="alert" className="course-subscribe__error">
+          {error}
+        </p>
+      ) : null}
+
       {!railConfirmed ? (
         <PaymentMethodChoice
           value={rail}
