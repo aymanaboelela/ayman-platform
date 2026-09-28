@@ -59,6 +59,7 @@ const admin = {
     roles: 'الصلاحيات',
     news: 'نيوز',
     media: 'مكتبة الوسائط',
+    videos: 'الفيديوهات',
     errors: 'الأعطال',
     audit: 'سجل النشاط',
     settings: 'الإعدادات',
@@ -4802,6 +4803,52 @@ const admin = {
    * So the wording is aimed at triage and not at reassurance: what broke, where,
    * how many students, how recently, and is it still happening.
    */
+  /**
+   * «الفيديوهات» — every uploaded lecture and what the bucket holds for it.
+   *
+   * Written for the question the owner actually asked: «إيه اللي متخزّن وبكام،
+   * وأمسح إيه». So the numbers lead, the leftovers are named as money being
+   * paid for nothing, and the delete says plainly that it cannot be undone.
+   */
+  videos: {
+    eyebrow: 'المحتوى',
+    title: 'الفيديوهات',
+    subtitle: 'كل فيديو اترفع على المنصة، حجمه قد إيه، وفي أنهي محاضرة.',
+    statTotal: 'المساحة كلها',
+    statCount: 'فيديو في محاضرات',
+    statCost: 'تكلفة التخزين في الشهر تقريبًا',
+    statCostHint: 'التخزين بـ٠٫٠١٥ دولار للجيجا في الشهر، والمشاهدة ببلاش.',
+    unitGb: 'جيجا',
+    unitMb: 'ميجا',
+    storageUnread: 'مقدرناش نقرا التخزين دلوقتي — المساحة هنا من غير الملفات الزيادة.',
+    listTitle: 'في المحاضرات',
+    empty: 'لسه مفيش فيديو اترفع.',
+    emptyHint: 'أول محاضرة تترفع من صفحة الكورس هتظهر هنا بحجمها.',
+    openLesson: 'افتح المحاضرة',
+    status: {
+      uploading: 'بيترفع',
+      pending: 'مستني دوره',
+      mirroring: 'بيتجهز',
+      ready: 'جاهز',
+      failed: 'وقع',
+      disabled: 'متوقف',
+    },
+    quality: '{height}p',
+    orphansTitle: 'ملفات من غير محاضرة',
+    orphansHint:
+      'دي فيديوهات محاضرتها أو الكورس بتاعها اتمسح، والملفات فضلت في التخزين بتتحسب كل شهر. مسحها مش هيأثر على أي طالب.',
+    orphanLabel: 'فيديو من غير محاضرة',
+    delete: 'امسح',
+    deleteTitle: 'تمسح الفيديو ده؟',
+    deleteBody:
+      'الملفات هتتمسح من التخزين خالص، والمحاضرة هتفضل موجودة من غير فيديو. مفيش رجوع في الخطوة دي.',
+    deleteOrphanBody: 'الملفات دي مش مربوطة بأي محاضرة. هتتمسح من التخزين خالص، ومفيش رجوع.',
+    deleteConfirm: 'امسح نهائيًا',
+    back: 'رجوع',
+    deleted: 'اتمسح الفيديو',
+    busy: 'الفيديو ده لسه بيترفع أو بيتجهز — استنى لما يخلص',
+    errorGeneric: 'حصلت مشكلة ومقدرناش نمسح. جرّب تاني.',
+  },
   errors: {
     eyebrow: 'المراقبة',
     title: 'الأعطال',

@@ -47,6 +47,9 @@ export const AUDIT_RESOURCES = {
   /// قفل شهر ٣» must not have to read term rows to find out.
   courseMonth: 'course_months',
   lesson: 'lessons',
+  /// An uploaded lecture's files in the bucket. Keyed by the upload id, not the
+  /// lesson: a video left behind by a deleted lesson has no lesson to name.
+  lessonVideo: 'lesson_videos',
   enrollment: 'enrollments',
   questionVersion: 'question_versions',
   quiz: 'quizzes',

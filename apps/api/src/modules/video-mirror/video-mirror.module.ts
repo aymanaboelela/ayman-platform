@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { RedisModule } from '../../redis/redis.module';
+import { VideoLibraryController } from './video-library.controller';
+import { VideoLibraryService } from './video-library.service';
 import { VideoMirrorService } from './video-mirror.service';
 import { VideoUploadService } from './video-upload.service';
 
@@ -30,7 +32,8 @@ import { VideoUploadService } from './video-upload.service';
    * because the module never compiles.
    */
   imports: [PrismaModule, RedisModule],
-  providers: [VideoMirrorService, VideoUploadService],
+  controllers: [VideoLibraryController],
+  providers: [VideoMirrorService, VideoUploadService, VideoLibraryService],
   exports: [VideoMirrorService, VideoUploadService],
 })
 export class VideoMirrorModule {}

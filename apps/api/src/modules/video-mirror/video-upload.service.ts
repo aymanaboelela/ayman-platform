@@ -278,6 +278,27 @@ export class VideoUploadService {
     return { status: 'removed' };
   }
 
+  /**
+   * Videos parked as «the one this upload replaces» while a new upload is in
+   * flight. No row points at them — the row already names the new upload —
+   * so they look exactly like files nobody needs, and they are the files a
+   * cancelled upload puts back. «الفيديوهات» must not offer them for deletion.
+   */
+  async parkedReplacedIds(): Promise<Set<string>> {
+    const inFlight = await this.prisma.lessonVideo.findMany({
+      where: { provider: 'upload', mirrorStatus: 'uploading' },
+      select: { externalId: true },
+    });
+    const ids = new Set<string>();
+    // No `.catch` on purpose: a Redis that cannot answer means «unknown», and
+    // the caller must refuse a delete rather than read that as «none parked».
+    for (const { externalId } of inFlight) {
+      const parked = await this.redis.get(REPLACED_KEY(externalId));
+      if (parked !== null) ids.add((JSON.parse(parked) as ReplacedVideo).externalId);
+    }
+    return ids;
+  }
+
   /** What the admin screen polls while the encode runs. */
   async status(lessonId: string): Promise<VideoUploadStatus> {
     const row = await this.prisma.lessonVideo.findUnique({

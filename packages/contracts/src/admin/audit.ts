@@ -47,6 +47,10 @@ export const AUDIT_ACTIONS = [
   'lesson:update',
   'lesson:reorder',
   'lesson:delete',
+  // «الفيديوهات» — an uploaded lecture's files deleted from the bucket. Its own
+  // action and not `lesson:update`: it is the one delete in the content domain
+  // that cannot be undone from a backup, because the bytes were never in one.
+  'video:delete',
   'enrollment:override',
   // quiz (Plan 5, instrumented by the Task 3 retrofit)
   'question:publish',
