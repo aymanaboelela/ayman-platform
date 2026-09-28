@@ -803,6 +803,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // however closely it resembles one already listed.
     { label: 'monthly exams: anonymous', method: 'get', path: () => '/api/me/exams', actor: 'anonymous', status: 401 },
     { label: 'monthly exams: student', method: 'get', path: () => '/api/me/exams', actor: 'student', status: 200 },
+    // «تحدّي الأسئلة» — `quiz:read` + فيتشر `quizGame` (مفتوحة هنا لأن التستات
+    // بتجري كستاك أيمن). سؤال مش في بنك الطالب بيرجّع 404 مش الإجابة.
+    { label: 'game round: anonymous', method: 'get', path: () => '/api/me/game/round', actor: 'anonymous', status: 401 },
+    { label: 'game round: student', method: 'get', path: () => '/api/me/game/round', actor: 'student', status: 200 },
+    { label: 'game answer: anonymous', method: 'post', path: () => '/api/me/game/answer', actor: 'anonymous', status: 401, body: () => ({ questionId: randomUUID(), optionId: null }) },
+    { label: 'game answer: student, question outside their pool', method: 'post', path: () => '/api/me/game/answer', actor: 'student', status: 404, body: () => ({ questionId: randomUUID(), optionId: null }) },
     // Same again for the activity feed, guarded by `progress:read` — the READ
     // half of the pair the heartbeat writes. Its own rows for the same reason
     // the quiz history has its own: a different permission is a different

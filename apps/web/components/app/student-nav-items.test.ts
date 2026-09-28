@@ -179,6 +179,7 @@ describe('STUDENT_TABS', () => {
     expect(rest.length + STUDENT_TABS.length).toBe(primary.length);
     expect(rest.map((item) => item.href)).toEqual([
       '/rank',
+      '/game',
       '/codes',
       '/foundations',
       '/store',

@@ -110,6 +110,7 @@ export const PROTECTED_PREFIXES = [
   '/profile',
   '/results',
   '/rank',
+  '/game',
   '/foundations',
   '/playground',
   /*
