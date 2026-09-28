@@ -102,6 +102,16 @@ export const FEATURE_DECLARATIONS = [
     descriptionAr: 'تحويلات إنستاباي الواردة ومطابقتها على الاشتراكات.',
     defaultForTenant: true,
   },
+  {
+    /*
+     * مقفولة افتراضيًا على أي ستاك تاني: اتعملت لأيمن بطلبه («لأيمن بس»)، ولسه
+     * بتتجرّب. لو مدرّس تاني عايزها، بتتفتح من مستند الصلاحيات من غير كود.
+     */
+    key: 'quizGame',
+    nameAr: 'تحدّي الأسئلة',
+    descriptionAr: 'لعبة سباق وقت على أسئلة الكويزات اللي الطالب امتحنها قبل كده.',
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FeatureDeclaration[];
 
 export type FeatureKey = (typeof FEATURE_DECLARATIONS)[number]['key'];

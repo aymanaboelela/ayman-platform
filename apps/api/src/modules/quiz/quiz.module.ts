@@ -24,6 +24,8 @@ import { QuizScoreFeed } from './quiz-score-feed';
 import { ScheduledExamsService } from './scheduled-exams.service';
 import { AttemptEventsService } from './attempt-events.service';
 import { AttemptService } from './attempt.service';
+import { GameController } from './game.controller';
+import { GameService } from './game.service';
 
 @Module({
   // `ProgressModule` is imported (not just re-exported) so `AttemptService`
@@ -38,6 +40,7 @@ import { AttemptService } from './attempt.service';
     AdminAttemptsController,
     AdminAnalyticsController,
     AdminExamsController,
+    GameController,
   ],
   providers: [
     MasteryService,
@@ -53,6 +56,7 @@ import { AttemptService } from './attempt.service';
     AnalyticsService,
     ScheduledExamsService,
     ManualGradingService,
+    GameService,
     // Registering an APP_* provider from inside a feature module still applies
     // it globally (Nest hoists APP_* providers) — every future controller that
     // renders a question is covered the moment it adds @NoAnswerLeak(), with
