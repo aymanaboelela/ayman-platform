@@ -550,6 +550,9 @@ export const STUDENT_BULK_DELETE_FAILURES = [
   'last-admin',
   'authored-content',
   'not-found',
+  // The account holds something the one deleting it does not — an admin, or
+  // the instructor seen from a restricted assistant. See `refuseIfOutranked`.
+  'outranked',
 ] as const;
 
 export const AdminStudentBulkDeleteFailureSchema = z.object({

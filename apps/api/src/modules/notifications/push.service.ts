@@ -137,6 +137,10 @@ export class PushService {
           keys: { p256dh: subscription.p256dh, auth: subscription.auth },
         },
         JSON.stringify(payload),
+        // web-push waits forever by default, and callers await this inside
+        // admin loops (bulk ship) — one push service that never answers held
+        // the whole action open. Ten seconds is generous for a push service.
+        { timeout: 10_000 },
       );
     } catch (error) {
       const statusCode = (error as { statusCode?: number }).statusCode;

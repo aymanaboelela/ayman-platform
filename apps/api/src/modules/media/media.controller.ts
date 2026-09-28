@@ -17,7 +17,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ZodValidationPipe } from 'nestjs-zod';
-import { OUTPUT_MIME } from '@ayman/contracts/admin/media';
+import { OUTPUT_MIME, STORAGE_KEY_PATTERN } from '@ayman/contracts/admin/media';
 import type { Response } from 'express';
 import { memoryStorage } from 'multer';
 import { MAX_DOCUMENT_BYTES, MAX_UPLOAD_BYTES } from '@ayman/contracts/admin/media';
@@ -165,6 +165,12 @@ export class MediaController {
     @Res() response: Response,
   ): Promise<void> {
     const key = `${prefix}/${name}`;
+    // Public library images ONLY. The private prefixes (`payment-proof/…`,
+    // `hw/…`, `msg/…`) are three segments precisely so this two-segment route
+    // cannot address them — but Express decodes `%2F` inside a parameter, so
+    // `/media/payment-proof%2F0a/<uuid>.webp` arrived as `prefix` =
+    // `payment-proof/0a` and served a student's receipt, `public, immutable`.
+    if (!STORAGE_KEY_PATTERN.test(key)) throw new NotFoundException();
     const info = await this.media.statByKey(key);
     if (!info) throw new NotFoundException();
 

@@ -850,7 +850,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       path: () => '/api/me/push/subscribe',
       actor: 'anonymous',
       status: 401,
-      body: () => ({ endpoint: 'https://push.example/x', keys: { p256dh: 'p', auth: 'a' } }),
+      body: () => ({ endpoint: 'https://fcm.googleapis.com/fcm/send/matrix-x', keys: { p256dh: 'p', auth: 'a' } }),
     },
     {
       label: 'push subscribe: student',
@@ -858,7 +858,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       path: () => '/api/me/push/subscribe',
       actor: 'student',
       status: 204,
-      body: () => ({ endpoint: 'https://push.example/x', keys: { p256dh: 'p', auth: 'a' } }),
+      body: () => ({ endpoint: 'https://fcm.googleapis.com/fcm/send/matrix-x', keys: { p256dh: 'p', auth: 'a' } }),
     },
     {
       label: 'push unsubscribe: anonymous',
@@ -866,7 +866,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       path: () => '/api/me/push/unsubscribe',
       actor: 'anonymous',
       status: 401,
-      body: () => ({ endpoint: 'https://push.example/x' }),
+      body: () => ({ endpoint: 'https://fcm.googleapis.com/fcm/send/matrix-x' }),
     },
     {
       label: 'push unsubscribe: student',
@@ -874,7 +874,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       path: () => '/api/me/push/unsubscribe',
       actor: 'student',
       status: 204,
-      body: () => ({ endpoint: 'https://push.example/x' }),
+      body: () => ({ endpoint: 'https://fcm.googleapis.com/fcm/send/matrix-x' }),
     },
 
     // ── بوابة ولي الأمر: عامة عن قصد، لأن اللي بيدخل مالوش حساب ─────────

@@ -3,6 +3,7 @@ import { Public } from '../../auth/decorators/public.decorator';
 import { loadEnv } from '../../config/env';
 import { CampaignService } from './campaign.service';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
+import { tokensMatch } from '../../common/security/tokens-match';
 
 /**
  * `POST /api/marketing/wa/receipt` — the second tick, arriving.
@@ -59,7 +60,7 @@ export class WhatsappReceiptController {
     @Body() body: { messageId?: unknown; status?: unknown; code?: unknown; detail?: unknown },
   ): Promise<{ ok: true }> {
     const expected = loadEnv(process.env).WA_SERVICE_TOKEN;
-    if (!expected || !token || token !== expected) throw new UnauthorizedException();
+    if (!tokensMatch(token, expected)) throw new UnauthorizedException();
 
     const messageId = typeof body.messageId === 'string' ? body.messageId : null;
     const status = typeof body.status === 'number' ? body.status : null;

@@ -203,14 +203,16 @@ describe('toReviewQuestion', () => {
       expect(JSON.stringify(result)).not.toContain('SECRET general');
     });
 
-    it('is present once the student has answered, even before grading', () => {
+    // Answered is not locked: nothing mid-attempt grades a question now, so
+    // an answered one can still be changed until submit.
+    it('is ABSENT on an answered question that can still be changed', () => {
       const answeredUngraded: ReviewRow = {
         ...row,
         response: { kind: 'choice', optionIds: ['opt-a'] },
         gradedAt: null,
       };
       const flags = { ...resolveReviewFlags(DEFAULT_REVIEW_OPTIONS, 'during'), generalFeedback: true };
-      expect(toReviewQuestion(answeredUngraded, flags)).toHaveProperty('generalFeedbackHtml');
+      expect(toReviewQuestion(answeredUngraded, flags)).not.toHaveProperty('generalFeedbackHtml');
     });
 
     it('is present once the question has been graded, even with a null response', () => {
@@ -254,14 +256,15 @@ describe('toReviewQuestion', () => {
       expect(JSON.stringify(result.rightAnswerOptionIds ?? null)).not.toContain('opt-a');
     });
 
-    it('is present once the student has answered, even before grading', () => {
+    // The exploit: save a wrong answer, read the key, change it, submit.
+    it('is ABSENT on an answered question that can still be changed', () => {
       const answeredUngraded: ReviewRow = {
         ...row,
         response: { kind: 'choice', optionIds: ['opt-b'] },
         gradedAt: null,
       };
-      expect(toReviewQuestion(answeredUngraded, duringWithRightAnswer).rightAnswerOptionIds).toEqual(
-        ['opt-a'],
+      expect(toReviewQuestion(answeredUngraded, duringWithRightAnswer)).not.toHaveProperty(
+        'rightAnswerOptionIds',
       );
     });
 

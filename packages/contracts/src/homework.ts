@@ -1,4 +1,5 @@
 import { z } from '@ayman/contracts/zod';
+import { HOMEWORK_KEY_PATTERN } from './admin/media';
 
 /**
  * الواجب — the exercise set on a lecture, the photographs of the answer, and
@@ -98,7 +99,11 @@ export type HomeworkStatus = z.infer<typeof HomeworkStatusSchema>;
  */
 export const HomeworkImageInputSchema = z
   .object({
-    storageKey: z.string().max(255),
+    // `hw/` keys ONLY. The bucket check in `submit` proves a key exists, not
+    // that it is a homework photo — and a resubmit DELETES the previous
+    // submission's keys, so any existing key (a course cover read off a public
+    // page) sent here was a key a student could have the platform erase.
+    storageKey: z.string().max(255).regex(HOMEWORK_KEY_PATTERN),
     sizeBytes: z.number().int().positive(),
   })
   .strict();

@@ -190,6 +190,38 @@ describe('TransfersService', () => {
       expect(await prisma.studentPaymentAddress.count({ where: { handle: HANDLE } })).toBe(0);
     });
 
+    // The bait: a claim filed long before the money, waiting for the next
+    // first-time payer. It must not catch their transfer — nor learn their
+    // address for the bait's owner.
+    it('ignores a claim that was already waiting long before the money arrived', async () => {
+      const bait = await claim(otherStudentId, courseId);
+      await prisma.paymentSubmission.update({
+        where: { id: bait.id },
+        data: { createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+      });
+
+      const result = await service.ingest({ text: notificationFor(PRICE_CENTS) });
+
+      expect(result).toMatchObject({ created: 1, matched: 0 });
+      expect((await prisma.paymentSubmission.findUniqueOrThrow({ where: { id: bait.id } })).status).toBe(
+        'pending',
+      );
+      expect(await prisma.studentPaymentAddress.count({ where: { handle: HANDLE } })).toBe(0);
+    });
+
+    it('still matches an old claim once the address is known to be that student’s', async () => {
+      await prisma.studentPaymentAddress.create({ data: { userId: studentId, handle: HANDLE } });
+      const filed = await claim(studentId, courseId);
+      await prisma.paymentSubmission.update({
+        where: { id: filed.id },
+        data: { createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+      });
+
+      const result = await service.ingest({ text: notificationFor(PRICE_CENTS) });
+
+      expect(result).toMatchObject({ matched: 1 });
+    });
+
     it('keeps money nobody was waiting for, and grants nothing', async () => {
       const result = await service.ingest({ text: notificationFor(PRICE_CENTS + 100_000) });
 

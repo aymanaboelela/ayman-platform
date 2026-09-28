@@ -160,11 +160,15 @@ export function toReviewQuestion(row: ReviewRow, flags: ReviewFlags): ReviewQues
   // are columns on `attempt_questions` written only at grade time, so a null
   // value incidentally gates them. `generalFeedbackHtml` has no such column
   // of its own to gate on, so the gate is explicit here instead.
-  if (
-    flags.generalFeedback &&
-    row.version.generalFeedbackHtml &&
-    (row.response != null || row.gradedAt != null)
-  ) {
+  //
+  // ⚠️ `gradedAt`, not «answered or graded». An ANSWERED question used to pass
+  // too, back when `checkAnswer` froze a question the moment its answer was
+  // revealed. That button is gone and nothing mid-attempt grades a question
+  // any more, so an answered question stays editable until submit — and the
+  // explanation (or the key, below) arriving on an answered question was a
+  // free answer key: save anything, read the right option, change the answer,
+  // submit. Submit grades every question, so after it this gate is simply open.
+  if (flags.generalFeedback && row.version.generalFeedbackHtml && row.gradedAt != null) {
     payload.generalFeedbackHtml = row.version.generalFeedbackHtml;
   }
   if (flags.rightAnswer && row.rightAnswerText) payload.rightAnswerText = row.rightAnswerText;
@@ -196,11 +200,8 @@ export function toReviewQuestion(row: ReviewRow, flags: ReviewFlags): ReviewQues
   // I9 replaced a text round-trip with these ids for good reasons (see below)
   // and inherited none of B4's gate, because the value it replaced was a
   // grade-time column and the new one is not.
-  if (
-    flags.rightAnswer &&
-    isChoiceType(row.version.type) &&
-    (row.response != null || row.gradedAt != null)
-  ) {
+  // Graded only — see the note on `generalFeedbackHtml` above.
+  if (flags.rightAnswer && isChoiceType(row.version.type) && row.gradedAt != null) {
     // Ordering ships the ids IN `position` ORDER, and all of them: the answer
     // is the sequence, not a subset, and the review screen renders it as a
     // numbered list rather than as per-option highlights. `fraction` is not

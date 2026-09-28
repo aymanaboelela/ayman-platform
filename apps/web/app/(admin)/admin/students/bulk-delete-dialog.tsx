@@ -31,6 +31,7 @@ const FAILURE_COPY: Record<AdminStudentBulkDeleteFailure['reason'], string> = {
   'last-admin': c.bulkDeleteReasonLastAdmin,
   'authored-content': c.bulkDeleteReasonAuthored,
   'not-found': c.bulkDeleteReasonMissing,
+  outranked: c.bulkDeleteReasonOutranked,
 };
 
 export interface BulkDeleteDialogProps {

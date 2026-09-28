@@ -11,6 +11,7 @@ import { Public } from '../../auth/decorators/public.decorator';
 import { loadEnv } from '../../config/env';
 import { CampaignService } from './campaign.service';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
+import { tokensMatch } from '../../common/security/tokens-match';
 
 /**
  * `POST /api/marketing/wa/inbound` — the sidecar relaying what a phone typed
@@ -48,7 +49,7 @@ export class WhatsappInboundController {
     @Body() body: { phone?: unknown; text?: unknown },
   ): Promise<{ ok: true }> {
     const expected = loadEnv(process.env).WA_SERVICE_TOKEN;
-    if (!expected || !token || token !== expected) throw new UnauthorizedException();
+    if (!tokensMatch(token, expected)) throw new UnauthorizedException();
 
     const phone = typeof body.phone === 'string' ? body.phone : null;
     const text = typeof body.text === 'string' ? body.text : null;

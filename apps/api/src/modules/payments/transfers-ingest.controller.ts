@@ -7,6 +7,7 @@ import { loadEnv } from '../../config/env';
 import { IngestTransfersDto } from './payments.dto';
 import { TransfersService } from './transfers.service';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
+import { tokensMatch } from '../../common/security/tokens-match';
 
 /**
  * `POST /api/ingest/transfers` — what the phone that received the money saw.
@@ -45,7 +46,7 @@ export class TransfersIngestController {
     @Body() body: IngestTransfersDto,
   ): Promise<IngestTransfersResult> {
     const expected = loadEnv(process.env).INSTAPAY_INGEST_TOKEN;
-    if (!expected || !token || token !== expected) throw new UnauthorizedException();
+    if (!tokensMatch(token, expected)) throw new UnauthorizedException();
     return this.transfers.ingest(body);
   }
 }
