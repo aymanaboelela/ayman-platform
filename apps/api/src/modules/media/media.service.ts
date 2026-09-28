@@ -1,6 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
-import { BadRequestException, Inject, Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  PayloadTooLargeException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import sharp, { type OutputInfo } from 'sharp';
 import {
   ALLOWED_UPLOAD_EXT,
@@ -94,8 +101,41 @@ async function sharpCanDecode(input: Buffer): Promise<boolean> {
  * The 20s cap is a guard rather than a budget — a phone photo decodes in well
  * under a second, and the ceiling exists so a crafted file cannot hold a
  * worker open. Both files are removed on every path, including that one.
+ *
+ * ⚠️ The 20s cap bounds ONE process, not how many run. The book-order receipt
+ * upload is public, so a few dozen files that look like HEIC and that sharp
+ * cannot open used to start a few dozen ffmpegs at once, each free to use every
+ * core — enough to stall all three stacks on this VPS. Hence `-threads 1`, at
+ * most `MAX_TRANSCODES` running, and a short queue behind them; past that the
+ * upload is refused rather than parked. A real student's photo waits a moment
+ * at worst.
  */
+const MAX_TRANSCODES = 2;
+const MAX_QUEUED_TRANSCODES = 8;
+let runningTranscodes = 0;
+const transcodeQueue: Array<() => void> = [];
+
+async function withTranscodeSlot<T>(work: () => Promise<T>): Promise<T> {
+  if (runningTranscodes >= MAX_TRANSCODES) {
+    if (transcodeQueue.length >= MAX_QUEUED_TRANSCODES) {
+      throw new ServiceUnavailableException('image conversion is busy, try again shortly');
+    }
+    await new Promise<void>((resolve) => transcodeQueue.push(resolve));
+  }
+  runningTranscodes += 1;
+  try {
+    return await work();
+  } finally {
+    runningTranscodes -= 1;
+    transcodeQueue.shift()?.();
+  }
+}
+
 async function transcodeToJpeg(input: Buffer): Promise<Buffer> {
+  return withTranscodeSlot(() => runFfmpegTranscode(input));
+}
+
+async function runFfmpegTranscode(input: Buffer): Promise<Buffer> {
   const { spawn } = await import('node:child_process');
   const { mkdtemp, readFile, rm, writeFile } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
@@ -111,7 +151,7 @@ async function transcodeToJpeg(input: Buffer): Promise<Buffer> {
     await new Promise<void>((resolve, reject) => {
       const child = spawn(
         'ffmpeg',
-        ['-hide_banner', '-loglevel', 'error', '-y', '-i', source,
+        ['-hide_banner', '-loglevel', 'error', '-y', '-threads', '1', '-i', source,
          '-frames:v', '1', '-q:v', '2', target],
         { stdio: ['ignore', 'ignore', 'pipe'] },
       );
@@ -311,7 +351,9 @@ export class MediaService {
     const buffer =
       decodable || !HEIF_MIME.has(detected.mime)
         ? file.buffer
-        : await transcodeToJpeg(file.buffer).catch(() => {
+        : await transcodeToJpeg(file.buffer).catch((error: unknown) => {
+            // «Busy» is not «bad file» — let the 503 through so the client retries.
+            if (error instanceof ServiceUnavailableException) throw error;
             throw new BadRequestException('file could not be processed as an image');
           });
 

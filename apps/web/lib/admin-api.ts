@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import type { ZodType } from 'zod';
 import { CSRF_COOKIE, CSRF_HEADER } from './csrf';
 import { bound, resolve } from './api';
+import { forwardClientIp } from './client-ip';
 
 /**
  * Server-only, cookie-forwarding, and deliberately `cache: 'no-store'`. Admin
@@ -26,6 +27,7 @@ async function authHeaders(extra?: Record<string, string>): Promise<Record<strin
   return {
     accept: 'application/json',
     ...(cookie ? { cookie } : {}),
+    ...forwardClientIp(incoming),
     ...extra,
   };
 }

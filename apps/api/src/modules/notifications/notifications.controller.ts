@@ -39,6 +39,20 @@ const QUEUE_PERMISSION: Record<LiveQueue, Permission> = {
   payments: 'payment:read',
 };
 
+/**
+ * Each open stream is a socket, a heartbeat timer and a subscriber held for as
+ * long as the client likes — and nothing capped either the number or the
+ * length, so one account could open streams until the process ran out of
+ * sockets. Eight covers every tab and device a real person has open at once;
+ * past that the oldest keep working and the new one gets a 429. Thirty minutes
+ * is a ceiling on one connection, not on the feature: the browser's
+ * `EventSource` reconnects on its own after `retry:` and the student never
+ * notices.
+ */
+const MAX_STREAMS_PER_USER = 8;
+const MAX_STREAM_MS = 30 * 60_000;
+const openStreams = new Map<string, number>();
+
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 
@@ -91,6 +105,13 @@ export class NotificationsController {
   @RequirePermission('profile:read')
   @Get('notifications/stream')
   stream(@CurrentUser() user: AuthenticatedUser, @Res() response: Response): void {
+    const open = openStreams.get(user.id) ?? 0;
+    if (open >= MAX_STREAMS_PER_USER) {
+      response.status(429).json({ message: 'too many open notification streams' });
+      return;
+    }
+    openStreams.set(user.id, open + 1);
+
     /*
       `no-transform` and `X-Accel-Buffering: no` for the reason the assistant's
       own stream carries them: something between here and the browser will
@@ -143,6 +164,9 @@ export class NotificationsController {
       send({ type: 'ping' });
     }, HEARTBEAT_MS);
 
+    // Ending the response fires `close` below, which does all the cleanup.
+    const lifetime = setTimeout(() => response.end(), MAX_STREAM_MS);
+
     /*
       ⚠️ ON THE RESPONSE, NOT ON THE REQUEST — the same trap documented at
       length in `assistant-ask.controller.ts`. Node emits `close` on the
@@ -153,8 +177,12 @@ export class NotificationsController {
     */
     response.on('close', () => {
       clearInterval(heartbeat);
+      clearTimeout(lifetime);
       unsubscribe();
       for (const off of queueUnsubscribes) off();
+      const left = (openStreams.get(user.id) ?? 1) - 1;
+      if (left > 0) openStreams.set(user.id, left);
+      else openStreams.delete(user.id);
       response.end();
     });
   }

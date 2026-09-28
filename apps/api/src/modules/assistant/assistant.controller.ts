@@ -61,12 +61,19 @@ const OPEN_THROTTLE = {
   short: { limit: 1, ttl: seconds(10) },
   medium: { limit: 3, ttl: seconds(600) },
   long: { limit: 5, ttl: seconds(3600) },
+  // The three above key on the session cookie, which is never validated — a
+  // script that sends no cookie, or a new one each time, gets fresh buckets.
+  // This one keys on the client's address and cannot be reset that way. It
+  // matters here because every new chat notifies every admin.
+  ip: { limit: 20, ttl: seconds(3600) },
 };
 
 /** Following up in a thread that already exists is cheaper. */
 const MESSAGE_THROTTLE = {
   short: { limit: 1, ttl: seconds(3) },
   medium: { limit: 10, ttl: seconds(600) },
+  // Per address, for the reason on `OPEN_THROTTLE`.
+  ip: { limit: 120, ttl: seconds(600) },
 };
 
 // المساعد. الراوتات دي `@Public()`، فإخفاء اللانشر في الويب مابيقفلش

@@ -290,12 +290,25 @@ const nextConfig: NextConfig = {
      */
     qualities: [60, 75],
 
+    /*
+     * The same argument as `qualities` above, for the URL itself. A pattern
+     * with no `search` accepts ANY query string, so `…/media/x.jpg?1`, `?2`, …
+     * were each a fresh fetch, a sharp resize and a new file in the optimizer's
+     * disk cache — unauthenticated, unthrottled, on the disk the three stacks'
+     * Postgres share. `search: ''` allows only the bare URL, which is all
+     * `mediaUrl()` ever produces. The size caps bound what one entry can cost:
+     * no upload route accepts more than a few MB, and 1 GB of cache is LRU'd.
+     */
+    maximumResponseBody: 15_000_000,
+    maximumDiskCacheSize: 1_000_000_000,
+
     remotePatterns: [
       {
         protocol: mediaOriginUrl.protocol.replace(':', '') as 'http' | 'https',
         hostname: mediaOriginUrl.hostname,
         port: mediaOriginUrl.port,
         pathname: '/media/**',
+        search: '',
       },
       /**
        * Google profile photos, for the avatar on /onboarding.
@@ -311,8 +324,13 @@ const nextConfig: NextConfig = {
        * It also stops a request going to Google on every page view that shows
        * an avatar, which would tell them where a signed-in student is
        * browsing, and it survives Google rotating the URL.
+       *
+       * Only the account-photo paths (`/a/…`, and `/a-/…` on older accounts),
+       * not the whole host: anyone can put an image of their own on lh3, and
+       * the optimizer would fetch and resize it for them.
        */
-      { protocol: 'https', hostname: 'lh3.googleusercontent.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com', pathname: '/a/**', search: '' },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com', pathname: '/a-/**', search: '' },
     ],
   },
 

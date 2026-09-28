@@ -1,4 +1,4 @@
-import { ipTrackerFromRequest, trackerFromRequest } from './request-identity';
+import { ipBucket, ipTrackerFromRequest, trackerFromRequest } from './request-identity';
 
 describe('trackerFromRequest', () => {
   it('keys two students behind one NAT separately', () => {
@@ -208,5 +208,52 @@ describe('ipTrackerFromRequest — the bucket a client cannot opt out of', () =>
     expect(
       ipTrackerFromRequest({ ip: '9.9.9.9', headers: { 'cf-connecting-ip': ['41.35.1.2', '5.5.5.5'] } }),
     ).toBe('ip:41.35.1.2');
+  });
+});
+
+describe('trackerFromRequest — anonymous fallback', () => {
+  it('keys a guest on the client, not the Cloudflare edge', () => {
+    // Two guests behind the same PoP must not share one bucket.
+    const a = trackerFromRequest({ ip: '172.68.1.1', headers: { 'cf-connecting-ip': '41.35.1.2' } });
+    const b = trackerFromRequest({ ip: '172.68.1.1', headers: { 'cf-connecting-ip': '156.200.3.4' } });
+    expect(a).toBe('ip:41.35.1.2');
+    expect(a).not.toBe(b);
+  });
+});
+
+describe('ipBucket — one key per subscriber', () => {
+  it('leaves IPv4 alone', () => {
+    expect(ipBucket('41.35.1.2')).toBe('41.35.1.2');
+  });
+
+  it('groups a whole IPv6 /64 into one key', () => {
+    // The bypass: a household owns the /64 and can use a new address per request.
+    const first = ipBucket('2c0f:fc88:1:2:aaaa:bbbb:cccc:dddd');
+    const second = ipBucket('2c0f:fc88:1:2::1');
+    expect(first).toBe('2c0f:fc88:0001:0002::/64');
+    expect(second).toBe(first);
+  });
+
+  it('keeps two different /64s apart', () => {
+    expect(ipBucket('2c0f:fc88:1:2::1')).not.toBe(ipBucket('2c0f:fc88:1:3::1'));
+  });
+
+  it('expands compression in the first four groups', () => {
+    expect(ipBucket('2001:db8::1')).toBe('2001:0db8:0000:0000::/64');
+    expect(ipBucket('::1')).toBe('0000:0000:0000:0000::/64');
+  });
+
+  it('is case-insensitive', () => {
+    expect(ipBucket('2C0F:FC88:1:2::1')).toBe(ipBucket('2c0f:fc88:1:2::1'));
+  });
+
+  it('unwraps an IPv4-mapped address to the IPv4 it carries', () => {
+    expect(ipBucket('::ffff:41.35.1.2')).toBe('41.35.1.2');
+  });
+
+  it('is what the ip tracker keys on', () => {
+    expect(ipTrackerFromRequest({ headers: { 'cf-connecting-ip': '2c0f:fc88:1:2::9' } })).toBe(
+      'ip:2c0f:fc88:0001:0002::/64',
+    );
   });
 });

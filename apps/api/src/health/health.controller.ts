@@ -58,12 +58,30 @@ export class HealthController {
     database: 'up' | 'down';
     startedAt: string;
   }> {
-    const dbUp = await this.prisma.isHealthy();
+    const dbUp = await this.databaseUp();
     return {
       status: dbUp ? 'ok' : 'degraded',
       service: 'ayman-api',
       database: dbUp ? 'up' : 'down',
       startedAt: STARTED_AT,
     };
+  }
+
+  /**
+   * The answer, reused for two seconds.
+   *
+   * This route is public, exempt from every throttler (for the reasons above),
+   * and reachable from the internet through `/api/health` — so each hit was a
+   * database round trip nobody could limit. A healthcheck every few seconds
+   * gets a fresh answer each time; a flood gets one query per two seconds.
+   */
+  private cached: { up: boolean; at: number } | null = null;
+
+  private async databaseUp(): Promise<boolean> {
+    const now = Date.now();
+    if (this.cached && now - this.cached.at < 2_000) return this.cached.up;
+    const up = await this.prisma.isHealthy();
+    this.cached = { up, at: now };
+    return up;
   }
 }

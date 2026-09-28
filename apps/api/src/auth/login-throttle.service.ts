@@ -119,16 +119,23 @@ export class InMemoryAttemptStore implements AttemptStore {
     return this.records.size;
   }
 
+  /**
+   * Makes room, and makes a lot of it at once.
+   *
+   * This used to trim to exactly the ceiling by SORTING every entry — so once a
+   * flood of distinct identifiers filled the map, every further failed login
+   * paid a full scan and a 20,000-element sort on the event loop. Trimming to
+   * 90% means the next ~2,000 new keys cost nothing, and the overflow goes in
+   * insertion order (a `Map` iterates oldest first), which needs no sort.
+   */
   private evict(): void {
     const now = this.now();
     for (const [key, record] of this.records) {
       if (record.forgetAfter <= now) this.records.delete(key);
     }
-    if (this.records.size <= MAX_TRACKED_KEYS) return;
-
-    const byExpiry = [...this.records].sort((a, b) => a[1].forgetAfter - b[1].forgetAfter);
-    for (const [key] of byExpiry) {
-      if (this.records.size <= MAX_TRACKED_KEYS) break;
+    const target = Math.floor(MAX_TRACKED_KEYS * 0.9);
+    for (const key of this.records.keys()) {
+      if (this.records.size <= target) break;
       this.records.delete(key);
     }
   }

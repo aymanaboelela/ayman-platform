@@ -2,6 +2,7 @@ import { cache } from 'react';
 import { headers } from 'next/headers';
 import { z } from 'zod';
 import { bound, resolve } from './api';
+import { forwardClientIp } from './client-ip';
 
 const SessionSchema = z.object({
   id: z.string(),
@@ -75,7 +76,11 @@ export const getSession = cache(async function getSession(): Promise<SessionUser
    */
   const response = await fetch(resolve('/api/session'), {
     ...bound({
-      headers: cookie ? { cookie, accept: 'application/json' } : { accept: 'application/json' },
+      headers: {
+        accept: 'application/json',
+        ...(cookie ? { cookie } : {}),
+        ...forwardClientIp(incoming),
+      },
       cache: 'no-store',
     }),
   });

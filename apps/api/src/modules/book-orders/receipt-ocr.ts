@@ -120,12 +120,28 @@ const PSM_SPARSE = '11';
  * costs nothing and a second worker would mean a second copy of a 22 MB model.
  */
 let queue: Promise<unknown> = Promise.resolve();
+let pending = 0;
 
-function enqueue<T>(work: () => Promise<T>): Promise<T> {
+/**
+ * How many reads may wait. The payment route that feeds this is public, and a
+ * read can be up to eight OCR passes — an unbounded queue let a script stack
+ * hours of CPU behind it. Past the cap a receipt is simply not read, the same
+ * outcome as a blurry photo: `submitPayment` treats nulls as "nothing learned"
+ * and a person reviews it. A real day's receipts never come near this.
+ */
+const MAX_PENDING_READS = 20;
+
+function enqueue<T>(work: () => Promise<T>): Promise<T> | null {
+  if (pending >= MAX_PENDING_READS) return null;
+  pending += 1;
   const next = queue.then(work, work);
   queue = next.then(
     () => undefined,
     () => undefined,
+  );
+  void next.then(
+    () => (pending -= 1),
+    () => (pending -= 1),
   );
   return next;
 }
@@ -234,7 +250,7 @@ export async function readReceipt(
    * was the wrong way up" — there is no confidence score worth trusting on a
    * page of mojibake.
    */
-  return enqueue(async () => {
+  const queued = enqueue(async (): Promise<ReceiptReading> => {
     for (const rotation of [0, 90, 270, 180]) {
       let prepared: Buffer;
       try {
@@ -266,6 +282,8 @@ export async function readReceipt(
     }
     return nothing;
   });
+  if (!queued) log.warn('receipt reading queue is full — skipping this one');
+  return queued ?? nothing;
 }
 
 /** One recognise at one segmentation mode. */
