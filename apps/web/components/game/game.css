@@ -333,3 +333,308 @@
 @keyframes gm-gain { from { opacity: 0; transform: translateY(10px) scale(0.8); } 30% { opacity: 1; transform: translateY(-4px) scale(1.15); } to { transform: none; } }
 @keyframes gm-fall { 0% { opacity: 1; transform: translateY(0) rotate(0); } 100% { opacity: 0; transform: translateY(26rem) rotate(560deg); } }
 @keyframes gm-blink { 50% { opacity: 0.55; } }
+
+/* =============================================================================
+   صفحة الألعاب — اختيار اللعبة والكورس والمستوى.
+   ========================================================================== */
+.gm-stage--hub { place-items: start center; }
+.gm-hub { display: grid; gap: 1.25rem; width: min(100%, 56rem); }
+.gm-hub__head { text-align: center; display: grid; gap: 0.5rem; justify-items: center; }
+.gm-hub__group { display: grid; gap: 0.65rem; border: 0; padding: 0; margin: 0; min-width: 0; }
+.gm-hub__legend { margin-bottom: 0.4rem; font-size: var(--fs-text-sm); font-weight: var(--fw-bold); color: var(--ink-fg-2); letter-spacing: 0.04em; }
+.gm-hub__hint { font-size: var(--fs-text-xs); color: var(--ink-fg-2); }
+.gm-hub__go { display: grid; justify-items: center; gap: 0.6rem; margin-top: 0.25rem; }
+
+.gm-modes { display: grid; gap: 0.75rem; }
+@media (min-width: 720px) { .gm-modes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.gm-mode[data-tone='gold'] { --tone: var(--print-gold); --tone-2: var(--viz-3); }
+.gm-mode[data-tone='rose'] { --tone: var(--viz-4); --tone-2: var(--viz-1); }
+.gm-mode[data-tone='teal'] { --tone: var(--viz-2); --tone-2: var(--viz-6); }
+.gm-mode {
+  position: relative;
+  display: grid;
+  gap: 0.4rem;
+  align-content: start;
+  padding: 1.1rem;
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(120% 120% at 100% 0%, color-mix(in oklab, var(--tone) 28%, transparent) 0%, transparent 60%),
+    rgb(255 255 255 / 0.05);
+  border: 1px solid var(--ink-line);
+  cursor: pointer;
+  transition: transform var(--d-hover) var(--ease-out), border-color var(--d-hover), box-shadow var(--d-hover);
+}
+.gm-mode:hover { transform: translateY(-2px); }
+.gm-mode[data-on] {
+  border-color: var(--tone);
+  box-shadow: 0 0 0 2px var(--tone), 0 14px 34px color-mix(in oklab, var(--tone) 35%, transparent);
+}
+.gm-mode:has(input:focus-visible) { outline: 2px solid var(--ink-accent); outline-offset: 3px; }
+.gm-mode__icon {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, var(--tone), var(--tone-2));
+  color: #fff;
+  box-shadow: 0 10px 24px color-mix(in oklab, var(--tone) 40%, transparent);
+}
+.gm-mode__title { margin-top: 0.3rem; font-size: var(--fs-title-4); font-weight: var(--fw-bold); }
+.gm-mode__body { font-size: var(--fs-text-sm); color: var(--ink-fg-2); line-height: 1.7; }
+
+.gm-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.gm-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid var(--ink-line);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+.gm-pick[data-on] { background: var(--ink-accent); color: var(--on-light-ink); border-color: transparent; }
+.gm-pick:has(input:focus-visible) { outline: 2px solid var(--ink-accent); outline-offset: 2px; }
+.gm-pick__n { padding: 0 0.45rem; border-radius: var(--r-full); background: rgb(0 0 0 / 0.2); font-size: var(--fs-text-xs); font-variant-numeric: tabular-nums; }
+
+.gm-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
+.gm-level[data-level='easy'] { --tone: var(--viz-6); }
+.gm-level[data-level='medium'] { --tone: var(--viz-1); }
+.gm-level[data-level='hard'] { --tone: var(--viz-4); }
+.gm-level {
+  display: grid;
+  justify-items: center;
+  gap: 0.15rem;
+  padding: 0.75rem 0.5rem;
+  border-radius: var(--r-lg);
+  background: color-mix(in oklab, var(--tone) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--tone) 40%, transparent);
+  cursor: pointer;
+  text-align: center;
+}
+.gm-level[data-on] { background: var(--tone); color: #fff; box-shadow: 0 10px 24px color-mix(in oklab, var(--tone) 40%, transparent); }
+.gm-level:has(input:focus-visible) { outline: 2px solid var(--ink-accent); outline-offset: 2px; }
+.gm-level__label { font-size: var(--fs-text-lg); font-weight: var(--fw-bold); }
+.gm-level__n { font-size: var(--fs-text-xs); opacity: 0.85; }
+
+/* =============================================================================
+   «من سيربح المليون» — أزرق ليلي، دهب، وبارات سداسية زي البرنامج.
+   ========================================================================== */
+.mln {
+  background:
+    radial-gradient(90% 70% at 50% 0%, color-mix(in oklab, var(--viz-5) 55%, transparent) 0%, transparent 60%),
+    radial-gradient(80% 80% at 50% 110%, color-mix(in oklab, var(--viz-3) 45%, transparent) 0%, transparent 60%),
+    var(--ink);
+}
+.mln-layout { display: grid; gap: 1rem; width: min(100%, 64rem); align-self: stretch; }
+@media (min-width: 900px) { .mln-layout { grid-template-columns: minmax(0, 1fr) 13rem; align-items: start; } }
+.mln-main { display: grid; gap: 0.9rem; align-content: start; }
+
+.mln-top { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.mln-lifelines { display: flex; gap: 0.5rem; }
+.mln-life {
+  display: grid;
+  place-items: center;
+  width: 3.4rem;
+  height: 2.4rem;
+  border-radius: 999px;
+  border: 2px solid color-mix(in oklab, var(--print-gold) 70%, #fff);
+  background: radial-gradient(circle at 50% 30%, color-mix(in oklab, var(--viz-5), #fff 15%), color-mix(in oklab, var(--viz-5), #000 45%));
+  color: #fff;
+  box-shadow: 0 0 14px color-mix(in oklab, var(--viz-5) 50%, transparent);
+  transition: transform var(--d-hover) var(--ease-out), opacity 200ms;
+}
+.mln-life:hover:not(:disabled) { transform: translateY(-2px) scale(1.04); }
+.mln-life:disabled { opacity: 0.45; cursor: default; }
+.mln-life[data-used] { position: relative; }
+.mln-life[data-used]::after {
+  content: '';
+  position: absolute;
+  inset: 45% -4px auto;
+  height: 3px;
+  background: var(--err);
+  transform: rotate(-20deg);
+  border-radius: 2px;
+}
+.mln-life__fifty { font-family: var(--font-mono); font-size: 0.8rem; font-weight: var(--fw-bold); direction: ltr; }
+
+.mln-timer {
+  --p: 1;
+  display: grid;
+  place-items: center;
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: 50%;
+  background:
+    radial-gradient(closest-side, var(--ink) 78%, transparent 80% 100%),
+    conic-gradient(var(--print-gold) calc(var(--p) * 360deg), rgb(255 255 255 / 0.12) 0);
+  font-family: var(--font-mono);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-text-lg);
+}
+.mln-timer[data-low] {
+  background:
+    radial-gradient(closest-side, var(--ink) 78%, transparent 80% 100%),
+    conic-gradient(var(--viz-4) calc(var(--p) * 360deg), rgb(255 255 255 / 0.12) 0);
+  color: color-mix(in oklab, var(--viz-4), #fff 35%);
+}
+
+.mln-for { text-align: center; font-weight: var(--fw-semibold); color: var(--ink-accent); letter-spacing: 0.02em; }
+
+/* البار السداسي: clip-path على الأطراف، وخط دهبي بيعدّي من الناحيتين. */
+.mln-question,
+.mln-option {
+  position: relative;
+  clip-path: polygon(3% 0, 97% 0, 100% 50%, 97% 100%, 3% 100%, 0 50%);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--viz-5), #000 25%), color-mix(in oklab, var(--viz-5), #000 60%));
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--print-gold) 55%, transparent);
+}
+.mln-question {
+  padding: 1.25rem 2.5rem;
+  text-align: center;
+  font-size: clamp(1.05rem, 2.6vw, 1.35rem);
+  font-weight: var(--fw-semibold);
+  line-height: 1.8;
+  color: #fff;
+}
+.mln-question__stem img { max-height: 12rem; margin-inline: auto; border-radius: var(--r-md); }
+
+.mln-options { display: grid; gap: 0.7rem; }
+@media (min-width: 640px) { .mln-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.mln-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 3.6rem;
+  padding: 0.7rem 2rem;
+  color: #fff;
+  font-weight: var(--fw-semibold);
+  text-align: start;
+  transition: filter 160ms, transform 160ms;
+}
+.mln-option:hover:not(:disabled) { filter: brightness(1.2); }
+.mln-option__letter { color: var(--print-gold); font-weight: var(--fw-bold); flex: none; }
+.mln-option__body { min-width: 0; line-height: 1.6; }
+.mln-option[data-gone] { opacity: 0.25; }
+.mln-option[data-state='locked'] {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--print-gold), #fff 20%), var(--print-gold-deep));
+  color: var(--on-light-ink);
+}
+.mln-option[data-state='locked'] .mln-option__letter { color: var(--on-light-ink); }
+.mln-option[data-state='right'] {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--ok), #fff 25%), var(--ok));
+  box-shadow: inset 0 0 0 2px #fff;
+}
+.mln-option[data-state='right'] .mln-option__letter { color: #fff; }
+.mln-option[data-state='wrong'] { background: linear-gradient(180deg, color-mix(in oklab, var(--err), #fff 15%), var(--err)); }
+.mln-option[data-state='wrong'] .mln-option__letter { color: #fff; }
+
+.mln-final {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  padding: 1rem;
+  border-radius: var(--r-lg);
+  background: rgb(0 0 0 / 0.35);
+  border: 1px solid color-mix(in oklab, var(--print-gold) 50%, transparent);
+}
+/* على الموبايل «إجابة نهائية؟» بتلزق تحت فوق شريط التابات — من غيرها كانت
+   بتقع تحت الاختيارات وبرّه الشاشة. */
+@media (max-width: 899px) {
+  .mln-final {
+    position: sticky;
+    inset-block-end: 5.25rem;
+    z-index: 5;
+    background: color-mix(in oklab, var(--ink) 92%, transparent);
+    backdrop-filter: blur(8px);
+  }
+}
+.mln-final__q { font-size: var(--fs-title-3); font-weight: var(--fw-bold); color: var(--ink-accent); }
+.mln-final__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; }
+.mln-verdict { text-align: center; font-size: var(--fs-title-2); font-weight: var(--fw-bold); color: color-mix(in oklab, var(--err), #fff 35%); }
+.mln-verdict[data-right] { color: color-mix(in oklab, var(--ok), #fff 45%); }
+
+.mln-audience { padding: 0.8rem 1rem; border-radius: var(--r-lg); background: rgb(0 0 0 / 0.3); border: 1px solid var(--ink-line); }
+.mln-audience__title { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.5rem; font-size: var(--fs-text-sm); font-weight: var(--fw-bold); color: var(--ink-accent); }
+.mln-audience__bars { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0.6rem; height: 7rem; align-items: end; direction: rtl; }
+.mln-audience__bar { position: relative; display: grid; grid-template-rows: 1fr auto auto; justify-items: center; height: 100%; }
+.mln-audience__fill {
+  align-self: end;
+  width: 60%;
+  height: var(--v);
+  min-height: 3px;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(to top, var(--viz-5), var(--viz-2));
+}
+.mln-audience__pct { font-family: var(--font-mono); font-size: var(--fs-text-xs); direction: ltr; }
+.mln-audience__letter { font-weight: var(--fw-bold); color: var(--print-gold); }
+
+.mln-bottom { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.mln-walk-btn { display: inline-flex; align-items: center; gap: 0.4rem; font-size: var(--fs-text-sm); color: var(--ink-fg-2); }
+.mln-walk-btn:hover:not(:disabled) { color: var(--ink-fg); }
+.mln-walk-btn:disabled { opacity: 0.4; }
+.mln-walk { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: var(--fs-text-sm); }
+.mln-toggles { display: flex; flex-wrap: wrap; gap: 0.9rem; }
+
+.mln-ladder {
+  display: grid;
+  gap: 2px;
+  padding: 0.6rem;
+  border-radius: var(--r-lg);
+  background: rgb(0 0 0 / 0.35);
+  border: 1px solid var(--ink-line);
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-sm);
+}
+@media (max-width: 899px) {
+  /* على الموبايل: السلّم شريط أفقي فوق، من غير ما ياخد نص الشاشة. */
+  .mln-ladder { grid-auto-flow: column; grid-auto-columns: minmax(4.5rem, 1fr); overflow-x: auto; order: -1; direction: ltr; }
+}
+.mln-rung {
+  display: grid;
+  grid-template-columns: 1.6rem 1fr auto;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--r-sm);
+  color: var(--ink-fg-2);
+  direction: ltr;
+}
+.mln-rung[data-safe] { color: #fff; font-weight: var(--fw-bold); }
+.mln-rung[data-done] { color: color-mix(in oklab, var(--print-gold), #fff 20%); }
+.mln-rung[data-now] { background: linear-gradient(90deg, var(--print-gold), var(--print-gold-deep)); color: var(--on-light-ink); font-weight: var(--fw-bold); }
+.mln-rung__step { opacity: 0.8; }
+.mln-rung__points { text-align: end; font-variant-numeric: tabular-nums; }
+.mln-rung__safe { width: 0.9rem; height: 0.9rem; color: var(--print-gold); }
+.mln-rung[data-now] .mln-rung__safe { color: var(--on-light-ink); }
+
+.mln-result { gap: 0.6rem; }
+.mln-medal {
+  display: grid;
+  place-items: center;
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in oklab, var(--print-gold), #fff 45%), var(--print-gold-deep));
+  color: var(--on-light-ink);
+  box-shadow: 0 0 0 6px rgb(255 255 255 / 0.08), 0 0 40px color-mix(in oklab, var(--print-gold) 55%, transparent);
+}
+.mln-medal[data-kind='lost'] { background: radial-gradient(circle at 35% 30%, color-mix(in oklab, var(--viz-5), #fff 35%), color-mix(in oklab, var(--viz-5), #000 40%)); color: #fff; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .gm-mode[data-on] .gm-mode__icon { animation: gm-float 2.6s ease-in-out infinite; }
+  .mln-question { animation: gm-rise 420ms var(--ease-out) both; }
+  .mln-options li { animation: gm-rise 380ms var(--ease-out) calc(var(--i) * 90ms + 200ms) both; }
+  .mln[data-phase='checking'] .mln-option[data-state='locked'] { animation: mln-suspense 700ms ease-in-out infinite; }
+  .mln-option[data-state='right'] { animation: mln-flash 450ms ease-in-out 3; }
+  .mln-audience__fill { animation: mln-grow 900ms var(--ease-out) both; }
+  .mln-rung[data-now] { animation: gm-pop 400ms var(--ease-pop); }
+  .mln-medal { animation: gm-float 3s ease-in-out infinite; }
+}
+@keyframes mln-suspense { 50% { filter: brightness(1.35); } }
+@keyframes mln-flash { 50% { filter: brightness(1.5); } }
+@keyframes mln-grow { from { height: 0; } }

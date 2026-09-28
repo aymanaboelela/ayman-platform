@@ -89,3 +89,5 @@ export function useGameSound() {
 
   return useMemo(() => ({ enabled, play, unlock, toggle }), [enabled, play, unlock, toggle]);
 }
+
+export type GameSound = ReturnType<typeof useGameSound>;

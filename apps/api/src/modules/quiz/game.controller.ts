@@ -1,10 +1,10 @@
-import { Body, Controller, Get, HttpCode, Post, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Query, UsePipes } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
-import type { GameAnswerResult, GameRound } from '@ayman/contracts/quiz/game';
+import type { GameAnswerResult, GameHub, GameLifelineResult, GameRound } from '@ayman/contracts/quiz/game';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
-import { GameAnswerDto } from './dto/game-answer.dto';
+import { GameAnswerDto, GameLifelineDto, GameRoundQueryDto } from './dto/game-answer.dto';
 import { GameService } from './game.service';
 import { NoAnswerLeak } from './interceptors/no-answer-leak.decorator';
 
@@ -22,11 +22,18 @@ import { NoAnswerLeak } from './interceptors/no-answer-leak.decorator';
 export class GameController {
   constructor(private readonly game: GameService) {}
 
+  /** صفحة الألعاب: الكورسات اللي فيها أسئلة، وكام سؤال في كل مستوى. */
+  @Get('hub')
+  hub(@CurrentUser() user: AuthenticatedUser): Promise<GameHub> {
+    return this.game.hub(user.id);
+  }
+
   /** الأسئلة من غير أي علامة على الصح — `@NoAnswerLeak()` بيتأكد. */
   @NoAnswerLeak()
+  @UsePipes(ZodValidationPipe)
   @Get('round')
-  round(@CurrentUser() user: AuthenticatedUser): Promise<GameRound> {
-    return this.game.round(user.id);
+  round(@CurrentUser() user: AuthenticatedUser, @Query() query: GameRoundQueryDto): Promise<GameRound> {
+    return this.game.round(user.id, query);
   }
 
   /**
@@ -38,5 +45,16 @@ export class GameController {
   @Post('answer')
   answer(@CurrentUser() user: AuthenticatedUser, @Body() body: GameAnswerDto): Promise<GameAnswerResult> {
     return this.game.answer(user.id, body);
+  }
+
+  /**
+   * «حذف إجابتين» و«اسأل الجمهور». زي `answer` بيتكلّم عن الصح (غلطين يختفوا،
+   * أو نسب الجمهور)، فمش `@NoAnswerLeak()` — وبس على سؤال في بنك الطالب.
+   */
+  @UsePipes(ZodValidationPipe)
+  @HttpCode(200)
+  @Post('lifeline')
+  lifeline(@CurrentUser() user: AuthenticatedUser, @Body() body: GameLifelineDto): Promise<GameLifelineResult> {
+    return this.game.lifeline(user.id, body);
   }
 }

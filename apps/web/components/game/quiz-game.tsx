@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
-import Link from 'next/link';
 import {
   ArrowLeft,
   Circle,
@@ -11,27 +10,22 @@ import {
   RotateCcw,
   Sparkles,
   Square,
-  Timer,
   Trophy,
   Triangle,
   Volume2,
   VolumeX,
-  Zap,
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import {
-  GAME_LIVES,
-  GAME_ROUND_SIZE,
-  GAME_SECONDS_PER_QUESTION,
+  GAME_RULES,
   GameAnswerResultSchema,
-  GameRoundSchema,
   gamePoints,
   type GameRound,
 } from '@ayman/contracts/quiz/game';
 import { SafeHtml } from '@/components/content/safe-html';
-import { apiGet, apiPost } from '@/lib/api';
-import { useGameSound } from './use-game-sound';
+import { apiPost } from '@/lib/api';
+import type { GameSound } from './use-game-sound';
 
 const c = copy.game;
 
@@ -61,22 +55,36 @@ interface Feedback {
  * بعد ما الطالب يختار. مفيش لوحة أوائل على اللعبة، فمفيش حاجة تتسرق لو حد لعب
  * في الأرقام — شوف `GAME_POINTS` في الكونتراكت.
  */
-export function QuizGame({ initial }: { initial: GameRound }) {
+export function QuizGame({
+  round: initial,
+  refetch,
+  onExit,
+  sound,
+}: {
+  round: GameRound;
+  /** «جولة كمان» — نفس اللعبة والكورس والمستوى. */
+  refetch: () => Promise<GameRound>;
+  /** الرجوع لصفحة الألعاب. */
+  onExit: () => void;
+  sound: GameSound;
+}) {
   const [round, setRound] = useState(initial);
-  const [phase, setPhase] = useState<Phase>('intro');
+  const rules = GAME_RULES[round.mode];
+  const seconds = rules.seconds[round.level];
+  // بتبدأ على العدّ التنازلي على طول: الاختيار والـ«يلا» حصلوا في صفحة الألعاب.
+  const [phase, setPhase] = useState<Phase>('countdown');
   const [count, setCount] = useState(3);
   const [index, setIndex] = useState(0);
-  const [lives, setLives] = useState(GAME_LIVES);
+  const [lives, setLives] = useState(rules.lives);
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
   const [rightCount, setRightCount] = useState(0);
-  const [left, setLeft] = useState(GAME_SECONDS_PER_QUESTION);
+  const [left, setLeft] = useState(seconds);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const deadline = useRef(0);
-  const sound = useGameSound();
 
   const question = round.questions[index];
   const total = round.questions.length;
@@ -91,13 +99,13 @@ export function QuizGame({ initial }: { initial: GameRound }) {
         setCount((n) => n - 1);
         return;
       }
-      deadline.current = performance.now() + GAME_SECONDS_PER_QUESTION * 1000;
-      setLeft(GAME_SECONDS_PER_QUESTION);
+      deadline.current = performance.now() + seconds * 1000;
+      setLeft(seconds);
       setPhase('question');
       sound.play('go');
     }, 800);
     return () => window.clearTimeout(id);
-  }, [phase, count, sound]);
+  }, [phase, count, sound, seconds]);
 
   const answer = useCallback(
     async (optionId: string | null) => {
@@ -110,7 +118,7 @@ export function QuizGame({ initial }: { initial: GameRound }) {
           optionId,
         });
         const nextStreak = result.correct ? streak + 1 : 0;
-        const gained = result.correct ? gamePoints(secondsLeft, nextStreak) : 0;
+        const gained = result.correct ? gamePoints(secondsLeft, nextStreak, seconds) : 0;
         setStreak(nextStreak);
         setBestStreak((best) => Math.max(best, nextStreak));
         if (result.correct) {
@@ -128,7 +136,7 @@ export function QuizGame({ initial }: { initial: GameRound }) {
         setBusy(false);
       }
     },
-    [question, busy, streak, sound],
+    [question, busy, streak, sound, seconds],
   );
 
   // التايمر: requestAnimationFrame مش setInterval، عشان الشريط يمشي ناعم
@@ -136,7 +144,7 @@ export function QuizGame({ initial }: { initial: GameRound }) {
   useEffect(() => {
     if (phase !== 'question') return;
     let frame = 0;
-    let lastWhole = GAME_SECONDS_PER_QUESTION;
+    let lastWhole = seconds;
     const step = () => {
       const remaining = Math.max(0, (deadline.current - performance.now()) / 1000);
       setLeft(remaining);
@@ -151,7 +159,7 @@ export function QuizGame({ initial }: { initial: GameRound }) {
     };
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  }, [phase, answer, sound]);
+  }, [phase, answer, sound, seconds]);
 
   const next = useCallback(() => {
     setFeedback(null);
@@ -161,10 +169,10 @@ export function QuizGame({ initial }: { initial: GameRound }) {
       return;
     }
     setIndex((i) => i + 1);
-    deadline.current = performance.now() + GAME_SECONDS_PER_QUESTION * 1000;
-    setLeft(GAME_SECONDS_PER_QUESTION);
+    deadline.current = performance.now() + seconds * 1000;
+    setLeft(seconds);
     setPhase('question');
-  }, [lives, index, total, sound]);
+  }, [lives, index, total, sound, seconds]);
 
   // بعد الإجابة: ثانية ونص ويروح للي بعده لوحده، والزرار موجود لو حد مستعجل.
   useEffect(() => {
@@ -174,9 +182,8 @@ export function QuizGame({ initial }: { initial: GameRound }) {
   }, [phase, feedback, next]);
 
   const start = () => {
-    sound.unlock();
     setIndex(0);
-    setLives(GAME_LIVES);
+    setLives(rules.lives);
     setScore(0);
     setStreak(0);
     setBestStreak(0);
@@ -190,7 +197,7 @@ export function QuizGame({ initial }: { initial: GameRound }) {
   const again = async () => {
     setBusy(true);
     try {
-      setRound(await apiGet('/api/me/game/round', GameRoundSchema));
+      setRound(await refetch());
       start();
     } catch {
       setError(true);
@@ -199,62 +206,9 @@ export function QuizGame({ initial }: { initial: GameRound }) {
     }
   };
 
-  if (round.poolSize === 0) {
-    return (
-      <section className="gm-stage gm-stage--intro">
-        <Backdrop />
-        <div className="gm-panel gm-panel--center">
-          <span className="gm-badge-icon" aria-hidden="true">
-            <Sparkles className="size-7" />
-          </span>
-          <h2 className="gm-title">{c.emptyTitle}</h2>
-          <p className="gm-lead">{c.emptyBody}</p>
-          <Link href="/path" className="gm-btn gm-btn--primary">
-            {c.emptyCta}
-            <ArrowLeft className="size-4" aria-hidden="true" />
-          </Link>
-        </div>
-      </section>
-    );
-  }
-
   return (
     <section className="gm-stage" data-phase={phase}>
       <Backdrop />
-
-      {phase === 'intro' ? (
-        <div className="gm-panel gm-panel--center">
-          <span className="gm-badge-icon" aria-hidden="true">
-            <Zap className="size-8" />
-          </span>
-          <h2 className="gm-title">{c.title}</h2>
-          <p className="gm-lead">{c.lead}</p>
-          <p className="gm-pool">{formatCopy(c.poolReady, { n: round.poolSize })}</p>
-          <ul className="gm-rules">
-            <li>
-              <Sparkles className="size-4" aria-hidden="true" />
-              {formatCopy(c.ruleQuestions, { n: Math.min(GAME_ROUND_SIZE, total) })}
-            </li>
-            <li>
-              <Timer className="size-4" aria-hidden="true" />
-              {formatCopy(c.ruleSeconds, { n: GAME_SECONDS_PER_QUESTION })}
-            </li>
-            <li>
-              <Heart className="size-4" aria-hidden="true" />
-              {formatCopy(c.ruleLives, { n: GAME_LIVES })}
-            </li>
-            <li>
-              <Flame className="size-4" aria-hidden="true" />
-              {c.ruleCombo}
-            </li>
-          </ul>
-          <button type="button" className="gm-btn gm-btn--primary gm-btn--big" onClick={start}>
-            {c.start}
-            <Zap className="size-5" aria-hidden="true" />
-          </button>
-          <SoundToggle sound={sound} />
-        </div>
-      ) : null}
 
       {phase === 'countdown' ? (
         <div className="gm-countdown" aria-live="assertive">
@@ -269,7 +223,7 @@ export function QuizGame({ initial }: { initial: GameRound }) {
         <div className="gm-play">
           <header className="gm-hud">
             <div className="gm-hud__lives" aria-label={formatCopy(c.ruleLives, { n: lives })}>
-              {Array.from({ length: GAME_LIVES }, (_, i) => (
+              {Array.from({ length: rules.lives }, (_, i) => (
                 <Heart key={i} className="gm-heart" data-lost={i >= lives || undefined} aria-hidden="true" />
               ))}
             </div>
@@ -284,7 +238,7 @@ export function QuizGame({ initial }: { initial: GameRound }) {
 
           <div className="gm-timer" aria-hidden="true">
             <span
-              style={{ '--gm-left': `${(left / GAME_SECONDS_PER_QUESTION) * 100}%` } as CSSProperties}
+              style={{ '--gm-left': `${(left / seconds) * 100}%` } as CSSProperties}
               data-low={left <= 5 || undefined}
             />
           </div>
@@ -355,6 +309,7 @@ export function QuizGame({ initial }: { initial: GameRound }) {
           outOfLives={lives <= 0}
           busy={busy}
           onAgain={() => void again()}
+          onExit={onExit}
         />
       ) : null}
 
@@ -371,6 +326,7 @@ function Results({
   outOfLives,
   busy,
   onAgain,
+  onExit,
 }: {
   score: number;
   right: number;
@@ -379,6 +335,7 @@ function Results({
   outOfLives: boolean;
   busy: boolean;
   onAgain: () => void;
+  onExit: () => void;
 }) {
   const ratio = total > 0 ? right / total : 0;
   const stars = ratio >= 0.9 ? 3 : ratio >= 0.6 ? 2 : ratio > 0 ? 1 : 0;
@@ -414,16 +371,16 @@ function Results({
           <RotateCcw className="size-5" aria-hidden="true" />
           {c.again}
         </button>
-        <Link href="/path" className="gm-btn gm-btn--ghost">
-          {c.toPath}
+        <button type="button" className="gm-btn gm-btn--ghost" onClick={onExit}>
+          {c.toGames}
           <ArrowLeft className="size-4" aria-hidden="true" />
-        </Link>
+        </button>
       </div>
     </div>
   );
 }
 
-function SoundToggle({ sound }: { sound: ReturnType<typeof useGameSound> }) {
+export function SoundToggle({ sound }: { sound: GameSound }) {
   return (
     <button type="button" className="gm-sound" onClick={sound.toggle} aria-pressed={sound.enabled}>
       {sound.enabled ? <Volume2 className="size-4" aria-hidden="true" /> : <VolumeX className="size-4" aria-hidden="true" />}
@@ -433,7 +390,7 @@ function SoundToggle({ sound }: { sound: ReturnType<typeof useGameSound> }) {
 }
 
 /** الخلفية: نجوم ودواير نيون بتتحرك ببطء — «المود». زينة بس. */
-function Backdrop() {
+export function Backdrop() {
   return (
     <div className="gm-backdrop" aria-hidden="true">
       <span className="gm-orb gm-orb--1" />
