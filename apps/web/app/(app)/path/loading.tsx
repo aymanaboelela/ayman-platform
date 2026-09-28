@@ -15,10 +15,9 @@ export default function Loading() {
         <Skeleton width="narrow" className="h-4" />
       </div>
 
-      <div className="mb-8 rounded-lg border border-line bg-surface-2 px-5 py-4">
-        <Skeleton width="wide" className="mb-3 h-5" />
-        <Skeleton className="h-2" />
-      </div>
+      {/* الهيرو بلونه الحقيقي مش رمادي — شريط رمادي بيتبدّل بجريدينت أزرق
+          بيعمل «فلاش» أول ما الصفحة تحمّل. */}
+      <div className="mb-8 h-72 rounded-lg bg-[color-mix(in_oklab,var(--viz-5)_60%,var(--viz-3))] opacity-70 md:h-60" />
 
       <div className="grid gap-8 lg:grid-cols-[18rem_minmax(0,1fr)]">
         <div className="space-y-2 rounded-lg border border-line bg-surface-2 p-4">

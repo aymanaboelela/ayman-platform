@@ -1,8 +1,9 @@
+import type { CSSProperties } from 'react';
 import { copy, type PathCourse } from '@ayman/contracts';
-import { cn } from '@ayman/ui';
 import { SubjectMark } from '@/components/course-art';
 import { CheckIcon } from '@/components/player/icons';
 import { ProgressRing } from '@/components/progress-ring';
+import { PATH_HUES } from './path-hues';
 
 const c = copy.path;
 
@@ -44,26 +45,26 @@ export function CourseRail({
   return (
     <aside className="lg:sticky lg:top-6 lg:self-start">
       <p className="eyebrow mb-3 text-fg-muted">{c.courses}</p>
-      <ul className="panel overflow-hidden">
-        {courses.map((course) => {
+      {/* كل كورس بلونه (`data-hue`) — نفس اللون اللي راسه ومحطاته واخدينه تحت،
+          فالعين بتربط الصف هنا بالخريطة هناك من غير ما تقرا العنوان مرتين. */}
+      <ul className="pth-rail">
+        {courses.map((course, index) => {
           const isCurrent = course.id === currentCourseId;
           const isDone = course.totalLessons > 0 && course.clearedLessons === course.totalLessons;
 
           return (
-            <li key={course.id} className="border-b border-line-subtle last:border-b-0">
+            <li key={course.id} data-hue={index % PATH_HUES}>
               <a
                 href={`#course-${course.id}`}
-                className={cn(
-                  'flex items-center gap-3 border-s-2 px-3 py-3',
-                  'transition-colors duration-[160ms] ease-out hover:bg-surface-3',
-                  isCurrent ? 'border-accent text-fg' : 'border-transparent text-fg-muted',
-                )}
+                className="pth-rail__item"
+                data-current={isCurrent || undefined}
+                aria-current={isCurrent ? 'true' : undefined}
               >
-                <ProgressRing percent={course.progressPercent} size={40}>
+                <ProgressRing percent={course.progressPercent} size={44}>
                   {isDone ? (
                     <CheckIcon className="h-4 w-4 text-accent-text" />
                   ) : (
-                    // 1.5rem inside a 40px ring with a 4px stroke: the mark
+                    // 1.5rem inside a 44px ring with a 4px stroke: the mark
                     // fills the hole without touching the arc.
                     <SubjectMark
                       subjectNameAr={course.subjectNameAr}
@@ -73,15 +74,16 @@ export function CourseRail({
                 </ProgressRing>
 
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[length:var(--fs-text-sm)]">
-                    {course.title}
-                  </span>
-                  <span className="mono block text-[length:var(--fs-mono-label)] text-fg-muted">
+                  <span className="pth-rail__title">{course.title}</span>
+                  <span className="pth-rail__meta">
                     {isDone
                       ? course.contentComplete
                         ? c.courseDone
                         : c.courseUpToDate
                       : `${course.clearedLessons} / ${course.totalLessons}`}
+                  </span>
+                  <span className="pth-rail__bar" aria-hidden="true">
+                    <span style={{ '--pth-fill': `${course.progressPercent}%` } as CSSProperties} />
                   </span>
                 </span>
               </a>
