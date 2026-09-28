@@ -17,7 +17,10 @@ import {
   resolveMarkdownRewrite,
   type AuthState,
   isGuardianRoute,
+  proxy,
 } from './proxy';
+import { NextRequest } from 'next/server';
+import { HTML_PREVIEW_CSP, HTML_PREVIEW_PATH } from './lib/html-preview';
 
 const directive = (policy: string, name: string): string =>
   policy
@@ -772,5 +775,34 @@ describe('resolveMarkdownRewrite', () => {
     ]) {
       expect(resolveMarkdownRewrite(path, 'text/markdown')).toBeNull();
     }
+  });
+});
+
+/**
+ * The HTML playground's preview frame. Its whole isolation lives in these
+ * response headers, so they are asserted on a real `proxy()` response rather
+ * than on the constants — a branch that stopped running (a reordered `if`, a
+ * renamed path) would leave the constants perfect and the frame naked.
+ */
+describe('proxy — the HTML preview frame', () => {
+  it('serves its own enforced policy instead of the site’s', async () => {
+    const response = await proxy(new NextRequest(`http://localhost${HTML_PREVIEW_PATH}`));
+    expect(response.headers.get('Content-Security-Policy')).toBe(HTML_PREVIEW_CSP);
+    // Not ALSO the site-wide one, whose `frame-ancestors 'none'` would blank it.
+    expect(response.headers.get('Content-Security-Policy-Report-Only')).toBeNull();
+    expect(response.headers.get('Content-Security-Policy')).toContain('sandbox allow-scripts');
+    expect(response.headers.get('Content-Security-Policy')).not.toContain('allow-same-origin');
+  });
+
+  it('can be framed by this site only, and is never indexed', async () => {
+    const response = await proxy(new NextRequest(`http://localhost${HTML_PREVIEW_PATH}`));
+    expect(response.headers.get('X-Frame-Options')).toBe('SAMEORIGIN');
+    expect(response.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+  });
+
+  it('leaves every other page unframeable', async () => {
+    const response = await proxy(new NextRequest('http://localhost/courses'));
+    expect(response.headers.get('X-Frame-Options')).toBe('DENY');
   });
 });

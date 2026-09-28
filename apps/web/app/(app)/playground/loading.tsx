@@ -1,20 +1,24 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
 import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
-/** Mirrors the two-panel split so the layout does not jump when it hydrates. */
+/**
+ * Mirrors the page: the hero band, then the two panes, so nothing jumps when
+ * it hydrates.
+ *
+ * ⚠️ Deliberately NONE of the page's own `pg-*` classes. An e2e gate that
+ * waits on a block class would pass on this skeleton if it wore the same one
+ * (`e2e-gates-must-not-name-skeleton-classes`), and the page's stylesheet is
+ * not loaded here anyway.
+ */
 export default function Loading() {
   return (
-    <main className="mx-auto w-full max-w-[var(--w-shell)] px-6 py-10 md:py-12">
+    <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
       <RouteLoadingWatchdog />
-      <div className="mb-6 space-y-3">
-        <Skeleton width="narrow" className="h-3" />
-        <Skeleton width="wide" className="h-8" />
-        <Skeleton width="narrow" className="h-4" />
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <Skeleton className="h-56 rounded-lg md:h-64" />
+      <div className="mt-6 grid gap-4 xl:grid-cols-2">
         {Array.from({ length: 2 }, (_, index) => (
           <div className="panel overflow-hidden" key={index}>
-            <Skeleton className="h-9 rounded-none" />
+            <Skeleton className="h-12 rounded-none" />
             <div className="p-4">
               <Skeleton className="h-[19rem]" />
             </div>
