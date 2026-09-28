@@ -183,6 +183,19 @@ export class MirrorStorage {
    * every time.
    */
   async listMirroredIds(): Promise<Set<string>> {
+    return this.listIdsUnder('v');
+  }
+
+  /**
+   * Every upload id that still has an ORIGINAL file in the bucket. The worker
+   * deletes it once the ladder is up, so an id here is a lecture that never
+   * finished encoding — or one whose lesson was deleted before it did.
+   */
+  async listSourceIds(): Promise<Set<string>> {
+    return this.listIdsUnder('raw');
+  }
+
+  private async listIdsUnder(root: 'v' | 'raw'): Promise<Set<string>> {
     const ids = new Set<string>();
     let token: string | undefined;
 
@@ -190,19 +203,49 @@ export class MirrorStorage {
       const listed = await this.s3.send(
         new ListObjectsV2Command({
           Bucket: this.config.bucket,
-          Prefix: 'v/',
+          Prefix: `${root}/`,
           Delimiter: '/',
           ContinuationToken: token,
         }),
       );
       for (const entry of listed.CommonPrefixes ?? []) {
-        const id = entry.Prefix?.slice('v/'.length).replace(/\/$/, '');
+        const id = entry.Prefix?.slice(`${root}/`.length).replace(/\/$/, '');
         if (id !== undefined && id.length > 0) ids.add(id);
       }
       token = listed.IsTruncated === true ? listed.NextContinuationToken : undefined;
     } while (token !== undefined);
 
     return ids;
+  }
+
+  /**
+   * Total size and newest write under one prefix. One listing per prefix, so
+   * it is for the handful of folders no lesson points at — never for every
+   * lecture, whose sizes are already on their rows.
+   */
+  async prefixUsage(prefix: string): Promise<{ bytes: number; lastModified: Date | null }> {
+    let bytes = 0;
+    let lastModified: Date | null = null;
+    let token: string | undefined;
+
+    do {
+      const listed = await this.s3.send(
+        new ListObjectsV2Command({
+          Bucket: this.config.bucket,
+          Prefix: `${prefix}/`,
+          ContinuationToken: token,
+        }),
+      );
+      for (const object of listed.Contents ?? []) {
+        bytes += object.Size ?? 0;
+        if (object.LastModified !== undefined && (lastModified === null || object.LastModified > lastModified)) {
+          lastModified = object.LastModified;
+        }
+      }
+      token = listed.IsTruncated === true ? listed.NextContinuationToken : undefined;
+    } while (token !== undefined);
+
+    return { bytes, lastModified };
   }
 
   /**
