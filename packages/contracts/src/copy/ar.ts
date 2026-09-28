@@ -752,6 +752,9 @@ export const copy = {
       subtitle: 'دقيقة واحدة وتكون جوه أول محاضرة.',
     },
     fields: {
+      /** زرار العين جوّه خانة كلمة السر — اسم فعل، مش أمر لولد أو بنت. */
+      showPassword: 'إظهار كلمة السر',
+      hidePassword: 'إخفاء كلمة السر',
       name: 'الاسم الكامل',
       /** Said up front, so the rule is not first met as an error. */
       nameHint: 'ثلاثي على الأقل، بالعربي أو بالإنجليزي',
