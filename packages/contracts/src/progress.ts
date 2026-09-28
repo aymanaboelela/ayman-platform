@@ -322,6 +322,12 @@ export const CourseOutlineSchema = z.object({
      */
       contentComplete: z.boolean(),
     /**
+     * Draw the student's phone number beside their name over an uploaded
+     * lecture — the instructor's per-course switch. The default only exists
+     * so a web build that lands a minute before its API still parses.
+     */
+    watermarkPhone: z.boolean().default(false),
+    /**
      * «جروب الدفعة» — this cohort's own WhatsApp group, or `null` when the
      * course has none (which is the default, and stays the default:
      * «أوقات برضه ممكن أنا ما أعملش جروب أصلاً»).

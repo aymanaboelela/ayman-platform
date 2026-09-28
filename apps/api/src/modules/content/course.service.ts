@@ -175,6 +175,7 @@ export class CourseService {
           scheduleNote: input.scheduleNote,
           whatsappGroupUrl: input.whatsappGroupUrl,
           contentComplete: input.contentComplete,
+          watermarkPhone: input.watermarkPhone,
           monthlyPriceCents: input.monthlyPriceCents,
           quarterlyPriceCents: input.quarterlyPriceCents,
           yearlyPriceCents: input.yearlyPriceCents,
@@ -317,6 +318,9 @@ export class CourseService {
           }),
           ...(input.contentComplete !== undefined && {
             contentComplete: input.contentComplete,
+          }),
+          ...(input.watermarkPhone !== undefined && {
+            watermarkPhone: input.watermarkPhone,
           }),
           ...(input.monthlyPriceCents !== undefined && {
             monthlyPriceCents: input.monthlyPriceCents,
@@ -1006,6 +1010,9 @@ export class CourseService {
         // back — the exact failure the note above documents.
         whatsappGroupUrl: true,
         contentComplete: true,
+        // Selected for the same reason as the two above: an editor that opens
+        // with the switch off would autosave it off.
+        watermarkPhone: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,

@@ -13,9 +13,11 @@ import { VideoLesson } from './video-lesson';
 
 export interface LessonPlayerProps {
   payload: LessonPlayer;
+  /** The viewer's name and phone, drawn over an uploaded lecture. */
+  watermark?: string | null;
 }
 
-export function LessonPlayerView({ payload }: LessonPlayerProps) {
+export function LessonPlayerView({ payload, watermark = null }: LessonPlayerProps) {
   const [progress, setProgress] = useState(payload.progress);
   const [saveFailed, setSaveFailed] = useState(false);
 
@@ -72,6 +74,7 @@ export function LessonPlayerView({ payload }: LessonPlayerProps) {
           resumeAt={payload.progress.completedAt != null ? 0 : payload.progress.maxPositionSeconds}
           onProgress={onProgress}
           onError={onError}
+          watermark={watermark}
         />
       ) : null}
 
