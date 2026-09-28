@@ -119,7 +119,7 @@
     and `overflow-y: clip` would silently kill vertical scrolling on the whole
     document.
 
-    This does NOT touch deliberate horizontal scrollers: `.rail__viewport`, wide
+    This does NOT touch deliberate horizontal scrollers: `.why-rail__viewport`, wide
     tables and code blocks scroll inside their own `overflow-x: auto` boxes, and
     a clip on the root has no effect on a descendant's own scroll container.
     Decorative art that hangs past the edge (the landing page's canvas is 500px

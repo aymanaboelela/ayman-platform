@@ -29,7 +29,7 @@
    every block component roots itself on the same class:
 
      hero        → `.hero`                            (site-hero.tsx)
-     whyRail     → `.site-section site-section--tint rail`
+     whyRail     → `.site-section site-section--tint why-rail`
      courseGrid  → `.site-section site-section--tint` + `id="featured-courses"`
      books       → `.site-section`                    (books-strip.tsx)
      instructor  → `.site-section profile`
@@ -220,7 +220,7 @@ body:has(main[data-layout='editorial']) .site-nav--over .site-btn--outline {
 /* ── Section rhythm ───────────────────────────────────────────────────────
    Sections are separated by a rule, not by a change of background.
 
-   ⚠️ `.rail` is excluded from the padding. It is `min-height: 100svh` because
+   ⚠️ `.why-rail` is excluded from the padding. It is `min-height: 100svh` because
    a GSAP ScrollTrigger PINS it and measures this section to decide when — the
    comment at `sections.css:823` spells out that any other height starts the
    pin late or releases it early. Changing its padding changes what that
@@ -229,13 +229,13 @@ body:has(main[data-layout='editorial']) .site-nav--over .site-btn--outline {
    `.site-section--tint` needs no selector of its own: every tinted element
    carries BOTH classes, and `[data-layout] .site-section` is (0,2,0) against
    the modifier's (0,1,0), so this rule already wins the background. */
-[data-layout='editorial'] .site-section:not(.rail) {
+[data-layout='editorial'] .site-section:not(.why-rail) {
   background: var(--site-bg);
   border-top: 1px solid var(--site-line);
   padding-block: clamp(4.5rem, 9vw, 7.5rem);
 }
 
-[data-layout='editorial'] .rail {
+[data-layout='editorial'] .why-rail {
   background: var(--site-bg);
   border-top: 1px solid var(--site-line);
 }
@@ -278,7 +278,7 @@ body:has(main[data-layout='editorial']) .site-nav--over .site-btn--outline {
    those two states. */
 [data-layout='editorial'] .course-card,
 [data-layout='editorial'] .track,
-[data-layout='editorial'] .rail__card,
+[data-layout='editorial'] .why-rail__card,
 [data-layout='editorial'] .book-card,
 [data-layout='editorial'] .profile__card,
 [data-layout='editorial'] .quotes__card {
@@ -287,7 +287,7 @@ body:has(main[data-layout='editorial']) .site-nav--over .site-btn--outline {
   border: 1px solid var(--site-line);
 }
 
-[data-layout='editorial'] .rail__card,
+[data-layout='editorial'] .why-rail__card,
 [data-layout='editorial'] .book-card,
 [data-layout='editorial'] .profile__card,
 [data-layout='editorial'] .quotes__card {
@@ -339,11 +339,11 @@ body:has(main[data-layout='editorial']) .site-nav--over .site-btn--outline {
   justify-content: center;
 }
 
-/* `.rail` is excluded here for the same reason as above — and it is the one
+/* `.why-rail` is excluded here for the same reason as above — and it is the one
    section compact cannot compress. It is a pinned, exactly-one-viewport
    block, so an instructor who places the whyRail block still gets a full
    screen of it. Shortening it means changing the pin, not the padding. */
-[data-layout='compact'] .site-section:not(.rail) {
+[data-layout='compact'] .site-section:not(.why-rail) {
   padding-block: clamp(2.25rem, 4vw, 3.5rem);
 }
 
@@ -356,7 +356,7 @@ body:has(main[data-layout='editorial']) .site-nav--over .site-btn--outline {
    apply here unchanged. */
 [data-layout='compact'] .course-card,
 [data-layout='compact'] .track,
-[data-layout='compact'] .rail__card,
+[data-layout='compact'] .why-rail__card,
 [data-layout='compact'] .book-card,
 [data-layout='compact'] .profile__card,
 [data-layout='compact'] .quotes__card {
@@ -364,7 +364,7 @@ body:has(main[data-layout='editorial']) .site-nav--over .site-btn--outline {
   box-shadow: none;
 }
 
-[data-layout='compact'] .rail__card,
+[data-layout='compact'] .why-rail__card,
 [data-layout='compact'] .book-card,
 [data-layout='compact'] .profile__card,
 [data-layout='compact'] .quotes__card {
