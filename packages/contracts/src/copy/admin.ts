@@ -56,7 +56,8 @@ const admin = {
     navigation: 'القوائم',
     branding: 'الهوية البصرية',
     flags: 'خصائص التشغيل',
-    roles: 'الصلاحيات',
+    // «الفريق» أولًا: ده اللي المدرّس بيدوّر عليه لما عايز يضيف مساعد.
+    roles: 'الفريق والصلاحيات',
     news: 'نيوز',
     media: 'مكتبة الوسائط',
     videos: 'الفيديوهات',
@@ -2221,7 +2222,7 @@ const admin = {
    * الجملة دي — فلو الجملة تقنية، القرار بيبقى تخمين.
    */
   roles: {
-    title: 'الصلاحيات',
+    title: 'الفريق والصلاحيات',
     lead: 'المساعد بيقدر يعمل إيه. اللي مقفول مايشوفش الشاشة أصلًا.',
 
     /**
@@ -2662,6 +2663,17 @@ const admin = {
     roleChangeFailed: 'مقدرناش نغيّر الدور — نحاول تاني',
     roleChangeSelfError: 'مينفعش تغيّر دورك إنت',
     roleChangeLastAdminError: 'ده آخر مسؤول في المنصة — مينفعش تلغي صلاحياته',
+    /** A bare 403 from the permission guard — the admin-only door, pressed by someone else. */
+    roleChangeAdminOnly: 'تغيير الدور ده للمسؤول بس. المساعد بيتضاف من شاشة «الفريق والصلاحيات».',
+    roleChangeAdminTarget: 'ده حساب مسؤول، ودوره مش بيتغيّر من هنا.',
+    roleChangeOutranked: 'الحساب ده معاه صلاحيات إنت مش معاك، فمينفعش تغيّر دوره.',
+    roleChangeBeyondYou: 'مينفعش تعيّن حد بصلاحيات أكتر من صلاحياتك.',
+    /**
+     * Under «مساعد» on the student page, for the teacher: the role is only the
+     * door; WHAT the assistant may do is set per person on the team screen.
+     */
+    roleOwnerPermissionsHint: 'بعد ما يبقى مساعد، حدّد هو يقدر يعمل إيه بالظبط من شاشة «الفريق والصلاحيات».',
+    roleOpenTeam: 'افتح الفريق والصلاحيات',
     saveSuccess: 'اتحفظت بيانات الطالب',
     saveFailed: 'مقدرناش نحفظ — نحاول تاني',
     /** A duplicate phone or email — caught by the DB's own unique index. */

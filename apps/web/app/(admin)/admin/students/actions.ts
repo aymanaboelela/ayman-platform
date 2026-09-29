@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import {
   AdminGrantRowSchema,
   AdminRoleChangeSchema,
+  AdminStaffRoleSchema,
   AdminStudentBanSchema,
   AdminStudentBulkDeleteResultSchema,
   AdminStudentBulkDeleteSchema,
@@ -25,6 +26,7 @@ import { z } from 'zod';
 import { BroadcastResponseSchema } from '@ayman/contracts/outreach/broadcast';
 import { AdminFinanceRowSchema } from '@ayman/contracts/admin/finance';
 import { AdminApiError, adminSend, adminSendVoid } from '@/lib/admin-api';
+import { roleChangeError } from '@/lib/role-change-error';
 
 export type ActionResult = { ok: true } | { ok: false; message: string };
 
@@ -139,7 +141,33 @@ export async function changeRoleAction(userId: string, formData: FormData): Prom
     revalidatePath('/admin/students');
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+    return { ok: false, message: roleChangeError(error) };
+  }
+}
+
+/**
+ * The same dialog, for a teacher: «مساعد» or «طالب», through `staff-role`.
+ *
+ * ⚠️ `role` is the admin's door and `student:role-change` is withheld from the
+ * teacher, so the dialog answered every teacher with a 403 — the one screen he
+ * found for adding an assistant could not add one. `staff-role` takes
+ * `owner | student` only, which is exactly what `staff:manage` is for.
+ */
+export async function staffRoleChangeAction(userId: string, formData: FormData): Promise<ActionResult> {
+  const body = AdminStaffRoleSchema.safeParse({
+    role: formData.get('role'),
+    reason: formData.get('reason'),
+  });
+  if (!body.success) return { ok: false, message: copy.admin.students.roleChangeFailed };
+
+  try {
+    await adminSend('POST', `/api/admin/students/${userId}/staff-role`, body.data, RoleChangeResultSchema);
+    revalidatePath(`/admin/students/${userId}`);
+    revalidatePath('/admin/students');
+    revalidatePath('/admin/roles');
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: roleChangeError(error) };
   }
 }
 

@@ -4,6 +4,7 @@ import { revalidatePath } from '@/lib/revalidate-screen';
 import { z } from '@ayman/contracts/zod';
 import { copy } from '@ayman/contracts/copy/admin';
 import { adminGet, adminSend } from '@/lib/admin-api';
+import { roleChangeError } from '@/lib/role-change-error';
 import {
   UserPermissionsReadSchema,
   type UserPermissionsRead,
@@ -123,8 +124,11 @@ export async function setStaffRoleAction(
     );
     revalidatePath('/admin/roles');
     return { ok: true };
-  } catch {
-    return { ok: false, message: c.staff.failed };
+  } catch (error) {
+    // The refusal itself — «ده حساب مسؤول»، «معاه صلاحيات إنت مش معاك» — not
+    // a «try again» that will fail the same way every time.
+    const message = roleChangeError(error);
+    return { ok: false, message: message === copy.admin.students.roleChangeFailed ? c.staff.failed : message };
   }
 }
 
