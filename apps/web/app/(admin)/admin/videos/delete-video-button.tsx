@@ -44,9 +44,19 @@ export function DeleteVideoButton({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
+  /*
+   * ⚠️ The refusal is said INSIDE the dialog, not only in a toast.
+   *
+   * «هنا حذف مش شغّال»: a press that was refused said so in a corner toast,
+   * gone in four seconds, while the owner's eyes were on the button. The API's
+   * refusals name the fix («لسه بيترفع… استنى لما يخلص»), so they belong where
+   * he is looking.
+   */
+  const [error, setError] = useState<string | null>(null);
 
   async function go() {
     setPending(true);
+    setError(null);
     const result = await deleteVideoAction(videoId, courseId);
     setPending(false);
     if (result.ok) {
@@ -55,12 +65,20 @@ export function DeleteVideoButton({
       router.refresh();
     } else {
       // Stays open: the admin is still looking at the video they meant.
+      setError(result.message);
       toast.error(result.message);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => (pending ? undefined : setOpen(next))}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (pending) return;
+        setOpen(next);
+        if (!next) setError(null);
+      }}
+    >
       <DialogTrigger asChild>
         <button
           type="button"
@@ -83,6 +101,14 @@ export function DeleteVideoButton({
           <DialogTitle>{c.deleteTitle}</DialogTitle>
           <DialogDescription>{body ?? (courseId === null ? c.deleteOrphanBody : c.deleteBody)}</DialogDescription>
         </DialogHeader>
+        {error !== null ? (
+          <p
+            role="alert"
+            className="rounded-md border border-[color-mix(in_oklab,var(--err)_40%,var(--border))] bg-[color-mix(in_oklab,var(--err)_9%,var(--n-2))] px-3 py-2 text-[length:var(--fs-text-sm)] text-err"
+          >
+            {error}
+          </p>
+        ) : null}
         <DialogFooter>
           <DialogClose asChild>
             <Button variant="secondary" disabled={pending}>
