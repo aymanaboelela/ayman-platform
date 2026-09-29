@@ -656,6 +656,9 @@ export class AssistantService {
         entryPath: true,
         lastMessageAt: true,
         adminReadAt: true,
+        // The student's side of the same stamp — what turns the tick on his
+        // own messages into «اتشافت». See the contract's `visitorReadAt`.
+        visitorReadAt: true,
         createdAt: true,
         /*
          * `phoneNumber` alongside the name — the ONE field this select gained
@@ -762,6 +765,7 @@ export class AssistantService {
       // by the time this response renders he has just read it.
       unreadForAdmin: false,
       createdAt: row.createdAt.toISOString(),
+      visitorReadAt: row.visitorReadAt?.toISOString() ?? null,
       // A guest typed theirs into المساعد's form; a student's is the one they
       // sign in with. Never both — a row has a `userId` or a `guestPhone`.
       contactPhone: row.user?.phoneNumber ?? row.guestPhone,
