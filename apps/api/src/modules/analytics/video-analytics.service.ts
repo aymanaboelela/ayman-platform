@@ -56,10 +56,33 @@ const REACH = Prisma.sql`LEAST(lp."max_position_seconds"::float / NULLIF(lv."dur
  * arithmetic — `7 × 20 / 20` is exactly 7, where the float route can land on
  * 6.999… and floor a viewer into the step below the one they reached.
  */
-const REACH_STEP = Prisma.sql`(LEAST(lp."max_position_seconds", lv."duration_seconds") * ${RETENTION_STEPS}::int) / NULLIF(lv."duration_seconds", 0)`;
+const REACH_STEP_RAW = Prisma.sql`(LEAST(lp."max_position_seconds", lv."duration_seconds") * ${RETENTION_STEPS}::int) / NULLIF(lv."duration_seconds", 0)`;
+
+/**
+ * How close to the last second still counts as «reached the end».
+ *
+ * ⚠️ The top step used to need `max_position_seconds >= duration` EXACTLY, and
+ * almost nobody's furthest heartbeat lands on the very last second — the
+ * player ends, the outro plays, the tab closes. So the curve's 100% point read
+ * 0% on a video the same page said 44% «كمّلوا» (measured 2026-09-29).
+ * Reaching the last few seconds, or being marked complete by the platform,
+ * is reaching the end.
+ */
+const END_SLACK_SECONDS = 15;
+
+const DONE = Prisma.sql`lp."state" IN ('completed', 'passed')`;
+
+const REACH_STEP = Prisma.sql`CASE
+  WHEN ${DONE}
+    -- The slack only on a video long enough for it to mean «the outro»: on a
+    -- 20-second clip it would be most of the video.
+    OR (lv."duration_seconds" > ${END_SLACK_SECONDS * 4}::int
+        AND lp."max_position_seconds" >= lv."duration_seconds" - ${END_SLACK_SECONDS}::int)
+    THEN ${RETENTION_STEPS}::int
+  ELSE ${REACH_STEP_RAW}
+END`;
 
 /** «خلّصه» — the lessons table's `completed`, so the two screens agree. */
-const DONE = Prisma.sql`lp."state" IN ('completed', 'passed')`;
 
 interface CatalogRow {
   provider: string;
