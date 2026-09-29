@@ -1,8 +1,24 @@
 'use client';
 
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { ImagePlus } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  CircleCheck,
+  Copy,
+  ImagePlus,
+  LoaderCircle,
+  MapPin,
+  PackageCheck,
+  Pencil,
+  ShoppingBag,
+  TriangleAlert,
+  Truck,
+  UserRound,
+  Wallet,
+} from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { normalizeEgyptianPhone } from '@ayman/contracts/phone';
@@ -10,18 +26,21 @@ import { TaxonomySchema, type Taxonomy } from '@ayman/contracts/taxonomy';
 import { BookOrderSchema, type BookOrder } from '@ayman/contracts/book-orders';
 import {
   bookShippingCentsFor,
+  bookShippingZoneOf,
   minBookShippingCents,
   type BookShippingRates,
+  type BookShippingZone,
 } from '@ayman/contracts/books';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
+import { cn } from '@ayman/ui/lib/cn';
 import { ApiRequestError, apiGet, apiPost } from '@/lib/api';
 import { duplicateOrderFrom, whereIs, type DuplicateTwin } from '@/lib/duplicate-order';
 import { uploadBookOrderScreenshot } from '@/lib/upload-client';
-import { formatEGP, formatShipping } from '@/lib/price';
+import { formatEGP } from '@/lib/price';
 import {
   CART_ORDER_KEY,
   cartKeyOf,
@@ -32,9 +51,73 @@ import {
 } from '@/lib/book-order-storage';
 import { PaymentBrand, type PaymentRail } from './payment-brand';
 import { PaymentMethodChoice } from './payment-method-choice';
+/*
+ * The checkout's own stylesheet, and every rule in it reads `:root` tokens
+ * only. This panel is drawn inside a Radix dialog, which portals into
+ * `<body>` — outside `.site` and outside `.store-surface` — so a `--site-*`
+ * token there resolves to nothing (`lib/books-dialog-tokens.test.ts`).
+ * Imported HERE rather than from a route stylesheet because the panel opens
+ * from four places in two route groups — `/books`, `/store`, the course page
+ * and the dashboard — plus the resume page, and this is the one module all of
+ * them load.
+ */
+import './book-checkout.css';
 
 const c = copy.bookOrder;
 
+/** One line of what is being bought, for the summary — display only. */
+export type BookOrderSummaryLine = { title: string; quantity: number; unitCents: number };
+
+/** The three zones, named — `books.shippingZone*`, the same words the shop's
+ *  shipping card uses, so the two screens cannot describe a zone differently. */
+const ZONE_NAMES: Record<BookShippingZone, string> = {
+  cairo_giza: copy.books.shippingZoneNear,
+  delta: copy.books.shippingZoneDelta,
+  far: copy.books.shippingZoneFar,
+};
+
+/** Every field that can carry its own inline message. */
+type FieldKey =
+  | 'fullName'
+  | 'phone'
+  | 'altPhone'
+  | 'governorateCode'
+  | 'city'
+  | 'addressStreet'
+  | 'senderPhone'
+  | 'screenshot';
+
+/** Where focus goes when a field is the first one wrong. */
+const FIELD_IDS: Record<FieldKey, string> = {
+  fullName: 'book-order-full-name',
+  phone: 'book-order-phone',
+  altPhone: 'book-order-alt-phone',
+  governorateCode: 'book-order-governorate',
+  city: 'book-order-city',
+  addressStreet: 'book-order-street',
+  senderPhone: 'book-order-sender-phone',
+  screenshot: 'book-order-screenshot-button',
+};
+
+/**
+ * A price the way the checkout prints it: the figure, then a smaller «ج».
+ *
+ * `<bdi>` around the figure — a Latin-digit run inside Arabic, grouped with
+ * «٬» by `formatEGP` — so it can never be reordered against the unit or the
+ * words beside it.
+ *
+ * ⚠️ Deliberately NOT `bookOrder.priceLine` («٣٠٠ جنيه»). That string is the
+ * payment step's headline figure and is printed there exactly once; the
+ * footer and the summary carry the same number in this split form.
+ */
+function Money({ cents }: { cents: number }) {
+  return (
+    <>
+      <bdi className="bco-money">{formatEGP(cents)}</bdi>{' '}
+      <span className="bco-money__unit">{copy.books.currencyShort}</span>
+    </>
+  );
+}
 
 /** `+201021196367` → `٠١٠٢١١٩٦٣٦٧`-shaped local digits — same helper
  *  `SubscribePanel` uses for the same Vodafone Cash number. */
@@ -82,6 +165,19 @@ type Step = 'checking' | 'address' | 'payment' | 'submitting' | 'success' | 'alr
  *
  * `resumeOrderId` بيعدّي على اللوكال ستوريج خالص. الحالة مختلفة: الطالب داخل
  * بحسابه وبيبصّ على طلب مربوط بيه، فالمعرّف جاي من السيرفر. شوف البروب نفسه.
+ *
+ * ## The screen (2026-09-29 redesign — layout only)
+ *
+ * «بوكسات جوه بوكسات، رمادي، ومفيش إحساس بخطوات». So, one frame for every
+ * step: a step bar (الطلب · العنوان · الدفع), ONE order summary — beside the
+ * form when there is room, folded above it on a phone — and a footer that holds
+ * the total and the one action, OUTSIDE the scrolling body so it never sits on
+ * a field. Inside a dialog (`.bco-dialog`) the frame fills it; on the resume
+ * page it is a card in the page.
+ *
+ * ⚠️ Nothing below the render changed what is sent or when: the same checks
+ * gate the same two POSTs, with the same fields. The checks now report per
+ * field instead of one line at the bottom, and that is the whole difference.
  */
 export function BookOrderPanel({
   courseId,
@@ -91,6 +187,7 @@ export function BookOrderPanel({
   instapay,
   vodafoneCash,
   resumeOrderId,
+  summaryLines,
   onCancel,
 }: {
   /**
@@ -141,6 +238,15 @@ export function BookOrderPanel({
    * الطلب من `address_only` لـ`paid`. اللي كان ناقص هو اللينك ليه.
    */
   resumeOrderId?: string;
+  /**
+   * What is being bought, for the summary — DISPLAY ONLY, never sent.
+   *
+   * Before an order exists the panel knows ids and quantities (`items`) or a
+   * course id, not titles. The caller does, so it hands them over; once the
+   * order row is back its own frozen lines replace these. It used to be a
+   * second summary box the CALLER drew above the panel — «ملخص مكرر مرتين».
+   */
+  summaryLines?: readonly BookOrderSummaryLine[];
   onCancel: () => void;
 }) {
   /*
@@ -164,7 +270,17 @@ export function BookOrderPanel({
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
   const [order, setOrder] = useState<BookOrder | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  /** Which copy button just worked — the number or the amount. */
+  const [copied, setCopied] = useState<'number' | 'amount' | null>(null);
+  /**
+   * One message per field, instead of one line at the bottom naming the first
+   * wrong field while the reader looks at the field. Same checks, same order,
+   * same words — see `addressErrors` and `submitPayment`.
+   */
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
+  /** The phone-width summary is folded by default; wide screens ignore it. */
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   /**
    * «هتحوّل بإيه؟» — same two-state shape as the course panel. Nothing is
    * preselected: a default is a choice the student did not make, and this one
@@ -212,7 +328,57 @@ export function BookOrderPanel({
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const numberInputRef = useRef<HTMLInputElement>(null);
+  const amountInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /*
+   * ── The on-screen keyboard ─────────────────────────────────────────────
+   *
+   * On a phone the dialog is a sheet pinned to the bottom of the LAYOUT
+   * viewport, and neither iOS Safari nor Chrome (whose default is now
+   * `resizes-visual`) shrinks that viewport for the keyboard — they shrink
+   * the VISUAL one. So a keyboard opened for «الشارع» slid up over the sheet's
+   * footer and the lower fields, and the pinned total sat on the very input
+   * being typed into.
+   *
+   * This lifts the sheet to sit on top of the keyboard and caps it to the
+   * visible height: the footer stays in view, the body scrolls, and the
+   * browser scrolls the focused field into that body. Written as custom
+   * properties on the dialog (`.bco-dialog[data-keyboard]` in the stylesheet)
+   * rather than inline geometry, so the dialog's own layout is untouched the
+   * rest of the time. Nothing happens outside a dialog, or on a desktop.
+   */
+  useEffect(() => {
+    const host = rootRef.current?.closest<HTMLElement>('.bco-dialog');
+    const viewport = typeof window === 'undefined' ? null : window.visualViewport;
+    if (!host || !viewport) return;
+    const clear = () => {
+      host.style.removeProperty('--bco-kb');
+      host.style.removeProperty('--bco-vvh');
+      host.style.removeProperty('--bco-vvtop');
+      delete host.dataset.keyboard;
+    };
+    const update = () => {
+      const covered = window.innerHeight - (viewport.offsetTop + viewport.height);
+      // 80px: a keyboard, not a collapsing URL bar.
+      if (covered > 80) {
+        host.style.setProperty('--bco-kb', `${Math.round(covered)}px`);
+        host.style.setProperty('--bco-vvh', `${Math.round(viewport.height)}px`);
+        host.style.setProperty('--bco-vvtop', `${Math.round(viewport.offsetTop)}px`);
+        host.dataset.keyboard = 'open';
+      } else {
+        clear();
+      }
+    };
+    update();
+    viewport.addEventListener('resize', update);
+    viewport.addEventListener('scroll', update);
+    return () => {
+      viewport.removeEventListener('resize', update);
+      viewport.removeEventListener('scroll', update);
+      clear();
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -346,7 +512,12 @@ export function BookOrderPanel({
   // ⚠️ EITHER rail sells a book. Keeping this on InstaPay alone would close the
   // shop on a platform that takes Vodafone Cash and nothing else.
   if (!instapay && !vodafoneCash) {
-    return <p className="course-subscribe__error">{c.noNumber}</p>;
+    return (
+      <p className="bco-unavailable" role="status">
+        <TriangleAlert size={18} aria-hidden="true" />
+        {c.noNumber}
+      </p>
+    );
   }
 
   /**
@@ -359,27 +530,61 @@ export function BookOrderPanel({
   const railName =
     rail === 'vodafoneCash' ? copy.subscribe.railVodafoneCash : copy.subscribe.railInstapay;
 
-  async function copyNumber() {
+  /** The amount as bare digits — what a banking app's amount field takes. */
+  const payAmountCents = order?.amountCents ?? quotedTotalCents;
+  const amountDigits = String(Math.round(payAmountCents / 100));
+
+  /**
+   * Clipboard first, then the hidden-input `execCommand` path — unchanged from
+   * the single «نسخ الرقم» this used to be, now shared by the amount too.
+   */
+  async function copyText(text: string, which: 'number' | 'amount', input: HTMLInputElement | null) {
+    const done = () => {
+      setCopied(which);
+      setTimeout(() => setCopied(null), 2000);
+    };
     try {
-      await navigator.clipboard.writeText(localNumber);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(text);
+      done();
       return;
     } catch {
       // Fall through to the execCommand path below.
     }
-    const input = numberInputRef.current;
     if (!input) return;
     try {
       input.focus();
       input.select();
-      if (document.execCommand('copy')) {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      }
+      if (document.execCommand('copy')) done();
     } catch {
-      // Both paths refused — the number is still selected text on screen.
+      // Both paths refused — the text is still selected on screen.
     }
+  }
+
+  function copyNumber() {
+    return copyText(localNumber, 'number', numberInputRef.current);
+  }
+
+  function copyAmount() {
+    return copyText(amountDigits, 'amount', amountInputRef.current);
+  }
+
+  /** A field was edited — its own message goes, the others stay. */
+  function clearFieldError(key: FieldKey) {
+    setFieldErrors((current) => {
+      if (!(key in current)) return current;
+      const { [key]: _gone, ...rest } = current;
+      return rest;
+    });
+  }
+
+  /** Report per field, and put the cursor in the first one that is wrong. */
+  function reportFieldErrors(errors: Partial<Record<FieldKey, string>>): boolean {
+    setFieldErrors(errors);
+    const first = (Object.keys(errors) as FieldKey[])[0];
+    if (!first) return false;
+    setError(null);
+    document.getElementById(FIELD_IDS[first])?.focus();
+    return true;
   }
 
   /**
@@ -404,41 +609,26 @@ export function BookOrderPanel({
     );
   }
 
+  /**
+   * The address checks — the same eight, in the same order, with the same
+   * messages as the chain of early returns they replace. The only difference
+   * is that every failing field gets its message at once, under itself.
+   */
+  function addressErrors(): Partial<Record<FieldKey, string>> {
+    const errors: Partial<Record<FieldKey, string>> = {};
+    if (!fullName.trim()) errors.fullName = c.fullNameRequired;
+    if (!phone.trim()) errors.phone = c.phoneRequired;
+    else if (!normalizeEgyptianPhone(phone)) errors.phone = c.phoneInvalid;
+    if (!altPhone.trim()) errors.altPhone = c.altPhoneRequired;
+    else if (!normalizeEgyptianPhone(altPhone)) errors.altPhone = c.altPhoneInvalid;
+    if (!governorateCode) errors.governorateCode = c.governorateRequired;
+    if (!city.trim()) errors.city = c.cityRequired;
+    if (!addressStreet.trim()) errors.addressStreet = c.addressStreetRequired;
+    return errors;
+  }
+
   async function submitAddress() {
-    const normalizedPhone = normalizeEgyptianPhone(phone);
-    const normalizedAltPhone = normalizeEgyptianPhone(altPhone);
-    if (!fullName.trim()) {
-      setError(c.fullNameRequired);
-      return;
-    }
-    if (!phone.trim()) {
-      setError(c.phoneRequired);
-      return;
-    }
-    if (!normalizedPhone) {
-      setError(c.phoneInvalid);
-      return;
-    }
-    if (!altPhone.trim()) {
-      setError(c.altPhoneRequired);
-      return;
-    }
-    if (!normalizedAltPhone) {
-      setError(c.altPhoneInvalid);
-      return;
-    }
-    if (!governorateCode) {
-      setError(c.governorateRequired);
-      return;
-    }
-    if (!city.trim()) {
-      setError(c.cityRequired);
-      return;
-    }
-    if (!addressStreet.trim()) {
-      setError(c.addressStreetRequired);
-      return;
-    }
+    if (reportFieldErrors(addressErrors())) return;
     setError(null);
 
     /*
@@ -541,18 +731,12 @@ export function BookOrderPanel({
   async function submitPayment() {
     if (!order) return;
     const normalizedSenderPhone = normalizeEgyptianPhone(senderPhone);
-    if (!senderPhone.trim()) {
-      setError(c.senderPhoneRequired);
-      return;
-    }
-    if (!normalizedSenderPhone) {
-      setError(c.senderPhoneInvalid);
-      return;
-    }
-    if (!file) {
-      setError(c.screenshotRequired);
-      return;
-    }
+    // Same three checks, same order, same words — reported per field.
+    const errors: Partial<Record<FieldKey, string>> = {};
+    if (!senderPhone.trim()) errors.senderPhone = c.senderPhoneRequired;
+    else if (!normalizedSenderPhone) errors.senderPhone = c.senderPhoneInvalid;
+    if (!file) errors.screenshot = c.screenshotRequired;
+    if (reportFieldErrors(errors) || !file) return;
 
     setError(null);
     setStep('submitting');
@@ -606,19 +790,172 @@ export function BookOrderPanel({
     }
   }
 
+  /* ══ The screen ══════════════════════════════════════════════════════════
+     Everything from here down is layout. It reads the state above and calls
+     the handlers above; it decides nothing about the order. */
+
+  const onPayment = step === 'payment' || step === 'submitting';
+  const submitting = step === 'submitting';
+  /** 2 = address, 3 = payment, 4 = every stop behind us. «الطلب» — the basket
+   *  or the book — was chosen before this dialog opened, so it is always done. */
+  const currentStop = step === 'checking' || step === 'address' ? 2 : onPayment ? 3 : 4;
+
+  /*
+   * The summary's lines. The ORDER's own once it exists — a resumed order shows
+   * what was actually bought, not what this session happens to hold — and the
+   * caller's `summaryLines` before that.
+   */
+  const lines = order
+    ? order.items.map((line) => ({
+        title: line.titleAr,
+        quantity: line.quantity,
+        cents: line.unitPriceCents * line.quantity,
+      }))
+    : (summaryLines ?? []).map((line) => ({
+        title: line.title,
+        quantity: line.quantity,
+        cents: line.unitCents * line.quantity,
+      }));
+
+  /*
+   * The breakdown follows the same rule it always has: LIVE on the address
+   * step (it moves with the governorate select), the order's FROZEN figures
+   * once there is money to send — they are what the transfer has to match.
+   */
+  const frozen =
+    order !== null && (onPayment || step === 'success' || step === 'alreadyOrdered');
+  const summaryGovernorate = frozen ? order.governorateCode : governorateCode;
+  const summaryZone = summaryGovernorate ? ZONE_NAMES[bookShippingZoneOf(summaryGovernorate)] : null;
+  const summary = (
+    <OrderSummary
+      lines={lines}
+      subtotalCents={frozen ? order.itemsCents : itemsCents}
+      shippingCents={frozen ? order.shippingCents : shippingQuoteCents}
+      zone={summaryZone}
+      discountCents={frozen ? order.discountCents : 0}
+      open={summaryOpen}
+      onToggle={() => setSummaryOpen((open) => !open)}
+    />
+  );
+
+  /** The footer's figure: a floor until a governorate is picked, then the
+   *  live quote, then — once the order exists — its frozen total. */
+  const footerTotal = frozen ? (
+    <Money cents={order.amountCents} />
+  ) : shippingQuoteCents === null ? (
+    <>
+      {formatCopy(copy.books.totalFrom, {
+        price: formatEGP(itemsCents + minBookShippingCents(shippingRates)),
+      })}{' '}
+      <span className="bco-money__unit">{copy.books.currencyShort}</span>
+    </>
+  ) : (
+    <Money cents={quotedTotalCents} />
+  );
+  const footerNote =
+    !frozen && shippingQuoteCents === null
+      ? `${copy.books.shipping} ${copy.books.shippingByGovernorate}`
+      : c.totalIncludesShipping;
+
+  let main: ReactNode;
+  let footer: ReactNode = null;
+  let withSummary = true;
+
   if (step === 'checking') {
-    return <p className="course-subscribe__title">{copy.common.loading}</p>;
-  }
-
-  if (step === 'alreadyOrdered') {
-    return <p className="course-subscribe__success">{c.alreadyOrdered}</p>;
-  }
-
-  if (step === 'success') {
-    return <p className="course-subscribe__success">{c.success}</p>;
-  }
-
-  if (step === 'address') {
+    withSummary = false;
+    main = (
+      <p className="bco-loading" role="status">
+        <LoaderCircle className="bco-loading__spin" size={22} aria-hidden="true" />
+        {copy.common.loading}
+      </p>
+    );
+  } else if (step === 'alreadyOrdered' || step === 'success') {
+    const doneTitle = step === 'success' ? c.successTitle : null;
+    main = (
+      <div className={cn('bco-done', step === 'success' && 'bco-done--success')} role="status">
+        <span className="bco-done__icon" aria-hidden="true">
+          {step === 'success' ? <CircleCheck size={34} /> : <PackageCheck size={32} />}
+        </span>
+        {doneTitle ? <p className="bco-done__title">{doneTitle}</p> : null}
+        <p className="bco-done__body">{step === 'success' ? c.successBody : c.alreadyOrdered}</p>
+      </div>
+    );
+    withSummary = order !== null;
+    footer = (
+      <FooterBar
+        total={order ? <Money cents={order.amountCents} /> : undefined}
+        note={order ? c.totalIncludesShipping : undefined}
+        primary={
+          <Button type="button" className="bco-primary" onClick={onCancel}>
+            {c.done}
+          </Button>
+        }
+      />
+    );
+  } else if (step === 'address' && duplicatePrompt) {
+    /*
+     * ⚠️ The question REPLACES the form rather than sitting over it as a modal.
+     *
+     * This is the one screen where a student is deciding whether to spend money
+     * twice, and a dialog floating over a filled-in form invites the reflex
+     * that dismisses dialogs. One screen, one question, two answers — and the
+     * safe one is the PRIMARY button, so doing nothing costs nothing.
+     */
+    main = (
+      <div className="bco-warn">
+        <span className="bco-warn__icon" aria-hidden="true">
+          <TriangleAlert size={22} />
+        </span>
+        <div className="bco-warn__text">
+          <p className="bco-warn__title">{c.duplicateTitle}</p>
+          <p className="bco-warn__body">{c.duplicateBody}</p>
+          {/*
+            «لو راح للطباعة تقوله راح للطباعة». Without this the student is
+            being asked to decide about an order they cannot see — and the one
+            who cannot tell whether the first is coming is exactly the one who
+            orders again. Rendered only when the 409 carried a body.
+          */}
+          {duplicateTwin ? (
+            <p className="bco-warn__body">
+              <b>{c.duplicateWhereTitle}</b> {whereIs(duplicateTwin.status)}
+              {duplicateTwin.ref ? (
+                <>
+                  {' '}
+                  {/* The label reads right to left and ONLY the reference is
+                      pinned left to right — «ك-A3F92C», exactly as the shipping
+                      card prints it. The whole sentence in `ltr` put the colon
+                      and the label on the wrong side of it. */}
+                  {c.duplicateRef.split('{ref}')[0]}
+                  <bdi dir="ltr">{duplicateTwin.ref}</bdi>
+                  {c.duplicateRef.split('{ref}')[1]}
+                </>
+              ) : null}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    );
+    footer = (
+      <FooterBar
+        error={error}
+        secondary={
+          <button
+            type="button"
+            className="bco-secondary"
+            onClick={() => void confirmDuplicateOrder()}
+            disabled={savingAddress}
+          >
+            {c.duplicateConfirm}
+          </button>
+        }
+        primary={
+          <Button type="button" className="bco-primary" onClick={onCancel}>
+            {c.duplicateCancel}
+          </Button>
+        }
+      />
+    );
+  } else if (step === 'address') {
     const pinned = (taxonomy?.pinnedGovernorateCodes ?? [])
       .map((code) => taxonomy?.governorates.find((g) => g.code === code))
       .filter((g): g is Taxonomy['governorates'][number] => g !== undefined);
@@ -627,398 +964,693 @@ export function BookOrderPanel({
     );
     const governorateOptions = [...pinned, ...rest];
 
-    /*
-     * ⚠️ The question REPLACES the form rather than sitting over it as a modal.
-     *
-     * This is the one screen where a student is deciding whether to spend money
-     * twice, and a dialog floating over a filled-in form invites the reflex
-     * that dismisses dialogs. One screen, one question, two answers — and the
-     * safe one is first and plain, so doing nothing costs nothing.
-     */
-    if (duplicatePrompt) {
-      return (
-        <div className="course-subscribe">
-          <p className="course-subscribe__title">{c.duplicateTitle}</p>
-          <p className="course-subscribe__instructions">{c.duplicateBody}</p>
-          {/*
-            «لو راح للطباعة تقوله راح للطباعة». Without this the student is
-            being asked to decide about an order they cannot see — and the one
-            who cannot tell whether the first is coming is exactly the one who
-            orders again.
+    main = (
+      <div className="bco-stack">
+        <section className="bco-card" aria-labelledby="bco-contact-title">
+          <div className="bco-card__head">
+            <span className="bco-card__icon" aria-hidden="true">
+              <UserRound size={18} />
+            </span>
+            <div>
+              <h3 id="bco-contact-title" className="bco-card__title">
+                {c.contactTitle}
+              </h3>
+              <p className="bco-card__lead">{c.contactLead}</p>
+            </div>
+          </div>
 
-            Rendered only when the 409 carried a body. An older API, or a
-            response that would not parse, falls back to the question alone
-            rather than to a blank line pretending to say something.
-          */}
-          {duplicateTwin ? (
-            <p className="course-subscribe__instructions">
-              <b>{c.duplicateWhereTitle}</b> {whereIs(duplicateTwin.status)}
-              {duplicateTwin.ref ? (
-                <>
-                  {' '}
-                  <span dir="ltr">{formatCopy(c.duplicateRef, { ref: duplicateTwin.ref })}</span>
-                </>
-              ) : null}
-            </p>
-          ) : null}
-          <div className="course-subscribe__actions">
-            <Button type="button" onClick={onCancel}>
-              {c.duplicateCancel}
-            </Button>
-            <button
-              type="button"
-              className="course-subscribe__cancel"
-              onClick={() => void confirmDuplicateOrder()}
-              disabled={savingAddress}
+          <div className="bco-grid">
+            <Field id={FIELD_IDS.fullName} label={c.fullNameLabel} error={fieldErrors.fullName} full>
+              <Input
+                id={FIELD_IDS.fullName}
+                className="bco-input"
+                autoComplete="name"
+                enterKeyHint="next"
+                invalid={Boolean(fieldErrors.fullName)}
+                aria-describedby={fieldErrors.fullName ? `${FIELD_IDS.fullName}-error` : undefined}
+                value={fullName}
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                  clearFieldError('fullName');
+                }}
+              />
+            </Field>
+
+            <Field id={FIELD_IDS.phone} label={c.phoneLabel} error={fieldErrors.phone}>
+              <Input
+                id={FIELD_IDS.phone}
+                className="bco-input bco-input--ltr"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                enterKeyHint="next"
+                dir="ltr"
+                placeholder="01xxxxxxxxx"
+                invalid={Boolean(fieldErrors.phone)}
+                aria-describedby={fieldErrors.phone ? `${FIELD_IDS.phone}-error` : undefined}
+                value={phone}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  clearFieldError('phone');
+                }}
+              />
+            </Field>
+
+            <Field id={FIELD_IDS.altPhone} label={c.altPhoneLabel} error={fieldErrors.altPhone}>
+              <Input
+                id={FIELD_IDS.altPhone}
+                className="bco-input bco-input--ltr"
+                type="tel"
+                inputMode="tel"
+                /* Not `tel`: autofill would put the SAME number here, and a
+                   second number that is the first one is no second number. */
+                autoComplete="off"
+                enterKeyHint="next"
+                dir="ltr"
+                placeholder="01xxxxxxxxx"
+                invalid={Boolean(fieldErrors.altPhone)}
+                aria-describedby={fieldErrors.altPhone ? `${FIELD_IDS.altPhone}-error` : undefined}
+                value={altPhone}
+                onChange={(e) => {
+                  setAltPhone(e.target.value);
+                  clearFieldError('altPhone');
+                }}
+              />
+            </Field>
+          </div>
+        </section>
+
+        <section className="bco-card" aria-labelledby="bco-delivery-title">
+          <div className="bco-card__head">
+            <span className="bco-card__icon" aria-hidden="true">
+              <MapPin size={18} />
+            </span>
+            <div>
+              <h3 id="bco-delivery-title" className="bco-card__title">
+                {c.deliveryTitle}
+              </h3>
+              <p className="bco-card__lead">{c.deliveryLead}</p>
+            </div>
+          </div>
+
+          <div className="bco-grid">
+            <Field
+              id={FIELD_IDS.governorateCode}
+              label={c.governorateLabel}
+              error={fieldErrors.governorateCode}
             >
-              {c.duplicateConfirm}
-            </button>
+              <Select
+                id={FIELD_IDS.governorateCode}
+                className="bco-input"
+                autoComplete="address-level1"
+                invalid={Boolean(fieldErrors.governorateCode)}
+                aria-describedby={
+                  fieldErrors.governorateCode ? `${FIELD_IDS.governorateCode}-error` : undefined
+                }
+                value={governorateCode}
+                onChange={(e) => {
+                  setGovernorateCode(e.target.value);
+                  clearFieldError('governorateCode');
+                }}
+              >
+                <option value="">{c.governoratePlaceholder}</option>
+                {governorateOptions.map((g) => (
+                  <option key={g.code} value={g.code}>
+                    {g.nameAr}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field id={FIELD_IDS.city} label={c.cityLabel} error={fieldErrors.city}>
+              <Input
+                id={FIELD_IDS.city}
+                className="bco-input"
+                autoComplete="address-level2"
+                enterKeyHint="next"
+                invalid={Boolean(fieldErrors.city)}
+                aria-describedby={fieldErrors.city ? `${FIELD_IDS.city}-error` : undefined}
+                value={city}
+                onChange={(e) => {
+                  setCity(e.target.value);
+                  clearFieldError('city');
+                }}
+              />
+            </Field>
+
+            {/* Which zone the picked governorate is in, and what that zone
+                costs — the answer to «ليه الشحن ١٥٠؟» before it is asked. The
+                same number the summary's «الشحن» row moves to. */}
+            {governorateCode && shippingQuoteCents !== null ? (
+              <p className="bco-zone" aria-live="polite">
+                <Truck size={16} aria-hidden="true" />
+                <span className="bco-zone__name">
+                  {formatCopy(c.zoneHint, { zone: ZONE_NAMES[bookShippingZoneOf(governorateCode)] })}
+                </span>
+                <span className="bco-zone__price">
+                  {shippingQuoteCents === 0 ? copy.books.shippingFree : <Money cents={shippingQuoteCents} />}
+                </span>
+              </p>
+            ) : null}
+
+            <Field id={FIELD_IDS.addressStreet} label={c.addressStreetLabel} error={fieldErrors.addressStreet} full>
+              <Input
+                id={FIELD_IDS.addressStreet}
+                className="bco-input"
+                autoComplete="address-line1"
+                enterKeyHint="next"
+                invalid={Boolean(fieldErrors.addressStreet)}
+                aria-describedby={
+                  fieldErrors.addressStreet ? `${FIELD_IDS.addressStreet}-error` : undefined
+                }
+                value={addressStreet}
+                onChange={(e) => {
+                  setAddressStreet(e.target.value);
+                  clearFieldError('addressStreet');
+                }}
+              />
+            </Field>
+
+            <Field id="book-order-building" label={c.addressBuildingLabel}>
+              <Input
+                id="book-order-building"
+                className="bco-input"
+                autoComplete="address-line2"
+                enterKeyHint="next"
+                value={addressBuilding}
+                onChange={(e) => setAddressBuilding(e.target.value)}
+              />
+            </Field>
+
+            <Field id="book-order-note" label={c.addressNoteLabel}>
+              <Textarea
+                id="book-order-note"
+                className="bco-input bco-input--note"
+                rows={2}
+                autoComplete="off"
+                placeholder={c.addressNotePlaceholder}
+                value={addressNote}
+                onChange={(e) => setAddressNote(e.target.value)}
+              />
+            </Field>
           </div>
-        </div>
-      );
-    }
+        </section>
+      </div>
+    );
 
-    return (
-      <div className="course-subscribe">
-        {/* The breakdown, and it MOVES — «الشحن» is «على حسب المحافظة» until the
-            select below is touched and the real number the moment it is. Three
-            rows rather than one total, for the reason the shop's basket shows
-            three: a single figure that changes when you pick an address, with
-            nothing naming the part that changed, reads as a price that went up
-            on you. */}
-        <div className="books-checkout__summary">
-          <div className="books-cart__row">
-            <span>{copy.books.subtotal}</span>
-            <span>{formatEGP(itemsCents)}</span>
-          </div>
-          <div className="books-cart__row">
-            <span>{copy.books.shipping}</span>
-            <span>
-              {shippingQuoteCents === null
-                ? copy.books.shippingByGovernorate
-                : formatShipping(shippingQuoteCents, copy.books.shippingFree)}
-            </span>
-          </div>
-          <div className="books-cart__row books-cart__row--total">
-            <span>{copy.books.total}</span>
-            <span>
-              {shippingQuoteCents === null
-                ? formatCopy(copy.books.totalFrom, {
-                    price: formatEGP(itemsCents + minBookShippingCents(shippingRates)),
-                  })
-                : formatEGP(quotedTotalCents)}
-            </span>
-          </div>
-        </div>
-        <p className="course-subscribe__title">{c.addressTitle}</p>
-
-        <div>
-          <Label htmlFor="book-order-full-name">{c.fullNameLabel}</Label>
-          <Input id="book-order-full-name" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-        </div>
-
-        <div>
-          <Label htmlFor="book-order-phone">{c.phoneLabel}</Label>
-          <Input
-            id="book-order-phone"
-            type="tel"
-            inputMode="tel"
-            dir="ltr"
-            placeholder="01xxxxxxxxx"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="book-order-alt-phone">{c.altPhoneLabel}</Label>
-          <Input
-            id="book-order-alt-phone"
-            type="tel"
-            inputMode="tel"
-            dir="ltr"
-            placeholder="01xxxxxxxxx"
-            value={altPhone}
-            onChange={(e) => setAltPhone(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="book-order-governorate">{c.governorateLabel}</Label>
-          <Select
-            id="book-order-governorate"
-            value={governorateCode}
-            onChange={(e) => setGovernorateCode(e.target.value)}
-          >
-            <option value="">{c.governoratePlaceholder}</option>
-            {governorateOptions.map((g) => (
-              <option key={g.code} value={g.code}>
-                {g.nameAr}
-              </option>
-            ))}
-          </Select>
-        </div>
-
-        <div>
-          <Label htmlFor="book-order-city">{c.cityLabel}</Label>
-          <Input id="book-order-city" value={city} onChange={(e) => setCity(e.target.value)} />
-        </div>
-
-        <div>
-          <Label htmlFor="book-order-street">{c.addressStreetLabel}</Label>
-          <Input id="book-order-street" value={addressStreet} onChange={(e) => setAddressStreet(e.target.value)} />
-        </div>
-
-        <div>
-          <Label htmlFor="book-order-building">{c.addressBuildingLabel}</Label>
-          <Input
-            id="book-order-building"
-            value={addressBuilding}
-            onChange={(e) => setAddressBuilding(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="book-order-note">{c.addressNoteLabel}</Label>
-          <Textarea
-            id="book-order-note"
-            rows={2}
-            placeholder={c.addressNotePlaceholder}
-            value={addressNote}
-            onChange={(e) => setAddressNote(e.target.value)}
-          />
-        </div>
-
-        {error ? (
-          <p role="alert" className="course-subscribe__error">
-            {error}
-          </p>
-        ) : null}
-
-        <div className="course-subscribe__actions">
-          <Button type="button" onClick={submitAddress} disabled={savingAddress}>
-            {savingAddress ? c.addressSubmitting : c.addressSubmit}
-          </Button>
-          <button type="button" className="course-subscribe__cancel" onClick={onCancel} disabled={savingAddress}>
+    footer = (
+      <FooterBar
+        error={error}
+        total={footerTotal}
+        note={footerNote}
+        secondary={
+          <button type="button" className="bco-secondary" onClick={onCancel} disabled={savingAddress}>
             {c.back}
           </button>
+        }
+        primary={
+          <Button type="button" className="bco-primary" onClick={submitAddress} disabled={savingAddress}>
+            {savingAddress ? (
+              <>
+                <LoaderCircle className="bco-loading__spin" size={17} aria-hidden="true" />
+                {c.addressSubmitting}
+              </>
+            ) : (
+              <>
+                {c.addressSubmit}
+                <ArrowLeft size={17} aria-hidden="true" />
+              </>
+            )}
+          </Button>
+        }
+      />
+    );
+  } else {
+    // `payment` / `submitting`.
+    main = (
+      <div className="bco-stack">
+        {/*
+          The figure to send, first and largest, with its own copy button —
+          priced from the ORDER's own frozen total once it exists (by this step
+          it always does); the fallback is the live quote, reachable only in the
+          instant between the address saving and the row coming back.
+        */}
+        <div className="bco-amount">
+          <span className="bco-amount__icon" aria-hidden="true">
+            <Wallet size={22} />
+          </span>
+          <div className="bco-amount__text">
+            <p className="bco-amount__label">{c.payAmountLabel}</p>
+            <p className="bco-amount__value">
+              {formatCopy(c.priceLine, { price: formatEGP(payAmountCents) })}
+            </p>
+          </div>
+          <button type="button" className="bco-copy" onClick={() => void copyAmount()}>
+            {copied === 'amount' ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
+            {copied === 'amount' ? copy.subscribe.copied : c.copyAmount}
+          </button>
+          <input
+            ref={amountInputRef}
+            readOnly
+            dir="ltr"
+            value={amountDigits}
+            aria-hidden="true"
+            tabIndex={-1}
+            className="sr-only"
+          />
         </div>
+
+        {/*
+          ⚠️ WHERE THE PARCEL IS GOING, on the screen that asks for money — the
+          reason resuming can land here instead of on the address form. From
+          `order`, not the form state: after a resume those can differ, and the
+          parcel follows the server's copy.
+        */}
+        {order ? (
+          <div className="bco-recap">
+            <span className="bco-recap__icon" aria-hidden="true">
+              <MapPin size={17} />
+            </span>
+            <div className="bco-recap__text">
+              <p className="bco-recap__label">{c.deliverTo}</p>
+              <p className="bco-recap__value">
+                {[
+                  order.fullName,
+                  taxonomy?.governorates.find((g) => g.code === order.governorateCode)?.nameAr ??
+                    order.governorateCode,
+                  order.city,
+                  order.addressStreet,
+                ]
+                  .filter(Boolean)
+                  .join(c.itemSeparator)}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="bco-link"
+              onClick={() => setStep('address')}
+              disabled={submitting}
+            >
+              <Pencil size={14} aria-hidden="true" />
+              {c.editAddress}
+            </button>
+          </div>
+        ) : null}
+
+        {/* The rail question comes before anything carrying a number — see the
+            note in `subscribe-panel.tsx`. */}
+        {!railConfirmed ? (
+          <div className="bco-card bco-card--rails">
+            <PaymentMethodChoice
+              value={rail}
+              // One tap: pick the rail AND move on — see `PaymentMethodChoice`.
+              onChange={(next) => {
+                setRail(next);
+                setRailConfirmed(true);
+              }}
+              available={{ instapay: Boolean(instapay), vodafoneCash: Boolean(vodafoneCash) }}
+            />
+          </div>
+        ) : (
+          <ol className="bco-paysteps">
+            <li className="bco-paystep">
+              <span className="bco-paystep__num" aria-hidden="true">
+                1
+              </span>
+              <div className="bco-paystep__body">
+                <div className="bco-paystep__head">
+                  <p className="bco-paystep__title">{formatCopy(c.payStepSend, { rail: railName })}</p>
+                  <button
+                    type="button"
+                    className="bco-link"
+                    onClick={() => setRailConfirmed(false)}
+                    disabled={submitting}
+                  >
+                    {copy.subscribe.railChange}
+                  </button>
+                </div>
+                <div className="bco-number">
+                  <PaymentBrand rail={rail ?? 'instapay'} className="bco-number__brand" />
+                  <bdi dir="ltr" className="bco-number__value">
+                    {localNumber}
+                  </bdi>
+                  <button type="button" className="bco-copy bco-copy--solid" onClick={() => void copyNumber()}>
+                    {copied === 'number' ? (
+                      <Check size={15} aria-hidden="true" />
+                    ) : (
+                      <Copy size={15} aria-hidden="true" />
+                    )}
+                    {copied === 'number' ? copy.subscribe.copied : copy.subscribe.copyNumber}
+                  </button>
+                  <input
+                    ref={numberInputRef}
+                    readOnly
+                    dir="ltr"
+                    value={localNumber}
+                    aria-hidden="true"
+                    tabIndex={-1}
+                    className="sr-only"
+                  />
+                </div>
+              </div>
+            </li>
+
+            <li className="bco-paystep">
+              <span className="bco-paystep__num" aria-hidden="true">
+                2
+              </span>
+              <div className="bco-paystep__body">
+                <Field
+                  id={FIELD_IDS.senderPhone}
+                  label={copy.subscribe.senderPhoneLabel}
+                  error={fieldErrors.senderPhone}
+                >
+                  <Input
+                    id={FIELD_IDS.senderPhone}
+                    className="bco-input bco-input--ltr"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    dir="ltr"
+                    placeholder="01xxxxxxxxx"
+                    invalid={Boolean(fieldErrors.senderPhone)}
+                    aria-describedby={
+                      fieldErrors.senderPhone ? `${FIELD_IDS.senderPhone}-error` : undefined
+                    }
+                    value={senderPhone}
+                    onChange={(event) => {
+                      setSenderPhone(event.target.value);
+                      clearFieldError('senderPhone');
+                    }}
+                    disabled={submitting}
+                  />
+                </Field>
+              </div>
+            </li>
+
+            <li className="bco-paystep">
+              <span className="bco-paystep__num" aria-hidden="true">
+                3
+              </span>
+              <div className="bco-paystep__body">
+                <Field
+                  id={FIELD_IDS.screenshot}
+                  label={copy.subscribe.screenshotLabel}
+                  error={fieldErrors.screenshot}
+                  hint={formatCopy(copy.subscribe.screenshotHint, { rail: railName })}
+                >
+                  <input
+                    ref={fileInputRef}
+                    id="book-order-screenshot"
+                    type="file"
+                    /* `image/*`, not the API's allowlist. The narrow list greyed
+                       out HEIC screenshots on iOS; `compressImage` re-encodes to
+                       JPEG first and the API's own allowlist is still the gate.
+                       Same value the homework picker has always used. */
+                    accept="image/*"
+                    onChange={(event) => {
+                      handleFileChange(event);
+                      clearFieldError('screenshot');
+                    }}
+                    disabled={submitting}
+                    className="sr-only"
+                  />
+                  <button
+                    id={FIELD_IDS.screenshot}
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={submitting}
+                    aria-describedby={fieldErrors.screenshot ? `${FIELD_IDS.screenshot}-error` : undefined}
+                    className={cn('bco-upload', previewUrl && 'bco-upload--filled')}
+                  >
+                    {previewUrl ? (
+                      <img src={previewUrl} alt="" className="bco-upload__preview" />
+                    ) : (
+                      <span className="bco-upload__icon" aria-hidden="true">
+                        <ImagePlus size={24} strokeWidth={2} />
+                      </span>
+                    )}
+                    <span className="bco-upload__text">
+                      <span className="bco-upload__name">
+                        {file ? file.name : copy.subscribe.screenshotPlaceholder}
+                      </span>
+                      {file ? <span className="bco-upload__change">{copy.subscribe.screenshotChange}</span> : null}
+                    </span>
+                  </button>
+                </Field>
+              </div>
+            </li>
+          </ol>
+        )}
       </div>
+    );
+
+    footer = (
+      <FooterBar
+        error={error}
+        total={footerTotal}
+        note={footerNote}
+        secondary={
+          <button
+            type="button"
+            className="bco-secondary"
+            onClick={() => setStep('address')}
+            disabled={submitting}
+          >
+            {c.back}
+          </button>
+        }
+        primary={
+          railConfirmed ? (
+            <Button type="button" className="bco-primary" onClick={submitPayment} disabled={submitting}>
+              {submitting ? (
+                <>
+                  <LoaderCircle className="bco-loading__spin" size={17} aria-hidden="true" />
+                  {c.submitting}
+                </>
+              ) : (
+                <>
+                  {c.submit}
+                  <ArrowLeft size={17} aria-hidden="true" />
+                </>
+              )}
+            </Button>
+          ) : null
+        }
+      />
     );
   }
 
-  // `payment` / `submitting` — the exact `SubscribePanel` payment UI, priced
-  // from the ORDER's own `amountCents` (the book's price at submission time).
-  const submitting = step === 'submitting';
-
   return (
-    <div className="course-subscribe">
-      <p className="course-subscribe__amount">
-        {/* The ORDER's own frozen total once it exists — by this step it always
-            does, and it is the number the transfer has to match. The fallback
-            is the live quote, which can only be reached in the instant between
-            the address saving and the row coming back. */}
-        {formatCopy(c.priceLine, { price: formatEGP(order?.amountCents ?? quotedTotalCents) })}
-      </p>
-      {/* The order's own lines once it exists — one book for the course flow, the
-          whole basket for the shop. Read off the ORDER rather than the props so
-          a resumed one (a tab reopened days later) shows what was actually
-          bought, not what happens to be in this session's cart. */}
-      <p className="course-subscribe__title">
-        {(order?.items ?? []).map((line) => line.titleAr).join(c.itemSeparator)}
-      </p>
+    <div ref={rootRef} className="bco" data-step={step}>
+      <StepBar current={currentStop} />
+      <div className="bco__scroll">
+        <div className={cn('bco__layout', withSummary && 'bco__layout--split')}>
+          <div className="bco__main">{main}</div>
+          {withSummary ? summary : null}
+        </div>
+      </div>
+      {footer}
+    </div>
+  );
+}
 
-      {/*
-        What the number above is made of, on the screen that asks for it. The
-        address step showed «الكتب / الشحن» and this one dropped it, so «٦٠٠
-        جنيه» arrived one screen after «٤٥٠» with nothing naming the ١٥٠ —
-        the «اتحاسبت زيادة؟» call the order's four-number breakdown exists to
-        prevent. The ORDER's frozen figures, never the live quote: they are what
-        the transfer has to match. No total row; the big number is the total.
-      */}
-      {order ? (
-        <div className="books-checkout__summary">
-          <div className="books-cart__row">
-            <span>{copy.books.subtotal}</span>
-            <span>{formatEGP(order.itemsCents)}</span>
+/** «١ الطلب · ٢ العنوان · ٣ الدفع». `current` is 2, 3, or 4 (all done). */
+function StepBar({ current }: { current: number }) {
+  const stops = [c.stepCart, c.stepAddress, c.stepPayment];
+  return (
+    <ol className="bco-steps" aria-label={c.stepsLabel}>
+      {stops.map((label, index) => {
+        const n = index + 1;
+        const state = n < current ? 'done' : n === current ? 'current' : 'next';
+        return (
+          <li
+            key={label}
+            className="bco-steps__item"
+            data-state={state}
+            aria-current={state === 'current' ? 'step' : undefined}
+          >
+            <span className="bco-steps__dot" aria-hidden="true">
+              {state === 'done' ? <Check size={14} strokeWidth={3} /> : n}
+            </span>
+            <span className="bco-steps__label">{label}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/**
+ * The ONE order summary. Lines, then «الكتب» and «الشحن — {zone}» (and a
+ * discount when the admin gave one). No «الإجمالي» row: the total lives in the
+ * footer, once — a second copy of it here is how two different totals ended up
+ * stacked in this dialog before.
+ *
+ * On a phone it folds to its header row (`data-open`); on a wide layout the
+ * stylesheet shows the body regardless and hides the toggle.
+ */
+function OrderSummary({
+  lines,
+  subtotalCents,
+  shippingCents,
+  zone,
+  discountCents,
+  open,
+  onToggle,
+}: {
+  lines: readonly { title: string; quantity: number; cents: number }[];
+  subtotalCents: number;
+  /** `null` — no governorate yet: the rule, not a number. */
+  shippingCents: number | null;
+  zone: string | null;
+  discountCents: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const count = lines.reduce((sum, line) => sum + line.quantity, 0);
+  return (
+    <aside className="bco-sum" data-open={open ? 'true' : 'false'} aria-label={c.summaryTitle}>
+      <button type="button" className="bco-sum__head" aria-expanded={open} onClick={onToggle}>
+        <span className="bco-sum__icon" aria-hidden="true">
+          <ShoppingBag size={16} />
+        </span>
+        <span className="bco-sum__title">{c.summaryTitle}</span>
+        {count > 0 ? (
+          <span className="bco-sum__count">{formatCopy(copy.books.shelfCount, { n: count })}</span>
+        ) : null}
+        <span className="bco-sum__toggle">
+          {c.summaryDetails}
+          <ChevronDown size={16} aria-hidden="true" />
+        </span>
+      </button>
+
+      <div className="bco-sum__body">
+        {lines.length > 0 ? (
+          <ul className="bco-sum__lines">
+            {lines.map((line, index) => (
+              <li key={`${line.title}-${index}`} className="bco-sum__line">
+                <span className="bco-sum__line-title">{line.title}</span>
+                <bdi dir="ltr" className="bco-sum__qty">
+                  ×{line.quantity}
+                </bdi>
+                <span className="bco-sum__line-price">
+                  <Money cents={line.cents} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        <dl className="bco-sum__rows">
+          <div className="bco-sum__row">
+            <dt>{copy.books.subtotal}</dt>
+            <dd>
+              <Money cents={subtotalCents} />
+            </dd>
           </div>
-          <div className="books-cart__row">
-            <span>{copy.books.shipping}</span>
-            <span>{formatShipping(order.shippingCents, copy.books.shippingFree)}</span>
+          <div className="bco-sum__row">
+            <dt>
+              {copy.books.shipping}
+              {zone ? <span className="bco-sum__zone">{zone}</span> : null}
+            </dt>
+            <dd>
+              {shippingCents === null ? (
+                <span className="bco-sum__pending">{copy.books.shippingByGovernorate}</span>
+              ) : shippingCents === 0 ? (
+                copy.books.shippingFree
+              ) : (
+                <Money cents={shippingCents} />
+              )}
+            </dd>
           </div>
-          {order.discountCents > 0 ? (
-            <div className="books-cart__row">
-              <span>{copy.books.discount}</span>
-              <span>{formatCopy(copy.books.discountValue, { price: formatEGP(order.discountCents) })}</span>
+          {discountCents > 0 ? (
+            <div className="bco-sum__row bco-sum__row--discount">
+              <dt>{copy.books.discount}</dt>
+              <dd>
+                <bdi dir="ltr">{formatCopy(copy.books.discountValue, { price: formatEGP(discountCents) })}</bdi>
+              </dd>
             </div>
           ) : null}
-        </div>
-      ) : null}
-
-      {/*
-        ⚠️ WHERE THE PARCEL IS GOING, on the screen that asks for money.
-
-        This line is the reason resuming can land here instead of on the address
-        form. Without it a student arrived at a transfer number with no sign
-        that an address had ever been given — «المفروض لما أضغط على طلب الكتاب
-        الأول أكتب العنوان بتاعي وكده» — and the way back existed but was
-        labelled «رجوع», which reads as "undo", not as "check your address".
-
-        It renders from `order`, not from the form state, so it shows what the
-        SERVER has: after a resume those can differ, and the parcel follows the
-        server's copy.
-      */}
-      {order ? (
-        <p className="course-subscribe__hint">
-          {/* `governorateCode` is what the order row carries; the readable name
-              lives on the taxonomy this panel already loaded. Falling back to
-              the code rather than dropping the field keeps the line honest when
-              the taxonomy has not arrived yet. */}
-          {[
-            order.fullName,
-            taxonomy?.governorates.find((g) => g.code === order.governorateCode)?.nameAr ??
-              order.governorateCode,
-            order.city,
-            order.addressStreet,
-          ]
-            .filter(Boolean)
-            .join(c.itemSeparator)}{' '}
-          <button
-            type="button"
-            className="pay-choice__back"
-            onClick={() => setStep('address')}
-          >
-            {c.editAddress}
-          </button>
-        </p>
-      ) : null}
-
-      {/* The rail question comes before anything carrying a number — see the
-          note in `subscribe-panel.tsx`. */}
-      {!railConfirmed ? (
-        <PaymentMethodChoice
-          value={rail}
-          // One tap: pick the rail AND move on. There is no confirm button —
-          // see `PaymentMethodChoice`.
-          onChange={(next) => {
-            setRail(next);
-            setRailConfirmed(true);
-          }}
-          available={{ instapay: Boolean(instapay), vodafoneCash: Boolean(vodafoneCash) }}
-        />
-      ) : (
-        <>
-          <button type="button" onClick={() => setRailConfirmed(false)} className="pay-choice__back">
-            {copy.subscribe.railChange}
-          </button>
-
-          <p className="course-subscribe__instructions">
-            {formatCopy(c.instructions, { number: localNumber, rail: railName })}
-          </p>
-
-          <PaymentBrand rail={rail ?? 'instapay'} className="course-subscribe__brand" />
-
-      <div className="course-subscribe__number-row">
-        <span dir="ltr" className="course-subscribe__number">
-          {localNumber}
-        </span>
-        <input
-          ref={numberInputRef}
-          readOnly
-          dir="ltr"
-          value={localNumber}
-          aria-hidden="true"
-          tabIndex={-1}
-          className="sr-only"
-        />
-        <button type="button" onClick={copyNumber} className="course-subscribe__copy">
-          {copied ? copy.subscribe.copied : copy.subscribe.copyNumber}
-        </button>
+        </dl>
       </div>
+    </aside>
+  );
+}
 
-      <div>
-        <Label htmlFor="book-order-sender-phone">{copy.subscribe.senderPhoneLabel}</Label>
-        <Input
-          id="book-order-sender-phone"
-          type="tel"
-          inputMode="tel"
-          dir="ltr"
-          placeholder="01xxxxxxxxx"
-          value={senderPhone}
-          onChange={(event) => setSenderPhone(event.target.value)}
-          disabled={submitting}
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="book-order-screenshot">{copy.subscribe.screenshotLabel}</Label>
-        <input
-          ref={fileInputRef}
-          id="book-order-screenshot"
-          type="file"
-          /* `image/*`, not the API's allowlist.
-
-             The narrow list greyed out a real share of the photo library on
-             iOS, where pictures are HEIC and HEIC is not on that allowlist —
-             the student taps a screenshot that is visibly there and the picker
-             refuses to hand it over, so the form still says «ارفع صورة إثبات
-             التحويل» and there is nothing on screen explaining why.
-
-             Safe to widen because the upload no longer sends what the picker
-             returns: `compressImage` re-encodes to JPEG first, and the API's
-             own allowlist is still the gate. Same value the homework picker
-             has always used. */
-          accept="image/*"
-          onChange={handleFileChange}
-          disabled={submitting}
-          className="sr-only"
-        />
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={submitting}
-          className="course-subscribe__upload"
-        >
-          {previewUrl ? (
-            <img src={previewUrl} alt="" className="course-subscribe__upload-preview" />
-          ) : (
-            <span className="course-subscribe__upload-icon" aria-hidden="true">
-              <ImagePlus className="size-6" strokeWidth={2} />
-            </span>
-          )}
-          <span className="course-subscribe__upload-text">
-            {file ? file.name : copy.subscribe.screenshotPlaceholder}
-          </span>
-          {file ? (
-            <span className="course-subscribe__upload-change">{copy.subscribe.screenshotChange}</span>
-          ) : null}
-        </button>
-        <p className="course-subscribe__hint">
-          {formatCopy(copy.subscribe.screenshotHint, { rail: railName })}
-        </p>
-      </div>
-
+/** A labelled field with its own message line. */
+function Field({
+  id,
+  label,
+  error,
+  hint,
+  full,
+  children,
+}: {
+  id: string;
+  label: string;
+  error?: string;
+  hint?: string;
+  /** Spans both columns of the form grid. */
+  full?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cn('bco-field', full && 'bco-field--full')}>
+      <Label htmlFor={id} className="bco-field__label">
+        {label}
+      </Label>
+      {children}
       {error ? (
-        <p role="alert" className="course-subscribe__error">
+        <p id={`${id}-error`} className="bco-field__error">
+          <TriangleAlert size={14} aria-hidden="true" />
+          {error}
+        </p>
+      ) : hint ? (
+        <p className="bco-field__hint">{hint}</p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The footer: the total on one side, the action on the other, and a request
+ * error — the one kind of message that is about no single field — above both.
+ */
+function FooterBar({
+  error,
+  total,
+  note,
+  secondary,
+  primary,
+}: {
+  error?: string | null;
+  total?: ReactNode;
+  note?: string;
+  secondary?: ReactNode;
+  primary?: ReactNode;
+}) {
+  return (
+    <div className="bco__foot">
+      {error ? (
+        <p role="alert" className="bco__alert">
+          <TriangleAlert size={16} aria-hidden="true" />
           {error}
         </p>
       ) : null}
-
-      <div className="course-subscribe__actions">
-        <Button type="button" onClick={submitPayment} disabled={submitting}>
-          {submitting ? c.submitting : c.submit}
-        </Button>
-        <button
-          type="button"
-          className="course-subscribe__cancel"
-          onClick={() => setStep('address')}
-          disabled={submitting}
-        >
-          {c.back}
-        </button>
+      <div className={cn('bco__bar', !total && 'bco__bar--bare')}>
+        {total ? (
+          <div className="bco-total">
+            <span className="bco-total__label">{copy.books.total}</span>
+            <span className="bco-total__value">{total}</span>
+            {note ? <span className="bco-total__note">{note}</span> : null}
+          </div>
+        ) : null}
+        <div className="bco__actions">
+          {secondary}
+          {primary}
+        </div>
       </div>
-        </>
-      )}
     </div>
   );
 }

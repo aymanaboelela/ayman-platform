@@ -56,8 +56,9 @@ export function BookOrderButton({
   return (
     <div className="course-start">
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent closeLabel={copy.bookOrder.back}>
-          <DialogHeader>
+        {/* `bco-dialog` — the checkout's own layout; see `book-checkout.css`. */}
+        <DialogContent closeLabel={copy.bookOrder.back} className="bco-dialog">
+          <DialogHeader className="bco-dialog__head">
             <DialogTitle>{bookTitle}</DialogTitle>
           </DialogHeader>
           {/* ⚠️ The breakdown MOVED INTO the panel. It has to update when the
@@ -66,6 +67,7 @@ export function BookOrderButton({
               question, sitting directly above the live one. */}
           <BookOrderPanel
             courseId={courseId}
+            summaryLines={[{ title: bookTitle, quantity: 1, unitCents: bookPriceCents }]}
             itemsCents={bookPriceCents}
             shippingRates={shippingRates}
             instapay={instapay}

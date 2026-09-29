@@ -1279,8 +1279,9 @@
 
 /* ---------- checkout dialog ---------- */
 
-/* `.books-checkout` and `.books-checkout__summary` are in `globals.css`: the
-   dialog portals into `<body>`, where no `--site-*` token exists. */
+/* The checkout dialog is styled by `components/site/book-checkout.css`, which
+   its panel imports: the dialog portals into `<body>`, where no `--site-*`
+   token exists. */
 
 /* ---------------------------------------------------------------------------
    .books-strip — the landing page's books section.

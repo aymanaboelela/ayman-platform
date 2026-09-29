@@ -1,0 +1,1257 @@
+/* ============================================================================
+   The book-order checkout — `BookOrderPanel`, and the dialog that holds it.
+
+   ## Tokens: `:root` only
+
+   The panel renders inside a Radix dialog, and a dialog portals into `<body>`
+   — outside `.site` on `/books` and the course page, outside `.store-surface`
+   on `/store`, and under `(app)` on the dashboard and the resume page. A
+   `--site-*` token resolves to NOTHING in any of those; the summary once
+   rendered with no background because of exactly that. Everything here is a
+   `--n-*` / `--a-*` / status token from `packages/ui/src/tokens/color.css`,
+   which exists everywhere and flips with `data-theme` on its own.
+   `lib/books-dialog-tokens.test.ts` holds this file to that.
+
+   `--a-*` is the ACTION ramp (amber by default, the tenant's accent when an
+   admin picks one), and the dialog's own chrome and its primary button are
+   painted with it — so the step bar, the amount and the buttons agree.
+
+   ## The frame
+
+       ┌ .bco-dialog (DialogContent) ─────────────────────────────┐
+       │ .bco-dialog__head   title                            ×   │
+       │ .bco ┌ .bco-steps   ① الطلب ── ② العنوان ── ③ الدفع       │
+       │      ├ .bco__scroll  (the ONLY thing that scrolls)       │
+       │      │   .bco__layout  form · summary                     │
+       │      └ .bco__foot    total              رجوع  [التالي ←] │
+       └───────────────────────────────────────────────────────────┘
+
+   The footer is OUTSIDE the scrolling body. It used to be a sticky row inside
+   it, which is why a field could slide under the buttons and why it had a hard
+   edge: now the body simply ends where the footer begins.
+
+   On a phone the dialog is a bottom sheet; from 48rem it is a centred dialog
+   up to 58rem wide, and once the panel itself is 44rem wide the summary moves
+   beside the form. That last switch is a CONTAINER query on `.bco`, because
+   the same panel also sits in a page column on the resume screen.
+   ============================================================================ */
+
+/* ---------- the dialog shell ---------- */
+
+/* Every declaration here overrides a Tailwind utility on `DialogContent`, and
+   wins because this file is unlayered and the utilities are not. */
+.bco-dialog {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(ellipse 90% 11rem at 50% 0%, color-mix(in oklch, var(--a-9), transparent 88%), transparent 72%),
+    var(--n-2);
+}
+
+/* A bottom sheet on a phone: full width, anchored to the floor, rounded on top.
+   `translate` is what Tailwind's `-translate-x-1/2` sets. */
+@media (max-width: 47.999rem) {
+  .bco-dialog {
+    inset-inline: 0;
+    inset-block: auto 0;
+    translate: none;
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - 0.75rem);
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+    border-block-end-width: 0;
+  }
+}
+
+@media (min-width: 48rem) {
+  .bco-dialog {
+    max-width: min(58rem, calc(100vw - 3rem));
+    max-height: calc(100dvh - 3rem);
+  }
+}
+
+/*
+ * The keyboard is up (`BookOrderPanel` writes these from `visualViewport`).
+ * Neither mobile browser shrinks the LAYOUT viewport for it, so without this
+ * the sheet's footer and lower fields sat behind the keyboard. Lifted to sit on
+ * it, capped to what is visible; the body scrolls the focused field into view.
+ */
+.bco-dialog[data-keyboard='open'] {
+  max-height: calc(var(--bco-vvh, 100dvh) - 0.5rem);
+}
+
+@media (max-width: 47.999rem) {
+  .bco-dialog[data-keyboard='open'] {
+    inset-block-end: var(--bco-kb, 0px);
+  }
+}
+
+@media (min-width: 48rem) {
+  .bco-dialog[data-keyboard='open'] {
+    top: calc(var(--bco-vvtop, 0px) + var(--bco-vvh, 100dvh) / 2);
+  }
+}
+
+/* The step bar is the first thing to give up its room to the keyboard. */
+.bco-dialog[data-keyboard='open'] .bco-steps {
+  display: none;
+}
+
+/* The dialog box itself takes focus when a step swaps out the button that had
+   it (Radix keeps focus inside). It is not a control, so it draws no ring —
+   the next Tab lands on a real one, which does. */
+.bco-dialog:focus-visible {
+  outline: none;
+}
+
+.bco-dialog__head {
+  margin: 0;
+  padding: 1.125rem 1.25rem 0.75rem;
+  /* Clears the dialog's own × in the inline-end corner. */
+  padding-inline-end: 3.5rem;
+}
+
+/* ---------- the panel frame ---------- */
+
+.bco {
+  /* The two surfaces a card and a field sit on. Local names for existing
+     tokens, set per theme: a card is one step LIGHTER than the dialog in both
+     themes (n-1 on n-2 in light, n-3 on n-2 in dark), a field one step in. */
+  --bco-card: var(--n-1);
+  --bco-field: var(--n-2);
+
+  container: bco / inline-size;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* On a page (the resume screen) the panel is its own card. */
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  background: var(--n-2);
+  overflow: hidden;
+}
+
+:root[data-theme='dark'] .bco {
+  --bco-card: var(--n-3);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .bco {
+    --bco-card: var(--n-3);
+  }
+}
+
+/* Inside the dialog it IS the dialog: no second border, no second fill. */
+.bco-dialog .bco {
+  flex: 1 1 auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.bco__scroll {
+  padding: 0.25rem 1.25rem 1.25rem;
+}
+
+.bco-dialog .bco__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.bco__layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* On a phone the summary comes FIRST, folded — what is being bought, then the
+   form. It is after the form in the source so a wide layout can put it in the
+   second column without reordering anything for a screen reader there. */
+.bco__layout--split .bco-sum {
+  order: -1;
+}
+
+@container bco (min-width: 44rem) {
+  .bco__layout--split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 18.5rem;
+    align-items: start;
+    gap: 1.25rem;
+  }
+
+  .bco__layout--split .bco-sum {
+    order: 0;
+    position: sticky;
+    top: 0;
+  }
+}
+
+.bco__main {
+  min-width: 0;
+}
+
+.bco-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+/* ---------- the step bar ---------- */
+
+.bco-steps {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 1.125rem 1.25rem 1rem;
+  list-style: none;
+}
+
+/* In the dialog the title row above already gives it air. */
+.bco-dialog .bco-steps {
+  padding-top: 0.25rem;
+}
+
+.bco-steps__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: var(--fw-medium);
+  color: var(--n-11);
+}
+
+.bco-steps__item:last-child {
+  flex: 0 0 auto;
+}
+
+/* The rail between two stops — filled once the stop before it is done. */
+.bco-steps__item:not(:last-child)::after {
+  content: '';
+  flex: 1 1 auto;
+  min-width: 0.75rem;
+  block-size: 2px;
+  margin-inline: 0.25rem 0.5rem;
+  border-radius: var(--r-full);
+  background: var(--border-strong);
+}
+
+.bco-steps__item[data-state='done']::after {
+  background: var(--a-9);
+}
+
+.bco-steps__dot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 1.875rem;
+  block-size: 1.875rem;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  background: var(--bco-card);
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--n-11);
+}
+
+.bco-steps__item[data-state='current'] .bco-steps__dot {
+  border-color: var(--a-9);
+  background: color-mix(in oklch, var(--a-9), transparent 82%);
+  color: var(--a-11);
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--a-9), transparent 86%);
+}
+
+.bco-steps__item[data-state='done'] .bco-steps__dot {
+  border-color: var(--a-9);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+}
+
+.bco-steps__item[data-state='current'] .bco-steps__label {
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.bco-steps__label {
+  white-space: nowrap;
+}
+
+/* ---------- cards and the form grid ---------- */
+
+.bco-card {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--bco-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.bco-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.bco-card__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: 0.75rem;
+  background: color-mix(in oklch, var(--a-9), transparent 82%);
+  color: var(--a-11);
+}
+
+.bco-card__title {
+  font-size: 1rem;
+  font-weight: var(--fw-bold);
+  line-height: 1.4;
+  color: var(--n-12);
+}
+
+.bco-card__lead {
+  margin-top: 0.125rem;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--n-11);
+}
+
+.bco-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.875rem 1rem;
+}
+
+@container bco (min-width: 30rem) {
+  .bco-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bco-field--full,
+  .bco-zone {
+    grid-column: 1 / -1;
+  }
+}
+
+.bco-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bco-field__label {
+  margin-bottom: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+/* Taller, rounder and one step inset from the card — the `Input`/`Select`
+   utilities are overridden here, not edited, since every other form uses them. */
+.bco-input {
+  height: auto;
+  min-block-size: 2.875rem;
+  padding-inline: 0.875rem;
+  border-radius: 0.75rem;
+  border-color: var(--border-strong);
+  background: var(--bco-field);
+  transition:
+    border-color var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease);
+}
+
+.bco-input:focus-visible {
+  border-color: var(--a-9);
+  background: var(--bco-card);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--a-9), transparent 75%);
+}
+
+.bco-input[aria-invalid='true'] {
+  border-color: var(--err);
+  background: color-mix(in oklch, var(--err), transparent 94%);
+}
+
+/* A phone number is typed left to right, but it lines up with the Arabic
+   labels above it. `end` of an `ltr` box is its right edge. */
+.bco-input--ltr {
+  text-align: end;
+}
+
+.bco-input--note {
+  min-block-size: 2.875rem;
+  padding-block: 0.625rem;
+  resize: vertical;
+}
+
+.bco-field__error {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: var(--fw-medium);
+  line-height: 1.5;
+  color: var(--err);
+}
+
+.bco-field__error svg {
+  flex: none;
+}
+
+.bco-field__hint {
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--n-11);
+}
+
+/* Which delivery zone the governorate is in, and its fee. */
+.bco-zone {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.875rem;
+  border: 1px solid color-mix(in oklch, var(--a-9), transparent 62%);
+  background: color-mix(in oklch, var(--a-9), transparent 88%);
+  font-size: 0.875rem;
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+.bco-zone svg {
+  flex: none;
+  color: var(--a-11);
+}
+
+.bco-zone__name {
+  flex: 1;
+  min-width: 0;
+}
+
+.bco-zone__price {
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
+  color: var(--a-11);
+}
+
+/* ---------- the order summary ---------- */
+
+.bco-sum {
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--bco-card);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.bco-sum__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  inline-size: 100%;
+  padding: 0.75rem 0.875rem;
+  border: 0;
+  background: color-mix(in oklch, var(--a-9), transparent 90%);
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.bco-sum__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 1.875rem;
+  block-size: 1.875rem;
+  border-radius: 0.625rem;
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+}
+
+.bco-sum__title {
+  font-size: 0.9375rem;
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.bco-sum__count {
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--r-full);
+  border: 1px solid var(--border);
+  background: var(--bco-card);
+  font-size: 0.75rem;
+  font-weight: var(--fw-bold);
+  color: var(--a-11);
+  white-space: nowrap;
+}
+
+.bco-sum__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-inline-start: auto;
+  font-size: 0.8125rem;
+  font-weight: var(--fw-semibold);
+  color: var(--a-11);
+}
+
+.bco-sum__toggle svg {
+  transition: rotate var(--d-hover) var(--ease);
+}
+
+.bco-sum[data-open='true'] .bco-sum__toggle svg {
+  rotate: 180deg;
+}
+
+.bco-sum[data-open='false'] .bco-sum__body {
+  display: none;
+}
+
+.bco-sum__body {
+  padding: 0.75rem 0.875rem 0.875rem;
+}
+
+/* Beside the form there is room to show it all, always — the fold is for a
+   phone, where the form is the thing being done. */
+@container bco (min-width: 44rem) {
+  .bco-sum__head {
+    cursor: default;
+  }
+
+  .bco-sum__toggle {
+    display: none;
+  }
+
+  .bco-sum[data-open='false'] .bco-sum__body {
+    display: block;
+  }
+}
+
+.bco-sum__lines {
+  display: grid;
+  gap: 0.625rem;
+  margin: 0;
+  padding: 0 0 0.75rem;
+  list-style: none;
+  border-bottom: 1px dashed var(--border-strong);
+}
+
+.bco-sum__line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--n-12);
+}
+
+.bco-sum__qty {
+  padding: 0.0625rem 0.4375rem;
+  border-radius: var(--r-full);
+  background: var(--bco-field);
+  font-size: 0.75rem;
+  font-weight: var(--fw-bold);
+  color: var(--n-11);
+}
+
+.bco-sum__line-price {
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+.bco-sum__rows {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+}
+
+.bco-sum__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: var(--n-11);
+}
+
+.bco-sum__row dd {
+  margin: 0;
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+  white-space: nowrap;
+}
+
+/* «الشحن» and, under it, WHICH zone — the thing that makes the number make
+   sense, and the thing that changes when the governorate does. */
+.bco-sum__zone {
+  display: block;
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  font-weight: var(--fw-semibold);
+  color: var(--a-11);
+}
+
+.bco-sum__pending {
+  font-weight: var(--fw-medium);
+  color: var(--n-11);
+}
+
+.bco-sum__row--discount dd {
+  color: var(--ok);
+}
+
+/* ---------- a price ---------- */
+
+.bco-money {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+.bco-money__unit {
+  font-size: 0.72em;
+  font-weight: var(--fw-medium);
+  opacity: 0.75;
+}
+
+/* ---------- payment ---------- */
+
+/* The figure to send — first, largest, and copyable. */
+.bco-amount {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 1rem 1.125rem;
+  border-radius: 1.125rem;
+  border: 1px solid color-mix(in oklch, var(--a-9), transparent 50%);
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--a-9), transparent 74%),
+    color-mix(in oklch, var(--a-9), transparent 92%)
+  );
+}
+
+.bco-amount__icon {
+  display: grid;
+  place-items: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: 50%;
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  box-shadow: 0 8px 18px -10px var(--a-9);
+}
+
+.bco-amount__label {
+  font-size: 0.8125rem;
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+}
+
+.bco-amount__value {
+  font-size: 1.875rem;
+  font-weight: var(--fw-bold);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  color: var(--n-12);
+}
+
+.bco-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  min-block-size: 2.5rem;
+  padding-inline: 0.875rem;
+  border-radius: var(--r-full);
+  border: 1px solid color-mix(in oklch, var(--a-9), transparent 45%);
+  background: var(--bco-card);
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
+  color: var(--a-11);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--d-hover) var(--ease),
+    border-color var(--d-hover) var(--ease);
+}
+
+.bco-copy:hover {
+  border-color: var(--a-9);
+}
+
+.bco-copy--solid {
+  border-color: transparent;
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+}
+
+.bco-copy--solid:hover {
+  background: var(--a-10);
+}
+
+/* Where the parcel is going, on the screen that asks for the money. */
+.bco-recap {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 1rem;
+  border: 1px dashed var(--border-strong);
+  background: var(--bco-card);
+}
+
+.bco-recap__icon {
+  display: grid;
+  place-items: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: 0.625rem;
+  background: color-mix(in oklch, var(--a-9), transparent 84%);
+  color: var(--a-11);
+}
+
+.bco-recap__label {
+  font-size: 0.75rem;
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+}
+
+.bco-recap__value {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--n-12);
+}
+
+@container bco (max-width: 29.999rem) {
+  .bco-recap .bco-link {
+    grid-column: 2;
+    justify-self: start;
+    margin-inline-start: -0.5rem;
+  }
+}
+
+.bco-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.3125rem 0.5rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
+  color: var(--a-11);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.bco-link:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--a-9), transparent 86%);
+}
+
+.bco-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The rail question, in its card. `.pay-choice*` is the shared component's
+   own styling (globals.css) and the course subscribe flow uses it untouched;
+   these are the touches it gets inside the checkout only. */
+.bco .pay-choice__question {
+  font-size: 1rem;
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+/* Side by side even on a phone — two marks are narrow enough, and one above
+   the other pushed the second rail below the fold. */
+.bco .pay-choice__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.bco .pay-choice__card {
+  min-block-size: 6.5rem;
+  border-radius: 1rem;
+  background: var(--bco-field);
+}
+
+/* Payment, as three numbered stops. */
+.bco-paysteps {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bco-paystep {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--bco-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.bco-paystep__num {
+  display: grid;
+  place-items: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: 50%;
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  font-size: 0.875rem;
+  font-weight: var(--fw-bold);
+}
+
+.bco-paystep__body {
+  min-width: 0;
+}
+
+.bco-paystep__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.bco-paystep__title {
+  padding-top: 0.25rem;
+  font-size: 0.9375rem;
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+/* The number to send to: the provider's mark over it, the digits large and
+   left-to-right, and the copy button beside them. */
+.bco-number {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.625rem 0.75rem;
+  padding: 0.875rem;
+  border-radius: 0.875rem;
+  border: 1px solid var(--border);
+  background: var(--bco-field);
+}
+
+.bco-number__brand {
+  grid-column: 1 / -1;
+  block-size: 1.5rem;
+  inline-size: auto;
+  max-inline-size: 100%;
+  object-fit: contain;
+  justify-self: start;
+}
+
+.bco-number__value {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-size: 1.375rem;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--n-12);
+  justify-self: start;
+  /* Eleven digits read as ONE number; broken across two lines they read as
+     two, and the second half is the part people mistype. */
+  white-space: nowrap;
+}
+
+/* A phone: the number gets the whole row and the copy button the row under
+   it, full width — the one thing on this screen most worth hitting first time. */
+@container bco (max-width: 29.999rem) {
+  .bco-number__value,
+  .bco-number .bco-copy {
+    grid-column: 1 / -1;
+  }
+
+  .bco-number__value {
+    font-size: 1.5rem;
+  }
+
+  .bco-paystep {
+    grid-template-columns: 1.75rem minmax(0, 1fr);
+    gap: 0.625rem;
+    padding: 0.875rem;
+  }
+
+  .bco-paystep__num {
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    font-size: 0.8125rem;
+  }
+}
+
+/* The proof: a real target, not a slim row — and green once a picture is in. */
+.bco-upload {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  inline-size: 100%;
+  min-block-size: 5.25rem;
+  padding: 0.875rem 1rem;
+  border-radius: 1rem;
+  border: 2px dashed color-mix(in oklch, var(--a-9), transparent 45%);
+  background: color-mix(in oklch, var(--a-9), transparent 93%);
+  color: var(--n-11);
+  text-align: start;
+  cursor: pointer;
+  transition:
+    border-color var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease);
+}
+
+.bco-upload:hover:not(:disabled) {
+  border-color: var(--a-9);
+  background: color-mix(in oklch, var(--a-9), transparent 87%);
+}
+
+.bco-upload:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.bco-upload--filled {
+  border-style: solid;
+  border-color: color-mix(in oklch, var(--ok), transparent 45%);
+  background: color-mix(in oklch, var(--ok), transparent 92%);
+}
+
+.bco-upload__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 3rem;
+  block-size: 3rem;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in oklch, var(--a-9), transparent 50%);
+  background: var(--bco-card);
+  color: var(--a-11);
+}
+
+.bco-upload__preview {
+  flex: none;
+  inline-size: 3.5rem;
+  block-size: 3.5rem;
+  border-radius: 0.625rem;
+  border: 1px solid var(--border);
+  object-fit: cover;
+}
+
+.bco-upload__text {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.bco-upload__name {
+  font-size: 0.9375rem;
+  font-weight: var(--fw-semibold);
+  line-height: 1.5;
+  color: var(--n-12);
+}
+
+/* A FILE name is cut to one line — a camera roll's are long and meaningless.
+   The prompt before it is a sentence and wraps. */
+.bco-upload--filled .bco-upload__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bco-upload__change {
+  font-size: 0.8125rem;
+  font-weight: var(--fw-bold);
+  color: var(--a-11);
+}
+
+/* ---------- the footer ---------- */
+
+.bco__foot {
+  flex: none;
+  position: relative;
+  z-index: 1;
+  padding: 0.875rem 1.25rem calc(0.875rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+  background: var(--bco-card);
+  box-shadow: 0 -12px 24px -20px color-mix(in oklch, var(--n-12), transparent 55%);
+}
+
+.bco__alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.75rem;
+  background: color-mix(in oklch, var(--err), transparent 90%);
+  font-size: 0.8125rem;
+  font-weight: var(--fw-semibold);
+  line-height: 1.6;
+  color: var(--err);
+}
+
+.bco__alert svg {
+  flex: none;
+  margin-top: 0.1875rem;
+}
+
+.bco__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+.bco__bar--bare {
+  justify-content: flex-end;
+}
+
+.bco-total {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  column-gap: 0.5rem;
+  margin-inline-end: auto;
+}
+
+.bco-total__label {
+  font-size: 0.8125rem;
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+}
+
+.bco-total__value {
+  font-size: 1.375rem;
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
+  color: var(--n-12);
+}
+
+.bco-total__note {
+  grid-column: 1 / -1;
+  font-size: 0.75rem;
+  color: var(--n-11);
+}
+
+.bco__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bco-secondary {
+  min-block-size: 2.75rem;
+  padding-inline: 0.875rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: transparent;
+  font-size: 0.875rem;
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+  cursor: pointer;
+  transition:
+    background-color var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease);
+}
+
+.bco-secondary:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--n-12), transparent 93%);
+  color: var(--n-12);
+}
+
+.bco-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bco-primary {
+  height: auto;
+  min-block-size: 3rem;
+  padding-inline: 1.375rem;
+  border-radius: 0.875rem;
+  font-size: 1rem;
+  font-weight: var(--fw-bold);
+  box-shadow: 0 10px 22px -12px var(--a-9);
+}
+
+/* A phone: the total and «رجوع» share the first row, and the action gets the
+   whole second one — the widest, lowest target on the screen, under the thumb. */
+@container bco (max-width: 29.999rem) {
+  .bco__bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .bco__actions {
+    display: contents;
+  }
+
+  .bco-total {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+  }
+
+  .bco-secondary {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .bco-primary {
+    grid-column: 1 / -1;
+    inline-size: 100%;
+  }
+
+  .bco__bar--bare .bco-secondary {
+    grid-column: 1 / -1;
+    justify-self: center;
+    text-align: center;
+    white-space: normal;
+  }
+}
+
+/* ---------- finished, waiting, and nothing to sell ---------- */
+
+.bco-done {
+  display: grid;
+  justify-items: center;
+  gap: 0.625rem;
+  padding: 1.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--bco-card);
+  text-align: center;
+}
+
+.bco-done__icon {
+  display: grid;
+  place-items: center;
+  inline-size: 4rem;
+  block-size: 4rem;
+  margin-bottom: 0.25rem;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--a-9), transparent 82%);
+  color: var(--a-11);
+}
+
+.bco-done--success .bco-done__icon {
+  background: color-mix(in oklch, var(--ok), transparent 84%);
+  color: var(--ok);
+  box-shadow: 0 0 0 0.5rem color-mix(in oklch, var(--ok), transparent 92%);
+}
+
+.bco-done__title {
+  font-size: 1.3125rem;
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.bco-done__body {
+  max-width: 36ch;
+  font-size: 0.9375rem;
+  line-height: 1.8;
+  color: var(--n-11);
+}
+
+/* «إنت طلبت الكتاب ده قبل كده» — a question, so a warning tone, not an error. */
+.bco-warn {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.875rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in oklch, var(--warn), transparent 55%);
+  background: color-mix(in oklch, var(--warn), transparent 90%);
+}
+
+.bco-warn__icon {
+  color: var(--warn);
+}
+
+.bco-warn__title {
+  font-size: 1rem;
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.bco-warn__body {
+  margin-top: 0.375rem;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: var(--n-11);
+}
+
+.bco-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2.5rem 1rem;
+  font-size: 0.9375rem;
+  color: var(--n-11);
+}
+
+.bco-loading__spin {
+  flex: none;
+  animation: bco-spin 0.9s linear infinite;
+}
+
+@keyframes bco-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bco-loading__spin {
+    animation-duration: 2.4s;
+  }
+
+  .bco-sum__toggle svg {
+    transition: none;
+  }
+}
+
+.bco-unavailable {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+  border-radius: 0.875rem;
+  border: 1px solid color-mix(in oklch, var(--warn), transparent 55%);
+  background: color-mix(in oklch, var(--warn), transparent 90%);
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: var(--n-12);
+}
+
+.bco-unavailable svg {
+  flex: none;
+  margin-top: 0.1875rem;
+  color: var(--warn);
+}
