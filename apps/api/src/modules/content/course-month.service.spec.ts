@@ -337,12 +337,13 @@ describe('CourseMonthService', () => {
       const months = await service.fill(courseId, 10);
 
       expect(months.map((month) => month.monthIndex)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-      // The two he made keep their names; the new ones are «شهر N» in the
-      // digits the rest of the page uses.
+      // The two he made keep their names; the new ones are born by ordinal —
+      // «الشهر الثاني», never «شهر ٢», which is what the student read on the
+      // checkout.
       expect(months[0]?.title).toBe('شهر ١ — أكتوبر');
       expect(months[3]?.title).toBe('مراجعة');
-      expect(months[1]?.title).toBe('شهر ٢');
-      expect(months[9]?.title).toBe('شهر ١٠');
+      expect(months[1]?.title).toBe('الشهر الثاني');
+      expect(months[9]?.title).toBe('الشهر العاشر');
       // Closed, every one — nothing a student can see or buy has changed.
       expect(months.every((month) => !month.isOpen)).toBe(true);
     });
