@@ -60,6 +60,7 @@ export type CourseDefaults = {
   /** اكتمل نزول المحتوى — gates «خلصت الكورس» on the student's screens. */
   contentComplete: boolean;
   watermarkPhone: boolean;
+  watermarkName: boolean;
   /** EGP cents — `null` means that plan is not for sale on this course. */
   monthlyPriceCents: number | null;
   /* No `quarterlyPriceCents`. «٣ شهور» is off the shelf: the API refuses a
@@ -165,6 +166,7 @@ type Draft = {
   whatsappGroupUrl: string;
   contentComplete: boolean;
   watermarkPhone: boolean;
+  watermarkName: boolean;
   /**
    * EGP POUNDS, as text — `''` is «مش للبيع». The wire fields are cents;
    * `formDataOf` is the one place that multiplies by 100, so the draft never
@@ -266,6 +268,7 @@ function formDataOf(draft: Draft, sellsTerms = false): FormData {
   // endpoint, not "set it false".
   data.set('contentComplete', draft.contentComplete ? 'true' : 'false');
   data.set('watermarkPhone', draft.watermarkPhone ? 'true' : 'false');
+  data.set('watermarkName', draft.watermarkName ? 'true' : 'false');
   return data;
 }
 
@@ -318,6 +321,7 @@ export function CourseForm({
     whatsappGroupUrl: defaults?.whatsappGroupUrl ?? '',
     contentComplete: defaults?.contentComplete ?? false,
     watermarkPhone: defaults?.watermarkPhone ?? false,
+    watermarkName: defaults?.watermarkName ?? true,
     monthlyPrice:
       defaults?.monthlyPriceCents != null ? String(defaults.monthlyPriceCents / 100) : '',
     yearlyPrice: defaults?.yearlyPriceCents != null ? String(defaults.yearlyPriceCents / 100) : '',
@@ -952,10 +956,27 @@ export function CourseForm({
         </div>
 
         {/*
-          The name over an uploaded lecture is always drawn; the phone number
-          with it is this switch, course by course, and it starts off.
+          What is drawn over the lecture, course by course: the name (on by
+          default — it is the watermark) and the phone beside it (off).
         */}
-        <div className="rounded-[var(--r-md)] border border-line-subtle bg-surface-3 p-3">
+        <div className="space-y-3 rounded-[var(--r-md)] border border-line-subtle bg-surface-3 p-3">
+          <input type="hidden" name="watermarkName" value="false" />
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              name="watermarkName"
+              value="true"
+              checked={draft.watermarkName}
+              onChange={(event) => update({ watermarkName: event.target.checked })}
+              className="mt-1"
+            />
+            <span>
+              <span className="block text-fg">{copy.admin.course.watermarkName}</span>
+              <span className="block text-[length:var(--fs-text-sm)] text-fg-muted">
+                {copy.admin.course.watermarkNameHint}
+              </span>
+            </span>
+          </label>
           <input type="hidden" name="watermarkPhone" value="false" />
           <label className="flex items-start gap-2">
             <input

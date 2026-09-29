@@ -36,6 +36,7 @@ const AdminCourseDetailSchema = z.object({
   contentComplete: z.boolean(),
   /** Same reason again: parsed here or the switch opens off and autosaves off. */
   watermarkPhone: z.boolean(),
+  watermarkName: z.boolean(),
   monthlyPriceCents: z.number().int().nullable(),
   /** ⚠️ HISTORY ONLY. Nothing on this screen renders it any more — «٣ شهور»
    *  is off the shelf and `course-form.tsx` has no field for it. Parsed

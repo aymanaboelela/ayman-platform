@@ -162,6 +162,13 @@ function readWatermarkPhone(formData: FormData): boolean {
   return values[values.length - 1] === 'true';
 }
 
+/** «اظهر اسم الطالب على الفيديو». The same pair, but ON when the field is
+ *  absent: the name is the watermark every course had before the switch. */
+function readWatermarkName(formData: FormData): boolean {
+  const values = formData.getAll('watermarkName');
+  return values.length === 0 ? true : values[values.length - 1] === 'true';
+}
+
 /**
  * The card's badge, or `null` for «من غير شارة».
  *
@@ -238,6 +245,7 @@ export async function createCourseAction(formData: FormData): Promise<void> {
     whatsappGroupUrl: readOptionalText(formData, 'whatsappGroupUrl'),
     contentComplete: readContentComplete(formData),
     watermarkPhone: readWatermarkPhone(formData),
+    watermarkName: readWatermarkName(formData),
     coverKey: readOptionalText(formData, 'coverKey'),
     requiresGrant: readRequiresGrant(formData),
     monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
@@ -336,6 +344,7 @@ export async function updateCourseAction(
       whatsappGroupUrl: readOptionalText(formData, 'whatsappGroupUrl'),
       contentComplete: readContentComplete(formData),
       watermarkPhone: readWatermarkPhone(formData),
+    watermarkName: readWatermarkName(formData),
       coverKey: readOptionalText(formData, 'coverKey'),
       requiresGrant: readRequiresGrant(formData),
       monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),

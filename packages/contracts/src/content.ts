@@ -224,6 +224,9 @@ const courseWritableShape = {
   /** اظهر رقم الطالب على الفيديو. Off on create — the name alone is drawn
    *  until the instructor turns this on for the course. */
   watermarkPhone: z.boolean().default(false),
+  /** اسم الطالب على الفيديو. On on create — the name is the watermark; the
+   *  teacher turns it off per course. */
+  watermarkName: z.boolean().default(true),
   /**
    * Subscription prices, EGP CENTS — `null` means that plan is not for sale.
    * Independent of each other; a course can sell any subset of them.

@@ -176,6 +176,7 @@ export class CourseService {
           whatsappGroupUrl: input.whatsappGroupUrl,
           contentComplete: input.contentComplete,
           watermarkPhone: input.watermarkPhone,
+          watermarkName: input.watermarkName,
           monthlyPriceCents: input.monthlyPriceCents,
           quarterlyPriceCents: input.quarterlyPriceCents,
           yearlyPriceCents: input.yearlyPriceCents,
@@ -321,6 +322,9 @@ export class CourseService {
           }),
           ...(input.watermarkPhone !== undefined && {
             watermarkPhone: input.watermarkPhone,
+          }),
+          ...(input.watermarkName !== undefined && {
+            watermarkName: input.watermarkName,
           }),
           ...(input.monthlyPriceCents !== undefined && {
             monthlyPriceCents: input.monthlyPriceCents,
@@ -1013,6 +1017,7 @@ export class CourseService {
         // Selected for the same reason as the two above: an editor that opens
         // with the switch off would autosave it off.
         watermarkPhone: true,
+        watermarkName: true,
         monthlyPriceCents: true,
         quarterlyPriceCents: true,
         yearlyPriceCents: true,
