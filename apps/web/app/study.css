@@ -2975,18 +2975,51 @@ details[open] > .unit__head .unit__chevron,
   gap: var(--s-8);
 }
 
+.runner-bar__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-8);
+}
+
 .runner-bar__count {
-  font-family: var(--font-mono);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-4) var(--s-8);
   font-variant-numeric: tabular-nums;
-  font-size: var(--fs-mono-label);
+  font-size: var(--fs-text-sm);
   color: var(--n-11);
 }
 
+/* «سؤال ٣ من ٢٠» — the line's subject, so it is the one in full ink. */
+.runner-bar__pos {
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+/* The share done, as a number, at the far end of the meter it describes. A
+   Latin numeral and a percent sign inside an RTL line, so it is isolated —
+   otherwise the bidi algorithm is free to print it as «%40». */
+.runner-bar__pct {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--a-11);
+}
+
 /* Amber: this is the student's POSITION, which is what amber marks everywhere
-   else in the study surface (`LessonProgressBar`, the path map). */
+   else in the study surface (`LessonProgressBar`, the path map).
+
+   8px, not the 3px it was: a hairline meter is a decoration, and this one is
+   the answer to «فاضل كام» on a timed paper — it has to be readable from the
+   corner of an eye that is on the question. */
 .runner-bar__meter {
   display: block;
-  block-size: 3px;
+  block-size: 0.5rem;
   overflow: hidden;
   border-radius: 999px;
   background: var(--n-4);
@@ -3067,51 +3100,355 @@ details[open] > .unit__head .unit__chevron,
 }
 
 /* ── the question ────────────────────────────────────────────────────────── */
+
+/* The card got a top rule in the question's own colour family — ember, the
+   study surface's STRUCTURE hue — so it reads as "the thing on this page" and
+   not as one more bordered rectangle. The rule is a background layer, not a
+   border, so the card's box does not change size and the skeleton in
+   `attempt/[attemptId]/loading.tsx` still lines up with it. */
 .runner-card {
   padding: var(--s-20);
   border: var(--hairline) solid var(--border);
   border-radius: var(--r-lg);
-  background: var(--n-1);
+  background:
+    linear-gradient(90deg, var(--e-stage), var(--e-stage-deep)) top / 100% 4px no-repeat,
+    var(--n-1);
+  box-shadow: var(--shadow-sm);
 }
 
 @media (min-width: 48rem) {
   .runner-card { padding: var(--s-24); }
 }
 
+/* «سؤال ٣» · «إجابة واحدة بس» · «٢ درجة» … and the flag, pushed to the far
+   end. Wraps on a phone rather than squeezing: the flag drops to its own line
+   before any chip breaks mid-word. */
+.qhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8);
+}
+
+/* The question's number is structure — ember, solid, the loudest mark on the
+   card after the options. `--ink-fg` is the text step `.stage` already
+   measures against this exact gradient. */
+.qhead__num {
+  display: inline-flex;
+  align-items: center;
+  block-size: 2rem;
+  padding-inline: var(--s-12);
+  border-radius: var(--r-full);
+  background: linear-gradient(160deg, var(--e-stage), var(--e-stage-deep));
+  color: var(--ink-fg);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  white-space: nowrap;
+}
+
+.qhead__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  block-size: 1.75rem;
+  padding-inline: var(--s-8);
+  border-radius: var(--r-full);
+  border: var(--hairline) solid var(--e-tint-line);
+  background: var(--e-tint);
+  color: var(--e-ink);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+
+.qhead__chip--mark {
+  border-color: var(--border);
+  background: var(--n-3);
+  color: var(--n-11);
+  font-variant-numeric: tabular-nums;
+}
+
+.qhead__flag { margin-inline-start: auto; }
+
+/* The stem is what the student reads three times. One step up from body text,
+   and the measure capped so a long question does not run the full card. */
+.qcard__stem {
+  max-inline-size: var(--w-prose);
+  font-size: var(--fs-text-lg);
+  line-height: var(--lh-text-lg);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+/* ── the options ─────────────────────────────────────────────────────────── */
+
 /* An option is a big, obvious target — a student answers twenty of these under
    time pressure, and a 3px-padded row with a small radio is a mis-tap waiting
-   to happen. */
+   to happen.
+
+   Each one carries a LETTER — أ ب ج د — in its own hue. The hue is a
+   non-interactive category mark (the rule `lib/subject-art.ts` states for
+   decorative hues): it tells the options apart at a glance and gives a
+   student a name to say out loud («الإجابة ج»), and it carries no meaning of
+   its own. The six hues sit between teal and pink and deliberately skip green
+   and red, which on the next screen mean «صح» and «غلط»; and they skip amber,
+   which is what the CHOSEN option turns. So the only amber on the card is the
+   student's own answer. */
 .runner-option {
+  --opt-h: 255;
+  position: relative;
   display: flex;
   cursor: pointer;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--s-12);
-  padding: var(--s-12) var(--s-16);
+  min-block-size: 3.5rem;
+  padding: var(--s-8) var(--s-12);
   border: var(--hairline) solid var(--border);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   background: var(--n-1);
   transition:
     background var(--d-hover) var(--ease-out),
-    border-color var(--d-hover) var(--ease-out);
+    border-color var(--d-hover) var(--ease-out),
+    box-shadow var(--d-hover) var(--ease-out);
 }
 
+.runner-options > li:nth-child(6n + 2) > .runner-option { --opt-h: 195; }
+.runner-options > li:nth-child(6n + 3) > .runner-option { --opt-h: 295; }
+.runner-options > li:nth-child(6n + 4) > .runner-option { --opt-h: 335; }
+.runner-options > li:nth-child(6n + 5) > .runner-option { --opt-h: 225; }
+.runner-options > li:nth-child(6n + 6) > .runner-option { --opt-h: 270; }
+
 .runner-option:hover {
-  border-color: var(--border-strong);
+  border-color: oklch(0.72 0.09 var(--opt-h));
   background: var(--n-2);
 }
 
-/* `:has()` — the checked state lives on the input inside the label, and this
-   is the styling hook that avoids threading a `selected` prop through every
-   option row just to paint a border. */
-.runner-option:has(:checked) {
+/* The letter well. Lightness and chroma are fixed per theme, so all six are
+   lit identically and only the hue moves — the `.tile--hued` recipe. Declared
+   as two properties on the ROW rather than as colours on the well: the dark
+   theme then swaps two variables, and the chosen / right / wrong states below
+   can repaint the well without having to outrank a `:root[data-theme]`
+   selector (the trap `.tile--hued` documents).
+   Measured on the worst hue of the six: 7.1:1 light, 8.4:1 dark. */
+.runner-option {
+  --opt-well: oklch(0.94 0.045 var(--opt-h));
+  --opt-ink: oklch(0.42 0.14 var(--opt-h));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .runner-option {
+    --opt-well: oklch(0.32 0.07 var(--opt-h));
+    --opt-ink: oklch(0.88 0.08 var(--opt-h));
+  }
+}
+
+:root[data-theme='dark'] .runner-option {
+  --opt-well: oklch(0.32 0.07 var(--opt-h));
+  --opt-ink: oklch(0.88 0.08 var(--opt-h));
+}
+
+.runner-option__letter {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-md);
+  background: var(--opt-well);
+  color: var(--opt-ink);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+  transition:
+    background var(--d-hover) var(--ease-out),
+    color var(--d-hover) var(--ease-out);
+}
+
+.runner-option__body {
+  flex: 1;
+  min-inline-size: 0;
+  color: var(--n-12);
+}
+
+/* The radio / checkbox itself, at the far end. It stays the real control —
+   the keyboard lands on it and `getByRole('radio')` finds it — the card around
+   it just makes the whole row the target. */
+.runner-option__control { flex: none; }
+
+/* Chosen. `data-state` rather than `:checked`: Radix renders a `<button
+   role="radio">`, and its hidden native input only exists inside a `<form>`,
+   which the runner is not — so `:has(:checked)` never matched and a chosen
+   option looked exactly like every other one. The 1px ring doubles the border
+   without moving a pixel of layout. */
+.runner-option:has([data-state='checked']) {
   border-color: var(--a-9);
-  background: color-mix(in oklab, var(--a-9) 8%, var(--n-1));
+  background: color-mix(in oklab, var(--a-9) 10%, var(--n-1));
+  box-shadow: 0 0 0 1px var(--a-9);
+}
+
+.runner-option:has([data-state='checked']) .runner-option__letter {
+  background: var(--a-9);
+  /* The same fixed ink every amber fill in the product carries — `--n-12`
+     inverts between themes and the amber does not. */
+  color: #1a1206;
+}
+
+/* The keyboard is on the control, which is small; the card says where it is. */
+.runner-option:has(:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--a-9);
+  outline-offset: 2px;
 }
 
 .runner-option:has(:disabled) {
   cursor: not-allowed;
   opacity: 0.6;
 }
+
+/* ── the reviewed question ───────────────────────────────────────────────── */
+
+/* One card per question on the review screen, with its verdict on the
+   inline-start edge — a 4px rule in `--ok`/`--err`, the one job those two
+   tokens have. Partial and ungraded stay neutral: a rule in amber would read
+   as "press me", and grey is honest about "not a verdict yet". */
+.review-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-16);
+  padding: var(--s-20);
+  border: var(--hairline) solid var(--border);
+  border-inline-start: 4px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+  box-shadow: var(--shadow-sm);
+}
+
+.review-card--correct { border-inline-start-color: var(--ok); }
+.review-card--incorrect { border-inline-start-color: var(--err); }
+
+.review-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  block-size: 1.75rem;
+  padding-inline: var(--s-8);
+  border-radius: var(--r-full);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-3);
+  color: var(--n-11);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+.review-verdict--correct {
+  border-color: color-mix(in oklch, var(--ok), transparent 65%);
+  background: color-mix(in oklch, var(--ok), transparent 88%);
+  color: var(--ok);
+}
+
+.review-verdict--incorrect {
+  border-color: color-mix(in oklch, var(--err), transparent 65%);
+  background: color-mix(in oklch, var(--err), transparent 88%);
+  color: var(--err);
+}
+
+/* A reviewed option: the runner's own row, minus the pointer — nothing here
+   is pressed. Right and wrong repaint the WELL as well as the border, so the
+   letter the student remembers choosing is the thing that turns red. */
+.review-option {
+  cursor: default;
+}
+
+.review-option:hover {
+  border-color: var(--border);
+  background: var(--n-1);
+}
+
+.review-option--right,
+.review-option--right:hover {
+  border-color: var(--ok);
+  background: color-mix(in oklch, var(--ok), transparent 92%);
+}
+
+.review-option--right .runner-option__letter {
+  background: color-mix(in oklch, var(--ok), transparent 78%);
+  color: var(--ok);
+}
+
+.review-option--wrong,
+.review-option--wrong:hover {
+  border-color: var(--err);
+  background: color-mix(in oklch, var(--err), transparent 92%);
+}
+
+.review-option--wrong .runner-option__letter {
+  background: color-mix(in oklch, var(--err), transparent 78%);
+  color: var(--err);
+}
+
+.review-option--chosen,
+.review-option--chosen:hover {
+  border-color: var(--a-9);
+}
+
+.review-option--chosen .runner-option__letter {
+  background: var(--a-9);
+  color: #1a1206;
+}
+
+.review-option__main {
+  display: flex;
+  flex: 1;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+/* ── an ordering question ────────────────────────────────────────────────── */
+
+/* The same card as a choice option, so an ordering question does not look
+   like a different product halfway down a paper. The handle is the position
+   number in an ember well — structure, not a pick: nothing here is "chosen",
+   and amber on it would say otherwise. Ember rather than the letter hues,
+   because a row's hue would change every time it moved. */
+.order-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  min-block-size: 3.5rem;
+  padding: var(--s-8) var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+  transition:
+    border-color var(--d-hover) var(--ease-out),
+    box-shadow var(--d-hover) var(--ease-out);
+}
+
+.order-row--dragging {
+  border-color: var(--a-9);
+  box-shadow: var(--shadow-md);
+}
+
+.order-row__handle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-md);
+  background: var(--e-tint);
+  box-shadow: inset 0 0 0 var(--hairline) var(--e-tint-line);
+  color: var(--e-ink);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  cursor: grab;
+  /* What stops the browser claiming the gesture as a scroll before dnd-kit's
+     touch delay has elapsed (was `touch-none`). */
+  touch-action: none;
+}
+
+.order-row__handle:active { cursor: grabbing; }
 
 /* ── what do I press ─────────────────────────────────────────────────────── */
 
