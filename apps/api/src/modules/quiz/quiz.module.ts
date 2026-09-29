@@ -92,6 +92,8 @@ import { GameService } from './game.service';
     // `ScheduledExamsService` is exported so `DashboardModule`'s page-level
     // reads can be composed later without widening the `SCORE_FEED` port.
     ScheduledExamsService,
+    // «ساحة التحدي» بتسحب أسئلتها من نفس بنك الألعاب (`GameService.arenaPool`).
+    GameService,
     // `QuizHistoryService` and `ManualGradingService` are deliberately NOT
     // exported: each has exactly one consumer, and both are in this module
     // (`MeQuizzesController` and `AdminAttemptsController`). Exporting them

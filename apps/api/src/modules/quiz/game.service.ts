@@ -341,6 +341,30 @@ export class GameService {
     );
   }
 
+  /**
+   * «ساحة التحدي»: بنك الطالب في كورس واحد، بنفس الكويري ونفس إعدادات «سباق
+   * الوقت» للكورس ده (`game_mode_settings`) — الساحة سباق هي كمان. من نفس
+   * `pool` عن قصد: أي فلتر بيتضاف على البنك (سؤال اتشال من البنك، امتحان
+   * جاي) بيوصل للساحة من غير ما حد يفتكرها.
+   */
+  async arenaPool(userId: string, courseId: string): Promise<Array<{ versionId: string; facility: number | null }>> {
+    const pool = await this.pool(userId);
+    return eligible(pool, 'race', courseId, { kind: 'all' }).map((entry) => ({
+      versionId: entry.versionId,
+      facility: entry.facility,
+    }));
+  }
+
+  /** كام سؤال للساحة في كل كورس في بنك الطالب — كويري واحدة للكل. */
+  async arenaPoolCounts(userId: string): Promise<Map<string, number>> {
+    const pool = await this.pool(userId);
+    const counts = new Map<string, number>();
+    for (const courseId of pool.courses.keys()) {
+      counts.set(courseId, eligible(pool, 'race', courseId, { kind: 'all' }).length);
+    }
+    return counts;
+  }
+
   /** سؤال مش في بنك الطالب = 404 — مش الإجابة، ومش صوته. */
   async assertInPool(userId: string, questionId: string): Promise<void> {
     const pool = await this.pool(userId);

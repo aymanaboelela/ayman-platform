@@ -96,6 +96,7 @@ import {
 } from '../modules/wallet/admin-wallet.controller';
 import { WalletService } from '../modules/wallet/wallet.service';
 import { BooksService } from '../modules/books/books.service';
+import { ArenaModule } from '../modules/arena/arena.module';
 
 import { enumerateRoutes, type RouteRef } from './route-inventory';
 
@@ -311,6 +312,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // Self-contained: it imports only NotificationsModule and
         // SettingsModule, neither of which pulls in AuthModule.
         OutreachModule,
+        // «ساحة التحدي» — موديول كامل زي `UnlockCodesModule`: الطابور والماتش
+        // في Redis، والموديول بيجيبه. التايمرز مابتشتغلش تحت `NODE_ENV=test`.
+        ArenaModule,
       ],
       providers: [
         Reflector,
@@ -831,6 +835,25 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'monthly exams: student', method: 'get', path: () => '/api/me/exams', actor: 'student', status: 200 },
     // «تحدّي الأسئلة» — `quiz:read` + فيتشر `quizGame` (مفتوحة هنا لأن التستات
     // بتجري كستاك أيمن). سؤال مش في بنك الطالب بيرجّع 404 مش الإجابة.
+    // «ساحة التحدي» — `quiz:read` + فلاج `arena.enabled` (مفتوح هنا لأن
+    // التستات بتجري كستاك أيمن). الستريم زائر بس: طالب بيفتح ستريم مابيخلصش.
+    // كورس مش من كورساته = ٤٠٣، وماتش مش بتاعه = ٤٠٤ (مش «مش من حقك»).
+    { label: 'arena lobby: anonymous', method: 'get', path: () => '/api/me/arena', actor: 'anonymous', status: 401 },
+    { label: 'arena lobby: student', method: 'get', path: () => '/api/me/arena', actor: 'student', status: 200 },
+    { label: 'arena stream: anonymous', method: 'get', path: () => '/api/me/arena/stream', actor: 'anonymous', status: 401 },
+    { label: 'arena queue: anonymous', method: 'post', path: () => '/api/me/arena/queue', actor: 'anonymous', status: 401, body: () => ({ courseId: randomUUID() }) },
+    { label: 'arena queue: student, a course that is not theirs', method: 'post', path: () => '/api/me/arena/queue', actor: 'student', status: 403, body: () => ({ courseId: randomUUID() }) },
+    { label: 'arena leave queue: anonymous', method: 'delete', path: () => '/api/me/arena/queue', actor: 'anonymous', status: 401 },
+    { label: 'arena leave queue: student', method: 'delete', path: () => '/api/me/arena/queue', actor: 'student', status: 200 },
+    { label: 'arena answer: anonymous', method: 'post', path: () => `/api/me/arena/matches/${randomUUID()}/answer`, actor: 'anonymous', status: 401, body: () => ({ index: 0, optionId: randomUUID() }) },
+    { label: 'arena answer: student, not their match', method: 'post', path: () => `/api/me/arena/matches/${randomUUID()}/answer`, actor: 'student', status: 404, body: () => ({ index: 0, optionId: randomUUID() }) },
+    { label: 'arena surrender: anonymous', method: 'post', path: () => `/api/me/arena/matches/${randomUUID()}/leave`, actor: 'anonymous', status: 401 },
+    { label: 'arena surrender: student, not their match', method: 'post', path: () => `/api/me/arena/matches/${randomUUID()}/leave`, actor: 'student', status: 404 },
+    { label: 'arena beat: anonymous', method: 'post', path: () => '/api/me/arena/beat', actor: 'anonymous', status: 401 },
+    { label: 'arena beat: student', method: 'post', path: () => '/api/me/arena/beat', actor: 'student', status: 200 },
+    { label: 'admin arena: anonymous', method: 'get', path: () => '/api/admin/arena', actor: 'anonymous', status: 401 },
+    { label: 'admin arena: student', method: 'get', path: () => '/api/admin/arena', actor: 'student', status: 403 },
+    { label: 'admin arena: admin', method: 'get', path: () => '/api/admin/arena', actor: 'admin', status: 200 },
     { label: 'game round: anonymous', method: 'get', path: () => '/api/me/game/round', actor: 'anonymous', status: 401 },
     { label: 'game round: student', method: 'get', path: () => '/api/me/game/round', actor: 'student', status: 200 },
     { label: 'game hub: anonymous', method: 'get', path: () => '/api/me/game/hub', actor: 'anonymous', status: 401 },
