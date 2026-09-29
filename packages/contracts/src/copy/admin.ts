@@ -5254,6 +5254,20 @@ const admin = {
     restored: 'الفيديو رجع للمحاضرة',
     deleteArchivedBody: 'الفيديو ده هيتمسح من التخزين خالص، ومش هتقدر ترجّعه تاني.',
     deleteConfirm: 'امسح نهائيًا',
+    /**
+     * The views strip above the list and the numbers on each row — the same
+     * figures as «التحليلات ← الفيديوهات», over its default window, shown only
+     * to a session that may read analytics.
+     */
+    statsLead: 'آخر ٢٨ يوم',
+    statsViews: 'مشاهدة',
+    statsWatchHours: 'ساعة مشاهدة',
+    statsViewers: 'طالب اتفرّج',
+    statsOpen: 'كل الإحصائيات',
+    rowViews: '{n} مشاهدة',
+    rowWatched: 'اتشاف منه {p}',
+    rowNoViews: 'لسه محدش اتفرّج',
+    rowStats: 'الإحصائيات',
     back: 'رجوع',
     deleted: 'اتمسح الفيديو',
     busy: 'الفيديو ده لسه بيترفع أو بيتجهز — استنى لما يخلص',
@@ -5593,6 +5607,8 @@ const analytics = {
   navStudents: 'تحليل الطلبة',
   /** `/admin/analytics/money` — shown only to a session holding `payment:read`. */
   navMoney: 'الفلوس يوم بيوم',
+  /** `/admin/analytics/videos` — «إحصائيات الفيديو», per video. */
+  navVideos: 'الفيديوهات',
 
   // ── the window / filter bar ────────────────────────────────────────────
   window: 'الفترة',
@@ -5866,6 +5882,83 @@ const analytics = {
   /** On a row that is itself a link — screen-reader only, so the destination
    *  is never «اضغط هنا» three hundred times in a table. */
   openRow: 'فتح {name}',
+
+  // ── videos — «الفيديو اتشاف قد إيه» ─────────────────────────────────────
+  //
+  // YouTube Studio's vocabulary, because that is the one the owner asked in.
+  // «مشاهدة» is one SITTING, not one student — a student who comes back
+  // tomorrow is a second view, exactly as on YouTube — and the screen says
+  // so once, in `videosDefinition`, rather than leaving the reader to guess
+  // why views outnumber students.
+  videosTitle: 'كل فيديو بالأرقام',
+  videosLead: 'اتشاف قد إيه، كام مرة، ومين وصل لحد فين — للفيديوهات المرفوعة واللي على يوتيوب.',
+  videosDefinition:
+    'المشاهدة = مرة قعد فيها طالب قدام الفيديو وهو شغّال. نفس الطالب لو رجع تاني بكرة بتتحسب مشاهدة جديدة. الأرقام من المنصة نفسها، مش من يوتيوب.',
+  /** One line, under the table: the limit `VideoAnalyticsService` documents. */
+  videosSwapNote: 'المشاهدات بتتسجّل على المحاضرة — لو غيّرت الفيديو اللي على محاضرة، مشاهداتها القديمة بتتحسب للفيديو الجديد.',
+  period: 'الفترة',
+  period7d: 'آخر ٧ أيام',
+  period28d: 'آخر ٢٨ يوم',
+  period90d: 'آخر ٩٠ يوم',
+  periodAll: 'من الأول',
+  views: 'المشاهدات',
+  uniqueViewers: 'طلبة اتفرّجوا',
+  watchTime: 'وقت المشاهدة',
+  avgViewDuration: 'متوسط مدة المشاهدة',
+  avgPercentWatched: 'متوسط اللي اتشاف منه',
+  videoCompletion: 'كمّلوا الفيديو',
+  /** `{n}` — views per student, e.g. «١٫٤ مشاهدة لكل طالب». */
+  viewsPerViewer: '{n} مشاهدة لكل طالب',
+  /** `{n}` of `{total}` videos had at least one view in the period. */
+  videosWatched: '{n} من {total} فيديو اتشافوا',
+  /** Under the watch-time tile: the same number in the unit a parent uses. */
+  perView: 'في المشاهدة',
+  viewsPerDay: 'المشاهدات يوم بيوم',
+  watchMinutesPerDay: 'دقايق المشاهدة يوم بيوم',
+  viewersPerDay: 'طلبة',
+  viewsUnit: 'مشاهدة',
+  topVideos: 'أكتر فيديوهات اتشافت',
+  topVideosHint: 'في الفترة المختارة — دوس على أي واحد يفتح إحصائياته.',
+  seriesCapped: 'الرسم بيعرض آخر سنة بس — الأرقام اللي فوق من الأول.',
+  retentionTitle: 'الطلبة وصلوا لحد فين في الفيديو',
+  retentionHint:
+    'تقريبي: بنعرف لكل طالب أبعد نقطة وصلها، مش كل ثانية اتفرّج عليها — اللي قدّم لقدّام بيتحسب إنه وصل، واللي رجع يعيد جزء بيتحسب مرة.',
+  /** Tooltip x: «عند ٢٥٪ من الفيديو». */
+  retentionAt: 'عند {p} من الفيديو',
+  /** Tooltip value: «٧٥٪ من الطلبة». */
+  retentionShare: '{p} من الطلبة',
+  retentionUnknown: 'مدة الفيديو مش معروفة لسه، فمنقدرش نرسم لحد فين وصلوا.',
+  byHourTitle: 'بيتفرّجوا إمتى',
+  byHourHint: 'المشاهدات حسب الساعة اللي بدأت فيها، بتوقيت القاهرة.',
+  /** `{from}`–`{to}`, two formatted hours. */
+  hourRange: 'من {from} لـ{to}',
+  videoLessonsTitle: 'المحاضرات اللي عليها الفيديو ده',
+  videoLessonsHint: 'الفيديو الواحد ممكن يبقى على أكتر من محاضرة — الأرقام اللي فوق مجموعهم كلهم.',
+  viewersTitle: 'مين اتفرّج',
+  viewersHint: 'مرتّبين بوقت المشاهدة في الفترة المختارة. «وصل لحد» هي أبعد نقطة وصلها في الفيديو من أول مرة.',
+  /** `{n}` — the row cap; the full count is in the tile above. */
+  viewersCapped: 'ظاهر أول {n} بس — العدد الكامل في المربع اللي فوق.',
+  noViewers: 'محدش اتفرّج على الفيديو ده في الفترة دي.',
+  noVideos: 'لسه مفيش فيديو على أي محاضرة.',
+  columnVideo: 'الفيديو',
+  columnViews: 'مشاهدات',
+  columnViewers: 'طلبة',
+  columnWatchTime: 'وقت المشاهدة',
+  columnAvgView: 'متوسط المشاهدة',
+  columnAvgPercent: 'اتشاف منه',
+  columnVideoCompletion: 'كمّلوه',
+  columnReached: 'وصل لحد',
+  columnLastViewed: 'آخر مشاهدة',
+  /** `{n}` lessons the same video is on. */
+  onLessons: 'على {n} محاضرة',
+  providerUpload: 'مرفوع',
+  providerYoutube: 'يوتيوب',
+  draftLesson: 'مسودة',
+  finished: 'كمّله',
+  backToVideos: 'كل الفيديوهات',
+  openVideoStats: 'إحصائيات الفيديو',
+  openLessonAnalytics: 'تحليل المحاضرة',
+  videoLength: 'مدته',
 
   // ── chart chrome ───────────────────────────────────────────────────────
   showTable: 'اعرض الأرقام',

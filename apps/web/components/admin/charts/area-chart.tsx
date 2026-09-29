@@ -7,6 +7,15 @@ import { num, shortDate } from './format';
 export interface Point {
   date: string;
   value: number;
+  /**
+   * The x label, when the axis is not a calendar — the retention curve's
+   * «عند ٢٥٪ من الفيديو». Omitted, the chart reads `date` as `YYYY-MM-DD`.
+   * A string per point, not a formatter: see `unit` for why no function may
+   * cross into this component.
+   */
+  label?: string;
+  /** The tooltip's value, already formatted — overrides `value` + `unit`. */
+  display?: string;
 }
 
 const HEIGHT = 180;
@@ -151,10 +160,16 @@ export function AreaChart({
       </svg>
 
       {/* Two ticks only — the ends. A 90-point axis with every date on it is
-          unreadable, and the crosshair carries the rest. */}
+          unreadable, and the crosshair carries the rest.
+
+          The FIRST point's label is the first child, because in an RTL row the
+          first child is the one on the right — where `xFor(0)` draws it. The
+          two were the other way round, so the axis named the newest day under
+          the oldest bar (measured in Chrome: first flex child at x=1188 of a
+          right-aligned row, the second at 800). */}
       <div className="mt-1 flex justify-between text-[length:var(--fs-mono-label)] text-fg-muted">
-        <span className="tabular">{shortDate(points.at(-1)!.date)}</span>
-        <span className="tabular">{shortDate(points[0]!.date)}</span>
+        <span className="tabular">{xLabel(points[0]!)}</span>
+        <span className="tabular">{xLabel(points.at(-1)!)}</span>
       </div>
 
       {active ? (
@@ -165,19 +180,25 @@ export function AreaChart({
             'px-2 py-1 text-[length:var(--fs-text-xs)] shadow-md',
           )}
           style={{
-            // `insetInlineEnd` rather than `left`: the SVG's own x runs LTR,
-            // so anchoring from the logical end is what keeps the tooltip over
-            // the crosshair in an RTL document.
-            insetInlineEnd: `${(hover! / (points.length - 1)) * 100}%`,
+            // Point i sits i/(n−1) of the width in from the RIGHT edge
+            // (`xFor`), and in RTL the right edge is inline-START. This was
+            // `insetInlineEnd` — the LEFT edge in RTL — which put the tooltip
+            // for the oldest day over the newest one. `translateX(50%)` then
+            // centres the box on the crosshair (its right edge sits on it).
+            insetInlineStart: `${(hover! / (points.length - 1)) * 100}%`,
             transform: 'translateX(50%)',
           }}
         >
-          <span className="block text-fg-muted">{shortDate(active.date)}</span>
+          <span className="block text-fg-muted">{xLabel(active)}</span>
           <span className="tabular block font-medium text-fg">
-            {unit ? `${num(active.value)} ${unit}` : num(active.value)}
+            {active.display ?? (unit ? `${num(active.value)} ${unit}` : num(active.value))}
           </span>
         </div>
       ) : null}
     </div>
   );
+}
+
+function xLabel(point: Point): string {
+  return point.label ?? shortDate(point.date);
 }

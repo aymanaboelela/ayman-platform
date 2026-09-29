@@ -6,6 +6,7 @@ import {
   parseAsStringLiteral,
 } from 'nuqs/server';
 import { STUDENT_ANALYTICS_SORTS } from '@ayman/contracts/admin/analytics';
+import { DEFAULT_VIDEO_PERIOD, VIDEO_PERIODS } from '@ayman/contracts/admin/video-analytics';
 
 /** The windows the API accepts. Kept here as the literal union the URL parses
  *  into, so an unknown `?days=` falls back rather than 400ing the page. */
@@ -30,6 +31,15 @@ export const moneySearchParams = {
   days: parseAsInteger.withDefault(30).withOptions({ shallow: false }),
 };
 export const moneyCache = createSearchParamsCache(moneySearchParams);
+
+/** «الفيديوهات» and one video's page. An unknown `?period=` falls back to the
+ *  default instead of reaching the API, which would 400 the whole page. */
+export const videosSearchParams = {
+  period: parseAsStringLiteral(VIDEO_PERIODS)
+    .withDefault(DEFAULT_VIDEO_PERIOD)
+    .withOptions({ shallow: false }),
+};
+export const videosCache = createSearchParamsCache(videosSearchParams);
 
 export const lessonsSearchParams = {
   courseId: parseAsString.withDefault('').withOptions({ shallow: false }),
