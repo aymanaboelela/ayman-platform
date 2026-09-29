@@ -6,10 +6,8 @@ import {
   CalendarCheck2,
   ClipboardCheck,
   Crown,
-  Hourglass,
   Lock,
   Medal,
-  NotebookPen,
   Sparkles,
   Target,
   TrendingUp,
@@ -21,7 +19,6 @@ import { formatCopy } from '@ayman/contracts/format';
 import {
   CohortRankSchema,
   RANK_LEVELS,
-  RANK_POINTS,
   levelFor,
   type CohortRank,
   type RankLevelProgress,
@@ -30,7 +27,9 @@ import { StatTile } from '@/components/dashboard/stat-tile';
 import { CountUp } from '@/components/rank/count-up';
 import { RankArt } from '@/components/rank/rank-art';
 import { HAS_DRAGONS, LevelIcon, PodiumDragon } from '@/components/rank/rank-dragon';
+import { Climb } from '@/components/rank/climb';
 import { apiGetAuthed } from '@/lib/api-server';
+import { getRankNextOrNull } from '@/lib/rank-next';
 import '@/components/rank/rank.css';
 
 const c = copy.rank;
@@ -52,7 +51,12 @@ const NUM = new Intl.NumberFormat('en-US');
  * لفوق»، فالشرح والحساب مايختلفوش.
  */
 export default async function RankPage() {
-  const data = await apiGetAuthed('/api/me/rank', CohortRankSchema);
+  // الاتنين مع بعض: «الطريق لفوق» مش مستني الترتيب، ولو وقع بيرجع `null` والكروت
+  // بترجع شرح بس (`getRankNextOrNull`).
+  const [data, steps] = await Promise.all([
+    apiGetAuthed('/api/me/rank', CohortRankSchema),
+    getRankNextOrNull(),
+  ]);
   const level = levelFor(data.me.points);
 
   return (
@@ -116,7 +120,7 @@ export default async function RankPage() {
         </section>
       ) : null}
 
-      <Climb data={data} />
+      <Climb data={data} steps={steps} />
 
       <LevelPath level={level} />
 
@@ -392,81 +396,6 @@ function Ladder({
         </p>
       ) : null}
     </div>
-  );
-}
-
-function Climb({ data }: { data: CohortRank }) {
-  const owedLeft = data.me.homework.owed - data.me.homework.submitted;
-  const tips = [
-    {
-      key: 'homework',
-      icon: NotebookPen,
-      title: c.climbHomeworkTitle,
-      body: formatCopy(c.climbHomeworkBody, {
-        submitted: RANK_POINTS.homeworkSubmitted,
-        accepted: RANK_POINTS.homeworkAcceptedMax,
-      }),
-      max: RANK_POINTS.homeworkSubmitted + RANK_POINTS.homeworkAcceptedMax,
-      alert: owedLeft > 0 ? formatCopy(c.climbHomeworkOwed, { count: owedLeft }) : null,
-    },
-    {
-      key: 'quiz',
-      icon: Target,
-      title: c.climbQuizTitle,
-      body: formatCopy(c.climbQuizBody, { bonus: RANK_POINTS.quizFullMarkBonus }),
-      max: 100 * RANK_POINTS.quizPerPercent + RANK_POINTS.quizFullMarkBonus,
-      alert: null,
-    },
-    {
-      key: 'exam',
-      icon: CalendarCheck2,
-      title: c.climbExamTitle,
-      body: formatCopy(c.climbExamBody, {
-        bonus: RANK_POINTS.examFullMarkBonus,
-        max: 100 * RANK_POINTS.examPerPercent + RANK_POINTS.examFullMarkBonus,
-      }),
-      max: 100 * RANK_POINTS.examPerPercent + RANK_POINTS.examFullMarkBonus,
-      alert: null,
-    },
-  ] as const;
-
-  return (
-    <section className="mt-8">
-      <div className="rk-climb__head">
-        <div>
-          <h2 className="rk-section-title">
-            <Sparkles className="size-5" aria-hidden="true" />
-            {c.climbTitle}
-          </h2>
-          <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{c.climbLead}</p>
-        </div>
-        <Link href="/path" className="rk-cta">
-          {c.climbCta}
-          <ArrowLeft className="size-4" aria-hidden="true" />
-        </Link>
-      </div>
-
-      <ul className="rk-climb">
-        {tips.map((tip) => (
-          <li key={tip.key} className="rk-tip" data-kind={tip.key}>
-            <span className="rk-tip__icon" aria-hidden="true">
-              <tip.icon className="size-5" />
-            </span>
-            <span className="rk-tip__badge">{formatCopy(c.upTo, { points: tip.max })}</span>
-            <h3 className="rk-tip__title">{tip.title}</h3>
-            <p className="rk-tip__body">{tip.body}</p>
-            {tip.alert ? <p className="rk-tip__alert">{tip.alert}</p> : null}
-          </li>
-        ))}
-      </ul>
-
-      {data.me.pendingReview > 0 ? (
-        <p className="rk-pending">
-          <Hourglass className="size-4" aria-hidden="true" />
-          {formatCopy(c.climbPending, { count: data.me.pendingReview })}
-        </p>
-      ) : null}
-    </section>
   );
 }
 

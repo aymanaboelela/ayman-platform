@@ -47,6 +47,27 @@ export default function Loading() {
           </div>
         ))}
       </div>
+
+      {/* «الطريق لفوق»: العنوان وزرار المسار، وتلات كروت بصفوفها. */}
+      <div className="mt-8 flex items-end justify-between gap-3">
+        <div className="w-full space-y-2">
+          <Skeleton width="narrow" className="h-6" />
+          <Skeleton width="wide" className="h-4" />
+        </div>
+        <Skeleton width="narrow" className="h-9 w-28 shrink-0 rounded-full" />
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        {Array.from({ length: 3 }, (_, index) => (
+          <div key={index} className="space-y-3 rounded-lg border border-line bg-surface-2 p-4">
+            <Skeleton width="narrow" className="size-10 rounded-md" />
+            <Skeleton width="wide" className="h-5" />
+            <Skeleton width="full" className="h-4" />
+            <Skeleton width="full" className="h-11 rounded-md" />
+            <Skeleton width="full" className="h-13 rounded-md" />
+            <Skeleton width="full" className="h-13 rounded-md" />
+          </div>
+        ))}
+      </div>
     </main>
   );
 }
