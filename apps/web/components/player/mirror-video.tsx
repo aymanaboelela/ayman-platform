@@ -1,24 +1,13 @@
 'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type PointerEvent as ReactPointerEvent,
-  type ReactNode,
-} from 'react';
-import { Pause, Play, RotateCcw, RotateCw, Settings, Volume2, VolumeX } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { effectiveSeconds, type PlayerVideoMirror, type VideoTrim } from '@ayman/contracts/video';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
 import type { YouTubePlayer } from '@/lib/youtube';
 import { skipCuts, trimWindow, watchedAt } from '@/lib/video-trim';
-import { FullscreenIcon } from './icons';
-import './mirror-video.css';
+import { PlayerChrome, SPEEDS, readSavedSpeed, saveSpeed } from './player-chrome';
 
 const c = copy.player.controls;
 
@@ -49,7 +38,9 @@ const c = copy.player.controls;
  *     the player (see `VideoLesson.toggleFullscreen`), and the name stays.
  *
  * What the bar keeps from the element is the part that matters most: the
- * browser's own playback, buffering and recovery. Only the chrome is ours.
+ * browser's own playback, buffering and recovery. Only the chrome is ours —
+ * and it lives in `player-chrome.tsx` now, because YouTube's frame wears the
+ * same one. This file is the half that knows it is a `<video>`.
  *
  * ── Why HLS at all, rather than one mp4 ───────────────────────────────────
  * Adaptive bitrate is the difference between "works" and "works like
@@ -93,13 +84,6 @@ const YT_PLAYING = 1;
 const YT_PAUSED = 2;
 const YT_ENDED = 0;
 
-const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2] as const;
-const SEEK_STEP = 10;
-const HIDE_AFTER_MS = 2500;
-/** Often enough that no stretch of a recording stays clean for long. */
-const WATERMARK_MOVE_MS = 5_000;
-const SPEED_KEY = 'ayman:player:speed';
-
 /**
  * Make a `<video>` answer the three questions the heartbeat asks a YouTube
  * player. An adapter rather than a second heartbeat: the completion rules
@@ -120,25 +104,6 @@ function adapt(element: HTMLVideoElement, trim: VideoTrim | null): YouTubePlayer
     playVideo: () => void element.play().catch(() => undefined),
     destroy: () => undefined,
   };
-}
-
-function clock(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
-  const total = Math.floor(seconds);
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
-}
-
-function readSavedSpeed(): number {
-  try {
-    const saved = Number(window.localStorage.getItem(SPEED_KEY));
-    return (SPEEDS as readonly number[]).includes(saved) ? saved : 1;
-  } catch {
-    return 1;
-  }
 }
 
 /** The slice of hls.js this component touches, so the type never has to be
@@ -167,8 +132,6 @@ export function MirrorVideo({
 }: MirrorVideoProps) {
   const ref = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<HlsHandle | null>(null);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastTap = useRef<{ at: number; side: 'start' | 'end' } | null>(null);
   const [seeked, setSeeked] = useState(false);
 
   const [paused, setPaused] = useState(true);
@@ -182,9 +145,6 @@ export function MirrorVideo({
   const [levels, setLevels] = useState<Level[]>([]);
   const [level, setLevel] = useState(-1);
   const [autoHeight, setAutoHeight] = useState<number | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [controlsShown, setControlsShown] = useState(true);
-  const [flash, setFlash] = useState<'back' | 'forward' | null>(null);
   /** «قص الفيديو» — what of the file the student sees. `null` = all of it. */
   const trim = mirror.trim ?? null;
 
@@ -293,27 +253,7 @@ export function MirrorVideo({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mirror.hlsUrl]);
 
-  /* ── controls that hide themselves while the lecture plays ───────────── */
-
-  const reveal = useCallback(() => {
-    setControlsShown(true);
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => {
-      const element = ref.current;
-      if (element && !element.paused) setControlsShown(false);
-    }, HIDE_AFTER_MS);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-    };
-  }, []);
-
-  // A paused lecture, or an open menu, keeps the bar on screen.
-  const barVisible = controlsShown || paused || menuOpen;
-
-  /* ── actions ──────────────────────────────────────────────────────────── */
+  /* ── actions — what the chrome's buttons do to a `<video>` ─────────────── */
 
   const togglePlay = useCallback(() => {
     const element = ref.current;
@@ -328,18 +268,29 @@ export function MirrorVideo({
     const full = Number.isFinite(element.duration) ? element.duration : element.currentTime + delta;
     const { start, end } = trimWindow(trim, full);
     element.currentTime = skipCuts(Math.min(Math.max(start, element.currentTime + delta), end), trim);
-    setFlash(delta < 0 ? 'back' : 'forward');
-    setTimeout(() => setFlash(null), 450);
   }, [trim]);
+
+  const seekTo = useCallback((value: number) => {
+    const element = ref.current;
+    if (element) element.currentTime = skipCuts(value, trim);
+  }, [trim]);
+
+  const toggleMute = useCallback(() => {
+    const element = ref.current;
+    if (element) element.muted = !element.muted;
+  }, []);
+
+  const chooseVolume = useCallback((value: number) => {
+    const element = ref.current;
+    if (!element) return;
+    element.volume = value;
+    element.muted = element.volume === 0;
+  }, []);
 
   const chooseSpeed = useCallback((value: number) => {
     const element = ref.current;
     if (element) element.playbackRate = value;
-    try {
-      window.localStorage.setItem(SPEED_KEY, String(value));
-    } catch {
-      /* private window — the choice still holds for this lecture */
-    }
+    saveSpeed(value);
   }, []);
 
   const chooseLevel = useCallback((index: number) => {
@@ -350,81 +301,6 @@ export function MirrorVideo({
     hls.currentLevel = index;
     setLevel(index);
   }, []);
-
-  /* ── keyboard: the YouTube keys, on the player only ───────────────────── */
-
-  const onKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLDivElement>) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      // A focused button already answers Space, and a focused slider already
-      // answers the arrows — handling them here too would fire twice.
-      if (event.target !== event.currentTarget && (event.code === 'Space' || event.code.startsWith('Arrow'))) return;
-      // `code`, not `key`: on an Arabic layout K emits «ن».
-      switch (event.code) {
-        case 'Space':
-        case 'KeyK':
-          event.preventDefault();
-          togglePlay();
-          break;
-        case 'ArrowLeft':
-        case 'KeyJ':
-          event.preventDefault();
-          seekBy(-SEEK_STEP);
-          break;
-        case 'ArrowRight':
-        case 'KeyL':
-          event.preventDefault();
-          seekBy(SEEK_STEP);
-          break;
-        case 'KeyM': {
-          event.preventDefault();
-          const element = ref.current;
-          if (element) element.muted = !element.muted;
-          break;
-        }
-        default:
-          return;
-      }
-      reveal();
-    },
-    [togglePlay, seekBy, reveal],
-  );
-
-  /*
-   * A tap on the picture.
-   *
-   * Mouse: play/pause, the way YouTube's desktop player does it. Touch: the
-   * first tap only brings the bar back (a phone user reaching for a button
-   * must not pause the lecture on the way), and a second tap within 300ms on
-   * one half of the picture jumps ten seconds that way.
-   */
-  const onSurfacePointerUp = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (menuOpen) {
-        setMenuOpen(false);
-        return;
-      }
-      if (event.pointerType === 'mouse') {
-        togglePlay();
-        reveal();
-        return;
-      }
-      const box = event.currentTarget.getBoundingClientRect();
-      const side = event.clientX - box.left < box.width / 2 ? 'start' : 'end';
-      const now = Date.now();
-      const previous = lastTap.current;
-      if (previous && now - previous.at < 300 && previous.side === side) {
-        lastTap.current = null;
-        seekBy(side === 'start' ? -SEEK_STEP : SEEK_STEP);
-        reveal();
-        return;
-      }
-      lastTap.current = { at: now, side };
-      if (barVisible && !paused) setControlsShown(false);
-      else reveal();
-    },
-    [menuOpen, togglePlay, reveal, seekBy, barVisible, paused],
-  );
 
   // The bar spans only what the student sees: `[start, end]` of the file.
   const window_ = trimWindow(trim, duration);
@@ -441,22 +317,54 @@ export function MirrorVideo({
       : `${levels.find((rung) => rung.index === level)?.height ?? ''}p`;
 
   return (
-    <div
-      // LTR for the whole surface: the timeline, the ±10 buttons, the arrow
-      // keys and the double-tap halves all have to agree on which way is back.
-      dir="ltr"
-      // A size container, so the settings menu can be capped at the PLAYER's
-      // height — a phone in portrait gives it barely 200px.
-      className={cn('absolute inset-0 select-none bg-black [container-type:size]', !barVisible && 'cursor-none')}
-      tabIndex={0}
-      role="region"
-      aria-label={title}
-      onKeyDown={onKeyDown}
-      onPointerMove={(event) => {
-        if (event.pointerType === 'mouse') reveal();
+    <PlayerChrome
+      title={title}
+      className="bg-black"
+      paused={paused}
+      waiting={waiting}
+      timeline={{
+        min: window_.start,
+        max: window_.end,
+        value: time,
+        played,
+        loaded,
       }}
-      // No «حفظ الفيديو باسم» — the menu that offers it is the browser's.
-      onContextMenu={(event) => event.preventDefault()}
+      shownTime={shownTime}
+      shownDuration={shownDuration}
+      onTogglePlay={togglePlay}
+      onSeekBy={seekBy}
+      onSeekTo={seekTo}
+      muted={muted}
+      volume={volume}
+      onToggleMute={toggleMute}
+      onVolume={chooseVolume}
+      speed={speed}
+      speeds={SPEEDS}
+      onSpeed={chooseSpeed}
+      settingsExtra={
+        levels.length > 1 ? (
+          <>
+            <p className="mt-3 text-[length:var(--fs-text-xs)] font-semibold text-white/70">
+              {c.quality} · <span dir="ltr">{qualityLabel}</span>
+            </p>
+            <div className="mt-2 grid grid-cols-3 gap-1.5" dir="ltr">
+              <QualityItem wide selected={level === -1} onClick={() => chooseLevel(-1)}>
+                <span dir="rtl">
+                  {autoHeight !== null ? formatCopy(c.qualityAutoNow, { height: autoHeight }) : c.qualityAuto}
+                </span>
+              </QualityItem>
+              {levels.map((rung) => (
+                <QualityItem key={rung.index} selected={level === rung.index} onClick={() => chooseLevel(rung.index)}>
+                  <span className="mono">{rung.height}p</span>
+                </QualityItem>
+              ))}
+            </div>
+          </>
+        ) : null
+      }
+      fullscreen={fullscreen}
+      onToggleFullscreen={onToggleFullscreen}
+      watermark={watermark}
     >
       <video
         ref={ref}
@@ -471,10 +379,7 @@ export function MirrorVideo({
         controlsList="nodownload noremoteplayback"
         disablePictureInPicture
         disableRemotePlayback
-        onPlay={() => {
-          setPaused(false);
-          reveal();
-        }}
+        onPlay={() => setPaused(false)}
         onPause={() => setPaused(true)}
         onEnded={() => setPaused(true)}
         onWaiting={() => setWaiting(true)}
@@ -517,211 +422,7 @@ export function MirrorVideo({
           event.currentTarget.currentTime = target;
         }}
       />
-
-      {watermark ? <Watermark text={watermark} /> : null}
-
-      {/* The picture itself: the tap / double-tap surface. */}
-      <div className="absolute inset-0 z-[6]" onPointerUp={onSurfacePointerUp} aria-hidden="true" />
-
-      {waiting && !paused ? (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-[7] m-auto size-12 animate-spin rounded-full border-2 border-white/30 border-t-white"
-        />
-      ) : null}
-
-      {flash ? (
-        <span
-          aria-hidden="true"
-          className={cn(
-            'pointer-events-none absolute top-1/2 z-[7] grid size-16 -translate-y-1/2 place-items-center rounded-full bg-black/45 text-white',
-            flash === 'back' ? 'start-[12%]' : 'end-[12%]',
-          )}
-        >
-          {flash === 'back' ? <RotateCcw className="size-7" /> : <RotateCw className="size-7" />}
-        </span>
-      ) : null}
-
-      {paused && !waiting ? (
-        <button
-          type="button"
-          onClick={togglePlay}
-          aria-label={c.play}
-          className="absolute inset-0 z-[8] m-auto grid size-16 place-items-center rounded-full bg-accent text-[#1A1206] shadow-lg"
-        >
-          <Play className="size-7 translate-x-0.5 fill-current" aria-hidden="true" />
-        </button>
-      ) : null}
-
-      {/*
-        The bar. Left to right, like the whole surface: a timeline runs that
-        way in every player a student has ever used, Arabic interfaces included.
-      */}
-      <div
-        className={cn(
-          'absolute inset-x-0 bottom-0 z-[9] bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-2 pt-10',
-          'transition-opacity duration-[200ms] ease-out',
-          barVisible ? 'opacity-100' : 'pointer-events-none opacity-0',
-        )}
-      >
-        <input
-          type="range"
-          className="mv-timeline"
-          min={window_.start}
-          max={window_.end || 0}
-          step={0.1}
-          value={Math.min(Math.max(time, window_.start), window_.end || 0)}
-          aria-label={c.seek}
-          aria-valuetext={`${clock(shownTime)} / ${clock(shownDuration)}`}
-          style={{ '--mv-played': `${played}%`, '--mv-buffered': `${Math.max(played, loaded)}%` } as CSSProperties}
-          onChange={(event) => {
-            const element = ref.current;
-            if (element) element.currentTime = skipCuts(Number(event.currentTarget.value), trim);
-            reveal();
-          }}
-        />
-
-        <div className="mt-1 flex items-center gap-1 text-white">
-          <BarButton label={paused ? c.play : c.pause} onClick={togglePlay}>
-            {paused ? <Play className="size-5 fill-current" /> : <Pause className="size-5 fill-current" />}
-          </BarButton>
-          {/* On a phone the double tap does this, the way YouTube's does — the
-              bar there is too narrow to spend two buttons on it. */}
-          <BarButton label={c.back} onClick={() => seekBy(-SEEK_STEP)} className="hidden sm:grid">
-            <RotateCcw className="size-5" />
-          </BarButton>
-          <BarButton label={c.forward} onClick={() => seekBy(SEEK_STEP)} className="hidden sm:grid">
-            <RotateCw className="size-5" />
-          </BarButton>
-          <BarButton
-            label={muted || volume === 0 ? c.unmute : c.mute}
-            onClick={() => {
-              const element = ref.current;
-              if (element) element.muted = !element.muted;
-            }}
-          >
-            {muted || volume === 0 ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
-          </BarButton>
-          <input
-            type="range"
-            className="mv-volume hidden md:block"
-            min={0}
-            max={1}
-            step={0.05}
-            value={muted ? 0 : volume}
-            aria-label={c.volume}
-            onChange={(event) => {
-              const element = ref.current;
-              if (!element) return;
-              element.volume = Number(event.currentTarget.value);
-              element.muted = element.volume === 0;
-            }}
-          />
-          <span className="mono tabular ms-1 whitespace-nowrap text-[length:var(--fs-text-xs)] text-white/90">
-            {clock(shownTime)} / {clock(shownDuration)}
-          </span>
-
-          <span className="ms-auto" />
-
-          <div className="relative">
-            <BarButton label={c.settings} onClick={() => setMenuOpen((open) => !open)} active={menuOpen}>
-              <Settings className={cn('size-5 transition-transform duration-[200ms]', menuOpen && 'rotate-45')} />
-              {speed !== 1 ? (
-                <span className="mono absolute -top-0.5 end-0 rounded bg-accent px-1 text-[10px] font-bold leading-4 text-[#1A1206]">
-                  {speed}x
-                </span>
-              ) : null}
-            </BarButton>
-            {menuOpen ? (
-              <div
-                role="menu"
-                className="absolute bottom-12 end-0 max-h-[calc(100cqh-4rem)] w-64 max-w-[80cqw] overflow-y-auto overscroll-contain rounded-lg border border-white/10 bg-black/85 p-3 text-white shadow-xl backdrop-blur-md"
-              >
-                {/* Anchored in the bar's LTR, read in Arabic. */}
-                <div dir="rtl">
-                <p className="text-[length:var(--fs-text-xs)] font-semibold text-white/70">{c.speed}</p>
-                <div className="mt-2 grid grid-cols-3 gap-1.5" dir="ltr">
-                  {SPEEDS.map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={speed === value}
-                      onClick={() => chooseSpeed(value)}
-                      className={cn(
-                        'mono rounded-md px-2 py-1.5 text-[length:var(--fs-text-sm)] transition-colors duration-[160ms]',
-                        speed === value ? 'bg-accent font-semibold text-[#1A1206]' : 'bg-white/10 hover:bg-white/20',
-                      )}
-                    >
-                      {value === 1 ? c.speedNormal : `${value}x`}
-                    </button>
-                  ))}
-                </div>
-
-                {levels.length > 1 ? (
-                  <>
-                    <p className="mt-3 text-[length:var(--fs-text-xs)] font-semibold text-white/70">
-                      {c.quality} · <span dir="ltr">{qualityLabel}</span>
-                    </p>
-                    <div className="mt-2 grid grid-cols-3 gap-1.5" dir="ltr">
-                      <QualityItem wide selected={level === -1} onClick={() => chooseLevel(-1)}>
-                        <span dir="rtl">
-                          {autoHeight !== null ? formatCopy(c.qualityAutoNow, { height: autoHeight }) : c.qualityAuto}
-                        </span>
-                      </QualityItem>
-                      {levels.map((rung) => (
-                        <QualityItem key={rung.index} selected={level === rung.index} onClick={() => chooseLevel(rung.index)}>
-                          <span className="mono">{rung.height}p</span>
-                        </QualityItem>
-                      ))}
-                    </div>
-                  </>
-                ) : null}
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          <BarButton
-            label={fullscreen ? copy.player.exitFullscreen : copy.player.enterFullscreen}
-            onClick={onToggleFullscreen}
-          >
-            <FullscreenIcon exiting={fullscreen} />
-          </BarButton>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function BarButton({
-  label,
-  onClick,
-  active = false,
-  className,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  active?: boolean;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className={cn(
-        'relative grid size-10 place-items-center rounded-full transition-colors duration-[160ms] ease-out',
-        'hover:bg-white/15 focus-visible:bg-white/15',
-        active && 'bg-white/15',
-        className,
-      )}
-    >
-      {children}
-    </button>
+    </PlayerChrome>
   );
 }
 
@@ -751,34 +452,5 @@ function QualityItem({
     >
       {children}
     </button>
-  );
-}
-
-/**
- * The viewer's name over the picture, moved every few seconds.
- *
- * Not protection — nothing drawn by the page is — but attribution: a
- * screen-recorded lecture carries the account it came from, and that is what
- * stops a recording being passed around. Moving it is what keeps it from
- * being cropped out of one corner.
- */
-function Watermark({ text }: { text: string }) {
-  const [spot, setSpot] = useState({ top: 12, start: 8 });
-
-  useEffect(() => {
-    const move = () => setSpot({ top: 8 + Math.random() * 72, start: 4 + Math.random() * 56 });
-    const id = setInterval(move, WATERMARK_MOVE_MS);
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <span
-      aria-hidden="true"
-      className="mv-watermark"
-      style={{ insetBlockStart: `${spot.top}%`, insetInlineStart: `${spot.start}%` }}
-      dir="auto"
-    >
-      {text}
-    </span>
   );
 }

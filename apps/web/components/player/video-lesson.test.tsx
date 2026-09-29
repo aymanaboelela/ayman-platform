@@ -47,17 +47,74 @@ const UPLOADED: PlayerVideo = {
 /** The same upload, while the encoder still has it. */
 const PROCESSING: PlayerVideo = { ...UPLOADED, mirror: null };
 
-function renderPlayer() {
+function renderPlayer({ resumeAt = 0, watermark = null }: { resumeAt?: number; watermark?: string | null } = {}) {
   return render(
     <VideoLesson
       lessonId="0198c3a2-0000-7000-8000-000000000001"
       video={VIDEO}
       title="How AI Works"
-      resumeAt={0}
+      resumeAt={resumeAt}
       onProgress={() => {}}
       onError={() => {}}
+      watermark={watermark}
     />,
   );
+}
+
+interface FakeEvents {
+  onReady?: (event: { target: unknown }) => void;
+  onStateChange?: (event: { data: number; target: unknown }) => void;
+}
+
+/**
+ * The IFrame API, as much of it as the shield's bar drives.
+ *
+ * Like the real one it REPLACES the node it is handed with its own frame, so
+ * the frame ends up where the real one does: inside the shell, before the
+ * layers drawn over it. And like the real one it answers `onReady` LATER, never
+ * from inside the constructor — the watchdog is armed after construction, and
+ * a synchronous `onReady` would find nothing to disarm.
+ */
+function fakeYouTube({ ready = 'soon' }: { ready?: 'soon' | 'never' } = {}) {
+  const frame = document.createElement('iframe');
+  let events: FakeEvents = {};
+  let playerVars: Record<string, unknown> = {};
+  const player = {
+    destroy: vi.fn(),
+    getCurrentTime: vi.fn(() => 42),
+    getDuration: vi.fn(() => 3696),
+    getPlayerState: vi.fn(() => 1),
+    playVideo: vi.fn(),
+    pauseVideo: vi.fn(),
+    seekTo: vi.fn(),
+    getVideoLoadedFraction: vi.fn(() => 0.1),
+    getPlaybackRate: vi.fn(() => 1),
+    setPlaybackRate: vi.fn(),
+    getAvailablePlaybackRates: vi.fn(() => [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]),
+    getVolume: vi.fn(() => 100),
+    setVolume: vi.fn(),
+    isMuted: vi.fn(() => false),
+    mute: vi.fn(),
+    unMute: vi.fn(),
+    getIframe: () => frame,
+  };
+  const Player = vi.fn(
+    (mount: HTMLElement, options: { playerVars?: Record<string, unknown>; events?: FakeEvents }) => {
+      events = options.events ?? {};
+      playerVars = options.playerVars ?? {};
+      mount.replaceWith(frame);
+      if (ready === 'soon') queueMicrotask(() => events.onReady?.({ target: player }));
+      return player;
+    },
+  );
+  loadYouTubeIframeApi.mockResolvedValue({ Player });
+  return {
+    player,
+    frame,
+    playerVars: () => playerVars,
+    /** YouTube reporting a state change, the way `onStateChange` does. */
+    emit: (state: number) => act(() => events.onStateChange?.({ data: state, target: player })),
+  };
 }
 
 beforeEach(() => {
@@ -151,21 +208,8 @@ describe('VideoLesson when YouTube never answers', () => {
 
   it('leaves a player that does become ready alone', async () => {
     vi.useFakeTimers();
-    const destroy = vi.fn();
-    loadYouTubeIframeApi.mockResolvedValue({
-      Player: vi.fn((_element: HTMLElement, options: { events?: { onReady?: (e: unknown) => void } }) => {
-        const player = {
-          destroy,
-          getCurrentTime: () => 0,
-          getDuration: () => 0,
-          getPlayerState: () => 1,
-          playVideo: vi.fn(),
-          getIframe: () => document.createElement('iframe'),
-        };
-        queueMicrotask(() => options.events?.onReady?.({ target: player }));
-        return player;
-      }),
-    });
+    const { player } = fakeYouTube();
+    const destroy = player.destroy;
     renderPlayer();
 
     fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
@@ -346,19 +390,19 @@ describe('VideoLesson fullscreen control', () => {
       configurable: true,
     });
 
-    loadYouTubeIframeApi.mockResolvedValue({
-      Player: vi.fn((_mount: unknown, options: { events?: { onReady?: (e: unknown) => void } }) => {
-        const player = { destroy: vi.fn(), getCurrentTime: () => 0, getDuration: () => 100, getPlayerState: () => 1, playVideo: vi.fn() };
-        options.events?.onReady?.({ target: player });
-        return player;
-      }),
-    });
+    fakeYouTube();
   });
 
+  /**
+   * The button in the shield's bar. Waiting for the bar first, because while
+   * the frame loads the corner control stands in for it — and a test holding
+   * THAT one would be clicking a button that has since left the page.
+   */
   async function play() {
     renderPlayer();
     fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
-    return screen.findByRole('button', { name: copy.player.enterFullscreen });
+    await screen.findByRole('region', { name: 'How AI Works' });
+    return screen.getByRole('button', { name: copy.player.enterFullscreen });
   }
 
   it('shows no fullscreen button until the video has actually started', () => {
@@ -400,5 +444,252 @@ describe('VideoLesson fullscreen control', () => {
 
     expect(unlock).toHaveBeenCalledTimes(1);
     expect(exitFullscreen).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * «شيلها من الفيديوهات اللي بتتعرض يوتيوب».
+ *
+ * The embed's own UI — the copy-link button in the corner, the title, the
+ * logo, the right-click menu — handed any student the video's address. The
+ * shield answers with three things, and each is asserted by its EFFECT:
+ * YouTube is asked to draw no controls, a layer of ours covers the whole
+ * frame and swallows what lands on it, and every control a student still
+ * needs is ours, calling the IFrame API.
+ */
+describe('VideoLesson YouTube shield', () => {
+  const c = copy.player.controls;
+
+  async function play(options?: Parameters<typeof renderPlayer>[0]) {
+    const view = renderPlayer(options);
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await screen.findByRole('region', { name: 'How AI Works' });
+    return view;
+  }
+
+  it('asks YouTube for no controls, no keyboard and no cards — and keeps the rest', async () => {
+    const yt = fakeYouTube();
+    await play({ resumeAt: 600 });
+
+    expect(yt.playerVars()).toMatchObject({
+      controls: 0,
+      disablekb: 1,
+      iv_load_policy: 3,
+      rel: 0,
+      playsinline: 1,
+      hl: 'ar',
+      // The resume still lands: 600 minus the five-second rewind.
+      start: 595,
+    });
+  });
+
+  it('covers the whole frame with a layer that takes every tap and swallows the context menu', async () => {
+    const yt = fakeYouTube();
+    const { container } = await play();
+
+    const region = screen.getByRole('region', { name: 'How AI Works' });
+    // Over the frame: a later sibling in the same shell, stretched edge to
+    // edge, and nothing on it lets events fall through.
+    expect(region.parentElement).toBe(yt.frame.parentElement);
+    expect(yt.frame.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(region.className).toContain('inset-0');
+    expect(region.className).not.toContain('pointer-events-none');
+
+    const surface = container.querySelector('[data-player-surface]') as HTMLElement;
+    expect(surface.className).toContain('inset-0');
+    // `fireEvent` returns false when a handler called `preventDefault()`:
+    // YouTube's «نسخ عنوان URL للفيديو» menu, and the browser's, never open.
+    expect(fireEvent.contextMenu(surface)).toBe(false);
+    expect(fireEvent.contextMenu(region)).toBe(false);
+  });
+
+  it('takes the frame out of the keyboard\'s reach too', async () => {
+    const yt = fakeYouTube();
+    await play();
+
+    // Tab would otherwise walk into YouTube's title link and copy-link button.
+    expect(yt.frame.tabIndex).toBe(-1);
+    expect(yt.frame.inert).toBe(true);
+  });
+
+  it('drives the video through the IFrame API from its own buttons', async () => {
+    const yt = fakeYouTube();
+    await play();
+    // YouTube says it is playing, so the bar offers «إيقاف مؤقت».
+    yt.emit(1);
+
+    fireEvent.click(screen.getByRole('button', { name: c.pause }));
+    expect(yt.player.pauseVideo).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getAllByRole('button', { name: c.play })[0] as HTMLElement);
+    expect(yt.player.playVideo).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: c.forward }));
+    expect(yt.player.seekTo).toHaveBeenLastCalledWith(52, true);
+    fireEvent.click(screen.getByRole('button', { name: c.back }));
+    expect(yt.player.seekTo).toHaveBeenLastCalledWith(32, true);
+
+    fireEvent.change(screen.getByRole('slider', { name: c.seek }), { target: { value: '1800' } });
+    expect(yt.player.seekTo).toHaveBeenLastCalledWith(1800, true);
+
+    fireEvent.click(screen.getByRole('button', { name: c.mute }));
+    expect(yt.player.mute).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: c.settings }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: '1.5x' }));
+    expect(yt.player.setPlaybackRate).toHaveBeenCalledWith(1.5);
+  });
+
+  it('offers no quality menu — the API cannot set one, so none is faked', async () => {
+    fakeYouTube();
+    await play();
+
+    fireEvent.click(screen.getByRole('button', { name: c.settings }));
+    expect(screen.queryByText(c.quality)).toBeNull();
+  });
+
+  it('offers no speed menu for a video that plays at one speed only', async () => {
+    const yt = fakeYouTube();
+    yt.player.getAvailablePlaybackRates.mockReturnValue([1]);
+    await play();
+
+    expect(screen.queryByRole('button', { name: c.settings })).toBeNull();
+  });
+
+  it('draws the student\'s name over YouTube\'s picture as well', async () => {
+    fakeYouTube();
+    const { container } = await play({ watermark: 'Student Name · 01000000000' });
+
+    const mark = container.querySelector('.mv-watermark');
+    expect(mark?.textContent).toBe('Student Name · 01000000000');
+  });
+
+  it('keeps its own fullscreen button in the bar, not the corner one', async () => {
+    fakeYouTube();
+    await play();
+
+    // Exactly one: the bar's. The corner control was for a frame with a bar
+    // of its own, and two identical buttons would be one too many.
+    expect(screen.getAllByRole('button', { name: copy.player.enterFullscreen })).toHaveLength(1);
+  });
+
+  /*
+   * The iPhone case. It will not start an embed from script until the frame
+   * itself has been touched — and the shield exists so it cannot be. Without
+   * a way through, every iPhone student would face a lecture that never
+   * starts.
+   */
+  it('opens a hole over YouTube\'s own play button when a play never starts, and closes it once it does', async () => {
+    vi.useFakeTimers();
+    const yt = fakeYouTube();
+    renderPlayer();
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const region = screen.getByRole('region', { name: 'How AI Works' });
+    expect(region.className).not.toContain('pc-keyhole');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_500);
+    });
+    expect(region.className).toContain('pc-keyhole');
+    // An inert frame takes no tap even through a hole.
+    expect(yt.frame.inert).toBe(false);
+
+    yt.emit(1);
+    expect(region.className).not.toContain('pc-keyhole');
+    expect(yt.frame.inert).toBe(true);
+  });
+
+  it('never opens the hole where the play simply works', async () => {
+    vi.useFakeTimers();
+    const yt = fakeYouTube();
+    renderPlayer();
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    yt.emit(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+
+    expect(screen.getByRole('region', { name: 'How AI Works' }).className).not.toContain('pc-keyhole');
+  });
+
+  it('covers the frame while it is still loading, before there is an API to drive', async () => {
+    fakeYouTube({ ready: 'never' });
+    const { container } = renderPlayer();
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {});
+
+    const glass = container.querySelector('[data-player-glass]') as HTMLElement | null;
+    expect(glass).not.toBeNull();
+    expect(glass?.className).toContain('inset-0');
+    expect(fireEvent.contextMenu(glass as HTMLElement)).toBe(false);
+  });
+
+  it('leaves the plain-embed fallback unshielded, because nothing could drive it', async () => {
+    loadYouTubeIframeApi.mockRejectedValue(new Error('blocked'));
+    const { container } = renderPlayer();
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+
+    const frame = (await screen.findByTitle('How AI Works')) as HTMLIFrameElement;
+    // YouTube's own controls are the only ones this frame has.
+    expect(frame.src).not.toContain('controls=0');
+    expect(screen.queryByRole('region', { name: 'How AI Works' })).toBeNull();
+    expect(container.querySelector('[data-player-glass]')).toBeNull();
+  });
+});
+
+/**
+ * The bar moved out of `mirror-video.tsx` into `player-chrome.tsx` so both
+ * sources wear it. Our own copy is the one that had it first — these hold it
+ * to what it did before the move.
+ */
+describe('VideoLesson our own copy, after the bar moved out', () => {
+  const c = copy.player.controls;
+
+  beforeEach(() => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockImplementation((type: string) =>
+      type === 'application/vnd.apple.mpegurl' ? 'probably' : '',
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('still draws its bar, its speeds and the name over the picture', async () => {
+    const { container } = render(
+      <VideoLesson
+        lessonId="0198c3a2-0000-7000-8000-000000000001"
+        video={MIRRORED}
+        title="How AI Works"
+        resumeAt={0}
+        onProgress={() => {}}
+        onError={() => {}}
+        watermark="Student Name"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {});
+
+    const region = screen.getByRole('region', { name: 'How AI Works' });
+    expect(region.querySelector('video')).not.toBeNull();
+    expect(region.className).toContain('bg-black');
+    expect(container.querySelector('.mv-watermark')?.textContent).toBe('Student Name');
+    expect(fireEvent.contextMenu(region)).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: c.settings }));
+    expect(screen.getAllByRole('menuitemradio').map((item) => item.textContent)).toEqual([
+      '0.75x',
+      c.speedNormal,
+      '1.25x',
+      '1.5x',
+      '1.75x',
+      '2x',
+    ]);
   });
 });
