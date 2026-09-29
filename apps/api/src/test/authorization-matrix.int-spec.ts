@@ -1792,6 +1792,20 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'analytics export students: admin', method: 'get', path: () => '/api/admin/analytics/export/students.csv', actor: 'admin', status: 200 },
     { label: 'analytics export roster: student', method: 'get', path: () => `/api/admin/analytics/lessons/${lessonId}/roster.csv`, actor: 'student', status: 403 },
     { label: 'analytics export roster: admin', method: 'get', path: () => `/api/admin/analytics/lessons/${lessonId}/roster.csv`, actor: 'admin', status: 200 },
+    // «إحصائيات الفيديو». Same permission, same double duty: the admin 200 on
+    // the list runs the GROUPING/UNION SQL end to end. This fixture has no
+    // video lesson, so the detail's admin row asks for a well-formed key that
+    // names nothing — a 404, which is a mounted, authorized route answering
+    // «مش موجود», never a 403.
+    { label: 'analytics videos: anonymous', method: 'get', path: () => '/api/admin/analytics/videos?period=28d', actor: 'anonymous', status: 401 },
+    { label: 'analytics videos: student', method: 'get', path: () => '/api/admin/analytics/videos?period=28d', actor: 'student', status: 403 },
+    { label: 'analytics videos: admin', method: 'get', path: () => '/api/admin/analytics/videos?period=28d', actor: 'admin', status: 200 },
+    { label: 'analytics video detail: anonymous', method: 'get', path: () => `/api/admin/analytics/videos/upload-${'a'.repeat(32)}`, actor: 'anonymous', status: 401 },
+    { label: 'analytics video detail: student', method: 'get', path: () => `/api/admin/analytics/videos/upload-${'a'.repeat(32)}`, actor: 'student', status: 403 },
+    { label: 'analytics video detail: admin, no such video', method: 'get', path: () => `/api/admin/analytics/videos/upload-${'a'.repeat(32)}?period=all`, actor: 'admin', status: 404 },
+    { label: 'analytics export videos: anonymous', method: 'get', path: () => '/api/admin/analytics/export/videos.csv', actor: 'anonymous', status: 401 },
+    { label: 'analytics export videos: student', method: 'get', path: () => '/api/admin/analytics/export/videos.csv', actor: 'student', status: 403 },
+    { label: 'analytics export videos: admin', method: 'get', path: () => '/api/admin/analytics/export/videos.csv?period=all', actor: 'admin', status: 200 },
 
     // ── Vodafone Cash course subscriptions ──────────────────────────────
     // `POST /api/payments/screenshot` is the multipart route and is a
