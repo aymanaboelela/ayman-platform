@@ -52,6 +52,8 @@ export const AUDIT_RESOURCES = {
   lessonVideo: 'lesson_videos',
   enrollment: 'enrollments',
   questionVersion: 'question_versions',
+  /// «أسئلة الألعاب» — لعبة في كورس بتسحب منين. المعرّف `courseId:mode`.
+  gameModeSetting: 'game_mode_settings',
   quiz: 'quizzes',
   quizAttempt: 'quiz_attempts',
   taxonomy: 'taxonomy',

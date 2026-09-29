@@ -242,6 +242,8 @@ model User {
   /// Ledger rows an admin entered by hand. `SetNull`: deleting the admin
   /// keeps the money and loses only the name — same as `refundsIssued`.
   walletTransactionsEntered  WalletTransaction[]     @relation("WalletTransactionActor")
+  /// «الألعاب» — كل جولة لعبها. `Cascade`: إحصائيات لعب مالهاش معنى من غير صاحبها.
+  gameSessions               GameSession[]
 
   @@unique([email])
   @@map("users")
@@ -1045,6 +1047,9 @@ model Course {
   // `monthlyPriceCents` above.
   /// «أسئلة الألعاب» بتاعة الكورس — شوف `QuestionCategory.gameCourseId`.
   gameQuestionBank QuestionCategory? @relation("GameQuestionBank")
+  /// كل لعبة بتسحب منين في الكورس ده — شوف `GameModeSetting`.
+  gameModeSettings GameModeSetting[]
+  gameSessions     GameSession[]
   @@index([status, publishedAt])
   @@index([systemId, year, trackId, subjectId])
   @@map("courses")
@@ -1081,6 +1086,8 @@ model CourseSection {
   /// الأولى» means to the student who paid for it.
   accessGrants    AccessGrant[]
   unlockCodeItems UnlockCodeItem[]
+  /// جولات ألعاب الطالب اختار فيها الوحدة دي بس.
+  gameSessions    GameSession[]
 
   // Re-created as DEFERRABLE INITIALLY DEFERRED in the hand-written migration
   // (Task 3, Step 7). Prisma cannot express deferrability and does not
@@ -1410,6 +1417,9 @@ model Lesson {
   coversLessons       ExamCoverage[]       @relation("ExamCoverageExam")
   /// The inverse: which monthly exams carry this lecture on their syllabus.
   coveredByExams      ExamCoverage[]       @relation("ExamCoverageCovered")
+  /// «أسئلة الألعاب» بتاعة الدرس ده — شوف `QuestionCategory.gameLessonId`.
+  gameQuestionBank    QuestionCategory?    @relation("GameLessonBank")
+  gameSessions        GameSession[]
   /// «المحاضرة دي تابعة لشهر كام» — the sales months that open this lecture.
   /// Empty on every lecture of a course with no months configured, and empty
   /// is a real, deliberate state even on one that has them — see `LessonMonth`.
@@ -3430,11 +3440,17 @@ model QuestionCategory {
   /// «أسئلة الألعاب» — لو مربوط بكورس، الألعاب بتسحب من أسئلة التصنيف ده
   /// لطلبة الكورس. واحد بس لكل كورس. NULL = تصنيف عادي.
   gameCourseId String?           @unique @map("game_course_id") @db.Uuid
+  /// «أسئلة الألعاب» لدرس واحد — تصنيف ابن لتصنيف الكورس (`parentId`)، والألعاب
+  /// بتعدّ أسئلته على الدرس ده (الطالب يقدر يلعب الدرس لوحده). واحد بس لكل
+  /// درس. درس اتمسح = `SET NULL`، والأسئلة بتفضل في ألعاب الكورس كأسئلة عامة
+  /// لأن التصنيف لسه ابن تصنيف الكورس.
+  gameLessonId String?           @unique @map("game_lesson_id") @db.Uuid
 
   parent     QuestionCategory?   @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
   children   QuestionCategory[]  @relation("CategoryTree")
   entries    QuestionBankEntry[]
   gameCourse Course?             @relation("GameQuestionBank", fields: [gameCourseId], references: [id], onDelete: SetNull)
+  gameLesson Lesson?             @relation("GameLessonBank", fields: [gameLessonId], references: [id], onDelete: SetNull)
 
   @@index([parentId])
   @@map("question_categories")
@@ -3494,6 +3510,7 @@ model QuestionVersion {
   author           User              @relation(fields: [createdBy], references: [id], onDelete: Restrict)
   options          QuestionOption[]
   attemptQuestions AttemptQuestion[]
+  gameAnswers      GameAnswer[]
 
   @@unique([bankEntryId, version])
   @@index([bankEntryId, status])
@@ -5426,5 +5443,125 @@ model MarketingOptOut {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("marketing_opt_outs")
+  @@schema("app")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// «الألعاب» — الإعدادات لكل لعبة، والجولات، والإجابات
+// ═══════════════════════════════════════════════════════════════════════
+
+enum GameMode {
+  race
+  millionaire
+  survival
+
+  @@map("game_mode")
+  @@schema("app")
+}
+
+enum GameLevel {
+  easy
+  medium
+  hard
+
+  @@map("game_level")
+  @@schema("app")
+}
+
+/// إزاي الجولة خلصت. NULL في `game_sessions.outcome` = لسه، أو الطالب خرج في النص.
+enum GameOutcome {
+  won
+  walked
+  lost
+  finished
+
+  @@map("game_outcome")
+  @@schema("app")
+}
+
+/// لعبة واحدة في كورس واحد بتسحب منين. مفيش صف = الافتراضي (الكويزات وأسئلة
+/// الألعاب، وكل الدروس) — نفس اللي كان قبل ما الجدول ده يتعمل.
+///
+/// `lessonIds` مصفوفة من غير FK عن قصد: درس اتمسح بيفضل رقم مالوش أسئلة،
+/// والفلتر بيتجاهله. جدول ربط كان هيبقى تلات جداول لإعداد بيتقرا مرة مع كل جولة.
+model GameModeSetting {
+  courseId   String   @map("course_id") @db.Uuid
+  mode       GameMode
+  useQuizzes Boolean  @default(true) @map("use_quizzes")
+  useBank    Boolean  @default(true) @map("use_bank")
+  lessonIds  String[] @default([]) @map("lesson_ids") @db.Uuid
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([courseId, mode])
+  @@map("game_mode_settings")
+  @@schema("app")
+}
+
+/// جولة لعب واحدة — بتبدأ لما السيرفر يوزّع الأسئلة (`POST /api/me/game/rounds`).
+///
+/// `questionIds` هي الأسئلة اللي اتوزّعت: الإجابة و«المساعدات» والصوت
+/// بيتأكدوا منها (صف واحد بـindex) بدل ما يعيدوا حساب بنك الطالب كله مع كل
+/// دوسة — ده اللي كان بيخلّي «أيوه، نهائية» تقعد تحمّل.
+///
+/// المدة من ساعة السيرفر بس، مقصوصة على أطول جولة ممكنة
+/// (`gameSessionCapSeconds`)، وبتتحدّث مع كل إجابة — فالجولة اللي الطالب
+/// قفلها في النص ليها مدة لحد آخر إجابة.
+model GameSession {
+  id              String       @id @default(uuid(7)) @db.Uuid
+  userId          String       @map("user_id")
+  /// NULL = «كل الكورسات».
+  courseId        String?      @map("course_id") @db.Uuid
+  /// النطاق: وحدة أو درس. الاتنين NULL = المنهج كله.
+  sectionId       String?      @map("section_id") @db.Uuid
+  lessonId        String?      @map("lesson_id") @db.Uuid
+  mode            GameMode
+  level           GameLevel
+  questionIds     String[]     @default([]) @map("question_ids") @db.Uuid
+  questionCount   Int          @default(0) @map("question_count")
+  answered        Int          @default(0)
+  /// «right_count» مش «correct» في الداتابيز: `schema.spec.ts` بيمنع أي عمود
+  /// اسمه `correct` في الـschema — الصح في بنك الأسئلة `fraction` بس، وده عدّاد
+  /// نتيجة لعبة مش علامة على اختيار.
+  correct         Int          @default(0) @map("right_count")
+  score           Int          @default(0)
+  outcome         GameOutcome?
+  durationSeconds Int          @default(0) @map("duration_seconds")
+  startedAt       DateTime     @default(now()) @map("started_at")
+  lastActivityAt  DateTime     @default(now()) @map("last_activity_at")
+  endedAt         DateTime?    @map("ended_at")
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course  Course?        @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  section CourseSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  lesson  Lesson?        @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  answers GameAnswer[]
+
+  @@index([startedAt])
+  @@index([userId, startedAt])
+  @@index([courseId, startedAt])
+  @@map("game_sessions")
+  @@schema("app")
+}
+
+/// إجابة واحدة في جولة — للصح والغلط في الإحصائيات و«أصعب الأسئلة».
+/// UNIQUE على (الجولة، السؤال): دوسة اتبعتت مرتين (نت بطيء) بتتحسب مرة.
+model GameAnswer {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  sessionId         String   @map("session_id") @db.Uuid
+  questionVersionId String   @map("question_version_id") @db.Uuid
+  /// NULL = الوقت خلص من غير إجابة.
+  optionId          String?  @map("option_id") @db.Uuid
+  /// «was_right» مش «correct» — نفس سبب `GameSession.correct`.
+  correct           Boolean  @map("was_right")
+  answeredAt        DateTime @default(now()) @map("answered_at")
+
+  session         GameSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionVersion QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, questionVersionId])
+  @@index([questionVersionId])
+  @@map("game_answers")
   @@schema("app")
 }

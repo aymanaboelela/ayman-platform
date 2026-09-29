@@ -60,6 +60,10 @@ export const AUDIT_ACTIONS = [
   // every attempt already sat on it to a different row of the outline, and
   // «الكويز راح فين» has no other answer once the old lesson no longer has one.
   'quiz:move',
+  // «أسئلة الألعاب» — لعبة في كورس اتغيّر هي بتسحب منين (الكويزات، أسئلة
+  // الألعاب، دروس معيّنة). بيتسجّل لأن «المليون بقى فيه أسئلة الدرس ٣ بس» سؤال
+  // ماحدش هيعرف يجاوبه من الأسئلة نفسها.
+  'game:settings',
   // امتحانات نص/آخر الشهر. Their own actions rather than `quiz:*`, because the
   // question an audit of one answers is «الامتحان اتفتح إمتى وعلى إيه» — the
   // window and the syllabus — and folding them into quiz edits would bury that

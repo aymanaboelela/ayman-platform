@@ -1,21 +1,36 @@
 import { randomInt } from 'node:crypto';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
+  DEFAULT_GAME_MODE_CONFIG,
   GAME_RULES,
+  clampGameSeconds,
+  defaultGameModes,
+  gameItemAllowed,
+  settleGame,
   type GameAnswerRequest,
   type GameAnswerResult,
+  type GameBucket,
+  type GameFinishRequest,
+  type GameFinishResult,
   type GameHub,
+  type GameHubCourse,
   type GameLevel,
   type GameLifelineRequest,
   type GameLifelineResult,
+  type GameMe,
   type GameMode,
+  type GameModesConfig,
   type GameRound,
   type GameRoundQuery,
+  type GameScope,
+  type GameSource,
+  type GameStartRequest,
 } from '@ayman/contracts/quiz/game';
 import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import { Prisma } from '../../generated/prisma/client';
 import { azureSpeech } from './game-voice.config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EnrollmentService } from '../enrollment/enrollment.service';
 
 /** «سهل» لو ٧٠٪ من اللي جاوبوه جابوه صح، و«صعب» لو أقل من ٤٠٪. */
 const EASY_AT = 0.7;
@@ -24,13 +39,49 @@ const HARD_BELOW = 0.4;
 const MIN_ANSWERS_FOR_LEVEL = 3;
 /** «اسأل الجمهور» بيقرا إجابات الطلبة الحقيقية لو فيه كفاية منها. */
 const MIN_REAL_VOTES = 5;
+/**
+ * السؤال «اتوزّع» على الطالب في جولة من آخر كام ساعة؟ — للصوت، اللي
+ * رابطه مافيهوش رقم الجولة (عشان المتصفح يكاش القطعة بين الجولات).
+ */
+const DEALT_WINDOW_MS = 12 * 60 * 60 * 1000;
 
 interface PoolEntry {
   versionId: string;
+  bankEntryId: string;
   courseId: string;
-  courseTitle: string;
+  source: GameSource;
+  lessonId: string | null;
+  sectionId: string | null;
   facility: number | null;
   level: GameLevel;
+}
+
+interface PoolCourse {
+  id: string;
+  title: string;
+  sections: Map<string, { title: string; position: number }>;
+  lessons: Map<string, { title: string; sectionId: string; sectionPosition: number; position: number }>;
+}
+
+interface Pool {
+  entries: Map<string, PoolEntry>;
+  courses: Map<string, PoolCourse>;
+  modes: Map<string, GameModesConfig>;
+}
+
+interface PoolRow {
+  vid: string;
+  course_id: string;
+  course_title: string;
+  source: GameSource;
+  lesson_id: string | null;
+  lesson_title: string | null;
+  lesson_position: number | null;
+  section_id: string | null;
+  section_title: string | null;
+  section_position: number | null;
+  bank_entry_id: string;
+  category_id: string;
 }
 
 /** ترتيب المستويات اللي بنسحب منها لكل اختيار — الأقرب الأول. */
@@ -55,90 +106,142 @@ const MILLIONAIRE_MIX: Record<GameLevel, Record<GameLevel, number>> = {
  * — بأحدث نسخة جاهزة، إلا لو اتسأل في نسخة معيّنة فهي اللي بتدخل. أيمن طلبها
  * كده بالنص: «من كل الأسئلة اللي في الكويز اللي امتحنها قبل كده».
  *
- * ومعاهم «أسئلة الألعاب» اللي المدرّس ضافها لكل كورس من لوحة التحكم (تصنيف
- * في البنك مربوط بالكورس — `QuestionCategory.gameCourseId`)، لطلبة الكورس.
+ * ومعاهم «أسئلة الألعاب» اللي المدرّس ضافها من لوحة التحكم: تصنيف مربوط
+ * بالكورس (`QuestionCategory.gameCourseId`) — أسئلة عامة — وتحته تصنيف لكل
+ * درس (`gameLessonId`).
  *
- * وماعدا أي سؤال داخل في امتحان شهر أو امتحان كورس لسه جاي والطالب
- * ماسلّموش: slot مباشر أو تصنيف بيسحب منه. من غيرها اللعبة كانت هتبقى حل
- * نموذجي للامتحان قبل ما يتعمل.
+ * ## بس كورسات الطالب يقدر يفتحها
+ *
+ * نفس القاعدة اللي «كورساتي» واللوحة بيستخدموها (`EnrollmentService
+ * .listOwn` → `accessActive`): اشتراك في الكورس، وgrant لسه حي، والكورس
+ * منشور. اشتراكه خلص = أسئلة الكورس ده خرجت من ألعابه.
+ *
+ * ## كل سؤال محسوب على درس
+ *
+ * سؤال الكويز على الدرس اللي الكويز بعده في نفس الوحدة (الكويز درس لوحده
+ * `kind = quiz` بعد المحاضرة، فـ«الدرس الأول» فيه أسئلة المحاضرة وكويزها
+ * مع بعض). كويز مالوش محاضرة قبله (امتحان شهر، امتحان كورس) محسوب على نفسه.
+ * سؤال الألعاب على درس تصنيفه، والعام مالوش درس.
+ *
+ * ## وماعدا أي سؤال داخل في امتحان جاي
+ *
+ * امتحان شهر أو امتحان كورس لسه جاي والطالب ماسلّموش: slot مباشر أو تصنيف
+ * بيسحب منه. من غيرها اللعبة كانت هتبقى حل نموذجي للامتحان قبل ما يتعمل.
+ *
+ * ## الجولة متسجّلة
+ *
+ * `start` بيكتب صف في `game_sessions` فيه الأسئلة اللي اتوزّعت، والإجابة
+ * والمساعدات والصوت بيتأكدوا من الصف ده بدل ما يعيدوا حساب البنك كله —
+ * البنك تقيل (كل كويز الطالب امتحنه، ونسبة الصح من كل محاولات المنصة)، وكان
+ * بيتحسب مع كل «أيوه، نهائية» ومع كل قطعة صوت (٥ في السؤال الواحد).
  *
  * الإجابة الصح مابتسافرش مع السؤال أبدًا — التصحيح هنا سؤال سؤال.
  */
 @Injectable()
 export class GameService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly enrollments: EnrollmentService,
+  ) {}
 
   async hub(userId: string): Promise<GameHub> {
-    const pool = await this.pool(userId);
-    const byCourse = new Map<string, GameHub['courses'][number]>();
-    for (const entry of pool.values()) {
-      const course = byCourse.get(entry.courseId) ?? {
-        id: entry.courseId,
-        title: entry.courseTitle,
-        counts: { easy: 0, medium: 0, hard: 0 },
-      };
-      course.counts[entry.level] += 1;
-      byCourse.set(entry.courseId, course);
+    const [pool, me] = await Promise.all([this.pool(userId), this.me(userId)]);
+    const courses: GameHubCourse[] = [];
+    for (const course of pool.courses.values()) {
+      const counts = { easy: 0, medium: 0, hard: 0 };
+      const buckets = new Map<string, GameBucket>();
+      for (const entry of pool.entries.values()) {
+        if (entry.courseId !== course.id) continue;
+        counts[entry.level] += 1;
+        const key = `${entry.source}|${entry.lessonId ?? ''}`;
+        const bucket = buckets.get(key) ?? {
+          source: entry.source,
+          lessonId: entry.lessonId,
+          sectionId: entry.sectionId,
+          counts: { easy: 0, medium: 0, hard: 0 },
+        };
+        bucket.counts[entry.level] += 1;
+        buckets.set(key, bucket);
+      }
+      const sections = [...course.sections.entries()]
+        .sort(([, a], [, b]) => a.position - b.position)
+        .map(([id, section]) => ({ id, title: section.title }));
+      const lessons = [...course.lessons.entries()]
+        .sort(([, a], [, b]) => a.sectionPosition - b.sectionPosition || a.position - b.position)
+        .map(([id, lesson]) => ({ id, title: lesson.title, sectionId: lesson.sectionId }));
+      courses.push({
+        id: course.id,
+        title: course.title,
+        counts,
+        sections,
+        lessons,
+        buckets: [...buckets.values()],
+        modes: pool.modes.get(course.id) ?? defaultGameModes(),
+      });
     }
-    return {
-      total: pool.size,
-      courses: [...byCourse.values()].sort((a, b) => countOf(b) - countOf(a)),
-      voice: azureSpeech() !== null,
-    };
+    courses.sort((a, b) => countOf(b) - countOf(a));
+    return { total: pool.entries.size, courses, voice: azureSpeech() !== null, me };
   }
 
+  /**
+   * `GET /round` — القديم، لتابات من بيلد قبل الجولات المتسجّلة. بيحترم
+   * إعدادات الكورس، ومابيتسجّلش.
+   */
   async round(userId: string, query: GameRoundQuery): Promise<GameRound> {
     const pool = await this.pool(userId);
-    const entries = [...pool.values()].filter((entry) => !query.courseId || entry.courseId === query.courseId);
+    const entries = eligible(pool, query.mode, query.courseId, { kind: 'all' });
     const picked = pick(entries, query.mode, query.level);
-    if (picked.length === 0) return { mode: query.mode, level: query.level, questions: [], poolSize: entries.length };
+    return { ...(await this.render(picked, query.mode, query.level)), poolSize: entries.length, sessionId: null };
+  }
 
-    const versions = await this.prisma.questionVersion.findMany({
-      where: { id: { in: picked.map((entry) => entry.versionId) } },
-      // ⚠️ من غير `fraction` ولا `feedbackHtml`: الإجابة الصح مابتسافرش مع
-      // السؤال. `@NoAnswerLeak()` على الراوت شبكة تانية، مش الأولى.
-      select: {
-        id: true,
-        type: true,
-        stemHtml: true,
-        options: { orderBy: { position: 'asc' }, select: { id: true, bodyHtml: true } },
+  /**
+   * جولة جديدة: الأسئلة من البنك بعد إعدادات الكورس والنطاق اللي الطالب
+   * اختاره، وصف في `game_sessions`. النطاق بيضيّق بس — وحدة مش في كورس
+   * الطالب مالهاش أسئلة، فالجولة بترجع فاضية ومابتتسجّلش.
+   */
+  async start(userId: string, input: GameStartRequest): Promise<GameRound> {
+    const pool = await this.pool(userId);
+    const scope: GameScope = { kind: input.scope, id: input.scopeId };
+    const entries = eligible(pool, input.mode, input.courseId, scope);
+    const picked = pick(entries, input.mode, input.level);
+    const round = await this.render(picked, input.mode, input.level);
+    if (round.questions.length === 0) return { ...round, poolSize: entries.length, sessionId: null };
+
+    const now = new Date();
+    const session = await this.prisma.gameSession.create({
+      data: {
+        userId,
+        // كله من البنك اللي السيرفر حسبه، فالـFKs موجودة: الجولة مابتتكتبش
+        // إلا لو فيه سؤال واحد على الأقل اتسحب من النطاق ده.
+        courseId: input.courseId ?? null,
+        sectionId: input.scope === 'section' ? (input.scopeId ?? null) : null,
+        lessonId: input.scope === 'lesson' ? (input.scopeId ?? null) : null,
+        mode: input.mode,
+        level: input.level,
+        questionIds: round.questions.map((question) => question.id),
+        questionCount: round.questions.length,
+        startedAt: now,
+        lastActivityAt: now,
       },
+      select: { id: true },
     });
-    const byId = new Map(versions.map((version) => [version.id, version]));
-
-    return {
-      mode: query.mode,
-      level: query.level,
-      poolSize: entries.length,
-      questions: picked.flatMap((entry) => {
-        const version = byId.get(entry.versionId);
-        if (!version || version.options.length < 2) return [];
-        return [
-          {
-            id: version.id,
-            type: version.type as 'mcq_single' | 'true_false',
-            stemHtml: version.stemHtml,
-            // صح/غلط بترتيبه؛ الاختيار من متعدد بيتلخبط كل جولة عشان مايتحفظش
-            // «التالتة هي الصح».
-            options: version.type === 'true_false' ? version.options : sample(version.options, version.options.length),
-            level: entry.level,
-          },
-        ];
-      }),
-    };
+    return { ...round, poolSize: entries.length, sessionId: session.id };
   }
 
   async answer(userId: string, input: GameAnswerRequest): Promise<GameAnswerResult> {
-    const options = await this.optionsInPool(userId, input.questionId);
+    const session = input.sessionId ? await this.dealt(userId, input.sessionId, input.questionId) : null;
+    const options = session ? await this.optionsOf(input.questionId) : await this.optionsInPool(userId, input.questionId);
     const rightOptionIds = rightOf(options);
-    return {
-      correct: input.optionId !== null && rightOptionIds.includes(input.optionId),
-      rightOptionIds,
-    };
+    const correct = input.optionId !== null && rightOptionIds.includes(input.optionId);
+    if (session) await this.record(session, input, correct);
+    return { correct, rightOptionIds };
   }
 
   async lifeline(userId: string, input: GameLifelineRequest): Promise<GameLifelineResult> {
-    const options = await this.optionsInPool(userId, input.questionId);
+    if (input.sessionId) await this.dealt(userId, input.sessionId, input.questionId);
+    const options = input.sessionId
+      ? await this.optionsOf(input.questionId)
+      : await this.optionsInPool(userId, input.questionId);
     const right = new Set(rightOf(options));
 
     if (input.kind === 'fifty') {
@@ -148,6 +251,52 @@ export class GameService {
     }
 
     return { removeOptionIds: [], votes: await this.audience(input.questionId, options, right) };
+  }
+
+  /**
+   * آخر الجولة. النتيجة من الإجابات اللي اتصحّحت هنا بالترتيب
+   * (`settleGame`)، والمدة من ساعة السيرفر مقصوصة. مرتين = نفس النتيجة:
+   * التانية بترجع اللي اتكتب في الأولى.
+   */
+  async finish(userId: string, sessionId: string, input: GameFinishRequest): Promise<GameFinishResult> {
+    const session = await this.prisma.gameSession.findFirst({
+      where: { id: sessionId, userId },
+      select: {
+        mode: true,
+        level: true,
+        questionCount: true,
+        startedAt: true,
+        endedAt: true,
+        outcome: true,
+        score: true,
+        durationSeconds: true,
+      },
+    });
+    if (!session) throw new NotFoundException();
+    if (session.endedAt && session.outcome) {
+      return { outcome: session.outcome, score: session.score, durationSeconds: session.durationSeconds };
+    }
+
+    const answers = await this.prisma.gameAnswer.findMany({
+      where: { sessionId },
+      orderBy: [{ answeredAt: 'asc' }, { id: 'asc' }],
+      select: { correct: true },
+    });
+    const settled = settleGame({
+      mode: session.mode,
+      level: session.level,
+      questionCount: session.questionCount,
+      answers: answers.map((answer) => answer.correct),
+      claimedScore: input.score,
+    });
+    const now = new Date();
+    const durationSeconds = clampGameSeconds(session.startedAt, now, session.mode, session.level);
+    // `endedAt: null` في الشرط: نهايتين في نفس اللحظة = واحدة بس بتكتب.
+    await this.prisma.gameSession.updateMany({
+      where: { id: sessionId, userId, endedAt: null },
+      data: { outcome: settled.outcome, score: settled.score, endedAt: now, lastActivityAt: now, durationSeconds },
+    });
+    return { ...settled, durationSeconds };
   }
 
   /**
@@ -195,23 +344,187 @@ export class GameService {
   /** سؤال مش في بنك الطالب = 404 — مش الإجابة، ومش صوته. */
   async assertInPool(userId: string, questionId: string): Promise<void> {
     const pool = await this.pool(userId);
-    if (!pool.has(questionId)) throw new NotFoundException();
+    if (!pool.entries.has(questionId)) throw new NotFoundException();
+  }
+
+  /**
+   * للصوت: السؤال اتوزّع على الطالب ده في جولة قريبة؟ — صف واحد بـindex. لو
+   * لأ (تاب قديم بيلعب من `GET /round`) بيرجع لحساب البنك كله.
+   */
+  async assertDealtOrInPool(userId: string, questionId: string): Promise<void> {
+    const recent = await this.prisma.gameSession.findFirst({
+      where: {
+        userId,
+        startedAt: { gte: new Date(Date.now() - DEALT_WINDOW_MS) },
+        questionIds: { has: questionId },
+      },
+      select: { id: true },
+    });
+    if (!recent) await this.assertInPool(userId, questionId);
+  }
+
+  /** الجولة بتاعة الطالب ده، والسؤال اتوزّع فيها — وإلا 404. */
+  private async dealt(userId: string, sessionId: string, questionId: string) {
+    const session = await this.prisma.gameSession.findFirst({
+      where: { id: sessionId, userId },
+      select: { id: true, mode: true, level: true, startedAt: true, endedAt: true, questionIds: true },
+    });
+    if (!session || !session.questionIds.includes(questionId)) throw new NotFoundException();
+    return session;
+  }
+
+  /**
+   * الإجابة في الإحصائيات. `skipDuplicates` على (الجولة، السؤال): دوسة
+   * اتبعتت مرتين بتتحسب مرة، والعدّادات بتزيد بس لو الصف اتكتب فعلًا. جولة
+   * خلصت خلاص مابتتغيّرش.
+   */
+  private async record(
+    session: { id: string; mode: GameMode; level: GameLevel; startedAt: Date; endedAt: Date | null },
+    input: GameAnswerRequest,
+    correct: boolean,
+  ): Promise<void> {
+    if (session.endedAt) return;
+    const now = new Date();
+    const inserted = await this.prisma.gameAnswer.createMany({
+      data: [{ sessionId: session.id, questionVersionId: input.questionId, optionId: input.optionId, correct, answeredAt: now }],
+      skipDuplicates: true,
+    });
+    if (inserted.count === 0) return;
+    await this.prisma.gameSession.update({
+      where: { id: session.id },
+      data: {
+        answered: { increment: 1 },
+        correct: { increment: correct ? 1 : 0 },
+        lastActivityAt: now,
+        durationSeconds: clampGameSeconds(session.startedAt, now, session.mode, session.level),
+      },
+    });
   }
 
   /** الاختيارات بـ`fraction` — بس لسؤال في بنك الطالب؛ غير كده 404 مش الإجابة. */
   private async optionsInPool(userId: string, questionId: string) {
     await this.assertInPool(userId, questionId);
+    return this.optionsOf(questionId);
+  }
+
+  private optionsOf(questionId: string) {
     return this.prisma.questionOption.findMany({
       where: { questionVersionId: questionId },
       select: { id: true, fraction: true },
     });
   }
 
-  private async pool(userId: string): Promise<Map<string, PoolEntry>> {
-    const [rows, blocked] = await Promise.all([
+  /** الأسئلة من غير أي علامة على الصح. */
+  private async render(
+    picked: PoolEntry[],
+    mode: GameMode,
+    level: GameLevel,
+  ): Promise<Omit<GameRound, 'poolSize' | 'sessionId'>> {
+    if (picked.length === 0) return { mode, level, questions: [] };
+    const versions = await this.prisma.questionVersion.findMany({
+      where: { id: { in: picked.map((entry) => entry.versionId) } },
+      // ⚠️ من غير `fraction` ولا `feedbackHtml`: الإجابة الصح مابتسافرش مع
+      // السؤال. `@NoAnswerLeak()` على الراوت شبكة تانية، مش الأولى.
+      select: {
+        id: true,
+        type: true,
+        stemHtml: true,
+        options: { orderBy: { position: 'asc' }, select: { id: true, bodyHtml: true } },
+      },
+    });
+    const byId = new Map(versions.map((version) => [version.id, version]));
+
+    return {
+      mode,
+      level,
+      questions: picked.flatMap((entry) => {
+        const version = byId.get(entry.versionId);
+        if (!version || version.options.length < 2) return [];
+        return [
+          {
+            id: version.id,
+            type: version.type as 'mcq_single' | 'true_false',
+            stemHtml: version.stemHtml,
+            // صح/غلط بترتيبه؛ الاختيار من متعدد بيتلخبط كل جولة عشان مايتحفظش
+            // «التالتة هي الصح».
+            options: version.type === 'true_false' ? version.options : sample(version.options, version.options.length),
+            level: entry.level,
+          },
+        ];
+      }),
+    };
+  }
+
+  /** «آخر نتايجك» على صفحة الألعاب — جولات فيها إجابة واحدة على الأقل. */
+  private async me(userId: string): Promise<GameMe> {
+    const [totals, recent] = await Promise.all([
       this.prisma.$queryRaw<
-        Array<{ vid: string; course_id: string; course_title: string; bank_entry_id: string; category_id: string }>
+        Array<{
+          plays: number;
+          seconds: number;
+          best_race: number | null;
+          best_millionaire: number | null;
+          best_survival: number | null;
+        }>
       >(Prisma.sql`
+        SELECT count(*)::int AS plays,
+          COALESCE(sum("duration_seconds"), 0)::int AS seconds,
+          max("score") FILTER (WHERE "mode" = 'race' AND "outcome" IS NOT NULL) AS best_race,
+          max("score") FILTER (WHERE "mode" = 'millionaire' AND "outcome" IS NOT NULL) AS best_millionaire,
+          max("score") FILTER (WHERE "mode" = 'survival' AND "outcome" IS NOT NULL) AS best_survival
+        FROM "app"."game_sessions"
+        WHERE "user_id" = ${userId} AND "answered" > 0
+      `),
+      this.prisma.gameSession.findMany({
+        where: { userId, answered: { gt: 0 } },
+        orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+        take: 5,
+        select: {
+          mode: true,
+          level: true,
+          score: true,
+          correct: true,
+          answered: true,
+          outcome: true,
+          startedAt: true,
+          course: { select: { title: true } },
+        },
+      }),
+    ]);
+    const row = totals[0];
+    return {
+      plays: row?.plays ?? 0,
+      seconds: row?.seconds ?? 0,
+      best: {
+        race: row?.best_race ?? null,
+        millionaire: row?.best_millionaire ?? null,
+        survival: row?.best_survival ?? null,
+      },
+      recent: recent.map((session) => ({
+        mode: session.mode,
+        level: session.level,
+        courseTitle: session.course?.title ?? null,
+        score: session.score,
+        correct: session.correct,
+        answered: session.answered,
+        outcome: session.outcome,
+        startedAt: session.startedAt.toISOString(),
+      })),
+    };
+  }
+
+  /** الكورسات اللي الطالب يقدر يفتحها دلوقتي — نفس `accessActive` بتاع «كورساتي». */
+  private async playableCourseIds(userId: string): Promise<string[]> {
+    const enrollments = await this.enrollments.listOwn(userId);
+    return enrollments.filter((enrollment) => enrollment.accessActive).map((enrollment) => enrollment.courseId);
+  }
+
+  private async pool(userId: string): Promise<Pool> {
+    const courseIds = await this.playableCourseIds(userId);
+    if (courseIds.length === 0) return { entries: new Map(), courses: new Map(), modes: new Map() };
+
+    const [rows, blocked, settings] = await Promise.all([
+      this.prisma.$queryRaw<PoolRow[]>(Prisma.sql`
         WITH sat AS (
           SELECT DISTINCT a."quiz_id"
           FROM "app"."quiz_attempts" a
@@ -252,8 +565,10 @@ export class GameService {
             ORDER BY v."version" DESC LIMIT 1
           ) lv ON true
         ),
+        -- سؤال الكويز محسوب على المحاضرة اللي الكويز بعدها في نفس الوحدة، ولو
+        -- مفيش (امتحان، أو كويز أول الوحدة) على الكويز نفسه.
         from_quizzes AS (
-          SELECT x.vid, l."course_id"
+          SELECT x.vid, l."course_id" AS course_id, COALESCE(lec."id", l."id") AS lesson_id
           FROM (
             SELECT vid, "quiz_id" FROM seen
             UNION SELECT vid, "quiz_id" FROM slotted WHERE vid IS NOT NULL
@@ -261,37 +576,62 @@ export class GameService {
           ) x
           JOIN "app"."quizzes" qz ON qz."id" = x."quiz_id"
           JOIN "app"."lessons" l ON l."id" = qz."lesson_id"
+          LEFT JOIN LATERAL (
+            SELECT l2."id" FROM "app"."lessons" l2
+            WHERE l."kind" = 'quiz' AND l2."section_id" = l."section_id" AND l2."kind" <> 'quiz'
+              AND (l2."position", l2."id") < (l."position", l."id")
+            ORDER BY l2."position" DESC, l2."id" DESC LIMIT 1
+          ) lec ON true
+          WHERE l."course_id" = ANY(${courseIds}::uuid[])
         ),
-        -- «أسئلة الألعاب» اللي المدرّس ضافها للكورس (تصنيف مربوط بيه)، لطالب
-        -- مشترك في الكورس ده دلوقتي.
-        from_game_bank AS (
-          SELECT lv."id" AS vid, qc."game_course_id" AS course_id
+        -- «أسئلة الألعاب»: تصنيف الكورس (عام)، وكل تصنيف تحته — المربوط بدرس
+        -- في نفس الكورس محسوب على الدرس، والباقي عام.
+        game_categories AS (
+          SELECT qc."id" AS category_id, qc."game_course_id" AS course_id, NULL::uuid AS lesson_id
           FROM "app"."question_categories" qc
-          JOIN "app"."enrollments" e
-            ON e."course_id" = qc."game_course_id" AND e."user_id" = ${userId} AND e."status" = 'active'
-          JOIN "app"."question_bank_entries" be ON be."category_id" = qc."id"
+          WHERE qc."game_course_id" = ANY(${courseIds}::uuid[])
+          UNION ALL
+          SELECT child."id", parent."game_course_id", gl."id"
+          FROM "app"."question_categories" parent
+          JOIN "app"."question_categories" child ON child."parent_id" = parent."id"
+          LEFT JOIN "app"."lessons" gl ON gl."id" = child."game_lesson_id" AND gl."course_id" = parent."game_course_id"
+          WHERE parent."game_course_id" = ANY(${courseIds}::uuid[])
+        ),
+        from_game_bank AS (
+          SELECT lv."id" AS vid, gc.course_id, gc.lesson_id
+          FROM game_categories gc
+          JOIN "app"."question_bank_entries" be ON be."category_id" = gc.category_id
           JOIN LATERAL (
             SELECT v."id" FROM "app"."question_versions" v
             WHERE v."bank_entry_id" = be."id" AND v."status" = 'ready'
             ORDER BY v."version" DESC LIMIT 1
           ) lv ON true
-          WHERE qc."game_course_id" IS NOT NULL
         ),
+        -- سؤال في الاتنين محسوب على أسئلة الألعاب: المدرّس حطّه هناك بإيده.
         allq AS (
-          SELECT vid, "course_id" FROM from_quizzes
-          UNION SELECT vid, course_id FROM from_game_bank
+          SELECT vid, course_id, lesson_id, 'bank'::text AS source, 0 AS pref FROM from_game_bank
+          UNION ALL
+          SELECT vid, course_id, lesson_id, 'quiz'::text, 1 FROM from_quizzes
         )
-        SELECT DISTINCT ON (q.vid) q.vid, q."course_id", co."title" AS course_title,
+        SELECT DISTINCT ON (q.vid) q.vid, q.course_id, co."title" AS course_title, q.source,
+          q.lesson_id, ls."title" AS lesson_title, ls."position" AS lesson_position,
+          cs."id" AS section_id, cs."title" AS section_title, cs."position" AS section_position,
           v."bank_entry_id", be."category_id"
         FROM allq q
         JOIN "app"."question_versions" v ON v."id" = q.vid AND v."type" IN ('mcq_single', 'true_false')
         JOIN "app"."question_bank_entries" be ON be."id" = v."bank_entry_id"
-        JOIN "app"."courses" co ON co."id" = q."course_id"
+        JOIN "app"."courses" co ON co."id" = q.course_id AND co."status" = 'published'
+        LEFT JOIN "app"."lessons" ls ON ls."id" = q.lesson_id
+        LEFT JOIN "app"."course_sections" cs ON cs."id" = ls."section_id"
         WHERE (SELECT count(*) FROM "app"."question_options" o WHERE o."question_version_id" = v."id") >= 2
           AND EXISTS (SELECT 1 FROM "app"."question_options" o WHERE o."question_version_id" = v."id" AND o."fraction" > 0)
-        ORDER BY q.vid
+        ORDER BY q.vid, q.pref
       `),
       this.upcomingExamSources(userId),
+      this.prisma.gameModeSetting.findMany({
+        where: { courseId: { in: courseIds } },
+        select: { courseId: true, mode: true, useQuizzes: true, useBank: true, lessonIds: true },
+      }),
     ]);
 
     const kept = rows.filter(
@@ -299,13 +639,39 @@ export class GameService {
     );
     const facility = await this.facility([...new Set(kept.map((row) => row.bank_entry_id))]);
 
-    return new Map(
-      kept.map((row) => {
-        const f = facility.get(row.bank_entry_id) ?? null;
-        const level: GameLevel = f === null ? 'medium' : f >= EASY_AT ? 'easy' : f < HARD_BELOW ? 'hard' : 'medium';
-        return [row.vid, { versionId: row.vid, courseId: row.course_id, courseTitle: row.course_title, facility: f, level }];
-      }),
-    );
+    const pool: Pool = { entries: new Map(), courses: new Map(), modes: modesByCourse(settings) };
+    for (const row of kept) {
+      const f = facility.get(row.bank_entry_id) ?? null;
+      const level: GameLevel = f === null ? 'medium' : f >= EASY_AT ? 'easy' : f < HARD_BELOW ? 'hard' : 'medium';
+      const course = pool.courses.get(row.course_id) ?? {
+        id: row.course_id,
+        title: row.course_title,
+        sections: new Map(),
+        lessons: new Map(),
+      };
+      const placed = row.lesson_id !== null && row.section_id !== null;
+      if (placed) {
+        course.sections.set(row.section_id!, { title: row.section_title ?? '', position: row.section_position ?? 0 });
+        course.lessons.set(row.lesson_id!, {
+          title: row.lesson_title ?? '',
+          sectionId: row.section_id!,
+          sectionPosition: row.section_position ?? 0,
+          position: row.lesson_position ?? 0,
+        });
+      }
+      pool.courses.set(row.course_id, course);
+      pool.entries.set(row.vid, {
+        versionId: row.vid,
+        bankEntryId: row.bank_entry_id,
+        courseId: row.course_id,
+        source: row.source,
+        lessonId: placed ? row.lesson_id : null,
+        sectionId: placed ? row.section_id : null,
+        facility: f,
+        level,
+      });
+    }
+    return pool;
   }
 
   /** نسبة الإجابات الصح على كل سؤال من كل المحاولات في المنصة. */
@@ -362,7 +728,29 @@ export class GameService {
   }
 }
 
-function countOf(course: GameHub['courses'][number]): number {
+/** إعدادات كل كورس، واللي مالوش صف على الافتراضي. */
+export function modesByCourse(
+  rows: ReadonlyArray<{ courseId: string; mode: GameMode; useQuizzes: boolean; useBank: boolean; lessonIds: string[] }>,
+): Map<string, GameModesConfig> {
+  const byCourse = new Map<string, GameModesConfig>();
+  for (const row of rows) {
+    const modes = byCourse.get(row.courseId) ?? defaultGameModes();
+    modes[row.mode] = { useQuizzes: row.useQuizzes, useBank: row.useBank, lessonIds: [...row.lessonIds] };
+    byCourse.set(row.courseId, modes);
+  }
+  return byCourse;
+}
+
+/** اللي يدخل الجولة: كورس الطالب (أو كلهم)، وإعدادات الكورس للعبة دي، والنطاق. */
+function eligible(pool: Pool, mode: GameMode, courseId: string | undefined, scope: GameScope): PoolEntry[] {
+  return [...pool.entries.values()].filter((entry) => {
+    if (courseId && entry.courseId !== courseId) return false;
+    const config = pool.modes.get(entry.courseId)?.[mode] ?? DEFAULT_GAME_MODE_CONFIG;
+    return gameItemAllowed(entry, config, scope);
+  });
+}
+
+function countOf(course: { counts: { easy: number; medium: number; hard: number } }): number {
   return course.counts.easy + course.counts.medium + course.counts.hard;
 }
 
