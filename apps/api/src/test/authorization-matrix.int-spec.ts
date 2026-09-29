@@ -1827,6 +1827,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'analytics export videos: student', method: 'get', path: () => '/api/admin/analytics/export/videos.csv', actor: 'student', status: 403 },
     { label: 'analytics export videos: admin', method: 'get', path: () => '/api/admin/analytics/export/videos.csv?period=all', actor: 'admin', status: 200 },
 
+    // «الأوائل» — `analytics:read` زي اللي فوقه، بس الكونترولر جوّه
+    // `ProgressModule` جنب `/api/me/rank` عشان يقرا نفس الكاش. صف الأدمن على
+    // القايمة بيشغّل كويري الدفعة والتابات للآخر؛ وعلى الشريحة بطالب الفيكستشر.
+    { label: 'leaderboard: anonymous', method: 'get', path: () => '/api/admin/leaderboard', actor: 'anonymous', status: 401 },
+    { label: 'leaderboard: student', method: 'get', path: () => '/api/admin/leaderboard', actor: 'student', status: 403 },
+    { label: 'leaderboard: admin', method: 'get', path: () => '/api/admin/leaderboard', actor: 'admin', status: 200 },
+    { label: 'leaderboard: admin, bad page size', method: 'get', path: () => '/api/admin/leaderboard?perPage=25', actor: 'admin', status: 400 },
+    { label: 'leaderboard student rank: anonymous', method: 'get', path: () => `/api/admin/leaderboard/students/${studentId}`, actor: 'anonymous', status: 401 },
+    { label: 'leaderboard student rank: student', method: 'get', path: () => `/api/admin/leaderboard/students/${studentId}`, actor: 'student', status: 403 },
+    { label: 'leaderboard student rank: admin', method: 'get', path: () => `/api/admin/leaderboard/students/${studentId}`, actor: 'admin', status: 200 },
+
     // ── Vodafone Cash course subscriptions ──────────────────────────────
     // `POST /api/payments/screenshot` is the multipart route and is a
     // documented gap below, same reasoning as `POST /api/media`. These are

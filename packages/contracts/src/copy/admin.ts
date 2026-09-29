@@ -126,6 +126,11 @@ const admin = {
      */
     followUp: 'متابعة الطلبة',
     /**
+     * «الأوائل» — ترتيب كل دفعة بالنقط، نفس أرقام صفحة «ترتيبي» عند الطالب.
+     * جنب «التحليلات» في التدريس: الاتنين قراية على الدفعة كلها.
+     */
+    leaderboard: 'الأوائل',
+    /**
      * «منصات المدرّسين» — the control plane, and the ONLY admin section that
      * is not gated on a permission. Every instructor holds `role: 'admin'`
      * (= `'*'`) on their own stack, so a permission would render this link for
@@ -1648,6 +1653,7 @@ const admin = {
     '/admin/books': 'طلبات الكتاب المدفوعة اللي لسه ما اتشحنتش.',
     '/admin/attempts': 'محاولات الامتحانات ودرجاتها.',
     '/admin/analytics': 'أداء الطلبة وأصعب الأسئلة.',
+    '/admin/leaderboard': 'مين الأوائل في كل دفعة، وترتيب كل طالب عندك.',
     '/admin/inbox': 'رسايل الطلبة والرد عليها.',
     '/admin/outreach': 'سجل الرسايل اللي اتبعتت باسمك.',
     '/admin/follow-up': 'مين وقف في نص الكورس، ومين دخل ومشترَكش.',
@@ -2215,6 +2221,94 @@ const admin = {
 
     emptyStalled: 'مفيش حد واقف — كل الطلبة لاحقين آخر المحاضرات والكويزات.',
     emptyIdle: 'مفيش حساب من غير اشتراك.',
+  },
+  /**
+   * «الأوائل» — `/admin/leaderboard`.
+   *
+   * الكلام هنا للمدرّس عن طلبته، ومفيش صيغة بتفترض ولد ولا بنت: «ترتيب أي
+   * طالب» مش «ترتيبه»، و«جمعوا نقط» مش «شاطرين». الأرقام نفسها اللي الطالب
+   * شايفها في «ترتيبي»، والشاشة بتقول كده في أولها عشان سؤال «ليه ده الأول؟»
+   * ليه إجابة واحدة.
+   */
+  leaderboard: {
+    eyebrow: 'الترتيب',
+    title: 'الأوائل',
+    lead: 'ترتيب كل دفعة بالنقط — نفس الأرقام اللي كل طالب شايفها في صفحة «ترتيبي». دوّر على أي طالب واعرف ترتيبه في دفعته، وكل صف بيفتح سجل الطالب.',
+    cohortsLabel: 'الدفعات',
+    /** `{n}` — عدد الطلبة على التاب. */
+    cohortSize: '{n} طالب',
+
+    statSize: 'طالب في الدفعة',
+    statActive: 'جمعوا نقط',
+    /** `{percent}` — من الدفعة. */
+    statActiveHint: '{percent}% من الدفعة',
+    statAverage: 'متوسط النقط',
+    statTop: 'نقط الأول',
+    statPending: 'ورق مستني تصحيح',
+    statPendingHint: 'النقط هتزيد أول ما يتصحح',
+    statPendingNone: 'مفيش ورق مستني',
+
+    podiumTitle: 'التلاتة الأوائل',
+    podiumEmpty: 'لسه محدش في الدفعة دي جمع نقط — أول كويز يتحل هيفتح المنصة.',
+    levelsTitle: 'الدفعة على المستويات',
+    levelsHint: 'نفس المستوى اللي كل طالب شايفه تحت ترتيبه.',
+
+    tableTitle: 'ترتيب الدفعة كلها',
+    searchLabel: 'اعرف ترتيب طالب',
+    searchPlaceholder: 'الاسم أو رقم الموبايل',
+    searchSubmit: 'دوّر',
+    searchClear: 'مسح البحث',
+    streamLabel: 'عربي / لغات',
+    streamAll: 'الكل',
+    /** `{n}` — كام صف طابق البحث أو الفلتر. */
+    resultsCount: '{n} طالب طابقوا البحث',
+    /** نتيجة واحدة: الإجابة على «ترتيبه كام؟» في جملة. `{name}` `{rank}` `{size}` */
+    foundOne: '{name} — المركز {rank} من {size} في الدفعة',
+    rankNote: 'الترتيب على الدفعة كلها، مش على نتيجة البحث.',
+    emptySearch: 'مفيش طالب بالاسم أو الرقم ده في الدفعة دي.',
+    emptySearchHint: 'ممكن يكون في دفعة تانية — افتح سجله من «الطلبة» وهتلاقي ترتيبه فوق.',
+    emptySearchCta: 'دوّر في الطلبة',
+    emptyCohort: 'مفيش طلبة في الدفعة دي لسه.',
+    emptyAll: 'لسه مفيش طلبة مشتركين ليهم سنة دراسية — الترتيب بيبدأ أول ما حد يشترك.',
+
+    columnRank: 'المركز',
+    columnStudent: 'الطالب',
+    columnPoints: 'النقط',
+    columnQuizzes: 'الكويزات',
+    columnExams: 'الامتحانات',
+    columnHomework: 'الواجبات',
+    columnLastActive: 'آخر نشاط',
+    points: 'نقطة',
+    /** `{count}` كويز، `{full}` علامة كاملة. */
+    quizzesHint: '{count} كويز · {full} كاملة',
+    examsHint: '{count} امتحان',
+    /** `{accepted}` اتقبل من `{submitted}` اتسلّم. */
+    homeworkHint: '{accepted} اتقبل',
+    /** `{n}` لسه ما اتسلّمش. */
+    homeworkOwed: '{n} ناقص',
+    pendingChip: '{n} ورقة بتتصحح',
+    noneYet: '—',
+    systemUnknown: 'نظامه مش متسجّل',
+    systemUnknownHint: 'البروفايل ده اتعمل قبل سؤال النظام، فالطالب في «ترتيبي» بيتقارن بالسنة كلها — رقمه هناك ممكن يختلف عن هنا.',
+
+    lastActiveNever: 'عمره ما دخل',
+    lastActiveToday: 'النهارده',
+    lastActiveYesterday: 'امبارح',
+    /** `{days}` */
+    lastActiveDays: 'من {days} يوم',
+    openRecord: 'السجل',
+    whatsapp: 'واتساب',
+
+    /** `{minutes}` — عمر اللقطة. */
+    computedAt: 'الترتيب بيتحسب كل ٥ دقايق — آخر تحديث من {minutes} دقيقة.',
+    computedNow: 'الترتيب بيتحسب كل ٥ دقايق — لسه متحدّث دلوقتي.',
+    /** `{n}` مشترك مالوش سنة في البروفايل. */
+    unplaced: '{n} طالب مشترك ومالوش سنة دراسية في البروفايل، فمش داخل في أي دفعة.',
+
+    /** شريحة صفحة الطالب. `{rank}` `{size}` */
+    studentChip: 'الترتيب في الدفعة: #{rank} من {size}',
+    studentChipPoints: '{points} نقطة',
+    studentChipNoYear: 'من غير سنة دراسية — برّه الترتيب',
   },
   branding: {
     title: 'الهوية البصرية',

@@ -16,6 +16,7 @@ import {
   LayoutDashboard,
   LibraryBig,
   ListTree,
+  Medal,
   ScrollText,
   Send,
   Settings,
@@ -338,6 +339,20 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     href: '/admin/analytics',
     labelAr: copy.analytics.title,
     icon: ChartColumn,
+    permission: 'analytics:read',
+    group: 'teaching',
+  },
+  {
+    // «الأوائل» — تحت التحليلات مباشرة وبنفس صلاحيتها: الاتنين قراية على
+    // الدفعة كلها ومفيهمش كتابة. `Medal` مش `Trophy`: الكاس بتاع «لوحة
+    // الشرف» فوق، ودي الشاشتين اللي أكتر حاجة محتاجين يتفرّقوا من بعيد — دي
+    // الترتيب الداخلي بالنقط، ودي اللي بتتنشر للعامة.
+    //
+    // من غير `feature`: الترتيب شغّال عند كل مدرّس (صفحة «ترتيبي» عند
+    // الطالب مش ورا فيتشر)، فالشاشة اللي بتوريه للمدرّس ماينفعش تبقى ورا فيتشر.
+    href: '/admin/leaderboard',
+    labelAr: copy.admin.nav.leaderboard,
+    icon: Medal,
     permission: 'analytics:read',
     group: 'teaching',
   },

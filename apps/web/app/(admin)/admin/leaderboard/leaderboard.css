@@ -1,0 +1,649 @@
+/* =============================================================================
+   «الأوائل» — `/admin/leaderboard`.
+
+   فوق `components/rank/rank.css` مش بداله: المنصة (`.rk-podium*`)، الكروت
+   (`.rk-card`)، ألوان المستويات (`--lvl` من `.rk [data-level]`) والميداليات
+   (`--rk-gold` / `--rk-silver` / `--rk-bronze`) كلها من هناك، عشان الشاشة دي
+   تبان «شبه اللي في الداشبورد بتاع الطالب» بالحرف. الملف ده فيه اللي الأدمن
+   بس محتاجه: الهيرو والتابات والبلاطات والجدول.
+
+   ملوّنة عن قصد: «minimal» بيتقري عنده «مش خلصان». كل لون توكن أو `color-mix`
+   من توكن، فالثيم الغامق شغّال من غير نسخة تانية. الأبيض الصريح بس على أرضيات
+   غامقة في الثيمين (الهيرو، التاب المفتوح، زرار البحث).
+
+   الجدول بيقلب كروت بـ`@container` على عرض الصفحة نفسها، مش بالفيوبورت:
+   السايدبار ٢٦٠px، فـ`md` على الشاشة كانت هتبقى عمود ٤٦٠px بجدول تمن أعمدة
+   جوّاه. ومفيش سكرول عرضي في أي عرض.
+
+   RTL: خصايص منطقية بس (`inset-inline-*`، `padding-inline`، …).
+   ========================================================================== */
+
+.lb {
+  container: lb / inline-size;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.lb-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* ── الهيرو ─────────────────────────────────────────────────────────────── */
+.lb-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  display: grid;
+  gap: 1rem;
+  align-items: center;
+  padding: 1.5rem 1.25rem;
+  border-radius: var(--r-lg);
+  color: #fff;
+  background:
+    radial-gradient(90% 80% at 100% 0%, color-mix(in oklab, var(--viz-4) 70%, transparent) 0%, transparent 60%),
+    radial-gradient(80% 90% at 0% 100%, color-mix(in oklab, var(--print-gold) 60%, transparent) 0%, transparent 62%),
+    linear-gradient(135deg, var(--viz-3) 0%, var(--viz-5) 100%);
+  box-shadow: var(--shadow-md);
+}
+.lb-hero__shapes { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.lb-shape { position: absolute; display: block; }
+.lb-shape--ring {
+  width: 11rem;
+  height: 11rem;
+  inset-block-start: -3.5rem;
+  inset-inline-start: 35%;
+  border-radius: 50%;
+  border: 18px solid rgb(255 255 255 / 0.08);
+}
+.lb-shape--blob {
+  width: 9rem;
+  height: 9rem;
+  inset-block-end: -3.25rem;
+  inset-inline-end: 14%;
+  border-radius: 42% 58% 60% 40% / 45% 40% 60% 55%;
+  background: rgb(255 255 255 / 0.08);
+}
+.lb-shape--dot {
+  width: 0.9rem;
+  height: 0.9rem;
+  inset-block-start: 1.25rem;
+  inset-inline-end: 1.75rem;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--print-gold), #fff 40%);
+}
+.lb-hero__copy { position: relative; z-index: 1; min-width: 0; }
+.lb-hero__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: var(--r-full);
+  background: rgb(0 0 0 / 0.18);
+  border: 1px solid rgb(255 255 255 / 0.24);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+}
+.lb-hero__title {
+  margin-top: 0.6rem;
+  font-size: var(--fs-title-1);
+  font-weight: var(--fw-bold);
+  line-height: 1.2;
+}
+.lb-hero__lead {
+  margin-top: 0.5rem;
+  max-width: 42rem;
+  font-size: var(--fs-text-sm);
+  line-height: 1.85;
+  color: rgb(255 255 255 / 0.9);
+}
+.lb-hero__live {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  font-size: var(--fs-text-xs);
+  color: rgb(255 255 255 / 0.82);
+}
+.lb-hero__art { position: relative; z-index: 1; display: none; justify-self: center; width: 9rem; }
+
+@container lb (min-width: 40rem) {
+  .lb-hero { grid-template-columns: minmax(0, 1fr) 10rem; padding: 2rem 2.25rem; }
+  .lb-hero__art { display: block; }
+}
+
+/* ── تابات الدفعات ───────────────────────────────────────────────────────── */
+.lb-tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.lb-tab {
+  --tab: var(--viz-5);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.5rem;
+  padding-block: 0.35rem;
+  padding-inline: 0.95rem 0.45rem;
+  border-radius: var(--r-full);
+  border: 1px solid color-mix(in oklab, var(--tab) 35%, var(--color-line));
+  background: color-mix(in oklab, var(--tab) 9%, var(--color-surface-2));
+  color: var(--color-fg);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  text-decoration: none;
+  transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out);
+}
+.lb-tab[data-year='1'] { --tab: var(--viz-2); }
+.lb-tab[data-year='2'] { --tab: var(--viz-5); }
+.lb-tab[data-year='3'] { --tab: var(--viz-4); }
+.lb-tab:hover { border-color: var(--tab); }
+.lb-tab[data-empty] { opacity: 0.6; }
+.lb-tab[aria-current='page'] {
+  border-color: transparent;
+  background: color-mix(in oklab, var(--tab), #000 22%);
+  color: #fff;
+  box-shadow: 0 6px 16px color-mix(in oklab, var(--tab) 35%, transparent);
+  opacity: 1;
+}
+.lb-tab__count {
+  min-width: 1.9rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--tab) 18%, transparent);
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-xs);
+  text-align: center;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.lb-tab[aria-current='page'] .lb-tab__count { background: rgb(255 255 255 / 0.22); }
+
+/* ── أرقام الدفعة ────────────────────────────────────────────────────────── */
+.lb-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+@container lb (min-width: 48rem) {
+  .lb-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+}
+/* على الموبايل البلاطة عمودين في السطر، والأيقونة جنب الرقم كانت بتكسر
+   «طالب في الدفعة» على سطرين — فالأيقونة فوق لحد ما العرض يكفي. */
+.lb-stat {
+  --hue: var(--viz-5);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 1rem;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklab, var(--hue) 28%, var(--color-line));
+  background:
+    radial-gradient(120% 120% at 100% 0%, color-mix(in oklab, var(--hue) 16%, transparent) 0%, transparent 65%),
+    var(--color-surface-2);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-fg);
+  text-decoration: none;
+}
+@container lb (min-width: 36rem) {
+  .lb-stat { flex-direction: row; gap: 0.75rem; }
+}
+.lb-stat[data-hue='viz-2'] { --hue: var(--viz-2); }
+.lb-stat[data-hue='viz-4'] { --hue: var(--viz-4); }
+.lb-stat[data-hue='viz-5'] { --hue: var(--viz-5); }
+.lb-stat[data-hue='gold'] { --hue: var(--rk-gold); }
+.lb-stat--link { transition: border-color 160ms var(--ease-out), transform 160ms var(--ease-out); }
+.lb-stat--link:hover { border-color: var(--hue); transform: translateY(-1px); }
+.lb-stat__well {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--hue) 18%, transparent);
+  color: color-mix(in oklab, var(--hue), var(--color-fg) 25%);
+}
+.lb-stat__body { display: grid; align-content: start; gap: 0.15rem; flex: 1; align-self: stretch; min-width: 0; }
+.lb-stat__value {
+  justify-self: start;
+  font-family: var(--font-mono);
+  font-size: var(--fs-title-2);
+  font-weight: var(--fw-bold);
+  line-height: 1.15;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.lb-stat__label { font-size: var(--fs-text-sm); font-weight: var(--fw-semibold); color: var(--color-fg-muted); }
+.lb-stat__note { font-size: var(--fs-text-xs); color: var(--color-fg-muted); }
+.lb-stat__meter,
+.lb-level__bar,
+.lb-metric__bar {
+  display: block;
+  overflow: hidden;
+  border-radius: var(--r-full);
+}
+.lb-stat__meter { height: 4px; margin-top: 0.4rem; background: color-mix(in oklab, var(--hue) 14%, var(--color-surface-1)); }
+.lb-stat__meter > span,
+.lb-level__bar > span,
+.lb-metric__bar > span {
+  display: block;
+  height: 100%;
+  width: var(--lb-fill);
+  border-radius: inherit;
+}
+.lb-stat__meter > span { background: var(--hue); }
+
+/* ── المنصة والمستويات ───────────────────────────────────────────────────── */
+.lb-duo { display: grid; gap: 1rem; }
+@container lb (min-width: 52rem) {
+  .lb-duo { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+}
+
+.lb-podium__who {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+.lb-podium__who:hover .rk-podium__name { text-decoration: underline; text-underline-offset: 3px; }
+.lb-podium__face {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--color-surface-2), 0 0 0 6px var(--medal), var(--shadow-sm);
+}
+.rk-podium__slot[data-place='1'] .lb-podium__face {
+  box-shadow:
+    0 0 0 3px var(--color-surface-2),
+    0 0 0 7px var(--medal),
+    0 10px 24px color-mix(in oklab, var(--medal) 45%, transparent);
+}
+.lb-podium__face .rk-podium__crown { z-index: 1; }
+
+.lb-levels__hint { margin-top: -0.6rem; margin-bottom: 1rem; font-size: var(--fs-text-xs); color: var(--color-fg-muted); }
+.lb-levels__list { display: grid; gap: 0.55rem; }
+.lb-level {
+  display: grid;
+  grid-template-columns: 1.75rem 4.25rem minmax(0, 1fr) 5rem;
+  align-items: center;
+  gap: 0.6rem;
+}
+.lb-level__gem { width: 1.75rem; height: 1.75rem; }
+.lb-level[data-zero] .lb-level__gem { filter: grayscale(1); opacity: 0.4; }
+.lb-level__name { font-size: var(--fs-text-sm); font-weight: var(--fw-semibold); color: var(--color-fg); }
+.lb-level__bar { height: 0.6rem; background: color-mix(in oklab, var(--lvl) 12%, var(--color-surface-1)); }
+.lb-level__bar > span { background: var(--lvl); }
+.lb-level__count {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.lb-level__pct { font-size: var(--fs-text-xs); font-weight: var(--fw-medium); color: var(--color-fg-muted); }
+
+/* ── القايمة ─────────────────────────────────────────────────────────────── */
+.lb-board { display: grid; gap: 1rem; min-width: 0; }
+.lb-board__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+}
+.lb-board__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1 1 22rem;
+  justify-content: flex-end;
+}
+
+.lb-search { display: flex; align-items: stretch; flex: 1 1 16rem; min-width: 0; max-width: 28rem; }
+.lb-search__field { position: relative; display: flex; flex: 1; min-width: 0; }
+.lb-search__icon {
+  position: absolute;
+  inset-inline-start: 0.7rem;
+  inset-block-start: 50%;
+  width: 1rem;
+  height: 1rem;
+  transform: translateY(-50%);
+  color: var(--color-fg-muted);
+  pointer-events: none;
+}
+.lb-search__input {
+  flex: 1;
+  min-width: 0;
+  height: 2.5rem;
+  padding-inline: 2.2rem 0.75rem;
+  border: 1px solid var(--color-line);
+  border-inline-end: 0;
+  border-start-start-radius: var(--r-md);
+  border-end-start-radius: var(--r-md);
+  background: var(--color-surface-1);
+  color: var(--color-fg);
+  /* ١٦px على الموبايل: أقل من كده وسفاري بيعمل زوم على الصفحة كلها. */
+  font-size: 1rem;
+}
+.lb-search__input::placeholder { color: var(--color-fg-faint); }
+.lb-search__input:focus {
+  outline: none;
+  border-color: var(--viz-3);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--viz-3) 22%, transparent);
+}
+.lb-search__go {
+  padding-inline: 1.1rem;
+  border-start-end-radius: var(--r-md);
+  border-end-end-radius: var(--r-md);
+  background: color-mix(in oklab, var(--viz-3), #000 18%);
+  color: #fff;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  transition: background-color 160ms var(--ease-out);
+}
+.lb-search__go:hover { background: color-mix(in oklab, var(--viz-3), #000 30%); }
+@container lb (min-width: 40rem) {
+  .lb-search__input { font-size: var(--fs-text-sm); }
+}
+
+.lb-results {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.9rem;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg);
+}
+.lb-results__note { font-size: var(--fs-text-xs); font-weight: var(--fw-medium); color: var(--color-fg-muted); }
+.lb-results__clear { color: var(--viz-3); text-decoration: underline; text-underline-offset: 3px; }
+
+/* نتيجة واحدة: «ترتيبه كام؟» في سطر كبير. */
+.lb-found {
+  --medal: var(--viz-3);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklab, var(--medal) 40%, var(--color-line));
+  background:
+    radial-gradient(120% 160% at 100% 0%, color-mix(in oklab, var(--medal) 20%, transparent) 0%, transparent 65%),
+    var(--color-surface-2);
+  box-shadow: var(--shadow-md);
+}
+.lb-found[data-place='1'] { --medal: var(--rk-gold); }
+.lb-found[data-place='2'] { --medal: var(--rk-silver); }
+.lb-found[data-place='3'] { --medal: var(--rk-bronze); }
+.lb-found__text { flex: 1; min-width: 0; }
+.lb-found__line { font-size: var(--fs-title-4); font-weight: var(--fw-bold); line-height: 1.5; color: var(--color-fg); }
+.lb-found__meta { margin-top: 0.2rem; font-size: var(--fs-text-sm); color: var(--color-fg-muted); }
+.lb-found__rank {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--fs-title-1);
+  font-weight: var(--fw-bold);
+  color: color-mix(in oklab, var(--medal), var(--color-fg) 20%);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.lb-found__hash { font-size: 0.6em; opacity: 0.6; }
+
+.lb-table { --lb-cols: 1fr; display: grid; gap: 0.6rem; }
+.lb-thead { display: none; }
+.lb-list { display: grid; gap: 0.75rem; }
+
+/*
+ * الكارت (الافتراضي): ستة أعمدة متساوية، عشان المركز ياخد سُدس والاسم الباقي،
+ * والتلات أرقام (كويز/امتحان/واجب) يقسموا السطر بالتساوي.
+ */
+.lb-row {
+  --medal: var(--color-line);
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-areas:
+    'rank who who who who who'
+    'points points points points points points'
+    'quiz quiz exam exam hw hw'
+    'last last actions actions actions actions';
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  box-shadow: var(--shadow-sm);
+}
+.lb-row[data-place='1'] { --medal: var(--rk-gold); }
+.lb-row[data-place='2'] { --medal: var(--rk-silver); }
+.lb-row[data-place='3'] { --medal: var(--rk-bronze); }
+.lb-row[data-place] {
+  border-color: color-mix(in oklab, var(--medal) 50%, var(--color-line));
+  background:
+    radial-gradient(120% 160% at 100% 0%, color-mix(in oklab, var(--medal) 16%, transparent) 0%, transparent 60%),
+    var(--color-surface-2);
+}
+
+.lb-rank {
+  grid-area: rank;
+  justify-self: start;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-1);
+  color: var(--color-fg);
+}
+.lb-row[data-place] .lb-rank {
+  border-color: transparent;
+  background: linear-gradient(135deg, color-mix(in oklab, var(--medal), #fff 35%), var(--medal));
+  color: var(--on-light-ink);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--medal) 30%, transparent);
+}
+.lb-rank__n {
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.lb-rank__medal {
+  position: absolute;
+  inset-block-start: -0.55rem;
+  inset-inline-end: -0.45rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  color: color-mix(in oklab, var(--medal), #000 20%);
+  fill: color-mix(in oklab, var(--medal), #fff 40%);
+}
+
+.lb-who { grid-area: who; display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+.lb-who__text { display: grid; gap: 0.15rem; min-width: 0; }
+.lb-who__name {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+.lb-who__name:hover { color: var(--viz-3); text-decoration: underline; text-underline-offset: 3px; }
+.lb-who__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.6rem;
+  font-size: var(--fs-text-xs);
+  color: var(--color-fg-muted);
+}
+.lb-who__meta .lb-ltr { font-family: var(--font-mono); }
+.lb-who__chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.15rem; }
+.lb-chip {
+  --chip: var(--viz-5);
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.5rem;
+  border-radius: var(--r-full);
+  border: 1px solid color-mix(in oklab, var(--chip) 30%, transparent);
+  background: color-mix(in oklab, var(--chip) 13%, transparent);
+  color: color-mix(in oklab, var(--chip), var(--color-fg) 30%);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+}
+.lb-chip[data-tone='general'] { --chip: var(--viz-2); }
+.lb-chip[data-tone='languages'] { --chip: var(--viz-5); }
+.lb-chip[data-tone='pending'] { --chip: var(--viz-4); }
+.lb-chip[data-tone='warn'] { --chip: var(--warn); cursor: help; }
+
+.lb-points {
+  grid-area: points;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in oklab, var(--lvl) 30%, transparent);
+  background: color-mix(in oklab, var(--lvl) 12%, var(--color-surface-1));
+}
+.lb-points__gem { flex: none; width: 1.6rem; height: 1.6rem; }
+.lb-points__n {
+  font-family: var(--font-mono);
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.lb-points__lvl {
+  margin-inline-start: auto;
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: color-mix(in oklab, var(--lvl), var(--color-fg) 35%);
+}
+
+.lb-metric { --kind: var(--viz-5); display: grid; align-content: start; gap: 0.2rem; min-width: 0; }
+.lb-metric[data-kind='quiz'] { grid-area: quiz; --kind: var(--viz-5); }
+.lb-metric[data-kind='exam'] { grid-area: exam; --kind: var(--viz-4); }
+.lb-metric[data-kind='homework'] { grid-area: hw; --kind: var(--viz-6); }
+.lb-metric__label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: color-mix(in oklab, var(--kind), var(--color-fg) 30%);
+}
+.lb-metric__value {
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+}
+.lb-metric__bar { height: 4px; background: color-mix(in oklab, var(--kind) 14%, var(--color-surface-1)); }
+.lb-metric__bar > span { background: var(--kind); }
+.lb-metric__hint { font-size: var(--fs-text-xs); color: var(--color-fg-muted); }
+.lb-metric__owed { color: var(--err); font-weight: var(--fw-semibold); }
+
+.lb-last {
+  grid-area: last;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--fs-text-xs);
+  color: var(--color-fg-muted);
+}
+.lb-actions { grid-area: actions; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.4rem; }
+
+.lb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.25rem;
+  padding-inline: 0.8rem;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in oklab, var(--viz-3) 35%, var(--color-line));
+  background: color-mix(in oklab, var(--viz-3) 10%, var(--color-surface-1));
+  color: color-mix(in oklab, var(--viz-3), var(--color-fg) 25%);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  text-decoration: none;
+  transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out);
+}
+.lb-btn:hover { border-color: var(--viz-3); background: color-mix(in oklab, var(--viz-3) 18%, var(--color-surface-1)); }
+.lb-btn--accent { min-height: 2.5rem; padding-inline: 1.1rem; font-size: var(--fs-text-sm); }
+
+/* كارتين جنب بعض لحد ما العرض يكفي جدول. */
+@container lb (min-width: 40rem) {
+  .lb-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/*
+ * الجدول: نفس الصف، الأعمدة جنب بعض. `--lb-cols` واحد للهيدر وللصفوف عشان
+ * العناوين تقف فوق أرقامها بالظبط.
+ */
+@container lb (min-width: 60rem) {
+  .lb-table { --lb-cols: 3.25rem minmax(12rem, 1fr) 7rem 6rem 6rem 7rem 5.75rem 6.5rem; }
+  .lb-thead {
+    display: grid;
+    grid-template-columns: var(--lb-cols);
+    gap: 0.6rem;
+    padding-inline: 0.75rem;
+    font-size: var(--fs-text-xs);
+    font-weight: var(--fw-semibold);
+    color: var(--color-fg-muted);
+  }
+  .lb-list { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+  .lb-row {
+    grid-template-columns: var(--lb-cols);
+    grid-template-areas: 'rank who points quiz exam hw last actions';
+    gap: 0.6rem;
+    padding: 0.7rem 0.75rem;
+  }
+  .lb-metric__label { display: none; }
+  .lb-points { flex-wrap: wrap; gap: 0.1rem 0.4rem; padding: 0.4rem 0.55rem; }
+  .lb-points__n { font-size: var(--fs-text-base); }
+  .lb-points__lvl { flex-basis: 100%; margin-inline-start: 0; }
+  .lb-actions { flex-direction: column; align-items: stretch; }
+  .lb-actions > * { justify-content: center; }
+}
+
+/* ── فاضي وحواشي ─────────────────────────────────────────────────────────── */
+.lb-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: 2.5rem 1rem;
+  border-radius: var(--r-lg);
+  border: 1px dashed var(--color-line);
+  background: var(--color-surface-2);
+  color: var(--color-fg-muted);
+  text-align: center;
+  line-height: 1.8;
+}
+.lb-empty__hint { font-size: var(--fs-text-sm); }
+.lb-footnote { font-size: var(--fs-text-xs); color: var(--color-fg-muted); text-align: center; }
+
+/* ── الحركة — نفس keyframes بتاعة `rank.css` ─────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  .lb-hero { animation: rk-rise 600ms var(--ease-out) both; }
+  .lb-shape--ring { animation: rk-float 9s ease-in-out infinite; }
+  .lb-shape--blob { animation: rk-morph 12s ease-in-out infinite; }
+  .lb-shape--dot { animation: rk-float 5s ease-in-out infinite reverse; }
+  .lb-podium__face { animation: rk-pop 500ms var(--ease-pop) calc(var(--d) * 140ms + 700ms) both; }
+  .lb-stat__meter > span { animation: rk-fill 900ms var(--ease-out) 300ms both; }
+  .lb-level__bar > span { animation: rk-fill 900ms var(--ease-out) calc(var(--d) * 70ms + 300ms) both; }
+  .lb-row { animation: rk-rise 420ms var(--ease-out) calc(var(--d) * 35ms) both; }
+}
