@@ -1003,6 +1003,9 @@ const admin = {
     passGrade: 'درجة النجاح ٪',
     poster: 'صورة المحاضرة',
     posterHint: 'بتظهر قبل ما الفيديو يشتغل. لو سيبتها فاضية هتظهر صورة يوتيوب.',
+    /** The same picker on an UPLOADED lecture — empty means the encoder's own frame. */
+    posterUploadHint: 'بتظهر للطالب قبل ما يدوس تشغيل. لو سيبتها فاضية هتظهر لقطة من الفيديو نفسه.',
+    posterSaved: 'اتحفظت صورة المحاضرة',
     // The quiz link is no longer gated on `kind === 'quiz'`, so it has to say
     // which of the two situations it is: open the quiz, or start one.
     addQuiz: 'إضافة اختبار للمحاضرة',

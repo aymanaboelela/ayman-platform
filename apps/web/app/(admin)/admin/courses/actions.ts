@@ -1234,6 +1234,30 @@ export async function videoPreviewUrlAction(externalId: string): Promise<string 
   return `${origin}/v/${externalId}/master.m3u8`;
 }
 
+/**
+ * «الصورة اللي أنا حاطّاها» on an uploaded lecture — its own PUT, because an
+ * upload has no URL to re-save the poster with (see the route's comment).
+ */
+export async function setUploadPosterAction(
+  courseId: string,
+  lessonId: string,
+  posterKey: string | null,
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'PUT',
+      `/api/admin/lessons/${lessonId}/video/poster`,
+      z.object({ posterKey: z.string().nullable() }),
+      { posterKey },
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: arabicError(error) };
+  }
+}
+
 export async function setVideoTrimAction(
   courseId: string,
   lessonId: string,
