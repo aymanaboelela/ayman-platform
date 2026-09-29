@@ -20,7 +20,8 @@ import {
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
-import { changeRoleAction, type ActionResult } from '../actions';
+import Link from 'next/link';
+import { changeRoleAction, staffRoleChangeAction, type ActionResult } from '../actions';
 
 const IDLE: ActionResult = { ok: true };
 
@@ -30,8 +31,21 @@ const IDLE: ActionResult = { ok: true };
  * does not even have a `role` key, so this is the only path that can change
  * one, and it always requires a reason that lands in the audit trail.
  */
-export function RoleChangeSection({ student }: { student: AdminStudentDetail }) {
+export function RoleChangeSection({
+  student,
+  mode,
+}: {
+  student: AdminStudentDetail;
+  /**
+   * `admin` — the whole-platform door (`role`, `student:role-change`): طالب،
+   * مساعد، مسؤول. `staff` — the teacher's door (`staff-role`, `staff:manage`):
+   * طالب أو مساعد، and WHAT the assistant may do is set per person on the team
+   * screen. The page picks from the session; the API decides regardless.
+   */
+  mode: 'admin' | 'staff';
+}) {
   const [open, setOpen] = useState(false);
+  const staffDoor = mode === 'staff';
   /*
    * الوصف بيتغيّر مع الاختيار، وده مش زينة.
    *
@@ -39,10 +53,13 @@ export function RoleChangeSection({ student }: { student: AdminStudentDetail }) 
    * ومسح الحسابات والتاني لأ — وده مش حاجة يتوقعها اللي بيقرا الاسمين. سطر
    * تحت القايمة بيقول اللي إنت على وشك تديه، **قبل** ما تدوس.
    */
-  const [role, setRole] = useState(student.role === 'admin' ? 'student' : 'admin');
+  const [role, setRole] = useState(
+    staffDoor ? (student.role === 'owner' ? 'student' : 'owner') : student.role === 'admin' ? 'student' : 'admin',
+  );
   const formRef = useRef<HTMLFormElement>(null);
   const [state, action, pending] = useActionState<ActionResult, FormData>(
-    (_previous, formData) => changeRoleAction(student.id, formData),
+    (_previous, formData) =>
+      staffDoor ? staffRoleChangeAction(student.id, formData) : changeRoleAction(student.id, formData),
     IDLE,
   );
 
@@ -70,6 +87,9 @@ export function RoleChangeSection({ student }: { student: AdminStudentDetail }) 
               : copy.admin.students.roleStudent}
         </Badge>
 
+        {/* An admin account is not the teacher's to change — the server
+            refuses it (`setStaffRole`), so no button that can only fail. */}
+        {staffDoor && student.role === 'admin' ? null : (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button type="button" variant="secondary">
@@ -101,7 +121,7 @@ export function RoleChangeSection({ student }: { student: AdminStudentDetail }) 
                       التدريس بس، ومن غير أي حاجة لا رجعة فيها ولا خاصة
                       بالفلوس. الشاشة هي اللي كانت بتخفي الاختيار الآمن. */}
                   <option value="owner">{copy.admin.students.roleOwner}</option>
-                  <option value="admin">{copy.admin.students.roleAdmin}</option>
+                  {staffDoor ? null : <option value="admin">{copy.admin.students.roleAdmin}</option>}
                 </Select>
                 {role === 'admin' || role === 'owner' ? (
                   <p
@@ -112,7 +132,9 @@ export function RoleChangeSection({ student }: { student: AdminStudentDetail }) 
                   >
                     {role === 'admin'
                       ? copy.admin.students.roleAdminHint
-                      : copy.admin.students.roleOwnerHint}
+                      : staffDoor
+                        ? copy.admin.students.roleOwnerPermissionsHint
+                        : copy.admin.students.roleOwnerHint}
                   </p>
                 ) : null}
               </div>
@@ -147,6 +169,12 @@ export function RoleChangeSection({ student }: { student: AdminStudentDetail }) 
             </form>
           </DialogContent>
         </Dialog>
+        )}
+        {staffDoor && student.role === 'owner' ? (
+          <Link href="/admin/roles" className="block text-[length:var(--fs-text-sm)] text-accent-text underline">
+            {copy.admin.students.roleOpenTeam}
+          </Link>
+        ) : null}
       </CardBody>
     </Card>
   );

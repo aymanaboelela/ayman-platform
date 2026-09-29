@@ -56,7 +56,8 @@ const admin = {
     navigation: 'القوائم',
     branding: 'الهوية البصرية',
     flags: 'خصائص التشغيل',
-    roles: 'الصلاحيات',
+    // «الفريق» أولًا: ده اللي المدرّس بيدوّر عليه لما عايز يضيف مساعد.
+    roles: 'الفريق والصلاحيات',
     news: 'نيوز',
     media: 'مكتبة الوسائط',
     videos: 'الفيديوهات',
@@ -2221,7 +2222,7 @@ const admin = {
    * الجملة دي — فلو الجملة تقنية، القرار بيبقى تخمين.
    */
   roles: {
-    title: 'الصلاحيات',
+    title: 'الفريق والصلاحيات',
     lead: 'المساعد بيقدر يعمل إيه. اللي مقفول مايشوفش الشاشة أصلًا.',
 
     /**
@@ -2662,6 +2663,17 @@ const admin = {
     roleChangeFailed: 'مقدرناش نغيّر الدور — نحاول تاني',
     roleChangeSelfError: 'مينفعش تغيّر دورك إنت',
     roleChangeLastAdminError: 'ده آخر مسؤول في المنصة — مينفعش تلغي صلاحياته',
+    /** A bare 403 from the permission guard — the admin-only door, pressed by someone else. */
+    roleChangeAdminOnly: 'تغيير الدور ده للمسؤول بس. المساعد بيتضاف من شاشة «الفريق والصلاحيات».',
+    roleChangeAdminTarget: 'ده حساب مسؤول، ودوره مش بيتغيّر من هنا.',
+    roleChangeOutranked: 'الحساب ده معاه صلاحيات إنت مش معاك، فمينفعش تغيّر دوره.',
+    roleChangeBeyondYou: 'مينفعش تعيّن حد بصلاحيات أكتر من صلاحياتك.',
+    /**
+     * Under «مساعد» on the student page, for the teacher: the role is only the
+     * door; WHAT the assistant may do is set per person on the team screen.
+     */
+    roleOwnerPermissionsHint: 'بعد ما يبقى مساعد، حدّد هو يقدر يعمل إيه بالظبط من شاشة «الفريق والصلاحيات».',
+    roleOpenTeam: 'افتح الفريق والصلاحيات',
     saveSuccess: 'اتحفظت بيانات الطالب',
     saveFailed: 'مقدرناش نحفظ — نحاول تاني',
     /** A duplicate phone or email — caught by the DB's own unique index. */
@@ -4960,15 +4972,22 @@ const admin = {
      * the storage that lands on the owner's Cloudflare account.
      */
     usageTitle: 'فيديوهات المدرّسين — المساحة والتكلفة',
-    usageLead: 'الأرقام من كلاودفلير نفسه — نفس اللي الفاتورة بتتحسب منه. التخزين بـ٠٫٠١٥ دولار للجيجا في الشهر، والمشاهدة ببلاش.',
+    /** `{cost}` Cloudflare's rate, `{price}` what a teacher pays — both dollars per GB-month. */
+    usageLead: 'الأرقام من كلاودفلير نفسه. التخزين عليك بـ{cost} دولار للجيجا في الشهر، والمدرّس بيدفع الضعف: {price}. المشاهدة ببلاش.',
     usageSelf: 'منصتك',
     usageTeacher: 'المدرّس',
     usageStored: 'متخزّن دلوقتي',
     usageFiles: 'ملف',
+    /** Stored now × the row's rate: what a full month costs if nothing changes. */
+    usageMonthly: 'في الشهر بالمساحة دي',
     usageThisMonth: 'الشهر ده لحد دلوقتي',
     usageLastMonth: 'الشهر اللي فات',
-    usageTotal: 'الإجمالي',
-    usageFreeTier: 'أول ١٠ جيجا في الحساب كله ببلاش كل شهر، فالفاتورة الحقيقية ممكن تبقى أقل من الإجمالي ده.',
+    /** Under a teacher's name: the money columns are what he PAYS, not the cost. */
+    usageCharged: 'بسعر المدرّس (الضعف)',
+    /** Under «منصتك»: the money columns are the cost itself. */
+    usageAtCost: 'بالتكلفة',
+    usageTotal: 'هتحصّله من المدرّسين',
+    usageFreeTier: 'أول ١٠ جيجا في الحساب كله ببلاش كل شهر — دي بتقلّل فاتورتك إنت، مش حساب المدرّسين.',
     usageNotConfigured: 'الشاشة دي محتاجة مفتاح قراية من كلاودفلير عشان تجيب الأرقام.',
     usageNotConfiguredHint: 'اعمل API Token بصلاحية «Account Analytics: Read» على حسابك، وحطه في إعدادات ستاكك باسم:',
     usageFailed: 'كلاودفلير مردّش دلوقتي — جرّب تاني بعد شوية.',
@@ -5183,6 +5202,14 @@ const admin = {
     statCount: 'فيديو في محاضرات',
     statCost: 'تكلفة التخزين في الشهر تقريبًا',
     statCostHint: 'التخزين بـ٠٫٠١٥ دولار للجيجا في الشهر، والمشاهدة ببلاش.',
+    /**
+     * The same card on a teacher's stack — what HE pays, every month, at the
+     * price the owner charges (`TENANT_USD_PER_GB_MONTH`), not Cloudflare's.
+     */
+    statCostTenant: 'هتدفعها كل شهر',
+    /** `{price}` — dollars per GB-month, e.g. `0.03`. */
+    statCostTenantHint: '{price} دولار لكل جيجا متخزّنة، بتتحسب كل شهر على المساحة اللي فوق. المشاهدة ببلاش.',
+    perMonth: 'في الشهر',
     unitGb: 'جيجا',
     unitMb: 'ميجا',
     storageUnread: 'مقدرناش نقرا التخزين دلوقتي — المساحة هنا من غير الملفات الزيادة.',

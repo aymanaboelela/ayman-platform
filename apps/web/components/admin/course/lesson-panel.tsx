@@ -37,6 +37,7 @@ import { VideoPreview } from './video-preview';
 import { VideoUpload } from './video-upload';
 import { RemoveUploadedVideo } from './remove-uploaded-video';
 import { VideoTrimEditor } from './video-trim-editor';
+import { UploadedVideoPreview } from './uploaded-video-preview';
 import { fetchYouTubeDuration } from './youtube-duration';
 import { useFeature } from '../entitlements-context';
 
@@ -513,6 +514,10 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
 
       {source === 'upload' && uploadOpen ? (
         <>
+        {/* The lecture itself first, once there is one to watch. */}
+        {lesson.video?.provider === 'upload' && lesson.video.mirrorStatus === 'ready' ? (
+          <UploadedVideoPreview externalId={lesson.video.externalId} />
+        ) : null}
         <VideoUpload
           courseId={courseId}
           lessonId={lesson.id}

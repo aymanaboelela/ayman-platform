@@ -10,10 +10,12 @@ import {
   type VideoLibraryTarget,
 } from '@ayman/contracts/admin/video-upload';
 import { copy } from '@ayman/contracts/copy/admin';
+import { R2_USD_PER_GB_MONTH, TENANT_USD_PER_GB_MONTH } from '@ayman/contracts/video';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { getEntitlements } from '@/lib/entitlements';
+import { IS_AYMAN } from '@/lib/tenant';
 import { DeleteVideoButton } from './delete-video-button';
 import { RestoreVideoButton } from './restore-video-button';
 
@@ -21,8 +23,13 @@ const c = copy.admin.videos;
 
 export const metadata = { title: c.title };
 
-/** R2 Standard, per GB-month. Egress is free, so storage IS the bill. */
-const USD_PER_GB_MONTH = 0.015;
+/**
+ * The rate this screen quotes. On the owner's stack it is Cloudflare's own —
+ * the bill is his. On a teacher's it is what the owner CHARGES him, twice the
+ * cost (see `TENANT_USD_PER_GB_MONTH`): the bucket is on the owner's account,
+ * so Cloudflare's number is not what the teacher pays.
+ */
+const USD_PER_GB_MONTH = IS_AYMAN ? R2_USD_PER_GB_MONTH : TENANT_USD_PER_GB_MONTH;
 
 const stamp = new Intl.DateTimeFormat('ar-EG', { dateStyle: 'medium' });
 
@@ -101,10 +108,17 @@ export default async function AdminVideosPage() {
         <Stat icon={Film} label={c.statCount} tone="info">
           <span className="mono tabular">{items.length}</span>
         </Stat>
-        <Stat icon={Wallet} label={c.statCost} tone="ok" hint={c.statCostHint}>
+        <Stat
+          icon={Wallet}
+          label={IS_AYMAN ? c.statCost : c.statCostTenant}
+          tone="ok"
+          hint={IS_AYMAN ? c.statCostHint : formatCopy(c.statCostTenantHint, { price: USD_PER_GB_MONTH.toFixed(2) })}
+        >
           <span dir="ltr" className="mono tabular">
             ${monthly < 0.01 && monthly > 0 ? '<0.01' : monthly.toFixed(2)}
-          </span>
+          </span>{' '}
+          {/* «كل شهر» said on the number itself, not only in the small print. */}
+          <span className="text-[length:var(--fs-text-sm)] font-normal text-fg-muted">{c.perMonth}</span>
         </Stat>
       </dl>
 
