@@ -11,6 +11,7 @@ import {
   uploadSourceKey,
 } from '@ayman/contracts/video';
 import {
+  encodedFraction,
   posterArgs,
   readMasterVariants,
   readMediaPlaylist,
@@ -384,5 +385,25 @@ describe('videoKey', () => {
 
   it('points players at the SITE, never at the bucket', () => {
     expect(videoKeyUri('https://x.com/', 'a'.repeat(32))).toBe(`https://x.com/api/videos/${'a'.repeat(32)}/key`);
+  });
+});
+
+describe('encodedFraction — the bar during the encode', () => {
+  const segs = (n: number) => Array.from({ length: n }, (_, i) => `seg_${String(i).padStart(3, '0')}.ts`);
+
+  it('moves with the segments on disk — 100 × 6 s of a 1 h lecture is a sixth', () => {
+    expect(encodedFraction(segs(100), 3600)).toBeCloseTo(1 / 6);
+  });
+
+  it('counts only segments — not the playlist ffmpeg rewrites beside them', () => {
+    expect(encodedFraction([...segs(10), 'index.m3u8'], 600)).toBeCloseTo(0.1);
+  });
+
+  it('never says done while ffmpeg is still running', () => {
+    expect(encodedFraction(segs(700), 3600)).toBe(0.99);
+  });
+
+  it('is 0 for a duration ffprobe could not read', () => {
+    expect(encodedFraction(segs(5), 0)).toBe(0);
   });
 });

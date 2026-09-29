@@ -482,6 +482,8 @@ export class VideoMirrorService implements OnModuleDestroy {
         .catch(() => undefined);
     };
 
+    let lastEncodePercent = 20;
+
     const work = await mkdtemp(join(tmpdir(), `upload-${uploadId}-`));
     const sourceFile = join(work, 'source');
 
@@ -508,6 +510,13 @@ export class VideoMirrorService implements OnModuleDestroy {
           void setProgress(stage === 'encoding' ? 20 : stage === 'poster' ? 85 : 15);
         },
         { key: this.videoKey(uploadId), uri: videoKeyUri(this.appUrl, uploadId) },
+        // The encode is 20 → 84: it is most of the wait, so most of the bar.
+        (fraction) => {
+          const percent = 20 + Math.floor(fraction * 64);
+          if (percent === lastEncodePercent) return;
+          lastEncodePercent = percent;
+          void setProgress(percent);
+        },
       );
 
       try {

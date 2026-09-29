@@ -843,7 +843,7 @@ const admin = {
     videoUploadWrongType: 'ده مش ملف فيديو',
     videoUploading: 'بيترفع…',
     /** After the last part lands and before the encoder is done with it. */
-    videoUploadProcessing: 'بيتجهّز… ده بياخد دقايق حسب طول المحاضرة',
+    videoUploadProcessing: 'بيتجهّز على السيرفر… المحاضرة الطويلة ممكن تاخد ساعة أو أكتر، وتقدر تقفل الصفحة',
     videoUploadDone: 'خلصت، والمحاضرة شغالة عند الطلبة',
     videoUploadFailed: 'الرفع وقع',
     videoUploadRetry: 'حاول تاني',
