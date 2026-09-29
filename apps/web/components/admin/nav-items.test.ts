@@ -37,3 +37,21 @@ describe('the book shelf in the admin sidebar', () => {
     expect(hrefs).not.toContain('/admin/books');
   });
 });
+
+/**
+ * «الفريق والصلاحيات» for the teacher. It was gated on `role:read`, which the
+ * teacher does not hold — so the screen where he adds an assistant and picks
+ * what they may do never appeared in his sidebar, and he found the admin-only
+ * role dialog on the student page instead, and a 403.
+ */
+describe('the team screen in the sidebar', () => {
+  it('shows to whoever manages staff, without the role grid permission', () => {
+    const hrefs = visibleNavItems(['admin:access', 'staff:manage'], allOn).map((item) => item.href);
+    expect(hrefs).toContain('/admin/roles');
+  });
+
+  it('stays hidden from an assistant the teacher did not trust with the team', () => {
+    const hrefs = visibleNavItems(['admin:access', 'course:read-admin'], allOn).map((item) => item.href);
+    expect(hrefs).not.toContain('/admin/roles');
+  });
+});

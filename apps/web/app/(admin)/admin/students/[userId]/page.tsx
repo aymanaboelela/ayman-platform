@@ -13,6 +13,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { Skeleton } from '@ayman/ui/components/skeleton';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { adminGet, adminGetOrForbidden } from '@/lib/admin-api';
+import { can, getSession } from '@/lib/session';
 import { SessionDeviceListSchema } from '@ayman/contracts/sessions';
 import { StudentRecord } from '@/components/admin/students/student-record';
 import { WhatsappButton } from '@/components/admin/whatsapp-button';
@@ -227,6 +228,17 @@ export default async function StudentDetailPage({
     adminGetOrForbidden(`/api/admin/students/${userId}/sessions`, SessionDeviceListSchema),
   ]);
 
+  /*
+   * Which door the role card opens, if any. `getSession` is `cache()`d — the
+   * layout already read it, so this is not a second request.
+   */
+  const session = await getSession();
+  const roleDoor = can(session, 'student:role-change')
+    ? 'admin'
+    : can(session, 'staff:manage')
+      ? 'staff'
+      : null;
+
   const closedCourses = courses
     .filter((course) => course.requiresGrant)
     .map((course) => ({ id: course.id, title: course.title }));
@@ -316,7 +328,7 @@ export default async function StudentDetailPage({
           </Suspense>
         </div>
         <div className="flex flex-col gap-6">
-          <RoleChangeSection student={student} />
+          {roleDoor ? <RoleChangeSection student={student} mode={roleDoor} /> : null}
           <SetPasswordSection student={student} />
           <CourseAccessSection userId={userId} grants={grants} closedCourses={closedCourses} />
           {/* `null` is «not yours to see», never «empty» — see
