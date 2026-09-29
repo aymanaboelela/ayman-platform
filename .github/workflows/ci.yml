@@ -1483,6 +1483,39 @@ jobs:
               echo "::warning::production was already serving this commit before this job began — two merges landed close enough together that the first build picked up the second commit."
               landed
             fi
+
+            # ── Dokploy's OWN push hook shipped it ─────────────────────────
+            #
+            # The compose has auto-deploy on push: GitHub's webhook starts a
+            # build the second the merge lands, and it is live in ~3 minutes —
+            # while this job only starts after ~20 minutes of Playwright. So
+            # by the time the fingerprint above is taken, it is ALREADY the
+            # new build; our own trigger then rebuilds an unchanged tree from
+            # cache, nothing restarts, and this step failed every merge with
+            # «the Dokploy rebuild did not land at all» (2026-09-29, #537 and
+            # #539, both verifiably live).
+            #
+            # Same guard as above against a build that started BEFORE this
+            # push and booted after it: require the previous commit on main to
+            # be at least 10 minutes older than this one — longer than any
+            # build — so the only build that can have started between this
+            # push and the API's boot is this push's own.
+            if [ -n "$pushed" ] && [ "$started_before" \> "$pushed" ]; then
+              parent=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" --jq '.parents[0].sha' 2>/dev/null || true)
+              parent_at=''
+              [ -n "$parent" ] && parent_at=$(gh api "repos/$GITHUB_REPOSITORY/commits/$parent" \
+                --jq '.commit.committer.date' 2>/dev/null || true)
+              gap=''
+              if [ -n "$parent_at" ]; then
+                gap=$(( $(date -u -d "$pushed" +%s 2>/dev/null || echo 0) - $(date -u -d "$parent_at" +%s 2>/dev/null || echo 0) ))
+              fi
+              if [ -n "$gap" ] && [ "$gap" -ge 600 ]; then
+                echo "this commit was pushed at $pushed; the one before it at $parent_at (${gap}s earlier)"
+                echo "and the API answering now has been up since $started_before — after this push, so its build is this push's"
+                echo "Deployed: Dokploy's push hook shipped this commit before this job began."
+                landed
+              fi
+            fi
           fi
 
           # Two different incidents, and they used to print the same sentence —
