@@ -958,12 +958,15 @@ describe('analytics (integration)', () => {
         [2, 1, 300],
         [1, 1, 120],
       ]);
-      // Steps 18 and 10: everyone to 50%, one of two past it, nobody at 95%.
+      // Everyone to 50%, one of two past it — and that one, marked complete, to the end.
       expect(detail.retention?.[0]).toBe(1);
       expect(detail.retention?.[10]).toBe(1);
       expect(detail.retention?.[11]).toBe(0.5);
       expect(detail.retention?.[18]).toBe(0.5);
-      expect(detail.retention?.[19]).toBe(0);
+      // s0 stopped at 90% but the platform marked it complete — that is
+      // «reached the end», so the curve's last point agrees with «كمّلوه».
+      expect(detail.retention?.[19]).toBe(0.5);
+      expect(detail.retention?.[20]).toBe(0.5);
       expect(detail.byHour.reduce((sum, n) => sum + n, 0)).toBe(3);
       expect(detail.daily).toHaveLength(28);
       expect(detail.daily.reduce((sum, day) => sum + day.views, 0)).toBe(3);
