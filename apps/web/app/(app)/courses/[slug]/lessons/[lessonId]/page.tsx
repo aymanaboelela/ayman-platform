@@ -317,7 +317,7 @@ export default async function LessonPage({
           {/* «جروب الدفعة» first, then «تحتاج مساعدة؟» — the room the
               student's own classmates are in is the first place a question
               about a lecture gets answered, and a DM to him is the last resort.
-              Side by side and foldable; each renders nothing when unset. */}
+              Stacked and foldable; each renders nothing when unset. */}
           <CourseQuickLinks
             groupUrl={outline.course.whatsappGroupUrl}
             whatsapp={settings.contact.whatsapp}

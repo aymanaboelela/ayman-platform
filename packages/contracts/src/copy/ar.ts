@@ -3476,14 +3476,15 @@ export const copy = {
     group: {
       title: 'جروب الدفعة',
       lead: 'جروب الواتساب الخاص بطلبة الكورس ده — الأسئلة والتنبيهات بينزلوا فيه.',
-      /** The short line under the title in the compact, side-by-side card. */
+      /** The short line under the title in the compact sidebar row. */
       short: 'أسئلة وتنبيهات الدفعة',
       cta: 'دخول الجروب',
     },
 
     /**
-     * The group and help cards side by side, with a switch to fold them away —
-     * «كبار أوي… يبقوا جنب بعض، ويبقى فيه زرار يخفيهم ويرجّعهم».
+     * The group and help links as two compact rows, with a switch to fold them
+     * away — «كبار أوي… ويبقى فيه زرار يخفيهم ويرجّعهم». They sat side by side
+     * until that cut both short lines off; see `CourseQuickLinks`.
      */
     quickLinks: {
       title: 'الجروب والمساعدة',

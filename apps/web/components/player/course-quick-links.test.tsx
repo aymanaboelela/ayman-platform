@@ -13,7 +13,7 @@ describe('CourseQuickLinks', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('puts the group and the help DM side by side, each its own link', () => {
+  it('lists the group and the help DM one under the other, each its own link', () => {
     render(<CourseQuickLinks groupUrl="https://chat.whatsapp.com/abc" whatsapp="+201021196367" />);
 
     expect(screen.getByRole('link', { name: new RegExp(c.group.title) })).toHaveAttribute(
