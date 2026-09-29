@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { HeartbeatResponse, LessonProgressDto } from '@ayman/contracts';
-import { DWELL_COMPLETE_MS } from '@ayman/contracts/progress';
+import { isCompletionUndoable } from '@ayman/contracts/completion-undo';
+import { DWELL_COMPLETE_MS, videoCompletionFraction } from '@ayman/contracts/progress';
 import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -23,6 +24,14 @@ interface CompletionOutcome {
   response: HeartbeatResponse;
   /** The student to announce «مبروك، خلصت الكورس» to, or `null`. */
   courseCompletedFor: string | null;
+}
+
+/** What `undoManualCompletion` locks and decides on — nothing else is read. */
+interface LockedUndoRow {
+  completed_via: string | null;
+  watched_seconds: number;
+  max_position_seconds: number;
+  open_count: number;
 }
 
 @Injectable()
@@ -203,6 +212,179 @@ export class LessonProgressService {
 
       return this.markComplete(tx, context, 'manual');
     });
+  }
+
+  /**
+   * «تم» → «نرجّع الدرس؟» — taking back a press of «خلاص · التالي».
+   *
+   * «في ناس بتضغط بالغلط». The button sits under the video, the student's
+   * thumb is already there, and until this existed a mistaken press was
+   * permanent: the lesson read «تم» for good, the course percentage kept a
+   * lecture nobody watched, and the exam could open on it.
+   *
+   * ## Only what the button wrote
+   *
+   * `isCompletionUndoable` is the rule, shared with the player so the dialog
+   * never offers what this refuses. In short: `manual` only — `auto`, `dwell`
+   * and a quiz pass were earned, not pressed — and only on a video that has
+   * not since been watched to the thresholds, because the next heartbeat would
+   * re-complete it as `auto`. Text and attachment lessons are out too: their
+   * dwell timer re-arms the moment they read incomplete and hands the
+   * completion straight back. A quiz is refused by name before any of that,
+   * with the same sentence `completeManually` uses.
+   *
+   * ## The row goes back to what the heartbeat would have left
+   *
+   * `completedAt`/`completedVia` cleared TOGETHER — `lesson_progress_completed_
+   * has_source` rejects one without the other — and `completion` recomputed
+   * with `videoCompletionFraction`, the call the heartbeat makes for an
+   * unfinished video. Leaving it at 1 would be legal (`completed_is_full` only
+   * binds a row with `completed_at`) and wrong: the continue-watching bar
+   * would draw a lecture the student has not watched as full. The watch
+   * counters are untouched, as `markComplete` left them.
+   *
+   * `state` goes to `in_progress` whenever there is any trace of the student
+   * having been here — an open, a second watched — which is what `open()`
+   * would have written; `not_started` only for a row with none.
+   *
+   * The row is read `FOR UPDATE`, like the heartbeat's: a heartbeat landing
+   * between this read and the write would otherwise be judged against
+   * counters that are no longer the row's.
+   *
+   * ## The course
+   *
+   * `recalculate` runs as it does after every completion, so the percentage
+   * drops and — if this was the lecture that finished the course — the
+   * enrolment's `completedAt` clears and the course is back in «شغال عليه».
+   * Nothing is announced: `recalculate` only ever emits on the edge INTO
+   * finished. The «مبروك» that finish produced is withdrawn — see
+   * `retractCourseCompleted`.
+   */
+  async undoManualCompletion(userId: string, lessonId: string): Promise<HeartbeatResponse> {
+    const context = await this.access.require(userId, lessonId);
+
+    if (context.kind === 'quiz') {
+      throw new BadRequestException('A quiz lesson is completed by passing its quiz.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<LockedUndoRow[]>`
+        SELECT completed_via::text AS completed_via,
+               watched_seconds,
+               max_position_seconds,
+               open_count
+          FROM app.lesson_progress
+         WHERE enrollment_id = ${context.enrollmentId}
+           AND lesson_id     = ${context.lessonId}
+           FOR UPDATE
+      `;
+      const current = locked[0];
+
+      const snapshot = {
+        durationSeconds: context.durationSeconds,
+        watchedSeconds: current?.watched_seconds ?? 0,
+        maxPositionSeconds: current?.max_position_seconds ?? 0,
+      };
+
+      if (
+        !current ||
+        !isCompletionUndoable({ ...snapshot, kind: context.kind, completedVia: current.completed_via })
+      ) {
+        // Not idempotent on purpose, unlike `completeManually`'s double press:
+        // the player never draws this control for any of these, so reaching
+        // here means a stale page or a hand-made request — and a 200 carrying
+        // a row that still reads «تم» would tell a stale page it worked.
+        throw new BadRequestException('Only a lesson finished with the button can be taken back.');
+      }
+
+      const touched =
+        current.open_count > 0 || current.watched_seconds > 0 || current.max_position_seconds > 0;
+
+      const before = await tx.enrollment.findUniqueOrThrow({
+        where: { id: context.enrollmentId },
+        select: { completedAt: true },
+      });
+
+      const row = await tx.lessonProgress.update({
+        where: {
+          enrollmentId_lessonId: {
+            enrollmentId: context.enrollmentId,
+            lessonId: context.lessonId,
+          },
+        },
+        data: {
+          completedAt: null,
+          completedVia: null,
+          state: touched ? 'in_progress' : 'not_started',
+          completion: videoCompletionFraction(snapshot),
+        },
+        select: PROGRESS_SELECT,
+      });
+
+      /*
+        Always a drop or no change, so `completedNow` is always null here and
+        there is nothing to announce after the commit. Ignoring it is not the
+        "quieter" caller `CourseProgressResult` warns about — there is nothing
+        it could ever carry.
+      */
+      const aggregate = await this.courseProgress.recalculate(
+        tx,
+        context.enrollmentId,
+        context.courseId,
+      );
+
+      const after = await tx.enrollment.findUniqueOrThrow({
+        where: { id: context.enrollmentId },
+        select: { completedAt: true },
+      });
+      if (before.completedAt !== null && after.completedAt === null) {
+        await this.retractCourseCompleted(tx, userId, context.courseId);
+      }
+
+      return {
+        progress: toProgressDto(row as ProgressRow),
+        justCompleted: false,
+        courseProgressPercent: aggregate.percent,
+      };
+    });
+  }
+
+  /**
+   * An undo that takes a FINISHED course back to unfinished withdraws the
+   * «مبروك، خلصت الكورس» that finish produced.
+   *
+   * The ordinary case is exactly the mistake the undo exists for: «خلاص ·
+   * التالي» pressed on the last lecture by accident, the toast fires, the
+   * student takes it back. Left alone, the bell would go on saying «خلصت
+   * الكورس» about a course at 90% — and the real finish later would put a
+   * SECOND «مبروك» under it, because `recalculate` re-arms whenever
+   * `completedAt` goes null (deliberately; see its «The EDGE» note). With
+   * this, the bell holds one «مبروك» per finish that actually stands.
+   *
+   * Only the NEWEST one. Earlier rows are finishes that were true when they
+   * were written — finished, re-opened by a newly published lecture, finished
+   * again — and they are history, not this mistake.
+   *
+   * The toast already shown cannot be recalled, and nothing here pretends it
+   * can. Inside the caller's transaction, like `emit`: a retraction that
+   * outlived a rolled-back undo would delete a congratulation that still
+   * stands.
+   */
+  private async retractCourseCompleted(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    courseId: string,
+  ): Promise<void> {
+    const latest = await tx.notification.findFirst({
+      where: {
+        userId,
+        kind: 'course_completed',
+        payload: { path: ['courseId'], equals: courseId },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { id: true },
+    });
+    if (latest) await tx.notification.delete({ where: { id: latest.id } });
   }
 
   /**
