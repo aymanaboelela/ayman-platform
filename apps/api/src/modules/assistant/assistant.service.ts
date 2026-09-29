@@ -27,6 +27,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { hashGuestToken, mintGuestToken } from './guest-token';
+import { groupGrantsByCourse } from './thread-courses';
 import type {
   ConversationOrigin,
   ConversationStatus,
@@ -709,9 +710,20 @@ export class AssistantService {
      * `purchase` is what made hand-issued access invisible on every screen
      * that talks about subscriptions.
      *
-     * `scope: 'course'` only: the automatic `platform` grant is held by
-     * everyone who ever enrolled and names no course, so listing it here
-     * would put an identical, meaningless line on every single thread.
+     * `course`, `term` and `course_month` — every scope that is a
+     * subscription to ONE course. `course_month` is the one that was missing:
+     * the monthly plan became «شهر من المنهج» and hundreds of live
+     * subscriptions moved to it in an afternoon, and every one of those
+     * students read «مش مشترك» here while holding the month they were
+     * writing in about. The automatic `platform` grant stays out — it is held
+     * by everyone who ever enrolled and names no course, so listing it would
+     * put an identical, meaningless line on every thread. `section`/`lesson`
+     * stay out too: a code that opens one lesson is not a subscription.
+     *
+     * Grouped per course below, and the months and terms travel with the
+     * course — «يبقى ظاهر هو مشترك في أنهي شهر». Two students both reading
+     * «مشترك» in the same course can hold different months, and the month is
+     * what decides the answer to «الحصة دي مش فاتحة معايا».
      *
      * `null` for a guest — there is no account to check, and running this on
      * `userId: null` would be a wasted round trip for an answer the schema
@@ -722,28 +734,26 @@ export class AssistantService {
       ? await this.prisma.accessGrant.findMany({
           where: {
             userId: row.userId,
-            scope: 'course',
+            scope: { in: ['course', 'term', 'course_month'] },
+            courseId: { not: null },
             revokedAt: null,
             validFrom: { lte: now },
             OR: [{ validUntil: null }, { validUntil: { gt: now } }],
           },
-          orderBy: [{ validFrom: 'desc' }],
+          orderBy: [{ validFrom: 'desc' }, { id: 'desc' }],
           select: {
             courseId: true,
+            scope: true,
             source: true,
             validUntil: true,
             course: { select: { title: true } },
+            term: { select: { title: true } },
+            month: { select: { monthIndex: true, title: true } },
           },
         })
       : null;
 
-    const courses =
-      grants?.map((grant) => ({
-        courseId: grant.courseId ?? '',
-        courseTitle: grant.course?.title ?? '',
-        source: grant.source,
-        validUntil: grant.validUntil?.toISOString() ?? null,
-      })) ?? null;
+    const courses = grants === null ? null : groupGrantsByCourse(grants);
 
     // Derived, never a second query — the two cannot disagree this way.
     const hasActiveSubscription = courses === null ? null : courses.length > 0;

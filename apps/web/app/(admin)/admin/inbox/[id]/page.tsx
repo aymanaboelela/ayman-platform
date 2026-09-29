@@ -27,6 +27,19 @@ import { ThreadActions } from './thread-actions';
 
 const c = copy.assistant.inbox;
 
+/** «الترم الأول · شهر 1، 2» — terms by title, months by their curriculum
+ *  number, so three months stay one short line on a badge. */
+function coursePart(course: {
+  terms: readonly string[];
+  months: readonly { index: number }[];
+}): string {
+  const months =
+    course.months.length > 0
+      ? formatCopy(c.subscribedMonths, { months: course.months.map((month) => month.index).join('، ') })
+      : null;
+  return [...course.terms, months].filter(Boolean).join(' · ');
+}
+
 export const metadata = { title: c.threadTitle };
 
 /**
@@ -131,13 +144,19 @@ export default async function AdminInboxThreadPage({
                   <span
                     key={course.courseId}
                     title={
-                      course.validUntil
-                        ? formatCopy(c.subscribedUntil, { date: shortDate(course.validUntil) })
-                        : c.subscribedNoExpiry
+                      course.whole
+                        ? course.validUntil
+                          ? formatCopy(c.subscribedUntil, { date: shortDate(course.validUntil) })
+                          : c.subscribedNoExpiry
+                        : [...course.terms, ...course.months.map((month) => month.title)].join('، ')
                     }
                     className="rounded-full border border-[oklch(0.62_0.15_150)]/40 bg-[oklch(0.62_0.15_150)]/12 px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium text-[oklch(0.62_0.15_150)]"
                   >
                     {course.courseTitle}
+                    {/* Which part of the course, when it is not the whole of
+                        it — «يبقى ظاهر هو مشترك في أنهي شهر». The answer to
+                        «الحصة دي مش فاتحة معايا» is in these numbers. */}
+                    {course.whole ? '' : ` · ${coursePart(course)}`}
                     {/* «اتفتح بالإيد» stays visible here too — a hand-issued
                         course must never be indistinguishable from a paid
                         one on the screen where he decides how to answer. */}
