@@ -327,6 +327,8 @@ export const CourseOutlineSchema = z.object({
      * so a web build that lands a minute before its API still parses.
      */
     watermarkPhone: z.boolean().default(false),
+    /** Draw the student's NAME over the lecture — on unless the teacher turned it off. */
+    watermarkName: z.boolean().default(true),
     /**
      * «جروب الدفعة» — this cohort's own WhatsApp group, or `null` when the
      * course has none (which is the default, and stays the default:

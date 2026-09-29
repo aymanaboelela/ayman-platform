@@ -415,6 +415,7 @@ export function CourseEditor({
               scheduleNote: course.scheduleNote,
               contentComplete: course.contentComplete,
               watermarkPhone: course.watermarkPhone,
+              watermarkName: course.watermarkName,
               monthlyPriceCents: course.monthlyPriceCents,
               /* No `quarterlyPriceCents` — the form has no field for it any
                  more. The payload still carries it; nothing on this screen

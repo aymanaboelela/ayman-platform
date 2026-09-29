@@ -210,14 +210,19 @@ export default async function LessonPage({
           */}
           <LessonPlayerView
             payload={lesson}
-            /* The name always; the phone number only where the instructor
-               switched it on for this course («اظهر رقم الطالب على الفيديو»). */
+            /* Each part only where the teacher switched it on for this
+               course: the name («اظهر اسم الطالب», on by default) and the
+               phone («اظهر رقم الطالب», off). Both off is no watermark at all
+               — `null`, not an empty string drawn moving across the picture. */
             watermark={
               viewer === null
                 ? null
-                : [viewer.name, outline.course.watermarkPhone ? viewer.phoneNumber : null]
+                : [
+                    outline.course.watermarkName ? viewer.name : null,
+                    outline.course.watermarkPhone ? viewer.phoneNumber : null,
+                  ]
                     .filter(Boolean)
-                    .join(' · ')
+                    .join(' · ') || null
             }
           />
 

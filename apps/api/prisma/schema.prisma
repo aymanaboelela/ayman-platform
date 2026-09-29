@@ -926,10 +926,12 @@ model Course {
 
   /// «اظهر رقم الطالب على الفيديو» — per course, set by the instructor.
   ///
-  /// The student's NAME is always drawn over an uploaded lecture; the phone
-  /// number is drawn too only where this is on. Off by default: the owner's
-  /// call was «شيله، وخليه من إعدادات الكورس».
+  /// The phone number is drawn over a lecture only where this is on. Off by
+  /// default: the owner's call was «شيله، وخليه من إعدادات الكورس».
   watermarkPhone Boolean @default(false) @map("watermark_phone")
+  /// The student's NAME over a lecture — on by default, the teacher's switch:
+  /// «أقدر أوقفها أو أشغّلها من الكورس».
+  watermarkName  Boolean @default(true) @map("watermark_name")
 
   /// «جروب الدفعة» — the WhatsApp group for THIS course's cohort, or NULL for
   /// a course that does not have one.
