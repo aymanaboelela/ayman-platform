@@ -96,6 +96,10 @@ function fakeYouTube({ ready = 'soon' }: { ready?: 'soon' | 'never' } = {}) {
     isMuted: vi.fn(() => false),
     mute: vi.fn(),
     unMute: vi.fn(),
+    // Captions: none, unless a test says otherwise.
+    getOptions: vi.fn((): string[] => []),
+    loadModule: vi.fn(),
+    unloadModule: vi.fn(),
     getIframe: () => frame,
   };
   const Player = vi.fn(
@@ -691,5 +695,231 @@ describe('VideoLesson our own copy, after the bar moved out', () => {
       '1.75x',
       '2x',
     ]);
+  });
+});
+
+/**
+ * «عاوز هنا يبقى الصورة اللي أنا حاطّاها، ولما أضغط عليها الفيديو يشتغل على
+ * طول».
+ *
+ * An uploaded lecture showed a grey box before play, and the tap on it only
+ * mounted a player that then wanted a second tap. Both halves are asserted by
+ * what the student sees and what the element is asked to do.
+ */
+describe('VideoLesson uploaded lecture poster and one-tap play', () => {
+  const ENCODER_FRAME = 'https://video.example.test/v/0123456789abcdef0123456789abcdef/poster.jpg';
+  let play: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockImplementation((type: string) =>
+      type === 'application/vnd.apple.mpegurl' ? 'probably' : '',
+    );
+    play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(() => Promise.resolve());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function renderUpload(video: PlayerVideo) {
+    return render(
+      <VideoLesson
+        lessonId="0198c3a2-0000-7000-8000-000000000001"
+        video={video}
+        title="How AI Works"
+        resumeAt={0}
+        onProgress={() => {}}
+        onError={() => {}}
+      />,
+    );
+  }
+
+  it('shows the teacher\'s picture, and the encoder\'s frame when that one will not load', () => {
+    const { container } = renderUpload({ ...UPLOADED, posterUrl: 'https://media.example.test/media/poster.webp' });
+
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('https://media.example.test/media/poster.webp');
+    fireEvent.error(container.querySelector('img') as HTMLImageElement);
+    // Not a grey box: the frame the encoder cut beside the playlist.
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(ENCODER_FRAME);
+    fireEvent.error(container.querySelector('img') as HTMLImageElement);
+    // Only when both fail does the poster give up on pictures.
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('uses the encoder\'s frame when the teacher set no picture at all', () => {
+    const { container } = renderUpload(UPLOADED);
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(ENCODER_FRAME);
+  });
+
+  it('asks the video to play inside the tap itself — no second press', () => {
+    const { container } = renderUpload(UPLOADED);
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+
+    // Synchronously, before anything is awaited: the element is already on
+    // the page and `play()` was called while the tap was being handled, which
+    // is what the browser needs to see to allow sound.
+    const video = container.querySelector('video');
+    expect(video).not.toBeNull();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(play.mock.contexts[0]).toBe(video);
+  });
+
+  it('falls back to the big play disc when the browser refuses anyway', async () => {
+    play.mockImplementation(() => Promise.reject(new DOMException('no', 'NotAllowedError')));
+    renderUpload(UPLOADED);
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {});
+
+    // Nothing thrown, nothing stuck: the element stayed paused, so the bar's
+    // own play control is there for the second tap.
+    expect(screen.getAllByRole('button', { name: copy.player.controls.play }).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * «عاوز لما أكبّر الفيديو يكبّر الشاشة كلها شبه يوتيوب».
+ */
+describe('VideoLesson fullscreen covers the whole screen', () => {
+  const original = Element.prototype.requestFullscreen;
+
+  beforeEach(() => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockImplementation((type: string) =>
+      type === 'application/vnd.apple.mpegurl' ? 'probably' : '',
+    );
+    Object.defineProperty(document, 'fullscreenElement', { value: null, writable: true, configurable: true });
+  });
+
+  afterEach(() => {
+    Element.prototype.requestFullscreen = original;
+    vi.restoreAllMocks();
+    document.documentElement.removeAttribute('data-player-fullscreen');
+  });
+
+  async function playUpload() {
+    const view = render(
+      <VideoLesson
+        lessonId="0198c3a2-0000-7000-8000-000000000001"
+        video={UPLOADED}
+        title="How AI Works"
+        resumeAt={0}
+        onProgress={() => {}}
+        onError={() => {}}
+        watermark="Student Name"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {});
+    const region = screen.getByRole('region', { name: 'How AI Works' });
+    return { ...view, region, shell: region.parentElement as HTMLElement };
+  }
+
+  it('asks for real fullscreen on the player\'s own container, with the bar and the name inside it', async () => {
+    const requestFullscreen = vi.fn(() => Promise.resolve());
+    Element.prototype.requestFullscreen = requestFullscreen as unknown as Element['requestFullscreen'];
+    const { shell } = await playUpload();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: copy.player.enterFullscreen }));
+    });
+
+    expect(requestFullscreen).toHaveBeenCalledTimes(1);
+    // The container — not the <video>, whose own fullscreen drops everything
+    // drawn over the picture.
+    expect(requestFullscreen.mock.contexts[0]).toBe(shell);
+    expect(shell.querySelector('.mv-watermark')).not.toBeNull();
+    expect(shell.querySelector('[role="region"]')).not.toBeNull();
+  });
+
+  it('pins itself over the screen when the browser refuses real fullscreen', async () => {
+    Element.prototype.requestFullscreen = vi.fn(() =>
+      Promise.reject(new Error('denied')),
+    ) as unknown as Element['requestFullscreen'];
+    const { shell } = await playUpload();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: copy.player.enterFullscreen }));
+    });
+
+    // An in-app browser used to make this a button that did nothing.
+    expect(shell.className).toContain('fixed');
+    expect(document.documentElement.hasAttribute('data-player-fullscreen')).toBe(true);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: copy.player.exitFullscreen }));
+    });
+    expect(shell.className).not.toContain('fixed');
+    expect(document.documentElement.hasAttribute('data-player-fullscreen')).toBe(false);
+  });
+
+  it('pins itself over the screen on an iPhone, and lets the page go on Escape', async () => {
+    // No Fullscreen API for a <div> at all.
+    Element.prototype.requestFullscreen = undefined as unknown as Element['requestFullscreen'];
+    const { shell } = await playUpload();
+
+    fireEvent.click(screen.getByRole('button', { name: copy.player.enterFullscreen }));
+    expect(shell.className).toContain('fixed');
+    // The attribute `globals.css` reads to take `.route-fade`'s transform —
+    // the containing block that kept the pinned player inside the page
+    // column — out of the way.
+    expect(document.documentElement.hasAttribute('data-player-fullscreen')).toBe(true);
+
+    fireEvent.keyDown(document, { code: 'Escape' });
+    expect(shell.className).not.toContain('fixed');
+    expect(document.documentElement.hasAttribute('data-player-fullscreen')).toBe(false);
+  });
+
+  it('moves the name with a transform, not with top/left', async () => {
+    const { shell } = await playUpload();
+    const mark = shell.querySelector('.mv-watermark') as HTMLElement;
+
+    expect(mark.style.transform).toMatch(/^translate\(/);
+    expect(mark.style.insetBlockStart).toBe('');
+    expect(mark.style.insetInlineStart).toBe('');
+  });
+});
+
+describe('VideoLesson YouTube captions toggle', () => {
+  const c = copy.player.controls;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function playWith(yt: ReturnType<typeof fakeYouTube>) {
+    vi.useFakeTimers();
+    renderPlayer();
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    // One poll of the player.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    return yt;
+  }
+
+  it('offers a captions button only for a video that has captions, and starts it off', async () => {
+    const yt = fakeYouTube();
+    yt.player.getOptions.mockReturnValue(['captions']);
+    await playWith(yt);
+
+    // A video whose uploader turned captions on by default used to show them
+    // with no way to hide them. They start hidden now; the button shows them.
+    expect(yt.player.unloadModule).toHaveBeenCalledWith('captions');
+    const show = screen.getByRole('button', { name: c.captionsShow });
+
+    fireEvent.click(show);
+    expect(yt.player.loadModule).toHaveBeenCalledWith('captions');
+    fireEvent.click(screen.getByRole('button', { name: c.captionsHide }));
+    expect(yt.player.unloadModule).toHaveBeenCalledTimes(2);
+  });
+
+  it('draws no captions button for a video without any', async () => {
+    const yt = fakeYouTube();
+    await playWith(yt);
+
+    expect(screen.queryByRole('button', { name: c.captionsShow })).toBeNull();
+    expect(yt.player.unloadModule).not.toHaveBeenCalled();
   });
 });

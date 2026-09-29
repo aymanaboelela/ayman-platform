@@ -69,6 +69,19 @@ export interface YouTubeApiPlayer extends YouTubePlayer {
   isMuted(): boolean;
   mute(): void;
   unMute(): void;
+  /**
+   * Captions — the one part of this surface Google never documented, and the
+   * only handle on them the API has ever had. `getOptions()` lists
+   * `'captions'` for a video that HAS caption tracks (on or off);
+   * `loadModule('captions')` shows them and `unloadModule('captions')` hides
+   * them. Measured against the live embed on 2026-09-29.
+   *
+   * Optional on purpose: undocumented means it can vanish, and when it does
+   * the bar simply draws no captions button (`youtube-shield.tsx`).
+   */
+  getOptions?(): string[];
+  loadModule?(module: 'captions'): void;
+  unloadModule?(module: 'captions'): void;
 }
 
 /**

@@ -10,7 +10,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
-import { Pause, Play, RotateCcw, RotateCw, Settings, Volume2, VolumeX } from 'lucide-react';
+import { Captions, CaptionsOff, Pause, Play, RotateCcw, RotateCw, Settings, Volume2, VolumeX } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { cn } from '@ayman/ui/lib/cn';
 import { FullscreenIcon } from './icons';
@@ -126,6 +126,12 @@ export interface PlayerChromeProps {
   onSpeed: (value: number) => void;
   /** More of the settings menu, after the speeds: the quality ladder, where the source has one. */
   settingsExtra?: ReactNode;
+  /**
+   * The captions toggle. `null` — no button at all — where there is nothing
+   * to toggle: our own copy carries no tracks, and neither does a YouTube
+   * video nobody captioned.
+   */
+  captions?: { on: boolean; onToggle: () => void } | null;
   fullscreen: boolean;
   onToggleFullscreen: () => void;
   /**
@@ -161,6 +167,7 @@ export function PlayerChrome({
   speeds,
   onSpeed,
   settingsExtra,
+  captions = null,
   fullscreen,
   onToggleFullscreen,
   watermark,
@@ -439,6 +446,16 @@ export function PlayerChrome({
 
           <span className="ms-auto" />
 
+          {captions ? (
+            <BarButton
+              label={captions.on ? c.captionsHide : c.captionsShow}
+              onClick={captions.onToggle}
+              active={captions.on}
+            >
+              {captions.on ? <Captions className="size-5" /> : <CaptionsOff className="size-5" />}
+            </BarButton>
+          ) : null}
+
           {hasSettings ? (
             <div className="relative">
               <BarButton label={c.settings} onClick={() => setMenuOpen((open) => !open)} active={menuOpen}>
@@ -535,6 +552,19 @@ function BarButton({
  * screen-recorded lecture carries the account it came from, and that is what
  * stops a recording being passed around. Moving it is what keeps it from
  * being cropped out of one corner.
+ *
+ * ── Moved by `transform`, not by `top`/`left` ────────────────────────────
+ * It used to glide on `inset-block-start`/`inset-inline-start`, which are
+ * layout properties: every frame of the 700ms glide was a layout pass on the
+ * main thread — the thread that is also feeding hls.js — every five seconds
+ * for the whole lecture. A transform glides on the compositor instead.
+ *
+ * The catch is that `translate(x%)` is a percentage of the element ITSELF,
+ * and the name is a few words wide. So the element that moves is a layer the
+ * size of the whole picture, with the name pinned in its corner: 30% of its
+ * own width IS 30% of the player's, and the name lands exactly where the old
+ * `inset-inline-start: 30%` put it. The surface is always LTR, so positive x
+ * is always the inline start moving towards the end.
  */
 function Watermark({ text }: { text: string }) {
   const [spot, setSpot] = useState({ top: 12, start: 8 });
@@ -549,10 +579,15 @@ function Watermark({ text }: { text: string }) {
     <span
       aria-hidden="true"
       className="mv-watermark"
-      style={{ insetBlockStart: `${spot.top}%`, insetInlineStart: `${spot.start}%` }}
-      dir="auto"
+      style={{ transform: `translate(${spot.start}%, ${spot.top}%)` }}
     >
-      {text}
+      {/* `dir="auto"` on the TEXT, one level in, and never on the pinned
+          span: an inset resolved against an Arabic name's own RTL would pin
+          it to the other corner, and the translate would carry it off the
+          picture. The pinned span inherits the surface's LTR. */}
+      <span className="mv-watermark__name">
+        <span dir="auto">{text}</span>
+      </span>
     </span>
   );
 }

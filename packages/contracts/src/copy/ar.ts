@@ -3153,6 +3153,13 @@ export const copy = {
       quality: 'الجودة',
       qualityAuto: 'تلقائي',
       qualityAutoNow: 'تلقائي ({height}p)',
+      /**
+       * YouTube's CC button went with its bar, so ours carries one — only on
+       * a video that has captions at all. Nouns, like the rest of the bar,
+       * so the label never has to guess who is pressing it.
+       */
+      captionsShow: 'إظهار الترجمة',
+      captionsHide: 'إخفاء الترجمة',
     },
     outline: 'محتوى الكورس',
     previous: 'الدرس السابق',

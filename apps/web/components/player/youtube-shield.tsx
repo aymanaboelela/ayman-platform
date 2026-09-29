@@ -79,7 +79,9 @@ export function YouTubeShield({
   onToggleFullscreen,
   watermark,
 }: YouTubeShieldProps) {
-  const [time, setTime] = useState(() => player.getCurrentTime());
+  // Whole seconds, like our own copy's — see `mirror-video.tsx` for why a
+  // finer value was only ever re-renders nobody could see.
+  const [time, setTime] = useState(() => Math.floor(player.getCurrentTime()));
   const [duration, setDuration] = useState(() => player.getDuration());
   const [loaded, setLoaded] = useState(0);
   const [volume, setVolume] = useState(() => player.getVolume() / 100);
@@ -105,9 +107,23 @@ export function YouTubeShield({
    */
   const [wantsPlay, setWantsPlay] = useState(true);
   const [everPlayed, setEverPlayed] = useState(state === YT_STATE.PLAYING);
+  /**
+   * Captions: whether this video HAS any, and whether they are showing.
+   *
+   * YouTube's CC button went with its bar — and a video whose uploader turned
+   * captions on by default then showed them with no way to turn them off.
+   * The API answers only the first question (`getOptions()` lists
+   * `'captions'` when there are tracks, on or off), so the second is ours to
+   * decide: the first time tracks are seen, they are switched OFF, and from
+   * then on the button is the only thing that changes it. Off is where
+   * YouTube itself starts anybody who has not asked for them.
+   */
+  const [captionsAvailable, setCaptionsAvailable] = useState(false);
+  const [captionsOn, setCaptionsOn] = useState(false);
   const [stalled, setStalled] = useState(false);
   const startTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hold = useRef({ time: 0, sound: 0, speed: 0 });
+  const captionsSeen = useRef(false);
 
   /*
    * YouTube's own word on what happened wins over our intent: a lecture that
@@ -159,13 +175,21 @@ export function YouTubeShield({
         const now = Date.now();
         const total = player.getDuration();
         setDuration(total);
-        setLoaded(player.getVideoLoadedFraction() * total);
-        if (now >= hold.current.time) setTime(player.getCurrentTime());
+        setLoaded(Math.floor(player.getVideoLoadedFraction() * total));
+        if (now >= hold.current.time) setTime(Math.floor(player.getCurrentTime()));
         if (now >= hold.current.sound) {
           setMuted(player.isMuted());
           setVolume(player.getVolume() / 100);
         }
         if (now >= hold.current.speed) setSpeed(player.getPlaybackRate());
+        // Read once. The list says "this video has tracks" and nothing more —
+        // it still lists the module after `unloadModule` has hidden them —
+        // so after the first sighting there is nothing left to learn from it.
+        if (!captionsSeen.current && player.getOptions?.().includes('captions')) {
+          captionsSeen.current = true;
+          player.unloadModule?.('captions');
+          setCaptionsAvailable(true);
+        }
       } catch {
         // The frame went away under us (the page is tearing down). The next
         // render unmounts this; there is nothing to show until then.
@@ -240,6 +264,12 @@ export function YouTubeShield({
     [player],
   );
 
+  const toggleCaptions = useCallback(() => {
+    if (captionsOn) player.unloadModule?.('captions');
+    else player.loadModule?.('captions');
+    setCaptionsOn(!captionsOn);
+  }, [player, captionsOn]);
+
   const played = duration > 0 ? Math.min(100, Math.max(0, (time / duration) * 100)) : 0;
   const fetched = duration > 0 ? Math.min(100, Math.max(0, (loaded / duration) * 100)) : 0;
 
@@ -261,6 +291,13 @@ export function YouTubeShield({
       speed={speed}
       speeds={speeds}
       onSpeed={chooseSpeed}
+      captions={
+        // Both halves of the undocumented pair, or no button: one without
+        // the other is a toggle that works in one direction only.
+        captionsAvailable && player.loadModule && player.unloadModule
+          ? { on: captionsOn, onToggle: toggleCaptions }
+          : null
+      }
       fullscreen={fullscreen}
       onToggleFullscreen={onToggleFullscreen}
       watermark={watermark}

@@ -1,6 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+// Type-only: erased at build, so it cannot pull the library into the bundle
+// the way a value import would (see `HlsHandle` below).
+import type { HlsConfig } from 'hls.js';
 import { effectiveSeconds, type PlayerVideoMirror, type VideoTrim } from '@ayman/contracts/video';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -106,6 +109,70 @@ function adapt(element: HTMLVideoElement, trim: VideoTrim | null): YouTubePlayer
   };
 }
 
+/**
+ * ══════════════════════════════════════════════════════════════════════════
+ * «الفيديو بيلاج — مش عاوز أي لاج خالص»
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Measured on production: a 6-second 1080p segment is 1.5–1.7 MB, and until
+ * the edge caches them each one is a 0.3–0.8 s round trip to the bucket. The
+ * cache rule is the fix for the round trip; these are the fix for what the
+ * player does with it. hls.js ships defaults tuned for a desktop on a fast
+ * line, and a student on Egyptian mobile data is neither.
+ */
+export const HLS_CONFIG: Partial<HlsConfig> = {
+  /*
+   * The rung is chosen by measured bandwidth, never "the first one in the
+   * playlist" — which is the top rung in ours, and the one most likely to
+   * stall on a phone.
+   */
+  startLevel: -1,
+  /*
+   * What hls.js assumes the line can do before it has timed a single
+   * segment. The default is 500 kbps — a guess from a decade ago that pins
+   * the first seconds of every lecture to the bottom rung, so the lecture
+   * OPENS blurry on a line that could carry 720p. 1.5 Mbps is a middling
+   * 4G connection here: high enough to start at a readable rung, low enough
+   * that a slow line is corrected within a segment or two.
+   */
+  abrEwmaDefaultEstimate: 1_500_000,
+  /*
+   * Never fetch more pixels than the player shows. A 1080p segment is
+   * three times a 480p one, and on a phone in portrait the player is 360
+   * pixels wide — every byte above that is data spent on nothing and a
+   * segment that arrives later than it had to.
+   */
+  capLevelToPlayerSize: true,
+  /*
+   * Keep a minute ahead. The default 30 s runs out after five segments,
+   * and one slow request from an uncached edge is enough to catch up with
+   * the playhead and freeze the picture. A minute rides out a bad patch;
+   * much more than that is data spent on a lecture the student may close.
+   */
+  maxBufferLength: 60,
+  /*
+   * The ceiling hls.js may grow the buffer to when the line is fast and
+   * segments are small. Two minutes, not the default ten: a student on a
+   * data bundle who stops at minute twelve should not have paid for
+   * minute twenty-two.
+   */
+  maxMaxBufferLength: 120,
+  /*
+   * Let go of what has been watched, beyond the last half-minute. The
+   * default keeps EVERY played second in the SourceBuffer for the whole
+   * hour, and on a 2 GB Android tablet that ends in a QuotaExceeded error
+   * and a stall half-way through the lecture. Thirty seconds still covers
+   * «رجوع ١٠ ثواني» three times over without a refetch.
+   */
+  backBufferLength: 30,
+  /*
+   * Ask for the first segment while the playlist is still being wired to
+   * the element, instead of after. Shaves one round trip — the 0.3–0.8 s
+   * above — off the gap between the tap and the first frame.
+   */
+  startFragPrefetch: true,
+};
+
 /** The slice of hls.js this component touches, so the type never has to be
  *  imported eagerly (which would pull the library into every student's bundle). */
 interface HlsHandle {
@@ -136,6 +203,17 @@ export function MirrorVideo({
 
   const [paused, setPaused] = useState(true);
   const [waiting, setWaiting] = useState(false);
+  /*
+   * `time` and `buffered` are held in WHOLE SECONDS, not as the element
+   * reports them.
+   *
+   * `timeupdate` fires about four times a second and `progress` about three,
+   * and each `setState` with a new float re-rendered this and the whole bar
+   * over the picture — work on the same main thread that is appending
+   * segments. The clock prints seconds, and a second of an hour-long lecture
+   * is a tenth of a pixel on a phone's timeline, so a finer value was never
+   * visible; floored, React skips every update that lands on the same second.
+   */
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [buffered, setBuffered] = useState(0);
@@ -185,12 +263,7 @@ export function MirrorVideo({
           return;
         }
 
-        const instance = new Hls({
-          // The ministry tablet's connection is the design target: start
-          // conservatively and let the ladder climb.
-          startLevel: -1,
-          capLevelToPlayerSize: true,
-        });
+        const instance = new Hls(HLS_CONFIG);
         hlsRef.current = instance;
 
         instance.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -383,6 +456,15 @@ export function MirrorVideo({
         onPause={() => setPaused(true)}
         onEnded={() => setPaused(true)}
         onWaiting={() => setWaiting(true)}
+        // The poster's tap asks for playback before there is anything to play
+        // (see `VideoLesson.activate`), so between the tap and the first frame
+        // the element is playing-but-empty — and `waiting` never fires for a
+        // load that has not started. Without this the middle of the picture
+        // is blank for that second; with it, the spinner. Only when playback
+        // was asked for: a refused play keeps the play disc instead.
+        onLoadStart={(event) => {
+          if (!event.currentTarget.paused) setWaiting(true);
+        }}
         onPlaying={() => setWaiting(false)}
         onCanPlay={() => setWaiting(false)}
         onTimeUpdate={(event) => {
@@ -397,7 +479,7 @@ export function MirrorVideo({
               element.currentTime = trim.end;
             }
           }
-          setTime(element.currentTime);
+          setTime(Math.floor(element.currentTime));
         }}
         onDurationChange={(event) => {
           const value = event.currentTarget.duration;
@@ -405,7 +487,7 @@ export function MirrorVideo({
         }}
         onProgress={(event) => {
           const ranges = event.currentTarget.buffered;
-          setBuffered(ranges.length > 0 ? ranges.end(ranges.length - 1) : 0);
+          setBuffered(ranges.length > 0 ? Math.floor(ranges.end(ranges.length - 1)) : 0);
         }}
         onVolumeChange={(event) => {
           setMuted(event.currentTarget.muted);

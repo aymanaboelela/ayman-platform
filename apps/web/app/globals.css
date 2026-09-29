@@ -710,6 +710,27 @@
   animation: route-fade-in 220ms var(--ease-out) both;
 }
 
+/* «ملء الشاشة» on a phone with no Fullscreen API for a <div> — the iPhone.
+   The lesson player pins itself over the viewport (`fixed inset-0`) and sets
+   this attribute on <html> while it is pinned (`video-lesson.tsx`).
+
+   `fill-mode: none` and not `animation: none`: the finished animation's
+   identity `transform` is what made `.route-fade` the containing block for
+   the pinned player, and the stacking context the top bar and the tab bar
+   painted over. With `none` a FINISHED animation leaves nothing behind, so
+   both go; and unlike removing the animation, it does not restart it —
+   leaving fullscreen would otherwise fade the whole page in again.
+
+   `overflow: hidden` so a swipe on the pinned player cannot scroll the page
+   underneath it (and pull Safari's toolbars back in over the picture). */
+html[data-player-fullscreen] {
+  overflow: hidden;
+}
+
+html[data-player-fullscreen] .route-fade {
+  animation-fill-mode: none;
+}
+
 /* ── The student's avatar ─────────────────────────────────────────────────────
 
    `components/app/user-avatar.tsx`: a figure on the student's own colour,
