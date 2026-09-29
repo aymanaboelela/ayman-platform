@@ -13,7 +13,7 @@ import { VideoLesson } from './video-lesson';
 
 export interface LessonPlayerProps {
   payload: LessonPlayer;
-  /** The viewer's name and phone, drawn over an uploaded lecture. */
+  /** The viewer's name and phone, drawn over the lecture — ours or YouTube's. */
   watermark?: string | null;
 }
 

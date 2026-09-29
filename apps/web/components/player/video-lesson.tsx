@@ -8,12 +8,15 @@ import { formatDuration } from '@/lib/format';
 import {
   FRAME_ALLOW,
   YOUTUBE_NOCOOKIE_HOST,
+  YT_STATE,
   loadYouTubeIframeApi,
+  type YouTubeApiPlayer,
   type YouTubePlayer,
 } from '@/lib/youtube';
 import { MirrorVideo } from './mirror-video';
 import { FullscreenIcon, PlayIcon } from './icons';
 import { useVideoHeartbeat } from './use-video-heartbeat';
+import { YouTubeShield } from './youtube-shield';
 
 /**
  * `lock`/`unlock` are the Screen Orientation API's own methods and TypeScript's
@@ -96,10 +99,31 @@ export interface VideoLessonProps {
   onProgress: (response: HeartbeatResponse) => void;
   onError: () => void;
   /**
-   * Who is watching, for the name drawn over OUR copy of the lecture. `null`
-   * for no watermark. YouTube's frame is not ours to draw on.
+   * Who is watching, for the name drawn over the lecture. `null` for no
+   * watermark.
+   *
+   * Over BOTH sources now. It used to be ours alone — YouTube's frame was the
+   * student's to click, so anything drawn over it was in the way of its
+   * controls. Since the shield (`youtube-shield.tsx`) the layer over the frame
+   * is ours, and the name is simply one more thing drawn on it.
    */
   watermark?: string | null;
+}
+
+/**
+ * Take YouTube's frame out of the keyboard's reach as well as the pointer's.
+ *
+ * The chrome over it catches every tap, but a frame is a focus target in its
+ * own right: Tab walks into it and on to YouTube's title link and copy-link
+ * button, and Enter opens them. `inert` takes the frame and everything in it
+ * out of focus order (and out of the accessibility tree, where our own
+ * region, titled with the lesson, stands in for it); `tabIndex` is the same
+ * wish spelled for an engine that predates `inert`.
+ */
+function sealFrame(frame: HTMLIFrameElement | null | undefined): void {
+  if (!frame) return;
+  frame.tabIndex = -1;
+  frame.inert = true;
 }
 
 /**
@@ -165,6 +189,15 @@ export function VideoLesson({
    */
   const readyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [player, setPlayer] = useState<YouTubePlayer | null>(null);
+  /**
+   * The same YouTube player as `player`, typed for everything the shield's
+   * bar drives. Separate because `player` is also what our own copy hands the
+   * heartbeat — an adapter over a `<video>` with none of these methods.
+   * `null` until `onReady`, and the shield is drawn only once it is not.
+   */
+  const [youtube, setYoutube] = useState<YouTubeApiPlayer | null>(null);
+  /** What `onStateChange` last said — the shield's play/pause follows it. */
+  const [youtubeState, setYoutubeState] = useState<number>(YT_STATE.UNSTARTED);
   const [activated, setActivated] = useState(false);
   const [failure, setFailure] = useState<VideoFailure | null>(null);
   /**
@@ -277,12 +310,11 @@ export function VideoLesson({
   /**
    * `F` for fullscreen, the way YouTube does it.
    *
-   * The embed already answers `F` — but only while the IFRAME holds focus,
-   * which it does not until the student has clicked inside it. A student who
-   * has been scrolling the outline, or who just loaded the page, presses `F`
-   * and nothing happens. So the page listens too, and the two do not conflict:
-   * once focus is inside the embed the keystroke never reaches this handler,
-   * and YouTube's own shortcut takes it.
+   * The embed used to answer `F` itself, but only while the IFRAME held focus,
+   * so the page listened too. Now it is the only listener: the frame is
+   * `inert` and built with `disablekb: 1`, so YouTube's own shortcuts are gone
+   * — they included keys that do nothing we would want a student to find —
+   * and the chrome over it answers the rest (see `player-chrome.tsx`).
    *
    * ⚠️ `event.code`, NOT `event.key`. This platform is Arabic, so on an Arabic
    * layout the F key emits "ب" and a `key === 'f'` test never fires for the
@@ -309,8 +341,9 @@ export function VideoLesson({
    * `screen.orientation.lock` is genuinely absent on iOS Safari, and a desktop
    * browser rejects it because there is nothing to rotate. Neither is an error
    * anybody can act on, and neither should stop the fullscreen that DID work.
-   * On iOS the student still has YouTube's own fullscreen control inside the
-   * frame, which is the platform's own answer to this.
+   * An iPhone never gets this far anyway: it has no `requestFullscreen` on a
+   * `<div>`, so it takes the pseudo-fullscreen branch at the top, and turning
+   * the handset turns the pinned shell with it.
    */
   const toggleFullscreen = useCallback(() => {
     const shell = shellRef.current;
@@ -441,10 +474,27 @@ export function VideoLesson({
           hl: 'ar',
           cc_lang_pref: 'ar',
           origin: window.location.origin,
-          // The fullscreen button, explicitly. It defaults on, but `fs: 0` is
-          // one typo away and the failure is silent — the control simply is
-          // not drawn and the student concludes the video cannot be enlarged.
-          fs: 1,
+          /*
+           * «شيلها»: no YouTube controls at all. Its bar is where the copy-link
+           * and the logo live, and it would sit UNDER the shield anyway —
+           * drawn, visible, and dead to every tap, which reads as a broken
+           * player. Ours is drawn on top instead (`youtube-shield.tsx`).
+           *
+           * `disablekb` for the same reason on the keyboard: the frame is
+           * `inert` and cannot take focus, but a frame that somehow did would
+           * otherwise answer YouTube's keys and not ours.
+           *
+           * `iv_load_policy: 3` turns video annotations off — boxes an
+           * uploader can draw on the picture that link out to other YouTube
+           * pages, and that the shield would leave on screen, visible and
+           * dead to every tap.
+           *
+           * `fs` is gone with the bar it lived in: fullscreen is OUR shell now,
+           * which is also what keeps the name on the picture in fullscreen.
+           */
+          controls: 0,
+          disablekb: 1,
+          iv_load_policy: 3,
           /*
            * Where to begin. 0 is exactly what the parameter means when it is
            * absent, so this is passed unconditionally rather than spread in.
@@ -470,6 +520,7 @@ export function VideoLesson({
             }
             playerRef.current = event.target;
             setPlayer(event.target);
+            setYoutube(event.target);
 
             /*
              * Fullscreen has to be granted to the frame, not just enabled in
@@ -493,6 +544,7 @@ export function VideoLesson({
               frame.setAttribute('allow', FRAME_ALLOW);
               frame.setAttribute('allowfullscreen', '');
             }
+            sealFrame(frame);
 
             /*
              * ⚠️ AND ACTUALLY PLAY IT. Constructing a player does not start one.
@@ -519,12 +571,16 @@ export function VideoLesson({
              */
             event.target.playVideo();
           },
+          onStateChange: (event) => setYoutubeState(event.data),
           // The `event.data` code was always there — `lib/youtube.ts` even
           // types it — and was always dropped on the floor.
           onError: (event) => setFailure(failureOfCode(event.data)),
         },
       });
       playerRef.current = instance;
+      // Sealed now, not at `onReady`: the frame is on the page from this line,
+      // and on a slow connection `onReady` can be seconds away.
+      sealFrame(shellRef.current?.querySelector('iframe'));
 
       // Armed AFTER construction so it only ever measures the frame, never the
       // script fetch that `loadYouTubeIframeApi` already bounds. `onReady`
@@ -630,6 +686,42 @@ export function VideoLesson({
       ) : null}
 
       {/*
+        YouTube's frame, behind glass — from the moment it exists.
+
+        Two layers for two moments. Until `onReady` the API has no methods to
+        drive, so there is nothing for a bar to do: this is just the glass, and
+        a spinner on it. But the frame is ALREADY on the page and already
+        drawing YouTube's poster, with its title and copy-link button on it,
+        and on a slow connection it sits like that for seconds. A shield that
+        waited for `onReady` would leave exactly that window open.
+
+        Neither is drawn once the plain embed has taken over — see the note on
+        that frame below — nor over a failure, whose panel has a link of its
+        own to offer.
+      */}
+      {activated && !(useMirror && video.mirror) && youtubeId !== null && !plainFrame && !failure ? (
+        youtube === null ? (
+          <div
+            aria-hidden="true"
+            data-player-glass=""
+            className="absolute inset-0 z-[5] grid place-items-center"
+            onContextMenu={(event) => event.preventDefault()}
+          >
+            <span className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-accent" />
+          </div>
+        ) : (
+          <YouTubeShield
+            player={youtube}
+            state={youtubeState}
+            title={title}
+            fullscreen={fullscreen}
+            onToggleFullscreen={toggleFullscreen}
+            watermark={watermark}
+          />
+        )
+      ) : null}
+
+      {/*
         The fullscreen control, and the whole point of this change: `F` was the
         only way in, and a phone has no F key — so on the device where a 16:9
         strip across the top of a portrait screen hurts most, there was no
@@ -639,11 +731,11 @@ export function VideoLesson({
         of «شغّل الفيديو» and steal the tap that starts the lesson, to put a
         student fullscreen on a video that has not begun.
 
-        `pointer-events-auto` on the button with nothing catching events around
-        it, so the rest of the frame still belongs to the embed — this is one
-        small target in a corner, not a layer over the video.
+        And only while no bar of ours is drawn — our copy and the shielded
+        YouTube player each carry this button in their own bar. What is left
+        is the wait for the frame, and the plain embed.
       */}
-      {activated && !(useMirror && video.mirror) ? (
+      {activated && !(useMirror && video.mirror) && youtube === null ? (
         <button
           type="button"
           onClick={toggleFullscreen}
@@ -668,6 +760,13 @@ export function VideoLesson({
         `autoplay=1` is safe here in a way it is not for the API player: this
         frame is only ever mounted because the student pressed play, so the
         gesture that permits autoplay has already happened.
+
+        ⚠️ UNSHIELDED, and it has to be. The shield works by taking every tap
+        and replaying it through the IFrame API — and this frame exists
+        precisely because the API never arrived. Covered, it would be a video
+        nobody can play, pause or seek, so it keeps YouTube's own controls,
+        copy-link button included. It is also the rare path: the API script
+        blocked while YouTube itself is not.
       */}
       {plainFrame && plainEmbedSrc !== null ? (
         <iframe
