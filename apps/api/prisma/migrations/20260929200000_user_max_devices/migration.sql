@@ -11,7 +11,7 @@
 -- override, written only by `PUT /api/admin/students/:userId/device-limit`.
 --
 -- The CHECK is the same 1..10 range the contract enforces
--- (`DEVICE_LIMIT_FLOOR`/`DEVICE_LIMIT_CEILING` in `@ayman/contracts/sessions`).
+-- (`DEVICE_LIMIT_FLOOR`/`DEVICE_LIMIT_CEILING` in `@ayman/contracts/device-limit`).
 -- 0 is not «blocked» — a ban is how an account is shut, and a limit of 0 would
 -- be a second, unaudited ban. Above 10 the limit stops meaning anything.
 ALTER TABLE "app"."users"
