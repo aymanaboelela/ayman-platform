@@ -1,4 +1,5 @@
 import { FLAG_DECLARATIONS } from '@ayman/contracts/admin/flags';
+import { DEFAULT_MAX_DEVICES, effectiveMaxDevices } from '@ayman/contracts/device-limit';
 import { parseUserAgent } from '../modules/sessions/user-agent';
 import type { PrismaClient } from '../generated/prisma/client';
 
@@ -52,8 +53,15 @@ import type { PrismaClient } from '../generated/prisma/client';
  * change, and nothing below assumes the current identity is permanent.
  */
 
-/** «آخره two devices». */
-export const MAX_DEVICES_PER_ACCOUNT = 2;
+/**
+ * «آخره two devices» — the DEFAULT now, not the rule.
+ *
+ * An account's own `users.max_devices` wins when the instructor has set one
+ * («أقدر أحدد بإيدي أزوّد الأجهزة أكتر من ٢»), and NULL — every account nobody
+ * has touched — lands here. The number lives in `@ayman/contracts/device-limit`
+ * so the admin card that shows «مسموح له بجهازين» and this gate cannot drift.
+ */
+export const MAX_DEVICES_PER_ACCOUNT = DEFAULT_MAX_DEVICES;
 
 /** The code the web app matches on to render «إنت داخلة على جهازين خلاص». */
 export const DEVICE_LIMIT_ERROR = 'DEVICE_LIMIT_REACHED' as const;
@@ -74,7 +82,24 @@ export const DEVICE_LIMIT_FLAG_DEFAULT =
 export interface ActiveDeviceLookup {
   /** Distinct device names for `userId` that still have a live session behind them. */
   activeDeviceNames(userId: string): Promise<string[]>;
+  /**
+   * The account's own override (`users.max_devices`), or `null` for «the
+   * platform default». On the lookup rather than a second collaborator
+   * because it is the same question — «how many may this account have, and how
+   * many does it» — and a gate wired with one half would count against the
+   * wrong limit without anything failing.
+   */
+  maxDevicesFor(userId: string): Promise<number | null>;
 }
+
+/**
+ * What the gate decided, and against which number.
+ *
+ * `limit` rides along on a refusal so the sign-in hook's explanation carries
+ * the account's REAL limit — a student the instructor raised to four must not
+ * be told «two».
+ */
+export type DeviceLimitDecision = { admitted: true } | { admitted: false; limit: number };
 
 /**
  * The whole decision, as a pure function.
@@ -123,6 +148,20 @@ export class PrismaActiveDeviceLookup implements ActiveDeviceLookup {
     `;
     return rows.map((row) => row.device_name);
   }
+
+  /**
+   * A primary-key read of one nullable column. `findUnique` and not a join
+   * into the query above: that one is `DISTINCT` over device rows, and an
+   * account with no live device (every sign-up, every student back after 90
+   * days) has no row for the limit to ride on.
+   */
+  async maxDevicesFor(userId: string): Promise<number | null> {
+    const row = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { maxDevices: true },
+    });
+    return row?.maxDevices ?? null;
+  }
 }
 
 /**
@@ -168,7 +207,8 @@ export class CachedFlag {
 }
 
 /**
- * The gate itself. One `admits` call answers both enforcement points:
+ * The gate itself. One `check` (or `admits`, its yes/no) answers both
+ * enforcement points:
  * `databaseHooks.session.create.before` (which can only refuse) and
  * `createAuthBeforeHook` (which can explain). They MUST ask the same question
  * — a message that does not match the refusal is worse than no message.
@@ -177,8 +217,11 @@ export class DeviceLimitGate {
   constructor(
     private readonly flag: CachedFlag,
     private readonly devices: ActiveDeviceLookup,
-    private readonly limit: number = MAX_DEVICES_PER_ACCOUNT,
   ) {}
+
+  async admits(userId: string, userAgent: string | null | undefined): Promise<boolean> {
+    return (await this.check(userId, userAgent)).admitted;
+  }
 
   /**
    * Fails OPEN, on purpose and at every step.
@@ -189,16 +232,26 @@ export class DeviceLimitGate {
    * of them — can sign in, register, or come back from Google, and the
    * message they would get is «Failed to create session». Account sharing for
    * the length of an incident is the cheaper failure by a wide margin.
+   *
+   * The two reads run together: the override is a primary-key lookup, the
+   * device list is the query that was already here, and neither needs the
+   * other's answer. `effectiveMaxDevices` is the same function the admin card
+   * resolves «مسموح له بـ…» with, so what the instructor reads is what this
+   * counts to.
    */
-  async admits(userId: string, userAgent: string | null | undefined): Promise<boolean> {
+  async check(userId: string, userAgent: string | null | undefined): Promise<DeviceLimitDecision> {
     try {
-      if (!(await this.flag.enabled())) return true;
+      if (!(await this.flag.enabled())) return { admitted: true };
       const { deviceName } = parseUserAgent(userAgent);
-      const activeNames = await this.devices.activeDeviceNames(userId);
-      return admitsDevice(activeNames, deviceName, this.limit);
+      const [activeNames, override] = await Promise.all([
+        this.devices.activeDeviceNames(userId),
+        this.devices.maxDevicesFor(userId),
+      ]);
+      const limit = effectiveMaxDevices(override);
+      return admitsDevice(activeNames, deviceName, limit) ? { admitted: true } : { admitted: false, limit };
     } catch (error) {
       console.error('device-limit: admitting by default after a failed check', error);
-      return true;
+      return { admitted: true };
     }
   }
 }

@@ -123,6 +123,20 @@ model User {
   bannedBy       User?     @relation("UserBannedBy", fields: [bannedByUserId], references: [id], onDelete: SetNull)
   bansIssued     User[]    @relation("UserBannedBy")
 
+  /// ── حد الأجهزة لكل حساب ─────────────────────────────────────────────
+  ///
+  /// NULL is «the platform default» (`DEFAULT_MAX_DEVICES`, 2) and is every
+  /// row that nobody has touched — a number is the instructor's explicit
+  /// override from the student's page. Nullable rather than `DEFAULT 2`
+  /// because the two are different statements: a stored 2 would pin the
+  /// account to today's default and silently opt it out of any later change.
+  /// `users_max_devices_range` holds it to 1..10 (see the migration).
+  ///
+  /// Not in Better Auth's `additionalFields`: the gate in
+  /// `auth/device-limit.ts` reads it with its own query, so the session
+  /// payload never carries it and no auth route can write it.
+  maxDevices     Int?      @map("max_devices")
+
   sessions       Session[]
   accounts       Account[]
   studentProfile StudentProfile?

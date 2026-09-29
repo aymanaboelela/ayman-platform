@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import {
   accountThrottleKey,
   emailIdentifier,
@@ -54,7 +54,21 @@ function makeService() {
     // `list()`'s hamza-folded name match — the only raw read in the service.
     $queryRaw: jest.fn(async () => [] as { user_id: string }[]),
   };
-  return { service: new StudentsService(prisma as never, audit as never), prisma, audit };
+  // «الأجهزة المفتوحة» — the revoke itself belongs to `SessionDeviceService`
+  // (its own DB spec covers what it deletes); what is measured here is who may
+  // aim it and what the log says.
+  const sessionDevices = {
+    revokeFor: jest.fn(
+      async () => ({ deviceName: 'Chrome على Android', sessions: 3 }) as { deviceName: string; sessions: number } | null,
+    ),
+    revokeAllFor: jest.fn(async () => 2),
+  };
+  return {
+    service: new StudentsService(prisma as never, audit as never, sessionDevices as never),
+    prisma,
+    audit,
+    sessionDevices,
+  };
 }
 
 describe('StudentsService.list', () => {
@@ -600,6 +614,117 @@ describe('StudentsService.ban', () => {
 
     await service.ban('target', 'a real reason', 'actor').catch(() => undefined);
     expect(prisma.user.update).toHaveBeenCalled();
+  });
+});
+
+/**
+ * «سجّل خروج» و«مسموح له بكام جهاز» من صفحة الطالب.
+ *
+ * The permission (`student:write`) says whether the operator may touch
+ * devices at all; `refuseIfOutranked` says whose. Both writes and the limit go
+ * through the same target check, so an assistant cannot sign the instructor
+ * out of every device or pin an admin to one.
+ */
+describe('StudentsService — devices', () => {
+  it('signs one device out through the student\'s own revoke, and logs which one', async () => {
+    const { service, prisma, audit, sessionDevices } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({ role: 'student', maxDevices: null });
+
+    await service.revokeDevice('target', 'device-1', 'actor');
+
+    expect(sessionDevices.revokeFor).toHaveBeenCalledWith('target', 'device-1');
+    expect(audit.record).toHaveBeenCalledTimes(1);
+    expect(audit.record.mock.calls[0][0]).toMatchObject({
+      action: 'student:revoke-session',
+      resourceType: 'user',
+      resourceId: 'target',
+      outcome: 'success',
+      metadata: { device: 'Chrome على Android', sessions: 3 },
+    });
+  });
+
+  // Not this account's device, already gone, or never existed — one answer,
+  // as on the student's own «أجهزتي», and nothing written to the log.
+  it('404s a device that is not this account\'s, and logs nothing', async () => {
+    const { service, prisma, audit, sessionDevices } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({ role: 'student', maxDevices: null });
+    sessionDevices.revokeFor.mockResolvedValueOnce(null);
+
+    await expect(service.revokeDevice('target', 'someone-elses', 'actor')).rejects.toThrow(NotFoundException);
+    expect(audit.record).not.toHaveBeenCalled();
+  });
+
+  it('404s an account that does not exist before touching any device', async () => {
+    const { service, sessionDevices } = makeService();
+
+    await expect(service.revokeDevice('missing', 'device-1', 'actor')).rejects.toThrow(NotFoundException);
+    await expect(service.revokeAllDevices('missing', 'actor')).rejects.toThrow(NotFoundException);
+    expect(sessionDevices.revokeFor).not.toHaveBeenCalled();
+    expect(sessionDevices.revokeAllFor).not.toHaveBeenCalled();
+  });
+
+  it('signs every device out and logs how many were open', async () => {
+    const { service, prisma, audit, sessionDevices } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({ role: 'student', maxDevices: null });
+
+    await service.revokeAllDevices('target', 'actor');
+
+    expect(sessionDevices.revokeAllFor).toHaveBeenCalledWith('target');
+    expect(audit.record.mock.calls[0][0]).toMatchObject({
+      action: 'student:revoke-session',
+      resourceId: 'target',
+      metadata: { device: 'all', devices: 2 },
+    });
+  });
+
+  // An assistant is an `owner`, and `owner` holds `student:write`.
+  it('refuses an owner signing an admin out — one device or all of them', async () => {
+    const { service, prisma, sessionDevices } = makeService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ role: 'admin', maxDevices: null })
+      .mockResolvedValueOnce({ role: 'owner' })
+      .mockResolvedValueOnce({ role: 'admin', maxDevices: null })
+      .mockResolvedValueOnce({ role: 'owner' });
+
+    await expect(service.revokeDevice('admin-id', 'device-1', 'assistant')).rejects.toThrow(ForbiddenException);
+    await expect(service.revokeAllDevices('admin-id', 'assistant')).rejects.toThrow(ForbiddenException);
+    expect(sessionDevices.revokeFor).not.toHaveBeenCalled();
+    expect(sessionDevices.revokeAllFor).not.toHaveBeenCalled();
+  });
+
+  it('stores the limit and logs what it was before — the column is overwritten', async () => {
+    const { service, prisma, audit } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({ role: 'student', maxDevices: null });
+
+    await expect(service.setDeviceLimit('target', { maxDevices: 4 }, 'actor')).resolves.toEqual({ maxDevices: 4 });
+
+    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'target' }, data: { maxDevices: 4 } });
+    expect(audit.record.mock.calls[0][0]).toMatchObject({
+      action: 'student:device-limit',
+      resourceId: 'target',
+      metadata: { from: null, to: 4 },
+    });
+  });
+
+  it('`null` puts the account back on the default', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValueOnce({ role: 'student', maxDevices: 4 });
+
+    await service.setDeviceLimit('target', { maxDevices: null }, 'actor');
+    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'target' }, data: { maxDevices: null } });
+  });
+
+  it('refuses an owner changing an admin\'s limit, and writes nothing', async () => {
+    const { service, prisma, audit } = makeService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ role: 'admin', maxDevices: null })
+      .mockResolvedValueOnce({ role: 'owner' });
+
+    await expect(service.setDeviceLimit('admin-id', { maxDevices: 1 }, 'assistant')).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(audit.record).not.toHaveBeenCalled();
   });
 });
 

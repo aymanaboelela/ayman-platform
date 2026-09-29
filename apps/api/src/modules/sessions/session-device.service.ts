@@ -12,6 +12,13 @@ export interface SessionDeviceView {
   isCurrent: boolean;
 }
 
+/** What a revoke took away — for the operator's audit row, never the student's screen. */
+export interface RevokedDevice {
+  deviceName: string;
+  /** Better Auth sessions deleted with it — one per sign-in from that device. */
+  sessions: number;
+}
+
 export interface RecordLoginInput {
   sessionId: string;
   userId: string;
@@ -217,7 +224,7 @@ export class SessionDeviceService {
    * جهاز عشان تضيف جديد» has to actually free one, or the two-device limit is
    * a permanent lock and the student's only remaining move is WhatsApp.
    */
-  async revokeOwn(userId: string, deviceId: string): Promise<boolean> {
+  async revokeOwn(userId: string, deviceId: string): Promise<RevokedDevice | null> {
     // Ownership is proven FIRST and by the WHERE clause — id AND user_id —
     // never by reading the row and comparing `userId` in application code.
     // A null result covers "belongs to someone else", "does not exist" and
@@ -227,7 +234,7 @@ export class SessionDeviceService {
       where: { id: deviceId, userId, revokedAt: null },
       select: { deviceName: true },
     });
-    if (!device) return false;
+    if (!device) return null;
 
     const group = { userId, deviceName: device.deviceName, revokedAt: null } as const;
     const rows = await this.prisma.sessionDevice.findMany({
@@ -242,6 +249,55 @@ export class SessionDeviceService {
     await this.prisma.session.deleteMany({
       where: { id: { in: rows.map((row) => row.sessionId) } },
     });
-    return true;
+    return { deviceName: device.deviceName, sessions: rows.length };
+  }
+
+  /**
+   * «سجّل خروج» from the student's admin page — the same revoke, aimed by the
+   * operator.
+   *
+   * Delegates rather than repeating the body, for the reason `listFor` does:
+   * what «this device is signed out» means (every sign-in in the name's group
+   * stamped, every session behind them deleted, the slot free for the gate) is
+   * ONE definition, and an admin copy that drifted from it would free a slot
+   * on the card while the gate went on counting it.
+   *
+   * The ownership rule is unchanged and it is what keeps this safe: `userId`
+   * is the account in the URL, so a device id that belongs to anybody else is
+   * `null` → 404, never a revoke on the wrong account. WHETHER this operator
+   * may act on that account is the caller's question (`StudentsService`),
+   * not this class's.
+   */
+  revokeFor(userId: string, deviceId: string): Promise<RevokedDevice | null> {
+    return this.revokeOwn(userId, deviceId);
+  }
+
+  /**
+   * «سجّل خروج من كل الأجهزة» — every session the account holds.
+   *
+   * ALL of `app.sessions` for the user, not only the ones a device row points
+   * at: `recordLogin` is best-effort, so a session whose device row was never
+   * written is exactly the one this list cannot show and «من كل الأجهزة» must
+   * still end. Same reach as `ban` and `setPassword`, minus the ban.
+   *
+   * The device rows are STAMPED, not deleted — the choice `revokeOwn` makes,
+   * and for its reason: the table is the account's sign-in log, and the
+   * admin-side delete paths (`ban`, `setPassword`) that erase it are erasing
+   * for a different purpose. One transaction, so the list and the sessions
+   * cannot be seen half-done.
+   *
+   * Returns how many DEVICES were open — what the operator saw on the card —
+   * read through `listFor` so the number means what the card meant by it.
+   */
+  async revokeAllFor(userId: string): Promise<number> {
+    const open = await this.listFor(userId);
+    await this.prisma.$transaction([
+      this.prisma.sessionDevice.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+      this.prisma.session.deleteMany({ where: { userId } }),
+    ]);
+    return open.length;
   }
 }

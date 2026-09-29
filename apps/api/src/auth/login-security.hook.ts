@@ -13,7 +13,7 @@ import {
   type LoginIdentifier,
   type StoredCredential,
 } from './credential-check.service';
-import { DEVICE_LIMIT_ERROR, MAX_DEVICES_PER_ACCOUNT, type DeviceLimitGate } from './device-limit';
+import { DEVICE_LIMIT_ERROR, type DeviceLimitGate } from './device-limit';
 import type { LoginSecurityService } from './login-security.service';
 import { planFullNameCheck } from './full-name-check';
 import { HUMAN_CHECK_HEADER, type HumanCheck } from './human-check';
@@ -442,7 +442,7 @@ export function createAuthBeforeHook(
        * `databaseHooks.session.create.before` in `auth.config.ts`: it covers
        * sign-up and Google as well, and it can only answer «Failed to create
        * session». This block covers the two sign-in routes and turns that into
-       * a sentence with a way out in it — «الحساب مفتوح على جهازين خلاص»
+       * a sentence with a way out in it — «الحساب مفتوح على كل الأجهزة المسموح بيها»
        * plus the instructor's WhatsApp link, which the WEB attaches from
        * `settings.contact.whatsapp`. The number is never written into an API
        * message: it differs per stack, and a literal here would be a tenant
@@ -452,18 +452,21 @@ export function createAuthBeforeHook(
        * login box would answer "does this account exist and is it in use",
        * which is a better oracle than the one S1 closes.
        *
-       * Both halves ask `deviceLimit.admits` with the same two arguments, so
-       * they cannot disagree. The user agent comes off the request headers
-       * here and off the session row there; Better Auth copies one to the
-       * other (`internal-adapter.mjs`: `userAgent: headers?.get("user-agent")`),
-       * so they are the same string.
+       * Both halves ask the same gate with the same two arguments, so they
+       * cannot disagree. The user agent comes off the request headers here and
+       * off the session row there; Better Auth copies one to the other
+       * (`internal-adapter.mjs`: `userAgent: headers?.get("user-agent")`), so
+       * they are the same string.
+       *
+       * `check` rather than `admits` so `limit` is THIS account's — its own
+       * `users.max_devices` when the instructor raised it, not the default.
        */
-      const admitted = await deviceLimit.admits(result.userId, ctx.headers?.get('user-agent'));
-      if (!admitted) {
+      const decision = await deviceLimit.check(result.userId, ctx.headers?.get('user-agent'));
+      if (!decision.admitted) {
         throw new APIError('FORBIDDEN', {
           code: DEVICE_LIMIT_ERROR,
           message: 'Device limit reached for this account',
-          limit: MAX_DEVICES_PER_ACCOUNT,
+          limit: decision.limit,
         });
       }
     }
