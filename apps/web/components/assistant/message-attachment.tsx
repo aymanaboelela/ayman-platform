@@ -1,6 +1,7 @@
 import { Download, FileText } from 'lucide-react';
 import type { MessageAttachment } from '@ayman/contracts/assistant/conversation';
 import { cn } from '@ayman/ui/lib/cn';
+import { VoiceNote } from './voice-note';
 
 /**
  * The file on a message, drawn the same way on both sides of the thread.
@@ -27,12 +28,6 @@ import { cn } from '@ayman/ui/lib/cn';
  * `priority` buy nothing here either: it is one image inside a scrolled
  * transcript, never LCP.
  */
-/** Seconds → `m:ss`, Western digits like every other number on the platform. */
-function formatClock(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
-}
-
 export function MessageAttachmentView({
   attachment,
   labels,
@@ -46,43 +41,18 @@ export function MessageAttachmentView({
 }) {
   if (attachment.kind === 'voice') {
     /*
-     * A native `<audio controls>`, and that is a decision rather than a
-     * shortcut.
+     * A player drawn for a chat — see `VoiceNote` — around a real `<audio>`
+     * that still loads nothing until it is pressed.
      *
-     * A hand-drawn WhatsApp waveform would need its own play/pause state, its
-     * own scrubber, its own keyboard handling and its own screen-reader story —
-     * four things the browser already ships, correctly, in every locale. What
-     * the native control does NOT ship is a length for a live-recorded WebM
-     * (its header carries none, so `duration` reads `Infinity` until the file
-     * is seeked end to end), which is exactly why the recorder's own count
-     * travels with the message and is printed beside it.
-     *
-     * `preload="none"`: a thread with twenty voice notes must not pull
-     * twenty audio files — or hold twenty media players — the moment it opens.
-     * It was `metadata`, which still opens a player per note to read a
-     * duration nobody needs from it: the recorder's own count is printed
-     * beside the control, and the admin's thread view renders its whole
-     * history at once, in a tab that stays open all day.
+     * `preload="none"` stays the rule: a thread with twenty voice notes must
+     * not pull twenty audio files — or hold twenty media players — the moment
+     * it opens, and the admin's thread view renders its whole history at once,
+     * in a tab that stays open all day. The length is the recorder's own count,
+     * because a live-recorded WebM carries none (`duration` reads `Infinity`
+     * until the file is seeked end to end).
      */
     return (
-      <div className="mt-1 flex flex-col gap-1">
-        <audio
-          controls
-          preload="none"
-          src={attachment.path}
-          className="w-full max-w-[16rem]"
-        />
-        {attachment.durationSeconds !== null ? (
-          <span
-            className={cn(
-              'text-[length:var(--fs-text-xs)] tabular-nums',
-              tone === 'own' ? 'text-[#1A1206]/70' : 'text-fg-muted',
-            )}
-          >
-            {formatClock(attachment.durationSeconds)}
-          </span>
-        ) : null}
-      </div>
+      <VoiceNote src={attachment.path} durationSeconds={attachment.durationSeconds} tone={tone} />
     );
   }
 
@@ -92,15 +62,15 @@ export function MessageAttachmentView({
         href={attachment.path}
         target="_blank"
         rel="noreferrer"
-        className="mt-1 block overflow-hidden rounded-xl"
+        className="chat-media"
       >
         <img
           src={attachment.path}
           alt={labels.imageAlt}
-          // Bounded in BOTH axes: the intrinsic size is unknown until it
-          // decodes, and an unbounded portrait photo makes the transcript
-          // scroll past the reply box on a phone.
-          className="max-h-[22rem] w-auto max-w-full object-contain"
+          // Bounded in BOTH axes (see `.chat-media img`): the intrinsic size is
+          // unknown until it decodes, and an unbounded portrait photo makes the
+          // transcript scroll past the reply box on a phone.
+          //
           // A long thread's photos decode only as they scroll into view — a
           // decoded phone photo is megabytes, and the admin's thread view has
           // no window on how many it renders.
@@ -123,29 +93,24 @@ export function MessageAttachmentView({
    *
    * The label survives as the icon's accessible name; a file card that
    * announced only its filename would not say what activating it does.
+   *
+   * The tile says WHAT the file is before the name is read — «PDF», «PPTX» —
+   * because on a thread full of decks the extension is the part he is
+   * scanning for. Same one fact `shortenFilename` protects.
    */
+  const extension = fileExtension(attachment.filename);
   return (
     <a
       href={attachment.downloadPath}
-      className={cn(
-        // `min-w` in a FIXED unit, not a percentage: the bubble around this is
-        // shrink-to-fit, so a percentage max/min on it resolves against a width
-        // that is itself being derived from this content — measured, a
-        // `w-[min(26rem,85%)]` on the bubble had no effect at all. A fixed
-        // floor does participate in intrinsic sizing. 16rem is chosen to fit
-        // inside the narrowest bubble the layout can produce (85% of a 390px
-        // viewport, less the bubble's own padding).
-        'mt-1 flex w-full min-w-[16rem] max-w-full items-center gap-2.5 rounded-xl border p-2.5',
-        'transition-opacity duration-[160ms] ease-out hover:opacity-80',
-        tone === 'own'
-          ? // Hardcoded on the accent bubble, which is admin-settable: a
-            // `border-line` token here would vanish against whatever colour he
-            // picks. Same reasoning as the WhatsApp card in `message-body.tsx`.
-            'border-[#1A1206]/20 bg-[#1A1206]/8'
-          : 'border-line-subtle bg-surface-1',
-      )}
+      className={cn('chat-file', tone === 'own' ? 'chat-file--own' : 'chat-file--other')}
     >
-      <FileText className="size-6 shrink-0 opacity-70" aria-hidden="true" />
+      <span className="chat-file__tile" aria-hidden="true">
+        {extension ? (
+          <span className="chat-file__ext">{extension}</span>
+        ) : (
+          <FileText className="size-5" />
+        )}
+      </span>
       <span className="min-w-0 flex-1">
         {/*
           ONE line, shortened in the MIDDLE.
@@ -159,23 +124,46 @@ export function MessageAttachmentView({
           worth keeping.
 
           `title` carries the untrimmed name for anyone who needs it.
+
+          Isolated, with the extension isolated again inside it: in an Arabic
+          line «الو….pdf» otherwise renders as «pdf.…الو» — the dot is a
+          neutral and takes the paragraph's direction. The outer `<bdi>` lets a
+          Latin name stay a Latin line; the inner one keeps «.pdf» one piece.
         */}
-        <span
-          title={attachment.filename}
-          className="block truncate text-[length:var(--fs-text-sm)] font-medium"
-        >
-          {shortenFilename(attachment.filename)}
+        <span title={attachment.filename} className="chat-file__name">
+          <FileName name={shortenFilename(attachment.filename)} />
         </span>
-        <span className="mono block text-[length:var(--fs-mono-label)] opacity-70">
-          {formatBytes(attachment.sizeBytes)}
-        </span>
+        <span className="chat-file__size">{formatBytes(attachment.sizeBytes)}</span>
       </span>
-      <span className="grid size-11 shrink-0 place-items-center">
+      <span className="chat-file__action">
         <Download className="size-4" aria-hidden="true" />
         <span className="sr-only">{labels.download}</span>
       </span>
     </a>
   );
+}
+
+function FileName({ name }: { name: string }) {
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0) return <bdi>{name}</bdi>;
+  return (
+    <bdi>
+      {name.slice(0, dot)}
+      <bdi dir="ltr">{name.slice(dot)}</bdi>
+    </bdi>
+  );
+}
+
+/**
+ * `PDF`, `PPTX`, `DOCX` — the extension as a tile label, or `''` when there is
+ * none worth showing. Four letters at most: the tile is a square, and
+ * anything longer is not an extension a reader recognises at a glance.
+ */
+export function fileExtension(name: string): string {
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0 || dot === name.length - 1) return '';
+  const extension = name.slice(dot + 1).toUpperCase();
+  return /^[A-Z0-9]{1,4}$/.test(extension) ? extension : '';
 }
 
 /** Longer than this and the middle is replaced by an ellipsis. */

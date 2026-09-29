@@ -2,7 +2,7 @@ import { Bot, UserRound } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import type { AssistantTranscriptTurn } from '@ayman/contracts/assistant/conversation';
 import { cn } from '@ayman/ui';
-import { inboxTimeFormatter } from '../status-chip';
+import { chatTime } from '@/components/assistant/chat-timeline';
 
 const c = copy.assistant.inbox;
 
@@ -41,14 +41,14 @@ export function AssistantTranscript({
   createdAt: string;
 }) {
   return (
-    <li className="flex flex-col gap-1">
-      <div className="w-full max-w-[min(42rem,100%)] overflow-hidden rounded-2xl border border-dashed border-line bg-surface-1">
+    <li className="chat-system">
+      <div className="chat-transcript">
         {/*
           The header does the whole job of distinguishing this from the
           conversation around it — dashed border, no accent, and a sentence
           saying in words that nobody wrote this TO him.
         */}
-        <div className="border-b border-line-subtle bg-surface-2 px-4 py-2.5">
+        <div className="chat-transcript__head">
           <p className="flex items-center gap-2 text-[length:var(--fs-text-sm)] font-semibold text-fg">
             <Bot className="size-4 shrink-0 text-fg-muted" aria-hidden="true" />
             {c.transcriptTitle}
@@ -115,12 +115,11 @@ export function AssistantTranscript({
       </div>
 
       {/* The same stamp every other message in the thread carries, so the
-          card sits in the timeline rather than beside it. */}
-      <time
-        dateTime={createdAt}
-        className="mono px-1 text-[length:var(--fs-mono-label)] text-fg-faint"
-      >
-        {inboxTimeFormatter.format(new Date(createdAt))}
+          card sits in the timeline rather than beside it — in Cairo time,
+          named, because this card is rendered on a server whose clock is UTC
+          (see `chat-timeline.ts`). */}
+      <time dateTime={createdAt} className="chat-system__time">
+        {chatTime(createdAt)}
       </time>
     </li>
   );

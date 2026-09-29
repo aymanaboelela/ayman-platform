@@ -8,14 +8,14 @@ import {
   type ConversationMessageEntry,
 } from '@ayman/contracts/assistant/conversation';
 import { cn } from '@ayman/ui/lib/cn';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, SmilePlus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@ayman/ui/components/button';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { MessageBody } from '@/components/assistant/message-body';
 import { MessageAttachmentView } from '@/components/assistant/message-attachment';
-import { tenantName } from '@/lib/tenant';
-import { inboxTimeFormatter } from '../status-chip';
+import { ChatMeta, type ChatDelivery } from '@/components/assistant/chat-meta';
+import { monogramOf } from '@/components/assistant/chat-timeline';
 import { deleteMessageAction, editMessageAction, setReactionAction } from '../actions';
 
 const c = copy.assistant.inbox;
@@ -60,10 +60,23 @@ export function MessageBubble({
   conversationId,
   message,
   who,
+  startsGroup = true,
+  endsGroup = true,
+  seen = false,
 }: {
   conversationId: string;
   message: ConversationMessageEntry;
+  /** The student's name — only its first letter is drawn, as their avatar. */
   who: string;
+  /** First of a run of messages from one side — see `buildChatTimeline`. */
+  startsGroup?: boolean;
+  /** Last of a run — carries the tail and the avatar. */
+  endsGroup?: boolean;
+  /**
+   * HIS message, and the student has had the thread open since it was written
+   * (`visitorReadAt >= createdAt`). Ignored on the student's own messages.
+   */
+  seen?: boolean;
 }) {
   const router = useRouter();
   const [picking, setPicking] = useState(false);
@@ -172,215 +185,221 @@ export function MessageBubble({
     else toast.error(c.messageActionFailed);
   }
 
+  const hasText = message.body.trim().length > 0;
+  const imageOnly = !hasText && message.attachment?.kind === 'image';
+  const delivery: ChatDelivery = fromVisitor ? null : seen ? 'seen' : 'sent';
+
   return (
-    <li className={cn('group flex flex-col gap-1', fromVisitor ? 'items-start' : 'items-end')}>
+    <li
+      className={cn(
+        'chat-row group',
+        fromVisitor ? 'chat-row--other' : 'chat-row--own',
+        startsGroup ? 'chat-row--start' : '',
+        endsGroup ? 'chat-row--end' : '',
+      )}
+    >
       {/*
-        The same byline the student sees in `assistant-thread.tsx`, read from
-        the same key and gated the same way — and it has to be, because these
-        two screens render the two ends of ONE conversation. Gating only the
-        student's side would leave a tenant looking at «مهندس أيمن» over
-        replies she is typing in her own inbox, which is not merely a leak: it
-        is the screen where she would conclude that the platform had been
-        sending messages in a stranger's name.
+        The student's initial, on the LAST bubble of each run of theirs —
+        where Messenger and iMessage put the face, so a run reads as one person
+        talking rather than as a column of anonymous boxes. The slot is there
+        on every row of their side (empty above the last) so the bubbles line
+        up on one edge.
 
-        `tenantName()` hands his stack «مهندس أيمن» back verbatim, so his own
-        inbox is unchanged.
+        No byline over his own bubbles any more, and none over theirs. This is
+        a conversation between two people with the other one's name in the
+        header directly above it; a name over every bubble was the loudest
+        thing on the screen and said nothing the side of the screen did not.
+        The student's panel still names HIM, gated through `tenantName()` —
+        see `assistant-thread.tsx`.
       */}
-      <span className="flex items-center gap-1.5 px-1 text-[length:var(--fs-text-xs)] text-fg-faint">
-        {fromVisitor ? who : tenantName(copy.assistant.thread.ayman)}
-      </span>
+      {fromVisitor ? (
+        <span className="chat-avatar chat-avatar--initial" aria-hidden="true">
+          {endsGroup ? monogramOf(who) : null}
+        </span>
+      ) : null}
 
-      <div className={cn('flex items-center gap-1.5', fromVisitor ? '' : 'flex-row-reverse')}>
-        <div
-          onPointerDown={startPress}
-          onPointerMove={movePress}
-          onPointerUp={endPress}
-          onPointerCancel={endPress}
-          onPointerLeave={endPress}
-          onContextMenu={(event) => {
-            // Both the desktop way in AND the suppression of the OS menu that
-            // a finished long press would otherwise raise on top of the picker.
-            event.preventDefault();
-            setPicking(true);
-          }}
-          className={cn(
-            'relative max-w-[min(38rem,85%)] whitespace-pre-wrap wrap-anywhere rounded-2xl px-4 py-3',
-            'text-[length:var(--fs-text-sm)] leading-[1.75]',
-            // Only while the timer is armed: an ordinary tap must still be able
-            // to select text, which is what a reader expects of a transcript.
-            fired.current ? 'select-none' : '',
-            fromVisitor
-              ? 'rounded-ss-md border border-line bg-surface-2 text-fg'
-              : 'rounded-se-md bg-accent text-[#1A1206]',
-          )}
-        >
-          {editing ? (
-            <div className="flex w-[min(32rem,70vw)] flex-col gap-2">
-              <Textarea
-                value={draft}
-                rows={3}
-                autoFocus
-                onChange={(event) => setDraft(event.target.value)}
-                className="bg-surface-1 text-fg"
-              />
-              <div className="flex items-center gap-2">
-                <Button type="button" onClick={saveEdit} disabled={busy}>
-                  {c.messageEditSave}
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditing(false);
-                    setDraft(message.body);
-                  }}
-                  className="text-[length:var(--fs-text-sm)] text-[#1A1206]/70 hover:text-[#1A1206]"
-                >
-                  {c.messageEditCancel}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* An empty body is legal — a reply may be only a file — and
-                  `MessageBody` renders nothing for '', so the bubble collapses
-                  onto the attachment rather than reserving a blank line. */}
-              {/* Same rule as the student's thread: only his own side draws
-                  a course card, so he sees exactly what the student saw. */}
-              <MessageBody body={message.body} trusted={!fromVisitor} />
-            </>
-          )}
-
-          {message.attachment ? (
-            <MessageAttachmentView
-              attachment={message.attachment}
-              tone={fromVisitor ? 'other' : 'own'}
-              labels={{ imageAlt: c.attachmentImageAlt, download: c.attachmentDownload }}
-            />
-          ) : null}
-
-          {reaction ? (
-            <span
-              // Overlapping the bottom edge, exactly where WhatsApp puts it.
-              className={cn(
-                'absolute -bottom-2.5 grid h-6 min-w-6 place-items-center rounded-full px-1',
-                'border border-line bg-surface-1 text-[length:var(--fs-text-xs)] leading-none',
-                fromVisitor ? 'start-3' : 'end-3',
-              )}
-            >
-              {reaction}
-            </span>
-          ) : null}
-        </div>
-
-        {/*
-          The discoverable way in. Hidden until hover or keyboard focus so it
-          does not clutter a transcript, but always in the tab order — the
-          long press is unreachable without a touch screen and unknowable
-          without being told.
-        */}
-        <button
-          type="button"
-          onClick={() => setPicking((open) => !open)}
-          aria-label={c.reactLabel}
-          aria-expanded={picking}
-          className={cn(
-            'grid size-8 shrink-0 place-items-center rounded-full text-fg-faint opacity-0',
-            'transition-opacity duration-[160ms] ease-out',
-            'group-hover:opacity-100 focus-visible:opacity-100 hover:bg-surface-3',
-          )}
-        >
-          <span aria-hidden="true">☺</span>
-        </button>
-      </div>
-
-      {/* Put back deliberately: replacing the page's inline bubbles with this
-          component dropped the timestamps off the whole admin thread, and a
-          transcript with no times on it is not a transcript. The linter found
-          it — the import went unused — rather than anybody noticing. */}
-      <time
-        dateTime={message.createdAt}
-        className="mono px-1 text-[length:var(--fs-mono-label)] text-fg-faint"
-      >
-        {inboxTimeFormatter.format(new Date(message.createdAt))}
-        {/* Beside the time, not instead of it: the reader needs to know WHEN it
-            was said and that the words changed since. */}
-        {message.editedAt ? ` · ${c.messageEdited}` : ''}
-      </time>
-
-      {picking ? (
-        <>
-          {/* Catches the next press anywhere so the row closes without needing
-              a listener on `document` that outlives this component. */}
-          <button
-            type="button"
-            aria-label={c.reactClose}
-            onClick={() => setPicking(false)}
-            className="fixed inset-0 z-10 cursor-default"
-          />
+      <div className="chat-row__stack">
+        <div className="chat-row__line">
           <div
-            role="group"
-            aria-label={c.reactLabel}
+            onPointerDown={startPress}
+            onPointerMove={movePress}
+            onPointerUp={endPress}
+            onPointerCancel={endPress}
+            onPointerLeave={endPress}
+            onContextMenu={(event) => {
+              // Both the desktop way in AND the suppression of the OS menu that
+              // a finished long press would otherwise raise on top of the picker.
+              event.preventDefault();
+              setPicking(true);
+            }}
             className={cn(
-              'relative z-20 flex items-center gap-0.5 rounded-full border border-line',
-              'bg-surface-1 px-1.5 py-1 shadow-sm',
+              'chat-bubble',
+              message.attachment ? 'chat-bubble--has-attachment' : '',
+              imageOnly ? 'chat-bubble--media-only' : '',
+              editing ? 'chat-bubble--editing' : '',
+              // Only while the timer is armed: an ordinary tap must still be able
+              // to select text, which is what a reader expects of a transcript.
+              fired.current ? 'select-none' : '',
             )}
           >
-            {MESSAGE_REACTIONS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => choose(emoji)}
-                aria-label={emoji}
-                aria-pressed={reaction === emoji}
-                className={cn(
-                  'grid size-9 place-items-center rounded-full text-[length:var(--fs-text-base)]',
-                  'transition-transform duration-[120ms] ease-out hover:scale-125',
-                  reaction === emoji ? 'bg-accent/20' : '',
-                )}
-              >
-                {emoji}
-              </button>
-            ))}
-
-            {/*
-              «أعدل» و«أمسح» — on HIS OWN messages only, and the check is
-              `fromVisitor` because a student's words are not his to rewrite.
-              The API enforces the same thing in the WHERE clause; this is what
-              stops the buttons being offered where they would 404.
-
-              In the same row as the emoji rather than a second menu: the long
-              press already opens this, and «شبه واتساب بالظبط» is one sheet of
-              things you can do to a message, not two.
-            */}
-            {fromVisitor ? null : (
+            {editing ? (
+              <div className="chat-edit">
+                <Textarea
+                  value={draft}
+                  rows={3}
+                  autoFocus
+                  onChange={(event) => setDraft(event.target.value)}
+                  className="chat-edit__field"
+                />
+                <div className="flex items-center gap-2">
+                  <Button type="button" onClick={saveEdit} disabled={busy}>
+                    {c.messageEditSave}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditing(false);
+                      setDraft(message.body);
+                    }}
+                    className="chat-edit__cancel"
+                  >
+                    {c.messageEditCancel}
+                  </button>
+                </div>
+              </div>
+            ) : (
               <>
-                <span aria-hidden="true" className="mx-0.5 h-5 w-px bg-line" />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPicking(false);
-                    setDraft(message.body);
-                    setEditing(true);
-                  }}
-                  aria-label={c.messageEdit}
-                  className="grid size-9 place-items-center rounded-full text-fg-muted hover:bg-surface-3 hover:text-fg"
-                >
-                  <Pencil className="size-4" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  onClick={remove}
-                  disabled={busy}
-                  aria-label={c.messageDelete}
-                  className="grid size-9 place-items-center rounded-full text-fg-muted hover:bg-surface-3 hover:text-[var(--err)]"
-                >
-                  <Trash2 className="size-4" aria-hidden="true" />
-                </button>
+                {/* The file first and the words under it — a caption, the
+                    way every messenger lays a photo out. */}
+                {message.attachment ? (
+                  <MessageAttachmentView
+                    attachment={message.attachment}
+                    tone={fromVisitor ? 'other' : 'own'}
+                    labels={{ imageAlt: c.attachmentImageAlt, download: c.attachmentDownload }}
+                  />
+                ) : null}
+
+                {/* An empty body is legal — a reply may be only a file — and
+                    then there is no text line for the time to share, so it
+                    gets a line of its own (or, over a bare photo, a pill on
+                    the photo). Same rule as the student's thread: only his
+                    own side draws a course card, so he sees exactly what the
+                    student saw. */}
+                {hasText ? (
+                  <div className="chat-text">
+                    <MessageBody body={message.body} trusted={!fromVisitor} />
+                    <ChatMeta
+                      createdAt={message.createdAt}
+                      edited={message.editedAt !== null}
+                      delivery={delivery}
+                      variant="ghost"
+                    />
+                  </div>
+                ) : null}
+                {/* Put back deliberately, once already: replacing the page's
+                    inline bubbles with this component dropped the timestamps off
+                    the whole admin thread, and a transcript with no times on it
+                    is not a transcript. «معدّلة» sits beside the time, not
+                    instead of it: the reader needs to know WHEN it was said and
+                    that the words changed since. */}
+                <ChatMeta
+                  createdAt={message.createdAt}
+                  edited={message.editedAt !== null}
+                  delivery={delivery}
+                  variant={hasText ? 'corner' : imageOnly ? 'overlay' : 'line'}
+                />
               </>
             )}
+
+            {reaction ? (
+              // Overlapping the bottom edge, exactly where WhatsApp puts it.
+              <span className="chat-reaction">{reaction}</span>
+            ) : null}
           </div>
-        </>
-      ) : null}
+
+          {/*
+            The discoverable way in. Hidden until hover or keyboard focus so it
+            does not clutter a transcript, but always in the tab order — the
+            long press is unreachable without a touch screen and unknowable
+            without being told.
+          */}
+          <button
+            type="button"
+            onClick={() => setPicking((open) => !open)}
+            aria-label={c.reactLabel}
+            aria-expanded={picking}
+            className="chat-react-trigger"
+          >
+            <SmilePlus className="size-4" aria-hidden="true" />
+          </button>
+        </div>
+
+        {picking ? (
+          <>
+            {/* Catches the next press anywhere so the row closes without needing
+                a listener on `document` that outlives this component. */}
+            <button
+              type="button"
+              aria-label={c.reactClose}
+              onClick={() => setPicking(false)}
+              className="fixed inset-0 z-10 cursor-default"
+            />
+            <div role="group" aria-label={c.reactLabel} className="chat-picker">
+              {MESSAGE_REACTIONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => choose(emoji)}
+                  aria-label={emoji}
+                  aria-pressed={reaction === emoji}
+                  className="chat-picker__emoji"
+                >
+                  {emoji}
+                </button>
+              ))}
+
+              {/*
+                «أعدل» و«أمسح» — on HIS OWN messages only, and the check is
+                `fromVisitor` because a student's words are not his to rewrite.
+                The API enforces the same thing in the WHERE clause; this is what
+                stops the buttons being offered where they would 404.
+
+                In the same row as the emoji rather than a second menu: the long
+                press already opens this, and «شبه واتساب بالظبط» is one sheet of
+                things you can do to a message, not two.
+              */}
+              {fromVisitor ? null : (
+                <>
+                  <span aria-hidden="true" className="chat-picker__rule" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPicking(false);
+                      setDraft(message.body);
+                      setEditing(true);
+                    }}
+                    aria-label={c.messageEdit}
+                    title={c.messageEdit}
+                    className="chat-picker__action"
+                  >
+                    <Pencil className="size-4" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={remove}
+                    disabled={busy}
+                    aria-label={c.messageDelete}
+                    title={c.messageDelete}
+                    className="chat-picker__action chat-picker__action--danger"
+                  >
+                    <Trash2 className="size-4" aria-hidden="true" />
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        ) : null}
+      </div>
     </li>
   );
 }

@@ -1,0 +1,1293 @@
+/* =============================================================================
+   «الشات» — one conversation, drawn the same way at both ends: the
+   instructor's `/admin/inbox/[id]` and the student's panel.
+
+   «غيّر الديزاين بتاع الشات يبقى شكله حلو أوي وجميل كده بيني وبين الناس، على
+   الديسكتوب وعلى الشخص التاني المستقبِل». So it is a MESSENGER, not a page
+   with a form under it: a lit wallpaper, bubbles that group into runs with a
+   tail on the last, day chips that stick while scrolling, the time and the
+   ticks tucked into the bubble's corner, and a composer docked to the bottom
+   of the same object.
+
+   ## Whose side is whose
+
+   By the READER, the way every messenger does it: your own words sit on the
+   inline-END side (the left, in Arabic) in the brand colour, the other
+   person's on the inline-START side in a paper-white bubble with their face
+   beside the run. The instructor sees his replies in orange on the left; the
+   student sees THEIRS in orange on the left. Same product from both doors.
+
+   ## Tokens only
+
+   Every colour is a token or a `color-mix` of one — the tenant's accent and
+   the dark theme follow without a second stylesheet. Mixes are `oklab`, never
+   `oklch` (see `lib/neutral-mix-space.test.ts`). The dark theme swaps the
+   accent washes for neutral ones, because amber over ink-navy is brown (the
+   same call `centers.css` makes).
+
+   RTL throughout: every offset is `inset-inline-*` / `margin-inline-*`, and
+   the Latin in a keycap or a clock is isolated `ltr`.
+   ========================================================================== */
+
+/* ── the object ─────────────────────────────────────────────────────────── */
+
+.chat {
+  --chat-wall: var(--n-2);
+  --chat-wash: color-mix(in oklab, var(--a-9) 15%, transparent);
+  --chat-wash-2: color-mix(in oklab, var(--a-9) 9%, transparent);
+  --chat-dot: color-mix(in oklab, var(--a-11) 16%, transparent);
+  --chat-other: var(--n-1);
+  --chat-surface: var(--n-1);
+  --chat-surface-2: var(--n-2);
+  --chat-own-top: var(--a-9);
+  --chat-own-bottom: var(--a-10);
+  --chat-own-ink: var(--on-accent-ink);
+  --chat-shadow: color-mix(in oklab, var(--ink) 13%, transparent);
+  --chat-shadow-soft: color-mix(in oklab, var(--ink) 7%, transparent);
+  --chat-own-glow: color-mix(in oklab, var(--a-10) 34%, transparent);
+  /* The student's initial, on the admin side. Neutral in dark: amber mixed
+     into ink-navy is brown. */
+  --chat-avatar: linear-gradient(145deg, color-mix(in oklab, var(--a-9) 26%, var(--n-1)), color-mix(in oklab, var(--a-10) 42%, var(--n-1)));
+  --chat-avatar-ink: var(--a-12);
+  /* A hairline round the paper bubble, as a shadow rather than a border so
+     the tail — which has no border — does not show a seam. */
+  --chat-ring: color-mix(in oklab, var(--ink) 6%, transparent);
+  /* «اتشافت» — a WhatsApp-ish blue, pulled toward the ink so it holds its
+     contrast on the amber bubble in both themes. */
+  --chat-seen: color-mix(in oklab, var(--info) 88%, var(--on-accent-ink));
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--n-12);
+  background:
+    radial-gradient(70rem 26rem at 100% 0%, var(--chat-wash), transparent 70%),
+    radial-gradient(50rem 30rem at 0% 100%, var(--chat-wash-2), transparent 70%),
+    radial-gradient(var(--chat-dot) 1px, transparent 1.5px) 0 0 / 22px 22px,
+    var(--chat-wall);
+}
+
+:root[data-theme='dark'] .chat {
+  --chat-wall: var(--n-1);
+  --chat-wash: color-mix(in oklab, var(--n-4) 80%, transparent);
+  --chat-wash-2: color-mix(in oklab, var(--n-3) 70%, transparent);
+  --chat-dot: color-mix(in oklab, var(--n-8) 40%, transparent);
+  --chat-other: var(--n-4);
+  --chat-surface: var(--n-2);
+  --chat-surface-2: var(--n-3);
+  --chat-shadow: color-mix(in oklab, var(--ink) 55%, transparent);
+  --chat-shadow-soft: color-mix(in oklab, var(--ink) 35%, transparent);
+  --chat-own-glow: color-mix(in oklab, var(--a-9) 18%, transparent);
+  --chat-ring: transparent;
+  --chat-avatar: linear-gradient(145deg, var(--n-6), var(--n-5));
+  --chat-avatar-ink: var(--a-11);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .chat {
+    --chat-wall: var(--n-1);
+    --chat-wash: color-mix(in oklab, var(--n-4) 80%, transparent);
+    --chat-wash-2: color-mix(in oklab, var(--n-3) 70%, transparent);
+    --chat-dot: color-mix(in oklab, var(--n-8) 40%, transparent);
+    --chat-other: var(--n-4);
+    --chat-surface: var(--n-2);
+    --chat-surface-2: var(--n-3);
+    --chat-shadow: color-mix(in oklab, var(--ink) 55%, transparent);
+    --chat-shadow-soft: color-mix(in oklab, var(--ink) 35%, transparent);
+    --chat-own-glow: color-mix(in oklab, var(--a-9) 18%, transparent);
+    --chat-ring: transparent;
+    --chat-avatar: linear-gradient(145deg, var(--n-6), var(--n-5));
+    --chat-avatar-ink: var(--a-11);
+  }
+}
+
+/* The instructor's thread: a card of its own under the conversation header,
+   filling whatever height the page has left (see `.chat-page`). */
+.chat--admin {
+  flex: 1 1 auto;
+  min-height: 24rem;
+  margin-block-start: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  box-shadow: var(--shadow-md);
+}
+
+/* The student's panel: the widget already draws the card, so this is only
+   the inside of it. */
+.chat--panel {
+  flex: 1 1 auto;
+}
+
+/* ── the admin page: a column exactly as tall as the screen ────────────────
+   `main` pads 16px / 24px (see `(admin)/layout.tsx`) under a sticky header of
+   `--admin-header-h`, so this is the height that makes the page itself never
+   scroll — the thread does instead, and the composer is always on screen.
+   A phone with a tall header (many course badges) lets the chat keep its
+   `min-height` and the page scroll a little, rather than squeezing the
+   thread to nothing. */
+.chat-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--admin-header-h) - 2rem);
+}
+
+@media (min-width: 48rem) {
+  .chat-page {
+    height: calc(100dvh - var(--admin-header-h) - 3rem);
+  }
+}
+
+.chat-page > a,
+.chat-page > header {
+  flex-shrink: 0;
+}
+
+.chat-page > a {
+  align-self: flex-start;
+}
+
+/* ── the scroller ───────────────────────────────────────────────────────── */
+
+.chat-viewport {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* `column-reverse` is the whole of «يفتح على آخر رسالة»: a reversed flex
+   container's scroll ORIGIN is its end, so the browser opens it on the newest
+   message — in the server's HTML, before any script — and keeps it there as
+   the thread grows. `.chat-stream` is its only child and lays out top-down as
+   normal, so reading order and tab order are untouched. See `useChatScroll`. */
+.chat-scroller {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column-reverse;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--n-6) transparent;
+}
+
+.chat-scroller:focus-visible {
+  outline: var(--focus-ring-width) solid var(--a-9);
+  outline-offset: calc(var(--focus-ring-width) * -1);
+}
+
+.chat-stream {
+  width: 100%;
+  max-width: 54rem;
+  margin-inline: auto;
+  padding: 0.75rem 0.75rem 1rem;
+}
+
+@media (min-width: 48rem) {
+  .chat--admin .chat-stream {
+    padding: 1rem 1.5rem 1.25rem;
+  }
+}
+
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ── the day chip ───────────────────────────────────────────────────────── */
+
+/* Sticky, so the day is always readable at the top while scrolling back —
+   WhatsApp's chip. Opaque rather than frosted: `backdrop-filter` on a sticky
+   element repaints every scrolled frame, and this is read on phones (see
+   `.topbar` in `globals.css`). */
+.chat-day {
+  position: sticky;
+  inset-block-start: 0.5rem;
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  margin-block: 0.875rem 0.5rem;
+  pointer-events: none;
+}
+
+.chat-day:first-child {
+  margin-block-start: 0.25rem;
+}
+
+.chat-day > span {
+  padding: 0.1875rem 0.875rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-full);
+  background: var(--chat-surface);
+  box-shadow: 0 1px 2px var(--chat-shadow-soft);
+  color: var(--n-11);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-text-xs);
+  pointer-events: auto;
+}
+
+/* ── a row: [avatar] [bubble] [react] ───────────────────────────────────── */
+
+.chat-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-block-start: 0.1875rem;
+}
+
+.chat-row--start {
+  margin-block-start: 0.75rem;
+}
+
+.chat-day + .chat-row {
+  margin-block-start: 0.25rem;
+}
+
+/* A reaction hangs off the bubble's bottom edge; the next row makes room. */
+.chat-row:has(.chat-reaction) {
+  margin-block-end: 0.75rem;
+}
+
+.chat-row--own {
+  justify-content: flex-end;
+}
+
+.chat-row__stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: min(36rem, 82%);
+}
+
+.chat-row--own .chat-row__stack {
+  align-items: flex-end;
+}
+
+.chat-row--other .chat-row__stack {
+  align-items: flex-start;
+}
+
+.chat-row__line {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+}
+
+/* The react button sits on the side facing the middle of the screen. */
+.chat-row--own .chat-row__line {
+  flex-direction: row-reverse;
+}
+
+/* The student's side of the panel names the instructor once per run. */
+.chat-byline {
+  margin-block-end: 0.25rem;
+  padding-inline: 0.75rem;
+  color: var(--a-11);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-text-xs);
+}
+
+/* ── avatars ────────────────────────────────────────────────────────────── */
+
+.chat-avatar {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--r-full);
+}
+
+.chat-avatar:empty {
+  visibility: hidden;
+}
+
+.chat-avatar--initial {
+  background: var(--chat-avatar);
+  box-shadow: 0 1px 2px var(--chat-shadow-soft), inset 0 0 0 1px color-mix(in oklab, var(--a-9) 30%, transparent);
+  color: var(--chat-avatar-ink);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+}
+
+/* ── the bubble ─────────────────────────────────────────────────────────── */
+
+.chat-bubble {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.4375rem 0.75rem 0.5rem;
+  border-radius: 1.125rem;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-text-base);
+  line-height: var(--lh-text-base);
+}
+
+.chat-row--other .chat-bubble {
+  background: var(--chat-other);
+  box-shadow:
+    0 0 0 1px var(--chat-ring),
+    0 1px 1px var(--chat-shadow-soft),
+    0 2px 8px -2px var(--chat-shadow-soft);
+  color: var(--n-12);
+}
+
+.chat-row--own .chat-bubble {
+  background: linear-gradient(180deg, var(--chat-own-top), var(--chat-own-bottom));
+  box-shadow: 0 1px 1px var(--chat-shadow-soft), 0 6px 16px -8px var(--chat-own-glow);
+  color: var(--chat-own-ink);
+}
+
+/* Runs: the corners that face the screen's edge tighten between bubbles of one
+   run, so it reads as one voice rather than a stack of boxes. */
+.chat-row--other:not(.chat-row--start) .chat-bubble {
+  border-start-start-radius: 0.3125rem;
+}
+.chat-row--other:not(.chat-row--end) .chat-bubble {
+  border-end-start-radius: 0.3125rem;
+}
+.chat-row--own:not(.chat-row--start) .chat-bubble {
+  border-start-end-radius: 0.3125rem;
+}
+.chat-row--own:not(.chat-row--end) .chat-bubble {
+  border-end-end-radius: 0.3125rem;
+}
+
+/* The tail, on the LAST bubble of a run — where the avatar is. A square corner
+   plus a small curved wedge outside it; the wedge's curve is a radial mask, so
+   it is the bubble's own colour with no border to seam. */
+.chat-row--other.chat-row--end .chat-bubble {
+  border-end-start-radius: 0;
+}
+.chat-row--own.chat-row--end .chat-bubble {
+  border-end-end-radius: 0;
+}
+
+.chat-row--end .chat-bubble:not(.chat-bubble--editing)::after {
+  content: '';
+  position: absolute;
+  inset-block-end: 0;
+  width: 0.625rem;
+  height: 0.875rem;
+  pointer-events: none;
+}
+
+/* Physical in its SHAPE (a mask has no logical axes) and logical in its
+   PLACE — so the wedge is drawn for RTL, and mirrored for an LTR reader. */
+.chat-row--other.chat-row--end .chat-bubble::after {
+  inset-inline-start: -0.5rem;
+  background: var(--chat-other);
+  mask: radial-gradient(0.625rem 0.875rem at 100% 0, transparent 97%, black 100%);
+}
+.chat-row--own.chat-row--end .chat-bubble::after {
+  inset-inline-end: -0.5rem;
+  background: var(--chat-own-bottom);
+  mask: radial-gradient(0.625rem 0.875rem at 0 0, transparent 97%, black 100%);
+}
+.chat-row--other.chat-row--end .chat-bubble:dir(ltr)::after {
+  mask: radial-gradient(0.625rem 0.875rem at 0 0, transparent 97%, black 100%);
+}
+.chat-row--own.chat-row--end .chat-bubble:dir(ltr)::after {
+  mask: radial-gradient(0.625rem 0.875rem at 100% 0, transparent 97%, black 100%);
+}
+
+/* The words. `pre-wrap` is what keeps an outreach message's paragraphs and
+   bulleted list legible (see `MessageBody`). */
+.chat-text {
+  white-space: pre-wrap;
+}
+
+.chat-bubble--has-attachment {
+  padding: 0.25rem;
+}
+
+.chat-bubble--has-attachment .chat-text {
+  padding: 0.3125rem 0.5rem 0.25rem;
+}
+
+.chat-bubble--has-attachment .chat-meta--corner {
+  inset-inline-end: 0.75rem;
+}
+
+.chat-bubble--has-attachment .chat-meta--line {
+  padding: 0.125rem 0.5rem 0.1875rem;
+}
+
+.chat-bubble--media-only {
+  padding: 0.1875rem;
+}
+
+.chat-bubble--editing {
+  padding: 0.75rem;
+}
+
+/* ── time, «معدّلة», ticks ──────────────────────────────────────────────── */
+
+.chat-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  opacity: 0.72;
+}
+
+.chat-row--own .chat-meta {
+  opacity: 0.78;
+}
+
+.chat-meta--corner {
+  position: absolute;
+  inset-block-end: 0.4375rem;
+  inset-inline-end: 0.75rem;
+}
+
+/* The invisible twin — see `ChatMeta`. It reserves the corner's exact width at
+   the end of the last line, and wraps to a fresh line exactly when the stamp
+   would not fit beside the words. */
+.chat-meta--ghost {
+  visibility: hidden;
+  margin-inline-start: 0.625rem;
+  vertical-align: baseline;
+}
+
+.chat-meta--line {
+  display: flex;
+  justify-content: flex-end;
+  margin-block-start: 0.25rem;
+}
+
+.chat-meta--overlay {
+  position: absolute;
+  inset-block-end: 0.5rem;
+  inset-inline-end: 0.5rem;
+  z-index: 1;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--ink) 58%, transparent);
+  color: var(--ink-fg);
+  opacity: 1;
+}
+
+.chat-meta__tick {
+  display: inline-grid;
+  place-items: center;
+}
+
+.chat-meta__tick--seen {
+  color: var(--chat-seen);
+}
+
+.chat-meta--overlay .chat-meta__tick--seen {
+  color: var(--ink-fg);
+}
+
+/* ── the reaction ───────────────────────────────────────────────────────── */
+
+.chat-reaction {
+  position: absolute;
+  inset-block-end: -0.8125rem;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  min-width: 1.625rem;
+  height: 1.625rem;
+  padding-inline: 0.25rem;
+  border: 2px solid var(--chat-wall);
+  border-radius: var(--r-full);
+  background: var(--chat-surface);
+  box-shadow: 0 1px 3px var(--chat-shadow);
+  font-size: var(--fs-text-xs);
+  line-height: 1;
+}
+
+/* On the side AWAY from the time — the stamp owns the inline-end corner. */
+.chat-reaction {
+  inset-inline-start: 0.625rem;
+}
+
+/* The discoverable way to react — hidden until the row is hovered or the
+   button itself has focus, always in the tab order. */
+.chat-react-trigger {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--r-full);
+  color: var(--n-10);
+  opacity: 0;
+  transition:
+    opacity var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease);
+}
+
+.chat-row:hover .chat-react-trigger,
+.chat-react-trigger:focus-visible,
+.chat-react-trigger[aria-expanded='true'] {
+  opacity: 1;
+}
+
+/* On a phone the long press IS the way in (see `MessageBubble`), and an
+   invisible button beside every bubble was 36px the bubble could not use —
+   enough to push a voice note out of its own bubble at 390px. */
+@media (hover: none) and (pointer: coarse) {
+  .chat-react-trigger:not([aria-expanded='true']) {
+    display: none;
+  }
+}
+
+.chat-react-trigger:hover {
+  background: var(--chat-surface);
+  color: var(--n-12);
+}
+
+.chat-picker {
+  position: relative;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  margin-block-start: 0.5rem;
+  padding: 0.25rem 0.375rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-full);
+  background: var(--chat-surface);
+  box-shadow: 0 8px 24px -6px var(--chat-shadow), 0 2px 6px var(--chat-shadow-soft);
+  animation: chat-pop var(--d-popover) var(--ease-pop);
+}
+
+.chat-picker__emoji,
+.chat-picker__action {
+  display: grid;
+  place-items: center;
+  width: 2.375rem;
+  height: 2.375rem;
+  border-radius: var(--r-full);
+  font-size: 1.25rem;
+  line-height: 1;
+  transition:
+    transform 120ms var(--ease-out),
+    background-color var(--d-hover) var(--ease);
+}
+
+.chat-picker__emoji:hover {
+  transform: scale(1.22);
+}
+
+.chat-picker__emoji[aria-pressed='true'] {
+  background: color-mix(in oklab, var(--a-9) 24%, transparent);
+}
+
+.chat-picker__action {
+  color: var(--n-11);
+}
+
+.chat-picker__action:hover {
+  background: var(--chat-surface-2);
+  color: var(--n-12);
+}
+
+.chat-picker__action--danger:hover {
+  color: var(--err);
+}
+
+.chat-picker__rule {
+  width: 1px;
+  height: 1.25rem;
+  margin-inline: 0.125rem;
+  background: var(--border);
+}
+
+/* ── editing in place ───────────────────────────────────────────────────── */
+
+.chat-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(32rem, 70vw);
+}
+
+.chat-edit__field {
+  background: var(--n-1);
+  color: var(--n-12);
+}
+
+.chat-edit__cancel {
+  font-size: var(--fs-text-sm);
+  opacity: 0.75;
+}
+
+.chat-edit__cancel:hover {
+  opacity: 1;
+}
+
+/* ── attachments ────────────────────────────────────────────────────────── */
+
+.chat-media {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 0.875rem;
+}
+
+.chat-media img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 22rem;
+  object-fit: cover;
+}
+
+.chat-file {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  /* A FIXED floor, not a percentage: the bubble shrink-wraps this card, so a
+     percentage would resolve against a width derived from the card itself.
+     13.5rem fits the narrowest bubble a 360px phone produces. */
+  min-width: 13.5rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.875rem;
+  transition: background-color var(--d-hover) var(--ease);
+}
+
+.chat-file--other {
+  background: var(--chat-surface-2);
+  color: var(--n-12);
+}
+
+.chat-file--own {
+  background: color-mix(in oklab, var(--on-accent-ink) 9%, transparent);
+  color: var(--chat-own-ink);
+}
+
+.chat-file--other:hover {
+  background: color-mix(in oklab, var(--a-9) 12%, var(--chat-surface-2));
+}
+
+.chat-file--own:hover {
+  background: color-mix(in oklab, var(--on-accent-ink) 15%, transparent);
+}
+
+.chat-file__tile {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+}
+
+.chat-file--other .chat-file__tile {
+  background: linear-gradient(160deg, var(--a-9), var(--a-10));
+  color: var(--on-accent-ink);
+}
+
+.chat-file--own .chat-file__tile {
+  background: var(--on-accent-ink);
+  color: var(--a-9);
+}
+
+.chat-file__ext {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.02em;
+}
+
+.chat-file__name {
+  display: block;
+  overflow: hidden;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-file__size {
+  display: block;
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: end;
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  line-height: var(--lh-mono-label);
+  opacity: 0.7;
+}
+
+.chat-file__action {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, currentColor 9%, transparent);
+}
+
+/* The file of a reply still on its way — a name, nothing to open yet. */
+.chat-pending-file {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 18rem;
+  padding: 0.375rem 0.5rem;
+  font-size: var(--fs-text-sm);
+}
+
+/* ── voice notes ────────────────────────────────────────────────────────── */
+
+.chat-voice {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 13.5rem;
+  padding: 0.3125rem 0.375rem 0.125rem;
+}
+
+.chat-voice__play {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--r-full);
+  transition: transform 120ms var(--ease-out);
+}
+
+.chat-voice__play:active {
+  transform: scale(0.94);
+}
+
+.chat-voice--other .chat-voice__play {
+  background: linear-gradient(160deg, var(--a-9), var(--a-10));
+  box-shadow: 0 3px 10px -4px var(--chat-own-glow);
+  color: var(--on-accent-ink);
+}
+
+.chat-voice--own .chat-voice__play {
+  background: var(--on-accent-ink);
+  color: var(--a-9);
+}
+
+/* Media controls read left-to-right in every language — a timeline is not
+   text, and a scrubber that ran backwards for an Arabic reader would be the
+   odd one out among every player they own. */
+.chat-voice__track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 4rem;
+  height: 1.875rem;
+  direction: ltr;
+}
+
+.chat-voice__bars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+}
+
+.chat-voice__bar {
+  flex: 1 1 0;
+  min-height: 3px;
+  height: calc(var(--chat-bar) * 100%);
+  border-radius: var(--r-full);
+  transition: background-color 120ms linear;
+}
+
+.chat-voice--other .chat-voice__bar {
+  background: color-mix(in oklab, var(--n-10) 45%, transparent);
+}
+
+.chat-voice--other .chat-voice__bar[data-on='true'] {
+  background: var(--a-10);
+}
+
+.chat-voice--own .chat-voice__bar {
+  background: color-mix(in oklab, var(--on-accent-ink) 28%, transparent);
+}
+
+.chat-voice--own .chat-voice__bar[data-on='true'] {
+  background: var(--on-accent-ink);
+}
+
+.chat-voice__seek {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.chat-voice__seek:disabled {
+  cursor: default;
+}
+
+.chat-voice__track:has(.chat-voice__seek:focus-visible) {
+  border-radius: var(--r-sm);
+  outline: var(--focus-ring-width) solid currentColor;
+  outline-offset: 2px;
+}
+
+.chat-voice__clock {
+  direction: ltr;
+  unicode-bidi: isolate;
+  min-width: 2.25rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.chat-voice__mic {
+  display: grid;
+  place-items: center;
+  opacity: 0.6;
+}
+
+/* ── the transcript card (admin) ────────────────────────────────────────── */
+
+.chat-system {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  margin-block: 0.875rem;
+}
+
+.chat-transcript {
+  width: 100%;
+  max-width: min(42rem, 100%);
+  overflow: hidden;
+  border: 1px dashed var(--border-strong);
+  border-radius: 1rem;
+  background: var(--chat-surface);
+  box-shadow: 0 2px 10px -4px var(--chat-shadow-soft);
+}
+
+.chat-transcript__head {
+  padding: 0.625rem 1rem;
+  border-block-end: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--a-9) 10%, var(--chat-surface-2)), var(--chat-surface-2));
+}
+
+.chat-system__time {
+  color: var(--n-10);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── the jump-to-latest button ──────────────────────────────────────────── */
+
+.chat-jump {
+  position: absolute;
+  inset-block-end: 1rem;
+  inset-inline-end: 1rem;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-full);
+  background: var(--chat-surface);
+  box-shadow: 0 8px 22px -6px var(--chat-shadow), 0 2px 5px var(--chat-shadow-soft);
+  color: var(--n-11);
+  transition:
+    opacity var(--d-popover) var(--ease-out),
+    transform var(--d-popover) var(--ease-out),
+    color var(--d-hover) var(--ease);
+}
+
+.chat-jump:hover {
+  color: var(--n-12);
+}
+
+.chat-jump[data-visible='false'] {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0.5rem) scale(0.9);
+}
+
+.chat-jump__badge {
+  position: absolute;
+  inset-block-start: -0.375rem;
+  inset-inline-start: -0.25rem;
+  display: grid;
+  place-items: center;
+  min-width: 1.375rem;
+  height: 1.375rem;
+  padding-inline: 0.3125rem;
+  border-radius: var(--r-full);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  font-size: 0.6875rem;
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── the composer ───────────────────────────────────────────────────────── */
+
+.chat-composer {
+  position: relative;
+  flex-shrink: 0;
+  border-block-start: 1px solid var(--border-subtle);
+  background: color-mix(in oklab, var(--chat-surface) 92%, transparent);
+}
+
+.chat-composer__inner {
+  width: 100%;
+  max-width: 54rem;
+  margin-inline: auto;
+  padding: 0.625rem 0.75rem 0.75rem;
+}
+
+@media (min-width: 48rem) {
+  .chat--admin .chat-composer__inner {
+    padding: 0.75rem 1.5rem 0.875rem;
+  }
+}
+
+.chat-composer__progress {
+  position: absolute;
+  inset-block-start: -1px;
+  inset-inline: 0;
+  height: 3px;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--a-9) 18%, transparent);
+}
+
+.chat-composer__progress > span {
+  display: block;
+  height: 100%;
+  background: var(--a-9);
+  transition: width var(--d-hover) var(--ease-linear);
+}
+
+.chat-composer__status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-block-end: 0.5rem;
+  color: var(--n-11);
+  font-size: var(--fs-text-sm);
+}
+
+.chat-composer__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.chat-composer__field {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-end;
+  gap: 0.125rem;
+  min-width: 0;
+  padding: 0.1875rem 0.3125rem;
+  border: 1px solid var(--border);
+  border-radius: 1.375rem;
+  background: var(--n-1);
+  box-shadow: 0 1px 2px var(--chat-shadow-soft);
+  transition:
+    border-color var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease);
+}
+
+.chat-composer__field:focus-within {
+  border-color: color-mix(in oklab, var(--a-9) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--a-9) 22%, transparent);
+}
+
+.chat-composer__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.375rem;
+  border: 0;
+  background: transparent;
+  color: var(--n-12);
+  font-size: var(--fs-text-base);
+  line-height: var(--lh-text-base);
+  resize: none;
+  outline: none;
+}
+
+.chat-composer__input::placeholder {
+  color: var(--n-10);
+}
+
+.chat-icon-button {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--r-full);
+  color: var(--n-10);
+  transition:
+    background-color var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease);
+}
+
+.chat-icon-button:hover:not(:disabled) {
+  background: var(--chat-surface-2);
+  color: var(--n-12);
+}
+
+.chat-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.chat-send {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2.875rem;
+  height: 2.875rem;
+  border-radius: var(--r-full);
+  background: linear-gradient(160deg, var(--a-9), var(--a-10));
+  box-shadow: 0 6px 16px -6px var(--chat-own-glow), 0 1px 2px var(--chat-shadow-soft);
+  color: var(--on-accent-ink);
+  transition:
+    transform 120ms var(--ease-out),
+    opacity var(--d-hover) var(--ease),
+    filter var(--d-hover) var(--ease);
+}
+
+.chat-send:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.chat-send:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.chat-send:disabled {
+  cursor: not-allowed;
+  box-shadow: none;
+  opacity: 0.45;
+}
+
+/* The arrow points the way the words travel: toward the inline END. */
+.chat-send__icon:dir(rtl) {
+  scale: -1 1;
+}
+
+.chat-send:focus-visible,
+.chat-icon-button:focus-visible,
+.chat-jump:focus-visible,
+.chat-react-trigger:focus-visible,
+.chat-voice__play:focus-visible,
+.chat-picker__emoji:focus-visible,
+.chat-picker__action:focus-visible,
+.chat-composer__close:focus-visible {
+  outline: var(--focus-ring-width) solid var(--a-9);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.chat-staged {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-block-end: 0.5rem;
+  padding: 0.375rem 0.375rem 0.375rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--n-1);
+}
+
+.chat-staged__icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.625rem;
+  background: color-mix(in oklab, var(--a-9) 18%, transparent);
+  color: var(--a-11);
+}
+
+.chat-staged__size {
+  display: block;
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: end;
+  color: var(--n-10);
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-label);
+}
+
+.chat-composer__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.375rem 1rem;
+  margin-block-start: 0.5rem;
+  padding-inline: 0.25rem;
+}
+
+.chat-composer__hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.875rem;
+  margin: 0;
+  color: var(--n-10);
+  font-size: var(--fs-text-xs);
+  line-height: var(--lh-text-xs);
+}
+
+/* The ceilings are the server's to enforce and it says so when one is hit
+   (`attachTooLarge`); on a phone the line wrapped into a bidi tangle of
+   brackets under the box, so it is a desktop courtesy. */
+@media (max-width: 40rem) {
+  .chat-composer__limits {
+    display: none;
+  }
+}
+
+.chat-keys kbd {
+  display: inline-block;
+  direction: ltr;
+  unicode-bidi: isolate;
+  padding: 0 0.3125rem;
+  border: 1px solid var(--border);
+  border-block-end-width: 2px;
+  border-radius: var(--r-xs);
+  background: var(--chat-surface-2);
+  color: var(--n-11);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+
+/* No keyboard, no keycaps: on a phone Enter is a new line (see `onKeyDown`). */
+@media (pointer: coarse) {
+  .chat-keys {
+    display: none;
+  }
+}
+
+.chat-composer__close {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  color: var(--n-11);
+  font-size: var(--fs-text-xs);
+  transition:
+    border-color var(--d-hover) var(--ease),
+    color var(--d-hover) var(--ease);
+}
+
+.chat-composer__close:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--n-12);
+}
+
+.chat-closed {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.875rem 1.25rem;
+  border-block-start: 1px solid var(--border-subtle);
+  background: var(--chat-surface);
+}
+
+.chat-closed--center {
+  justify-content: center;
+  margin: 0;
+  color: var(--n-11);
+  font-size: var(--fs-text-sm);
+  text-align: center;
+}
+
+.chat-closed__note {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  color: var(--n-11);
+  font-size: var(--fs-text-sm);
+}
+
+/* ── the student's panel: who is on the other end ───────────────────────── */
+
+.chat-peer {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.875rem;
+  border-block-end: 1px solid var(--border-subtle);
+  background: var(--chat-surface);
+}
+
+.chat-peer__name {
+  display: block;
+  color: var(--n-12);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-text-sm);
+}
+
+.chat-peer__role {
+  display: block;
+  color: var(--n-11);
+  font-size: var(--fs-text-xs);
+  line-height: var(--lh-text-xs);
+}
+
+/* ── motion ─────────────────────────────────────────────────────────────── */
+
+.chat-row--pending {
+  animation: chat-in var(--d-popover) var(--ease-out);
+}
+
+.chat-row--pending .chat-bubble {
+  opacity: 0.85;
+}
+
+@keyframes chat-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem) scale(0.98);
+  }
+}
+
+@keyframes chat-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
