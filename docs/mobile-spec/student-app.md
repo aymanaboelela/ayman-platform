@@ -1749,6 +1749,7 @@ scrubber, watch-time alone by leaving the tab playing in the background.
 | `postHeartbeat` | `POST /api/lessons/{id}/heartbeat` `{position, delta}` → `HeartbeatResponse` |
 | `postDwell` | `POST /api/lessons/{id}/dwell` `{}` → `HeartbeatResponse` |
 | `postComplete` | `POST /api/lessons/{id}/complete` `{}` → `HeartbeatResponse` |
+| `deleteComplete` (`lib/progress-undo-client.ts`) | `DELETE /api/lessons/{id}/complete` (no body) → `HeartbeatResponse`; 400 unless `isCompletionUndoable` |
 
 `EmptyBodySchema` = `z.object({}).strict()` — the manual button carries no payload.
 
@@ -1784,6 +1785,18 @@ finally { setSaving(false) }
 Advancing after a failed write is what makes a progress hole invisible — the
 student ends up further along with a gap they only find weeks later when the
 course refuses to reach 100%.
+
+**Taking back «تم».** When the lesson is complete AND
+`isCompletionUndoable(...)` (`@ayman/contracts/completion-undo`) is true — a
+`manual` completion, on a video, not since watched to both thresholds — the
+disabled «تم» is replaced by `UndoCompleteButton`: an enabled `--ok`-tinted «تم»
+that opens a dialog (`copy.player.undoTitle` / `undoBody`, buttons
+`undoConfirm` «أيوه، نرجّعه» and `undoCancel` «لأ، يفضل زي ما هو»), with
+`copy.player.undoHint` under the button. The yes calls `deleteComplete`, hands
+the response to `onProgress`, and refreshes — no navigation. A failure keeps the
+dialog open with `undoFailed`. Every other «تم» (`auto`, `dwell`, quiz, text,
+attachment) stays the disabled badge: the server refuses the undo for all of
+them.
 
 Other player state words: `copy.player.inProgress` «شغّال»,
 `copy.player.notStarted` «لسه», `copy.player.eyebrow` «09 / المشغّل».
@@ -3564,6 +3577,7 @@ Auth (better-auth): `POST /api/auth/sign-up/email`, `/sign-in/email`,
 | `GET /api/lessons/{lessonId}/player` | lesson player |
 | `GET /api/lessons/{lessonId}/resources/{resourceId}/view` and `/download` | resources |
 | `POST /api/lessons/{id}/open`, `/heartbeat`, `/dwell`, `/complete` | progress |
+| `DELETE /api/lessons/{id}/complete` | «نرجّع الدرس؟» — undo a manual completion |
 | `GET /api/quiz/lessons/{lessonId}` | quiz intro |
 | `POST /api/quiz/quizzes/{quizId}/attempts` | start an attempt |
 | `POST /api/quiz/attempts/{attemptId}/resume` | the runner, every load |

@@ -3182,6 +3182,28 @@ export const copy = {
      */
     markFailed: 'ماتسجّلش إن الدرس خلص. تأكيد على النت ودوسة تانية.',
     completed: 'تم',
+    /**
+     * «تم» → «نرجّع الدرس؟» — «في ناس بتضغط بالغلط».
+     *
+     * Only ever shown for a lecture finished with the button and not since
+     * watched (`isCompletionUndoable`); every other «تم» stays a badge.
+     *
+     * FLAT keys, not an `undo: {…}` group, and on purpose: a tab that outlived
+     * the deploy keeps the OLD `copy` object (see `completion-undo.ts`), and
+     * `copy.player.undo.title` there is a TypeError at render where
+     * `copy.player.undoTitle` is merely an empty string.
+     *
+     * Neither the reader's gender nor an imperative: «نرجّعه» is the inclusive
+     * plural and «يفضل» is about the lesson, where «رجّعه»/«سيبه» would each
+     * only be said to a boy.
+     */
+    undoHint: 'اتداس بالغلط؟ دوسة على «تم» وبيرجع.',
+    undoTitle: 'نرجّع الدرس لـ«لسه ماخلصش»؟',
+    undoBody: 'علامة «تم» هتتشال من الدرس، ونسبة تقدّمك في الكورس هتنزل معاها.',
+    undoConfirm: 'أيوه، نرجّعه',
+    undoCancel: 'لأ، يفضل زي ما هو',
+    undoing: 'بنرجّعه…',
+    undoFailed: 'الدرس مارجعش — ممكن النت يكون فصل. نجرّب تاني.',
     inProgress: 'شغّال',
     notStarted: 'لسه',
     play: 'تشغيل الفيديو',

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { isCompletionUndoable } from '@ayman/contracts/completion-undo';
 import { copy } from '@ayman/contracts/copy';
 import type { HeartbeatResponse, LessonPlayer } from '@ayman/contracts/progress';
 import { postOpen } from '@/lib/progress-client';
@@ -46,6 +47,21 @@ export function LessonPlayerView({ payload, watermark = null }: LessonPlayerProp
   const onError = useCallback(() => setSaveFailed(true), []);
   const isComplete = progress.completedAt != null;
   const isQuiz = payload.lesson.kind === 'quiz';
+  /*
+    From the `progress` STATE, unlike `resumeAt` below — this has to follow
+    the heartbeats. A lecture finished with the button and then watched to the
+    end anyway stops being undoable mid-video — the server refuses it from
+    then on, since un-finishing a row past both thresholds would last exactly
+    one heartbeat — and «تم» should turn back into a badge the moment that
+    happens rather than on the next page load.
+  */
+  const undoable = isCompletionUndoable({
+    kind: payload.lesson.kind,
+    completedVia: progress.completedVia,
+    durationSeconds: payload.video?.durationSeconds ?? 0,
+    watchedSeconds: progress.watchedSeconds,
+    maxPositionSeconds: progress.maxPositionSeconds,
+  });
 
   return (
     <div className="space-y-6">
@@ -186,6 +202,7 @@ export function LessonPlayerView({ payload, watermark = null }: LessonPlayerProp
         // one server-side too — this only stops us from drawing a control whose
         // press is now a 400.
         manualComplete={!isQuiz}
+        undoable={undoable}
         onProgress={onProgress}
       />
     </div>
