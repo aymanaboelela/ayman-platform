@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { compressImage } from './image-compress';
+import { ALLOWED_UPLOAD_EXT } from '@ayman/contracts/admin/media';
+import { compressImage, sniffImageExtension } from './image-compress';
 
 /**
  * jsdom has no canvas encoder and no `createImageBitmap`, so these cases pin
@@ -120,5 +121,64 @@ describe('compressImage', () => {
     expect(out.name).toBe('IMG_0421.jpg');
     expect(out.type).toBe('image/jpeg');
     expect(out.size).toBeLessThan(5_000_000);
+  });
+});
+
+/**
+ * «ارفع الواجب بيقول الملف غير مدعوم» — a photo the API would refuse for its
+ * NAME (`.jfif`, `.bmp`, none) or its empty TYPE must still arrive as something
+ * the API takes, even when the re-encode is not smaller.
+ */
+describe('compressImage — files the API would refuse as they are', () => {
+  const JPEG = [0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1];
+  const HEIC = [0, 0, 0, 0x18, ...'ftypheic'.split('').map((c) => c.charCodeAt(0)), 0, 0, 0, 0];
+
+  function bytesFile(bytes: number[], name: string, type: string): File {
+    return new File([new Uint8Array(bytes)], name, { type });
+  }
+
+  it('keeps the same extension list as the API gate', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const source = readFileSync(join(import.meta.dirname, 'image-compress.ts'), 'utf8');
+    const listed = /API_EXTENSIONS = new Set\(\[([^\]]+)\]\)/.exec(source)?.[1] ?? '';
+    const ours = listed.split(',').map((s) => s.trim().replace(/'/g, '')).filter(Boolean).sort();
+    expect(ours).toEqual([...ALLOWED_UPLOAD_EXT].sort());
+  });
+
+  it('re-encodes a .jfif even when the JPEG comes out BIGGER', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 10, height: 10, close: () => undefined })));
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      fillRect: () => undefined,
+      drawImage: () => undefined,
+      fillStyle: '',
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(function (this: HTMLCanvasElement, cb: BlobCallback) {
+      cb(new Blob([new Uint8Array(99_999)], { type: 'image/jpeg' }));
+    });
+    const out = await compressImage(bytesFile(JPEG, 'واجب.jfif', 'image/jpeg'));
+    expect(out.name).toBe('واجب.jpg');
+    expect(out.type).toBe('image/jpeg');
+  });
+
+  it('names a HEIC the browser cannot draw by its bytes, so the API decodes it', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => {
+      throw new Error('unsupported');
+    }));
+    const out = await compressImage(bytesFile(HEIC, 'image', ''));
+    expect(out.name).toBe('image.heic');
+    expect(out.type).toBe('image/heic');
+  });
+
+  it('names a JPEG with no usable extension .jpg when nothing can re-encode it', async () => {
+    vi.stubGlobal('createImageBitmap', undefined);
+    const out = await compressImage(bytesFile(JPEG, 'IMG-20260929-WA0003', ''));
+    expect(out.name).toBe('IMG-20260929-WA0003.jpg');
+  });
+
+  it('sniffs the formats a phone writes', async () => {
+    expect(await sniffImageExtension(bytesFile(JPEG, 'x', ''))).toBe('jpg');
+    expect(await sniffImageExtension(bytesFile(HEIC, 'x', ''))).toBe('heic');
+    expect(await sniffImageExtension(bytesFile([0x25, 0x50, 0x44, 0x46], 'x.pdf', 'application/pdf'))).toBeNull();
   });
 });
