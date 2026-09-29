@@ -2266,6 +2266,27 @@ const admin = {
        * ماكانش بيشتغل ولا مرة.
        */
       removeReasonPlaceholder: 'ليه بتشيله؟',
+      /**
+       * «متعمل دي دروب داون ليت فيها حاجات» — the reason is a choice, not a
+       * blank box. Every option is at least `STAFF_ROLE_REASON_MIN` characters
+       * (the server's bound; `staff-section.test.tsx` checks it), and
+       * «سبب تاني…» opens the free-text box for anything else.
+       */
+      reasonChoose: 'اختار السبب',
+      reasonOther: 'سبب تاني…',
+      reasonOtherLabel: 'اكتب السبب',
+      addReasons: [
+        'تصحيح الواجبات والامتحانات',
+        'الرد على رسايل الطلبة',
+        'رفع المحاضرات وتنظيم الكورسات',
+        'متابعة الطلبة والاشتراكات',
+        'تسجيل الحضور في السنتر',
+      ],
+      removeReasons: [
+        'الشغل معانا خلص',
+        'مش محتاجين صلاحيات اللوحة دلوقتي',
+        'الإضافة كانت بالغلط',
+      ],
       confirmRemove: 'أكّد الشيل',
       cancel: 'إلغاء',
       /** `{min}` من `STAFF_ROLE_REASON_MIN` — نفس الرقم اللي السيرفر بيقيس بيه. */

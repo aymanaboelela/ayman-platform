@@ -121,10 +121,14 @@ describe('staff search', () => {
 
     // الزرار التاني «ضيفه للفريق» — اللي تحت السبب.
     const confirm = () => screen.getAllByRole('button', { name: c.add }).at(-1)!;
-    fireEvent.change(screen.getByLabelText(c.reasonLabel), { target: { value: 'مساعد' } });
     expect(confirm()).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText(c.reasonLabel), { target: { value: 'مساعد تصحيح' } });
+    // «سبب تاني…» — the free text still has to be as long as the server wants.
+    fireEvent.change(screen.getByLabelText(c.reasonLabel), { target: { value: '__other__' } });
+    fireEvent.change(screen.getByLabelText(c.reasonOtherLabel), { target: { value: 'مساعد' } });
+    expect(confirm()).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(c.reasonOtherLabel), { target: { value: 'مساعد تصحيح' } });
     expect(confirm()).toBeEnabled();
     await act(async () => {
       fireEvent.click(confirm());
@@ -141,6 +145,33 @@ describe('staff search', () => {
  * الزرار كان بيبعت «—» كسبب والسيرفر بيطلب ٨ حروف، فالشيل ماكانش بيشتغل ولا
  * مرة. دلوقتي بيسأل عن السبب، وبيبعته هو.
  */
+/**
+ * «متعمل دي دروب داون ليت فيها حاجات» — the reason is a choice.
+ */
+describe('the reason dropdown', () => {
+  it('sends a ready reason in one choice, no typing', async () => {
+    searched.mockResolvedValue({ ok: true, rows: [{ id: 'amgad', name: 'أمجد سامي', phone: '+20101' }] });
+    roleSet.mockResolvedValue({ ok: true });
+    renderSection();
+
+    type('امجد');
+    await waitFor(() => expect(screen.getByText('أمجد سامي')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: c.add }));
+    fireEvent.change(screen.getByLabelText(c.reasonLabel), { target: { value: c.addReasons[0] } });
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: c.add }).at(-1)!);
+    });
+
+    expect(roleSet).toHaveBeenCalledWith('amgad', 'owner', c.addReasons[0]);
+  });
+
+  it('offers only reasons the server accepts as they are', () => {
+    for (const reason of [...c.addReasons, ...c.removeReasons]) {
+      expect(reason.trim().length).toBeGreaterThanOrEqual(8);
+    }
+  });
+});
+
 describe('removing an assistant', () => {
   it('asks for a reason first and sends that reason', async () => {
     roleSet.mockResolvedValue({ ok: true });
@@ -152,12 +183,12 @@ describe('removing an assistant', () => {
     const confirm = screen.getByRole('button', { name: c.confirmRemove });
     expect(confirm).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText(c.reasonLabel), { target: { value: 'خلص شغله معانا' } });
+    fireEvent.change(screen.getByLabelText(c.reasonLabel), { target: { value: c.removeReasons[0] } });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: c.confirmRemove }));
     });
 
-    expect(roleSet).toHaveBeenCalledWith('assistant', 'student', 'خلص شغله معانا');
+    expect(roleSet).toHaveBeenCalledWith('assistant', 'student', c.removeReasons[0]);
     await waitFor(() => expect(screen.getByText(c.removed)).toBeInTheDocument());
   });
 
@@ -166,7 +197,7 @@ describe('removing an assistant', () => {
     renderSection();
 
     fireEvent.click(screen.getByRole('button', { name: c.remove }));
-    fireEvent.change(screen.getByLabelText(c.reasonLabel), { target: { value: 'خلص شغله معانا' } });
+    fireEvent.change(screen.getByLabelText(c.reasonLabel), { target: { value: c.removeReasons[0] } });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: c.confirmRemove }));
     });
