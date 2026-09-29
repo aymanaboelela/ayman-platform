@@ -1,7 +1,8 @@
 /** The billing arithmetic, apart from the fetch — pure, so it is tested without the network. */
+import { R2_USD_PER_GB_MONTH, TENANT_VIDEO_PRICE_MULTIPLIER } from '@ayman/contracts/video';
 
-/** R2 Standard, per GB-month (decimal GB, as Cloudflare bills). */
-const USD_PER_GB_MONTH = 0.015;
+/** R2 Standard, per GB-month — one number for the whole product, in contracts. */
+const USD_PER_GB_MONTH = R2_USD_PER_GB_MONTH;
 const USD_PER_MILLION_CLASS_A = 4.5;
 const USD_PER_MILLION_CLASS_B = 0.36;
 
@@ -75,3 +76,16 @@ export function summarise(
   return { averageBytes, classA, classB, costUsd };
 }
 
+
+/**
+ * What the owner charges a row, as a multiple of what it costs him: 1 for his
+ * own stack, `TENANT_VIDEO_PRICE_MULTIPLIER` for every teacher's.
+ */
+export function priceMultiplier(tenantKey: string): number {
+  return tenantKey === 'ayman' ? 1 : TENANT_VIDEO_PRICE_MULTIPLIER;
+}
+
+/** A full month at what is stored now — «هيدفع كام في الشهر لو فضل كده». Storage only: requests are cents. */
+export function monthlyAtCurrentStorage(storedBytes: number, tenantKey: string): number {
+  return (storedBytes / 1e9) * USD_PER_GB_MONTH * priceMultiplier(tenantKey);
+}

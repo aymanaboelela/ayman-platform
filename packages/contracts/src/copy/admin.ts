@@ -4960,15 +4960,22 @@ const admin = {
      * the storage that lands on the owner's Cloudflare account.
      */
     usageTitle: 'فيديوهات المدرّسين — المساحة والتكلفة',
-    usageLead: 'الأرقام من كلاودفلير نفسه — نفس اللي الفاتورة بتتحسب منه. التخزين بـ٠٫٠١٥ دولار للجيجا في الشهر، والمشاهدة ببلاش.',
+    /** `{cost}` Cloudflare's rate, `{price}` what a teacher pays — both dollars per GB-month. */
+    usageLead: 'الأرقام من كلاودفلير نفسه. التخزين عليك بـ{cost} دولار للجيجا في الشهر، والمدرّس بيدفع الضعف: {price}. المشاهدة ببلاش.',
     usageSelf: 'منصتك',
     usageTeacher: 'المدرّس',
     usageStored: 'متخزّن دلوقتي',
     usageFiles: 'ملف',
+    /** Stored now × the row's rate: what a full month costs if nothing changes. */
+    usageMonthly: 'في الشهر بالمساحة دي',
     usageThisMonth: 'الشهر ده لحد دلوقتي',
     usageLastMonth: 'الشهر اللي فات',
-    usageTotal: 'الإجمالي',
-    usageFreeTier: 'أول ١٠ جيجا في الحساب كله ببلاش كل شهر، فالفاتورة الحقيقية ممكن تبقى أقل من الإجمالي ده.',
+    /** Under a teacher's name: the money columns are what he PAYS, not the cost. */
+    usageCharged: 'بسعر المدرّس (الضعف)',
+    /** Under «منصتك»: the money columns are the cost itself. */
+    usageAtCost: 'بالتكلفة',
+    usageTotal: 'هتحصّله من المدرّسين',
+    usageFreeTier: 'أول ١٠ جيجا في الحساب كله ببلاش كل شهر — دي بتقلّل فاتورتك إنت، مش حساب المدرّسين.',
     usageNotConfigured: 'الشاشة دي محتاجة مفتاح قراية من كلاودفلير عشان تجيب الأرقام.',
     usageNotConfiguredHint: 'اعمل API Token بصلاحية «Account Analytics: Read» على حسابك، وحطه في إعدادات ستاكك باسم:',
     usageFailed: 'كلاودفلير مردّش دلوقتي — جرّب تاني بعد شوية.',
@@ -5183,6 +5190,14 @@ const admin = {
     statCount: 'فيديو في محاضرات',
     statCost: 'تكلفة التخزين في الشهر تقريبًا',
     statCostHint: 'التخزين بـ٠٫٠١٥ دولار للجيجا في الشهر، والمشاهدة ببلاش.',
+    /**
+     * The same card on a teacher's stack — what HE pays, every month, at the
+     * price the owner charges (`TENANT_USD_PER_GB_MONTH`), not Cloudflare's.
+     */
+    statCostTenant: 'هتدفعها كل شهر',
+    /** `{price}` — dollars per GB-month, e.g. `0.03`. */
+    statCostTenantHint: '{price} دولار لكل جيجا متخزّنة، بتتحسب كل شهر على المساحة اللي فوق. المشاهدة ببلاش.',
+    perMonth: 'في الشهر',
     unitGb: 'جيجا',
     unitMb: 'ميجا',
     storageUnread: 'مقدرناش نقرا التخزين دلوقتي — المساحة هنا من غير الملفات الزيادة.',

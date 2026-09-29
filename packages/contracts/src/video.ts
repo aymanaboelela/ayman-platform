@@ -571,6 +571,24 @@ export interface LadderRung {
  */
 export const UPLOAD_CRF = 23;
 
+/**
+ * R2 Standard, per GB-month (decimal GB, as Cloudflare bills). Egress is free,
+ * so for a video bucket storage IS the bill.
+ */
+export const R2_USD_PER_GB_MONTH = 0.015;
+
+/**
+ * What a teacher on another stack pays per GB-month: twice the cost.
+ *
+ * The owner's decision, 2026-09-29: «بالنسبة لصبري وعادل تزوّد الضعف على السعر
+ * بتاع الجيجا، ويبقى ظاهر قدامه إنه هيدفع كل شهر». Their buckets sit on HIS
+ * Cloudflare account (their domains are zones there), so the invoice is his and
+ * this is the price he charges on. The teacher sees this number on his own
+ * «الفيديوهات» screen; the owner sees both on «منصات المدرّسين».
+ */
+export const TENANT_VIDEO_PRICE_MULTIPLIER = 2;
+export const TENANT_USD_PER_GB_MONTH = R2_USD_PER_GB_MONTH * TENANT_VIDEO_PRICE_MULTIPLIER;
+
 export const UPLOAD_LADDER: readonly LadderRung[] = [
   { height: 1080, maxKbps: 4200, audioKbps: 128 },
   { height: 720, maxKbps: 2400, audioKbps: 128 },
