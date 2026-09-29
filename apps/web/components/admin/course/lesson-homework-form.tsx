@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { NotebookPen } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { DEFAULT_HOMEWORK_IMAGES, MAX_HOMEWORK_IMAGES } from '@ayman/contracts/homework';
@@ -14,6 +14,7 @@ import {
   removeLessonHomeworkAction,
   setLessonHomeworkAction,
 } from '@/app/(admin)/admin/courses/actions';
+import { clearDraft, readDraft, writeDraft } from '@/lib/session-draft';
 import { ConfirmButton } from './confirm-button';
 import { useAutosave } from './autosave';
 
@@ -58,10 +59,47 @@ export function LessonHomeworkForm({
    *  already fetched — so the panel can say «فيه ٤ مستنيين» without a request. */
   pendingCount: number;
 }) {
+  /*
+   * The body survives a reload in this tab until the server has it — see
+   * `lib/session-draft.ts`. The case is a deploy mid-sentence: the autosave
+   * fails on a Server Action id that no longer exists, the toast offers
+   * «تحديث دلوقتي», and without this the reload that fixes the save discarded
+   * the very text it was trying to save.
+   */
+  const draftField = `homework-body-${lessonId}`;
   const [draft, setDraft] = useState<LessonHomeworkDraft | null>(homework);
   const { save } = useAutosave<LessonHomeworkDraft>({
-    onSave: (value) => setLessonHomeworkAction(courseId, lessonId, value),
+    onSave: async (value) => {
+      const result = await setLessonHomeworkAction(courseId, lessonId, value);
+      // Only when what landed is what is kept: a save that lands while newer
+      // text is still waiting must not wipe the newer text.
+      if (result.ok && readDraft(draftField) === value.body) clearDraft(draftField);
+      return result;
+    },
   });
+
+  /*
+   * The kept text, read through `useSyncExternalStore` so the server render
+   * and hydration see `undefined` ("not readable here") and the client reads
+   * `sessionStorage` only after — a draft restored during hydration would be a
+   * mismatch, since the server rendered the saved body.
+   *
+   * Adopted ONCE, in render (`restored` latches it), rather than copied across
+   * by an effect: `react-hooks/set-state-in-effect` rejects that shape, and
+   * `message-bubble.tsx` records why. Only the SAVE waits for an effect, since
+   * it is a side effect and not state.
+   */
+  const kept = useSyncExternalStore(noopSubscribe, () => readDraft(draftField), () => undefined);
+  const [restored, setRestored] = useState<LessonHomeworkDraft | null | undefined>(undefined);
+  if (restored === undefined && kept !== undefined) {
+    const next = kept !== null && kept !== (draft?.body ?? '') ? { ...(draft ?? BLANK), body: kept } : null;
+    setRestored(next);
+    if (next) setDraft(next);
+  }
+  useEffect(() => {
+    // The same three-character floor `update` applies below.
+    if (restored && restored.body.trim().length >= 3) save(restored);
+  }, [restored, save]);
 
   function update(patch: Partial<LessonHomeworkDraft>) {
     setDraft((current) => {
@@ -120,7 +158,10 @@ export function LessonHomeworkForm({
           maxLength={4000}
           value={draft.body}
           placeholder={c.bodyPlaceholder}
-          onChange={(event) => update({ body: event.target.value })}
+          onChange={(event) => {
+            writeDraft(draftField, event.target.value);
+            update({ body: event.target.value });
+          }}
         />
       </div>
 
@@ -166,7 +207,10 @@ export function LessonHomeworkForm({
           // through it without reading.
           onConfirm={async () => {
             const result = await removeLessonHomeworkAction(courseId, lessonId);
-            if (result.ok) setDraft(null);
+            if (result.ok) {
+              clearDraft(draftField);
+              setDraft(null);
+            }
             return result;
           }}
         />
@@ -174,6 +218,8 @@ export function LessonHomeworkForm({
     </section>
   );
 }
+
+const noopSubscribe = () => () => {};
 
 const BLANK: LessonHomeworkDraft = {
   body: '',
