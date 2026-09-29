@@ -282,13 +282,13 @@ const admin = {
      * moves when it flips.
      */
     contentComplete: 'المنهج نزل كله',
-    /** The switch beside the name drawn over an uploaded lecture. */
+    /** The switch beside the name drawn over a lecture — uploaded or on YouTube, since both wear our player now. */
     watermarkPhone: 'اظهر رقم الطالب على الفيديو',
     watermarkPhoneHint:
       'علّمها لو عايز رقم الطالب يظهر جنب اسمه — عشان لو حد صوّر الشاشة ونزّلها يبان مين.',
     watermarkName: 'اظهر اسم الطالب على الفيديو',
     watermarkNameHint:
-      'اسم الطالب بيتحرك على الفيديو، فلو حد صوّر الشاشة يبان الفيديو خرج من حساب مين. شيل العلامة لو مش عايزه يظهر في الكورس ده.',
+      'اسم الطالب بيتحرك على الفيديو — المرفوع واللي على يوتيوب — فلو حد صوّر الشاشة يبان الفيديو خرج من حساب مين. شيل العلامة لو مش عايزه يظهر في الكورس ده.',
     contentCompleteHint:
       'سيبها فاضية طول ما لسه فيه محاضرات جاية. لغاية ما تعلّمها، الطالب اللي خلّص اللي نازل هيقرا «خلّصت اللي نزل» مش «خلصت الكورس».',
     /** The «⋯» trigger in the editor bar: archive, delete, and the video check. */
@@ -1003,6 +1003,9 @@ const admin = {
     passGrade: 'درجة النجاح ٪',
     poster: 'صورة المحاضرة',
     posterHint: 'بتظهر قبل ما الفيديو يشتغل. لو سيبتها فاضية هتظهر صورة يوتيوب.',
+    /** The same picker on an UPLOADED lecture — empty means the encoder's own frame. */
+    posterUploadHint: 'بتظهر للطالب قبل ما يدوس تشغيل. لو سيبتها فاضية هتظهر لقطة من الفيديو نفسه.',
+    posterSaved: 'اتحفظت صورة المحاضرة',
     // The quiz link is no longer gated on `kind === 'quiz'`, so it has to say
     // which of the two situations it is: open the quiz, or start one.
     addQuiz: 'إضافة اختبار للمحاضرة',

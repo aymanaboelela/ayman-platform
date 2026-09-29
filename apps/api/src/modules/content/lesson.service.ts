@@ -396,6 +396,30 @@ export class LessonService {
    * completion rule already read that column — and the original length is
    * kept in `full_duration_seconds` so the trim can always be undone.
    */
+  /**
+   * The picture the student sees before pressing play, on an uploaded lecture.
+   * `null` puts back the frame the encoder cut (`v/<id>/poster.jpg`) — the
+   * player falls back to it whenever this is empty.
+   */
+  async setUploadPoster(lessonId: string, posterKey: string | null): Promise<{ posterKey: string | null }> {
+    const row = await this.prisma.lessonVideo.findUnique({
+      where: { lessonId },
+      select: { provider: true },
+    });
+    if (row === null || row.provider !== 'upload') {
+      throw new BadRequestException('الصورة دي للفيديو المرفوع — صورة فيديو يوتيوب بتتحفظ مع اللينك');
+    }
+    await this.prisma.lessonVideo.update({ where: { lessonId }, data: { posterKey } });
+    await this.audit.record({
+      action: 'lesson:update',
+      resourceType: AUDIT_RESOURCES.lesson,
+      resourceId: lessonId,
+      outcome: 'success',
+      metadata: { operation: 'setUploadPoster', posterKey },
+    });
+    return { posterKey };
+  }
+
   async setTrim(lessonId: string, trim: VideoTrim | null): Promise<{ durationSeconds: number }> {
     const row = await this.prisma.lessonVideo.findUnique({
       where: { lessonId },

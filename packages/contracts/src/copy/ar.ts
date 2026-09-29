@@ -3134,7 +3134,9 @@ export const copy = {
     /**
      * Our own player's controls — the uploaded lectures, where the browser's
      * built-in bar was replaced so nothing on it offers «تنزيل», and so the
-     * name over the picture stays there in fullscreen too.
+     * name over the picture stays there in fullscreen too. And the YouTube
+     * lectures since the shield: YouTube draws no bar there any more, because
+     * its bar is where the copy-link button lives.
      */
     controls: {
       play: 'تشغيل',
@@ -3151,6 +3153,13 @@ export const copy = {
       quality: 'الجودة',
       qualityAuto: 'تلقائي',
       qualityAutoNow: 'تلقائي ({height}p)',
+      /**
+       * YouTube's CC button went with its bar, so ours carries one — only on
+       * a video that has captions at all. Nouns, like the rest of the bar,
+       * so the label never has to guess who is pressing it.
+       */
+      captionsShow: 'إظهار الترجمة',
+      captionsHide: 'إخفاء الترجمة',
     },
     outline: 'محتوى الكورس',
     previous: 'الدرس السابق',

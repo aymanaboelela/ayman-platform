@@ -1,7 +1,8 @@
 /**
  * A hand-written slice of the YouTube IFrame Player API instead of a typings
  * package: this is the entire surface we use, it is stable, and a dependency
- * whose whole job is to describe six methods is not worth the supply chain.
+ * whose whole job is to describe a couple of dozen methods is not worth the
+ * supply chain.
  */
 export const YT_STATE = {
   UNSTARTED: -1,
@@ -39,6 +40,51 @@ export interface YouTubePlayer {
 }
 
 /**
+ * The player the IFrame API actually builds — everything `YouTubePlayer` has,
+ * plus the controls our own bar drives now that YouTube draws none.
+ *
+ * A separate interface rather than more methods on `YouTubePlayer`, because
+ * that one is also the CONTRACT the heartbeat reads, and `mirror-video.tsx`
+ * satisfies it with an adapter over a `<video>`. Widening it would make that
+ * adapter implement a volume API nobody calls on it.
+ *
+ * Only valid from `onReady` on: the object the constructor returns is a shell
+ * whose methods are attached once the frame has answered.
+ *
+ * https://developers.google.com/youtube/iframe_api_reference#Functions
+ */
+export interface YouTubeApiPlayer extends YouTubePlayer {
+  pauseVideo(): void;
+  /** `allowSeekAhead` true asks the server for bytes past the buffer. */
+  seekTo(seconds: number, allowSeekAhead: boolean): void;
+  /** 0–1, how much of the video the player has fetched. */
+  getVideoLoadedFraction(): number;
+  getPlaybackRate(): number;
+  setPlaybackRate(rate: number): void;
+  /** Per video — a live stream offers only `[1]`. */
+  getAvailablePlaybackRates(): number[];
+  /** 0–100, not 0–1 like `HTMLMediaElement.volume`. */
+  getVolume(): number;
+  setVolume(volume: number): void;
+  isMuted(): boolean;
+  mute(): void;
+  unMute(): void;
+  /**
+   * Captions — the one part of this surface Google never documented, and the
+   * only handle on them the API has ever had. `getOptions()` lists
+   * `'captions'` for a video that HAS caption tracks (on or off);
+   * `loadModule('captions')` shows them and `unloadModule('captions')` hides
+   * them. Measured against the live embed on 2026-09-29.
+   *
+   * Optional on purpose: undocumented means it can vanish, and when it does
+   * the bar simply draws no captions button (`youtube-shield.tsx`).
+   */
+  getOptions?(): string[];
+  loadModule?(module: 'captions'): void;
+  unloadModule?(module: 'captions'): void;
+}
+
+/**
  * What the player's frame is allowed to do.
  *
  * `fullscreen` is the load-bearing entry — see `video-lesson.tsx`'s `onReady`.
@@ -53,14 +99,14 @@ export interface YouTubePlayerOptions {
   host?: string;
   playerVars?: Record<string, string | number>;
   events?: {
-    onReady?: (event: { target: YouTubePlayer }) => void;
-    onStateChange?: (event: { data: number; target: YouTubePlayer }) => void;
+    onReady?: (event: { target: YouTubeApiPlayer }) => void;
+    onStateChange?: (event: { data: number; target: YouTubeApiPlayer }) => void;
     onError?: (event: { data: number }) => void;
   };
 }
 
 export interface YouTubeApi {
-  Player: new (element: HTMLElement | string, options: YouTubePlayerOptions) => YouTubePlayer;
+  Player: new (element: HTMLElement | string, options: YouTubePlayerOptions) => YouTubeApiPlayer;
 }
 
 declare global {

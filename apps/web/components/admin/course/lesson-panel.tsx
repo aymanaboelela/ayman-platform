@@ -21,6 +21,7 @@ import {
   setLessonMonthsAction,
   setLessonTextAction,
   setLessonVideoAction,
+  setUploadPosterAction,
   updateLessonAction,
 } from '@/app/(admin)/admin/courses/actions';
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
@@ -517,6 +518,30 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
         {/* The lecture itself first, once there is one to watch. */}
         {lesson.video?.provider === 'upload' && lesson.video.mirrorStatus === 'ready' ? (
           <UploadedVideoPreview externalId={lesson.video.externalId} />
+        ) : null}
+        {/*
+          «الصورة اللي أنا حاطّاها» — the picture the student sees before
+          pressing play. It lived only on the YouTube tab, so an uploaded
+          lecture could not have one; empty keeps the encoder's own frame.
+        */}
+        {lesson.video?.provider === 'upload' ? (
+          <MediaKeyField
+            name="uploadPosterKey"
+            id={`upload-poster-${lesson.id}`}
+            label={c.poster}
+            hint={c.posterUploadHint}
+            defaultValue={lesson.video.posterKey ?? null}
+            onChange={(key) => {
+              void setUploadPosterAction(courseId, lesson.id, key).then((result) => {
+                if (result.ok) {
+                  toast.success(c.posterSaved);
+                  router.refresh();
+                } else {
+                  toast.error(result.message);
+                }
+              });
+            }}
+          />
         ) : null}
         <VideoUpload
           courseId={courseId}

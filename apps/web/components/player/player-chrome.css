@@ -1,5 +1,8 @@
 /* =============================================================================
-   «النسخة اللي عندنا» — our own controls over the uploaded lecture.
+   Our own controls over a lecture — both kinds of it. `PlayerChrome` draws
+   them over our copy (`mirror-video.tsx`) and over YouTube's frame
+   (`youtube-shield.tsx`), so a student sees one player whichever source the
+   lesson happens to come from.
 
    The bar and the menu sit on the picture, so they are white on a dark scrim
    in every theme: a lecture is a dark rectangle whatever the page around it
@@ -107,24 +110,68 @@
  * The name over the picture. Faint enough not to be in the way of the
  * lecture, legible enough to survive a phone camera pointed at a screen —
  * the dark halo is what keeps it readable over a white slide.
+ *
+ * Two elements: `.mv-watermark` is a layer the size of the picture that
+ * MOVES (by `transform`, on the compositor — see `Watermark` in
+ * `player-chrome.tsx` for why the layer is full-size), and the name sits
+ * still in its corner.
  */
 .mv-watermark {
   position: absolute;
+  inset: 0;
   z-index: 5;
   pointer-events: none;
+  will-change: transform;
+  transition: transform 700ms ease-in-out;
+}
+
+.mv-watermark__name {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
   user-select: none;
   white-space: nowrap;
   color: rgb(255 255 255 / 0.4);
   font-size: clamp(0.7rem, 1.6vw, 1rem);
   font-weight: 600;
   text-shadow: 0 0 3px rgb(0 0 0 / 0.55);
-  transition:
-    inset-block-start 700ms ease-in-out,
-    inset-inline-start 700ms ease-in-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .mv-watermark {
     transition: none;
   }
+}
+
+/*
+ * «دوس على زرار يوتيوب» — the one tap the shield lets through.
+ *
+ * An iPhone will not start a YouTube embed from script until someone has
+ * touched the frame itself, and the shield exists so nobody can. So when a
+ * play we asked for has not started, the chrome cuts a hole the size of
+ * YouTube's own play button in its middle — and only there: the title and
+ * the copy-link button live along the edges, which stay covered. The hole
+ * closes for good the first time the video plays (see `youtube-shield.tsx`).
+ *
+ * `clip-path` and not a gap between four divs: a clipped-away area is also
+ * outside the element for hit-testing, so one rule makes the hole both
+ * invisible and tappable-through. `evenodd` is what turns the inner square
+ * into a hole instead of more of the same shape.
+ */
+.pc-keyhole {
+  --pc-hole-x: 3.5rem;
+  --pc-hole-y: 2.75rem;
+  clip-path: polygon(
+    evenodd,
+    0 0,
+    100% 0,
+    100% 100%,
+    0 100%,
+    0 0,
+    calc(50% - var(--pc-hole-x)) calc(50% - var(--pc-hole-y)),
+    calc(50% + var(--pc-hole-x)) calc(50% - var(--pc-hole-y)),
+    calc(50% + var(--pc-hole-x)) calc(50% + var(--pc-hole-y)),
+    calc(50% - var(--pc-hole-x)) calc(50% + var(--pc-hole-y)),
+    calc(50% - var(--pc-hole-x)) calc(50% - var(--pc-hole-y))
+  );
 }
