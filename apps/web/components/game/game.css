@@ -546,18 +546,23 @@
   background: rgb(0 0 0 / 0.35);
   border: 1px solid color-mix(in oklab, var(--print-gold) 50%, transparent);
 }
-/* على الموبايل «إجابة نهائية؟» بتلزق تحت فوق شريط التابات — من غيرها كانت
-   بتقع تحت الاختيارات وبرّه الشاشة. */
-@media (max-width: 899px) {
-  .mln-final {
-    position: sticky;
-    inset-block-end: 5.25rem;
-    z-index: 5;
-    background: color-mix(in oklab, var(--ink) 92%, transparent);
-    backdrop-filter: blur(8px);
-  }
-}
+/* ⚠️ مش sticky. كانت لازقة تحت الشاشة على الموبايل (عشان ماتقعش برّه)،
+   ولأن الـsticky بيتحط فوق اللي تحته، كانت بتغطّي آخر اختيارين وتاكل أي دوسة
+   عليهم وهي مفتوحة. دلوقتي تحت الاختيارات في مكانها، والصفحة بتنزل لها
+   (`scrollIntoView` في `lock`) — والمسافة دي عشان ماتقفش ورا شريط التابات. */
+.mln-final { scroll-margin-block-end: 6rem; }
 .mln-final__q { font-size: var(--fs-title-3); font-weight: var(--fw-bold); color: var(--ink-accent); }
+.mln-final__hint { font-size: var(--fs-text-xs); color: var(--ink-fg-2); }
+.mln-final__failed {
+  max-width: 30rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--err) 30%, transparent);
+  color: #fff;
+  font-size: var(--fs-text-sm);
+  text-align: center;
+}
+.mln-checking { text-align: center; font-weight: var(--fw-semibold); color: var(--ink-accent); letter-spacing: 0.04em; }
 .mln-final__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; }
 .mln-verdict { text-align: center; font-size: var(--fs-title-2); font-weight: var(--fw-bold); color: color-mix(in oklab, var(--err), #fff 35%); }
 .mln-verdict[data-right] { color: color-mix(in oklab, var(--ok), #fff 45%); }
@@ -638,6 +643,7 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .gm-mode[data-on] .gm-mode__icon { animation: gm-float 2.6s ease-in-out infinite; }
+  .mln-checking { animation: gm-blink 900ms ease-in-out infinite; }
   .mln-question { animation: gm-rise 420ms var(--ease-out) both; }
   .mln-options li { animation: gm-rise 380ms var(--ease-out) calc(var(--i) * 90ms + 200ms) both; }
   .mln[data-phase='checking'] .mln-option[data-state='locked'] { animation: mln-suspense 700ms ease-in-out infinite; }
