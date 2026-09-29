@@ -1051,7 +1051,8 @@
 
 /* In the rail the three rows are a small receipt on a tinted slip. Scoped:
    `BookOrderPanel` prints its own `.books-cart__row`s inside the checkout
-   dialog and on the course page, and those keep their plain rows. */
+   dialog and on the course page, and those keep their plain rows
+   (`globals.css`). */
 .books-cart .books-cart__totals {
   padding: 0.875rem 1rem;
   border: 0;
@@ -1059,29 +1060,17 @@
   background: var(--site-card-2);
 }
 
-.books-cart__row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  font-size: 0.875rem;
+/* `.books-cart__row` itself lives in `globals.css` — it is mostly drawn inside
+   the order DIALOG, which portals out of `.site` (see the banner there). These
+   are the rail's own touches, and the rail is inside `.site`. */
+.books-cart .books-cart__row {
   color: var(--site-fg-2);
 }
 
-.books-cart__row--total {
-  padding-top: 0.4375rem;
-  border-top: 1px dashed var(--site-line);
-  font-size: 1.0625rem;
-  font-weight: var(--fw-bold);
-  color: var(--site-fg);
-}
-
 .books-cart .books-cart__row--total {
+  border-top-color: var(--site-line);
   font-size: 1.125rem;
-}
-
-.books-cart__row span:last-child {
-  font-variant-numeric: tabular-nums;
+  color: var(--site-fg);
 }
 
 .books-cart__cta {
@@ -1290,26 +1279,8 @@
 
 /* ---------- checkout dialog ---------- */
 
-.books-checkout {
-  display: grid;
-  gap: 1rem;
-}
-
-/*
- * The basket, restated inside the checkout dialog.
- *
- * Not decoration: this is the last screen before someone types an address, and
- * it is the screen where «ليه ٥٦٥؟» gets asked. Repeating the lines here
- * costs nothing and answers it before it is asked.
- */
-.books-checkout__summary {
-  display: grid;
-  gap: 0.375rem;
-  padding: 0.875rem 1rem;
-  border-radius: 1rem;
-  border: 1px solid var(--site-line);
-  background: var(--site-card-2);
-}
+/* `.books-checkout` and `.books-checkout__summary` are in `globals.css`: the
+   dialog portals into `<body>`, where no `--site-*` token exists. */
 
 /* ---------------------------------------------------------------------------
    .books-strip — the landing page's books section.
