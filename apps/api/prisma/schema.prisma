@@ -3468,6 +3468,13 @@ model QuestionBankEntry {
   ownerId     String   @map("owner_id")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
+  /// «اتشال من البنك» — the soft delete. Set when an admin deletes a question
+  /// somebody already answered: it leaves the bank list, the slot picker, the
+  /// random pools and the games, and its versions stay exactly where every
+  /// past attempt and game answer points. A question nobody answered is
+  /// deleted outright instead — see `QuestionRemovalService`. NULL = in the
+  /// bank; «رجّعه للبنك» sets it back to NULL.
+  archivedAt  DateTime? @map("archived_at")
 
   category  QuestionCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   owner     User              @relation(fields: [ownerId], references: [id], onDelete: Restrict)

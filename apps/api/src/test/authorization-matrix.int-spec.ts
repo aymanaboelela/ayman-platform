@@ -839,6 +839,19 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin game banks: admin', method: 'get', path: () => '/api/admin/game-banks', actor: 'admin', status: 200 },
     { label: 'admin game bank ensure: student', method: 'post', path: () => `/api/admin/game-banks/${randomUUID()}`, actor: 'student', status: 403 },
     { label: 'admin game bank ensure: admin, unknown course', method: 'post', path: () => `/api/admin/game-banks/${randomUUID()}`, actor: 'admin', status: 404 },
+    // «امسح السؤال» من البنك — `question:write` زي باقي البنك. الخطة والمسح
+    // بياخدوا `{ ids }`؛ ids مش في البنك = خطة فاضية ومسح مالوش أثر (200)، مش
+    // خطأ — فصف الأدمن بيثبت إن الراوت بيعدّي الصلاحية من غير ما يلمس داتا.
+    { label: 'admin question delete-plan: anonymous', method: 'post', path: () => '/api/admin/questions/delete-plan', actor: 'anonymous', status: 401, body: () => ({ ids: [randomUUID()] }) },
+    { label: 'admin question delete-plan: student', method: 'post', path: () => '/api/admin/questions/delete-plan', actor: 'student', status: 403, body: () => ({ ids: [randomUUID()] }) },
+    { label: 'admin question delete-plan: admin, unknown ids', method: 'post', path: () => '/api/admin/questions/delete-plan', actor: 'admin', status: 200, body: () => ({ ids: [randomUUID()] }) },
+    { label: 'admin question delete-plan: admin, no ids', method: 'post', path: () => '/api/admin/questions/delete-plan', actor: 'admin', status: 400, body: () => ({ ids: [] }) },
+    { label: 'admin question delete: anonymous', method: 'post', path: () => '/api/admin/questions/delete', actor: 'anonymous', status: 401, body: () => ({ ids: [randomUUID()] }) },
+    { label: 'admin question delete: student', method: 'post', path: () => '/api/admin/questions/delete', actor: 'student', status: 403, body: () => ({ ids: [randomUUID()] }) },
+    { label: 'admin question delete: admin, unknown ids', method: 'post', path: () => '/api/admin/questions/delete', actor: 'admin', status: 200, body: () => ({ ids: [randomUUID()] }) },
+    { label: 'admin question restore: anonymous', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/restore`, actor: 'anonymous', status: 401 },
+    { label: 'admin question restore: student', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/restore`, actor: 'student', status: 403 },
+    { label: 'admin question restore: admin, unknown question', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/restore`, actor: 'admin', status: 404 },
     { label: 'game hub: student', method: 'get', path: () => '/api/me/game/hub', actor: 'student', status: 200 },
     { label: 'game voice: anonymous', method: 'get', path: () => `/api/me/game/voice/${randomUUID()}/stem`, actor: 'anonymous', status: 401 },
     // من غير مفتاح Azure (زي CI) أو برّه بنك الطالب — 404 في الحالتين.

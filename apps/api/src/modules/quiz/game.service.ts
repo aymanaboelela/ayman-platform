@@ -619,7 +619,10 @@ export class GameService {
           v."bank_entry_id", be."category_id"
         FROM allq q
         JOIN "app"."question_versions" v ON v."id" = q.vid AND v."type" IN ('mcq_single', 'true_false')
-        JOIN "app"."question_bank_entries" be ON be."id" = v."bank_entry_id"
+        -- سؤال اتشال من البنك («امسح السؤال» على سؤال حد حلّه) مابيدخلش أي
+        -- لعبة، من أي مصدر — لا من الكويزات اللي الطالب حلّها ولا من أسئلة
+        -- الألعاب. إجاباته القديمة في الإحصائيات زي ما هي.
+        JOIN "app"."question_bank_entries" be ON be."id" = v."bank_entry_id" AND be."archived_at" IS NULL
         JOIN "app"."courses" co ON co."id" = q.course_id AND co."status" = 'published'
         LEFT JOIN "app"."lessons" ls ON ls."id" = q.lesson_id
         LEFT JOIN "app"."course_sections" cs ON cs."id" = ls."section_id"

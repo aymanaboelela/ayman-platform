@@ -52,6 +52,10 @@ export const AUDIT_RESOURCES = {
   lessonVideo: 'lesson_videos',
   enrollment: 'enrollments',
   questionVersion: 'question_versions',
+  /// A bank question as a whole — «امسح السؤال» and «رجّعه للبنك». Keyed by the
+  /// ENTRY, not a version: the delete takes every version with it, and
+  /// «مين مسح السؤال ده» is asked about the question, not about one of its drafts.
+  questionBankEntry: 'question_bank_entries',
   /// «أسئلة الألعاب» — لعبة في كورس بتسحب منين. المعرّف `courseId:mode`.
   gameModeSetting: 'game_mode_settings',
   quiz: 'quizzes',

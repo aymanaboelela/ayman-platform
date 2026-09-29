@@ -54,6 +54,15 @@ export const AUDIT_ACTIONS = [
   'enrollment:override',
   // quiz (Plan 5, instrumented by the Task 3 retrofit)
   'question:publish',
+  // «امسح السؤال» from the bank. ONE action for both outcomes, with
+  // `metadata.mode` = `hard` (nobody ever answered it — the row is gone, and
+  // `metadata.stem` is the only place left that says what it was) or
+  // `archive` (somebody did — it left the bank and every result still renders).
+  // A question a quiz still holds is refused and writes nothing.
+  'question:delete',
+  // «رجّعه للبنك» — the undo for an archive. A hard delete has no undo, by
+  // design: nothing used it.
+  'question:restore',
   'quiz:publish',
   'quiz:answer-edit',
   // Re-points an existing quiz at another lesson. Logged because it moves
