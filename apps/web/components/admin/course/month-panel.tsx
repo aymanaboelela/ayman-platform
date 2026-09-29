@@ -7,6 +7,7 @@ import type { AdminCourseMonth } from '@ayman/contracts/months';
 import { copy } from '@ayman/contracts/copy/admin';
 import { isMonthlyExamLesson } from '@ayman/contracts/quiz/monthly-exam';
 import { formatCopy } from '@ayman/contracts/format';
+import { defaultMonthTitle } from '@ayman/contracts/month-title';
 import { Button } from '@ayman/ui/components/button';
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
@@ -402,12 +403,6 @@ function draftLecturesByMonth(sections: Section[]): Map<string, number> {
   return counts;
 }
 
-/** «شهر ٣» — Arabic-Indic digits, the shape every month on the course is
- *  named in (`copy.admin.month.firstMonthTitle`, and the API's `fill`). */
-function arabicDigits(value: number): string {
-  return String(value).replace(/\d/g, (digit) => '٠١٢٣٤٥٦٧٨٩'[Number(digit)] ?? digit);
-}
-
 /** «كمّل الشهور لحد ١٠» — the school year, which is what he named. */
 const FILL_UP_TO = 10;
 
@@ -483,7 +478,8 @@ export function MonthPanel({
     setPending(true);
     void createMonthAction(courseId, {
       monthIndex,
-      title: formatCopy(c.defaultTitle, { n: arabicDigits(monthIndex) }),
+      // «الشهر التالت», the name the API's `fill` gives too.
+      title: defaultMonthTitle(monthIndex),
       // Never open on creation — see `StartByMonth`. The tile's switch is
       // where a month goes on sale, after its lectures are in it.
       isOpen: false,
@@ -537,7 +533,7 @@ export function MonthPanel({
       <div className="flex flex-wrap items-center gap-2">
         {canFill ? (
           <Button type="button" size="sm" disabled={pending} onClick={fill}>
-            {formatCopy(c.fillCta, { n: arabicDigits(FILL_UP_TO) })}
+            {formatCopy(c.fillCta, { month: defaultMonthTitle(FILL_UP_TO) })}
           </Button>
         ) : null}
         <Button

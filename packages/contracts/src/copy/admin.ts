@@ -565,8 +565,9 @@ const admin = {
      *  because the term switch next door revokes and this one never has. */
     openedToast: '«{month}» اتفتح للاشتراك.',
     closedToast: '«{month}» اتقفل للاشتراك — اللي معاهم يفضلوا شايفينه.',
-    /** `{n}` — «١٠». The one press that fills the school year in, closed. */
-    fillCta: 'كمّل الشهور لحد شهر {n}',
+    /** `{month}` — «الشهر العاشر». The one press that fills the school
+     *  year in, closed. */
+    fillCta: 'كمّل الشهور لحد {month}',
     /** The months block's head chip — how many are on sale, at a glance. */
     openCount: 'مفتوح {open} من {total}',
     fillDone: 'تمام — الشهور الناقصة اتعملت، ومقفولة لحد ما تفتحها.',
@@ -657,7 +658,7 @@ const admin = {
      * The one press for a course that has NO months at all — which is every
      * course on the platform on the day this ships.
      *
-     * It makes «شهر ١» and puts every lecture in it, because that is the only
+     * It makes «الشهر الأول» and puts every lecture in it, because that is the only
      * shape the first month can have on a course that has been running: all
      * the content that exists is content the current cohort already paid to
      * see, and a second month does not exist yet. «كل ده شهر أول.»
@@ -665,23 +666,21 @@ const admin = {
      * The subscriber step stays separate and counted — this one touches no
      * access at all, so it needs no number in front of it.
      */
-    /** The name «شهر ١» is given, not asked for — the instructor renames it in
-     *  place a second later if he wants «شهر ١ — أكتوبر». Asking first would
-     *  put a form between him and the one press. */
-    firstMonthTitle: 'شهر ١',
-    /** `{n}` in Arabic-Indic digits — the name every month after the first is
-     *  born with, same shape as `firstMonthTitle`. Renamed in place. */
-    defaultTitle: 'شهر {n}',
+    /** The name the first month is given, not asked for — the instructor
+     *  renames it in place a second later if he wants «الشهر الأول — أكتوبر».
+     *  Asking first would put a form between him and the one press. Same
+     *  string `defaultMonthTitle(1)` makes (`@ayman/contracts/month-title`). */
+    firstMonthTitle: 'الشهر الأول',
     /** The 409 when «كمّل الشهور» is pressed on a course with no months at
      *  all — filling the year in must never be what turns a course over. */
-    fillNeedsFirst: 'الكورس ده لسه مش بيتباع بالشهور — ابدأ بشهر ١ الأول.',
+    fillNeedsFirst: 'الكورس ده لسه مش بيتباع بالشهور — ابدأ بالشهر الأول.',
     startCta: 'خلّي الكورس بالشهور',
-    /** `{n}` — lessons adopted into «شهر ١». The other nine months are made
+    /** `{n}` — lessons adopted into «الشهر الأول». The other nine months are made
      *  in the same press, closed, and the sentence says so. */
-    startDone: 'تمام — ١٠ شهور اتعملوا مقفولين، و{n} محاضرة اتحطت في «شهر ١». افتح «شهر ١» عشان الاشتراك الشهري يتباع.',
+    startDone: 'تمام — ١٠ شهور اتعملوا مقفولين، و{n} محاضرة اتحطت في «الشهر الأول». افتح «الشهر الأول» عشان الاشتراك الشهري يتباع.',
     /** The fill after it failed: month 1 exists, the other nine do not yet. */
-    startDoneFirstOnly: 'اتعمل «شهر ١» و{n} محاضرة اتحطت فيه، بس باقي الشهور ما اتعملتش — دوس «كمّل الشهور» تحت.',
-    startConfirm: 'هنعمل ١٠ شهور مقفولين ونحط كل محاضرات الكورس في «شهر ١». الاشتراك الشهري بعدها بيفتح شهر مش ٣٠ يوم، ومش هيتباع لحد ما تفتح شهر. تمام؟',
+    startDoneFirstOnly: 'اتعمل «الشهر الأول» و{n} محاضرة اتحطت فيه، بس باقي الشهور ما اتعملتش — دوس «كمّل الشهور» تحت.',
+    startConfirm: 'هنعمل ١٠ شهور مقفولين ونحط كل محاضرات الكورس في «الشهر الأول». الاشتراك الشهري بعدها بيفتح شهر مش ٣٠ يوم، ومش هيتباع لحد ما تفتح شهر. تمام؟',
     /** Every month closed on a course with a monthly price. */
     noneOpenWarning: 'مفيش ولا شهر مفتوح — يعني الاشتراك الشهري مش متاح للطلبة دلوقتي. افتح الشهر اللي عايز تبيعه.',
     setupNote: 'مفيش حاجة بتتسحب من حد — ده بيزوّد بس.',
@@ -3474,7 +3473,7 @@ const admin = {
     chartIncomeTitle: 'فلوس الاشتراكات كل يوم',
     chartIncomeHint: 'كل عمود يوم، ومقسوم على الكورسات. قبل المرتجع — المرتجع والصافي في الجدول تحت.',
     chartSubsTitle: 'الاشتراكات كل يوم',
-    chartSubsHint: 'جديد = أول دفعة للكورس ده من الحساب ده. تجديد = حساب دفع للكورس ده قبل كده ودفع تاني (زي شهر ٢ بعد شهر ١).',
+    chartSubsHint: 'جديد = أول دفعة للكورس ده من الحساب ده. تجديد = حساب دفع للكورس ده قبل كده ودفع تاني (زي الشهر الثاني بعد الأول).',
     seriesNew: 'جديد',
     seriesRenewal: 'تجديد',
     /** The fold for courses past the fourth — never a generated fifth hue. */
@@ -3534,7 +3533,7 @@ const admin = {
     studentWalletPaid: 'من المحفظة',
     /** `{amount}` — money given back against this payment. */
     refundedNote: 'رجع منها {amount}',
-    /** `{months}` — «شهر ١، شهر ٢». */
+    /** `{months}` — «الشهر الأول، الشهر الثاني». */
     boughtMonths: '{months}',
     goToDaily: 'الفلوس يوم بيوم',
   },

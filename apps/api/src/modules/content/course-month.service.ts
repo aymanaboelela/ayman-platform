@@ -8,7 +8,7 @@ import {
 } from '@ayman/contracts/admin/content-months';
 import { copy } from '@ayman/contracts/copy/admin';
 import { MONTHLY_EXAM_LESSON } from '@ayman/contracts/quiz/monthly-exam';
-import { formatCopy } from '@ayman/contracts/format';
+import { defaultMonthTitle } from '@ayman/contracts/month-title';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -38,14 +38,6 @@ const PUBLISHED_LECTURE = { isPublished: true, kind: { not: 'quiz' } } as const;
  * count on the platform uses. Two questions, two sets, on purpose.
  */
 const PUBLISHED_ANY = { isPublished: true } as const;
-
-/** «شهر ٣», not «شهر 3» — the title every other month on the course was
- *  given (`copy.admin.month.firstMonthTitle`). Mapped by hand rather than
- *  through `Intl`: a runtime built with small-icu formats `ar-EG` in Latin
- *  digits, and a title is stored, so it must not depend on the server. */
-function toArabicDigits(value: number): string {
-  return String(value).replace(/\d/g, (digit) => '٠١٢٣٤٥٦٧٨٩'[Number(digit)] ?? digit);
-}
 
 /** What `countsFor` gathers once, for however many months the caller holds. */
 interface MonthCounts {
@@ -197,7 +189,9 @@ export class CourseMonthService {
         data: missing.map((monthIndex) => ({
           courseId,
           monthIndex,
-          title: formatCopy(copy.admin.month.defaultTitle, { n: toArabicDigits(monthIndex) }),
+          // «الشهر التالت», not «شهر ٣» — the same name the first month
+          // was born with; see `@ayman/contracts/month-title`.
+          title: defaultMonthTitle(monthIndex),
           isOpen: false,
         })),
         skipDuplicates: true,
