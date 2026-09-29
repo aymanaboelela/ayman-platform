@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { copy } from '@ayman/contracts/copy';
 import type { HeartbeatResponse, PlayerVideo } from '@ayman/contracts/progress';
 import { cn } from '@ayman/ui/lib/cn';
@@ -209,8 +210,12 @@ export function VideoLesson({
    * instead leaves the scrim, the play disc and the duration exactly where
    * they were, which is what the `posterUrl == null` branch has always looked
    * like anyway.
+   *
+   * An index into `posterCandidates` rather than a flag, since «عاوز هنا يبقى
+   * الصورة اللي أنا حاطّاها»: an uploaded lecture has a SECOND picture to
+   * fall back to before it gives up on pictures altogether — see there.
    */
-  const [posterFailed, setPosterFailed] = useState(false);
+  const [posterAttempt, setPosterAttempt] = useState(0);
   /**
    * The last thing tried before giving up: a plain `<iframe>` embed, with no
    * IFrame API behind it.
@@ -263,6 +268,28 @@ export function VideoLesson({
    */
   const [startedAt, setStartedAt] = useState(0);
 
+  /*
+   * What the poster tries, in order: the payload's `posterUrl` — the picture
+   * the teacher set, or the one the API fell back to — and then, for an
+   * UPLOADED lecture, the frame the encoder cut beside the ladder.
+   *
+   * That second entry is what stands between an uploaded lecture and a grey
+   * box. The API only falls back to it when the teacher set nothing, so a
+   * teacher's picture that fails to load (a deleted key, a flaky media
+   * origin) used to drop straight to no picture at all, even though the
+   * encoder's frame was sitting next to the playlist the whole time. Derived
+   * from the playlist URL the same way the admin's preview derives it — a URL
+   * the API already built, never one read out of a column.
+   */
+  const encoderFrame =
+    video.provider === 'upload' && video.mirror !== null
+      ? video.mirror.hlsUrl.replace(/master\.m3u8$/, 'poster.jpg')
+      : null;
+  const posterCandidates = [video.posterUrl, encoderFrame].filter(
+    (url, index, all): url is string => url !== null && all.indexOf(url) === index,
+  );
+  const posterUrl = posterCandidates[posterAttempt] ?? null;
+
   // Computed once per render rather than inside `activate`, because the poster
   // has to PRINT the same second it is going to seek to. Two call sites, one
   // number: the label can never promise a resume point the player then ignores.
@@ -306,6 +333,32 @@ export function VideoLesson({
         }).toString()}`;
 
   useVideoHeartbeat({ lessonId, player, onResponse: onProgress, onError });
+
+  /*
+   * The pinned version, made to actually cover the SCREEN.
+   *
+   * `fixed inset-0` pins to the viewport only when no ancestor is a
+   * containing block for fixed elements — and one is: `.route-fade`, whose
+   * finished page-enter animation leaves an identity `transform` behind (the
+   * same trap `student-shell.tsx` documents for the assistant launcher). So
+   * on the iPhone «ملء الشاشة» filled the page's content column instead: the
+   * top bar and the tab bar stayed on screen over it, and on a scrolled page
+   * the "fullscreen" player sat wherever the column's top happened to be —
+   * «عاوز لما أكبّر الفيديو يكبّر الشاشة كلها». The attribute lets
+   * `globals.css` take that transform away, and the page's scroll with it,
+   * for exactly as long as the player is pinned.
+   *
+   * A ref beside the state because `toggleFullscreen` is a stable callback
+   * the document keydown listener holds; it reads the current value rather
+   * than the one it closed over.
+   */
+  const pseudoFullscreenRef = useRef(false);
+  useEffect(() => {
+    pseudoFullscreenRef.current = pseudoFullscreen;
+    const root = document.documentElement;
+    root.toggleAttribute('data-player-fullscreen', pseudoFullscreen);
+    return () => root.removeAttribute('data-player-fullscreen');
+  }, [pseudoFullscreen]);
 
   /**
    * `F` for fullscreen, the way YouTube does it.
@@ -365,13 +418,29 @@ export function VideoLesson({
       void document.exitFullscreen().catch(() => {});
       return;
     }
+    // Out of the pinned version first, if a refusal below had put us there.
+    if (pseudoFullscreenRef.current) {
+      setPseudoFullscreen(false);
+      return;
+    }
 
-    void shell
-      .requestFullscreen?.()
-      .then(() => (screen.orientation as LockableOrientation | undefined)?.lock?.('landscape'))
-      .catch(() => {
-        /* no fullscreen, or no rotation — see the note above */
-      });
+    shell.requestFullscreen().then(
+      () => {
+        void Promise.resolve((screen.orientation as LockableOrientation | undefined)?.lock?.('landscape')).catch(
+          () => {
+            /* no rotation here — see the note above */
+          },
+        );
+      },
+      /*
+       * The browser HAS the method and still said no: the in-app browsers
+       * a link from WhatsApp or Facebook opens in, a WebView that stubs it,
+       * a permissions policy. Before, that was a button that did nothing at
+       * all. The pinned version needs nothing from the browser, so it is
+       * what «ملء الشاشة» means there too.
+       */
+      () => setPseudoFullscreen(true),
+    );
   }, []);
 
   useEffect(() => {
@@ -609,13 +678,42 @@ export function VideoLesson({
     // Nothing to play yet. The poster is already saying so; this is the guard
     // that keeps a keyboard activation from getting past it.
     if (stillProcessing) return;
+
+    if (useMirror) {
+      /*
+       * «لما أضغط عليها الفيديو يشتغل على طول» — one tap, and it plays.
+       *
+       * The `<video>` used to be left to start itself (`autoPlay`) once it
+       * mounted on the NEXT render. That render lands after the tap has been
+       * handled, so the start was an autoplay, not a response to the tap —
+       * and Safari refuses an autoplay with sound. The student pressed the
+       * poster, got a paused player with a second play button on it, and had
+       * to press again.
+       *
+       * So the element is rendered NOW, inside the tap (`flushSync`), and
+       * asked to play while the tap is still being handled. It has no source
+       * yet — hls.js attaches one a moment later — and that is fine: `play()`
+       * on an empty element leaves it un-paused, so it starts the moment
+       * there is a frame, and the browser has already seen the gesture it
+       * wanted. `autoPlay` stays on the element as the second route.
+       *
+       * If the browser refuses anyway, the rejection is swallowed and the
+       * element stays paused — which is the bar's big play disc, one more
+       * tap. Degraded, never stuck.
+       */
+      flushSync(() => {
+        setActivated(true);
+        setStartedAt(startAt);
+      });
+      const element = shellRef.current?.querySelector('video');
+      // `Promise.resolve` around it: an engine old enough to return nothing
+      // from `play()` must not turn the tap into a TypeError.
+      if (element) void Promise.resolve(element.play()).catch(() => undefined);
+      return;
+    }
+
     setActivated(true);
     setStartedAt(startAt);
-
-    // Our copy needs no API, no script and no handshake — the element is in
-    // the tree on the next render and starts itself. Nothing below this line
-    // applies to it.
-    if (useMirror) return;
 
     await startYouTube(startAt);
   }, [activated, stillProcessing, useMirror, startYouTube]);
@@ -662,7 +760,7 @@ export function VideoLesson({
         <MirrorVideo
           mirror={video.mirror}
           title={title}
-          posterUrl={posterFailed ? null : video.posterUrl}
+          posterUrl={posterUrl}
           startAt={startedAt}
           onPlayer={setPlayer}
           fullscreen={fullscreen}
@@ -832,7 +930,7 @@ export function VideoLesson({
             'bg-surface-2 transition-colors duration-[160ms] ease-out hover:bg-surface-3',
           )}
         >
-          {video.posterUrl ? (
+          {posterUrl ? (
             <>
               {/*
                 Full opacity now, with a scrim over it instead of 60% opacity
@@ -846,14 +944,16 @@ export function VideoLesson({
                 Absolutely positioned inside the reserved box, so its own
                 intrinsic size can never move anything.
               */}
-              {posterFailed ? null : (
-                <img
-                  src={video.posterUrl}
-                  alt=""
-                  onError={() => setPosterFailed(true)}
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-              )}
+              {/* Keyed by its URL: a failed candidate is replaced by a NEW
+                  element for the next one, rather than the old one being
+                  re-pointed and inheriting its error state. */}
+              <img
+                key={posterUrl}
+                src={posterUrl}
+                alt=""
+                onError={() => setPosterAttempt((attempt) => attempt + 1)}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
               <span aria-hidden="true" className="absolute inset-0 bg-black/45" />
             </>
           ) : null}
@@ -906,7 +1006,7 @@ export function VideoLesson({
           <span
             className={cn(
               'pointer-events-none relative text-[length:var(--fs-title-4)] font-semibold',
-              video.posterUrl ? 'text-white' : 'text-fg',
+              posterUrl ? 'text-white' : 'text-fg',
             )}
           >
             {copy.player.play}
@@ -930,7 +1030,7 @@ export function VideoLesson({
               <span
                 className={cn(
                   'text-[length:var(--fs-mono-label)]',
-                  video.posterUrl ? 'text-white/80' : 'text-fg-muted',
+                  posterUrl ? 'text-white/80' : 'text-fg-muted',
                 )}
               >
                 {copy.player.resumeFrom}
@@ -941,7 +1041,7 @@ export function VideoLesson({
               <span
                 className={cn(
                   'mono tabular text-[length:var(--fs-mono-label)]',
-                  video.posterUrl ? 'text-white' : 'text-fg',
+                  posterUrl ? 'text-white' : 'text-fg',
                 )}
               >
                 {formatDuration(resumeSeconds)}
@@ -962,7 +1062,7 @@ export function VideoLesson({
                 className={cn(
                   'pointer-events-auto inline-flex min-h-11 items-center rounded-md px-3',
                   'text-[length:var(--fs-text-sm)] transition-colors duration-[160ms] ease-out',
-                  video.posterUrl
+                  posterUrl
                     ? 'border border-white/40 text-white hover:bg-white/15'
                     : 'border border-line text-fg-muted hover:bg-surface-3 hover:text-fg',
                 )}
@@ -974,7 +1074,7 @@ export function VideoLesson({
             <span
               className={cn(
                 'mono tabular pointer-events-none relative text-[length:var(--fs-mono-label)]',
-                video.posterUrl ? 'text-white/80' : 'text-fg-muted',
+                posterUrl ? 'text-white/80' : 'text-fg-muted',
               )}
             >
               {formatDuration(video.durationSeconds)}
