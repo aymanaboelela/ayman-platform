@@ -9,15 +9,19 @@ import './player-cards.css';
 const c = copy.player;
 
 /**
- * «جروب الدفعة» and «تحتاج مساعدة؟», side by side under the outline, with a
- * switch that folds them away.
+ * «جروب الدفعة» and «تحتاج مساعدة؟», one compact row each under the outline,
+ * with a switch that folds them away.
  *
  * They used to be two full cards stacked one over the other — an icon tile, a
  * two-line lead and a full-width button each — about 330px of sidebar for two
  * links, on the page where the outline is what the student came to scroll.
  * «كبار أوي… يبقوا جنب بعض، ويبقى فيه زرار يخفيهم ويرجّعهم.»
  *
- * Each tile IS the link now: one tap target, no button inside a card.
+ * Side by side then cut both leads to a few letters in the sidebar's real
+ * width, so they are stacked again — but as short link rows, not cards: «اضبط
+ * دي تحت دي بشكل صغير لأن الكلام مش باين». See `.ql__grid` for the numbers.
+ *
+ * Each row IS the link: one tap target, no button inside a card.
  *
  * ## The two destinations are still not the same thing
  *
@@ -55,7 +59,7 @@ export function CourseQuickLinks({
       </div>
 
       {hidden ? null : (
-        <div id="course-quick-links" className="ql__grid" data-count={groupUrl && helpHref ? 2 : 1}>
+        <div id="course-quick-links" className="ql__grid">
           {groupUrl ? (
             /* `target="_blank"`: a student mid-lecture must not lose the player
                to open a chat. */
