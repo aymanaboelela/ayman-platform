@@ -84,6 +84,19 @@ export function cairoDay(column: string): Prisma.Sql {
   return Prisma.sql`to_char(((${Prisma.raw(column)} AT TIME ZONE 'UTC') AT TIME ZONE ${CAIRO})::date, 'YYYY-MM-DD')`;
 }
 
+/** `cairoDay` as a `date` rather than text — for GROUPING on it. Formatting a
+ *  string per ROW before grouping costs a `to_char` for every sitting in the
+ *  window; format the handful of day rows that come out instead. */
+export function cairoDate(column: string): Prisma.Sql {
+  return Prisma.sql`((${Prisma.raw(column)} AT TIME ZONE 'UTC') AT TIME ZONE ${CAIRO})::date`;
+}
+
+/** The Cairo wall-clock hour (0..23) of a naive-UTC timestamp column — the same
+ *  UTC-first conversion as `cairoDay`, for the same reason. */
+export function cairoHour(column: string): Prisma.Sql {
+  return Prisma.sql`EXTRACT(HOUR FROM ((${Prisma.raw(column)} AT TIME ZONE 'UTC') AT TIME ZONE ${CAIRO}))::int`;
+}
+
 /** The JS twin of `cairoDay` — the Cairo calendar date an instant falls on. */
 const CAIRO_DATE = new Intl.DateTimeFormat('en-CA', {
   timeZone: CAIRO,

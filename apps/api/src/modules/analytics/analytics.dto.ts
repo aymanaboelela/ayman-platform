@@ -1,4 +1,5 @@
 import { STUDENT_ANALYTICS_SORTS } from '@ayman/contracts/admin/analytics';
+import { DEFAULT_VIDEO_PERIOD, VIDEO_PERIODS } from '@ayman/contracts/admin/video-analytics';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -34,3 +35,10 @@ export const StudentAnalyticsQuerySchema = z.object({
   courseId: optionalUuid,
 });
 export class StudentAnalyticsQueryDto extends createZodDto(StudentAnalyticsQuerySchema) {}
+
+/** «إحصائيات الفيديو». The period is a closed list for the same reason `days`
+ *  is above: it bounds the scan an admin can ask for from the URL bar. */
+export const VideoAnalyticsQuerySchema = z.object({
+  period: z.enum(VIDEO_PERIODS).default(DEFAULT_VIDEO_PERIOD),
+});
+export class VideoAnalyticsQueryDto extends createZodDto(VideoAnalyticsQuerySchema) {}

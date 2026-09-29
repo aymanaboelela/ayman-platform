@@ -14,6 +14,12 @@ import { CourseHeadcountService } from './course-headcount.service';
 import { LessonAnalyticsService } from './lesson-analytics.service';
 import { OverviewService } from './overview.service';
 import { StudentAnalyticsService } from './student-analytics.service';
+import { VideoAnalyticsService } from './video-analytics.service';
+import {
+  VideoAnalyticsDetailSchema,
+  VideoAnalyticsListSchema,
+  videoKeyOf,
+} from '@ayman/contracts/admin/video-analytics';
 
 /**
  * The contract test for a module that is almost entirely hand-written SQL.
@@ -37,6 +43,7 @@ describe('analytics (integration)', () => {
   let lessons: LessonAnalyticsService;
   let students: StudentAnalyticsService;
   let headcount: CourseHeadcountService;
+  let videos: VideoAnalyticsService;
 
   const suffix = randomUUID().slice(0, 8);
   const userIds: string[] = [];
@@ -53,6 +60,7 @@ describe('analytics (integration)', () => {
     lessons = new LessonAnalyticsService(prisma);
     students = new StudentAnalyticsService(prisma);
     headcount = new CourseHeadcountService(prisma);
+    videos = new VideoAnalyticsService(prisma);
 
     const governorate = await prisma.governorate.findFirstOrThrow();
     governorateCode = governorate.code;
@@ -869,5 +877,118 @@ describe('analytics (integration)', () => {
     expect(ascending.rows[0]?.meanScore).toBeCloseTo(0.3, 5);
     expect(descending.rows.at(-1)?.meanScore).toBeNull();
     expect(ascending.rows.at(-1)?.meanScore).toBeNull();
+  });
+
+  /*
+   * «إحصائيات الفيديو». One UPLOAD on two lessons of this course, so every
+   * figure has to be summed across lessons and a student met on both has to
+   * be one viewer. Built here and torn down in `finally` — last in the file on
+   * purpose, so the lesson counts every test above asserts never see it.
+   *
+   *   student 0  lesson A: two sittings today (200s + 100s), reached 540/600, completed
+   *   student 1  lesson B: one sitting today (120s), reached 150/600
+   *              lesson A: one sitting 40 days ago (60s), reached 300/600
+   *   student 2  lesson A: a sitting that credited nothing — NOT a view
+   *   instructor lesson A: 500s today — not a student, not a view
+   */
+  it('counts a video across every lesson it is on, students only, per period', async () => {
+    const externalId = randomUUID().replaceAll('-', '');
+    const key = videoKeyOf('upload', externalId);
+    const section = await prisma.courseSection.findFirstOrThrow({ where: { courseId } });
+    const lessonIds: string[] = [];
+    for (const position of [2, 3]) {
+      const lesson = await prisma.lesson.create({
+        data: { courseId, sectionId: section.id, title: `فيديو ${position}`, kind: 'video', position, isPublished: true },
+      });
+      await prisma.lessonVideo.create({
+        data: { lessonId: lesson.id, provider: 'upload', externalId, durationSeconds: 600, mirrorStatus: 'ready', mirrorHeight: 720 },
+      });
+      lessonIds.push(lesson.id);
+    }
+    const [lessonA, lessonB] = lessonIds as [string, string];
+
+    try {
+      const enrollmentOf = async (userId: string) =>
+        (await prisma.enrollment.findFirstOrThrow({ where: { userId, courseId } })).id;
+      const [s0, s1, s2, staff] = await Promise.all([
+        enrollmentOf(userIds[0]!),
+        enrollmentOf(userIds[1]!),
+        enrollmentOf(userIds[2]!),
+        enrollmentOf(`an-author-${suffix}`),
+      ]);
+      const now = new Date();
+      const fortyDaysAgo = new Date(now.getTime() - 40 * 86_400_000);
+
+      await prisma.lessonProgress.createMany({
+        data: [
+          { enrollmentId: s0, lessonId: lessonA, completion: 1, state: 'completed', watchedSeconds: 300, maxPositionSeconds: 540, openCount: 1, completedAt: now, completedVia: 'auto', firstOpenedAt: now, lastHeartbeatAt: now },
+          { enrollmentId: s1, lessonId: lessonB, completion: 0.25, state: 'in_progress', watchedSeconds: 120, maxPositionSeconds: 150, openCount: 1, firstOpenedAt: now, lastHeartbeatAt: now },
+          { enrollmentId: s1, lessonId: lessonA, completion: 0.5, state: 'in_progress', watchedSeconds: 60, maxPositionSeconds: 300, openCount: 1, firstOpenedAt: now, lastHeartbeatAt: now },
+          { enrollmentId: s2, lessonId: lessonA, completion: 0, state: 'in_progress', watchedSeconds: 0, maxPositionSeconds: 0, openCount: 1, firstOpenedAt: now, lastHeartbeatAt: now },
+          { enrollmentId: staff, lessonId: lessonA, completion: 1, state: 'completed', watchedSeconds: 500, maxPositionSeconds: 600, openCount: 1, completedAt: now, completedVia: 'auto', firstOpenedAt: now, lastHeartbeatAt: now },
+        ],
+      });
+      await prisma.lessonViewSession.createMany({
+        data: [
+          { enrollmentId: s0, lessonId: lessonA, startedAt: now, lastSeenAt: now, watchedSeconds: 200 },
+          { enrollmentId: s0, lessonId: lessonA, startedAt: now, lastSeenAt: now, watchedSeconds: 100 },
+          { enrollmentId: s1, lessonId: lessonB, startedAt: now, lastSeenAt: now, watchedSeconds: 120 },
+          { enrollmentId: s1, lessonId: lessonA, startedAt: fortyDaysAgo, lastSeenAt: fortyDaysAgo, watchedSeconds: 60 },
+          { enrollmentId: s2, lessonId: lessonA, startedAt: now, lastSeenAt: now, watchedSeconds: 0 },
+          { enrollmentId: staff, lessonId: lessonA, startedAt: now, lastSeenAt: now, watchedSeconds: 500 },
+        ],
+      });
+
+      const detail = await videos.detail(key, '28d');
+      expect(() => VideoAnalyticsDetailSchema.parse(detail)).not.toThrow();
+      expect(detail.summary).toMatchObject({
+        key,
+        lessonCount: 2,
+        views: 3,
+        uniqueViewers: 2,
+        watchSeconds: 420,
+        avgViewSeconds: 140,
+        completedViewers: 1,
+        completionRate: 0.5,
+      });
+      // Student 1's reach is the furthest point on EITHER lesson (300/600),
+      // even though the sitting that got there is outside the window.
+      expect(detail.summary.avgPercentWatched).toBeCloseTo((0.9 + 0.5) / 2, 5);
+      expect(detail.lessons.map((lesson) => [lesson.views, lesson.uniqueViewers, lesson.watchSeconds])).toEqual([
+        [2, 1, 300],
+        [1, 1, 120],
+      ]);
+      // Steps 18 and 10: everyone to 50%, one of two past it, nobody at 95%.
+      expect(detail.retention?.[0]).toBe(1);
+      expect(detail.retention?.[10]).toBe(1);
+      expect(detail.retention?.[11]).toBe(0.5);
+      expect(detail.retention?.[18]).toBe(0.5);
+      expect(detail.retention?.[19]).toBe(0);
+      expect(detail.byHour.reduce((sum, n) => sum + n, 0)).toBe(3);
+      expect(detail.daily).toHaveLength(28);
+      expect(detail.daily.reduce((sum, day) => sum + day.views, 0)).toBe(3);
+      expect(detail.viewers.map((viewer) => [viewer.userId, viewer.watchSeconds, viewer.completed])).toEqual([
+        [userIds[0], 300, true],
+        [userIds[1], 120, false],
+      ]);
+
+      // Ninety days reaches the old sitting: one more view, same two people.
+      const wider = await videos.detail(key, '90d');
+      expect(wider.summary).toMatchObject({ views: 4, uniqueViewers: 2, watchSeconds: 480 });
+
+      // The list row says exactly what the page it links to says.
+      const list = await videos.list('28d');
+      expect(() => VideoAnalyticsListSchema.parse(list)).not.toThrow();
+      const row = list.videos.find((video) => video.key === key);
+      expect(row).toEqual(detail.summary);
+      expect(list.totals.views).toBeGreaterThanOrEqual(3);
+      expect(list.totals.views).toBe(list.daily.reduce((sum, day) => sum + day.views, 0));
+
+      await expect(videos.detail(videoKeyOf('upload', 'f'.repeat(32)), '28d')).rejects.toThrow();
+      await expect(videos.detail('not-a-key', '28d')).rejects.toThrow();
+    } finally {
+      // Cascades the placements, the progress rows and the sittings.
+      await prisma.lesson.deleteMany({ where: { id: { in: lessonIds } } });
+    }
   });
 });

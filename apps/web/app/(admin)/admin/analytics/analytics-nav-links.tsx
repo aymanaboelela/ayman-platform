@@ -11,12 +11,13 @@ const c = copy.analytics;
 const TABS = [
   { href: '/admin/analytics', label: c.navOverview, exact: true, money: false },
   { href: '/admin/analytics/lessons', label: c.navLessons, exact: false, money: false },
+  { href: '/admin/analytics/videos', label: c.navVideos, exact: false, money: false },
   { href: '/admin/analytics/students', label: c.navStudents, exact: false, money: false },
   // Money, so its own permission — see `AnalyticsNav`, which decides.
   { href: '/admin/analytics/money', label: c.navMoney, exact: false, money: true },
 ] as const;
 
-/** Three screens, one subject — four for a reader allowed to see the money. A
+/** Four screens, one subject — five for a reader allowed to see the money. A
  *  sub-nav rather than sidebar entries: they share a filter vocabulary and a
  *  reader moves between them constantly, which is exactly the case tabs are
  *  for. */
@@ -25,7 +26,7 @@ export function AnalyticsNavLinks({ showMoney }: { showMoney: boolean }) {
   const tabs = TABS.filter((tab) => showMoney || !tab.money);
   const navRef = useRef<HTMLElement>(null);
 
-  // On a phone the fourth tab is past the edge, and landing on it with its
+  // On a phone the last tabs are past the edge, and landing on it with its
   // label cut in half reads as broken. Bring the current tab into the strip —
   // `nearest` on both axes, so a tab already in view moves nothing and the
   // page itself never scrolls.
@@ -36,7 +37,7 @@ export function AnalyticsNavLinks({ showMoney }: { showMoney: boolean }) {
   }, [pathname]);
 
   return (
-    // `overflow-x-auto`: four tabs are wider than a 360px phone, and a nav
+    // `overflow-x-auto`: five tabs are wider than a 360px phone, and a nav
     // that wraps puts the active underline on a second row nobody reads.
     <nav
       ref={navRef}

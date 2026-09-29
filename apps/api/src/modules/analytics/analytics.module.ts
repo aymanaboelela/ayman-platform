@@ -4,6 +4,7 @@ import { CourseHeadcountService } from './course-headcount.service';
 import { LessonAnalyticsService } from './lesson-analytics.service';
 import { OverviewService } from './overview.service';
 import { StudentAnalyticsService } from './student-analytics.service';
+import { VideoAnalyticsService } from './video-analytics.service';
 
 /**
  * The cohort-wide analytics surface. Distinct from `QuizModule`'s own
@@ -26,6 +27,7 @@ import { StudentAnalyticsService } from './student-analytics.service';
     LessonAnalyticsService,
     StudentAnalyticsService,
     CourseHeadcountService,
+    VideoAnalyticsService,
   ],
 })
 export class CohortAnalyticsModule {}

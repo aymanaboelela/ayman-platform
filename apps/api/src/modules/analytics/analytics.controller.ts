@@ -8,16 +8,19 @@ import type {
   StudentAnalyticsDetail,
   StudentAnalyticsRow,
 } from '@ayman/contracts/admin/analytics';
+import type { VideoAnalyticsDetail, VideoAnalyticsList } from '@ayman/contracts/admin/video-analytics';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import {
   LessonAnalyticsQueryDto,
   OverviewQueryDto,
   StudentAnalyticsQueryDto,
+  VideoAnalyticsQueryDto,
 } from './analytics.dto';
 import { CourseHeadcountService } from './course-headcount.service';
 import { LessonAnalyticsService } from './lesson-analytics.service';
 import { OverviewService } from './overview.service';
 import { StudentAnalyticsService } from './student-analytics.service';
+import { VideoAnalyticsService } from './video-analytics.service';
 import { csvFraction, toCsv } from './csv';
 
 /**
@@ -39,6 +42,7 @@ export class AnalyticsController {
     private readonly lessons: LessonAnalyticsService,
     private readonly students: StudentAnalyticsService,
     private readonly headcount: CourseHeadcountService,
+    private readonly videos: VideoAnalyticsService,
   ) {}
 
   @Get('overview')
@@ -81,6 +85,29 @@ export class AnalyticsController {
   @Get('students/:userId')
   studentDetail(@Param('userId') userId: string): Promise<StudentAnalyticsDetail> {
     return this.students.detail(userId);
+  }
+
+  /**
+   * «إحصائيات الفيديو» — every video with its views, watch time and reach over
+   * `?period=`, plus the totals and the daily series across all of them.
+   */
+  @Get('videos')
+  listVideos(@Query() query: VideoAnalyticsQueryDto): Promise<VideoAnalyticsList> {
+    return this.videos.list(query.period);
+  }
+
+  /**
+   * One video, YouTube-Studio style. `:videoKey` is `provider-externalId`
+   * (`parseVideoKey`), NOT a uuid — a video is the pair `lesson_videos`
+   * stores, possibly on several lessons. A key that cannot name a stored video
+   * is a 404 before any query runs.
+   */
+  @Get('videos/:videoKey')
+  videoDetail(
+    @Param('videoKey') videoKey: string,
+    @Query() query: VideoAnalyticsQueryDto,
+  ): Promise<VideoAnalyticsDetail> {
+    return this.videos.detail(videoKey, query.period);
   }
 
   // ── exports ──────────────────────────────────────────────────────────────
@@ -137,6 +164,27 @@ export class AnalyticsController {
         csvFraction(row.passRate),
         row.medianQuizSeconds === null ? null : Math.round(row.medianQuizSeconds),
         row.lastActiveAt,
+      ]),
+    );
+  }
+
+  @Get('export/videos.csv')
+  @Header('content-type', 'text/csv; charset=utf-8')
+  @Header('content-disposition', 'attachment; filename="videos.csv"')
+  async exportVideos(@Query() query: VideoAnalyticsQueryDto): Promise<string> {
+    const { videos } = await this.videos.list(query.period);
+    return toCsv(
+      [
+        'video_key', 'provider', 'title', 'course', 'lessons', 'duration_seconds',
+        'views', 'unique_viewers', 'watch_hours', 'avg_view_seconds',
+        'avg_percent_watched', 'completed_viewers', 'completion_rate', 'last_viewed_at',
+      ],
+      videos.map((row) => [
+        row.key, row.provider, row.title, row.courseTitle, row.lessonCount, row.durationSeconds,
+        row.views, row.uniqueViewers, Math.round((row.watchSeconds / 3600) * 100) / 100,
+        row.avgViewSeconds === null ? null : Math.round(row.avgViewSeconds),
+        csvFraction(row.avgPercentWatched), row.completedViewers, csvFraction(row.completionRate),
+        row.lastViewedAt,
       ]),
     );
   }

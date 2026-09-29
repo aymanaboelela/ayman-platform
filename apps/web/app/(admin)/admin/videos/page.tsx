@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { AlertTriangle, Archive, Clock3, Film, FolderX, HardDrive, Wallet } from 'lucide-react';
+import { AlertTriangle, Archive, BarChart3, ChevronLeft, Clock3, Eye, Film, FolderX, HardDrive, Timer, Users, Wallet } from 'lucide-react';
 import {
   VideoLibrarySchema,
   type VideoLibraryArchived,
@@ -9,17 +9,29 @@ import {
   type VideoLibraryOrphan,
   type VideoLibraryTarget,
 } from '@ayman/contracts/admin/video-upload';
+import {
+  VideoAnalyticsListSchema,
+  videoKeyOf,
+  type VideoAnalyticsList,
+  type VideoStatsRow,
+} from '@ayman/contracts/admin/video-analytics';
 import { copy } from '@ayman/contracts/copy/admin';
 import { R2_USD_PER_GB_MONTH, TENANT_USD_PER_GB_MONTH } from '@ayman/contracts/video';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
+import { hours, num, pct } from '@/components/admin/charts/format';
 import { getEntitlements } from '@/lib/entitlements';
+import { can, getSession } from '@/lib/session';
 import { IS_AYMAN } from '@/lib/tenant';
 import { DeleteVideoButton } from './delete-video-button';
 import { RestoreVideoButton } from './restore-video-button';
 
 const c = copy.admin.videos;
+
+/** The window the strip and the row numbers use — «التحليلات ← الفيديوهات»'s
+ *  default, so the link from here lands on the same figures. */
+const STATS_PERIOD = '28d';
 
 export const metadata = { title: c.title };
 
@@ -89,11 +101,12 @@ const STATUS_TONE: Record<VideoLibraryItem['status'], string> = {
 export default async function AdminVideosPage() {
   if (!(await getEntitlements())['video.upload']) notFound();
 
-  const { items, archived, targets, orphans, totalBytes, storageRead } = await adminGet(
-    '/api/admin/videos',
-    VideoLibrarySchema,
-  );
+  const [{ items, archived, targets, orphans, totalBytes, storageRead }, stats] = await Promise.all([
+    adminGet('/api/admin/videos', VideoLibrarySchema),
+    videoStats(),
+  ]);
   const monthly = (totalBytes / 1e9) * USD_PER_GB_MONTH;
+  const statsByVideo = new Map(stats?.videos.map((row) => [row.key, row]));
 
   return (
     <>
@@ -122,6 +135,8 @@ export default async function AdminVideosPage() {
         </Stat>
       </dl>
 
+      {stats !== null ? <StatsStrip stats={stats} /> : null}
+
       {storageRead ? null : (
         <p className="mt-3 flex items-center gap-2 rounded-lg border border-[color-mix(in_oklab,var(--warn)_40%,var(--border))] bg-[color-mix(in_oklab,var(--warn)_9%,var(--n-2))] px-3 py-2 text-[length:var(--fs-text-sm)] text-warn">
           <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
@@ -142,7 +157,11 @@ export default async function AdminVideosPage() {
       ) : (
         <ul className="mt-3 flex flex-col gap-2.5">
           {items.map((item) => (
-            <VideoRow key={`${item.videoId}:${item.lessonId}`} item={item} />
+            <VideoRow
+              key={`${item.videoId}:${item.lessonId}`}
+              item={item}
+              stats={stats === null ? undefined : (statsByVideo.get(videoKeyOf('upload', item.videoId)) ?? null)}
+            />
           ))}
         </ul>
       )}
@@ -150,10 +169,73 @@ export default async function AdminVideosPage() {
   );
 }
 
+/**
+ * «اتشاف قد إيه» for every row, from the analytics surface — or `null` when
+ * this session may not read analytics (`analytics:read` is its own grant; a
+ * role that manages uploads need not hold it) or the read failed.
+ *
+ * `null` hides the numbers and never breaks the page: this screen's job is
+ * storage and deleting, and a views query that 500s must not take the delete
+ * button down with it. «التحليلات ← الفيديوهات» reads the same endpoint and is
+ * where a real fault shows.
+ */
+async function videoStats(): Promise<VideoAnalyticsList | null> {
+  if (!can(await getSession(), 'analytics:read')) return null;
+  return adminGet(`/api/admin/analytics/videos?period=${STATS_PERIOD}`, VideoAnalyticsListSchema).catch(() => null);
+}
+
+const statsHref = (key?: string) =>
+  key === undefined
+    ? `/admin/analytics/videos?period=${STATS_PERIOD}`
+    : `/admin/analytics/videos/${encodeURIComponent(key)}?period=${STATS_PERIOD}`;
+
+/**
+ * The views strip — the three numbers the owner asked for, over the last 28
+ * days, across EVERY video (YouTube lectures too, not only the uploads listed
+ * below), linking to the screen that breaks them down.
+ */
+function StatsStrip({ stats }: { stats: VideoAnalyticsList }) {
+  const { totals } = stats;
+  return (
+    <section className="mt-3 rounded-xl border border-[color-mix(in_oklab,var(--viz-1)_35%,var(--border))] bg-[color-mix(in_oklab,var(--viz-1)_6%,var(--n-2))] p-3">
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-[length:var(--fs-text-sm)] font-medium text-fg">
+          <BarChart3 className="size-4 text-accent-text" aria-hidden="true" />
+          {c.statsLead}
+        </p>
+        <Link
+          href={statsHref()}
+          className="group inline-flex items-center gap-1 text-[length:var(--fs-text-sm)] text-accent-text transition-colors duration-[160ms] ease-out hover:text-fg"
+        >
+          {c.statsOpen}
+          <ChevronLeft
+            className="size-3.5 transition-transform duration-[160ms] ease-out group-hover:-translate-x-0.5"
+            aria-hidden="true"
+          />
+        </Link>
+      </div>
+      <dl className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+        <Stat icon={Eye} label={c.statsViews} tone="viz1">
+          <span className="tabular">{num(totals.views)}</span>
+        </Stat>
+        <Stat icon={Timer} label={c.statsWatchHours} tone="viz3">
+          <span className="tabular">{num(totals.watchSeconds / 3600, totals.watchSeconds < 36_000 ? 1 : 0)}</span>
+        </Stat>
+        <Stat icon={Users} label={c.statsViewers} tone="viz2">
+          <span className="tabular">{num(totals.uniqueViewers)}</span>
+        </Stat>
+      </dl>
+    </section>
+  );
+}
+
 const STAT_TONE = {
   accent: 'bg-accent/12 text-accent-text',
   info: 'bg-[color-mix(in_oklab,var(--info)_14%,var(--n-2))] text-info',
   ok: 'bg-[color-mix(in_oklab,var(--ok)_14%,var(--n-2))] text-ok',
+  viz1: 'bg-[color-mix(in_oklab,var(--viz-1)_16%,var(--n-2))] text-[color:var(--viz-1)]',
+  viz2: 'bg-[color-mix(in_oklab,var(--viz-2)_16%,var(--n-2))] text-[color:var(--viz-2)]',
+  viz3: 'bg-[color-mix(in_oklab,var(--viz-3)_16%,var(--n-2))] text-[color:var(--viz-3)]',
 } as const;
 
 function Stat({
@@ -183,9 +265,16 @@ function Stat({
   );
 }
 
-function VideoRow({ item }: { item: VideoLibraryItem }) {
+/**
+ * `stats`: `undefined` — this session cannot read analytics, so the row says
+ * nothing about views; `null` — it can, and nobody watched in the window;
+ * otherwise the video's row from the analytics list. The three are different
+ * facts and render differently.
+ */
+function VideoRow({ item, stats }: { item: VideoLibraryItem; stats: VideoStatsRow | null | undefined }) {
   const busy = item.status === 'uploading' || item.status === 'mirroring';
   const length = duration(item.durationSeconds);
+  const key = videoKeyOf('upload', item.videoId);
 
   return (
     <li className="rounded-xl border border-line bg-surface-2 p-4">
@@ -248,9 +337,20 @@ function VideoRow({ item }: { item: VideoLibraryItem }) {
               </div>
             ) : null}
           </dl>
+
+          {stats !== undefined ? <RowStats stats={stats} /> : null}
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {stats !== undefined ? (
+            <Link
+              href={statsHref(key)}
+              className="inline-flex h-10 items-center gap-1.5 rounded-md border border-[color-mix(in_oklab,var(--viz-1)_40%,var(--border))] bg-[color-mix(in_oklab,var(--viz-1)_8%,var(--n-2))] px-3 text-[length:var(--fs-text-sm)] font-medium text-fg transition-colors duration-[160ms] ease-out hover:bg-[color-mix(in_oklab,var(--viz-1)_14%,var(--n-2))] md:h-9"
+            >
+              <BarChart3 className="size-4 text-accent-text" aria-hidden="true" />
+              {c.rowStats}
+            </Link>
+          ) : null}
           <Link
             href={`/admin/courses/${item.courseId}`}
             className="inline-flex h-10 items-center rounded-md border border-line px-3 text-[length:var(--fs-text-sm)] font-medium text-fg transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:bg-surface-3 md:h-9"
@@ -261,6 +361,33 @@ function VideoRow({ item }: { item: VideoLibraryItem }) {
         </div>
       </div>
     </li>
+  );
+}
+
+/** Views · watch time · how much of it was watched, as three coloured chips —
+ *  the row's answer to «اتشاف قد إيه» without leaving the storage screen. */
+function RowStats({ stats }: { stats: VideoStatsRow | null }) {
+  if (stats === null || stats.views === 0) {
+    return <p className="mt-2 text-[length:var(--fs-text-xs)] text-fg-subtle">{c.rowNoViews}</p>;
+  }
+  const chip = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg';
+  return (
+    <p className="mt-2 flex flex-wrap items-center gap-1.5">
+      <span className={cn(chip, 'bg-[color-mix(in_oklab,var(--viz-1)_14%,var(--n-2))]')}>
+        <Eye className="size-3 text-[color:var(--viz-1)]" aria-hidden="true" />
+        {formatCopy(c.rowViews, { n: num(stats.views) })}
+      </span>
+      <span className={cn(chip, 'bg-[color-mix(in_oklab,var(--viz-3)_14%,var(--n-2))]')}>
+        <Timer className="size-3 text-[color:var(--viz-3)]" aria-hidden="true" />
+        {hours(stats.watchSeconds / 3600)}
+      </span>
+      {stats.avgPercentWatched !== null ? (
+        <span className={cn(chip, 'bg-[color-mix(in_oklab,var(--viz-2)_14%,var(--n-2))]')}>
+          <Users className="size-3 text-[color:var(--viz-2)]" aria-hidden="true" />
+          {formatCopy(c.rowWatched, { p: pct(stats.avgPercentWatched) })}
+        </span>
+      ) : null}
+    </p>
   );
 }
 
