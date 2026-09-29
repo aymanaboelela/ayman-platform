@@ -1023,6 +1023,23 @@ describe('AssistantService', () => {
       expect(studentRow.who).toBe('طالب المساعد');
     });
 
+    it('tells him when the STUDENT last had the thread open — the «اتشافت» tick', async () => {
+      const { thread, guestToken } = await openGuest();
+      await service.reply(thread.id, 'ردّي');
+
+      // Opened by nobody on the student's side yet: his reply is «اتبعتت».
+      const before = await service.detail(thread.id);
+      expect(before.visitorReadAt).toBeNull();
+
+      await service.markVisitorRead(thread.id, null, guestToken);
+      const after = await service.detail(thread.id);
+      expect(after.visitorReadAt).not.toBeNull();
+      // At or after his reply — which is exactly the comparison the tick makes.
+      const reply = after.messages.at(-1)!;
+      expect(reply.author).toBe('admin');
+      expect(after.visitorReadAt! >= reply.createdAt).toBe(true);
+    });
+
     it('marks a thread read when it is opened', async () => {
       const { thread } = await openGuest();
       const detail = await service.detail(thread.id);

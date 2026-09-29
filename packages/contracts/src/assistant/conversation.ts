@@ -643,6 +643,26 @@ export const AdminConversationDetailSchema = AdminConversationRowSchema.extend({
   messages: z.array(ConversationMessageSchema),
   createdAt: z.iso.datetime(),
   /**
+   * When the STUDENT last had this thread open — `conversations.visitor_read_at`,
+   * written by their panel's `/read` and by every message they send — or
+   * `null` for never.
+   *
+   * It is what turns the tick on his own message from «اتبعتت» into
+   * «اتشافت»: a message written at or before this instant has been on their
+   * screen. The column already existed for the launcher's unread dot; this
+   * only lets the thread he is reading see it.
+   *
+   * Admin-only, and deliberately not mirrored on `ConversationThreadSchema`:
+   * a student watching a «seen» mark on a question nobody has answered yet is
+   * not something anybody asked for.
+   *
+   * `.default(null)` rather than required: the web and the API deploy from one
+   * commit but restart seconds apart, and a thread page that 500s in that
+   * window because the API has not learned the field yet costs more than a
+   * tick that reads «اتبعتت» for a few seconds.
+   */
+  visitorReadAt: z.iso.datetime().nullable().default(null),
+  /**
    * The number to reach this person on, in E.164 — a guest's typed number, or
    * a signed-in student's account phone.
    *

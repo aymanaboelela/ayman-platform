@@ -12,6 +12,8 @@ import { waMeHref } from '@ayman/contracts/whatsapp';
 import { cn } from '@ayman/ui';
 import { adminGetOrNotFound } from '@/lib/admin-api';
 import { assistantPathLabels } from '@/lib/assistant-path';
+import { buildChatTimeline } from '@/components/assistant/chat-timeline';
+import { AdminChat } from './admin-chat';
 import { AssistantTranscript } from './assistant-transcript';
 import { MessageBubble } from './message-bubble';
 import { InboxStatusChip } from '../status-chip';
@@ -23,9 +25,9 @@ function shortDate(iso: string): string {
     new Date(iso),
   );
 }
-import { ThreadActions } from './thread-actions';
 
 const c = copy.assistant.inbox;
+const cc = copy.assistant.chat;
 
 /** «الترم الأول · شهر 1، 2» — terms by title, months by their curriculum
  *  number, so three months stay one short line on a badge. */
@@ -73,8 +75,27 @@ export default async function AdminInboxThreadPage({
    */
   const whatsapp = waMeHref(thread.contactPhone);
 
+  /*
+   * Day chips and runs, worked out HERE on the server where the transcript is
+   * parsed too — see `buildChatTimeline`. A transcript card never joins a run:
+   * it is a record, not something either of them said.
+   */
+  const timeline = buildChatTimeline(thread.messages, {
+    labels: { today: cc.today, yesterday: cc.yesterday },
+    standalone: (message) => parseAssistantTranscript(message.body) !== null,
+  });
+  const last = thread.messages.at(-1) ?? null;
+
   return (
-    <>
+    /*
+     * A column exactly as tall as the screen below the admin header, so the
+     * THREAD scrolls and the page does not — which is the fix for «بيجيلي
+     * الشات من فوق». The page used to scroll as a whole, opened at its top like
+     * every page does, and the newest message was a scroll away at the bottom
+     * of it. Now the header stays put, the composer is always on screen, and
+     * the thread opens on its last message (see `ChatViewport`).
+     */
+    <div className="chat-page">
       <Link
         href="/admin/inbox"
         className="mb-4 inline-flex items-center gap-1.5 text-[length:var(--fs-text-sm)] text-fg-muted transition-colors duration-[160ms] ease-out hover:text-fg"
@@ -241,49 +262,69 @@ export default async function AdminInboxThreadPage({
       </header>
 
       {/*
-        Each bubble is a CLIENT component now — «ردّ بإيموجي» needs a press
-        handler, and a long press needs pointer events. Only the bubble
-        crosses; the header, the crumbs and the actions below stay on the
-        server.
+        The messages are rendered HERE, on the server; `AdminChat` only wraps
+        them in the scroller and docks the composer under them. Each bubble is
+        a client component — «ردّ بإيموجي» needs a press handler, and a long
+        press needs pointer events — but nothing above them has to be.
       */}
-      <ol className="mt-5 flex flex-col gap-4">
-        {thread.messages.map((message) => {
-          /*
-            ── THE ASSISTANT TRANSCRIPT, told apart from the student's words ──
+      <AdminChat
+        id={thread.id}
+        status={thread.status}
+        latest={last ? { id: last.id, createdAt: last.createdAt, author: last.author } : null}
+      >
+        <ol className="chat-list">
+          {timeline.map((entry) => {
+            if (entry.kind === 'day') {
+              return (
+                <li key={`day:${entry.key}`} className="chat-day">
+                  <span>{entry.label}</span>
+                </li>
+              );
+            }
+            const { message } = entry;
+            /*
+              ── THE ASSISTANT TRANSCRIPT, told apart from the student's words ──
 
-            A handoff out of المساعد writes the exchange into the thread as its
-            own message, authored `visitor` because the enum has two members
-            (see `serializeAssistantTranscript`). Parsed HERE, on the server,
-            and drawn as a record rather than as a bubble — «محتاج أعرف هو سأل
-            على إيه» is only answered if he can also tell which half of it a
-            machine said.
+              A handoff out of المساعد writes the exchange into the thread as its
+              own message, authored `visitor` because the enum has two members
+              (see `serializeAssistantTranscript`). Parsed HERE, on the server,
+              and drawn as a record rather than as a bubble — «محتاج أعرف هو سأل
+              على إيه» is only answered if he can also tell which half of it a
+              machine said.
 
-            A body that does not parse is every message ever written before
-            this format existed, and it falls through to the bubble untouched.
-          */
-          const turns = parseAssistantTranscript(message.body);
-          if (turns) {
+              A body that does not parse is every message ever written before
+              this format existed, and it falls through to the bubble untouched.
+            */
+            const turns = parseAssistantTranscript(message.body);
+            if (turns) {
+              return (
+                <AssistantTranscript
+                  key={message.id}
+                  turns={turns}
+                  trimmed={assistantTranscriptTrimmed(message.body)}
+                  createdAt={message.createdAt}
+                />
+              );
+            }
             return (
-              <AssistantTranscript
+              <MessageBubble
                 key={message.id}
-                turns={turns}
-                trimmed={assistantTranscriptTrimmed(message.body)}
-                createdAt={message.createdAt}
+                conversationId={thread.id}
+                message={message}
+                who={thread.who}
+                startsGroup={entry.startsGroup}
+                endsGroup={entry.endsGroup}
+                /*
+                  «اتشافت» — the student has had the thread open since this
+                  was written. ISO strings from one serializer compare in time
+                  order, so no Date is built per bubble.
+                */
+                seen={thread.visitorReadAt !== null && message.createdAt <= thread.visitorReadAt}
               />
             );
-          }
-          return (
-            <MessageBubble
-              key={message.id}
-              conversationId={thread.id}
-              message={message}
-              who={thread.who}
-            />
-          );
-        })}
-      </ol>
-
-      <ThreadActions id={thread.id} status={thread.status} />
-    </>
+          })}
+        </ol>
+      </AdminChat>
+    </div>
   );
 }

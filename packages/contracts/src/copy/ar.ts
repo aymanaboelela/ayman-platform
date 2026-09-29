@@ -5278,6 +5278,44 @@ export const copy = {
       tooMany: 'رسايل كتير في وقت قصير. شوية ونحاول تاني.',
     },
 
+    /* ── الشات نفسه — الطرفين ─────────────────────────────────────────────
+     *
+     * The strings BOTH ends of a conversation draw with: the instructor's
+     * `/admin/inbox/[id]` and the student's panel are one chat seen from two
+     * doors, and a day chip that said «النهارده» on one and «اليوم» on the
+     * other would be two products.
+     *
+     * Read by a student as well as by him, so the gender rule applies in
+     * full: every line here describes the MESSAGE or names an action with a
+     * masdar — «النزول»، «تشغيل» — and never addresses the reader.
+     */
+    chat: {
+      /** The chip between days. Anything older is a weekday or a date. */
+      today: 'النهارده',
+      yesterday: 'امبارح',
+      /** The floating button back to the newest message. */
+      jumpLabel: 'النزول لآخر رسالة',
+      /** Its name when messages arrived while the reader was up the thread. `{n}` */
+      jumpUnseen: 'النزول لآخر رسالة — {n} جديدة',
+      /** The scroll region's accessible name. */
+      regionLabel: 'الرسايل',
+      /** Beside the time on a message whose words were rewritten. */
+      edited: 'معدّلة',
+      /* The ticks on the sender's own messages — hover titles and the
+         accessible names of a mark that is otherwise only a picture. They
+         describe the MESSAGE («اتبعتت»), which is one word for everybody. */
+      sending: 'بتتبعت…',
+      sent: 'اتبعتت — لسه ماتشافتش',
+      seen: 'اتشافت',
+      /* The voice-note player. Masdar, like every verb a student can read. */
+      voicePlay: 'تشغيل الرسالة الصوتية',
+      voicePause: 'إيقاف مؤقت',
+      voiceSeek: 'مكان التشغيل',
+      /** Under the composer on a keyboard, each after its keycap. */
+      enterToSend: 'للإرسال',
+      shiftEnterNewline: 'لسطر جديد',
+    },
+
     // ── the visitor's side of an open conversation ─────────────────────
     thread: {
       title: 'محادثتك مع مهندس أيمن',
