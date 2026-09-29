@@ -73,3 +73,16 @@
 .store-surface .book-card {
   scroll-margin-block-start: calc(var(--topbar-h) + var(--s-16));
 }
+
+/* The shipping card sits directly above the shop here (the marketing page
+   puts it in the hero instead), so it owes the shelves the gap. */
+.store-surface .books-ship {
+  margin-block-end: var(--s-24);
+}
+
+/* The phone basket bar insets itself to the marketing page's gutter, which is
+   `.site-shell`'s padding. Inside the shell that gutter is already `<main>`'s,
+   so a second one would float the bar narrower than the shelves under it. */
+.store-surface .books-bar {
+  margin-inline: 0;
+}

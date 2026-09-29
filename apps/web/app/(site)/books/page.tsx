@@ -106,19 +106,18 @@ export default async function BooksPage() {
       <JsonLd data={bookListJsonLd(catalog.shelves, catalog.shippingCents)} />
 
       <section className="books-hero">
-        <div className="site-shell">
-          <span className="site-badge">{c.badge}</span>
-          <h1 className="page-title" style={{ marginTop: '1rem' }}>
-            {c.pageTitle}
-          </h1>
-          <p className="site-lead books-hero__lead">{c.lead}</p>
+        <div className="site-shell books-hero__inner">
+          <div className="books-hero__copy">
+            <span className="site-badge">{c.badge}</span>
+            <h1 className="page-title books-hero__title">{c.pageTitle}</h1>
+            <p className="site-lead books-hero__lead">{c.lead}</p>
+          </div>
           {/*
-            That delivery is charged, and charged once — without naming the
-            amount. The figure is a setting that moves, and a number printed
-            across the top of the shop is where a stale one reads as a promise;
-            the basket quotes the live value. The fee is still passed in: at
-            zero the line becomes a different sentence entirely, and only the
-            number can decide that. See `copy.books.shippingOnce`.
+            The delivery rule and every zone's fee, read from the live setting
+            — the card beside the title rather than a line under it, because
+            «الشحن كام؟» is the question a parent opens this page with. At zero
+            everywhere it becomes a different sentence entirely, and only the
+            numbers can decide that. See `copy.books.shippingHeadline`.
           */}
           <BooksShippingChip rates={catalog.shippingRates} />
         </div>

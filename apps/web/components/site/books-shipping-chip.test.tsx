@@ -52,6 +52,44 @@ describe('BooksShippingChip', () => {
     expect(text).toContain('150');
   });
 
+  /*
+   * «…مهما كان عدد الكتبالقاهرة والجيزة 80» — the headline and the zone list
+   * used to be two strings in one inline run, and nothing separated them. Each
+   * piece is its own element now, so the seam cannot come back unnoticed.
+   */
+  it('gives the rule and every zone their own element, so no two strings are glued', () => {
+    render(<BooksShippingChip rates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }} />);
+
+    expect(screen.getByText(copy.books.shippingHeadline)).toBeTruthy();
+    const zones = screen.getAllByRole('listitem');
+    expect(zones).toHaveLength(3);
+    expect(zones.map((zone) => zone.querySelector('.books-ship__zone-name')?.textContent)).toEqual([
+      copy.books.shippingZoneNear,
+      copy.books.shippingZoneDelta,
+      copy.books.shippingZoneFar,
+    ]);
+    // Each row carries its OWN zone's price, not the floor three times.
+    expect(zones.map((zone) => zone.querySelector('.books-money')?.textContent)).toEqual([
+      '80',
+      '100',
+      '150',
+    ]);
+    expect(document.body.textContent).not.toContain('الكتبالقاهرة');
+  });
+
+  it('says «مجانًا» for a free zone, and drops the «بيبدأ من» floor when that floor is zero', () => {
+    render(<BooksShippingChip rates={{ cairo_giza: 0, delta: 10_000, far: 15_000 }} />);
+
+    // Still the zoned card — two zones are charged, so the «مرة واحدة» rule
+    // is true and worth saying.
+    expect(screen.getByText(copy.books.shippingHeadline)).toBeTruthy();
+    expect(screen.getByText(copy.books.shippingFree)).toBeTruthy();
+    // «بيبدأ من 0 ج» is not a floor, and a bare «0» reads as a price that
+    // failed to load.
+    expect(document.body.textContent).not.toContain('بيبدأ');
+    expect(document.body.textContent).not.toMatch(/(^|\D)0(\D|$)/);
+  });
+
   it('does not lead with a zone the reader might not be in', () => {
     render(<BooksShippingChip rates={{ cairo_giza: 8_000, delta: 10_000, far: 15_000 }} />);
 

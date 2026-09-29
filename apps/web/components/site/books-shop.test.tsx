@@ -108,6 +108,29 @@ describe('BooksShop', () => {
   });
 
   /**
+   * On a long shelf the reader scans for what they already picked by the card
+   * itself, not by the stepper at its foot — so the card says «في الطلب» the
+   * moment it is in the basket, and stops saying it when it leaves.
+   */
+  it('marks a card as in the basket, and unmarks it when it is taken out', () => {
+    const { container } = render(<BooksShop catalog={catalog} instapay={null} vodafoneCash={null} />);
+    const card = container.querySelector('.book-card');
+
+    expect(card?.classList.contains('book-card--in-cart')).toBe(false);
+    expect(screen.queryByText(copy.books.added)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: copy.books.add }));
+    expect(card?.classList.contains('book-card--in-cart')).toBe(true);
+    expect(screen.getByText(copy.books.added)).toBeTruthy();
+
+    // The stepper's «−» at a quantity of one removes the line. (The basket's
+    // own «شيله» carries the same name, so the stepper is found by its box.)
+    fireEvent.click(card?.querySelector('.book-stepper__btn') as Element);
+    expect(card?.classList.contains('book-card--in-cart')).toBe(false);
+    expect(screen.queryByText(copy.books.added)).toBeNull();
+  });
+
+  /**
    * The شرح book and the لغات edition of one subject are two rows with nearly
    * the same title, the same generated cover and often the same price. Before
    * this chip the only thing separating them on the shelf was a word inside the
