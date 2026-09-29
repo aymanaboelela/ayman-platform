@@ -352,7 +352,18 @@ export default async function StudentDetailPage({
           ) : (
             <ConversationSection userId={userId} conversation={conversation} />
           )}
-          {devices === null ? <ForbiddenPanel /> : <DevicesSection devices={devices} />}
+          {/* `canManage` hides the three writes from an operator who holds
+              `student:read` alone — they would only come back 403. */}
+          {devices === null ? (
+            <ForbiddenPanel />
+          ) : (
+            <DevicesSection
+              userId={userId}
+              devices={devices}
+              maxDevices={student.maxDevices}
+              canManage={can(session, 'student:write')}
+            />
+          )}
           {/* LAST in the column, deliberately. Two of its three controls are
               destructive and one is irreversible, so it sits below the
               everyday ones rather than beside them — an operator scrolling to

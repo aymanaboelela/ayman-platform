@@ -76,7 +76,8 @@ export const HUMAN_CHECK_FAILED_CODE = 'HUMAN_CHECK_FAILED';
 export const LOCKED_ACCOUNT_CODE = 'ACCOUNT_LOCKED';
 
 /**
- * «الحساب مفتوح على جهازين خلاص».
+ * «الحساب مفتوح على كل الأجهزة المسموح بيها» — the account's own limit
+ * (`users.max_devices`) or the default two.
  *
  * Emitted only after the submitted password has verified, exactly like
  * `BANNED_ACCOUNT_CODE` and for the identical reason — before that point it
