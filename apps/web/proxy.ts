@@ -595,7 +595,10 @@ function sharedCspDirectives(dev: boolean): string[] {
     // a host was allowed in the directive someone assumed it would use rather
     // than the one it actually uses. Its entry in `connect-src` is left alone —
     // harmless, and removing it would only invite the reverse error later.
-    `img-src 'self' blob: data: https://i.ytimg.com https://c.clarity.ms https://c.bing.com ${MEDIA_ORIGIN}`,
+    // `VIDEO_ORIGIN`: the frame the encoder cuts for every uploaded lecture
+    // (`v/<id>/poster.jpg`, beside the ladder) — the admin's lecture preview
+    // shows it before the player loads.
+    `img-src 'self' blob: data: https://i.ytimg.com https://c.clarity.ms https://c.bing.com ${MEDIA_ORIGIN} ${VIDEO_ORIGIN}`.trimEnd(),
     "font-src 'self'",
     // Same reasoning for uploaded audio/video served from the media origin.
     //
