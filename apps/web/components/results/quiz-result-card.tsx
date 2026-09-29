@@ -1,11 +1,50 @@
 import Link from 'next/link';
+import {
+  ArrowDown,
+  ArrowUp,
+  BookOpen,
+  CalendarCheck2,
+  Check,
+  Equal,
+  Hourglass,
+  Sparkles,
+  Star,
+  type LucideIcon,
+} from 'lucide-react';
 import { attemptAllowance, copy, formatCopy, type QuizHistoryRow } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
+import { ProgressRing } from '@/components/progress-ring';
+import { formatDay, verdictOf, type Verdict } from '@/lib/results-view';
 import { quizHref, reviewHref } from '@/lib/quiz-links';
 
+const c = copy.results;
+
 /**
- * One quiz the student has sat: what they best scored, what they scored last
- * time, how many attempts are left, and the two things they can do about it.
+ * The ring's colour per verdict — the same `--ok` / `--err` every other
+ * screen uses for a pass and a fail, because this IS that verdict. «امتياز»
+ * keeps the pass colour on the ring and earns a separate badge: it is a pass
+ * first.
+ */
+const RING: Record<Verdict, string> = {
+  excellent: 'var(--ok)',
+  passed: 'var(--ok)',
+  failed: 'var(--err)',
+  pending: 'var(--info)',
+};
+
+const BADGE: Record<Verdict, { icon: LucideIcon; label: string }> = {
+  excellent: { icon: Check, label: c.verdictPassed },
+  passed: { icon: Check, label: c.verdictPassed },
+  // `copy.quiz.failed` — «محتاجة مراجعة» — is a STATE with a way forward,
+  // and it is the word the quiz's own results screen already uses. The card
+  // must not say something harsher about the same sitting.
+  failed: { icon: BookOpen, label: copy.quiz.failed },
+  pending: { icon: Hourglass, label: copy.quiz.pendingNotFinal },
+};
+
+/**
+ * One exam the student has sat: its score at a glance, how the latest sitting
+ * compared with the one before, and the two things there are to do about it.
  *
  * ## Why both "best" and "latest"
  *
@@ -13,6 +52,18 @@ import { quizHref, reviewHref } from '@/lib/quiz-links';
  * two sittings is the student's grade — and `latest` is how it went most
  * recently, which is the one a student checks after an improvement sitting.
  * Showing only the best hides a decline; showing only the latest hides a pass.
+ *
+ * With ONE sitting they are the same attempt, so `latest` is not printed at
+ * all: two identical figures side by side read as two results, and that is
+ * almost every card on this page (every quiz is one graded sitting; only the
+ * final exam offers a second).
+ *
+ * ## The delta
+ *
+ * `delta` is the latest sitting minus the one before it (`latestDeltas`,
+ * from the series the page already has). A rise is green with an arrow; a
+ * fall is quiet grey, NOT red — the best still counts, and a student reading
+ * a lower second paper does not need the card to say it twice.
  *
  * ## The review link is unconditional
  *
@@ -22,9 +73,25 @@ import { quizHref, reviewHref } from '@/lib/quiz-links';
  * link can never leak anything and never dead-ends — a student gets told why,
  * which is strictly better than a link that silently is not there.
  */
-export function QuizResultRow({ row }: { row: QuizHistoryRow }) {
+export function QuizResultCard({
+  row,
+  delta = null,
+  showCourse = false,
+  headingLevel = 3,
+}: {
+  row: QuizHistoryRow;
+  delta?: number | null;
+  /** Off inside a course group, whose header already names the course. */
+  showCourse?: boolean;
+  /** 3 under the section's h2; 4 under a course group's h3. */
+  headingLevel?: 3 | 4;
+}) {
+  const verdict = verdictOf(row);
+  const Heading = headingLevel === 3 ? 'h3' : 'h4';
+  const Badge = BADGE[verdict].icon;
+
   const attempts = row.allowsImprovement
-    ? formatCopy(copy.results.attemptsOf, {
+    ? formatCopy(c.attemptsOf, {
         used: row.attemptsUsed,
         // Never a literal 2. The allowance has exactly one home, and a copy of
         // it here is the sort of thing that survives a rule change by weeks.
@@ -42,76 +109,82 @@ export function QuizResultRow({ row }: { row: QuizHistoryRow }) {
   const canImprove = row.allowsImprovement && !row.improvementUsed;
 
   return (
-    <li className="flex flex-col gap-4 border-b border-line-subtle p-5 last:border-b-0 sm:flex-row sm:items-center">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[length:var(--fs-text-base)] font-medium text-fg">
-          {row.quizTitle}
-        </p>
-        <p className="truncate text-[length:var(--fs-text-sm)] text-fg-muted">{row.courseTitle}</p>
+    <li className="rs-exam" data-verdict={verdict}>
+      <div className="rs-exam__top">
+        <ProgressRing percent={row.bestPercent ?? 0} size={64} color={RING[verdict]}>
+          <span className="rs-exam__ring-num rs-ltr" aria-hidden="true">
+            {row.bestPercent === null ? '—' : `${row.bestPercent}%`}
+          </span>
+        </ProgressRing>
+
+        <div className="rs-exam__id">
+          <Heading className="rs-exam__title">{row.quizTitle}</Heading>
+          {showCourse ? <p className="rs-exam__course">{row.courseTitle}</p> : null}
+          <p className="rs-exam__badges">
+            <span className="rs-verdict" data-verdict={verdict}>
+              <Badge className="size-3.5" aria-hidden="true" />
+              {BADGE[verdict].label}
+            </span>
+            {verdict === 'excellent' ? (
+              <span className="rs-verdict" data-verdict="star">
+                <Star className="size-3.5" aria-hidden="true" />
+                {c.verdictExcellent}
+              </span>
+            ) : null}
+          </p>
+        </div>
       </div>
 
-      <dl className="flex shrink-0 items-center gap-5">
-        <Figure label={copy.results.best} percent={row.bestPercent} passed={row.passed} />
-        <Figure label={copy.results.latest} percent={row.latestPercent} passed={null} />
-        <div>
-          <dt className="whitespace-nowrap text-[length:var(--fs-mono-label)] text-fg-muted">
-            {copy.results.attemptsUsed}
-          </dt>
-          {/* `whitespace-nowrap`: "من غير حد" is three words in a column sized
-              for "٢ من ٣", and it wrapped to three stacked lines that pushed
-              the row's height out. It is a value, not prose — it breaks the
-              layout before it breaks the line. */}
-          <dd className="mono tabular whitespace-nowrap text-[length:var(--fs-text-sm)] text-fg">
-            {attempts}
-          </dd>
+      <dl className="rs-exam__figs">
+        <Figure label={c.best} percent={row.bestPercent} passed={row.passed} />
+        {row.attemptsUsed > 1 ? (
+          <Figure label={c.latest} percent={row.latestPercent} passed={null} delta={delta} />
+        ) : null}
+        <div className="rs-fig">
+          <dt className="rs-fig__label">{c.attemptsUsed}</dt>
+          {/* `whitespace-nowrap`: it is a value, not prose — «محاولة واحدة»
+              wrapping to two stacked lines pushed the card's height out. */}
+          <dd className="rs-fig__value rs-fig__value--quiet whitespace-nowrap">{attempts}</dd>
         </div>
       </dl>
 
-      {/* `h-10 md:h-9` on both links below. These are the only two actions on
-          this screen, they sit 8px apart at the bottom of every row, and at
-          36px they were the last controls here still below a fingertip. 40px
-          is not a new number invented for them: it is exactly what study.css
-          gives `.chip`, `.review-filter__option` and `.verdict` under
-          `max-width: 47.999rem`, and what `Button`'s `sm` size does — the
-          same breakpoint Tailwind's `md` names. These two escaped all four of
-          those passes only because they are one-off utility strings rather
-          than a shared class. Above `md` nothing about the row changes. */}
-      <div className="flex shrink-0 items-center gap-2">
-        <Link
-          href={reviewHref(row.lessonId, row.latestAttemptId)}
-          className={cn(
-            'inline-flex h-10 items-center rounded-sm border border-line px-3 md:h-9',
-            'text-[length:var(--fs-text-sm)] text-fg',
-            'transition-colors duration-[160ms] ease-out hover:bg-surface-3',
-          )}
-        >
-          {copy.quiz.reviewAnswers}
-        </Link>
-
+      <div className="rs-exam__foot">
         {canImprove ? (
-          // To the quiz's own intro page, not straight into a new attempt.
-          // Starting a graded exam is not something a link should do on hover
-          // or on a mis-tap — that page states the duration, the marks and the
-          // attempts left, and owns the button that actually creates one.
-          <Link
-            href={quizHref(row.lessonId)}
-            className={cn(
-              'inline-flex h-10 items-center rounded-sm bg-accent px-3 md:h-9',
-              'text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]',
-              'transition-colors duration-[160ms] ease-out hover:bg-accent-hover',
-            )}
-          >
-            {copy.quiz.improveExam}
-          </Link>
+          <p className="rs-exam__status" data-open="">
+            <Sparkles className="size-4 shrink-0" aria-hidden="true" />
+            {c.improveOpen}
+          </p>
         ) : (
-          // Two different endings. «استعملت محاولة التحسين» is the truthful one
-          // for an exam whose second sitting is spent; telling that student
-          // "you have already sat this" is technically true and answers a
-          // question they did not ask.
-          <span className="text-[length:var(--fs-text-sm)] text-fg-faint">
-            {row.improvementUsed ? copy.quiz.improveUsed : copy.quiz.noAttemptsLeft}
-          </span>
+          <p className="rs-exam__status">
+            <CalendarCheck2 className="size-4 shrink-0" aria-hidden="true" />
+            <time dateTime={row.lastSubmittedAt}>
+              {formatCopy(c.submittedOn, { date: formatDay(row.lastSubmittedAt) })}
+            </time>
+          </p>
         )}
+
+        <div className="rs-exam__actions">
+          {/* SOLID when reviewing is the one thing left to do about this
+              exam — a paper under the pass mark with no second sitting —
+              which is also what the hero's sentence for a low average points
+              at. Outlined everywhere else, so an improvement sitting, when
+              there is one, stays the single loudest button on the card. */}
+          <Link
+            href={reviewHref(row.lessonId, row.latestAttemptId)}
+            className={cn('chip', verdict === 'failed' && !canImprove ? 'chip--solid' : 'chip--accent')}
+          >
+            {copy.quiz.reviewAnswers}
+          </Link>
+          {canImprove ? (
+            // To the quiz's own intro page, not straight into a new attempt.
+            // Starting a graded exam is not something a link should do on a
+            // mis-tap — that page states the duration, the marks and the
+            // attempts left, and owns the button that actually creates one.
+            <Link href={quizHref(row.lessonId)} className="chip chip--solid">
+              {copy.quiz.improveExam}
+            </Link>
+          ) : null}
+        </div>
       </div>
     </li>
   );
@@ -129,34 +202,32 @@ export function QuizResultRow({ row }: { row: QuizHistoryRow }) {
  * same value `ExamsSection` and `recordQuizResult` use.
  *
  * So every score from 50 to 69 was printed in GREEN on `/results` while the
- * dashboard, the lesson and the student's actual grade all said failed. The
- * number was right and its colour contradicted every other screen — the worst
- * shape for this particular mistake, because the figure it miscolours is
- * labelled «أحسن» and is the one a student reads as their standing.
+ * dashboard, the lesson and the student's actual grade all said failed.
  *
  * `passed` is nullable (an attempt awaiting essay grading has no verdict yet),
  * and null reads as neutral rather than as a fail.
  *
- * `latest` passes `null` deliberately, which is not the same thing as "not yet
- * graded" — it is that a lower recent score coloured red next to a green best
- * would say "you failed" about a quiz the student has already passed. Only the
- * figure that DECIDES the grade gets to wear the verdict's colour.
+ * `latest` passes `null` deliberately: a lower recent score coloured red next
+ * to a green best would say "you failed" about a quiz the student has already
+ * passed. Only the figure that DECIDES the grade wears the verdict's colour.
  */
 function Figure({
   label,
   percent,
   passed,
+  delta = null,
 }: {
   label: string;
   percent: number | null;
   passed: boolean | null;
+  delta?: number | null;
 }) {
   return (
-    <div>
-      <dt className="text-[length:var(--fs-mono-label)] text-fg-muted">{label}</dt>
+    <div className="rs-fig">
+      <dt className="rs-fig__label">{label}</dt>
       <dd
         className={cn(
-          'mono tabular text-[length:var(--fs-text-base)] font-medium',
+          'rs-fig__value',
           percent === null
             ? 'text-fg-muted'
             : passed === null
@@ -166,8 +237,28 @@ function Figure({
                 : 'text-[color:var(--err)]',
         )}
       >
-        {percent === null ? copy.results.noneYet : `${percent}%`}
+        <span className="rs-ltr">{percent === null ? c.noneYet : `${percent}%`}</span>
+        {delta === null ? null : <Delta delta={delta} />}
       </dd>
     </div>
+  );
+}
+
+function Delta({ delta }: { delta: number }) {
+  const direction = delta > 0 ? 'up' : delta < 0 ? 'down' : 'same';
+  const Icon = direction === 'up' ? ArrowUp : direction === 'down' ? ArrowDown : Equal;
+  const words =
+    direction === 'up' ? c.deltaUp : direction === 'down' ? c.deltaDown : c.deltaSame;
+
+  return (
+    <span className="rs-delta" data-direction={direction}>
+      <Icon className="size-3.5" aria-hidden="true" />
+      {direction === 'same' ? null : (
+        <span className="rs-ltr" aria-hidden="true">
+          {Math.abs(delta)}
+        </span>
+      )}
+      <span className="sr-only">{formatCopy(words, { n: Math.abs(delta) })}</span>
+    </span>
   );
 }

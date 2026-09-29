@@ -3,6 +3,7 @@ import type { QuizHistoryPoint } from '@ayman/contracts';
 import {
   CHART_HEIGHT,
   CHART_WIDTH,
+  areaPoints,
   passLineY,
   polylinePoints,
   projectSeries,
@@ -80,6 +81,34 @@ describe('projectSeries', () => {
       expect(projected.y).toBeGreaterThanOrEqual(0);
       expect(projected.y).toBeLessThanOrEqual(CHART_HEIGHT);
     }
+  });
+});
+
+describe('projectSeries with an inset', () => {
+  it('pulls both ends in by the inset and keeps the RTL order', () => {
+    const projected = projectSeries(
+      [point({ attemptId: 'old' }), point({ attemptId: 'mid' }), point({ attemptId: 'new' })],
+      7,
+    );
+
+    expect(projected[0]?.x).toBe(CHART_WIDTH - 7);
+    expect(projected[1]?.x).toBe(CHART_WIDTH / 2);
+    expect(projected[2]?.x).toBe(7);
+  });
+
+  it('still centres a single point', () => {
+    expect(projectSeries([point()], 7)[0]?.x).toBe(CHART_WIDTH / 2);
+  });
+});
+
+describe('areaPoints', () => {
+  it('closes the wash along the floor, under the two ends', () => {
+    const projected = projectSeries([point({ scorePercent: 0 }), point({ scorePercent: 100 })]);
+    expect(areaPoints(projected)).toBe(`100,${CHART_HEIGHT} 0,0 0,${CHART_HEIGHT} 100,${CHART_HEIGHT}`);
+  });
+
+  it('draws nothing under a single point', () => {
+    expect(areaPoints(projectSeries([point()]))).toBe('');
   });
 });
 
