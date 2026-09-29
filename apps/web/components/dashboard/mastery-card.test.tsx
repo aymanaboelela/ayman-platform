@@ -128,3 +128,41 @@ describe('MasteryCard', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('MasteryCard — bands and bidi', () => {
+  it('colours each row by the same band /results uses', () => {
+    const { container } = render(
+      <MasteryCard
+        mastery={{
+          weakest: [
+            { ...topic, categoryId: 'a', accuracyPercent: 27 },
+            { ...topic, categoryId: 'b', accuracyPercent: 58 },
+          ],
+          strongest: [{ ...topic, categoryId: 'c', accuracyPercent: 96 }],
+          evaluated: 3,
+          pending: 0,
+        }}
+      />,
+    );
+
+    const bands = [...container.querySelectorAll('.topic-row')].map((row) => row.getAttribute('data-band'));
+    expect(bands).toEqual(['low', 'pass']);
+    expect(container.querySelector('.topic-strong__item')?.getAttribute('data-band')).toBe('high');
+  });
+
+  it('keeps «1-2» in a topic name from being reordered into «2-1»', () => {
+    const { container } = render(
+      <MasteryCard
+        mastery={{
+          weakest: [{ ...topic, name: 'امتحان نصف الشهر — الدرسان 1-1 و 1-2' }],
+          strongest: [],
+          evaluated: 1,
+          pending: 0,
+        }}
+      />,
+    );
+
+    const runs = [...container.querySelectorAll('.topic-row__title bdi[dir="ltr"]')].map((el) => el.textContent);
+    expect(runs).toEqual(['1-1', '1-2']);
+  });
+});

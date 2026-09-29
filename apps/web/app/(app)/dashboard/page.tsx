@@ -24,7 +24,6 @@ import { getSession } from '@/lib/session';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { xpFor } from '@/lib/xp';
 import { Achievements } from '@/components/dashboard/achievements';
-import { AsideBlock } from '@/components/dashboard/aside-block';
 import { ContinueWatchingCard } from '@/components/dashboard/continue-watching-card';
 import { DashboardHero } from '@/components/dashboard/dashboard-hero';
 import { EnrolledCourseCard } from '@/components/dashboard/enrolled-course-card';
@@ -777,30 +776,22 @@ export default async function DashboardPage() {
             is most days — which is also why it is safe this high in the
             column.
           */}
-          {dashboard.pendingExams.length > 0 ? (
-            /* No banner: this one renders only when something is actually
-               waiting, and a decorative header over an alert makes it read as
-               standing furniture. */
-            <AsideBlock>
-              <PendingExamsCard exams={dashboard.pendingExams} />
-            </AsideBlock>
-          ) : null}
+          {/* Draws its own card and head now, like every card in this column —
+              and still renders nothing at all when nothing is waiting. */}
+          <PendingExamsCard exams={dashboard.pendingExams} />
 
           {/*
-            «ذاكر ده» — the only block on the page that names a CAUSE rather
-            than a quantity, and the reason the aside exists at all rather than
-            being three decorative cards.
+            «نقوّي النقط دي» (was «ذاكر ده») — the only block on the page that
+            names a CAUSE rather than a quantity, and the reason the aside
+            exists at all rather than being three decorative cards. It draws
+            its own card and coloured head (`PanelHead`).
 
             `null` when the read failed, and the card is simply absent then —
             see `lib/mastery.ts`. This is an enhancement to a screen that was
             complete without it, and this page has been taken down once already
             by an added read that threw.
           */}
-          {mastery ? (
-            <AsideBlock art="mastery">
-              <MasteryCard mastery={mastery} />
-            </AsideBlock>
-          ) : null}
+          {mastery ? <MasteryCard mastery={mastery} /> : null}
 
           {/*
             «إنجازاتك» — the one block that reports what a student has DONE

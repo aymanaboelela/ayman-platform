@@ -3889,17 +3889,24 @@ export const copy = {
      * three.
      */
     tipOfDayTitle: 'نصيحة اليوم',
+    /*
+     * ⚠️ ولا جملة فيهم بتكلّم ولد. النسخة الأولى كان فيها سبعة من عشرة
+     * بصيغة المذكر («ذاكر»، «مذاكرتش»، «افتح الدرس اللي واقف عنده»، «قارن
+     * نفسك»، «استمر»…) — ونص اللي بيقروها بنات. اللي هنا يا اسم، يا جمع
+     * متكلّم («بنحبها»، «نرجع»)، زي «نبدأ من هنا» و«نختار كورس» تحت.
+     * `dashboard-voice.spec.ts` بيمسك الرجوع.
+     */
     tipOfDay: [
-      'عشر دقايق دلوقتي أحسن من ساعتين تقول هتعملهم بكرة.',
-      'افتح الدرس اللي واقف عنده — مش شرط تخلص الكورس النهارده، بس متسيبوش برد.',
-      'ذاكر الحاجة اللي مذاكرتش فيها كويس، مش اللي بتحبها بس.',
+      'عشر دقايق دلوقتي أحسن من ساعتين مستنيين لبكرة.',
+      'الدرس اللي وقفنا عنده أولى من أي حاجة — مش شرط الكورس يخلص النهارده، المهم ميبردش.',
+      'المذاكرة الصح بتبدأ بالحاجة الأصعب، مش بالحاجة اللي بنحبها بس.',
       'امتحان قصير بعد كل درس بيثبّت المعلومة أكتر من مراجعة عشر مرات.',
-      'لو تهت في موضوع، ارجع للدرس تاني — مفيش عيب في الإعادة.',
-      'خمس دقايق تلخيص بعد أي درس بتفرق أكتر مما تتخيل.',
-      'متقارنش نفسك بزمايلك — قارن نفسك بنفسك بدري.',
-      'يوم تذاكر فيه بجد أحسن من أسبوع تفتح فيه الكتاب وتقفله.',
-      'لو الدرس صعب، شوفه تاني قبل ما تدخل الامتحان — مش شرط تفهمه من أول مرة.',
-      'استمر — الفرق بين الناجح وغيره غالبًا هو إنه كمّل.',
+      'موضوع مش واضح؟ نرجع للدرس تاني — مفيش عيب في الإعادة.',
+      'خمس دقايق تلخيص بعد أي درس بتفرق فرق كبير.',
+      'المقارنة الحقيقية مع نفسك امبارح، مش مع حد تاني.',
+      'يوم مذاكرة بجد أحسن من أسبوع الكتاب فيه بيتفتح ويتقفل.',
+      'الدرس الصعب يستاهل مشاهدة تانية قبل الامتحان — مش شرط يتفهم من أول مرة.',
+      'الاستمرار هو السر — أغلب اللي بيوصلوا هما اللي كمّلوا للآخر.',
     ],
     /**
      * «شهر جديد اتفتح» — الشريط اللي فوق الداشبورد، للطالب اللي دافع بالشهر
@@ -3987,15 +3994,27 @@ export const copy = {
       review: 'شوف ورقتك',
     },
     mastery: {
-      title: 'ذاكر ده',
+      /**
+       * «نقوّي النقط دي» — was «ذاكر ده», a masculine imperative over a list
+       * of red bars: an order, to a boy, about what went wrong. Now first
+       * person plural like «نبدأ من هنا», and the list under it reads as the
+       * shortest way to more marks rather than as a charge sheet.
+       */
+      title: 'نقوّي النقط دي',
+      /** One line under the title — what the rows ARE, said as an opportunity:
+       *  marks still to be won, each beside the lesson that teaches it. */
+      lead: 'أكتر مواضيع فيها درجات لسه تتكسب، ومع كل واحد الدرس بتاعه.',
       /** `{n}` — how many topics cleared the evidence floor. Present so three
        *  rows do not read as "these are all the topics that exist". */
       evaluatedCount: '{n} موضوع اتقاسوا',
-      reviewCta: 'مراجعة',
-      strongLabel: 'متمكّن في:',
+      /** The per-row button. «نراجع», not «راجع»: the imperative only works
+       *  on a boy, and `dashboard-voice.spec.ts` bans it by name. */
+      reviewCta: 'نراجع',
+      /** Was «متمكّن في:» — an adjective about the reader, masculine. */
+      strongLabel: 'نقط القوة:',
       /** Nothing sat yet, or every topic still under the evidence floor. */
       emptyBody:
-        'لسه بنجمّع صورة عن مستواك. كام امتحان كمان وهتلاقي هنا بالظبط الضعف فين.',
+        'لسه بنجمّع صورة عن مستواك — كام امتحان كمان وهيظهر هنا بالظبط إيه اللي يستاهل مراجعة.',
       /** Topics measured, none under the review bar. A separate string from
        *  `emptyBody` on purpose: "we have not measured you" and "we measured
        *  you and you are fine" are different facts, and a student who has
@@ -4115,11 +4134,30 @@ export const copy = {
       firstExamTitle: 'أول امتحان',
       firstExamHint: 'أول امتحان يتقدّم ويتسلّم.',
       firstPassTitle: 'أول نجاح',
-      firstPassHint: 'اعدّي أي امتحان.',
+      /* Nouns, not «اعدّي» / «خُد» — a hint is read by boys and girls alike,
+         and «خُد» is the one that only works on a boy. */
+      firstPassHint: 'درجة نجاح في أي امتحان.',
       courseDoneTitle: 'كورس كامل',
       courseDoneHint: 'كورس كامل من أوله لآخره.',
       distinctionTitle: 'امتياز',
-      distinctionHint: 'خُد ٩٠٪ أو أكتر في أي امتحان.',
+      /* Latin digits, like every figure beside it on the tile grid — «٩٠٪»
+         next to «3 من 10» read as two different number systems. */
+      distinctionHint: 'درجة 90% أو أكتر في أي امتحان.',
+
+      /*
+       * ── How far along a locked marker is ──────────────────────────────
+       * Printed under a locked tile, in place of its hint, where the page
+       * already HAS the number: lessons finished, the furthest course, the best
+       * mark. The markers without one («أول امتحان»، «أول نجاح») are a single
+       * event, and «0 من 1» says less than the hint does. Which marker gets
+       * which is decided in `apps/web/lib/achievements.ts`.
+       */
+      /** `{n}` of `{total}` lessons — «عشر دروس». */
+      progressCount: '{n} من {total}',
+      /** `{percent}` — the furthest-along course — «كورس كامل». */
+      progressCourse: 'أقرب كورس {percent}%',
+      /** `{percent}` — the best mark so far — «امتياز». */
+      progressBest: 'أعلى درجة {percent}%',
     },
   },
 

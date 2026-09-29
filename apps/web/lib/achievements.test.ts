@@ -322,3 +322,63 @@ describe('tierName', () => {
     expect(tierName('gold')).toBe('ذهبية');
   });
 });
+
+describe('achievementsFor — progress on a locked marker', () => {
+  const byId = (list: ReturnType<typeof achievementsFor>, id: string) =>
+    list.find((badge) => badge.id === id)!;
+
+  it('counts lessons toward «عشر دروس»', () => {
+    const badges = achievementsFor({
+      dashboard: dashboard([course({ completedLessons: 3 })]),
+      summary: summary(),
+      completedLessons: 3,
+    });
+    expect(byId(badges, 'ten-lessons').progress).toEqual({ value: 3, target: 10, label: '3 من 10' });
+  });
+
+  it('measures «كورس كامل» against the furthest-along course', () => {
+    const badges = achievementsFor({
+      dashboard: dashboard([
+        course({ id: 'a', completedLessons: 1, totalLessons: 6 }),
+        course({ id: 'b', completedLessons: 5, totalLessons: 8 }),
+      ]),
+      summary: summary(),
+      completedLessons: 6,
+    });
+    expect(byId(badges, 'course-done').progress).toMatchObject({ value: 63, target: 100 });
+  });
+
+  it('measures «امتياز» against the best mark, and never reads it full while locked', () => {
+    const badges = achievementsFor({
+      dashboard: dashboard(),
+      // 89.6 rounds to 90 — the target — on a marker that is still locked.
+      summary: summary({ quizzesTaken: 1, bestPercent: 89.6 }),
+      completedLessons: 0,
+    });
+    const distinction = byId(badges, 'distinction');
+    expect(distinction.earned).toBe(false);
+    expect(distinction.progress).toMatchObject({ value: 89, target: 90 });
+  });
+
+  it('prints no meter where there is nothing to measure yet', () => {
+    // «أعلى درجة 0%» for a student who has never sat an exam states a mark
+    // they did not get, and a course meter with no course measures nothing.
+    const badges = achievementsFor({ dashboard: dashboard(), summary: summary(), completedLessons: 0 });
+    expect(byId(badges, 'distinction').progress).toBeUndefined();
+    expect(byId(badges, 'course-done').progress).toBeUndefined();
+  });
+
+  it('carries no progress on the single-event markers, or on anything earned', () => {
+    const badges = achievementsFor({
+      dashboard: dashboard([course({ completedLessons: 10, totalLessons: 10 })]),
+      summary: summary({ quizzesTaken: 1, passedCount: 1, bestPercent: 95 }),
+      completedLessons: 10,
+    });
+    expect(badges.every((badge) => badge.progress === undefined)).toBe(true);
+
+    const fresh = achievementsFor({ dashboard: dashboard(), summary: summary(), completedLessons: 0 });
+    for (const id of ['first-lesson', 'first-exam', 'first-pass']) {
+      expect(byId(fresh, id).progress).toBeUndefined();
+    }
+  });
+});

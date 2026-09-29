@@ -1,5 +1,5 @@
+import { Lightbulb, Quote } from 'lucide-react';
 import { copy } from '@ayman/contracts';
-import { CardArt } from './card-art';
 
 const c = copy.dashboard;
 
@@ -42,28 +42,37 @@ export function tipOfTheDay(date: Date = new Date()): string {
 }
 
 /**
- * ## Why this is a banner card and not a `.tile` any more
+ * ## Why a callout, and not a banner card any more
  *
- * It was a 40px well with a `Lightbulb` in it and one line of text beside it,
- * sitting full-width between the stats row and «إنجازاتك». Two things were
- * wrong with that and they are the same two the whole aside column fixes: at
- * full width a one-line card reads as important, and it is not — it is the
- * lightest thing on the page — and the glyph was too small to say "tip"
- * («غير الأيكونز، يبقى فيه صور، لأن بجد مش فاهم حاجة»).
+ * It was a 40px well with a `Lightbulb` beside one line of text, then an
+ * `.aside-card` with a 16/6 drawing of a lamp over an open book — and on a
+ * 390px phone that second form was ~250px tall for ONE sentence, most of it
+ * pale illustration («شكلها حلو أوي واضبط الدنيا»). It is now what it is: a
+ * short, coloured callout. The bulb is a solid medallion rather than a
+ * drawing, the sentence is set larger than body text because it is the only
+ * thing in the card, and a faint quote mark behind it says "a saying" without
+ * costing a line.
  *
- * The heading is new. There was none: the card printed the sentence with no
- * word anywhere saying what it was, so a student read a piece of advice with
- * no idea whether it was aimed at them, generated, or written by the
+ * Teal, not amber, for the card itself: amber on this page means "press this"
+ * and "you are here", and a tip is neither. The bulb keeps the amber because
+ * it is LIT — the same "live" sense the ring on the band uses.
+ *
+ * The heading stays. There was none once: the card printed the sentence with
+ * no word anywhere saying what it was, so a student read a piece of advice
+ * with no idea whether it was aimed at them, generated, or written by the
  * instructor. `c.tipOfDayTitle` names it.
  */
 export function TipOfDayCard() {
   return (
-    <section className="aside-card">
-      <CardArt name="tip" />
-      <div className="aside-card__body">
-        <h2 className="aside-card__title">{c.tipOfDayTitle}</h2>
-        <p className="aside-card__note">{tipOfTheDay()}</p>
+    <section className="tip-callout">
+      <span className="tip-callout__icon" aria-hidden="true">
+        <Lightbulb className="size-5" strokeWidth={2.25} />
+      </span>
+      <div className="tip-callout__body">
+        <h2 className="tip-callout__title">{c.tipOfDayTitle}</h2>
+        <p className="tip-callout__text">{tipOfTheDay()}</p>
       </div>
+      <Quote className="tip-callout__quote" aria-hidden="true" />
     </section>
   );
 }

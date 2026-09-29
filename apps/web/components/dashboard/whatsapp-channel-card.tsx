@@ -2,7 +2,6 @@ import { ArrowLeft } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { SOCIAL_MARKS, SocialIcon } from '@/components/site/social-icons';
-import { CardArt } from './card-art';
 import { WhatsappChannelLink } from './whatsapp-channel-link';
 
 const c = copy.dashboard.whatsappChannel;
@@ -62,7 +61,11 @@ export function WhatsappChannelCard({
    * كده بشكل حلو». The row layout at that width put a 44px mark, a title, a
    * subtitle and a button into 368px and the CTA wrapped under the text with
    * the arrow on its own line. The aside form stacks them instead, and opens
-   * with the banner drawing the same way its two neighbours in that column do.
+   * with the same coloured head (`.panel-head`) as the cards under it in that
+   * column — in WhatsApp's own green. It opened with a 16/6 drawing of a phone
+   * until the phone screenshot that called the column's pale banners
+   * unfinished; the real mark in a lit medallion says "WhatsApp" faster than
+   * a drawing of a handset did, at a third of the height.
    */
   variant?: 'row' | 'aside';
 }) {
@@ -75,23 +78,25 @@ export function WhatsappChannelCard({
         className={cn('aside-card block', !flush && 'mb-4')}
         style={{ '--wa': SOCIAL_MARKS.whatsapp.hex, '--wa-ink': '#0A2E1C' } as React.CSSProperties}
       >
-        <CardArt name="channel" />
-        <span className="aside-card__body block">
-          <span className="flex items-center gap-2.5">
-            <span
-              aria-hidden="true"
-              className="grid size-9 shrink-0 place-items-center rounded-[var(--r-md)] bg-[var(--wa)] text-white"
-            >
-              <SocialIcon mark={SOCIAL_MARKS.whatsapp} size={18} />
-            </span>
-            <span className="aside-card__title min-w-0 flex-1">{c.title}</span>
+        {/* `.panel-head` on spans rather than `<PanelHead>`: the whole card is
+            one link, and a heading element inside it would make the link's
+            accessible name a heading's. `data-hue="wa"` reads `--wa`, set on
+            the link above. */}
+        <span className="panel-head" data-hue="wa">
+          <span aria-hidden="true" className="panel-head__icon">
+            <SocialIcon mark={SOCIAL_MARKS.whatsapp} size={22} />
           </span>
-          <span className="aside-card__note block">{c.lead}</span>
+          <span className="panel-head__text">
+            <span className="panel-head__title block">{c.title}</span>
+            <span className="panel-head__lead block">{c.lead}</span>
+          </span>
+        </span>
+        <span className="aside-card__body block">
           {/* Full width down here rather than a chip at the end of a row: it
               is the only pressable thing in the card and the card is the
               width of a phone button. Dark ink on the green for the contrast
               reason the row variant's own comment sets out at length. */}
-          <span className="mt-3 flex items-center justify-center gap-1.5 rounded-[var(--r-sm)] bg-[var(--wa)] px-3 py-2.5 text-[length:var(--fs-text-base)] font-semibold text-[color:var(--wa-ink)]">
+          <span className="flex items-center justify-center gap-1.5 rounded-[var(--r-sm)] bg-[var(--wa)] px-3 py-2.5 text-[length:var(--fs-text-base)] font-semibold text-[color:var(--wa-ink)]">
             <ArrowLeft className="size-4" aria-hidden="true" />
             {c.cta}
           </span>
