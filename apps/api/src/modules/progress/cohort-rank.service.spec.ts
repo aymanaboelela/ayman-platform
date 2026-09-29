@@ -6,9 +6,15 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import { DEFAULT_REVIEW_OPTIONS } from '@ayman/contracts/quiz/quiz-settings';
 import { CohortRankSchema } from '@ayman/contracts/rank';
+import {
+  AdminLeaderboardSchema,
+  AdminStudentRankSchema,
+  LeaderboardQuerySchema,
+} from '@ayman/contracts/admin/leaderboard';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { CohortRankService, shortName, standing } from './cohort-rank.service';
+import { LeaderboardService } from './leaderboard.service';
 
 /**
  * الدفعة هنا سنة مالهاش وجود (٧٠٠ وشوية) عشان الداتابيز المحلية مليانة طلبة
@@ -224,6 +230,57 @@ describe('CohortRankService', () => {
     expect(none.cohort).toBeNull();
     expect(none.me.rank).toBeNull();
     expect(none.podium).toEqual([]);
+  });
+
+  /**
+   * «الأوائل» في الأدمن: الشاشة كلها قايمة على إن رقم كل طالب فيها هو اللي
+   * الطالب نفسه شايفه في `/rank`. فالتست بيسأل الطالب نفسه عن كل صف.
+   */
+  it('the admin leaderboard ranks the cohort exactly as each student sees it', async () => {
+    const board = new LeaderboardService(prisma, service);
+    // من غير السكيما: السنة هنا ٧٠٠ وشوية (شوف فوق)، والسكيما بتقفل على ١٢.
+    const result = await board.board({ ...LeaderboardQuerySchema.parse({}), year });
+
+    expect(() => AdminLeaderboardSchema.parse(result)).not.toThrow();
+    // مش فيها اللي مش مشترك، ولا الأدمن، ولا اللي مالوش سنة.
+    expect(result.cohort).toMatchObject({ year, systemId: null, size: 4, active: 3, pendingReview: 1 });
+    expect(result.rows.map((row) => [row.userId, row.rank, row.points])).toEqual([
+      [ids.top, 1, 220],
+      [ids.homework, 2, 180],
+      [ids.pending, 3, 80],
+      [ids.idle, 4, 0],
+    ]);
+    for (const row of result.rows) {
+      const own = await service.forUser(row.userId);
+      expect([own.me.rank, own.me.points]).toEqual([row.rank, row.points]);
+    }
+
+    // المدرّس بيشوف الاسم كامل والتفاصيل اللي الطالب بيشوفها عن نفسه بس.
+    expect(result.rows[0]?.fullName).toBe('ملك سعيد ذكي محمد');
+    expect(result.rows[1]?.homework).toEqual({ submitted: 1, accepted: 1, owed: 2 });
+    expect(result.podium.map((row) => row.userId)).toEqual([ids.top, ids.homework, ids.pending]);
+  });
+
+  it('searches inside the cohort without renumbering it', async () => {
+    const board = new LeaderboardService(prisma, service);
+    const result = await board.board({ ...LeaderboardQuerySchema.parse({ q: 'علا' }), year });
+
+    expect(result.rowCount).toBe(1);
+    expect(result.rows.map((row) => [row.userId, row.rank])).toEqual([[ids.homework, 2]]);
+    // المنصة من الدفعة كلها، مش من نتيجة البحث.
+    expect(result.podium).toHaveLength(3);
+  });
+
+  it('gives the student page the rank the student sees, and the cohort size beside it', async () => {
+    const hw = await service.forAdmin(ids.homework);
+    expect(() => AdminStudentRankSchema.parse(hw)).not.toThrow();
+    expect(hw).toMatchObject({ cohort: { year, systemId: null, size: 4 }, rank: 2, points: 180 });
+
+    // مش مشترك في كورس، فمش في اللقطة — بس `standing` بيحطّه، فالعدد بيعدّه.
+    const unenrolled = await service.forAdmin(ids.unenrolled);
+    expect(unenrolled).toMatchObject({ cohort: { size: 5 }, rank: 4, points: 0 });
+
+    expect(await service.forAdmin(ids.noYear)).toEqual({ cohort: null, rank: null, points: 0 });
   });
 
   it('an admin still sees their own points, ranked against the cohort they are not part of', async () => {

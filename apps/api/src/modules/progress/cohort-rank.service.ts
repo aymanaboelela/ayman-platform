@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import { RANK_POINTS, type CohortRank } from '@ayman/contracts/rank';
+import type { AdminStudentRank } from '@ayman/contracts/admin/leaderboard';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -24,6 +25,9 @@ const AVERAGE_WEIGHTS = { quizzes: 0.4, exams: 0.4, homework: 0.2 } as const;
 interface ScoreRow {
   user_id: string;
   full_name: string;
+  phone: string | null;
+  system_id: string | null;
+  school_stream: 'general' | 'languages' | null;
   points: number;
   quiz_n: number;
   quiz_avg: number | null;
@@ -43,27 +47,57 @@ export interface CohortEntry {
   points: number;
 }
 
-interface CohortKey {
+/**
+ * صف الدفعة زي ما بيتخزّن في الكاش: اللي `standing` محتاجه، وجنبه تفاصيل
+ * النقط اللي شاشة «الأوائل» في الأدمن بتعرضها.
+ *
+ * الشاشتين بيقروا **نفس اللقطة**، مش كويريين: لو الأدمن ليه كويري لوحده كان
+ * ممكن يتحسب في دقيقة غير اللي اتحسب فيها ترتيب الطالب، والاتنين يختلفوا
+ * على نفس الطالب. `standing` بيختار الحقول اللي بيبعتها بالاسم (`podium`
+ * و`ladder`)، فالاسم الكامل والموبايل هنا عمرهم ما بيوصلوا لطالب تاني.
+ */
+export interface CohortMember extends CohortEntry {
+  fullName: string;
+  phone: string | null;
+  /** `false` = بروفايل من قبل سؤال النظام، بيتقارن بالسنة كلها في `/rank`. */
+  systemKnown: boolean;
+  stream: 'general' | 'languages' | null;
+  stats: RankStats;
+}
+
+export type RankStats = Omit<CohortRank['me'], 'rank' | 'betterThanPercent'>;
+
+export interface CohortSnapshot {
+  at: number;
+  rows: CohortMember[];
+}
+
+export interface CohortKey {
   systemId: string | null;
   year: number;
 }
 
+/**
+ * مين بيتحسب في أي دفعة — مكتوبين مرة واحدة، لأن فيه مكانين بيعدّوا: الدفعة
+ * نفسها (`cohort`) وعدد كل تاب في شاشة الأدمن (`populationCounts`). لو اتكتبوا
+ * مرتين، التاب هيقول «٤٢» والقايمة تحته ٤٠.
+ *
+ * طالب، مش محظور، ومشترك في كورس واحد على الأقل: اللي عمل حساب وعمره ما فتح
+ * حاجة مش «دفعة»، وكان هيخلّي «أحسن من ٩٠٪» رقم منفوخ.
+ */
+const STUDENTS_ONLY = Prisma.sql`AND u."role" = 'student' AND u."banned_at" IS NULL`;
+const ENROLLED = Prisma.sql`EXISTS (SELECT 1 FROM "app"."enrollments" en WHERE en."user_id" = sp."user_id")`;
+
 @Injectable()
 export class CohortRankService {
-  private readonly cache = new Map<string, { at: number; rows: CohortEntry[] }>();
+  private readonly cache = new Map<string, CohortSnapshot>();
 
   constructor(private readonly prisma: PrismaService) {}
 
   async forUser(userId: string): Promise<CohortRank> {
-    const profile = await this.prisma.studentProfile.findUnique({
-      where: { userId },
-      select: { year: true, systemId: true },
-    });
+    const { me, placed } = await this.place(userId);
 
-    const [mine] = await this.scores(Prisma.sql`sp."user_id" = ${userId}`, false);
-    const me = mine ?? emptyRow(userId);
-
-    if (profile?.year == null) {
+    if (placed === null) {
       return {
         cohort: null,
         me: { ...stats(me), rank: null, betterThanPercent: null },
@@ -74,19 +108,66 @@ export class CohortRankService {
       };
     }
 
-    const key: CohortKey = { systemId: profile.systemId, year: profile.year };
-    const [cached, label] = await Promise.all([this.cohort(key), this.cohortLabel(key)]);
-    const placed = standing(cached.rows, { userId, name: shortName(me.full_name), points: me.points });
-
     return {
       // من غير `size` — شوف `CohortRankSchema.cohort`.
-      cohort: { label },
-      me: { ...stats(me), ...placed.me },
-      pointsToNextRank: placed.pointsToNextRank,
-      podium: placed.podium,
-      ladder: placed.ladder,
-      computedAt: new Date(cached.at).toISOString(),
+      cohort: { label: placed.label },
+      me: { ...stats(me), ...placed.standing.me },
+      pointsToNextRank: placed.standing.pointsToNextRank,
+      podium: placed.standing.podium,
+      ladder: placed.standing.ladder,
+      computedAt: new Date(placed.snapshot.at).toISOString(),
     };
+  }
+
+  /**
+   * «الترتيب في الدفعة: #N من M» لصفحة الطالب في الأدمن.
+   *
+   * نفس `place` اللي `forUser` بيمشي عليه بالحرف — صف الطالب لايف والباقيين
+   * من الكاش — فالرقم هو اللي الطالب شايفه في `/rank` في نفس اللحظة. الفرق
+   * الوحيد إن `size` بيتبعت: المدرّس صاحب الرقم ده.
+   */
+  async forAdmin(userId: string): Promise<AdminStudentRank> {
+    const { me, placed } = await this.place(userId);
+    if (placed === null) return { cohort: null, rank: null, points: me.points };
+
+    // الطالب نفسه ممكن مايكونش جوّه اللقطة (مش مشترك في كورس، أو اشترك بعد
+    // ما اتحسبت) — `standing` بيحطّه فيها، فالعدد لازم يعدّه زيه.
+    const others = placed.snapshot.rows.filter((row) => row.userId !== userId).length;
+    return {
+      cohort: { ...placed.key, label: placed.label, size: others + 1 },
+      rank: placed.standing.me.rank,
+      points: me.points,
+    };
+  }
+
+  /**
+   * الدفعة كلها زي ما هي في الكاش — لشاشة «الأوائل». نفس اللقطة اللي
+   * `forUser` بيرتّب الطالب وسطها، مش نسخة محسوبة لوحدها.
+   */
+  snapshot(key: CohortKey): Promise<CohortSnapshot> {
+    return this.cohort(key);
+  }
+
+  label(key: CohortKey): Promise<string> {
+    return this.cohortLabel(key);
+  }
+
+  /**
+   * كام طالب في كل (نظام، سنة) — لتابات شاشة الأدمن، من غير ما تتحسب نقط أي
+   * دفعة. نفس `STUDENTS_ONLY` و`ENROLLED` اللي الدفعة نفسها ماشية عليهم.
+   * `year = null` = مشترك ومالوش سنة، فمالوش دفعة خالص.
+   */
+  async populationCounts(): Promise<Array<{ systemId: string | null; year: number | null; n: number }>> {
+    const rows = await this.prisma.$queryRaw<Array<{ system_id: string | null; year: number | null; n: number }>>(
+      Prisma.sql`
+        SELECT sp."system_id"::text AS system_id, sp."year"::int AS year, count(*)::int AS n
+        FROM "app"."student_profiles" sp
+        JOIN "app"."users" u ON u."id" = sp."user_id" ${STUDENTS_ONLY}
+        WHERE ${ENROLLED}
+        GROUP BY 1, 2
+      `,
+    );
+    return rows.map((row) => ({ systemId: row.system_id, year: row.year, n: row.n }));
   }
 
   /** للتستات: الكاش عايش في الـinstance، والسبك الواحد بيبني دفعات ورا بعض. */
@@ -94,7 +175,42 @@ export class CohortRankService {
     this.cache.clear();
   }
 
-  private async cohort(key: CohortKey): Promise<{ at: number; rows: CohortEntry[] }> {
+  /**
+   * الطالب وسط دفعته: صفه هو محسوب دلوقتي، والدفعة من الكاش. `placed = null`
+   * لما البروفايل مالوش سنة — مفيش دفعة يترتّب فيها.
+   */
+  private async place(userId: string): Promise<{
+    me: ScoreRow;
+    placed: {
+      key: CohortKey;
+      label: string;
+      snapshot: CohortSnapshot;
+      standing: ReturnType<typeof standing>;
+    } | null;
+  }> {
+    const profile = await this.prisma.studentProfile.findUnique({
+      where: { userId },
+      select: { year: true, systemId: true },
+    });
+
+    const [mine] = await this.scores(Prisma.sql`sp."user_id" = ${userId}`, false);
+    const me = mine ?? emptyRow(userId);
+    if (profile?.year == null) return { me, placed: null };
+
+    const key: CohortKey = { systemId: profile.systemId, year: profile.year };
+    const [snapshot, label] = await Promise.all([this.cohort(key), this.cohortLabel(key)]);
+    return {
+      me,
+      placed: {
+        key,
+        label,
+        snapshot,
+        standing: standing(snapshot.rows, { userId, name: shortName(me.full_name), points: me.points }),
+      },
+    };
+  }
+
+  private async cohort(key: CohortKey): Promise<CohortSnapshot> {
     const cacheKey = `${key.systemId ?? '-'}:${key.year}`;
     const hit = this.cache.get(cacheKey);
     if (hit && Date.now() - hit.at < COHORT_TTL_MS) return hit;
@@ -107,18 +223,26 @@ export class CohortRankService {
      * فبيدخلوا مع سنتهم. والتمن إن اللي نظامه NULL بيتقارن بالسنة كلها — وده
      * أقرب للحقيقة من إنه يتقارن بنفسه.
      *
-     * ولازم يكون مشترك في كورس واحد على الأقل: اللي عمل حساب وعمره ما فتح
-     * حاجة مش «دفعة»، وكان هيخلّي «أحسن من ٩٠٪» رقم منفوخ.
+     * ولازم يكون مشترك في كورس واحد على الأقل — شوف `ENROLLED` فوق.
      */
     const rows = await this.scores(
       Prisma.sql`sp."year" = ${key.year}
         AND (${key.systemId}::uuid IS NULL OR sp."system_id" IS NULL OR sp."system_id" = ${key.systemId}::uuid)
-        AND EXISTS (SELECT 1 FROM "app"."enrollments" en WHERE en."user_id" = sp."user_id")`,
+        AND ${ENROLLED}`,
       true,
     );
-    const entry = {
+    const entry: CohortSnapshot = {
       at: Date.now(),
-      rows: rows.map((row) => ({ userId: row.user_id, name: shortName(row.full_name), points: row.points })),
+      rows: rows.map((row) => ({
+        userId: row.user_id,
+        name: shortName(row.full_name),
+        points: row.points,
+        fullName: row.full_name,
+        phone: row.phone,
+        systemKnown: row.system_id !== null,
+        stream: row.school_stream,
+        stats: stats(row),
+      })),
     };
     this.cache.set(cacheKey, entry);
     return entry;
@@ -146,13 +270,14 @@ export class CohortRankService {
    * التمبلت (`new-admin-screen-traps`).
    */
   private async scores(condition: Prisma.Sql, studentsOnly: boolean): Promise<ScoreRow[]> {
-    const roleFilter = studentsOnly
-      ? Prisma.sql`AND u."role" = 'student' AND u."banned_at" IS NULL`
-      : Prisma.empty;
+    const roleFilter = studentsOnly ? STUDENTS_ONLY : Prisma.empty;
 
     return this.prisma.$queryRaw<ScoreRow[]>(Prisma.sql`
       WITH cohort AS (
-        SELECT sp."user_id", sp."full_name"
+        -- الموبايل والنظام وعربي/لغات لشاشة الأدمن بس (بحث وفلتر وعلامة)،
+        -- وكلهم أعمدة في نفس الصف، فمش بيكلّفوا join زيادة.
+        SELECT sp."user_id", sp."full_name", sp."phone"::text AS phone,
+          sp."system_id"::text AS system_id, sp."school_stream"::text AS school_stream
         FROM "app"."student_profiles" sp
         JOIN "app"."users" u ON u."id" = sp."user_id" ${roleFilter}
         WHERE ${condition}
@@ -235,7 +360,7 @@ export class CohortRankService {
         ) x
         GROUP BY 1
       )
-      SELECT c."user_id", c."full_name",
+      SELECT c."user_id", c."full_name", c.phone, c.system_id, c.school_stream,
         (COALESCE(qz.pts, 0) + COALESCE(hw.pts, 0))::int AS points,
         COALESCE(qz.quiz_n, 0) AS quiz_n, qz.quiz_avg, COALESCE(qz.quiz_full, 0) AS quiz_full,
         COALESCE(qz.exam_n, 0) AS exam_n, qz.exam_avg, COALESCE(qz.exam_full, 0) AS exam_full,
@@ -254,6 +379,9 @@ function emptyRow(userId: string): ScoreRow {
   return {
     user_id: userId,
     full_name: '',
+    phone: null,
+    system_id: null,
+    school_stream: null,
     points: 0,
     quiz_n: 0,
     quiz_avg: null,
@@ -272,7 +400,7 @@ function round1(value: number | null): number | null {
   return value == null ? null : Math.round(value * 10) / 10;
 }
 
-function stats(row: ScoreRow): Omit<CohortRank['me'], 'rank' | 'betterThanPercent'> {
+function stats(row: ScoreRow): RankStats {
   const owed = Math.max(row.hw_owed, row.hw_submitted);
   const parts: Array<[value: number, weight: number]> = [];
   if (row.quiz_avg != null) parts.push([row.quiz_avg, AVERAGE_WEIGHTS.quizzes]);
@@ -331,10 +459,7 @@ export function standing(
       (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0),
   );
 
-  const ranks: number[] = [];
-  all.forEach((row, i) => {
-    ranks.push(i > 0 && all[i - 1]!.points === row.points ? ranks[i - 1]! : i + 1);
-  });
+  const ranks = competitiveRanks(all.map((row) => row.points));
 
   const myIndex = all.findIndex((row) => row.isMe);
   const above = others.filter((row) => row.points > me.points);
@@ -358,6 +483,23 @@ export function standing(
       .map((row, i) => ({ rank: ranks[i]!, points: row.points, isMe: row.isMe }))
       .slice(ladderStart(myIndex, all.length), ladderStart(myIndex, all.length) + LADDER_SIZE),
   };
+}
+
+/**
+ * «١، ٢، ٢، ٤» لنقط مترتّبة من الأعلى للأقل: اللي نقطه زي اللي قبله بياخد
+ * رقمه، واللي بعدهم بيتخطّى بعددهم.
+ *
+ * دالة لوحدها عشان فيه مكانين بيرتّبوا — `standing` للطالب، و«الأوائل» في
+ * الأدمن — والاتنين لازم يدّوا نفس الرقم لنفس الطالب. لو كل واحد كتب اللوب
+ * بتاعه، أول تعديل في واحد (ترتيب كثيف «١، ٢، ٢، ٣» مثلًا) كان هيخلّي
+ * الشاشتين يختلفوا.
+ */
+export function competitiveRanks(sortedPoints: readonly number[]): number[] {
+  const ranks: number[] = [];
+  sortedPoints.forEach((points, i) => {
+    ranks.push(i > 0 && sortedPoints[i - 1] === points ? ranks[i - 1]! : i + 1);
+  });
+  return ranks;
 }
 
 const LADDER_SIZE = 5;
