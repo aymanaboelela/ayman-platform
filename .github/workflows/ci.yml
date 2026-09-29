@@ -934,10 +934,70 @@ jobs:
           echo "API_STARTED_BEFORE=$started" >> "$GITHUB_ENV"
           echo "BUILD_FINGERPRINT_BEFORE=$fp" >> "$GITHUB_ENV"
 
+      # ── Does this run need to ask Dokploy for anything? ─────────────────
+      #
+      # Dokploy's own GitHub integration rebuilds EVERY stack on every push to
+      # main, twenty minutes before this job gets here. So this job's webhooks
+      # were a second full build of the same commit on every stack, every
+      # merge — and a merge burst multiplied it: measured 2026-09-30, four
+      # merges inside five minutes produced ten builds of the last one per
+      # stack, and one earlier merge was built three times. Each build
+      # restarts the API, which kills any video encode in flight (see
+      # `STALE_CLAIM_MS` in video-mirror.service.ts) and drops every open SSE
+      # stream.
+      #
+      # The webhooks stay — they are the backstop for the day the push hook
+      # does not fire — but a run now skips them in the two cases where they
+      # can only duplicate work:
+      #
+      #   · SUPERSEDED — main has moved past this commit. The newer push was
+      #     built by the push hook with this commit inside it, and the newer
+      #     commit's own run will do this job's checking for both.
+      #   · ALREADY SHIPPED — production's API booted after this commit was
+      #     pushed, and the commit before it is at least ten minutes older,
+      #     so that boot can only be this push's build. The same two facts the
+      #     wait step already accepts as proof, read before triggering instead
+      #     of fifteen minutes after.
+      #
+      # Anything uncertain — a back-to-back merge, a missing `startedAt`, an
+      # API error — falls through to triggering, which is what happened
+      # before this step existed.
+      - name: Decide whether a rebuild is still needed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          head=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq '.sha' 2>/dev/null || true)
+          if [ -n "$head" ] && [ "$head" != "$GITHUB_SHA" ]; then
+            echo "main is at ${head:0:8} now, past ${GITHUB_SHA:0:8} — the push hook built it with this commit inside."
+            echo "SKIP_DEPLOY=superseded by ${head:0:8}" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          started="${API_STARTED_BEFORE:-}"
+          pushed=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" --jq '.commit.committer.date' 2>/dev/null || true)
+          parent=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" --jq '.parents[0].sha' 2>/dev/null || true)
+          parent_at=''
+          [ -n "$parent" ] && parent_at=$(gh api "repos/$GITHUB_REPOSITORY/commits/$parent" \
+            --jq '.commit.committer.date' 2>/dev/null || true)
+          if [ -z "$started" ] || [ -z "$pushed" ] || [ -z "$parent_at" ]; then
+            echo "not enough to tell (startedAt='${started}', pushed='${pushed}', parent='${parent_at}') — triggering as before"
+            exit 0
+          fi
+          gap=$(( $(date -u -d "$pushed" +%s) - $(date -u -d "$parent_at" +%s) ))
+          if [ "$started" \> "$pushed" ] && [ "$gap" -ge 600 ]; then
+            echo "pushed $pushed; the API has been up since $started, and the commit before this one is ${gap}s older"
+            echo "SKIP_DEPLOY=the push hook already shipped it (API up since $started)" >> "$GITHUB_ENV"
+          else
+            echo "no proof the push hook shipped this yet (API up since $started, pushed $pushed, gap ${gap}s) — triggering"
+          fi
+
       - name: Trigger the Dokploy deploy
         env:
           DEPLOY_URL: ${{ secrets.DOKPLOY_DEPLOY_URL }}
         run: |
+          if [ -n "${SKIP_DEPLOY:-}" ]; then
+            echo "not asking Dokploy: ${SKIP_DEPLOY} (see the step before this one)"
+            exit 0
+          fi
           # ## Why nothing in this step is fatal any more
           #
           # This job's verdict is "did production change", and the step AFTER
@@ -1122,6 +1182,12 @@ jobs:
         env:
           TENANT_DEPLOY_URLS: ${{ secrets.DOKPLOY_TENANT_DEPLOY_URLS }}
         run: |
+          # Every stack has the same push hook, so the answer read off Ayman's
+          # stack above is the answer for theirs too.
+          if [ -n "${SKIP_DEPLOY:-}" ]; then
+            echo "not asking the other stacks either: ${SKIP_DEPLOY}"
+            exit 0
+          fi
           if [ -z "$TENANT_DEPLOY_URLS" ]; then
             echo "No DOKPLOY_TENANT_DEPLOY_URLS — nothing but Ayman's stack to deploy."
             exit 0
@@ -1294,6 +1360,14 @@ jobs:
           }
 
           started_of() { printf '%s' "$1" | grep -oE '"startedAt":"[^"]*"' | cut -d'"' -f4; }
+
+          # Decided before any trigger — see «Decide whether a rebuild is
+          # still needed». Both cases are proof the build already happened (or
+          # is a newer run's to prove), so there is nothing to wait for.
+          if [ -n "${SKIP_DEPLOY:-}" ]; then
+            echo "Deployed: ${SKIP_DEPLOY}."
+            exit 0
+          fi
 
           # Set by the trigger step: `ok`, or a sentence about what went wrong
           # there. Nothing in that step is fatal any more (its own header says
