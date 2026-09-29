@@ -278,6 +278,26 @@ export class QuizBuilderService {
     await this.assertPaperAllowed(quizId, paper);
 
     const slotId = await this.prisma.$transaction(async (tx) => {
+      /*
+       * An archived question left the bank («امسح السؤال» on a question
+       * somebody had answered). The picker no longer lists it, but a tab
+       * opened before the delete still can — and a slot on it would put a
+       * question back on a paper the teacher took out of circulation.
+       *
+       * `FOR SHARE`, and inside this transaction: `QuestionRemovalService`
+       * takes `FOR UPDATE` on the same row before it decides, so the two
+       * serialise — either the slot lands first and the delete sees it and
+       * refuses, or the archive lands first and this sees it. Compared as
+       * text so a malformed id reaches the slot insert and fails there the
+       * way it always has, instead of as a cast error here.
+       */
+      const [entry] = await tx.$queryRaw<Array<{ archived: boolean }>>(Prisma.sql`
+        SELECT ("archived_at" IS NOT NULL) AS "archived"
+        FROM "app"."question_bank_entries" WHERE "id"::text = ${input.bankEntryId}
+        FOR SHARE
+      `);
+      if (entry?.archived) throw new BadRequestException({ code: 'question_archived' });
+
       const position = await this.nextPosition(tx, quizId, paper);
       const created = await tx.quizSlot.create({
         data: {
@@ -526,9 +546,12 @@ export class QuizBuilderService {
         const available = await this.prisma.questionVersion.count({
           where: {
             status: 'ready',
-            bankEntry: filter.categoryIds?.length
-              ? { categoryId: { in: filter.categoryIds } }
-              : undefined,
+            // The same pool the draw uses (`AttemptService`): an archived
+            // question is not in it, so it must not count towards filling it.
+            bankEntry: {
+              archivedAt: null,
+              ...(filter.categoryIds?.length ? { categoryId: { in: filter.categoryIds } } : {}),
+            },
             type: filter.types?.length ? { in: filter.types } : undefined,
           },
         });

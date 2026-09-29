@@ -193,24 +193,24 @@ function SortableItem({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(isDragging && 'relative z-10 opacity-80')}
     >
-      <div className="flex items-center gap-2 rounded-sm border border-line-subtle bg-surface-2 p-2">
+      <div className={cn('order-row', isDragging && 'order-row--dragging')}>
         {/* The drag affordance and the position indicator are the same element:
             a student who cannot drag still reads the number, and one who can
-            has something obvious to grab. `touch-none` is what stops the
-            browser from claiming the gesture as a scroll before dnd-kit's
-            delay has elapsed. */}
+            has something obvious to grab. `touch-action: none` on
+            `.order-row__handle` is what stops the browser from claiming the
+            gesture as a scroll before dnd-kit's delay has elapsed. */}
         <button
           type="button"
           {...attributes}
           {...listeners}
           aria-label={copy.quiz.orderInstruction}
-          className="mono flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-sm bg-surface-3 text-[length:var(--fs-mono-label)] tabular-nums text-fg-muted"
+          className="order-row__handle"
         >
           {position}
         </button>
 
         <div className="min-w-0 flex-1">
-          <SafeHtml html={option.bodyHtml} />
+          <SafeHtml html={option.bodyHtml} className="text-fg" />
         </div>
 
         <div className="flex shrink-0 flex-col">

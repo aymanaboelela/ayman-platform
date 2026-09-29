@@ -1,0 +1,719 @@
+/* ===========================================================================
+   «بنك الأسئلة» — /admin/questions, the question page, and the delete dialog.
+
+   Its own file, imported by the components that use it, because nothing else
+   in the admin reads these objects (the same arrangement as
+   `components/centers/centers.css`).
+
+   The colour rule is the admin's (`admin.css`), unchanged:
+
+     ember   STRUCTURE — the band, the section chrome
+     amber   ACTION    — «سؤال جديد», what is selected
+     --ok    the correct option in a preview, and nothing else
+     --err   the delete control and the delete dialog, and nothing else
+
+   Two decorative hues on top, both CATEGORY MARKS in the sense
+   `lib/subject-art.ts` licenses — non-interactive, `aria-hidden` or doubled by
+   the text beside them: a hue per question TYPE on its chip, and a hue per
+   category on its dot. Neither lands on green or red (they are spoken for) or
+   on amber (it means "press"). Every hue is drawn at a fixed lightness and
+   chroma per theme so a row of them reads as one set.
+
+   RTL: logical properties only.
+   =========================================================================== */
+
+/* ── the page head ───────────────────────────────────────────────────────── */
+
+.qbank-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+  margin-block-start: var(--s-20);
+}
+
+/* A real button weight on the band: the two ways in are the whole point of
+   the page, so they are not chips. White-on-ember for the secondary one,
+   because every neutral inverts between themes and the band does not. */
+.qbank-hero__primary,
+.qbank-hero__secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-8);
+  block-size: 2.75rem;
+  padding-inline: var(--s-16);
+  border-radius: var(--r-md);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.qbank-hero__primary {
+  background: var(--a-9);
+  color: #1a1206;
+}
+
+.qbank-hero__primary:hover { background: var(--a-10); }
+
+.qbank-hero__secondary {
+  border: var(--hairline) solid rgb(255 255 255 / 0.35);
+  background: rgb(255 255 255 / 0.12);
+  color: var(--ink-fg);
+}
+
+.qbank-hero__secondary:hover { background: rgb(255 255 255 / 0.2); }
+
+.qbank-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--s-12);
+  margin-block: var(--s-20);
+}
+
+/* ── the two columns ─────────────────────────────────────────────────────── */
+
+/* `minmax(0, 1fr)`, not `1fr`, on the phone too: a bare `1fr` track is at
+   least as wide as its min-content, and a `<select>` is as wide as its
+   longest option — one long category name pushed the whole column past the
+   screen's edge, where `overflow-x: clip` silently cut it off. */
+.qbank-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-20);
+}
+
+@media (min-width: 64rem) {
+  .qbank-layout {
+    grid-template-columns: minmax(0, 1fr) 17rem;
+    align-items: start;
+  }
+}
+
+.qbank-main {
+  display: flex;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: var(--s-16);
+}
+
+/* ── the categories panel ────────────────────────────────────────────────── */
+
+/* A `<details>` that is open by default on a desktop and folded on a phone
+   (the page decides `open`), so on a 390px screen the list of questions is
+   not pushed under forty category rows. */
+.qbank-cats {
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+@media (min-width: 64rem) {
+  .qbank-cats {
+    position: sticky;
+    inset-block-start: calc(var(--admin-header-h) + var(--s-16));
+  }
+}
+
+.qbank-cats__summary {
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-8);
+  padding: var(--s-12) var(--s-16);
+  border-block-end: var(--hairline) solid var(--border);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+  list-style: none;
+}
+
+.qbank-cats__summary::-webkit-details-marker { display: none; }
+
+.qbank-cats__list {
+  display: flex;
+  max-block-size: 26rem;
+  flex-direction: column;
+  gap: var(--s-2);
+  overflow-y: auto;
+  padding: var(--s-8);
+}
+
+.qbank-cat {
+  --cat-h: 255;
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  min-block-size: 2.5rem;
+  padding: var(--s-4) var(--s-8);
+  border-radius: var(--r-sm);
+  color: var(--n-11);
+  font-size: var(--fs-text-sm);
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.qbank-cat:hover { background: var(--n-2); color: var(--n-12); }
+
+.qbank-cat[aria-current='page'] {
+  background: color-mix(in oklab, var(--a-9) 12%, var(--n-1));
+  color: var(--n-12);
+  font-weight: var(--fw-semibold);
+}
+
+.qbank-cat__dot {
+  flex: none;
+  inline-size: 0.625rem;
+  block-size: 0.625rem;
+  border-radius: var(--r-full);
+  background: oklch(0.66 0.12 var(--cat-h));
+}
+
+.qbank-cat__dot--all {
+  background: linear-gradient(135deg, var(--e-stage), var(--a-9));
+}
+
+.qbank-cat__name {
+  min-inline-size: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qbank-cat__count {
+  flex: none;
+  min-inline-size: 1.75rem;
+  padding-inline: var(--s-4);
+  border-radius: var(--r-full);
+  background: var(--n-3);
+  color: var(--n-11);
+  font-size: var(--fs-text-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.qbank-cats__empty {
+  padding: var(--s-4) var(--s-8) var(--s-8);
+  font-size: var(--fs-text-xs);
+  color: var(--n-10);
+}
+
+.qbank-cats__foot {
+  padding: var(--s-12);
+  border-block-start: var(--hairline) solid var(--border);
+}
+
+/* ── the view switch and the filter bar ──────────────────────────────────── */
+
+.qbank-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s-4);
+  padding: var(--s-4);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-2);
+}
+
+.qbank-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-8);
+  block-size: 2.25rem;
+  padding-inline: var(--s-12);
+  border-radius: var(--r-sm);
+  color: var(--n-11);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+
+.qbank-tab:hover { color: var(--n-12); }
+
+.qbank-tab[aria-current='page'] {
+  background: var(--n-1);
+  color: var(--n-12);
+  box-shadow: var(--shadow-sm);
+}
+
+.qbank-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s-8);
+  padding: var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+/* The search owns the first line; the two selects share the second, each
+   as wide as half of it. A `<select>` is otherwise as wide as its longest
+   option, and one category named like a sentence pushed the other off the
+   row. */
+.qbank-filters__form {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s-8);
+}
+
+.qbank-filters > label {
+  min-inline-size: 0;
+  flex: 1 1 12rem;
+}
+
+.qbank-filters select,
+.qbank-filters__search input { inline-size: 100%; }
+
+.qbank-filters__search {
+  display: flex;
+  min-inline-size: min(100%, 14rem);
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+/* «نسخة» — neutral, not ember: beside «امسح», a warm-brown chip read as a
+   second warning. */
+.qbank-plain {
+  border: var(--hairline) solid var(--border);
+  background: var(--n-1);
+  color: var(--n-12);
+  cursor: pointer;
+}
+
+.qbank-plain:hover { background: var(--n-3); }
+
+.qbank-filters__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-8);
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+/* ── the bulk bar ────────────────────────────────────────────────────────── */
+
+/* Sticky while anything is ticked, so «امسح المتعلّم» is reachable from the
+   fortieth row without scrolling back up. */
+.qbank-bulk {
+  position: sticky;
+  inset-block-start: calc(var(--admin-header-h) + var(--s-8));
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8) var(--s-12);
+  padding: var(--s-8) var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+  box-shadow: var(--shadow-sm);
+}
+
+.qbank-bulk--active {
+  border-color: color-mix(in oklch, var(--a-9), transparent 45%);
+  background: color-mix(in oklab, var(--a-9) 8%, var(--n-1));
+}
+
+.qbank-bulk__all {
+  display: inline-flex;
+  cursor: pointer;
+  align-items: center;
+  gap: var(--s-8);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+.qbank-bulk__count {
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.qbank-bulk__actions {
+  display: flex;
+  gap: var(--s-8);
+  margin-inline-start: auto;
+}
+
+/* ── one question ────────────────────────────────────────────────────────── */
+
+.qrow {
+  --type-h: 255;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-12);
+  padding: var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-inline-start: 4px solid oklch(0.7 0.11 var(--type-h));
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color var(--d-hover) var(--ease-out),
+    background var(--d-hover) var(--ease-out);
+}
+
+.qrow--selected {
+  border-color: var(--a-9);
+  border-inline-start-color: var(--a-9);
+  background: color-mix(in oklab, var(--a-9) 6%, var(--n-1));
+}
+
+.qrow__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8);
+}
+
+.qrow__pick {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: var(--min-tap-size);
+  block-size: var(--min-tap-size);
+  margin: calc(-1 * var(--s-8));
+  margin-inline-end: 0;
+  cursor: pointer;
+}
+
+.qtag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  block-size: 1.625rem;
+  padding-inline: var(--s-8);
+  border-radius: var(--r-full);
+  border: var(--hairline) solid var(--border);
+  background: var(--n-2);
+  color: var(--n-11);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+
+/* The type chip — the one hued tag. Same recipe as the letter wells in the
+   runner: fixed lightness and chroma, the hue from the row. */
+.qtag--type {
+  border-color: transparent;
+  background: oklch(0.94 0.045 var(--type-h));
+  color: oklch(0.42 0.13 var(--type-h));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .qtag--type {
+    background: oklch(0.32 0.07 var(--type-h));
+    color: oklch(0.88 0.08 var(--type-h));
+  }
+}
+
+:root[data-theme='dark'] .qtag--type {
+  background: oklch(0.32 0.07 var(--type-h));
+  color: oklch(0.88 0.08 var(--type-h));
+}
+
+.qtag--category .qbank-cat__dot { inline-size: 0.5rem; block-size: 0.5rem; }
+
+.qtag--ready {
+  border-color: color-mix(in oklch, var(--a-9), transparent 60%);
+  background: color-mix(in oklab, var(--a-9) 10%, var(--n-1));
+  color: var(--a-11);
+}
+
+.qtag--draft {
+  border-style: dashed;
+}
+
+.qtag--used {
+  border-color: var(--e-tint-line);
+  background: var(--e-tint);
+  color: var(--e-ink);
+}
+
+.qrow__stem {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+.qrow__stem img { max-block-size: 8rem; }
+
+/* The options, as the student will see them — letters and all — with the
+   correct one(s) in `--ok` and a check, so a wrong key is caught HERE rather
+   than by forty students. */
+.qrow__opts {
+  display: grid;
+  gap: var(--s-4);
+}
+
+@media (min-width: 48rem) {
+  .qrow__opts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.qopt {
+  display: flex;
+  min-inline-size: 0;
+  align-items: center;
+  gap: var(--s-8);
+  padding: var(--s-4) var(--s-8);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-2);
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.qopt__letter {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border-radius: var(--r-sm);
+  background: var(--n-4);
+  color: var(--n-11);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-bold);
+}
+
+.qopt__body {
+  min-inline-size: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qopt--right {
+  border-color: color-mix(in oklch, var(--ok), transparent 50%);
+  background: color-mix(in oklch, var(--ok), transparent 90%);
+  color: var(--n-12);
+}
+
+.qopt--right .qopt__letter {
+  background: color-mix(in oklch, var(--ok), transparent 75%);
+  color: var(--ok);
+}
+
+.qopt__right {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--ok);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+}
+
+/* A short-answer pattern is TEXT the student types — often Latin (`a < b`,
+   `print`), so it is isolated from the Arabic around it. */
+.qopt__pattern {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+}
+
+.qrow__note {
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.qrow__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-8);
+  padding-block-start: var(--s-12);
+  border-block-start: var(--hairline) solid var(--border);
+}
+
+/* ── the delete dialog ───────────────────────────────────────────────────── */
+
+.qdel__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+  padding: var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-inline-start: 4px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--n-2);
+}
+
+.qdel__group--delete { border-inline-start-color: var(--err); }
+.qdel__group--archive { border-inline-start-color: var(--info); }
+.qdel__group--blocked { border-inline-start-color: var(--a-9); }
+
+.qdel__title {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.qdel__hint {
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.qdel__items {
+  display: flex;
+  max-block-size: 10rem;
+  flex-direction: column;
+  gap: var(--s-4);
+  overflow-y: auto;
+  font-size: var(--fs-text-sm);
+  color: var(--n-12);
+}
+
+.qdel__quiz {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-4);
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+.qdel__quiz a {
+  color: var(--a-11);
+  font-weight: var(--fw-medium);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ── the question page ───────────────────────────────────────────────────── */
+
+.qpage-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-12);
+  margin-block-end: var(--s-20);
+}
+
+.qpage-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  margin-block-end: var(--s-8);
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.qpage-crumb:hover { color: var(--n-12); }
+
+/* A note ABOVE the form, never a toast: «مسودة — الطلبة مش شايفينه» has to
+   be true for as long as the page is open, not for four seconds.
+   Published is the calm, neutral case. A draft is amber — it is waiting on a
+   press («انشر السؤال» / «حفظ ونشر»). Archived is the one in `--err`. Ember
+   was tried first and read as a warning on a question that was fine. */
+.qpage-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8) var(--s-12);
+  margin-block-end: var(--s-20);
+  padding: var(--s-12) var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-inline-start: 4px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--n-2);
+  color: var(--n-11);
+  font-size: var(--fs-text-sm);
+}
+
+.qpage-note--draft {
+  border-color: color-mix(in oklch, var(--a-9), transparent 55%);
+  border-inline-start-color: var(--a-9);
+  background: color-mix(in oklab, var(--a-9) 10%, var(--n-1));
+  color: var(--n-12);
+}
+
+.qpage-note--archived {
+  border-color: color-mix(in oklch, var(--err), transparent 60%);
+  border-inline-start-color: var(--err);
+  background: color-mix(in oklch, var(--err), transparent 92%);
+  color: var(--n-12);
+}
+
+.qpage-note__action { margin-inline-start: auto; }
+
+/* The two ways in, side by side above the form on «سؤال جديد». */
+.qnew-ways {
+  display: grid;
+  gap: var(--s-12);
+  margin-block-end: var(--s-24);
+}
+
+@media (min-width: 48rem) {
+  .qnew-ways { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.qnew-way {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  padding: var(--s-16);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+.qnew-way--here {
+  border-color: color-mix(in oklch, var(--a-9), transparent 45%);
+  background: color-mix(in oklab, var(--a-9) 8%, var(--n-1));
+}
+
+.qnew-way__well {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: var(--r-md);
+  background: var(--e-tint);
+  color: var(--e-ink);
+}
+
+.qnew-way--here .qnew-way__well {
+  background: var(--a-9);
+  color: #1a1206;
+}
+
+.qnew-way__title {
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.qnew-way__hint {
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.qnew-way__action { margin-inline-start: auto; }
+
+/* The bulk bar's delete — the one place a destructive control is filled in by
+   default, because it only exists once something is ticked. */
+.qbank-danger {
+  border: var(--hairline) solid color-mix(in oklch, var(--err), transparent 55%);
+  background: color-mix(in oklch, var(--err), transparent 88%);
+  color: var(--err);
+  cursor: pointer;
+}
+
+.qbank-danger:hover {
+  background: color-mix(in oklch, var(--err), transparent 80%);
+}

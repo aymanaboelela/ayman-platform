@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState, type KeyboardEvent } from 'react';
+import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -33,6 +33,7 @@ import { OptionRows, type OptionRowValue } from './option-rows';
  * returned it; this schema simply stopped narrowing it away.
  */
 const SavedQuestionSchema = z.object({ bankEntryId: z.string(), versionId: z.string() });
+const PublishedSchema = z.object({ ok: z.boolean() });
 
 /**
  * `QuestionInputSchema`'s members carry `.default()`/`.prefault()` on
@@ -73,6 +74,21 @@ export interface QuestionFormProps {
    *   building is the opposite of what the key is for. The panel binds it.
    */
   embedded?: boolean;
+  /**
+   * The bank's own pages: a second, primary button — «حفظ ونشر» — beside the
+   * plain save, which becomes «حفظ كمسودة».
+   *
+   * A hand-written question used to land as a draft, and a draft is invisible
+   * to «أضف سؤال من البنك» and to every student, with the only way forward a
+   * separate «انشر السؤال» on the next page. So «I added a question and it is
+   * not in the exam» was the normal outcome of adding a question. Publishing
+   * here re-validates the stored rows exactly as that button does
+   * (`QuestionBankService.publish`), so nothing unpublishable gets through.
+   *
+   * Not in the builder's panel or its «سؤال جديد» dialog: those already
+   * publish on their own terms.
+   */
+  publishOnSave?: boolean;
 }
 
 const DEFAULT_MCQ: QuestionInput = {
@@ -153,9 +169,14 @@ export function QuestionForm({
   defaultValues,
   onSaved,
   embedded = false,
+  publishOnSave = false,
 }: QuestionFormProps) {
   const router = useRouter();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Which of the two submit buttons was pressed. A ref, set in the button's
+  // own `onClick` — which runs before the form's submit event — so the one
+  // `onSubmit` below serves both without a second code path.
+  const publishAfterSave = useRef(false);
   // The form's fields hold TEXT, not markup — `toStored` puts the markup back
   // on the way out. `useMemo` and not `useState`: the two consumers below both
   // read it on the first render only, and recomputing it if the caller ever
@@ -235,6 +256,26 @@ export function QuestionForm({
       const result = bankEntryId
         ? SavedQuestionSchema.parse(await apiPatch(`/api/admin/questions/${bankEntryId}`, payload))
         : await apiPost('/api/admin/questions', SavedQuestionSchema, payload);
+      if (publishOnSave && publishAfterSave.current) {
+        try {
+          await apiPost(`/api/admin/questions/${result.versionId}/publish`, PublishedSchema, {});
+        } catch {
+          // Saved, not published: the draft is safe, and its own page carries
+          // «انشر السؤال» and says why it could not go out.
+          toast.error(copy.quizAdmin.newQuestionPublishFailed);
+          router.refresh();
+          router.push(`/admin/questions/${result.bankEntryId}`);
+          return;
+        }
+        toast.success(copy.quizAdmin.bank.savedAndPublished);
+        router.refresh();
+        // A NEW question goes back to the bank, on its own category, where it
+        // is now the first row — with its options and its key on show, which
+        // is the check that it went in right. An edit stays on its page.
+        if (bankEntryId) router.push(`/admin/questions/${result.bankEntryId}`);
+        else router.push(`/admin/questions?category=${encodeURIComponent(values.categoryId)}`);
+        return;
+      }
       toast.success(copy.admin.common.saved);
       /*
        * `next.config.ts` lets the client router cache reuse a dynamic route for
@@ -259,6 +300,9 @@ export function QuestionForm({
   function onKeyDown(event: KeyboardEvent<HTMLFormElement>) {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault();
+      // The shortcut is the plain save, as it always was — publishing is a
+      // button the teacher presses on purpose.
+      publishAfterSave.current = false;
       void form.handleSubmit(onSubmit)();
       return;
     }
@@ -349,11 +393,35 @@ export function QuestionForm({
         <Textarea id="generalFeedbackHtml" {...form.register('generalFeedbackHtml')} />
       </div>
 
-      <div className="flex items-center justify-between border-t border-line-subtle pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4">
         <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{copy.quizAdmin.shortcutsHint}</p>
-        <Button type="submit" disabled={form.formState.isSubmitting}>
-          {copy.quizAdmin.save}
-        </Button>
+        {publishOnSave ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="submit"
+              variant="secondary"
+              disabled={form.formState.isSubmitting}
+              onClick={() => {
+                publishAfterSave.current = false;
+              }}
+            >
+              {copy.quizAdmin.bank.saveDraft}
+            </Button>
+            <Button
+              type="submit"
+              disabled={form.formState.isSubmitting}
+              onClick={() => {
+                publishAfterSave.current = true;
+              }}
+            >
+              {copy.quizAdmin.bank.saveAndPublish}
+            </Button>
+          </div>
+        ) : (
+          <Button type="submit" disabled={form.formState.isSubmitting}>
+            {copy.quizAdmin.save}
+          </Button>
+        )}
       </div>
     </form>
   );

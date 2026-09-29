@@ -17,6 +17,7 @@ import { MeQuizzesController } from './me-quizzes.controller';
 import { NoAnswerLeakInterceptor } from './interceptors/no-answer-leak.interceptor';
 import { OverdueService } from './overdue.service';
 import { QuestionBankService } from './question-bank.service';
+import { QuestionRemovalService } from './question-removal.service';
 import { QuizAccessService } from './quiz-access.service';
 import { QuizBuilderService } from './quiz-builder.service';
 import { QuizHistoryService } from './quiz-history.service';
@@ -56,6 +57,7 @@ import { GameService } from './game.service';
   providers: [
     MasteryService,
     QuestionBankService,
+    QuestionRemovalService,
     QuizAccessService,
     AttemptEventsService,
     AttemptService,

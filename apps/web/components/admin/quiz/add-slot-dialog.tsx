@@ -46,10 +46,27 @@ export function AddSlotDialog({ quizId, paper }: { quizId: string; paper: QuizPa
   useEffect(() => {
     if (!open) return;
     const timer = setTimeout(async () => {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ take: '50' });
       if (search) params.set('search', search);
-      const data = await apiGet(`/api/admin/questions?${params}`, z.array(BankRowSchema));
-      setRows(data.filter((row) => row.versions[0]?.status === 'ready'));
+      /*
+       * `{ rows, rowCount }`, not a bare array. The list route changed shape
+       * when the bank got a pager (#328) and this picker was never told: every
+       * search threw a `ZodError` inside this timer, nothing caught it, and the
+       * list stayed «فاضي» — «أضف سؤال من البنك» could not add anything. The
+       * catch is new too, so the next shape change shows as an empty list
+       * rather than an unhandled rejection. Archived questions are not in this
+       * route at all (the API leaves them out), so there is nothing to filter
+       * for them here.
+       */
+      try {
+        const data = await apiGet(
+          `/api/admin/questions?${params}`,
+          z.object({ rows: z.array(BankRowSchema) }),
+        );
+        setRows(data.rows.filter((row) => row.versions[0]?.status === 'ready'));
+      } catch {
+        setRows([]);
+      }
     }, 250);
     return () => clearTimeout(timer);
   }, [open, search]);

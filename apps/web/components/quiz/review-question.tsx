@@ -1,9 +1,11 @@
 import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
 import type { Correctness } from '@ayman/contracts/quiz/attempt';
 import type { QuestionType } from '@ayman/contracts/quiz/question';
 import { cn } from '@ayman/ui/lib/cn';
 import { SafeHtml } from '@/components/content/safe-html';
 import { tenantSentence } from '@/lib/tenant-copy';
+import { optionLetter } from './option-letter';
 
 export interface ReviewQuestionOption {
   id: string;
@@ -188,29 +190,41 @@ export function ReviewQuestion({ question }: ReviewQuestionProps) {
     // label instead would couple that contract check to a copy string, and the
     // attribute is absent (rather than empty) when the server sent no verdict,
     // so `[data-correctness]` cannot match a question whose grade is withheld.
-    <div
+    <article
       data-correctness={question.correctness}
-      className="flex flex-col gap-4 rounded-lg border border-line bg-surface-2 p-5"
+      className={cn(
+        'review-card',
+        question.correctness === 'correct' && 'review-card--correct',
+        question.correctness === 'incorrect' && 'review-card--incorrect',
+      )}
     >
-      <div className="flex items-start justify-between gap-4">
-        <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted">
-          {String(question.slotPosition + 1).padStart(2, '0')}
-        </p>
-        <div className="flex items-center gap-3">
-          {question.mark !== undefined && question.maxMark !== undefined ? (
-            <p className="mono tabular-nums text-fg-muted">
+      <div className="qhead">
+        <span className="qhead__num">{formatCopy(copy.quiz.questionNumber, { n: question.slotPosition + 1 })}</span>
+        {question.mark !== undefined && question.maxMark !== undefined ? (
+          <span className="qhead__chip qhead__chip--mark">
+            {/* An `<bdi>`: «1 / 2» is a fraction, and in an RTL line the
+                slash would otherwise flip it into «2 / 1». */}
+            <bdi>
               {question.mark ?? '—'} / {question.maxMark}
-            </p>
-          ) : null}
-          {question.correctness ? (
-            <p className={cn('font-medium', CORRECTNESS_TONE[question.correctness])}>
-              {CORRECTNESS_LABEL[question.correctness]}
-            </p>
-          ) : null}
-        </div>
+            </bdi>
+          </span>
+        ) : null}
+        {question.correctness ? (
+          <span
+            className={cn(
+              'review-verdict qhead__flag',
+              question.correctness === 'correct' && 'review-verdict--correct',
+              question.correctness === 'incorrect' && 'review-verdict--incorrect',
+              CORRECTNESS_TONE[question.correctness],
+            )}
+          >
+            {question.correctness === 'correct' ? <CheckGlyph /> : question.correctness === 'incorrect' ? <CrossGlyph /> : null}
+            {CORRECTNESS_LABEL[question.correctness]}
+          </span>
+        ) : null}
       </div>
 
-      <SafeHtml html={question.stemHtml} className="text-fg" />
+      <SafeHtml html={question.stemHtml} className="qcard__stem" />
 
       {isOrdering ? (
         /*
@@ -247,41 +261,53 @@ export function ReviewQuestion({ question }: ReviewQuestionProps) {
       ) : null}
 
       {isChoice ? (
-        <ul className="flex flex-col gap-2">
-          {question.options.map((option) => {
+        /*
+          The runner's own option rows, with the runner's letters — so the «ب»
+          a student remembers choosing is the «ب» that turns red or green here.
+          Right repaints the row AND its letter in `--ok`, a wrong pick in
+          `--err`; a pick the grader did not call wrong (partial credit on a
+          multi-answer question) stays amber, the colour it was when chosen.
+        */
+        <ul className="runner-options flex flex-col gap-2">
+          {question.options.map((option, index) => {
             const isChosen = chosenIds.includes(option.id);
             const isCorrectOption = correctIds.has(option.id);
             const isWrongChosen = isChosen && !isCorrectOption && question.correctness === 'incorrect';
             return (
-              <li
-                key={option.id}
-                className={cn(
-                  'flex flex-col gap-1.5 rounded-sm border p-3',
-                  isCorrectOption
-                    ? 'border-ok bg-[color-mix(in_oklch,var(--ok),transparent_92%)]'
-                    : isWrongChosen
-                      ? 'border-err bg-[color-mix(in_oklch,var(--err),transparent_92%)]'
-                      : isChosen
-                        ? 'border-accent'
-                        : 'border-line-subtle',
-                )}
-              >
-                <SafeHtml html={option.bodyHtml} />
-                {/* I8: colour is never the ONLY channel — every highlighted
-                    row also carries an icon plus a visible text label. */}
-                {isCorrectOption ? (
-                  <span className="flex items-center gap-1.5 text-[length:var(--fs-text-xs)] font-medium text-ok">
-                    <CheckGlyph />
-                    {copy.quiz.rightAnswer}
-                  </span>
-                ) : isWrongChosen ? (
-                  <span className="flex items-center gap-1.5 text-[length:var(--fs-text-xs)] font-medium text-err">
-                    <CrossGlyph />
-                    {copy.quiz.yourAnswer}
-                  </span>
-                ) : isChosen ? (
-                  <span className="text-[length:var(--fs-text-xs)] text-fg-muted">{copy.quiz.yourAnswer}</span>
-                ) : null}
+              <li key={option.id}>
+                <div
+                  className={cn(
+                    'runner-option review-option',
+                    isCorrectOption
+                      ? 'review-option--right'
+                      : isWrongChosen
+                        ? 'review-option--wrong'
+                        : isChosen
+                          ? 'review-option--chosen'
+                          : null,
+                  )}
+                >
+                  <span className="runner-option__letter">{optionLetter(index)}</span>
+                  <div className="review-option__main">
+                    <SafeHtml html={option.bodyHtml} className="runner-option__body" />
+                    {/* I8: colour is never the ONLY channel — every highlighted
+                        row also carries an icon plus a visible text label. */}
+                    {isCorrectOption ? (
+                      <span className="flex flex-wrap items-center gap-1.5 text-[length:var(--fs-text-xs)] font-medium text-ok">
+                        <CheckGlyph />
+                        <span>{copy.quiz.rightAnswer}</span>
+                        {isChosen ? <span className="text-fg-muted">· {copy.quiz.yourAnswer}</span> : null}
+                      </span>
+                    ) : isWrongChosen ? (
+                      <span className="flex items-center gap-1.5 text-[length:var(--fs-text-xs)] font-medium text-err">
+                        <CrossGlyph />
+                        {copy.quiz.yourAnswer}
+                      </span>
+                    ) : isChosen ? (
+                      <span className="text-[length:var(--fs-text-xs)] font-medium text-accent-text">{copy.quiz.yourAnswer}</span>
+                    ) : null}
+                  </div>
+                </div>
               </li>
             );
           })}
@@ -319,7 +345,6 @@ export function ReviewQuestion({ question }: ReviewQuestionProps) {
           <SafeHtml html={question.generalFeedbackHtml} />
         </div>
       ) : null}
-
-    </div>
+    </article>
   );
 }

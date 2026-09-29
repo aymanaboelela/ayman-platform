@@ -435,17 +435,32 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
         */}
         <div className="runner-bar">
           <div className="runner-bar__progress">
-            <p className="runner-bar__count">
-              {formatCopy(copy.quiz.questionOf, {
-                current: currentIndex + 1,
-                total: initial.questions.length,
-              })}
-              {' · '}
-              {formatCopy(copy.quiz.answeredCount, {
-                answered: answeredCount,
-                total: initial.questions.length,
-              })}
-            </p>
+            {/*
+              Position on the left of the line and the share done on the
+              right, above a meter thick enough to read at a glance. The
+              percentage is `aria-hidden`: the sentence beside it already says
+              «جاوبت على ٢ من ٢٠», and a screen reader does not need the same
+              fact twice in two notations.
+            */}
+            <div className="runner-bar__row">
+              <p className="runner-bar__count">
+                <span className="runner-bar__pos">
+                  {formatCopy(copy.quiz.questionOf, {
+                    current: currentIndex + 1,
+                    total: initial.questions.length,
+                  })}
+                </span>
+                <span>
+                  {formatCopy(copy.quiz.answeredCount, {
+                    answered: answeredCount,
+                    total: initial.questions.length,
+                  })}
+                </span>
+              </p>
+              <span className="runner-bar__pct" aria-hidden="true">
+                {Math.round(answeredPercent)}%
+              </span>
+            </div>
             {/* `scaleX`, not a width — see `.runner-bar__meter > span` in
                 study.css. Animating `inline-size` here ran layout and paint on
                 every frame of every answer, inside a sticky bar, on the one
@@ -481,6 +496,7 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
           <QuestionView
             saveStatus={AUTOSAVE_STATUS_LABEL[autosave.status]}
             question={currentQuestion}
+            number={currentIndex + 1}
             response={responses[current.slotPosition] ?? null}
             onChange={handleChange}
             onToggleFlag={handleToggleFlag}

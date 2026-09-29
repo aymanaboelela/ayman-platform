@@ -67,6 +67,12 @@ export default function Loading() {
 
           <div className="runner-card">
             <div className="flex flex-col gap-5">
+              {/* The card's head — «سؤال ٣» and its two chips — at the pills'
+                  own 32px, so the stem does not drop 40px when it lands. */}
+              <div className="qhead">
+                <Skeleton className="h-8 w-20 rounded-full" />
+                <Skeleton className="h-7 w-24 rounded-full" />
+              </div>
               <Skeleton width="full" className="h-5" />
               <Skeleton width="wide" className="h-5" />
 
@@ -74,9 +80,11 @@ export default function Loading() {
                 {Array.from({ length: 4 }, (_, index) => (
                   // `pointer-events-none` only so the real option's `:hover`
                   // and `cursor: pointer` do not make a grey bar look clickable
-                  // on a desktop. The geometry — 12px/16px padding, the
-                  // hairline, `--r-md` — is the option's own.
+                  // on a desktop. The geometry — the 56px floor, the padding,
+                  // the hairline, `--r-lg` and the 36px letter well — is the
+                  // option's own.
                   <li key={index} className="runner-option pointer-events-none">
+                    <Skeleton className="size-9 shrink-0" />
                     <Skeleton width={index % 2 === 0 ? 'full' : 'wide'} className="h-[1lh]" />
                   </li>
                 ))}

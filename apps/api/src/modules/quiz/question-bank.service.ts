@@ -273,6 +273,9 @@ export class QuestionBankService {
     versionId: string;
     version: number;
     status: QuestionStatus;
+    /** Set when the question was deleted after somebody had answered it — the
+     *  page says so and offers «رجّعه للبنك». ISO string over the wire. */
+    archivedAt: Date | null;
     /**
      * How many DISTINCT quizzes hold a slot pointing at this entry.
      *
@@ -288,6 +291,7 @@ export class QuestionBankService {
       where: { id: bankEntryId },
       select: {
         categoryId: true,
+        archivedAt: true,
         versions: {
           orderBy: { version: 'desc' },
           take: 1,
@@ -338,6 +342,7 @@ export class QuestionBankService {
       versionId: version.id,
       version: version.version,
       status: version.status,
+      archivedAt: entry.archivedAt,
       usedInQuizzes: quizzes.length,
       input,
     };
@@ -390,11 +395,31 @@ export class QuestionBankService {
    * plan. This is the minimal read/create surface the question form needs to
    * offer a real `categoryId`, not a category management screen.
    */
-  async listCategories(): Promise<{ id: string; name: string }[]> {
-    return this.prisma.questionCategory.findMany({
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true },
-    });
+  async listCategories(): Promise<{ id: string; name: string; questionCount: number }[]> {
+    /*
+     * `questionCount` — questions still IN the bank (an archived one is not
+     * counted), for «التصنيفات» on the bank screen: «الحلقات · ٤٥» is how the
+     * teacher sees where the bank is thin before a paper needs it. One
+     * `GROUP BY` over the whole bank, not a `_count` per category row — the
+     * same number, one query. Every other caller parses `{ id, name }` and a
+     * Zod object ignores the extra key.
+     */
+    const [categories, counts] = await Promise.all([
+      this.prisma.questionCategory.findMany({
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true },
+      }),
+      this.prisma.questionBankEntry.groupBy({
+        by: ['categoryId'],
+        // The same rows the list counts: in the bank, with at least one
+        // version. An entry with no version at all never shows in the list,
+        // so counting it here made «٧٤٣ في البنك» sit over «٧٢٨ سؤال».
+        where: { archivedAt: null, versions: { some: {} } },
+        _count: { _all: true },
+      }),
+    ]);
+    const byCategory = new Map(counts.map((row) => [row.categoryId, row._count._all]));
+    return categories.map((category) => ({ ...category, questionCount: byCategory.get(category.id) ?? 0 }));
   }
 
   async createCategory(name: string): Promise<{ id: string; name: string }> {
@@ -408,6 +433,8 @@ export class QuestionBankService {
     categoryId?: string;
     type?: QuestionType;
     search?: string;
+    /** `true` = «اللي اتشالت» only; otherwise the bank, which never includes them. */
+    archived?: boolean;
     take: number;
     skip: number;
   }) {
@@ -423,6 +450,10 @@ export class QuestionBankService {
      */
     const where = {
       categoryId: filter.categoryId,
+      // An archived question left the bank: it is not in the list, and so not
+      // in the slot picker that reads this same route. «اللي اتشالت» asks for
+      // them on purpose, and gets nothing else.
+      archivedAt: filter.archived ? { not: null } : null,
       versions: {
         some: {
           type: filter.type,
@@ -444,6 +475,7 @@ export class QuestionBankService {
       skip: filter.skip,
       select: {
         id: true,
+        archivedAt: true,
         category: { select: { id: true, name: true } },
         versions: {
           orderBy: { version: 'desc' },
@@ -455,13 +487,34 @@ export class QuestionBankService {
             type: true,
             stemHtml: true,
             defaultMark: true,
+            /* The options, with their weights, so the list can show each
+               question the way the student gets it — letters, and the right
+               one marked. Admin-only route (`question:write`); the weights are
+               exactly what the edit form already loads. */
+            options: {
+              orderBy: { position: 'asc' },
+              select: { id: true, bodyHtml: true, answerPattern: true, fraction: true },
+            },
           },
         },
+        // Which quizzes hold it — the row says «في ٣ امتحان», which is what a
+        // delete will run into, before anyone presses it.
+        quizSlots: { select: { quizId: true } },
       },
       }),
     ]);
 
-    return { rows, rowCount };
+    return {
+      rows: rows.map(({ quizSlots, versions, ...row }) => ({
+        ...row,
+        usedInQuizzes: new Set(quizSlots.map((slot) => slot.quizId)).size,
+        versions: versions.map((version) => ({
+          ...version,
+          options: version.options.map((option) => ({ ...option, fraction: Number(option.fraction) })),
+        })),
+      })),
+      rowCount,
+    };
   }
 
   /**

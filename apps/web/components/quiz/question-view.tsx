@@ -2,6 +2,7 @@
 
 import { memo, useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import { Flag } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
@@ -10,6 +11,7 @@ import { RadioGroup, RadioGroupItem } from '@ayman/ui/components/radio-group';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { cn } from '@ayman/ui/lib/cn';
 import { SafeHtml } from '@/components/content/safe-html';
+import { optionLetter } from './option-letter';
 import type { AnswerResponse } from './use-attempt-autosave';
 
 /**
@@ -50,6 +52,8 @@ export interface QuestionViewData {
 
 export interface QuestionViewProps {
   question: QuestionViewData;
+  /** 1-based, as the student counts — «سؤال ٣». A number, so the memo holds. */
+  number: number;
   response: AnswerResponse | null;
   onChange: (response: AnswerResponse | null) => void;
   onToggleFlag: () => void;
@@ -84,6 +88,7 @@ function wordCount(text: string): number {
  */
 function QuestionViewImpl({
   question,
+  number,
   response,
   onChange,
   onToggleFlag,
@@ -104,44 +109,44 @@ function QuestionViewImpl({
   return (
     <div className="flex flex-col gap-5">
       {/*
-        Stacked on a phone, side by side from `sm` up.
+        The card's head: which question, what kind of answer it wants, what it
+        is worth — and the flag, pushed to the far end.
 
-        As one row at every width these were two flex children with no
-        `shrink-0` between them. At 360px the card leaves 288px, minus the 16px
-        gap, and the flex algorithm shrank BOTH proportionally until the button
-        hit its min-content floor (~70-95px) — which left the question itself
-        about 180-200px of measure. Arabic wraps badly at that width: a two-line
-        stem became four or five, pushing the options further down a screen the
-        student is already scrolling.
+        «إجابة واحدة بس» versus «ممكن أكتر من إجابة» is the one fact about a
+        choice question the student could not see before: a radio and a
+        checkbox are 20px apart in shape and nobody reads them. Said in words,
+        on every question, before the options.
 
-        The button's own label was the second casualty. «علّم السؤال» / «شيل
-        العلامة» are two words each, and squeezed that far they wrapped to two
-        lines (2 × 14px × 1.65 ≈ 46px) inside a `size="sm"` box locked to
-        `h-10`, so the label rendered proud of its own border — on the one
-        screen a student is graded on. `shrink-0` here and `whitespace-nowrap`
-        on `Button` are the two halves of that fix.
+        It WRAPS rather than squeezing. The flag used to sit beside the stem in
+        one row, and at 360px the flex algorithm shrank both until «علّم
+        السؤال» broke over two lines inside a box locked to `h-10` and the stem
+        was left ~190px of measure. Here the stem has the whole card below the
+        head, and on a narrow phone the flag drops to its own line before any
+        chip breaks mid-word (`whitespace-nowrap` on `Button` and on the chips).
 
-        DOM order is untouched (the button already followed the stem), so the
-        order a screen reader announces does not change. What this does cost is
-        ~40px above the options on a phone. The better long-term shape is an
-        icon-only 44px control with the label as `aria-label`, which costs
-        nothing vertically — but a flag that is an icon needs a flagged state
-        told by FILL rather than by colour alone, so it is a design decision
-        rather than part of this fix.
+        The flag's pressed state is told by FILL as well as by colour — the
+        icon fills — so it survives a student who cannot separate the two
+        hues. The label still changes, and `aria-pressed` says it to a screen
+        reader.
       */}
-      <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between sm:gap-4">
-        <SafeHtml html={question.stemHtml} className="min-w-0 max-w-[var(--w-prose)] text-fg" />
+      <div className="qhead">
+        <span className="qhead__num">{formatCopy(copy.quiz.questionNumber, { n: number })}</span>
+        <span className="qhead__chip">{copy.quiz.kinds[question.type]}</span>
+        <span className="qhead__chip qhead__chip--mark">{formatCopy(copy.quiz.questionMarks, { n: question.maxMark })}</span>
         <Button
           type="button"
           variant="ghost"
           size="sm"
           onClick={onToggleFlag}
           aria-pressed={question.flagged}
-          className={cn('shrink-0', question.flagged && 'text-accent-text')}
+          className={cn('qhead__flag shrink-0', question.flagged && 'text-accent-text')}
         >
+          <Flag className="size-4" aria-hidden="true" fill={question.flagged ? 'currentColor' : 'none'} />
           {question.flagged ? copy.quiz.unflag : copy.quiz.flag}
         </Button>
       </div>
+
+      <SafeHtml html={question.stemHtml} className="qcard__stem min-w-0" />
 
       {isChoice ? (
         <RadioGroup
@@ -161,12 +166,13 @@ function QuestionViewImpl({
           value={chosenIds[0] ?? ''}
           onValueChange={(value) => onChange({ kind: 'choice', optionIds: [value] })}
         >
-          <ul className="flex flex-col gap-2">
-            {question.options.map((option) => (
+          <ul className="runner-options flex flex-col gap-2">
+            {question.options.map((option, index) => (
               <li key={option.id}>
                 <label className="runner-option">
-                  <RadioGroupItem value={option.id} className="mt-0.5" />
-                  <SafeHtml html={option.bodyHtml} />
+                  <span className="runner-option__letter">{optionLetter(index)}</span>
+                  <SafeHtml html={option.bodyHtml} className="runner-option__body" />
+                  <RadioGroupItem value={option.id} className="runner-option__control" />
                 </label>
               </li>
             ))}
@@ -175,22 +181,22 @@ function QuestionViewImpl({
       ) : null}
 
       {isMulti ? (
-        <ul className="flex flex-col gap-2">
-          {question.options.map((option) => {
+        <ul className="runner-options flex flex-col gap-2">
+          {question.options.map((option, index) => {
             const checked = chosenIds.includes(option.id);
             return (
               <li key={option.id}>
                 <label className="runner-option">
+                  <span className="runner-option__letter">{optionLetter(index)}</span>
+                  <SafeHtml html={option.bodyHtml} className="runner-option__body" />
                   <Checkbox
-                    className="mt-0.5"
+                    className="runner-option__control"
                     checked={checked}
-                   
                     onCheckedChange={(next) => {
                       const nextIds = next ? [...chosenIds, option.id] : chosenIds.filter((id) => id !== option.id);
                       onChange(nextIds.length > 0 ? { kind: 'choice', optionIds: nextIds } : null);
                     }}
                   />
-                  <SafeHtml html={option.bodyHtml} />
                 </label>
               </li>
             );

@@ -5644,6 +5644,93 @@ const quizAdmin = {
   /** `{n}` — how many questions match, so the size of the bank is visible
    *  rather than implied by a page that stops at fifty. */
   bankCount: '{n} سؤال',
+  /* ── «ركن الأسئلة» — the bank screen, the question page, and «امسح» ──────
+   * «عاوز مكان أحذف سؤال من بنك الأسئلة … يبقى فيه مكان أحط فيه الأسئلة
+   * واضبطها». The delete copy says what WILL happen to each question before
+   * the click, in the three outcomes the server decides
+   * (`@ayman/contracts/quiz/question-removal`). */
+  bank: {
+    eyebrow: 'ركن الأسئلة',
+    lead: 'كل سؤال بيتكتب مرة واحدة هنا، وبعدين يتحط في أي كويز أو امتحان أو لعبة.',
+    add: 'إضافة سؤال',
+    paste: 'لصق أسئلة كتير',
+    statQuestions: 'سؤال في البنك',
+    statCategories: 'تصنيف فيه أسئلة',
+    statArchived: 'سؤال اتشال',
+    categoriesTitle: 'التصنيفات',
+    allQuestions: 'كل الأسئلة',
+    /** The folded list of categories with nothing in them yet. */
+    emptyCategories: 'تصنيفات لسه فاضية ({n})',
+    tabBank: 'في البنك',
+    tabArchived: 'اللي اتشالت',
+    clearFilters: 'مسح الفلاتر',
+    selectAll: 'اختيار كل اللي في الصفحة',
+    selectRow: 'اختيار السؤال',
+    selectedCount: '{n} متعلّم',
+    deleteSelected: 'امسح المتعلّم',
+    clearSelection: 'إلغاء التعليم',
+    edit: 'تعديل',
+    duplicate: 'نسخة',
+    duplicated: 'اتعملت نسخة من السؤال',
+    delete: 'امسح',
+    restore: 'رجّعه للبنك',
+    restored: 'السؤال رجع للبنك',
+    /** How many DISTINCT quizzes hold the question — what a delete runs into. */
+    usedIn: 'في {n} امتحان',
+    marks: '{n} درجة',
+    /** Beside the correct option(s) in a row's preview. */
+    right: 'صح',
+    orderingKey: 'الترتيب ده هو الصح — الطالب بيشوفه متلخبط',
+    essayNote: 'سؤال مقالي — بيتصحح بالإيد من «تصحيح الورق».',
+    shortAnswerNote: 'الإجابات المقبولة:',
+    emptyTitle: 'البنك لسه فاضي',
+    emptyHint: 'أول سؤال من «إضافة سؤال»، أو مجموعة كاملة مرة واحدة من «لصق أسئلة كتير» — وكل سؤال بيتحفظ هنا ويتحط في أي امتحان.',
+    emptyFilteredTitle: 'مفيش أسئلة بالشكل ده',
+    emptyFilteredHint: 'كلمة تانية في البحث، أو من غير فلاتر.',
+    emptyCategoryTitle: 'التصنيف ده لسه فاضي',
+    emptyCategoryHint: 'أول سؤال فيه من هنا — سؤال واحد، أو كذا سؤال بلصقة واحدة.',
+    emptyArchivedTitle: 'مفيش أسئلة متشالة',
+    emptyArchivedHint: 'السؤال اللي حد حلّه قبل كده مابيتمسحش — بيتشال هنا، ويرجع للبنك بضغطة.',
+    /* ── the delete dialog ── */
+    deleteTitle: 'مسح {n} سؤال',
+    deleteTitleOne: 'مسح السؤال',
+    deleteLoading: 'بنشوف كل سؤال مستخدم فين…',
+    deletePlanFailed: 'مقدرناش نعرف الأسئلة دي مستخدمة فين، فمااتمسحش حاجة.',
+    deleteGroupDelete: 'هيتمسح نهائي',
+    deleteGroupDeleteHint: 'محدش حلّه قبل كده ومش في أي امتحان — هيتشال خالص.',
+    deleteGroupArchive: 'هيتشال من البنك',
+    deleteGroupArchiveHint: 'هيتشال من البنك، واللي حلّوه هيفضل في نتايجهم. ومش هيظهر في امتحان جديد ولا في الألعاب، ويرجع من «اللي اتشالت» في أي وقت.',
+    deleteGroupBlocked: 'مش هيتشال',
+    deleteGroupBlockedHint: 'لسه موجود في امتحان — يتشال من الامتحان الأول، وبعدين يتمسح من هنا.',
+    /** A random pool of a published quiz that would be left short. */
+    deleteViaPool: 'السحب العشوائي فيه مش هيلاقي أسئلة كفاية من غيره',
+    deletePublished: 'منشور',
+    deleteDraft: 'مش منشور',
+    deleteConfirm: 'امسح {n} سؤال',
+    deleteConfirmOne: 'امسح السؤال',
+    deleteNothing: 'مفيش حاجة تتمسح من اللي اتعلّم.',
+    deleteDoneDeleted: 'اتمسح {n} سؤال نهائي',
+    deleteDoneArchived: 'اتشال {n} سؤال من البنك',
+    deleteDoneBlocked: '{n} سؤال فضلوا عشان لسه في امتحانات',
+    deleteFailed: 'المسح ماتمّش — مفيش حاجة اتغيّرت.',
+    /* ── the question page ── */
+    backToBank: 'بنك الأسئلة',
+    draftNote: 'مسودة — الطلبة مش شايفين السؤال ده لحد ما يتنشر.',
+    publishedNote: 'منشور — نسخة {n}. أي تعديل بيعمل نسخة جديدة، والطلبة شايفين المنشورة لحد ما الجديدة تتنشر.',
+    archivedNote: 'السؤال ده اتشال من البنك — مش بيظهر في الامتحانات ولا الألعاب، ولسه ظاهر في نتايج اللي حلّوه.',
+    sharedNote: 'مستخدم في {n} امتحان — أي تعديل هنا بيوصل لكلهم.',
+    saveAndPublish: 'حفظ ونشر',
+    saveDraft: 'حفظ كمسودة',
+    savedAndPublished: 'السؤال اتحفظ واتنشر',
+    /* ── «سؤال جديد» ── */
+    newWriteTitle: 'سؤال واحد',
+    newWriteHint: 'السؤال والاختيارات تحت، وعلامة على الإجابة الصح.',
+    newPasteTitle: 'أسئلة كتير مرة واحدة',
+    newPasteHint: 'من ورقة أو ملف — كل سؤال في فقرة، وبتتراجع قبل ما تتحفظ.',
+    /** After «لصق أسئلة كتير» commits — the old toast reused the PREVIEW
+     *  line («معاينة ٤٠ سؤال») for a question that had already been saved. */
+    bulkAdded: 'اتضاف {n} سؤال للبنك',
+  },
   newQuestion: 'سؤال جديد',
   /**
    * The exam builder's own «write a question» entry point — see
@@ -5694,7 +5781,9 @@ const quizAdmin = {
   published: 'السؤال اتنشر — أي تعديل بعد كده هيعمل نسخة جديدة',
   versionBadge: 'نسخة {n}',
   draftBadge: 'مسودة',
-  bulkImport: 'استيراد سريع',
+  /** Ayman's own words for it — «لصق أسئلة كتير» — rather than «استيراد»,
+   *  which reads like a file upload this is not. */
+  bulkImport: 'لصق أسئلة كتير',
   bulkImportHint: 'الصق الأسئلة، كل سؤال في فقرة، وحدد الإجابة بسطر ANSWER أو الإجابة',
   bulkImportExample:
     'سؤال ١: عاصمة مصر إيه؟\nA. القاهرة\nB. الإسكندرية\nC. أسوان\nANSWER: A\n\n' +

@@ -1234,9 +1234,14 @@ export class AttemptService {
         const candidates = await tx.questionVersion.findMany({
           where: {
             status: 'ready',
-            bankEntry: filter.categoryIds?.length
-              ? { categoryId: { in: filter.categoryIds } }
-              : undefined,
+            // A question deleted from the bank after somebody answered it is
+            // archived, not gone — and it must not come back through a random
+            // draw. Only which questions are ELIGIBLE changes; the draw, the
+            // snapshot and the marks are untouched.
+            bankEntry: {
+              archivedAt: null,
+              ...(filter.categoryIds?.length ? { categoryId: { in: filter.categoryIds } } : {}),
+            },
             type: filter.types?.length ? { in: filter.types } : undefined,
           },
           select: { id: true, type: true, options: optionSelect },

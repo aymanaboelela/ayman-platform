@@ -5920,6 +5920,24 @@ export const copy = {
     typeAnswer: 'إجابتك هنا',
     chooseOne: 'إجابة واحدة بس',
     chooseMany: 'كل الإجابات الصحيحة',
+    /* ── the question card ─────────────────────────────────────────────────
+     * «سؤال ٣» on its own pill, what kind of answer it wants, and what it is
+     * worth — the head of every question in the runner and on the review. */
+    questionNumber: 'سؤال {n}',
+    questionMarks: '{n} درجة',
+    /** What each kind of question wants, said in words above the options: a
+     *  radio and a checkbox are 20px apart in shape and nobody reads them.
+     *  Nouns, never an imperative — one string serves every student. */
+    kinds: {
+      mcq_single: 'إجابة واحدة بس',
+      mcq_multi: 'ممكن أكتر من إجابة',
+      true_false: 'صح ولا خطأ',
+      short_answer: 'إجابة قصيرة',
+      ordering: 'ترتيب',
+      essay: 'إجابة مكتوبة',
+    },
+    /** أ ب ج د — the name of an option on the paper, in the served order. */
+    optionLetters: ['أ', 'ب', 'ج', 'د', 'هـ', 'و', 'ز', 'ح', 'ط', 'ي'],
     true: 'صح',
     false: 'خطأ',
     /* ── Ordering ────────────────────────────────────────────────────────── */

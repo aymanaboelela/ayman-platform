@@ -15,8 +15,11 @@ import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { modesByCourse } from './game.service';
 
-/** أسئلة جاهزة (نسخة منشورة واحدة على الأقل) — نفس العدّ في كل مكان هنا. */
-const READY_ENTRIES = { entries: { where: { versions: { some: { status: 'ready' as const } } } } };
+/** أسئلة جاهزة (نسخة منشورة واحدة على الأقل) — نفس العدّ في كل مكان هنا.
+ *  واللي اتشال من البنك (`archivedAt`) مش محسوب: اللعبة مابتسحبهوش. */
+const READY_ENTRIES = {
+  entries: { where: { archivedAt: null, versions: { some: { status: 'ready' as const } } } },
+};
 
 /**
  * «أسئلة الألعاب» — تصنيف في بنك الأسئلة لكل كورس (`gameCourseId`)، وتحته
@@ -255,6 +258,8 @@ export class GameBanksService {
         SELECT DISTINCT x.lesson_id, x.vid
         FROM versions x
         JOIN "app"."question_versions" v ON v."id" = x.vid AND v."type" IN ('mcq_single', 'true_false')
+        -- نفس فلتر اللعبة نفسها (GameService.pool): اللي اتشال مابيتعدّش.
+        JOIN "app"."question_bank_entries" be ON be."id" = v."bank_entry_id" AND be."archived_at" IS NULL
         WHERE (SELECT count(*) FROM "app"."question_options" o WHERE o."question_version_id" = v."id") >= 2
           AND EXISTS (SELECT 1 FROM "app"."question_options" o WHERE o."question_version_id" = v."id" AND o."fraction" > 0)
       )
