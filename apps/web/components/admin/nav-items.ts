@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Coins,
   FileImage,
+  FileQuestion,
   Film,
   Flag,
   GraduationCap,
@@ -263,6 +264,20 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: NotebookPen,
     permission: 'homework:read',
     feature: 'homework',
+    group: 'teaching',
+  },
+  {
+    // «ركن الأسئلة» — بنك الأسئلة. The page has existed since the quiz engine
+    // shipped and had NO row here: the only ways in were a link at the foot of
+    // the exam builder and the games screen. It is where every quiz, exam and
+    // game question is written, pasted and deleted, so it gets its own door,
+    // directly above the exams it feeds. `question:write` — the permission
+    // `AdminQuestionsController` carries, and the one «أسئلة الألعاب» below
+    // already asks for. No feature flag: every stack has a bank.
+    href: '/admin/questions',
+    labelAr: copy.admin.nav.questions,
+    icon: FileQuestion,
+    permission: 'question:write',
     group: 'teaching',
   },
   {

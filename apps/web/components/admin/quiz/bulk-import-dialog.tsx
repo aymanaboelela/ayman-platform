@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { ClipboardPaste } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -29,6 +30,15 @@ const BulkCommitResultSchema = z.object({ created: z.number() });
 export interface BulkImportDialogProps {
   categories: { id: string; name: string }[];
   onCommitted?: () => void;
+  /** Preselected in the dialog's category select — the bank passes the one
+   *  it is filtered on, so pasting from «التصنيف ده لسه فاضي» lands there. */
+  defaultCategoryId?: string;
+  /**
+   * The trigger's own class, replacing the secondary `Button`. The bank's
+   * band draws it as one of its two big doors; everywhere else keeps the
+   * button it always had.
+   */
+  triggerClassName?: string;
 }
 
 /**
@@ -37,10 +47,17 @@ export interface BulkImportDialogProps {
  * committing. This preview is a convenience only — the API re-parses the
  * same text server-side and is the actual validation.
  */
-export function BulkImportDialog({ categories, onCommitted }: BulkImportDialogProps) {
+export function BulkImportDialog({
+  categories,
+  onCommitted,
+  defaultCategoryId,
+  triggerClassName,
+}: BulkImportDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [categoryId, setCategoryId] = useState(categories[0]?.id ?? '');
+  const [categoryId, setCategoryId] = useState(
+    categories.find((category) => category.id === defaultCategoryId)?.id ?? categories[0]?.id ?? '',
+  );
   const [text, setText] = useState('');
   const [debouncedText, setDebouncedText] = useState('');
   const [committing, setCommitting] = useState(false);
@@ -64,7 +81,9 @@ export function BulkImportDialog({ categories, onCommitted }: BulkImportDialogPr
         categoryId,
         text,
       });
-      toast.success(formatCopy(copy.quizAdmin.bulkImportPreview, { n: response.created }));
+      // «اتضاف ٤٠ سؤال للبنك» — it used to reuse the PREVIEW line («معاينة ٤٠
+      // سؤال») as the success toast, for questions that were already saved.
+      toast.success(formatCopy(copy.quizAdmin.bank.bulkAdded, { n: response.created }));
       setOpen(false);
       setText('');
       /*
@@ -87,9 +106,16 @@ export function BulkImportDialog({ categories, onCommitted }: BulkImportDialogPr
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" variant="secondary">
-          {copy.quizAdmin.bulkImport}
-        </Button>
+        {triggerClassName ? (
+          <button type="button" className={triggerClassName}>
+            <ClipboardPaste className="size-5" aria-hidden="true" />
+            {copy.quizAdmin.bulkImport}
+          </button>
+        ) : (
+          <Button type="button" variant="secondary">
+            {copy.quizAdmin.bulkImport}
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent closeLabel={copy.admin.common.close} className="max-w-[820px]">
         <DialogHeader>
