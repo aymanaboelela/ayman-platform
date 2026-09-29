@@ -55,3 +55,26 @@ describe('the team screen in the sidebar', () => {
     expect(hrefs).not.toContain('/admin/roles');
   });
 });
+
+/**
+ * «الأوائل» — «هنا برضو عاوز تضيفلي مين الأوائل». بنفس صلاحية «التحليلات»
+ * اللي جنبها، ومن غير فيتشر: صفحة «ترتيبي» عند الطالب شغّالة عند كل مدرّس،
+ * فالشاشة اللي بتوريها للمدرّس لازم تبقى عند كل مدرّس كمان.
+ */
+describe('the leaderboard in the sidebar', () => {
+  it('shows to whoever reads analytics, beside analytics', () => {
+    const hrefs = visibleNavItems(['analytics:read'], allOn).map((item) => item.href);
+    expect(hrefs).toContain('/admin/leaderboard');
+    expect(hrefs.indexOf('/admin/leaderboard')).toBe(hrefs.indexOf('/admin/analytics') + 1);
+  });
+
+  it('stays on with every feature off, and hidden without the permission', () => {
+    const allOff = Object.fromEntries(FEATURE_KEYS.map((key) => [key, false])) as Entitlements;
+    expect(visibleNavItems(['analytics:read'], allOff).map((item) => item.href)).toContain('/admin/leaderboard');
+    expect(visibleNavItems(['student:read'], allOn).map((item) => item.href)).not.toContain('/admin/leaderboard');
+  });
+
+  it('lights its own row', () => {
+    expect(activeNavItem('/admin/leaderboard')?.href).toBe('/admin/leaderboard');
+  });
+});

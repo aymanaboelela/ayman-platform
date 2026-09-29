@@ -29,6 +29,7 @@ import { DevicesSection } from './devices-section';
 import { CenterAttendanceSection } from './center-attendance-section';
 import { PaymentsSection, PaymentsSectionSkeleton } from './payments-section';
 import { WalletSection } from './wallet-section';
+import { RankChip } from './rank-chip';
 
 export const metadata = { title: copy.admin.students.detailTitle };
 
@@ -302,6 +303,11 @@ export default async function StudentDetailPage({
         </h1>
         <span className="mono text-[length:var(--fs-text-sm)] text-fg-muted">{student.phone}</span>
         <WhatsappButton phone={student.phone} label={copy.admin.students.whatsapp} />
+        {/* «الترتيب في الدفعة» — نفس رقم «ترتيبي» عند الطالب. في boundary
+            لوحده ومن غير fallback: قراية زيادة، والفورم تحت مايستناهاش. */}
+        <Suspense fallback={null}>
+          <RankChip userId={userId} fullName={student.fullName} />
+        </Suspense>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
