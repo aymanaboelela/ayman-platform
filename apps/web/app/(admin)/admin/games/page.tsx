@@ -3,14 +3,16 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { GameBanksSchema } from '@ayman/contracts/quiz/game';
 import { adminGetOrForbidden } from '@/lib/admin-api';
 import { GameBankRow } from './game-bank-row';
+import { GamesTabs } from './games-tabs';
 
 const c = copy.admin.games;
 
 export const metadata: Metadata = { title: c.title };
 
 /**
- * «أسئلة الألعاب» — لكل كورس تصنيف في بنك الأسئلة، والألعاب بتسحب منه
- * عشوائي لطلبة الكورس، مع أسئلة الكويزات اللي امتحنوها.
+ * «أسئلة الألعاب» — لكل كورس (صف + شعبة) كارت: أسئلته العامة، وأسئلة دروسه،
+ * ولو إعداداته متغيّرة، ولينك «الدروس والإعدادات» لصفحته. الألعاب بتسحب من
+ * دول ومن الكويزات اللي الطالب امتحنها.
  */
 export default async function AdminGamesPage() {
   const data = await adminGetOrForbidden('/api/admin/game-banks', GameBanksSchema);
@@ -20,13 +22,14 @@ export default async function AdminGamesPage() {
     <>
       <h1 className="mb-1 text-[length:var(--fs-title-2)] font-semibold text-fg">{c.title}</h1>
       <p className="max-w-[var(--w-prose)] text-fg-muted">{c.lead}</p>
-      <p className="mt-2 max-w-[var(--w-prose)] text-[length:var(--fs-text-sm)] text-fg-muted">{c.how}</p>
+      <p className="mb-5 mt-2 max-w-[var(--w-prose)] text-[length:var(--fs-text-sm)] text-fg-muted">{c.how}</p>
+      <GamesTabs active="questions" />
       {data.rows.length === 0 ? (
-        <p className="mt-6 text-fg-muted">{c.empty}</p>
+        <p className="mt-6 rounded-lg border border-dashed border-line p-10 text-center text-fg-muted">{c.empty}</p>
       ) : (
-        <ul className="mt-6 grid gap-3">
-          {data.rows.map((row) => (
-            <GameBankRow key={row.courseId} row={row} />
+        <ul className="grid gap-3 lg:grid-cols-2">
+          {data.rows.map((row, index) => (
+            <GameBankRow key={row.courseId} row={row} index={index} />
           ))}
         </ul>
       )}
