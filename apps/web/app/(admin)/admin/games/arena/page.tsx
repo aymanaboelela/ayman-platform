@@ -42,7 +42,7 @@ export default async function AdminArenaPage() {
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <section className="rounded-lg border border-line bg-surface-2 p-4 lg:col-span-2">
+        <section className="min-w-0 rounded-lg border border-line bg-surface-2 p-4 lg:col-span-2">
           <h2 className="mb-3 font-semibold text-fg">{c.recent}</h2>
           {data.recent.length === 0 ? (
             <p className="py-6 text-center text-fg-muted">{c.empty}</p>
@@ -55,7 +55,7 @@ export default async function AdminArenaPage() {
           )}
         </section>
 
-        <section className="rounded-lg border border-line bg-surface-2 p-4">
+        <section className="min-w-0 rounded-lg border border-line bg-surface-2 p-4">
           <h2 className="mb-3 flex items-center gap-2 font-semibold text-fg">
             <Crown className="size-5 text-[var(--print-gold)]" aria-hidden="true" />
             {c.top}
@@ -67,7 +67,8 @@ export default async function AdminArenaPage() {
               {data.top.map((player, index) => (
                 <li
                   key={`${player.name}-${index}`}
-                  className="flex items-center gap-3 rounded-md border border-line bg-surface-1 px-3 py-2"
+                  // `min-w-0`: من غيره السطر الـ`truncate` بيوسّع الجريد برّه الكارت.
+                  className="flex min-w-0 items-center gap-3 rounded-md border border-line bg-surface-1 px-3 py-2"
                 >
                   <span className="w-5 text-center font-mono font-bold text-fg-muted">{index + 1}</span>
                   <UserAvatar name={player.name} image={player.image} size={34} />
@@ -93,12 +94,15 @@ export default async function AdminArenaPage() {
 function MatchRow({ match }: { match: AdminArenaMatch }) {
   const tone = { completed: 'var(--viz-2)', forfeit: 'var(--viz-1)', abandoned: 'var(--n-9)', aborted: 'var(--err)' }[match.outcome];
   return (
-    <li className="grid gap-1 rounded-md border border-line bg-surface-1 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+    <li className="grid min-w-0 gap-1 rounded-md border border-line bg-surface-1 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
       <div className="min-w-0">
         <p className="flex flex-wrap items-center gap-x-2 font-medium text-fg">
           <span className={match.winner === 'a' ? 'font-bold text-[var(--viz-2)]' : ''}>{match.a.name}</span>
-          <span className="font-mono text-fg-muted [direction:ltr] [unicode-bidi:isolate]">
-            {match.a.score} — {match.b.score}
+          {/* كل رقم جنب اسم صاحبه — سترنج LTR واحد كان بيحط رقم (أ) جنب (ب). */}
+          <span className="inline-flex items-center gap-1.5 font-mono text-fg-muted">
+            <span>{match.a.score}</span>
+            <span aria-hidden="true">—</span>
+            <span>{match.b.score}</span>
           </span>
           <span className={match.winner === 'b' ? 'font-bold text-[var(--viz-2)]' : ''}>{match.b.name}</span>
           {match.winner === null && match.outcome === 'completed' ? (
