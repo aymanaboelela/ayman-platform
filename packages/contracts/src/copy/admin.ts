@@ -4021,6 +4021,8 @@ const admin = {
     /** «راح للمطبعة» — الورق مشي للمطبعة، والكرتونة لسه ما مشيتش. */
     filterPrinting: 'في المطبعة',
     filterShipped: 'اتشحنت',
+    /** The three shipping tabs as one print run — see `PackingStatusSchema`. */
+    filterCourier: 'مدفوعة + في المطبعة + اتشحنت',
     filterDelivered: 'وصلت',
     filterRejected: 'مرفوضة',
     /** Not a status — a view. See `AdminBookOrderFilterSchema`. */
@@ -4383,6 +4385,9 @@ const admin = {
     labelsTitle: 'كروت الشحن',
     labelsButton: 'كروت الشحن (PDF)',
     labelsHint: 'كرت لكل طرد — الاسم والعنوان والموبايلين والطبعة والعدد، جاهز يتلزق على الشحنة.',
+    /** «حطها كلها في PDF واحد» — مدفوعة + في المطبعة + اتشحنت، بنفس التواريخ والفلاتر. */
+    labelsAllButton: 'كروت الشحن — كله في PDF واحد',
+    labelsAllHint: 'كروت «مدفوعة» و«في المطبعة» و«اتشحنت» مع بعض، بنفس التواريخ والفلاتر، الأقدم الأول.',
     labelsCount: '{n} كرت',
     /** العناوين الصغيرة جوّه الكرت. */
     labelsTo: 'الطرد لـ',
@@ -4390,6 +4395,8 @@ const admin = {
     labelsAltPhone: 'احتياطي',
     labelsAddress: 'العنوان',
     labelsCopies: 'نسخة',
+    /** Beside the copies: how many DIFFERENT books are in the box. */
+    labelsBooks: 'كتاب',
     /** الطبعة اللي في الصندوق — «كتاب عربي» / «كتاب لغات». الاسم الكامل
      *  للكتاب بيلفّ على تلات سطور في الكرت، واللي بيملا الصندوق مش بيعمل
      *  حاجة غير إنه يبص على آخر كلمة فيه. الاسم فاضل في لستة الشحن. */

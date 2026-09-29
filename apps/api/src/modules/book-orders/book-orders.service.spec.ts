@@ -2231,6 +2231,35 @@ describe('BookOrdersService', () => {
       // named so the desk can see what to fix, never a silent disappearance.
       expect(list.groups.flatMap((group) => group.lines).map((line) => line.fullName)).toEqual([stamp]);
     }, 20_000);
+
+    it('«كله في PDF واحد» — courier is paid + printing + shipped, oldest first, nothing else', async () => {
+      const stamp = `كله-${Date.now()}`;
+      const make = async (label: string, status: 'paid' | 'printing' | 'shipped' | 'delivered') => {
+        const order = await paidOrder(studentId, { courseId: undefined, items: [{ bookId: generalBook, quantity: 1 }], fullName: `${stamp} ${label}` });
+        // Each later status carries its own stamp (CHECK constraints), and the
+        // ones before it — a shipped parcel was printed first.
+        const now = new Date();
+        if (status !== 'paid') {
+          await prisma.bookOrder.update({
+            where: { id: order.id },
+            data: {
+              status,
+              printedAt: now,
+              ...(status === 'shipped' || status === 'delivered' ? { shippedAt: now } : {}),
+              ...(status === 'delivered' ? { deliveredAt: now } : {}),
+            },
+          });
+        }
+        return order;
+      };
+      await make('مدفوعة', 'paid');
+      await make('مطبعة', 'printing');
+      await make('اتشحنت', 'shipped');
+      await make('وصلت', 'delivered');
+
+      const run = await service.packingList({ status: 'courier', from: null, to: null, q: stamp });
+      expect(run.labels.map((label) => label.fullName)).toEqual([`${stamp} مدفوعة`, `${stamp} مطبعة`, `${stamp} اتشحنت`]);
+    }, 20_000);
   });
   /*
    * ═════════════════════════════════════════════════════════════════════════

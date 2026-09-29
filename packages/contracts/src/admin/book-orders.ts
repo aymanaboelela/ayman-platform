@@ -611,9 +611,21 @@ export type BulkBookOrderResult = z.infer<typeof BulkBookOrderResultSchema>;
  * the screen, always, and there is no way to press export and get a different
  * set of orders than the one on display.
  */
+/**
+ * «حطها كلها في PDF واحد» — the courier run is rarely one tab: the parcels
+ * going out today are «مدفوعة» AND «في المطبعة» AND «اتشحنت» over the same
+ * days, and printing three PDFs meant three stacks to merge by hand, in the
+ * wrong order. `courier` is those three as one run, oldest first — only on the
+ * print/export routes, never a list tab (a tab that holds three statuses has
+ * no single next action).
+ */
+export const COURIER_STATUSES = ['paid', 'printing', 'shipped'] as const;
+export const PackingStatusSchema = z.union([AdminBookOrderFilterSchema, z.literal('courier')]);
+export type PackingStatus = z.infer<typeof PackingStatusSchema>;
+
 export const ExportBookOrdersQuerySchema = z
   .object({
-    status: AdminBookOrderFilterSchema,
+    status: PackingStatusSchema,
     from: z.iso.date().nullable().default(null),
     to: z.iso.date().nullable().default(null),
     stream: AdminBookOrderStreamSchema.optional(),

@@ -104,6 +104,9 @@ export function ExportRange({
   if (filters?.stream) params.set('stream', filters.stream);
   if (filters?.year !== undefined) params.set('year', String(filters.year));
   if (filters?.q) params.set('q', filters.q);
+  // «كله في PDF واحد» — the same filters, the three shipping tabs as one run.
+  const courierParams = new URLSearchParams(params);
+  courierParams.set('status', 'courier');
 
   /**
    * «حدّد اللي في المدى» — tick exactly the orders the file would contain.
@@ -206,6 +209,17 @@ export function ExportRange({
             title={c.labelsHint}
           >
             {c.labelsButton}
+          </a>
+        ) : null}
+        {batchable ? (
+          <a
+            href={`/admin/books/labels?${courierParams.toString()}`}
+            target="_blank"
+            rel="noopener"
+            className="rounded-full border border-accent bg-accent px-3 py-1 text-[length:var(--fs-text-xs)] font-medium text-[#1A1206] transition-colors duration-[160ms] ease-out hover:bg-accent-hover"
+            title={c.labelsAllHint}
+          >
+            {c.labelsAllButton}
           </a>
         ) : null}
         <a
@@ -346,6 +360,17 @@ export function ExportRange({
           title={c.labelsHint}
         >
           {c.labelsButton}
+        </a>
+      ) : null}
+      {batchable ? (
+        <a
+          href={`/admin/books/labels?${courierParams.toString()}`}
+          target="_blank"
+          rel="noopener"
+          className="rounded-full border border-accent bg-accent px-3.5 py-1.5 text-[length:var(--fs-text-sm)] font-medium text-[#1A1206] transition-colors duration-[160ms] ease-out hover:bg-accent-hover"
+          title={c.labelsAllHint}
+        >
+          {c.labelsAllButton}
         </a>
       ) : null}
     </div>

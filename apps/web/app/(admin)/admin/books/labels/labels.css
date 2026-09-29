@@ -359,6 +359,17 @@
   border: 1px solid var(--gold);
 }
 
+.label-card__count-part {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+}
+
+.label-card__count-part + .label-card__count-part {
+  padding-inline-start: 2.5mm;
+  border-inline-start: 1px solid var(--gold);
+}
+
 .label-card__count b {
   font-size: 20px;
   font-weight: 800;

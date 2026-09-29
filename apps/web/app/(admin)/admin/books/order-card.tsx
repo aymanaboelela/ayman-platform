@@ -293,6 +293,12 @@ export function BookOrderCard({
             <p className="text-[length:var(--fs-title-4)] font-semibold tabular-nums text-fg">
               {formatEGP(row.amountCents)} ج
             </p>
+            {/* «طالب كام كتاب وكام نسخة» — up here beside the money, not only
+                in the grey line at the foot where it was easy to miss. The
+                same two numbers the shipping card prints. */}
+            <p className="mt-1 inline-flex items-center rounded-full border border-accent/40 bg-accent/10 px-2.5 py-0.5 text-[length:var(--fs-text-xs)] font-semibold tabular-nums text-accent-text">
+              {formatCopy(c.itemsSummary, { n: new Set(row.items.map((item) => item.titleAr)).size, copies })}
+            </p>
             <p className="text-[length:var(--fs-text-xs)] tabular-nums text-fg-faint">
               {formatCopy(row.discountCents > 0 ? c.breakdownWithDiscount : c.breakdown, {
                 items: formatEGP(row.itemsCents),
@@ -328,8 +334,15 @@ export function BookOrderCard({
                 {/* The quantity FIRST and as its own object — «كل واحد عايز كام
                     كتاب» is read off this column, and buried mid-sentence in
                     «×٢» it was the easiest number on the card to miss. */}
-                <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-surface-4 text-[length:var(--fs-text-xs)] font-semibold tabular-nums text-fg">
-                  {item.quantity}
+                <span
+                  className={cn(
+                    'inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md px-1.5 text-[length:var(--fs-text-xs)] font-semibold tabular-nums',
+                    item.quantity > 1 ? 'bg-accent text-[#1A1206]' : 'bg-surface-4 text-fg',
+                  )}
+                  title={formatCopy(c.itemsSummary, { n: 1, copies: item.quantity })}
+                  dir="ltr"
+                >
+                  {item.quantity}×
                 </span>
                 <span className="min-w-0 flex-1 text-[length:var(--fs-text-sm)] font-medium text-fg">
                   {item.titleAr}
