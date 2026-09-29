@@ -2476,14 +2476,39 @@
   border-top: 1px solid var(--site-line);
 }
 
+/* A hairline of accent along the footer's top edge, brightest at the centre —
+   where the glow below appears to come from. */
+.site-footer::before {
+  content: '';
+  position: absolute;
+  inset-inline: 10%;
+  inset-block-start: 0;
+  block-size: 1px;
+  background: linear-gradient(to left, transparent, color-mix(in oklch, var(--p-500), transparent 30%), transparent);
+}
+
+/*
+ * The warm light behind the footer.
+ *
+ * ⚠️ The box covers the WHOLE footer, and every gradient in it has faded to
+ * nothing well inside that box. It used to be a band from `-40%` to `50%` of
+ * the footer's height with an ellipse centred on its BOTTOM edge — so the
+ * lower half of the ellipse was simply cut off, and the glow ended in a hard
+ * horizontal line a third of the way down, right through the link columns.
+ * Sizing the ellipses in `rem` against a box this tall means no radius can
+ * reach an edge that is not the footer's own.
+ *
+ * Two pools: one spilling down from the top edge behind the call to action,
+ * one rising behind the wordmark at the foot.
+ */
 .site-footer__glow {
   position: absolute;
-  inset-inline: 0;
-  top: -40%;
-  height: 90%;
+  inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(ellipse 45% 55% at 50% 100%, rgb(var(--p-rgb) / 0.20), transparent 70%);
+  background:
+    radial-gradient(ellipse min(60%, 44rem) 30rem at 50% 0%, color-mix(in oklch, var(--p-500), transparent 82%), transparent 72%),
+    radial-gradient(ellipse min(70%, 52rem) 22rem at 50% 100%, color-mix(in oklch, var(--p-500), transparent 86%), transparent 72%);
 }
 
 .site-footer__inner {
@@ -2544,36 +2569,44 @@
 
 /* ---- link grid ---- */
 
+/*
+ * The brand and the three link columns, on ONE panel.
+ *
+ * They were four loose columns on the page tint, and with seven links in the
+ * first, two in the second and four in the third they read as sparse and
+ * lopsided — nothing held them together. A single translucent panel gives the
+ * group an edge, «الصفحات» runs in two columns so it stops being the one tall
+ * list, and the brand block is divided from the links by a rule rather than by
+ * a gap.
+ */
 .site-footer__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
-  gap: clamp(1.5rem, 3vw, 3rem);
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1.1fr);
+  gap: clamp(1.5rem, 3vw, 2.5rem);
   align-items: start;
-  padding-block: clamp(2.5rem, 5vw, 4rem);
-  /* The parked launcher's berth, reserved.
-
-     The assistant launcher stays pinned to the viewport floor and may
-     overlap this bar. That is deliberate: it used to ride up to avoid the
-     wordmark, and a support button that moves as you scroll is one you have
-     to go looking for.
-     "Just above that rule" is precisely where this grid's last row ends, so
-     without a gutter the button trades covering the brand for covering a
-     link — measured at 390px («مجتمع الطلاب»), at 768 and 900 (the same), and
-     at 1024 («قناة واتساب»).
-
-     6.5rem is the launcher's own 3.5rem plus the 1.5rem it keeps clear on
-     each side, and it replaces rather than adds to the block padding above.
-     One number at every width: the columns reflow three times between 360px
-     and 1440px, and a per-breakpoint value would be correct at the three
-     widths someone measured and wrong between them. */
-  padding-block-end: 6.5rem;
+  margin-block-start: clamp(2.5rem, 5vw, 3.5rem);
+  padding: clamp(1.25rem, 3vw, 2.25rem);
+  border: 1px solid var(--site-line);
+  border-radius: 1.75rem;
+  background:
+    radial-gradient(ellipse 60% 90% at 100% 0%, color-mix(in oklch, var(--p-500), transparent 92%), transparent 70%),
+    color-mix(in oklch, var(--site-card), transparent 20%);
+  box-shadow: var(--site-shadow-sm);
 }
 
 .site-footer__brand {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 1.25rem;
+  gap: 1.125rem;
+}
+
+@media (min-width: 64rem) {
+  .site-footer__brand {
+    align-self: stretch;
+    padding-inline-end: clamp(1.5rem, 3vw, 2.5rem);
+    border-inline-end: 1px solid var(--site-line);
+  }
 }
 
 .site-footer__blurb {
@@ -2583,25 +2616,50 @@
   color: var(--site-fg-2);
 }
 
+/* A column label: the foreground colour with a short accent bar before it.
+   No `letter-spacing` and no `uppercase` — these are ARABIC words, and
+   tracking pulls a cursive script's joined letters apart. */
 .site-footer__h {
-  font-size: var(--fs-text-xs);
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+  font-size: 0.9375rem;
   font-weight: var(--fw-bold);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--site-accent-text);
-  margin-bottom: 1rem;
+  color: var(--site-fg);
 }
 
+.site-footer__h::before {
+  content: '';
+  flex: none;
+  inline-size: 0.875rem;
+  block-size: 0.1875rem;
+  border-radius: var(--r-full);
+  background: var(--site-accent-solid);
+}
+
+/* A grid of one track, so a column can become two without a second element:
+   the label, the WhatsApp button and the group link span every track. */
 .site-footer__col {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  align-content: start;
+  gap: 0.625rem 1.5rem;
+}
+
+/* «الصفحات» holds seven links against the others' two and four; in two
+   columns it stops being the one tall list the row hangs off. */
+.site-footer__col--pages {
+  grid-template-columns: repeat(2, minmax(0, max-content));
 }
 
 .site-footer__col a:not(.site-btn) {
   position: relative;
   width: fit-content;
   font-size: var(--fs-text-sm);
+  line-height: 1.6;
   color: var(--site-fg-2);
   text-decoration: none;
   transition: color var(--d-hover) var(--ease);
@@ -2631,9 +2689,33 @@
   transform: scaleX(1);
 }
 
-.site-footer__wa {
+/*
+ * «التواصل معانا على واتساب» — tinted in WhatsApp's own green (`--brand`,
+ * written inline from the icon registry) instead of a grey outline, so the one
+ * way to reach a person on this footer looks like it.
+ *
+ * `.site-footer .site-footer__wa` for specificity only: it has to beat
+ * `.site-btn--outline`'s border and its hover colour, which are one class
+ * each and live in `theme.css`.
+ */
+.site-footer .site-footer__wa {
+  grid-column: 1 / -1;
   width: 100%;
+  margin-top: 0.5rem;
   justify-content: center;
+  border-color: color-mix(in srgb, var(--brand, var(--site-accent-solid)), transparent 55%);
+  background: color-mix(in srgb, var(--brand, var(--site-accent-solid)), transparent 88%);
+  color: var(--site-fg);
+}
+
+.site-footer .site-footer__wa svg {
+  color: var(--brand, var(--site-accent-solid));
+}
+
+.site-footer .site-footer__wa:hover {
+  border-color: var(--brand, var(--site-accent-solid));
+  background: color-mix(in srgb, var(--brand, var(--site-accent-solid)), transparent 78%);
+  color: var(--site-fg);
 }
 
 /* ---- social ---- */
@@ -2647,35 +2729,43 @@
   margin: 0;
 }
 
+/*
+ * Each mark sits in its OWN brand colour at rest — a tinted disc with the icon
+ * in the brand hue — rather than five identical grey tiles that only turned
+ * colour under a mouse a phone does not have.
+ *
+ * `--social-tone` is the brand colour pulled a little towards the ink on the
+ * light theme (WhatsApp's `#25D366` alone is under 2:1 on white) and swapped
+ * for `--brand-ink` on the dark one (TikTok's `#000000` is invisible there).
+ * Both are written inline per button by the component.
+ */
 .social__link {
+  --social-tone: color-mix(in oklch, var(--brand, var(--site-accent-solid)), var(--site-fg) 22%);
+
   position: relative;
   display: grid;
   place-items: center;
-  width: 3rem;
-  height: 3rem;
-  border-radius: 1rem;
-  border: 1px solid var(--site-line-strong);
-  background: var(--site-card);
-  color: var(--site-fg-2);
-  overflow: hidden;
+  width: 2.875rem;
+  height: 2.875rem;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--social-tone), transparent 72%);
+  background: color-mix(in srgb, var(--social-tone), transparent 90%);
+  color: var(--social-tone);
   transition:
     transform var(--d-hover) var(--ease-pop),
     border-color var(--d-hover) var(--ease),
-    color var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease),
     box-shadow var(--d-hover) var(--ease);
 }
 
-/* The brand colour washes UP from the bottom on hover rather than swapping the
-   background instantly — the icon stays legible through the whole transition,
-   which a hard swap does not manage. `--brand` is set per button in the
-   component from the icon's own official hex. */
-.social__link::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: var(--brand, var(--site-accent-solid));
-  transform: translateY(100%);
-  transition: transform var(--d-hover) var(--ease);
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .social__link {
+    --social-tone: var(--brand-ink, var(--brand, var(--site-accent-solid)));
+  }
+}
+
+:root[data-theme='dark'] .social__link {
+  --social-tone: var(--brand-ink, var(--brand, var(--site-accent-solid)));
 }
 
 .social__link svg {
@@ -2683,45 +2773,62 @@
   z-index: 1;
 }
 
+/* Hover deepens the SAME tint and lifts the disc on a glow of its own colour.
+   The icon never changes colour, so there is no state in which a mark sits on
+   a fill it cannot be read against. */
 .social__link:hover {
   transform: translateY(-0.25rem);
-  border-color: transparent;
-  color: #fff;
-  box-shadow: 0 0.75rem 1.5rem -0.5rem color-mix(in srgb, var(--brand, #000), transparent 50%);
+  border-color: var(--social-tone);
+  background: color-mix(in srgb, var(--social-tone), transparent 78%);
+  box-shadow: 0 0.75rem 1.5rem -0.625rem color-mix(in srgb, var(--social-tone), transparent 40%);
 }
 
-.social__link:hover::before {
-  transform: translateY(0);
-}
-
-/* TikTok's mark is black, which is invisible on the dark theme's card. Its
-   wash needs a light face instead of a white one. */
-.social__link:hover svg {
-  mix-blend-mode: normal;
-}
-
-/* A secondary link under the account column — the students' group. */
+/* A secondary link under the account column — the students' group, as a chip. */
 .site-footer__group {
+  grid-column: 1 / -1;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  margin-top: 0.25rem;
+  padding: 0.375rem 0.875rem;
+  border: 1px solid var(--site-line);
+  border-radius: var(--r-full);
+  background: var(--site-card);
   font-size: var(--fs-text-sm);
   color: var(--site-fg-2);
   text-decoration: none;
-  transition: color var(--d-hover) var(--ease);
+  transition:
+    color var(--d-hover) var(--ease),
+    border-color var(--d-hover) var(--ease);
 }
 
 .site-footer__group:hover {
   color: var(--site-accent-text);
+  border-color: var(--site-line-strong);
 }
 
 /* ---- bottom bar ---- */
 
+/*
+ * The rights line and the way back up, on one rule.
+ *
+ * ⚠️ The parked launcher's berth. المساعد's button stays pinned to the
+ * viewport floor (3.5rem, 1.5rem up), so at the very bottom of the page it
+ * covers the lowest 5rem. The grid used to reserve 6.5rem of empty padding
+ * under its last row for that; with the grid now a panel, that padding would
+ * be a blank strip INSIDE a card. It is not needed where it was: below this
+ * bar the wordmark is never shorter than ~4.7rem (13vw at 360px, plus its top
+ * margin), and the bar's own end padding covers the rest — so what the button
+ * sits on at full scroll is the wordmark and this padding, never a link.
+ * Re-measure at 360–390px if either of those changes.
+ */
 .site-footer__bar {
   display: flex;
-  justify-content: center;
-  padding-block: 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin-top: clamp(1.75rem, 3.5vw, 2.5rem);
+  padding-block: 1.5rem 2rem;
   border-top: 1px solid var(--site-line);
 }
 
@@ -2730,6 +2837,37 @@
   color: var(--site-fg-2);
 }
 
+.site-footer__top {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-block-size: 2.5rem;
+  padding-inline: 1rem;
+  border: 1px solid var(--site-line-strong);
+  border-radius: var(--r-full);
+  background: var(--site-card);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--site-fg);
+  text-decoration: none;
+  transition:
+    color var(--d-hover) var(--ease),
+    border-color var(--d-hover) var(--ease),
+    transform var(--d-hover) var(--ease-pop);
+}
+
+.site-footer__top:hover {
+  color: var(--site-accent-text);
+  border-color: var(--site-accent-solid);
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-footer__top:hover,
+  .social__link:hover {
+    transform: none;
+  }
+}
 
 /* ---- watermark ---- */
 
@@ -3019,13 +3157,16 @@
   }
 
   .site-footer__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1.1fr);
   }
 
   /* The brand block spans the row above the link columns rather than being
-     squeezed into a quarter of it. */
+     squeezed into a quarter of it — divided from them by a rule underneath,
+     the same way the desktop panel divides them with one beside it. */
   .site-footer__brand {
     grid-column: 1 / -1;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--site-line);
   }
 }
 
@@ -3049,9 +3190,19 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .site-footer__bar {
-    flex-direction: column;
-    align-items: flex-start;
+  /* One column of sections, each laying its own links out two across — the
+     footer on a phone is a short, even block instead of four stacked lists. */
+  .site-footer__col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* Each link is already a 2.75rem touch target on a phone (see the
+       hit-area block at the end of this file); a gap on top of that spaces
+       the rows twice. */
+    row-gap: 0;
+  }
+
+  .site-footer__col + .site-footer__col {
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--site-line);
   }
 
   .footer-cta__actions .site-btn {

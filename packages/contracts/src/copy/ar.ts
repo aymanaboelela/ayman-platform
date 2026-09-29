@@ -1535,6 +1535,8 @@ export const copy = {
     footerWhatsappChannel: 'قناة واتساب',
     footerFacebookGroup: 'جروب فيسبوك',
     footerWhatsapp: 'التواصل معانا على واتساب',
+    /** The bottom bar's way back up — a noun phrase, so it addresses nobody. */
+    footerBackToTop: 'لأول الصفحة',
 
     // ---- "why learn here" — the two-column vertical marquee ----
     whyTitle: 'ليه تتعلم البرمجة مع',
@@ -6357,11 +6359,31 @@ export const copy = {
     /* ── The basket ───────────────────────────────────────────────────────── */
     cartTitle: 'طلبك',
     cartEmpty: 'لسه مختارتش أي كتاب',
+    /** Under `cartEmpty` in the basket rail — what the rail is FOR, before
+     *  there is anything in it. Passive on purpose: one string for every
+     *  student, so no «اختار/اختاري». */
+    cartEmptyHint: 'أي كتاب يتضاف هيظهر هنا بسعره، والإجمالي تحته.',
     /** The line that does the most work on this page. Stated on the shelf, not
      *  only at checkout, so nobody meets it as a surprise. */
     shippingOnce: 'الشحن من {price} على حسب المحافظة — مرة واحدة على الطلب كله مهما كان عدد الكتب',
     /** The zones spelled out, under the line above — «الرقم ده جه منين». */
     shippingZones: 'القاهرة والجيزة {near} · وجه بحري {delta} · الصعيد وسيناء والبحر الأحمر {far}',
+    /* ── The shop's shipping CARD (`BooksShippingChip`) ────────────────────
+       The two lines above are one run-on sentence, and that is fine where
+       they are read as text (`/books.md`). On the shelf they were rendered
+       as one pill and glued together — «…عدد الكتبالقاهرة والجيزة 80» — with
+       the three zones in 11px type. The card says the rule first, as a
+       headline, and then gives each zone its own row and its own price. */
+    shippingHeadline: 'الشحن مرة واحدة على الطلب كله، مهما كان عدد الكتب',
+    /** Under the headline: the floor, said as a floor. `{price}` is the
+     *  cheapest zone. Omitted when that zone is free — «من 0» is not a floor. */
+    shippingFromNote: 'بيبدأ من {price} ج، على حسب المحافظة',
+    shippingZoneNear: 'القاهرة والجيزة',
+    shippingZoneDelta: 'وجه بحري',
+    shippingZoneFar: 'الصعيد وسيناء والبحر الأحمر',
+    /** The unit after a bare `formatEGP` figure, set smaller than the number
+     *  on a card and a zone row. */
+    currencyShort: 'ج',
     /**
      * The same shelf line when the fee is ZERO.
      *

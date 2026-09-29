@@ -2469,6 +2469,67 @@ html[data-player-fullscreen] .route-fade {
   font-weight: var(--fw-medium);
 }
 
+/* ---------------------------------------------------------------------------
+   `.books-checkout*` / `.books-cart__row*` — the order summary inside the book
+   order dialog. Moved from `(site)/styles/books.css`, for exactly the reason
+   the `.course-start*` banner above gives.
+
+   Every place these render is a Radix `Dialog.Portal`, which mounts into
+   `<body>` — outside `.site` on `/books`, outside `.store-surface` on
+   `/store`, and on the dashboard and the course page too. The `--site-*`
+   tokens they read are declared on `.site` (and aliased on `.store-surface`),
+   so in the dialog every one of them resolved to NOTHING: the summary a
+   student reads right before typing an address had no background, no border
+   and no rule over its total. And under `(app)` — the dashboard's «اطلب
+   الكتاب», the resume-payment page — `books.css` is not even loaded, so the
+   rows were not laid out at all.
+
+   Global tokens only, the ones the dialog's own chrome is painted with
+   (`bg-surface-2`, `border-line`): `--n-3` is one step above that surface in
+   both themes, which is what makes the summary read as a slip ON the dialog.
+   `lib/books-dialog-tokens.test.ts` keeps `--site-*` out of these rules.
+
+   The basket rail on `/books` renders `.books-cart__row` too, INSIDE `.site`;
+   its own receipt look stays in `books.css`, scoped under `.books-cart`.
+   --------------------------------------------------------------------------- */
+.books-checkout {
+  display: grid;
+  gap: 1rem;
+}
+
+/* The basket, restated inside the checkout dialog. Not decoration: this is the
+   last screen before someone types an address, and it is the screen where
+   «ليه ٥٦٥؟» gets asked. Repeating the lines here answers it first. */
+.books-checkout__summary {
+  display: grid;
+  gap: 0.375rem;
+  padding: 0.875rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  background: var(--n-3);
+}
+
+.books-cart__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.875rem;
+  color: var(--n-11);
+}
+
+.books-cart__row--total {
+  padding-top: 0.4375rem;
+  border-top: 1px dashed var(--border-strong);
+  font-size: 1.0625rem;
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.books-cart__row span:last-child {
+  font-variant-numeric: tabular-nums;
+}
+
 
 /* ---------------------------------------------------------------------------
    THE PRODUCT TYPE SCALE — one step up from the marketing site's.

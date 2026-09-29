@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Layers, Minus, Plus, ShoppingBag, Truck } from 'lucide-react';
+import { ArrowLeft, BookOpen, Check, Layers, Minus, Plus, ShoppingBag, Truck } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import {
@@ -27,6 +27,24 @@ import { subjectArt } from '@/lib/subject-art';
 import { formatEGP } from '@/lib/price';
 
 const c = copy.books;
+
+/**
+ * A price as the shop prints it: the figure, then a smaller «ج».
+ *
+ * `<bdi>` around the figure because it is a Latin-digit run inside Arabic and
+ * `formatEGP` groups thousands with «٬» — isolated, it can never be reordered
+ * against the unit or the words around it. The unit is its own span so the
+ * card can set it a step smaller than the number, which is what makes «250 ج»
+ * read as a price rather than as a sentence.
+ */
+function Money({ cents }: { cents: number }) {
+  return (
+    <>
+      <bdi className="books-money">{formatEGP(cents)}</bdi>{' '}
+      <span className="books-money__unit">{c.currencyShort}</span>
+    </>
+  );
+}
 
 /** The three bands inside a shelf, in render order, with their headings. */
 const TERMS: readonly { key: BookTerm; label: string }[] = [
@@ -160,9 +178,11 @@ export function BooksShop({
     return (
       <div className="site-shell books-shelves">
         <div className="books-empty">
-          <BookOpen size={28} aria-hidden="true" />
+          <span className="books-empty__icon" aria-hidden="true">
+            <BookOpen size={30} />
+          </span>
           <p className="books-empty__title">{c.empty}</p>
-          <p>{c.emptyNote}</p>
+          <p className="books-empty__note">{c.emptyNote}</p>
         </div>
       </div>
     );
@@ -193,17 +213,25 @@ export function BooksShop({
       */}
       {lines.length > 0 ? (
         <div className="books-bar">
+          <span className="books-bar__bag" aria-hidden="true">
+            <ShoppingBag size={18} />
+            <span className="books-bar__count">{bookCount}</span>
+          </span>
           <div className="books-bar__totals">
-            <span className="books-bar__total">{formatEGP(totals.totalCents)}</span>
+            <span className="books-bar__total">
+              <Money cents={totals.totalCents} />
+            </span>
+            {/* The count and the one thing the figure above leaves out. It
+                used to repeat the total word for word — «الطلب فيه ٢ كتاب —
+                الإجمالي ٥٠٠» under «٥٠٠» — and still never said that the
+                courier is on top. */}
             <span className="books-bar__detail">
-              {formatCopy(c.cartAnnounce, {
-                n: bookCount,
-                price: formatEGP(totals.totalCents),
-              })}
+              {formatCopy(c.shelfCount, { n: bookCount })} · {c.shipping} {c.shippingByGovernorate}
             </span>
           </div>
           <button type="button" className="books-bar__cta" onClick={() => setCheckingOut(true)}>
             {c.checkout}
+            <ArrowLeft size={16} aria-hidden="true" />
           </button>
         </div>
       ) : null}
@@ -222,25 +250,37 @@ export function BooksShop({
           </div>
 
           <aside className="books-cart" aria-label={c.cartTitle}>
-            <p className="books-cart__title">
-              <ShoppingBag size={18} aria-hidden="true" />
-              {c.cartTitle}
-            </p>
+            <div className="books-cart__head">
+              <span className="books-cart__icon" aria-hidden="true">
+                <ShoppingBag size={18} />
+              </span>
+              <p className="books-cart__title">{c.cartTitle}</p>
+              {bookCount > 0 ? (
+                <span className="books-cart__count">{formatCopy(c.shelfCount, { n: bookCount })}</span>
+              ) : null}
+            </div>
 
             {lines.length === 0 ? (
-              <p className="books-cart__empty">{c.cartEmpty}</p>
+              <div className="books-cart__empty">
+                <p className="books-cart__empty-title">{c.cartEmpty}</p>
+                <p className="books-cart__empty-hint">{c.cartEmptyHint}</p>
+              </div>
             ) : (
               <>
                 <ul className="books-cart__lines">
                   {lines.map((line) => (
                     <li key={line.book.id} className="books-cart__line">
-                      <span>{line.book.titleAr}</span>
-                      <span>{formatEGP(line.book.priceCents * line.quantity)}</span>
+                      <span className="books-cart__line-title">{line.book.titleAr}</span>
+                      <span className="books-cart__line-total">
+                        <Money cents={line.book.priceCents * line.quantity} />
+                      </span>
                       <span className="books-cart__line-sub">
-                        {formatCopy(c.lineQuantity, {
-                          quantity: line.quantity,
-                          price: formatEGP(line.book.priceCents),
-                        })}
+                        <span>
+                          {formatCopy(c.lineQuantity, {
+                            quantity: line.quantity,
+                            price: formatEGP(line.book.priceCents),
+                          })}
+                        </span>
                         <button
                           type="button"
                           className="books-cart__remove"
@@ -261,6 +301,7 @@ export function BooksShop({
                   onClick={() => setCheckingOut(true)}
                 >
                   {c.checkout}
+                  <ArrowLeft size={17} aria-hidden="true" />
                 </button>
                 <p className="books-cart__note">{c.checkoutNote}</p>
               </>
@@ -404,8 +445,11 @@ function Shelf({
              applies to a subject with no books, one level down. */
           if (inTerm.length === 0) return null;
           return (
-            <div key={key}>
-              <h3 className="books-term__label">{label}</h3>
+            <div key={key} className="books-term">
+              <h3 className="books-term__label">
+                {label}
+                <span className="books-term__count">{inTerm.length}</span>
+              </h3>
               <div className="books-grid">
                 {inTerm.map((book) => (
                   <BookTile
@@ -448,29 +492,57 @@ function BookTile({
       handle the two callers already hold, and it is what survives a book being
       re-seeded.
     */
-    <article className="book-card" id={`book-${book.slug}`}>
+    <article
+      className={`book-card${quantity > 0 ? ' book-card--in-cart' : ''}${book.inStock ? '' : ' book-card--sold-out'}`}
+      id={`book-${book.slug}`}
+    >
+      {/*
+        The art is a STAGE with the jacket standing on it, not a full-bleed
+        crop: a tinted panel in the subject's hue, and the book on it at its
+        own 3/4 with a spine and a shadow. It reads as a printed object you
+        can order, which a flat 3/4 rectangle edge to edge never did.
+
+        `.book-card__jacket` is the positioned box the cover fills — an
+        uploaded cover is `next/image` with `fill`, and without its own box it
+        would fill the whole stage, padding and all.
+      */}
       <div className="book-card__art">
-        {/*
-          The same generated art the course cards use when nothing is uploaded.
-          Ayman is supplying photographs of the real covers; until they land,
-          this is a designed jacket in the subject's own hue rather than the grey
-          panel that made the signed-in surface read as «مصمطة». An uploaded
-          cover wins the moment there is one.
-        */}
-        <CourseArt
-          coverKey={book.coverKey}
-          subjectNameAr={subjectNameAr}
-          seed={book.slug}
-          compact
-          /*
-            `compact` for the CROP — a 3/4 jacket has to fill this box and the
-            title is printed in the card below it — but NOT for its size: that
-            default is `128px`, written for two thumbnails, and this card is a
-            `.books-grid` track, which caps at 20rem. A 128px file stretched
-            over 320px is what «الكواليتي وحشة جدا» was.
-          */
-          sizes="20rem"
-        />
+        <div className="book-card__jacket">
+          {/*
+            The same generated art the course cards use when nothing is uploaded.
+            Ayman is supplying photographs of the real covers; until they land,
+            this is a designed jacket in the subject's own hue rather than the grey
+            panel that made the signed-in surface read as «مصمطة». An uploaded
+            cover wins the moment there is one.
+          */}
+          <CourseArt
+            coverKey={book.coverKey}
+            subjectNameAr={subjectNameAr}
+            seed={book.slug}
+            compact
+            /*
+              `compact` for the CROP — a 3/4 jacket has to fill this box and the
+              title is printed in the card below it — but NOT for its size: that
+              default is `128px`, written for two thumbnails. A 128px file
+              stretched over a card is what «الكواليتي وحشة جدا» was, and 20rem
+              still covers the widest jacket at 2x.
+            */
+            sizes="20rem"
+          />
+        </div>
+
+        {/* One tag at most, in the order that matters to the reader: already
+            in the basket, then can't be bought, then on offer. */}
+        {quantity > 0 ? (
+          <span className="book-card__tag book-card__tag--in-cart">
+            <Check size={13} aria-hidden="true" />
+            {c.added}
+          </span>
+        ) : !book.inStock ? (
+          <span className="book-card__tag book-card__tag--sold-out">{c.outOfStock}</span>
+        ) : book.comparePriceCents !== null && book.comparePriceCents > book.priceCents ? (
+          <span className="book-card__tag book-card__tag--sale">{c.discount}</span>
+        ) : null}
       </div>
 
       <div className="book-card__body">
@@ -510,9 +582,13 @@ function BookTile({
         </div>
 
         <div className="book-card__price-row">
-          <span className="book-card__price">{formatEGP(book.priceCents)}</span>
+          <span className="book-card__price">
+            <Money cents={book.priceCents} />
+          </span>
           {book.comparePriceCents !== null ? (
-            <span className="book-card__was">{formatEGP(book.comparePriceCents)}</span>
+            <span className="book-card__was">
+              <bdi>{formatEGP(book.comparePriceCents)}</bdi>
+            </span>
           ) : null}
         </div>
 
@@ -565,36 +641,65 @@ function BookTile({
 }
 
 /**
- * The hero's shipping chip — exported so the page can render it server-side.
+ * The hero's shipping card — exported so the page can render it server-side.
  *
- * It states the FLOOR and then the three zones under it. «الشحن ٨٠ ج» alone
- * would be a number two thirds of the country is not charged, and this line is
- * read on the shelf precisely so nobody meets the real figure as a surprise at
- * the address form.
+ * It states the RULE, then the FLOOR, then each zone on its own row. «الشحن ٨٠
+ * ج» alone would be a number two thirds of the country is not charged, and this
+ * card is read on the shelf precisely so nobody meets the real figure as a
+ * surprise at the address form.
+ *
+ * ⚠️ It was one `<p>` pill holding two sentences — `shippingOnce` and then
+ * `shippingZones` in a `<small>` with nothing between them — and it rendered
+ * as «…مهما كان عدد الكتبالقاهرة والجيزة 80 · …» in 11px type. Every piece now
+ * has its own element, so there is no inline seam left for two strings to meet
+ * at.
+ *
+ * Every figure is the live setting (`catalog.shippingRates`), never a literal.
  */
 export function BooksShippingChip({ rates }: { rates: BookShippingRates }) {
   const free = rates.cairo_giza === 0 && rates.delta === 0 && rates.far === 0;
+  const floor = minBookShippingCents(rates);
+  const zones = [
+    { key: 'near', label: c.shippingZoneNear, cents: rates.cairo_giza },
+    { key: 'delta', label: c.shippingZoneDelta, cents: rates.delta },
+    { key: 'far', label: c.shippingZoneFar, cents: rates.far },
+  ] as const;
+
   return (
-    <p className="books-hero__shipping">
-      <Truck size={16} aria-hidden="true" />
-      {/* A whole different sentence when delivery is free everywhere, not the
-          same one with «٠ ج» in its slot — see `shippingFreeOnce`. The zoned
-          wording spends its second half promising the fee is charged once,
-          which is nonsense about a fee that is not charged at all. */}
-      {free ? (
-        c.shippingFreeOnce
-      ) : (
-        <span>
-          {formatCopy(c.shippingOnce, { price: formatEGP(minBookShippingCents(rates)) })}
-          <small className="books-hero__zones">
-            {formatCopy(c.shippingZones, {
-              near: formatEGP(rates.cairo_giza),
-              delta: formatEGP(rates.delta),
-              far: formatEGP(rates.far),
-            })}
-          </small>
+    <div className={`books-ship${free ? ' books-ship--free' : ''}`}>
+      <div className="books-ship__head">
+        <span className="books-ship__icon" aria-hidden="true">
+          <Truck size={20} />
         </span>
+        <div className="books-ship__text">
+          {/* A whole different sentence when delivery is free everywhere, not
+              the same one with «٠ ج» in its slot — see `shippingFreeOnce`. The
+              zoned wording spends its second half promising the fee is charged
+              once, which is nonsense about a fee that is not charged at all. */}
+          <p className="books-ship__title">{free ? c.shippingFreeOnce : c.shippingHeadline}</p>
+          {!free && floor > 0 ? (
+            <p className="books-ship__note">
+              {formatCopy(c.shippingFromNote, { price: formatEGP(floor) })}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      {free ? null : (
+        <ul className="books-ship__zones">
+          {zones.map((zone) => (
+            <li key={zone.key} className={`books-ship__zone books-ship__zone--${zone.key}`}>
+              <span className="books-ship__zone-name">{zone.label}</span>
+              <span className="books-ship__zone-price">
+                {/* A zone that is free while the others are not says so in a
+                    word — `formatEGP(0)` alone is a bare «0». Same rule as
+                    `formatShipping`. */}
+                {zone.cents === 0 ? c.shippingFree : <Money cents={zone.cents} />}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
-    </p>
+    </div>
   );
 }
