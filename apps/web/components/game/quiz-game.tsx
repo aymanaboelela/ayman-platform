@@ -25,6 +25,7 @@ import {
 } from '@ayman/contracts/quiz/game';
 import { SafeHtml } from '@/components/content/safe-html';
 import { apiPost } from '@/lib/api';
+import { finishRound } from './finish-round';
 import type { GameSound } from './use-game-sound';
 
 const c = copy.game;
@@ -52,8 +53,8 @@ interface Feedback {
  *
  * الحالة كلها هنا في المتصفح: النقط والكومبو والقلوب والتايمر. التصحيح بس في
  * السيرفر، سؤال سؤال (`POST /api/me/game/answer`)، والإجابة الصح مابتوصلش إلا
- * بعد ما الطالب يختار. مفيش لوحة أوائل على اللعبة، فمفيش حاجة تتسرق لو حد لعب
- * في الأرقام — شوف `GAME_POINTS` في الكونتراكت.
+ * بعد ما الطالب يختار. النقط اللي بتتبعت في الآخر للإحصائيات السيرفر بيحصرها
+ * بين أقل وأكتر نقط ممكنة للإجابات اللي هو صحّحها (`settleGame`).
  */
 export function QuizGame({
   round: initial,
@@ -85,6 +86,8 @@ export function QuizGame({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const deadline = useRef(0);
+  // الجولة اللي اتقالها «خلصت» — مرة واحدة لكل جولة، حتى لو الشاشة اترندرت تاني.
+  const finished = useRef<string | null>(null);
 
   const question = round.questions[index];
   const total = round.questions.length;
@@ -116,7 +119,9 @@ export function QuizGame({
         const result = await apiPost('/api/me/game/answer', GameAnswerResultSchema, {
           questionId: question.id,
           optionId,
+          ...(round.sessionId ? { sessionId: round.sessionId } : {}),
         });
+        setError(false);
         const nextStreak = result.correct ? streak + 1 : 0;
         const gained = result.correct ? gamePoints(secondsLeft, nextStreak, seconds) : 0;
         setStreak(nextStreak);
@@ -136,7 +141,7 @@ export function QuizGame({
         setBusy(false);
       }
     },
-    [question, busy, streak, sound, seconds],
+    [question, busy, streak, sound, seconds, round.sessionId],
   );
 
   // التايمر: requestAnimationFrame مش setInterval، عشان الشريط يمشي ناعم
@@ -173,6 +178,13 @@ export function QuizGame({
     setLeft(seconds);
     setPhase('question');
   }, [lives, index, total, sound, seconds]);
+
+  // آخر الجولة: السيرفر بيقفل الجولة ويحسب نتيجتها ومدتها.
+  useEffect(() => {
+    if (phase !== 'over' || !round.sessionId || finished.current === round.sessionId) return;
+    finished.current = round.sessionId;
+    finishRound(round.sessionId, score);
+  }, [phase, round.sessionId, score]);
 
   // بعد الإجابة: ثانية ونص ويروح للي بعده لوحده، والزرار موجود لو حد مستعجل.
   useEffect(() => {
@@ -313,7 +325,11 @@ export function QuizGame({
         />
       ) : null}
 
-      {error ? <p className="gm-error" role="alert">{c.failed}</p> : null}
+      {error ? (
+        <p className="gm-error" role="alert">
+          {phase === 'over' ? c.failed : c.answerFailed}
+        </p>
+      ) : null}
     </section>
   );
 }

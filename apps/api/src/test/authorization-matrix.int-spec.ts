@@ -99,6 +99,13 @@ import { BooksService } from '../modules/books/books.service';
 
 import { enumerateRoutes, type RouteRef } from './route-inventory';
 
+/** جسم صحيح لـ`PUT /admin/game-banks/:courseId/modes` — الافتراضي في التلاتة. */
+const GAME_MODES_BODY = {
+  race: { useQuizzes: true, useBank: true, lessonIds: [] },
+  millionaire: { useQuizzes: true, useBank: true, lessonIds: [] },
+  survival: { useQuizzes: true, useBank: true, lessonIds: [] },
+};
+
 /**
  * THE full-product authorization matrix. Plan 5's `quiz.authz.spec.ts`
  * already covers the quiz module's ~36 routes (attempt lifecycle, appeals,
@@ -840,6 +847,26 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'game lifeline: student, question outside their pool', method: 'post', path: () => '/api/me/game/lifeline', actor: 'student', status: 404, body: () => ({ questionId: randomUUID(), kind: 'audience' }) },
     { label: 'game answer: anonymous', method: 'post', path: () => '/api/me/game/answer', actor: 'anonymous', status: 401, body: () => ({ questionId: randomUUID(), optionId: null }) },
     { label: 'game answer: student, question outside their pool', method: 'post', path: () => '/api/me/game/answer', actor: 'student', status: 404, body: () => ({ questionId: randomUUID(), optionId: null }) },
+    // الجولة المتسجّلة ونهايتها. طالب من غير كورسات = جولة فاضية (200)
+    // ومابتتسجّلش؛ جولة مش بتاعته = 404.
+    { label: 'game rounds: anonymous', method: 'post', path: () => '/api/me/game/rounds', actor: 'anonymous', status: 401, body: () => ({ mode: 'race' }) },
+    { label: 'game rounds: student', method: 'post', path: () => '/api/me/game/rounds', actor: 'student', status: 200, body: () => ({ mode: 'millionaire', level: 'easy' }) },
+    { label: 'game finish: anonymous', method: 'post', path: () => `/api/me/game/sessions/${randomUUID()}/finish`, actor: 'anonymous', status: 401, body: () => ({}) },
+    { label: 'game finish: student, not their session', method: 'post', path: () => `/api/me/game/sessions/${randomUUID()}/finish`, actor: 'student', status: 404, body: () => ({}) },
+    { label: 'game answer: student, session not theirs', method: 'post', path: () => '/api/me/game/answer', actor: 'student', status: 404, body: () => ({ questionId: randomUUID(), optionId: null, sessionId: randomUUID() }) },
+    // «أسئلة الألعاب» لكورس واحد: الدروس والإعدادات — `question:write` زي الباقي.
+    { label: 'admin game bank detail: student', method: 'get', path: () => `/api/admin/game-banks/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin game bank detail: admin, unknown course', method: 'get', path: () => `/api/admin/game-banks/${randomUUID()}`, actor: 'admin', status: 404 },
+    { label: 'admin game lesson bank: student', method: 'post', path: () => `/api/admin/game-banks/${randomUUID()}/lessons/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin game lesson bank: admin, unknown lesson', method: 'post', path: () => `/api/admin/game-banks/${randomUUID()}/lessons/${randomUUID()}`, actor: 'admin', status: 404 },
+    { label: 'admin game modes: student', method: 'put', path: () => `/api/admin/game-banks/${randomUUID()}/modes`, actor: 'student', status: 403, body: () => ({ modes: GAME_MODES_BODY }) },
+    { label: 'admin game modes: admin, unknown course', method: 'put', path: () => `/api/admin/game-banks/${randomUUID()}/modes`, actor: 'admin', status: 404, body: () => ({ modes: GAME_MODES_BODY }) },
+    // «إحصائيات الألعاب» — `analytics:read` زي «الفيديوهات».
+    { label: 'admin game stats: anonymous', method: 'get', path: () => '/api/admin/game-stats', actor: 'anonymous', status: 401 },
+    { label: 'admin game stats: student', method: 'get', path: () => '/api/admin/game-stats', actor: 'student', status: 403 },
+    { label: 'admin game stats: admin', method: 'get', path: () => '/api/admin/game-stats?period=7d', actor: 'admin', status: 200 },
+    { label: 'admin game stats student: student', method: 'get', path: () => `/api/admin/game-stats/students/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin game stats student: admin', method: 'get', path: () => `/api/admin/game-stats/students/${randomUUID()}`, actor: 'admin', status: 200 },
     // Same again for the activity feed, guarded by `progress:read` — the READ
     // half of the pair the heartbeat writes. Its own rows for the same reason
     // the quiz history has its own: a different permission is a different

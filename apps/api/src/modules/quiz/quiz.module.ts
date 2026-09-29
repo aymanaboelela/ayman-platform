@@ -28,6 +28,9 @@ import { AdminGameBanksController } from './admin-game-banks.controller';
 import { GameBanksService } from './game-banks.service';
 import { MediaModule } from '../media/media.module';
 import { GameController } from './game.controller';
+import { AdminGameStatsController } from './admin-game-stats.controller';
+import { GameStatsService } from './game-stats.service';
+import { EnrollmentModule } from '../enrollment/enrollment.module';
 import { GameVoiceService } from './game-voice.service';
 import { GameService } from './game.service';
 
@@ -35,7 +38,9 @@ import { GameService } from './game.service';
   // `ProgressModule` is imported (not just re-exported) so `AttemptService`
   // can inject Plan 4's `LessonProgressService` — the only way a quiz result
   // becomes lesson progress (Task 12).
-  imports: [PrismaModule, ProgressModule, NotificationsModule, MediaModule],
+  // `EnrollmentModule` للألعاب: بنك الطالب من كورساته اللي يقدر يفتحها بس،
+  // بنفس `accessActive` بتاع «كورساتي».
+  imports: [PrismaModule, ProgressModule, NotificationsModule, MediaModule, EnrollmentModule],
   controllers: [
     AdminQuestionsController,
     AdminQuizzesController,
@@ -46,6 +51,7 @@ import { GameService } from './game.service';
     AdminExamsController,
     GameController,
     AdminGameBanksController,
+    AdminGameStatsController,
   ],
   providers: [
     MasteryService,
@@ -64,6 +70,7 @@ import { GameService } from './game.service';
     GameService,
     GameBanksService,
     GameVoiceService,
+    GameStatsService,
     // Registering an APP_* provider from inside a feature module still applies
     // it globally (Nest hoists APP_* providers) — every future controller that
     // renders a question is covered the moment it adds @NoAnswerLeak(), with

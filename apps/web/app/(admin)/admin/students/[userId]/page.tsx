@@ -27,6 +27,7 @@ import { HistorySection } from './history-section';
 import { ConversationSection } from './conversation-section';
 import { DevicesSection } from './devices-section';
 import { CenterAttendanceSection } from './center-attendance-section';
+import { GamesSection } from './games-section';
 import { PaymentsSection, PaymentsSectionSkeleton } from './payments-section';
 import { WalletSection } from './wallet-section';
 import { RankChip } from './rank-chip';
@@ -331,6 +332,11 @@ export default async function StudentDetailPage({
               would flash and vanish. */}
           <Suspense fallback={null}>
             <CenterAttendanceSection userId={userId} />
+          </Suspense>
+          {/* «الألعاب» — كام جولة، وقت اللعب، وأعلى نتيجة. نفس المعاملة:
+              بوندري لوحده، ولو القراية وقعت أو الفيتشر مقفولة مابيظهرش. */}
+          <Suspense fallback={null}>
+            <GamesSection userId={userId} />
           </Suspense>
         </div>
         <div className="flex flex-col gap-6">

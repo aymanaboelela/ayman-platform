@@ -1,10 +1,17 @@
 import { Body, Controller, Get, Header, HttpCode, Param, ParseUUIDPipe, Post, Query, StreamableFile, UsePipes } from '@nestjs/common';
+import { Throttle, seconds } from '@nestjs/throttler';
 import { ZodValidationPipe } from 'nestjs-zod';
-import type { GameAnswerResult, GameHub, GameLifelineResult, GameRound } from '@ayman/contracts/quiz/game';
+import type {
+  GameAnswerResult,
+  GameFinishResult,
+  GameHub,
+  GameLifelineResult,
+  GameRound,
+} from '@ayman/contracts/quiz/game';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
-import { GameAnswerDto, GameLifelineDto, GameRoundQueryDto } from './dto/game-answer.dto';
+import { GameAnswerDto, GameFinishDto, GameLifelineDto, GameRoundQueryDto, GameStartDto } from './dto/game-answer.dto';
 import { GameService } from './game.service';
 import { GameVoiceService } from './game-voice.service';
 import { NoAnswerLeak } from './interceptors/no-answer-leak.decorator';
@@ -32,12 +39,43 @@ export class GameController {
     return this.game.hub(user.id);
   }
 
-  /** الأسئلة من غير أي علامة على الصح — `@NoAnswerLeak()` بيتأكد. */
+  /**
+   * الجولة القديمة، من غير تسجيل — لتاب اتفتح على بيلد قبل `POST rounds`.
+   * الأسئلة من غير أي علامة على الصح — `@NoAnswerLeak()` بيتأكد.
+   */
   @NoAnswerLeak()
   @UsePipes(ZodValidationPipe)
   @Get('round')
   round(@CurrentUser() user: AuthenticatedUser, @Query() query: GameRoundQueryDto): Promise<GameRound> {
     return this.game.round(user.id, query);
+  }
+
+  /**
+   * جولة جديدة بالنطاق اللي الطالب اختاره (المنهج كله، وحدة، ولا درس)،
+   * ومعاها صف في `game_sessions` — الإحصائيات، والتأكد السريع من الإجابات.
+   * POST مش GET: بيكتب.
+   */
+  @NoAnswerLeak()
+  @UsePipes(ZodValidationPipe)
+  @HttpCode(200)
+  @Post('rounds')
+  start(@CurrentUser() user: AuthenticatedUser, @Body() body: GameStartDto): Promise<GameRound> {
+    return this.game.start(user.id, body);
+  }
+
+  /**
+   * آخر الجولة: النتيجة والمدة من السيرفر. النقط اللي المتصفح بيبعتها
+   * (سباق/بقاء) بتتحصر بين أقل وأكتر نقط ممكنة للإجابات اللي اتصحّحت هنا.
+   */
+  @UsePipes(ZodValidationPipe)
+  @HttpCode(200)
+  @Post('sessions/:sessionId/finish')
+  finish(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Body() body: GameFinishDto,
+  ): Promise<GameFinishResult> {
+    return this.game.finish(user.id, sessionId, body);
   }
 
   /**
@@ -67,6 +105,14 @@ export class GameController {
    * الستاك مالوش مفتاح Azure، والمتصفح ساعتها بيقرا بصوته. متكاش عند
    * المتصفح أسبوع: نفس السؤال بنفس النص = نفس الصوت.
    */
+  // ٩ قطع للسؤال الواحد (السؤال، وحرف ونص لكل اختيار) بتتطلب مع بعض، فـ٦٠
+  // في الدقيقة الافتراضية كانت بتخلص بعد ٦ أسئلة سريعة والصوت يقع لصوت
+  // المتصفح في النص. القطعة نفسها بتتكاش أسبوع، فده سقف مش باب.
+  @Throttle({
+    short: { limit: 30, ttl: seconds(1) },
+    medium: { limit: 300, ttl: seconds(60) },
+    long: { limit: 5000, ttl: seconds(3600) },
+  })
   @Get('voice/:questionId/:part')
   @Header('Content-Type', 'audio/mpeg')
   @Header('Cache-Control', 'private, max-age=604800, immutable')

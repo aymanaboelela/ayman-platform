@@ -10,11 +10,13 @@ import {
   GameLifelineResultSchema,
   MILLIONAIRE_LADDER,
   MILLIONAIRE_SAFE_STEPS,
+  millionaireFloor,
   type GameLifelineResult,
   type GameRound,
 } from '@ayman/contracts/quiz/game';
 import { SafeHtml } from '@/components/content/safe-html';
 import { apiPost } from '@/lib/api';
+import { finishRound } from './finish-round';
 import { Backdrop, SoundToggle } from './quiz-game';
 import type { GameSound } from './use-game-sound';
 import { useSpeech } from './use-speech';
@@ -27,6 +29,17 @@ type Phase = 'question' | 'locked' | 'checking' | 'reveal' | 'over';
 type Outcome = 'won' | 'walked' | 'lost';
 
 /**
+ * أطول وقت «أيوه، نهائية» تستنى السيرفر. من غيره طلب معلّق كان بيسيب الشاشة
+ * على «بنتأكد» والاختيارات مقفولة لحد ما المتصفح نفسه يزهق — دقايق.
+ */
+const ANSWER_TIMEOUT_MS = 12_000;
+
+/** الطلب بيتقطع بعد `ms` — `AbortSignal.timeout` مش موجود في كل متصفح لسه. */
+function deadlineSignal(ms: number): AbortSignal | undefined {
+  return typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(ms) : undefined;
+}
+
+/**
  * «من سيربح المليون».
  *
  * ١٥ سؤال من الأسهل للأصعب (السيرفر بيرتّبهم بنسبة اللي جابوهم صح). كل سؤال:
@@ -36,6 +49,22 @@ type Outcome = 'won' | 'walked' | 'lost';
  * السلّم نقط مش فلوس، والسؤال الـ٥ والـ١٠ «أمان»: اللي بيقع بعدهم بياخدهم.
  * مساعدتين، كل واحدة مرة في الجولة: «حذف إجابتين» و«اسأل الجمهور» — الاتنين
  * من السيرفر، والجمهور بيقرا اختيارات الطلبة الحقيقية لو فيه كفاية منها.
+ *
+ * ## «بضغط ومش بتشتغل، لازم أقعد أضغط كتير»
+ *
+ * الدوسة نفسها كانت بتوصل — اللي كان بيضيع هو الإجابة. «أيوه، نهائية»
+ * بتبعت `POST /answer`، والسيرفر كان بيعيد حساب بنك الطالب كله مع كل إجابة
+ * (ومع كل قطعة من صوت السؤال، ٥ في السؤال)، فالطلب كان بيتأخر أو يقع. ولما
+ * يقع، `check` كان بيبلعه: السؤال يرجع مفتوح من غير كلمة، والإجابة لسه دهبي
+ * كأنها مقفولة، و«إجابة نهائية؟» اختفت، والثواني اللي راحت تتخصم من التايمر.
+ * الطالب يدوس على الإجابة الدهبي — مفيش حاجة تحصل غير إن التأكيد يرجع —
+ * ويدوس تاني وتالت.
+ *
+ * دلوقتي: السيرفر بيتأكد من الجولة المتسجّلة (صف واحد) بدل البنك. والطلب اللي
+ * يقع بيسيب الإجابة مقفولة والتأكيد مفتوح وبيقول ليه، والتايمر واقف. ودوسة
+ * تانية على نفس الإجابة = «أيوه، نهائية» — الدوسة التانية بقت ليها معنى.
+ * و«إجابة نهائية؟» مابقتش لازقة فوق آخر اختيارين على الموبايل (كانت بتاكل
+ * الدوس عليهم): بقت تحتهم، والصفحة بتنزل لها.
  */
 export function Millionaire({
   round: initial,
@@ -66,6 +95,10 @@ export function Millionaire({
   const [walking, setWalking] = useState(false);
   const [left, setLeft] = useState(seconds);
   const [busy, setBusy] = useState(false);
+  /** آخر «أيوه، نهائية» ماوصلتش — بتتقال تحت التأكيد لحد المحاولة الجاية. */
+  const [sendFailed, setSendFailed] = useState(false);
+  const [lifelineFailed, setLifelineFailed] = useState(false);
+  const finalRef = useRef<HTMLDivElement>(null);
   // صفر = لسه مابدأش؛ أول فريم في التايمر بيحط الموعد.
   const deadline = useRef(0);
   // الموسيقى بتوطى تحت القراية وبترجع بعدها — `show` نفسه بيتجاهل لو الصوت مقفول.
@@ -74,7 +107,7 @@ export function Millionaire({
 
   const question = round.questions[index];
   const secured = index === 0 ? 0 : ladder[index - 1]!;
-  const safeFloor = floorAt(ladder, index);
+  const safeFloor = millionaireFloor(ladder, index);
 
   // كل سؤال جديد: «دخلة» السؤال (هوا طالع وضربة)، وبعدها القراية فوق فرشة
   // التوتر. القراية بتستنى الدخلة تخلص عشان الصوت مايتغطّاش.
@@ -103,6 +136,14 @@ export function Millionaire({
     strip.scrollTo({ left: rung.offsetLeft - (strip.clientWidth - rung.offsetWidth) / 2, behavior: 'smooth' });
   }, [index]);
 
+  // «إجابة نهائية؟» تحت الاختيارات: لو برّه الشاشة، الصفحة بتنزل لها لحد ما
+  // تبان كلها — `nearest`، فلو باينة خلاص مفيش حاجة بتتحرك.
+  useEffect(() => {
+    if (phase !== 'locked') return;
+    const smooth = window.matchMedia?.('(prefers-reduced-motion: no-preference)').matches ?? false;
+    finalRef.current?.scrollIntoView?.({ block: 'nearest', behavior: smooth ? 'smooth' : 'auto' });
+  }, [phase]);
+
   // آخر ١٠ ثواني: التكّة بتتضاعف.
   const urgent = phase === 'question' && left <= 10;
   useEffect(() => {
@@ -130,21 +171,30 @@ export function Millionaire({
       speech.stop();
       setOutcome({ kind, points });
       setPhase('over');
+      // النقط هنا للشاشة بس — السيرفر بيحسب النتيجة من السلّم والإجابات اللي
+      // هو صحّحها، فمفيش حاجة تتبعت غير «الجولة خلصت».
+      finishRound(round.sessionId);
       // الخسارة اتسمعت خلاص وقت الكشف؛ هنا بس الفوز والانسحاب.
       if (kind !== 'lost') sound.show((score) => score.finale(kind === 'won'));
     },
-    [speech, sound],
+    [speech, sound, round.sessionId],
   );
 
   const check = useCallback(
     async (optionId: string | null) => {
       if (!question) return;
       setBusy(true);
+      setSendFailed(false);
       setPhase('checking');
       speech.stop();
       try {
         const [result] = await Promise.all([
-          apiPost('/api/me/game/answer', GameAnswerResultSchema, { questionId: question.id, optionId }),
+          apiPost(
+            '/api/me/game/answer',
+            GameAnswerResultSchema,
+            { questionId: question.id, optionId, ...(round.sessionId ? { sessionId: round.sessionId } : {}) },
+            { signal: deadlineSignal(ANSWER_TIMEOUT_MS) },
+          ),
           // لحظة سكوت قبل الكشف — «التشويق» نص اللعبة.
           new Promise((resolve) => window.setTimeout(resolve, 1400)),
         ]);
@@ -169,14 +219,22 @@ export function Millionaire({
           }
         }, result.correct ? 1800 : 2600);
       } catch {
-        // السؤال رجع مفتوح — والفرشة ترجع معاه بدل التوتر.
-        sound.show((score) => score.startBed(size > 1 ? index / (size - 1) : 0));
-        setPhase('question');
+        setSendFailed(true);
+        if (optionId === null) {
+          // الوقت خلص والإجابة الفاضية ماوصلتش: السؤال بيرجع، والتايمر (اللي
+          // خلص) بيبعتها تاني لوحده.
+          setPhase('question');
+          return;
+        }
+        // ⚠️ مش `'question'`: الإجابة بتفضل مقفولة، و«إجابة نهائية؟» مفتوحة،
+        // والتايمر واقف زي ما كان وقت التأكيد — دوسة واحدة وتتبعت تاني.
+        setPhase('locked');
+        sound.show((score) => score.startTension());
       } finally {
         setBusy(false);
       }
     },
-    [question, speech, sound, index, size, ladder, safeFloor, finish, seconds],
+    [question, speech, sound, index, size, ladder, safeFloor, finish, seconds, round.sessionId],
   );
 
   // التايمر بيقف وقت «إجابة نهائية؟» — التفكير في التأكيد مش بيتحسب.
@@ -198,7 +256,14 @@ export function Millionaire({
   }, [phase, check, seconds]);
 
   const lock = (optionId: string) => {
+    // دوسة تانية على نفس الإجابة = «أيوه، نهائية». قبل كده كانت مابتعملش
+    // حاجة، والطالب اللي مالاحظش التأكيد تحت كان يفضل يدوس.
+    if (phase === 'locked' && optionId === chosen) {
+      void check(optionId);
+      return;
+    }
     if (phase !== 'question' && phase !== 'locked') return;
+    setSendFailed(false);
     // التايمر بيقف هنا (الـeffect بتاعه مربوط بـ`question`)، و`left` بيفضل
     // شايل اللي فاضل عشان «لأ، لسه» يكمّل منه.
     setChosen(optionId);
@@ -216,6 +281,7 @@ export function Millionaire({
 
   const cancelLock = () => {
     deadline.current = performance.now() + left * 1000;
+    setSendFailed(false);
     setChosen(null);
     setPhase('question');
     sound.show((score) => score.startBed(size > 1 ? index / (size - 1) : 0));
@@ -224,12 +290,20 @@ export function Millionaire({
   const lifeline = async (kind: 'fifty' | 'audience') => {
     if (!question || used[kind] || busy) return;
     setBusy(true);
+    setLifelineFailed(false);
     try {
-      const result = await apiPost('/api/me/game/lifeline', GameLifelineResultSchema, { questionId: question.id, kind });
+      const result = await apiPost('/api/me/game/lifeline', GameLifelineResultSchema, {
+        questionId: question.id,
+        kind,
+        ...(round.sessionId ? { sessionId: round.sessionId } : {}),
+      });
       setUsed((u) => ({ ...u, [kind]: true }));
       if (kind === 'fifty') setRemoved(result.removeOptionIds);
       else setVotes(result.votes);
       sound.show((score) => score.lifeline());
+    } catch {
+      // المساعدة ماتحسبتش (`used` زي ما هو) — تتجرّب تاني.
+      setLifelineFailed(true);
     } finally {
       setBusy(false);
     }
@@ -247,6 +321,8 @@ export function Millionaire({
       setVotes([]);
       setUsed({ fifty: false, audience: false });
       setOutcome(null);
+      setSendFailed(false);
+      setLifelineFailed(false);
       deadline.current = performance.now() + seconds * 1000;
       setLeft(seconds);
       setPhase('question');
@@ -373,6 +449,12 @@ export function Millionaire({
             <SafeHtml html={question.stemHtml} className="mln-question__stem" />
           </div>
 
+          {lifelineFailed ? (
+            <p className="mln-stuck" role="alert">
+              {c.lifelineFailed}
+            </p>
+          ) : null}
+
           {votes.length > 0 ? (
             <div className="mln-audience" aria-label={c.mlnAudienceTitle}>
               <p className="mln-audience__title">
@@ -422,9 +504,22 @@ export function Millionaire({
             })}
           </ul>
 
+          {phase === 'checking' ? (
+            <p className="mln-checking" role="status">
+              {c.mlnChecking}
+            </p>
+          ) : null}
+
           {phase === 'locked' && chosen ? (
-            <div className="mln-final" role="dialog" aria-label={c.mlnFinal}>
+            <div className="mln-final" role="dialog" aria-label={c.mlnFinal} ref={finalRef}>
               <p className="mln-final__q">{c.mlnFinal}</p>
+              {sendFailed ? (
+                <p className="mln-final__failed" role="alert">
+                  {c.mlnSendFailed}
+                </p>
+              ) : (
+                <p className="mln-final__hint">{c.mlnTapAgain}</p>
+              )}
               <div className="mln-final__actions">
                 <button type="button" className="gm-btn gm-btn--primary" onClick={() => void check(chosen)}>
                   <Check className="size-4" aria-hidden="true" />
@@ -511,9 +606,3 @@ export function Millionaire({
   );
 }
 
-/** النقط المضمونة لو الجولة وقعت على السؤال ده: آخر «أمان» اتعدّى. */
-function floorAt(ladder: readonly number[], index: number): number {
-  let floor = 0;
-  for (const step of MILLIONAIRE_SAFE_STEPS) if (index >= step) floor = ladder[step - 1] ?? floor;
-  return floor;
-}

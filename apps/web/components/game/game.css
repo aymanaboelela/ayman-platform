@@ -337,18 +337,107 @@
 @keyframes gm-gain { from { opacity: 0; transform: translateY(10px) scale(0.8); } 30% { opacity: 1; transform: translateY(-4px) scale(1.15); } to { transform: none; } }
 @keyframes gm-fall { 0% { opacity: 1; transform: translateY(0) rotate(0); } 100% { opacity: 0; transform: translateY(26rem) rotate(560deg); } }
 @keyframes gm-blink { 50% { opacity: 0.55; } }
+@keyframes gm-glow { 50% { box-shadow: 0 10px 34px color-mix(in oklab, var(--a-9) 70%, transparent); } }
 
 /* =============================================================================
-   صفحة الألعاب — اختيار اللعبة والكورس والمستوى.
+   صفحة الألعاب — اللعبة، والكورس، والأسئلة منين، والمستوى.
+
+   كل خطوة برقمها (١ ٢ ٣ ٤) عشان الصفحة تتقري من فوق لتحت زي فورم، واللي
+   متختار بيبان من بعيد: إطار بلون اللعبة، علامة صح في الركن، ولمعة. اختيار
+   أسئلته أقل من اللي اللعبة محتاجاه رمادي ومعاه السبب — بيتختار عادي عشان
+   الطالب يشوف ليه، و«يلا نبدأ» هي اللي بتتقفل.
    ========================================================================== */
 .gm-stage--hub { place-items: start center; }
-.gm-hub { display: grid; gap: 1.25rem; width: min(100%, 56rem); }
+.gm-hub { display: grid; gap: 1.35rem; width: min(100%, 58rem); min-width: 0; }
 .gm-hub__head { text-align: center; display: grid; gap: 0.5rem; justify-items: center; }
-.gm-hub__group { display: grid; gap: 0.65rem; border: 0; padding: 0; margin: 0; min-width: 0; }
-.gm-hub__legend { margin-bottom: 0.4rem; font-size: var(--fs-text-sm); font-weight: var(--fw-bold); color: var(--ink-fg-2); letter-spacing: 0.04em; }
+.gm-hub__group { display: grid; gap: 0.7rem; border: 0; padding: 0; margin: 0; min-width: 0; }
+.gm-hub__legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  color: var(--ink-fg);
+  letter-spacing: 0.02em;
+}
+.gm-step {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--viz-1), var(--viz-4));
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-xs);
+  box-shadow: 0 4px 12px color-mix(in oklab, var(--viz-4) 45%, transparent);
+}
 .gm-hub__hint { font-size: var(--fs-text-xs); color: var(--ink-fg-2); }
-.gm-hub__go { display: grid; justify-items: center; gap: 0.6rem; margin-top: 0.25rem; }
+.gm-hub__warn {
+  max-width: 34rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--viz-1) 18%, transparent);
+  border: 1px solid color-mix(in oklab, var(--viz-1) 45%, transparent);
+  font-size: var(--fs-text-sm);
+  text-align: center;
+}
 
+/* ── «نتايجك» ─────────────────────────────────────────────────────────── */
+.gm-me {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.85rem;
+  border-radius: var(--r-lg);
+  background: rgb(255 255 255 / 0.05);
+  border: 1px solid var(--ink-line);
+}
+.gm-me__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
+.gm-me__stat[data-tone='violet'] { --tone: var(--viz-5); }
+.gm-me__stat[data-tone='teal'] { --tone: var(--viz-2); }
+.gm-me__stat[data-tone='gold'] { --tone: var(--print-gold); }
+.gm-me__stat {
+  display: grid;
+  justify-items: center;
+  gap: 0.1rem;
+  padding: 0.55rem 0.35rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--tone) 16%, transparent);
+  border: 1px solid color-mix(in oklab, var(--tone) 38%, transparent);
+  text-align: center;
+  min-width: 0;
+}
+.gm-me__stat svg { color: var(--tone); }
+.gm-me__n {
+  font-family: var(--font-mono);
+  font-size: var(--fs-text-lg);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.gm-me__label { font-size: var(--fs-text-xs); color: var(--ink-fg-2); }
+.gm-me__none { font-size: var(--fs-text-xs); color: var(--ink-fg-2); text-align: center; }
+.gm-me__recent { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
+.gm-me__round {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--r-full);
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid var(--ink-line);
+  font-size: var(--fs-text-xs);
+}
+.gm-me__round[data-outcome='won'] { border-color: color-mix(in oklab, var(--print-gold) 60%, transparent); }
+.gm-me__round[data-outcome='lost'] { border-color: color-mix(in oklab, var(--err) 50%, transparent); }
+.gm-me__mode { font-weight: var(--fw-bold); }
+.gm-me__result { color: var(--ink-fg-2); }
+
+/* ── اللعبة ───────────────────────────────────────────────────────────── */
 .gm-modes { display: grid; gap: 0.75rem; }
 @media (min-width: 720px) { .gm-modes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .gm-mode[data-tone='gold'] { --tone: var(--print-gold); --tone-2: var(--viz-3); }
@@ -357,8 +446,9 @@
 .gm-mode {
   position: relative;
   display: grid;
-  gap: 0.4rem;
+  gap: 0.45rem;
   align-content: start;
+  min-width: 0;
   padding: 1.1rem;
   border-radius: var(--r-lg);
   background:
@@ -366,14 +456,32 @@
     rgb(255 255 255 / 0.05);
   border: 1px solid var(--ink-line);
   cursor: pointer;
-  transition: transform var(--d-hover) var(--ease-out), border-color var(--d-hover), box-shadow var(--d-hover);
+  transition: transform var(--d-hover) var(--ease-out), border-color var(--d-hover), box-shadow var(--d-hover), opacity var(--d-hover);
 }
 .gm-mode:hover { transform: translateY(-2px); }
 .gm-mode[data-on] {
   border-color: var(--tone);
-  box-shadow: 0 0 0 2px var(--tone), 0 14px 34px color-mix(in oklab, var(--tone) 35%, transparent);
+  background:
+    radial-gradient(120% 120% at 100% 0%, color-mix(in oklab, var(--tone) 42%, transparent) 0%, transparent 65%),
+    rgb(255 255 255 / 0.08);
+  box-shadow: 0 0 0 2px var(--tone), 0 16px 38px color-mix(in oklab, var(--tone) 38%, transparent);
 }
+.gm-mode[data-short]:not([data-on]) { opacity: 0.62; }
 .gm-mode:has(input:focus-visible) { outline: 2px solid var(--ink-accent); outline-offset: 3px; }
+.gm-mode__check {
+  position: absolute;
+  inset-block-start: 0.75rem;
+  inset-inline-end: 0.75rem;
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 2px solid var(--ink-line);
+  color: transparent;
+  transition: background-color var(--d-hover), border-color var(--d-hover), color var(--d-hover), transform var(--d-hover) var(--ease-out);
+}
+.gm-mode[data-on] .gm-mode__check { background: var(--tone); border-color: var(--tone); color: var(--on-light-ink); transform: scale(1.08); }
 .gm-mode__icon {
   display: grid;
   place-items: center;
@@ -386,12 +494,36 @@
 }
 .gm-mode__title { margin-top: 0.3rem; font-size: var(--fs-title-4); font-weight: var(--fw-bold); }
 .gm-mode__body { font-size: var(--fs-text-sm); color: var(--ink-fg-2); line-height: 1.7; }
+.gm-mode__rules { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.gm-rule {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--r-full);
+  background: rgb(0 0 0 / 0.25);
+  font-size: var(--fs-text-xs);
+  color: var(--ink-fg);
+}
+.gm-rule svg { color: var(--tone); }
+.gm-mode__note,
+.gm-mode__best {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+}
+.gm-mode__note { color: var(--ink-fg-2); }
+.gm-mode__best { color: var(--ink-accent); }
 
-.gm-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+/* ── الكورس ───────────────────────────────────────────────────────────── */
+.gm-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; min-width: 0; }
 .gm-pick {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  max-width: 100%;
   padding: 0.5rem 0.9rem;
   border-radius: var(--r-full);
   background: rgb(255 255 255 / 0.06);
@@ -399,11 +531,89 @@
   font-size: var(--fs-text-sm);
   font-weight: var(--fw-semibold);
   cursor: pointer;
+  transition: background-color var(--d-hover), border-color var(--d-hover);
 }
+.gm-pick:hover { background: rgb(255 255 255 / 0.1); }
 .gm-pick[data-on] { background: var(--ink-accent); color: var(--on-light-ink); border-color: transparent; }
 .gm-pick:has(input:focus-visible) { outline: 2px solid var(--ink-accent); outline-offset: 2px; }
-.gm-pick__n { padding: 0 0.45rem; border-radius: var(--r-full); background: rgb(0 0 0 / 0.2); font-size: var(--fs-text-xs); font-variant-numeric: tabular-nums; }
+.gm-pick__label { min-width: 0; overflow-wrap: anywhere; }
+.gm-pick__n {
+  flex: none;
+  padding: 0 0.45rem;
+  border-radius: var(--r-full);
+  background: rgb(0 0 0 / 0.22);
+  font-size: var(--fs-text-xs);
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
 
+/* ── الأسئلة منين ─────────────────────────────────────────────────────── */
+.gm-scopes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: var(--r-full);
+  background: rgb(0 0 0 / 0.3);
+  border: 1px solid var(--ink-line);
+}
+.gm-scope {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: var(--r-full);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  color: var(--ink-fg-2);
+  transition: background-color var(--d-hover), color var(--d-hover);
+}
+.gm-scope:hover:not(:disabled) { color: var(--ink-fg); }
+.gm-scope[data-on] {
+  background: linear-gradient(135deg, var(--viz-5), var(--viz-2));
+  color: #fff;
+  box-shadow: 0 6px 18px color-mix(in oklab, var(--viz-5) 45%, transparent);
+}
+.gm-scope:disabled { opacity: 0.4; cursor: default; }
+.gm-scope-list {
+  display: grid;
+  gap: 0.45rem;
+  max-height: 22rem;
+  overflow-y: auto;
+  padding: 0.2rem;
+  overscroll-behavior: contain;
+}
+@media (min-width: 720px) { .gm-scope-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.gm-scope-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--r-md);
+  background: rgb(255 255 255 / 0.05);
+  border: 1px solid var(--ink-line);
+  cursor: pointer;
+  transition: background-color var(--d-hover), border-color var(--d-hover), box-shadow var(--d-hover);
+}
+.gm-scope-item:hover { background: rgb(255 255 255 / 0.09); }
+.gm-scope-item[data-on] {
+  border-color: var(--viz-2);
+  background: color-mix(in oklab, var(--viz-2) 18%, transparent);
+  box-shadow: 0 0 0 1px var(--viz-2);
+}
+.gm-scope-item[data-short]:not([data-on]) { opacity: 0.55; }
+.gm-scope-item:has(input:focus-visible) { outline: 2px solid var(--ink-accent); outline-offset: 2px; }
+.gm-scope-item__text { display: grid; gap: 0.1rem; min-width: 0; flex: 1; }
+.gm-scope-item__title { font-weight: var(--fw-semibold); overflow-wrap: anywhere; }
+.gm-scope-item__meta { font-size: var(--fs-text-xs); color: var(--ink-fg-2); overflow-wrap: anywhere; }
+.gm-scope-item__meta--warn { color: color-mix(in oklab, var(--viz-1), #fff 30%); }
+
+/* ── المستوى ──────────────────────────────────────────────────────────── */
 .gm-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
 .gm-level[data-level='easy'] { --tone: var(--viz-6); }
 .gm-level[data-level='medium'] { --tone: var(--viz-1); }
@@ -412,17 +622,65 @@
   display: grid;
   justify-items: center;
   gap: 0.15rem;
+  min-width: 0;
   padding: 0.75rem 0.5rem;
   border-radius: var(--r-lg);
   background: color-mix(in oklab, var(--tone) 12%, transparent);
   border: 1px solid color-mix(in oklab, var(--tone) 40%, transparent);
   cursor: pointer;
   text-align: center;
+  transition: background-color var(--d-hover), box-shadow var(--d-hover), transform var(--d-hover) var(--ease-out);
 }
+.gm-level:hover { transform: translateY(-1px); }
 .gm-level[data-on] { background: var(--tone); color: #fff; box-shadow: 0 10px 24px color-mix(in oklab, var(--tone) 40%, transparent); }
 .gm-level:has(input:focus-visible) { outline: 2px solid var(--ink-accent); outline-offset: 2px; }
 .gm-level__label { font-size: var(--fs-text-lg); font-weight: var(--fw-bold); }
 .gm-level__n { font-size: var(--fs-text-xs); opacity: 0.85; }
+
+/* ── «يلا نبدأ» ───────────────────────────────────────────────────────── */
+.gm-hub__go {
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  margin-top: 0.25rem;
+  padding: 0.9rem;
+  border-radius: var(--r-lg);
+  background: color-mix(in oklab, var(--ink) 80%, transparent);
+  border: 1px solid var(--ink-line);
+}
+/* على الموبايل الصفحة طويلة: الزرار بيفضل تحت فوق شريط التابات وهو
+   بيسكرول. آخر حاجة في الصفحة، فلما يوصل مكانه مابيغطّيش حاجة. */
+@media (max-width: 719px) {
+  .gm-hub__go {
+    position: sticky;
+    inset-block-end: 5.25rem;
+    z-index: 4;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 -10px 30px rgb(0 0 0 / 0.35);
+  }
+}
+.gm-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem 0.6rem;
+  max-width: 100%;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  text-align: center;
+}
+.gm-summary__text { min-width: 0; overflow-wrap: anywhere; }
+.gm-summary__n {
+  padding: 0.1rem 0.55rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--viz-2) 22%, transparent);
+  color: var(--ink-fg);
+  font-size: var(--fs-text-xs);
+}
+.gm-go { min-width: min(100%, 16rem); }
+.gm-go[aria-busy='true'] { cursor: progress; }
+.gm-error--inline { position: static; text-align: center; }
 
 /* =============================================================================
    «من سيربح المليون» — أزرق ليلي، دهب، وبارات سداسية زي البرنامج.
@@ -546,18 +804,23 @@
   background: rgb(0 0 0 / 0.35);
   border: 1px solid color-mix(in oklab, var(--print-gold) 50%, transparent);
 }
-/* على الموبايل «إجابة نهائية؟» بتلزق تحت فوق شريط التابات — من غيرها كانت
-   بتقع تحت الاختيارات وبرّه الشاشة. */
-@media (max-width: 899px) {
-  .mln-final {
-    position: sticky;
-    inset-block-end: 5.25rem;
-    z-index: 5;
-    background: color-mix(in oklab, var(--ink) 92%, transparent);
-    backdrop-filter: blur(8px);
-  }
-}
+/* ⚠️ مش sticky. كانت لازقة تحت الشاشة على الموبايل (عشان ماتقعش برّه)،
+   ولأن الـsticky بيتحط فوق اللي تحته، كانت بتغطّي آخر اختيارين وتاكل أي دوسة
+   عليهم وهي مفتوحة. دلوقتي تحت الاختيارات في مكانها، والصفحة بتنزل لها
+   (`scrollIntoView` في `lock`) — والمسافة دي عشان ماتقفش ورا شريط التابات. */
+.mln-final { scroll-margin-block-end: 6rem; }
 .mln-final__q { font-size: var(--fs-title-3); font-weight: var(--fw-bold); color: var(--ink-accent); }
+.mln-final__hint { font-size: var(--fs-text-xs); color: var(--ink-fg-2); }
+.mln-final__failed {
+  max-width: 30rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--err) 30%, transparent);
+  color: #fff;
+  font-size: var(--fs-text-sm);
+  text-align: center;
+}
+.mln-checking { text-align: center; font-weight: var(--fw-semibold); color: var(--ink-accent); letter-spacing: 0.04em; }
 .mln-final__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; }
 .mln-verdict { text-align: center; font-size: var(--fs-title-2); font-weight: var(--fw-bold); color: color-mix(in oklab, var(--err), #fff 35%); }
 .mln-verdict[data-right] { color: color-mix(in oklab, var(--ok), #fff 45%); }
@@ -638,6 +901,10 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .gm-mode[data-on] .gm-mode__icon { animation: gm-float 2.6s ease-in-out infinite; }
+  .gm-mode[data-on] .gm-mode__check { animation: gm-pop 320ms var(--ease-pop); }
+  .gm-scope-item { animation: gm-rise 280ms var(--ease-out) calc(min(var(--i), 12) * 30ms) both; }
+  .gm-go:not(:disabled) { animation: gm-glow 2.4s ease-in-out infinite; }
+  .mln-checking { animation: gm-blink 900ms ease-in-out infinite; }
   .mln-question { animation: gm-rise 420ms var(--ease-out) both; }
   .mln-options li { animation: gm-rise 380ms var(--ease-out) calc(var(--i) * 90ms + 200ms) both; }
   .mln[data-phase='checking'] .mln-option[data-state='locked'] { animation: mln-suspense 700ms ease-in-out infinite; }

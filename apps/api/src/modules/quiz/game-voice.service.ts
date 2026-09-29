@@ -62,7 +62,7 @@ export class GameVoiceService {
     if (letter) {
       text = LETTERS[Number(letter[1])] ?? '';
     } else {
-      await this.game.assertInPool(userId, questionId);
+      await this.game.assertDealtOrInPool(userId, questionId);
       if (part === 'stem') {
         const version = await this.prisma.questionVersion.findUnique({
           where: { id: questionId },
