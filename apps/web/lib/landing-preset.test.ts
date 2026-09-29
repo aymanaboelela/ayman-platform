@@ -258,10 +258,15 @@ describe('the footer switch', () => {
    *     node -e "const s=require('fs').readFileSync('apps/web/components/site/site-footer.tsx','utf8');\
    *     const i=s.indexOf('  return (\\n    <footer className=\\\"site-footer\\\">');\
    *     console.log(require('crypto').createHash('sha256').update(s.slice(i)).digest('hex'))"
+   *
+   * Last regenerated 2026-09-29, for a change he asked for about this footer
+   * in as many words — «هنا حسّن الدنيا والديزاين شوية»: `--brand-ink` on each
+   * social button, a modifier class on «الصفحات», and «لأول الصفحة» in the
+   * bottom bar. Every link and channel it had is still there.
    */
   it('still ends in the exact classic footer', () => {
     const digest = createHash('sha256').update(FOOTER.slice(CLASSIC_FOOTER_AT)).digest('hex');
-    expect(digest).toBe('0abc814aef5f2f4e257366452a0b904122c04945313bc0f17dfe3c68baafa9ae');
+    expect(digest).toBe('33a7a9cc55ad572ebacc26197dadb11c71b7d458fcfc4454aaa95da9a0bb398d');
   });
 
   it('branches on the preset BEFORE the classic return, so classic falls through', () => {

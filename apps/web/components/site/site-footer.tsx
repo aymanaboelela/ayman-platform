@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import { ArrowLeft, Users } from 'lucide-react';
+import { ArrowLeft, ArrowUp, Users } from 'lucide-react';
 import { copy } from '@ayman/contracts';
-import { SOCIAL_MARKS, SocialIcon } from '@/components/site/social-icons';
+import { SOCIAL_MARKS, SocialIcon, inkBrand } from '@/components/site/social-icons';
 import { FooterDragons } from '@/components/site/footer-dragons';
 /*
  * The link tables and the two derivations below used to live in this file.
@@ -170,10 +170,15 @@ export async function SiteFooter() {
                       rel="noopener noreferrer"
                       aria-label={item.label}
                       title={item.label}
-                      // Read by `.social__link:hover` — each button lights up
-                      // in its own brand's colour instead of all four turning
-                      // the same orange.
-                      style={{ ['--brand' as string]: mark.hex }}
+                      // Read by `.social__link` — each button is tinted in its
+                      // own brand's colour instead of all five sitting grey.
+                      // `--brand-ink` is the variant a DARK surface needs:
+                      // TikTok's official `#000000` vanishes on the dark
+                      // theme's card (see `SocialMark.inkHex`).
+                      style={{
+                        ['--brand' as string]: mark.hex,
+                        ['--brand-ink' as string]: inkBrand(mark),
+                      }}
                     >
                       <SocialIcon mark={mark} />
                     </a>
@@ -183,7 +188,7 @@ export async function SiteFooter() {
             </ul>
           </div>
 
-          <nav className="site-footer__col" aria-label={c.footerPages}>
+          <nav className="site-footer__col site-footer__col--pages" aria-label={c.footerPages}>
             <p className="site-footer__h">{c.footerPages}</p>
             {pageLinks.map((link) => (
               <Link href={link.href} key={link.href}>
@@ -242,6 +247,13 @@ export async function SiteFooter() {
 
         <div className="site-footer__bar">
           <p className="site-footer__rights">{c.footerRights}</p>
+          {/* `#top` needs no element with that id: the HTML spec scrolls a
+              fragment of «top» to the top of the document. A plain anchor,
+              so it works in this Server Component without a script. */}
+          <a className="site-footer__top" href="#top">
+            {c.footerBackToTop}
+            <ArrowUp size={15} aria-hidden="true" />
+          </a>
         </div>
       </div>
 
