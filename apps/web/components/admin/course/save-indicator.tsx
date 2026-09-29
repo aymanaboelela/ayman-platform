@@ -2,6 +2,7 @@
 
 import { copy } from '@ayman/contracts/copy/admin';
 import { cn } from '@ayman/ui/lib/cn';
+import { useTabIsStale } from '@/lib/stale-tab';
 import { useAutosaveSummary } from './autosave';
 
 const c = copy.admin.autosave;
@@ -19,6 +20,7 @@ const c = copy.admin.autosave;
  */
 export function SaveIndicator({ className }: { className?: string }) {
   const { status, error, retry } = useAutosaveSummary();
+  const stale = useTabIsStale();
 
   if (status === 'error') {
     return (
@@ -29,8 +31,15 @@ export function SaveIndicator({ className }: { className?: string }) {
       >
         <span aria-hidden="true" className="size-1.5 rounded-full bg-err" />
         <span className="text-err">{error ?? c.error}</span>
-        <button type="button" onClick={retry} className="underline">
-          {c.retry}
+        {/* On a tab older than the server, «نجرّب تاني» re-sends the same
+            dead Server Action id and fails identically — a document load is
+            the only retry that can work. `lib/stale-tab.ts`. */}
+        <button
+          type="button"
+          onClick={stale ? () => window.location.reload() : retry}
+          className="underline"
+        >
+          {stale ? copy.common.staleBuildReload : c.retry}
         </button>
       </p>
     );

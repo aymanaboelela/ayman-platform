@@ -11,6 +11,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import type { ActionResult } from '@/app/(admin)/admin/courses/actions';
+import { actionErrorMessage } from '@/lib/stale-tab';
 
 export type AutosaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
 
@@ -219,7 +220,13 @@ export function useAutosave<T>({ onSave, delayMs = 700 }: Options<T>) {
         (error: unknown) => {
           inFlightRef.current = false;
           pendingRef.current = pending;
-          report('error', error instanceof Error ? error.message : 'unknown', flushNow);
+          // A THROWN failure is not the API refusing the value — that comes
+          // back as `{ ok: false }` above — and the one that actually reaches
+          // editors is a deploy: the tab's Server Action id no longer exists,
+          // and Next's English «was not found on the server» used to land in
+          // the header verbatim. `actionErrorMessage` swaps that one for the
+          // Arabic «نزل تحديث» and raises the reload toast; `lib/stale-tab.ts`.
+          report('error', actionErrorMessage(error, 'unknown'), flushNow);
         },
       );
     },

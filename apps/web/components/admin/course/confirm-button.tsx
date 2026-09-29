@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from '@ayman/ui/components/dialog';
 import type { ActionResult } from '@/app/(admin)/admin/courses/actions';
+import { actionErrorMessage, isStaleActionError } from '@/lib/stale-tab';
 
 /**
  * A destructive action behind a dialog that names its consequence.
@@ -49,7 +50,22 @@ export function ConfirmButton({
 
   async function run() {
     setPending(true);
-    const result = await onConfirm();
+    let result: ActionResult;
+    try {
+      result = await onConfirm();
+    } catch (error) {
+      setPending(false);
+      // A throw is not the API saying no (that is `{ ok: false }`, below), so
+      // anything but the one known case keeps going exactly where it went
+      // before. The known case is a tab older than the deploy — its Server
+      // Action id is gone — and it used to leave this dialog spinning forever.
+      // Closed so the reload toast is reachable: a modal dialog makes the
+      // page outside it inert. `lib/stale-tab.ts`.
+      if (!isStaleActionError(error)) throw error;
+      setOpen(false);
+      toast.error(actionErrorMessage(error, null) ?? copy.common.error);
+      return;
+    }
     setPending(false);
     setOpen(false);
     if (result.ok) {
