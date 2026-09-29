@@ -52,3 +52,8 @@ export class ReorderDto extends createZodDto(ReorderSchema) {}
 
 /** «قص الفيديو» — `trim: null` puts the whole video back. */
 export class SetVideoTrimDto extends createZodDto(z.object({ trim: VideoTrimSchema.nullable() }).strict()) {}
+
+/** Same bound as the YouTube save's `posterKey` (`LessonVideoInputSchema`). */
+export class SetVideoPosterDto extends createZodDto(
+  z.object({ posterKey: z.string().min(1).max(255).nullable() }).strict(),
+) {}

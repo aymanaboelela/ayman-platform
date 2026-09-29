@@ -1374,6 +1374,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin lesson video upload status: student', method: 'get', path: () => `/api/admin/lessons/${scratchLessonId}/video/upload/status`, actor: 'student', status: 403 },
     { label: 'admin lesson video trim: anonymous', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/video/trim`, actor: 'anonymous', status: 401, body: () => ({ trim: null }) },
     { label: 'admin lesson video trim: student', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/video/trim`, actor: 'student', status: 403, body: () => ({ trim: null }) },
+    { label: 'admin lesson video poster: anonymous', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/video/poster`, actor: 'anonymous', status: 401, body: () => ({ posterKey: null }) },
+    { label: 'admin lesson video poster: student', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/video/poster`, actor: 'student', status: 403, body: () => ({ posterKey: null }) },
     // The key of an encrypted lecture: signed-in only, and a video the
     // student cannot watch is the same 404 as one that does not exist.
     { label: 'video key: anonymous', method: 'get', path: () => `/api/videos/${'a'.repeat(32)}/key`, actor: 'anonymous', status: 401 },

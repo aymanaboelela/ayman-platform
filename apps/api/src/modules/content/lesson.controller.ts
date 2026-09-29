@@ -28,6 +28,7 @@ import {
   AbortVideoUploadDto,
   CompleteVideoUploadDto,
   ResumeVideoUploadDto,
+  SetVideoPosterDto,
   SetVideoTrimDto,
   SetLessonVideoDto,
   StartVideoUploadDto,
@@ -110,6 +111,18 @@ export class LessonController {
   @Put('lessons/:id/video')
   setVideo(@Param('id') id: string, @Body() body: SetLessonVideoDto) {
     return this.lessons.setVideo(id, body);
+  }
+
+  /**
+   * «الصورة اللي أنا حاطّاها» on an UPLOADED lecture. The YouTube save carries
+   * its poster in the same PUT as the URL; an upload has no URL to re-send, and
+   * `PUT …/video` refuses `provider: 'upload'` — so the poster had no door.
+   */
+  @RequireFeature('video.upload')
+  @RequirePermission('lesson:write')
+  @Put('lessons/:id/video/poster')
+  setVideoPoster(@Param('id') id: string, @Body() body: SetVideoPosterDto) {
+    return this.lessons.setUploadPoster(id, body.posterKey);
   }
 
   /** «قص الفيديو» — the player applies it; the files are never touched. */
