@@ -104,8 +104,7 @@ function QuestionViewImpl({
   return (
     <div className="flex flex-col gap-5">
       {/*
-        Stacked on a phone, side by side from `sm` up — the same shape
-        `components/results/quiz-result-row.tsx` uses, for the same reason.
+        Stacked on a phone, side by side from `sm` up.
 
         As one row at every width these were two flex children with no
         `shrink-0` between them. At 360px the card leaves 288px, minus the 16px

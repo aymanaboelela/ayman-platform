@@ -34,13 +34,21 @@ export interface ChartPoint {
  * renders nothing at all. A lone point is placed at the middle of the box
  * instead, which is also what it means: one reading, no trend.
  *
+ * ## `inset`
+ *
+ * How far in from each side the first and last points sit, in the same units
+ * as `CHART_WIDTH`. `/results` labels every point with its score and its date
+ * CENTRED on the point, so a point on the very edge of the box has half its
+ * label hanging outside the card; an inset of a few units keeps both ends'
+ * labels inside without a second coordinate system for the text.
+ *
  * ## The y axis
  *
  * Fixed to 0–100 rather than scaled to the data's own range. An auto-scaled
  * axis makes 62% and 64% look like a dramatic climb, which on a page about a
  * student's exam results is not a neutral rendering choice.
  */
-export function projectSeries(series: readonly QuizHistoryPoint[]): ChartPoint[] {
+export function projectSeries(series: readonly QuizHistoryPoint[], inset = 0): ChartPoint[] {
   if (series.length === 0) return [];
 
   if (series.length === 1) {
@@ -48,7 +56,8 @@ export function projectSeries(series: readonly QuizHistoryPoint[]): ChartPoint[]
     return [{ x: CHART_WIDTH / 2, y: yFor(only.scorePercent), point: only }];
   }
 
-  const step = CHART_WIDTH / (series.length - 1);
+  const span = CHART_WIDTH - inset * 2;
+  const step = span / (series.length - 1);
 
   return series.map((point, index) => ({
     // Clamped, not merely computed. `CHART_WIDTH - index * step` accumulates
@@ -57,7 +66,7 @@ export function projectSeries(series: readonly QuizHistoryPoint[]): ChartPoint[]
     // is invisible in a render and it makes the "every point is inside the
     // box" invariant false, which is the kind of almost-right that survives
     // until something downstream depends on it.
-    x: clamp(CHART_WIDTH - index * step, 0, CHART_WIDTH),
+    x: clamp(CHART_WIDTH - inset - index * step, inset, CHART_WIDTH - inset),
     y: yFor(point.scorePercent),
     point,
   }));
@@ -90,4 +99,20 @@ export function polylinePoints(points: readonly ChartPoint[]): string {
  */
 function round(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * The `points` of a `<polygon>` that fills UNDER the line, down to the
+ * floor — the area wash. The line's own points, then the two floor corners
+ * beneath its ends, so the shape closes along the x axis rather than cutting a
+ * diagonal back to the first point.
+ *
+ * Empty for fewer than two points: one point has no area under it, and a
+ * degenerate polygon is an invisible element a screen reader may still find.
+ */
+export function areaPoints(points: readonly ChartPoint[]): string {
+  if (points.length < 2) return '';
+  const first = points[0]!;
+  const last = points[points.length - 1]!;
+  return `${polylinePoints(points)} ${round(last.x)},${CHART_HEIGHT} ${round(first.x)},${CHART_HEIGHT}`;
 }

@@ -4121,7 +4121,6 @@ export const copy = {
     },
   },
 
-  /** Slice 2 — `/results`, the student's own quiz history. */
   /**
    * «تحدّي الأسئلة» — `/game`. لعبة سباق وقت على أسئلة الكويزات اللي الطالب
    * امتحنها قبل كده.
@@ -4278,34 +4277,78 @@ export const copy = {
     zeroBody: 'أول كويز يتحل أو واجب يتسلّم هو أول خطوة على اللوحة.',
     liveNote: 'ترتيبك بيتحسب لحظيًا مع كل فتحة للصفحة، والدفعة بتتحدّث كل كام دقيقة.',
   },
+  /**
+   * «نتائجي» — `/results`، كل امتحان الطالب اتقدّم فيه.
+   *
+   * ⚠️ ولا جملة هنا بتتصرّف لولد أو بنت. الصفحة كانت بتقول «امتحانات
+   * دخلتها»، «نجحت فيها»، «لسه مدخلتش» — التلاتة بيتقروا لولد بس (للبنت:
+   * «دخلتيها»، «نجحتي»، «مدخلتيش»). بدالهم فعل مبني للمجهول عن الامتحان
+   * نفسه («اتقدّم»، «اتعدّى»)، وـك على اسم («درجاتك»، «محاولاتك»)، وجملة
+   * اسمية. و«ناجح» مش هنا كمان: صفة مذكّر بتتقري وصف للطالب، فالبادچ
+   * «اتعدّى» — فعل ماضي للامتحان، والمخاطَب منه «عدّيت» فمايتلخبطش.
+   */
   results: {
     eyebrow: '03 / نتائجي',
     title: 'نتائجي',
-    subtitle: 'كل امتحان دخلته، درجتك فيه، وإزاي بتتحسّن مع الوقت.',
-    statQuizzes: 'امتحانات دخلتها',
+    subtitle: 'درجة كل امتحان، ومراجعة إجاباته، وشكل مستواك مع الوقت.',
+    statQuizzes: 'امتحانات اتقدّمت',
     statAttempts: 'عدد محاولاتك',
     statAverage: 'متوسط درجاتك',
     statBest: 'أعلى درجة',
-    statPassed: 'امتحانات نجحت فيها',
+    statPassed: 'امتحانات اتعدّت',
     /** The stat tiles show this instead of a number when nothing is graded. */
     noneYet: 'لسه',
+    /**
+     * Where the AVERAGE sits, under the gauge — and it is not a verdict: every
+     * exam carries its own pass mark, and the per-exam cards below state each
+     * real one. These name the average's place against the platform's default
+     * line, so the low one is a place on a road, never «راسب».
+     */
+    bandHigh: 'مستوى امتياز',
+    bandPass: 'فوق خط النجاح',
+    bandLow: 'لسه في الطريق',
+    /**
+     * The hero's one sentence, picked from the numbers (`resultsMood` in
+     * `lib/results-view.ts`). A low average gets the way forward, not a
+     * judgement — «البداية مش مقياس» — because a student who opens this page
+     * after a bad sitting is the one most likely to close it for good.
+     */
+    moodFirst: 'أول درجة اتسجّلت، ومن هنا الخط بيبدأ.',
+    moodRising: 'الدرجات طالعة لفوق: من {first}% لحد {last}%. المجهود باين.',
+    moodHigh: 'متوسط امتياز، والمذاكرة باينة في كل درجة.',
+    moodAllPassed: 'كل الامتحانات اللي اتقدّمت اتعدّت — {passed} من {total}.',
+    moodPass: 'فوق خط النجاح، وكل امتحان جاي فرصة المتوسط يعلى أكتر.',
+    moodLow: 'البداية مش مقياس. مراجعة الإجابات أقصر طريق لدرجة أعلى في الامتحان الجاي.',
+    /**
+     * Only while an essay is still with the instructor. `gradeAttempt` counts
+     * an unmarked essay as zero, so the average above is LOW until it is
+     * marked — said here, or a midterm half-marked reads as a collapse.
+     */
+    pendingNote: 'فيه ورقة لسه بتتصحّح، والمتوسط هيتحدّث أول ما تتصحّح.',
     trendTitle: 'درجاتك مع الوقت',
     /**
-     * The chart's visually-hidden description. `{count}` attempts, from
-     * `{first}`% to `{last}`% — a sighted student reads the shape, everyone
-     * else gets the same fact as a sentence, because a polyline announces
-     * nothing.
+     * The chart's caption. `{count}` attempts, from `{first}`% to `{last}`% —
+     * a sighted student reads the shape, everyone else gets the same fact as
+     * a sentence, and the per-attempt list under it (`trendPoint`).
      */
     trendSummary: 'رسم بياني لـ{count} محاولة، من {first}% لحد {last}%.',
-    /** Drawn as a dashed rule across the chart. */
+    /** One attempt is a point, not a line — said instead of `trendSummary`. */
+    trendSummaryOne: 'محاولة واحدة لحد دلوقتي، درجتها {score}%.',
+    trendSingle: 'الامتحان الجاي هيرسم الاتجاه.',
+    /** Drawn as a dashed rule across the chart, and named in its legend. */
     trendPassLine: 'خط النجاح',
     /**
      * The chart's legend. Pass/fail is drawn as filled-vs-hollow rather than
      * as a second hue — green-vs-orange measures ΔE 6.3 under protanopia — so
-     * these two strings ARE the encoding's other half, not decoration.
+     * these strings ARE the encoding's other half, not decoration. Both are
+     * about the ATTEMPT (feminine, third person): «عدّت» / «ماعدّتش». The
+     * second person would be «عدّيت» — which is exactly the form avoided.
      */
-    trendLegendPassed: 'محاولة عدّيتها',
+    trendLegendPassed: 'محاولة عدّت',
     trendLegendFailed: 'محاولة ماعدّتش',
+    trendLegendPending: 'لسه بتتصحّح',
+    /** One line per attempt in the chart's screen-reader list. */
+    trendPoint: '{title}: {score}%، {verdict}، {date}',
     quizzesTitle: 'كل امتحان على حدة',
     best: 'أعلى درجة',
     latest: 'آخر محاولة',
@@ -4313,9 +4356,28 @@ export const copy = {
     /** `{used}` of `{max}`, e.g. "٢ من ٣". */
     attemptsOf: '{used} من {max}',
     attemptsUnlimited: 'من غير حد',
-    emptyTitle: 'لسه مدخلتش أي امتحان',
+    /** The card's badge. A verb about the EXAM, not an adjective about the student. */
+    verdictPassed: 'اتعدّى',
+    /** Beside `verdictPassed`, from `DISTINCTION_PERCENT` up — the same line «امتياز» on the dashboard uses. */
+    verdictExcellent: 'امتياز',
+    /** The latest sitting against the one before it — the arrow's words, for a screen reader. */
+    deltaUp: 'أعلى بـ{n}% من المحاولة اللي قبلها',
+    deltaDown: 'أقل بـ{n}% من المحاولة اللي قبلها',
+    deltaSame: 'نفس درجة المحاولة اللي قبلها',
+    /** The card's footer: when it was sat. */
+    submittedOn: 'اتقدّم {date}',
+    /** …or that the improvement sitting is still there to take. */
+    improveOpen: 'امتحان التحسين متاح',
+    /** A course group's header, when the student has sat exams in more than one. */
+    groupCount: '{count} امتحان',
+    groupPassed: 'اتعدّى منهم {passed}',
+    emptyTitle: 'لسه مفيش امتحانات هنا',
     emptyBody: 'كل درس وراه امتحان قصير. أول ما واحد يخلص، درجتك ومراجعة إجاباتك هيبانوا هنا.',
     emptyCta: 'مسارك',
+    /** The empty state's three steps — nouns, so nobody is told «ذاكر». */
+    emptyStep1: 'مذاكرة الدرس',
+    emptyStep2: 'امتحان قصير بعده',
+    emptyStep3: 'الدرجة والمراجعة هنا',
   },
 
   /** Slice 3 — `/profile`. */

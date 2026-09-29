@@ -19,6 +19,13 @@ export interface ProgressRingProps {
    * lands on instead, which is the same reasoning `--stage-fg-2` is set with.
    */
   tone?: 'surface' | 'ink';
+  /**
+   * The arc's colour, when it is not progress. `/results` draws a SCORE with
+   * this ring — green for an exam that passed, red for one that did not —
+   * and a second ring component for that one difference is exactly the split
+   * this file was merged back from. Omitted, the arc is amber, as before.
+   */
+  color?: string;
   className?: string;
 }
 
@@ -56,6 +63,7 @@ export function ProgressRing({
   children,
   size = 44,
   tone = 'surface',
+  color,
   className,
 }: ProgressRingProps) {
   const clamped = Math.min(Math.max(percent, 0), 100);
@@ -95,7 +103,8 @@ export function ProgressRing({
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={circumference * (1 - clamped / 100)}
-            className="stroke-accent"
+            className={color ? undefined : 'stroke-accent'}
+            style={color ? { stroke: color } : undefined}
           />
         ) : null}
       </svg>
