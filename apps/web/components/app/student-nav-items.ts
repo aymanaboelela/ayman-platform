@@ -7,6 +7,7 @@ import {
   MonitorSmartphone,
   Route,
   Sprout,
+  Swords,
   Terminal,
   Ticket,
   Trophy,
@@ -77,6 +78,13 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * أي ستاك تاني، والصفحة والـAPI عليهم حارس `quizGame` كمان.
    */
   ...(aymanOnly(true) ? [{ href: '/game', labelAr: copy.nav.game, icon: Gamepad2 }] : []),
+  /*
+   * «ساحة التحدي» — ماتش مباشر. نفس بوابة «الألعاب»: البند عند أيمن بس، والصفحة
+   * والـAPI ورا فلاج `arena.enabled` (مفتوح عنده افتراضيًا ومقفول عند الباقي).
+   * القايمة بتتبني وقت البيلد ومابتقراش فلاجات، فستاك تاني فتح الفلاج بيوصلها
+   * من الرابط لحد ما يتعمل للقايمة باب بيقرا الفلاج.
+   */
+  ...(aymanOnly(true) ? [{ href: '/arena', labelAr: copy.nav.arena, icon: Swords }] : []),
   { href: '/library', labelAr: copy.nav.courses, icon: BookMarked, tab: true },
   /*
    * «كود الكورس» — right under the courses, because that is where a student

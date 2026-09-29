@@ -112,6 +112,8 @@ export const PROTECTED_PREFIXES = [
   '/results',
   '/rank',
   '/game',
+  // «ساحة التحدي» — اللوبي `apiGetAuthed`، والماتش كله ستريم متوثّق.
+  '/arena',
   '/foundations',
   '/playground',
   /*
