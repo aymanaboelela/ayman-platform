@@ -704,6 +704,11 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'progress open: admin has no enrollment bypass', method: 'post', path: () => `/api/lessons/${lessonId}/open`, actor: 'admin', status: 404, body: () => ({}) },
     { label: 'progress dwell: non-enrolled is 404', method: 'post', path: () => `/api/lessons/${lessonId}/dwell`, actor: 'other', status: 404, body: () => ({}) },
     { label: 'progress complete: non-enrolled is 404', method: 'post', path: () => `/api/lessons/${lessonId}/complete`, actor: 'other', status: 404, body: () => ({}) },
+    // «نرجّع الدرس؟» — the same enrolment ownership as the POST it undoes. No
+    // enrolled-student row: this fixture's lesson is text-kind, which the undo
+    // refuses for every actor (a business rule, like `heartbeat` above).
+    { label: 'progress undo complete: anonymous', method: 'delete', path: () => `/api/lessons/${lessonId}/complete`, actor: 'anonymous', status: 401 },
+    { label: 'progress undo complete: non-enrolled is 404', method: 'delete', path: () => `/api/lessons/${lessonId}/complete`, actor: 'other', status: 404 },
 
     // ── Player — course:read is held by students too (Plan 2), so the
     // ownership dimension is enrollment, exactly like progress. `outline`

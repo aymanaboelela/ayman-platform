@@ -29,6 +29,7 @@
     "./content": "./src/content.ts",
     "./catalog": "./src/catalog.ts",
     "./progress": "./src/progress.ts",
+    "./completion-undo": "./src/completion-undo.ts",
     "./activity": "./src/activity.ts",
     "./rank": "./src/rank.ts",
     "./notifications": "./src/notifications.ts",

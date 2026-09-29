@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, UsePipes } from '@nestjs/common';
+import { Body, Controller, Delete, Param, Post, UsePipes } from '@nestjs/common';
 import { Throttle, seconds } from '@nestjs/throttler';
 import { ZodValidationPipe } from 'nestjs-zod';
 import type { HeartbeatResponse, LessonProgressDto } from '@ayman/contracts';
@@ -88,5 +88,28 @@ export class ProgressController {
     @Body() _body: EmptyBodyDto,
   ): Promise<HeartbeatResponse> {
     return this.lessonProgress.completeManually(user.id, lessonId);
+  }
+
+  /**
+   * «تم» → «نرجّع الدرس؟» — the same completion, taken back. Only a `manual`
+   * one on a video, and only while watching has not since earned it; see
+   * `LessonProgressService.undoManualCompletion` for why the rest are 400s.
+   *
+   * DELETE on the same path because it removes exactly what the POST above
+   * wrote, and nothing else. No body at all — the lesson id and the session
+   * are the whole request.
+   *
+   * Throttled like the dwell: every call recalculates the course, and on the
+   * last lecture a press/undo loop is a «مبروك» push per round. Twenty a
+   * minute is far past any honest use of a confirmation dialog.
+   */
+  @RequirePermission('progress:write')
+  @Throttle({ short: { limit: 2, ttl: seconds(1) }, medium: { limit: 20, ttl: seconds(60) } })
+  @Delete(':lessonId/complete')
+  undoComplete(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('lessonId') lessonId: string,
+  ): Promise<HeartbeatResponse> {
+    return this.lessonProgress.undoManualCompletion(user.id, lessonId);
   }
 }

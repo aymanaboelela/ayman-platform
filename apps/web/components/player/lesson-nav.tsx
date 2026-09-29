@@ -9,6 +9,7 @@ import { Button } from '@ayman/ui/components/button';
 import { cn } from '@ayman/ui/lib/cn';
 import { postComplete } from '@/lib/progress-client';
 import { CheckIcon, ChevronBack, ChevronForward } from './icons';
+import { UndoCompleteButton } from './undo-complete-button';
 
 export interface LessonNavProps {
   lessonId: string;
@@ -26,6 +27,14 @@ export interface LessonNavProps {
    * completion rule of its own.
    */
   manualComplete?: boolean;
+  /**
+   * Whether the «تم» this lesson shows can be taken back —
+   * `isCompletionUndoable`, decided by the player from the same row the
+   * server will judge. Only read while `isComplete`; `false` keeps «تم» the
+   * disabled badge it always was, which is right for everything the student
+   * did not finish with the button.
+   */
+  undoable?: boolean;
   onProgress: (response: HeartbeatResponse) => void;
 }
 
@@ -45,6 +54,7 @@ export function LessonNav({
   next,
   isComplete,
   manualComplete = true,
+  undoable = false,
   onProgress,
 }: LessonNavProps) {
   const router = useRouter();
@@ -177,16 +187,28 @@ export function LessonNav({
           it. */}
       {manualComplete ? (
         <div className="flex flex-col gap-2 sm:items-end">
-          <Button
-            onClick={() => void finish()}
-            disabled={saving || isComplete}
-            className="w-full sm:w-auto"
-          >
-            <span className="flex items-center gap-2">
-              {isComplete ? <CheckIcon /> : null}
-              {isComplete ? copy.player.completed : label}
-            </span>
-          </Button>
+          {isComplete && undoable ? (
+            <>
+              <UndoCompleteButton lessonId={lessonId} onProgress={onProgress} />
+              {/* Says «تم» can be pressed at all. It is the one control on the
+                  page that USED to be dead once pressed, and a student who
+                  learnt that has no reason to try it again. */}
+              <p className="text-[length:var(--fs-text-xs)] text-center text-fg-muted sm:text-end">
+                {copy.player.undoHint}
+              </p>
+            </>
+          ) : (
+            <Button
+              onClick={() => void finish()}
+              disabled={saving || isComplete}
+              className="w-full sm:w-auto"
+            >
+              <span className="flex items-center gap-2">
+                {isComplete ? <CheckIcon /> : null}
+                {isComplete ? copy.player.completed : label}
+              </span>
+            </Button>
+          )}
 
           {/* Directly under the button that failed, not a toast: the student is
               looking at the button, and the answer to "did that work?" has to be

@@ -414,6 +414,208 @@ describe('LessonProgressService', () => {
       await prisma.notification.deleteMany({ where: { userId } });
     });
   });
+
+  /*
+    «تم» → «نرجّع الدرس؟». Like `completeManually` above, the assertions that
+    matter are on the ROW and the ENROLMENT — a refusal that threw after
+    writing, or an undo that cleared the lesson and left the course at 100%,
+    would both pass a test that only looked at the response.
+  */
+  describe('undoManualCompletion', () => {
+    const videoRow = () =>
+      prisma.lessonProgress.findUniqueOrThrow({
+        where: { enrollmentId_lessonId: { enrollmentId, lessonId: videoLessonId } },
+      });
+
+    it('takes back a manual completion, and the course percentage with it', async () => {
+      await service.open(userId, textLessonId);
+      await service.completeManually(userId, textLessonId);
+      await service.open(userId, videoLessonId);
+      const done = await service.completeManually(userId, videoLessonId);
+      expect(done.courseProgressPercent).toBe(100);
+
+      const response = await service.undoManualCompletion(userId, videoLessonId);
+
+      expect(response.justCompleted).toBe(false);
+      expect(response.courseProgressPercent).toBe(50);
+      expect(response.progress.completedAt).toBeNull();
+      expect(response.progress.completedVia).toBeNull();
+      // Opened, so `in_progress` — what `open()` itself would have left.
+      expect(response.progress.state).toBe('in_progress');
+      expect(response.progress.completion).toBe(0);
+
+      const row = await videoRow();
+      expect(row.completedAt).toBeNull();
+      expect(row.completedVia).toBeNull();
+      const enrollment = await prisma.enrollment.findUniqueOrThrow({ where: { id: enrollmentId } });
+      expect(Number(enrollment.progressPercent)).toBe(50);
+      expect(enrollment.completedAt).toBeNull();
+    });
+
+    it('recomputes completion from what was actually watched, and keeps the counters', async () => {
+      await service.open(userId, videoLessonId);
+      await prisma.lessonProgress.update({
+        where: { enrollmentId_lessonId: { enrollmentId, lessonId: videoLessonId } },
+        data: { watchedSeconds: 120, maxPositionSeconds: 150 },
+      });
+      await service.completeManually(userId, videoLessonId);
+
+      const response = await service.undoManualCompletion(userId, videoLessonId);
+
+      // 120 of 600 — `videoCompletionFraction`, the heartbeat's own number.
+      expect(response.progress.completion).toBe(0.2);
+      expect(response.progress.watchedSeconds).toBe(120);
+      expect(response.progress.maxPositionSeconds).toBe(150);
+    });
+
+    it('leaves the lesson finishable again with the button', async () => {
+      await service.open(userId, videoLessonId);
+      await service.completeManually(userId, videoLessonId);
+      await service.undoManualCompletion(userId, videoLessonId);
+
+      const again = await service.completeManually(userId, videoLessonId);
+
+      expect(again.justCompleted).toBe(true);
+      expect(again.progress.completedVia).toBe('manual');
+    });
+
+    it('refuses an automatic completion, and changes nothing', async () => {
+      const completedAt = new Date();
+      await prisma.lessonProgress.create({
+        data: {
+          enrollmentId,
+          lessonId: videoLessonId,
+          completion: 1,
+          state: 'completed',
+          watchedSeconds: 600,
+          maxPositionSeconds: 600,
+          openCount: 1,
+          completedAt,
+          completedVia: 'auto',
+        },
+      });
+
+      await expect(service.undoManualCompletion(userId, videoLessonId)).rejects.toMatchObject({
+        status: 400,
+      });
+
+      const row = await videoRow();
+      expect(row.completedVia).toBe('auto');
+      expect(row.completedAt?.getTime()).toBe(completedAt.getTime());
+    });
+
+    it('refuses a manual press on a video since watched to both thresholds', async () => {
+      await prisma.lessonProgress.create({
+        data: {
+          enrollmentId,
+          lessonId: videoLessonId,
+          completion: 1,
+          state: 'completed',
+          watchedSeconds: 600,
+          maxPositionSeconds: 600,
+          openCount: 1,
+          completedAt: new Date(),
+          completedVia: 'manual',
+        },
+      });
+
+      // The next heartbeat would re-complete it as `auto`; the undo would last
+      // ten seconds.
+      await expect(service.undoManualCompletion(userId, videoLessonId)).rejects.toMatchObject({
+        status: 400,
+      });
+      expect((await videoRow()).completedVia).toBe('manual');
+    });
+
+    it('refuses a text lesson, whose dwell would hand the completion straight back', async () => {
+      await service.open(userId, textLessonId);
+      await service.completeManually(userId, textLessonId);
+
+      await expect(service.undoManualCompletion(userId, textLessonId)).rejects.toMatchObject({
+        status: 400,
+      });
+    });
+
+    it('refuses a lesson that is not complete at all', async () => {
+      await service.open(userId, videoLessonId);
+
+      await expect(service.undoManualCompletion(userId, videoLessonId)).rejects.toMatchObject({
+        status: 400,
+      });
+    });
+
+    it('refuses a quiz lesson', async () => {
+      await expect(service.undoManualCompletion(userId, quizLessonId)).rejects.toThrow(
+        /quiz lesson is completed by passing/i,
+      );
+    });
+
+    it('404s for a lesson the caller is not enrolled in', async () => {
+      const stranger = await prisma.user.create({
+        data: { id: `str-u-${Date.now()}`, name: 'غريب', email: `str-u-${Date.now()}@t.test` },
+      });
+
+      await expect(service.undoManualCompletion(stranger.id, videoLessonId)).rejects.toMatchObject({
+        status: 404,
+      });
+
+      await prisma.user.delete({ where: { id: stranger.id } });
+    });
+
+    it('un-finishes the course, announces nothing, and withdraws only the «مبروك» it reverses', async () => {
+      await prisma.notification.deleteMany({ where: { userId } });
+      const count = () =>
+        prisma.notification.count({ where: { userId, kind: 'course_completed' } });
+
+      // A finish from before — true when it was written (a lecture published
+      // later re-opened the course). History, not the mistake being undone.
+      const earlier = await prisma.notification.create({
+        data: {
+          userId,
+          kind: 'course_completed',
+          payload: { courseId },
+          createdAt: new Date(Date.now() - 7 * 24 * 3600 * 1000),
+        },
+      });
+
+      await service.open(userId, textLessonId);
+      await service.completeManually(userId, textLessonId);
+      await service.open(userId, videoLessonId);
+      await service.completeManually(userId, videoLessonId);
+      expect(await count()).toBe(2);
+
+      await service.undoManualCompletion(userId, videoLessonId);
+
+      const left = await prisma.notification.findMany({
+        where: { userId, kind: 'course_completed' },
+        select: { id: true },
+      });
+      expect(left).toEqual([{ id: earlier.id }]);
+      const enrollment = await prisma.enrollment.findUniqueOrThrow({ where: { id: enrollmentId } });
+      expect(enrollment.completedAt).toBeNull();
+
+      // The real finish, later: one «مبروك» for it, not a second on top of the
+      // mistaken one.
+      await service.completeManually(userId, videoLessonId);
+      expect(await count()).toBe(2);
+
+      await prisma.notification.deleteMany({ where: { userId } });
+    });
+
+    it('does not touch «مبروك» when the course was not finished to begin with', async () => {
+      await prisma.notification.deleteMany({ where: { userId } });
+      await prisma.notification.create({
+        data: { userId, kind: 'course_completed', payload: { courseId } },
+      });
+
+      await service.open(userId, videoLessonId);
+      await service.completeManually(userId, videoLessonId);
+      await service.undoManualCompletion(userId, videoLessonId);
+
+      expect(await prisma.notification.count({ where: { userId, kind: 'course_completed' } })).toBe(1);
+      await prisma.notification.deleteMany({ where: { userId } });
+    });
+  });
 });
 
 // Isolated in its own course/enrollment fixture rather than reusing the
