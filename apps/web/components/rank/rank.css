@@ -471,9 +471,9 @@
   background:
     radial-gradient(120% 120% at 100% 0%, color-mix(in oklab, var(--tip) 16%, transparent) 0%, transparent 65%),
     var(--color-surface-2);
-  transition: transform var(--d-hover) var(--ease-out), box-shadow var(--d-hover) var(--ease-out);
 }
-.rk-tip:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+/* الكارت نفسه مابيترفعش على الهوفر: مش رابط، والصفوف اللي جوّاه هي اللي
+   بتتضغط. كارت بيطلع لفوق تحت الماوس بيقول «اضغطني» وهو مابيعملش حاجة. */
 .rk-tip__icon {
   display: grid;
   place-items: center;
@@ -507,6 +507,261 @@
   font-size: var(--fs-text-sm);
   font-weight: var(--fw-semibold);
 }
+
+/* ── الصفوف: كل حاجة ناقصة رابط لمكانها ───────────────────────────────── */
+
+/* الشريط بالعدد لما يبقى رابط — أول صف، بسهم، وبطول صباع. */
+.rk-tip__alert--link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-block-size: 2.75rem;
+  border: 1px solid color-mix(in oklab, var(--tip) 40%, transparent);
+  transition: background-color var(--d-hover) var(--ease-out);
+}
+.rk-tip__alert--link:hover { background: color-mix(in oklab, var(--tip) 24%, transparent); }
+.rk-tip__alert--link svg { color: var(--tip); transition: transform var(--d-hover) var(--ease-out); }
+.rk-tip__alert--link:hover svg { transform: translateX(-3px); }
+
+.rk-steps { display: grid; gap: 0.4rem; }
+.rk-steps + .rk-more,
+.rk-tip__alert + .rk-steps { margin-top: 0.1rem; }
+
+.rk-step[data-tone='go'] { --step: var(--tip); }
+.rk-step[data-tone='warn'] { --step: var(--warn); }
+.rk-step[data-tone='info'] { --step: var(--info); }
+.rk-step[data-tone='done'] { --step: var(--ok); }
+.rk-step[data-tone='muted'] { --step: var(--color-fg-muted); }
+.rk-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  min-block-size: 3.25rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in oklab, var(--tip) 20%, var(--color-line));
+  background: var(--color-surface-1);
+  color: var(--color-fg);
+  transition:
+    border-color var(--d-hover) var(--ease-out),
+    background-color var(--d-hover) var(--ease-out),
+    transform var(--d-hover) var(--ease-out);
+}
+.rk-step:hover {
+  border-color: color-mix(in oklab, var(--tip) 60%, var(--color-line));
+  background: color-mix(in oklab, var(--tip) 7%, var(--color-surface-1));
+}
+.rk-step__glyph {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--step) 16%, transparent);
+  color: var(--step);
+}
+.rk-step__main { display: grid; gap: 0.2rem; min-width: 0; }
+.rk-step__eyebrow { font-size: var(--fs-text-xs); color: var(--color-fg-muted); }
+.rk-step__title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  line-height: 1.5;
+}
+.rk-step__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
+.rk-step__course { font-size: var(--fs-text-xs); color: var(--color-fg-muted); }
+.rk-step__chev {
+  width: 1.15rem;
+  height: 1.15rem;
+  color: var(--color-fg-muted);
+  transition: transform var(--d-hover) var(--ease-out), color var(--d-hover) var(--ease-out);
+}
+.rk-step:hover .rk-step__chev { color: var(--tip); transform: translateX(-3px); }
+
+.rk-chip-sm[data-tone='go'] { --chip: var(--tip); }
+.rk-chip-sm[data-tone='warn'] { --chip: var(--warn); }
+.rk-chip-sm[data-tone='info'] { --chip: var(--info); }
+.rk-chip-sm[data-tone='done'] { --chip: var(--ok); }
+.rk-chip-sm[data-tone='score'] { --chip: var(--viz-3); }
+.rk-chip-sm[data-tone='muted'] { --chip: var(--color-fg-muted); }
+.rk-chip-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--chip) 13%, transparent);
+  color: var(--color-fg);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  line-height: 1.6;
+}
+/* الفعل نفسه («رفع الحل»، «حل الكويز») أتقل من الحالة جنبه. */
+.rk-chip-sm[data-tone='go'] {
+  background: color-mix(in oklab, var(--chip) 22%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--chip) 45%, transparent);
+  font-weight: var(--fw-bold);
+}
+
+/* رقم لاتيني جوّه جملة عربي — من غير العزل ده «70%» بتتقري «%70». */
+.rk-num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-bold);
+}
+
+/* «وكمان N» — `<details>` بيفتح الباقي في مكانه. */
+.rk-more__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-block-size: 2.75rem;
+  border-radius: var(--r-md);
+  border: 1px dashed color-mix(in oklab, var(--tip) 45%, var(--color-line));
+  color: var(--color-fg);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  list-style: none;
+  transition: background-color var(--d-hover) var(--ease-out);
+}
+.rk-more__toggle::-webkit-details-marker { display: none; }
+.rk-more__toggle:hover { background: color-mix(in oklab, var(--tip) 8%, transparent); }
+.rk-more__close,
+.rk-more[open] .rk-more__open { display: none; }
+.rk-more[open] .rk-more__close { display: inline; }
+.rk-more__chev { color: var(--tip); transition: transform var(--d-hover) var(--ease-out); }
+.rk-more[open] .rk-more__chev { transform: rotate(180deg); }
+.rk-more[open] > .rk-steps { margin-top: 0.4rem; }
+.rk-more__path {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-block-size: 2.75rem;
+  margin-top: 0.4rem;
+  color: var(--color-fg);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+
+/* الكارت فضي = اتقفل. بيتقال، مش بيتساب فراغ. */
+.rk-done {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--ok) 13%, transparent);
+  color: var(--color-fg);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+.rk-done svg { color: var(--ok); }
+.rk-done[data-quiet] {
+  background: color-mix(in oklab, var(--color-fg-muted) 8%, transparent);
+  color: var(--color-fg-muted);
+  font-weight: var(--fw-regular);
+}
+.rk-done[data-quiet] svg { color: var(--color-fg-muted); }
+
+/* المقفول باشتراك: سطر واحد بالعدد وباب الاشتراك. */
+.rk-locked {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: 2.75rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-1);
+  color: var(--color-fg-muted);
+  font-size: var(--fs-text-xs);
+  line-height: 1.7;
+}
+.rk-locked > span { flex: 1; }
+.rk-locked__cta {
+  margin-inline-start: 0.35rem;
+  color: var(--color-fg);
+  font-weight: var(--fw-bold);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rk-locked:hover { border-color: color-mix(in oklab, var(--tip) 45%, var(--color-line)); }
+
+/* امتحان الشهر الجاي — أكبر حاجة في الكارت، لأنه الوحيد اللي عليه ميعاد. */
+.rk-exam {
+  display: grid;
+  justify-items: start;
+  gap: 0.25rem;
+  min-block-size: 2.75rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklab, var(--tip) 40%, var(--color-line));
+  background:
+    radial-gradient(120% 140% at 0% 100%, color-mix(in oklab, var(--tip) 20%, transparent) 0%, transparent 70%),
+    var(--color-surface-1);
+  color: var(--color-fg);
+  transition: border-color var(--d-hover) var(--ease-out), box-shadow var(--d-hover) var(--ease-out);
+}
+a.rk-exam:hover { border-color: var(--tip); box-shadow: var(--shadow-md); }
+.rk-exam[data-open] {
+  border-color: color-mix(in oklab, var(--tip) 70%, var(--color-line));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--tip) 18%, transparent);
+}
+.rk-exam__eyebrow { font-size: var(--fs-text-xs); font-weight: var(--fw-semibold); color: var(--color-fg-muted); }
+.rk-exam__title { font-size: var(--fs-text-base); font-weight: var(--fw-bold); }
+.rk-exam__course { font-size: var(--fs-text-xs); color: var(--color-fg-muted); }
+.rk-exam__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+.rk-exam__status svg { color: var(--tip); flex: none; }
+.rk-exam__live {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok) 25%, transparent);
+}
+.rk-exam__when { font-size: var(--fs-text-xs); color: var(--color-fg-muted); }
+.rk-exam__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: var(--r-full);
+  background: var(--accent-cta);
+  color: var(--on-accent-ink);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+}
+a.rk-exam:hover .rk-exam__cta { background: var(--accent-cta-hover); }
+.rk-exam--empty {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  border-style: dashed;
+  background: transparent;
+  color: var(--color-fg-muted);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+.rk-exam--empty svg { color: var(--tip); flex: none; }
+.rk-exam + .rk-steps { margin-top: 0.15rem; }
 .rk-pending {
   display: flex;
   align-items: center;
@@ -670,6 +925,8 @@
   .rk-dragon[data-place] { animation: rk-pop 600ms var(--ease-pop) calc(var(--d) * 140ms + 700ms) both, rk-bob 3.2s ease-in-out calc(var(--d) * 300ms + 1.4s) infinite; }
   .rk-dragon[data-place='1'] { animation: rk-pop 600ms var(--ease-pop) 700ms both, rk-roar 3.2s ease-in-out 1.4s infinite; }
   .rk-path__step[data-level='legend'] .rk-dragon--level { animation: rk-bob 3s ease-in-out infinite; }
+  .rk-exam__live { animation: rk-pulse 1.8s ease-in-out infinite; }
+  .rk-step:active { transform: scale(0.99); }
 }
 @keyframes rk-roar {
   0%, 100% { transform: translateY(0) scale(1); filter: drop-shadow(0 10px 14px rgb(0 0 0 / 0.18)); }

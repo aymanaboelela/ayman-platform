@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Clock3, ImagePlus, NotebookPen, RotateCcw, X } from 'lucide-react';
 // The `/copy` SUBPATH, never the root barrel: this is a client component on
@@ -69,6 +69,20 @@ export function LessonHomework({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
+  const section = useRef<HTMLElement>(null);
+
+  /*
+   * `#homework` — «الطريق لفوق» في `/rank` بيودّي هنا. المتصفح والراوتر
+   * مابينزلوش على الـhash لوحدهم: الكارت ده بيوصل في الستريم بعد ما سكرول
+   * الصفحة اتحدد، فكان الطالب بيفتح المحاضرة من فوق ويدوّر على الواجب. فالكارت
+   * نفسه بينزل على نفسه لما يتركّب والعنوان فيه `#homework`، ومرة واحدة بس
+   * (مش مع كل `router.refresh()` بعد الرفع).
+   */
+  useEffect(() => {
+    if (window.location.hash !== '#homework') return;
+    const frame = requestAnimationFrame(() => section.current?.scrollIntoView({ block: 'start' }));
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   const submission = homework.submission;
   /*
@@ -161,8 +175,12 @@ export function LessonHomework({
 
   return (
     <section
+      // `#homework` — «الطريق لفوق» في `/rank` بيودّي هنا على طول، والمسافة
+      // فوقه عشان التوب بار الثابت مايغطّيش العنوان.
+      id="homework"
+      ref={section}
       aria-label={c.title}
-      className="mt-6 overflow-hidden rounded-[var(--r-lg)] border border-line bg-surface-2"
+      className="mt-6 scroll-mt-[calc(var(--topbar-h)+1rem)] overflow-hidden rounded-[var(--r-lg)] border border-line bg-surface-2"
     >
       {/*
         The coloured band. It is what makes «فيه واجب» readable from the top of
