@@ -322,47 +322,40 @@ export function BooksShop({
       </p>
 
       <Dialog open={checkingOut} onOpenChange={setCheckingOut}>
-        <DialogContent closeLabel={copy.common.close}>
-          <DialogHeader>
+        {/*
+          `bco-dialog` hands the dialog's layout to the checkout: a sheet on a
+          phone, a wide two-column dialog on a desktop, with the panel's own
+          footer pinned outside the scrolling body. See `book-checkout.css`.
+        */}
+        <DialogContent closeLabel={copy.common.close} className="bco-dialog">
+          <DialogHeader className="bco-dialog__head">
             <DialogTitle>{c.cartTitle}</DialogTitle>
           </DialogHeader>
-          <div className="books-checkout">
-            <div className="books-checkout__summary">
-              {lines.map((line) => (
-                <div key={line.book.id} className="books-cart__row">
-                  <span>
-                    {formatCopy(c.lineTitleQuantity, {
-                      title: line.book.titleAr,
-                      quantity: line.quantity,
-                    })}
-                  </span>
-                  <span>{formatEGP(line.book.priceCents * line.quantity)}</span>
-                </div>
-              ))}
-              {/* ⚠️ NO `<Totals>` here. It would be a SECOND, frozen answer to
-                  the question the panel below answers live: this copy is stuck
-                  on «من ٢٣٠» (the cheapest zone) while the panel's own total
-                  becomes ٢٥٠ the moment a وجه-بحري address is picked, and the
-                  reader gets two different totals stacked on top of each other.
-                  The panel owns the breakdown — same reason `BookOrderButton`
-                  keeps its breakdown inside rather than above. */}
-            </div>
+          {/*
+            The SAME panel the course page uses — address, then payment, with
+            the guest-resume behaviour intact. It is handed a cart instead of a
+            course id; everything after that is identical, which is the whole
+            reason it was generalised rather than copied.
 
-            {/*
-              The SAME panel the course page uses — address, then the Vodafone
-              Cash step, with the guest-resume behaviour intact. It is handed a
-              cart instead of a course id; everything after that is identical,
-              which is the whole reason it was generalised rather than copied.
-            */}
-            <BookOrderPanel
-              items={lines.map((line) => ({ bookId: line.book.id, quantity: line.quantity }))}
-              itemsCents={totals.itemsCents}
-              shippingRates={catalog.shippingRates}
-              instapay={instapay}
-              vodafoneCash={vodafoneCash}
-              onCancel={() => setCheckingOut(false)}
-            />
-          </div>
+            ⚠️ The basket's lines go IN as `summaryLines` rather than being
+            drawn up here. They used to be a second summary box above the
+            panel's own — the same order listed twice, one box inside another.
+            The panel's summary is the one that moves with the governorate, so
+            it is the one that stays.
+          */}
+          <BookOrderPanel
+            items={lines.map((line) => ({ bookId: line.book.id, quantity: line.quantity }))}
+            summaryLines={lines.map((line) => ({
+              title: line.book.titleAr,
+              quantity: line.quantity,
+              unitCents: line.book.priceCents,
+            }))}
+            itemsCents={totals.itemsCents}
+            shippingRates={catalog.shippingRates}
+            instapay={instapay}
+            vodafoneCash={vodafoneCash}
+            onCancel={() => setCheckingOut(false)}
+          />
         </DialogContent>
       </Dialog>
     </>

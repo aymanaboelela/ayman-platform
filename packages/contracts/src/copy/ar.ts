@@ -3113,6 +3113,48 @@ export const copy = {
     senderPhoneInvalid: 'الرقم ده مش رقم مصري صحيح',
     noNumber: 'طلب الكتاب مش متاح دلوقتي. تواصل معانا على واتساب.',
     back: 'رجوع',
+
+    /* ── The checkout's own chrome (the redesigned dialog) ─────────────────
+       Every one of these is a NOUN or a statement about the platform — never
+       an imperative — because one string serves every student: «الدفع» and
+       «التفاصيل», not «ادفع» and «اعرض». */
+    /** The step bar's accessible name, and its three stops. */
+    stepsLabel: 'خطوات الطلب',
+    stepCart: 'الطلب',
+    stepAddress: 'العنوان',
+    stepPayment: 'الدفع',
+    /** The one order summary — beside the form on a wide screen, folded above
+     *  it on a phone with `summaryDetails` as its toggle. */
+    summaryTitle: 'ملخص الطلب',
+    summaryDetails: 'التفاصيل',
+    /** The address form, in two groups instead of one long column. */
+    contactTitle: 'بيانات التواصل',
+    contactLead: 'رقمين للتواصل وقت الشحن.',
+    deliveryTitle: 'عنوان التوصيل',
+    deliveryLead: 'الكتاب بيتشحن لحد باب البيت.',
+    /** Under the governorate select, once one is picked — which of the three
+     *  delivery zones it falls in, beside that zone's fee. `{zone}` is
+     *  `books.shippingZoneNear/Delta/Far`. */
+    zoneHint: 'منطقة الشحن: {zone}',
+    /** Under the total in the footer, once delivery is known. */
+    totalIncludesShipping: 'شامل الشحن',
+    /** The payment step's headline figure and its copy button. */
+    payAmountLabel: 'المبلغ المطلوب تحويله',
+    copyAmount: 'نسخ المبلغ',
+    /** The saved address, restated on the payment step. */
+    deliverTo: 'التوصيل على',
+    /** Payment, as three numbered stops. `{rail}` — «إنستاباي»/«فودافون كاش».
+     *  The other two stops reuse `subscribe.senderPhoneLabel` and
+     *  `subscribe.screenshotLabel` word for word. */
+    payStepSend: 'التحويل على رقم {rail}',
+    /** The confirmation, after the screenshot is in. `success` above is the
+     *  same message in one sentence; the screen splits it into a headline and
+     *  what happens next. */
+    successTitle: 'طلبك وصلنا',
+    successBody:
+      'بنتأكد من الدفع الأول، وأول ما الكتاب يتشحن هتوصلك رسالة هنا على المنصة بموعد الوصول.',
+    /** Closes the dialog from a finished state. */
+    done: 'تمام',
   },
   player: {
     eyebrow: '09 / المشغّل',

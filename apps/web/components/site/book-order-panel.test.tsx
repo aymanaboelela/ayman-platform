@@ -1,6 +1,9 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { BookOrder } from '@ayman/contracts/book-orders';
+import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { apiPost } from '@/lib/api';
 import { BookOrderPanel } from './book-order-panel';
 
 /**
@@ -42,7 +45,16 @@ const stored = {
 vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
   apiGet: vi.fn(async (path: string) =>
-    path === '/api/taxonomy' ? { governorates: [], pinnedGovernorateCodes: [], systems: [] } : stored,
+    path === '/api/taxonomy'
+      ? {
+          // One governorate, so the address form has something to pick. «RS»
+          // (the stored order's) is deliberately NOT in it — the resume tests
+          // below never needed it to be.
+          governorates: [{ code: '25', nameAr: 'أسيوط', slug: 'assiut', region: 'upper', sortOrder: 1 }],
+          pinnedGovernorateCodes: [],
+          systems: [],
+        }
+      : stored,
   ),
   apiPost: vi.fn(),
 }));
@@ -91,5 +103,59 @@ describe('BookOrderPanel — the remembered basket order', () => {
     expect(await screen.findByDisplayValue('طالب تجربة')).toBeTruthy();
     // The old order's frozen total is nowhere on screen.
     await waitFor(() => expect(screen.queryByText('300 جنيه')).toBeNull());
+  });
+});
+
+/**
+ * The redesigned address step. The checks are the same eight in the same order
+ * with the same words; what changed is that each failing field says so under
+ * itself — and, as before, nothing is sent until every one passes.
+ */
+describe('BookOrderPanel — the address step', () => {
+  function renderFresh() {
+    render(
+      <BookOrderPanel
+        items={[{ bookId: BOOK, quantity: 1 }]}
+        summaryLines={[{ title: 'كتاب تانية بكالوريا برمجة لغات', quantity: 1, unitCents: 15000 }]}
+        itemsCents={15000}
+        shippingRates={{ cairo_giza: 8000, delta: 10000, far: 15000 }}
+        instapay={null}
+        vodafoneCash="+201021196367"
+        onCancel={() => undefined}
+      />,
+    );
+  }
+
+  it('names every missing field under itself, and sends nothing', async () => {
+    vi.mocked(apiPost).mockClear();
+    renderFresh();
+    fireEvent.click(await screen.findByRole('button', { name: copy.bookOrder.addressSubmit }));
+
+    for (const message of [
+      copy.bookOrder.fullNameRequired,
+      copy.bookOrder.phoneRequired,
+      copy.bookOrder.altPhoneRequired,
+      copy.bookOrder.governorateRequired,
+      copy.bookOrder.cityRequired,
+      copy.bookOrder.addressStreetRequired,
+    ]) {
+      expect(screen.getByText(message)).toBeTruthy();
+    }
+    // The first wrong field is where the cursor goes.
+    expect(document.activeElement?.id).toBe('book-order-full-name');
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  it('says which delivery zone the picked governorate is in', async () => {
+    renderFresh();
+    const select = await screen.findByLabelText(copy.bookOrder.governorateLabel);
+    await screen.findByRole('option', { name: 'أسيوط' });
+    fireEvent.change(select, { target: { value: '25' } });
+
+    expect(
+      screen.getByText(formatCopy(copy.bookOrder.zoneHint, { zone: copy.books.shippingZoneFar })),
+    ).toBeTruthy();
+    // …and the summary's «الشحن» row names the same zone.
+    expect(screen.getByText(copy.books.shippingZoneFar)).toBeTruthy();
   });
 });
