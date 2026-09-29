@@ -1045,6 +1045,29 @@ export const copy = {
      */
     slowLoad: 'الصفحة بتاخد وقت أطول من العادي.',
     slowLoadReload: 'نحمّلها من الأول',
+    /**
+     * The tab is running an older build than the server — a deploy landed
+     * while it was open. See `components/pwa/stale-build-watch.tsx`.
+     *
+     * Nothing is broken and nothing was lost on the server; the page simply
+     * cannot save any more, because every Server Action id it holds belongs to
+     * a build that no longer exists. So the toast names the cause in the
+     * reader's terms (an update came out) and the one thing that fixes it.
+     *
+     * `staleBuildAction` is the INLINE twin, shown where a save or a delete
+     * actually failed for this reason — in place of Next's own English
+     * sentence, «Server Action "…" was not found on the server», which is what
+     * editors used to see in red above the form. It says the request did not
+     * arrive rather than «مااتحفظش», because the same line serves a delete and
+     * a publish as well as a save.
+     *
+     * The button is a masdar, like every other button in the product — an
+     * imperative («حدّث») would address one reader and not the other.
+     */
+    staleBuild: 'نزل تحديث للمنصة — نحدّث الصفحة عشان الحفظ يشتغل.',
+    staleBuildAction:
+      'نزل تحديث للمنصة والصفحة دي لسه على النسخة القديمة، فالطلب ماوصلش. نحدّث الصفحة ونجرّب تاني.',
+    staleBuildReload: 'تحديث دلوقتي',
   },
   /**
    * Cross-cutting accessibility strings that belong to no single feature —
