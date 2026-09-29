@@ -107,6 +107,28 @@ export function readProbe(json: string): SourceProbe {
 const SEGMENT_SECONDS = 6;
 
 /**
+ * How far the encode has got, from the segments of ONE rung already on disk.
+ *
+ * ⚠️ «واقف على ٢٠٪ والفيديو أصلًا اترفع». The encode is one ffmpeg call that
+ * says nothing until it exits, and it is the long part — an hour of lecture can
+ * take one or two hours of niced CPU. So the bar sat at the 20 it was given
+ * when ffmpeg started, for hours, and read exactly like a stuck upload.
+ *
+ * Every rung is cut on the same forced keyframes, so the tallest one's segment
+ * count times the segment length is how many seconds of the lecture are done.
+ * The segment being written is counted too; capped below 1 because the file is
+ * not done until ffmpeg says so.
+ */
+export function encodedFraction(names: readonly string[], durationSeconds: number): number {
+  const segments = names.filter((name) => name.startsWith('seg_')).length;
+  if (durationSeconds <= 0) return 0;
+  return Math.min(0.99, (segments * SEGMENT_SECONDS) / durationSeconds);
+}
+
+/** How often the segments are counted — the admin's page polls on its own clock anyway. */
+const ENCODE_POLL_MS = 15_000;
+
+/**
  * The ffmpeg invocation that turns ONE source file into an HLS ladder.
  *
  * A pure function for the same reason `hlsArgs` is one: a mis-built ladder
@@ -490,6 +512,8 @@ export async function transcodeUpload(
   onStage?: (stage: 'probing' | 'encoding' | 'poster') => void,
   /** Encrypt every segment with this key, fetched by players from `uri`. */
   encryption: { key: Buffer; uri: string } | null = null,
+  /** 0‥1 of the encode, every `ENCODE_POLL_MS` while ffmpeg runs. See `encodedFraction`. */
+  onEncodeProgress?: (fraction: number) => void,
 ): Promise<TranscodeResult> {
   const exec = (bin: string, args: readonly string[]): Promise<unknown> =>
     tools.renice
@@ -540,10 +564,23 @@ export async function transcodeUpload(
   }
 
   onStage?.('encoding');
-  await exec(
-    tools.ffmpeg,
-    transcodeArgs(sourceFile, rungs, outDir, probe.hasAudio, tools.threads, keyInfoFile),
-  );
+  const tallest = join(outDir, '0');
+  const poll =
+    onEncodeProgress === undefined
+      ? null
+      : setInterval(() => {
+          readdir(tallest)
+            .then((names) => onEncodeProgress(encodedFraction(names, probe.durationSeconds)))
+            .catch(() => undefined);
+        }, ENCODE_POLL_MS);
+  try {
+    await exec(
+      tools.ffmpeg,
+      transcodeArgs(sourceFile, rungs, outDir, probe.hasAudio, tools.threads, keyInfoFile),
+    );
+  } finally {
+    if (poll !== null) clearInterval(poll);
+  }
 
   // The master ffmpeg wrote already plays — it only advertises each rung's
   // ceiling. So a failure here costs a cautious rung choice, never a lecture.
