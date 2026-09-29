@@ -901,7 +901,7 @@ describe('analytics (integration)', () => {
         data: { courseId, sectionId: section.id, title: `فيديو ${position}`, kind: 'video', position, isPublished: true },
       });
       await prisma.lessonVideo.create({
-        data: { lessonId: lesson.id, provider: 'upload', externalId, durationSeconds: 600, mirrorStatus: 'ready' },
+        data: { lessonId: lesson.id, provider: 'upload', externalId, durationSeconds: 600, mirrorStatus: 'ready', mirrorHeight: 720 },
       });
       lessonIds.push(lesson.id);
     }
