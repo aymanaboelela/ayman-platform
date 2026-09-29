@@ -114,6 +114,8 @@ export const arenaCopy = {
     selfOfflineTitle: 'النت عندك قطع',
     selfOfflineBody: 'بنحاول نوصل تاني — المهلة {s} ثانية.',
     bothOfflineTitle: 'النت قطع عند الاتنين',
+    /** الستريم وقع عندنا إحنا — قبل ما السيرفر نفسه يعرف. */
+    reconnecting: 'بنحاول نوصل تاني…',
     backOnline: 'رجعنا!',
   },
   result: {
@@ -133,7 +135,6 @@ export const arenaCopy = {
     abortedBody: 'حصل تحديث في المنصة وقطع الماتش. مفيش نقط اتحسبت على حد — ماتش جديد في ثانية.',
     noQuestions: 'مفيش أسئلة كفاية للماتش ده',
     noQuestionsBody: 'البنك المشترك قليل على ماتش كامل. ممكن نجرّب كورس تاني.',
-    score: '{you} — {opponent}',
     pointsEarned: '+{n} نقطة ساحة',
     pointsNone: 'مفيش نقط الماتش ده',
     capped: 'السقف قصّ نقط الماتش ده — سقف اليوم {cap} نقطة، ونفس المنافس بيجيب نقط {pair} ماتشات بس في اليوم.',

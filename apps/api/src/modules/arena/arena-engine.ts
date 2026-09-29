@@ -4,7 +4,7 @@ import {
   type ArenaMatchView,
   type ArenaPoint,
   type ArenaReveal,
-  type ArenaSideState,
+  type ArenaSideStatus,
 } from '@ayman/contracts/arena';
 
 /**
@@ -366,7 +366,7 @@ export function viewFor(state: MatchState, side: Side): ArenaMatchView {
   const live = state.stage === 'question' && state.end === null;
   const question = state.stage === 'question' || state.stage === 'reveal' ? state.questions[state.index] : undefined;
 
-  const sideState = (s: Side): ArenaSideState => {
+  const sideStatus = (s: Side): ArenaSideStatus => {
     if (!state.players[s].online && state.end === null) return 'offline';
     const mine = live ? round?.answers[s] : null;
     return mine && !mine.right ? 'locked' : 'thinking';
@@ -408,8 +408,8 @@ export function viewFor(state: MatchState, side: Side): ArenaMatchView {
     total: state.questions.length,
     index: state.index,
     stage: state.stage,
-    you: { player: { name: me.name, image: me.image }, score: me.score, state: sideState(side) },
-    opponent: { player: { name: them.name, image: them.image }, score: them.score, state: sideState(other(side)) },
+    you: { player: { name: me.name, image: me.image }, score: me.score, status: sideStatus(side) },
+    opponent: { player: { name: them.name, image: them.image }, score: them.score, status: sideStatus(other(side)) },
     question: question
       ? {
           index: state.index,

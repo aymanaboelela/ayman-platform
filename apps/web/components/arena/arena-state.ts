@@ -32,6 +32,7 @@ export interface ArenaState {
 export type ArenaAction =
   | { type: 'frame'; view: ArenaView; fx: ArenaFx; at: number; now: number }
   | { type: 'clock'; at: number; now: number }
+  | { type: 'beat'; at: number; now: number; phase: 'idle' | 'queued' | 'match' }
   | { type: 'connection'; connection: Connection }
   | { type: 'start'; courseId: string; now: number }
   | { type: 'queued'; view: ArenaView; now: number }
@@ -97,6 +98,12 @@ export function arenaReducer(state: ArenaState, action: ArenaAction): ArenaState
     }
     case 'clock':
       return { ...state, offset: action.at - action.now };
+    case 'beat': {
+      // السيرفر شالنا من الطابور من غير ما يبعت (النبضة وقفت لحظة) — الشاشة
+      // لسه فاكرة إننا مستنيين. نرجع «مفيش حاجة»، و`want` بيرجّعنا للطابور.
+      const lost = action.phase === 'idle' && state.view.phase === 'queued';
+      return { ...state, offset: action.at - action.now, view: lost ? { phase: 'idle' } : state.view };
+    }
     case 'connection':
       return { ...state, connection: action.connection };
     case 'start':
@@ -135,6 +142,16 @@ export function arenaReducer(state: ArenaState, action: ArenaAction): ArenaState
 
 function questionIndex(view: ArenaView): string {
   return view.phase === 'match' ? `${view.match.id}:${view.match.index}:${view.match.stage}` : view.phase;
+}
+
+/**
+ * الاختيار ده مافيهوش ولا حرف عربي؟ — «len()» في سطر RTL بتطلع «()len»،
+ * فالاختيار اللي كله لاتيني أو أرقام بيتعزل LTR. اختيار فيه عربي (حتى لو
+ * بيبدأ بكود) بيفضل RTL، والكود جوّاه معزول لوحده.
+ */
+export function isLatinText(html: string): boolean {
+  const text = html.replace(/<[^>]*>/g, ' ').replace(/&[a-z#0-9]+;/gi, ' ');
+  return !/[\u0600-\u06FF\u0750-\u077F]/u.test(text);
 }
 
 /** أنهي شاشة. */

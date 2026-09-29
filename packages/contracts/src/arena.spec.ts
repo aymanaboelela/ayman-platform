@@ -131,8 +131,8 @@ describe('the wire shapes', () => {
           total: 7,
           index: 2,
           stage: 'question',
-          you: { player: { name: 'مريم', image: null }, score: 1, state: 'thinking' },
-          opponent: { player: { name: 'ملك', image: '/x.webp' }, score: 1, state: 'locked' },
+          you: { player: { name: 'مريم', image: null }, score: 1, status: 'thinking' },
+          opponent: { player: { name: 'ملك', image: '/x.webp' }, score: 1, status: 'locked' },
           question: {
             index: 2,
             id: 'q',

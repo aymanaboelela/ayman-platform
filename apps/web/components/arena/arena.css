@@ -209,7 +209,7 @@
 }
 .ca-me__stat[data-tone='violet'] { --tone: var(--ca-violet); }
 .ca-me__label { font-size: var(--fs-text-xs); color: var(--ink-fg-2); font-weight: var(--fw-semibold); }
-.ca-me__value { font-family: var(--font-mono); font-size: var(--fs-title-2); font-weight: var(--fw-bold); color: #fff; line-height: 1.2; }
+.ca-me__value { justify-self: start; font-family: var(--font-mono); font-size: var(--fs-title-2); font-weight: var(--fw-bold); color: #fff; line-height: 1.2; }
 .ca-me__stat[data-tone='gold'] .ca-me__value { color: color-mix(in oklab, var(--ca-gold), #fff 30%); }
 .ca-me__record { grid-column: 1 / -1; font-size: var(--fs-text-sm); color: var(--ink-fg-2); font-weight: var(--fw-semibold); }
 .ca-me__today {
@@ -455,7 +455,16 @@
 .ca-stage__sub { color: var(--ink-fg-2); font-size: var(--fs-text-sm); line-height: 1.7; max-width: 34rem; }
 
 /* بندوّر: رادار. */
-.ca-search { align-content: center; }
+/* الشريط فوق، والباقي في نص اللي فاضل. */
+.ca-search,
+.ca-vs,
+.ca-result { display: flex; flex-direction: column; align-items: center; }
+.ca-search > .ca-stage__bar,
+.ca-vs > .ca-stage__bar,
+.ca-result > .ca-stage__bar { margin-bottom: auto; }
+.ca-search > :last-child,
+.ca-vs > :last-child,
+.ca-result > :last-child { margin-bottom: auto; }
 .ca-radar {
   position: relative;
   display: grid;
@@ -520,7 +529,6 @@
 .ca-nobody__body { color: var(--ink-fg-2); font-size: var(--fs-text-sm); line-height: 1.7; }
 
 /* VS */
-.ca-vs { align-content: center; }
 .ca-vs__arena {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -653,6 +661,9 @@
   box-shadow: 0 0 0 4px color-mix(in oklab, var(--ca-gold) 35%, transparent), 0 0 30px var(--ca-gold);
   opacity: 0;
   pointer-events: none;
+  /* «+١» مش «١+»: العلامة ضعيفة وبتروح آخر السطر في RTL. */
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 .ca-ring {
@@ -698,6 +709,14 @@
 }
 .ca-question__stem pre,
 .ca-question__stem code { direction: ltr; unicode-bidi: isolate; }
+/* الكارت أبيض في الثيمين، فالكود جوّاه لازم يبقى فاتح في الثيمين كمان — من
+   غير ده الثيم الغامق كان بيحط كود غامق بحروف غامقة على كارت أبيض. */
+.ca-question__stem :is(code, pre) {
+  background: rgb(0 0 0 / 0.06);
+  color: var(--on-light-ink);
+  border-color: rgb(0 0 0 / 0.12);
+}
+.ca-option__body :is(code, pre) { background: rgb(255 255 255 / 0.2); color: #fff; border-color: rgb(255 255 255 / 0.3); }
 .ca-options { display: grid; gap: 0.65rem; }
 @media (min-width: 640px) { .ca-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .ca-option {
@@ -733,7 +752,13 @@
   background: rgb(255 255 255 / 0.24);
   font-size: var(--fs-text-lg);
 }
-.ca-option__body { min-width: 0; flex: 1; line-height: 1.6; }
+/* `plaintext`: اتجاه كل سطر من أول حرف فيه — «len()» بيفضل «len()» مش
+   «()len»، والعربي بيفضل عربي، من غير ما نعرف مقدمًا الاختيار بأنهي لغة. */
+.ca-option__text { min-width: 0; flex: 1; }
+.ca-option__body { line-height: 1.6; }
+/* اختيار مكتوب لاتيني (`isLatinText`): معزول LTR عشان «len()» ماتتقلبش
+   «()len»، ولازق ناحية الحرف زي أي اختيار عربي. */
+.ca-option__text[data-dir='ltr'] { direction: ltr; unicode-bidi: isolate; text-align: end; }
 .ca-option__mark { flex: none; }
 .ca-option__pick {
   position: absolute;
@@ -760,6 +785,26 @@
 .ca-feedback[data-tone='ok'] { color: color-mix(in oklab, var(--ok), #fff 45%); }
 .ca-feedback[data-tone='err'] { color: color-mix(in oklab, var(--err), #fff 45%); }
 .ca-feedback[data-tone='gold'] { color: color-mix(in oklab, var(--ca-gold), #fff 25%); }
+
+/* النت قطع عندنا إحنا — شريط فوق، والسؤال لسه ظاهر تحته. */
+.ca-lost {
+  position: absolute;
+  inset-block-start: 0.75rem;
+  inset-inline: 0.75rem;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem 0.6rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--warn) 88%, #000);
+  color: #fff;
+  font-weight: var(--fw-bold);
+  box-shadow: var(--shadow-md);
+}
+.ca-lost__sub { font-weight: var(--fw-regular); font-size: var(--fs-text-sm); opacity: 0.9; }
 
 /* قطع النت، والانسحاب — فوق المسرح نفسه (مش مودال بيقفل سكرول الصفحة). */
 .ca-overlay {
@@ -797,7 +842,6 @@
 }
 
 /* النتيجة */
-.ca-result { align-content: center; }
 .ca-result__icon {
   --tone: var(--ca-blue);
   display: grid;
@@ -828,7 +872,7 @@
 .ca-result__side { display: grid; justify-items: center; gap: 0.35rem; opacity: 0.8; }
 .ca-result__side[data-won] { opacity: 1; }
 .ca-result__name { font-weight: var(--fw-bold); color: #fff; max-width: 8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ca-result__score { font-family: var(--font-mono); font-size: 2.5rem; font-weight: var(--fw-bold); color: #fff; }
+.ca-result__score { display: inline-flex; align-items: center; gap: 0.6rem; font-family: var(--font-mono); font-size: 2.5rem; font-weight: var(--fw-bold); color: #fff; }
 .ca-result__points {
   display: inline-flex;
   flex-wrap: wrap;
@@ -909,6 +953,7 @@
   .ca-side[data-side='you'] .ca-burst { --from-x: calc(var(--dir-x, -1) * min(26vw, 16rem)); }
   .ca-side[data-side='opponent'] .ca-burst { --from-x: calc(var(--dir-x, -1) * -1 * min(26vw, 16rem)); }
   .ca-offline__icon { animation: ca-heartbeat 1.4s ease-in-out infinite; }
+  .ca-lost { animation: ca-rise 240ms var(--ease-out) both; }
   .ca-overlay { animation: ca-fade 200ms var(--ease-out) both; }
 
   .ca-result__icon { animation: ca-slam 520ms var(--ease-pop) both; }

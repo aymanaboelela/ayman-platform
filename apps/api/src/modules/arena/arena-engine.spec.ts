@@ -136,9 +136,9 @@ describe('arena engine — scoring, exactly as asked', () => {
     const { state, t } = started();
     expect(answer(state, 0, 0, WRONG(0), t + 1_000).result).toBe('wrong');
     expect(state.stage).toBe('question');
-    expect(viewFor(state, 0).you.state).toBe('locked');
+    expect(viewFor(state, 0).you.status).toBe('locked');
     expect(viewFor(state, 0).yourPick).toBe(WRONG(0));
-    expect(viewFor(state, 1).opponent.state).toBe('locked');
+    expect(viewFor(state, 1).opponent.status).toBe('locked');
 
     // لسه مقفول عليه — ولا صح ولا غلط تاني بيتحسب.
     expect(answer(state, 0, 0, RIGHT(0), t + 1_500).result).toBe('ignored');
@@ -186,7 +186,7 @@ describe('arena engine — scoring, exactly as asked', () => {
     expect(answer(state, 0, 1, RIGHT(1), t + 100).result).toBe('ignored');
     expect(answer(state, 0, 0, 'not-an-option', t + 200).result).toBe('ignored');
     // اختيار مش موجود مابيقفلش السؤال على صاحبه.
-    expect(viewFor(state, 0).you.state).toBe('thinking');
+    expect(viewFor(state, 0).you.status).toBe('thinking');
     answer(state, 1, 0, RIGHT(0), t + 300);
     advance(state, t + 300 + R.revealMs);
     expect(state.index).toBe(1);
@@ -259,7 +259,7 @@ describe('arena engine — «النت عنده قطع»', () => {
     expect(events).toEqual([{ kind: 'offline', side: 1 }]);
     const view = viewFor(state, 0);
     expect(view.paused).toEqual({ who: 'opponent', graceUntil: t + 5_000 + R.graceMs });
-    expect(view.opponent.state).toBe('offline');
+    expect(view.opponent.status).toBe('offline');
     expect(view.deadline).toBeNull();
     expect(viewFor(state, 1).paused?.who).toBe('you');
     // الساعة واقفة: ولا timeout، ولا إجابة بتتقبل.
@@ -290,7 +290,7 @@ describe('arena engine — «النت عنده قطع»', () => {
     expect(state.stage).toBe('question');
     // الوقت اللي كان فاضل رجع زي ما هو، والإجابة الغلط لسه قافلة عليه.
     expect(state.stageEndsAt).toBe(t + 10_000 + (R.questionMs - 3_000));
-    expect(viewFor(state, 0).you.state).toBe('locked');
+    expect(viewFor(state, 0).you.status).toBe('locked');
     expect(answer(state, 1, 0, RIGHT(0), t + 11_000).result).toBe('right');
   });
 

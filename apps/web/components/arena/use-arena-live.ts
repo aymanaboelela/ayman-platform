@@ -105,7 +105,7 @@ export function useArenaLive(initial: { view: ArenaView; at: number }) {
     const beat = async () => {
       try {
         const reply = await apiPost('/api/me/arena/beat', ArenaBeatSchema, {});
-        if (!stopped) dispatch({ type: 'clock', at: reply.at, now: Date.now() });
+        if (!stopped) dispatch({ type: 'beat', at: reply.at, now: Date.now(), phase: reply.phase });
       } catch {
         // نبضة ضاعت = التانية بعد ٤ ثواني. السيرفر مستحمل اتنين.
       }

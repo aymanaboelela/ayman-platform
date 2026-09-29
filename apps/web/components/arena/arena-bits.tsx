@@ -76,7 +76,8 @@ export function CountdownRing({
   size = 76,
 }: {
   fraction: number;
-  seconds: number;
+  /** `null` = مفيش عدّ (السؤال اتقفل) — الحلقة من غير رقم. */
+  seconds: number | null;
   paused?: boolean;
   size?: number;
 }) {
@@ -86,7 +87,7 @@ export function CountdownRing({
   return (
     <span
       className="ca-ring"
-      data-urgent={!paused && seconds <= 5 ? '' : undefined}
+      data-urgent={!paused && seconds !== null && seconds <= 5 ? '' : undefined}
       data-paused={paused ? '' : undefined}
       style={{ '--size': `${size}px` } as CSSProperties}
       role="timer"
@@ -103,7 +104,7 @@ export function CountdownRing({
           strokeDashoffset={length * (1 - clamped)}
         />
       </svg>
-      <span className="ca-ring__text">{seconds}</span>
+      {seconds !== null ? <span className="ca-ring__text">{seconds}</span> : null}
     </span>
   );
 }

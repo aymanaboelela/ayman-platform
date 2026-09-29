@@ -7,7 +7,7 @@ import { arenaCopy } from '@ayman/contracts/copy/arena';
 import { formatCopy } from '@ayman/contracts/format';
 import { SafeHtml } from '@/components/content/safe-html';
 import { ArenaEmblem, Confetti, CountdownRing, Fighter, Num, SoundButton, useNow } from './arena-bits';
-import { clockText, patienceRanOut, remainingMs, type ArenaState } from './arena-state';
+import { clockText, isLatinText, patienceRanOut, remainingMs, type ArenaState } from './arena-state';
 import type { ArenaSound } from './use-arena-sound';
 
 const c = arenaCopy;
@@ -46,7 +46,7 @@ export function ArenaSearch({
   }, [play, nobody]);
 
   return (
-    <section className="ca-stage ca-search" aria-live="polite">
+    <section className="ca-stage ca-search">
       <div className="ca-stage__bar">
         <span className="ca-badge">
           <Swords className="size-4" aria-hidden="true" />
@@ -68,7 +68,7 @@ export function ArenaSearch({
         </span>
       </div>
 
-      <h2 className="ca-stage__title">
+      <h2 className="ca-stage__title" aria-live="polite">
         <Radar className="size-6" aria-hidden="true" />
         {state.connection === 'lost' ? c.search.reconnecting : c.search.title}
       </h2>
@@ -108,7 +108,7 @@ export function ArenaVersus({ match, offset, sound }: { match: ArenaMatchView; o
   const now = useNow(200);
   const left = Math.ceil(remainingMs(match.deadline, offset, now) / 1000);
   return (
-    <section className="ca-stage ca-vs" aria-live="polite">
+    <section className="ca-stage ca-vs">
       <div className="ca-stage__bar">
         <span className="ca-badge">
           <Zap className="size-4" aria-hidden="true" />
@@ -163,7 +163,7 @@ export function ArenaMatch({
   const seconds = Math.ceil(leftMs / 1000);
   const question = match.question;
   const reveal = match.stage === 'reveal' ? match.reveal : null;
-  const locked = match.you.state === 'locked' || match.yourPick !== null;
+  const locked = match.you.status === 'locked' || match.yourPick !== null;
 
   // تكة في آخر ٣ ثواني.
   const lastTick = useRef<number | null>(null);
@@ -194,7 +194,7 @@ export function ArenaMatch({
         <div className="ca-score__mid">
           <CountdownRing
             fraction={live ? leftMs / match.questionMs : match.stage === 'reveal' ? 0 : 1}
-            seconds={live ? seconds : 0}
+            seconds={live ? seconds : null}
             paused={Boolean(match.paused)}
           />
           <ol className="ca-dots" aria-hidden="true">
@@ -228,7 +228,9 @@ export function ArenaMatch({
                   <span className="ca-option__letter" aria-hidden="true">
                     {LETTERS[i] ?? i + 1}
                   </span>
-                  <SafeHtml html={option.bodyHtml} className="ca-option__body" />
+                  <span className="ca-option__text" data-dir={isLatinText(option.bodyHtml) ? 'ltr' : undefined}>
+                    <SafeHtml html={option.bodyHtml} className="ca-option__body" />
+                  </span>
                   {reveal && reveal.opponentOptionId === option.id ? (
                     <span className="ca-option__pick" data-side="opponent">
                       {match.opponent.player.name}
@@ -248,6 +250,14 @@ export function ArenaMatch({
       </p>
 
       {match.paused ? <PauseOverlay match={match} offset={state.offset} now={now} /> : null}
+      {state.connection === 'lost' && !match.paused ? (
+        // النت قطع عندنا: السيرفر لسه مايعرفش، والشاشة مش هتتحدّث لحد ما الستريم يرجع.
+        <p className="ca-lost" role="status">
+          <WifiOff className="size-5" aria-hidden="true" />
+          <span>{c.play.selfOfflineTitle}</span>
+          <span className="ca-lost__sub">{c.play.reconnecting}</span>
+        </p>
+      ) : null}
 
       {confirmLeave ? (
         <div className="ca-overlay" role="dialog" aria-modal="true" aria-labelledby="ca-leave-title">
@@ -282,17 +292,17 @@ export function ArenaMatch({
 function Side({ match, who, burstKey }: { match: ArenaMatchView; who: 'you' | 'opponent'; burstKey: number | null }) {
   const side = match[who];
   const status =
-    side.state === 'offline' ? c.play.offline : side.state === 'locked' ? c.play.locked : who === 'opponent' && match.stage === 'question' ? c.play.thinking : '';
+    side.status === 'offline' ? c.play.offline : side.status === 'locked' ? c.play.locked : who === 'opponent' && match.stage === 'question' ? c.play.thinking : '';
   return (
-    <div className="ca-side" data-side={who} data-state={side.state}>
-      <Fighter player={side.player} side={who} size={46} state={side.state} />
+    <div className="ca-side" data-side={who} data-state={side.status}>
+      <Fighter player={side.player} side={who} size={46} state={side.status} />
       <div className="ca-side__text">
         <span className="ca-side__name">{who === 'you' ? c.play.me : side.player.name}</span>
         <span className="ca-side__status">
-          {side.state === 'offline' ? <WifiOff className="size-3.5" aria-hidden="true" /> : null}
-          {side.state === 'locked' ? <X className="size-3.5" aria-hidden="true" /> : null}
+          {side.status === 'offline' ? <WifiOff className="size-3.5" aria-hidden="true" /> : null}
+          {side.status === 'locked' ? <X className="size-3.5" aria-hidden="true" /> : null}
           {status}
-          {who === 'opponent' && side.state === 'thinking' && match.stage === 'question' ? (
+          {who === 'opponent' && side.status === 'thinking' && match.stage === 'question' ? (
             <span className="ca-typing" aria-hidden="true">
               <i />
               <i />
@@ -334,7 +344,7 @@ function feedbackLine(match: ArenaMatchView, state: ArenaState): { text: string;
     return { text: reason === 'both_wrong' ? c.play.bothWrong : c.play.timeout, tone: 'muted' };
   }
   if (match.yourPick) return { text: formatCopy(c.play.youWrong, { name }), tone: 'err' };
-  if (match.opponent.state === 'locked') return { text: formatCopy(c.play.opponentWrong, { name }), tone: 'gold' };
+  if (match.opponent.status === 'locked') return { text: formatCopy(c.play.opponentWrong, { name }), tone: 'gold' };
   return { text: ' ', tone: 'muted' };
 }
 
@@ -408,7 +418,13 @@ export function ArenaResult({
           <Fighter player={match.you.player} side="you" size={70} />
           <span className="ca-result__name">{c.play.me}</span>
         </div>
-        <Num value={formatCopy(c.result.score, { you: match.you.score, opponent: match.opponent.score })} className="ca-result__score" />
+        {/* رقمين منفصلين مش سترنج LTR واحد: في RTL «٠ — ١» كانت بتحط رقمك جنب
+            صورة المنافس. كده كل رقم جنب صاحبه. */}
+        <span className="ca-result__score">
+          <Num value={match.you.score} />
+          <span aria-hidden="true">—</span>
+          <Num value={match.opponent.score} />
+        </span>
         <div className="ca-result__side" data-side="opponent" data-won={end.outcome === 'loss' || undefined}>
           <Fighter player={match.opponent.player} side="opponent" size={70} />
           <span className="ca-result__name">{name}</span>

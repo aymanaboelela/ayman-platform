@@ -1,4 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
+import { FLAG_DECLARATIONS } from '@ayman/contracts/admin/flags';
 import { FlagsService } from './flags.service';
 
 function makeService() {
@@ -22,9 +23,19 @@ describe('FlagsService.onModuleInit', () => {
   it('upserts every declaration, keeping enabled on CREATE only', async () => {
     const { service, prisma } = makeService();
     await service.onModuleInit();
-    expect(prisma.featureFlag.upsert).toHaveBeenCalledTimes(7);
+    expect(prisma.featureFlag.upsert).toHaveBeenCalledTimes(FLAG_DECLARATIONS.length);
     const firstCall = prisma.featureFlag.upsert.mock.calls[0][0];
     expect(firstCall.update).not.toHaveProperty('enabled');
+  });
+
+  it('creates the arena flag open on his stack — the suite runs as it', async () => {
+    const { service, prisma } = makeService();
+    await service.onModuleInit();
+    const calls = prisma.featureFlag.upsert.mock.calls as unknown as Array<
+      [{ where: { key: string }; create: { enabled: boolean } }]
+    >;
+    const arena = calls.find(([args]) => args.where.key === 'arena.enabled');
+    expect(arena?.[0].create.enabled).toBe(true);
   });
 });
 

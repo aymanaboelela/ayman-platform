@@ -5,6 +5,7 @@ import { MemoryArenaKv } from './arena-kv';
 import { MemoryArenaRealtime } from './arena-realtime';
 import type { ArenaEligibility, ArenaRecordsPort } from './arena.ports';
 import { ArenaService, fxFor } from './arena.service';
+import { collectKeysDeep, FORBIDDEN_ANSWER_KEYS } from '../quiz/serializers/learner.serializer';
 
 const R = ARENA_RULES;
 
@@ -169,6 +170,16 @@ describe('ArenaService — matchmaking', () => {
     expect((await service.lobby('alice')).view.phase).toBe('idle');
   });
 
+  it('does not drop a student who just pressed start because an older tab closed its stream', async () => {
+    const { service, clock } = setup();
+    await online(service, 'alice');
+    await service.streamClosed('alice'); // ريلود: الصفحة القديمة قفلت ستريمها
+    clock.now += 5_000;
+    await service.join('alice', COURSE); // الـPOST سبق الستريم الجديد
+    await service.sweepQueues();
+    expect((await service.lobby('alice')).view.phase).toBe('queued');
+  });
+
   it('refuses a student with no paid subscription, no year, or a course they cannot play', async () => {
     const { service } = setup();
     await expect(service.join('free', COURSE)).rejects.toBeInstanceOf(ForbiddenException);
@@ -232,7 +243,7 @@ describe('ArenaService — a match, end to end', () => {
     const { service, realtime, id, clock } = await playing();
     expect((await service.answer('alice', id, 0, 'q0-a', clock.now + 500)).result).toBe('wrong');
     expect(lastFrame(realtime, 'bob').fx).toBe('opponent_wrong');
-    expect(matchOf(lastFrame(realtime, 'bob').view).opponent.state).toBe('locked');
+    expect(matchOf(lastFrame(realtime, 'bob').view).opponent.status).toBe('locked');
     expect((await service.answer('bob', id, 0, 'q0-b', clock.now + 9_000)).result).toBe('right');
   });
 
@@ -318,6 +329,17 @@ describe('ArenaService — a match, end to end', () => {
     expect(matchOf(lastFrame(realtime, 'bob').view).end?.outcome).toBe('win');
   });
 
+  it('ends its own matches as «اتقطع» on SIGTERM, before the HTTP server closes, and closes the streams', async () => {
+    const { service, realtime, recorded } = await playing();
+    const closeStream = jest.fn();
+    service.trackStream(closeStream);
+    await service.beforeApplicationShutdown();
+    expect(lastFrame(realtime, 'alice').fx).toBe('aborted');
+    expect(matchOf(lastFrame(realtime, 'bob').view).end?.reason).toBe('aborted');
+    expect(recorded[0]?.end?.reason).toBe('aborted');
+    expect(closeStream).toHaveBeenCalled();
+  });
+
   it('ends a match left behind by a restarted process as «اتقطع» for both, with no points', async () => {
     const first = await playing({ bootId: 'old-boot' });
     const second = setup({ bootId: 'new-boot', kv: first.kv, clock: first.clock });
@@ -333,6 +355,43 @@ describe('ArenaService — a match, end to end', () => {
     await second.service.streamOpened('bob');
     await second.service.join('alice', COURSE);
     expect(matchOf(await second.service.join('bob', COURSE)).stage).toBe('vs');
+  });
+});
+
+describe('ArenaService — what goes over the wire', () => {
+  /*
+   * كل فريم بيعدّي من نفس شبكة `@NoAnswerLeak()` (الستريم بيتأكد بإيده، والـPOST
+   * بالإنترسبتور). حقل اسمه `state` كان وقع هنا مرة: الماتش اتعمل في Redis
+   * والاتنين ماشافوش ولا فريم. فالتست ده بيلعب ماتش فيه كل حاجة ويقرا كل فريم.
+   */
+  it('never sends a key the answer-leak net refuses, in any frame of a whole match', async () => {
+    const { service, realtime, id, clock } = await playing({ questionCount: 3 });
+    await service.answer('alice', id, 0, 'q0-a', clock.now + 100);
+    await service.answer('bob', id, 0, 'q0-b', clock.now + 200);
+    clock.now += 200 + R.revealMs;
+    await service.beat('alice');
+    await service.beat('bob');
+    await service.sweep();
+    await service.streamClosed('bob');
+    clock.now += 3_000;
+    await service.beat('alice');
+    await service.sweep();
+    await service.streamOpened('bob');
+    await service.sweep();
+    clock.now += R.questionMs;
+    await service.beat('alice');
+    await service.beat('bob');
+    await service.sweep();
+    await service.leave('bob', id);
+
+    const frames = [...(realtime.sent.get('alice') ?? []), ...(realtime.sent.get('bob') ?? [])];
+    expect(frames.length).toBeGreaterThan(8);
+    for (const frame of frames) {
+      const leaked = [...collectKeysDeep(frame)].filter((key) => FORBIDDEN_ANSWER_KEYS.has(key));
+      expect(leaked).toEqual([]);
+    }
+    const lobby = await service.lobby('alice');
+    expect([...collectKeysDeep(lobby)].filter((key) => FORBIDDEN_ANSWER_KEYS.has(key))).toEqual([]);
   });
 });
 

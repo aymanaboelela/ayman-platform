@@ -22,8 +22,8 @@ function match(overrides: Partial<ArenaMatchView> = {}): ArenaMatchView {
     total: 7,
     index: 2,
     stage: 'question',
-    you: { player: { name: 'مريم', image: null }, score: 1, state: 'thinking' },
-    opponent: { player: { name: 'ملك', image: null }, score: 1, state: 'thinking' },
+    you: { player: { name: 'مريم', image: null }, score: 1, status: 'thinking' },
+    opponent: { player: { name: 'ملك', image: null }, score: 1, status: 'thinking' },
     question: {
       index: 2,
       id: 'q2',
@@ -70,7 +70,7 @@ describe('ArenaMatch', () => {
   });
 
   it('locks every option after a wrong answer and says the point is still open for the other', () => {
-    play(match({ yourPick: 'o2', you: { player: { name: 'مريم', image: null }, score: 1, state: 'locked' } }));
+    play(match({ yourPick: 'o2', you: { player: { name: 'مريم', image: null }, score: 1, status: 'locked' } }));
     const options = screen.getAllByRole('button').filter((b) => b.className.includes('ca-option'));
     expect(options.every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
     expect(options[1]!.getAttribute('data-state')).toBe('wrong');
@@ -78,7 +78,7 @@ describe('ArenaMatch', () => {
   });
 
   it('tells the student the opponent missed and the point is up for grabs', () => {
-    play(match({ opponent: { player: { name: 'ملك', image: null }, score: 1, state: 'locked' } }));
+    play(match({ opponent: { player: { name: 'ملك', image: null }, score: 1, status: 'locked' } }));
     expect(screen.getByText(formatCopy(c.play.opponentWrong, { name: 'ملك' }))).toBeTruthy();
   });
 
@@ -86,7 +86,7 @@ describe('ArenaMatch', () => {
     play(
       match({
         stage: 'reveal',
-        opponent: { player: { name: 'ملك', image: null }, score: 2, state: 'thinking' },
+        opponent: { player: { name: 'ملك', image: null }, score: 2, status: 'thinking' },
         reveal: {
           index: 2,
           correctOptionIds: ['o1'],
@@ -106,13 +106,21 @@ describe('ArenaMatch', () => {
   it('puts «النت قطع عند …» over the match while the opponent is gone', () => {
     play(
       match({
-        opponent: { player: { name: 'ملك', image: null }, score: 1, state: 'offline' },
+        opponent: { player: { name: 'ملك', image: null }, score: 1, status: 'offline' },
         paused: { who: 'opponent', graceUntil: Date.now() + 15_000 },
         deadline: null,
       }),
     );
     expect(screen.getByRole('alertdialog')).toBeTruthy();
     expect(screen.getByText(formatCopy(c.play.opponentOfflineTitle, { name: 'ملك' }))).toBeTruthy();
+  });
+
+  it('says our own connection dropped before the server even knows', () => {
+    const view = match();
+    const state = { ...initialState({ phase: 'match', match: view }, Date.now(), Date.now()), connection: 'lost' as const };
+    render(<ArenaMatch state={state} match={view} onAnswer={vi.fn()} onLeave={vi.fn()} sound={sound} />);
+    expect(screen.getByText(c.play.selfOfflineTitle)).toBeTruthy();
+    expect(screen.getByText(c.play.reconnecting)).toBeTruthy();
   });
 
   it('asks before walking out', () => {
@@ -127,7 +135,7 @@ describe('ArenaResult', () => {
   it('celebrates a win with the points earned and the new total', () => {
     const view = match({
       stage: 'ended',
-      you: { player: { name: 'مريم', image: null }, score: 4, state: 'thinking' },
+      you: { player: { name: 'مريم', image: null }, score: 4, status: 'thinking' },
       end: { outcome: 'win', reason: 'completed', pointsEarned: 3, capped: false, totalPoints: 21 },
     });
     const { container } = render(<ArenaResult match={view} onAgain={vi.fn()} onLobby={vi.fn()} sound={sound} />);

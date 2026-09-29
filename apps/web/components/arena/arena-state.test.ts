@@ -5,6 +5,7 @@ import {
   clockText,
   cueFor,
   initialState,
+  isLatinText,
   mergeView,
   patienceRanOut,
   remainingMs,
@@ -20,8 +21,8 @@ function match(overrides: Partial<ArenaMatchView> = {}): ArenaMatchView {
     total: 7,
     index: 0,
     stage: 'question',
-    you: { player: { name: 'مريم', image: null }, score: 0, state: 'thinking' },
-    opponent: { player: { name: 'ملك', image: null }, score: 0, state: 'thinking' },
+    you: { player: { name: 'مريم', image: null }, score: 0, status: 'thinking' },
+    opponent: { player: { name: 'ملك', image: null }, score: 0, status: 'thinking' },
     question: {
       index: 0,
       id: 'q0',
@@ -73,6 +74,17 @@ describe('arenaReducer', () => {
     expect(state.offset).toBe(1_000);
     const next = arenaReducer(state, { type: 'clock', at: 5_000, now: 5_500 });
     expect(next.offset).toBe(-500);
+  });
+
+  it('goes back to «idle» — and so back into the queue — when the server says the seat was lost', () => {
+    const queued: ArenaView = { phase: 'queued', courseId: 'c1', courseTitle: '', cohortLabel: '', since: 1 };
+    let state = arenaReducer(initialState(queued, 0, 0), { type: 'start', courseId: 'c1', now: 0 });
+    state = arenaReducer(state, { type: 'beat', at: 10, now: 10, phase: 'idle' });
+    expect(state.view.phase).toBe('idle');
+    expect(state.want).toBe('c1');
+    expect(screenOf(state)).toBe('search');
+    const inGame = arenaReducer(initialState(inMatch(match()), 0, 0), { type: 'beat', at: 0, now: 0, phase: 'idle' });
+    expect(inGame.view.phase).toBe('match');
   });
 
   it('goes searching the moment «يلا نبدأ» is pressed, before the server answers', () => {
@@ -151,6 +163,17 @@ describe('the clock on screen', () => {
     expect(patienceRanOut(0, ARENA_RULES.searchPatienceMs - 1, ARENA_RULES.searchPatienceMs)).toBe(false);
     expect(patienceRanOut(0, ARENA_RULES.searchPatienceMs, ARENA_RULES.searchPatienceMs)).toBe(true);
     expect(patienceRanOut(null, 999_999, ARENA_RULES.searchPatienceMs)).toBe(false);
+  });
+});
+
+describe('isLatinText', () => {
+  it('isolates a Latin option and leaves an Arabic one alone', () => {
+    expect(isLatinText('<p>len()</p>')).toBe(true);
+    expect(isLatinText('<p>8</p>')).toBe(true);
+    expect(isLatinText('<p>x[0]</p>')).toBe(true);
+    expect(isLatinText('<p>خطأ</p>')).toBe(false);
+    expect(isLatinText('<p>3 نقط</p>')).toBe(false);
+    expect(isLatinText('<p><code>print</code> بتطبع</p>')).toBe(false);
   });
 });
 

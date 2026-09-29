@@ -75,14 +75,17 @@ export type ArenaPlayer = z.infer<typeof ArenaPlayerSchema>;
  *   thinking  لسه مجاوبش
  *   locked    جاوب غلط — اتقفل عليه السؤال ده
  *   offline   النت عنده قطع
+ *
+ * ⚠️ اسم الحقل `status` مش `state`: `state` في `FORBIDDEN_ANSWER_KEYS` (حالة
+ * سؤال الكويز `graded_right` بتتسمّى كده)، و`@NoAnswerLeak()` بيرفض أي رد فيه.
  */
-export const ArenaSideStateSchema = z.enum(['thinking', 'locked', 'offline']);
-export type ArenaSideState = z.infer<typeof ArenaSideStateSchema>;
+export const ArenaSideStatusSchema = z.enum(['thinking', 'locked', 'offline']);
+export type ArenaSideStatus = z.infer<typeof ArenaSideStatusSchema>;
 
 export const ArenaSideSchema = z.object({
   player: ArenaPlayerSchema,
   score: z.number().int().min(0),
-  state: ArenaSideStateSchema,
+  status: ArenaSideStatusSchema,
 });
 export type ArenaSide = z.infer<typeof ArenaSideSchema>;
 

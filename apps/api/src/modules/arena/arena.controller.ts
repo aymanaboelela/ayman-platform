@@ -105,6 +105,7 @@ export class ArenaController {
       closed = true;
       clearInterval(heartbeat);
       clearTimeout(lifetime);
+      untrack();
       unsubscribe();
       const left = (openStreams.get(user.id) ?? 1) - 1;
       if (left > 0) openStreams.set(user.id, left);
@@ -118,6 +119,8 @@ export class ArenaController {
       void this.arena.streamAlive(user.id).catch(() => undefined);
     }, PING_MS);
     const lifetime = setTimeout(() => cleanup(), MAX_STREAM_MS);
+    // الإغلاق (ديبلوي) بيقفله بإيده — وإلا السيرفر بيفضل مستنيه يخلص.
+    const untrack = this.arena.trackStream(cleanup);
     // ⚠️ على الـresponse مش الـrequest — نفس الفخ اللي في ستريم الإشعارات.
     response.on('close', cleanup);
 

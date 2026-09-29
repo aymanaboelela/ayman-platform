@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
   ServiceUnavailableException,
+  type BeforeApplicationShutdown,
   type OnApplicationBootstrap,
   type OnApplicationShutdown,
 } from '@nestjs/common';
@@ -119,13 +120,15 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * واقفة. الطابور بيعيش عادي: اللي لسه بيبعت نبض بيفضل فيه.
  */
 @Injectable()
-export class ArenaService implements OnApplicationBootstrap, OnApplicationShutdown {
+export class ArenaService implements OnApplicationBootstrap, BeforeApplicationShutdown, OnApplicationShutdown {
   private readonly logger = new Logger(ArenaService.name);
   readonly bootId = randomUUID();
   private sweepTimer: NodeJS.Timeout | null = null;
   private queueTimer: NodeJS.Timeout | null = null;
   private sweeping = false;
   private queueSweeping = false;
+  /** الستريمات المفتوحة على البروسيس ده — بتتقفل بإيدنا وهو بيقفل. */
+  private readonly streams = new Set<() => void>();
 
   constructor(
     @Inject(ARENA_KV) private readonly kv: ArenaKv,
@@ -152,11 +155,22 @@ export class ArenaService implements OnApplicationBootstrap, OnApplicationShutdo
     this.queueTimer.unref();
   }
 
-  async onApplicationShutdown(): Promise<void> {
+  /**
+   * SIGTERM (ديبلوي). `before…` مش `on…`: Nest بيقفل سيرفر الـHTTP **بين**
+   * الاتنين، والسيرفر مابيقفلش وفيه ستريمات مفتوحة — فكود في
+   * `onApplicationShutdown` كان هيستنى لحد ما Docker يقتل البروسيس بعد ١٠
+   * ثواني، ومايشتغلش أبدًا. هنا الماتشات بتتقفل «اتقطع» وتتبعت للاتنين
+   * والستريم لسه مفتوح، وبعدين ستريمات الساحة بتتقفل بإيدنا.
+   *
+   * لو ده ماكملش (SIGKILL، كراش)، أول بوت بعده بيعمل نفس الحاجة
+   * (`closeOrphans`).
+   */
+  async beforeApplicationShutdown(): Promise<void> {
     if (this.sweepTimer) clearInterval(this.sweepTimer);
     if (this.queueTimer) clearInterval(this.queueTimer);
     this.sweepTimer = null;
     this.queueTimer = null;
+    let closed = 0;
     try {
       // الماتشات بتاعتي بس — لو فيه بروسيس جديد قام قبلي، اللي عمله هو بتاعه.
       for (const id of await this.kv.smembers(K.live)) {
@@ -164,12 +178,26 @@ export class ArenaService implements OnApplicationBootstrap, OnApplicationShutdo
           const state = await this.loadMatch(id);
           if (!state || state.end || state.bootId !== this.bootId) return;
           await this.commit(state, abort(state, this.clock()));
+          closed += 1;
         }).catch(() => undefined);
       }
     } catch (error) {
       this.logger.warn(`shutdown cleanup failed: ${(error as Error).message}`);
     }
+    // الفريم بيلف على Redis pub/sub قبل ما يوصل الستريم — لحظة عشان يلحق.
+    if (closed > 0) await sleep(400);
+    for (const close of [...this.streams]) close();
+    this.streams.clear();
+  }
+
+  async onApplicationShutdown(): Promise<void> {
     await this.realtime.close();
+  }
+
+  /** الكنترولر بيسجّل كل ستريم بيفتحه، عشان يتقفل وقت الإغلاق. */
+  trackStream(close: () => void): () => void {
+    this.streams.add(close);
+    return () => this.streams.delete(close);
   }
 
   /** ماتشات بروسيس قبلي فضلت شغّالة (مات من غير ما يقفلها) — «اتقطع». */
@@ -241,6 +269,10 @@ export class ArenaService implements OnApplicationBootstrap, OnApplicationShutdo
       };
       await this.setPointer(userId, entry);
       await this.kv.set(K.beat(userId), String(now), ARENA_RULES.beatTtlMs);
+      // علامة «الستريم اتقفل» من صفحة قبلها (ريلود، تاب اتقفل) مالهاش معنى
+      // وهو لسه داس «يلا نبدأ» — من غير المسح ده، السويبر كان بيشيله من
+      // الطابور في اللحظة اللي بين الـPOST وفتح الستريم الجديد.
+      await this.kv.del(K.gone(userId));
       await this.kv.zadd(K.queue(next), since, userId, QUEUE_TTL);
       await this.kv.sadd(K.queues, next, SET_TTL);
       return next;
@@ -429,9 +461,12 @@ export class ArenaService implements OnApplicationBootstrap, OnApplicationShutdo
       }
       const events: EngineEvent[] = [];
       for (const side of [0, 1] as const) {
-        const online = await this.isOnline(state.players[side].userId, now);
-        if (online && !state.players[side].online) events.push(...reconnect(state, side, now));
-        if (!online && state.players[side].online) events.push(...disconnect(state, side, now));
+        const userId = state.players[side].userId;
+        const online = await this.isOnline(userId, now);
+        if (online === state.players[side].online) continue;
+        // سطر لكل قطع ورجوع — «الماتش راح بالانسحاب» من غير سبب مكتوب مالوش تشخيص.
+        this.logger.log(`arena ${state.id}: ${userId} ${online ? 'back' : 'offline'} (${await this.presence(userId, now)})`);
+        events.push(...(online ? reconnect(state, side, now) : disconnect(state, side, now)));
       }
       events.push(...advance(state, now));
       if (events.length > 0) await this.commit(state, events);
@@ -598,6 +633,13 @@ export class ArenaService implements OnApplicationBootstrap, OnApplicationShutdo
     if (streams > 0) return true;
     const gone = Number((await this.kv.get(K.gone(userId))) ?? 0);
     return gone === 0 || now - gone < OFFLINE_DEBOUNCE_MS;
+  }
+
+  private async presence(userId: string, now: number): Promise<string> {
+    const beat = Number((await this.kv.get(K.beat(userId))) ?? 0);
+    const streams = (await this.kv.get(K.streams(userId))) ?? '-';
+    const gone = Number((await this.kv.get(K.gone(userId))) ?? 0);
+    return `beat ${beat ? now - beat : '-'}ms ago, streams ${streams}, gone ${gone ? now - gone : '-'}ms ago`;
   }
 
   private async pointer(userId: string): Promise<Pointer | null> {
