@@ -6,7 +6,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import type { VideoLibrary, VideoLibraryOrphan } from '@ayman/contracts/admin/video-upload';
+import type { ReusableVideos, VideoLibrary, VideoLibraryOrphan } from '@ayman/contracts/admin/video-upload';
 import { UPLOAD_ID_RE, isVideoExternalId, mirrorPrefix, uploadSourceKey } from '@ayman/contracts/video';
 import { AuditService } from '../../audit/audit.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -153,32 +153,7 @@ export class VideoLibraryService {
     const kept = await this.prisma.archivedVideo.findUnique({ where: { externalId: videoId } });
     if (kept === null) throw new NotFoundException('الفيديو ده مش في «محفوظة»');
 
-    const lesson = await this.prisma.lesson.findUnique({
-      where: { id: lessonId },
-      select: {
-        kind: true,
-        title: true,
-        section: { select: { course: { select: { id: true, title: true } } } },
-        video: {
-          select: {
-            provider: true,
-            externalId: true,
-            sourceName: true,
-            durationSeconds: true,
-            mirrorHeight: true,
-            mirrorBytes: true,
-            mirrorStatus: true,
-            posterKey: true,
-            fullDurationSeconds: true,
-          },
-        },
-      },
-    });
-    if (lesson === null) throw new NotFoundException('المحاضرة مش موجودة');
-    if (lesson.kind !== 'video') throw new BadRequestException('دي مش محاضرة فيديو');
-    if (lesson.video?.mirrorStatus === 'uploading' || lesson.video?.mirrorStatus === 'mirroring') {
-      throw new ConflictException('المحاضرة دي عليها فيديو لسه بيترفع أو بيتجهز — استنى لما يخلص');
-    }
+    const lesson = await this.targetLesson(lessonId);
 
     const data = {
       provider: 'upload' as const,
@@ -217,6 +192,177 @@ export class VideoLibraryService {
       resourceId: lessonId,
       outcome: 'success',
       metadata: { operation: 'restoreVideo', videoId, displaced: displaced?.externalId ?? null },
+    });
+    return { videoId, lessonId };
+  }
+
+  /**
+   * The video lesson a video is about to be put on — and the refusals both
+   * «رجّعه» and «اختار متروفع» share: not a video lesson, or one whose own
+   * upload is still in flight (swapping under it would orphan that upload).
+   */
+  private async targetLesson(lessonId: string) {
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id: lessonId },
+      select: {
+        kind: true,
+        title: true,
+        section: { select: { course: { select: { id: true, title: true } } } },
+        video: {
+          select: {
+            provider: true,
+            externalId: true,
+            sourceName: true,
+            durationSeconds: true,
+            mirrorHeight: true,
+            mirrorBytes: true,
+            mirrorStatus: true,
+            posterKey: true,
+            fullDurationSeconds: true,
+          },
+        },
+      },
+    });
+    if (lesson === null) throw new NotFoundException('المحاضرة مش موجودة');
+    if (lesson.kind !== 'video') throw new BadRequestException('دي مش محاضرة فيديو');
+    if (lesson.video?.mirrorStatus === 'uploading' || lesson.video?.mirrorStatus === 'mirroring') {
+      throw new ConflictException('المحاضرة دي عليها فيديو لسه بيترفع أو بيتجهز — استنى لما يخلص');
+    }
+    return lesson;
+  }
+
+  /**
+   * «اختار فيديو متروفع قبل كده» — every video a lesson could point at without
+   * a new upload: the ready uploads lessons play now (one row per video, not
+   * per lesson), and the kept ones. No bucket listing — see
+   * `ReusableVideosSchema`.
+   */
+  async reusable(): Promise<ReusableVideos> {
+    const rows = await this.prisma.lessonVideo.findMany({
+      where: { provider: 'upload', mirrorStatus: 'ready' },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        externalId: true,
+        sourceName: true,
+        durationSeconds: true,
+        mirrorHeight: true,
+        updatedAt: true,
+        lesson: {
+          select: { id: true, title: true, section: { select: { title: true, course: { select: { title: true } } } } },
+        },
+      },
+    });
+    const byVideo = new Map<string, ReusableVideos['videos'][number]>();
+    for (const row of rows) {
+      const seen = byVideo.get(row.externalId);
+      if (seen) {
+        seen.lessonIds.push(row.lesson.id);
+        continue;
+      }
+      byVideo.set(row.externalId, {
+        videoId: row.externalId,
+        sourceName: row.sourceName,
+        durationSeconds: row.durationSeconds > 0 ? row.durationSeconds : null,
+        maxHeight: row.mirrorHeight,
+        lessonIds: [row.lesson.id],
+        lessonTitle: row.lesson.title,
+        sectionTitle: row.lesson.section.title,
+        courseTitle: row.lesson.section.course.title,
+        kept: false,
+        updatedAt: row.updatedAt.toISOString(),
+      });
+    }
+    const kept = await this.prisma.archivedVideo.findMany({ orderBy: { archivedAt: 'desc' } });
+    const archived = kept
+      .filter((row) => !byVideo.has(row.externalId))
+      .map((row) => ({
+        videoId: row.externalId,
+        sourceName: row.sourceName,
+        durationSeconds: row.durationSeconds > 0 ? row.durationSeconds : null,
+        maxHeight: row.mirrorHeight,
+        lessonIds: [],
+        lessonTitle: row.fromLessonTitle,
+        sectionTitle: null,
+        courseTitle: row.fromCourseTitle,
+        kept: true,
+        updatedAt: row.archivedAt.toISOString(),
+      }));
+    return { videos: [...byVideo.values(), ...archived] };
+  }
+
+  /**
+   * Put a video that is already in the bucket on one more lesson.
+   *
+   * A kept one is simply «رجّعه» — it leaves «محفوظة». One that another lesson
+   * plays is SHARED: the new row copies that lesson's — file, poster, length,
+   * and its trim, because the usual case is the same lecture in a second
+   * course (عربي ولغات), cut the same way. Each lesson's trim is its own row
+   * from then on.
+   *
+   * Whatever this lesson played before is kept in «محفوظة», never deleted —
+   * the same promise as `restore`.
+   */
+  async attach(videoId: string, lessonId: string): Promise<{ videoId: string; lessonId: string }> {
+    const kept = await this.prisma.archivedVideo.findUnique({ where: { externalId: videoId }, select: { externalId: true } });
+    if (kept !== null) return this.restore(videoId, lessonId);
+
+    const source = await this.prisma.lessonVideo.findFirst({
+      where: { externalId: videoId, provider: 'upload', mirrorStatus: 'ready' },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        lessonId: true,
+        externalId: true,
+        sourceName: true,
+        durationSeconds: true,
+        mirrorHeight: true,
+        mirrorBytes: true,
+        posterKey: true,
+        captions: true,
+        trimStartSeconds: true,
+        trimEndSeconds: true,
+        trimCuts: true,
+        fullDurationSeconds: true,
+      },
+    });
+    if (source === null) throw new NotFoundException('الفيديو ده مش موجود أو لسه بيتجهز');
+
+    const lesson = await this.targetLesson(lessonId);
+    if (lesson.video?.externalId === videoId) return { videoId, lessonId };
+
+    const data = {
+      provider: 'upload' as const,
+      externalId: source.externalId,
+      sourceName: source.sourceName,
+      durationSeconds: source.durationSeconds,
+      mirrorHeight: source.mirrorHeight,
+      mirrorBytes: source.mirrorBytes,
+      posterKey: source.posterKey,
+      captions: (source.captions as Prisma.InputJsonValue | null) ?? Prisma.DbNull,
+      mirrorStatus: 'ready' as const,
+      mirrorError: null,
+      mirrorProgress: 100,
+      mirrorAttempts: 0,
+      trimStartSeconds: source.trimStartSeconds,
+      trimEndSeconds: source.trimEndSeconds,
+      trimCuts: (source.trimCuts as Prisma.InputJsonValue | null) ?? Prisma.DbNull,
+      fullDurationSeconds: source.fullDurationSeconds,
+    };
+    await this.prisma.lessonVideo.upsert({ where: { lessonId }, create: { lessonId, ...data }, update: data });
+
+    const displaced = lesson.video;
+    if (displaced !== null && displaced.provider === 'upload' && displaced.externalId !== videoId) {
+      await this.archive.release(displaced, displaced.mirrorStatus === 'ready', {
+        lessonTitle: lesson.title,
+        courseTitle: lesson.section.course.title,
+      });
+    }
+
+    await this.audit.record({
+      action: 'lesson:update',
+      resourceType: AUDIT_RESOURCES.lesson,
+      resourceId: lessonId,
+      outcome: 'success',
+      metadata: { operation: 'attachVideo', videoId, fromLessonId: source.lessonId, displaced: displaced?.externalId ?? null },
     });
     return { videoId, lessonId };
   }

@@ -1384,6 +1384,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin video library delete: student', method: 'delete', path: () => `/api/admin/videos/${'a'.repeat(32)}`, actor: 'student', status: 403 },
     { label: 'admin video library restore: anonymous', method: 'post', path: () => `/api/admin/videos/${'a'.repeat(32)}/restore`, actor: 'anonymous', status: 401, body: () => ({ lessonId: scratchLessonId }) },
     { label: 'admin video library restore: student', method: 'post', path: () => `/api/admin/videos/${'a'.repeat(32)}/restore`, actor: 'student', status: 403, body: () => ({ lessonId: scratchLessonId }) },
+    { label: 'admin video reusable list: anonymous', method: 'get', path: () => `/api/admin/videos/reusable`, actor: 'anonymous', status: 401 },
+    { label: 'admin video reusable list: student', method: 'get', path: () => `/api/admin/videos/reusable`, actor: 'student', status: 403 },
+    { label: 'admin video attach: anonymous', method: 'post', path: () => `/api/admin/videos/${'a'.repeat(32)}/attach`, actor: 'anonymous', status: 401, body: () => ({ lessonId: scratchLessonId }) },
+    { label: 'admin video attach: student', method: 'post', path: () => `/api/admin/videos/${'a'.repeat(32)}/attach`, actor: 'student', status: 403, body: () => ({ lessonId: scratchLessonId }) },
     { label: 'admin lesson text put: anonymous', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/text`, actor: 'anonymous', status: 401 },
     { label: 'admin lesson text put: student', method: 'put', path: () => `/api/admin/lessons/${scratchLessonId}/text`, actor: 'student', status: 403 },
     /*

@@ -24,6 +24,7 @@ import {
   TermSetOpenResultSchema,
 } from '@ayman/contracts';
 import { VideoEmbedStatusSchema, type VideoEmbedStatus } from '@ayman/contracts/video';
+import { ReusableVideosSchema, type ReusableVideos } from '@ayman/contracts/admin/video-upload';
 import {
   AdminCourseMonthSchema,
   CourseMonthWriteSchema,
@@ -1321,6 +1322,39 @@ export async function videoUploadStatusAction(
     );
   } catch {
     return null;
+  }
+}
+
+/**
+ * «اختار فيديو متروفع قبل كده» — what the picker lists. `null` when the list
+ * could not be read, so the dialog says so instead of «مفيش فيديوهات».
+ */
+export async function reusableVideosAction(): Promise<ReusableVideos | null> {
+  try {
+    return await apiGetAuthed('/api/admin/videos/reusable', ReusableVideosSchema);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Point this lesson at a video already in the bucket. What the lesson played
+ * before is kept in «الفيديوهات» by the API — never deleted.
+ */
+export async function attachVideoAction(courseId: string, lessonId: string, videoId: string): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'POST',
+      `/api/admin/videos/${encodeURIComponent(videoId)}/attach`,
+      z.object({ videoId: z.string(), lessonId: z.string() }),
+      { lessonId },
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    revalidatePath('/admin/videos');
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: arabicError(error) };
   }
 }
 

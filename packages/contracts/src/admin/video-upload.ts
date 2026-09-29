@@ -229,3 +229,38 @@ export const VideoLibrarySchema = z.object({
   storageRead: z.boolean(),
 });
 export type VideoLibrary = z.infer<typeof VideoLibrarySchema>;
+
+/* ─── «اختار فيديو متروفع قبل كده» ────────────────────────────────────────
+ *
+ * Same lecture, second course (عربي ولغات): the file is already in the
+ * bucket, so the lesson points at it instead of uploading it again. One
+ * video, several `lesson_videos` rows — `VideoArchiveService.release` and the
+ * key endpoint already count every lesson on a video, so nothing is deleted
+ * while any of them still plays it.
+ *
+ * Its own list, not `VideoLibrarySchema`: that one lists the bucket for
+ * orphans on every read, and a picker opened from a lesson panel must not
+ * cost a bucket listing each time.
+ */
+export const ReusableVideoSchema = z.object({
+  videoId: z.string(),
+  sourceName: z.string().nullable(),
+  durationSeconds: z.number().int().nonnegative().nullable(),
+  maxHeight: z.number().int().positive().nullable(),
+  /** Every lesson playing it now — empty for a kept one. */
+  lessonIds: z.array(z.string()),
+  /** Where it is (or came from), for the row's label. */
+  lessonTitle: z.string().nullable(),
+  sectionTitle: z.string().nullable(),
+  courseTitle: z.string().nullable(),
+  /** In «محفوظة» — on no lesson right now. */
+  kept: z.boolean(),
+  updatedAt: z.string(),
+});
+export type ReusableVideo = z.infer<typeof ReusableVideoSchema>;
+
+export const ReusableVideosSchema = z.object({ videos: z.array(ReusableVideoSchema) });
+export type ReusableVideos = z.infer<typeof ReusableVideosSchema>;
+
+export const VideoAttachSchema = z.object({ lessonId: z.uuid() }).strict();
+export type VideoAttach = z.infer<typeof VideoAttachSchema>;
