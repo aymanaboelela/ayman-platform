@@ -157,6 +157,19 @@ export const AUDIT_ACTIONS = [
    */
   'student:set-password',
   /**
+   * «سجّل خروج» من صفحة الطالب، وحد الأجهزة بتاعه.
+   *
+   * Two entries, not one `student:devices`: kicking a session is something
+   * done TO the account right now, raising its limit is a standing policy on
+   * it, and «مين خرّج الطالب ده من موبايله» and «مين سمحله بأربع أجهزة» are
+   * asked by different people for different reasons. The revoke carries the
+   * device name (or `all`), the limit carries from → to — neither is
+   * recoverable from the tables afterwards, since the device rows are only
+   * stamped and the override column is overwritten.
+   */
+  'student:revoke-session',
+  'student:device-limit',
+  /**
    * Opening and closing a single course for a single student — the key to
    * `Course.requiresGrant`.
    *

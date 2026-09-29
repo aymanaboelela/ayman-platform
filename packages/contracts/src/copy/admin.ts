@@ -1792,8 +1792,34 @@ const admin = {
     panelForbiddenHint: 'الصلاحية دي بتتمنح من إعدادات الصلاحيات.',
     /** أجهزة الطالب في صفحته عند الأدمن — مش «أجهزتي»، دي بتاعت حد تاني. */
     studentDevices: 'الأجهزة المفتوحة',
-    studentDevicesHint: 'الحساب مسموح له بجهازين. الطالب بيقفل أي جهاز من «أجهزتي».',
+    /** `{devices}` — «جهازين»، «٣ أجهزة»: the account's ACTUAL limit, its
+     *  own override or the default, never a number written into the sentence. */
+    studentDevicesLimit: 'الحساب مسموح له بـ{devices}.',
+    studentDevicesHint: 'تقدر تسجّل خروجه من أي جهاز عشان المكان يفضى، والطالب نفسه يقدر يعمل كده من «أجهزتي».',
     studentDevicesEmpty: 'مفيش أجهزة مفتوحة دلوقتي.',
+    /** Arabic counts the three shapes differently — one, a dual, and a plural
+     *  that takes the number. `{n}` is already in Arabic-Indic digits. */
+    studentDevicesOne: 'جهاز واحد',
+    studentDevicesTwo: 'جهازين',
+    studentDevicesMany: '{n} أجهزة',
+    studentDevicesSignOut: 'سجّل خروج',
+    studentDevicesSignOutAll: 'سجّل خروج من كل الأجهزة',
+    /** The confirm, inline under the row — `{device}` is the row's own name. */
+    studentDevicesSignOutAsk: 'نسجّل خروج الحساب من «{device}»؟ هيحتاج يدخل تاني على الجهاز ده، والمكان بيفضى على طول.',
+    studentDevicesSignOutAllAsk: 'نسجّل خروج الحساب من كل الأجهزة؟ هيحتاج يدخل تاني على أي جهاز.',
+    studentDevicesSignOutYes: 'أيوه، سجّل خروج',
+    studentDevicesSignOutFailed: 'مقدرناش نسجّل الخروج — جرّب تاني.',
+    /** 404 on a single device: it was signed out between the page load and the
+     *  press (by the student, or another tab). Nothing to do but refresh. */
+    studentDevicesSignOutGone: 'الجهاز ده اتقفل خلاص.',
+    studentDevicesLimitLabel: 'عدد الأجهزة المسموح بيها',
+    /** `{devices}` — the platform default, spelled like the line above it. */
+    studentDevicesLimitDefault: 'الافتراضي ({devices})',
+    studentDevicesLimitSave: 'احفظ الحد',
+    studentDevicesLimitSaved: 'اتحفظ.',
+    studentDevicesLimitFailed: 'مقدرناش نحفظ الحد — جرّب تاني.',
+    /** `refuseIfOutranked` — the account is staff with more than the reader. */
+    studentDevicesOutranked: 'الحساب ده معاه صلاحيات إنت مش معاك، فمينفعش تغيّر أجهزته.',
     /** The landing page's shape — a different page, not the same page recoloured. */
     landingLayout: 'شكل الصفحة الرئيسية',
     landingLayoutHint:

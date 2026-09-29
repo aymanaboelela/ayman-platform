@@ -28,9 +28,16 @@ const IPHONE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
 class FakeDevices implements ActiveDeviceLookup {
-  constructor(public names: string[]) {}
+  /** `override` is the account's own `users.max_devices` — `null` = the default. */
+  constructor(
+    public names: string[],
+    public override: number | null = null,
+  ) {}
   async activeDeviceNames(): Promise<string[]> {
     return this.names;
+  }
+  async maxDevicesFor(): Promise<number | null> {
+    return this.override;
   }
 }
 
@@ -89,6 +96,10 @@ describe('DeviceLimitGate — the flag is the switch, and off is the default', (
         asked = true;
         return [CHROME_ANDROID, SAFARI_IOS];
       },
+      async maxDevicesFor() {
+        asked = true;
+        return 1;
+      },
     };
     const gate = new DeviceLimitGate(new CachedFlag(async () => false, false), devices);
 
@@ -129,6 +140,9 @@ describe('DeviceLimitGate — the flag is the switch, and off is the default', (
       async activeDeviceNames() {
         throw new Error('connection terminated');
       },
+      async maxDevicesFor() {
+        return null;
+      },
     };
     const gate = new DeviceLimitGate(alwaysOn(), devices);
     expect(await gate.admits('user-1', ANDROID_UA)).toBe(true);
@@ -154,6 +168,65 @@ describe('DeviceLimitGate — the flag is the switch, and off is the default', (
     const gate = new DeviceLimitGate(alwaysOn(), new FakeDevices(['جهاز غير معروف', SAFARI_IOS]));
     expect(await gate.admits('user-1', '')).toBe(true);
     expect(await gate.admits('user-1', null)).toBe(true);
+  });
+});
+
+/**
+ * «أقدر أحدد بإيدي أزوّد الأجهزة اللي هيدخل بيها أكتر من ٢».
+ *
+ * The limit is per account now: `users.max_devices`, NULL for everyone the
+ * instructor has not touched. What has to hold is that the gate counts to the
+ * number the admin card shows — `effectiveMaxDevices` on both sides — and that
+ * nobody who was never touched notices anything.
+ */
+describe('DeviceLimitGate — the account\'s own limit', () => {
+  it('lets a raised account in on a third device', async () => {
+    const gate = new DeviceLimitGate(alwaysOn(), new FakeDevices([SAFARI_IOS, EDGE_WINDOWS], 3));
+    expect(await gate.admits('user-1', ANDROID_UA)).toBe(true);
+  });
+
+  it('still refuses the device past the raised limit', async () => {
+    const gate = new DeviceLimitGate(
+      alwaysOn(),
+      new FakeDevices([SAFARI_IOS, EDGE_WINDOWS, 'Firefox على Linux'], 3),
+    );
+    expect(await gate.check('user-1', ANDROID_UA)).toEqual({ admitted: false, limit: 3 });
+  });
+
+  it('holds a lowered account to one — and still lets that one device back in', async () => {
+    const gate = new DeviceLimitGate(alwaysOn(), new FakeDevices([SAFARI_IOS], 1));
+    expect(await gate.admits('user-1', ANDROID_UA)).toBe(false);
+    expect(await gate.admits('user-1', IPHONE_UA)).toBe(true);
+  });
+
+  it('an untouched account (NULL) is held to the default, exactly as before', async () => {
+    const gate = new DeviceLimitGate(alwaysOn(), new FakeDevices([SAFARI_IOS, EDGE_WINDOWS], null));
+    expect(await gate.check('user-1', ANDROID_UA)).toEqual({
+      admitted: false,
+      limit: MAX_DEVICES_PER_ACCOUNT,
+    });
+  });
+
+  /**
+   * The column's CHECK keeps 0 out, so a 0 can only come from a hand edit —
+   * and a hand edit must not turn into a second, unaudited ban.
+   */
+  it('reads an out-of-range override as the default, never as «no devices»', async () => {
+    const gate = new DeviceLimitGate(alwaysOn(), new FakeDevices([], 0));
+    expect(await gate.admits('user-1', ANDROID_UA)).toBe(true);
+  });
+
+  it('admits when the limit read fails — the same fail-open as the device read', async () => {
+    const devices: ActiveDeviceLookup = {
+      async activeDeviceNames() {
+        return [SAFARI_IOS, EDGE_WINDOWS];
+      },
+      async maxDevicesFor() {
+        throw new Error('connection terminated');
+      },
+    };
+    const gate = new DeviceLimitGate(alwaysOn(), devices);
+    expect(await gate.check('user-1', ANDROID_UA)).toEqual({ admitted: true });
   });
 });
 

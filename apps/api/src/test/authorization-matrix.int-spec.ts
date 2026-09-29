@@ -1521,6 +1521,21 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'student sessions: student', method: 'get', path: () => `/api/admin/students/${studentId}/sessions`, actor: 'student', status: 403 },
     { label: 'student sessions: admin', method: 'get', path: () => `/api/admin/students/${studentId}/sessions`, actor: 'admin', status: 200 },
 
+    // «سجّل خروج» و«مسموح له بكام جهاز» — `student:write`، مش `student:read`
+    // اللي الليستة عليه: كتابة على حساب حد تاني. الطالب مايوصلش لأي واحد
+    // فيهم، وأقل حاجة إن id جهاز حد تاني مايبقاش طريق يطلّعه. صف الأدمن على
+    // جهاز مش موجود بيرجع 404 — الراوت وصل للسيرفيس ومالقاش حاجة يقفلها.
+    { label: 'student revoke session: anonymous', method: 'delete', path: () => `/api/admin/students/${studentId}/sessions/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'student revoke session: student', method: 'delete', path: () => `/api/admin/students/${studentId}/sessions/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'student revoke session: admin, unknown device', method: 'delete', path: () => `/api/admin/students/${studentId}/sessions/${randomUUID()}`, actor: 'admin', status: 404 },
+    { label: 'student revoke all sessions: anonymous', method: 'delete', path: () => `/api/admin/students/${studentId}/sessions`, actor: 'anonymous', status: 401 },
+    { label: 'student revoke all sessions: student', method: 'delete', path: () => `/api/admin/students/${studentId}/sessions`, actor: 'student', status: 403 },
+    { label: 'student device limit: anonymous', method: 'put', path: () => `/api/admin/students/${studentId}/device-limit`, actor: 'anonymous', status: 401, body: () => ({ maxDevices: 3 }) },
+    { label: 'student device limit: student', method: 'put', path: () => `/api/admin/students/${studentId}/device-limit`, actor: 'student', status: 403, body: () => ({ maxDevices: 3 }) },
+    // The range is the schema's before it is the column's: 11 is a 400 with a
+    // reason, never a 500 from the CHECK.
+    { label: 'student device limit: admin, out of range', method: 'put', path: () => `/api/admin/students/${studentId}/device-limit`, actor: 'admin', status: 400, body: () => ({ maxDevices: 11 }) },
+
     /*
      * الباب الضيّق لتعيين مساعد. `staff:manage` — والمدرّس ماسكها بالأساس،
      * فde أول راوت في الملف ده الـ`owner` بيعدّي منه والـ`student` لأ.

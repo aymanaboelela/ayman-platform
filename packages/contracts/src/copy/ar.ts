@@ -979,8 +979,12 @@ export const copy = {
        * Names the way out first, because there is one and it does not need
        * anybody's help: «أجهزتي» in the settings closes a device and frees the
        * slot immediately.
+       *
+       * No number in it: the limit is per account now (`users.max_devices`,
+       * set from the student's admin page), so «جهازين» would be false for
+       * exactly the students the instructor had already made room for.
        */
-      loginDeviceLimit: 'الحساب مفتوح على جهازين خلاص، ومش بنسمح بأكتر من كده.',
+      loginDeviceLimit: 'الحساب مفتوح على كل الأجهزة المسموح بيها خلاص، ومش بنسمح بأكتر من كده.',
       loginDeviceLimitAction:
         'من «أجهزتي» في الإعدادات، أي جهاز يتقفل والمكان يفضى على طول.',
     },
@@ -1356,8 +1360,11 @@ export const copy = {
        * as the two screens disagreeing. «قفل» is the noun, not the imperative
        * — the platform never asks whether a student is a boy or a girl, so the
        * copy does not inflect.
+       *
+       * No number, for the same reason as `loginDeviceLimit`: the instructor
+       * can raise one account's limit, and this screen does not know it.
        */
-      limitNote: 'الحساب بيفتح على جهازين بالكتير — قفل أي جهاز هنا بيفضّي مكان لواحد جديد.',
+      limitNote: 'الحساب بيفتح على عدد محدود من الأجهزة — قفل أي جهاز هنا بيفضّي مكان لواحد جديد.',
     },
   },
   home: {

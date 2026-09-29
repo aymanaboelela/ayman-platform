@@ -12,6 +12,7 @@ import {
   AdminStudentDeleteBlockerSchema,
   AdminStudentDeleteSchema,
   AdminStudentDetailSchema,
+  AdminStudentDeviceLimitSchema,
   AdminStudentPatchSchema,
   AdminStudentSetPasswordSchema,
   type AdminStudentBulkDeleteResult,
@@ -398,6 +399,76 @@ export async function unbanStudentAction(userId: string): Promise<ActionResult> 
     return { ok: true };
   } catch (error) {
     return { ok: false, message: explain(error, c.unbanFailed, {}) };
+  }
+}
+
+/*
+ * ════════════════════════════════════════════════════════════════════════
+ * «الأجهزة المفتوحة» — sign a device out, all of them, or change how many
+ * the account may have. `student:write` on the API, and `refuseIfOutranked`
+ * behind it for a staff target.
+ * ════════════════════════════════════════════════════════════════════════
+ */
+
+const devicesCopy = copy.admin.settings;
+
+/** The service's two `refuseIfOutranked` messages — one sentence covers both. */
+const DEVICE_REFUSALS = {
+  'to an admin account': devicesCopy.studentDevicesOutranked,
+  'holds permissions you do not': devicesCopy.studentDevicesOutranked,
+};
+
+/*
+ * `encodeURIComponent` on both ids: they arrive from the client as arguments,
+ * and a `/` in one would aim this DELETE at a different route with the
+ * operator's own cookie. The API refuses what it should either way; the path
+ * should still say what the button meant.
+ */
+function devicesPath(userId: string, rest: string): string {
+  return `/api/admin/students/${encodeURIComponent(userId)}/${rest}`;
+}
+
+export async function revokeStudentDeviceAction(userId: string, deviceId: string): Promise<ActionResult> {
+  try {
+    await adminSendVoid('DELETE', devicesPath(userId, `sessions/${encodeURIComponent(deviceId)}`));
+    revalidatePath(`/admin/students/${userId}`);
+    return { ok: true };
+  } catch (error) {
+    // 404 is «already gone» — the student closed it from «أجهزتي», or another
+    // tab did. The list is stale, not the operator wrong: refresh it and say so.
+    if (error instanceof AdminApiError && error.status === 404) {
+      revalidatePath(`/admin/students/${userId}`);
+      return { ok: false, message: devicesCopy.studentDevicesSignOutGone };
+    }
+    return { ok: false, message: explain(error, devicesCopy.studentDevicesSignOutFailed, DEVICE_REFUSALS) };
+  }
+}
+
+export async function revokeAllStudentDevicesAction(userId: string): Promise<ActionResult> {
+  try {
+    await adminSendVoid('DELETE', devicesPath(userId, 'sessions'));
+    revalidatePath(`/admin/students/${userId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: explain(error, devicesCopy.studentDevicesSignOutFailed, DEVICE_REFUSALS) };
+  }
+}
+
+/**
+ * `''` from the select is «الافتراضي» → `null`, never `0` — `Number('')` is 0,
+ * and 0 is outside the range the schema and the column both refuse.
+ */
+export async function setStudentDeviceLimitAction(userId: string, formData: FormData): Promise<ActionResult> {
+  try {
+    const raw = formData.get('maxDevices');
+    const body = AdminStudentDeviceLimitSchema.parse({
+      maxDevices: raw === null || raw === '' ? null : Number(raw),
+    });
+    await adminSend('PUT', devicesPath(userId, 'device-limit'), body, AdminStudentDeviceLimitSchema);
+    revalidatePath(`/admin/students/${userId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: explain(error, devicesCopy.studentDevicesLimitFailed, DEVICE_REFUSALS) };
   }
 }
 

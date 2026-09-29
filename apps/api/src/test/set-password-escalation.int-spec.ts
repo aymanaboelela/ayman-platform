@@ -36,9 +36,10 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
-/** Only the two collaborators `setPassword` actually reaches. */
+/** Only the two collaborators `setPassword` actually reaches — the third,
+ *  the device service, is never touched by it. */
 const audit = { record: async () => undefined };
-const service = new StudentsService(prisma as never, audit as never);
+const service = new StudentsService(prisma as never, audit as never, {} as never);
 
 async function makeUser(role: 'admin' | 'owner' | 'student') {
   const id = randomUUID();

@@ -17,6 +17,7 @@ import {
   type AdminStudentBulkDeleteResult,
   type AdminStudentDeleteBlocker,
   type AdminStudentDetail,
+  type AdminStudentDeviceLimit,
   type AdminStudentConversation,
   type AdminStudentPatch,
   type AdminStudentRow,
@@ -38,6 +39,7 @@ import { escapeLike, foldArabic, FOLD_FROM, FOLD_TO } from '../../../common/arab
 import { isUniqueViolation } from '../../../common/prisma/prisma-errors';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { Prisma } from '../../../generated/prisma/client';
+import { SessionDeviceService } from '../../sessions/session-device.service';
 
 export interface StudentListQuery {
   page: number;
@@ -86,6 +88,7 @@ const DETAIL_SELECT = {
       // rather than denormalised because a ban outlives its issuer
       // (`ON DELETE SET NULL`), so this is legitimately nullable.
       bannedBy: { select: { name: true } },
+      maxDevices: true,
     },
   },
   governorate: { select: { nameAr: true } },
@@ -129,6 +132,7 @@ function toDetail(record: DetailRecord): AdminStudentDetail {
     bannedReason: record.user.bannedReason,
     bannedByName: record.user.bannedBy?.name ?? null,
     honorPhotoKey: record.honorPhotoKey,
+    maxDevices: record.user.maxDevices,
   };
 }
 
@@ -207,6 +211,7 @@ export class StudentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly sessionDevices: SessionDeviceService,
   ) {}
 
   async list(query: StudentListQuery): Promise<{ rows: AdminStudentRow[]; rowCount: number }> {
@@ -1014,6 +1019,114 @@ export class StudentsService {
     });
 
     return this.detail(userId);
+  }
+
+  /**
+   * «سجّل خروج» from one device, from the student's page.
+   *
+   * «أقدر كأدمن أعمل لحد تسجيل خروج عشان يقدر يدخل أجهزة جديدة». Until now the
+   * card only listed devices and the way out was the student's own «أجهزتي» —
+   * which a student refused at the login box cannot reach. The revoke itself
+   * is `SessionDeviceService.revokeFor`, i.e. the student's own `revokeOwn`
+   * aimed at the account in the URL: same grouping by device name, same
+   * session deletion, so the slot the gate counts is the slot this frees.
+   *
+   * 404 when the device is not this account's, not live, or already gone —
+   * one answer for all three, as on the student's side.
+   */
+  async revokeDevice(userId: string, deviceId: string, actorUserId: string): Promise<void> {
+    await this.deviceTarget(userId, actorUserId);
+
+    const revoked = await this.sessionDevices.revokeFor(userId, deviceId);
+    if (!revoked) throw new NotFoundException();
+
+    await this.audit.record({
+      action: 'student:revoke-session',
+      resourceType: 'user',
+      resourceId: userId,
+      outcome: 'success',
+      metadata: { device: revoked.deviceName, sessions: revoked.sessions },
+    });
+  }
+
+  /**
+   * «سجّل خروج من كل الأجهزة». Every session the account holds, including
+   * any whose device row was never written — see `revokeAllFor`.
+   *
+   * Not a ban and not a password reset: nothing stops the student signing
+   * straight back in, which is the point — this is how an instructor clears
+   * the slots for a student who changed phones, not how one is punished.
+   */
+  async revokeAllDevices(userId: string, actorUserId: string): Promise<void> {
+    await this.deviceTarget(userId, actorUserId);
+
+    const devices = await this.sessionDevices.revokeAllFor(userId);
+
+    await this.audit.record({
+      action: 'student:revoke-session',
+      resourceType: 'user',
+      resourceId: userId,
+      outcome: 'success',
+      metadata: { device: 'all', devices },
+    });
+  }
+
+  /**
+   * حد الأجهزة لهذا الحساب — `null` puts it back on the platform default.
+   *
+   * Takes effect on the NEXT sign-in, by construction: the gate is only asked
+   * when a session is created. Lowering a limit below what the account has
+   * open signs nobody out — that is what the two routes above are for, and an
+   * instructor who set «١» to stop sharing can press «سجّل خروج من كل
+   * الأجهزة» next to it. Doing it implicitly here would log out a student
+   * because a number changed.
+   *
+   * `from` is in the audit row because the column is overwritten: after the
+   * write, «what was it before» has no other answer.
+   */
+  async setDeviceLimit(
+    userId: string,
+    input: AdminStudentDeviceLimit,
+    actorUserId: string,
+  ): Promise<AdminStudentDeviceLimit> {
+    const target = await this.deviceTarget(userId, actorUserId);
+
+    await this.prisma.user.update({ where: { id: userId }, data: { maxDevices: input.maxDevices } });
+
+    await this.audit.record({
+      action: 'student:device-limit',
+      resourceType: 'user',
+      resourceId: userId,
+      outcome: 'success',
+      metadata: { from: target.maxDevices, to: input.maxDevices },
+    });
+
+    return { maxDevices: input.maxDevices };
+  }
+
+  /**
+   * The account a device action is aimed at, and whether this actor may aim
+   * at it.
+   *
+   * `refuseIfOutranked` for the reason it exists on ban and delete: `owner`
+   * holds `student:write` and so does every assistant, and without it an
+   * assistant could sign the instructor — or an admin — out of every device
+   * they own, or pin them to one. A student target passes straight through.
+   */
+  private async deviceTarget(
+    userId: string,
+    actorUserId: string,
+  ): Promise<{ role: string; maxDevices: number | null }> {
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, maxDevices: true },
+    });
+    if (!target) throw new NotFoundException();
+
+    const refusal = await this.refuseIfOutranked(actorUserId, { id: userId, role: target.role });
+    if (refusal) throw new ForbiddenException(refusal);
+
+    return target;
   }
 
   /**

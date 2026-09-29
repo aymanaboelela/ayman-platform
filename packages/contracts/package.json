@@ -21,6 +21,7 @@
     "./auth": "./src/auth.ts",
     "./profile": "./src/profile.ts",
     "./sessions": "./src/sessions.ts",
+    "./device-limit": "./src/device-limit.ts",
     "./guardian": "./src/guardian.ts",
     "./centers": "./src/centers.ts",
     "./unlock-codes": "./src/unlock-codes.ts",

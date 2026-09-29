@@ -5,6 +5,7 @@ import {
   AdminStudentBanSchema,
   AdminStudentBulkDeleteSchema,
   AdminStudentDeleteSchema,
+  AdminStudentDeviceLimitSchema,
   AdminStudentPatchSchema,
   AdminStudentSetPasswordSchema,
   StudentListQuerySchema,
@@ -28,3 +29,6 @@ export class AdminGrantCreateDto extends createZodDto(AdminGrantCreateSchema) {}
 export class AdminStudentBanDto extends createZodDto(AdminStudentBanSchema) {}
 export class AdminStudentDeleteDto extends createZodDto(AdminStudentDeleteSchema) {}
 export class AdminStudentBulkDeleteDto extends createZodDto(AdminStudentBulkDeleteSchema) {}
+
+/** حد الأجهزة لحساب واحد — رقم من ١ لـ١٠، أو `null` للافتراضي. */
+export class AdminStudentDeviceLimitDto extends createZodDto(AdminStudentDeviceLimitSchema) {}

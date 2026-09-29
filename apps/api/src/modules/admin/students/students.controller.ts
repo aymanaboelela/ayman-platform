@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UsePipes } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, UsePipes } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../../auth/decorators/current-user.decorator';
 import { SessionDeviceService } from '../../sessions/session-device.service';
@@ -12,6 +12,7 @@ import {
   AdminStudentBanDto,
   AdminStudentBulkDeleteDto,
   AdminStudentDeleteDto,
+  AdminStudentDeviceLimitDto,
   AdminStudentPatchDto,
   AdminStudentSetPasswordDto,
   StudentListQueryDto,
@@ -64,17 +65,62 @@ export class StudentsController {
    * الأجهزة اللي الحساب مفتوح عليها دلوقتي.
    *
    * `student:read` وخلاص — ده نفس اللي بيفتح صفحة الطالب، ومفيش سبب يخلّي
-   * «مين فاتح الحساب» صلاحية منفصلة عن «شوف الحساب». الحد جهازين، فالمدرّس
-   * بيتسأل «ليه الطالب مش قادر يدخل» وde المكان اللي بيجاوب.
-   *
-   * ⚠️ قراءة بس. قفل جهاز لسه للطالب من «أجهزتي» — `revokeOwn` بيركّب الملكية
-   * في الـWHERE نفسه عشان مايبقاش فيه طريق يقفل جهاز حد تاني، وراوت أدمن هنا
-   * كان هيفتح الطريق ده من غير ما يبقى مطلوب.
+   * «مين فاتح الحساب» صلاحية منفصلة عن «شوف الحساب». المدرّس بيتسأل «ليه
+   * الطالب مش قادر يدخل» وده المكان اللي بيجاوب.
    */
   @RequirePermission('student:read')
   @Get(':userId/sessions')
   listSessions(@Param('userId') userId: string) {
     return this.sessionDevices.listFor(userId);
+  }
+
+  /*
+   * «سجّل خروج» — جهاز واحد، أو كل الأجهزة — و«مسموح له بكام جهاز».
+   *
+   * كانت قراءة بس، والطالب هو اللي بيقفل من «أجهزتي». بس الطالب اللي الحد
+   * رفضه على صفحة الدخول مش واصل لـ«أجهزتي» أصلًا، فالمدرّس كان بيشوف المشكلة
+   * ومش بيقدر يحلّها. الملكية لسه في الـWHERE: `revokeFor` هو `revokeOwn`
+   * نفسه على الحساب اللي في الـURL، فـid جهاز حد تاني بيرجع 404 مش قفل.
+   *
+   * `student:write`، مش `student:read` اللي الليستة عليه: ده كتابة على حساب
+   * حد تاني، وحد متمنحله يشوف الطلبة بس مايصحّش يطلّعهم من أجهزتهم. ومش
+   * `student:ban`: الطالب بيدخل تاني على طول، فده تصليح دعم زي فتح كورس، مش
+   * عقوبة. و`refuseIfOutranked` في السيرفس بيمنع مساعد يعمل ده في المدرّس أو
+   * الأدمن.
+   *
+   * `DELETE` على الكوليكشن من غير body لكل الأجهزة — الفعل هو العملية، زي
+   * `removeMany` تحت. 204 زي راوت الطالب: مفيش حاجة ترجع غير «اتعمل».
+   */
+  @RequirePermission('student:write')
+  @Delete(':userId/sessions/:deviceId')
+  @HttpCode(204)
+  async revokeSession(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId') userId: string,
+    @Param('deviceId') deviceId: string,
+  ): Promise<void> {
+    await this.students.revokeDevice(userId, deviceId, user.id);
+  }
+
+  @RequirePermission('student:write')
+  @Delete(':userId/sessions')
+  @HttpCode(204)
+  async revokeAllSessions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId') userId: string,
+  ): Promise<void> {
+    await this.students.revokeAllDevices(userId, user.id);
+  }
+
+  /** `{ maxDevices: null }` رجوع للافتراضي — شوف `AdminStudentDeviceLimitSchema`. */
+  @RequirePermission('student:write')
+  @Put(':userId/device-limit')
+  setDeviceLimit(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId') userId: string,
+    @Body() body: AdminStudentDeviceLimitDto,
+  ) {
+    return this.students.setDeviceLimit(userId, body, user.id);
   }
 
   /*

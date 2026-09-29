@@ -1,6 +1,7 @@
 import { z } from '@ayman/contracts/zod';
 import { AttendanceModeSchema, StudyTypeSchema } from '@ayman/contracts/centers';
 import { egyptianPhone, isPlaceholderEmail, normalizeEgyptianPhone } from '@ayman/contracts/phone';
+import { DEVICE_LIMIT_CEILING, DEVICE_LIMIT_FLOOR } from '@ayman/contracts/device-limit';
 
 /**
  * A local copy of `onboarding.ts`'s `GenderSchema` — deliberately NOT a
@@ -106,9 +107,38 @@ export const AdminStudentDetailSchema = AdminStudentRowSchema.extend({
    *  board, or null for the vast majority who have none. Never the student's
    *  own avatar; see `student_profiles.honor_photo_key`. */
   honorPhotoKey: z.string().nullable(),
+  /** حد الأجهزة لهذا الحساب — `users.max_devices`. NULL is «the platform
+   *  default» (`DEFAULT_MAX_DEVICES` in `@ayman/contracts/device-limit`), and it
+   *  is every account nobody has touched; a number is the instructor's own
+   *  override. The card resolves the two with `effectiveMaxDevices`, the same
+   *  function the sign-in gate uses, so they cannot disagree. */
+  maxDevices: z.number().int().nullable(),
 });
 
 export type AdminStudentDetail = z.infer<typeof AdminStudentDetailSchema>;
+
+/**
+ * `PUT /api/admin/students/:userId/device-limit` — «أزوّد الأجهزة أكتر من ٢».
+ *
+ * `null` puts the account back on the platform default, and it is a real value
+ * rather than a missing key: «رجّعه للافتراضي» has to be sayable, and a
+ * `.optional()` here would make an empty body a silent no-op instead of a 400.
+ *
+ * `PUT` because the body IS the whole resource — one number or its absence —
+ * and sending it twice leaves the same row. The range is the column's own
+ * CHECK (`users_max_devices_range`); the schema refuses first so the operator
+ * gets a 400 with a reason instead of a 500 from Postgres.
+ *
+ * Also the route's RESPONSE — the override as stored — so the one schema
+ * describes the resource both ways.
+ */
+export const AdminStudentDeviceLimitSchema = z
+  .object({
+    maxDevices: z.number().int().min(DEVICE_LIMIT_FLOOR).max(DEVICE_LIMIT_CEILING).nullable(),
+  })
+  .strict();
+
+export type AdminStudentDeviceLimit = z.infer<typeof AdminStudentDeviceLimitSchema>;
 
 /**
  * `GET /api/admin/students/:userId/conversation` — the thread with this
