@@ -45,8 +45,26 @@ export const TRANSCODE_TOOLS = Symbol('TRANSCODE_TOOLS');
 const LOCK_TTL_MS = 90_000;
 const LOCK_RENEW_MS = 15_000;
 
-/** How long a claimed row may sit in `mirroring` before another worker takes it. */
-const STALE_CLAIM_MS = 45 * 60_000;
+/**
+ * How long a `mirroring` row may go without a heartbeat before it is taken
+ * back — the worker that claimed it is gone.
+ *
+ * It was 45 minutes, measured from the CLAIM, and every deploy paid it in
+ * full: the API container restarts, ffmpeg dies with it, and the lecture sat
+ * «بيتجهّز على السيرفر… 22%» for three quarters of an hour with nothing
+ * running — «١٣٩ ميجا وبقالها ربع ساعة ثابتة». On an evening with several
+ * deploys that is every upload.
+ *
+ * The claim is now kept alive by `HEARTBEAT_MS` below for as long as the work
+ * runs, so staleness means «nobody has touched this for three minutes», which
+ * a live worker never lets happen — twelve missed heartbeats, not one slow
+ * encode. The Redis lock already stops two workers; this only decides when a
+ * row nobody holds is given back.
+ */
+const STALE_CLAIM_MS = 3 * 60_000;
+
+/** How often a running job stamps `mirrorAt` on the row it claimed. */
+const HEARTBEAT_MS = 15_000;
 
 /** Wait after a failure before trying again. Attempt-linear, not exponential —
  *  three attempts never spans more than an hour, so a transient YouTube error
@@ -252,6 +270,21 @@ export class VideoMirrorService implements OnModuleDestroy {
       data: { mirrorStatus: 'mirroring', mirrorAt: new Date(), mirrorProgress: 0 },
     });
 
+    /*
+     * The heartbeat `STALE_CLAIM_MS` is measured against. Scoped to
+     * `mirroring` so a beat that lands after the row finished (or failed)
+     * cannot drag its `mirrorAt` — which is the failure backoff's clock —
+     * forward. A failed write is ignored: one missed beat is not twelve.
+     */
+    const heartbeat = setInterval(() => {
+      this.prisma.lessonVideo
+        .updateMany({
+          where: { lessonId: claimed.lessonId, mirrorStatus: 'mirroring' },
+          data: { mirrorAt: new Date() },
+        })
+        .catch(() => undefined);
+    }, HEARTBEAT_MS);
+
     try {
       if (claimed.provider === 'upload') await this.transcodeOne(claimed.externalId);
       else await this.mirrorOne(claimed.externalId);
@@ -279,6 +312,8 @@ export class VideoMirrorService implements OnModuleDestroy {
         { externalId: claimed.externalId, provider: claimed.provider, attempts, err: error },
         'video mirror failed',
       );
+    } finally {
+      clearInterval(heartbeat);
     }
   }
 
