@@ -875,6 +875,48 @@ describe('AssistantService', () => {
       await prisma.accessGrant.delete({ where: { id: grant.id } });
     });
 
+    it('counts a MONTHLY subscriber, and names the months', async () => {
+      // «هنا بيبقى مشترك وباين فوق إنه مش مشترك» — the query read
+      // `scope: 'course'` only, and the monthly plan is one `course_month`
+      // grant per month, so every monthly subscriber showed as unsubscribed.
+      const [third, first] = await Promise.all([
+        prisma.courseMonth.create({ data: { courseId, monthIndex: 3, title: 'شهر ٣ — نوفمبر' } }),
+        prisma.courseMonth.create({ data: { courseId, monthIndex: 1, title: 'شهر ١ — سبتمبر' } }),
+      ]);
+      const grants = await Promise.all(
+        [third, first].map((month) =>
+          prisma.accessGrant.create({
+            data: { userId: studentId, courseId, monthId: month.id, scope: 'course_month', source: 'purchase' },
+          }),
+        ),
+      );
+
+      const student = await service.open({
+        entryPath: ['root'],
+        message: 'من طالب',
+        userId: studentId,
+        guest: null,
+      });
+      createdConversations.push(student.thread.id);
+
+      const detail = await service.detail(student.thread.id);
+      expect(detail.hasActiveSubscription).toBe(true);
+      expect(detail.courses).toEqual([
+        expect.objectContaining({
+          courseId,
+          whole: false,
+          validUntil: null,
+          months: [
+            { index: 1, title: 'شهر ١ — سبتمبر' },
+            { index: 3, title: 'شهر ٣ — نوفمبر' },
+          ],
+        }),
+      ]);
+
+      await prisma.accessGrant.deleteMany({ where: { id: { in: grants.map((grant) => grant.id) } } });
+      await prisma.courseMonth.deleteMany({ where: { id: { in: [third.id, first.id] } } });
+    });
+
     it('never reports true from a REVOKED or LAPSED grant', async () => {
       const revoked = await prisma.accessGrant.create({
         data: {

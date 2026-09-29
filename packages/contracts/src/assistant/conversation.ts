@@ -708,6 +708,25 @@ export const AdminConversationDetailSchema = AdminConversationRowSchema.extend({
         source: z.string(),
         /** `null` means it does not expire, which the UI spells out. */
         validUntil: z.iso.datetime().nullable(),
+        /**
+         * The whole course (`scope: course`), or only the months/terms below.
+         *
+         * ⚠️ The third «مش مشترك» bug: the query read `scope: 'course'`
+         * only, so every student on the monthly plan — `course_month`, one
+         * grant per month — showed as unsubscribed. The months are now read
+         * AND named, because «مشترك» without «في أنهي شهر» cannot answer a
+         * student asking why lesson 7 is locked.
+         *
+         * `.default()`s so a web build that lands a few seconds before its
+         * API still parses the older shape rather than failing the page.
+         */
+        whole: z.boolean().default(true),
+        /** Term titles held on this course; empty when `whole`. */
+        terms: z.array(z.string()).default([]),
+        /** Curriculum months held on this course, by `monthIndex`; empty when `whole`. */
+        months: z
+          .array(z.object({ index: z.number().int(), title: z.string() }))
+          .default([]),
       }),
     )
     .nullable(),

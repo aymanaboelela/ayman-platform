@@ -5326,6 +5326,10 @@ export const copy = {
       /** Appended to a course opened by hand, so it is never mistaken for a
        *  paid subscription on the screen where he decides how to answer. */
       subscribedByHand: 'بالإيد',
+      /** A course held by the month rather than whole — «يبقى ظاهر هو مشترك في
+       *  أنهي شهر». `{months}` is the curriculum numbers, «1، 2، 3»; the full
+       *  titles are on the badge's hover title. */
+      subscribedMonths: 'شهر {months}',
       unanswered: 'محتاجة رد',
       /* ── «ردّ بإيموجي» ────────────────────────────────────────────────
        *
