@@ -811,7 +811,27 @@ const admin = {
      */
     videoSourceUpload: 'ارفع الفيديو',
     videoSourceYouTube: 'رابط يوتيوب',
-    videoUploadPick: 'اختار ملف الفيديو',
+    videoUploadPick: 'اختار ملف الفيديو أو اسحبه هنا',
+    /** Shown in the box while a file is dragged over it. */
+    videoUploadDrop: 'سيبه هنا وهيبدأ يترفع',
+    /**
+     * «اختار فيديو متروفع قبل كده» — same lecture in a second course (عربي
+     * ولغات). The file is already in the bucket, so the lesson points at it:
+     * no second upload, no second bill.
+     */
+    videoReuseOpen: 'أو اختار فيديو متروفع قبل كده',
+    videoReuseTitle: 'فيديو متروفع قبل كده',
+    videoReuseHint: 'نفس الملف بيتعرض في المحاضرة دي من غير ما يترفع تاني ولا ياخد مساحة زيادة.',
+    videoReuseSearch: 'دوّر باسم المحاضرة أو الكورس أو الملف',
+    videoReuseEmpty: 'مفيش فيديوهات جاهزة لسه',
+    videoReuseNoMatch: 'مفيش فيديو بالاسم ده',
+    videoReuseLoadFailed: 'مقدرناش نجيب الفيديوهات — جرّب تاني',
+    videoReuseKept: 'محفوظ',
+    videoReuseHere: 'على المحاضرة دي',
+    videoReuseAlsoOn: 'وعلى {n} محاضرة كمان',
+    videoReuseReplaceNote: 'الفيديو اللي على المحاضرة دلوقتي هيتحفظ في «الفيديوهات»، مش هيتمسح.',
+    videoReuseConfirm: 'حطه في المحاضرة دي',
+    videoReuseDone: 'الفيديو اتحط في المحاضرة',
     /**
      * Names the two things an instructor actually wants to know before
      * committing an hour of uplink: what it will take, and that it does not

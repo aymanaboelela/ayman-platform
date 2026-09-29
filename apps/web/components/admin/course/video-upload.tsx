@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { UploadCloud } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { MAX_UPLOAD_VIDEO_BYTES, UPLOAD_VIDEO_MIME, type VideoMirrorStatus } from '@ayman/contracts/video';
@@ -18,6 +19,7 @@ import {
   useUpload,
   type SavedUpload,
 } from '@/lib/video-upload-manager';
+import { ReuseVideoPicker } from './reuse-video-picker';
 
 /**
  * ══════════════════════════════════════════════════════════════════════════
@@ -67,6 +69,8 @@ export function VideoUpload({
    */
   const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
   const [startedOver, setStartedOver] = useState(false);
+  /** A file is being dragged over the box — it lights up to say «سيبه هنا». */
+  const [dragging, setDragging] = useState(false);
   /** «احتفظ بيه / امسحه خالص» for the video a new upload replaces. Keep by default. */
   const [keepOld, setKeepOld] = useState(true);
   const saved: SavedUpload | null =
@@ -255,11 +259,45 @@ export function VideoUpload({
         </fieldset>
       ) : null}
 
+      {/*
+        Drop target as well as a picker: the file is usually already on the
+        screen (Finder, the editing app) and dragging it here is one motion
+        instead of a file dialog and a folder hunt. The same `pick()` runs
+        either way, so a dropped file gets every check a chosen one does —
+        size, type, «نفس الملف» for a resume.
+
+        ⚠️ `preventDefault` on dragover is what makes this a drop target at
+        all; without it the browser opens the video in the tab and the admin
+        loses the page.
+      */}
       <label
+        data-dragging={dragging || undefined}
+        onDragEnter={(event) => {
+          if (!event.dataTransfer.types.includes('Files')) return;
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragOver={(event) => {
+          if (!event.dataTransfer.types.includes('Files')) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'copy';
+        }}
+        onDragLeave={(event) => {
+          // Leaving for a child (the text spans) is not leaving the box.
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+          setDragging(false);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          const file = event.dataTransfer.files[0];
+          if (file) pick(file);
+        }}
         className={cn(
           'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg',
           'border border-dashed border-line px-4 py-6 text-center',
           'transition-colors duration-[160ms] hover:border-accent hover:bg-surface-2',
+          'data-[dragging]:border-2 data-[dragging]:border-accent data-[dragging]:bg-accent/10',
         )}
       >
         <input
@@ -273,11 +311,21 @@ export function VideoUpload({
             if (file) pick(file);
           }}
         />
+        <UploadCloud
+          className={cn('size-7 transition-transform duration-[160ms]', dragging ? 'scale-110 text-accent' : 'text-fg-muted')}
+          aria-hidden="true"
+        />
         <span className="text-[length:var(--fs-text-sm)] font-semibold text-fg">
-          {resumable ? c.videoUploadResumePick : c.videoUploadPick}
+          {dragging ? c.videoUploadDrop : resumable ? c.videoUploadResumePick : c.videoUploadPick}
         </span>
         <span className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.videoUploadHint}</span>
       </label>
+
+      {/* A resume is about THAT file; offering another video then would read
+          as «the upload is lost, pick something else». */}
+      {resumable ? null : (
+        <ReuseVideoPicker courseId={courseId} lessonId={lessonId} hasVideo={current !== null} onDone={onDone} />
+      )}
 
       {encodeDone && failed === null ? (
         <p role="status" className="mt-2 text-[length:var(--fs-text-xs)] text-[var(--color-ok,#15803d)]">

@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, UsePipes } from '@nestjs/common';
 import { createZodDto, ZodValidationPipe } from 'nestjs-zod';
-import { VideoRestoreSchema } from '@ayman/contracts/admin/video-upload';
+import { VideoAttachSchema, VideoRestoreSchema } from '@ayman/contracts/admin/video-upload';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { VideoLibraryService } from './video-library.service';
@@ -19,6 +19,7 @@ import { VideoLibraryService } from './video-library.service';
  * video a lesson uses it IS that act, plus the bytes.
  */
 class VideoRestoreDto extends createZodDto(VideoRestoreSchema) {}
+class VideoAttachDto extends createZodDto(VideoAttachSchema) {}
 
 @Controller('admin')
 @UsePipes(ZodValidationPipe)
@@ -38,6 +39,25 @@ export class VideoLibraryController {
   @Post('videos/:videoId/restore')
   restore(@Param('videoId') videoId: string, @Body() body: VideoRestoreDto) {
     return this.library.restore(videoId, body.lessonId);
+  }
+
+  /**
+   * «اختار فيديو متروفع قبل كده» — the picker in the lesson panel. Same
+   * permission as the library list: it names lessons in draft courses.
+   */
+  @RequireFeature('video.upload')
+  @RequirePermission('course:read-admin')
+  @Get('videos/reusable')
+  reusable() {
+    return this.library.reusable();
+  }
+
+  /** Point one more lesson at a video already in the bucket. `lesson:write`, like `restore`. */
+  @RequireFeature('video.upload')
+  @RequirePermission('lesson:write')
+  @Post('videos/:videoId/attach')
+  attach(@Param('videoId') videoId: string, @Body() body: VideoAttachDto) {
+    return this.library.attach(videoId, body.lessonId);
   }
 
   @RequireFeature('video.upload')

@@ -38,6 +38,7 @@ function build(options: {
   const kept = [...(options.kept ?? [])];
   const released: { id: string; keep: boolean }[] = [];
   const upserts: string[] = [];
+  let lastUpsert: Record<string, unknown> | null = null;
   const prisma = {
     archivedVideo: {
       findMany: async () =>
@@ -76,13 +77,37 @@ function build(options: {
     },
     $transaction: async (ops: unknown[]) => ops,
     lessonVideo: {
-      upsert: async (args: { update: { externalId: string } }) => {
+      upsert: async (args: { update: { externalId: string } & Record<string, unknown> }) => {
         upserts.push(args.update.externalId);
+        lastUpsert = args.update;
         return {};
       },
-      findMany: async (args: { where?: { provider?: string; externalId?: string } }) =>
+      findFirst: async (args: { where: { externalId: string; provider: string; mirrorStatus: string } }) => {
+        const found = rows.find(
+          (row) =>
+            row.externalId === args.where.externalId &&
+            row.provider === args.where.provider &&
+            row.mirrorStatus === args.where.mirrorStatus,
+        );
+        return found
+          ? {
+              ...found,
+              sourceName: 'lecture.mp4',
+              durationSeconds: 3600,
+              mirrorHeight: 1080,
+              posterKey: 'poster.jpg',
+              captions: null,
+              trimStartSeconds: 30,
+              trimEndSeconds: null,
+              trimCuts: null,
+              fullDurationSeconds: 3630,
+            }
+          : null;
+      },
+      findMany: async (args: { where?: { provider?: string; externalId?: string; mirrorStatus?: string } }) =>
         rows
           .filter((row) => args.where?.provider === undefined || row.provider === args.where.provider)
+          .filter((row) => args.where?.mirrorStatus === undefined || row.mirrorStatus === args.where.mirrorStatus)
           .filter((row) => args.where?.externalId === undefined || row.externalId === args.where.externalId)
           .map((row) => ({
             ...row,
@@ -134,7 +159,7 @@ function build(options: {
       },
     } as unknown as VideoArchiveService,
   );
-  return { service, log, audits, rows, released, upserts };
+  return { service, log, audits, rows, released, upserts, upserted: () => lastUpsert };
 }
 
 const row = (lessonId: string, externalId: string, extra: Partial<Row> = {}): Row => ({
@@ -238,5 +263,46 @@ describe('«محفوظة»', () => {
     const { service, log } = build({ rows: [], ladders: { [UP('9')]: 10 }, kept: [UP('9')] });
     await service.remove(UP('9'));
     expect(log).toEqual([`kept:${UP('9')}`, `files:v/${UP('9')}`, `source:raw/${UP('9')}/source`]);
+  });
+});
+
+describe('«اختار فيديو متروفع قبل كده»', () => {
+  it('lists each ready video once, with every lesson on it, plus the kept ones', async () => {
+    const { service } = build({
+      rows: [
+        row('l1', UP('a')),
+        row('l2', UP('a')),
+        row('l3', UP('b'), { mirrorStatus: 'mirroring' }),
+        row('l4', 'dQw4w9WgXcQ', { provider: 'youtube' }),
+      ],
+      kept: [UP('c')],
+    });
+    const { videos } = await service.reusable();
+    expect(videos.map((video) => [video.videoId, video.lessonIds, video.kept])).toEqual([
+      [UP('a'), ['l1', 'l2'], false],
+      [UP('c'), [], true],
+    ]);
+  });
+
+  it('shares a video another lesson plays — its trim too — and keeps what the lesson had', async () => {
+    const { service, upserts, upserted, released, audits } = build({ rows: [row('l1', UP('a'))] });
+    await service.attach(UP('a'), 'l9');
+    expect(upserts).toEqual([UP('a')]);
+    expect(upserted()).toMatchObject({ externalId: UP('a'), mirrorStatus: 'ready', trimStartSeconds: 30, posterKey: 'poster.jpg' });
+    // The video l9 played before goes to «محفوظة», not the bin.
+    expect(released).toEqual([{ id: UP('8'), keep: true }]);
+    expect(audits).toMatchObject([{ metadata: { operation: 'attachVideo', videoId: UP('a'), fromLessonId: 'l1' } }]);
+  });
+
+  it('a kept video is put back, not copied', async () => {
+    const { service, audits } = build({ rows: [], kept: [UP('c')] });
+    await service.attach(UP('c'), 'l9');
+    expect(audits).toMatchObject([{ metadata: { operation: 'restoreVideo', videoId: UP('c') } }]);
+  });
+
+  it('refuses a video that is nowhere or still encoding', async () => {
+    const { service } = build({ rows: [row('l1', UP('b'), { mirrorStatus: 'mirroring' })] });
+    await expect(service.attach(UP('b'), 'l9')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.attach(UP('d'), 'l9')).rejects.toBeInstanceOf(NotFoundException);
   });
 });
