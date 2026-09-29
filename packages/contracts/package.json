@@ -113,7 +113,9 @@
     "./admin/leaderboard": "./src/admin/leaderboard.ts",
     "./quiz/scheduled": "./src/quiz/scheduled.ts",
     "./quiz/monthly-exam": "./src/quiz/monthly-exam.ts",
-    "./admin/exams": "./src/admin/exams.ts"
+    "./admin/exams": "./src/admin/exams.ts",
+    "./arena": "./src/arena.ts",
+    "./copy/arena": "./src/copy/arena.ts"
   },
   "scripts": {
     "lint": "eslint src",
