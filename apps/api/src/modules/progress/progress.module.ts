@@ -10,6 +10,7 @@ import { ActivityController } from './activity.controller';
 import { ActivityService } from './activity.service';
 import { CohortRankService } from './cohort-rank.service';
 import { RankController } from './rank.controller';
+import { RankNextService } from './rank-next.service';
 import { AdminLeaderboardController } from './leaderboard.controller';
 import { LeaderboardService } from './leaderboard.service';
 import { ProgressController } from './progress.controller';
@@ -47,6 +48,7 @@ import { ViewSessionService } from './view-session.service';
     ViewSessionService,
     ActivityService,
     CohortRankService,
+    RankNextService,
     LeaderboardService,
   ],
   // `LessonProgressService` is exported so Plan 5's `QuizModule` can inject

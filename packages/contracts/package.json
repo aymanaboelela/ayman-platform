@@ -33,6 +33,7 @@
     "./completion-undo": "./src/completion-undo.ts",
     "./activity": "./src/activity.ts",
     "./rank": "./src/rank.ts",
+    "./rank-next": "./src/rank-next.ts",
     "./notifications": "./src/notifications.ts",
     "./notifications/push": "./src/notifications/push.ts",
     "./payments": "./src/payments.ts",

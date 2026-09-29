@@ -877,6 +877,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // الرابط. صفوفه لوحدها لنفس السبب: كل راوت لازم يتسمّى.
     { label: 'cohort rank: anonymous', method: 'get', path: () => '/api/me/rank', actor: 'anonymous', status: 401 },
     { label: 'cohort rank: student', method: 'get', path: () => '/api/me/rank', actor: 'student', status: 200 },
+    // «الطريق لفوق» — نفس الصلاحية ونفس الهوية من السيشن. اللي بيطلع في
+    // القوايم واللي لأ متختبر في `rank-next.service.spec.ts`؛ هنا الباب بس.
+    { label: 'rank next steps: anonymous', method: 'get', path: () => '/api/me/rank/next', actor: 'anonymous', status: 401 },
+    { label: 'rank next steps: student', method: 'get', path: () => '/api/me/rank/next', actor: 'student', status: 200 },
     // Notifications (slice 4), guarded by `profile:read` for the two reads and
     // `profile:write` for the two writes — deliberately NOT `quiz:read`, even
     // though two of the three kinds are emitted by the quiz engine: the list is

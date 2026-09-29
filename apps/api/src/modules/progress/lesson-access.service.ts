@@ -260,6 +260,63 @@ export class LessonAccessService {
     return context;
   }
 
+  /**
+   * What `require()` would say about each of these lessons, for a screen that
+   * LISTS doors — «الطريق لفوق» on `/rank` — and must never draw one that
+   * 404s or 403s on click.
+   *
+   * ## It IS `require()`, not a re-derivation of it
+   *
+   * Every lesson goes through `require()` itself, codes and months and terms
+   * and the lapsed-grant check and the progression gate included. A bulk
+   * version written from the same parts would be a second copy of the one
+   * sentence that decides what a paying student may open, and the first
+   * change to either copy would make a listed row open onto a padlock —
+   * exactly what `unlock-codes-gate` warns every new door about.
+   *
+   * What makes it affordable is the collaborators, not the rule: they are
+   * wrapped for THIS call so each per-COURSE question (the grants, the month
+   * slice, the code slice, the gate map) is asked once per course instead of
+   * once per lesson. Only `resolve()` is per lesson. The wrapper lives for one
+   * call, so nothing is cached across requests and a grant bought a second
+   * ago is seen.
+   *
+   * - `open`   — `require()` returned.
+   * - `locked` — a 403: the student belongs to the course, but a subscription
+   *              does not cover this (another month or term, an expired
+   *              grant, a code-only buyer). A door to buy exists.
+   * - `hidden` — a 404: unpublished, not theirs, or the course exam still
+   *              gated. Nothing to show, and nothing to sell.
+   *
+   * Anything else — a database fault — is thrown, not read as «مقفول».
+   */
+  async openable(
+    userId: string,
+    lessonIds: readonly string[],
+  ): Promise<Map<string, 'open' | 'locked' | 'hidden'>> {
+    const scoped = new LessonAccessService(this.prisma, askedOnce(this.gate), askedOnce(this.entitlement));
+    const verdicts = new Map<string, 'open' | 'locked' | 'hidden'>();
+    const queue = [...new Set(lessonIds)];
+
+    // A few at a time, not all at once: this runs on a page view, and forty
+    // lesson reads fired together would hold forty pool connections that the
+    // lesson player needs more.
+    const worker = async () => {
+      for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+        try {
+          await scoped.require(userId, id);
+          verdicts.set(id, 'open');
+        } catch (error) {
+          if (error instanceof ForbiddenException) verdicts.set(id, 'locked');
+          else if (error instanceof NotFoundException) verdicts.set(id, 'hidden');
+          else throw error;
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(OPENABLE_CONCURRENCY, queue.length) }, worker));
+    return verdicts;
+  }
+
   private async resolve(userId: string, lessonId: string): Promise<LessonAccessContext> {
     // `lessonId` is a raw `@Param()` string, never Zod-validated the way a
     // request body is — a caller iterating ids (exactly the case this
@@ -342,4 +399,40 @@ export class LessonAccessService {
       isMonthlyExam: isMonthlyExamLesson(lesson.kind, lesson.section.title),
     };
   }
+}
+
+/** How many lessons `openable()` asks about at the same time. */
+const OPENABLE_CONCURRENCY = 4;
+
+/**
+ * The same object, except every method answers each distinct set of arguments
+ * ONCE for as long as this wrapper lives — for `openable()`, one call.
+ *
+ * A `Proxy` rather than a hand-written subclass per service, because the point
+ * is that `require()` runs UNCHANGED against it: a subclass would have to list
+ * the methods it caches, and a method added to `EntitlementService` next month
+ * would quietly go uncached rather than quietly keep working.
+ *
+ * Methods are invoked with the proxy as `this`, so a method that calls a
+ * sibling (`LessonGateService.isAvailable` → `resolveCourse`,
+ * `resolveMonthAccess` → `resolveMonthSlice`) reaches the cached one too. The
+ * key is the JSON of the arguments — ids, a `CourseAccessSubject`, a
+ * `CourseAccess` — none of which carry anything JSON cannot tell apart.
+ *
+ * ⚠️ Never for a WRITE. It is only ever handed the two read-only services
+ * `require()` consults.
+ */
+function askedOnce<T extends object>(target: T): T {
+  const answers = new Map<string, unknown>();
+  return new Proxy(target, {
+    get(object, property, receiver) {
+      const value: unknown = Reflect.get(object, property, receiver);
+      if (typeof value !== 'function' || typeof property !== 'string') return value;
+      return (...args: unknown[]) => {
+        const key = `${property}:${JSON.stringify(args)}`;
+        if (!answers.has(key)) answers.set(key, (value as (...a: unknown[]) => unknown).apply(receiver, args));
+        return answers.get(key);
+      };
+    },
+  });
 }
