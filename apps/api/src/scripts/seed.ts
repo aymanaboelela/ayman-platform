@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { FLAG_DECLARATIONS } from '@ayman/contracts/admin/flags';
+import { flagStartsEnabled } from '../common/flag-default';
 import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
 import { copy } from '@ayman/contracts/copy';
 import { PrismaClient, type Region } from '../generated/prisma/client';
@@ -411,7 +412,9 @@ async function main(): Promise<void> {
       create: {
         key: declaration.key,
         descriptionAr: declaration.descriptionAr,
-        enabled: declaration.defaultValue,
+        // Same per-stack default `FlagsService` creates with — a seeded row
+        // must not open on another teacher's stack what the boot would not.
+        enabled: flagStartsEnabled(declaration),
       },
       update: { descriptionAr: declaration.descriptionAr },
     });

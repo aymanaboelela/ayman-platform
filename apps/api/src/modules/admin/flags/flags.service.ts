@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
 import { FLAG_DECLARATIONS, type FeatureFlag, type FeatureFlagList } from '@ayman/contracts/admin/flags';
 import { AuditService } from '../../../audit/audit.service';
+import { flagStartsEnabled } from '../../../common/flag-default';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AUDIT_RESOURCES } from '../admin.constants';
 
@@ -39,7 +40,9 @@ export class FlagsService implements OnModuleInit {
         create: {
           key: declaration.key,
           descriptionAr: declaration.descriptionAr,
-          enabled: declaration.defaultValue,
+          // Per-stack on CREATE only — «مفتوحة عند أيمن، مقفولة عند الباقي»
+          // (`defaultForTenant`). See `common/flag-default.ts`.
+          enabled: flagStartsEnabled(declaration),
         },
         // Description follows the declaration; `enabled` never does — an
         // operator's toggle must survive a deploy.

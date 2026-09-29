@@ -11,6 +11,17 @@ export interface FlagDeclaration {
   key: string;
   descriptionAr: string;
   defaultValue: boolean;
+  /**
+   * The value a NON-Ayman stack starts with, when it differs from
+   * `defaultValue` — the same «off by default on everyone else» that
+   * `defaultForTenant` means in `admin/entitlements.ts` (`quizGame`).
+   *
+   * Only read where a row is CREATED (`FlagsService.onModuleInit` and the
+   * seed), through `IS_AYMAN` on the API. After that the row is the teacher's:
+   * his toggle from `/admin/flags` wins, and a deploy never rewrites it. A
+   * flag without this field behaves exactly as it always did.
+   */
+  defaultForTenant?: boolean;
 }
 
 export const FLAG_DECLARATIONS = [
@@ -21,6 +32,18 @@ export const FLAG_DECLARATIONS = [
   { key: 'onboarding.askParentPhones', descriptionAr: 'السؤال عن أرقام ولي الأمر', defaultValue: true },
   { key: 'home.showTestimonials', descriptionAr: 'إظهار آراء الطلبة في الصفحة الرئيسية', defaultValue: false },
   { key: 'sessions.enforceDeviceLimit', descriptionAr: 'تطبيق حد الأجهزة المسموح بها', defaultValue: false },
+  /*
+   * «ساحة التحدي» — ماتش مباشر بين طالبين. اتعملت للستاك الأصلي بطلب صاحبه
+   * («المنصة بتاعتي»)، فمفتوحة عنده (`IS_AYMAN`) ومقفولة على أي ستاك تاني لحد
+   * ما المدرّس يفتحها من `/admin/flags` — والتنانين في لوحتها ورا
+   * `aymanOnly` مهما حصل.
+   */
+  {
+    key: 'arena.enabled',
+    descriptionAr: 'ساحة التحدي: ماتش مباشر بين طالبين على أسئلة الكورس',
+    defaultValue: true,
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FlagDeclaration[];
 
 export type FlagKey = (typeof FLAG_DECLARATIONS)[number]['key'];
