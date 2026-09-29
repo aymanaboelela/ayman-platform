@@ -8,6 +8,7 @@ import { PREPAINT_SCRIPT } from '@/lib/security/prepaint-script';
 import { BrandMarkProvider } from '@/components/brand-mark-provider';
 import { MotionProvider } from '@/components/motion/motion-provider';
 import { RouteProgress } from '@/components/motion/route-progress';
+import { RouteScrollReset } from '@/components/motion/route-scroll-reset';
 import { JsonLd } from '@/components/seo/json-ld';
 import { organizationJsonLd, personJsonLd, webSiteJsonLd } from '@/lib/seo/jsonld';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
@@ -275,6 +276,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         */}
         <Suspense fallback={null}>
           <Clarity />
+        </Suspense>
+        {/*
+          Renders nothing. Opens a newly pushed page at its top when Next's own
+          scroll handler skipped it — which it does on every dynamic route
+          whose skeleton commits first; see the component for the mechanism.
+
+          At the ROOT because the cause is in every `loading.tsx`, not in one
+          route group. `<Suspense>` for the same reason `<Clarity>` has one: it
+          reads `usePathname()`, and outside a boundary that fails the export.
+        */}
+        <Suspense fallback={null}>
+          <RouteScrollReset />
         </Suspense>
       </body>
     </html>

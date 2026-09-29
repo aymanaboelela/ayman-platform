@@ -114,6 +114,11 @@ export default function SmoothScrollImpl() {
    * reader touches the wheel again, which is what lets Next's scroll-to-top —
    * or a restored offset on a back/forward — stand.
    *
+   * ⚠️ Next does not always scroll. On a route whose skeleton commits first
+   * (`/years/[year]`) its handler skips the scroll entirely, and that one is
+   * `RouteScrollReset`'s (root layout) — a native `scrollTo` one frame after
+   * the `start()` below, which Lenis resyncs from rather than fights.
+   *
    * Held stopped for one frame rather than restarted inline so the order of
    * this effect against Next's own scroll handling cannot matter. Stopped is a
    * safe state to be in for a frame: `onVirtualScroll` bails while stopped
