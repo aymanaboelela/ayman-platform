@@ -14,6 +14,7 @@ import { Button } from '@ayman/ui/components/button';
 import { cn } from '@ayman/ui/lib/cn';
 import { uploadHomeworkImage } from '@/lib/upload-client';
 import { tenantSentence } from '@/lib/tenant-copy';
+import { actionErrorMessage, isStaleActionError } from '@/lib/stale-tab';
 import { submitHomeworkAction } from '@/app/(app)/courses/[slug]/lessons/[lessonId]/homework-actions';
 
 const c = copy.homework;
@@ -142,10 +143,23 @@ export function LessonHomework({
     }
     setError(null);
     startTransition(async () => {
-      const result = await submitHomeworkAction(
-        lessonId,
-        staged.map((page) => ({ storageKey: page.storageKey, sizeBytes: page.sizeBytes })),
-      );
+      let result: Awaited<ReturnType<typeof submitHomeworkAction>>;
+      try {
+        result = await submitHomeworkAction(
+          lessonId,
+          staged.map((page) => ({ storageKey: page.storageKey, sizeBytes: page.sizeBytes })),
+        );
+      } catch (error) {
+        // A deploy landed while this lesson was open, so the action id this
+        // tab holds is gone. Thrown inside a transition it would replace the
+        // whole lesson with the error screen («الصفحة دي مافتحتش»), which is
+        // not what happened; say what did, beside the button, and let the
+        // toast offer the reload. Anything else still goes to the boundary.
+        // `lib/stale-tab.ts`.
+        if (!isStaleActionError(error)) throw error;
+        setError(actionErrorMessage(error, null) ?? c.submitFailed);
+        return;
+      }
       if (!result.ok) {
         setError(c.submitFailed);
         return;

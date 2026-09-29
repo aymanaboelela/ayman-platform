@@ -14,6 +14,7 @@ import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { rootMetadata } from '@/lib/seo/metadata';
 import { Toaster } from '@/components/toaster';
 import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
+import { StaleBuildWatch } from '@/components/pwa/stale-build-watch';
 import { Clarity } from '@/components/analytics/clarity';
 import './globals.css';
 
@@ -244,6 +245,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           that matters on a product people sign into.
         */}
         <ServiceWorkerRegister />
+        {/*
+          Renders nothing — it notices when this tab is older than the server
+          (a deploy landed while it was open) and raises one toast with a
+          reload, before the next save fails on a Server Action id that no
+          longer exists. At the ROOT because every surface saves something and
+          the root layout is the one thing a soft navigation never replaces.
+          See the component.
+        */}
+        <StaleBuildWatch />
         {/*
           Microsoft Clarity — session recordings and heatmaps, injected by
           `@microsoft/clarity` from the browser. Renders nothing.
