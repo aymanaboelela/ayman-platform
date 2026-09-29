@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { copy } from '@ayman/contracts';
 import type { PlayerVideo } from '@ayman/contracts/progress';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -283,9 +283,9 @@ describe('VideoLesson with a mirror', () => {
     fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
     await act(async () => {});
 
-    const video = container.querySelector('video');
-    expect(video).not.toBeNull();
-    expect(video?.getAttribute('src')).toBe(MIRRORED.mirror?.hlsUrl);
+    // `src` lands after the dynamic `import('hls.js')` settles — one flush is
+    // enough on an idle machine and not under a full parallel run.
+    await waitFor(() => expect(container.querySelector('video')?.getAttribute('src')).toBe(MIRRORED.mirror?.hlsUrl));
     expect(container.querySelector('iframe')).toBeNull();
   });
 
