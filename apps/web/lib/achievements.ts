@@ -1,6 +1,7 @@
 import {
   MASTERY_STRONG_AT,
   copy,
+  formatCopy,
   type Dashboard,
   type QuizHistorySummary,
 } from '@ayman/contracts';
@@ -120,6 +121,25 @@ export interface Achievement {
    *  INDEPENDENT of `earned`: an unearned gold badge is still a gold badge. */
   tier: AchievementTier;
   earned: boolean;
+  /**
+   * How far along a LOCKED marker is, where the page already has the number —
+   * see `badgeProgress` below. Absent once earned, and absent on the markers
+   * that are a single event.
+   */
+  progress?: AchievementProgress;
+}
+
+/**
+ * The meter under a locked tile: `value` of `target`, and the words for it.
+ *
+ * `value` is clamped to `target` here rather than in the component, so a
+ * rendered meter can never overflow its track — and never reads full on a
+ * marker that is still locked (see `badgeProgress`).
+ */
+export interface AchievementProgress {
+  value: number;
+  target: number;
+  label: string;
 }
 
 /** The lesson count that earns «عشر دروس». Named rather than inline so the
@@ -137,6 +157,70 @@ export const TEN_LESSONS = 10;
  *  and may never import from `apps/web`. */
 export const DISTINCTION_PERCENT = MASTERY_STRONG_AT;
 
+/**
+ * «3 من 10» under a locked «عشر دروس» — the one question an unearned marker
+ * raises and the hint alone cannot answer: how close is it.
+ *
+ * ## Only where the number is already on the page
+ *
+ * Three markers have one: lessons finished (`completedLessons`), the furthest
+ * course (`completedLessons / totalLessons`, the same live count the
+ * «كورس كامل» predicate reads), and the best mark (`summary.bestPercent`,
+ * against `DISTINCTION_PERCENT`). The other three are a single event — one
+ * lecture, one sitting, one pass — and «0 من 1» says less than the hint does,
+ * so they carry none and the tile shows the hint instead.
+ *
+ * ## Never full while locked
+ *
+ * A course at 99.6% rounds to «100%», and a meter drawn full on a tile with a
+ * lock on it is a contradiction on screen. So a locked marker's value is held
+ * one step under its target, whatever the rounding says.
+ *
+ * `null` when there is nothing to measure yet — no course with a lesson in
+ * it, no graded exam — rather than a meter at zero: «أعلى درجة 0%» for a
+ * student who has never sat an exam states a mark they did not get.
+ */
+function badgeProgress(
+  id: string,
+  {
+    dashboard,
+    summary,
+    completedLessons,
+  }: { dashboard: Dashboard; summary: QuizHistorySummary; completedLessons: number },
+): AchievementProgress | undefined {
+  const underTarget = (value: number, target: number) => Math.max(0, Math.min(value, target - 1));
+
+  if (id === 'ten-lessons') {
+    const value = underTarget(completedLessons, TEN_LESSONS);
+    return {
+      value,
+      target: TEN_LESSONS,
+      label: formatCopy(c.progressCount, { n: value, total: TEN_LESSONS }),
+    };
+  }
+
+  if (id === 'course-done') {
+    const ratios = dashboard.enrolledCourses
+      .filter((course) => course.totalLessons > 0)
+      .map((course) => course.completedLessons / course.totalLessons);
+    if (ratios.length === 0) return undefined;
+    const value = underTarget(Math.round(Math.max(...ratios) * 100), 100);
+    return { value, target: 100, label: formatCopy(c.progressCourse, { percent: value }) };
+  }
+
+  if (id === 'distinction') {
+    if (summary.bestPercent === null) return undefined;
+    const value = underTarget(Math.round(summary.bestPercent), DISTINCTION_PERCENT);
+    return {
+      value,
+      target: DISTINCTION_PERCENT,
+      label: formatCopy(c.progressBest, { percent: value }),
+    };
+  }
+
+  return undefined;
+}
+
 export function achievementsFor({
   dashboard,
   summary,
@@ -148,7 +232,7 @@ export function achievementsFor({
    *  the strip and the stat tile above it can never disagree about the count. */
   completedLessons: number;
 }): Achievement[] {
-  return [
+  const markers: Achievement[] = [
     {
       id: 'first-lesson',
       glyph: 'play',
@@ -215,6 +299,15 @@ export function achievementsFor({
       earned: summary.bestPercent !== null && summary.bestPercent >= DISTINCTION_PERCENT,
     },
   ];
+
+  // Progress is attached to LOCKED markers only: an earned one has nothing
+  // left to measure, and a meter on it would read as a second, smaller claim.
+  for (const marker of markers) {
+    if (marker.earned) continue;
+    const progress = badgeProgress(marker.id, { dashboard, summary, completedLessons });
+    if (progress) marker.progress = progress;
+  }
+  return markers;
 }
 
 /** How many of the six are earned — the count the section heading states. */

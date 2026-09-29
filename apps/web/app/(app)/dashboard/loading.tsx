@@ -19,12 +19,15 @@ import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
  *    leaves the contents blank, which is what a skeleton is for. It now stands
  *    a line taller, because the band gained the three figures the stat tiles
  *    used to carry.
- * 2. The four-tile grid is GONE, and so is the achievements strip from this
- *    position. What sits under the hero slot is the mastery card: a heading
- *    and three rows.
- * 3. The achievements strip is now the LAST block on the page, below the
- *    courses — and it is six equal cells, the one region whose shape a generic
- *    bar cannot suggest.
+ * 2. The four-tile grid is GONE. What sits under the hero slot is
+ *    `.dash-split`, exactly as the page has it: the courses in the main column
+ *    and the aside cards beside them from 80rem (under them below that).
+ * 3. The aside is drawn as the three cards that are always there —
+ *    «نقوّي النقط دي», «إنجازاتك» and «نصيحة اليوم» — each in its real chrome:
+ *    the `.panel-head` wash and medallion, three `.topic-row`s, the six-segment
+ *    meter over six tiles, the teal callout. The conditional cards above them
+ *    (the channel, the guardian code, a course group, pending exams) are not
+ *    guessed at, for the reason «The one region…» below gives.
  * 4. «امتحان الشهر» sits between the band and the hero slot, and it is drawn
  *    here as a second ember block for the reason point 1 gives: it is a filled
  *    surface, and three grey lines standing in for it grow a coloured slab into
@@ -42,8 +45,8 @@ import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
  * the same reason — a compact strip, not the band's full open-phase height — so
  * the shrink everyone else pays is a small one.
  *
- * The right-hand rail this file used to reserve is gone: the courses grid took
- * the full width when the cards gained their artwork.
+ * The right-hand rail this file used to reserve is gone; the column beside the
+ * courses is the aside, and it is drawn.
  *
  * One hero-slot block covers both possible occupants — the resume card and the
  * first-run card. They are close enough in height that guessing wrong costs a
@@ -120,56 +123,98 @@ export default function Loading() {
         <Skeleton width="full" className="h-1" />
       </div>
 
-      {/* The mastery card: a heading and three `.topic-row`s. Three, always —
-          the card renders fewer when a student has fewer weak topics, but a
-          skeleton that guesses low grows the page, and one that guesses high
-          only shrinks it. */}
-      <div className="mb-8 space-y-4">
-        <Skeleton width="narrow" className="h-5" />
-        <div className="space-y-2">
-          {Array.from({ length: 3 }, (_, index) => (
-            <div key={index} className="topic-row">
-              <span className="topic-row__text">
-                <Skeleton width={index % 2 === 0 ? 'wide' : 'narrow'} className="h-4" />
-                <Skeleton width="full" className="h-[6px]" />
-              </span>
-            </div>
-          ))}
+      {/* `.dash-split`, as the page has it: the courses in the main column and
+          the aside cards beside them from 80rem, under them below that. The
+          skeleton used to stack a mastery list and a six-cell badge strip in
+          the main column — positions both left long ago — so it promised a
+          layout the page then rearranged. */}
+      <div className="dash-split">
+        <div className="dash-split__main space-y-4">
+          <Skeleton width="narrow" className="h-5" />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            {Array.from({ length: 4 }, (_, index) => (
+              <div key={index} className="overflow-hidden rounded-lg border border-line bg-surface-2">
+                {/* The artwork's own box, at the card's real 16/7, so the grid
+                    does not shift when four covers arrive. */}
+                <div className="aspect-[16/7] w-full bg-surface-3" />
+                <div className="space-y-4 p-5">
+                  <Skeleton width={index % 2 === 0 ? 'wide' : 'narrow'} className="h-5" />
+                  <Skeleton width="full" className="h-1" />
+                  <Skeleton width="narrow" className="h-3" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
 
-      <div className="space-y-4">
-        <Skeleton width="narrow" className="h-5" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-          {Array.from({ length: 4 }, (_, index) => (
-            <div key={index} className="overflow-hidden rounded-lg border border-line bg-surface-2">
-              {/* The artwork's own box, at the card's real 16/7, so the grid
-                  does not shift when four covers arrive. */}
-              <div className="aspect-[16/7] w-full bg-surface-3" />
-              <div className="space-y-4 p-5">
-                <Skeleton width={index % 2 === 0 ? 'wide' : 'narrow'} className="h-5" />
-                <Skeleton width="full" className="h-1" />
-                <Skeleton width="narrow" className="h-3" />
+        <aside className="dash-split__side mt-8 space-y-4 lg:mt-0">
+          {/* «نقوّي النقط دي»: the real `.panel-head` wash with blank bars in
+              it, then three `.topic-row`s. Three, always — the card renders
+              fewer when a student has fewer weak topics, but a skeleton that
+              guesses low grows the page, and one that guesses high only
+              shrinks it. */}
+          <div className="aside-card">
+            <SkeletonPanelHead />
+            <div className="aside-card__body topic-list">
+              {Array.from({ length: 3 }, (_, index) => (
+                <div key={index} className="topic-row">
+                  <span aria-hidden="true" className="topic-row__score" />
+                  <span className="topic-row__title">
+                    <Skeleton width={index % 2 === 0 ? 'wide' : 'narrow'} className="h-4" />
+                  </span>
+                  <span aria-hidden="true" className="topic-row__bar" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* «إنجازاتك»: the head, the six-segment meter and six tiles — the
+              one region whose shape a generic bar cannot suggest. */}
+          <div className="aside-card">
+            <SkeletonPanelHead />
+            <div className="aside-card__body">
+              <span aria-hidden="true" className="award-meter">
+                {Array.from({ length: 6 }, (_, index) => (
+                  <span key={index} className="award-meter__pip" />
+                ))}
+              </span>
+              <div className="badge-strip badge-strip--compact">
+                {Array.from({ length: 6 }, (_, index) => (
+                  <div key={index} className="badge">
+                    <span aria-hidden="true" className="badge__disc" />
+                    <Skeleton width="wide" className="h-3" />
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      {/* The achievements strip, last — mirroring the page, where it moved
-          below the exams so the run from "fix this" to "your courses" is not
-          interrupted by a rewards block. */}
-      <div className="mt-8 space-y-4">
-        <Skeleton width="narrow" className="h-5" />
-        <div className="badge-strip">
-          {Array.from({ length: 6 }, (_, index) => (
-            <div key={index} className="badge">
-              <span aria-hidden="true" className="badge__disc" />
-              <Skeleton width="wide" className="h-3" />
+          {/* «نصيحة اليوم»: the callout's own teal ground, bulb well and two
+              lines. */}
+          <div className="tip-callout">
+            <span aria-hidden="true" className="tip-callout__icon" />
+            <div className="tip-callout__body space-y-3">
+              <Skeleton width="narrow" className="h-3" />
+              <Skeleton width="full" className="h-4" />
             </div>
-          ))}
-        </div>
+          </div>
+        </aside>
       </div>
     </main>
+  );
+}
+
+/** A `.panel-head` with its hue wash and medallion, and bars where the title
+ *  and the lead will be. `data-hue` is left at its default: which card this is
+ *  is not known yet, and the default blue is the first card's. */
+function SkeletonPanelHead() {
+  return (
+    <div className="panel-head">
+      <span aria-hidden="true" className="panel-head__icon" />
+      <div className="panel-head__text space-y-2">
+        <Skeleton width="narrow" className="h-4" />
+        <Skeleton width="wide" className="h-3" />
+      </div>
+    </div>
   );
 }

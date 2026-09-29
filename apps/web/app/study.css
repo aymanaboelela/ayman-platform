@@ -1000,10 +1000,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--s-8);
-  padding: var(--s-12) var(--s-8);
+  gap: var(--s-4);
+  min-inline-size: 0;
+  padding: var(--s-12) var(--s-4);
   border-radius: var(--r-lg);
-  border: var(--hairline) solid var(--border);
+  /* Dashed while locked: an outline waiting to be filled, which is what the
+     tile is. The earned rule below makes it solid. */
+  border: var(--hairline) dashed color-mix(in oklab, var(--n-12) 18%, transparent);
   /* ⚠️ `--n-3`, not `--n-1`. In the dark theme `--n-1` IS the page background,
      and this strip's usual home is inside an `.aside-card` (`--n-2`) — a card
      painted at `--n-1` on top of `--n-2` is not a surface, it is a hole. Same
@@ -1014,10 +1017,13 @@
 }
 
 .badge__disc {
+  /* `relative`: `.badge__state` (the tick or the padlock) sits on its rim. */
+  position: relative;
   display: grid;
   place-items: center;
-  inline-size: 2.75rem;
-  block-size: 2.75rem;
+  inline-size: 3rem;
+  block-size: 3rem;
+  margin-block-end: var(--s-4);
   border-radius: 999px;
   /* One step above the card it sits on, so an unearned disc is still visibly a
      disc. `--n-10` rather than `--n-9` for the glyph: at `--n-9` on `--n-4` the
@@ -1025,6 +1031,28 @@
      graphics have to clear. Quiet is not the same thing as invisible. */
   background: var(--n-4);
   color: var(--n-10);
+}
+
+/* The state, on the disc's rim at the inline end: a padlock while locked, a
+   tick once earned. A SHAPE, so it survives greyscale — the metal alone is
+   colour and nothing else. */
+.badge__state {
+  position: absolute;
+  inset-block-end: -3px;
+  inset-inline-end: -3px;
+  display: grid;
+  place-items: center;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  border-radius: 999px;
+  background: var(--n-2);
+  box-shadow: 0 0 0 1.5px var(--n-3), inset 0 0 0 var(--hairline) var(--border);
+  color: var(--n-11);
+}
+
+.badge__state svg {
+  inline-size: 0.7rem;
+  block-size: 0.7rem;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1103,12 +1131,21 @@
 /* ⚠️ The tier class is on the `<li>` whether or not the marker is earned — an
    unearned gold badge is still a gold badge, and the strip is supposed to say
    so. The METAL, though, is spent only here, under `.badge--earned`: an
-   unearned marker stays the quiet `--n-3`/`--n-4` chip above, keeps its `title`
-   hint, and carries no lock, no dimming and no strike-through. It has to read
-   as "not yet", never as "not for you". */
+   unearned marker stays the quiet `--n-3`/`--n-4` chip above, with a padlock
+   on the rim and its hint or its progress printed under the title. The
+   padlock is new, and it is paired with that line on purpose: a lock alone
+   reads "not for you"; a lock over «3 من 10» reads "not yet". */
 .badge--earned {
-  border-color: color-mix(in oklch, var(--badge-metal) 45%, transparent);
-  background: color-mix(in oklab, var(--badge-metal) 10%, var(--n-3));
+  border-style: solid;
+  border-color: color-mix(in oklab, var(--badge-metal) 45%, transparent);
+  /* Lit from above: the metal's own colour pooled behind the disc and fading
+     into the card, so an earned tile glows and a locked one does not. */
+  background: radial-gradient(
+    110% 85% at 50% 0%,
+    color-mix(in oklab, var(--badge-metal) 26%, var(--n-2)) 0%,
+    color-mix(in oklab, var(--badge-metal) 7%, var(--n-2)) 75%
+  );
+  box-shadow: 0 8px 18px -12px color-mix(in oklab, var(--badge-metal) 80%, transparent);
 }
 
 .badge--earned .badge__disc {
@@ -1117,7 +1154,11 @@
      bright top edge and a shadowed bottom one are what make a flat circle look
      struck rather than filled. White and black at low alpha rather than palette
      colours, because they are LIGHT, not hue; `--ink-line` in the tokens file
-     is the same idea. */
+     is the same idea.
+
+     Every tier now carries a glow, sized by its ring weight — the strip used
+     to light only gold, and the two bronze tiles beside it read as dull brown
+     buttons rather than as things won. */
   background: linear-gradient(
     160deg,
     var(--badge-metal-hi) 0%,
@@ -1128,19 +1169,25 @@
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.45),
     inset 0 -2px 4px rgb(0 0 0 / 0.22),
-    0 0 0 var(--badge-ring) color-mix(in oklch, var(--badge-metal) 34%, transparent);
+    0 0 0 var(--badge-ring) color-mix(in oklab, var(--badge-metal) 34%, transparent),
+    0 0 14px -3px color-mix(in oklab, var(--badge-metal) 60%, transparent);
 }
 
-/* Gold gets one thing the other two do not: a halo. It is the only tier a
-   student can hold without holding the cheaper ones (a distinction on the first
-   exam), so it has to win the strip at a glance rather than merely sit at the
-   top of an ordering nobody can see. */
+/* Gold still wins the strip at a glance: the widest halo. It is the only tier
+   a student can hold without holding the cheaper ones (a distinction on the
+   first exam), so it cannot merely sit at the top of an ordering nobody sees. */
 .badge--gold.badge--earned .badge__disc {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.5),
     inset 0 -2px 4px rgb(0 0 0 / 0.22),
-    0 0 0 var(--badge-ring) color-mix(in oklch, var(--badge-metal) 34%, transparent),
-    0 0 14px -2px color-mix(in oklch, var(--badge-metal) 55%, transparent);
+    0 0 0 var(--badge-ring) color-mix(in oklab, var(--badge-metal) 34%, transparent),
+    0 0 22px -2px color-mix(in oklab, var(--badge-metal) 70%, transparent);
+}
+
+.badge--earned .badge__state {
+  background: var(--ok);
+  box-shadow: 0 0 0 1.5px var(--n-2);
+  color: var(--n-1);
 }
 
 .badge__title {
@@ -1151,8 +1198,80 @@
 }
 
 .badge--earned .badge__title {
-  font-weight: var(--fw-medium);
+  font-weight: var(--fw-semibold);
   color: var(--n-12);
+}
+
+/* The tile's second line, earned: its metal, in the metal. */
+.badge__tier {
+  padding: 0.05rem 0.5rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--badge-metal) 18%, var(--n-2));
+  font-size: var(--fs-mono-label);
+  font-weight: var(--fw-semibold);
+  line-height: 1.6;
+  color: color-mix(in oklab, var(--badge-metal) 55%, var(--n-12));
+}
+
+/* …and locked: the hint, or a meter and «3 من 10». */
+.badge__hint {
+  font-size: var(--fs-mono-label);
+  line-height: 1.45;
+  color: var(--n-11);
+  overflow-wrap: anywhere;
+}
+
+.badge__progress {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s-4);
+  inline-size: 100%;
+  padding-inline: var(--s-4);
+}
+
+.badge__meter {
+  display: block;
+  block-size: 5px;
+  overflow: hidden;
+  border-radius: var(--r-full);
+  background: var(--n-5);
+}
+
+/* The meter fills in the metal the marker WILL be struck in — the strip's
+   one hint of colour on a locked tile, and a true one. */
+.badge__meter-fill {
+  display: block;
+  block-size: 100%;
+  min-inline-size: 3px;
+  border-radius: var(--r-full);
+  /* The mid and deep stops, not the highlight: silver's highlight is
+     `--ink-fg`, near-white, and on a light tile a meter starting there read as
+     no fill at all. */
+  background: linear-gradient(to left, var(--badge-metal), var(--badge-metal-lo));
+}
+
+/* «2 من 6», as six segments under the heading — each earned one in its own
+   metal, so the bar says how many and how much in one glance. The metal
+   variables come from the `.badge--{tier}` class the component puts on each
+   segment; the tile rules above do not apply because the segment is not a
+   `.badge`. */
+.award-meter {
+  display: flex;
+  gap: var(--s-4);
+  margin-block-end: var(--s-12);
+}
+
+.award-meter__pip {
+  flex: 1;
+  block-size: 6px;
+  border-radius: var(--r-full);
+  background: var(--n-4);
+}
+
+.award-meter__pip--on {
+  background: linear-gradient(to left, var(--badge-metal), var(--badge-metal-lo));
+  box-shadow: 0 0 8px -1px color-mix(in oklab, var(--badge-metal) 70%, transparent);
 }
 
 /* ---------------------------------------------------------------------------
@@ -2098,21 +2217,17 @@ details[open] > .unit__head .unit__chevron,
    the student's actual work — sat between the resume card and their courses at
    exactly the size of the thing they were interrupting.
 
-   ## Why each one opens with a drawing
+   ## Why each one opens with a coloured head, and no longer a drawing
 
    Same complaint, second half: «غير الأيكونز، يبقى فيه صور، لأن بجد مش فاهم
-   حاجة». A 16px lucide glyph in a 40px well is a bullet point — at that size a
-   lightbulb and a trophy are the same grey smudge, so the icon was carrying no
-   information and the card was reading as a paragraph with a dot in front of
-   it. The banner is the first thing in the card and it is the size of a
-   picture, which is what makes the three tell each other apart at a glance.
-
-   DRAWN, not photographed — the same trade `SpotIllustration` and `CourseArt`
-   already make on this surface: it re-themes with the page (a raster asset
-   would need a light and a dark copy), it is sharp on every screen, and it
-   costs no request on the screen that has to paint fastest. It is also the
-   only way to keep them recognisably one family; three stock photos are three
-   different photographers.
+   حاجة». A 16px lucide glyph in a 40px well is a bullet point, so for a while
+   every card here opened with a 16/6 SVG scene — a phone, a lamp, a podium, a
+   magnifier. On a 390px phone that was four ~140px pastel banners down one
+   column, each ABOVE its own heading, and it came back as «اضبط بقى يا باشا
+   شكلها»: pale, washed out, unfinished. The cards now open with `.panel-head`
+   — a wash in the card's own hue, a solid lit medallion, the heading, and
+   the count — so they still tell each other apart at a glance, by colour and
+   mark, at a third of the height.
    --------------------------------------------------------------------------- */
 /* `--n-2` for the same reason `.tile` above documents: `--n-1` is the page. */
 .aside-card {
@@ -2122,118 +2237,212 @@ details[open] > .unit__head .unit__chevron,
   background: var(--n-2);
 }
 
-.aside-card__art {
-  display: block;
-  inline-size: 100%;
-  block-size: auto;
-  /* Wide and shallow. A square banner on a 23rem column is 368px of picture
-     above four words of text, which is the opposite of the problem being
-     fixed — the drawing is a label for the card, not the card. */
-  aspect-ratio: 16 / 6;
-  /* `--e-art`, not `--e-tint` — see that token's own note. `--e-tint` in the
-     dark theme is one percent of lightness away from the page, so these four
-     banners rendered as dark smudges and the drawings inside them were barely
-     legible. A banner is decoration with nothing to read on it, so it can and
-     should carry real colour. */
-  background: var(--e-art);
-}
-
 .aside-card__body {
   padding: var(--s-16);
 }
 
-/* ── the banner drawings (components/dashboard/card-art.tsx) ──────────────
-   Structure in ember, exactly one amber element per scene, and one decorative
-   hue per scene fed in as `--card-art-h`. That hue tints ONLY the wash behind
-   the subject — the rule `lib/subject-art.ts` sets for the decorative ramp is
-   that it may fill a non-interactive category mark and nothing else, and a
-   banner is the purest case of one. */
-/* Must match `.aside-card__art`'s background exactly — the SVG is `slice`d
-   inside the banner, so any gap shows the ground through. */
-.card-art__field {
-  fill: var(--e-art);
+/* ---------------------------------------------------------------------------
+   .panel-head — the top of an aside card (`components/dashboard/panel-head.tsx`).
+
+   A coloured wash, a solid medallion, the heading and its lead, and the count
+   at the inline end. It replaced the 16/6 banner drawings on «قناة
+   الواتساب»، «نقوّي النقط دي» and «إنجازاتك»: on a phone each banner was ~140px of pale pastel ABOVE
+   the heading, and the three of them down one column read as a page that had
+   not finished loading rather than as illustration.
+
+   One hue per card. From the `--viz-*` ramp for the category cards — blue
+   for the topics (the ink blue of «نتائجي»'s hero, since the rows under it
+   are scored in that page's bands), violet for the awards (the colour
+   `/results` and «ترتيبي» give the top of the scale). WhatsApp's own green
+   for the channel. And the accent, amber, for «امتحانات في انتظارك» alone —
+   the one card that IS an action waiting. The ramp is the licensed home for
+   a category hue; nothing in a head is pressable, so none of it competes with
+   the amber buttons below.
+   --------------------------------------------------------------------------- */
+.panel-head {
+  --ph-hue: var(--viz-5);
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  padding: var(--s-16);
+  border-block-end: var(--hairline) solid color-mix(in oklab, var(--ph-hue) 20%, var(--border));
+  background:
+    radial-gradient(
+      90% 140% at 100% 0%,
+      color-mix(in oklab, var(--ph-hue) 20%, transparent) 0%,
+      transparent 70%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--ph-hue) 10%, var(--n-2)) 0%,
+      color-mix(in oklab, var(--ph-hue) 3%, var(--n-2)) 100%
+    );
 }
 
-.card-art__wash {
-  fill: oklch(0.62 0.13 var(--card-art-h) / 0.14);
+.panel-head[data-hue='violet'] { --ph-hue: var(--viz-3); }
+.panel-head[data-hue='teal'] { --ph-hue: var(--viz-2); }
+.panel-head[data-hue='amber'] { --ph-hue: var(--a-9); }
+/* The accent fill is LIGHT in both themes (it is a button colour), so its
+   medallion takes the fixed dark ink `--solid` chips use, not white. */
+.panel-head[data-hue='amber'] .panel-head__icon { color: var(--on-accent-ink); }
+/* WhatsApp's own green, written onto the card link as `--wa` by
+   `WhatsappChannelCard` — a brand mark, not a palette step. */
+.panel-head[data-hue='wa'] { --ph-hue: var(--wa); }
+
+/* The medallion: the hue at full strength, lit like the badge discs — an
+   angled ramp and a bright top edge — so it reads as an object, not a dot. */
+.panel-head__icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    150deg,
+    color-mix(in oklab, var(--ph-hue) 72%, var(--ink-fg)) 0%,
+    var(--ph-hue) 55%,
+    color-mix(in oklab, var(--ph-hue) 78%, var(--ink)) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    0 6px 14px -6px color-mix(in oklab, var(--ph-hue) 75%, transparent);
+  /* `--ink-fg` is theme-fixed — the medallion is a mid-tone in both themes,
+     so its glyph is white in both. */
+  color: var(--ink-fg);
 }
 
-.card-art__solid {
-  fill: var(--n-1);
-  stroke: var(--e-tint-line);
-  stroke-width: 2;
+.panel-head__text {
+  flex: 1;
+  min-inline-size: 0;
 }
 
-.card-art__screen {
-  fill: var(--e-tint);
+.panel-head__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4) var(--s-8);
 }
 
-/* A raised face — the podium's winning block, and anything else that has to
-   read as a surface rather than as a hole. `--n-1` (what `.card-art__solid`
-   fills with) is the PAGE background, which on a light card is white paper and
-   on the dark theme is a near-black rectangle sitting in the middle of an ember
-   banner. A neutral wash keyed off the foreground is light on dark and dark on
-   light, so it reads as "raised" in both. */
-.card-art__riser {
-  fill: color-mix(in oklch, var(--n-12), transparent 90%);
-  stroke: var(--e-tint-line);
-  stroke-width: 2;
-}
-
-.card-art__line {
-  fill: none;
-  stroke: var(--e-tint-line);
-  stroke-width: 2;
-}
-
-.card-art__lens {
-  fill: oklch(0.62 0.13 var(--card-art-h) / 0.18);
-  stroke: var(--e-tint-line);
-  stroke-width: 2;
-}
-
-.card-art__mark {
-  fill: none;
-  stroke: var(--e-tint-line);
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-
-.card-art__accent-fill {
-  fill: var(--a-9);
-}
-
-.card-art__accent-stroke {
-  fill: none;
-  stroke: var(--a-9);
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.aside-card__title {
+.panel-head__title {
+  min-inline-size: 0;
   font-size: var(--fs-title-4);
-  font-weight: var(--fw-medium);
+  font-weight: var(--fw-bold);
+  line-height: 1.35;
   color: var(--n-12);
 }
 
-/* A `.group-head` that has been wrapped in a card by `<AsideBlock>` keeps its
-   ember mark and its rule — both still do their job — but not its full-width
-   type size. `--fs-title-3` beside the `--fs-title-4` of the cards above and
-   below it is the same heading printed at two sizes in one 23rem column. */
-.aside-card .group-head {
-  margin-block-end: var(--s-12);
-}
-
-.aside-card .group-head__title {
-  font-size: var(--fs-title-4);
-}
-
-.aside-card__note {
-  margin-block-start: var(--s-4);
-  font-size: var(--fs-text-sm);
-  line-height: var(--lh-text-sm);
+.panel-head__lead {
+  margin-block-start: 0.15rem;
+  font-size: var(--fs-text-xs);
+  line-height: 1.55;
   color: var(--n-11);
+}
+
+.panel-head__meta {
+  flex-shrink: 0;
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--ph-hue) 15%, var(--n-2));
+  box-shadow: inset 0 0 0 var(--hairline) color-mix(in oklab, var(--ph-hue) 32%, transparent);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in oklab, var(--ph-hue) 58%, var(--n-12));
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   .tip-callout — «نصيحة اليوم» (`components/dashboard/tip-of-day-card.tsx`).
+
+   One sentence, so one short coloured card: a lit bulb, the label, the line
+   set a step above body text, and a faint quote mark behind it. It was an
+   `.aside-card` with a 16/6 drawing on top — ~250px on a phone for a single
+   line. Teal, because amber on this page means an action or "you are here",
+   and a tip is neither; the bulb keeps the amber because it is lit.
+   --------------------------------------------------------------------------- */
+.tip-callout {
+  --tip-hue: var(--viz-2);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-12);
+  padding: var(--s-16);
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid color-mix(in oklab, var(--tip-hue) 32%, var(--border));
+  background:
+    radial-gradient(
+      80% 120% at 0% 100%,
+      color-mix(in oklab, var(--viz-5) 14%, transparent) 0%,
+      transparent 70%
+    ),
+    linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--tip-hue) 17%, var(--n-2)) 0%,
+      color-mix(in oklab, var(--tip-hue) 6%, var(--n-2)) 100%
+    );
+}
+
+.tip-callout__icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    150deg,
+    color-mix(in oklab, var(--a-9) 60%, var(--ink-fg)) 0%,
+    var(--a-9) 55%,
+    var(--p-700) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.45),
+    0 0 18px -3px color-mix(in oklab, var(--a-9) 70%, transparent);
+  /* The fixed dark ink `--on-accent-ink` exists for exactly this: text on the
+     amber fill, in both themes. */
+  color: var(--on-accent-ink);
+}
+
+.tip-callout__body {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.tip-callout__title {
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-bold);
+  line-height: 1.5;
+  color: color-mix(in oklab, var(--tip-hue) 62%, var(--n-12));
+}
+
+.tip-callout__text {
+  margin-block-start: 0.2rem;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-medium);
+  line-height: 1.7;
+  color: var(--n-12);
+  text-wrap: pretty;
+}
+
+/* A filled quote mark in the bottom corner at the inline end — the last line
+   of a two-line tip is the short one, so that corner is the emptiest.
+   Decoration only, and faint: it sits under the text (`isolation` on the card
+   keeps the negative z-index inside it) and must never compete with it. */
+.tip-callout__quote {
+  position: absolute;
+  z-index: -1;
+  inset-block-end: 0.5rem;
+  inset-inline-end: 0.75rem;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  fill: currentColor;
+  stroke-width: 0;
+  color: color-mix(in oklab, var(--tip-hue) 16%, transparent);
 }
 
 /* The strip inside a 23rem column. `.badge-strip`'s own `lg` rule opens to six
@@ -2376,7 +2585,6 @@ details[open] > .unit__head .unit__chevron,
      · this screen,
      · `.verdict--pass`, on the dashboard's exam rows and on the quiz lesson
        in the player,
-     · `.topic-row__fill`, the accuracy bar on the dashboard's mastery card,
      · `<Figure tone="verdict">` in `QuizResultRow`, which colours the BEST
        percent on `/results`,
      · `<Badge tone>` in `ResultHeader`, on the review screen a student lands
@@ -2595,46 +2803,91 @@ details[open] > .unit__head .unit__chevron,
 }
 
 /* ---------------------------------------------------------------------------
-   .topic-row — one weak topic on the dashboard's mastery card.
+   .topic-row — one weak topic on the dashboard's «نقوّي النقط دي» card.
 
-   Deliberately built on `.attempt-row`'s proportions rather than as a new
-   shape: it sits three sections above an `.attempt-row` list on the same page,
-   both are "a thing you did, a figure, and a button", and two near-identical
-   rows drawn differently is how a page starts to look assembled from parts.
+   Score chip, name, a bar, and a button — the row is its own small card,
+   coloured by its BAND, so the three rows read as three separate things to
+   do rather than one red list.
 
-   The bar is the one thing the exam rows do not have, because an exam has a
-   verdict and a topic has a degree.
+   ## The colour is `/results`'s, on purpose
+
+   `data-band` is `scoreBand()` from `lib/results-view.ts`, and the three hues
+   are the ones `.rs-hero[data-band]` gives the gauge on «نتائجي»: amber
+   (`--viz-1`) under the pass line, green (`--viz-6`) over it, violet
+   (`--viz-3`) from «امتياز» up. A 27% here and a 27% average there are the
+   same colour, and it is not red on either screen.
+
+   It WAS red — a red track, a red fill, red ink — on the argument that red
+   means marks not collected. That is true and it still read as three alarms
+   on the one block whose rows are each fixable in one lesson; reported from a
+   phone as flat and alarming. Every mix below is `in oklab`
+   (`lib/neutral-mix-space.test.ts`).
+
+   ## The grid
+
+   Two lines: the score chip spans both at the inline start, the name takes
+   the whole first line, and the bar shares the second with the button. The
+   name used to share ONE line with a bar, a figure and the button, so on a
+   390px phone «امتحان نصف الشهر الأول — الدرسان 1-1 و 1-2» was cut to a few
+   words — and the name is the thing a student is reading.
    --------------------------------------------------------------------------- */
 
-.topic-row {
-  /* `relative`, so «راجع الدرس» can stretch its hit area over the whole row —
-     see `.topic-row__link` below. */
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--s-12);
-  padding: var(--s-12);
-  border-radius: var(--r-md);
-  background: var(--n-1);
-  box-shadow: inset 0 0 0 var(--hairline) var(--border);
+.topic-list {
+  display: grid;
+  gap: var(--s-8);
 }
 
-/* The review link owns the ROW, not just the chip.
+.topic-row {
+  --tr-band: var(--viz-1);
+  /* `relative`, so «نراجع» can stretch its hit area over the whole row — see
+     `.topic-row__link` below. `overflow: hidden` for the band stripe. */
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'score title title'
+    'score bar cta';
+  align-items: center;
+  column-gap: var(--s-12);
+  row-gap: var(--s-8);
+  padding: var(--s-12);
+  padding-inline-start: calc(var(--s-12) + 3px);
+  border-radius: var(--r-lg);
+  border: var(--hairline) solid color-mix(in oklab, var(--tr-band) 26%, var(--border));
+  background: linear-gradient(
+    to left,
+    color-mix(in oklab, var(--tr-band) 9%, var(--n-2)) 0%,
+    var(--n-2) 70%
+  );
+}
+
+.topic-row[data-band='pass'] { --tr-band: var(--viz-6); }
+.topic-row[data-band='high'] { --tr-band: var(--viz-3); }
+
+/* The band, as a stripe at the inline start — the same mark `.rs-exam` carries
+   on «نتائجي», so the two lists read as one family. */
+.topic-row::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: 3px;
+  background: var(--tr-band);
+}
+
+/* The review link owns the ROW, not just the button.
    -----------------------------------------------------------------------------
-   The chip is ~72px wide at the inline end of a row whose title, bar and figure
-   are all inert — so on «ذاكر ده», the block that names the one thing a student
-   should work on, tapping the topic did nothing and only a small pill at the
-   far edge worked. A student aims at the NAME. Same fix, and the same
+   A student aims at the NAME. The button is at the far inline end of a row
+   whose title, bar and figure are all inert — so tapping the topic used to do
+   nothing and only a small pill at the edge worked. Same fix, and the same
    mechanism, as `.lesson-row__link` further up this file.
 
    A pseudo-element rather than wrapping the row in an anchor: wrapping would
-   put the bar and the percentage inside the link's accessible name, so a screen
-   reader would read «مقاطع الشرط · ٤٢٪ · راجع الدرس» as one control. This adds
-   hit area and nothing else — one tab stop, one name.
-
-   `z-index: 1` keeps it under nothing (there is nothing else positioned in the
-   row) and the focus ring is left on the chip itself, where it outlines a
-   72px control rather than the whole row. */
+   put the bar and the percentage inside the link's accessible name, so a
+   screen reader would read «مقاطع الشرط · ٤٢٪ · نراجع» as one control. This
+   adds hit area and nothing else — one tab stop, one name. The focus ring is
+   left on the button itself. */
 .topic-row__link::after {
   content: '';
   position: absolute;
@@ -2643,82 +2896,153 @@ details[open] > .unit__head .unit__chevron,
   border-radius: inherit;
 }
 
-.topic-row__text {
-  display: flex;
-  min-inline-size: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 0.375rem;
+/* The score, in the band's colour — the chip the eye lands on first. Mixed
+   toward `--n-12` for the ink so it clears contrast in BOTH themes: darker
+   than the hue on paper, lighter than it at night. */
+.topic-row__score {
+  grid-area: score;
+  display: grid;
+  place-items: center;
+  min-inline-size: 3.5rem;
+  block-size: 3.5rem;
+  padding-inline: var(--s-4);
+  border-radius: var(--r-lg);
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--tr-band) 24%, var(--n-2)) 0%,
+    color-mix(in oklab, var(--tr-band) 12%, var(--n-2)) 100%
+  );
+  box-shadow: inset 0 0 0 var(--hairline) color-mix(in oklab, var(--tr-band) 40%, transparent);
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: color-mix(in oklab, var(--tr-band) 60%, var(--n-12));
+  /* «27%» inside an Arabic row — without the isolate the sign can land on the
+     wrong side of the number. */
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 .topic-row__title {
+  grid-area: title;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
   font-size: var(--fs-text-sm);
-  font-weight: var(--fw-medium);
+  font-weight: var(--fw-semibold);
+  line-height: 1.55;
   color: var(--n-12);
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+
+/* «1-2» inside a topic name, isolated by `isolateLtrRuns` so the bidi
+   algorithm cannot reverse it — and kept on one line, or the hyphen becomes a
+   break opportunity and «1-» ends one line while «1» starts the next. */
+.topic-row__title bdi,
+.topic-strong__item bdi,
+.badge__hint bdi {
   white-space: nowrap;
 }
 
-/* Two reds, and the pair is the whole point.
-
-   The TRACK is a faint `--err` wash — the marks this topic offered. The FILL is
-   solid `--err` — the marks the student collected. What is left over between
-   them is what they lost, and it is red because losing them is why the row is
-   on this card at all.
-
-   The first version had a NEUTRAL track, and the screenshot killed it: the
-   worst possible row — a topic scored 0% — rendered as a grey line with no ink
-   on it whatsoever, indistinguishable from a skeleton that had not loaded. The
-   card's most urgent row was its most invisible one, because the fill encodes
-   marks COLLECTED and this card's entire subject is marks MISSING.
-
-   Tinting the track fixes that without inverting the number: 0% is now a fully
-   washed bar with no solid in it, 52% is half solid, and the figure printed
-   beside the bar still names the solid part. */
+/* The track is the band's own tint, so a 0% row is a coloured, EMPTY bar —
+   not a grey line indistinguishable from a skeleton that has not loaded,
+   which is what a neutral track made of the card's worst row once. */
 .topic-row__bar {
+  grid-area: bar;
   display: block;
-  block-size: 6px;
+  block-size: 8px;
   overflow: hidden;
-  border-radius: var(--r-xs);
-  background: color-mix(in oklab, var(--err) 22%, var(--n-3));
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--tr-band) 18%, var(--n-4));
 }
 
 .topic-row__fill {
   display: block;
   block-size: 100%;
-  border-radius: var(--r-xs);
-  background: var(--err);
-  /* A topic scored 2% is not a topic scored 0%, and at 6px tall the difference
+  border-radius: var(--r-full);
+  /* Paler at the start, full strength at the leading edge — the page is RTL,
+     so the fill grows from the right and `to left` runs the same way. */
+  background: linear-gradient(
+    to left,
+    color-mix(in oklab, var(--tr-band) 60%, var(--n-2)),
+    var(--tr-band)
+  );
+  /* A topic scored 2% is not a topic scored 0%, and at 8px tall the difference
      would otherwise be a sub-pixel sliver. Zero stays genuinely zero — this is
      a floor on a drawn bar, not on the value — because `MasteryCard` omits the
      element entirely at 0. */
   min-inline-size: 3px;
 }
 
-.topic-row__value {
-  flex-shrink: 0;
-  font-size: var(--fs-text-sm);
-  font-variant-numeric: tabular-nums;
-  color: var(--n-11);
+.topic-row__cta {
+  grid-area: cta;
+  gap: var(--s-4);
+  font-weight: var(--fw-semibold);
 }
 
-/* The mastered topics, one line. Deliberately the smallest thing on the card:
-   it is there so the block is not purely an indictment, not to compete with
-   the three rows that carry the instruction. */
+/* The mastered topics, as chips in their own band colour. Deliberately the
+   smallest thing on the card: it is there so the block is not purely a list of
+   what to fix, not to compete with the rows that carry the instruction. */
 .topic-strong {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: var(--s-8);
   margin-block-start: var(--s-12);
+  padding-block-start: var(--s-12);
+  border-block-start: var(--hairline) dashed var(--border);
   font-size: var(--fs-text-sm);
   color: var(--n-11);
 }
 
 .topic-strong__item {
-  color: var(--ok);
+  --tr-band: var(--viz-6);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: 0.1rem 0.6rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--tr-band) 14%, var(--n-2));
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+  color: color-mix(in oklab, var(--tr-band) 60%, var(--n-12));
+}
+
+.topic-strong__item[data-band='high'] { --tr-band: var(--viz-3); }
+.topic-strong__item[data-band='low'] { --tr-band: var(--viz-1); }
+
+.topic-strong__value {
+  font-weight: var(--fw-bold);
   font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Nothing measured yet / all clear: the drawing BESIDE the sentence. Stacked,
+   it was a ~220px box for two lines of text. */
+.topic-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  border-radius: var(--r-lg);
+  background: color-mix(in oklab, var(--viz-5) 6%, var(--n-3));
+}
+
+.topic-empty .spot {
+  flex-shrink: 0;
+  inline-size: 5.25rem;
+  block-size: auto;
+  margin: 0;
+}
+
+.topic-empty__body {
+  min-inline-size: 0;
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+  color: var(--n-11);
 }
 
 /* ---------------------------------------------------------------------------

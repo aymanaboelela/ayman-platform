@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { Sparkles } from 'lucide-react';
+import { ClipboardCheck, Sparkles } from 'lucide-react';
 import { copy, formatCopy, type PendingExam } from '@ayman/contracts';
 import { quizHref } from '@/lib/quiz-links';
+import { PanelHead } from './panel-head';
 
 const c = copy.dashboard;
 
@@ -30,18 +31,23 @@ const c = copy.dashboard;
  * card on the busiest screen in the product, so the section renders nothing
  * at all rather than an "لا يوجد" placeholder — the same call `recommendedCourses`
  * makes on the page for the exact same reason.
+ *
+ * ## Its own card, with the same head as its neighbours
+ *
+ * It used to be a bare `.group-head` list the page wrapped in a card shell
+ * (`AsideBlock`, now gone). Every other card in the aside now opens with `PanelHead`,
+ * and a lone ember rule among four coloured heads read as the one card nobody
+ * had finished. Amber, because this is the one card in the column that is
+ * an ACTION waiting — the colour the rest of the page spends on "press this".
  */
 export function PendingExamsCard({ exams }: { exams: readonly PendingExam[] }) {
   if (exams.length === 0) return null;
 
   return (
-    <section>
-      <div className="group-head">
-        <span className="group-head__mark" aria-hidden="true" />
-        <h2 className="group-head__title">{c.pendingExamsTitle}</h2>
-      </div>
+    <section className="aside-card">
+      <PanelHead icon={ClipboardCheck} hue="amber" title={c.pendingExamsTitle} />
 
-      <ul className="space-y-2">
+      <ul className="aside-card__body space-y-2">
         {exams.map((exam) => (
           <li key={exam.lessonId}>
             <PendingExamRow exam={exam} />

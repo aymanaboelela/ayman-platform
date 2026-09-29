@@ -1,6 +1,8 @@
 import {
+  Check,
   ClipboardCheck,
   Layers,
+  Lock,
   Medal,
   PlayCircle,
   Sparkle,
@@ -9,7 +11,8 @@ import {
 } from 'lucide-react';
 import { copy, formatCopy } from '@ayman/contracts';
 import { tierName, type Achievement, type BadgeGlyph } from '@/lib/achievements';
-import { CardArt } from './card-art';
+import { isolateLtrRuns } from './ltr-runs';
+import { PanelHead } from './panel-head';
 
 const GLYPHS: Record<BadgeGlyph, LucideIcon> = {
   play: PlayCircle,
@@ -29,10 +32,21 @@ const c = copy.dashboard.badges;
  *
  * ## The accessible name carries the state
  *
- * Earned and unearned differ by fill and by opacity — two visual properties and
- * no text. So each marker's `aria-label` spells out which it is, and an
- * unearned one appends its condition; a screen reader hears «أول درس — لسه:
- * افتح أول محاضرة وخلّصها» rather than a title with no state at all.
+ * Earned and unearned differ by metal, a tick or a padlock, and the line under
+ * the title — all of it drawn, none of it read out. So each marker's
+ * `aria-label` spells out which it is, and an unearned one appends its
+ * condition and, where the page has the number, how far along it is: «عشر
+ * دروس — شارة فضية — لسه: عشر محاضرات في أي كورس. (3 من 10)».
+ *
+ * ## What a locked tile prints
+ *
+ * It used to print its title and nothing else, so four grey tiles out of six
+ * said nothing about how to get any of them — the condition lived in a `title`
+ * tooltip, which does nothing on the phones this is read on. Now each locked
+ * tile prints a second line: a meter and «3 من 10» where
+ * `lib/achievements.ts` has a number for it, the hint where it does not. An
+ * earned one prints its metal («ذهبية») in the same slot, so every tile in
+ * the grid is the same three lines and the rows line up.
  *
  * The `<li>` carries the label rather than the title element, because the disc
  * is `aria-hidden` and the title alone would name the marker twice.
@@ -77,11 +91,15 @@ export function Achievements({
   /**
    * `'aside'` is the dashboard's, and it is the reason this block moved off
    * the main column — «الإنجازات برضه نفس الكلام»، i.e. into the side, in a
-   * box, with a picture. The strip is the same six markers built from the same
-   * rules; what changes is that it opens with a banner instead of a
-   * `.group-head`, and it is pinned to three columns because the `lg` rule on
-   * `.badge-strip` opens to SIX and six 50px cells in a 23rem column wrap
-   * «أول امتحان» onto three lines each.
+   * box. The strip is the same six markers built from the same rules; what
+   * changes is that it opens with a `PanelHead` and a six-segment meter
+   * instead of a `.group-head`, and it is pinned to three columns because the
+   * `lg` rule on `.badge-strip` opens to SIX and six 50px cells in a 23rem
+   * column wrap «أول امتحان» onto three lines each.
+   *
+   * It opened with a 16/6 drawing of a podium until the phone screenshot that
+   * called it unfinished: ~140px of pastel before the heading, on a card whose
+   * content is already six pictures.
    *
    * `'section'` is the original full-width form. Nothing renders it today; it
    * is kept because the strip is not dashboard-specific and `/profile` is the
@@ -92,65 +110,92 @@ export function Achievements({
   const aside = variant === 'aside';
 
   const strip = (
-      <ul className={aside ? 'badge-strip badge-strip--compact' : 'badge-strip'}>
-        {achievements.map((badge) => {
-          const Glyph = GLYPHS[badge.glyph];
-          return (
-            <li
-              key={badge.id}
-              className={
-                badge.earned
-                  ? `badge badge--${badge.tier} badge--earned`
-                  : `badge badge--${badge.tier}`
-              }
-              // A pointer affordance for the condition, which otherwise only
-              // reaches screen readers. It is deliberately NOT the only way to
-              // learn what the strip is — `title` does nothing on a touch
-              // screen, which is why the heading carries `badges.note`.
-              title={badge.earned ? undefined : badge.hint}
-              // The tier sits between the name and the state in BOTH branches,
-              // so the sentence reads the same way round every time: what it
-              // is, what it is worth, whether you have it.
-              aria-label={
-                badge.earned
-                  ? `${badge.title} — ${formatCopy(c.tierLabel, { tier: tierName(badge.tier) })} — ${c.earned}`
-                  : `${badge.title} — ${formatCopy(c.tierLabel, { tier: tierName(badge.tier) })} — ${c.locked}: ${badge.hint}`
-              }
-            >
-              <span className="badge__disc" aria-hidden="true">
-                <Glyph className="size-5" />
+    <ul className={aside ? 'badge-strip badge-strip--compact' : 'badge-strip'}>
+      {achievements.map((badge) => {
+        const Glyph = GLYPHS[badge.glyph];
+        const tier = formatCopy(c.tierLabel, { tier: tierName(badge.tier) });
+        return (
+          <li
+            key={badge.id}
+            className={
+              badge.earned
+                ? `badge badge--${badge.tier} badge--earned`
+                : `badge badge--${badge.tier}`
+            }
+            // A pointer affordance for the condition. No longer the only place
+            // it reaches a sighted student — a locked tile now prints its
+            // hint or its progress under the title — but it is the full
+            // sentence where the tile shows «3 من 10».
+            title={badge.earned ? undefined : badge.hint}
+            // The tier sits between the name and the state in BOTH branches,
+            // so the sentence reads the same way round every time: what it
+            // is, what it is worth, whether you have it — and, locked, how
+            // far along it is.
+            aria-label={
+              badge.earned
+                ? `${badge.title} — ${tier} — ${c.earned}`
+                : `${badge.title} — ${tier} — ${c.locked}: ${badge.hint}${
+                    badge.progress ? ` (${badge.progress.label})` : ''
+                  }`
+            }
+          >
+            <span className="badge__disc" aria-hidden="true">
+              <Glyph className="size-5" />
+              {/* The state, ON the disc, in a shape — a tick or a padlock —
+                  so earned-or-not survives greyscale and a glance. It says
+                  "not yet", not "not for you": the line under the title is
+                  how to get it. */}
+              <span className="badge__state">
+                {badge.earned ? <Check strokeWidth={3} /> : <Lock strokeWidth={2.5} />}
               </span>
-              {/* `aria-hidden`: the `<li>` above already names this marker AND
-                  its state. Leaving the text exposed would announce the title,
-                  then the title again inside the label. */}
-              <span className="badge__title" aria-hidden="true">
-                {badge.title}
+            </span>
+            {/* `aria-hidden`, all three lines: the `<li>` above already names
+                this marker, its tier, its state and its progress. Leaving the
+                text exposed would announce each of them twice. */}
+            <span className="badge__title" aria-hidden="true">
+              {badge.title}
+            </span>
+            {badge.earned ? (
+              <span className="badge__tier" aria-hidden="true">
+                {tierName(badge.tier)}
               </span>
-            </li>
-          );
-        })}
-      </ul>
+            ) : badge.progress ? (
+              <span className="badge__progress" aria-hidden="true">
+                <span className="badge__meter">
+                  <span
+                    className="badge__meter-fill"
+                    style={{
+                      inlineSize: `${Math.round((badge.progress.value / badge.progress.target) * 100)}%`,
+                    }}
+                  />
+                </span>
+                <span className="badge__hint">{isolateLtrRuns(badge.progress.label)}</span>
+              </span>
+            ) : (
+              <span className="badge__hint" aria-hidden="true">
+                {isolateLtrRuns(badge.hint)}
+              </span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 
   if (aside) {
     return (
       <section className="aside-card">
-        <CardArt name="awards" />
+        {/* The gloss is the head's lead line, at every width — it is the one
+            sentence that says what earns a marker at all. */}
+        <PanelHead
+          icon={Trophy}
+          hue="violet"
+          title={c.title}
+          lead={c.note}
+          meta={formatCopy(c.count, { earned, total: achievements.length })}
+        />
         <div className="aside-card__body">
-          <div className="flex items-baseline gap-2">
-            <h2 className="aside-card__title min-w-0 flex-1">{c.title}</h2>
-            <span className="group-head__count shrink-0">
-              {formatCopy(c.count, { earned, total: achievements.length })}
-            </span>
-          </div>
-          {/* The gloss is UNCONDITIONAL here, at every width. In the full-width
-              form it is `sm:hidden` under a heading that carries its own copy
-              of it — a `.group-head` cannot wrap, so the two split by
-              breakpoint. This card's heading is a flex row that can, so there
-              is one gloss and it is always on. It is also the only thing on
-              screen that says what earns a marker: `title` on a badge does
-              nothing on a touch screen. */}
-          <p className="aside-card__note mb-3">{c.note}</p>
+          <AwardMeter achievements={achievements} />
           {strip}
         </div>
       </section>
@@ -173,5 +218,39 @@ export function Achievements({
       <p className="mb-3 text-[length:var(--fs-text-sm)] text-fg-muted sm:hidden">{c.note}</p>
       {strip}
     </section>
+  );
+}
+
+/** Cheapest first, so the lit segments climb bronze → silver → gold from the
+ *  start of the bar, the way the metals themselves are ranked. */
+const METAL_ORDER = { bronze: 0, silver: 1, gold: 2 } as const;
+
+/**
+ * «2 من 6» as a picture: one segment per marker, earned ones first, each
+ * struck in its OWN metal — so the bar says how many and how much in the same
+ * glance, where a single amber fill would only say how many.
+ *
+ * `aria-hidden`: the count is printed as text in the head right above it.
+ */
+function AwardMeter({ achievements }: { achievements: readonly Achievement[] }) {
+  const ordered = [
+    ...achievements
+      .filter((badge) => badge.earned)
+      .sort((a, b) => METAL_ORDER[a.tier] - METAL_ORDER[b.tier]),
+    ...achievements.filter((badge) => !badge.earned),
+  ];
+  return (
+    <span className="award-meter" aria-hidden="true">
+      {ordered.map((badge) => (
+        <span
+          key={badge.id}
+          className={
+            badge.earned
+              ? `award-meter__pip badge--${badge.tier} award-meter__pip--on`
+              : 'award-meter__pip'
+          }
+        />
+      ))}
+    </span>
   );
 }
