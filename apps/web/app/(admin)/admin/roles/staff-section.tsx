@@ -7,6 +7,7 @@ import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
+import { Select } from '@ayman/ui/components/select';
 
 import { searchAccountsAction, setStaffRoleAction } from './actions';
 import { MemberPermissions } from './member-permissions';
@@ -235,13 +236,11 @@ export function StaffSection({
               {removing === m.id ? (
                 <div className="w-full basis-full rounded-md border border-line-subtle bg-surface-2 p-3">
                   <Label htmlFor={`staff-remove-${m.id}`}>{c.reasonLabel}</Label>
-                  <Input
+                  <ReasonPicker
                     id={`staff-remove-${m.id}`}
-                    value={removeReason}
-                    autoComplete="off"
-                    placeholder={c.removeReasonPlaceholder}
-                    onChange={(event: ChangeEvent<HTMLInputElement>) => setRemoveReason(event.target.value)}
-                    className="mt-1.5"
+                    options={c.removeReasons}
+                    otherPlaceholder={c.removeReasonPlaceholder}
+                    onChange={setRemoveReason}
                   />
                   <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{reasonHint}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -341,13 +340,11 @@ export function StaffSection({
         {picked ? (
           <div className="mt-3">
             <Label htmlFor="staff-reason">{c.reasonLabel}</Label>
-            <Input
+            <ReasonPicker
               id="staff-reason"
-              value={reason}
-              autoComplete="off"
-              placeholder={c.reasonPlaceholder}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => setReason(event.target.value)}
-              className="mt-1.5"
+              options={c.addReasons}
+              otherPlaceholder={c.reasonPlaceholder}
+              onChange={setReason}
             />
             <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{reasonHint}</p>
             {/* `reasonMin` مش ٣: الزرار كان بيتفتح عند ٣ والسيرفر بيطلب ٨،
@@ -363,5 +360,71 @@ export function StaffSection({
         ) : null}
       </div>
     </section>
+  );
+}
+
+const OTHER = '__other__';
+
+/**
+ * The reason as a choice — «متعمل دي دروب داون ليت فيها حاجات».
+ *
+ * A blank box that must hold eight characters was a wall in front of a
+ * one-click decision: the teacher did not know what to write, or wrote «مساعد»
+ * and watched the button stay grey. Nothing is preselected (the choice is the
+ * confirmation), and «سبب تاني…» keeps the free text for anything the list
+ * does not say.
+ */
+function ReasonPicker({
+  id,
+  options,
+  otherPlaceholder,
+  onChange,
+}: {
+  id: string;
+  options: readonly string[];
+  otherPlaceholder: string;
+  /** The reason as it will be sent — `''` until one is chosen or written. */
+  onChange: (reason: string) => void;
+}) {
+  const [choice, setChoice] = useState('');
+  const [custom, setCustom] = useState('');
+
+  return (
+    <>
+      <Select
+        id={id}
+        value={choice}
+        onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+          const next = event.target.value;
+          setChoice(next);
+          onChange(next === OTHER ? custom : next);
+        }}
+        className="mt-1.5"
+      >
+        <option value="" disabled>
+          {c.reasonChoose}
+        </option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+        <option value={OTHER}>{c.reasonOther}</option>
+      </Select>
+      {choice === OTHER ? (
+        <Input
+          aria-label={c.reasonOtherLabel}
+          value={custom}
+          autoComplete="off"
+          autoFocus
+          placeholder={otherPlaceholder}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => {
+            setCustom(event.target.value);
+            onChange(event.target.value);
+          }}
+          className="mt-2"
+        />
+      ) : null}
+    </>
   );
 }
