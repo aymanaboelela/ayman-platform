@@ -780,7 +780,13 @@
   font-size: var(--fs-text-xs);
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.3);
 }
-.ca-option[data-state='pending'] { transform: translateY(3px); box-shadow: 0 0 0 3px #fff, 0 2px 0 color-mix(in oklab, var(--tone), #000 35%); }
+/* لحظة الضغط، قبل رد السيرفر — خاتم واضح وبروزة أوضح من `:active` العادية،
+   عشان في مباراة ١٥ ثانية الطالب يحس إنها اتسجّلت من أول لمسة وما يلمسش تاني. */
+.ca-option[data-state='pending'] {
+  transform: translateY(3px) scale(0.98);
+  box-shadow: 0 0 0 4px #fff, 0 0 18px rgb(255 255 255 / 0.5), 0 2px 0 color-mix(in oklab, var(--tone), #000 35%);
+  filter: brightness(1.08);
+}
 .ca-option[data-state='right'] {
   background: linear-gradient(135deg, color-mix(in oklab, var(--ok), #fff 15%), var(--ok));
   box-shadow: 0 0 0 4px rgb(255 255 255 / 0.9), 0 0 32px color-mix(in oklab, var(--ok) 70%, transparent);

@@ -36,6 +36,22 @@ export function ArenaApp({ lobby }: { lobby: Lobby }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fxKey]);
 
+  // اللوبي بيفضل زي ما السيرفر رسمه أول مرة — لو حد تاني كسب ماتش، ترتيبه
+  // ونقطه في «أبطال الساحة» مايتغيروش عند الطالب القاعد ساكت غير لما يعمل
+  // ريفريش بإيده. `router.refresh()` نفس النداء اللي `backToLobby` بيستخدمه
+  // أصلًا — بيعيد قراية السيرفر كومبوننت من غير ما يمسح حالة الكلاينت (زي
+  // الكورس المختار)، فمفيش داعي لـAPI كلاينت جديد ولا سكيما جديدة. كل ١٠
+  // ثواني، وبس لما التاب فاتح (`document.hidden`) عشان ما نضربش السيرفر من
+  // تابات مقفولة في الخلفية.
+  useEffect(() => {
+    if (screen !== 'lobby') return;
+    const id = window.setInterval(() => {
+      if (document.hidden) return;
+      router.refresh();
+    }, 10_000);
+    return () => window.clearInterval(id);
+  }, [screen, router]);
+
   const course = lobby.courses.find((entry) => entry.id === (state.want ?? courseId));
   const match = state.view.phase === 'match' ? state.view.match : null;
 

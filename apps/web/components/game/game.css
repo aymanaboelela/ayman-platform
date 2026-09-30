@@ -242,6 +242,13 @@
 }
 .gm-option[data-state='wrong'] { filter: saturate(0.4) brightness(0.8); box-shadow: 0 0 0 3px color-mix(in oklab, var(--err), #fff 20%); }
 .gm-option[data-state='dim'] { opacity: 0.35; }
+/* الضغطة نفسها، قبل رد السيرفر — نزول واضح وخاتم أبيض عشان الطالب يحس إنها
+   اتسجّلت على طول وما يضغطش تاني. من غيرها الزرار فاضل شكله زي قبل الضغط
+   لحد رد السيرفر، وده اللي كان بيخلي الضغطة تتحس إنها «مش شغالة». */
+.gm-option[data-state='pending'] {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 0.85), 0 2px 0 color-mix(in oklab, var(--tone), #000 35%);
+}
 
 .gm-feedback { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.75rem; }
 .gm-feedback__title { font-size: var(--fs-title-3); font-weight: var(--fw-bold); color: color-mix(in oklab, var(--err), #fff 35%); }
