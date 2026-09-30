@@ -27,7 +27,7 @@ const c = copy.dashboard.exams;
  * exam are the same kind of row to it. This one is the month's papers
  * specifically, and it has a row `ExamsSection` structurally cannot draw: the
  * exam a student MISSED. A missed exam produces no attempt, so it appears in no
- * history at all — and «مدخلتش الامتحان ده» is a fact worth being told once,
+ * history at all — and «الامتحان ده فاتك» is a fact worth being told once,
  * rather than an exam that silently never existed.
  *
  * ## Absent, not empty — with one exception
@@ -94,7 +94,7 @@ function ClosedExamRow({ exam }: { exam: StudentExam }) {
    *                      is null on purpose here, and printing ٠ for it would
    *                      tell a student who wrote four pages that they got
    *                      nothing.
-   *   never sat        — «مدخلتش الامتحان ده». Deliberately NOT «صفر»: they did
+   *   never sat        — «الامتحان ده فاتك». Deliberately NOT «صفر»: they did
    *                      not fail it, they missed it, and those are different
    *                      things to read about yourself.
    */

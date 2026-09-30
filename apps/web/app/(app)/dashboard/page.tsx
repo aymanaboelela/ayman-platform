@@ -353,10 +353,10 @@ export default async function DashboardPage() {
 
       {/*
         «امتحان الشهر» — full width, directly under the band, ABOVE «ناقصك كده
-        وتخلص».
+        وخلاص».
 
         This position is the one thing on the page that outranks «ناقصك كده
-        وتخلص», and only because it is DATED. Everything else in this column
+        وخلاص», and only because it is DATED. Everything else in this column
         describes an outstanding quantity that will still be outstanding
         tomorrow; an exam window opens on Friday at eight and shuts, and a
         student who scrolls past it does not get another one — `attemptAllowance`
@@ -373,19 +373,19 @@ export default async function DashboardPage() {
       <ExamCountdownBand exam={monthlyExam} serverTime={studentExams.serverTime} />
 
       {/*
-        «شهر جديد اتفتح» — تحت الباند، وفوق «ناقصك كده وتخلص».
+        «شهر جديد اتفتح» — تحت الباند، وفوق «ناقصك كده وخلاص».
 
         تحت الامتحان وليس فوقه: الامتحان **بميعاد**، بيفتح الجمعة ٨ ويقفل، وطالب
         دوّس عليه بالغلط مافيش جلسة تانية يلحقها (`attemptAllowance` واحد). الشهر
         مش كده — بيفضل مفتوح لحد ما المدرّس يقفله. فاللي بيقفل النهارده بياخد
         المكان اللي فوق.
 
-        وفوق «ناقصك كده وتخلص» لأن ده فلوس والتاني تقدّم. الطالب اللي شهره التاني
+        وفوق «ناقصك كده وخلاص» لأن ده فلوس والتاني تقدّم. الطالب اللي شهره التاني
         اتفتح وهو مش ماسكه، أهم حاجة يعرفها إن فيه محاضرات مقفولة عليه — «فاضلك
         درسين» في الشهر اللي خلّصه بتبقى الجملة التانية، مش الأولى.
 
         `quiet` لما يكون فيه امتحان مفتوح: الشاشة عليها زرار أمبر واحد بس، وفي
-        الساعات دي هو «ادخل الامتحان». نفس السبب اللي الصفحة بتوقّف
+        الساعات دي هو «نبدأ الامتحان». نفس السبب اللي الصفحة بتوقّف
         `<NextUpBlock>` عشانه تحت بالظبط — بس ده بيهدّى وماينزلش، لأن الفلوس
         والباب الوحيد ليها مايختفوش عشان فيه امتحان.
 
@@ -395,7 +395,7 @@ export default async function DashboardPage() {
       */}
       <MonthNewsBand offers={dashboard.monthOffers} quiet={monthlyExam?.phase === 'open'} />
 
-      {/* «ناقصك كده وتخلص» — the band above states the percentage, this states
+      {/* «ناقصك كده وخلاص» — the band above states the percentage, this states
           what to do about it. Directly under the hero because those two are one
           thought: «عاوز يبقى فيه حاجة تحت… أعرف اللي ناقصني وأضبطها».
           `showRing={false}` — the band's own 104px ring is right there, and a
@@ -404,7 +404,7 @@ export default async function DashboardPage() {
 
           ⚠️ IT STANDS DOWN while a monthly exam is OPEN, and that is this
           page's «exactly one accent-filled primary action» rule being kept
-          rather than excepted. `<ExamCountdownBand>` carries «ادخل الامتحان» in
+          rather than excepted. `<ExamCountdownBand>` carries «نبدأ الامتحان» in
           `--a-9` in that phase, and every row of this block ends in an amber
           pill of its own — two amber answers to "what do I press" on one
           screen is precisely the state the rebuild at the top of this file
@@ -550,7 +550,7 @@ export default async function DashboardPage() {
               own label said it was done with.
 
               The state has not gone anywhere — every card still carries its own
-              meter, its lesson count and «خلّصت اللي نزل» when that is true.
+              meter, its lesson count and «خلّصنا اللي نزل» when that is true.
               The card says it, per course, instead of a filter deciding for
               the student which of their courses they are allowed to see.
             */}

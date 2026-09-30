@@ -55,7 +55,7 @@ export interface LibraryCourse {
   /** `null` when the student is not enrolled — the card says «نبدأ الكورس». */
   progressPercent: number | null;
   clearedLessons: number;
-  /** Gates «خلصت الكورس» on the card — see `Course.contentComplete`. */
+  /** Gates «خلّصنا الكورس» on the card — see `Course.contentComplete`. */
   contentComplete: boolean;
   /** Where «نكمّل» points. Null when not enrolled, or when the course is done. */
   nextLessonId: string | null;

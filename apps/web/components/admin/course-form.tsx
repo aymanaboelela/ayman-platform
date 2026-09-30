@@ -57,7 +57,7 @@ export type CourseDefaults = {
    * is the cohort's own. See `Course.whatsappGroupUrl` in schema.prisma.
    */
   whatsappGroupUrl: string | null;
-  /** اكتمل نزول المحتوى — gates «خلصت الكورس» on the student's screens. */
+  /** اكتمل نزول المحتوى — gates «خلّصنا الكورس» on the student's screens. */
   contentComplete: boolean;
   watermarkPhone: boolean;
   watermarkName: boolean;
@@ -926,7 +926,7 @@ export function CourseForm({
           اكتمل نزول المحتوى.
 
           The one fact on this page that only the instructor knows, and the
-          reason it had to be stored: «خلصت الكورس» was derived from
+          reason it had to be stored: «خلّصنا الكورس» was derived from
           `clearedLessons === totalLessons`, and `totalLessons` is what has
           been PUBLISHED, not what the course will hold. One lecture up,
           thirty being recorded, and the student who watched the one was told
