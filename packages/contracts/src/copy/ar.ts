@@ -2096,7 +2096,7 @@ export const copy = {
   library: {
     eyebrow: '04 / الكورسات',
     title: 'الكورسات',
-    subtitle: 'كل الكورسات المنشورة، مرتّبة بالصف والمسار — وكورساتك إنت في الأول.',
+    subtitle: 'كل الكورسات المنشورة، مرتّبة بالصف والمسار — وكورساتك في الأول.',
 
     // ── the identity strip ───────────────────────────────────────────────
     /** `{year}` is e.g. «الصف الثاني بكالوريا», `{track}` e.g. «لغات». */
@@ -2136,18 +2136,25 @@ export const copy = {
      *  تحته، والعنوان بيقول الحالة في كلمتين يقراهم من بعيد. */
     ownedMonthsPendingTitle: 'لسه بنجهّزه',
     ownedMonthsPending: 'محاضرات {months} بتتجهّز — هتلاقيها هنا أول ما تنزل.',
-    percentDone: 'خلصت {percent}%',
-    notStarted: 'لسه ماابتديتش',
-    courseDone: 'خلصت الكورس',
+    /**
+     * The progress line on a course card — and the three below it are the
+     * other states of the SAME slot, so all four speak alike: first person
+     * plural, the «نكمّل»/«نبدأ» voice. «خلصت ٤٠٪»، «خلصت الكورس» and «لسه
+     * ماابتديتش» were second person past, which Egyptian says to a boy only
+     * (a girl «خلصتي»، «ماابتديتيش»).
+     */
+    percentDone: 'خلّصنا {percent}%',
+    notStarted: 'لسه مابدأناش',
+    courseDone: 'خلّصنا الكورس',
     /**
      * The same 100% on a course that is still being uploaded.
      *
-     * «خلصت الكورس» is a claim about the COURSE; this is a claim about the
+     * «خلّصنا الكورس» is a claim about the COURSE; this is a claim about the
      * student, and it is the only one that is true while `contentComplete` is
      * false — `totalLessons` counts what has been published, so a course with
      * one lecture up called every viewer of it a graduate.
      */
-    courseUpToDate: 'خلّصت اللي نزل',
+    courseUpToDate: 'خلّصنا اللي نزل',
     start: 'نبدأ الكورس',
     resume: 'نكمّل',
     open: 'فتح الكورس',
@@ -3595,7 +3602,8 @@ export const copy = {
     title: 'مسارك التعليمي',
     subtitle: 'كل كورس مفتوح لك، بالترتيب اللي هتذاكر بيه.',
     summary: '{cleared} من {total} محاضرة في {courses} كورس',
-    percentComplete: 'خلصت {percent}%',
+    /** Same voice as `library.percentDone`. */
+    percentComplete: 'خلّصنا {percent}%',
     startHere: 'نبدأ من هنا',
     courses: 'الكورسات',
     /** `{n}` is the course's 1-based place in the student's run of courses. */
@@ -3607,7 +3615,7 @@ export const copy = {
     exam: 'الامتحان النهائي',
     courseDone: 'الكورس خلص',
     /** Same distinction as `library.courseUpToDate`. */
-    courseUpToDate: 'خلّصت اللي نزل',
+    courseUpToDate: 'خلّصنا اللي نزل',
     nothingOpen: 'مفيش حاجة مفتوحة دلوقتي',
     /** الهيرو اللي فوق الصفحة. «نكمّل» جمع شامل — مش أمر لولد ولا لبنت. */
     heroNext: 'نكمّل: {title}',
@@ -3780,8 +3788,9 @@ export const copy = {
       title: 'مبروك! اسمك على لوحة الشرف',
       /** تحت العنوان — اللي المدرّس كتبه بنفسه على الكارت. */
       reason: '{rank} — {reason}',
-      /** الزرار: بيودّي على دور اللوحة نفسه، مش على أول الصفحة. */
-      open: 'شوف اللوحة',
+      /** الزرار: بيودّي على دور اللوحة نفسه، مش على أول الصفحة. مصدر زي
+       *  «فتح الكورس» — «شوف» أمر لولد بس. */
+      open: 'فتح اللوحة',
       /** «لسه من {value}» — وقت نسبي، `{value}` متظبّط قبل ما يوصل. */
       when: 'اتحطّ من {value}',
     },
@@ -3823,7 +3832,7 @@ export const copy = {
     startCourse: 'نبدأ الكورس',
     courseDone: 'الكورس ده خلص',
     /** Same distinction as `library.courseUpToDate`. */
-    courseUpToDate: 'خلّصت اللي نزل',
+    courseUpToDate: 'خلّصنا اللي نزل',
     emptyTitle: 'نبدأ من كورس',
     emptyBody: 'أي كورس من صفّك ومساره، بالاشتراك فيه، بيبان هنا على طول مع تقدّمك فيه.',
 
@@ -3865,8 +3874,8 @@ export const copy = {
     pendingExamsTitle: 'امتحانات في انتظارك',
     /** `{course}` — the meta line under each row, naming which course it
      *  belongs to. Same shape `ExamRow`'s `attempt-row__meta` uses. */
-    pendingExamsMeta: 'خلّصت {course} — الامتحان جاهز',
-    pendingExamsCta: 'ابدأ الامتحان',
+    pendingExamsMeta: 'خلّصنا {course} — الامتحان جاهز',
+    pendingExamsCta: 'نبدأ الامتحان',
 
     // ── XP / hours / badges — the new stats row under the hero ───────────
     /** Computed live, every render — see `apps/web/lib/xp.ts`. Same "nothing
@@ -3886,7 +3895,7 @@ export const copy = {
 
     /*
      * ══════════════════════════════════════════════════════════════════════
-     * «ناقصك كده وتخلص» — the block under the progress ring.
+     * «ناقصك كده وخلاص» — the block under the progress ring.
      *
      * The ring used to print «٨٠٪ إجمالي تقدّمك» and stop, which is a verdict
      * with no instruction attached: it says how far off you are and nothing
@@ -3895,10 +3904,12 @@ export const copy = {
      * ══════════════════════════════════════════════════════════════════════
      */
     nextUp: {
-      title: 'ناقصك كده وتخلص',
-      lead: 'دوس على أي واحدة منهم وهي توديك لمكانها على طول.',
+      /** «ناقصك» is ـك on a noun — one spelling for both readers. «وتخلص»
+       *  after it was not: a girl «تخلصي». */
+      title: 'ناقصك كده وخلاص',
+      lead: 'كل واحدة منهم بتودّي على مكانها على طول.',
       ctaLessons: 'يلا نكمّل',
-      ctaExam: 'ادخل الامتحان',
+      ctaExam: 'نبدأ الامتحان',
 
       /* ── The counts on each row ────────────────────────────────────────
          Four forms because Arabic has four, and «فاضلك 2 دروس» is the kind
@@ -3916,20 +3927,26 @@ export const copy = {
          written to be worth reading rather than to fill the space: it says
          what finishing actually buys, which is the part a percentage never
          tells anybody. */
-      wonTitle: 'مبروك يا {name}! خلصت كل حاجة',
+      wonTitle: 'مبروك يا {name}! كله خلص',
       /** No first name on the session — the congratulation is still one. */
-      wonTitleFallback: 'مبروك! خلصت كل حاجة',
-      wonCourses: 'قفلت من أوله لآخره: {courses}.',
+      wonTitleFallback: 'مبروك! كله خلص',
+      /** From the first lesson to the last exam — a phrase, not «قفلت», so it
+       *  fits one course or four and either reader. */
+      wonCourses: 'من أول درس لآخر امتحان: {courses}.',
       /** When the payload knows the student is done but names no course. */
-      wonCoursesPlain: 'مافيش ولا درس ولا امتحان لسه مستنيك.',
+      wonCoursesPlain: 'مافيش ولا درس ولا امتحان لسه فاضل.',
       wonAndMore: 'و{n} كمان',
       /** In the table for the same reason every other string is: a component
        *  that writes `titles.join('، ')` has put user-facing text back into a
        *  component, and «، » is as user-facing as a word. */
       listSeparator: '، ',
+      /** His voice, and still nobody's gender: he speaks in the first person
+       *  («هقولك» — ـك on a verb, spelled the same for either reader) and the
+       *  advice is nouns. «خد نفسك، ارجع راجع… وانت مرتاح… مستنيك» was five
+       *  masculine forms in one sentence. */
       wonNote:
-        'ده مش شوية. اللي بيمشي لحد الآخر كده بيبان في الامتحان، مش في النسبة بس. خد نفسك، ارجع راجع اللي عدى وانت مرتاح، وأول ما ينزل جديد هتلاقيني مستنيك.',
-      wonResults: 'شوف درجاتك',
+        'ده مش شوية. اللي بيمشي لحد الآخر كده بيبان في الامتحان، مش في النسبة بس. دلوقتي وقت راحة، ومراجعة على الهادي للي عدّى — وأول ما ينزل جديد هقولك على طول.',
+      wonResults: 'درجاتك كلها',
       wonBrowse: 'كورسات تانية',
     },
     badgesEarnedLabel: 'شارات محققة',
@@ -4029,7 +4046,7 @@ export const copy = {
       upcomingEyebrow: 'امتحان قرب',
       /** The band once the window is open. The one accent action on the page. */
       openEyebrow: 'الامتحان مفتوح دلوقتي',
-      enter: 'ادخل الامتحان',
+      enter: 'نبدأ الامتحان',
       /** `{course}` — so a student in four courses knows which one this is. */
       courseLine: 'كورس {course}',
       /** `{lessons}` — the covered lesson titles, joined with «، ». This is the
@@ -4049,17 +4066,17 @@ export const copy = {
       closesAtLine: 'ويقفل {date}',
       /** One sitting, no second chance, and it must be said BEFORE they start —
        *  discovering it after a dropped connection is the worst way to learn it. */
-      oneSittingWarning: 'عندك محاولة واحدة بس — ابدأ وانت فاضي ونت كويس.',
+      oneSittingWarning: 'عندك محاولة واحدة بس — محتاجة وقت فاضي ونت كويس.',
       /** The shelf in «امتحاناتك» once the window has closed. */
       closedTitle: 'امتحانات الشهر',
-      closedEmpty: 'لسه مفيش امتحانات شهر خلصت.',
+      closedEmpty: 'لسه مفيش امتحانات شهر انتهت.',
       /** `{score}` `{outOf}` — their own result. */
       scoreLine: '{score} من {outOf}',
       /** Shown instead of a score when the window closed and they never sat it.
        *  Not «صفر»: they did not fail it, they missed it, and the two are
        *  different things to read about yourself. */
-      missed: 'مدخلتش الامتحان ده',
-      review: 'شوف ورقتك',
+      missed: 'الامتحان ده فاتك',
+      review: 'مراجعة ورقتك',
     },
     mastery: {
       /**
@@ -4131,18 +4148,18 @@ export const copy = {
      * course works, which is the thing they are actually missing.
      */
     stepBlockedTitle: 'لسه بدري شوية على الخطوة دي',
-    stepLessonBlocked: 'عشان تفتح درس، لازم تكون مشترك في كورس الأول. نختار كورس ونبدأ.',
-    stepQuizBlocked: 'الاختبار بييجي بعد الدرس — افتح أول درس، والاختبار بتاعه هيفتح بعده.',
+    stepLessonBlocked: 'الدروس بتتفتح بالاشتراك في كورس الأول. نختار كورس ونبدأ.',
+    stepQuizBlocked: 'الاختبار بييجي بعد الدرس — نفتح أول درس، والاختبار بتاعه هيفتح بعده.',
     /**
      * Step 3 pressed by a student who has no course at all.
      *
-     * `stepQuizBlocked` above would be wrong here — it says «افتح أول درس»,
+     * `stepQuizBlocked` above would be wrong here — it says «نفتح أول درس»,
      * and there is no lesson to open. Each step explains itself in ITS own
      * terms and then points at the earliest thing that is actually missing;
      * this is the two-hop version of that sentence.
      */
     stepQuizBlockedNoCourse:
-      'الاختبار بييجي بعد الدرس، والدرس بييجي بعد ما تشترك في كورس. نبدأ من هنا.',
+      'الاختبار بييجي بعد الدرس، والدرس بييجي بعد الاشتراك في كورس. نبدأ من هنا.',
     /** Replaces the step's CTA once it is ticked. */
     stepDone: 'تمّت',
 

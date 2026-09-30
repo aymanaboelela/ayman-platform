@@ -279,9 +279,9 @@ export default async function LessonPage({
           tested, and rendered nowhere). If `/library` ever wants a card like
           it, that is a card written for `/library`.
 
-          A plain stacking wrapper only: `CourseOutlineSidebar` keeps its OWN
-          `lg:sticky`/`overflow-y-auto` pair, so nesting a second sticky/scroll
-          container here would fight it.
+          The column below is a plain stacking wrapper; the sticky part is
+          the inner one that holds the outline AND «الجروب والمساعدة» — see
+          the note there.
         */}
         {/*
           `min-w-0` is load-bearing, and its absence is what made this page
@@ -307,21 +307,44 @@ export default async function LessonPage({
               door at the bottom of a long outline is a door nobody finds.
               Renders nothing when there is nothing to offer. */}
           <MonthOfferCard courseSlug={outline.course.slug} offer={outline.monthOffer} />
-          <CourseOutlineSidebar
-            outline={outline}
-            activeLessonId={payload.lesson.id}
-            shippingRates={shippingRates}
-            instapay={settings.contact.instapay}
-            vodafoneCash={settings.contact.vodafoneCash}
-          />
-          {/* «جروب الدفعة» first, then «تحتاج مساعدة؟» — the room the
-              student's own classmates are in is the first place a question
-              about a lecture gets answered, and a DM to him is the last resort.
-              Stacked and foldable; each renders nothing when unset. */}
-          <CourseQuickLinks
-            groupUrl={outline.course.whatsappGroupUrl}
-            whatsapp={settings.contact.whatsapp}
-          />
+          {/*
+            ONE sticky box for the outline and «الجروب والمساعدة», not a
+            sticky outline with the links after it.
+
+            The outline used to be `lg:sticky` on its own. A sticky box still
+            takes its place in the flow, so once the page scrolled it slid down
+            its column and OVER the links panel sitting after it — the group
+            and help rows disappeared under the lesson list on every desktop
+            lesson page taller than the screen.
+
+            Now this wrapper sticks, capped at the viewport, and the outline
+            inside it is the part that gives: `CourseOutlineSidebar` shrinks
+            (`lg:min-h-0`) and scrolls inside itself, the links keep their
+            height (a grid's content-based minimum) and stay pinned under it.
+            No `self-start` here: in a COLUMN flexbox that is the inline axis,
+            and it would size the box to its min-content — the overflow the
+            outline's own `w-full min-w-0` note measures.
+
+            Below `lg` none of this sticks: the outline keeps its own
+            `max-h-[60dvh]` scroller and the links follow it in the flow.
+          */}
+          <div className="flex w-full min-w-0 flex-col gap-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)]">
+            <CourseOutlineSidebar
+              outline={outline}
+              activeLessonId={payload.lesson.id}
+              shippingRates={shippingRates}
+              instapay={settings.contact.instapay}
+              vodafoneCash={settings.contact.vodafoneCash}
+            />
+            {/* «جروب الدفعة» first, then «تحتاج مساعدة؟» — the room the
+                student's own classmates are in is the first place a question
+                about a lecture gets answered, and a DM to him is the last
+                resort. Stacked and foldable; each renders nothing when unset. */}
+            <CourseQuickLinks
+              groupUrl={outline.course.whatsappGroupUrl}
+              whatsapp={settings.contact.whatsapp}
+            />
+          </div>
         </div>
       </div>
     </main>

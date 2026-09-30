@@ -53,7 +53,7 @@ export function ExamCountdownClock({ opensAt, serverTime }: { opensAt: string; s
    *
    * Without this, a student sitting on the dashboard at 19:59 waiting for a
    * 20:00 exam watches the clock reach «فاضل 00:00:00» and stop, with no door
-   * — the band's `open` face, the «ادخل الامتحان» button and `<NextUpBlock>`
+   * — the band's `open` face, the «نبدأ الامتحان» button and `<NextUpBlock>`
    * standing down are all decisions the SERVER made when the page rendered.
    * `router.refresh()` re-runs those Server Components against a fresh
    * `/api/me/exams`, so the band flips to `open` on its own and the page's

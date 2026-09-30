@@ -47,7 +47,7 @@ const stamp = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
  *                `quiz_not_open_yet` until the instant `openFrom` names). What
  *                it carries instead is the countdown, the date, and the covered
  *                lessons — the answer to "what do I revise tonight".
- *   `open`      — the same band, now carrying «ادخل الامتحان», and the page
+ *   `open`      — the same band, now carrying «نبدأ الامتحان», and the page
  *                 stands `<NextUpBlock>` down for exactly as long as it is
  *                 there. That is the one-action rule holding rather than being
  *                 excepted: for those few hours, the exam IS what to do next.

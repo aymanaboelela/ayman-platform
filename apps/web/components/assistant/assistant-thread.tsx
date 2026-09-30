@@ -14,6 +14,7 @@ import { tenantName } from '@/lib/tenant';
 import { AymanAvatar } from './ayman-avatar';
 import { ChatMeta } from './chat-meta';
 import { buildChatTimeline } from './chat-timeline';
+import { groupChatTimelineByDay } from './chat-day-groups';
 import { ChatViewport } from './chat-viewport';
 import { MessageBody } from './message-body';
 import { MessageAttachmentView } from './message-attachment';
@@ -155,127 +156,125 @@ export function AssistantThread({
       </div>
 
       <ChatViewport latest={latest} label={cc.regionLabel}>
-        <ol className="chat-list">
-          {timeline.map((entry) => {
-            if (entry.kind === 'day') {
+        {groupChatTimelineByDay(timeline).map((day) => (
+          <ol key={`day:${day.key}`} className="chat-list chat-list--day">
+            <li className="chat-day">
+              <span>{day.label}</span>
+            </li>
+            {day.entries.map((entry) => {
+              const { message, startsGroup, endsGroup } = entry;
+              const fromVisitor = message.author === 'visitor';
+              const hasText = message.body.trim().length > 0;
+              const imageOnly = !hasText && message.attachment?.kind === 'image';
               return (
-                <li key={`day:${entry.key}`} className="chat-day">
-                  <span>{entry.label}</span>
-                </li>
-              );
-            }
-            const { message, startsGroup, endsGroup } = entry;
-            const fromVisitor = message.author === 'visitor';
-            const hasText = message.body.trim().length > 0;
-            const imageOnly = !hasText && message.attachment?.kind === 'image';
-            return (
-              <li
-                key={message.id}
-                className={cn(
-                  'chat-row',
-                  // The READER's words are their own side: `own` here is the
-                  // student, where on the admin screen it is him.
-                  fromVisitor ? 'chat-row--own' : 'chat-row--other',
-                  startsGroup ? 'chat-row--start' : '',
-                  endsGroup ? 'chat-row--end' : '',
-                )}
-              >
-                {/*
-                  His FACE beside the last bubble of each of his runs, and
-                  nothing beside the student's own. «رسايل م. أيمن» opens threads
-                  he did not personally type, and the photograph is what stops
-                  those reading as system notices wearing his name — see
-                  `AymanAvatar`. The slot is kept on every row of his side so
-                  the run lines up on one edge.
-                */}
-                {fromVisitor ? null : (
-                  <span className="chat-avatar">{endsGroup ? <AymanAvatar size="sm" /> : null}</span>
-                )}
-                <div className="chat-row__stack">
+                <li
+                  key={message.id}
+                  className={cn(
+                    'chat-row',
+                    // The READER's words are their own side: `own` here is the
+                    // student, where on the admin screen it is him.
+                    fromVisitor ? 'chat-row--own' : 'chat-row--other',
+                    startsGroup ? 'chat-row--start' : '',
+                    endsGroup ? 'chat-row--end' : '',
+                  )}
+                >
                   {/*
-                    His name once per run, over the first bubble. `c.ayman` is
-                    «مهندس أيمن», and it is the BYLINE — the line that claims who
-                    wrote the words underneath it. Ungated, a second
-                    instructor's student opens her thread, reads a reply she
-                    typed herself, and is told by name that a man she has never
-                    heard of sent it. `tenantName()` returns «مهندس أيمن»
-                    unchanged on his stack and `TENANT_DISPLAY_NAME` anywhere
-                    else; the honorific does not survive the swap on purpose —
-                    we do not know another instructor's title.
-
-                    Nothing over the student's own bubbles: «إنت» was a word
-                    that grows a ي in the feminine, and the side of the screen
-                    already says whose they are.
+                    His FACE beside the last bubble of each of his runs, and
+                    nothing beside the student's own. «رسايل م. أيمن» opens threads
+                    he did not personally type, and the photograph is what stops
+                    those reading as system notices wearing his name — see
+                    `AymanAvatar`. The slot is kept on every row of his side so
+                    the run lines up on one edge.
                   */}
-                  {!fromVisitor && startsGroup ? (
-                    <span className="chat-byline">{tenantName(c.ayman)}</span>
-                  ) : null}
-                  <div className="chat-row__line">
-                    <div
-                      className={cn(
-                        'chat-bubble',
-                        message.attachment ? 'chat-bubble--has-attachment' : '',
-                        imageOnly ? 'chat-bubble--media-only' : '',
-                      )}
-                    >
-                      {message.attachment ? (
-                        <MessageAttachmentView
-                          attachment={message.attachment}
-                          tone={fromVisitor ? 'own' : 'other'}
-                          labels={{
-                            imageAlt: c.attachmentImageAlt,
-                            download: c.attachmentDownload,
-                          }}
-                        />
-                      ) : null}
+                  {fromVisitor ? null : (
+                    <span className="chat-avatar">{endsGroup ? <AymanAvatar size="sm" /> : null}</span>
+                  )}
+                  <div className="chat-row__stack">
+                    {/*
+                      His name once per run, over the first bubble. `c.ayman` is
+                      «مهندس أيمن», and it is the BYLINE — the line that claims who
+                      wrote the words underneath it. Ungated, a second
+                      instructor's student opens her thread, reads a reply she
+                      typed herself, and is told by name that a man she has never
+                      heard of sent it. `tenantName()` returns «مهندس أيمن»
+                      unchanged on his stack and `TENANT_DISPLAY_NAME` anywhere
+                      else; the honorific does not survive the swap on purpose —
+                      we do not know another instructor's title.
 
-                      {/*
-                        TEXT NODES and `<a>` elements — never markup. There is
-                        no HTML sink anywhere on this path, and that absence,
-                        not a sanitiser, is the control; `MessageBody` splits
-                        the string on a URL pattern and builds React elements.
-
-                        `trusted` only for a message his side wrote — it is
-                        what lets «الكورس بتاعك» draw as a card. A visitor's own
-                        pasted link never gets one; see `MessageBody`.
-
-                        An empty body is legal — a message may be only a file —
-                        and then the time gets a line of its own (or a pill on
-                        the photo) instead of the corner of a text line.
-                      */}
-                      {hasText ? (
-                        <div className="chat-text">
-                          <MessageBody body={message.body} trusted={!fromVisitor} />
-                          <ChatMeta
-                            createdAt={message.createdAt}
-                            edited={message.editedAt !== null}
-                            variant="ghost"
+                      Nothing over the student's own bubbles: «إنت» was a word
+                      that grows a ي in the feminine, and the side of the screen
+                      already says whose they are.
+                    */}
+                    {!fromVisitor && startsGroup ? (
+                      <span className="chat-byline">{tenantName(c.ayman)}</span>
+                    ) : null}
+                    <div className="chat-row__line">
+                      <div
+                        className={cn(
+                          'chat-bubble',
+                          message.attachment ? 'chat-bubble--has-attachment' : '',
+                          imageOnly ? 'chat-bubble--media-only' : '',
+                        )}
+                      >
+                        {message.attachment ? (
+                          <MessageAttachmentView
+                            attachment={message.attachment}
+                            tone={fromVisitor ? 'own' : 'other'}
+                            labels={{
+                              imageAlt: c.attachmentImageAlt,
+                              download: c.attachmentDownload,
+                            }}
                           />
-                        </div>
-                      ) : null}
-                      <ChatMeta
-                        createdAt={message.createdAt}
-                        edited={message.editedAt !== null}
-                        variant={hasText ? 'corner' : imageOnly ? 'overlay' : 'line'}
-                      />
+                        ) : null}
 
-                      {/*
-                        «ردّ بإيموجي» — READ ONLY on this side. The student sees
-                        what the instructor put on their message and cannot set
-                        one: he was the one who asked for the gesture, and a
-                        picker here would be a feature nobody requested on the
-                        surface where it is hardest to get right.
-                      */}
-                      {message.adminReaction ? (
-                        <span className="chat-reaction">{message.adminReaction}</span>
-                      ) : null}
+                        {/*
+                          TEXT NODES and `<a>` elements — never markup. There is
+                          no HTML sink anywhere on this path, and that absence,
+                          not a sanitiser, is the control; `MessageBody` splits
+                          the string on a URL pattern and builds React elements.
+
+                          `trusted` only for a message his side wrote — it is
+                          what lets «الكورس بتاعك» draw as a card. A visitor's own
+                          pasted link never gets one; see `MessageBody`.
+
+                          An empty body is legal — a message may be only a file —
+                          and then the time gets a line of its own (or a pill on
+                          the photo) instead of the corner of a text line.
+                        */}
+                        {hasText ? (
+                          <div className="chat-text">
+                            <MessageBody body={message.body} trusted={!fromVisitor} />
+                            <ChatMeta
+                              createdAt={message.createdAt}
+                              edited={message.editedAt !== null}
+                              variant="ghost"
+                            />
+                          </div>
+                        ) : null}
+                        <ChatMeta
+                          createdAt={message.createdAt}
+                          edited={message.editedAt !== null}
+                          variant={hasText ? 'corner' : imageOnly ? 'overlay' : 'line'}
+                        />
+
+                        {/*
+                          «ردّ بإيموجي» — READ ONLY on this side. The student sees
+                          what the instructor put on their message and cannot set
+                          one: he was the one who asked for the gesture, and a
+                          picker here would be a feature nobody requested on the
+                          surface where it is hardest to get right.
+                        */}
+                        {message.adminReaction ? (
+                          <span className="chat-reaction">{message.adminReaction}</span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
+                </li>
+              );
+            })}
+          </ol>
+        ))}
 
         {pending ? (
           <ol className="chat-list" aria-live="polite">

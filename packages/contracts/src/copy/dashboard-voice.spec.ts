@@ -67,6 +67,22 @@ const MASCULINE_ONLY = new Set([
   'ليك',
   'بيك',
   'عليك',
+  // What the rest of the dashboard and its /library + /path twins shipped
+  // with, found after the three blocks above were swept: imperatives on the
+  // exam buttons, «إنت», and ـك on a verb or participle that a girl hears
+  // with a ي on the end («توديكي»، «مستنياكي»).
+  'ابدأ',
+  'دوس',
+  'قفلت',
+  'وتخلص',
+  'ماابتديتش',
+  'تشترك',
+  'مشترك',
+  'إنت',
+  'انت',
+  'وانت',
+  'توديك',
+  'مستنيك',
 ]);
 
 /** Every string under a copy subtree, with the key path it lives at. */
@@ -85,6 +101,42 @@ const BLOCKS = [
   ...lines(copy.dashboard.tipOfDay, 'dashboard.tipOfDay'),
   ['dashboard.tipOfDayTitle', copy.dashboard.tipOfDayTitle] as [string, string],
 ];
+
+/**
+ * Everything else a student reads on the dashboard, plus the keys the
+ * dashboard shares a sentence with on /library and /path — the progress slot
+ * on a course card says «خلّصنا اللي نزل» in all three places, and a fix on one
+ * screen that left the other two saying «خلّصت» is how this list was found.
+ *
+ * The WHOLE `dashboard` subtree rather than a key list: a new card added to
+ * the dashboard is covered the day it lands, which is the case a key list
+ * misses by construction.
+ */
+const STUDENT_SCREENS = [
+  ...lines(copy.dashboard, 'dashboard'),
+  ...(['subtitle', 'percentDone', 'notStarted', 'courseDone', 'courseUpToDate'] as const).map(
+    (key) => [`library.${key}`, copy.library[key]] as [string, string],
+  ),
+  ...(['percentComplete', 'courseUpToDate'] as const).map(
+    (key) => [`path.${key}`, copy.path[key]] as [string, string],
+  ),
+];
+
+describe('the rest of the dashboard, and its /library and /path twins', () => {
+  it('scans something', () => {
+    expect(STUDENT_SCREENS.length).toBeGreaterThan(150);
+  });
+
+  it('never addresses the student as a boy', () => {
+    for (const [path, line] of STUDENT_SCREENS) {
+      for (const token of line.split(/[\s،.:؟!—«»…()٪%{}]+/u)) {
+        expect(MASCULINE_ONLY.has(token), `«${token}» in ${path} only works on a male reader: ${line}`).toBe(
+          false,
+        );
+      }
+    }
+  });
+});
 
 describe('the dashboard’s study blocks’ voice', () => {
   it('scans something', () => {

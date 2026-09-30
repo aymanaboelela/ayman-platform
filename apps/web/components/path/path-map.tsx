@@ -8,6 +8,7 @@ import { CourseClosedDialog } from './course-closed-dialog';
 import { lessonStateLabel } from '@/lib/course-outline';
 import { CheckIcon, LockIcon } from '@/components/player/icons';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
+import { LtrRatio } from '@/components/ltr-ratio';
 import { ProgressRing } from '@/components/progress-ring';
 import { Trophy } from 'lucide-react';
 import { PATH_HUES } from './path-hues';
@@ -333,7 +334,7 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
           <p className="eyebrow flex flex-wrap items-baseline gap-2 text-fg-muted">
             {c.courseIndex.replace('{n}', String(index + 1))}
             <span className="mono tabular text-[length:var(--fs-mono-label)] sm:hidden">
-              {course.clearedLessons} / {course.totalLessons}
+              <LtrRatio value={course.clearedLessons} of={course.totalLessons} />
             </span>
             {/* The state of the COURSE, on the eyebrow rather than beside the
                 title: the title is allowed to wrap to two lines on a phone and
@@ -411,7 +412,7 @@ export function PathMap({ course, index }: { course: PathCourse; index: number }
         {/* Its phone-sized copy sits on the eyebrow line above — see the note
             there. Hidden rather than moved so the desktop row is untouched. */}
         <span className="mono tabular hidden shrink-0 text-[length:var(--fs-mono-label)] text-fg-muted sm:block">
-          {course.clearedLessons} / {course.totalLessons}
+          <LtrRatio value={course.clearedLessons} of={course.totalLessons} />
         </span>
       </header>
 

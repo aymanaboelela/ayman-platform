@@ -81,6 +81,17 @@ describe('ChatViewport', () => {
     expect(rule).toMatch(/overflow-y:\s*auto/);
   });
 
+  it('holds each day chip inside its own day, not the whole thread', () => {
+    // Sticky, and scoped by the markup: the chip's rule stays sticky, and the
+    // gap between days lives on a LATER day's chip — every chip is now the
+    // first child of its list, so a `:first-child` rule would hit them all.
+    const css = readFileSync(join(import.meta.dirname, 'chat.css'), 'utf8');
+    const chip = /\.chat-day\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(chip).toMatch(/position:\s*sticky/);
+    expect(css).toMatch(/\.chat-list--day\s*\+\s*\.chat-list--day\s*>\s*\.chat-day\s*\{/);
+    expect(css).not.toMatch(/\.chat-day:first-child/);
+  });
+
   it('offers no jump button while the reader is at the bottom', () => {
     render(view(latest('m1', '2026-09-29T10:00:00Z')));
     expect(jump()).toHaveAttribute('data-visible', 'false');

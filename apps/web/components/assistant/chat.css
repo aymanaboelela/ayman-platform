@@ -205,19 +205,27 @@
 /* Sticky, so the day is always readable at the top while scrolling back —
    WhatsApp's chip. Opaque rather than frosted: `backdrop-filter` on a sticky
    element repaints every scrolled frame, and this is read on phones (see
-   `.topbar` in `globals.css`). */
+   `.topbar` in `globals.css`).
+
+   Each day is its own `.chat-list--day` and the chip is its first child, so
+   the chip is held inside ITS day: when the day ends the next one's chip
+   pushes it off the top. With every day in one list, every chip stayed pinned
+   to the same spot for the rest of the thread and they piled up there, the
+   wider ones showing round the narrower — see `groupChatTimelineByDay`. */
 .chat-day {
   position: sticky;
   inset-block-start: 0.5rem;
   z-index: 3;
   display: flex;
   justify-content: center;
-  margin-block: 0.875rem 0.5rem;
+  margin-block: 0.25rem 0.5rem;
   pointer-events: none;
 }
 
-.chat-day:first-child {
-  margin-block-start: 0.25rem;
+/* The gap BETWEEN two days, on the later day's chip — the first day keeps the
+   tight top it always had. */
+.chat-list--day + .chat-list--day > .chat-day {
+  margin-block-start: 0.875rem;
 }
 
 .chat-day > span {

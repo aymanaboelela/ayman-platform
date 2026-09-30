@@ -304,14 +304,15 @@ export function CourseOutlineSidebar({
           `w-full min-w-0` is what keeps this panel inside its own column, and
           both halves are needed.
 
-          `lg:self-start` is `align-self: flex-start`, which is what lets the
-          sticky offset work — but it also takes the panel OUT of the flex
-          container's stretch, so its width falls back to `fit-content`. And
-          `fit-content` is floored at min-content, which here is the widest
-          `.lesson-row__meta`: those are `truncate`, i.e. `white-space: nowrap`,
-          so a long «الامتحان النهائي · 45:00 · لسه ما خلصتهاش» sized the whole
-          panel. Measured at 1280: a 473px card in a 380px track, hanging 93px
-          past the page and clipping every chip in the column.
+          This panel used to carry `lg:self-start` for its sticky offset, and
+          in its column flexbox that is `align-self: flex-start` on the INLINE
+          axis — it takes the panel out of the stretch, so its width falls back
+          to `fit-content`. And `fit-content` is floored at min-content, which
+          here is the widest `.lesson-row__meta`: those are `truncate`, i.e.
+          `white-space: nowrap`, so a long «الامتحان النهائي · 45:00 · لسه ما
+          خلصتهاش» sized the whole panel. Measured at 1280: a 473px card in a
+          380px track, hanging 93px past the page and clipping every chip in
+          the column.
 
           `w-full` puts the width back on the track; `min-w-0` stops the
           automatic minimum size from overriding it again. The rows then do
@@ -319,7 +320,16 @@ export function CourseOutlineSidebar({
         */
         'w-full min-w-0',
         'max-h-[60dvh] overflow-y-auto',
-        'lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start',
+        /*
+          On `lg` the STICKING is the lesson page's, not this panel's: a
+          wrapper there pins this outline and «الجروب والمساعدة» together and
+          caps them at the viewport, because a panel that stuck on its own slid
+          down over the links after it. So here the panel only gives way —
+          `max-h-none` hands the bound to that wrapper, and `min-h-0` lets the
+          flex column shrink it below its content, which is what turns it into
+          the scroller instead of the page.
+        */
+        'lg:max-h-none lg:min-h-0',
       )}
     >
       <div className="border-b border-line-subtle px-5 py-5">
