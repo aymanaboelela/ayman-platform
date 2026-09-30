@@ -4,6 +4,8 @@ import { copy } from '@ayman/contracts';
 import { cn } from '@ayman/ui';
 import { formatDuration } from '@/components/site/course-card';
 import { CourseArt } from '@/components/course-art';
+import { isolateLtrRuns } from '@/components/dashboard/ltr-runs';
+import { LtrRatio } from '@/components/ltr-ratio';
 import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
 import { enrolledCourseHref } from '@/lib/course-href';
 import type { LibraryCourse } from '@/lib/library';
@@ -128,10 +130,12 @@ export function LibraryCourseCard({ course }: { course: LibraryCourse }) {
                     ? course.contentComplete
                       ? c.courseDone
                       : c.courseUpToDate
-                    : c.percentDone.replace('{percent}', String(course.progressPercent))}
+                    : isolateLtrRuns(
+                        c.percentDone.replace('{percent}', String(course.progressPercent)),
+                      )}
                 </span>
                 <span className="mono tabular text-[length:var(--fs-mono-label)] text-accent-text">
-                  {course.clearedLessons} / {course.lessonCount}
+                  <LtrRatio value={course.clearedLessons} of={course.lessonCount} />
                 </span>
               </div>
               <LessonProgressBar percent={course.progressPercent ?? 0} label={course.title} />

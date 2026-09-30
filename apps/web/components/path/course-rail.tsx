@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { copy, type PathCourse } from '@ayman/contracts';
 import { SubjectMark } from '@/components/course-art';
 import { CheckIcon } from '@/components/player/icons';
+import { LtrRatio } from '@/components/ltr-ratio';
 import { ProgressRing } from '@/components/progress-ring';
 import { PATH_HUES } from './path-hues';
 
@@ -80,7 +81,7 @@ export function CourseRail({
                       ? course.contentComplete
                         ? c.courseDone
                         : c.courseUpToDate
-                      : `${course.clearedLessons} / ${course.totalLessons}`}
+                      : <LtrRatio value={course.clearedLessons} of={course.totalLessons} />}
                   </span>
                   <span className="pth-rail__bar" aria-hidden="true">
                     <span style={{ '--pth-fill': `${course.progressPercent}%` } as CSSProperties} />

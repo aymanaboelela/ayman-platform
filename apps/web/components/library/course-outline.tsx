@@ -6,6 +6,7 @@ import { CourseEntry } from '@/components/site/course-entry';
 import { LessonKindIcon } from '@/components/player/lesson-kind-icon';
 import { LockIcon } from '@/components/player/icons';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
+import { LtrRatio } from '@/components/ltr-ratio';
 import { formatDuration } from '@/components/site/course-card';
 import {
   isLessonFinished,
@@ -411,11 +412,15 @@ function Unit({
 
         {/* «٣ / ٥» only means something once there is progress to count.
             Before enrolling every section would read "0 / 5", which says
-            "you have failed at nothing yet" — so it states the size instead. */}
+            "you have failed at nothing yet" — so it states the size instead.
+            The ratio is isolated left-to-right (`LtrRatio`); the size is an
+            Arabic phrase and keeps the page's direction. */}
         <span className="unit__count">
-          {enrolled
-            ? `${cleared} / ${section.entries.length}`
-            : c.lessonCount.replace('{n}', String(section.entries.length))}
+          {enrolled ? (
+            <LtrRatio value={cleared} of={section.entries.length} />
+          ) : (
+            c.lessonCount.replace('{n}', String(section.entries.length))
+          )}
         </span>
 
         <ChevronDown size={18} aria-hidden="true" className="unit__chevron" />

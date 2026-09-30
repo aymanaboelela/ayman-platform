@@ -11,6 +11,8 @@ import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { buildCourseOutline } from '@/lib/course-outline';
 import { CourseCover } from '@/components/library/course-cover';
 import { SpotIllustration } from '@/components/dashboard/spot-illustration';
+import { isolateLtrRuns } from '@/components/dashboard/ltr-runs';
+import { LtrRatio } from '@/components/ltr-ratio';
 import { CourseOutlineView } from '@/components/library/course-outline';
 import { CourseGroupCard } from '@/components/player/course-group-card';
 import { MonthOfferCard } from '@/components/player/month-offer-card';
@@ -255,17 +257,19 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
         <section className="panel mb-8 p-5">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-[length:var(--fs-title-4)] font-medium text-fg">
-              {/* «خلصت الكورس» only when the instructor says the syllabus is
-                  all up. Otherwise the same 100% reads «خلّصت اللي نزل» — see
+              {/* «خلّصنا الكورس» only when the instructor says the syllabus is
+                  all up. Otherwise the same 100% reads «خلّصنا اللي نزل» — see
                   `Course.contentComplete`. */}
               {outline.progressPercent === 100
                 ? course.contentComplete
                   ? c.courseDone
                   : c.courseUpToDate
-                : c.percentDone.replace('{percent}', String(outline.progressPercent))}
+                : isolateLtrRuns(
+                    c.percentDone.replace('{percent}', String(outline.progressPercent)),
+                  )}
             </p>
             <p className="mono tabular text-[length:var(--fs-mono-label)] text-accent-text">
-              {outline.clearedLessons} / {outline.totalLessons}
+              <LtrRatio value={outline.clearedLessons} of={outline.totalLessons} />
             </p>
           </div>
           <LessonProgressBar percent={outline.progressPercent} label={course.title} />
