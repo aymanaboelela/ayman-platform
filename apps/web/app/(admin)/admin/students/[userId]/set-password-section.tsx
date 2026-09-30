@@ -36,8 +36,25 @@ const c = copy.admin.students;
  * `state` — `IDLE` is `{ ok: true }`, so `state.ok` is already true on the
  * very first render and an effect version would close a dialog the operator
  * has only just opened. Same pattern as `BanDialog`/`UnbanDialog`.
+ *
+ * ⚠️ STUDENTS ONLY, and not a tidiness choice — `StudentsService.setPassword`
+ * refuses any other role, on purpose: it rewrites an Argon2 hash from a user
+ * id with no check of its own on WHOSE, so a screen that let this run on an
+ * `owner` row would be handing the operator a working credential for the
+ * platform operator's own account. The API comment carries the full argument.
+ *
+ * This card standing down for a non-student target is the SAME decision
+ * stated twice, not a redundant one: the list search that reaches this page
+ * matches staff accounts too (`/admin/students?q=` is not student-scoped),
+ * so an operator can land here on «مستر محمد عادل» — the platform's own
+ * seeded admin — by typing his name. Showing the button and letting the API
+ * refuse it read as broken: «مقدرناش نغيّر كلمة السر — نحاول تاني» names a
+ * transient failure, and retrying can never succeed. Not rendering the card
+ * at all is the honest screen — there is nothing to retry.
  */
 export function SetPasswordSection({ student }: { student: AdminStudentDetail }) {
+  // Hooks run unconditionally, ABOVE the role check below — the rule a
+  // conditional `return` before a hook call would break.
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState<ActionResult, FormData>(
     async (_previous, formData) => {
@@ -47,6 +64,8 @@ export function SetPasswordSection({ student }: { student: AdminStudentDetail })
     },
     IDLE,
   );
+
+  if (student.role !== 'student') return null;
 
   return (
     <Card>
