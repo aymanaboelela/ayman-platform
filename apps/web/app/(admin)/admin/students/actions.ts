@@ -124,7 +124,17 @@ export async function setStudentPasswordAction(
     );
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: explain(error, copy.admin.students.setPasswordFailed, {}) };
+    // `<SetPasswordSection>` already stands down for a non-student target —
+    // see its own note — so reaching this specific 403 means that guard was
+    // bypassed (a stale tab, a hand-built request). Named anyway, so the
+    // message stays true rather than falling to «نحاول تاني» on a refusal
+    // retrying can never fix.
+    return {
+      ok: false,
+      message: explain(error, copy.admin.students.setPasswordFailed, {
+        'can only be set on student accounts': copy.admin.students.setPasswordNotStudent,
+      }),
+    };
   }
 }
 

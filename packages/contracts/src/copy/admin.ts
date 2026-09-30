@@ -2952,6 +2952,11 @@ const admin = {
     setPasswordMismatch: 'كلمتا المرور مش متطابقتين',
     setPasswordSuccess: 'اتغيّرت كلمة السر',
     setPasswordFailed: 'مقدرناش نغيّر كلمة السر — نحاول تاني',
+    /** The 403 `<SetPasswordSection>` already prevents by not rendering on a
+     *  non-student target — see its own note — so this only reaches someone
+     *  who bypassed that. Not «نحاول تاني»: the refusal is permanent, and
+     *  retrying can never change it. */
+    setPasswordNotStudent: 'الحساب ده مش حساب طالب — مينفعش نغيّر كلمة سره من هنا.',
 
     /* ── حظر ومسح الحساب ─────────────────────────────────────────────────
      *
