@@ -55,6 +55,8 @@ import '@/components/wallet/wallet.css';
    tokens only: this panel is drawn in a dialog that portals out of `.site`,
    and on the subscribe page inside the dark course hero. */
 import './book-checkout.css';
+import { arabicCount } from '@ayman/contracts/arabic-count';
+import { monthLessonForms } from '@/lib/month-lesson-count';
 
 /** `+201021196367` → `٠١٠٢١١٩٦٣٦٧`-shaped local digits, what a Vodafone Cash
  *  transfer screen actually asks a student to dial. */
@@ -275,7 +277,7 @@ function MonthCard({
         {owned
           ? copy.subscribe.monthCardOwned
           : month.lessonCount > 0
-            ? formatCopy(copy.subscribe.monthCardLessons, { count: month.lessonCount })
+            ? arabicCount(month.lessonCount, monthLessonForms())
             : // An open month with nothing in it yet is the instructor
               // pre-selling, and it says so rather than printing «0 محاضرة» —
               // which reads as a number that failed to load.

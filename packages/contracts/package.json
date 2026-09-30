@@ -40,6 +40,7 @@
     "./wallet": "./src/wallet.ts",
     "./months": "./src/months.ts",
     "./month-title": "./src/month-title.ts",
+    "./arabic-count": "./src/arabic-count.ts",
     "./admin/content-months": "./src/admin/content-months.ts",
     "./homework": "./src/homework.ts",
     "./copy/homework": "./src/copy/homework.ts",

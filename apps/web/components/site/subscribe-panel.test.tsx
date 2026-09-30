@@ -473,7 +473,8 @@ describe('curriculum months', () => {
 
     expect(screen.getByText(MONTH_ONE.title)).toBeTruthy();
     expect(
-      screen.getByText(formatCopy(copy.subscribe.monthCardLessons, { count: 4 })),
+      // «4 محاضرات», not «4 محاضرة» — 3 to 10 take the plural.
+      screen.getByText(formatCopy(copy.subscribe.monthCardLessonsFew, { count: 4 })),
     ).toBeTruthy();
     // A month the instructor opened before writing into it says so, rather
     // than printing «0 محاضرة» — which reads as a number that failed to load.
