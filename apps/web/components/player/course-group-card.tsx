@@ -51,8 +51,23 @@ export function CourseGroupCard({
 }) {
   if (!url) return null;
 
+  /*
+    A column with the button pushed to the END (`mt-auto`): the lead below may
+    take one line or two, and two of these side by side in a grid row are
+    stretched to the same height — so the extra line has to come out of the
+    space above the button, not move the button. Every button in the row then
+    sits on the same line whatever each card's lead says.
+
+    Deliberately no `h-full`. The dashboard stacks these in its aside, which
+    is a STRETCHED grid item — a definite height as far as a percentage is
+    concerned — so `height: 100%` there would make each card as tall as the
+    whole aside. A card placed straight into a grid is stretched without it.
+  */
   return (
-    <section aria-label={c.title} className="rounded-lg border border-line bg-surface-2 p-4">
+    <section
+      aria-label={c.title}
+      className="flex flex-col gap-3.5 rounded-lg border border-line bg-surface-2 p-4"
+    >
       <div className="flex items-center gap-3">
         <span
           aria-hidden="true"
@@ -62,7 +77,16 @@ export function CourseGroupCard({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[length:var(--fs-text-base)] font-semibold text-fg">{c.title}</p>
-          <p className="mt-0.5 truncate text-[length:var(--fs-text-sm)] text-fg-muted">
+          {/*
+            Two lines, then the ellipsis — not `truncate`. On /library the card
+            is ~28rem wide and the lead («جروب الواتساب الخاص بطلبة الكورس ده
+            — الأسئلة والتنبيهات بينزلوا فيه») is about twice what fits on one
+            line, so a single-line cut hid the half that says what the group is
+            FOR. `line-clamp` also keeps `white-space` normal, so unlike
+            `truncate` its min-content is one word and it cannot widen the
+            column it sits in.
+          */}
+          <p className="mt-0.5 line-clamp-2 text-[length:var(--fs-text-sm)] text-fg-muted">
             {courseTitle ?? c.lead}
           </p>
         </div>
@@ -77,7 +101,7 @@ export function CourseGroupCard({
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="chip chip--solid mt-3.5 w-full"
+        className="chip chip--solid mt-auto w-full"
       >
         {c.cta}
       </a>
