@@ -181,3 +181,67 @@ describe('two about blocks can sit on one page', () => {
     expect(container.querySelector('#about-teacher')).not.toBeNull();
   });
 });
+
+/**
+ * «هنا ضابطها إن هو الصورة وكل حاجة» — the board had a winner on it
+ * (`rank: 1`, real `photoKey`) and this preset drew a bare name-and-course
+ * line, no face at all. `StudioHonors` rendered no `<HonorFace>` of any
+ * kind; the classic board's own component was never wired in.
+ */
+describe('the honour board has a face on it', () => {
+  function entry(overrides: Partial<import('@ayman/contracts/admin/exams').HonorBoardEntry> = {}) {
+    return {
+      studentName: 'محمد صبري',
+      avatarKey: null,
+      photoKey: null,
+      title: 'الأول على الدفعة',
+      courseLabel: 'تانية بكالوريا — عربي',
+      rank: 1,
+      scaledScore: null,
+      gradeOutOf: null,
+      percent: null,
+      ...overrides,
+    };
+  }
+
+  it('draws the photo an instructor cleared for the board', async () => {
+    const { container } = render(
+      await StudioLanding({
+        blocks: [block(HERO), block({ type: 'honorBoard' })],
+        honorBoard: [entry({ photoKey: '04/mohamed.webp' })],
+      }),
+    );
+
+    const face = container.querySelector('.honor-board__slot-avatar--photo');
+    expect(face?.tagName).toBe('IMG');
+    expect(face?.getAttribute('src')).toContain('04/mohamed.webp');
+    // `avatarKey` is never the source — see `HonorFace`'s own note.
+    expect(face?.getAttribute('src')).not.toContain('some-avatar');
+  });
+
+  it('falls back to initials when no board photo was set — not a blank row', async () => {
+    const { container } = render(
+      await StudioLanding({
+        blocks: [block(HERO), block({ type: 'honorBoard' })],
+        honorBoard: [entry({ photoKey: null })],
+      }),
+    );
+
+    const face = container.querySelector('.honor-board__slot-avatar');
+    expect(face).not.toBeNull();
+    expect(face?.tagName).not.toBe('IMG');
+    expect(face?.textContent?.trim().length).toBeGreaterThan(0);
+  });
+
+  it('still stands down on an empty board, face or no face', async () => {
+    const { container } = render(
+      await StudioLanding({
+        blocks: [block(HERO), block({ type: 'honorBoard' })],
+        honorBoard: [],
+      }),
+    );
+
+    expect(container.querySelector('#honors')).toBeNull();
+    expect(container.querySelector('.honor-board__slot-avatar')).toBeNull();
+  });
+});

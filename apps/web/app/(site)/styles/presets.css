@@ -4254,8 +4254,30 @@
 
 [data-preset='studio'] .st-honor {
   display: flex;
-  align-items: baseline;
+  /* `center`, not `baseline` — a row with a circular face needs to sit on
+     its own middle, not on the text's baseline the way the plain rank/name/
+     note row did before the photo existed. */
+  align-items: center;
   gap: 1rem;
+}
+
+/*
+ * `HonorFace` always emits `.honor-board__slot-avatar` — the classic preset's
+ * OWN size (7rem, a card's face) lives unscoped in `sections.css`, so it
+ * applies here too unless overridden. This is a thin list row, not a card:
+ * a 7rem circle would swallow the line and push everything else onto a
+ * second one. Same component, same fallback-to-initials argument; only the
+ * size and the row-appropriate ring change.
+ */
+[data-preset='studio'] .honor-board__slot-avatar {
+  flex: none;
+  margin-inline: 0;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  font-size: var(--fs-text-sm);
+  background: var(--st-wash);
+  box-shadow: 0 0 0 1px var(--st-rule);
+  color: var(--st-accent);
 }
 
 [data-preset='studio'] .st-honor__r {
