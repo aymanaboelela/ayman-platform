@@ -1237,19 +1237,23 @@
   color: var(--board-ink-2);
 }
 
-/* The initials disc, in place of the photograph. See `board-honors.tsx` for
-   why this board declines `avatarKey` — it is a product decision, not a
-   missing asset, so there is no `img` fallback to design here. */
-[data-preset='board'] .board-honor__avatar {
-  display: grid;
-  place-items: center;
+/*
+ * `HonorFace`'s own disc — the photo an instructor cleared for this board, or
+ * initials when there is none. `.honor-board__slot-avatar` is a FIXED class
+ * name the component emits everywhere it is used (`classic`, `studio`, and
+ * now this preset); its base size (7rem) is a CARD's face and is unscoped in
+ * `sections.css`, so this override brings it down to the card size `board`
+ * already had — same disc, same ring, same digits-isolation the old
+ * hand-drawn `.board-honor__avatar` circle carried, which this replaces.
+ */
+[data-preset='board'] .honor-board__slot-avatar {
   inline-size: 3.25rem;
   block-size: 3.25rem;
-  border-radius: 50%;
+  margin-inline: 0;
+  font-size: var(--fs-text-base);
   background: var(--board-tile);
   color: var(--board-on-slab);
-  font-size: var(--fs-text-base);
-  font-weight: var(--fw-bold);
+  box-shadow: none;
   /* Latin initials inside an RTL card: isolate so a two-letter run cannot
      reorder against the Arabic name underneath it. */
   direction: ltr;
@@ -4265,19 +4269,24 @@
 /*
  * `HonorFace` always emits `.honor-board__slot-avatar` — the classic preset's
  * OWN size (7rem, a card's face) lives unscoped in `sections.css`, so it
- * applies here too unless overridden. This is a thin list row, not a card:
- * a 7rem circle would swallow the line and push everything else onto a
- * second one. Same component, same fallback-to-initials argument; only the
- * size and the row-appropriate ring change.
+ * applies here too unless overridden. This is a list row, not a card, so a
+ * 7rem circle is still the wrong shape here — but «صغيره والصورة مش حلوة»
+ * (too small, and the photo itself doesn't read well) moved the row-face size
+ * up from a first pass at 2.5rem: 3.75rem is big enough that a real photo has
+ * a face in it rather than a postage stamp, and the ring got thicker and
+ * tinted with the accent instead of the flat hairline that made a photo look
+ * like a plain rectangle with corners rounded off.
  */
 [data-preset='studio'] .honor-board__slot-avatar {
   flex: none;
   margin-inline: 0;
-  inline-size: 2.5rem;
-  block-size: 2.5rem;
-  font-size: var(--fs-text-sm);
+  inline-size: 3.75rem;
+  block-size: 3.75rem;
+  font-size: var(--fs-text-lg);
   background: var(--st-wash);
-  box-shadow: 0 0 0 1px var(--st-rule);
+  box-shadow:
+    0 0 0 2px var(--st-accent-lift),
+    0 2px 6px color-mix(in oklch, var(--st-ink), transparent 85%);
   color: var(--st-accent);
 }
 
