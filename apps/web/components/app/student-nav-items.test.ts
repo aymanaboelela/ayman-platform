@@ -180,6 +180,7 @@ describe('STUDENT_TABS', () => {
     expect(rest.map((item) => item.href)).toEqual([
       '/rank',
       '/game',
+      '/arena',
       '/codes',
       '/wallet',
       '/foundations',

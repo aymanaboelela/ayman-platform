@@ -413,6 +413,8 @@ export const copy = {
     results: 'نتائجي',
     rank: 'ترتيبي',
     game: 'الألعاب',
+    /** «ساحة التحدي» — الماتش المباشر. الكوبي كلها في `copy/arena.ts`. */
+    arena: 'ساحة التحدي',
     profile: 'بروفايلي',
     railAllCourses: 'كل الكورسات',
     collapseRail: 'اطوِ القائمة',

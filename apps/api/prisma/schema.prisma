@@ -244,6 +244,11 @@ model User {
   walletTransactionsEntered  WalletTransaction[]     @relation("WalletTransactionActor")
   /// «الألعاب» — كل جولة لعبها. `Cascade`: إحصائيات لعب مالهاش معنى من غير صاحبها.
   gameSessions               GameSession[]
+  /// «ساحة التحدي» — الماتشات من الناحيتين، والكسبها، ورصيده.
+  arenaMatchesAsA            ArenaMatch[]            @relation("ArenaMatchPlayerA")
+  arenaMatchesAsB            ArenaMatch[]            @relation("ArenaMatchPlayerB")
+  arenaMatchesWon            ArenaMatch[]            @relation("ArenaMatchWinner")
+  arenaStat                  ArenaStat?
 
   @@unique([email])
   @@map("users")
@@ -1050,6 +1055,7 @@ model Course {
   /// كل لعبة بتسحب منين في الكورس ده — شوف `GameModeSetting`.
   gameModeSettings GameModeSetting[]
   gameSessions     GameSession[]
+  arenaMatches     ArenaMatch[]
   @@index([status, publishedAt])
   @@index([systemId, year, trackId, subjectId])
   @@map("courses")
@@ -3518,6 +3524,7 @@ model QuestionVersion {
   options          QuestionOption[]
   attemptQuestions AttemptQuestion[]
   gameAnswers      GameAnswer[]
+  arenaRounds      ArenaRound[]
 
   @@unique([bankEntryId, version])
   @@index([bankEntryId, status])
@@ -5570,5 +5577,114 @@ model GameAnswer {
   @@unique([sessionId, questionVersionId])
   @@index([questionVersionId])
   @@map("game_answers")
+  @@schema("app")
+}
+
+/// «ساحة التحدي» — إزاي الماتش خلص.
+///   completed  الأسئلة خلصت
+///   forfeit    واحد فصل ومارجعش في المهلة (أو انسحب) — التاني كسب
+///   abandoned  الاتنين فصلوا — مفيش كسبان ولا نقط
+///   aborted    السيرفر اتعمله ريستارت في النص — مفيش نقط
+enum ArenaMatchOutcome {
+  completed
+  forfeit
+  abandoned
+  aborted
+
+  @@map("arena_match_outcome")
+  @@schema("app")
+}
+
+/// سؤال واحد في الماتش اتقفل ليه.
+enum ArenaRoundReason {
+  correct
+  both_wrong
+  timeout
+
+  @@map("arena_round_reason")
+  @@schema("app")
+}
+
+/// «ساحة التحدي» — ماتش واحد خلص. الماتش وهو شغّال عايش في Redis (الساعة
+/// والطابور والقفل)، وده الصف اللي بيتكتب مرة واحدة في آخره: النتيجة،
+/// والنقط اللي دخلت فعلًا بعد السقف. `id` هو نفس id الماتش في Redis، فنهايتين
+/// لنفس الماتش (ريستارت في نص الكتابة) = صف واحد.
+model ArenaMatch {
+  id            String            @id @db.Uuid
+  /// `SetNull`: الكورس لو اتمسح، النتيجة والنقط بيفضلوا.
+  courseId      String?           @map("course_id") @db.Uuid
+  playerAId     String            @map("player_a_id")
+  playerBId     String            @map("player_b_id")
+  scoreA        Int               @default(0) @map("score_a")
+  scoreB        Int               @default(0) @map("score_b")
+  /// `null` = تعادل، أو محدش (اتقطع).
+  winnerId      String?           @map("winner_id")
+  outcome       ArenaMatchOutcome
+  /// نقط الساحة اللي دخلت رصيد كل واحد من الماتش ده، بعد السقف.
+  pointsA       Int               @default(0) @map("points_a")
+  pointsB       Int               @default(0) @map("points_b")
+  questionCount Int               @map("question_count")
+  /// «الصف الثاني بكالوريا · عربي» وقت الماتش — للأدمن، مش للترتيب.
+  cohortLabel   String            @default("") @map("cohort_label")
+  startedAt     DateTime          @map("started_at")
+  endedAt       DateTime          @map("ended_at")
+
+  course  Course?      @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  playerA User         @relation("ArenaMatchPlayerA", fields: [playerAId], references: [id], onDelete: Cascade)
+  playerB User         @relation("ArenaMatchPlayerB", fields: [playerBId], references: [id], onDelete: Cascade)
+  winner  User?        @relation("ArenaMatchWinner", fields: [winnerId], references: [id], onDelete: SetNull)
+  rounds  ArenaRound[]
+
+  @@index([endedAt])
+  @@index([playerAId, endedAt])
+  @@index([playerBId, endedAt])
+  @@map("arena_matches")
+  @@schema("app")
+}
+
+/// سؤال واحد في ماتش: مين خد النقطة وليه، وكل لاعب اختار إيه وبعد قد إيه.
+/// «was_right» مش «correct» — `schema.spec.ts` بيمنع عمود اسمه `correct`.
+model ArenaRound {
+  id                String           @id @default(uuid(7)) @db.Uuid
+  matchId           String           @map("match_id") @db.Uuid
+  position          Int
+  /// `SetNull`: سؤال اتمسح من البنك مابيمسحش نتيجة ماتش اتلعب عليه.
+  questionVersionId String?          @map("question_version_id") @db.Uuid
+  /// `a` أو `b` أو `null` (محدش خدها).
+  winnerSide        String?          @map("winner_side")
+  reason            ArenaRoundReason
+  optionA           String?          @map("option_a") @db.Uuid
+  /// من فتح السؤال لحد ما الإجابة وصلت السيرفر — بساعة السيرفر.
+  msA               Int?             @map("ms_a")
+  wasRightA         Boolean?         @map("was_right_a")
+  optionB           String?          @map("option_b") @db.Uuid
+  msB               Int?             @map("ms_b")
+  wasRightB         Boolean?         @map("was_right_b")
+
+  match           ArenaMatch       @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  questionVersion QuestionVersion? @relation(fields: [questionVersionId], references: [id], onDelete: SetNull)
+
+  @@unique([matchId, position])
+  @@index([questionVersionId])
+  @@map("arena_rounds")
+  @@schema("app")
+}
+
+/// رصيد الساحة لكل طالب — بيتزوّد في نفس الترانزاكشن اللي بيكتب الماتش.
+/// منفصل عن نقط الترتيب (`RANK_POINTS`) عن قصد: الساحة لعبة، والترتيب درجات.
+model ArenaStat {
+  userId       String    @id @map("user_id")
+  points       Int       @default(0)
+  wins         Int       @default(0)
+  draws        Int       @default(0)
+  losses       Int       @default(0)
+  played       Int       @default(0)
+  lastPlayedAt DateTime? @map("last_played_at")
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([points(sort: Desc)])
+  @@map("arena_stats")
   @@schema("app")
 }

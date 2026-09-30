@@ -54,6 +54,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
 import { CentersModule } from './modules/centers/centers.module';
 import { HomeworkModule } from './modules/homework/homework.module';
 import { TenantEntitlementsModule } from './modules/tenant-entitlements/tenant-entitlements.module';
+import { ArenaModule } from './modules/arena/arena.module';
 
 @Module({
   imports: [
@@ -179,6 +180,8 @@ import { TenantEntitlementsModule } from './modules/tenant-entitlements/tenant-e
      * الطالب لكورس، وده عن وصول المدرّس لفيتشر.
      */
     TenantEntitlementsModule,
+    // «ساحة التحدي» — ماتش مباشر بين طالبين (فلاج `arena.enabled`).
+    ArenaModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -1,8 +1,10 @@
 import Link from 'next/link';
-import { BarChart3, ListChecks } from 'lucide-react';
+import { BarChart3, ListChecks, Swords } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
+import { arenaCopy } from '@ayman/contracts/copy/arena';
 import { cn } from '@ayman/ui/lib/cn';
 import { can, getSession } from '@/lib/session';
+import { IS_AYMAN } from '@/lib/tenant';
 
 const c = copy.admin.games;
 
@@ -11,11 +13,17 @@ const c = copy.admin.games;
  * بندين في السايدبار. كل تبويب بصلاحيته (`question:write` و`analytics:read`)،
  * والتبويب اللي هيفتح على 403 مابيظهرش أصلًا — نفس قاعدة `AnalyticsNav`.
  */
-export async function GamesTabs({ active }: { active: 'questions' | 'stats' }) {
+export async function GamesTabs({ active }: { active: 'questions' | 'stats' | 'arena' }) {
   const session = await getSession();
   const tabs = [
     { key: 'questions', href: '/admin/games', label: c.tabQuestions, icon: ListChecks, show: can(session, 'question:write') },
     { key: 'stats', href: '/admin/games/stats', label: c.tabStats, icon: BarChart3, show: can(session, 'analytics:read') },
+    /*
+     * «ساحة التحدي» — نفس صلاحية الإحصائيات. التبويب عند أيمن بس، زي بند
+     * الطالب: الفلاج (`arena.enabled`) مقفول افتراضيًا على أي ستاك تاني، والشاشة
+     * نفسها بترد «مش موجودة» لو اتقفل.
+     */
+    { key: 'arena', href: '/admin/games/arena', label: arenaCopy.admin.tab, icon: Swords, show: IS_AYMAN && can(session, 'analytics:read') },
   ].filter((tab) => tab.show);
   if (tabs.length < 2) return null;
 
