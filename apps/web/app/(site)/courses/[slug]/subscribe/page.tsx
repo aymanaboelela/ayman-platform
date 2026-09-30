@@ -84,8 +84,11 @@ export default async function CourseSubscribePage({ params }: { params: Promise<
           own note on why the props were never enough), and `months` has no
           cached twin at all.
         */}
-        {/* Room under the title — the panel sat flush against «اشتراك الكورس». */}
-        <div className="mt-6 md:mt-8">
+        {/* Room under the title — the panel sat flush against «اشتراك الكورس».
+            Capped at the dialog's own width: the checkout is a two-column card
+            (steps and form beside the summary), and stretched across the whole
+            1440px shell the form fields became two metre-long bars. */}
+        <div className="mt-6 max-w-[58rem] md:mt-8">
           <SubscribePanel
             courseId={course.id}
             slug={course.slug}

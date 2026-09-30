@@ -368,6 +368,25 @@ describe('the payment rail', () => {
     ).toBeGreaterThan(1);
   });
 
+  /*
+   * The same two checks `submit` always ran, now reported under the field each
+   * is about — and still nothing is uploaded or sent until both pass.
+   */
+  it('names each missing payment field under itself, and sends nothing', async () => {
+    vi.mocked(uploadPaymentScreenshot).mockClear();
+    await openCheckout(liveSettings(INSTAPAY, WALLET));
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.subscribe.railInstapay) }));
+    await screen.findByLabelText(copy.subscribe.senderPhoneLabel);
+
+    fireEvent.click(screen.getByRole('button', { name: copy.subscribe.submit }));
+
+    expect(screen.getByText(copy.subscribe.senderPhoneRequired)).toBeTruthy();
+    expect(screen.getByText(copy.subscribe.screenshotRequired)).toBeTruthy();
+    expect(document.activeElement?.id).toBe('subscribe-sender-phone');
+    expect(uploadPaymentScreenshot).not.toHaveBeenCalled();
+    expect(apiPost).not.toHaveBeenCalled();
+  });
+
   it('offers an unconfigured rail as unavailable rather than hiding it', async () => {
     // A student staring at a single option with no explanation cannot tell
     // whether the site is broken or the choice simply is not offered — and a

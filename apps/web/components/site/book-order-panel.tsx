@@ -4,10 +4,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'r
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
-  Check,
-  ChevronDown,
   CircleCheck,
-  Copy,
   ImagePlus,
   LoaderCircle,
   MapPin,
@@ -33,7 +30,6 @@ import {
 } from '@ayman/contracts/books';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
-import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { cn } from '@ayman/ui/lib/cn';
@@ -51,6 +47,17 @@ import {
 } from '@/lib/book-order-storage';
 import { PaymentBrand, type PaymentRail } from './payment-brand';
 import { PaymentMethodChoice } from './payment-method-choice';
+import {
+  AmountCard,
+  CheckoutField as Field,
+  CheckoutFooter,
+  CheckoutSteps,
+  CheckoutSummary,
+  CopyButton,
+  FooterTotal,
+  Money,
+  useCheckoutKeyboard,
+} from './checkout-parts';
 /*
  * The checkout's own stylesheet, and every rule in it reads `:root` tokens
  * only. This panel is drawn inside a Radix dialog, which portals into
@@ -98,26 +105,6 @@ const FIELD_IDS: Record<FieldKey, string> = {
   senderPhone: 'book-order-sender-phone',
   screenshot: 'book-order-screenshot-button',
 };
-
-/**
- * A price the way the checkout prints it: the figure, then a smaller «ج».
- *
- * `<bdi>` around the figure — a Latin-digit run inside Arabic, grouped with
- * «٬» by `formatEGP` — so it can never be reordered against the unit or the
- * words beside it.
- *
- * ⚠️ Deliberately NOT `bookOrder.priceLine` («٣٠٠ جنيه»). That string is the
- * payment step's headline figure and is printed there exactly once; the
- * footer and the summary carry the same number in this split form.
- */
-function Money({ cents }: { cents: number }) {
-  return (
-    <>
-      <bdi className="bco-money">{formatEGP(cents)}</bdi>{' '}
-      <span className="bco-money__unit">{copy.books.currencyShort}</span>
-    </>
-  );
-}
 
 /** `+201021196367` → `٠١٠٢١١٩٦٣٦٧`-shaped local digits — same helper
  *  `SubscribePanel` uses for the same Vodafone Cash number. */
@@ -270,8 +257,6 @@ export function BookOrderPanel({
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
   const [order, setOrder] = useState<BookOrder | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /** Which copy button just worked — the number or the amount. */
-  const [copied, setCopied] = useState<'number' | 'amount' | null>(null);
   /**
    * One message per field, instead of one line at the bottom naming the first
    * wrong field while the reader looks at the field. Same checks, same order,
@@ -327,58 +312,10 @@ export function BookOrderPanel({
   const [senderPhone, setSenderPhone] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const numberInputRef = useRef<HTMLInputElement>(null);
-  const amountInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  /*
-   * ── The on-screen keyboard ─────────────────────────────────────────────
-   *
-   * On a phone the dialog is a sheet pinned to the bottom of the LAYOUT
-   * viewport, and neither iOS Safari nor Chrome (whose default is now
-   * `resizes-visual`) shrinks that viewport for the keyboard — they shrink
-   * the VISUAL one. So a keyboard opened for «الشارع» slid up over the sheet's
-   * footer and the lower fields, and the pinned total sat on the very input
-   * being typed into.
-   *
-   * This lifts the sheet to sit on top of the keyboard and caps it to the
-   * visible height: the footer stays in view, the body scrolls, and the
-   * browser scrolls the focused field into that body. Written as custom
-   * properties on the dialog (`.bco-dialog[data-keyboard]` in the stylesheet)
-   * rather than inline geometry, so the dialog's own layout is untouched the
-   * rest of the time. Nothing happens outside a dialog, or on a desktop.
-   */
-  useEffect(() => {
-    const host = rootRef.current?.closest<HTMLElement>('.bco-dialog');
-    const viewport = typeof window === 'undefined' ? null : window.visualViewport;
-    if (!host || !viewport) return;
-    const clear = () => {
-      host.style.removeProperty('--bco-kb');
-      host.style.removeProperty('--bco-vvh');
-      host.style.removeProperty('--bco-vvtop');
-      delete host.dataset.keyboard;
-    };
-    const update = () => {
-      const covered = window.innerHeight - (viewport.offsetTop + viewport.height);
-      // 80px: a keyboard, not a collapsing URL bar.
-      if (covered > 80) {
-        host.style.setProperty('--bco-kb', `${Math.round(covered)}px`);
-        host.style.setProperty('--bco-vvh', `${Math.round(viewport.height)}px`);
-        host.style.setProperty('--bco-vvtop', `${Math.round(viewport.offsetTop)}px`);
-        host.dataset.keyboard = 'open';
-      } else {
-        clear();
-      }
-    };
-    update();
-    viewport.addEventListener('resize', update);
-    viewport.addEventListener('scroll', update);
-    return () => {
-      viewport.removeEventListener('resize', update);
-      viewport.removeEventListener('scroll', update);
-      clear();
-    };
-  }, []);
+  /* The sheet rides above an on-screen keyboard — see `useCheckoutKeyboard`. */
+  useCheckoutKeyboard(rootRef);
 
   useEffect(() => {
     return () => {
@@ -533,40 +470,6 @@ export function BookOrderPanel({
   /** The amount as bare digits — what a banking app's amount field takes. */
   const payAmountCents = order?.amountCents ?? quotedTotalCents;
   const amountDigits = String(Math.round(payAmountCents / 100));
-
-  /**
-   * Clipboard first, then the hidden-input `execCommand` path — unchanged from
-   * the single «نسخ الرقم» this used to be, now shared by the amount too.
-   */
-  async function copyText(text: string, which: 'number' | 'amount', input: HTMLInputElement | null) {
-    const done = () => {
-      setCopied(which);
-      setTimeout(() => setCopied(null), 2000);
-    };
-    try {
-      await navigator.clipboard.writeText(text);
-      done();
-      return;
-    } catch {
-      // Fall through to the execCommand path below.
-    }
-    if (!input) return;
-    try {
-      input.focus();
-      input.select();
-      if (document.execCommand('copy')) done();
-    } catch {
-      // Both paths refused — the text is still selected on screen.
-    }
-  }
-
-  function copyNumber() {
-    return copyText(localNumber, 'number', numberInputRef.current);
-  }
-
-  function copyAmount() {
-    return copyText(amountDigits, 'amount', amountInputRef.current);
-  }
 
   /** A field was edited — its own message goes, the others stay. */
   function clearFieldError(key: FieldKey) {
@@ -1195,30 +1098,14 @@ export function BookOrderPanel({
           it always does); the fallback is the live quote, reachable only in the
           instant between the address saving and the row coming back.
         */}
-        <div className="bco-amount">
-          <span className="bco-amount__icon" aria-hidden="true">
-            <Wallet size={22} />
-          </span>
-          <div className="bco-amount__text">
-            <p className="bco-amount__label">{c.payAmountLabel}</p>
-            <p className="bco-amount__value">
-              {formatCopy(c.priceLine, { price: formatEGP(payAmountCents) })}
-            </p>
-          </div>
-          <button type="button" className="bco-copy" onClick={() => void copyAmount()}>
-            {copied === 'amount' ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
-            {copied === 'amount' ? copy.subscribe.copied : c.copyAmount}
-          </button>
-          <input
-            ref={amountInputRef}
-            readOnly
-            dir="ltr"
-            value={amountDigits}
-            aria-hidden="true"
-            tabIndex={-1}
-            className="sr-only"
-          />
-        </div>
+        <AmountCard
+          icon={<Wallet size={22} />}
+          label={c.payAmountLabel}
+          value={formatCopy(c.priceLine, { price: formatEGP(payAmountCents) })}
+          digits={amountDigits}
+          copyLabel={c.copyAmount}
+          copiedLabel={copy.subscribe.copied}
+        />
 
         {/*
           ⚠️ WHERE THE PARCEL IS GOING, on the screen that asks for money — the
@@ -1294,22 +1181,11 @@ export function BookOrderPanel({
                   <bdi dir="ltr" className="bco-number__value">
                     {localNumber}
                   </bdi>
-                  <button type="button" className="bco-copy bco-copy--solid" onClick={() => void copyNumber()}>
-                    {copied === 'number' ? (
-                      <Check size={15} aria-hidden="true" />
-                    ) : (
-                      <Copy size={15} aria-hidden="true" />
-                    )}
-                    {copied === 'number' ? copy.subscribe.copied : copy.subscribe.copyNumber}
-                  </button>
-                  <input
-                    ref={numberInputRef}
-                    readOnly
-                    dir="ltr"
-                    value={localNumber}
-                    aria-hidden="true"
-                    tabIndex={-1}
-                    className="sr-only"
+                  <CopyButton
+                    text={localNumber}
+                    label={copy.subscribe.copyNumber}
+                    copiedLabel={copy.subscribe.copied}
+                    solid
                   />
                 </div>
               </div>
@@ -1457,27 +1333,12 @@ export function BookOrderPanel({
 
 /** «١ الطلب · ٢ العنوان · ٣ الدفع». `current` is 2, 3, or 4 (all done). */
 function StepBar({ current }: { current: number }) {
-  const stops = [c.stepCart, c.stepAddress, c.stepPayment];
   return (
-    <ol className="bco-steps" aria-label={c.stepsLabel}>
-      {stops.map((label, index) => {
-        const n = index + 1;
-        const state = n < current ? 'done' : n === current ? 'current' : 'next';
-        return (
-          <li
-            key={label}
-            className="bco-steps__item"
-            data-state={state}
-            aria-current={state === 'current' ? 'step' : undefined}
-          >
-            <span className="bco-steps__dot" aria-hidden="true">
-              {state === 'done' ? <Check size={14} strokeWidth={3} /> : n}
-            </span>
-            <span className="bco-steps__label">{label}</span>
-          </li>
-        );
-      })}
-    </ol>
+    <CheckoutSteps
+      label={c.stepsLabel}
+      stops={[c.stepCart, c.stepAddress, c.stepPayment]}
+      current={current}
+    />
   );
 }
 
@@ -1510,22 +1371,14 @@ function OrderSummary({
 }) {
   const count = lines.reduce((sum, line) => sum + line.quantity, 0);
   return (
-    <aside className="bco-sum" data-open={open ? 'true' : 'false'} aria-label={c.summaryTitle}>
-      <button type="button" className="bco-sum__head" aria-expanded={open} onClick={onToggle}>
-        <span className="bco-sum__icon" aria-hidden="true">
-          <ShoppingBag size={16} />
-        </span>
-        <span className="bco-sum__title">{c.summaryTitle}</span>
-        {count > 0 ? (
-          <span className="bco-sum__count">{formatCopy(copy.books.shelfCount, { n: count })}</span>
-        ) : null}
-        <span className="bco-sum__toggle">
-          {c.summaryDetails}
-          <ChevronDown size={16} aria-hidden="true" />
-        </span>
-      </button>
-
-      <div className="bco-sum__body">
+    <CheckoutSummary
+      title={c.summaryTitle}
+      icon={<ShoppingBag size={16} />}
+      badge={count > 0 ? formatCopy(copy.books.shelfCount, { n: count }) : undefined}
+      toggleLabel={c.summaryDetails}
+      open={open}
+      onToggle={onToggle}
+    >
         {lines.length > 0 ? (
           <ul className="bco-sum__lines">
             {lines.map((line, index) => (
@@ -1573,50 +1426,11 @@ function OrderSummary({
             </div>
           ) : null}
         </dl>
-      </div>
-    </aside>
+    </CheckoutSummary>
   );
 }
 
-/** A labelled field with its own message line. */
-function Field({
-  id,
-  label,
-  error,
-  hint,
-  full,
-  children,
-}: {
-  id: string;
-  label: string;
-  error?: string;
-  hint?: string;
-  /** Spans both columns of the form grid. */
-  full?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div className={cn('bco-field', full && 'bco-field--full')}>
-      <Label htmlFor={id} className="bco-field__label">
-        {label}
-      </Label>
-      {children}
-      {error ? (
-        <p id={`${id}-error`} className="bco-field__error">
-          <TriangleAlert size={14} aria-hidden="true" />
-          {error}
-        </p>
-      ) : hint ? (
-        <p className="bco-field__hint">{hint}</p>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * The footer: the total on one side, the action on the other, and a request
- * error — the one kind of message that is about no single field — above both.
- */
+/** The book checkout's footer — the shared one, with «الإجمالي» as its label. */
 function FooterBar({
   error,
   total,
@@ -1631,26 +1445,11 @@ function FooterBar({
   primary?: ReactNode;
 }) {
   return (
-    <div className="bco__foot">
-      {error ? (
-        <p role="alert" className="bco__alert">
-          <TriangleAlert size={16} aria-hidden="true" />
-          {error}
-        </p>
-      ) : null}
-      <div className={cn('bco__bar', !total && 'bco__bar--bare')}>
-        {total ? (
-          <div className="bco-total">
-            <span className="bco-total__label">{copy.books.total}</span>
-            <span className="bco-total__value">{total}</span>
-            {note ? <span className="bco-total__note">{note}</span> : null}
-          </div>
-        ) : null}
-        <div className="bco__actions">
-          {secondary}
-          {primary}
-        </div>
-      </div>
-    </div>
+    <CheckoutFooter
+      error={error}
+      total={total ? <FooterTotal label={copy.books.total} value={total} note={note} /> : undefined}
+      secondary={secondary}
+      primary={primary}
+    />
   );
 }

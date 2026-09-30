@@ -216,8 +216,12 @@ export function CourseStartButton({
           dialog gives it the whole screen's focus, same as the review-reject
           prompt in admin/payments does for a shorter flow. */}
       <Dialog open={showSubscribe} onOpenChange={setShowSubscribe}>
-        <DialogContent closeLabel={copy.subscribe.back}>
-          <DialogHeader>
+        {/* `bco-dialog` hands the dialog's layout to the checkout — a sheet on
+            a phone, a wide two-column dialog on a desktop, the footer pinned
+            outside the scrolling body. Same frame as the book checkout; see
+            `book-checkout.css`. */}
+        <DialogContent closeLabel={copy.subscribe.back} className="bco-dialog">
+          <DialogHeader className="bco-dialog__head">
             <DialogTitle>{copy.subscribe.title}</DialogTitle>
           </DialogHeader>
           <SubscribePanel

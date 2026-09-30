@@ -1,6 +1,10 @@
 /* ============================================================================
    The book-order checkout — `BookOrderPanel`, and the dialog that holds it.
 
+   The COURSE checkout (`SubscribePanel`) is drawn in the same frame from the
+   same parts (`checkout-parts.tsx`) — its own pieces (plan cards, month cards,
+   the notes above the plans) are at the end of this file.
+
    ## Tokens: `:root` only
 
    The panel renders inside a Radix dialog, and a dialog portals into `<body>`
@@ -128,10 +132,15 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  /* On a page (the resume screen) the panel is its own card. */
+  /* On a page (the resume screen, the subscribe page) the panel is its own
+     card. */
   border: 1px solid var(--border);
   border-radius: 1.25rem;
   background: var(--n-2);
+  /* Its own ink: the subscribe page sets it inside the dark course hero,
+     whose white text would otherwise run into every line not coloured below. */
+  color: var(--n-12);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
 
@@ -151,6 +160,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
+  box-shadow: none;
 }
 
 .bco__scroll {
@@ -1254,4 +1264,246 @@
   flex: none;
   margin-top: 0.1875rem;
   color: var(--warn);
+}
+
+/* ============================================================================
+   The course checkout's own pieces — `SubscribePanel`.
+   ============================================================================ */
+
+/* A section heading inside a card («الباقات المتاحة»، «الشهور المتاحة»). */
+.bco-heading {
+  margin-bottom: 0.875rem;
+  font-size: 1.0625rem;
+  font-weight: var(--fw-bold);
+  line-height: 1.4;
+  color: var(--n-12);
+}
+
+.bco-lead {
+  margin: -0.375rem 0 1rem;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: var(--n-11);
+}
+
+/*
+ * The plan cards — «شهر»، «ترم»، «سنة كاملة». Each acts on the tap (there is
+ * no selected state to show), so the card itself is the button: an icon disc,
+ * the name, and the price in a pill under it.
+ *
+ * `auto-fit` with a `min()` floor: three across when there is room, and the
+ * cards wrap rather than squeeze on a phone.
+ */
+.bco-plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: 0.75rem;
+}
+
+/* Two across on a phone, and an odd one out takes the whole last row rather
+   than sitting beside a hole. */
+@container bco (max-width: 29.999rem) {
+  .bco-plans {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bco-plans > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+.bco-plan {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: 9rem;
+  padding: 1.125rem 0.875rem;
+  border: 1.5px solid var(--border);
+  border-radius: 1rem;
+  background: var(--bco-field);
+  font: inherit;
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color var(--d-hover) var(--ease),
+    background-color var(--d-hover) var(--ease),
+    box-shadow var(--d-hover) var(--ease),
+    transform var(--d-hover) var(--ease);
+}
+
+@media (hover: hover) {
+  .bco-plan:hover {
+    border-color: var(--a-9);
+    background: color-mix(in oklch, var(--a-9), transparent 90%);
+    box-shadow: 0 12px 22px -16px var(--a-9);
+    transform: translateY(-2px);
+  }
+}
+
+.bco-plan:active {
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bco-plan,
+  .bco-plan:hover {
+    transform: none;
+  }
+}
+
+.bco-plan__icon {
+  display: grid;
+  place-items: center;
+  inline-size: 3rem;
+  block-size: 3rem;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--a-9), transparent 82%);
+  color: var(--a-11);
+}
+
+.bco-plan__name {
+  font-size: 1.0625rem;
+  font-weight: var(--fw-bold);
+  line-height: 1.4;
+  color: var(--n-12);
+}
+
+.bco-plan__price {
+  padding: 0.1875rem 0.75rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklch, var(--a-9), transparent 86%);
+  font-size: 0.875rem;
+  font-weight: var(--fw-bold);
+  color: var(--a-11);
+}
+
+/* The month cards (`MonthCard`, `.pay-choice__card`): wider than the two
+   rails, because a month title is a phrase — «الشهر الأول» — not a word. */
+.bco .bco-months {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 8rem), 1fr));
+}
+
+.bco .bco-months .pay-choice__card {
+  min-block-size: 5.5rem;
+}
+
+/* A line above the plans: the last claim was turned down, the subscription
+   ran out, or every month is already open. One shape, three tones. */
+.bco-note {
+  padding: 0.75rem 0.875rem;
+  border-radius: 0.875rem;
+  border: 1px solid;
+  font-size: 0.875rem;
+  font-weight: var(--fw-medium);
+  line-height: 1.7;
+}
+
+.bco-note--err {
+  border-color: color-mix(in oklch, var(--err), transparent 60%);
+  background: color-mix(in oklch, var(--err), transparent 91%);
+  color: var(--err);
+}
+
+.bco-note--warn {
+  border-color: color-mix(in oklch, var(--warn), transparent 55%);
+  background: color-mix(in oklch, var(--warn), transparent 90%);
+  color: var(--n-12);
+}
+
+.bco-note--ok {
+  border-color: color-mix(in oklch, var(--ok), transparent 60%);
+  background: color-mix(in oklch, var(--ok), transparent 90%);
+  color: var(--ok);
+}
+
+/* The summary: the course's name over its rows, and the months as chips. */
+.bco-sum__course {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px dashed var(--border-strong);
+  font-size: 0.9375rem;
+  font-weight: var(--fw-bold);
+  line-height: 1.6;
+  color: var(--n-12);
+}
+
+.bco-sum__course + .bco-sum__rows {
+  margin-top: 0;
+}
+
+.bco-sum__row--stack {
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.bco-sum__row--stack dd {
+  white-space: normal;
+}
+
+.bco-sum__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bco-sum__chip {
+  padding: 0.1875rem 0.625rem;
+  border-radius: var(--r-full);
+  border: 1px solid color-mix(in oklch, var(--a-9), transparent 55%);
+  background: color-mix(in oklch, var(--a-9), transparent 88%);
+  font-size: 0.8125rem;
+  font-weight: var(--fw-semibold);
+  color: var(--a-11);
+}
+
+.bco-sum__row--total {
+  margin-top: 0.25rem;
+  padding-top: 0.625rem;
+  border-top: 1px dashed var(--border-strong);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.bco-sum__row--total dd {
+  font-size: 1.125rem;
+}
+
+/* The month picker's footer figure: the running total, or why the button is
+   off. */
+.bco-total__line {
+  margin-inline-end: auto;
+  font-size: 1.125rem;
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.bco-total__hint {
+  margin-inline-end: auto;
+  font-size: 0.875rem;
+  font-weight: var(--fw-medium);
+  color: var(--n-11);
+}
+
+@container bco (max-width: 29.999rem) {
+  .bco-total__line,
+  .bco-total__hint {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+  }
+}
+
+/* The wallet card sits in the checkout's stack; its own look is `wallet.css`. */
+.bco .wl-pay {
+  margin: 0;
+}
+
+/* «فتح الكورس» under the wallet confirmation. */
+.bco-done__cta {
+  margin-top: 0.5rem;
 }
