@@ -155,7 +155,10 @@ export function GamesHub({ hub }: { hub: GameHub }) {
     () =>
       restoreChoice(hub, parseLast(saved), {
         mode: 'millionaire',
-        courseId: hub.courses.length === 1 ? hub.courses[0]!.id : null,
+        // The first course, not «كل الكورسات»: the server puts the one the
+        // student subscribed to first, and that is where a round should
+        // start. «الكل» is still one tap away.
+        courseId: hub.courses[0]?.id ?? null,
         scope: 'all',
         scopeId: null,
         level: 'medium',
