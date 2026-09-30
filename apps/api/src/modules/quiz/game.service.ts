@@ -179,7 +179,25 @@ export class GameService {
         modes: pool.modes.get(course.id) ?? defaultGameModes(),
       });
     }
-    courses.sort((a, b) => countOf(b) - countOf(a));
+    /*
+     * The course the student PAID for first, then by size. Sorting by size
+     * alone put the free foundation course on top — it has the most questions
+     * — so a second-year student opening the games landed on «كورس تأسيسي»
+     * instead of their own curriculum: «مش الكورس التأسيسي، عاوز الكورس اللي
+     * مشترك فيه». `requiresGrant` is the same line the catalogue draws between
+     * a course you subscribe to and one that is open to everyone.
+     */
+    const paid = new Set(
+      (
+        await this.prisma.course.findMany({
+          where: { id: { in: courses.map((course) => course.id) }, requiresGrant: true },
+          select: { id: true },
+        })
+      ).map((course) => course.id),
+    );
+    courses.sort(
+      (a, b) => Number(paid.has(b.id)) - Number(paid.has(a.id)) || countOf(b) - countOf(a),
+    );
     return { total: pool.entries.size, courses, voice: azureSpeech() !== null, me };
   }
 

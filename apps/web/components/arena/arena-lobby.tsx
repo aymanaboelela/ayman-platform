@@ -41,22 +41,31 @@ export function ArenaLobby({
     <div className="ca-lobby">
       <section className="ca-hero" aria-labelledby="ca-title">
         <span className="ca-hero__glow" aria-hidden="true" />
-        <span className="ca-hero__rings" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
+        {/* The mute switch alone in the corner. «تحدّي مباشر» moved into the
+            text column as its eyebrow: sharing this row put it directly over
+            the shield, where the ripples crossed it. */}
         <div className="ca-hero__top">
-          <span className="ca-badge">
-            <Swords className="size-4" aria-hidden="true" />
-            {c.eyebrow}
-          </span>
           <SoundButton sound={sound} />
         </div>
 
         <div className="ca-hero__main">
-          <ArenaEmblem className="ca-hero__emblem" />
+          {/* The ripples belong to the shield, so they live in its box and
+              centre on it — positioned against the whole card they sat a
+              fixed offset from a shield whose place moves with the padding
+              and the badge row, and crossed «تحدّي مباشر» instead. */}
+          <span className="ca-hero__mark">
+            <span className="ca-hero__rings" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+            <ArenaEmblem className="ca-hero__emblem" />
+          </span>
           <div className="ca-hero__text">
+            <span className="ca-badge ca-hero__eyebrow">
+              <Swords className="size-4" aria-hidden="true" />
+              {c.eyebrow}
+            </span>
             <h1 id="ca-title" className="ca-hero__title">
               {c.title}
             </h1>
