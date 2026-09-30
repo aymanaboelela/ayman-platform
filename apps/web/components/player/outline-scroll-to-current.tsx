@@ -4,8 +4,8 @@ import { useEffect } from 'react';
 
 export interface OutlineScrollToCurrentProps {
   /**
-   * Not read — the effect finds the row through `[aria-current="page"]`, which
-   * is markup the sidebar already emits. It is here as the effect's DEPENDENCY:
+   * Not read — the effect finds the row through `[aria-current]`, which is
+   * markup the sidebar already emits. It is here as the effect's DEPENDENCY:
    * navigating between two lessons of the same course keeps this component
    * mounted and only swaps which row carries `aria-current`, so without it the
    * panel would stay parked on the lesson the student just left.
@@ -44,7 +44,10 @@ export interface OutlineScrollToCurrentProps {
 export function OutlineScrollToCurrent({ activeLessonId }: OutlineScrollToCurrentProps) {
   useEffect(() => {
     const panel = document.querySelector<HTMLElement>('[data-course-outline]');
-    const current = panel?.querySelector<HTMLElement>('[aria-current="page"]');
+    // ANY value of `aria-current`, not `="page"`: `LessonRow` has written
+    // `aria-current="true"` since #223, and a query for "page" found nothing,
+    // so the panel opened at lesson 1 on every lesson of every course.
+    const current = panel?.querySelector<HTMLElement>('[aria-current]');
     if (!panel || !current) return;
 
     // A short course fits inside the bound and never became a scroller. There
