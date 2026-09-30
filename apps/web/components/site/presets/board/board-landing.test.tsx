@@ -708,6 +708,48 @@ describe('BoardPanel — the opener', () => {
 
     expect(container.querySelector('.board-panel__role')?.textContent).toBe('من الصفر للاحتراف');
   });
+
+  /**
+   * The code box («أول برنامج هتكتبه») used to render here, side by side with
+   * the photograph, behind a `:has(.board-code):has(.board-portrait)` grid
+   * rule in `presets.css`. It is gone from the component entirely — removed,
+   * not hidden — so no amount of branding data can make it reappear.
+   */
+  it('renders no code box, with or without a photograph', async () => {
+    getBranding.mockResolvedValue(branding({ heroKey: 'aa/hero.webp' }));
+    const page = await BoardLanding({ blocks: [block(HERO)], honorBoard: [] });
+    const { container } = render(sectionAt(page, 0));
+
+    expect(container.querySelector('.board-code')).toBeNull();
+    expect(container.querySelector('figure')).toBeNull();
+  });
+
+  /** The instructor's own photograph, large and centred, when the tenant has
+   *  uploaded one — the whole point of this redesign. */
+  it('renders the instructor’s photograph as the panel’s figure when heroKey is set', async () => {
+    getBranding.mockResolvedValue(branding({ heroKey: 'aa/hero.webp' }));
+    const page = await BoardLanding({ blocks: [block(HERO)], honorBoard: [] });
+    const { container } = render(sectionAt(page, 0));
+
+    const portrait = container.querySelector('.board-portrait img');
+    expect(portrait?.getAttribute('src')).toContain('aa/hero.webp');
+    /* Decorative: the name is already this section's `<h1>`. */
+    expect(container.querySelector('.board-portrait')?.getAttribute('aria-hidden')).toBe('true');
+    /* No mark alongside the photograph — see `board-panel.tsx` for why. */
+    expect(container.querySelector('.board-mark')).toBeNull();
+  });
+
+  /** No upload yet is a supported state, not a broken one — `<BoardMark>`
+   *  must still stand in for the figure exactly as it did before this
+   *  redesign touched the photograph branch beside it. */
+  it('still falls back to BoardMark when there is no heroKey', async () => {
+    getBranding.mockResolvedValue(branding({ heroKey: null }));
+    const page = await BoardLanding({ blocks: [block(HERO)], honorBoard: [] });
+    const { container } = render(sectionAt(page, 0));
+
+    expect(container.querySelector('.board-portrait')).toBeNull();
+    expect(container.querySelector('.board-mark')).toBeTruthy();
+  });
 });
 
 describe('BoardMark', () => {

@@ -3,7 +3,6 @@ import Link from 'next/link';
 import type { BrandingRead } from '@ayman/contracts/admin/settings';
 import { mediaUrl } from '@ayman/ui/branding';
 import { BoardMark } from './board-mark';
-import { boardCopy } from './board-copy';
 
 /**
  * The opener of «اللوح»: one solid block of the brand colour with a curved
@@ -184,79 +183,36 @@ export function BoardPanel({
         */}
         {branding.heroKey ? (
           /*
-            The mark drops to a strip above the photograph when there is one.
-            It used to BE the figure — a 22rem-wide logo centred in the panel —
-            and that was the right answer only while there was nothing else to
-            put there. A student choosing a teacher is choosing a person, and a
-            mascot at hero size in front of a face that is not on the page is
-            the panel arguing for the brand over the person teaching.
+            الصورة هي الافتتاحية دلوقتي، مش عنصر جنبها.
 
-            `aria-hidden` on the wrapper: the name is the page's `<h1>`
-            directly above, so the photograph carries no information a reader
-            who cannot see it is missing.
-          */
-          /*
-            No mark above the photograph.
-            
-            It was a strip here for one release, on the theory that a brand
-            needs its mark on the opener. It does not: the wordmark is already
-            in the header, three centimetres above, and a second copy of the
-            same mascot between the headline and the face was the opener
-            saying the same thing twice — which is what it looked like.
-          */
-          <>
-            {/*
-              الكود جنب الصورة، ومكانه بعد الزراير عن قصد.
-              
-              الافتتاحية كانت بلاطة زرقا فيها كلام وزراير وصورة — تقرا مسطّحة
-              لأن مفيش فيها حاجة تخص **المادة** اللي بتتباع. تلات سطور بايثون
-              بتشتغل هي أقصر حاجة ممكن تقول «ده اللي هتتعلمه» من غير ما تقولها
-              بالكلام.
-              
-              ⚠️ مش نسخة من «الاستوديو». هناك اللوحة بتطلع على ورق أبيض وبتاخد
-              ظل وحواف؛ هنا هي مساحة أغمق شوية جوّه البلاطة نفسها، من غير ظل —
-              لأن ظل على لون صلب هو بالظبط الحاجة اللي البريست ده مالوش.
-            */}
-            <figure className="board-code">
-              <figcaption className="board-code__cap">{boardCopy.heroCode.label}</figcaption>
-              {/*
-                `dir="ltr"` مش رفاهية: الصفحة عربي فالاتجاه الموروث RTL، وRTL
-                على `print("أهلاً يا", name)` بيقلب ترتيب الأقواس والعلامات
-                حوالين النص العربي لحاجة مش الكود اللي حد كتبه.
-              */}
-              <pre className="board-code__body" dir="ltr">
-                {boardCopy.heroCode.lines.map((line) => (
-                  <code className="board-code__line" key={line.comment ?? line.code ?? ''}>
-                    {line.comment ? (
-                      <span className="board-code__comment" dir="rtl">
-                        {line.comment}
-                      </span>
-                    ) : (
-                      line.code
-                    )}
-                  </code>
-                ))}
-              </pre>
-              <p className="board-code__out">
-                <span className="board-code__caret" aria-hidden="true">
-                  &gt;
-                </span>{' '}
-                {boardCopy.heroCode.out}
-              </p>
-            </figure>
+            كان هنا صندوق كود بايثون شغّال جنب الصورة — «أول برنامج هتكتبه» —
+            وكان بياخد نص المساحة على الشاشة العريضة (`grid-template-columns:
+            1fr auto`). المدرّس طلب شيله صراحة: البلاطة بقت فيها صورته هو
+            كبيرة في النص، مش صورة وكود بيتقاسموا مكان. `boardCopy.heroCode`
+            اتشالت معاه — مكنش بيقراها حد غير الكومبوننت ده (تأكدت بـgrep قبل
+            الشيل).
 
-            <div className="board-portrait" aria-hidden="true">
-              <Image
-                className="board-portrait__img"
-                src={mediaUrl(branding.heroKey)}
-                alt=""
-                width={900}
-                height={1104}
-                sizes="(min-width: 48rem) 26rem, 70vw"
-                priority
-              />
-            </div>
-          </>
+            ⚠️ ده مش نسخ من «الاستوديو»: هناك لسه فيه كود جنب البورتريه —
+            `studioCopy.heroCode` نسخة تانية خالص، ومحدش قرب لها هنا.
+
+            لسه مافيش مارك فوق الصورة، لنفس سبب ما كانش موجود قبل الشيل ده:
+            الووردمارك أصلًا في الهيدر فوق بتلات سنتيمتر، وتكرار المارك هنا
+            كان بيقول نفس الكلام مرتين.
+
+            `aria-hidden` على الغلاف: الاسم هو `<h1>` الصفحة فوق مباشرة، فمفيش
+            معلومة في الصورة إن قارئ الشاشة محتاجها.
+          */
+          <div className="board-portrait" aria-hidden="true">
+            <Image
+              className="board-portrait__img"
+              src={mediaUrl(branding.heroKey)}
+              alt=""
+              width={900}
+              height={1104}
+              sizes="(min-width: 48rem) 34rem, 82vw"
+              priority
+            />
+          </div>
         ) : (
           <BoardMark branding={branding} name={name} />
         )}
