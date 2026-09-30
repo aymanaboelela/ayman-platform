@@ -46,6 +46,13 @@ export interface ResultRowProps {
    * how you go looking for the paper you meant to rate.
    */
   canMark?: boolean;
+  /**
+   * `/admin/grading?tab=…` as the list is showing it right now — forwarded
+   * onto «افتح الورقة» so the paper's own «رجوع» can read the same tab/sort/
+   * exam/day back and return here rather than to the bare queue. See
+   * `../../../app/(admin)/admin/grading/nav.ts`.
+   */
+  listHref: string;
 }
 
 /**
@@ -72,8 +79,12 @@ export interface ResultRowProps {
  * Same rule as the queue row beside it: two destinations (the student's record,
  * and the paper), so no stretched pseudo-element over the card.
  */
-export function ResultRow({ row, rank, canMark = false }: ResultRowProps) {
+export function ResultRow({ row, rank, canMark = false, listHref }: ResultRowProps) {
   const scored = row.scaledScore !== null;
+  // The query alone (`?tab=…`), reattached to the attempt id — `listHref` is
+  // an `/admin/grading` URL, not `/admin/grading/:id`, so only its search
+  // half is reusable here.
+  const listQuery = listHref.includes('?') ? listHref.slice(listHref.indexOf('?')) : '';
 
   return (
     <div
@@ -163,7 +174,10 @@ export function ResultRow({ row, rank, canMark = false }: ResultRowProps) {
         ) : null}
       </div>
 
-      <Link href={`/admin/grading/${row.attemptId}`} className="chip chip--quiet shrink-0">
+      <Link
+        href={`/admin/grading/${row.attemptId}${listQuery}`}
+        className="chip chip--quiet shrink-0"
+      >
         {c.openPaper}
       </Link>
 

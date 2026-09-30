@@ -15,6 +15,7 @@ import { adminGet } from '@/lib/admin-api';
 import { GradingQueueRow } from '@/components/admin/grading/queue-row';
 import { ResultRow } from '@/components/admin/grading/result-row';
 import { AdminEmpty } from '@/components/admin/admin-empty';
+import { GRADING_TABS, gradingListHref, type GradingTab as Tab } from './nav';
 
 /** Day and month, Western digits — the same rule every date here follows. No
  *  year: the list is the last sixty days of sittings. */
@@ -30,30 +31,15 @@ const dayClass =
 const dayActive = 'border-accent bg-accent/15 text-accent-text';
 const dayIdle = 'border-line text-fg-muted hover:border-accent/40 hover:text-fg';
 
-/** Every filter lives in the URL, so each control has to rebuild the whole
- *  query rather than append to it — a day link that dropped the exam filter
- *  would silently widen the view it was meant to narrow. */
-function hrefFor(state: {
-  tab: string;
-  sort?: string;
-  exam?: string;
-  day?: string;
-}): string {
-  const params = new URLSearchParams();
-  if (state.tab !== 'queue') params.set('tab', state.tab);
-  if (state.sort) params.set('sort', state.sort);
-  if (state.exam) params.set('exam', state.exam);
-  if (state.day) params.set('day', state.day);
-  const query = params.toString();
-  return query ? `/admin/grading?${query}` : '/admin/grading';
-}
+/** `gradingListHref` — re-exported under its call site's old name so the rest
+ *  of this file, and the detail page's back link, build the exact same URL
+ *  from one definition. See `./nav` for why it moved. */
+const hrefFor = gradingListHref;
+const TABS = GRADING_TABS;
 
 const c = copy.admin.grading;
 
 export const metadata = { title: c.title };
-
-const TABS = ['queue', 'marked', 'top', 'late'] as const;
-type Tab = (typeof TABS)[number];
 
 const TAB_LABEL: Record<Tab, string> = {
   queue: c.tabQueue,
@@ -391,6 +377,9 @@ export default async function AdminGradingPage({
                     /* Rateable on both — a late paper still gets marked and
                        judged; it simply cannot go on the board. */
                     canMark={tab === 'top' || tab === 'late'}
+                    /* So the paper's «رجوع» lands back on THIS tab/sort/filter
+                       combination — see `./nav` for the bug this closes. */
+                    listHref={hrefFor({ tab, sort: query.sort, exam, day })}
                   />
                 </li>
               ))}
