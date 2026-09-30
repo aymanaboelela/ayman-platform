@@ -882,7 +882,10 @@ export function AssistantWidget({
               </div>
 
               {panelMode === 'escalate' ? (
-                <div className="flex-1 overflow-y-auto">
+                // `overscroll-contain` — the same scroll-chaining fix as the
+                // chat transcript in `assistant-chat.tsx`, for the one other
+                // scroller a tall form can grow inside the panel.
+                <div className="flex-1 overflow-y-auto overscroll-contain">
                   <AssistantEscalate
                     /*
                       The tree is gone, so there is no trail to carry. The
@@ -933,7 +936,7 @@ export function AssistantWidget({
               ) : null}
 
               {panelMode === 'sent' ? (
-                <div className="flex flex-1 flex-col items-center gap-3 overflow-y-auto px-6 py-10 text-center">
+                <div className="flex flex-1 flex-col items-center gap-3 overflow-y-auto overscroll-contain px-6 py-10 text-center">
                   <CheckCircle2 className="size-9 text-accent" aria-hidden="true" />
                   <p className="text-[length:var(--fs-text-base)] font-semibold text-fg">
                     {tenantSentence(c.escalate.sentTitle)}
