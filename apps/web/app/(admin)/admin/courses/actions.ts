@@ -269,7 +269,39 @@ export async function createCourseAction(formData: FormData): Promise<void> {
     ...readStream(formData),
   });
 
-  const course = await apiSend('POST', '/api/admin/courses', CourseRowSchema, parsed);
+  /*
+   * `updateCourseAction` maps this exact pair — a 409 is always the slug, a
+   * 400 is `assertOfferingExists` — to `copy.admin.course.slugTaken` /
+   * `offeringMissing` and RETURNS them, because the editor reads an
+   * `ActionResult`. This action cannot: it has to end in `redirect()` (see
+   * the long note in `<CourseForm>` on why this stays a form action), so an
+   * uncaught throw here went straight past every surface boundary to
+   * `(admin)/error.tsx` — «الصفحة وقعت», the create form and everything typed
+   * into it gone, for a mistake as ordinary as reusing a slug. Recorded on
+   * production 2026-09-30 (digest 2364962632).
+   *
+   * The fix keeps the redirect shape: send the instructor BACK to the create
+   * page, with the slug they typed and which message to show — `<CourseForm>`
+   * toasts it and refills the field, so the retry is «غيّر السلج» rather than
+   * «retype the whole course».
+   */
+  let course: z.infer<typeof CourseRowSchema>;
+  try {
+    course = await apiSend('POST', '/api/admin/courses', CourseRowSchema, parsed);
+  } catch (error) {
+    const formError =
+      error instanceof Error && error.message.includes('failed with 409')
+        ? 'slugTaken'
+        : error instanceof Error && error.message.includes('failed with 400')
+          ? 'offeringMissing'
+          : null;
+    if (formError !== null) {
+      redirect(`/admin/courses/new?formError=${formError}&slug=${encodeURIComponent(parsed.slug)}`);
+    }
+    // Anything else is a genuine fault, not a mistake he can fix by changing
+    // one field — still `(admin)/error.tsx`, on purpose.
+    throw error;
+  }
 
   /*
    * A new course arrives with somewhere to put the first lecture, and a first

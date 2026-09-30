@@ -85,6 +85,16 @@ type Props = {
    */
   action: (formData: FormData) => unknown;
   /**
+   * `createCourseAction` sent him BACK here rather than crashing to
+   * «الصفحة وقعت» — see the action's own comment. `null`/absent on an
+   * ordinary visit; toasted once on mount when present, never re-shown on a
+   * later save (this prop does not change after the page loads).
+   */
+  formError?: 'slugTaken' | 'offeringMissing' | null;
+  /** The slug he typed before the redirect — only read when `formError` is
+   *  set, so the retry is «غيّر السلج» and not a blank form again. */
+  initialSlug?: string;
+  /**
    * The course has «شهور المنهج» configured, so the one monthly price buys ONE
    * of them rather than thirty days of everything — `priceMonthlyPerMonth`
    * under the field says so.
@@ -293,6 +303,8 @@ export function CourseForm({
   taxonomy,
   defaults,
   action,
+  formError = null,
+  initialSlug,
   mode = 'create',
   bookSlot,
   pricingSlot,
@@ -304,7 +316,7 @@ export function CourseForm({
 }: Props) {
   const [draft, setDraft] = useState<Draft>(() => ({
     title: defaults?.title ?? '',
-    slug: defaults?.slug ?? '',
+    slug: defaults?.slug ?? initialSlug ?? '',
     subtitle: defaults?.subtitle ?? '',
     description: defaults?.description ?? '',
     systemId: defaults?.systemId ?? taxonomy.systems[0]?.id ?? '',
@@ -329,6 +341,17 @@ export function CourseForm({
     bookPrice: defaults?.bookPriceCents != null ? String(defaults.bookPriceCents / 100) : '',
   }));
   const [saving, setSaving] = useState(false);
+  /*
+   * `createCourseAction` redirected back here instead of crashing — say why,
+   * once. `[]` on purpose: `formError` is a query param from THIS load, and a
+   * later save going through the same `create` → `redirect` round trip is a
+   * fresh navigation with a fresh mount, not a prop change on this one.
+   */
+  useEffect(() => {
+    if (formError === 'slugTaken') toast.error(copy.admin.course.slugTaken);
+    else if (formError === 'offeringMissing') toast.error(copy.admin.course.offeringMissing);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   /*
    * The LATEST draft, for `update` to build on — not the one this render
    * closed over.
