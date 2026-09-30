@@ -5,7 +5,20 @@ import { createCourseAction } from '../actions';
 
 export const metadata = { title: copy.admin.course.new };
 
-export default async function NewCoursePage() {
+/** The two mistakes `createCourseAction` sends back here instead of to
+ *  `(admin)/error.tsx` — see the long comment on that action. */
+const FORM_ERRORS = ['slugTaken', 'offeringMissing'] as const;
+type FormError = (typeof FORM_ERRORS)[number];
+
+function readFormError(value: string | undefined): FormError | null {
+  return (FORM_ERRORS as readonly string[]).includes(value ?? '') ? (value as FormError) : null;
+}
+
+export default async function NewCoursePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ formError?: string; slug?: string }>;
+}) {
   /* Cache first, live only on a miss — the shape `/onboarding` uses, and for the
      same reason it uses it: taxonomy is load-bearing on this screen (the form's
      system / year / track selects are built from it), so a cached `null` cannot
@@ -17,12 +30,22 @@ export default async function NewCoursePage() {
   const taxonomy = (await getTaxonomyOrNull()) ?? (await getTaxonomyLiveOrNull());
   if (!taxonomy) throw new Error('GET /api/taxonomy is unavailable');
 
+  const params = await searchParams;
+  const formError = readFormError(params.formError);
+
   return (
     <>
       <h1 className="mb-6 text-[length:var(--fs-title-2)] font-semibold">
         {copy.admin.course.new}
       </h1>
-      <CourseForm taxonomy={taxonomy} action={createCourseAction} />
+      <CourseForm
+        taxonomy={taxonomy}
+        action={createCourseAction}
+        formError={formError}
+        // The slug he typed, back from the redirect — so the retry is
+        // «غيّر السلج» rather than retyping the whole course.
+        initialSlug={formError ? (params.slug ?? '') : undefined}
+      />
     </>
   );
 }
