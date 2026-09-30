@@ -3,7 +3,8 @@ import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * The book-order checkout is drawn inside a Radix dialog, and a dialog portals
+ * The book-order checkout — and the course checkout, drawn in the same frame
+ * since — is drawn inside a Radix dialog, and a dialog portals
  * into `<body>` — outside `.site` (where `--site-*` is declared) and outside
  * `.store-surface` (where it is aliased). A `var(--site-…)` there resolves to
  * nothing, and the summary a student reads right before typing an address once
@@ -27,6 +28,8 @@ const WEB = join(import.meta.dirname, '..');
 const APP = join(WEB, 'app');
 const CHECKOUT_CSS = join(WEB, 'components', 'site', 'book-checkout.css');
 const PANEL = join(WEB, 'components', 'site', 'book-order-panel.tsx');
+/** The course checkout is drawn in the same frame and portals the same way. */
+const COURSE_PANEL = join(WEB, 'components', 'site', 'subscribe-panel.tsx');
 
 /** Classes whose unscoped rules may be rendered outside `.site`. */
 const ROW_CLASS = /^\.books-cart__row(?![\w-])|^\.books-cart__row--total/;
@@ -67,8 +70,9 @@ describe('the book-order checkout dialog', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('is loaded by the panel itself, so every surface that opens it has it', () => {
+  it('is loaded by both panels themselves, so every surface that opens either has it', () => {
     expect(readFileSync(PANEL, 'utf8')).toMatch(/^import '\.\/book-checkout\.css';$/m);
+    expect(readFileSync(COURSE_PANEL, 'utf8')).toMatch(/^import '\.\/book-checkout\.css';$/m);
   });
 
   it('keeps `--site-*` out of every unscoped basket-row rule, in any stylesheet', () => {

@@ -2741,13 +2741,13 @@ export const copy = {
      * option with no reason beside it reads as a broken screen, and a student
      * who thinks the site is broken does not send money.
      */
-    railQuestion: 'هتحوّل بإيه؟',
+    railQuestion: 'التحويل هيبقى بإيه؟',
     railInstapay: 'إنستاباي',
     railVodafoneCash: 'فودافون كاش',
     railUnavailable: 'مش متاح دلوقتي',
     /** Back to the question, from the screen that shows the number. */
-    railChange: 'غيّر طريقة التحويل',
-    cta: 'اشترك دلوقتي',
+    railChange: 'تغيير طريقة التحويل',
+    cta: 'الاشتراك دلوقتي',
     title: 'اشتراك الكورس',
     choosePlan: 'الباقات المتاحة',
     /**
@@ -2783,7 +2783,7 @@ export const copy = {
     /** `{price}` — the CHEAPEST open term's price, shown on the term card
      *  when the course sells more than one (no single number to show yet). */
     planTermFromPrice: 'من {price} جنيه',
-    chooseTermTitle: 'اختار الترم',
+    chooseTermTitle: 'الترمات المتاحة',
 
     // ── «شهر» when the course sells by curriculum month ──────────────────
     /**
@@ -2830,7 +2830,7 @@ export const copy = {
     /** `{price}` — EGP, already formatted. The running total under the
      *  picker, which is the only place a multi-month choice shows its cost. */
     monthsTotal: 'الإجمالي: {price} جنيه',
-    monthsContinue: 'كمّل الدفع',
+    monthsContinue: 'التالي — الدفع',
     monthsRequired: 'لازم اختيار شهر واحد على الأقل',
     /** `{price}` is EGP, already formatted — shared by every plan card
      *  (monthly/quarterly/yearly and a single-term course) and every row of
@@ -2845,7 +2845,7 @@ export const copy = {
      * single most expensive mistake this screen can make: the money leaves and
      * nothing reconciles it.
      */
-    instructions: 'حوّل المبلغ على رقم {rail} {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
+    instructions: 'التحويل على رقم {rail} {number}، وبعده رقم الموبايل اللي اتحوّل منه وصورة سكرين شوت من التحويل.',
     copyNumber: 'نسخ الرقم',
     copied: 'اتنسخ',
     /** Replaces the old «المبلغ اللي حوّلته» field — the plan already fixes
@@ -2854,9 +2854,9 @@ export const copy = {
      *  to learn, and it is what an admin reconciles against the real
      *  Vodafone Cash log. See the model note on
      *  `PaymentSubmission.senderPhone`. */
-    senderPhoneLabel: 'رقم الموبايل اللي حوّلت منه',
+    senderPhoneLabel: 'رقم الموبايل اللي اتحوّل منه',
     screenshotLabel: 'صورة إثبات التحويل',
-    screenshotPlaceholder: 'اضغط هنا وارفع صورة السكرين شوت',
+    screenshotPlaceholder: 'رفع صورة السكرين شوت',
     screenshotChange: 'تغيير الصورة',
     /**
      * ⚠️ `{rail}` — same reason as `instructions` above, and this one was
@@ -2876,20 +2876,20 @@ export const copy = {
     /** After a successful submission — replaces the whole panel. No promised
      *  turnaround time on purpose: the review is manual and a stated window
      *  becomes a complaint the moment it slips. */
-    success: 'تم استلام طلبك! هنراجعه ونفعّل اشتراكك، وهيوصلك إشعار أول ما يتم.',
+    success: 'هنراجع التحويل ونفعّل الاشتراك، وهيوصلك إشعار أول ما يتم.',
     /** A second attempt while an earlier one for the same course is still `pending`. */
-    alreadyPending: 'عندك طلب اشتراك في مراجعة بالفعل لنفس الكورس — استنى الرد عليه الأول.',
-    genericError: 'حصل خطأ، حاول تاني.',
+    alreadyPending: 'فيه طلب اشتراك لنفس الكورس في المراجعة بالفعل — الرد عليه جاي الأول.',
+    genericError: 'حصل خطأ، نحاول تاني.',
     /* ── الإيصال ده اتبعت قبل كده ───────────────────────────────────────────
        يوم ١٧/٠٩ طلع خمس طلبة كل واحد عنده طلبين مدفوعين لنفس الكتاب، وأربعة
        منهم رافعين نفس ملف الصورة بالظبط على الاتنين. مش ناس دفعت مرتين —
        الفورم بيبدأ من الأول لو فتحوا من موبايل تاني، وماكانش فيه حاجة بتقولهم.
        ⚠️ الصيغة مش بتتهم حد. «اتبعت قبل كده» بتوصف الإيصال، و«لو كنت عايز
        نسخة تانية» بتفتح الباب اللي البيع الحقيقي بيعدّي منه بدل ما تقفله. */
-    uploadError: 'مقدرناش نرفع الصورة. جرب صورة تانية أو اتأكد من الاتصال بالنت.',
-    senderPhoneRequired: 'اكتب رقم الموبايل اللي حوّلت منه',
+    uploadError: 'مقدرناش نرفع الصورة. صورة تانية أو اتصال أقوى بالنت غالبًا بيحلّوها.',
+    senderPhoneRequired: 'رقم الموبايل اللي اتحوّل منه مطلوب',
     senderPhoneInvalid: 'الرقم ده مش رقم مصري صحيح',
-    screenshotRequired: 'ارفع صورة إثبات التحويل',
+    screenshotRequired: 'صورة إثبات التحويل مطلوبة',
     /**
      * No `contact.instapay` configured — a real, if rare, admin gap.
      *
@@ -2908,7 +2908,7 @@ export const copy = {
      * things that are true: the platform is at fault, and it is worth a retry.
      * `retry` below is the button beside it.
      */
-    noNumber: 'رقم التحويل لسه بيتظبط عندنا. جرب تاني بعد لحظة، والاشتراك هيفتح.',
+    noNumber: 'رقم التحويل لسه بيتظبط عندنا. نحاول تاني بعد لحظة، والاشتراك هيفتح.',
     /**
      * A closed course with nothing to sell: no monthly/quarterly/yearly price
      * and no open, priced term — read LIVE, not off the cached page.
@@ -2927,11 +2927,11 @@ export const copy = {
      * up yet, which is the honest description of that state and the one that
      * does not send anyone to WhatsApp for a course they cannot buy either way.
      */
-    noPlans: 'الاشتراك في الكورس ده لسه مش مفتوح. جرب تاني بعد شوية.',
+    noPlans: 'الاشتراك في الكورس ده لسه مش مفتوح. نحاول تاني بعد شوية.',
     /** The button beside `noNumber`/`noPlans` — re-reads the live price and
      *  number rather than reloading the page, so a student who arrived a
      *  minute before the admin finished does not lose their place. */
-    retry: 'جرّب تاني',
+    retry: 'نحاول تاني',
     /** «الدفع من المحفظة» — the card above the rails when the wallet has money. */
     walletTitle: 'الدفع من المحفظة',
     walletBalance: 'رصيدك {balance} جنيه',
@@ -2956,7 +2956,7 @@ export const copy = {
      *  here because their subscription ran out, not one starting fresh.
      *  Never shown for a lapsed `term` (its own notice, if any, is a
      *  separate concern — a term closes by admin action, not a date). */
-    previouslySubscribedLapsed: 'كنت مشترك في الكورس ده قبل كده وخلصت مدة اشتراكك — اشترك تاني عشان ترجع تكمل.',
+    previouslySubscribedLapsed: 'مدة الاشتراك اللي كان على الكورس ده انتهت — والتجديد بيرجّع كل حاجة زي ما كانت.',
     /**
      * The `pendingStatus` banner's own WhatsApp button — shown beside it on
      * the public course page (`course-subscribe-state.tsx`) so a student
@@ -2965,7 +2965,41 @@ export const copy = {
      * that one is a generic "contact us" link in the footer, and this one is
      * scoped to the exact thing the student is waiting on.
      */
-    pendingWhatsapp: 'اسأل عن حالة الطلب على واتساب',
+    pendingWhatsapp: 'السؤال عن حالة الطلب على واتساب',
+
+    /* ── The checkout's own chrome — the same frame as the book checkout ───
+       Nouns and «نـ» forms only, never an imperative and never a verb or an
+       adjective that only fits a boy: one string serves every student, and
+       the platform never asks. `copy/checkout-voice.spec.ts` holds this whole
+       object to that. */
+    /** The step bar's accessible name and its three stops. */
+    stepsLabel: 'خطوات الاشتراك',
+    stepPlan: 'الباقة',
+    stepPay: 'الدفع',
+    stepConfirm: 'التأكيد',
+    /** The one summary — beside the payment step on a wide screen, folded
+     *  above it on a phone with `summaryDetails` as its toggle. */
+    summaryTitle: 'ملخص الاشتراك',
+    summaryDetails: 'التفاصيل',
+    summaryPlan: 'الباقة',
+    summaryMonths: 'الشهور',
+    summaryAmount: 'المبلغ',
+    /** The footer's figure. */
+    totalLabel: 'الإجمالي',
+    /** The payment step's headline figure and its copy button. */
+    payAmountLabel: 'المبلغ المطلوب تحويله',
+    copyAmount: 'نسخ المبلغ',
+    /** Payment as three numbered stops. `{rail}` — «إنستاباي»/«فودافون كاش»;
+     *  the other two stops are `senderPhoneLabel` and `screenshotLabel`. */
+    payStepSend: 'التحويل على رقم {rail}',
+    /** The confirmation after the screenshot is in — `success` is its body. */
+    successTitle: 'طلبك وصلنا',
+    /** The wallet path's confirmation — `walletSuccess` is its body. */
+    walletSuccessTitle: 'الاشتراك اتفعّل',
+    /** A claim already in review — `pendingStatus` is its body. */
+    pendingTitle: 'الطلب في المراجعة',
+    /** Closes the dialog from a finished state. */
+    done: 'تمام',
   },
   /**
    * الكتاب الورقي — ordering the printed textbook of a course that has one.
@@ -3100,7 +3134,7 @@ export const copy = {
      * single most expensive mistake this screen can make: the money leaves and
      * nothing reconciles it.
      */
-    instructions: 'حوّل المبلغ على رقم {rail} {number}، وبعدين اكتب رقم الموبايل اللي حوّلت منه وارفع صورة سكرين شوت من التحويل.',
+    instructions: 'التحويل على رقم {rail} {number}، وبعده رقم الموبايل اللي اتحوّل منه وصورة سكرين شوت من التحويل.',
     submit: 'إرسال الطلب',
     submitting: 'بنبعت الطلب…',
     /**
@@ -3138,10 +3172,10 @@ export const copy = {
        بدل ما تقفله في وشه. */
     receiptAlreadyUsed:
       'صورة التحويل دي اتبعتت قبل كده على طلب تاني، فما ينفعش تتحسب مرتين. لو ده تحويل جديد ارفع صورته هو، ولو كنت عايز نسخة تانية كلّمنا على واتساب.',
-    genericError: 'حصل خطأ، حاول تاني.',
-    uploadError: 'مقدرناش نرفع الصورة. جرب صورة تانية أو اتأكد من الاتصال بالنت.',
-    screenshotRequired: 'ارفع صورة إثبات التحويل',
-    senderPhoneRequired: 'اكتب رقم الموبايل اللي حوّلت منه',
+    genericError: 'حصل خطأ، نحاول تاني.',
+    uploadError: 'مقدرناش نرفع الصورة. صورة تانية أو اتصال أقوى بالنت غالبًا بيحلّوها.',
+    screenshotRequired: 'صورة إثبات التحويل مطلوبة',
+    senderPhoneRequired: 'رقم الموبايل اللي اتحوّل منه مطلوب',
     senderPhoneInvalid: 'الرقم ده مش رقم مصري صحيح',
     noNumber: 'طلب الكتاب مش متاح دلوقتي. تواصل معانا على واتساب.',
     back: 'رجوع',

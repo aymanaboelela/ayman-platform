@@ -1,7 +1,20 @@
 'use client';
 
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { BookOpen, CalendarClock, CalendarRange, Check, ImagePlus, Lock } from 'lucide-react';
+import {
+  ArrowLeft,
+  BookOpen,
+  CalendarClock,
+  CalendarRange,
+  CircleCheck,
+  GraduationCap,
+  Hourglass,
+  ImagePlus,
+  LoaderCircle,
+  Lock,
+  TriangleAlert,
+  Wallet,
+} from 'lucide-react';
 import { z } from '@ayman/contracts/zod';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -15,17 +28,33 @@ import { WalletBalanceSchema, WalletPurchaseResultSchema } from '@ayman/contract
 import type { CourseMonth, SellablePaymentPlan } from '@ayman/contracts/months';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
-import { Label } from '@ayman/ui/components/label';
 import { cn } from '@ayman/ui/lib/cn';
 import { ApiRequestError, apiGet, apiPost } from '@/lib/api';
 import { uploadPaymentScreenshot } from '@/lib/upload-client';
 import { formatEGP } from '@/lib/price';
 import { PaymentBrand, type PaymentRail } from './payment-brand';
 import { PaymentMethodChoice } from './payment-method-choice';
+import {
+  AmountCard,
+  CheckoutDone,
+  CheckoutField,
+  CheckoutFooter,
+  CheckoutSteps,
+  CheckoutSummary,
+  CopyButton,
+  FooterTotal,
+  Money,
+  PayStep,
+  useCheckoutKeyboard,
+} from './checkout-parts';
 import { WalletPayCard } from '@/components/wallet/wallet-pay-card';
 import { newIdempotencyKey } from '@/lib/idempotency-key';
 import { formatEGPExact } from '@/lib/price';
 import '@/components/wallet/wallet.css';
+/* The checkout frame's stylesheet — shared with the book checkout, `:root`
+   tokens only: this panel is drawn in a dialog that portals out of `.site`,
+   and on the subscribe page inside the dark course hero. */
+import './book-checkout.css';
 
 /** `+201021196367` → `٠١٠٢١١٩٦٣٦٧`-shaped local digits, what a Vodafone Cash
  *  transfer screen actually asks a student to dial. */
@@ -152,8 +181,8 @@ type LivePlans = {
 
 /**
  * One plan choice, as its own tappable CARD rather than a line in a stacked
- * list of buttons — sits beside its siblings in a responsive grid (see
- * `.course-subscribe__plans` in `pages.css`), each with its own icon, name
+ * list of buttons — sits beside its siblings in a responsive grid
+ * (`.bco-plans` in `book-checkout.css`), each with its own icon, name
  * and price, so the three options (monthly/term/yearly) read as three distinct
  * products rather than three rows of text.
  *
@@ -174,17 +203,12 @@ function PlanCard({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      className="course-subscribe__plan-card"
-      onClick={onClick}
-      aria-label={`${name} — ${price}`}
-    >
-      <span className="course-subscribe__plan-icon" aria-hidden="true">
+    <button type="button" className="bco-plan" onClick={onClick} aria-label={`${name} — ${price}`}>
+      <span className="bco-plan__icon" aria-hidden="true">
         {icon}
       </span>
-      <span className="course-subscribe__plan-name">{name}</span>
-      <span className="course-subscribe__plan-price">{price}</span>
+      <span className="bco-plan__name">{name}</span>
+      <span className="bco-plan__price">{price}</span>
     </button>
   );
 }
@@ -341,8 +365,22 @@ export function SubscribePanel({
   const [senderPhone, setSenderPhone] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The two payment fields' own messages — the SAME three checks `submit` has
+   * always run, in the same order and the same words, shown under the field
+   * they are about instead of as one line at the bottom. `error` above keeps
+   * everything that is about no single field (a 409, an upload that failed).
+   */
+  const [fieldErrors, setFieldErrors] = useState<{ senderPhone?: string; screenshot?: string }>({});
+  /** The phone-width summary is folded by default; wide screens ignore it. */
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  /** The course's name for the summary — read off the same live catalog
+   *  response the prices come from. Display only; `null` until it lands. */
+  const [courseTitle, setCourseTitle] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  /* The sheet rides above an on-screen keyboard — see `useCheckoutKeyboard`. */
+  useCheckoutKeyboard(rootRef);
   const [rejection, setRejection] = useState<string | null>(null);
   // Set only when the newest submission for THIS course was actually
   // approved and its grant's `validUntil` has already passed — a student who
@@ -391,8 +429,6 @@ export function SubscribePanel({
    * (the response was lost) is then answered with its own result.
    */
   const [walletKey] = useState(newIdempotencyKey);
-  // The clipboard write's own fallback target — see `copyNumber` below.
-  const numberInputRef = useRef<HTMLInputElement>(null);
   // The native file input is visually hidden (`sr-only`) — this is what the
   // styled dropzone button actually clicks, since a plain browser "Choose
   // File" control reads as nothing selectable on the smaller, older devices
@@ -459,6 +495,7 @@ export function SubscribePanel({
 
       if (courseResult.status === 'fulfilled') {
         const live = courseResult.value;
+        setCourseTitle(live.title);
         setLivePlans({
           monthlyPriceCents: live.monthlyPriceCents,
           monthlyOnSale: live.monthlyOnSale !== false,
@@ -607,12 +644,80 @@ export function SubscribePanel({
    */
   const hasPlan = monthlyPriceCents !== null || yearlyPriceCents !== null || terms.length > 0;
 
+  /*
+   * ══ The screen ═══════════════════════════════════════════════════════════
+   * Everything from here down that returns JSX is layout, drawn in the same
+   * frame as the book checkout (`checkout-parts.tsx`): a step bar, the body —
+   * with the ONE summary beside it on a wide screen and folded above it on a
+   * phone — and a footer OUTSIDE the scrolling body that holds the total and
+   * the action, so it never sits on a field. It reads the state above and calls
+   * the handlers below; it decides nothing about what is sold or sent.
+   *
+   * `ref={rootRef}` is on the same element in every branch, so the keyboard
+   * hook finds the dialog from the very first paint (`checking`).
+   */
+  function frame(
+    current: number,
+    main: ReactNode,
+    footer?: ReactNode,
+    summary?: ReactNode,
+  ) {
+    return (
+      <div ref={rootRef} className="bco bco--course" data-step={step}>
+        <CheckoutSteps
+          label={copy.subscribe.stepsLabel}
+          stops={[copy.subscribe.stepPlan, copy.subscribe.stepPay, copy.subscribe.stepConfirm]}
+          current={current}
+        />
+        <div className="bco__scroll">
+          <div className={cn('bco__layout', summary ? 'bco__layout--split' : null)}>
+            <div className="bco__main">{main}</div>
+            {summary ?? null}
+          </div>
+        </div>
+        {footer ?? null}
+      </div>
+    );
+  }
+
+  /** «رجوع» / «تمام» out of the panel — only where there is somewhere to go
+   *  (see `onCancel`: the subscribe PAGE passes none). */
+  const closeButton = (label: string) =>
+    onCancel ? (
+      <button type="button" className="bco-secondary" onClick={onCancel}>
+        {label}
+      </button>
+    ) : null;
+
   if (step === 'checking') {
-    return <p className="course-subscribe__loading">{copy.subscribe.checking}</p>;
+    return frame(
+      1,
+      <p className="bco-loading" role="status">
+        <LoaderCircle className="bco-loading__spin" size={22} aria-hidden="true" />
+        {copy.subscribe.checking}
+      </p>,
+    );
   }
 
   if (step === 'pending') {
-    return <p className="course-subscribe__pending">{copy.subscribe.pendingStatus}</p>;
+    return frame(
+      3,
+      <CheckoutDone
+        tone="info"
+        icon={<Hourglass size={30} />}
+        title={copy.subscribe.pendingTitle}
+        body={copy.subscribe.pendingStatus}
+      />,
+      onCancel ? (
+        <CheckoutFooter
+          primary={
+            <Button type="button" className="bco-primary" onClick={onCancel}>
+              {copy.subscribe.done}
+            </Button>
+          }
+        />
+      ) : undefined,
+    );
   }
 
   /*
@@ -646,30 +751,31 @@ export function SubscribePanel({
   const vodafone = liveVodafone !== undefined ? liveVodafone : null;
 
   if (!hasPlan || (!instapay && !vodafone)) {
-    return (
-      <div className="course-subscribe">
-        <p className="course-subscribe__error">
-          {hasPlan ? copy.subscribe.noNumber : copy.subscribe.noPlans}
-        </p>
-        <Button
-          type="button"
-          onClick={() => {
-            // Back to `checking` as well as bumping the attempt, so the press
-            // has a visible answer. Without it the effect re-runs behind an
-            // unchanged screen and the button reads as broken — which is the
-            // complaint `use-error-retry.ts` was written about, one screen over.
-            setStep('checking');
-            setAttempt((n) => n + 1);
-          }}
-        >
-          {copy.subscribe.retry}
-        </Button>
-        {onCancel ? (
-          <button type="button" className="course-subscribe__cancel" onClick={onCancel}>
-            {copy.subscribe.back}
-          </button>
-        ) : null}
-      </div>
+    return frame(
+      1,
+      <p className="bco-unavailable" role="status">
+        <TriangleAlert size={18} aria-hidden="true" />
+        {hasPlan ? copy.subscribe.noNumber : copy.subscribe.noPlans}
+      </p>,
+      <CheckoutFooter
+        secondary={closeButton(copy.subscribe.back)}
+        primary={
+          <Button
+            type="button"
+            className="bco-primary"
+            onClick={() => {
+              // Back to `checking` as well as bumping the attempt, so the press
+              // has a visible answer. Without it the effect re-runs behind an
+              // unchanged screen and the button reads as broken — which is the
+              // complaint `use-error-retry.ts` was written about, one screen over.
+              setStep('checking');
+              setAttempt((n) => n + 1);
+            }}
+          >
+            {copy.subscribe.retry}
+          </Button>
+        }
+      />,
     );
   }
 
@@ -789,38 +895,6 @@ export function SubscribePanel({
     return 'choose';
   }
 
-  async function copyNumber() {
-    // Two paths, because `navigator.clipboard` is not a given: it needs a
-    // secure context and can be refused outright by permissions policy or an
-    // older WebView, which is exactly the class of device most likely to be
-    // paying over Vodafone Cash. `execCommand('copy')` against a real,
-    // focused, selected input still works in every one of those cases —
-    // deprecated, but not yet removed anywhere that matters here.
-    try {
-      await navigator.clipboard.writeText(localNumber);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      return;
-    } catch {
-      // Fall through to the execCommand path below.
-    }
-
-    const input = numberInputRef.current;
-    if (!input) return;
-    try {
-      input.focus();
-      input.select();
-      const ok = document.execCommand('copy');
-      if (ok) {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      }
-    } catch {
-      // Both paths refused. The number is still selected text on screen —
-      // nothing else to do here.
-    }
-  }
-
   /**
    * «الدفع من المحفظة» — the same plan, term and months a transfer claim would
    * carry, and no transfer. The server re-derives the price and re-checks
@@ -865,16 +939,18 @@ export function SubscribePanel({
   async function submit() {
     if (!plan) return;
     const normalizedPhone = normalizeEgyptianPhone(senderPhone);
-    if (!senderPhone.trim()) {
-      setError(copy.subscribe.senderPhoneRequired);
-      return;
-    }
-    if (!normalizedPhone) {
-      setError(copy.subscribe.senderPhoneInvalid);
-      return;
-    }
-    if (!file) {
-      setError(copy.subscribe.screenshotRequired);
+    // The same three checks, in the same order, with the same words — each
+    // reported under its own field, and the cursor put in the first one.
+    const errors: { senderPhone?: string; screenshot?: string } = {};
+    if (!senderPhone.trim()) errors.senderPhone = copy.subscribe.senderPhoneRequired;
+    else if (!normalizedPhone) errors.senderPhone = copy.subscribe.senderPhoneInvalid;
+    if (!file) errors.screenshot = copy.subscribe.screenshotRequired;
+    setFieldErrors(errors);
+    if (errors.senderPhone || errors.screenshot || !file || !normalizedPhone) {
+      setError(null);
+      document
+        .getElementById(errors.senderPhone ? 'subscribe-sender-phone' : 'subscribe-screenshot-button')
+        ?.focus();
       return;
     }
 
@@ -912,25 +988,107 @@ export function SubscribePanel({
     }
   }
 
-  if (step === 'walletSuccess') {
+  /*
+   * The plan the student has picked, and the months under it — for the ONE
+   * summary. Display only: every figure in it is one the steps below already
+   * compute, restated in one place.
+   */
+  const chosenTerm = plan === 'term' ? (terms.find((term) => term.id === termId) ?? null) : null;
+  // A month purchase on a course sold by curriculum month is named by its
+  // months (the row under it), not by the word «شهر» — which would read as one
+  // rolling month and contradict the list.
+  const planName =
+    plan === 'monthly'
+      ? months.length > 0
+        ? null
+        : copy.subscribe.planMonthlyLabel
+      : plan === 'yearly'
+        ? copy.subscribe.planYearlyLabel
+        : plan === 'term'
+          ? (chosenTerm?.title ?? copy.subscribe.planTermLabel)
+          : null;
+  const chosenMonths = months.filter((month) => selectedMonthIds.includes(month.id));
+
+  function summaryCard(amount: number | null) {
     return (
-      // Inside the panel's own card, not bare on the page band behind it.
-      <div className="course-subscribe wl-pay__success" role="status">
-        <span className="wl-sent__badge">
-          <Check className="size-8" strokeWidth={3} aria-hidden="true" />
-        </span>
-        <p className="course-subscribe__success">
-          {formatCopy(copy.subscribe.walletSuccess, { balance: formatEGPExact(walletBalance ?? 0) })}
-        </p>
-        <a href={`/library/${encodeURIComponent(slug)}`} className="wl-btn wl-btn--primary">
+      <CheckoutSummary
+        title={copy.subscribe.summaryTitle}
+        icon={<GraduationCap size={16} />}
+        toggleLabel={copy.subscribe.summaryDetails}
+        open={summaryOpen}
+        onToggle={() => setSummaryOpen((open) => !open)}
+      >
+        {courseTitle ? <p className="bco-sum__course">{courseTitle}</p> : null}
+        <dl className="bco-sum__rows">
+          {planName ? (
+            <div className="bco-sum__row">
+              <dt>{copy.subscribe.summaryPlan}</dt>
+              <dd>{planName}</dd>
+            </div>
+          ) : null}
+          {chosenMonths.length > 0 ? (
+            <div className="bco-sum__row bco-sum__row--stack">
+              <dt>{copy.subscribe.summaryMonths}</dt>
+              <dd>
+                <ul className="bco-sum__chips">
+                  {chosenMonths.map((month) => (
+                    <li key={month.id} className="bco-sum__chip">
+                      {month.title}
+                    </li>
+                  ))}
+                </ul>
+              </dd>
+            </div>
+          ) : null}
+          {amount !== null && amount > 0 ? (
+            <div className="bco-sum__row bco-sum__row--total">
+              <dt>{copy.subscribe.summaryAmount}</dt>
+              <dd>
+                <Money cents={amount} />
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+      </CheckoutSummary>
+    );
+  }
+
+  if (step === 'walletSuccess') {
+    return frame(
+      4,
+      <CheckoutDone
+        tone="success"
+        icon={<CircleCheck size={34} />}
+        title={copy.subscribe.walletSuccessTitle}
+        body={formatCopy(copy.subscribe.walletSuccess, { balance: formatEGPExact(walletBalance ?? 0) })}
+      >
+        <a href={`/library/${encodeURIComponent(slug)}`} className="wl-btn wl-btn--primary bco-done__cta">
           {copy.subscribe.walletSuccessOpen}
         </a>
-      </div>
+      </CheckoutDone>,
+      onCancel ? <CheckoutFooter secondary={closeButton(copy.subscribe.done)} /> : undefined,
     );
   }
 
   if (step === 'success') {
-    return <p className="course-subscribe__success">{copy.subscribe.success}</p>;
+    return frame(
+      4,
+      <CheckoutDone
+        tone="success"
+        icon={<CircleCheck size={34} />}
+        title={copy.subscribe.successTitle}
+        body={copy.subscribe.success}
+      />,
+      onCancel ? (
+        <CheckoutFooter
+          primary={
+            <Button type="button" className="bco-primary" onClick={onCancel}>
+              {copy.subscribe.done}
+            </Button>
+          }
+        />
+      ) : undefined,
+    );
   }
 
   if (step === 'choose') {
@@ -944,92 +1102,94 @@ export function SubscribePanel({
     // opens every month: the «شهر» card could only lead to a grid of padlocks.
     const monthCardCovered = coversAll && months.length > 0;
 
-    return (
-      <div className="course-subscribe">
+    return frame(
+      1,
+      <div className="bco-stack">
         {rejection ? (
-          <p className="course-subscribe__rejected">
+          <p className="bco-note bco-note--err">
             {copy.subscribe.rejectedStatus}
             {': '}
             {rejection}
           </p>
         ) : null}
         {previouslyLapsed ? (
-          <p className="course-subscribe__lapsed">{copy.subscribe.previouslySubscribedLapsed}</p>
+          <p className="bco-note bco-note--warn">{copy.subscribe.previouslySubscribedLapsed}</p>
         ) : null}
-        {monthCardCovered ? <p className="course-subscribe__covered">{copy.subscribe.coversAllNote}</p> : null}
-        <p className="course-subscribe__title">{copy.subscribe.choosePlan}</p>
-        <div className="course-subscribe__plans">
-          {monthlyPriceCents !== null && !monthCardCovered ? (
-            <PlanCard
-              icon={<CalendarClock className="size-6" strokeWidth={2} />}
-              name={copy.subscribe.planMonthlyLabel}
-              price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(monthlyPriceCents) })}
-              onClick={() => choosePlan('monthly')}
-            />
-          ) : null}
-          {/*
-            ⚠️ There is no «٣ شهور» card, and its absence is a DECISION rather
-            than the accident it would otherwise look like.
+        {monthCardCovered ? <p className="bco-note bco-note--ok">{copy.subscribe.coversAllNote}</p> : null}
+        <section className="bco-card" aria-labelledby="bco-plans-title">
+          <h3 id="bco-plans-title" className="bco-heading">
+            {copy.subscribe.choosePlan}
+          </h3>
+          <div className="bco-plans">
+            {monthlyPriceCents !== null && !monthCardCovered ? (
+              <PlanCard
+                icon={<CalendarClock className="size-6" strokeWidth={2} />}
+                name={copy.subscribe.planMonthlyLabel}
+                price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(monthlyPriceCents) })}
+                onClick={() => choosePlan('monthly')}
+              />
+            ) : null}
+            {/*
+              ⚠️ There is no «٣ شهور» card, and its absence is a DECISION rather
+              than the accident it would otherwise look like.
 
-            `quarterlyPriceCents` is NULL on every course once the retirement
-            migration has run, so the card would have stopped drawing on its
-            own — which is the worst way for a product to leave a shelf: the
-            next reader finds live code for a plan nobody sells and has to
-            work out whether it is broken or retired. `copy.subscribe
-            .planQuarterlyLabel` deliberately SURVIVES for the screens that
-            list history (admin payments, finance, «اشتراكاتي»); a student who
-            bought three months still has them.
-          */}
-          {terms.length === 1 ? (
-            <PlanCard
-              icon={<BookOpen className="size-6" strokeWidth={2} />}
-              name={copy.subscribe.planTermLabel}
-              price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(terms[0]!.priceCents) })}
-              onClick={() => choosePlan('term')}
-            />
-          ) : cheapestTermCents !== null ? (
-            <PlanCard
-              icon={<BookOpen className="size-6" strokeWidth={2} />}
-              name={copy.subscribe.planTermLabel}
-              price={formatCopy(copy.subscribe.planTermFromPrice, { price: formatEGP(cheapestTermCents) })}
-              onClick={() => choosePlan('term')}
-            />
-          ) : null}
-          {yearlyPriceCents !== null ? (
-            <PlanCard
-              icon={<CalendarRange className="size-6" strokeWidth={2} />}
-              name={copy.subscribe.planYearlyLabel}
-              price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(yearlyPriceCents) })}
-              onClick={() => choosePlan('yearly')}
-            />
-          ) : null}
-        </div>
-        {onCancel ? (
-          <button type="button" className="course-subscribe__cancel" onClick={onCancel}>
-            {copy.subscribe.back}
-          </button>
-        ) : null}
-      </div>
+              `quarterlyPriceCents` is NULL on every course once the retirement
+              migration has run, so the card would have stopped drawing on its
+              own — which is the worst way for a product to leave a shelf: the
+              next reader finds live code for a plan nobody sells and has to
+              work out whether it is broken or retired. `copy.subscribe
+              .planQuarterlyLabel` deliberately SURVIVES for the screens that
+              list history (admin payments, finance, «اشتراكاتي»); a student who
+              bought three months still has them.
+            */}
+            {terms.length === 1 ? (
+              <PlanCard
+                icon={<BookOpen className="size-6" strokeWidth={2} />}
+                name={copy.subscribe.planTermLabel}
+                price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(terms[0]!.priceCents) })}
+                onClick={() => choosePlan('term')}
+              />
+            ) : cheapestTermCents !== null ? (
+              <PlanCard
+                icon={<BookOpen className="size-6" strokeWidth={2} />}
+                name={copy.subscribe.planTermLabel}
+                price={formatCopy(copy.subscribe.planTermFromPrice, { price: formatEGP(cheapestTermCents) })}
+                onClick={() => choosePlan('term')}
+              />
+            ) : null}
+            {yearlyPriceCents !== null ? (
+              <PlanCard
+                icon={<CalendarRange className="size-6" strokeWidth={2} />}
+                name={copy.subscribe.planYearlyLabel}
+                price={formatCopy(copy.subscribe.priceLine, { price: formatEGP(yearlyPriceCents) })}
+                onClick={() => choosePlan('yearly')}
+              />
+            ) : null}
+          </div>
+        </section>
+      </div>,
+      onCancel ? <CheckoutFooter secondary={closeButton(copy.subscribe.back)} /> : undefined,
     );
   }
 
   if (step === 'chooseMonths') {
     const nothingChosen = selectedMonthIds.length === 0;
 
-    return (
-      <div className="course-subscribe">
-        <p className="course-subscribe__title">{copy.subscribe.chooseMonthsTitle}</p>
+    return frame(
+      1,
+      <section className="bco-card" aria-labelledby="bco-months-title">
+        <h3 id="bco-months-title" className="bco-heading">
+          {copy.subscribe.chooseMonthsTitle}
+        </h3>
         {/* Says the thing that is actually new. A student who subscribed last
             year reads «شهر» as thirty days, and every screen after this one
             would quietly confirm it. */}
-        <p className="course-subscribe__instructions">{copy.subscribe.chooseMonthsHint}</p>
+        <p className="bco-lead">{copy.subscribe.chooseMonthsHint}</p>
 
-        {/* `.pay-choice__grid` rather than `.course-subscribe__plans`: the
-            plan grid is hard-wired to two columns because its cards hold one
-            short duration word each, and a month title is a phrase. This one
-            is `auto-fit` with a `min(100%, …)` floor, so twelve months reflow
-            instead of squeezing two to a row on a phone. */}
-        <div className="pay-choice__grid">
+        {/* `.pay-choice__grid` for the cards' selected state (see `MonthCard`),
+            re-flowed by `.bco-months` so a month title — a phrase, not a word —
+            gets the width it needs. */}
+        <div className="pay-choice__grid bco-months">
           {months.map((month) => (
             <MonthCard
               key={month.id}
@@ -1040,51 +1200,57 @@ export function SubscribePanel({
             />
           ))}
         </div>
-
-        {/*
-          ⚠️ The total and the CTA live INSIDE `.course-subscribe__actions`,
-          which is the row commit e64a39f4 made `position: sticky` after «كمّل
-          الطلب» was found below the fold on the transfer screen. This screen
-          is the worse case of that same bug: twelve month cards in a dialog
-          capped at `100dvh - 2rem` is a list you scroll, and both the running
-          total and the button are things the student needs WHILE scrolling,
-          not after. Putting them in that row is what keeps them on screen for
-          every month they tap.
-
-          The total replaces itself with `monthsRequired` at zero rather than
-          printing «الإجمالي: 0 جنيه» beside a dead button — that is the slot
-          where the eye already is, so it is where the reason belongs.
-        */}
-        <div className="course-subscribe__actions">
-          <Button type="button" onClick={() => setStep('form')} disabled={nothingChosen}>
-            {copy.subscribe.monthsContinue}
-          </Button>
-          {nothingChosen ? (
-            <p className="course-subscribe__hint">{copy.subscribe.monthsRequired}</p>
+      </section>,
+      /*
+       * The running total and the CTA live in the footer, which never scrolls:
+       * twelve month cards is a list you scroll, and both are things the
+       * student needs WHILE scrolling, not after.
+       *
+       * The total replaces itself with `monthsRequired` at zero rather than
+       * printing «الإجمالي: 0 جنيه» beside a dead button — that is the slot
+       * where the eye already is, so it is where the reason belongs.
+       */
+      <CheckoutFooter
+        total={
+          nothingChosen ? (
+            <p className="bco-total__hint">{copy.subscribe.monthsRequired}</p>
           ) : (
-            <p className="course-subscribe__amount">
+            <p className="bco-total__line">
               {formatCopy(copy.subscribe.monthsTotal, {
                 price: formatEGP(selectedMonthsTotalCents),
               })}
             </p>
-          )}
-          <button
-            type="button"
-            className="course-subscribe__cancel"
-            onClick={() => setStep('choose')}
-          >
+          )
+        }
+        secondary={
+          <button type="button" className="bco-secondary" onClick={() => setStep('choose')}>
             {copy.subscribe.back}
           </button>
-        </div>
-      </div>
+        }
+        primary={
+          <Button
+            type="button"
+            className="bco-primary"
+            onClick={() => setStep('form')}
+            disabled={nothingChosen}
+          >
+            {copy.subscribe.monthsContinue}
+            <ArrowLeft size={17} aria-hidden="true" />
+          </Button>
+        }
+      />,
+      nothingChosen ? undefined : summaryCard(selectedMonthsTotalCents),
     );
   }
 
   if (step === 'chooseTerm') {
-    return (
-      <div className="course-subscribe">
-        <p className="course-subscribe__title">{copy.subscribe.chooseTermTitle}</p>
-        <div className="course-subscribe__plans">
+    return frame(
+      1,
+      <section className="bco-card" aria-labelledby="bco-terms-title">
+        <h3 id="bco-terms-title" className="bco-heading">
+          {copy.subscribe.chooseTermTitle}
+        </h3>
+        <div className="bco-plans">
           {terms.map((term) => (
             <PlanCard
               key={term.id}
@@ -1095,10 +1261,14 @@ export function SubscribePanel({
             />
           ))}
         </div>
-        <button type="button" className="course-subscribe__cancel" onClick={() => setStep('choose')}>
-          {copy.subscribe.back}
-        </button>
-      </div>
+      </section>,
+      <CheckoutFooter
+        secondary={
+          <button type="button" className="bco-secondary" onClick={() => setStep('choose')}>
+            {copy.subscribe.back}
+          </button>
+        }
+      />,
     );
   }
 
@@ -1123,20 +1293,20 @@ export function SubscribePanel({
           ? (terms.find((term) => term.id === termId)?.priceCents ?? null)
           : null;
 
-  return (
-    <div className="course-subscribe">
+  return frame(
+    2,
+    <div className="bco-stack">
       {amountCents !== null ? (
-        <p className="course-subscribe__amount">
-          {formatCopy(copy.subscribe.priceLine, { price: formatEGP(amountCents) })}
-        </p>
+        <AmountCard
+          icon={<Wallet size={22} />}
+          label={copy.subscribe.payAmountLabel}
+          value={formatCopy(copy.subscribe.priceLine, { price: formatEGP(amountCents) })}
+          digits={String(Math.round(amountCents / 100))}
+          copyLabel={copy.subscribe.copyAmount}
+          copiedLabel={copy.subscribe.copied}
+        />
       ) : null}
 
-      {/*
-        ⚠️ The rail question comes BEFORE anything with a number on it, and it
-        returns early. Rendering the chooser above the form instead would put a
-        transfer number on screen while the student is still deciding which app
-        to open — which is the exact confusion this step exists to remove.
-      */}
       {/*
         «الدفع من المحفظة» — asked FIRST when there is money in the wallet, and
         only then: a student with an empty wallet sees the checkout exactly as
@@ -1155,146 +1325,151 @@ export function SubscribePanel({
         />
       ) : null}
 
-      {!railConfirmed && error ? (
-        <p role="alert" className="course-subscribe__error">
-          {error}
-        </p>
-      ) : null}
-
+      {/*
+        ⚠️ The rail question comes BEFORE anything with a number on it, and it
+        replaces the steps below rather than sitting above them. Rendering the
+        chooser beside the number would put a transfer number on screen while
+        the student is still deciding which app to open — which is the exact
+        confusion this step exists to remove.
+      */}
       {!railConfirmed ? (
-        <PaymentMethodChoice
-          value={rail}
-          // One tap: pick the rail AND move on. There is no confirm button —
-          // see `PaymentMethodChoice`.
-          onChange={(next) => {
-            setRail(next);
-            setRailConfirmed(true);
-          }}
-          available={{ instapay: Boolean(instapay), vodafoneCash: Boolean(vodafone) }}
-        />
+        <div className="bco-card bco-card--rails">
+          <PaymentMethodChoice
+            value={rail}
+            // One tap: pick the rail AND move on. There is no confirm button —
+            // see `PaymentMethodChoice`.
+            onChange={(next) => {
+              setRail(next);
+              setRailConfirmed(true);
+            }}
+            available={{ instapay: Boolean(instapay), vodafoneCash: Boolean(vodafone) }}
+          />
+        </div>
       ) : (
-        <>
-          <button
-            type="button"
-            onClick={() => setRailConfirmed(false)}
-            className="pay-choice__back"
-          >
-            {copy.subscribe.railChange}
-          </button>
+        <ol className="bco-paysteps">
+          <PayStep n={1}>
+            <div className="bco-paystep__head">
+              {/* Names the chosen rail in words — the number below belongs to
+                  it and to nothing else (see `railNumber`). */}
+              <p className="bco-paystep__title">{formatCopy(copy.subscribe.payStepSend, { rail: railName })}</p>
+              <button
+                type="button"
+                className="bco-link"
+                onClick={() => setRailConfirmed(false)}
+                disabled={submitting}
+              >
+                {copy.subscribe.railChange}
+              </button>
+            </div>
+            <div className="bco-number">
+              <PaymentBrand rail={rail ?? 'instapay'} className="bco-number__brand" />
+              <bdi dir="ltr" className="bco-number__value">
+                {localNumber}
+              </bdi>
+              <CopyButton
+                text={localNumber}
+                label={copy.subscribe.copyNumber}
+                copiedLabel={copy.subscribe.copied}
+                solid
+              />
+            </div>
+          </PayStep>
 
-          <p className="course-subscribe__instructions">
-            {formatCopy(copy.subscribe.instructions, { number: localNumber, rail: railName })}
-          </p>
+          <PayStep n={2}>
+            <CheckoutField
+              id="subscribe-sender-phone"
+              label={copy.subscribe.senderPhoneLabel}
+              error={fieldErrors.senderPhone}
+            >
+              <Input
+                id="subscribe-sender-phone"
+                className="bco-input bco-input--ltr"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                dir="ltr"
+                placeholder="01xxxxxxxxx"
+                invalid={Boolean(fieldErrors.senderPhone)}
+                aria-describedby={fieldErrors.senderPhone ? 'subscribe-sender-phone-error' : undefined}
+                value={senderPhone}
+                onChange={(event) => {
+                  setSenderPhone(event.target.value);
+                  setFieldErrors((current) => ({ ...current, senderPhone: undefined }));
+                }}
+                disabled={submitting}
+              />
+            </CheckoutField>
+          </PayStep>
 
-          <PaymentBrand rail={rail ?? 'instapay'} className="course-subscribe__brand" />
+          <PayStep n={3}>
+            <CheckoutField
+              id="subscribe-screenshot"
+              label={copy.subscribe.screenshotLabel}
+              error={fieldErrors.screenshot}
+              hint={formatCopy(copy.subscribe.screenshotHint, { rail: railName })}
+            >
+              <input
+                ref={fileInputRef}
+                id="subscribe-screenshot"
+                type="file"
+                /* `image/*`, not the API's allowlist.
 
-      <div className="course-subscribe__number-row">
-        <span dir="ltr" className="course-subscribe__number">
-          {localNumber}
-        </span>
-        {/* `readOnly`, not `type="hidden"` — `execCommand('copy')` in
-            `copyNumber` needs a real, focusable, selectable input to select
-            text from when the async Clipboard API is unavailable. Visually
-            merged into the row rather than hidden off-screen, since a
-            focused element some browsers scroll into view. */}
-        <input
-          ref={numberInputRef}
-          readOnly
-          dir="ltr"
-          value={localNumber}
-          aria-hidden="true"
-          tabIndex={-1}
-          className="sr-only"
-        />
-        <button type="button" onClick={copyNumber} className="course-subscribe__copy">
-          {copied ? copy.subscribe.copied : copy.subscribe.copyNumber}
-        </button>
-      </div>
+                   The narrow list greyed out a real share of the photo library
+                   on iOS, where pictures are HEIC and HEIC is not on that
+                   allowlist — the student taps a screenshot that is visibly
+                   there and the picker refuses to hand it over.
 
-      <div>
-        <Label htmlFor="subscribe-sender-phone">{copy.subscribe.senderPhoneLabel}</Label>
-        <Input
-          id="subscribe-sender-phone"
-          type="tel"
-          inputMode="tel"
-          dir="ltr"
-          placeholder="01xxxxxxxxx"
-          value={senderPhone}
-          onChange={(event) => setSenderPhone(event.target.value)}
-          disabled={submitting}
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="subscribe-screenshot">{copy.subscribe.screenshotLabel}</Label>
-        <input
-          ref={fileInputRef}
-          id="subscribe-screenshot"
-          type="file"
-          /* `image/*`, not the API's allowlist.
-
-             The narrow list greyed out a real share of the photo library on
-             iOS, where pictures are HEIC and HEIC is not on that allowlist —
-             the student taps a screenshot that is visibly there and the picker
-             refuses to hand it over, so the form still says «ارفع صورة إثبات
-             التحويل» and there is nothing on screen explaining why.
-
-             Safe to widen because the upload no longer sends what the picker
-             returns: `compressImage` re-encodes to JPEG first, and the API's
-             own allowlist is still the gate. Same value the homework picker
-             has always used. */
-          accept="image/*"
-          onChange={handleFileChange}
-          disabled={submitting}
-          className="sr-only"
-        />
+                   Safe to widen because the upload no longer sends what the
+                   picker returns: `compressImage` re-encodes to JPEG first, and
+                   the API's own allowlist is still the gate. Same value the
+                   homework picker has always used. */
+                accept="image/*"
+                onChange={(event) => {
+                  handleFileChange(event);
+                  setFieldErrors((current) => ({ ...current, screenshot: undefined }));
+                }}
+                disabled={submitting}
+                className="sr-only"
+              />
+              <button
+                id="subscribe-screenshot-button"
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={submitting}
+                aria-describedby={fieldErrors.screenshot ? 'subscribe-screenshot-error' : undefined}
+                className={cn('bco-upload', previewUrl && 'bco-upload--filled')}
+              >
+                {previewUrl ? (
+                  // A plain `<img>`, deliberately: this is a local `blob:`
+                  // preview of the student's own pick, never a remote asset, so
+                  // `next/image`'s optimizer has nothing to do here.
+                  <img src={previewUrl} alt="" className="bco-upload__preview" />
+                ) : (
+                  <span className="bco-upload__icon" aria-hidden="true">
+                    <ImagePlus size={24} strokeWidth={2} />
+                  </span>
+                )}
+                <span className="bco-upload__text">
+                  <span className="bco-upload__name">{file ? file.name : copy.subscribe.screenshotPlaceholder}</span>
+                  {file ? <span className="bco-upload__change">{copy.subscribe.screenshotChange}</span> : null}
+                </span>
+              </button>
+            </CheckoutField>
+          </PayStep>
+        </ol>
+      )}
+    </div>,
+    <CheckoutFooter
+      error={error}
+      total={
+        amountCents !== null ? (
+          <FooterTotal label={copy.subscribe.totalLabel} value={<Money cents={amountCents} />} />
+        ) : undefined
+      }
+      secondary={
         <button
           type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={submitting}
-          className="course-subscribe__upload"
-        >
-          {previewUrl ? (
-            // A plain `<img>`, deliberately — same reasoning as `offline/page.tsx`:
-            // this is a local `blob:` preview of the student's own file pick,
-            // never a remote asset, so `next/image`'s optimizer (which serves
-            // through `/_next/image`, a server route) has nothing to do here.
-            <img src={previewUrl} alt="" className="course-subscribe__upload-preview" />
-          ) : (
-            // `ImagePlus`, not a bare "+" — the whole point of this pass was
-            // that the control read as decoration rather than "press this to
-            // pick a photo". A generic plus is still generic; a picture-frame
-            // glyph with a plus on it says "add an image" on sight, before a
-            // student has read a word of the label beside it.
-            <span className="course-subscribe__upload-icon" aria-hidden="true">
-              <ImagePlus className="size-6" strokeWidth={2} />
-            </span>
-          )}
-          <span className="course-subscribe__upload-text">
-            {file ? file.name : copy.subscribe.screenshotPlaceholder}
-          </span>
-          {file ? (
-            <span className="course-subscribe__upload-change">{copy.subscribe.screenshotChange}</span>
-          ) : null}
-        </button>
-        <p className="course-subscribe__hint">
-          {formatCopy(copy.subscribe.screenshotHint, { rail: railName })}
-        </p>
-      </div>
-
-      {error ? (
-        <p role="alert" className="course-subscribe__error">
-          {error}
-        </p>
-      ) : null}
-
-      <div className="course-subscribe__actions">
-        <Button type="button" onClick={submit} disabled={submitting}>
-          {submitting ? copy.subscribe.submitting : copy.subscribe.submit}
-        </Button>
-        <button
-          type="button"
-          className="course-subscribe__cancel"
+          className="bco-secondary"
           // Back to whichever picker this claim came through — see
           // `stepBeforeForm` for why it is never the plan grid.
           onClick={() => setStep(stepBeforeForm())}
@@ -1302,9 +1477,25 @@ export function SubscribePanel({
         >
           {copy.subscribe.back}
         </button>
-      </div>
-        </>
-      )}
-    </div>
+      }
+      primary={
+        railConfirmed ? (
+          <Button type="button" className="bco-primary" onClick={submit} disabled={submitting}>
+            {submitting ? (
+              <>
+                <LoaderCircle className="bco-loading__spin" size={17} aria-hidden="true" />
+                {copy.subscribe.submitting}
+              </>
+            ) : (
+              <>
+                {copy.subscribe.submit}
+                <ArrowLeft size={17} aria-hidden="true" />
+              </>
+            )}
+          </Button>
+        ) : null
+      }
+    />,
+    summaryCard(amountCents),
   );
 }
