@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { copy } from '@ayman/contracts/copy';
 import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
 
+import { HonorFace } from '../../honor-face';
 import { StudioHeading } from './studio-heading';
 import { studioCopy } from './studio-copy';
 
@@ -101,6 +102,15 @@ export function StudioHonors({
               className="st-honor"
               key={`${entry.studentName}-${entry.courseLabel}-${entry.rank}`}
             >
+              {/*
+                The photograph an instructor cleared for THIS board, or
+                initials when there is none — same component and the same
+                argument the classic preset's board makes; see `HonorFace`.
+                `[data-preset='studio'] .honor-board__slot-avatar` in
+                `presets.css` resizes the disc for a row instead of a card —
+                the classic 7rem circle would swallow this thin line.
+              */}
+              <HonorFace name={entry.studentName} photoKey={entry.photoKey} />
               {/* The written rank, not the row's index: the board can carry a
                   first and a second from two different courses, and numbering
                   by position renames the second «الأول» a second time. */}
