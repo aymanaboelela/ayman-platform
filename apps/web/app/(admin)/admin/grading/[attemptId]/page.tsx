@@ -6,6 +6,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { AdminGradingAttemptSchema } from '@ayman/contracts/admin/exams';
 import { adminGetOrNotFound } from '@/lib/admin-api';
 import { GradingPaper } from '@/components/admin/grading/grading-paper';
+import { gradingListHref, normalizeGradingQuery } from '../nav';
 
 const c = copy.admin.grading;
 
@@ -52,14 +53,27 @@ const submittedAtFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
  */
 export default async function AdminGradingPaperPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ attemptId: string }>;
+  /** Only present when the paper was opened from `/admin/grading` with a
+   *  non-default tab/sort/exam/day — see `../nav`. */
+  searchParams: Promise<{ tab?: string; sort?: string; exam?: string; day?: string }>;
 }) {
   const { attemptId } = await params;
+  const query = await searchParams;
   const attempt = await adminGetOrNotFound(
     `/api/admin/attempts/${attemptId}/grading`,
     AdminGradingAttemptSchema,
   );
+  /*
+   * ⚠️ كان `href="/admin/grading"` بالحرف — يعني «رجوع» من تبويب «اتصحّح
+   * خلاص» أو «الأوائل»، أو من فلتر امتحان/يوم، كان بيرمي الأدمن على تبويب
+   * «الطابور» الافتراضي: مش سوبر سِت لباقي التبويبات، فكان بيوهم إن الورق
+   * اختفى. `ResultRow` بيبعت نفس الفلتر على لينك الورقة (`nav.ts`)، وهنا
+   * بترجع نفس الحاجة بالظبط لو موجودة، أو `/admin/grading` عادي لو مفيش.
+   */
+  const backHref = gradingListHref(normalizeGradingQuery(query));
 
   return (
     <>
@@ -68,7 +82,7 @@ export default async function AdminGradingPaperPage({
           `/admin/homework/[id]` uses for the same journey. */}
       <p className="mb-4">
         <Link
-          href="/admin/grading"
+          href={backHref}
           className="inline-flex items-center gap-1.5 text-[length:var(--fs-text-sm)] text-fg-muted hover:text-fg"
         >
           <ArrowRight className="size-4" aria-hidden="true" />

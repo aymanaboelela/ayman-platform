@@ -9,6 +9,7 @@ import { AdminHomeworkDetailSchema } from '@ayman/contracts/homework';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 import { adminGetOrNotFound } from '@/lib/admin-api';
 import { HomeworkReviewForm } from './review-form';
+import { homeworkBackHref } from '../nav';
 
 const c = copy.admin.homework;
 
@@ -49,8 +50,12 @@ const submittedAtFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
  */
 export default async function AdminHomeworkDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  /** Only `filter` is read — same tab the list page renders. Anything else on
+   *  the URL is not this page's business to carry. */
+  searchParams: Promise<{ filter?: string }>;
 }) {
   /*
    * نفس جيت `/admin/homework` — والـURL ده بيتوصله من غيره. الحكاية كاملة فوق
@@ -61,18 +66,28 @@ export default async function AdminHomeworkDetailPage({
   if (!(await getEntitlements()).homework) notFound();
 
   const { id } = await params;
+  const { filter } = await searchParams;
   const submission = await adminGetOrNotFound(
     `/api/admin/homework/${id}`,
     AdminHomeworkDetailSchema,
   );
 
   const phoneHref = waMeHref(submission.studentPhone);
+  /*
+   * ⚠️ كان `href="/admin/homework"` بالحرف — يعني «رجوع» من تبويب «الكل» كان
+   * بيرجّعك لتبويب «مستني مراجعة» (الافتراضي)، مش للي كنت شايفه. الطلب اللي
+   * جاله قرار هنا بيختفي من القايمة فورًا، فالرجوع من غير الفلتر كان بيوهم
+   * إنه اتمسح. نفس الفكرة اللي `/admin/analytics/videos/[videoKey]` ماشي
+   * بيها مع `period` تحت. `HomeworkRow` هو اللي بيبعت `?filter=` على لينك
+   * الصف أصلًا — شوف `../nav.ts`.
+   */
+  const backHref = homeworkBackHref(filter);
 
   return (
     <>
       <p className="mb-4">
         <Link
-          href="/admin/homework"
+          href={backHref}
           className="inline-flex items-center gap-1.5 text-[length:var(--fs-text-sm)] text-fg-muted hover:text-fg"
         >
           <ArrowRight className="size-4" aria-hidden="true" />

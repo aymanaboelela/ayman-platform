@@ -138,7 +138,7 @@ export default async function AdminHomeworkPage({
         <ul className="mt-5 flex flex-col gap-2.5">
           {rows.map((row) => (
             <li key={row.id}>
-              <HomeworkRow row={row} />
+              <HomeworkRow row={row} filter={filter} />
             </li>
           ))}
         </ul>
@@ -147,7 +147,7 @@ export default async function AdminHomeworkPage({
   );
 }
 
-function HomeworkRow({ row }: { row: AdminHomeworkRow }) {
+function HomeworkRow({ row, filter }: { row: AdminHomeworkRow; filter: HomeworkFilter }) {
   const Icon = STATUS_ICON[row.status];
 
   return (
@@ -212,7 +212,7 @@ function HomeworkRow({ row }: { row: AdminHomeworkRow }) {
       </div>
 
       <Link
-        href={`/admin/homework/${row.id}`}
+        href={`/admin/homework/${row.id}?filter=${filter}`}
         className="chip chip--solid shrink-0 after:absolute after:inset-0 after:content-['']"
       >
         {STATUS_LABEL[row.status]}
