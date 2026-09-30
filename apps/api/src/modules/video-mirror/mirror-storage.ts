@@ -65,6 +65,46 @@ const CACHE_CONTROL = 'public, max-age=31536000, immutable';
 const PUT_ATTEMPTS = 4;
 const PUT_BACKOFF_MS = 2_000;
 
+/**
+ * How many objects `uploadLadder` sends to R2 at once.
+ *
+ * R2 is a network round trip per object, not CPU — 12 in flight together is
+ * nowhere near the container's file-descriptor ceiling and nowhere near
+ * saturating one uplink, and it turns a couple-thousand-object ladder from
+ * "one after another" into "twelve after another", the whole difference
+ * between an hour and a few minutes. Not raised further without measuring:
+ * this is the number of SIMULTANEOUS multipart-capable streams reading off
+ * the same disk the encode just wrote to, and R2 itself throttles a single
+ * bucket under heavy concurrent PUTs long before this box would struggle.
+ */
+export const UPLOAD_CONCURRENCY = 12;
+
+/**
+ * Runs `worker` over `items`, `limit` at a time, from one shared cursor.
+ *
+ * Not `items` chunked into batches of `limit` with a `Promise.all` per
+ * batch — that stalls every worker in a batch on whichever ONE item in it is
+ * slowest, batch after batch. Pulling the next item as soon as a worker
+ * frees up keeps all `limit` slots busy until the queue is actually empty.
+ *
+ * A plain loop per worker, not a library: this is the one place in the
+ * codebase that needs bounded concurrency, and it is eleven lines.
+ */
+export async function uploadPool<T>(
+  items: readonly T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let cursor = 0;
+  async function pull(): Promise<void> {
+    while (cursor < items.length) {
+      const item = items[cursor++] as T;
+      await worker(item);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, pull));
+}
+
 export class MirrorStorage {
   private readonly s3: S3Client;
 
@@ -102,12 +142,37 @@ export class MirrorStorage {
    * rather than a playlist pointing at segments that were never written,
    * which is a player that spins forever on exactly the tablets this feature
    * is for.
+   *
+   * `rest` uploads `UPLOAD_CONCURRENCY` at a time, not one after another.
+   *
+   * «بيترفع بسرعة، بيجيلي المعالجة دي اللي بتطول» — a sub-hour lecture was
+   * taking about an hour, and it was never the encode: `transcodeArgs` is one
+   * ffmpeg process finishing in minutes. It was THIS loop. A four-rung ladder
+   * at six-second segments is the «well over a thousand … back to back» this
+   * file's own `putFile` comment already names — roughly 2,400 objects for a
+   * one-hour lecture — and each one used to wait for the PREVIOUS object's
+   * full round trip to R2 before starting. At the same per-file latency the
+   * retried-upload comment below is written against, that is the whole
+   * missing hour.
+   *
+   * Concurrency, not one big `Promise.all`: `rest` can be thousands of
+   * entries, and opening that many TCP connections and read streams to R2 at
+   * once is how a lecture upload takes down the container's own file
+   * descriptor limit instead of merely being slow. `UPLOAD_CONCURRENCY`
+   * workers pull from one shared cursor (`uploadPool`) — bounded, and every
+   * worker is busy until the queue is empty, so nobody sits idle waiting for
+   * a batch boundary the way `chunk-then-Promise.all` would.
+   *
+   * `master` stays a single `await` AFTER the pool drains — not inside it —
+   * so the "last" guarantee is unchanged: every other object has finished
+   * uploading, successfully, before the one object a player will ever ask
+   * for by name exists.
    */
   async uploadLadder(dir: string, files: readonly string[], prefix: string): Promise<void> {
     const master = 'master.m3u8';
     const rest = files.filter((file) => file !== master);
 
-    for (const file of rest) await this.putFile(dir, file, prefix);
+    await uploadPool(rest, UPLOAD_CONCURRENCY, (file) => this.putFile(dir, file, prefix));
     if (files.includes(master)) await this.putFile(dir, master, prefix);
   }
 
