@@ -85,6 +85,33 @@ describe('AssistantThread — the student’s end of the chat', () => {
     expect(container.querySelectorAll('.chat-byline')).toHaveLength(1);
   });
 
+  it('gives each day its own list, with its chip first — so the chip leaves with its day', () => {
+    /*
+     * The chip is sticky, and a sticky box is held inside its parent. With
+     * every day in one list the parent was the whole thread, so scrolling back
+     * over three days piled three chips on the same spot. One list per day is
+     * the whole fix; this pins the shape the CSS relies on.
+     */
+    const twoDays: ConversationThread = {
+      ...THREAD,
+      messages: [
+        message('0193c6f0-0000-7000-8000-000000000001', 'visitor', '2026-09-27T08:00:00Z', 'من يومين'),
+        ...THREAD.messages,
+      ],
+    };
+    const { container } = render(<AssistantThread thread={twoDays} onUpdated={() => {}} />);
+    const chips = [...container.querySelectorAll('.chat-day')];
+    expect(chips).toHaveLength(2);
+    for (const chip of chips) {
+      expect(chip.parentElement).toHaveClass('chat-list', 'chat-list--day');
+      expect(chip.parentElement?.firstElementChild).toBe(chip);
+    }
+    expect(chips[0]!.parentElement).toHaveTextContent('من يومين');
+    expect(chips[0]!.parentElement).not.toHaveTextContent('سؤالي عن الكورس');
+    expect(chips[1]!.parentElement).toHaveTextContent('سؤالي عن الكورس');
+    expect(chips[1]!.parentElement).not.toHaveTextContent('من يومين');
+  });
+
   it('never addresses the student by «إنت» — their side needs no byline', () => {
     render(<AssistantThread thread={THREAD} onUpdated={() => {}} />);
     expect(screen.queryByText(c.you)).toBeNull();
