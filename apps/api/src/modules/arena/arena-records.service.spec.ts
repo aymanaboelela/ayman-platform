@@ -194,6 +194,50 @@ describe('ArenaRecordsService (database)', () => {
     expect((await records.me(top, cohort)).rank).toBeLessThan((await records.me(second, cohort)).rank ?? Infinity);
   });
 
+  /**
+   * «شيلني منها» — an instructor testing his own arena, or a student promoted
+   * to staff with the old profile left behind, can end up with a real
+   * `arena_stats` row: nothing upstream of a recorded match reads `role`.
+   * `board()`'s main list already excludes anyone but `role: 'student'`; this
+   * is the same guarantee for «مكانك» and for the one-row fallback `board()`
+   * uses when that account is not in the top of the table.
+   */
+  it('never ranks a non-student, even one with leftover cohort data', async () => {
+    const promoted = `arena-${tag}-promoted`;
+    await prisma.user.create({
+      data: { id: promoted, name: 'مدرّس', email: `${promoted}@example.test`, role: 'admin' },
+    });
+    await prisma.studentProfile.create({
+      data: {
+        userId: promoted,
+        fullName: 'مدرّس سابقًا طالب',
+        gender: 'male',
+        phone: `011${Math.floor(10_000_000 + Math.random() * 89_999_999)}`,
+        governorateCode: (await prisma.governorate.findFirstOrThrow()).code,
+        systemId,
+        year,
+        schoolStream: 'general',
+      },
+    });
+    users.push(promoted);
+    const opponent = await student('صديقه');
+    const cohort = { systemId, year, stream: 'general' as const };
+
+    await records.record(finished(promoted, opponent, 0));
+
+    // The row is real — `record()` does not know or care about roles.
+    expect((await prisma.arenaStat.findUniqueOrThrow({ where: { userId: promoted } })).played).toBe(1);
+
+    const mine = await records.me(promoted, cohort);
+    expect(mine).toMatchObject({ points: 0, wins: 0, played: 0, rank: null, todayPoints: 0 });
+
+    const board = await records.board(promoted, cohort, 'تانية · عربي');
+    expect(board.rows.find((row) => row.isMe)).toBeUndefined();
+    expect(board.me).toBeNull();
+    // Nobody ELSE lost a real row over this — the opponent is unaffected.
+    expect((await records.me(opponent, cohort)).played).toBe(1);
+  });
+
   it('shows the admin the latest matches and the top of the table', async () => {
     const overview = await records.admin();
     expect(overview.totals.matchesToday).toBeGreaterThan(0);

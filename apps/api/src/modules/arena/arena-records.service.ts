@@ -172,20 +172,33 @@ export class ArenaRecordsService implements ArenaRecordsPort {
     });
   }
 
+  /**
+   * «شيلني منها» — a non-student account (an instructor testing his own
+   * platform, most often) can end up with a real `arena_stats` row: nothing
+   * upstream of a RECORDED match checks `role`, and a `studentProfile` with a
+   * `year` set — the only thing `eligibility()` actually requires — survives
+   * a role change from a student account promoted to staff. `board()`'s main
+   * list already excludes anyone but `role: 'student'`; this is the same
+   * exclusion for «مكانك», which reads the stat directly and had no join to
+   * apply it through. A non-student reads exactly as someone who has never
+   * played — the zeroed shape below, not a rank among people who are.
+   */
   async me(userId: string, cohort: ArenaCohort | null): Promise<Omit<ArenaMe, 'name' | 'image'>> {
-    const [stat, today] = await Promise.all([
+    const [user, stat, today] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
       this.prisma.arenaStat.findUnique({ where: { userId } }),
       this.todayPoints(this.prisma, [userId], cairoDayStart(new Date())),
     ]);
-    const rank = stat && stat.played > 0 && cohort ? await this.rankOf(stat.points, cohort) : null;
+    const mine = user?.role === 'student' ? stat : null;
+    const rank = mine && mine.played > 0 && cohort ? await this.rankOf(mine.points, cohort) : null;
     return {
-      points: stat?.points ?? 0,
-      wins: stat?.wins ?? 0,
-      draws: stat?.draws ?? 0,
-      losses: stat?.losses ?? 0,
-      played: stat?.played ?? 0,
+      points: mine?.points ?? 0,
+      wins: mine?.wins ?? 0,
+      draws: mine?.draws ?? 0,
+      losses: mine?.losses ?? 0,
+      played: mine?.played ?? 0,
       rank,
-      todayPoints: today.get(userId) ?? 0,
+      todayPoints: user?.role === 'student' ? (today.get(userId) ?? 0) : 0,
     };
   }
 
@@ -213,10 +226,13 @@ export class ArenaRecordsService implements ArenaRecordsPort {
 
     let me = out.find((row) => row.isMe) ?? null;
     if (!me) {
+      // Same `role = 'student'` the main list enforces above — see the note
+      // on `me()` for why a row can exist here at all for an account this
+      // board never means to rank.
       const [mine] = await this.prisma.$queryRaw<BoardRow[]>(Prisma.sql`
         SELECT s."user_id", sp."full_name", u."name", u."image", s."points", s."wins", s."played"
         FROM "app"."arena_stats" s
-        JOIN "app"."users" u ON u."id" = s."user_id"
+        JOIN "app"."users" u ON u."id" = s."user_id" AND u."role" = 'student' AND u."banned_at" IS NULL
         LEFT JOIN "app"."student_profiles" sp ON sp."user_id" = s."user_id"
         WHERE s."user_id" = ${userId} AND s."played" > 0
       `);
