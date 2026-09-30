@@ -8,6 +8,8 @@ import { formatCopy } from '@ayman/contracts/format';
 import type { CourseOutline } from '@ayman/contracts/progress';
 import { formatEGP } from '@/lib/price';
 import './player-cards.css';
+import { arabicCount } from '@ayman/contracts/arabic-count';
+import { monthLessonForms } from '@/lib/month-lesson-count';
 
 const c = copy.player.monthOffer;
 
@@ -142,6 +144,6 @@ export function MonthOfferCard({ courseSlug, offer }: { courseSlug: string; offe
  *  «0 محاضرة» would read as a number that failed to load. */
 function lessonsLine(count: number): string {
   return count > 0
-    ? formatCopy(copy.subscribe.monthCardLessons, { count })
+    ? arabicCount(count, monthLessonForms())
     : copy.subscribe.monthCardEmpty;
 }

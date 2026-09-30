@@ -2802,8 +2802,14 @@ export const copy = {
      * Masdar, no imperative — see `lockedMonthTitle`'s note.
      */
     chooseMonthsHint: 'كل شهر بيفتح محاضراته هو، ومابيخلصش بعد مدة. ينفع اختيار أكتر من شهر في تحويل واحد.',
-    /** `{count}` — published lectures in this month. */
+    /** `{count}` — published lectures in this month, 0 and 11 upward. The
+     *  other counts use the three forms below, through `arabicCount`
+     *  (`@ayman/contracts/arabic-count`) — «3 محاضرة» is not how it is said. */
     monthCardLessons: '{count} محاضرة',
+    monthCardLessonsOne: 'محاضرة واحدة',
+    monthCardLessonsTwo: 'محاضرتين',
+    /** `{count}` — 3 to 10. */
+    monthCardLessonsFew: '{count} محاضرات',
     /**
      * A month the instructor opened for sale before writing into it. Shown
      * rather than hidden: pre-selling a month is his decision to make, and a

@@ -15,6 +15,8 @@ import {
   DialogTrigger,
 } from '@ayman/ui/components/dialog';
 import './locked-dialog.css';
+import { arabicCount } from '@ayman/contracts/arabic-count';
+import { monthLessonForms } from '@/lib/month-lesson-count';
 
 const c = copy.library;
 
@@ -140,7 +142,7 @@ export function MonthLockedDialog({
             <span className="lock-dialog__month-count">
               <PlayCircle className="size-3.5" aria-hidden="true" />
               {month.lessonCount > 0
-                ? formatCopy(copy.subscribe.monthCardLessons, { count: month.lessonCount })
+                ? arabicCount(month.lessonCount, monthLessonForms())
                 : copy.subscribe.monthCardEmpty}
             </span>
           </p>
