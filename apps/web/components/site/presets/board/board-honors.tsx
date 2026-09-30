@@ -1,7 +1,7 @@
 import { Medal } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import type { HonorBoardEntry } from '@ayman/contracts/admin/exams';
-import { initials } from '@/components/app/user-avatar';
+import { HonorFace } from '../../honor-face';
 import { BoardHeading } from './board-heading';
 import { boardCopy } from './board-copy';
 
@@ -44,6 +44,19 @@ const c = copy.landing.honorBoard;
  * That rule lives on the API and this component only renders the result of it,
  * but it is the reason this section is allowed to exist and is worth knowing
  * before anyone extends it.
+ *
+ * ## The photograph is `HonorFace`, same as `classic`
+ *
+ * This preset used to decline `photoKey` outright — an instructor who set one
+ * for a student still saw initials, on purpose, on the reasoning that a preset
+ * built for an instructor who had not been asked should not start publishing
+ * faces on his behalf. That instructor has now been asked, in as many words
+ * («لما بيحط صورة لطالب في لوحة الشرف مش بتظهر») — a photo an instructor
+ * cleared FOR this board is exactly what `HonorFace` was already built to
+ * show, on `classic` and `studio` both; this preset was the one holdout for no
+ * reason a live report still agreed with. `entry.avatarKey` — the student's
+ * OWN avatar — is still never read here; see `HonorFace`'s own file for that
+ * argument, which is unchanged.
  *
  * ## The block stays props-free
  *
@@ -91,20 +104,13 @@ export function BoardHonors({
                     الأول» cards read as a contradiction. */}
                 <span className="board-honor__course">{entry.courseLabel}</span>
 
-                {/* Initials, never a photograph — both keys on the payload
-                    are ignored here rather than missing from it. This board is
-                    the one surface a stranger reads, and it names a minor: a
-                    face beside that name is a different disclosure from a name
-                    alone. The classic board now shows one, but only the one an
-                    instructor set for it (`photoKey`) and never the student's
-                    own avatar — a decision taken on Ayman's own board, for his
-                    own students. A preset built for an instructor who has not
-                    been asked should not start publishing faces on his behalf;
-                    a preset that reached for `<UserAvatar image={…}>` would do
-                    exactly that, with the wrong key. */}
-                <span className="board-honor__avatar" aria-hidden="true">
-                  {initials(entry.studentName)}
-                </span>
+                {/* The photograph an instructor cleared for THIS board, or
+                    initials when there is none — see the file header for why
+                    this preset stopped declining `photoKey`.
+                    `[data-preset='board'] .honor-board__slot-avatar` in
+                    `presets.css` fits `HonorFace`'s disc to this card instead
+                    of the bare `board-honor__avatar` circle it replaces. */}
+                <HonorFace name={entry.studentName} photoKey={entry.photoKey} />
 
                 <span className="board-honor__name">{entry.studentName}</span>
 

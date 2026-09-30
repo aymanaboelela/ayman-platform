@@ -569,14 +569,18 @@ describe('BoardHonors — the empty board', () => {
 
   /*
    * The board names a minor on the one page a stranger reads, and the owner
-   * asked for the face not to go with the name. `avatarKey` stays in the
-   * contract so instructor screens can still show who a row is, which means
-   * nothing about the payload stops a preset from rendering it — only this
-   * assertion does. It is deliberately set to a real-looking key above, so a
-   * preset that reached for `<UserAvatar image={…}>` fails here rather than
-   * passing on a fixture that had no photo to leak.
+   * never asked for a student's OWN avatar to go with the name there —
+   * `avatarKey` stays in the contract so instructor screens can still show
+   * who a row is, which means nothing about the payload stops a preset from
+   * rendering it — only `HonorFace` does. It is deliberately set to a
+   * real-looking key above, so a preset that reached for
+   * `<UserAvatar image={…}>` fails here rather than passing on a fixture
+   * that had no photo to leak.
+   *
+   * ⚠️ `photoKey` — the photo an INSTRUCTOR cleared for this board — is a
+   * different fact, and this preset stopped declining it; see the next test.
    */
-  it('shows initials and never the photograph', () => {
+  it('shows initials and never the student\'s own avatar', () => {
     const { container } = render(
       <BoardHonors
         entries={[
@@ -597,7 +601,41 @@ describe('BoardHonors — the empty board', () => {
     );
 
     expect(container.querySelector('img')).toBeNull();
-    expect(container.querySelector('.board-honor__avatar')?.textContent).toBeTruthy();
+    expect(container.querySelector('.honor-board__slot-avatar')?.textContent).toBeTruthy();
+  });
+
+  /**
+   * «لما بيحط صورة لطالب في لوحة الشرف مش بتظهر» — this preset used to
+   * ignore `photoKey` outright, on the reasoning that an instructor who had
+   * not been asked should not have faces published on his behalf. Asked, in
+   * those words: the photo an instructor cleared FOR this board now renders,
+   * same as `classic` and `studio`.
+   */
+  it('draws the photo an instructor cleared for the board', () => {
+    const { container } = render(
+      <BoardHonors
+        entries={[
+          {
+            studentName: 'طالب مجتهد',
+            avatarKey: null,
+            photoKey: '04/mogtahed-board.webp',
+            title: 'امتحان الشهر',
+            courseLabel: 'برمجة — تانية بكالوريا',
+            rank: 1,
+            scaledScore: 48,
+            gradeOutOf: 50,
+            percent: 96,
+          },
+        ]}
+        level={2}
+      />,
+    );
+
+    // The `next/image` stub above keeps only `src`/`alt` — see its own
+    // comment — so this reads the photo by tag rather than by `HonorFace`'s
+    // `--photo` modifier class, which the stub drops along with everything
+    // else `<Image>` was given.
+    expect(container.querySelector('img')?.getAttribute('src')).toContain('04/mogtahed-board.webp');
   });
 
   /*
@@ -960,15 +998,20 @@ describe('board preset — the stylesheet cannot reach the classic page', () => 
    *
    * ⚠️ `.board-honor__score` used to be the second entry here. The mark came
    * off this board with the photographs — «بدون درجات» — so the selector went
-   * with it, and `.board-honor__avatar` inherited the rule. A stale name in
-   * this list does not fail: `indexOf` returns -1, `slice(-1)` hands back the
-   * last character of the file, and the assertion fails on an empty body with
-   * a message naming a selector nobody can find. That is how this was noticed.
+   * with it. `.board-honor__avatar` inherited the rule after that and has
+   * since been replaced by `.honor-board__slot-avatar` — `HonorFace`'s own
+   * class, now that this preset shows the photo an instructor cleared for the
+   * board instead of a hand-drawn initials circle. A stale name in this list
+   * does not fail: `indexOf` returns -1, `slice(-1)` hands back the last
+   * character of the file, and the assertion fails on an empty body with a
+   * message naming a selector nobody can find. That is how this was noticed
+   * the first time, and why the name below is checked against the stylesheet
+   * rather than assumed.
    */
   it('isolates every Latin-digit run', () => {
     const css = stripComments(boardSection());
 
-    for (const selector of ['.board-tile__n', '.board-honor__avatar']) {
+    for (const selector of ['.board-tile__n', '.honor-board__slot-avatar']) {
       expect(css, `${selector} is not in the stylesheet at all`).toContain(`${selector} {`);
       const rule = css.slice(css.indexOf(`${selector} {`));
       const body = rule.slice(0, rule.indexOf('}'));
