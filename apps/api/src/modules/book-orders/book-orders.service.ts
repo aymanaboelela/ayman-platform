@@ -29,12 +29,14 @@ import type {
   MarkBookOrderShippedResult,
   ClearBookOrderHoldResult,
   PackingListYear,
+  PackingStatus,
   RejectBookOrderResult,
   RestoreBookOrderResult,
 } from '@ayman/contracts/admin/book-orders';
 import type { AdminBookOrderPatchInput } from '@ayman/contracts/admin/books';
 import {
   BULK_NOT_HELD_REASON,
+  COURIER_STATUSES,
   bookOrderRef,
   bookOrderYearWord,
 } from '@ayman/contracts/admin/book-orders';
@@ -395,8 +397,10 @@ function summariseOrders(rows: CountableOrder[]): AdminBookOrderOverview {
  * deleted from, and that is exactly what the admin looking at the tab needs to
  * see. Every other value, and no value at all, means «مش محذوف».
  */
-function liveOrDeletedWhere(status: AdminBookOrderFilter | undefined): Prisma.BookOrderWhereInput {
+function liveOrDeletedWhere(status: AdminBookOrderFilter | PackingStatus | undefined): Prisma.BookOrderWhereInput {
   if (status === 'deleted') return { deletedAt: { not: null } };
+  // «كله في PDF واحد» — see `PackingStatusSchema`.
+  if (status === 'courier') return { deletedAt: null, status: { in: [...COURIER_STATUSES] } };
   return { deletedAt: null, ...(status ? { status } : {}) };
 }
 

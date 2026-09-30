@@ -7,7 +7,7 @@ import { copy as site } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { egyptianPhoneForLabel } from '@ayman/contracts/phone';
 import {
-  AdminBookOrderFilterSchema,
+  PackingStatusSchema,
   AdminBookOrderStreamSchema,
   PackingListSchema,
   bookOrderYearWord,
@@ -239,7 +239,7 @@ export default async function BookOrderLabelsPage({
   /* Read THROUGH the schemas, exactly like the packing sheet: these go into a
      query string the API re-validates, and a junk value should print the
      default run rather than an error page. */
-  const status = AdminBookOrderFilterSchema.catch('paid').parse(one('status'));
+  const status = PackingStatusSchema.catch('paid').parse(one('status'));
   const stream = AdminBookOrderStreamSchema.safeParse(one('stream')).data;
   const year = YearFilterSchema.safeParse(one('year')).data;
   const from = one('from');
@@ -365,9 +365,18 @@ export default async function BookOrderLabelsPage({
                 the box. The titles stay on the packing sheet, which has a
                 column for them and a desk to read them at. */}
             <footer className="label-card__foot">
+              {/* «طالب كام كتاب وكام نسخة» — both, side by side. Copies alone
+                  could not tell two copies of one book from two different
+                  books, and those are two different boxes to pack. */}
               <span className="label-card__count">
-                <b>{label.copies}</b>
-                <small>{c.labelsCopies}</small>
+                <span className="label-card__count-part">
+                  <b>{new Set(label.items.map((item) => item.title)).size}</b>
+                  <small>{c.labelsBooks}</small>
+                </span>
+                <span className="label-card__count-part">
+                  <b>{label.copies}</b>
+                  <small>{c.labelsCopies}</small>
+                </span>
               </span>
               <span className="label-card__streams">
                 {/* One chip per BOOK now — «أولى بكالوريا · عربي» — because
@@ -387,11 +396,11 @@ export default async function BookOrderLabelsPage({
                         : 'label-card__stream label-card__stream--unknown'
                     }
                   >
-                    {chip.quantity > 1 ? (
-                      <b className="label-card__qty" dir="ltr">
-                        {formatCopy(c.labelsBookQty, { n: String(chip.quantity) })}
-                      </b>
-                    ) : null}
+                    {/* Always, «1×» included: a chip without a number was
+                        read as «one of these» on a card that also said «3». */}
+                    <b className="label-card__qty" dir="ltr">
+                      {formatCopy(c.labelsBookQty, { n: String(chip.quantity) })}
+                    </b>
                     {chip.text}
                   </span>
                 )) ??

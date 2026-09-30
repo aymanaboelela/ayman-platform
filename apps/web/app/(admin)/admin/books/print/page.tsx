@@ -7,7 +7,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { copy as site } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import {
-  AdminBookOrderFilterSchema,
+  PackingStatusSchema,
   AdminBookOrderStreamSchema,
   PackingListSchema,
   bookOrderYearWord,
@@ -30,6 +30,7 @@ const STATUS_LABEL: Record<string, string> = {
   paid: c.filterPaid,
   printing: c.filterPrinting,
   shipped: c.filterShipped,
+  courier: c.filterCourier,
   delivered: c.filterDelivered,
   address_only: c.filterAddressOnly,
   rejected: c.filterRejected,
@@ -102,7 +103,7 @@ export default async function BookOrdersPrintPage({
      the default list rather than an error page. `status` has no default there
      — «مدفوعة» is the daily queue and the tab this is almost always opened
      from. */
-  const status = AdminBookOrderFilterSchema.catch('paid').parse(one('status'));
+  const status = PackingStatusSchema.catch('paid').parse(one('status'));
   const stream = AdminBookOrderStreamSchema.safeParse(one('stream')).data;
   const year = YearFilterSchema.safeParse(one('year')).data;
   const from = one('from');
