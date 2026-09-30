@@ -258,7 +258,16 @@ export function AssistantChat({
        * conversation collapses the transcript to the height of its content and
        * the panel visibly grows with each answer.
        */}
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:min-h-[13rem]">
+      {/*
+        `overscroll-contain`: without it, a reader who scrolls past the TOP of
+        this list (or past the bottom) hands the rest of the wheel/touch delta
+        to whatever is behind the panel — the page underneath scrolled instead
+        of stopping, reported as «لما أقف عليها وأسكرول للي فوق تسكرول لأن مش
+        بتسكرول بالفقرة». `AssistantThread`'s own scroller (`.chat-scroller` in
+        `chat.css`) already has this; this box is a second, separate scroller
+        — المساعد's own transcript, not أيمن's — that never got it.
+      */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:min-h-[13rem]">
         {messages.length === 0 ? (
           <Welcome onPick={askStarter} />
         ) : (
