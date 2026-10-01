@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { ArrowUpLeft } from 'lucide-react';
 // The `/copy` subpath, not the root barrel: the rail is on every `(app)` route,
@@ -9,6 +10,7 @@ import { ArrowUpLeft } from 'lucide-react';
 // every signed-in page's client manifest.
 import { copy } from '@ayman/contracts/copy';
 import { BrandLockup } from '@/components/brand-lockup';
+import { isPlainPress } from '@/lib/welcome-motion';
 import { RailToggle } from './rail-toggle';
 import { StudentNavFooterList, StudentNavList } from './student-nav-list';
 
@@ -37,6 +39,9 @@ import { StudentNavFooterList, StudentNavList } from './student-nav-list';
  * the layout above it) awaiting anything.
  */
 export function StudentRail({ courses, forcedCollapsed }: { courses: ReactNode; forcedCollapsed: boolean }) {
+  const pathname = usePathname();
+  const onDashboard = pathname === '/dashboard';
+
   return (
     /* `rail` هو جذر البلوك اللي `rail__head` و`rail__label` و`rail__brand` و
        `rail__item` كلهم فروعه — كان ناقص، والستايل شيت كان بيوصل للفروع من غير
@@ -82,6 +87,12 @@ export function StudentRail({ courses, forcedCollapsed }: { courses: ReactNode; 
             href="/dashboard"
             className="rail__brand min-w-0 rounded-md"
             aria-label={copy.nav.dashboard}
+            // واقف على /dashboard أصلًا: دوسة على الشعار كانت بتدفع history
+            // entry تانية لنفس الصفحة، وزرار الرجوع بيحتاج دوستين عشان يسيبها
+            // فعلًا — نفس الباج اللي `student-nav-list.tsx` بيحارس منه.
+            onClick={(event) => {
+              if (onDashboard && isPlainPress(event)) event.preventDefault();
+            }}
           >
             <BrandLockup showTagline={false} />
           </Link>

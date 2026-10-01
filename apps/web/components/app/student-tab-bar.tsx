@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { copy } from '@ayman/contracts/copy';
+import { isPlainPress } from '@/lib/welcome-motion';
 import { STUDENT_TABS, activeStudentNav } from './student-nav-items';
 
 /**
@@ -52,6 +53,15 @@ export function StudentTabBar() {
                 aria-current={isActive ? 'page' : undefined}
                 className="tabbar__tab"
                 data-active={isActive ? '' : undefined}
+                // التاب اللي الطالب واقف عليه أصلًا: `<Link>` بيدفع history entry
+                // جديدة حتى لو الوجهة نفس الصفحة، فدوسة تانية على «حسابي» وهو
+                // واقف فيها كانت بتعمل entry متكررة — وزرار الرجوع بيحتاج دوستين
+                // عشان يسيب الصفحة فعلًا. مفيش منع إلا لدوسة عادية (شوف
+                // `isPlainPress`)، عشان فتح في تاب جديد أو دوسة طويلة يفضلوا زي
+                // ما هم.
+                onClick={(event) => {
+                  if (isActive && isPlainPress(event)) event.preventDefault();
+                }}
               >
                 <item.icon className="size-5" aria-hidden="true" />
                 <span className="tabbar__label">{item.labelAr}</span>
