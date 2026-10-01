@@ -415,6 +415,8 @@ export const copy = {
     game: 'الألعاب',
     /** «ساحة التحدي» — الماتش المباشر. الكوبي كلها في `copy/arena.ts`. */
     arena: 'ساحة التحدي',
+    /** «دفتر غلطاتي». الكوبي كلها في `copy/mistakes.ts`. */
+    mistakes: 'غلطاتي',
     profile: 'بروفايلي',
     railAllCourses: 'كل الكورسات',
     collapseRail: 'اطوِ القائمة',

@@ -44,6 +44,18 @@ export const FLAG_DECLARATIONS = [
     defaultValue: true,
     defaultForTenant: false,
   },
+  /*
+   * «دفتر غلطاتي» — كل سؤال غلط فيه الطالب في أي كويز، مجمّع في مكان واحد،
+   * وبيديله يعيد الاختبار عليه لحد ما يثبّته. اتعملت بطلب صاحب الستاك الأصلي
+   * («أي غلطة في أي كويز»)، فمفتوحة عنده ومقفولة على أي ستاك تاني لحد ما
+   * المدرّس يفتحها من `/admin/flags` — نفس منطق `arena.enabled` بالظبط.
+   */
+  {
+    key: 'mistakes.enabled',
+    descriptionAr: 'دفتر غلطاتي: كل سؤال غلط فيه الطالب، وإعادة الاختبار عليه',
+    defaultValue: true,
+    defaultForTenant: false,
+  },
 ] as const satisfies readonly FlagDeclaration[];
 
 export type FlagKey = (typeof FLAG_DECLARATIONS)[number]['key'];
