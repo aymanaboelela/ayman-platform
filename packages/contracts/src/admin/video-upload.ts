@@ -50,6 +50,14 @@ export const VideoUploadStartSchema = z
      * made must never be the one that cannot be undone.
      */
     keepPrevious: z.boolean().default(true),
+    /**
+     * AES-128-encrypt the mirrored copy's TS segments — «مينفعش حد ينزّل
+     * الفيديو». `true` by default, matching every lecture uploaded before this
+     * field existed. Fixed for this mirror's whole life: the worker reads it
+     * once, at the start of the transcode, and re-encrypting a `ready` video
+     * means re-transcoding it from the source, not flipping a flag.
+     */
+    encrypt: z.boolean().default(true),
   })
   .strict();
 export type VideoUploadStart = z.infer<typeof VideoUploadStartSchema>;

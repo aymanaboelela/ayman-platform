@@ -357,6 +357,8 @@ export function startUpload(
   contentType: string,
   /** The video this one replaces: keep it in «محفوظة», or delete it for good. */
   keepPrevious = true,
+  /** AES-128-encrypt the mirrored copy — «مينفعش حد ينزّل الفيديو». */
+  encrypt = true,
 ): Promise<void> {
   return run(courseId, lessonId, file, async () =>
     (await actions()).startVideoUploadAction(lessonId, {
@@ -364,6 +366,7 @@ export function startUpload(
       sizeBytes: file.size,
       contentType,
       keepPrevious,
+      encrypt,
     }),
   );
 }
