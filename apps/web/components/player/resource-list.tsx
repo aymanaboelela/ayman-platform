@@ -61,7 +61,6 @@ function UploadedVideoFrame({ resource }: { resource: PlayerResource }) {
   if (resource.viewPath === null) return null;
   return (
     <div className="overflow-hidden rounded-md border border-line bg-surface-2">
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption -- a short instructor clip, no transcript pipeline exists for it */}
       <video src={resource.viewPath} controls preload="metadata" className="block aspect-video w-full">
         {c.videoUnsupported}
       </video>
