@@ -83,6 +83,11 @@ export function QuizGame({
   const [rightCount, setRightCount] = useState(0);
   const [left, setLeft] = useState(seconds);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  // الاختيار اللي اتدوس عليه وهو لسه ماشي للسيرفر — من غيره الزرار كان بيوّري
+  // نفس الشكل بالظبط من الضغطة لحد رد السيرفر، فالطالب كان بيدوس تاني ظنًا إنها
+  // ماخدتش، والضغطة التانية دي كانت بترفض لأن `busy` بقى true. نفس الاختيار،
+  // الضغطة الأولانية هي اللي شغّالة دايمًا — بس مفيش حد كان بيعرف ده.
+  const [chosenId, setChosenId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const deadline = useRef(0);
@@ -139,6 +144,7 @@ export function QuizGame({
         setError(true);
       } finally {
         setBusy(false);
+        setChosenId(null);
       }
     },
     [question, busy, streak, sound, seconds, round.sessionId],
@@ -168,6 +174,7 @@ export function QuizGame({
 
   const next = useCallback(() => {
     setFeedback(null);
+    setChosenId(null);
     if (lives <= 0 || index + 1 >= total) {
       setPhase('over');
       sound.play('end');
@@ -270,13 +277,15 @@ export function QuizGame({
             {question.options.map((option, i) => {
               const tile = TILES[i % TILES.length]!;
               const Icon = tile.icon;
-              const state = !feedback
-                ? undefined
-                : feedback.right.includes(option.id)
+              const state = feedback
+                ? feedback.right.includes(option.id)
                   ? 'right'
                   : feedback.chosen === option.id
                     ? 'wrong'
-                    : 'dim';
+                    : 'dim'
+                : chosenId === option.id
+                  ? 'pending'
+                  : undefined;
               return (
                 <li key={option.id} style={{ '--i': i } as CSSProperties}>
                   <button
@@ -285,7 +294,13 @@ export function QuizGame({
                     data-tone={tile.tone}
                     data-state={state}
                     disabled={phase !== 'question' || busy}
-                    onClick={() => void answer(option.id)}
+                    onClick={() => {
+                      // الاختيار بيتسجّل هنا أول حاجة، أول ما اليد ترفع عن
+                      // الشاشة — مش لما رد السيرفر يوصل. ده اللي بيخلي الزرار
+                      // يوّري إنه اتدوس على طول، حتى لو الشبكة بطيئة.
+                      setChosenId(option.id);
+                      void answer(option.id);
+                    }}
                   >
                     <span className="gm-option__shape" aria-hidden="true">
                       <Icon className="size-5" />
