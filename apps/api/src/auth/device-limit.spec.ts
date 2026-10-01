@@ -5,6 +5,7 @@ import {
   DEVICE_LIMIT_FLAG_DEFAULT,
   MAX_DEVICES_PER_ACCOUNT,
   type ActiveDeviceLookup,
+  type RoleLookup,
 } from './device-limit';
 
 /**
@@ -154,6 +155,73 @@ describe('DeviceLimitGate — the flag is the switch, and off is the default', (
     const gate = new DeviceLimitGate(alwaysOn(), new FakeDevices(['جهاز غير معروف', SAFARI_IOS]));
     expect(await gate.admits('user-1', '')).toBe(true);
     expect(await gate.admits('user-1', null)).toBe(true);
+  });
+
+  /**
+   * «الأدمن والمالك بلا حد» — the limit is for students. An instructor running
+   * the dashboard from a desktop and checking WhatsApp from a phone (and maybe
+   * covering support from a third) must never trip the same control built to
+   * stop account sharing.
+   */
+  describe('role exemption — admin and owner skip the limit entirely', () => {
+    function roleOf(role: string | null): RoleLookup {
+      return { roleOf: async () => role };
+    }
+
+    it('admits a third device for an admin, without even asking how many they have', async () => {
+      let asked = false;
+      const devices: ActiveDeviceLookup = {
+        async activeDeviceNames() {
+          asked = true;
+          return [SAFARI_IOS, EDGE_WINDOWS];
+        },
+      };
+      const gate = new DeviceLimitGate(alwaysOn(), devices, roleOf('admin'));
+      expect(await gate.admits('admin-1', ANDROID_UA)).toBe(true);
+      expect(asked).toBe(false);
+    });
+
+    it('admits a third device for an owner the same way', async () => {
+      const gate = new DeviceLimitGate(
+        alwaysOn(),
+        new FakeDevices([SAFARI_IOS, EDGE_WINDOWS]),
+        roleOf('owner'),
+      );
+      expect(await gate.admits('owner-1', ANDROID_UA)).toBe(true);
+    });
+
+    it('still refuses a third device for a student', async () => {
+      const gate = new DeviceLimitGate(
+        alwaysOn(),
+        new FakeDevices([SAFARI_IOS, EDGE_WINDOWS]),
+        roleOf('student'),
+      );
+      expect(await gate.admits('student-1', ANDROID_UA)).toBe(false);
+    });
+
+    it('still refuses when the role is unknown — a lookup miss must not become a bypass', async () => {
+      const gate = new DeviceLimitGate(
+        alwaysOn(),
+        new FakeDevices([SAFARI_IOS, EDGE_WINDOWS]),
+        roleOf(null),
+      );
+      expect(await gate.admits('ghost-1', ANDROID_UA)).toBe(false);
+    });
+
+    it('defaults to NOT exempt when no RoleLookup is given, so every pre-existing caller is unchanged', async () => {
+      const gate = new DeviceLimitGate(alwaysOn(), new FakeDevices([SAFARI_IOS, EDGE_WINDOWS]));
+      expect(await gate.admits('user-1', ANDROID_UA)).toBe(false);
+    });
+
+    it('a failing role lookup fails open, same as every other check in this gate', async () => {
+      const devices = new FakeDevices([SAFARI_IOS, EDGE_WINDOWS]);
+      const gate = new DeviceLimitGate(alwaysOn(), devices, {
+        roleOf: async () => {
+          throw new Error('connection terminated');
+        },
+      });
+      expect(await gate.admits('user-1', ANDROID_UA)).toBe(true);
+    });
   });
 });
 

@@ -77,6 +77,34 @@ export interface ActiveDeviceLookup {
 }
 
 /**
+ * «الأدمن والمالك بلا حد» — admin and owner accounts run the platform itself
+ * (dashboard on a desktop, WhatsApp campaigns from a phone, a second admin
+ * covering support) and must never be the ones a sharing control locks out.
+ * Students are the only role the limit is for.
+ */
+export const DEVICE_LIMIT_EXEMPT_ROLES = new Set(['admin', 'owner']);
+
+export interface RoleLookup {
+  /** `null` for "no such user" or "role unknown" — both fall through to the student limit. */
+  roleOf(userId: string): Promise<string | null>;
+}
+
+export class PrismaRoleLookup implements RoleLookup {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  async roleOf(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    return user?.role ?? null;
+  }
+}
+
+/** No-op default: every caller that predates the role exemption keeps counting devices exactly as before. */
+const NEVER_EXEMPT: RoleLookup = { roleOf: async () => null };
+
+/**
  * The whole decision, as a pure function.
  *
  * A device already on the list is ALWAYS admitted, even at the limit — the
@@ -177,6 +205,7 @@ export class DeviceLimitGate {
   constructor(
     private readonly flag: CachedFlag,
     private readonly devices: ActiveDeviceLookup,
+    private readonly roles: RoleLookup = NEVER_EXEMPT,
     private readonly limit: number = MAX_DEVICES_PER_ACCOUNT,
   ) {}
 
@@ -193,6 +222,8 @@ export class DeviceLimitGate {
   async admits(userId: string, userAgent: string | null | undefined): Promise<boolean> {
     try {
       if (!(await this.flag.enabled())) return true;
+      const role = await this.roles.roleOf(userId);
+      if (role && DEVICE_LIMIT_EXEMPT_ROLES.has(role)) return true;
       const { deviceName } = parseUserAgent(userAgent);
       const activeNames = await this.devices.activeDeviceNames(userId);
       return admitsDevice(activeNames, deviceName, this.limit);
@@ -214,5 +245,6 @@ export function createDeviceLimitGate(prisma: PrismaClient): DeviceLimitGate {
       return row?.enabled ?? DEVICE_LIMIT_FLAG_DEFAULT;
     }, DEVICE_LIMIT_FLAG_DEFAULT),
     new PrismaActiveDeviceLookup(prisma),
+    new PrismaRoleLookup(prisma),
   );
 }
