@@ -16,7 +16,8 @@ import { rootMetadata } from '@/lib/seo/metadata';
 import { Toaster } from '@/components/toaster';
 import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
 import { StaleBuildWatch } from '@/components/pwa/stale-build-watch';
-import { Clarity } from '@/components/analytics/clarity';
+// `Clarity` is deliberately NOT imported or mounted below — see the long
+// comment at its old call site, right after `<StaleBuildWatch />`.
 import './globals.css';
 
 /**
@@ -256,37 +257,33 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         */}
         <StaleBuildWatch />
         {/*
-          Microsoft Clarity — session recordings and heatmaps, injected by
-          `@microsoft/clarity` from the browser. Renders nothing.
+          ⚠️ `<Clarity>` is DELIBERATELY not mounted — read before re-adding it.
 
-          At the ROOT rather than in `(site)`, because the sessions worth
-          watching start on a marketing page and continue into the signed-in
-          product; a mount that covered only one half would cut every recording
-          at the login screen. `/admin` is excluded from inside the component —
-          those screens put real students' names, emails and grades on screen,
-          and a recording of one is a copy of that data in a third-party
-          dashboard.
+          Microsoft Clarity reassigns `window.history.pushState` and
+          `replaceState` the moment its tag loads, and restarts that patch
+          250ms after every URL change (see the component's own docblock,
+          still intact below, for why the admin-recording guard needed a full
+          `location.reload()` to work around the same behaviour). Next's App
+          Router calls those same two native methods for every client-side
+          navigation. On production this surfaced as «لما بضغط على الباك…
+          لازم أضغط ٤-٥ مرات»، وبعدين زرار الباك بيقف مطفي خالص — reported
+          on EVERY route, not one page, which is what pointed at something
+          mounted at the root rather than a navigation bug in our own code.
+          The same incompatibility is a years-old, still-open, un-fixed
+          report against Clarity itself: github.com/microsoft/clarity/issues/85
+          ("Using Clarity breaks navigation in Gatsby") — a different
+          framework, the same root cause (Clarity's history patch fighting
+          the SPA router's own pushState calls), never resolved upstream.
 
-          Ships nothing at all unless `NEXT_PUBLIC_CLARITY_PROJECT_ID` was set
-          at BUILD time (see `apps/web/Dockerfile`).
-
-          ⚠️ The `<Suspense>` is REQUIRED, not stylistic. `<Clarity>` calls
-          `usePathname()` to know whether it is on `/admin`, and under
-          `cacheComponents: true` (next.config.ts) reading the pathname is
-          uncached data. In the ROOT layout that makes it uncached data on the
-          path of every page, so `next build` refuses the whole export:
-
-            Route "/admin/questions/[bankEntryId]": Uncached data was accessed
-            outside of <Suspense>.
-
-          Not a warning — the build exits 1, and it named this component. A
-          boundary with a `null` fallback confines the dynamic hole to a
-          component that renders nothing anyway, so all 83 pages keep
-          prerendering and the analytics tag stays out of that decision.
+          Ayman's call, told the trade-off plainly: session recordings and
+          heatmaps, against the browser's own back button working on every
+          page of the product. He chose the back button. If Clarity ever
+          ships a fix for the upstream issue above, this is the one block to
+          restore — the component, its CSP allowances in `proxy.ts`, and the
+          `NEXT_PUBLIC_CLARITY_PROJECT_ID` plumbing are all still in place,
+          untouched, specifically so turning it back on is this diff in
+          reverse and nothing more.
         */}
-        <Suspense fallback={null}>
-          <Clarity />
-        </Suspense>
         {/*
           Renders nothing. Opens a newly pushed page at its top when Next's own
           scroll handler skipped it — which it does on every dynamic route
