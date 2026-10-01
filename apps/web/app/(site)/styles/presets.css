@@ -4603,9 +4603,9 @@
 
 /* ⚠️ `.site-nav--over` is set from `[data-site-hero]`'s scroll position alone
    (`site-nav.tsx`), and `.st-hero` carries that attribute — so the nav
-   believes it is floating over a DARK stage and paints the wordmark and the
-   outline button white. On this preset it is floating over paper, and white
-   on paper is nothing at all.
+   believes it is floating over a DARK stage and paints the wordmark, the
+   outline button, AND the theme toggle white. On this preset it is floating
+   over paper, and white on paper is nothing at all.
 
    The same fix `editorial` already carries for the same reason, reached the
    same way: through the page, because the nav is not a descendant. */
@@ -4617,6 +4617,21 @@ body:has(main[data-preset='studio']) .site-nav--over .wordmark__tag {
 body:has(main[data-preset='studio']) .site-nav--over .site-btn--outline {
   border-color: var(--p-200);
   color: var(--site-fg);
+}
+
+/* The toggle was missed when the two fixes above shipped: `sections.css`'s
+   `.site-nav--over .theme-pill` repaints it as a light-on-dark glass pill,
+   which is correct over the classic hero's ink stage and invisible over this
+   preset's paper one — a near-white fill under a near-white icon, on a
+   near-white page. Restoring the exact values the base `.theme-pill` rule in
+   `globals.css` already uses (and that the PINNED state on this same preset
+   already renders correctly, since nothing overrides it there) keeps the
+   control identical whether the header is over the hero or past it, instead
+   of swapping styles at the scroll boundary. */
+body:has(main[data-preset='studio']) .site-nav--over .theme-pill {
+  border-color: var(--border-strong);
+  background: color-mix(in oklch, var(--p-500), transparent 90%);
+  color: var(--n-11);
 }
 
 /* ── the page reveals as you read it ──────────────────────────────────────

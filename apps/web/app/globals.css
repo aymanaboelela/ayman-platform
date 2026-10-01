@@ -2209,8 +2209,8 @@ html[data-player-fullscreen] .route-fade {
   display: flex;
   align-items: center;
   gap: var(--s-12);
-  min-block-size: 3.25rem;
-  padding-inline: var(--s-12);
+  min-block-size: 3.625rem;
+  padding-inline: var(--s-16);
   border-radius: var(--r-lg);
   color: var(--n-11);
   /* `--fs-text-lg`, i.e. ONE STEP ABOVE the body copy beside it — not `-base`,
@@ -2222,8 +2222,16 @@ html[data-player-fullscreen] .route-fade {
      moves around the product, and inside `.product-type` (which already lifts
      the whole signed-in ramp) that lands at 19px. A navigation list is one of
      the few places where being the largest text in its own column is correct —
-     nothing else in the rail competes with it. */
-  font-size: var(--fs-text-lg);
+     nothing else in the rail competes with it.
+
+     THIRD time: 19px still read small next to the row's own padding once the
+     well and the sidebar column grew to match (below), so this one goes past
+     the named scale rather than waiting for a fourth half-step. 1.3125rem
+     (21px) is deliberately a literal here, not a new `--fs-text-xl` token —
+     nothing else in the product shell asks to be larger than `-lg`, and a
+     token only this one selector reads is not a scale, it is this number with
+     a different name. */
+  font-size: 1.3125rem;
   transition:
     background-color var(--d-hover) var(--ease),
     color var(--d-hover) var(--ease);
@@ -2238,8 +2246,8 @@ html[data-player-fullscreen] .route-fade {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  inline-size: 2.25rem;
-  block-size: 2.25rem;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
   border-radius: var(--r-md);
   border: var(--hairline) solid var(--border-subtle);
   background: var(--n-3);
@@ -2257,8 +2265,8 @@ html[data-player-fullscreen] .route-fade {
    active states already did once — which is the whole reason `.nav-pill`
    exists. Specificity 0,1,1 beats Tailwind's single-class `.size-4`. */
 .nav-pill__well svg {
-  inline-size: 1.15rem;
-  block-size: 1.15rem;
+  inline-size: 1.3rem;
+  block-size: 1.3rem;
 }
 
 .nav-pill__label {
