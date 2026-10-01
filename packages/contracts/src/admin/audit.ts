@@ -170,6 +170,11 @@ export const AUDIT_ACTIONS = [
    */
   'student:set-password',
   /**
+   * نفس حجة `student:set-password` فوق بالظبط، بس للفريق — شوف تعليقها في
+   * `permissions.ts` وفي `StudentsService.setStaffPassword`.
+   */
+  'staff:set-password',
+  /**
    * «سجّل خروج» من صفحة الطالب، وحد الأجهزة بتاعه.
    *
    * Two entries, not one `student:devices`: kicking a session is something

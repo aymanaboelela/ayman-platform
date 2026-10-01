@@ -2600,6 +2600,24 @@ const admin = {
        * بتمنعك. «مش متاح» كانت هتخلّيه يدوّر على الزرار في مكان تاني.
        */
       adminHasEverything: 'صاحب المنصة — معاه كل حاجة',
+      /**
+       * «إعادة تعيين كلمة السر» — نفس فكرة `students.setPassword*` بالظبط، بس
+       * على مساعد بدل طالب. الزرار ده نفسه بيبان لصاحب المنصة بس
+       * (`currentUserId === founderId`) — الحارس الحقيقي على السيرفر
+       * `setStaffPassword` نفسها، والزرار اللي هيظهر لمساعد تاني كان هيرجع
+       * «مقدرناش» كل مرة من غير ما يعرف ليه.
+       */
+      resetPasswordAction: 'إعادة تعيين كلمة السر',
+      resetPasswordDialogTitle: 'كلمة سر جديدة لـ{name}',
+      resetPasswordNewLabel: 'كلمة السر الجديدة',
+      resetPasswordConfirmLabel: 'تأكيد كلمة السر الجديدة',
+      resetPasswordConfirm: 'تعيين كلمة السر',
+      resetPasswordMismatch: 'كلمتا المرور مش متطابقتين',
+      resetPasswordSuccess: 'اتغيّرت كلمة السر، وخرج من كل جلسة كانت شغالة.',
+      resetPasswordFailed: 'مقدرناش نغيّر كلمة السر — نحاول تاني',
+      /** الحارس الحقيقي في `StudentsService.setStaffPassword` — نفس نص الرفض. */
+      resetPasswordNotFounder: 'إعادة تعيين كلمة سر الفريق لصاحب المنصة بس.',
+      resetPasswordNotStaff: 'الحساب ده مش حساب مساعد — مينفعش نغيّر كلمة سره من هنا.',
     },
     baselineTitle: 'معاه دايمًا',
     baselineHint: 'ده أساس الرول، مكتوب في الكود ومش بيتقفل من هنا.',

@@ -1,15 +1,24 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition, type ChangeEvent } from 'react';
+import { useActionState, useEffect, useRef, useState, useTransition, type ChangeEvent } from 'react';
 
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@ayman/ui/components/dialog';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
 
-import { searchAccountsAction, setStaffRoleAction } from './actions';
+import { searchAccountsAction, setStaffPasswordAction, setStaffRoleAction, type ActionResult } from './actions';
 import { MemberPermissions } from './member-permissions';
 
 const c = copy.admin.roles.staff;
@@ -222,6 +231,17 @@ export function StaffSection({
                   >
                     {c.remove}
                   </Button>
+                  {/*
+                   * ⚠️ بيبان لصاحب المنصة بس (`currentUserId === founderId`)، مش
+                   * لأي مساعد ماسك `staff:set-password` — الصلاحية دي في أساس كل
+                   * `owner` فعلًا (`permissions.ts`)، بس الحارس الحقيقي جوّه
+                   * `StudentsService.setStaffPassword`: صاحب المنصة بس، مهما كانت
+                   * صلاحيات الداس. زرار يبان لمساعد تاني كان هيرفضه السيرفر كل
+                   * مرة من غير تفسير — نفس منطق إخفاء أزرار الأدمن فوق.
+                   */}
+                  {currentUserId === founderId ? (
+                    <StaffPasswordResetButton memberId={m.id} name={m.name} />
+                  ) : null}
                 </>
               )}
 
@@ -360,6 +380,88 @@ export function StaffSection({
         ) : null}
       </div>
     </section>
+  );
+}
+
+const PASSWORD_IDLE: ActionResult = { ok: true };
+
+/**
+ * ديالوج «إعادة تعيين كلمة السر» لصف مساعد واحد — نفس شكل
+ * `SetPasswordSection` (`students/[userId]/set-password-section.tsx`)
+ * بالظبط، بس ديالوج صغير جوّه الصف مش كارت كامل، لأن الشاشة دي ليستة مش
+ * صفحة حساب.
+ *
+ * بيتقفل من جوّه الأكشن عند النجاح، مش من `useEffect` بيراقب `state` — نفس
+ * سبب `SetPasswordSection`: `PASSWORD_IDLE.ok` بالفعل `true`، فنسخة الـeffect
+ * كانت هتقفل الديالوج أول ما يتفتح.
+ */
+function StaffPasswordResetButton({ memberId, name }: { memberId: string; name: string }) {
+  const [open, setOpen] = useState(false);
+  const [state, action, pending] = useActionState<ActionResult, FormData>(async (_previous, formData) => {
+    const result = await setStaffPasswordAction(memberId, formData);
+    if (result.ok) setOpen(false);
+    return result;
+  }, PASSWORD_IDLE);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="ghost">
+          {member.resetPasswordAction}
+        </Button>
+      </DialogTrigger>
+      <DialogContent closeLabel={copy.admin.common.close}>
+        <DialogHeader>
+          <DialogTitle>{formatCopy(member.resetPasswordDialogTitle, { name })}</DialogTitle>
+        </DialogHeader>
+
+        <form action={action} className="space-y-3">
+          <div>
+            <Label htmlFor={`staff-password-new-${memberId}`}>{member.resetPasswordNewLabel}</Label>
+            <Input
+              id={`staff-password-new-${memberId}`}
+              name="newPassword"
+              type="password"
+              dir="ltr"
+              autoComplete="new-password"
+              minLength={8}
+              maxLength={128}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor={`staff-password-confirm-${memberId}`}>{member.resetPasswordConfirmLabel}</Label>
+            <Input
+              id={`staff-password-confirm-${memberId}`}
+              name="confirmPassword"
+              type="password"
+              dir="ltr"
+              autoComplete="new-password"
+              minLength={8}
+              maxLength={128}
+              required
+            />
+          </div>
+
+          {!state.ok ? (
+            <p role="alert" aria-live="polite" className="text-[length:var(--fs-text-xs)] text-danger">
+              {state.message}
+            </p>
+          ) : null}
+
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="ghost">
+                {copy.admin.actions.cancel}
+              </Button>
+            </DialogClose>
+            <Button type="submit" disabled={pending}>
+              {pending ? copy.admin.actions.saving : member.resetPasswordConfirm}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
