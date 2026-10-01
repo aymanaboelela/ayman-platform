@@ -25,7 +25,7 @@ export const metadata = { title: c.title };
  * من غير كاش — اللي بيعدّل صلاحية لازم يشوف كتابته هو، مش حالة قديمة.
  */
 export default async function RolesPage() {
-  const [roles, staff, session] = await Promise.all([
+  const [roles, staffResult, session] = await Promise.all([
     /*
      * ⚠️ `OrForbidden` — و`role:read` **محجوبة عن المدرّس** في
      * `OWNER_WITHHELD`، فالقراءة دي بترد 403 على كل ستاك مدرّس، دايمًا.
@@ -52,6 +52,13 @@ export default async function RolesPage() {
      * `staff` معناها «أي حد مش طالب» — دور رابع يتضاف بكرة هيبان هنا من غير
      * ما حد يفتكر يعدّل الشاشة دي.
      */
+    /*
+     * ⚠️ نفس درس `GRANTABLE_ROLES` فوق، بس هنا على القراءة اللي الشاشة
+     * الوحيدة المفيدة فيها لمدرّس هي بتاعتها: `Promise.all` من غير `catch`
+     * معناها إن أي سبب — 500، أو مهلة، أو حتى شكل رد مش متوقع — بياخد
+     * الشاشة كلها معاه لصفحة خطأ، بدل ما يفضل البحث والإضافة شغالين وبس
+     * الليستة الحالية تبقى فاضية مع رسالة.
+     */
     adminGet(
       '/api/admin/students?page=1&perPage=50&role=staff',
       z.object({
@@ -69,9 +76,16 @@ export default async function RolesPage() {
           }),
         ),
       }),
-    ),
+    )
+      .then((data) => ({ ok: true as const, data }))
+      .catch((error: unknown) => {
+        console.error('admin/roles: failed to load the team roster', error);
+        return { ok: false as const };
+      }),
     getSession(),
   ]);
+
+  const staff = staffResult.ok ? staffResult.data : { rows: [] };
 
   /*
    * صاحب الستاك — أقدم حساب مش-طالب.
@@ -104,6 +118,7 @@ export default async function RolesPage() {
           currentUserId={session?.id ?? ''}
           reasonMin={STAFF_ROLE_REASON_MIN}
           founderId={founderId}
+          loadFailed={!staffResult.ok}
         />
       </div>
 

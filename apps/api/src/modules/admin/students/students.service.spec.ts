@@ -552,6 +552,43 @@ describe('StudentsService.changeRole', () => {
       service.changeRole('missing', { role: 'admin', reason: 'a real reason' }, 'actor'),
     ).rejects.toThrow();
   });
+
+  /**
+   * `refuseIfOutranked`'s founder guard, exercised through `changeRole`.
+   *
+   * On a stack where the founder's own role is `owner` (every tenant other
+   * than Ayman's), an assistant holding the full `owner` baseline — nothing
+   * withheld — would otherwise pass the outranks check below and demote the
+   * actual platform owner. `target.role === 'student'` never reaches this far
+   * (the function returns `null` immediately), so this only matters for a
+   * staff target, which is exactly the founder's own shape.
+   */
+  it('refuses to change the founder’s own role, even when the actor outranks them on paper', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ role: 'owner' }) // target
+      .mockResolvedValueOnce({ role: 'owner' }); // actor, inside refuseIfOutranked
+    prisma.user.findFirst.mockResolvedValueOnce({ id: 'founder-1' });
+
+    await expect(
+      service.changeRole('founder-1', { role: 'student', reason: 'a real reason' }, 'assistant-2'),
+    ).rejects.toThrow(ForbiddenException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('does not treat a stack with no admin/owner rows as having a founder to protect', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ role: 'owner' })
+      .mockResolvedValueOnce({ role: 'owner' });
+    prisma.user.findFirst.mockResolvedValueOnce(null);
+    // Owner-to-owner still needs `actorHoldsAll` to pass — give the actor the
+    // full baseline so only the founder guard itself is under test.
+    prisma.user.findUnique.mockResolvedValueOnce({ role: 'owner' });
+
+    const result = await service.changeRole('target', { role: 'student', reason: 'a real reason' }, 'actor');
+    expect(result).toEqual({ role: 'student' });
+  });
 });
 
 /**
@@ -583,6 +620,24 @@ describe('StudentsService.ban', () => {
 
     await expect(service.ban('target', 'a real reason', 'actor')).rejects.toThrow(ForbiddenException);
     expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Same `refuseIfOutranked` founder guard as `changeRole`'s own test —
+   * proven here too because this is exactly the gap the platform owner hit:
+   * an assistant holding the full `owner` baseline could otherwise ban the
+   * founder outright, on a stack with no `admin`-role row to undo it.
+   */
+  it('refuses to ban the founder, even an outranking assistant', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ role: 'owner', bannedAt: null }) // target
+      .mockResolvedValueOnce({ role: 'owner' }); // actor, inside refuseIfOutranked
+    prisma.user.findFirst.mockResolvedValueOnce({ id: 'founder-1' });
+
+    await expect(service.ban('founder-1', 'a real reason', 'assistant-2')).rejects.toThrow(ForbiddenException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.session.deleteMany).not.toHaveBeenCalled();
   });
 
   it('counts only UNBANNED admins when deciding if this is the last one', async () => {

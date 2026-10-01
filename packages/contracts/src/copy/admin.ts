@@ -2493,6 +2493,12 @@ const admin = {
        */
       searchFailed: 'مقدرناش ندوّر دلوقتي. نجرّب تاني.',
       empty: 'لسه مفيش حد في الفريق غيرك.',
+      /**
+       * ⚠️ مش «مفيش حد» — فشل في القراءة. `page.tsx` بيبلع أي خطأ في جلب
+       * الفريق (500، مهلة، أي حاجة) بدل ما يسيب الصفحة كلها تقع، شوف
+       * `staff-section.tsx`'s `loadFailed`.
+       */
+      loadFailed: 'مقدرناش نجيب الفريق دلوقتي. حدّث الصفحة.',
       reasonLabel: 'السبب',
       reasonPlaceholder: 'ليه بتضيفه؟',
       add: 'ضيفه للفريق',
@@ -2951,6 +2957,8 @@ const admin = {
     /** A bare 403 from the permission guard — the admin-only door, pressed by someone else. */
     roleChangeAdminOnly: 'تغيير الدور ده للمسؤول بس. المساعد بيتضاف من شاشة «الفريق والصلاحيات».',
     roleChangeAdminTarget: 'ده حساب مسؤول، ودوره مش بيتغيّر من هنا.',
+    /** `refuseIfOutranked`'s founder guard — حتى لو المساعد ماسك كل الصلاحيات. */
+    roleChangeFounderTarget: 'ده حساب صاحب المنصة، ومش بيتغيّر ولا يتحظر ولا يتشال من هنا.',
     roleChangeOutranked: 'الحساب ده معاه صلاحيات إنت مش معاك، فمينفعش تغيّر دوره.',
     roleChangeBeyondYou: 'مينفعش تعيّن حد بصلاحيات أكتر من صلاحياتك.',
     /**
