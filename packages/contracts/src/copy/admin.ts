@@ -1636,7 +1636,12 @@ const admin = {
      * note for why 95 is Cloudflare's number rather than ours.
      */
     fileHint: 'PDF أو PowerPoint أو Word أو Excel — ٩٥ ميجا كحد أقصى',
+    /** نفس عدد الميجا بالظبط — `MAX_DOCUMENT_BYTES` نفسها، شوف تعليقها. */
+    videoFileHint: 'MP4 أو WebM أو MOV — ٩٥ ميجا كحد أقصى',
     fileDropHint: 'سحب الملف هنا، أو دوسة للاختيار',
+    /** التبويب فوق فيديو الدرس — رابط يوتيوب، أو رفع الفيديو نفسه على السيرفر. */
+    videoSourceYoutube: 'رابط يوتيوب',
+    videoSourceUpload: 'رفع فيديو',
     videoUrl: 'رابط يوتيوب',
     linkUrl: 'الرابط',
     linkUrlHint: 'لازم يبدأ بـ https',

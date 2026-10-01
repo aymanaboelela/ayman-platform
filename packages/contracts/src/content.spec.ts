@@ -307,6 +307,51 @@ describe('LessonResourceInputSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('accepts an uploaded video, nulling the youtube payload', () => {
+    const parsed = LessonResourceInputSchema.parse({
+      ...base,
+      kind: 'video',
+      storageKey: 'resvideo/ab/x.mp4',
+      filename: 'حل الواجب.mp4',
+      mime: 'video/mp4',
+      sizeBytes: 50 * 1024 * 1024,
+    });
+    expect(parsed).toMatchObject({
+      kind: 'video',
+      storageKey: 'resvideo/ab/x.mp4',
+      videoProvider: null,
+      videoExternalId: null,
+    });
+  });
+
+  it('rejects an uploaded video that also carries a youtube url', () => {
+    const result = LessonResourceInputSchema.safeParse({
+      ...base,
+      kind: 'video',
+      storageKey: 'resvideo/ab/x.mp4',
+      filename: 'x.mp4',
+      mime: 'video/mp4',
+      sizeBytes: 1024,
+      provider: 'youtube',
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an uploaded video missing its metadata', () => {
+    const result = LessonResourceInputSchema.safeParse({
+      ...base,
+      kind: 'video',
+      storageKey: 'resvideo/ab/x.mp4',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a video with neither a youtube url nor an upload', () => {
+    const result = LessonResourceInputSchema.safeParse({ ...base, kind: 'video' });
+    expect(result.success).toBe(false);
+  });
+
   it('rejects an http link', () => {
     const result = LessonResourceInputSchema.safeParse({
       ...base,

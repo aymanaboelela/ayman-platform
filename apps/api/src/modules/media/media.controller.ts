@@ -75,6 +75,25 @@ export class MediaController {
     return this.documents.upload(file);
   }
 
+  /**
+   * «حل الواجب» uploaded straight into a lesson's materials, as an
+   * alternative to a YouTube link — see `DocumentService.uploadVideo`.
+   * Same ceiling as `/media/documents` on purpose: it is the Cloudflare edge
+   * limit, not a document-specific one.
+   */
+  @RequirePermission('media:write')
+  @Post('media/resource-videos')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_DOCUMENT_BYTES, files: 1 },
+    }),
+  )
+  async uploadResourceVideo(@UploadedFile() file?: MulterFile) {
+    if (!file) throw new BadRequestException('no file uploaded');
+    return this.documents.uploadVideo(file);
+  }
+
   @RequirePermission('media:read')
   @Get('admin/media')
   @UsePipes(ZodValidationPipe)

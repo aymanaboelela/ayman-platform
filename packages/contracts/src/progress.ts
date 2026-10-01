@@ -417,12 +417,14 @@ export const PlayerResourceSchema = z.object({
   title: z.string(),
   description: z.string().nullable(),
 
-  /** File resources (`presentation`, `document`) only. */
+  /** File resources (`presentation`, `document`) and an UPLOADED video only —
+   *  a YouTube video has no bytes of ours, so these stay null for it. */
   filename: z.string().nullable(),
   mime: z.string().nullable(),
   sizeBytes: z.number().int().min(0).nullable(),
 
-  /** Video resources only. The 11-char id — the embed URL is rebuilt client-side. */
+  /** A YouTube video only, never an uploaded one. The 11-char id — the embed
+   *  URL is rebuilt client-side. */
   youtubeId: z
     .string()
     .regex(/^[A-Za-z0-9_-]{11}$/)
@@ -437,7 +439,10 @@ export const PlayerResourceSchema = z.object({
    * access per request before streaming a byte. A leaked storage key is not by
    * itself an access grant.
    *
-   * Null for `video` and `link`, which have no bytes of ours to serve.
+   * Null for a YouTube `video` and for `link`, which have no bytes of ours to
+   * serve — an UPLOADED video is a `video` resource with these populated
+   * exactly like a `presentation`/`document`, told apart by `youtubeId` being
+   * null where `filename`/`mime` are not.
    */
   viewPath: z.string().startsWith('/api/').nullable(),
   downloadPath: z.string().startsWith('/api/').nullable(),

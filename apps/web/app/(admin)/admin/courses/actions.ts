@@ -1544,6 +1544,11 @@ const ResourceRowSchema = z.object({ id: z.uuid() });
  * Mirrors `LessonResourceInputSchema`'s INPUT shape (a video carries `url`,
  * not `videoExternalId`). The API's Zod transform is what turns it into
  * columns, so nothing here reconstructs or parses a URL.
+ *
+ * A video has TWO shapes, not one: a YouTube link (`provider`/`url`), or an
+ * upload carrying the same four file fields `presentation`/`document` use —
+ * see the schema's own note on why `storageKey` alone is what tells the two
+ * apart server-side.
  */
 export type AddResourceInput =
   | {
@@ -1556,6 +1561,15 @@ export type AddResourceInput =
       sizeBytes: number;
     }
   | { kind: 'video'; title: string; description: string | null; provider: 'youtube'; url: string }
+  | {
+      kind: 'video';
+      title: string;
+      description: string | null;
+      storageKey: string;
+      filename: string;
+      mime: string;
+      sizeBytes: number;
+    }
   | { kind: 'link'; title: string; description: string | null; linkUrl: string };
 
 export async function addResourceAction(

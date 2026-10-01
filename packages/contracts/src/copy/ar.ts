@@ -3418,6 +3418,8 @@ export const copy = {
     mainPresentation: 'البريزنتيشن الأساسي',
     openInNewTab: 'فتح في تبويب جديد',
     viewerUnavailable: 'المتصفح مش قادر يعرض الملف — التحميل بيفتحه.',
+    /** `<video>`'s fallback content — browsers with no video support at all. */
+    videoUnsupported: 'المتصفح مش قادر يشغّل الفيديو ده.',
     noResources: 'مفيش مواد مرفوعة للدرس ده.',
     lockedHint: 'اللي قبله لازم يخلص الأول عشان يتفتح',
     examBadge: 'امتحان',

@@ -236,4 +236,42 @@ describe('LocalDiskStorage', () => {
     });
   });
 
+  describe('resource video keys (the shape DocumentService.uploadVideo mints)', () => {
+    // The exact same omission as `doc/`, `payment-proof/`, `book-order-proof/`
+    // before it, and the reason this suite exists at all: `resvideo/` has to
+    // be added to `isValidStorageKey` in the SAME change that starts minting
+    // it, or every real upload 500s with "invalid storage key" the moment an
+    // instructor tries it — a failure no mocked-storage unit test can catch.
+    const VIDEO_KEY = 'resvideo/0f/0f8fad5b-d9cb-469f-a165-70867728950e.mp4';
+
+    it('accepts a resource video key and round-trips the bytes', async () => {
+      const storage = new LocalDiskStorage(root);
+      await storage.put(VIDEO_KEY, Buffer.from('x'), 'video/mp4');
+
+      await expect(storage.stat(VIDEO_KEY)).resolves.toEqual({ size: 1 });
+    });
+
+    it.each(['webm', 'mov'])('accepts a .%s resource video key', async (ext) => {
+      const storage = new LocalDiskStorage(root);
+      const key = `resvideo/ab/0f8fad5b-d9cb-469f-a165-70867728950e.${ext}`;
+      await expect(storage.put(key, Buffer.from('x'), 'application/octet-stream')).resolves.toBeUndefined();
+    });
+
+    it('still refuses an extension outside the allowlist under the resvideo/ prefix', async () => {
+      const storage = new LocalDiskStorage(root);
+      await expect(
+        storage.put('resvideo/ab/0f8fad5b-d9cb-469f-a165-70867728950e.pdf', Buffer.from('x'), 'x'),
+      ).rejects.toThrow(/invalid storage key/);
+    });
+
+    it.each([
+      'resvideo/../../../etc/passwd',
+      '../resvideo/ab/0f8fad5b-d9cb-469f-a165-70867728950e.mp4',
+      'resvideo/ab/../../../../etc/passwd.mp4',
+    ])('refuses traversal attempt %s', async (key) => {
+      const storage = new LocalDiskStorage(root);
+      await expect(storage.getStream(key)).rejects.toThrow();
+    });
+  });
+
 });

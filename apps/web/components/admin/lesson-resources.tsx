@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { copy } from '@ayman/contracts/copy/admin';
 import type { LessonResourceKind } from '@ayman/contracts/content';
-import { ALLOWED_DOCUMENT_EXT } from '@ayman/contracts/admin/media';
+import { ALLOWED_DOCUMENT_EXT, ALLOWED_RESOURCE_VIDEO_EXT } from '@ayman/contracts/admin/media';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
@@ -20,12 +20,23 @@ import {
   type ActionResult,
   type AddResourceInput,
 } from '@/app/(admin)/admin/courses/actions';
-import { uploadDocument, type UploadFailure, type UploadedDocument } from '@/lib/upload-client';
+import {
+  uploadDocument,
+  uploadResourceVideo,
+  type UploadFailure,
+  type UploadedDocument,
+} from '@/lib/upload-client';
 import { SortableList, type SortableHandleProps } from './sortable-list';
 
 const c = copy.admin.resource;
 const IDLE: ActionResult = { ok: true };
-const ACCEPT = ALLOWED_DOCUMENT_EXT.map((ext) => `.${ext}`).join(',');
+const DOCUMENT_ACCEPT = ALLOWED_DOCUMENT_EXT.map((ext) => `.${ext}`).join(',');
+const VIDEO_ACCEPT = ALLOWED_RESOURCE_VIDEO_EXT.map((ext) => `.${ext}`).join(',');
+
+/** «يوتيوب» أو «رفع» — فرع تاني تحت `kind === 'video'` بس، مش قيمة جديدة في
+ *  `LessonResourceKind` نفسه: السيرفر بيفرّق بين الاتنين بـ`storageKey`
+ *  (شوف `content.ts`)، والفرونت محتاج نفس التفرقة عشان يعرف يرسم إيه. */
+type VideoSource = 'youtube' | 'upload';
 
 /** The closed set of upload failures, in Arabic an instructor can act on. */
 function uploadReason(reason: UploadFailure): string {
@@ -246,6 +257,9 @@ export function LessonResources({
   const [kind, setKind] = useState<LessonResourceKind>(() =>
     resources.some((resource) => resource.kind === 'presentation') ? 'document' : 'presentation',
   );
+  /** بس لما `kind === 'video'` — يوتيوب هو الافتراضي عشان الفورم يفضل نفس
+   *  شكله القديم لحد ما حد يختار «رفع» بنفسه. */
+  const [videoSource, setVideoSource] = useState<VideoSource>('youtube');
   const [uploaded, setUploaded] = useState<UploadedDocument | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   /*
@@ -277,7 +291,8 @@ export function LessonResources({
   // The database enforces this with a partial unique index; disabling the
   // option here only means the admin learns the rule before a 500 tells them.
   const hasPresentation = resources.some((resource) => resource.kind === 'presentation');
-  const isFileKind = kind === 'presentation' || kind === 'document';
+  const isUploadedVideo = kind === 'video' && videoSource === 'upload';
+  const isFileKind = kind === 'presentation' || kind === 'document' || isUploadedVideo;
 
   const [state, formAction, pending] = useActionState<ActionResult, FormData>(
     async (_previous, formData) => {
@@ -289,6 +304,9 @@ export function LessonResources({
       if (kind === 'presentation' || kind === 'document') {
         if (uploaded === null) return { ok: false, message: c.file };
         input = { kind, title, description, ...uploaded };
+      } else if (isUploadedVideo) {
+        if (uploaded === null) return { ok: false, message: c.file };
+        input = { kind: 'video', title, description, ...uploaded };
       } else if (kind === 'video') {
         input = {
           kind: 'video',
@@ -328,7 +346,9 @@ export function LessonResources({
     setProgress(0);
     setUploadError(null);
     try {
-      const result = await uploadDocument(file, setProgress);
+      const result = isUploadedVideo
+        ? await uploadResourceVideo(file, setProgress)
+        : await uploadDocument(file, setProgress);
       if (result.ok) {
         setUploaded(result.value);
         toast.success(c.uploaded);
@@ -420,6 +440,7 @@ export function LessonResources({
               value={kind}
               onChange={(event) => {
                 setKind(event.target.value as LessonResourceKind);
+                setVideoSource('youtube');
                 setUploaded(null);
                 // The error goes with the file it was about. Switching to
                 // «رابط» while «الملف كبير أوي» is still on screen reads as a
@@ -444,6 +465,27 @@ export function LessonResources({
 
         {hasPresentation && kind === 'presentation' ? (
           <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.onePresentationOnly}</p>
+        ) : null}
+
+        {kind === 'video' ? (
+          <div className="flex gap-1" role="radiogroup" aria-label={c.kindVideo}>
+            {(['youtube', 'upload'] as const).map((source) => (
+              <button
+                key={source}
+                type="button"
+                role="radio"
+                aria-checked={videoSource === source}
+                className={cn('chip', videoSource === source ? 'chip--solid' : 'chip--quiet')}
+                onClick={() => {
+                  setVideoSource(source);
+                  setUploaded(null);
+                  setUploadError(null);
+                }}
+              >
+                {source === 'youtube' ? c.videoSourceYoutube : c.videoSourceUpload}
+              </button>
+            ))}
+          </div>
         ) : null}
 
         {isFileKind ? (
@@ -477,7 +519,7 @@ export function LessonResources({
               ref={fileRef}
               id={`res-file-${lessonId}`}
               type="file"
-              accept={ACCEPT}
+              accept={isUploadedVideo ? VIDEO_ACCEPT : DOCUMENT_ACCEPT}
               className={cn(
                 'block w-full rounded-sm border border-line bg-surface-2 px-3 py-2',
                 'text-[length:var(--fs-text-sm)] text-fg',
@@ -511,13 +553,14 @@ export function LessonResources({
               <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
                 {uploading
                   ? `${c.uploading} ${Math.round(progress * 100)}%`
-                  : (uploaded?.filename ?? `${c.fileDropHint} · ${c.fileHint}`)}
+                  : (uploaded?.filename ??
+                    `${c.fileDropHint} · ${isUploadedVideo ? c.videoFileHint : c.fileHint}`)}
               </p>
             )}
           </div>
         ) : null}
 
-        {kind === 'video' ? (
+        {kind === 'video' && videoSource === 'youtube' ? (
           <div>
             <Label htmlFor={`res-url-${lessonId}`}>{c.videoUrl}</Label>
             <Input id={`res-url-${lessonId}`} name="url" required />
