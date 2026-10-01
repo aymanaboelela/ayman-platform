@@ -365,6 +365,10 @@ export class PlayerService {
               filename: true,
               mime: true,
               sizeBytes: true,
+              // Not returned to the client — see `isFile` below. Read only to
+              // tell an UPLOADED video (bytes of ours to stream) apart from a
+              // YouTube one (nothing of ours to serve).
+              storageKey: true,
               videoExternalId: true,
               linkUrl: true,
             },
@@ -510,7 +514,13 @@ export class PlayerService {
           }
         : null,
       resources: lesson.resources.map((resource) => {
-        const isFile = resource.kind === 'presentation' || resource.kind === 'document';
+        // An uploaded video (storageKey set) has bytes of ours to stream,
+        // exactly like a presentation or document — only a YouTube video and
+        // a link do not.
+        const isFile =
+          resource.kind === 'presentation' ||
+          resource.kind === 'document' ||
+          (resource.kind === 'video' && resource.storageKey !== null);
         return {
           id: resource.id,
           kind: resource.kind,
@@ -523,7 +533,8 @@ export class PlayerService {
           linkUrl: resource.linkUrl,
           // Never the storage URL. `/media/*` is @Public(), so anything gated
           // on enrollment has to come back through a route that re-checks it.
-          // Null for video and link — they have no bytes of ours to serve.
+          // Null for a YouTube video and a link — they have no bytes of ours
+          // to serve.
           viewPath: isFile ? `/api/lessons/${lesson.id}/resources/${resource.id}/view` : null,
           downloadPath: isFile
             ? `/api/lessons/${lesson.id}/resources/${resource.id}/download`

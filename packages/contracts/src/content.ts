@@ -613,10 +613,34 @@ export const LessonResourceInputSchema = z
     }
 
     if (value.kind === 'video') {
+      // رفع مباشر — نفس حمولة presentation/document بالظبط، بدل رابط يوتيوب.
+      // اتفحصت أول حاجة: `storageKey` وحده كفاية يحدد المسار ده، وبيتعارض
+      // مع provider/url زي ما الرابط بيتعارض مع storageKey تحت.
+      if (value.storageKey !== undefined) {
+        if (value.provider !== undefined || value.url !== undefined) {
+          ctx.addIssue({ code: 'custom', message: 'الفيديو المرفوع مايجيش معاه رابط', path: ['kind'] });
+          return z.NEVER;
+        }
+        if (value.filename === undefined || value.mime === undefined || value.sizeBytes === undefined) {
+          ctx.addIssue({ code: 'custom', message: 'لازم ترفع الفيديو الأول', path: ['storageKey'] });
+          return z.NEVER;
+        }
+        return {
+          ...common,
+          storageKey: value.storageKey,
+          filename: value.filename,
+          mime: value.mime,
+          sizeBytes: value.sizeBytes,
+          videoProvider: null,
+          videoExternalId: null,
+          linkUrl: null,
+        };
+      }
+
       if (value.provider !== 'youtube') {
         ctx.addIssue({
           code: 'custom',
-          message: 'النسخة الحالية بتدعم فيديوهات يوتيوب بس',
+          message: 'الفيديو إما رابط يوتيوب أو ملف مرفوع',
           path: ['provider'],
         });
         return z.NEVER;

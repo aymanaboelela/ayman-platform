@@ -52,9 +52,28 @@ function YouTubeFrame({ youtubeId, title }: { youtubeId: string; title: string }
   );
 }
 
+/**
+ * «حل الواجب» uploaded straight into the lesson instead of linked from
+ * YouTube — `viewPath` streams it through the same enrollment-checked route
+ * a document uses (`player.service.ts`), never a storage URL.
+ */
+function UploadedVideoFrame({ resource }: { resource: PlayerResource }) {
+  if (resource.viewPath === null) return null;
+  return (
+    <div className="overflow-hidden rounded-md border border-line bg-surface-2">
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption -- a short instructor clip, no transcript pipeline exists for it */}
+      <video src={resource.viewPath} controls preload="metadata" className="block aspect-video w-full">
+        {c.videoUnsupported}
+      </video>
+    </div>
+  );
+}
+
 function VideoResource({ resource }: { resource: PlayerResource }) {
-  if (resource.youtubeId === null) return null;
-  return <YouTubeFrame youtubeId={resource.youtubeId} title={resource.title} />;
+  if (resource.youtubeId !== null) {
+    return <YouTubeFrame youtubeId={resource.youtubeId} title={resource.title} />;
+  }
+  return <UploadedVideoFrame resource={resource} />;
 }
 
 /**

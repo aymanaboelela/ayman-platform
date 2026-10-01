@@ -1521,6 +1521,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin resource reorder: student', method: 'patch', path: () => `/api/admin/lessons/${lessonId}/resources/order`, actor: 'student', status: 403 },
     { label: 'document upload: student', method: 'post', path: () => `/api/media/documents`, actor: 'student', status: 403 },
     { label: 'document upload: anonymous', method: 'post', path: () => `/api/media/documents`, actor: 'anonymous', status: 401 },
+    { label: 'resource video upload: student', method: 'post', path: () => `/api/media/resource-videos`, actor: 'student', status: 403 },
+    { label: 'resource video upload: anonymous', method: 'post', path: () => `/api/media/resource-videos`, actor: 'anonymous', status: 401 },
 
     // ── Media — admin-only ──
     { label: 'media upload: anonymous', method: 'post', path: () => '/api/media', actor: 'anonymous', status: 401 },

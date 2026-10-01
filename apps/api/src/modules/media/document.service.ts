@@ -8,6 +8,8 @@ import {
 import {
   ALLOWED_DOCUMENT_EXT,
   ALLOWED_DOCUMENT_MIME,
+  ALLOWED_RESOURCE_VIDEO_EXT,
+  ALLOWED_RESOURCE_VIDEO_MIME,
   MAX_DOCUMENT_BYTES,
 } from '@ayman/contracts/admin/media';
 import { AuditService } from '../../audit/audit.service';
@@ -19,6 +21,8 @@ import { decodeOriginalName } from './original-name';
 
 const ALLOWED_EXT = new Set<string>(ALLOWED_DOCUMENT_EXT);
 const ALLOWED_MIME = new Set<string>(ALLOWED_DOCUMENT_MIME);
+const ALLOWED_VIDEO_EXT = new Set<string>(ALLOWED_RESOURCE_VIDEO_EXT);
+const ALLOWED_VIDEO_MIME = new Set<string>(ALLOWED_RESOURCE_VIDEO_MIME);
 
 /**
  * The stored extension is chosen by US from the DETECTED mime, never echoed
@@ -30,6 +34,9 @@ const EXT_FOR_MIME: Record<string, string> = {
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
 };
 
 export interface UploadedDocument {
@@ -74,6 +81,34 @@ export class DocumentService {
    * guarantee does not.
    */
   async upload(file: UploadFile, prefix = 'doc'): Promise<UploadedDocument> {
+    return this.uploadAs(file, prefix, 'document', ALLOWED_EXT, ALLOWED_MIME);
+  }
+
+  /**
+   * «حل الواجب» explained on camera, uploaded straight into a lesson's
+   * materials instead of linked from YouTube. Same four compensating controls
+   * as `upload()` — the class doc above talks about PDFs and OOXML, but
+   * nothing in that argument is document-specific: a video cannot be
+   * script-executed from a `sandbox`ed opaque origin either, and the signature
+   * sniff works off `file-type`'s video magic bytes exactly the way it does
+   * off a PDF's.
+   *
+   * `resvideo/` keeps this off `doc/`'s own three-segment key space — not for
+   * security (neither is reachable through the public route) but so the two
+   * pipelines' audit trails and storage layout stay legible as two different
+   * things, the way `msg/` already does for conversation attachments.
+   */
+  async uploadVideo(file: UploadFile, prefix = 'resvideo'): Promise<UploadedDocument> {
+    return this.uploadAs(file, prefix, 'resource-video', ALLOWED_VIDEO_EXT, ALLOWED_VIDEO_MIME);
+  }
+
+  private async uploadAs(
+    file: UploadFile,
+    prefix: string,
+    pipeline: string,
+    allowedExt: ReadonlySet<string>,
+    allowedMime: ReadonlySet<string>,
+  ): Promise<UploadedDocument> {
     // Checked before the extension so an oversized upload is rejected without
     // any further work, matching MediaService's order.
     if (file.size > MAX_DOCUMENT_BYTES) {
@@ -81,7 +116,7 @@ export class DocumentService {
     }
 
     const extension = file.originalname.split('.').pop()?.toLowerCase() ?? '';
-    if (!ALLOWED_EXT.has(extension)) {
+    if (!allowedExt.has(extension)) {
       throw new BadRequestException('file extension is not allowed');
     }
 
@@ -89,7 +124,7 @@ export class DocumentService {
     // specific OOXML type sniffs as `application/zip` and is rejected here —
     // this fails closed, which is the intended behaviour.
     const detected = await this.signature.detect(file.buffer);
-    if (!detected || !ALLOWED_MIME.has(detected.mime)) {
+    if (!detected || !allowedMime.has(detected.mime)) {
       throw new BadRequestException('file contents are not an allowed document type');
     }
 
@@ -103,7 +138,7 @@ export class DocumentService {
       resourceId: id,
       outcome: 'success',
       metadata: {
-        pipeline: 'document',
+        pipeline,
         prefix,
         declaredExtension: extension,
         detectedMime: detected.mime,

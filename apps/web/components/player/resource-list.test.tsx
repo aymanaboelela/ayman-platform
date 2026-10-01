@@ -52,6 +52,17 @@ const video = resource({
   youtubeId: 'dQw4w9WgXcQ',
 });
 
+const uploadedVideo = resource({
+  id: 'r-vid-upload',
+  kind: 'video',
+  title: 'حل الواجب',
+  filename: 'solution.mp4',
+  mime: 'video/mp4',
+  sizeBytes: 1024,
+  viewPath: '/api/lessons/l1/resources/r-vid-upload/view',
+  downloadPath: '/api/lessons/l1/resources/r-vid-upload/download',
+});
+
 describe('ResourceList', () => {
   it('renders the empty state when there is nothing', () => {
     render(<ResourceList resources={[]} />);
@@ -131,6 +142,22 @@ describe('ResourceList', () => {
   it('gives video and link resources no viewer and no download affordance', () => {
     render(<ResourceList resources={[video, link]} />);
     expect(screen.queryByRole('link', { name: copy.player.download })).toBeNull();
+  });
+
+  it('plays an UPLOADED video straight off viewPath, never a youtube embed', () => {
+    const { container } = render(<ResourceList resources={[uploadedVideo]} />);
+
+    expect(container.querySelector('iframe')).toBeNull();
+    const player = container.querySelector('video');
+    expect(player).not.toBeNull();
+    expect(player).toHaveAttribute('src', '/api/lessons/l1/resources/r-vid-upload/view');
+    expect(player).toHaveAttribute('controls');
+  });
+
+  it('an uploaded video with no viewPath (a malformed row) renders nothing rather than crash', () => {
+    const broken = resource({ id: 'r-vid-broken', kind: 'video' });
+    render(<ResourceList resources={[broken]} />);
+    expect(document.querySelector('video, iframe')).toBeNull();
   });
 
   it('renders a mixed set in the order given', () => {
