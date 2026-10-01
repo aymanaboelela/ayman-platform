@@ -200,6 +200,7 @@ export class VideoUploadService {
         durationSeconds: 0,
         mirrorStatus: 'uploading',
         mirrorProgress: 0,
+        encrypted: input.encrypt,
         sourceBytes: BigInt(input.sizeBytes),
         sourceName: input.fileName,
       },
@@ -215,6 +216,7 @@ export class VideoUploadService {
         mirrorAttempts: 0,
         mirrorAt: null,
         mirrorProgress: 0,
+        encrypted: input.encrypt,
         sourceBytes: BigInt(input.sizeBytes),
         sourceName: input.fileName,
         // A new video starts whole — the old one's cut belongs to the old one.

@@ -531,12 +531,23 @@ export class VideoMirrorService implements OnModuleDestroy {
         throw new Error('الملف اللي اترفع مش موجود في التخزين — لازم يترفع تاني');
       }
 
+      // The admin's own choice at upload time (`encrypt` on `VideoUploadStartSchema`),
+      // read back here rather than re-derived — `encrypted` defaults `true` so
+      // a row written before this flag existed, or a caller that never set it,
+      // still gets the old unconditional behaviour.
+      const row = await this.prisma.lessonVideo.findFirst({
+        where: { externalId: uploadId, provider: 'upload' },
+        select: { encrypted: true },
+      });
+      const encryption = (row?.encrypted ?? true)
+        ? { key: this.videoKey(uploadId), uri: videoKeyUri(this.appUrl, uploadId) }
+        : null;
+
       await setProgress(5);
       await storage.downloadTo(sourceKey, sourceFile);
 
       await setProgress(15);
-      // Every upload is encrypted from now on — «مينفعش حد ينزّل الفيديو».
-      // Lectures encoded before this stay plain and keep playing as they are.
+      // «مينفعش حد ينزّل الفيديو» — بس بطلب الأدمن بقى، مش افتراض ثابت.
       const result = await transcodeUpload(
         sourceFile,
         work,
@@ -544,7 +555,7 @@ export class VideoMirrorService implements OnModuleDestroy {
         (stage) => {
           void setProgress(stage === 'encoding' ? 20 : stage === 'poster' ? 85 : 15);
         },
-        { key: this.videoKey(uploadId), uri: videoKeyUri(this.appUrl, uploadId) },
+        encryption,
         // The encode is 20 → 84: it is most of the wait, so most of the bar.
         (fraction) => {
           const percent = 20 + Math.floor(fraction * 64);

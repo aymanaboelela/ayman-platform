@@ -1232,7 +1232,13 @@ export async function probeVideoDurationAction(
 
 export async function startVideoUploadAction(
   lessonId: string,
-  input: { fileName: string; sizeBytes: number; contentType: string; keepPrevious?: boolean },
+  input: {
+    fileName: string;
+    sizeBytes: number;
+    contentType: string;
+    keepPrevious?: boolean;
+    encrypt?: boolean;
+  },
 ): Promise<{ ok: true; session: VideoUploadSession } | { ok: false; message: string }> {
   try {
     const session = await apiSend(

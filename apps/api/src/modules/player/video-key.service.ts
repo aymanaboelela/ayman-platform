@@ -38,9 +38,14 @@ export class VideoKeyService {
 
     const rows = await this.prisma.lessonVideo.findMany({
       where: { externalId: videoId, provider: 'upload' },
-      select: { lessonId: true },
+      select: { lessonId: true, encrypted: true },
     });
     if (rows.length === 0) throw new NotFoundException('video not found');
+    // Defense in depth — a plain mirror's manifest never has `#EXT-X-KEY`, so
+    // hls.js never calls this route for one in practice. A probe that asks
+    // anyway gets the same 404 as a video id that does not exist, same as
+    // every other refusal here.
+    if (!rows[0]!.encrypted) throw new NotFoundException('video not found');
 
     if (userHasPermission(user.id, user.role, 'course:read-admin')) {
       return this.mirror.videoKey(videoId);

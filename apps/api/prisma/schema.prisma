@@ -1540,6 +1540,12 @@ model LessonVideo {
   /// spinner concludes it has hung; four honest steps beat a smooth bar
   /// interpolated from nothing.
   mirrorProgress Int?              @map("mirror_progress")
+  /// Whether the mirrored copy's TS segments are AES-128-encrypted —
+  /// «مينفعش حد ينزّل الفيديو». Chosen at the START of the upload, not
+  /// flippable after: a `ready` mirror's segments are already written one way
+  /// or the other, and re-encrypting means re-transcoding. `true` by default,
+  /// matching every row written before this column existed.
+  encrypted      Boolean           @default(true) @map("encrypted")
 
   /// ── الرفع المباشر ───────────────────────────────────────────────────
   /// Set only for `provider = upload`: the instructor's own file, before the
