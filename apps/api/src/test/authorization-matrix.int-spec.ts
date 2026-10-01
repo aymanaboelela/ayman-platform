@@ -1583,6 +1583,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'student set-password: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/set-password`, actor: 'anonymous', status: 401 },
     { label: 'student set-password: student', method: 'post', path: () => `/api/admin/students/${studentId}/set-password`, actor: 'student', status: 403 },
 
+    /*
+     * `staff:set-password` — الباب المقابل على المساعدين. في أساس كل
+     * `owner` (مش محجوبة زي الصلاحية اللي فوقها)، فالحارس الحقيقي داخل
+     * `setStaffPassword` نفسها مش هنا: صاحب المنصة بس. مفيش حساب مساعد في
+     * الفيكستشر ده، فالصف الأخير بيثبت نص الحارس التاني بدلها — هدف طالب
+     * مرفوض بـ403 حتى من الـ`admin` (اللي هو نفسه صاحب المنصة هنا).
+     */
+    { label: 'staff set-password: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/staff-password`, actor: 'anonymous', status: 401, body: () => ({ newPassword: 'a-very-strong-pass-1' }) },
+    { label: 'staff set-password: student', method: 'post', path: () => `/api/admin/students/${studentId}/staff-password`, actor: 'student', status: 403, body: () => ({ newPassword: 'a-very-strong-pass-1' }) },
+    { label: 'staff set-password: admin, target is a student', method: 'post', path: () => `/api/admin/students/${studentId}/staff-password`, actor: 'admin', status: 403, body: () => ({ newPassword: 'a-very-strong-pass-1' }) },
+
     // ── سجل الحساب — who did what to this student, in order. `student:read`,
     // the same permission as the profile it renders inside: it composes rows
     // that permission already reaches (grants, subscriptions, book orders) and

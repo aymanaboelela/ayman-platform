@@ -30,6 +30,8 @@ function makeService() {
     },
     user: {
       findUnique: jest.fn(async () => null as unknown),
+      // `setStaffPassword`'s founder check — the earliest non-student row.
+      findFirst: jest.fn(async () => null as unknown),
       count: jest.fn(async () => 1),
       update: jest.fn(async () => ({})),
       delete: jest.fn(async () => ({})),
@@ -444,6 +446,59 @@ describe('StudentsService.setPassword', () => {
       status: true,
     });
     expect(loginThrottle.isLocked(phoneKey)).toBe(false);
+  });
+});
+
+describe('StudentsService.setStaffPassword', () => {
+  /**
+   * The actual guard: `staff:set-password` sits in every owner's baseline
+   * (see `permissions.ts`), so any assistant can reach this route. What
+   * stops one assistant from resetting another's — or the founder's own —
+   * password is this check alone, not the permission system.
+   */
+  it('refuses an actor who is not the founder, even one holding the permission', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findFirst.mockResolvedValueOnce({ id: 'founder-1' });
+
+    await expect(service.setStaffPassword('u1', 'a-real-password', 'assistant-2')).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(prisma.account.upsert).not.toHaveBeenCalled();
+  });
+
+  it('refuses when there is no non-student account at all', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findFirst.mockResolvedValueOnce(null);
+
+    await expect(service.setStaffPassword('u1', 'a-real-password', 'actor')).rejects.toThrow(ForbiddenException);
+  });
+
+  it('refuses a student target even when called by the founder', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findFirst.mockResolvedValueOnce({ id: 'founder-1' });
+    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u1', role: 'student' });
+
+    await expect(service.setStaffPassword('u1', 'a-real-password', 'founder-1')).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(prisma.account.upsert).not.toHaveBeenCalled();
+  });
+
+  it('lets the founder reset an owner-role staff password, logged under its own audit action', async () => {
+    const { service, prisma, audit } = makeService();
+    prisma.user.findFirst.mockResolvedValueOnce({ id: 'founder-1' });
+    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u2', role: 'owner', email: null, phoneNumber: null });
+
+    const result = await service.setStaffPassword('u2', 'a-real-password', 'founder-1');
+
+    expect(result).toEqual({ status: true });
+    expect(prisma.account.upsert).toHaveBeenCalledTimes(1);
+    const entry = audit.record.mock.calls[0]![0];
+    expect(entry).toMatchObject({
+      action: 'staff:set-password',
+      resourceId: 'u2',
+      metadata: { actorUserId: 'founder-1' },
+    });
   });
 });
 

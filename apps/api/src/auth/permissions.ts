@@ -105,6 +105,21 @@ export const PERMISSIONS = [
   // moment they next sign in — and it is never bundled onto the profile-patch
   // endpoint (`AdminStudentPatchSchema` has no `password` key at all).
   'student:set-password',
+  /*
+   * تعيين كلمة سر مساعد — نفس حجة `student:set-password` فوق بالظبط، بس
+   * للفريق. `setPassword` بترفض أي حساب مش طالب عمدًا (شوف الكومنت هناك:
+   * «الموضوع ده لمين معاه الداتابيز، مش لشاشة»)، والصلاحية دي هي الشاشة
+   * المخصوصة لنفس الطلب — للمدرّس اللي عايز يرجّع مساعده يدخل من غير ما
+   * يحتاج وصول للداتابيز.
+   *
+   * ⚠️ مش في `OWNER_WITHHELD`، زي `student:set-password` بالظبط — الرول
+   * «كل حاجة ماعدا المحجوب»، فالمساعد بياخدها زي ما بياخد `staff:manage`.
+   * الحماية الحقيقية مش هنا: `setStaffPassword` بترفض أي حد مش **صاحب
+   * المنصة نفسه** (أقدم حساب مش-طالب)، أيًا كان اللي هو ماسكه — نفس فكرة
+   * حارس `writeUser` في `roles.controller.ts`، بس على المنفّذ (actor) مش
+   * على الهدف. مساعد ماسك الصلاحية دي يقدر يوصل للراوت ويتقفل عليه هناك.
+   */
+  'staff:set-password',
   'attempt:read',
   'attempt:unlock',
   'audit:read',
