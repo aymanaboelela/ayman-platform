@@ -55,6 +55,7 @@ import { CentersModule } from './modules/centers/centers.module';
 import { HomeworkModule } from './modules/homework/homework.module';
 import { TenantEntitlementsModule } from './modules/tenant-entitlements/tenant-entitlements.module';
 import { ArenaModule } from './modules/arena/arena.module';
+import { MistakesModule } from './modules/mistakes/mistakes.module';
 
 @Module({
   imports: [
@@ -182,6 +183,8 @@ import { ArenaModule } from './modules/arena/arena.module';
     TenantEntitlementsModule,
     // «ساحة التحدي» — ماتش مباشر بين طالبين (فلاج `arena.enabled`).
     ArenaModule,
+    // «دفتر غلطاتي» — كل سؤال غلط فيه الطالب (فلاج `mistakes.enabled`).
+    MistakesModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -114,6 +114,8 @@ export const PROTECTED_PREFIXES = [
   '/game',
   // «ساحة التحدي» — اللوبي `apiGetAuthed`، والماتش كله ستريم متوثّق.
   '/arena',
+  // «دفتر غلطاتي» — نفس سبب الساحة بالظبط: `apiGetAuthed` من غير شرط.
+  '/mistakes',
   '/foundations',
   '/playground',
   /*

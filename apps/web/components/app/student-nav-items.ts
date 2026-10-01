@@ -5,6 +5,7 @@ import {
   Gamepad2,
   LayoutDashboard,
   MonitorSmartphone,
+  NotebookPen,
   Route,
   Sprout,
   Swords,
@@ -85,6 +86,11 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * من الرابط لحد ما يتعمل للقايمة باب بيقرا الفلاج.
    */
   ...(aymanOnly(true) ? [{ href: '/arena', labelAr: copy.nav.arena, icon: Swords }] : []),
+  /*
+   * «دفتر غلطاتي» — نفس بوابة «ساحة التحدي» بالظبط: البند عند أيمن بس، فلاج
+   * `mistakes.enabled` مفتوح عنده افتراضيًا ومقفول عند الباقي.
+   */
+  ...(aymanOnly(true) ? [{ href: '/mistakes', labelAr: copy.nav.mistakes, icon: NotebookPen }] : []),
   { href: '/library', labelAr: copy.nav.courses, icon: BookMarked, tab: true },
   /*
    * «كود الكورس» — right under the courses, because that is where a student

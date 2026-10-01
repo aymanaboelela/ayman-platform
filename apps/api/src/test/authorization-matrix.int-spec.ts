@@ -97,6 +97,7 @@ import {
 import { WalletService } from '../modules/wallet/wallet.service';
 import { BooksService } from '../modules/books/books.service';
 import { ArenaModule } from '../modules/arena/arena.module';
+import { MistakesModule } from '../modules/mistakes/mistakes.module';
 
 import { enumerateRoutes, type RouteRef } from './route-inventory';
 
@@ -315,6 +316,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // «ساحة التحدي» — موديول كامل زي `UnlockCodesModule`: الطابور والماتش
         // في Redis، والموديول بيجيبه. التايمرز مابتشتغلش تحت `NODE_ENV=test`.
         ArenaModule,
+        // «دفتر غلطاتي» — بيقرا كويزات الطالب بس، مفيش Redis ولا تايمرز.
+        MistakesModule,
       ],
       providers: [
         Reflector,
@@ -854,6 +857,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin arena: anonymous', method: 'get', path: () => '/api/admin/arena', actor: 'anonymous', status: 401 },
     { label: 'admin arena: student', method: 'get', path: () => '/api/admin/arena', actor: 'student', status: 403 },
     { label: 'admin arena: admin', method: 'get', path: () => '/api/admin/arena', actor: 'admin', status: 200 },
+    // «دفتر غلطاتي» — `quiz:read` + فلاج `mistakes.enabled` (مفتوح هنا لنفس
+    // سبب الساحة فوق). سؤال مش من غلطات الطالب ده = ٤٠٤، مش «مش من حقك».
+    { label: 'mistakes notebook: anonymous', method: 'get', path: () => '/api/me/mistakes', actor: 'anonymous', status: 401 },
+    { label: 'mistakes notebook: student', method: 'get', path: () => '/api/me/mistakes', actor: 'student', status: 200 },
+    { label: 'mistakes answer: anonymous', method: 'post', path: () => `/api/me/mistakes/${randomUUID()}/answer`, actor: 'anonymous', status: 401, body: () => ({ optionIds: [randomUUID()] }) },
+    { label: 'mistakes answer: student, a question not in their mistakes', method: 'post', path: () => `/api/me/mistakes/${randomUUID()}/answer`, actor: 'student', status: 404, body: () => ({ optionIds: [randomUUID()] }) },
     { label: 'game round: anonymous', method: 'get', path: () => '/api/me/game/round', actor: 'anonymous', status: 401 },
     { label: 'game round: student', method: 'get', path: () => '/api/me/game/round', actor: 'student', status: 200 },
     { label: 'game hub: anonymous', method: 'get', path: () => '/api/me/game/hub', actor: 'anonymous', status: 401 },

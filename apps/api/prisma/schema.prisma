@@ -249,6 +249,8 @@ model User {
   arenaMatchesAsB            ArenaMatch[]            @relation("ArenaMatchPlayerB")
   arenaMatchesWon            ArenaMatch[]            @relation("ArenaMatchWinner")
   arenaStat                  ArenaStat?
+  /// «دفتر غلطاتي» — حالة إعادة الاختبار على كل سؤال غلط فيه.
+  mistakeReviews             MistakeReview[]
 
   @@unique([email])
   @@map("users")
@@ -3525,10 +3527,39 @@ model QuestionVersion {
   attemptQuestions AttemptQuestion[]
   gameAnswers      GameAnswer[]
   arenaRounds      ArenaRound[]
+  mistakeReviews   MistakeReview[]
 
   @@unique([bankEntryId, version])
   @@index([bankEntryId, status])
   @@map("question_versions")
+  @@schema("app")
+}
+
+/// «دفتر غلطاتي» — حالة إعادة الاختبار على سؤال طالب غلط فيه في كويز حقيقي
+/// (`AttemptQuestion.state`). الصف ده مايتكتبش من محرك التصحيح أصلًا —
+/// `MistakesService` بيقرا `attempt_questions` وبيكتب هنا بس، فإضافة الفيتشر
+/// دي متلمسش الكويز الأصلي خالص.
+///
+/// السؤال «غلطة مفتوحة» أو «اتصلحت» بيتحدد وقت القراية بمقارنة
+/// `mastered_at` هنا بتاريخ آخر غلطة حقيقية على نفس السؤال — مفيش عمود
+/// `open`/`fixed` هنا، عشان لو الطالب غلط في نفس السؤال تاني في كويز حقيقي
+/// بعد ما كان «مظبوط»، يرجع دفتر الغلطات يوّريه من غير أي كود يلمس الصف ده.
+model MistakeReview {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  userId            String    @map("user_id")
+  questionVersionId String    @map("question_version_id") @db.Uuid
+  /// عداد متتالي للصح في إعادة الاختبار من الدفتر — أي غلطة (هنا أو في كويز
+  /// حقيقي) بترجّعه صفر.
+  streakRight       Int       @default(0) @map("streak_right")
+  masteredAt        DateTime? @map("mastered_at")
+  lastReviewedAt    DateTime  @default(now()) @map("last_reviewed_at")
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionVersion QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionVersionId])
+  @@index([userId, masteredAt])
+  @@map("mistake_reviews")
   @@schema("app")
 }
 
