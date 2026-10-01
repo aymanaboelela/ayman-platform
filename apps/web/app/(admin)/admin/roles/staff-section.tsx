@@ -63,6 +63,7 @@ export function StaffSection({
   currentUserId,
   reasonMin,
   founderId,
+  loadFailed,
 }: {
   members: StaffMember[];
   currentUserId: string;
@@ -71,6 +72,13 @@ export function StaffSection({
   reasonMin: number;
   /** أقدم حساب مش-طالب — صلاحياته مقفولة على السيرفر، شوف `page.tsx`. */
   founderId?: string;
+  /**
+   * الفريق ماجاش — مش «مفيش حد لسه». `page.tsx` بيبلع أي فشل في قراءة
+   * الليستة (500، مهلة، أي حاجة) بدل ما يسيب الصفحة كلها تقع، و`members`
+   * بتوصل فاضية في الحالتين. من غير الفرق هنا، فشل القراءة كان هيتقرا
+   * «لسه مفيش حد في الفريق» — رسالة بتقول العكس بالظبط.
+   */
+  loadFailed?: boolean;
 }) {
   const [term, setTerm] = useState('');
   const [found, setFound] = useState<Found[] | null>(null);
@@ -168,7 +176,9 @@ export function StaffSection({
 
       {/* الفريق الحالي أولًا: «مين موجود» قبل «ضيف واحد» — الشاشة بتتفتح أكتر
           عشان تتراجع مش عشان يتضاف حد. */}
-      {members.length === 0 ? (
+      {loadFailed ? (
+        <p role="alert" className="text-danger">{c.loadFailed}</p>
+      ) : members.length === 0 ? (
         <p className="text-fg-muted">{c.empty}</p>
       ) : (
         <ul className="divide-y divide-line rounded-lg border border-line">

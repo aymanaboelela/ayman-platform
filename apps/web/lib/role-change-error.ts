@@ -21,6 +21,7 @@ const REFUSALS: ReadonlyArray<readonly [needle: string, message: string]> = [
   ['last remaining admin', c.roleChangeLastAdminError],
   ['not managed from the team screen', c.roleChangeAdminTarget],
   ['to an admin account', c.roleChangeAdminTarget],
+  ["platform owner's account", c.roleChangeFounderTarget],
   ['permissions you do not hold', c.roleChangeBeyondYou],
   ['holds permissions you do not', c.roleChangeOutranked],
 ];

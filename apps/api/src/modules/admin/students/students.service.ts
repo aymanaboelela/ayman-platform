@@ -909,6 +909,27 @@ export class StudentsService {
     });
     if (actor?.role === 'admin') return null;
     if (target.role === 'admin') return 'only an admin can do this to an admin account';
+
+    /*
+     * ⚠️ صاحب الستاك نفسه مالوش حد يلمسه — حتى مساعد ماسك `staff:manage`
+     * وكل صلاحيات الـ`owner` من غير ما يتقفل عليه حاجة.
+     *
+     * الفحص اللي تحت (`actorHoldsAll`) بيقارن صلاحيات، ومساعد اتفتحله
+     * كل حاجة هيعدّيه — ساعتها بيقدر يحظر أو يشيل أو يغيّر دور المدرّس اللي
+     * فتحله الصلاحية أصلًا، ومفيش حساب `admin` على الستاكات دي يرجّعه. نفس
+     * حارس `writeUser` في `roles.controller.ts` بالظبط، بس هنا بوابة واحدة
+     * لكل الأفعال الخمسة اللي بتعدّي من `refuseIfOutranked` (تغيير الدور،
+     * الحظر، الفك، المسح) بدل ما يتكرر في كل واحدة لوحدها.
+     */
+    const founder = await this.prisma.user.findFirst({
+      where: { role: { not: 'student' } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (founder && founder.id === target.id && founder.id !== actorUserId) {
+      return 'this is the platform owner\'s account, and it cannot be acted on from here';
+    }
+
     if (!(await this.actorHoldsAll(actorUserId, permissionsForUser(target.id, target.role)))) {
       return 'this account holds permissions you do not';
     }
@@ -937,6 +958,8 @@ export class StudentsService {
     const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
     if (!target) throw new NotFoundException();
 
+    // صاحب الستاك مالوش حد يعدّل دوره — `refuseIfOutranked` تحت بترفضها،
+    // شوف الحارس المركزي جوّاها.
     const refusal = await this.refuseIfOutranked(actorUserId, { id: userId, role: target.role });
     if (refusal) throw new ForbiddenException(refusal);
 
