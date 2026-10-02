@@ -401,6 +401,49 @@ async function main(): Promise<void> {
     });
   }
 
+  /*
+   * ── «البرمجة وعلوم الحاسب» — متاحة لأي track، سنة ٢ وسنة ٣ ────────────
+   *
+   * عملية حقيقية على صبري (مدرّس برمجة، 2026-10-02): فتح «كورس جديد»،
+   * اختار البكالوريا المصرية، وكل تركيبة (نظام + سنة + مسار) جرّبها قالت
+   * «المادة دي مش موجودة في المناهج» — لأن `programming_cs` كانت بس اختيارية
+   * داخل مسار الهندسة وعلوم الحاسب سنة ٢ (أ.ف `t.electives` فوق)، ومفيش
+   * صف واحد ليها في سنة ٣ أو أي مسار تاني خالص.
+   *
+   * المنصة كلها «البرمجة وعلوم الحاسب»، فمدرّس برمجة لازم يقدر يعمل كورس
+   * لطالب في أي مسار — مش بس اللي اختار البرمجة اختياري رسمي في مساره.
+   * صف عادي (`electiveGroupId: null`)، مش جوّه مجموعة اختيارية: ده عشان
+   * ميأثّرش على اختيار «كيمياء ولا برمجة» الحقيقي بتاع مسار الهندسة، وبرضو
+   * يبقى متاح لأي مسار تاني كمادة إضافية — `countsTowardTotal: false` زي
+   * سنة ١ بالظبط، مش من مجموع الدرجات الرسمي.
+   */
+  for (const t of BACALORYA_TRACKS) {
+    const trackId = bacTrackIdBySlug.get(t.slug);
+    if (!trackId) throw new Error(`Seed bug: track "${t.slug}" was not created`);
+
+    for (const year of [2, 3] as const) {
+      await prisma.subjectOffering.upsert({
+        where: {
+          systemId_year_trackId_subjectId: {
+            systemId: bacalorya.id,
+            year,
+            trackId,
+            subjectId: subjectId('programming_cs'),
+          },
+        },
+        update: {},
+        create: {
+          systemId: bacalorya.id,
+          year,
+          trackId,
+          subjectId: subjectId('programming_cs'),
+          countsTowardTotal: false,
+          sortOrder: 50,
+        },
+      });
+    }
+  }
+
   // FlagsService.onModuleInit does this same reconciliation on every Nest
   // boot; it is repeated here so a freshly seeded database (CI, a clean
   // local reset) has the full declared set even before the app has ever

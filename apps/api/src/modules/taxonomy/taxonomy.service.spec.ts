@@ -182,4 +182,29 @@ describe('TaxonomyService', () => {
       'first_foreign_language',
     ]);
   });
+
+  /**
+   * «الصفحة بتقول المادة دي مش موجودة في المناهج» — صبري، مدرّس برمجة، جرّب
+   * كل مسار في البكالوريا وكل واحد رفض. `programming_cs` كانت بس اختيارية
+   * داخل مسار الهندسة سنة ٢ (جوه `electiveGroups`)، ومفيش صف ليها في أي
+   * مسار تاني ولا في سنة ٣ خالص. المنصة كلها «البرمجة وعلوم الحاسب»، فمدرّس
+   * برمجة لازم يقدر يعمل كورس لأي مسار، سنة ٢ أو ٣.
+   */
+  it('makes البرمجة وعلوم الحاسب reachable for every بكالوريا track, years 2 and 3', async () => {
+    const { systems } = await service.getTaxonomy();
+    const bac = systems.find((s) => s.slug === 'bacalorya');
+    expect(bac).toBeDefined();
+
+    for (const track of bac?.tracks ?? []) {
+      for (const year of [2, 3]) {
+        const plain = (bac?.subjects ?? []).some(
+          (option) => option.subjectSlug === 'programming_cs' && option.year === year && option.trackId === track.id,
+        );
+        const elective = track.electiveGroups.some(
+          (group) => group.year === year && group.options.some((option) => option.subjectSlug === 'programming_cs'),
+        );
+        expect(plain || elective).toBe(true);
+      }
+    }
+  });
 });
