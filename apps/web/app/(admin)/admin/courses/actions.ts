@@ -221,53 +221,75 @@ function invalidateCourse(courseId: string): void {
 
 export async function createCourseAction(formData: FormData): Promise<void> {
   const emphasis = readEmphasis(formData);
-  const parsed = CourseCreateSchema.parse({
-    slug: formData.get('slug'),
-    title: formData.get('title'),
-    subtitle: readOptionalText(formData, 'subtitle'),
-    description: readOptionalText(formData, 'description'),
-    systemId: formData.get('systemId'),
-    year: Number(formData.get('year')),
-    trackId: readTrackId(formData),
-    subjectId: formData.get('subjectId'),
-    emphasis,
-    // Cleared with the badge: the CHECK forbids a note without one, and the
-    // form already blanks the input, so this only guards a hand-built POST.
-    emphasisNote: emphasis === null ? null : readOptionalText(formData, 'emphasisNote'),
-    // Independent of `emphasis` — unlike `emphasisNote` there is no badge to
-    // clear it alongside.
-    comingSoonNote: readOptionalText(formData, 'comingSoonNote'),
-    // «ميعاد المحاضرة». `readOptionalText` is what makes a cleared input mean
-    // «مفيش ميعاد معلن»: it turns `''` into `null`, and `null` is the only
-    // value that removes the line from the student's band. Sending `''` would
-    // be a 400 — the schema trims and refuses an empty string.
-    scheduleNote: readOptionalText(formData, 'scheduleNote'),
-    whatsappGroupUrl: readOptionalText(formData, 'whatsappGroupUrl'),
-    contentComplete: readContentComplete(formData),
-    watermarkPhone: readWatermarkPhone(formData),
-    watermarkName: readWatermarkName(formData),
-    coverKey: readOptionalText(formData, 'coverKey'),
-    requiresGrant: readRequiresGrant(formData),
-    monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
-    /*
-     * NO `quarterlyPriceCents`, here or in the update below.
-     *
-     * «٣ شهور» is off the shelf: the field is gone from `course-form.tsx`, and
-     * `CourseService.assertQuarterlyRetired` answers 400 to any non-null
-     * value — so sending one is a save the instructor cannot act on.
-     *
-     * ABSENT rather than an explicit `null`, which is the difference that
-     * matters. On create the schema's own `.default(null)` fills it. On update
-     * `CourseUpdateSchema` is built with `partialWithoutDefaults`, so an
-     * absent key leaves the column exactly where it is — and a price a past
-     * subscription was sold at stays readable to the finance screens instead
-     * of being wiped by the next rename of the course.
-     */
-    yearlyPriceCents: readOptionalPriceCents(formData, 'yearlyPriceCents'),
-    bookTitle: readOptionalText(formData, 'bookTitle'),
-    bookPriceCents: readOptionalPriceCents(formData, 'bookPriceCents'),
-    ...readStream(formData),
-  });
+  const rawSlug = String(formData.get('slug') ?? '');
+  /*
+   * ⚠️ The same uncaught-throw shape the 409/400 fix below already closed
+   * (digest 2364962632), one step earlier: `CourseCreateSchema.parse` itself
+   * can reject — most reachably `subjectId` on a combo whose dropdown was
+   * empty (year 1, or any ثانوية عامة track, before `getTaxonomy()` exposed
+   * plain offerings — see `taxonomy.service.ts`). The form never renders a
+   * `subjectId` field at all when that happens, so `formData.get('subjectId')`
+   * is `null` and `.uuid()` throws a `ZodError` HERE, before any network call
+   * — which the `try` below never covered, since it only wraps `apiSend`.
+   * Same redirect, same `offeringMissing` message: from the instructor's
+   * side, "no subject was ever offered to pick" and "the subject doesn't
+   * exist on the server" are the identical problem.
+   */
+  let parsed: z.infer<typeof CourseCreateSchema>;
+  try {
+    parsed = CourseCreateSchema.parse({
+      slug: formData.get('slug'),
+      title: formData.get('title'),
+      subtitle: readOptionalText(formData, 'subtitle'),
+      description: readOptionalText(formData, 'description'),
+      systemId: formData.get('systemId'),
+      year: Number(formData.get('year')),
+      trackId: readTrackId(formData),
+      subjectId: formData.get('subjectId'),
+      emphasis,
+      // Cleared with the badge: the CHECK forbids a note without one, and the
+      // form already blanks the input, so this only guards a hand-built POST.
+      emphasisNote: emphasis === null ? null : readOptionalText(formData, 'emphasisNote'),
+      // Independent of `emphasis` — unlike `emphasisNote` there is no badge to
+      // clear it alongside.
+      comingSoonNote: readOptionalText(formData, 'comingSoonNote'),
+      // «ميعاد المحاضرة». `readOptionalText` is what makes a cleared input mean
+      // «مفيش ميعاد معلن»: it turns `''` into `null`, and `null` is the only
+      // value that removes the line from the student's band. Sending `''` would
+      // be a 400 — the schema trims and refuses an empty string.
+      scheduleNote: readOptionalText(formData, 'scheduleNote'),
+      whatsappGroupUrl: readOptionalText(formData, 'whatsappGroupUrl'),
+      contentComplete: readContentComplete(formData),
+      watermarkPhone: readWatermarkPhone(formData),
+      watermarkName: readWatermarkName(formData),
+      coverKey: readOptionalText(formData, 'coverKey'),
+      requiresGrant: readRequiresGrant(formData),
+      monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
+      /*
+       * NO `quarterlyPriceCents`, here or in the update below.
+       *
+       * «٣ شهور» is off the shelf: the field is gone from `course-form.tsx`, and
+       * `CourseService.assertQuarterlyRetired` answers 400 to any non-null
+       * value — so sending one is a save the instructor cannot act on.
+       *
+       * ABSENT rather than an explicit `null`, which is the difference that
+       * matters. On create the schema's own `.default(null)` fills it. On update
+       * `CourseUpdateSchema` is built with `partialWithoutDefaults`, so an
+       * absent key leaves the column exactly where it is — and a price a past
+       * subscription was sold at stays readable to the finance screens instead
+       * of being wiped by the next rename of the course.
+       */
+      yearlyPriceCents: readOptionalPriceCents(formData, 'yearlyPriceCents'),
+      bookTitle: readOptionalText(formData, 'bookTitle'),
+      bookPriceCents: readOptionalPriceCents(formData, 'bookPriceCents'),
+      ...readStream(formData),
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      redirect(`/admin/courses/new?formError=offeringMissing&slug=${encodeURIComponent(rawSlug)}`);
+    }
+    throw error;
+  }
 
   /*
    * `updateCourseAction` maps this exact pair — a 409 is always the slug, a

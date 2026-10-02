@@ -135,4 +135,51 @@ describe('TaxonomyService', () => {
     const tha = systems.find((s) => s.slug === 'thanaweya_amma');
     expect(tha?.years.find((y) => y.year === 2)?.labelAr).toBe('الصف الثاني الثانوي');
   });
+
+  /**
+   * The fix this file's own existing cases could not catch: `electiveGroups`
+   * was the ONLY subject source the create-course form had, and it is empty
+   * for every ثانوية عامة track (the case right above) AND for year 1 of
+   * either system (no track exists yet to even look at). `system.subjects`
+   * is the plain-offering sibling that makes both of those submittable.
+   */
+  it('gives both systems plain, trackless year-1 subjects — the combo electiveGroups can never cover', async () => {
+    const { systems } = await service.getTaxonomy();
+    for (const slug of ['bacalorya', 'thanaweya_amma']) {
+      const system = systems.find((s) => s.slug === slug);
+      const year1 = system?.subjects.filter((option) => option.year === 1) ?? [];
+      expect(year1.length).toBeGreaterThan(0);
+      for (const option of year1) {
+        expect(option.trackId).toBeNull();
+        // The submittable value is the SubjectOffering id, never the bare Subject id.
+        expect(option.id).not.toBe(option.subjectId);
+      }
+    }
+  });
+
+  it('gives الثانوية العامة tracks no plain subjects beyond year 1 — documented gap, not this fix', async () => {
+    const { systems } = await service.getTaxonomy();
+    const tha = systems.find((s) => s.slug === 'thanaweya_amma');
+    const beyondYear1 = tha?.subjects.filter((option) => option.year !== 1) ?? [];
+    expect(beyondYear1).toEqual([]);
+  });
+
+  it('gives every تانية بكالوريا track its own 3 shared plain subjects', async () => {
+    const { systems } = await service.getTaxonomy();
+    const bac = systems.find((s) => s.slug === 'bacalorya');
+    const engineering = bac?.tracks.find((t) => t.slug === 'engineering_cs');
+    expect(engineering).toBeDefined();
+    const year2Shared = (bac?.subjects ?? []).filter(
+      (option) => option.year === 2 && option.trackId === engineering?.id,
+    );
+    // Shared, not trackless: `YEAR_2_SHARED` is seeded once PER track in
+    // `seed.ts` (same 3 subjects, 4 separate `SubjectOffering` rows, one per
+    // track), so the form's `trackId` filter must match the SELECTED track —
+    // not `null` — or a year-2 picker would show every track's rows at once.
+    expect(year2Shared.map((option) => option.subjectSlug).sort()).toEqual([
+      'arabic',
+      'egyptian_history',
+      'first_foreign_language',
+    ]);
+  });
 });
