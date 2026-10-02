@@ -1723,6 +1723,9 @@ const admin = {
     /** The heading over the live queues, which only render when non-zero. */
     waitingTitle: 'محتاج تصرّف',
     waitingNone: 'مفيش حاجة مستنياك دلوقتي.',
+    /** The `/admin/platforms` video-usage teaser — owner-only, link-wrapped tile. */
+    videoUsageTitle: 'استهلاك سيرفر الفيديوهات',
+    videoUsageLead: 'مساحة {{n}} مدرّس — {{stored}}. التفاصيل والفاتورة في منصات المدرّسين.',
     /** «كام واحد مشترك في كل كورس» — the per-course headcount strip. */
     coursesTitle: 'الطلبة في كل كورس',
     coursesLead: 'كام واحد داخل كل كورس، وكام اشتراك شغال.',
