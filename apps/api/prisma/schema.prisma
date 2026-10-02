@@ -3459,15 +3459,39 @@ model QuestionCategory {
   /// درس. درس اتمسح = `SET NULL`، والأسئلة بتفضل في ألعاب الكورس كأسئلة عامة
   /// لأن التصنيف لسه ابن تصنيف الكورس.
   gameLessonId String?           @unique @map("game_lesson_id") @db.Uuid
+  /// «أسئلة كتب خارجية» — جذر شجرة كتاب واحد (الوحدة/الدرس تحته عادي عن طريق
+  /// `parentId`، زي أي تصنيف فرعي، من غير عمود خاص بيهم). نفس فكرة
+  /// `gameCourseId` بالظبط: واحد بس لكل كتاب، وكتاب اتمسح = `SET NULL`
+  /// (التصنيف وأسئلته بتفضل موجودة كتصنيف عادي، مش بتتمسح).
+  externalBookId String?         @unique @map("external_book_id") @db.Uuid
 
-  parent     QuestionCategory?   @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
-  children   QuestionCategory[]  @relation("CategoryTree")
-  entries    QuestionBankEntry[]
-  gameCourse Course?             @relation("GameQuestionBank", fields: [gameCourseId], references: [id], onDelete: SetNull)
-  gameLesson Lesson?             @relation("GameLessonBank", fields: [gameLessonId], references: [id], onDelete: SetNull)
+  parent       QuestionCategory?   @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children     QuestionCategory[]  @relation("CategoryTree")
+  entries      QuestionBankEntry[]
+  gameCourse   Course?             @relation("GameQuestionBank", fields: [gameCourseId], references: [id], onDelete: SetNull)
+  gameLesson   Lesson?             @relation("GameLessonBank", fields: [gameLessonId], references: [id], onDelete: SetNull)
+  externalBook ExternalBook?       @relation(fields: [externalBookId], references: [id], onDelete: SetNull)
 
   @@index([parentId])
   @@map("question_categories")
+  @@schema("app")
+}
+
+/// «كتب خارجية» — مرجع ورقي (كتاب الوزارة، كتاب خاص) بنك أسئلة المنصة بيتقسم
+/// عليه. الكتاب نفسه مجرد اسم وغلاف؛ الوحدات والدروس جواه مجرد تصنيفات عادية
+/// (`QuestionCategory.parentId`) تحت تصنيف جذر الكتاب (`externalBookId`) —
+/// زي «أسئلة الألعاب» بالظبط، بس شجرة تلات مستويات مش اتنين.
+model ExternalBook {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  title      String
+  coverKey   String?   @map("cover_key")
+  sortOrder  Int       @default(0) @map("sort_order")
+  archivedAt DateTime? @map("archived_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  rootCategory QuestionCategory?
+
+  @@map("external_books")
   @@schema("app")
 }
 

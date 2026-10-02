@@ -73,6 +73,12 @@ export const AUDIT_ACTIONS = [
   // الألعاب، دروس معيّنة). بيتسجّل لأن «المليون بقى فيه أسئلة الدرس ٣ بس» سؤال
   // ماحدش هيعرف يجاوبه من الأسئلة نفسها.
   'game:settings',
+  // «كتب خارجية» — الكتاب نفسه، ووحدة/درس جديد في شجرته. مش مسح — الحذف
+  // مقصور على تصنيف فاضي، وبيتسجّل زي أي مسح تصنيف عادي.
+  'external-book:create',
+  'external-book:update',
+  'external-book:create-unit',
+  'external-book:create-lesson',
   // امتحانات نص/آخر الشهر. Their own actions rather than `quiz:*`, because the
   // question an audit of one answers is «الامتحان اتفتح إمتى وعلى إيه» — the
   // window and the syllabus — and folding them into quiz edits would bury that
