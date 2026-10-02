@@ -17,6 +17,7 @@ import {
   type ActionResult,
 } from '@/app/(admin)/admin/courses/actions';
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
+import { actionErrorMessage } from '@/lib/stale-tab';
 import { ActionError, IDLE } from './action-state';
 import { examPrerequisiteCount } from './exam-gate-count';
 import { useFeature } from '../entitlements-context';
@@ -107,11 +108,12 @@ export function CourseExamGate({
       const result = await scaffoldExamAction(course.id);
       if (result.ok) router.push(`/admin/quizzes/${result.quizId}`);
       else toast.error(result.message);
-    } catch {
+    } catch (error) {
       // A dropped connection or a stale action id after a deploy REJECTS
       // rather than returning `ok: false` — and without this the button stayed
-      // disabled until a reload.
-      toast.error(c.scaffoldFailed);
+      // disabled until a reload. `actionErrorMessage` names the real fix
+      // (reload) for the stale case instead of a retry that fails the same way.
+      toast.error(actionErrorMessage(error, c.scaffoldFailed));
     } finally {
       setPending(false);
     }

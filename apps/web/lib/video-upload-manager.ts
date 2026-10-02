@@ -1,6 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import { actionErrorMessage } from '@/lib/stale-tab';
 
 /*
  * The Server Actions, loaded on first USE and never at import.
@@ -305,7 +306,20 @@ async function run(
   });
   emit();
 
-  const opened = await open();
+  let opened: Awaited<ReturnType<typeof open>>;
+  try {
+    opened = await open();
+  } catch (error) {
+    // `open` is a Server Action (`startVideoUploadAction`/`resumeVideoUploadAction`)
+    // called directly, not wrapped in its own try/catch — a tab left open across
+    // a deploy throws here with Next's `UnrecognizedActionError` before this
+    // function's own `try` even starts (that one only wraps the parts/complete
+    // call below). «كمّل الرفع» on a stale tab used to escape uncaught straight
+    // to the route's `error.tsx`. Same `actionErrorMessage` the catch below
+    // already uses — one flag, one reload toast, not a crashed page.
+    patch(lessonId, { phase: 'error', message: actionErrorMessage(error, null) });
+    return;
+  }
   if (!opened.ok) {
     patch(lessonId, { phase: 'error', message: opened.message });
     return;
@@ -343,7 +357,7 @@ async function run(
     if (controller.signal.aborted) return;
     // The saved session stays: the parts that made it are in the bucket, and
     // picking the same file again resumes from them.
-    patch(lessonId, { phase: 'error', message: error instanceof Error ? error.message : null });
+    patch(lessonId, { phase: 'error', message: actionErrorMessage(error, null) });
   } finally {
     controllers.delete(lessonId);
   }

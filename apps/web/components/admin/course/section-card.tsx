@@ -20,6 +20,7 @@ import {
   updateSectionAction,
 } from '@/app/(admin)/admin/courses/actions';
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
+import { actionErrorMessage } from '@/lib/stale-tab';
 import type { SortableHandleProps } from '../sortable-list';
 import { SortableLessonList } from './lesson-list';
 import { AddLessonForm } from './lesson-panel';
@@ -176,10 +177,12 @@ export function SectionCard({
     try {
       const result = await setSectionPublishedAction(courseId, section.id, !section.isPublished);
       if (!result.ok) toast.error(result.message);
-    } catch {
+    } catch (error) {
       // Rejects rather than returning `ok: false` on a dropped connection or
       // a stale action id — see the same catch on the lecture row.
-      toast.error(copy.admin.common.actionFailed);
+      // `actionErrorMessage` names the real fix (reload) for the stale case
+      // instead of the generic «حاول تاني» that just fails again.
+      toast.error(actionErrorMessage(error, copy.admin.common.actionFailed));
     } finally {
       setPublishPending(false);
     }
