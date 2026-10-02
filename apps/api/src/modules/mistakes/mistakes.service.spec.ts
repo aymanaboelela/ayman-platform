@@ -112,6 +112,87 @@ describe('MistakesService', () => {
     expect(open[0]!.streakRight).toBe(0);
   });
 
+  /**
+   * الحارس اللي منعها تقع — `MistakeEntrySchema.options` بيطلب عنصرين على
+   * الأقل (`packages/contracts/src/mistakes.ts`)، وقياس على ستاك حقيقي لقى
+   * عشرة أسئلة بـ٠ أو ١ خيار. من غير الحارس، سؤال زي ده كان بيعدّي للطالب
+   * ويكسر الدفتر كله بخطأ Zod — نفس معاملة السؤال المحذوف تمامًا: يختفي من
+   * الدفتر بدل ما يكسره.
+   */
+  it('drops a question left with fewer than 2 options, instead of crashing the whole notebook', async () => {
+    await seedResult({ questionIndex: 0, right: false, submittedAt: new Date('2026-05-01T10:00:00Z') });
+
+    /*
+     * `QuestionBankService` (اللي `seedQuizFixture` بيستخدمه) مابيسيبش سؤال
+     * بأقل من خيارين — نفس حارس العقد. السؤال التالف ده بيتعمل بإيد من غيره
+     * عشان يقلّد الصفوف الحقيقية اللي اتقاست على ستاك فيه (status='ready'،
+     * خيار واحد) — نفس الطريقة اللي أي إدخال بإيده بره السيرفيس ممكن يعملها.
+     */
+    const brokenVersionId = randomUUID();
+    await prisma.questionVersion.create({
+      data: {
+        id: brokenVersionId,
+        bankEntryId: fixture.bankEntryIds[0]!,
+        version: 2,
+        status: 'draft',
+        type: 'mcq_single',
+        stemHtml: '<p>سؤال تالف</p>',
+        createdBy: fixture.adminId,
+        options: { create: [{ bodyHtml: 'الاختيار الوحيد', fraction: 1, position: 0 }] },
+      },
+    });
+    // `question_options_freeze` بيمنع تعديل الخيارات أول ما الحالة تبقى
+    // `ready` — فالخيار الناقص اتحط وهي لسه `draft`، والتحويل لـ`ready` جاي
+    // دلوقتي لوحده. مفيش حارس حاليًا بيمنع التحويل ده بأقل من خيارين —
+    // وده بالظبط إزاي الصفوف الحقيقية اللي اتقاست عليها الفحص وصلت للحالة دي.
+    await prisma.questionVersion.update({ where: { id: brokenVersionId }, data: { status: 'ready' } });
+    await seedResult({ questionIndex: 1, right: false, submittedAt: new Date('2026-05-01T10:00:00Z') });
+    // `seedResult` بتاخد index في `fixture.versionIds` — السؤال التالف مش
+    // فيها، فبيتحط بإيد بنفس شكل الدالة بالظبط.
+    const brokenAttemptId = randomUUID();
+    attemptIds.push(brokenAttemptId);
+    const quiz = await prisma.quiz.findUniqueOrThrow({
+      where: { id: fixture.quizId },
+      select: { sumMarks: true, gradeOutOf: true, passPercent: true },
+    });
+    await prisma.quizAttempt.create({
+      data: {
+        id: brokenAttemptId,
+        quizId: fixture.quizId,
+        userId: fixture.studentId,
+        attemptNo: attemptIds.length,
+        paper: 'original',
+        state: 'submitted',
+        submittedAt: new Date('2026-05-01T10:00:00Z'),
+        startedAt: new Date('2026-05-01T10:00:00Z'),
+        sumMarks: quiz.sumMarks,
+        gradeOutOf: quiz.gradeOutOf,
+        passPercent: quiz.passPercent,
+      },
+    });
+    await prisma.attemptQuestion.create({
+      data: {
+        attemptId: brokenAttemptId,
+        slotPosition: 1,
+        questionVersionId: brokenVersionId,
+        optionOrder: [0],
+        maxMark: 1,
+        minFraction: 0,
+        maxFraction: 1,
+        mark: 0,
+        fraction: 0,
+        state: 'graded_wrong',
+        gradedAt: new Date('2026-05-01T10:00:00Z'),
+        answeredAt: new Date('2026-05-01T10:00:00Z'),
+      },
+    });
+
+    const { open } = await service.notebook(fixture.studentId);
+
+    expect(open).toHaveLength(2);
+    expect(open.map((entry) => entry.questionVersionId)).not.toContain(brokenVersionId);
+  });
+
   it('never lists a question the student answered right', async () => {
     await seedResult({ questionIndex: 0, right: true, submittedAt: new Date('2026-05-01T10:00:00Z') });
 
