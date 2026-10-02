@@ -20,6 +20,9 @@ import {
 } from '@/lib/seo/jsonld';
 import { formatArticleDate } from '@/lib/format';
 import { buildMetadata } from '@/lib/seo/metadata';
+import { getPublicSettingsOrDefaults } from '@/lib/settings';
+import { tenantName } from '@/lib/tenant';
+import { waMeHref } from '@ayman/contracts/whatsapp';
 
 /**
  * ⚠️ There is deliberately NO `generateStaticParams` here, and adding one back
@@ -114,9 +117,16 @@ export default async function NewsArticlePage({ params }: { params: Promise<{ sl
    * anchor rather than fail to render. Same cached read the course grid uses,
    * so it costs nothing new.
    */
-  const { courses } = await getCatalogOrEmpty();
+  const [{ courses }, { contact }] = await Promise.all([
+    getCatalogOrEmpty(),
+    getPublicSettingsOrDefaults(),
+  ]);
   const relatedCourse =
     courses.find((candidate) => candidate.slug === post.relatedCourseSlug) ?? null;
+  // نفس بناء الرابط اللي الفوتر بيستخدمه بالظبط — `waMeHref` بيرجّع `null`
+  // لو الستاك مالوش رقم واتساب مسجّل، فالقسم مابيتعرضش خالص بدل زرار
+  // بيفتح صفحة واتساب التسويقية من غير رقم.
+  const whatsappHref = waMeHref(contact.whatsapp);
 
   const faqRows = faqRowsFromBlocks(blocks);
   const terms = termsFromBlocks(blocks, `/news/${post.slug}`);
@@ -243,6 +253,24 @@ export default async function NewsArticlePage({ params }: { params: Promise<{ sl
             </>
           )}
         </aside>
+
+        {/*
+          القسم التاني، منفصل عن `article__cta` فوق — سؤال تاني مش بديل
+          («الكورس ده يفيدني؟» مقابل «عايز أسأل حد مباشرة»)، فبيبان معاه
+          مش بدله. الاسم جاي من `tenantName()` نفسه — مفيش اسم مكتوب هنا،
+          وده اللي بيخلّي القسم ده آمن على أي ستاك تاني.
+        */}
+        {whatsappHref ? (
+          <aside className="article__cta article__cta--whatsapp">
+            <p className="article__cta-title">{copy.news.whatsappTitle}</p>
+            <p className="article__cta-body">
+              {formatCopy(copy.news.whatsappBody, { instructor: tenantName(copy.site.instructor) })}
+            </p>
+            <a href={whatsappHref} target="_blank" rel="noreferrer" className="site-btn site-btn--primary">
+              {copy.news.whatsappCta}
+            </a>
+          </aside>
+        ) : null}
       </article>
     </main>
   );
