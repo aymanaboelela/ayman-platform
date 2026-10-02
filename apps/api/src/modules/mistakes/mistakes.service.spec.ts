@@ -4,6 +4,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { MISTAKE_MASTERY_STREAK } from '@ayman/contracts/mistakes';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { collectKeysDeep, FORBIDDEN_ANSWER_KEYS } from '../quiz/serializers/learner.serializer';
 import { seedQuizFixture, type QuizFixture } from '../quiz/testing/quiz-fixtures';
 import { MistakesService } from './mistakes.service';
 
@@ -110,6 +111,23 @@ describe('MistakesService', () => {
     expect(open[0]!.lessonTitle).toBe('اختبار');
     expect(open[0]!.timesMissed).toBe(1);
     expect(open[0]!.streakRight).toBe(0);
+  });
+
+  /**
+   * الكراش الحقيقي اللي الحارس فوق (أقل من خيارين) ماكانش بيمسكه: كل سؤال
+   * بيرجع من `LEARNER_QUESTION_SELECT` معاه `position` فعليًا وقت التشغيل
+   * (مطلوبة للترتيب)، و`position` من `FORBIDDEN_ANSWER_KEYS`. ده كان معناه
+   * إن أي طالب عنده غلطة واحدة بس — أي طالب حقيقي — بياخد ٥٠٠ من
+   * `NoAnswerLeakInterceptor` على طول، مش حالة نادرة. التست ده بيشغّل نفس
+   * فاحص الـinterceptor الحقيقي على رد `notebook()` الحقيقي، مش بيفترض.
+   */
+  it('never lets a FORBIDDEN_ANSWER_KEYS field — like the option position the query sorts by — reach the response', async () => {
+    await seedResult({ questionIndex: 0, right: false, submittedAt: new Date('2026-05-01T10:00:00Z') });
+
+    const { open } = await service.notebook(fixture.studentId);
+
+    const offending = [...collectKeysDeep(open)].filter((key) => FORBIDDEN_ANSWER_KEYS.has(key));
+    expect(offending).toEqual([]);
   });
 
   /**
