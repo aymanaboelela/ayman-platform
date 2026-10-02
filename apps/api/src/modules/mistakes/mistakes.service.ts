@@ -189,14 +189,24 @@ function rightOptionsOf(options: readonly { id: string; fraction: unknown }[]): 
 
 function toEntry(
   row: LatestRow,
-  question: { id: string; type: string; stemHtml: string; options: { id: string; bodyHtml: string }[] },
+  question: { id: string; type: string; stemHtml: string; options: { id: string; bodyHtml: string; position: number }[] },
   lesson: { title: string; courseTitle: string; courseSlug: string } | undefined,
 ): MistakeEntry {
   return {
     questionVersionId: row.question_version_id,
     type: question.type as MistakeEntry['type'],
     stemHtml: question.stemHtml,
-    options: question.options,
+    /*
+     * ⚠️ `question.options` — قادم من `LEARNER_QUESTION_SELECT` — فيه
+     * `position` فعليًا وقت التشغيل (بيتاخد عشان الترتيب في الـ`orderBy`)،
+     * حتى لو الـTS type القديم هنا كان بيدّعي إن مالوش. `position` في
+     * `FORBIDDEN_ANSWER_KEYS`، و`NoAnswerLeakInterceptor` بيمشي على الرد
+     * كله ويرفض أي مفتاح فيها — فأي طالب عنده غلطة واحدة في أي كويز حقيقي
+     * كان بيرجعله ٥٠٠ على طول، مش بس الحالة النادرة (سؤال بخيار واحد) اللي
+     * اتصلحت قبل كده. الترتيب محفوظ من الـ`orderBy` في الكويري نفسها —
+     * إسقاط `position` من الرد هنا مايغيّرش ترتيب الاختيارات.
+     */
+    options: question.options.map(({ id, bodyHtml }) => ({ id, bodyHtml })),
     courseTitle: lesson?.courseTitle ?? null,
     courseSlug: lesson?.courseSlug ?? null,
     lessonTitle: lesson?.title ?? null,
