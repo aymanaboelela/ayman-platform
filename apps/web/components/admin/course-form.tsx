@@ -448,16 +448,26 @@ export function CourseForm({
   const track = system?.tracks.find((candidate) => candidate.id === draft.trackId);
 
   /**
-   * The taxonomy contract only exposes subjects that are members of an
-   * elective group for the selected track and year — that is every subject
-   * this single-subject-per-course platform currently needs a picker for.
-   * `subjectId` here is `Subject.id` (not the offering id `option.id`),
-   * exactly what `Course.subjectId` requires.
+   * Two sources, merged — most subjects are PLAIN offerings (`system.subjects`,
+   * scoped here by year/track), electives are the exception (`تانية بكالوريا`
+   * year-2's pair, via `track.electiveGroups`). Before this merge, a year-1
+   * course (no track at all) or any ثانوية عامة course — which never seeds an
+   * elective group — got an empty dropdown and an unsubmittable form: see
+   * `createCourseAction`'s own note on `subjectId` being required. `subjectId`
+   * here is always `Subject.id` (not the offering id `option.id`), exactly
+   * what `Course.subjectId` requires; deduped by it since the same subject
+   * could in principle appear in both lists.
    */
-  const subjects = (track?.electiveGroups ?? [])
+  const plainSubjects = (system?.subjects ?? [])
+    .filter((option) => option.year === draft.year && option.trackId === (showTrack ? draft.trackId || null : null))
+    .map((option) => ({ id: option.subjectId, nameAr: option.nameAr }));
+  const electiveSubjects = (track?.electiveGroups ?? [])
     .filter((group) => group.year === draft.year)
     .flatMap((group) => group.options)
     .map((option) => ({ id: option.subjectId, nameAr: option.nameAr }));
+  const subjects = [...plainSubjects, ...electiveSubjects].filter(
+    (option, index, all) => all.findIndex((candidate) => candidate.id === option.id) === index,
+  );
 
   /*
    * The LEGACY pair, and the only reason this form still knows about it.

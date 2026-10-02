@@ -51,6 +51,19 @@ export const ElectiveGroupSchema = z.object({
   options: z.array(ElectiveOptionSchema),
 });
 
+/**
+ * A plain, non-elective `subject_offerings` row — `elective_group_id IS
+ * NULL`. Same four fields as `ElectiveOptionSchema` (same meaning: `id` is
+ * the offering, `subjectId` the subject itself) plus `year`/`trackId` to
+ * scope it, since this sits at the SYSTEM level, not nested under one track
+ * the way `electiveGroups` is — a year-1 subject has no track at all
+ * (`trackId: null`), so there is no track node to hang it off.
+ */
+export const SubjectOfferingOptionSchema = ElectiveOptionSchema.extend({
+  year: z.number().int(),
+  trackId: z.string().nullable(),
+});
+
 export const TrackSchema = z.object({
   id: z.string(),
   slug: z.string().min(1),
@@ -75,6 +88,15 @@ export const EducationSystemSchema = z.object({
   allowsRetakes: z.boolean(),
   years: z.array(AcademicYearSchema),
   tracks: z.array(TrackSchema),
+  /**
+   * Every plain (non-elective) subject offered anywhere in this system —
+   * year-1 common subjects (either system), year-2/3 shared and specialist
+   * subjects (البكالوريا). The admin create-course form filters this by
+   * `(year, trackId)` and merges it with the matching track's
+   * `electiveGroups` options — the two are siblings in the same dropdown,
+   * not alternatives; most subjects are plain, electives are the exception.
+   */
+  subjects: z.array(SubjectOfferingOptionSchema),
 });
 
 export const TaxonomySchema = z.object({
@@ -88,6 +110,7 @@ export type Region = z.infer<typeof RegionSchema>;
 export type Governorate = z.infer<typeof GovernorateSchema>;
 export type AcademicYear = z.infer<typeof AcademicYearSchema>;
 export type ElectiveOption = z.infer<typeof ElectiveOptionSchema>;
+export type SubjectOfferingOption = z.infer<typeof SubjectOfferingOptionSchema>;
 export type ElectiveGroup = z.infer<typeof ElectiveGroupSchema>;
 export type Track = z.infer<typeof TrackSchema>;
 export type EducationSystem = z.infer<typeof EducationSystemSchema>;
