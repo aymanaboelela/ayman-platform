@@ -58,6 +58,9 @@ export const AUDIT_RESOURCES = {
   questionBankEntry: 'question_bank_entries',
   /// «أسئلة الألعاب» — لعبة في كورس بتسحب منين. المعرّف `courseId:mode`.
   gameModeSetting: 'game_mode_settings',
+  /// «كتب خارجية» — الكتاب نفسه (اسم/غلاف/أرشفة)، مش أسئلته. الأسئلة بتتسجّل
+  /// بـ`questionBankEntry` زي أي سؤال تاني.
+  externalBook: 'external_books',
   quiz: 'quizzes',
   quizAttempt: 'quiz_attempts',
   taxonomy: 'taxonomy',
