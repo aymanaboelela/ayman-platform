@@ -46,6 +46,15 @@ export class MistakesService {
       const question = questionById.get(row.question_version_id);
       // بنك الأسئلة ممكن يمسح نسخة قديمة — السؤال يختفي من الدفتر بدل ما يقع.
       if (!question) continue;
+      /*
+       * ⚠️ `MistakeEntrySchema.options` بيطلب عنصرين على الأقل
+       * (`packages/contracts/src/mistakes.ts`) — نفس شرط أي سؤال اختياري
+       * حقيقي. سؤال قديم/تالف بخيار واحد أو من غيره (اتقاس على ستاك محلي:
+       * عشرة أسئلة حقيقية بـ٠ أو ١ خيار) كان بيعدّي هنا، فالصفحة كلها كانت
+       * بتقع بخطأ Zod عند الطالب — نفس معاملة السؤال المحذوف فوق بالظبط:
+       * يختفي من الدفتر بدل ما يكسره.
+       */
+      if (question.options.length < 2) continue;
       const entry = toEntry(row, question, lessons.get(row.lesson_id));
       // «اتصلحت» بس لو التثبيت حصل بعد آخر غلطة حقيقية — غلطة جديدة في كويز
       // حقيقي بعد التثبيت ترجّع السؤال هنا من غير أي كتابة على الصف نفسه.
