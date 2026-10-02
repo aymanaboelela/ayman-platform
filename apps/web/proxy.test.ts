@@ -810,3 +810,59 @@ describe('proxy — the HTML preview frame', () => {
     expect(response.headers.get('X-Frame-Options')).toBe('DENY');
   });
 });
+
+/**
+ * «الحساب داخل فعلًا، بس اتوجّه لصفحة الدخول في حلقة» — صبري، أضاف مساعد
+ * بصلاحيات محدودة من `/admin/roles` (شاشة `MemberPermissions`) من غير
+ * `profile:read` (ومفيش سبب يحطّها — هي مش من حاجة المساعد خالص)، وحسابه كان
+ * بيترمي `/login` من غير ما يدخل الشاشة أصلًا، رغم إن `admin:access` نفسها
+ * اتحطّتله صح.
+ *
+ * السبب: `resolveAuthState` كان بيسأل `GET /api/profile/me`، وده مقفول
+ * بـ`profile:read` — صلاحية طالب، مالهاش علاقة بـ«إنت داخل ولا لأ». مساعد
+ * مالوش الصلاحية دي كان بياخد 403، و`resolveAuthState` بيقرا أي حاجة مش 200
+ * على إنها «مش داخل خالص» (fail-closed، S12) — فجلسة صحيحة بتترفض.
+ *
+ * الفيكس: `/api/session` بدل `/api/profile/me` — مفيش `@RequirePermission`
+ * عليها خالص، فأي حساب داخل بيعدّي بغض النظر عن صلاحياته.
+ */
+describe('proxy — a staff account with no profile:read still reaches /admin', () => {
+  it('does not bounce to /login when /api/session answers 200 with narrow permissions', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        expect(url).toContain('/api/session');
+        expect(url).not.toContain('/api/profile/me');
+        return new Response(
+          JSON.stringify({
+            id: 'staff-1',
+            role: 'owner',
+            permissions: ['admin:access', 'conversation:read', 'conversation:reply'],
+            onboardingCompleted: true,
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const response = await proxy(
+      new NextRequest('http://localhost/admin', { headers: { cookie: 'session_token=anything' } }),
+    );
+
+    expect(response.headers.get('location')).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it('still bounces to /login when the session fetch genuinely fails (no cookie at all)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401 })),
+    );
+
+    const response = await proxy(new NextRequest('http://localhost/admin'));
+
+    expect(response.headers.get('location')).toContain('/login');
+    vi.unstubAllGlobals();
+  });
+});

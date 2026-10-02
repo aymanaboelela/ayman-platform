@@ -460,10 +460,21 @@ export function decideRedirect(pathname: string, auth: AuthState): RedirectDecis
 }
 
 /**
- * `GET /api/profile/me` answers both questions this proxy needs in one
- * round trip: 401 means no session, 200 carries `onboardingCompleted`.
- * Cookies are forwarded manually — this is a server-to-server fetch, not a
- * browser request, so nothing attaches them automatically.
+ * `GET /api/session` answers both questions this proxy needs in one round
+ * trip: 401 means no session, 200 carries `onboardingCompleted`. Cookies are
+ * forwarded manually — this is a server-to-server fetch, not a browser
+ * request, so nothing attaches them automatically.
+ *
+ * ⚠️ NOT `/api/profile/me`, on purpose — that route carries `@RequirePermission
+ * ('profile:read')`, a STUDENT permission that has nothing to do with "is
+ * this visitor logged in". A staff account scoped down from `/admin/roles`
+ * (`MemberPermissions`) with no reason to ever hold `profile:read` got a 403
+ * from it, which the `!response.ok` branch below reads as "not authenticated
+ * at all" — a real session, correctly carrying real `admin:access`, bounced
+ * back to `/login` in a loop. `/api/session` (`SessionController`) carries no
+ * `@RequirePermission` at all — any signed-in account can read it — which is
+ * exactly the authentication question this function asks, not an
+ * authorization one.
  *
  * S12 (fail closed): a network error, a non-OK/non-401 status, or a slow
  * API (3s timeout) are ALL treated as "not authenticated" — never as "let
@@ -473,7 +484,7 @@ export function decideRedirect(pathname: string, auth: AuthState): RedirectDecis
 async function resolveAuthState(request: NextRequest): Promise<AuthState> {
   const cookie = request.headers.get('cookie');
   try {
-    const response = await fetch(`${API_ORIGIN}/api/profile/me`, {
+    const response = await fetch(`${API_ORIGIN}/api/session`, {
       // The visitor's IP, or every student shares one throttle bucket — see
       // `lib/client-ip.ts`.
       headers: { ...(cookie ? { cookie } : {}), ...forwardClientIp(request.headers) },
@@ -1150,7 +1161,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
    * is public (`isMarkdownablePath` only ever matches routes absent from
    * `PROTECTED_PREFIXES`, asserted in `markdown-routes.test.ts`), so
    * `resolveRedirect` would return `null` for all of them anyway — running it
-   * first would only add a fetch to `/api/profile/me` on a route that can
+   * first would only add a fetch to `/api/session` on a route that can
    * never redirect.
    */
   const markdownTarget = resolveMarkdownRewrite(
