@@ -5910,6 +5910,15 @@ export const copy = {
     fallbackCta: 'الكورسات المتاحة',
     /** `aria-label` on the article list. */
     listLabel: 'قائمة المقالات',
+    /**
+     * CTA التواصل تحت كل مقالة — منفصل عن `related*`/`fallback*` فوق وبيبان
+     * معاهم الاتنين، لأنه سؤال تاني مش بديل: «الكورس ده يفيدني؟» مقابل «عايز
+     * أسأل حد مباشرة». `{instructor}` جايَّة من `tenantName(copy.site.instructor)`
+     * في الصفحة نفسها — متكتبش اسم هنا، شوف تعليق `tenantName`'s own guard.
+     */
+    whatsappTitle: 'عندك سؤال؟',
+    whatsappBody: 'اتركه مع {instructor} على واتساب، وهيردّلك بنفسه.',
+    whatsappCta: 'التواصل على واتساب',
   },
 
   quiz: {
