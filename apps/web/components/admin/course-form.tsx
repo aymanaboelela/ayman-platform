@@ -1197,6 +1197,21 @@ export function CourseForm({
         that failed looked exactly like one that worked.
       */
       action={async (formData) => {
+        /*
+         * «الصفحة وقعت» (digest 3189615441) on Sabry's stack: a system/year/
+         * track with no subject row at all — الثانوية العامة past year ١ has
+         * none seeded, a real and still-open gap, not just a display bug —
+         * left `subjectId` unsent, and the create crashed before #596 added a
+         * catch around the parse. That catch means a submit from here no
+         * longer crashes, but it still round-trips to the server just to
+         * bounce back with a toast — a dead end dressed as progress. Refusing
+         * HERE, same as the price check below, means the button never sends a
+         * request it already knows cannot succeed.
+         */
+        if (subjects.length === 0) {
+          toast.error(copy.admin.course.subjectEmpty);
+          return;
+        }
         // A typo in a price is not «مش للبيع» — refuse it here, on the page,
         // instead of creating the course without the plan.
         if (!pricesReadable(draftRef.current)) {
