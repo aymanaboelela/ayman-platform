@@ -283,6 +283,27 @@ function formDataOf(draft: Draft, sellsTerms = false): FormData {
 }
 
 /**
+ * الفرع الأول المتاح لنظام/سنة معينة — أو `''` لو السنة ١ (مالهاش مسار خالص).
+ *
+ * ⚠️ عملية حقيقية (صبري، 2026-10-03): «كورس جديد» بتفتح على سنة ٢ افتراضيًا
+ * (أول قيمة في `draft.year`)، والمسار بيبدأ `''` («—»). من سنة ٢ لفوق، كل
+ * صف `SubjectOffering` له `trackId` — مفيش ولا مادة واحدة (حتى «البرمجة
+ * وعلوم الحاسب» بعد #600/#602) بدون مسار. يعني الفورم بيفتح على تركيبة
+ * مضمون إنها تطلع «مفيش مواد متاحة»، والمدرّس لازم يكتشف لوحده إنه محتاج
+ * يختار مسار الأول — حتى لو مادته هي نفسها متاحة لكل المسارات بالتساوي.
+ *
+ * الحل: افتراضي أول مسار حقيقي بدل «—» — أي مسار يفتح الليستة، مش بيأثر
+ * على المادة اللي هتظهر لمواد غير اختيارية زي البرمجة. نفس الدالة بتتنده
+ * عند أول تحميل، وعند تغيير النظام، وعند تغيير السنة من ١ لحاجة تانية —
+ * التلات لحظات اللي المسار كان بيفضل أو بيترجع `''`.
+ */
+function firstTrackIdOrEmpty(taxonomy: Taxonomy, systemId: string, year: number): string {
+  if (year === 1) return '';
+  const system = taxonomy.systems.find((candidate) => candidate.id === systemId);
+  return system?.tracks[0]?.id ?? '';
+}
+
+/**
  * The course's own fields — title, slug, taxonomy, cover, access.
  *
  * ## Two modes, and why the edit one has no «حفظ»
@@ -314,32 +335,37 @@ export function CourseForm({
   sellsTerms = false,
   sellsByMonth = false,
 }: Props) {
-  const [draft, setDraft] = useState<Draft>(() => ({
-    title: defaults?.title ?? '',
-    slug: defaults?.slug ?? initialSlug ?? '',
-    subtitle: defaults?.subtitle ?? '',
-    description: defaults?.description ?? '',
-    systemId: defaults?.systemId ?? taxonomy.systems[0]?.id ?? '',
-    year: defaults?.year ?? 2,
-    trackId: defaults?.trackId ?? '',
-    subjectId: defaults?.subjectId ?? '',
-    coverKey: defaults?.coverKey ?? null,
-    stream: streamChoiceOf(defaults ?? { forGeneral: true, forLanguages: true }),
-    requiresGrant: defaults?.requiresGrant ?? false,
-    emphasis: defaults?.emphasis ?? '',
-    emphasisNote: defaults?.emphasisNote ?? '',
-    comingSoonNote: defaults?.comingSoonNote ?? '',
-    scheduleNote: defaults?.scheduleNote ?? '',
-    whatsappGroupUrl: defaults?.whatsappGroupUrl ?? '',
-    contentComplete: defaults?.contentComplete ?? false,
-    watermarkPhone: defaults?.watermarkPhone ?? false,
-    watermarkName: defaults?.watermarkName ?? true,
-    monthlyPrice:
-      defaults?.monthlyPriceCents != null ? String(defaults.monthlyPriceCents / 100) : '',
-    yearlyPrice: defaults?.yearlyPriceCents != null ? String(defaults.yearlyPriceCents / 100) : '',
-    bookTitle: defaults?.bookTitle ?? '',
-    bookPrice: defaults?.bookPriceCents != null ? String(defaults.bookPriceCents / 100) : '',
-  }));
+  const [draft, setDraft] = useState<Draft>(() => {
+    const initialSystemId = defaults?.systemId ?? taxonomy.systems[0]?.id ?? '';
+    const initialYear = defaults?.year ?? 2;
+    return {
+      title: defaults?.title ?? '',
+      slug: defaults?.slug ?? initialSlug ?? '',
+      subtitle: defaults?.subtitle ?? '',
+      description: defaults?.description ?? '',
+      systemId: initialSystemId,
+      year: initialYear,
+      trackId: defaults?.trackId ?? firstTrackIdOrEmpty(taxonomy, initialSystemId, initialYear),
+      subjectId: defaults?.subjectId ?? '',
+      coverKey: defaults?.coverKey ?? null,
+      stream: streamChoiceOf(defaults ?? { forGeneral: true, forLanguages: true }),
+      requiresGrant: defaults?.requiresGrant ?? false,
+      emphasis: defaults?.emphasis ?? '',
+      emphasisNote: defaults?.emphasisNote ?? '',
+      comingSoonNote: defaults?.comingSoonNote ?? '',
+      scheduleNote: defaults?.scheduleNote ?? '',
+      whatsappGroupUrl: defaults?.whatsappGroupUrl ?? '',
+      contentComplete: defaults?.contentComplete ?? false,
+      watermarkPhone: defaults?.watermarkPhone ?? false,
+      watermarkName: defaults?.watermarkName ?? true,
+      monthlyPrice:
+        defaults?.monthlyPriceCents != null ? String(defaults.monthlyPriceCents / 100) : '',
+      yearlyPrice:
+        defaults?.yearlyPriceCents != null ? String(defaults.yearlyPriceCents / 100) : '',
+      bookTitle: defaults?.bookTitle ?? '',
+      bookPrice: defaults?.bookPriceCents != null ? String(defaults.bookPriceCents / 100) : '',
+    };
+  });
   const [saving, setSaving] = useState(false);
   /*
    * `createCourseAction` redirected back here instead of crashing — say why,
@@ -584,7 +610,12 @@ export function CourseForm({
               id="systemId"
               name="systemId"
               value={draft.systemId}
-              onChange={(event) => update({ systemId: event.target.value, trackId: '' })}
+              onChange={(event) =>
+                update({
+                  systemId: event.target.value,
+                  trackId: firstTrackIdOrEmpty(taxonomy, event.target.value, draft.year),
+                })
+              }
             >
               {taxonomy.systems.map((option) => (
                 <option key={option.id} value={option.id}>
@@ -602,7 +633,17 @@ export function CourseForm({
               id="year"
               name="year"
               value={String(draft.year)}
-              onChange={(event) => update({ year: Number(event.target.value) })}
+              onChange={(event) => {
+                const year = Number(event.target.value);
+                update({
+                  year,
+                  // سنة ١ مالهاش مسار خالص؛ من سنة ٢ لفوق سيب أي مسار
+                  // مختار فعلًا زي ما هو، وادي أول واحد بس لو كان فاضي
+                  // (جاي من سنة ١، أو الحالة الافتراضية الأولى).
+                  trackId:
+                    year === 1 ? '' : draft.trackId || firstTrackIdOrEmpty(taxonomy, draft.systemId, year),
+                });
+              }}
             >
               {(system?.years ?? []).map((option) => (
                 <option key={option.year} value={String(option.year)}>
