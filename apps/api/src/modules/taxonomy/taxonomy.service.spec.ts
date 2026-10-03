@@ -157,11 +157,17 @@ describe('TaxonomyService', () => {
     }
   });
 
-  it('gives الثانوية العامة tracks no plain subjects beyond year 1 — documented gap, not this fix', async () => {
+  it('gives الثانوية العامة tracks exactly one plain subject beyond year 1 — برمجة, not a real curriculum', async () => {
+    // The gap this documented ("no subject beyond year 1 at all") was itself
+    // the bug: الثانوية العامة never had a single offering past year 1, which
+    // is what made برمجة unreachable there too — see the fix below. ONLY
+    // برمجة is seeded this way; a real year-2/3 ثانوية عامة curriculum
+    // (تاريخ، جغرافيا، إلخ) is still not this platform's concern.
     const { systems } = await service.getTaxonomy();
     const tha = systems.find((s) => s.slug === 'thanaweya_amma');
     const beyondYear1 = tha?.subjects.filter((option) => option.year !== 1) ?? [];
-    expect(beyondYear1).toEqual([]);
+    expect(beyondYear1.every((option) => option.subjectSlug === 'programming_cs')).toBe(true);
+    expect(beyondYear1.length).toBeGreaterThan(0);
   });
 
   it('gives every تانية بكالوريا track its own 3 shared plain subjects', async () => {
@@ -185,25 +191,30 @@ describe('TaxonomyService', () => {
 
   /**
    * «الصفحة بتقول المادة دي مش موجودة في المناهج» — صبري، مدرّس برمجة، جرّب
-   * كل مسار في البكالوريا وكل واحد رفض. `programming_cs` كانت بس اختيارية
-   * داخل مسار الهندسة سنة ٢ (جوه `electiveGroups`)، ومفيش صف ليها في أي
-   * مسار تاني ولا في سنة ٣ خالص. المنصة كلها «البرمجة وعلوم الحاسب»، فمدرّس
-   * برمجة لازم يقدر يعمل كورس لأي مسار، سنة ٢ أو ٣.
+   * كل مسار جرّبه وكل واحد رفض (أول مرة البكالوريا بس، #600؛ وبعدها
+   * الثانوية العامة كمان، نفس المشكلة بالظبط). `programming_cs` كانت بس
+   * اختيارية داخل مسار الهندسة سنة ٢ بالبكالوريا، ومفيش صف ليها في أي
+   * مسار تاني ولا في سنة ٣، ولا في الثانوية العامة خالص. المنصة كلها
+   * «البرمجة وعلوم الحاسب»، فمدرّس برمجة لازم يقدر يعمل كورس لأي نظام وأي
+   * مسار، سنة ٢ أو ٣.
    */
-  it('makes البرمجة وعلوم الحاسب reachable for every بكالوريا track, years 2 and 3', async () => {
+  it('makes البرمجة وعلوم الحاسب reachable for every track in both systems, years 2 and 3', async () => {
     const { systems } = await service.getTaxonomy();
-    const bac = systems.find((s) => s.slug === 'bacalorya');
-    expect(bac).toBeDefined();
 
-    for (const track of bac?.tracks ?? []) {
-      for (const year of [2, 3]) {
-        const plain = (bac?.subjects ?? []).some(
-          (option) => option.subjectSlug === 'programming_cs' && option.year === year && option.trackId === track.id,
-        );
-        const elective = track.electiveGroups.some(
-          (group) => group.year === year && group.options.some((option) => option.subjectSlug === 'programming_cs'),
-        );
-        expect(plain || elective).toBe(true);
+    for (const slug of ['bacalorya', 'thanaweya_amma']) {
+      const system = systems.find((s) => s.slug === slug);
+      expect(system).toBeDefined();
+
+      for (const track of system?.tracks ?? []) {
+        for (const year of [2, 3]) {
+          const plain = (system?.subjects ?? []).some(
+            (option) => option.subjectSlug === 'programming_cs' && option.year === year && option.trackId === track.id,
+          );
+          const elective = track.electiveGroups.some(
+            (group) => group.year === year && group.options.some((option) => option.subjectSlug === 'programming_cs'),
+          );
+          expect(plain || elective).toBe(true);
+        }
       }
     }
   });

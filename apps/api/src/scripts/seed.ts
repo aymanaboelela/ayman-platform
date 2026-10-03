@@ -225,8 +225,9 @@ async function main(): Promise<void> {
     });
   }
 
+  const thaTrackIdBySlug = new Map<string, string>();
   for (const [index, t] of THANAWEYA_TRACKS.entries()) {
-    await prisma.track.upsert({
+    const track = await prisma.track.upsert({
       where: { systemId_slug: { systemId: thanaweya.id, slug: t.slug } },
       update: { labelAr: t.labelAr, sortOrder: index },
       create: {
@@ -238,6 +239,7 @@ async function main(): Promise<void> {
         sortOrder: index,
       },
     });
+    thaTrackIdBySlug.set(t.slug, track.id);
   }
 
   // ── year 1 offerings (identical for both systems, no track) ─────────
@@ -402,45 +404,48 @@ async function main(): Promise<void> {
   }
 
   /*
-   * ── «البرمجة وعلوم الحاسب» — متاحة لأي track، سنة ٢ وسنة ٣ ────────────
+   * ── «البرمجة وعلوم الحاسب» — متاحة لأي track في أي نظام، سنة ٢ وسنة ٣ ──
    *
    * عملية حقيقية على صبري (مدرّس برمجة، 2026-10-02): فتح «كورس جديد»،
-   * اختار البكالوريا المصرية، وكل تركيبة (نظام + سنة + مسار) جرّبها قالت
-   * «المادة دي مش موجودة في المناهج» — لأن `programming_cs` كانت بس اختيارية
-   * داخل مسار الهندسة وعلوم الحاسب سنة ٢ (أ.ف `t.electives` فوق)، ومفيش
-   * صف واحد ليها في سنة ٣ أو أي مسار تاني خالص.
+   * وكل تركيبة (نظام + سنة + مسار) جرّبها قالت «المادة دي مش موجودة في
+   * المناهج» — لأن `programming_cs` كانت بس اختيارية داخل مسار الهندسة
+   * وعلوم الحاسب سنة ٢ بالبكالوريا (أ.ف `t.electives` فوق)، ومفيش صف واحد
+   * ليها في سنة ٣، ولا في الثانوية العامة خالص (مفيش عندها حاجة بعد سنة ١
+   * أصلًا — فجوة كانت موثّقة في #600، وبرضو كانت بتمنع نفس المشكلة).
    *
    * المنصة كلها «البرمجة وعلوم الحاسب»، فمدرّس برمجة لازم يقدر يعمل كورس
-   * لطالب في أي مسار — مش بس اللي اختار البرمجة اختياري رسمي في مساره.
-   * صف عادي (`electiveGroupId: null`)، مش جوّه مجموعة اختيارية: ده عشان
-   * ميأثّرش على اختيار «كيمياء ولا برمجة» الحقيقي بتاع مسار الهندسة، وبرضو
-   * يبقى متاح لأي مسار تاني كمادة إضافية — `countsTowardTotal: false` زي
-   * سنة ١ بالظبط، مش من مجموع الدرجات الرسمي.
+   * لطالب في أي نظام وأي مسار — مش بس اللي اختار البرمجة اختياري رسمي في
+   * مساره. صف عادي (`electiveGroupId: null`)، مش جوّه مجموعة اختيارية: ده
+   * عشان ميأثّرش على اختيار «كيمياء ولا برمجة» الحقيقي بتاع مسار الهندسة،
+   * وبرضو يبقى متاح لأي مسار تاني كمادة إضافية — `countsTowardTotal: false`
+   * زي سنة ١ بالظبط، مش من مجموع الدرجات الرسمي.
    */
-  for (const t of BACALORYA_TRACKS) {
-    const trackId = bacTrackIdBySlug.get(t.slug);
-    if (!trackId) throw new Error(`Seed bug: track "${t.slug}" was not created`);
-
-    for (const year of [2, 3] as const) {
-      await prisma.subjectOffering.upsert({
-        where: {
-          systemId_year_trackId_subjectId: {
-            systemId: bacalorya.id,
+  for (const [system, trackIdBySlug] of [
+    [bacalorya, bacTrackIdBySlug],
+    [thanaweya, thaTrackIdBySlug],
+  ] as const) {
+    for (const trackId of trackIdBySlug.values()) {
+      for (const year of [2, 3] as const) {
+        await prisma.subjectOffering.upsert({
+          where: {
+            systemId_year_trackId_subjectId: {
+              systemId: system.id,
+              year,
+              trackId,
+              subjectId: subjectId('programming_cs'),
+            },
+          },
+          update: {},
+          create: {
+            systemId: system.id,
             year,
             trackId,
             subjectId: subjectId('programming_cs'),
+            countsTowardTotal: false,
+            sortOrder: 50,
           },
-        },
-        update: {},
-        create: {
-          systemId: bacalorya.id,
-          year,
-          trackId,
-          subjectId: subjectId('programming_cs'),
-          countsTowardTotal: false,
-          sortOrder: 50,
-        },
-      });
+        });
+      }
     }
   }
 
