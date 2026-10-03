@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { ProfileMeSchema, StudentQuizHistorySchema, copy } from '@ayman/contracts';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 import { apiGetAuthed } from '@/lib/api-server';
@@ -116,6 +117,23 @@ const c = copy.dashboard;
  * the profile's `year` and `trackId` into the labels the band prints.
  */
 export default async function DashboardPage() {
+  /*
+   * ⚠️ طالب بس — عملية حقيقية: صبري عمل حساب مساعد («سهام») بصلاحيات محدودة
+   * من `/admin/roles`، وكراشت هنا بالظبط، كود عطل 2315818922. المساعد مش
+   * طالب — `enrollment:read`/`profile:read`/إلخ مش من حاجته، فمفيش سبب يحطّهم
+   * ليه، ومن غيرهم كل نداء من الـ٩ اللي تحت كان بيترمي 403 غير ملتقط.
+   *
+   * تسع نداءات على طول الصفحة، كل واحد يتصلح لوحده كان عدد كبير وسطحي —
+   * فحص واحد هنا، على نفس `getSession()` اللي الصفحة أصلًا بتعمله تحت
+   * (مـ`cache()`، فده مش نداء إضافي)، بيقفل الباب كله مرة واحدة.
+   *
+   * `role !== 'student'` مش «غير داخل» — أدمن أو مساعد عنده حساب حقيقي، بس
+   * الصفحة دي مالهاش معنى له (مفيش enrollment ولا quiz history لحساب مش
+   * طالب). `/admin` هو المكان اللي شاشته تناسب دوره فعليًا.
+   */
+  const earlySession = await getSession();
+  if (earlySession && earlySession.role !== 'student') redirect('/admin');
+
   const [
     dashboard,
     me,
