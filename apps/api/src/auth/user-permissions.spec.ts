@@ -210,6 +210,42 @@ describe('replaceForUser — التصعيد', () => {
 });
 
 /**
+ * `admin:access` — عملية حقيقية، صبري (2026-10-02): علّم «رد على المحادثات +
+ * مراجعة الدفعات + الإحصائيات» بس من شاشة `/admin/roles`، ونسي يفتح قسم
+ * «النظام» اللي `admin:access` متحطّة جواه — ومش غريب إنه نساها، هي قاعدة
+ * جنب `settings:write` و`role:grant`، حاجات تخوّف أي حد بيدي مساعد صلاحيات
+ * محدودة فيبعد عنها.
+ *
+ * النتيجة: المساعد كان ياخد 404 على أي صفحة `/admin/*` يحاول يفتحها، حتى
+ * اللي صلاحياتها معاه فعلًا — لأن `(admin)/layout.tsx` بيتأكد من
+ * `admin:access` قبل أي حاجة تانية خالص. صلاحية بس من غيرها مفيش طريقة
+ * تتستخدم بيها، فمفيش قرار حقيقي بيتاخد لما حد يسيبها من غير قصد.
+ */
+describe('replaceForUser — admin:access بتتضاف تلقائي', () => {
+  /* نفس منطق الخدمة بالحرف — انظر `replaceForUser` في
+     `permission-grants.service.ts`. */
+  function withForcedAdminAccess(wanted: readonly string[]): string[] {
+    const set = new Set(wanted);
+    if (set.size > 0) set.add('admin:access');
+    return [...set];
+  }
+
+  it('بتتضاف لو فيه أي صلاحية تانية، حتى لو محدش علّمها بنفسه', () => {
+    const saved = withForcedAdminAccess(['conversation:read', 'conversation:reply', 'payment:read']);
+    expect(saved).toContain('admin:access');
+  });
+
+  it('بتفضل فاضية لو القرار قفل الحساب كله — ده مش نسيان', () => {
+    expect(withForcedAdminAccess([])).toEqual([]);
+  });
+
+  it('مابتتكررش لو كانت متحطّة أصلًا', () => {
+    const saved = withForcedAdminAccess(['admin:access', 'analytics:read']);
+    expect(saved.filter((permission) => permission === 'admin:access')).toHaveLength(1);
+  });
+});
+
+/**
  * صاحب الستاك — «أقدم حساب مش-طالب».
  *
  * ⚠️ القاعدة دي موجودة عشان على ستاكات المدرّسين التانيين المدرّس والمساعد
