@@ -22,7 +22,7 @@ import { RequirePermission } from '../../auth/decorators/require-permission.deco
 import { NoAnswerLeak } from '../quiz/interceptors/no-answer-leak.decorator';
 import { collectKeysDeep, FORBIDDEN_ANSWER_KEYS } from '../quiz/serializers/learner.serializer';
 import { ArenaOpenGuard } from './arena-gate.service';
-import { ArenaAnswerDto, ArenaQueueDto } from './arena.dto';
+import { ArenaAnswerDto, ArenaChallengeCreateDto, ArenaQueueDto } from './arena.dto';
 import { ArenaService } from './arena.service';
 
 /**
@@ -140,7 +140,32 @@ export class ArenaController {
   @HttpCode(200)
   @Post('queue')
   join(@CurrentUser() user: AuthenticatedUser, @Body() body: ArenaQueueDto): Promise<ArenaView> {
-    return this.arena.join(user.id, body.courseId);
+    return this.arena.join(user.id, body.courseId, body.topicId);
+  }
+
+  /**
+   * «تحدّي من اختيارك» — تحدّي مفتوح لدفعتك على تحدّي أو أكتر من الكورس،
+   * والطالب بيستنى فيه زي الطابور (نفس الستريم، ونفس «إلغاء»).
+   */
+  @NoAnswerLeak()
+  @Throttle({ short: { limit: 3, ttl: seconds(1) }, medium: { limit: 20, ttl: seconds(60) } })
+  @UsePipes(ZodValidationPipe)
+  @HttpCode(200)
+  @Post('challenges')
+  createChallenge(@CurrentUser() user: AuthenticatedUser, @Body() body: ArenaChallengeCreateDto): Promise<ArenaView> {
+    return this.arena.createChallenge(user.id, body.courseId, body.topicIds);
+  }
+
+  /** «قبول» تحدّي طالب من دفعتك — ٤٠٤ لو اتقفل، أو اتقبل، أو مش من طابورك. */
+  @NoAnswerLeak()
+  @Throttle({ short: { limit: 3, ttl: seconds(1) }, medium: { limit: 20, ttl: seconds(60) } })
+  @HttpCode(200)
+  @Post('challenges/:challengeId/accept')
+  acceptChallenge(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('challengeId', ParseUUIDPipe) challengeId: string,
+  ): Promise<ArenaView> {
+    return this.arena.acceptChallenge(user.id, challengeId);
   }
 
   /** «إلغاء» / «خروج» من الطابور. */

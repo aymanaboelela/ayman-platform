@@ -15,9 +15,11 @@ import {
   type ArenaAnswerResult,
   type ArenaBeat,
   type ArenaFx,
+  type ArenaCourse,
   type ArenaLobby,
   type ArenaView,
 } from '@ayman/contracts/arena';
+import type { ArenaOpenChallenge } from '@ayman/contracts/arena-challenges';
 import {
   abort,
   advance,
@@ -34,7 +36,7 @@ import {
   type Side,
 } from './arena-engine';
 import type { ArenaKv } from './arena-kv';
-import { pickPair, queueKeyOf } from './arena-matchmaking';
+import { challengeQueueKey, pickPair, queueKeyOf } from './arena-matchmaking';
 import type { ArenaRealtime } from './arena-realtime';
 import {
   ARENA_ACCESS,
@@ -44,6 +46,7 @@ import {
   ARENA_REALTIME,
   ARENA_RECORDS,
   type ArenaAccessPort,
+  type ArenaEligibility,
   type ArenaQuestionsPort,
   type ArenaRecordsPort,
 } from './arena.ports';
@@ -60,6 +63,10 @@ const K = {
   streams: (id: string) => `arena:streams:${id}`,
   gone: (id: string) => `arena:gone:${id}`,
   lock: (name: string) => `arena:lock:${name}`,
+  /** تحدّي طالب مفتوح — `OpenChallenge`. */
+  challenge: (id: string) => `arena:ch:${id}`,
+  /** التحديات المفتوحة في طابور (كورس × دفعة) واحد. */
+  open: (key: string) => `arena:open:${key}`,
 } as const;
 
 const MIN = 60_000;
@@ -92,8 +99,32 @@ type Pointer =
       since: number;
       name: string;
       image: string | null;
+      /**
+       * «التحديات» — اختيارية: مؤشر اتكتب قبل الديبلوي ده (لسه في Redis)
+       * مافيهوش الحقول دي، ومعناه «الكورس كله».
+       */
+      topicId?: string | null;
+      topicIds?: string[];
+      topicTitle?: string | null;
+      challengeId?: string | null;
     }
   | { kind: 'match'; matchId: string };
+
+/** تحدّي طالب مفتوح — في Redis لحد ما حد يقبله، أو صاحبه يلغيه أو يمشي. */
+interface OpenChallenge {
+  id: string;
+  creatorId: string;
+  name: string;
+  image: string | null;
+  courseId: string;
+  courseTitle: string;
+  /** طابور (كورس × دفعة) — اللي ينفع يقبلوه. */
+  cohortKey: string;
+  cohortLabel: string;
+  topicIds: string[];
+  topicTitles: string[];
+  since: number;
+}
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -222,24 +253,84 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
 
   async lobby(userId: string): Promise<ArenaLobby> {
     const eligibility = await this.access.eligibility(userId);
-    const [view, me, board] = await Promise.all([
+    const [view, me, board, courses, challenges] = await Promise.all([
       this.currentView(userId, true),
       this.records.me(userId, eligibility.cohort),
       this.records.board(userId, eligibility.cohort, eligibility.cohortLabel),
+      this.withWaiting(userId, eligibility),
+      this.openChallenges(userId, eligibility),
     ]);
     return {
       cohort: eligibility.cohort ? { label: eligibility.cohortLabel } : null,
       blocked: eligibility.blocked,
-      courses: eligibility.courses,
+      courses,
       me: { ...me, name: eligibility.name, image: eligibility.image },
       view,
       board,
       at: this.clock(),
+      challenges,
     };
   }
 
-  /** «يلا نبدأ». طالب واحد = طابور واحد أو ماتش واحد، مهما فتح تابات. */
-  async join(userId: string, courseId: string): Promise<ArenaView> {
+  /** كام حد من دفعتك في طابور كل تحدّي دلوقتي. */
+  private async withWaiting(userId: string, eligibility: ArenaEligibility): Promise<ArenaCourse[]> {
+    const cohort = eligibility.cohort;
+    if (!cohort) return eligibility.courses;
+    return Promise.all(
+      eligibility.courses.map(async (course) => ({
+        ...course,
+        topics: await Promise.all(
+          (course.topics ?? []).map(async (topic) => ({
+            ...topic,
+            waiting: (await this.kv.zall(K.queue(queueKeyOf(course.id, cohort, topic.id)))).filter(
+              (member) => member.member !== userId,
+            ).length,
+          })),
+        ),
+      })),
+    );
+  }
+
+  /**
+   * تحديات الطلبة المفتوحة في كورسات الطالب ودفعته. اللي صاحبه مشي (النبض
+   * وقف) أو اتقبل بيتشال هنا كمان، مش بس من السويبر.
+   */
+  private async openChallenges(userId: string, eligibility: ArenaEligibility): Promise<ArenaOpenChallenge[]> {
+    const cohort = eligibility.cohort;
+    if (!cohort || eligibility.blocked) return [];
+    const out: ArenaOpenChallenge[] = [];
+    for (const course of eligibility.courses) {
+      if ((course.topics ?? []).length === 0) continue;
+      const cohortKey = queueKeyOf(course.id, cohort);
+      for (const id of await this.kv.smembers(K.open(cohortKey))) {
+        const record = await this.loadChallenge(id);
+        if (!record) {
+          await this.kv.srem(K.open(cohortKey), id);
+          continue;
+        }
+        if (!(await this.queuedAndAlive(record.creatorId, challengeQueueKey(id)))) {
+          await this.closeChallenge(id);
+          continue;
+        }
+        out.push({
+          id,
+          by: { name: record.name, image: record.image },
+          courseId: record.courseId,
+          courseTitle: record.courseTitle,
+          topicTitles: record.topicTitles,
+          since: record.since,
+          mine: record.creatorId === userId,
+        });
+      }
+    }
+    return out.sort((a, b) => a.since - b.since);
+  }
+
+  /**
+   * «يلا نبدأ». طالب واحد = طابور واحد أو ماتش واحد، مهما فتح تابات. كورس
+   * فيه «تحديات» بيتلعب على تحدّي (`topicId` لازم)، وطابوره لكل تحدّي.
+   */
+  async join(userId: string, courseId: string, topicId?: string): Promise<ArenaView> {
     const key = await this.withLock(`u:${userId}`, async () => {
       const pointer = await this.pointer(userId);
       if (pointer?.kind === 'match') {
@@ -252,10 +343,14 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
       if (eligibility.blocked) throw new ForbiddenException({ code: eligibility.blocked });
       const course = eligibility.courses.find((entry) => entry.id === courseId && entry.playable);
       if (!course) throw new ForbiddenException({ code: 'course_not_playable' });
+      const topics = course.topics ?? [];
+      const topic = topics.find((entry) => entry.id === topicId) ?? null;
+      if (topics.length > 0 && !topic) throw new ForbiddenException({ code: 'topic_required' });
+      if (topicId && !topic?.playable) throw new ForbiddenException({ code: 'course_not_playable' });
 
-      const next = queueKeyOf(courseId, eligibility.cohort);
+      const next = queueKeyOf(courseId, eligibility.cohort, topic?.id ?? null);
       const now = this.clock();
-      if (pointer?.kind === 'queue' && pointer.key !== next) await this.kv.zrem(K.queue(pointer.key), userId);
+      if (pointer?.kind === 'queue' && pointer.key !== next) await this.leaveQueue(userId, pointer);
       const since = pointer?.kind === 'queue' && pointer.key === next ? pointer.since : now;
       const entry: Pointer = {
         kind: 'queue',
@@ -266,6 +361,10 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
         since,
         name: eligibility.name,
         image: eligibility.image,
+        topicId: topic?.id ?? null,
+        topicIds: topic ? [topic.id] : [],
+        topicTitle: topic?.title ?? null,
+        challengeId: null,
       };
       await this.setPointer(userId, entry);
       await this.kv.set(K.beat(userId), String(now), ARENA_RULES.beatTtlMs);
@@ -292,7 +391,7 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
     return this.withLock(`u:${userId}`, async () => {
       const pointer = await this.pointer(userId);
       if (pointer?.kind === 'queue') {
-        await this.kv.zrem(K.queue(pointer.key), userId);
+        await this.leaveQueue(userId, pointer);
         await this.kv.del(K.user(userId));
         await this.send(userId, 'left_queue', { phase: 'idle' });
         return { phase: 'idle' } as const;
@@ -308,6 +407,133 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
     });
   }
 
+  /**
+   * «تحدّي من اختيارك»: الطالب بيفتح تحدّي على تحدّي أو أكتر من كورسه،
+   * وبيستنى في طابور لوحده (`c:<id>`) لحد ما حد من نفس الطابور (كورس × دفعة)
+   * يقبله. تحدّي واحد مفتوح للطالب — التاني بيقفل الأول.
+   */
+  async createChallenge(userId: string, courseId: string, topicIds: readonly string[]): Promise<ArenaView> {
+    const key = await this.withLock(`u:${userId}`, async () => {
+      const pointer = await this.pointer(userId);
+      if (pointer?.kind === 'match') {
+        const state = await this.loadMatch(pointer.matchId);
+        if (state && !state.end) return null;
+      }
+      const eligibility = await this.access.eligibility(userId);
+      if (!eligibility.cohort) throw new ForbiddenException({ code: 'no_year' });
+      if (eligibility.blocked) throw new ForbiddenException({ code: eligibility.blocked });
+      const course = eligibility.courses.find((entry) => entry.id === courseId);
+      const topics = (course?.topics ?? []).filter((topic) => topicIds.includes(topic.id));
+      if (!course || topics.length === 0) throw new ForbiddenException({ code: 'topic_required' });
+      // مجموع البنوك سقف (التحديات ممكن تتداخل) — الماتش نفسه بيرجع «مفيش
+      // أسئلة كفاية» لو الحقيقي أقل، زي أي طابور.
+      if (topics.reduce((sum, topic) => sum + topic.questions, 0) < ARENA_RULES.minPool) {
+        throw new ForbiddenException({ code: 'course_not_playable' });
+      }
+      if (pointer?.kind === 'queue') await this.leaveQueue(userId, pointer);
+
+      const now = this.clock();
+      const id = randomUUID();
+      const cohortKey = queueKeyOf(courseId, eligibility.cohort);
+      const record: OpenChallenge = {
+        id,
+        creatorId: userId,
+        name: eligibility.name,
+        image: eligibility.image,
+        courseId,
+        courseTitle: course.title,
+        cohortKey,
+        cohortLabel: eligibility.cohortLabel,
+        topicIds: topics.map((topic) => topic.id),
+        topicTitles: topics.map((topic) => topic.title),
+        since: now,
+      };
+      await this.kv.set(K.challenge(id), JSON.stringify(record), QUEUE_TTL);
+      await this.kv.sadd(K.open(cohortKey), id, SET_TTL);
+      const next = challengeQueueKey(id);
+      await this.enterQueue(userId, next, now, {
+        kind: 'queue',
+        key: next,
+        courseId,
+        courseTitle: course.title,
+        cohortLabel: eligibility.cohortLabel,
+        since: now,
+        name: eligibility.name,
+        image: eligibility.image,
+        topicId: null,
+        topicIds: record.topicIds,
+        topicTitle: record.topicTitles.join('، '),
+        challengeId: id,
+      });
+      return next;
+    });
+    if (key) {
+      const view = await this.currentView(userId, false);
+      if (view.phase === 'queued') await this.send(userId, 'queued', view);
+      return view;
+    }
+    return this.currentView(userId, false);
+  }
+
+  /**
+   * «قبول» تحدّي طالب. لازم يكون من نفس الطابور (نفس الكورس ونفس الدفعة)،
+   * والتحدّي لسه مفتوح ومحدش قبله. صاحبه بيندهها كمان (ريستارت للسيرفر
+   * والمتصفح بيرجّعه) — ساعتها بيرجع يستنى في تحدّيه.
+   */
+  async acceptChallenge(userId: string, challengeId: string): Promise<ArenaView> {
+    const record = await this.loadChallenge(challengeId);
+    if (!record) throw new NotFoundException({ code: 'challenge_gone' });
+    const next = challengeQueueKey(challengeId);
+
+    const joined = await this.withLock(`u:${userId}`, async () => {
+      const pointer = await this.pointer(userId);
+      if (pointer?.kind === 'match') {
+        const state = await this.loadMatch(pointer.matchId);
+        if (state && !state.end) return false;
+      }
+      const eligibility = await this.access.eligibility(userId);
+      if (!eligibility.cohort) throw new ForbiddenException({ code: 'no_year' });
+      if (eligibility.blocked) throw new ForbiddenException({ code: eligibility.blocked });
+      const mine = record.creatorId === userId;
+      // دفعة تانية أو كورس مش مشترك فيه = التحدّي مش ليه، من غير ما نقول ليه.
+      const course = eligibility.courses.find((entry) => entry.id === record.courseId);
+      if (!mine && (!course || queueKeyOf(record.courseId, eligibility.cohort) !== record.cohortKey)) {
+        throw new NotFoundException({ code: 'challenge_gone' });
+      }
+      if (pointer?.kind === 'queue' && pointer.key !== next) await this.leaveQueue(userId, pointer);
+      const now = this.clock();
+      const entered = await this.withLock(`q:${next}`, async () => {
+        const members = await this.kv.zall(K.queue(next));
+        const others = members.filter((member) => member.member !== userId);
+        // اتقبل خلاص (حد سبق) — مفيش طرف تالت.
+        if (!mine && others.some((member) => member.member !== record.creatorId)) return false;
+        if (!mine && !others.some((member) => member.member === record.creatorId)) return false;
+        await this.enterQueue(userId, next, now, {
+          kind: 'queue',
+          key: next,
+          courseId: record.courseId,
+          courseTitle: record.courseTitle,
+          cohortLabel: record.cohortLabel,
+          since: mine ? record.since : now,
+          name: eligibility.name,
+          image: eligibility.image,
+          topicId: null,
+          topicIds: record.topicIds,
+          topicTitle: record.topicTitles.join('، '),
+          challengeId,
+        });
+        return true;
+      });
+      if (!entered) throw new NotFoundException({ code: 'challenge_gone' });
+      return true;
+    });
+
+    if (joined) await this.tryPair(next);
+    const view = await this.currentView(userId, false);
+    if (view.phase === 'queued') await this.send(userId, 'queued', view);
+    return view;
+  }
+
   /** أقدم اتنين في الطابور ده لسه موجودين = ماتش. */
   async tryPair(key: string): Promise<boolean> {
     const pair = await this.withLock(`q:${key}`, async () => {
@@ -316,6 +542,15 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
       for (const member of members) if (await this.queuedAndAlive(member.userId, key)) alive.add(member.userId);
       const picked = pickPair(members, (id) => alive.has(id));
       for (const id of picked.stale) await this.dropFromQueue(id, key);
+      // تحدّي طالب صاحبه مشي: اللي كان قبله مايفضلش مستني تحدّي مابقاش موجود.
+      if (key.startsWith('c:') && !(await this.kv.get(K.challenge(key.slice(2))))) {
+        for (const member of members) {
+          if (picked.stale.includes(member.userId)) continue;
+          await this.dropFromQueue(member.userId, key);
+          await this.send(member.userId, 'left_queue', { phase: 'idle' });
+        }
+        return null;
+      }
       if (!picked.pair) return null;
       for (const member of picked.pair) await this.kv.zrem(K.queue(key), member.userId);
       return picked.pair;
@@ -365,6 +600,8 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
     if (pointer?.kind === 'queue') {
       await this.kv.expire(K.user(userId), POINTER_TTL);
       await this.kv.expire(K.queue(pointer.key), QUEUE_TTL);
+      // تحدّي مفتوح بيعيش طول ما صاحبه مستني.
+      if (pointer.challengeId) await this.kv.expire(K.challenge(pointer.challengeId), QUEUE_TTL);
       return { at: now, phase: 'queued' };
     }
     if (pointer?.kind === 'match') {
@@ -488,10 +725,12 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
 
     let questions: Awaited<ReturnType<ArenaQuestionsPort['build']>> = [];
     try {
-      questions = await this.questions.build(a.courseId, userIds, ARENA_RULES.questions);
+      questions = await this.questions.build(a.courseId, userIds, ARENA_RULES.questions, a.topicIds ?? []);
     } catch (error) {
       this.logger.warn(`arena questions for ${a.courseId}: ${(error as Error).message}`);
     }
+    // تحدّي طالب: اتقبل (أو وقع) — مايفضلش في لستة «مفتوحة».
+    if (a.challengeId) await this.closeChallenge(a.challengeId);
     if (questions.length < MIN_MATCH_QUESTIONS) {
       for (const id of userIds) {
         await this.kv.del(K.user(id));
@@ -505,7 +744,8 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
       id: randomUUID(),
       bootId: this.bootId,
       courseId: a.courseId,
-      courseTitle: a.courseTitle,
+      // الشاشة بتقول على إيه الماتش: «البرمجة · الوحدة الأولى».
+      courseTitle: a.topicTitle ? `${a.courseTitle} · ${a.topicTitle}` : a.courseTitle,
       cohortLabel: a.cohortLabel,
       players: [
         { userId: userIds[0], name: a.name, image: a.image },
@@ -591,6 +831,9 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
         courseTitle: pointer.courseTitle,
         cohortLabel: pointer.cohortLabel,
         since: pointer.since,
+        topicId: pointer.topicId ?? null,
+        topicTitle: pointer.topicTitle ?? null,
+        challengeId: pointer.challengeId ?? null,
       };
     }
     if (pointer?.kind === 'match') {
@@ -613,7 +856,41 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
   private async dropFromQueue(userId: string, key: string): Promise<void> {
     await this.kv.zrem(K.queue(key), userId);
     const pointer = await this.pointer(userId);
-    if (pointer?.kind === 'queue' && pointer.key === key) await this.kv.del(K.user(userId));
+    if (pointer?.kind === 'queue' && pointer.key === key) {
+      await this.closeOwnChallenge(userId, pointer);
+      await this.kv.del(K.user(userId));
+    }
+  }
+
+  /** يخرج من طابوره — ولو كان مستني في تحدّيه هو، التحدّي بيتقفل. */
+  private async leaveQueue(userId: string, pointer: Extract<Pointer, { kind: 'queue' }>): Promise<void> {
+    await this.kv.zrem(K.queue(pointer.key), userId);
+    await this.closeOwnChallenge(userId, pointer);
+  }
+
+  private async closeOwnChallenge(userId: string, pointer: Extract<Pointer, { kind: 'queue' }>): Promise<void> {
+    if (!pointer.challengeId) return;
+    const record = await this.loadChallenge(pointer.challengeId);
+    if (record?.creatorId === userId) await this.closeChallenge(pointer.challengeId);
+  }
+
+  private async enterQueue(userId: string, key: string, now: number, entry: Pointer): Promise<void> {
+    await this.setPointer(userId, entry);
+    await this.kv.set(K.beat(userId), String(now), ARENA_RULES.beatTtlMs);
+    await this.kv.del(K.gone(userId));
+    await this.kv.zadd(K.queue(key), entry.kind === 'queue' ? entry.since : now, userId, QUEUE_TTL);
+    await this.kv.sadd(K.queues, key, SET_TTL);
+  }
+
+  private async loadChallenge(id: string): Promise<OpenChallenge | null> {
+    const raw = await this.kv.get(K.challenge(id));
+    return raw ? (JSON.parse(raw) as OpenChallenge) : null;
+  }
+
+  private async closeChallenge(id: string): Promise<void> {
+    const record = await this.loadChallenge(id);
+    await this.kv.del(K.challenge(id));
+    if (record) await this.kv.srem(K.open(record.cohortKey), id);
   }
 
   /**

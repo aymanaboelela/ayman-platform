@@ -433,12 +433,21 @@ export class GameService {
    * `pool` عن قصد: أي فلتر بيتضاف على البنك (سؤال اتشال من البنك، امتحان
    * جاي) بيوصل للساحة من غير ما حد يفتكرها.
    */
-  async arenaPool(userId: string, courseId: string): Promise<Array<{ versionId: string; facility: number | null }>> {
+  async arenaPool(userId: string, courseId: string): Promise<ArenaPoolItem[]> {
     const pool = await this.pool(userId);
-    return eligible(pool, 'race', courseId, { kind: 'all' }).map((entry) => ({
-      versionId: entry.versionId,
-      facility: entry.facility,
-    }));
+    return eligible(pool, 'race', courseId, { kind: 'all' }).map(arenaItem);
+  }
+
+  /**
+   * «ساحة التحدي» على تحديات: بنك الطالب في دروس التحديات دي (نفس
+   * `topicCourses` بتاع الألعاب — نظامه، والامتحانات اللي لسه). تحدّي مش
+   * متشغّل أو من كورس تاني مابيضيفش حاجة.
+   */
+  async arenaTopicPool(userId: string, courseId: string, topicIds: readonly string[]): Promise<ArenaPoolItem[]> {
+    const course = (await this.topicCourses(userId, [courseId])).get(courseId);
+    if (!course) return [];
+    const lessons = new Set(course.topics.filter((topic) => topicIds.includes(topic.id)).flatMap((topic) => topic.lessonIds));
+    return course.entries.filter((entry) => entry.lessonId !== null && lessons.has(entry.lessonId)).map(arenaItem);
   }
 
   /** كام سؤال للساحة في كل كورس في بنك الطالب — كويري واحدة للكل. */
@@ -903,6 +912,23 @@ export class GameService {
     }
     return { entries, categories };
   }
+}
+
+/** سؤال في بنك الساحة — `pickQuestions` بيحتاج المجموعة عشان «ماتكرّرش». */
+export interface ArenaPoolItem {
+  versionId: string;
+  facility: number | null;
+  bankEntryId: string;
+  variantGroupKey: string | null;
+}
+
+function arenaItem(entry: PoolEntry): ArenaPoolItem {
+  return {
+    versionId: entry.versionId,
+    facility: entry.facility,
+    bankEntryId: entry.bankEntryId,
+    variantGroupKey: entry.variantGroupKey,
+  };
 }
 
 /** إعدادات كل كورس، واللي مالوش صف على الافتراضي. */

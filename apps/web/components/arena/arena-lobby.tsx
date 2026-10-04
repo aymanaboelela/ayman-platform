@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import type { CSSProperties } from 'react';
-import { BookOpen, Flame, Scale, Swords, Timer, Trophy, UserRound, XCircle, Zap } from 'lucide-react';
-import { ARENA_RULES, type ArenaLobby as Lobby } from '@ayman/contracts/arena';
+import { useState, type CSSProperties } from 'react';
+import { BookOpen, Check, Flag, Flame, Handshake, Scale, Swords, Timer, Trophy, UserRound, Users, XCircle, Zap } from 'lucide-react';
+import { ARENA_RULES, type ArenaCourse, type ArenaLobby as Lobby } from '@ayman/contracts/arena';
+import { encodeArenaIntent, type ArenaOpenChallenge } from '@ayman/contracts/arena-challenges';
 import { arenaCopy } from '@ayman/contracts/copy/arena';
 import { formatCopy } from '@ayman/contracts/format';
 import { ArenaBoard } from './arena-board';
@@ -16,25 +17,36 @@ const NUM = new Intl.NumberFormat('en-US');
 
 /**
  * اللوبي: الهيرو الغامق (شعار، «صفّك»، صورتك ونقطك وترتيبك)، الكورس اللي
- * هنلعب فيه، زرار «يلا نبدأ» الكبير، القواعد، وأبطال الساحة.
+ * هنلعب فيه، وبعدين:
+ *   · كورس من غير «تحديات» — زرار «يلا نبدأ» الكبير على الكورس كله، زي الأول.
+ *   · كورس فيه تحديات — كارت لكل تحدّي بزرار «يلا» لوحده، و«تحدّي من
+ *     اختيارك» (تحدّي أو أكتر يتفتح للدفعة).
+ * وفوقهم تحديات الدفعة المفتوحة بزرار «قبول» لكل واحد، وتحت القواعد وأبطال
+ * الساحة.
+ *
+ * كل «يلا» بتبعت `ArenaIntent` (`arena-challenges.ts`) — نفس اللي بيرجّع
+ * الطالب لمكانه لو السيرفر اتعمله ريستارت.
  */
 export function ArenaLobby({
   lobby,
   courseId,
   onCourse,
-  onStart,
+  onPlay,
   error,
   sound,
 }: {
   lobby: Lobby;
   courseId: string | null;
   onCourse: (id: string) => void;
-  onStart: () => void;
+  onPlay: (intent: string) => void;
   error: ArenaErrorCode | null;
   sound: ArenaSound;
 }) {
   const { me } = lobby;
   const playable = lobby.courses.filter((course) => course.playable);
+  const selected = lobby.courses.find((course) => course.id === courseId) ?? null;
+  const topical = selected && (selected.topics ?? []).length > 0 ? selected : null;
+  const challenges = lobby.challenges ?? [];
   const capPct = Math.min(100, Math.round((me.todayPoints / ARENA_RULES.dailyPointsCap) * 100));
 
   return (
@@ -99,6 +111,10 @@ export function ArenaLobby({
         </div>
       </section>
 
+      {!lobby.blocked && challenges.length > 0 ? (
+        <OpenChallenges challenges={challenges} onAccept={(id) => onPlay(encodeArenaIntent({ kind: 'challenge', challengeId: id }))} />
+      ) : null}
+
       {lobby.blocked ? (
         <Blocked kind={lobby.blocked} />
       ) : playable.length === 0 ? (
@@ -137,12 +153,23 @@ export function ArenaLobby({
             ))}
           </div>
 
-          <button type="button" className="ca-start" onClick={onStart} disabled={!courseId}>
-            <span className="ca-start__shine" aria-hidden="true" />
-            <Zap className="size-6" aria-hidden="true" />
-            {c.start}
-          </button>
-          <p className="ca-start__hint">{c.startHint}</p>
+          {topical ? (
+            <Topics course={topical} onPlay={onPlay} />
+          ) : (
+            <>
+              <button
+                type="button"
+                className="ca-start"
+                onClick={() => courseId && onPlay(encodeArenaIntent({ kind: 'course', courseId }))}
+                disabled={!courseId}
+              >
+                <span className="ca-start__shine" aria-hidden="true" />
+                <Zap className="size-6" aria-hidden="true" />
+                {c.start}
+              </button>
+              <p className="ca-start__hint">{c.startHint}</p>
+            </>
+          )}
           {error ? <p className="ca-error" role="alert">{errorText(error)}</p> : null}
         </section>
       )}
@@ -199,10 +226,130 @@ function Blocked({ kind }: { kind: 'no_year' | 'no_subscription' }) {
   );
 }
 
+/**
+ * تحديات الكورس: كارت لكل تحدّي بلونه وزرار «يلا» (طابور التحدّي ده)، وتحتهم
+ * «تحدّي من اختيارك» — تحدّي أو أكتر، وزرار واحد يفتحه للدفعة.
+ */
+function Topics({ course, onPlay }: { course: ArenaCourse; onPlay: (intent: string) => void }) {
+  const topics = course.topics ?? [];
+  const [picked, setPicked] = useState<string[]>([]);
+  const chosen = topics.filter((topic) => picked.includes(topic.id));
+  // سقف تقريبي (التحديات ممكن تتداخل) — السيرفر بيقول الحقيقة لو أقل.
+  const enough = chosen.reduce((sum, topic) => sum + topic.questions, 0) >= ARENA_RULES.minPool;
+  return (
+    <div className="ca-topics-wrap">
+      <h3 className="ca-topics__title">{c.topicsTitle}</h3>
+      <p className="ca-card__sub">{c.topicsLead}</p>
+      <ul className="ca-topics">
+        {topics.map((topic, index) => (
+          <li key={topic.id} className="ca-topic" data-tone={index % 4} data-off={!topic.playable || undefined}>
+            <span className="ca-topic__icon" aria-hidden="true">
+              <Flag className="size-5" />
+            </span>
+            <span className="ca-topic__text">
+              <span className="ca-topic__name">{topic.title}</span>
+              <span className="ca-topic__meta">
+                {topic.playable ? formatCopy(c.courseQuestions, { n: NUM.format(topic.questions) }) : c.topicTooFew}
+                {topic.waiting > 0 ? (
+                  <span className="ca-topic__waiting">
+                    <Users className="size-3.5" aria-hidden="true" />
+                    {formatCopy(c.topicWaiting, { n: NUM.format(topic.waiting) })}
+                  </span>
+                ) : null}
+              </span>
+            </span>
+            <button
+              type="button"
+              className="ca-btn ca-btn--primary ca-topic__go"
+              disabled={!topic.playable}
+              onClick={() => onPlay(encodeArenaIntent({ kind: 'topic', courseId: course.id, topicId: topic.id }))}
+            >
+              <Zap className="size-4" aria-hidden="true" />
+              {c.topicPlay}
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <div className="ca-create">
+        <h3 className="ca-topics__title">
+          <Swords className="size-5" aria-hidden="true" />
+          {c.createTitle}
+        </h3>
+        <p className="ca-card__sub">{c.createLead}</p>
+        <div className="ca-create__chips" role="group" aria-label={c.createPick}>
+          {topics.map((topic) => {
+            const on = picked.includes(topic.id);
+            return (
+              <button
+                key={topic.id}
+                type="button"
+                className="ca-chip"
+                aria-pressed={on}
+                data-on={on || undefined}
+                onClick={() => setPicked(on ? picked.filter((id) => id !== topic.id) : [...picked, topic.id])}
+              >
+                {on ? <Check className="size-4" aria-hidden="true" /> : null}
+                {topic.title}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          className="ca-btn ca-btn--primary"
+          disabled={!enough}
+          onClick={() => onPlay(encodeArenaIntent({ kind: 'create', courseId: course.id, topicIds: picked }))}
+        >
+          <Flag className="size-4" aria-hidden="true" />
+          {c.createCta}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** تحديات الدفعة المفتوحة — صف لكل واحد بصاحبه وتحدّياته وزرار «قبول». */
+function OpenChallenges({ challenges, onAccept }: { challenges: ArenaOpenChallenge[]; onAccept: (id: string) => void }) {
+  return (
+    <section className="ca-card ca-open" aria-labelledby="ca-open-title">
+      <header className="ca-card__head">
+        <span className="ca-card__icon" data-tone="gold">
+          <Handshake className="size-5" aria-hidden="true" />
+        </span>
+        <h2 id="ca-open-title" className="ca-card__title">
+          {c.openTitle}
+        </h2>
+      </header>
+      <ul className="ca-open__list">
+        {challenges.map((challenge) => (
+          <li key={challenge.id} className="ca-open__row" data-mine={challenge.mine || undefined}>
+            <Fighter player={challenge.by} side={challenge.mine ? 'you' : 'opponent'} size={40} />
+            <span className="ca-open__text">
+              <span className="ca-open__by">{challenge.mine ? c.openMine : formatCopy(c.openBy, { name: challenge.by.name })}</span>
+              <span className="ca-open__topics">
+                {challenge.courseTitle} · {challenge.topicTitles.join('، ')}
+              </span>
+            </span>
+            {challenge.mine ? null : (
+              <button type="button" className="ca-btn ca-btn--primary" onClick={() => onAccept(challenge.id)}>
+                <Handshake className="size-4" aria-hidden="true" />
+                {c.accept}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function errorText(code: ArenaErrorCode): string {
   if (code === 'no_year') return c.blockedYearBody;
   if (code === 'no_subscription') return c.blockedSubBody;
   if (code === 'course_not_playable') return c.courseTooFew;
+  if (code === 'topic_required') return c.topicRequired;
+  if (code === 'challenge_gone') return c.challengeGone;
   if (code === 'no_questions') return arenaCopy.result.noQuestionsBody;
   return c.closedBody;
 }

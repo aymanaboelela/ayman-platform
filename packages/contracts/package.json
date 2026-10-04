@@ -118,6 +118,7 @@
     "./quiz/monthly-exam": "./src/quiz/monthly-exam.ts",
     "./admin/exams": "./src/admin/exams.ts",
     "./arena": "./src/arena.ts",
+    "./arena-challenges": "./src/arena-challenges.ts",
     "./copy/arena": "./src/copy/arena.ts",
     "./mistakes": "./src/mistakes.ts",
     "./copy/mistakes": "./src/copy/mistakes.ts"

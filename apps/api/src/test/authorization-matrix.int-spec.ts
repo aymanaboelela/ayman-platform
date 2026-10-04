@@ -849,6 +849,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'arena stream: anonymous', method: 'get', path: () => '/api/me/arena/stream', actor: 'anonymous', status: 401 },
     { label: 'arena queue: anonymous', method: 'post', path: () => '/api/me/arena/queue', actor: 'anonymous', status: 401, body: () => ({ courseId: randomUUID() }) },
     { label: 'arena queue: student, a course that is not theirs', method: 'post', path: () => '/api/me/arena/queue', actor: 'student', status: 403, body: () => ({ courseId: randomUUID() }) },
+    // «تحدّي من اختيارك» وقبوله — طالب من غير سنة/اشتراك مايقدرش يفتح تحدّي
+    // (٤٠٣)، وتحدّي مش موجود (أو مش من طابوره) = ٤٠٤.
+    { label: 'arena challenge create: anonymous', method: 'post', path: () => '/api/me/arena/challenges', actor: 'anonymous', status: 401, body: () => ({ courseId: randomUUID(), topicIds: [randomUUID()] }) },
+    { label: 'arena challenge create: student, a course that is not theirs', method: 'post', path: () => '/api/me/arena/challenges', actor: 'student', status: 403, body: () => ({ courseId: randomUUID(), topicIds: [randomUUID()] }) },
+    { label: 'arena challenge accept: anonymous', method: 'post', path: () => `/api/me/arena/challenges/${randomUUID()}/accept`, actor: 'anonymous', status: 401 },
+    { label: 'arena challenge accept: student, no such challenge', method: 'post', path: () => `/api/me/arena/challenges/${randomUUID()}/accept`, actor: 'student', status: 404 },
     { label: 'arena leave queue: anonymous', method: 'delete', path: () => '/api/me/arena/queue', actor: 'anonymous', status: 401 },
     { label: 'arena leave queue: student', method: 'delete', path: () => '/api/me/arena/queue', actor: 'student', status: 200 },
     { label: 'arena answer: anonymous', method: 'post', path: () => `/api/me/arena/matches/${randomUUID()}/answer`, actor: 'anonymous', status: 401, body: () => ({ index: 0, optionId: randomUUID() }) },
