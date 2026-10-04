@@ -27,6 +27,9 @@ export const mistakesCopy = {
     missedTimes: 'غلطة {n} مرات',
     missedAt: 'آخر غلطة {when}',
     streakHint: 'صح {have} من {need} عشان تتصلح',
+    /** آخر غلطة كانت في لعبة مش كويز — الشارة جنب السؤال. */
+    fromGame: 'من تحدّي الأسئلة',
+    fromArena: 'من ساحة التحدي',
   },
   practice: {
     of: 'سؤال {n} من {total}',

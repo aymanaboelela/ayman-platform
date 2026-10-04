@@ -6,6 +6,7 @@ import {
   Circle,
   Diamond,
   Flame,
+  GraduationCap,
   Heart,
   RotateCcw,
   Sparkles,
@@ -25,6 +26,7 @@ import {
 } from '@ayman/contracts/quiz/game';
 import { SafeHtml } from '@/components/content/safe-html';
 import { apiPost } from '@/lib/api';
+import { AnswerExplain } from './answer-explain';
 import { finishRound } from './finish-round';
 import type { GameSound } from './use-game-sound';
 
@@ -46,6 +48,7 @@ interface Feedback {
   right: string[];
   correct: boolean;
   gained: number;
+  explanationHtml: string | null;
 }
 
 /**
@@ -72,6 +75,11 @@ export function QuizGame({
   const [round, setRound] = useState(initial);
   const rules = GAME_RULES[round.mode];
   const seconds = rules.seconds[round.level];
+  /**
+   * «تدريب»: نفس الجولة من غير تايمر ولا قلوب. الغلط مابيخسّرش، والشرح
+   * بيفضل قدّام الطالب لحد ما يدوس «اللي بعده» — دي مذاكرة مش سباق.
+   */
+  const practice = round.practice === true;
   // بتبدأ على العدّ التنازلي على طول: الاختيار والـ«يلا» حصلوا في صفحة الألعاب.
   const [phase, setPhase] = useState<Phase>('countdown');
   const [count, setCount] = useState(3);
@@ -107,19 +115,20 @@ export function QuizGame({
         setCount((n) => n - 1);
         return;
       }
-      deadline.current = performance.now() + seconds * 1000;
+      deadline.current = practice ? Number.POSITIVE_INFINITY : performance.now() + seconds * 1000;
       setLeft(seconds);
       setPhase('question');
       sound.play('go');
     }, 800);
     return () => window.clearTimeout(id);
-  }, [phase, count, sound, seconds]);
+  }, [phase, count, sound, seconds, practice]);
 
   const answer = useCallback(
     async (optionId: string | null) => {
       if (!question || busy) return;
       setBusy(true);
-      const secondsLeft = Math.max(0, (deadline.current - performance.now()) / 1000);
+      // التدريب مالوش وقت، فنقطه من غير بونص سرعة — نفس أقل نقط بيحسبها السيرفر.
+      const secondsLeft = practice ? 0 : Math.max(0, (deadline.current - performance.now()) / 1000);
       try {
         const result = await apiPost('/api/me/game/answer', GameAnswerResultSchema, {
           questionId: question.id,
@@ -134,10 +143,16 @@ export function QuizGame({
         if (result.correct) {
           setScore((s) => s + gained);
           setRightCount((n) => n + 1);
-        } else {
+        } else if (!practice) {
           setLives((n) => n - 1);
         }
-        setFeedback({ chosen: optionId, right: result.rightOptionIds, correct: result.correct, gained });
+        setFeedback({
+          chosen: optionId,
+          right: result.rightOptionIds,
+          correct: result.correct,
+          gained,
+          explanationHtml: result.explanationHtml ?? null,
+        });
         setPhase('feedback');
         sound.play(result.correct ? (nextStreak >= 3 ? 'combo' : 'right') : 'wrong');
       } catch {
@@ -147,13 +162,13 @@ export function QuizGame({
         setChosenId(null);
       }
     },
-    [question, busy, streak, sound, seconds, round.sessionId],
+    [question, busy, streak, sound, seconds, round.sessionId, practice],
   );
 
   // التايمر: requestAnimationFrame مش setInterval، عشان الشريط يمشي ناعم
   // ويقف لوحده لو التاب اتخبّى (المتصفح بيوقف الفريمات).
   useEffect(() => {
-    if (phase !== 'question') return;
+    if (phase !== 'question' || practice) return;
     let frame = 0;
     let lastWhole = seconds;
     const step = () => {
@@ -170,7 +185,7 @@ export function QuizGame({
     };
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  }, [phase, answer, sound, seconds]);
+  }, [phase, answer, sound, seconds, practice]);
 
   const next = useCallback(() => {
     setFeedback(null);
@@ -181,10 +196,10 @@ export function QuizGame({
       return;
     }
     setIndex((i) => i + 1);
-    deadline.current = performance.now() + seconds * 1000;
+    deadline.current = practice ? Number.POSITIVE_INFINITY : performance.now() + seconds * 1000;
     setLeft(seconds);
     setPhase('question');
-  }, [lives, index, total, sound, seconds]);
+  }, [lives, index, total, sound, seconds, practice]);
 
   // آخر الجولة: السيرفر بيقفل الجولة ويحسب نتيجتها ومدتها.
   useEffect(() => {
@@ -194,11 +209,14 @@ export function QuizGame({
   }, [phase, round.sessionId, score]);
 
   // بعد الإجابة: ثانية ونص ويروح للي بعده لوحده، والزرار موجود لو حد مستعجل.
+  // إلا لو فيه حاجة تتقري: غلطة ليها شرح، أو أي سؤال في التدريب — ساعتها
+  // مفيش عدّ، و«اللي بعده» بإيد الطالب (التايمر واقف أصلًا في الكشف).
+  const reading = feedback !== null && (practice || (!feedback.correct && feedback.explanationHtml !== null));
   useEffect(() => {
-    if (phase !== 'feedback') return;
+    if (phase !== 'feedback' || reading) return;
     const id = window.setTimeout(next, feedback?.correct ? 1400 : 2200);
     return () => window.clearTimeout(id);
-  }, [phase, feedback, next]);
+  }, [phase, feedback, next, reading]);
 
   const start = () => {
     setIndex(0);
@@ -241,11 +259,18 @@ export function QuizGame({
       {(phase === 'question' || phase === 'feedback') && question ? (
         <div className="gm-play">
           <header className="gm-hud">
-            <div className="gm-hud__lives" aria-label={formatCopy(c.ruleLives, { n: lives })}>
-              {Array.from({ length: rules.lives }, (_, i) => (
-                <Heart key={i} className="gm-heart" data-lost={i >= lives || undefined} aria-hidden="true" />
-              ))}
-            </div>
+            {practice ? (
+              <p className="gm-practice-badge">
+                <GraduationCap className="size-4" aria-hidden="true" />
+                {c.practiceBadge}
+              </p>
+            ) : (
+              <div className="gm-hud__lives" aria-label={formatCopy(c.ruleLives, { n: lives })}>
+                {Array.from({ length: rules.lives }, (_, i) => (
+                  <Heart key={i} className="gm-heart" data-lost={i >= lives || undefined} aria-hidden="true" />
+                ))}
+              </div>
+            )}
             <p className="gm-hud__progress">{formatCopy(c.questionOf, { n: index + 1, total })}</p>
             <p className="gm-hud__score">
               <Trophy className="size-4" aria-hidden="true" />
@@ -255,12 +280,14 @@ export function QuizGame({
             </p>
           </header>
 
-          <div className="gm-timer" aria-hidden="true">
-            <span
-              style={{ '--gm-left': `${(left / seconds) * 100}%` } as CSSProperties}
-              data-low={left <= 5 || undefined}
-            />
-          </div>
+          {practice ? null : (
+            <div className="gm-timer" aria-hidden="true">
+              <span
+                style={{ '--gm-left': `${(left / seconds) * 100}%` } as CSSProperties}
+                data-low={left <= 5 || undefined}
+              />
+            </div>
+          )}
 
           {streak >= 2 ? (
             <p key={streak} className="gm-combo">
@@ -322,6 +349,12 @@ export function QuizGame({
                 {c.next}
                 <ArrowLeft className="size-4" aria-hidden="true" />
               </button>
+              {!feedback.correct || practice ? (
+                <AnswerExplain
+                  rightHtml={feedback.correct ? [] : question.options.filter((option) => feedback.right.includes(option.id)).map((option) => option.bodyHtml)}
+                  explanationHtml={feedback.explanationHtml}
+                />
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -333,7 +366,7 @@ export function QuizGame({
           right={rightCount}
           total={Math.min(total, index + 1)}
           bestStreak={bestStreak}
-          outOfLives={lives <= 0}
+          outOfLives={!practice && lives <= 0}
           busy={busy}
           onAgain={() => void again()}
           onExit={onExit}

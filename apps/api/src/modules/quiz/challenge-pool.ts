@@ -101,7 +101,44 @@ export async function challengeCandidates(
         ON jsonb_typeof(p."source_filter"->'categoryIds') = 'array'
        AND be."category_id"::text IN (SELECT jsonb_array_elements_text(p."source_filter"->'categoryIds'))
     ),
-    exams AS (
+    ${examBlockCtes(userId)}
+    SELECT DISTINCT ON (x.be_id, x."course_id")
+      lv."id" AS vid, x.be_id AS bank_entry_id, be."variant_group_key", x."course_id", x.lesson_id,
+      ls."section_id", ls."for_general", ls."for_languages"
+    FROM linked x
+    JOIN "app"."question_bank_entries" be ON be."id" = x.be_id AND be."archived_at" IS NULL
+    JOIN LATERAL (
+      SELECT v."id" FROM "app"."question_versions" v
+      WHERE v."bank_entry_id" = be."id" AND v."status" = 'ready'
+      ORDER BY v."version" DESC LIMIT 1
+    ) lv ON true
+    JOIN "app"."question_versions" v ON v."id" = lv."id" AND v."type" IN ('mcq_single', 'true_false')
+    JOIN "app"."lessons" ls ON ls."id" = x.lesson_id
+    WHERE NOT EXISTS (SELECT 1 FROM blocked b WHERE b.be_id = be."id")
+      AND (SELECT count(*) FROM "app"."question_options" o WHERE o."question_version_id" = v."id") >= 2
+      AND EXISTS (SELECT 1 FROM "app"."question_options" o WHERE o."question_version_id" = v."id" AND o."fraction" > 0)
+    ORDER BY x.be_id, x."course_id", x.pref
+  `);
+  return rows.map((row) => ({
+    versionId: row.vid,
+    bankEntryId: row.bank_entry_id,
+    variantGroupKey: row.variant_group_key,
+    courseId: row.course_id,
+    lessonId: row.lesson_id,
+    sectionId: row.section_id,
+    forGeneral: row.for_general,
+    forLanguages: row.for_languages,
+  }));
+}
+
+/**
+ * `exams` و`blocked` — الامتحانات اللي لسه مقفولة على الطالب ده (مسودة، أو
+ * مفتوحة وماسلّمهاش)، وكل سؤال بيسحب منها. CTE مكتوبة مرة واحدة: البنك
+ * (`challengeCandidates`) و«دفتر غلطاتي» (`blockedBankEntries`) لازم يقولوا نفس
+ * الكلام، وإلا الدفتر يكشف إجابة سؤال البنك بيخبّيه.
+ */
+function examBlockCtes(userId: string | null): Prisma.Sql {
+  return Prisma.sql`exams AS (
       SELECT q."id"
       FROM "app"."quizzes" q
       JOIN "app"."lessons" l ON l."id" = q."lesson_id"
@@ -131,34 +168,16 @@ export async function challengeCandidates(
       JOIN "app"."question_bank_entries" be
         ON jsonb_typeof(p."source_filter"->'categoryIds') = 'array'
        AND be."category_id"::text IN (SELECT jsonb_array_elements_text(p."source_filter"->'categoryIds'))
-    )
-    SELECT DISTINCT ON (x.be_id, x."course_id")
-      lv."id" AS vid, x.be_id AS bank_entry_id, be."variant_group_key", x."course_id", x.lesson_id,
-      ls."section_id", ls."for_general", ls."for_languages"
-    FROM linked x
-    JOIN "app"."question_bank_entries" be ON be."id" = x.be_id AND be."archived_at" IS NULL
-    JOIN LATERAL (
-      SELECT v."id" FROM "app"."question_versions" v
-      WHERE v."bank_entry_id" = be."id" AND v."status" = 'ready'
-      ORDER BY v."version" DESC LIMIT 1
-    ) lv ON true
-    JOIN "app"."question_versions" v ON v."id" = lv."id" AND v."type" IN ('mcq_single', 'true_false')
-    JOIN "app"."lessons" ls ON ls."id" = x.lesson_id
-    WHERE NOT EXISTS (SELECT 1 FROM blocked b WHERE b.be_id = be."id")
-      AND (SELECT count(*) FROM "app"."question_options" o WHERE o."question_version_id" = v."id") >= 2
-      AND EXISTS (SELECT 1 FROM "app"."question_options" o WHERE o."question_version_id" = v."id" AND o."fraction" > 0)
-    ORDER BY x.be_id, x."course_id", x.pref
+    )`;
+}
+
+/** أسئلة البنك (`question_bank_entries.id`) اللي امتحان لسه مقفول على الطالب ده بيسحب منها. */
+export async function blockedBankEntries(prisma: PrismaService, userId: string): Promise<Set<string>> {
+  const rows = await prisma.$queryRaw<Array<{ be_id: string }>>(Prisma.sql`
+    WITH ${examBlockCtes(userId)}
+    SELECT be_id FROM blocked
   `);
-  return rows.map((row) => ({
-    versionId: row.vid,
-    bankEntryId: row.bank_entry_id,
-    variantGroupKey: row.variant_group_key,
-    courseId: row.course_id,
-    lessonId: row.lesson_id,
-    sectionId: row.section_id,
-    forGeneral: row.for_general,
-    forLanguages: row.for_languages,
-  }));
+  return new Set(rows.map((row) => row.be_id));
 }
 
 /** درس في الكورس، والدرس اللي أسئلته محسوبة عليه (كويز ← محاضرته). */

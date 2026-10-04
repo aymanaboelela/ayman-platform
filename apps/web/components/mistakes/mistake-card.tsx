@@ -29,6 +29,11 @@ export function MistakeCard({ entry }: { entry: MistakeEntry }) {
       )}
       <SafeHtml html={entry.stemHtml} className="leading-relaxed text-fg" />
       <div className="flex flex-wrap gap-2.5 text-xs text-fg-muted">
+        {entry.source === 'game' || entry.source === 'arena' ? (
+          <span className="rounded-full bg-[color-mix(in_oklab,var(--viz-3)_18%,transparent)] px-2 font-semibold text-fg">
+            {entry.source === 'game' ? c.fromGame : c.fromArena}
+          </span>
+        ) : null}
         <span>{entry.timesMissed === 1 ? c.missedOnce : formatCopy(c.missedTimes, { n: entry.timesMissed })}</span>
         <span>{formatCopy(c.missedAt, { when: relativeAr(entry.missedAt) })}</span>
         {entry.streakRight > 0 && (

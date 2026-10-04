@@ -36,6 +36,7 @@ import {
 } from '@ayman/contracts/quiz/challenges';
 import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import { Prisma } from '../../generated/prisma/client';
+import { sanitizeRichText } from '../../common/sanitize/rich-text';
 import { azureSpeech } from './game-voice.config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EnrollmentService } from '../enrollment/enrollment.service';
@@ -313,7 +314,9 @@ export class GameService {
     const correct = input.optionId !== null && rightOptionIds.includes(input.optionId);
     if (session) await this.record(userId, session, input, correct);
     // الشرح بيوصل مع الصح بس — بعد ما الإجابة اتحسبت، زي `rightOptionIds`.
-    const explanationHtml = version?.generalFeedbackHtml?.trim() ? version.generalFeedbackHtml : null;
+    // بيتنضّف تاني هنا زي أسئلة الساحة: المتصفح بيرسمه من رد API مباشرةً، من
+    // غير سيرفر كومبوننت في النص.
+    const explanationHtml = version?.generalFeedbackHtml?.trim() ? sanitizeRichText(version.generalFeedbackHtml) : null;
     return { correct, rightOptionIds, explanationHtml };
   }
 
