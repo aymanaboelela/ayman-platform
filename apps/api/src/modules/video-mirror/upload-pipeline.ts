@@ -470,9 +470,12 @@ export interface TranscodeResult extends MirrorResult {
 export interface TranscodeTools extends MirrorTools {
   readonly ffprobe: string;
   /**
-   * Encoder threads. `0` lets ffmpeg use every core, which on a shared VPS
-   * means the site gets slow for the length of a lecture. Configurable so a
-   * bigger machine can be told to go faster.
+   * Encoder threads. `0` lets ffmpeg use every core — which is what this
+   * used to default to, and the reference VPS (4 cores, three tenant stacks)
+   * measured 130-170% CPU from ONE encode alone (2026-10-04). `nice -n 19`
+   * below only lowers SCHEDULING priority; it does not cap how many cores a
+   * process may touch, so a single lecture could still starve every other
+   * container on the box for the length of the encode.
    */
   readonly threads: number;
   /**
@@ -494,7 +497,10 @@ export const DEFAULT_TRANSCODE_TOOLS: TranscodeTools = {
   // kill a HUNG ffmpeg, not a slow one — failing a lecture at 90% is worse
   // than a late one.
   timeoutMs: 12 * 60 * 60_000,
-  threads: 0,
+  // Half the reference VPS's 4 cores — leaves the other two for postgres,
+  // redis, traefik and whichever OTHER tenant stack is sharing the same
+  // physical box, so one lecture encoding never fully starves the site.
+  threads: 2,
   renice: process.platform === 'linux',
 };
 

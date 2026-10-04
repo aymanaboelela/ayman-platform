@@ -91,6 +91,14 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
+    # ⚠️ عملية حقيقية (2026-10-04): 256 عملية zombie على سيرفر صبري وقت
+    # انهيار الـCPU — `ffmpeg` اللي بيحوّل الفيديو بيتولد من هنا، وكل
+    # healthcheck بتاع الكونتينرات التانية (`node -e fetch(...)`) بينفّذ جوه
+    # الكونتينر ده كل كام ثانية. من غير `init`، الـPID 1 (Node) مش بيعمل
+    # wait() على العمليات الفرعية دي، فبتفضل zombie متراكمة بدل ما تتشال —
+    # وده بالظبط اللي كان بيمنع السيرفر يرجّع الموارد حتى بعد ما العملية
+    # الأصلية خلصت أو اتقفلت بالقوة.
+    init: true
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -282,6 +290,9 @@ services:
     build:
       context: ./services/wa
     restart: unless-stopped
+    # نفس سبب `api` — الـhealthcheck بينفّذ عملية جوّه الكونتينر ده كل كام
+    # ثانية برضو، وبدون `init` بتتراكم zombie مع الوقت.
+    init: true
     environment:
       WA_PORT: '3400'
       WA_TOKEN: ${WA_TOKEN:-}
@@ -357,6 +368,8 @@ services:
         # كان بيخلّيه صعب يتلاقى.
         NEXT_PUBLIC_GOOGLE_ENABLED: ${GOOGLE_CLIENT_ID:+1}
     restart: unless-stopped
+    # نفس سبب `api` فوق — healthcheck بينفّذ جوّه الكونتينر كل كام ثانية.
+    init: true
     depends_on:
       api: { condition: service_healthy }
       redis: { condition: service_healthy }
