@@ -844,10 +844,16 @@ const admin = {
     /**
      * Names the two things an instructor actually wants to know before
      * committing an hour of uplink: what it will take, and that it does not
-     * have to be perfect. No mention of codecs — the encoder handles them.
+     * have to be perfect.
+     *
+     * The second sentence is the one place codecs are named (2026-10-04): a
+     * file that meets it is published in seconds with no encode at all —
+     * `canPassThrough` in the API, whose limits these words must match
+     * (H.264, ≤1080p, `PASSTHROUGH_MAX_KBPS` ≈ 2 GB an hour). Anything else
+     * still works; it just waits for the server.
      */
     videoUploadHint:
-      'أي فيديو من الكاميرا أو الموبايل. إحنا بنجهّزه لكل الجودات لوحدنا — مش محتاج تظبط حاجة.',
+      'أي فيديو من الكاميرا أو الموبايل بيشتغل. ولو عايزه يتنشر في ثواني من غير تجهيز: صدّره MP4 بـ H.264 (مش H.265/HEVC)، 1080 أو أقل، وأقل من ٢ جيجا للساعة.',
     videoUploadTooBig: 'الملف أكبر من ٨ جيجا — لازم يتقسّم أو يتضغط الأول',
     videoUploadWrongType: 'ده مش ملف فيديو',
     videoUploading: 'بيترفع…',
