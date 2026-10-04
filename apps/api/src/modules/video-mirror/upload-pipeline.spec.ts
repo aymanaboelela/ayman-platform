@@ -11,7 +11,10 @@ import {
   uploadSourceKey,
 } from '@ayman/contracts/video';
 import {
+  PASSTHROUGH_MAX_KBPS,
+  canPassThrough,
   encodedFraction,
+  passthroughArgs,
   posterArgs,
   readMasterVariants,
   readMediaPlaylist,
@@ -48,7 +51,7 @@ function probeJson(options: {
 
 describe('readProbe', () => {
   it('reads the display size, duration and audio presence', () => {
-    expect(readProbe(probeJson({}))).toEqual({
+    expect(readProbe(probeJson({}))).toMatchObject({
       width: 1920,
       height: 1080,
       durationSeconds: 3601,
@@ -414,5 +417,83 @@ describe('encodedFraction — the bar during the encode', () => {
 
   it('is 0 for a duration ffprobe could not read', () => {
     expect(encodedFraction(segs(5), 0)).toBe(0);
+  });
+});
+
+/**
+ * «أنا مش عاوز معالجة، أنا اللي هرفعه HD» — a file already fit to stream is
+ * published as it is. Each case below is a file that would play for the
+ * teacher and fail for a student if it were copied.
+ */
+describe('canPassThrough', () => {
+  const ready = {
+    width: 1920,
+    height: 1080,
+    durationSeconds: 3600,
+    hasAudio: true,
+    videoCodec: 'h264',
+    pixelFormat: 'yuv420p',
+    audioCodec: 'aac',
+    bitRate: 3_000_000,
+    rotated: false,
+  };
+
+  it('publishes an H.264 export at a sane rate as it is', () => {
+    expect(canPassThrough(ready)).toBe(true);
+    expect(canPassThrough({ ...ready, hasAudio: false, audioCodec: null })).toBe(true);
+  });
+
+  // The owner's own «مضغوطه» file on 2026-10-04: HEVC 1080p at 9.6 Mbit/s.
+  it('encodes HEVC — Chrome on most students\' devices cannot play it', () => {
+    expect(canPassThrough({ ...ready, videoCodec: 'hevc', bitRate: 9_775_833 })).toBe(false);
+  });
+
+  it('encodes a file too heavy to be the only rung', () => {
+    expect(canPassThrough({ ...ready, bitRate: PASSTHROUGH_MAX_KBPS * 1000 + 1 })).toBe(false);
+    expect(canPassThrough({ ...ready, bitRate: null })).toBe(false);
+  });
+
+  it('encodes what would play black, silent, sideways or oversized', () => {
+    expect(canPassThrough({ ...ready, pixelFormat: 'yuv420p10le' })).toBe(false);
+    expect(canPassThrough({ ...ready, audioCodec: 'opus' })).toBe(false);
+    expect(canPassThrough({ ...ready, rotated: true })).toBe(false);
+    expect(canPassThrough({ ...ready, width: 3840, height: 2160 })).toBe(false);
+  });
+
+  it('reads codec, pixel format, rate and rotation from ffprobe', () => {
+    const probe = readProbe(
+      JSON.stringify({
+        streams: [
+          { codec_type: 'video', codec_name: 'h264', pix_fmt: 'yuv420p', width: 1280, height: 720 },
+          { codec_type: 'audio', codec_name: 'aac' },
+        ],
+        format: { duration: '60', bit_rate: '2500000' },
+      }),
+    );
+    expect(probe).toMatchObject({ videoCodec: 'h264', pixelFormat: 'yuv420p', audioCodec: 'aac', bitRate: 2_500_000, rotated: false });
+    expect(readProbe(probeJson({ rotation: 90 })).rotated).toBe(true);
+  });
+});
+
+describe('passthroughArgs', () => {
+  const plain = passthroughArgs('/tmp/src', '/tmp/out', true);
+  const encrypted = passthroughArgs('/tmp/src', '/tmp/out', true, '/tmp/work/video.keyinfo');
+
+  it('copies the streams — no encoder, no filter, no CPU', () => {
+    expect(plain.join(' ')).toContain('-c copy');
+    expect(plain).not.toContain('libx264');
+    expect(plain).not.toContain('-filter_complex');
+  });
+
+  it('writes the same layout as an encode, so nothing downstream can tell', () => {
+    expect(plain[plain.indexOf('-master_pl_name') + 1]).toBe('master.m3u8');
+    expect(plain[plain.length - 1]).toBe('/tmp/out/%v/index.m3u8');
+    expect(plain[plain.indexOf('-var_stream_map') + 1]).toBe('v:0,a:0');
+    expect(passthroughArgs('/tmp/src', '/tmp/out', false)[plain.indexOf('-var_stream_map')]).toBeDefined();
+  });
+
+  it('encrypts into MPEG-TS when given a key, like the encode does', () => {
+    expect(encrypted[encrypted.indexOf('-hls_segment_type') + 1]).toBe('mpegts');
+    expect(encrypted[encrypted.indexOf('-hls_key_info_file') + 1]).toBe('/tmp/work/video.keyinfo');
   });
 });

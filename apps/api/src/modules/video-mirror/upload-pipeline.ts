@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { promisify } from 'node:util';
-import { UPLOAD_CRF, ladderFor, type LadderRung } from '@ayman/contracts/video';
+import { MIRROR_MAX_PIXELS, UPLOAD_CRF, ladderFor, type LadderRung } from '@ayman/contracts/video';
 import { DEFAULT_TOOLS, type MirrorResult, type MirrorTools } from './mirror-pipeline';
 
 const run = promisify(execFile);
@@ -51,10 +51,21 @@ export interface SourceProbe {
   readonly height: number;
   readonly durationSeconds: number;
   readonly hasAudio: boolean;
+  /** ffprobe's `codec_name` — `h264`, `hevc`… */
+  readonly videoCodec: string;
+  readonly pixelFormat: string | null;
+  /** `null` when there is no audio track. */
+  readonly audioCodec: string | null;
+  /** The whole file's rate, bit/s — `null` when the container does not say. */
+  readonly bitRate: number | null;
+  /** Carries a quarter- or half-turn tag that only a decoder applies. */
+  readonly rotated: boolean;
 }
 
 interface FfprobeStream {
   codec_type?: string;
+  codec_name?: string;
+  pix_fmt?: string;
   width?: number;
   height?: number;
   /** Present on phone recordings; ffmpeg applies it, so the DISPLAY size swaps. */
@@ -63,7 +74,7 @@ interface FfprobeStream {
 
 interface FfprobeOutput {
   streams?: FfprobeStream[];
-  format?: { duration?: string };
+  format?: { duration?: string; bit_rate?: string };
 }
 
 /**
@@ -95,12 +106,115 @@ export function readProbe(json: string): SourceProbe {
     throw new Error('مش قادرين نقرا مدة الفيديو — الملف يمكن يكون ناقص أو باظ');
   }
 
+  const audio = streams.find((stream) => stream.codec_type === 'audio');
+  const bitRate = Number.parseInt(parsed.format?.bit_rate ?? '', 10);
+
   return {
     width: quarterTurned ? video.height : video.width,
     height: quarterTurned ? video.width : video.height,
     durationSeconds: Math.round(duration),
-    hasAudio: streams.some((stream) => stream.codec_type === 'audio'),
+    hasAudio: audio !== undefined,
+    videoCodec: video.codec_name ?? '',
+    pixelFormat: video.pix_fmt ?? null,
+    audioCodec: audio === undefined ? null : (audio.codec_name ?? ''),
+    bitRate: Number.isFinite(bitRate) && bitRate > 0 ? bitRate : null,
+    rotated: rotation !== undefined && rotation % 360 !== 0,
   };
+}
+
+/**
+ * ── Publishing a file as it is ────────────────────────────────────────────
+ *
+ * «أنا مش عاوز معالجة، أنا اللي هرفعه HD» (the owner, 2026-10-04). An encode
+ * is hours of CPU on the VPS the three stacks share, and on 2026-10-04 that
+ * CPU is what took every site down. A teacher who exports the lecture right
+ * on their own machine has already done the expensive part.
+ *
+ * So a file that is ALREADY streamable is only cut into encrypted HLS
+ * segments, with `-c copy`: no decode, no encode — seconds of CPU for an hour
+ * of lecture, and the picture is byte-for-byte what the teacher exported.
+ *
+ * "Streamable" is narrow on purpose, because each condition is a way a copied
+ * file plays for the teacher and fails for a student:
+ *
+ *  - **H.264, 8-bit 4:2:0.** HEVC (what a phone or a "compress" preset often
+ *    writes) does not play in Chrome on most of the laptops and phones a
+ *    student owns, and 10-bit or 4:2:2 decodes to black on half of them. The
+ *    owner's own «مضغوطه» file on 2026-10-04 was HEVC — it is exactly the
+ *    file this check exists to catch.
+ *  - **AAC audio, or none.** What HLS players expect in a segment.
+ *  - **No rotation tag.** Only a decoder applies it; a copied stream would
+ *    play sideways.
+ *  - **At most 1080p worth of pixels, at most `PASSTHROUGH_MAX_KBPS`.** There
+ *    is only ONE rung — no 360p to fall back to on a weak connection — so the
+ *    one rung has to be light enough for a student's line and data bundle.
+ *
+ * Anything else is encoded as before, at 720 (`UPLOAD_LADDER`). Nothing is
+ * refused: a teacher who uploads the wrong file gets a slower lecture, not a
+ * broken one.
+ */
+export const PASSTHROUGH_MAX_KBPS = 5000;
+
+export function canPassThrough(probe: SourceProbe): boolean {
+  return (
+    probe.videoCodec === 'h264' &&
+    (probe.pixelFormat === 'yuv420p' || probe.pixelFormat === 'yuvj420p') &&
+    (probe.audioCodec === null || probe.audioCodec === 'aac') &&
+    !probe.rotated &&
+    probe.width * probe.height <= MIRROR_MAX_PIXELS &&
+    probe.bitRate !== null &&
+    probe.bitRate <= PASSTHROUGH_MAX_KBPS * 1000
+  );
+}
+
+/**
+ * The ffmpeg invocation that segments an already-streamable file WITHOUT
+ * re-encoding it — one variant, same layout as `transcodeArgs` writes
+ * (`master.m3u8` + `0/index.m3u8`), so everything downstream (upload, the
+ * bandwidth rewrite, the player) cannot tell the two apart.
+ *
+ * Segments are cut at the source's own keyframes, so they are only roughly
+ * `SEGMENT_SECONDS` long. That is fine for one rung: equal cuts matter only
+ * when a player has to switch between rungs mid-lecture.
+ */
+export function passthroughArgs(
+  source: string,
+  outDir: string,
+  hasAudio: boolean,
+  keyInfoFile: string | null = null,
+): string[] {
+  const encrypted = keyInfoFile !== null;
+  return [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-i',
+    source,
+    '-map',
+    '0:v:0',
+    ...(hasAudio ? ['-map', '0:a:0'] : []),
+    '-c',
+    'copy',
+    '-f',
+    'hls',
+    '-hls_time',
+    String(SEGMENT_SECONDS),
+    '-hls_playlist_type',
+    'vod',
+    '-hls_segment_type',
+    encrypted ? 'mpegts' : 'fmp4',
+    ...(encrypted ? ['-hls_key_info_file', keyInfoFile] : []),
+    '-hls_flags',
+    'independent_segments',
+    '-master_pl_name',
+    'master.m3u8',
+    '-var_stream_map',
+    hasAudio ? 'v:0,a:0' : 'v:0',
+    '-hls_segment_filename',
+    join(outDir, '%v', encrypted ? 'seg_%03d.ts' : 'seg_%03d.m4s'),
+    join(outDir, '%v', 'index.m3u8'),
+  ];
 }
 
 /** Segment length. Matches the mirror's, so both ladders behave identically. */
@@ -546,13 +660,14 @@ export async function transcodeUpload(
   );
 
   const probe = readProbe(probed.stdout);
-  const rungs = ladderFor(probe.height);
+  const passThrough = canPassThrough(probe);
+  const rungs = passThrough ? [] : ladderFor(probe.height);
 
   const outDir = join(workDir, 'hls');
   // ffmpeg writes segments into `%v` subdirectories but will not create them,
   // and the errno it fails with says nothing about ladders.
   await mkdir(outDir, { recursive: true });
-  for (let i = 0; i < rungs.length; i += 1) {
+  for (let i = 0; i < Math.max(1, rungs.length); i += 1) {
     await mkdir(join(outDir, String(i)), { recursive: true });
   }
 
@@ -582,7 +697,9 @@ export async function transcodeUpload(
   try {
     await exec(
       tools.ffmpeg,
-      transcodeArgs(sourceFile, rungs, outDir, probe.hasAudio, tools.threads, keyInfoFile),
+      passThrough
+        ? passthroughArgs(sourceFile, outDir, probe.hasAudio, keyInfoFile)
+        : transcodeArgs(sourceFile, rungs, outDir, probe.hasAudio, tools.threads, keyInfoFile),
     );
   } finally {
     if (poll !== null) clearInterval(poll);
@@ -611,8 +728,8 @@ export async function transcodeUpload(
   return {
     dir: outDir,
     files,
-    // `ladderFor` returns tallest-first.
-    maxHeight: rungs[0]!.height,
+    // `ladderFor` returns tallest-first; a copied file is its own only rung.
+    maxHeight: passThrough ? probe.height : rungs[0]!.height,
     bytes,
     durationSeconds: probe.durationSeconds,
     cleanup: async () => {
