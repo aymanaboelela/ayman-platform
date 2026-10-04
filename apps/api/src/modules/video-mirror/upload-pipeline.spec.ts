@@ -90,14 +90,23 @@ describe('readProbe', () => {
 describe('ladderFor', () => {
   it('never publishes a rung taller than the source', () => {
     expect(ladderFor(720).map((rung) => rung.height)).toEqual([720, 480, 360]);
-    expect(ladderFor(1080).map((rung) => rung.height)).toEqual([1080, 720, 480, 360]);
+    expect(ladderFor(1080).map((rung) => rung.height)).toEqual([720, 480, 360]);
   });
 
-  it('does not invent a 1080p rung for a 1080-wide portrait lecture', () => {
-    // 1080×1920 portrait: the HEIGHT is 1920, so 1080p is legitimately below
-    // the source and belongs. The guard being tested is that the decision is
-    // made on height, not on the smaller axis.
-    expect(ladderFor(1920)[0]?.height).toBe(1080);
+  // 2026-10-04: a 1080 rung on a shared VPS took every stack down. A 4K or
+  // 1080 source still tops out at 720 — the ceiling is the ladder, not the file.
+  it('never publishes above 720, whatever the source', () => {
+    expect(ladderFor(2160)[0]?.height).toBe(720);
+    expect(Math.max(...UPLOAD_LADDER.map((rung) => rung.height))).toBe(720);
+  });
+
+  it('decides a portrait lecture on its height, not on the smaller axis', () => {
+    // 1080×1920 portrait: the HEIGHT is 1920, so the top rung (720) is
+    // legitimately below the source and belongs. Deciding on the smaller axis
+    // (1080) would give the same answer today and the wrong one the day the
+    // ladder grows again — so the assertion is on a source the axes disagree on.
+    expect(ladderFor(1920)[0]?.height).toBe(720);
+    expect(ladderFor(1920)).toHaveLength(3);
   });
 
   it('keeps one rung at the source height for a video below the ladder', () => {
@@ -124,12 +133,12 @@ describe('transcodeArgs', () => {
   it('decodes once and splits, rather than reading the file per rung', () => {
     expect(args.filter((arg) => arg === '-i')).toHaveLength(1);
     const filter = args[args.indexOf('-filter_complex') + 1] ?? '';
-    expect(filter.startsWith('[0:v]split=4')).toBe(true);
+    expect(filter.startsWith('[0:v]split=3')).toBe(true);
   });
 
   it('scales by height only, so the source aspect ratio survives', () => {
     const filter = args[args.indexOf('-filter_complex') + 1] ?? '';
-    expect(filter).toContain('scale=-2:1080');
+    expect(filter).toContain('scale=-2:720');
     expect(filter).toContain('scale=-2:360');
     expect(filter).not.toContain('1920');
   });
@@ -152,11 +161,11 @@ describe('transcodeArgs', () => {
   it('encodes at constant quality, capped per rung, with no bitrate target', () => {
     expect(joined).toContain(`-crf:v ${UPLOAD_CRF}`);
     expect(args.some((arg) => arg.startsWith('-b:v'))).toBe(false);
-    expect(joined).toContain('-maxrate:v:0 4200k');
-    expect(joined).toContain('-bufsize:v:0 8400k');
-    expect(joined).toContain('-maxrate:v:3 700k');
+    expect(joined).toContain('-maxrate:v:0 3000k');
+    expect(joined).toContain('-bufsize:v:0 6000k');
+    expect(joined).toContain('-maxrate:v:2 700k');
     expect(joined).toContain('-b:a:0 128k');
-    expect(joined).toContain('-b:a:3 64k');
+    expect(joined).toContain('-b:a:2 64k');
   });
 
   /*
@@ -176,7 +185,7 @@ describe('transcodeArgs', () => {
   });
 
   it('names each variant in the stream map, audio included', () => {
-    expect(args[args.indexOf('-var_stream_map') + 1]).toBe('v:0,a:0 v:1,a:1 v:2,a:2 v:3,a:3');
+    expect(args[args.indexOf('-var_stream_map') + 1]).toBe('v:0,a:0 v:1,a:1 v:2,a:2');
   });
 
   it('packages fMP4 HLS with independent segments, like the mirror', () => {
