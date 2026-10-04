@@ -40,8 +40,43 @@ const actions = () => import('@/app/(admin)/admin/courses/actions');
 
 /** Parts in flight at once. Four keeps an ADSL uplink busy without starving it. */
 const CONCURRENCY = 4;
-/** Attempts per part before the upload gives up. */
-const PART_ATTEMPTS = 3;
+/**
+ * Attempts per part before the upload gives up.
+ *
+ * ⚠️ Was 3, with 1.5 s and 3 s between them — about five seconds of patience.
+ * «وصل ١١٪ وفشل» (2026-10-04): a 5 GB lecture died at 11% to an ordinary
+ * home-internet blip, because ONE part out of hundreds lost its connection for
+ * longer than that. Ten attempts on `partRetryDelayMs` ride out three
+ * minutes of a flaky line, plus however long the laptop is offline, before
+ * giving up — and a give-up still keeps the saved session, so «كمّل الرفع»
+ * resumes from the parts already in the bucket.
+ */
+const PART_ATTEMPTS = 10;
+
+/** Doubling from 2 s, capped at 30 s: 2, 4, 8, 16, 30, 30… */
+export function partRetryDelayMs(attempt: number): number {
+  return Math.min(30_000, 2000 * 2 ** (attempt - 1));
+}
+
+/**
+ * Resolve when the browser says it is online — at once if it already is.
+ *
+ * A retry fired while the laptop's Wi-Fi is down fails instantly and burns an
+ * attempt for nothing. Waiting for `online` spends the outage waiting rather
+ * than failing, however long it lasts; the abort signal still ends it.
+ */
+function untilOnline(signal: AbortSignal): Promise<void> {
+  if (typeof navigator === 'undefined' || navigator.onLine) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      window.removeEventListener('online', done);
+      signal.removeEventListener('abort', done);
+      resolve();
+    };
+    window.addEventListener('online', done);
+    signal.addEventListener('abort', done);
+  });
+}
 /** The window the speed is averaged over — long enough not to jitter. */
 const SPEED_WINDOW_MS = 8000;
 const SAVED_PREFIX = 'ayman:video-upload:';
@@ -262,9 +297,10 @@ async function sendParts(
           // The bytes it reported are not on the server; the bar must not lie.
           sentPerPart.set(part.partNumber, 0);
           bump();
-          // Linear back-off: a dropped connection and a momentary 503 clear in
-          // seconds, and anything that does not is not going to.
-          await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+          if (attempt === PART_ATTEMPTS) break;
+          await new Promise((resolve) => setTimeout(resolve, partRetryDelayMs(attempt)));
+          await untilOnline(signal);
+          if (signal.aborted) throw error;
         }
       }
       if (lastError !== null) throw lastError;
