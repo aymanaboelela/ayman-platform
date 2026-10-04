@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { ALLOWED_VOICE_EXT } from '@ayman/contracts/admin/media';
 import { LocalDiskStorage } from './local-disk.storage';
 
 const VALID_KEY = 'ab/0191f2a0-1111-7000-8000-000000000000.webp';
@@ -274,4 +275,22 @@ describe('LocalDiskStorage', () => {
     });
   });
 
+
+  describe('voice note keys (the shape VoiceService mints)', () => {
+    // Shipped 2026-09-03 without its extensions in `CONVERSATION_KEY_PATTERN`:
+    // every real voice note 500'd for a month behind mocked-storage specs.
+    it.each(ALLOWED_VOICE_EXT)('accepts a .%s voice note under msg/ and round-trips it', async (ext) => {
+      const storage = new LocalDiskStorage(root);
+      const key = `msg/a0/a02faaab-54a4-4e6e-9e30-3fc06e1a1899.${ext}`;
+      await storage.put(key, Buffer.from('x'), 'audio/webm');
+      await expect(storage.stat(key)).resolves.toEqual({ size: 1 });
+    });
+
+    it('still refuses an audio extension nothing mints', async () => {
+      const storage = new LocalDiskStorage(root);
+      await expect(
+        storage.put('msg/a0/a02faaab-54a4-4e6e-9e30-3fc06e1a1899.mp3', Buffer.from('x'), 'x'),
+      ).rejects.toThrow(/invalid storage key/);
+    });
+  });
 });
