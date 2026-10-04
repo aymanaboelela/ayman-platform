@@ -101,6 +101,9 @@ import { MistakesModule } from '../modules/mistakes/mistakes.module';
 
 import { enumerateRoutes, type RouteRef } from './route-inventory';
 
+/** جسم صحيح لـ`POST /admin/challenge-topics/:courseId` — درس من كورس مش موجود. */
+const CHALLENGE_TOPIC_BODY = { title: 'الوحدة الأولى', sectionIds: [], lessonIds: ['01990000-0000-7000-8000-00000000abcd'], isActive: true };
+
 /** جسم صحيح لـ`PUT /admin/game-banks/:courseId/modes` — الافتراضي في التلاتة. */
 const GAME_MODES_BODY = {
   race: { useQuizzes: true, useBank: true, lessonIds: [] },
@@ -906,6 +909,24 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin game lesson bank: admin, unknown lesson', method: 'post', path: () => `/api/admin/game-banks/${randomUUID()}/lessons/${randomUUID()}`, actor: 'admin', status: 404 },
     { label: 'admin game modes: student', method: 'put', path: () => `/api/admin/game-banks/${randomUUID()}/modes`, actor: 'student', status: 403, body: () => ({ modes: GAME_MODES_BODY }) },
     { label: 'admin game modes: admin, unknown course', method: 'put', path: () => `/api/admin/game-banks/${randomUUID()}/modes`, actor: 'admin', status: 404, body: () => ({ modes: GAME_MODES_BODY }) },
+    // «قسم التحديات» — نفس باب «أسئلة الألعاب»: `question:write` + `quizGame`.
+    // كورس مش موجود = ٤٠٤ للأدمن؛ الطالب مابيوصلش للسؤال ده أصلًا.
+    { label: 'admin challenge topics: anonymous', method: 'get', path: () => `/api/admin/challenge-topics/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin challenge topics: student', method: 'get', path: () => `/api/admin/challenge-topics/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin challenge topics: admin, unknown course', method: 'get', path: () => `/api/admin/challenge-topics/${randomUUID()}`, actor: 'admin', status: 404 },
+    { label: 'admin challenge topic create: anonymous', method: 'post', path: () => `/api/admin/challenge-topics/${randomUUID()}`, actor: 'anonymous', status: 401, body: () => CHALLENGE_TOPIC_BODY },
+    { label: 'admin challenge topic create: student', method: 'post', path: () => `/api/admin/challenge-topics/${randomUUID()}`, actor: 'student', status: 403, body: () => CHALLENGE_TOPIC_BODY },
+    { label: 'admin challenge topic create: admin, unknown course', method: 'post', path: () => `/api/admin/challenge-topics/${randomUUID()}`, actor: 'admin', status: 404, body: () => CHALLENGE_TOPIC_BODY },
+    { label: 'admin challenge topic create: admin, no unit or lesson', method: 'post', path: () => `/api/admin/challenge-topics/${randomUUID()}`, actor: 'admin', status: 400, body: () => ({ ...CHALLENGE_TOPIC_BODY, lessonIds: [] }) },
+    { label: 'admin challenge topic order: anonymous', method: 'put', path: () => `/api/admin/challenge-topics/${randomUUID()}/order`, actor: 'anonymous', status: 401, body: () => ({ ids: [randomUUID()] }) },
+    { label: 'admin challenge topic order: student', method: 'put', path: () => `/api/admin/challenge-topics/${randomUUID()}/order`, actor: 'student', status: 403, body: () => ({ ids: [randomUUID()] }) },
+    { label: 'admin challenge topic order: admin, course with no topics', method: 'put', path: () => `/api/admin/challenge-topics/${randomUUID()}/order`, actor: 'admin', status: 404, body: () => ({ ids: [randomUUID()] }) },
+    { label: 'admin challenge topic update: anonymous', method: 'patch', path: () => `/api/admin/challenge-topics/${randomUUID()}/${randomUUID()}`, actor: 'anonymous', status: 401, body: () => ({ isActive: false }) },
+    { label: 'admin challenge topic update: student', method: 'patch', path: () => `/api/admin/challenge-topics/${randomUUID()}/${randomUUID()}`, actor: 'student', status: 403, body: () => ({ isActive: false }) },
+    { label: 'admin challenge topic update: admin, unknown course', method: 'patch', path: () => `/api/admin/challenge-topics/${randomUUID()}/${randomUUID()}`, actor: 'admin', status: 404, body: () => ({ isActive: false }) },
+    { label: 'admin challenge topic delete: anonymous', method: 'delete', path: () => `/api/admin/challenge-topics/${randomUUID()}/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin challenge topic delete: student', method: 'delete', path: () => `/api/admin/challenge-topics/${randomUUID()}/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin challenge topic delete: admin, unknown topic', method: 'delete', path: () => `/api/admin/challenge-topics/${randomUUID()}/${randomUUID()}`, actor: 'admin', status: 404 },
     // «أسئلة كتب خارجية» — نفس `question:write` بالظبط، زي «أسئلة الألعاب».
     { label: 'admin external books: student', method: 'get', path: () => '/api/admin/external-books', actor: 'student', status: 403 },
     { label: 'admin external books: admin', method: 'get', path: () => '/api/admin/external-books', actor: 'admin', status: 200 },

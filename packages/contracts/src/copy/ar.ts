@@ -6216,6 +6216,12 @@ export const copy = {
     importUnknownLetter: 'السؤال رقم {n}: حرف إجابة مش موجود ({letter})',
     importNoOptions: 'السؤال رقم {n}: مفيش اختيارات',
     importUnknownType: 'السؤال رقم {n}: نوع سؤال مش معروف',
+    /** `GROUP:` بقيمة فيها مسافة أو رموز — المفتاح كلمة واحدة. */
+    importBadGroup: 'السؤال رقم {n}: اسم المجموعة ({group}) لازم يكون كلمة واحدة من غير مسافات — حروف وأرقام و _ - . بس',
+    /** `LESSON:` بقيمة مش رقم درس (uuid). */
+    importBadLesson: 'السؤال رقم {n}: رقم الدرس ({lesson}) مش مكتوب صح — انسخه من لوحة التحكم زي ما هو',
+    /** `LESSON:` برقم مكتوب صح بس مفيش درس بيه (اتمسح، أو من ستاك تاني). */
+    importUnknownLesson: 'السؤال رقم {n}: مفيش درس بالرقم ده ({lesson})',
   },
   /**
    * The markdown twin of every public page — what an AI assistant reads when

@@ -124,6 +124,6 @@ export class AdminQuestionsController {
 
   @Post('bulk')
   bulk(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkImportDto) {
-    return this.bank.bulkImport(body.text, body.categoryId, user.id);
+    return this.bank.bulkImport(body.text, body.categoryId, user.id, { lessonId: body.lessonId, status: body.status });
   }
 }

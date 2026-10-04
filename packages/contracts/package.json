@@ -93,6 +93,7 @@
     "./quiz/history": "./src/quiz/history.ts",
     "./quiz/mastery": "./src/quiz/mastery.ts",
     "./quiz/game": "./src/quiz/game.ts",
+    "./quiz/challenges": "./src/quiz/challenges.ts",
     "./quiz/game-stats": "./src/quiz/game-stats.ts",
     "./quiz/question-removal": "./src/quiz/question-removal.ts",
     "./quiz/external-books": "./src/quiz/external-books.ts",
