@@ -96,30 +96,36 @@ export function StudioHonors({
           title={copy.landing.honorBoard.title}
           level={level}
         />
-        <ol className="st-rows st-honors">
+        {/*
+          ⚠️ كروت، مش صفوف — عملية حقيقية (أيمن، 2026-10-04): الشكل القديم
+          (`st-rows`/`st-honor`, سطر رفيع والصورة 2.5rem) كان مقروء أقل من
+          preset الكلاسيك، والمطلوب هنا بالظبط إن اللوحة تبان بنفس وضوح
+          الكلاسيك — صورة كبيرة، اسم واضح، ترتيب واضح — مش نسخة مصغّرة منه.
+          نفس بنية `.board-honor` في preset «اللوح» (شبكة كروت، صورة دايرة
+          كبيرة، رانك/اسم/مادة) بس بألوان ومسافات استوديو (`--st-*`) —
+          مفيش أيقونة ميدالية هنا عن قصد، preset الاستوديو مالوش أيقونات
+          زخرفية خالص في أي قسم تاني.
+        */}
+        <ul className="st-honor-cards">
           {entries.map((entry) => (
             <li
-              className="st-honor"
+              className="st-honor-card"
               key={`${entry.studentName}-${entry.courseLabel}-${entry.rank}`}
             >
-              {/*
-                The photograph an instructor cleared for THIS board, or
-                initials when there is none — same component and the same
-                argument the classic preset's board makes; see `HonorFace`.
-                `[data-preset='studio'] .honor-board__slot-avatar` in
-                `presets.css` resizes the disc for a row instead of a card —
-                the classic 7rem circle would swallow this thin line.
-              */}
+              {/* الصورة اللي المدرّس وافق عليها لللوحة دي، أو الحروف الأولى
+                  لو مفيش — نفس الكومبوننت ونفس الحجة اللي preset الكلاسيك
+                  بيعملها؛ شوف `HonorFace`. `.honor-board__slot-avatar`
+                  بيرجع لحجمه الأصلي (7rem) هنا، مش الـ2.5rem بتاع الصف. */}
               <HonorFace name={entry.studentName} photoKey={entry.photoKey} />
-              {/* The written rank, not the row's index: the board can carry a
-                  first and a second from two different courses, and numbering
-                  by position renames the second «الأول» a second time. */}
-              <span className="st-honor__r">{copy.landing.honorBoard.placeRanks[entry.rank - 1] ?? ''}</span>
-              <span className="st-honor__n">{entry.studentName}</span>
-              <span className="st-honor__note">{entry.courseLabel}</span>
+              {/* الرانك المكتوب، مش ترتيب العنصر في القايمة: اللوحة ممكن
+                  تحمل أول وتاني من مادتين مختلفين، والترقيم بالموضع بيسمّي
+                  التاني «الأول» تاني. */}
+              <span className="st-honor-card__r">{copy.landing.honorBoard.placeRanks[entry.rank - 1] ?? ''}</span>
+              <span className="st-honor-card__n">{entry.studentName}</span>
+              <span className="st-honor-card__note">{entry.courseLabel}</span>
             </li>
           ))}
-        </ol>
+        </ul>
       </div>
     </section>
   );

@@ -4216,15 +4216,14 @@
   line-height: 1.85;
 }
 
-/* ── rows: quotes and honours ──────────────────────────────────────────── */
+/* ── rows: quotes ──────────────────────────────────────────────────────── */
 
 [data-preset='studio'] .st-rows {
   display: grid;
   gap: 0;
 }
 
-[data-preset='studio'] .st-quote,
-[data-preset='studio'] .st-honor {
+[data-preset='studio'] .st-quote {
   padding-block: 1.5rem;
   border-block-start: 1px solid var(--st-rule);
 }
@@ -4253,46 +4252,52 @@
   font-size: var(--fs-text-sm);
 }
 
-[data-preset='studio'] .st-honor {
-  display: flex;
-  /* `center`, not `baseline` — a row with a circular face needs to sit on
-     its own middle, not on the text's baseline the way the plain rank/name/
-     note row did before the photo existed. */
-  align-items: center;
-  gap: 1rem;
-}
-
-/*
- * `HonorFace` always emits `.honor-board__slot-avatar` — the classic preset's
- * OWN size (7rem, a card's face) lives unscoped in `sections.css`, so it
- * applies here too unless overridden. This is a thin list row, not a card:
- * a 7rem circle would swallow the line and push everything else onto a
- * second one. Same component, same fallback-to-initials argument; only the
- * size and the row-appropriate ring change.
+/* ── honours: كروت، مش صفوف ───────────────────────────────────────────────
+ *
+ * عملية حقيقية (أيمن، 2026-10-04): preset الاستوديو كان بيورّي اللوحة
+ * كصفوف رفيعة (صورة 2.5rem) — أقل وضوحًا من preset الكلاسيك، والمطلوب
+ * بالظبط عكس كده: نفس وضوح الكلاسيك، صورة كبيرة واسم وترتيب واضحين.
+ * البنية هنا زي `.board-honor` في preset «اللوح» (شبكة كروت)، بس بحدود
+ * وألوان استوديو (`--st-rule`/`--st-paper`) زي `.st-course__link` فوق —
+ * مفيش أيقونة ميدالية عن قصد، preset الاستوديو مالوش أيقونات زخرفية
+ * في أي قسم تاني خالص.
  */
-[data-preset='studio'] .honor-board__slot-avatar {
-  flex: none;
-  margin-inline: 0;
-  inline-size: 2.5rem;
-  block-size: 2.5rem;
-  font-size: var(--fs-text-sm);
-  background: var(--st-wash);
-  box-shadow: 0 0 0 1px var(--st-rule);
-  color: var(--st-accent);
+[data-preset='studio'] .st-honor-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-[data-preset='studio'] .st-honor__r {
-  flex: none;
+[data-preset='studio'] .st-honor-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.75rem 1.25rem;
+  border: 1px solid var(--st-rule);
+  border-radius: var(--radius-lg);
+  background: var(--st-paper);
+  text-align: center;
+}
+
+/* `HonorFace` always emits `.honor-board__slot-avatar` — the classic
+   preset's own 7rem size lives unscoped in `sections.css`, and that is
+   exactly the size this card wants too, so nothing here overrides it. */
+
+[data-preset='studio'] .st-honor-card__r {
   color: var(--st-accent);
   font-weight: 700;
 }
 
-[data-preset='studio'] .st-honor__n {
-  font-weight: 600;
+[data-preset='studio'] .st-honor-card__n {
+  font-size: var(--fs-text-lg);
+  font-weight: 650;
 }
 
-[data-preset='studio'] .st-honor__note {
-  margin-inline-start: auto;
+[data-preset='studio'] .st-honor-card__note {
   color: var(--st-ink-2);
   font-size: var(--fs-text-sm);
 }
@@ -4694,7 +4699,7 @@ body:has(main[data-preset='studio']) .site-nav--over .theme-pill {
     [data-preset='studio'] .st-reason,
     [data-preset='studio'] .st-year,
     [data-preset='studio'] .st-quote,
-    [data-preset='studio'] .st-honor {
+    [data-preset='studio'] .st-honor-card {
       animation: st-rise 520ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
       animation-timeline: view();
       animation-range: entry 6% cover 30%;
