@@ -21,6 +21,7 @@ import {
 } from './proxy';
 import { NextRequest } from 'next/server';
 import { HTML_PREVIEW_CSP, HTML_PREVIEW_PATH } from './lib/html-preview';
+import { LIMIT_PER_MINUTE } from './lib/flood-guard';
 
 const directive = (policy: string, name: string): string =>
   policy
@@ -863,6 +864,35 @@ describe('proxy — a staff account with no profile:read still reaches /admin', 
     const response = await proxy(new NextRequest('http://localhost/admin'));
 
     expect(response.headers.get('location')).toContain('/login');
+    vi.unstubAllGlobals();
+  });
+});
+
+/**
+ * 2026-10-04: two addresses rendered a tenant's pages ~16 times a second for
+ * two days, and the shared VPS was capped to 20% CPU for it. The guard must
+ * answer them before the render — and must never touch a signed-in student.
+ */
+describe('proxy — an anonymous address rendering pages like a bot', () => {
+  it('is refused with 429 past the per-minute limit, before any render', async () => {
+    const headers = { 'cf-connecting-ip': '203.0.113.77' };
+    let last: Response | undefined;
+    for (let i = 0; i <= LIMIT_PER_MINUTE; i += 1) {
+      last = await proxy(new NextRequest('http://localhost/', { headers }));
+    }
+    expect(last?.status).toBe(429);
+    expect(last?.headers.get('retry-after')).toBe('60');
+  });
+
+  it('never refuses the same address when it carries a session', async () => {
+    const fetchMock = vi.fn(async () => new Response('{}', { status: 401 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const headers = { 'cf-connecting-ip': '203.0.113.78', cookie: 'session_token=x' };
+    let last: Response | undefined;
+    for (let i = 0; i <= LIMIT_PER_MINUTE; i += 1) {
+      last = await proxy(new NextRequest('http://localhost/', { headers }));
+    }
+    expect(last?.status).not.toBe(429);
     vi.unstubAllGlobals();
   });
 });

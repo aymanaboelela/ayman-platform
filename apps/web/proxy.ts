@@ -8,6 +8,7 @@ import {
   pathFromMarkdownSuffix,
 } from './lib/agents/markdown-routes';
 import { forwardClientIp } from './lib/client-ip';
+import { createFloodGuard, floodGuardIp } from './lib/flood-guard';
 import { HTML_PREVIEW_CSP, HTML_PREVIEW_PATH } from './lib/html-preview';
 import { JS_RUNNER_CSP, JS_RUNNER_PATH } from './lib/js-runner';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
@@ -1082,7 +1083,32 @@ function ensureCsrfCookie(request: NextRequest, response: NextResponse): void {
   });
 }
 
+/** One per process — the counts must outlive a single request. See `lib/flood-guard.ts`. */
+const floodGuard = createFloodGuard();
+
 export async function proxy(request: NextRequest): Promise<NextResponse> {
+  /*
+   * An anonymous address rendering pages faster than any crowd of humans can,
+   * refused BEFORE anything below runs — the auth round trip and the render
+   * are exactly the cost a bot is imposing. First, so nothing else is paid.
+   */
+  if (
+    floodGuard.shouldReject(
+      floodGuardIp(request.headers),
+      !hasSessionCookie(request),
+      request.nextUrl.pathname,
+    )
+  ) {
+    return new NextResponse('طلبات كتير أوي من نفس الشبكة. جرّب تاني كمان دقيقة.', {
+      status: 429,
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+        'retry-after': '60',
+        'cache-control': 'no-store',
+      },
+    });
+  }
+
   /*
    * The JavaScript playground's worker, and the ONE response in this app that
    * is allowed to evaluate a string.
