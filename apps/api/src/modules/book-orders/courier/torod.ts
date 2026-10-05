@@ -226,6 +226,22 @@ export function placeFor(
   return { cityName: home.name, areaName: named ?? city.trim(), matched: false };
 }
 
+/**
+ * A number the way an Egyptian courier types it — «01225796476».
+ *
+ * ⚠️ Orders store phones in E.164 («+201225796476»). Sent as digits that is
+ * «201225796476», twelve characters, and their system silently CUT it: the
+ * first real order (BK-051C1C, 2026-10-05) showed «2012257964» on their panel —
+ * a number that rings nobody, on the parcel the agent has to phone about.
+ * So the country code comes off and the trunk zero goes back on.
+ */
+export function localEgyptianPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('20') && digits.length === 12) return `0${digits.slice(2)}`;
+  if (digits.startsWith('0020') && digits.length === 14) return `0${digits.slice(4)}`;
+  return digits;
+}
+
 /** One order line as the courier sees it — `Temp_Order_Api` in their Swagger. */
 export interface TorodOrder {
   sender_Code: string;
@@ -286,7 +302,7 @@ export function torodOrderFor(order: CourierOrderInput, place: TorodPlace): Toro
 
   const notes = [
     ref,
-    order.altPhone && order.altPhone !== order.phone ? `رقم تاني: ${order.altPhone}` : null,
+    order.altPhone && order.altPhone !== order.phone ? `رقم تاني: ${localEgyptianPhone(order.altPhone)}` : null,
     place.matched ? null : 'المنطقة مش متحددة — من فضلكم اقروا العنوان كامل',
   ]
     .filter((part): part is string => part !== null)
@@ -300,8 +316,8 @@ export function torodOrderFor(order: CourierOrderInput, place: TorodPlace): Toro
     sender_Code: ref,
     sender_UID: order.id,
     reciver_Name: order.fullName.trim(),
-    // «يجب ان لا يحتوي علي فواصل او +» — digits only.
-    reciver_Phone: order.phone.replace(/\D/g, ''),
+    // «يجب ان لا يحتوي علي فواصل او +» — and in the local form; see above.
+    reciver_Phone: localEgyptianPhone(order.phone),
     full_Address: address,
     city_Name: place.cityName,
     area_Name: place.areaName,
