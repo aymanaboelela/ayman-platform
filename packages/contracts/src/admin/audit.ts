@@ -54,6 +54,12 @@ export const AUDIT_ACTIONS = [
   'enrollment:override',
   // quiz (Plan 5, instrumented by the Task 3 retrofit)
   'question:publish',
+  // «انشر المسودات» — ONE row per bulk press, on top of the `question:publish`
+  // row each published version already writes. The per-version rows say what
+  // became ready; this one says it was one act, its scope (a category, or the
+  // ticked ids) and how many would not validate — «مين نشر التلات تلاف سؤال
+  // دول مرة واحدة» has no answer from three thousand identical rows.
+  'question:publish-drafts',
   // «امسح السؤال» from the bank. ONE action for both outcomes, with
   // `metadata.mode` = `hard` (nobody ever answered it — the row is gone, and
   // `metadata.stem` is the only place left that says what it was) or

@@ -425,10 +425,6 @@
   color: var(--a-11);
 }
 
-.qtag--draft {
-  border-style: dashed;
-}
-
 .qtag--used {
   border-color: var(--e-tint-line);
   background: var(--e-tint);
@@ -716,4 +712,251 @@
 
 .qbank-danger:hover {
   background: color-mix(in oklch, var(--err), transparent 80%);
+}
+
+/* ── «انشر المسودات» ─────────────────────────────────────────────────────── */
+
+/* A draft is waiting on a press, so it is amber — the same reading as
+   `.qpage-note--draft` on the question page. Filled, not the dashed outline it
+   used to be: thousands of generated wordings arrive as drafts, and the badge
+   is how one is told apart from a published row at a glance. */
+.qtag--draft {
+  border-color: color-mix(in oklch, var(--a-9), transparent 40%);
+  background: color-mix(in oklab, var(--a-9) 22%, var(--n-1));
+  color: var(--a-11);
+  font-weight: var(--fw-semibold);
+}
+
+/* The row's own edge says it too, dashed, so a draft in a long ready list is
+   found by scrolling, not by reading every badge. The type hue keeps the
+   inline-start edge; selection (amber, solid) still wins over this. */
+.qrow--draft {
+  border-style: dashed;
+  border-inline-start-style: solid;
+  border-block-color: color-mix(in oklch, var(--a-9), transparent 50%);
+  border-inline-end-color: color-mix(in oklch, var(--a-9), transparent 50%);
+  background: color-mix(in oklab, var(--a-9) 3%, var(--n-1));
+}
+
+/* Declared after `.qrow--selected` at the same weight, so a ticked draft has
+   to be told the selection wins. */
+.qrow--draft.qrow--selected {
+  border-style: solid;
+  border-color: var(--a-9);
+  background: color-mix(in oklab, var(--a-9) 6%, var(--n-1));
+}
+
+/* A variant group's key — a hue per key (decorative: the key is written), and
+   the key itself isolated, because it is usually Latin (`loop-1`) inside an
+   Arabic row and would otherwise flip. */
+.qtag--group {
+  --group-h: 255;
+  border-color: transparent;
+  background: oklch(0.94 0.04 var(--group-h));
+  color: oklch(0.42 0.12 var(--group-h));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .qtag--group {
+    background: oklch(0.32 0.06 var(--group-h));
+    color: oklch(0.88 0.07 var(--group-h));
+  }
+}
+
+:root[data-theme='dark'] .qtag--group {
+  background: oklch(0.32 0.06 var(--group-h));
+  color: oklch(0.88 0.07 var(--group-h));
+}
+
+.qtag__key {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+}
+
+/* «الصيغ جنب بعض»: one group's rows in one box, so the wordings are read
+   against each other. The box takes the key's hue on its edge. */
+.qgroup {
+  --group-h: 255;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+  padding: var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-inline-start: 4px solid oklch(0.7 0.11 var(--group-h));
+  border-radius: var(--r-lg);
+  background: var(--n-2);
+}
+
+.qgroup__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: oklch(0.45 0.12 var(--group-h));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .qgroup__head { color: oklch(0.85 0.08 var(--group-h)); }
+}
+
+:root[data-theme='dark'] .qgroup__head { color: oklch(0.85 0.08 var(--group-h)); }
+
+/* The explanation under the options — `--info`, the one hue in the set that
+   means "read this", kept off amber (press) and green (the right option). */
+.qrow__why {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-8) var(--s-12);
+  border-inline-start: 3px solid var(--info);
+  border-radius: var(--r-sm);
+  background: color-mix(in oklch, var(--info), transparent 92%);
+  font-size: var(--fs-text-sm);
+  color: var(--n-12);
+}
+
+.qrow__why-label {
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--info);
+}
+
+.qrow__why--missing {
+  border-inline-start-color: var(--border-strong);
+  background: var(--n-2);
+  color: var(--n-11);
+}
+
+/* «مسودات / جاهزة / الكل». */
+.qbank-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-self: flex-start;
+  gap: var(--s-4);
+  padding: var(--s-4);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-2);
+}
+
+.qbank-status__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-8);
+  block-size: 2.25rem;
+  padding-inline: var(--s-12);
+  border-radius: var(--r-sm);
+  color: var(--n-11);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+
+.qbank-status__tab:hover { color: var(--n-12); }
+
+.qbank-status__tab[aria-current='page'] {
+  background: var(--n-1);
+  color: var(--n-12);
+  box-shadow: var(--shadow-sm);
+}
+
+.qbank-status__dot {
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: var(--r-full);
+}
+
+.qbank-status__tab--draft .qbank-status__dot { background: var(--a-9); }
+.qbank-status__tab--ready .qbank-status__dot { background: var(--ok); }
+
+.qbank-status__tab--draft[aria-current='page'] {
+  background: color-mix(in oklab, var(--a-9) 18%, var(--n-1));
+  color: var(--a-11);
+}
+
+/* A category's drafts beside its name in the panel. */
+.qbank-cat__drafts {
+  flex: none;
+  padding-inline: var(--s-4);
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--a-9) 22%, var(--n-1));
+  color: var(--a-11);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+/* The band above a filtered category's list while it has drafts. Amber, the
+   whole of it: it exists only to be pressed. */
+.qbank-drafts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-12);
+  padding: var(--s-12) var(--s-16);
+  border: var(--hairline) solid color-mix(in oklch, var(--a-9), transparent 45%);
+  border-inline-start: 4px solid var(--a-9);
+  border-radius: var(--r-lg);
+  background: color-mix(in oklab, var(--a-9) 10%, var(--n-1));
+}
+
+.qbank-drafts__lead {
+  min-inline-size: 0;
+  flex: 1 1 16rem;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+.qbank-drafts__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+}
+
+.qbank-drafts__go {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-8);
+  block-size: 2.5rem;
+  padding-inline: var(--s-16);
+  border-radius: var(--r-md);
+  background: var(--a-9);
+  color: #1a1206;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.qbank-drafts__go:hover { background: var(--a-10); }
+
+/* The questions a bulk publish could not let out, each with its reason. */
+.qpub__failed {
+  display: flex;
+  max-block-size: 18rem;
+  flex-direction: column;
+  gap: var(--s-8);
+  overflow-y: auto;
+}
+
+.qpub__fail {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  padding: var(--s-8) var(--s-12);
+  border: var(--hairline) solid color-mix(in oklch, var(--err), transparent 60%);
+  border-radius: var(--r-md);
+  background: color-mix(in oklch, var(--err), transparent 92%);
+  color: var(--err);
+}
+
+.qpub__reason {
+  min-inline-size: 0;
+  flex: 1;
+  font-size: var(--fs-text-sm);
+  color: var(--n-12);
 }

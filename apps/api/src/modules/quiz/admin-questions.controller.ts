@@ -3,6 +3,7 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { BulkImportDto } from './dto/bulk-import.dto';
+import { PublishDraftsDto } from './dto/publish-drafts.dto';
 import { CreateCategoryDto } from './dto/category.dto';
 import { CreateQuestionDto, UpdateQuestionDto } from './dto/question.dto';
 import { QuestionRemovalDto } from './dto/question-removal.dto';
@@ -47,12 +48,18 @@ export class AdminQuestionsController {
        `1` is the bank itself, so every existing caller (the slot picker, the
        games screen's links) keeps seeing only what is still in it. */
     @Query('archived') archived?: string,
+    /* «مسودات» / «جاهزة» — anything else is both, the list as it always was. */
+    @Query('status') status?: string,
+    /* `group` puts the variants of one idea next to each other. */
+    @Query('sort') sort?: string,
   ) {
     return this.bank.list({
       categoryId,
       search,
       type: QuestionTypeSchema.safeParse(type).data,
       archived: archived === '1',
+      status: status === 'draft' || status === 'ready' ? status : undefined,
+      sort: sort === 'group' ? 'group' : 'recent',
       take: Math.min(Number(take) || 50, 200),
       skip: Number(skip) || 0,
     });
@@ -84,6 +91,21 @@ export class AdminQuestionsController {
   @HttpCode(200)
   remove(@Body() body: QuestionRemovalDto) {
     return this.removal.remove(body.ids);
+  }
+
+  /**
+   * «انشر المسودات» — every draft of a category, or the ticked ones, through
+   * the same `publish()` as the single button (see `publishDrafts`). 200 and a
+   * report even when some fail: a partial publish is the expected outcome of
+   * a big generated paste, not an error.
+   *
+   * A static segment, declared before every `:param` route — the same habit
+   * as `delete-plan` above.
+   */
+  @Post('publish-drafts')
+  @HttpCode(200)
+  publishDrafts(@Body() body: PublishDraftsDto) {
+    return this.bank.publishDrafts(body);
   }
 
   @Get(':bankEntryId')

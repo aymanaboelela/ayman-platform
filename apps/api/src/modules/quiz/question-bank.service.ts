@@ -214,14 +214,17 @@ export class QuestionBankService {
    * Publishing re-validates the STORED rows through the same shared schema the
    * form used. A question that reached the database through a bulk import, a
    * migration or a bug never becomes `ready` in an ungradeable state.
+   *
+   * `true` when THIS call made it ready; `false` when it already was not a
+   * draft — the single button ignores it, `publishDrafts` counts with it.
    */
-  async publish(versionId: string): Promise<void> {
+  async publish(versionId: string): Promise<boolean> {
     const version = await this.prisma.questionVersion.findUnique({
       where: { id: versionId },
       include: { options: { orderBy: { position: 'asc' } }, bankEntry: true },
     });
     if (!version) throw new NotFoundException();
-    if (version.status !== 'draft') return;
+    if (version.status !== 'draft') return false;
 
     const candidate = {
       type: version.type,
@@ -260,6 +263,75 @@ export class QuestionBankService {
       outcome: 'success',
       metadata: { bankEntryId: version.bankEntryId, version: version.version },
     });
+    return true;
+  }
+
+  /**
+   * «انشر المسودات» — `publish()` above, once per draft in scope, and nothing
+   * of its own on the question rows.
+   *
+   * Deliberately a loop over the single path rather than one
+   * `updateMany({ status: 'ready' })`: that UPDATE would be faster and would
+   * skip the re-validation of the stored rows — which is the whole reason
+   * `publish()` exists, and exactly what a few thousand generated variants
+   * need — and the per-version `question:publish` audit row. A question that
+   * fails comes back in `failed` and stays a draft; the others go regardless,
+   * because one bad block out of four hundred should not hold the rest back
+   * the way it does in a paste (there the fix is to edit the paste; here it is
+   * to open that one question).
+   *
+   * Sequential, not `Promise.all`: every publish writes an audit row, and the
+   * audit chain serialises on an advisory lock anyway — concurrency here only
+   * buys pooled connections waiting on each other.
+   *
+   * Scope is the latest version's draft: `saveDraft` never leaves a draft
+   * under a newer version, so «the entry's draft» and «its latest, if draft»
+   * are the same row. Archived questions are out — they left the bank, and a
+   * category sweep must not quietly publish what «امسح» put away.
+   */
+  async publishDrafts(scope: {
+    categoryId?: string | undefined;
+    versionIds?: readonly string[] | undefined;
+  }): Promise<{ published: number; failed: { versionId: string; bankEntryId: string; message: string }[] }> {
+    // Belt and braces for the refine on the DTO: an empty scope is never "the
+    // whole bank".
+    if (!scope.categoryId && !scope.versionIds?.length) return { published: 0, failed: [] };
+
+    const drafts = await this.prisma.questionVersion.findMany({
+      where: {
+        status: 'draft',
+        ...(scope.versionIds ? { id: { in: [...scope.versionIds] } } : {}),
+        bankEntry: { archivedAt: null, ...(scope.categoryId ? { categoryId: scope.categoryId } : {}) },
+      },
+      // Oldest first, so a bulk publish walks a paste in the order it was written.
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, bankEntryId: true },
+    });
+    let published = 0;
+    const failed: { versionId: string; bankEntryId: string; message: string }[] = [];
+    for (const draft of drafts) {
+      try {
+        if (await this.publish(draft.id)) published += 1;
+      } catch (error) {
+        failed.push({ versionId: draft.id, bankEntryId: draft.bankEntryId, message: publishFailure(error) });
+      }
+    }
+
+    // Nothing in scope wrote nothing, and is not worth a row saying so.
+    if (drafts.length > 0) await this.audit.record({
+      action: 'question:publish-drafts',
+      resourceType: scope.categoryId ? AUDIT_RESOURCES.questionCategory : AUDIT_RESOURCES.questionVersion,
+      resourceId: scope.categoryId ?? null,
+      outcome: failed.length === 0 ? 'success' : 'failure',
+      metadata: {
+        scope: scope.categoryId ? 'category' : 'versions',
+        requested: scope.versionIds?.length ?? drafts.length,
+        published,
+        failed: failed.map((item) => item.versionId),
+      },
+    });
+
+    return { published, failed };
   }
 
   /**
@@ -396,7 +468,7 @@ export class QuestionBankService {
    * plan. This is the minimal read/create surface the question form needs to
    * offer a real `categoryId`, not a category management screen.
    */
-  async listCategories(): Promise<{ id: string; name: string; questionCount: number }[]> {
+  async listCategories(): Promise<{ id: string; name: string; questionCount: number; draftCount: number }[]> {
     /*
      * `questionCount` — questions still IN the bank (an archived one is not
      * counted), for «التصنيفات» on the bank screen: «الحلقات · ٤٥» is how the
@@ -405,7 +477,7 @@ export class QuestionBankService {
      * same number, one query. Every other caller parses `{ id, name }` and a
      * Zod object ignores the extra key.
      */
-    const [categories, counts] = await Promise.all([
+    const [categories, counts, drafts] = await Promise.all([
       this.prisma.questionCategory.findMany({
         orderBy: { name: 'asc' },
         select: { id: true, name: true },
@@ -418,9 +490,22 @@ export class QuestionBankService {
         where: { archivedAt: null, versions: { some: {} } },
         _count: { _all: true },
       }),
+      // `draftCount` — what «انشر كل مسودات التصنيف ده» would publish: the
+      // same predicate as `list({ status: 'draft' })` and `publishDrafts`, so
+      // the number on the button is the number that goes.
+      this.prisma.questionBankEntry.groupBy({
+        by: ['categoryId'],
+        where: { archivedAt: null, versions: { some: { status: 'draft' } } },
+        _count: { _all: true },
+      }),
     ]);
     const byCategory = new Map(counts.map((row) => [row.categoryId, row._count._all]));
-    return categories.map((category) => ({ ...category, questionCount: byCategory.get(category.id) ?? 0 }));
+    const draftsBy = new Map(drafts.map((row) => [row.categoryId, row._count._all]));
+    return categories.map((category) => ({
+      ...category,
+      questionCount: byCategory.get(category.id) ?? 0,
+      draftCount: draftsBy.get(category.id) ?? 0,
+    }));
   }
 
   async createCategory(name: string): Promise<{ id: string; name: string }> {
@@ -436,6 +521,17 @@ export class QuestionBankService {
     search?: string;
     /** `true` = «اللي اتشالت» only; otherwise the bank, which never includes them. */
     archived?: boolean;
+    /**
+     * «مسودات» / «جاهزة». A draft is only ever the LATEST version (`saveDraft`
+     * edits a draft in place and only opens N+1 over a ready one), so «has a
+     * draft» is «waiting on a press» — including a published question with an
+     * unpublished edit — and «no draft» is «what students get is what is
+     * here». Omitted = both.
+     */
+    status?: 'draft' | 'ready' | undefined;
+    /** `group`: variants of one idea side by side, for reading wordings
+     *  against each other. Otherwise the newest first, as always. */
+    sort?: 'recent' | 'group' | undefined;
     take: number;
     skip: number;
   }) {
@@ -461,6 +557,12 @@ export class QuestionBankService {
           stemHtml: filter.search ? { contains: filter.search, mode: 'insensitive' } : undefined,
         },
       },
+      AND:
+        filter.status === 'draft'
+          ? [{ versions: { some: { status: 'draft' } } }]
+          : filter.status === 'ready'
+            ? [{ versions: { none: { status: 'draft' } } }, { versions: { some: { status: 'ready' } } }]
+            : [],
     } satisfies Prisma.QuestionBankEntryWhereInput;
 
     const [rowCount, rows] = await this.prisma.$transaction([
@@ -471,12 +573,19 @@ export class QuestionBankService {
          transaction, so identical `updatedAt` values are the NORMAL case here,
          not an edge — and with `skip`/`take` live an unstable order shows some
          questions twice and hides others. */
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      orderBy:
+        filter.sort === 'group'
+          ? // Ungrouped questions after every group, not between them.
+            [{ variantGroupKey: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }, { id: 'asc' }]
+          : [{ updatedAt: 'desc' }, { id: 'desc' }],
       take: filter.take,
       skip: filter.skip,
       select: {
         id: true,
         archivedAt: true,
+        // «صيغ مختلفة لنفس الفكرة» — shown on the row so a variant is reviewed
+        // beside its siblings, not alone.
+        variantGroupKey: true,
         category: { select: { id: true, name: true } },
         versions: {
           orderBy: { version: 'desc' },
@@ -487,6 +596,9 @@ export class QuestionBankService {
             status: true,
             type: true,
             stemHtml: true,
+            // The explanation the games show after a wrong answer — reviewed
+            // with the wording it explains, before a draft goes out.
+            generalFeedbackHtml: true,
             defaultMark: true,
             /* The options, with their weights, so the list can show each
                question the way the student gets it — letters, and the right
@@ -583,8 +695,9 @@ export class QuestionBankService {
           },
           include: { versions: true },
         });
-        // A draft paste stops here: the owner publishes each one from the bank
-        // after reading it, and nothing student-facing reads a draft version.
+        // A draft paste stops here: the owner publishes from the bank after
+        // reading them — one at a time, the ticked ones, or the whole category
+        // (`publishDrafts`) — and nothing student-facing reads a draft version.
         if (options.status === 'draft') continue;
         // Imported questions land as `ready`: the instructor already reviewed
         // them in the preview, and forcing 60 publish clicks would defeat the
@@ -599,4 +712,20 @@ export class QuestionBankService {
 
     return { created: questions.length, errors: [] };
   }
+}
+
+/**
+ * The line a failed draft shows in the bulk result: the first thing the form
+ * itself would have said about it («لازم تحدد إجابة صحيحة واحدة بالظبط»), not
+ * the generic headline `publish()` puts above the issue list.
+ */
+function publishFailure(error: unknown): string {
+  if (error instanceof BadRequestException) {
+    const body = error.getResponse() as { message?: unknown; issues?: { message?: unknown }[] };
+    const first = body.issues?.[0]?.message;
+    if (typeof first === 'string' && first) return first;
+    if (typeof body.message === 'string' && body.message) return body.message;
+  }
+  if (error instanceof NotFoundException) return copy.quizErrors.publishDraftGone;
+  return copy.quizErrors.publishDraftFailed;
 }

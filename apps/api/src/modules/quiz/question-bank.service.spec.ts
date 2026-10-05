@@ -142,7 +142,7 @@ describe('QuestionBankService', () => {
         authorId,
       );
 
-      await expect(service.publish(created.versionId)).resolves.toBeUndefined();
+      await expect(service.publish(created.versionId)).resolves.toBe(true);
 
       const stored = await prisma.questionOption.findMany({
         where: { questionVersionId: created.versionId },

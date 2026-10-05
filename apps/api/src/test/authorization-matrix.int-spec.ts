@@ -890,6 +890,15 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin question delete: anonymous', method: 'post', path: () => '/api/admin/questions/delete', actor: 'anonymous', status: 401, body: () => ({ ids: [randomUUID()] }) },
     { label: 'admin question delete: student', method: 'post', path: () => '/api/admin/questions/delete', actor: 'student', status: 403, body: () => ({ ids: [randomUUID()] }) },
     { label: 'admin question delete: admin, unknown ids', method: 'post', path: () => '/api/admin/questions/delete', actor: 'admin', status: 200, body: () => ({ ids: [randomUUID()] }) },
+    // «انشر المسودات» — `question:write` زي باقي البنك. تصنيف مالوش مسودات =
+    // `{ published: 0 }` (200)، فصف الأدمن بيثبت إن الراوت بيعدّي الصلاحية من
+    // غير ما ينشر حاجة. الاتنين مع بعض أو ولا واحد = 400.
+    { label: 'admin publish drafts: anonymous', method: 'post', path: () => '/api/admin/questions/publish-drafts', actor: 'anonymous', status: 401, body: () => ({ categoryId: randomUUID() }) },
+    { label: 'admin publish drafts: student', method: 'post', path: () => '/api/admin/questions/publish-drafts', actor: 'student', status: 403, body: () => ({ categoryId: randomUUID() }) },
+    { label: 'admin publish drafts: admin, unknown category', method: 'post', path: () => '/api/admin/questions/publish-drafts', actor: 'admin', status: 200, body: () => ({ categoryId: randomUUID() }) },
+    { label: 'admin publish drafts: admin, unknown versions', method: 'post', path: () => '/api/admin/questions/publish-drafts', actor: 'admin', status: 200, body: () => ({ versionIds: [randomUUID()] }) },
+    { label: 'admin publish drafts: admin, both scopes', method: 'post', path: () => '/api/admin/questions/publish-drafts', actor: 'admin', status: 400, body: () => ({ categoryId: randomUUID(), versionIds: [randomUUID()] }) },
+    { label: 'admin publish drafts: admin, no scope', method: 'post', path: () => '/api/admin/questions/publish-drafts', actor: 'admin', status: 400, body: () => ({}) },
     { label: 'admin question restore: anonymous', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/restore`, actor: 'anonymous', status: 401 },
     { label: 'admin question restore: student', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/restore`, actor: 'student', status: 403 },
     { label: 'admin question restore: admin, unknown question', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/restore`, actor: 'admin', status: 404 },
