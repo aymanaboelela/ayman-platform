@@ -1,4 +1,11 @@
-import { foldArabic, placeFor, readAddOrdersResponse, torodCitiesFor, torodOrderFor } from './torod';
+import {
+  foldArabic,
+  localEgyptianPhone,
+  placeFor,
+  readAddOrdersResponse,
+  torodCitiesFor,
+  torodOrderFor,
+} from './torod';
 
 /* A slice of Torod's live lists (GET /api/Client/getareas, 2026-10-05). */
 const AREAS = new Map<number, string[]>([
@@ -124,6 +131,35 @@ describe('torodOrderFor', () => {
       { cityName: 'القاهرة', areaName: 'مجهول', matched: false },
     );
     expect(payload.notes).toBe('BK-3F4A5B | المنطقة مش متحددة — من فضلكم اقروا العنوان كامل');
+  });
+});
+
+describe('localEgyptianPhone', () => {
+  it('turns the stored E.164 form into the 11 digits their system keeps', () => {
+    // BK-051C1C went out as «201225796476» and their panel showed «2012257964».
+    expect(localEgyptianPhone('+201225796476')).toBe('01225796476');
+    expect(localEgyptianPhone('00201225796476')).toBe('01225796476');
+    expect(localEgyptianPhone('01225796476')).toBe('01225796476');
+  });
+
+  it('sends stored orders with the local number', () => {
+    const payload = torodOrderFor(
+      {
+        id: '0199a0b1-2c3d-7e4f-8a9b-0c1d2e3f4a5b',
+        fullName: 'منى',
+        phone: '+201012345678',
+        altPhone: '+201112345678',
+        governorateNameAr: 'القاهرة',
+        city: 'مدينة نصر',
+        addressStreet: 'ش ١',
+        addressBuilding: null,
+        addressNote: null,
+        items: [{ titleAr: 'كتاب', quantity: 1 }],
+      },
+      { cityName: 'القاهرة', areaName: 'مدينة نصر', matched: true },
+    );
+    expect(payload.reciver_Phone).toBe('01012345678');
+    expect(payload.notes).toContain('رقم تاني: 01112345678');
   });
 });
 
