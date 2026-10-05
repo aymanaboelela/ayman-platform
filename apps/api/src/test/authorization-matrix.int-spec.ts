@@ -2470,13 +2470,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin book orders print many: anonymous', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'anonymous', status: 401 },
     { label: 'admin book orders print many: student', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'student', status: 403 },
     { label: 'admin book orders print many: admin', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
-    // «خلصت الطباعة وجاهز» and «ابعت لشركة الشحن» — the next two steps of the
-    // same desk, on the same `book-order:ship`. The courier push has no admin
-    // 201 row: with no Torod account in CI it answers 400 «مش متظبط», which
-    // proves nothing about who may reach it.
-    { label: 'admin book orders ready many: anonymous', method: 'post', path: () => '/api/admin/book-orders/ready', actor: 'anonymous', status: 401 },
-    { label: 'admin book orders ready many: student', method: 'post', path: () => '/api/admin/book-orders/ready', actor: 'student', status: 403 },
-    { label: 'admin book orders ready many: admin', method: 'post', path: () => '/api/admin/book-orders/ready', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
+    // «ابعت لشركة الشحن» — the same desk, on the same `book-order:ship`. No
+    // admin 201 row: with no Torod account in CI it answers 400 «مش متظبط»,
+    // which proves nothing about who may reach it.
     { label: 'admin book orders courier many: anonymous', method: 'post', path: () => '/api/admin/book-orders/courier', actor: 'anonymous', status: 401 },
     { label: 'admin book orders courier many: student', method: 'post', path: () => '/api/admin/book-orders/courier', actor: 'student', status: 403 },
     { label: 'admin book orders courier events: anonymous', method: 'get', path: () => `/api/admin/book-orders/${randomUUID()}/courier-events`, actor: 'anonymous', status: 401 },

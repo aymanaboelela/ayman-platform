@@ -205,7 +205,6 @@ model User {
   // being deleted.
   bookOrders                 BookOrder[]             @relation("BookOrderStudent")
   bookOrdersPrinted          BookOrder[]             @relation("BookOrderPrintedBy")
-  bookOrdersReady          BookOrder[]             @relation("BookOrderReadyBy")
   bookOrdersShipped          BookOrder[]             @relation("BookOrderShippedBy")
   bookOrdersDelivered        BookOrder[]             @relation("BookOrderDeliveredBy")
   bookOrdersRejected         BookOrder[]             @relation("BookOrderRejectedBy")
@@ -3141,12 +3140,6 @@ model BookOrder {
   printedAt       DateTime? @map("printed_at")
   printedByUserId String?   @map("printed_by_user_id")
 
-  /// «خلصت الطباعة وجاهز للشحن» — the copy came back from the printer and is
-  /// boxed. The tab this fills is the one the courier push runs from, so
-  /// «إيه اللي جاهز يتبعت؟» is a tab and not a guess.
-  readyAt       DateTime? @map("ready_at")
-  readyByUserId String?   @map("ready_by_user_id")
-
   /// «اتشحن» — set by `BookOrdersService.markShipped`, an explicit admin
   /// action. Records ONLY that the order shipped; no notification is sent to
   /// the student (the admin handles that himself, outside the platform).
@@ -3177,9 +3170,11 @@ model BookOrder {
   deliveredAt       DateTime? @map("delivered_at")
   deliveredByUserId String?   @map("delivered_by_user_id")
 
-  /// «شركة الشحن» — the order as Torod (the courier) knows it. Every column
-  /// is null until `markShipped` hands the parcel over through their API, and
-  /// stays null forever on a stack without the `books.courier` entitlement.
+  /// «شركة الشحن» — the order as Torod (the courier) knows it. A FLAG beside
+  /// the status and never a status of its own: the data goes to their system
+  /// when the run goes to the printer, and their agent collects the boxes FROM
+  /// the printer — so «في المطبعة» and «عند شركة الشحن» are true at once.
+  /// Null forever on a stack without the `books.courier` entitlement.
   ///
   /// `courierSentAt` is the double-push guard, the same job `shipNoticeSentAt`
   /// does for the message: their `addorders` is not idempotent, so a second
@@ -3235,7 +3230,6 @@ model BookOrder {
   user        User?           @relation("BookOrderStudent", fields: [userId], references: [id], onDelete: Cascade)
   course      Course?         @relation(fields: [courseId], references: [id], onDelete: Cascade)
   printedBy   User?           @relation("BookOrderPrintedBy", fields: [printedByUserId], references: [id], onDelete: SetNull)
-  readyBy     User?           @relation("BookOrderReadyBy", fields: [readyByUserId], references: [id], onDelete: SetNull)
   shippedBy   User?           @relation("BookOrderShippedBy", fields: [shippedByUserId], references: [id], onDelete: SetNull)
   deliveredBy User?           @relation("BookOrderDeliveredBy", fields: [deliveredByUserId], references: [id], onDelete: SetNull)
   rejectedBy  User?           @relation("BookOrderRejectedBy", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
@@ -3323,11 +3317,6 @@ enum BookOrderStatus {
   address_only
   paid
   printing
-  /// «خلصت الطباعة وجاهز» — boxed and waiting to be handed to the courier.
-  ready
-  /// «اتبعت لشركة الشحن» — the data is in Torod's system and the parcel is
-  /// waiting for their agent. Becomes `shipped` only when THEY say so.
-  courier
   shipped
   delivered
   rejected

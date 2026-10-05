@@ -18,6 +18,7 @@ import {
 } from '@ayman/contracts/admin/book-orders';
 import { AdminBookRowSchema } from '@ayman/contracts/admin/books';
 import { cn } from '@ayman/ui';
+import { ChevronDown, FileDown } from 'lucide-react';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { adminGet } from '@/lib/admin-api';
 import { BulkShipProvider, BulkToolbarActions } from './bulk-ship';
@@ -54,8 +55,6 @@ type Tab = AdminBookOrderFilter | 'all';
 const TAB_LABEL: Record<Tab, string> = {
   paid: c.filterPaid,
   printing: c.filterPrinting,
-  ready: c.filterReady,
-  courier: c.filterCourier,
   shipped: c.filterShipped,
   delivered: c.filterDelivered,
   address_only: c.filterAddressOnly,
@@ -78,10 +77,6 @@ const TAB_LABEL: Record<Tab, string> = {
 const TABS: Tab[] = [
   'paid',
   'printing',
-  /* «خلص طباعة» then «عند شركة الشحن» — the two stops between the printer and
-     «اتشحنت», in the order a box passes through them. */
-  'ready',
-  'courier',
   'shipped',
   'delivered',
   'address_only',
@@ -91,7 +86,7 @@ const TABS: Tab[] = [
 ];
 
 /** The tabs whose rows a batch can still move along. */
-const BATCHABLE: ReadonlySet<Tab> = new Set(['paid', 'printing', 'ready', 'courier', 'shipped']);
+const BATCHABLE: ReadonlySet<Tab> = new Set(['paid', 'printing', 'shipped']);
 
 /**
  * Which صف an order is FILED UNDER in the split view.
@@ -258,161 +253,193 @@ export default async function AdminBooksPage({
     </ul>
   );
 
+  /* Per-tab tint — the same hue the card stripe uses, so «في المطبعة» on the
+     tab bar and the violet edge on a card are visibly the same thing. */
+  const TAB_TONE: Record<Tab, string> = {
+    all: 'var(--a-11)',
+    deleted: 'oklch(0.5 0 0)',
+    paid: 'var(--info)',
+    printing: 'oklch(0.55 0.16 300)',
+    shipped: 'var(--e-ink)',
+    delivered: 'var(--ok)',
+    address_only: 'var(--warn)',
+    rejected: 'var(--err)',
+  };
+
   return (
     <>
-      <p className="text-[length:var(--fs-mono-label)] uppercase tracking-wide text-accent-text">
-        {c.eyebrow}
-      </p>
-      <h1 className="mt-1 text-[length:var(--fs-title-2)] font-semibold text-fg">{c.title}</h1>
-      <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">{c.subtitle}</p>
+      {/* ── Title, with the one thing this page CREATES beside it ───────── */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[length:var(--fs-mono-label)] uppercase tracking-wide text-accent-text">{c.eyebrow}</p>
+          <h1 className="mt-1 text-[length:var(--fs-title-2)] font-semibold text-fg">{c.title}</h1>
+        </div>
+        <CreateBookOrderDialog
+          /* Active titles only — an order for a book that is off the shelf is
+             an order the shop has said it is not taking. */
+          books={books
+            .filter((book) => book.isActive)
+            .map((book) => ({
+              id: book.id,
+              titleAr: book.titleAr,
+              priceCents: book.priceCents,
+              courseTitle: book.courseTitle,
+            }))}
+          governorates={governorateOptions}
+        />
+      </div>
 
       <BooksTabs active="/admin/books" />
 
-      {/* الأرقام أول حاجة — «محتاجها فوق، في أول صفحة كده». Above the filters
-          rather than under them, because it is what the screen is opened to
-          read before anything is pressed. */}
-      <BookOrderOverview overview={overview} />
-
-      {/* A plain GET form, no client component: the result IS the URL, so a
-          search an admin found someone with can be sent to a colleague, and
-          the back button walks searches the way it walks tabs. `status` rides
-          along in a hidden field because submitting a form replaces the query
-          string wholesale — without it, every search would silently throw the
-          admin back to the default tab. */}
-      <form action="/admin/books" className="mt-4 flex flex-wrap items-center gap-2">
-        {status !== 'paid' ? <input type="hidden" name="status" value={status} /> : null}
-        <label htmlFor="q" className="sr-only">
-          {c.searchLabel}
-        </label>
-        <input
-          id="q"
-          name="q"
-          type="search"
-          defaultValue={query}
-          placeholder={c.searchPlaceholder}
-          aria-label={c.searchLabel}
-          className="h-10 min-w-0 flex-1 rounded-full border border-line bg-surface-2 px-4 text-[length:var(--fs-text-sm)] text-fg placeholder:text-fg-faint sm:max-w-[26rem]"
-        />
-        <button
-          type="submit"
-          className="h-10 shrink-0 rounded-full bg-accent px-5 text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]"
-        >
-          {c.searchSubmit}
-        </button>
-        {query ? (
-          <Link
-            href={`/admin/books?status=${status}`}
-            className="h-10 shrink-0 rounded-full border border-line px-4 text-[length:var(--fs-text-sm)] leading-10 text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg"
-          >
-            {c.searchClear}
-          </Link>
-        ) : null}
-      </form>
-
-      {/* The provider wraps the toolbar as well as the list: «حدّد اللي في
-          المدى» lives beside the export it mirrors, and it needs the same
-          selection the checkboxes below write into. */}
-      <BulkShipProvider courierEnabled={entitlements['books.courier']}>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <nav className="flex flex-wrap gap-1.5">
-            {TABS.map((tab) => (
-              <Link
-                key={tab}
-                /* The search survives a tab change — the whole reason to switch
-                   tabs mid-search is that the order was not in this one. */
-                href={`/admin/books?status=${tab}${query ? `&q=${encodeURIComponent(query)}` : ''}`}
-                aria-current={tab === status ? 'page' : undefined}
+      {/*
+        ── The tab bar, with a count on every tab ─────────────────────────
+        It used to sit under the numbers, the search and three dropdowns — the
+        control the page is driven by was the fifth thing on it. Now it is the
+        first, and «كام في المطبعة؟» is answered before anything is pressed.
+        Scrolls sideways on a phone rather than wrapping into three rows.
+      */}
+      <nav
+        aria-label={c.columnStatus}
+        className="-mx-1 mt-5 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none]"
+      >
+        {TABS.map((tab) => {
+          const active = tab === status;
+          const tone = TAB_TONE[tab];
+          const count = overview.tabCounts[tab] ?? 0;
+          return (
+            <Link
+              key={tab}
+              /* The search survives a tab change — the whole reason to switch
+                 tabs mid-search is that the order was not in this one. */
+              href={`/admin/books?status=${tab}${query ? `&q=${encodeURIComponent(query)}` : ''}`}
+              aria-current={active ? 'page' : undefined}
+              className={cn(
+                'inline-flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-[length:var(--fs-text-sm)] font-medium',
+                'transition-colors duration-[160ms] ease-out',
+                active ? 'text-white' : 'border-line bg-surface-2 text-fg-muted hover:border-line-strong hover:text-fg',
+                tab === 'deleted' && !active ? 'border-dashed' : '',
+              )}
+              style={
+                active
+                  ? { background: tone, borderColor: tone, color: '#fff' }
+                  : undefined
+              }
+            >
+              {TAB_LABEL[tab]}
+              <span
                 className={cn(
-                  'rounded-full border px-3.5 py-1.5 text-[length:var(--fs-text-sm)]',
-                  'transition-colors duration-[160ms] ease-out',
-                  tab === status
-                    ? 'border-accent bg-accent text-[#1A1206]'
-                    : 'border-line text-fg-muted hover:border-accent/40 hover:text-fg',
-                  /* The archive of hidden rows reads as an archive even when it
-                     is not the open tab — it is the one list whose contents are
-                     invisible everywhere else. */
-                  tab === 'deleted' && tab !== status ? 'border-dashed' : '',
+                  'min-w-6 rounded-full px-1.5 text-center text-[length:var(--fs-text-xs)] tabular-nums leading-5',
+                  active ? 'bg-white/25' : 'bg-surface-4 text-fg-muted',
                 )}
               >
-                {TAB_LABEL[tab]}
-              </Link>
-            ))}
-          </nav>
+                {count}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
 
-          <div className="flex flex-wrap items-end gap-2">
-            {/* «يبقى فيه sorting قدامي وأبقى شايفه» — and «لغات أو عربي، أو
-                أولى أو تانية». Three dropdowns rather than three more rows of
-                chips; see `ListControl`. */}
-            <ListControl
-              name="sort"
-              label={c.sortLabel}
-              value={sort}
-              options={[
-                { value: 'oldest', label: c.sortOldest },
-                { value: 'newest', label: c.sortNewest },
-                { value: 'amount_desc', label: c.sortAmountDesc },
-                { value: 'amount_asc', label: c.sortAmountAsc },
-                { value: 'name_asc', label: c.sortNameAsc },
-                { value: 'governorate', label: c.sortGovernorate },
-              ]}
-            />
-            <ListControl
-              name="stream"
-              label={c.streamLabel}
-              value={stream ?? ''}
-              options={[
-                { value: '', label: c.streamAll },
-                { value: 'general', label: c.streamGeneral },
-                { value: 'languages', label: c.streamLanguages },
-              ]}
-            />
-            <ListControl
-              name="year"
-              label={c.yearLabel}
-              value={year === undefined ? '' : String(year)}
-              options={[
-                { value: '', label: c.yearAll },
-                ...[1, 2, 3].map((n) => ({
-                  value: String(n),
-                  label: formatCopy(c.yearOption, { year: bookOrderYearWord(n) ?? '' }),
-                })),
-              ]}
-            />
-            <CreateBookOrderDialog
-              /* Active titles only — an order for a book that is off the shelf
-                 is an order the shop has said it is not taking. `courseTitle`
-                 rides along as a LABEL, so «كتاب الترم الأول» under three
-                 different courses is three distinguishable options. */
-              books={books
-                .filter((book) => book.isActive)
-                .map((book) => ({
-                  id: book.id,
-                  titleAr: book.titleAr,
-                  priceCents: book.priceCents,
-                  courseTitle: book.courseTitle,
-                }))}
-              governorates={governorateOptions}
-            />
+      {/* ── Search and the three filters, on ONE row ────────────────────── */}
+      <div className="mt-4 flex flex-wrap items-end gap-2">
+        {/* A plain GET form: the result IS the URL, so a search can be sent to
+            a colleague and the back button walks searches like tabs. `status`
+            rides along because submitting replaces the whole query string. */}
+        <form action="/admin/books" className="flex min-w-[16rem] flex-1 items-center gap-2">
+          {status !== 'paid' ? <input type="hidden" name="status" value={status} /> : null}
+          <label htmlFor="q" className="sr-only">
+            {c.searchLabel}
+          </label>
+          <input
+            id="q"
+            name="q"
+            type="search"
+            defaultValue={query}
+            placeholder={c.searchPlaceholder}
+            aria-label={c.searchLabel}
+            className="h-10 min-w-0 flex-1 rounded-full border border-line bg-surface-2 px-4 text-[length:var(--fs-text-sm)] text-fg placeholder:text-fg-faint"
+          />
+          <button
+            type="submit"
+            className="h-10 shrink-0 rounded-full bg-accent px-5 text-[length:var(--fs-text-sm)] font-medium text-[#1A1206]"
+          >
+            {c.searchSubmit}
+          </button>
+          {query ? (
+            <Link
+              href={`/admin/books?status=${status}`}
+              className="h-10 shrink-0 rounded-full border border-line px-4 text-[length:var(--fs-text-sm)] leading-10 text-fg-muted transition-colors duration-[160ms] ease-out hover:border-accent/40 hover:text-fg"
+            >
+              {c.searchClear}
+            </Link>
+          ) : null}
+        </form>
+        <ListControl
+          name="sort"
+          label={c.sortLabel}
+          value={sort}
+          options={[
+            { value: 'oldest', label: c.sortOldest },
+            { value: 'newest', label: c.sortNewest },
+            { value: 'amount_desc', label: c.sortAmountDesc },
+            { value: 'amount_asc', label: c.sortAmountAsc },
+            { value: 'name_asc', label: c.sortNameAsc },
+            { value: 'governorate', label: c.sortGovernorate },
+          ]}
+        />
+        <ListControl
+          name="stream"
+          label={c.streamLabel}
+          value={stream ?? ''}
+          options={[
+            { value: '', label: c.streamAll },
+            { value: 'general', label: c.streamGeneral },
+            { value: 'languages', label: c.streamLanguages },
+          ]}
+        />
+        <ListControl
+          name="year"
+          label={c.yearLabel}
+          value={year === undefined ? '' : String(year)}
+          options={[
+            { value: '', label: c.yearAll },
+            ...[1, 2, 3].map((n) => ({
+              value: String(n),
+              label: formatCopy(c.yearOption, { year: bookOrderYearWord(n) ?? '' }),
+            })),
+          ]}
+        />
+      </div>
 
-            {/* The export needs ONE concrete status — `all` has no meaning for
-                a spreadsheet handed to a shipping company, so the button reads
-                the SAME tab that is open rather than a hidden default the
-                admin cannot see. */}
-            {status !== 'all' ? (
-              <ExportRange
-                status={status}
-                tabLabel={TAB_LABEL[status]}
-                /* The three filters the toolbar above is showing. Without them
-                   the file is a different set of orders than the list —
-                   «جالب إن واحد ناقص» — and nobody can tell which is right. */
-                filters={{ stream, year, q: query || undefined }}
-                /* The TAB's total, not this page's fifty. See `ExportRange`. */
-                rowCount={rowCount}
-                /* The three states a parcel can still be moved out of. */
-                batchable={BATCHABLE.has(status)}
-              />
-            ) : null}
-          </div>
+      {/* The provider wraps the toolbar as well as the list: «حدّد اللي في
+          المدى» lives with the exports, and it needs the same selection the
+          checkboxes write into. */}
+      <BulkShipProvider courierEnabled={entitlements['books.courier']} tab={status}>
+        {/* ── The numbers, as one line, and the paper tools behind one button ── */}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <BookOrderOverview overview={overview} />
+          {/* The export needs ONE concrete status — `all` has no meaning for a
+              spreadsheet handed to a shipping company. */}
+          {status !== 'all' ? (
+            <details className="group relative">
+              <summary className="inline-flex h-10 cursor-pointer list-none items-center gap-2 rounded-full border border-accent/40 bg-accent/10 px-4 text-[length:var(--fs-text-sm)] font-medium text-accent-text transition-colors duration-[160ms] ease-out hover:bg-accent/20 [&::-webkit-details-marker]:hidden">
+                <FileDown className="size-4" aria-hidden />
+                {c.toolsButton}
+                <ChevronDown className="size-4 transition-transform duration-[160ms] group-open:rotate-180" aria-hidden />
+              </summary>
+              <div className="mt-2 rounded-xl border border-line bg-surface-2 p-3 lg:absolute lg:end-0 lg:z-20 lg:w-max lg:max-w-[46rem] lg:shadow-lg">
+                <ExportRange
+                  status={status}
+                  tabLabel={TAB_LABEL[status]}
+                  /* The filters on screen — without them the file is a
+                     different set of orders than the list. */
+                  filters={{ stream, year, q: query || undefined }}
+                  /* The TAB's total, not this page's fifty. */
+                  rowCount={rowCount}
+                  batchable={BATCHABLE.has(status)}
+                />
+              </div>
+            </details>
+          ) : null}
         </div>
 
         {/*

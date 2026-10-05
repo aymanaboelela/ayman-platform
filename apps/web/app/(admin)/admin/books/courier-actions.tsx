@@ -3,18 +3,23 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import type { AdminBookOrderRow, BookOrderCourierEvent } from '@ayman/contracts/admin/book-orders';
+import { Truck } from 'lucide-react';
+import type {
+  AdminBookOrderRow,
+  BookOrderCourierEvent,
+  BulkBookOrderResult,
+} from '@ayman/contracts/admin/book-orders';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
-import { courierBookOrdersAction, courierEventsAction, readyBookOrdersAction } from './actions';
+import { courierBookOrdersAction, courierEventsAction } from './actions';
 import { useCourierEnabled } from './bulk-ship';
 
 const c = copy.admin.books;
 
 /** The courier's teal — its own hue on a row that already spends violet on
- *  «راح للمطبعة», green on «اتشحن» and blue on «وصل». */
-const COURIER_TONE = 'oklch(0.55 0.13 190)';
+ *  «المطبعة», green on «اتشحن» and blue on «وصل». */
+export const COURIER_TONE = 'oklch(0.55 0.13 190)';
 
 const dateFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
   dateStyle: 'medium',
@@ -22,36 +27,26 @@ const dateFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
 });
 
 /**
- * «خلص وجاهز» for one row — the box came back from the printer.
- *
- * A batch of one through the batch route, so a refusal arrives with its reason
- * already worded («محجوز للمراجعة») rather than as a status code to map.
+ * The toast for a print batch that also went to the courier: the print count,
+ * then one line per order the COURIER refused — those boxes are at the printer
+ * with nobody coming for them, which is the one thing the admin must not miss.
  */
-export function ReadyAction({ id }: { id: string }) {
-  const router = useRouter();
-  const [pending, setPending] = useState(false);
-
-  async function markReady() {
-    if (!window.confirm(c.markReadyConfirm)) return;
-    setPending(true);
-    const result = await readyBookOrdersAction([id]);
-    setPending(false);
-    const row = result?.rows[0];
-    if (row?.outcome === 'ready') toast.success(copy.admin.common.saved);
-    else toast.error(row?.reason ?? c.actionFailed);
-    router.refresh();
+export function reportCourierHalf(result: BulkBookOrderResult): void {
+  if (!result.courier) return;
+  if (result.courier.sent > 0) {
+    toast.success(formatCopy(c.bulkCourierDone, { count: String(result.courier.sent) }));
   }
-
-  return (
-    <Button type="button" size="sm" variant="secondary" onClick={markReady} disabled={pending}>
-      {pending ? c.markReadyWorking : c.markReady}
-    </Button>
-  );
+  for (const row of result.courier.failed) {
+    toast.error(formatCopy(c.courierFailedRow, { name: row.fullName, reason: row.reason }), {
+      duration: 12_000,
+    });
+  }
 }
 
 /**
- * «ابعت لشركة الشحن» for one row. Rendered only where the stack has the
- * integration — `useCourierEnabled` reads the same flag the bulk bar does.
+ * «ابعت لشركة الشحن» for one row — the order the print batch did not cover:
+ * refused the first time, or printed before the integration existed. Renders
+ * nothing on a stack without it.
  */
 export function SendToCourierAction({ id }: { id: string }) {
   const enabled = useCourierEnabled();
@@ -65,8 +60,9 @@ export function SendToCourierAction({ id }: { id: string }) {
     const result = await courierBookOrdersAction([id]);
     setPending(false);
     if (result && 'error' in result) toast.error(result.error);
-    else if (result?.rows[0]?.outcome === 'sent_to_courier') toast.success(formatCopy(c.bulkCourierDone, { count: '1' }));
-    else toast.error(result?.rows[0]?.reason ?? c.actionFailed);
+    else if (result?.rows[0]?.outcome === 'sent_to_courier') {
+      toast.success(formatCopy(c.bulkCourierDone, { count: '1' }));
+    } else toast.error(result?.rows[0]?.reason ?? c.actionFailed);
     router.refresh();
   }
 
@@ -74,29 +70,67 @@ export function SendToCourierAction({ id }: { id: string }) {
     <Button
       type="button"
       size="sm"
+      variant="secondary"
       onClick={send}
       disabled={pending}
-      style={{ background: COURIER_TONE, color: '#fff' }}
+      style={{ color: COURIER_TONE, borderColor: `color-mix(in oklch, ${COURIER_TONE}, transparent 55%)` }}
     >
+      <Truck className="size-4" aria-hidden />
       {pending ? c.sendToCourierWorking : c.sendToCourier}
     </Button>
   );
 }
 
 /**
- * Where the courier says the parcel is — and, on demand, every step it went
- * through.
+ * The chip beside the name: is the courier going to come for this box?
  *
- * Renders nothing for an order the courier has never heard of. A refused push
- * shows the courier's own sentence, because it is the only diagnosis there is
- * («المنطقة غير موجودة» is fixed by editing the address, «مش متظبط» by a call).
+ * Only where the question is live — a paid or printing order on a stack with
+ * the integration. Quiet teal when they have it; amber when the box is at the
+ * printer and they do NOT, because that parcel waits forever without a word.
+ */
+export function CourierChip({ row }: { row: AdminBookOrderRow }) {
+  const enabled = useCourierEnabled();
+  if (!enabled || row.deletedAt) return null;
+  if (row.status !== 'paid' && row.status !== 'printing') return null;
+  if (row.courierSentAt) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium leading-none"
+        style={{
+          color: COURIER_TONE,
+          background: `color-mix(in oklch, ${COURIER_TONE}, transparent 88%)`,
+        }}
+      >
+        <Truck className="size-3" aria-hidden />
+        {c.courierSent}
+      </span>
+    );
+  }
+  if (row.status !== 'printing') return null;
+  return (
+    <span
+      className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium leading-none"
+      style={{ color: 'var(--warn)', background: 'color-mix(in oklch, var(--warn), transparent 88%)' }}
+    >
+      <Truck className="size-3" aria-hidden />
+      {c.courierMissing}
+    </span>
+  );
+}
+
+/**
+ * What the courier last said about the parcel, and — on demand — every step.
+ *
+ * Renders nothing until there is something to say: a status from them, or a
+ * refusal in their words («المنطقة غير موجودة» is fixed by editing the
+ * address, «مش متظبط» by a phone call).
  */
 export function CourierPanel({ row }: { row: AdminBookOrderRow }) {
   const [open, setOpen] = useState(false);
   const [events, setEvents] = useState<BookOrderCourierEvent[] | null>(null);
   const [loading, setLoading] = useState(false);
 
-  if (!row.courier && !row.courierError && !row.courierSentAt) return null;
+  if (!row.courier && !row.courierError) return null;
 
   async function toggle() {
     if (open) {
@@ -115,12 +149,13 @@ export function CourierPanel({ row }: { row: AdminBookOrderRow }) {
     <div
       className="rounded-lg border px-3 py-2 text-[length:var(--fs-text-sm)]"
       style={{
-        borderColor: `color-mix(in oklch, ${COURIER_TONE}, transparent 60%)`,
-        background: `color-mix(in oklch, ${COURIER_TONE}, transparent 92%)`,
+        borderColor: `color-mix(in oklch, ${row.courierError ? 'var(--err)' : COURIER_TONE}, transparent 60%)`,
+        background: `color-mix(in oklch, ${row.courierError ? 'var(--err)' : COURIER_TONE}, transparent 93%)`,
       }}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="font-medium" style={{ color: COURIER_TONE }}>
+        <span className="inline-flex items-center gap-1.5 font-medium" style={{ color: COURIER_TONE }}>
+          <Truck className="size-4" aria-hidden />
           {c.courierLabel}
         </span>
         {row.courier ? (
@@ -129,16 +164,20 @@ export function CourierPanel({ row }: { row: AdminBookOrderRow }) {
             {row.courier.note ? <span className="text-fg-muted"> — {row.courier.note}</span> : null}
           </span>
         ) : null}
-        {row.courier?.agentName && row.courier.agentPhone ? (
+        {row.courier?.agentName ? (
           <span className="text-[length:var(--fs-text-xs)] text-fg-muted">
             {formatCopy(c.courierAgent, { name: row.courier.agentName })}
-            {' · '}
-            <span dir="ltr" className="[unicode-bidi:isolate]">
-              {row.courier.agentPhone}
-            </span>
+            {row.courier.agentPhone ? (
+              <>
+                {' · '}
+                <span dir="ltr" className="[unicode-bidi:isolate]">
+                  {row.courier.agentPhone}
+                </span>
+              </>
+            ) : null}
           </span>
         ) : null}
-        {row.courierSentAt ? (
+        {row.courier ? (
           <button
             type="button"
             onClick={toggle}

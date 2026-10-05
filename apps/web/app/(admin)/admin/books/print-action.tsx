@@ -1,10 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { Printer } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
-import { markBookOrderPrintingAction } from './actions';
+import { printBookOrdersAction } from './actions';
+import { useCourierEnabled } from './bulk-ship';
+import { reportCourierHalf } from './courier-actions';
 
 const c = copy.admin.books;
 
@@ -33,21 +38,29 @@ const c = copy.admin.books;
  * button changes, and nudging a poll that will return the same value is noise.
  */
 export function PrintAction({ id }: { id: string }) {
+  const router = useRouter();
+  /* On a stack with the courier integration the same press hands the order to
+     their system — the printer gives the box to their agent, so the data has
+     to be there first. Through the batch route, which already does both. */
+  const courier = useCourierEnabled();
   const [pending, setPending] = useState(false);
 
   async function markPrinting() {
-    if (!window.confirm(c.markPrintingConfirm)) return;
+    const ask = courier ? formatCopy(c.bulkPrintCourierConfirm, { count: '1' }) : c.markPrintingConfirm;
+    if (!window.confirm(ask)) return;
     setPending(true);
-    const result = await markBookOrderPrintingAction(id);
+    const result = await printBookOrdersAction([id], courier);
     setPending(false);
-    if (result.ok) toast.success(copy.admin.common.saved);
-    else toast.error(result.message === 'already-printing' ? c.alreadyPrinting : c.actionFailed);
+    const row = result?.rows[0];
+    if (row?.outcome === 'printing') toast.success(copy.admin.common.saved);
+    else toast.error(row?.reason ?? c.actionFailed);
+    if (result) reportCourierHalf(result);
+    router.refresh();
   }
 
   return (
     <Button
       type="button"
-      size="sm"
       onClick={markPrinting}
       disabled={pending}
       /*
@@ -65,7 +78,8 @@ export function PrintAction({ id }: { id: string }) {
       */
       style={{ background: 'oklch(0.55 0.16 300)', color: '#fff' }}
     >
-      {pending ? c.markPrintingWorking : c.markPrinting}
+      <Printer className="size-4" aria-hidden />
+      {pending ? c.markPrintingWorking : c.bulkPrintButton}
     </Button>
   );
 }

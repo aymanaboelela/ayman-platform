@@ -262,26 +262,31 @@ export class AdminBookOrdersController {
   @RequireCsrf()
   @Post('printing')
   @UsePipes(ZodValidationPipe)
-  printMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
-    return this.bookOrders.markPrintingMany(user.id, body.ids);
+  async printMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
+    const result = await this.bookOrders.markPrintingMany(user.id, body.ids);
+    /* «ابعتهم لشركة الشحن الأول عشان ياخدوهم من المطبعة» — the same run goes
+       into the courier's system, but only the rows that actually went to the
+       printer just now. A courier refusal never undoes the print: the paper is
+       at the printer either way, and the row says what is still missing. */
+    if (!body.courier || !this.courier.enabled()) return result;
+    const printed = result.rows.filter((row) => row.outcome === 'printing').map((row) => row.id);
+    if (printed.length === 0) return result;
+    const sent = await this.courier.sendMany(user.id, printed);
+    return {
+      ...result,
+      courier: {
+        sent: sent.succeeded,
+        failed: sent.rows
+          .filter((row) => row.outcome !== 'sent_to_courier')
+          .map((row) => ({ id: row.id, fullName: row.fullName, reason: row.reason ?? '' })),
+      },
+    };
   }
 
   /**
-   * «خلصت الطباعة وجاهز» in bulk — the run came back from the printer. Same
-   * desk, same permission as `printing`, and nothing is sent: see
-   * `BookOrdersService.markReady`. Declared before the `:id/…` routes for the
-   * ordering reason above.
-   */
-  @RequirePermission('book-order:ship')
-  @RequireCsrf()
-  @Post('ready')
-  @UsePipes(ZodValidationPipe)
-  readyMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
-    return this.bookOrders.markReadyMany(user.id, body.ids);
-  }
-
-  /**
-   * «ابعت لشركة الشحن» — the selected orders go into Torod's system. Gated on
+   * «ابعت لشركة الشحن» on its own — for the orders the print batch did not
+   * cover: refused by the courier the first time, or printed before the
+   * integration existed. Gated on
    * `books.courier` on top of the class's `books`: a stack without the
    * integration has no button and no route. See `BookOrderCourierService`.
    */

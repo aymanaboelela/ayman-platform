@@ -40,3 +40,12 @@ CREATE INDEX "book_order_courier_events_order_id_received_at_idx" ON "app"."book
 
 -- AddForeignKey
 ALTER TABLE "app"."book_order_courier_events" ADD CONSTRAINT "book_order_courier_events_order_id_fkey" FOREIGN KEY ("order_id") REFERENCES "app"."book_orders"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- ⚠️ الفهرس الجزئي بتاع «إيرادات الكتب» اتبنى على `('paid','shipped','delivered')`
+-- بس — يعني طلب في المطبعة كان بيختفي من الإيرادات لحد ما يتشحن (`printing`
+-- عمره ما اتضاف للقايمة دي). `BOOK_COUNTED_SQL` اتصلّح، والفهرس لازم يتبني على
+-- نفس الشرط بالحرف وإلا الـplanner مش هيستخدمه.
+DROP INDEX IF EXISTS "app"."book_orders_paid_at_counted_idx";
+CREATE INDEX "book_orders_paid_at_counted_idx"
+  ON "app"."book_orders" ("paid_at")
+  WHERE "status" IN ('paid', 'printing', 'shipped', 'delivered') AND "deleted_at" IS NULL;

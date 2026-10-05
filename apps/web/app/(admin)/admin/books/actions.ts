@@ -201,29 +201,18 @@ export async function deliverBookOrdersAction(ids: string[]): Promise<BulkBookOr
  * difference from `shipBookOrdersAction` above, and it is why the two are
  * separate actions rather than one with a mode.
  */
-export async function printBookOrdersAction(ids: string[]): Promise<BulkBookOrderResult | null> {
+export async function printBookOrdersAction(
+  ids: string[],
+  /** Hand the same run to the courier's system — see `BulkBookOrderActionSchema.courier`. */
+  courier = false,
+): Promise<BulkBookOrderResult | null> {
   try {
     const result = await adminSend(
       'POST',
       '/api/admin/book-orders/printing',
-      { ids },
+      { ids, courier },
       BulkBookOrderResultSchema,
     );
-    revalidatePath('/admin/books');
-    return result;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * «خلصت الطباعة وجاهز» — one row or a whole run, through the same batch route:
- * a single press is a batch of one, and its per-row answer already carries the
- * reason when the row did not move.
- */
-export async function readyBookOrdersAction(ids: string[]): Promise<BulkBookOrderResult | null> {
-  try {
-    const result = await adminSend('POST', '/api/admin/book-orders/ready', { ids }, BulkBookOrderResultSchema);
     revalidatePath('/admin/books');
     return result;
   } catch {

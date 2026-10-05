@@ -47,7 +47,7 @@ describe('BookOrderCourierService', () => {
   let studentId = '';
   const created: string[] = [];
 
-  async function order(status: 'paid' | 'printing' | 'ready' | 'courier' | 'shipped' = 'ready') {
+  async function order(status: 'paid' | 'printing' | 'shipped' = 'printing', sent = false) {
     const now = new Date();
     const row = await prisma.bookOrder.create({
       data: {
@@ -64,8 +64,7 @@ describe('BookOrderCourierService', () => {
         status,
         paidAt: now,
         printedAt: status === 'printing' ? now : null,
-        readyAt: status === 'ready' ? now : null,
-        courierSentAt: status === 'courier' ? now : null,
+        courierSentAt: sent ? now : null,
         items: { create: [{ titleAr: 'كتاب البرمجة', unitPriceCents: 25000, quantity: 1 }] },
       },
       select: { id: true },
@@ -127,22 +126,23 @@ describe('BookOrderCourierService', () => {
   });
 
   describe('sendMany', () => {
-    it('hands a ready order to the courier and moves it to «courier»', async () => {
-      const id = await order('ready');
+    it('hands an order at the printer to the courier, and leaves it at the printer', async () => {
+      const id = await order('printing');
       const result = await service.sendMany(adminId, [id]);
 
       expect(result.rows[0]).toMatchObject({ outcome: 'sent_to_courier' });
       expect(sent).toHaveLength(1);
       expect(sent[0]).toMatchObject({ sender_UID: id, city_Name: 'القاهرة', area_Name: 'مدينة نصر', order_Amt: 0 });
       const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id } });
-      expect(row.status).toBe('courier');
+      // A flag, not a status: their agent collects it FROM the printer.
+      expect(row.status).toBe('printing');
       expect(row.courierSentAt).not.toBeNull();
       // Nothing for the student yet — data in somebody's computer is not news.
       expect(await messages()).toEqual([]);
     });
 
     it('never sends the same order twice', async () => {
-      const id = await order('ready');
+      const id = await order('printing');
       await service.sendMany(adminId, [id]);
       const again = await service.sendMany(adminId, [id, id]);
 
@@ -151,22 +151,23 @@ describe('BookOrderCourierService', () => {
     });
 
     it('releases the claim on a refusal and keeps their words', async () => {
-      const id = await order('ready');
+      const id = await order('printing');
       refuseWith = 'المنطقة غير موجودة';
       const refused = await service.sendMany(adminId, [id]);
 
       expect(refused.rows[0]).toMatchObject({ outcome: 'skipped', reason: 'شركة الشحن رفضته: المنطقة غير موجودة' });
       let row = await prisma.bookOrder.findUniqueOrThrow({ where: { id } });
-      expect(row).toMatchObject({ status: 'ready', courierSentAt: null, courierError: 'المنطقة غير موجودة' });
+      expect(row).toMatchObject({ status: 'printing', courierSentAt: null, courierError: 'المنطقة غير موجودة' });
 
       refuseWith = null;
       await service.sendMany(adminId, [id]);
       row = await prisma.bookOrder.findUniqueOrThrow({ where: { id } });
-      expect(row).toMatchObject({ status: 'courier', courierError: null });
+      expect(row.courierSentAt).not.toBeNull();
+      expect(row.courierError).toBeNull();
     });
 
     it('skips a held order by name', async () => {
-      const id = await order('ready');
+      const id = await order('printing');
       await prisma.bookOrder.update({
         where: { id },
         data: { heldForReviewAt: new Date(), heldReason: 'amount_short' },
@@ -181,7 +182,7 @@ describe('BookOrderCourierService', () => {
         ...torod,
         credentials: () => null,
       } as unknown as TorodClient);
-      await expect(unconfigured.sendMany(adminId, [await order('ready')])).rejects.toBeInstanceOf(
+      await expect(unconfigured.sendMany(adminId, [await order('printing')])).rejects.toBeInstanceOf(
         BadRequestException,
       );
     });
@@ -190,7 +191,7 @@ describe('BookOrderCourierService', () => {
   describe('ingest (the webhook)', () => {
     it('«مع المندوب» ships the order and tells the student who is coming', async () => {
       await prisma.conversation.deleteMany({ where: { userId: studentId } });
-      const id = await order('courier');
+      const id = await order('printing', true);
       const result = await service.ingest([report(id, 3, { status_Name: 'في الشحن مع المندوب' })]);
 
       expect(result).toEqual({ applied: 1, ignored: 0 });
@@ -213,7 +214,7 @@ describe('BookOrderCourierService', () => {
 
     it('is a no-op for a report it has already seen', async () => {
       await prisma.conversation.deleteMany({ where: { userId: studentId } });
-      const id = await order('courier');
+      const id = await order('printing', true);
       await service.ingest([report(id, 3)]);
       const again = await service.ingest([report(id, 3)]);
 
@@ -223,7 +224,7 @@ describe('BookOrderCourierService', () => {
     });
 
     it('«تسليم ناجح» closes the order', async () => {
-      const id = await order('courier');
+      const id = await order('printing', true);
       await service.ingest([report(id, 3), report(id, 4, { status_Name: 'تم التسليم' })]);
       const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id } });
       expect(row).toMatchObject({ status: 'delivered', deliveredByUserId: null, courierStatusName: 'تم التسليم' });
@@ -256,14 +257,14 @@ describe('BookOrderCourierService', () => {
     });
 
     it('does not resurrect a deleted order', async () => {
-      const id = await order('courier');
+      const id = await order('printing', true);
       await prisma.bookOrder.update({
         where: { id },
         data: { deletedAt: new Date(), deletedByUserId: adminId, deletionReason: 'تكرار' },
       });
       await service.ingest([report(id, 4)]);
       const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id } });
-      expect(row.status).toBe('courier');
+      expect(row.status).toBe('printing');
       expect(row.courierStatusId).toBe(4);
     });
   });

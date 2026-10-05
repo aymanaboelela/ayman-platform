@@ -3121,8 +3121,6 @@ export const copy = {
     duplicateWhereTitle: 'طلبك القديم:',
     duplicateWherePaid: 'استلمنا فلوسه وبنجهّزه للشحن.',
     duplicateWherePrinting: 'نسختك دخلت المطبعة، وأول ما تخرج هتتشحن.',
-    duplicateWhereReady: 'خلص طباعة وهيتسلّم لشركة الشحن قريب.',
-    duplicateWhereCourier: 'عند شركة الشحن ومستني المندوب يستلمه.',
     duplicateWhereShipped: 'خرج وفي الطريق ليك دلوقتي.',
     duplicateWhereDelivered: 'وصلك خلاص.',
     /** الحالات اللي مش محطة في السكة — بيقول قدّ إيه بقى له من غير ما يوعد. */
@@ -6874,8 +6872,6 @@ export const copy = {
       /** «في المطبعة» داخليًا — بس الطالب بيشوف «بنطبعه»، لأن ده اللي بيحصل
        *  فعلًا وهو أوضح من اسم محطة إدارية مش بتاعته. */
       statusPrinting: 'بنطبعه',
-      statusReady: 'جاهز للشحن',
-      statusCourier: 'عند شركة الشحن',
       statusShipped: 'في الطريق',
       statusDelivered: 'وصلك',
       statusRejected: 'اترفض',
@@ -6889,8 +6885,6 @@ export const copy = {
       /** ما بيوعدش بيوم — الطبعة بترجع لما ترجع — بس بيقول الخطوة اللي بعدها،
        *  زي باقي السطور هنا. */
       notePrinting: 'نسختك دخلت المطبعة مع طبعة جديدة. أول ما تخرج وتتشحن هتلاقي هنا إنها في الطريق.',
-      noteReady: 'الكتاب خلص طباعة واتغلّف، وهيتسلّم لشركة الشحن قريب. أول ما المندوب يستلمه هتلاقي هنا إنه في الطريق.',
-      noteCourier: 'بيانات الشحنة وصلت لشركة الشحن، ومستنيين المندوب ييجي يستلم الكتاب. أول ما يستلمه هتلاقي هنا إنه في الطريق.',
       /** What the courier last said, under the note — «فين الكتاب دلوقتي؟». */
       courierStatus: 'شركة الشحن: {status}',
       /** `{name}` — the number is rendered beside it, isolated LTR. */

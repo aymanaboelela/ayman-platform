@@ -23,20 +23,23 @@ import { placeFor, torodCitiesFor, torodOrderFor, TOROD_STATUS } from './torod';
 import { TorodClient } from './torod.client';
 import { TorodWebhookEntrySchema, type TorodWebhookEntry } from './torod-webhook.dto';
 
-/** Where a parcel can be when it is handed to the courier: paid, and not yet
- *  with anybody. `ready` is the normal case; `paid`/`printing` for a copy that
- *  came off the shelf and never needed the «جاهز» step. */
-const PUSHABLE: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing', 'ready']);
+/** Where an order can be when its data goes to the courier: paid and not yet
+ *  shipped. `printing` is the normal case — the push rides on «ابعت للمطبعة»,
+ *  and their agent collects the boxes from the printer. */
+const PUSHABLE: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing']);
 
 /** Where «مع المندوب» may move an order to `shipped` from. */
-const BEFORE_SHIPPED: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing', 'ready', 'courier']);
+const BEFORE_SHIPPED: ReadonlySet<BookOrderStatus> = PUSHABLE;
 
 /**
  * «شركة الشحن» — the two directions of the courier integration.
  *
- *   · OUT: «ابعت لشركة الشحن» puts the selected orders into Torod's system and
- *     moves them to `courier`. Nothing is said to the student yet — the data
- *     being in somebody's computer is not the parcel moving.
+ *   · OUT: the orders go into Torod's system — normally together with
+ *     «ابعت للمطبعة», because the PRINTER hands the boxes to their agent and
+ *     the data has to be there first. It is a flag (`courierSentAt`), not a
+ *     status: the parcel is still at the printer. Nothing is said to the
+ *     student — the data being in somebody's computer is not the parcel
+ *     moving.
  *   · IN: their webhook reports what happened, and THAT is what moves the
  *     order on and tells the student: «مع المندوب» is `shipped`, «تسليم ناجح»
  *     is `delivered`, «مؤجل» and «مرتجع» are a message each.
@@ -169,10 +172,6 @@ export class BookOrderCourierService {
       return skip(`شركة الشحن رفضته: ${result.error}`);
     }
 
-    await this.prisma.bookOrder.update({
-      where: { id: order.id },
-      data: { status: 'courier' },
-    });
     await this.audit.record({
       action: 'book-order:courier',
       resourceType: AUDIT_RESOURCES.bookOrder,

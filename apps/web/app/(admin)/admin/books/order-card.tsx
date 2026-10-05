@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { MapPin, Phone } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import type { AdminBookOrderRow } from '@ayman/contracts/admin/book-orders';
@@ -10,19 +11,14 @@ import { formatEGP } from '@/lib/price';
 import { StreamBadge } from '@/components/stream-badge';
 import { WhatsappButton } from '@/components/admin/whatsapp-button';
 import { bookLineStream } from './line-stream';
-import {
-  DeliverAction,
-  MarkOrderFreeAction,
-  RejectOrderAction,
-  RemoveOrderAction,
-  RestoreOrderAction,
-} from './order-actions';
+import { DeliverAction, MarkOrderFreeAction, RestoreOrderAction } from './order-actions';
 import { MarkOrderPaidDialog } from './mark-paid-dialog';
 import { ShipAction } from './ship-action';
 import { HeldBanner } from './held-banner';
 import { PrintAction } from './print-action';
 import { OrderCheckbox } from './bulk-ship';
-import { CourierPanel, ReadyAction, SendToCourierAction } from './courier-actions';
+import { CourierChip, CourierPanel, SendToCourierAction } from './courier-actions';
+import { OrderMoreMenu } from './order-more-menu';
 import { BookOrderScreenshotThumbnail } from './screenshot-thumbnail';
 import { EditBookOrderDialog } from './edit-order-dialog';
 
@@ -66,15 +62,24 @@ const c = copy.admin.books;
  *      change how you treat the call and stay coloured. Everything else stopped
  *      being a pill.
  *
- * ## The actions are still real, labelled buttons
+ * ## One big button: the next step
  *
- * Unchanged and deliberately so: this screen is used with a phone against one
- * ear, and a kebab menu that hides «وصل» behind a click is a kebab that gets
- * pressed wrong. What is new is that they sit in their own bar at the FOOT of
- * the card rather than floating beside the address — five labelled buttons and
- * an address competing for the same row is what made the old layout wrap into
- * a different shape on every card.
+ * «لو فيه زراير مالهاش لازمة أشيلها». The foot of the card carried nine
+ * controls — the next step the same size as «احذف», and «اتشحن» on rows where
+ * it was not the next step at all. Now it carries the ONE action the row is
+ * waiting for, large and coloured by what it does (violet «ابعت للمطبعة»,
+ * green «اتشحن», blue «وصل»), beside «تعديل» and «واتساب». The rare ones —
+ * shipping without a print run, a hand delivery, reject, delete — are still
+ * one click away under «المزيد», labelled, never icon-only.
+ *
+ * The checkbox moved to the head of the card, where a column of them reads as
+ * a column rather than as one control lost among nine.
  */
+
+/**
+ * The tabs a batch can still move a row along from — the checkbox shows there.
+ */
+const BATCHABLE_STATUS: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing', 'shipped']);
 
 /**
  * Each state's colour, as a CSS value the card paints the stripe and the pill
@@ -91,8 +96,6 @@ const STATUS_TONE: Record<BookOrderStatus, string> = {
   address_only: 'var(--warn)',
   paid: 'var(--info)',
   printing: 'oklch(0.55 0.16 300)',
-  ready: 'oklch(0.62 0.12 150)',
-  courier: 'oklch(0.55 0.13 190)',
   shipped: 'var(--e-ink)',
   delivered: 'var(--ok)',
   rejected: 'var(--err)',
@@ -102,8 +105,6 @@ const STATUS_LABEL: Record<BookOrderStatus, string> = {
   address_only: c.statusAddressOnly,
   paid: c.statusPaid,
   printing: c.statusPrinting,
-  ready: c.statusReady,
-  courier: c.statusCourier,
   shipped: c.statusShipped,
   delivered: c.statusDelivered,
   rejected: c.statusRejected,
@@ -119,7 +120,7 @@ function Chip({ children, className }: { children: React.ReactNode; className?: 
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full border border-line-subtle bg-surface-3 px-2 py-0.5',
+        'inline-flex items-center whitespace-nowrap rounded-full border border-line-subtle bg-surface-3 px-2 py-0.5',
         'text-[length:var(--fs-text-xs)] leading-none text-fg-muted',
         className,
       )}
@@ -145,7 +146,6 @@ export function BookOrderCard({
   multiYear?: boolean;
 }) {
   const tone = STATUS_TONE[row.status];
-  const copies = row.items.reduce((sum, item) => sum + item.quantity, 0);
   /* The first letter of the name, as the card's only piece of "identity". Not a
      photo: a book order is frequently a guest with no account and therefore no
      avatar, and half a column of initials beside half a column of blanks is
@@ -180,7 +180,7 @@ export function BookOrderCard({
         {/*
           «محجوز للمراجعة» — ABOVE the name, because it changes what to do with
           the whole row. A held order is already missing from the packing list
-          and skipped by the bulk «اتشحن»; this is the only place that says so.
+          and skipped by the bulk actions; this is the only place that says so.
         */}
         {row.heldForReviewAt ? (
           <HeldBanner
@@ -193,34 +193,40 @@ export function BookOrderCard({
 
         {/* ── WHO, and what state ─────────────────────────────────────── */}
         <div className="flex flex-wrap items-start gap-3">
+          {!row.deletedAt && BATCHABLE_STATUS.has(row.status) ? (
+            <span className="pt-2">
+              <OrderCheckbox id={row.id} label={row.fullName} compact />
+            </span>
+          ) : null}
           <span
             aria-hidden
-            className="grid size-9 shrink-0 place-items-center rounded-full border border-line-subtle bg-surface-3 text-[length:var(--fs-text-sm)] font-semibold text-fg-muted"
+            className="grid size-10 shrink-0 place-items-center rounded-full text-[length:var(--fs-text-base)] font-semibold"
+            style={{
+              color: tone,
+              background: `color-mix(in oklch, ${tone}, transparent 86%)`,
+            }}
           >
             {initial}
           </span>
 
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              {/* The order's OWN `fullName` is the source of truth for shipping
-                  whether or not an account exists — a linked account only adds
-                  a link, never the displayed name. A guest gets a plain label
-                  rather than a dead link to `/admin/students/null`. */}
-              {row.userId ? (
-                <Link
-                  href={`/admin/students/${row.userId}`}
-                  className="text-[length:var(--fs-title-4)] font-semibold text-fg underline decoration-dotted decoration-fg-faint underline-offset-4 hover:text-accent-text hover:decoration-solid"
-                >
-                  {row.fullName}
-                </Link>
-              ) : (
-                <span className="text-[length:var(--fs-title-4)] font-semibold text-fg">
-                  {row.fullName}
-                </span>
-              )}
+            {/* The order's OWN `fullName` is the source of truth for shipping
+                whether or not an account exists — a linked account only adds a
+                link. A guest gets a plain label rather than a dead link. */}
+            {row.userId ? (
+              <Link
+                href={`/admin/students/${row.userId}`}
+                className="text-[length:var(--fs-title-4)] font-semibold text-fg hover:text-accent-text"
+              >
+                {row.fullName}
+              </Link>
+            ) : (
+              <span className="text-[length:var(--fs-title-4)] font-semibold text-fg">{row.fullName}</span>
+            )}
 
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <span
-                className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[length:var(--fs-text-xs)] font-medium leading-none"
+                className="inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-[length:var(--fs-text-xs)] font-medium leading-none"
                 style={{
                   color: tone,
                   background: `color-mix(in oklch, ${tone}, transparent 88%)`,
@@ -229,32 +235,20 @@ export function BookOrderCard({
               >
                 {STATUS_LABEL[row.status]}
               </span>
+              {/* Is the courier coming for this box? Only asked where it is
+                  live — see `CourierChip`. */}
+              <CourierChip row={row} />
 
               {/* «مجاني» beside the status and never instead of it: a giveaway
-                  is still shipped, delivered or rejected like any other parcel,
-                  and without this the row is a 0 ج sale that reads as a data
-                  error. */}
+                  is still shipped like any other parcel. */}
               {row.isFree ? (
-                <Chip className="!border-accent/40 !bg-accent/10 !text-accent-text">
-                  {c.freeBadge}
-                </Chip>
+                <Chip className="!border-accent/40 !bg-accent/10 !text-accent-text">{c.freeBadge}</Chip>
               ) : null}
 
-              {/*
-                «أعرف إن الراجل ده طلب كتاب قبل كده ولا لأ» — counted on the
-                PHONE, because guest checkout means one person is several
-                unlinked rows. Coloured, because it is the one chip here that
-                changes how you treat the call.
-
-                A LINK and not a plain chip, which is the whole of this change:
-                the count raises a question it cannot itself answer — WHICH
-                orders, and did they arrive? — and leaving the admin to retype
-                the number into the search box was the gap. `status=all`,
-                because the previous order worth seeing is usually one that
-                already shipped and the default tab hides it; and `q` is the
-                phone rather than the name because two students share a name
-                far more often than they share a number.
-              */}
+              {/* «أعرف إن الراجل ده طلب كتاب قبل كده ولا لأ» — counted on the
+                  PHONE (guest checkout means one person is several unlinked
+                  rows), and a LINK to those orders because the count raises a
+                  question it cannot answer by itself. */}
               {row.previousOrdersFromPhone > 0 ? (
                 <Link
                   href={`/admin/books?status=all&q=${encodeURIComponent(row.phone)}`}
@@ -273,28 +267,21 @@ export function BookOrderCard({
                 </Chip>
               ) : null}
 
-              {/* The status chip beside it still says «مدفوعة» — that is the
-                  point of a soft delete: the row keeps the state it was hidden
-                  IN. */}
+              {/* The status chip beside it keeps the state the row was hidden
+                  IN — that is the point of a soft delete. */}
               {row.deletedAt ? (
                 <Chip className="!border-[color:var(--err)] !bg-transparent !font-medium !text-[color:var(--err)]">
                   {c.removedBadge}
                 </Chip>
               ) : null}
             </div>
-
-            {row.courseTitle ? (
-              <p className="mt-0.5 text-[length:var(--fs-text-xs)] text-fg-faint">
-                {row.courseTitle}
-              </p>
-            ) : null}
           </div>
 
-          {/* The money, right-aligned and readable at a glance — the number the
-              phone call is usually about. The breakdown sits under it because
-              «الشحن ٦٥» is the part people query, and an admin answering that
-              call should not have to open the editor for it. */}
-          <div className="text-end">
+          {/* The money — the number the phone call is usually about. The
+              breakdown under it because «الشحن ٦٥» is the part people query. */}
+          {/* On a phone it drops under the name — beside it, a 390px card left
+              the name three words wide and the chips one word per line. */}
+          <div className="shrink-0 text-end max-sm:order-last max-sm:w-full max-sm:text-start">
             <p className="text-[length:var(--fs-title-4)] font-semibold tabular-nums text-fg">
               {formatEGP(row.amountCents)} ج
             </p>
@@ -306,11 +293,8 @@ export function BookOrderCard({
                 total: formatEGP(row.amountCents),
               })}
             </p>
-            {/* ٠ ج with nobody having said «مجاني». `unitPriceCents` allows 0,
-                so an order typed with the price left blank lands here — and
-                before the «مجاني» switch existed that was the only way to
-                record a giveaway, so these rows are real. The badge IS the
-                button that answers the question it asks. */}
+            {/* ٠ ج with nobody having said «مجاني» — the badge IS the button
+                that answers the question it asks. */}
             {!row.isFree && row.amountCents === 0 ? (
               <span className="mt-1 inline-block">
                 <MarkOrderFreeAction id={row.id} />
@@ -331,31 +315,20 @@ export function BookOrderCard({
                 className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-3/60 px-3 py-2"
               >
                 {/* The quantity FIRST and as its own object — «كل واحد عايز كام
-                    كتاب» is read off this column, and buried mid-sentence in
-                    «×٢» it was the easiest number on the card to miss. */}
+                    كتاب» is read off this column. */}
                 <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-surface-4 text-[length:var(--fs-text-xs)] font-semibold tabular-nums text-fg">
                   {item.quantity}
                 </span>
                 <span className="min-w-0 flex-1 text-[length:var(--fs-text-sm)] font-medium text-fg">
                   {item.titleAr}
                 </span>
-                {/* الصف and الطبعة sit ON the line they describe — one delivery
-                    can hold a لغات book and a عام one, and the person packing
-                    the box needs to know which is which. */}
                 {yearWord ? <Chip>{formatCopy(c.yearOption, { year: yearWord })}</Chip> : null}
-                {stream ? (
-                  <StreamBadge forGeneral={stream.forGeneral} forLanguages={stream.forLanguages} />
-                ) : null}
-                <span className="text-[length:var(--fs-text-xs)] tabular-nums text-fg-faint">
-                  {formatEGP(item.unitPriceCents * item.quantity)} ج
-                </span>
+                {stream ? <StreamBadge forGeneral={stream.forGeneral} forLanguages={stream.forLanguages} /> : null}
               </li>
             );
           })}
           {/* An order with NO lines still says so, rather than rendering an
-              empty block that reads as a loading state. Rare (a hand-edited
-              order whose last line was removed) and real — the address is
-              genuine and somebody is waiting for a parcel. */}
+              empty block that reads as a loading state. */}
           {row.items.length === 0 ? (
             <li className="rounded-lg border border-dashed border-line bg-surface-3/60 px-3 py-2 text-[length:var(--fs-text-sm)] text-fg-muted">
               {formatCopy(c.itemsSummary, { n: 0, copies: 0 })}
@@ -363,35 +336,65 @@ export function BookOrderCard({
           ) : null}
         </ul>
 
-        {/* ── WHERE it goes ───────────────────────────────────────────── */}
-        <p className="rounded-lg border border-line-subtle bg-surface-3/40 px-3 py-2 text-[length:var(--fs-text-sm)] leading-relaxed text-fg">
-          {formatCopy(c.addressLine, {
-            name: row.fullName,
-            governorate: row.governorateNameAr,
-            city: row.city,
-            street: row.addressStreet,
-          })}
-          {row.addressBuilding
-            ? formatCopy(c.addressLineBuilding, { building: row.addressBuilding })
-            : ''}
-          {row.addressNote ? ` — ${row.addressNote}` : ''}
-        </p>
+        {/* ── WHERE it goes, and how to reach them ─────────────────────── */}
+        <div className="flex flex-col gap-1.5 text-[length:var(--fs-text-sm)]">
+          <p className="flex items-start gap-2 leading-relaxed text-fg">
+            <MapPin className="mt-1 size-4 shrink-0 text-fg-faint" aria-hidden />
+            <span>
+              {formatCopy(c.addressPlace, {
+                governorate: row.governorateNameAr,
+                city: row.city,
+                street: row.addressStreet,
+              })}
+              {row.addressBuilding ? formatCopy(c.addressLineBuilding, { building: row.addressBuilding }) : ''}
+              {row.addressNote ? <span className="text-fg-muted"> — {row.addressNote}</span> : null}
+            </span>
+          </p>
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+            <Phone className="size-4 shrink-0 text-fg-faint" aria-hidden />
+            <a href={`tel:${row.phone}`} dir="ltr" className="[unicode-bidi:isolate] hover:text-fg">
+              {row.phone}
+            </a>
+            {row.altPhone && row.altPhone !== row.phone ? (
+              <span>
+                {c.altPhoneLabel}:{' '}
+                <a href={`tel:${row.altPhone}`} dir="ltr" className="[unicode-bidi:isolate] hover:text-fg">
+                  {row.altPhone}
+                </a>
+              </span>
+            ) : null}
+            {/* ALWAYS rendered, in one of three wordings — an absent line is
+                indistinguishable from a missing feature. */}
+            {row.senderPhone ? (
+              <span>
+                {c.senderPhoneLabel}:{' '}
+                <span dir="ltr" className="[unicode-bidi:isolate]">
+                  {row.senderPhone}
+                </span>
+              </span>
+            ) : (
+              <span>
+                {c.senderPhoneLabel}: {row.status === 'address_only' ? c.senderPhoneUnpaid : c.senderPhoneManual}
+              </span>
+            )}
+            <time dateTime={row.createdAt} className="text-fg-faint">
+              {dateFormatter.format(new Date(row.createdAt))}
+            </time>
+          </p>
+        </div>
 
-        {/* «فين الكتاب؟» — the courier's latest word, and the trail behind it. */}
+        {/* «فين الكتاب؟» — the courier's latest word, or their refusal. */}
         <CourierPanel row={row} />
 
         {row.adminNote ? (
-          <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
+          <p className="rounded-lg bg-surface-3/60 px-3 py-2 text-[length:var(--fs-text-sm)] text-fg-muted">
             <span className="font-medium text-fg">{c.adminNoteLabel}: </span>
             {row.adminNote}
           </p>
         ) : null}
 
-        {/* The two reasons, and they are not the same kind of thing. The
-            rejection is what the STUDENT was told, word for word — an admin
-            answering «ليه اترفض طلبي؟» must be able to read back exactly what
-            was sent. The deletion reason is internal and nobody outside this
-            screen has ever seen it. */}
+        {/* The rejection is what the STUDENT was told, word for word; the
+            deletion reason is internal. Two different kinds of text. */}
         {row.rejectionReason ? (
           <p className="rounded-lg border border-[color-mix(in_oklch,var(--err),transparent_60%)] bg-[color-mix(in_oklch,var(--err),transparent_92%)] px-3 py-2 text-[length:var(--fs-text-sm)] text-fg">
             <span className="font-medium text-[color:var(--err)]">{c.rejectedReasonLabel}: </span>
@@ -405,129 +408,39 @@ export function BookOrderCard({
           </p>
         ) : null}
 
-        {/* ── The quiet metadata line ─────────────────────────────────── */}
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--fs-text-xs)] text-fg-faint">
-          <span dir="ltr">{row.phone}</span>
-          <span dir="ltr">
-            {c.altPhoneLabel}: {row.altPhone}
-          </span>
-          {/* ALWAYS rendered, in one of three wordings. It used to disappear
-              when `senderPhone` was null, and an absent line is
-              indistinguishable from a missing feature — «فين الرقم اللي هعرف
-              إنه دفعله منه؟» on an order that was simply never paid for. */}
-          {row.senderPhone ? (
-            <span dir="ltr">
-              {c.senderPhoneLabel}: {row.senderPhone}
-            </span>
-          ) : (
-            <span>
-              {c.senderPhoneLabel}:{' '}
-              {row.status === 'address_only' ? c.senderPhoneUnpaid : c.senderPhoneManual}
-            </span>
-          )}
-          <span>{formatCopy(c.itemsSummary, { n: row.items.length, copies })}</span>
-          <time dateTime={row.createdAt}>{dateFormatter.format(new Date(row.createdAt))}</time>
-        </p>
-
         {/*
           ── The action bar ────────────────────────────────────────────────
-          Real, labelled buttons — one per thing that can be done to this row,
-          in the order the work flows: fix it, send it to the printer, ship it,
-          confirm it arrived, turn it down, hide it. Not an icon-only overflow
-          menu: this screen is used with a phone against one ear.
-
-          Its own row at the FOOT of the card rather than floating beside the
-          address, which is what made every card wrap into a different shape.
+          Start: the receipt, «واتساب», «تعديل». End: «المزيد» and the ONE
+          button this row is waiting for. See the file note.
         */}
         <div className="flex flex-wrap items-center gap-2 border-t border-line-subtle pt-3">
           {row.hasScreenshot ? (
-            <BookOrderScreenshotThumbnail
-              id={row.id}
-              alt={formatCopy(c.screenshotAlt, { student: row.fullName })}
-            />
+            <BookOrderScreenshotThumbnail id={row.id} alt={formatCopy(c.screenshotAlt, { student: row.fullName })} />
           ) : null}
-
-          {/* `row.phone` — the order's OWN contact number, always present
-              whether or not an account exists — is the right number to reach
-              about THIS delivery, not the account holder's `studentPhone`. */}
           <WhatsappButton phone={row.phone} label={c.whatsapp} size="sm" />
+          {row.deletedAt ? null : <EditBookOrderDialog order={row} books={books} governorates={governorates} />}
 
-          {row.deletedAt ? (
-            /* A hidden row has exactly one thing you can do to it. Editing or
-               shipping something that is in no working list is an action whose
-               result nobody would see. */
-            <RestoreOrderAction id={row.id} />
-          ) : (
-            <>
-              {/* «أعدل» first because it is the one that is reversible. */}
-              <EditBookOrderDialog order={row} books={books} governorates={governorates} />
-
-              {/* «الفلوس وصلت» — the ONE way out of «بدأ ومكملش الدفع» that
-                  does not need the student to come back and upload anything.
-                  Only on that state: every later one has already been settled,
-                  and a rejected row is restored before it is paid for. It
-                  carries both answers — فلوس and مجاني — because the admin is
-                  answering «اتحصّل منه إيه؟» once. See the dialog. */}
-              {row.status === 'address_only' ? (
-                <MarkOrderPaidDialog id={row.id} amountCents={row.amountCents} />
-              ) : null}
-
-              {/* Only on rows a batch can act on — a checkbox on a delivered
-                  order is a control whose only outcome is «اتشحن قبل كده».
-                  `printing` is in the set because it both ships AND is what
-                  «ابعت للمطبعة» produces, so a re-selected row is skipped
-                  rather than un-tickable. */}
-              {row.status === 'paid' ||
-              row.status === 'printing' ||
-              row.status === 'ready' ||
-              row.status === 'courier' ||
-              row.status === 'shipped' ? (
-                <OrderCheckbox id={row.id} label={row.fullName} />
-              ) : null}
-
-              {/* «راح للمطبعة» — only from `paid`, which is the only state it
-                  moves. See `markPrinting` for why it is not reachable from a
-                  parcel that has already left. */}
-              {row.status === 'paid' ? <PrintAction id={row.id} /> : null}
-
-              {/* «خلص وجاهز» — the box is back from the printer. From `paid`
-                  too: a copy off the stock shelf never went to a run. */}
-              {row.status === 'paid' || row.status === 'printing' ? <ReadyAction id={row.id} /> : null}
-
-              {/* «ابعت لشركة الشحن» — on the ready box, where the run is
-                  normally sent from. Renders nothing on a stack without the
-                  integration. */}
-              {row.status === 'ready' ? <SendToCourierAction id={row.id} /> : null}
-
-              {/* Ships by hand from every state short of `shipped` — a parcel
-                  given to a different courier, or one theirs picked up without
-                  their system saying so. */}
-              {row.status === 'paid' ||
-              row.status === 'printing' ||
-              row.status === 'ready' ||
-              row.status === 'courier' ? (
-                <ShipAction id={row.id} />
-              ) : null}
-
-              {/* On the pre-courier states as well as `shipped`: Ayman delivers
-                  some of these himself, and those never pass through «اتشحن». */}
-              {row.status === 'paid' ||
-              row.status === 'printing' ||
-              row.status === 'ready' ||
-              row.status === 'courier' ||
-              row.status === 'shipped' ? (
-                <DeliverAction id={row.id} />
-              ) : null}
-
-              {/* Not on a delivered order — a book in the student's hands
-                  cannot be turned down — and not on one already rejected. */}
-              {row.status !== 'delivered' && row.status !== 'rejected' ? (
-                <RejectOrderAction id={row.id} />
-              ) : null}
-
-              <RemoveOrderAction id={row.id} />
-            </>
-          )}
+          <div className="ms-auto flex flex-wrap items-center gap-2">
+            {row.deletedAt ? (
+              <RestoreOrderAction id={row.id} />
+            ) : (
+              <>
+                <OrderMoreMenu id={row.id} status={row.status} />
+                {/* The order the print batch did not hand to the courier —
+                    refused, or printed before the integration. */}
+                {row.status === 'printing' && !row.courierSentAt ? <SendToCourierAction id={row.id} /> : null}
+                {row.status === 'address_only' ? (
+                  <MarkOrderPaidDialog id={row.id} amountCents={row.amountCents} />
+                ) : row.status === 'paid' ? (
+                  <PrintAction id={row.id} />
+                ) : row.status === 'printing' ? (
+                  <ShipAction id={row.id} />
+                ) : row.status === 'shipped' ? (
+                  <DeliverAction id={row.id} />
+                ) : null}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </li>

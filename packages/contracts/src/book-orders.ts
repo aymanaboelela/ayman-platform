@@ -59,11 +59,6 @@ export const BookOrderStatusSchema = z.enum([
   'address_only',
   'paid',
   'printing',
-  /** «خلصت الطباعة وجاهز للشحن» — boxed, waiting for the courier. */
-  'ready',
-  /** «اتبعت لشركة الشحن» — in the courier's system, waiting for their agent.
-   *  Turns into `shipped` when THEY report the pickup, not when we press. */
-  'courier',
   'shipped',
   'delivered',
   'rejected',

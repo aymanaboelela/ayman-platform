@@ -213,10 +213,8 @@ export const AdminBookOrderRowSchema = z.object({
    *  an order that never passed through the printer, which is a real path and
    *  not a missing value: see `BookOrderStatusSchema`. */
   printedAt: z.iso.datetime().nullable(),
-  /** «خلصت الطباعة وجاهز» — when the box was marked ready for the courier. */
-  readyAt: z.iso.datetime().nullable(),
-  /** When the order was handed to the courier's system — the double-push
-   *  guard, see `BookOrder.courierSentAt`. */
+  /** When the order went into the courier's system — a flag beside the
+   *  status, and the double-push guard. See `BookOrder.courierSentAt`. */
   courierSentAt: z.iso.datetime().nullable(),
   /** The courier's own words for the last refused push, or null. */
   courierError: z.string().nullable(),
@@ -546,6 +544,13 @@ export const BulkBookOrderActionSchema = z
      * service uses it regardless of this flag.
      */
     whatsapp: z.boolean().default(false),
+    /**
+     * «ابعت للمطبعة» only: hand the same run to the courier's system too. The
+     * printer gives the boxes to their agent, so the data has to be there
+     * first. Ignored on a stack without `books.courier`; every other batch
+     * ignores it.
+     */
+    courier: z.boolean().default(false),
   })
   .strict();
 export type BulkBookOrderAction = z.infer<typeof BulkBookOrderActionSchema>;
@@ -589,8 +594,6 @@ export const BULK_NOT_HELD_REASON = 'مش محجوز';
 export const BulkBookOrderOutcomeSchema = z.enum([
   'shipped',
   'printing',
-  /** «خلصت الطباعة وجاهز» — marked, nothing sent. */
-  'ready',
   /** «اتبعت لشركة الشحن» — the courier accepted the data. */
   'sent_to_courier',
   'delivered',
@@ -617,6 +620,19 @@ export const BulkBookOrderResultSchema = z.object({
   succeeded: z.number().int(),
   noticeFailed: z.number().int(),
   skipped: z.number().int(),
+  /**
+   * «ابعت للمطبعة» on a stack with the courier integration also hands the
+   * same run to the courier's system — the printer gives the boxes to their
+   * agent, so the data has to be there first. Present only on that batch; the
+   * printing itself already succeeded for every row named here, and only the
+   * courier half did not.
+   */
+  courier: z
+    .object({
+      sent: z.number().int(),
+      failed: z.array(z.object({ id: z.uuid(), fullName: z.string(), reason: z.string() })),
+    })
+    .optional(),
 });
 export type BulkBookOrderResult = z.infer<typeof BulkBookOrderResultSchema>;
 
@@ -976,5 +992,11 @@ export const AdminBookOrderOverviewSchema = z.object({
    * honest answer to «كام طلب فيه كتاب أولى» and the wrong one to «كام طلب».
    */
   years: z.array(AdminBookOrderYearOverviewSchema),
+  /**
+   * How many orders sit on EACH tab under the same search and filters — the
+   * number beside every tab name. «كام في المطبعة؟» used to cost a click per
+   * tab; the tab bar now answers it before anything is pressed.
+   */
+  tabCounts: z.record(z.string(), z.number().int()),
 });
 export type AdminBookOrderOverview = z.infer<typeof AdminBookOrderOverviewSchema>;

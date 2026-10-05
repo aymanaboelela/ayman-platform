@@ -315,7 +315,7 @@ function lineFacts(item: CountableOrder['items'][number], order: CountableOrder)
  * `orders` and one order in EACH year's `orders`. The question a year bucket
  * answers is «كام طلب فيه كتاب أولى», which is what a print run is decided on.
  */
-function summariseOrders(rows: CountableOrder[]): AdminBookOrderOverview {
+function summariseOrders(rows: CountableOrder[]): Omit<AdminBookOrderOverview, 'tabCounts'> {
   const totals = { orders: rows.length, books: 0, copies: 0, general: 0, languages: 0 };
   const phones = new Set<string>();
   /* Keyed by the year as a string so `null` («من غير صف») is a bucket like any
@@ -594,15 +594,11 @@ interface OrderRow {
 const DUPLICATE_WINDOW_DAYS = 7;
 
 /**
- * Where a parcel can be when the admin presses «اتشحن» (or «وصل») by hand.
- *
- * Every paid state short of `shipped`: `printing` for the reprint handed over
- * the counter, `ready` for the box that went with a courier other than the
- * integrated one, and `courier` for the parcel the courier picked up without
- * their webhook ever saying so. Pressing it there is the admin overruling a
- * silent system, which is what the button is for.
+ * Where a parcel can be when the admin presses «اتشحن» (or «وصل»): paid and
+ * not yet gone. `paid` too, for the reprint handed over the counter that never
+ * saw a print run.
  */
-const SHIPPABLE: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing', 'ready', 'courier']);
+const SHIPPABLE: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing']);
 
 @Injectable()
 export class BookOrdersService {
@@ -930,7 +926,7 @@ export class BookOrdersService {
           OR: [
             { createdAt: { gte: since } },
             { paidAt: { gte: since } },
-            { status: { in: ['paid', 'printing', 'ready', 'courier', 'shipped'] } },
+            { status: { in: ['paid', 'printing', 'shipped'] } },
           ],
         },
         orderBy: [{ createdAt: 'desc' }],
@@ -2043,7 +2039,6 @@ export class BookOrdersService {
           createdAt: true,
           paidAt: true,
           printedAt: true,
-          readyAt: true,
           courierSentAt: true,
           courierError: true,
           /* «فين الكتاب؟» — the courier's latest word on the parcel. See
@@ -2145,7 +2140,6 @@ export class BookOrdersService {
         heldReason: row.heldReason,
         screenshotAmountCents: row.screenshotAmountCents,
         printedAt: row.printedAt?.toISOString() ?? null,
-        readyAt: row.readyAt?.toISOString() ?? null,
         courierSentAt: row.courierSentAt?.toISOString() ?? null,
         courierError: row.courierError,
         courier: courierView(row),
@@ -2209,6 +2203,28 @@ export class BookOrdersService {
    * already why `previousOrdersFromPhone` counts on it.
    */
   async adminOverview(query: AdminBookOrderQuery): Promise<AdminBookOrderOverview> {
+    /* The tab counts ignore the tab itself and keep everything else — they are
+       the answer to «لو دست على التبويب ده هلاقي كام؟». */
+    const scope: Prisma.BookOrderWhereInput = {
+      ...this.adminSearchWhere(query.q),
+      ...streamAndYearWhere(query.stream, query.year),
+    };
+    const [byStatus, deleted] = await Promise.all([
+      this.prisma.bookOrder.groupBy({
+        by: ['status'],
+        where: { ...scope, deletedAt: null },
+        _count: { _all: true },
+      }),
+      this.prisma.bookOrder.count({ where: { ...scope, deletedAt: { not: null } } }),
+    ]);
+    const tabCounts: Record<string, number> = { deleted };
+    let all = 0;
+    for (const group of byStatus) {
+      tabCounts[group.status] = group._count._all;
+      all += group._count._all;
+    }
+    tabCounts.all = all;
+
     const rows = await this.prisma.bookOrder.findMany({
       where: {
         ...liveOrDeletedWhere(query.status),
@@ -2227,7 +2243,7 @@ export class BookOrdersService {
       },
     });
 
-    return summariseOrders(rows);
+    return { ...summariseOrders(rows), tabCounts };
   }
 
   /**
@@ -2593,9 +2609,7 @@ export class BookOrdersService {
       throw new BadRequestException(
         order.status === 'printing'
           ? 'this order is already at the printer'
-          : order.status === 'ready' || order.status === 'courier'
-            ? 'this order is already back from the printer'
-            : order.status === 'shipped' || order.status === 'delivered'
+          : order.status === 'shipped' || order.status === 'delivered'
             ? 'this order has already left — it cannot go back to the printer'
             : order.status === 'rejected'
               ? 'this order was rejected — restore it to a live status first'
@@ -2667,9 +2681,7 @@ export class BookOrdersService {
           reason:
             order.status === 'printing'
               ? 'راح للمطبعة قبل كده'
-              : order.status === 'ready' || order.status === 'courier'
-                ? 'خلص طباعة خلاص'
-                : order.status === 'shipped' || order.status === 'delivered'
+              : order.status === 'shipped' || order.status === 'delivered'
                 ? 'اتشحن خلاص'
                 : 'لسه مادفعش',
         });
@@ -2713,85 +2725,6 @@ export class BookOrdersService {
     return {
       rows,
       succeeded: rows.filter((row) => row.outcome === 'printing').length,
-      noticeFailed: 0,
-      skipped: rows.filter((row) => row.outcome === 'skipped').length,
-    };
-  }
-
-  /**
-   * «خلصت الطباعة وجاهز للشحن» — the run came back from the printer and these
-   * boxes are packed.
-   *
-   * The tab this fills is the one the courier push runs from, so it is the
-   * line between «لسه في المطبعة» and «ممكن يتبعت النهاردة» — a question that
-   * otherwise has to be answered by walking over to the shelf.
-   *
-   * From `printing`, and from `paid` too: a copy taken off the stock shelf
-   * never went to the printer, and inventing a print run to unlock this would
-   * be the lie `markShipped` already refuses to demand. Nothing is sent to the
-   * student — a box on a shelf is not news, same as paper at the printer.
-   */
-  async markReady(adminId: string, orderId: string): Promise<void> {
-    const order = await this.orderForAdminAction(orderId);
-    this.assertNotDeleted(order);
-    if (order.status !== 'paid' && order.status !== 'printing') {
-      throw new BadRequestException(
-        order.status === 'ready'
-          ? 'جاهز قبل كده'
-          : order.status === 'courier' || order.status === 'shipped' || order.status === 'delivered'
-            ? 'اتشحن خلاص'
-            : order.status === 'rejected'
-              ? 'الطلب مرفوض'
-              : 'لسه مادفعش',
-      );
-    }
-    if (order.heldForReviewAt !== null) throw new BadRequestException('محجوز للمراجعة');
-
-    const now = new Date();
-    // One statement — `book_orders_ready_status_has_a_stamp` refuses the status
-    // without the stamp, exactly like the printing pair.
-    await this.prisma.bookOrder.update({
-      where: { id: order.id },
-      data: { status: 'ready', readyAt: now, readyByUserId: adminId },
-    });
-
-    await this.audit.record({
-      action: 'book-order:ready',
-      resourceType: AUDIT_RESOURCES.bookOrder,
-      resourceId: order.id,
-      outcome: 'success',
-      metadata: { userId: order.userId, courseId: order.courseId, adminId, from: order.status },
-    });
-  }
-
-  /** «جاهز» on a whole run — the same per-row reporting `markPrintingMany`
-   *  gives, so the three that did not move are named rather than re-read. */
-  async markReadyMany(adminId: string, ids: string[]): Promise<BulkBookOrderResult> {
-    const rows: BulkBookOrderResultRow[] = [];
-    for (const id of ids) {
-      const order = await this.prisma.bookOrder.findUnique({
-        where: { id },
-        select: { fullName: true, deletedAt: true },
-      });
-      if (!order || order.deletedAt !== null) {
-        rows.push({ id, outcome: 'skipped', fullName: '', reason: 'الطلب مش موجود' });
-        continue;
-      }
-      try {
-        await this.markReady(adminId, id);
-        rows.push({ id, outcome: 'ready', fullName: order.fullName, reason: null });
-      } catch (error) {
-        rows.push({
-          id,
-          outcome: 'skipped',
-          fullName: order.fullName,
-          reason: error instanceof BadRequestException ? error.message : 'مقدرناش نسجّله',
-        });
-      }
-    }
-    return {
-      rows,
-      succeeded: rows.filter((row) => row.outcome === 'ready').length,
       noticeFailed: 0,
       skipped: rows.filter((row) => row.outcome === 'skipped').length,
     };

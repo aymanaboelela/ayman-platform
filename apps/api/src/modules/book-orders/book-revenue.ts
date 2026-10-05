@@ -42,10 +42,9 @@ import type { Prisma } from '../../generated/prisma/client';
  * ⚠️ Every status a paid order passes through, in order. `printing` was missing
  * here from the day it was added, so an order at the printer vanished from
  * «إيرادات الكتب» until it shipped — the same «the more carefully he does the
- * paperwork, the less money it reports» bug `delivered` once was. `ready` and
- * `courier` sit on the same road and would have repeated it.
+ * paperwork, the less money it reports» bug `delivered` once was.
  */
-export const BOOK_COUNTED_STATUSES = ['paid', 'printing', 'ready', 'courier', 'shipped', 'delivered'] as const;
+export const BOOK_COUNTED_STATUSES = ['paid', 'printing', 'shipped', 'delivered'] as const;
 
 export const BOOK_COUNTED_WHERE = {
   status: { in: [...BOOK_COUNTED_STATUSES] },

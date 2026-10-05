@@ -38,10 +38,6 @@ export function whereIs(status: string): string {
       return c.duplicateWherePaid;
     case 'printing':
       return c.duplicateWherePrinting;
-    case 'ready':
-      return c.duplicateWhereReady;
-    case 'courier':
-      return c.duplicateWhereCourier;
     case 'shipped':
       return c.duplicateWhereShipped;
     case 'delivered':
