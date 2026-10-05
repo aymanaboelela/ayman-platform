@@ -4634,30 +4634,23 @@ const admin = {
 
     /*
      * ════════════════════════════════════════════════════════════════════
-     * «شركة الشحن» — المطبعة هي اللي بتسلّم الكراتين لمندوب الشحن، فبيانات
-     * الطلب لازم تكون في سيستمهم قبلها. عشان كده بتتبعت مع «ابعت للمطبعة»
-     * نفسها، والزرار اللي لوحده هنا للطلبات اللي فاتها ده (اترفضت عندهم أو
-     * اتطبعت قبل الربط). الطالب مابيتقالوش حاجة غير لما تدوس «اتشحن».
+     * «شركة الشحن» — «لما المطبعة تخلص ببعت الأوردرات لشركة الشحن». الزرار
+     * ده بيكتب الطلب في سيستمهم وبيسجّله «اتشحن» في نفس الضغطة، وده اللي
+     * بيبلّغ الطالب. «اتشحن» لوحده لسه موجود في «المزيد» للشحنة اللي راحت مع
+     * حد تاني.
      * ════════════════════════════════════════════════════════════════════
      */
     sendToCourier: 'ابعت لشركة الشحن',
     sendToCourierWorking: 'بيتبعت…',
-    sendToCourierConfirm: 'هتتبعت بيانات الطلب ده لسيستم شركة الشحن عشان مندوبهم ياخده من المطبعة. تمام؟',
+    sendToCourierConfirm: 'المطبعة خلّصت الطلب ده؟ هيتبعت لسيستم شركة الشحن ويتسجّل «اتشحن»، والطالب هيوصله إن كتابه اتشحن. تمام؟',
     /** `{count}` */
-    bulkCourierConfirm: 'هتتبعت بيانات {count} طلب لسيستم شركة الشحن عشان مندوبهم ياخدهم من المطبعة. تمام؟',
+    bulkCourierConfirm: 'المطبعة خلّصت الـ{count} طلب دول؟ هيتبعتوا لسيستم شركة الشحن ويتسجّلوا «اتشحن»، وكل طالب هيوصله إن كتابه اتشحن. تمام؟',
     /** `{count}` */
-    bulkCourierDone: 'اتبعتوا لشركة الشحن {count}',
-    /** On «ابعت للمطبعة» when the stack has the integration — the courier
-     *  half rides along, and the confirm says so. `{count}` */
-    bulkPrintCourierConfirm: 'هتسجّل إن {count} طلب راحوا للمطبعة، وبياناتهم هتتبعت لشركة الشحن عشان مندوبهم ياخدهم من هناك. مفيش رسايل هتتبعت للطلبة. تمام؟',
-    /** `{name}` · `{reason}` — the courier half failed, the print did not.
-     *  `{reason}` is already a sentence («شركة الشحن رفضته: …»). */
-    courierFailedRow: '{name} — راح للمطبعة، بس {reason}',
-    /** The quiet chip on a card the courier already has. */
-    courierSent: 'عند شركة الشحن',
-    /** The loud one on a card at the printer that the courier does NOT have —
-     *  the box will sit there with nobody coming for it. */
-    courierMissing: 'لسه مش عند شركة الشحن',
+    bulkCourierDone: 'اتبعتوا لشركة الشحن واتشحنوا {count}',
+    /** In «المزيد» on a printing row, where the main button is the courier. */
+    shipWithoutCourier: 'اتشحن من غير شركة الشحن',
+    /** The quiet chip on a card the courier has. */
+    courierSent: 'اتبعت لشركة الشحن',
     /** The courier's own words for a refused push. `{error}` */
     courierError: 'شركة الشحن رفضته: {error}',
     courierLabel: 'شركة الشحن',

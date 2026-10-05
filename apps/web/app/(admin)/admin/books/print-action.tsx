@@ -5,11 +5,8 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Printer } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
-import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import { printBookOrdersAction } from './actions';
-import { useCourierEnabled } from './bulk-ship';
-import { reportCourierHalf } from './courier-actions';
 
 const c = copy.admin.books;
 
@@ -39,22 +36,18 @@ const c = copy.admin.books;
  */
 export function PrintAction({ id }: { id: string }) {
   const router = useRouter();
-  /* On a stack with the courier integration the same press hands the order to
-     their system — the printer gives the box to their agent, so the data has
-     to be there first. Through the batch route, which already does both. */
-  const courier = useCourierEnabled();
   const [pending, setPending] = useState(false);
 
+  /* Through the batch route as a batch of one, so a refusal arrives already
+     worded («محجوز للمراجعة») rather than as a status code to map. */
   async function markPrinting() {
-    const ask = courier ? formatCopy(c.bulkPrintCourierConfirm, { count: '1' }) : c.markPrintingConfirm;
-    if (!window.confirm(ask)) return;
+    if (!window.confirm(c.markPrintingConfirm)) return;
     setPending(true);
-    const result = await printBookOrdersAction([id], courier);
+    const result = await printBookOrdersAction([id]);
     setPending(false);
     const row = result?.rows[0];
     if (row?.outcome === 'printing') toast.success(copy.admin.common.saved);
     else toast.error(row?.reason ?? c.actionFailed);
-    if (result) reportCourierHalf(result);
     router.refresh();
   }
 

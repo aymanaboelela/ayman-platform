@@ -18,7 +18,6 @@ import {
   clearBookOrderHoldsAction,
   courierBookOrdersAction,
 } from './actions';
-import { reportCourierHalf } from './courier-actions';
 
 const c = copy.admin.books;
 
@@ -356,30 +355,15 @@ function BulkActions({ variant }: { variant: 'bar' | 'inline' }) {
             {c.bulkDeliverButton}
           </Button>
         ) : null}
-        {showCourier ? (
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={busy}
-            onClick={() => {
-              if (!window.confirm(formatCopy(c.bulkCourierConfirm, { count: String(ids.length) }))) return;
-              void run(async (selection) => {
-                const result = await courierBookOrdersAction(selection);
-                if (result && 'error' in result) {
-                  toast.error(result.error);
-                  return { rows: [], succeeded: 0, noticeFailed: 0, skipped: 0 };
-                }
-                return result;
-              }, c.bulkCourierDone);
-            }}
-            style={{ color: 'oklch(0.55 0.13 190)', borderColor: 'color-mix(in oklch, oklch(0.55 0.13 190), transparent 55%)' }}
-          >
-            {c.sendToCourier}
-          </Button>
-        ) : null}
+        {/*
+          «اتشحن» by hand — the main button where the stack has no courier
+          integration, and the quiet one beside «ابعت لشركة الشحن» where it
+          does (a parcel that went with somebody else).
+        */}
         {showShip ? (
           <Button
             size="sm"
+            variant={ctx.courierEnabled ? 'secondary' : 'primary'}
             disabled={busy}
             onClick={() => {
               if (
@@ -392,28 +376,42 @@ function BulkActions({ variant }: { variant: 'bar' | 'inline' }) {
                 return;
               void run(shipBookOrdersAction, c.bulkShipped);
             }}
-            style={{ background: 'oklch(0.58 0.15 150)', color: '#fff' }}
+            style={ctx.courierEnabled ? undefined : { background: 'oklch(0.58 0.15 150)', color: '#fff' }}
           >
-            {busy ? c.bulkWorking : c.bulkShipButton}
+            {ctx.courierEnabled ? c.shipWithoutCourier : busy ? c.bulkWorking : c.bulkShipButton}
           </Button>
         ) : null}
         {/*
-          «ابعت للمطبعة» — and, on a stack with the courier integration, the
-          same run goes into the courier's system: the printer hands the boxes
-          to their agent, so the data must be there first. The confirm says so.
+          «لما المطبعة تخلص ببعت الأوردرات لشركة الشحن» — the run goes into
+          their system AND is recorded «اتشحن», which tells every student.
         */}
+        {showCourier ? (
+          <Button
+            size="sm"
+            disabled={busy}
+            onClick={() => {
+              if (!window.confirm(formatCopy(c.bulkCourierConfirm, { count: String(ids.length) }))) return;
+              void run(async (selection) => {
+                const result = await courierBookOrdersAction(selection);
+                if (result && 'error' in result) {
+                  toast.error(result.error);
+                  return { rows: [], succeeded: 0, noticeFailed: 0, skipped: 0 };
+                }
+                return result;
+              }, c.bulkCourierDone);
+            }}
+            style={{ background: 'oklch(0.55 0.13 190)', color: '#fff' }}
+          >
+            {busy ? c.bulkWorking : c.sendToCourier}
+          </Button>
+        ) : null}
         {showPrint ? (
           <Button
             size="sm"
             disabled={busy}
             onClick={() => {
-              const ask = ctx.courierEnabled ? c.bulkPrintCourierConfirm : c.bulkPrintConfirm;
-              if (!window.confirm(formatCopy(ask, { count: String(ids.length) }))) return;
-              void run(async (selection) => {
-                const result = await printBookOrdersAction(selection, ctx.courierEnabled);
-                if (result) reportCourierHalf(result);
-                return result;
-              }, c.bulkPrinted);
+              if (!window.confirm(formatCopy(c.bulkPrintConfirm, { count: String(ids.length) }))) return;
+              void run(printBookOrdersAction, c.bulkPrinted);
             }}
             style={{ background: 'oklch(0.55 0.16 300)', color: '#fff' }}
           >

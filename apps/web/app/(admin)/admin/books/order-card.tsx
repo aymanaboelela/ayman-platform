@@ -426,15 +426,14 @@ export function BookOrderCard({
             ) : (
               <>
                 <OrderMoreMenu id={row.id} status={row.status} />
-                {/* The order the print batch did not hand to the courier —
-                    refused, or printed before the integration. */}
-                {row.status === 'printing' && !row.courierSentAt ? <SendToCourierAction id={row.id} /> : null}
                 {row.status === 'address_only' ? (
                   <MarkOrderPaidDialog id={row.id} amountCents={row.amountCents} />
                 ) : row.status === 'paid' ? (
                   <PrintAction id={row.id} />
                 ) : row.status === 'printing' ? (
-                  <ShipAction id={row.id} />
+                  /* «لما المطبعة تخلص ببعت لشركة الشحن» — that one press also
+                     records «اتشحن». Without the integration, plain «اتشحن». */
+                  <SendToCourierAction id={row.id} fallback={<ShipAction id={row.id} />} />
                 ) : row.status === 'shipped' ? (
                   <DeliverAction id={row.id} />
                 ) : null}
