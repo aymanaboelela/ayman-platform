@@ -200,6 +200,8 @@ export function MirrorVideo({
   const ref = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<HlsHandle | null>(null);
   const [seeked, setSeeked] = useState(false);
+  /** hls.js was told where to start, so the element must not be seeked there a second time. */
+  const startsItself = useRef(false);
 
   const [paused, setPaused] = useState(true);
   const [waiting, setWaiting] = useState(false);
@@ -263,8 +265,20 @@ export function MirrorVideo({
           return;
         }
 
-        const instance = new Hls(HLS_CONFIG);
+        /*
+         * Start where the student is resuming, from the FIRST request.
+         *
+         * Left at its default, hls.js fetched the playlist's opening segments
+         * (and with `startFragPrefetch`, one before it was even asked), and
+         * only then did `loadedmetadata` move the playhead to minute 27 —
+         * aborting all of it and starting over. On mobile data that was
+         * seconds of a black frame spent downloading the part of the lecture
+         * the student had already watched.
+         */
+        const startPosition = skipCuts(Math.max(startAt, trim?.start ?? 0), trim);
+        const instance = new Hls(startPosition > 0 ? { ...HLS_CONFIG, startPosition } : HLS_CONFIG);
         hlsRef.current = instance;
+        startsItself.current = true;
 
         instance.on(Hls.Events.MANIFEST_PARSED, () => {
           setLevels(
@@ -467,6 +481,10 @@ export function MirrorVideo({
         }}
         onPlaying={() => setWaiting(false)}
         onCanPlay={() => setWaiting(false)}
+        // A seek into what is not fetched yet is a wait like any other: the
+        // spinner, rather than a frozen frame that looks like the player hung.
+        onSeeking={() => setWaiting(true)}
+        onSeeked={() => setWaiting(false)}
         onTimeUpdate={(event) => {
           const element = event.currentTarget;
           const t = element.currentTime;
@@ -499,7 +517,7 @@ export function MirrorVideo({
           // again on every quality change in the native Safari path.
           // The instructor's start wins over a resume point before it.
           const target = skipCuts(Math.max(startAt, trim?.start ?? 0), trim);
-          if (seeked || target <= 0) return;
+          if (seeked || startsItself.current || target <= 0) return;
           setSeeked(true);
           event.currentTarget.currentTime = target;
         }}
