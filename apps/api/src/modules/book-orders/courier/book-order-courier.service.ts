@@ -24,8 +24,8 @@ import { TorodClient } from './torod.client';
 import { TorodWebhookEntrySchema, type TorodWebhookEntry } from './torod-webhook.dto';
 
 /** Where an order can be when its data goes to the courier: paid and not yet
- *  shipped. `printing` is the normal case — the push rides on «ابعت للمطبعة»,
- *  and their agent collects the boxes from the printer. */
+ *  shipped. `printing` is the normal case — the run came back from the
+ *  printer; `paid` for a copy off the shelf that never saw one. */
 const PUSHABLE: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing']);
 
 /** Where «مع المندوب» may move an order to `shipped` from. */
@@ -34,15 +34,17 @@ const BEFORE_SHIPPED: ReadonlySet<BookOrderStatus> = PUSHABLE;
 /**
  * «شركة الشحن» — the two directions of the courier integration.
  *
- *   · OUT: the orders go into Torod's system — normally together with
- *     «ابعت للمطبعة», because the PRINTER hands the boxes to their agent and
- *     the data has to be there first. It is a flag (`courierSentAt`), not a
- *     status: the parcel is still at the printer. Nothing is said to the
- *     student — the data being in somebody's computer is not the parcel
- *     moving.
- *   · IN: their webhook reports what happened, and THAT is what moves the
- *     order on and tells the student: «مع المندوب» is `shipped`, «تسليم ناجح»
- *     is `delivered`, «مؤجل» and «مرتجع» are a message each.
+ *   · OUT: «ابعت لشركة الشحن», pressed when the printer is DONE — «لما
+ *     المطبعة تخلص ببعت الأوردرات لشركة الشحن». The order goes into Torod's
+ *     system and is recorded `shipped` in the same step, which is what tells
+ *     the student. Before this existed that was exactly his day: the printer
+ *     says it went to the courier, he presses «اتشحن». Now one press does
+ *     both, and the data is typed by nobody.
+ *     Not at «ابعت للمطبعة»: data in their system is an invitation for their
+ *     agent to come, and he would arrive at a printer with no books.
+ *   · IN: their webhook, when they enable it (they have not, 2026-10-05):
+ *     «مع المندوب» names the agent to the student, «تسليم ناجح» is
+ *     `delivered`, «مؤجل» and «مرتجع» are a message each.
  *
  * Kept out of `BookOrdersService` (4 000 lines already) and leaning on it only
  * for the one rule it owns — who an order's student is.
@@ -172,6 +174,16 @@ export class BookOrderCourierService {
       return skip(`شركة الشحن رفضته: ${result.error}`);
     }
 
+    /*
+     * «اتشحن» — through the very method the button uses, so the student hears
+     * it the same way (the bell, and «كتابك سلّمناه لشركة الشحن» in the
+     * thread), and a row that cannot ship says why instead of half-shipping.
+     * The courier already has it either way; a refusal here only means the
+     * admin presses «اتشحن» by hand.
+     */
+    const shipped = await this.bookOrders.markShippedMany(adminId, [order.id], false);
+    const shipRow = shipped.rows[0];
+
     await this.audit.record({
       action: 'book-order:courier',
       resourceType: AUDIT_RESOURCES.bookOrder,
@@ -187,7 +199,13 @@ export class BookOrderCourierService {
         areaMatched: place.matched,
       },
     });
-    return { id, outcome: 'sent_to_courier', fullName: order.fullName, reason: null };
+    return {
+      id,
+      outcome: 'sent_to_courier',
+      fullName: order.fullName,
+      reason:
+        shipRow?.outcome === 'skipped' ? `اتبعت لشركة الشحن بس ماتسجّلش اتشحن: ${shipRow.reason ?? ''}` : null,
+    };
   }
 
   /**
@@ -328,8 +346,10 @@ export class BookOrderCourierService {
   /**
    * The thread message for this status, if it gets one.
    *
-   * «مع المندوب» and «اتسلّم» go only when they MOVED the order: a parcel the
-   * admin already closed by hand does not need the news a second time.
+   * «مع المندوب» goes on every NEW report of it — the agent's name and number
+   * are news even on an order «ابعت لشركة الشحن» already shipped. «اتسلّم»
+   * goes only when it MOVED the order: a parcel the admin already closed by
+   * hand does not need the news a second time.
    * «مؤجل» and «مرتجع» have no status of their own, so every new report of one
    * is news. «تسليم جزئي» and codes we do not know stay on the admin's trail.
    *
@@ -349,12 +369,19 @@ export class BookOrderCourierService {
     const note = entry.status_Note ? ` — «${entry.status_Note}»` : '';
     const notice = copy.bookCourierNotice;
 
-    if (entry.status_ID === TOROD_STATUS.withAgent && to === 'shipped' && from !== 'shipped') {
+    /* «مع المندوب» is news whenever it is a NEW report (the fingerprint
+       already dropped repeats) — the order is usually `shipped` by now, since
+       «ابعت لشركة الشحن» records that, but the agent's name and number are
+       not something the student has heard yet. */
+    if (entry.status_ID === TOROD_STATUS.withAgent) {
       const text =
         entry.delivery_Name && entry.delivery_Phone
           ? formatCopy(notice.withAgent, { name, agent: entry.delivery_Name, phone: entry.delivery_Phone })
           : formatCopy(notice.withAgentUnnamed, { name });
-      await this.outreach.postAdminMessage(studentId, text);
+      // Quietly when this report is what shipped it (`book_order_shipped`
+      // already rang the bell); as a message that rings otherwise.
+      if (to === 'shipped' && from !== 'shipped') await this.outreach.postAdminMessage(studentId, text);
+      else await this.ringWith(studentId, text);
       return;
     }
     if (entry.status_ID === TOROD_STATUS.delivered && to === 'delivered' && from !== 'delivered') {
@@ -368,9 +395,13 @@ export class BookOrderCourierService {
           ? notice.returned
           : null;
     if (template === null) return;
-    await this.prisma.$transaction((tx) =>
-      this.outreach.sendManual(tx, { userId: studentId, body: formatCopy(template, { name, note }) }),
-    );
+    await this.ringWith(studentId, formatCopy(template, { name, note }));
+  }
+
+  /** A thread message that rings the bell as a message — for the statuses
+   *  with no notification kind of their own. */
+  private async ringWith(studentId: string, body: string): Promise<void> {
+    await this.prisma.$transaction((tx) => this.outreach.sendManual(tx, { userId: studentId, body }));
     await this.notifications.announce(studentId);
   }
 

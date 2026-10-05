@@ -201,16 +201,12 @@ export async function deliverBookOrdersAction(ids: string[]): Promise<BulkBookOr
  * difference from `shipBookOrdersAction` above, and it is why the two are
  * separate actions rather than one with a mode.
  */
-export async function printBookOrdersAction(
-  ids: string[],
-  /** Hand the same run to the courier's system — see `BulkBookOrderActionSchema.courier`. */
-  courier = false,
-): Promise<BulkBookOrderResult | null> {
+export async function printBookOrdersAction(ids: string[]): Promise<BulkBookOrderResult | null> {
   try {
     const result = await adminSend(
       'POST',
       '/api/admin/book-orders/printing',
-      { ids, courier },
+      { ids },
       BulkBookOrderResultSchema,
     );
     revalidatePath('/admin/books');

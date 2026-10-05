@@ -262,31 +262,14 @@ export class AdminBookOrdersController {
   @RequireCsrf()
   @Post('printing')
   @UsePipes(ZodValidationPipe)
-  async printMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
-    const result = await this.bookOrders.markPrintingMany(user.id, body.ids);
-    /* «ابعتهم لشركة الشحن الأول عشان ياخدوهم من المطبعة» — the same run goes
-       into the courier's system, but only the rows that actually went to the
-       printer just now. A courier refusal never undoes the print: the paper is
-       at the printer either way, and the row says what is still missing. */
-    if (!body.courier || !this.courier.enabled()) return result;
-    const printed = result.rows.filter((row) => row.outcome === 'printing').map((row) => row.id);
-    if (printed.length === 0) return result;
-    const sent = await this.courier.sendMany(user.id, printed);
-    return {
-      ...result,
-      courier: {
-        sent: sent.succeeded,
-        failed: sent.rows
-          .filter((row) => row.outcome !== 'sent_to_courier')
-          .map((row) => ({ id: row.id, fullName: row.fullName, reason: row.reason ?? '' })),
-      },
-    };
+  printMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
+    return this.bookOrders.markPrintingMany(user.id, body.ids);
   }
 
   /**
-   * «ابعت لشركة الشحن» on its own — for the orders the print batch did not
-   * cover: refused by the courier the first time, or printed before the
-   * integration existed. Gated on
+   * «ابعت لشركة الشحن» — the run is back from the printer: the orders go into
+   * Torod's system AND are recorded «اتشحن», which is what tells each student.
+   * See `BookOrderCourierService.sendMany`. Gated on
    * `books.courier` on top of the class's `books`: a stack without the
    * integration has no button and no route. See `BookOrderCourierService`.
    */

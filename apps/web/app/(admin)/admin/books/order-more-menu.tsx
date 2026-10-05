@@ -16,6 +16,7 @@ import {
 import { useRefreshBookOrdersUnshippedCount } from '@/components/admin/book-orders-alerts';
 import { markBookOrderDeliveredAction, markBookOrderShippedAction } from './actions';
 import { RejectOrderAction, RemoveOrderAction } from './order-actions';
+import { useCourierEnabled } from './bulk-ship';
 
 const c = copy.admin.books;
 
@@ -58,7 +59,10 @@ export function OrderMoreMenu({ id, status }: { id: string; status: BookOrderSta
     } else toast.error(result.message === 'already-delivered' ? c.alreadyDelivered : c.actionFailed);
   }
 
-  const canShip = status === 'paid';
+  const courier = useCourierEnabled();
+  /* From `paid`: a copy with no print run. From `printing` only where the main
+     button is the courier's — a parcel that went with somebody else. */
+  const canShip = status === 'paid' || (status === 'printing' && courier);
   const canDeliver = status === 'paid' || status === 'printing';
   const canReject = status !== 'delivered' && status !== 'rejected';
 
@@ -76,7 +80,7 @@ export function OrderMoreMenu({ id, status }: { id: string; status: BookOrderSta
           {canShip ? (
             <DropdownMenuItem onSelect={() => void shipNow()}>
               <PackageCheck className="size-4" aria-hidden />
-              {c.shipSkipPrinter}
+              {status === 'printing' ? c.shipWithoutCourier : c.shipSkipPrinter}
             </DropdownMenuItem>
           ) : null}
           {canDeliver ? (

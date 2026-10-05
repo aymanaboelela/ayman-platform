@@ -1,14 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Truck } from 'lucide-react';
-import type {
-  AdminBookOrderRow,
-  BookOrderCourierEvent,
-  BulkBookOrderResult,
-} from '@ayman/contracts/admin/book-orders';
+import type { AdminBookOrderRow, BookOrderCourierEvent } from '@ayman/contracts/admin/book-orders';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
@@ -27,54 +23,34 @@ const dateFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
 });
 
 /**
- * The toast for a print batch that also went to the courier: the print count,
- * then one line per order the COURIER refused — those boxes are at the printer
- * with nobody coming for them, which is the one thing the admin must not miss.
+ * «ابعت لشركة الشحن» for one row — the printer is done with it. The order goes
+ * into their system and is recorded «اتشحن» in the same press, which tells the
+ * student. On a stack without the integration this renders `fallback` — the
+ * plain «اتشحن» — so the card always shows ONE next step.
  */
-export function reportCourierHalf(result: BulkBookOrderResult): void {
-  if (!result.courier) return;
-  if (result.courier.sent > 0) {
-    toast.success(formatCopy(c.bulkCourierDone, { count: String(result.courier.sent) }));
-  }
-  for (const row of result.courier.failed) {
-    toast.error(formatCopy(c.courierFailedRow, { name: row.fullName, reason: row.reason }), {
-      duration: 12_000,
-    });
-  }
-}
-
-/**
- * «ابعت لشركة الشحن» for one row — the order the print batch did not cover:
- * refused the first time, or printed before the integration existed. Renders
- * nothing on a stack without it.
- */
-export function SendToCourierAction({ id }: { id: string }) {
+export function SendToCourierAction({ id, fallback }: { id: string; fallback?: ReactNode }) {
   const enabled = useCourierEnabled();
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  if (!enabled) return null;
+  if (!enabled) return <>{fallback ?? null}</>;
 
   async function send() {
     if (!window.confirm(c.sendToCourierConfirm)) return;
     setPending(true);
     const result = await courierBookOrdersAction([id]);
     setPending(false);
+    const row = result && !('error' in result) ? result.rows[0] : undefined;
     if (result && 'error' in result) toast.error(result.error);
-    else if (result?.rows[0]?.outcome === 'sent_to_courier') {
+    else if (row?.outcome === 'sent_to_courier') {
       toast.success(formatCopy(c.bulkCourierDone, { count: '1' }));
-    } else toast.error(result?.rows[0]?.reason ?? c.actionFailed);
+      // Sent, but «اتشحن» did not take — the reason says what to press.
+      if (row.reason) toast.message(row.reason);
+    } else toast.error(row?.reason ?? c.actionFailed);
     router.refresh();
   }
 
   return (
-    <Button
-      type="button"
-      size="sm"
-      variant="secondary"
-      onClick={send}
-      disabled={pending}
-      style={{ color: COURIER_TONE, borderColor: `color-mix(in oklch, ${COURIER_TONE}, transparent 55%)` }}
-    >
+    <Button type="button" onClick={send} disabled={pending} style={{ background: COURIER_TONE, color: '#fff' }}>
       <Truck className="size-4" aria-hidden />
       {pending ? c.sendToCourierWorking : c.sendToCourier}
     </Button>
@@ -82,38 +58,19 @@ export function SendToCourierAction({ id }: { id: string }) {
 }
 
 /**
- * The chip beside the name: is the courier going to come for this box?
- *
- * Only where the question is live — a paid or printing order on a stack with
- * the integration. Quiet teal when they have it; amber when the box is at the
- * printer and they do NOT, because that parcel waits forever without a word.
+ * «اتبعت لشركة الشحن» — on an order the courier's system has, so a shipped
+ * order the courier is carrying reads differently from one that went with
+ * somebody else. Quiet teal: it is a fact, not a task.
  */
 export function CourierChip({ row }: { row: AdminBookOrderRow }) {
-  const enabled = useCourierEnabled();
-  if (!enabled || row.deletedAt) return null;
-  if (row.status !== 'paid' && row.status !== 'printing') return null;
-  if (row.courierSentAt) {
-    return (
-      <span
-        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium leading-none"
-        style={{
-          color: COURIER_TONE,
-          background: `color-mix(in oklch, ${COURIER_TONE}, transparent 88%)`,
-        }}
-      >
-        <Truck className="size-3" aria-hidden />
-        {c.courierSent}
-      </span>
-    );
-  }
-  if (row.status !== 'printing') return null;
+  if (!row.courierSentAt || row.deletedAt) return null;
   return (
     <span
       className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium leading-none"
-      style={{ color: 'var(--warn)', background: 'color-mix(in oklch, var(--warn), transparent 88%)' }}
+      style={{ color: COURIER_TONE, background: `color-mix(in oklch, ${COURIER_TONE}, transparent 88%)` }}
     >
       <Truck className="size-3" aria-hidden />
-      {c.courierMissing}
+      {c.courierSent}
     </span>
   );
 }

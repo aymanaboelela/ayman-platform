@@ -25,9 +25,24 @@ describe('BookOrderCourierService', () => {
   const audit = new AuditService(prisma);
   const notifications = new NotificationsService(prisma);
   const outreach = new OutreachService(prisma, notifications, {} as SettingsService);
-  /* The one rule borrowed from `BookOrdersService` — who the student is. */
+  /* The two things borrowed from `BookOrdersService`: who the student is, and
+     «اتشحن» — stubbed to the status change it makes, because the real one
+     also posts the student's notice through services this suite does not
+     build. That it is CALLED, and only after the courier accepted, is what is
+     pinned here. */
+  const shippedIds: string[] = [];
   const bookOrders = {
     studentIdForOrder: async (order: { userId: string | null }) => order.userId,
+    markShippedMany: async (_adminId: string, ids: string[]) => {
+      shippedIds.push(...ids);
+      await prisma.bookOrder.updateMany({ where: { id: { in: ids } }, data: { status: 'shipped', shippedAt: new Date() } });
+      return {
+        rows: ids.map((id) => ({ id, outcome: 'shipped' as const, fullName: '', reason: null })),
+        succeeded: ids.length,
+        noticeFailed: 0,
+        skipped: 0,
+      };
+    },
   } as unknown as BookOrdersService;
 
   const sent: TorodOrder[] = [];
@@ -114,6 +129,7 @@ describe('BookOrderCourierService', () => {
 
   beforeEach(() => {
     sent.length = 0;
+    shippedIds.length = 0;
     refuseWith = null;
   });
 
@@ -126,7 +142,7 @@ describe('BookOrderCourierService', () => {
   });
 
   describe('sendMany', () => {
-    it('hands an order at the printer to the courier, and leaves it at the printer', async () => {
+    it('hands a printed order to the courier and records it «اتشحن»', async () => {
       const id = await order('printing');
       const result = await service.sendMany(adminId, [id]);
 
@@ -134,11 +150,10 @@ describe('BookOrderCourierService', () => {
       expect(sent).toHaveLength(1);
       expect(sent[0]).toMatchObject({ sender_UID: id, city_Name: 'القاهرة', area_Name: 'مدينة نصر', order_Amt: 0 });
       const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id } });
-      // A flag, not a status: their agent collects it FROM the printer.
-      expect(row.status).toBe('printing');
+      // «لما المطبعة تخلص ببعت لشركة الشحن» — and that IS «اتشحن».
+      expect(row.status).toBe('shipped');
       expect(row.courierSentAt).not.toBeNull();
-      // Nothing for the student yet — data in somebody's computer is not news.
-      expect(await messages()).toEqual([]);
+      expect(shippedIds).toEqual([id]);
     });
 
     it('never sends the same order twice', async () => {
@@ -158,6 +173,8 @@ describe('BookOrderCourierService', () => {
       expect(refused.rows[0]).toMatchObject({ outcome: 'skipped', reason: 'شركة الشحن رفضته: المنطقة غير موجودة' });
       let row = await prisma.bookOrder.findUniqueOrThrow({ where: { id } });
       expect(row).toMatchObject({ status: 'printing', courierSentAt: null, courierError: 'المنطقة غير موجودة' });
+      // Refused by the courier → not shipped either.
+      expect(shippedIds).toEqual([]);
 
       refuseWith = null;
       await service.sendMany(adminId, [id]);
