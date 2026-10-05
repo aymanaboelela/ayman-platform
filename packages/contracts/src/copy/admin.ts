@@ -1414,6 +1414,54 @@ const admin = {
     studentLast: 'آخر جولة {date}',
     studentAllStats: 'إحصائيات الألعاب',
   },
+  /**
+   * «قسم التحديات» — على صفحة كورس واحد في «أسئلة الألعاب». كل تحدّي = اسم +
+   * وحدات و/أو دروس، والطالب بيختار منهم (واحد أو أكتر) بدل «الكورس كله».
+   */
+  challenges: {
+    title: 'قسم التحديات',
+    lead: 'مواضيع بأسماء يختار منها الطلبة — «الوحدة الأولى»، «الدرس التالت بس». الأسئلة من دروس التحدّي كلها: كويزاتها (حتى لو الطالب لسه ماامتحنهاش)، وأسئلة الألعاب، والأسئلة المربوطة بالدرس من «لصق أسئلة». المتشغّل بس بيظهر للطلبة.',
+    foundation: 'الكورس التأسيسي مالوش تحديات — مابيظهرش في الألعاب ولا الساحة خالص.',
+    none: 'لسه مفيش تحديات في الكورس ده. أول تحدّي بيقلب صفحة الألعاب للكورس ده من «المنهج كله / وحدة / درس» للتحديات.',
+    add: 'تحدّي جديد',
+    edit: 'تعديل',
+    remove: 'مسح',
+    removeConfirm: 'مسح «{title}»؟ الأسئلة نفسها مش هتتمسح.',
+    up: 'لفوق',
+    down: 'لتحت',
+    active: 'متشغّل',
+    inactive: 'متوقف',
+    activeHint: 'الطلبة بيشوفوه',
+    inactiveHint: 'مستخبي عن الطلبة',
+    nameLabel: 'اسم التحدّي',
+    namePlaceholder: 'مثلًا: الوحدة الأولى',
+    scopeLabel: 'الوحدات والدروس',
+    scopeHint: 'وحدة كاملة بتجيب كل دروسها (وكويزاتها). أو دروس معيّنة بس.',
+    wholeUnit: 'الوحدة كلها',
+    lessonsOnly: 'دروس معيّنة',
+    pickedUnits: '{n} وحدة',
+    pickedLessons: '{n} درس',
+    readyTotal: '{n} سؤال جاهز',
+    readyStreams: 'عربي {general} · لغات {languages}',
+    lessonReady: '{n} سؤال',
+    missing: '{n} وحدة/درس مابقوش في الكورس — بيتشالوا مع أول حفظ',
+    enough: 'يكفي كل الألعاب',
+    shortFor: 'قليل على: {modes}',
+    modeMillionaire: 'المليون ({n})',
+    modeRace: 'السباق ({n})',
+    modeSurvival: 'البقاء ({n})',
+    modePractice: 'التدريب ({n})',
+    modeArena: 'الساحة ({n})',
+    save: 'حفظ التحدّي',
+    create: 'إضافة التحدّي',
+    cancel: 'إلغاء',
+    saving: 'بيتحفظ…',
+    saved: 'اتحفظ',
+    failed: 'ماتحفظش. نجرّب تاني.',
+    needScope: 'اختار وحدة أو درس واحد على الأقل',
+    needName: 'اكتب اسم للتحدّي',
+    howCount: 'العدّ هنا من غير طالب: أسئلة امتحان مفتوح لسه بتتحسب برّه. كل طالب بيشوف أسئلة نظامه بس (عربي/لغات)، وأسئلة امتحان الشهر بترجعله بعد ما يسلّمه.',
+  },
   /** «أسئلة كتب خارجية» — `/admin/question-books`. شجرة كتاب ← وحدة ← درس،
    *  بنفس شكل «أسئلة الألعاب» تمامًا. */
   questionBooks: {
@@ -5875,14 +5923,24 @@ const quizAdmin = {
   /** Ayman's own words for it — «لصق أسئلة كتير» — rather than «استيراد»,
    *  which reads like a file upload this is not. */
   bulkImport: 'لصق أسئلة كتير',
-  bulkImportHint: 'الصق الأسئلة، كل سؤال في فقرة، وحدد الإجابة بسطر ANSWER أو الإجابة',
+  bulkImportHint: 'الصق الأسئلة، كل سؤال في فقرة، وحدد الإجابة بسطر ANSWER أو الإجابة. اختياري تحت كل سؤال: EXPLANATION أو الشرح (بيظهر بعد الإجابة الغلط في الألعاب)، GROUP أو المجموعة (صيغ مختلفة لنفس الفكرة بنفس الاسم — الطالب مابياخدش منهم غير واحدة لحد ما البنك يخلص)، و LESSON أو الدرس (رقم درس، يربط السؤال بيه في التحديات).',
+  /** «جاهز / مسودة» على اللصق كله — المسودة مابتوصلش أي طالب لحد ما تتنشر من البنك. */
+  bulkImportStatus: 'الحالة',
+  bulkImportReady: 'جاهزة — تدخل على طول',
+  bulkImportDraft: 'مسودة — أراجعها الأول',
+  /** لما الديالوج مفتوح من صف درس — الأسئلة كلها بتتربط بيه. */
+  bulkImportLinked: 'الأسئلة هتتربط بالدرس ده في التحديات.',
   bulkImportExample:
     'سؤال ١: عاصمة مصر إيه؟\nA. القاهرة\nB. الإسكندرية\nC. أسوان\nANSWER: A\n\n' +
     'سؤال ٢: النيل بيجري من الجنوب للشمال\nTYPE: true\nA. صح\nB. خطأ\nANSWER: A\n\n' +
     // The ordering block has no ANSWER line on purpose — the items ARE the
     // answer, in the order they are written. Shown here because that is the
     // one thing about this type nobody guesses.
-    'سؤال ٣: رتّب من الأسرع للأبطأ\nالنوع: ترتيب\nA. CPU\nB. Cache\nC. RAM\nD. Storage',
+    'سؤال ٣: رتّب من الأسرع للأبطأ\nالنوع: ترتيب\nA. CPU\nB. Cache\nC. RAM\nD. Storage\n\n' +
+    // The three optional lines the challenges added. LESSON is a lesson id
+    // copied from the admin; the dialog opened from a lesson row fills it in
+    // for every block, so most pastes never write it.
+    'سؤال ٤: range(3) بتطلّع كام رقم؟\nA. 2\nB. 3\nC. 4\nANSWER: B\nEXPLANATION: 0 و1 و2 — تلات أرقام.\nGROUP: range-1',
   bulkImportPreview: 'معاينة {n} سؤال',
   bulkImportCommit: 'أضف الأسئلة للبنك',
   quizTitle: 'إعدادات الامتحان',

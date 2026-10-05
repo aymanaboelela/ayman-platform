@@ -2,6 +2,8 @@ import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { MISTAKE_MASTERY_STREAK } from '@ayman/contracts/mistakes';
+import { DEFAULT_REVIEW_OPTIONS } from '@ayman/contracts/quiz/quiz-settings';
+import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import { PrismaClient } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { collectKeysDeep, FORBIDDEN_ANSWER_KEYS } from '../quiz/serializers/learner.serializer';
@@ -293,6 +295,71 @@ describe('MistakesService', () => {
     await expect(
       service.answer(fixture.studentId, fixture.versionIds[1]!, [optionIds[1]![0]!]),
     ).rejects.toMatchObject({ status: 404 });
+  });
+
+  /** جولة «تحدّي الأسئلة» فيها إجابة واحدة على السؤال ده. */
+  async function play(questionIndex: number, right: boolean, at: Date): Promise<void> {
+    await prisma.gameSession.create({
+      data: {
+        userId: fixture.studentId,
+        courseId: fixture.courseId,
+        mode: 'race',
+        level: 'medium',
+        questionIds: [fixture.versionIds[questionIndex]!],
+        questionCount: 1,
+        startedAt: at,
+        answers: {
+          create: {
+            questionVersionId: fixture.versionIds[questionIndex]!,
+            optionId: optionIds[questionIndex]![right ? 0 : 1]!,
+            correct: right,
+            answeredAt: at,
+          },
+        },
+      },
+    });
+  }
+
+  it('brings a question missed in a game into the notebook, labelled as a game miss', async () => {
+    await play(1, false, new Date('2026-05-02T10:00:00Z'));
+
+    const { open } = await service.notebook(fixture.studentId);
+    expect(open.map((entry) => [entry.questionVersionId, entry.source, entry.courseTitle])).toEqual([
+      [fixture.versionIds[1], 'game', 'كورس الاختبار'],
+    ]);
+    // ومش بس بيظهر — يتعاد عليه زي أي غلطة.
+    const result = await service.answer(fixture.studentId, fixture.versionIds[1]!, [optionIds[1]![0]!]);
+    expect(result.correct).toBe(true);
+  });
+
+  it('lets a later right answer anywhere close a game miss, like a quiz miss', async () => {
+    await play(1, false, new Date('2026-05-02T10:00:00Z'));
+    await play(1, true, new Date('2026-05-03T10:00:00Z'));
+    expect((await service.notebook(fixture.studentId)).open).toEqual([]);
+  });
+
+  it('hides a game-only miss on a question an open monthly exam uses, and will not grade it either', async () => {
+    const shelf = await prisma.courseSection.create({
+      data: { courseId: fixture.courseId, title: EXAM_SHELF_TITLE, position: 90, isPublished: true },
+    });
+    const lesson = await prisma.lesson.create({
+      data: { courseId: fixture.courseId, sectionId: shelf.id, title: 'امتحان الشهر', kind: 'quiz', position: 0, isPublished: true },
+    });
+    const exam = await prisma.quiz.create({ data: { lessonId: lesson.id, reviewOptions: DEFAULT_REVIEW_OPTIONS, isPublished: true } });
+    await prisma.quizSlot.create({ data: { quizId: exam.id, position: 0, maxMark: 1, bankEntryId: fixture.bankEntryIds[1]! } });
+    try {
+      await play(1, false, new Date('2026-05-02T10:00:00Z'));
+      expect((await service.notebook(fixture.studentId)).open).toEqual([]);
+      // الرد هنا بيقول الصح — وده سؤال امتحان لسه الطالب ماسلّموش.
+      await expect(service.answer(fixture.studentId, fixture.versionIds[1]!, [optionIds[1]![0]!])).rejects.toMatchObject({
+        status: 404,
+      });
+    } finally {
+      await prisma.quizSlot.deleteMany({ where: { quizId: exam.id } });
+      await prisma.quiz.delete({ where: { id: exam.id } });
+      await prisma.lesson.delete({ where: { id: lesson.id } });
+      await prisma.courseSection.delete({ where: { id: shelf.id } });
+    }
   });
 
   it('never mixes one student’s mistakes into another’s', async () => {

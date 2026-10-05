@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import type { MistakeAnswerResult, MistakeEntry, MistakeNotebook } from '@ayman/contracts/mistakes';
 import { MISTAKE_MASTERY_STREAK } from '@ayman/contracts/mistakes';
 import { PrismaService } from '../../prisma/prisma.service';
+import { blockedBankEntries } from '../quiz/challenge-pool';
 import { LEARNER_QUESTION_SELECT } from '../quiz/serializers/learner.serializer';
 
 /** الأنواع اللي دفتر الغلطات بيتعامل معاها — شوف `mistakes.ts` (v1: أسئلة اختيارية بس). */
@@ -15,9 +16,15 @@ const GRADED_ATTEMPT_STATES = ['submitted', 'pending_review'] as const;
  *  Postgres زي ما هو، مش العقد. */
 interface LatestRow {
   question_version_id: string;
+  bank_entry_id: string;
   state: 'graded_wrong' | 'graded_partial';
   missed_at: Date;
-  lesson_id: string;
+  /** `null` لغلطة من لعبة أو ساحة على سؤال مش مربوط بدرس. */
+  lesson_id: string | null;
+  course_id: string | null;
+  source: 'quiz' | 'game' | 'arena';
+  /** فيه غلطة في كويز حقيقي على السؤال ده — مش لعب بس. */
+  from_quiz: boolean;
   missed_count: bigint;
   streak_right: number | null;
   mastered_at: Date | null;
@@ -28,15 +35,16 @@ export class MistakesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async notebook(userId: string): Promise<MistakeNotebook> {
-    const rows = await this.latestMissed(userId);
+    const rows = await this.visible(userId, await this.latestMissed(userId));
     if (rows.length === 0) return { open: [], mastered: [] };
 
-    const [questions, lessons] = await Promise.all([
+    const [questions, lessons, courses] = await Promise.all([
       this.prisma.questionVersion.findMany({
         where: { id: { in: rows.map((row) => row.question_version_id) } },
         select: LEARNER_QUESTION_SELECT,
       }),
-      this.lessonLabels(rows.map((row) => row.lesson_id)),
+      this.lessonLabels(rows.flatMap((row) => (row.lesson_id ? [row.lesson_id] : []))),
+      this.courseLabels(rows.flatMap((row) => (row.course_id && !row.lesson_id ? [row.course_id] : []))),
     ]);
     const questionById = new Map(questions.map((question) => [question.id, question]));
 
@@ -55,7 +63,8 @@ export class MistakesService {
        * يختفي من الدفتر بدل ما يكسره.
        */
       if (question.options.length < 2) continue;
-      const entry = toEntry(row, question, lessons.get(row.lesson_id));
+      const label = row.lesson_id ? lessons.get(row.lesson_id) : row.course_id ? courses.get(row.course_id) : undefined;
+      const entry = toEntry(row, question, label);
       // «اتصلحت» بس لو التثبيت حصل بعد آخر غلطة حقيقية — غلطة جديدة في كويز
       // حقيقي بعد التثبيت ترجّع السؤال هنا من غير أي كتابة على الصف نفسه.
       const isMastered = row.mastered_at !== null && row.mastered_at > row.missed_at;
@@ -73,9 +82,11 @@ export class MistakesService {
       },
       select: { id: true },
     });
-    // مفيش تسجيل غلطة على السؤال ده خالص — السؤال ده مش في دفتر الطالب ده،
-    // مهما كان معاه ID صحيح لسؤال حقيقي على المنصة.
-    if (!known) throw new NotFoundException();
+    // مفيش تسجيل غلطة على السؤال ده خالص (لا كويز ولا لعبة ولا ساحة) — السؤال
+    // ده مش في دفتر الطالب ده، مهما كان معاه ID صحيح لسؤال حقيقي على المنصة.
+    // وغلطة لعب بس على سؤال امتحان لسه مقفول عليه = برضه ٤٠٤: الرد هنا
+    // بيقول الصح.
+    if (!known && !(await this.missedInPlay(userId, questionVersionId))) throw new NotFoundException();
 
     const question = await this.prisma.questionVersion.findUnique({
       where: { id: questionVersionId },
@@ -118,35 +129,74 @@ export class MistakesService {
     return { correct, rightOptionIds, streakRight, mastered };
   }
 
+  /**
+   * آخر مرة اتجاوب فيها كل سؤال — من تلات مصادر:
+   *
+   *   · `quiz`  — كويز حقيقي اتسلّم (`attempt_questions`)، زي ما كان.
+   *   · `game`  — «تحدّي الأسئلة» (`game_answers`): غلط = الوقت خلص أو اختيار غلط.
+   *   · `arena` — «ساحة التحدي» (`arena_rounds`): بس السؤال اللي الطالب جاوبه
+   *     فعلًا — اللي التاني سبقه فيه مش غلطة.
+   *
+   * الصح في أي مصدر بيتحسب برضه، عشان «آخر مرة» تبقى آخر مرة فعلًا: سؤال غلط
+   * فيه في لعبة وجابه صح في كويز بعدها مش غلطة مفتوحة. المصدرين الجداد
+   * بيتملوا بس على ستاك فيه ألعاب (`quizGame`/`arena.enabled`).
+   */
   private async latestMissed(userId: string): Promise<LatestRow[]> {
     return this.prisma.$queryRaw<LatestRow[]>`
-      WITH scored AS (
-        SELECT
-          aq."question_version_id" AS question_version_id,
-          aq."state" AS state,
-          a."submitted_at" AS submitted_at,
-          qz."lesson_id" AS lesson_id,
-          count(*) FILTER (WHERE aq."state" IN ('graded_wrong', 'graded_partial'))
-            OVER (PARTITION BY aq."question_version_id") AS missed_count
+      WITH events AS (
+        SELECT aq."question_version_id" AS question_version_id, aq."state"::text AS state,
+          a."submitted_at" AS at, qz."lesson_id" AS lesson_id, l."course_id" AS course_id, 'quiz'::text AS source
         FROM "app"."attempt_questions" aq
         JOIN "app"."quiz_attempts" a ON a."id" = aq."attempt_id"
         JOIN "app"."quizzes" qz ON qz."id" = a."quiz_id"
-        JOIN "app"."question_versions" v ON v."id" = aq."question_version_id"
-        WHERE a."user_id" = ${userId}
-          AND a."state" IN ('submitted', 'pending_review')
-          AND v."type" IN ('mcq_single', 'mcq_multi', 'true_false')
+        JOIN "app"."lessons" l ON l."id" = qz."lesson_id"
+        WHERE a."user_id" = ${userId} AND a."state" IN ('submitted', 'pending_review')
+        UNION ALL
+        SELECT ga."question_version_id", CASE WHEN ga."was_right" THEN 'graded_right' ELSE 'graded_wrong' END,
+          ga."answered_at", NULL::uuid, gs."course_id", 'game'
+        FROM "app"."game_answers" ga
+        JOIN "app"."game_sessions" gs ON gs."id" = ga."session_id"
+        WHERE gs."user_id" = ${userId}
+        UNION ALL
+        SELECT r."question_version_id",
+          CASE WHEN (CASE WHEN m."player_a_id" = ${userId} THEN r."was_right_a" ELSE r."was_right_b" END)
+            THEN 'graded_right' ELSE 'graded_wrong' END,
+          m."ended_at", NULL::uuid, m."course_id", 'arena'
+        FROM "app"."arena_rounds" r
+        JOIN "app"."arena_matches" m ON m."id" = r."match_id"
+        WHERE r."question_version_id" IS NOT NULL
+          AND ((m."player_a_id" = ${userId} AND r."option_a" IS NOT NULL)
+            OR (m."player_b_id" = ${userId} AND r."option_b" IS NOT NULL))
+      ),
+      scored AS (
+        SELECT e.*, v."bank_entry_id",
+          count(*) FILTER (WHERE e.state IN ('graded_wrong', 'graded_partial'))
+            OVER (PARTITION BY e.question_version_id) AS missed_count,
+          bool_or(e.source = 'quiz' AND e.state IN ('graded_wrong', 'graded_partial'))
+            OVER (PARTITION BY e.question_version_id) AS from_quiz,
+          -- غلطة لعب على سؤال مربوط بدرس: الدفتر بيقول الدرس، مش الكورس بس.
+          COALESCE(e.lesson_id, be."lesson_id", qc."game_lesson_id") AS label_lesson_id
+        FROM events e
+        JOIN "app"."question_versions" v ON v."id" = e.question_version_id
+        JOIN "app"."question_bank_entries" be ON be."id" = v."bank_entry_id"
+        JOIN "app"."question_categories" qc ON qc."id" = be."category_id"
+        WHERE v."type" IN ('mcq_single', 'mcq_multi', 'true_false')
       ),
       latest AS (
         SELECT DISTINCT ON (question_version_id)
-          question_version_id, state, submitted_at, lesson_id, missed_count
+          question_version_id, bank_entry_id, state, at, label_lesson_id, course_id, source, from_quiz, missed_count
         FROM scored
-        ORDER BY question_version_id, submitted_at DESC
+        ORDER BY question_version_id, at DESC
       )
       SELECT
         latest.question_version_id,
+        latest.bank_entry_id,
         latest.state,
-        latest.submitted_at AS missed_at,
-        latest.lesson_id,
+        latest.at AS missed_at,
+        latest.label_lesson_id AS lesson_id,
+        latest.course_id,
+        latest.source,
+        latest.from_quiz,
         latest.missed_count,
         mr."streak_right" AS streak_right,
         mr."mastered_at" AS mastered_at
@@ -155,6 +205,56 @@ export class MistakesService {
         ON mr."user_id" = ${userId} AND mr."question_version_id" = latest.question_version_id
       WHERE latest.state IN ('graded_wrong', 'graded_partial')
     `;
+  }
+
+  /**
+   * غلطة من لعب بس (مفيش غلطة كويز على نفس السؤال) على سؤال امتحان لسه
+   * مقفول على الطالب — مسودة، أو مفتوح وماسلّموش — مابتظهرش. الدفتر بيقول
+   * الصح، والسؤال ممكن يكون اتحط في امتحان شهر بعد ما اتلعب. غلطات الكويز
+   * زي ما كانت بالظبط: الطالب شاف مراجعتها خلاص.
+   */
+  private async visible(userId: string, rows: LatestRow[]): Promise<LatestRow[]> {
+    if (rows.every((row) => row.from_quiz)) return rows;
+    const blocked = await blockedBankEntries(this.prisma, userId);
+    return rows.filter((row) => row.from_quiz || !blocked.has(row.bank_entry_id));
+  }
+
+  /** غلط في السؤال ده في لعبة أو ساحة، والسؤال مش في امتحان لسه مقفول عليه. */
+  private async missedInPlay(userId: string, questionVersionId: string): Promise<boolean> {
+    const rows = await this.prisma.$queryRaw<Array<{ bank_entry_id: string }>>`
+      SELECT v."bank_entry_id"
+      FROM "app"."question_versions" v
+      WHERE v."id" = ${questionVersionId}::uuid
+        AND (
+          EXISTS (
+            SELECT 1 FROM "app"."game_answers" ga
+            JOIN "app"."game_sessions" gs ON gs."id" = ga."session_id"
+            WHERE ga."question_version_id" = v."id" AND gs."user_id" = ${userId} AND NOT ga."was_right"
+          )
+          OR EXISTS (
+            SELECT 1 FROM "app"."arena_rounds" r
+            JOIN "app"."arena_matches" m ON m."id" = r."match_id"
+            WHERE r."question_version_id" = v."id"
+              AND ((m."player_a_id" = ${userId} AND r."option_a" IS NOT NULL AND r."was_right_a" = false)
+                OR (m."player_b_id" = ${userId} AND r."option_b" IS NOT NULL AND r."was_right_b" = false))
+          )
+        )
+    `;
+    const entry = rows[0]?.bank_entry_id;
+    if (!entry) return false;
+    return !(await blockedBankEntries(this.prisma, userId)).has(entry);
+  }
+
+  /** كورس الغلطة اللي مالهاش درس (لعبة على سؤال عام) — منشور بس، زي الدروس. */
+  private async courseLabels(
+    ids: readonly string[],
+  ): Promise<Map<string, { title: string | null; courseTitle: string; courseSlug: string }>> {
+    if (ids.length === 0) return new Map();
+    const courses = await this.prisma.course.findMany({
+      where: { id: { in: [...new Set(ids)] }, status: 'published' },
+      select: { id: true, title: true, slug: true },
+    });
+    return new Map(courses.map((course) => [course.id, { title: null, courseTitle: course.title, courseSlug: course.slug }]));
   }
 
   /** نفس منطق `MasteryService.publishedLessons` بالظبط — درس منشور وكورسه
@@ -190,7 +290,7 @@ function rightOptionsOf(options: readonly { id: string; fraction: unknown }[]): 
 function toEntry(
   row: LatestRow,
   question: { id: string; type: string; stemHtml: string; options: { id: string; bodyHtml: string; position: number }[] },
-  lesson: { title: string; courseTitle: string; courseSlug: string } | undefined,
+  lesson: { title: string | null; courseTitle: string; courseSlug: string } | undefined,
 ): MistakeEntry {
   return {
     questionVersionId: row.question_version_id,
@@ -213,5 +313,6 @@ function toEntry(
     missedAt: row.missed_at.toISOString(),
     timesMissed: Number(row.missed_count),
     streakRight: row.streak_right ?? 0,
+    source: row.source,
   };
 }

@@ -58,6 +58,8 @@ export const AUDIT_RESOURCES = {
   questionBankEntry: 'question_bank_entries',
   /// «أسئلة الألعاب» — لعبة في كورس بتسحب منين. المعرّف `courseId:mode`.
   gameModeSetting: 'game_mode_settings',
+  /// «قسم التحديات» — موضوع واحد في كورس. ترتيبهم كلهم بيتسجّل على الكورس.
+  challengeTopic: 'challenge_topics',
   /// «كتب خارجية» — الكتاب نفسه (اسم/غلاف/أرشفة)، مش أسئلته. الأسئلة بتتسجّل
   /// بـ`questionBankEntry` زي أي سؤال تاني.
   externalBook: 'external_books',

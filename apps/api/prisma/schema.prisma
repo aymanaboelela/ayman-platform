@@ -251,6 +251,8 @@ model User {
   arenaStat                  ArenaStat?
   /// «دفتر غلطاتي» — حالة إعادة الاختبار على كل سؤال غلط فيه.
   mistakeReviews             MistakeReview[]
+  /// «التحديات» — كل سؤال (أو مجموعة صيغ) شافه في لعبة أو ساحة، وإمتى.
+  questionExposures          QuestionExposure[]
 
   @@unique([email])
   @@map("users")
@@ -1058,6 +1060,8 @@ model Course {
   gameModeSettings GameModeSetting[]
   gameSessions     GameSession[]
   arenaMatches     ArenaMatch[]
+  /// «قسم التحديات» — المواضيع اللي الطلبة بيتحدّوا فيها — شوف `ChallengeTopic`.
+  challengeTopics  ChallengeTopic[]
   @@index([status, publishedAt])
   @@index([systemId, year, trackId, subjectId])
   @@map("courses")
@@ -1428,6 +1432,8 @@ model Lesson {
   /// «أسئلة الألعاب» بتاعة الدرس ده — شوف `QuestionCategory.gameLessonId`.
   gameQuestionBank    QuestionCategory?    @relation("GameLessonBank")
   gameSessions        GameSession[]
+  /// أسئلة البنك المربوطة بالدرس ده مباشرةً — شوف `QuestionBankEntry.lessonId`.
+  linkedQuestions     QuestionBankEntry[]  @relation("BankEntryLesson")
   /// «المحاضرة دي تابعة لشهر كام» — the sales months that open this lecture.
   /// Empty on every lecture of a course with no months configured, and empty
   /// is a real, deliberate state even on one that has them — see `LessonMonth`.
@@ -3513,13 +3519,29 @@ model QuestionBankEntry {
   /// deleted outright instead — see `QuestionRemovalService`. NULL = in the
   /// bank; «رجّعه للبنك» sets it back to NULL.
   archivedAt  DateTime? @map("archived_at")
+  /// «التحديات»: السؤال ده على أنهي درس، من غير ما يتنقل من تصنيفه.
+  ///
+  /// عمود مش تصنيف عن قصد. التصنيف هو «السؤال متخزّن فين في البنك» (كتاب
+  /// خارجي ← وحدة ← درس، أو «ألعاب — الكورس ← الدرس»)، وده سؤال تاني خالص:
+  /// «يتسأل في تحدّي أنهي درس». سؤال من «كتب خارجية» لازم يفضل في شجرة
+  /// الكتاب ويتربط بدرس في الكورس في نفس الوقت — تصنيف واحد مايقدرش يقول
+  /// الاتنين. درس اتمسح = `SET NULL`، والسؤال بيفضل في البنك.
+  lessonId        String?   @map("lesson_id") @db.Uuid
+  /// «صيغ لنفس الفكرة»: كذا سؤال بنفس المفتاح = نفس المعلومة بكلام مختلف
+  /// ونفس الإجابة. «ماتكرّرش السؤال» بيتحسب على المجموعة كلها
+  /// (`QuestionExposure.groupKey = g:<key>`)، ولما المجموعة ترجع الطالب بياخد
+  /// الصيغة اللي شافها أقل. NULL = السؤال مجموعة لوحده (`e:<id>`).
+  variantGroupKey String?   @map("variant_group_key")
 
   category  QuestionCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   owner     User              @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  lesson    Lesson?           @relation("BankEntryLesson", fields: [lessonId], references: [id], onDelete: SetNull)
   versions  QuestionVersion[]
   quizSlots QuizSlot[]
 
   @@index([categoryId])
+  @@index([lessonId])
+  @@index([variantGroupKey])
   @@map("question_bank_entries")
   @@schema("app")
 }
@@ -5606,6 +5628,14 @@ model GameSession {
   startedAt       DateTime     @default(now()) @map("started_at")
   lastActivityAt  DateTime     @default(now()) @map("last_activity_at")
   endedAt         DateTime?    @map("ended_at")
+  /// «التحديات» اللي الجولة اتسحبت منها (`challenge_topics.id`). فاضية = الجولة
+  /// بالنطاق القديم (المنهج كله، وحدة، ولا درس). من غير FK زي
+  /// `GameModeSetting.lessonIds`: تحدّي اتمسح بيفضل رقم في جولة قديمة.
+  topicIds        String[]     @default([]) @map("topic_ids") @db.Uuid
+  /// «تدريب»: من غير تايمر ولا قلوب، والشرح بعد كل سؤال. عدد الأسئلة بتاع
+  /// `mode`، والجولة متسجّلة زي أي جولة، بس مابتدخلش «أحسن نتيجة» — مفيش
+  /// سباق فيها.
+  practice        Boolean      @default(false)
 
   user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   course  Course?        @relation(fields: [courseId], references: [id], onDelete: SetNull)
@@ -5638,6 +5668,57 @@ model GameAnswer {
   @@unique([sessionId, questionVersionId])
   @@index([questionVersionId])
   @@map("game_answers")
+  @@schema("app")
+}
+
+/// «قسم التحديات» — موضوع واحد في كورس واحد يتحدّى فيه الطلبة: «الوحدة
+/// الأولى»، «الدرس التالت بس». الأدمن بيعمله من لوحة التحكم: عنوان، ووحدات
+/// و/أو دروس من نفس الكورس، وتشغيل/إيقاف، وترتيب.
+///
+/// بنك التحدّي = كل سؤال اختيار من متعدد أو صح/غلط جاهز ومربوط بدروسه — من
+/// كويزات الدروس، ومن «أسئلة الألعاب» بتاعة الدرس، ومن الربط المباشر
+/// (`QuestionBankEntry.lessonId`) — سواء الطالب امتحن الكويز ولا لأ. التفاصيل في
+/// `GameService.topicPool`.
+///
+/// `sectionIds`/`lessonIds` مصفوفات من غير FK زي `GameModeSetting.lessonIds`:
+/// وحدة اتمسحت بتفضل رقم مالوش دروس، والبنك بيتجاهله. والقراية دايمًا
+/// بتتقاطع مع دروس الكورس نفسه، فرقم من كورس تاني مابيوسّعش حاجة.
+model ChallengeTopic {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  courseId   String   @map("course_id") @db.Uuid
+  title      String
+  sectionIds String[] @default([]) @map("section_ids") @db.Uuid
+  lessonIds  String[] @default([]) @map("lesson_ids") @db.Uuid
+  /// الطالب بيشوف المتشغّل بس.
+  isActive   Boolean  @default(true) @map("is_active")
+  position   Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, position])
+  @@map("challenge_topics")
+  @@schema("app")
+}
+
+/// «ماتكرّرش السؤال»: الطالب شاف المجموعة دي إمتى آخر مرة، وكام مرة.
+///
+/// `groupKey` = `g:<variantGroupKey>` للأسئلة اللي ليها صيغ، و`e:<bankEntryId>`
+/// لكل سؤال (حتى لو في مجموعة) — الأول بيقول «المجموعة رجعت إمتى»، والتاني
+/// «أنهي صيغة فيها اتشافت أقل». بيتكتب مع كل إجابة في لعبة، ولكل سؤال اتلعب
+/// في ماتش ساحة. الاختيار بيقدّم اللي مااتشافش، وبعدين الأقدم.
+model QuestionExposure {
+  userId     String   @map("user_id")
+  groupKey   String   @map("group_key")
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  times      Int      @default(1)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, groupKey])
+  @@index([userId, lastSeenAt])
+  @@map("question_exposures")
   @@schema("app")
 }
 

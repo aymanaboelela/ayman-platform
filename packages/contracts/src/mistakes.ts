@@ -42,6 +42,11 @@ export const MistakeEntrySchema = z.object({
   timesMissed: z.number().int().min(1),
   /** صح متتالي هنا في الدفتر دلوقتي (0 قبل أول محاولة). */
   streakRight: z.number().int().min(0),
+  /**
+   * آخر مرة اتجاوب فيها كانت فين: كويز حقيقي، «تحدّي الأسئلة»، ولا «ساحة
+   * التحدي». غلطات اللعب بتدخل الدفتر هي كمان — شوف `MistakesService.latestMissed`.
+   */
+  source: z.enum(['quiz', 'game', 'arena']).default('quiz'),
 });
 export type MistakeEntry = z.infer<typeof MistakeEntrySchema>;
 

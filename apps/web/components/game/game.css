@@ -446,8 +446,11 @@
 
 /* ── اللعبة ───────────────────────────────────────────────────────────── */
 .gm-modes { display: grid; gap: 0.75rem; }
-@media (min-width: 720px) { .gm-modes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* أربع كروت (التلات ألعاب و«تدريب»): اتنين جنب بعض، والأربعة على شاشة عريضة. */
+@media (min-width: 720px) { .gm-modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .gm-modes { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .gm-mode[data-tone='gold'] { --tone: var(--print-gold); --tone-2: var(--viz-3); }
+.gm-mode[data-tone='violet'] { --tone: var(--viz-5); --tone-2: var(--viz-2); }
 .gm-mode[data-tone='rose'] { --tone: var(--viz-4); --tone-2: var(--viz-1); }
 .gm-mode[data-tone='teal'] { --tone: var(--viz-2); --tone-2: var(--viz-6); }
 .gm-mode {
@@ -619,6 +622,87 @@
 .gm-scope-item__title { font-weight: var(--fw-semibold); overflow-wrap: anywhere; }
 .gm-scope-item__meta { font-size: var(--fs-text-xs); color: var(--ink-fg-2); overflow-wrap: anywhere; }
 .gm-scope-item__meta--warn { color: color-mix(in oklab, var(--viz-1), #fff 30%); }
+
+/* ── «التحديات» ───────────────────────────────────────────────────────── */
+/* كارت لكل تحدّي بلونه (`--tone` من الكومبوننت)، والمتعلّم بيولّع بلونه — أكتر
+   من واحد ينفع يتعلّم، فده checkbox مش radio. */
+.gm-topics { display: grid; gap: 0.55rem; }
+@media (min-width: 720px) { .gm-topics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.gm-topics__all { justify-self: start; padding-inline: 1rem; border: 1px solid var(--ink-line); }
+.gm-topic {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in oklab, var(--tone) 22%, transparent) 0%, transparent 65%),
+    rgb(255 255 255 / 0.05);
+  border: 1px solid var(--ink-line);
+  cursor: pointer;
+  transition: background-color var(--d-hover), border-color var(--d-hover), box-shadow var(--d-hover), transform var(--d-hover) var(--ease-out);
+}
+.gm-topic:hover { transform: translateY(-1px); }
+.gm-topic[data-on] {
+  border-color: var(--tone);
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in oklab, var(--tone) 40%, transparent) 0%, transparent 70%),
+    color-mix(in oklab, var(--tone) 14%, transparent);
+  box-shadow: 0 0 0 1px var(--tone), 0 8px 22px color-mix(in oklab, var(--tone) 30%, transparent);
+}
+.gm-topic[data-short]:not([data-on]) { opacity: 0.6; }
+.gm-topic:has(input:focus-visible) { outline: 2px solid var(--ink-accent); outline-offset: 2px; }
+.gm-topic__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--tone) 30%, transparent);
+  color: var(--ink-fg);
+}
+.gm-topic[data-on] .gm-topic__icon { background: var(--tone); }
+
+/* ── الصح والشرح بعد الإجابة ──────────────────────────────────────────── */
+.gm-explain {
+  flex-basis: 100%;
+  display: grid;
+  gap: 0.6rem;
+  max-width: 40rem;
+  margin-inline: auto;
+  padding: 0.85rem 1rem;
+  border-radius: var(--r-lg);
+  background: rgb(0 0 0 / 0.28);
+  border: 1px solid var(--ink-line);
+  text-align: start;
+}
+.gm-explain__row { display: grid; gap: 0.25rem; }
+.gm-explain__row[data-kind='right'] { --tone: var(--ok); }
+.gm-explain__row[data-kind='why'] { --tone: var(--print-gold); }
+.gm-explain__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-bold);
+  color: color-mix(in oklab, var(--tone), var(--ink-fg) 35%);
+}
+.gm-explain__body { line-height: 1.8; color: var(--ink-fg); }
+
+/* «تدريب» مكان القلوب في الشريط اللي فوق. */
+.gm-practice-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--viz-5) 26%, transparent);
+  border: 1px solid color-mix(in oklab, var(--viz-5) 55%, transparent);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-bold);
+}
 
 /* ── المستوى ──────────────────────────────────────────────────────────── */
 .gm-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }

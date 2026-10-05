@@ -7,6 +7,7 @@ import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { QuestionInputSchema, type QuestionInput } from '@ayman/contracts/quiz/question';
 import { plainTextToHtml } from '@ayman/contracts/quiz/rich-text';
+import { VARIANT_GROUP_KEY } from '@ayman/contracts/quiz/challenges';
 
 export interface ImportError {
   /** 1-based, so it matches what the instructor sees in the preview. */
@@ -16,8 +17,22 @@ export interface ImportError {
   message: string;
 }
 
+/**
+ * What a block says about the question that is not the question itself — it
+ * lands on the bank ENTRY, not the version, so it has no place in
+ * `QuestionInput`. Index-aligned with `ImportResult.questions`.
+ */
+export interface ImportMeta {
+  /** `GROUP:` / `المجموعة:` → `QuestionBankEntry.variantGroupKey`. */
+  variantGroupKey: string | null;
+  /** `LESSON:` / `الدرس:` → `QuestionBankEntry.lessonId` (overrides the request's). */
+  lessonId: string | null;
+}
+
 export interface ImportResult {
   questions: QuestionInput[];
+  /** One per question, same order. */
+  meta: ImportMeta[];
   errors: ImportError[];
 }
 
@@ -29,6 +44,14 @@ const ANSWER_LINE = /^\s*(?:ANSWER|Answer|answer|الإجابة|الاجابة)\
 // could never be written on an Arabic-first platform.
 const TYPE_LINE = /^\s*(?:TYPE|النوع)\s*[:：]\s*([\p{L}\w]+)\s*$/iu;
 const PATTERN_LINE = /^\s*=\s*(.+?)\s*$/;
+// «الشرح» بعد الإجابة في الألعاب والتحديات → `generalFeedbackHtml`. أكتر من
+// سطر = أكتر من فقرة.
+const EXPLANATION_LINE = /^\s*(?:EXPLANATION|Explanation|explanation|الشرح|شرح)\s*[:：]\s*(.+?)\s*$/;
+// «صيغ لنفس الفكرة» → `variantGroupKey`. الكلمة لوحدها، والفاليديشن تحت.
+const GROUP_LINE = /^\s*(?:GROUP|Group|group|المجموعة)\s*[:：]\s*(.*?)\s*$/;
+// السؤال على أنهي درس → `lessonId`. القيمة رقم الدرس كما هو من لوحة التحكم.
+const LESSON_LINE = /^\s*(?:LESSON|Lesson|lesson|الدرس)\s*[:：]\s*(.*?)\s*$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Latin A–J then the Arabic abjad order أ ب ج د هـ و ز ح ط. */
 const LETTER_ORDER = 'ABCDEFGHIJ';
@@ -62,6 +85,12 @@ function toParagraphs(lines: readonly string[]): string {
  *   - `A. text` options, Latin or Arabic letters
  *   - `ANSWER: B` or `الإجابة: ب`, comma-separated for multi-choice
  *   - `TYPE: short` + `= pattern` lines, or `TYPE: essay`
+ *   - optional `EXPLANATION: …` / `الشرح: …` — shown after a wrong answer in
+ *     the games and challenges (`generalFeedbackHtml`)
+ *   - optional `GROUP: loops-1` / `المجموعة: …` — several questions with the
+ *     same key are wordings of one idea (`variantGroupKey`)
+ *   - optional `LESSON: <lesson id>` / `الدرس: …` — links the question to a
+ *     lesson for the challenges (`lessonId`), overriding the paste's own
  *
  * Anything richer (GIFT, Moodle XML, QTI) is an importer we can add later
  * against the same `QuestionInput` output. The parser's contract is that every
@@ -75,10 +104,11 @@ export function parseQuestionBlocks(text: string, categoryId: string): ImportRes
     .filter((lines) => lines.length > 0);
 
   const questions: QuestionInput[] = [];
+  const meta: ImportMeta[] = [];
   const errors: ImportError[] = [];
 
   if (blocks.length === 0) {
-    return { questions, errors: [{ blockIndex: 1, line: 1, message: copy.quizErrors.importNoQuestions }] };
+    return { questions, meta, errors: [{ blockIndex: 1, line: 1, message: copy.quizErrors.importNoQuestions }] };
   }
 
   blocks.forEach((lines, index) => {
@@ -89,8 +119,43 @@ export function parseQuestionBlocks(text: string, categoryId: string): ImportRes
     let answerLetters: string[] = [];
     let declaredType: string | null = null;
     let sawAnswerLine = false;
+    const explanation: string[] = [];
+    let group: string | null = null;
+    let lesson: string | null = null;
+    let badLine: string | null = null;
 
-    for (const line of lines) {
+    for (const [lineIndex, line] of lines.entries()) {
+      const explanationMatch = EXPLANATION_LINE.exec(line);
+      if (explanationMatch) {
+        explanation.push(explanationMatch[1]!);
+        continue;
+      }
+      const groupMatch = GROUP_LINE.exec(line);
+      if (groupMatch) {
+        group = groupMatch[1]!;
+        if (!VARIANT_GROUP_KEY.test(group)) {
+          errors.push({
+            blockIndex,
+            line: lineIndex + 1,
+            message: formatCopy(copy.quizErrors.importBadGroup, { n: blockIndex, group }),
+          });
+          badLine = line;
+        }
+        continue;
+      }
+      const lessonMatch = LESSON_LINE.exec(line);
+      if (lessonMatch) {
+        lesson = lessonMatch[1]!.toLowerCase();
+        if (!UUID.test(lesson)) {
+          errors.push({
+            blockIndex,
+            line: lineIndex + 1,
+            message: formatCopy(copy.quizErrors.importBadLesson, { n: blockIndex, lesson: lessonMatch[1]! }),
+          });
+          badLine = line;
+        }
+        continue;
+      }
       const typeMatch = TYPE_LINE.exec(line);
       if (typeMatch) {
         declaredType = typeMatch[1]!.toLowerCase();
@@ -118,6 +183,7 @@ export function parseQuestionBlocks(text: string, categoryId: string): ImportRes
       stem.push(line.trim());
     }
 
+    if (badLine !== null) return;
     if (stem.length === 0) {
       errors.push({ blockIndex, line: 1, message: copy.quizErrors.stemRequired });
       return;
@@ -126,6 +192,7 @@ export function parseQuestionBlocks(text: string, categoryId: string): ImportRes
     const base = {
       categoryId,
       stemHtml: toParagraphs(stem),
+      ...(explanation.length > 0 ? { generalFeedbackHtml: toParagraphs(explanation) } : {}),
       defaultMark: 1,
       settings: { shuffleOptions: true, caseSensitive: false },
     };
@@ -226,7 +293,8 @@ export function parseQuestionBlocks(text: string, categoryId: string): ImportRes
       return;
     }
     questions.push(parsed.data);
+    meta.push({ variantGroupKey: group, lessonId: lesson });
   });
 
-  return { questions, errors };
+  return { questions, meta, errors };
 }

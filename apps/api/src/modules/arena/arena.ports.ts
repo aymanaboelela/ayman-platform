@@ -33,8 +33,11 @@ export interface ArenaAccessPort {
 }
 
 export interface ArenaQuestionsPort {
-  /** نفس الأسئلة للاتنين، بالترتيب، من غير ما الصح يطلع من السيرفر. */
-  build(courseId: string, userIds: [string, string], count: number): Promise<EngineQuestion[]>;
+  /**
+   * نفس الأسئلة للاتنين، بالترتيب، من غير ما الصح يطلع من السيرفر. `topicIds`
+   * فاضية = الكورس كله؛ غير كده بنك التحديات دي بس.
+   */
+  build(courseId: string, userIds: [string, string], count: number, topicIds?: readonly string[]): Promise<EngineQuestion[]>;
 }
 
 export interface ArenaRecordsPort {

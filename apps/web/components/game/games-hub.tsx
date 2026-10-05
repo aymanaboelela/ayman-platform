@@ -8,6 +8,7 @@ import {
   Check,
   Clock,
   Crown,
+  GraduationCap,
   Heart,
   HeartPulse,
   Layers,
@@ -15,6 +16,7 @@ import {
   ListOrdered,
   Lock,
   Sparkles,
+  Swords,
   Timer,
   Trophy,
   Zap,
@@ -36,6 +38,7 @@ import {
   type GameRound,
   type GameScopeKind,
 } from '@ayman/contracts/quiz/game';
+import { CHALLENGE_MIN_QUESTIONS, topicCounts, type GameHubTopic } from '@ayman/contracts/quiz/challenges';
 import { apiPost } from '@/lib/api';
 import { Millionaire } from './millionaire';
 import { Backdrop, QuizGame, SoundToggle } from './quiz-game';
@@ -44,11 +47,27 @@ import { useGameSound } from './use-game-sound';
 const c = copy.game;
 const NUM = new Intl.NumberFormat('en-US');
 
-const MODES: Array<{ mode: GameMode; title: string; body: string; icon: typeof Crown; tone: string }> = [
+/**
+ * اللي الطالب بيختاره: التلات ألعاب، و«تدريب». التدريب مش لعبة رابعة عند
+ * السيرفر — جولة سباق (`race`) بـ`practice: true`: نفس عدد الأسئلة، من غير
+ * تايمر ولا قلوب، والشرح بعد كل سؤال.
+ */
+export type HubMode = GameMode | 'practice';
+
+const MODES: Array<{ mode: HubMode; title: string; body: string; icon: typeof Crown; tone: string }> = [
   { mode: 'millionaire', title: c.modeMillionaire, body: c.modeMillionaireBody, icon: Crown, tone: 'gold' },
   { mode: 'race', title: c.modeRace, body: c.modeRaceBody, icon: Zap, tone: 'rose' },
   { mode: 'survival', title: c.modeSurvival, body: c.modeSurvivalBody, icon: HeartPulse, tone: 'teal' },
+  { mode: 'practice', title: c.modePractice, body: c.modePracticeBody, icon: GraduationCap, tone: 'violet' },
 ];
+
+/** اللعبة اللي بتتبعت للسيرفر — التدريب جولة سباق. */
+const playMode = (mode: HubMode): GameMode => (mode === 'practice' ? 'race' : mode);
+const minFor = (mode: HubMode): number =>
+  mode === 'practice' ? CHALLENGE_MIN_QUESTIONS.practice : GAME_MIN_QUESTIONS[mode];
+/** الكورس فيه «تحديات» — ساعتها هي اللي بتتختار مكان «الأسئلة من». */
+const topicalOf = (course: GameHubCourse | undefined): course is GameHubCourse & { topics: GameHubTopic[] } =>
+  !!course && (course.topics?.length ?? 0) > 0;
 
 const LEVELS: Array<{ level: GameLevel; label: string }> = [
   { level: 'easy', label: c.levelEasy },
@@ -62,7 +81,12 @@ const SCOPES: Array<{ kind: GameScopeKind; label: string; icon: typeof Library }
   { kind: 'lesson', label: c.scopeLesson, icon: BookOpen },
 ];
 
-const MODE_TITLE: Record<GameMode, string> = { millionaire: c.modeMillionaire, race: c.modeRace, survival: c.modeSurvival };
+const MODE_TITLE: Record<HubMode, string> = {
+  millionaire: c.modeMillionaire,
+  race: c.modeRace,
+  survival: c.modeSurvival,
+  practice: c.modePractice,
+};
 const LEVEL_TITLE: Record<GameLevel, string> = { easy: c.levelEasy, medium: c.levelMedium, hard: c.levelHard };
 const OUTCOME: Record<NonNullable<GameMyRound['outcome']>, string> = {
   won: c.outcomeWon,
@@ -75,11 +99,13 @@ const OUTCOME: Record<NonNullable<GameMyRound['outcome']>, string> = {
 const LAST_KEY = 'game:last:v1';
 
 export interface GameChoice {
-  mode: GameMode;
+  mode: HubMode;
   courseId: string | null;
   scope: GameScopeKind;
   scopeId: string | null;
   level: GameLevel;
+  /** «التحديات» المتعلّمة — بس لكورس فيه تحديات. */
+  topicIds: string[];
 }
 
 /** النص الخام، مش الأوبجكت: `useSyncExternalStore` محتاج نفس القيمة لنفس الحالة. */
@@ -118,10 +144,18 @@ function writeLast(choice: GameChoice): void {
  */
 export function restoreChoice(hub: GameHub, saved: Partial<GameChoice> | null, fallback: GameChoice): GameChoice {
   if (!saved) return fallback;
-  const mode = MODES.some((entry) => entry.mode === saved.mode) ? (saved.mode as GameMode) : fallback.mode;
+  const mode = MODES.some((entry) => entry.mode === saved.mode) ? (saved.mode as HubMode) : fallback.mode;
   const level = LEVELS.some((entry) => entry.level === saved.level) ? (saved.level as GameLevel) : fallback.level;
   const course = saved.courseId ? hub.courses.find((candidate) => candidate.id === saved.courseId) : undefined;
-  const courseId = course ? course.id : saved.courseId === null && hub.courses.length > 1 ? null : fallback.courseId;
+  // «كل الكورسات» مالهاش معنى لو فيه كورس بتحديات — التحدّي في كورس واحد.
+  const allowAll = hub.courses.length > 1 && !hub.courses.some(topicalOf);
+  const courseId = course ? course.id : saved.courseId === null && allowAll ? null : fallback.courseId;
+  const picked = hub.courses.find((candidate) => candidate.id === courseId);
+  if (topicalOf(picked)) {
+    const known = new Set(picked.topics.map((topic) => topic.id));
+    const kept = (Array.isArray(saved.topicIds) ? saved.topicIds : []).filter((id) => known.has(id));
+    return { mode, level, courseId, scope: 'all', scopeId: null, topicIds: kept.length > 0 ? kept : defaultTopics(picked, mode) };
+  }
   let scope: GameScopeKind = 'all';
   let scopeId: string | null = null;
   if (course && saved.scope === 'section' && course.sections.some((section) => section.id === saved.scopeId)) {
@@ -131,7 +165,16 @@ export function restoreChoice(hub: GameHub, saved: Partial<GameChoice> | null, f
     scope = 'lesson';
     scopeId = saved.scopeId ?? null;
   }
-  return { mode, level, courseId, scope, scopeId };
+  return { mode, level, courseId, scope, scopeId, topicIds: [] };
+}
+
+/** أول تحدّي يكفي اللعبة، ولو مفيش فأوّل واحد — الزرار تحت بيقول ليه. */
+function defaultTopics(course: GameHubCourse & { topics: GameHubTopic[] }, mode: HubMode): string[] {
+  const enough = course.topics.find(
+    (topic) => totalOf(topicCounts(course.topics, course.topicBuckets ?? [], [topic.id])) >= minFor(mode),
+  );
+  const first = enough ?? course.topics[0];
+  return first ? [first.id] : [];
 }
 
 /**
@@ -162,6 +205,7 @@ export function GamesHub({ hub }: { hub: GameHub }) {
         scope: 'all',
         scopeId: null,
         level: 'medium',
+        topicIds: topicalOf(hub.courses[0]) ? defaultTopics(hub.courses[0], 'millionaire') : [],
       }),
     [hub, saved],
   );
@@ -179,17 +223,32 @@ export function GamesHub({ hub }: { hub: GameHub }) {
   };
 
   const course = choice.courseId ? hub.courses.find((candidate) => candidate.id === choice.courseId) : undefined;
+  const topical = topicalOf(course) ? course : null;
+  const allowAll = !hub.courses.some(topicalOf);
   const pool: GameHubCourse[] = course ? [course] : hub.courses;
   const scope = { kind: choice.scope, id: choice.scopeId ?? undefined };
-  const counts = gameScopeCounts(pool, choice.mode, scope);
+  const game = playMode(choice.mode);
+  /** كام سؤال للعبة دي في الاختيار ده — التحديات بتتعدّ من دروسها، والنطاق القديم بإعدادات الكورس. */
+  const countFor = (mode: HubMode) =>
+    topical
+      ? topicCounts(topical.topics, topical.topicBuckets ?? [], choice.topicIds)
+      : gameScopeCounts(pool, playMode(mode), scope);
+  const counts = countFor(choice.mode);
   const available = totalOf(counts);
-  const min = GAME_MIN_QUESTIONS[choice.mode];
-  const closed = course ? !gameModeOpen(course.modes[choice.mode]) : false;
+  const min = minFor(choice.mode);
+  // إعدادات «كل لعبة بتسحب منين» للنطاق القديم بس — التحدّي هو اللي بيحدد الأسئلة.
+  const closedFor = (mode: HubMode) => (course && !topical ? !gameModeOpen(course.modes[playMode(mode)]) : false);
+  const closed = closedFor(choice.mode);
+  const noTopic = topical !== null && choice.topicIds.length === 0;
   const step = { course: 2, scope: hub.courses.length > 1 ? 3 : 2 };
   const levelStep = step.scope + (course ? 1 : 0);
 
-  const scopeTitle =
-    choice.scope === 'section'
+  const pickedTopics = topical ? topical.topics.filter((topic) => choice.topicIds.includes(topic.id)) : [];
+  const scopeTitle = topical
+    ? pickedTopics.length === 1
+      ? pickedTopics[0]!.title
+      : formatCopy(c.topicsMany, { n: pickedTopics.length })
+    : choice.scope === 'section'
       ? (course?.sections.find((section) => section.id === choice.scopeId)?.title ?? c.scopeAll)
       : choice.scope === 'lesson'
         ? (course?.lessons.find((lesson) => lesson.id === choice.scopeId)?.title ?? c.scopeAll)
@@ -199,11 +258,13 @@ export function GamesHub({ hub }: { hub: GameHub }) {
 
   const fetchRound = () =>
     apiPost('/api/me/game/rounds', GameRoundSchema, {
-      mode: choice.mode,
+      mode: game,
       level: choice.level,
       ...(choice.courseId ? { courseId: choice.courseId } : {}),
-      scope: choice.scope,
-      ...(choice.scope !== 'all' && choice.scopeId ? { scopeId: choice.scopeId } : {}),
+      scope: topical ? 'all' : choice.scope,
+      ...(!topical && choice.scope !== 'all' && choice.scopeId ? { scopeId: choice.scopeId } : {}),
+      ...(topical ? { topicIds: choice.topicIds } : {}),
+      ...(choice.mode === 'practice' ? { practice: true } : {}),
     });
 
   const start = async () => {
@@ -249,7 +310,7 @@ export function GamesHub({ hub }: { hub: GameHub }) {
     );
   }
 
-  const canStart = !busy && !closed && available >= min;
+  const canStart = !busy && !closed && !noTopic && available >= min;
 
   return (
     <section className="gm-stage gm-stage--hub">
@@ -271,11 +332,12 @@ export function GamesHub({ hub }: { hub: GameHub }) {
           </legend>
           <div className="gm-modes">
             {MODES.map((entry) => {
-              const rules = GAME_RULES[entry.mode];
-              const modeCount = totalOf(gameScopeCounts(pool, entry.mode, scope));
-              const modeClosed = course ? !gameModeOpen(course.modes[entry.mode]) : false;
-              const short = modeCount < GAME_MIN_QUESTIONS[entry.mode];
-              const best = hub.me.best[entry.mode];
+              const rules = GAME_RULES[playMode(entry.mode)];
+              const practice = entry.mode === 'practice';
+              const modeCount = totalOf(countFor(entry.mode));
+              const modeClosed = closedFor(entry.mode);
+              const short = modeCount < minFor(entry.mode);
+              const best = practice ? null : hub.me.best[playMode(entry.mode)];
               return (
                 <label
                   key={entry.mode}
@@ -306,11 +368,11 @@ export function GamesHub({ hub }: { hub: GameHub }) {
                     </span>
                     <span className="gm-rule">
                       <Timer className="size-3.5" aria-hidden="true" />
-                      {formatCopy(c.ruleSecondsShort, { n: rules.seconds[choice.level] })}
+                      {practice ? c.ruleNoTimer : formatCopy(c.ruleSecondsShort, { n: rules.seconds[choice.level] })}
                     </span>
                     <span className="gm-rule">
                       <Heart className="size-3.5" aria-hidden="true" />
-                      {formatCopy(c.ruleLivesShort, { n: rules.lives })}
+                      {practice ? c.ruleNoLives : formatCopy(c.ruleLivesShort, { n: rules.lives })}
                     </span>
                   </span>
                   {modeClosed ? (
@@ -321,7 +383,7 @@ export function GamesHub({ hub }: { hub: GameHub }) {
                   ) : short ? (
                     <span className="gm-mode__note">
                       <Lock className="size-3.5" aria-hidden="true" />
-                      {formatCopy(c.needsAtLeast, { n: GAME_MIN_QUESTIONS[entry.mode] })}
+                      {formatCopy(c.needsAtLeast, { n: minFor(entry.mode) })}
                     </span>
                   ) : best !== null ? (
                     <span className="gm-mode__best">
@@ -344,17 +406,19 @@ export function GamesHub({ hub }: { hub: GameHub }) {
               {c.pickCourse}
             </legend>
             <div className="gm-chips">
-              <label className="gm-pick" data-on={choice.courseId === null || undefined}>
-                <input
-                  type="radio"
-                  name="course"
-                  className="sr-only"
-                  checked={choice.courseId === null}
-                  onChange={() => update({ courseId: null, scope: 'all', scopeId: null })}
-                />
-                {c.allCourses}
-                <span className="gm-pick__n">{totalOf(gameScopeCounts(hub.courses, choice.mode, { kind: 'all' }))}</span>
-              </label>
+              {allowAll ? (
+                <label className="gm-pick" data-on={choice.courseId === null || undefined}>
+                  <input
+                    type="radio"
+                    name="course"
+                    className="sr-only"
+                    checked={choice.courseId === null}
+                    onChange={() => update({ courseId: null, scope: 'all', scopeId: null, topicIds: [] })}
+                  />
+                  {c.allCourses}
+                  <span className="gm-pick__n">{totalOf(gameScopeCounts(hub.courses, game, { kind: 'all' }))}</span>
+                </label>
+              ) : null}
               {hub.courses.map((entry) => (
                 <label key={entry.id} className="gm-pick" data-on={choice.courseId === entry.id || undefined}>
                   <input
@@ -362,20 +426,39 @@ export function GamesHub({ hub }: { hub: GameHub }) {
                     name="course"
                     className="sr-only"
                     checked={choice.courseId === entry.id}
-                    onChange={() => update({ courseId: entry.id, scope: 'all', scopeId: null })}
+                    onChange={() =>
+                      update({
+                        courseId: entry.id,
+                        scope: 'all',
+                        scopeId: null,
+                        topicIds: topicalOf(entry) ? defaultTopics(entry, choice.mode) : [],
+                      })
+                    }
                   />
                   <span className="gm-pick__label">{entry.title}</span>
-                  <span className="gm-pick__n">{totalOf(gameScopeCounts([entry], choice.mode, { kind: 'all' }))}</span>
+                  <span className="gm-pick__n">
+                    {topicalOf(entry)
+                      ? totalOf(topicCounts(entry.topics, entry.topicBuckets ?? [], entry.topics.map((topic) => topic.id)))
+                      : totalOf(gameScopeCounts([entry], game, { kind: 'all' }))}
+                  </span>
                 </label>
               ))}
             </div>
           </fieldset>
         ) : null}
 
-        {course ? (
+        {topical ? (
+          <TopicPicker
+            course={topical}
+            min={min}
+            picked={choice.topicIds}
+            step={step.scope}
+            onChange={(topicIds) => update({ topicIds })}
+          />
+        ) : course ? (
           <ScopePicker
             course={course}
-            mode={choice.mode}
+            mode={game}
             scope={choice.scope}
             scopeId={choice.scopeId}
             step={step.scope}
@@ -426,6 +509,8 @@ export function GamesHub({ hub }: { hub: GameHub }) {
           </p>
           {closed ? (
             <p className="gm-hub__warn">{c.modeClosed}</p>
+          ) : noTopic ? (
+            <p className="gm-hub__warn">{c.topicsPickOne}</p>
           ) : available < min ? (
             <p className="gm-hub__warn">
               {formatCopy(c.tooFewFor, { scope: scopeTitle, n: available, game: MODE_TITLE[choice.mode], min })}
@@ -585,6 +670,84 @@ function ScopePicker({
           </div>
         )
       ) : null}
+    </fieldset>
+  );
+}
+
+/**
+ * «التحديات»: تحدّي واحد أو أكتر من الكورس، كل واحد بكام سؤال فيه. الأسئلة
+ * بتتجمع من غير تكرار (`topicCounts`)، فالرقم تحت هو اللي هيتلعب. تحدّي أقل
+ * من اللي اللعبة محتاجاه بيتعرض باهت ومعاه السبب — بس ينفع يتجمع مع غيره.
+ */
+function TopicPicker({
+  course,
+  min,
+  picked,
+  step,
+  onChange,
+}: {
+  course: GameHubCourse & { topics: GameHubTopic[] };
+  min: number;
+  picked: string[];
+  step: number;
+  onChange: (topicIds: string[]) => void;
+}) {
+  const buckets = course.topicBuckets ?? [];
+  const all = course.topics.map((topic) => topic.id);
+  const everything = all.every((id) => picked.includes(id));
+  return (
+    <fieldset className="gm-hub__group">
+      <legend className="gm-hub__legend">
+        <span className="gm-step" aria-hidden="true">
+          {step}
+        </span>
+        {c.pickTopics}
+      </legend>
+      <p className="gm-hub__hint">{c.topicsHint}</p>
+      {course.topics.length > 1 ? (
+        <button
+          type="button"
+          className="gm-scope gm-topics__all"
+          aria-pressed={everything}
+          data-on={everything || undefined}
+          onClick={() => onChange(everything ? [] : all)}
+        >
+          <Check className="size-4" aria-hidden="true" />
+          {c.topicsAll}
+        </button>
+      ) : null}
+      <div className="gm-topics">
+        {course.topics.map((topic, i) => {
+          const n = totalOf(topicCounts(course.topics, buckets, [topic.id]));
+          const on = picked.includes(topic.id);
+          return (
+            <label
+              key={topic.id}
+              className="gm-topic"
+              data-on={on || undefined}
+              data-short={n < min || undefined}
+              style={{ '--i': i, '--tone': `var(--viz-${(i % 6) + 1})` } as CSSProperties}
+            >
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={on}
+                onChange={() => onChange(on ? picked.filter((id) => id !== topic.id) : [...picked, topic.id])}
+              />
+              <span className="gm-topic__icon" aria-hidden="true">
+                {on ? <Check className="size-4" /> : <Swords className="size-4" />}
+              </span>
+              <span className="gm-scope-item__text">
+                <span className="gm-scope-item__title">{topic.title}</span>
+                {n < min ? (
+                  <span className="gm-scope-item__meta gm-scope-item__meta--warn">{formatCopy(c.needsAtLeast, { n: min })}</span>
+                ) : null}
+              </span>
+              <span className="gm-pick__n">{n}</span>
+            </label>
+          );
+        })}
+      </div>
     </fieldset>
   );
 }

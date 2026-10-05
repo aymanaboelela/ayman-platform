@@ -1,4 +1,5 @@
 import type { ArenaFx, ArenaMatchView, ArenaView } from '@ayman/contracts/arena';
+import { intentOfQueue } from '@ayman/contracts/arena-challenges';
 
 /**
  * «ساحة التحدي» — حالة الصفحة كفانكشنز بيور (`arena-state.test.ts`).
@@ -16,7 +17,11 @@ export interface ArenaState {
   /** ساعة السيرفر − ساعة المتصفح (مللي). */
   offset: number;
   connection: Connection;
-  /** الطالب داس «يلا نبدأ» على الكورس ده ولسه عايز يلعب — بيرجع للطابور لوحده بعد ريستارت. */
+  /**
+   * الطالب داس «يلا نبدأ» ولسه عايز يلعب — بيرجع للطابور لوحده بعد ريستارت.
+   * نص `ArenaIntent` (`arena-challenges.ts`): كورس، تحدّي، تحدّي جديد، أو
+   * تحدّي طالب مفتوح.
+   */
   want: string | null;
   /** آخر حاجة حصلت، للصوت والأنيميشن. `key` بيتغيّر مع كل فريم عشان نفس الـfx مرتين يتلعب مرتين. */
   fx: { fx: ArenaFx; key: number } | null;
@@ -34,7 +39,7 @@ export type ArenaAction =
   | { type: 'clock'; at: number; now: number }
   | { type: 'beat'; at: number; now: number; phase: 'idle' | 'queued' | 'match' }
   | { type: 'connection'; connection: Connection }
-  | { type: 'start'; courseId: string; now: number }
+  | { type: 'start'; intent: string; now: number }
   | { type: 'queued'; view: ArenaView; now: number }
   | { type: 'cancel' }
   | { type: 'answer-sent'; optionId: string }
@@ -49,7 +54,7 @@ export function initialState(view: ArenaView, at: number, now: number): ArenaSta
     view,
     offset: at - now,
     connection: 'off',
-    want: view.phase === 'queued' ? view.courseId : null,
+    want: view.phase === 'queued' ? intentOfQueue(view) : null,
     fx: null,
     pending: null,
     late: false,
@@ -111,7 +116,7 @@ export function arenaReducer(state: ArenaState, action: ArenaAction): ArenaState
         ...state,
         // «ماتش تاني» من شاشة النتيجة: الشاشة تروح «بندوّر» على طول، مش بعد رد الطلب.
         view: state.view.phase === 'match' && state.view.match.end ? { phase: 'idle' } : state.view,
-        want: action.courseId,
+        want: action.intent,
         error: null,
         patienceFrom: action.now,
         pending: null,
@@ -119,7 +124,10 @@ export function arenaReducer(state: ArenaState, action: ArenaAction): ArenaState
       };
     case 'queued': {
       const view = mergeView(state.view, action.view);
-      return { ...state, view, patienceFrom: state.patienceFrom ?? action.now };
+      // «افتح تحدّي» اتحوّل لتحدّي برقم — الرجوع بعد ريستارت يرجع لنفس
+      // التحدّي، مش يفتح واحد تاني.
+      const want = view.phase === 'queued' && state.want ? intentOfQueue(view) : state.want;
+      return { ...state, view, want, patienceFrom: state.patienceFrom ?? action.now };
     }
     case 'cancel':
       return { ...state, view: { phase: 'idle' }, want: null, patienceFrom: null, pending: null };

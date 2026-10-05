@@ -70,7 +70,7 @@ export function ArenaSearch({
 
       <h2 className="ca-stage__title" aria-live="polite">
         <Radar className="size-6" aria-hidden="true" />
-        {state.connection === 'lost' ? c.search.reconnecting : c.search.title}
+        {state.connection === 'lost' ? c.search.reconnecting : queued?.challengeId ? c.search.openTitle : c.search.title}
       </h2>
       <p className="ca-stage__sub">{formatCopy(c.search.sub, { cohort: cohortLabel, course: courseTitle })}</p>
       <p className="ca-elapsed">

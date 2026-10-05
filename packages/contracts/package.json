@@ -93,6 +93,7 @@
     "./quiz/history": "./src/quiz/history.ts",
     "./quiz/mastery": "./src/quiz/mastery.ts",
     "./quiz/game": "./src/quiz/game.ts",
+    "./quiz/challenges": "./src/quiz/challenges.ts",
     "./quiz/game-stats": "./src/quiz/game-stats.ts",
     "./quiz/question-removal": "./src/quiz/question-removal.ts",
     "./quiz/external-books": "./src/quiz/external-books.ts",
@@ -117,6 +118,7 @@
     "./quiz/monthly-exam": "./src/quiz/monthly-exam.ts",
     "./admin/exams": "./src/admin/exams.ts",
     "./arena": "./src/arena.ts",
+    "./arena-challenges": "./src/arena-challenges.ts",
     "./copy/arena": "./src/copy/arena.ts",
     "./mistakes": "./src/mistakes.ts",
     "./copy/mistakes": "./src/copy/mistakes.ts"

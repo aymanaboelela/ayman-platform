@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { QuestionInputSchema, type QuestionInput } from '@ayman/contracts/quiz/question';
 import { parseQuestionBlocks, type ImportError } from '@ayman/contracts/quiz/import';
 import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -535,16 +536,42 @@ export class QuestionBankService {
     text: string,
     categoryId: string,
     authorId: string,
+    options: { lessonId?: string | undefined; status?: 'ready' | 'draft' | undefined } = {},
   ): Promise<{ created: number; errors: ImportError[] }> {
-    const { questions, errors } = parseQuestionBlocks(text, categoryId);
+    const { questions, meta, errors } = parseQuestionBlocks(text, categoryId);
     if (errors.length > 0) return { created: 0, errors };
 
+    // «التحديات»: every lesson a block (or the paste as a whole) points at has
+    // to exist — a stale id from another stack would otherwise be a FK error
+    // halfway through the transaction, with no block number to fix.
+    const wanted = [...new Set([options.lessonId, ...meta.map((entry) => entry.lessonId)].filter((id): id is string => !!id))];
+    if (wanted.length > 0) {
+      const known = new Set(
+        (await this.prisma.lesson.findMany({ where: { id: { in: wanted } }, select: { id: true } })).map((lesson) => lesson.id),
+      );
+      if (options.lessonId && !known.has(options.lessonId)) throw new NotFoundException();
+      const missing: ImportError[] = meta.flatMap((entry, index) =>
+        entry.lessonId && !known.has(entry.lessonId)
+          ? [
+              {
+                blockIndex: index + 1,
+                line: 1,
+                message: formatCopy(copy.quizErrors.importUnknownLesson, { n: index + 1, lesson: entry.lessonId }),
+              },
+            ]
+          : [],
+      );
+      if (missing.length > 0) return { created: 0, errors: missing };
+    }
+
     await this.prisma.$transaction(async (tx) => {
-      for (const question of questions) {
+      for (const [index, question] of questions.entries()) {
         const entry = await tx.questionBankEntry.create({
           data: {
             categoryId,
             ownerId: authorId,
+            lessonId: meta[index]?.lessonId ?? options.lessonId ?? null,
+            variantGroupKey: meta[index]?.variantGroupKey ?? null,
             versions: {
               create: {
                 version: 1,
@@ -556,6 +583,9 @@ export class QuestionBankService {
           },
           include: { versions: true },
         });
+        // A draft paste stops here: the owner publishes each one from the bank
+        // after reading it, and nothing student-facing reads a draft version.
+        if (options.status === 'draft') continue;
         // Imported questions land as `ready`: the instructor already reviewed
         // them in the preview, and forcing 60 publish clicks would defeat the
         // entire point of a bulk import. This UPDATE touches only `status`,

@@ -1,4 +1,5 @@
 import { z } from '@ayman/contracts/zod';
+import { ArenaOpenChallengeSchema, ArenaTopicSchema } from '@ayman/contracts/arena-challenges';
 
 /**
  * «ساحة التحدي» — طالبين من نفس الدفعة ونفس الكورس، نفس الأسئلة في نفس
@@ -179,6 +180,12 @@ export const ArenaViewSchema = z.discriminatedUnion('phase', [
     cohortLabel: z.string(),
     /** دخل الطابور إمتى (ساعة السيرفر) — عدّاد «بندوّر بقالنا…». */
     since: EpochMs,
+    /** تحدّي من تحديات الأدمن — `null` = الكورس كله، أو تحدّي طالب. */
+    topicId: z.string().nullable().default(null),
+    /** اسم التحدّي (أو التحديات) — للشاشة. */
+    topicTitle: z.string().nullable().default(null),
+    /** تحدّي طالب مفتوح — `arena-challenges.ts`. */
+    challengeId: z.string().nullable().default(null),
   }),
   z.object({ phase: z.literal('match'), match: ArenaMatchViewSchema }),
 ]);
@@ -219,8 +226,11 @@ export type ArenaFrame = z.infer<typeof ArenaFrameSchema>;
 
 // ── الطلبات ───────────────────────────────────────────────────────────────
 
-/** `POST /api/me/arena/queue` — الكورس اللي عايز يلعب فيه. */
-export const ArenaQueueRequestSchema = z.object({ courseId: z.uuid() }).strict();
+/**
+ * `POST /api/me/arena/queue` — الكورس اللي عايز يلعب فيه، والتحدّي لو الكورس
+ * فيه «تحديات» (لازم ساعتها — الطابور لكل تحدّي).
+ */
+export const ArenaQueueRequestSchema = z.object({ courseId: z.uuid(), topicId: z.uuid().optional() }).strict();
 export type ArenaQueueRequest = z.infer<typeof ArenaQueueRequestSchema>;
 
 /** `POST /api/me/arena/matches/:matchId/answer`. */
@@ -275,6 +285,12 @@ export const ArenaCourseSchema = z.object({
   questions: z.number().int().min(0),
   /** `questions >= ARENA_RULES.minPool`. */
   playable: z.boolean(),
+  /**
+   * «التحديات» المتشغّلة في الكورس. مش فاضية = الماتش على تحدّي (أو تحدّي
+   * طالب)، مش على الكورس كله — `questions`/`playable` فوق بيتحسبوا من بنك
+   * التحديات ساعتها.
+   */
+  topics: z.array(ArenaTopicSchema).default([]),
 });
 export type ArenaCourse = z.infer<typeof ArenaCourseSchema>;
 
@@ -309,6 +325,8 @@ export const ArenaLobbySchema = z.object({
   board: ArenaBoardSchema,
   /** ساعة السيرفر وقت الرد. */
   at: EpochMs,
+  /** تحديات الطلبة المفتوحة في كورساتك ودفعتك — شوف `arena-challenges.ts`. */
+  challenges: z.array(ArenaOpenChallengeSchema).default([]),
 });
 export type ArenaLobby = z.infer<typeof ArenaLobbySchema>;
 

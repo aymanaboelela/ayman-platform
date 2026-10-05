@@ -96,7 +96,11 @@ export function BankRow({
       <div className="flex flex-wrap items-center gap-2">
         {category ? (
           <>
-            <BulkImportDialog categories={[category]} onCommitted={() => router.refresh()} />
+            <BulkImportDialog
+              categories={[category]}
+              onCommitted={() => router.refresh()}
+              {...(lesson ? { lessonId: lesson.id } : {})}
+            />
             <Link href={`/admin/questions/new?category=${encodeURIComponent(category.id)}`} className={ROW_LINK}>
               <FilePlus2 className="size-4" aria-hidden="true" />
               {c.newQuestion}

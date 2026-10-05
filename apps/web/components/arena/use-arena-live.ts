@@ -9,6 +9,7 @@ import {
   ArenaViewSchema,
   type ArenaView,
 } from '@ayman/contracts/arena';
+import { decodeArenaIntent } from '@ayman/contracts/arena-challenges';
 import { ApiRequestError, apiDelete, apiPost } from '@/lib/api';
 import { arenaReducer, initialState, screenOf } from './arena-state';
 
@@ -18,7 +19,29 @@ const SILENCE_MS = 12_000;
 /** بعد ريستارت للسيرفر: الطالب لسه عايز يلعب ومش في طابور — نرجّعه، مش أكتر من مرة كل كده. */
 const REJOIN_EVERY_MS = 4_000;
 
-export type ArenaErrorCode = 'no_year' | 'no_subscription' | 'course_not_playable' | 'no_questions' | 'unavailable';
+export type ArenaErrorCode =
+  | 'no_year'
+  | 'no_subscription'
+  | 'course_not_playable'
+  | 'no_questions'
+  | 'topic_required'
+  | 'challenge_gone'
+  | 'unavailable';
+
+/** «يلا» على الحاجة دي — كورس، تحدّي، تحدّي جديد، أو قبول تحدّي طالب. */
+function enter(intent: string): Promise<ArenaView> {
+  const parsed = decodeArenaIntent(intent);
+  switch (parsed.kind) {
+    case 'topic':
+      return apiPost('/api/me/arena/queue', ArenaViewSchema, { courseId: parsed.courseId, topicId: parsed.topicId });
+    case 'create':
+      return apiPost('/api/me/arena/challenges', ArenaViewSchema, { courseId: parsed.courseId, topicIds: parsed.topicIds });
+    case 'challenge':
+      return apiPost(`/api/me/arena/challenges/${encodeURIComponent(parsed.challengeId)}/accept`, ArenaViewSchema, {});
+    case 'course':
+      return apiPost('/api/me/arena/queue', ArenaViewSchema, { courseId: parsed.courseId });
+  }
+}
 
 /**
  * الماتش المباشر: ستريم SSE للحالة، ونبضة POST كل ٤ ثواني، والأفعال
@@ -119,10 +142,10 @@ export function useArenaLive(initial: { view: ArenaView; at: number }) {
   }, [live]);
 
   // ── يلا نبدأ / ماتش تاني ─────────────────────────────────────────────────
-  const join = useCallback(async (courseId: string) => {
+  const join = useCallback(async (intent: string) => {
     lastJoin.current = Date.now();
     try {
-      const view = await apiPost('/api/me/arena/queue', ArenaViewSchema, { courseId });
+      const view = await enter(intent);
       dispatch({ type: 'queued', view, now: Date.now() });
     } catch (error) {
       const code = errorCode(error);
@@ -132,9 +155,9 @@ export function useArenaLive(initial: { view: ArenaView; at: number }) {
   }, []);
 
   const start = useCallback(
-    (courseId: string) => {
-      dispatch({ type: 'start', courseId, now: Date.now() });
-      void join(courseId);
+    (intent: string) => {
+      dispatch({ type: 'start', intent, now: Date.now() });
+      void join(intent);
     },
     [join],
   );
@@ -190,8 +213,12 @@ export function useArenaLive(initial: { view: ArenaView; at: number }) {
 function errorCode(error: unknown): ArenaErrorCode {
   if (error instanceof ApiRequestError && error.status === 403) {
     const code = (error.payload as { code?: unknown } | undefined)?.code;
-    if (code === 'no_year' || code === 'no_subscription' || code === 'course_not_playable') return code;
+    if (code === 'no_year' || code === 'no_subscription' || code === 'course_not_playable' || code === 'topic_required') {
+      return code;
+    }
     return 'course_not_playable';
   }
+  // تحدّي طالب اتقفل أو اتقبل قبل ما الضغطة توصل.
+  if (error instanceof ApiRequestError && error.status === 404) return 'challenge_gone';
   return 'unavailable';
 }

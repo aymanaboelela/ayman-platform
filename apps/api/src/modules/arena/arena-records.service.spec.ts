@@ -134,6 +134,35 @@ describe('ArenaRecordsService (database)', () => {
     expect(await prisma.arenaMatch.count({ where: { id: state.id } })).toBe(1);
   });
 
+  it('marks every question the match opened as seen by both players — «ماتكرّرش» covers the arena too', async () => {
+    const [a, b] = [await student('سارة'), await student('هنا')];
+    const category = await prisma.questionCategory.create({ data: { name: `arena-${tag}-seen` } });
+    const entry = await prisma.questionBankEntry.create({
+      data: { categoryId: category.id, ownerId: users[0]!, variantGroupKey: `arena-${tag}` },
+    });
+    const version = await prisma.questionVersion.create({
+      data: { bankEntryId: entry.id, version: 1, type: 'true_false', stemHtml: '<p>s</p>', createdBy: users[0]! },
+    });
+    try {
+      const state = finished(a, b, 0);
+      state.questions[0]!.id = version.id;
+      await records.record(state);
+      const seen = await prisma.questionExposure.findMany({
+        where: { userId: { in: [a, b] } },
+        orderBy: [{ userId: 'asc' }, { groupKey: 'asc' }],
+        select: { userId: true, groupKey: true, times: true },
+      });
+      const keys = [`e:${entry.id}`, `g:arena-${tag}`].sort();
+      expect(seen).toEqual(
+        [a, b].sort().flatMap((userId) => keys.map((groupKey) => ({ userId, groupKey, times: 1 }))),
+      );
+    } finally {
+      await prisma.arenaMatch.deleteMany({ where: { playerAId: a } });
+      await prisma.questionBankEntry.delete({ where: { id: entry.id } });
+      await prisma.questionCategory.delete({ where: { id: category.id } });
+    }
+  });
+
   it('pays a draw to both and a forfeit to whoever stayed', async () => {
     const [a, b] = [await student('سلمى'), await student('نور')];
     const draw = await records.record(finished(a, b, null));
@@ -202,7 +231,11 @@ describe('ArenaRecordsService (database)', () => {
   });
 
   describe('who counts as subscribed', () => {
-    const game = { arenaPoolCounts: async () => new Map([[courseId, 30]]) } as unknown as GameService;
+    // كورس من غير «تحديات» — العدّ من بنك الكويزات زي الأول.
+    const game = {
+      arenaPoolCounts: async () => new Map([[courseId, 30]]),
+      topicCourses: async () => new Map(),
+    } as unknown as GameService;
     const access = () => new ArenaAccessService(prisma, game);
 
     async function enrolled(name: string): Promise<string> {
@@ -216,7 +249,7 @@ describe('ArenaRecordsService (database)', () => {
       await prisma.accessGrant.create({ data: { userId: id, scope: 'course', courseId, source: 'admin' } });
       const result = await access().eligibility(id);
       expect(result.blocked).toBeNull();
-      expect(result.courses).toEqual([{ id: courseId, title: 'كورس الساحة', questions: 30, playable: true }]);
+      expect(result.courses).toEqual([{ id: courseId, title: 'كورس الساحة', questions: 30, playable: true, topics: [] }]);
       expect(result.cohortLabel).toContain('عربي');
     });
 

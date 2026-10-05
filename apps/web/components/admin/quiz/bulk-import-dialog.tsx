@@ -39,6 +39,12 @@ export interface BulkImportDialogProps {
    * button it always had.
    */
   triggerClassName?: string;
+  /**
+   * «التحديات»: the dialog opened from a lesson's row links every pasted
+   * question to that lesson (`QuestionBankEntry.lessonId`). A block's own
+   * `LESSON:` line still wins.
+   */
+  lessonId?: string;
 }
 
 /**
@@ -52,6 +58,7 @@ export function BulkImportDialog({
   onCommitted,
   defaultCategoryId,
   triggerClassName,
+  lessonId,
 }: BulkImportDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -59,6 +66,7 @@ export function BulkImportDialog({
     categories.find((category) => category.id === defaultCategoryId)?.id ?? categories[0]?.id ?? '',
   );
   const [text, setText] = useState('');
+  const [status, setStatus] = useState<'ready' | 'draft'>('ready');
   const [debouncedText, setDebouncedText] = useState('');
   const [committing, setCommitting] = useState(false);
 
@@ -80,6 +88,10 @@ export function BulkImportDialog({
       const response = await apiPost('/api/admin/questions/bulk', BulkCommitResultSchema, {
         categoryId,
         text,
+        ...(lessonId ? { lessonId } : {}),
+        // `ready` is the endpoint's default — sent only when it differs, so an
+        // API from the previous build (strict schema) still takes the paste.
+        ...(status === 'draft' ? { status } : {}),
       });
       // «اتضاف ٤٠ سؤال للبنك» — it used to reuse the PREVIEW line («معاينة ٤٠
       // سؤال») as the success toast, for questions that were already saved.
@@ -122,15 +134,31 @@ export function BulkImportDialog({
           <DialogTitle>{copy.quizAdmin.bulkImport}</DialogTitle>
         </DialogHeader>
 
-        <div className="mb-4">
-          <Label htmlFor="bulk-import-category">{copy.quizAdmin.category}</Label>
-          <Select id="bulk-import-category" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </Select>
+        <div className="mb-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="bulk-import-category">{copy.quizAdmin.category}</Label>
+            <Select id="bulk-import-category" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="bulk-import-status">{copy.quizAdmin.bulkImportStatus}</Label>
+            <Select
+              id="bulk-import-status"
+              value={status}
+              onChange={(event) => setStatus(event.target.value === 'draft' ? 'draft' : 'ready')}
+            >
+              <option value="ready">{copy.quizAdmin.bulkImportReady}</option>
+              <option value="draft">{copy.quizAdmin.bulkImportDraft}</option>
+            </Select>
+          </div>
+          {lessonId ? (
+            <p className="text-[length:var(--fs-text-sm)] text-fg-muted sm:col-span-2">{copy.quizAdmin.bulkImportLinked}</p>
+          ) : null}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
