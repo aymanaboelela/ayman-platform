@@ -5,7 +5,7 @@ import { formatCopy } from '@ayman/contracts/format';
 import type { AdminBookOrderRow } from '@ayman/contracts/admin/book-orders';
 import { bookOrderYearWord } from '@ayman/contracts/admin/book-orders';
 import type { AdminBookRow } from '@ayman/contracts/admin/books';
-import type { BookOrderStatus } from '@ayman/contracts/book-orders';
+import { bookOrderDate, type BookOrderStatus } from '@ayman/contracts/book-orders';
 import { cn } from '@ayman/ui';
 import { formatEGP } from '@/lib/price';
 import { StreamBadge } from '@/components/stream-badge';
@@ -379,8 +379,12 @@ export function BookOrderCard({
                 {c.senderPhoneLabel}: {row.status === 'address_only' ? c.senderPhoneUnpaid : c.senderPhoneManual}
               </span>
             )}
-            <time dateTime={row.createdAt} className="text-fg-faint">
-              {dateFormatter.format(new Date(row.createdAt))}
+            {/* The day it was PAID — never the day the address form was saved
+                (`bookOrderDate`). A row that never paid says so in words. */}
+            <time dateTime={bookOrderDate(row)} className="text-fg-faint">
+              {formatCopy(row.paidAt ? c.paidOn : c.startedOn, {
+                date: dateFormatter.format(new Date(bookOrderDate(row))),
+              })}
             </time>
           </p>
         </div>

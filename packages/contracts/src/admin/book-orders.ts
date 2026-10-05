@@ -703,7 +703,9 @@ export const PackingListLineSchema = z.object({
   street: z.string(),
   building: z.string().nullable(),
   note: z.string(),
-  createdAt: z.string(),
+  /** `YYYY-MM-DD` of `bookOrderDate` — the day it was PAID, never the day the
+   *  address form was saved. */
+  orderDate: z.string(),
 });
 export type PackingListLine = z.infer<typeof PackingListLineSchema>;
 
@@ -854,7 +856,8 @@ export const PackingLabelSchema = z.object({
   streams: z.array(z.string()),
   /** Total copies in this one parcel. The number the courier counts. */
   copies: z.number().int(),
-  createdAt: z.string(),
+  /** `YYYY-MM-DD` of `bookOrderDate` — see `PackingListLineSchema.orderDate`. */
+  orderDate: z.string(),
 });
 export type PackingLabel = z.infer<typeof PackingLabelSchema>;
 

@@ -407,7 +407,7 @@ export default async function BookOrderLabelsPage({
                   ))
                 ))}
               </span>
-              <span className="label-card__date">{shipDate(label.createdAt)}</span>
+              <span className="label-card__date">{shipDate(label.orderDate)}</span>
             </footer>
           </article>
         ))}

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import type { BookOrder, BookOrderStatus, CreateBookOrderInput, SubmitBookOrderPaymentInput } from '@ayman/contracts/book-orders';
+import { bookOrderDate } from '@ayman/contracts/book-orders';
 import type {
   AdminBookOrderFilter,
   AdminBookOrderQuery,
@@ -56,6 +57,7 @@ import { OutreachService } from '../outreach/outreach.service';
 import { SettingsService } from '../admin/settings/settings.service';
 import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
 import { BOOK_REVENUE_WHERE } from './book-revenue';
+import { cairoDayKey } from '../analytics/analytics-shared';
 import { deliveryDaysFor } from './delivery-days';
 import {
   PHASH_MAX_DISTANCE,
@@ -202,10 +204,21 @@ function toOrderLine(item: OrderLineRow) {
  * others — on a list whose job is making sure every parcel gets packed exactly
  * once. `id` is uuid(7), so the tiebreak is also chronological.
  */
+/*
+ * «الأقدم» and «الأحدث» mean by PAYMENT — `bookOrderDate`. An address saved
+ * three weeks before the transfer is not three weeks older in the queue than
+ * one paid the same morning. `nulls: 'last'` keeps the never-paid rows (the
+ * «بدأت ومكملتش» tab, where every row is null) in the order they were started.
+ */
+const BY_ORDER_DATE_ASC: Prisma.BookOrderOrderByWithRelationInput[] = [
+  { paidAt: { sort: 'asc', nulls: 'last' } },
+  { createdAt: 'asc' },
+];
+
 function orderByFor(sort: AdminBookOrderSort): Prisma.BookOrderOrderByWithRelationInput[] {
   switch (sort) {
     case 'newest':
-      return [{ createdAt: 'desc' }, { id: 'desc' }];
+      return [{ paidAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }];
     case 'amount_desc':
       return [{ amountCents: 'desc' }, { id: 'desc' }];
     case 'amount_asc':
@@ -216,10 +229,10 @@ function orderByFor(sort: AdminBookOrderSort): Prisma.BookOrderOrderByWithRelati
       // By NAME, not by code: the codes are arbitrary and the admin reads the
       // Arabic. Then oldest-first inside each governorate, so a courier route
       // is still packed in the order the orders arrived.
-      return [{ governorate: { nameAr: 'asc' } }, { createdAt: 'asc' }, { id: 'asc' }];
+      return [{ governorate: { nameAr: 'asc' } }, ...BY_ORDER_DATE_ASC, { id: 'asc' }];
     case 'oldest':
     default:
-      return [{ createdAt: 'asc' }, { id: 'asc' }];
+      return [...BY_ORDER_DATE_ASC, { id: 'asc' }];
   }
 }
 
@@ -3587,7 +3600,8 @@ export class BookOrdersService {
       { header: 'الشارع', key: 'street', width: 28 },
       { header: 'رقم العمارة', key: 'building', width: 14 },
       { header: 'تفاصيل إضافية', key: 'note', width: 28 },
-      { header: 'تاريخ الطلب', key: 'createdAt', width: 18 },
+      // The day it was PAID — see `bookOrderDate`.
+      { header: 'تاريخ الدفع', key: 'orderDate', width: 18 },
     ];
 
     /*
@@ -3693,7 +3707,7 @@ export class BookOrdersService {
      * last day, which is most of them, and the admin would only notice when
      * the printer came up short.
      */
-    const createdAt =
+    const range =
       from || to
         ? {
             ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
@@ -3702,6 +3716,12 @@ export class BookOrdersService {
               : {}),
           }
         : undefined;
+    /* «من يوم كام لـ يوم كام» is by the PAYMENT date, like every date on the
+       paper this feeds (`bookOrderDate`); an order never paid is placed by the
+       day it was started. */
+    const inRange: Prisma.BookOrderWhereInput | undefined = range
+      ? { OR: [{ paidAt: range }, { paidAt: null, createdAt: range }] }
+      : undefined;
 
     /* THE SAME three filter helpers `adminList` builds its own WHERE from, in
        the same order — the export is the list, and the only way to keep that
@@ -3716,7 +3736,7 @@ export class BookOrdersService {
       ...liveOrDeletedWhere(status),
       ...this.adminSearchWhere(query.q ?? ''),
       ...streamAndYearWhere(query.stream, query.year),
-      ...(createdAt ? { createdAt } : {}),
+      ...(inRange ? { AND: [inRange] } : {}),
     };
 
     const rows = await this.prisma.bookOrder.findMany({
@@ -3736,7 +3756,7 @@ export class BookOrdersService {
          */
         heldForReviewAt: null,
       },
-      orderBy: [{ createdAt: 'asc' }],
+      orderBy: [...BY_ORDER_DATE_ASC, { id: 'asc' }],
       select: {
         /* For «حدّد اللي في المدى» — see `PackingListSchema.orderIds`. */
         id: true,
@@ -3749,6 +3769,7 @@ export class BookOrdersService {
         addressNote: true,
         amountCents: true,
         shippingCents: true,
+        paidAt: true,
         createdAt: true,
         items: ORDER_ITEM_SELECT,
         course: { select: { title: true, year: true, forGeneral: true, forLanguages: true, bookTitle: true } },
@@ -3841,7 +3862,8 @@ export class BookOrdersService {
         street: row.addressStreet,
         building: row.addressBuilding,
         note: row.addressNote ?? '',
-        createdAt: row.createdAt.toISOString().slice(0, 10),
+        // The Cairo calendar day it was PAID — see `bookOrderDate`.
+        orderDate: cairoDayKey(new Date(bookOrderDate(row))),
       };
 
       /*
@@ -3906,7 +3928,7 @@ export class BookOrdersService {
         items: parcelItems,
         streams: parcelStreams,
         copies: parcelItems.reduce((n, item) => n + item.quantity, 0),
-        createdAt: address.createdAt,
+        orderDate: address.orderDate,
       });
 
       if (row.items.length === 0) {
@@ -4031,7 +4053,7 @@ export class BookOrdersService {
        the cards or the spreadsheet could reach them by accident. */
     const held = await this.prisma.bookOrder.findMany({
       where: { ...packingWhere, heldForReviewAt: { not: null } },
-      orderBy: [{ createdAt: 'asc' }],
+      orderBy: [...BY_ORDER_DATE_ASC, { id: 'asc' }],
       select: { id: true },
     });
 

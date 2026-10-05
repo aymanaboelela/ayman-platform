@@ -308,7 +308,7 @@ export default async function BookOrdersPrintPage({
                 <th>{columns.fullName}</th>
                 <th>{columns.phone}</th>
                 <th>{columns.address}</th>
-                <th>{columns.createdAt}</th>
+                <th>{columns.orderDate}</th>
                 <th>{columns.tick}</th>
               </tr>
             </thead>
@@ -338,7 +338,7 @@ export default async function BookOrdersPrintPage({
                       .join('، ')}
                     {line.note ? <span className="packing-note">{line.note}</span> : null}
                   </td>
-                  <td className="packing-date">{shipDate(line.createdAt)}</td>
+                  <td className="packing-date">{shipDate(line.orderDate)}</td>
                   {/* Ticked with a pen as each parcel goes in the box. */}
                   <td className="packing-tick">
                     <span />

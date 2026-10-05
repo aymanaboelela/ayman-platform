@@ -27,6 +27,7 @@ import { CreateBookOrderDialog } from './create-book-order-dialog';
 import { BooksTabs } from './books-tabs';
 import { BookOrderCard } from './order-card';
 import { BookOrderOverview } from './order-overview';
+import { TabActions } from './tab-actions';
 import { ListControl, ListPager } from '@/components/admin/list-controls';
 
 const c = copy.admin.books;
@@ -419,6 +420,20 @@ export default async function AdminBooksPage({
           checkboxes write into. */}
       <BulkShipProvider courierEnabled={entitlements['books.courier']} tab={status}>
         {/* ── The numbers, as one line, and the paper tools behind one button ── */}
+        {/*
+          «زرار فوق: ابعت الكل» — the tab's next step for EVERY order in it
+          (not just this page), under the filters on screen. «مدفوعة»: to the
+          printer. «في المطبعة»/«مرتجع»: to the courier, or «اتشحن».
+        */}
+        <div className="mt-4">
+          <TabActions
+            status={status}
+            filters={{ stream, year, q: query || undefined }}
+            count={overview.tabCounts[status] ?? 0}
+            courierEnabled={entitlements['books.courier']}
+          />
+        </div>
+
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <BookOrderOverview overview={overview} />
           {/* The export needs ONE concrete status — `all` has no meaning for a

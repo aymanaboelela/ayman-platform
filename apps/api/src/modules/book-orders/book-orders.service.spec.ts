@@ -2075,6 +2075,33 @@ describe('BookOrdersService', () => {
    * on a total across all of them is an assertion on other people's data.
    */
   describe('packingList', () => {
+    /* «كتب العنوان وفضل ٢٠ يوم مدفعش، ويوم ما يدفع يتحط التاريخ» — the paper
+       carries the day it was PAID, and «من يوم كام لـ يوم كام» picks it by
+       that day too. */
+    it('dates every line by payment, not by the day the address was saved', async () => {
+      const stamp = `دفع-${Date.now()}`;
+      const order = await paidOrder(studentId, {
+        courseId: undefined,
+        items: [{ bookId: bookA, quantity: 1 }],
+        fullName: stamp,
+      });
+      const paidAt = new Date('2026-10-05T12:00:00.000Z');
+      await prisma.bookOrder.update({
+        where: { id: order.id },
+        data: { createdAt: new Date('2026-09-15T12:00:00.000Z'), paidAt },
+      });
+
+      const list = await service.packingList({ status: 'paid', from: null, to: null, q: stamp });
+      const [line] = list.groups.flatMap((group) => group.lines);
+      expect(line?.orderDate).toBe('2026-10-05');
+      expect(list.labels[0]?.orderDate).toBe('2026-10-05');
+
+      const sameDay = await service.packingList({ status: 'paid', from: '2026-10-05', to: '2026-10-05', q: stamp });
+      expect(sameDay.orders).toBe(1);
+      const dayStarted = await service.packingList({ status: 'paid', from: '2026-09-15', to: '2026-09-15', q: stamp });
+      expect(dayStarted.orders).toBe(0);
+    }, 20_000);
+
     it('applies the screen’s stream filter, so the file is the list', async () => {
       const stamp = `تصدير-${Date.now()}`;
       await paidOrder(studentId, {

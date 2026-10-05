@@ -260,6 +260,28 @@ const base = {
   createdAt: z.iso.datetime(),
 };
 
+/**
+ * THE date of a book order, everywhere it is written — the card, the packing
+ * sheet, the shipping card on the parcel, the spreadsheet, the student's own
+ * screen: the day it was PAID.
+ *
+ * «كتب العنوان وفضل ٢٠ يوم مدفعش، ويوم ما يدفع يتحط التاريخ» — the row is
+ * created when the address form is saved, and a student can sit on it for
+ * weeks before transferring. Printing `createdAt` put a three-week-old date on
+ * a parcel paid for yesterday, which reads as an order the desk sat on. Only
+ * an order that never paid falls back to the day it was started.
+ *
+ * ⚠️ Never print `createdAt` for an order directly. `book-order-date.test.ts`
+ * fails the build on it.
+ */
+export function bookOrderDate(order: {
+  paidAt: string | Date | null;
+  createdAt: string | Date;
+}): string {
+  const date = order.paidAt ?? order.createdAt;
+  return typeof date === 'string' ? date : date.toISOString();
+}
+
 /** A student's own order — never another student's. */
 export const BookOrderSchema = z.object(base);
 export type BookOrder = z.infer<typeof BookOrderSchema>;
