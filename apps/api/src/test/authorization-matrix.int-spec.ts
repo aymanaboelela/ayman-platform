@@ -2501,6 +2501,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin book order deliver: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/deliver`, actor: 'anonymous', status: 401 },
     { label: 'admin book order deliver: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/deliver`, actor: 'student', status: 403 },
     { label: 'admin book order deliver: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/deliver`, actor: 'admin', status: 404 },
+    // «مرتجع» — the other way a shipment ends; same `book-order:ship`.
+    { label: 'admin book order return: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/return`, actor: 'anonymous', status: 401 },
+    { label: 'admin book order return: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/return`, actor: 'student', status: 403 },
+    { label: 'admin book order return: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/return`, actor: 'admin', body: () => ({ reason: null }), status: 404 },
     { label: 'admin book order reject: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/reject`, actor: 'anonymous', body: () => ({ reason: 'التحويل ما وصلش' }), status: 401 },
     { label: 'admin book order reject: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/reject`, actor: 'student', body: () => ({ reason: 'التحويل ما وصلش' }), status: 403 },
     { label: 'admin book order reject: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/reject`, actor: 'admin', body: () => ({ reason: 'التحويل ما وصلش' }), status: 404 },

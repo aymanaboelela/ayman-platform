@@ -65,6 +65,7 @@ function order(overrides: Partial<BookOrder> = {}): BookOrder {
     deliveredAt: null,
     rejectedAt: null,
     rejectionReason: null,
+    returnedAt: null,
     courier: null,
     createdAt: '2026-03-01T10:00:00.000Z',
     ...overrides,
@@ -103,6 +104,7 @@ describe('MyBookOrdersSection — the reassurance line', () => {
     'printing',
     'shipped',
     'delivered',
+    'returned',
     'rejected',
   ];
   const notes: Record<BookOrderStatus, string> = {
@@ -111,6 +113,7 @@ describe('MyBookOrdersSection — the reassurance line', () => {
     printing: c.notePrinting,
     shipped: c.noteShipped,
     delivered: c.noteDelivered,
+    returned: c.noteReturned,
     rejected: c.noteRejected,
   };
 

@@ -379,6 +379,9 @@ export const AUDIT_ACTIONS = [
   // Restoring records the reason it had been deleted for, because the column
   // holding it is cleared by the same write.
   'book-order:deliver',
+  // «مرتجع» — the parcel came back. Its own row because «مين قال إنه رجع؟» is
+  // asked on the day the student says it never left.
+  'book-order:return',
   'book-order:reject',
   'book-order:delete',
   'book-order:restore',

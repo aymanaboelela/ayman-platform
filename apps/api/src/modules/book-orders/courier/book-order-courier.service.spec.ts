@@ -248,7 +248,7 @@ describe('BookOrderCourierService', () => {
       expect((await service.events(id)).map((event) => event.statusId)).toEqual([3, 4]);
     });
 
-    it('«مؤجل» and «مرتجع» leave the status alone and message the student with their note', async () => {
+    it('«مؤجل» leaves the status alone, «مرتجع» moves it, and both message the student with their note', async () => {
       await prisma.conversation.deleteMany({ where: { userId: studentId } });
       const id = await order('shipped');
       await service.ingest([
@@ -256,12 +256,20 @@ describe('BookOrderCourierService', () => {
         report(id, 5, { status_Note: 'رفض الاستلام' }),
       ]);
       const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id } });
-      expect(row).toMatchObject({ status: 'shipped', courierStatusId: 5 });
+      expect(row).toMatchObject({ status: 'returned', courierStatusId: 5 });
       const [postponed, returned] = await messages();
       expect(postponed).toContain('أجّلت');
       expect(postponed).toContain('العميل مش موجود');
       expect(returned).toContain('رجعت');
       expect(returned).toContain('رفض الاستلام');
+    });
+
+    it('«مرتجع» moves a shipped parcel to its own tab, ready to be sent again', async () => {
+      const id = await order('shipped', true);
+      await service.ingest([report(id, 5, { status_Note: 'الرقم مقفول' })]);
+      const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id } });
+      expect(row).toMatchObject({ status: 'returned', returnReason: 'الرقم مقفول', courierSentAt: null });
+      expect(row.returnedAt).not.toBeNull();
     });
 
     it('records but ignores an order it does not know, and one entry it cannot read', async () => {

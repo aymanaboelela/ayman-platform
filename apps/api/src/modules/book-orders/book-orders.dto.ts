@@ -7,6 +7,7 @@ import {
   DeleteBookOrderSchema,
   ExportBookOrdersQuerySchema,
   MarkBookOrderPaidSchema,
+  MarkBookOrderReturnedSchema,
   RejectBookOrderSchema,
 } from '@ayman/contracts/admin/book-orders';
 import { AdminBookOrderPatchSchema } from '@ayman/contracts/admin/books';
@@ -26,6 +27,7 @@ export class RejectBookOrderDto extends createZodDto(RejectBookOrderSchema) {}
 /** «الفلوس وصلت» — settling an `address_only` order by hand, as money or as a
  *  giveaway. See `MarkBookOrderPaidSchema` for why the two are one body. */
 export class MarkBookOrderPaidDto extends createZodDto(MarkBookOrderPaidSchema) {}
+export class MarkBookOrderReturnedDto extends createZodDto(MarkBookOrderReturnedSchema) {}
 export class DeleteBookOrderDto extends createZodDto(DeleteBookOrderSchema) {}
 /** The Excel export's own query — `status` is required, never defaulted.
  *  See `BookOrdersService.exportXlsx`'s own note on why, and why it is the

@@ -42,6 +42,7 @@ const order = (id: string, createdAt: string): BookOrder =>
     deliveredAt: null,
     rejectedAt: null,
     rejectionReason: null,
+    returnedAt: null,
     courier: null,
     createdAt,
   }) satisfies BookOrder;

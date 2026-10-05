@@ -44,7 +44,9 @@ import type { Prisma } from '../../generated/prisma/client';
  * «إيرادات الكتب» until it shipped — the same «the more carefully he does the
  * paperwork, the less money it reports» bug `delivered` once was.
  */
-export const BOOK_COUNTED_STATUSES = ['paid', 'printing', 'shipped', 'delivered'] as const;
+/* `returned` too: a parcel that came back was still paid for — money leaves
+   only through a `Refund` row. */
+export const BOOK_COUNTED_STATUSES = ['paid', 'printing', 'shipped', 'delivered', 'returned'] as const;
 
 export const BOOK_COUNTED_WHERE = {
   status: { in: [...BOOK_COUNTED_STATUSES] },

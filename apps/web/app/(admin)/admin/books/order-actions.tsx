@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { HandHeart } from 'lucide-react';
 import {
   DeleteBookOrderSchema,
+  MarkBookOrderReturnedSchema,
   RejectBookOrderSchema,
 } from '@ayman/contracts/admin/book-orders';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -15,6 +16,7 @@ import {
   markBookOrderDeliveredAction,
   rejectBookOrderAction,
   markBookOrderFreeAction,
+  markBookOrderReturnedAction,
   restoreBookOrderAction,
 } from './actions';
 import { ReasonDialog } from './reason-dialog';
@@ -107,6 +109,40 @@ export function RejectOrderAction({
       schema={RejectBookOrderSchema}
       onSubmit={async (reason) => {
         const result = await rejectBookOrderAction(id, reason);
+        if (result.ok) refreshUnshippedCount();
+        return result;
+      }}
+    />
+  );
+}
+
+/** «رجعت (مرتجع)» — opened from the card's «المزيد». The reason may be empty. */
+export function ReturnOrderAction({
+  id,
+  open,
+  onOpenChange,
+}: {
+  id: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const refreshUnshippedCount = useRefreshBookOrdersUnshippedCount();
+
+  return (
+    <ReasonDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      triggerLabel={c.markReturned}
+      title={c.returnDialogTitle}
+      hint={c.returnDialogHint}
+      reasonLabel={c.returnReasonLabel}
+      placeholder={c.returnReasonPlaceholder}
+      submitLabel={c.returnSubmit}
+      submittingLabel={c.returnSubmitting}
+      failedMessage={c.returnFailed}
+      schema={MarkBookOrderReturnedSchema}
+      onSubmit={async (reason) => {
+        const result = await markBookOrderReturnedAction(id, reason);
         if (result.ok) refreshUnshippedCount();
         return result;
       }}

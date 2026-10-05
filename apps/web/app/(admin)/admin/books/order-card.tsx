@@ -79,7 +79,7 @@ const c = copy.admin.books;
 /**
  * The tabs a batch can still move a row along from — the checkbox shows there.
  */
-const BATCHABLE_STATUS: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing', 'shipped']);
+const BATCHABLE_STATUS: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing', 'shipped', 'returned']);
 
 /**
  * Each state's colour, as a CSS value the card paints the stripe and the pill
@@ -98,6 +98,7 @@ const STATUS_TONE: Record<BookOrderStatus, string> = {
   printing: 'oklch(0.55 0.16 300)',
   shipped: 'var(--e-ink)',
   delivered: 'var(--ok)',
+  returned: 'oklch(0.62 0.17 45)',
   rejected: 'var(--err)',
 };
 
@@ -107,6 +108,7 @@ const STATUS_LABEL: Record<BookOrderStatus, string> = {
   printing: c.statusPrinting,
   shipped: c.statusShipped,
   delivered: c.statusDelivered,
+  returned: c.statusReturned,
   rejected: c.statusRejected,
 };
 
@@ -401,6 +403,22 @@ export function BookOrderCard({
             {row.rejectionReason}
           </p>
         ) : null}
+        {/* «مرتجع» — why it came back, in the courier's words or the admin's:
+            the first thing to say on the phone call this row is waiting for. */}
+        {row.status === 'returned' ? (
+          <p
+            className="rounded-lg border px-3 py-2 text-[length:var(--fs-text-sm)] text-fg"
+            style={{
+              borderColor: 'color-mix(in oklch, oklch(0.62 0.17 45), transparent 60%)',
+              background: 'color-mix(in oklch, oklch(0.62 0.17 45), transparent 92%)',
+            }}
+          >
+            <span className="font-medium" style={{ color: 'oklch(0.55 0.17 45)' }}>
+              {c.returnReasonShown}:{' '}
+            </span>
+            {row.returnReason ?? '—'}
+          </p>
+        ) : null}
         {row.deletionReason ? (
           <p className="rounded-lg border border-line-subtle bg-surface-3 px-3 py-2 text-[length:var(--fs-text-sm)] text-fg-muted">
             <span className="font-medium text-fg">{c.removedReasonLabel}: </span>
@@ -430,7 +448,7 @@ export function BookOrderCard({
                   <MarkOrderPaidDialog id={row.id} amountCents={row.amountCents} />
                 ) : row.status === 'paid' ? (
                   <PrintAction id={row.id} />
-                ) : row.status === 'printing' ? (
+                ) : row.status === 'printing' || row.status === 'returned' ? (
                   /* «لما المطبعة تخلص ببعت لشركة الشحن» — that one press also
                      records «اتشحن». Without the integration, plain «اتشحن». */
                   <SendToCourierAction id={row.id} fallback={<ShipAction id={row.id} />} />

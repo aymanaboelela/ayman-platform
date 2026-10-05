@@ -14,6 +14,8 @@ import {
   type MarkBookOrderPaidInput,
   MarkBookOrderPrintingResultSchema,
   MarkBookOrderShippedResultSchema,
+  MarkBookOrderReturnedResultSchema,
+  MarkBookOrderReturnedSchema,
   RejectBookOrderResultSchema,
   RejectBookOrderSchema,
   RestoreBookOrderResultSchema,
@@ -397,6 +399,24 @@ export async function markBookOrderDeliveredAction(id: string): Promise<ActionRe
           ? error.message
           : 'unknown';
     return { ok: false, message };
+  }
+}
+
+/** «رجعت (مرتجع)» — the reason is optional; see `MarkBookOrderReturnedSchema`. */
+export async function markBookOrderReturnedAction(id: string, reason: string): Promise<ActionResult> {
+  const parsed = MarkBookOrderReturnedSchema.safeParse({ reason: reason.trim() || null });
+  if (!parsed.success) return { ok: false, message: copy.admin.books.returnFailed };
+  try {
+    await adminSend(
+      'POST',
+      `/api/admin/book-orders/${encodeURIComponent(id)}/return`,
+      parsed.data,
+      MarkBookOrderReturnedResultSchema,
+    );
+    revalidatePath('/admin/books');
+    return { ok: true };
+  } catch {
+    return { ok: false, message: copy.admin.books.returnFailed };
   }
 }
 

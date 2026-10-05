@@ -1769,6 +1769,32 @@ describe('BookOrdersService', () => {
         expect(skipped?.fullName).not.toBe('');
       });
 
+      it('«مرتجع»: only a shipped parcel comes back, and it can go out again', async () => {
+        /* The thread message goes through `OutreachService`, which this suite
+           does not build — stubbed to record what was said. */
+        const said: string[] = [];
+        (service as unknown as { outreach: unknown }).outreach = {
+          sendManual: async (_tx: unknown, input: { body: string }) => {
+            said.push(input.body);
+            return { conversationId: '', messageId: '' };
+          },
+        };
+        const order = await paidOrder();
+        await expect(service.markReturned(adminId, order.id, null)).rejects.toBeInstanceOf(BadRequestException);
+
+        await service.markShipped(adminId, order.id);
+        const returned = await service.markReturned(adminId, order.id, 'الرقم مقفول');
+        expect(returned.status).toBe('returned');
+        const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+        expect(row).toMatchObject({ returnReason: 'الرقم مقفول', returnedByUserId: adminId, courierSentAt: null });
+        expect(said[0]).toContain('الرقم مقفول');
+
+        // Out again — and the return stamp stays, like every stamp before it.
+        expect((await service.markShipped(adminId, order.id)).status).toBe('shipped');
+        const after = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+        expect(after.returnedAt).not.toBeNull();
+      });
+
       /* ⚠️ No bulk-SHIP case here, deliberately. `markShippedMany` posts the
          student's notice through `OutreachService`, which this suite does not
          build — see the service construction at the top. That a `printing` row
