@@ -11,6 +11,7 @@ import {
   CreateExternalBookDto,
   CreateExternalBookLessonDto,
   CreateExternalBookUnitDto,
+  MoveExternalBookLessonDto,
   RenameExternalBookCategoryDto,
   UpdateExternalBookDto,
 } from './dto/external-books.dto';
@@ -68,6 +69,11 @@ export class AdminExternalBooksController {
     @Body() body: AdoptExternalBookLessonDto,
   ) {
     return this.books.adoptLesson(bookId, unitId, body.categoryId);
+  }
+
+  @Patch('categories/:categoryId/move')
+  moveLesson(@Param('categoryId') categoryId: string, @Body() body: MoveExternalBookLessonDto) {
+    return this.books.moveLesson(categoryId, body.unitId);
   }
 
   @Patch('categories/:categoryId')
