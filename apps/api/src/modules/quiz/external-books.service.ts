@@ -312,6 +312,38 @@ export class ExternalBooksService {
     return lesson;
   }
 
+  /**
+   * درس كتاب (تصنيف تحت وحدة) بينتقل لآخر وحدة تانية — في نفس الكتاب أو كتاب
+   * تاني — بأسئلته زي ما هي. الدرس اللي اتحذف من المقرر بيطلع كده من كتاب
+   * مربوط بكورس لكتاب مش مربوط، فترتيب الربط مايعدّوش.
+   */
+  async moveLesson(categoryId: string, unitId: string): Promise<{ id: string; name: string }> {
+    const lesson = await this.prisma.questionCategory.findFirst({
+      where: { id: categoryId, parent: { parent: { externalBookId: { not: null } } } },
+      select: { id: true, parent: { select: { parent: { select: { externalBookId: true } } } } },
+    });
+    const unit = await this.prisma.questionCategory.findFirst({
+      where: { id: unitId, parent: { externalBookId: { not: null } } },
+      select: { id: true, parent: { select: { externalBookId: true } } },
+    });
+    if (!lesson || !unit) throw new NotFoundException();
+
+    const count = await this.prisma.questionCategory.count({ where: { parentId: unitId } });
+    const moved = await this.prisma.questionCategory.update({
+      where: { id: categoryId },
+      data: { parentId: unitId, sortOrder: count },
+      select: { id: true, name: true },
+    });
+    await this.audit.record({
+      action: 'external-book:move-lesson',
+      resourceType: AUDIT_RESOURCES.externalBook,
+      resourceId: unit.parent!.externalBookId!,
+      outcome: 'success',
+      metadata: { lessonId: categoryId, unitId, fromBookId: lesson.parent!.parent!.externalBookId },
+    });
+    return moved;
+  }
+
   /** إعادة تسمية وحدة أو درس — مش تصنيف جذر كتاب (ده بيتغيّر مع `update`). */
   async renameCategory(categoryId: string, name: string): Promise<{ id: string; name: string }> {
     const category = await this.prisma.questionCategory.findUnique({

@@ -104,4 +104,10 @@ export const CreateExternalBookUnitSchema = z.object({ name: z.string().trim().m
 export const CreateExternalBookLessonSchema = z.object({ name: z.string().trim().min(1).max(200) }).strict();
 /** تصنيف موجود في البنك بيتنقل درس جوه وحدة — `POST …/units/:unitId/adopt`. */
 export const AdoptExternalBookLessonSchema = z.object({ categoryId: z.uuid() }).strict();
+/**
+ * درس كتاب بيتنقل لوحدة تانية (في نفس الكتاب أو كتاب تاني) — `PATCH …/categories/:id/move`.
+ * أهم استخدام: درس اتحذف من المقرر يطلع من كتاب مربوط بكورس، عشان ترتيب
+ * الربط (`book-lesson-links.ts`) مايعدّوش.
+ */
+export const MoveExternalBookLessonSchema = z.object({ unitId: z.uuid() }).strict();
 export const RenameExternalBookCategorySchema = z.object({ name: z.string().trim().min(1).max(200) }).strict();

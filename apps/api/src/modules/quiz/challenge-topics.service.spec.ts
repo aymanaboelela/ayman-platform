@@ -11,6 +11,7 @@ import type { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
 import { EnrollmentService } from '../enrollment/enrollment.service';
 import { ChallengeTopicsService } from './challenge-topics.service';
+import { ExternalBooksService } from './external-books.service';
 import { GameService } from './game.service';
 import { QuestionBankService } from './question-bank.service';
 import { seedQuizFixture, type QuizFixture } from './testing/quiz-fixtures';
@@ -367,6 +368,41 @@ describe('challenge topics', () => {
     expect(onC.topics.find((topic) => topic.title === 'ج')!.ready.total).toBe(1);
     expect((await start('ج')).questions.map((q) => q.id)).toEqual([third!.versionId]);
     expect(onA.topics).toHaveLength(1);
+  });
+
+  it('a lesson moved out of the linked book stops counting, and the next one takes its lecture', async () => {
+    fixture = await seedQuizFixture(prisma, {});
+    const books = new ExternalBooksService(prisma, audit);
+    const lectureA = await lecture('الدرس الاول');
+    const lectureB = await lecture('الدرس الثاني');
+
+    const linked = await books.create('كتاب المقرر', fixture.courseId);
+    const shelf = await books.create('دروس محذوفة', null);
+    cleanups.push(async () => {
+      const roots = await prisma.questionCategory.findMany({ where: { externalBookId: { in: [linked.id, shelf.id] } }, select: { id: true } });
+      const units = await prisma.questionCategory.findMany({ where: { parentId: { in: roots.map((root) => root.id) } }, select: { id: true } });
+      const lessons = await prisma.questionCategory.findMany({ where: { parentId: { in: units.map((unit) => unit.id) } }, select: { id: true } });
+      await prisma.questionBankEntry.deleteMany({ where: { categoryId: { in: lessons.map((lesson) => lesson.id) } } });
+      for (const level of [lessons, units, roots]) await prisma.questionCategory.deleteMany({ where: { id: { in: level.map((row) => row.id) } } });
+      await prisma.externalBook.deleteMany({ where: { id: { in: [linked.id, shelf.id] } } });
+    });
+    const unit = await books.createUnit(linked.id, 'الوحدة ١');
+    const deleted = await books.createLesson(linked.id, unit.id, 'درس اتحذف');
+    const kept = await books.createLesson(linked.id, unit.id, 'درس في المقرر');
+    const shelfUnit = await books.createUnit(shelf.id, 'محذوف');
+    await question(deleted.id, { stem: 'من درس محذوف' });
+    const keptQuestion = await question(kept.id);
+
+    const onA = () => topics.create(fixture.courseId, { title: `أ-${Math.random()}`, sectionIds: [], lessonIds: [lectureA], isActive: true });
+    expect((await onA()).topics.at(-1)!.ready.total).toBe(1);
+
+    await books.moveLesson(deleted.id, shelfUnit.id);
+    const detail = await books.detail(linked.id);
+    expect(detail.units[0]!.lessons.map((lesson) => [lesson.name, lesson.linkedLesson?.id])).toEqual([['درس في المقرر', lectureA]]);
+    const pool = await prisma.questionBankEntry.findMany({ where: { categoryId: kept.id }, select: { id: true } });
+    expect(pool.map((entry) => entry.id)).toEqual([keptQuestion.bankEntryId]);
+    expect(lectureB).toBeTruthy();
+    await expect(books.moveLesson(unit.id, shelfUnit.id)).rejects.toThrow();
   });
 
   it('refuses the foundation course and a topic with nothing in it', async () => {
