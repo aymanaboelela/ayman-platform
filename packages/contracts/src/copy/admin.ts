@@ -4533,6 +4533,20 @@ const admin = {
      *  `BookOrder.addressBuilding` model doc for why it's optional. */
     addressLineBuilding: '، عمارة {building}',
     altPhoneLabel: 'موبايل تاني',
+    /*
+     * The tab-wide buttons at the top — «ابعت الكل» instead of selecting. They
+     * act on every order of the tab under the filters on screen (not just
+     * this page), and a held order is skipped like everywhere else. `{n}`
+     */
+    allToPrinter: 'ابعت الكل للمطبعة ({n})',
+    allToCourier: 'ابعت الكل لشركة الشحن ({n})',
+    allShip: 'اتشحن الكل ({n})',
+    allWorking: 'بيتبعت…',
+    allEmpty: 'مفيش طلبات في التبويب ده تتبعت',
+    /** The card's date — the day it was PAID (`bookOrderDate`). `{date}` */
+    paidOn: 'اتدفع {date}',
+    /** On a row that never paid, the only date it has. `{date}` */
+    startedOn: 'اتسجّل {date}',
     senderPhoneLabel: 'حوّل من',
     /*
      * ── التاريخ على الكارت: يوم الدفع، مش يوم ما الفورم اتملا ──────────
@@ -4954,7 +4968,8 @@ const admin = {
       phone: 'الموبايل',
       altPhone: 'موبايل تاني',
       address: 'العنوان',
-      createdAt: 'تاريخ الطلب',
+      /** The day it was PAID — see `bookOrderDate`. */
+      orderDate: 'تاريخ الدفع',
       /** خانة فاضية الشغّال يعلّم فيها بالقلم لما يحطّ الطرد في الكرتونة —
        *  لستة من أربعين من غير علامة هي لستة بتتعاد من الأول. */
       tick: 'اتشحن',

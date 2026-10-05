@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { copy } from '@ayman/contracts';
-import type { BookOrder } from '@ayman/contracts/book-orders';
+import { bookOrderDate, type BookOrder } from '@ayman/contracts/book-orders';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
 import { StreamBadge } from '@/components/stream-badge';
@@ -157,10 +157,10 @@ export function BookOrderCard({
         </span>
 
         <time
-          dateTime={order.createdAt}
+          dateTime={bookOrderDate(order)}
           className="mono text-[length:var(--fs-mono-label)] text-fg-faint"
         >
-          {formatCopy(c.placedOn, { date: formatBookOrderDate(order.createdAt) })}
+          {formatCopy(c.placedOn, { date: formatBookOrderDate(bookOrderDate(order)) })}
         </time>
       </div>
 
