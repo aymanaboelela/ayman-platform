@@ -23,7 +23,7 @@ export async function createBookAction(title: string): Promise<BookResult> {
 
 export async function updateBookAction(
   bookId: string,
-  patch: { title?: string; archived?: boolean },
+  patch: { title?: string; archived?: boolean; courseId?: string | null },
 ): Promise<BookResult> {
   try {
     const book = await adminSend(

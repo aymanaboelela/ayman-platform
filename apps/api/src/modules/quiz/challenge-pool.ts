@@ -1,6 +1,7 @@
 import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import { Prisma } from '../../generated/prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { loadBookLessonLinks } from './book-lesson-links';
 
 /**
  * «التحديات» — بنك الكورس كله، سؤال سؤال، كل واحد على درس واحد. بيور على
@@ -12,7 +13,10 @@ import type { PrismaService } from '../../prisma/prisma.service';
  *
  *   1. ربط مباشر — `question_bank_entries.lesson_id` (لصق أسئلة بـ`LESSON:`).
  *   2. «أسئلة الألعاب» بتاعة الدرس — تصنيف `game_lesson_id`.
- *   3. كويزات الكورس المنشورة (الكويز ودرسه منشورين): slot مباشر أو تصنيف
+ *   3. كتاب خارجي مربوط بالكورس — درس الكتاب رقم N على محاضرة الكورس رقم N
+ *      (`book-lesson-links.ts`). بيتحسب هنا مش بيتخزّن، فمحاضرة جديدة بتلاقي
+ *      أسئلتها لوحدها.
+ *   4. كويزات الكورس المنشورة (الكويز ودرسه منشورين): slot مباشر أو تصنيف
  *      بيسحب منه pool الكويز. **سواء الطالب امتحنه ولا لأ** — ده الفرق عن
  *      `GameService.pool`، وده اللي أيمن طلبه.
  *
@@ -63,6 +67,7 @@ export async function challengeCandidates(
 ): Promise<ChallengeCandidate[]> {
   if (courseIds.length === 0) return [];
   const ids = [...courseIds];
+  const book = await loadBookLessonLinks(prisma, ids);
   const rows = await prisma.$queryRaw<CandidateRow[]>(Prisma.sql`
     WITH quiz_home AS (
       SELECT qz."id" AS quiz_id, l."course_id", COALESCE(lec."id", l."id") AS lesson_id
@@ -88,12 +93,17 @@ export async function challengeCandidates(
       JOIN "app"."question_bank_entries" be ON be."category_id" = qc."id"
       WHERE l."course_id" = ANY(${ids}::uuid[])
       UNION ALL
-      SELECT s."bank_entry_id", qh."course_id", qh.lesson_id, 2
+      SELECT be."id", x.course_id, x.lesson_id, 2
+      FROM unnest(${book.map((link) => link.categoryId)}::uuid[], ${book.map((link) => link.courseId)}::uuid[],
+                  ${book.map((link) => link.lessonId)}::uuid[]) AS x(category_id, course_id, lesson_id)
+      JOIN "app"."question_bank_entries" be ON be."category_id" = x.category_id
+      UNION ALL
+      SELECT s."bank_entry_id", qh."course_id", qh.lesson_id, 3
       FROM "app"."quiz_slots" s
       JOIN quiz_home qh ON qh.quiz_id = s."quiz_id"
       WHERE s."bank_entry_id" IS NOT NULL
       UNION ALL
-      SELECT be."id", qh."course_id", qh.lesson_id, 3
+      SELECT be."id", qh."course_id", qh.lesson_id, 4
       FROM "app"."quiz_slots" s
       JOIN quiz_home qh ON qh.quiz_id = s."quiz_id"
       JOIN "app"."quiz_pools" p ON p."id" = s."pool_id"

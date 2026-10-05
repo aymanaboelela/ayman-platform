@@ -7,6 +7,7 @@ import type {
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
 import { AUDIT_RESOURCES } from '../admin/admin.constants';
+import { loadBookLessonLinks } from './book-lesson-links';
 
 /** أسئلة جاهزة (نسخة منشورة واحدة على الأقل) — نفس تعريف `game-banks.service.ts`. */
 const READY_ENTRIES = {
@@ -33,6 +34,7 @@ export class ExternalBooksService {
         title: true,
         coverKey: true,
         archivedAt: true,
+        courseId: true,
         rootCategory: {
           select: {
             id: true,
@@ -68,9 +70,16 @@ export class ExternalBooksService {
     return this.row(book.id);
   }
 
-  async update(bookId: string, patch: { title?: string; archived?: boolean }): Promise<ExternalBookRow> {
+  async update(
+    bookId: string,
+    patch: { title?: string; archived?: boolean; courseId?: string | null },
+  ): Promise<ExternalBookRow> {
     const book = await this.prisma.externalBook.findUnique({ where: { id: bookId }, select: { id: true, title: true } });
     if (!book) throw new NotFoundException();
+    if (patch.courseId) {
+      const course = await this.prisma.course.findUnique({ where: { id: patch.courseId }, select: { id: true } });
+      if (!course) throw new NotFoundException();
+    }
 
     const nextTitle = patch.title?.trim();
     await this.prisma.$transaction(async (tx) => {
@@ -79,6 +88,7 @@ export class ExternalBooksService {
         data: {
           title: nextTitle,
           archivedAt: patch.archived === undefined ? undefined : patch.archived ? new Date() : null,
+          courseId: patch.courseId,
         },
       });
       // اسم تصنيف الجذر بيتبع اسم الكتاب — نفس اللي «أسئلة الألعاب» بتعمله
@@ -110,6 +120,7 @@ export class ExternalBooksService {
         title: true,
         coverKey: true,
         archivedAt: true,
+        courseId: true,
         rootCategory: {
           select: {
             id: true,
@@ -133,11 +144,31 @@ export class ExternalBooksService {
     });
     if (!book || !book.rootCategory) throw new NotFoundException();
 
+    // نفس الربط اللي التحديات بتشوفه بالظبط — الشاشة بتقول «الدرس ده بيغذّي
+    // المحاضرة دي» عشان لو الترتيب اتزق (فيديو زيادة وسط الوحدة) يبان هنا
+    // قبل ما طالب يتسأل في درس غير اللي اختاره.
+    const [links, courses] = await Promise.all([
+      book.courseId && book.archivedAt === null ? loadBookLessonLinks(this.prisma, [book.courseId]) : [],
+      this.prisma.course.findMany({ orderBy: { createdAt: 'asc' }, select: { id: true, title: true } }),
+    ]);
+    const lessonIds = [...new Set(links.map((link) => link.lessonId))];
+    const titles = new Map(
+      (await this.prisma.lesson.findMany({ where: { id: { in: lessonIds } }, select: { id: true, title: true } })).map(
+        (lesson) => [lesson.id, lesson.title.trim()],
+      ),
+    );
+    const linkedLesson = (categoryId: string) => {
+      const link = links.find((candidate) => candidate.categoryId === categoryId);
+      return link ? { id: link.lessonId, title: titles.get(link.lessonId) ?? '' } : null;
+    };
+
     return {
       id: book.id,
       title: book.title,
       coverKey: book.coverKey,
       archived: book.archivedAt !== null,
+      courseId: book.courseId,
+      courses,
       categoryId: book.rootCategory.id,
       ready: book.rootCategory._count.entries,
       units: book.rootCategory.children.map((unit) => ({
@@ -150,6 +181,7 @@ export class ExternalBooksService {
           name: lesson.name,
           categoryId: lesson.id,
           ready: lesson._count.entries,
+          linkedLesson: linkedLesson(lesson.id),
         })),
       })),
     };
@@ -212,6 +244,54 @@ export class ExternalBooksService {
     return lesson;
   }
 
+  /**
+   * تصنيف موجود في البنك بيبقى درس في الوحدة دي — بأسئلته زي ما هي، من غير
+   * لصق تاني. بس تصنيف عادي: مش جوه شجرة تانية، ومش «أسئلة ألعاب»، ومالوش
+   * تصنيفات تحته — عشان النقل مايشيلش أسئلة من مكان حد معتمد عليه.
+   */
+  async adoptLesson(bookId: string, unitId: string, categoryId: string): Promise<{ id: string; name: string }> {
+    const unit = await this.prisma.questionCategory.findFirst({
+      where: { id: unitId, parent: { externalBookId: bookId } },
+      select: { id: true },
+    });
+    if (!unit) throw new NotFoundException();
+    const category = await this.prisma.questionCategory.findUnique({
+      where: { id: categoryId },
+      select: {
+        parentId: true,
+        gameCourseId: true,
+        gameLessonId: true,
+        externalBookId: true,
+        _count: { select: { children: true } },
+      },
+    });
+    if (!category) throw new NotFoundException();
+    if (
+      category.parentId !== null ||
+      category.gameCourseId !== null ||
+      category.gameLessonId !== null ||
+      category.externalBookId !== null ||
+      category._count.children > 0
+    ) {
+      throw new BadRequestException('category is not a plain top-level category');
+    }
+
+    const count = await this.prisma.questionCategory.count({ where: { parentId: unitId } });
+    const lesson = await this.prisma.questionCategory.update({
+      where: { id: categoryId },
+      data: { parentId: unitId, sortOrder: count },
+      select: { id: true, name: true },
+    });
+    await this.audit.record({
+      action: 'external-book:adopt-lesson',
+      resourceType: AUDIT_RESOURCES.externalBook,
+      resourceId: bookId,
+      outcome: 'success',
+      metadata: { unitId, lessonId: lesson.id },
+    });
+    return lesson;
+  }
+
   /** إعادة تسمية وحدة أو درس — مش تصنيف جذر كتاب (ده بيتغيّر مع `update`). */
   async renameCategory(categoryId: string, name: string): Promise<{ id: string; name: string }> {
     const category = await this.prisma.questionCategory.findUnique({
@@ -256,6 +336,7 @@ function toRow(book: {
   title: string;
   coverKey: string | null;
   archivedAt: Date | null;
+  courseId: string | null;
   rootCategory: {
     id: string;
     _count: { entries: number };
@@ -270,6 +351,7 @@ function toRow(book: {
     title: book.title,
     coverKey: book.coverKey,
     archived: book.archivedAt !== null,
+    courseId: book.courseId,
     categoryId: root?.id ?? '',
     ready: (root?._count.entries ?? 0) + unitReady + lessonReady,
     units: root?.children.length ?? 0,

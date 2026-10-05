@@ -19,6 +19,12 @@ export const ExternalBookLessonSchema = z.object({
   name: z.string(),
   categoryId: z.string(),
   ready: z.number().int(),
+  /**
+   * محاضرة الكورس اللي الدرس ده بيغذّي تحدياتها — بالترتيب، مش بالاسم
+   * (`apps/api/src/modules/quiz/book-lesson-links.ts`). NULL = الكتاب مش
+   * مربوط بكورس، أو الكورس لسه ماوصلش للدرس ده.
+   */
+  linkedLesson: z.object({ id: z.string(), title: z.string() }).nullable(),
 });
 export type ExternalBookLesson = z.infer<typeof ExternalBookLessonSchema>;
 
@@ -36,6 +42,8 @@ export const ExternalBookRowSchema = z.object({
   title: z.string(),
   coverKey: z.string().nullable(),
   archived: z.boolean(),
+  /** «التحديات» — الكورس اللي دروس الكتاب بتتربط بمحاضراته بالترتيب. */
+  courseId: z.string().nullable(),
   categoryId: z.string(),
   /** مجموع أسئلة الكتاب نفسه + كل وحداته + كل دروسه. */
   ready: z.number().int(),
@@ -51,6 +59,9 @@ export const ExternalBookDetailSchema = z.object({
   title: z.string(),
   coverKey: z.string().nullable(),
   archived: z.boolean(),
+  courseId: z.string().nullable(),
+  /** الكورسات اللي ينفع الكتاب يتربط بيها — لاختيار الكورس في الشاشة. */
+  courses: z.array(z.object({ id: z.string(), title: z.string() })),
   categoryId: z.string(),
   /** أسئلة الكتاب نفسه — «المنهج كله»، مش جوه أي وحدة. */
   ready: z.number().int(),
@@ -60,9 +71,16 @@ export type ExternalBookDetail = z.infer<typeof ExternalBookDetailSchema>;
 
 export const CreateExternalBookSchema = z.object({ title: z.string().trim().min(1).max(200) }).strict();
 export const UpdateExternalBookSchema = z
-  .object({ title: z.string().trim().min(1).max(200).optional(), archived: z.boolean().optional() })
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    archived: z.boolean().optional(),
+    /** NULL = فك الربط. */
+    courseId: z.uuid().nullable().optional(),
+  })
   .strict();
 
 export const CreateExternalBookUnitSchema = z.object({ name: z.string().trim().min(1).max(200) }).strict();
 export const CreateExternalBookLessonSchema = z.object({ name: z.string().trim().min(1).max(200) }).strict();
+/** تصنيف موجود في البنك بيتنقل درس جوه وحدة — `POST …/units/:unitId/adopt`. */
+export const AdoptExternalBookLessonSchema = z.object({ categoryId: z.uuid() }).strict();
 export const RenameExternalBookCategorySchema = z.object({ name: z.string().trim().min(1).max(200) }).strict();

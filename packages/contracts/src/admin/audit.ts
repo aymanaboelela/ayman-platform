@@ -92,6 +92,7 @@ export const AUDIT_ACTIONS = [
   'external-book:update',
   'external-book:create-unit',
   'external-book:create-lesson',
+  'external-book:adopt-lesson',
   // امتحانات نص/آخر الشهر. Their own actions rather than `quiz:*`, because the
   // question an audit of one answers is «الامتحان اتفتح إمتى وعلى إيه» — the
   // window and the syllabus — and folding them into quiz edits would bury that

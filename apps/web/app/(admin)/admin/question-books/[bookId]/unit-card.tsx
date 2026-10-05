@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Layers, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, Layers, Link2, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
@@ -148,7 +148,8 @@ function AddLessonForm({ bookId, unitId }: { bookId: string; unitId: string }) {
   );
 }
 
-export function UnitCard({ bookId, unit }: { bookId: string; unit: ExternalBookUnit }) {
+/** `linked` — الكتاب مربوط بكورس، فكل درس بيقول بياخد أسئلته أنهي محاضرة. */
+export function UnitCard({ bookId, unit, linked }: { bookId: string; unit: ExternalBookUnit; linked: boolean }) {
   return (
     <div className="rounded-lg border border-line bg-surface-2 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -176,6 +177,24 @@ export function UnitCard({ bookId, unit }: { bookId: string; unit: ExternalBookU
                 <span className="shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
                   {lesson.ready > 0 ? formatCopy(c.ready, { n: lesson.ready }) : c.none}
                 </span>
+                {linked ? (
+                  <span
+                    className={
+                      lesson.linkedLesson
+                        ? 'inline-flex min-w-0 items-center gap-1 rounded-full bg-surface-3 px-2 py-0.5 text-[length:var(--fs-text-xs)] text-ok'
+                        : 'shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted'
+                    }
+                  >
+                    {lesson.linkedLesson ? (
+                      <>
+                        <Link2 className="size-3 shrink-0" aria-hidden="true" />
+                        <span className="truncate">{formatCopy(c.linkedTo, { title: lesson.linkedLesson.title })}</span>
+                      </>
+                    ) : (
+                      c.notLinkedYet
+                    )}
+                  </span>
+                ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <CategoryActions categoryId={lesson.categoryId} name={lesson.name} ready={lesson.ready} />
