@@ -23,11 +23,13 @@ const c = copy.books.mine;
  * wording pass while proving nothing about the mapping.
  */
 describe('describeBookOrderStatus', () => {
-  it('pairs each of the six statuses with its own chip and its own note', () => {
+  it('pairs each of the eight statuses with its own chip and its own note', () => {
     const cases: Record<BookOrderStatus, { label: string; note: string }> = {
       address_only: { label: c.statusAddressOnly, note: c.noteAddressOnly },
       paid: { label: c.statusPaid, note: c.notePaid },
       printing: { label: c.statusPrinting, note: c.notePrinting },
+      ready: { label: c.statusReady, note: c.noteReady },
+      courier: { label: c.statusCourier, note: c.noteCourier },
       shipped: { label: c.statusShipped, note: c.noteShipped },
       delivered: { label: c.statusDelivered, note: c.noteDelivered },
       rejected: { label: c.statusRejected, note: c.noteRejected },

@@ -84,6 +84,9 @@ import { FinanceDailyService } from '../modules/payments/finance-daily.service';
 import { BookOrdersController } from '../modules/book-orders/book-orders.controller';
 import { AdminBookOrdersController } from '../modules/book-orders/admin-book-orders.controller';
 import { BookOrdersService } from '../modules/book-orders/book-orders.service';
+import { BookOrderCourierService } from '../modules/book-orders/courier/book-order-courier.service';
+import { TorodClient } from '../modules/book-orders/courier/torod.client';
+import { TorodWebhookController } from '../modules/book-orders/courier/torod-webhook.controller';
 import { BooksController } from '../modules/books/books.controller';
 import { AdminBooksController } from '../modules/books/admin-books.controller';
 import { ExpensesController } from '../modules/expenses/expenses.controller';
@@ -255,6 +258,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // `PaymentsController`'s own comment.
         BookOrdersController,
         AdminBookOrdersController,
+        // «شركة الشحن» — the courier's webhook. A `KNOWN_GAPS` entry, not a
+        // matrix row: its actor is their server, holding the path token.
+        TorodWebhookController,
         // «قسم الكتب» — the catalogue. Same by-class registration and the same
         // reason: its `BooksService` dependencies (Prisma, `AuditService`,
         // `SettingsService`) are already available from `AuditModule` and
@@ -406,6 +412,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // «الفلوس يوم بيوم» — `AdminFinanceController`'s second dependency.
         FinanceDailyService,
         BookOrdersService,
+        BookOrderCourierService,
+        TorodClient,
         BooksService,
         // `AdminBroadcastController`'s dependency. Listed for the reason the
         // block above gives: a provider a registered controller needs and
@@ -2462,6 +2470,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin book orders print many: anonymous', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'anonymous', status: 401 },
     { label: 'admin book orders print many: student', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'student', status: 403 },
     { label: 'admin book orders print many: admin', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
+    // «خلصت الطباعة وجاهز» and «ابعت لشركة الشحن» — the next two steps of the
+    // same desk, on the same `book-order:ship`. The courier push has no admin
+    // 201 row: with no Torod account in CI it answers 400 «مش متظبط», which
+    // proves nothing about who may reach it.
+    { label: 'admin book orders ready many: anonymous', method: 'post', path: () => '/api/admin/book-orders/ready', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders ready many: student', method: 'post', path: () => '/api/admin/book-orders/ready', actor: 'student', status: 403 },
+    { label: 'admin book orders ready many: admin', method: 'post', path: () => '/api/admin/book-orders/ready', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
+    { label: 'admin book orders courier many: anonymous', method: 'post', path: () => '/api/admin/book-orders/courier', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders courier many: student', method: 'post', path: () => '/api/admin/book-orders/courier', actor: 'student', status: 403 },
+    { label: 'admin book orders courier events: anonymous', method: 'get', path: () => `/api/admin/book-orders/${randomUUID()}/courier-events`, actor: 'anonymous', status: 401 },
+    { label: 'admin book orders courier events: student', method: 'get', path: () => `/api/admin/book-orders/${randomUUID()}/courier-events`, actor: 'student', status: 403 },
     // رفع الحجز بالجملة — same `book-order:ship` authority as the per-row
     // `:id/review-ok` above. The admin case's id belongs to no order, so a 201
     // proves the route is REACHED; the body reports that row as `skipped`.
@@ -2793,6 +2812,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // `transfers-ingest.controller.spec.ts`; the admin-authenticated twin of
       // this ingest (`POST /api/admin/transfers/ingest`) IS covered above.
       'POST /api/ingest/transfers',
+      // «شركة الشحن» — Torod's status webhook, holding `TOROD_WEBHOOK_TOKEN`
+      // in its path. Same shape as the InstaPay ingest above: the actor is a
+      // server, not a browser, so none of anonymous/student/admin is the
+      // question. The webhook's effects are pinned in
+      // `book-order-courier.service.spec.ts`.
+      'POST /api/webhooks/torod/:token',
       // Same multipart problem, same reasoning — the book-order proof
       // upload. The plain-JSON routes around it (create, payment, mine, and
       // the whole admin surface) ARE covered above.
@@ -3009,6 +3034,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
            * through, which is also what makes the feature ship dormant.
            */
           'POST /api/ingest/transfers',
+          /*
+           * «شركة الشحن» — the courier's webhook. Public for the reason the
+           * InstaPay ingest is: their server has no session. Its gate is the
+           * token in the path, compared in full before the body is read, and
+           * an unset `TOROD_WEBHOOK_TOKEN` refuses everything.
+           */
+          'POST /api/webhooks/torod/:token',
           /*
            * الكتاب الورقي — guest checkout. Per Ayman: ordering the physical
            * textbook is "a different service" from the platform's login-

@@ -127,6 +127,14 @@ export function describeBookOrderStatus(status: BookOrderStatus): BookOrderStatu
     case 'printing':
       return { label: c.statusPrinting, note: c.notePrinting, tone: 'var(--info)', closed: false };
 
+    /* Still «ours» and still blue, for the reason `printing` gives: the student
+       does nothing differently. The words change because the question they
+       are asking — «لسه فاضل كتير؟» — has a better answer now. */
+    case 'ready':
+      return { label: c.statusReady, note: c.noteReady, tone: 'var(--info)', closed: false };
+    case 'courier':
+      return { label: c.statusCourier, note: c.noteCourier, tone: 'var(--info)', closed: false };
+
     /* Ember rather than a second blue: `paid` and `shipped` are the two states
        a student checks back on most, and they sit one above the other in a
        history list where telling them apart at a glance is the entire job. */

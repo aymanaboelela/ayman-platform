@@ -59,6 +59,11 @@ export const BookOrderStatusSchema = z.enum([
   'address_only',
   'paid',
   'printing',
+  /** «خلصت الطباعة وجاهز للشحن» — boxed, waiting for the courier. */
+  'ready',
+  /** «اتبعت لشركة الشحن» — in the courier's system, waiting for their agent.
+   *  Turns into `shipped` when THEY report the pickup, not when we press. */
+  'courier',
   'shipped',
   'delivered',
   'rejected',
@@ -226,6 +231,23 @@ const base = {
   /** Set when the admin confirmed the book ARRIVED — not when it was handed to
    *  the courier. `shippedAt` is what the platform did; this is what happened. */
   deliveredAt: z.iso.datetime().nullable(),
+  /**
+   * Where the courier says the parcel is — `null` until their first update.
+   *
+   * The latest status only: the student's question is «فين الكتاب دلوقتي؟»,
+   * and the agent's name and number are what let them pick up the phone that
+   * is about to ring from a number they do not know.
+   */
+  courier: z
+    .object({
+      statusId: z.number().int(),
+      statusName: z.string(),
+      note: z.string().nullable(),
+      agentName: z.string().nullable(),
+      agentPhone: z.string().nullable(),
+      at: z.iso.datetime().nullable(),
+    })
+    .nullable(),
   rejectedAt: z.iso.datetime().nullable(),
   /**
    * Why it was turned down, in the admin's own words, and shown to the student.

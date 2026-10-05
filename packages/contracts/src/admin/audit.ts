@@ -353,6 +353,16 @@ export const AUDIT_ACTIONS = [
   // is also the one book-order transition whose trail is the ONLY record it
   // happened.
   'book-order:printing',
+  // «خلصت الطباعة وجاهز» — the box is back from the printer. Its own row for
+  // the reason `printing` has one: nothing is sent, so the trail is the record.
+  'book-order:ready',
+  // «اتبعت لشركة الشحن» — the data went into the courier's system. Separate
+  // from `ship` because `ship` now means the courier PICKED IT UP, and the gap
+  // between the two is exactly what «المندوب ماجاش» is about.
+  'book-order:courier',
+  // A status the courier's webhook reported. No admin behind it — the actor is
+  // their system, and the metadata carries what it said.
+  'book-order:courier-status',
   'book-order:ship',
   // The rest of the courier leg and the two judgements about an order.
   //

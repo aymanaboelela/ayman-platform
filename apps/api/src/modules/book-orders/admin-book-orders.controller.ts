@@ -27,6 +27,7 @@ import {
   RejectBookOrderDto,
 } from './book-orders.dto';
 import { BookOrdersService } from './book-orders.service';
+import { BookOrderCourierService } from './courier/book-order-courier.service';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
@@ -47,6 +48,7 @@ export class AdminBookOrdersController {
   constructor(
     private readonly bookOrders: BookOrdersService,
     private readonly media: MediaService,
+    private readonly courier: BookOrderCourierService,
   ) {}
 
   @RequirePermission('book-order:read')
@@ -262,6 +264,42 @@ export class AdminBookOrdersController {
   @UsePipes(ZodValidationPipe)
   printMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
     return this.bookOrders.markPrintingMany(user.id, body.ids);
+  }
+
+  /**
+   * «خلصت الطباعة وجاهز» in bulk — the run came back from the printer. Same
+   * desk, same permission as `printing`, and nothing is sent: see
+   * `BookOrdersService.markReady`. Declared before the `:id/…` routes for the
+   * ordering reason above.
+   */
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post('ready')
+  @UsePipes(ZodValidationPipe)
+  readyMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
+    return this.bookOrders.markReadyMany(user.id, body.ids);
+  }
+
+  /**
+   * «ابعت لشركة الشحن» — the selected orders go into Torod's system. Gated on
+   * `books.courier` on top of the class's `books`: a stack without the
+   * integration has no button and no route. See `BookOrderCourierService`.
+   */
+  @RequireFeature('books.courier')
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post('courier')
+  @UsePipes(ZodValidationPipe)
+  courierMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
+    return this.courier.sendMany(user.id, body.ids);
+  }
+
+  /** «فين الكتاب؟» — every status the courier reported for one order. */
+  @RequireFeature('books.courier')
+  @RequirePermission('book-order:read')
+  @Get(':id/courier-events')
+  courierEvents(@Param('id') id: string) {
+    return this.courier.events(id);
   }
 
   @RequirePermission('book-order:ship')

@@ -22,6 +22,7 @@ import { ShipAction } from './ship-action';
 import { HeldBanner } from './held-banner';
 import { PrintAction } from './print-action';
 import { OrderCheckbox } from './bulk-ship';
+import { CourierPanel, ReadyAction, SendToCourierAction } from './courier-actions';
 import { BookOrderScreenshotThumbnail } from './screenshot-thumbnail';
 import { EditBookOrderDialog } from './edit-order-dialog';
 
@@ -90,6 +91,8 @@ const STATUS_TONE: Record<BookOrderStatus, string> = {
   address_only: 'var(--warn)',
   paid: 'var(--info)',
   printing: 'oklch(0.55 0.16 300)',
+  ready: 'oklch(0.62 0.12 150)',
+  courier: 'oklch(0.55 0.13 190)',
   shipped: 'var(--e-ink)',
   delivered: 'var(--ok)',
   rejected: 'var(--err)',
@@ -99,6 +102,8 @@ const STATUS_LABEL: Record<BookOrderStatus, string> = {
   address_only: c.statusAddressOnly,
   paid: c.statusPaid,
   printing: c.statusPrinting,
+  ready: c.statusReady,
+  courier: c.statusCourier,
   shipped: c.statusShipped,
   delivered: c.statusDelivered,
   rejected: c.statusRejected,
@@ -372,6 +377,9 @@ export function BookOrderCard({
           {row.addressNote ? ` — ${row.addressNote}` : ''}
         </p>
 
+        {/* «فين الكتاب؟» — the courier's latest word, and the trail behind it. */}
+        <CourierPanel row={row} />
+
         {row.adminNote ? (
           <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
             <span className="font-medium text-fg">{c.adminNoteLabel}: </span>
@@ -469,7 +477,11 @@ export function BookOrderCard({
                   `printing` is in the set because it both ships AND is what
                   «ابعت للمطبعة» produces, so a re-selected row is skipped
                   rather than un-tickable. */}
-              {row.status === 'paid' || row.status === 'printing' || row.status === 'shipped' ? (
+              {row.status === 'paid' ||
+              row.status === 'printing' ||
+              row.status === 'ready' ||
+              row.status === 'courier' ||
+              row.status === 'shipped' ? (
                 <OrderCheckbox id={row.id} label={row.fullName} />
               ) : null}
 
@@ -478,15 +490,32 @@ export function BookOrderCard({
                   parcel that has already left. */}
               {row.status === 'paid' ? <PrintAction id={row.id} /> : null}
 
-              {/* Ships from `paid` directly as well as from `printing`: a
-                  single reprint handed over the counter never sees a run. */}
-              {row.status === 'paid' || row.status === 'printing' ? (
+              {/* «خلص وجاهز» — the box is back from the printer. From `paid`
+                  too: a copy off the stock shelf never went to a run. */}
+              {row.status === 'paid' || row.status === 'printing' ? <ReadyAction id={row.id} /> : null}
+
+              {/* «ابعت لشركة الشحن» — on the ready box, where the run is
+                  normally sent from. Renders nothing on a stack without the
+                  integration. */}
+              {row.status === 'ready' ? <SendToCourierAction id={row.id} /> : null}
+
+              {/* Ships by hand from every state short of `shipped` — a parcel
+                  given to a different courier, or one theirs picked up without
+                  their system saying so. */}
+              {row.status === 'paid' ||
+              row.status === 'printing' ||
+              row.status === 'ready' ||
+              row.status === 'courier' ? (
                 <ShipAction id={row.id} />
               ) : null}
 
               {/* On the pre-courier states as well as `shipped`: Ayman delivers
                   some of these himself, and those never pass through «اتشحن». */}
-              {row.status === 'paid' || row.status === 'printing' || row.status === 'shipped' ? (
+              {row.status === 'paid' ||
+              row.status === 'printing' ||
+              row.status === 'ready' ||
+              row.status === 'courier' ||
+              row.status === 'shipped' ? (
                 <DeliverAction id={row.id} />
               ) : null}
 

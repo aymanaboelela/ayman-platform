@@ -54,6 +54,8 @@ type Tab = AdminBookOrderFilter | 'all';
 const TAB_LABEL: Record<Tab, string> = {
   paid: c.filterPaid,
   printing: c.filterPrinting,
+  ready: c.filterReady,
+  courier: c.filterCourier,
   shipped: c.filterShipped,
   delivered: c.filterDelivered,
   address_only: c.filterAddressOnly,
@@ -76,6 +78,10 @@ const TAB_LABEL: Record<Tab, string> = {
 const TABS: Tab[] = [
   'paid',
   'printing',
+  /* «خلص طباعة» then «عند شركة الشحن» — the two stops between the printer and
+     «اتشحنت», in the order a box passes through them. */
+  'ready',
+  'courier',
   'shipped',
   'delivered',
   'address_only',
@@ -83,6 +89,9 @@ const TABS: Tab[] = [
   'all',
   'deleted',
 ];
+
+/** The tabs whose rows a batch can still move along. */
+const BATCHABLE: ReadonlySet<Tab> = new Set(['paid', 'printing', 'ready', 'courier', 'shipped']);
 
 /**
  * Which صف an order is FILED UNDER in the split view.
@@ -143,7 +152,8 @@ export default async function AdminBooksPage({
    * `notFound()` مش ٤٠٣: الصفحة مش «ممنوعة»، هي مش هنا. ونفس الشكل بالحرف
    * اللي `(admin)/layout.tsx` بيستخدمه، وبيشرح ليه فوقه.
    */
-  if (!(await getEntitlements()).books) notFound();
+  const entitlements = await getEntitlements();
+  if (!entitlements.books) notFound();
 
   const params = await searchParams;
   const raw = Array.isArray(params.status) ? params.status[0] : params.status;
@@ -302,7 +312,7 @@ export default async function AdminBooksPage({
       {/* The provider wraps the toolbar as well as the list: «حدّد اللي في
           المدى» lives beside the export it mirrors, and it needs the same
           selection the checkboxes below write into. */}
-      <BulkShipProvider>
+      <BulkShipProvider courierEnabled={entitlements['books.courier']}>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <nav className="flex flex-wrap gap-1.5">
             {TABS.map((tab) => (
@@ -399,9 +409,7 @@ export default async function AdminBooksPage({
                 /* The TAB's total, not this page's fifty. See `ExportRange`. */
                 rowCount={rowCount}
                 /* The three states a parcel can still be moved out of. */
-                batchable={
-                  status === 'paid' || status === 'printing' || status === 'shipped'
-                }
+                batchable={BATCHABLE.has(status)}
               />
             ) : null}
           </div>
@@ -505,9 +513,7 @@ export default async function AdminBooksPage({
                         }
                         filters={{ stream, year: section.year, q: query || undefined }}
                         rowCount={section.counts.orders}
-                        batchable={
-                          status === 'paid' || status === 'printing' || status === 'shipped'
-                        }
+                        batchable={BATCHABLE.has(status)}
                         compact
                       />
                     </span>

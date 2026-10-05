@@ -16,6 +16,8 @@ import {
   deliverBookOrdersAction,
   printBookOrdersAction,
   clearBookOrderHoldsAction,
+  readyBookOrdersAction,
+  courierBookOrdersAction,
 } from './actions';
 
 const c = copy.admin.books;
@@ -60,11 +62,19 @@ interface BulkContext {
   setBusy: (value: boolean) => void;
   alsoWhatsapp: boolean;
   setAlsoWhatsapp: (value: boolean) => void;
+  /** «ابعت لشركة الشحن» exists on this stack — `books.courier`. */
+  courierEnabled: boolean;
 }
 
 const Ctx = createContext<BulkContext | null>(null);
 
-export function BulkShipProvider({ children }: { children: ReactNode }) {
+export function BulkShipProvider({
+  children,
+  courierEnabled = false,
+}: {
+  children: ReactNode;
+  courierEnabled?: boolean;
+}) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   /*
@@ -92,8 +102,9 @@ export function BulkShipProvider({ children }: { children: ReactNode }) {
       setBusy,
       alsoWhatsapp,
       setAlsoWhatsapp,
+      courierEnabled,
     }),
-    [selected, busy, alsoWhatsapp],
+    [selected, busy, alsoWhatsapp, courierEnabled],
   );
 
   return (
@@ -119,6 +130,11 @@ export function BulkShipProvider({ children }: { children: ReactNode }) {
  */
 export function useBulkSelectMany(): ((ids: string[]) => void) | null {
   return useContext(Ctx)?.selectMany ?? null;
+}
+
+/** Whether this stack has «ابعت لشركة الشحن» — read by the card's own button. */
+export function useCourierEnabled(): boolean {
+  return useContext(Ctx)?.courierEnabled ?? false;
 }
 
 /**
@@ -344,6 +360,42 @@ function BulkActions({ variant }: { variant: 'bar' | 'inline' }) {
         >
           {c.bulkPrintButton}
         </Button>
+        {/*
+          «خلصوا وجاهزين» then «ابعت لشركة الشحن» — the two steps between the
+          printer and the courier, in the order the boxes move. The courier
+          button exists only where the stack has the integration.
+        */}
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={busy}
+          onClick={() => {
+            if (!window.confirm(formatCopy(c.bulkReadyConfirm, { count: String(ids.length) }))) return;
+            void run(readyBookOrdersAction, c.bulkReadyDone);
+          }}
+        >
+          {c.bulkReadyButton}
+        </Button>
+        {ctx.courierEnabled ? (
+          <Button
+            size="sm"
+            disabled={busy}
+            onClick={() => {
+              if (!window.confirm(formatCopy(c.bulkCourierConfirm, { count: String(ids.length) }))) return;
+              void run(async (selection) => {
+                const result = await courierBookOrdersAction(selection);
+                if (result && 'error' in result) {
+                  toast.error(result.error);
+                  return { rows: [], succeeded: 0, noticeFailed: 0, skipped: 0 };
+                }
+                return result;
+              }, c.bulkCourierDone);
+            }}
+            style={{ background: 'oklch(0.55 0.13 190)', color: '#fff' }}
+          >
+            {c.sendToCourier}
+          </Button>
+        ) : null}
         <Button
           size="sm"
           variant="secondary"

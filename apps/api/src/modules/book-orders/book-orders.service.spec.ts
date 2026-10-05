@@ -1769,6 +1769,35 @@ describe('BookOrdersService', () => {
         expect(skipped?.fullName).not.toBe('');
       });
 
+      it('«خلصوا وجاهزين» moves a run from the printer to ready, and names what it skipped', async () => {
+        const printed = await paidOrder();
+        const shelf = await paidOrder();
+        const shipped = await paidOrder();
+        await service.markPrinting(adminId, printed.id);
+        await service.markShipped(adminId, shipped.id);
+
+        const result = await service.markReadyMany(adminId, [printed.id, shelf.id, shipped.id]);
+        expect(result.succeeded).toBe(2);
+        expect(result.rows.find((row) => row.id === shipped.id)).toMatchObject({
+          outcome: 'skipped',
+          reason: 'اتشحن خلاص',
+        });
+
+        const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: printed.id } });
+        expect(row).toMatchObject({ status: 'ready', readyByUserId: adminId });
+        // The print stamp survives — «راح للمطبعة إمتى» is still a question.
+        expect(row.printedAt).not.toBeNull();
+        // Still owed, so it still counts: a box on the shelf is revenue.
+        expect(row.shippedAt).toBeNull();
+      });
+
+      it('ships and delivers by hand from ready', async () => {
+        const order = await paidOrder();
+        await service.markReadyMany(adminId, [order.id]);
+        expect((await service.markShipped(adminId, order.id)).status).toBe('shipped');
+        expect((await service.markDelivered(adminId, order.id)).status).toBe('delivered');
+      });
+
       /* ⚠️ No bulk-SHIP case here, deliberately. `markShippedMany` posts the
          student's notice through `OutreachService`, which this suite does not
          build — see the service construction at the top. That a `printing` row

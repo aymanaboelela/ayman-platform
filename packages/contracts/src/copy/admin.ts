@@ -4426,6 +4426,10 @@ const admin = {
     filterAddressOnly: 'بدأت ومكملتش',
     /** «راح للمطبعة» — الورق مشي للمطبعة، والكرتونة لسه ما مشيتش. */
     filterPrinting: 'في المطبعة',
+    /** «خلصت الطباعة وجاهز» — متغلّف ومستني يتبعت لشركة الشحن. */
+    filterReady: 'جاهز للشحن',
+    /** البيانات في سيستم شركة الشحن، ومستنيين المندوب ييجي ياخده. */
+    filterCourier: 'عند شركة الشحن',
     filterShipped: 'اتشحنت',
     filterDelivered: 'وصلت',
     filterRejected: 'مرفوضة',
@@ -4495,6 +4499,8 @@ const admin = {
     statusAddressOnly: 'بدأ ومكملش الدفع',
     statusPaid: 'مدفوعة، لسه ماتشحنتش',
     statusPrinting: 'في المطبعة، لسه ماتشحنتش',
+    statusReady: 'خلص طباعة وجاهز للشحن',
+    statusCourier: 'اتبعت لشركة الشحن، مستني المندوب',
     statusShipped: 'اتشحنت',
     statusDelivered: 'وصلت للطالب',
     statusRejected: 'مرفوضة',
@@ -4611,6 +4617,38 @@ const admin = {
     bulkPrintConfirm: 'هتسجّل إن {count} طلب راحوا للمطبعة. مفيش أي رسايل هتتبعت للطلبة. تمام؟',
     /** `{count}` */
     bulkPrinted: 'راحوا للمطبعة {count}',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * «خلصت الطباعة وجاهز» ثم «ابعت لشركة الشحن». الأولى تسجيل بس، والتانية
+     * بتكتب الطلب في سيستم شركة الشحن — والطالب مابيتقالوش حاجة غير لما
+     * المندوب يستلم فعلًا.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    markReady: 'خلص وجاهز',
+    markReadyWorking: 'بتسجّل…',
+    markReadyConfirm: 'نسجّل إن الطلب ده خلص طباعة وجاهز للشحن؟ الطالب مش هيوصله حاجة.',
+    bulkReadyButton: 'خلصوا وجاهزين',
+    /** `{count}` */
+    bulkReadyConfirm: 'هتسجّل إن {count} طلب خلصوا طباعة وجاهزين للشحن. مفيش رسايل هتتبعت. تمام؟',
+    /** `{count}` */
+    bulkReadyDone: 'جاهزين للشحن {count}',
+    sendToCourier: 'ابعت لشركة الشحن',
+    sendToCourierWorking: 'بيتبعت…',
+    sendToCourierConfirm: 'هيتبعت الطلب ده لسيستم شركة الشحن عشان المندوب ييجي ياخده. الطالب هيتبلّغ لما يستلمه فعلًا. تمام؟',
+    /** `{count}` */
+    bulkCourierConfirm: 'هيتبعت {count} طلب لسيستم شركة الشحن. كل طالب هيتبلّغ لما المندوب يستلم كتابه فعلًا. تمام؟',
+    /** `{count}` */
+    bulkCourierDone: 'اتبعتوا لشركة الشحن {count}',
+    /** The courier's own words for a refused push. `{error}` */
+    courierError: 'شركة الشحن رفضته: {error}',
+    courierLabel: 'شركة الشحن',
+    /** `{name}` — the number is rendered beside it, isolated LTR. */
+    courierAgent: 'المندوب: {name}',
+    courierTrail: 'تتبّع الشحنة',
+    courierTrailHide: 'اخفي التتبّع',
+    courierTrailEmpty: 'شركة الشحن لسه مابعتتش أي تحديث.',
+    courierTrailFailed: 'مقدرناش نجيب التتبّع',
 
     /*
      * ════════════════════════════════════════════════════════════════════
@@ -6613,6 +6651,8 @@ const marketing = {
     address_only: 'طلبوا ومدفعوش',
     paid: 'دفعوا ولسه ماتشحنش ليهم',
     printing: 'كتابهم في المطبعة',
+    ready: 'كتابهم جاهز للشحن',
+    courier: 'كتابهم عند شركة الشحن',
     shipped: 'اتشحن ليهم',
     delivered: 'وصلهم الكتاب',
     rejected: 'طلبهم اترفض',

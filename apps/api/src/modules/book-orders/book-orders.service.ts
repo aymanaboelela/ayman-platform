@@ -488,9 +488,40 @@ const ORDER_SELECT = {
   rejectedAt: true,
   rejectionReason: true,
   createdAt: true,
+  /* «فين الكتاب؟» — the courier's latest word on the parcel. See
+     `courierView`. */
+  courierStatusId: true,
+  courierStatusName: true,
+  courierStatusNote: true,
+  courierStatusAt: true,
+  courierAgentName: true,
+  courierAgentPhone: true,
   course: { select: { title: true, bookTitle: true } },
   items: ORDER_ITEM_SELECT,
 } as const;
+
+/**
+ * The courier's latest status as both screens render it — `null` until their
+ * first webhook, because a parcel nobody has reported on has no status to show.
+ */
+export function courierView(row: {
+  courierStatusId: number | null;
+  courierStatusName: string | null;
+  courierStatusNote: string | null;
+  courierStatusAt: Date | null;
+  courierAgentName: string | null;
+  courierAgentPhone: string | null;
+}): BookOrder['courier'] {
+  if (row.courierStatusId === null || row.courierStatusName === null) return null;
+  return {
+    statusId: row.courierStatusId,
+    statusName: row.courierStatusName,
+    note: row.courierStatusNote,
+    agentName: row.courierAgentName,
+    agentPhone: row.courierAgentPhone,
+    at: row.courierStatusAt?.toISOString() ?? null,
+  };
+}
 
 /** One line as it is written — the shape both pricing paths return. */
 interface OrderLineWrite {
@@ -541,6 +572,12 @@ interface OrderRow {
   rejectedAt: Date | null;
   rejectionReason: string | null;
   createdAt: Date;
+  courierStatusId: number | null;
+  courierStatusName: string | null;
+  courierStatusNote: string | null;
+  courierStatusAt: Date | null;
+  courierAgentName: string | null;
+  courierAgentPhone: string | null;
   course: { title: string; bookTitle: string | null } | null;
   items: OrderLineRow[];
 }
@@ -555,6 +592,17 @@ interface OrderRow {
  * have to argue with a dialog about.
  */
 const DUPLICATE_WINDOW_DAYS = 7;
+
+/**
+ * Where a parcel can be when the admin presses «اتشحن» (or «وصل») by hand.
+ *
+ * Every paid state short of `shipped`: `printing` for the reprint handed over
+ * the counter, `ready` for the box that went with a courier other than the
+ * integrated one, and `courier` for the parcel the courier picked up without
+ * their webhook ever saying so. Pressing it there is the admin overruling a
+ * silent system, which is what the button is for.
+ */
+const SHIPPABLE: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing', 'ready', 'courier']);
 
 @Injectable()
 export class BookOrdersService {
@@ -641,6 +689,7 @@ export class BookOrdersService {
       deliveredAt: row.deliveredAt?.toISOString() ?? null,
       rejectedAt: row.rejectedAt?.toISOString() ?? null,
       rejectionReason: row.rejectionReason,
+      courier: courierView(row),
       createdAt: row.createdAt.toISOString(),
     };
   }
@@ -881,7 +930,7 @@ export class BookOrdersService {
           OR: [
             { createdAt: { gte: since } },
             { paidAt: { gte: since } },
-            { status: { in: ['paid', 'printing', 'shipped'] } },
+            { status: { in: ['paid', 'printing', 'ready', 'courier', 'shipped'] } },
           ],
         },
         orderBy: [{ createdAt: 'desc' }],
@@ -981,7 +1030,7 @@ export class BookOrdersService {
    * which is what guest checkout is for. That is not a degraded case to work
    * around; there is simply no bell to ring, and the admin tells them himself.
    */
-  private async studentIdForOrder(order: {
+  async studentIdForOrder(order: {
     userId: string | null;
     phone: string;
   }): Promise<string | null> {
@@ -1994,6 +2043,17 @@ export class BookOrdersService {
           createdAt: true,
           paidAt: true,
           printedAt: true,
+          readyAt: true,
+          courierSentAt: true,
+          courierError: true,
+          /* «فين الكتاب؟» — the courier's latest word on the parcel. See
+             `courierView`. */
+          courierStatusId: true,
+          courierStatusName: true,
+          courierStatusNote: true,
+          courierStatusAt: true,
+          courierAgentName: true,
+          courierAgentPhone: true,
           shippedAt: true,
           deliveredAt: true,
           rejectedAt: true,
@@ -2085,6 +2145,10 @@ export class BookOrdersService {
         heldReason: row.heldReason,
         screenshotAmountCents: row.screenshotAmountCents,
         printedAt: row.printedAt?.toISOString() ?? null,
+        readyAt: row.readyAt?.toISOString() ?? null,
+        courierSentAt: row.courierSentAt?.toISOString() ?? null,
+        courierError: row.courierError,
+        courier: courierView(row),
         shippedAt: row.shippedAt?.toISOString() ?? null,
         deliveredAt: row.deliveredAt?.toISOString() ?? null,
         rejectedAt: row.rejectedAt?.toISOString() ?? null,
@@ -2529,7 +2593,9 @@ export class BookOrdersService {
       throw new BadRequestException(
         order.status === 'printing'
           ? 'this order is already at the printer'
-          : order.status === 'shipped' || order.status === 'delivered'
+          : order.status === 'ready' || order.status === 'courier'
+            ? 'this order is already back from the printer'
+            : order.status === 'shipped' || order.status === 'delivered'
             ? 'this order has already left — it cannot go back to the printer'
             : order.status === 'rejected'
               ? 'this order was rejected — restore it to a live status first'
@@ -2601,7 +2667,9 @@ export class BookOrdersService {
           reason:
             order.status === 'printing'
               ? 'راح للمطبعة قبل كده'
-              : order.status === 'shipped' || order.status === 'delivered'
+              : order.status === 'ready' || order.status === 'courier'
+                ? 'خلص طباعة خلاص'
+                : order.status === 'shipped' || order.status === 'delivered'
                 ? 'اتشحن خلاص'
                 : 'لسه مادفعش',
         });
@@ -2650,6 +2718,85 @@ export class BookOrdersService {
     };
   }
 
+  /**
+   * «خلصت الطباعة وجاهز للشحن» — the run came back from the printer and these
+   * boxes are packed.
+   *
+   * The tab this fills is the one the courier push runs from, so it is the
+   * line between «لسه في المطبعة» and «ممكن يتبعت النهاردة» — a question that
+   * otherwise has to be answered by walking over to the shelf.
+   *
+   * From `printing`, and from `paid` too: a copy taken off the stock shelf
+   * never went to the printer, and inventing a print run to unlock this would
+   * be the lie `markShipped` already refuses to demand. Nothing is sent to the
+   * student — a box on a shelf is not news, same as paper at the printer.
+   */
+  async markReady(adminId: string, orderId: string): Promise<void> {
+    const order = await this.orderForAdminAction(orderId);
+    this.assertNotDeleted(order);
+    if (order.status !== 'paid' && order.status !== 'printing') {
+      throw new BadRequestException(
+        order.status === 'ready'
+          ? 'جاهز قبل كده'
+          : order.status === 'courier' || order.status === 'shipped' || order.status === 'delivered'
+            ? 'اتشحن خلاص'
+            : order.status === 'rejected'
+              ? 'الطلب مرفوض'
+              : 'لسه مادفعش',
+      );
+    }
+    if (order.heldForReviewAt !== null) throw new BadRequestException('محجوز للمراجعة');
+
+    const now = new Date();
+    // One statement — `book_orders_ready_status_has_a_stamp` refuses the status
+    // without the stamp, exactly like the printing pair.
+    await this.prisma.bookOrder.update({
+      where: { id: order.id },
+      data: { status: 'ready', readyAt: now, readyByUserId: adminId },
+    });
+
+    await this.audit.record({
+      action: 'book-order:ready',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      metadata: { userId: order.userId, courseId: order.courseId, adminId, from: order.status },
+    });
+  }
+
+  /** «جاهز» on a whole run — the same per-row reporting `markPrintingMany`
+   *  gives, so the three that did not move are named rather than re-read. */
+  async markReadyMany(adminId: string, ids: string[]): Promise<BulkBookOrderResult> {
+    const rows: BulkBookOrderResultRow[] = [];
+    for (const id of ids) {
+      const order = await this.prisma.bookOrder.findUnique({
+        where: { id },
+        select: { fullName: true, deletedAt: true },
+      });
+      if (!order || order.deletedAt !== null) {
+        rows.push({ id, outcome: 'skipped', fullName: '', reason: 'الطلب مش موجود' });
+        continue;
+      }
+      try {
+        await this.markReady(adminId, id);
+        rows.push({ id, outcome: 'ready', fullName: order.fullName, reason: null });
+      } catch (error) {
+        rows.push({
+          id,
+          outcome: 'skipped',
+          fullName: order.fullName,
+          reason: error instanceof BadRequestException ? error.message : 'مقدرناش نسجّله',
+        });
+      }
+    }
+    return {
+      rows,
+      succeeded: rows.filter((row) => row.outcome === 'ready').length,
+      noticeFailed: 0,
+      skipped: rows.filter((row) => row.outcome === 'skipped').length,
+    };
+  }
+
   async markShipped(adminId: string, orderId: string): Promise<MarkBookOrderShippedResult> {
     const order = await this.orderForAdminAction(orderId);
     this.assertNotDeleted(order);
@@ -2659,7 +2806,7 @@ export class BookOrdersService {
        reprint handed over the counter never sees a print run, and demanding a
        fake one to unlock this button would put a lie in the audit trail. Same
        argument `markDelivered` has always made for accepting `paid`. */
-    if (order.status !== 'paid' && order.status !== 'printing') {
+    if (!SHIPPABLE.has(order.status)) {
       throw new BadRequestException(
         order.status === 'shipped' ? 'this order already shipped' : 'this order has not been paid yet',
       );
@@ -2760,7 +2907,7 @@ export class BookOrdersService {
          printer this morning is exactly the row this batch runs on when the
          boxes come back in the afternoon, and skipping it here would make the
          new state a dead end reachable only one row at a time. */
-      if (order.status !== 'paid' && order.status !== 'printing') {
+      if (!SHIPPABLE.has(order.status)) {
         rows.push({
           id,
           outcome: 'skipped',
@@ -2953,7 +3100,7 @@ export class BookOrdersService {
   async markDelivered(adminId: string, orderId: string): Promise<MarkBookOrderDeliveredResult> {
     const order = await this.orderForAdminAction(orderId);
     this.assertNotDeleted(order);
-    if (order.status !== 'paid' && order.status !== 'printing' && order.status !== 'shipped') {
+    if (!SHIPPABLE.has(order.status) && order.status !== 'shipped') {
       throw new BadRequestException(
         order.status === 'delivered'
           ? 'this order was already marked delivered'

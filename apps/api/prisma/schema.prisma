@@ -205,6 +205,7 @@ model User {
   // being deleted.
   bookOrders                 BookOrder[]             @relation("BookOrderStudent")
   bookOrdersPrinted          BookOrder[]             @relation("BookOrderPrintedBy")
+  bookOrdersReady          BookOrder[]             @relation("BookOrderReadyBy")
   bookOrdersShipped          BookOrder[]             @relation("BookOrderShippedBy")
   bookOrdersDelivered        BookOrder[]             @relation("BookOrderDeliveredBy")
   bookOrdersRejected         BookOrder[]             @relation("BookOrderRejectedBy")
@@ -3140,6 +3141,12 @@ model BookOrder {
   printedAt       DateTime? @map("printed_at")
   printedByUserId String?   @map("printed_by_user_id")
 
+  /// «خلصت الطباعة وجاهز للشحن» — the copy came back from the printer and is
+  /// boxed. The tab this fills is the one the courier push runs from, so
+  /// «إيه اللي جاهز يتبعت؟» is a tab and not a guess.
+  readyAt       DateTime? @map("ready_at")
+  readyByUserId String?   @map("ready_by_user_id")
+
   /// «اتشحن» — set by `BookOrdersService.markShipped`, an explicit admin
   /// action. Records ONLY that the order shipped; no notification is sent to
   /// the student (the admin handles that himself, outside the platform).
@@ -3169,6 +3176,34 @@ model BookOrder {
   /// on the day it turns out it did not.
   deliveredAt       DateTime? @map("delivered_at")
   deliveredByUserId String?   @map("delivered_by_user_id")
+
+  /// «شركة الشحن» — the order as Torod (the courier) knows it. Every column
+  /// is null until `markShipped` hands the parcel over through their API, and
+  /// stays null forever on a stack without the `books.courier` entitlement.
+  ///
+  /// `courierSentAt` is the double-push guard, the same job `shipNoticeSentAt`
+  /// does for the message: their `addorders` is not idempotent, so a second
+  /// press of «اتشحن» must find this stamped and skip the call rather than
+  /// create a second shipment the courier will happily dispatch.
+  courierSentAt     DateTime? @map("courier_sent_at")
+  /// Why the last push was refused, in the courier's own words — «لا يوجد عميل
+  /// بهذه البيانات». Null on success. Stored for the same reason
+  /// `shipNoticeError` is: the admin re-opening the list is the only person
+  /// who can act on it.
+  courierError      String?   @map("courier_error")
+  /// Their id for the shipment (`vision_ID`), learned from the first webhook.
+  courierRef        String?   @map("courier_ref")
+  /// The LATEST status the courier reported — a copy of the newest
+  /// `BookOrderCourierEvent`, kept here so the admin list can filter and render
+  /// without a join per row. The events table is the history; this is «دلوقتي».
+  courierStatusId   Int?      @map("courier_status_id")
+  courierStatusName String?   @map("courier_status_name")
+  courierStatusNote String?   @map("courier_status_note")
+  courierStatusAt   DateTime? @map("courier_status_at")
+  /// The delivery agent on the latest status — the name and number the
+  /// student is told to expect a call from.
+  courierAgentName  String?   @map("courier_agent_name")
+  courierAgentPhone String?   @map("courier_agent_phone")
 
   /// «أرفضه» — the admin turned the order down, and the student is owed the
   /// reason. The row STAYS in the list and stays visible to the student; that is
@@ -3200,6 +3235,7 @@ model BookOrder {
   user        User?           @relation("BookOrderStudent", fields: [userId], references: [id], onDelete: Cascade)
   course      Course?         @relation(fields: [courseId], references: [id], onDelete: Cascade)
   printedBy   User?           @relation("BookOrderPrintedBy", fields: [printedByUserId], references: [id], onDelete: SetNull)
+  readyBy     User?           @relation("BookOrderReadyBy", fields: [readyByUserId], references: [id], onDelete: SetNull)
   shippedBy   User?           @relation("BookOrderShippedBy", fields: [shippedByUserId], references: [id], onDelete: SetNull)
   deliveredBy User?           @relation("BookOrderDeliveredBy", fields: [deliveredByUserId], references: [id], onDelete: SetNull)
   rejectedBy  User?           @relation("BookOrderRejectedBy", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
@@ -3208,6 +3244,9 @@ model BookOrder {
   items       BookOrderItem[]
   /// Money given back against this order — see `Refund`.
   refunds     Refund[]
+  /// What the courier reported, one row per status change — see
+  /// `BookOrderCourierEvent`.
+  courierEvents BookOrderCourierEvent[]
 
   /// The admin list: paid-not-yet-shipped is the default view of `/admin/books`
   /// and the Excel export's own filter — oldest first, first-come-first-served,
@@ -3245,10 +3284,50 @@ model BookOrder {
   @@schema("app")
 }
 
+/// One status change the courier reported for a book order, through the
+/// Torod webhook. The order's own `courierStatus*` columns hold only the latest;
+/// this is the trail «فين الكتاب؟» is answered from.
+///
+/// `fingerprint` is what makes the webhook safe to replay. The courier resends
+/// a status whenever it likes (and a retry after our timeout is a resend), and
+/// the student must hear about «مع المندوب» once — so a row whose
+/// status/date/note we have already seen is a no-op, enforced by the unique
+/// index rather than a read-then-write that two concurrent deliveries could
+/// both pass.
+model BookOrderCourierEvent {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  orderId     String   @map("order_id") @db.Uuid
+  fingerprint String
+  statusId    Int      @map("status_id")
+  statusName  String   @map("status_name")
+  statusNote  String?  @map("status_note")
+  /// Their date, as they sent it — «2026-08-02». Text, not a timestamp: it has
+  /// no time and no zone, and parsing it into one would invent both.
+  statusDate  String?  @map("status_date")
+  agentName   String?  @map("agent_name")
+  agentPhone  String?  @map("agent_phone")
+  /// The whole entry as received, for the day a field we do not read turns
+  /// out to matter.
+  raw         Json
+  receivedAt  DateTime @default(now()) @map("received_at")
+
+  order BookOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, fingerprint])
+  @@index([orderId, receivedAt])
+  @@map("book_order_courier_events")
+  @@schema("app")
+}
+
 enum BookOrderStatus {
   address_only
   paid
   printing
+  /// «خلصت الطباعة وجاهز» — boxed and waiting to be handed to the courier.
+  ready
+  /// «اتبعت لشركة الشحن» — the data is in Torod's system and the parcel is
+  /// waiting for their agent. Becomes `shipped` only when THEY say so.
+  courier
   shipped
   delivered
   rejected
