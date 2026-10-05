@@ -61,6 +61,9 @@ export const BookOrderStatusSchema = z.enum([
   'printing',
   'shipped',
   'delivered',
+  /** «مرتجع» — the courier brought it back undelivered. Paid, owed, and the
+   *  next step is a phone call and a second shipment. */
+  'returned',
   'rejected',
 ]);
 export type BookOrderStatus = z.infer<typeof BookOrderStatusSchema>;
@@ -226,6 +229,8 @@ const base = {
   /** Set when the admin confirmed the book ARRIVED — not when it was handed to
    *  the courier. `shippedAt` is what the platform did; this is what happened. */
   deliveredAt: z.iso.datetime().nullable(),
+  /** «مرتجع» — when the parcel came back undelivered. */
+  returnedAt: z.iso.datetime().nullable(),
   /**
    * Where the courier says the parcel is — `null` until their first update.
    *

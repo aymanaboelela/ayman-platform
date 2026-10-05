@@ -224,6 +224,9 @@ export const AdminBookOrderRowSchema = z.object({
   /** Set when the admin confirmed ARRIVAL, which is the transition that
    *  notifies the student. `shippedAt` only records that it left. */
   deliveredAt: z.iso.datetime().nullable(),
+  /** «مرتجع» — when it came back, and why if anybody said. */
+  returnedAt: z.iso.datetime().nullable(),
+  returnReason: z.string().nullable(),
   rejectedAt: z.iso.datetime().nullable(),
   /** The admin's own words, shown to the student. Non-null exactly when
    *  `rejectedAt` is — a database CHECK keeps the pair together. */
@@ -266,6 +269,22 @@ export const MarkBookOrderDeliveredResultSchema = z.object({
   deliveredAt: z.iso.datetime(),
 });
 export type MarkBookOrderDeliveredResult = z.infer<typeof MarkBookOrderDeliveredResultSchema>;
+
+/**
+ * «رجعت (مرتجع)» — the reason is OPTIONAL, unlike a rejection's: the courier
+ * often says nothing useful, and a mandatory box gets «.» typed into it.
+ */
+export const MarkBookOrderReturnedSchema = z
+  .object({ reason: z.string().trim().max(300).nullable().default(null) })
+  .strict();
+export type MarkBookOrderReturnedInput = z.infer<typeof MarkBookOrderReturnedSchema>;
+
+export const MarkBookOrderReturnedResultSchema = z.object({
+  id: z.uuid(),
+  status: z.literal('returned'),
+  returnedAt: z.iso.datetime(),
+});
+export type MarkBookOrderReturnedResult = z.infer<typeof MarkBookOrderReturnedResultSchema>;
 
 /**
  * One status change the courier reported — a row of the «فين الكتاب؟» trail

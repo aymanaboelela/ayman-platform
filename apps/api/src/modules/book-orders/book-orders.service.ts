@@ -26,6 +26,7 @@ import type {
   MarkBookOrderPaidInput,
   MarkBookOrderPaidResult,
   MarkBookOrderPrintingResult,
+  MarkBookOrderReturnedResult,
   MarkBookOrderShippedResult,
   ClearBookOrderHoldResult,
   PackingListYear,
@@ -485,6 +486,7 @@ const ORDER_SELECT = {
      carries the other and the card never has to render «مرفوض» with nothing
      after it. */
   deliveredAt: true,
+  returnedAt: true,
   rejectedAt: true,
   rejectionReason: true,
   createdAt: true,
@@ -569,6 +571,7 @@ interface OrderRow {
   printedAt: Date | null;
   shippedAt: Date | null;
   deliveredAt: Date | null;
+  returnedAt: Date | null;
   rejectedAt: Date | null;
   rejectionReason: string | null;
   createdAt: Date;
@@ -595,10 +598,11 @@ const DUPLICATE_WINDOW_DAYS = 7;
 
 /**
  * Where a parcel can be when the admin presses «اتشحن» (or «وصل»): paid and
- * not yet gone. `paid` too, for the reprint handed over the counter that never
- * saw a print run.
+ * not with anybody. `paid` too, for the reprint handed over the counter that
+ * never saw a print run; `returned` for the parcel that came back and goes out
+ * again.
  */
-const SHIPPABLE: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing']);
+const SHIPPABLE: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing', 'returned']);
 
 @Injectable()
 export class BookOrdersService {
@@ -683,6 +687,7 @@ export class BookOrdersService {
       printedAt: row.printedAt?.toISOString() ?? null,
       shippedAt: row.shippedAt?.toISOString() ?? null,
       deliveredAt: row.deliveredAt?.toISOString() ?? null,
+      returnedAt: row.returnedAt?.toISOString() ?? null,
       rejectedAt: row.rejectedAt?.toISOString() ?? null,
       rejectionReason: row.rejectionReason,
       courier: courierView(row),
@@ -926,7 +931,7 @@ export class BookOrdersService {
           OR: [
             { createdAt: { gte: since } },
             { paidAt: { gte: since } },
-            { status: { in: ['paid', 'printing', 'shipped'] } },
+            { status: { in: ['paid', 'printing', 'shipped', 'returned'] } },
           ],
         },
         orderBy: [{ createdAt: 'desc' }],
@@ -2051,6 +2056,8 @@ export class BookOrdersService {
           courierAgentPhone: true,
           shippedAt: true,
           deliveredAt: true,
+          returnedAt: true,
+          returnReason: true,
           rejectedAt: true,
           rejectionReason: true,
           deletedAt: true,
@@ -2145,6 +2152,8 @@ export class BookOrdersService {
         courier: courierView(row),
         shippedAt: row.shippedAt?.toISOString() ?? null,
         deliveredAt: row.deliveredAt?.toISOString() ?? null,
+        returnedAt: row.returnedAt?.toISOString() ?? null,
+        returnReason: row.returnReason,
         rejectedAt: row.rejectedAt?.toISOString() ?? null,
         rejectionReason: row.rejectionReason,
         deletedAt: row.deletedAt?.toISOString() ?? null,
@@ -3072,6 +3081,70 @@ export class BookOrdersService {
     });
 
     return { id: order.id, status: 'delivered', deliveredAt: now.toISOString() };
+  }
+
+  /**
+   * «رجعت (مرتجع)» — the courier brought the parcel back undelivered.
+   *
+   * From `shipped` only: a parcel nobody handed to a courier cannot come back
+   * from one. It moves to its own tab — «مين اللي كتابه رجع ومحتاج نكلّمه؟» is
+   * a list somebody works through — and from there it ships again («ابعت
+   * لشركة الشحن» creates a NEW shipment, which is why `courierSentAt` is
+   * cleared) or is handed over and closed with «وصل».
+   *
+   * The student is told, in the thread, that it came back and that we will
+   * call — the same words the courier's own «مرتجع» report sends, so the two
+   * paths cannot say different things about one parcel.
+   */
+  async markReturned(
+    adminId: string,
+    orderId: string,
+    reason: string | null,
+  ): Promise<MarkBookOrderReturnedResult> {
+    const order = await this.orderForAdminAction(orderId);
+    this.assertNotDeleted(order);
+    if (order.status !== 'shipped') {
+      throw new BadRequestException(
+        order.status === 'returned' ? 'this order is already marked returned' : 'this order has not shipped',
+      );
+    }
+
+    const now = new Date();
+    const note = reason?.trim() || null;
+    await this.prisma.bookOrder.update({
+      where: { id: order.id },
+      data: {
+        status: 'returned',
+        returnedAt: now,
+        returnedByUserId: adminId,
+        returnReason: note,
+        // A second shipment is a new one in the courier's system.
+        courierSentAt: null,
+      },
+    });
+
+    const studentId = await this.studentIdForOrder(order);
+    if (studentId !== null) {
+      const name = (await this.prisma.bookOrder.findUnique({ where: { id: order.id }, select: { fullName: true } }))
+        ?.fullName.trim()
+        .split(/\s+/)[0];
+      const body = formatCopy(copy.bookCourierNotice.returned, {
+        name: name ?? '',
+        note: note ? ` — «${note}»` : '',
+      });
+      await this.prisma.$transaction((tx) => this.outreach.sendManual(tx, { userId: studentId, body }));
+      await this.notifications.announce(studentId);
+    }
+
+    await this.audit.record({
+      action: 'book-order:return',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      metadata: { userId: order.userId, courseId: order.courseId, adminId, reason: note },
+    });
+
+    return { id: order.id, status: 'returned', returnedAt: now.toISOString() };
   }
 
   /**

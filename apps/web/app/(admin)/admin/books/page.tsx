@@ -57,6 +57,7 @@ const TAB_LABEL: Record<Tab, string> = {
   printing: c.filterPrinting,
   shipped: c.filterShipped,
   delivered: c.filterDelivered,
+  returned: c.filterReturned,
   address_only: c.filterAddressOnly,
   rejected: c.filterRejected,
   all: c.filterAll,
@@ -79,6 +80,8 @@ const TABS: Tab[] = [
   'printing',
   'shipped',
   'delivered',
+  /* «مرتجع» right after «وصلت»: the two ways a shipment ends. */
+  'returned',
   'address_only',
   'rejected',
   'all',
@@ -86,7 +89,7 @@ const TABS: Tab[] = [
 ];
 
 /** The tabs whose rows a batch can still move along. */
-const BATCHABLE: ReadonlySet<Tab> = new Set(['paid', 'printing', 'shipped']);
+const BATCHABLE: ReadonlySet<Tab> = new Set(['paid', 'printing', 'shipped', 'returned']);
 
 /**
  * Which صف an order is FILED UNDER in the split view.
@@ -262,6 +265,7 @@ export default async function AdminBooksPage({
     printing: 'oklch(0.55 0.16 300)',
     shipped: 'var(--e-ink)',
     delivered: 'var(--ok)',
+    returned: 'oklch(0.62 0.17 45)',
     address_only: 'var(--warn)',
     rejected: 'var(--err)',
   };

@@ -8,6 +8,7 @@ import type {
   MarkBookOrderDeliveredResult,
   MarkBookOrderPaidResult,
   MarkBookOrderPrintingResult,
+  MarkBookOrderReturnedResult,
   RejectBookOrderResult,
   RestoreBookOrderResult,
   ClearBookOrderHoldResult,
@@ -24,6 +25,7 @@ import {
   BulkBookOrderActionDto,
   ExportBookOrdersQueryDto,
   MarkBookOrderPaidDto,
+  MarkBookOrderReturnedDto,
   RejectBookOrderDto,
 } from './book-orders.dto';
 import { BookOrdersService } from './book-orders.service';
@@ -326,6 +328,23 @@ export class AdminBookOrdersController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<MarkBookOrderDeliveredResult> {
     return this.bookOrders.markDelivered(user.id, id);
+  }
+
+  /**
+   * «رجعت (مرتجع)» — the courier brought it back. Same desk, same authority as
+   * «وصل»: it is the other way a shipment ends. See
+   * `BookOrdersService.markReturned`.
+   */
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post(':id/return')
+  @UsePipes(ZodValidationPipe)
+  markReturned(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: MarkBookOrderReturnedDto,
+  ): Promise<MarkBookOrderReturnedResult> {
+    return this.bookOrders.markReturned(user.id, id, body.reason);
   }
 
   /**

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Ban, HandHeart, MoreHorizontal, PackageCheck, Trash2 } from 'lucide-react';
+import { Ban, HandHeart, MoreHorizontal, PackageCheck, Trash2, Undo2 } from 'lucide-react';
 import type { BookOrderStatus } from '@ayman/contracts/book-orders';
 import { copy } from '@ayman/contracts/copy/admin';
 import {
@@ -15,7 +15,7 @@ import {
 } from '@ayman/ui/components/dropdown-menu';
 import { useRefreshBookOrdersUnshippedCount } from '@/components/admin/book-orders-alerts';
 import { markBookOrderDeliveredAction, markBookOrderShippedAction } from './actions';
-import { RejectOrderAction, RemoveOrderAction } from './order-actions';
+import { RejectOrderAction, RemoveOrderAction, ReturnOrderAction } from './order-actions';
 import { useCourierEnabled } from './bulk-ship';
 
 const c = copy.admin.books;
@@ -38,6 +38,7 @@ export function OrderMoreMenu({ id, status }: { id: string; status: BookOrderSta
   const refreshUnshippedCount = useRefreshBookOrdersUnshippedCount();
   const [rejecting, setRejecting] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [returning, setReturning] = useState(false);
 
   async function shipNow() {
     if (!window.confirm(c.shipConfirm)) return;
@@ -62,8 +63,10 @@ export function OrderMoreMenu({ id, status }: { id: string; status: BookOrderSta
   const courier = useCourierEnabled();
   /* From `paid`: a copy with no print run. From `printing` only where the main
      button is the courier's — a parcel that went with somebody else. */
-  const canShip = status === 'paid' || (status === 'printing' && courier);
-  const canDeliver = status === 'paid' || status === 'printing';
+  const canShip = status === 'paid' || ((status === 'printing' || status === 'returned') && courier);
+  const canDeliver = status === 'paid' || status === 'printing' || status === 'returned';
+  /* «رجعت (مرتجع)» — only a parcel that went out can come back. */
+  const canReturn = status === 'shipped';
   const canReject = status !== 'delivered' && status !== 'rejected';
 
   return (
@@ -80,7 +83,7 @@ export function OrderMoreMenu({ id, status }: { id: string; status: BookOrderSta
           {canShip ? (
             <DropdownMenuItem onSelect={() => void shipNow()}>
               <PackageCheck className="size-4" aria-hidden />
-              {status === 'printing' ? c.shipWithoutCourier : c.shipSkipPrinter}
+              {status === 'paid' ? c.shipSkipPrinter : c.shipWithoutCourier}
             </DropdownMenuItem>
           ) : null}
           {canDeliver ? (
@@ -89,7 +92,13 @@ export function OrderMoreMenu({ id, status }: { id: string; status: BookOrderSta
               {c.deliverByHand}
             </DropdownMenuItem>
           ) : null}
-          {canShip || canDeliver ? <DropdownMenuSeparator className="my-1 h-px bg-line-subtle" /> : null}
+          {canReturn ? (
+            <DropdownMenuItem onSelect={() => setReturning(true)}>
+              <Undo2 className="size-4" aria-hidden />
+              {c.markReturned}
+            </DropdownMenuItem>
+          ) : null}
+          {canShip || canDeliver || canReturn ? <DropdownMenuSeparator className="my-1 h-px bg-line-subtle" /> : null}
           {canReject ? (
             <DropdownMenuItem onSelect={() => setRejecting(true)} className="text-[color:var(--err)]">
               <Ban className="size-4" aria-hidden />
@@ -105,6 +114,7 @@ export function OrderMoreMenu({ id, status }: { id: string; status: BookOrderSta
 
       <RejectOrderAction id={id} open={rejecting} onOpenChange={setRejecting} />
       <RemoveOrderAction id={id} open={removing} onOpenChange={setRemoving} />
+      {canReturn ? <ReturnOrderAction id={id} open={returning} onOpenChange={setReturning} /> : null}
     </>
   );
 }

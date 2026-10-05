@@ -207,6 +207,7 @@ model User {
   bookOrdersPrinted          BookOrder[]             @relation("BookOrderPrintedBy")
   bookOrdersShipped          BookOrder[]             @relation("BookOrderShippedBy")
   bookOrdersDelivered        BookOrder[]             @relation("BookOrderDeliveredBy")
+  bookOrdersReturned        BookOrder[]             @relation("BookOrderReturnedBy")
   bookOrdersRejected         BookOrder[]             @relation("BookOrderRejectedBy")
   bookOrdersDeleted          BookOrder[]             @relation("BookOrderDeletedBy")
   // الواجب — the homework this student handed in, and (for an admin) the
@@ -3171,6 +3172,16 @@ model BookOrder {
   deliveredAt       DateTime? @map("delivered_at")
   deliveredByUserId String?   @map("delivered_by_user_id")
 
+  /// «مرتجع» — the parcel came back from the courier undelivered: a wrong
+  /// address, a phone nobody answered, a refusal at the door. Its own status
+  /// and tab because «مين اللي كتابه رجع ومحتاج نكلّمه؟» is a list somebody
+  /// works through, not a footnote on «اتشحنت». Set by the admin, or by the
+  /// courier's webhook when they enable it. `returnReason` is optional — their
+  /// words or the admin's.
+  returnedAt       DateTime? @map("returned_at")
+  returnedByUserId String?   @map("returned_by_user_id")
+  returnReason     String?   @map("return_reason")
+
   /// «شركة الشحن» — the order as Torod (the courier) knows it. A FLAG beside
   /// the status and never a status of its own: the data goes to their system
   /// when the run goes to the printer, and their agent collects the boxes FROM
@@ -3233,6 +3244,7 @@ model BookOrder {
   printedBy   User?           @relation("BookOrderPrintedBy", fields: [printedByUserId], references: [id], onDelete: SetNull)
   shippedBy   User?           @relation("BookOrderShippedBy", fields: [shippedByUserId], references: [id], onDelete: SetNull)
   deliveredBy User?           @relation("BookOrderDeliveredBy", fields: [deliveredByUserId], references: [id], onDelete: SetNull)
+  returnedBy  User?           @relation("BookOrderReturnedBy", fields: [returnedByUserId], references: [id], onDelete: SetNull)
   rejectedBy  User?           @relation("BookOrderRejectedBy", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
   deletedBy   User?           @relation("BookOrderDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
   governorate Governorate     @relation(fields: [governorateCode], references: [code])
@@ -3320,6 +3332,8 @@ enum BookOrderStatus {
   printing
   shipped
   delivered
+  /// «مرتجع» — the courier brought it back undelivered.
+  returned
   rejected
 
   @@map("book_order_status")

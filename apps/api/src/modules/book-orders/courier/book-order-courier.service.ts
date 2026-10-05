@@ -26,7 +26,7 @@ import { TorodWebhookEntrySchema, type TorodWebhookEntry } from './torod-webhook
 /** Where an order can be when its data goes to the courier: paid and not yet
  *  shipped. `printing` is the normal case — the run came back from the
  *  printer; `paid` for a copy off the shelf that never saw one. */
-const PUSHABLE: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing']);
+const PUSHABLE: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing', 'returned']);
 
 /** Where «مع المندوب» may move an order to `shipped` from. */
 const BEFORE_SHIPPED: ReadonlySet<BookOrderStatus> = PUSHABLE;
@@ -281,6 +281,8 @@ export class BookOrderCourierService {
     if (live && entry.status_ID === TOROD_STATUS.delivered && (BEFORE_SHIPPED.has(from) || from === 'shipped')) {
       to = 'delivered';
     }
+    // «مرتجع» moves a parcel that was out to its own tab — see `markReturned`.
+    if (live && entry.status_ID === TOROD_STATUS.returned && from === 'shipped') to = 'returned';
 
     const studentId = live ? await this.bookOrders.studentIdForOrder(order) : null;
 
@@ -313,9 +315,14 @@ export class BookOrderCourierService {
             // so, the courier did, and the audit row below records that.
             ...(to === 'shipped' && from !== 'shipped' ? { status: 'shipped', shippedAt: now } : {}),
             ...(to === 'delivered' && from !== 'delivered' ? { status: 'delivered', deliveredAt: now } : {}),
+            // A second shipment is a new one in their system — clear the guard.
+            ...(to === 'returned' && from !== 'returned'
+              ? { status: 'returned', returnedAt: now, returnReason: note, courierSentAt: null }
+              : {}),
           },
         });
-        if (studentId !== null && to !== from) {
+        // «مرتجع» has no notification kind; its thread message rings instead.
+        if (studentId !== null && to !== from && to !== 'returned') {
           await this.notifications.emit(tx, {
             userId: studentId,
             kind: to === 'delivered' ? 'book_order_delivered' : 'book_order_shipped',
@@ -329,7 +336,7 @@ export class BookOrderCourierService {
       throw error;
     }
 
-    if (studentId !== null && to !== from) await this.notifications.announce(studentId);
+    if (studentId !== null && to !== from && to !== 'returned') await this.notifications.announce(studentId);
 
     await this.audit.record({
       action: 'book-order:courier-status',

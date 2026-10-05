@@ -4445,6 +4445,8 @@ const admin = {
     filterPrinting: 'في المطبعة',
     filterShipped: 'اتشحنت',
     filterDelivered: 'وصلت',
+    /** الشحنات اللي رجعت من شركة الشحن ومتسلّمتش. */
+    filterReturned: 'مرتجع',
     filterRejected: 'مرفوضة',
     /** Not a status — a view. See `AdminBookOrderFilterSchema`. */
     filterDeleted: 'المحذوفة',
@@ -4514,6 +4516,7 @@ const admin = {
     statusPrinting: 'في المطبعة، لسه ماتشحنتش',
     statusShipped: 'اتشحنت',
     statusDelivered: 'وصلت للطالب',
+    statusReturned: 'رجعت من شركة الشحن',
     statusRejected: 'مرفوضة',
     /** Shown beside the name on a GUEST order — no account is linked, so
      *  there is nowhere for the name to link to. See `AdminBookOrderRow`'s
@@ -4660,6 +4663,20 @@ const admin = {
     courierTrailHide: 'اخفي التتبّع',
     courierTrailEmpty: 'شركة الشحن لسه مابعتتش أي تحديث.',
     courierTrailFailed: 'مقدرناش نجيب التتبّع',
+
+    /*
+     * «مرتجع» — الشحنة رجعت ومتسلّمتش. الطالب بيوصله إنها رجعت وإننا هنكلّمه،
+     * والطلب بيروح تبويب «مرتجع» لحد ما يتبعت تاني أو يتسلّم باليد.
+     */
+    markReturned: 'رجعت (مرتجع)',
+    returnDialogTitle: 'الشحنة رجعت؟',
+    returnDialogHint: 'الطلب هيروح تبويب «مرتجع»، والطالب هيوصله إن الشحنة رجعت وإننا هنتواصل. تقدر تبعته لشركة الشحن تاني من هناك.',
+    returnReasonLabel: 'السبب (اختياري)',
+    returnReasonPlaceholder: 'مثلًا: الرقم مقفول، العنوان ناقص، رفض الاستلام…',
+    returnSubmit: 'سجّل إنها رجعت',
+    returnSubmitting: 'بيتسجّل…',
+    returnFailed: 'مقدرناش نسجّلها',
+    returnReasonShown: 'سبب الرجوع',
 
     /*
      * ════════════════════════════════════════════════════════════════════
@@ -6680,6 +6697,7 @@ const marketing = {
     printing: 'كتابهم في المطبعة',
     shipped: 'اتشحن ليهم',
     delivered: 'وصلهم الكتاب',
+    returned: 'كتابهم رجع (مرتجع)',
     rejected: 'طلبهم اترفض',
   },
   audienceExtraPhones: 'أرقام تانية',

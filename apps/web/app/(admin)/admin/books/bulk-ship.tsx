@@ -282,11 +282,12 @@ function BulkActions({ variant }: { variant: 'bar' | 'inline' }) {
      the bar on «مدفوعة» reads «ابعت للمطبعة» and not five things to choose
      between. «الكل» and the search results mix states, so they get them all. */
   const tab = ctx.tab;
-  const mixed = tab !== 'paid' && tab !== 'printing' && tab !== 'shipped';
+  const mixed = tab !== 'paid' && tab !== 'printing' && tab !== 'shipped' && tab !== 'returned';
   const showPrint = mixed || tab === 'paid';
-  const showShip = mixed || tab === 'printing';
-  const showDeliver = mixed || tab === 'shipped';
-  const showCourier = ctx.courierEnabled && (mixed || tab === 'printing');
+  // «مرتجع» goes out again exactly the way a printed run does.
+  const showShip = mixed || tab === 'printing' || tab === 'returned';
+  const showDeliver = mixed || tab === 'shipped' || tab === 'returned';
+  const showCourier = ctx.courierEnabled && (mixed || tab === 'printing' || tab === 'returned');
 
   return (
     <>
