@@ -143,6 +143,10 @@ function sealFrame(frame: HTMLIFrameElement | null | undefined): void {
  */
 const RESUME_REWIND_SECONDS = 5;
 
+function youtubeFrameClass(captions: boolean): string {
+  return captions ? 'absolute inset-0 h-full w-full' : 'absolute inset-x-0 top-[-25%] h-[150%] w-full';
+}
+
 function resumePoint(furthestSeconds: number, durationSeconds: number): number {
   if (!Number.isFinite(furthestSeconds)) return 0;
   const point = Math.floor(furthestSeconds) - RESUME_REWIND_SECONDS;
@@ -199,6 +203,8 @@ export function VideoLesson({
   const [youtube, setYoutube] = useState<YouTubeApiPlayer | null>(null);
   /** What `onStateChange` last said — the shield's play/pause follows it. */
   const [youtubeState, setYoutubeState] = useState<number>(YT_STATE.UNSTARTED);
+  /** Captions showing — the one time YouTube's frame is NOT cropped (see the mount below). */
+  const [youtubeCaptions, setYoutubeCaptions] = useState(false);
   const [activated, setActivated] = useState(false);
   const [failure, setFailure] = useState<VideoFailure | null>(null);
   /**
@@ -718,6 +724,13 @@ export function VideoLesson({
     await startYouTube(startAt);
   }, [activated, stillProcessing, useMirror, startYouTube]);
 
+  // The frame replaced the node React rendered, so React's className update
+  // lands nowhere — it is written onto the frame itself.
+  useEffect(() => {
+    const frame = youtube?.getIframe?.();
+    if (frame) frame.className = youtubeFrameClass(youtubeCaptions);
+  }, [youtube, youtubeCaptions]);
+
   useEffect(() => {
     return () => {
       if (readyTimerRef.current) clearTimeout(readyTimerRef.current);
@@ -745,7 +758,27 @@ export function VideoLesson({
         pseudoFullscreen && 'fixed inset-0 z-[60] h-dvh w-screen bg-black',
       )}
     >
-      <div ref={mountRef} className="absolute inset-0 h-full w-full" />
+      {/*
+        The IFrame API REPLACES this node and the frame keeps its class.
+
+        Taller than the box, by a quarter above and below, and the shell's
+        `overflow-hidden` crops the excess. YouTube fits the picture to the
+        frame's WIDTH and centres it, so the lecture is exactly as large as
+        before — but everything YouTube pins to the frame's EDGES now lands
+        off screen: the title and channel bar along the top, and along the
+        bottom the logo, the copy-link button and «المزيد من الفيديوهات».
+        `controls: 0` does not stop those: the desktop embed draws them on
+        every pause, the mobile one on every seek, and they sat under our
+        bar as a second, dead player — «مش منسق ولا نظيف».
+
+        Except while captions are on: YouTube pins THOSE to the frame's
+        bottom edge too, so a cropped frame shows a student who asked for
+        captions none at all. With captions on, the frame is the box again.
+
+        The API copies this class onto the frame it swaps in; after that,
+        React cannot see the frame, so an effect writes the class onto it.
+      */}
+      <div ref={mountRef} className={youtubeFrameClass(youtubeCaptions)} />
 
       {/*
         «النسخة اللي عندنا». Rendered INSTEAD of the YouTube frame, not beside
@@ -815,6 +848,7 @@ export function VideoLesson({
             fullscreen={fullscreen}
             onToggleFullscreen={toggleFullscreen}
             watermark={watermark}
+            onCaptionsChange={setYoutubeCaptions}
           />
         )
       ) : null}

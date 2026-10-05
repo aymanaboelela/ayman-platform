@@ -35,6 +35,8 @@ export interface YouTubeShieldProps {
   fullscreen: boolean;
   onToggleFullscreen: () => void;
   watermark: string | null;
+  /** The student turned YouTube's captions on or off — the frame's crop follows it. */
+  onCaptionsChange?: (on: boolean) => void;
 }
 
 /**
@@ -52,6 +54,19 @@ const POLL_MS = 250;
  * thumb would jump back to where it was, then forward again.
  */
 const HOLD_MS = 700;
+
+/**
+ * A SEEK holds longer, and lets go early once YouTube agrees.
+ *
+ * 700 ms was measured on a fast line. On mobile data the frame can take two
+ * or three seconds to report the new second, and until it does every poll
+ * dragged the thumb back to where the student had just left — the seek looked
+ * refused, so they seeked again, which restarted the fetch. The hold now
+ * lasts until the reported time is within `SEEK_SETTLED_S` of the target, or
+ * this long has passed (a seek past the end, a video YouTube clamps).
+ */
+const SEEK_HOLD_MS = 4_000;
+const SEEK_SETTLED_S = 1.5;
 
 /**
  * How long a play we asked for may take to start before the shield steps
@@ -78,6 +93,7 @@ export function YouTubeShield({
   fullscreen,
   onToggleFullscreen,
   watermark,
+  onCaptionsChange,
 }: YouTubeShieldProps) {
   // Whole seconds, like our own copy's — see `mirror-video.tsx` for why a
   // finer value was only ever re-renders nobody could see.
@@ -123,6 +139,8 @@ export function YouTubeShield({
   const [stalled, setStalled] = useState(false);
   const startTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hold = useRef({ time: 0, sound: 0, speed: 0 });
+  /** Where the last seek we asked for is going — `null` once YouTube is there. */
+  const seekTarget = useRef<number | null>(null);
   const captionsSeen = useRef(false);
 
   /*
@@ -176,7 +194,13 @@ export function YouTubeShield({
         const total = player.getDuration();
         setDuration(total);
         setLoaded(Math.floor(player.getVideoLoadedFraction() * total));
-        if (now >= hold.current.time) setTime(Math.floor(player.getCurrentTime()));
+        const current = player.getCurrentTime();
+        const target = seekTarget.current;
+        if (target !== null && (now >= hold.current.time || Math.abs(current - target) < SEEK_SETTLED_S)) {
+          seekTarget.current = null;
+          hold.current.time = 0;
+        }
+        if (now >= hold.current.time) setTime(Math.floor(current));
         if (now >= hold.current.sound) {
           setMuted(player.isMuted());
           setVolume(player.getVolume() / 100);
@@ -227,13 +251,22 @@ export function YouTubeShield({
     (value: number) => {
       const target = Math.max(0, duration > 0 ? Math.min(value, duration) : value);
       player.seekTo(target, true);
-      hold.current.time = Date.now() + HOLD_MS;
-      setTime(target);
+      seekTarget.current = target;
+      hold.current.time = Date.now() + SEEK_HOLD_MS;
+      setTime(Math.floor(target));
     },
     [player, duration],
   );
 
-  const seekBy = useCallback((delta: number) => seekTo(player.getCurrentTime() + delta), [player, seekTo]);
+  /*
+   * From where the LAST seek is going, while it is still on its way. Three
+   * quick presses of «+١٠» read the playhead three times before the frame
+   * had reported the first jump, so they all landed on the same +10.
+   */
+  const seekBy = useCallback(
+    (delta: number) => seekTo((seekTarget.current ?? player.getCurrentTime()) + delta),
+    [player, seekTo],
+  );
 
   const toggleMute = useCallback(() => {
     if (muted) player.unMute();
@@ -268,7 +301,8 @@ export function YouTubeShield({
     if (captionsOn) player.unloadModule?.('captions');
     else player.loadModule?.('captions');
     setCaptionsOn(!captionsOn);
-  }, [player, captionsOn]);
+    onCaptionsChange?.(!captionsOn);
+  }, [player, captionsOn, onCaptionsChange]);
 
   const played = duration > 0 ? Math.min(100, Math.max(0, (time / duration) * 100)) : 0;
   const fetched = duration > 0 ? Math.min(100, Math.max(0, (loaded / duration) * 100)) : 0;
