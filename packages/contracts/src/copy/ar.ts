@@ -6213,6 +6213,10 @@ export const copy = {
   },
   quizErrors: {
     exactlyOneCorrect: 'لازم تحدد إجابة صحيحة واحدة بالظبط',
+    /** «انشر المسودات» — a draft that disappeared (deleted, or published by
+     *  someone else) between the list and the press. */
+    publishDraftGone: 'السؤال ده اتمسح أو اتغيّر قبل ما يتنشر',
+    publishDraftFailed: 'السؤال ده ماتنشرش — افتحه وجرّب تنشره لوحده',
     atLeastTwoOptions: 'لازم يكون فيه اختيارين على الأقل',
     trueFalseNeedsTwo: 'سؤال صح وخطأ لازم يكون له اختيارين بالظبط',
     multiWeightsMustSumToOne: 'مجموع أوزان الإجابات الصحيحة لازم يساوي 1',

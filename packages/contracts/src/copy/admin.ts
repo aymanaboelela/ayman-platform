@@ -5869,6 +5869,42 @@ const quizAdmin = {
     /** After «لصق أسئلة كتير» commits — the old toast reused the PREVIEW
      *  line («معاينة ٤٠ سؤال») for a question that had already been saved. */
     bulkAdded: 'اتضاف {n} سؤال للبنك',
+    /* ── «انشر المسودات» — a paste can land as drafts so generated wordings
+     * are read before any student gets them; these are the screen's ways to
+     * read them and let them out, one, the ticked ones, or a whole category. */
+    statusLabel: 'الحالة',
+    statusAll: 'الكل',
+    statusDraft: 'مسودات',
+    statusReady: 'جاهزة',
+    sortLabel: 'الترتيب',
+    sortRecent: 'الأحدث الأول',
+    /** Variants of one idea next to each other, to compare the wordings. */
+    sortGroup: 'الصيغ جنب بعض',
+    /** Beside a category in the panel — how many of its questions wait on «انشر». */
+    draftsPill: '{n} مسودة',
+    publishOne: 'انشر',
+    publishedOne: 'السؤال اتنشر',
+    publishSelected: 'انشر المحدد ({n})',
+    publishCategory: 'انشر كل مسودات التصنيف ده ({n})',
+    publishCategoryLead: '{n} سؤال في التصنيف ده لسه مسودة — الطلبة مش شايفينهم لحد ما يتنشروا.',
+    publishCategoryReview: 'راجعهم الأول',
+    publishTitle: 'نشر {n} مسودة',
+    publishTitleCategory: 'نشر كل مسودات «{name}»',
+    publishBody: 'كل سؤال بيتراجع زي ما بيتراجع لوحده، واللي فيه غلطة بيفضل مسودة ويظهر هنا. اللي يتنشر بيدخل الكويزات والألعاب والتحديات على طول، ومابيرجعش مسودة — أي تعديل بعد كده بيعمل نسخة جديدة.',
+    publishConfirm: 'انشر {n}',
+    publishing: 'بننشر…',
+    publishDone: 'اتنشر {n} سؤال',
+    publishNothing: 'مفيش مسودات تتنشر — يمكن اتنشروا من شاشة تانية.',
+    publishFailedTitle: '{n} سؤال مااتنشرش',
+    publishFailedHint: 'دول لسه مسودات — افتح كل واحد وصلّح اللي مكتوب جنبه.',
+    publishFix: 'افتح وصلّحه',
+    publishRequestFailed: 'النشر ماتمّش، ومفيش حاجة اتغيّرت في اللي ماوصلش — جرّب تاني.',
+    /** The question's `generalFeedbackHtml`, shown under its options. */
+    explanation: 'الشرح',
+    noExplanation: 'من غير شرح — الطالب مش هيلاقي حاجة بعد الإجابة الغلط.',
+    /** Before a variant group's key, on its tag and its heading. */
+    group: 'المجموعة',
+    groupCount: '{n} صيغة',
   },
   newQuestion: 'سؤال جديد',
   /**

@@ -96,6 +96,7 @@
     "./quiz/challenges": "./src/quiz/challenges.ts",
     "./quiz/game-stats": "./src/quiz/game-stats.ts",
     "./quiz/question-removal": "./src/quiz/question-removal.ts",
+    "./quiz/publish-drafts": "./src/quiz/publish-drafts.ts",
     "./quiz/external-books": "./src/quiz/external-books.ts",
     "./admin/analytics": "./src/admin/analytics.ts",
     "./admin/video-analytics": "./src/admin/video-analytics.ts",
