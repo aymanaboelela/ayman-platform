@@ -354,6 +354,13 @@ export const AUDIT_ACTIONS = [
   // is also the one book-order transition whose trail is the ONLY record it
   // happened.
   'book-order:printing',
+  // «اتبعت لشركة الشحن» — the data went into the courier's system, usually
+  // with the print run. Separate from `ship` because the parcel is still at the
+  // printer; `ship` is the day their agent collected it.
+  'book-order:courier',
+  // A status the courier's webhook reported. No admin behind it — the actor is
+  // their system, and the metadata carries what it said.
+  'book-order:courier-status',
   'book-order:ship',
   // The rest of the courier leg and the two judgements about an order.
   //

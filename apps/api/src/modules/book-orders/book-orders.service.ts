@@ -315,7 +315,7 @@ function lineFacts(item: CountableOrder['items'][number], order: CountableOrder)
  * `orders` and one order in EACH year's `orders`. The question a year bucket
  * answers is «كام طلب فيه كتاب أولى», which is what a print run is decided on.
  */
-function summariseOrders(rows: CountableOrder[]): AdminBookOrderOverview {
+function summariseOrders(rows: CountableOrder[]): Omit<AdminBookOrderOverview, 'tabCounts'> {
   const totals = { orders: rows.length, books: 0, copies: 0, general: 0, languages: 0 };
   const phones = new Set<string>();
   /* Keyed by the year as a string so `null` («من غير صف») is a bucket like any
@@ -488,9 +488,40 @@ const ORDER_SELECT = {
   rejectedAt: true,
   rejectionReason: true,
   createdAt: true,
+  /* «فين الكتاب؟» — the courier's latest word on the parcel. See
+     `courierView`. */
+  courierStatusId: true,
+  courierStatusName: true,
+  courierStatusNote: true,
+  courierStatusAt: true,
+  courierAgentName: true,
+  courierAgentPhone: true,
   course: { select: { title: true, bookTitle: true } },
   items: ORDER_ITEM_SELECT,
 } as const;
+
+/**
+ * The courier's latest status as both screens render it — `null` until their
+ * first webhook, because a parcel nobody has reported on has no status to show.
+ */
+export function courierView(row: {
+  courierStatusId: number | null;
+  courierStatusName: string | null;
+  courierStatusNote: string | null;
+  courierStatusAt: Date | null;
+  courierAgentName: string | null;
+  courierAgentPhone: string | null;
+}): BookOrder['courier'] {
+  if (row.courierStatusId === null || row.courierStatusName === null) return null;
+  return {
+    statusId: row.courierStatusId,
+    statusName: row.courierStatusName,
+    note: row.courierStatusNote,
+    agentName: row.courierAgentName,
+    agentPhone: row.courierAgentPhone,
+    at: row.courierStatusAt?.toISOString() ?? null,
+  };
+}
 
 /** One line as it is written — the shape both pricing paths return. */
 interface OrderLineWrite {
@@ -541,6 +572,12 @@ interface OrderRow {
   rejectedAt: Date | null;
   rejectionReason: string | null;
   createdAt: Date;
+  courierStatusId: number | null;
+  courierStatusName: string | null;
+  courierStatusNote: string | null;
+  courierStatusAt: Date | null;
+  courierAgentName: string | null;
+  courierAgentPhone: string | null;
   course: { title: string; bookTitle: string | null } | null;
   items: OrderLineRow[];
 }
@@ -555,6 +592,13 @@ interface OrderRow {
  * have to argue with a dialog about.
  */
 const DUPLICATE_WINDOW_DAYS = 7;
+
+/**
+ * Where a parcel can be when the admin presses «اتشحن» (or «وصل»): paid and
+ * not yet gone. `paid` too, for the reprint handed over the counter that never
+ * saw a print run.
+ */
+const SHIPPABLE: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing']);
 
 @Injectable()
 export class BookOrdersService {
@@ -641,6 +685,7 @@ export class BookOrdersService {
       deliveredAt: row.deliveredAt?.toISOString() ?? null,
       rejectedAt: row.rejectedAt?.toISOString() ?? null,
       rejectionReason: row.rejectionReason,
+      courier: courierView(row),
       createdAt: row.createdAt.toISOString(),
     };
   }
@@ -981,7 +1026,7 @@ export class BookOrdersService {
    * which is what guest checkout is for. That is not a degraded case to work
    * around; there is simply no bell to ring, and the admin tells them himself.
    */
-  private async studentIdForOrder(order: {
+  async studentIdForOrder(order: {
     userId: string | null;
     phone: string;
   }): Promise<string | null> {
@@ -1994,6 +2039,16 @@ export class BookOrdersService {
           createdAt: true,
           paidAt: true,
           printedAt: true,
+          courierSentAt: true,
+          courierError: true,
+          /* «فين الكتاب؟» — the courier's latest word on the parcel. See
+             `courierView`. */
+          courierStatusId: true,
+          courierStatusName: true,
+          courierStatusNote: true,
+          courierStatusAt: true,
+          courierAgentName: true,
+          courierAgentPhone: true,
           shippedAt: true,
           deliveredAt: true,
           rejectedAt: true,
@@ -2085,6 +2140,9 @@ export class BookOrdersService {
         heldReason: row.heldReason,
         screenshotAmountCents: row.screenshotAmountCents,
         printedAt: row.printedAt?.toISOString() ?? null,
+        courierSentAt: row.courierSentAt?.toISOString() ?? null,
+        courierError: row.courierError,
+        courier: courierView(row),
         shippedAt: row.shippedAt?.toISOString() ?? null,
         deliveredAt: row.deliveredAt?.toISOString() ?? null,
         rejectedAt: row.rejectedAt?.toISOString() ?? null,
@@ -2145,6 +2203,28 @@ export class BookOrdersService {
    * already why `previousOrdersFromPhone` counts on it.
    */
   async adminOverview(query: AdminBookOrderQuery): Promise<AdminBookOrderOverview> {
+    /* The tab counts ignore the tab itself and keep everything else — they are
+       the answer to «لو دست على التبويب ده هلاقي كام؟». */
+    const scope: Prisma.BookOrderWhereInput = {
+      ...this.adminSearchWhere(query.q),
+      ...streamAndYearWhere(query.stream, query.year),
+    };
+    const [byStatus, deleted] = await Promise.all([
+      this.prisma.bookOrder.groupBy({
+        by: ['status'],
+        where: { ...scope, deletedAt: null },
+        _count: { _all: true },
+      }),
+      this.prisma.bookOrder.count({ where: { ...scope, deletedAt: { not: null } } }),
+    ]);
+    const tabCounts: Record<string, number> = { deleted };
+    let all = 0;
+    for (const group of byStatus) {
+      tabCounts[group.status] = group._count._all;
+      all += group._count._all;
+    }
+    tabCounts.all = all;
+
     const rows = await this.prisma.bookOrder.findMany({
       where: {
         ...liveOrDeletedWhere(query.status),
@@ -2163,7 +2243,7 @@ export class BookOrdersService {
       },
     });
 
-    return summariseOrders(rows);
+    return { ...summariseOrders(rows), tabCounts };
   }
 
   /**
@@ -2659,7 +2739,7 @@ export class BookOrdersService {
        reprint handed over the counter never sees a print run, and demanding a
        fake one to unlock this button would put a lie in the audit trail. Same
        argument `markDelivered` has always made for accepting `paid`. */
-    if (order.status !== 'paid' && order.status !== 'printing') {
+    if (!SHIPPABLE.has(order.status)) {
       throw new BadRequestException(
         order.status === 'shipped' ? 'this order already shipped' : 'this order has not been paid yet',
       );
@@ -2760,7 +2840,7 @@ export class BookOrdersService {
          printer this morning is exactly the row this batch runs on when the
          boxes come back in the afternoon, and skipping it here would make the
          new state a dead end reachable only one row at a time. */
-      if (order.status !== 'paid' && order.status !== 'printing') {
+      if (!SHIPPABLE.has(order.status)) {
         rows.push({
           id,
           outcome: 'skipped',
@@ -2953,7 +3033,7 @@ export class BookOrdersService {
   async markDelivered(adminId: string, orderId: string): Promise<MarkBookOrderDeliveredResult> {
     const order = await this.orderForAdminAction(orderId);
     this.assertNotDeleted(order);
-    if (order.status !== 'paid' && order.status !== 'printing' && order.status !== 'shipped') {
+    if (!SHIPPABLE.has(order.status) && order.status !== 'shipped') {
       throw new BadRequestException(
         order.status === 'delivered'
           ? 'this order was already marked delivered'

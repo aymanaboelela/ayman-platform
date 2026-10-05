@@ -3171,6 +3171,36 @@ model BookOrder {
   deliveredAt       DateTime? @map("delivered_at")
   deliveredByUserId String?   @map("delivered_by_user_id")
 
+  /// «شركة الشحن» — the order as Torod (the courier) knows it. A FLAG beside
+  /// the status and never a status of its own: the data goes to their system
+  /// when the run goes to the printer, and their agent collects the boxes FROM
+  /// the printer — so «في المطبعة» and «عند شركة الشحن» are true at once.
+  /// Null forever on a stack without the `books.courier` entitlement.
+  ///
+  /// `courierSentAt` is the double-push guard, the same job `shipNoticeSentAt`
+  /// does for the message: their `addorders` is not idempotent, so a second
+  /// press of «اتشحن» must find this stamped and skip the call rather than
+  /// create a second shipment the courier will happily dispatch.
+  courierSentAt     DateTime? @map("courier_sent_at")
+  /// Why the last push was refused, in the courier's own words — «لا يوجد عميل
+  /// بهذه البيانات». Null on success. Stored for the same reason
+  /// `shipNoticeError` is: the admin re-opening the list is the only person
+  /// who can act on it.
+  courierError      String?   @map("courier_error")
+  /// Their id for the shipment (`vision_ID`), learned from the first webhook.
+  courierRef        String?   @map("courier_ref")
+  /// The LATEST status the courier reported — a copy of the newest
+  /// `BookOrderCourierEvent`, kept here so the admin list can filter and render
+  /// without a join per row. The events table is the history; this is «دلوقتي».
+  courierStatusId   Int?      @map("courier_status_id")
+  courierStatusName String?   @map("courier_status_name")
+  courierStatusNote String?   @map("courier_status_note")
+  courierStatusAt   DateTime? @map("courier_status_at")
+  /// The delivery agent on the latest status — the name and number the
+  /// student is told to expect a call from.
+  courierAgentName  String?   @map("courier_agent_name")
+  courierAgentPhone String?   @map("courier_agent_phone")
+
   /// «أرفضه» — the admin turned the order down, and the student is owed the
   /// reason. The row STAYS in the list and stays visible to the student; that is
   /// the whole difference from `deletedAt` below. `books_orders_rejection_has_a_
@@ -3209,6 +3239,9 @@ model BookOrder {
   items       BookOrderItem[]
   /// Money given back against this order — see `Refund`.
   refunds     Refund[]
+  /// What the courier reported, one row per status change — see
+  /// `BookOrderCourierEvent`.
+  courierEvents BookOrderCourierEvent[]
 
   /// The admin list: paid-not-yet-shipped is the default view of `/admin/books`
   /// and the Excel export's own filter — oldest first, first-come-first-served,
@@ -3243,6 +3276,41 @@ model BookOrder {
   /// «وريني اللي محتاج مراجعة» — a handful of rows against the whole table.
   @@index([heldForReviewAt])
   @@map("book_orders")
+  @@schema("app")
+}
+
+/// One status change the courier reported for a book order, through the
+/// Torod webhook. The order's own `courierStatus*` columns hold only the latest;
+/// this is the trail «فين الكتاب؟» is answered from.
+///
+/// `fingerprint` is what makes the webhook safe to replay. The courier resends
+/// a status whenever it likes (and a retry after our timeout is a resend), and
+/// the student must hear about «مع المندوب» once — so a row whose
+/// status/date/note we have already seen is a no-op, enforced by the unique
+/// index rather than a read-then-write that two concurrent deliveries could
+/// both pass.
+model BookOrderCourierEvent {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  orderId     String   @map("order_id") @db.Uuid
+  fingerprint String
+  statusId    Int      @map("status_id")
+  statusName  String   @map("status_name")
+  statusNote  String?  @map("status_note")
+  /// Their date, as they sent it — «2026-08-02». Text, not a timestamp: it has
+  /// no time and no zone, and parsing it into one would invent both.
+  statusDate  String?  @map("status_date")
+  agentName   String?  @map("agent_name")
+  agentPhone  String?  @map("agent_phone")
+  /// The whole entry as received, for the day a field we do not read turns
+  /// out to matter.
+  raw         Json
+  receivedAt  DateTime @default(now()) @map("received_at")
+
+  order BookOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, fingerprint])
+  @@index([orderId, receivedAt])
+  @@map("book_order_courier_events")
   @@schema("app")
 }
 

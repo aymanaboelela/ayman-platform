@@ -71,6 +71,8 @@ export function ReasonDialog({
   onSubmit,
   schema,
   disabled = false,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   triggerLabel: string;
   title: string;
@@ -85,8 +87,21 @@ export function ReasonDialog({
   onSubmit: (reason: string) => Promise<ActionResult>;
   schema: ReasonSchema;
   disabled?: boolean;
+  /**
+   * Controlled from outside — the card opens these from its «المزيد» menu,
+   * where a button of its own would put a red «ارفض» back on every row. When
+   * set, the dialog renders no trigger.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const controlled = controlledOpen !== undefined;
+  const open = controlled ? controlledOpen : ownOpen;
+  const setOpen = (next: boolean) => {
+    if (!controlled) setOwnOpen(next);
+    onOpenChange?.(next);
+  };
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -123,17 +138,19 @@ export function ReasonDialog({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="danger"
-        disabled={disabled || pending}
-        onClick={() => {
-          setError(null);
-          setOpen(true);
-        }}
-      >
-        {pending ? submittingLabel : triggerLabel}
-      </Button>
+      {controlled ? null : (
+        <Button
+          type="button"
+          variant="danger"
+          disabled={disabled || pending}
+          onClick={() => {
+            setError(null);
+            setOpen(true);
+          }}
+        >
+          {pending ? submittingLabel : triggerLabel}
+        </Button>
+      )}
 
       <Dialog
         open={open}

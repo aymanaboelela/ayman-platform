@@ -3036,6 +3036,28 @@ export const copy = {
   bookShipNotice:
     'يا {name}، كتابك سلّمناه لشركة الشحن النهاردة 📦\n\nهيوصلك خلال {days} أيام عمل بإذن الله، والمندوب هيتصل بيك على نفس الرقم ده قبل ما يوصل.\n\nأي حاجة، رد على الرسالة دي.',
 
+  /**
+   * «شركة الشحن» — what the student is told when the COURIER reports a status,
+   * through the platform thread (never WhatsApp: «مش هبعت حاجة بالواتساب
+   * بتاعي»). One message per status change; `{note}` is the courier's own
+   * remark, already wrapped as « — …» or empty.
+   *
+   * ⚠️ No gendered address, same rule as every outreach line — and no name of
+   * the instructor, because these are signed by nobody but the platform.
+   */
+  bookCourierNotice: {
+    withAgent:
+      'يا {name}، كتابك دلوقتي مع مندوب شركة الشحن وفي الطريق 🚚\n\nالمندوب: {agent}\nالرقم: {phone}\n\nهيتصل قبل ما يوصل، فالموبايل يفضل قريب.',
+    withAgentUnnamed:
+      'يا {name}، كتابك دلوقتي مع مندوب شركة الشحن وفي الطريق 🚚\n\nهيتصل قبل ما يوصل، فالموبايل يفضل قريب.',
+    delivered:
+      'يا {name}، شركة الشحن بلّغتنا إن الكتاب اتسلّم ✅\n\nبالتوفيق في المذاكرة. ولو فيه أي مشكلة في الكتاب، الرد على الرسالة دي بيوصلنا.',
+    postponed:
+      'يا {name}، شركة الشحن أجّلت توصيل الكتاب{note}.\n\nالمندوب هيتواصل تاني على نفس الرقم لتحديد ميعاد جديد.',
+    returned:
+      'يا {name}، شحنة الكتاب رجعت لشركة الشحن ومتسلّمتش{note}.\n\nهنتواصل على نفس الرقم عشان نرتّب التوصيل من جديد. ولو فيه رقم أو عنوان أدق، الرد على الرسالة دي بيوصلنا.',
+  },
+
   bookOrder: {
     cta: 'اطلب الكتاب',
     /** `{cta}` — `bookOrder.cta` itself, `{price}` — EGP, already formatted.
@@ -6863,6 +6885,10 @@ export const copy = {
       /** ما بيوعدش بيوم — الطبعة بترجع لما ترجع — بس بيقول الخطوة اللي بعدها،
        *  زي باقي السطور هنا. */
       notePrinting: 'نسختك دخلت المطبعة مع طبعة جديدة. أول ما تخرج وتتشحن هتلاقي هنا إنها في الطريق.',
+      /** What the courier last said, under the note — «فين الكتاب دلوقتي؟». */
+      courierStatus: 'شركة الشحن: {status}',
+      /** `{name}` — the number is rendered beside it, isolated LTR. */
+      courierAgent: 'المندوب: {name}',
       noteShipped: 'الكتاب خرج ليك وفي الطريق. ساعات بيتأخر يوم أو اتنين، وده عادي — أول ما يوصلك هتلاقي هنا إنه اتسلّم.',
       noteDelivered: 'الكتاب وصلك. لو في أي مشكلة فيه كلّم الدعم وإحنا نظبّطها.',
       /* ── «استلمت الكتاب» ────────────────────────────────────────────────

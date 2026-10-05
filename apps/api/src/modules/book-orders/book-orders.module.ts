@@ -10,6 +10,9 @@ import { BookOrdersController } from './book-orders.controller';
 import { AdminBookOrdersController } from './admin-book-orders.controller';
 import { BookOrdersService } from './book-orders.service';
 import { warmReceiptOcr } from './receipt-ocr';
+import { BookOrderCourierService } from './courier/book-order-courier.service';
+import { TorodClient } from './courier/torod.client';
+import { TorodWebhookController } from './courier/torod-webhook.controller';
 
 /**
  * `AuthModule` — for `OptionalSessionService`, which `BookOrdersController`'s
@@ -28,8 +31,8 @@ import { warmReceiptOcr } from './receipt-ocr';
     /* «إنستا باي» و«فودافون كاش» — الرقمين اللي الإيصال بيتقري بالنسبة لهم. */
     SettingsModule,
   ],
-  controllers: [BookOrdersController, AdminBookOrdersController],
-  providers: [BookOrdersService],
+  controllers: [BookOrdersController, AdminBookOrdersController, TorodWebhookController],
+  providers: [BookOrdersService, BookOrderCourierService, TorodClient],
   // «التحويلات الواردة» settles a paid book the same way it settles a
   // subscription — see `TransfersService`, which lives in `PaymentsModule`.
   exports: [BookOrdersService],

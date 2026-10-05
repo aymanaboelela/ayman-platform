@@ -238,6 +238,11 @@ services:
       # everything, which is the intended default: مفيش موافقة أوتوماتيك من
       # غير ما حد يظبط التوكن بنفسه.
       INSTAPAY_INGEST_TOKEN: ${INSTAPAY_INGEST_TOKEN:-}
+      # «شركة الشحن» (Torod) — حساب الـAPI وتوكن الـwebhook. فاضيين = «اتشحن»
+      # بيشتغل زي ما كان من غير ما يبعت لشركة الشحن، وده الافتراضي.
+      TOROD_LOGIN: ${TOROD_LOGIN:-}
+      TOROD_PASSWORD: ${TOROD_PASSWORD:-}
+      TOROD_WEBHOOK_TOKEN: ${TOROD_WEBHOOK_TOKEN:-}
       # «مش روبوت» على التسجيل — السر هنا والمفتاح العام في الويب تحت.
       # فاضي = مفيش تحقق، وده الافتراضي.
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}

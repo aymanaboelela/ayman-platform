@@ -266,6 +266,38 @@ export function BookOrderCard({
       ) : null}
 
       {/*
+        «فين الكتاب دلوقتي؟» — what the courier last said, and who is carrying
+        it. Only while the parcel is still moving: on a delivered or rejected
+        order the courier's last word is history the card already tells better.
+        The agent's number is isolated LTR, or it reverses inside Arabic.
+      */}
+      {order.courier && !status.closed ? (
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[length:var(--fs-text-sm)]">
+          <span className="text-fg">
+            {formatCopy(c.courierStatus, { status: order.courier.statusName })}
+            {order.courier.note ? <span className="text-fg-muted"> — {order.courier.note}</span> : null}
+          </span>
+          {order.courier.agentName ? (
+            <span className="text-fg-muted">
+              {formatCopy(c.courierAgent, { name: order.courier.agentName })}
+              {order.courier.agentPhone ? (
+                <>
+                  {' · '}
+                  <a
+                    href={`tel:${order.courier.agentPhone}`}
+                    dir="ltr"
+                    className="[unicode-bidi:isolate] underline decoration-dotted underline-offset-4"
+                  >
+                    {order.courier.agentPhone}
+                  </a>
+                </>
+              ) : null}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/*
         The admin's own words, VERBATIM, under a prefix that marks them as a
         quote and not as ours — the same rule `payment_rejected` follows in the
         notification feed. `rejectionReason` is non-null exactly when

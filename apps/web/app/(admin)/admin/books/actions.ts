@@ -18,6 +18,8 @@ import {
   RejectBookOrderSchema,
   RestoreBookOrderResultSchema,
   ClearBookOrderHoldResultSchema,
+  BookOrderCourierEventListSchema,
+  type BookOrderCourierEvent,
 } from '@ayman/contracts/admin/book-orders';
 import { z } from 'zod';
 import {
@@ -27,7 +29,7 @@ import {
 } from '@ayman/contracts/admin/books';
 import { BookOrderSchema } from '@ayman/contracts/book-orders';
 import { copy } from '@ayman/contracts/copy/admin';
-import { adminGet, adminSend } from '@/lib/admin-api';
+import { AdminApiError, adminGet, adminSend } from '@/lib/admin-api';
 
 const c = copy.admin.books;
 
@@ -199,16 +201,55 @@ export async function deliverBookOrdersAction(ids: string[]): Promise<BulkBookOr
  * difference from `shipBookOrdersAction` above, and it is why the two are
  * separate actions rather than one with a mode.
  */
-export async function printBookOrdersAction(ids: string[]): Promise<BulkBookOrderResult | null> {
+export async function printBookOrdersAction(
+  ids: string[],
+  /** Hand the same run to the courier's system — see `BulkBookOrderActionSchema.courier`. */
+  courier = false,
+): Promise<BulkBookOrderResult | null> {
   try {
     const result = await adminSend(
       'POST',
       '/api/admin/book-orders/printing',
-      { ids },
+      { ids, courier },
       BulkBookOrderResultSchema,
     );
     revalidatePath('/admin/books');
     return result;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * «ابعت لشركة الشحن». Unlike the batches above, a refusal of the WHOLE request
+ * carries a sentence worth showing — «ربط شركة الشحن مش متظبط» — so it comes
+ * back as `{ error }` instead of a bare `null` the toast can only call a
+ * failure.
+ */
+export async function courierBookOrdersAction(
+  ids: string[],
+): Promise<BulkBookOrderResult | { error: string } | null> {
+  try {
+    const result = await adminSend('POST', '/api/admin/book-orders/courier', { ids }, BulkBookOrderResultSchema);
+    revalidatePath('/admin/books');
+    return result;
+  } catch (error) {
+    if (error instanceof AdminApiError && error.status === 400) {
+      const message = (error.payload as { message?: unknown } | null)?.message;
+      if (typeof message === 'string') return { error: message };
+    }
+    return null;
+  }
+}
+
+/** «تتبّع الشحنة» — fetched when the trail is opened, never per row on load:
+ *  fifty cards each asking on render is how this screen meets the rate limit. */
+export async function courierEventsAction(id: string): Promise<BookOrderCourierEvent[] | null> {
+  try {
+    return await adminGet(
+      `/api/admin/book-orders/${encodeURIComponent(id)}/courier-events`,
+      BookOrderCourierEventListSchema,
+    );
   } catch {
     return null;
   }

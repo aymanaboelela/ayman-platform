@@ -16,7 +16,9 @@ import {
   deliverBookOrdersAction,
   printBookOrdersAction,
   clearBookOrderHoldsAction,
+  courierBookOrdersAction,
 } from './actions';
+import { reportCourierHalf } from './courier-actions';
 
 const c = copy.admin.books;
 
@@ -60,11 +62,23 @@ interface BulkContext {
   setBusy: (value: boolean) => void;
   alsoWhatsapp: boolean;
   setAlsoWhatsapp: (value: boolean) => void;
+  /** «ابعت لشركة الشحن» exists on this stack — `books.courier`. */
+  courierEnabled: boolean;
+  /** The open tab — the bar offers the actions that make sense on it. */
+  tab: string;
 }
 
 const Ctx = createContext<BulkContext | null>(null);
 
-export function BulkShipProvider({ children }: { children: ReactNode }) {
+export function BulkShipProvider({
+  children,
+  courierEnabled = false,
+  tab = 'all',
+}: {
+  children: ReactNode;
+  courierEnabled?: boolean;
+  tab?: string;
+}) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   /*
@@ -92,8 +106,10 @@ export function BulkShipProvider({ children }: { children: ReactNode }) {
       setBusy,
       alsoWhatsapp,
       setAlsoWhatsapp,
+      courierEnabled,
+      tab,
     }),
-    [selected, busy, alsoWhatsapp],
+    [selected, busy, alsoWhatsapp, courierEnabled, tab],
   );
 
   return (
@@ -121,12 +137,26 @@ export function useBulkSelectMany(): ((ids: string[]) => void) | null {
   return useContext(Ctx)?.selectMany ?? null;
 }
 
+/** Whether this stack has «ابعت لشركة الشحن» — read by the card's own button. */
+export function useCourierEnabled(): boolean {
+  return useContext(Ctx)?.courierEnabled ?? false;
+}
+
 /**
  * One row's checkbox. Rendered only on rows an action can actually apply to —
  * a checkbox on a delivered order is a control that can only ever produce
  * «اتشحن قبل كده».
  */
-export function OrderCheckbox({ id, label }: { id: string; label: string }) {
+export function OrderCheckbox({
+  id,
+  label,
+  compact = false,
+}: {
+  id: string;
+  label: string;
+  /** Box only — at the head of a card, where a column of them is the label. */
+  compact?: boolean;
+}) {
   const ctx = useContext(Ctx);
   if (!ctx) return null;
   return (
@@ -135,10 +165,10 @@ export function OrderCheckbox({ id, label }: { id: string; label: string }) {
         type="checkbox"
         checked={ctx.selected.has(id)}
         onChange={() => ctx.toggle(id)}
-        className="size-4"
+        className="size-5 accent-accent"
         aria-label={formatCopy(c.bulkSelectOne, { name: label })}
       />
-      {c.bulkSelect}
+      {compact ? null : c.bulkSelect}
     </label>
   );
 }
@@ -249,115 +279,147 @@ function BulkActions({ variant }: { variant: 'bar' | 'inline' }) {
     router.refresh();
   }
 
+  /* Which buttons this bar offers: the next step for the tab that is open, so
+     the bar on «مدفوعة» reads «ابعت للمطبعة» and not five things to choose
+     between. «الكل» and the search results mix states, so they get them all. */
+  const tab = ctx.tab;
+  const mixed = tab !== 'paid' && tab !== 'printing' && tab !== 'shipped';
+  const showPrint = mixed || tab === 'paid';
+  const showShip = mixed || tab === 'printing';
+  const showDeliver = mixed || tab === 'shipped';
+  const showCourier = ctx.courierEnabled && (mixed || tab === 'printing');
+
   return (
     <>
       <span
         className={
           variant === 'bar'
             ? 'text-[length:var(--fs-text-sm)] font-medium text-fg'
-            : 'text-[length:var(--fs-text-xs)] font-medium text-accent-text'
+            : 'text-[length:var(--fs-text-sm)] font-semibold text-accent-text'
         }
       >
         {formatCopy(c.bulkSelected, { count: String(ids.length) })}
       </span>
-      <label className="flex cursor-pointer items-center gap-1.5 text-[length:var(--fs-text-xs)] text-fg-muted">
-        <input
-          type="checkbox"
-          checked={alsoWhatsapp}
-          onChange={(event) => setAlsoWhatsapp(event.target.checked)}
-          className="size-4"
-        />
-        {c.bulkAlsoWhatsapp}
-      </label>
-      <div className={variant === 'bar' ? 'ms-auto flex flex-wrap items-center gap-2' : 'flex flex-wrap items-center gap-2'}>
-        {/*
-          «راجعتهم، كمّل» — FIRST, because it is first in the day.
-
-          A held order is missing from the packing list, from «كروت الشحن» and
-          from both batches beside this one, so pressing any of them before this
-          quietly leaves those parcels behind. Putting the lift at the head of
-          the row puts it where the run actually starts: review the flagged
-          receipts, lift the holds, then print and ship the whole list as one.
-
-          Amber, matching `HeldBanner` — it is the only control here that
-          answers a band the admin has already been reading up the page.
-        */}
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={busy}
-          onClick={() => {
-            if (!window.confirm(formatCopy(c.bulkReviewOkConfirm, { count: String(ids.length) })))
-              return;
-            void run(clearBookOrderHoldsAction, c.bulkReviewOkDone, {
-              quietSkipReason: BULK_NOT_HELD_REASON,
-              noneMessage: c.bulkReviewOkNone,
-            });
-          }}
-          /* Inline, like `HeldBanner`'s own band: `color-mix` in an arbitrary
-             Tailwind value has to be underscore-escaped to survive the class
-             parser, and a token this button MUST match exactly is not worth
-             spelling twice in two different syntaxes. */
-          style={{
-            borderColor: 'color-mix(in oklch, var(--warn), transparent 55%)',
-            background: 'color-mix(in oklch, var(--warn), transparent 88%)',
-            color: 'var(--warn)',
-          }}
-        >
-          {c.bulkReviewOkButton}
-        </Button>
-        <Button
-          size="sm"
-          disabled={busy}
-          onClick={() => {
-            if (
-              !window.confirm(
-                formatCopy(alsoWhatsapp ? c.bulkShipConfirmWhatsapp : c.bulkShipConfirm, {
-                  count: String(ids.length),
-                }),
-              )
-            )
-              return;
-            void run(shipBookOrdersAction, c.bulkShipped);
-          }}
-        >
-          {busy ? c.bulkWorking : c.bulkShipButton}
-        </Button>
-        {/*
-          «أحدد على الناس كلهم وأضغط الطباعة» — the batch this screen is
-          actually driven by. It sits BEFORE «اشحن المحدد» because that is the
-          order the day runs in: the PDF comes down, the rows go to the
-          printer, and shipping happens when the boxes come back.
-
-          No WhatsApp box and no mention of messages in its confirm — nothing is
-          sent. It reads the same selection the other two do, so the run picked
-          with «حدّد اللي في المدى» is exactly the run that goes.
-        */}
-        <Button
-          size="sm"
-          disabled={busy}
-          onClick={() => {
-            if (!window.confirm(formatCopy(c.bulkPrintConfirm, { count: String(ids.length) }))) return;
-            void run(printBookOrdersAction, c.bulkPrinted);
-          }}
-          className="!bg-[oklch(0.55_0.16_300)] !text-white hover:!bg-[oklch(0.50_0.16_300)]"
-        >
-          {c.bulkPrintButton}
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={busy}
-          onClick={() => {
-            if (!window.confirm(formatCopy(c.bulkDeliverConfirm, { count: String(ids.length) }))) return;
-            void run(deliverBookOrdersAction, c.bulkShipped);
-          }}
-        >
-          {c.bulkDeliverButton}
-        </Button>
+      {/* «ابعت واتساب كمان» belongs to «اتشحن» alone — it is the only batch
+          that messages anybody — so it shows only where «اتشحن» does. */}
+      {showShip ? (
+        <label className="flex cursor-pointer items-center gap-1.5 text-[length:var(--fs-text-xs)] text-fg-muted">
+          <input
+            type="checkbox"
+            checked={alsoWhatsapp}
+            onChange={(event) => setAlsoWhatsapp(event.target.checked)}
+            className="size-4"
+          />
+          {c.bulkAlsoWhatsapp}
+        </label>
+      ) : null}
+      <div className={variant === 'bar' ? 'ms-auto flex flex-wrap items-center gap-2' : 'ms-auto flex flex-wrap items-center gap-2'}>
         <Button size="sm" variant="ghost" disabled={busy} onClick={clear}>
           {c.bulkClear}
         </Button>
+        {/*
+          «راجعتهم، كمّل» — first, because it is first in the day: a held order
+          is missing from the packing list and from every batch beside this.
+          Only where holds live — a hold is lifted before the print run.
+        */}
+        {showPrint ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={busy}
+            onClick={() => {
+              if (!window.confirm(formatCopy(c.bulkReviewOkConfirm, { count: String(ids.length) }))) return;
+              void run(clearBookOrderHoldsAction, c.bulkReviewOkDone, {
+                quietSkipReason: BULK_NOT_HELD_REASON,
+                noneMessage: c.bulkReviewOkNone,
+              });
+            }}
+            style={{
+              borderColor: 'color-mix(in oklch, var(--warn), transparent 55%)',
+              background: 'color-mix(in oklch, var(--warn), transparent 88%)',
+              color: 'var(--warn)',
+            }}
+          >
+            {c.bulkReviewOkButton}
+          </Button>
+        ) : null}
+        {showDeliver ? (
+          <Button
+            size="sm"
+            disabled={busy}
+            onClick={() => {
+              if (!window.confirm(formatCopy(c.bulkDeliverConfirm, { count: String(ids.length) }))) return;
+              void run(deliverBookOrdersAction, c.bulkShipped);
+            }}
+            style={{ background: 'oklch(0.58 0.13 240)', color: '#fff' }}
+          >
+            {c.bulkDeliverButton}
+          </Button>
+        ) : null}
+        {showCourier ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={busy}
+            onClick={() => {
+              if (!window.confirm(formatCopy(c.bulkCourierConfirm, { count: String(ids.length) }))) return;
+              void run(async (selection) => {
+                const result = await courierBookOrdersAction(selection);
+                if (result && 'error' in result) {
+                  toast.error(result.error);
+                  return { rows: [], succeeded: 0, noticeFailed: 0, skipped: 0 };
+                }
+                return result;
+              }, c.bulkCourierDone);
+            }}
+            style={{ color: 'oklch(0.55 0.13 190)', borderColor: 'color-mix(in oklch, oklch(0.55 0.13 190), transparent 55%)' }}
+          >
+            {c.sendToCourier}
+          </Button>
+        ) : null}
+        {showShip ? (
+          <Button
+            size="sm"
+            disabled={busy}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  formatCopy(alsoWhatsapp ? c.bulkShipConfirmWhatsapp : c.bulkShipConfirm, {
+                    count: String(ids.length),
+                  }),
+                )
+              )
+                return;
+              void run(shipBookOrdersAction, c.bulkShipped);
+            }}
+            style={{ background: 'oklch(0.58 0.15 150)', color: '#fff' }}
+          >
+            {busy ? c.bulkWorking : c.bulkShipButton}
+          </Button>
+        ) : null}
+        {/*
+          «ابعت للمطبعة» — and, on a stack with the courier integration, the
+          same run goes into the courier's system: the printer hands the boxes
+          to their agent, so the data must be there first. The confirm says so.
+        */}
+        {showPrint ? (
+          <Button
+            size="sm"
+            disabled={busy}
+            onClick={() => {
+              const ask = ctx.courierEnabled ? c.bulkPrintCourierConfirm : c.bulkPrintConfirm;
+              if (!window.confirm(formatCopy(ask, { count: String(ids.length) }))) return;
+              void run(async (selection) => {
+                const result = await printBookOrdersAction(selection, ctx.courierEnabled);
+                if (result) reportCourierHalf(result);
+                return result;
+              }, c.bulkPrinted);
+            }}
+            style={{ background: 'oklch(0.55 0.16 300)', color: '#fff' }}
+          >
+            {busy ? c.bulkWorking : c.bulkPrintButton}
+          </Button>
+        ) : null}
       </div>
     </>
   );

@@ -27,6 +27,7 @@ import {
   RejectBookOrderDto,
 } from './book-orders.dto';
 import { BookOrdersService } from './book-orders.service';
+import { BookOrderCourierService } from './courier/book-order-courier.service';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
@@ -47,6 +48,7 @@ export class AdminBookOrdersController {
   constructor(
     private readonly bookOrders: BookOrdersService,
     private readonly media: MediaService,
+    private readonly courier: BookOrderCourierService,
   ) {}
 
   @RequirePermission('book-order:read')
@@ -260,8 +262,49 @@ export class AdminBookOrdersController {
   @RequireCsrf()
   @Post('printing')
   @UsePipes(ZodValidationPipe)
-  printMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
-    return this.bookOrders.markPrintingMany(user.id, body.ids);
+  async printMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
+    const result = await this.bookOrders.markPrintingMany(user.id, body.ids);
+    /* «ابعتهم لشركة الشحن الأول عشان ياخدوهم من المطبعة» — the same run goes
+       into the courier's system, but only the rows that actually went to the
+       printer just now. A courier refusal never undoes the print: the paper is
+       at the printer either way, and the row says what is still missing. */
+    if (!body.courier || !this.courier.enabled()) return result;
+    const printed = result.rows.filter((row) => row.outcome === 'printing').map((row) => row.id);
+    if (printed.length === 0) return result;
+    const sent = await this.courier.sendMany(user.id, printed);
+    return {
+      ...result,
+      courier: {
+        sent: sent.succeeded,
+        failed: sent.rows
+          .filter((row) => row.outcome !== 'sent_to_courier')
+          .map((row) => ({ id: row.id, fullName: row.fullName, reason: row.reason ?? '' })),
+      },
+    };
+  }
+
+  /**
+   * «ابعت لشركة الشحن» on its own — for the orders the print batch did not
+   * cover: refused by the courier the first time, or printed before the
+   * integration existed. Gated on
+   * `books.courier` on top of the class's `books`: a stack without the
+   * integration has no button and no route. See `BookOrderCourierService`.
+   */
+  @RequireFeature('books.courier')
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post('courier')
+  @UsePipes(ZodValidationPipe)
+  courierMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
+    return this.courier.sendMany(user.id, body.ids);
+  }
+
+  /** «فين الكتاب؟» — every status the courier reported for one order. */
+  @RequireFeature('books.courier')
+  @RequirePermission('book-order:read')
+  @Get(':id/courier-events')
+  courierEvents(@Param('id') id: string) {
+    return this.courier.events(id);
   }
 
   @RequirePermission('book-order:ship')

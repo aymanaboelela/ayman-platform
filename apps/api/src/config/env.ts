@@ -160,6 +160,25 @@ const schema = z
     INSTAPAY_INGEST_TOKEN: optionalSecret,
 
     /**
+     * «شركة الشحن» — the account Torod issued for its `addorders` API, and the
+     * secret its status webhook must carry back.
+     *
+     * The courier push runs only when LOGIN and PASSWORD are both present AND
+     * the stack holds the `books.courier` entitlement; anything less leaves
+     * «اتشحن» doing exactly what it did before. Deliberately NOT a paired
+     * `.refine` like `WA_SERVICE_URL`: a half-filled courier account must
+     * never be able to stop the API from booting — see `optionalSecret` for
+     * the hour that cost once.
+     *
+     * The webhook token is separate because the courier sends it, not us: it
+     * is the path segment their dashboard posts to, and unset means the
+     * webhook route refuses everything.
+     */
+    TOROD_LOGIN: optionalSecret,
+    TOROD_PASSWORD: optionalSecret,
+    TOROD_WEBHOOK_TOKEN: optionalSecret,
+
+    /**
      * Cloudflare Turnstile's SECRET — the server half of the «مش روبوت» check on
      * `/sign-up/email` (`auth/human-check.ts`). The site key is the web's
      * (`TURNSTILE_SITE_KEY`), and the two go in together or not at all:
