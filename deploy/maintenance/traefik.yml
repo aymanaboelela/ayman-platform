@@ -1,0 +1,25 @@
+# Traefik (file provider في Dokploy: /etc/dokploy/traefik/dynamic/maintenance.yml).
+#
+# أولوية ١ — أقل من أي راوتر بتاع ستاك (Traefik بيدّي الراوتر أولوية = طول
+# الـrule، فـHost(`x.com`) = ٢٥). فطول ما الستاك قايم وhealthy راوتره بيكسب،
+# ولما الحاوية بتتشال أو لسه بتقوم (Traefik بيتجاهل الحاوية اللي مش healthy)
+# الراوتر بتاعها بيختفي والطلب بيقع هنا بدل «404 page not found».
+#
+# دومين جديد لمدرّس = سطر Host جديد هنا (docs/runbooks/new-tenant.md).
+http:
+  routers:
+    maintenance:
+      rule: "Host(`aymanaboelela.com`) || Host(`mr-mohammedadel.com`) || Host(`engmohamedsabry.com`)"
+      entryPoints:
+        - websecure
+      priority: 1
+      service: maintenance
+      # من غير certResolver: الشهادات اللي راوترات الستاكات جابتها موجودة في
+      # الـstore وبتتختار بالـSNI. resolver هنا كان هيطلب شهادة واحدة للتلات
+      # دومينات بتحدي HTTP، وده بيقع ورا Cloudflare.
+      tls: {}
+  services:
+    maintenance:
+      loadBalancer:
+        servers:
+          - url: "http://platform-maintenance:80"
