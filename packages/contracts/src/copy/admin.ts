@@ -1507,6 +1507,14 @@ const admin = {
     /** على كل درس — `{title}` اسم المحاضرة اللي بياخد أسئلته. */
     linkedTo: 'على: {title}',
     notLinkedYet: 'لسه مفيش محاضرة ليه',
+    /* ── تقسيم الكتب على الصف والشعبة (من الكورس المربوط) ─────────────── */
+    /** `{year}` من `yearNames`، و`{system}` اسم النظام — «تانية بكالوريا». */
+    yearGroup: '{year} {system}',
+    yearNames: ['أولى', 'تانية', 'تالتة'],
+    streams: { general: 'عربي', languages: 'لغات', both: 'عربي ولغات' },
+    noCourseGroup: 'كتب مش مربوطة بكورس',
+    booksCount: '{n} كتاب',
+    newBookCourse: 'الصف والشعبة',
   },
   honorBoard: {
     title: 'لوحة الشرف',

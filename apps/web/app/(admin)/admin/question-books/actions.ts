@@ -11,9 +11,9 @@ export type BookResult = { ok: true; book: ExternalBookRow } | { ok: false; mess
 export type CategoryResult = { ok: true; id: string; name: string } | { ok: false; message?: string };
 export type VoidResult = { ok: true } | { ok: false; message?: string };
 
-export async function createBookAction(title: string): Promise<BookResult> {
+export async function createBookAction(title: string, courseId: string | null): Promise<BookResult> {
   try {
-    const book = await adminSend('POST', '/api/admin/external-books', { title }, ExternalBookRowSchema);
+    const book = await adminSend('POST', '/api/admin/external-books', { title, courseId }, ExternalBookRowSchema);
     revalidatePath('/admin/question-books');
     return { ok: true, book };
   } catch {

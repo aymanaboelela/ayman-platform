@@ -34,7 +34,7 @@ export class AdminExternalBooksController {
 
   @Post()
   create(@Body() body: CreateExternalBookDto): Promise<ExternalBookRow> {
-    return this.books.create(body.title);
+    return this.books.create(body.title, body.courseId);
   }
 
   @Get(':bookId')

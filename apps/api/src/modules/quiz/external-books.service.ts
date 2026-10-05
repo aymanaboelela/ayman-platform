@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type {
+  ExternalBookCourse,
   ExternalBookDetail,
   ExternalBookRow,
   ExternalBooks,
@@ -49,12 +50,31 @@ export class ExternalBooksService {
         },
       },
     });
-    return { rows: books.map(toRow) };
+    return { rows: books.map(toRow), courses: await this.courses() };
   }
 
-  async create(title: string): Promise<ExternalBookRow> {
+  /** الكورسات بصفّها وشعبتها — للاختيار، ولتقسيم الكتب في الشاشة. */
+  private async courses(): Promise<ExternalBookCourse[]> {
+    const courses = await this.prisma.course.findMany({
+      orderBy: [{ year: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, title: true, year: true, forGeneral: true, forLanguages: true, system: { select: { nameAr: true } } },
+    });
+    return courses.map((course) => ({
+      id: course.id,
+      title: course.title,
+      year: course.year,
+      systemName: course.system.nameAr,
+      stream: course.forGeneral && course.forLanguages ? 'both' : course.forLanguages ? 'languages' : 'general',
+    }));
+  }
+
+  async create(title: string, courseId?: string | null): Promise<ExternalBookRow> {
+    if (courseId) {
+      const course = await this.prisma.course.findUnique({ where: { id: courseId }, select: { id: true } });
+      if (!course) throw new NotFoundException();
+    }
     const book = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.externalBook.create({ data: { title } });
+      const created = await tx.externalBook.create({ data: { title, courseId: courseId ?? null } });
       await tx.questionCategory.create({
         data: { name: `كتاب — ${title}`, externalBookId: created.id },
       });
@@ -65,7 +85,7 @@ export class ExternalBooksService {
       resourceType: AUDIT_RESOURCES.externalBook,
       resourceId: book.id,
       outcome: 'success',
-      metadata: { title },
+      metadata: { title, courseId: courseId ?? null },
     });
     return this.row(book.id);
   }
@@ -149,7 +169,7 @@ export class ExternalBooksService {
     // قبل ما طالب يتسأل في درس غير اللي اختاره.
     const [links, courses] = await Promise.all([
       book.courseId && book.archivedAt === null ? loadBookLessonLinks(this.prisma, [book.courseId]) : [],
-      this.prisma.course.findMany({ orderBy: { createdAt: 'asc' }, select: { id: true, title: true } }),
+      this.courses(),
     ]);
     const lessonIds = [...new Set(links.map((link) => link.lessonId))];
     const titles = new Map(

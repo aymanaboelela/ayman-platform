@@ -37,6 +37,22 @@ export const ExternalBookUnitSchema = z.object({
 });
 export type ExternalBookUnit = z.infer<typeof ExternalBookUnitSchema>;
 
+/**
+ * كورس ينفع الكتاب يتربط بيه — ومنه الصف والشعبة اللي الشاشة بتقسّم الكتب
+ * عليهم («تانية بكالوريا — عربي»). الكتاب مالوش صف ولا شعبة لوحده: الكورس
+ * هو اللي بيقول، عشان مايبقاش فيه مكانين ممكن يختلفوا.
+ */
+export const ExternalBookCourseSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  year: z.number().int(),
+  /** اسم النظام («بكالوريا»). */
+  systemName: z.string(),
+  /** `general` = مدارس عربي، `languages` = مدارس لغات. */
+  stream: z.enum(['general', 'languages', 'both']),
+});
+export type ExternalBookCourse = z.infer<typeof ExternalBookCourseSchema>;
+
 export const ExternalBookRowSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -51,7 +67,10 @@ export const ExternalBookRowSchema = z.object({
 });
 export type ExternalBookRow = z.infer<typeof ExternalBookRowSchema>;
 
-export const ExternalBooksSchema = z.object({ rows: z.array(ExternalBookRowSchema) });
+export const ExternalBooksSchema = z.object({
+  rows: z.array(ExternalBookRowSchema),
+  courses: z.array(ExternalBookCourseSchema),
+});
 export type ExternalBooks = z.infer<typeof ExternalBooksSchema>;
 
 export const ExternalBookDetailSchema = z.object({
@@ -61,7 +80,7 @@ export const ExternalBookDetailSchema = z.object({
   archived: z.boolean(),
   courseId: z.string().nullable(),
   /** الكورسات اللي ينفع الكتاب يتربط بيها — لاختيار الكورس في الشاشة. */
-  courses: z.array(z.object({ id: z.string(), title: z.string() })),
+  courses: z.array(ExternalBookCourseSchema),
   categoryId: z.string(),
   /** أسئلة الكتاب نفسه — «المنهج كله»، مش جوه أي وحدة. */
   ready: z.number().int(),
@@ -69,7 +88,9 @@ export const ExternalBookDetailSchema = z.object({
 });
 export type ExternalBookDetail = z.infer<typeof ExternalBookDetailSchema>;
 
-export const CreateExternalBookSchema = z.object({ title: z.string().trim().min(1).max(200) }).strict();
+export const CreateExternalBookSchema = z
+  .object({ title: z.string().trim().min(1).max(200), courseId: z.uuid().nullable().optional() })
+  .strict();
 export const UpdateExternalBookSchema = z
   .object({
     title: z.string().trim().min(1).max(200).optional(),
