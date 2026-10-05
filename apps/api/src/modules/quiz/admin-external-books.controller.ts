@@ -7,6 +7,7 @@ import type {
 } from '@ayman/contracts/quiz/external-books';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import {
+  AdoptExternalBookLessonDto,
   CreateExternalBookDto,
   CreateExternalBookLessonDto,
   CreateExternalBookUnitDto,
@@ -33,7 +34,7 @@ export class AdminExternalBooksController {
 
   @Post()
   create(@Body() body: CreateExternalBookDto): Promise<ExternalBookRow> {
-    return this.books.create(body.title);
+    return this.books.create(body.title, body.courseId);
   }
 
   @Get(':bookId')
@@ -58,6 +59,15 @@ export class AdminExternalBooksController {
     @Body() body: CreateExternalBookLessonDto,
   ) {
     return this.books.createLesson(bookId, unitId, body.name);
+  }
+
+  @Post(':bookId/units/:unitId/adopt')
+  adoptLesson(
+    @Param('bookId') bookId: string,
+    @Param('unitId') unitId: string,
+    @Body() body: AdoptExternalBookLessonDto,
+  ) {
+    return this.books.adoptLesson(bookId, unitId, body.categoryId);
   }
 
   @Patch('categories/:categoryId')

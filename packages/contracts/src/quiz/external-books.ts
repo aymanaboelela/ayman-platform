@@ -19,6 +19,12 @@ export const ExternalBookLessonSchema = z.object({
   name: z.string(),
   categoryId: z.string(),
   ready: z.number().int(),
+  /**
+   * محاضرة الكورس اللي الدرس ده بيغذّي تحدياتها — بالترتيب، مش بالاسم
+   * (`apps/api/src/modules/quiz/book-lesson-links.ts`). NULL = الكتاب مش
+   * مربوط بكورس، أو الكورس لسه ماوصلش للدرس ده.
+   */
+  linkedLesson: z.object({ id: z.string(), title: z.string() }).nullable(),
 });
 export type ExternalBookLesson = z.infer<typeof ExternalBookLessonSchema>;
 
@@ -31,11 +37,29 @@ export const ExternalBookUnitSchema = z.object({
 });
 export type ExternalBookUnit = z.infer<typeof ExternalBookUnitSchema>;
 
+/**
+ * كورس ينفع الكتاب يتربط بيه — ومنه الصف والشعبة اللي الشاشة بتقسّم الكتب
+ * عليهم («تانية بكالوريا — عربي»). الكتاب مالوش صف ولا شعبة لوحده: الكورس
+ * هو اللي بيقول، عشان مايبقاش فيه مكانين ممكن يختلفوا.
+ */
+export const ExternalBookCourseSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  year: z.number().int(),
+  /** اسم النظام («بكالوريا»). */
+  systemName: z.string(),
+  /** `general` = مدارس عربي، `languages` = مدارس لغات. */
+  stream: z.enum(['general', 'languages', 'both']),
+});
+export type ExternalBookCourse = z.infer<typeof ExternalBookCourseSchema>;
+
 export const ExternalBookRowSchema = z.object({
   id: z.string(),
   title: z.string(),
   coverKey: z.string().nullable(),
   archived: z.boolean(),
+  /** «التحديات» — الكورس اللي دروس الكتاب بتتربط بمحاضراته بالترتيب. */
+  courseId: z.string().nullable(),
   categoryId: z.string(),
   /** مجموع أسئلة الكتاب نفسه + كل وحداته + كل دروسه. */
   ready: z.number().int(),
@@ -43,7 +67,10 @@ export const ExternalBookRowSchema = z.object({
 });
 export type ExternalBookRow = z.infer<typeof ExternalBookRowSchema>;
 
-export const ExternalBooksSchema = z.object({ rows: z.array(ExternalBookRowSchema) });
+export const ExternalBooksSchema = z.object({
+  rows: z.array(ExternalBookRowSchema),
+  courses: z.array(ExternalBookCourseSchema),
+});
 export type ExternalBooks = z.infer<typeof ExternalBooksSchema>;
 
 export const ExternalBookDetailSchema = z.object({
@@ -51,6 +78,9 @@ export const ExternalBookDetailSchema = z.object({
   title: z.string(),
   coverKey: z.string().nullable(),
   archived: z.boolean(),
+  courseId: z.string().nullable(),
+  /** الكورسات اللي ينفع الكتاب يتربط بيها — لاختيار الكورس في الشاشة. */
+  courses: z.array(ExternalBookCourseSchema),
   categoryId: z.string(),
   /** أسئلة الكتاب نفسه — «المنهج كله»، مش جوه أي وحدة. */
   ready: z.number().int(),
@@ -58,11 +88,20 @@ export const ExternalBookDetailSchema = z.object({
 });
 export type ExternalBookDetail = z.infer<typeof ExternalBookDetailSchema>;
 
-export const CreateExternalBookSchema = z.object({ title: z.string().trim().min(1).max(200) }).strict();
+export const CreateExternalBookSchema = z
+  .object({ title: z.string().trim().min(1).max(200), courseId: z.uuid().nullable().optional() })
+  .strict();
 export const UpdateExternalBookSchema = z
-  .object({ title: z.string().trim().min(1).max(200).optional(), archived: z.boolean().optional() })
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    archived: z.boolean().optional(),
+    /** NULL = فك الربط. */
+    courseId: z.uuid().nullable().optional(),
+  })
   .strict();
 
 export const CreateExternalBookUnitSchema = z.object({ name: z.string().trim().min(1).max(200) }).strict();
 export const CreateExternalBookLessonSchema = z.object({ name: z.string().trim().min(1).max(200) }).strict();
+/** تصنيف موجود في البنك بيتنقل درس جوه وحدة — `POST …/units/:unitId/adopt`. */
+export const AdoptExternalBookLessonSchema = z.object({ categoryId: z.uuid() }).strict();
 export const RenameExternalBookCategorySchema = z.object({ name: z.string().trim().min(1).max(200) }).strict();

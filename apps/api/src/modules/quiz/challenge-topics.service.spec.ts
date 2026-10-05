@@ -325,6 +325,50 @@ describe('challenge topics', () => {
     expect(exposures.find((row) => row.groupKey === 'g:loops-1')?.times).toBe(2);
   });
 
+  it('feeds each lecture from the book lesson in the same place — and a lecture added later finds its own', async () => {
+    fixture = await seedQuizFixture(prisma, {});
+    await grant(fixture.studentId);
+    const lectureA = await lecture('الدرس الاول');
+    // فيديو حلول وسط الوحدة — لو اتعدّ، الدرس التاني كان هياخد أسئلة درس الكتاب التالت.
+    await lecture('حل تقيم الاسبوع الاول');
+    const lectureB = await lecture('الدرس الثاني');
+
+    const book = await prisma.externalBook.create({ data: { title: 'كتاب', courseId: fixture.courseId } });
+    const root = await prisma.questionCategory.create({ data: { name: 'كتاب', externalBookId: book.id } });
+    const unit = await prisma.questionCategory.create({ data: { name: 'الوحدة ١', parentId: root.id } });
+    const lessons = await Promise.all(
+      [0, 1, 2].map((sortOrder) => prisma.questionCategory.create({ data: { name: `درس ${sortOrder + 1}`, parentId: unit.id, sortOrder } })),
+    );
+    cleanups.push(async () => {
+      await prisma.questionBankEntry.deleteMany({ where: { categoryId: { in: lessons.map((lesson) => lesson.id) } } });
+      await prisma.questionCategory.deleteMany({ where: { id: { in: lessons.map((lesson) => lesson.id) } } });
+      await prisma.questionCategory.delete({ where: { id: unit.id } });
+      await prisma.questionCategory.delete({ where: { id: root.id } });
+      await prisma.externalBook.delete({ where: { id: book.id } });
+    });
+    const [first, second, third] = await Promise.all(lessons.map((lesson) => question(lesson.id)));
+
+    const onA = await topics.create(fixture.courseId, { title: 'أ', sectionIds: [], lessonIds: [lectureA], isActive: true });
+    const onB = await topics.create(fixture.courseId, { title: 'ب', sectionIds: [], lessonIds: [lectureB], isActive: true });
+    expect(onB.topics.map((topic) => topic.ready.total)).toEqual([1, 1]);
+
+    const start = (title: string) =>
+      game.hub(fixture.studentId).then((hub) => {
+        const topic = hub.courses.find((entry) => entry.id === fixture.courseId)!.topics.find((entry) => entry.title === title)!;
+        return game.start(fixture.studentId, { mode: 'race', level: 'medium', scope: 'all', courseId: fixture.courseId, topicIds: [topic.id] });
+      });
+    expect((await start('أ')).questions.map((q) => q.id)).toEqual([first!.versionId]);
+    expect((await start('ب')).questions.map((q) => q.id)).toEqual([second!.versionId]);
+
+    // المحاضرة التالتة لسه ماتضافتش — أسئلة درس الكتاب التالت مستنياها، وأول
+    // ما تتضاف بتلاقيها من غير ما حد يلمس البنك.
+    const lectureC = await lecture('الدرس الثالث');
+    const onC = await topics.create(fixture.courseId, { title: 'ج', sectionIds: [], lessonIds: [lectureC], isActive: true });
+    expect(onC.topics.find((topic) => topic.title === 'ج')!.ready.total).toBe(1);
+    expect((await start('ج')).questions.map((q) => q.id)).toEqual([third!.versionId]);
+    expect(onA.topics).toHaveLength(1);
+  });
+
   it('refuses the foundation course and a topic with nothing in it', async () => {
     fixture = await seedQuizFixture(prisma, {});
     const sectionId = await courseSectionId();

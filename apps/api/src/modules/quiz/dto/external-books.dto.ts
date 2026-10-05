@@ -1,5 +1,6 @@
 import { createZodDto } from 'nestjs-zod';
 import {
+  AdoptExternalBookLessonSchema,
   CreateExternalBookLessonSchema,
   CreateExternalBookSchema,
   CreateExternalBookUnitSchema,
@@ -12,3 +13,4 @@ export class UpdateExternalBookDto extends createZodDto(UpdateExternalBookSchema
 export class CreateExternalBookUnitDto extends createZodDto(CreateExternalBookUnitSchema) {}
 export class CreateExternalBookLessonDto extends createZodDto(CreateExternalBookLessonSchema) {}
 export class RenameExternalBookCategoryDto extends createZodDto(RenameExternalBookCategorySchema) {}
+export class AdoptExternalBookLessonDto extends createZodDto(AdoptExternalBookLessonSchema) {}

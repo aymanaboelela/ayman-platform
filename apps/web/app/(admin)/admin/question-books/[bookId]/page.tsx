@@ -7,6 +7,7 @@ import { adminGetOrNotFound } from '@/lib/admin-api';
 import { BookHeader } from './book-header';
 import { CategoryActions } from './category-actions';
 import { AddUnitForm } from './add-unit-form';
+import { BookCourse } from './book-course';
 import { UnitCard } from './unit-card';
 
 const c = copy.admin.questionBooks;
@@ -33,6 +34,7 @@ export default async function QuestionBookPage({ params }: { params: Promise<{ b
       </Link>
 
       <BookHeader bookId={book.id} title={book.title} archived={book.archived} />
+      <BookCourse bookId={book.id} courseId={book.courseId} courses={book.courses} />
 
       <section className="mt-6 rounded-lg border border-line bg-surface-2 p-3 sm:p-4">
         <h2 className="flex items-center gap-2 font-semibold text-fg">
@@ -55,7 +57,7 @@ export default async function QuestionBookPage({ params }: { params: Promise<{ b
         ) : (
           <div className="flex flex-col gap-4">
             {book.units.map((unit) => (
-              <UnitCard key={unit.id} bookId={book.id} unit={unit} />
+              <UnitCard key={unit.id} bookId={book.id} unit={unit} linked={book.courseId !== null} />
             ))}
           </div>
         )}

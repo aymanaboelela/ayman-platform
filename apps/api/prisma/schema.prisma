@@ -1056,6 +1056,7 @@ model Course {
   // `monthlyPriceCents` above.
   /// «أسئلة الألعاب» بتاعة الكورس — شوف `QuestionCategory.gameCourseId`.
   gameQuestionBank QuestionCategory? @relation("GameQuestionBank")
+  externalBooks    ExternalBook[]    @relation("ExternalBookCourse")
   /// كل لعبة بتسحب منين في الكورس ده — شوف `GameModeSetting`.
   gameModeSettings GameModeSetting[]
   gameSessions     GameSession[]
@@ -3494,9 +3495,15 @@ model ExternalBook {
   sortOrder  Int       @default(0) @map("sort_order")
   archivedAt DateTime? @map("archived_at")
   createdAt  DateTime  @default(now()) @map("created_at")
+  /// «التحديات» — الكورس اللي الكتاب ده بيغذّي تحدياته. دروس الكتاب بالترتيب
+  /// بتتربط بمحاضرات الكورس بالترتيب (`book-lesson-links.ts`)، فمحاضرة جديدة
+  /// بتلاقي أسئلتها لوحدها. NULL = كتاب مرجع بس، مش بيغذّي حاجة.
+  courseId   String?   @map("course_id") @db.Uuid
 
   rootCategory QuestionCategory?
+  course       Course?           @relation("ExternalBookCourse", fields: [courseId], references: [id], onDelete: SetNull)
 
+  @@index([courseId])
   @@map("external_books")
   @@schema("app")
 }
