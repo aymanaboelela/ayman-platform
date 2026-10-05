@@ -137,8 +137,16 @@ export const DOCUMENT_KEY_PATTERN =
  * arrive re-encoded to `.webp` by the same sharp gate everything else passes,
  * documents keep the extension detected from their magic bytes.
  */
+/*
+ * ⚠️ `webm|m4a` — voice notes (`VoiceService`) mint under this same `msg/`
+ * prefix, and were left out when they shipped (2026-09-03). Every voice note
+ * on a real disk then 500'd with «invalid storage key» — the instructor saw
+ * «مقدرناش نرفع الملف» on every one, for a month — while every spec passed,
+ * because they all mock the storage. `local-disk.storage.spec.ts` now mints
+ * one through the REAL storage for each `ALLOWED_VOICE_EXT`.
+ */
 export const CONVERSATION_KEY_PATTERN =
-  /^msg\/[0-9a-f]{2}\/[0-9a-f-]{36}\.(?:webp|pdf|pptx|docx|xlsx)$/;
+  /^msg\/[0-9a-f]{2}\/[0-9a-f-]{36}\.(?:webp|pdf|pptx|docx|xlsx|webm|m4a)$/;
 
 /**
  * Payment proof keys — `payment-proof/<2 hex>/<uuid>.webp`, minted by
