@@ -20,6 +20,14 @@ import { TorodWebhookDto } from './torod-webhook.dto';
  * request can likewise move an order (here: to «اتسلّم», which tells a student
  * their book arrived). Unset `TOROD_WEBHOOK_TOKEN` refuses everything.
  *
+ * ⚠️ DORMANT as of 2026-10-05. Torod answered «عكس الحالات غير متاح — فقط
+ * اضافة شحنات»: their system does not call anyone yet. Until it does, an order
+ * sits in `courier` until the admin presses «اتشحن» / «وصل» by hand, which both
+ * accept from `courier`. They promised a status-inquiry request keyed on
+ * `sender_Code` (our `BK-` ref) «خلال أيام» — when it lands, a poller feeding
+ * `BookOrderCourierService.ingest` is the whole change; the route stays for the
+ * day they enable push.
+ *
  * `@Public()` because the caller is their server, not a browser — no session,
  * no CSRF. The authorization matrix lists it as a documented gap for that
  * reason, like the InstaPay ingest.

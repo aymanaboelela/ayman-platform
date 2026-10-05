@@ -4635,9 +4635,9 @@ const admin = {
     bulkReadyDone: 'جاهزين للشحن {count}',
     sendToCourier: 'ابعت لشركة الشحن',
     sendToCourierWorking: 'بيتبعت…',
-    sendToCourierConfirm: 'هيتبعت الطلب ده لسيستم شركة الشحن عشان المندوب ييجي ياخده. الطالب هيتبلّغ لما يستلمه فعلًا. تمام؟',
+    sendToCourierConfirm: 'هيتبعت الطلب ده لسيستم شركة الشحن عشان المندوب ييجي ياخده. أول ما يستلمه دوس «اتشحن» والطالب هيتبلّغ. تمام؟',
     /** `{count}` */
-    bulkCourierConfirm: 'هيتبعت {count} طلب لسيستم شركة الشحن. كل طالب هيتبلّغ لما المندوب يستلم كتابه فعلًا. تمام؟',
+    bulkCourierConfirm: 'هيتبعت {count} طلب لسيستم شركة الشحن. أول ما المندوب يستلمهم دوس «اتشحن» والطلبة هيتبلّغوا. تمام؟',
     /** `{count}` */
     bulkCourierDone: 'اتبعتوا لشركة الشحن {count}',
     /** The courier's own words for a refused push. `{error}` */
