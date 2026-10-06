@@ -1,13 +1,20 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { copy } from '@ayman/contracts/copy';
 
 /**
  * hls.js, reduced to what `MirrorVideo` touches — and a record of the config
  * every instance was built with, because that config IS the fix for
  * «الفيديو بيلاج».
  */
-const { FakeHls, built } = vi.hoisted(() => {
+const { FakeHls, built, instances } = vi.hoisted(() => {
   const built: Record<string, unknown>[] = [];
+  const instances: Array<{
+    levels: { height: number }[];
+    currentLevel: number;
+    nextLevel: number;
+    handlers: Record<string, () => void>;
+  }> = [];
   class FakeHls {
     static isSupported() {
       return true;
@@ -17,17 +24,22 @@ const { FakeHls, built } = vi.hoisted(() => {
     static ErrorDetails = { KEY_LOAD_ERROR: 'keyLoadError', KEY_LOAD_TIMEOUT: 'keyLoadTimeOut' };
     levels: { height: number }[] = [];
     currentLevel = -1;
+    nextLevel = -1;
+    handlers: Record<string, () => void> = {};
     constructor(config: Record<string, unknown>) {
       built.push(config);
+      instances.push(this);
     }
-    on() {}
+    on(event: string, handler: () => void) {
+      this.handlers[event] = handler;
+    }
     loadSource() {}
     attachMedia() {}
     startLoad() {}
     recoverMediaError() {}
     destroy() {}
   }
-  return { FakeHls, built };
+  return { FakeHls, built, instances };
 });
 
 vi.mock('hls.js', () => ({ default: FakeHls }));
@@ -37,6 +49,7 @@ const { MirrorVideo, HLS_CONFIG } = await import('./mirror-video');
 afterEach(() => {
   cleanup();
   built.length = 0;
+  instances.length = 0;
 });
 
 function renderMirror() {
@@ -133,5 +146,22 @@ describe('MirrorVideo seeking', () => {
     expect(writes).toEqual([]);
     fireEvent.pointerUp(window);
     expect(writes).toEqual([1300]);
+  });
+});
+
+describe('MirrorVideo manual quality', () => {
+  it('switches with nextLevel — currentLevel flushes the buffer and froze the picture under the audio', async () => {
+    const { getByRole, getByText } = renderMirror();
+    await act(async () => {});
+    const hls = instances[0]!;
+    hls.levels = [{ height: 360 }, { height: 720 }, { height: 1080 }];
+    await act(async () => hls.handlers.manifestParsed?.());
+
+    // The settings menu holds the quality grid.
+    fireEvent.click(getByRole('button', { name: copy.player.controls.settings }));
+    fireEvent.click(getByText('720p'));
+
+    expect(hls.nextLevel).toBe(1);
+    expect(hls.currentLevel).toBe(-1);
   });
 });
