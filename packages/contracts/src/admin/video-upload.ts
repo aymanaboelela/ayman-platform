@@ -272,3 +272,40 @@ export type ReusableVideos = z.infer<typeof ReusableVideosSchema>;
 
 export const VideoAttachSchema = z.object({ lessonId: z.uuid() }).strict();
 export type VideoAttach = z.infer<typeof VideoAttachSchema>;
+
+/* ── «رفع فيديو» جوّه مواد الدرس ──────────────────────────────────────────
+ *
+ * Same transfer as the lecture's own video — pre-signed parts straight to the
+ * bucket, «كمّل الرفع», the same encoder and the same protected HLS — but it
+ * fills a ROW IN `lesson_resources`, never `lesson_videos`. A homework
+ * solution uploaded beside a lecture must not be able to replace, park or
+ * archive the lecture itself, and keeping the two on different tables makes
+ * that structural rather than a rule someone has to remember.
+ *
+ * The material row is written when the session OPENS, with its title, in
+ * state `uploading`. That is what lets the admin press «أضف مادة» once and
+ * walk away: nothing has to be saved after the bytes land, so an upload that
+ * finishes in another tab — or after the panel is closed — is already on the
+ * lesson. Students see it only once it is `ready`.
+ *
+ * Complete, resume, abort and status reuse the lecture's own schemas, on
+ * `/api/admin/resources/:id/video-upload/*`.
+ */
+
+/** `POST /api/admin/lessons/:id/resources/video-upload` */
+export const ResourceVideoUploadStartSchema = z
+  .object({
+    title: z.string().min(1).max(200),
+    description: z.string().max(1000).nullable().default(null),
+    fileName: VideoUploadStartSchema.shape.fileName,
+    sizeBytes: VideoUploadStartSchema.shape.sizeBytes,
+    contentType: VideoUploadStartSchema.shape.contentType,
+  })
+  .strict();
+export type ResourceVideoUploadStart = z.infer<typeof ResourceVideoUploadStartSchema>;
+
+/** The session, plus the material row it already created. */
+export const ResourceVideoUploadSessionSchema = VideoUploadSessionSchema.extend({
+  resourceId: z.uuid(),
+});
+export type ResourceVideoUploadSession = z.infer<typeof ResourceVideoUploadSessionSchema>;

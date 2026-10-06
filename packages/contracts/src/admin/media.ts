@@ -196,18 +196,7 @@ export const BOOK_ORDER_PROOF_KEY_PATTERN = /^book-order-proof\/[0-9a-f]{2}\/[0-
  */
 export const HOMEWORK_KEY_PATTERN = /^hw\/[0-9a-f]{2}\/[0-9a-f-]{36}\.webp$/;
 
-/**
- * A lesson material's uploaded video — `resvideo/<2 hex>/<uuid>.<ext>`, minted
- * by `DocumentService.uploadVideo`. The exact failure mode `PAYMENT_PROOF_KEY_PATTERN`'s
- * and `BOOK_ORDER_PROOF_KEY_PATTERN`'s own comments warn about — a new prefix
- * that ships without a matching pattern here passes every upload gate and then
- * 500s at `LocalDiskStorage.put` with "invalid storage key" on the first real
- * attempt — is exactly what this entry exists to not repeat a third time.
- */
-export const RESOURCE_VIDEO_KEY_PATTERN =
-  /^resvideo\/[0-9a-f]{2}\/[0-9a-f-]{36}\.(?:mp4|webm|mov)$/;
-
-/** Any of the seven shapes. `MediaStorage` implementations validate against this. */
+/** Any of the six shapes. `MediaStorage` implementations validate against this. */
 export function isValidStorageKey(key: string): boolean {
   return (
     STORAGE_KEY_PATTERN.test(key) ||
@@ -215,8 +204,7 @@ export function isValidStorageKey(key: string): boolean {
     CONVERSATION_KEY_PATTERN.test(key) ||
     PAYMENT_PROOF_KEY_PATTERN.test(key) ||
     BOOK_ORDER_PROOF_KEY_PATTERN.test(key) ||
-    HOMEWORK_KEY_PATTERN.test(key) ||
-    RESOURCE_VIDEO_KEY_PATTERN.test(key)
+    HOMEWORK_KEY_PATTERN.test(key)
   );
 }
 
@@ -329,21 +317,6 @@ export const ALLOWED_DOCUMENT_MIME = [
  * `docs/runbooks/vps-setup.md`.
  */
 export const MAX_DOCUMENT_BYTES = 95 * 1024 * 1024;
-
-/**
- * A lesson material's video, uploaded directly instead of linked from
- * YouTube — «حل الواجب» explained on camera, no YouTube account involved.
- *
- * `MAX_DOCUMENT_BYTES` on purpose, not a video-sized number of its own: the
- * Cloudflare edge limit above is the same 100 MB regardless of what the bytes
- * are, so a wider ceiling here would just move the silent-413 failure from
- * `MAX_DOCUMENT_BYTES` onto this constant instead of avoiding it. This is a
- * short explanation clip, not the lecture's own video — that one goes through
- * `video-mirror`'s resumable, chunked pipeline precisely because a real
- * lecture does not fit in 95 MB.
- */
-export const ALLOWED_RESOURCE_VIDEO_EXT = ['mp4', 'webm', 'mov'] as const;
-export const ALLOWED_RESOURCE_VIDEO_MIME = ['video/mp4', 'video/webm', 'video/quicktime'] as const;
 
 // ── Voice notes ──────────────────────────────────────────────────────────
 // A recorded reply in the inbox. Neither an image (no sharp re-encode is

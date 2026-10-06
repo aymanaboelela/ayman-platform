@@ -1870,10 +1870,36 @@ model LessonResource {
   sizeBytes  Int?    @map("size_bytes")
 
   // ── payload: video ─────────────────────────────────────────────────────
-  /// The ELEVEN-CHARACTER provider id, never a URL. `extractYouTubeId` parses
-  /// the URL and discards it, which is what eliminates the SSRF class.
+  /// `youtube`: the ELEVEN-CHARACTER provider id, never a URL —
+  /// `extractYouTubeId` parses the URL and discards it, which is what
+  /// eliminates the SSRF class. `upload`: the 32-hex upload id, the same key a
+  /// lesson's main uploaded video lives under (`v/<id>/` on R2). The CHECK
+  /// `lesson_resources_video_id_shape` binds each shape to its provider.
   videoProvider   VideoProvider? @map("video_provider")
   videoExternalId String?        @map("video_external_id")
+
+  // ── «رفع فيديو»: the upload pipeline's state, `provider = upload` only ─
+  /// Same columns, same names, same meaning as on `LessonVideo` — the worker
+  /// writes one data object to both tables (see `VideoMirrorService`). A
+  /// CHECK makes `mirrorStatus` present exactly when the video is uploaded:
+  /// a YouTube row with a state would be claimed by the encoder, and an
+  /// uploaded row without one would never be claimed at all.
+  ///
+  /// Not a lesson's main video and never one: nothing here touches
+  /// `lesson_videos`, so an upload into the materials cannot replace or park
+  /// the lecture itself.
+  mirrorStatus    VideoMirrorStatus? @map("mirror_status")
+  mirrorProgress  Int?               @map("mirror_progress")
+  mirrorHeight    Int?               @map("mirror_height")
+  mirrorBytes     BigInt?            @map("mirror_bytes")
+  mirrorError     String?            @map("mirror_error")
+  mirrorAttempts  Int                @default(0) @map("mirror_attempts")
+  mirrorAt        DateTime?          @map("mirror_at")
+  /// The instructor's filename, shown back to them — NEVER part of a key.
+  sourceName      String?            @map("source_name")
+  sourceBytes     BigInt?            @map("source_bytes")
+  /// From ffprobe, once encoded. Null until then.
+  durationSeconds Int?               @map("duration_seconds")
 
   // ── payload: link ──────────────────────────────────────────────────────
   /// `https:` only, enforced at the DTO and by a CHECK. Rendered as an anchor,
@@ -1892,6 +1918,8 @@ model LessonResource {
   // inside buildReorderSql's single UPDATE are legal because nothing forbids
   // them at any point. Do not "fix" this by adding a unique index.
   @@index([lessonId, position])
+  /// The worker's claim — same shape as `lesson_videos_mirror_idx`.
+  @@index([mirrorStatus, mirrorAt])
   @@map("lesson_resources")
   @@schema("app")
 }

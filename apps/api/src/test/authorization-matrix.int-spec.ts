@@ -1585,8 +1585,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin resource reorder: student', method: 'patch', path: () => `/api/admin/lessons/${lessonId}/resources/order`, actor: 'student', status: 403 },
     { label: 'document upload: student', method: 'post', path: () => `/api/media/documents`, actor: 'student', status: 403 },
     { label: 'document upload: anonymous', method: 'post', path: () => `/api/media/documents`, actor: 'anonymous', status: 401 },
-    { label: 'resource video upload: student', method: 'post', path: () => `/api/media/resource-videos`, actor: 'student', status: 403 },
-    { label: 'resource video upload: anonymous', method: 'post', path: () => `/api/media/resource-videos`, actor: 'anonymous', status: 401 },
+    // «رفع فيديو» in a lesson's materials — the lecture's upload, for a material row.
+    { label: 'admin resource video upload start: anonymous', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/resources/video-upload`, actor: 'anonymous', status: 401, body: () => ({ title: 'حل', fileName: 'a.mp4', sizeBytes: 1024, contentType: 'video/mp4' }) },
+    { label: 'admin resource video upload start: student', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/resources/video-upload`, actor: 'student', status: 403, body: () => ({ title: 'حل', fileName: 'a.mp4', sizeBytes: 1024, contentType: 'video/mp4' }) },
+    { label: 'admin resource video upload complete: anonymous', method: 'post', path: () => `/api/admin/resources/${randomUUID()}/video-upload/complete`, actor: 'anonymous', status: 401, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u', parts: [{ partNumber: 1, etag: 'e' }] }) },
+    { label: 'admin resource video upload complete: student', method: 'post', path: () => `/api/admin/resources/${randomUUID()}/video-upload/complete`, actor: 'student', status: 403, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u', parts: [{ partNumber: 1, etag: 'e' }] }) },
+    { label: 'admin resource video upload resume: anonymous', method: 'post', path: () => `/api/admin/resources/${randomUUID()}/video-upload/resume`, actor: 'anonymous', status: 401, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u', sizeBytes: 1024 }) },
+    { label: 'admin resource video upload resume: student', method: 'post', path: () => `/api/admin/resources/${randomUUID()}/video-upload/resume`, actor: 'student', status: 403, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u', sizeBytes: 1024 }) },
+    { label: 'admin resource video upload abort: anonymous', method: 'post', path: () => `/api/admin/resources/${randomUUID()}/video-upload/abort`, actor: 'anonymous', status: 401, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u' }) },
+    { label: 'admin resource video upload abort: student', method: 'post', path: () => `/api/admin/resources/${randomUUID()}/video-upload/abort`, actor: 'student', status: 403, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u' }) },
+    { label: 'admin resource video upload status: anonymous', method: 'get', path: () => `/api/admin/resources/${randomUUID()}/video-upload/status`, actor: 'anonymous', status: 401 },
+    { label: 'admin resource video upload status: student', method: 'get', path: () => `/api/admin/resources/${randomUUID()}/video-upload/status`, actor: 'student', status: 403 },
 
     // ── Media — admin-only ──
     { label: 'media upload: anonymous', method: 'post', path: () => '/api/media', actor: 'anonymous', status: 401 },

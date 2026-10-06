@@ -42,9 +42,11 @@ import {
 } from '@ayman/contracts/admin/content-months';
 import { formatCopy } from '@ayman/contracts/format';
 import {
+  ResourceVideoUploadSessionSchema,
   VideoUploadResumedSchema,
   VideoUploadSessionSchema,
   VideoUploadStatusSchema,
+  type ResourceVideoUploadSession,
   type VideoUploadResumed,
   type VideoUploadSession,
   type VideoUploadStatus,
@@ -1573,10 +1575,9 @@ const ResourceRowSchema = z.object({ id: z.uuid() });
  * not `videoExternalId`). The API's Zod transform is what turns it into
  * columns, so nothing here reconstructs or parses a URL.
  *
- * A video has TWO shapes, not one: a YouTube link (`provider`/`url`), or an
- * upload carrying the same four file fields `presentation`/`document` use —
- * see the schema's own note on why `storageKey` alone is what tells the two
- * apart server-side.
+ * A video here is a YouTube link only. An UPLOADED one never comes through
+ * this action: it opens its own row with `startResourceVideoUploadAction`
+ * below, before the first byte moves.
  */
 export type AddResourceInput =
   | {
@@ -1589,15 +1590,6 @@ export type AddResourceInput =
       sizeBytes: number;
     }
   | { kind: 'video'; title: string; description: string | null; provider: 'youtube'; url: string }
-  | {
-      kind: 'video';
-      title: string;
-      description: string | null;
-      storageKey: string;
-      filename: string;
-      mime: string;
-      sizeBytes: number;
-    }
   | { kind: 'link'; title: string; description: string | null; linkUrl: string };
 
 export async function addResourceAction(
@@ -1686,6 +1678,111 @@ export async function reorderResourcesAction(
   } catch (error) {
     return { ok: false, message: arabicError(error) };
   }
+}
+
+/* ── «رفع فيديو» جوّه مواد الدرس ──────────────────────────────────────────
+ *
+ * The lecture's upload actions, for a material — JSON only, the bytes go
+ * straight to the bucket (see `startVideoUploadAction`'s note on the 1 MB
+ * Server Action ceiling). `start` CREATES the material row, which is why the
+ * course is revalidated there and not only on completion: the row has to
+ * appear in the list, «بيترفع», the moment the admin presses «أضف مادة».
+ */
+
+export async function startResourceVideoUploadAction(
+  courseId: string,
+  lessonId: string,
+  input: { title: string; description: string | null; fileName: string; sizeBytes: number; contentType: string },
+): Promise<{ ok: true; session: ResourceVideoUploadSession } | { ok: false; message: string }> {
+  try {
+    const session = await apiSend(
+      'POST',
+      `/api/admin/lessons/${lessonId}/resources/video-upload`,
+      ResourceVideoUploadSessionSchema,
+      input,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true, session };
+  } catch (error) {
+    return { ok: false, message: arabicError(error, copy.admin.resource.addFailed) };
+  }
+}
+
+export async function resumeResourceVideoUploadAction(
+  resourceId: string,
+  input: { videoId: string; uploadId: string; sizeBytes: number },
+): Promise<{ ok: true; session: VideoUploadResumed } | { ok: false; message: string }> {
+  try {
+    const session = await apiSend(
+      'POST',
+      `/api/admin/resources/${resourceId}/video-upload/resume`,
+      VideoUploadResumedSchema,
+      input,
+    );
+    return { ok: true, session };
+  } catch (error) {
+    return { ok: false, message: arabicError(error) };
+  }
+}
+
+export async function completeResourceVideoUploadAction(
+  courseId: string,
+  resourceId: string,
+  input: { videoId: string; uploadId: string; parts: { partNumber: number; etag: string }[] },
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'POST',
+      `/api/admin/resources/${resourceId}/video-upload/complete`,
+      z.object({ status: z.string() }),
+      input,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: arabicError(error) };
+  }
+}
+
+export async function abortResourceVideoUploadAction(
+  courseId: string,
+  resourceId: string,
+  input: { videoId: string; uploadId: string },
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'POST',
+      `/api/admin/resources/${resourceId}/video-upload/abort`,
+      z.object({ status: z.string() }),
+      input,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: arabicError(error) };
+  }
+}
+
+/** Polled while the encoder works — `null` on any failure, like `videoUploadStatusAction`. */
+export async function resourceVideoStatusAction(resourceId: string): Promise<VideoUploadStatus | null> {
+  try {
+    return await apiGetAuthed(`/api/admin/resources/${resourceId}/video-upload/status`, VideoUploadStatusSchema);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The encode finished while the panel was open: the list was rendered from a
+ * `pending` row, and only a fresh render shows «جاهز». Revalidating is all
+ * this does — the row itself was already written by the worker.
+ */
+export async function refreshCourseAction(courseId: string): Promise<void> {
+  invalidateCourse(courseId);
+  revalidatePath(`/admin/courses/${courseId}`);
 }
 
 /**

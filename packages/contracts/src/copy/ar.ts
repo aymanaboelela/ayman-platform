@@ -3440,8 +3440,13 @@ export const copy = {
     mainPresentation: 'البريزنتيشن الأساسي',
     openInNewTab: 'فتح في تبويب جديد',
     viewerUnavailable: 'المتصفح مش قادر يعرض الملف — التحميل بيفتحه.',
-    /** `<video>`'s fallback content — browsers with no video support at all. */
-    videoUnsupported: 'المتصفح مش قادر يشغّل الفيديو ده.',
+    /**
+     * «رفع فيديو» in the materials, uploaded and still being encoded. Shown in
+     * place of the player so the card does not vanish and reappear later.
+     */
+    resourceVideoProcessing: 'الفيديو ده بيتجهّز — بيبقى جاهز هنا كمان شوية.',
+    /** Our copy of a material's video would not play at all — no YouTube to fall back to. */
+    resourceVideoFailed: 'الفيديو مارضيش يشتغل — ريفرش للصفحة بيحلّها غالبًا.',
     noResources: 'مفيش مواد مرفوعة للدرس ده.',
     lockedHint: 'اللي قبله لازم يخلص الأول عشان يتفتح',
     examBadge: 'امتحان',

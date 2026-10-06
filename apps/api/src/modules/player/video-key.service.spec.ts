@@ -17,6 +17,8 @@ function build(options: {
   allowed: Record<string, 'ok' | 'forbidden' | 'missing'>;
   /** Every row shares one `encrypted` value here — a real mirror does too. */
   encrypted?: boolean;
+  /** Lessons whose MATERIALS carry this video as a ready upload. */
+  materials?: string[];
 }) {
   return new VideoKeyService(
     {
@@ -25,6 +27,10 @@ function build(options: {
           args.where.externalId === VIDEO
             ? options.lessons.map((lessonId) => ({ lessonId, encrypted: options.encrypted ?? true }))
             : [],
+      },
+      lessonResource: {
+        findMany: async (args: { where: { videoExternalId: string } }) =>
+          args.where.videoExternalId === VIDEO ? (options.materials ?? []).map((lessonId) => ({ lessonId })) : [],
       },
     } as unknown as PrismaService,
     {
@@ -56,6 +62,17 @@ describe('VideoKeyService', () => {
     const service = build({ lessons: [], allowed: {} });
     await expect(service.key(student, VIDEO)).rejects.toBeInstanceOf(NotFoundException);
     await expect(service.key(student, '../x')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  /*
+   * «رفع فيديو» in a lesson's materials: no `lesson_videos` row at all, the
+   * same rule — whoever may open the lesson it hangs off.
+   */
+  it('hands a material video\'s key to a student who may open its lesson, and 404s one who may not', async () => {
+    const allowed = build({ lessons: [], materials: ['l3'], allowed: { l3: 'ok' } });
+    await expect(allowed.key(student, VIDEO)).resolves.toEqual(KEY);
+    const refused = build({ lessons: [], materials: ['l3'], allowed: { l3: 'forbidden' } });
+    await expect(refused.key(student, VIDEO)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('lets staff preview without being enrolled', async () => {

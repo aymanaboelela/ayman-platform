@@ -5,6 +5,7 @@ import { Card, CardBody } from '@ayman/ui/components/card';
 import { cn } from '@ayman/ui/lib/cn';
 import { DocumentViewer } from './document-viewer';
 import { DocumentIcon, LinkIcon, SlidesIcon, VideoIcon } from './icons';
+import { ResourceVideo } from './resource-video';
 
 const c = copy.player;
 
@@ -53,26 +54,38 @@ function YouTubeFrame({ youtubeId, title }: { youtubeId: string; title: string }
 }
 
 /**
- * «حل الواجب» uploaded straight into the lesson instead of linked from
- * YouTube — `viewPath` streams it through the same enrollment-checked route
- * a document uses (`player.service.ts`), never a storage URL.
+ * A material video: a YouTube embed, or — «رفع فيديو» — our own encrypted HLS
+ * ladder in the lecture's own player, or «بيتجهّز» while the encoder works.
+ *
+ * It used to be a bare `<video src>` on the document route, which streamed
+ * the whole file with no `Range` (no seeking, and iOS Safari would not play
+ * it) and handed every student a download. The ladder fixes all three.
  */
-function UploadedVideoFrame({ resource }: { resource: PlayerResource }) {
-  if (resource.viewPath === null) return null;
-  return (
-    <div className="overflow-hidden rounded-md border border-line bg-surface-2">
-      <video src={resource.viewPath} controls preload="metadata" className="block aspect-video w-full">
-        {c.videoUnsupported}
-      </video>
-    </div>
-  );
-}
-
-function VideoResource({ resource }: { resource: PlayerResource }) {
+function VideoResource({ resource, watermark }: { resource: PlayerResource; watermark: string | null }) {
   if (resource.youtubeId !== null) {
     return <YouTubeFrame youtubeId={resource.youtubeId} title={resource.title} />;
   }
-  return <UploadedVideoFrame resource={resource} />;
+  if (resource.mirror !== null) {
+    return (
+      <ResourceVideo
+        mirror={resource.mirror}
+        posterUrl={resource.posterUrl}
+        title={resource.title}
+        watermark={watermark}
+      />
+    );
+  }
+  if (resource.processing) {
+    return (
+      <p
+        role="status"
+        className="rounded-md border border-line bg-surface-2 px-4 py-3 text-[length:var(--fs-text-sm)] text-fg-muted"
+      >
+        {c.resourceVideoProcessing}
+      </p>
+    );
+  }
+  return null;
 }
 
 /**
@@ -174,7 +187,14 @@ function ExternalLinkCard({ resource }: { resource: PlayerResource }) {
   );
 }
 
-export function ResourceList({ resources }: { resources: PlayerResource[] }) {
+export function ResourceList({
+  resources,
+  watermark = null,
+}: {
+  resources: PlayerResource[];
+  /** The student's name over an uploaded video, exactly as over the lecture. */
+  watermark?: string | null;
+}) {
   if (resources.length === 0) {
     return (
       <Card>
@@ -209,7 +229,7 @@ export function ResourceList({ resources }: { resources: PlayerResource[] }) {
               </p>
             )}
 
-            {resource.kind === 'video' ? <VideoResource resource={resource} /> : null}
+            {resource.kind === 'video' ? <VideoResource resource={resource} watermark={watermark} /> : null}
             {resource.kind === 'link' ? <LinkResource resource={resource} /> : null}
             {isFile ? <DocumentViewer resource={resource} /> : null}
           </li>

@@ -33,6 +33,9 @@ const resource = (id: string, title: string): PlayerResource => ({
   linkUrl: null,
   viewPath: `/api/lessons/r/${id}/view`,
   downloadPath: `/api/lessons/r/${id}/download`,
+  mirror: null,
+  posterUrl: null,
+  processing: false,
 });
 
 /*

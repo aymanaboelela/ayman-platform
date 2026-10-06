@@ -36,10 +36,24 @@ export class VideoKeyService {
   async key(user: Pick<AuthenticatedUser, 'id' | 'role'>, videoId: string): Promise<Buffer> {
     if (!UPLOAD_ID_RE.test(videoId)) throw new NotFoundException('video not found');
 
-    const rows = await this.prisma.lessonVideo.findMany({
+    const lectures = await this.prisma.lessonVideo.findMany({
       where: { externalId: videoId, provider: 'upload' },
       select: { lessonId: true, encrypted: true },
     });
+    /*
+     * «رفع فيديو» in a lesson's MATERIALS — a different table, the same rule:
+     * whoever may open the lesson it hangs off may have its key. Always
+     * encrypted (there is no «من غير تشفير» for a material), so no flag to read.
+     * Only `ready` ones: until then there is no playlist to decrypt.
+     */
+    const materials =
+      lectures.length > 0
+        ? []
+        : await this.prisma.lessonResource.findMany({
+            where: { videoExternalId: videoId, videoProvider: 'upload', mirrorStatus: 'ready' },
+            select: { lessonId: true },
+          });
+    const rows = [...lectures, ...materials.map(({ lessonId }) => ({ lessonId, encrypted: true }))];
     if (rows.length === 0) throw new NotFoundException('video not found');
     // Defense in depth — a plain mirror's manifest never has `#EXT-X-KEY`, so
     // hls.js never calls this route for one in practice. A probe that asks

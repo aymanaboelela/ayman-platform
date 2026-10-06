@@ -84,8 +84,16 @@ const SAVED_PREFIX = 'ayman:video-upload:';
 export type UploadPhase = 'uploading' | 'processing' | 'error';
 
 export interface UploadEntry {
+  /**
+   * The store's own key. The lecture's upload is keyed by its `lessonId`, as
+   * it always was; a lesson MATERIAL's («رفع فيديو» in مواد الدرس) by its own
+   * key, because one lesson can have several materials uploading at once.
+   */
+  key: string;
   lessonId: string;
   courseId: string;
+  /** Set for a material's upload once its row exists; null for the lecture. */
+  resourceId: string | null;
   fileName: string;
   phase: UploadPhase;
   sent: number;
@@ -131,15 +139,21 @@ export function useUploads(): readonly UploadEntry[] {
   return useSyncExternalStore(subscribe, () => snapshot, () => EMPTY);
 }
 
-/** One lesson's upload, or null. */
+/** One lesson's upload of its OWN video, or null — never a material's. */
 export function useUpload(lessonId: string): UploadEntry | null {
-  return useUploads().find((entry) => entry.lessonId === lessonId) ?? null;
+  return useUploads().find((entry) => entry.key === lessonId) ?? null;
 }
 
-function patch(lessonId: string, change: Partial<UploadEntry>): void {
-  const current = entries.get(lessonId);
+/** Every material upload this tab is running for one lesson. */
+export function useResourceUploads(lessonId: string): readonly UploadEntry[] {
+  const all = useUploads();
+  return all.filter((entry) => entry.lessonId === lessonId && entry.key !== lessonId);
+}
+
+function patch(key: string, change: Partial<UploadEntry>): void {
+  const current = entries.get(key);
   if (current === undefined) return;
-  entries.set(lessonId, { ...current, ...change });
+  entries.set(key, { ...current, ...change });
   emit();
 }
 
@@ -163,26 +177,26 @@ function syncUnloadGuard(): void {
 
 /* ── persistence — best effort, and never the only copy of anything ─────── */
 
-export function savedUpload(lessonId: string): SavedUpload | null {
+export function savedUpload(key: string): SavedUpload | null {
   try {
-    const raw = window.localStorage.getItem(SAVED_PREFIX + lessonId);
+    const raw = window.localStorage.getItem(SAVED_PREFIX + key);
     return raw === null ? null : (JSON.parse(raw) as SavedUpload);
   } catch {
     return null;
   }
 }
 
-function save(lessonId: string, saved: SavedUpload): void {
+function save(key: string, saved: SavedUpload): void {
   try {
-    window.localStorage.setItem(SAVED_PREFIX + lessonId, JSON.stringify(saved));
+    window.localStorage.setItem(SAVED_PREFIX + key, JSON.stringify(saved));
   } catch {
     /* private window — resume will not be offered, the upload still runs */
   }
 }
 
-export function forgetSaved(lessonId: string): void {
+export function forgetSaved(key: string): void {
   try {
-    window.localStorage.removeItem(SAVED_PREFIX + lessonId);
+    window.localStorage.removeItem(SAVED_PREFIX + key);
   } catch {
     /* nothing stored */
   }
@@ -227,7 +241,7 @@ function putPart(url: string, body: Blob, onProgress: (loaded: number) => void, 
 }
 
 async function sendParts(
-  lessonId: string,
+  key: string,
   file: File,
   partSizeBytes: number,
   parts: readonly { partNumber: number; url: string }[],
@@ -258,7 +272,7 @@ async function sendParts(
     const first = samples[0]!;
     const span = (now - first.at) / 1000;
     const rate = span >= 1 ? Math.max(0, (sent - first.sent) / span) : null;
-    patch(lessonId, {
+    patch(key, {
       sent,
       bytesPerSecond: rate,
       secondsLeft: rate !== null && rate > 0 ? Math.ceil((file.size - sent) / rate) : null,
@@ -311,27 +325,49 @@ async function sendParts(
   return [...etags.entries()].map(([partNumber, etag]) => ({ partNumber, etag })).sort((a, b) => a.partNumber - b.partNumber);
 }
 
-async function run(
-  courseId: string,
-  lessonId: string,
-  file: File,
-  open: () => Promise<
-    | {
-        ok: true;
-        session: {
-          videoId: string;
-          uploadId: string;
-          partSizeBytes: number;
-          parts: { partNumber: number; url: string }[];
-          done?: { partNumber: number; etag: string }[];
-        };
-      }
-    | { ok: false; message: string }
-  >,
-): Promise<void> {
-  entries.set(lessonId, {
-    lessonId,
+/** What a session open answers — the lecture's, or a material's with its new row. */
+type Opened =
+  | {
+      ok: true;
+      session: {
+        videoId: string;
+        uploadId: string;
+        partSizeBytes: number;
+        parts: { partNumber: number; url: string }[];
+        done?: { partNumber: number; etag: string }[];
+        resourceId?: string;
+      };
+    }
+  | { ok: false; message: string };
+
+/**
+ * Which row an upload fills, and how to talk to it. The transfer — parts,
+ * retries, the speed, «كمّل الرفع» — is the same for the lecture and for a
+ * material; only these differ.
+ */
+interface UploadTarget {
+  key: string;
+  courseId: string;
+  lessonId: string;
+  resourceId: string | null;
+  open: () => Promise<Opened>;
+  /** Where the session is remembered, once it is known (a material's id arrives with `open`). */
+  savedKey: (session: Extract<Opened, { ok: true }>['session']) => string;
+  complete: (
+    session: Extract<Opened, { ok: true }>['session'],
+    parts: { partNumber: number; etag: string }[],
+  ) => Promise<{ ok: true } | { ok: false; message: string }>;
+  /** Told once, when the session is open (or could not be). */
+  onOpened?: (opened: Opened) => void;
+}
+
+async function run(target: UploadTarget, file: File): Promise<void> {
+  const { key, courseId } = target;
+  entries.set(key, {
+    key,
+    lessonId: target.lessonId,
     courseId,
+    resourceId: target.resourceId,
     fileName: file.name,
     phase: 'uploading',
     sent: 0,
@@ -342,9 +378,9 @@ async function run(
   });
   emit();
 
-  let opened: Awaited<ReturnType<typeof open>>;
+  let opened: Opened;
   try {
-    opened = await open();
+    opened = await target.open();
   } catch (error) {
     // `open` is a Server Action (`startVideoUploadAction`/`resumeVideoUploadAction`)
     // called directly, not wrapped in its own try/catch — a tab left open across
@@ -353,17 +389,22 @@ async function run(
     // call below). «كمّل الرفع» on a stale tab used to escape uncaught straight
     // to the route's `error.tsx`. Same `actionErrorMessage` the catch below
     // already uses — one flag, one reload toast, not a crashed page.
-    patch(lessonId, { phase: 'error', message: actionErrorMessage(error, null) });
+    const message = actionErrorMessage(error, null);
+    patch(key, { phase: 'error', message });
+    target.onOpened?.({ ok: false, message: message ?? '' });
     return;
   }
+  target.onOpened?.(opened);
   if (!opened.ok) {
-    patch(lessonId, { phase: 'error', message: opened.message });
+    patch(key, { phase: 'error', message: opened.message });
     return;
   }
 
   const { session } = opened;
-  sessions.set(lessonId, { videoId: session.videoId, uploadId: session.uploadId });
-  save(lessonId, {
+  if (session.resourceId !== undefined) patch(key, { resourceId: session.resourceId });
+  const savedKey = target.savedKey(session);
+  sessions.set(key, { videoId: session.videoId, uploadId: session.uploadId });
+  save(savedKey, {
     videoId: session.videoId,
     uploadId: session.uploadId,
     courseId,
@@ -372,31 +413,44 @@ async function run(
     lastModified: file.lastModified,
   });
   const controller = new AbortController();
-  controllers.set(lessonId, controller);
+  controllers.set(key, controller);
 
   try {
-    const parts = await sendParts(lessonId, file, session.partSizeBytes, session.parts, session.done ?? [], controller.signal);
-    const { completeVideoUploadAction } = await actions();
-    const completed = await completeVideoUploadAction(courseId, lessonId, {
-      videoId: session.videoId,
-      uploadId: session.uploadId,
-      parts,
-    });
+    const parts = await sendParts(key, file, session.partSizeBytes, session.parts, session.done ?? [], controller.signal);
+    const completed = await target.complete(session, parts);
     if (!completed.ok) {
-      patch(lessonId, { phase: 'error', message: completed.message });
+      patch(key, { phase: 'error', message: completed.message });
       return;
     }
-    forgetSaved(lessonId);
-    sessions.delete(lessonId);
-    patch(lessonId, { phase: 'processing', sent: file.size, secondsLeft: 0 });
+    forgetSaved(savedKey);
+    sessions.delete(key);
+    patch(key, { phase: 'processing', sent: file.size, secondsLeft: 0 });
   } catch (error) {
     if (controller.signal.aborted) return;
     // The saved session stays: the parts that made it are in the bucket, and
     // picking the same file again resumes from them.
-    patch(lessonId, { phase: 'error', message: actionErrorMessage(error, null) });
+    patch(key, { phase: 'error', message: actionErrorMessage(error, null) });
   } finally {
-    controllers.delete(lessonId);
+    controllers.delete(key);
   }
+}
+
+/** The lecture's own video: keyed, saved and sealed by its lesson. */
+function lectureTarget(courseId: string, lessonId: string, open: () => Promise<Opened>): UploadTarget {
+  return {
+    key: lessonId,
+    courseId,
+    lessonId,
+    resourceId: null,
+    open,
+    savedKey: () => lessonId,
+    complete: async (session, parts) =>
+      (await actions()).completeVideoUploadAction(courseId, lessonId, {
+        videoId: session.videoId,
+        uploadId: session.uploadId,
+        parts,
+      }),
+  };
 }
 
 /** A fresh upload. The caller has already refused wrong types and oversized files. */
@@ -410,25 +464,31 @@ export function startUpload(
   /** AES-128-encrypt the mirrored copy — «مينفعش حد ينزّل الفيديو». */
   encrypt = true,
 ): Promise<void> {
-  return run(courseId, lessonId, file, async () =>
-    (await actions()).startVideoUploadAction(lessonId, {
-      fileName: file.name,
-      sizeBytes: file.size,
-      contentType,
-      keepPrevious,
-      encrypt,
-    }),
+  return run(
+    lectureTarget(courseId, lessonId, async () =>
+      (await actions()).startVideoUploadAction(lessonId, {
+        fileName: file.name,
+        sizeBytes: file.size,
+        contentType,
+        keepPrevious,
+        encrypt,
+      }),
+    ),
+    file,
   );
 }
 
 /** «كمّل الرفع» — the same file, after the tab lost it. */
 export function resumeUpload(lessonId: string, file: File, saved: SavedUpload): Promise<void> {
-  return run(saved.courseId, lessonId, file, async () =>
-    (await actions()).resumeVideoUploadAction(lessonId, {
-      videoId: saved.videoId,
-      uploadId: saved.uploadId,
-      sizeBytes: file.size,
-    }),
+  return run(
+    lectureTarget(saved.courseId, lessonId, async () =>
+      (await actions()).resumeVideoUploadAction(lessonId, {
+        videoId: saved.videoId,
+        uploadId: saved.uploadId,
+        sizeBytes: file.size,
+      }),
+    ),
+    file,
   );
 }
 
@@ -450,9 +510,137 @@ export async function cancelUpload(courseId: string, lessonId: string): Promise<
   }
 }
 
-/** Drop a finished or failed entry from view. */
-export function dismissUpload(lessonId: string): void {
-  if (entries.get(lessonId)?.phase === 'uploading') return;
-  entries.delete(lessonId);
+/** Drop a finished or failed entry from view — by its `key` (the lecture's is its lesson id). */
+export function dismissUpload(key: string): void {
+  if (entries.get(key)?.phase === 'uploading') return;
+  entries.delete(key);
   emit();
+}
+
+/* ── «رفع فيديو» جوّه مواد الدرس ─────────────────────────────────────────
+ *
+ * The same transfer for a lesson MATERIAL. The difference that matters to the
+ * admin: the material row is created by the session open, so once that has
+ * answered there is nothing left to save — the panel can close, and the
+ * corner card finishes the job.
+ */
+
+const resourceKey = (resourceId: string): string => `resource:${resourceId}`;
+
+/** A material's saved session — `null` when this browser never started it. */
+export function savedResourceUpload(resourceId: string): SavedUpload | null {
+  return savedUpload(resourceKey(resourceId));
+}
+
+export function forgetSavedResource(resourceId: string): void {
+  forgetSaved(resourceKey(resourceId));
+}
+
+function resourceTarget(
+  key: string,
+  courseId: string,
+  lessonId: string,
+  resourceId: string | null,
+  open: () => Promise<Opened>,
+  onOpened?: (opened: Opened) => void,
+): UploadTarget {
+  return {
+    key,
+    courseId,
+    lessonId,
+    resourceId,
+    open,
+    onOpened,
+    savedKey: (session) => resourceKey(session.resourceId ?? resourceId ?? ''),
+    complete: async (session, parts) =>
+      (await actions()).completeResourceVideoUploadAction(courseId, session.resourceId ?? resourceId ?? '', {
+        videoId: session.videoId,
+        uploadId: session.uploadId,
+        parts,
+      }),
+  };
+}
+
+let fresh = 0;
+
+/**
+ * «أضف مادة» with a video file: opens the session — which creates the
+ * material — and keeps sending in the background. Resolves as soon as the
+ * row exists (or could not be made), NOT when the upload ends: that is what
+ * the caller waits on to close its form and show the new row.
+ */
+export function startResourceUpload(
+  courseId: string,
+  lessonId: string,
+  file: File,
+  contentType: string,
+  material: { title: string; description: string | null },
+): Promise<{ ok: true; resourceId: string } | { ok: false; message: string }> {
+  fresh += 1;
+  const key = `resource-new:${lessonId}:${Date.now()}:${fresh}`;
+  return new Promise((resolve) => {
+    void run(
+      resourceTarget(
+        key,
+        courseId,
+        lessonId,
+        null,
+        async () =>
+          (await actions()).startResourceVideoUploadAction(courseId, lessonId, {
+            title: material.title,
+            description: material.description,
+            fileName: file.name,
+            sizeBytes: file.size,
+            contentType,
+          }),
+        (opened) => {
+          if (opened.ok && opened.session.resourceId !== undefined) {
+            resolve({ ok: true, resourceId: opened.session.resourceId });
+          } else {
+            // Nothing was created, so nothing is left to show in the corner.
+            entries.delete(key);
+            emit();
+            resolve({ ok: false, message: opened.ok ? '' : opened.message });
+          }
+        },
+      ),
+      file,
+    );
+  });
+}
+
+/** «كمّل الرفع» for a material, after the tab lost it. */
+export function resumeResourceUpload(
+  lessonId: string,
+  resourceId: string,
+  file: File,
+  saved: SavedUpload,
+): Promise<void> {
+  return run(
+    resourceTarget(resourceKey(resourceId), saved.courseId, lessonId, resourceId, async () =>
+      (await actions()).resumeResourceVideoUploadAction(resourceId, {
+        videoId: saved.videoId,
+        uploadId: saved.uploadId,
+        sizeBytes: file.size,
+      }),
+    ),
+    file,
+  );
+}
+
+/** «إلغاء» — the parts go, and the material with them (see the API). */
+export async function cancelResourceUpload(courseId: string, resourceId: string): Promise<void> {
+  const entry = [...entries.values()].find((candidate) => candidate.resourceId === resourceId);
+  const key = entry?.key ?? resourceKey(resourceId);
+  controllers.get(key)?.abort();
+  controllers.delete(key);
+  const session = sessions.get(key) ?? savedResourceUpload(resourceId);
+  sessions.delete(key);
+  forgetSavedResource(resourceId);
+  entries.delete(key);
+  emit();
+  if (session !== null) {
+    const { abortResourceVideoUploadAction } = await actions();
+    await abortResourceVideoUploadAction(courseId, resourceId, { videoId: session.videoId, uploadId: session.uploadId });
+  }
 }

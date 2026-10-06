@@ -132,65 +132,6 @@ describe('DocumentService.upload', () => {
   });
 });
 
-describe('DocumentService.uploadVideo', () => {
-  const mp4 = { mime: 'video/mp4', ext: 'mp4' };
-
-  it('stores under the resvideo/ prefix, not doc/', async () => {
-    const { service, storage } = makeService(mp4);
-    const result = await service.uploadVideo({
-      originalname: 'حل الواجب.mp4',
-      buffer: PDF_BYTES,
-      size: PDF_BYTES.byteLength,
-    });
-
-    expect(result.storageKey).toMatch(/^resvideo\/[0-9a-f]{2}\/[0-9a-f-]{36}\.mp4$/);
-    expect(storage.put).toHaveBeenCalledWith(result.storageKey, PDF_BYTES, 'video/mp4');
-  });
-
-  it('rejects a document extension — the two allowlists are separate', async () => {
-    const { service, signature } = makeService(mp4);
-    await expect(
-      service.uploadVideo({ originalname: 'notes.pdf', buffer: PDF_BYTES, size: 10 }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(signature.detect).not.toHaveBeenCalled();
-  });
-
-  it('rejects when the magic bytes are not a video the allowlist knows', async () => {
-    const { service, storage } = makeService(pdf);
-    await expect(
-      service.uploadVideo({ originalname: 'clip.mp4', buffer: PDF_BYTES, size: 10 }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(storage.put).not.toHaveBeenCalled();
-  });
-
-  it('still enforces MAX_DOCUMENT_BYTES — the same Cloudflare edge ceiling', async () => {
-    const { service, signature } = makeService(mp4);
-    await expect(
-      service.uploadVideo({
-        originalname: 'huge.mp4',
-        buffer: PDF_BYTES,
-        size: MAX_DOCUMENT_BYTES + 1,
-      }),
-    ).rejects.toBeInstanceOf(PayloadTooLargeException);
-    expect(signature.detect).not.toHaveBeenCalled();
-  });
-
-  it('audits with the resource-video pipeline name', async () => {
-    const { service, audit } = makeService(mp4);
-    const result = await service.uploadVideo({
-      originalname: 'solution.mp4',
-      buffer: PDF_BYTES,
-      size: PDF_BYTES.byteLength,
-    });
-
-    expect(audit.record).toHaveBeenCalledWith(
-      expect.objectContaining({
-        metadata: expect.objectContaining({ pipeline: 'resource-video', storageKey: result.storageKey }),
-      }),
-    );
-  });
-});
-
 /**
  * Against the REAL storage class, not a mock.
  *
@@ -234,25 +175,6 @@ describe('DocumentService against real disk storage', () => {
     });
 
     // The whole point: the key it minted is one storage accepts.
-    await expect(storage.stat(result.storageKey)).resolves.toEqual({
-      size: PDF_BYTES.byteLength,
-    });
-  });
-
-  it.each([
-    ['video/mp4', 'clip.mp4'],
-    ['video/webm', 'clip.webm'],
-    ['video/quicktime', 'clip.mov'],
-  ])('writes %s to disk under resvideo/ and can read it back', async (mime, filename) => {
-    const { service, storage } = realService(mime);
-
-    const result = await service.uploadVideo({
-      originalname: filename,
-      buffer: PDF_BYTES,
-      size: PDF_BYTES.byteLength,
-    });
-
-    expect(result.storageKey).toMatch(/^resvideo\//);
     await expect(storage.stat(result.storageKey)).resolves.toEqual({
       size: PDF_BYTES.byteLength,
     });

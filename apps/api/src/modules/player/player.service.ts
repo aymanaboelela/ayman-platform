@@ -365,12 +365,13 @@ export class PlayerService {
               filename: true,
               mime: true,
               sizeBytes: true,
-              // Not returned to the client — see `isFile` below. Read only to
-              // tell an UPLOADED video (bytes of ours to stream) apart from a
-              // YouTube one (nothing of ours to serve).
-              storageKey: true,
+              videoProvider: true,
               videoExternalId: true,
               linkUrl: true,
+              // «رفع فيديو» — where the encoder is, so an uploaded material
+              // plays from our ladder once `ready` and says «بيتجهّز» before.
+              mirrorStatus: true,
+              mirrorHeight: true,
             },
           },
         },
@@ -513,34 +514,55 @@ export class PlayerService {
             passPercent: Number(lesson.quiz.passPercent),
           }
         : null,
-      resources: lesson.resources.map((resource) => {
-        // An uploaded video (storageKey set) has bytes of ours to stream,
-        // exactly like a presentation or document — only a YouTube video and
-        // a link do not.
-        const isFile =
-          resource.kind === 'presentation' ||
-          resource.kind === 'document' ||
-          (resource.kind === 'video' && resource.storageKey !== null);
-        return {
-          id: resource.id,
-          kind: resource.kind,
-          title: resource.title,
-          description: resource.description,
-          filename: resource.filename,
-          mime: resource.mime,
-          sizeBytes: resource.sizeBytes,
-          youtubeId: resource.videoExternalId,
-          linkUrl: resource.linkUrl,
-          // Never the storage URL. `/media/*` is @Public(), so anything gated
-          // on enrollment has to come back through a route that re-checks it.
-          // Null for a YouTube video and a link — they have no bytes of ours
-          // to serve.
-          viewPath: isFile ? `/api/lessons/${lesson.id}/resources/${resource.id}/view` : null,
-          downloadPath: isFile
-            ? `/api/lessons/${lesson.id}/resources/${resource.id}/download`
-            : null,
-        };
-      }),
+      resources: lesson.resources
+        /*
+         * An uploaded material the student cannot use yet is left out rather
+         * than drawn broken: `uploading` may never finish (a closed tab), and
+         * `failed`/`disabled` are the admin's to fix. `pending`/`mirroring`
+         * stay — «بيتجهّز» tells the student it is coming.
+         */
+        .filter(
+          (resource) =>
+            resource.videoProvider !== 'upload' ||
+            resource.mirrorStatus === 'ready' ||
+            resource.mirrorStatus === 'pending' ||
+            resource.mirrorStatus === 'mirroring',
+        )
+        .map((resource) => {
+          const isFile = resource.kind === 'presentation' || resource.kind === 'document';
+          const uploaded = resource.videoProvider === 'upload' ? resource.videoExternalId : null;
+          // Built from the upload id and the configured origin, never read out
+          // of a column — the same rule, and the same helpers, as the lecture.
+          const mirror =
+            uploaded !== null && base !== null && resource.mirrorStatus === 'ready' && resource.mirrorHeight !== null
+              ? {
+                  hlsUrl: mirrorPlaylistUrl(base, uploaded),
+                  maxHeight: resource.mirrorHeight,
+                  posterUrl: mirrorPosterUrl(base, uploaded),
+                }
+              : null;
+          return {
+            id: resource.id,
+            kind: resource.kind,
+            title: resource.title,
+            description: resource.description,
+            filename: resource.filename,
+            mime: resource.mime,
+            sizeBytes: resource.sizeBytes,
+            youtubeId: resource.videoProvider === 'youtube' ? resource.videoExternalId : null,
+            linkUrl: resource.linkUrl,
+            // Never the storage URL. `/media/*` is @Public(), so anything gated
+            // on enrollment has to come back through a route that re-checks it.
+            // Null for every video and link — no file of ours to stream.
+            viewPath: isFile ? `/api/lessons/${lesson.id}/resources/${resource.id}/view` : null,
+            downloadPath: isFile
+              ? `/api/lessons/${lesson.id}/resources/${resource.id}/download`
+              : null,
+            mirror: mirror === null ? null : { hlsUrl: mirror.hlsUrl, maxHeight: mirror.maxHeight, trim: null },
+            posterUrl: mirror?.posterUrl ?? null,
+            processing: uploaded !== null && mirror === null,
+          };
+        }),
       progress: progress
         ? toProgressDto(progress as ProgressRow)
         : {
