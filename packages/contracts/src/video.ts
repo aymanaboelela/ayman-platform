@@ -402,8 +402,21 @@ export function mirrorPrefix(externalId: string): string {
  */
 export function mirrorPlaylistUrl(baseUrl: string, externalId: string): string {
   const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-  return `${base}/${mirrorPrefix(externalId)}/master.m3u8`;
+  return `${base}/${mirrorPrefix(externalId)}/master.m3u8?l=${MIRROR_LADDER_VERSION}`;
 }
+
+/**
+ * Bump when a lecture's ladder is rewritten IN PLACE.
+ *
+ * Everything under `v/<id>/` is served `immutable` for a year, by the edge and
+ * by every student's browser — right, because an id never changes its bytes.
+ * The one exception is a ladder we add a rung to after the fact (2026-10-06:
+ * the 1080-only lecture 5 of الوحدة التانية), and no purge reaches a browser
+ * that already holds the old master. A new query string is a new cache key
+ * for both, so each one fetches the new master once, and the segments under it
+ * (which did not change) stay cached.
+ */
+export const MIRROR_LADDER_VERSION = 2;
 
 /**
  * The poster frame a transcode writes beside the ladder.

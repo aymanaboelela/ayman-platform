@@ -169,10 +169,10 @@ describe('mirror keys and URLs', () => {
 
   it('builds the playlist URL without doubling the slash', () => {
     expect(mirrorPlaylistUrl('https://video.example.test/', 'WndSPGcPmfM')).toBe(
-      'https://video.example.test/v/WndSPGcPmfM/master.m3u8',
+      'https://video.example.test/v/WndSPGcPmfM/master.m3u8?l=2',
     );
     expect(mirrorPlaylistUrl('https://video.example.test', 'WndSPGcPmfM')).toBe(
-      'https://video.example.test/v/WndSPGcPmfM/master.m3u8',
+      'https://video.example.test/v/WndSPGcPmfM/master.m3u8?l=2',
     );
   });
 });

@@ -11,16 +11,20 @@ import {
   uploadSourceKey,
 } from '@ayman/contracts/video';
 import {
+  LOW_RUNG,
   PASSTHROUGH_MAX_KBPS,
   canPassThrough,
   encodedFraction,
+  lowRungArgs,
   passthroughArgs,
   posterArgs,
   readMasterVariants,
   readMediaPlaylist,
   readProbe,
+  segmentBoundaries,
   transcodeArgs,
   variantBandwidth,
+  withLowRung,
   withMeasuredBandwidth,
 } from './upload-pipeline';
 import { videoKey, videoKeyUri } from './video-key';
@@ -495,5 +499,62 @@ describe('passthroughArgs', () => {
   it('encrypts into MPEG-TS when given a key, like the encode does', () => {
     expect(encrypted[encrypted.indexOf('-hls_segment_type') + 1]).toBe('mpegts');
     expect(encrypted[encrypted.indexOf('-hls_key_info_file') + 1]).toBe('/tmp/work/video.keyinfo');
+  });
+});
+
+describe('the low rung of a copied file', () => {
+  // Segments cut at the source's own keyframes: not a fixed 6 s grid.
+  const playlist = [
+    '#EXTM3U',
+    '#EXT-X-TARGETDURATION:7',
+    '#EXTINF:6.000000,',
+    'seg_000.ts',
+    '#EXTINF:5.866667,',
+    'seg_001.ts',
+    '#EXTINF:6.366667,',
+    'seg_002.ts',
+    '#EXTINF:4.000000,',
+    'seg_003.ts',
+    '#EXT-X-ENDLIST',
+  ].join('\n');
+
+  it('cuts where the copy is cut — the sum of the segments before, never the end', () => {
+    const cuts = segmentBoundaries(playlist);
+    expect(cuts).toHaveLength(3);
+    expect(cuts[0]).toBeCloseTo(6, 6);
+    expect(cuts[1]).toBeCloseTo(11.866667, 6);
+    expect(cuts[2]).toBeCloseTo(18.233334, 6);
+  });
+
+  it('forces a keyframe at every boundary, a millisecond early, and at no other time', () => {
+    const args = lowRungArgs('/tmp/src', '/tmp/out/1', true, [6, 11.866667], 2);
+    expect(args[args.indexOf('-force_key_frames') + 1]).toBe('5.999,11.866');
+    // Nothing else may add a keyframe, or a segment would be cut off the grid.
+    expect(args[args.indexOf('-sc_threshold') + 1]).toBe('0');
+    expect(Number(args[args.indexOf('-g') + 1])).toBeGreaterThan(10_000);
+    // And the muxer must cut at every one of them.
+    expect(Number(args[args.indexOf('-hls_time') + 1])).toBeLessThan(2);
+  });
+
+  it('scales to the low rung and keeps its audio', () => {
+    const args = lowRungArgs('/tmp/src', '/tmp/out/1', true, [6], 2);
+    expect(args[args.indexOf('-vf') + 1]).toBe(`scale=-2:${LOW_RUNG.height}:flags=bicubic`);
+    expect(args).toContain('0:a:0');
+    expect(lowRungArgs('/tmp/src', '/tmp/out/1', false, [6], 2)).not.toContain('0:a:0');
+  });
+
+  it('encrypts like the copy it sits beside', () => {
+    const plain = lowRungArgs('/tmp/src', '/tmp/out/1', true, [6], 2);
+    const encrypted = lowRungArgs('/tmp/src', '/tmp/out/1', true, [6], 2, '/tmp/work/video.keyinfo');
+    expect(plain).not.toContain('-hls_key_info_file');
+    expect(encrypted[encrypted.indexOf('-hls_key_info_file') + 1]).toBe('/tmp/work/video.keyinfo');
+    expect(encrypted[encrypted.indexOf('-hls_segment_type') + 1]).toBe('mpegts');
+  });
+
+  it('lists the low rung after the copy in the master', () => {
+    const master = '#EXTM3U\n#EXT-X-VERSION:6\n#EXT-X-STREAM-INF:BANDWIDTH=5252992,RESOLUTION=1920x1080\n0/index.m3u8\n';
+    const out = withLowRung(master, '1/index.m3u8', 640, 360);
+    expect(readMasterVariants(out)).toEqual(['0/index.m3u8', '1/index.m3u8']);
+    expect(out).toContain('RESOLUTION=640x360');
   });
 });
