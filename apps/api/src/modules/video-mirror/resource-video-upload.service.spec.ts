@@ -211,7 +211,7 @@ describe('ResourceVideoUploadService — a material video, through the real cons
       viewPath: null,
       downloadPath: null,
       processing: false,
-      mirror: { hlsUrl: `https://video.test/v/${session.videoId}/master.m3u8`, maxHeight: 720 },
+      mirror: { hlsUrl: `https://video.test/v/${session.videoId}/master.m3u8?l=2`, maxHeight: 720 },
     });
     await expect(keys.key({ id: studentId, role: 'student' }, session.videoId)).resolves.toEqual(KEY);
 
