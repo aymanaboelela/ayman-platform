@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 import { MIRROR_MAX_PIXELS, UPLOAD_CRF, ladderFor, type LadderRung } from '@ayman/contracts/video';
+import { IS_AYMAN } from '../../common/tenant';
 import { DEFAULT_TOOLS, type MirrorResult, type MirrorTools } from './mirror-pipeline';
 
 const run = promisify(execFile);
@@ -215,6 +216,117 @@ export function passthroughArgs(
     join(outDir, '%v', encrypted ? 'seg_%03d.ts' : 'seg_%03d.m4s'),
     join(outDir, '%v', 'index.m3u8'),
   ];
+}
+
+/**
+ * ── The rung a copied file lacks ──────────────────────────────────────────
+ *
+ * A file published as it is has ONE rung. A student whose line cannot carry
+ * it has nothing to fall to — the player buffers, and that is exactly the
+ * «الفيديو بيقطّع» of a 1080 copy on a weak connection (2026-10-06). So a
+ * copied lecture gets one extra, small rung beside it: 360p, encoded from the
+ * source. One rung at a third of the pixels of the cheapest encode on the old
+ * ladder, so it costs a fraction of one — the reason publishing as-is was
+ * worth having is untouched.
+ *
+ * ⚠️ It must be cut at EXACTLY the copied rung's segment boundaries. The copy
+ * is cut at the source's own keyframes, so its segments are 5.9–6.4 s, not 6;
+ * a 360 rung cut on a fixed 6 s grid would sit a fraction of a second off
+ * every boundary, and the player stalls visibly at each switch — the problem
+ * `transcodeArgs` forces keyframes to avoid. So the copy's playlist is read
+ * first and its boundaries are forced here.
+ */
+export const LOW_RUNG: LadderRung = { height: 360, maxKbps: 700, audioKbps: 64 };
+
+/** Cumulative cut times (seconds) between the segments of a media playlist; the start and the end are not cuts. */
+export function segmentBoundaries(playlist: string): number[] {
+  const { segments } = readMediaPlaylist(playlist);
+  const cuts: number[] = [];
+  let at = 0;
+  for (let i = 0; i < segments.length - 1; i += 1) {
+    at += segments[i]!.durationSeconds;
+    cuts.push(at);
+  }
+  return cuts;
+}
+
+/**
+ * The low rung's ffmpeg invocation: scaled, constant quality like the main
+ * ladder, keyframes ONLY at `boundaries`, and an `-hls_time` shorter than any
+ * gap between them — so the muxer cuts at every forced keyframe and nowhere
+ * else.
+ */
+export function lowRungArgs(
+  source: string,
+  outDir: string,
+  hasAudio: boolean,
+  boundaries: readonly number[],
+  threads: number,
+  keyInfoFile: string | null = null,
+): string[] {
+  const encrypted = keyInfoFile !== null;
+  return [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-i',
+    source,
+    '-map',
+    '0:v:0',
+    ...(hasAudio ? ['-map', '0:a:0'] : []),
+    '-vf',
+    `scale=-2:${LOW_RUNG.height}:flags=bicubic`,
+    '-c:v',
+    'libx264',
+    '-preset',
+    'medium',
+    '-profile:v',
+    'high',
+    '-pix_fmt',
+    'yuv420p',
+    '-crf',
+    String(UPLOAD_CRF),
+    '-maxrate',
+    `${LOW_RUNG.maxKbps}k`,
+    '-bufsize',
+    `${LOW_RUNG.maxKbps * 2}k`,
+    // A millisecond early: the keyframe lands on the first frame at or after
+    // the time, and a boundary that float-sums a hair too high would push it
+    // one frame late — a cut a frame off is still a cut off.
+    '-force_key_frames',
+    boundaries.map((t) => Math.max(0, t - 0.001).toFixed(3)).join(','),
+    // No keyframe but the forced ones.
+    '-sc_threshold',
+    '0',
+    '-g',
+    '100000',
+    ...(hasAudio
+      ? ['-c:a', 'aac', '-ac', '2', '-b:a', `${LOW_RUNG.audioKbps}k`]
+      : []),
+    '-threads',
+    String(threads),
+    '-f',
+    'hls',
+    '-hls_time',
+    '1',
+    '-hls_playlist_type',
+    'vod',
+    '-hls_segment_type',
+    encrypted ? 'mpegts' : 'fmp4',
+    ...(encrypted ? ['-hls_key_info_file', keyInfoFile] : []),
+    '-hls_flags',
+    'independent_segments',
+    '-hls_segment_filename',
+    join(outDir, encrypted ? 'seg_%03d.ts' : 'seg_%03d.m4s'),
+    join(outDir, 'index.m3u8'),
+  ];
+}
+
+/** `master` with the low rung listed after the copied one. */
+export function withLowRung(master: string, uri: string, width: number, height: number): string {
+  const base = master.endsWith('\n') ? master : `${master}\n`;
+  return `${base}#EXT-X-STREAM-INF:BANDWIDTH=${LOW_RUNG.maxKbps * 1000},RESOLUTION=${width}x${height}\n${uri}\n`;
 }
 
 /** Segment length. Matches the mirror's, so both ladders behave identically. */
@@ -598,6 +710,13 @@ export interface TranscodeTools extends MirrorTools {
    * yields the instant a student's request needs the CPU.
    */
   readonly renice: boolean;
+  /**
+   * Add the 360 rung to a file published as it is (see `LOW_RUNG`). Ayman's
+   * stack only: the owner asked for it for his own lectures (2026-10-06), and
+   * on the other two stacks it would be encode CPU nobody chose to spend on
+   * the shared VPS.
+   */
+  readonly lowRung: boolean;
 }
 
 export const DEFAULT_TRANSCODE_TOOLS: TranscodeTools = {
@@ -616,6 +735,7 @@ export const DEFAULT_TRANSCODE_TOOLS: TranscodeTools = {
   // physical box, so one lecture encoding never fully starves the site.
   threads: 2,
   renice: process.platform === 'linux',
+  lowRung: IS_AYMAN,
 };
 
 /**
@@ -670,6 +790,8 @@ export async function transcodeUpload(
   for (let i = 0; i < Math.max(1, rungs.length); i += 1) {
     await mkdir(join(outDir, String(i)), { recursive: true });
   }
+  // A copied file gets a second, small rung (see `LOW_RUNG`).
+  const wantsLowRung = tools.lowRung && passThrough && probe.height > LOW_RUNG.height;
 
   /*
    * The key goes in `workDir`, NEVER in `outDir`: everything under `outDir`
@@ -703,6 +825,29 @@ export async function transcodeUpload(
     );
   } finally {
     if (poll !== null) clearInterval(poll);
+  }
+
+  if (wantsLowRung) {
+    // Best effort, like the poster: the copy alone already plays, so a failure
+    // here costs the weak-connection fallback, never the lecture. The master is
+    // only touched once the rung exists, so a half-written one is never listed.
+    const lowDir = join(outDir, '1');
+    try {
+      const boundaries = segmentBoundaries(await readFile(join(tallest, 'index.m3u8'), 'utf8'));
+      await mkdir(lowDir, { recursive: true });
+      await exec(
+        tools.ffmpeg,
+        lowRungArgs(sourceFile, lowDir, probe.hasAudio, boundaries, tools.threads, keyInfoFile),
+      );
+      const masterPath = join(outDir, 'master.m3u8');
+      const lowWidth = Math.max(2, Math.round((probe.width * LOW_RUNG.height) / probe.height / 2) * 2);
+      await writeFile(
+        masterPath,
+        withLowRung(await readFile(masterPath, 'utf8'), '1/index.m3u8', lowWidth, LOW_RUNG.height),
+      );
+    } catch {
+      await rm(lowDir, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 
   // The master ffmpeg wrote already plays — it only advertises each rung's
