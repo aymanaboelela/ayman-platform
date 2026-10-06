@@ -2,7 +2,7 @@
 
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useRef, type ComponentProps } from 'react';
-import { useBackDismiss } from '../hooks/use-back-dismiss';
+import { BackStop } from '../hooks/use-back-dismiss';
 import { cn } from '../lib/cn';
 
 export const Sheet = DialogPrimitive.Root;
@@ -37,7 +37,6 @@ export function SheetContent({ className, children, closeLabel, ...props }: Shee
     over whatever loaded next.
   */
   const closeRef = useRef<HTMLButtonElement>(null);
-  useBackDismiss(() => closeRef.current?.click());
 
   return (
     <DialogPrimitive.Portal>
@@ -54,6 +53,9 @@ export function SheetContent({ className, children, closeLabel, ...props }: Shee
         )}
         {...props}
       >
+        {/* Armed only while the drawer is OPEN — inside Radix's `Content`, which
+            is absent while closed. See `BackStop`. */}
+        <BackStop onBack={() => closeRef.current?.click()} />
         {children}
         {/*
           44×44 below `md`, and the glyph does not move.

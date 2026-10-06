@@ -81,6 +81,7 @@ export {
 // close on it, which today is the running exam.
 export {
   useBackDismiss,
+  BackStop,
   type BackDismissOptions,
   type BackDismissHandle,
 } from './hooks/use-back-dismiss';
