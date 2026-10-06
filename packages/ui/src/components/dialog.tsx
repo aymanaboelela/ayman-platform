@@ -2,7 +2,7 @@
 
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useRef, type ComponentProps } from 'react';
-import { useBackDismiss } from '../hooks/use-back-dismiss';
+import { BackStop } from '../hooks/use-back-dismiss';
 import { cn } from '../lib/cn';
 
 export const Dialog = DialogPrimitive.Root;
@@ -30,11 +30,16 @@ export function DialogContent({ className, children, closeLabel, ...props }: Dia
     The Android back gesture closes this dialog instead of leaving the page.
 
     Wired here, in the primitive, rather than at each of the ~14 call sites, so
-    every dialog in the product inherits it and no future one can forget. The
-    hook arms on mount and stands down on unmount, which for a Radix dialog is
-    precisely "while open": `Portal` renders nothing at all when it is closed.
-    That is why it takes no `open` prop — the mount IS the open state, and a
-    second source of truth for it could only ever disagree.
+    every dialog in the product inherits it and no future one can forget.
+
+    ⚠️ The stop is armed by `<BackStop>` INSIDE `DialogPrimitive.Content`, never
+    by a hook in this function's own body. This function renders whenever its
+    parent does — open or closed — and only Radix's `Content` is absent while
+    closed. The hook used to live up here on the belief that «the mount IS the
+    open state», and every CLOSED dialog on a page pushed a history entry on
+    load: `/admin/exams`, with a delete and a copy dialog per exam, added ten,
+    and the browser's back button took eleven presses to leave
+    (2026-10-06). `use-back-dismiss.test.ts` pins it.
 
     Closing goes through the dialog's OWN close button rather than through some
     new callback prop. `DialogContent` has no access to the root's
@@ -45,7 +50,6 @@ export function DialogContent({ className, children, closeLabel, ...props }: Dia
     hidden while the body is still locked.
   */
   const closeRef = useRef<HTMLButtonElement>(null);
-  useBackDismiss(() => closeRef.current?.click());
 
   return (
     <DialogPrimitive.Portal>
@@ -98,6 +102,8 @@ export function DialogContent({ className, children, closeLabel, ...props }: Dia
         )}
         {...props}
       >
+        {/* Only while open — see the note at the top of this function. */}
+        <BackStop onBack={() => closeRef.current?.click()} />
         {children}
         {/*
           44×44 below `md` without the mark moving a pixel — the same change as
