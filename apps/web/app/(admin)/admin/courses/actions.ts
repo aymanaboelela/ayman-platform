@@ -23,7 +23,11 @@ import {
   streamFlagsOf,
   TermSetOpenResultSchema,
 } from '@ayman/contracts';
-import { VideoEmbedStatusSchema, type VideoEmbedStatus } from '@ayman/contracts/video';
+import {
+  MIRROR_LADDER_VERSION,
+  VideoEmbedStatusSchema,
+  type VideoEmbedStatus,
+} from '@ayman/contracts/video';
 import { ReusableVideosSchema, type ReusableVideos } from '@ayman/contracts/admin/video-upload';
 import {
   AdminCourseMonthSchema,
@@ -1293,7 +1297,8 @@ export async function startVideoUploadAction(
 export async function videoPreviewUrlAction(externalId: string): Promise<string | null> {
   const origin = (process.env.NEXT_PUBLIC_VIDEO_ORIGIN ?? '').replace(/\/+$/, '');
   if (origin === '' || !/^[0-9a-f]{32}$/.test(externalId)) return null;
-  return `${origin}/v/${externalId}/master.m3u8`;
+  // Same URL the student's player gets, so the preview shows the same ladder.
+  return `${origin}/v/${externalId}/master.m3u8?l=${MIRROR_LADDER_VERSION}`;
 }
 
 /**
