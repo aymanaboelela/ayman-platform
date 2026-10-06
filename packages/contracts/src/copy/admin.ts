@@ -1752,8 +1752,23 @@ const admin = {
      * note for why 95 is Cloudflare's number rather than ours.
      */
     fileHint: 'PDF أو PowerPoint أو Word أو Excel — ٩٥ ميجا كحد أقصى',
-    /** نفس عدد الميجا بالظبط — `MAX_DOCUMENT_BYTES` نفسها، شوف تعليقها. */
-    videoFileHint: 'MP4 أو WebM أو MOV — ٩٥ ميجا كحد أقصى',
+    /**
+     * «رفع فيديو» — the lecture's own pipeline, so the lecture's own ceiling
+     * (`MAX_UPLOAD_VIDEO_BYTES`, 8 GB), not the 95 MB a single request can
+     * carry: the file goes up in parts, straight to the bucket.
+     */
+    videoFileHint: 'أي فيديو لحد ٨ جيجا — بيترفع على أجزاء، ولو النت قطع بيكمّل من مكانه',
+    /** After «أضف مادة» with a video: the row exists, the bytes are on their way. */
+    videoUploadStarted: 'المادة اتضافت والفيديو بيترفع — اللوحة دي ممكن تتقفل، الكارت اللي تحت بيكمّل الرفع.',
+    /** The four states an uploaded material can be in, on its row. */
+    videoStatusUploading: 'بيترفع',
+    videoStatusProcessing: 'بيتجهّز على السيرفر',
+    videoStatusReady: 'جاهز للطلبة',
+    videoStatusFailed: 'التجهيز وقع',
+    /** A material whose upload stopped in another tab — its own file picker resumes it. */
+    videoStatusInterrupted: 'الرفع وقف قبل ما يخلص — نفس الملف بيكمّله من مكانه',
+    videoResumePick: 'اختيار نفس الملف',
+    videoCancelUpload: 'إلغاء الرفع',
     fileDropHint: 'سحب الملف هنا، أو دوسة للاختيار',
     /** التبويب فوق فيديو الدرس — رابط يوتيوب، أو رفع الفيديو نفسه على السيرفر. */
     videoSourceYoutube: 'رابط يوتيوب',

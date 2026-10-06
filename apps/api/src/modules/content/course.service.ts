@@ -1162,6 +1162,14 @@ export class CourseService {
                     filename: true,
                     linkUrl: true,
                     videoExternalId: true,
+                    // «رفع فيديو» — so the row can say «بيترفع / بيتجهّز /
+                    // جاهز / فشل» and name the file, without a request each.
+                    videoProvider: true,
+                    mirrorStatus: true,
+                    mirrorProgress: true,
+                    mirrorError: true,
+                    sourceName: true,
+                    durationSeconds: true,
                   },
                 },
               },

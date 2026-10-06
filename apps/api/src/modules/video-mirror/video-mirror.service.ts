@@ -71,6 +71,28 @@ const HEARTBEAT_MS = 15_000;
  *  on a Friday does not leave a lecture unmirrored until Sunday. */
 const RETRY_BACKOFF_MS = 20 * 60_000;
 
+/** The pipeline columns both claimable tables share, by the same names. */
+interface ClaimWrite {
+  mirrorStatus?: 'mirroring' | 'failed';
+  mirrorAt?: Date;
+  mirrorProgress?: number | null;
+  mirrorAttempts?: number;
+  mirrorError?: string;
+}
+
+/**
+ * One claimed row, whichever table it lives in — a lecture's `lesson_videos`
+ * row or a material's `lesson_resources` row. The worker's state machine is
+ * the same for both; only the `where` differs, and this is where it lives.
+ */
+interface Claim {
+  externalId: string;
+  provider: string;
+  mirrorAttempts: number;
+  mark: (data: ClaimWrite) => Promise<void>;
+  beat: (data: { mirrorAt: Date }) => Promise<void>;
+}
+
 @Injectable()
 export class VideoMirrorService implements OnModuleDestroy {
   private readonly logger = new Logger(VideoMirrorService.name);
@@ -228,25 +250,27 @@ export class VideoMirrorService implements OnModuleDestroy {
      * With YouTube pulls off, only uploads are claimed: a YouTube row would be
      * a download bound to fail and leave half a ladder behind.
      */
-    const claimed = await this.prisma.lessonVideo.findFirst({
+    const claimable = [
+      { mirrorStatus: 'pending' as const },
+      {
+        mirrorStatus: 'failed' as const,
+        mirrorAttempts: { lt: MIRROR_MAX_ATTEMPTS },
+        mirrorAt: { lt: new Date(now.getTime() - RETRY_BACKOFF_MS) },
+      },
+      // The reaper. A worker killed mid-download leaves a row nothing else
+      // would ever look at again — `mirroring` is not a state anything
+      // else queries — and the lecture stays dark forever with a status
+      // that reads like progress.
+      {
+        mirrorStatus: 'mirroring' as const,
+        mirrorAt: { lt: new Date(now.getTime() - STALE_CLAIM_MS) },
+      },
+    ];
+
+    const lecture = await this.prisma.lessonVideo.findFirst({
       where: {
         ...(this.pullsFromYouTube ? {} : { provider: 'upload' }),
-        OR: [
-          { mirrorStatus: 'pending' },
-          {
-            mirrorStatus: 'failed',
-            mirrorAttempts: { lt: MIRROR_MAX_ATTEMPTS },
-            mirrorAt: { lt: new Date(now.getTime() - RETRY_BACKOFF_MS) },
-          },
-          // The reaper. A worker killed mid-download leaves a row nothing else
-          // would ever look at again — `mirroring` is not a state anything
-          // else queries — and the lecture stays dark forever with a status
-          // that reads like progress.
-          {
-            mirrorStatus: 'mirroring',
-            mirrorAt: { lt: new Date(now.getTime() - STALE_CLAIM_MS) },
-          },
-        ],
+        OR: claimable,
       },
       orderBy: [{ mirrorAt: { sort: 'asc', nulls: 'first' } }],
       select: {
@@ -258,6 +282,44 @@ export class VideoMirrorService implements OnModuleDestroy {
       },
     });
 
+    let claimed: Claim | null = null;
+    if (lecture !== null) {
+      const where = { lessonId: lecture.lessonId };
+      claimed = {
+        externalId: lecture.externalId,
+        provider: lecture.provider,
+        mirrorAttempts: lecture.mirrorAttempts,
+        mark: async (data) => void (await this.prisma.lessonVideo.update({ where, data })),
+        beat: async (data) =>
+          void (await this.prisma.lessonVideo.updateMany({ where: { ...where, mirrorStatus: 'mirroring' }, data })),
+      };
+    } else {
+      /*
+       * «رفع فيديو» جوّه مواد الدرس — the same encoder, the same lock, the
+       * same one-at-a-time, drawn from `lesson_resources` once no lecture is
+       * waiting. Lectures first on purpose: the lecture is what a student
+       * opened the page for, and a material that waits one more encode loses
+       * nothing. Never starved either — a failed lecture is out of the claim
+       * for the backoff window, so a broken one cannot hold the queue.
+       */
+      const material = await this.prisma.lessonResource.findFirst({
+        where: { videoProvider: 'upload', OR: claimable },
+        orderBy: [{ mirrorAt: { sort: 'asc', nulls: 'first' } }],
+        select: { id: true, videoExternalId: true, mirrorAttempts: true },
+      });
+      if (material !== null && material.videoExternalId !== null) {
+        const where = { id: material.id };
+        claimed = {
+          externalId: material.videoExternalId,
+          provider: 'upload',
+          mirrorAttempts: material.mirrorAttempts,
+          mark: async (data) => void (await this.prisma.lessonResource.update({ where, data })),
+          beat: async (data) =>
+            void (await this.prisma.lessonResource.updateMany({ where: { ...where, mirrorStatus: 'mirroring' }, data })),
+        };
+      }
+    }
+
     if (claimed === null) {
       // The sweep adopts YouTube ladders only, and costs a bucket listing
       // (Class A) every minute — for nothing, with YouTube off.
@@ -265,10 +327,7 @@ export class VideoMirrorService implements OnModuleDestroy {
       return;
     }
 
-    await this.prisma.lessonVideo.update({
-      where: { lessonId: claimed.lessonId },
-      data: { mirrorStatus: 'mirroring', mirrorAt: new Date(), mirrorProgress: 0 },
-    });
+    await claimed.mark({ mirrorStatus: 'mirroring', mirrorAt: new Date(), mirrorProgress: 0 });
 
     /*
      * The heartbeat `STALE_CLAIM_MS` is measured against. Scoped to
@@ -276,13 +335,9 @@ export class VideoMirrorService implements OnModuleDestroy {
      * cannot drag its `mirrorAt` — which is the failure backoff's clock —
      * forward. A failed write is ignored: one missed beat is not twelve.
      */
+    const beating = claimed;
     const heartbeat = setInterval(() => {
-      this.prisma.lessonVideo
-        .updateMany({
-          where: { lessonId: claimed.lessonId, mirrorStatus: 'mirroring' },
-          data: { mirrorAt: new Date() },
-        })
-        .catch(() => undefined);
+      beating.beat({ mirrorAt: new Date() }).catch(() => undefined);
     }, HEARTBEAT_MS);
 
     try {
@@ -295,17 +350,14 @@ export class VideoMirrorService implements OnModuleDestroy {
       const attempts = claimed.mirrorAttempts + 1;
       const message = error instanceof Error ? error.message : String(error);
 
-      await this.prisma.lessonVideo.update({
-        where: { lessonId: claimed.lessonId },
-        data: {
-          mirrorStatus: 'failed',
-          mirrorAttempts: attempts,
-          // Truncated: this string is rendered in the admin table, and
-          // yt-dlp's longer errors carry a full URL and a stack.
-          mirrorError: message.slice(0, 500),
-          mirrorAt: new Date(),
-          mirrorProgress: null,
-        },
+      await claimed.mark({
+        mirrorStatus: 'failed',
+        mirrorAttempts: attempts,
+        // Truncated: this string is rendered in the admin table, and
+        // yt-dlp's longer errors carry a full URL and a stack.
+        mirrorError: message.slice(0, 500),
+        mirrorAt: new Date(),
+        mirrorProgress: null,
       });
 
       this.logger.warn(
@@ -512,9 +564,7 @@ export class VideoMirrorService implements OnModuleDestroy {
     const sourceKey = uploadSourceKey(uploadId);
 
     const setProgress = async (progress: number): Promise<void> => {
-      await this.prisma.lessonVideo
-        .updateMany({ where: { externalId: uploadId, provider: 'upload' }, data: { mirrorProgress: progress } })
-        .catch(() => undefined);
+      await this.writeUploadRows(uploadId, { mirrorProgress: progress }).catch(() => undefined);
     };
 
     let lastEncodePercent = 20;
@@ -535,6 +585,9 @@ export class VideoMirrorService implements OnModuleDestroy {
       // read back here rather than re-derived — `encrypted` defaults `true` so
       // a row written before this flag existed, or a caller that never set it,
       // still gets the old unconditional behaviour.
+      //
+      // A material's upload (`lesson_resources`) has no such row and no such
+      // choice: it is always encrypted, which the `?? true` already says.
       const row = await this.prisma.lessonVideo.findFirst({
         where: { externalId: uploadId, provider: 'upload' },
         select: { encrypted: true },
@@ -580,21 +633,18 @@ export class VideoMirrorService implements OnModuleDestroy {
       // lecture that exists outside the instructor's laptop.
       await storage.deleteObject(sourceKey);
 
-      await this.prisma.lessonVideo.updateMany({
-        where: { externalId: uploadId, provider: 'upload' },
-        data: {
-          mirrorStatus: 'ready',
-          mirrorHeight: result.maxHeight,
-          mirrorBytes: BigInt(result.bytes),
-          mirrorError: null,
-          mirrorAttempts: 0,
-          mirrorAt: new Date(),
-          mirrorProgress: 100,
-          sourceBytes: BigInt(size),
-          // The duration comes from the FILE, which is the only thing that
-          // knows it. Nobody types it and nothing is asked about it.
-          durationSeconds: result.durationSeconds,
-        },
+      await this.writeUploadRows(uploadId, {
+        mirrorStatus: 'ready',
+        mirrorHeight: result.maxHeight,
+        mirrorBytes: BigInt(result.bytes),
+        mirrorError: null,
+        mirrorAttempts: 0,
+        mirrorAt: new Date(),
+        mirrorProgress: 100,
+        sourceBytes: BigInt(size),
+        // The duration comes from the FILE, which is the only thing that
+        // knows it. Nobody types it and nothing is asked about it.
+        durationSeconds: result.durationSeconds,
       });
 
       this.logger.log(
@@ -604,6 +654,31 @@ export class VideoMirrorService implements OnModuleDestroy {
     } finally {
       await rm(work, { recursive: true, force: true }).catch(() => undefined);
     }
+  }
+
+  /**
+   * Write the encoder's progress (or its result) to every row naming this
+   * upload — a lecture's, or a material's. The upload id is minted per row
+   * and never reused, so in practice exactly one of the two matches; writing
+   * both is what keeps `transcodeOne` ignorant of which kind of row asked.
+   * The column names are the same on both tables on purpose.
+   */
+  private async writeUploadRows(
+    uploadId: string,
+    data: {
+      mirrorProgress?: number;
+      mirrorStatus?: 'ready';
+      mirrorHeight?: number;
+      mirrorBytes?: bigint;
+      mirrorError?: null;
+      mirrorAttempts?: number;
+      mirrorAt?: Date;
+      sourceBytes?: bigint;
+      durationSeconds?: number;
+    },
+  ): Promise<void> {
+    await this.prisma.lessonVideo.updateMany({ where: { externalId: uploadId, provider: 'upload' }, data });
+    await this.prisma.lessonResource.updateMany({ where: { videoExternalId: uploadId, videoProvider: 'upload' }, data });
   }
 
   /**

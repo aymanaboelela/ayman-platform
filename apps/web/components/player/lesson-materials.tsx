@@ -36,7 +36,14 @@ import { DownloadIcon } from './icons';
  * Safari. The button carries `aria-expanded` and `aria-controls`, which is the
  * same information for assistive tech and none of the trouble.
  */
-export function LessonMaterials({ resources }: { resources: PlayerResource[] }) {
+export function LessonMaterials({
+  resources,
+  watermark = null,
+}: {
+  resources: PlayerResource[];
+  /** Passed through to an uploaded material video — see `ResourceList`. */
+  watermark?: string | null;
+}) {
   /*
    * ⚠️ مفتوح افتراضيًا، وكان مقفول.
    *
@@ -100,7 +107,7 @@ export function LessonMaterials({ resources }: { resources: PlayerResource[] }) 
 
       {open ? (
         <div id="lesson-materials" className="mt-4">
-          <ResourceList resources={resources} />
+          <ResourceList resources={resources} watermark={watermark} />
         </div>
       ) : null}
     </section>

@@ -272,25 +272,6 @@ export function uploadDocument(
 }
 
 /**
- * A lesson material's video, uploaded directly instead of linked from
- * YouTube — «حل الواجب» explained on camera. Same response shape and the
- * same Cloudflare-edge ceiling as `uploadDocument`; only the endpoint and the
- * allowed extensions (checked server-side) differ.
- */
-export function uploadResourceVideo(
-  file: File,
-  onProgress?: (fraction: number) => void,
-): Promise<UploadOutcome<UploadedDocument>> {
-  return upload(
-    '/api/media/resource-videos',
-    file,
-    MAX_DOCUMENT_BYTES,
-    (json) => DocumentUploadSchema.parse(json),
-    onProgress,
-  );
-}
-
-/**
  * A file the instructor is attaching to a reply — a picture OR a document.
  *
  * ## One endpoint for both kinds, unlike everything above

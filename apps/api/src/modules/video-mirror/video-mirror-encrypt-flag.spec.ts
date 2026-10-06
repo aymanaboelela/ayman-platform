@@ -24,6 +24,7 @@ function build(encrypted: boolean | undefined) {
       findFirst: async () => (encrypted === undefined ? null : { encrypted }),
       updateMany: async () => ({ count: 1 }),
     },
+    lessonResource: { updateMany: async () => ({ count: 0 }) },
   };
   const storage = {
     sizeOf: async () => 1024,

@@ -22,6 +22,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 import { REDIS } from '../../redis/redis.module';
 import { VideoArchiveService } from './video-archive.service';
+import type { MirrorStorage } from './mirror-storage';
 import { VideoMirrorService } from './video-mirror.service';
 
 /**
@@ -43,7 +44,40 @@ import { VideoMirrorService } from './video-mirror.service';
  * SigV4's seven-day maximum, because each URL is write access to our bucket
  * sitting in a browser tab.
  */
-const SIGNED_URL_TTL_SECONDS = 6 * 60 * 60;
+export const SIGNED_URL_TTL_SECONDS = 6 * 60 * 60;
+
+/**
+ * «كمّل الرفع», the bucket half: which parts arrived WHOLE, and fresh URLs for
+ * the rest. Shared by the lecture's upload and a material's
+ * (`ResourceVideoUploadService`) — the two differ in which row they check
+ * first, never in what counts as a part that made it.
+ */
+export async function reopenSession(storage: MirrorStorage, input: VideoUploadResume): Promise<VideoUploadResumed> {
+  const key = uploadSourceKey(input.videoId);
+  const uploaded = await storage.listParts(key, input.uploadId);
+  if (uploaded === null) {
+    throw new NotFoundException('الرفع ده وقته خلص — ابدأ من الأول');
+  }
+
+  const total = uploadPartCount(input.sizeBytes);
+  const partSizeBytes = uploadPartSize(input.sizeBytes);
+  const expected = (partNumber: number): number =>
+    partNumber < total ? partSizeBytes : input.sizeBytes - partSizeBytes * (total - 1);
+  // Only parts that arrived WHOLE count as done; anything else is sent again.
+  const done = uploaded.filter((part) => part.partNumber <= total && part.size === expected(part.partNumber));
+  const have = new Set(done.map((part) => part.partNumber));
+  const missing = Array.from({ length: total }, (_, index) => index + 1).filter((n) => !have.has(n));
+
+  const parts = await storage.presignPartNumbers(key, input.uploadId, missing, SIGNED_URL_TTL_SECONDS);
+  return {
+    videoId: input.videoId,
+    uploadId: input.uploadId,
+    partSizeBytes,
+    parts,
+    done: done.map(({ partNumber, etag }) => ({ partNumber, etag })),
+    expiresAt: new Date(Date.now() + SIGNED_URL_TTL_SECONDS * 1000).toISOString(),
+  };
+}
 
 /**
  * The video this upload is REPLACING, parked while the new one is in flight.
@@ -259,32 +293,12 @@ export class VideoUploadService {
       throw new BadRequestException('ده مش نفس الملف اللي كان بيترفع — اختار نفس الملف');
     }
 
-    const key = uploadSourceKey(input.videoId);
-    const uploaded = await storage.listParts(key, input.uploadId);
-    if (uploaded === null) {
-      throw new NotFoundException('الرفع ده وقته خلص — ابدأ من الأول');
-    }
-
-    const total = uploadPartCount(input.sizeBytes);
-    const partSizeBytes = uploadPartSize(input.sizeBytes);
-    const expected = (partNumber: number): number =>
-      partNumber < total ? partSizeBytes : input.sizeBytes - partSizeBytes * (total - 1);
-    // Only parts that arrived WHOLE count as done; anything else is sent again.
-    const done = uploaded.filter((part) => part.partNumber <= total && part.size === expected(part.partNumber));
-    const have = new Set(done.map((part) => part.partNumber));
-    const missing = Array.from({ length: total }, (_, index) => index + 1).filter((n) => !have.has(n));
-
-    const parts = await storage.presignPartNumbers(key, input.uploadId, missing, SIGNED_URL_TTL_SECONDS);
-    this.logger.log({ lessonId, videoId: input.videoId, done: done.length, missing: missing.length }, 'video upload resumed');
-
-    return {
-      videoId: input.videoId,
-      uploadId: input.uploadId,
-      partSizeBytes,
-      parts,
-      done: done.map(({ partNumber, etag }) => ({ partNumber, etag })),
-      expiresAt: new Date(Date.now() + SIGNED_URL_TTL_SECONDS * 1000).toISOString(),
-    };
+    const session = await reopenSession(storage, input);
+    this.logger.log(
+      { lessonId, videoId: input.videoId, done: session.done.length, missing: session.parts.length },
+      'video upload resumed',
+    );
+    return session;
   }
 
   /**

@@ -129,6 +129,7 @@ export function LessonPlayerView({ payload, watermark = null }: LessonPlayerProp
           resources={payload.resources}
           alreadyComplete={isComplete}
           onProgress={onProgress}
+          watermark={watermark}
         />
       ) : null}
 
@@ -168,7 +169,7 @@ export function LessonPlayerView({ payload, watermark = null }: LessonPlayerProp
         // مفتوح افتراضيًا — شوف `<LessonMaterials>` للسبب: المرفق بيتحط لما
         // يكون فيه حاجة تستاهل، والمحاضرة اللي مالهاش مرفقات مابترسمش القسم
         // أصلًا، فالقفل كان بيخبّي ملف المدرّس رفعه عشان يتقرا.
-        <LessonMaterials resources={payload.resources} />
+        <LessonMaterials resources={payload.resources} watermark={watermark} />
       ) : null}
 
       {/*

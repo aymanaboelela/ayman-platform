@@ -694,4 +694,42 @@ describe('LessonService', () => {
       expect(await prisma.lessonMonth.count({ where: { lessonId: lesson.id } })).toBe(0);
     });
   });
+
+  /*
+   * «رفع فيديو» in the materials: its ladder on R2 belongs to this row alone,
+   * so deleting the material is what frees it. Before, nothing did.
+   */
+  it('deleting an uploaded material video frees its files; a YouTube one has none to free', async () => {
+    const purged: string[] = [];
+    const withArchive = new LessonService(
+      prisma,
+      new AuditService(prisma),
+      youtube,
+      null as never,
+      { purge: async (id: string) => void purged.push(id) } as never,
+    );
+    const lesson = await prisma.lesson.create({
+      data: { courseId, sectionId, title: 'مواد', kind: 'text', position: 900 },
+    });
+    const uploaded = await prisma.lessonResource.create({
+      data: {
+        lessonId: lesson.id,
+        kind: 'video',
+        title: 'حل الواجب',
+        videoProvider: 'upload',
+        videoExternalId: 'd'.repeat(32),
+        mirrorStatus: 'ready',
+        mirrorHeight: 720,
+      },
+    });
+    const linked = await prisma.lessonResource.create({
+      data: { lessonId: lesson.id, kind: 'video', title: 'يوتيوب', videoProvider: 'youtube', videoExternalId: 'dQw4w9WgXcQ' },
+    });
+
+    await withArchive.removeResource(uploaded.id);
+    await withArchive.removeResource(linked.id);
+
+    expect(purged).toEqual(['d'.repeat(32)]);
+    expect(await prisma.lessonResource.count({ where: { lessonId: lesson.id } })).toBe(0);
+  });
 });

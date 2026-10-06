@@ -417,8 +417,7 @@ export const PlayerResourceSchema = z.object({
   title: z.string(),
   description: z.string().nullable(),
 
-  /** File resources (`presentation`, `document`) and an UPLOADED video only —
-   *  a YouTube video has no bytes of ours, so these stay null for it. */
+  /** File resources (`presentation`, `document`) only. */
   filename: z.string().nullable(),
   mime: z.string().nullable(),
   sizeBytes: z.number().int().min(0).nullable(),
@@ -430,6 +429,26 @@ export const PlayerResourceSchema = z.object({
     .regex(/^[A-Za-z0-9_-]{11}$/)
     .nullable(),
 
+  /**
+   * An UPLOADED video, once the encoder has finished: the same HLS ladder and
+   * the same AES-128 key route the lecture's own video plays from, built from
+   * the upload id and the configured origin, never read from a column.
+   *
+   * Never a `viewPath`: an uploaded video is not a file we stream or offer to
+   * download — «مينفعش حد ينزّل الفيديو» applies to it exactly as it does to
+   * the lecture.
+   *
+   * Defaulted so a web build that lands before its API still parses.
+   */
+  mirror: PlayerVideoMirrorSchema.nullable().default(null),
+  /** The encoder's frame, beside the ladder. Only with `mirror`. */
+  posterUrl: z.string().nullable().default(null),
+  /**
+   * Uploaded and still being encoded — «بيتجهّز». The card says so instead of
+   * vanishing and reappearing an hour later.
+   */
+  processing: z.boolean().default(false),
+
   /** Link resources only. Always https — enforced at the DTO and by a CHECK. */
   linkUrl: z.string().startsWith('https://').nullable(),
 
@@ -439,10 +458,8 @@ export const PlayerResourceSchema = z.object({
    * access per request before streaming a byte. A leaked storage key is not by
    * itself an access grant.
    *
-   * Null for a YouTube `video` and for `link`, which have no bytes of ours to
-   * serve — an UPLOADED video is a `video` resource with these populated
-   * exactly like a `presentation`/`document`, told apart by `youtubeId` being
-   * null where `filename`/`mime` are not.
+   * Null for every `video` and for `link` — none of them is a file of ours to
+   * stream.
    */
   viewPath: z.string().startsWith('/api/').nullable(),
   downloadPath: z.string().startsWith('/api/').nullable(),
