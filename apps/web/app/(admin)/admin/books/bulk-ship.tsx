@@ -287,7 +287,11 @@ function BulkActions({ variant }: { variant: 'bar' | 'inline' }) {
   // «مرتجع» goes out again exactly the way a printed run does.
   const showShip = mixed || tab === 'printing' || tab === 'returned';
   const showDeliver = mixed || tab === 'shipped' || tab === 'returned';
-  const showCourier = ctx.courierEnabled && (mixed || tab === 'printing' || tab === 'returned');
+  /* `shipped` هنا كمان — دفعة اتعلّمت «اتشحن» بإيد ولا شركة الشحن شافتها،
+     ونفس الزرار ده بيبعتها فعليًا (`sendOne` بيسيب أي صف معاه
+     `courierSentAt` من غير لمس، فمفيش تكرار). */
+  const showCourier =
+    ctx.courierEnabled && (mixed || tab === 'printing' || tab === 'returned' || tab === 'shipped');
 
   return (
     <>
