@@ -996,6 +996,8 @@ const admin = {
     previewPlay: 'تشغيل الفيديو',
     previewClose: 'قفل المعاينة',
     previewOnYouTube: 'افتحه على يوتيوب',
+    previewFailed: 'الفيديو واقف ومش بيشتغل — جرّب تاني.',
+    previewRetry: 'جرّب تاني',
     /** Wipes the `lesson_videos` row. The action existed with NO caller at all,
      *  so a wrong link could be replaced but never removed. */
     removeVideoDone: 'الفيديو اتشال',
