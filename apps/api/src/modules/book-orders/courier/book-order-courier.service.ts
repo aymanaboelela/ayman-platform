@@ -31,6 +31,14 @@ const PUSHABLE: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing', 'ret
 /** Where «مع المندوب» may move an order to `shipped` from. */
 const BEFORE_SHIPPED: ReadonlySet<BookOrderStatus> = PUSHABLE;
 
+/** `PUSHABLE` plus a `shipped` row Torod never actually got. `courierSentAt`
+ *  is checked first and is the real gate (see `sendOne`) — this only ever
+ *  lets through a parcel marked «اتشحن» by hand before the integration
+ *  existed, or by a bulk mistake, with nobody at Torod aware of it. Kept
+ *  separate from `PUSHABLE`/`BEFORE_SHIPPED` so the webhook's own
+ *  `from === 'shipped'` handling (below) is untouched. */
+const PUSHABLE_OR_STRANDED_SHIPPED: ReadonlySet<BookOrderStatus> = new Set([...PUSHABLE, 'shipped']);
+
 /**
  * «شركة الشحن» — the two directions of the courier integration.
  *
@@ -133,7 +141,7 @@ export class BookOrderCourierService {
       reason,
     });
     if (order.courierSentAt !== null) return skip('اتبعت لشركة الشحن قبل كده');
-    if (!PUSHABLE.has(order.status)) {
+    if (!PUSHABLE_OR_STRANDED_SHIPPED.has(order.status)) {
       return skip(
         order.status === 'address_only'
           ? 'لسه مادفعش'

@@ -456,6 +456,12 @@ export function BookOrderCard({
                   /* «لما المطبعة تخلص ببعت لشركة الشحن» — that one press also
                      records «اتشحن». Without the integration, plain «اتشحن». */
                   <SendToCourierAction id={row.id} fallback={<ShipAction id={row.id} />} />
+                ) : row.status === 'shipped' && !row.courierSentAt ? (
+                  /* «اتشحنت» من غير ما توصل تورود فعلاً — دفعة قبل الربط، أو
+                     غلطة شحن يدوي. نفس الزرار؛ من غير تكامل بيرجع لـ«وصل»
+                     زي ما كان، ومفيش رسالة واتساب تانية تتبعت — الطلب شحن
+                     خلاص من وجهة نظر الطالب. */
+                  <SendToCourierAction id={row.id} fallback={<DeliverAction id={row.id} />} />
                 ) : row.status === 'shipped' ? (
                   <DeliverAction id={row.id} />
                 ) : null}
