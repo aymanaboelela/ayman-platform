@@ -125,6 +125,12 @@ services:
       # every stack taught before this existed. The API reads it for the
       # assistant's scope and for the subject the seed opens on every track.
       TENANT_SUBJECT: ${TENANT_SUBJECT:-}
+      # The teacher's name, for everything the API itself writes: the
+      # assistant's answers, push and WhatsApp texts. `common/tenant.ts` reads
+      # it, but it was only ever passed to `web` — so on every teacher's stack
+      # the assistant said «المدرّس هو المنصة», `tenantName()`'s fallback.
+      # Empty on Ayman's stack, where `tenantName()` ignores it anyway.
+      TENANT_DISPLAY_NAME: ${TENANT_DISPLAY_NAME:-}
       # مستند الصلاحيات الموقّع — إيه الفيتشرز اللي الستاك ده مسموح له
       # يشغّلها. فاضي = الافتراضي المعلن، وده حالة صحيحة مش عطل.
       #

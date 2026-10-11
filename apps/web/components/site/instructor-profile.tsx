@@ -4,7 +4,7 @@ import { getCatalogOrEmpty } from '@/lib/catalog';
 import { MediaSlot } from '@/components/site/media-slot';
 import { ProfileCourses } from '@/components/site/instructor-profile-courses';
 import { DEMO_COURSES } from '@/lib/demo-courses';
-import { tenantName } from '@/lib/tenant';
+import { IS_AYMAN, tenantName } from '@/lib/tenant';
 import { TEACHES_CODE } from '@/lib/tenant-subject';
 import { bySubject } from '@/lib/subject-copy';
 import { subjectCopy } from '@ayman/contracts/copy/subject';
@@ -111,10 +111,18 @@ export async function InstructorProfile() {
               <dt className="profile__stat-n">{courses.length}</dt>
               <dd className="profile__stat-l">{c.profileCoursesLabel}</dd>
             </div>
-            <div className="profile__stat">
-              <dt className="profile__stat-n">{c.statStudents}</dt>
-              <dd className="profile__stat-l">{c.profileStudentsLabel}</dd>
-            </div>
+            {/*
+              `statStudents` is a figure typed into HIS copy table («+١٤٠٠»),
+              not a count anything measures — on another teacher's profile it
+              is his number presented as theirs. The two counts that ARE
+              measured (courses, hours) stay on every stack.
+            */}
+            {IS_AYMAN ? (
+              <div className="profile__stat">
+                <dt className="profile__stat-n">{c.statStudents}</dt>
+                <dd className="profile__stat-l">{c.profileStudentsLabel}</dd>
+              </div>
+            ) : null}
             <div className="profile__stat">
               <dt className="profile__stat-n">{totalHours}</dt>
               <dd className="profile__stat-l">{c.profileHoursLabel}</dd>
@@ -126,7 +134,9 @@ export async function InstructorProfile() {
               {c.profileCta}
             </Link>
             <Link className="site-btn site-btn--outline profile__action" href="#about">
-              {c.profileSecondary}
+              {/* «عن المهندس» is his title; the teacher here may hold another,
+                  or be a woman — the neutral label names the section instead. */}
+              {IS_AYMAN ? c.profileSecondary : c.profileSecondaryNeutral}
             </Link>
           </div>
 
