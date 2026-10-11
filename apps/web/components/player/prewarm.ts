@@ -87,12 +87,20 @@ export async function prewarmMirror(hlsUrl: string, fetcher: typeof fetch = fetc
   }
 }
 
-/** YouTube's own script. `loadYouTubeIframeApi` is retry-safe, so a failed head start does not stick. */
-export function prewarmYouTube(): void {
+/**
+ * YouTube's own script. `loadYouTubeIframeApi` is retry-safe, so a failed head
+ * start does not stick. Resolves `false` when it did not arrive — one of the
+ * two facts the player weighs before saying YouTube is blocked here.
+ */
+export function prewarmYouTube(): Promise<boolean> {
   try {
-    void Promise.resolve(loadYouTubeIframeApi()).catch(() => undefined);
+    return Promise.resolve(loadYouTubeIframeApi()).then(
+      () => true,
+      () => false,
+    );
   } catch {
     // Browser-only API called where there is no window.
+    return Promise.resolve(false);
   }
 }
 

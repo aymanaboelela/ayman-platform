@@ -626,6 +626,14 @@ describe('CSP builders', () => {
     expect(scriptSrc).toContain('https://scripts.clarity.ms');
   });
 
+  it('lets the player probe youtube.com as an image — without it every network reads as «YouTube blocked»', () => {
+    for (const policy of [buildPublicCsp(false), buildAuthenticatedCsp(NONCE, false)]) {
+      const imgSrc = directive(policy, 'img-src');
+      expect(imgSrc).toContain('https://www.youtube.com');
+      expect(imgSrc).toContain('https://i.ytimg.com');
+    }
+  });
+
   /**
    * The third Clarity host, and the third directive. `c.clarity.ms/c.gif` is a
    * tracking pixel fetched as an <img>, so neither `script-src` (the two tag

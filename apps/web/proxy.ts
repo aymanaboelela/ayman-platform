@@ -614,7 +614,12 @@ function sharedCspDirectives(dev: boolean): string[] {
     // `VIDEO_ORIGIN`: the frame the encoder cuts for every uploaded lecture
     // (`v/<id>/poster.jpg`, beside the ladder) — the admin's lecture preview
     // shows it before the player loads.
-    `img-src 'self' blob: data: https://i.ytimg.com https://c.clarity.ms https://c.bing.com ${MEDIA_ORIGIN} ${VIDEO_ORIGIN}`.trimEnd(),
+    // `www.youtube.com`: its icon is one half of the player's «is YouTube
+    // reachable at all» probe (`components/player/youtube-reach.ts`) — the
+    // ministry tablet blocks the whole host, and an image is the one request
+    // that needs nothing but the network to answer. Without it the probe
+    // reads every network as blocked.
+    `img-src 'self' blob: data: https://i.ytimg.com https://c.clarity.ms https://c.bing.com https://www.youtube.com ${MEDIA_ORIGIN} ${VIDEO_ORIGIN}`.trimEnd(),
     "font-src 'self'",
     // Same reasoning for uploaded audio/video served from the media origin.
     //
