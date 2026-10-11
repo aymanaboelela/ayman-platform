@@ -548,7 +548,7 @@ describe('VideoLesson YouTube shield', () => {
     expect(yt.player.setPlaybackRate).toHaveBeenCalledWith(1.5);
   });
 
-  it('offers no quality menu — the API cannot set one, so none is faked', async () => {
+  it('offers no quality menu when the player cannot pin one — none is faked', async () => {
     fakeYouTube();
     await play();
 
@@ -1006,5 +1006,58 @@ describe('VideoLesson YouTube captions toggle', () => {
 
     expect(screen.queryByRole('button', { name: c.captionsShow })).toBeNull();
     expect(yt.player.unloadModule).not.toHaveBeenCalled();
+  });
+});
+
+describe('VideoLesson YouTube quality menu', () => {
+  const c = copy.player.controls;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function playWith(yt: ReturnType<typeof fakeYouTube>) {
+    vi.useFakeTimers();
+    renderPlayer();
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    return yt;
+  }
+
+  function withQuality(yt: ReturnType<typeof fakeYouTube>) {
+    const setPlaybackQualityRange = vi.fn();
+    Object.assign(yt.player, {
+      getAvailableQualityLevels: vi.fn(() => ['hd1080', 'hd720', 'large', 'medium', 'small', 'tiny', 'auto']),
+      getPlaybackQuality: vi.fn(() => 'hd720'),
+      setPlaybackQualityRange,
+    });
+    return setPlaybackQualityRange;
+  }
+
+  it('lists the levels the video has, tallest first, and shows the current one', async () => {
+    const yt = fakeYouTube();
+    withQuality(yt);
+    await playWith(yt);
+
+    fireEvent.click(screen.getByRole('button', { name: c.settings }));
+    const items = screen.getAllByRole('menuitemradio').filter((el) => /^\d+p$/.test(el.textContent ?? ''));
+    expect(items.map((el) => el.textContent)).toEqual(['1080p', '720p', '480p', '360p', '240p']);
+    expect(screen.getByRole('menuitemradio', { name: '720p' }).getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('pins the level it is asked for, both ends of the range', async () => {
+    const yt = fakeYouTube();
+    const pin = withQuality(yt);
+    await playWith(yt);
+
+    fireEvent.click(screen.getByRole('button', { name: c.settings }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: '360p' }));
+    // A one-sided range is a hint YouTube ignores.
+    expect(pin).toHaveBeenCalledWith('medium', 'medium');
   });
 });

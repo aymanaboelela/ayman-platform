@@ -1,16 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 // Type-only: erased at build, so it cannot pull the library into the bundle
 // the way a value import would (see `HlsHandle` below).
 import type { HlsConfig } from 'hls.js';
 import { effectiveSeconds, type PlayerVideoMirror, type VideoTrim } from '@ayman/contracts/video';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
-import { cn } from '@ayman/ui/lib/cn';
 import type { YouTubePlayer } from '@/lib/youtube';
 import { skipCuts, trimWindow, watchedAt } from '@/lib/video-trim';
 import { PlayerChrome, SPEEDS, readSavedSpeed, saveSpeed } from './player-chrome';
+import { QualityItem } from './quality-item';
 
 const c = copy.player.controls;
 
@@ -177,7 +177,9 @@ export const HLS_CONFIG: Partial<HlsConfig> = {
  *  imported eagerly (which would pull the library into every student's bundle). */
 interface HlsHandle {
   destroy: () => void;
+  /** Read by nothing here — see `chooseLevel` for why it is never SET. */
   currentLevel: number;
+  nextLevel: number;
   levels: { height: number }[];
 }
 
@@ -383,9 +385,17 @@ export function MirrorVideo({
   const chooseLevel = useCallback((index: number) => {
     const hls = hlsRef.current;
     if (!hls) return;
-    // `currentLevel` switches now and flushes the buffer, which is what a
-    // student who just picked 1080p expects to see. -1 hands it back to ABR.
-    hls.currentLevel = index;
+    /*
+     * `nextLevel`, never `currentLevel`. `currentLevel` flushes the WHOLE
+     * buffer and re-seeks, and after a few manual switches the picture froze
+     * at 2–3 frames a second while the audio carried on — «الصوت شغال والفيديو
+     * واقف» (2026-10-06). Reproduced in real Chrome on an encrypted ladder cut
+     * exactly like ours: 150 frames per 5 s with no switching, 105 → 74 → 42 →
+     * 13 → 10 with `currentLevel`, and a steady 150 every time with
+     * `nextLevel`, which drops only what is AHEAD of the playhead and lets the
+     * fragment already playing finish. -1 hands the choice back to ABR.
+     */
+    hls.nextLevel = index;
     setLevel(index);
   }, []);
 
@@ -526,31 +536,3 @@ export function MirrorVideo({
   );
 }
 
-function QualityItem({
-  selected,
-  onClick,
-  wide = false,
-  children,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  /** «تلقائي» takes the whole first row — it is the default, and it is longer. */
-  wide?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitemradio"
-      aria-checked={selected}
-      onClick={onClick}
-      className={cn(
-        'rounded-md px-2 py-1.5 text-center text-[length:var(--fs-text-sm)] transition-colors duration-[160ms]',
-        wide && 'col-span-3',
-        selected ? 'bg-accent font-semibold text-[#1A1206]' : 'bg-white/10 hover:bg-white/20',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
