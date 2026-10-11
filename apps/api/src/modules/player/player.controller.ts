@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Res } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import type { CourseOutline, LessonPlayer } from '@ayman/contracts';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
@@ -53,7 +53,14 @@ export class PlayerController {
     response: Response,
   ): Promise<void> {
     const file = await this.player.resourceStream(userId, lessonId, resourceId);
+    this.sendFile(file, disposition, response);
+  }
 
+  private sendFile(
+    file: Awaited<ReturnType<PlayerService['resourceStream']>>,
+    disposition: 'inline' | 'attachment',
+    response: Response,
+  ): void {
     response.set({
       // Our detected mime, never one the uploader declared.
       'Content-Type': file.mime,
@@ -93,5 +100,21 @@ export class PlayerController {
     @Res() response: Response,
   ): Promise<void> {
     return this.serveResource(user.id, lessonId, resourceId, 'attachment', response);
+  }
+
+  /**
+   * «مواد الدرس» in the course editor — the instructor downloading a file he
+   * uploaded. The student routes above refuse him (he is not enrolled), so the
+   * row's title had nowhere to go. Same headers and streaming, gated on
+   * `lesson:write` like every other material route.
+   */
+  @RequirePermission('lesson:write')
+  @Get('admin/resources/:resourceId/download')
+  async adminDownload(
+    @Param('resourceId', new ParseUUIDPipe()) resourceId: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    const file = await this.player.adminResourceStream(resourceId);
+    this.sendFile(file, 'attachment', response);
   }
 }
