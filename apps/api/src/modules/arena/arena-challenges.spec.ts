@@ -51,6 +51,27 @@ const PEOPLE: Record<string, ArenaEligibility> = {
   carol: person('نور', 'languages'),
 };
 
+/** Same queue as alice, but `eligibility` locked something for her personally. */
+function locked(name: string, lock: 'course' | 'topic'): ArenaEligibility {
+  const base = person(name, 'general');
+  return {
+    ...base,
+    courses: base.courses.map((course) =>
+      course.id !== COURSE
+        ? course
+        : lock === 'course'
+          ? { ...course, playable: false }
+          : {
+              ...course,
+              // Big enough for any pool check — only the lock should refuse it.
+              topics: course.topics!.map((topic) => (topic.id === UNIT_1 ? { ...topic, playable: false } : topic)),
+            },
+    ),
+  };
+}
+PEOPLE.eve = locked('سلمى', 'course');
+PEOPLE.fay = locked('فرح', 'topic');
+
 function questions(n: number): EngineQuestion[] {
   return Array.from({ length: n }, (_, i) => ({
     id: `q${i}`,
@@ -213,6 +234,31 @@ describe('arena — a student’s own challenge', () => {
     await online(service, 'alice');
     await expect(service.createChallenge('alice', FLAT, [UNIT_1])).rejects.toBeInstanceOf(ForbiddenException);
     await expect(service.createChallenge('alice', COURSE, [SMALL])).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  /*
+   * The same gate `join()` has always had. Without it a student locked out of
+   * a course or a topic — by `eligibility`, for them personally — could still
+   * open a challenge on it, or accept a classmate's, and play it anyway.
+   */
+  it('refuses to open a challenge on a course or topic locked for this student', async () => {
+    const { service } = setup();
+    await online(service, 'eve', 'fay');
+    await expect(service.createChallenge('eve', COURSE, [UNIT_1])).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.createChallenge('fay', COURSE, [UNIT_1])).rejects.toBeInstanceOf(ForbiddenException);
+    // An open topic beside the locked one is still fine.
+    expect((await service.createChallenge('fay', COURSE, [LESSON_3])).phase).toBe('queued');
+  });
+
+  it('refuses to accept a classmate’s challenge on a course or topic locked for this student', async () => {
+    const { service } = setup();
+    await online(service, 'alice', 'eve', 'fay', 'bob');
+    const view = await service.createChallenge('alice', COURSE, [UNIT_1]);
+    if (view.phase !== 'queued' || !view.challengeId) throw new Error('expected an open challenge');
+    await expect(service.acceptChallenge('eve', view.challengeId)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.acceptChallenge('fay', view.challengeId)).rejects.toBeInstanceOf(NotFoundException);
+    // Still open for someone it is not locked for.
+    expect(matchOf(await service.acceptChallenge('bob', view.challengeId)).opponent.player.name).toBe('مريم');
   });
 });
 

@@ -422,8 +422,10 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
       const eligibility = await this.access.eligibility(userId);
       if (!eligibility.cohort) throw new ForbiddenException({ code: 'no_year' });
       if (eligibility.blocked) throw new ForbiddenException({ code: eligibility.blocked });
-      const course = eligibility.courses.find((entry) => entry.id === courseId);
-      const topics = (course?.topics ?? []).filter((topic) => topicIds.includes(topic.id));
+      // نفس بوابة `join()` بالحرف: كورس أو تحدّي مقفول من `eligibility` مايتلعبش
+      // من هنا برضه، وإلا طالب يفتح تحدّي على كورس/تحدّي هو شخصيًا متحرم منه.
+      const course = eligibility.courses.find((entry) => entry.id === courseId && entry.playable);
+      const topics = (course?.topics ?? []).filter((topic) => topicIds.includes(topic.id) && topic.playable);
       if (!course || topics.length === 0) throw new ForbiddenException({ code: 'topic_required' });
       // مجموع البنوك سقف (التحديات ممكن تتداخل) — الماتش نفسه بيرجع «مفيش
       // أسئلة كفاية» لو الحقيقي أقل، زي أي طابور.
@@ -496,8 +498,16 @@ export class ArenaService implements OnApplicationBootstrap, BeforeApplicationSh
       if (eligibility.blocked) throw new ForbiddenException({ code: eligibility.blocked });
       const mine = record.creatorId === userId;
       // دفعة تانية أو كورس مش مشترك فيه = التحدّي مش ليه، من غير ما نقول ليه.
-      const course = eligibility.courses.find((entry) => entry.id === record.courseId);
-      if (!mine && (!course || queueKeyOf(record.courseId, eligibility.cohort) !== record.cohortKey)) {
+      // و`playable` هنا نفس شرط `createChallenge`/`join` — كورس أو تحدّي اتقفل
+      // بعد ما اتفتح التحدّي مايتقبلش، حتى لو لسه في الطابور.
+      const course = eligibility.courses.find((entry) => entry.id === record.courseId && entry.playable);
+      const topicsStillPlayable = record.topicIds.every((topicId) =>
+        (course?.topics ?? []).some((topic) => topic.id === topicId && topic.playable),
+      );
+      if (
+        !mine &&
+        (!course || !topicsStillPlayable || queueKeyOf(record.courseId, eligibility.cohort) !== record.cohortKey)
+      ) {
         throw new NotFoundException({ code: 'challenge_gone' });
       }
       if (pointer?.kind === 'queue' && pointer.key !== next) await this.leaveQueue(userId, pointer);
