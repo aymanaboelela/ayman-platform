@@ -1,5 +1,8 @@
+import { crc32 } from 'node:zlib';
+import { PayloadTooLargeException, ServiceUnavailableException } from '@nestjs/common';
 import sharp from 'sharp';
 import { STORAGE_KEY_PATTERN } from '@ayman/contracts/admin/media';
+import { heifTranscoder } from './heif-transcode';
 import { MediaService } from './media.service';
 import type { MediaStorage } from './storage/media-storage';
 
@@ -237,6 +240,109 @@ describe('MediaService.upload', () => {
     await expect(
       service.upload({ originalname: 'evil.heic', buffer: Buffer.from('MZ\x90\x00'), size: 4 }),
     ).rejects.toThrow('file contents are not an allowed image type');
+  });
+
+  /*
+   * ## HEIC that sharp CANNOT decode — the production case
+   *
+   * The two cases above hand sharp a PNG labelled HEIC, so sharp decodes it and
+   * the transcoder never runs. In production sharp's prebuilt libvips reads a
+   * HEIC's header and then fails on the pixels, and the old code decided «can
+   * decode» from the header alone — so the transcode never ran there either.
+   * These hand the service bytes sharp cannot decode at all, which is what a
+   * real HEIC is to the prebuilt, and stand the transcoder in for
+   * `heif-convert` (the CI runner has none; `heic-transcode.spec.ts` drives
+   * the real one where it exists).
+   */
+  describe('a HEIC sharp cannot decode', () => {
+    const undecodableHeic = Buffer.from('\0\0\0\x18ftypheic\0\0\0\0mif1heic-pixels-sharp-cannot-read');
+
+    afterEach(() => jest.restoreAllMocks());
+
+    it('is transcoded and stored, rather than refused as «not an image»', async () => {
+      const { service, storage } = makeService({ mime: 'image/heic', ext: 'heic' });
+      const toJpeg = jest
+        .spyOn(heifTranscoder, 'toJpeg')
+        .mockResolvedValue(await sharp({ create: { width: 30, height: 40, channels: 3, background: '#fff' } }).jpeg().toBuffer());
+
+      await expect(
+        service.uploadPrivateImage(
+          { originalname: 'IMG_0421.HEIC', buffer: undecodableHeic, size: undecodableHeic.length },
+          'hw',
+        ),
+      ).resolves.toMatchObject({ storageKey: expect.stringMatching(/^hw\//) });
+      expect(toJpeg).toHaveBeenCalledWith(undecodableHeic);
+      expect(storage.put).toHaveBeenCalledTimes(1);
+    });
+
+    /*
+     * libheif rotates by the container's `irot` box AND copies the camera's
+     * EXIF into the JPEG, Orientation tag included — measured: a portrait HEIC
+     * came out of `heif-convert` 300×400, upright, tagged 6. `.rotate()` on
+     * that turned the homework page on its side.
+     */
+    it('is NOT rotated again by the stale EXIF orientation the transcoder carries over', async () => {
+      const { service, prisma } = makeService({ mime: 'image/heic', ext: 'heic' });
+      const uprightButTagged = await sharp({
+        create: { width: 30, height: 40, channels: 3, background: '#fff' },
+      })
+        .withMetadata({ orientation: 6 })
+        .jpeg()
+        .toBuffer();
+      jest.spyOn(heifTranscoder, 'toJpeg').mockResolvedValue(uprightButTagged);
+
+      await service.upload({ originalname: 'IMG_0421.HEIC', buffer: undecodableHeic, size: undecodableHeic.length });
+
+      const created = prisma.mediaAsset.create.mock.calls[0]?.[0] as { data: { width: number; height: number } };
+      expect({ width: created.data.width, height: created.data.height }).toEqual({ width: 30, height: 40 });
+    });
+
+    it('is refused as unprocessable when the transcoder cannot read it either', async () => {
+      const { service, storage } = makeService({ mime: 'image/heic', ext: 'heic' });
+      jest.spyOn(heifTranscoder, 'toJpeg').mockRejectedValue(new Error('heif-convert exited 1'));
+      await expect(
+        service.upload({ originalname: 'IMG_0421.HEIC', buffer: undecodableHeic, size: undecodableHeic.length }),
+      ).rejects.toThrow('file could not be processed as an image');
+      expect(storage.put).not.toHaveBeenCalled();
+    });
+
+    it('passes «busy» through as a 503, not as «not an image»', async () => {
+      const { service } = makeService({ mime: 'image/heic', ext: 'heic' });
+      jest
+        .spyOn(heifTranscoder, 'toJpeg')
+        .mockRejectedValue(new ServiceUnavailableException('image conversion is busy, try again shortly'));
+      await expect(
+        service.upload({ originalname: 'IMG_0421.HEIC', buffer: undecodableHeic, size: undecodableHeic.length }),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    });
+
+    it('never spawns a converter for a format that is not HEIF', async () => {
+      const { service } = makeService({ mime: 'image/gif', ext: 'gif' });
+      const toJpeg = jest.spyOn(heifTranscoder, 'toJpeg');
+      const notAGif = Buffer.from('GIF89a-then-garbage');
+      await expect(
+        service.upload({ originalname: 'broken.gif', buffer: notAGif, size: notAGif.length }),
+      ).rejects.toThrow('file could not be processed as an image');
+      expect(toJpeg).not.toHaveBeenCalled();
+    });
+  });
+
+  /*
+   * A 64 MP or 108 MP camera photo is an image that is too BIG, and the student
+   * has to be told that — «ده مش ملف صورة» about it is false and gives her
+   * nothing to do. The header is enough to know: this PNG claims 8000×8000
+   * and carries no pixels, so the refusal has to come from the dimensions.
+   */
+  it('refuses an image over the pixel cap as TOO LARGE (413), not as unprocessable', async () => {
+    const { service } = makeService({ mime: 'image/png', ext: 'png' });
+    const png = await makePng();
+    // IHDR starts at byte 8: length(4) "IHDR"(4) width(4) height(4) … crc(4).
+    png.writeUInt32BE(8000, 16);
+    png.writeUInt32BE(8000, 20);
+    png.writeUInt32BE(crc32(png.subarray(12, 29)), 29);
+    await expect(service.upload({ originalname: 'huge.png', buffer: png, size: png.length })).rejects.toBeInstanceOf(
+      PayloadTooLargeException,
+    );
   });
 
   it('rejects a real PNG buffer whose filename claims .svg — gate 1 blocks it before sniffing', async () => {
