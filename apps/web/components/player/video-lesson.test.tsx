@@ -1061,3 +1061,49 @@ describe('VideoLesson YouTube quality menu', () => {
     expect(pin).toHaveBeenCalledWith('medium', 'medium');
   });
 });
+
+describe('VideoLesson head start before the tap', () => {
+  const settle = () => act(async () => void (await new Promise((resolve) => setTimeout(resolve, 600))));
+
+  it('loads YouTube\'s script while the poster is still showing, for a lecture that plays from YouTube', async () => {
+    fakeYouTube();
+    renderPlayer();
+    await settle();
+
+    expect(loadYouTubeIframeApi).toHaveBeenCalled();
+    // …and nothing was built: the frame appears only on the tap.
+    expect(document.querySelector('iframe')).toBeNull();
+  });
+
+  it('never touches YouTube for a lecture we serve ourselves — not even to warm it', async () => {
+    render(
+      <VideoLesson
+        lessonId="0198c3a2-0000-7000-8000-000000000001"
+        video={UPLOADED}
+        title="How AI Works"
+        resumeAt={0}
+        onProgress={() => {}}
+        onError={() => {}}
+      />,
+    );
+    await settle();
+
+    expect(loadYouTubeIframeApi).not.toHaveBeenCalled();
+  });
+
+  it('warms nothing while the lecture is still being prepared', async () => {
+    render(
+      <VideoLesson
+        lessonId="0198c3a2-0000-7000-8000-000000000001"
+        video={PROCESSING}
+        title="How AI Works"
+        resumeAt={0}
+        onProgress={() => {}}
+        onError={() => {}}
+      />,
+    );
+    await settle();
+
+    expect(loadYouTubeIframeApi).not.toHaveBeenCalled();
+  });
+});
