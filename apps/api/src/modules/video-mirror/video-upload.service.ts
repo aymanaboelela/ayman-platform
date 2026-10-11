@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import type Redis from 'ioredis';
 import type {
+  VideoLadderUpgrade,
   VideoUploadAbort,
   VideoUploadComplete,
   VideoUploadResume,
@@ -19,6 +20,7 @@ import type {
 } from '@ayman/contracts/admin/video-upload';
 import { UPLOAD_ID_RE, uploadPartCount, uploadPartSize, uploadSourceKey } from '@ayman/contracts/video';
 import { PrismaService } from '../../prisma/prisma.service';
+import { IS_AYMAN } from '../../common/tenant';
 import { Prisma } from '../../generated/prisma/client';
 import { REDIS } from '../../redis/redis.module';
 import { VideoArchiveService } from './video-archive.service';
@@ -427,6 +429,57 @@ export class VideoUploadService {
       sizeBytes: row.mirrorBytes === null ? null : Number(row.mirrorBytes),
       error: row.mirrorError,
     };
+  }
+
+  /**
+   * «حسّن الجودات» — what the screen needs to draw the button.
+   *
+   * `available` is the whole gate: false on every stack but Ayman's and for
+   * anything that is not a ready upload, so the screen draws nothing instead of
+   * a button that answers 404.
+   */
+  async upgradeState(lessonId: string): Promise<VideoLadderUpgrade> {
+    const row = await this.prisma.lessonVideo.findUnique({
+      where: { lessonId },
+      select: {
+        provider: true,
+        externalId: true,
+        mirrorStatus: true,
+        upgradeStatus: true,
+        upgradeProgress: true,
+        upgradeError: true,
+      },
+    });
+    const available = IS_AYMAN && row !== null && row.provider === 'upload' && row.mirrorStatus === 'ready';
+    if (row === null || !available) {
+      return { available: false, state: null, progress: null, error: null, heights: [] };
+    }
+    const state = (['queued', 'running', 'done', 'failed'] as const).find((s) => s === row.upgradeStatus) ?? null;
+    return {
+      available: true,
+      state,
+      progress: row.upgradeProgress,
+      error: row.upgradeError,
+      heights: await this.mirror.ladderHeights(row.externalId),
+    };
+  }
+
+  /** Put a lecture in the night queue. Idempotent while it is already queued or running. */
+  async requestUpgrade(lessonId: string): Promise<VideoLadderUpgrade> {
+    if (!IS_AYMAN) throw new NotFoundException();
+    const row = await this.prisma.lessonVideo.findUnique({
+      where: { lessonId },
+      select: { provider: true, mirrorStatus: true, upgradeStatus: true },
+    });
+    if (row === null || row.provider !== 'upload') throw new NotFoundException('الدرس ده مالوش فيديو مرفوع');
+    if (row.mirrorStatus !== 'ready') throw new BadRequestException('الفيديو لسه ما خلصش — استنى لما يتنشر');
+    if (row.upgradeStatus !== 'queued' && row.upgradeStatus !== 'running') {
+      await this.prisma.lessonVideo.update({
+        where: { lessonId },
+        data: { upgradeStatus: 'queued', upgradeProgress: 0, upgradeError: null, upgradeAt: null },
+      });
+    }
+    return this.upgradeState(lessonId);
   }
 
   /**

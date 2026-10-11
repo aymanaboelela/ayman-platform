@@ -332,6 +332,8 @@ export class PlayerService {
               // YouTube. Two columns and no join — see `mirror` below.
               mirrorStatus: true,
               mirrorHeight: true,
+              // Which version of the ladder to ask for — see `mirrorPlaylistUrl`.
+              ladderRev: true,
               // «قص الفيديو».
               trimStartSeconds: true,
               trimEndSeconds: true,
@@ -485,7 +487,7 @@ export class PlayerService {
             mirror:
               base !== null && lesson.video.mirrorStatus === 'ready' && lesson.video.mirrorHeight
                 ? {
-                    hlsUrl: mirrorPlaylistUrl(base, lesson.video.externalId),
+                    hlsUrl: mirrorPlaylistUrl(base, lesson.video.externalId, lesson.video.ladderRev),
                     maxHeight: lesson.video.mirrorHeight,
                     // «قص الفيديو» — applied by the player, on the original timeline.
                     trim:

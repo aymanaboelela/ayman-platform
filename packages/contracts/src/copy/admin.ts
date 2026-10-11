@@ -888,6 +888,17 @@ const admin = {
     videoUploadResumePick: 'اختار نفس الملف وكمّل',
     videoUploadNotSameFile: 'ده مش نفس الملف اللي كان بيترفع — اختار نفس الملف، أو ابدأ رفع جديد.',
     videoUploadStartOver: 'ابدأ رفع جديد',
+    // «حسّن الجودات» — بيظهر على منصة أيمن بس.
+    ladderTitle: 'الجودات',
+    ladderNow: 'الجودات الحالية: {heights}',
+    ladderButton: 'حسّن الجودات (720 / 480 / 360)',
+    ladderHint: 'بتشتغل بالليل على السيرفر من غير ما تأثر على الموقع، والطلبة بيفضلوا يشوفوا المحاضرة عادي.',
+    ladderQueued: 'في الطابور — هتبدأ في خلال دقيقة',
+    ladderRunning: 'بتتحوّل… {percent}%',
+    ladderDone: 'خلصت. الطالب اللي فتح المحاضرة قبل كده هيشوفها بعد ما يفتحها تاني.',
+    ladderFailed: 'وقعت: {error}',
+    ladderRetry: 'جرّب تاني',
+    ladderAllThere: 'كل الجودات موجودة',
     /** The corner card that follows the upload around the whole dashboard. */
     videoUploadDockTitle: 'رفع الفيديو',
     videoUploadDockProcessing: 'اترفع — بيتجهّز دلوقتي',

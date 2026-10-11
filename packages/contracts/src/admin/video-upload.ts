@@ -163,6 +163,27 @@ export const VideoUploadStatusSchema = z.object({
 });
 export type VideoUploadStatus = z.infer<typeof VideoUploadStatusSchema>;
 
+/* ── «حسّن الجودات» ────────────────────────────────────────────────────────
+ *
+ * A lecture published as it is has one rung. The owner presses a button, at
+ * night, and the worker builds 720 / 480 / 360 from the rung already in the
+ * bucket. This is what the screen needs to draw that button.
+ *
+ * `available` is false on every stack but his, and for anything that is not an
+ * uploaded, ready lecture — the screen draws nothing then, rather than a
+ * button that answers 404.
+ */
+export const VideoLadderUpgradeSchema = z.object({
+  available: z.boolean(),
+  /** `null` = never asked. */
+  state: z.enum(['queued', 'running', 'done', 'failed']).nullable(),
+  progress: z.number().int().min(0).max(100).nullable(),
+  error: z.string().nullable(),
+  /** Heights the lecture offers now, tallest first — what the owner would see in the quality menu. */
+  heights: z.array(z.number().int().positive()),
+});
+export type VideoLadderUpgrade = z.infer<typeof VideoLadderUpgradeSchema>;
+
 /* ── «الفيديوهات» — every uploaded lecture, and what it costs ─────────────
  *
  * The one screen that answers «إيه اللي متخزّن عندنا وبكام». Until it existed,
