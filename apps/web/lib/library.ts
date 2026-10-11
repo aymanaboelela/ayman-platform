@@ -7,6 +7,7 @@ import type {
 } from '@ayman/contracts';
 import { copy } from '@ayman/contracts';
 import { FIXED_SYSTEM_SLUG } from '@/lib/section-defaults';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
 
 const c = copy.library;
 
@@ -173,10 +174,26 @@ function findTrackLabel(taxonomy: Taxonomy, trackId: string | null | undefined):
  * so this asks for the label of the system the student is provably in. The
  * scan is kept as a fallback for a database where that system is missing or
  * has not been seeded with years — a broken heading is still better than none.
+ *
+ * ## …and on a stack that does not teach code, the STUDENT's system
+ *
+ * There the student chose their system (`lib/subject-section.ts`), and the
+ * platform's own is no longer a fact about them: a الثانوية العامة student of
+ * a physics teacher is in «الصف الثاني الثانوي», and heading their shelf
+ * «الصف الثاني بكالوريا» names a year of a system they are not in. Their
+ * stored system is preferred, then the platform's, then the scan. A
+ * programming stack keeps the platform's system first, as before.
  */
-function findYearLabel(taxonomy: Taxonomy | null, year: number): string {
+function findYearLabel(
+  taxonomy: Taxonomy | null,
+  year: number,
+  studentSystemId?: string | null,
+): string {
   const systems = taxonomy?.systems ?? [];
-  const preferred = systems.find((system) => system.slug === FIXED_SYSTEM_SLUG);
+  const platform = systems.find((system) => system.slug === FIXED_SYSTEM_SLUG);
+  const preferred = TEACHES_CODE
+    ? platform
+    : (systems.find((system) => system.id === studentSystemId) ?? platform);
   for (const system of preferred ? [preferred, ...systems] : systems) {
     const found = system.years.find((y) => y.year === year);
     if (found) return found.labelAr;
@@ -210,7 +227,7 @@ export function identityOf(me: ProfileMe, taxonomy: Taxonomy | null): LibraryIde
   const schoolStream = me.profile?.schoolStream ?? null;
   return {
     year,
-    yearLabelAr: findYearLabel(taxonomy, year),
+    yearLabelAr: findYearLabel(taxonomy, year, me.profile?.systemId),
     trackLabelAr: findTrackLabel(taxonomy, me.profile?.trackId),
     schoolStream,
     schoolStreamLabelAr: schoolStream === null ? null : copy.stream[schoolStream],
@@ -324,7 +341,7 @@ export function buildLibrary({
     .sort(([a], [b]) => a - b)
     .map(([groupYear, list]) => ({
       year: groupYear,
-      labelAr: findYearLabel(taxonomy, groupYear),
+      labelAr: findYearLabel(taxonomy, groupYear, me.profile?.systemId),
       courseCount: list.length,
       tracks: byTrack(list.map(toLibraryCourse), list.map(trackKey)),
     }));
