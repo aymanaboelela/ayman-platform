@@ -3,6 +3,7 @@ import { SubmitWalletTopupSchema, WalletPurchaseSchema } from '@ayman/contracts/
 import {
   AdminApproveWalletTopupSchema,
   AdminRejectWalletTopupSchema,
+  AdminWalletActivityQuerySchema,
   AdminWalletCreditSchema,
   AdminWalletDebitSchema,
   AdminWalletSearchQuerySchema,
@@ -17,3 +18,4 @@ export class AdminWalletSearchQueryDto extends createZodDto(AdminWalletSearchQue
 export class AdminWalletTopupQueryDto extends createZodDto(AdminWalletTopupQuerySchema) {}
 export class AdminApproveWalletTopupDto extends createZodDto(AdminApproveWalletTopupSchema) {}
 export class AdminRejectWalletTopupDto extends createZodDto(AdminRejectWalletTopupSchema) {}
+export class AdminWalletActivityQueryDto extends createZodDto(AdminWalletActivityQuerySchema) {}

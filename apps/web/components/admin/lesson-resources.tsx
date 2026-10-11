@@ -2,6 +2,7 @@
 
 import { useActionState, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { copy } from '@ayman/contracts/copy/admin';
 import type { LessonResourceKind } from '@ayman/contracts/content';
@@ -147,6 +148,15 @@ function ResourceRow({
   const [editing, setEditing] = useState(false);
   const [pending, setPending] = useState(false);
   const subtitle = subtitleOf(resource);
+  /*
+   * «عاوز أضغط عليها أعرف أحمّلها». Only a stored FILE has bytes to download
+   * (a link or a video has none), and `filename` is non-null exactly then. The
+   * admin route, because the student one refuses anyone not enrolled.
+   */
+  const downloadHref =
+    resource.filename !== null
+      ? `/api/admin/resources/${encodeURIComponent(resource.id)}/download`
+      : null;
 
   async function save(formData: FormData) {
     const title = String(formData.get('title') ?? '').trim();
@@ -227,9 +237,19 @@ function ResourceRow({
         {KIND_LABEL[resource.kind]}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[length:var(--fs-text-sm)] text-fg">
-          {resource.title}
-        </span>
+        {downloadHref ? (
+          <a
+            href={downloadHref}
+            download
+            className="block truncate text-[length:var(--fs-text-sm)] text-fg underline-offset-2 hover:text-accent-text hover:underline"
+          >
+            {resource.title}
+          </a>
+        ) : (
+          <span className="block truncate text-[length:var(--fs-text-sm)] text-fg">
+            {resource.title}
+          </span>
+        )}
         {subtitle === null ? null : (
           <span className="mono block truncate text-[length:var(--fs-mono-label)] text-fg-muted">
             {subtitle}
@@ -250,6 +270,12 @@ function ResourceRow({
       </span>
 
       <span className="row-actions">
+        {downloadHref ? (
+          <a href={downloadHref} download className="chip chip--quiet">
+            <Download className="size-3.5" aria-hidden="true" />
+            {c.download}
+          </a>
+        ) : null}
         <button type="button" className="chip chip--quiet" onClick={() => setEditing(true)}>
           {c.edit}
         </button>

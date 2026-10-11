@@ -7,6 +7,7 @@ import {
   type AdminWallet,
   type AdminWalletCreditInput,
   type AdminWalletDebitInput,
+  type AdminWalletListFilter,
   type AdminWalletSearch,
 } from '@ayman/contracts/admin/wallet';
 import { AdminApiError, adminGet, adminSend } from '@/lib/admin-api';
@@ -53,9 +54,15 @@ export async function debitWalletAction(userId: string, input: AdminWalletDebitI
 }
 
 /** The search box — a read, through the admin's own cookie. */
-export async function searchWalletsAction(q: string): Promise<AdminWalletSearch | null> {
+export async function searchWalletsAction(
+  q: string,
+  filter: AdminWalletListFilter = 'funded',
+): Promise<AdminWalletSearch | null> {
   try {
-    return await adminGet(`/api/admin/wallets?q=${encodeURIComponent(q.slice(0, 120))}`, AdminWalletSearchSchema);
+    return await adminGet(
+      `/api/admin/wallets?q=${encodeURIComponent(q.slice(0, 120))}&filter=${filter}`,
+      AdminWalletSearchSchema,
+    );
   } catch {
     return null;
   }

@@ -17,6 +17,9 @@ import type {
   AdminWallet,
   AdminWalletCreditInput,
   AdminWalletDebitInput,
+  AdminWalletActivity,
+  AdminWalletActivityQuery,
+  AdminWalletListFilter,
   AdminWalletSearch,
   AdminWalletTopupList,
   AdminWalletTopupQuery,
@@ -41,6 +44,8 @@ const MAX_PENDING_TOPUPS = 3;
 
 /** The statement's length on screen. An export is a different feature. */
 const STATEMENT_LIMIT = 100;
+const FUNDED_LIMIT = 500;
+const ACTIVITY_PAGE = 50;
 const TOPUPS_LIMIT = 20;
 
 const TRANSACTION_SELECT = {
@@ -249,10 +254,14 @@ export class WalletService {
    * recently, which is what the screen opens on — the student somebody just
    * called about is almost always one of them.
    */
-  async search(q: string): Promise<AdminWalletSearch> {
+  async search(q: string, filter: AdminWalletListFilter = 'funded'): Promise<AdminWalletSearch> {
     const query = q.trim();
     const [rows, totals, pending] = await Promise.all([
-      query.length === 0 ? this.recentWallets() : this.findStudents(query),
+      query.length > 0
+        ? this.findStudents(query)
+        : filter === 'funded'
+          ? this.fundedWallets()
+          : this.recentWallets(),
       this.prisma.wallet.aggregate({
         where: { balanceCents: { gt: 0 } },
         _sum: { balanceCents: true },
@@ -271,6 +280,81 @@ export class WalletService {
         walletCount: totals._count._all,
         pendingCount: pending._count._all,
         pendingCents: pending._sum.amountCents ?? 0,
+      },
+    };
+  }
+
+  /**
+   * «الناس اللي معاهم فلوس في المحفظة» — every wallet holding a balance,
+   * biggest first. Capped well above any real cohort's count of funded
+   * wallets; the totals tile above it is the uncapped number.
+   */
+  private async fundedWallets(): Promise<AdminWalletSearch['rows']> {
+    const wallets = await this.prisma.wallet.findMany({
+      where: { balanceCents: { gt: 0 } },
+      orderBy: [{ balanceCents: 'desc' }, { userId: 'asc' }],
+      take: FUNDED_LIMIT,
+      select: {
+        balanceCents: true,
+        updatedAt: true,
+        user: { select: { id: true, name: true, phoneNumber: true, email: true } },
+      },
+    });
+    return wallets.map((wallet) => ({
+      id: wallet.user.id,
+      name: wallet.user.name,
+      phone: wallet.user.phoneNumber,
+      email: wallet.user.email,
+      balanceCents: wallet.balanceCents,
+      lastMovedAt: wallet.updatedAt.toISOString(),
+    }));
+  }
+
+  /**
+   * «سجل الحركات» — every movement across every wallet, newest first, keyset
+   * paged on the uuid7 id (time-ordered, unique, so no timestamp tie-break is
+   * needed). `admin` is the hand-made credits and debits — the rows that carry
+   * an admin's name and his reason.
+   */
+  async activity(query: AdminWalletActivityQuery): Promise<AdminWalletActivity> {
+    const kindWhere: Prisma.WalletTransactionWhereInput =
+      query.filter === 'admin' ? { kind: { in: ['admin_credit', 'admin_debit'] } } : {};
+    const [rows, credited, debited] = await Promise.all([
+      this.prisma.walletTransaction.findMany({
+        where: { ...kindWhere, ...(query.before ? { id: { lt: query.before } } : {}) },
+        orderBy: { id: 'desc' },
+        take: ACTIVITY_PAGE + 1,
+        select: {
+          ...TRANSACTION_SELECT,
+          wallet: {
+            select: { user: { select: { id: true, name: true, phoneNumber: true, email: true } } },
+          },
+        },
+      }),
+      this.prisma.walletTransaction.aggregate({
+        where: { ...kindWhere, amountCents: { gt: 0 } },
+        _sum: { amountCents: true },
+      }),
+      this.prisma.walletTransaction.aggregate({
+        where: { ...kindWhere, amountCents: { lt: 0 } },
+        _sum: { amountCents: true },
+      }),
+    ]);
+    const page = rows.slice(0, ACTIVITY_PAGE);
+    return {
+      rows: page.map((row) => ({
+        ...toAdminTransaction(row),
+        student: {
+          id: row.wallet.user.id,
+          name: row.wallet.user.name,
+          phone: row.wallet.user.phoneNumber,
+          email: row.wallet.user.email,
+        },
+      })),
+      nextBefore: rows.length > ACTIVITY_PAGE ? page[page.length - 1]!.id : null,
+      totals: {
+        creditedCents: credited._sum.amountCents ?? 0,
+        debitedCents: Math.abs(debited._sum.amountCents ?? 0),
       },
     };
   }

@@ -58,6 +58,9 @@ const admin = {
     flags: 'خصائص التشغيل',
     // «الفريق» أولًا: ده اللي المدرّس بيدوّر عليه لما عايز يضيف مساعد.
     roles: 'الفريق والصلاحيات',
+    /** زرار «ادخل كطالب» في أسفل سايد بار الأدمن — بيوديه `/dashboard` بنفس
+     *  جلسته هو، مش انتحال شخصية حد. أيمن بس: شوف `aymanOnly` في `app-sidebar.tsx`. */
+    studentView: 'الصفحة كطالب',
     news: 'نيوز',
     media: 'مكتبة الوسائط',
     videos: 'الفيديوهات',
@@ -1127,6 +1130,8 @@ const admin = {
     openThreadHint: 'لو عايز تبعتله صوت أو تكمّل كلام',
     prompt: 'المطلوب في الواجب',
     noPrompt: 'الواجب اتشال من المحاضرة، والحل ده فضل.',
+    /** On the per-image rotate button — many phone photos land sideways. */
+    rotateImage: 'لفّ الصورة',
 
     // ── the decision ─────────────────────────────────────────────────────
     accept: 'مقبول',
@@ -1832,6 +1837,8 @@ const admin = {
     empty: 'لسه مفيش مواد. نبدأ بالبريزنتيشن الأساسي.',
     onePresentationOnly: 'فيه بريزنتيشن أساسي واحد بس لكل محاضرة.',
     edit: 'تعديل',
+    /** The file the instructor uploaded, saved under the material's title. */
+    download: 'تحميل',
     save: 'حفظ',
     cancel: 'إلغاء',
   },
@@ -4011,6 +4018,22 @@ const admin = {
     searchPlaceholder: 'اسم الطالب أو رقمه…',
     searching: 'بندوّر…',
     recentTitle: 'آخر محافظ اتحركت',
+    /** The list's two views when nothing is typed. */
+    filterFunded: 'معاهم فلوس',
+    filterRecent: 'آخر حركة',
+    fundedTitle: 'كل اللي في محفظتهم رصيد — الأكبر الأول',
+    emptyFunded: 'مفيش ولا محفظة فيها رصيد دلوقتي.',
+    /** «سجل الحركات» — every wallet movement across every student. */
+    activityLink: 'سجل الحركات',
+    activityTitle: 'سجل حركات المحفظة',
+    activityLead: 'كل فلوس دخلت أو خرجت من أي محفظة، مين عملها، وليه. الأحدث الأول.',
+    activityAdmin: 'إضافة وخصم بإيد الأدمن',
+    activityAll: 'كل الحركات',
+    activityCredited: 'دخل',
+    activityDebited: 'خرج',
+    activityEmpty: 'لسه مفيش حركات.',
+    activityMore: 'هات أقدم',
+    noReason: 'من غير سبب مكتوب',
     resultsTitle: 'نتايج البحث',
     noResults: 'مفيش طالب بالاسم أو الرقم ده.',
     emptyRecent: 'لسه مفيش ولا محفظة اتحركت — أول شحنة بتبان هنا.',
@@ -4041,8 +4064,10 @@ const admin = {
     gift: 'هدية / تعويض',
     giftHint: 'مفيش فلوس دخلت — مابتتحسبش دخل',
     kindRequired: 'لازم نحدد: مدفوعة ولا هدية؟',
-    note: 'ملاحظة (اختياري)',
+    note: 'السبب',
     notePlaceholder: 'مثلًا: دفع كاش في السنتر',
+    /** Credit's reason is required now, like the debit's. */
+    noteRequired: 'لازم سبب للإضافة — بيفضل ظاهر في كشف الحساب وسجل الحركات.',
     /** `{amount}` — «٢٠٠ ج». */
     creditSubmit: 'شحن {amount}',
     creditSubmitEmpty: 'شحن',
@@ -4058,6 +4083,8 @@ const admin = {
     reason: 'السبب',
     reasonPlaceholder: 'مثلًا: الشحنة اتكتبت مرتين',
     reasonRequired: 'لازم سبب للخصم',
+    /** Fills the debit with the whole balance — «أشيله من المحفظة». */
+    debitAll: 'اسحب الرصيد كله ({amount})',
     debitSubmit: 'خصم {amount}',
     debitSubmitEmpty: 'خصم',
     debiting: 'بيتخصم…',

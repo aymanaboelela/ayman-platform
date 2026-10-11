@@ -9,7 +9,7 @@ import { PlayerService } from './player.service';
  */
 describe('PlayerService.resourceStream', () => {
   const access = { require: jest.fn() };
-  const prisma = { lessonResource: { findFirst: jest.fn() } };
+  const prisma = { lessonResource: { findFirst: jest.fn(), findUnique: jest.fn() } };
   const storage = { getStream: jest.fn(), stat: jest.fn() };
   const media = { resolve: jest.fn() };
 
@@ -113,5 +113,36 @@ describe('PlayerService.resourceStream', () => {
       size: 4096,
     });
     expect(storage.getStream).toHaveBeenCalledWith('doc/ab/x.pdf');
+  });
+
+  describe('adminResourceStream — the instructor downloading his own upload', () => {
+    it('never asks the enrolment gate, and saves under the title he typed', async () => {
+      prisma.lessonResource.findUnique.mockResolvedValue({
+        storageKey: 'doc/ab/x.pdf',
+        mime: 'application/pdf',
+        // A pre-`decodeOriginalName` row: latin1-mangled Arabic.
+        filename: 'Ø£Ø³Ø§Ø³.pdf',
+        title: 'تقنيات التشفير/المصادقة',
+      });
+      storage.stat.mockResolvedValue({ size: 10 });
+      storage.getStream.mockResolvedValue({ pipe: jest.fn() });
+
+      const result = await service.adminResourceStream('r1');
+
+      expect(access.require).not.toHaveBeenCalled();
+      expect(result.filename).toBe('تقنيات التشفير المصادقة.pdf');
+      expect(result.mime).toBe('application/pdf');
+    });
+
+    it('404s a link or a video, which has no file', async () => {
+      prisma.lessonResource.findUnique.mockResolvedValue({
+        storageKey: null,
+        mime: null,
+        filename: null,
+        title: 'رابط',
+      });
+      await expect(service.adminResourceStream('r1')).rejects.toThrow(NotFoundException);
+      expect(storage.getStream).not.toHaveBeenCalled();
+    });
   });
 });

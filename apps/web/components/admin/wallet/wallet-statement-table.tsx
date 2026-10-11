@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
-import type { AdminWalletTransaction } from '@ayman/contracts/admin/wallet';
+import Link from 'next/link';
+import type { AdminWalletStudent, AdminWalletTransaction } from '@ayman/contracts/admin/wallet';
 import type { WalletTransactionKind } from '@ayman/contracts/wallet';
 import { cn } from '@ayman/ui/lib/cn';
 import { formatEGPExact } from '@/lib/price';
@@ -59,7 +60,9 @@ export function WalletStatementTable({
   rows,
   limit,
 }: {
-  rows: readonly AdminWalletTransaction[];
+  /** `student` is present on «سجل الحركات», where rows span many wallets —
+   *  each one then names whose wallet it was and links to it. */
+  rows: readonly (AdminWalletTransaction & { student?: AdminWalletStudent })[];
   /** The student page's panel shows the latest few; the wallet page all. */
   limit?: number;
 }) {
@@ -110,8 +113,22 @@ export function WalletStatementTable({
                   </span>
                 ) : null}
               </p>
+              {row.student ? (
+                <Link
+                  href={`/admin/wallet/${encodeURIComponent(row.student.id)}`}
+                  className="block truncate text-[length:var(--fs-text-sm)] font-medium text-accent-text underline-offset-2 hover:underline"
+                >
+                  {row.student.name}
+                </Link>
+              ) : null}
               {detail ? <p className="truncate text-[length:var(--fs-text-sm)] text-fg-muted">{detail}</p> : null}
-              {row.note ? <p className="text-[length:var(--fs-text-sm)] text-fg">{row.note}</p> : null}
+              {/* The reason, always — and said out loud when a hand-made move
+                  has none (rows from before it was required). */}
+              {row.note ? (
+                <p className="text-[length:var(--fs-text-sm)] text-fg">{row.note}</p>
+              ) : row.kind === 'admin_credit' || row.kind === 'admin_debit' ? (
+                <p className="text-[length:var(--fs-text-sm)] italic text-fg-faint">{c.noReason}</p>
+              ) : null}
               <p className="mt-0.5 text-[length:var(--fs-text-xs)] text-fg-faint">
                 {WHEN.format(new Date(row.createdAt))}
                 {row.actor ? ` · ${formatCopy(c.by, { name: row.actor.name })}` : ''}

@@ -18,6 +18,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { HomeworkService } from '../homework/homework.service';
 import { isFeatureEnabled } from '../../common/entitlements';
 import { InjectMediaUrl, type MediaUrlResolver } from '../../common/media/media-url';
+import { extname } from 'node:path';
 import { MEDIA_STORAGE, type MediaStorage } from '../media/storage/media-storage';
 import { ACTIVE_ENROLLMENT_STATUSES } from '../enrollment/enrollment.service';
 import { LessonAccessService } from '../progress/lesson-access.service';
@@ -625,20 +626,34 @@ export class PlayerService {
    * a redirect to a third-party URL from an authenticated route is an open
    * redirect wearing a download button.
    */
-  async resourceStream(
-    userId: string,
-    lessonId: string,
+  /**
+   * The same file for the instructor — «عاوز أضغط عليها أعرف أحمّلها».
+   *
+   * `resourceStream` above gates on `LessonAccessService.require`, which has
+   * no staff bypass: an admin is not enrolled, so the material he uploaded
+   * 404s for him. The gate here is the route's `lesson:write` instead, the
+   * same permission that let him add the file.
+   */
+  async adminResourceStream(
     resourceId: string,
   ): Promise<{ stream: Readable; mime: string; filename: string; size: number }> {
-    const context = await this.access.require(userId, lessonId);
-
-    // `lessonId: context.lessonId` is what stops a resource id from ANOTHER
-    // lesson resolving here — the gate authorized one lesson, and this query
-    // is scoped to that same lesson rather than to the id in the URL.
-    const resource = await this.prisma.lessonResource.findFirst({
-      where: { id: resourceId, lessonId: context.lessonId },
-      select: { kind: true, storageKey: true, mime: true, filename: true },
+    const resource = await this.prisma.lessonResource.findUnique({
+      where: { id: resourceId },
+      select: { storageKey: true, mime: true, filename: true, title: true },
     });
+    // Saved under the title he typed, not the stored filename: rows uploaded
+    // before `decodeOriginalName` carry a latin1-mangled Arabic name forever.
+    const ext = resource?.filename ? extname(resource.filename) : '';
+    const named = resource && {
+      ...resource,
+      filename: `${resource.title.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'file'}${ext}`,
+    };
+    return this.openResourceFile(named);
+  }
+
+  private async openResourceFile(
+    resource: { storageKey: string | null; mime: string | null; filename: string | null } | null,
+  ): Promise<{ stream: Readable; mime: string; filename: string; size: number }> {
     if (
       !resource ||
       resource.storageKey === null ||
@@ -657,5 +672,22 @@ export class PlayerService {
       filename: resource.filename,
       size: info.size,
     };
+  }
+
+  async resourceStream(
+    userId: string,
+    lessonId: string,
+    resourceId: string,
+  ): Promise<{ stream: Readable; mime: string; filename: string; size: number }> {
+    const context = await this.access.require(userId, lessonId);
+
+    // `lessonId: context.lessonId` is what stops a resource id from ANOTHER
+    // lesson resolving here — the gate authorized one lesson, and this query
+    // is scoped to that same lesson rather than to the id in the URL.
+    const resource = await this.prisma.lessonResource.findFirst({
+      where: { id: resourceId, lessonId: context.lessonId },
+      select: { kind: true, storageKey: true, mime: true, filename: true },
+    });
+    return this.openResourceFile(resource);
   }
 }
