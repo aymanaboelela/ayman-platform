@@ -45,7 +45,9 @@ const UPLOADED: PlayerVideo = {
   durationSeconds: 3696,
   posterUrl: null,
   mirror: {
-    hlsUrl: 'https://video.example.test/v/0123456789abcdef0123456789abcdef/master.m3u8',
+    // The real shape, query and all — `mirrorPlaylistUrl` always appends one,
+    // and a fixture without it hid a black poster on every upload.
+    hlsUrl: 'https://video.example.test/v/0123456789abcdef0123456789abcdef/master.m3u8?l=3&r=2',
     maxHeight: 1080,
   },
 };
