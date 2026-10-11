@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UploadedVideoPreview } from './uploaded-video-preview';
 
 vi.mock('@/app/(admin)/admin/courses/actions', () => ({
-  videoPreviewUrlAction: vi.fn(async (id: string) => `https://video.example.com/v/${id}/master.m3u8`),
+  // The real shape, query and all — a fixture without `?l=` hid a black poster.
+  videoPreviewUrlAction: vi.fn(async (id: string) => `https://video.example.com/v/${id}/master.m3u8?l=3`),
 }));
 vi.mock('hls.js', () => ({ default: { isSupported: () => false } }));
 

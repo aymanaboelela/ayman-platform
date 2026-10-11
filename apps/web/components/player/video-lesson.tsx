@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { copy } from '@ayman/contracts/copy';
 import type { HeartbeatResponse, PlayerVideo } from '@ayman/contracts/progress';
+import { posterBesidePlaylist } from '@ayman/contracts/video';
 import { cn } from '@ayman/ui/lib/cn';
 import { formatDuration } from '@/lib/format';
 import {
@@ -290,7 +291,7 @@ export function VideoLesson({
    */
   const encoderFrame =
     video.provider === 'upload' && video.mirror !== null
-      ? video.mirror.hlsUrl.replace(/master\.m3u8$/, 'poster.jpg')
+      ? posterBesidePlaylist(video.mirror.hlsUrl)
       : null;
   const posterCandidates = [video.posterUrl, encoderFrame].filter(
     (url, index, all): url is string => url !== null && all.indexOf(url) === index,

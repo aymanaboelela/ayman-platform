@@ -410,6 +410,21 @@ export function mirrorPlaylistUrl(baseUrl: string, externalId: string, ladderRev
 }
 
 /**
+ * The frame the encoder cut (`poster.jpg`), from the playlist URL beside it.
+ *
+ * ⚠️ The query has to go. `mirrorPlaylistUrl` always appends `?l=…` (and
+ * `&r=…` once a ladder is rewritten), and both call sites used to do
+ * `replace(/master\.m3u8$/, …)` — which never matches a URL ending in a query,
+ * so the "poster" was the playlist itself, the `<img>` failed, and every
+ * uploaded lecture showed a black box (2026-10-11, Adel's stack). The specs
+ * mocked a URL with no query, so they stayed green the whole time.
+ */
+export function posterBesidePlaylist(playlistUrl: string): string | null {
+  const match = /^(.*\/)master\.m3u8(?:[?#].*)?$/.exec(playlistUrl);
+  return match ? `${match[1]}poster.jpg` : null;
+}
+
+/**
  * Bump when a lecture's ladder is rewritten IN PLACE.
  *
  * Everything under `v/<id>/` is served `immutable` for a year, by the edge and
