@@ -18,7 +18,7 @@ import {
   type TranscodeTools,
 } from './upload-pipeline';
 import { videoKey, videoKeyUri } from './video-key';
-import { upgradeLadder, variantSizes } from './ladder-upgrade';
+import { machineThrottle, upgradeLadder, variantSizes } from './ladder-upgrade';
 import { IS_AYMAN } from '../../common/tenant';
 
 /** One mirror at a time across the platform, however many API replicas exist. */
@@ -715,7 +715,10 @@ export class VideoMirrorService implements OnModuleDestroy {
       where: {
         provider: 'upload',
         mirrorStatus: 'ready',
-        OR: [{ upgradeStatus: 'queued' }, { upgradeStatus: 'running', upgradeAt: { lt: stale } }],
+        OR: [
+          { upgradeStatus: 'queued' },
+          { upgradeStatus: { in: ['running', 'waiting'] }, upgradeAt: { lt: stale } },
+        ],
       },
       orderBy: [{ upgradeAt: { sort: 'asc', nulls: 'first' } }],
       select: { lessonId: true, externalId: true, encrypted: true, mirrorBytes: true, ladderRev: true },
@@ -727,7 +730,7 @@ export class VideoMirrorService implements OnModuleDestroy {
     await mark({ upgradeStatus: 'running', upgradeAt: new Date(), upgradeProgress: 0, upgradeError: null });
     const beat = setInterval(() => {
       this.prisma.lessonVideo
-        .updateMany({ where: { ...where, upgradeStatus: 'running' }, data: { upgradeAt: new Date() } })
+        .updateMany({ where: { ...where, upgradeStatus: { in: ['running', 'waiting'] } }, data: { upgradeAt: new Date() } })
         .catch(() => undefined);
     }, HEARTBEAT_MS);
 
@@ -744,11 +747,25 @@ export class VideoMirrorService implements OnModuleDestroy {
         ffprobe: this.encoder.ffprobe,
         threads: this.encoder.threads,
         renice: this.encoder.renice,
+        // The machine's own load decides when the encoder may run — see
+        // `Throttle`. `waiting` is the same job, stopped for the sites' sake.
+        throttle: machineThrottle(this.encoder.threads, (waiting) => {
+          void this.prisma.lessonVideo
+            .updateMany({
+              where: { ...where, upgradeStatus: { in: ['running', 'waiting'] } },
+              data: { upgradeStatus: waiting ? 'waiting' : 'running' },
+            })
+            .catch(() => undefined);
+        }),
+        expectedBytes: Number(row.mirrorBytes ?? 0),
         onProgress: (percent) => {
           if (percent === last) return;
           last = percent;
           void this.prisma.lessonVideo
-            .updateMany({ where: { ...where, upgradeStatus: 'running' }, data: { upgradeProgress: percent } })
+            .updateMany({
+              where: { ...where, upgradeStatus: { in: ['running', 'waiting'] } },
+              data: { upgradeProgress: percent },
+            })
             .catch(() => undefined);
         },
       });

@@ -454,7 +454,7 @@ export class VideoUploadService {
     if (row === null || !available) {
       return { available: false, state: null, progress: null, error: null, heights: [] };
     }
-    const state = (['queued', 'running', 'done', 'failed'] as const).find((s) => s === row.upgradeStatus) ?? null;
+    const state = (['queued', 'running', 'waiting', 'done', 'failed'] as const).find((s) => s === row.upgradeStatus) ?? null;
     return {
       available: true,
       state,
@@ -473,7 +473,7 @@ export class VideoUploadService {
     });
     if (row === null || row.provider !== 'upload') throw new NotFoundException('الدرس ده مالوش فيديو مرفوع');
     if (row.mirrorStatus !== 'ready') throw new BadRequestException('الفيديو لسه ما خلصش — استنى لما يتنشر');
-    if (row.upgradeStatus !== 'queued' && row.upgradeStatus !== 'running') {
+    if (row.upgradeStatus !== 'queued' && row.upgradeStatus !== 'running' && row.upgradeStatus !== 'waiting') {
       await this.prisma.lessonVideo.update({
         where: { lessonId },
         data: { upgradeStatus: 'queued', upgradeProgress: 0, upgradeError: null, upgradeAt: null },

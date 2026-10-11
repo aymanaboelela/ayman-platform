@@ -176,7 +176,8 @@ export type VideoUploadStatus = z.infer<typeof VideoUploadStatusSchema>;
 export const VideoLadderUpgradeSchema = z.object({
   available: z.boolean(),
   /** `null` = never asked. */
-  state: z.enum(['queued', 'running', 'done', 'failed']).nullable(),
+  /** `waiting`: running, but stopped until the server calms down. */
+  state: z.enum(['queued', 'running', 'waiting', 'done', 'failed']).nullable(),
   progress: z.number().int().min(0).max(100).nullable(),
   error: z.string().nullable(),
   /** Heights the lecture offers now, tallest first — what the owner would see in the quality menu. */

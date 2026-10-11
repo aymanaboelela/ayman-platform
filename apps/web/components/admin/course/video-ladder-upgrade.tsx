@@ -35,7 +35,7 @@ export function VideoLadderUpgradeButton({ lessonId }: { lessonId: string }) {
   }, [lessonId]);
 
   // …and then only while there is something to watch.
-  const watching = info?.state === 'queued' || info?.state === 'running';
+  const watching = info?.state === 'queued' || info?.state === 'running' || info?.state === 'waiting';
   useEffect(() => {
     if (!watching) return;
     let alive = true;
@@ -52,7 +52,7 @@ export function VideoLadderUpgradeButton({ lessonId }: { lessonId: string }) {
 
   if (info === null || !info.available) return null;
 
-  const working = info.state === 'queued' || info.state === 'running';
+  const working = info.state === 'queued' || info.state === 'running' || info.state === 'waiting';
   const missing = info.heights.length < 4 && !working;
 
   function press() {
@@ -77,6 +77,11 @@ export function VideoLadderUpgradeButton({ lessonId }: { lessonId: string }) {
       {info.state === 'running' ? (
         <p className="mt-2 text-[length:var(--fs-text-sm)] text-fg" aria-live="polite">
           {formatCopy(c.ladderRunning, { percent: info.progress ?? 0 })}
+        </p>
+      ) : null}
+      {info.state === 'waiting' ? (
+        <p className="mt-2 text-[length:var(--fs-text-sm)] text-fg" aria-live="polite">
+          {formatCopy(c.ladderWaiting, { percent: info.progress ?? 0 })}
         </p>
       ) : null}
       {info.state === 'failed' ? (

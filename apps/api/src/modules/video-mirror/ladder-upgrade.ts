@@ -1,7 +1,8 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createDecipheriv } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, stat, statfs, writeFile } from 'node:fs/promises';
+import { cpus, loadavg } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 import { UPLOAD_LADDER, type LadderRung } from '@ayman/contracts/video';
@@ -82,6 +83,155 @@ export function rungsToBuild(existingHeights: readonly number[], sourceHeight: n
   return UPGRADE_RUNGS.filter((rung) => rung.height < sourceHeight && !existingHeights.includes(rung.height));
 }
 
+/**
+ * ── Not at the students' expense ─────────────────────────────────────────
+ *
+ * The three stacks share one 4-core VPS, and on 2026-10-04 one encode at full
+ * tilt was enough for Hostinger to cap the CPU and take all three sites down.
+ * `nice` and two threads make this polite; they do not make it SAFE, because
+ * the box can be busy for reasons that are not ours (a student rush, another
+ * stack's own encode). So the encoder watches the machine and gets out of the
+ * way: when the load climbs it is STOPPED (`SIGSTOP`) — not slowed, stopped,
+ * the CPU it was using is free that instant — and continued (`SIGCONT`) when
+ * the box has calmed down.
+ *
+ * Two thresholds, and the gap is the point. The 1-minute load average counts
+ * our own threads, so resuming at the level we paused at would put the load
+ * straight back over the line and pause us again every half minute. We resume
+ * only when the load, WITH our threads added back, would still be under the
+ * line that paused us.
+ */
+export interface ThrottleLimits {
+  /** Pause above this 1-minute load average. */
+  readonly pauseAbove: number;
+  /** Resume below this. Always under `pauseAbove` by at least the encoder's own threads. */
+  readonly resumeBelow: number;
+  /** A pause shorter than this tells nothing: the load average lags what it measures. */
+  readonly minPauseMs: number;
+}
+
+/** Limits for a box with `cores` cores and an encoder using `threads` of them. */
+export function throttleLimits(cores: number, threads: number): ThrottleLimits {
+  const pauseAbove = cores * 0.9;
+  return {
+    pauseAbove,
+    resumeBelow: Math.max(0.3, pauseAbove - threads - 0.5),
+    minPauseMs: 30_000,
+  };
+}
+
+/** What to do about the encoder right now. Pure — the timing lives in the caller. */
+export function throttleDecision(
+  load: number,
+  paused: boolean,
+  pausedForMs: number,
+  limits: ThrottleLimits,
+): 'pause' | 'resume' | 'keep' {
+  if (!paused) return load > limits.pauseAbove ? 'pause' : 'keep';
+  return load < limits.resumeBelow && pausedForMs >= limits.minPauseMs ? 'resume' : 'keep';
+}
+
+export interface Throttle {
+  readonly limits: ThrottleLimits;
+  /** The 1-minute load average. */
+  readonly load: () => number;
+  readonly pollMs: number;
+  /** `true` when the encoder was stopped for the machine's sake, `false` when it was let go again. */
+  readonly onWaiting: (waiting: boolean) => void;
+}
+
+/**
+ * Run a command under the throttle.
+ *
+ * `spawn`, not `execFile`: a signal has to reach the process while it runs.
+ * With `nice` in front the pid is the encoder's own — `nice` execs it — so one
+ * `SIGSTOP` stops the encoder and every thread it started.
+ */
+export function runThrottled(
+  bin: string,
+  args: readonly string[],
+  throttle: Throttle,
+  options: { renice: boolean; timeoutMs: number },
+): Promise<void> {
+  const child = options.renice
+    ? spawn('nice', ['-n', '19', bin, ...args], { stdio: ['ignore', 'ignore', 'pipe'] })
+    : spawn(bin, [...args], { stdio: ['ignore', 'ignore', 'pipe'] });
+
+  let stderr = '';
+  child.stderr?.on('data', (chunk: Buffer) => {
+    // The tail is the part that says why it died.
+    stderr = (stderr + chunk.toString()).slice(-2_000);
+  });
+
+  return new Promise<void>((resolve, reject) => {
+    let paused = false;
+    let pausedAt = 0;
+    let finished = false;
+
+    const finish = (error?: Error) => {
+      if (finished) return;
+      finished = true;
+      clearInterval(watch);
+      clearTimeout(deadline);
+      // A stopped process cannot hear SIGTERM: continue it first, or it
+      // outlives us holding its memory — and the next worker's CPU.
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill('SIGCONT');
+        if (error) child.kill('SIGKILL');
+      }
+      if (paused) throttle.onWaiting(false);
+      if (error) reject(error);
+      else resolve();
+    };
+
+    const watch = setInterval(() => {
+      if (finished) return;
+      const decision = throttleDecision(throttle.load(), paused, Date.now() - pausedAt, throttle.limits);
+      if (decision === 'pause') {
+        child.kill('SIGSTOP');
+        paused = true;
+        pausedAt = Date.now();
+        throttle.onWaiting(true);
+      } else if (decision === 'resume') {
+        child.kill('SIGCONT');
+        paused = false;
+        throttle.onWaiting(false);
+      }
+    }, throttle.pollMs);
+
+    const deadline = setTimeout(() => finish(new Error('الترميز خد وقت أطول من المسموح')), options.timeoutMs);
+
+    child.on('error', (error) => finish(error));
+    child.on('close', (code, signal) => {
+      if (code === 0) finish();
+      else finish(new Error(`ffmpeg وقف (${code ?? signal}): ${stderr.trim().slice(-300)}`));
+    });
+  });
+}
+
+/** Wait, before starting something heavy, until the box is under the resume line. */
+export async function waitUntilCalm(throttle: Throttle, isAborted: () => boolean = () => false): Promise<void> {
+  let waiting = false;
+  while (throttle.load() > throttle.limits.resumeBelow + 0.5 && !isAborted()) {
+    if (!waiting) {
+      waiting = true;
+      throttle.onWaiting(true);
+    }
+    await new Promise((resolve) => setTimeout(resolve, throttle.pollMs));
+  }
+  if (waiting) throttle.onWaiting(false);
+}
+
+/** The throttle the worker uses: this machine's load, this encoder's threads. */
+export function machineThrottle(threads: number, onWaiting: (waiting: boolean) => void): Throttle {
+  return {
+    limits: throttleLimits(cpus().length, threads),
+    load: () => loadavg()[0] ?? 0,
+    pollMs: 5_000,
+    onWaiting,
+  };
+}
+
 async function listFiles(dir: string, root = dir): Promise<string[]> {
   const out: string[] = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -106,6 +256,10 @@ export interface UpgradeDeps {
   readonly threads: number;
   readonly renice: boolean;
   readonly onProgress: (percent: number) => void;
+  /** What the machine can take — see `Throttle`. */
+  readonly throttle: Throttle;
+  /** Roughly what the lecture weighs in the bucket; the work dir needs about twice that. */
+  readonly expectedBytes: number;
 }
 
 export interface UpgradeResult {
@@ -120,11 +274,6 @@ export interface UpgradeResult {
 /** Build the missing rungs from the tallest one in the bucket, and publish them. */
 export async function upgradeLadder(deps: UpgradeDeps): Promise<UpgradeResult> {
   const { storage, prefix, key, work } = deps;
-  const exec = (bin: string, args: readonly string[]) =>
-    deps.renice
-      ? run('nice', ['-n', '19', bin, ...args], { maxBuffer: 16 * 1024 * 1024, timeout: 12 * 60 * 60_000 })
-      : run(bin, [...args], { maxBuffer: 16 * 1024 * 1024, timeout: 12 * 60 * 60_000 });
-
   const master = await storage.readText(`${prefix}/master.m3u8`);
   const variants = variantSizes(master);
   if (variants.length === 0) throw new Error('ملف الجودات مش فيه أي جودة');
@@ -135,6 +284,19 @@ export async function upgradeLadder(deps: UpgradeDeps): Promise<UpgradeResult> {
   );
   const heightsNow = variants.map((v) => v.height).sort((a, b) => b - a);
   if (todo.length === 0) return { heights: heightsNow, addedBytes: 0, nothingToDo: true };
+
+  /*
+   * The source is one file as big as the lecture, and the new rungs come on top.
+   * A full disk fails the encode at 90% and — worse — takes the database's
+   * volume with it, so it is checked BEFORE a byte is downloaded.
+   */
+  const free = await statfs(work).then((f) => Number(f.bavail) * Number(f.bsize)).catch(() => Infinity);
+  const needed = deps.expectedBytes * 2 + 500 * 1024 * 1024;
+  if (free < needed) {
+    throw new Error(
+      `مفيش مساحة كفاية على السيرفر: محتاج حوالي ${Math.ceil(needed / 1024 ** 3)} جيجا وفاضل ${Math.floor(free / 1024 ** 3)}`,
+    );
+  }
 
   /* ── 1. the tallest rung back out of the bucket, decrypted, as one file ── */
   const topDir = dirname(top.uri);
@@ -198,7 +360,13 @@ export async function upgradeLadder(deps: UpgradeDeps): Promise<UpgradeResult> {
     const index = variants.length + i;
     const dir = join(outRoot, String(index));
     await mkdir(dir, { recursive: true });
-    await exec(deps.ffmpeg, lowRungArgs(source, dir, probe.hasAudio, boundaries, deps.threads, keyInfoFile, rung));
+    await waitUntilCalm(deps.throttle);
+    await runThrottled(
+      deps.ffmpeg,
+      lowRungArgs(source, dir, probe.hasAudio, boundaries, deps.threads, keyInfoFile, rung),
+      deps.throttle,
+      { renice: deps.renice, timeoutMs: 12 * 60 * 60_000 },
+    );
 
     const made = readMediaPlaylist(await readFile(join(dir, 'index.m3u8'), 'utf8'));
     if (made.segments.length !== media.segments.length) {
