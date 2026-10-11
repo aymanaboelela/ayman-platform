@@ -93,7 +93,7 @@ describe('the wallet', () => {
   const balanceOf = async (userId: string) =>
     (await prisma.wallet.findUnique({ where: { userId } }))?.balanceCents ?? 0;
   const credit = (userId: string, amountCents: number, paid = true) =>
-    wallet.credit(adminId, userId, { amountCents, paid, note: null, idempotencyKey: randomUUID() });
+    wallet.credit(adminId, userId, { amountCents, paid, note: 'شحن تجربة', idempotencyKey: randomUUID() });
 
   beforeAll(async () => {
     await prisma.$connect();
@@ -162,6 +162,52 @@ describe('the wallet', () => {
       ]);
     });
 
+    it('«سجل الحركات» names whose wallet, who moved it and why — newest first', async () => {
+      const id = await student();
+      await credit(id, 30_000);
+      await wallet.debit(adminId, id, {
+        amountCents: 30_000,
+        reducesIncome: false,
+        note: 'سحب الرصيد كله',
+        idempotencyKey: randomUUID(),
+      });
+
+      const activity = await wallet.activity({ filter: 'admin' });
+      const mine = activity.rows.filter((row) => row.student.id === id);
+      expect(mine.map((row) => [row.kind, row.amountCents, row.note])).toEqual([
+        ['admin_debit', -30_000, 'سحب الرصيد كله'],
+        ['admin_credit', 30_000, 'شحن تجربة'],
+      ]);
+      expect(mine[0]!.actor?.id).toBe(adminId);
+      expect(activity.rows.every((row) => row.kind === 'admin_credit' || row.kind === 'admin_debit')).toBe(true);
+
+      // Keyset paging: the next page starts strictly after the last row.
+      if (activity.nextBefore) {
+        const next = await wallet.activity({ filter: 'admin', before: activity.nextBefore });
+        expect(next.rows.every((row) => row.id < activity.nextBefore!)).toBe(true);
+      }
+    });
+
+    it('the funded list holds only wallets with money, biggest first', async () => {
+      const rich = await student();
+      const empty = await student();
+      await credit(rich, 9_000_000);
+      await credit(empty, 10_000);
+      await wallet.debit(adminId, empty, {
+        amountCents: 10_000,
+        reducesIncome: false,
+        note: 'تصفير',
+        idempotencyKey: randomUUID(),
+      });
+
+      const { rows } = await wallet.search('', 'funded');
+      expect(rows.every((row) => row.balanceCents > 0)).toBe(true);
+      expect(rows.map((row) => row.id)).not.toContain(empty);
+      const balances = rows.map((row) => row.balanceCents);
+      expect(balances).toEqual([...balances].sort((a, b) => b - a));
+      expect(rows.map((row) => row.id)).toContain(rich);
+    });
+
     it('never goes below zero — the debit is refused and nothing is written', async () => {
       const id = await student();
       await credit(id, 10_000);
@@ -193,7 +239,7 @@ describe('the wallet', () => {
     it('the same «اشحن» pressed twice is ONE credit', async () => {
       const id = await student();
       const key = randomUUID();
-      const input = { amountCents: 25_000, paid: true, note: null, idempotencyKey: key };
+      const input = { amountCents: 25_000, paid: true, note: 'دفع كاش', idempotencyKey: key };
 
       await Promise.all([wallet.credit(adminId, id, input), wallet.credit(adminId, id, input)]);
       await wallet.credit(adminId, id, input);
