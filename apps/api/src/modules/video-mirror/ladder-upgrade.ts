@@ -43,6 +43,29 @@ const run = promisify(execFile);
  */
 export const UPGRADE_RUNGS: readonly LadderRung[] = UPLOAD_LADDER;
 
+/**
+ * ONE core. The first real run (lecture 5, 2026-10-11) used two, and on a
+ * busy afternoon that put the shared 4-core box straight onto the pause line:
+ * two minutes of encoding, two minutes stopped, over and over. One core keeps
+ * the load under the line, so the encode runs steadily — at about the same
+ * pace, and without ever leaning on the students' sites.
+ */
+export const UPGRADE_THREADS = 1;
+
+/**
+ * `faster`, not the upload ladder's `medium`. Measured on lecture 5 itself
+ * (three minutes, 720p, CRF 23, one thread):
+ *
+ *   medium    98 s CPU   1183 kbit/s   VMAF 96.2
+ *   faster    65 s CPU   1099 kbit/s   VMAF 95.5
+ *   veryfast  49 s CPU    962 kbit/s   VMAF 93.7
+ *
+ * A third less CPU and a SMALLER file, for 0.6 VMAF no one can see. These are
+ * the fallback rungs a weak connection drops to; veryfast's 93.7 starts to
+ * soften the code on the slides.
+ */
+export const UPGRADE_PRESET = 'faster' as const;
+
 /** `RESOLUTION=WxH` of each variant of a master, in the order the master lists them. */
 export function variantSizes(master: string): Array<{ uri: string; width: number; height: number }> {
   const out: Array<{ uri: string; width: number; height: number }> = [];
@@ -434,7 +457,7 @@ export async function upgradeLadder(deps: UpgradeDeps): Promise<UpgradeResult> {
       await waitUntilCalm(deps.throttle);
       await runThrottled(
         deps.ffmpeg,
-        lowRungArgs(source, dir, probe.hasAudio, boundaries, deps.threads, keyInfoFile, rung),
+        lowRungArgs(source, dir, probe.hasAudio, boundaries, deps.threads, keyInfoFile, rung, UPGRADE_PRESET),
         deps.throttle,
         { renice: deps.renice, timeoutMs: 12 * 60 * 60_000 },
       );
