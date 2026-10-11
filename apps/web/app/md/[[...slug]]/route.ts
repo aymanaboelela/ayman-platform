@@ -17,6 +17,7 @@ import { getBookCatalogOrEmpty } from '@/lib/books';
 import { getEntitlements } from '@/lib/entitlements';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getHomeBlocks } from '@/lib/home-blocks';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
 
 /**
  * Markdown for Agents.
@@ -90,9 +91,21 @@ export async function GET(
         renderHomeMarkdown(courses, faq?.type === 'faq' ? faq.items : undefined),
       );
     }
-    case 'about':
-      return markdownResponse(renderAboutMarkdown());
+    case 'about': {
+      /*
+       * The instructor's own «عن المدرّس» settings — the same row the page's
+       * `<AboutInstructor>` prints. The defaults variant for the reason the
+       * subscribe case gives: reachable during a build with no API, and an
+       * empty biography recovers on the next revalidation.
+       */
+      const { about } = await getPublicSettingsOrDefaults();
+      return markdownResponse(renderAboutMarkdown(about));
+    }
     case 'essentials':
+      /* The code glossary does not exist on a stack that does not teach code —
+         `/essentials` itself 404s there, and so does its twin, so the two
+         cannot say different things about one URL. */
+      if (!TEACHES_CODE) return new Response(null, { status: 404 });
       return markdownResponse(renderEssentialsMarkdown());
     case 'subscribe': {
       // The rails are admin-configured and this route is reachable during a
