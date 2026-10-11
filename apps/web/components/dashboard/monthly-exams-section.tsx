@@ -99,6 +99,10 @@ function ClosedExamRow({ exam }: { exam: StudentExam }) {
    *                      things to read about yourself.
    */
   const score = exam.hasSat ? exam.scaledScore : null;
+  /* A kept-open exam they missed is not «فاتك» — the deadline passed, the
+     door did not shut. It links into the paper like a sat one does. */
+  const lateDoor = !exam.hasSat && exam.keptOpen;
+  const linked = exam.hasSat || lateDoor;
 
   const result =
     score !== null
@@ -112,7 +116,9 @@ function ClosedExamRow({ exam }: { exam: StudentExam }) {
       : exam.hasSat
         ? // Names the marker — see `components/quiz/result-header.tsx`.
           tenantSentence(copy.quiz.essayPending)
-        : c.missed;
+        : lateDoor
+          ? c.lateOpen
+          : c.missed;
 
   return (
     /*
@@ -141,7 +147,7 @@ function ClosedExamRow({ exam }: { exam: StudentExam }) {
           press that arrives somewhere with nothing on it is the second of the
           two ways a press stops meaning anything.
         */}
-        {exam.hasSat ? (
+        {linked ? (
           <Link
             href={quizHref(exam.lessonId)}
             className="attempt-row__title after:absolute after:inset-0 after:content-['']"
@@ -166,6 +172,7 @@ function ClosedExamRow({ exam }: { exam: StudentExam }) {
           is a review of something finished, and the filled chip stays reserved
           for the one row on the page that is asking for the student's time. */}
       {exam.hasSat ? <span className="chip chip--accent">{c.review}</span> : null}
+      {lateDoor ? <span className="chip chip--accent">{c.enter}</span> : null}
     </div>
   );
 }

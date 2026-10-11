@@ -1216,6 +1216,24 @@ const admin = {
     coverageEmpty: 'الكورس ده لسه من غير دروس.',
     opensAtLabel: 'يفتح',
     closesAtLabel: 'يقفل',
+    /**
+     * «يفضل مفتوح قد إيه؟» — the window as a LENGTH. He thinks «٢٤ ساعة» or
+     * «يومين», not a second date; typing one fills «يقفل» from «يفتح».
+     */
+    windowLengthLabel: 'يفضل مفتوح قد إيه؟',
+    windowLengthHint: 'اكتب المدة وميعاد القفل بيتحسب لوحده من ميعاد الفتح — أو عدّل «يقفل» بإيدك.',
+    unitHours: 'ساعة',
+    unitDays: 'يوم',
+    /**
+     * «يفضل متاح جوه الكورس بعد الميعاد». Past the deadline the exam leaves
+     * the dashboard but stays sittable from the course; those papers are
+     * graded and marked late (out of «الأوائل» and the honour board).
+     */
+    keepOpenLabel: 'يفضل متاح جوه الكورس بعد الميعاد',
+    keepOpenHint: 'بعد ما الوقت يخلص الامتحان بيختفي من الصفحة الرئيسية، بس اللي فاته يقدر يمتحنه من جوه الكورس. ورقته بتتصحح عادي، بس بتتعلّم «بعد الميعاد» ومابتدخلش الأوائل ولا لوحة الشرف.',
+    keptOpenBadge: 'متاح جوه الكورس بعد الميعاد',
+    keepOpenOn: 'سيبه متاح بعد الميعاد',
+    keepOpenOff: 'اقفله بعد الميعاد',
     durationLabel: 'مدة الامتحان (بالدقيقة)',
     gradeOutOfLabel: 'الدرجة من',
     passPercentLabel: 'نسبة النجاح %',

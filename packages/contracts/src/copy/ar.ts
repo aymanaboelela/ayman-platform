@@ -3566,6 +3566,21 @@ export const copy = {
      * away — «كبار أوي… ويبقى فيه زرار يخفيهم ويرجّعهم». They sat side by side
      * until that cut both short lines off; see `CourseQuickLinks`.
      */
+    /**
+     * «امتحانات الشهر» inside the course — the door a kept-open exam keeps
+     * after it leaves the dashboard. Never gendered.
+     */
+    courseExams: {
+      title: 'امتحانات الشهر',
+      open: 'مفتوح دلوقتي',
+      late: 'بعد الميعاد',
+      start: 'نبدأ الامتحان',
+      /** `{date}` — the on-time deadline. */
+      closesLine: 'يقفل {date}',
+      lateNote: 'الورقة بتتصحح عادي، بس مابتدخلش الأوائل ولا لوحة الشرف.',
+      sat: 'اتسلّم',
+      review: 'مراجعة ورقتك',
+    },
     quickLinks: {
       title: 'الجروب والمساعدة',
       hide: 'إخفاء',
@@ -4147,6 +4162,9 @@ export const copy = {
        *  Not «صفر»: they did not fail it, they missed it, and the two are
        *  different things to read about yourself. */
       missed: 'الامتحان ده فاتك',
+      /** A kept-open exam they missed — the deadline passed, the door did not
+       *  shut. Replaces `missed` on that row and links into the paper. */
+      lateOpen: 'فات ميعاده — بس لسه متاح',
       review: 'مراجعة ورقتك',
     },
     mastery: {
