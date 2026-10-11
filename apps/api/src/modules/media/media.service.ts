@@ -28,6 +28,7 @@ import { AuditService } from '../../audit/audit.service';
 import { currentActor } from '../../audit/audit-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { FileSignatureService } from './file-signature.service';
+import { heifTranscoder } from './heif-transcode';
 import { MEDIA_STORAGE, type MediaStorage } from './storage/media-storage';
 import { AUDIT_RESOURCES, SITE_SETTINGS_ID } from '../admin/admin.constants';
 import { decodeOriginalName } from './original-name';
@@ -63,120 +64,122 @@ const HEIF_MIME = new Set<string>([
   'image/heif-sequence',
 ] satisfies readonly (typeof ALLOWED_UPLOAD_MIME)[number][]);
 
-/**
- * Can this build of sharp open these bytes at all?
- *
- * A header parse, not a decode — `metadata()` is what the pipeline below calls
- * anyway, so the cost is one extra read of the first few kilobytes rather than
- * a second full decode.
- */
-async function sharpCanDecode(input: Buffer): Promise<boolean> {
-  try {
-    await sharp(input).metadata();
-    return true;
-  } catch {
-    return false;
-  }
+interface EncodeOptions {
+  maxBytes: number;
+  square?: number;
+  width?: number;
+  quality?: number;
 }
 
 /**
- * HEIC/HEIF in, JPEG out, through the ffmpeg already in the runtime image.
+ * A decoder error, said as what it means to the person uploading.
  *
- * ⚠️ **THROUGH TEMP FILES, NOT PIPES**, and that is not a style preference.
- *
- * HEIF is an ISO-BMFF container: the frame offsets live in a box the demuxer
- * seeks to, so it cannot be read from a stream. Measured — `-i pipe:0` on a
- * valid HEIC exits 176 with «Not yet implemented in FFmpeg, patches welcome»,
- * which is indistinguishable from a corrupt upload if you only check the code.
- * The same picture as a file converts in one call.
- *
- * ⚠️ `-frames:v 1` and not a plain convert: a HEIC *sequence* (a Live Photo,
- * or a burst) holds many frames, and without the cap ffmpeg writes one JPEG
- * per frame. A still is what the platform stores for every other format too.
- *
- * `-q:v 2` is near-lossless: this is an intermediate that sharp re-encodes to
- * WebP straight after, so a lower setting would only buy generation loss on a
- * student's homework photo.
- *
- * The 20s cap is a guard rather than a budget — a phone photo decodes in well
- * under a second, and the ceiling exists so a crafted file cannot hold a
- * worker open. Both files are removed on every path, including that one.
- *
- * ⚠️ The 20s cap bounds ONE process, not how many run. The book-order receipt
- * upload is public, so a few dozen files that look like HEIC and that sharp
- * cannot open used to start a few dozen ffmpegs at once, each free to use every
- * core — enough to stall all three stacks on this VPS. Hence `-threads 1`, at
- * most `MAX_TRANSCODES` running, and a short queue behind them; past that the
- * upload is refused rather than parked. A real student's photo waits a moment
- * at worst.
+ * ⚠️ «Exceeds pixel limit» is a SIZE refusal, not a format one. It used to come
+ * out as «could not be processed», which the student reads as «ده مش ملف
+ * صورة» — about a photo off a 64 MP or 108 MP camera, which is very much an
+ * image and only too big. A 413 lets the screen say the true thing.
  */
-const MAX_TRANSCODES = 2;
-const MAX_QUEUED_TRANSCODES = 8;
-let runningTranscodes = 0;
-const transcodeQueue: Array<() => void> = [];
-
-async function withTranscodeSlot<T>(work: () => Promise<T>): Promise<T> {
-  if (runningTranscodes >= MAX_TRANSCODES) {
-    if (transcodeQueue.length >= MAX_QUEUED_TRANSCODES) {
-      throw new ServiceUnavailableException('image conversion is busy, try again shortly');
-    }
-    await new Promise<void>((resolve) => transcodeQueue.push(resolve));
+function decodeFailure(error: unknown): never {
+  if (error instanceof Error && /pixel limit/i.test(error.message)) {
+    throw new PayloadTooLargeException('image dimensions are too large');
   }
-  runningTranscodes += 1;
-  try {
-    return await work();
-  } finally {
-    runningTranscodes -= 1;
-    transcodeQueue.shift()?.();
-  }
+  throw new BadRequestException('file could not be processed as an image');
 }
 
-async function transcodeToJpeg(input: Buffer): Promise<Buffer> {
-  return withTranscodeSlot(() => runFfmpegTranscode(input));
-}
+/**
+ * Gate 3: decode, orient, bound and re-encode to WebP.
+ *
+ * `transcoded` says the buffer is the JPEG `heifTranscoder` made of a HEIC, not
+ * what was uploaded — upright already, and a single frame.
+ */
+async function reencode(
+  buffer: Buffer,
+  mime: string,
+  options: EncodeOptions,
+  transcoded: boolean,
+): Promise<{ data: Buffer; info: OutputInfo }> {
+  // The re-encode is the real control. A GIF/HTML polyglot sniffs as GIF and
+  // passes gate 2; re-encoding it produces a clean WebP with no HTML in it,
+  // and drops every EXIF/GPS block in the process. For a photo taken on a
+  // student's phone, that GPS block is not a theoretical concern.
+  /*
+    `animated` names every container in ALLOWED_UPLOAD_MIME that can hold more
+    than one frame, and AVIF is on that list.
 
-async function runFfmpegTranscode(input: Buffer): Promise<Buffer> {
-  const { spawn } = await import('node:child_process');
-  const { mkdtemp, readFile, rm, writeFile } = await import('node:fs/promises');
-  const { tmpdir } = await import('node:os');
-  const { join } = await import('node:path');
+    It was missing until 2026-08-13, and the failure was the silent kind: with
+    `animated` false sharp opens page 0 and nothing else, so an animated AVIF
+    was accepted, re-encoded and stored as a STILL. No error, no warning, no
+    rejected upload — the instructor's animation simply arrived frozen, and
+    the only way to notice was to look at it.
 
-  const dir = await mkdtemp(join(tmpdir(), 'heif-'));
-  const source = join(dir, 'in');
-  const target = join(dir, 'out.jpg');
+    Worth being precise about why this is the likelier cause of any real
+    "my animation lost its animation" report than the `.rotate()` mechanism
+    documented below: `.rotate()` turned out not to flatten anything (proved
+    with a 4-frame fixture), whereas this genuinely did, for one of the five
+    accepted formats.
 
-  try {
-    await writeFile(source, input);
+    Derived from the constant rather than restated, so a sixth format cannot
+    be added to the contract and silently miss this line. PNG can technically
+    be animated (APNG); libvips does not decode APNG frames, so listing it
+    would claim a capability that does not exist.
+  */
+  let pipeline = sharp(buffer, {
+    limitInputPixels: MAX_INPUT_PIXELS,
+    animated: MULTI_FRAME_MIME.has(mime),
+    failOn: 'error',
+  });
 
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn(
-        'ffmpeg',
-        ['-hide_banner', '-loglevel', 'error', '-y', '-threads', '1', '-i', source,
-         '-frames:v', '1', '-q:v', '2', target],
-        { stdio: ['ignore', 'ignore', 'pipe'] },
-      );
+  const probe = await pipeline.metadata().catch(decodeFailure);
+  const isQuarterTurnOnAnimation = (probe.pages ?? 1) > 1 && (probe.orientation ?? 1) >= 5;
+  // A transcoded HEIC is upright already, still carrying the camera's
+  // Orientation tag — rotating by it again turns the page sideways. See
+  // `heif-transcode.ts`.
+  if (!isQuarterTurnOnAnimation && !transcoded) {
+    pipeline = pipeline.rotate();
+  }
 
-      let stderr = '';
-      const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);
-
-      child.stderr.on('data', (c: Buffer) => {
-        stderr = (stderr + c.toString()).slice(0, 500);
-      });
-      child.on('error', (error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
-      child.on('close', (code) => {
-        clearTimeout(timer);
-        if (code === 0) resolve();
-        else reject(new Error(`ffmpeg exited ${code}: ${stderr}`));
-      });
+  if (options.square) {
+    // `withoutEnlargement: false` on purpose — a 64px avatar is upscaled to
+    // the canonical size rather than served smaller than every layout
+    // assumes. `cover` crops to the centre, which is where faces are.
+    pipeline = pipeline.resize(options.square, options.square, { fit: 'cover' });
+  } else {
+    // Everything that is not an avatar — course covers, home blocks, lesson
+    // attachments — used to be stored at whatever size it arrived at.
+    // `MAX_UPLOAD_BYTES` (8 MB) and `MAX_INPUT_PIXELS` (50 MP) cap what may
+    // be DECODED, not what lands on disk, and that ceiling is already in
+    // use: four of the assets already in `.media` are 1,899,938-byte WebPs
+    // at 2400×1350. Nothing on the site paints a box that big. `--site-shell`
+    // is 1440 CSS px (theme.css) and `.courses__grid` is
+    // `minmax(min(100%, 19rem), 1fr)`, so a `.course-card__thumb` is a 16/9
+    // box between roughly 304 and 460 CSS px wide — about 340 on a phone,
+    // and the catalog paints one per card. A 1.9 MB download per card on a
+    // data-saver 3G connection is tens of seconds before anything is legible.
+    //
+    // 1600 sits above the largest 1× box the layout can produce and is still
+    // ~4× the linear pixels a phone card consumes, so it costs no visible
+    // sharpness anywhere, including on a 2× display.
+    //
+    // `withoutEnlargement: true` is the OPPOSITE of the avatar rule above,
+    // deliberately: a 300px logo must stay 300px. Upscaling it would only
+    // produce a larger file with no more detail in it. `fit: 'inside'`
+    // preserves the aspect ratio — the uploader chose the framing, and this
+    // is a size bound, not a crop.
+    pipeline = pipeline.resize(options.width ?? 1600, null, {
+      withoutEnlargement: true,
+      fit: 'inside',
     });
-
-    return await readFile(target);
-  } finally {
-    await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
+
+  // A magic-byte sniff only reads the header — it cannot tell a genuine
+  // image from a truncated or otherwise corrupt one wearing a valid
+  // signature. Without this catch, that shape of input reaches sharp's
+  // decoder uncaught and surfaces as an unhandled 500, not the 400 every
+  // other rejection here produces.
+  return pipeline
+    .webp({ quality: options.quality ?? 82 })
+    .toBuffer({ resolveWithObject: true })
+    .catch(decodeFailure);
 }
 
 export interface UploadFile {
@@ -272,7 +275,7 @@ export class MediaService {
      * Optional rather than required, so no existing call site changes and the
      * defaults stay stated in one place.
      */
-    options: { maxBytes: number; square?: number; width?: number; quality?: number },
+    options: EncodeOptions,
   ): Promise<{ data: Buffer; info: OutputInfo; extension: string; detectedMime: string }> {
     if (file.size > options.maxBytes) {
       throw new PayloadTooLargeException();
@@ -288,137 +291,48 @@ export class MediaService {
       throw new BadRequestException('file contents are not an allowed image type');
     }
 
-    // The re-encode is the real control. A GIF/HTML polyglot sniffs as GIF and
-    // passes gate 2; re-encoding it produces a clean WebP with no HTML in it,
-    // and drops every EXIF/GPS block in the process. For a photo taken on a
-    // student's phone, that GPS block is not a theoretical concern.
     /*
-      `animated` names every container in ALLOWED_UPLOAD_MIME that can hold more
-      than one frame, and AVIF is on that list.
-
-      It was missing until 2026-08-13, and the failure was the silent kind: with
-      `animated` false sharp opens page 0 and nothing else, so an animated AVIF
-      was accepted, re-encoded and stored as a STILL. No error, no warning, no
-      rejected upload — the instructor's animation simply arrived frozen, and
-      the only way to notice was to look at it.
-
-      Worth being precise about why this is the likelier cause of any real
-      "my animation lost its animation" report than the `.rotate()` mechanism
-      documented below: `.rotate()` turned out not to flatten anything (proved
-      with a 4-frame fixture), whereas this genuinely did, for one of the five
-      accepted formats.
-
-      Derived from the constant rather than restated, so a sixth format cannot
-      be added to the contract and silently miss this line. PNG can technically
-      be animated (APNG); libvips does not decode APNG frames, so listing it
-      would claim a capability that does not exist.
-    */
-    /*
-     * HEIC goes through ffmpeg — but only if `sharp` could not open it itself.
+     * HEIC is ASKED of sharp first, and transcoded only when sharp fails.
      *
-     * ## The bug
+     * ## ⚠️ Why this is a real attempt and not a probe
      *
-     * `image/heic` is on the allowlist, so it clears both gates, and then
-     * `sharp` cannot decode it and the upload dies at `metadata()` with «file
-     * could not be processed as an image». Reproduced against the live API: a
-     * 1200×1600 HEIC answered 400 while the same picture as PNG answered 201.
-     * Every photo an iPhone takes is HEIC by default.
+     * The previous version asked `sharp(buffer).metadata()` whether it «could
+     * decode» a HEIC, and transcoded only on a no. That question has the wrong
+     * answer on the production image: sharp's prebuilt libvips links libheif
+     * for AVIF and ships WITHOUT an HEVC decoder (the patent position), so the
+     * CONTAINER parses — `metadata()` reports a 1200×1600 HEIC perfectly — and
+     * only the pixel decode fails, as «bad seek». Measured in `node:24-slim`
+     * with sharp 0.35.3. The probe said yes, the transcode never ran, and the
+     * upload died at `toBuffer` with «file could not be processed as an image».
+     * (A real iPhone tile grid failed the probe instead, went to ffmpeg 5.1,
+     * and died there — see `heif-transcode.ts`. Either way, every HEIC.)
      *
-     * The cause is upstream: sharp's prebuilt libvips ships WITHOUT libheif,
-     * deliberately, over the HEVC patent position. Installing a Debian package
-     * does not change which binary runs.
+     * Running the whole re-encode and falling back on failure asks the only
+     * question that matters. The earlier note here said the Mac's sharp
+     * decodes HEIC; it does not either (same prebuilt, measured on sharp
+     * 0.35.3 — only `metadata()` worked there too), which is how a probe that
+     * only read the header looked fine in development. Where a future sharp CAN
+     * decode HEIC, this simply succeeds; the unit specs that hand this a PNG
+     * labelled HEIC stay off the subprocess path; and where it cannot, it fails
+     * fast — libvips gives up on the first tile.
      *
-     * ## ⚠️ Why this TRIES FIRST instead of transcoding every HEIC
-     *
-     * Because HEIC support in sharp is decided at BUILD time, and the two
-     * environments disagree. The macOS dev machine's libvips decodes it; the
-     * Debian prebuilt in the runtime image does not. Measured both ways.
-     *
-     * An unconditional transcode makes the whole upload path depend on ffmpeg
-     * being present — and the unit-test environment does not have it, so every
-     * HEIC case went red for a reason that has nothing to do with the code.
-     * Trying sharp first means the subprocess is spawned only where it is
-     * actually needed, which is exactly the environment that has ffmpeg
-     * installed (`apps/api/Dockerfile`, already there for video).
-     *
-     * ⚠️ It also keeps the existing specs honest rather than passing by luck:
-     * they hand this method a PNG and mock the signature service into calling
-     * it HEIC, so with sharp asked first they exercise the path they always
-     * described — and a REAL HEIC, which `heic-transcode.spec.ts` supplies,
-     * exercises the fallback.
+     * A refusal for SIZE is not retried — a transcode would not make a 100 MP
+     * image smaller than the cap.
      */
-    const decodable = await sharpCanDecode(file.buffer);
-    const buffer =
-      decodable || !HEIF_MIME.has(detected.mime)
-        ? file.buffer
-        : await transcodeToJpeg(file.buffer).catch((error: unknown) => {
-            // «Busy» is not «bad file» — let the 503 through so the client retries.
-            if (error instanceof ServiceUnavailableException) throw error;
-            throw new BadRequestException('file could not be processed as an image');
-          });
-
-    let pipeline = sharp(buffer, {
-      limitInputPixels: MAX_INPUT_PIXELS,
-      // A transcode returns one JPEG frame, so asking for pages on it would
-      // have sharp read a container that is not there.
-      animated: buffer === file.buffer && MULTI_FRAME_MIME.has(detected.mime),
-      failOn: 'error',
-    });
-
-    const probe = await pipeline.metadata().catch(() => {
-      throw new BadRequestException('file could not be processed as an image');
-    });
-    const isQuarterTurnOnAnimation = (probe.pages ?? 1) > 1 && (probe.orientation ?? 1) >= 5;
-    if (!isQuarterTurnOnAnimation) {
-      pipeline = pipeline.rotate();
-    }
-
-    if (options.square) {
-      // `withoutEnlargement: false` on purpose — a 64px avatar is upscaled to
-      // the canonical size rather than served smaller than every layout
-      // assumes. `cover` crops to the centre, which is where faces are.
-      pipeline = pipeline.resize(options.square, options.square, { fit: 'cover' });
-    } else {
-      // Everything that is not an avatar — course covers, home blocks, lesson
-      // attachments — used to be stored at whatever size it arrived at.
-      // `MAX_UPLOAD_BYTES` (8 MB) and `MAX_INPUT_PIXELS` (50 MP) cap what may
-      // be DECODED, not what lands on disk, and that ceiling is already in
-      // use: four of the assets already in `.media` are 1,899,938-byte WebPs
-      // at 2400×1350. Nothing on the site paints a box that big. `--site-shell`
-      // is 1440 CSS px (theme.css) and `.courses__grid` is
-      // `minmax(min(100%, 19rem), 1fr)`, so a `.course-card__thumb` is a 16/9
-      // box between roughly 304 and 460 CSS px wide — about 340 on a phone,
-      // and the catalog paints one per card. A 1.9 MB download per card on a
-      // data-saver 3G connection is tens of seconds before anything is legible.
-      //
-      // 1600 sits above the largest 1× box the layout can produce and is still
-      // ~4× the linear pixels a phone card consumes, so it costs no visible
-      // sharpness anywhere, including on a 2× display.
-      //
-      // `withoutEnlargement: true` is the OPPOSITE of the avatar rule above,
-      // deliberately: a 300px logo must stay 300px. Upscaling it would only
-      // produce a larger file with no more detail in it. `fit: 'inside'`
-      // preserves the aspect ratio — the uploader chose the framing, and this
-      // is a size bound, not a crop.
-      pipeline = pipeline.resize(options.width ?? 1600, null, {
-        withoutEnlargement: true,
-        fit: 'inside',
-      });
-    }
-
-    // A magic-byte sniff only reads the header — it cannot tell a genuine
-    // image from a truncated or otherwise corrupt one wearing a valid
-    // signature. Without this catch, that shape of input reaches sharp's
-    // decoder uncaught and surfaces as an unhandled 500, not the 400 every
-    // other rejection here produces.
-    const { data, info } = await pipeline
-      .webp({ quality: options.quality ?? 82 })
-      .toBuffer({ resolveWithObject: true })
-      .catch(() => {
+    let encoded: { data: Buffer; info: OutputInfo };
+    try {
+      encoded = await reencode(file.buffer, detected.mime, options, false);
+    } catch (error) {
+      if (!HEIF_MIME.has(detected.mime) || error instanceof PayloadTooLargeException) throw error;
+      const jpeg = await heifTranscoder.toJpeg(file.buffer).catch((cause: unknown) => {
+        // «Busy» is not «bad file» — let the 503 through so the client retries.
+        if (cause instanceof ServiceUnavailableException) throw cause;
         throw new BadRequestException('file could not be processed as an image');
       });
+      encoded = await reencode(jpeg, 'image/jpeg', options, true);
+    }
 
-    return { data, info, extension, detectedMime: detected.mime };
+    return { ...encoded, extension, detectedMime: detected.mime };
   }
 
   async upload(file: UploadFile): Promise<MediaAsset> {

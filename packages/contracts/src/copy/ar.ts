@@ -3648,8 +3648,9 @@ export const copy = {
     lead: 'المطلوب في الواجب ده:',
     /** The upload area, when nothing has been handed in yet. */
     uploadTitle: 'رفع صور الحل',
-    /** `{max}` is the ceiling the instructor set on this exercise. */
-    uploadHint: 'صوّر ورقة الحل ودوس هنا — لحد {max} صورة.',
+    /** `{max}` is the ceiling the instructor set on this exercise.
+     *  No imperative: «صوّر … ودوس» only works on a male reader. */
+    uploadHint: 'صورة واضحة لكل ورقة من الحل — لحد {max} صورة.',
     pick: 'اختيار الصور',
     /** On the button while the browser is sending them. */
     uploading: 'بنرفع…',
@@ -3663,11 +3664,26 @@ export const copy = {
     resubmit: 'تسليم الحل من تاني',
     /** Errors, one per thing that can actually go wrong. */
     tooMany: 'الحد الأقصى {max} صورة للواجب ده.',
-    tooLarge: 'الصورة كبيرة أوي — أقصى حجم ٨ ميجا للصورة.',
-    /** بتشمل HEIC دلوقتي — صور الآيفون بتتحوّل على السيرفر. الجملة القديمة
-     *  كانت بتعدّ الصيغ، والطالبة اللي صوّرت بتليفونها كانت بتقرا «ده مش ملف
-     *  صورة» وهي فعلًا صوّرت صورة. */
-    badType: 'ده مش ملف صورة. صوّر ورقتك تاني وابعتها.',
+    /** Over 8 MB even after the browser shrank it, or a 64/108 MP camera
+     *  photo over the pixel cap — both are SIZE, and a screenshot of the photo
+     *  is the one fix that works on every phone. */
+    tooLarge: 'الصورة دي كبيرة أوي (أقصى حجم ٨ ميجا). لقطة شاشة للصورة نفسها بتحلّ المشكلة.',
+    /**
+     * The file really is not a picture — a PDF, a document, a video.
+     *
+     * ⚠️ Kept for THAT case only. Until 2026-10-11 it was also what every
+     * iPhone HEIC got (the API could not decode one at all — see
+     * `apps/api/src/modules/media/heif-transcode.ts`), and what a photo the API
+     * failed to read got, so a student who had photographed her homework was
+     * told it was not a photograph. Those two now have their own lines below.
+     * No imperative either: «صوّر … وابعتها» only works on a male reader.
+     */
+    badType: 'الملف ده مش صورة. المطلوب صورة لورقة الحل (JPG أو PNG أو صورة الموبايل العادية).',
+    /** A picture the server could not open — damaged, or a format it cannot
+     *  convert. Not the student's fault, and not «not an image». */
+    unreadable: 'مقدرناش نفتح الصورة دي. لقطة شاشة ليها أو صورة جديدة للورقة غالبًا هتنفع.',
+    /** The request never completed — the photo may be perfectly fine. */
+    network: 'النت فصل قبل ما الصورة تترفع. نجرّب تاني لما النت يرجع.',
     uploadFailed: 'مقدرناش نرفع الصورة. نجرّب تاني.',
     submitFailed: 'مقدرناش نسلّم الواجب دلوقتي. نجرّب تاني.',
     empty: 'لازم صورة واحدة على الأقل للحل.',

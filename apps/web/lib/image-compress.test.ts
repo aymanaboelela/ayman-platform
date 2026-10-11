@@ -182,3 +182,87 @@ describe('compressImage — files the API would refuse as they are', () => {
     expect(await sniffImageExtension(bytesFile([0x25, 0x50, 0x44, 0x46], 'x.pdf', 'application/pdf'))).toBeNull();
   });
 });
+
+/**
+ * The `<img>` fallback. Before it, a browser with no `createImageBitmap`, or
+ * one that refused it for a `File` (Safari < 15, some in-app Android
+ * WebViews), sent the camera's original up untouched — megabytes on mobile
+ * data, and a `tooLarge` refusal for a photo that would have shrunk to 400 KB.
+ */
+describe('compressImage — the <img> fallback', () => {
+  const restore: Array<() => void> = [];
+  afterEach(() => {
+    while (restore.length) restore.pop()!();
+  });
+
+  function stubObjectUrls() {
+    const created = vi.fn(() => 'blob:homework-page');
+    const revoked = vi.fn();
+    const before = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+    URL.createObjectURL = created;
+    URL.revokeObjectURL = revoked;
+    restore.push(() => {
+      URL.createObjectURL = before.create;
+      URL.revokeObjectURL = before.revoke;
+    });
+    return { created, revoked };
+  }
+
+  function stubImage(naturalWidth: number, naturalHeight: number, decodes: boolean) {
+    class FakeImage {
+      src = '';
+      naturalWidth = naturalWidth;
+      naturalHeight = naturalHeight;
+      decode() {
+        return decodes ? Promise.resolve() : Promise.reject(new Error('EncodingError'));
+      }
+    }
+    vi.stubGlobal('Image', FakeImage);
+  }
+
+  function stubCanvas(blobBytes: number) {
+    const drawImage = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      fillStyle: '',
+      fillRect: vi.fn(),
+      drawImage,
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((cb) => {
+      (cb as (b: Blob | null) => void)(new Blob([new Uint8Array(blobBytes)], { type: 'image/jpeg' }));
+    });
+    return drawImage;
+  }
+
+  it('re-encodes through an <img> when createImageBitmap is missing', async () => {
+    vi.stubGlobal('createImageBitmap', undefined);
+    stubImage(3024, 4032, true);
+    const { revoked } = stubObjectUrls();
+    const drawImage = stubCanvas(300_000);
+
+    const out = await compressImage(fileOf('IMG_0421.jpg', 'image/jpeg', 9_000_000));
+    expect(out.size).toBe(300_000);
+    expect(out.name).toBe('IMG_0421.jpg');
+    // Long edge bounded to 1600, aspect kept — 3024×4032 → 1200×1600.
+    expect(drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, 1200, 1600);
+    expect(revoked).toHaveBeenCalledWith('blob:homework-page');
+  });
+
+  it('falls back to the <img> when createImageBitmap rejects the file', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn(() => Promise.reject(new Error('InvalidStateError'))));
+    stubImage(1000, 800, true);
+    stubObjectUrls();
+    stubCanvas(64);
+    const out = await compressImage(fileOf('scan.png', 'image/png', 4_000_000));
+    expect(out.name).toBe('scan.jpg');
+    expect(out.type).toBe('image/jpeg');
+  });
+
+  it('returns the original, and frees the URL, when the <img> cannot decode it either', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn(() => Promise.reject(new Error('unsupported'))));
+    stubImage(0, 0, false);
+    const { revoked } = stubObjectUrls();
+    const heic = fileOf('IMG_0421.HEIC', 'image/heic');
+    await expect(compressImage(heic)).resolves.toBe(heic);
+    expect(revoked).toHaveBeenCalledWith('blob:homework-page');
+  });
+});

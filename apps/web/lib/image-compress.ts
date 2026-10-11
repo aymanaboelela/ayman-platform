@@ -101,20 +101,16 @@ export async function compressImage(file: File): Promise<File> {
   // it is passed through untouched.
   if (file.type === 'image/gif' && !mustConvert) return file;
 
-  if (typeof createImageBitmap !== 'function') return mustConvert ? await renamedBySignature(file) : file;
+  const decoded = await decode(file);
+  // The browser cannot draw it — a PDF from the wrong picker, or HEIC on
+  // Chrome/Android/Firefox. The API decodes HEIC itself; all it needs is a
+  // NAME its first gate accepts, which the bytes can tell us.
+  if (!decoded) return mustConvert ? await renamedBySignature(file) : file;
 
-  let bitmap: ImageBitmap | null = null;
   try {
-    /* `imageOrientation: 'from-image'` is load-bearing, not a nicety. A phone
-       photo carries its rotation in EXIF and the raw pixels are sideways; a
-       canvas draws the raw pixels. Without this, re-encoding turns an upright
-       screenshot into a rotated one — and the EXIF that would have corrected it
-       is gone, because re-encoding strips it. */
-    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-
-    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const scale = Math.min(1, MAX_EDGE / Math.max(decoded.width, decoded.height));
+    const width = Math.max(1, Math.round(decoded.width * scale));
+    const height = Math.max(1, Math.round(decoded.height * scale));
 
     const canvas = document.createElement('canvas');
     canvas.width = width;
@@ -127,7 +123,7 @@ export async function compressImage(file: File): Promise<File> {
        a transparent status bar would arrive framed in black bars. */
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, width, height);
-    context.drawImage(bitmap, 0, 0, width, height);
+    context.drawImage(decoded.source, 0, 0, width, height);
 
     const blob = await new Promise<Blob | null>((resolve) => {
       canvas.toBlob(resolve, MIME, QUALITY);
@@ -143,12 +139,79 @@ export async function compressImage(file: File): Promise<File> {
       lastModified: file.lastModified,
     });
   } catch {
-    // The browser cannot draw it — a PDF from the wrong picker, or HEIC on
-    // Chrome/Android. The API decodes HEIC itself; all it needs is a NAME its
-    // first gate accepts, which the bytes can tell us.
+    // A tainted canvas, an encoder that threw — the original, as always.
     return mustConvert ? await renamedBySignature(file) : file;
   } finally {
-    bitmap?.close();
+    decoded.close();
+  }
+}
+
+interface Decoded {
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  close: () => void;
+}
+
+/**
+ * The picture, upright, in something a canvas can draw — or `null`.
+ *
+ * `createImageBitmap` first, then an `<img>`. The second path is not a
+ * nicety: Safari before 15 has no `createImageBitmap` at all, some Android
+ * WebViews (the in-app browser a link from WhatsApp or Facebook opens in)
+ * reject it for a `File`, and Safari 17+ can draw a HEIC through `<img>`.
+ * Each of those used to send the camera's original file up — megabytes of it
+ * on mobile data, and over `MAX_UPLOAD_BYTES` often enough that the student
+ * was refused for a photo that would have compressed to 400 KB.
+ */
+async function decode(file: File): Promise<Decoded | null> {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      /* `imageOrientation: 'from-image'` is load-bearing, not a nicety. A phone
+         photo carries its rotation in EXIF and the raw pixels are sideways; a
+         canvas draws the raw pixels. Without this, re-encoding turns an
+         upright photo into a rotated one — and the EXIF that would have
+         corrected it is gone, because re-encoding strips it. */
+      const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      return {
+        source: bitmap,
+        width: bitmap.width,
+        height: bitmap.height,
+        close: () => bitmap.close(),
+      };
+    } catch {
+      // Fall through to the element.
+    }
+  }
+  return decodeWithElement(file);
+}
+
+/**
+ * An `<img>` honours EXIF orientation by default (`image-orientation:
+ * from-image` is the CSS initial value) and `drawImage` draws it upright.
+ *
+ * `decode()` is also the guard: jsdom has none, and an element that never
+ * fires `load` would hang the upload forever instead of falling back. Every
+ * browser with `decode()` (Chrome 64, Safari 11.1, Firefox 68) also draws
+ * EXIF-rotated images upright.
+ */
+async function decodeWithElement(file: File): Promise<Decoded | null> {
+  if (typeof Image === 'undefined' || typeof Image.prototype.decode !== 'function') return null;
+  const url = URL.createObjectURL(file);
+  const image = new Image();
+  image.src = url;
+  try {
+    await image.decode();
+    if (image.naturalWidth === 0 || image.naturalHeight === 0) throw new Error('empty image');
+    return {
+      source: image,
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+      close: () => URL.revokeObjectURL(url),
+    };
+  } catch {
+    URL.revokeObjectURL(url);
+    return null;
   }
 }
 
