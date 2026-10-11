@@ -21,6 +21,7 @@ import type {
 import { UPLOAD_ID_RE, uploadPartCount, uploadPartSize, uploadSourceKey } from '@ayman/contracts/video';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IS_AYMAN } from '../../common/tenant';
+import { rungsToBuild } from './ladder-upgrade';
 import { Prisma } from '../../generated/prisma/client';
 import { REDIS } from '../../redis/redis.module';
 import { VideoArchiveService } from './video-archive.service';
@@ -448,37 +449,53 @@ export class VideoUploadService {
         upgradeStatus: true,
         upgradeProgress: true,
         upgradeError: true,
+        upgradeHeights: true,
       },
     });
     const available = IS_AYMAN && row !== null && row.provider === 'upload' && row.mirrorStatus === 'ready';
     if (row === null || !available) {
-      return { available: false, state: null, progress: null, error: null, heights: [] };
+      return { available: false, state: null, progress: null, error: null, heights: [], buildable: [], requested: [] };
     }
     const state = (['queued', 'running', 'waiting', 'done', 'failed'] as const).find((s) => s === row.upgradeStatus) ?? null;
+    const heights = await this.mirror.ladderHeights(row.externalId);
+    const top = heights[0] ?? 0;
     return {
       available: true,
       state,
       progress: row.upgradeProgress,
       error: row.upgradeError,
-      heights: await this.mirror.ladderHeights(row.externalId),
+      heights,
+      buildable: rungsToBuild(heights, top).map((rung) => rung.height),
+      requested: row.upgradeHeights,
     };
   }
 
-  /** Put a lecture in the night queue. Idempotent while it is already queued or running. */
-  async requestUpgrade(lessonId: string): Promise<VideoLadderUpgrade> {
+  /**
+   * Put a lecture in the queue — every missing rung, or the ones named.
+   * Idempotent while one is already queued or running: a second press does not
+   * start a second encode, and does not change what the first one is making.
+   */
+  async requestUpgrade(lessonId: string, heights: readonly number[] = []): Promise<VideoLadderUpgrade> {
     if (!IS_AYMAN) throw new NotFoundException();
-    const row = await this.prisma.lessonVideo.findUnique({
-      where: { lessonId },
-      select: { provider: true, mirrorStatus: true, upgradeStatus: true },
-    });
-    if (row === null || row.provider !== 'upload') throw new NotFoundException('الدرس ده مالوش فيديو مرفوع');
-    if (row.mirrorStatus !== 'ready') throw new BadRequestException('الفيديو لسه ما خلصش — استنى لما يتنشر');
-    if (row.upgradeStatus !== 'queued' && row.upgradeStatus !== 'running' && row.upgradeStatus !== 'waiting') {
-      await this.prisma.lessonVideo.update({
-        where: { lessonId },
-        data: { upgradeStatus: 'queued', upgradeProgress: 0, upgradeError: null, upgradeAt: null },
-      });
+    const current = await this.upgradeState(lessonId);
+    if (!current.available) throw new NotFoundException('الدرس ده مالوش فيديو مرفوع جاهز');
+    if (current.state === 'queued' || current.state === 'running' || current.state === 'waiting') return current;
+    if (current.buildable.length === 0) throw new BadRequestException('كل الجودات موجودة بالفعل');
+    const unknown = heights.filter((height) => !current.buildable.includes(height));
+    if (unknown.length > 0) {
+      throw new BadRequestException(`الجودة ${unknown.join('، ')}p مش ممكنة للفيديو ده`);
     }
+    await this.prisma.lessonVideo.update({
+      where: { lessonId },
+      data: {
+        upgradeStatus: 'queued',
+        upgradeProgress: 0,
+        upgradeError: null,
+        upgradeAt: null,
+        // Empty = «الكل»; deduplicated so the screen shows what was asked once.
+        upgradeHeights: [...new Set(heights)],
+      },
+    });
     return this.upgradeState(lessonId);
   }
 

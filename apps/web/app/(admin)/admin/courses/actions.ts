@@ -1436,10 +1436,15 @@ export async function videoLadderUpgradeAction(lessonId: string): Promise<VideoL
   }
 }
 
-/** Put the lecture in the night queue. */
-export async function requestVideoLadderUpgradeAction(lessonId: string): Promise<VideoLadderUpgrade | null> {
+/** Put the lecture in the queue — the rungs named, or every missing one when `heights` is empty. */
+export async function requestVideoLadderUpgradeAction(
+  lessonId: string,
+  heights: readonly number[] = [],
+): Promise<VideoLadderUpgrade | null> {
   try {
-    return await apiSend('POST', `/api/admin/lessons/${lessonId}/video/upgrade`, VideoLadderUpgradeSchema);
+    return await apiSend('POST', `/api/admin/lessons/${lessonId}/video/upgrade`, VideoLadderUpgradeSchema, {
+      heights: [...heights],
+    });
   } catch {
     return null;
   }

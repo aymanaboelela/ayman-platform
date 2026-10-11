@@ -40,6 +40,16 @@ describe('rungsToBuild', () => {
     expect(rungsToBuild([1080, 360], 1080).map((r) => r.height)).toEqual([720, 480]);
   });
 
+  it('builds only the rungs the owner named — «720 بس»', () => {
+    expect(rungsToBuild([1080], 1080, [720]).map((r) => r.height)).toEqual([720]);
+    expect(rungsToBuild([1080], 1080, [360, 480]).map((r) => r.height)).toEqual([480, 360]);
+  });
+
+  it('treats an empty choice as «الكل», and never rebuilds a named rung that is already there', () => {
+    expect(rungsToBuild([1080], 1080, []).map((r) => r.height)).toEqual([720, 480, 360]);
+    expect(rungsToBuild([1080, 360], 1080, [360, 720]).map((r) => r.height)).toEqual([720]);
+  });
+
   it('never builds a rung taller than the source', () => {
     expect(rungsToBuild([720], 720).map((r) => r.height)).toEqual([480, 360]);
     expect(rungsToBuild([360], 360)).toEqual([]);
