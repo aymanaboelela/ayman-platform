@@ -46,3 +46,30 @@ export function tenantName(fallback: string): string {
   if (IS_AYMAN) return fallback;
   return TENANT_DISPLAY_NAME || 'المنصة';
 }
+
+/**
+ * The subject this stack teaches — a slug from
+ * `packages/contracts/src/subjects.ts`. The server-side half of the same
+ * constant in `apps/web/lib/tenant.ts`; the rule is stated twice for the
+ * reason this file's header gives.
+ *
+ * A plain string, not a `SubjectSlug`: this module stays free of
+ * `@ayman/contracts` (see `tenantName` above), so it cannot check the slug.
+ * `scripts/check-tenant-env.mjs` refuses an unknown one before a deploy, and
+ * `common/tenant-subject.ts` resolves the Arabic name where the assistant's
+ * prompt and the seed need it.
+ *
+ * Unset or empty means `programming_cs`, which is what every stack taught
+ * before the variable existed — so his stack and the first two instructors'
+ * read exactly what they always read.
+ */
+export const TENANT_SUBJECT = (process.env.TENANT_SUBJECT ?? '').trim() || 'programming_cs';
+
+/**
+ * Whether this stack teaches programming. `IS_AYMAN ||` first: his platform is
+ * programming by definition, and a stray `TENANT_SUBJECT` on his stack must not
+ * be able to rewrite his assistant's prompt or his seed. An unknown slug is
+ * `false` — the assistant of a stack whose subject was mistyped should not go
+ * on refusing every question that is not about code.
+ */
+export const TEACHES_CODE = IS_AYMAN || TENANT_SUBJECT === 'programming_cs';

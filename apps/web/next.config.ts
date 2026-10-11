@@ -58,6 +58,16 @@ const nextConfig: NextConfig = {
   env: {
     TENANT_KEY: process.env.TENANT_KEY ?? '',
     TENANT_DISPLAY_NAME: process.env.TENANT_DISPLAY_NAME ?? '',
+    /*
+     * The same hole, for the subject. `TEACHES_CODE` decides which ELEMENTS
+     * exist — the editor-window cards in `year-tracks.tsx`, the Python panel
+     * beside the studio opener, the rail's «تجربة الكود» entry — and several
+     * of those are `'use client'` trees. Left out of this block,
+     * `process.env.TENANT_SUBJECT` compiles to `undefined` in the browser, the
+     * client answers `programming_cs`, and a physics teacher's landing page
+     * hydrates the server's neutral cards back into code windows.
+     */
+    TENANT_SUBJECT: process.env.TENANT_SUBJECT ?? '',
   },
   // Emits .next/standalone with a self-contained server.js and only the
   // node_modules actually reached — the runtime image copies that instead of
