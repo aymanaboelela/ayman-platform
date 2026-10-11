@@ -80,6 +80,7 @@ export function SectionPickers({
   // the latter and skips the whole component (same note as the wizard's).
   const system = useWatch({ control, name: 'system' });
   const year = useWatch({ control, name: 'year' });
+  const trackId = useWatch({ control, name: 'trackId' });
   const shownSystem = live ? system : undefined;
   const shownYear = live ? year : undefined;
 
@@ -111,7 +112,25 @@ export function SectionPickers({
         options={years}
         disabled={years.length === 0}
         errorMessage={errors.year?.message}
-        {...register('year', { setValueAs: emptyToUndefinedNumber })}
+        {...register('year', {
+          setValueAs: emptyToUndefinedNumber,
+          /*
+           * ⚠️ A track the new year cannot have is emptied HERE, not left for
+           * the submit to drop. Going from year 2 back to year 1 unmounts the
+           * track select, but react-hook-form keeps its value — and the
+           * step's own `trigger` then runs `refineSection`, which answers
+           * «الصف الأول لا يختار مسارًا بعد» on a field that is no longer on
+           * screen, and the wizard will not move. A track still valid for the
+           * new year (2 → 3, same system) is kept.
+           */
+          onChange: (event: { target: { value: string } }) => {
+            const next = emptyToUndefinedNumber(event.target.value);
+            const stillValid = trackOptionsFor(taxonomy, system, next).some(
+              (option) => option.value === trackId,
+            );
+            if (!stillValid) setValue('trackId', undefined);
+          },
+        })}
       />
       {tracks.length > 0 ? (
         <SelectField
