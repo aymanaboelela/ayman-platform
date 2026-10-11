@@ -3,7 +3,6 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 import { MIRROR_MAX_PIXELS, UPLOAD_CRF, ladderFor, type LadderRung } from '@ayman/contracts/video';
-import { IS_AYMAN } from '../../common/tenant';
 import { DEFAULT_TOOLS, type MirrorResult, type MirrorTools } from './mirror-pipeline';
 
 const run = promisify(execFile);
@@ -263,6 +262,7 @@ export function lowRungArgs(
   boundaries: readonly number[],
   threads: number,
   keyInfoFile: string | null = null,
+  rung: LadderRung = LOW_RUNG,
 ): string[] {
   const encrypted = keyInfoFile !== null;
   return [
@@ -276,7 +276,7 @@ export function lowRungArgs(
     '0:v:0',
     ...(hasAudio ? ['-map', '0:a:0'] : []),
     '-vf',
-    `scale=-2:${LOW_RUNG.height}:flags=bicubic`,
+    `scale=-2:${rung.height}:flags=bicubic`,
     '-c:v',
     'libx264',
     '-preset',
@@ -288,9 +288,9 @@ export function lowRungArgs(
     '-crf',
     String(UPLOAD_CRF),
     '-maxrate',
-    `${LOW_RUNG.maxKbps}k`,
+    `${rung.maxKbps}k`,
     '-bufsize',
-    `${LOW_RUNG.maxKbps * 2}k`,
+    `${rung.maxKbps * 2}k`,
     // A millisecond early: the keyframe lands on the first frame at or after
     // the time, and a boundary that float-sums a hair too high would push it
     // one frame late — a cut a frame off is still a cut off.
@@ -302,7 +302,7 @@ export function lowRungArgs(
     '-g',
     '100000',
     ...(hasAudio
-      ? ['-c:a', 'aac', '-ac', '2', '-b:a', `${LOW_RUNG.audioKbps}k`]
+      ? ['-c:a', 'aac', '-ac', '2', '-b:a', `${rung.audioKbps}k`]
       : []),
     '-threads',
     String(threads),
@@ -323,10 +323,10 @@ export function lowRungArgs(
   ];
 }
 
-/** `master` with the low rung listed after the copied one. */
-export function withLowRung(master: string, uri: string, width: number, height: number): string {
+/** `master` with one more rung listed after the ones it has. */
+export function withRung(master: string, uri: string, width: number, height: number, maxKbps: number): string {
   const base = master.endsWith('\n') ? master : `${master}\n`;
-  return `${base}#EXT-X-STREAM-INF:BANDWIDTH=${LOW_RUNG.maxKbps * 1000},RESOLUTION=${width}x${height}\n${uri}\n`;
+  return `${base}#EXT-X-STREAM-INF:BANDWIDTH=${maxKbps * 1000},RESOLUTION=${width}x${height}\n${uri}\n`;
 }
 
 /** Segment length. Matches the mirror's, so both ladders behave identically. */
@@ -711,10 +711,10 @@ export interface TranscodeTools extends MirrorTools {
    */
   readonly renice: boolean;
   /**
-   * Add the 360 rung to a file published as it is (see `LOW_RUNG`). Ayman's
-   * stack only: the owner asked for it for his own lectures (2026-10-06), and
-   * on the other two stacks it would be encode CPU nobody chose to spend on
-   * the shared VPS.
+   * Add the 360 rung to a file published as it is (see `LOW_RUNG`) at upload
+   * time. OFF: the owner chose to press «حسّن الجودات» himself, at night
+   * (2026-10-11), rather than have the shared VPS encode while students watch.
+   * The switch stays because the same helpers build the rungs that button asks for.
    */
   readonly lowRung: boolean;
 }
@@ -735,7 +735,7 @@ export const DEFAULT_TRANSCODE_TOOLS: TranscodeTools = {
   // physical box, so one lecture encoding never fully starves the site.
   threads: 2,
   renice: process.platform === 'linux',
-  lowRung: IS_AYMAN,
+  lowRung: false,
 };
 
 /**
@@ -843,7 +843,7 @@ export async function transcodeUpload(
       const lowWidth = Math.max(2, Math.round((probe.width * LOW_RUNG.height) / probe.height / 2) * 2);
       await writeFile(
         masterPath,
-        withLowRung(await readFile(masterPath, 'utf8'), '1/index.m3u8', lowWidth, LOW_RUNG.height),
+        withRung(await readFile(masterPath, 'utf8'), '1/index.m3u8', lowWidth, LOW_RUNG.height, LOW_RUNG.maxKbps),
       );
     } catch {
       await rm(lowDir, { recursive: true, force: true }).catch(() => undefined);

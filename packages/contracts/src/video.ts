@@ -400,9 +400,13 @@ export function mirrorPrefix(externalId: string): string {
  * read back from the database, so a tampered key cannot redirect a student
  * anywhere.
  */
-export function mirrorPlaylistUrl(baseUrl: string, externalId: string): string {
+export function mirrorPlaylistUrl(baseUrl: string, externalId: string, ladderRev = 1): string {
   const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-  return `${base}/${mirrorPrefix(externalId)}/master.m3u8?l=${MIRROR_LADDER_VERSION}`;
+  // `rev` is per lecture (`lesson_videos.ladder_rev`): the worker bumps it when
+  // it rewrites THAT lecture's master. Revision 1 adds nothing, so a lecture
+  // nobody has touched keeps the URL its viewers already have cached.
+  const rev = ladderRev > 1 ? `&r=${ladderRev}` : '';
+  return `${base}/${mirrorPrefix(externalId)}/master.m3u8?l=${MIRROR_LADDER_VERSION}${rev}`;
 }
 
 /**

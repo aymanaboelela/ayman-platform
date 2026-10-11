@@ -224,6 +224,23 @@ export class LessonController {
     return this.uploads.status(id);
   }
 
+  /**
+   * «حسّن الجودات» — Ayman's stack only (the service answers 404 elsewhere).
+   * `lesson:write`, like the upload it follows. NOT `video.upload`-gated: that
+   * feature is on for the other tenants too, and this is not theirs.
+   */
+  @RequirePermission('lesson:write')
+  @Get('lessons/:id/video/upgrade')
+  videoLadderUpgrade(@Param('id') id: string) {
+    return this.uploads.upgradeState(id);
+  }
+
+  @RequirePermission('lesson:write')
+  @Post('lessons/:id/video/upgrade')
+  requestVideoLadderUpgrade(@Param('id') id: string) {
+    return this.uploads.requestUpgrade(id);
+  }
+
   @RequirePermission('lesson:write')
   @Put('lessons/:id/text')
   setText(@Param('id') id: string, @Body() body: SetLessonTextDto) {

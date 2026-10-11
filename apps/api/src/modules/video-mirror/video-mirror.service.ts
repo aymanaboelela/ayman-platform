@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Inject, Injectable, Logger, Optional, type OnModuleDestroy } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import type { Prisma } from '../../generated/prisma/client';
 import type Redis from 'ioredis';
 import { MIRROR_MAX_ATTEMPTS, mirrorPrefix, uploadSourceKey } from '@ayman/contracts/video';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -17,6 +18,8 @@ import {
   type TranscodeTools,
 } from './upload-pipeline';
 import { videoKey, videoKeyUri } from './video-key';
+import { machineThrottle, upgradeLadder, variantSizes } from './ladder-upgrade';
+import { IS_AYMAN } from '../../common/tenant';
 
 /** One mirror at a time across the platform, however many API replicas exist. */
 const LOCK_KEY = 'ayman:video-mirror:worker';
@@ -321,6 +324,8 @@ export class VideoMirrorService implements OnModuleDestroy {
     }
 
     if (claimed === null) {
+      // Nothing waiting to be packaged: a night-time «حسّن الجودات» may be.
+      if (await this.upgradeStep()) return;
       // The sweep adopts YouTube ladders only, and costs a bucket listing
       // (Class A) every minute — for nothing, with YouTube off.
       if (this.pullsFromYouTube) await this.adoptSweep();
@@ -679,6 +684,110 @@ export class VideoMirrorService implements OnModuleDestroy {
   ): Promise<void> {
     await this.prisma.lessonVideo.updateMany({ where: { externalId: uploadId, provider: 'upload' }, data });
     await this.prisma.lessonResource.updateMany({ where: { videoExternalId: uploadId, videoProvider: 'upload' }, data });
+  }
+
+  /** The heights a published upload offers, tallest first. `[]` when the bucket cannot say. */
+  async ladderHeights(uploadId: string): Promise<number[]> {
+    if (this.storage === null) return [];
+    try {
+      const master = await this.storage.readText(`${mirrorPrefix(uploadId)}/master.m3u8`);
+      return variantSizes(master)
+        .map((v) => v.height)
+        .sort((a, b) => b - a);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * «حسّن الجودات» — one queued lecture, or nothing. Runs only when no lecture
+   * is waiting to be packaged: the owner pressed the button for later, and a
+   * student's brand-new upload must never queue behind it.
+   *
+   * Ayman's stack only (`IS_AYMAN`), and checked HERE as well as at the
+   * endpoint: a row somebody queued by other means must not make another
+   * tenant's worker encode on the shared VPS.
+   */
+  private async upgradeStep(): Promise<boolean> {
+    if (!IS_AYMAN || this.config === null || this.storage === null) return false;
+    const stale = new Date(Date.now() - STALE_CLAIM_MS);
+    const row = await this.prisma.lessonVideo.findFirst({
+      where: {
+        provider: 'upload',
+        mirrorStatus: 'ready',
+        OR: [
+          { upgradeStatus: 'queued' },
+          { upgradeStatus: { in: ['running', 'waiting'] }, upgradeAt: { lt: stale } },
+        ],
+      },
+      orderBy: [{ upgradeAt: { sort: 'asc', nulls: 'first' } }],
+      select: { lessonId: true, externalId: true, encrypted: true, mirrorBytes: true, ladderRev: true },
+    });
+    if (row === null) return false;
+
+    const where = { lessonId: row.lessonId };
+    const mark = (data: Prisma.LessonVideoUpdateInput) => this.prisma.lessonVideo.update({ where, data });
+    await mark({ upgradeStatus: 'running', upgradeAt: new Date(), upgradeProgress: 0, upgradeError: null });
+    const beat = setInterval(() => {
+      this.prisma.lessonVideo
+        .updateMany({ where: { ...where, upgradeStatus: { in: ['running', 'waiting'] } }, data: { upgradeAt: new Date() } })
+        .catch(() => undefined);
+    }, HEARTBEAT_MS);
+
+    const work = await mkdtemp(join(tmpdir(), `upgrade-${row.externalId}-`));
+    let last = -1;
+    try {
+      const result = await upgradeLadder({
+        storage: this.storage,
+        prefix: mirrorPrefix(row.externalId),
+        key: row.encrypted ? this.videoKey(row.externalId) : null,
+        keyUri: videoKeyUri(this.appUrl, row.externalId),
+        work,
+        ffmpeg: this.encoder.ffmpeg,
+        ffprobe: this.encoder.ffprobe,
+        threads: this.encoder.threads,
+        renice: this.encoder.renice,
+        // The machine's own load decides when the encoder may run — see
+        // `Throttle`. `waiting` is the same job, stopped for the sites' sake.
+        throttle: machineThrottle(this.encoder.threads, (waiting) => {
+          void this.prisma.lessonVideo
+            .updateMany({
+              where: { ...where, upgradeStatus: { in: ['running', 'waiting'] } },
+              data: { upgradeStatus: waiting ? 'waiting' : 'running' },
+            })
+            .catch(() => undefined);
+        }),
+        expectedBytes: Number(row.mirrorBytes ?? 0),
+        onProgress: (percent) => {
+          if (percent === last) return;
+          last = percent;
+          void this.prisma.lessonVideo
+            .updateMany({
+              where: { ...where, upgradeStatus: { in: ['running', 'waiting'] } },
+              data: { upgradeProgress: percent },
+            })
+            .catch(() => undefined);
+        },
+      });
+      await mark({
+        upgradeStatus: 'done',
+        upgradeProgress: 100,
+        upgradeError: null,
+        upgradeAt: new Date(),
+        // A rewritten master needs a new URL — see `mirrorPlaylistUrl`.
+        ...(result.nothingToDo ? {} : { ladderRev: row.ladderRev + 1 }),
+        mirrorBytes: BigInt(Number(row.mirrorBytes ?? 0) + result.addedBytes),
+      });
+      this.logger.log({ uploadId: row.externalId, heights: result.heights, addedBytes: result.addedBytes }, 'ladder upgraded');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error({ err: error, uploadId: row.externalId }, 'ladder upgrade failed');
+      await mark({ upgradeStatus: 'failed', upgradeError: message.slice(0, 500), upgradeAt: new Date() }).catch(() => undefined);
+    } finally {
+      clearInterval(beat);
+      await rm(work, { recursive: true, force: true }).catch(() => undefined);
+    }
+    return true;
   }
 
   /**

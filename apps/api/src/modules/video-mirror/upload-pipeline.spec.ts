@@ -24,7 +24,7 @@ import {
   segmentBoundaries,
   transcodeArgs,
   variantBandwidth,
-  withLowRung,
+  withRung,
   withMeasuredBandwidth,
 } from './upload-pipeline';
 import { videoKey, videoKeyUri } from './video-key';
@@ -553,7 +553,7 @@ describe('the low rung of a copied file', () => {
 
   it('lists the low rung after the copy in the master', () => {
     const master = '#EXTM3U\n#EXT-X-VERSION:6\n#EXT-X-STREAM-INF:BANDWIDTH=5252992,RESOLUTION=1920x1080\n0/index.m3u8\n';
-    const out = withLowRung(master, '1/index.m3u8', 640, 360);
+    const out = withRung(master, '1/index.m3u8', 640, 360, 700);
     expect(readMasterVariants(out)).toEqual(['0/index.m3u8', '1/index.m3u8']);
     expect(out).toContain('RESOLUTION=640x360');
   });
