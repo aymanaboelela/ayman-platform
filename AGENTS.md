@@ -11,8 +11,12 @@ any other). Read this file first. It is the entry point; the detail lives in
 | [`docs/agents/pitfalls.md`](docs/agents/pitfalls.md) | **Before writing code.** Hard-won lessons: traps that pass every test and still break production |
 | [`docs/agents/recipes.md`](docs/agents/recipes.md) | Publishing lectures, quizzes, exams, news through the live API |
 
-[`CLAUDE.md`](CLAUDE.md) holds the same core rules in Egyptian Arabic. Where the
+[`CLAUDE.md`](CLAUDE.md) holds the same core rules in compact form. Where the
 two disagree, CLAUDE.md wins and this file should be fixed.
+
+**Language: everything is in English** (replies, docs, comments, commits, PRs).
+The owner writes prompts in Arabic; read them in Arabic and answer in English.
+The only exception is user-facing product copy, which stays Egyptian Arabic (§6).
 
 > ⚠️ `apps/web/app/AGENTS.md/route.ts` is **not** this file. That is a route that
 > serves `/AGENTS.md` on the live website, describing the *product* to AI agents
@@ -184,6 +188,7 @@ fix → PR to main → CI (gitleaks, lint+typecheck, unit, integration, playwrig
 **General**
 - Comments explain **why**, not what. The repo is heavily commented, specific,
   and often cites the incident that caused the code. Match that density and voice.
+  Many existing comments are in Arabic; write new ones in English.
 - Single quotes in TS/TSX. Plain CSS (no SASS). **No `!important`.**
 - Before building a "missing" feature, grep for it: the column, DTO, service and
   readers usually already exist and only the admin control is missing. Check
@@ -263,7 +268,8 @@ fix → PR to main → CI (gitleaks, lint+typecheck, unit, integration, playwrig
 - Commit identity: `Ayman Abo El Ela <142680481+aymanaboelela@users.noreply.github.com>`
   (the repo owner's global git config). Never commit under any other identity and
   never pass `-c user.name/-c user.email`.
-- Commit messages and PR titles in this repo are written in Arabic (see `git log`).
+- Commit messages, PR titles and PR descriptions are in **English**. Older history
+  is in Arabic; don't follow it.
 - Branch from `origin/main`, ideally in a fresh worktree. Several agent sessions
   often share one checkout: never `git add -A` / `git stash` there; stage explicit
   paths and verify your change is in `HEAD` after committing.
@@ -278,8 +284,8 @@ fix → PR to main → CI (gitleaks, lint+typecheck, unit, integration, playwrig
 
 ## 9. Talking to the owner
 
-- The owner reads Egyptian Arabic. Reply in short, direct Arabic, no preamble,
-  no recap. Keep English to code and file paths.
+- The owner prompts in Arabic but wants **every reply in English**. Keep replies
+  short and direct: no preamble, no recap.
 - Report results and what broke. Ask only when genuinely blocked, or for the
   "for whom?" question in §4.
 - He judges UI as a parent would: colour, imagery, a button on every row, the
