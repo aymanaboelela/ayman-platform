@@ -263,6 +263,7 @@ export function lowRungArgs(
   threads: number,
   keyInfoFile: string | null = null,
   rung: LadderRung = LOW_RUNG,
+  preset: 'medium' | 'faster' | 'veryfast' = 'medium',
 ): string[] {
   const encrypted = keyInfoFile !== null;
   return [
@@ -280,7 +281,7 @@ export function lowRungArgs(
     '-c:v',
     'libx264',
     '-preset',
-    'medium',
+    preset,
     '-profile:v',
     'high',
     '-pix_fmt',

@@ -43,6 +43,29 @@ const run = promisify(execFile);
  */
 export const UPGRADE_RUNGS: readonly LadderRung[] = UPLOAD_LADDER;
 
+/**
+ * ONE core. The first real run (lecture 5, 2026-10-11) used two, and on a
+ * busy afternoon that put the shared 4-core box straight onto the pause line:
+ * two minutes of encoding, two minutes stopped, over and over. One core keeps
+ * the load under the line, so the encode runs steadily — at about the same
+ * pace, and without ever leaning on the students' sites.
+ */
+export const UPGRADE_THREADS = 1;
+
+/**
+ * `faster`, not the upload ladder's `medium`. Measured on lecture 5 itself
+ * (three minutes, 720p, CRF 23, one thread):
+ *
+ *   medium    98 s CPU   1183 kbit/s   VMAF 96.2
+ *   faster    65 s CPU   1099 kbit/s   VMAF 95.5
+ *   veryfast  49 s CPU    962 kbit/s   VMAF 93.7
+ *
+ * A third less CPU and a SMALLER file, for 0.6 VMAF no one can see. These are
+ * the fallback rungs a weak connection drops to; veryfast's 93.7 starts to
+ * soften the code on the slides.
+ */
+export const UPGRADE_PRESET = 'faster' as const;
+
 /** `RESOLUTION=WxH` of each variant of a master, in the order the master lists them. */
 export function variantSizes(master: string): Array<{ uri: string; width: number; height: number }> {
   const out: Array<{ uri: string; width: number; height: number }> = [];
@@ -78,9 +101,21 @@ export function sequenceIv(sequence: number): Buffer {
   return iv;
 }
 
-/** Heights of the rungs still worth building: shorter than the source, not already there. */
-export function rungsToBuild(existingHeights: readonly number[], sourceHeight: number): LadderRung[] {
-  return UPGRADE_RUNGS.filter((rung) => rung.height < sourceHeight && !existingHeights.includes(rung.height));
+/**
+ * Rungs still worth building: shorter than the source, not already there —
+ * and, when the owner named some (`requested`), only those. Empty = «الكل».
+ */
+export function rungsToBuild(
+  existingHeights: readonly number[],
+  sourceHeight: number,
+  requested: readonly number[] = [],
+): LadderRung[] {
+  return UPGRADE_RUNGS.filter(
+    (rung) =>
+      rung.height < sourceHeight &&
+      !existingHeights.includes(rung.height) &&
+      (requested.length === 0 || requested.includes(rung.height)),
+  );
 }
 
 /**
@@ -260,6 +295,8 @@ export interface UpgradeDeps {
   readonly throttle: Throttle;
   /** Roughly what the lecture weighs in the bucket; the work dir needs about twice that. */
   readonly expectedBytes: number;
+  /** Only these heights. Empty or absent = every missing rung. */
+  readonly heights?: readonly number[];
 }
 
 export interface UpgradeResult {
@@ -269,9 +306,53 @@ export interface UpgradeResult {
   readonly addedBytes: number;
   /** Nothing was missing — no rung built, master untouched. */
   readonly nothingToDo: boolean;
+  /** Rungs an earlier, interrupted attempt had already finished — taken, not rebuilt. */
+  readonly reused: number[];
 }
 
 /** Build the missing rungs from the tallest one in the bucket, and publish them. */
+/**
+ * What a finished rung leaves beside its segments: proof that it is complete,
+ * and the numbers its master line needs. Written LAST, after every segment and
+ * the playlist are in the bucket — so its presence is the checkpoint.
+ *
+ * Why there is a checkpoint at all: a two-hour lecture is hours of encoding,
+ * and every deploy restarts the API container — on 2026-10-11 two merges from
+ * other sessions restarted the first real run within five minutes. Without
+ * this, every restart threw away every finished rung and began again.
+ */
+export interface RungRecord {
+  readonly height: number;
+  readonly width: number;
+  readonly segments: number;
+  readonly peak: number;
+  readonly average: number;
+  readonly bytes: number;
+}
+
+/** Where a built rung lives. Named by HEIGHT, not by position: the same rung keeps the same place on every attempt, whatever else was asked for. */
+export function rungDir(height: number): string {
+  return `r${height}`;
+}
+
+/** A finished rung from an earlier attempt, or `null` — missing, partial, or for a different cut. */
+export function usableRecord(text: string | null, height: number, segments: number): RungRecord | null {
+  if (text === null) return null;
+  try {
+    const record = JSON.parse(text) as Partial<RungRecord>;
+    const ok =
+      record.height === height &&
+      record.segments === segments &&
+      typeof record.width === 'number' &&
+      typeof record.peak === 'number' &&
+      typeof record.average === 'number' &&
+      typeof record.bytes === 'number';
+    return ok ? (record as RungRecord) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function upgradeLadder(deps: UpgradeDeps): Promise<UpgradeResult> {
   const { storage, prefix, key, work } = deps;
   const master = await storage.readText(`${prefix}/master.m3u8`);
@@ -281,122 +362,163 @@ export async function upgradeLadder(deps: UpgradeDeps): Promise<UpgradeResult> {
   const todo = rungsToBuild(
     variants.map((v) => v.height),
     top.height,
+    deps.heights ?? [],
   );
   const heightsNow = variants.map((v) => v.height).sort((a, b) => b - a);
-  if (todo.length === 0) return { heights: heightsNow, addedBytes: 0, nothingToDo: true };
+  if (todo.length === 0) return { heights: heightsNow, addedBytes: 0, nothingToDo: true, reused: [] };
 
-  /*
-   * The source is one file as big as the lecture, and the new rungs come on top.
-   * A full disk fails the encode at 90% and — worse — takes the database's
-   * volume with it, so it is checked BEFORE a byte is downloaded.
-   */
-  const free = await statfs(work).then((f) => Number(f.bavail) * Number(f.bsize)).catch(() => Infinity);
-  const needed = deps.expectedBytes * 2 + 500 * 1024 * 1024;
-  if (free < needed) {
-    throw new Error(
-      `مفيش مساحة كفاية على السيرفر: محتاج حوالي ${Math.ceil(needed / 1024 ** 3)} جيجا وفاضل ${Math.floor(free / 1024 ** 3)}`,
-    );
-  }
-
-  /* ── 1. the tallest rung back out of the bucket, decrypted, as one file ── */
   const topDir = dirname(top.uri);
   const playlistText = await storage.readText(`${prefix}/${top.uri}`);
   const media = readMediaPlaylist(playlistText);
-  const boundaries = segmentBoundaries(playlistText);
-  const encoding = readSegmentEncoding(playlistText);
-  if (encoding.encrypted && key === null) throw new Error('الفيديو مشفّر ومفيش مفتاح');
 
-  const source = join(work, encoding.init ? 'source.mp4' : 'source.ts');
-  const sink = createWriteStream(source);
-  const write = (chunk: Buffer): Promise<void> =>
-    new Promise((resolve, reject) => sink.write(chunk, (error) => (error ? reject(error) : resolve())));
-
-  const pieces = [...(encoding.init ? [{ uri: encoding.init, sequence: -1 }] : []), ...media.segments.map((s, i) => ({ uri: s.uri, sequence: i }))];
-  const scratch = join(work, 'dl');
-  await mkdir(scratch, { recursive: true });
-  try {
-    for (let i = 0; i < pieces.length; i += 1) {
-      const piece = pieces[i]!;
-      const file = join(scratch, 'piece');
-      await storage.downloadTo(`${prefix}/${topDir}/${piece.uri}`, file);
-      let bytes = await readFile(file);
-      // The init segment (fMP4) is never encrypted; every media segment is,
-      // with the playlist's IV or, absent that, its own sequence number.
-      if (encoding.encrypted && piece.sequence >= 0) {
-        const decipher = createDecipheriv('aes-128-cbc', key!, encoding.iv ?? sequenceIv(piece.sequence));
-        bytes = Buffer.concat([decipher.update(bytes), decipher.final()]);
-      }
-      await write(bytes);
-      if (i % 25 === 0) deps.onProgress(5 + Math.floor((i / pieces.length) * 20));
-    }
-  } finally {
-    await new Promise<void>((resolve) => sink.end(resolve));
-    await rm(scratch, { recursive: true, force: true }).catch(() => undefined);
+  /* ── 0. what an earlier, interrupted attempt already finished ───────────── */
+  const finished = new Map<number, RungRecord>();
+  for (const rung of todo) {
+    const text = await storage.readText(`${prefix}/${rungDir(rung.height)}/rung.json`).catch(() => null);
+    const record = usableRecord(text, rung.height, media.segments.length);
+    if (record !== null) finished.set(rung.height, record);
   }
+  const reused = [...finished.keys()];
+  const pending = todo.filter((rung) => !finished.has(rung.height));
 
-  const probed = await run(
-    deps.ffprobe,
-    ['-hide_banner', '-loglevel', 'error', '-print_format', 'json', '-show_format', '-show_streams', source],
-    { maxBuffer: 16 * 1024 * 1024, timeout: 5 * 60_000 },
-  );
-  const probe = readProbe(probed.stdout);
-
-  /* ── 2. the missing rungs, each on the tallest rung's boundaries ───────── */
-  const outRoot = join(work, 'out');
-  let keyInfoFile: string | null = null;
-  if (encoding.encrypted) {
-    const keyFile = join(work, 'video.key');
-    keyInfoFile = join(work, 'video.keyinfo');
-    await writeFile(keyFile, key!, { mode: 0o600 });
-    await writeFile(keyInfoFile, `${deps.keyUri}\n${keyFile}\n`, { mode: 0o600 });
-  }
-
-  let nextMaster = master;
-  const measured = new Map<string, VariantBandwidth>();
-  for (let i = 0; i < todo.length; i += 1) {
-    const rung = todo[i]!;
-    // New directories go AFTER whatever the master already lists, so a rung
-    // that is already in the bucket is never overwritten under a student.
-    const index = variants.length + i;
-    const dir = join(outRoot, String(index));
-    await mkdir(dir, { recursive: true });
-    await waitUntilCalm(deps.throttle);
-    await runThrottled(
-      deps.ffmpeg,
-      lowRungArgs(source, dir, probe.hasAudio, boundaries, deps.threads, keyInfoFile, rung),
-      deps.throttle,
-      { renice: deps.renice, timeoutMs: 12 * 60 * 60_000 },
-    );
-
-    const made = readMediaPlaylist(await readFile(join(dir, 'index.m3u8'), 'utf8'));
-    if (made.segments.length !== media.segments.length) {
+  if (pending.length > 0) {
+    /*
+     * The source is one file as big as the lecture, and the new rungs come on
+     * top. A full disk fails the encode at 90% and — worse — takes the
+     * database's volume with it, so it is checked BEFORE a byte is downloaded.
+     */
+    const free = await statfs(work).then((f) => Number(f.bavail) * Number(f.bsize)).catch(() => Infinity);
+    const needed = deps.expectedBytes * 2 + 500 * 1024 * 1024;
+    if (free < needed) {
       throw new Error(
-        `جودة ${rung.height}p طلعت ${made.segments.length} قطعة بدل ${media.segments.length} — مش هترفعها عشان التبديل ما يهنّجش`,
+        `مفيش مساحة كفاية على السيرفر: محتاج حوالي ${Math.ceil(needed / 1024 ** 3)} جيجا وفاضل ${Math.floor(free / 1024 ** 3)}`,
       );
     }
-    const sizes = [];
-    for (const segment of made.segments) {
-      sizes.push({ durationSeconds: segment.durationSeconds, bytes: (await stat(join(dir, segment.uri))).size });
-    }
-    const uri = `${index}/index.m3u8`;
-    const width = Math.max(2, Math.round((top.width * rung.height) / top.height / 2) * 2);
-    nextMaster = withRung(nextMaster, uri, width, rung.height, rung.maxKbps);
-    const bandwidth = variantBandwidth(sizes, made.targetDurationSeconds);
-    if (bandwidth !== null) measured.set(uri, bandwidth);
-    deps.onProgress(25 + Math.floor(((i + 1) / todo.length) * 60));
-  }
-  await writeFile(join(outRoot, 'master.m3u8'), withMeasuredBandwidth(nextMaster, measured));
 
-  /* ── 3. publish: segments first, the master LAST (`uploadLadder` orders it) ── */
-  const files = await listFiles(outRoot);
+    /* ── 1. the tallest rung back out of the bucket, decrypted, as one file ── */
+    const boundaries = segmentBoundaries(playlistText);
+    const encoding = readSegmentEncoding(playlistText);
+    if (encoding.encrypted && key === null) throw new Error('الفيديو مشفّر ومفيش مفتاح');
+
+    const source = join(work, encoding.init ? 'source.mp4' : 'source.ts');
+    const sink = createWriteStream(source);
+    const write = (chunk: Buffer): Promise<void> =>
+      new Promise((resolve, reject) => sink.write(chunk, (error) => (error ? reject(error) : resolve())));
+
+    const pieces = [
+      ...(encoding.init ? [{ uri: encoding.init, sequence: -1 }] : []),
+      ...media.segments.map((s, i) => ({ uri: s.uri, sequence: i })),
+    ];
+    const scratch = join(work, 'dl');
+    await mkdir(scratch, { recursive: true });
+    try {
+      for (let i = 0; i < pieces.length; i += 1) {
+        const piece = pieces[i]!;
+        const file = join(scratch, 'piece');
+        await storage.downloadTo(`${prefix}/${topDir}/${piece.uri}`, file);
+        let bytes = await readFile(file);
+        // The init segment (fMP4) is never encrypted; every media segment is,
+        // with the playlist's IV or, absent that, its own sequence number.
+        if (encoding.encrypted && piece.sequence >= 0) {
+          const decipher = createDecipheriv('aes-128-cbc', key!, encoding.iv ?? sequenceIv(piece.sequence));
+          bytes = Buffer.concat([decipher.update(bytes), decipher.final()]);
+        }
+        await write(bytes);
+        if (i % 25 === 0) deps.onProgress(5 + Math.floor((i / pieces.length) * 20));
+      }
+    } finally {
+      await new Promise<void>((resolve) => sink.end(resolve));
+      await rm(scratch, { recursive: true, force: true }).catch(() => undefined);
+    }
+
+    const probed = await run(
+      deps.ffprobe,
+      ['-hide_banner', '-loglevel', 'error', '-print_format', 'json', '-show_format', '-show_streams', source],
+      { maxBuffer: 16 * 1024 * 1024, timeout: 5 * 60_000 },
+    );
+    const probe = readProbe(probed.stdout);
+
+    let keyInfoFile: string | null = null;
+    if (encoding.encrypted) {
+      const keyFile = join(work, 'video.key');
+      keyInfoFile = join(work, 'video.keyinfo');
+      await writeFile(keyFile, key!, { mode: 0o600 });
+      await writeFile(keyInfoFile, `${deps.keyUri}\n${keyFile}\n`, { mode: 0o600 });
+    }
+
+    /* ── 2. each missing rung on the tallest rung's boundaries — published as it finishes ── */
+    const outRoot = join(work, 'out');
+    for (let i = 0; i < pending.length; i += 1) {
+      const rung = pending[i]!;
+      const name = rungDir(rung.height);
+      const dir = join(outRoot, name);
+      await rm(dir, { recursive: true, force: true });
+      await mkdir(dir, { recursive: true });
+      await waitUntilCalm(deps.throttle);
+      await runThrottled(
+        deps.ffmpeg,
+        lowRungArgs(source, dir, probe.hasAudio, boundaries, deps.threads, keyInfoFile, rung, UPGRADE_PRESET),
+        deps.throttle,
+        { renice: deps.renice, timeoutMs: 12 * 60 * 60_000 },
+      );
+
+      const made = readMediaPlaylist(await readFile(join(dir, 'index.m3u8'), 'utf8'));
+      if (made.segments.length !== media.segments.length) {
+        throw new Error(
+          `جودة ${rung.height}p طلعت ${made.segments.length} قطعة بدل ${media.segments.length} — مش هترفعها عشان التبديل ما يهنّجش`,
+        );
+      }
+      const sizes = [];
+      let bytes = 0;
+      for (const segment of made.segments) {
+        const size = (await stat(join(dir, segment.uri))).size;
+        bytes += size;
+        sizes.push({ durationSeconds: segment.durationSeconds, bytes: size });
+      }
+      const bandwidth = variantBandwidth(sizes, made.targetDurationSeconds);
+      const record: RungRecord = {
+        height: rung.height,
+        width: Math.max(2, Math.round((top.width * rung.height) / top.height / 2) * 2),
+        segments: made.segments.length,
+        peak: bandwidth?.peak ?? rung.maxKbps * 1000,
+        average: bandwidth?.average ?? rung.maxKbps * 1000,
+        bytes: bytes + (await stat(join(dir, 'index.m3u8'))).size,
+      };
+
+      // Segments and playlist first, the record LAST: the record is the claim
+      // that everything before it arrived.
+      const files = (await listFiles(dir)).map((file) => `${name}/${file}`);
+      await storage.uploadLadder(outRoot, files, prefix);
+      await writeFile(join(dir, 'rung.json'), JSON.stringify(record));
+      await storage.uploadLadder(outRoot, [`${name}/rung.json`], prefix);
+      finished.set(rung.height, record);
+      // The local copy has done its job; a long lecture's rungs should not pile up on the disk.
+      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+      deps.onProgress(25 + Math.floor(((i + 1) / pending.length) * 60));
+    }
+  }
+
+  /* ── 3. the master, LAST: only now does any student see the new rungs ── */
+  let nextMaster = master;
+  const measured = new Map<string, VariantBandwidth>();
   let addedBytes = 0;
-  for (const file of files) addedBytes += (await stat(join(outRoot, file))).size;
+  for (const rung of todo) {
+    const record = finished.get(rung.height)!;
+    const uri = `${rungDir(rung.height)}/index.m3u8`;
+    nextMaster = withRung(nextMaster, uri, record.width, record.height, rung.maxKbps);
+    measured.set(uri, { peak: record.peak, average: record.average });
+    addedBytes += record.bytes;
+  }
+  const masterRoot = join(work, 'master');
+  await mkdir(masterRoot, { recursive: true });
+  await writeFile(join(masterRoot, 'master.m3u8'), withMeasuredBandwidth(nextMaster, measured));
   deps.onProgress(90);
-  await storage.uploadLadder(outRoot, files, prefix);
+  await storage.uploadLadder(masterRoot, ['master.m3u8'], prefix);
 
   return {
     heights: [...heightsNow, ...todo.map((r) => r.height)].sort((a, b) => b - a),
     addedBytes,
     nothingToDo: false,
+    reused,
   };
 }

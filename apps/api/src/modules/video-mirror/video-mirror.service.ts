@@ -18,7 +18,7 @@ import {
   type TranscodeTools,
 } from './upload-pipeline';
 import { videoKey, videoKeyUri } from './video-key';
-import { machineThrottle, upgradeLadder, variantSizes } from './ladder-upgrade';
+import { UPGRADE_THREADS, machineThrottle, upgradeLadder, variantSizes } from './ladder-upgrade';
 import { IS_AYMAN } from '../../common/tenant';
 
 /** One mirror at a time across the platform, however many API replicas exist. */
@@ -721,7 +721,14 @@ export class VideoMirrorService implements OnModuleDestroy {
         ],
       },
       orderBy: [{ upgradeAt: { sort: 'asc', nulls: 'first' } }],
-      select: { lessonId: true, externalId: true, encrypted: true, mirrorBytes: true, ladderRev: true },
+      select: {
+        lessonId: true,
+        externalId: true,
+        encrypted: true,
+        mirrorBytes: true,
+        ladderRev: true,
+        upgradeHeights: true,
+      },
     });
     if (row === null) return false;
 
@@ -745,11 +752,12 @@ export class VideoMirrorService implements OnModuleDestroy {
         work,
         ffmpeg: this.encoder.ffmpeg,
         ffprobe: this.encoder.ffprobe,
-        threads: this.encoder.threads,
+        // One core, not the upload encoder's two — see `UPGRADE_THREADS`.
+        threads: UPGRADE_THREADS,
         renice: this.encoder.renice,
         // The machine's own load decides when the encoder may run — see
         // `Throttle`. `waiting` is the same job, stopped for the sites' sake.
-        throttle: machineThrottle(this.encoder.threads, (waiting) => {
+        throttle: machineThrottle(UPGRADE_THREADS, (waiting) => {
           void this.prisma.lessonVideo
             .updateMany({
               where: { ...where, upgradeStatus: { in: ['running', 'waiting'] } },
@@ -758,6 +766,7 @@ export class VideoMirrorService implements OnModuleDestroy {
             .catch(() => undefined);
         }),
         expectedBytes: Number(row.mirrorBytes ?? 0),
+        heights: row.upgradeHeights,
         onProgress: (percent) => {
           if (percent === last) return;
           last = percent;
