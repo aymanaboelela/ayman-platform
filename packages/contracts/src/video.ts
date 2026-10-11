@@ -434,8 +434,16 @@ export function posterBesidePlaylist(playlistUrl: string): string | null {
  * that already holds the old master. A new query string is a new cache key
  * for both, so each one fetches the new master once, and the segments under it
  * (which did not change) stay cached.
+ *
+ * 3 (2026-10-11): not a ladder change — a cache one. Until #638 the admin
+ * preview loaded `master.m3u8?l=2` as an `<img>`, a no-CORS request, and the
+ * browser kept that copy, with no `Access-Control-Allow-Origin`, `immutable`
+ * for a year. Every later hls.js fetch of the same URL reused it and failed
+ * `ERR_FAILED` — on every lecture, in the browser of everyone who had opened
+ * a preview (the instructor and his assistants first). The edge is fixed by a
+ * Cloudflare rule; only a new URL reaches a browser's own cache.
  */
-export const MIRROR_LADDER_VERSION = 2;
+export const MIRROR_LADDER_VERSION = 3;
 
 /**
  * The poster frame a transcode writes beside the ladder.
