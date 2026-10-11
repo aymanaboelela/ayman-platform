@@ -5728,6 +5728,19 @@ const admin = {
     credentialsTitle: 'بيانات دخول المدرّس',
     credentialsHint: 'هتظهر هنا مرة واحدة بس. ابعتهاله وقوله يغيّر الباسورد أول ما يدخل.',
     loginAt: 'يدخل من',
+    /**
+     * The hand-over message, ready to paste. `{url}` `{login}` `{email}`
+     * `{password}`. Neutral wording on purpose — the teacher may be a woman,
+     * so no masculine imperative («ادخل»، «غيّر»).
+     */
+    handoverMessage:
+      'أهلًا! المنصة بتاعتك جاهزة: {url}\n' +
+      'الدخول للوحة التحكم: {login}\n' +
+      'الإيميل: {email}\n' +
+      'الباسورد: {password}\n' +
+      'لازم الباسورد يتغيّر بعد أول دخول.',
+    copyMessage: 'انسخ رسالة للمدرّس',
+    sendWhatsapp: 'ابعتها واتساب',
     email: 'الإيميل',
     password: 'الباسورد',
     nextTitle: 'الباقي عليك',

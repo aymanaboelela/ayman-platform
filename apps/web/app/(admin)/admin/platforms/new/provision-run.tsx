@@ -12,12 +12,14 @@ import {
   KeyRound,
   ListChecks,
   Loader2,
+  MessageCircle,
   MinusCircle,
   RotateCcw,
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
 import { Badge } from '@ayman/ui/components/badge';
 import { Card, CardBody } from '@ayman/ui/components/card';
 import { cn } from '@ayman/ui/lib/cn';
@@ -46,7 +48,7 @@ const STEP_ICON: Record<StepResult['state'], { icon: LucideIcon; className: stri
  * ever show it: it lives in the stack's Dokploy environment until «إنهاء
  * الإعداد» clears it, and the list screen deliberately never reads it out.
  */
-export function ProvisionRun({ result }: { result: ProvisionActionResult }) {
+export function ProvisionRun({ result, teacherPhone = '' }: { result: ProvisionActionResult; teacherPhone?: string }) {
   const ok = result.ok;
   const steps = result.steps;
   const composeId = 'composeId' in result ? result.composeId : undefined;
@@ -109,7 +111,7 @@ export function ProvisionRun({ result }: { result: ProvisionActionResult }) {
       </Card>
 
       {ok && composeId ? <Watch composeId={composeId} appUrl={result.appUrl ?? null} /> : null}
-      {ok ? <Credentials result={result} /> : null}
+      {ok ? <Credentials result={result} teacherPhone={teacherPhone} /> : null}
       {ok ? <NextSteps result={result} /> : null}
       {ok ? (
         <div>
@@ -177,12 +179,20 @@ function CopyField({ id, label, value, copied, onCopy }: { id: string; label: st
   );
 }
 
-function Credentials({ result }: { result: ProvisionActionResult }) {
+function Credentials({ result, teacherPhone }: { result: ProvisionActionResult; teacherPhone: string }) {
   const [copied, copyValue] = useCopy();
   const credentials = 'credentials' in result ? result.credentials : null;
   const appUrl = 'appUrl' in result ? result.appUrl : undefined;
   if (!credentials || !appUrl) return null;
   const loginUrl = `${appUrl}/login`;
+  const message = formatCopy(c.handoverMessage, {
+    url: appUrl,
+    login: loginUrl,
+    email: credentials.email,
+    password: credentials.password,
+  });
+  // wa.me wants the number without the plus; the form already insisted on E.164.
+  const whatsapp = teacherPhone.startsWith('+') ? `https://wa.me/${teacherPhone.slice(1)}?text=${encodeURIComponent(message)}` : null;
 
   return (
     <Card>
@@ -206,6 +216,27 @@ function Credentials({ result }: { result: ProvisionActionResult }) {
             copied={copied === 'password'}
             onCopy={() => copyValue('password', credentials.password)}
           />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => copyValue('message', message)}
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accent px-4 text-[length:var(--fs-text-sm)] font-medium text-[#1A1206] hover:bg-accent-hover"
+          >
+            {copied === 'message' ? <Check aria-hidden="true" className="size-4" /> : <Copy aria-hidden="true" className="size-4" />}
+            {copied === 'message' ? c.copied : c.copyMessage}
+          </button>
+          {whatsapp ? (
+            <a
+              href={whatsapp}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-line bg-surface-3 px-4 text-[length:var(--fs-text-sm)] text-fg hover:bg-surface-4"
+            >
+              <MessageCircle aria-hidden="true" className="size-4" />
+              {c.sendWhatsapp}
+            </a>
+          ) : null}
         </div>
       </CardBody>
     </Card>

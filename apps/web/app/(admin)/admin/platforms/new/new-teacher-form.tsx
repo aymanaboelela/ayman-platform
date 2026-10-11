@@ -89,7 +89,7 @@ export function NewTeacherForm({ features, cloudflare }: NewTeacherFormProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      {run && run.steps.length > 0 ? <ProvisionRun result={run} /> : null}
+      {run && run.steps.length > 0 ? <ProvisionRun result={run} teacherPhone={values.whatsapp ?? ''} /> : null}
       {run && !run.ok && run.steps.length === 0 ? (
         <p role="alert" className="rounded-lg border border-[color-mix(in_oklch,var(--err),transparent_60%)] bg-[color-mix(in_oklch,var(--err),transparent_92%)] p-3 text-[length:var(--fs-text-sm)] text-fg">
           {run.error}
