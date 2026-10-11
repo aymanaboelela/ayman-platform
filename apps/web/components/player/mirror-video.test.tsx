@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { copy } from '@ayman/contracts/copy';
 
 /**
@@ -13,18 +13,22 @@ const { FakeHls, built, instances } = vi.hoisted(() => {
     levels: { height: number }[];
     currentLevel: number;
     nextLevel: number;
+    startLevel: number;
+    bandwidthEstimate: number;
     handlers: Record<string, () => void>;
   }> = [];
   class FakeHls {
     static isSupported() {
       return true;
     }
-    static Events = { MANIFEST_PARSED: 'manifestParsed', LEVEL_SWITCHED: 'levelSwitched', ERROR: 'error' };
+    static Events = { MANIFEST_PARSED: 'manifestParsed', LEVEL_SWITCHED: 'levelSwitched', FRAG_LOADED: 'fragLoaded', ERROR: 'error' };
     static ErrorTypes = { NETWORK_ERROR: 'networkError', MEDIA_ERROR: 'mediaError' };
     static ErrorDetails = { KEY_LOAD_ERROR: 'keyLoadError', KEY_LOAD_TIMEOUT: 'keyLoadTimeOut' };
     levels: { height: number }[] = [];
     currentLevel = -1;
     nextLevel = -1;
+    startLevel = 0;
+    bandwidthEstimate = 0;
     handlers: Record<string, () => void> = {};
     constructor(config: Record<string, unknown>) {
       built.push(config);
@@ -164,5 +168,82 @@ describe('MirrorVideo manual quality', () => {
 
     expect(hls.nextLevel).toBe(1);
     expect(hls.currentLevel).toBe(-1);
+  });
+});
+
+describe('MirrorVideo opens on the rung this device can carry', () => {
+  const store = new Map<string, string>();
+  let downlink: number | undefined;
+  beforeAll(() => {
+    // jsdom here has no usable `localStorage` — see `book-order-panel.test.tsx`.
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => void store.set(k, String(v)),
+        removeItem: (k: string) => void store.delete(k),
+        clear: () => store.clear(),
+      },
+    });
+    // The browser's hint about the line — absent on Safari and Firefox.
+    Object.defineProperty(navigator, 'connection', {
+      configurable: true,
+      get: () => (downlink === undefined ? undefined : { downlink }),
+    });
+    // jsdom lays nothing out: give the <video> a real player width.
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 928 });
+  });
+  afterEach(() => {
+    store.clear();
+    downlink = undefined;
+  });
+
+  const LADDER = [
+    { height: 360, width: 640, bitrate: 900_000, averageBitrate: 450_000 },
+    { height: 480, width: 854, bitrate: 1_500_000, averageBitrate: 750_000 },
+    { height: 720, width: 1280, bitrate: 3_000_000, averageBitrate: 1_400_000 },
+    { height: 1080, width: 1920, bitrate: 5_000_000, averageBitrate: 3_700_000 },
+  ];
+
+  async function parsed() {
+    renderMirror();
+    await act(async () => {});
+    const hls = instances[0]!;
+    hls.levels = LADDER;
+    await act(async () => hls.handlers.manifestParsed?.());
+    return hls;
+  }
+
+  it('opens on the lightest rung when the browser says nothing about the line — every iPhone', async () => {
+    store.set('ayman:player:bandwidth', JSON.stringify({ bps: 20_000_000, at: Date.now() }));
+    expect((await parsed()).startLevel).toBe(0);
+  });
+
+  it('opens a fast line straight on 720, not on 360 for a segment', async () => {
+    downlink = 10;
+    // 720 averages 1.4 Mbit/s: its six-second segment is 0.8 s at 10 Mbit/s.
+    // 1080 would be 2.2 s — and the 928-px player is no wider than 720 anyway.
+    expect((await parsed()).startLevel).toBe(2);
+  });
+
+  it('opens a slow line on the lightest rung, as before', async () => {
+    downlink = 0.6;
+    expect((await parsed()).startLevel).toBe(0);
+  });
+
+  it('lets a slower measurement from this device pull the start down', async () => {
+    downlink = 10;
+    store.set('ayman:player:bandwidth', JSON.stringify({ bps: 3_000_000, at: Date.now() }));
+    expect((await parsed()).startLevel).toBe(1);
+  });
+
+  it('saves what it measured once a few segments have been timed — not hls.js\'s default', async () => {
+    const hls = await parsed();
+    hls.bandwidthEstimate = 6_000_000;
+    await act(async () => hls.handlers.fragLoaded?.());
+    await act(async () => hls.handlers.fragLoaded?.());
+    expect(store.get('ayman:player:bandwidth')).toBeUndefined();
+    await act(async () => hls.handlers.fragLoaded?.());
+    expect(JSON.parse(store.get('ayman:player:bandwidth') ?? 'null')).toMatchObject({ bps: 6_000_000 });
   });
 });

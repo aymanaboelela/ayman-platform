@@ -11,6 +11,7 @@ import type { YouTubePlayer } from '@/lib/youtube';
 import { skipCuts, trimWindow, watchedAt } from '@/lib/video-trim';
 import { PlayerChrome, SPEEDS, readSavedSpeed, saveSpeed } from './player-chrome';
 import { QualityItem } from './quality-item';
+import { capForWidth, knownBandwidth, saveBandwidth, startRung } from './start-rung';
 
 const c = copy.player.controls;
 
@@ -200,7 +201,11 @@ interface HlsHandle {
   /** Read by nothing here — see `chooseLevel` for why it is never SET. */
   currentLevel: number;
   nextLevel: number;
-  levels: { height: number }[];
+  /** Read once, on manifest-parsed — see `start-rung.ts`. */
+  startLevel: number;
+  /** hls.js's running estimate of the line, bit/s — saved for the next lecture. */
+  bandwidthEstimate: number;
+  levels: { height: number; width?: number; bitrate: number; averageBitrate?: number }[];
 }
 
 interface Level {
@@ -303,11 +308,25 @@ export function MirrorVideo({
         startsItself.current = true;
 
         instance.on(Hls.Events.MANIFEST_PARSED, () => {
+          // A student this device already knows opens on the rung their line
+          // carries, not on 360 for six seconds — see `start-rung.ts`. Set here,
+          // between parsing and the first segment, which is the one moment
+          // hls.js still reads it.
+          const playerPixels = element.clientWidth * (window.devicePixelRatio || 1);
+          instance.startLevel = startRung(instance.levels, knownBandwidth(), capForWidth(instance.levels, playerPixels));
           setLevels(
             instance.levels
               .map((rung, index) => ({ index, height: rung.height }))
               .sort((a, b) => b.height - a.height),
           );
+        });
+        // Measured while it plays, saved as it goes: a student closes the tab,
+        // they do not stop the video. Not before a few segments have been
+        // timed — until then the estimate is hls.js's default, not this line.
+        let timed = 0;
+        instance.on(Hls.Events.FRAG_LOADED, () => {
+          timed += 1;
+          if (timed >= 3 && timed % 3 === 0) saveBandwidth(instance.bandwidthEstimate);
         });
         instance.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
           setAutoHeight(instance.levels[data.level]?.height ?? null);
