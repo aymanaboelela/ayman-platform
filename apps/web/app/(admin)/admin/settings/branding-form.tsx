@@ -23,6 +23,7 @@ import { Button } from '@ayman/ui/components/button';
 import { RadioGroup, RadioGroupItem } from '@ayman/ui/components/radio-group';
 import { Select } from '@ayman/ui/components/select';
 import { AssetPicker } from '@/components/admin/asset-picker';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
 import { SettingsField, issuesFromErrors } from './settings-field';
 import { updateBrandingAction } from './actions';
 
@@ -107,6 +108,19 @@ const PRESET_LABEL: Record<(typeof LANDING_PRESETS)[number], { name: string; hin
     hint: copy.admin.settings.landingPresetStudioHint,
   },
 };
+
+/**
+ * The pages this stack may pick from.
+ *
+ * «الترمينال» (`neon`) is a programmer's page — `//` section markers, cards
+ * drawn as code windows, monospace numbers — and only a stack that teaches code
+ * is offered it. Elsewhere it is not in the list, and `(site)/page.tsx` renders
+ * `classic` for a row that holds it anyway, so hiding the option and refusing
+ * the page agree. A programming stack sees all four, as before.
+ */
+const OFFERED_PRESETS = TEACHES_CODE
+  ? LANDING_PRESETS
+  : LANDING_PRESETS.filter((preset) => preset !== 'neon');
 
 const LAYOUT_LABEL: Record<(typeof LANDING_LAYOUTS)[number], { name: string; hint: string }> = {
   classic: {
@@ -212,7 +226,15 @@ export function BrandingForm({ defaultValues, assets }: BrandingFormProps) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const form = useForm<BrandingFormValues, unknown, Branding>({
     resolver: zodResolver(BrandingSchema),
-    defaultValues,
+    /*
+     * A stored «الترمينال» on a stack that is not offered it opens the form on
+     * «كلاسيك» — what the page is already rendering — so the radio group never
+     * shows no selection, and the next save writes down what visitors see.
+     */
+    defaultValues:
+      TEACHES_CODE || defaultValues.landingPreset !== 'neon'
+        ? defaultValues
+        : { ...defaultValues, landingPreset: 'classic' },
   });
   const issues = issuesFromErrors(form.formState.errors);
 
@@ -351,7 +373,7 @@ export function BrandingForm({ defaultValues, assets }: BrandingFormProps) {
             }
             aria-label={copy.admin.settings.landingPreset}
           >
-            {LANDING_PRESETS.map((preset) => (
+            {OFFERED_PRESETS.map((preset) => (
               <label key={preset} className="flex items-start gap-3 py-1">
                 <RadioGroupItem value={preset} />
                 <span className="flex flex-col">

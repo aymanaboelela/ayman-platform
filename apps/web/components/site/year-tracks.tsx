@@ -12,6 +12,8 @@ import { TracksDragon, type DragonStage } from '@/components/site/tracks-dragon'
 import { DRAGON_IGNITES_AT, DRAGON_RIDE } from '@/lib/brand-assets';
 import { useRampHex } from '@/lib/ramp-color';
 import { IS_AYMAN } from '@/lib/tenant';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
+import { YearCards } from '@/components/site/year-cards';
 
 const c = copy.landing;
 
@@ -147,6 +149,23 @@ const GLYPHS: readonly [number, number, number, number, number, string][] = [
 ];
 
 /**
+ * The `yearTracks` block — which of its two faces this stack gets.
+ *
+ * The editor windows below are PROGRAMMING: hand-written JavaScript, a status
+ * bar reading «build passing», and a first card that is the code glossary. On
+ * a stack that teaches something else, `<YearCards>` draws the three years as
+ * plain cards instead; see that file for why it is a separate component.
+ *
+ * Decided by a module constant, so it is the same answer on the server, during
+ * hydration and on every render after — nothing here can flip between the two.
+ * A programming stack renders `<CodeYearTracks>` exactly as `YearTracks` was
+ * rendered before this wrapper existed: same element, same props, same DOM.
+ */
+export function YearTracks() {
+  return TEACHES_CODE ? <CodeYearTracks /> : <YearCards />;
+}
+
+/**
  * "Choose your year" — three editor-window cards staged over a lit floor.
  *
  * Below 64rem the staging is impossible (three absolutely-positioned cards at
@@ -155,7 +174,7 @@ const GLYPHS: readonly [number, number, number, number, number, string][] = [
  * scaled down, because a 3:4 cut-out behind a stacked column has nothing to
  * stand behind.
  */
-export function YearTracks() {
+function CodeYearTracks() {
   const ref = useRef<HTMLElement>(null);
   const stageRef = useRef<DragonStage | null>(null);
   // A real dependency for the `useGsap` call below, not decoration: TracksDragon

@@ -259,14 +259,22 @@ describe('the footer switch', () => {
    *     const i=s.indexOf('  return (\\n    <footer className=\\\"site-footer\\\">');\
    *     console.log(require('crypto').createHash('sha256').update(s.slice(i)).digest('hex'))"
    *
-   * Last regenerated 2026-09-29, for a change he asked for about this footer
+   * Regenerated 2026-09-29, for a change he asked for about this footer
    * in as many words — «هنا حسّن الدنيا والديزاين شوية»: `--brand-ink` on each
    * social button, a modifier class on «الصفحات», and «لأول الصفحة» in the
    * bottom bar. Every link and channel it had is still there.
+   *
+   * Last regenerated 2026-10-11, for `TENANT_SUBJECT`: the two subject lines
+   * under the wordmark now read through the subject gate — `{SITE_TAGLINE}`
+   * and `bySubject(c.footerTagline, …)` — so a physics teacher's footer stops
+   * announcing programming. On a programming stack both expressions ARE the
+   * strings they replaced (`SITE_TAGLINE === copy.site.tagline`, and
+   * `bySubject` returns its first argument), which `subject-copy.test.ts`
+   * pins, so the HTML his students are served did not change by a byte.
    */
   it('still ends in the exact classic footer', () => {
     const digest = createHash('sha256').update(FOOTER.slice(CLASSIC_FOOTER_AT)).digest('hex');
-    expect(digest).toBe('33a7a9cc55ad572ebacc26197dadb11c71b7d458fcfc4454aaa95da9a0bb398d');
+    expect(digest).toBe('3968d31cb7c308b2d121c76ed6a30ead0f992531c27399a17bcfc563eeaed9a3');
   });
 
   it('branches on the preset BEFORE the classic return, so classic falls through', () => {

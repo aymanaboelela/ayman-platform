@@ -8,6 +8,7 @@ import { JsonLd } from '@/components/seo/json-ld';
 import { buildMetadata, SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { faqPageJsonLd } from '@/lib/seo/jsonld';
 import { getHomeBlocks, getHonorBoard } from '@/lib/home-blocks';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
 import { SiteHero } from '@/components/site/site-hero';
 import { WhyRail } from '@/components/site/why-rail';
 import { FeaturedCourses } from '@/components/site/featured-courses';
@@ -156,7 +157,14 @@ export default async function HomePage() {
    * is nothing here to suspend — a plain `await import()` in an async server
    * component is the server-side spelling.
    */
-  if (branding.landingPreset === 'neon') {
+  /*
+   * «الترمينال» only where the subject IS code. Its whole vocabulary — `//`
+   * section markers, code-window cards, a monospace everything — describes a
+   * programming course, and on a physics teacher's stack it would be a costume.
+   * The branding picker no longer offers it there; a row that already holds it
+   * falls through to `classic` below rather than rendering the costume.
+   */
+  if (branding.landingPreset === 'neon' && TEACHES_CODE) {
     const { default: NeonLanding } = await import('@/components/site/presets/neon/neon-landing');
     return <NeonLanding blocks={blocks} honorBoard={honorBoard} />;
   }
