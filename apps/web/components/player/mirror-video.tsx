@@ -122,11 +122,31 @@ function adapt(element: HTMLVideoElement, trim: VideoTrim | null): YouTubePlayer
  */
 export const HLS_CONFIG: Partial<HlsConfig> = {
   /*
-   * The rung is chosen by measured bandwidth, never "the first one in the
-   * playlist" — which is the top rung in ours, and the one most likely to
-   * stall on a phone.
+   * Start on the LIGHTEST rung, say so, and do not test the line first.
+   *
+   * «بيطول عشان يحمّل، والنت عند الناس ضعيف». Left on `startLevel: -1`, hls.js
+   * does two things that cost a weak connection dearly (read off its own debug
+   * log, replayed in real Chrome on a 600 kbit/s line):
+   *
+   *   · it downloads the first segment of the lightest rung "to test bitrate
+   *     and will not buffer it" — five seconds of a 400 KB segment thrown
+   *     away before anything can play;
+   *   · it then tries to pick a starting rung from that measurement, fails
+   *     ("Could not find best starting auto level") and falls back to «first
+   *     in the playlist» — which in OUR master is the TALLEST rung, since
+   *     ffmpeg lists 1080 first. A 1.5 MB 720p segment on a line that does
+   *     60 KB/s: 20 seconds before the first frame.
+   *
+   * Measured, first frame: 26.6 s → 5.9 s at 600 kbit/s, 5.6 s → 1.3 s at
+   * 3 Mbit/s, 0.3 s → 0.1 s on a fast line. The fast line pays for it with
+   * about eight seconds on the 360 rung before ABR climbs — the same trade
+   * YouTube makes, and the one a student on a bad line is asking for.
+   *
+   * Level 0 is the lightest because hls.js sorts levels by bitrate. A lecture
+   * published as it is has one rung, so there it changes nothing.
    */
-  startLevel: -1,
+  startLevel: 0,
+  testBandwidth: false,
   /*
    * What hls.js assumes the line can do before it has timed a single
    * segment. The default is 500 kbps — a guess from a decade ago that pins

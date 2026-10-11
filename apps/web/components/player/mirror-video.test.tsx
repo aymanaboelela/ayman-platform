@@ -76,7 +76,8 @@ describe('MirrorVideo playback tuning', () => {
     expect(built).toHaveLength(1);
     expect(built[0]).toEqual(HLS_CONFIG);
     expect(built[0]).toMatchObject({
-      startLevel: -1,
+      startLevel: 0,
+      testBandwidth: false,
       capLevelToPlayerSize: true,
       maxBufferLength: 60,
       maxMaxBufferLength: 120,
