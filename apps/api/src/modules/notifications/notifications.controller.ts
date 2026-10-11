@@ -10,7 +10,6 @@ import {
 } from '@ayman/contracts/notifications';
 import type { PushPublicKey } from '@ayman/contracts/notifications/push';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
-import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { userHasPermission, type Permission } from '../../auth/permissions';
 import { NotificationsService } from './notifications.service';
 import { NotificationsRealtimeService } from './notifications-realtime.service';
@@ -59,18 +58,31 @@ const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 
 /**
- * `/api/me/notifications` — the student's own.
+ * `/api/me/notifications` — the caller's own, whoever they are.
  *
  * Same prefix and the same identity discipline as `/api/me/dashboard`,
  * `/api/me/quizzes` and `/api/me/activity`: the read routes take no id
  * parameter at all, and the one route that does (`:id/read`) is scoped by
  * `{ id, userId }` inside `updateMany`, so a guessed id belonging to another
- * student updates zero rows instead of theirs.
+ * account updates zero rows instead of theirs.
  *
- * `profile:read` is the permission — every signed-in student holds it, and
- * notifications are personal rather than course content. Deliberately not
- * `quiz:read`, even though two of the three kinds come from the quiz engine:
- * the notification list is about the caller, not about a quiz.
+ * ⚠️ No `@RequirePermission` on any route here, on purpose — every route
+ * used to carry `profile:read`/`profile:write`, reasoning «every signed-in
+ * student holds it». That was true until the per-account permission screen
+ * (`/admin/roles` → «المساعد ده يشوف إيه») existed: an assistant scoped down
+ * to a handful of sections (رد على المحادثات، مراجعة الدفعات — never «الملف
+ * الشخصي», which has nothing to do with either) lost `profile:read`, and
+ * `<NotificationBell>` — mounted for every admin page, not opt-in — threw a
+ * plain `Error` on the 403 straight through `ErrorBoundaryHandler`:
+ * «الصفحة وقعت» on `/admin` itself, for an account whose actual granted
+ * permissions worked everywhere they were checked.
+ *
+ * The bell is not a course-content or profile-content screen; it is the
+ * self-scoped inbox every signed-in account — student, assistant, admin —
+ * is owed regardless of what else it may or may not do. `AuthGuard`'s bare
+ * deny-by-default is the correct gate, same reasoning as `SessionController`
+ * (see its own note): authenticated is the only question this answers, not
+ * «entitled to what».
  */
 @Controller('me')
 export class NotificationsController {
@@ -89,8 +101,8 @@ export class NotificationsController {
    * client never answers on the same channel. SSE is the protocol shaped like
    * that, and — more usefully here — it is plain HTTP. It goes through the same
    * Traefik, carries the same session cookie, and passes the same
-   * `RequirePermission` guard as every other route in this file, so «مين ده»
-   * is answered once, in the place it is already answered. A WebSocket would
+   * `AuthGuard` as every other route in this file, so «مين ده» is answered
+   * once, in the place it is already answered. A WebSocket would
    * need its own upgrade path through the proxy, its own authentication
    * handshake, and its own reconnect logic, to carry strictly less.
    *
@@ -104,7 +116,6 @@ export class NotificationsController {
    * learn about a change sooner, and a client that misses every frame is
    * behind by one poll, not wrong.
    */
-  @RequirePermission('profile:read')
   @Get('notifications/stream')
   stream(@CurrentUser() user: AuthenticatedUser, @Res() response: Response): void {
     const open = openStreams.get(user.id) ?? 0;
@@ -189,7 +200,6 @@ export class NotificationsController {
     });
   }
 
-  @RequirePermission('profile:read')
   @Get('notifications')
   feed(
     @CurrentUser() user: AuthenticatedUser,
@@ -203,7 +213,6 @@ export class NotificationsController {
    * Its own route rather than a field on the feed: the topbar renders this on
    * every page and must not fetch twenty rows to show one number.
    */
-  @RequirePermission('profile:read')
   @Get('notifications/unread-count')
   async unread(@CurrentUser() user: AuthenticatedUser): Promise<UnreadCount> {
     return { unread: await this.notifications.unreadCount(user.id) };
@@ -218,7 +227,6 @@ export class NotificationsController {
    * timestamp, so "when did I read this" stays true across a double-click or a
    * retried request.
    */
-  @RequirePermission('profile:write')
   @Post('notifications/:id/read')
   @HttpCode(204)
   async read(
@@ -228,7 +236,6 @@ export class NotificationsController {
     await this.notifications.markRead(user.id, id);
   }
 
-  @RequirePermission('profile:write')
   @Post('notifications/read-all')
   @HttpCode(204)
   async readAll(@CurrentUser() user: AuthenticatedUser): Promise<void> {
@@ -238,17 +245,15 @@ export class NotificationsController {
   /*
    * ── Web Push — the leg that reaches a browser with no tab open ──────────
    *
-   * Three routes, `profile:read`/`profile:write` like every route above:
-   * this is a self-service toggle on the CALLER'S OWN browser, not a kind-
-   * specific authority, so it needs no permission of its own — the same
-   * reasoning that keeps the feed and the mark-read routes on `profile:*`
-   * rather than inventing one per notification kind.
+   * Three routes, no `@RequirePermission` like every route above: this is a
+   * self-service toggle on the CALLER'S OWN browser, not a kind-specific
+   * authority, so it needs no permission of its own — same reasoning as the
+   * feed and the mark-read routes, see the class-level note.
    */
 
   /** `null` when `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` are
    *  not all configured — the toggle stays quiet in that case rather than
    *  subscribing a browser the API could never send to. */
-  @RequirePermission('profile:read')
   @Get('push/public-key')
   publicKey(): PushPublicKey {
     return { publicKey: this.push.publicKey() };
@@ -260,7 +265,6 @@ export class NotificationsController {
    * subscription object it just posted, and there is nothing useful to hand
    * back.
    */
-  @RequirePermission('profile:write')
   @Post('push/subscribe')
   @HttpCode(204)
   @UsePipes(ZodValidationPipe)
@@ -271,7 +275,6 @@ export class NotificationsController {
     await this.push.subscribe(user.id, body);
   }
 
-  @RequirePermission('profile:write')
   @Post('push/unsubscribe')
   @HttpCode(204)
   @UsePipes(ZodValidationPipe)

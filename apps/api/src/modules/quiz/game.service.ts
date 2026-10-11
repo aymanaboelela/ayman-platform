@@ -26,11 +26,22 @@ import {
   type GameSource,
   type GameStartRequest,
 } from '@ayman/contracts/quiz/game';
+import {
+  PRACTICE_SECONDS_PER_QUESTION,
+  freshFirst,
+  isFoundationCourse,
+  type Exposure,
+  type GameHubTopic,
+  type TopicBucket,
+} from '@ayman/contracts/quiz/challenges';
 import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import { Prisma } from '../../generated/prisma/client';
+import { sanitizeRichText } from '../../common/sanitize/rich-text';
 import { azureSpeech } from './game-voice.config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EnrollmentService } from '../enrollment/enrollment.service';
+import { challengeCandidates, courseLessons, lessonServes, topicHomeLessons } from './challenge-pool';
+import { exposuresOf, recordExposures } from './question-exposure';
 
 /** «سهل» لو ٧٠٪ من اللي جاوبوه جابوه صح، و«صعب» لو أقل من ٤٠٪. */
 const EASY_AT = 0.7;
@@ -48,6 +59,8 @@ const DEALT_WINDOW_MS = 12 * 60 * 60 * 1000;
 interface PoolEntry {
   versionId: string;
   bankEntryId: string;
+  /** «صيغ لنفس الفكرة» — شوف `QuestionBankEntry.variantGroupKey`. */
+  variantGroupKey: string | null;
   courseId: string;
   source: GameSource;
   lessonId: string | null;
@@ -82,6 +95,13 @@ interface PoolRow {
   section_position: number | null;
   bank_entry_id: string;
   category_id: string;
+  variant_group_key: string | null;
+}
+
+/** «التحديات» المتشغّلة في كورس واحد، وبنك الطالب فيها. */
+export interface TopicCourse {
+  topics: GameHubTopic[];
+  entries: PoolEntry[];
 }
 
 /** ترتيب المستويات اللي بنسحب منها لكل اختيار — الأقرب الأول. */
@@ -145,7 +165,7 @@ export class GameService {
   ) {}
 
   async hub(userId: string): Promise<GameHub> {
-    const [pool, me] = await Promise.all([this.pool(userId), this.me(userId)]);
+    const [pool, me, topical] = await Promise.all([this.pool(userId), this.me(userId), this.topicCourses(userId)]);
     const courses: GameHubCourse[] = [];
     for (const course of pool.courses.values()) {
       const counts = { easy: 0, medium: 0, hard: 0 };
@@ -177,7 +197,27 @@ export class GameService {
         lessons,
         buckets: [...buckets.values()],
         modes: pool.modes.get(course.id) ?? defaultGameModes(),
+        ...topicFields(topical.get(course.id)),
       });
+    }
+    // كورس فيه «تحديات» بيظهر حتى لو الطالب لسه ماامتحنش ولا كويز فيه — بنك
+    // التحديات مش مستني الكويزات.
+    const listed = new Set(courses.map((course) => course.id));
+    const missing = [...topical.keys()].filter((id) => !listed.has(id));
+    if (missing.length > 0) {
+      const titles = await this.prisma.course.findMany({ where: { id: { in: missing } }, select: { id: true, title: true } });
+      for (const course of titles) {
+        courses.push({
+          id: course.id,
+          title: course.title,
+          counts: { easy: 0, medium: 0, hard: 0 },
+          sections: [],
+          lessons: [],
+          buckets: [],
+          modes: pool.modes.get(course.id) ?? defaultGameModes(),
+          ...topicFields(topical.get(course.id)),
+        });
+      }
     }
     /*
      * The course the student PAID for first, then by size. Sorting by size
@@ -198,7 +238,8 @@ export class GameService {
     courses.sort(
       (a, b) => Number(paid.has(b.id)) - Number(paid.has(a.id)) || countOf(b) - countOf(a),
     );
-    return { total: pool.entries.size, courses, voice: azureSpeech() !== null, me };
+    const topicTotal = [...topical.values()].reduce((sum, course) => sum + course.entries.length, 0);
+    return { total: pool.entries.size + topicTotal, courses, voice: azureSpeech() !== null, me };
   }
 
   /**
@@ -209,7 +250,7 @@ export class GameService {
     const pool = await this.pool(userId);
     const entries = eligible(pool, query.mode, query.courseId, { kind: 'all' });
     const picked = pick(entries, query.mode, query.level);
-    return { ...(await this.render(picked, query.mode, query.level)), poolSize: entries.length, sessionId: null };
+    return { ...(await this.render(picked, query.mode, query.level)), poolSize: entries.length, sessionId: null, practice: false };
   }
 
   /**
@@ -218,11 +259,25 @@ export class GameService {
    * الطالب مالهاش أسئلة، فالجولة بترجع فاضية ومابتتسجّلش.
    */
   async start(userId: string, input: GameStartRequest): Promise<GameRound> {
-    const pool = await this.pool(userId);
-    const scope: GameScope = { kind: input.scope, id: input.scopeId };
-    const entries = eligible(pool, input.mode, input.courseId, scope);
-    const picked = pick(entries, input.mode, input.level);
-    const round = await this.render(picked, input.mode, input.level);
+    const practice = input.practice === true;
+    const topicIds = input.topicIds?.length ? input.topicIds : null;
+    let entries: PoolEntry[];
+    let usedTopics: string[] = [];
+    if (topicIds && input.courseId) {
+      const topical = (await this.topicCourses(userId, [input.courseId])).get(input.courseId);
+      // تحدّي مش متشغّل، أو من كورس تاني، بيتشال بهدوء — النطاق بيضيّق بس.
+      const chosen = (topical?.topics ?? []).filter((topic) => topicIds.includes(topic.id));
+      usedTopics = chosen.map((topic) => topic.id);
+      const lessons = new Set(chosen.flatMap((topic) => topic.lessonIds));
+      entries = (topical?.entries ?? []).filter((entry) => entry.lessonId !== null && lessons.has(entry.lessonId));
+    } else {
+      const pool = await this.pool(userId);
+      const scope: GameScope = { kind: input.scope, id: input.scopeId };
+      entries = eligible(pool, input.mode, input.courseId, scope);
+    }
+    const seen = await exposuresOf(this.prisma, [userId]);
+    const picked = pick(entries, input.mode, input.level, seen);
+    const round = { ...(await this.render(picked, input.mode, input.level)), practice };
     if (round.questions.length === 0) return { ...round, poolSize: entries.length, sessionId: null };
 
     const now = new Date();
@@ -232,8 +287,10 @@ export class GameService {
         // كله من البنك اللي السيرفر حسبه، فالـFKs موجودة: الجولة مابتتكتبش
         // إلا لو فيه سؤال واحد على الأقل اتسحب من النطاق ده.
         courseId: input.courseId ?? null,
-        sectionId: input.scope === 'section' ? (input.scopeId ?? null) : null,
-        lessonId: input.scope === 'lesson' ? (input.scopeId ?? null) : null,
+        sectionId: !topicIds && input.scope === 'section' ? (input.scopeId ?? null) : null,
+        lessonId: !topicIds && input.scope === 'lesson' ? (input.scopeId ?? null) : null,
+        topicIds: usedTopics,
+        practice,
         mode: input.mode,
         level: input.level,
         questionIds: round.questions.map((question) => question.id),
@@ -248,11 +305,19 @@ export class GameService {
 
   async answer(userId: string, input: GameAnswerRequest): Promise<GameAnswerResult> {
     const session = input.sessionId ? await this.dealt(userId, input.sessionId, input.questionId) : null;
-    const options = session ? await this.optionsOf(input.questionId) : await this.optionsInPool(userId, input.questionId);
-    const rightOptionIds = rightOf(options);
+    if (!session) await this.assertInPool(userId, input.questionId);
+    const version = await this.prisma.questionVersion.findUnique({
+      where: { id: input.questionId },
+      select: { generalFeedbackHtml: true, options: { select: { id: true, fraction: true } } },
+    });
+    const rightOptionIds = rightOf(version?.options ?? []);
     const correct = input.optionId !== null && rightOptionIds.includes(input.optionId);
-    if (session) await this.record(session, input, correct);
-    return { correct, rightOptionIds };
+    if (session) await this.record(userId, session, input, correct);
+    // الشرح بيوصل مع الصح بس — بعد ما الإجابة اتحسبت، زي `rightOptionIds`.
+    // بيتنضّف تاني هنا زي أسئلة الساحة: المتصفح بيرسمه من رد API مباشرةً، من
+    // غير سيرفر كومبوننت في النص.
+    const explanationHtml = version?.generalFeedbackHtml?.trim() ? sanitizeRichText(version.generalFeedbackHtml) : null;
+    return { correct, rightOptionIds, explanationHtml };
   }
 
   async lifeline(userId: string, input: GameLifelineRequest): Promise<GameLifelineResult> {
@@ -288,6 +353,7 @@ export class GameService {
         outcome: true,
         score: true,
         durationSeconds: true,
+        practice: true,
       },
     });
     if (!session) throw new NotFoundException();
@@ -307,8 +373,10 @@ export class GameService {
       answers: answers.map((answer) => answer.correct),
       claimedScore: input.score,
     });
+    // «تدريب» مفيهوش قلوب: الغلط مابيخسّرش الجولة، فهي دايمًا «اكتملت».
+    if (session.practice) settled.outcome = 'finished';
     const now = new Date();
-    const durationSeconds = clampGameSeconds(session.startedAt, now, session.mode, session.level);
+    const durationSeconds = sessionSeconds(session, now);
     // `endedAt: null` في الشرط: نهايتين في نفس اللحظة = واحدة بس بتكتب.
     await this.prisma.gameSession.updateMany({
       where: { id: sessionId, userId, endedAt: null },
@@ -365,12 +433,21 @@ export class GameService {
    * `pool` عن قصد: أي فلتر بيتضاف على البنك (سؤال اتشال من البنك، امتحان
    * جاي) بيوصل للساحة من غير ما حد يفتكرها.
    */
-  async arenaPool(userId: string, courseId: string): Promise<Array<{ versionId: string; facility: number | null }>> {
+  async arenaPool(userId: string, courseId: string): Promise<ArenaPoolItem[]> {
     const pool = await this.pool(userId);
-    return eligible(pool, 'race', courseId, { kind: 'all' }).map((entry) => ({
-      versionId: entry.versionId,
-      facility: entry.facility,
-    }));
+    return eligible(pool, 'race', courseId, { kind: 'all' }).map(arenaItem);
+  }
+
+  /**
+   * «ساحة التحدي» على تحديات: بنك الطالب في دروس التحديات دي (نفس
+   * `topicCourses` بتاع الألعاب — نظامه، والامتحانات اللي لسه). تحدّي مش
+   * متشغّل أو من كورس تاني مابيضيفش حاجة.
+   */
+  async arenaTopicPool(userId: string, courseId: string, topicIds: readonly string[]): Promise<ArenaPoolItem[]> {
+    const course = (await this.topicCourses(userId, [courseId])).get(courseId);
+    if (!course) return [];
+    const lessons = new Set(course.topics.filter((topic) => topicIds.includes(topic.id)).flatMap((topic) => topic.lessonIds));
+    return course.entries.filter((entry) => entry.lessonId !== null && lessons.has(entry.lessonId)).map(arenaItem);
   }
 
   /** كام سؤال للساحة في كل كورس في بنك الطالب — كويري واحدة للكل. */
@@ -409,7 +486,7 @@ export class GameService {
   private async dealt(userId: string, sessionId: string, questionId: string) {
     const session = await this.prisma.gameSession.findFirst({
       where: { id: sessionId, userId },
-      select: { id: true, mode: true, level: true, startedAt: true, endedAt: true, questionIds: true },
+      select: { id: true, mode: true, level: true, startedAt: true, endedAt: true, questionIds: true, practice: true },
     });
     if (!session || !session.questionIds.includes(questionId)) throw new NotFoundException();
     return session;
@@ -421,7 +498,8 @@ export class GameService {
    * خلصت خلاص مابتتغيّرش.
    */
   private async record(
-    session: { id: string; mode: GameMode; level: GameLevel; startedAt: Date; endedAt: Date | null },
+    userId: string,
+    session: { id: string; mode: GameMode; level: GameLevel; startedAt: Date; endedAt: Date | null; practice: boolean },
     input: GameAnswerRequest,
     correct: boolean,
   ): Promise<void> {
@@ -438,9 +516,12 @@ export class GameService {
         answered: { increment: 1 },
         correct: { increment: correct ? 1 : 0 },
         lastActivityAt: now,
-        durationSeconds: clampGameSeconds(session.startedAt, now, session.mode, session.level),
+        durationSeconds: sessionSeconds(session, now),
       },
     });
+    // «ماتكرّرش السؤال»: اتشاف دلوقتي. اللي اتوزّع ومااتجاوبش (الجولة وقفت
+    // قبله) لسه «جديد».
+    await recordExposures(this.prisma, [userId], [input.questionId]);
   }
 
   /** الاختيارات بـ`fraction` — بس لسؤال في بنك الطالب؛ غير كده 404 مش الإجابة. */
@@ -461,7 +542,7 @@ export class GameService {
     picked: PoolEntry[],
     mode: GameMode,
     level: GameLevel,
-  ): Promise<Omit<GameRound, 'poolSize' | 'sessionId'>> {
+  ): Promise<Omit<GameRound, 'poolSize' | 'sessionId' | 'practice'>> {
     if (picked.length === 0) return { mode, level, questions: [] };
     const versions = await this.prisma.questionVersion.findMany({
       where: { id: { in: picked.map((entry) => entry.versionId) } },
@@ -511,9 +592,9 @@ export class GameService {
       >(Prisma.sql`
         SELECT count(*)::int AS plays,
           COALESCE(sum("duration_seconds"), 0)::int AS seconds,
-          max("score") FILTER (WHERE "mode" = 'race' AND "outcome" IS NOT NULL) AS best_race,
-          max("score") FILTER (WHERE "mode" = 'millionaire' AND "outcome" IS NOT NULL) AS best_millionaire,
-          max("score") FILTER (WHERE "mode" = 'survival' AND "outcome" IS NOT NULL) AS best_survival
+          max("score") FILTER (WHERE "mode" = 'race' AND "outcome" IS NOT NULL AND NOT "practice") AS best_race,
+          max("score") FILTER (WHERE "mode" = 'millionaire' AND "outcome" IS NOT NULL AND NOT "practice") AS best_millionaire,
+          max("score") FILTER (WHERE "mode" = 'survival' AND "outcome" IS NOT NULL AND NOT "practice") AS best_survival
         FROM "app"."game_sessions"
         WHERE "user_id" = ${userId} AND "answered" > 0
       `),
@@ -558,7 +639,66 @@ export class GameService {
   /** الكورسات اللي الطالب يقدر يفتحها دلوقتي — نفس `accessActive` بتاع «كورساتي». */
   private async playableCourseIds(userId: string): Promise<string[]> {
     const enrollments = await this.enrollments.listOwn(userId);
-    return enrollments.filter((enrollment) => enrollment.accessActive).map((enrollment) => enrollment.courseId);
+    const ids = enrollments.filter((enrollment) => enrollment.accessActive).map((enrollment) => enrollment.courseId);
+    if (ids.length === 0) return [];
+    // الكورس التأسيسي عمره ما بيظهر في الألعاب ولا التحديات — طلب أيمن بالنص.
+    const courses = await this.prisma.course.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, title: true, subtitle: true },
+    });
+    const foundation = new Set(courses.filter((course) => isFoundationCourse(course)).map((course) => course.id));
+    return ids.filter((id) => !foundation.has(id));
+  }
+
+  /**
+   * «التحديات» المتشغّلة في كورسات الطالب، وبنكه في كل واحد — شوف
+   * `challenge-pool.ts`. البنك متفلتر على نظام الطالب (عربي/لغات): درس
+   * للّغات بس مابيوصلش طالب عربي. `only` = كورسات معيّنة (الجولة)، غير كده
+   * كل كورساته (صفحة الألعاب).
+   */
+  async topicCourses(userId: string, only?: readonly string[]): Promise<Map<string, TopicCourse>> {
+    const playable = await this.playableCourseIds(userId);
+    const courseIds = only ? playable.filter((id) => only.includes(id)) : playable;
+    if (courseIds.length === 0) return new Map();
+    const rows = await this.prisma.challengeTopic.findMany({
+      where: { courseId: { in: courseIds }, isActive: true },
+      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, title: true, courseId: true, sectionIds: true, lessonIds: true },
+    });
+    if (rows.length === 0) return new Map();
+    const withTopics = [...new Set(rows.map((row) => row.courseId))];
+    const [lessons, candidates, profile] = await Promise.all([
+      courseLessons(this.prisma, withTopics),
+      challengeCandidates(this.prisma, withTopics, userId),
+      this.prisma.studentProfile.findUnique({ where: { userId }, select: { schoolStream: true } }),
+    ]);
+    const stream = profile?.schoolStream ?? null;
+    const served = candidates.filter((candidate) => lessonServes(candidate, stream));
+    const facility = await this.facility([...new Set(served.map((candidate) => candidate.bankEntryId))]);
+
+    const out = new Map<string, TopicCourse>();
+    for (const row of rows) {
+      const course = out.get(row.courseId) ?? { topics: [], entries: [] };
+      course.topics.push({ id: row.id, title: row.title, lessonIds: [...topicHomeLessons(row, lessons)] });
+      out.set(row.courseId, course);
+    }
+    for (const candidate of served) {
+      const course = out.get(candidate.courseId);
+      if (!course) continue;
+      const f = facility.get(candidate.bankEntryId) ?? null;
+      course.entries.push({
+        versionId: candidate.versionId,
+        bankEntryId: candidate.bankEntryId,
+        variantGroupKey: candidate.variantGroupKey,
+        courseId: candidate.courseId,
+        source: 'bank',
+        lessonId: candidate.lessonId,
+        sectionId: candidate.sectionId,
+        facility: f,
+        level: levelOf(f),
+      });
+    }
+    return out;
   }
 
   private async pool(userId: string): Promise<Pool> {
@@ -658,7 +798,7 @@ export class GameService {
         SELECT DISTINCT ON (q.vid) q.vid, q.course_id, co."title" AS course_title, q.source,
           q.lesson_id, ls."title" AS lesson_title, ls."position" AS lesson_position,
           cs."id" AS section_id, cs."title" AS section_title, cs."position" AS section_position,
-          v."bank_entry_id", be."category_id"
+          v."bank_entry_id", be."category_id", be."variant_group_key"
         FROM allq q
         JOIN "app"."question_versions" v ON v."id" = q.vid AND v."type" IN ('mcq_single', 'true_false')
         -- سؤال اتشال من البنك («امسح السؤال» على سؤال حد حلّه) مابيدخلش أي
@@ -687,7 +827,7 @@ export class GameService {
     const pool: Pool = { entries: new Map(), courses: new Map(), modes: modesByCourse(settings) };
     for (const row of kept) {
       const f = facility.get(row.bank_entry_id) ?? null;
-      const level: GameLevel = f === null ? 'medium' : f >= EASY_AT ? 'easy' : f < HARD_BELOW ? 'hard' : 'medium';
+      const level = levelOf(f);
       const course = pool.courses.get(row.course_id) ?? {
         id: row.course_id,
         title: row.course_title,
@@ -708,6 +848,7 @@ export class GameService {
       pool.entries.set(row.vid, {
         versionId: row.vid,
         bankEntryId: row.bank_entry_id,
+        variantGroupKey: row.variant_group_key,
         courseId: row.course_id,
         source: row.source,
         lessonId: placed ? row.lesson_id : null,
@@ -773,6 +914,23 @@ export class GameService {
   }
 }
 
+/** سؤال في بنك الساحة — `pickQuestions` بيحتاج المجموعة عشان «ماتكرّرش». */
+export interface ArenaPoolItem {
+  versionId: string;
+  facility: number | null;
+  bankEntryId: string;
+  variantGroupKey: string | null;
+}
+
+function arenaItem(entry: PoolEntry): ArenaPoolItem {
+  return {
+    versionId: entry.versionId,
+    facility: entry.facility,
+    bankEntryId: entry.bankEntryId,
+    variantGroupKey: entry.variantGroupKey,
+  };
+}
+
 /** إعدادات كل كورس، واللي مالوش صف على الافتراضي. */
 export function modesByCourse(
   rows: ReadonlyArray<{ courseId: string; mode: GameMode; useQuizzes: boolean; useBank: boolean; lessonIds: string[] }>,
@@ -795,6 +953,34 @@ function eligible(pool: Pool, mode: GameMode, courseId: string | undefined, scop
   });
 }
 
+/** «سهل» لو ٧٠٪ جابوه صح، «صعب» لو أقل من ٤٠٪، ومن غير إجابات كفاية متوسط. */
+function levelOf(f: number | null): GameLevel {
+  return f === null ? 'medium' : f >= EASY_AT ? 'easy' : f < HARD_BELOW ? 'hard' : 'medium';
+}
+
+/** المدة المحسوبة — «تدريب» من غير تايمر، فسقفه دقيقتين للسؤال. */
+function sessionSeconds(
+  session: { startedAt: Date; mode: GameMode; level: GameLevel; practice: boolean },
+  now: Date,
+): number {
+  if (!session.practice) return clampGameSeconds(session.startedAt, now, session.mode, session.level);
+  const elapsed = Math.floor((now.getTime() - session.startedAt.getTime()) / 1000);
+  return Math.max(0, Math.min(GAME_RULES[session.mode].questions * PRACTICE_SECONDS_PER_QUESTION, elapsed));
+}
+
+/** حقول «التحديات» في كورس صفحة الألعاب — الأعداد لكل درس، من غير الأسئلة. */
+function topicFields(course: TopicCourse | undefined): { topics: GameHubTopic[]; topicBuckets: TopicBucket[] } {
+  if (!course) return { topics: [], topicBuckets: [] };
+  const buckets = new Map<string, TopicBucket>();
+  for (const entry of course.entries) {
+    if (!entry.lessonId) continue;
+    const bucket = buckets.get(entry.lessonId) ?? { lessonId: entry.lessonId, counts: { easy: 0, medium: 0, hard: 0 } };
+    bucket.counts[entry.level] += 1;
+    buckets.set(entry.lessonId, bucket);
+  }
+  return { topics: course.topics, topicBuckets: [...buckets.values()] };
+}
+
 function countOf(course: { counts: { easy: number; medium: number; hard: number } }): number {
   return course.counts.easy + course.counts.medium + course.counts.hard;
 }
@@ -811,12 +997,20 @@ function rightOf(options: Array<{ id: string; fraction: Prisma.Decimal | number 
  * المليون: خلطة من التلات مستويات (`MILLIONAIRE_MIX`). المليون والبقاء
  * بيترتّبوا من الأسهل للأصعب — زي البرنامج، كل سؤال أصعب من اللي قبله.
  */
-function pick(entries: PoolEntry[], mode: GameMode, level: GameLevel): PoolEntry[] {
+function pick(
+  entries: PoolEntry[],
+  mode: GameMode,
+  level: GameLevel,
+  seen: ReadonlyMap<string, Exposure> = new Map(),
+): PoolEntry[] {
   const size = GAME_RULES[mode].questions;
+  // «ماتكرّرش السؤال»: اللي ماتشافش الأول (بترتيب عشوائي)، وبعدين الأقدم،
+  // وصيغة واحدة بس من كل مجموعة. من غير exposures = عشوائي زي الأول.
+  const fresh = freshFirst(entries, seen, () => randomInt(1_000_000) / 1_000_000);
   const byLevel: Record<GameLevel, PoolEntry[]> = {
-    easy: sample(entries.filter((e) => e.level === 'easy'), entries.length),
-    medium: sample(entries.filter((e) => e.level === 'medium'), entries.length),
-    hard: sample(entries.filter((e) => e.level === 'hard'), entries.length),
+    easy: fresh.filter((e) => e.level === 'easy'),
+    medium: fresh.filter((e) => e.level === 'medium'),
+    hard: fresh.filter((e) => e.level === 'hard'),
   };
 
   let picked: PoolEntry[] = [];

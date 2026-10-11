@@ -34,6 +34,28 @@ export class TaxonomyService {
             orderBy: { sortOrder: 'asc' },
             select: { year: true, labelAr: true, badgeAr: true },
           },
+          /*
+           * Every PLAIN (non-elective) offering in the system — year-1
+           * common subjects (trackId null, no track exists yet at year 1),
+           * year-2/3 shared and specialist البكالوريا subjects. The ONLY
+           * subject source the create-course form had before this was
+           * `track.electives`, which ثانوية عامة never seeds and which
+           * year-1 can never reach (no track at all) — so creating a course
+           * for either left the subject dropdown empty and the form
+           * un-submittable. This is the fix: most subjects are plain: the
+           * elective pair at تانية بكالوريا year-2 is the exception, not the
+           * rule.
+           */
+          offerings: {
+            where: { electiveGroupId: null },
+            orderBy: [{ year: 'asc' }, { sortOrder: 'asc' }],
+            select: {
+              id: true,
+              year: true,
+              trackId: true,
+              subject: { select: { id: true, slug: true, nameAr: true } },
+            },
+          },
           tracks: {
             orderBy: { sortOrder: 'asc' },
             select: {
@@ -67,10 +89,18 @@ export class TaxonomyService {
     return {
       governorates,
       pinnedGovernorateCodes: PINNED_GOVERNORATE_CODES,
-      systems: systems.map((system) => ({
+      systems: systems.map(({ offerings, ...system }) => ({
         ...system,
         // Prisma returns Decimal for numeric columns; the contract says number.
         passPercent: Number(system.passPercent),
+        subjects: offerings.map((offering) => ({
+          id: offering.id,
+          subjectId: offering.subject.id,
+          subjectSlug: offering.subject.slug,
+          nameAr: offering.subject.nameAr,
+          year: offering.year,
+          trackId: offering.trackId,
+        })),
         tracks: system.tracks.map(({ electives, ...track }) => ({
           ...track,
           electiveGroups: electives.map(({ offerings, ...group }) => ({

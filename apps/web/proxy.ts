@@ -8,6 +8,7 @@ import {
   pathFromMarkdownSuffix,
 } from './lib/agents/markdown-routes';
 import { forwardClientIp } from './lib/client-ip';
+import { createFloodGuard, floodGuardIp } from './lib/flood-guard';
 import { HTML_PREVIEW_CSP, HTML_PREVIEW_PATH } from './lib/html-preview';
 import { JS_RUNNER_CSP, JS_RUNNER_PATH } from './lib/js-runner';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
@@ -460,10 +461,21 @@ export function decideRedirect(pathname: string, auth: AuthState): RedirectDecis
 }
 
 /**
- * `GET /api/profile/me` answers both questions this proxy needs in one
- * round trip: 401 means no session, 200 carries `onboardingCompleted`.
- * Cookies are forwarded manually — this is a server-to-server fetch, not a
- * browser request, so nothing attaches them automatically.
+ * `GET /api/session` answers both questions this proxy needs in one round
+ * trip: 401 means no session, 200 carries `onboardingCompleted`. Cookies are
+ * forwarded manually — this is a server-to-server fetch, not a browser
+ * request, so nothing attaches them automatically.
+ *
+ * ⚠️ NOT `/api/profile/me`, on purpose — that route carries `@RequirePermission
+ * ('profile:read')`, a STUDENT permission that has nothing to do with "is
+ * this visitor logged in". A staff account scoped down from `/admin/roles`
+ * (`MemberPermissions`) with no reason to ever hold `profile:read` got a 403
+ * from it, which the `!response.ok` branch below reads as "not authenticated
+ * at all" — a real session, correctly carrying real `admin:access`, bounced
+ * back to `/login` in a loop. `/api/session` (`SessionController`) carries no
+ * `@RequirePermission` at all — any signed-in account can read it — which is
+ * exactly the authentication question this function asks, not an
+ * authorization one.
  *
  * S12 (fail closed): a network error, a non-OK/non-401 status, or a slow
  * API (3s timeout) are ALL treated as "not authenticated" — never as "let
@@ -473,7 +485,7 @@ export function decideRedirect(pathname: string, auth: AuthState): RedirectDecis
 async function resolveAuthState(request: NextRequest): Promise<AuthState> {
   const cookie = request.headers.get('cookie');
   try {
-    const response = await fetch(`${API_ORIGIN}/api/profile/me`, {
+    const response = await fetch(`${API_ORIGIN}/api/session`, {
       // The visitor's IP, or every student shares one throttle bucket — see
       // `lib/client-ip.ts`.
       headers: { ...(cookie ? { cookie } : {}), ...forwardClientIp(request.headers) },
@@ -1071,7 +1083,32 @@ function ensureCsrfCookie(request: NextRequest, response: NextResponse): void {
   });
 }
 
+/** One per process — the counts must outlive a single request. See `lib/flood-guard.ts`. */
+const floodGuard = createFloodGuard();
+
 export async function proxy(request: NextRequest): Promise<NextResponse> {
+  /*
+   * An anonymous address rendering pages faster than any crowd of humans can,
+   * refused BEFORE anything below runs — the auth round trip and the render
+   * are exactly the cost a bot is imposing. First, so nothing else is paid.
+   */
+  if (
+    floodGuard.shouldReject(
+      floodGuardIp(request.headers),
+      !hasSessionCookie(request),
+      request.nextUrl.pathname,
+    )
+  ) {
+    return new NextResponse('طلبات كتير أوي من نفس الشبكة. جرّب تاني كمان دقيقة.', {
+      status: 429,
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+        'retry-after': '60',
+        'cache-control': 'no-store',
+      },
+    });
+  }
+
   /*
    * The JavaScript playground's worker, and the ONE response in this app that
    * is allowed to evaluate a string.
@@ -1150,7 +1187,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
    * is public (`isMarkdownablePath` only ever matches routes absent from
    * `PROTECTED_PREFIXES`, asserted in `markdown-routes.test.ts`), so
    * `resolveRedirect` would return `null` for all of them anyway — running it
-   * first would only add a fetch to `/api/profile/me` on a route that can
+   * first would only add a fetch to `/api/session` on a route that can
    * never redirect.
    */
   const markdownTarget = resolveMarkdownRewrite(

@@ -18,6 +18,7 @@ import { RequirePermission } from '../../auth/decorators/require-permission.deco
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 import { LessonService } from './lesson.service';
 import { VideoUploadService } from '../video-mirror/video-upload.service';
+import { ResourceVideoUploadService } from '../video-mirror/resource-video-upload.service';
 import { YouTubeDurationService } from './youtube-duration.service';
 import { SetHomeworkDto } from '../homework/homework.dto';
 import {
@@ -31,6 +32,7 @@ import {
   SetVideoPosterDto,
   SetVideoTrimDto,
   SetLessonVideoDto,
+  StartResourceVideoUploadDto,
   StartVideoUploadDto,
   UpdateLessonDto,
   UpdateResourceDto,
@@ -43,6 +45,7 @@ export class LessonController {
     private readonly lessons: LessonService,
     private readonly youtube: YouTubeDurationService,
     private readonly uploads: VideoUploadService,
+    private readonly resourceUploads: ResourceVideoUploadService,
   ) {}
 
   /**
@@ -264,6 +267,53 @@ export class LessonController {
   @Post('lessons/:id/resources')
   addResource(@Param('id') id: string, @Body() body: AddResourceDto) {
     return this.lessons.addResource(id, body);
+  }
+
+  /* ── «رفع فيديو» جوّه مواد الدرس ──────────────────────────────────────
+   *
+   * The lecture's upload routes, for a MATERIAL — see
+   * `ResourceVideoUploadService`. `lesson:write` like every other material
+   * write, and `video.upload` like the lecture's upload, because it is the
+   * same cost: the bytes sit on R2 and are encoded again. A stack with the
+   * feature off keeps «رابط يوتيوب» for materials and loses nothing else.
+   *
+   * `start` hangs off the LESSON (the material does not exist yet); the rest
+   * off the material it created.
+   */
+  @RequireFeature('video.upload')
+  @RequirePermission('lesson:write')
+  @Post('lessons/:id/resources/video-upload')
+  startResourceVideoUpload(@Param('id') id: string, @Body() body: StartResourceVideoUploadDto) {
+    return this.resourceUploads.start(id, body);
+  }
+
+  @RequireFeature('video.upload')
+  @RequirePermission('lesson:write')
+  @Post('resources/:id/video-upload/complete')
+  completeResourceVideoUpload(@Param('id') id: string, @Body() body: CompleteVideoUploadDto) {
+    return this.resourceUploads.complete(id, body);
+  }
+
+  @RequireFeature('video.upload')
+  @RequirePermission('lesson:write')
+  @Post('resources/:id/video-upload/resume')
+  resumeResourceVideoUpload(@Param('id') id: string, @Body() body: ResumeVideoUploadDto) {
+    return this.resourceUploads.resume(id, body);
+  }
+
+  @RequireFeature('video.upload')
+  @RequirePermission('lesson:write')
+  @Post('resources/:id/video-upload/abort')
+  abortResourceVideoUpload(@Param('id') id: string, @Body() body: AbortVideoUploadDto) {
+    return this.resourceUploads.abort(id, body);
+  }
+
+  /** Polled while the encoder works. `lesson:write` for the same reason as the lecture's status. */
+  @RequireFeature('video.upload')
+  @RequirePermission('lesson:write')
+  @Get('resources/:id/video-upload/status')
+  resourceVideoUploadStatus(@Param('id') id: string) {
+    return this.resourceUploads.status(id);
   }
 
   @RequirePermission('lesson:write')

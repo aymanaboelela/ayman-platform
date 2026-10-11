@@ -177,6 +177,7 @@ export const PERMISSION_CATEGORIES: readonly PermissionCategory[] = [
       'role:read',
       'role:grant',
       'staff:manage',
+      'staff:set-password',
       'payment:submit',
       'book-order:submit',
     ],

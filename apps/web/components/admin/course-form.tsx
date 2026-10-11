@@ -283,6 +283,27 @@ function formDataOf(draft: Draft, sellsTerms = false): FormData {
 }
 
 /**
+ * الفرع الأول المتاح لنظام/سنة معينة — أو `''` لو السنة ١ (مالهاش مسار خالص).
+ *
+ * ⚠️ عملية حقيقية (صبري، 2026-10-03): «كورس جديد» بتفتح على سنة ٢ افتراضيًا
+ * (أول قيمة في `draft.year`)، والمسار بيبدأ `''` («—»). من سنة ٢ لفوق، كل
+ * صف `SubjectOffering` له `trackId` — مفيش ولا مادة واحدة (حتى «البرمجة
+ * وعلوم الحاسب» بعد #600/#602) بدون مسار. يعني الفورم بيفتح على تركيبة
+ * مضمون إنها تطلع «مفيش مواد متاحة»، والمدرّس لازم يكتشف لوحده إنه محتاج
+ * يختار مسار الأول — حتى لو مادته هي نفسها متاحة لكل المسارات بالتساوي.
+ *
+ * الحل: افتراضي أول مسار حقيقي بدل «—» — أي مسار يفتح الليستة، مش بيأثر
+ * على المادة اللي هتظهر لمواد غير اختيارية زي البرمجة. نفس الدالة بتتنده
+ * عند أول تحميل، وعند تغيير النظام، وعند تغيير السنة من ١ لحاجة تانية —
+ * التلات لحظات اللي المسار كان بيفضل أو بيترجع `''`.
+ */
+function firstTrackIdOrEmpty(taxonomy: Taxonomy, systemId: string, year: number): string {
+  if (year === 1) return '';
+  const system = taxonomy.systems.find((candidate) => candidate.id === systemId);
+  return system?.tracks[0]?.id ?? '';
+}
+
+/**
  * The course's own fields — title, slug, taxonomy, cover, access.
  *
  * ## Two modes, and why the edit one has no «حفظ»
@@ -314,32 +335,37 @@ export function CourseForm({
   sellsTerms = false,
   sellsByMonth = false,
 }: Props) {
-  const [draft, setDraft] = useState<Draft>(() => ({
-    title: defaults?.title ?? '',
-    slug: defaults?.slug ?? initialSlug ?? '',
-    subtitle: defaults?.subtitle ?? '',
-    description: defaults?.description ?? '',
-    systemId: defaults?.systemId ?? taxonomy.systems[0]?.id ?? '',
-    year: defaults?.year ?? 2,
-    trackId: defaults?.trackId ?? '',
-    subjectId: defaults?.subjectId ?? '',
-    coverKey: defaults?.coverKey ?? null,
-    stream: streamChoiceOf(defaults ?? { forGeneral: true, forLanguages: true }),
-    requiresGrant: defaults?.requiresGrant ?? false,
-    emphasis: defaults?.emphasis ?? '',
-    emphasisNote: defaults?.emphasisNote ?? '',
-    comingSoonNote: defaults?.comingSoonNote ?? '',
-    scheduleNote: defaults?.scheduleNote ?? '',
-    whatsappGroupUrl: defaults?.whatsappGroupUrl ?? '',
-    contentComplete: defaults?.contentComplete ?? false,
-    watermarkPhone: defaults?.watermarkPhone ?? false,
-    watermarkName: defaults?.watermarkName ?? true,
-    monthlyPrice:
-      defaults?.monthlyPriceCents != null ? String(defaults.monthlyPriceCents / 100) : '',
-    yearlyPrice: defaults?.yearlyPriceCents != null ? String(defaults.yearlyPriceCents / 100) : '',
-    bookTitle: defaults?.bookTitle ?? '',
-    bookPrice: defaults?.bookPriceCents != null ? String(defaults.bookPriceCents / 100) : '',
-  }));
+  const [draft, setDraft] = useState<Draft>(() => {
+    const initialSystemId = defaults?.systemId ?? taxonomy.systems[0]?.id ?? '';
+    const initialYear = defaults?.year ?? 2;
+    return {
+      title: defaults?.title ?? '',
+      slug: defaults?.slug ?? initialSlug ?? '',
+      subtitle: defaults?.subtitle ?? '',
+      description: defaults?.description ?? '',
+      systemId: initialSystemId,
+      year: initialYear,
+      trackId: defaults?.trackId ?? firstTrackIdOrEmpty(taxonomy, initialSystemId, initialYear),
+      subjectId: defaults?.subjectId ?? '',
+      coverKey: defaults?.coverKey ?? null,
+      stream: streamChoiceOf(defaults ?? { forGeneral: true, forLanguages: true }),
+      requiresGrant: defaults?.requiresGrant ?? false,
+      emphasis: defaults?.emphasis ?? '',
+      emphasisNote: defaults?.emphasisNote ?? '',
+      comingSoonNote: defaults?.comingSoonNote ?? '',
+      scheduleNote: defaults?.scheduleNote ?? '',
+      whatsappGroupUrl: defaults?.whatsappGroupUrl ?? '',
+      contentComplete: defaults?.contentComplete ?? false,
+      watermarkPhone: defaults?.watermarkPhone ?? false,
+      watermarkName: defaults?.watermarkName ?? true,
+      monthlyPrice:
+        defaults?.monthlyPriceCents != null ? String(defaults.monthlyPriceCents / 100) : '',
+      yearlyPrice:
+        defaults?.yearlyPriceCents != null ? String(defaults.yearlyPriceCents / 100) : '',
+      bookTitle: defaults?.bookTitle ?? '',
+      bookPrice: defaults?.bookPriceCents != null ? String(defaults.bookPriceCents / 100) : '',
+    };
+  });
   const [saving, setSaving] = useState(false);
   /*
    * `createCourseAction` redirected back here instead of crashing — say why,
@@ -448,16 +474,26 @@ export function CourseForm({
   const track = system?.tracks.find((candidate) => candidate.id === draft.trackId);
 
   /**
-   * The taxonomy contract only exposes subjects that are members of an
-   * elective group for the selected track and year — that is every subject
-   * this single-subject-per-course platform currently needs a picker for.
-   * `subjectId` here is `Subject.id` (not the offering id `option.id`),
-   * exactly what `Course.subjectId` requires.
+   * Two sources, merged — most subjects are PLAIN offerings (`system.subjects`,
+   * scoped here by year/track), electives are the exception (`تانية بكالوريا`
+   * year-2's pair, via `track.electiveGroups`). Before this merge, a year-1
+   * course (no track at all) or any ثانوية عامة course — which never seeds an
+   * elective group — got an empty dropdown and an unsubmittable form: see
+   * `createCourseAction`'s own note on `subjectId` being required. `subjectId`
+   * here is always `Subject.id` (not the offering id `option.id`), exactly
+   * what `Course.subjectId` requires; deduped by it since the same subject
+   * could in principle appear in both lists.
    */
-  const subjects = (track?.electiveGroups ?? [])
+  const plainSubjects = (system?.subjects ?? [])
+    .filter((option) => option.year === draft.year && option.trackId === (showTrack ? draft.trackId || null : null))
+    .map((option) => ({ id: option.subjectId, nameAr: option.nameAr }));
+  const electiveSubjects = (track?.electiveGroups ?? [])
     .filter((group) => group.year === draft.year)
     .flatMap((group) => group.options)
     .map((option) => ({ id: option.subjectId, nameAr: option.nameAr }));
+  const subjects = [...plainSubjects, ...electiveSubjects].filter(
+    (option, index, all) => all.findIndex((candidate) => candidate.id === option.id) === index,
+  );
 
   /*
    * The LEGACY pair, and the only reason this form still knows about it.
@@ -574,7 +610,12 @@ export function CourseForm({
               id="systemId"
               name="systemId"
               value={draft.systemId}
-              onChange={(event) => update({ systemId: event.target.value, trackId: '' })}
+              onChange={(event) =>
+                update({
+                  systemId: event.target.value,
+                  trackId: firstTrackIdOrEmpty(taxonomy, event.target.value, draft.year),
+                })
+              }
             >
               {taxonomy.systems.map((option) => (
                 <option key={option.id} value={option.id}>
@@ -592,7 +633,17 @@ export function CourseForm({
               id="year"
               name="year"
               value={String(draft.year)}
-              onChange={(event) => update({ year: Number(event.target.value) })}
+              onChange={(event) => {
+                const year = Number(event.target.value);
+                update({
+                  year,
+                  // سنة ١ مالهاش مسار خالص؛ من سنة ٢ لفوق سيب أي مسار
+                  // مختار فعلًا زي ما هو، وادي أول واحد بس لو كان فاضي
+                  // (جاي من سنة ١، أو الحالة الافتراضية الأولى).
+                  trackId:
+                    year === 1 ? '' : draft.trackId || firstTrackIdOrEmpty(taxonomy, draft.systemId, year),
+                });
+              }}
             >
               {(system?.years ?? []).map((option) => (
                 <option key={option.year} value={String(option.year)}>
@@ -1187,6 +1238,21 @@ export function CourseForm({
         that failed looked exactly like one that worked.
       */
       action={async (formData) => {
+        /*
+         * «الصفحة وقعت» (digest 3189615441) on Sabry's stack: a system/year/
+         * track with no subject row at all — الثانوية العامة past year ١ has
+         * none seeded, a real and still-open gap, not just a display bug —
+         * left `subjectId` unsent, and the create crashed before #596 added a
+         * catch around the parse. That catch means a submit from here no
+         * longer crashes, but it still round-trips to the server just to
+         * bounce back with a toast — a dead end dressed as progress. Refusing
+         * HERE, same as the price check below, means the button never sends a
+         * request it already knows cannot succeed.
+         */
+        if (subjects.length === 0) {
+          toast.error(copy.admin.course.subjectEmpty);
+          return;
+        }
         // A typo in a price is not «مش للبيع» — refuse it here, on the page,
         // instead of creating the course without the plan.
         if (!pricesReadable(draftRef.current)) {

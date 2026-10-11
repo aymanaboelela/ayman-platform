@@ -13,6 +13,7 @@ import { StatTile } from '@/components/dashboard/stat-tile';
 import { BulkImportDialog } from '@/components/admin/quiz/bulk-import-dialog';
 import { NewCategoryForm } from '@/components/admin/quiz/new-category-form';
 import { QuestionBankList } from '@/components/admin/quiz/question-bank-list';
+import { CategoryDraftsBand } from '@/components/admin/quiz/publish-drafts-dialog';
 import {
   BankCategorySchema,
   BankListSchema,
@@ -40,6 +41,7 @@ function sanitizeRow(row: BankRow): BankRow {
     versions: row.versions.map((version) => ({
       ...version,
       stemHtml: sanitizeRichText(version.stemHtml),
+      generalFeedbackHtml: version.generalFeedbackHtml ? sanitizeRichText(version.generalFeedbackHtml) : null,
       options: version.options.map((option) => ({ ...option, bodyHtml: sanitizeRichText(option.bodyHtml) })),
     })),
   };
@@ -71,6 +73,11 @@ export default async function QuestionBankPage({
   const categoryId = one('category');
   const type = one('type');
   const archived = one('view') === 'archived';
+  // «مسودات» / «جاهزة» — anything else is both. Not offered on «اللي اتشالت»:
+  // an archived question is out of the bank whatever its status.
+  const statusParam = one('status');
+  const status = !archived && (statusParam === 'draft' || statusParam === 'ready') ? statusParam : '';
+  const grouped = one('sort') === 'group';
   const page = Math.max(1, Number(one('page')) || 1);
 
   const query = new URLSearchParams({
@@ -81,6 +88,8 @@ export default async function QuestionBankPage({
   if (categoryId) query.set('categoryId', categoryId);
   if (type) query.set('type', type);
   if (archived) query.set('archived', '1');
+  if (status) query.set('status', status);
+  if (grouped) query.set('sort', 'group');
 
   const [bank, categories, archivedBank] = await Promise.all([
     apiGetAuthed(`/api/admin/questions?${query}`, BankListSchema),
@@ -96,6 +105,7 @@ export default async function QuestionBankPage({
     .sort((a, b) => b.questionCount - a.questionCount || a.name.localeCompare(b.name, 'ar'));
   const empty = categories.filter((category) => category.questionCount === 0);
   const current = categories.find((category) => category.id === categoryId);
+  const totalDrafts = categories.reduce((sum, category) => sum + category.draftCount, 0);
 
   /** Keeps the other filters when one changes — a link replaces the whole query. */
   const href = (next: Record<string, string | null>): string => {
@@ -104,6 +114,8 @@ export default async function QuestionBankPage({
       category: categoryId || null,
       type: type || null,
       view: archived ? 'archived' : null,
+      status: status || null,
+      sort: grouped ? 'group' : null,
       ...next,
     };
     const out = new URLSearchParams();
@@ -115,7 +127,7 @@ export default async function QuestionBankPage({
   // first in the form's select), and so does the paste.
   const newHref = categoryId ? `/admin/questions/new?category=${encodeURIComponent(categoryId)}` : '/admin/questions/new';
   const pasteCategories = current ? [current, ...categories.filter((category) => category.id !== current.id)] : categories;
-  const filtered = Boolean(search || categoryId || type);
+  const filtered = Boolean(search || categoryId || type || status);
 
   return (
     <>
@@ -189,6 +201,8 @@ export default async function QuestionBankPage({
               {categoryId ? <input type="hidden" name="category" value={categoryId} /> : null}
               {type ? <input type="hidden" name="type" value={type} /> : null}
               {archived ? <input type="hidden" name="view" value="archived" /> : null}
+              {status ? <input type="hidden" name="status" value={status} /> : null}
+              {grouped ? <input type="hidden" name="sort" value="group" /> : null}
             </form>
             <ListControl
               name="category"
@@ -212,12 +226,62 @@ export default async function QuestionBankPage({
                 ...QUESTION_TYPES.map((value) => ({ value, label: copy.quizAdmin.types[value] })),
               ]}
             />
+            <ListControl
+              name="sort"
+              label={c.sortLabel}
+              value={grouped ? 'group' : ''}
+              options={[
+                { value: '', label: c.sortRecent },
+                { value: 'group', label: c.sortGroup },
+              ]}
+            />
           </div>
+
+          {/*
+            «مسودات / جاهزة / الكل» — links, like the view tabs above, so the
+            URL is the state. Only «مسودات» carries a number — the bank's, or
+            the filtered category's, from the panel's own counts: it is the one
+            that says how much reading is still waiting.
+          */}
+          {archived ? null : (
+            <nav className="qbank-status" aria-label={c.statusLabel}>
+              <Link href={href({ status: null })} className="qbank-status__tab" aria-current={status ? undefined : 'page'}>
+                {c.statusAll}
+              </Link>
+              <Link
+                href={href({ status: 'draft' })}
+                className="qbank-status__tab qbank-status__tab--draft"
+                aria-current={status === 'draft' ? 'page' : undefined}
+              >
+                <span className="qbank-status__dot" aria-hidden="true" />
+                {c.statusDraft}
+                <span className="qbank-cat__count">{current ? current.draftCount : totalDrafts}</span>
+              </Link>
+              <Link
+                href={href({ status: 'ready' })}
+                className="qbank-status__tab qbank-status__tab--ready"
+                aria-current={status === 'ready' ? 'page' : undefined}
+              >
+                <span className="qbank-status__dot" aria-hidden="true" />
+                {c.statusReady}
+              </Link>
+            </nav>
+          )}
+
+          {current && current.draftCount > 0 && !archived ? (
+            <CategoryDraftsBand
+              categoryId={current.id}
+              categoryName={current.name}
+              draftCount={current.draftCount}
+              reviewHref={href({ status: 'draft', sort: 'group', q: null, type: null })}
+              reviewing={status === 'draft'}
+            />
+          ) : null}
 
           <div className="qbank-filters__meta">
             <span>{formatCopy(copy.quizAdmin.bankCount, { n: bank.rowCount })}</span>
             {filtered ? (
-              <Link href={href({ q: null, category: null, type: null })} className="chip chip--quiet">
+              <Link href={href({ q: null, category: null, type: null, status: null })} className="chip chip--quiet">
                 {c.clearFilters}
               </Link>
             ) : null}
@@ -238,7 +302,7 @@ export default async function QuestionBankPage({
               }
             />
           ) : (
-            <QuestionBankList rows={rows} archived={archived} />
+            <QuestionBankList rows={rows} archived={archived} grouped={grouped} />
           )}
 
           <ListPager
@@ -272,7 +336,7 @@ export default async function QuestionBankPage({
               <span className="qbank-cat__count">{totalInBank}</span>
             </Link>
             {filled.map((category) => (
-              <CategoryLink key={category.id} id={category.id} name={category.name} count={category.questionCount} current={category.id === categoryId} href={href({ category: category.id })} />
+              <CategoryLink key={category.id} id={category.id} name={category.name} count={category.questionCount} drafts={category.draftCount} current={category.id === categoryId} href={href({ category: category.id })} />
             ))}
             {empty.length > 0 ? (
               <details open={Boolean(current && current.questionCount === 0)}>
@@ -298,12 +362,15 @@ function CategoryLink({
   id,
   name,
   count,
+  drafts = 0,
   current,
   href,
 }: {
   id: string;
   name: string;
   count: number;
+  /** Shown as an amber pill — where a paste of drafts is still waiting. */
+  drafts?: number;
   current: boolean;
   href: string;
 }) {
@@ -316,6 +383,9 @@ function CategoryLink({
     >
       <span className="qbank-cat__dot" aria-hidden="true" />
       <span className="qbank-cat__name">{name}</span>
+      {drafts > 0 ? (
+        <span className="qbank-cat__drafts">{formatCopy(c.draftsPill, { n: drafts })}</span>
+      ) : null}
       <span className="qbank-cat__count">{count}</span>
     </Link>
   );

@@ -213,10 +213,20 @@ export const AdminBookOrderRowSchema = z.object({
    *  an order that never passed through the printer, which is a real path and
    *  not a missing value: see `BookOrderStatusSchema`. */
   printedAt: z.iso.datetime().nullable(),
+  /** When the order went into the courier's system — the double-push guard.
+   *  See `BookOrder.courierSentAt`. */
+  courierSentAt: z.iso.datetime().nullable(),
+  /** The courier's own words for the last refused push, or null. */
+  courierError: z.string().nullable(),
+  /** The latest courier status — same shape the student sees. */
+  courier: BookOrderSchema.shape.courier,
   shippedAt: z.iso.datetime().nullable(),
   /** Set when the admin confirmed ARRIVAL, which is the transition that
    *  notifies the student. `shippedAt` only records that it left. */
   deliveredAt: z.iso.datetime().nullable(),
+  /** «مرتجع» — when it came back, and why if anybody said. */
+  returnedAt: z.iso.datetime().nullable(),
+  returnReason: z.string().nullable(),
   rejectedAt: z.iso.datetime().nullable(),
   /** The admin's own words, shown to the student. Non-null exactly when
    *  `rejectedAt` is — a database CHECK keeps the pair together. */
@@ -259,6 +269,40 @@ export const MarkBookOrderDeliveredResultSchema = z.object({
   deliveredAt: z.iso.datetime(),
 });
 export type MarkBookOrderDeliveredResult = z.infer<typeof MarkBookOrderDeliveredResultSchema>;
+
+/**
+ * «رجعت (مرتجع)» — the reason is OPTIONAL, unlike a rejection's: the courier
+ * often says nothing useful, and a mandatory box gets «.» typed into it.
+ */
+export const MarkBookOrderReturnedSchema = z
+  .object({ reason: z.string().trim().max(300).nullable().default(null) })
+  .strict();
+export type MarkBookOrderReturnedInput = z.infer<typeof MarkBookOrderReturnedSchema>;
+
+export const MarkBookOrderReturnedResultSchema = z.object({
+  id: z.uuid(),
+  status: z.literal('returned'),
+  returnedAt: z.iso.datetime(),
+});
+export type MarkBookOrderReturnedResult = z.infer<typeof MarkBookOrderReturnedResultSchema>;
+
+/**
+ * One status change the courier reported — a row of the «فين الكتاب؟» trail
+ * the admin opens on an order. Oldest first, the order it happened in.
+ */
+export const BookOrderCourierEventSchema = z.object({
+  id: z.uuid(),
+  statusId: z.number().int(),
+  statusName: z.string(),
+  note: z.string().nullable(),
+  /** Their date, as they sent it — no time, no zone. */
+  statusDate: z.string().nullable(),
+  agentName: z.string().nullable(),
+  agentPhone: z.string().nullable(),
+  receivedAt: z.iso.datetime(),
+});
+export type BookOrderCourierEvent = z.infer<typeof BookOrderCourierEventSchema>;
+export const BookOrderCourierEventListSchema = z.array(BookOrderCourierEventSchema);
 
 /** «راح للمطبعة» — the hand-off BEFORE the courier's. Same convention again. */
 export const MarkBookOrderPrintingResultSchema = z.object({
@@ -562,6 +606,9 @@ export const BULK_NOT_HELD_REASON = 'مش محجوز';
 export const BulkBookOrderOutcomeSchema = z.enum([
   'shipped',
   'printing',
+  /** «اتبعت لشركة الشحن» — the courier accepted the data, and the order is
+   *  now `shipped` with its student told. */
+  'sent_to_courier',
   'delivered',
   'review_cleared',
   'notice_failed',
@@ -656,7 +703,9 @@ export const PackingListLineSchema = z.object({
   street: z.string(),
   building: z.string().nullable(),
   note: z.string(),
-  createdAt: z.string(),
+  /** `YYYY-MM-DD` of `bookOrderDate` — the day it was PAID, never the day the
+   *  address form was saved. */
+  orderDate: z.string(),
 });
 export type PackingListLine = z.infer<typeof PackingListLineSchema>;
 
@@ -807,7 +856,8 @@ export const PackingLabelSchema = z.object({
   streams: z.array(z.string()),
   /** Total copies in this one parcel. The number the courier counts. */
   copies: z.number().int(),
-  createdAt: z.string(),
+  /** `YYYY-MM-DD` of `bookOrderDate` — see `PackingListLineSchema.orderDate`. */
+  orderDate: z.string(),
 });
 export type PackingLabel = z.infer<typeof PackingLabelSchema>;
 
@@ -945,5 +995,11 @@ export const AdminBookOrderOverviewSchema = z.object({
    * honest answer to «كام طلب فيه كتاب أولى» and the wrong one to «كام طلب».
    */
   years: z.array(AdminBookOrderYearOverviewSchema),
+  /**
+   * How many orders sit on EACH tab under the same search and filters — the
+   * number beside every tab name. «كام في المطبعة؟» used to cost a click per
+   * tab; the tab bar now answers it before anything is pressed.
+   */
+  tabCounts: z.record(z.string(), z.number().int()),
 });
 export type AdminBookOrderOverview = z.infer<typeof AdminBookOrderOverviewSchema>;

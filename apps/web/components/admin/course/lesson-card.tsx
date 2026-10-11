@@ -13,6 +13,7 @@ import {
   setLessonPublishedAction,
 } from '@/app/(admin)/admin/courses/actions';
 import type { AdminCourseDetail } from '@/app/(admin)/admin/courses/[id]/page';
+import { actionErrorMessage } from '@/lib/stale-tab';
 import type { SortableHandleProps } from '../sortable-list';
 import { ConfirmButton } from './confirm-button';
 import { LessonPanel } from './lesson-panel';
@@ -91,10 +92,11 @@ export function LessonCard({
       const result = await setLessonPublishedAction(courseId, lesson.id, !lesson.isPublished);
       if (result.ok) router.refresh();
       else toast.error(result.message);
-    } catch {
+    } catch (error) {
       // A dropped connection or a stale action id after a deploy REJECTS
       // instead of returning `ok: false` — and left the chip disabled.
-      toast.error(copy.admin.common.actionFailed);
+      // `actionErrorMessage` names the real fix (reload) for the stale case.
+      toast.error(actionErrorMessage(error, copy.admin.common.actionFailed));
     } finally {
       setPublishPending(false);
     }

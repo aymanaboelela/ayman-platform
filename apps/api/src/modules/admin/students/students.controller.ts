@@ -185,6 +185,21 @@ export class StudentsController {
     return this.students.setPassword(userId, body.newPassword, user.id);
   }
 
+  /*
+   * نفس الراوت فوق، على المساعدين — بس `staff:set-password` في أساس كل
+   * `owner` (مش محجوبة زي `student:set-password`)، فالحارس الحقيقي جوّه
+   * `setStaffPassword` نفسها: صاحب المنصة بس. شوف تعليقها.
+   */
+  @RequirePermission('staff:set-password')
+  @Post(':userId/staff-password')
+  setStaffPassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId') userId: string,
+    @Body() body: AdminStudentSetPasswordDto,
+  ) {
+    return this.students.setStaffPassword(userId, body.newPassword, user.id);
+  }
+
   /**
    * تعيين مساعد أو رجوعه طالب — الباب الضيّق.
    *

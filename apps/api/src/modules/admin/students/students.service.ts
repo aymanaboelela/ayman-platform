@@ -707,6 +707,60 @@ export class StudentsService {
       throw new ForbiddenException('passwords can only be set on student accounts');
     }
 
+    return this.writePassword(target, newPassword, 'student:set-password', actorUserId);
+  }
+
+  /**
+   * «إعادة تعيين كلمة سر الفريق» — الباب المقابل لـ`setPassword` فوق، على
+   * المساعدين بدل الطلبة. نفس النتيجة بالضبط (هاش جديد، تفريغ قفل الدخول،
+   * وقف كل الجلسات القديمة) ونفس تحذير الـaudit — بس الحارس مختلف تمامًا،
+   * لأن `staff:set-password` في أساس كل `owner` (شوف تعليقها في
+   * `permissions.ts`) فمساعد بيقدر يوصل للراوت ده أصلًا.
+   *
+   * ⚠️ الحماية الحقيقية هنا: **صاحب المنصة نفسه بس**، مهما كانت الصلاحيات
+   * اللي معاه. نفس فكرة حارس `writeUser` في `roles.controller.ts` بالظبط
+   * (أقدم حساب مش-طالب = صاحب المنصة)، بس على المنفّذ مش على الهدف — من
+   * غيره مساعد ماسك `staff:set-password` كان يقدر يغيّر كلمة سر مساعد تاني،
+   * أو حتى صاحب المنصة نفسه.
+   */
+  async setStaffPassword(
+    userId: string,
+    newPassword: string,
+    actorUserId: string,
+  ): Promise<{ status: true }> {
+    const founder = await this.prisma.user.findFirst({
+      where: { role: { not: 'student' } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (!founder || founder.id !== actorUserId) {
+      throw new ForbiddenException('only the platform owner can reset a staff password');
+    }
+
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, phoneNumber: true, role: true },
+    });
+    if (!target) throw new NotFoundException();
+    if (target.role === 'student') {
+      throw new ForbiddenException('passwords can only be set on staff accounts here');
+    }
+
+    return this.writePassword(target, newPassword, 'staff:set-password', actorUserId);
+  }
+
+  /**
+   * الجزء المشترك بين `setPassword` و`setStaffPassword`: هاش، تفريغ قفل
+   * الدخول التلاتة، وقف كل جلسة قديمة، وسجل الـaudit. الحارس (مين، وعلى
+   * مين) بيتعمل قبل ما الدالة دي تتنادى — هي نفسها عمياء عن الهدف.
+   */
+  private async writePassword(
+    target: { id: string; email: string | null; phoneNumber: string | null },
+    newPassword: string,
+    action: 'student:set-password' | 'staff:set-password',
+    actorUserId: string,
+  ): Promise<{ status: true }> {
+    const userId = target.id;
     const passwordHash = await argon2.hash(newPassword, ARGON2_OPTIONS);
 
     await this.prisma.account.upsert({
@@ -789,7 +843,7 @@ export class StudentsService {
     // Never the password itself, hashed or otherwise — just who did it and to
     // whom. `audit_log` is INSERT-only; a credential belongs nowhere in it.
     await this.audit.record({
-      action: 'student:set-password',
+      action,
       resourceType: 'user',
       resourceId: userId,
       outcome: 'success',
@@ -855,6 +909,27 @@ export class StudentsService {
     });
     if (actor?.role === 'admin') return null;
     if (target.role === 'admin') return 'only an admin can do this to an admin account';
+
+    /*
+     * ⚠️ صاحب الستاك نفسه مالوش حد يلمسه — حتى مساعد ماسك `staff:manage`
+     * وكل صلاحيات الـ`owner` من غير ما يتقفل عليه حاجة.
+     *
+     * الفحص اللي تحت (`actorHoldsAll`) بيقارن صلاحيات، ومساعد اتفتحله
+     * كل حاجة هيعدّيه — ساعتها بيقدر يحظر أو يشيل أو يغيّر دور المدرّس اللي
+     * فتحله الصلاحية أصلًا، ومفيش حساب `admin` على الستاكات دي يرجّعه. نفس
+     * حارس `writeUser` في `roles.controller.ts` بالظبط، بس هنا بوابة واحدة
+     * لكل الأفعال الخمسة اللي بتعدّي من `refuseIfOutranked` (تغيير الدور،
+     * الحظر، الفك، المسح) بدل ما يتكرر في كل واحدة لوحدها.
+     */
+    const founder = await this.prisma.user.findFirst({
+      where: { role: { not: 'student' } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (founder && founder.id === target.id && founder.id !== actorUserId) {
+      return 'this is the platform owner\'s account, and it cannot be acted on from here';
+    }
+
     if (!(await this.actorHoldsAll(actorUserId, permissionsForUser(target.id, target.role)))) {
       return 'this account holds permissions you do not';
     }
@@ -883,6 +958,8 @@ export class StudentsService {
     const target = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
     if (!target) throw new NotFoundException();
 
+    // صاحب الستاك مالوش حد يعدّل دوره — `refuseIfOutranked` تحت بترفضها،
+    // شوف الحارس المركزي جوّاها.
     const refusal = await this.refuseIfOutranked(actorUserId, { id: userId, role: target.role });
     if (refusal) throw new ForbiddenException(refusal);
 

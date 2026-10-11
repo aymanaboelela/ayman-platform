@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { HandHeart } from 'lucide-react';
 import {
   DeleteBookOrderSchema,
+  MarkBookOrderReturnedSchema,
   RejectBookOrderSchema,
 } from '@ayman/contracts/admin/book-orders';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -14,6 +16,7 @@ import {
   markBookOrderDeliveredAction,
   rejectBookOrderAction,
   markBookOrderFreeAction,
+  markBookOrderReturnedAction,
   restoreBookOrderAction,
 } from './actions';
 import { ReasonDialog } from './reason-dialog';
@@ -70,19 +73,31 @@ export function DeliverAction({ id }: { id: string }) {
       /* Its own colour, distinct from «اتشحن»'s green: the two sit side by side
          on a paid row and are one click apart in consequence — one is
          bookkeeping, the other tells a student their book is at the door. */
-      className="!bg-[oklch(0.58_0.13_240)] !text-white"
+      style={{ background: 'oklch(0.58 0.13 240)', color: '#fff' }}
     >
+      <HandHeart className="size-4" aria-hidden />
       {pending ? c.delivering : c.deliver}
     </Button>
   );
 }
 
-/** «ارفض الطلب» — the student sees the reason, verbatim. */
-export function RejectOrderAction({ id }: { id: string }) {
+/** «ارفض الطلب» — the student sees the reason, verbatim. Controlled from the
+ *  card's «المزيد» menu when `open` is passed. */
+export function RejectOrderAction({
+  id,
+  open,
+  onOpenChange,
+}: {
+  id: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const refreshUnshippedCount = useRefreshBookOrdersUnshippedCount();
 
   return (
     <ReasonDialog
+      open={open}
+      onOpenChange={onOpenChange}
       triggerLabel={c.reject}
       title={c.rejectDialogTitle}
       hint={c.rejectDialogHint}
@@ -101,12 +116,56 @@ export function RejectOrderAction({ id }: { id: string }) {
   );
 }
 
-/** «احذف الطلب» — soft, internal, and reversible from «المحذوفة». */
-export function RemoveOrderAction({ id }: { id: string }) {
+/** «رجعت (مرتجع)» — opened from the card's «المزيد». The reason may be empty. */
+export function ReturnOrderAction({
+  id,
+  open,
+  onOpenChange,
+}: {
+  id: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const refreshUnshippedCount = useRefreshBookOrdersUnshippedCount();
 
   return (
     <ReasonDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      triggerLabel={c.markReturned}
+      title={c.returnDialogTitle}
+      hint={c.returnDialogHint}
+      reasonLabel={c.returnReasonLabel}
+      placeholder={c.returnReasonPlaceholder}
+      submitLabel={c.returnSubmit}
+      submittingLabel={c.returnSubmitting}
+      failedMessage={c.returnFailed}
+      schema={MarkBookOrderReturnedSchema}
+      onSubmit={async (reason) => {
+        const result = await markBookOrderReturnedAction(id, reason);
+        if (result.ok) refreshUnshippedCount();
+        return result;
+      }}
+    />
+  );
+}
+
+/** «احذف الطلب» — soft, internal, and reversible from «المحذوفة». */
+export function RemoveOrderAction({
+  id,
+  open,
+  onOpenChange,
+}: {
+  id: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const refreshUnshippedCount = useRefreshBookOrdersUnshippedCount();
+
+  return (
+    <ReasonDialog
+      open={open}
+      onOpenChange={onOpenChange}
       triggerLabel={c.remove}
       title={c.removeDialogTitle}
       hint={c.removeDialogHint}

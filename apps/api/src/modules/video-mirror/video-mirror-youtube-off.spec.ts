@@ -41,6 +41,8 @@ function build(pullsFromYouTube: boolean, row: Row | null) {
         },
         update: async () => ({}),
       },
+      // No material waiting either — see the material spec for that queue.
+      lessonResource: { findFirst: async () => null },
     },
     transcodeOne: async (id: string) => void transcoded.push(id),
     mirrorOne: async (id: string) => void pulled.push(id),

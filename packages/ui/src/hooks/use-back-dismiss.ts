@@ -305,3 +305,18 @@ export function useBackDismiss(
 
   return { release };
 }
+
+/**
+ * The back stop for an overlay, as a component — render it INSIDE the part of
+ * the overlay that exists only while it is open (Radix's `Content`).
+ *
+ * ⚠️ A hook call in a wrapper's own body is NOT that. `DialogContent` and
+ * `SheetContent` render whenever their parent does, open or closed; only the
+ * Radix `Content` inside them is absent while closed. Calling `useBackDismiss`
+ * up there armed a stop for every CLOSED dialog on the page, and the browser's
+ * back button had to be pressed once per hidden dialog to leave.
+ */
+export function BackStop({ onBack }: { onBack: () => void }): null {
+  useBackDismiss(onBack);
+  return null;
+}

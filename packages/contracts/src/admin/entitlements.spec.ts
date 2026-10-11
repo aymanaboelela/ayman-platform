@@ -39,13 +39,14 @@ describe('the feature catalogue', () => {
    * المقفول بس هو اللي بيكلّف فلوس (تخزين الفيديو) أو بيبعت من رقم حقيقي
    * (الواتساب والإذاعة) — دول محتاجين قرار صريح من صاحب السوفتوير.
    *
-   * وواحد تالت نوعه: فيتشر اتطلبت «لأيمن بس» (`quizGame`). مابتكلّفش حاجة،
-   * بس فتحها لحد تاني قرار مش افتراضي — CLAUDE.md §٣.
+   * ونوع تالت: فيتشر اتطلبت «لأيمن بس» (`quizGame`، و`books.courier` اللي
+   * حساب شركة الشحن فيها حسابه هو). فتحها لحد تاني قرار مش افتراضي —
+   * CLAUDE.md §٣.
    */
   it('closes only what costs money, sends from a real number, or was asked for Ayman alone', () => {
     const closed = FEATURE_DECLARATIONS.filter((entry) => !entry.defaultForTenant).map((e) => e.key);
 
-    expect(closed).toEqual(['marketing.whatsapp', 'video.upload', 'broadcast', 'quizGame']);
+    expect(closed).toEqual(['marketing.whatsapp', 'video.upload', 'broadcast', 'books.courier', 'quizGame']);
   });
 
   it('gives every key an Arabic name and description for the control screen', () => {

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import {
   BookMarked,
   ChevronLeft,
@@ -14,8 +15,10 @@ import { getSession } from '@/lib/session';
 import { getEntitlements } from '@/lib/entitlements';
 import { getAdminCourseHeadcount, getAdminOverviewStats } from '@/lib/admin-overview';
 import { ADMIN_NAV_GROUPS, visibleNavItems } from '@/components/admin/nav-items';
+import { IS_AYMAN } from '@/lib/tenant';
 import { OverviewQueues } from '@/components/admin/overview-queues';
 import { OverviewCourses } from '@/components/admin/overview-courses';
+import { VideoUsageOverview } from './video-usage-overview';
 
 export const metadata = { title: copy.admin.title };
 
@@ -112,6 +115,15 @@ export default async function AdminOverviewPage() {
       </header>
 
       <OverviewQueues />
+
+      {/* «استهلاك سيرفر الفيديوهات» — owner-only, same gate as `/admin/platforms`
+          itself. Streamed: it calls Cloudflare and must not hold up the rest
+          of the overview (see `VideoUsageOverview`'s own note). */}
+      {IS_AYMAN ? (
+        <Suspense fallback={null}>
+          <VideoUsageOverview />
+        </Suspense>
+      ) : null}
 
       {stats ? (
         <section className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

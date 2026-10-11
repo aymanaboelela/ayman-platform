@@ -136,6 +136,12 @@ export function describeBookOrderStatus(status: BookOrderStatus): BookOrderStatu
     case 'delivered':
       return { label: c.statusDelivered, note: c.noteDelivered, tone: 'var(--ok)', closed: true };
 
+    /* Amber: the one state after payment where the student may have something
+       to do — answer the phone, correct an address. Not closed: it is going
+       out again. */
+    case 'returned':
+      return { label: c.statusReturned, note: c.noteReturned, tone: 'var(--warn)', closed: false };
+
     /* `noteRejected` is only the LEAD-IN — the admin's own words follow it
        verbatim on the card, under `c.rejectionReason`. Same rule
        `payment_rejected` follows, for the same reason: a reason paraphrased by

@@ -8,6 +8,7 @@ import type {
   MarkBookOrderDeliveredResult,
   MarkBookOrderPaidResult,
   MarkBookOrderPrintingResult,
+  MarkBookOrderReturnedResult,
   RejectBookOrderResult,
   RestoreBookOrderResult,
   ClearBookOrderHoldResult,
@@ -24,9 +25,11 @@ import {
   BulkBookOrderActionDto,
   ExportBookOrdersQueryDto,
   MarkBookOrderPaidDto,
+  MarkBookOrderReturnedDto,
   RejectBookOrderDto,
 } from './book-orders.dto';
 import { BookOrdersService } from './book-orders.service';
+import { BookOrderCourierService } from './courier/book-order-courier.service';
 import { RequireFeature } from '../../auth/decorators/require-feature.decorator';
 
 /**
@@ -47,6 +50,7 @@ export class AdminBookOrdersController {
   constructor(
     private readonly bookOrders: BookOrdersService,
     private readonly media: MediaService,
+    private readonly courier: BookOrderCourierService,
   ) {}
 
   @RequirePermission('book-order:read')
@@ -264,6 +268,30 @@ export class AdminBookOrdersController {
     return this.bookOrders.markPrintingMany(user.id, body.ids);
   }
 
+  /**
+   * «ابعت لشركة الشحن» — the run is back from the printer: the orders go into
+   * Torod's system AND are recorded «اتشحن», which is what tells each student.
+   * See `BookOrderCourierService.sendMany`. Gated on
+   * `books.courier` on top of the class's `books`: a stack without the
+   * integration has no button and no route. See `BookOrderCourierService`.
+   */
+  @RequireFeature('books.courier')
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post('courier')
+  @UsePipes(ZodValidationPipe)
+  courierMany(@CurrentUser() user: AuthenticatedUser, @Body() body: BulkBookOrderActionDto) {
+    return this.courier.sendMany(user.id, body.ids);
+  }
+
+  /** «فين الكتاب؟» — every status the courier reported for one order. */
+  @RequireFeature('books.courier')
+  @RequirePermission('book-order:read')
+  @Get(':id/courier-events')
+  courierEvents(@Param('id') id: string) {
+    return this.courier.events(id);
+  }
+
   @RequirePermission('book-order:ship')
   @RequireCsrf()
   @Post(':id/ship')
@@ -300,6 +328,23 @@ export class AdminBookOrdersController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<MarkBookOrderDeliveredResult> {
     return this.bookOrders.markDelivered(user.id, id);
+  }
+
+  /**
+   * «رجعت (مرتجع)» — the courier brought it back. Same desk, same authority as
+   * «وصل»: it is the other way a shipment ends. See
+   * `BookOrdersService.markReturned`.
+   */
+  @RequirePermission('book-order:ship')
+  @RequireCsrf()
+  @Post(':id/return')
+  @UsePipes(ZodValidationPipe)
+  markReturned(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: MarkBookOrderReturnedDto,
+  ): Promise<MarkBookOrderReturnedResult> {
+    return this.bookOrders.markReturned(user.id, id, body.reason);
   }
 
   /**

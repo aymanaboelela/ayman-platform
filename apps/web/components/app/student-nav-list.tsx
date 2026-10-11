@@ -2,7 +2,24 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import type { MouseEvent } from 'react';
+import { isPlainPress } from '@/lib/welcome-motion';
 import { STUDENT_NAV, activeStudentNav } from './student-nav-items';
+
+/**
+ * اللينك اللي الطالب واقف عليه أصلًا: `<Link>` بيدفع history entry جديدة حتى
+ * لو الوجهة نفس الصفحة، فدوسة تانية على نفس الصفحة وهو واقف فيها كانت بتعمل
+ * entry متكررة — وزرار الرجوع بيحتاج دوستين عشان يسيب الصفحة فعلًا
+ * (`isPlainPress` نفسها اللي `welcome-scene.tsx` بيستخدمها لمنطق مشابه: دوسة
+ * عادية بس، فتح تاب جديد أو دوسة طويلة يفضلوا زي ما هم). `onNavigate` لسه
+ * بيتنفّذ عشان شيت الموبايل يقفل حتى لو الوجهة نفسها.
+ */
+function guardActiveLink(isActive: boolean, onNavigate?: () => void) {
+  return (event: MouseEvent<HTMLAnchorElement>) => {
+    onNavigate?.();
+    if (isActive && isPlainPress(event)) event.preventDefault();
+  };
+}
 
 /**
  * The rail's primary links, shared with the mobile sheet — one list, one
@@ -67,7 +84,7 @@ export function StudentNavList({
           <li key={item.href}>
             <Link
               href={item.href}
-              onClick={onNavigate}
+              onClick={guardActiveLink(isActive, onNavigate)}
               title={item.labelAr}
               aria-current={isActive ? 'page' : undefined}
               // `.rail__item` stays alongside `.nav-pill`: the collapsed-rail
@@ -105,7 +122,7 @@ export function StudentNavFooterList({ onNavigate }: { onNavigate?: () => void }
           <li key={item.href}>
             <Link
               href={item.href}
-              onClick={onNavigate}
+              onClick={guardActiveLink(isActive, onNavigate)}
               title={item.labelAr}
               aria-current={isActive ? 'page' : undefined}
               // `.rail__item` stays alongside `.nav-pill`: the collapsed-rail

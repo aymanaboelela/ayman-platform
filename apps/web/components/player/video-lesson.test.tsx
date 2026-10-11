@@ -106,6 +106,8 @@ function fakeYouTube({ ready = 'soon' }: { ready?: 'soon' | 'never' } = {}) {
     (mount: HTMLElement, options: { playerVars?: Record<string, unknown>; events?: FakeEvents }) => {
       events = options.events ?? {};
       playerVars = options.playerVars ?? {};
+      // The real API carries the class across onto its frame.
+      frame.className = mount.className;
       mount.replaceWith(frame);
       if (ready === 'soon') queueMicrotask(() => events.onReady?.({ target: player }));
       return player;
@@ -530,8 +532,10 @@ describe('VideoLesson YouTube shield', () => {
 
     fireEvent.click(screen.getByRole('button', { name: c.forward }));
     expect(yt.player.seekTo).toHaveBeenLastCalledWith(52, true);
+    // From where the +10 is GOING, not from the playhead the frame has not
+    // updated yet — so back after forward lands where it started.
     fireEvent.click(screen.getByRole('button', { name: c.back }));
-    expect(yt.player.seekTo).toHaveBeenLastCalledWith(32, true);
+    expect(yt.player.seekTo).toHaveBeenLastCalledWith(42, true);
 
     fireEvent.change(screen.getByRole('slider', { name: c.seek }), { target: { value: '1800' } });
     expect(yt.player.seekTo).toHaveBeenLastCalledWith(1800, true);
@@ -644,6 +648,71 @@ describe('VideoLesson YouTube shield', () => {
     expect(frame.src).not.toContain('controls=0');
     expect(screen.queryByRole('region', { name: 'How AI Works' })).toBeNull();
     expect(container.querySelector('[data-player-glass]')).toBeNull();
+  });
+});
+
+describe('VideoLesson keyboard and timeline, YouTube-style', () => {
+  const c = copy.player.controls;
+
+  async function play() {
+    const yt = fakeYouTube();
+    renderPlayer();
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await screen.findByRole('region', { name: 'How AI Works' });
+    yt.emit(1);
+    return yt;
+  }
+
+  it('pauses on Space with focus on the page — the poster that had it is gone', async () => {
+    const yt = await play();
+    (document.activeElement as HTMLElement | null)?.blur();
+
+    // `false`: the page did not scroll instead.
+    expect(fireEvent.keyDown(document.body, { code: 'Space' })).toBe(false);
+    expect(yt.player.pauseVideo).toHaveBeenCalledTimes(1);
+  });
+
+  it('seeks on the arrows even with a bar button focused', async () => {
+    const yt = await play();
+    const mute = screen.getByRole('button', { name: c.mute });
+    mute.focus();
+
+    fireEvent.keyDown(mute, { code: 'ArrowRight' });
+    expect(yt.player.seekTo).toHaveBeenLastCalledWith(47, true);
+    fireEvent.keyDown(mute, { code: 'KeyL' });
+    expect(yt.player.seekTo).toHaveBeenLastCalledWith(57, true);
+    // Space over a focused button is play/pause, not a press of that button.
+    fireEvent.keyDown(mute, { code: 'Space' });
+    expect(yt.player.pauseVideo).toHaveBeenCalledTimes(1);
+    expect(fireEvent.keyUp(mute, { code: 'Space' })).toBe(false);
+    expect(yt.player.mute).not.toHaveBeenCalled();
+  });
+
+  it('leaves the keys to a field being typed in elsewhere on the page', async () => {
+    const yt = await play();
+    const answer = document.createElement('textarea');
+    document.body.append(answer);
+
+    expect(fireEvent.keyDown(answer, { code: 'Space' })).toBe(true);
+    fireEvent.keyDown(answer, { code: 'ArrowLeft' });
+    expect(yt.player.pauseVideo).not.toHaveBeenCalled();
+    expect(yt.player.seekTo).not.toHaveBeenCalled();
+    answer.remove();
+  });
+
+  it('seeks ONCE when a drag along the timeline is let go, not on every step of it', async () => {
+    const yt = await play();
+    const seek = screen.getByRole('slider', { name: c.seek }) as HTMLInputElement;
+
+    fireEvent.pointerDown(seek);
+    for (const value of ['600', '900', '1200', '1500']) fireEvent.change(seek, { target: { value } });
+    expect(yt.player.seekTo).not.toHaveBeenCalled();
+    // The thumb follows the finger meanwhile.
+    expect(seek.value).toBe('1500');
+
+    fireEvent.pointerUp(window);
+    expect(yt.player.seekTo).toHaveBeenCalledTimes(1);
+    expect(yt.player.seekTo).toHaveBeenLastCalledWith(1500, true);
   });
 });
 
@@ -913,6 +982,22 @@ describe('VideoLesson YouTube captions toggle', () => {
     expect(yt.player.loadModule).toHaveBeenCalledWith('captions');
     fireEvent.click(screen.getByRole('button', { name: c.captionsHide }));
     expect(yt.player.unloadModule).toHaveBeenCalledTimes(2);
+  });
+
+  it('crops YouTube\'s edges off the frame, and uncrops it while captions show', async () => {
+    const yt = fakeYouTube();
+    yt.player.getOptions.mockReturnValue(['captions']);
+    await playWith(yt);
+
+    // Taller than the box: the title bar and the logo strip land outside it.
+    expect(yt.frame.className).toContain('top-[-25%]');
+    expect(yt.frame.className).toContain('h-[150%]');
+
+    // YouTube pins captions to the same bottom edge, so they need the whole frame.
+    fireEvent.click(screen.getByRole('button', { name: c.captionsShow }));
+    expect(yt.frame.className).toBe('absolute inset-0 h-full w-full');
+    fireEvent.click(screen.getByRole('button', { name: c.captionsHide }));
+    expect(yt.frame.className).toContain('top-[-25%]');
   });
 
   it('draws no captions button for a video without any', async () => {

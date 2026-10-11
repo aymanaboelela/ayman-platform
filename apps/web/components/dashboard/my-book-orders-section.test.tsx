@@ -65,6 +65,8 @@ function order(overrides: Partial<BookOrder> = {}): BookOrder {
     deliveredAt: null,
     rejectedAt: null,
     rejectionReason: null,
+    returnedAt: null,
+    courier: null,
     createdAt: '2026-03-01T10:00:00.000Z',
     ...overrides,
   };
@@ -102,6 +104,7 @@ describe('MyBookOrdersSection — the reassurance line', () => {
     'printing',
     'shipped',
     'delivered',
+    'returned',
     'rejected',
   ];
   const notes: Record<BookOrderStatus, string> = {
@@ -110,6 +113,7 @@ describe('MyBookOrdersSection — the reassurance line', () => {
     printing: c.notePrinting,
     shipped: c.noteShipped,
     delivered: c.noteDelivered,
+    returned: c.noteReturned,
     rejected: c.noteRejected,
   };
 
@@ -281,4 +285,38 @@ describe('the unpaid order’s way forward', () => {
       expect(screen.queryByRole('link', { name: copy.books.mine.resumeCta })).toBeNull();
     },
   );
+});
+
+/**
+ * «فين الكتاب دلوقتي؟» — the courier's latest word, with the agent the student
+ * should expect a call from. Only while the parcel is moving: on a delivered
+ * order it is history the card already tells.
+ */
+describe('MyBookOrdersSection — the courier line', () => {
+  const courier = {
+    statusId: 3,
+    statusName: 'في الشحن مع المندوب',
+    note: null,
+    agentName: 'محمد',
+    agentPhone: '01000000000',
+    at: '2026-10-05T10:00:00.000Z',
+  };
+
+  it('names the status and the agent, with a number that can be called', () => {
+    render(<MyBookOrdersSection orders={[order({ status: 'shipped', courier })]} supportHref={SUPPORT} />);
+
+    expect(screen.getByText(/في الشحن مع المندوب/)).toBeInTheDocument();
+    expect(screen.getByText('01000000000').closest('a')).toHaveAttribute('href', 'tel:01000000000');
+  });
+
+  it('drops it once the order is closed', () => {
+    render(
+      <MyBookOrdersSection
+        orders={[order({ status: 'delivered', courier: { ...courier, statusId: 4, statusName: 'تم التسليم' } })]}
+        supportHref={SUPPORT}
+      />,
+    );
+
+    expect(screen.queryByText(/تم التسليم/)).not.toBeInTheDocument();
+  });
 });

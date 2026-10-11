@@ -21,6 +21,9 @@ describe('roleChangeError', () => {
     expect(roleChangeError(refused('you cannot change your own role'))).toBe(c.roleChangeSelfError);
     expect(roleChangeError(refused('cannot demote the last remaining admin'))).toBe(c.roleChangeLastAdminError);
     expect(roleChangeError(refused('an admin is not managed from the team screen'))).toBe(c.roleChangeAdminTarget);
+    expect(
+      roleChangeError(refused("this is the platform owner's account, and it cannot be acted on from here")),
+    ).toBe(c.roleChangeFounderTarget);
     expect(roleChangeError(refused('this account holds permissions you do not'))).toBe(c.roleChangeOutranked);
     expect(roleChangeError(refused('you cannot appoint someone with permissions you do not hold'))).toBe(
       c.roleChangeBeyondYou,

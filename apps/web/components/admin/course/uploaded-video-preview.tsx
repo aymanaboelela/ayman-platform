@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Play } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { videoPreviewUrlAction } from '@/app/(admin)/admin/courses/actions';
+import { HLS_CONFIG } from '@/components/player/mirror-video';
 
 const c = copy.admin.lesson;
 
@@ -27,6 +28,8 @@ export function UploadedVideoPreview({ externalId }: { externalId: string }) {
   const [url, setUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [posterFailed, setPosterFailed] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -41,14 +44,42 @@ export function UploadedVideoPreview({ externalId }: { externalId: string }) {
   useEffect(() => {
     const element = videoRef.current;
     if (!playing || url === null || !element) return undefined;
+    setFailed(false);
     let hls: { destroy: () => void } | null = null;
     let live = true;
     void (async () => {
       const { default: Hls } = await import('hls.js');
       if (!live) return;
       if (Hls.isSupported()) {
-        const instance = new Hls();
+        const instance = new Hls(HLS_CONFIG);
         hls = instance;
+        /*
+         * Without this, any fatal hls.js error (a cold edge on a
+         * just-finalized manifest, the key fetch stalling, a network blip)
+         * left the <video> spinning on its native "loading" indicator
+         * forever — no retry, no message, no escape hatch. `MirrorVideo`
+         * (the student player) has always handled this; this preview, being
+         * newer and simpler, never did.
+         */
+        instance.on(Hls.Events.ERROR, (_event, data) => {
+          if (!data.fatal) return;
+          if (
+            data.details === Hls.ErrorDetails.KEY_LOAD_ERROR ||
+            data.details === Hls.ErrorDetails.KEY_LOAD_TIMEOUT
+          ) {
+            setFailed(true);
+            return;
+          }
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            instance.startLoad();
+            return;
+          }
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            instance.recoverMediaError();
+            return;
+          }
+          setFailed(true);
+        });
         instance.loadSource(url);
         instance.attachMedia(element);
       } else {
@@ -61,7 +92,7 @@ export function UploadedVideoPreview({ externalId }: { externalId: string }) {
       live = false;
       hls?.destroy();
     };
-  }, [playing, url]);
+  }, [playing, url, attempt]);
 
   // The poster sits beside the playlist; an older upload may have none.
   const poster = url === null || posterFailed ? null : url.replace(/master\.m3u8$/, 'poster.jpg');
@@ -93,16 +124,30 @@ export function UploadedVideoPreview({ externalId }: { externalId: string }) {
   }
 
   return (
-    <div className="relative mb-3 aspect-video w-full max-w-xl overflow-hidden rounded-lg border border-line bg-black">
-      <video
-        ref={videoRef}
-        className="absolute inset-0 h-full w-full"
-        controls
-        playsInline
-        controlsList="nodownload"
-        disablePictureInPicture
-        poster={poster ?? undefined}
-      />
+    <div className="mb-3 w-full max-w-xl">
+      <div className="relative aspect-video overflow-hidden rounded-lg border border-line bg-black">
+        <video
+          ref={videoRef}
+          className="absolute inset-0 h-full w-full"
+          controls
+          playsInline
+          controlsList="nodownload"
+          disablePictureInPicture
+          poster={poster ?? undefined}
+        />
+        {failed ? (
+          <div className="absolute inset-0 grid place-items-center gap-2 bg-black/80 p-4 text-center">
+            <p className="text-[length:var(--fs-text-sm)] text-white">{c.previewFailed}</p>
+            <button
+              type="button"
+              onClick={() => setAttempt((n) => n + 1)}
+              className="rounded-full bg-accent px-4 py-1.5 text-[length:var(--fs-text-sm)] font-medium text-accent-contrast"
+            >
+              {c.previewRetry}
+            </button>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import ExcelJS from 'exceljs';
 import type { BookOrder, BookOrderStatus, CreateBookOrderInput, SubmitBookOrderPaymentInput } from '@ayman/contracts/book-orders';
+import { bookOrderDate } from '@ayman/contracts/book-orders';
 import type {
   AdminBookOrderFilter,
   AdminBookOrderQuery,
@@ -26,6 +27,7 @@ import type {
   MarkBookOrderPaidInput,
   MarkBookOrderPaidResult,
   MarkBookOrderPrintingResult,
+  MarkBookOrderReturnedResult,
   MarkBookOrderShippedResult,
   ClearBookOrderHoldResult,
   PackingListYear,
@@ -55,6 +57,7 @@ import { OutreachService } from '../outreach/outreach.service';
 import { SettingsService } from '../admin/settings/settings.service';
 import { COURSE_BOOK_SELECT, courseBook } from '../books/course-book';
 import { BOOK_REVENUE_WHERE } from './book-revenue';
+import { cairoDayKey } from '../analytics/analytics-shared';
 import { deliveryDaysFor } from './delivery-days';
 import {
   PHASH_MAX_DISTANCE,
@@ -201,10 +204,21 @@ function toOrderLine(item: OrderLineRow) {
  * others — on a list whose job is making sure every parcel gets packed exactly
  * once. `id` is uuid(7), so the tiebreak is also chronological.
  */
+/*
+ * «الأقدم» and «الأحدث» mean by PAYMENT — `bookOrderDate`. An address saved
+ * three weeks before the transfer is not three weeks older in the queue than
+ * one paid the same morning. `nulls: 'last'` keeps the never-paid rows (the
+ * «بدأت ومكملتش» tab, where every row is null) in the order they were started.
+ */
+const BY_ORDER_DATE_ASC: Prisma.BookOrderOrderByWithRelationInput[] = [
+  { paidAt: { sort: 'asc', nulls: 'last' } },
+  { createdAt: 'asc' },
+];
+
 function orderByFor(sort: AdminBookOrderSort): Prisma.BookOrderOrderByWithRelationInput[] {
   switch (sort) {
     case 'newest':
-      return [{ createdAt: 'desc' }, { id: 'desc' }];
+      return [{ paidAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }];
     case 'amount_desc':
       return [{ amountCents: 'desc' }, { id: 'desc' }];
     case 'amount_asc':
@@ -215,10 +229,10 @@ function orderByFor(sort: AdminBookOrderSort): Prisma.BookOrderOrderByWithRelati
       // By NAME, not by code: the codes are arbitrary and the admin reads the
       // Arabic. Then oldest-first inside each governorate, so a courier route
       // is still packed in the order the orders arrived.
-      return [{ governorate: { nameAr: 'asc' } }, { createdAt: 'asc' }, { id: 'asc' }];
+      return [{ governorate: { nameAr: 'asc' } }, ...BY_ORDER_DATE_ASC, { id: 'asc' }];
     case 'oldest':
     default:
-      return [{ createdAt: 'asc' }, { id: 'asc' }];
+      return [...BY_ORDER_DATE_ASC, { id: 'asc' }];
   }
 }
 
@@ -315,7 +329,7 @@ function lineFacts(item: CountableOrder['items'][number], order: CountableOrder)
  * `orders` and one order in EACH year's `orders`. The question a year bucket
  * answers is «كام طلب فيه كتاب أولى», which is what a print run is decided on.
  */
-function summariseOrders(rows: CountableOrder[]): AdminBookOrderOverview {
+function summariseOrders(rows: CountableOrder[]): Omit<AdminBookOrderOverview, 'tabCounts'> {
   const totals = { orders: rows.length, books: 0, copies: 0, general: 0, languages: 0 };
   const phones = new Set<string>();
   /* Keyed by the year as a string so `null` («من غير صف») is a bucket like any
@@ -485,12 +499,44 @@ const ORDER_SELECT = {
      carries the other and the card never has to render «مرفوض» with nothing
      after it. */
   deliveredAt: true,
+  returnedAt: true,
   rejectedAt: true,
   rejectionReason: true,
   createdAt: true,
+  /* «فين الكتاب؟» — the courier's latest word on the parcel. See
+     `courierView`. */
+  courierStatusId: true,
+  courierStatusName: true,
+  courierStatusNote: true,
+  courierStatusAt: true,
+  courierAgentName: true,
+  courierAgentPhone: true,
   course: { select: { title: true, bookTitle: true } },
   items: ORDER_ITEM_SELECT,
 } as const;
+
+/**
+ * The courier's latest status as both screens render it — `null` until their
+ * first webhook, because a parcel nobody has reported on has no status to show.
+ */
+export function courierView(row: {
+  courierStatusId: number | null;
+  courierStatusName: string | null;
+  courierStatusNote: string | null;
+  courierStatusAt: Date | null;
+  courierAgentName: string | null;
+  courierAgentPhone: string | null;
+}): BookOrder['courier'] {
+  if (row.courierStatusId === null || row.courierStatusName === null) return null;
+  return {
+    statusId: row.courierStatusId,
+    statusName: row.courierStatusName,
+    note: row.courierStatusNote,
+    agentName: row.courierAgentName,
+    agentPhone: row.courierAgentPhone,
+    at: row.courierStatusAt?.toISOString() ?? null,
+  };
+}
 
 /** One line as it is written — the shape both pricing paths return. */
 interface OrderLineWrite {
@@ -538,9 +584,16 @@ interface OrderRow {
   printedAt: Date | null;
   shippedAt: Date | null;
   deliveredAt: Date | null;
+  returnedAt: Date | null;
   rejectedAt: Date | null;
   rejectionReason: string | null;
   createdAt: Date;
+  courierStatusId: number | null;
+  courierStatusName: string | null;
+  courierStatusNote: string | null;
+  courierStatusAt: Date | null;
+  courierAgentName: string | null;
+  courierAgentPhone: string | null;
   course: { title: string; bookTitle: string | null } | null;
   items: OrderLineRow[];
 }
@@ -555,6 +608,14 @@ interface OrderRow {
  * have to argue with a dialog about.
  */
 const DUPLICATE_WINDOW_DAYS = 7;
+
+/**
+ * Where a parcel can be when the admin presses «اتشحن» (or «وصل»): paid and
+ * not with anybody. `paid` too, for the reprint handed over the counter that
+ * never saw a print run; `returned` for the parcel that came back and goes out
+ * again.
+ */
+const SHIPPABLE: ReadonlySet<BookOrderStatus> = new Set(['paid', 'printing', 'returned']);
 
 @Injectable()
 export class BookOrdersService {
@@ -639,8 +700,10 @@ export class BookOrdersService {
       printedAt: row.printedAt?.toISOString() ?? null,
       shippedAt: row.shippedAt?.toISOString() ?? null,
       deliveredAt: row.deliveredAt?.toISOString() ?? null,
+      returnedAt: row.returnedAt?.toISOString() ?? null,
       rejectedAt: row.rejectedAt?.toISOString() ?? null,
       rejectionReason: row.rejectionReason,
+      courier: courierView(row),
       createdAt: row.createdAt.toISOString(),
     };
   }
@@ -881,7 +944,7 @@ export class BookOrdersService {
           OR: [
             { createdAt: { gte: since } },
             { paidAt: { gte: since } },
-            { status: { in: ['paid', 'printing', 'shipped'] } },
+            { status: { in: ['paid', 'printing', 'shipped', 'returned'] } },
           ],
         },
         orderBy: [{ createdAt: 'desc' }],
@@ -981,7 +1044,7 @@ export class BookOrdersService {
    * which is what guest checkout is for. That is not a degraded case to work
    * around; there is simply no bell to ring, and the admin tells them himself.
    */
-  private async studentIdForOrder(order: {
+  async studentIdForOrder(order: {
     userId: string | null;
     phone: string;
   }): Promise<string | null> {
@@ -1994,8 +2057,20 @@ export class BookOrdersService {
           createdAt: true,
           paidAt: true,
           printedAt: true,
+          courierSentAt: true,
+          courierError: true,
+          /* «فين الكتاب؟» — the courier's latest word on the parcel. See
+             `courierView`. */
+          courierStatusId: true,
+          courierStatusName: true,
+          courierStatusNote: true,
+          courierStatusAt: true,
+          courierAgentName: true,
+          courierAgentPhone: true,
           shippedAt: true,
           deliveredAt: true,
+          returnedAt: true,
+          returnReason: true,
           rejectedAt: true,
           rejectionReason: true,
           deletedAt: true,
@@ -2085,8 +2160,13 @@ export class BookOrdersService {
         heldReason: row.heldReason,
         screenshotAmountCents: row.screenshotAmountCents,
         printedAt: row.printedAt?.toISOString() ?? null,
+        courierSentAt: row.courierSentAt?.toISOString() ?? null,
+        courierError: row.courierError,
+        courier: courierView(row),
         shippedAt: row.shippedAt?.toISOString() ?? null,
         deliveredAt: row.deliveredAt?.toISOString() ?? null,
+        returnedAt: row.returnedAt?.toISOString() ?? null,
+        returnReason: row.returnReason,
         rejectedAt: row.rejectedAt?.toISOString() ?? null,
         rejectionReason: row.rejectionReason,
         deletedAt: row.deletedAt?.toISOString() ?? null,
@@ -2145,6 +2225,28 @@ export class BookOrdersService {
    * already why `previousOrdersFromPhone` counts on it.
    */
   async adminOverview(query: AdminBookOrderQuery): Promise<AdminBookOrderOverview> {
+    /* The tab counts ignore the tab itself and keep everything else — they are
+       the answer to «لو دست على التبويب ده هلاقي كام؟». */
+    const scope: Prisma.BookOrderWhereInput = {
+      ...this.adminSearchWhere(query.q),
+      ...streamAndYearWhere(query.stream, query.year),
+    };
+    const [byStatus, deleted] = await Promise.all([
+      this.prisma.bookOrder.groupBy({
+        by: ['status'],
+        where: { ...scope, deletedAt: null },
+        _count: { _all: true },
+      }),
+      this.prisma.bookOrder.count({ where: { ...scope, deletedAt: { not: null } } }),
+    ]);
+    const tabCounts: Record<string, number> = { deleted };
+    let all = 0;
+    for (const group of byStatus) {
+      tabCounts[group.status] = group._count._all;
+      all += group._count._all;
+    }
+    tabCounts.all = all;
+
     const rows = await this.prisma.bookOrder.findMany({
       where: {
         ...liveOrDeletedWhere(query.status),
@@ -2163,7 +2265,7 @@ export class BookOrdersService {
       },
     });
 
-    return summariseOrders(rows);
+    return { ...summariseOrders(rows), tabCounts };
   }
 
   /**
@@ -2659,7 +2761,7 @@ export class BookOrdersService {
        reprint handed over the counter never sees a print run, and demanding a
        fake one to unlock this button would put a lie in the audit trail. Same
        argument `markDelivered` has always made for accepting `paid`. */
-    if (order.status !== 'paid' && order.status !== 'printing') {
+    if (!SHIPPABLE.has(order.status)) {
       throw new BadRequestException(
         order.status === 'shipped' ? 'this order already shipped' : 'this order has not been paid yet',
       );
@@ -2760,7 +2862,7 @@ export class BookOrdersService {
          printer this morning is exactly the row this batch runs on when the
          boxes come back in the afternoon, and skipping it here would make the
          new state a dead end reachable only one row at a time. */
-      if (order.status !== 'paid' && order.status !== 'printing') {
+      if (!SHIPPABLE.has(order.status)) {
         rows.push({
           id,
           outcome: 'skipped',
@@ -2953,7 +3055,7 @@ export class BookOrdersService {
   async markDelivered(adminId: string, orderId: string): Promise<MarkBookOrderDeliveredResult> {
     const order = await this.orderForAdminAction(orderId);
     this.assertNotDeleted(order);
-    if (order.status !== 'paid' && order.status !== 'printing' && order.status !== 'shipped') {
+    if (!SHIPPABLE.has(order.status) && order.status !== 'shipped') {
       throw new BadRequestException(
         order.status === 'delivered'
           ? 'this order was already marked delivered'
@@ -2992,6 +3094,70 @@ export class BookOrdersService {
     });
 
     return { id: order.id, status: 'delivered', deliveredAt: now.toISOString() };
+  }
+
+  /**
+   * «رجعت (مرتجع)» — the courier brought the parcel back undelivered.
+   *
+   * From `shipped` only: a parcel nobody handed to a courier cannot come back
+   * from one. It moves to its own tab — «مين اللي كتابه رجع ومحتاج نكلّمه؟» is
+   * a list somebody works through — and from there it ships again («ابعت
+   * لشركة الشحن» creates a NEW shipment, which is why `courierSentAt` is
+   * cleared) or is handed over and closed with «وصل».
+   *
+   * The student is told, in the thread, that it came back and that we will
+   * call — the same words the courier's own «مرتجع» report sends, so the two
+   * paths cannot say different things about one parcel.
+   */
+  async markReturned(
+    adminId: string,
+    orderId: string,
+    reason: string | null,
+  ): Promise<MarkBookOrderReturnedResult> {
+    const order = await this.orderForAdminAction(orderId);
+    this.assertNotDeleted(order);
+    if (order.status !== 'shipped') {
+      throw new BadRequestException(
+        order.status === 'returned' ? 'this order is already marked returned' : 'this order has not shipped',
+      );
+    }
+
+    const now = new Date();
+    const note = reason?.trim() || null;
+    await this.prisma.bookOrder.update({
+      where: { id: order.id },
+      data: {
+        status: 'returned',
+        returnedAt: now,
+        returnedByUserId: adminId,
+        returnReason: note,
+        // A second shipment is a new one in the courier's system.
+        courierSentAt: null,
+      },
+    });
+
+    const studentId = await this.studentIdForOrder(order);
+    if (studentId !== null) {
+      const name = (await this.prisma.bookOrder.findUnique({ where: { id: order.id }, select: { fullName: true } }))
+        ?.fullName.trim()
+        .split(/\s+/)[0];
+      const body = formatCopy(copy.bookCourierNotice.returned, {
+        name: name ?? '',
+        note: note ? ` — «${note}»` : '',
+      });
+      await this.prisma.$transaction((tx) => this.outreach.sendManual(tx, { userId: studentId, body }));
+      await this.notifications.announce(studentId);
+    }
+
+    await this.audit.record({
+      action: 'book-order:return',
+      resourceType: AUDIT_RESOURCES.bookOrder,
+      resourceId: order.id,
+      outcome: 'success',
+      metadata: { userId: order.userId, courseId: order.courseId, adminId, reason: note },
+    });
+
+    return { id: order.id, status: 'returned', returnedAt: now.toISOString() };
   }
 
   /**
@@ -3434,7 +3600,8 @@ export class BookOrdersService {
       { header: 'الشارع', key: 'street', width: 28 },
       { header: 'رقم العمارة', key: 'building', width: 14 },
       { header: 'تفاصيل إضافية', key: 'note', width: 28 },
-      { header: 'تاريخ الطلب', key: 'createdAt', width: 18 },
+      // The day it was PAID — see `bookOrderDate`.
+      { header: 'تاريخ الدفع', key: 'orderDate', width: 18 },
     ];
 
     /*
@@ -3540,7 +3707,7 @@ export class BookOrdersService {
      * last day, which is most of them, and the admin would only notice when
      * the printer came up short.
      */
-    const createdAt =
+    const range =
       from || to
         ? {
             ...(from ? { gte: new Date(`${from}T00:00:00.000Z`) } : {}),
@@ -3549,6 +3716,12 @@ export class BookOrdersService {
               : {}),
           }
         : undefined;
+    /* «من يوم كام لـ يوم كام» is by the PAYMENT date, like every date on the
+       paper this feeds (`bookOrderDate`); an order never paid is placed by the
+       day it was started. */
+    const inRange: Prisma.BookOrderWhereInput | undefined = range
+      ? { OR: [{ paidAt: range }, { paidAt: null, createdAt: range }] }
+      : undefined;
 
     /* THE SAME three filter helpers `adminList` builds its own WHERE from, in
        the same order — the export is the list, and the only way to keep that
@@ -3563,7 +3736,7 @@ export class BookOrdersService {
       ...liveOrDeletedWhere(status),
       ...this.adminSearchWhere(query.q ?? ''),
       ...streamAndYearWhere(query.stream, query.year),
-      ...(createdAt ? { createdAt } : {}),
+      ...(inRange ? { AND: [inRange] } : {}),
     };
 
     const rows = await this.prisma.bookOrder.findMany({
@@ -3583,7 +3756,7 @@ export class BookOrdersService {
          */
         heldForReviewAt: null,
       },
-      orderBy: [{ createdAt: 'asc' }],
+      orderBy: [...BY_ORDER_DATE_ASC, { id: 'asc' }],
       select: {
         /* For «حدّد اللي في المدى» — see `PackingListSchema.orderIds`. */
         id: true,
@@ -3596,6 +3769,7 @@ export class BookOrdersService {
         addressNote: true,
         amountCents: true,
         shippingCents: true,
+        paidAt: true,
         createdAt: true,
         items: ORDER_ITEM_SELECT,
         course: { select: { title: true, year: true, forGeneral: true, forLanguages: true, bookTitle: true } },
@@ -3688,7 +3862,8 @@ export class BookOrdersService {
         street: row.addressStreet,
         building: row.addressBuilding,
         note: row.addressNote ?? '',
-        createdAt: row.createdAt.toISOString().slice(0, 10),
+        // The Cairo calendar day it was PAID — see `bookOrderDate`.
+        orderDate: cairoDayKey(new Date(bookOrderDate(row))),
       };
 
       /*
@@ -3753,7 +3928,7 @@ export class BookOrdersService {
         items: parcelItems,
         streams: parcelStreams,
         copies: parcelItems.reduce((n, item) => n + item.quantity, 0),
-        createdAt: address.createdAt,
+        orderDate: address.orderDate,
       });
 
       if (row.items.length === 0) {
@@ -3878,7 +4053,7 @@ export class BookOrdersService {
        the cards or the spreadsheet could reach them by accident. */
     const held = await this.prisma.bookOrder.findMany({
       where: { ...packingWhere, heldForReviewAt: { not: null } },
-      orderBy: [{ createdAt: 'asc' }],
+      orderBy: [...BY_ORDER_DATE_ASC, { id: 'asc' }],
       select: { id: true },
     });
 

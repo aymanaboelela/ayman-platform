@@ -152,13 +152,95 @@ describe('GamesHub — what to play on', () => {
   });
 });
 
+const TOPIC_UNIT = '01990000-0000-7000-8000-0000000f0001';
+const TOPIC_LESSON = '01990000-0000-7000-8000-0000000f0002';
+
+/** نفس الكورس، بس فيه «تحديات»: الوحدة الأولى (الدرسين) والدرس التاني لوحده. */
+function topicHub(): GameHub {
+  const base = hub();
+  return GameHubSchema.parse({
+    ...base,
+    courses: [
+      {
+        ...base.courses[0]!,
+        topics: [
+          { id: TOPIC_UNIT, title: 'الوحدة الأولى كلها', lessonIds: [LESSON_1, LESSON_2] },
+          { id: TOPIC_LESSON, title: 'الدرس التاني بس', lessonIds: [LESSON_2] },
+        ],
+        topicBuckets: [
+          { lessonId: LESSON_1, counts: { easy: 3, medium: 9, hard: 0 } },
+          { lessonId: LESSON_2, counts: { easy: 1, medium: 3, hard: 0 } },
+        ],
+      },
+      base.courses[1]!,
+    ],
+  });
+}
+
+describe('GamesHub — challenge topics', () => {
+  it('swaps «الأسئلة من» for the course’s topics, counting overlapping topics once', () => {
+    render(<GamesHub hub={topicHub()} />);
+    pickCourse('البرمجة');
+    expect(screen.queryByRole('radio', { name: new RegExp(c.scopeLesson) })).toBeNull();
+    // «كل الكورسات» مالهاش معنى والتحدّي في كورس واحد.
+    expect(screen.queryByLabelText(new RegExp(c.allCourses))).toBeNull();
+
+    const unit = screen.getByText('الوحدة الأولى كلها').closest('label')!;
+    const lesson = screen.getByText('الدرس التاني بس').closest('label')!;
+    expect(unit).toHaveTextContent('16');
+    // ٤ أسئلة: أقل من المليون (١٥)، باهت ومعاه السبب.
+    expect(lesson).toHaveAttribute('data-short');
+    // التحدّي الأول اتختار لوحده لأنه أول واحد يكفي.
+    expect(within(unit).getByRole('checkbox')).toBeChecked();
+
+    // الاتنين مع بعض = ١٦ مش ٢٠: الدرس التاني جوّه الوحدة.
+    fireEvent.click(within(lesson).getByRole('checkbox'));
+    expect(screen.getByText(formatCopy(c.summaryPool, { n: 16 }))).toBeInTheDocument();
+  });
+
+  it('starts a practice round on the picked topics', async () => {
+    apiPost.mockResolvedValue({ mode: 'race', level: 'medium', questions: [], poolSize: 0, sessionId: null });
+    render(<GamesHub hub={topicHub()} />);
+    pickCourse('البرمجة');
+    fireEvent.click(screen.getByLabelText(new RegExp(c.modePractice)));
+    fireEvent.click(within(screen.getByText('الدرس التاني بس').closest('label')!).getByRole('checkbox'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(c.play) }));
+    });
+    expect(apiPost).toHaveBeenCalledWith('/api/me/game/rounds', expect.anything(), {
+      mode: 'race',
+      level: 'medium',
+      courseId: COURSE,
+      scope: 'all',
+      topicIds: [TOPIC_UNIT, TOPIC_LESSON],
+      practice: true,
+    });
+  });
+
+  it('will not start with no topic picked, and says so', () => {
+    render(<GamesHub hub={topicHub()} />);
+    pickCourse('البرمجة');
+    fireEvent.click(within(screen.getByText('الوحدة الأولى كلها').closest('label')!).getByRole('checkbox'));
+    expect(screen.getByRole('button', { name: new RegExp(c.play) })).toBeDisabled();
+    expect(screen.getByText(c.topicsPickOne)).toBeInTheDocument();
+  });
+});
+
 describe('restoreChoice', () => {
-  const fallback = { mode: 'millionaire' as const, courseId: null, scope: 'all' as const, scopeId: null, level: 'medium' as const };
+  const fallback = {
+    mode: 'millionaire' as const,
+    courseId: null,
+    scope: 'all' as const,
+    scopeId: null,
+    level: 'medium' as const,
+    topicIds: [],
+  };
 
   it('brings a saved lesson back when it is still there', () => {
     expect(
       restoreChoice(hub(), { mode: 'race', level: 'hard', courseId: COURSE, scope: 'lesson', scopeId: LESSON_2 }, fallback),
-    ).toEqual({ mode: 'race', level: 'hard', courseId: COURSE, scope: 'lesson', scopeId: LESSON_2 });
+    ).toEqual({ mode: 'race', level: 'hard', courseId: COURSE, scope: 'lesson', scopeId: LESSON_2, topicIds: [] });
   });
 
   it('drops a course the student can no longer open, and a lesson that lost its questions', () => {

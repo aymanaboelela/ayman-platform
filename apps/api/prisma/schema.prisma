@@ -207,6 +207,7 @@ model User {
   bookOrdersPrinted          BookOrder[]             @relation("BookOrderPrintedBy")
   bookOrdersShipped          BookOrder[]             @relation("BookOrderShippedBy")
   bookOrdersDelivered        BookOrder[]             @relation("BookOrderDeliveredBy")
+  bookOrdersReturned        BookOrder[]             @relation("BookOrderReturnedBy")
   bookOrdersRejected         BookOrder[]             @relation("BookOrderRejectedBy")
   bookOrdersDeleted          BookOrder[]             @relation("BookOrderDeletedBy")
   // الواجب — the homework this student handed in, and (for an admin) the
@@ -251,6 +252,8 @@ model User {
   arenaStat                  ArenaStat?
   /// «دفتر غلطاتي» — حالة إعادة الاختبار على كل سؤال غلط فيه.
   mistakeReviews             MistakeReview[]
+  /// «التحديات» — كل سؤال (أو مجموعة صيغ) شافه في لعبة أو ساحة، وإمتى.
+  questionExposures          QuestionExposure[]
 
   @@unique([email])
   @@map("users")
@@ -1054,10 +1057,13 @@ model Course {
   // `monthlyPriceCents` above.
   /// «أسئلة الألعاب» بتاعة الكورس — شوف `QuestionCategory.gameCourseId`.
   gameQuestionBank QuestionCategory? @relation("GameQuestionBank")
+  externalBooks    ExternalBook[]    @relation("ExternalBookCourse")
   /// كل لعبة بتسحب منين في الكورس ده — شوف `GameModeSetting`.
   gameModeSettings GameModeSetting[]
   gameSessions     GameSession[]
   arenaMatches     ArenaMatch[]
+  /// «قسم التحديات» — المواضيع اللي الطلبة بيتحدّوا فيها — شوف `ChallengeTopic`.
+  challengeTopics  ChallengeTopic[]
   @@index([status, publishedAt])
   @@index([systemId, year, trackId, subjectId])
   @@map("courses")
@@ -1428,6 +1434,8 @@ model Lesson {
   /// «أسئلة الألعاب» بتاعة الدرس ده — شوف `QuestionCategory.gameLessonId`.
   gameQuestionBank    QuestionCategory?    @relation("GameLessonBank")
   gameSessions        GameSession[]
+  /// أسئلة البنك المربوطة بالدرس ده مباشرةً — شوف `QuestionBankEntry.lessonId`.
+  linkedQuestions     QuestionBankEntry[]  @relation("BankEntryLesson")
   /// «المحاضرة دي تابعة لشهر كام» — the sales months that open this lecture.
   /// Empty on every lecture of a course with no months configured, and empty
   /// is a real, deliberate state even on one that has them — see `LessonMonth`.
@@ -1540,6 +1548,12 @@ model LessonVideo {
   /// spinner concludes it has hung; four honest steps beat a smooth bar
   /// interpolated from nothing.
   mirrorProgress Int?              @map("mirror_progress")
+  /// Whether the mirrored copy's TS segments are AES-128-encrypted —
+  /// «مينفعش حد ينزّل الفيديو». Chosen at the START of the upload, not
+  /// flippable after: a `ready` mirror's segments are already written one way
+  /// or the other, and re-encrypting means re-transcoding. `true` by default,
+  /// matching every row written before this column existed.
+  encrypted      Boolean           @default(true) @map("encrypted")
 
   /// ── الرفع المباشر ───────────────────────────────────────────────────
   /// Set only for `provider = upload`: the instructor's own file, before the
@@ -1856,10 +1870,36 @@ model LessonResource {
   sizeBytes  Int?    @map("size_bytes")
 
   // ── payload: video ─────────────────────────────────────────────────────
-  /// The ELEVEN-CHARACTER provider id, never a URL. `extractYouTubeId` parses
-  /// the URL and discards it, which is what eliminates the SSRF class.
+  /// `youtube`: the ELEVEN-CHARACTER provider id, never a URL —
+  /// `extractYouTubeId` parses the URL and discards it, which is what
+  /// eliminates the SSRF class. `upload`: the 32-hex upload id, the same key a
+  /// lesson's main uploaded video lives under (`v/<id>/` on R2). The CHECK
+  /// `lesson_resources_video_id_shape` binds each shape to its provider.
   videoProvider   VideoProvider? @map("video_provider")
   videoExternalId String?        @map("video_external_id")
+
+  // ── «رفع فيديو»: the upload pipeline's state, `provider = upload` only ─
+  /// Same columns, same names, same meaning as on `LessonVideo` — the worker
+  /// writes one data object to both tables (see `VideoMirrorService`). A
+  /// CHECK makes `mirrorStatus` present exactly when the video is uploaded:
+  /// a YouTube row with a state would be claimed by the encoder, and an
+  /// uploaded row without one would never be claimed at all.
+  ///
+  /// Not a lesson's main video and never one: nothing here touches
+  /// `lesson_videos`, so an upload into the materials cannot replace or park
+  /// the lecture itself.
+  mirrorStatus    VideoMirrorStatus? @map("mirror_status")
+  mirrorProgress  Int?               @map("mirror_progress")
+  mirrorHeight    Int?               @map("mirror_height")
+  mirrorBytes     BigInt?            @map("mirror_bytes")
+  mirrorError     String?            @map("mirror_error")
+  mirrorAttempts  Int                @default(0) @map("mirror_attempts")
+  mirrorAt        DateTime?          @map("mirror_at")
+  /// The instructor's filename, shown back to them — NEVER part of a key.
+  sourceName      String?            @map("source_name")
+  sourceBytes     BigInt?            @map("source_bytes")
+  /// From ffprobe, once encoded. Null until then.
+  durationSeconds Int?               @map("duration_seconds")
 
   // ── payload: link ──────────────────────────────────────────────────────
   /// `https:` only, enforced at the DTO and by a CHECK. Rendered as an anchor,
@@ -1878,6 +1918,8 @@ model LessonResource {
   // inside buildReorderSql's single UPDATE are legal because nothing forbids
   // them at any point. Do not "fix" this by adding a unique index.
   @@index([lessonId, position])
+  /// The worker's claim — same shape as `lesson_videos_mirror_idx`.
+  @@index([mirrorStatus, mirrorAt])
   @@map("lesson_resources")
   @@schema("app")
 }
@@ -3158,6 +3200,46 @@ model BookOrder {
   deliveredAt       DateTime? @map("delivered_at")
   deliveredByUserId String?   @map("delivered_by_user_id")
 
+  /// «مرتجع» — the parcel came back from the courier undelivered: a wrong
+  /// address, a phone nobody answered, a refusal at the door. Its own status
+  /// and tab because «مين اللي كتابه رجع ومحتاج نكلّمه؟» is a list somebody
+  /// works through, not a footnote on «اتشحنت». Set by the admin, or by the
+  /// courier's webhook when they enable it. `returnReason` is optional — their
+  /// words or the admin's.
+  returnedAt       DateTime? @map("returned_at")
+  returnedByUserId String?   @map("returned_by_user_id")
+  returnReason     String?   @map("return_reason")
+
+  /// «شركة الشحن» — the order as Torod (the courier) knows it. A FLAG beside
+  /// the status and never a status of its own: the data goes to their system
+  /// when the run goes to the printer, and their agent collects the boxes FROM
+  /// the printer — so «في المطبعة» and «عند شركة الشحن» are true at once.
+  /// Null forever on a stack without the `books.courier` entitlement.
+  ///
+  /// `courierSentAt` is the double-push guard, the same job `shipNoticeSentAt`
+  /// does for the message: their `addorders` is not idempotent, so a second
+  /// press of «اتشحن» must find this stamped and skip the call rather than
+  /// create a second shipment the courier will happily dispatch.
+  courierSentAt     DateTime? @map("courier_sent_at")
+  /// Why the last push was refused, in the courier's own words — «لا يوجد عميل
+  /// بهذه البيانات». Null on success. Stored for the same reason
+  /// `shipNoticeError` is: the admin re-opening the list is the only person
+  /// who can act on it.
+  courierError      String?   @map("courier_error")
+  /// Their id for the shipment (`vision_ID`), learned from the first webhook.
+  courierRef        String?   @map("courier_ref")
+  /// The LATEST status the courier reported — a copy of the newest
+  /// `BookOrderCourierEvent`, kept here so the admin list can filter and render
+  /// without a join per row. The events table is the history; this is «دلوقتي».
+  courierStatusId   Int?      @map("courier_status_id")
+  courierStatusName String?   @map("courier_status_name")
+  courierStatusNote String?   @map("courier_status_note")
+  courierStatusAt   DateTime? @map("courier_status_at")
+  /// The delivery agent on the latest status — the name and number the
+  /// student is told to expect a call from.
+  courierAgentName  String?   @map("courier_agent_name")
+  courierAgentPhone String?   @map("courier_agent_phone")
+
   /// «أرفضه» — the admin turned the order down, and the student is owed the
   /// reason. The row STAYS in the list and stays visible to the student; that is
   /// the whole difference from `deletedAt` below. `books_orders_rejection_has_a_
@@ -3190,12 +3272,16 @@ model BookOrder {
   printedBy   User?           @relation("BookOrderPrintedBy", fields: [printedByUserId], references: [id], onDelete: SetNull)
   shippedBy   User?           @relation("BookOrderShippedBy", fields: [shippedByUserId], references: [id], onDelete: SetNull)
   deliveredBy User?           @relation("BookOrderDeliveredBy", fields: [deliveredByUserId], references: [id], onDelete: SetNull)
+  returnedBy  User?           @relation("BookOrderReturnedBy", fields: [returnedByUserId], references: [id], onDelete: SetNull)
   rejectedBy  User?           @relation("BookOrderRejectedBy", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
   deletedBy   User?           @relation("BookOrderDeletedBy", fields: [deletedByUserId], references: [id], onDelete: SetNull)
   governorate Governorate     @relation(fields: [governorateCode], references: [code])
   items       BookOrderItem[]
   /// Money given back against this order — see `Refund`.
   refunds     Refund[]
+  /// What the courier reported, one row per status change — see
+  /// `BookOrderCourierEvent`.
+  courierEvents BookOrderCourierEvent[]
 
   /// The admin list: paid-not-yet-shipped is the default view of `/admin/books`
   /// and the Excel export's own filter — oldest first, first-come-first-served,
@@ -3233,12 +3319,49 @@ model BookOrder {
   @@schema("app")
 }
 
+/// One status change the courier reported for a book order, through the
+/// Torod webhook. The order's own `courierStatus*` columns hold only the latest;
+/// this is the trail «فين الكتاب؟» is answered from.
+///
+/// `fingerprint` is what makes the webhook safe to replay. The courier resends
+/// a status whenever it likes (and a retry after our timeout is a resend), and
+/// the student must hear about «مع المندوب» once — so a row whose
+/// status/date/note we have already seen is a no-op, enforced by the unique
+/// index rather than a read-then-write that two concurrent deliveries could
+/// both pass.
+model BookOrderCourierEvent {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  orderId     String   @map("order_id") @db.Uuid
+  fingerprint String
+  statusId    Int      @map("status_id")
+  statusName  String   @map("status_name")
+  statusNote  String?  @map("status_note")
+  /// Their date, as they sent it — «2026-08-02». Text, not a timestamp: it has
+  /// no time and no zone, and parsing it into one would invent both.
+  statusDate  String?  @map("status_date")
+  agentName   String?  @map("agent_name")
+  agentPhone  String?  @map("agent_phone")
+  /// The whole entry as received, for the day a field we do not read turns
+  /// out to matter.
+  raw         Json
+  receivedAt  DateTime @default(now()) @map("received_at")
+
+  order BookOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, fingerprint])
+  @@index([orderId, receivedAt])
+  @@map("book_order_courier_events")
+  @@schema("app")
+}
+
 enum BookOrderStatus {
   address_only
   paid
   printing
   shipped
   delivered
+  /// «مرتجع» — the courier brought it back undelivered.
+  returned
   rejected
 
   @@map("book_order_status")
@@ -3453,15 +3576,45 @@ model QuestionCategory {
   /// درس. درس اتمسح = `SET NULL`، والأسئلة بتفضل في ألعاب الكورس كأسئلة عامة
   /// لأن التصنيف لسه ابن تصنيف الكورس.
   gameLessonId String?           @unique @map("game_lesson_id") @db.Uuid
+  /// «أسئلة كتب خارجية» — جذر شجرة كتاب واحد (الوحدة/الدرس تحته عادي عن طريق
+  /// `parentId`، زي أي تصنيف فرعي، من غير عمود خاص بيهم). نفس فكرة
+  /// `gameCourseId` بالظبط: واحد بس لكل كتاب، وكتاب اتمسح = `SET NULL`
+  /// (التصنيف وأسئلته بتفضل موجودة كتصنيف عادي، مش بتتمسح).
+  externalBookId String?         @unique @map("external_book_id") @db.Uuid
 
-  parent     QuestionCategory?   @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
-  children   QuestionCategory[]  @relation("CategoryTree")
-  entries    QuestionBankEntry[]
-  gameCourse Course?             @relation("GameQuestionBank", fields: [gameCourseId], references: [id], onDelete: SetNull)
-  gameLesson Lesson?             @relation("GameLessonBank", fields: [gameLessonId], references: [id], onDelete: SetNull)
+  parent       QuestionCategory?   @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children     QuestionCategory[]  @relation("CategoryTree")
+  entries      QuestionBankEntry[]
+  gameCourse   Course?             @relation("GameQuestionBank", fields: [gameCourseId], references: [id], onDelete: SetNull)
+  gameLesson   Lesson?             @relation("GameLessonBank", fields: [gameLessonId], references: [id], onDelete: SetNull)
+  externalBook ExternalBook?       @relation(fields: [externalBookId], references: [id], onDelete: SetNull)
 
   @@index([parentId])
   @@map("question_categories")
+  @@schema("app")
+}
+
+/// «كتب خارجية» — مرجع ورقي (كتاب الوزارة، كتاب خاص) بنك أسئلة المنصة بيتقسم
+/// عليه. الكتاب نفسه مجرد اسم وغلاف؛ الوحدات والدروس جواه مجرد تصنيفات عادية
+/// (`QuestionCategory.parentId`) تحت تصنيف جذر الكتاب (`externalBookId`) —
+/// زي «أسئلة الألعاب» بالظبط، بس شجرة تلات مستويات مش اتنين.
+model ExternalBook {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  title      String
+  coverKey   String?   @map("cover_key")
+  sortOrder  Int       @default(0) @map("sort_order")
+  archivedAt DateTime? @map("archived_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  /// «التحديات» — الكورس اللي الكتاب ده بيغذّي تحدياته. دروس الكتاب بالترتيب
+  /// بتتربط بمحاضرات الكورس بالترتيب (`book-lesson-links.ts`)، فمحاضرة جديدة
+  /// بتلاقي أسئلتها لوحدها. NULL = كتاب مرجع بس، مش بيغذّي حاجة.
+  courseId   String?   @map("course_id") @db.Uuid
+
+  rootCategory QuestionCategory?
+  course       Course?           @relation("ExternalBookCourse", fields: [courseId], references: [id], onDelete: SetNull)
+
+  @@index([courseId])
+  @@map("external_books")
   @@schema("app")
 }
 
@@ -3483,13 +3636,29 @@ model QuestionBankEntry {
   /// deleted outright instead — see `QuestionRemovalService`. NULL = in the
   /// bank; «رجّعه للبنك» sets it back to NULL.
   archivedAt  DateTime? @map("archived_at")
+  /// «التحديات»: السؤال ده على أنهي درس، من غير ما يتنقل من تصنيفه.
+  ///
+  /// عمود مش تصنيف عن قصد. التصنيف هو «السؤال متخزّن فين في البنك» (كتاب
+  /// خارجي ← وحدة ← درس، أو «ألعاب — الكورس ← الدرس»)، وده سؤال تاني خالص:
+  /// «يتسأل في تحدّي أنهي درس». سؤال من «كتب خارجية» لازم يفضل في شجرة
+  /// الكتاب ويتربط بدرس في الكورس في نفس الوقت — تصنيف واحد مايقدرش يقول
+  /// الاتنين. درس اتمسح = `SET NULL`، والسؤال بيفضل في البنك.
+  lessonId        String?   @map("lesson_id") @db.Uuid
+  /// «صيغ لنفس الفكرة»: كذا سؤال بنفس المفتاح = نفس المعلومة بكلام مختلف
+  /// ونفس الإجابة. «ماتكرّرش السؤال» بيتحسب على المجموعة كلها
+  /// (`QuestionExposure.groupKey = g:<key>`)، ولما المجموعة ترجع الطالب بياخد
+  /// الصيغة اللي شافها أقل. NULL = السؤال مجموعة لوحده (`e:<id>`).
+  variantGroupKey String?   @map("variant_group_key")
 
   category  QuestionCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   owner     User              @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  lesson    Lesson?           @relation("BankEntryLesson", fields: [lessonId], references: [id], onDelete: SetNull)
   versions  QuestionVersion[]
   quizSlots QuizSlot[]
 
   @@index([categoryId])
+  @@index([lessonId])
+  @@index([variantGroupKey])
   @@map("question_bank_entries")
   @@schema("app")
 }
@@ -5576,6 +5745,14 @@ model GameSession {
   startedAt       DateTime     @default(now()) @map("started_at")
   lastActivityAt  DateTime     @default(now()) @map("last_activity_at")
   endedAt         DateTime?    @map("ended_at")
+  /// «التحديات» اللي الجولة اتسحبت منها (`challenge_topics.id`). فاضية = الجولة
+  /// بالنطاق القديم (المنهج كله، وحدة، ولا درس). من غير FK زي
+  /// `GameModeSetting.lessonIds`: تحدّي اتمسح بيفضل رقم في جولة قديمة.
+  topicIds        String[]     @default([]) @map("topic_ids") @db.Uuid
+  /// «تدريب»: من غير تايمر ولا قلوب، والشرح بعد كل سؤال. عدد الأسئلة بتاع
+  /// `mode`، والجولة متسجّلة زي أي جولة، بس مابتدخلش «أحسن نتيجة» — مفيش
+  /// سباق فيها.
+  practice        Boolean      @default(false)
 
   user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   course  Course?        @relation(fields: [courseId], references: [id], onDelete: SetNull)
@@ -5608,6 +5785,57 @@ model GameAnswer {
   @@unique([sessionId, questionVersionId])
   @@index([questionVersionId])
   @@map("game_answers")
+  @@schema("app")
+}
+
+/// «قسم التحديات» — موضوع واحد في كورس واحد يتحدّى فيه الطلبة: «الوحدة
+/// الأولى»، «الدرس التالت بس». الأدمن بيعمله من لوحة التحكم: عنوان، ووحدات
+/// و/أو دروس من نفس الكورس، وتشغيل/إيقاف، وترتيب.
+///
+/// بنك التحدّي = كل سؤال اختيار من متعدد أو صح/غلط جاهز ومربوط بدروسه — من
+/// كويزات الدروس، ومن «أسئلة الألعاب» بتاعة الدرس، ومن الربط المباشر
+/// (`QuestionBankEntry.lessonId`) — سواء الطالب امتحن الكويز ولا لأ. التفاصيل في
+/// `GameService.topicPool`.
+///
+/// `sectionIds`/`lessonIds` مصفوفات من غير FK زي `GameModeSetting.lessonIds`:
+/// وحدة اتمسحت بتفضل رقم مالوش دروس، والبنك بيتجاهله. والقراية دايمًا
+/// بتتقاطع مع دروس الكورس نفسه، فرقم من كورس تاني مابيوسّعش حاجة.
+model ChallengeTopic {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  courseId   String   @map("course_id") @db.Uuid
+  title      String
+  sectionIds String[] @default([]) @map("section_ids") @db.Uuid
+  lessonIds  String[] @default([]) @map("lesson_ids") @db.Uuid
+  /// الطالب بيشوف المتشغّل بس.
+  isActive   Boolean  @default(true) @map("is_active")
+  position   Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, position])
+  @@map("challenge_topics")
+  @@schema("app")
+}
+
+/// «ماتكرّرش السؤال»: الطالب شاف المجموعة دي إمتى آخر مرة، وكام مرة.
+///
+/// `groupKey` = `g:<variantGroupKey>` للأسئلة اللي ليها صيغ، و`e:<bankEntryId>`
+/// لكل سؤال (حتى لو في مجموعة) — الأول بيقول «المجموعة رجعت إمتى»، والتاني
+/// «أنهي صيغة فيها اتشافت أقل». بيتكتب مع كل إجابة في لعبة، ولكل سؤال اتلعب
+/// في ماتش ساحة. الاختيار بيقدّم اللي مااتشافش، وبعدين الأقدم.
+model QuestionExposure {
+  userId     String   @map("user_id")
+  groupKey   String   @map("group_key")
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  times      Int      @default(1)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, groupKey])
+  @@index([userId, lastSeenAt])
+  @@map("question_exposures")
   @@schema("app")
 }
 

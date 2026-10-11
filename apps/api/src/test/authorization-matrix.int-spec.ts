@@ -84,6 +84,9 @@ import { FinanceDailyService } from '../modules/payments/finance-daily.service';
 import { BookOrdersController } from '../modules/book-orders/book-orders.controller';
 import { AdminBookOrdersController } from '../modules/book-orders/admin-book-orders.controller';
 import { BookOrdersService } from '../modules/book-orders/book-orders.service';
+import { BookOrderCourierService } from '../modules/book-orders/courier/book-order-courier.service';
+import { TorodClient } from '../modules/book-orders/courier/torod.client';
+import { TorodWebhookController } from '../modules/book-orders/courier/torod-webhook.controller';
 import { BooksController } from '../modules/books/books.controller';
 import { AdminBooksController } from '../modules/books/admin-books.controller';
 import { ExpensesController } from '../modules/expenses/expenses.controller';
@@ -100,6 +103,9 @@ import { ArenaModule } from '../modules/arena/arena.module';
 import { MistakesModule } from '../modules/mistakes/mistakes.module';
 
 import { enumerateRoutes, type RouteRef } from './route-inventory';
+
+/** جسم صحيح لـ`POST /admin/challenge-topics/:courseId` — درس من كورس مش موجود. */
+const CHALLENGE_TOPIC_BODY = { title: 'الوحدة الأولى', sectionIds: [], lessonIds: ['01990000-0000-7000-8000-00000000abcd'], isActive: true };
 
 /** جسم صحيح لـ`PUT /admin/game-banks/:courseId/modes` — الافتراضي في التلاتة. */
 const GAME_MODES_BODY = {
@@ -252,6 +258,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // `PaymentsController`'s own comment.
         BookOrdersController,
         AdminBookOrdersController,
+        // «شركة الشحن» — the courier's webhook. A `KNOWN_GAPS` entry, not a
+        // matrix row: its actor is their server, holding the path token.
+        TorodWebhookController,
         // «قسم الكتب» — the catalogue. Same by-class registration and the same
         // reason: its `BooksService` dependencies (Prisma, `AuditService`,
         // `SettingsService`) are already available from `AuditModule` and
@@ -403,6 +412,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         // «الفلوس يوم بيوم» — `AdminFinanceController`'s second dependency.
         FinanceDailyService,
         BookOrdersService,
+        BookOrderCourierService,
+        TorodClient,
         BooksService,
         // `AdminBroadcastController`'s dependency. Listed for the reason the
         // block above gives: a provider a registered controller needs and
@@ -846,6 +857,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'arena stream: anonymous', method: 'get', path: () => '/api/me/arena/stream', actor: 'anonymous', status: 401 },
     { label: 'arena queue: anonymous', method: 'post', path: () => '/api/me/arena/queue', actor: 'anonymous', status: 401, body: () => ({ courseId: randomUUID() }) },
     { label: 'arena queue: student, a course that is not theirs', method: 'post', path: () => '/api/me/arena/queue', actor: 'student', status: 403, body: () => ({ courseId: randomUUID() }) },
+    // «تحدّي من اختيارك» وقبوله — طالب من غير سنة/اشتراك مايقدرش يفتح تحدّي
+    // (٤٠٣)، وتحدّي مش موجود (أو مش من طابوره) = ٤٠٤.
+    { label: 'arena challenge create: anonymous', method: 'post', path: () => '/api/me/arena/challenges', actor: 'anonymous', status: 401, body: () => ({ courseId: randomUUID(), topicIds: [randomUUID()] }) },
+    { label: 'arena challenge create: student, a course that is not theirs', method: 'post', path: () => '/api/me/arena/challenges', actor: 'student', status: 403, body: () => ({ courseId: randomUUID(), topicIds: [randomUUID()] }) },
+    { label: 'arena challenge accept: anonymous', method: 'post', path: () => `/api/me/arena/challenges/${randomUUID()}/accept`, actor: 'anonymous', status: 401 },
+    { label: 'arena challenge accept: student, no such challenge', method: 'post', path: () => `/api/me/arena/challenges/${randomUUID()}/accept`, actor: 'student', status: 404 },
     { label: 'arena leave queue: anonymous', method: 'delete', path: () => '/api/me/arena/queue', actor: 'anonymous', status: 401 },
     { label: 'arena leave queue: student', method: 'delete', path: () => '/api/me/arena/queue', actor: 'student', status: 200 },
     { label: 'arena answer: anonymous', method: 'post', path: () => `/api/me/arena/matches/${randomUUID()}/answer`, actor: 'anonymous', status: 401, body: () => ({ index: 0, optionId: randomUUID() }) },
@@ -881,6 +898,15 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin question delete: anonymous', method: 'post', path: () => '/api/admin/questions/delete', actor: 'anonymous', status: 401, body: () => ({ ids: [randomUUID()] }) },
     { label: 'admin question delete: student', method: 'post', path: () => '/api/admin/questions/delete', actor: 'student', status: 403, body: () => ({ ids: [randomUUID()] }) },
     { label: 'admin question delete: admin, unknown ids', method: 'post', path: () => '/api/admin/questions/delete', actor: 'admin', status: 200, body: () => ({ ids: [randomUUID()] }) },
+    // «انشر المسودات» — `question:write` زي باقي البنك. تصنيف مالوش مسودات =
+    // `{ published: 0 }` (200)، فصف الأدمن بيثبت إن الراوت بيعدّي الصلاحية من
+    // غير ما ينشر حاجة. الاتنين مع بعض أو ولا واحد = 400.
+    { label: 'admin publish drafts: anonymous', method: 'post', path: () => '/api/admin/questions/publish-drafts', actor: 'anonymous', status: 401, body: () => ({ categoryId: randomUUID() }) },
+    { label: 'admin publish drafts: student', method: 'post', path: () => '/api/admin/questions/publish-drafts', actor: 'student', status: 403, body: () => ({ categoryId: randomUUID() }) },
+    { label: 'admin publish drafts: admin, unknown category', method: 'post', path: () => '/api/admin/questions/publish-drafts', actor: 'admin', status: 200, body: () => ({ categoryId: randomUUID() }) },
+    { label: 'admin publish drafts: admin, unknown versions', method: 'post', path: () => '/api/admin/questions/publish-drafts', actor: 'admin', status: 200, body: () => ({ versionIds: [randomUUID()] }) },
+    { label: 'admin publish drafts: admin, both scopes', method: 'post', path: () => '/api/admin/questions/publish-drafts', actor: 'admin', status: 400, body: () => ({ categoryId: randomUUID(), versionIds: [randomUUID()] }) },
+    { label: 'admin publish drafts: admin, no scope', method: 'post', path: () => '/api/admin/questions/publish-drafts', actor: 'admin', status: 400, body: () => ({}) },
     { label: 'admin question restore: anonymous', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/restore`, actor: 'anonymous', status: 401 },
     { label: 'admin question restore: student', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/restore`, actor: 'student', status: 403 },
     { label: 'admin question restore: admin, unknown question', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/restore`, actor: 'admin', status: 404 },
@@ -906,6 +932,44 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin game lesson bank: admin, unknown lesson', method: 'post', path: () => `/api/admin/game-banks/${randomUUID()}/lessons/${randomUUID()}`, actor: 'admin', status: 404 },
     { label: 'admin game modes: student', method: 'put', path: () => `/api/admin/game-banks/${randomUUID()}/modes`, actor: 'student', status: 403, body: () => ({ modes: GAME_MODES_BODY }) },
     { label: 'admin game modes: admin, unknown course', method: 'put', path: () => `/api/admin/game-banks/${randomUUID()}/modes`, actor: 'admin', status: 404, body: () => ({ modes: GAME_MODES_BODY }) },
+    // «قسم التحديات» — نفس باب «أسئلة الألعاب»: `question:write` + `quizGame`.
+    // كورس مش موجود = ٤٠٤ للأدمن؛ الطالب مابيوصلش للسؤال ده أصلًا.
+    { label: 'admin challenge topics: anonymous', method: 'get', path: () => `/api/admin/challenge-topics/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin challenge topics: student', method: 'get', path: () => `/api/admin/challenge-topics/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin challenge topics: admin, unknown course', method: 'get', path: () => `/api/admin/challenge-topics/${randomUUID()}`, actor: 'admin', status: 404 },
+    { label: 'admin challenge topic create: anonymous', method: 'post', path: () => `/api/admin/challenge-topics/${randomUUID()}`, actor: 'anonymous', status: 401, body: () => CHALLENGE_TOPIC_BODY },
+    { label: 'admin challenge topic create: student', method: 'post', path: () => `/api/admin/challenge-topics/${randomUUID()}`, actor: 'student', status: 403, body: () => CHALLENGE_TOPIC_BODY },
+    { label: 'admin challenge topic create: admin, unknown course', method: 'post', path: () => `/api/admin/challenge-topics/${randomUUID()}`, actor: 'admin', status: 404, body: () => CHALLENGE_TOPIC_BODY },
+    { label: 'admin challenge topic create: admin, no unit or lesson', method: 'post', path: () => `/api/admin/challenge-topics/${randomUUID()}`, actor: 'admin', status: 400, body: () => ({ ...CHALLENGE_TOPIC_BODY, lessonIds: [] }) },
+    { label: 'admin challenge topic order: anonymous', method: 'put', path: () => `/api/admin/challenge-topics/${randomUUID()}/order`, actor: 'anonymous', status: 401, body: () => ({ ids: [randomUUID()] }) },
+    { label: 'admin challenge topic order: student', method: 'put', path: () => `/api/admin/challenge-topics/${randomUUID()}/order`, actor: 'student', status: 403, body: () => ({ ids: [randomUUID()] }) },
+    { label: 'admin challenge topic order: admin, course with no topics', method: 'put', path: () => `/api/admin/challenge-topics/${randomUUID()}/order`, actor: 'admin', status: 404, body: () => ({ ids: [randomUUID()] }) },
+    { label: 'admin challenge topic update: anonymous', method: 'patch', path: () => `/api/admin/challenge-topics/${randomUUID()}/${randomUUID()}`, actor: 'anonymous', status: 401, body: () => ({ isActive: false }) },
+    { label: 'admin challenge topic update: student', method: 'patch', path: () => `/api/admin/challenge-topics/${randomUUID()}/${randomUUID()}`, actor: 'student', status: 403, body: () => ({ isActive: false }) },
+    { label: 'admin challenge topic update: admin, unknown course', method: 'patch', path: () => `/api/admin/challenge-topics/${randomUUID()}/${randomUUID()}`, actor: 'admin', status: 404, body: () => ({ isActive: false }) },
+    { label: 'admin challenge topic delete: anonymous', method: 'delete', path: () => `/api/admin/challenge-topics/${randomUUID()}/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'admin challenge topic delete: student', method: 'delete', path: () => `/api/admin/challenge-topics/${randomUUID()}/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin challenge topic delete: admin, unknown topic', method: 'delete', path: () => `/api/admin/challenge-topics/${randomUUID()}/${randomUUID()}`, actor: 'admin', status: 404 },
+    // «أسئلة كتب خارجية» — نفس `question:write` بالظبط، زي «أسئلة الألعاب».
+    { label: 'admin external books: student', method: 'get', path: () => '/api/admin/external-books', actor: 'student', status: 403 },
+    { label: 'admin external books: admin', method: 'get', path: () => '/api/admin/external-books', actor: 'admin', status: 200 },
+    { label: 'admin external book create: student', method: 'post', path: () => '/api/admin/external-books', actor: 'student', status: 403, body: () => ({ title: 'كتاب' }) },
+    { label: 'admin external book detail: student', method: 'get', path: () => `/api/admin/external-books/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin external book detail: admin, unknown book', method: 'get', path: () => `/api/admin/external-books/${randomUUID()}`, actor: 'admin', status: 404 },
+    { label: 'admin external book update: student', method: 'patch', path: () => `/api/admin/external-books/${randomUUID()}`, actor: 'student', status: 403, body: () => ({ title: 'كتاب' }) },
+    { label: 'admin external book update: admin, unknown book', method: 'patch', path: () => `/api/admin/external-books/${randomUUID()}`, actor: 'admin', status: 404, body: () => ({ title: 'كتاب' }) },
+    { label: 'admin external book create unit: student', method: 'post', path: () => `/api/admin/external-books/${randomUUID()}/units`, actor: 'student', status: 403, body: () => ({ name: 'وحدة' }) },
+    { label: 'admin external book create unit: admin, unknown book', method: 'post', path: () => `/api/admin/external-books/${randomUUID()}/units`, actor: 'admin', status: 404, body: () => ({ name: 'وحدة' }) },
+    { label: 'admin external book create lesson: student', method: 'post', path: () => `/api/admin/external-books/${randomUUID()}/units/${randomUUID()}/lessons`, actor: 'student', status: 403, body: () => ({ name: 'درس' }) },
+    { label: 'admin external book create lesson: admin, unknown unit', method: 'post', path: () => `/api/admin/external-books/${randomUUID()}/units/${randomUUID()}/lessons`, actor: 'admin', status: 404, body: () => ({ name: 'درس' }) },
+    { label: 'admin external book adopt lesson: student', method: 'post', path: () => `/api/admin/external-books/${randomUUID()}/units/${randomUUID()}/adopt`, actor: 'student', status: 403, body: () => ({ categoryId: randomUUID() }) },
+    { label: 'admin external book adopt lesson: admin, unknown unit', method: 'post', path: () => `/api/admin/external-books/${randomUUID()}/units/${randomUUID()}/adopt`, actor: 'admin', status: 404, body: () => ({ categoryId: randomUUID() }) },
+    { label: 'admin external book move lesson: student', method: 'patch', path: () => `/api/admin/external-books/categories/${randomUUID()}/move`, actor: 'student', status: 403, body: () => ({ unitId: randomUUID() }) },
+    { label: 'admin external book move lesson: admin, unknown lesson', method: 'patch', path: () => `/api/admin/external-books/categories/${randomUUID()}/move`, actor: 'admin', status: 404, body: () => ({ unitId: randomUUID() }) },
+    { label: 'admin external book rename category: student', method: 'patch', path: () => `/api/admin/external-books/categories/${randomUUID()}`, actor: 'student', status: 403, body: () => ({ name: 'اسم' }) },
+    { label: 'admin external book rename category: admin, unknown category', method: 'patch', path: () => `/api/admin/external-books/categories/${randomUUID()}`, actor: 'admin', status: 404, body: () => ({ name: 'اسم' }) },
+    { label: 'admin external book delete category: student', method: 'delete', path: () => `/api/admin/external-books/categories/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin external book delete category: admin, unknown category', method: 'delete', path: () => `/api/admin/external-books/categories/${randomUUID()}`, actor: 'admin', status: 404 },
     // «إحصائيات الألعاب» — `analytics:read` زي «الفيديوهات».
     { label: 'admin game stats: anonymous', method: 'get', path: () => '/api/admin/game-stats', actor: 'anonymous', status: 401 },
     { label: 'admin game stats: student', method: 'get', path: () => '/api/admin/game-stats', actor: 'student', status: 403 },
@@ -1521,6 +1585,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin resource reorder: student', method: 'patch', path: () => `/api/admin/lessons/${lessonId}/resources/order`, actor: 'student', status: 403 },
     { label: 'document upload: student', method: 'post', path: () => `/api/media/documents`, actor: 'student', status: 403 },
     { label: 'document upload: anonymous', method: 'post', path: () => `/api/media/documents`, actor: 'anonymous', status: 401 },
+    // «رفع فيديو» in a lesson's materials — the lecture's upload, for a material row.
+    { label: 'admin resource video upload start: anonymous', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/resources/video-upload`, actor: 'anonymous', status: 401, body: () => ({ title: 'حل', fileName: 'a.mp4', sizeBytes: 1024, contentType: 'video/mp4' }) },
+    { label: 'admin resource video upload start: student', method: 'post', path: () => `/api/admin/lessons/${scratchLessonId}/resources/video-upload`, actor: 'student', status: 403, body: () => ({ title: 'حل', fileName: 'a.mp4', sizeBytes: 1024, contentType: 'video/mp4' }) },
+    { label: 'admin resource video upload complete: anonymous', method: 'post', path: () => `/api/admin/resources/${randomUUID()}/video-upload/complete`, actor: 'anonymous', status: 401, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u', parts: [{ partNumber: 1, etag: 'e' }] }) },
+    { label: 'admin resource video upload complete: student', method: 'post', path: () => `/api/admin/resources/${randomUUID()}/video-upload/complete`, actor: 'student', status: 403, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u', parts: [{ partNumber: 1, etag: 'e' }] }) },
+    { label: 'admin resource video upload resume: anonymous', method: 'post', path: () => `/api/admin/resources/${randomUUID()}/video-upload/resume`, actor: 'anonymous', status: 401, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u', sizeBytes: 1024 }) },
+    { label: 'admin resource video upload resume: student', method: 'post', path: () => `/api/admin/resources/${randomUUID()}/video-upload/resume`, actor: 'student', status: 403, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u', sizeBytes: 1024 }) },
+    { label: 'admin resource video upload abort: anonymous', method: 'post', path: () => `/api/admin/resources/${randomUUID()}/video-upload/abort`, actor: 'anonymous', status: 401, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u' }) },
+    { label: 'admin resource video upload abort: student', method: 'post', path: () => `/api/admin/resources/${randomUUID()}/video-upload/abort`, actor: 'student', status: 403, body: () => ({ videoId: 'a'.repeat(32), uploadId: 'u' }) },
+    { label: 'admin resource video upload status: anonymous', method: 'get', path: () => `/api/admin/resources/${randomUUID()}/video-upload/status`, actor: 'anonymous', status: 401 },
+    { label: 'admin resource video upload status: student', method: 'get', path: () => `/api/admin/resources/${randomUUID()}/video-upload/status`, actor: 'student', status: 403 },
 
     // ── Media — admin-only ──
     { label: 'media upload: anonymous', method: 'post', path: () => '/api/media', actor: 'anonymous', status: 401 },
@@ -1580,6 +1655,17 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     // different authority from correcting a profile field.
     { label: 'student set-password: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/set-password`, actor: 'anonymous', status: 401 },
     { label: 'student set-password: student', method: 'post', path: () => `/api/admin/students/${studentId}/set-password`, actor: 'student', status: 403 },
+
+    /*
+     * `staff:set-password` — الباب المقابل على المساعدين. في أساس كل
+     * `owner` (مش محجوبة زي الصلاحية اللي فوقها)، فالحارس الحقيقي داخل
+     * `setStaffPassword` نفسها مش هنا: صاحب المنصة بس. مفيش حساب مساعد في
+     * الفيكستشر ده، فالصف الأخير بيثبت نص الحارس التاني بدلها — هدف طالب
+     * مرفوض بـ403 حتى من الـ`admin` (اللي هو نفسه صاحب المنصة هنا).
+     */
+    { label: 'staff set-password: anonymous', method: 'post', path: () => `/api/admin/students/${studentId}/staff-password`, actor: 'anonymous', status: 401, body: () => ({ newPassword: 'a-very-strong-pass-1' }) },
+    { label: 'staff set-password: student', method: 'post', path: () => `/api/admin/students/${studentId}/staff-password`, actor: 'student', status: 403, body: () => ({ newPassword: 'a-very-strong-pass-1' }) },
+    { label: 'staff set-password: admin, target is a student', method: 'post', path: () => `/api/admin/students/${studentId}/staff-password`, actor: 'admin', status: 403, body: () => ({ newPassword: 'a-very-strong-pass-1' }) },
 
     // ── سجل الحساب — who did what to this student, in order. `student:read`,
     // the same permission as the profile it renders inside: it composes rows
@@ -2397,6 +2483,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin book orders print many: anonymous', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'anonymous', status: 401 },
     { label: 'admin book orders print many: student', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'student', status: 403 },
     { label: 'admin book orders print many: admin', method: 'post', path: () => '/api/admin/book-orders/printing', actor: 'admin', body: () => ({ ids: [randomUUID()] }), status: 201 },
+    // «ابعت لشركة الشحن» — the same desk, on the same `book-order:ship`. No
+    // admin 201 row: with no Torod account in CI it answers 400 «مش متظبط»,
+    // which proves nothing about who may reach it.
+    { label: 'admin book orders courier many: anonymous', method: 'post', path: () => '/api/admin/book-orders/courier', actor: 'anonymous', status: 401 },
+    { label: 'admin book orders courier many: student', method: 'post', path: () => '/api/admin/book-orders/courier', actor: 'student', status: 403 },
+    { label: 'admin book orders courier events: anonymous', method: 'get', path: () => `/api/admin/book-orders/${randomUUID()}/courier-events`, actor: 'anonymous', status: 401 },
+    { label: 'admin book orders courier events: student', method: 'get', path: () => `/api/admin/book-orders/${randomUUID()}/courier-events`, actor: 'student', status: 403 },
     // رفع الحجز بالجملة — same `book-order:ship` authority as the per-row
     // `:id/review-ok` above. The admin case's id belongs to no order, so a 201
     // proves the route is REACHED; the body reports that row as `skipped`.
@@ -2417,6 +2510,10 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin book order deliver: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/deliver`, actor: 'anonymous', status: 401 },
     { label: 'admin book order deliver: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/deliver`, actor: 'student', status: 403 },
     { label: 'admin book order deliver: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/deliver`, actor: 'admin', status: 404 },
+    // «مرتجع» — the other way a shipment ends; same `book-order:ship`.
+    { label: 'admin book order return: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/return`, actor: 'anonymous', status: 401 },
+    { label: 'admin book order return: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/return`, actor: 'student', status: 403 },
+    { label: 'admin book order return: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/return`, actor: 'admin', body: () => ({ reason: null }), status: 404 },
     { label: 'admin book order reject: anonymous', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/reject`, actor: 'anonymous', body: () => ({ reason: 'التحويل ما وصلش' }), status: 401 },
     { label: 'admin book order reject: student', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/reject`, actor: 'student', body: () => ({ reason: 'التحويل ما وصلش' }), status: 403 },
     { label: 'admin book order reject: admin, unknown order', method: 'post', path: () => `/api/admin/book-orders/${randomUUID()}/reject`, actor: 'admin', body: () => ({ reason: 'التحويل ما وصلش' }), status: 404 },
@@ -2728,6 +2825,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       // `transfers-ingest.controller.spec.ts`; the admin-authenticated twin of
       // this ingest (`POST /api/admin/transfers/ingest`) IS covered above.
       'POST /api/ingest/transfers',
+      // «شركة الشحن» — Torod's status webhook, holding `TOROD_WEBHOOK_TOKEN`
+      // in its path. Same shape as the InstaPay ingest above: the actor is a
+      // server, not a browser, so none of anonymous/student/admin is the
+      // question. The webhook's effects are pinned in
+      // `book-order-courier.service.spec.ts`.
+      'POST /api/webhooks/torod/:token',
       // Same multipart problem, same reasoning — the book-order proof
       // upload. The plain-JSON routes around it (create, payment, mine, and
       // the whole admin surface) ARE covered above.
@@ -2944,6 +3047,13 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
            * through, which is also what makes the feature ship dormant.
            */
           'POST /api/ingest/transfers',
+          /*
+           * «شركة الشحن» — the courier's webhook. Public for the reason the
+           * InstaPay ingest is: their server has no session. Its gate is the
+           * token in the path, compared in full before the body is read, and
+           * an unset `TOROD_WEBHOOK_TOKEN` refuses everything.
+           */
+          'POST /api/webhooks/torod/:token',
           /*
            * الكتاب الورقي — guest checkout. Per Ayman: ordering the physical
            * textbook is "a different service" from the platform's login-

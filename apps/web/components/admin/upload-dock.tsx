@@ -31,7 +31,7 @@ export function UploadDock() {
         const percent = upload.total === 0 ? 0 : Math.min(100, Math.round((upload.sent / upload.total) * 100));
         const uploading = upload.phase === 'uploading';
         return (
-          <div key={upload.lessonId} className="rounded-xl border border-line bg-surface-2 p-3 shadow-lg">
+          <div key={upload.key} className="rounded-xl border border-line bg-surface-2 p-3 shadow-lg">
             <div className="flex items-center gap-2">
               <span
                 aria-hidden="true"
@@ -55,7 +55,7 @@ export function UploadDock() {
               ) : (
                 <button
                   type="button"
-                  onClick={() => dismissUpload(upload.lessonId)}
+                  onClick={() => dismissUpload(upload.key)}
                   aria-label={copy.common.close}
                   className="grid size-7 place-items-center rounded-md text-fg-muted hover:bg-surface-3 hover:text-fg"
                 >

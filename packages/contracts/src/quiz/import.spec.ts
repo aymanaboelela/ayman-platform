@@ -214,4 +214,67 @@ ANSWER: A
     expect(result.questions).toEqual([]);
     expect(result.errors).toHaveLength(1);
   });
+
+  describe('EXPLANATION / GROUP / LESSON lines', () => {
+    const LESSON = '01990000-0000-7000-8000-00000000abcd';
+
+    it('carries the explanation, the variant group and the lesson out of the block', () => {
+      const result = parseQuestionBlocks(
+        `الحلقة for بتتنفّذ كام مرة لو range(3)؟
+A. 2
+B. 3
+C. 4
+ANSWER: B
+EXPLANATION: range(3) بتطلّع 0 و1 و2 — يعني تلات مرات.
+GROUP: loops-range-1
+LESSON: ${LESSON.toUpperCase()}`,
+        CATEGORY,
+      );
+      expect(result.errors).toEqual([]);
+      const question = result.questions[0]!;
+      // The directive lines never leak into the stem or the options.
+      expect(question.stemHtml).toBe('<p>الحلقة for بتتنفّذ كام مرة لو range(3)؟</p>');
+      expect(question.options).toHaveLength(3);
+      expect(question.generalFeedbackHtml).toBe('<p>range(3) بتطلّع 0 و1 و2 — يعني تلات مرات.</p>');
+      expect(result.meta).toEqual([{ variantGroupKey: 'loops-range-1', lessonId: LESSON }]);
+    });
+
+    it('reads the Arabic keywords, and escapes the explanation instead of trusting it', () => {
+      const result = parseQuestionBlocks(
+        `السؤال
+أ. صح
+ب. خطأ
+الإجابة: أ
+الشرح: <img src=x onerror=alert(1)> مش HTML
+الشرح: سطر تاني
+المجموعة: الحلقات_١`,
+        CATEGORY,
+      );
+      expect(result.errors).toEqual([]);
+      expect(result.questions[0]!.generalFeedbackHtml).toBe(
+        '<p>&lt;img src=x onerror=alert(1)&gt; مش HTML</p><p>سطر تاني</p>',
+      );
+      expect(result.meta[0]).toEqual({ variantGroupKey: 'الحلقات_١', lessonId: null });
+    });
+
+    it('keeps meta index-aligned with the questions, null where a block says nothing', () => {
+      const result = parseQuestionBlocks(`س١\nA. x\nB. y\nANSWER: A\n\nس٢\nA. x\nB. y\nANSWER: B\nGROUP: g2`, CATEGORY);
+      expect(result.questions).toHaveLength(2);
+      expect(result.meta).toEqual([
+        { variantGroupKey: null, lessonId: null },
+        { variantGroupKey: 'g2', lessonId: null },
+      ]);
+    });
+
+    it('rejects a group with a space and a lesson that is not an id, naming the block', () => {
+      const result = parseQuestionBlocks(
+        `س١\nA. x\nB. y\nANSWER: A\nGROUP: two words\n\nس٢\nA. x\nB. y\nANSWER: B\nLESSON: الدرس التالت`,
+        CATEGORY,
+      );
+      expect(result.questions).toEqual([]);
+      expect(result.errors.map((error) => error.blockIndex)).toEqual([1, 2]);
+      expect(result.errors[0]!.message).toContain('two words');
+      expect(result.errors[1]!.message).toContain('الدرس التالت');
+    });
+  });
 });

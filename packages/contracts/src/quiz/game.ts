@@ -1,4 +1,5 @@
 import { z } from '@ayman/contracts/zod';
+import { GameHubTopicSchema, TopicBucketSchema } from '@ayman/contracts/quiz/challenges';
 
 /**
  * «الألعاب» — `/api/me/game/*`. تلات ألعاب على نفس البنك:
@@ -124,6 +125,8 @@ export const GameRoundSchema = z.object({
    * عادي من غيره، بس مابتتحسبش في الإحصائيات.
    */
   sessionId: z.string().nullable().default(null),
+  /** «تدريب» — من غير تايمر ولا قلوب، والشرح بعد كل سؤال. */
+  practice: z.boolean().default(false),
 });
 export type GameRound = z.infer<typeof GameRoundSchema>;
 
@@ -143,6 +146,11 @@ export type GameAnswerRequest = z.infer<typeof GameAnswerRequestSchema>;
 export const GameAnswerResultSchema = z.object({
   correct: z.boolean(),
   rightOptionIds: z.array(z.string()),
+  /**
+   * شرح السؤال (`question_versions.general_feedback_html`) — بيوصل بس بعد
+   * الإجابة، مع الصح. `null` لو المدرّس ماكتبش شرح.
+   */
+  explanationHtml: z.string().nullable().default(null),
 });
 export type GameAnswerResult = z.infer<typeof GameAnswerResultSchema>;
 
@@ -178,10 +186,22 @@ export const GameStartRequestSchema = z
     courseId: z.uuid().optional(),
     scope: GameScopeKindSchema.default('all'),
     scopeId: z.uuid().optional(),
+    /**
+     * «التحديات» اللي الطالب اختارها (واحد أو أكتر، من كورس واحد). معاها
+     * `scope` بيتجاهل: البنك هو أسئلة دروس التحديات دي — شوف
+     * `quiz/challenges.ts`.
+     */
+    topicIds: z.array(z.uuid()).max(30).optional(),
+    /** «تدريب» — شوف `GameRound.practice`. */
+    practice: z.boolean().optional(),
   })
   .refine((value) => value.scope === 'all' || (value.scopeId !== undefined && value.courseId !== undefined), {
     message: 'a unit or a lesson needs its course and its id',
     path: ['scopeId'],
+  })
+  .refine((value) => !value.topicIds?.length || value.courseId !== undefined, {
+    message: 'challenge topics need their course',
+    path: ['topicIds'],
   });
 export type GameStartRequest = z.infer<typeof GameStartRequestSchema>;
 
@@ -370,6 +390,13 @@ export const GameHubCourseSchema = z.object({
   lessons: z.array(z.object({ id: z.string(), title: z.string(), sectionId: z.string() })).default([]),
   buckets: z.array(GameBucketSchema).default([]),
   modes: GameModesConfigSchema.default(defaultGameModes),
+  /**
+   * «التحديات» المتشغّلة في الكورس ده. فاضية = الكورس لسه بالنطاق القديم
+   * (المنهج كله، وحدة، ولا درس من الكويزات اللي اتمتحنت). مش فاضية = ده اللي
+   * الطالب بيختار منه، والأسئلة من `topicBuckets`.
+   */
+  topics: z.array(GameHubTopicSchema).default([]),
+  topicBuckets: z.array(TopicBucketSchema).default([]),
 });
 export type GameHubCourse = z.infer<typeof GameHubCourseSchema>;
 

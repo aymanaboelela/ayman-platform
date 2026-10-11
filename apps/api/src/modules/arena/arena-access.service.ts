@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ARENA_RULES } from '@ayman/contracts/arena';
+import { isFoundationCourse } from '@ayman/contracts/quiz/challenges';
 import { arenaCopy } from '@ayman/contracts/copy/arena';
 import { formatCopy } from '@ayman/contracts/format';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -73,10 +74,25 @@ export class ArenaAccessService implements ArenaAccessPort {
       return { name, image, cohort, cohortLabel, blocked: 'no_subscription', courses: [] };
     }
 
-    const counts = await this.game.arenaPoolCounts(userId);
+    const [counts, topical] = await Promise.all([this.game.arenaPoolCounts(userId), this.game.topicCourses(userId)]);
     const courses = paid.map((course) => {
+      // «التحديات»: كورس فيها بيتلعب على تحدّي، والعدّ من بنك التحديات — مش
+      // من الكويزات اللي اتمتحنت بس.
+      const withTopics = topical.get(course.id);
+      if (withTopics && withTopics.topics.length > 0) {
+        const inLessons = (lessonIds: readonly string[]) => {
+          const wanted = new Set(lessonIds);
+          return withTopics.entries.filter((entry) => entry.lessonId !== null && wanted.has(entry.lessonId)).length;
+        };
+        const topics = withTopics.topics.map((topic) => {
+          const questions = inLessons(topic.lessonIds);
+          return { id: topic.id, title: topic.title, questions, playable: questions >= ARENA_RULES.minPool, waiting: 0 };
+        });
+        const questions = inLessons(withTopics.topics.flatMap((topic) => topic.lessonIds));
+        return { id: course.id, title: course.title, questions, playable: topics.some((topic) => topic.playable), topics };
+      }
       const questions = counts.get(course.id) ?? 0;
-      return { id: course.id, title: course.title, questions, playable: questions >= ARENA_RULES.minPool };
+      return { id: course.id, title: course.title, questions, playable: questions >= ARENA_RULES.minPool, topics: [] };
     });
     courses.sort((a, b) => Number(b.playable) - Number(a.playable) || b.questions - a.questions);
     return { name, image, cohort, cohortLabel, blocked: null, courses };
@@ -98,7 +114,7 @@ export class ArenaAccessService implements ArenaAccessPort {
   private async paidCourses(userId: string): Promise<Array<{ id: string; title: string }>> {
     const enrollments = await this.prisma.enrollment.findMany({
       where: { userId, status: { in: [...ACTIVE_ENROLLMENT_STATUSES] }, course: { status: 'published' } },
-      select: { course: { select: { id: true, title: true, subjectId: true } } },
+      select: { course: { select: { id: true, title: true, subtitle: true, subjectId: true } } },
     });
     if (enrollments.length === 0) return [];
     // `requiresGrant: true` = من غير `platform`. شوف الشرح فوق الكلاس.
@@ -108,8 +124,12 @@ export class ArenaAccessService implements ArenaAccessPort {
       select: { scope: true, courseId: true, subjectId: true, validFrom: true, validUntil: true, revokedAt: true },
     });
     const now = new Date();
-    return enrollments
-      .filter((_, index) => hasLiveCourseAccess(grants, subjects[index]!, now))
-      .map(({ course }) => ({ id: course.id, title: course.title }));
+    return (
+      enrollments
+        .filter((_, index) => hasLiveCourseAccess(grants, subjects[index]!, now))
+        // الكورس التأسيسي عمره ما بيظهر في الساحة — زي الألعاب.
+        .filter(({ course }) => !isFoundationCourse(course))
+        .map(({ course }) => ({ id: course.id, title: course.title }))
+    );
   }
 }

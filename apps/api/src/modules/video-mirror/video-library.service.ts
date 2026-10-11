@@ -378,13 +378,22 @@ export class VideoLibraryService {
     const storage = this.mirror.objectStorage;
     if (storage === null) return [];
 
-    const [ladders, sources, referenced, parked] = await Promise.all([
+    const [ladders, sources, referenced, materials, parked] = await Promise.all([
       storage.listMirroredIds(),
       storage.listSourceIds(),
       this.prisma.lessonVideo.findMany({ select: { externalId: true } }),
+      // «رفع فيديو» in a lesson's materials lives under the same `v/<id>/` —
+      // without this every one of them would be offered here for deletion.
+      this.prisma.lessonResource.findMany({
+        where: { videoProvider: 'upload' },
+        select: { videoExternalId: true },
+      }),
       this.uploads.parkedReplacedIds(),
     ]);
-    const used = new Set(referenced.map((row) => row.externalId));
+    const used = new Set([
+      ...referenced.map((row) => row.externalId),
+      ...materials.flatMap((row) => (row.videoExternalId === null ? [] : [row.videoExternalId])),
+    ]);
     const ids = [...new Set([...ladders, ...sources])].filter(
       (id) => !used.has(id) && !parked.has(id) && !kept.has(id) && isVideoExternalId(id),
     );
@@ -440,6 +449,14 @@ export class VideoLibraryService {
       throw new ConflictException('الفيديو ده لسه بيترفع أو بيتجهز — استنى لما يخلص');
     }
     if (rows.length === 0) {
+      // A material's video is not a leftover: it is deleted with its
+      // material, from the lesson, which is where the admin can see what it is.
+      const material = await this.prisma.lessonResource.count({
+        where: { videoExternalId: videoId, videoProvider: 'upload' },
+      });
+      if (material > 0) {
+        throw new ConflictException('الفيديو ده في مواد درس — امسحه من مواد الدرس نفسها');
+      }
       const parked = await this.uploads.parkedReplacedIds().catch(() => null);
       if (parked === null) {
         throw new ServiceUnavailableException('مقدرناش نتأكد إن مفيش رفع شغّال — جرّب كمان شوية');

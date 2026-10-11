@@ -24,6 +24,7 @@ const entry: MistakeEntry = {
   missedAt: new Date().toISOString(),
   timesMissed: 1,
   streakRight: 0,
+  source: 'quiz',
 };
 
 function option(text: string): HTMLElement {

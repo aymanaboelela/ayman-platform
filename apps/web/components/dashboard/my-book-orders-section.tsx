@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { copy } from '@ayman/contracts';
-import type { BookOrder } from '@ayman/contracts/book-orders';
+import { bookOrderDate, type BookOrder } from '@ayman/contracts/book-orders';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
 import { StreamBadge } from '@/components/stream-badge';
@@ -157,10 +157,10 @@ export function BookOrderCard({
         </span>
 
         <time
-          dateTime={order.createdAt}
+          dateTime={bookOrderDate(order)}
           className="mono text-[length:var(--fs-mono-label)] text-fg-faint"
         >
-          {formatCopy(c.placedOn, { date: formatBookOrderDate(order.createdAt) })}
+          {formatCopy(c.placedOn, { date: formatBookOrderDate(bookOrderDate(order)) })}
         </time>
       </div>
 
@@ -263,6 +263,38 @@ export function BookOrderCard({
         >
           {c.resumeCta}
         </Link>
+      ) : null}
+
+      {/*
+        «فين الكتاب دلوقتي؟» — what the courier last said, and who is carrying
+        it. Only while the parcel is still moving: on a delivered or rejected
+        order the courier's last word is history the card already tells better.
+        The agent's number is isolated LTR, or it reverses inside Arabic.
+      */}
+      {order.courier && !status.closed ? (
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[length:var(--fs-text-sm)]">
+          <span className="text-fg">
+            {formatCopy(c.courierStatus, { status: order.courier.statusName })}
+            {order.courier.note ? <span className="text-fg-muted"> — {order.courier.note}</span> : null}
+          </span>
+          {order.courier.agentName ? (
+            <span className="text-fg-muted">
+              {formatCopy(c.courierAgent, { name: order.courier.agentName })}
+              {order.courier.agentPhone ? (
+                <>
+                  {' · '}
+                  <a
+                    href={`tel:${order.courier.agentPhone}`}
+                    dir="ltr"
+                    className="[unicode-bidi:isolate] underline decoration-dotted underline-offset-4"
+                  >
+                    {order.courier.agentPhone}
+                  </a>
+                </>
+              ) : null}
+            </span>
+          ) : null}
+        </div>
       ) : null}
 
       {/*

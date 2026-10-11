@@ -3,16 +3,21 @@
 import { revalidatePath } from '@/lib/revalidate-screen';
 import { z } from '@ayman/contracts/zod';
 import { copy } from '@ayman/contracts/copy/admin';
-import { adminGet, adminSend } from '@/lib/admin-api';
+import { AdminApiError, adminGet, adminSend } from '@/lib/admin-api';
 import { roleChangeError } from '@/lib/role-change-error';
 import {
   UserPermissionsReadSchema,
   type UserPermissionsRead,
 } from '@ayman/contracts/admin/roles';
-import { AdminStaffRoleSchema, STAFF_ROLE_REASON_MIN } from '@ayman/contracts/admin/students';
+import {
+  AdminStaffRoleSchema,
+  AdminStudentSetPasswordSchema,
+  STAFF_ROLE_REASON_MIN,
+} from '@ayman/contracts/admin/students';
 import { formatCopy } from '@ayman/contracts/format';
 
 const c = copy.admin.roles;
+const member = copy.admin.roles.member;
 
 export type ActionResult = { ok: true } | { ok: false; message: string };
 
@@ -129,6 +134,54 @@ export async function setStaffRoleAction(
     // a «try again» that will fail the same way every time.
     const message = roleChangeError(error);
     return { ok: false, message: message === copy.admin.students.roleChangeFailed ? c.staff.failed : message };
+  }
+}
+
+/**
+ * إعادة تعيين كلمة سر مساعد — نفس شكل `setStudentPasswordAction`
+ * (`students/actions.ts`) بالظبط، بس على `/staff-password` بدل
+ * `/set-password`. التطابق مش للتوحيد لذاته — `AdminStudentSetPasswordSchema`
+ * نفسها وراء الاتنين، والتأكيد بيتحقق هنا (مش بس في الديالوج) لنفس السبب:
+ * الأكشن بيشتغل على السيرفر أصلًا.
+ *
+ * ⚠️ الحارس الحقيقي مش هنا ولا في الشاشة — جوّه `StudentsService.setStaffPassword`:
+ * صاحب المنصة بس (أقدم حساب مش-طالب)، أيًّا كانت صلاحياته. الشاشة بتخفي
+ * الزرار عن غير صاحب المنصة (`staff-section.tsx`) عشان ماحدش يدوس على زرار
+ * هيرفضه السيرفر دايمًا، بس لو حد وصل هنا من غيره الرسالة بتاخد نفس الحارس
+ * من رد الـ403.
+ */
+export async function setStaffPasswordAction(userId: string, formData: FormData): Promise<ActionResult> {
+  const newPassword = String(formData.get('newPassword') ?? '');
+  const confirmPassword = String(formData.get('confirmPassword') ?? '');
+
+  if (newPassword !== confirmPassword) {
+    return { ok: false, message: member.resetPasswordMismatch };
+  }
+
+  try {
+    const body = AdminStudentSetPasswordSchema.parse({ newPassword });
+    await adminSend(
+      'POST',
+      `/api/admin/students/${encodeURIComponent(userId)}/staff-password`,
+      body,
+      z.object({ status: z.literal(true) }),
+    );
+    revalidatePath('/admin/roles');
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof AdminApiError && error.status === 403) {
+      const detail =
+        typeof error.payload === 'object' && error.payload !== null
+          ? String((error.payload as { message?: unknown }).message ?? '')
+          : '';
+      if (detail.includes('only the platform owner')) {
+        return { ok: false, message: member.resetPasswordNotFounder };
+      }
+      if (detail.includes('can only be set on staff accounts')) {
+        return { ok: false, message: member.resetPasswordNotStaff };
+      }
+    }
+    return { ok: false, message: member.resetPasswordFailed };
   }
 }
 

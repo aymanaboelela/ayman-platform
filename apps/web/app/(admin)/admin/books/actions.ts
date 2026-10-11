@@ -14,10 +14,14 @@ import {
   type MarkBookOrderPaidInput,
   MarkBookOrderPrintingResultSchema,
   MarkBookOrderShippedResultSchema,
+  MarkBookOrderReturnedResultSchema,
+  MarkBookOrderReturnedSchema,
   RejectBookOrderResultSchema,
   RejectBookOrderSchema,
   RestoreBookOrderResultSchema,
   ClearBookOrderHoldResultSchema,
+  BookOrderCourierEventListSchema,
+  type BookOrderCourierEvent,
 } from '@ayman/contracts/admin/book-orders';
 import { z } from 'zod';
 import {
@@ -27,7 +31,7 @@ import {
 } from '@ayman/contracts/admin/books';
 import { BookOrderSchema } from '@ayman/contracts/book-orders';
 import { copy } from '@ayman/contracts/copy/admin';
-import { adminGet, adminSend } from '@/lib/admin-api';
+import { AdminApiError, adminGet, adminSend } from '@/lib/admin-api';
 
 const c = copy.admin.books;
 
@@ -214,6 +218,41 @@ export async function printBookOrdersAction(ids: string[]): Promise<BulkBookOrde
   }
 }
 
+/**
+ * «ابعت لشركة الشحن». Unlike the batches above, a refusal of the WHOLE request
+ * carries a sentence worth showing — «ربط شركة الشحن مش متظبط» — so it comes
+ * back as `{ error }` instead of a bare `null` the toast can only call a
+ * failure.
+ */
+export async function courierBookOrdersAction(
+  ids: string[],
+): Promise<BulkBookOrderResult | { error: string } | null> {
+  try {
+    const result = await adminSend('POST', '/api/admin/book-orders/courier', { ids }, BulkBookOrderResultSchema);
+    revalidatePath('/admin/books');
+    return result;
+  } catch (error) {
+    if (error instanceof AdminApiError && error.status === 400) {
+      const message = (error.payload as { message?: unknown } | null)?.message;
+      if (typeof message === 'string') return { error: message };
+    }
+    return null;
+  }
+}
+
+/** «تتبّع الشحنة» — fetched when the trail is opened, never per row on load:
+ *  fifty cards each asking on render is how this screen meets the rate limit. */
+export async function courierEventsAction(id: string): Promise<BookOrderCourierEvent[] | null> {
+  try {
+    return await adminGet(
+      `/api/admin/book-orders/${encodeURIComponent(id)}/courier-events`,
+      BookOrderCourierEventListSchema,
+    );
+  } catch {
+    return null;
+  }
+}
+
 /** «راح للمطبعة» for one row. The 400 is mapped the same way «اتشحن» maps its
  *  own — a second press on a row already at the printer is a fact, not a
  *  status code. */
@@ -360,6 +399,24 @@ export async function markBookOrderDeliveredAction(id: string): Promise<ActionRe
           ? error.message
           : 'unknown';
     return { ok: false, message };
+  }
+}
+
+/** «رجعت (مرتجع)» — the reason is optional; see `MarkBookOrderReturnedSchema`. */
+export async function markBookOrderReturnedAction(id: string, reason: string): Promise<ActionResult> {
+  const parsed = MarkBookOrderReturnedSchema.safeParse({ reason: reason.trim() || null });
+  if (!parsed.success) return { ok: false, message: copy.admin.books.returnFailed };
+  try {
+    await adminSend(
+      'POST',
+      `/api/admin/book-orders/${encodeURIComponent(id)}/return`,
+      parsed.data,
+      MarkBookOrderReturnedResultSchema,
+    );
+    revalidatePath('/admin/books');
+    return { ok: true };
+  } catch {
+    return { ok: false, message: copy.admin.books.returnFailed };
   }
 }
 

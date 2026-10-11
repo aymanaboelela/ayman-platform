@@ -17,9 +17,18 @@ export interface ArenaCohort {
   stream: 'general' | 'languages' | null;
 }
 
-/** طابور واحد = كورس واحد × دفعة واحدة. */
-export function queueKeyOf(courseId: string, cohort: ArenaCohort): string {
-  return [courseId, cohort.systemId ?? '-', cohort.year, cohort.stream ?? '-'].join('|');
+/**
+ * طابور واحد = كورس واحد × دفعة واحدة — وتحدّي واحد لو الكورس فيه «تحديات»
+ * (اللي اختار «الوحدة الأولى» بيتقابل مع اللي اختارها بس).
+ */
+export function queueKeyOf(courseId: string, cohort: ArenaCohort, topicId?: string | null): string {
+  const base = [courseId, cohort.systemId ?? '-', cohort.year, cohort.stream ?? '-'].join('|');
+  return topicId ? `${base}|t:${topicId}` : base;
+}
+
+/** طابور تحدّي طالب مفتوح — عضو واحد (صاحبه) لحد ما حد يقبله. */
+export function challengeQueueKey(challengeId: string): string {
+  return `c:${challengeId}`;
 }
 
 export interface QueueMember {
@@ -57,6 +66,9 @@ export interface PoolItem {
   versionId: string;
   /** نسبة الصح على المنصة كلها — `null` لو مفيش إجابات كفاية. */
   facility: number | null;
+  /** «صيغ لنفس الفكرة» — صيغة واحدة بس في الماتش. */
+  variantGroupKey?: string | null;
+  bankEntryId?: string;
 }
 
 /**
@@ -67,22 +79,38 @@ export interface PoolItem {
  * الماتش مايقصرش لما واحد فيهم حل كويزات أكتر من التاني. وبعدين من الأسهل
  * للأصعب، زي أي مسابقة.
  */
-export function pickQuestions(
-  a: readonly PoolItem[],
-  b: readonly PoolItem[],
+export function pickQuestions<T extends PoolItem>(
+  a: readonly T[],
+  b: readonly T[],
   count: number,
   random: () => number = Math.random,
-): PoolItem[] {
+  /**
+   * الترتيب جوّه كل مجموعة (اللي في البنكين، واللي في بنك واحد). من غيره
+   * عشوائي؛ معاه — `freshFirst` بـ«شافوه إمتى» بتاع الاتنين — اللي محدش فيهم
+   * شافه الأول.
+   */
+  order?: (items: T[]) => T[],
+): T[] {
   const inB = new Map(b.map((item) => [item.versionId, item]));
-  const both: PoolItem[] = [];
-  const either = new Map<string, PoolItem>();
+  const both: T[] = [];
+  const either = new Map<string, T>();
   for (const item of a) {
     if (inB.has(item.versionId)) both.push(item);
     else either.set(item.versionId, item);
   }
   for (const item of b) if (!both.some((x) => x.versionId === item.versionId)) either.set(item.versionId, item);
 
-  const picked = [...shuffle(both, random), ...shuffle([...either.values()], random)].slice(0, count);
+  const arrange = order ?? ((items: T[]) => shuffle(items, random));
+  // صيغتين لنفس الفكرة مايدخلوش نفس الماتش — حتى لو واحدة في البنكين والتانية في بنك واحد.
+  const groups = new Set<string>();
+  const picked: T[] = [];
+  for (const item of [...arrange(both), ...arrange([...either.values()])]) {
+    if (picked.length >= count) break;
+    const group = item.variantGroupKey ? `g:${item.variantGroupKey}` : null;
+    if (group && groups.has(group)) continue;
+    if (group) groups.add(group);
+    picked.push(item);
+  }
   return picked.sort((x, y) => (y.facility ?? 0.55) - (x.facility ?? 0.55));
 }
 

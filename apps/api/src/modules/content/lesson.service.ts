@@ -654,11 +654,25 @@ export class LessonService {
   async removeResource(id: string): Promise<{ id: string }> {
     const resource = await this.prisma.lessonResource.findUnique({
       where: { id },
-      select: { id: true, lessonId: true },
+      select: { id: true, lessonId: true, videoProvider: true, videoExternalId: true },
     });
     if (!resource) throw new NotFoundException();
 
     await this.prisma.lessonResource.delete({ where: { id } });
+    /*
+     * «رفع فيديو» in the materials: its ladder is ours, on R2, and only this row
+     * pointed at it — the upload id is minted per material and never shared.
+     * Row FIRST, files after, the same order «الفيديوهات» deletes in: a storage
+     * hiccup then leaves a folder that screen lists as leftover, never a
+     * material pointing at nothing.
+     *
+     * Mid-encode is allowed. The worker's last write lands on no row and its
+     * ladder becomes a leftover — the admin asked for it gone, and refusing
+     * would trap a stuck upload on the lesson until someone could explain why.
+     */
+    if (resource.videoProvider === 'upload' && resource.videoExternalId !== null) {
+      await this.archive.purge(resource.videoExternalId);
+    }
     await this.audit.record({
       action: 'lesson:update',
       resourceType: AUDIT_RESOURCES.lesson,

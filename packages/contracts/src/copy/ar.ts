@@ -3036,6 +3036,28 @@ export const copy = {
   bookShipNotice:
     'يا {name}، كتابك سلّمناه لشركة الشحن النهاردة 📦\n\nهيوصلك خلال {days} أيام عمل بإذن الله، والمندوب هيتصل بيك على نفس الرقم ده قبل ما يوصل.\n\nأي حاجة، رد على الرسالة دي.',
 
+  /**
+   * «شركة الشحن» — what the student is told when the COURIER reports a status,
+   * through the platform thread (never WhatsApp: «مش هبعت حاجة بالواتساب
+   * بتاعي»). One message per status change; `{note}` is the courier's own
+   * remark, already wrapped as « — …» or empty.
+   *
+   * ⚠️ No gendered address, same rule as every outreach line — and no name of
+   * the instructor, because these are signed by nobody but the platform.
+   */
+  bookCourierNotice: {
+    withAgent:
+      'يا {name}، كتابك دلوقتي مع مندوب شركة الشحن وفي الطريق 🚚\n\nالمندوب: {agent}\nالرقم: {phone}\n\nهيتصل قبل ما يوصل، فالموبايل يفضل قريب.',
+    withAgentUnnamed:
+      'يا {name}، كتابك دلوقتي مع مندوب شركة الشحن وفي الطريق 🚚\n\nهيتصل قبل ما يوصل، فالموبايل يفضل قريب.',
+    delivered:
+      'يا {name}، شركة الشحن بلّغتنا إن الكتاب اتسلّم ✅\n\nبالتوفيق في المذاكرة. ولو فيه أي مشكلة في الكتاب، الرد على الرسالة دي بيوصلنا.',
+    postponed:
+      'يا {name}، شركة الشحن أجّلت توصيل الكتاب{note}.\n\nالمندوب هيتواصل تاني على نفس الرقم لتحديد ميعاد جديد.',
+    returned:
+      'يا {name}، شحنة الكتاب رجعت لشركة الشحن ومتسلّمتش{note}.\n\nهنتواصل على نفس الرقم عشان نرتّب التوصيل من جديد. ولو فيه رقم أو عنوان أدق، الرد على الرسالة دي بيوصلنا.',
+  },
+
   bookOrder: {
     cta: 'اطلب الكتاب',
     /** `{cta}` — `bookOrder.cta` itself, `{price}` — EGP, already formatted.
@@ -3418,6 +3440,13 @@ export const copy = {
     mainPresentation: 'البريزنتيشن الأساسي',
     openInNewTab: 'فتح في تبويب جديد',
     viewerUnavailable: 'المتصفح مش قادر يعرض الملف — التحميل بيفتحه.',
+    /**
+     * «رفع فيديو» in the materials, uploaded and still being encoded. Shown in
+     * place of the player so the card does not vanish and reappear later.
+     */
+    resourceVideoProcessing: 'الفيديو ده بيتجهّز — بيبقى جاهز هنا كمان شوية.',
+    /** Our copy of a material's video would not play at all — no YouTube to fall back to. */
+    resourceVideoFailed: 'الفيديو مارضيش يشتغل — ريفرش للصفحة بيحلّها غالبًا.',
     noResources: 'مفيش مواد مرفوعة للدرس ده.',
     lockedHint: 'اللي قبله لازم يخلص الأول عشان يتفتح',
     examBadge: 'امتحان',
@@ -4427,6 +4456,24 @@ export const copy = {
     ruleSecondsShort: '{n}ث للسؤال',
     ruleLivesShort: '{n} قلب',
     ruleQuestionsShort: '{n} سؤال',
+    // ── «التحديات» و«تدريب» ─────────────────────────────────────────────
+    /** وضع رابع جنب التلات ألعاب: من غير وقت ولا قلوب، والشرح بعد كل سؤال. */
+    modePractice: 'تدريب',
+    modePracticeBody: 'من غير وقت ولا قلوب — بعد كل سؤال الإجابة الصح وشرحها.',
+    practiceBadge: 'تدريب',
+    ruleNoTimer: 'من غير وقت',
+    ruleNoLives: 'من غير قلوب',
+    /** خطوة «التحديات» مكان «الأسئلة من» لما الكورس فيه تحديات. */
+    pickTopics: 'التحديات',
+    topicsHint: 'تحدّي واحد أو أكتر — الأسئلة من دروسهم كلها، ومن غير تكرار لحد ما تخلص.',
+    topicsAll: 'الكل',
+    topicsNone: 'لسه مفيش تحديات متاحة في الكورس ده.',
+    topicsPickOne: 'اختيار تحدّي واحد على الأقل',
+    /** في سطر الملخّص لما أكتر من تحدّي متعلّم. */
+    topicsMany: '{n} تحديات',
+    /** بعد الإجابة: الصح وشرحه. */
+    rightAnswer: 'الإجابة الصح',
+    explanation: 'الشرح',
   },
   /**
    * «ترتيبي على الدفعة» — `/rank`.
@@ -5908,6 +5955,15 @@ export const copy = {
     fallbackCta: 'الكورسات المتاحة',
     /** `aria-label` on the article list. */
     listLabel: 'قائمة المقالات',
+    /**
+     * CTA التواصل تحت كل مقالة — منفصل عن `related*`/`fallback*` فوق وبيبان
+     * معاهم الاتنين، لأنه سؤال تاني مش بديل: «الكورس ده يفيدني؟» مقابل «عايز
+     * أسأل حد مباشرة». `{instructor}` جايَّة من `tenantName(copy.site.instructor)`
+     * في الصفحة نفسها — متكتبش اسم هنا، شوف تعليق `tenantName`'s own guard.
+     */
+    whatsappTitle: 'عندك سؤال؟',
+    whatsappBody: 'اتركه مع {instructor} على واتساب، وهيردّلك بنفسه.',
+    whatsappCta: 'التواصل على واتساب',
   },
 
   quiz: {
@@ -6184,6 +6240,10 @@ export const copy = {
   },
   quizErrors: {
     exactlyOneCorrect: 'لازم تحدد إجابة صحيحة واحدة بالظبط',
+    /** «انشر المسودات» — a draft that disappeared (deleted, or published by
+     *  someone else) between the list and the press. */
+    publishDraftGone: 'السؤال ده اتمسح أو اتغيّر قبل ما يتنشر',
+    publishDraftFailed: 'السؤال ده ماتنشرش — افتحه وجرّب تنشره لوحده',
     atLeastTwoOptions: 'لازم يكون فيه اختيارين على الأقل',
     trueFalseNeedsTwo: 'سؤال صح وخطأ لازم يكون له اختيارين بالظبط',
     multiWeightsMustSumToOne: 'مجموع أوزان الإجابات الصحيحة لازم يساوي 1',
@@ -6205,6 +6265,12 @@ export const copy = {
     importUnknownLetter: 'السؤال رقم {n}: حرف إجابة مش موجود ({letter})',
     importNoOptions: 'السؤال رقم {n}: مفيش اختيارات',
     importUnknownType: 'السؤال رقم {n}: نوع سؤال مش معروف',
+    /** `GROUP:` بقيمة فيها مسافة أو رموز — المفتاح كلمة واحدة. */
+    importBadGroup: 'السؤال رقم {n}: اسم المجموعة ({group}) لازم يكون كلمة واحدة من غير مسافات — حروف وأرقام و _ - . بس',
+    /** `LESSON:` بقيمة مش رقم درس (uuid). */
+    importBadLesson: 'السؤال رقم {n}: رقم الدرس ({lesson}) مش مكتوب صح — انسخه من لوحة التحكم زي ما هو',
+    /** `LESSON:` برقم مكتوب صح بس مفيش درس بيه (اتمسح، أو من ستاك تاني). */
+    importUnknownLesson: 'السؤال رقم {n}: مفيش درس بالرقم ده ({lesson})',
   },
   /**
    * The markdown twin of every public page — what an AI assistant reads when
@@ -6813,6 +6879,7 @@ export const copy = {
       statusPrinting: 'بنطبعه',
       statusShipped: 'في الطريق',
       statusDelivered: 'وصلك',
+      statusReturned: 'رجع',
       statusRejected: 'اترفض',
       /* ── The reassurance line. THE reason this section exists ──────────
          «أوقات الكتاب بيتأخر — طمّنه.» Each of these is written to be read by
@@ -6824,8 +6891,13 @@ export const copy = {
       /** ما بيوعدش بيوم — الطبعة بترجع لما ترجع — بس بيقول الخطوة اللي بعدها،
        *  زي باقي السطور هنا. */
       notePrinting: 'نسختك دخلت المطبعة مع طبعة جديدة. أول ما تخرج وتتشحن هتلاقي هنا إنها في الطريق.',
+      /** What the courier last said, under the note — «فين الكتاب دلوقتي؟». */
+      courierStatus: 'شركة الشحن: {status}',
+      /** `{name}` — the number is rendered beside it, isolated LTR. */
+      courierAgent: 'المندوب: {name}',
       noteShipped: 'الكتاب خرج ليك وفي الطريق. ساعات بيتأخر يوم أو اتنين، وده عادي — أول ما يوصلك هتلاقي هنا إنه اتسلّم.',
       noteDelivered: 'الكتاب وصلك. لو في أي مشكلة فيه كلّم الدعم وإحنا نظبّطها.',
+      noteReturned: 'شحنة الكتاب رجعت لشركة الشحن ومتسلّمتش. هنتواصل على نفس الرقم عشان نبعتها تاني — ولو فيه رقم أو عنوان أدق، كلّم الدعم.',
       /* ── «استلمت الكتاب» ────────────────────────────────────────────────
          الزرار ده بيظهر على الطلب اللي «في الطريق» بس، والطالب هو اللي بيقفله.
          قبل كده الطلب ما كانش بيتقفل غير لما حد في الإدارة يفتكر يعلّمه، يعني

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { ArenaLobby as Lobby } from '@ayman/contracts/arena';
+import { decodeArenaIntent } from '@ayman/contracts/arena-challenges';
 import { ArenaLobby } from './arena-lobby';
 import { ArenaMatch, ArenaResult, ArenaSearch, ArenaVersus } from './arena-screens';
 import { cueFor } from './arena-state';
@@ -25,6 +26,8 @@ export function ArenaApp({ lobby }: { lobby: Lobby }) {
   const [courseId, setCourseId] = useState<string | null>(
     lobby.view.phase === 'queued' ? lobby.view.courseId : firstPlayable,
   );
+  /** آخر «يلا» — «ماتش تاني» بيرجع لنفس الحاجة. */
+  const [lastIntent, setLastIntent] = useState<string | null>(null);
 
   const { play } = sound;
   const fxKey = state.fx?.key;
@@ -52,14 +55,20 @@ export function ArenaApp({ lobby }: { lobby: Lobby }) {
     return () => window.clearInterval(id);
   }, [screen, router]);
 
-  const course = lobby.courses.find((entry) => entry.id === (state.want ?? courseId));
+  const wanted = state.want ? decodeArenaIntent(state.want) : null;
+  const course = lobby.courses.find(
+    (entry) => entry.id === (wanted && wanted.kind !== 'challenge' ? wanted.courseId : courseId),
+  );
   const match = state.view.phase === 'match' ? state.view.match : null;
+  const queued = state.view.phase === 'queued' ? state.view : null;
 
-  const start = (id: string | null) => {
-    if (!id) return;
+  const start = (intent: string | null) => {
+    if (!intent) return;
     sound.unlock();
-    setCourseId(id);
-    arena.start(id);
+    const parsed = decodeArenaIntent(intent);
+    if (parsed.kind !== 'challenge') setCourseId(parsed.courseId);
+    setLastIntent(intent);
+    arena.start(intent);
   };
 
   const backToLobby = () => {
@@ -75,7 +84,7 @@ export function ArenaApp({ lobby }: { lobby: Lobby }) {
           lobby={lobby}
           courseId={courseId}
           onCourse={setCourseId}
-          onStart={() => start(courseId)}
+          onPlay={start}
           error={(state.error as ArenaErrorCode | null) ?? null}
           sound={sound}
         />
@@ -84,8 +93,10 @@ export function ArenaApp({ lobby }: { lobby: Lobby }) {
         <ArenaSearch
           state={state}
           me={{ name: lobby.me.name, image: lobby.me.image }}
-          courseTitle={state.view.phase === 'queued' ? state.view.courseTitle : (course?.title ?? '')}
-          cohortLabel={state.view.phase === 'queued' ? state.view.cohortLabel : (lobby.cohort?.label ?? '')}
+          courseTitle={
+            queued ? (queued.topicTitle ? `${queued.courseTitle} · ${queued.topicTitle}` : queued.courseTitle) : (course?.title ?? '')
+          }
+          cohortLabel={queued ? queued.cohortLabel : (lobby.cohort?.label ?? '')}
           onCancel={() => void arena.cancel()}
           onKeepWaiting={arena.keepWaiting}
           sound={sound}
@@ -104,7 +115,17 @@ export function ArenaApp({ lobby }: { lobby: Lobby }) {
         />
       ) : null}
       {screen === 'result' && match ? (
-        <ArenaResult match={match} onAgain={() => start(courseId ?? firstPlayable)} onLobby={backToLobby} sound={sound} />
+        <ArenaResult
+          match={match}
+          onAgain={() => {
+            // تحدّي طالب اتلعب خلاص — «ماتش تاني» يرجع للوبي يختار، مش يقبل حاجة اتقفلت.
+            const again = lastIntent ?? courseId ?? firstPlayable;
+            if (!again || decodeArenaIntent(again).kind === 'challenge') backToLobby();
+            else start(again);
+          }}
+          onLobby={backToLobby}
+          sound={sound}
+        />
       ) : null}
     </div>
   );

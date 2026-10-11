@@ -56,8 +56,16 @@ export const AUDIT_RESOURCES = {
   /// ENTRY, not a version: the delete takes every version with it, and
   /// «مين مسح السؤال ده» is asked about the question, not about one of its drafts.
   questionBankEntry: 'question_bank_entries',
+  /// «انشر كل مسودات التصنيف ده» — the bulk publish is keyed by the category it
+  /// swept. A publish of ticked ids has no single resource and records null.
+  questionCategory: 'question_categories',
   /// «أسئلة الألعاب» — لعبة في كورس بتسحب منين. المعرّف `courseId:mode`.
   gameModeSetting: 'game_mode_settings',
+  /// «قسم التحديات» — موضوع واحد في كورس. ترتيبهم كلهم بيتسجّل على الكورس.
+  challengeTopic: 'challenge_topics',
+  /// «كتب خارجية» — الكتاب نفسه (اسم/غلاف/أرشفة)، مش أسئلته. الأسئلة بتتسجّل
+  /// بـ`questionBankEntry` زي أي سؤال تاني.
+  externalBook: 'external_books',
   quiz: 'quizzes',
   quizAttempt: 'quiz_attempts',
   taxonomy: 'taxonomy',

@@ -613,12 +613,26 @@ export const LessonResourceInputSchema = z
     }
 
     if (value.kind === 'video') {
-      if (value.provider !== 'youtube') {
+      /*
+       * يوتيوب بس هنا. الفيديو المرفوع مش بيعدّي على الراوت ده خالص.
+       *
+       * #580 كان بيقبل هنا `storageKey`/`filename`/`mime`/`sizeBytes` على
+       * فيديو، والقيد `lesson_resources_payload_matches_kind` بيطلب العكس
+       * بالظبط — فكل رفع كان بيقع بـ500. الرفع دلوقتي ليه راوت لوحده
+       * (`POST lessons/:id/resources/video-upload`) بيفتح الصف بنفسه قبل ما
+       * أول بايت يتحرك، ويمشي في pipeline فيديو المحاضرة. ملف على فيديو هنا
+       * بيترفض قبل ما يوصل للداتابيز.
+       */
+      if (value.storageKey !== undefined) {
         ctx.addIssue({
           code: 'custom',
-          message: 'النسخة الحالية بتدعم فيديوهات يوتيوب بس',
-          path: ['provider'],
+          message: 'الفيديو المرفوع بيترفع من «رفع فيديو»، مش كملف',
+          path: ['storageKey'],
         });
+        return z.NEVER;
+      }
+      if (value.provider !== 'youtube') {
+        ctx.addIssue({ code: 'custom', message: 'لازم رابط يوتيوب', path: ['provider'] });
         return z.NEVER;
       }
       const videoExternalId = value.url === undefined ? null : extractYouTubeId(value.url);

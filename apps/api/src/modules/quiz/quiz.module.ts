@@ -27,6 +27,10 @@ import { AttemptEventsService } from './attempt-events.service';
 import { AttemptService } from './attempt.service';
 import { AdminGameBanksController } from './admin-game-banks.controller';
 import { GameBanksService } from './game-banks.service';
+import { AdminChallengeTopicsController } from './admin-challenge-topics.controller';
+import { ChallengeTopicsService } from './challenge-topics.service';
+import { AdminExternalBooksController } from './admin-external-books.controller';
+import { ExternalBooksService } from './external-books.service';
 import { MediaModule } from '../media/media.module';
 import { GameController } from './game.controller';
 import { AdminGameStatsController } from './admin-game-stats.controller';
@@ -52,7 +56,9 @@ import { GameService } from './game.service';
     AdminExamsController,
     GameController,
     AdminGameBanksController,
+    AdminChallengeTopicsController,
     AdminGameStatsController,
+    AdminExternalBooksController,
   ],
   providers: [
     MasteryService,
@@ -71,6 +77,8 @@ import { GameService } from './game.service';
     ManualGradingService,
     GameService,
     GameBanksService,
+    ChallengeTopicsService,
+    ExternalBooksService,
     GameVoiceService,
     GameStatsService,
     // Registering an APP_* provider from inside a feature module still applies

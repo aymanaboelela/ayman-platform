@@ -54,6 +54,12 @@ export const AUDIT_ACTIONS = [
   'enrollment:override',
   // quiz (Plan 5, instrumented by the Task 3 retrofit)
   'question:publish',
+  // «انشر المسودات» — ONE row per bulk press, on top of the `question:publish`
+  // row each published version already writes. The per-version rows say what
+  // became ready; this one says it was one act, its scope (a category, or the
+  // ticked ids) and how many would not validate — «مين نشر التلات تلاف سؤال
+  // دول مرة واحدة» has no answer from three thousand identical rows.
+  'question:publish-drafts',
   // «امسح السؤال» from the bank. ONE action for both outcomes, with
   // `metadata.mode` = `hard` (nobody ever answered it — the row is gone, and
   // `metadata.stem` is the only place left that says what it was) or
@@ -73,6 +79,21 @@ export const AUDIT_ACTIONS = [
   // الألعاب، دروس معيّنة). بيتسجّل لأن «المليون بقى فيه أسئلة الدرس ٣ بس» سؤال
   // ماحدش هيعرف يجاوبه من الأسئلة نفسها.
   'game:settings',
+  // «قسم التحديات» — موضوع اتعمل، اتغيّر (اسمه، دروسه، اتشغّل/اتوقف)،
+  // اتمسح، أو اتغيّر ترتيبهم. بيتسجّل لنفس سبب `game:settings`: «التحدّي ده
+  // كان فيه الدرس التالت إمتى» مالوش إجابة من الأسئلة نفسها.
+  'challenge-topic:create',
+  'challenge-topic:update',
+  'challenge-topic:delete',
+  'challenge-topic:reorder',
+  // «كتب خارجية» — الكتاب نفسه، ووحدة/درس جديد في شجرته. مش مسح — الحذف
+  // مقصور على تصنيف فاضي، وبيتسجّل زي أي مسح تصنيف عادي.
+  'external-book:create',
+  'external-book:update',
+  'external-book:create-unit',
+  'external-book:create-lesson',
+  'external-book:adopt-lesson',
+  'external-book:move-lesson',
   // امتحانات نص/آخر الشهر. Their own actions rather than `quiz:*`, because the
   // question an audit of one answers is «الامتحان اتفتح إمتى وعلى إيه» — the
   // window and the syllabus — and folding them into quiz edits would bury that
@@ -169,6 +190,11 @@ export const AUDIT_ACTIONS = [
    * ever be mistaken for holding a credential in the clear.
    */
   'student:set-password',
+  /**
+   * نفس حجة `student:set-password` فوق بالظبط، بس للفريق — شوف تعليقها في
+   * `permissions.ts` وفي `StudentsService.setStaffPassword`.
+   */
+  'staff:set-password',
   /**
    * «سجّل خروج» من صفحة الطالب، وحد الأجهزة بتاعه.
    *
@@ -329,6 +355,13 @@ export const AUDIT_ACTIONS = [
   // is also the one book-order transition whose trail is the ONLY record it
   // happened.
   'book-order:printing',
+  // «اتبعت لشركة الشحن» — the data went into the courier's system, usually
+  // with the print run. Separate from `ship` because the parcel is still at the
+  // printer; `ship` is the day their agent collected it.
+  'book-order:courier',
+  // A status the courier's webhook reported. No admin behind it — the actor is
+  // their system, and the metadata carries what it said.
+  'book-order:courier-status',
   'book-order:ship',
   // The rest of the courier leg and the two judgements about an order.
   //
@@ -346,6 +379,9 @@ export const AUDIT_ACTIONS = [
   // Restoring records the reason it had been deleted for, because the column
   // holding it is cleared by the same write.
   'book-order:deliver',
+  // «مرتجع» — the parcel came back. Its own row because «مين قال إنه رجع؟» is
+  // asked on the day the student says it never left.
+  'book-order:return',
   'book-order:reject',
   'book-order:delete',
   'book-order:restore',

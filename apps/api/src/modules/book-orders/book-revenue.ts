@@ -38,8 +38,18 @@ import type { Prisma } from '../../generated/prisma/client';
  * here: the copies were printed and the parcel was sent whether or not anybody
  * paid for them.
  */
+/*
+ * ⚠️ Every status a paid order passes through, in order. `printing` was missing
+ * here from the day it was added, so an order at the printer vanished from
+ * «إيرادات الكتب» until it shipped — the same «the more carefully he does the
+ * paperwork, the less money it reports» bug `delivered` once was.
+ */
+/* `returned` too: a parcel that came back was still paid for — money leaves
+   only through a `Refund` row. */
+export const BOOK_COUNTED_STATUSES = ['paid', 'printing', 'shipped', 'delivered', 'returned'] as const;
+
 export const BOOK_COUNTED_WHERE = {
-  status: { in: ['paid', 'shipped', 'delivered'] },
+  status: { in: [...BOOK_COUNTED_STATUSES] },
   deletedAt: null,
 } as const satisfies Prisma.BookOrderWhereInput;
 
@@ -69,5 +79,5 @@ export const BOOK_REVENUE_WHERE = {
    together — each is one rule, and a change to one half that misses the other
    reopens exactly the divergence this file exists to close. `o` is the
    `book_orders` alias. */
-export const BOOK_COUNTED_SQL = `o."status" IN ('paid', 'shipped', 'delivered') AND o."deleted_at" IS NULL`;
+export const BOOK_COUNTED_SQL = `o."status" IN (${BOOK_COUNTED_STATUSES.map((status) => `'${status}'`).join(', ')}) AND o."deleted_at" IS NULL`;
 export const BOOK_REVENUE_SQL = `${BOOK_COUNTED_SQL} AND o."is_free" = false`;

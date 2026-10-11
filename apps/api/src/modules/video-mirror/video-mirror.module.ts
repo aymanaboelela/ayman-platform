@@ -5,6 +5,7 @@ import { VideoLibraryController } from './video-library.controller';
 import { VideoArchiveService } from './video-archive.service';
 import { VideoLibraryService } from './video-library.service';
 import { VideoMirrorService } from './video-mirror.service';
+import { ResourceVideoUploadService } from './resource-video-upload.service';
 import { VideoUploadService } from './video-upload.service';
 
 /**
@@ -34,7 +35,7 @@ import { VideoUploadService } from './video-upload.service';
    */
   imports: [PrismaModule, RedisModule],
   controllers: [VideoLibraryController],
-  providers: [VideoMirrorService, VideoUploadService, VideoLibraryService, VideoArchiveService],
-  exports: [VideoMirrorService, VideoUploadService, VideoArchiveService],
+  providers: [VideoMirrorService, VideoUploadService, VideoLibraryService, VideoArchiveService, ResourceVideoUploadService],
+  exports: [VideoMirrorService, VideoUploadService, VideoArchiveService, ResourceVideoUploadService],
 })
 export class VideoMirrorModule {}

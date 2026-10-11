@@ -9,6 +9,8 @@ export interface AttachmentLessonProps {
   resources: PlayerResource[];
   alreadyComplete: boolean;
   onProgress: (response: HeartbeatResponse) => void;
+  /** Over an uploaded material video, as over the lecture. */
+  watermark?: string | null;
 }
 
 /**
@@ -25,8 +27,9 @@ export function AttachmentLesson({
   resources,
   alreadyComplete,
   onProgress,
+  watermark = null,
 }: AttachmentLessonProps) {
   useDwellComplete({ lessonId, enabled: !alreadyComplete, onResponse: onProgress });
 
-  return <ResourceList resources={resources} />;
+  return <ResourceList resources={resources} watermark={watermark} />;
 }

@@ -307,6 +307,29 @@ describe('LessonResourceInputSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  /*
+   * The #580 shape — a video carrying the four FILE columns — is exactly what
+   * `lesson_resources_payload_matches_kind` forbids, so every such add was a
+   * 500 at the database. It is refused here now, before it gets that far; an
+   * uploaded video comes in through its own route and is never a file payload.
+   */
+  it('refuses a video carrying a stored file — that shape can never be saved', () => {
+    const result = LessonResourceInputSchema.safeParse({
+      ...base,
+      kind: 'video',
+      storageKey: 'resvideo/ab/x.mp4',
+      filename: 'حل الواجب.mp4',
+      mime: 'video/mp4',
+      sizeBytes: 50 * 1024 * 1024,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a video with no youtube url', () => {
+    const result = LessonResourceInputSchema.safeParse({ ...base, kind: 'video' });
+    expect(result.success).toBe(false);
+  });
+
   it('rejects an http link', () => {
     const result = LessonResourceInputSchema.safeParse({
       ...base,

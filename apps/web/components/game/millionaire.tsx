@@ -16,6 +16,7 @@ import {
 } from '@ayman/contracts/quiz/game';
 import { SafeHtml } from '@/components/content/safe-html';
 import { apiPost } from '@/lib/api';
+import { AnswerExplain } from './answer-explain';
 import { finishRound } from './finish-round';
 import { Backdrop, SoundToggle } from './quiz-game';
 import type { GameSound } from './use-game-sound';
@@ -92,6 +93,7 @@ export function Millionaire({
   const [votes, setVotes] = useState<GameLifelineResult['votes']>([]);
   const [used, setUsed] = useState({ fifty: false, audience: false });
   const [outcome, setOutcome] = useState<{ kind: Outcome; points: number } | null>(null);
+  const [missed, setMissed] = useState<{ rightHtml: string[]; explanationHtml: string | null } | null>(null);
   const [walking, setWalking] = useState(false);
   const [left, setLeft] = useState(seconds);
   const [busy, setBusy] = useState(false);
@@ -199,6 +201,13 @@ export function Millionaire({
           new Promise((resolve) => window.setTimeout(resolve, 1400)),
         ]);
         setRight(result.rightOptionIds);
+        // الغلطة اللي خلّصت الجولة: صحّها وشرحها بيفضلوا على شاشة النهاية.
+        if (!result.correct) {
+          setMissed({
+            rightHtml: question.options.filter((option) => result.rightOptionIds.includes(option.id)).map((option) => option.bodyHtml),
+            explanationHtml: result.explanationHtml ?? null,
+          });
+        }
         setPhase('reveal');
         const milestone = (MILLIONAIRE_SAFE_STEPS as readonly number[]).includes(index + 1) || index + 1 >= size;
         sound.show((score) => (result.correct ? score.right(milestone) : score.wrong()));
@@ -321,6 +330,7 @@ export function Millionaire({
       setVotes([]);
       setUsed({ fifty: false, audience: false });
       setOutcome(null);
+      setMissed(null);
       setSendFailed(false);
       setLifelineFailed(false);
       deadline.current = performance.now() + seconds * 1000;
@@ -360,6 +370,9 @@ export function Millionaire({
               : formatCopy(c.mlnReached, { n: outcome.kind === 'lost' ? index + 1 : index })}
             {outcome.kind === 'lost' && outcome.points > 0 ? ` ${c.mlnLostSafe}` : ''}
           </p>
+          {outcome.kind === 'lost' && missed ? (
+            <AnswerExplain rightHtml={missed.rightHtml} explanationHtml={missed.explanationHtml} />
+          ) : null}
           <div className="gm-results__actions">
             <button type="button" className="gm-btn gm-btn--primary gm-btn--big" onClick={() => void again()} disabled={busy}>
               <RotateCcw className="size-5" aria-hidden="true" />

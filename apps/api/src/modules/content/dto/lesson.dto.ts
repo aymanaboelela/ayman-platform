@@ -10,6 +10,7 @@ import {
 } from '@ayman/contracts/content';
 import { LessonVideoInputSchema } from '@ayman/contracts/video';
 import {
+  ResourceVideoUploadStartSchema,
   VideoUploadAbortSchema,
   VideoUploadCompleteSchema,
   VideoUploadResumeSchema,
@@ -39,6 +40,8 @@ export class StartVideoUploadDto extends createZodDto(VideoUploadStartSchema) {}
 export class CompleteVideoUploadDto extends createZodDto(VideoUploadCompleteSchema) {}
 export class ResumeVideoUploadDto extends createZodDto(VideoUploadResumeSchema) {}
 export class AbortVideoUploadDto extends createZodDto(VideoUploadAbortSchema) {}
+/** «رفع فيديو» in the materials — complete/resume/abort reuse the three above. */
+export class StartResourceVideoUploadDto extends createZodDto(ResourceVideoUploadStartSchema) {}
 /**
  * Same input/output asymmetry as `SetLessonVideoDto` above, for the same
  * reason: a video resource's INPUT has `provider` + `url`, its OUTPUT has

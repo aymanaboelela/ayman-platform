@@ -38,6 +38,7 @@ import {
   ScanLine,
   HandCoins,
   Gamepad2,
+  Library,
   PiggyBank,
   BanknoteArrowUp,
 } from 'lucide-react';
@@ -337,6 +338,15 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: Gamepad2,
     permission: 'question:write',
     feature: 'quizGame',
+    group: 'teaching',
+  },
+  {
+    // «أسئلة كتب خارجية» — نفس `question:write` بالظبط، زي «أسئلة الألعاب»
+    // فوقها. مفيش فيتشر فلاج: دي للكل مش أيمن بس.
+    href: '/admin/question-books',
+    labelAr: copy.admin.nav.questionBooks,
+    icon: Library,
+    permission: 'question:write',
     group: 'teaching',
   },
   {

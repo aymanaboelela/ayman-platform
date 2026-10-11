@@ -159,8 +159,10 @@ describe('GameService', () => {
     });
     const [right, wrong] = [options[0]!.id, options[1]!.id];
 
-    expect(await service.answer(fixture.studentId, { questionId, optionId: right })).toEqual({ correct: true, rightOptionIds: [right] });
-    expect(await service.answer(fixture.studentId, { questionId, optionId: wrong })).toEqual({ correct: false, rightOptionIds: [right] });
+    // الشرح بيوصل مع الصح، بعد الإجابة — الفيكستشر بيكتب «ملاحظة صحيحة».
+    const explanationHtml = '<p>ملاحظة صحيحة</p>';
+    expect(await service.answer(fixture.studentId, { questionId, optionId: right })).toEqual({ correct: true, rightOptionIds: [right], explanationHtml });
+    expect(await service.answer(fixture.studentId, { questionId, optionId: wrong })).toEqual({ correct: false, rightOptionIds: [right], explanationHtml });
     expect((await service.answer(fixture.studentId, { questionId, optionId: null })).correct).toBe(false);
   });
 

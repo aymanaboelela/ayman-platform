@@ -28,6 +28,7 @@ const round: GameRound = {
   level: 'medium',
   poolSize: 15,
   sessionId: '01990000-0000-7000-8000-00000000a001',
+  practice: false,
   questions: [
     {
       id: '01990000-0000-7000-8000-00000000b001',

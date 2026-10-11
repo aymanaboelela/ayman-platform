@@ -30,6 +30,8 @@ function makeService() {
     },
     user: {
       findUnique: jest.fn(async () => null as unknown),
+      // `setStaffPassword`'s founder check — the earliest non-student row.
+      findFirst: jest.fn(async () => null as unknown),
       count: jest.fn(async () => 1),
       update: jest.fn(async () => ({})),
       delete: jest.fn(async () => ({})),
@@ -447,6 +449,59 @@ describe('StudentsService.setPassword', () => {
   });
 });
 
+describe('StudentsService.setStaffPassword', () => {
+  /**
+   * The actual guard: `staff:set-password` sits in every owner's baseline
+   * (see `permissions.ts`), so any assistant can reach this route. What
+   * stops one assistant from resetting another's — or the founder's own —
+   * password is this check alone, not the permission system.
+   */
+  it('refuses an actor who is not the founder, even one holding the permission', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findFirst.mockResolvedValueOnce({ id: 'founder-1' });
+
+    await expect(service.setStaffPassword('u1', 'a-real-password', 'assistant-2')).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(prisma.account.upsert).not.toHaveBeenCalled();
+  });
+
+  it('refuses when there is no non-student account at all', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findFirst.mockResolvedValueOnce(null);
+
+    await expect(service.setStaffPassword('u1', 'a-real-password', 'actor')).rejects.toThrow(ForbiddenException);
+  });
+
+  it('refuses a student target even when called by the founder', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findFirst.mockResolvedValueOnce({ id: 'founder-1' });
+    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u1', role: 'student' });
+
+    await expect(service.setStaffPassword('u1', 'a-real-password', 'founder-1')).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(prisma.account.upsert).not.toHaveBeenCalled();
+  });
+
+  it('lets the founder reset an owner-role staff password, logged under its own audit action', async () => {
+    const { service, prisma, audit } = makeService();
+    prisma.user.findFirst.mockResolvedValueOnce({ id: 'founder-1' });
+    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u2', role: 'owner', email: null, phoneNumber: null });
+
+    const result = await service.setStaffPassword('u2', 'a-real-password', 'founder-1');
+
+    expect(result).toEqual({ status: true });
+    expect(prisma.account.upsert).toHaveBeenCalledTimes(1);
+    const entry = audit.record.mock.calls[0]![0];
+    expect(entry).toMatchObject({
+      action: 'staff:set-password',
+      resourceId: 'u2',
+      metadata: { actorUserId: 'founder-1' },
+    });
+  });
+});
+
 describe('StudentsService.changeRole', () => {
   it('refuses self-demotion', async () => {
     const { service } = makeService();
@@ -497,6 +552,43 @@ describe('StudentsService.changeRole', () => {
       service.changeRole('missing', { role: 'admin', reason: 'a real reason' }, 'actor'),
     ).rejects.toThrow();
   });
+
+  /**
+   * `refuseIfOutranked`'s founder guard, exercised through `changeRole`.
+   *
+   * On a stack where the founder's own role is `owner` (every tenant other
+   * than Ayman's), an assistant holding the full `owner` baseline — nothing
+   * withheld — would otherwise pass the outranks check below and demote the
+   * actual platform owner. `target.role === 'student'` never reaches this far
+   * (the function returns `null` immediately), so this only matters for a
+   * staff target, which is exactly the founder's own shape.
+   */
+  it('refuses to change the founder’s own role, even when the actor outranks them on paper', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ role: 'owner' }) // target
+      .mockResolvedValueOnce({ role: 'owner' }); // actor, inside refuseIfOutranked
+    prisma.user.findFirst.mockResolvedValueOnce({ id: 'founder-1' });
+
+    await expect(
+      service.changeRole('founder-1', { role: 'student', reason: 'a real reason' }, 'assistant-2'),
+    ).rejects.toThrow(ForbiddenException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('does not treat a stack with no admin/owner rows as having a founder to protect', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ role: 'owner' })
+      .mockResolvedValueOnce({ role: 'owner' });
+    prisma.user.findFirst.mockResolvedValueOnce(null);
+    // Owner-to-owner still needs `actorHoldsAll` to pass — give the actor the
+    // full baseline so only the founder guard itself is under test.
+    prisma.user.findUnique.mockResolvedValueOnce({ role: 'owner' });
+
+    const result = await service.changeRole('target', { role: 'student', reason: 'a real reason' }, 'actor');
+    expect(result).toEqual({ role: 'student' });
+  });
 });
 
 /**
@@ -528,6 +620,24 @@ describe('StudentsService.ban', () => {
 
     await expect(service.ban('target', 'a real reason', 'actor')).rejects.toThrow(ForbiddenException);
     expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Same `refuseIfOutranked` founder guard as `changeRole`'s own test —
+   * proven here too because this is exactly the gap the platform owner hit:
+   * an assistant holding the full `owner` baseline could otherwise ban the
+   * founder outright, on a stack with no `admin`-role row to undo it.
+   */
+  it('refuses to ban the founder, even an outranking assistant', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ role: 'owner', bannedAt: null }) // target
+      .mockResolvedValueOnce({ role: 'owner' }); // actor, inside refuseIfOutranked
+    prisma.user.findFirst.mockResolvedValueOnce({ id: 'founder-1' });
+
+    await expect(service.ban('founder-1', 'a real reason', 'assistant-2')).rejects.toThrow(ForbiddenException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.session.deleteMany).not.toHaveBeenCalled();
   });
 
   it('counts only UNBANNED admins when deciding if this is the last one', async () => {

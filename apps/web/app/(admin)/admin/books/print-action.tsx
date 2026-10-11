@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { Printer } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Button } from '@ayman/ui/components/button';
-import { markBookOrderPrintingAction } from './actions';
+import { printBookOrdersAction } from './actions';
 
 const c = copy.admin.books;
 
@@ -33,21 +35,25 @@ const c = copy.admin.books;
  * button changes, and nudging a poll that will return the same value is noise.
  */
 export function PrintAction({ id }: { id: string }) {
+  const router = useRouter();
   const [pending, setPending] = useState(false);
 
+  /* Through the batch route as a batch of one, so a refusal arrives already
+     worded («محجوز للمراجعة») rather than as a status code to map. */
   async function markPrinting() {
     if (!window.confirm(c.markPrintingConfirm)) return;
     setPending(true);
-    const result = await markBookOrderPrintingAction(id);
+    const result = await printBookOrdersAction([id]);
     setPending(false);
-    if (result.ok) toast.success(copy.admin.common.saved);
-    else toast.error(result.message === 'already-printing' ? c.alreadyPrinting : c.actionFailed);
+    const row = result?.rows[0];
+    if (row?.outcome === 'printing') toast.success(copy.admin.common.saved);
+    else toast.error(row?.reason ?? c.actionFailed);
+    router.refresh();
   }
 
   return (
     <Button
       type="button"
-      size="sm"
       onClick={markPrinting}
       disabled={pending}
       /*
@@ -65,7 +71,8 @@ export function PrintAction({ id }: { id: string }) {
       */
       style={{ background: 'oklch(0.55 0.16 300)', color: '#fff' }}
     >
-      {pending ? c.markPrintingWorking : c.markPrinting}
+      <Printer className="size-4" aria-hidden />
+      {pending ? c.markPrintingWorking : c.bulkPrintButton}
     </Button>
   );
 }

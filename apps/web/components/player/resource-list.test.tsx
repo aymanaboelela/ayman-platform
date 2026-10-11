@@ -22,6 +22,9 @@ function resource(overrides: Partial<PlayerResource> & Pick<PlayerResource, 'kin
     linkUrl: null,
     viewPath: null,
     downloadPath: null,
+    mirror: null,
+    posterUrl: null,
+    processing: false,
     ...overrides,
   };
 }
@@ -50,6 +53,15 @@ const video = resource({
   kind: 'video',
   title: 'فيديو شرح',
   youtubeId: 'dQw4w9WgXcQ',
+});
+
+const UPLOAD_ID = 'a'.repeat(32);
+const uploadedVideo = resource({
+  id: 'r-vid-upload',
+  kind: 'video',
+  title: 'حل الواجب',
+  mirror: { hlsUrl: `https://video.test/v/${UPLOAD_ID}/master.m3u8`, maxHeight: 720, trim: null },
+  posterUrl: `https://video.test/v/${UPLOAD_ID}/poster.jpg`,
 });
 
 describe('ResourceList', () => {
@@ -131,6 +143,38 @@ describe('ResourceList', () => {
   it('gives video and link resources no viewer and no download affordance', () => {
     render(<ResourceList resources={[video, link]} />);
     expect(screen.queryByRole('link', { name: copy.player.download })).toBeNull();
+  });
+
+  /*
+   * «رفع فيديو» — the lecture's player, not a bare `<video src>` on the file
+   * route (no seeking, no iOS, a download for everyone). Click to load, so a
+   * student scrolling past fetches no playlist; nothing to download, ever.
+   */
+  it('plays an UPLOADED video in our own player, on tap, with no download and no YouTube', () => {
+    const { container } = render(<ResourceList resources={[uploadedVideo]} />);
+
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(container.querySelector('video')).toBeNull();
+    expect(screen.queryByRole('link', { name: copy.player.download })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: `${copy.player.play} — حل الواجب` }));
+    const player = container.querySelector('video');
+    expect(player).not.toBeNull();
+    expect(player).toHaveAttribute('controlslist', 'nodownload noremoteplayback');
+    expect(player).not.toHaveAttribute('src', expect.stringContaining('/api/lessons/'));
+  });
+
+  it('says «بيتجهّز» while the encoder works, instead of vanishing', () => {
+    const waiting = resource({ id: 'r-vid-wait', kind: 'video', title: 'حل الواجب', processing: true });
+    render(<ResourceList resources={[waiting]} />);
+    expect(screen.getByRole('status')).toHaveTextContent(copy.player.resourceVideoProcessing);
+    expect(document.querySelector('video, iframe')).toBeNull();
+  });
+
+  it('a video with neither a YouTube id nor a ladder renders nothing rather than crash', () => {
+    const broken = resource({ id: 'r-vid-broken', kind: 'video' });
+    render(<ResourceList resources={[broken]} />);
+    expect(document.querySelector('video, iframe')).toBeNull();
   });
 
   it('renders a mixed set in the order given', () => {

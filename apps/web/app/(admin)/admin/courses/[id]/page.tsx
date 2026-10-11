@@ -177,6 +177,14 @@ const AdminCourseDetailSchema = z.object({
               filename: z.string().nullable(),
               linkUrl: z.string().nullable(),
               videoExternalId: z.string().nullable(),
+              // «رفع فيديو» — defaulted, so a page served by an API that
+              // predates them still parses and simply shows no status.
+              videoProvider: z.string().nullable().default(null),
+              mirrorStatus: VideoMirrorStatusSchema.nullable().default(null),
+              mirrorProgress: z.number().int().nullable().default(null),
+              mirrorError: z.string().nullable().default(null),
+              sourceName: z.string().nullable().default(null),
+              durationSeconds: z.number().int().nullable().default(null),
             }),
           ),
         }),

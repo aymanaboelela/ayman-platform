@@ -12,12 +12,25 @@ import { VideoKeyService } from './video-key.service';
 const VIDEO = 'a'.repeat(32);
 const KEY = Buffer.alloc(16, 7);
 
-function build(options: { lessons: string[]; allowed: Record<string, 'ok' | 'forbidden' | 'missing'> }) {
+function build(options: {
+  lessons: string[];
+  allowed: Record<string, 'ok' | 'forbidden' | 'missing'>;
+  /** Every row shares one `encrypted` value here — a real mirror does too. */
+  encrypted?: boolean;
+  /** Lessons whose MATERIALS carry this video as a ready upload. */
+  materials?: string[];
+}) {
   return new VideoKeyService(
     {
       lessonVideo: {
         findMany: async (args: { where: { externalId: string } }) =>
-          args.where.externalId === VIDEO ? options.lessons.map((lessonId) => ({ lessonId })) : [],
+          args.where.externalId === VIDEO
+            ? options.lessons.map((lessonId) => ({ lessonId, encrypted: options.encrypted ?? true }))
+            : [],
+      },
+      lessonResource: {
+        findMany: async (args: { where: { videoExternalId: string } }) =>
+          args.where.videoExternalId === VIDEO ? (options.materials ?? []).map((lessonId) => ({ lessonId })) : [],
       },
     } as unknown as PrismaService,
     {
@@ -51,8 +64,32 @@ describe('VideoKeyService', () => {
     await expect(service.key(student, '../x')).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  /*
+   * «رفع فيديو» in a lesson's materials: no `lesson_videos` row at all, the
+   * same rule — whoever may open the lesson it hangs off.
+   */
+  it('hands a material video\'s key to a student who may open its lesson, and 404s one who may not', async () => {
+    const allowed = build({ lessons: [], materials: ['l3'], allowed: { l3: 'ok' } });
+    await expect(allowed.key(student, VIDEO)).resolves.toEqual(KEY);
+    const refused = build({ lessons: [], materials: ['l3'], allowed: { l3: 'forbidden' } });
+    await expect(refused.key(student, VIDEO)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('lets staff preview without being enrolled', async () => {
     const service = build({ lessons: ['l1'], allowed: {} });
     await expect(service.key({ id: 'a1', role: 'admin' }, VIDEO)).resolves.toEqual(KEY);
+  });
+
+  /**
+   * «شفّره» / «من غير تشفير» at upload time — a plain mirror's manifest
+   * never carries `#EXT-X-KEY`, so hls.js never calls this route for one in
+   * practice. This asserts the server side of that: a probe that asks anyway,
+   * for a video the admin chose NOT to encrypt, gets refused all the same —
+   * even staff, even an enrolled student.
+   */
+  it('refuses the key for a video the admin chose not to encrypt, even for staff', async () => {
+    const service = build({ lessons: ['l1'], allowed: { l1: 'ok' }, encrypted: false });
+    await expect(service.key(student, VIDEO)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.key({ id: 'a1', role: 'admin' }, VIDEO)).rejects.toBeInstanceOf(NotFoundException);
   });
 });

@@ -1769,6 +1769,32 @@ describe('BookOrdersService', () => {
         expect(skipped?.fullName).not.toBe('');
       });
 
+      it('«مرتجع»: only a shipped parcel comes back, and it can go out again', async () => {
+        /* The thread message goes through `OutreachService`, which this suite
+           does not build — stubbed to record what was said. */
+        const said: string[] = [];
+        (service as unknown as { outreach: unknown }).outreach = {
+          sendManual: async (_tx: unknown, input: { body: string }) => {
+            said.push(input.body);
+            return { conversationId: '', messageId: '' };
+          },
+        };
+        const order = await paidOrder();
+        await expect(service.markReturned(adminId, order.id, null)).rejects.toBeInstanceOf(BadRequestException);
+
+        await service.markShipped(adminId, order.id);
+        const returned = await service.markReturned(adminId, order.id, 'الرقم مقفول');
+        expect(returned.status).toBe('returned');
+        const row = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+        expect(row).toMatchObject({ returnReason: 'الرقم مقفول', returnedByUserId: adminId, courierSentAt: null });
+        expect(said[0]).toContain('الرقم مقفول');
+
+        // Out again — and the return stamp stays, like every stamp before it.
+        expect((await service.markShipped(adminId, order.id)).status).toBe('shipped');
+        const after = await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } });
+        expect(after.returnedAt).not.toBeNull();
+      });
+
       /* ⚠️ No bulk-SHIP case here, deliberately. `markShippedMany` posts the
          student's notice through `OutreachService`, which this suite does not
          build — see the service construction at the top. That a `printing` row
@@ -2049,6 +2075,33 @@ describe('BookOrdersService', () => {
    * on a total across all of them is an assertion on other people's data.
    */
   describe('packingList', () => {
+    /* «كتب العنوان وفضل ٢٠ يوم مدفعش، ويوم ما يدفع يتحط التاريخ» — the paper
+       carries the day it was PAID, and «من يوم كام لـ يوم كام» picks it by
+       that day too. */
+    it('dates every line by payment, not by the day the address was saved', async () => {
+      const stamp = `دفع-${Date.now()}`;
+      const order = await paidOrder(studentId, {
+        courseId: undefined,
+        items: [{ bookId: bookA, quantity: 1 }],
+        fullName: stamp,
+      });
+      const paidAt = new Date('2026-10-05T12:00:00.000Z');
+      await prisma.bookOrder.update({
+        where: { id: order.id },
+        data: { createdAt: new Date('2026-09-15T12:00:00.000Z'), paidAt },
+      });
+
+      const list = await service.packingList({ status: 'paid', from: null, to: null, q: stamp });
+      const [line] = list.groups.flatMap((group) => group.lines);
+      expect(line?.orderDate).toBe('2026-10-05');
+      expect(list.labels[0]?.orderDate).toBe('2026-10-05');
+
+      const sameDay = await service.packingList({ status: 'paid', from: '2026-10-05', to: '2026-10-05', q: stamp });
+      expect(sameDay.orders).toBe(1);
+      const dayStarted = await service.packingList({ status: 'paid', from: '2026-09-15', to: '2026-09-15', q: stamp });
+      expect(dayStarted.orders).toBe(0);
+    }, 20_000);
+
     it('applies the screen’s stream filter, so the file is the list', async () => {
       const stamp = `تصدير-${Date.now()}`;
       await paidOrder(studentId, {

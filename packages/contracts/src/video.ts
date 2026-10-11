@@ -402,8 +402,21 @@ export function mirrorPrefix(externalId: string): string {
  */
 export function mirrorPlaylistUrl(baseUrl: string, externalId: string): string {
   const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-  return `${base}/${mirrorPrefix(externalId)}/master.m3u8`;
+  return `${base}/${mirrorPrefix(externalId)}/master.m3u8?l=${MIRROR_LADDER_VERSION}`;
 }
+
+/**
+ * Bump when a lecture's ladder is rewritten IN PLACE.
+ *
+ * Everything under `v/<id>/` is served `immutable` for a year, by the edge and
+ * by every student's browser — right, because an id never changes its bytes.
+ * The one exception is a ladder we add a rung to after the fact (2026-10-06:
+ * the 1080-only lecture 5 of الوحدة التانية), and no purge reaches a browser
+ * that already holds the old master. A new query string is a new cache key
+ * for both, so each one fetches the new master once, and the segments under it
+ * (which did not change) stay cached.
+ */
+export const MIRROR_LADDER_VERSION = 2;
 
 /**
  * The poster frame a transcode writes beside the ladder.
@@ -589,9 +602,22 @@ export const R2_USD_PER_GB_MONTH = 0.015;
 export const TENANT_VIDEO_PRICE_MULTIPLIER = 2;
 export const TENANT_USD_PER_GB_MONTH = R2_USD_PER_GB_MONTH * TENANT_VIDEO_PRICE_MULTIPLIER;
 
+/**
+ * ⚠️ 720p is the top, on purpose (the owner's decision, 2026-10-04: «الفيديو
+ * على كله 720»). The 1080 rung was more pixels than the other three rungs
+ * together — about 55% of every encode's CPU — on a VPS three stacks share.
+ * A long lecture at 1080 kept the box near 100% for hours, Hostinger capped
+ * it to 20%, and every teacher's site went down with it. A screen recording
+ * of code at 720 is still sharp; the 1080 rung bought little a phone shows.
+ *
+ * «بس مش عاوز الكوالتي تضعف» — and it does not: the 720 rung keeps the same
+ * CRF, so the picture at 720 is exactly what it was. Its ceiling went from
+ * 2400 to 3000 kbit/s, since it is now the rung a desktop student watches:
+ * a busy scene (a screen of scrolling code) gets the bits it needs instead of
+ * smearing at the cap. CRF decides the size of every other scene, as before.
+ */
 export const UPLOAD_LADDER: readonly LadderRung[] = [
-  { height: 1080, maxKbps: 4200, audioKbps: 128 },
-  { height: 720, maxKbps: 2400, audioKbps: 128 },
+  { height: 720, maxKbps: 3000, audioKbps: 128 },
   { height: 480, maxKbps: 1200, audioKbps: 96 },
   { height: 360, maxKbps: 700, audioKbps: 64 },
 ];

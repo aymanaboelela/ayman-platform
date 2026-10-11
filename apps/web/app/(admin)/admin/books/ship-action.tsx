@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { PackageCheck } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Button } from '@ayman/ui/components/button';
 import { useRefreshBookOrdersUnshippedCount } from '@/components/admin/book-orders-alerts';
@@ -43,7 +44,13 @@ export function ShipAction({ id }: { id: string }) {
   }
 
   return (
-    <Button type="button" onClick={ship} disabled={shipping} className="!bg-[oklch(0.62_0.15_150)]">
+    <Button
+      type="button"
+      onClick={ship}
+      disabled={shipping}
+      style={{ background: 'oklch(0.58 0.15 150)', color: '#fff' }}
+    >
+      <PackageCheck className="size-4" aria-hidden />
       {shipping ? c.shipping : c.ship}
     </Button>
   );

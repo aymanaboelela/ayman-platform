@@ -61,7 +61,7 @@ describe('MirrorVideo playback tuning', () => {
     await act(async () => {});
 
     expect(built).toHaveLength(1);
-    expect(built[0]).toBe(HLS_CONFIG);
+    expect(built[0]).toEqual(HLS_CONFIG);
     expect(built[0]).toMatchObject({
       startLevel: -1,
       capLevelToPlayerSize: true,
@@ -91,5 +91,47 @@ describe('MirrorVideo playback tuning', () => {
     // Held in whole seconds: three events inside one second are one value.
     expect(seek.value).toBe('12');
     expect(seek.getAttribute('aria-valuetext')).toBe('0:12 / 1:40');
+  });
+});
+
+describe('MirrorVideo seeking', () => {
+  it('asks hls.js to START at the resume point instead of seeking there after', async () => {
+    render(
+      <MirrorVideo
+        mirror={{ hlsUrl: 'https://video.example.test/v/abc/master.m3u8', maxHeight: 1080 }}
+        title="How AI Works"
+        posterUrl={null}
+        startAt={1620}
+        onPlayer={() => {}}
+        onFatal={() => {}}
+        fullscreen={false}
+        onToggleFullscreen={() => {}}
+        watermark={null}
+      />,
+    );
+    await act(async () => {});
+    expect(built[0]).toMatchObject({ ...HLS_CONFIG, startPosition: 1620 });
+  });
+
+  it('sets the playhead once per drag of the timeline', async () => {
+    const { container } = renderMirror();
+    await act(async () => {});
+    const video = container.querySelector('video') as HTMLVideoElement;
+    const seek = container.querySelector('input.mv-timeline') as HTMLInputElement;
+    Object.defineProperty(video, 'duration', { value: 3600, configurable: true });
+    fireEvent.durationChange(video);
+
+    const writes: number[] = [];
+    Object.defineProperty(video, 'currentTime', {
+      configurable: true,
+      get: () => writes.at(-1) ?? 0,
+      set: (value: number) => writes.push(value),
+    });
+
+    fireEvent.pointerDown(seek);
+    for (const value of ['100', '700', '1300']) fireEvent.change(seek, { target: { value } });
+    expect(writes).toEqual([]);
+    fireEvent.pointerUp(window);
+    expect(writes).toEqual([1300]);
   });
 });

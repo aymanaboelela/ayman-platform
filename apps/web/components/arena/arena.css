@@ -310,6 +310,103 @@
 .ca-course__title { font-weight: var(--fw-bold); color: var(--color-fg); line-height: 1.5; }
 .ca-course__meta { font-size: var(--fs-text-xs); color: var(--color-fg-muted); }
 
+/* ── «التحديات» — صف لكل تحدّي بلونه وزرار «يلا» لوحده ───────────────────── */
+.ca-topics-wrap { display: grid; gap: 0.75rem; }
+.ca-topics__title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: var(--fs-text-lg);
+  font-weight: var(--fw-bold);
+  color: var(--color-fg);
+}
+.ca-topics { display: grid; gap: 0.55rem; }
+.ca-topic {
+  --tone: var(--ca-you);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.7rem 0.8rem;
+  border-radius: var(--r-md);
+  background: linear-gradient(110deg, color-mix(in oklab, var(--tone) 16%, var(--color-surface-1)), var(--color-surface-1) 70%);
+  border: 1.5px solid color-mix(in oklab, var(--tone) 35%, var(--color-line));
+}
+.ca-topic[data-tone='1'] { --tone: var(--ca-violet); }
+.ca-topic[data-tone='2'] { --tone: var(--ca-amber); }
+.ca-topic[data-tone='3'] { --tone: var(--ca-them); }
+.ca-topic[data-off] { opacity: 0.6; }
+.ca-topic__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--tone) 22%, transparent);
+  color: var(--tone);
+}
+.ca-topic__text { display: grid; gap: 0.15rem; min-width: 0; flex: 1; }
+.ca-topic__name { font-weight: var(--fw-bold); color: var(--color-fg); overflow-wrap: anywhere; }
+.ca-topic__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: var(--fs-text-xs); color: var(--color-fg-muted); }
+.ca-topic__waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--ca-green) 18%, transparent);
+  color: var(--color-fg);
+  font-weight: var(--fw-semibold);
+}
+.ca-topic__go { flex: none; }
+
+/* «تحدّي من اختيارك» — شيبس للتحديات، وزرار واحد يفتحه للدفعة. */
+.ca-create {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--ca-gold) 8%, var(--color-surface-1));
+  border: 1.5px dashed color-mix(in oklab, var(--ca-gold) 45%, var(--color-line));
+}
+.ca-create__chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.ca-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2.25rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: var(--r-full);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-line);
+  font-size: var(--fs-text-sm);
+  color: var(--color-fg);
+  transition: background-color 160ms, border-color 160ms;
+}
+.ca-chip[data-on] {
+  background: color-mix(in oklab, var(--ca-gold) 24%, var(--color-surface-1));
+  border-color: var(--ca-gold);
+  font-weight: var(--fw-semibold);
+}
+
+/* تحديات الدفعة المفتوحة. */
+.ca-open__list { display: grid; gap: 0.5rem; }
+.ca-open__row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--ca-gold) 8%, var(--color-surface-1));
+  border: 1px solid color-mix(in oklab, var(--ca-gold) 30%, var(--color-line));
+}
+.ca-open__row[data-mine] { background: color-mix(in oklab, var(--ca-you) 10%, var(--color-surface-1)); }
+.ca-open__text { display: grid; gap: 0.1rem; min-width: 0; flex: 1; }
+.ca-open__by { font-weight: var(--fw-bold); color: var(--color-fg); overflow-wrap: anywhere; }
+.ca-open__topics { font-size: var(--fs-text-xs); color: var(--color-fg-muted); overflow-wrap: anywhere; }
+
 /* «يلا نبدأ» — أكبر حاجة في الصفحة. */
 .ca-start {
   position: relative;

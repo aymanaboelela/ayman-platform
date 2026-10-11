@@ -1,8 +1,10 @@
 import { randomInt } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
+import { freshFirst } from '@ayman/contracts/quiz/challenges';
 import { sanitizeRichText } from '../../common/sanitize/rich-text';
 import { PrismaService } from '../../prisma/prisma.service';
-import { GameService } from '../quiz/game.service';
+import { GameService, type ArenaPoolItem } from '../quiz/game.service';
+import { exposuresOf } from '../quiz/question-exposure';
 import type { EngineQuestion } from './arena-engine';
 import { pickQuestions } from './arena-matchmaking';
 import type { ArenaQuestionsPort } from './arena.ports';
@@ -24,9 +26,19 @@ export class ArenaQuestionsService implements ArenaQuestionsPort {
     private readonly game: GameService,
   ) {}
 
-  async build(courseId: string, userIds: [string, string], count: number): Promise<EngineQuestion[]> {
-    const [a, b] = await Promise.all(userIds.map((id) => this.game.arenaPool(id, courseId)));
-    const picked = pickQuestions(a ?? [], b ?? [], count, () => randomInt(1_000_000) / 1_000_000);
+  async build(
+    courseId: string,
+    userIds: [string, string],
+    count: number,
+    topicIds: readonly string[] = [],
+  ): Promise<EngineQuestion[]> {
+    const [a, b] = await Promise.all(
+      userIds.map((id) => (topicIds.length > 0 ? this.game.arenaTopicPool(id, courseId, topicIds) : this.game.arenaPool(id, courseId))),
+    );
+    // «ماتكرّرش»: اللي الاتنين ماشافوهوش الأول، وبعدين الأقدم عند الاتنين.
+    const seen = await exposuresOf(this.prisma, userIds);
+    const random = () => randomInt(1_000_000) / 1_000_000;
+    const picked = pickQuestions<ArenaPoolItem>(a ?? [], b ?? [], count, random, (items) => freshFirst(items, seen, random));
     if (picked.length === 0) return [];
 
     const versions = await this.prisma.questionVersion.findMany({

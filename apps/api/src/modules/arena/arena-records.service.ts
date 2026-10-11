@@ -12,6 +12,7 @@ import { arenaCopy } from '@ayman/contracts/copy/arena';
 import { formatCopy } from '@ayman/contracts/format';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { recordExposures } from '../quiz/question-exposure';
 import { shortName } from '../progress/cohort-rank.service';
 import { outcomeFor, type EngineAward, type MatchState } from './arena-engine';
 import { cairoDayStart, type ArenaCohort } from './arena-matchmaking';
@@ -134,6 +135,12 @@ export class ArenaRecordsService implements ArenaRecordsPort {
           },
         },
       });
+
+      // «ماتكرّرش السؤال»: كل سؤال اتفتح في الماتش اتشاف عند الاتنين.
+      const shown = state.rounds.flatMap((round, position) =>
+        round.reason !== null && stillThere.has(ids[position]!) ? [ids[position]!] : [],
+      );
+      await recordExposures(tx, [a, b], shown);
 
       if (scored) {
         for (const side of [0, 1] as const) {

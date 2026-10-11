@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
@@ -48,6 +47,9 @@ const c = copy.player.controls;
 
 export const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 export const SEEK_STEP = 10;
+/** ← / → — YouTube's own step for the arrows; J / L and the double tap stay at ten. */
+export const ARROW_STEP = 5;
+const VOLUME_STEP = 0.05;
 const HIDE_AFTER_MS = 2500;
 /** Often enough that no stretch of a recording stays clean for long. */
 const WATERMARK_MOVE_MS = 5_000;
@@ -66,6 +68,17 @@ export function clock(seconds: number): string {
   const s = total % 60;
   const pad = (n: number) => n.toString().padStart(2, '0');
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+/**
+ * Something on the page that owns the keyboard for itself: a field being
+ * typed into, or a control that answers Space and the arrows natively. Only
+ * consulted for focus OUTSIDE the player — inside it, every key is ours.
+ */
+function ownsKeys(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return target.closest('input, textarea, select, button, a[href], [role="slider"], [role="menu"], [role="dialog"]') !== null;
 }
 
 export function readSavedSpeed(): number {
@@ -175,6 +188,7 @@ export function PlayerChrome({
 }: PlayerChromeProps) {
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTap = useRef<{ at: number; side: 'start' | 'end' } | null>(null);
+  const lastPointer = useRef<string>('');
   /**
    * Read by the hide timer when it FIRES, not when it is armed — a lecture
    * paused in the meantime keeps its bar. A ref, written in an effect, because
@@ -184,6 +198,10 @@ export function PlayerChrome({
   const [menuOpen, setMenuOpen] = useState(false);
   const [controlsShown, setControlsShown] = useState(true);
   const [flash, setFlash] = useState<'back' | 'forward' | null>(null);
+  /** Where a finger is holding the timeline's thumb — see «the timeline» below. */
+  const [scrub, setScrub] = useState<number | null>(null);
+  const scrubRef = useRef<number | null>(null);
+  const dragging = useRef(false);
 
   useEffect(() => {
     pausedRef.current = paused;
@@ -224,8 +242,8 @@ export function PlayerChrome({
     };
   }, []);
 
-  // A paused lecture, or an open menu, keeps the bar on screen.
-  const barVisible = controlsShown || paused || menuOpen;
+  // A paused lecture, an open menu, or a thumb under a finger keeps the bar on screen.
+  const barVisible = controlsShown || paused || menuOpen || scrub !== null;
 
   /* ── actions ──────────────────────────────────────────────────────────── */
 
@@ -238,42 +256,158 @@ export function PlayerChrome({
     [onSeekBy],
   );
 
-  /* ── keyboard: the YouTube keys, on the player only ───────────────────── */
+  /* ── keyboard: the YouTube keys, wherever the student is on the page ───── */
 
-  const onKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLDivElement>) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      // A focused button already answers Space, and a focused slider already
-      // answers the arrows — handling them here too would fire twice.
-      if (event.target !== event.currentTarget && (event.code === 'Space' || event.code.startsWith('Arrow'))) return;
-      // `code`, not `key`: on an Arabic layout K emits «ن».
+  /*
+   * «لما حد يضغط على المسطرة مش بيوقف» — Space did nothing, and neither did
+   * the arrows.
+   *
+   * The keys used to be heard on the player's own element only, so they
+   * worked exactly while focus happened to sit inside it. The tap that starts
+   * a lecture is on the poster, and the poster is gone the moment it plays —
+   * focus falls back to the page, and from then on Space SCROLLED the page
+   * and the arrows did nothing. Inside the player it was worse in a quieter
+   * way: a focused bar button swallowed the arrows (they were skipped so a
+   * slider could have them), and a focused timeline took ← → as 0.1-second
+   * nudges — a press that moved nothing anyone could see.
+   *
+   * So they are heard on the DOCUMENT now, the way YouTube's watch page does
+   * it, and on the player every key is ours. Elsewhere on the page they stand
+   * aside for anything that owns the keyboard — a homework answer being
+   * typed, a button that Space should press, an open dialog.
+   *
+   * `code`, not `key`: on an Arabic layout K emits «ن».
+   */
+  const rootRef = useRef<HTMLDivElement>(null);
+  // The listener is installed once; it reads the current props through this.
+  const keys = useRef({ onTogglePlay, seekBy, onSeekTo, onToggleMute, onVolume, reveal, volume, muted, timeline });
+  useEffect(() => {
+    keys.current = { onTogglePlay, seekBy, onSeekTo, onToggleMute, onVolume, reveal, volume, muted, timeline };
+  });
+
+  useEffect(() => {
+    const isOurs = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return null;
+      const inside = event.target instanceof Node && rootRef.current?.contains(event.target) === true;
+      // The settings menu keeps its own keys: Space and Enter pick a speed.
+      if (inside && event.target instanceof HTMLElement && event.target.closest('[role="menu"]')) return null;
+      if (!inside && ownsKeys(event.target)) return null;
+      return { inside };
+    };
+
+    /*
+     * A bar button that has focus would ALSO press itself on Space — on the
+     * key's release, which is a separate event the keydown cannot cancel in
+     * every engine. So the release is cancelled too, and Space over the player
+     * means play/pause and nothing else.
+     */
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space' && isOurs(event)?.inside) event.preventDefault();
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const ours = isOurs(event);
+      if (!ours) return;
+      const { inside } = ours;
+
+      const k = keys.current;
+      const { min, max } = k.timeline;
       switch (event.code) {
         case 'Space':
         case 'KeyK':
-          event.preventDefault();
-          onTogglePlay();
+          // Holding Space must not toggle twenty times a second.
+          if (event.repeat) {
+            event.preventDefault();
+            return;
+          }
+          k.onTogglePlay();
           break;
         case 'ArrowLeft':
-        case 'KeyJ':
-          event.preventDefault();
-          seekBy(-SEEK_STEP);
+          k.seekBy(-ARROW_STEP);
           break;
         case 'ArrowRight':
+          k.seekBy(ARROW_STEP);
+          break;
+        case 'KeyJ':
+          k.seekBy(-SEEK_STEP);
+          break;
         case 'KeyL':
-          event.preventDefault();
-          seekBy(SEEK_STEP);
+          k.seekBy(SEEK_STEP);
           break;
+        case 'ArrowUp':
+        case 'ArrowDown': {
+          // Only over the player: outside it, these scroll the page.
+          if (!inside) return;
+          const from = k.muted ? 0 : k.volume;
+          const delta = event.code === 'ArrowUp' ? VOLUME_STEP : -VOLUME_STEP;
+          k.onVolume(Math.round(Math.min(1, Math.max(0, from + delta)) * 100) / 100);
+          break;
+        }
         case 'KeyM':
-          event.preventDefault();
-          onToggleMute();
+          k.onToggleMute();
           break;
-        default:
-          return;
+        case 'Home':
+          if (!inside) return;
+          k.onSeekTo(min);
+          break;
+        case 'End':
+          if (!inside) return;
+          k.onSeekTo(max);
+          break;
+        default: {
+          // 0–9: jump to that tenth of the lecture, as on YouTube.
+          const digit = /^(?:Digit|Numpad)([0-9])$/.exec(event.code);
+          if (!digit || max <= min) return;
+          k.onSeekTo(min + ((max - min) * Number(digit[1])) / 10);
+        }
       }
-      reveal();
-    },
-    [onTogglePlay, seekBy, onToggleMute, reveal],
-  );
+      event.preventDefault();
+      k.reveal();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keyup', onKeyUp);
+    };
+  }, []);
+
+  /* ── the timeline: follow the finger, seek once on release ────────────── */
+
+  /*
+   * «لما بيرجع من تحت الصوت شغال والصورة واقفة».
+   *
+   * Every `input` event of a drag was a seek — thirty or forty a second while
+   * a finger moved along the bar. Each one throws away what was buffered and
+   * asks for the bytes at a new second: YouTube fetches a new range per call,
+   * hls.js aborts the segment in flight and starts another. The audio track
+   * catches up first (it is a fraction of the bytes), the picture waits for a
+   * keyframe that the next seek cancels again — so the sound ran on over a
+   * frozen frame, and the drag "did not stop" where the finger let go.
+   *
+   * Now the thumb and the clock follow the finger, and the ONE seek happens on
+   * release. A click is a drag of length zero, and the keyboard (which never
+   * presses a pointer) still seeks on every step.
+   */
+
+  const commitScrub = useCallback(() => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    const value = scrubRef.current;
+    scrubRef.current = null;
+    setScrub(null);
+    if (value !== null) onSeekTo(value);
+  }, [onSeekTo]);
+
+  useEffect(() => {
+    // Released anywhere — a finger that slid off the bar still lets go.
+    window.addEventListener('pointerup', commitScrub);
+    window.addEventListener('pointercancel', commitScrub);
+    return () => {
+      window.removeEventListener('pointerup', commitScrub);
+      window.removeEventListener('pointercancel', commitScrub);
+    };
+  }, [commitScrub]);
 
   /*
    * A tap on the picture.
@@ -285,6 +419,10 @@ export function PlayerChrome({
    */
   const onSurfacePointerUp = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
+      // A drag along the timeline that was let go over the picture: that
+      // release is the end of the seek, not a tap.
+      if (dragging.current) return;
+      lastPointer.current = event.pointerType;
       if (menuOpen) {
         setMenuOpen(false);
         return;
@@ -315,6 +453,11 @@ export function PlayerChrome({
   );
 
   const hasSettings = speeds.length > 1 || settingsExtra != null;
+  // While a finger is on the thumb, the painted track and the clock follow it.
+  const span = timeline.max - timeline.min;
+  const scrubPlayed = scrub !== null && span > 0 ? Math.min(100, Math.max(0, ((scrub - timeline.min) / span) * 100)) : null;
+  // The clock prints the lecture's own seconds; for an untrimmed one they are the file's.
+  const scrubShown = scrub !== null ? shownTime + (scrub - timeline.value) : null;
 
   return (
     <div
@@ -329,10 +472,10 @@ export function PlayerChrome({
         keyhole && 'pc-keyhole',
         className,
       )}
+      ref={rootRef}
       tabIndex={0}
       role="region"
       aria-label={title}
-      onKeyDown={onKeyDown}
       onPointerMove={(event) => {
         if (event.pointerType === 'mouse') reveal();
       }}
@@ -349,6 +492,12 @@ export function PlayerChrome({
       <div
         className="absolute inset-0 z-[6]"
         onPointerUp={onSurfacePointerUp}
+        // A double CLICK fills the screen, as on YouTube's desktop player. A
+        // phone's double tap is the ten-second jump above, and some engines
+        // report it as a `dblclick` too — hence the pointer check.
+        onDoubleClick={() => {
+          if (lastPointer.current === 'mouse') onToggleFullscreen();
+        }}
         aria-hidden="true"
         data-player-surface=""
       />
@@ -391,7 +540,17 @@ export function PlayerChrome({
         className={cn(
           'absolute inset-x-0 bottom-0 z-[9] bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-2 pt-10',
           'transition-opacity duration-[200ms] ease-out',
-          barVisible ? 'opacity-100' : 'pointer-events-none opacity-0',
+          /*
+           * The scrim is not a target — only the controls on it are. On a
+           * phone the bar is nearly half the picture's height, and the empty
+           * gradient used to swallow every tap that landed on it: a double
+           * tap on that half seeked nowhere, and a tap to hide the bar did
+           * not hide it. Now those taps reach the picture under it.
+           */
+          'pointer-events-none',
+          barVisible
+            ? 'opacity-100 [&_button]:pointer-events-auto [&_input]:pointer-events-auto [&_[role=menu]]:pointer-events-auto'
+            : 'opacity-0',
         )}
       >
         <input
@@ -399,18 +558,27 @@ export function PlayerChrome({
           className="mv-timeline"
           min={timeline.min}
           max={timeline.max || 0}
-          step={0.1}
-          value={Math.min(Math.max(timeline.value, timeline.min), timeline.max || 0)}
+          step="any"
+          value={Math.min(Math.max(scrub ?? timeline.value, timeline.min), timeline.max || 0)}
           aria-label={c.seek}
-          aria-valuetext={`${clock(shownTime)} / ${clock(shownDuration)}`}
+          aria-valuetext={`${clock(scrubShown ?? shownTime)} / ${clock(shownDuration)}`}
           style={
             {
-              '--mv-played': `${timeline.played}%`,
-              '--mv-buffered': `${Math.max(timeline.played, timeline.loaded)}%`,
+              '--mv-played': `${scrubPlayed ?? timeline.played}%`,
+              '--mv-buffered': `${Math.max(scrubPlayed ?? timeline.played, timeline.loaded)}%`,
             } as CSSProperties
           }
+          onPointerDown={() => {
+            dragging.current = true;
+          }}
           onChange={(event) => {
-            onSeekTo(Number(event.currentTarget.value));
+            const value = Number(event.currentTarget.value);
+            if (dragging.current) {
+              scrubRef.current = value;
+              setScrub(value);
+            } else {
+              onSeekTo(value);
+            }
             reveal();
           }}
         />
@@ -441,7 +609,7 @@ export function PlayerChrome({
             onChange={(event) => onVolume(Number(event.currentTarget.value))}
           />
           <span className="mono tabular ms-1 whitespace-nowrap text-[length:var(--fs-text-xs)] text-white/90">
-            {clock(shownTime)} / {clock(shownDuration)}
+            {clock(scrubShown ?? shownTime)} / {clock(shownDuration)}
           </span>
 
           <span className="ms-auto" />

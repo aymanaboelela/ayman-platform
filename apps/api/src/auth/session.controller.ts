@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { CurrentUser, type AuthenticatedUser } from './decorators/current-user.decorator';
 import { type Permission, permissionsForUser } from './permissions';
+import { PrismaService } from '../prisma/prisma.service';
 
 export interface SessionResponse {
   id: string;
@@ -35,6 +36,11 @@ export interface SessionResponse {
   image: string | null;
   role: string;
   permissions: readonly Permission[];
+  /**
+   * «محتاج يكمّل بياناته ولا لأ» — عشان `proxy.ts` يقرّر يوجّهه لـ`/onboarding`
+   * ولا لأ، من غير ما يحتاج `profile:read`. انظر الكومنت على `me()`.
+   */
+  onboardingCompleted: boolean;
 }
 
 /**
@@ -50,8 +56,37 @@ export interface SessionResponse {
  */
 @Controller('session')
 export class SessionController {
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * ⚠️ `onboardingCompleted` اتضافت هنا، بدل ما `proxy.ts` يفضل يسأل
+   * `GET /api/profile/me`، لأن الراوت ده **مقفول بـ`profile:read`** — صلاحية
+   * طالب، مالهاش أي علاقة بـ«إنت داخل ولا لأ».
+   *
+   * لحد ما اتصلحت: مساعد اتدّيله صلاحيات محدودة من `/admin/roles` (شاشة
+   * `MemberPermissions`) من غير ما حد يحط «الملف الشخصي» معاها — ومفيش سبب
+   * يحطها، هي مش من حاجته — كان بيعدّي تسجيل الدخول فعلًا (الجلسة صحيحة،
+   * `/api/session` نفسها كانت بترجّعها تمام) بس `resolveAuthState` في
+   * `proxy.ts` كان بيسأل `/api/profile/me`، والراوت ده بيرفض (403) لأي
+   * حساب مالوش `profile:read`، و`resolveAuthState` بيقرا أي رد مش 200 على
+   * إنه «مش داخل خالص» (fail-closed) — فالحساب بيترمي `/login` في حلقة.
+   * ظاهره «الصلاحية مش شغالة»، وحقيقته «مش قادر يوصل للوحة أصلًا».
+   *
+   * الحل: `/api/session` ده أصلًا مالهوش صلاحية مطلوبة (أعلى الملف)، فهو
+   * المكان الصح يرجّع «إنت داخل، ودورك إيه، وخلّصت onboarding ولا لأ» مرة
+   * واحدة. الـonboarding نفسه مفهوم طالب بس — مدرّس أو مساعد عمرهم ما
+   * بيعدّوا بيه، فـ`true` ثابتة ليهم، ومفيش استعلام زيادة في الداتابيز.
+   */
   @Get()
-  me(@CurrentUser() user: AuthenticatedUser): SessionResponse {
+  async me(@CurrentUser() user: AuthenticatedUser): Promise<SessionResponse> {
+    const onboardingCompleted =
+      user.role === 'student'
+        ? (await this.prisma.studentProfile.findUnique({
+            where: { userId: user.id },
+            select: { onboardingCompletedAt: true },
+          }))?.onboardingCompletedAt != null
+        : true;
+
     return {
       id: user.id,
       email: user.email ?? null,
@@ -62,6 +97,7 @@ export class SessionController {
       /* بتاعة الحساب، مش بتاعة الرول: الشاشة لازم تخبّي اللي الـAPI هيرفضه،
          وإلا المساعد بيدوس زرار ويتقال له «مش من حقك». */
       permissions: permissionsForUser(user.id, user.role),
+      onboardingCompleted,
     };
   }
 }

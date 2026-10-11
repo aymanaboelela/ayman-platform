@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>بنحدّث المنصة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800&display=swap" rel="stylesheet">
+<!--
+  صفحة الصيانة — Traefik بيرجّعها (503) لما ستاك المنصة مش قايم، وده بيحصل
+  دقيقة أو اتنين في كل نشر. من غيرها الطالب كان بيشوف «404 page not found»
+  بتاعة Traefik وبيفتكر إن الموقع اتقفل.
+
+  صفحة واحدة لكل الدومينات، فمافيهاش اسم مدرّس ولا لوجو. بتشيّك لوحدها كل
+  ١٠ ثواني، وأول ما الموقع يرجع بتعمل reload.
+-->
+<style>
+  :root {
+    --bg-1: #0f1033;
+    --bg-2: #1d1a5c;
+    --glow-1: #7c5cff;
+    --glow-2: #00d4c8;
+    --glow-3: #ff7ab6;
+    --card: rgba(255, 255, 255, 0.07);
+    --line: rgba(255, 255, 255, 0.14);
+    --fg: #ffffff;
+    --muted: rgba(255, 255, 255, 0.72);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Cairo', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
+    color: var(--fg);
+    background: radial-gradient(120% 90% at 85% 0%, var(--bg-2), var(--bg-1) 60%);
+    display: grid;
+    place-items: center;
+    padding: 24px 16px;
+    overflow: hidden;
+  }
+  .blob {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(70px);
+    opacity: 0.55;
+    animation: drift 14s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+  .blob.a { width: 340px; height: 340px; background: var(--glow-1); inset-block-start: -80px; inset-inline-start: -60px; }
+  .blob.b { width: 300px; height: 300px; background: var(--glow-2); inset-block-end: -90px; inset-inline-end: -40px; animation-delay: -5s; }
+  .blob.c { width: 220px; height: 220px; background: var(--glow-3); inset-block-start: 40%; inset-inline-end: 12%; opacity: 0.35; animation-delay: -9s; }
+  @keyframes drift { to { transform: translate(40px, 30px) scale(1.12); } }
+
+  .card {
+    position: relative;
+    width: 100%;
+    max-width: 460px;
+    text-align: center;
+    padding: 40px 28px 32px;
+    border-radius: 28px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+  }
+  .icon {
+    width: 104px;
+    height: 104px;
+    margin: 0 auto 22px;
+    border-radius: 30px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, var(--glow-1), var(--glow-2));
+    box-shadow: 0 14px 40px rgba(124, 92, 255, 0.5);
+  }
+  .icon svg { width: 54px; height: 54px; animation: spin 3.2s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  h1 { font-size: 28px; font-weight: 800; line-height: 1.4; }
+  .lead { margin-top: 10px; font-size: 17px; line-height: 1.8; color: var(--muted); }
+  .eta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 18px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 700;
+    background: rgba(0, 212, 200, 0.14);
+    color: #7ff3ea;
+    border: 1px solid rgba(0, 212, 200, 0.3);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #2ef2e3; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.25; transform: scale(0.7); } }
+  .bar { margin-top: 26px; height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+  .bar span {
+    display: block;
+    height: 100%;
+    width: 40%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--glow-2), var(--glow-1), var(--glow-3));
+    animation: slide 1.8s ease-in-out infinite;
+  }
+  @keyframes slide { from { transform: translateX(160%); } to { transform: translateX(-260%); } }
+  button {
+    margin-top: 26px;
+    width: 100%;
+    padding: 14px 20px;
+    border: 0;
+    border-radius: 16px;
+    font: inherit;
+    font-size: 17px;
+    font-weight: 700;
+    color: #fff;
+    cursor: pointer;
+    background: linear-gradient(135deg, var(--glow-1), #5b3bff);
+    box-shadow: 0 10px 30px rgba(124, 92, 255, 0.45);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+  button:hover { transform: translateY(-1px); }
+  button:active { transform: translateY(1px); }
+  button[disabled] { opacity: 0.7; cursor: progress; }
+  .note { margin-top: 14px; min-height: 1.8em; font-size: 14px; color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) {
+    .blob, .icon svg, .dot, .bar span { animation: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="blob a"></div>
+  <div class="blob b"></div>
+  <div class="blob c"></div>
+
+  <main class="card">
+    <div class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 8.92a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8.92 4.6 1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.34.37.63.66.84.3.2.65.32 1.01.33H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+      </svg>
+    </div>
+
+    <h1>بنحدّث المنصة دلوقتي</h1>
+    <p class="lead">بنضيف حاجات جديدة ونظبّط حاجات. مفيش حاجة ضاعت، وكل تقدّمك محفوظ.</p>
+    <span class="eta"><span class="dot"></span>دقيقتين وترجع تشتغل</span>
+    <div class="bar" aria-hidden="true"><span></span></div>
+
+    <button id="retry" type="button">إعادة المحاولة</button>
+    <p class="note" id="note" role="status" aria-live="polite">الصفحة هتفتح لوحدها أول ما التحديث يخلص.</p>
+  </main>
+
+<script>
+  (function () {
+    var button = document.getElementById('retry');
+    var note = document.getElementById('note');
+    var checking = false;
+
+    // الموقع رجع = أي رد غير 503 (صفحة الصيانة نفسها بترجع 503 دايمًا).
+    function check(manual) {
+      if (checking) return;
+      checking = true;
+      if (manual) {
+        button.disabled = true;
+        button.textContent = 'بنشوف…';
+      }
+      fetch(location.href, { cache: 'no-store', credentials: 'same-origin' })
+        .then(function (res) {
+          if (res.status !== 503) {
+            note.textContent = 'رجعت! بنفتحلك الصفحة…';
+            location.reload();
+            return;
+          }
+          if (manual) note.textContent = 'لسه بيتحدّث — دقيقتين بالكتير وترجع.';
+        })
+        .catch(function () {
+          if (manual) note.textContent = 'لسه بيتحدّث — دقيقتين بالكتير وترجع.';
+        })
+        .then(function () {
+          checking = false;
+          button.disabled = false;
+          button.textContent = 'إعادة المحاولة';
+        });
+    }
+
+    button.addEventListener('click', function () { check(true); });
+    setInterval(function () { check(false); }, 10000);
+  })();
+</script>
+</body>
+</html>

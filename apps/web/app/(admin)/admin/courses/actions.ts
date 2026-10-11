@@ -23,7 +23,11 @@ import {
   streamFlagsOf,
   TermSetOpenResultSchema,
 } from '@ayman/contracts';
-import { VideoEmbedStatusSchema, type VideoEmbedStatus } from '@ayman/contracts/video';
+import {
+  MIRROR_LADDER_VERSION,
+  VideoEmbedStatusSchema,
+  type VideoEmbedStatus,
+} from '@ayman/contracts/video';
 import { ReusableVideosSchema, type ReusableVideos } from '@ayman/contracts/admin/video-upload';
 import {
   AdminCourseMonthSchema,
@@ -42,9 +46,11 @@ import {
 } from '@ayman/contracts/admin/content-months';
 import { formatCopy } from '@ayman/contracts/format';
 import {
+  ResourceVideoUploadSessionSchema,
   VideoUploadResumedSchema,
   VideoUploadSessionSchema,
   VideoUploadStatusSchema,
+  type ResourceVideoUploadSession,
   type VideoUploadResumed,
   type VideoUploadSession,
   type VideoUploadStatus,
@@ -221,53 +227,75 @@ function invalidateCourse(courseId: string): void {
 
 export async function createCourseAction(formData: FormData): Promise<void> {
   const emphasis = readEmphasis(formData);
-  const parsed = CourseCreateSchema.parse({
-    slug: formData.get('slug'),
-    title: formData.get('title'),
-    subtitle: readOptionalText(formData, 'subtitle'),
-    description: readOptionalText(formData, 'description'),
-    systemId: formData.get('systemId'),
-    year: Number(formData.get('year')),
-    trackId: readTrackId(formData),
-    subjectId: formData.get('subjectId'),
-    emphasis,
-    // Cleared with the badge: the CHECK forbids a note without one, and the
-    // form already blanks the input, so this only guards a hand-built POST.
-    emphasisNote: emphasis === null ? null : readOptionalText(formData, 'emphasisNote'),
-    // Independent of `emphasis` — unlike `emphasisNote` there is no badge to
-    // clear it alongside.
-    comingSoonNote: readOptionalText(formData, 'comingSoonNote'),
-    // «ميعاد المحاضرة». `readOptionalText` is what makes a cleared input mean
-    // «مفيش ميعاد معلن»: it turns `''` into `null`, and `null` is the only
-    // value that removes the line from the student's band. Sending `''` would
-    // be a 400 — the schema trims and refuses an empty string.
-    scheduleNote: readOptionalText(formData, 'scheduleNote'),
-    whatsappGroupUrl: readOptionalText(formData, 'whatsappGroupUrl'),
-    contentComplete: readContentComplete(formData),
-    watermarkPhone: readWatermarkPhone(formData),
-    watermarkName: readWatermarkName(formData),
-    coverKey: readOptionalText(formData, 'coverKey'),
-    requiresGrant: readRequiresGrant(formData),
-    monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
-    /*
-     * NO `quarterlyPriceCents`, here or in the update below.
-     *
-     * «٣ شهور» is off the shelf: the field is gone from `course-form.tsx`, and
-     * `CourseService.assertQuarterlyRetired` answers 400 to any non-null
-     * value — so sending one is a save the instructor cannot act on.
-     *
-     * ABSENT rather than an explicit `null`, which is the difference that
-     * matters. On create the schema's own `.default(null)` fills it. On update
-     * `CourseUpdateSchema` is built with `partialWithoutDefaults`, so an
-     * absent key leaves the column exactly where it is — and a price a past
-     * subscription was sold at stays readable to the finance screens instead
-     * of being wiped by the next rename of the course.
-     */
-    yearlyPriceCents: readOptionalPriceCents(formData, 'yearlyPriceCents'),
-    bookTitle: readOptionalText(formData, 'bookTitle'),
-    bookPriceCents: readOptionalPriceCents(formData, 'bookPriceCents'),
-    ...readStream(formData),
-  });
+  const rawSlug = String(formData.get('slug') ?? '');
+  /*
+   * ⚠️ The same uncaught-throw shape the 409/400 fix below already closed
+   * (digest 2364962632), one step earlier: `CourseCreateSchema.parse` itself
+   * can reject — most reachably `subjectId` on a combo whose dropdown was
+   * empty (year 1, or any ثانوية عامة track, before `getTaxonomy()` exposed
+   * plain offerings — see `taxonomy.service.ts`). The form never renders a
+   * `subjectId` field at all when that happens, so `formData.get('subjectId')`
+   * is `null` and `.uuid()` throws a `ZodError` HERE, before any network call
+   * — which the `try` below never covered, since it only wraps `apiSend`.
+   * Same redirect, same `offeringMissing` message: from the instructor's
+   * side, "no subject was ever offered to pick" and "the subject doesn't
+   * exist on the server" are the identical problem.
+   */
+  let parsed: z.infer<typeof CourseCreateSchema>;
+  try {
+    parsed = CourseCreateSchema.parse({
+      slug: formData.get('slug'),
+      title: formData.get('title'),
+      subtitle: readOptionalText(formData, 'subtitle'),
+      description: readOptionalText(formData, 'description'),
+      systemId: formData.get('systemId'),
+      year: Number(formData.get('year')),
+      trackId: readTrackId(formData),
+      subjectId: formData.get('subjectId'),
+      emphasis,
+      // Cleared with the badge: the CHECK forbids a note without one, and the
+      // form already blanks the input, so this only guards a hand-built POST.
+      emphasisNote: emphasis === null ? null : readOptionalText(formData, 'emphasisNote'),
+      // Independent of `emphasis` — unlike `emphasisNote` there is no badge to
+      // clear it alongside.
+      comingSoonNote: readOptionalText(formData, 'comingSoonNote'),
+      // «ميعاد المحاضرة». `readOptionalText` is what makes a cleared input mean
+      // «مفيش ميعاد معلن»: it turns `''` into `null`, and `null` is the only
+      // value that removes the line from the student's band. Sending `''` would
+      // be a 400 — the schema trims and refuses an empty string.
+      scheduleNote: readOptionalText(formData, 'scheduleNote'),
+      whatsappGroupUrl: readOptionalText(formData, 'whatsappGroupUrl'),
+      contentComplete: readContentComplete(formData),
+      watermarkPhone: readWatermarkPhone(formData),
+      watermarkName: readWatermarkName(formData),
+      coverKey: readOptionalText(formData, 'coverKey'),
+      requiresGrant: readRequiresGrant(formData),
+      monthlyPriceCents: readOptionalPriceCents(formData, 'monthlyPriceCents'),
+      /*
+       * NO `quarterlyPriceCents`, here or in the update below.
+       *
+       * «٣ شهور» is off the shelf: the field is gone from `course-form.tsx`, and
+       * `CourseService.assertQuarterlyRetired` answers 400 to any non-null
+       * value — so sending one is a save the instructor cannot act on.
+       *
+       * ABSENT rather than an explicit `null`, which is the difference that
+       * matters. On create the schema's own `.default(null)` fills it. On update
+       * `CourseUpdateSchema` is built with `partialWithoutDefaults`, so an
+       * absent key leaves the column exactly where it is — and a price a past
+       * subscription was sold at stays readable to the finance screens instead
+       * of being wiped by the next rename of the course.
+       */
+      yearlyPriceCents: readOptionalPriceCents(formData, 'yearlyPriceCents'),
+      bookTitle: readOptionalText(formData, 'bookTitle'),
+      bookPriceCents: readOptionalPriceCents(formData, 'bookPriceCents'),
+      ...readStream(formData),
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      redirect(`/admin/courses/new?formError=offeringMissing&slug=${encodeURIComponent(rawSlug)}`);
+    }
+    throw error;
+  }
 
   /*
    * `updateCourseAction` maps this exact pair — a 409 is always the slug, a
@@ -1232,7 +1260,13 @@ export async function probeVideoDurationAction(
 
 export async function startVideoUploadAction(
   lessonId: string,
-  input: { fileName: string; sizeBytes: number; contentType: string; keepPrevious?: boolean },
+  input: {
+    fileName: string;
+    sizeBytes: number;
+    contentType: string;
+    keepPrevious?: boolean;
+    encrypt?: boolean;
+  },
 ): Promise<{ ok: true; session: VideoUploadSession } | { ok: false; message: string }> {
   try {
     const session = await apiSend(
@@ -1263,7 +1297,8 @@ export async function startVideoUploadAction(
 export async function videoPreviewUrlAction(externalId: string): Promise<string | null> {
   const origin = (process.env.NEXT_PUBLIC_VIDEO_ORIGIN ?? '').replace(/\/+$/, '');
   if (origin === '' || !/^[0-9a-f]{32}$/.test(externalId)) return null;
-  return `${origin}/v/${externalId}/master.m3u8`;
+  // Same URL the student's player gets, so the preview shows the same ladder.
+  return `${origin}/v/${externalId}/master.m3u8?l=${MIRROR_LADDER_VERSION}`;
 }
 
 /**
@@ -1544,6 +1579,10 @@ const ResourceRowSchema = z.object({ id: z.uuid() });
  * Mirrors `LessonResourceInputSchema`'s INPUT shape (a video carries `url`,
  * not `videoExternalId`). The API's Zod transform is what turns it into
  * columns, so nothing here reconstructs or parses a URL.
+ *
+ * A video here is a YouTube link only. An UPLOADED one never comes through
+ * this action: it opens its own row with `startResourceVideoUploadAction`
+ * below, before the first byte moves.
  */
 export type AddResourceInput =
   | {
@@ -1644,6 +1683,111 @@ export async function reorderResourcesAction(
   } catch (error) {
     return { ok: false, message: arabicError(error) };
   }
+}
+
+/* ── «رفع فيديو» جوّه مواد الدرس ──────────────────────────────────────────
+ *
+ * The lecture's upload actions, for a material — JSON only, the bytes go
+ * straight to the bucket (see `startVideoUploadAction`'s note on the 1 MB
+ * Server Action ceiling). `start` CREATES the material row, which is why the
+ * course is revalidated there and not only on completion: the row has to
+ * appear in the list, «بيترفع», the moment the admin presses «أضف مادة».
+ */
+
+export async function startResourceVideoUploadAction(
+  courseId: string,
+  lessonId: string,
+  input: { title: string; description: string | null; fileName: string; sizeBytes: number; contentType: string },
+): Promise<{ ok: true; session: ResourceVideoUploadSession } | { ok: false; message: string }> {
+  try {
+    const session = await apiSend(
+      'POST',
+      `/api/admin/lessons/${lessonId}/resources/video-upload`,
+      ResourceVideoUploadSessionSchema,
+      input,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true, session };
+  } catch (error) {
+    return { ok: false, message: arabicError(error, copy.admin.resource.addFailed) };
+  }
+}
+
+export async function resumeResourceVideoUploadAction(
+  resourceId: string,
+  input: { videoId: string; uploadId: string; sizeBytes: number },
+): Promise<{ ok: true; session: VideoUploadResumed } | { ok: false; message: string }> {
+  try {
+    const session = await apiSend(
+      'POST',
+      `/api/admin/resources/${resourceId}/video-upload/resume`,
+      VideoUploadResumedSchema,
+      input,
+    );
+    return { ok: true, session };
+  } catch (error) {
+    return { ok: false, message: arabicError(error) };
+  }
+}
+
+export async function completeResourceVideoUploadAction(
+  courseId: string,
+  resourceId: string,
+  input: { videoId: string; uploadId: string; parts: { partNumber: number; etag: string }[] },
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'POST',
+      `/api/admin/resources/${resourceId}/video-upload/complete`,
+      z.object({ status: z.string() }),
+      input,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: arabicError(error) };
+  }
+}
+
+export async function abortResourceVideoUploadAction(
+  courseId: string,
+  resourceId: string,
+  input: { videoId: string; uploadId: string },
+): Promise<ActionResult> {
+  try {
+    await apiSend(
+      'POST',
+      `/api/admin/resources/${resourceId}/video-upload/abort`,
+      z.object({ status: z.string() }),
+      input,
+    );
+    invalidateCourse(courseId);
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: arabicError(error) };
+  }
+}
+
+/** Polled while the encoder works — `null` on any failure, like `videoUploadStatusAction`. */
+export async function resourceVideoStatusAction(resourceId: string): Promise<VideoUploadStatus | null> {
+  try {
+    return await apiGetAuthed(`/api/admin/resources/${resourceId}/video-upload/status`, VideoUploadStatusSchema);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The encode finished while the panel was open: the list was rendered from a
+ * `pending` row, and only a fresh render shows «جاهز». Revalidating is all
+ * this does — the row itself was already written by the worker.
+ */
+export async function refreshCourseAction(courseId: string): Promise<void> {
+  invalidateCourse(courseId);
+  revalidatePath(`/admin/courses/${courseId}`);
 }
 
 /**

@@ -111,6 +111,7 @@ const admin = {
      */
     honorBoard: 'لوحة الشرف',
     games: 'أسئلة الألعاب',
+    questionBooks: 'أسئلة كتب خارجية',
     // ── قسم التسويق — واتساب برة المنصة، لأول مرة. غير من «رسايلي للطلبة»
     // (outreach) اللي بتتبعت جوه المنصة نفسها لكل طالب بمناسبة حصلت له.
     marketing: 'التسويق',
@@ -843,10 +844,16 @@ const admin = {
     /**
      * Names the two things an instructor actually wants to know before
      * committing an hour of uplink: what it will take, and that it does not
-     * have to be perfect. No mention of codecs — the encoder handles them.
+     * have to be perfect.
+     *
+     * The second sentence is the one place codecs are named (2026-10-04): a
+     * file that meets it is published in seconds with no encode at all —
+     * `canPassThrough` in the API, whose limits these words must match
+     * (H.264, ≤1080p, `PASSTHROUGH_MAX_KBPS` ≈ 2 GB an hour). Anything else
+     * still works; it just waits for the server.
      */
     videoUploadHint:
-      'أي فيديو من الكاميرا أو الموبايل. إحنا بنجهّزه لكل الجودات لوحدنا — مش محتاج تظبط حاجة.',
+      'أي فيديو من الكاميرا أو الموبايل بيشتغل. ولو عايزه يتنشر في ثواني من غير تجهيز: صدّره MP4 بـ H.264 (مش H.265/HEVC)، 1080 أو أقل، وأقل من ٢ جيجا للساعة.',
     videoUploadTooBig: 'الملف أكبر من ٨ جيجا — لازم يتقسّم أو يتضغط الأول',
     videoUploadWrongType: 'ده مش ملف فيديو',
     videoUploading: 'بيترفع…',
@@ -893,6 +900,13 @@ const admin = {
     videoReplaceKeepTitle: 'الفيديو اللي عليها دلوقتي:',
     videoKeepOld: 'احتفظ بيه في «الفيديوهات» — أقدر أرجّعه بعدين',
     videoDeleteOld: 'امسحه خالص من السيرفر',
+    /**
+     * ثابت طول عمر الفيديو ده — اختيار بيتاخد مرة واحدة وقت الرفع، ومش
+     * قابل للتغيير بعدين من غير ما يترفع تاني من الأول.
+     */
+    videoEncryptTitle: 'حماية الفيديو من التنزيل',
+    videoEncryptOn: 'شفّره — محدش يقدر ينزّله (الافتراضي)',
+    videoEncryptOff: 'من غير تشفير',
     removeUploadedTitle: 'تشيل الفيديو ده من المحاضرة؟',
     removeUploadedBody:
       'المحاضرة هتفضل موجودة من غير فيديو. الفيديو نفسه تحب نعمل فيه إيه؟',
@@ -982,6 +996,8 @@ const admin = {
     previewPlay: 'تشغيل الفيديو',
     previewClose: 'قفل المعاينة',
     previewOnYouTube: 'افتحه على يوتيوب',
+    previewFailed: 'الفيديو واقف ومش بيشتغل — جرّب تاني.',
+    previewRetry: 'جرّب تاني',
     /** Wipes the `lesson_videos` row. The action existed with NO caller at all,
      *  so a wrong link could be replaced but never removed. */
     removeVideoDone: 'الفيديو اتشال',
@@ -1400,6 +1416,108 @@ const admin = {
     studentLast: 'آخر جولة {date}',
     studentAllStats: 'إحصائيات الألعاب',
   },
+  /**
+   * «قسم التحديات» — على صفحة كورس واحد في «أسئلة الألعاب». كل تحدّي = اسم +
+   * وحدات و/أو دروس، والطالب بيختار منهم (واحد أو أكتر) بدل «الكورس كله».
+   */
+  challenges: {
+    title: 'قسم التحديات',
+    lead: 'مواضيع بأسماء يختار منها الطلبة — «الوحدة الأولى»، «الدرس التالت بس». الأسئلة من دروس التحدّي كلها: كويزاتها (حتى لو الطالب لسه ماامتحنهاش)، وأسئلة الألعاب، والأسئلة المربوطة بالدرس من «لصق أسئلة». المتشغّل بس بيظهر للطلبة.',
+    foundation: 'الكورس التأسيسي مالوش تحديات — مابيظهرش في الألعاب ولا الساحة خالص.',
+    none: 'لسه مفيش تحديات في الكورس ده. أول تحدّي بيقلب صفحة الألعاب للكورس ده من «المنهج كله / وحدة / درس» للتحديات.',
+    add: 'تحدّي جديد',
+    edit: 'تعديل',
+    remove: 'مسح',
+    removeConfirm: 'مسح «{title}»؟ الأسئلة نفسها مش هتتمسح.',
+    up: 'لفوق',
+    down: 'لتحت',
+    active: 'متشغّل',
+    inactive: 'متوقف',
+    activeHint: 'الطلبة بيشوفوه',
+    inactiveHint: 'مستخبي عن الطلبة',
+    nameLabel: 'اسم التحدّي',
+    namePlaceholder: 'مثلًا: الوحدة الأولى',
+    scopeLabel: 'الوحدات والدروس',
+    scopeHint: 'وحدة كاملة بتجيب كل دروسها (وكويزاتها). أو دروس معيّنة بس.',
+    wholeUnit: 'الوحدة كلها',
+    lessonsOnly: 'دروس معيّنة',
+    pickedUnits: '{n} وحدة',
+    pickedLessons: '{n} درس',
+    readyTotal: '{n} سؤال جاهز',
+    readyStreams: 'عربي {general} · لغات {languages}',
+    lessonReady: '{n} سؤال',
+    missing: '{n} وحدة/درس مابقوش في الكورس — بيتشالوا مع أول حفظ',
+    enough: 'يكفي كل الألعاب',
+    shortFor: 'قليل على: {modes}',
+    modeMillionaire: 'المليون ({n})',
+    modeRace: 'السباق ({n})',
+    modeSurvival: 'البقاء ({n})',
+    modePractice: 'التدريب ({n})',
+    modeArena: 'الساحة ({n})',
+    save: 'حفظ التحدّي',
+    create: 'إضافة التحدّي',
+    cancel: 'إلغاء',
+    saving: 'بيتحفظ…',
+    saved: 'اتحفظ',
+    failed: 'ماتحفظش. نجرّب تاني.',
+    needScope: 'اختار وحدة أو درس واحد على الأقل',
+    needName: 'اكتب اسم للتحدّي',
+    howCount: 'العدّ هنا من غير طالب: أسئلة امتحان مفتوح لسه بتتحسب برّه. كل طالب بيشوف أسئلة نظامه بس (عربي/لغات)، وأسئلة امتحان الشهر بترجعله بعد ما يسلّمه.',
+  },
+  /** «أسئلة كتب خارجية» — `/admin/question-books`. شجرة كتاب ← وحدة ← درس،
+   *  بنفس شكل «أسئلة الألعاب» تمامًا. */
+  questionBooks: {
+    title: 'أسئلة كتب خارجية',
+    lead: 'قسّم أسئلة البنك على كتاب مرجعي — وحدة، وجوّاها درس، وأضف أسئلة على أي مستوى: الدرس، الوحدة كلها، أو الكتاب كله.',
+    empty: 'مفيش كتب لسه.',
+    addBook: 'كتاب جديد',
+    titlePlaceholder: 'اسم الكتاب',
+    add: 'ضيف',
+    adding: 'بتتضاف…',
+    failed: 'مقدرناش نضيف. نجرّب تاني.',
+    archived: 'متأرشف',
+    archive: 'أرشفة',
+    restore: 'رجّعه',
+    rename: 'غيّر الاسم',
+    ready: '{n} سؤال',
+    none: 'لسه مفيش أسئلة',
+    unitsCount: '{n} وحدة',
+    manage: 'الوحدات والدروس',
+    back: 'كل الكتب',
+    bookGeneral: 'أسئلة على الكتاب كله',
+    bookGeneralHint: 'بتدخل لما الطالب يختار «المنهج كله» — مالهاش وحدة ولا درس.',
+    addUnit: 'وحدة جديدة',
+    unitPlaceholder: 'اسم الوحدة',
+    addLesson: 'درس جديد',
+    lessonPlaceholder: 'اسم الدرس',
+    noUnits: 'لسه مفيش وحدات.',
+    noLessons: 'لسه مفيش دروس في الوحدة دي.',
+    newQuestion: 'سؤال جديد',
+    view: 'عرض وتعديل',
+    deleteCategory: 'مسح',
+    deleteConfirm: 'متأكد إنك عايز تمسح «{name}»؟ ده مش بيتراجع.',
+    deleteNotEmpty: 'فيه أسئلة أو دروس جوّاه — فضّيه الأول.',
+    deleteFailed: 'مقدرناش نمسحه. نجرّب تاني.',
+    renamePrompt: 'الاسم الجديد',
+    renameFailed: 'مقدرناش نغيّر الاسم. نجرّب تاني.',
+    /* ── «التحديات» — الكتاب بيغذّي كورس ─────────────────────────────── */
+    courseLabel: 'بيغذّي تحديات كورس',
+    courseNone: 'مش مربوط بكورس',
+    courseHint:
+      'دروس الكتاب بتتربط بمحاضرات الكورس بالترتيب: أول درس على أول محاضرة، وهكذا. محاضرة جديدة بتاخد أسئلة الدرس اللي بعده لوحدها. فيديوهات الحلول والمراجعة والامتحانات مش بتتعدّ.',
+    courseFailed: 'مقدرناش نربط الكورس. نجرّب تاني.',
+    /** على كل درس — `{title}` اسم المحاضرة اللي بياخد أسئلته. */
+    linkedTo: 'على: {title}',
+    notLinkedYet: 'لسه مفيش محاضرة ليه',
+    /* ── تقسيم الكتب على الصف والشعبة (من الكورس المربوط) ─────────────── */
+    /** `{year}` من `yearNames`، و`{system}` اسم النظام — «تانية بكالوريا». */
+    yearGroup: '{year} {system}',
+    yearNames: ['أولى', 'تانية', 'تالتة'],
+    streams: { general: 'عربي', languages: 'لغات', both: 'عربي ولغات' },
+    noCourseGroup: 'كتب مش مربوطة بكورس',
+    booksCount: '{n} كتاب',
+    newBookCourse: 'الصف والشعبة',
+  },
   honorBoard: {
     title: 'لوحة الشرف',
     lead: 'مين على اللوحة دلوقتي، ومين كان عليها قبل كده. تقدر تحط حد بإيدك بتاريخه ومركزه.',
@@ -1636,7 +1754,27 @@ const admin = {
      * note for why 95 is Cloudflare's number rather than ours.
      */
     fileHint: 'PDF أو PowerPoint أو Word أو Excel — ٩٥ ميجا كحد أقصى',
+    /**
+     * «رفع فيديو» — the lecture's own pipeline, so the lecture's own ceiling
+     * (`MAX_UPLOAD_VIDEO_BYTES`, 8 GB), not the 95 MB a single request can
+     * carry: the file goes up in parts, straight to the bucket.
+     */
+    videoFileHint: 'أي فيديو لحد ٨ جيجا — بيترفع على أجزاء، ولو النت قطع بيكمّل من مكانه',
+    /** After «أضف مادة» with a video: the row exists, the bytes are on their way. */
+    videoUploadStarted: 'المادة اتضافت والفيديو بيترفع — اللوحة دي ممكن تتقفل، الكارت اللي تحت بيكمّل الرفع.',
+    /** The four states an uploaded material can be in, on its row. */
+    videoStatusUploading: 'بيترفع',
+    videoStatusProcessing: 'بيتجهّز على السيرفر',
+    videoStatusReady: 'جاهز للطلبة',
+    videoStatusFailed: 'التجهيز وقع',
+    /** A material whose upload stopped in another tab — its own file picker resumes it. */
+    videoStatusInterrupted: 'الرفع وقف قبل ما يخلص — نفس الملف بيكمّله من مكانه',
+    videoResumePick: 'اختيار نفس الملف',
+    videoCancelUpload: 'إلغاء الرفع',
     fileDropHint: 'سحب الملف هنا، أو دوسة للاختيار',
+    /** التبويب فوق فيديو الدرس — رابط يوتيوب، أو رفع الفيديو نفسه على السيرفر. */
+    videoSourceYoutube: 'رابط يوتيوب',
+    videoSourceUpload: 'رفع فيديو',
     videoUrl: 'رابط يوتيوب',
     linkUrl: 'الرابط',
     linkUrlHint: 'لازم يبدأ بـ https',
@@ -1711,6 +1849,9 @@ const admin = {
     /** The heading over the live queues, which only render when non-zero. */
     waitingTitle: 'محتاج تصرّف',
     waitingNone: 'مفيش حاجة مستنياك دلوقتي.',
+    /** The `/admin/platforms` video-usage teaser — owner-only, link-wrapped tile. */
+    videoUsageTitle: 'استهلاك سيرفر الفيديوهات',
+    videoUsageLead: 'مساحة {{n}} مدرّس — {{stored}}. التفاصيل والفاتورة في منصات المدرّسين.',
     /** «كام واحد مشترك في كل كورس» — the per-course headcount strip. */
     coursesTitle: 'الطلبة في كل كورس',
     coursesLead: 'كام واحد داخل كل كورس، وكام اشتراك شغال.',
@@ -1767,6 +1908,7 @@ const admin = {
     '/admin/follow-up': 'مين وقف في نص الكورس، ومين دخل ومشترَكش.',
     '/admin/assistant': 'الأسئلة اللي الطلبة بيسألوها للمساعد.',
     '/admin/taxonomy': 'الأنظمة والصفوف والمسارات والمواد.',
+    '/admin/question-books': 'أسئلة مقسّمة على كتاب مرجعي — وحدة ودرس.',
     '/admin/marketing/campaigns': 'حملات واتساب للي لسه بره المنصة.',
     '/admin/home': 'أقسام الصفحة الرئيسية وترتيبها.',
     '/admin/navigation': 'روابط الهيدر والفوتر.',
@@ -2481,6 +2623,12 @@ const admin = {
        */
       searchFailed: 'مقدرناش ندوّر دلوقتي. نجرّب تاني.',
       empty: 'لسه مفيش حد في الفريق غيرك.',
+      /**
+       * ⚠️ مش «مفيش حد» — فشل في القراءة. `page.tsx` بيبلع أي خطأ في جلب
+       * الفريق (500، مهلة، أي حاجة) بدل ما يسيب الصفحة كلها تقع، شوف
+       * `staff-section.tsx`'s `loadFailed`.
+       */
+      loadFailed: 'مقدرناش نجيب الفريق دلوقتي. حدّث الصفحة.',
       reasonLabel: 'السبب',
       reasonPlaceholder: 'ليه بتضيفه؟',
       add: 'ضيفه للفريق',
@@ -2588,6 +2736,24 @@ const admin = {
        * بتمنعك. «مش متاح» كانت هتخلّيه يدوّر على الزرار في مكان تاني.
        */
       adminHasEverything: 'صاحب المنصة — معاه كل حاجة',
+      /**
+       * «إعادة تعيين كلمة السر» — نفس فكرة `students.setPassword*` بالظبط، بس
+       * على مساعد بدل طالب. الزرار ده نفسه بيبان لصاحب المنصة بس
+       * (`currentUserId === founderId`) — الحارس الحقيقي على السيرفر
+       * `setStaffPassword` نفسها، والزرار اللي هيظهر لمساعد تاني كان هيرجع
+       * «مقدرناش» كل مرة من غير ما يعرف ليه.
+       */
+      resetPasswordAction: 'إعادة تعيين كلمة السر',
+      resetPasswordDialogTitle: 'كلمة سر جديدة لـ{name}',
+      resetPasswordNewLabel: 'كلمة السر الجديدة',
+      resetPasswordConfirmLabel: 'تأكيد كلمة السر الجديدة',
+      resetPasswordConfirm: 'تعيين كلمة السر',
+      resetPasswordMismatch: 'كلمتا المرور مش متطابقتين',
+      resetPasswordSuccess: 'اتغيّرت كلمة السر، وخرج من كل جلسة كانت شغالة.',
+      resetPasswordFailed: 'مقدرناش نغيّر كلمة السر — نحاول تاني',
+      /** الحارس الحقيقي في `StudentsService.setStaffPassword` — نفس نص الرفض. */
+      resetPasswordNotFounder: 'إعادة تعيين كلمة سر الفريق لصاحب المنصة بس.',
+      resetPasswordNotStaff: 'الحساب ده مش حساب مساعد — مينفعش نغيّر كلمة سره من هنا.',
     },
     baselineTitle: 'معاه دايمًا',
     baselineHint: 'ده أساس الرول، مكتوب في الكود ومش بيتقفل من هنا.',
@@ -2921,6 +3087,8 @@ const admin = {
     /** A bare 403 from the permission guard — the admin-only door, pressed by someone else. */
     roleChangeAdminOnly: 'تغيير الدور ده للمسؤول بس. المساعد بيتضاف من شاشة «الفريق والصلاحيات».',
     roleChangeAdminTarget: 'ده حساب مسؤول، ودوره مش بيتغيّر من هنا.',
+    /** `refuseIfOutranked`'s founder guard — حتى لو المساعد ماسك كل الصلاحيات. */
+    roleChangeFounderTarget: 'ده حساب صاحب المنصة، ومش بيتغيّر ولا يتحظر ولا يتشال من هنا.',
     roleChangeOutranked: 'الحساب ده معاه صلاحيات إنت مش معاك، فمينفعش تغيّر دوره.',
     roleChangeBeyondYou: 'مينفعش تعيّن حد بصلاحيات أكتر من صلاحياتك.',
     /**
@@ -4294,6 +4462,8 @@ const admin = {
     filterPrinting: 'في المطبعة',
     filterShipped: 'اتشحنت',
     filterDelivered: 'وصلت',
+    /** الشحنات اللي رجعت من شركة الشحن ومتسلّمتش. */
+    filterReturned: 'مرتجع',
     filterRejected: 'مرفوضة',
     /** Not a status — a view. See `AdminBookOrderFilterSchema`. */
     filterDeleted: 'المحذوفة',
@@ -4363,6 +4533,7 @@ const admin = {
     statusPrinting: 'في المطبعة، لسه ماتشحنتش',
     statusShipped: 'اتشحنت',
     statusDelivered: 'وصلت للطالب',
+    statusReturned: 'رجعت من شركة الشحن',
     statusRejected: 'مرفوضة',
     /** Shown beside the name on a GUEST order — no account is linked, so
      *  there is nowhere for the name to link to. See `AdminBookOrderRow`'s
@@ -4372,10 +4543,27 @@ const admin = {
      *  holder's name shown elsewhere (often a parent's account). `{city}` —
      *  plain text, not a taxonomy value, distinct from `{governorate}`. */
     addressLine: '{name} — {governorate}، {city}، {street}',
+    /** The card's address — the name is already the card's title, so it is
+     *  not repeated here. */
+    addressPlace: '{governorate}، {city}، {street}',
     /** Appended only when the order has a building number — see the
      *  `BookOrder.addressBuilding` model doc for why it's optional. */
     addressLineBuilding: '، عمارة {building}',
     altPhoneLabel: 'موبايل تاني',
+    /*
+     * The tab-wide buttons at the top — «ابعت الكل» instead of selecting. They
+     * act on every order of the tab under the filters on screen (not just
+     * this page), and a held order is skipped like everywhere else. `{n}`
+     */
+    allToPrinter: 'ابعت الكل للمطبعة ({n})',
+    allToCourier: 'ابعت الكل لشركة الشحن ({n})',
+    allShip: 'اتشحن الكل ({n})',
+    allWorking: 'بيتبعت…',
+    allEmpty: 'مفيش طلبات في التبويب ده تتبعت',
+    /** The card's date — the day it was PAID (`bookOrderDate`). `{date}` */
+    paidOn: 'اتدفع {date}',
+    /** On a row that never paid, the only date it has. `{date}` */
+    startedOn: 'اتسجّل {date}',
     senderPhoneLabel: 'حوّل من',
     /*
      * ── التاريخ على الكارت: يوم الدفع، مش يوم ما الفورم اتملا ──────────
@@ -4477,6 +4665,65 @@ const admin = {
     bulkPrintConfirm: 'هتسجّل إن {count} طلب راحوا للمطبعة. مفيش أي رسايل هتتبعت للطلبة. تمام؟',
     /** `{count}` */
     bulkPrinted: 'راحوا للمطبعة {count}',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * «شركة الشحن» — «لما المطبعة تخلص ببعت الأوردرات لشركة الشحن». الزرار
+     * ده بيكتب الطلب في سيستمهم وبيسجّله «اتشحن» في نفس الضغطة، وده اللي
+     * بيبلّغ الطالب. «اتشحن» لوحده لسه موجود في «المزيد» للشحنة اللي راحت مع
+     * حد تاني.
+     * ════════════════════════════════════════════════════════════════════
+     */
+    sendToCourier: 'ابعت لشركة الشحن',
+    sendToCourierWorking: 'بيتبعت…',
+    sendToCourierConfirm: 'المطبعة خلّصت الطلب ده؟ هيتبعت لسيستم شركة الشحن ويتسجّل «اتشحن»، والطالب هيوصله إن كتابه اتشحن. تمام؟',
+    /** `{count}` */
+    bulkCourierConfirm: 'المطبعة خلّصت الـ{count} طلب دول؟ هيتبعتوا لسيستم شركة الشحن ويتسجّلوا «اتشحن»، وكل طالب هيوصله إن كتابه اتشحن. تمام؟',
+    /** `{count}` */
+    bulkCourierDone: 'اتبعتوا لشركة الشحن واتشحنوا {count}',
+    /** In «المزيد» on a printing row, where the main button is the courier. */
+    shipWithoutCourier: 'اتشحن من غير شركة الشحن',
+    /** The quiet chip on a card the courier has. */
+    courierSent: 'اتبعت لشركة الشحن',
+    /** The courier's own words for a refused push. `{error}` */
+    courierError: 'شركة الشحن رفضته: {error}',
+    courierLabel: 'شركة الشحن',
+    /** `{name}` — the number is rendered beside it, isolated LTR. */
+    courierAgent: 'المندوب: {name}',
+    courierTrail: 'تتبّع الشحنة',
+    courierTrailHide: 'اخفي التتبّع',
+    courierTrailEmpty: 'شركة الشحن لسه مابعتتش أي تحديث.',
+    courierTrailFailed: 'مقدرناش نجيب التتبّع',
+
+    /*
+     * «مرتجع» — الشحنة رجعت ومتسلّمتش. الطالب بيوصله إنها رجعت وإننا هنكلّمه،
+     * والطلب بيروح تبويب «مرتجع» لحد ما يتبعت تاني أو يتسلّم باليد.
+     */
+    markReturned: 'رجعت (مرتجع)',
+    returnDialogTitle: 'الشحنة رجعت؟',
+    returnDialogHint: 'الطلب هيروح تبويب «مرتجع»، والطالب هيوصله إن الشحنة رجعت وإننا هنتواصل. تقدر تبعته لشركة الشحن تاني من هناك.',
+    returnReasonLabel: 'السبب (اختياري)',
+    returnReasonPlaceholder: 'مثلًا: الرقم مقفول، العنوان ناقص، رفض الاستلام…',
+    returnSubmit: 'سجّل إنها رجعت',
+    returnSubmitting: 'بيتسجّل…',
+    returnFailed: 'مقدرناش نسجّلها',
+    returnReasonShown: 'سبب الرجوع',
+
+    /*
+     * ════════════════════════════════════════════════════════════════════
+     * الكارت بعد التنضيف: زرار واحد كبير هو الخطوة الجاية للطلب، وجنبه
+     * «تعديل» و«واتساب». الباقي (اللي بيحصل نادرًا أو بيمسح حاجة) في «المزيد».
+     * ════════════════════════════════════════════════════════════════════
+     */
+    moreActions: 'المزيد',
+    /** On a paid row — a copy handed over without a print run. */
+    shipSkipPrinter: 'اتشحن على طول (من غير مطبعة)',
+    /** On a paid/printing row — Ayman handed it over himself. */
+    deliverByHand: 'اتسلّم باليد',
+    /** The export/print tools, folded behind one button. */
+    toolsButton: 'تصدير وطباعة',
+    /** `{n}` — the number beside a tab name. */
+    tabCount: '{n}',
 
     /*
      * ════════════════════════════════════════════════════════════════════
@@ -4738,7 +4985,8 @@ const admin = {
       phone: 'الموبايل',
       altPhone: 'موبايل تاني',
       address: 'العنوان',
-      createdAt: 'تاريخ الطلب',
+      /** The day it was PAID — see `bookOrderDate`. */
+      orderDate: 'تاريخ الدفع',
       /** خانة فاضية الشغّال يعلّم فيها بالقلم لما يحطّ الطرد في الكرتونة —
        *  لستة من أربعين من غير علامة هي لستة بتتعاد من الأول. */
       tick: 'اتشحن',
@@ -5735,6 +5983,42 @@ const quizAdmin = {
     /** After «لصق أسئلة كتير» commits — the old toast reused the PREVIEW
      *  line («معاينة ٤٠ سؤال») for a question that had already been saved. */
     bulkAdded: 'اتضاف {n} سؤال للبنك',
+    /* ── «انشر المسودات» — a paste can land as drafts so generated wordings
+     * are read before any student gets them; these are the screen's ways to
+     * read them and let them out, one, the ticked ones, or a whole category. */
+    statusLabel: 'الحالة',
+    statusAll: 'الكل',
+    statusDraft: 'مسودات',
+    statusReady: 'جاهزة',
+    sortLabel: 'الترتيب',
+    sortRecent: 'الأحدث الأول',
+    /** Variants of one idea next to each other, to compare the wordings. */
+    sortGroup: 'الصيغ جنب بعض',
+    /** Beside a category in the panel — how many of its questions wait on «انشر». */
+    draftsPill: '{n} مسودة',
+    publishOne: 'انشر',
+    publishedOne: 'السؤال اتنشر',
+    publishSelected: 'انشر المحدد ({n})',
+    publishCategory: 'انشر كل مسودات التصنيف ده ({n})',
+    publishCategoryLead: '{n} سؤال في التصنيف ده لسه مسودة — الطلبة مش شايفينهم لحد ما يتنشروا.',
+    publishCategoryReview: 'راجعهم الأول',
+    publishTitle: 'نشر {n} مسودة',
+    publishTitleCategory: 'نشر كل مسودات «{name}»',
+    publishBody: 'كل سؤال بيتراجع زي ما بيتراجع لوحده، واللي فيه غلطة بيفضل مسودة ويظهر هنا. اللي يتنشر بيدخل الكويزات والألعاب والتحديات على طول، ومابيرجعش مسودة — أي تعديل بعد كده بيعمل نسخة جديدة.',
+    publishConfirm: 'انشر {n}',
+    publishing: 'بننشر…',
+    publishDone: 'اتنشر {n} سؤال',
+    publishNothing: 'مفيش مسودات تتنشر — يمكن اتنشروا من شاشة تانية.',
+    publishFailedTitle: '{n} سؤال مااتنشرش',
+    publishFailedHint: 'دول لسه مسودات — افتح كل واحد وصلّح اللي مكتوب جنبه.',
+    publishFix: 'افتح وصلّحه',
+    publishRequestFailed: 'النشر ماتمّش، ومفيش حاجة اتغيّرت في اللي ماوصلش — جرّب تاني.',
+    /** The question's `generalFeedbackHtml`, shown under its options. */
+    explanation: 'الشرح',
+    noExplanation: 'من غير شرح — الطالب مش هيلاقي حاجة بعد الإجابة الغلط.',
+    /** Before a variant group's key, on its tag and its heading. */
+    group: 'المجموعة',
+    groupCount: '{n} صيغة',
   },
   newQuestion: 'سؤال جديد',
   /**
@@ -5789,14 +6073,24 @@ const quizAdmin = {
   /** Ayman's own words for it — «لصق أسئلة كتير» — rather than «استيراد»,
    *  which reads like a file upload this is not. */
   bulkImport: 'لصق أسئلة كتير',
-  bulkImportHint: 'الصق الأسئلة، كل سؤال في فقرة، وحدد الإجابة بسطر ANSWER أو الإجابة',
+  bulkImportHint: 'الصق الأسئلة، كل سؤال في فقرة، وحدد الإجابة بسطر ANSWER أو الإجابة. اختياري تحت كل سؤال: EXPLANATION أو الشرح (بيظهر بعد الإجابة الغلط في الألعاب)، GROUP أو المجموعة (صيغ مختلفة لنفس الفكرة بنفس الاسم — الطالب مابياخدش منهم غير واحدة لحد ما البنك يخلص)، و LESSON أو الدرس (رقم درس، يربط السؤال بيه في التحديات).',
+  /** «جاهز / مسودة» على اللصق كله — المسودة مابتوصلش أي طالب لحد ما تتنشر من البنك. */
+  bulkImportStatus: 'الحالة',
+  bulkImportReady: 'جاهزة — تدخل على طول',
+  bulkImportDraft: 'مسودة — أراجعها الأول',
+  /** لما الديالوج مفتوح من صف درس — الأسئلة كلها بتتربط بيه. */
+  bulkImportLinked: 'الأسئلة هتتربط بالدرس ده في التحديات.',
   bulkImportExample:
     'سؤال ١: عاصمة مصر إيه؟\nA. القاهرة\nB. الإسكندرية\nC. أسوان\nANSWER: A\n\n' +
     'سؤال ٢: النيل بيجري من الجنوب للشمال\nTYPE: true\nA. صح\nB. خطأ\nANSWER: A\n\n' +
     // The ordering block has no ANSWER line on purpose — the items ARE the
     // answer, in the order they are written. Shown here because that is the
     // one thing about this type nobody guesses.
-    'سؤال ٣: رتّب من الأسرع للأبطأ\nالنوع: ترتيب\nA. CPU\nB. Cache\nC. RAM\nD. Storage',
+    'سؤال ٣: رتّب من الأسرع للأبطأ\nالنوع: ترتيب\nA. CPU\nB. Cache\nC. RAM\nD. Storage\n\n' +
+    // The three optional lines the challenges added. LESSON is a lesson id
+    // copied from the admin; the dialog opened from a lesson row fills it in
+    // for every block, so most pastes never write it.
+    'سؤال ٤: range(3) بتطلّع كام رقم؟\nA. 2\nB. 3\nC. 4\nANSWER: B\nEXPLANATION: 0 و1 و2 — تلات أرقام.\nGROUP: range-1',
   bulkImportPreview: 'معاينة {n} سؤال',
   bulkImportCommit: 'أضف الأسئلة للبنك',
   quizTitle: 'إعدادات الامتحان',
@@ -6435,6 +6729,7 @@ const marketing = {
     printing: 'كتابهم في المطبعة',
     shipped: 'اتشحن ليهم',
     delivered: 'وصلهم الكتاب',
+    returned: 'كتابهم رجع (مرتجع)',
     rejected: 'طلبهم اترفض',
   },
   audienceExtraPhones: 'أرقام تانية',

@@ -73,6 +73,9 @@ export function VideoUpload({
   const [dragging, setDragging] = useState(false);
   /** «احتفظ بيه / امسحه خالص» for the video a new upload replaces. Keep by default. */
   const [keepOld, setKeepOld] = useState(true);
+  /** AES-128-encrypt the mirrored copy — «مينفعش حد ينزّل الفيديو». On by
+   *  default, matching every lecture uploaded before this toggle existed. */
+  const [encrypt, setEncrypt] = useState(true);
   const saved: SavedUpload | null =
     hydrated && !startedOver && (current?.status === 'uploading' || entry?.phase === 'error')
       ? savedUpload(lessonId)
@@ -137,7 +140,7 @@ export function VideoUpload({
     const contentType = (UPLOAD_VIDEO_MIME as readonly string[]).includes(file.type) ? file.type : 'video/mp4';
     // A fresh upload's own failure must be resumable again.
     setStartedOver(false);
-    void startUpload(courseId, lessonId, file, contentType, keepOld);
+    void startUpload(courseId, lessonId, file, contentType, keepOld, encrypt);
   }
 
   const uploading = entry?.phase === 'uploading';
@@ -255,6 +258,25 @@ export function VideoUpload({
           <label className="flex items-center gap-2 py-1 text-[length:var(--fs-text-sm)] text-err">
             <input type="radio" name={`keep-${lessonId}`} checked={!keepOld} onChange={() => setKeepOld(false)} />
             {c.videoDeleteOld}
+          </label>
+        </fieldset>
+      ) : null}
+
+      {/*
+        Fixed for the mirror's whole life once this upload starts — not shown
+        while resuming an upload already in flight, since that choice was
+        already made and sent when the session opened.
+      */}
+      {!resumable ? (
+        <fieldset className="mb-3 rounded-md border border-line bg-surface-2 p-3">
+          <legend className="px-1 text-[length:var(--fs-text-xs)] font-semibold text-fg">{c.videoEncryptTitle}</legend>
+          <label className="flex items-center gap-2 py-1 text-[length:var(--fs-text-sm)] text-fg">
+            <input type="radio" name={`encrypt-${lessonId}`} checked={encrypt} onChange={() => setEncrypt(true)} />
+            {c.videoEncryptOn}
+          </label>
+          <label className="flex items-center gap-2 py-1 text-[length:var(--fs-text-sm)] text-fg-muted">
+            <input type="radio" name={`encrypt-${lessonId}`} checked={!encrypt} onChange={() => setEncrypt(false)} />
+            {c.videoEncryptOff}
           </label>
         </fieldset>
       ) : null}

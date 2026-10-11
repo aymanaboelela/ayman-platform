@@ -29,6 +29,8 @@ function build(options: {
   sources?: Record<string, number>;
   parked?: string[];
   kept?: string[];
+  /** Upload ids a lesson MATERIAL («رفع فيديو» in مواد الدرس) plays from. */
+  materials?: string[];
 }) {
   const rows = [...options.rows];
   const ladders = { ...(options.ladders ?? {}) };
@@ -39,7 +41,13 @@ function build(options: {
   const released: { id: string; keep: boolean }[] = [];
   const upserts: string[] = [];
   let lastUpsert: Record<string, unknown> | null = null;
+  const materials = [...(options.materials ?? [])];
   const prisma = {
+    lessonResource: {
+      findMany: async () => materials.map((videoExternalId) => ({ videoExternalId })),
+      count: async (args: { where: { videoExternalId: string } }) =>
+        materials.filter((id) => id === args.where.videoExternalId).length,
+    },
     archivedVideo: {
       findMany: async () =>
         kept.map((externalId) => ({
@@ -198,6 +206,20 @@ describe('VideoLibraryService.list', () => {
     expect(library.orphans.map((orphan) => orphan.videoId)).toEqual([UP('c'), UP('e')]);
     expect(library.totalBytes).toBe(1_500_000_000 + 300 + 5);
     expect(library.storageRead).toBe(true);
+  });
+
+  /*
+   * «رفع فيديو» in a lesson's materials lives under the same `v/<id>/` as a
+   * lecture, with no `lesson_videos` row. Without its own check every one of
+   * them read as a leftover — one click from gone, from a screen that cannot
+   * even say which lesson it belongs to.
+   */
+  it('never offers a lesson material\'s video as a leftover, and will not delete it from here', async () => {
+    const { service, log } = build({ rows: [], ladders: { [UP('9')]: 70, [UP('c')]: 300 }, materials: [UP('9')] });
+    const library = await service.list();
+    expect(library.orphans.map((orphan) => orphan.videoId)).toEqual([UP('c')]);
+    await expect(service.remove(UP('9'))).rejects.toBeInstanceOf(ConflictException);
+    expect(log).toEqual([]);
   });
 });
 

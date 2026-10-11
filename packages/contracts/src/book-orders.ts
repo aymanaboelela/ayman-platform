@@ -61,6 +61,9 @@ export const BookOrderStatusSchema = z.enum([
   'printing',
   'shipped',
   'delivered',
+  /** «مرتجع» — the courier brought it back undelivered. Paid, owed, and the
+   *  next step is a phone call and a second shipment. */
+  'returned',
   'rejected',
 ]);
 export type BookOrderStatus = z.infer<typeof BookOrderStatusSchema>;
@@ -226,6 +229,25 @@ const base = {
   /** Set when the admin confirmed the book ARRIVED — not when it was handed to
    *  the courier. `shippedAt` is what the platform did; this is what happened. */
   deliveredAt: z.iso.datetime().nullable(),
+  /** «مرتجع» — when the parcel came back undelivered. */
+  returnedAt: z.iso.datetime().nullable(),
+  /**
+   * Where the courier says the parcel is — `null` until their first update.
+   *
+   * The latest status only: the student's question is «فين الكتاب دلوقتي؟»,
+   * and the agent's name and number are what let them pick up the phone that
+   * is about to ring from a number they do not know.
+   */
+  courier: z
+    .object({
+      statusId: z.number().int(),
+      statusName: z.string(),
+      note: z.string().nullable(),
+      agentName: z.string().nullable(),
+      agentPhone: z.string().nullable(),
+      at: z.iso.datetime().nullable(),
+    })
+    .nullable(),
   rejectedAt: z.iso.datetime().nullable(),
   /**
    * Why it was turned down, in the admin's own words, and shown to the student.
@@ -237,6 +259,28 @@ const base = {
   rejectionReason: z.string().nullable(),
   createdAt: z.iso.datetime(),
 };
+
+/**
+ * THE date of a book order, everywhere it is written — the card, the packing
+ * sheet, the shipping card on the parcel, the spreadsheet, the student's own
+ * screen: the day it was PAID.
+ *
+ * «كتب العنوان وفضل ٢٠ يوم مدفعش، ويوم ما يدفع يتحط التاريخ» — the row is
+ * created when the address form is saved, and a student can sit on it for
+ * weeks before transferring. Printing `createdAt` put a three-week-old date on
+ * a parcel paid for yesterday, which reads as an order the desk sat on. Only
+ * an order that never paid falls back to the day it was started.
+ *
+ * ⚠️ Never print `createdAt` for an order directly. `book-order-date.test.ts`
+ * fails the build on it.
+ */
+export function bookOrderDate(order: {
+  paidAt: string | Date | null;
+  createdAt: string | Date;
+}): string {
+  const date = order.paidAt ?? order.createdAt;
+  return typeof date === 'string' ? date : date.toISOString();
+}
 
 /** A student's own order — never another student's. */
 export const BookOrderSchema = z.object(base);

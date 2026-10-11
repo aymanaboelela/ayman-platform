@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { copy } from '@ayman/contracts/copy/admin';
 import type { LessonResourceKind } from '@ayman/contracts/content';
 import { ALLOWED_DOCUMENT_EXT } from '@ayman/contracts/admin/media';
+import { MAX_UPLOAD_VIDEO_BYTES, UPLOAD_VIDEO_MIME, type VideoMirrorStatus } from '@ayman/contracts/video';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
@@ -21,11 +22,36 @@ import {
   type AddResourceInput,
 } from '@/app/(admin)/admin/courses/actions';
 import { uploadDocument, type UploadFailure, type UploadedDocument } from '@/lib/upload-client';
+import { formatBytes } from '@/lib/upload-format';
+import {
+  cancelResourceUpload,
+  startResourceUpload,
+  useResourceUploads,
+  type UploadEntry,
+} from '@/lib/video-upload-manager';
+import { useFeature } from './entitlements-context';
+import { ResourceVideoStatus } from './resource-video-status';
 import { SortableList, type SortableHandleProps } from './sortable-list';
 
 const c = copy.admin.resource;
 const IDLE: ActionResult = { ok: true };
-const ACCEPT = ALLOWED_DOCUMENT_EXT.map((ext) => `.${ext}`).join(',');
+const DOCUMENT_ACCEPT = ALLOWED_DOCUMENT_EXT.map((ext) => `.${ext}`).join(',');
+
+/**
+ * «يوتيوب» أو «رفع» — فرع تحت `kind === 'video'` بس. الاتنين بيوصلوا لنفس
+ * `kind`، بس من بابين مختلفين: الرابط من `addResourceAction`، والرفع من
+ * `startResourceUpload` اللي بيفتح الصف بنفسه ويمشي في pipeline فيديو
+ * المحاضرة (أجزاء، «كمّل الرفع»، HLS متشفّر). ومفيش ولا واحد منهم بيلمس فيديو
+ * المحاضرة الأساسي.
+ */
+type VideoSource = 'youtube' | 'upload';
+
+/** The browser's guess at the type; `ffprobe` on the server is what decides. */
+function videoRefusal(file: File): string | null {
+  if (file.size > MAX_UPLOAD_VIDEO_BYTES) return copy.admin.lesson.videoUploadTooBig;
+  if (!file.type.startsWith('video/')) return copy.admin.lesson.videoUploadWrongType;
+  return null;
+}
 
 /** The closed set of upload failures, in Arabic an instructor can act on. */
 function uploadReason(reason: UploadFailure): string {
@@ -45,6 +71,13 @@ export interface AdminResource {
   filename: string | null;
   linkUrl: string | null;
   videoExternalId: string | null;
+  /** «رفع فيديو» — `upload` and the encoder's state; absent on older payloads. */
+  videoProvider?: string | null;
+  mirrorStatus?: VideoMirrorStatus | null;
+  mirrorProgress?: number | null;
+  mirrorError?: string | null;
+  sourceName?: string | null;
+  durationSeconds?: number | null;
 }
 
 const KIND_LABEL: Record<LessonResourceKind, string> = {
@@ -72,6 +105,9 @@ function subtitleOf(resource: AdminResource): string | null {
    * a screen about lectures.
    */
   if (resource.linkUrl !== null) return resource.linkUrl;
+  // An uploaded video's id is 32 hex characters of nothing; its filename is
+  // what the instructor recognises.
+  if (resource.videoProvider === 'upload') return resource.sourceName ?? null;
   if (resource.videoExternalId !== null) return resource.videoExternalId;
   return null;
 }
@@ -95,11 +131,16 @@ function ActionError({ state }: { state: ActionResult }) {
  */
 function ResourceRow({
   courseId,
+  lessonId,
   resource,
+  upload,
   handleProps,
 }: {
   courseId: string;
+  lessonId: string;
   resource: AdminResource;
+  /** This tab's transfer for this material, if one is running. */
+  upload: UploadEntry | null;
   handleProps: SortableHandleProps;
 }) {
   const router = useRouter();
@@ -194,6 +235,18 @@ function ResourceRow({
             {subtitle}
           </span>
         )}
+        {resource.videoProvider === 'upload' ? (
+          <ResourceVideoStatus
+            courseId={courseId}
+            lessonId={lessonId}
+            resourceId={resource.id}
+            status={resource.mirrorStatus ?? null}
+            progress={resource.mirrorProgress ?? null}
+            error={resource.mirrorError ?? null}
+            durationSeconds={resource.durationSeconds ?? null}
+            entry={upload}
+          />
+        ) : null}
       </span>
 
       <span className="row-actions">
@@ -203,6 +256,14 @@ function ResourceRow({
         <span aria-hidden="true" className="row-actions__sep" />
         <form
           action={async () => {
+            // Mid-transfer, deleting is cancelling: stop sending the parts
+            // first, or the corner card would keep uploading into a row that
+            // is gone. The API's abort deletes the material too.
+            if (upload?.phase === 'uploading') {
+              await cancelResourceUpload(courseId, resource.id);
+              router.refresh();
+              return;
+            }
             const result = await removeResourceAction(courseId, resource.id);
             if (result.ok) router.refresh();
             else toast.error(result.message);
@@ -246,6 +307,19 @@ export function LessonResources({
   const [kind, setKind] = useState<LessonResourceKind>(() =>
     resources.some((resource) => resource.kind === 'presentation') ? 'document' : 'presentation',
   );
+  /** بس لما `kind === 'video'` — يوتيوب هو الافتراضي عشان الفورم يفضل نفس
+   *  شكله القديم لحد ما حد يختار «رفع» بنفسه. */
+  const [videoSource, setVideoSource] = useState<VideoSource>('youtube');
+  /*
+   * «رفع فيديو» بيكلّف نفس تكلفة رفع المحاضرة (R2 + إنكودينج)، فبيتبع نفس
+   * المفتاح `video.upload` على كل ستاك — والراوتات عليها نفس
+   * `@RequireFeature`. مقفول؟ يوتيوب بس، زي الأول.
+   */
+  const uploadOpen = useFeature('video.upload');
+  /** The picked video — sent only on «أضف مادة», which is what opens its row. */
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const router = useRouter();
+  const uploads = useResourceUploads(lessonId);
   const [uploaded, setUploaded] = useState<UploadedDocument | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   /*
@@ -277,6 +351,7 @@ export function LessonResources({
   // The database enforces this with a partial unique index; disabling the
   // option here only means the admin learns the rule before a 500 tells them.
   const hasPresentation = resources.some((resource) => resource.kind === 'presentation');
+  const isUploadedVideo = kind === 'video' && videoSource === 'upload';
   const isFileKind = kind === 'presentation' || kind === 'document';
 
   const [state, formAction, pending] = useActionState<ActionResult, FormData>(
@@ -284,6 +359,33 @@ export function LessonResources({
       const title = String(formData.get('title') ?? '');
       const rawDescription = String(formData.get('description') ?? '');
       const description = rawDescription.length > 0 ? rawDescription : null;
+
+      if (isUploadedVideo) {
+        if (videoFile === null) return { ok: false, message: c.file };
+        const contentType = (UPLOAD_VIDEO_MIME as readonly string[]).includes(videoFile.type)
+          ? videoFile.type
+          : 'video/mp4';
+        /*
+         * Resolves once the ROW exists, not when the upload ends — the bytes
+         * keep going from the corner card. That is the whole point: nothing
+         * is left to save afterwards, so the admin can close this and move on.
+         */
+        const started = await startResourceUpload(courseId, lessonId, videoFile, contentType, {
+          title,
+          description,
+        });
+        if (!started.ok) {
+          const message = started.message.length > 0 ? started.message : c.addFailed;
+          toast.error(message);
+          return { ok: false, message };
+        }
+        setVideoFile(null);
+        setFormKey((key) => key + 1);
+        setAdding(false);
+        toast.success(c.videoUploadStarted);
+        router.refresh();
+        return { ok: true };
+      }
 
       let input: AddResourceInput;
       if (kind === 'presentation' || kind === 'document') {
@@ -323,6 +425,24 @@ export function LessonResources({
     },
     IDLE,
   );
+
+  /** A video is only PICKED here; «أضف مادة» is what starts sending it. */
+  function pickVideo(file: File) {
+    const refusal = videoRefusal(file);
+    if (refusal !== null) {
+      setVideoFile(null);
+      setUploadError(refusal);
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
+    setUploadError(null);
+    setVideoFile(file);
+  }
+
+  function onFile(file: File) {
+    if (isUploadedVideo) pickVideo(file);
+    else void upload(file);
+  }
 
   async function upload(file: File) {
     setProgress(0);
@@ -368,7 +488,9 @@ export function LessonResources({
             renderItem={(resource, handleProps) => (
               <ResourceRow
                 courseId={courseId}
+                lessonId={lessonId}
                 resource={resource}
+                upload={uploads.find((entry) => entry.resourceId === resource.id) ?? null}
                 handleProps={handleProps}
               />
             )}
@@ -420,7 +542,9 @@ export function LessonResources({
               value={kind}
               onChange={(event) => {
                 setKind(event.target.value as LessonResourceKind);
+                setVideoSource('youtube');
                 setUploaded(null);
+                setVideoFile(null);
                 // The error goes with the file it was about. Switching to
                 // «رابط» while «الملف كبير أوي» is still on screen reads as a
                 // complaint about the link field.
@@ -446,7 +570,29 @@ export function LessonResources({
           <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.onePresentationOnly}</p>
         ) : null}
 
-        {isFileKind ? (
+        {kind === 'video' && uploadOpen ? (
+          <div className="flex gap-1" role="radiogroup" aria-label={c.kindVideo}>
+            {(['youtube', 'upload'] as const).map((source) => (
+              <button
+                key={source}
+                type="button"
+                role="radio"
+                aria-checked={videoSource === source}
+                className={cn('chip', videoSource === source ? 'chip--solid' : 'chip--quiet')}
+                onClick={() => {
+                  setVideoSource(source);
+                  setUploaded(null);
+                  setVideoFile(null);
+                  setUploadError(null);
+                }}
+              >
+                {source === 'youtube' ? c.videoSourceYoutube : c.videoSourceUpload}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {isFileKind || isUploadedVideo ? (
           <div
             // Same drop affordance as the image field — «أقدر أعمل drag and
             // drop عادي». `onDragOver` MUST preventDefault or the browser
@@ -461,7 +607,7 @@ export function LessonResources({
               event.preventDefault();
               setDragDepth(0);
               const file = event.dataTransfer.files?.[0];
-              if (file) void upload(file);
+              if (file) onFile(file);
             }}
             className={cn(
               'rounded-md border border-dashed border-line p-2 transition-colors duration-[160ms]',
@@ -477,14 +623,14 @@ export function LessonResources({
               ref={fileRef}
               id={`res-file-${lessonId}`}
               type="file"
-              accept={ACCEPT}
+              accept={isUploadedVideo ? 'video/*' : DOCUMENT_ACCEPT}
               className={cn(
                 'block w-full rounded-sm border border-line bg-surface-2 px-3 py-2',
                 'text-[length:var(--fs-text-sm)] text-fg',
               )}
               onChange={(event) => {
                 const file = event.target.files?.[0];
-                if (file) void upload(file);
+                if (file) onFile(file);
               }}
             />
 
@@ -511,13 +657,17 @@ export function LessonResources({
               <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-muted">
                 {uploading
                   ? `${c.uploading} ${Math.round(progress * 100)}%`
-                  : (uploaded?.filename ?? `${c.fileDropHint} · ${c.fileHint}`)}
+                  : isUploadedVideo
+                    ? videoFile !== null
+                      ? `${videoFile.name} · ${formatBytes(videoFile.size)}`
+                      : `${c.fileDropHint} · ${c.videoFileHint}`
+                    : (uploaded?.filename ?? `${c.fileDropHint} · ${c.fileHint}`)}
               </p>
             )}
           </div>
         ) : null}
 
-        {kind === 'video' ? (
+        {kind === 'video' && videoSource === 'youtube' ? (
           <div>
             <Label htmlFor={`res-url-${lessonId}`}>{c.videoUrl}</Label>
             <Input id={`res-url-${lessonId}`} name="url" required />
@@ -553,7 +703,7 @@ export function LessonResources({
           <Button
             type="submit"
             size="sm"
-            disabled={pending || uploading || (isFileKind && !uploaded)}
+            disabled={pending || uploading || (isFileKind && !uploaded) || (isUploadedVideo && videoFile === null)}
           >
             {c.add}
           </Button>
@@ -567,7 +717,7 @@ export function LessonResources({
           >
             {c.addCancel}
           </button>
-          {isFileKind && !uploaded && !uploading ? (
+          {(isFileKind && !uploaded && !uploading) || (isUploadedVideo && videoFile === null) ? (
             <span className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.needsFile}</span>
           ) : null}
         </div>

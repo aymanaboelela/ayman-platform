@@ -66,6 +66,25 @@ describe('createCourseAction — a slug already in use', () => {
     await expect(createCourseAction(formDataOf())).rejects.toThrow(/failed with 500/);
   });
 
+  /**
+   * One step earlier than the two cases above: no network call at all. A
+   * subject picker left empty (year 1, or any ثانوية عامة track, before
+   * `getTaxonomy()` exposed plain offerings) sends no `subjectId` field — the
+   * form never renders one — so `CourseCreateSchema.parse` itself rejects
+   * before `apiSend` is ever reached, which the first `try` never covered.
+   * Same redirect, same message: from here, "never offered" and "the server
+   * doesn't recognise it" are the same fixable mistake.
+   */
+  it('redirects the same way for a client-side validation failure — an empty subject picker, never reaching the server', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await expect(createCourseAction(formDataOf({ subjectId: '' }))).rejects.toThrow(
+      'REDIRECT:/admin/courses/new?formError=offeringMissing&slug=new-course',
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('never scaffolds a lecture or invalidates the catalog on a rejected create', async () => {
     const fetchSpy = vi.fn(async () => new Response('{}', { status: 409 }));
     vi.stubGlobal('fetch', fetchSpy);

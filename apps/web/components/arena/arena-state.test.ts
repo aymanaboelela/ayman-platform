@@ -63,7 +63,7 @@ describe('mergeView — the newest copy of the match wins', () => {
 
   it('ignores a late «queued» frame once the match has started', () => {
     const live = inMatch(match());
-    const late: ArenaView = { phase: 'queued', courseId: 'c', courseTitle: '', cohortLabel: '', since: 1 };
+    const late: ArenaView = { phase: 'queued', courseId: 'c', courseTitle: '', cohortLabel: '', since: 1, topicId: null, topicTitle: null, challengeId: null };
     expect(mergeView(live, late)).toBe(live);
   });
 });
@@ -77,8 +77,8 @@ describe('arenaReducer', () => {
   });
 
   it('goes back to «idle» — and so back into the queue — when the server says the seat was lost', () => {
-    const queued: ArenaView = { phase: 'queued', courseId: 'c1', courseTitle: '', cohortLabel: '', since: 1 };
-    let state = arenaReducer(initialState(queued, 0, 0), { type: 'start', courseId: 'c1', now: 0 });
+    const queued: ArenaView = { phase: 'queued', courseId: 'c1', courseTitle: '', cohortLabel: '', since: 1, topicId: null, topicTitle: null, challengeId: null };
+    let state = arenaReducer(initialState(queued, 0, 0), { type: 'start', intent: 'c1', now: 0 });
     state = arenaReducer(state, { type: 'beat', at: 10, now: 10, phase: 'idle' });
     expect(state.view.phase).toBe('idle');
     expect(state.want).toBe('c1');
@@ -88,7 +88,7 @@ describe('arenaReducer', () => {
   });
 
   it('goes searching the moment «يلا نبدأ» is pressed, before the server answers', () => {
-    const state = arenaReducer(initialState({ phase: 'idle' }, 0, 0), { type: 'start', courseId: 'c1', now: 100 });
+    const state = arenaReducer(initialState({ phase: 'idle' }, 0, 0), { type: 'start', intent: 'c1', now: 100 });
     expect(screenOf(state)).toBe('search');
     expect(state.want).toBe('c1');
   });
@@ -100,7 +100,7 @@ describe('arenaReducer', () => {
       0,
     );
     expect(screenOf(ended)).toBe('result');
-    const again = arenaReducer(ended, { type: 'start', courseId: 'c1', now: 1 });
+    const again = arenaReducer(ended, { type: 'start', intent: 'c1', now: 1 });
     expect(screenOf(again)).toBe('search');
   });
 
@@ -131,7 +131,7 @@ describe('arenaReducer', () => {
   });
 
   it('goes back to the lobby with a note when the shared bank was too small', () => {
-    let state = arenaReducer(initialState({ phase: 'idle' }, 0, 0), { type: 'start', courseId: 'c1', now: 0 });
+    let state = arenaReducer(initialState({ phase: 'idle' }, 0, 0), { type: 'start', intent: 'c1', now: 0 });
     state = arenaReducer(state, { type: 'frame', fx: 'no_questions', at: 0, now: 0, view: { phase: 'idle' } });
     expect(screenOf(state)).toBe('lobby');
     expect(state.error).toBe('no_questions');
@@ -141,7 +141,7 @@ describe('arenaReducer', () => {
 describe('screenOf', () => {
   it('maps every server phase to a screen', () => {
     expect(screenOf({ view: { phase: 'idle' }, want: null })).toBe('lobby');
-    expect(screenOf({ view: { phase: 'queued', courseId: 'c', courseTitle: '', cohortLabel: '', since: 0 }, want: 'c' })).toBe('search');
+    expect(screenOf({ view: { phase: 'queued', courseId: 'c', courseTitle: '', cohortLabel: '', since: 0, topicId: null, topicTitle: null, challengeId: null }, want: 'c' })).toBe('search');
     expect(screenOf({ view: inMatch(match({ stage: 'vs' })), want: null })).toBe('versus');
     expect(screenOf({ view: inMatch(match({ stage: 'reveal' })), want: null })).toBe('question');
   });

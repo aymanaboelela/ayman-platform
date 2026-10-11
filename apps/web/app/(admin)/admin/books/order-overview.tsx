@@ -1,8 +1,5 @@
 import { copy } from '@ayman/contracts/copy/admin';
-import { formatCopy } from '@ayman/contracts/format';
 import type { AdminBookOrderOverview } from '@ayman/contracts/admin/book-orders';
-import { bookOrderYearWord } from '@ayman/contracts/admin/book-orders';
-import { cn } from '@ayman/ui';
 
 const c = copy.admin.books;
 
@@ -37,105 +34,43 @@ const c = copy.admin.books;
  * read as answers to «كام عربي؟» / «كام لغات؟», never as a split of it.
  */
 
-function Stat({
-  value,
-  label,
-  tone,
-  wide = false,
-}: {
-  value: number;
-  label: string;
-  /** A CSS colour for the number and the card's tint, or nothing for the
-   *  neutral cards. Only the two that are ACTED on wear one — a row of six
-   *  coloured tiles is a row of six things shouting, which is the same as
-   *  none. */
-  tone?: string;
-  wide?: boolean;
-}) {
+function Stat({ value, label, tone }: { value: number; label: string; tone?: string }) {
   return (
-    <div
-      className={cn(
-        'rounded-xl border border-line bg-surface-2 px-4 py-3',
-        wide ? 'col-span-2 sm:col-span-1' : '',
-      )}
-      style={
-        tone
-          ? {
-              borderColor: `color-mix(in oklch, ${tone}, transparent 70%)`,
-              background: `color-mix(in oklch, ${tone}, transparent 94%)`,
-            }
-          : undefined
-      }
-    >
-      <p
-        className="text-[length:var(--fs-title-2)] font-semibold leading-none tabular-nums text-fg"
+    <span className="inline-flex items-baseline gap-1.5">
+      <span
+        className="text-[length:var(--fs-title-4)] font-semibold leading-none tabular-nums text-fg"
         style={tone ? { color: tone } : undefined}
       >
         {value.toLocaleString('ar-EG-u-nu-latn')}
-      </p>
-      <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{label}</p>
-    </div>
+      </span>
+      <span className="text-[length:var(--fs-text-xs)] text-fg-muted">{label}</span>
+    </span>
   );
 }
 
+/**
+ * The tab's numbers, as ONE line.
+ *
+ * It was six large tiles, then a box per صف, then a sentence — a full screen
+ * before the first order, on the page whose job is the orders. The per-صف
+ * numbers already head each صف's own column below, so here they would be said
+ * twice; what is left is the six totals, read left to right in one glance.
+ * «كام نسخة» stays the coloured one: it is what a print run is decided on.
+ */
 export function BookOrderOverview({ overview }: { overview: AdminBookOrderOverview }) {
   return (
     <section
       aria-label={c.overviewTitle}
-      className="mt-4 rounded-2xl border border-line bg-surface-1 p-3 sm:p-4"
+      title={c.overviewScope}
+      className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-full border border-line bg-surface-2 px-5 py-2.5"
     >
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat value={overview.orders} label={c.overviewOrders} />
-        <Stat value={overview.students} label={c.overviewStudents} />
-        <Stat value={overview.books} label={c.overviewBooks} />
-        {/* «كام نسخة» is what to PACK and is the one number a print run is
-            decided on, so it is the one that is coloured. */}
-        <Stat value={overview.copies} label={c.overviewCopies} tone="var(--a-11)" />
-        <Stat value={overview.streams.general} label={c.overviewGeneral} />
-        <Stat value={overview.streams.languages} label={c.overviewLanguages} />
-      </div>
-
-      {/* ── The same totals, per صف ──────────────────────────────────────
-          Read side by side rather than stacked: «كام سنة أولى وكام سنة تانية»
-          is a COMPARISON, and two rows of numbers a scroll apart is not one. */}
-      {overview.years.length > 0 ? (
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          {overview.years.map((year) => (
-            <div
-              key={year.year ?? 'none'}
-              className="rounded-xl border border-line-subtle bg-surface-2 px-4 py-3"
-            >
-              <p className="text-[length:var(--fs-text-sm)] font-semibold text-fg">
-                {year.year === null
-                  ? c.yearSectionNone
-                  : formatCopy(c.yearSectionTitle, { year: bookOrderYearWord(year.year) ?? '' })}
-              </p>
-              <p className="mt-1 text-[length:var(--fs-text-sm)] tabular-nums text-fg-muted">
-                {formatCopy(c.yearSectionCount, {
-                  orders: year.orders,
-                  books: year.books,
-                  copies: year.copies,
-                })}
-              </p>
-              <p className="mt-0.5 text-[length:var(--fs-text-xs)] tabular-nums text-fg-faint">
-                {formatCopy(c.yearSectionStreams, {
-                  general: year.streams.general,
-                  languages: year.streams.languages,
-                })}
-              </p>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      <p className="mt-2 text-[length:var(--fs-text-xs)] text-fg-faint">
-        {c.overviewScope}
-        {/* Said once, here, and never worked around by silently making the
-            buckets partition: an order holding a first-year book and a
-            second-year book really is one order in both, and that is the
-            answer «كام طلب فيه كتاب أولى» needs. */}
-        {overview.years.length > 1 ? ` — ${c.overviewYearsNote}` : ''}
-      </p>
+      <Stat value={overview.orders} label={c.overviewOrders} />
+      <Stat value={overview.students} label={c.overviewStudents} />
+      <Stat value={overview.books} label={c.overviewBooks} />
+      <Stat value={overview.copies} label={c.overviewCopies} tone="var(--a-11)" />
+      <span aria-hidden className="h-5 w-px bg-line" />
+      <Stat value={overview.streams.general} label={c.overviewGeneral} />
+      <Stat value={overview.streams.languages} label={c.overviewLanguages} />
     </section>
   );
 }

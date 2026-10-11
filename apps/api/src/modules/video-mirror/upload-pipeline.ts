@@ -2,7 +2,8 @@ import { execFile } from 'node:child_process';
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { promisify } from 'node:util';
-import { UPLOAD_CRF, ladderFor, type LadderRung } from '@ayman/contracts/video';
+import { MIRROR_MAX_PIXELS, UPLOAD_CRF, ladderFor, type LadderRung } from '@ayman/contracts/video';
+import { IS_AYMAN } from '../../common/tenant';
 import { DEFAULT_TOOLS, type MirrorResult, type MirrorTools } from './mirror-pipeline';
 
 const run = promisify(execFile);
@@ -51,10 +52,21 @@ export interface SourceProbe {
   readonly height: number;
   readonly durationSeconds: number;
   readonly hasAudio: boolean;
+  /** ffprobe's `codec_name` — `h264`, `hevc`… */
+  readonly videoCodec: string;
+  readonly pixelFormat: string | null;
+  /** `null` when there is no audio track. */
+  readonly audioCodec: string | null;
+  /** The whole file's rate, bit/s — `null` when the container does not say. */
+  readonly bitRate: number | null;
+  /** Carries a quarter- or half-turn tag that only a decoder applies. */
+  readonly rotated: boolean;
 }
 
 interface FfprobeStream {
   codec_type?: string;
+  codec_name?: string;
+  pix_fmt?: string;
   width?: number;
   height?: number;
   /** Present on phone recordings; ffmpeg applies it, so the DISPLAY size swaps. */
@@ -63,7 +75,7 @@ interface FfprobeStream {
 
 interface FfprobeOutput {
   streams?: FfprobeStream[];
-  format?: { duration?: string };
+  format?: { duration?: string; bit_rate?: string };
 }
 
 /**
@@ -95,12 +107,226 @@ export function readProbe(json: string): SourceProbe {
     throw new Error('مش قادرين نقرا مدة الفيديو — الملف يمكن يكون ناقص أو باظ');
   }
 
+  const audio = streams.find((stream) => stream.codec_type === 'audio');
+  const bitRate = Number.parseInt(parsed.format?.bit_rate ?? '', 10);
+
   return {
     width: quarterTurned ? video.height : video.width,
     height: quarterTurned ? video.width : video.height,
     durationSeconds: Math.round(duration),
-    hasAudio: streams.some((stream) => stream.codec_type === 'audio'),
+    hasAudio: audio !== undefined,
+    videoCodec: video.codec_name ?? '',
+    pixelFormat: video.pix_fmt ?? null,
+    audioCodec: audio === undefined ? null : (audio.codec_name ?? ''),
+    bitRate: Number.isFinite(bitRate) && bitRate > 0 ? bitRate : null,
+    rotated: rotation !== undefined && rotation % 360 !== 0,
   };
+}
+
+/**
+ * ── Publishing a file as it is ────────────────────────────────────────────
+ *
+ * «أنا مش عاوز معالجة، أنا اللي هرفعه HD» (the owner, 2026-10-04). An encode
+ * is hours of CPU on the VPS the three stacks share, and on 2026-10-04 that
+ * CPU is what took every site down. A teacher who exports the lecture right
+ * on their own machine has already done the expensive part.
+ *
+ * So a file that is ALREADY streamable is only cut into encrypted HLS
+ * segments, with `-c copy`: no decode, no encode — seconds of CPU for an hour
+ * of lecture, and the picture is byte-for-byte what the teacher exported.
+ *
+ * "Streamable" is narrow on purpose, because each condition is a way a copied
+ * file plays for the teacher and fails for a student:
+ *
+ *  - **H.264, 8-bit 4:2:0.** HEVC (what a phone or a "compress" preset often
+ *    writes) does not play in Chrome on most of the laptops and phones a
+ *    student owns, and 10-bit or 4:2:2 decodes to black on half of them. The
+ *    owner's own «مضغوطه» file on 2026-10-04 was HEVC — it is exactly the
+ *    file this check exists to catch.
+ *  - **AAC audio, or none.** What HLS players expect in a segment.
+ *  - **No rotation tag.** Only a decoder applies it; a copied stream would
+ *    play sideways.
+ *  - **At most 1080p worth of pixels, at most `PASSTHROUGH_MAX_KBPS`.** There
+ *    is only ONE rung — no 360p to fall back to on a weak connection — so the
+ *    one rung has to be light enough for a student's line and data bundle.
+ *
+ * Anything else is encoded as before, at 720 (`UPLOAD_LADDER`). Nothing is
+ * refused: a teacher who uploads the wrong file gets a slower lecture, not a
+ * broken one.
+ */
+export const PASSTHROUGH_MAX_KBPS = 5000;
+
+export function canPassThrough(probe: SourceProbe): boolean {
+  return (
+    probe.videoCodec === 'h264' &&
+    (probe.pixelFormat === 'yuv420p' || probe.pixelFormat === 'yuvj420p') &&
+    (probe.audioCodec === null || probe.audioCodec === 'aac') &&
+    !probe.rotated &&
+    probe.width * probe.height <= MIRROR_MAX_PIXELS &&
+    probe.bitRate !== null &&
+    probe.bitRate <= PASSTHROUGH_MAX_KBPS * 1000
+  );
+}
+
+/**
+ * The ffmpeg invocation that segments an already-streamable file WITHOUT
+ * re-encoding it — one variant, same layout as `transcodeArgs` writes
+ * (`master.m3u8` + `0/index.m3u8`), so everything downstream (upload, the
+ * bandwidth rewrite, the player) cannot tell the two apart.
+ *
+ * Segments are cut at the source's own keyframes, so they are only roughly
+ * `SEGMENT_SECONDS` long. That is fine for one rung: equal cuts matter only
+ * when a player has to switch between rungs mid-lecture.
+ */
+export function passthroughArgs(
+  source: string,
+  outDir: string,
+  hasAudio: boolean,
+  keyInfoFile: string | null = null,
+): string[] {
+  const encrypted = keyInfoFile !== null;
+  return [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-i',
+    source,
+    '-map',
+    '0:v:0',
+    ...(hasAudio ? ['-map', '0:a:0'] : []),
+    '-c',
+    'copy',
+    '-f',
+    'hls',
+    '-hls_time',
+    String(SEGMENT_SECONDS),
+    '-hls_playlist_type',
+    'vod',
+    '-hls_segment_type',
+    encrypted ? 'mpegts' : 'fmp4',
+    ...(encrypted ? ['-hls_key_info_file', keyInfoFile] : []),
+    '-hls_flags',
+    'independent_segments',
+    '-master_pl_name',
+    'master.m3u8',
+    '-var_stream_map',
+    hasAudio ? 'v:0,a:0' : 'v:0',
+    '-hls_segment_filename',
+    join(outDir, '%v', encrypted ? 'seg_%03d.ts' : 'seg_%03d.m4s'),
+    join(outDir, '%v', 'index.m3u8'),
+  ];
+}
+
+/**
+ * ── The rung a copied file lacks ──────────────────────────────────────────
+ *
+ * A file published as it is has ONE rung. A student whose line cannot carry
+ * it has nothing to fall to — the player buffers, and that is exactly the
+ * «الفيديو بيقطّع» of a 1080 copy on a weak connection (2026-10-06). So a
+ * copied lecture gets one extra, small rung beside it: 360p, encoded from the
+ * source. One rung at a third of the pixels of the cheapest encode on the old
+ * ladder, so it costs a fraction of one — the reason publishing as-is was
+ * worth having is untouched.
+ *
+ * ⚠️ It must be cut at EXACTLY the copied rung's segment boundaries. The copy
+ * is cut at the source's own keyframes, so its segments are 5.9–6.4 s, not 6;
+ * a 360 rung cut on a fixed 6 s grid would sit a fraction of a second off
+ * every boundary, and the player stalls visibly at each switch — the problem
+ * `transcodeArgs` forces keyframes to avoid. So the copy's playlist is read
+ * first and its boundaries are forced here.
+ */
+export const LOW_RUNG: LadderRung = { height: 360, maxKbps: 700, audioKbps: 64 };
+
+/** Cumulative cut times (seconds) between the segments of a media playlist; the start and the end are not cuts. */
+export function segmentBoundaries(playlist: string): number[] {
+  const { segments } = readMediaPlaylist(playlist);
+  const cuts: number[] = [];
+  let at = 0;
+  for (let i = 0; i < segments.length - 1; i += 1) {
+    at += segments[i]!.durationSeconds;
+    cuts.push(at);
+  }
+  return cuts;
+}
+
+/**
+ * The low rung's ffmpeg invocation: scaled, constant quality like the main
+ * ladder, keyframes ONLY at `boundaries`, and an `-hls_time` shorter than any
+ * gap between them — so the muxer cuts at every forced keyframe and nowhere
+ * else.
+ */
+export function lowRungArgs(
+  source: string,
+  outDir: string,
+  hasAudio: boolean,
+  boundaries: readonly number[],
+  threads: number,
+  keyInfoFile: string | null = null,
+): string[] {
+  const encrypted = keyInfoFile !== null;
+  return [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-i',
+    source,
+    '-map',
+    '0:v:0',
+    ...(hasAudio ? ['-map', '0:a:0'] : []),
+    '-vf',
+    `scale=-2:${LOW_RUNG.height}:flags=bicubic`,
+    '-c:v',
+    'libx264',
+    '-preset',
+    'medium',
+    '-profile:v',
+    'high',
+    '-pix_fmt',
+    'yuv420p',
+    '-crf',
+    String(UPLOAD_CRF),
+    '-maxrate',
+    `${LOW_RUNG.maxKbps}k`,
+    '-bufsize',
+    `${LOW_RUNG.maxKbps * 2}k`,
+    // A millisecond early: the keyframe lands on the first frame at or after
+    // the time, and a boundary that float-sums a hair too high would push it
+    // one frame late — a cut a frame off is still a cut off.
+    '-force_key_frames',
+    boundaries.map((t) => Math.max(0, t - 0.001).toFixed(3)).join(','),
+    // No keyframe but the forced ones.
+    '-sc_threshold',
+    '0',
+    '-g',
+    '100000',
+    ...(hasAudio
+      ? ['-c:a', 'aac', '-ac', '2', '-b:a', `${LOW_RUNG.audioKbps}k`]
+      : []),
+    '-threads',
+    String(threads),
+    '-f',
+    'hls',
+    '-hls_time',
+    '1',
+    '-hls_playlist_type',
+    'vod',
+    '-hls_segment_type',
+    encrypted ? 'mpegts' : 'fmp4',
+    ...(encrypted ? ['-hls_key_info_file', keyInfoFile] : []),
+    '-hls_flags',
+    'independent_segments',
+    '-hls_segment_filename',
+    join(outDir, encrypted ? 'seg_%03d.ts' : 'seg_%03d.m4s'),
+    join(outDir, 'index.m3u8'),
+  ];
+}
+
+/** `master` with the low rung listed after the copied one. */
+export function withLowRung(master: string, uri: string, width: number, height: number): string {
+  const base = master.endsWith('\n') ? master : `${master}\n`;
+  return `${base}#EXT-X-STREAM-INF:BANDWIDTH=${LOW_RUNG.maxKbps * 1000},RESOLUTION=${width}x${height}\n${uri}\n`;
 }
 
 /** Segment length. Matches the mirror's, so both ladders behave identically. */
@@ -470,9 +696,12 @@ export interface TranscodeResult extends MirrorResult {
 export interface TranscodeTools extends MirrorTools {
   readonly ffprobe: string;
   /**
-   * Encoder threads. `0` lets ffmpeg use every core, which on a shared VPS
-   * means the site gets slow for the length of a lecture. Configurable so a
-   * bigger machine can be told to go faster.
+   * Encoder threads. `0` lets ffmpeg use every core — which is what this
+   * used to default to, and the reference VPS (4 cores, three tenant stacks)
+   * measured 130-170% CPU from ONE encode alone (2026-10-04). `nice -n 19`
+   * below only lowers SCHEDULING priority; it does not cap how many cores a
+   * process may touch, so a single lecture could still starve every other
+   * container on the box for the length of the encode.
    */
   readonly threads: number;
   /**
@@ -481,6 +710,13 @@ export interface TranscodeTools extends MirrorTools {
    * yields the instant a student's request needs the CPU.
    */
   readonly renice: boolean;
+  /**
+   * Add the 360 rung to a file published as it is (see `LOW_RUNG`). Ayman's
+   * stack only: the owner asked for it for his own lectures (2026-10-06), and
+   * on the other two stacks it would be encode CPU nobody chose to spend on
+   * the shared VPS.
+   */
+  readonly lowRung: boolean;
 }
 
 export const DEFAULT_TRANSCODE_TOOLS: TranscodeTools = {
@@ -494,8 +730,12 @@ export const DEFAULT_TRANSCODE_TOOLS: TranscodeTools = {
   // kill a HUNG ffmpeg, not a slow one — failing a lecture at 90% is worse
   // than a late one.
   timeoutMs: 12 * 60 * 60_000,
-  threads: 0,
+  // Half the reference VPS's 4 cores — leaves the other two for postgres,
+  // redis, traefik and whichever OTHER tenant stack is sharing the same
+  // physical box, so one lecture encoding never fully starves the site.
+  threads: 2,
   renice: process.platform === 'linux',
+  lowRung: IS_AYMAN,
 };
 
 /**
@@ -540,15 +780,18 @@ export async function transcodeUpload(
   );
 
   const probe = readProbe(probed.stdout);
-  const rungs = ladderFor(probe.height);
+  const passThrough = canPassThrough(probe);
+  const rungs = passThrough ? [] : ladderFor(probe.height);
 
   const outDir = join(workDir, 'hls');
   // ffmpeg writes segments into `%v` subdirectories but will not create them,
   // and the errno it fails with says nothing about ladders.
   await mkdir(outDir, { recursive: true });
-  for (let i = 0; i < rungs.length; i += 1) {
+  for (let i = 0; i < Math.max(1, rungs.length); i += 1) {
     await mkdir(join(outDir, String(i)), { recursive: true });
   }
+  // A copied file gets a second, small rung (see `LOW_RUNG`).
+  const wantsLowRung = tools.lowRung && passThrough && probe.height > LOW_RUNG.height;
 
   /*
    * The key goes in `workDir`, NEVER in `outDir`: everything under `outDir`
@@ -576,10 +819,35 @@ export async function transcodeUpload(
   try {
     await exec(
       tools.ffmpeg,
-      transcodeArgs(sourceFile, rungs, outDir, probe.hasAudio, tools.threads, keyInfoFile),
+      passThrough
+        ? passthroughArgs(sourceFile, outDir, probe.hasAudio, keyInfoFile)
+        : transcodeArgs(sourceFile, rungs, outDir, probe.hasAudio, tools.threads, keyInfoFile),
     );
   } finally {
     if (poll !== null) clearInterval(poll);
+  }
+
+  if (wantsLowRung) {
+    // Best effort, like the poster: the copy alone already plays, so a failure
+    // here costs the weak-connection fallback, never the lecture. The master is
+    // only touched once the rung exists, so a half-written one is never listed.
+    const lowDir = join(outDir, '1');
+    try {
+      const boundaries = segmentBoundaries(await readFile(join(tallest, 'index.m3u8'), 'utf8'));
+      await mkdir(lowDir, { recursive: true });
+      await exec(
+        tools.ffmpeg,
+        lowRungArgs(sourceFile, lowDir, probe.hasAudio, boundaries, tools.threads, keyInfoFile),
+      );
+      const masterPath = join(outDir, 'master.m3u8');
+      const lowWidth = Math.max(2, Math.round((probe.width * LOW_RUNG.height) / probe.height / 2) * 2);
+      await writeFile(
+        masterPath,
+        withLowRung(await readFile(masterPath, 'utf8'), '1/index.m3u8', lowWidth, LOW_RUNG.height),
+      );
+    } catch {
+      await rm(lowDir, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 
   // The master ffmpeg wrote already plays — it only advertises each rung's
@@ -605,8 +873,8 @@ export async function transcodeUpload(
   return {
     dir: outDir,
     files,
-    // `ladderFor` returns tallest-first.
-    maxHeight: rungs[0]!.height,
+    // `ladderFor` returns tallest-first; a copied file is its own only rung.
+    maxHeight: passThrough ? probe.height : rungs[0]!.height,
     bytes,
     durationSeconds: probe.durationSeconds,
     cleanup: async () => {

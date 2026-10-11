@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { BookOpenCheck, ChevronRight, Info, Layers, Library, Sparkles } from 'lucide-react';
+import { BookOpenCheck, ChevronRight, Info, Layers, Library, Sparkles, Swords } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
+import { AdminChallengeTopicsSchema } from '@ayman/contracts/quiz/challenges';
 import { GameBankDetailSchema } from '@ayman/contracts/quiz/game';
 import { StatTile } from '@/components/admin/charts/stat-tile';
 import { num } from '@/components/admin/charts/format';
-import { adminGetOrNotFound } from '@/lib/admin-api';
+import { adminGetOrNotFound, adminGetOrNull } from '@/lib/admin-api';
+import { ChallengeTopics } from './challenge-topics';
 import { BankRow } from './lesson-bank-row';
 import { ModesForm } from './modes-form';
 
@@ -24,7 +26,11 @@ export const metadata: Metadata = { title: c.title };
  */
 export default async function GameCourseBankPage({ params }: { params: Promise<{ courseId: string }> }) {
   const { courseId } = await params;
-  const detail = await adminGetOrNotFound(`/api/admin/game-banks/${encodeURIComponent(courseId)}`, GameBankDetailSchema);
+  const [detail, challenges] = await Promise.all([
+    adminGetOrNotFound(`/api/admin/game-banks/${encodeURIComponent(courseId)}`, GameBankDetailSchema),
+    // `OrNull`: API من البيلد اللي قبله (لسه مافيهوش التحديات) مايوقّعش الصفحة كلها.
+    adminGetOrNull(`/api/admin/challenge-topics/${encodeURIComponent(courseId)}`, AdminChallengeTopicsSchema),
+  ]);
 
   const lessons = detail.sections.flatMap((section) => section.lessons);
   const lessonReady = lessons.reduce((sum, lesson) => sum + lesson.ready, 0);
@@ -59,6 +65,17 @@ export default async function GameCourseBankPage({ params }: { params: Promise<{
           accent
         />
       </section>
+
+      {challenges ? (
+        <section className="mt-8">
+          <h2 className="flex items-center gap-2 text-[length:var(--fs-title-3)] font-semibold text-fg">
+            <Swords className="size-5 text-[color:var(--viz-1)]" aria-hidden="true" />
+            {copy.admin.challenges.title}
+          </h2>
+          <p className="mb-3 mt-1 max-w-[var(--w-prose)] text-[length:var(--fs-text-sm)] text-fg-muted">{copy.admin.challenges.lead}</p>
+          <ChallengeTopics key={challenges.topics.map((topic) => topic.id).join()} initial={challenges} />
+        </section>
+      ) : null}
 
       <section className="mt-8">
         <h2 className="flex items-center gap-2 text-[length:var(--fs-title-3)] font-semibold text-fg">
