@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { BanknoteArrowUp } from 'lucide-react';
+import { BanknoteArrowUp, History } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { AdminWalletSearchSchema } from '@ayman/contracts/admin/wallet';
@@ -53,10 +53,14 @@ export default async function AdminWalletPage() {
 
       <WalletFinder initial={initial.rows} />
 
-      <p className="mt-6 text-[length:var(--fs-text-sm)]">
+      <p className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-[length:var(--fs-text-sm)]">
         <Link href="/admin/wallet/requests" className="inline-flex items-center gap-1.5 text-accent-text underline">
           <BanknoteArrowUp className="size-4" aria-hidden="true" />
           {c.requestsLink}
+        </Link>
+        <Link href="/admin/wallet/activity" className="inline-flex items-center gap-1.5 text-accent-text underline">
+          <History className="size-4" aria-hidden="true" />
+          {c.activityLink}
         </Link>
       </p>
     </>

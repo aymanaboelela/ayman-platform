@@ -11,7 +11,7 @@ import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { cn } from '@ayman/ui/lib/cn';
 import { newIdempotencyKey } from '@/lib/idempotency-key';
-import { parsePounds } from '@/lib/pounds';
+import { parsePounds, poundsOf } from '@/lib/pounds';
 import { formatEGPExact } from '@/lib/price';
 import { creditWalletAction, debitWalletAction, type WalletActionResult } from '../actions';
 
@@ -115,12 +115,13 @@ function CreditForm({ userId }: { userId: string }) {
     if (pending) return;
     if (cents < 100) return setError(c.amountRequired);
     if (paid === null) return setError(c.kindRequired);
+    if (note.trim().length < 3) return setError(c.noteRequired);
     setError(null);
     setPending(true);
     const result = await creditWalletAction(userId, {
       amountCents: cents,
       paid,
-      note: note.trim() || null,
+      note: note.trim(),
       idempotencyKey: key,
     });
     setPending(false);
@@ -301,6 +302,18 @@ function DebitForm({
             disabled={pending}
             className="h-11 rounded-lg bg-surface-1 text-center font-bold tabular-nums [unicode-bidi:isolate]"
           />
+          {/* «أشيله من المحفظة» — the whole balance in one press, still behind
+              the same reason and the same confirm-by-submit. */}
+          {balanceCents >= 100 ? (
+            <button
+              type="button"
+              onClick={() => setAmountText(poundsOf(balanceCents))}
+              disabled={pending}
+              className="mt-2 h-9 rounded-full border border-[color-mix(in_oklab,var(--err)_40%,var(--border))] bg-surface-1 px-3.5 text-[length:var(--fs-text-sm)] font-semibold text-[color:var(--err)] transition-colors hover:bg-[color-mix(in_oklab,var(--err)_8%,var(--n-2))]"
+            >
+              {formatCopy(c.debitAll, { amount: egp(balanceCents) })}
+            </button>
+          ) : null}
         </div>
         <fieldset className="m-0 border-0 p-0">
           <legend className="mb-1.5 text-[length:var(--fs-text-sm)] font-medium text-fg">{c.kindLabel}</legend>

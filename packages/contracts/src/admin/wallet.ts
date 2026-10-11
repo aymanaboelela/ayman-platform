@@ -60,7 +60,12 @@ export const AdminWalletCreditSchema = z
   .object({
     amountCents: z.number().int().min(100, 'أقل مبلغ جنيه واحد').max(WALLET_MAX_ADMIN_CENTS),
     paid: z.boolean(),
-    note: z.string().trim().max(300).nullable().default(null),
+    /**
+     * «يبقى في سبب» — required, like the debit's. Every hand-moved pound on
+     * the platform carries a sentence saying why, shown on the statement and
+     * in «سجل الحركات» forever.
+     */
+    note: z.string().trim().min(3, 'لازم سبب للإضافة').max(300),
     idempotencyKey: z.uuid(),
   })
   .strict();
@@ -85,8 +90,17 @@ export const AdminWalletDebitSchema = z
 export type AdminWalletDebitInput = z.infer<typeof AdminWalletDebitSchema>;
 
 /** `GET /api/admin/wallets?q=` — the «شحن المحفظة» search box. */
+/**
+ * `funded` — everyone holding money right now, biggest balance first: «أشوف
+ * الناس اللي دفعت في المحفظة». `recent` — the last wallets to move. Only read
+ * when `q` is empty; a search answers by name/phone across both.
+ */
+export const AdminWalletListFilterSchema = z.enum(['funded', 'recent']);
+export type AdminWalletListFilter = z.infer<typeof AdminWalletListFilterSchema>;
+
 export const AdminWalletSearchQuerySchema = z.object({
   q: z.string().trim().max(120).default(''),
+  filter: AdminWalletListFilterSchema.default('funded'),
 });
 export type AdminWalletSearchQuery = z.infer<typeof AdminWalletSearchQuerySchema>;
 
@@ -163,3 +177,37 @@ export const AdminRejectWalletTopupSchema = z
   })
   .strict();
 export type AdminRejectWalletTopupInput = z.infer<typeof AdminRejectWalletTopupSchema>;
+
+/* ── «سجل الحركات» ─────────────────────────────────────────────────────── */
+
+/**
+ * Every wallet movement on the platform, newest first, with whose wallet it
+ * was — «أعرف الحاجات اللي حصلت». `admin` narrows to the hand-made ones
+ * (إضافة / خصم), which are the moves that need a name and a reason beside them.
+ */
+export const AdminWalletActivityFilterSchema = z.enum(['admin', 'all']);
+export type AdminWalletActivityFilter = z.infer<typeof AdminWalletActivityFilterSchema>;
+
+export const AdminWalletActivityQuerySchema = z.object({
+  filter: AdminWalletActivityFilterSchema.default('admin'),
+  /** The last row's id from the previous page — ids are uuid7, so time-ordered. */
+  before: z.uuid().optional(),
+});
+export type AdminWalletActivityQuery = z.infer<typeof AdminWalletActivityQuerySchema>;
+
+export const AdminWalletActivityRowSchema = AdminWalletTransactionSchema.extend({
+  student: AdminWalletStudentSchema,
+});
+export type AdminWalletActivityRow = z.infer<typeof AdminWalletActivityRowSchema>;
+
+export const AdminWalletActivitySchema = z.object({
+  rows: z.array(AdminWalletActivityRowSchema),
+  /** Pass as `before` for the next page; null when this was the last. */
+  nextBefore: z.uuid().nullable(),
+  /** Sums over the SAME filter, all time — what the admin hands moved. */
+  totals: z.object({
+    creditedCents: z.number().int().min(0),
+    debitedCents: z.number().int().min(0),
+  }),
+});
+export type AdminWalletActivity = z.infer<typeof AdminWalletActivitySchema>;
