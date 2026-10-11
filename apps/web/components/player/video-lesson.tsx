@@ -18,6 +18,7 @@ import { MirrorVideo } from './mirror-video';
 import { FullscreenIcon, PlayIcon } from './icons';
 import { useVideoHeartbeat } from './use-video-heartbeat';
 import { YouTubeShield } from './youtube-shield';
+import { mayPrewarm, prewarmMirror, prewarmYouTube, whenIdle } from './prewarm';
 
 /**
  * `lock`/`unlock` are the Screen Orientation API's own methods and TypeScript's
@@ -678,6 +679,25 @@ export function VideoLesson({
       setPlainFrame(true);
     }
   }, [video.youtubeId]);
+
+  /*
+   * A head start while the poster is still showing — see `prewarm.ts`. Once
+   * the lecture is activated there is nothing left to warm, and while an
+   * upload is still being prepared there is nothing to fetch.
+   *
+   * Our copy and YouTube are mutually exclusive on purpose: a lecture we
+   * serve never touches YouTube (not even to warm it — on a blocked network
+   * that request is the thing that hangs).
+   */
+  const mirrorHlsUrl = useMirror && video.mirror ? video.mirror.hlsUrl : null;
+  useEffect(() => {
+    if (activated || stillProcessing) return;
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } })
+      .connection;
+    if (!mayPrewarm(connection)) return;
+    if (mirrorHlsUrl !== null) return whenIdle(() => void prewarmMirror(mirrorHlsUrl));
+    if (!useMirror && video.youtubeId !== null) return whenIdle(prewarmYouTube);
+  }, [activated, stillProcessing, mirrorHlsUrl, useMirror, video.youtubeId]);
 
   const activate = useCallback(async (startAt: number) => {
     if (activated || !mountRef.current) return;
