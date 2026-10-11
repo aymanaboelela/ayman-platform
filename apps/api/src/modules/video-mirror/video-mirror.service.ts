@@ -721,7 +721,14 @@ export class VideoMirrorService implements OnModuleDestroy {
         ],
       },
       orderBy: [{ upgradeAt: { sort: 'asc', nulls: 'first' } }],
-      select: { lessonId: true, externalId: true, encrypted: true, mirrorBytes: true, ladderRev: true },
+      select: {
+        lessonId: true,
+        externalId: true,
+        encrypted: true,
+        mirrorBytes: true,
+        ladderRev: true,
+        upgradeHeights: true,
+      },
     });
     if (row === null) return false;
 
@@ -758,6 +765,7 @@ export class VideoMirrorService implements OnModuleDestroy {
             .catch(() => undefined);
         }),
         expectedBytes: Number(row.mirrorBytes ?? 0),
+        heights: row.upgradeHeights,
         onProgress: (percent) => {
           if (percent === last) return;
           last = percent;

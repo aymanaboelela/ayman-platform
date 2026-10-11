@@ -182,8 +182,23 @@ export const VideoLadderUpgradeSchema = z.object({
   error: z.string().nullable(),
   /** Heights the lecture offers now, tallest first — what the owner would see in the quality menu. */
   heights: z.array(z.number().int().positive()),
+  /** Heights that can still be built: shorter than the source, not already there. Tallest first. */
+  buildable: z.array(z.number().int().positive()),
+  /** What the last press asked for. Empty = «الكل». */
+  requested: z.array(z.number().int().positive()),
 });
 export type VideoLadderUpgrade = z.infer<typeof VideoLadderUpgradeSchema>;
+
+/**
+ * The press itself: which of `buildable` to make. Empty or absent = all of
+ * them. A height that is not buildable for this lecture is refused, not
+ * silently dropped — the owner asked for something the screen should not have
+ * offered.
+ */
+export const VideoLadderUpgradeRequestSchema = z.object({
+  heights: z.array(z.number().int().positive()).max(8).optional(),
+});
+export type VideoLadderUpgradeRequest = z.infer<typeof VideoLadderUpgradeRequestSchema>;
 
 /* ── «الفيديوهات» — every uploaded lecture, and what it costs ─────────────
  *

@@ -34,6 +34,7 @@ import {
   SetLessonVideoDto,
   StartResourceVideoUploadDto,
   StartVideoUploadDto,
+  RequestLadderUpgradeDto,
   UpdateLessonDto,
   UpdateResourceDto,
 } from './dto/lesson.dto';
@@ -237,8 +238,8 @@ export class LessonController {
 
   @RequirePermission('lesson:write')
   @Post('lessons/:id/video/upgrade')
-  requestVideoLadderUpgrade(@Param('id') id: string) {
-    return this.uploads.requestUpgrade(id);
+  requestVideoLadderUpgrade(@Param('id') id: string, @Body() body: RequestLadderUpgradeDto) {
+    return this.uploads.requestUpgrade(id, body.heights ?? []);
   }
 
   @RequirePermission('lesson:write')

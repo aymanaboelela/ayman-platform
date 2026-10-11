@@ -12,6 +12,7 @@ import { LessonVideoInputSchema } from '@ayman/contracts/video';
 import {
   ResourceVideoUploadStartSchema,
   VideoUploadAbortSchema,
+  VideoLadderUpgradeRequestSchema,
   VideoUploadCompleteSchema,
   VideoUploadResumeSchema,
   VideoUploadStartSchema,
@@ -40,6 +41,7 @@ export class StartVideoUploadDto extends createZodDto(VideoUploadStartSchema) {}
 export class CompleteVideoUploadDto extends createZodDto(VideoUploadCompleteSchema) {}
 export class ResumeVideoUploadDto extends createZodDto(VideoUploadResumeSchema) {}
 export class AbortVideoUploadDto extends createZodDto(VideoUploadAbortSchema) {}
+export class RequestLadderUpgradeDto extends createZodDto(VideoLadderUpgradeRequestSchema) {}
 /** «رفع فيديو» in the materials — complete/resume/abort reuse the three above. */
 export class StartResourceVideoUploadDto extends createZodDto(ResourceVideoUploadStartSchema) {}
 /**
