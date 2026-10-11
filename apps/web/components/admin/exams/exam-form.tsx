@@ -9,10 +9,11 @@ import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { Select } from '@ayman/ui/components/select';
+import { Switch } from '@ayman/ui/components/switch';
 import { createExamAction, loadExamLessonsAction, patchExamAction } from '@/app/(admin)/admin/exams/actions';
 import { CoveragePicker } from './coverage-picker';
 import { examFailureMessage, type ExamFailure } from './exam-errors';
-import { toLocalInputValue } from './exam-time';
+import { closesAfter, toLocalInputValue, windowLength, type WindowUnit } from './exam-time';
 import { WindowEcho } from './window-echo';
 
 const c = copy.admin.monthlyExams;
@@ -34,6 +35,7 @@ export interface ExamFormInitial {
   durationMinutes: number | null;
   gradeOutOf: number;
   passPercent: number;
+  keepOpenAfterClose: boolean;
 }
 
 export interface ExamFormProps {
@@ -106,6 +108,38 @@ export function ExamForm({ courses, initialSections = [], initial }: ExamFormPro
   const [closesAt, setClosesAt] = useState(
     initial?.closesAt ? toLocalInputValue(new Date(initial.closesAt)) : '',
   );
+
+  /*
+   * The window as a LENGTH — «٢٤ ساعة»، «يومين» — which is how he states it.
+   * It and «يقفل» are two views of one fact: editing either rewrites the
+   * other, and moving «يفتح» carries «يقفل» along so the length holds.
+   */
+  const initialLength = windowLength(opensAt, closesAt);
+  const [windowAmount, setWindowAmount] = useState(String(initialLength?.amount ?? 24));
+  const [windowUnit, setWindowUnit] = useState<WindowUnit>(initialLength?.unit ?? 'hours');
+  const [keepOpen, setKeepOpen] = useState(initial?.keepOpenAfterClose ?? false);
+
+  function changeOpens(value: string) {
+    setOpensAt(value);
+    const next = closesAfter(value, num(windowAmount) ?? 0, windowUnit);
+    if (next) setClosesAt(next);
+  }
+
+  function changeLength(amount: string, unit: WindowUnit) {
+    setWindowAmount(amount);
+    setWindowUnit(unit);
+    const next = closesAfter(opensAt, num(amount) ?? 0, unit);
+    if (next) setClosesAt(next);
+  }
+
+  function changeCloses(value: string) {
+    setClosesAt(value);
+    const length = windowLength(opensAt, value);
+    if (length) {
+      setWindowAmount(String(length.amount));
+      setWindowUnit(length.unit);
+    }
+  }
 
   const [duration, setDuration] = useState(String(initial?.durationMinutes ?? 60));
   const [gradeOutOf, setGradeOutOf] = useState(String(initial?.gradeOutOf ?? 100));
@@ -188,6 +222,7 @@ export function ExamForm({ courses, initialSections = [], initial }: ExamFormPro
       durationMinutes: num(duration),
       gradeOutOf: num(gradeOutOf),
       passPercent: num(passPercent),
+      keepOpenAfterClose: keepOpen,
     };
 
     setSaving(true);
@@ -295,10 +330,39 @@ export function ExamForm({ courses, initialSections = [], initial }: ExamFormPro
             type="datetime-local"
             value={opensAt}
             invalid={missing.has('exam-opens')}
-            onChange={(event) => setOpensAt(event.target.value)}
+            onChange={(event) => changeOpens(event.target.value)}
           />
           <WindowEcho value={opensAt} />
           {missing.has('exam-opens') ? <FieldError /> : null}
+        </div>
+
+        <div>
+          <Label htmlFor="exam-window">{c.windowLengthLabel}</Label>
+          <div className="flex gap-2">
+            <Input
+              id="exam-window"
+              type="number"
+              min={1}
+              step="any"
+              inputMode="decimal"
+              className="min-w-0 flex-1"
+              value={windowAmount}
+              aria-describedby="exam-window-hint"
+              onChange={(event) => changeLength(event.target.value, windowUnit)}
+            />
+            <Select
+              aria-label={c.windowLengthLabel}
+              className="w-28 shrink-0"
+              value={windowUnit}
+              onChange={(event) => changeLength(windowAmount, event.target.value as WindowUnit)}
+            >
+              <option value="hours">{c.unitHours}</option>
+              <option value="days">{c.unitDays}</option>
+            </Select>
+          </div>
+          <p id="exam-window-hint" className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+            {c.windowLengthHint}
+          </p>
         </div>
 
         <div>
@@ -308,7 +372,7 @@ export function ExamForm({ courses, initialSections = [], initial }: ExamFormPro
             type="datetime-local"
             value={closesAt}
             invalid={missing.has('exam-closes')}
-            onChange={(event) => setClosesAt(event.target.value)}
+            onChange={(event) => changeCloses(event.target.value)}
           />
           <WindowEcho value={closesAt} />
           {windowError ? (
@@ -364,6 +428,32 @@ export function ExamForm({ courses, initialSections = [], initial }: ExamFormPro
           {missing.has('exam-pass') ? <FieldError /> : null}
         </div>
       </div>
+
+      {/* «يفضل متاح جوه الكورس بعد الميعاد» — the whole sentence is the
+          label, so pressing the words flips it too. */}
+      <label
+        htmlFor="exam-keep-open"
+        className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-2 p-3"
+      >
+        <Switch
+          id="exam-keep-open"
+          checked={keepOpen}
+          onCheckedChange={setKeepOpen}
+          aria-describedby="exam-keep-open-hint"
+          className="mt-0.5"
+        />
+        <span className="min-w-0">
+          <span className="block text-[length:var(--fs-text-sm)] font-medium text-fg">
+            {c.keepOpenLabel}
+          </span>
+          <span
+            id="exam-keep-open-hint"
+            className="mt-0.5 block text-[length:var(--fs-text-xs)] text-fg-muted"
+          >
+            {c.keepOpenHint}
+          </span>
+        </span>
+      </label>
 
       <div>
         <Button type="submit" disabled={saving}>

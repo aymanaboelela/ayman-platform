@@ -91,3 +91,40 @@ const CAIRO_SHORT = new Intl.DateTimeFormat('ar-EG-u-nu-latn', {
 export function formatCairoShort(iso: string): string {
   return CAIRO_SHORT.format(new Date(iso));
 }
+
+export type WindowUnit = 'hours' | 'days';
+
+/**
+ * «يفضل مفتوح قد إيه؟» → «يقفل». Days move the CALENDAR, not 24h of real
+ * time, so «يومين» from Friday 20:00 is Sunday 20:00 even across the October
+ * DST change; hours are real elapsed time. Empty when either side is unusable.
+ */
+export function closesAfter(opensAt: string, amount: number, unit: WindowUnit): string {
+  const from = fromLocalInputValue(opensAt);
+  if (!from || Number.isNaN(from.getTime()) || !(amount > 0)) return '';
+  const until = new Date(from);
+  if (unit === 'days') until.setDate(until.getDate() + amount);
+  else until.setTime(until.getTime() + amount * 3_600_000);
+  return toLocalInputValue(until);
+}
+
+/**
+ * The reverse, for a form opened on an exam that already has both dates: a
+ * whole number of days reads as days, anything else as hours (rounded to one
+ * decimal). `null` when the pair cannot be read.
+ */
+export function windowLength(
+  opensAt: string,
+  closesAt: string,
+): { amount: number; unit: WindowUnit } | null {
+  const from = fromLocalInputValue(opensAt);
+  const until = fromLocalInputValue(closesAt);
+  if (!from || !until || !(until > from)) return null;
+  const hours = Math.round((until.getTime() - from.getTime()) / 360_000) / 10;
+  // Whole days by the calendar, so a DST-straddling «يومين» still reads «٢ يوم».
+  const days = Math.round(hours / 24);
+  if (days >= 1 && closesAfter(opensAt, days, 'days') === closesAt) {
+    return { amount: days, unit: 'days' };
+  }
+  return { amount: hours, unit: 'hours' };
+}

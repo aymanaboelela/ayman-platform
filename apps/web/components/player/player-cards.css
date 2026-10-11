@@ -476,3 +476,89 @@
   color: var(--color-fg-muted);
 }
 .ql__go { flex-shrink: 0; color: color-mix(in oklab, var(--tone) 80%, var(--color-fg)); }
+
+/* ── «امتحانات الشهر» in the lesson sidebar — `course-exams-card.tsx` ───── */
+.ce-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklab, var(--a-9) 45%, var(--color-line));
+  background:
+    radial-gradient(120% 120% at 100% 0%, color-mix(in oklab, var(--a-9) 16%, transparent), transparent 60%),
+    var(--color-surface-2);
+}
+.ce-card__title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg);
+}
+.ce-card__title svg { color: var(--a-9); }
+.ce-card__list { display: grid; gap: 0.6rem; }
+.ce-exam {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.75rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-1);
+}
+.ce-exam__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.ce-exam__name {
+  min-inline-size: 0;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--color-fg);
+  overflow-wrap: anywhere;
+}
+.ce-exam__tag {
+  flex-shrink: 0;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--a-9) 45%, transparent);
+  background: color-mix(in oklab, var(--a-9) 12%, transparent);
+  color: var(--a-11);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+}
+.ce-exam[data-late] .ce-exam__tag {
+  border-color: var(--color-line);
+  background: var(--color-surface-3);
+  color: var(--color-fg-muted);
+}
+.ce-exam__meta {
+  font-size: var(--fs-text-xs);
+  line-height: 1.6;
+  color: var(--color-fg-muted);
+}
+.ce-exam__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 2.5rem;
+  padding-inline: 1rem;
+  border-radius: var(--r-md);
+  background: var(--a-9);
+  color: #1a1206;
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  transition: background var(--d-hover) var(--ease-out);
+}
+.ce-exam__cta:hover { background: var(--a-10); }
+.ce-exam__cta:focus-visible,
+.ce-exam__done:focus-visible { outline: 2px solid var(--p-500); outline-offset: 2px; }
+.ce-exam__done {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--fs-text-sm);
+  color: var(--ok);
+}

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Eye, EyeOff, PenLine, Trash2 } from 'lucide-react';
+import { DoorClosed, DoorOpen, Eye, EyeOff, PenLine, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { copy } from '@ayman/contracts/copy/admin';
 import type { AdminExamRow } from '@ayman/contracts/admin/exams';
@@ -16,7 +16,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@ayman/ui/components/dialog';
-import { deleteExamAction, setExamPublishedAction } from '@/app/(admin)/admin/exams/actions';
+import {
+  deleteExamAction,
+  patchExamAction,
+  setExamPublishedAction,
+} from '@/app/(admin)/admin/exams/actions';
 import { DuplicateExamDialog } from './duplicate-exam-dialog';
 import { examFailureMessage, type ExamFailure } from './exam-errors';
 import type { ExamCourseOption } from './exam-form';
@@ -108,6 +112,24 @@ export function ExamRowActions({
     router.refresh();
   }
 
+  /** «سيبه متاح بعد الميعاد» from the list, without opening the form — the
+   *  moment he needs it is the night it closes. */
+  async function toggleKeepOpen() {
+    setFailure(null);
+    setPending(true);
+    const result = await patchExamAction(row.lessonId, {
+      keepOpenAfterClose: !row.keepOpenAfterClose,
+    });
+    setPending(false);
+    if (!result.ok) {
+      setFailure(result.failure);
+      toast.error(examFailureMessage(result.failure));
+      return;
+    }
+    toast.success(copy.admin.common.saved);
+    router.refresh();
+  }
+
   async function remove() {
     setPending(true);
     const result = await deleteExamAction(row.lessonId);
@@ -158,6 +180,22 @@ export function ExamRowActions({
             <Eye className="size-3.5" aria-hidden="true" />
           )}
           {published ? c.unpublish : c.publish}
+        </button>
+
+        <button
+          type="button"
+          className={row.keepOpenAfterClose ? 'chip chip--accent' : 'chip chip--quiet'}
+          disabled={pending}
+          aria-pressed={row.keepOpenAfterClose}
+          title={c.keepOpenHint}
+          onClick={() => void toggleKeepOpen()}
+        >
+          {row.keepOpenAfterClose ? (
+            <DoorClosed className="size-3.5" aria-hidden="true" />
+          ) : (
+            <DoorOpen className="size-3.5" aria-hidden="true" />
+          )}
+          {row.keepOpenAfterClose ? c.keepOpenOff : c.keepOpenOn}
         </button>
 
         <DuplicateExamDialog

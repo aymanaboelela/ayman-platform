@@ -1,5 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { EXAM_SHELF_TITLE, examPhase } from '@ayman/contracts/quiz/scheduled';
+import {
+  EXAM_SHELF_TITLE,
+  examDeadline,
+  examKeptOpen,
+  examPhase,
+} from '@ayman/contracts/quiz/scheduled';
 import { DEFAULT_REVIEW_OPTIONS } from '@ayman/contracts/quiz/quiz-settings';
 import type { StudentExams } from '@ayman/contracts/quiz/scheduled';
 import type {
@@ -167,7 +172,10 @@ export class ScheduledExamsService {
           lessonId: lesson.id,
           durationSeconds: input.durationMinutes * 60,
           openFrom: input.opensAt,
-          openUntil: input.closesAt,
+          // Kept open: the engine never shuts it, and `lateAfter` remembers
+          // the deadline that mattered — see `examKeptOpen`.
+          openUntil: input.keepOpenAfterClose ? null : input.closesAt,
+          lateAfter: input.keepOpenAfterClose ? input.closesAt : null,
           // ⚠️ EXPLICIT, never left to a default. `allowsImprovement` is what
           // grants a second sitting (تحسين), and `assertPaperAllowed` only ever
           // reads this boolean — the "course exams only" rule is a UI and
@@ -204,6 +212,7 @@ export class ScheduledExamsService {
         title: input.title,
         opensAt: input.opensAt.toISOString(),
         closesAt: input.closesAt.toISOString(),
+        keepOpenAfterClose: input.keepOpenAfterClose,
         coveredLessonCount: input.coveredLessonIds.length,
       },
     });
@@ -227,26 +236,39 @@ export class ScheduledExamsService {
 
       const quizData: Prisma.QuizUpdateInput = {};
       if (input.opensAt !== undefined) quizData.openFrom = input.opensAt;
-      if (input.closesAt !== undefined) quizData.openUntil = input.closesAt;
       if (input.durationMinutes !== undefined) {
         quizData.durationSeconds = input.durationMinutes * 60;
       }
       if (input.gradeOutOf !== undefined) quizData.gradeOutOf = input.gradeOutOf;
       if (input.passPercent !== undefined) quizData.passPercent = input.passPercent;
 
-      if (Object.keys(quizData).length > 0) {
+      const touchesDeadline =
+        input.closesAt !== undefined || input.keepOpenAfterClose !== undefined;
+
+      if (Object.keys(quizData).length > 0 || touchesDeadline) {
         // A window is only half-checked by the schema when one side is absent
         // from the PATCH. Re-read the stored pair and check the pair that will
         // actually exist, so a PATCH moving only `opensAt` past a stored
         // `closesAt` is a 400 rather than an exam that can never open.
         const current = await tx.quiz.findUniqueOrThrow({
           where: { lessonId },
-          select: { openFrom: true, openUntil: true },
+          select: { openFrom: true, openUntil: true, lateAfter: true },
         });
         const from = input.opensAt ?? current.openFrom;
-        const until = input.closesAt ?? current.openUntil;
+        const until = input.closesAt ?? examDeadline(current.openUntil, current.lateAfter);
         if (from && until && until <= from) {
           throw new BadRequestException({ code: 'exam_window_inverted' });
+        }
+
+        if (touchesDeadline) {
+          // «الميعاد» is one fact stored in one of two columns, so any write
+          // to it rewrites both. Turning «يفضل متاح» OFF on an exam that was
+          // kept open keeps `lateAfter` at the deadline: the sittings that
+          // already happened late stay marked late.
+          const keep =
+            input.keepOpenAfterClose ?? examKeptOpen(current.openUntil, current.lateAfter);
+          quizData.openUntil = keep ? null : until;
+          quizData.lateAfter = keep || current.lateAfter !== null ? until : null;
         }
         await tx.quiz.update({ where: { lessonId }, data: quizData });
       }
@@ -369,13 +391,15 @@ export class ScheduledExamsService {
         durationSeconds: true,
         openFrom: true,
         openUntil: true,
+        lateAfter: true,
         gradeOutOf: true,
         passPercent: true,
         lesson: { select: { title: true } },
       },
     });
 
-    if (source.openFrom === null || source.openUntil === null) {
+    const deadline = examDeadline(source.openUntil, source.lateAfter);
+    if (source.openFrom === null || deadline === null) {
       throw new BadRequestException({ code: 'exam_has_no_window' });
     }
 
@@ -387,7 +411,8 @@ export class ScheduledExamsService {
           title: target.title ?? source.lesson.title,
           coveredLessonIds: target.coveredLessonIds,
           opensAt: source.openFrom,
-          closesAt: source.openUntil,
+          closesAt: deadline,
+          keepOpenAfterClose: examKeptOpen(source.openUntil, source.lateAfter),
           durationMinutes: Math.max(1, Math.round((source.durationSeconds ?? 3600) / 60)),
           gradeOutOf: Number(source.gradeOutOf),
           passPercent: Number(source.passPercent),
@@ -451,6 +476,7 @@ export class ScheduledExamsService {
             isPublished: true,
             openFrom: true,
             openUntil: true,
+            lateAfter: true,
             durationSeconds: true,
             gradeOutOf: true,
             _count: { select: { slots: true, attempts: true } },
@@ -488,28 +514,34 @@ export class ScheduledExamsService {
       needsGradingByQuiz.set(a.quizId, (needsGradingByQuiz.get(a.quizId) ?? 0) + 1);
     }
 
-    const exams = lessons.map((l) => ({
-      lessonId: l.id,
-      quizId: l.quiz?.id ?? null,
-      courseId: l.courseId,
-      courseTitle: l.course.title,
-      title: l.title,
-      phase: examPhase(l.quiz?.openFrom ?? null, l.quiz?.openUntil ?? null, now),
-      opensAt: l.quiz?.openFrom?.toISOString() ?? null,
-      closesAt: l.quiz?.openUntil?.toISOString() ?? null,
-      durationMinutes: l.quiz?.durationSeconds ? Math.round(l.quiz.durationSeconds / 60) : null,
-      gradeOutOf: Number(l.quiz?.gradeOutOf ?? 100),
-      lessonPublished: l.isPublished,
-      quizPublished: l.quiz?.isPublished ?? false,
-      sectionPublished: l.section.isPublished,
-      questionCount: l.quiz?._count.slots ?? 0,
-      coveredLessons: l.coversLessons.map((c) => ({
-        lessonId: c.coveredLessonId,
-        title: c.coveredLesson.title,
-      })),
-      attemptCount: l.quiz?._count.attempts ?? 0,
-      needsGradingCount: l.quiz ? (needsGradingByQuiz.get(l.quiz.id) ?? 0) : 0,
-    }));
+    const exams = lessons.map((l) => {
+      const openUntil = l.quiz?.openUntil ?? null;
+      const lateAfter = l.quiz?.lateAfter ?? null;
+      const deadline = examDeadline(openUntil, lateAfter);
+      return {
+        lessonId: l.id,
+        quizId: l.quiz?.id ?? null,
+        courseId: l.courseId,
+        courseTitle: l.course.title,
+        title: l.title,
+        phase: examPhase(l.quiz?.openFrom ?? null, deadline, now),
+        opensAt: l.quiz?.openFrom?.toISOString() ?? null,
+        closesAt: deadline?.toISOString() ?? null,
+        durationMinutes: l.quiz?.durationSeconds ? Math.round(l.quiz.durationSeconds / 60) : null,
+        gradeOutOf: Number(l.quiz?.gradeOutOf ?? 100),
+        keepOpenAfterClose: examKeptOpen(openUntil, lateAfter),
+        lessonPublished: l.isPublished,
+        quizPublished: l.quiz?.isPublished ?? false,
+        sectionPublished: l.section.isPublished,
+        questionCount: l.quiz?._count.slots ?? 0,
+        coveredLessons: l.coversLessons.map((c) => ({
+          lessonId: c.coveredLessonId,
+          title: c.coveredLesson.title,
+        })),
+        attemptCount: l.quiz?._count.attempts ?? 0,
+        needsGradingCount: l.quiz ? (needsGradingByQuiz.get(l.quiz.id) ?? 0) : 0,
+      };
+    });
 
     // Soonest first among what is live or coming; then the history, newest
     // first. He reads this page to answer «إيه الجاي؟», not «إيه اللي فات؟».
@@ -563,6 +595,7 @@ export class ScheduledExamsService {
             id: true,
             openFrom: true,
             openUntil: true,
+            lateAfter: true,
             durationSeconds: true,
             gradeOutOf: true,
           },
@@ -596,15 +629,17 @@ export class ScheduledExamsService {
 
     const exams = lessons.map((l) => {
       const quiz = l.quiz!;
+      const deadline = examDeadline(quiz.openUntil, quiz.lateAfter);
       return {
         lessonId: l.id,
         courseId: l.courseId,
         courseTitle: l.course.title,
         courseSlug: l.course.slug,
         title: l.title,
-        phase: examPhase(quiz.openFrom, quiz.openUntil, now),
+        phase: examPhase(quiz.openFrom, deadline, now),
         openFrom: quiz.openFrom?.toISOString() ?? null,
-        openUntil: quiz.openUntil?.toISOString() ?? null,
+        openUntil: deadline?.toISOString() ?? null,
+        keptOpen: examKeptOpen(quiz.openUntil, quiz.lateAfter),
         durationSeconds: quiz.durationSeconds,
         gradeOutOf: Number(quiz.gradeOutOf),
         coveredLessons: l.coversLessons.map((c) => ({

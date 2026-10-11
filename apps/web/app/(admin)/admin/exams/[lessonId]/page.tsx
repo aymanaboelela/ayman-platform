@@ -125,6 +125,7 @@ export default async function EditExamPage({
           durationMinutes: row.durationMinutes,
           gradeOutOf: row.gradeOutOf,
           passPercent: quiz?.settings.passPercent ?? 70,
+          keepOpenAfterClose: row.keepOpenAfterClose,
         }}
       />
     </>
