@@ -12,7 +12,6 @@ import { Checkbox } from '@ayman/ui/components/checkbox';
 import { Input } from '@ayman/ui/components/input';
 import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
-import type { ControlPlaneTenant } from '@/lib/control-plane';
 import { SettingsField, issuesFromErrors } from '../settings/settings-field';
 import { signEntitlementsAction } from './actions';
 import { DEFAULT_DAYS, SignRequestSchema, defaultFeatureValues, type SignRequest } from './schema';
@@ -21,8 +20,11 @@ import { DEFAULT_DAYS, SignRequestSchema, defaultFeatureValues, type SignRequest
 const dateFormatter = new Intl.DateTimeFormat('ar-EG-u-nu-latn', { dateStyle: 'long' });
 
 export interface PlatformsFormProps {
-  tenants: readonly ControlPlaneTenant[];
+  tenants: readonly { key: string; name: string }[];
   features: readonly FeatureDeclaration[];
+  /** Keys whose stack Dokploy holds — those get «وقّع وحطّه في منصته»,
+   *  which writes the token into the stack and deploys it. */
+  appliable?: readonly string[];
 }
 
 /**
@@ -54,9 +56,17 @@ export interface PlatformsFormProps {
  * the expiry line under the token is for, and why the day count is on the
  * same screen as the boxes rather than buried in the runbook.
  */
-export function PlatformsForm({ tenants, features }: PlatformsFormProps) {
+export function PlatformsForm({ tenants, features, appliable = [] }: PlatformsFormProps) {
   const c = copy.admin.platforms;
   const tokenRef = useRef<HTMLTextAreaElement>(null);
+  /*
+   * Which of the two submit buttons was pressed. A ref, not state: the click
+   * handler sets it and the submit handler reads it in the same tick, before
+   * a state update would have rendered.
+   */
+  const applyRef = useRef(false);
+  const [pressed, setPressed] = useState<'sign' | 'apply'>('sign');
+  const [applyNote, setApplyNote] = useState<{ ok: boolean; message: string } | null>(null);
   const [signed, setSigned] = useState<{ token: string; expiresAt: number } | null>(null);
   const [signError, setSignError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -76,10 +86,20 @@ export function PlatformsForm({ tenants, features }: PlatformsFormProps) {
   async function onSubmit(values: SignRequest) {
     setSignError(null);
     setCopied(false);
-    const result = await signEntitlementsAction(values);
+    setApplyNote(null);
+    const apply = applyRef.current && appliable.includes(values.tenantKey);
+    applyRef.current = false;
+    const result = await signEntitlementsAction({ ...values, apply });
     if (result.ok) {
       setSigned({ token: result.token, expiresAt: result.expiresAt });
-      toast.success(copy.admin.common.saved);
+      if (result.applied !== undefined) {
+        const note = { ok: result.applied, message: result.applyMessage ?? '' };
+        setApplyNote(note);
+        if (note.ok) toast.success(note.message);
+        else toast.error(note.message);
+      } else {
+        toast.success(copy.admin.common.saved);
+      }
     } else {
       // The previous token stays on screen on purpose — a failed re-sign
       // should not take away the one that was already copied.
@@ -248,9 +268,29 @@ export function PlatformsForm({ tenants, features }: PlatformsFormProps) {
           </p>
         ) : null}
 
-        <div>
-          <Button type="submit" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? c.signing : c.sign}
+        <div className="flex flex-wrap gap-2">
+          {appliable.includes(form.watch('tenantKey')) ? (
+            <Button
+              type="submit"
+              disabled={form.formState.isSubmitting}
+              onClick={() => {
+                applyRef.current = true;
+                setPressed('apply');
+              }}
+            >
+              {form.formState.isSubmitting && pressed === 'apply' ? c.applying : c.apply}
+            </Button>
+          ) : null}
+          <Button
+            type="submit"
+            variant={appliable.includes(form.watch('tenantKey')) ? 'secondary' : 'primary'}
+            disabled={form.formState.isSubmitting}
+            onClick={() => {
+              applyRef.current = false;
+              setPressed('sign');
+            }}
+          >
+            {form.formState.isSubmitting && pressed === 'sign' ? c.signing : c.sign}
           </Button>
         </div>
       </form>
@@ -287,6 +327,18 @@ export function PlatformsForm({ tenants, features }: PlatformsFormProps) {
                 </Button>
               </div>
 
+              {applyNote ? (
+                <p
+                  role="status"
+                  className={
+                    applyNote.ok
+                      ? 'text-[length:var(--fs-text-sm)] text-[color:var(--ok)]'
+                      : 'text-[length:var(--fs-text-sm)] text-[color:var(--err)]'
+                  }
+                >
+                  {applyNote.message}
+                </p>
+              ) : null}
               <p className="text-[length:var(--fs-text-sm)] text-fg-muted">{c.tokenHint}</p>
               {/*
                 The one thing that reads as a bug if it is not said here: the

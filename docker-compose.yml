@@ -444,6 +444,25 @@ services:
       # «Account Analytics: Read» على حساب كلاودفلير بتاعك. قراية بس، ولستاكك
       # بس — فاضي على أي ستاك تاني والشاشة بتقول إنها مش متظبطة.
       CONTROL_PLANE_CF_TOKEN: ${CONTROL_PLANE_CF_TOKEN:-}
+      # «مدرّس جديد» (/admin/platforms/new) — creates a whole stack for a new
+      # instructor through Dokploy's API. Owner's stack ONLY: the key can read
+      # and rewrite EVERY stack on the server, so `check-tenant-env.mjs`
+      # refuses an instructor env file that carries it. Empty = the screen
+      # explains how to connect and creates nothing.
+      #
+      # URL defaults to `http://dokploy:3000` — the panel's service name on
+      # `dokploy-network`, which `web` is already on. The public panel host is
+      # behind a Cloudflare challenge a server cannot answer.
+      CONTROL_PLANE_DOKPLOY_URL: ${CONTROL_PLANE_DOKPLOY_URL:-}
+      CONTROL_PLANE_DOKPLOY_KEY: ${CONTROL_PLANE_DOKPLOY_KEY:-}
+      # The compose whose git source a new stack is cloned from. Empty = the
+      # one whose APP_URL is this stack's own (found, not configured).
+      CONTROL_PLANE_DOKPLOY_TEMPLATE: ${CONTROL_PLANE_DOKPLOY_TEMPLATE:-}
+      # The PUBLIC panel origin, only to print a stack's CI webhook line.
+      # Empty = https://panel.<this stack's apex>.
+      CONTROL_PLANE_DOKPLOY_PUBLIC_URL: ${CONTROL_PLANE_DOKPLOY_PUBLIC_URL:-}
+      # Where new DNS records point. Empty = this stack's own apex A record.
+      CONTROL_PLANE_SERVER_IP: ${CONTROL_PLANE_SERVER_IP:-}
       TENANT_YOUTUBE: ${TENANT_YOUTUBE:-}
       TENANT_INSTAGRAM: ${TENANT_INSTAGRAM:-}
       TENANT_TIKTOK: ${TENANT_TIKTOK:-}

@@ -2,13 +2,23 @@
 
 import { FEATURE_DECLARATIONS } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
-import { controlPlaneTenants, signEntitlementsDocument } from '@/lib/control-plane';
+import { signEntitlementsDocument } from '@/lib/control-plane';
+import { applyEntitlements } from '@/lib/provisioning/provision';
+import { tenantList } from '@/lib/provisioning/tenants';
 import { can, getSession } from '@/lib/session';
 import { IS_AYMAN } from '@/lib/tenant';
 import { SignRequestSchema, type SignRequest } from './schema';
 
 export type SignActionResult =
-  | { ok: true; token: string; expiresAt: number }
+  | {
+      ok: true;
+      token: string;
+      expiresAt: number;
+      /** Set when the request asked for the token to go straight into the
+       *  stack: whether it did, and the sentence to show either way. */
+      applied?: boolean;
+      applyMessage?: string;
+    }
   | { ok: false; message: string };
 
 /**
@@ -61,7 +71,10 @@ export async function signEntitlementsAction(input: SignRequest): Promise<SignAc
    * That failure shows up days later as «الفيتشر مش شغالة عندي»; refusing an
    * unknown key here turns it into a message before the copy-paste.
    */
-  const known = controlPlaneTenants().some((tenant) => tenant.key === parsed.data.tenantKey);
+  // «Know about» = `CONTROL_PLANE_TENANTS`, or a stack Dokploy holds — a
+  // teacher created from «مدرّس جديد» is never typed into the env list.
+  const list = await tenantList();
+  const known = list.tenants.some((tenant) => tenant.key === parsed.data.tenantKey);
   if (!known) return { ok: false, message: copy.admin.platforms.signFailed };
 
   /*
@@ -89,7 +102,27 @@ export async function signEntitlementsAction(input: SignRequest): Promise<SignAc
       enabled,
       days: parsed.data.days,
     });
-    return { ok: true, token: signed.token, expiresAt: signed.expiresAt };
+    if (!parsed.data.apply) return { ok: true, token: signed.token, expiresAt: signed.expiresAt };
+
+    /*
+     * Straight into the stack: the line in its environment, then a deploy —
+     * the API reads the document once, at boot. A failure here still hands
+     * back the token, because it IS signed and valid; the owner can paste it
+     * by hand, which is exactly the flow this button saves him from.
+     */
+    let applied = false;
+    try {
+      applied = await applyEntitlements(parsed.data.tenantKey, signed.token);
+    } catch {
+      applied = false;
+    }
+    return {
+      ok: true,
+      token: signed.token,
+      expiresAt: signed.expiresAt,
+      applied,
+      applyMessage: applied ? copy.admin.platforms.applied : copy.admin.platforms.applyFailed,
+    };
   } catch (error) {
     // The two failures are worth telling apart on screen: a missing key is one
     // field in his own panel, anything else is a key that is there and wrong.
