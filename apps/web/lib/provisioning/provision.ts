@@ -544,6 +544,26 @@ export async function finalize(composeId: string): Promise<{ ok: boolean; zone: 
   return { ok: true, zone };
 }
 
+/**
+ * The two identity lines — the teacher's name and subject — then a deploy.
+ * Both are baked into the web image at `next build` (`/` is prerendered), so
+ * a restart would change nothing a visitor sees; only a rebuild does.
+ *
+ * `WA_DEVICE_NAME` is left alone on purpose: the phone keeps the name the
+ * device was LINKED under, and a renamed but still-linked device would make
+ * the env disagree with what the teacher actually sees on the handset.
+ */
+export async function updateIdentity(composeId: string, identity: { displayName: string; subject: string }): Promise<boolean> {
+  const stack = await tenantStack(composeId);
+  if (!stack) return false;
+  let env = stack.compose.env ?? '';
+  env = setEnvLine(env, 'TENANT_DISPLAY_NAME', identity.displayName);
+  env = setEnvLine(env, 'TENANT_SUBJECT', identity.subject);
+  await dokploy.updateCompose(composeId, { env });
+  await dokploy.deployCompose(composeId, 'Identity — control plane');
+  return true;
+}
+
 /** A freshly signed document into a stack's environment, then a deploy —
  *  the API reads `TENANT_ENTITLEMENTS` once, at boot. */
 export async function applyEntitlements(tenantKey: string, token: string): Promise<boolean> {

@@ -2,15 +2,23 @@
 
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Check, Copy, ExternalLink, KeyRound, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Check, Copy, ExternalLink, KeyRound, PencilLine, RefreshCw, ShieldCheck } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
+import { DEFAULT_TENANT_SUBJECT, SUBJECTS } from '@ayman/contracts/subjects';
 import { Button } from '@ayman/ui/components/button';
-import { finalizeTenantAction, redeployTenantAction } from './tenant-actions';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@ayman/ui/components/dialog';
+import { Input } from '@ayman/ui/components/input';
+import { Label } from '@ayman/ui/components/label';
+import { Select } from '@ayman/ui/components/select';
+import { finalizeTenantAction, redeployTenantAction, updateTenantIdentityAction } from './tenant-actions';
 
 const c = copy.admin.tenants;
 
 export interface TenantRowActionsProps {
   composeId: string | null;
+  name: string;
+  /** `TENANT_SUBJECT` as set, or null for the default (programming). */
+  subject: string | null;
   appUrl: string | null;
   pendingHandover: boolean;
   webhookUrl: string | null;
@@ -21,7 +29,7 @@ export interface TenantRowActionsProps {
  * the two that act on the stack — each disabled while its own request is in
  * flight, so a second press is not a second deploy queued behind the first.
  */
-export function TenantRowActions({ composeId, appUrl, pendingHandover, webhookUrl }: TenantRowActionsProps) {
+export function TenantRowActions({ composeId, name, subject, appUrl, pendingHandover, webhookUrl }: TenantRowActionsProps) {
   const [redeploying, startRedeploy] = useTransition();
   const [finalizing, startFinalize] = useTransition();
   const [handedOver, setHandedOver] = useState(!pendingHandover);
@@ -99,6 +107,7 @@ export function TenantRowActions({ composeId, appUrl, pendingHandover, webhookUr
             {redeploying ? c.redeploying : c.redeploy}
           </Button>
         ) : null}
+        {composeId ? <EditIdentity composeId={composeId} name={name} subject={subject} /> : null}
         {composeId && !handedOver ? (
           <Button type="button" variant="secondary" disabled={finalizing} onClick={onFinalize}>
             <ShieldCheck aria-hidden="true" className="size-4" />
@@ -131,5 +140,69 @@ export function TenantRowActions({ composeId, appUrl, pendingHandover, webhookUr
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * «تعديل» — the teacher's name and subject. A dialog rather than inline
+ * fields: saving REBUILDS the stack (both are baked in at `next build`), and
+ * that cost should be one deliberate press with the reason printed above it,
+ * not a side effect of tabbing out of a field.
+ */
+function EditIdentity({ composeId, name, subject }: { composeId: string; name: string; subject: string | null }) {
+  const [open, setOpen] = useState(false);
+  const [displayName, setDisplayName] = useState(name);
+  const [slug, setSlug] = useState(subject ?? DEFAULT_TENANT_SUBJECT);
+  const [saving, startSaving] = useTransition();
+  const fieldId = `identity-${composeId}`;
+
+  function onSave() {
+    startSaving(async () => {
+      const result = await updateTenantIdentityAction(composeId, { displayName, subject: slug });
+      if (result.ok) {
+        toast.success(result.message);
+        setOpen(false);
+      } else {
+        toast.error(result.message);
+      }
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="secondary">
+          <PencilLine aria-hidden="true" className="size-4" />
+          {c.edit}
+        </Button>
+      </DialogTrigger>
+      <DialogContent closeLabel={copy.admin.common.close}>
+        <DialogHeader>
+          <DialogTitle>{c.editTitle}</DialogTitle>
+          <DialogDescription>{c.editLead}</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`${fieldId}-name`}>{c.displayName}</Label>
+            <Input id={`${fieldId}-name`} value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={60} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`${fieldId}-subject`}>{c.subject}</Label>
+            <Select id={`${fieldId}-subject`} value={slug} onChange={(event) => setSlug(event.target.value)}>
+              {SUBJECTS.map((entry) => (
+                <option key={entry.slug} value={entry.slug}>
+                  {entry.nameAr}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <Button type="button" disabled={saving || displayName.trim().length < 2} onClick={onSave}>
+              {saving ? c.editSaving : c.editSave}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

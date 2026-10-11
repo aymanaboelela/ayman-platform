@@ -475,3 +475,20 @@ describe('provision — a key that already names another domain', () => {
     expect(state.domains[newCompose()!.composeId]!.some((domain) => domain.host.includes('other-domain'))).toBe(false);
   });
 });
+
+describe('updateIdentity', () => {
+  it('rewrites the name and subject lines only, then rebuilds', async () => {
+    const { updateIdentity } = await import('./provision');
+    const created = await provision(spec());
+    const before = newCompose()!.env ?? '';
+    const deploys = state.deployments[created.composeId!]!.length;
+
+    expect(await updateIdentity(created.composeId!, { displayName: 'أ. منى حسن', subject: 'chemistry' })).toBe(true);
+    const after = newCompose()!.env ?? '';
+    expect(parseEnvText(after).TENANT_DISPLAY_NAME).toBe('أ. منى حسن');
+    expect(parseEnvText(after).TENANT_SUBJECT).toBe('chemistry');
+    expect(parseEnvText(after).POSTGRES_PASSWORD).toBe(parseEnvText(before).POSTGRES_PASSWORD);
+    expect(state.deployments[created.composeId!]!.length).toBe(deploys + 1);
+    expect(await updateIdentity('c-owner', { displayName: 'x', subject: 'physics' })).toBe(false);
+  });
+});

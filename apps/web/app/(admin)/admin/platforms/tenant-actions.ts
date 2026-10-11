@@ -1,8 +1,10 @@
 'use server';
 
+import { z } from 'zod';
 import { copy } from '@ayman/contracts/copy/admin';
+import { SUBJECTS, type SubjectSlug } from '@ayman/contracts/subjects';
 import { isControlPlaneOwner } from '@/lib/provisioning/gate';
-import { finalize, redeploy } from '@/lib/provisioning/provision';
+import { finalize, redeploy, updateIdentity } from '@/lib/provisioning/provision';
 
 const c = copy.admin.tenants;
 
@@ -37,5 +39,25 @@ export async function finalizeTenantAction(composeId: string): Promise<TenantAct
     return { ok: true, message: done.zone ? c.finalizedZone : c.finalized };
   } catch (error) {
     return { ok: false, message: `${c.finalizeFailed} ${error instanceof Error ? error.message : ''}`.trim() };
+  }
+}
+
+const IdentitySchema = z.object({
+  displayName: z.string().trim().min(2).max(60),
+  subject: z.enum(SUBJECTS.map((subject) => subject.slug) as [SubjectSlug, ...SubjectSlug[]]),
+});
+
+/** «تعديل» on a teacher's card: name and subject, then a rebuild. */
+export async function updateTenantIdentityAction(
+  composeId: string,
+  input: { displayName: string; subject: string },
+): Promise<TenantActionResult> {
+  if (!(await isControlPlaneOwner())) return { ok: false, message: c.notOwner };
+  const parsed = IdentitySchema.safeParse(input);
+  if (!valid(composeId) || !parsed.success) return { ok: false, message: c.editFailed };
+  try {
+    return (await updateIdentity(composeId, parsed.data)) ? { ok: true, message: c.editSaved } : { ok: false, message: c.editFailed };
+  } catch (error) {
+    return { ok: false, message: `${c.editFailed} ${error instanceof Error ? error.message : ''}`.trim() };
   }
 }
