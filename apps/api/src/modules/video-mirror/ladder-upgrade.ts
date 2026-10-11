@@ -405,6 +405,14 @@ export function segmentArgs(
       `${o.rung.maxKbps * 2}k`,
       '-threads',
       String(threads),
+      // The encoder's clock at 90 kHz, the transport stream's own. Left at the
+      // frame rate it rounds every timestamp to the nearest frame, and a source
+      // whose frames sit a little off that grid (an export that shifted video
+      // by the audio's priming, 23 ms) came out 10 ms late against the copied
+      // rung — measured on the server's ffmpeg 5.1; 1:90000 matched exactly
+      // there and on 8.1.
+      '-enc_time_base:v',
+      '1:90000',
       '-c:a',
       'copy',
       // No offset of its own: the copied rung's segments already carry it.
