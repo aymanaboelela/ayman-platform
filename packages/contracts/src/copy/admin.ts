@@ -1829,6 +1829,8 @@ const admin = {
     empty: 'لسه مفيش مواد. نبدأ بالبريزنتيشن الأساسي.',
     onePresentationOnly: 'فيه بريزنتيشن أساسي واحد بس لكل محاضرة.',
     edit: 'تعديل',
+    /** The file the instructor uploaded, saved under the material's title. */
+    download: 'تحميل',
     save: 'حفظ',
     cancel: 'إلغاء',
   },

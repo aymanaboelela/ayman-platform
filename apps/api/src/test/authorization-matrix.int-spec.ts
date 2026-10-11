@@ -1585,6 +1585,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin course exam scaffold: student', method: 'post', path: () => `/api/admin/courses/${scratchCourseId}/exam/scaffold`, actor: 'student', status: 403 },
     { label: 'admin resource delete: anonymous', method: 'delete', path: () => `/api/admin/resources/${randomUUID()}`, actor: 'anonymous', status: 401 },
     { label: 'admin resource delete: student', method: 'delete', path: () => `/api/admin/resources/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin resource download: anonymous', method: 'get', path: () => `/api/admin/resources/${resourceId}/download`, actor: 'anonymous', status: 401 },
+    { label: 'admin resource download: student', method: 'get', path: () => `/api/admin/resources/${resourceId}/download`, actor: 'student', status: 403 },
     { label: 'admin resource patch: student', method: 'patch', path: () => `/api/admin/resources/${randomUUID()}`, actor: 'student', status: 403 },
     { label: 'admin resource reorder: student', method: 'patch', path: () => `/api/admin/lessons/${lessonId}/resources/order`, actor: 'student', status: 403 },
     { label: 'document upload: student', method: 'post', path: () => `/api/media/documents`, actor: 'student', status: 403 },
