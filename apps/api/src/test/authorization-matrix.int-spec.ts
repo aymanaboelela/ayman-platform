@@ -2061,10 +2061,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin wallets search: admin', method: 'get', path: () => '/api/admin/wallets?q=zz', actor: 'admin', status: 200 },
     { label: 'admin wallet: anonymous', method: 'get', path: () => `/api/admin/wallets/${randomUUID()}`, actor: 'anonymous', status: 401 },
     { label: 'admin wallet: student', method: 'get', path: () => `/api/admin/wallets/${randomUUID()}`, actor: 'student', status: 403 },
+    { label: 'admin wallet activity: anonymous', method: 'get', path: () => '/api/admin/wallets/activity', actor: 'anonymous', status: 401 },
+    { label: 'admin wallet activity: student', method: 'get', path: () => '/api/admin/wallets/activity', actor: 'student', status: 403 },
     { label: 'admin wallet: admin, unknown student', method: 'get', path: () => `/api/admin/wallets/${randomUUID()}`, actor: 'admin', status: 404 },
     { label: 'admin wallet credit: anonymous', method: 'post', path: () => `/api/admin/wallets/${randomUUID()}/credit`, actor: 'anonymous', status: 401 },
     { label: 'admin wallet credit: student', method: 'post', path: () => `/api/admin/wallets/${randomUUID()}/credit`, actor: 'student', status: 403, body: () => ({ amountCents: 10000, paid: true, idempotencyKey: randomUUID() }) },
-    { label: 'admin wallet credit: admin, unknown student', method: 'post', path: () => `/api/admin/wallets/${randomUUID()}/credit`, actor: 'admin', status: 404, body: () => ({ amountCents: 10000, paid: true, idempotencyKey: randomUUID() }) },
+    { label: 'admin wallet credit: admin, unknown student', method: 'post', path: () => `/api/admin/wallets/${randomUUID()}/credit`, actor: 'admin', status: 404, body: () => ({ amountCents: 10000, paid: true, note: 'تجربة', idempotencyKey: randomUUID() }) },
     { label: 'admin wallet debit: anonymous', method: 'post', path: () => `/api/admin/wallets/${randomUUID()}/debit`, actor: 'anonymous', status: 401 },
     { label: 'admin wallet debit: student', method: 'post', path: () => `/api/admin/wallets/${randomUUID()}/debit`, actor: 'student', status: 403, body: () => ({ amountCents: 10000, reducesIncome: false, note: 'غلطة', idempotencyKey: randomUUID() }) },
     // «طلبات الشحن».

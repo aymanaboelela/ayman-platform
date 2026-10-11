@@ -2,13 +2,19 @@ import { Body, Controller, Get, NotFoundException, Param, Post, Query, Res, UseP
 import type { Response } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { OUTPUT_MIME } from '@ayman/contracts/admin/media';
-import type { AdminWallet, AdminWalletSearch, AdminWalletTopupList } from '@ayman/contracts/admin/wallet';
+import type {
+  AdminWallet,
+  AdminWalletActivity,
+  AdminWalletSearch,
+  AdminWalletTopupList,
+} from '@ayman/contracts/admin/wallet';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { MediaService } from '../media/media.service';
 import {
   AdminApproveWalletTopupDto,
   AdminRejectWalletTopupDto,
+  AdminWalletActivityQueryDto,
   AdminWalletCreditDto,
   AdminWalletDebitDto,
   AdminWalletSearchQueryDto,
@@ -30,7 +36,14 @@ export class AdminWalletController {
   @RequirePermission('payment:read')
   @Get()
   search(@Query() query: AdminWalletSearchQueryDto): Promise<AdminWalletSearch> {
-    return this.wallet.search(query.q);
+    return this.wallet.search(query.q, query.filter);
+  }
+
+  /** «سجل الحركات». Declared before `:userId`, or Nest reads `activity` as one. */
+  @RequirePermission('payment:read')
+  @Get('activity')
+  activity(@Query() query: AdminWalletActivityQueryDto): Promise<AdminWalletActivity> {
+    return this.wallet.activity(query);
   }
 
   @RequirePermission('payment:read')
