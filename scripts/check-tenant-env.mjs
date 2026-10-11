@@ -62,7 +62,8 @@
  * Exit 0 = safe to deploy. Exit 1 = do not deploy.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 /** Values Ayman's live stack uses. Any of them on another stack is a leak. */
 const AYMANS = {
@@ -78,6 +79,32 @@ const AYMANS = {
  * than against a list of names — see the sweep.
  */
 const PLACEHOLDER = 'CHANGE_ME';
+
+/**
+ * The slugs of `packages/contracts/src/subjects.ts`, copied — this file runs
+ * with bare `node` and cannot import TypeScript. `check-tenant-env.spec.ts`
+ * fails the day the two lists differ.
+ */
+export const SUBJECT_SLUGS = [
+  'arabic',
+  'first_foreign_language',
+  'second_foreign_language',
+  'egyptian_history',
+  'mathematics',
+  'integrated_science',
+  'philosophy_logic',
+  'religious_education',
+  'programming_cs',
+  'physics',
+  'chemistry',
+  'biology',
+  'accounting',
+  'business_administration',
+  'psychology',
+  'economics',
+  'geography',
+  'statistics',
+];
 
 const errors = [];
 const warnings = [];
@@ -100,8 +127,17 @@ function warn(message) {
  * deploy fine, or bless a value Compose is about to truncate.
  */
 function parseEnvFile(path) {
+  return parseEnvText(readFileSync(path, 'utf8'));
+}
+
+/**
+ * The same parse, over text already in memory — the control plane reads a
+ * stack's environment out of Dokploy as one string, and has to read it exactly
+ * the way Compose (and this file) will.
+ */
+function parseEnvText(text) {
   const out = {};
-  for (const rawLine of readFileSync(path, 'utf8').split('\n')) {
+  for (const rawLine of text.split('\n')) {
     const line = rawLine.trim();
     if (line === '' || line.startsWith('#')) continue;
     const at = line.indexOf('=');
@@ -222,6 +258,19 @@ export function checkTenantEnv(env, options = {}) {
   // بيتقرا تحت في فحص مستند الصلاحيات: مقارنة `sub` بمفتاح غلط أصلًا
   // بتضيف غلطة تانية على نفس السبب.
   const keyIsValid = key !== '' && key !== 'ayman' && /^[a-z0-9][a-z0-9-]{1,30}$/.test(key);
+
+  // ── The subject ────────────────────────────────────────────────────────
+  //
+  // A slug the stack does not know would fall back to programming without a
+  // word — a physics teacher's site titled «البرمجة وعلوم الحاسب», with a Python
+  // playground in the nav. Empty is fine and means programming on purpose.
+  const subject = get(env, 'TENANT_SUBJECT');
+  if (subject !== '' && !SUBJECT_SLUGS.includes(subject)) {
+    fail(
+      `TENANT_SUBJECT "${subject}" is not a known subject. Use one of: ${SUBJECT_SLUGS.join(', ')} ` +
+        '(or leave it empty for programming_cs).',
+    );
+  }
 
   // ── Database ───────────────────────────────────────────────────────────
   const db = get(env, 'POSTGRES_DB');
@@ -776,6 +825,18 @@ export function checkTenantEnv(env, options = {}) {
         "belongs on the owner's stack only. Remove it.",
     );
   }
+  /*
+   * The provisioning key is worse than the signing key: Dokploy's API reads and
+   * rewrites EVERY stack's environment on the server — database passwords,
+   * auth secrets, the lot. On an instructor's stack it is not a feature leak,
+   * it is the keys to the other instructors' platforms.
+   */
+  if (get(env, 'CONTROL_PLANE_DOKPLOY_KEY') !== '') {
+    fail(
+      "CONTROL_PLANE_DOKPLOY_KEY is set. It is a Dokploy API key that can read and change every " +
+        "stack on the server, and it belongs on the owner's stack only. Remove it.",
+    );
+  }
   if (get(env, 'CONTROL_PLANE_TENANTS') !== '') {
     warn(
       'CONTROL_PLANE_TENANTS is set on an instructor stack. It does nothing here (the screen that ' +
@@ -811,7 +872,22 @@ export function checkTenantEnv(env, options = {}) {
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────
-const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
+/*
+ * ⚠️ An exact path comparison, not a basename match. The control plane imports
+ * this file into the Next server (`apps/web/lib/provisioning/tenant-env.ts`),
+ * and there `process.argv[1]` is the server's own entry point. The old
+ * `endsWith(basename)` test would have run the CLI — and its `process.exit` —
+ * inside the web server the day a bundler named a chunk after its entry file.
+ */
+function invokedDirectly() {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+const isMain = invokedDirectly();
 if (isMain) {
   const args = process.argv.slice(2);
   const firstDeploy = args.includes('--first-deploy');
@@ -836,4 +912,4 @@ if (isMain) {
   console.log(`\nOK${noted.length > 0 ? ` (${noted.length} warning(s))` : ''} — safe to deploy.`);
 }
 
-export { parseEnvFile };
+export { parseEnvFile, parseEnvText };

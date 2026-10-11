@@ -18,6 +18,7 @@
     "./onboarding": "./src/onboarding.ts",
     "./full-name": "./src/full-name.ts",
     "./cities": "./src/cities.ts",
+    "./subjects": "./src/subjects.ts",
     "./auth": "./src/auth.ts",
     "./profile": "./src/profile.ts",
     "./sessions": "./src/sessions.ts",
