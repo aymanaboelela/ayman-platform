@@ -1,8 +1,11 @@
 import { describe, expect, it } from '@jest/globals';
 import {
   readSegmentEncoding,
+  rungPlaylist,
   runThrottled,
   rungsToBuild,
+  segmentArgs,
+  usableProgress,
   sequenceIv,
   throttleDecision,
   throttleLimits,
@@ -169,5 +172,73 @@ describe('waitUntilCalm', () => {
       onWaiting: (waiting) => void events.push(waiting),
     });
     expect(events).toEqual([true, false]);
+  });
+});
+
+describe('segmentArgs — one segment into every missing rung', () => {
+  const rungs = [
+    { height: 720, maxKbps: 3000, audioKbps: 128 },
+    { height: 480, maxKbps: 1200, audioKbps: 96 },
+  ];
+  const args = segmentArgs('/w/in.ts', rungs.map((rung) => ({ rung, file: `/w/r${rung.height}/out.ts` })), 1, 'faster');
+
+  it('keeps the copied rung\'s timestamps — one timeline for every rung', () => {
+    expect(args.indexOf('-copyts')).toBeLessThan(args.indexOf('-i'));
+    // and adds no offset of its own
+    expect(args.filter((a) => a === '-muxdelay')).toHaveLength(2);
+    expect(args[args.indexOf('-muxdelay') + 1]).toBe('0');
+  });
+
+  it('copies the audio — re-encoding six seconds at a time would click at every boundary', () => {
+    expect(args.filter((a, i) => a === 'copy' && args[i - 1] === '-c:a')).toHaveLength(2);
+    expect(args).not.toContain('aac');
+  });
+
+  it('decodes once and scales into each rung', () => {
+    expect(args[args.indexOf('-filter_complex') + 1]).toBe(
+      '[0:v]split=2[s0][s1];[s0]scale=-2:720:flags=bicubic[v0];[s1]scale=-2:480:flags=bicubic[v1]',
+    );
+    expect(args.slice(-1)[0]).toBe('/w/r480/out.ts');
+  });
+
+  it('uses one core and the faster preset', () => {
+    expect(args[args.indexOf('-threads') + 1]).toBe('1');
+    expect(args[args.indexOf('-preset') + 1]).toBe('faster');
+  });
+
+  it('has a plain filter for a single rung', () => {
+    const one = segmentArgs('/w/in.ts', [{ rung: rungs[0]!, file: '/w/o.ts' }], 1);
+    expect(one[one.indexOf('-filter_complex') + 1]).toBe('[0:v]scale=-2:720:flags=bicubic[v0]');
+  });
+});
+
+describe('rungPlaylist', () => {
+  const top = { targetDurationSeconds: 7, segments: [{ durationSeconds: 6 }, { durationSeconds: 5.866667 }] };
+
+  it('has the tallest rung\'s cuts, our names, and one key line with the zero IV', () => {
+    const text = rungPlaylist(top, 'https://x/api/videos/abc/key');
+    expect(text).toContain('#EXT-X-KEY:METHOD=AES-128,URI="https://x/api/videos/abc/key",IV=0x00000000000000000000000000000000');
+    expect(text).toContain('#EXTINF:5.866667,\nseg_001.ts');
+    expect(text.trim().endsWith('#EXT-X-ENDLIST')).toBe(true);
+  });
+
+  it('has no key line for a lecture published unencrypted', () => {
+    expect(rungPlaylist(top, null)).not.toContain('EXT-X-KEY');
+  });
+});
+
+describe('usableProgress', () => {
+  it('resumes from a checkpoint for the same rung and the same cut', () => {
+    const text = JSON.stringify({ height: 720, segments: 1012, done: 40, sizes: Array(40).fill(1000) });
+    expect(usableProgress(text, 720, 1012)?.done).toBe(40);
+  });
+
+  it('starts over for another rung, another cut, or a checkpoint that claims more than it recorded', () => {
+    const base = { height: 720, segments: 1012, done: 40, sizes: Array(40).fill(1000) };
+    expect(usableProgress(JSON.stringify(base), 480, 1012)).toBeNull();
+    expect(usableProgress(JSON.stringify(base), 720, 1000)).toBeNull();
+    expect(usableProgress(JSON.stringify({ ...base, sizes: [1] }), 720, 1012)).toBeNull();
+    expect(usableProgress('{not json', 720, 1012)).toBeNull();
+    expect(usableProgress(null, 720, 1012)).toBeNull();
   });
 });
