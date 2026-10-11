@@ -3408,6 +3408,23 @@ export const copy = {
     videoFallbackNote: 'النت عندك كان مانع المشغّل بتاعنا، فشغّلناه بطريقة تانية. الدرس مش هيتسجّل لوحده — دوس «خلاص · التالي» لما تخلّص.',
     videoOpenOnYouTube: 'افتحه على يوتيوب',
     /*
+     * «تابلت الوزارة مش بيسمح بيوتيوب» — shown IN PLACE of a YouTube lecture
+     * on a network that blocks YouTube outright (`youtube-reach.ts`), instead
+     * of the dark plain embed that was all a ministry-tablet student got.
+     *
+     * No masculine imperatives — the platform never asks who is watching —
+     * so the actions are nouns («نسخ»، «إرسال») and the advice is about the
+     * lecture («بتشتغل عادي»), not an order to the student.
+     */
+    videoBlockedTitle: 'يوتيوب مقفول على الجهاز ده',
+    videoBlockedBody:
+      'المحاضرة دي متشغّلة من يوتيوب، وتابلت الوزارة وبعض شبكات المدارس بيقفلوه. على الموبايل أو اللابتوب بتشتغل عادي.',
+    videoBlockedShare: 'إرسال الرابط للموبايل',
+    videoBlockedCopy: 'نسخ رابط المحاضرة',
+    videoBlockedCopied: 'اتنسخ الرابط',
+    videoBlockedRetry: 'محاولة تانية',
+    videoBlockedOpenYouTube: 'فتح على يوتيوب',
+    /*
      * The lecture is on our origin and nowhere else, so there is no «افتحه
      * على يوتيوب» under this one. What is left really is worth retrying: the
      * causes are a dropped segment or an origin hiccup, and a reload clears
