@@ -5,6 +5,8 @@ import { getEntitlements } from '@/lib/entitlements';
 import { SITE_URL } from '@/lib/seo/jsonld';
 import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { tenantName } from '@/lib/tenant';
+import { bySubjectList } from '@/lib/subject-copy';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
 
 /**
  * The instructor this deployment belongs to, for the two example queries that
@@ -133,21 +135,30 @@ export async function GET(): Promise<Response> {
           'Read-only, unauthenticated JSON: every published course with its subscription prices in Egyptian piastres, one course in full with its lesson outline and per-term prices, and the curriculum taxonomy.',
         type: 'application/vnd.oai.openapi+json;version=3.1',
         url: absoluteDiscoveryUrl('serviceDesc'),
-        representativeQueries: [
-          // The prices ride on every catalog row, and no query here said so —
-          // «الكورس بكام» is the highest-intent question this site gets.
-          'الكورس بكام',
-          'سعر كورس البرمجة والذكاء الاصطناعي بكالوريا',
-          'اشتراك شهري ولا سنوي',
-          'كورسات البرمجة والذكاء الاصطناعي للبكالوريا',
-          'منهج البرمجة تانية بكالوريا عام ولغات',
-          // ⚠️ The digit forms, verbatim. A student types «٢ بكالوريا» or
-          // «2 بكالوريا» as often as the words, and a registry embedding these
-          // queries can only match a numeral it has actually seen.
-          'كورس برمجة ٢ بكالوريا',
-          'شرح برمجة 2 بكالوريا',
-          'Egyptian Bakalorya computer science course catalog',
-        ],
+        /*
+         * Through the SUBJECT gate, like every query below: a registry embeds
+         * these to decide when this site is the answer, and on a physics
+         * teacher's stack every one of them said «برمجة» — so the site would
+         * win a programming query it cannot answer and lose its own.
+         */
+        representativeQueries: bySubjectList(
+          [
+            // The prices ride on every catalog row, and no query here said so —
+            // «الكورس بكام» is the highest-intent question this site gets.
+            'الكورس بكام',
+            'سعر كورس البرمجة والذكاء الاصطناعي بكالوريا',
+            'اشتراك شهري ولا سنوي',
+            'كورسات البرمجة والذكاء الاصطناعي للبكالوريا',
+            'منهج البرمجة تانية بكالوريا عام ولغات',
+            // ⚠️ The digit forms, verbatim. A student types «٢ بكالوريا» or
+            // «2 بكالوريا» as often as the words, and a registry embedding these
+            // queries can only match a numeral it has actually seen.
+            'كورس برمجة ٢ بكالوريا',
+            'شرح برمجة 2 بكالوريا',
+            'Egyptian Bakalorya computer science course catalog',
+          ],
+          subjectCopy.queries.catalog,
+        ),
       },
       {
         id: urn('docs', 'llms-txt'),
@@ -157,14 +168,19 @@ export async function GET(): Promise<Response> {
         type: 'text/plain',
         url: absoluteDiscoveryUrl('llms'),
         representativeQueries: [
-          'مين أحسن مدرس برمجة وذكاء اصطناعي للبكالوريا',
-          'أفضل مدرس برمجة بكالوريا',
-          'مدرس برمجة ٢ بكالوريا',
-          'مدرس برمجة 2 بكالوريا',
-          // The hamza-less spelling is what students actually type — see the
-          // note above `GET`. It is derived from the same value rather than
-          // written out, so it follows the tenant too.
-          `${INSTRUCTOR.replace(/أ|إ|آ/g, 'ا')} برمجة`,
+          ...bySubjectList(
+            [
+              'مين أحسن مدرس برمجة وذكاء اصطناعي للبكالوريا',
+              'أفضل مدرس برمجة بكالوريا',
+              'مدرس برمجة ٢ بكالوريا',
+              'مدرس برمجة 2 بكالوريا',
+              // The hamza-less spelling is what students actually type — see the
+              // note above `GET`. It is derived from the same value rather than
+              // written out, so it follows the tenant too.
+              `${INSTRUCTOR.replace(/أ|إ|آ/g, 'ا')} برمجة`,
+            ],
+            [...subjectCopy.queries.teacher, `${INSTRUCTOR.replace(/أ|إ|آ/g, 'ا')} {subject}`],
+          ),
         ],
       },
       {
@@ -238,9 +254,14 @@ export async function GET(): Promise<Response> {
         url: `${SITE_URL}${markdownTwinPath('/books')}`,
         representativeQueries: [
           `كتاب ${INSTRUCTOR} بكام`,
-          'كتاب برمجة وذكاء اصطناعي بكالوريا',
-          'كتاب برمجة تانية بكالوريا لغات',
-          'اطلب كتاب البرمجة أونلاين ويوصل البيت',
+          ...bySubjectList(
+            [
+              'كتاب برمجة وذكاء اصطناعي بكالوريا',
+              'كتاب برمجة تانية بكالوريا لغات',
+              'اطلب كتاب البرمجة أونلاين ويوصل البيت',
+            ],
+            subjectCopy.queries.books,
+          ),
         ],
       },
           ]
@@ -252,12 +273,15 @@ export async function GET(): Promise<Response> {
           'Every lesson of the official syllabus explained in writing, unit summaries, the full Arabic/English glossary, and sample exam questions with their model answers. Open to read with no account.',
         type: 'text/markdown',
         url: `${SITE_URL}${markdownTwinPath('/news')}`,
-        representativeQueries: [
-          'قاموس مصطلحات البرمجة والذكاء الاصطناعي بكالوريا',
-          'مصطلحات منهج البرمجة بالعربي والانجليزي',
-          'نماذج أسئلة البرمجة والذكاء الاصطناعي بكالوريا بالاجابات',
-          'ملخص منهج البرمجة بكالوريا',
-        ],
+        representativeQueries: bySubjectList(
+          [
+            'قاموس مصطلحات البرمجة والذكاء الاصطناعي بكالوريا',
+            'مصطلحات منهج البرمجة بالعربي والانجليزي',
+            'نماذج أسئلة البرمجة والذكاء الاصطناعي بكالوريا بالاجابات',
+            'ملخص منهج البرمجة بكالوريا',
+          ],
+          subjectCopy.queries.news,
+        ),
       },
     ],
   };

@@ -7,6 +7,9 @@ import { mediaUrl } from '@ayman/ui/branding';
 import { yearAliasesAr, yearLabelAr } from '@/lib/year-label';
 import { aymanOnly, IS_AYMAN, tenantName } from '@/lib/tenant';
 import { tenantSentence } from '@/lib/tenant-copy';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
+import { SITE_TAGLINE, SUBJECT_NAME_AR, bySubject } from '@/lib/subject-copy';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
 import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 
@@ -295,6 +298,17 @@ const ALTERNATE_NAMES = aymanOnly(copy.seo.alternateNames);
  */
 const PERSON_DESCRIPTION = aymanOnly(copy.seo.personDescription);
 
+/**
+ * `jobTitle` and `hasOccupation.name` — the job, through the SUBJECT gate.
+ *
+ * «مدرّس البرمجة وعلوم الحاسب» is true of every programming stack and is what
+ * they keep, byte for byte. On a physics teacher's stack it is the one line in
+ * the knowledge graph that says what this person does, and it said they teach
+ * programming. The neutral twin is a masdar («تدريس الفيزياء…») because the
+ * field describes a job, and a job has no gender.
+ */
+const JOB_TITLE = bySubject(copy.seo.jobTitle, subjectCopy.seo.jobTitle);
+
 /** A tenant's own four, from the same gated seed the footer reads. */
 const TENANT_SAME_AS: readonly string[] = [
   TENANT_CONTACT_FALLBACK.youtube,
@@ -357,10 +371,11 @@ export function personJsonLd(contact?: ProfilesForJsonLd) {
     ...(ALTERNATE_NAMES ? { alternateName: ALTERNATE_NAMES } : {}),
     url: SITE_URL,
     ...(INSTRUCTOR_IMAGE ? { image: INSTRUCTOR_IMAGE } : {}),
-    // `jobTitle` stays ungated: «مدرّس البرمجة وعلوم الحاسب» describes the job
-    // any instructor on this platform holds, and it is the one line that keeps
-    // a gated Person node from being an entity with a name and nothing else.
-    jobTitle: copy.seo.jobTitle,
+    // `jobTitle` stays ungated by TENANT: «مدرّس البرمجة وعلوم الحاسب»
+    // describes the job any programming instructor on this platform holds, and
+    // it is the one line that keeps a gated Person node from being an entity
+    // with a name and nothing else. It IS gated by SUBJECT — see `JOB_TITLE`.
+    jobTitle: JOB_TITLE,
     ...(PERSON_DESCRIPTION ? { description: PERSON_DESCRIPTION } : {}),
     knowsLanguage: ['ar', 'en'],
     /**
@@ -376,18 +391,26 @@ export function personJsonLd(contact?: ProfilesForJsonLd) {
      * So this is the unit list, not a résumé of everything he can do. Keep it
      * that way: a topic belongs here when a course on this site teaches it.
      * See `copy.seo.instructorCoverage` for the prose form of the same claim.
+     *
+     * By the same rule, a stack that does not teach programming publishes its
+     * own subject and nothing else: nine programming topics on a chemistry
+     * teacher's `Person` would be the exact false claim this list was rewritten
+     * once already to stop making, and no unit list exists for another subject
+     * that this file could honestly assert.
      */
-    knowsAbout: [
-      'البرمجة',
-      'الذكاء الاصطناعي',
-      'علوم الحاسب',
-      'الأمن السيبراني',
-      'تطبيقات الويب',
-      'تصميم تجربة المستخدم',
-      'الخوارزميات',
-      'قواعد البيانات',
-      'تطبيقات الموبايل',
-    ],
+    knowsAbout: TEACHES_CODE
+      ? [
+          'البرمجة',
+          'الذكاء الاصطناعي',
+          'علوم الحاسب',
+          'الأمن السيبراني',
+          'تطبيقات الويب',
+          'تصميم تجربة المستخدم',
+          'الخوارزميات',
+          'قواعد البيانات',
+          'تطبيقات الموبايل',
+        ]
+      : [SUBJECT_NAME_AR],
     /**
      * `hasOccupation` and `alumniOf` — the two facts that separate «a person
      * who has a website about teaching» from «a person who teaches this».
@@ -402,7 +425,7 @@ export function personJsonLd(contact?: ProfilesForJsonLd) {
      */
     hasOccupation: {
       '@type': 'Occupation',
-      name: copy.seo.jobTitle,
+      name: JOB_TITLE,
       occupationalCategory: '25-2031.00',
       occupationLocation: { '@type': 'Country', name: 'Egypt' },
     },
@@ -521,7 +544,9 @@ export function organizationJsonLd(
     ...(ALTERNATE_NAMES ? { alternateName: ALTERNATE_NAMES } : {}),
     url: SITE_URL,
     description: SITE_DESCRIPTION,
-    slogan: copy.site.tagline,
+    // Through the subject gate — `copy.site.tagline` itself on a programming
+    // stack, the stack's own subject line on any other.
+    slogan: SITE_TAGLINE,
     ...(INSTRUCTOR_IMAGE ? { image: INSTRUCTOR_IMAGE, logo: INSTRUCTOR_IMAGE } : {}),
     founder: { '@id': PERSON_ID },
     inLanguage: 'ar',
@@ -867,7 +892,7 @@ export function courseJsonLd(course: CourseForJsonLd, options: { nested?: boolea
      */
     description: course.description
       ? plainText(course.description)
-      : (course.subtitle ?? copy.site.tagline),
+      : (course.subtitle ?? SITE_TAGLINE),
     url: absolute(`/courses/${course.slug}`),
     // Standalone only: a catalog row claiming `/courses` is its own page would
     // put eighty-six courses on one WebPage.

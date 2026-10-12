@@ -7,6 +7,7 @@ import {
 } from '@ayman/contracts/admin/settings';
 import { bound, resolve } from './api';
 import { tags } from './cache-tags';
+import { tenantBrandingDefaults } from '@ayman/contracts/admin/tenant-branding';
 
 /**
  * The public site's cached configuration reads.
@@ -83,7 +84,14 @@ export async function getBranding(): Promise<BrandingRead> {
     return branding;
   } catch {
     cacheLife('minutes');
-    return BrandingReadSchema.parse({});
+    // The look the owner picked when the stack was created, not the schema's
+    // amber classic — this is what `next build` bakes into the prerendered
+    // page, so a new teacher's site must not flash someone else's default
+    // look for the minutes after every deploy. `{}` on Ayman's stack.
+    return BrandingReadSchema.parse(tenantBrandingDefaults({
+      TENANT_LANDING_PRESET: process.env.TENANT_LANDING_PRESET,
+      TENANT_ACCENT: process.env.TENANT_ACCENT,
+    }));
   }
 }
 

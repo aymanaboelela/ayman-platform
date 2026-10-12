@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { tenantSentence } from '@/lib/tenant-copy';
 import Link from 'next/link';
 import { copy } from '@ayman/contracts';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
+import { bySubject } from '@/lib/subject-copy';
 import { JsonLd } from '@/components/seo/json-ld';
 import { getEntitlements } from '@/lib/entitlements';
 import { breadcrumbJsonLd, faqPageJsonLd } from '@/lib/seo/jsonld';
@@ -14,7 +16,7 @@ const c = copy.subscribePage;
 export async function generateMetadata(): Promise<Metadata> {
   return buildMetadata({
     title: tenantSentence(c.metaTitle),
-    description: tenantSentence(c.metaDescription),
+    description: tenantSentence(bySubject(c.metaDescription, subjectCopy.subscribePage.metaDescription)),
     path: '/subscribe',
   });
 }

@@ -10,11 +10,13 @@ import {
   Layers,
   LineChart,
   Lightbulb,
+  NotebookPen,
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { gsap } from '@/lib/gsap';
 import { useGsap } from '@/components/motion/use-gsap';
 import { tenantSentence } from '@/lib/tenant-copy';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
 
 const c = copy.landing;
 
@@ -35,7 +37,9 @@ export interface WhyRailItem {
  */
 const ICONS = [
   <Flag size={26} key="flag" />,
-  <Code2 size={26} key="code" />,
+  // The one glyph in the set that is about code. A stack that teaches another
+  // subject composes its own eight cards, and none of them is «كود من أول يوم».
+  TEACHES_CODE ? <Code2 size={26} key="code" /> : <NotebookPen size={26} key="notes" />,
   <Dumbbell size={26} key="dumbbell" />,
   <LineChart size={26} key="chart" />,
   <Layers size={26} key="layers" />,

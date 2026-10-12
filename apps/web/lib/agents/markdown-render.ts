@@ -1,7 +1,11 @@
 import { copy, formatCopy } from '@ayman/contracts';
 import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
-import { tenantName } from '@/lib/tenant';
+import { aymanOnly, tenantName } from '@/lib/tenant';
 import { tenantSentence } from '@/lib/tenant-copy';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
+import { SITE_TAGLINE, bySubject } from '@/lib/subject-copy';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
+import type { AboutSettings } from '@ayman/contracts/admin/settings';
 import type {
   CatalogCourse,
   CatalogCourseDetail,
@@ -237,7 +241,7 @@ export function renderHomeMarkdown(
       * instructor line and the `/about` link were the three that were not.
       */
     `# ${tenantName(copy.site.platformName)}`,
-    `> ${copy.site.tagline}`,
+    `> ${SITE_TAGLINE}`,
     /*
      * ⚠️ `SITE_DESCRIPTION`, not `copy.seo.description`. This surface is read by
      * ASSISTANTS, which is the worst place for the wrong instructor's name: a page
@@ -248,13 +252,21 @@ export function renderHomeMarkdown(
     SITE_DESCRIPTION,
     `## ${copy.landing.featuresTitle}`,
     join([
-      `**${copy.landing.feature1Title}** — ${copy.landing.feature1Body}`,
+      `**${copy.landing.feature1Title}** — ${bySubject(copy.landing.feature1Body, subjectCopy.landing.feature1Body)}`,
       `**${copy.landing.feature2Title}** — ${copy.landing.feature2Body}`,
       `**${copy.landing.feature3Title}** — ${copy.landing.feature3Body}`,
     ]),
-    `## ${copy.landing.tracksSelectTitle}`,
+    // The heading the year cards carry on a stack that does not teach code —
+    // `year-cards.tsx` — so the twin and the page name the section alike.
+    `## ${bySubject(copy.landing.tracksSelectTitle, subjectCopy.landing.tracksTitle)}`,
     [
-      `- [${copy.landing.trackEssentialsTitle}](${url('/essentials')}) — ${copy.landing.trackEssentialsBody}`,
+      // «التأسيس» is the code glossary, and it 404s on a stack that does not
+      // teach code — the same line `/llms.txt` drops there.
+      ...(TEACHES_CODE
+        ? [
+            `- [${copy.landing.trackEssentialsTitle}](${url('/essentials')}) — ${copy.landing.trackEssentialsBody}`,
+          ]
+        : []),
       `- [${copy.years.year1}](${url('/years/1')})`,
       `- [${copy.years.year2}](${url('/years/2')})`,
       `- [${copy.years.year3}](${url('/years/3')})`,
@@ -264,14 +276,31 @@ export function renderHomeMarkdown(
       ? courses.map((course) => courseLine(course)).join('\n')
       : `${copy.catalog.empty} — ${url('/courses')}`,
     `## ${copy.landing.instructorTitle}`,
-    `**${tenantName(copy.landing.instructorName)}** — ${copy.landing.instructorBody}`,
+    `**${tenantName(copy.landing.instructorName)}** — ${bySubject(copy.landing.instructorBody, subjectCopy.landing.instructorBody)}`,
     `[${tenantSentence(copy.landing.aboutTitle)}](${url('/about')})`,
     faq,
     footer('/', copy.agents.contentNote),
   ]);
 }
 
-export function renderAboutMarkdown(): string {
+/**
+ * `/about.md` — the same facts `/about` renders, read from the same places.
+ *
+ * ⚠️ `about` is the instructor's own «عن المدرّس» settings, and it is a
+ * parameter because the PAGE reads it: `<AboutInstructor>` prints
+ * `about.bioAr` and `about.credits`, and falls back to his written biography
+ * on his stack only. This twin used to print `aboutBody2`, `aboutBody3` and
+ * `aboutCredits` unconditionally — his eight years as a software engineer, his
+ * university, GDG, Microsoft Egypt — on every instructor's domain, in the one
+ * document written for the assistants that decide who teaches there. The page
+ * had been gated for months; its twin was the leak.
+ *
+ * Omitted, `about` is the empty settings row: on his stack that is the page he
+ * has (`aboutBody2/3` and his credits), and on any other it is no biography.
+ */
+export function renderAboutMarkdown(
+  about: Pick<AboutSettings, 'bioAr' | 'credits'> = { bioAr: '', credits: [] },
+): string {
   /*
    * ⚠️ `mark.name`, not `mark`. `aboutCredits[].marks` used to be an array of
    * strings and became `{ id, name, short }` when the credits section grew its
@@ -285,13 +314,18 @@ export function renderAboutMarkdown(): string {
    * Nothing in CI could see it: the twin's own test asserted on `copy.landing`
    * strings that this line never touched, and `[object Object]` is a valid
    * string. The test below now names the literal.
+   *
+   * The instructor's own credits win, as on the page; they carry no marks.
    */
-  const credits = copy.landing.aboutCredits
-    .map(
-      (credit) =>
-        `### ${credit.label}\n\n${credit.marks.map((mark) => mark.name).join(' · ')}\n\n${credit.note}`,
-    )
-    .join('\n\n');
+  const credits =
+    about.credits.length > 0
+      ? about.credits.map((credit) => `### ${credit.labelAr}\n\n${credit.noteAr}`).join('\n\n')
+      : (aymanOnly(copy.landing.aboutCredits) ?? [])
+          .map(
+            (credit) =>
+              `### ${credit.label}\n\n${credit.marks.map((mark) => mark.name).join(' · ')}\n\n${credit.note}`,
+          )
+          .join('\n\n');
 
   return join([
     // `aboutPageTitle` is the BARE name and nothing else, so `tenantName()` is
@@ -300,11 +334,12 @@ export function renderAboutMarkdown(): string {
     // because it is inside a link label there; both land on the same answer,
     // which is the point: this is the H1 of the HTML page's twin.)
     `# ${tenantName(copy.landing.aboutPageTitle)}`,
-    `> ${copy.landing.aboutPageLead}`,
-    copy.landing.aboutBody1,
-    copy.landing.aboutBody2,
-    copy.landing.aboutBody3,
-    `**${copy.landing.aboutRole}**`,
+    `> ${bySubject(copy.landing.aboutPageLead, subjectCopy.landing.aboutPageLead)}`,
+    bySubject(copy.landing.aboutBody1, subjectCopy.landing.aboutBody1),
+    // The same three reads `<AboutInstructor>` makes, in the same order.
+    about.bioAr || aymanOnly(copy.landing.aboutBody2),
+    aymanOnly(copy.landing.aboutBody3),
+    `**${tenantSentence(bySubject(copy.landing.aboutRole, subjectCopy.landing.aboutRole))}**`,
     credits,
     `## ${copy.landing.aboutPageCoursesTitle}`,
     `[${copy.landing.aboutPageCta}](${url('/courses')})`,
@@ -315,7 +350,7 @@ export function renderAboutMarkdown(): string {
 export function renderCoursesMarkdown(courses: readonly CatalogCourse[]): string {
   return join([
     `# ${copy.catalog.title}`,
-    `> ${copy.catalog.subtitle}`,
+    `> ${bySubject(copy.catalog.subtitle, subjectCopy.catalog.subtitle)}`,
     courses.length > 0 ? courses.map((course) => courseLine(course)).join('\n') : copy.catalog.empty,
     footer('/courses', copy.agents.contentNote),
   ]);
@@ -336,7 +371,7 @@ export function renderYearMarkdown(year: 1 | 2 | 3, courses: readonly CatalogCou
   const forYear = courses.filter((course) => course.year === year);
   return join([
     `# ${yearLabelAr(year)}`,
-    `> ${copy.catalog.subtitle}`,
+    `> ${bySubject(copy.catalog.subtitle, subjectCopy.catalog.subtitle)}`,
     /*
      * ⚠️ The year's other spellings, digits included, right under the heading.
      *
@@ -501,7 +536,7 @@ export function renderBooksMarkdown(catalog: BookCatalog): string {
     // same string for its `<title>`; `bookListJsonLd()` gates it for the
     // `ItemList` name. This is the third reader of it.
     `# ${tenantSentence(b.metaTitle)}`,
-    `> ${b.metaDescription}`,
+    `> ${bySubject(b.metaDescription, subjectCopy.books.metaDescription)}`,
     b.lead,
     /*
      * The delivery fee, stated once, exactly as the shelf states it. A book
@@ -558,7 +593,7 @@ export function renderSubscribeMarkdown(contact: {
 
   return join([
     `# ${c.title}`,
-    `> ${c.metaDescription}`,
+    `> ${bySubject(c.metaDescription, subjectCopy.subscribePage.metaDescription)}`,
     c.lead,
     subscribeSteps()
       .map((step, index) => `${index + 1}. **${step.title}** — ${step.body}`)
@@ -576,8 +611,8 @@ export function renderNewsIndexMarkdown(posts: readonly NewsListItem[]): string 
     .join('\n');
 
   return join([
-    `# ${copy.news.heading}`,
-    `> ${copy.news.subtitle}`,
+    `# ${bySubject(copy.news.heading, subjectCopy.news.heading)}`,
+    `> ${bySubject(copy.news.subtitle, subjectCopy.news.subtitle)}`,
     posts.length > 0 ? list : copy.news.empty,
     footer('/news', copy.agents.openNote),
   ]);

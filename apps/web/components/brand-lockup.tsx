@@ -21,6 +21,9 @@ import { mediaUrl } from '@ayman/ui/branding';
 import { getBrandAsset } from '@/lib/brand-assets';
 import { useBrandMark } from '@/components/brand-mark-provider';
 import { tenantName } from '@/lib/tenant';
+// `STACK_MONOGRAM` — `</>` on a stack that teaches code, the stack's own
+// initial on any other; see its note.
+import { SITE_TAGLINE, STACK_MONOGRAM } from '@/lib/subject-copy';
 
 /**
  * The product wordmark: the instructor's portrait plus the name and tagline.
@@ -130,7 +133,7 @@ export function BrandLockup({
         ) : mark ? (
           <Image src={mark.src} width={mark.width} height={mark.height} alt="" sizes="38px" />
         ) : (
-          <>&lt;/&gt;</>
+          STACK_MONOGRAM
         )}
       </span>
       <span className="brand__text">
@@ -160,7 +163,11 @@ export function BrandLockup({
           invent one for him.
         */}
         <span className="brand__name">{tenantName(copy.site.instructor)}</span>
-        {showTagline ? <span className="brand__tag">{copy.site.tagline}</span> : null}
+        {/* `SITE_TAGLINE` — the subject line through the subject gate, so a
+            physics teacher's five signed-in surfaces do not say «البرمجة وعلوم
+            الحاسب» under their name. `copy.site.tagline` itself on a
+            programming stack. */}
+        {showTagline ? <span className="brand__tag">{SITE_TAGLINE}</span> : null}
       </span>
     </span>
   );

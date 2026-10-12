@@ -3,6 +3,8 @@ import { copy } from '@ayman/contracts/copy';
 import { BRAND_ASSET_RATIO, getBrandAsset, type BrandAssetKind } from '@/lib/brand-assets';
 import { mediaUrl } from '@ayman/ui/branding';
 import { tenantName } from '@/lib/tenant';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
+import { SITE_TAGLINE, STACK_MONOGRAM } from '@/lib/subject-copy';
 
 /**
  * أنهي حقل في إعدادات المدرّس بيغذّي أنهي خانة.
@@ -172,17 +174,24 @@ function HeroFallback() {
           when other layers were added on top. A single window, lit and
           off-centre, holds the space the photo will take without pretending to
           be the photo. */}
-      <div className="hero-stage__pane hero-stage__pane--front">
-        <CodePane
-          file="you.js"
-          lines={[
-            [['k', 'let'], ['p', ' '], ['v', 'ready'], ['p', ' = '], ['n', 'true'], ['p', ';']],
-            [['k', 'while'], ['p', ' ('], ['v', 'ready'], ['p', ') {']],
-            [['p', '  '], ['f', 'learn'], ['p', '();']],
-            [['p', '}']],
-          ]}
-        />
-      </div>
+      {/* The pane is CODE, so it is only drawn where the subject is: on any
+          other stack the hero keeps its lit stage — glow, beam and floor, the
+          same set `<CutoutFallback>` is built from — and loses the `you.js`
+          window, which on a chemistry teacher's landing page was the first
+          picture a visitor saw. */}
+      {TEACHES_CODE ? (
+        <div className="hero-stage__pane hero-stage__pane--front">
+          <CodePane
+            file="you.js"
+            lines={[
+              [['k', 'let'], ['p', ' '], ['v', 'ready'], ['p', ' = '], ['n', 'true'], ['p', ';']],
+              [['k', 'while'], ['p', ' ('], ['v', 'ready'], ['p', ') {']],
+              [['p', '  '], ['f', 'learn'], ['p', '();']],
+              [['p', '}']],
+            ]}
+          />
+        </div>
+      ) : null}
 
       <div className="hero-stage__floor" />
     </div>
@@ -211,7 +220,9 @@ function PortraitFallback() {
     <div className="portrait-stage" aria-hidden="true">
       <div className="portrait-stage__field" />
       <div className="portrait-stage__rings" />
-      <span className="portrait-stage__monogram">&lt;/&gt;</span>
+      {/* `</>` where the subject is code, the stack's own initial elsewhere —
+          see `STACK_MONOGRAM`. */}
+      <span className="portrait-stage__monogram">{STACK_MONOGRAM}</span>
     </div>
   );
 }
@@ -237,7 +248,8 @@ function LogoFallback() {
         every other name gate was correct.
       */}
       <span className="wordmark__name">{tenantName(copy.site.name)}</span>
-      <span className="wordmark__tag">{copy.site.tagline}</span>
+      {/* Through the subject gate — see `SITE_TAGLINE`. */}
+      <span className="wordmark__tag">{SITE_TAGLINE}</span>
     </span>
   );
 }

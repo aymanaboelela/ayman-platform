@@ -1625,6 +1625,8 @@ export const copy = {
     profileHoursLabel: 'ساعة شرح',
     profileCta: 'كل الكورسات',
     profileSecondary: 'عن المهندس',
+    /** The same link on any other teacher's stack — names the section, not a title. */
+    profileSecondaryNeutral: 'نبذة تعريفية',
     profileAll: 'الكل',
     profileYear: 'الصف',
     profileEmpty: 'مفيش كورسات في الصف ده لسه.',

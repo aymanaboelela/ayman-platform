@@ -80,6 +80,13 @@ ENV NEXT_PUBLIC_GOOGLE_ENABLED=$NEXT_PUBLIC_GOOGLE_ENABLED
 # too. So this costs nothing that was not already true.
 ARG TENANT_KEY
 ARG TENANT_DISPLAY_NAME
+# The subject — empty = programming_cs. Same build-time reason as the two
+# above: the title, the landing cards and whether `/playground` exists are all
+# decided in the prerender and inlined into the client bundle.
+ARG TENANT_SUBJECT
+# The landing look from «مدرّس جديد» — the branding fallback the prerender bakes.
+ARG TENANT_LANDING_PRESET
+ARG TENANT_ACCENT
 ARG TENANT_YOUTUBE
 ARG TENANT_INSTAGRAM
 ARG TENANT_TIKTOK
@@ -88,6 +95,9 @@ ARG TENANT_WHATSAPP_CHANNEL
 ARG TENANT_WHATSAPP
 ENV TENANT_KEY=$TENANT_KEY
 ENV TENANT_DISPLAY_NAME=$TENANT_DISPLAY_NAME
+ENV TENANT_SUBJECT=$TENANT_SUBJECT
+ENV TENANT_LANDING_PRESET=$TENANT_LANDING_PRESET
+ENV TENANT_ACCENT=$TENANT_ACCENT
 ENV TENANT_YOUTUBE=$TENANT_YOUTUBE
 ENV TENANT_INSTAGRAM=$TENANT_INSTAGRAM
 ENV TENANT_TIKTOK=$TENANT_TIKTOK
@@ -139,7 +149,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # ⚠️ ومتشيلهاش عشان «مالهاش لازمة». من غيرها، طالب بيفتح منصة مدرّسه
 # بيلاقي اسم وسيرة مدرّس تاني — والفحص بيقول «safe to deploy» والدومين
 # بيشتغل والصفحة بترسم عادي.
-RUN echo "tenant=${TENANT_KEY} name=${TENANT_DISPLAY_NAME}" >/dev/null && \
+#
+# ⚠️ `subject=` belongs in the same text for the same reason. Two stacks with
+# the same key and name but a different subject would otherwise share this
+# layer, and a physics teacher would be served a programming site — Python
+# playground and all — from somebody else's cached build.
+RUN echo "tenant=${TENANT_KEY} name=${TENANT_DISPLAY_NAME} subject=${TENANT_SUBJECT} look=${TENANT_LANDING_PRESET}/${TENANT_ACCENT}" >/dev/null && \
     NEXT_PUBLIC_BUILD_ID="b$(date -u +%Y%m%d%H%M%S)" \
     pnpm --filter @ayman/web run build
 

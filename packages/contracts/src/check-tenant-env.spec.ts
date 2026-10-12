@@ -1,9 +1,10 @@
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — a dependency-free .mjs script, deliberately untyped so it
-// runs on a bare server before anything is installed.
-import { checkTenantEnv, parseEnvFile } from '../../../scripts/check-tenant-env.mjs';
+// A dependency-free .mjs script so it runs on a bare server before anything is
+// installed; its types sit beside it in `check-tenant-env.d.mts`.
+import { SUBJECT_SLUGS, checkTenantEnv, parseEnvFile } from '../../../scripts/check-tenant-env.mjs';
 import { CONTROL_ISSUER, ENTITLEMENTS_VERSION } from './admin/entitlements';
+import { SUBJECTS } from './subjects';
 
 /**
  * The preflight is the only thing standing between "forgot one variable" and
@@ -209,6 +210,52 @@ describe('checkTenantEnv', () => {
 
     it('accepts an explicitly empty CLARITY_PROJECT_ID', () => {
       expect(check({ CLARITY_PROJECT_ID: '' }).errors).toEqual([]);
+    });
+  });
+
+  describe('the landing look', () => {
+    it('accepts a known preset and accent, and both empty', () => {
+      expect(check({ TENANT_LANDING_PRESET: 'board', TENANT_ACCENT: 'blue' }).errors).toEqual([]);
+      expect(check({ TENANT_LANDING_PRESET: '', TENANT_ACCENT: '' }).errors).toEqual([]);
+    });
+
+    it('rejects a typo the boot would silently ignore', () => {
+      expect(check({ TENANT_LANDING_PRESET: 'bord' }).errors.join(' ')).toContain('TENANT_LANDING_PRESET');
+      expect(check({ TENANT_ACCENT: 'red' }).errors.join(' ')).toContain('TENANT_ACCENT');
+    });
+  });
+
+  describe('the subject', () => {
+    it('accepts it empty — programming, what every stack taught before it existed', () => {
+      expect(check({ TENANT_SUBJECT: '' }).errors).toEqual([]);
+    });
+
+    it('accepts a known slug', () => {
+      expect(check({ TENANT_SUBJECT: 'physics' }).errors).toEqual([]);
+    });
+
+    it('rejects an unknown one instead of silently teaching programming', () => {
+      expect(check({ TENANT_SUBJECT: 'fizyaa' }).errors.join(' ')).toContain('TENANT_SUBJECT');
+    });
+
+    it('knows exactly the subjects the seed creates', () => {
+      expect([...SUBJECT_SLUGS]).toEqual(SUBJECTS.map((subject) => subject.slug));
+    });
+  });
+
+  /**
+   * The owner's control-plane credentials, arriving in an instructor's file
+   * the easy way: copying the owner's environment to start a new one.
+   */
+  describe("the owner's control-plane keys", () => {
+    it('rejects the Dokploy key — it reads every stack on the server', () => {
+      expect(check({ CONTROL_PLANE_DOKPLOY_KEY: 'k'.repeat(40) }).errors.join(' ')).toContain(
+        'CONTROL_PLANE_DOKPLOY_KEY',
+      );
+    });
+
+    it('rejects the signing key', () => {
+      expect(check({ CONTROL_PLANE_PRIVATE_KEY: 'pem' }).errors.join(' ')).toContain('CONTROL_PLANE_PRIVATE_KEY');
     });
   });
 

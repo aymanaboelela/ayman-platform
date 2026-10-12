@@ -2,8 +2,20 @@ import Image from 'next/image';
 import { aymanOnly, tenantName } from '@/lib/tenant';
 import { getBranding, getPublicSettingsOrDefaults } from '@/lib/settings';
 import { tenantSentence } from '@/lib/tenant-copy';
-import { Code2, RefreshCw, ClipboardCheck, GraduationCap, Users, Braces } from 'lucide-react';
+import {
+  BookOpenCheck,
+  Braces,
+  Briefcase,
+  ClipboardCheck,
+  Code2,
+  GraduationCap,
+  RefreshCw,
+  Users,
+} from 'lucide-react';
 import { copy } from '@ayman/contracts';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
+import { bySubject } from '@/lib/subject-copy';
 import { MediaSlot } from '@/components/site/media-slot';
 import { getCredentialLogo } from '@/lib/brand-assets';
 
@@ -15,12 +27,19 @@ const c = copy.landing;
  * file for why an icon name is not a thing worth putting in the database.
  */
 const CHIP_ICONS = [
-  <Code2 size={18} key="code" />,
+  /* A code bracket where the subject is code; an open book where it is not —
+     the first chip is «شرح بالكود» on one and «شرح خطوة بخطوة» on the other,
+     and the glyph has to agree with the word beside it. */
+  TEACHES_CODE ? <Code2 size={18} key="code" /> : <BookOpenCheck size={18} key="book" />,
   <RefreshCw size={18} key="refresh" />,
   <ClipboardCheck size={18} key="check" />,
 ];
 
-const DEFAULT_CHIPS = [c.aboutChip1, c.aboutChip2, c.aboutChip3];
+const DEFAULT_CHIPS = [
+  bySubject(c.aboutChip1, subjectCopy.landing.aboutChip1),
+  c.aboutChip2,
+  c.aboutChip3,
+];
 
 /**
  * One per credit card, positional for the same reason `CHIP_ICONS` is: the
@@ -32,7 +51,14 @@ const DEFAULT_CHIPS = [c.aboutChip1, c.aboutChip2, c.aboutChip3];
 const CREDIT_GLYPHS = [
   <GraduationCap size={104} strokeWidth={1.25} key="study" />,
   <Users size={104} strokeWidth={1.25} key="teach" />,
-  <Braces size={104} strokeWidth={1.25} key="work" />,
+  /* «اشتغل» — braces for a software engineer's career, a briefcase for any
+     other: the credits on a non-programming stack are the instructor's own,
+     typed into /admin/settings, and their work was not necessarily code. */
+  TEACHES_CODE ? (
+    <Braces size={104} strokeWidth={1.25} key="work" />
+  ) : (
+    <Briefcase size={104} strokeWidth={1.25} key="work" />
+  ),
 ];
 
 /** One organisation. `id` keys `credentialLogos`; `short` is the monogram. */
@@ -61,7 +87,9 @@ export interface AboutInstructorProps {
 
 export async function AboutInstructor({
   title = tenantSentence(c.aboutTitle),
-  body1 = c.aboutBody1,
+  // The subject line, through the subject gate: «مهندس بيدرّس البرمجة وعلوم
+  // الحاسب…» is true of a programming stack and of nobody else.
+  body1 = bySubject(c.aboutBody1, subjectCopy.landing.aboutBody1),
   /*
    * ⚠️ متجيّتة — دي حقايق عن شخص بعينه، مش كوبي منصة.
    *
@@ -78,7 +106,7 @@ export async function AboutInstructor({
    */
   body2,
   body3,
-  role = tenantSentence(c.aboutRole),
+  role = tenantSentence(bySubject(c.aboutRole, subjectCopy.landing.aboutRole)),
   chips = DEFAULT_CHIPS,
   credits,
 }: AboutInstructorProps = {}) {

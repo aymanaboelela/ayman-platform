@@ -45,6 +45,9 @@ export const SignRequestSchema = z.object({
    * added, and would turn a stale open tab into an error instead of a token.
    */
   features: z.record(z.string(), z.boolean()),
+  /** Write the token into the stack's environment and deploy it, instead of
+   *  handing it back to be pasted. Only offered when Dokploy is connected. */
+  apply: z.boolean().optional(),
 });
 
 export type SignRequest = z.infer<typeof SignRequestSchema>;

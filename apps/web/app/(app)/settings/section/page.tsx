@@ -7,6 +7,7 @@ import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { ProfileForm } from '@/components/settings/profile-form';
+import { systemSlugOf } from '@/lib/subject-section';
 
 const c = copy.section;
 
@@ -72,10 +73,14 @@ export default async function SectionSettingsPage() {
            blank a column the student never touched. `ProfileForm` has the
            reasoning.
 
-           The system, the track and the elective are still NOT here: this
-           platform has one answer for each, they are resolved from the
-           taxonomy on submit (`@/lib/section-defaults`), and there is nothing
-           to translate back from a per-environment uuid to a slug. */
+           On a stack that teaches code the system, the track and the
+           elective are still NOT asked: that platform has one answer for
+           each, resolved from the taxonomy on submit
+           (`@/lib/section-defaults`). On any other stack the student chose
+           the system and the track, so both are handed over to prefill —
+           the system as the slug the form speaks, translated back through
+           the taxonomy this page already holds — and `ProfileForm` ignores
+           them where they are not asked. */
         <ProfileForm
           taxonomy={taxonomy}
           defaults={{
@@ -87,6 +92,8 @@ export default async function SectionSettingsPage() {
             schoolName: me.profile.schoolName,
             schoolStream: me.profile.schoolStream,
             year: me.profile.year,
+            system: systemSlugOf(taxonomy, me.profile.systemId),
+            trackId: me.profile.trackId,
             fatherPhone: me.profile.fatherPhone,
             studyType: me.profile.studyType,
             attendanceMode: me.profile.attendanceMode,

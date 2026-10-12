@@ -5,18 +5,25 @@
 # ولما الحاوية بتتشال أو لسه بتقوم (Traefik بيتجاهل الحاوية اللي مش healthy)
 # الراوتر بتاعها بيختفي والطلب بيقع هنا بدل «404 page not found».
 #
-# دومين جديد لمدرّس = سطر Host جديد هنا (docs/runbooks/new-tenant.md).
+# The rule catches EVERY host, not a list of them. A list meant one more
+# manual line per new teacher — a step the control plane («مدرّس جديد»)
+# cannot do, because this file lives on the server, not in Dokploy — and a
+# forgotten line was a teacher whose students saw Traefik's bare 404 on every
+# deploy. Priority 1 keeps it strictly a fallback: any stack's own router, and
+# Dokploy's panel router, outranks it whenever they exist.
+#
+# After changing this file, re-run deploy/maintenance/install.sh on the server.
 http:
   routers:
     maintenance:
-      rule: "Host(`aymanaboelela.com`) || Host(`mr-mohammedadel.com`) || Host(`engmohamedsabry.com`)"
+      rule: "PathPrefix(`/`)"
       entryPoints:
         - websecure
       priority: 1
       service: maintenance
       # من غير certResolver: الشهادات اللي راوترات الستاكات جابتها موجودة في
-      # الـstore وبتتختار بالـSNI. resolver هنا كان هيطلب شهادة واحدة للتلات
-      # دومينات بتحدي HTTP، وده بيقع ورا Cloudflare.
+      # الـstore وبتتختار بالـSNI. resolver هنا كان هيطلب شهادة لكل دومين
+      # بتحدي HTTP، وده بيقع ورا Cloudflare.
       tls: {}
   services:
     maintenance:

@@ -7,6 +7,7 @@ import {
 import { AGENT_DISCOVERY_PATHS, PUBLIC_API_ENDPOINTS } from '@/lib/agents/discovery';
 import { SITE_URL } from '@/lib/seo/jsonld';
 import { IS_AYMAN, tenantName } from '@/lib/tenant';
+import { TEACHES_CODE, isProgrammingOnlyRoute } from '@/lib/tenant-subject';
 
 /**
  * The skills published at `/.well-known/agent-skills/` (Agent Skills Discovery
@@ -58,9 +59,17 @@ const BROWSE_CATALOG: AgentSkill = {
    * mixed-direction string that renders wrong wherever an agent echoes it back.
    * A second stack gets English that names no one; his is byte-identical.
    */
+  /*
+   * …and a stack that does not teach programming gets a third sentence that
+   * does not claim it does. English that names no subject rather than an
+   * Arabic subject name in the middle of it, for the mixed-direction reason
+   * above; the catalog it points at names the subject on every course.
+   */
   description: IS_AYMAN
     ? "Find and describe the published courses on Ayman Abo El Ela's platform — Egyptian Bakalorya computer science and programming — using the public, unauthenticated catalog API."
-    : 'Find and describe the courses published on this platform — Egyptian Bakalorya computer science and programming — using the public, unauthenticated catalog API.',
+    : TEACHES_CODE
+      ? 'Find and describe the courses published on this platform — Egyptian Bakalorya computer science and programming — using the public, unauthenticated catalog API.'
+      : 'Find and describe the courses published on this platform for Egyptian secondary-school students, using the public, unauthenticated catalog API.',
   body: `# Browse the course catalog
 
 The published catalog is open. No key, no session, no registration — the endpoints
@@ -109,7 +118,12 @@ is the platform, "${tenantName(copy.site.instructor)}" is the instructor.
  * suffix because a `{slug}` placeholder is not a path that function can parse.
  */
 const TWIN_TABLE = [
-  ...STATIC_MARKDOWN_ROUTES.map((page) => `| ${url(page)} | ${url(markdownTwinPath(page) ?? '')} |`),
+  // Minus the glossary on a stack that does not teach code: `/essentials` and
+  // its twin both 404 there, and a row pointing at them is exactly the stale
+  // table this was generated to stop being.
+  ...STATIC_MARKDOWN_ROUTES.filter((page) => TEACHES_CODE || !isProgrammingOnlyRoute(page)).map(
+    (page) => `| ${url(page)} | ${url(markdownTwinPath(page) ?? '')} |`,
+  ),
   ...MARKDOWN_ROUTE_PATTERNS.map((page) => `| ${url(page)} | ${url(`${page}.md`)} |`),
 ].join('\n');
 
