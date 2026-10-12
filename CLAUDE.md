@@ -109,6 +109,9 @@ page renders.
 
 ---
 
+> Adding a teacher from the dashboard, subjects and a teacher's landing look:
+> see [`docs/teachers-platform.md`](docs/teachers-platform.md).
+
 ## 3. One bug fix reaches everyone
 
 This is why this shape was chosen. One codebase, one image recipe:
