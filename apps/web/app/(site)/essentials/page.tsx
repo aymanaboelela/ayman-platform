@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { copy } from '@ayman/contracts';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { getCatalogOrEmpty } from '@/lib/catalog';
@@ -14,15 +15,31 @@ import { CourseCard } from '@/components/site/course-card';
 import { LiquidBackdrop } from '@/components/site/liquid-backdrop';
 import { SpotlightGrid } from '@/components/site/spotlight-grid';
 import { ESSENTIAL_TERMS, termSlug } from '@/lib/essentials-terms';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
 
 const e = copy.essentials;
 
 
 export async function generateMetadata(): Promise<Metadata> {
+  /*
+   * A 404 on a stack that does not teach code (see the page below), so it
+   * describes nothing and is never indexed — a canonical and a «قبل أول سطر
+   * كود» description on a physics teacher's not-found page would advertise the
+   * glossary the route refuses to serve.
+   */
+  if (!TEACHES_CODE) return { robots: { index: false, follow: false } };
   return buildMetadata({ title: e.title, description: e.listLead, path: '/essentials' });
 }
 
 export default async function EssentialsPage() {
+  /*
+   * Twelve programming terms and the programming foundation course — the
+   * public twin of `/foundations`. Not a page on a stack that teaches another
+   * subject: `proxy.ts` 404s the path, its markdown twin 404s, the sitemap and
+   * the footer already leave it out, and this is the page's own answer.
+   */
+  if (!TEACHES_CODE) notFound();
+
   /*
    * `getCatalogOrEmpty`, not `getCatalog`: this page is prerendered, and
    * `getCatalog` throws when the API is unreachable — which is always true

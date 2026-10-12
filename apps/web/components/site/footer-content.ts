@@ -222,13 +222,13 @@ export function footerSocial(
  * ## What is deliberately NOT in here
  *
  * `copy.site.tagline` («البرمجة وعلوم الحاسب — نظام البكالوريا المصرية») and
- * `c.footerTagline` («البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية»). Both sit
- * in the classic footer ungated, and neither contains a name, so
- * `tenant-identity-leak.spec.ts` cannot see them — a maths teacher's footer
- * currently announces that the platform teaches programming. That is a real
- * leak and it is not this change's to fix (it is a copy-table decision on a
- * live page), but there is no reason to copy it onto two brand-new footers on
- * the way past. Both presets close on the tenant's own name instead.
+ * `c.footerTagline` («البرمجة وعلوم الحاسب لطلبة البكالوريا المصرية»). The
+ * classic footer prints both, through the SUBJECT gate since `TENANT_SUBJECT`
+ * existed (`SITE_TAGLINE` and `bySubject` in `lib/subject-copy.ts`), so a
+ * maths teacher's footer no longer announces that the platform teaches
+ * programming. The presets still close on the tenant's own name instead of
+ * either line — they were designed without them, and adding a subject line to
+ * three footers is a design change, not a leak fix.
  *
  * `c.footerRights` IS carried through, hard-coded year and all. Same argument
  * in reverse: it is wrong on all three footers identically, which is a copy

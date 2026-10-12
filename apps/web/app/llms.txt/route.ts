@@ -1,6 +1,9 @@
 import { connection } from 'next/server';
 import { tenantSentence } from '@/lib/tenant-copy';
 import { aymanOnly, tenantName } from '@/lib/tenant';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
+import { SITE_TAGLINE, bySubject } from '@/lib/subject-copy';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
 import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { copy } from '@ayman/contracts';
 import { AGENT_DISCOVERY_PATHS } from '@/lib/agents/discovery';
@@ -87,7 +90,7 @@ export async function GET(): Promise<Response> {
      * fact. `copy.seo.description` welds his name mid-sentence, so the whole
      * sentence has to be rebuilt — see `SITE_DESCRIPTION` in `lib/seo/metadata.ts`.
      */
-`> ${copy.site.tagline}. ${SITE_DESCRIPTION}`,
+`> ${SITE_TAGLINE}. ${SITE_DESCRIPTION}`,
     '',
     'Arabic (RTL) throughout. Course titles, subjects and tracks are Arabic and should be',
     'quoted as they are rather than transliterated.',
@@ -113,9 +116,9 @@ export async function GET(): Promise<Response> {
      */
     '## المدرّس',
     '',
-    `${tenantName(copy.site.instructor)} — ${tenantSentence(copy.landing.aboutRole)}.`,
+    `${tenantName(copy.site.instructor)} — ${tenantSentence(bySubject(copy.landing.aboutRole, subjectCopy.landing.aboutRole))}.`,
     '',
-    copy.landing.aboutBody1,
+    bySubject(copy.landing.aboutBody1, subjectCopy.landing.aboutBody1),
     /*
      * ⚠️ السيرة الذاتية متجيّتة — دي حقايق عن شخص بعينه، مش كوبي منصة.
      *
@@ -158,17 +161,27 @@ export async function GET(): Promise<Response> {
      * outperforms any claim to be the best — and cannot be contradicted by a
      * student who goes and looks.
      */
-    `### ${copy.llms.whyHim}`,
-    '',
-    ...copy.seo.instructorWhy.map((line) => `- ${line}`),
-    '',
+    /*
+     * ⚠️ HIS STACK ONLY, heading and all — the same gate as the CV lines above,
+     * and for the same reason. «مهندس برمجيات شغّال في السوق من ٨ سنين», «كان
+     * instructor في GDG», «كتاب مطبوع بيتشحن», «أربع وحدات وأربعتاشر درس»: every
+     * line of `instructorWhy` is a checkable claim about HIM and HIS catalogue,
+     * and on another instructor's domain it is a list of false ones, in the
+     * file an assistant quotes as fact. The `###` goes with the list, or the
+     * file asks «ليه هو بالذات؟» and answers nothing.
+     */
+    ...(aymanOnly([`### ${copy.llms.whyHim}`, '', ...copy.seo.instructorWhy.map((line) => `- ${line}`), '']) ?? []),
     '## Pages',
     '',
-    `- [الرئيسية](${url('/index.md')}): ${copy.landing.heroLead}`,
-    `- [${copy.catalog.title}](${url('/courses.md')}): ${copy.catalog.subtitle}`,
-    `- [${tenantSentence(copy.landing.aboutPageTitle)}](${url('/about.md')}): ${tenantSentence(copy.landing.aboutPageLead)}`,
-    `- [${copy.essentials.title}](${url('/essentials.md')}): ${copy.essentials.listLead}`,
-    `- [${copy.news.title}](${url('/news.md')}): ${copy.news.subtitle}`,
+    `- [الرئيسية](${url('/index.md')}): ${bySubject(copy.landing.heroLead, subjectCopy.landing.heroLead)}`,
+    `- [${copy.catalog.title}](${url('/courses.md')}): ${bySubject(copy.catalog.subtitle, subjectCopy.catalog.subtitle)}`,
+    `- [${tenantSentence(copy.landing.aboutPageTitle)}](${url('/about.md')}): ${tenantSentence(bySubject(copy.landing.aboutPageLead, subjectCopy.landing.aboutPageLead))}`,
+    // The glossary of code terms 404s on a stack that does not teach code, and
+    // a line here pointing at it is the drift `ai-catalog.json` warns about.
+    ...(TEACHES_CODE
+      ? [`- [${copy.essentials.title}](${url('/essentials.md')}): ${copy.essentials.listLead}`]
+      : []),
+    `- [${copy.news.title}](${url('/news.md')}): ${bySubject(copy.news.subtitle, subjectCopy.news.subtitle)}`,
     /*
      * ⚠️ `/books.md` was missing from every agent surface at once — no twin, no
      * line here, no structured data beyond a breadcrumb — and it is the only
@@ -178,7 +191,7 @@ export async function GET(): Promise<Response> {
      */
     ...(features.books
       ? [
-          `- [${tenantSentence(copy.books.metaTitle)}](${url('/books.md')}): ${tenantSentence(copy.books.metaDescription)}`,
+          `- [${tenantSentence(copy.books.metaTitle)}](${url('/books.md')}): ${tenantSentence(bySubject(copy.books.metaDescription, subjectCopy.books.metaDescription))}`,
         ]
       : []),
     /*
@@ -186,7 +199,7 @@ export async function GET(): Promise<Response> {
      * no public page did. The checkout is behind auth, so an assistant saw the
      * four prices on every course page and nothing about how to pay them.
      */
-    `- [${copy.subscribePage.title}](${url('/subscribe.md')}): ${copy.subscribePage.metaDescription}`,
+    `- [${copy.subscribePage.title}](${url('/subscribe.md')}): ${bySubject(copy.subscribePage.metaDescription, subjectCopy.subscribePage.metaDescription)}`,
     /*
      * ⚠️ The year lines carry their alternate spellings, and the digit forms
      * are the reason.

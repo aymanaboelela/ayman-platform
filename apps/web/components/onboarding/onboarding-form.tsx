@@ -25,6 +25,9 @@ import { apiPatch, ApiRequestError } from '@/lib/api';
 import { safeNext } from '@/lib/safe-next';
 import { tenantSentence } from '@/lib/tenant-copy';
 import { fixedSectionFor, offeredYearOptions } from '@/lib/section-defaults';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
+import { sectionFieldErrors, subjectSectionFor } from '@/lib/subject-section';
+import { SectionPickers } from './section-pickers';
 import { SCHOOL_STREAM_OPTIONS, governorateOptions as governorateOptionsFor } from '@/lib/profile-options';
 import { cityOptions } from '@/lib/city-options';
 import { StudyAttendanceFields } from '@/components/centers/attendance-fields';
@@ -56,14 +59,24 @@ const subscribeNothing = () => () => {};
 const PARENT_PHONE_NOTE_ID = 'father-phone-why';
 
 /**
+ * The section questions step 3 owns: the year alone on a stack that teaches
+ * code, the system, the year and the track on any other — see
+ * `lib/subject-section.ts` for why the three come back there.
+ */
+const SECTION_FIELDS: ReadonlyArray<keyof Onboarding> = TEACHES_CODE
+  ? ['year']
+  : ['system', 'year', 'trackId'];
+
+/**
  * Which fields each step owns, so "can I move forward" can be answered by
  * validating exactly that step and nothing after it.
  *
  * Step 3 asks the year, «نوع الدراسة» and — on a stack with a centre — «نوع
- * الحضور» and the slot. The system, the track and the elective subject are
- * filled from the taxonomy on submit (`@/lib/section-defaults`) — this
- * platform has one answer for each of them — so there is nothing on that step
- * for `trigger` to gate on for those.
+ * الحضور» and the slot. On a stack that teaches code the system, the track and
+ * the elective subject are filled from the taxonomy on submit
+ * (`@/lib/section-defaults`) — that platform has one answer for each of them —
+ * so there is nothing on that step for `trigger` to gate on for those. On any
+ * other stack the system and the track are asked too (`SECTION_FIELDS`).
  *
  * The three centre fields are listed so `trigger` re-checks their SHAPE, but
  * the schema has them optional; whether they are answered is
@@ -77,7 +90,7 @@ const STEPS = [
   },
   {
     title: copy.onboarding.step3Title,
-    fields: ['year', 'studyType', 'attendanceMode', 'centerSlotId'],
+    fields: [...SECTION_FIELDS, 'studyType', 'attendanceMode', 'centerSlotId'],
   },
   { title: copy.onboarding.step4Title, fields: ['fatherPhone'] },
 ] as const satisfies ReadonlyArray<{
@@ -252,6 +265,21 @@ export function OnboardingForm({
     return Object.keys(issues).length === 0;
   }
 
+  /**
+   * The system and the track, on a stack that asks them — optional on the
+   * schema (a programming stack never sends them), required by this form.
+   * Always `true` where they are not asked, so a programming stack's wizard
+   * runs exactly the checks it always ran.
+   */
+  function checkSectionFields(): boolean {
+    if (TEACHES_CODE) return true;
+    const issues = sectionFieldErrors(getValues(), taxonomy);
+    for (const [field, message] of Object.entries(issues)) {
+      setError(field as 'system' | 'trackId', { type: 'required', message });
+    }
+    return Object.keys(issues).length === 0;
+  }
+
   const isLastStep = stepIndex === STEPS.length - 1;
 
   /**
@@ -264,7 +292,8 @@ export function OnboardingForm({
     // After `trigger`, which clears these fields' errors when their shape is
     // fine — the «is it answered» check has to land on top of that.
     const centersValid = stepIndex !== CENTER_STEP || checkCenterFields();
-    if (!valid || !centersValid) return;
+    const sectionValid = stepIndex !== CENTER_STEP || checkSectionFields();
+    if (!valid || !centersValid || !sectionValid) return;
     setFormError(null);
     setStepIndex((index) => Math.min(index + 1, STEPS.length - 1));
   }
@@ -280,7 +309,11 @@ export function OnboardingForm({
     setFormError(null);
     // The centre list can change between step 3 and here (it is refetched on
     // a refusal), so the slot is re-checked where it is sent.
-    if (!checkCenterFields()) {
+    // Both run before either is read, so every unanswered question on the step
+    // is marked in the one press rather than one per press.
+    const centersOk = checkCenterFields();
+    const sectionOk = checkSectionFields();
+    if (!centersOk || !sectionOk) {
       setStepIndex(CENTER_STEP);
       return;
     }
@@ -294,7 +327,9 @@ export function OnboardingForm({
       // centre on screen it is «أونلاين», whatever a stale draft still holds.
       await apiPatch('/api/profile/onboarding', {
         ...values,
-        ...fixedSectionFor(taxonomy, values.year),
+        // On a stack that does not teach code the section is what the student
+        // CHOSE, cleaned against the taxonomy — see `subjectSectionFor`.
+        ...(TEACHES_CODE ? fixedSectionFor(taxonomy, values.year) : subjectSectionFor(taxonomy, values)),
         ...attendancePayload(values, { attendanceVisible, whenHidden: 'online' }),
       });
     } catch (error) {
@@ -554,15 +589,29 @@ export function OnboardingForm({
             changes?".
           */}
           <div hidden={stepIndex !== 2} className="space-y-5">
-            <SelectField
-              variant="pill"
-              icon={GraduationCap}
-              label={copy.onboarding.year}
-              placeholder={copy.onboarding.yearPlaceholder}
-              options={yearOptions}
-              errorMessage={errors.year?.message}
-              {...register('year', { setValueAs: emptyToUndefinedNumber })}
-            />
+            {/* The year alone where the subject is code; the system, the year
+                and the track anywhere else — `<SectionPickers>`. */}
+            {TEACHES_CODE ? (
+              <SelectField
+                variant="pill"
+                icon={GraduationCap}
+                label={copy.onboarding.year}
+                placeholder={copy.onboarding.yearPlaceholder}
+                options={yearOptions}
+                errorMessage={errors.year?.message}
+                {...register('year', { setValueAs: emptyToUndefinedNumber })}
+              />
+            ) : (
+              <SectionPickers
+                taxonomy={taxonomy}
+                control={control}
+                register={register}
+                setValue={setValue}
+                errors={errors}
+                variant="pill"
+                deferUntilHydrated
+              />
+            )}
             {/* «نوع الدراسة» always; «نوع الحضور» and the slot only on a
                 stack with a centre. Shared with «بياناتك». */}
             <StudyAttendanceFields

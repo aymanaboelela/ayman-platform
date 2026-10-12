@@ -277,6 +277,47 @@ Dokploy بيستخدم نفس متغيرات الستاك في الـinterpolati
 
 ---
 
+## 6.5.1 The subject — `TENANT_SUBJECT`
+
+The subject this instructor teaches: one slug from
+[`packages/contracts/src/subjects.ts`](../../packages/contracts/src/subjects.ts)
+(`physics`, `chemistry`, `mathematics`, `arabic`, …). **Empty means
+`programming_cs`**, which is what every stack taught before the variable
+existed, so the first three stacks (Ayman, Sabry, Adel) set nothing and change
+nothing. Ayman's stack is programming whatever the variable says.
+
+On a stack whose subject is not programming it changes:
+
+- **The words.** The subject line under every wordmark, the `<title>` and meta
+  descriptions, the JSON-LD (`jobTitle`, `knowsAbout`, `slogan`), the `/courses`,
+  `/news`, `/about`, `/links` and course-page descriptions, the footer,
+  `/llms.txt`, `/AGENTS.md`, the AI catalog's example queries and the markdown
+  twins all name the stack's subject instead of «البرمجة وعلوم الحاسب». The
+  neutral sentences live in `packages/contracts/src/copy/subject.ts`.
+- **The programming tools.** `/playground`, `/foundations` and `/essentials`
+  answer 404 (in `proxy.ts` and in each page), and leave the student rail, the
+  link hub and the agent files. The landing page's `yearTracks` block draws three
+  plain year cards instead of code windows; the studio preset drops its Python
+  panel; the «الترمينال» (`neon`) preset is not offered (a stored one renders
+  `classic`); the demo programming courses never fill an empty catalogue.
+- **The assistant.** Its scope and its refusal rule name the subject (a physics
+  question is answered, not refused), and the playground/glossary answers and
+  buttons are gone.
+- **The seed.** Every boot opens the subject for every track, years 2–3, in both
+  systems — so the admin course form can create a course anywhere. Without it a
+  physics teacher could not create a single الثانوية العامة course.
+- **Onboarding.** Students choose their system, year (1–3) and track, instead of
+  being filed as second-year Bakalorya engineering students studying
+  programming.
+
+It is read at **build time** by the web (`next.config.ts` → `env`, and a
+Dockerfile build arg that is also in the build layer's cache key), so changing it
+is a **rebuild, not a restart**. The API reads it at boot. The preflight
+(`node scripts/check-tenant-env.mjs`) refuses a slug it does not know; a
+programming tool on a mistyped stack is the failure it exists to stop.
+
+---
+
 ## ٦٫٦ مستند الصلاحيات — `TENANT_ENTITLEMENTS`
 
 المتغيّر ده بيقول للستاك **إيه الفيتشرز اللي مسموح له يشغّلها**. مستند موقّع

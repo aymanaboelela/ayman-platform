@@ -20,6 +20,9 @@ import {
 import { getBranding, getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getEntitlements } from '@/lib/entitlements';
 import { tenantName } from '@/lib/tenant';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
+import { SITE_TAGLINE, bySubject } from '@/lib/subject-copy';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
 import { waMeHref } from '@ayman/contracts/whatsapp';
 
 const c = copy.landing;
@@ -88,7 +91,13 @@ export async function SiteFooter() {
    * `=== 'classic'` arm and there must not be one: that markup is what his
    * students are served today, and the only acceptable diff on it is none.
    */
-  if (branding.landingPreset === 'neon') {
+  /*
+   * «الترمينال» is a programmer's page — sections labelled like code comments,
+   * cards drawn as code windows — so only a stack that teaches code gets it.
+   * A stack that does not, and has it stored anyway, falls through to the
+   * classic footer exactly as `page.tsx` falls through to the classic page.
+   */
+  if (branding.landingPreset === 'neon' && TEACHES_CODE) {
     const { default: NeonFooter } = await import('@/components/site/presets/neon/neon-footer');
     return <NeonFooter content={footerContent({ contact, features })} />;
   }
@@ -154,9 +163,13 @@ export async function SiteFooter() {
                   «أيمن أبو العلا» is worse than either alone: it reads as a
                   platform reselling somebody else's brand. */}
               <span className="wordmark__name">{tenantName(copy.site.name)}</span>
-              <span className="wordmark__tag">{copy.site.tagline}</span>
+              {/* Both subject lines through the subject gate — the original
+                  strings on a programming stack, the stack's own subject on any
+                  other. A chemistry teacher's footer said «البرمجة وعلوم الحاسب
+                  لطلبة البكالوريا المصرية» on every page of the site. */}
+              <span className="wordmark__tag">{SITE_TAGLINE}</span>
             </span>
-            <p className="site-footer__blurb">{c.footerTagline}</p>
+            <p className="site-footer__blurb">{bySubject(c.footerTagline, subjectCopy.landing.footerTagline)}</p>
 
             <ul className="social" aria-label={c.footerFollow}>
               {social.map((item) => {

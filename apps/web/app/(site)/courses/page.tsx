@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { tenantSentence } from '@/lib/tenant-copy';
 import { copy } from '@ayman/contracts';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
+import { bySubject } from '@/lib/subject-copy';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { CourseCard } from '@/components/site/course-card';
 import { StreamFilter } from '@/components/site/stream-filter';
@@ -11,7 +13,9 @@ import { buildMetadata } from '@/lib/seo/metadata';
 export async function generateMetadata(): Promise<Metadata> {
   return buildMetadata({
     title: copy.catalog.title,
-    description: tenantSentence(copy.seo.catalogDescription),
+    description: tenantSentence(
+      bySubject(copy.seo.catalogDescription, subjectCopy.seo.catalogDescription),
+    ),
     path: '/courses',
   });
 }
@@ -29,7 +33,7 @@ export default async function CoursesPage() {
     <main>
       <header className="page-head site-shell">
         <h1 className="page-title">{copy.catalog.title}</h1>
-        <p className="site-lead">{copy.catalog.subtitle}</p>
+        <p className="site-lead">{bySubject(copy.catalog.subtitle, subjectCopy.catalog.subtitle)}</p>
       </header>
 
       <div className="site-shell">

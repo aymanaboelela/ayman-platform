@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { copy, formatCopy } from '@ayman/contracts';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
+import { bySubject } from '@/lib/subject-copy';
 import { mediaUrl } from '@ayman/ui/branding';
 import { JsonLd } from '@/components/seo/json-ld';
 import { getNewsListOrEmpty } from '@/lib/news';
@@ -11,7 +13,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 export async function generateMetadata(): Promise<Metadata> {
   return buildMetadata({
     title: copy.news.title,
-    description: copy.news.description,
+    description: bySubject(copy.news.description, subjectCopy.news.description),
     path: '/news',
   });
 }
@@ -36,8 +38,8 @@ export default async function NewsIndexPage() {
         <p className="site-eyebrow">{copy.news.eyebrow}</p>
         {/* The `<h1>` is the section's strongest ranking signal, so it is the
             phrase people search — not the word «نيوز», which nobody types. */}
-        <h1 className="page-title">{copy.news.heading}</h1>
-        <p className="site-lead">{copy.news.subtitle}</p>
+        <h1 className="page-title">{bySubject(copy.news.heading, subjectCopy.news.heading)}</h1>
+        <p className="site-lead">{bySubject(copy.news.subtitle, subjectCopy.news.subtitle)}</p>
       </header>
 
       <div className="site-shell">

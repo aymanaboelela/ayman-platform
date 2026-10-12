@@ -11,6 +11,9 @@ import { copy } from '@ayman/contracts/copy';
 import { Button } from '@ayman/ui/components/button';
 import { apiPatch, ApiRequestError } from '@/lib/api';
 import { fixedSectionFor, offeredYearOptions } from '@/lib/section-defaults';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
+import { sectionFieldErrors, subjectSectionFor } from '@/lib/subject-section';
+import { SectionPickers } from '@/components/onboarding/section-pickers';
 import { GENDER_OPTIONS, SCHOOL_STREAM_OPTIONS, governorateOptions } from '@/lib/profile-options';
 import { cityOptions } from '@/lib/city-options';
 import { FixedSectionNote } from '@/components/onboarding/fixed-section-note';
@@ -39,6 +42,15 @@ export interface ProfileDefaults {
   schoolName?: string | null;
   schoolStream?: 'general' | 'languages' | null;
   year?: number | null;
+  /**
+   * The system's SLUG and the track's id — read only on a stack that does not
+   * teach code, where the student chose them (see `lib/subject-section.ts`).
+   * A programming stack never puts them into the form: `fixedSectionFor`
+   * decides both there, and a stored track riding along in the form's values
+   * would reach the payload of a year-1 student and be refused.
+   */
+  system?: 'bacalorya' | 'thanaweya_amma';
+  trackId?: string | null;
   fatherPhone?: string | null;
   studyType?: StudyType | null;
   attendanceMode?: AttendanceMode | null;
@@ -136,6 +148,9 @@ export function ProfileForm({
       schoolName: defaults.schoolName ?? undefined,
       schoolStream: defaults.schoolStream ?? undefined,
       year: defaults.year ?? undefined,
+      ...(TEACHES_CODE
+        ? {}
+        : { system: defaults.system, trackId: defaults.trackId ?? undefined }),
       fatherPhone: defaults.fatherPhone ?? undefined,
       // Null for every profile saved before these were asked — the cards
       // start unselected and the first save asks, as «المدينة» did.
@@ -174,9 +189,22 @@ export function ProfileForm({
     return Object.keys(issues).length === 0;
   }
 
+  /** The system and the track, where they are asked — see the wizard's twin. */
+  function checkSectionFields(): boolean {
+    if (TEACHES_CODE) return true;
+    const issues = sectionFieldErrors(getValues(), taxonomy);
+    for (const [field, message] of Object.entries(issues)) {
+      setError(field as 'system' | 'trackId', { type: 'required', message });
+    }
+    return Object.keys(issues).length === 0;
+  }
+
   async function onSubmit(values: Onboarding) {
     setFormError(null);
-    if (!checkCenterFields()) return;
+    // Both before either is read, so one press marks every missing answer.
+    const centersOk = checkCenterFields();
+    const sectionOk = checkSectionFields();
+    if (!centersOk || !sectionOk) return;
     try {
       // `fixedSectionFor` LAST, so the three answers nobody is asked for — the
       // system, the track, the elective — win over whatever the form holds.
@@ -184,7 +212,7 @@ export function ProfileForm({
       // pair likewise, so a hidden question sends what `whenHidden` says.
       await apiPatch('/api/profile/onboarding', {
         ...values,
-        ...fixedSectionFor(taxonomy, values.year),
+        ...(TEACHES_CODE ? fixedSectionFor(taxonomy, values.year) : subjectSectionFor(taxonomy, values)),
         ...attendancePayload(values, { attendanceVisible, whenHidden }),
       });
     } catch (error) {
@@ -219,7 +247,10 @@ export function ProfileForm({
       // The invalid branch runs the centre check too, so a missing «نوع
       // الدراسة» shows up in the same press as a missing school name rather
       // than on the next one.
-      onSubmit={handleSubmit(onSubmit, () => void checkCenterFields())}
+      onSubmit={handleSubmit(onSubmit, () => {
+        checkCenterFields();
+        checkSectionFields();
+      })}
       className="space-y-8"
       noValidate
     >
@@ -311,14 +342,29 @@ export function ProfileForm({
       </Group>
 
       <Group title={c.groupSection}>
-        <SelectField
-          label={copy.onboarding.year}
-          placeholder={copy.onboarding.yearPlaceholder}
-          options={yearOptions}
-          errorMessage={errors.year?.message}
-          {...register('year', { setValueAs: (v: string) => (v === '' ? undefined : Number(v)) })}
-        />
-        <FixedSectionNote />
+        {/* Where the subject is code, the year and a note stating the rest;
+            anywhere else the three questions the wizard asked there. */}
+        {TEACHES_CODE ? (
+          <SelectField
+            label={copy.onboarding.year}
+            placeholder={copy.onboarding.yearPlaceholder}
+            options={yearOptions}
+            errorMessage={errors.year?.message}
+            {...register('year', { setValueAs: (v: string) => (v === '' ? undefined : Number(v)) })}
+          />
+        ) : (
+          <SectionPickers
+            taxonomy={taxonomy}
+            control={control}
+            register={register}
+            setValue={setValue}
+            errors={errors}
+            deferUntilHydrated={false}
+          />
+        )}
+        {/* «الباقي إحنا عارفينه» states the programming platform's one
+            system, track and subject — true only where they are not asked. */}
+        {TEACHES_CODE ? <FixedSectionNote /> : null}
         <p className="rounded-lg border border-line bg-surface-2 px-4 py-3 text-[length:var(--fs-text-sm)] text-fg-muted">
           {c.keepsProgress}
         </p>

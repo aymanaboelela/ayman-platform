@@ -214,10 +214,18 @@ export function isAskActionId(value: string): value is AskActionId {
  * `AssistantAiService.courses()`). Passing nothing is safe and means no course
  * button can be built — the failure mode is a missing button, never a wrong
  * one.
+ *
+ * `omit` is the destinations that do not exist on this stack — the
+ * programming tools on a stack whose subject is not code. The model is not
+ * shown them (`askActionMenu(omit)`), and an id it names anyway is dropped
+ * here like any other unknown, so a physics student is never handed a button
+ * to a 404. Passed in rather than decided here: this module is shared with
+ * the browser and reads no environment.
  */
 export function askActions(
   ids: readonly string[],
   courses: readonly { readonly slug: string; readonly title: string }[] = [],
+  omit: readonly AskActionId[] = [],
 ): readonly AskAction[] {
   const out: AskAction[] = [];
   const seen = new Set<string>();
@@ -243,7 +251,7 @@ export function askActions(
       continue;
     }
 
-    if (!isAskActionId(id)) continue;
+    if (!isAskActionId(id) || omit.includes(id)) continue;
     const href = ASK_ACTION_HREFS[id];
     if (seen.has(href)) continue;
     seen.add(href);
@@ -267,9 +275,14 @@ function trimLabel(title: string): string {
  * model is choosing between places a student would name in Arabic, and an
  * English gloss of «التأسيس» would just be a second translation to keep in
  * step.
+ *
+ * `omit` takes ids off the menu — see `askActions`. Called with nothing, it
+ * is the whole table, which is the byte-stable prompt every programming stack
+ * has always sent.
  */
-export function askActionMenu(): string {
+export function askActionMenu(omit: readonly AskActionId[] = []): string {
   return (Object.keys(ASK_ACTION_HREFS) as AskActionId[])
+    .filter((id) => !omit.includes(id))
     .map((id) => `${id} — ${copy.assistant.ai.actions[id]}`)
     .join('\n');
 }

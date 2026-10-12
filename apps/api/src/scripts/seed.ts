@@ -4,6 +4,7 @@ import { FLAG_DECLARATIONS } from '@ayman/contracts/admin/flags';
 import { flagStartsEnabled } from '../common/flag-default';
 import { SiteSettingsSchema } from '@ayman/contracts/admin/settings';
 import { copy } from '@ayman/contracts/copy';
+import { SUBJECTS } from '@ayman/contracts/subjects';
 import { PrismaClient, type Region } from '../generated/prisma/client';
 import { GOVERNORATES } from './seed-data/governorates';
 import {
@@ -15,6 +16,7 @@ import { LocalDiskStorage } from '../modules/media/storage/local-disk.storage';
 import { loadEnv } from '../config/env';
 import { SITE_SETTINGS_ID } from '../modules/admin/admin.constants';
 import { SEEDS_OFFICIAL_SEO, TENANT_CONTACT_SEED } from './seed-data/tenant-contact';
+import { STACK_SUBJECT_SLUG } from '../common/tenant-subject';
 
 // Prisma 7 requires a driver adapter at construction time (see Task 8's
 // prisma.service.ts) — bare `new PrismaClient()` throws. Seeding is pure DML
@@ -24,27 +26,16 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
-/** Subjects are canonical names only — no grading semantics live here. */
-const SUBJECTS = [
-  { slug: 'arabic', nameAr: 'اللغة العربية' },
-  { slug: 'first_foreign_language', nameAr: 'اللغة الأجنبية الأولى' },
-  { slug: 'second_foreign_language', nameAr: 'اللغة الأجنبية الثانية' },
-  { slug: 'egyptian_history', nameAr: 'التاريخ المصري' },
-  { slug: 'mathematics', nameAr: 'الرياضيات' },
-  { slug: 'integrated_science', nameAr: 'العلوم المتكاملة' },
-  { slug: 'philosophy_logic', nameAr: 'الفلسفة والمنطق' },
-  { slug: 'religious_education', nameAr: 'التربية الدينية' },
-  { slug: 'programming_cs', nameAr: 'البرمجة وعلوم الحاسب' },
-  { slug: 'physics', nameAr: 'الفيزياء' },
-  { slug: 'chemistry', nameAr: 'الكيمياء' },
-  { slug: 'biology', nameAr: 'الأحياء' },
-  { slug: 'accounting', nameAr: 'المحاسبة' },
-  { slug: 'business_administration', nameAr: 'إدارة الأعمال' },
-  { slug: 'psychology', nameAr: 'علم النفس' },
-  { slug: 'economics', nameAr: 'الاقتصاد' },
-  { slug: 'geography', nameAr: 'الجغرافيا' },
-  { slug: 'statistics', nameAr: 'الإحصاء' },
-] as const;
+/*
+ * Subjects are canonical names only — no grading semantics live here.
+ *
+ * The list itself is `SUBJECTS` from `@ayman/contracts/subjects`, imported
+ * above. It was written out here, and this file was its only copy, until a
+ * stack had to know its own subject BEFORE it had a database — the web build
+ * reads `TENANT_SUBJECT` at `next build`, and the preflight checks the slug —
+ * so the rows moved to contracts unchanged, same slugs, same names, same
+ * order, and this file upserts that list.
+ */
 
 const BACALORYA_TRACKS = [
   {
@@ -419,32 +410,57 @@ async function main(): Promise<void> {
    * عشان ميأثّرش على اختيار «كيمياء ولا برمجة» الحقيقي بتاع مسار الهندسة،
    * وبرضو يبقى متاح لأي مسار تاني كمادة إضافية — `countsTowardTotal: false`
    * زي سنة ١ بالظبط، مش من مجموع الدرجات الرسمي.
+   *
+   * ## The STACK's subject, not programming by name
+   *
+   * Everything above is just as true of a physics teacher: their subject is a
+   * specialist subject on two Bakalorya tracks and an elective on one, and in
+   * الثانوية العامة it has no row after year 1 at all — so the course form
+   * (which lists only existing offerings) refused every combination they
+   * tried, exactly as it did Sabry. So this loop opens `TENANT_SUBJECT` —
+   * through `STACK_SUBJECT_SLUG`, which is `programming_cs` on every
+   * programming stack (unset included), making this the same upserts it has
+   * always run there.
+   *
+   * `update: {}` is what makes that safe for a subject the curriculum
+   * already places: physics in year 3 of مسار الهندسة keeps its `advanced`
+   * level and its place in the total, and an elective keeps its group. Only
+   * the missing cells are created, as a non-counting extra like the rows
+   * above. A slug the list does not know opens nothing and stops nothing — a
+   * seed that throws on boot is a domain Traefik answers 404 for.
    */
-  for (const [system, trackIdBySlug] of [
-    [bacalorya, bacTrackIdBySlug],
-    [thanaweya, thaTrackIdBySlug],
-  ] as const) {
-    for (const trackId of trackIdBySlug.values()) {
-      for (const year of [2, 3] as const) {
-        await prisma.subjectOffering.upsert({
-          where: {
-            systemId_year_trackId_subjectId: {
+  if (STACK_SUBJECT_SLUG === null) {
+    console.warn(
+      `seed: TENANT_SUBJECT "${process.env.TENANT_SUBJECT ?? ''}" is not a known subject — no subject opened on the tracks`,
+    );
+  } else {
+    const stackSubjectId = subjectId(STACK_SUBJECT_SLUG);
+    for (const [system, trackIdBySlug] of [
+      [bacalorya, bacTrackIdBySlug],
+      [thanaweya, thaTrackIdBySlug],
+    ] as const) {
+      for (const trackId of trackIdBySlug.values()) {
+        for (const year of [2, 3] as const) {
+          await prisma.subjectOffering.upsert({
+            where: {
+              systemId_year_trackId_subjectId: {
+                systemId: system.id,
+                year,
+                trackId,
+                subjectId: stackSubjectId,
+              },
+            },
+            update: {},
+            create: {
               systemId: system.id,
               year,
               trackId,
-              subjectId: subjectId('programming_cs'),
+              subjectId: stackSubjectId,
+              countsTowardTotal: false,
+              sortOrder: 50,
             },
-          },
-          update: {},
-          create: {
-            systemId: system.id,
-            year,
-            trackId,
-            subjectId: subjectId('programming_cs'),
-            countsTowardTotal: false,
-            sortOrder: 50,
-          },
-        });
+          });
+        }
       }
     }
   }

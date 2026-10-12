@@ -7,7 +7,9 @@ import { SiteFaq } from '@/components/site/site-faq';
 import { JsonLd } from '@/components/seo/json-ld';
 import { PERSON_ID, SITE_URL, breadcrumbJsonLd, faqPageJsonLd } from '@/lib/seo/jsonld';
 import { buildMetadata } from '@/lib/seo/metadata';
-import { tenantName } from '@/lib/tenant';
+import { aymanOnly, tenantName } from '@/lib/tenant';
+import { bySubject } from '@/lib/subject-copy';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
 import { tenantFaq, tenantSentence } from '@/lib/tenant-copy';
 
 const c = copy.landing;
@@ -26,6 +28,23 @@ const c = copy.landing;
 const ABOUT_TITLE = tenantName(c.aboutPageTitle);
 
 /**
+ * The `<title>` and the description — the role, through BOTH gates.
+ *
+ * `tenantSentence` swaps the name welded into each; `bySubject` swaps the
+ * subject, because «مدرّس البرمجة والذكاء الاصطناعي للبكالوريا» is the half of
+ * the title that answers an unbranded query, and on a physics teacher's
+ * domain it answered the wrong one. The neutral twins take `{name}` from
+ * `ABOUT_TITLE` so the name still LEADS — see the note in `generateMetadata`.
+ * The description is read twice (the meta tag and `ProfilePage`), so once.
+ */
+const ABOUT_ROLE_TITLE = tenantSentence(
+  bySubject(c.aboutPageRoleTitle, subjectCopy.landing.aboutPageRoleTitle, { name: ABOUT_TITLE }),
+);
+const ABOUT_DESCRIPTION = tenantSentence(
+  bySubject(c.aboutPageDescription, subjectCopy.landing.aboutPageDescription, { name: ABOUT_TITLE }),
+);
+
+/**
  * The FAQ, with the name swapped out of the questions, mapped ONCE.
  *
  * ⚠️ It is deliberately not mapped twice. The `<JsonLd>` below and `<SiteFaq>`
@@ -37,8 +56,18 @@ const ABOUT_TITLE = tenantName(c.aboutPageTitle);
  * Only the first row names him («ليه أذاكر … مع أيمن أبو العلا بالذات؟») today;
  * the mapping covers every row and both fields so that a future edit to any
  * answer cannot reintroduce the leak silently.
+ *
+ * ⚠️ AND HIS STACK ONLY. Swapping the name was never enough here, because the
+ * ANSWERS are about him: «مهندس برمجيات شغّال في السوق من ٨ سنين», «أربع وحدات
+ * وأربعتاشر درس — مشروح كتابة ومنشور مجانًا», his printed book, his glossary,
+ * «أولى وتانية بكالوريا». On another instructor's domain that is his CV and his
+ * catalogue published under their name — the same fact-about-a-person leak
+ * `about-instructor.tsx` gates its body and credits for, one section further
+ * down the same page. There is no generic version of «why HIM», so the section
+ * and its `FAQPage` markup go together; an instructor's own FAQ belongs in a
+ * `faq` block on their homepage.
  */
-const ABOUT_FAQ = tenantFaq(c.aboutFaq);
+const ABOUT_FAQ = aymanOnly(tenantFaq(c.aboutFaq)) ?? [];
 
 export async function generateMetadata(): Promise<Metadata> {
   return buildMetadata({
@@ -66,8 +95,8 @@ export async function generateMetadata(): Promise<Metadata> {
      * instructor's domain is the whole point, because this page exists to be
      * the one that ranks for the person whose deployment it is.
      */
-    title: tenantSentence(c.aboutPageRoleTitle),
-    description: tenantSentence(c.aboutPageDescription),
+    title: ABOUT_ROLE_TITLE,
+    description: ABOUT_DESCRIPTION,
     path: '/about',
   });
 }
@@ -118,7 +147,7 @@ export default function AboutPage() {
           '@id': `${SITE_URL}/about#webpage`,
           url: `${SITE_URL}/about`,
           name: ABOUT_TITLE,
-          description: tenantSentence(c.aboutPageDescription),
+          description: ABOUT_DESCRIPTION,
           inLanguage: 'ar',
           mainEntity: { '@id': PERSON_ID },
         }}
@@ -134,7 +163,7 @@ export default function AboutPage() {
         {/* The `<h1>` is the name alone. Everything a crawler weighs most —
             title, h1, first paragraph — says the same thing the query does. */}
         <h1 className="page-title">{ABOUT_TITLE}</h1>
-        <p className="site-lead">{c.aboutPageLead}</p>
+        <p className="site-lead">{bySubject(c.aboutPageLead, subjectCopy.landing.aboutPageLead)}</p>
       </header>
 
       {/* Reused wholesale. Its own `<h2>` is «مين أيمن أبو العلا؟», which sits
@@ -162,8 +191,16 @@ export default function AboutPage() {
         is ever filtered or truncated, the markup has to take the same list, not
         `aboutFaq` again.
       */}
-      <JsonLd data={faqPageJsonLd(ABOUT_FAQ)} />
-      <SiteFaq title={c.aboutFaqTitle} eyebrow={c.aboutFaqEyebrow} rows={ABOUT_FAQ} />
+      {/* Empty on any stack but his — see `ABOUT_FAQ`. The heading goes with
+          the rows: «الأسئلة اللي بتتسأل قبل ما حد يختار مدرّس» over nothing is
+          a section that promises an answer and gives none. */}
+      {/* Two conditionals rather than one fragment, so his page keeps the same
+          children in the same places — the tree React reconciles on his stack
+          is the one it always was, not merely the same HTML. */}
+      {ABOUT_FAQ.length > 0 ? <JsonLd data={faqPageJsonLd(ABOUT_FAQ)} /> : null}
+      {ABOUT_FAQ.length > 0 ? (
+        <SiteFaq title={c.aboutFaqTitle} eyebrow={c.aboutFaqEyebrow} rows={ABOUT_FAQ} />
+      ) : null}
 
       <section className="site-section">
         <div className="site-shell" style={{ textAlign: 'center' }}>

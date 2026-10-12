@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { tenantSentence } from '@/lib/tenant-copy';
+import { bySubject } from '@/lib/subject-copy';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
 import { ASK_QUESTION_MAX, type AskAction } from '@ayman/contracts/assistant/ask';
 /*
  * TYPE-ONLY, both of them — `@ayman/contracts/assistant/conversation` carries
@@ -37,6 +39,18 @@ import type { HandoffState } from './assistant-handoff';
 import { useAssistantAsk, type ChatMessage } from './use-assistant-ask';
 
 const c = copy.assistant.ai;
+
+/**
+ * The four openers, the LAST of which is about the subject — «يعني إيه متغيّر
+ * في البرمجة؟», because «you can ask me about the subject too» is the half
+ * nobody guesses (see `Welcome`). On a stack whose subject is not code that
+ * chip was an invitation to ask a physics teacher's assistant about
+ * variables; there it asks about the stack's own subject instead. A
+ * programming stack keeps the four strings exactly.
+ */
+const STARTERS: readonly string[] = c.starters.map((starter, index) =>
+  index === c.starters.length - 1 ? bySubject(starter, subjectCopy.assistant.subjectStarter) : starter,
+);
 
 /**
  * «اسأل أي حاجة» — the half of المساعد you can type into.
@@ -425,7 +439,7 @@ function Welcome({ onPick }: { onPick: (question: string) => void }) {
         {c.lead}
       </p>
       <ul className="flex w-full flex-col gap-1.5">
-        {c.starters.map((starter, index) => (
+        {STARTERS.map((starter, index) => (
           <m.li
             key={starter}
             initial={{ opacity: 0, y: 6 }}

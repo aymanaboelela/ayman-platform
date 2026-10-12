@@ -1,14 +1,21 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { Cpu, Library, Sparkles } from 'lucide-react';
 import { copy } from '@ayman/contracts';
 import { LanguageBadge, Playground } from '@/components/playground/playground';
 import { PlaygroundArt } from '@/components/playground/playground-art';
 import { ALL_EXAMPLES } from '@/lib/playground/examples';
 import '@/components/playground/playground.css';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
 
 const c = copy.playground;
 
-export const metadata: Metadata = { title: c.title };
+/*
+ * No title on a stack that does not teach code: the page below is a 404
+ * there, and «تجربة الكود» in the tab of a physics teacher's not-found page
+ * would be the one place the route still admitted to existing.
+ */
+export const metadata: Metadata = TEACHES_CODE ? { title: c.title } : {};
 
 /**
  * `/playground` — somewhere to try something without it counting.
@@ -47,6 +54,14 @@ export const metadata: Metadata = { title: c.title };
  * page works on every teacher's stack.
  */
 export default function PlaygroundPage() {
+  /*
+   * A JavaScript console and a Python interpreter are a programming course's
+   * tools, and nothing else. On a stack whose subject is not code, `proxy.ts`
+   * already 404s this path before the auth round trip; this is the same
+   * answer from the page itself, so neither layer is the only one.
+   */
+  if (!TEACHES_CODE) notFound();
+
   return (
     <main className="pg mx-auto w-full max-w-[var(--w-app)] px-4 py-8 md:px-6 md:py-10">
       <header className="pg-hero">
