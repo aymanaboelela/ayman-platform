@@ -194,7 +194,9 @@ function LessonLine({ lesson }: { lesson: AdminHomeworkLessonSummary }) {
   return (
     <div
       className={cn(
-        'relative flex h-full items-center gap-3 rounded-xl border bg-surface-2 p-4',
+        // `flex-wrap`: on a phone the button drops under the text at full width
+        // instead of squeezing the lecture's name to «تطور تكنولوجيا المعا…».
+        'relative flex h-full flex-wrap items-center gap-3 rounded-xl border bg-surface-2 p-4',
         'transition-colors duration-[160ms] ease-out hover:border-accent/50 focus-within:border-accent/50',
         waiting ? 'border-accent/40' : 'border-line',
       )}
@@ -209,13 +211,13 @@ function LessonLine({ lesson }: { lesson: AdminHomeworkLessonSummary }) {
         <Icon className="size-5" />
       </span>
 
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[length:var(--fs-text-base)] font-semibold text-fg">{lesson.lessonTitle}</p>
+      <div className="min-w-0 flex-1 basis-48">
+        <p className="line-clamp-2 text-[length:var(--fs-text-base)] font-semibold text-fg">{lesson.lessonTitle}</p>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[length:var(--fs-text-xs)] tabular-nums">
           <CountChip tone="submitted" label={c.countPending} n={lesson.pending} strong />
           <CountChip tone="accepted" label={c.countAccepted} n={lesson.accepted} />
           <CountChip tone="needs_work" label={c.countNeedsWork} n={lesson.needsWork} />
-          <span className="text-fg-muted">
+          <span className="whitespace-nowrap text-fg-muted">
             {c.lastSubmission} {submittedAtFormatter.format(new Date(lesson.lastSubmittedAt))}
           </span>
         </div>
@@ -226,7 +228,7 @@ function LessonLine({ lesson }: { lesson: AdminHomeworkLessonSummary }) {
       <Link
         href={homeworkListHref(lesson.lessonId, waiting ? 'pending' : 'all')}
         className={cn(
-          'chip shrink-0 after:absolute after:inset-0 after:content-[\'\']',
+          'chip shrink-0 justify-center after:absolute after:inset-0 after:content-[\'\'] max-sm:w-full',
           waiting ? 'chip--solid' : 'chip--quiet',
         )}
       >
@@ -417,7 +419,7 @@ function HomeworkRow({ row, filter, lessonId }: { row: AdminHomeworkRow; filter:
             <Images className="size-3.5" aria-hidden="true" />
             {row.imageCount} {c.imageUnit}
           </span>
-          <span className="tabular-nums">{submittedAtFormatter.format(new Date(row.submittedAt))}</span>
+          <span className="whitespace-nowrap tabular-nums">{submittedAtFormatter.format(new Date(row.submittedAt))}</span>
           {row.grade !== null ? (
             <span className="font-semibold text-[color:var(--ok)] tabular-nums">{row.grade} / 100</span>
           ) : null}
