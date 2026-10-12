@@ -1,10 +1,10 @@
 import Link from 'next/link';
-import { ArrowUpLeft, GraduationCap } from 'lucide-react';
+import { ArrowUpLeft } from 'lucide-react';
 import type { Entitlements } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
 import { BrandLockup } from '@/components/brand-lockup';
-import { aymanOnly } from '@/lib/tenant';
 import { AdminNavList } from './admin-nav-list';
+import { StudentViewLink } from './student-view-link';
 
 /**
  * RTL-native: the sidebar sits at the inline start and its divider is
@@ -40,20 +40,11 @@ export function AppSidebar({
           <BrandLockup showTagline={false} />
         </Link>
 
+        <StudentViewLink />
+
         <nav aria-label={copy.admin.title} className="flex-1">
           <AdminNavList permissions={permissions} features={features} />
         </nav>
-
-        {/* أيمن بس (`aymanOnly`) — بتوديه `/dashboard` بنفس جلسته هو، مش
-            انتحال شخصية طالب. كل مدرّس تاني شايف الزرار اللي تحته بس. */}
-        {aymanOnly(true) ? (
-          <Link href="/dashboard" className="nav-pill">
-            <span className="nav-pill__well" aria-hidden="true">
-              <GraduationCap className="size-4" />
-            </span>
-            <span className="nav-pill__label">{copy.admin.nav.studentView}</span>
-          </Link>
-        ) : null}
 
         <Link
           href="/"
