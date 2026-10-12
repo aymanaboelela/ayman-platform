@@ -22,6 +22,7 @@ import { getMyBookOrdersOrEmpty } from '@/lib/my-book-orders';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getBookCatalogOrEmpty } from '@/lib/books';
 import { getSession } from '@/lib/session';
+import { canOpenDashboard } from '@/lib/dashboard-access';
 import { getTaxonomyOrNull } from '@/lib/taxonomy';
 import { xpFor } from '@/lib/xp';
 import { Achievements } from '@/components/dashboard/achievements';
@@ -127,12 +128,13 @@ export default async function DashboardPage() {
    * فحص واحد هنا، على نفس `getSession()` اللي الصفحة أصلًا بتعمله تحت
    * (مـ`cache()`، فده مش نداء إضافي)، بيقفل الباب كله مرة واحدة.
    *
-   * `role !== 'student'` مش «غير داخل» — أدمن أو مساعد عنده حساب حقيقي، بس
-   * الصفحة دي مالهاش معنى له (مفيش enrollment ولا quiz history لحساب مش
-   * طالب). `/admin` هو المكان اللي شاشته تناسب دوره فعليًا.
+   * بالصلاحيات مش بالرول (`canOpenDashboard`): الفحص الأول كان
+   * `role !== 'student'`، فرجّع المالك نفسه لـ/admin — وهو عنده كل الصلاحيات
+   * واشتراكات وتاريخ اختبارات حقيقي — و«الصفحة كطالب» ماكانتش بتوديه حتة.
+   * المساعد اللي ناقصه صلاحية من اللي الصفحة محتاجاها لسه بيتوجّه لـ/admin.
    */
   const earlySession = await getSession();
-  if (earlySession && earlySession.role !== 'student') redirect('/admin');
+  if (!canOpenDashboard(earlySession)) redirect('/admin');
 
   const [
     dashboard,
