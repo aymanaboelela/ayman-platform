@@ -67,6 +67,8 @@ export interface ProvisionSpec {
   key: string;
   displayName: string;
   subject: string;
+  landingPreset: string;
+  accent: string;
   adminName: string;
   adminEmail: string;
   whatsapp: string;
@@ -298,6 +300,8 @@ async function provisionOnce(spec: ProvisionSpec): Promise<ProvisionResult> {
           key: spec.key,
           displayName: spec.displayName,
           subject: spec.subject,
+          landingPreset: spec.landingPreset,
+          accent: spec.accent,
           appHost: spec.appHost,
           mediaHost: spec.mediaHost,
           adminName: spec.adminName,

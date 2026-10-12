@@ -4,10 +4,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { Globe, Rocket, Sparkles, ToggleRight, UserRound, type LucideIcon } from 'lucide-react';
+import { Check, Globe, LayoutTemplate, Rocket, Sparkles, ToggleRight, UserRound, type LucideIcon } from 'lucide-react';
 import type { FeatureDeclaration } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
+import { ACCENT_SLOTS, type AccentSlot } from '@ayman/contracts/admin/settings';
 import { SUBJECTS, subjectNameAr } from '@ayman/contracts/subjects';
+import { ACCENT_RAMPS } from '@ayman/ui/branding';
+import { cn } from '@ayman/ui/lib/cn';
 import { Button } from '@ayman/ui/components/button';
 import { Card, CardBody } from '@ayman/ui/components/card';
 import { Checkbox } from '@ayman/ui/components/checkbox';
@@ -62,6 +65,10 @@ export function NewTeacherForm({ features, cloudflare }: NewTeacherFormProps) {
       appHost: '',
       mediaHost: '',
       key: '',
+      // Not his amber classic: a new teacher's page should not open looking
+      // like the owner's. Both are one click to change.
+      landingPreset: 'board',
+      accent: 'blue',
       features: defaultFeatureValues(),
       shareKeys: true,
       youtube: '',
@@ -123,7 +130,18 @@ export function NewTeacherForm({ features, cloudflare }: NewTeacherFormProps) {
                 description={c.subjectHint}
                 issues={issues}
                 render={(props) => (
-                  <Select {...props} {...form.register('subject')}>
+                  <Select
+                    {...props}
+                    {...form.register('subject', {
+                      // «الترمينال» exists for programming only; leaving it
+                      // selected under another subject would be refused.
+                      onChange: (event: { target: { value: string } }) => {
+                        if (event.target.value !== 'programming_cs' && form.getValues('landingPreset') === 'neon') {
+                          form.setValue('landingPreset', 'board');
+                        }
+                      },
+                    })}
+                  >
                     <option value="" disabled>
                       {c.subjectChoose}
                     </option>
@@ -226,6 +244,17 @@ export function NewTeacherForm({ features, cloudflare }: NewTeacherFormProps) {
                   )}
                 />
               </div>
+            </Section>
+
+            <Section icon={LayoutTemplate} title={c.sectionLook} note={c.sectionLookNote} hue="var(--a-9)">
+              <LookPicker
+                preset={values.landingPreset ?? 'board'}
+                accent={(values.accent ?? 'blue') as AccentSlot}
+                programming={values.subject === 'programming_cs'}
+                error={form.formState.errors.landingPreset?.message}
+                onPreset={(preset) => form.setValue('landingPreset', preset, { shouldValidate: true })}
+                onAccent={(accent) => form.setValue('accent', accent)}
+              />
             </Section>
 
             <Section icon={ToggleRight} title={c.sectionFeatures} note={c.sectionFeaturesNote} hue="var(--a-9)">
@@ -382,6 +411,108 @@ function Row({ label, value, mono = false }: { label: string; value: string; mon
       >
         {value}
       </dd>
+    </div>
+  );
+}
+
+const PRESETS = [
+  { id: 'board', label: copy.admin.settings.landingPresetBoard, hint: c.lookBoardHint },
+  { id: 'classic', label: copy.admin.settings.landingPresetClassic, hint: c.lookClassicHint },
+  { id: 'studio', label: copy.admin.settings.landingPresetStudio, hint: c.lookStudioHint },
+  { id: 'neon', label: copy.admin.settings.landingPresetNeon, hint: c.lookNeonHint },
+] as const;
+
+const ACCENT_NAMES: Record<AccentSlot, string> = {
+  amber: copy.admin.branding.accentAmber,
+  cyan: copy.admin.branding.accentCyan,
+  blue: copy.admin.branding.accentBlue,
+  violet: copy.admin.branding.accentViolet,
+  magenta: copy.admin.branding.accentMagenta,
+  slate: copy.admin.branding.accentSlate,
+};
+
+/**
+ * The page's look: one of the landing presets and one accent. The same two
+ * choices the teacher has later in `/admin/settings` — the run writes them
+ * into the stack's env, and the stack seeds them into its own settings once.
+ * `neon` is listed only for a programming subject (a non-programming stack
+ * renders classic in its place).
+ */
+function LookPicker({
+  preset,
+  accent,
+  programming,
+  error,
+  onPreset,
+  onAccent,
+}: {
+  preset: string;
+  accent: AccentSlot;
+  programming: boolean;
+  error?: string;
+  onPreset: (preset: 'classic' | 'board' | 'studio' | 'neon') => void;
+  onAccent: (accent: AccentSlot) => void;
+}) {
+  const swatch = ACCENT_RAMPS[accent].light[0];
+  return (
+    <div className="flex flex-col gap-5">
+      <fieldset>
+        <legend className="mb-2 text-[length:var(--fs-text-sm)] font-medium text-fg">{c.lookPreset}</legend>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {PRESETS.filter((entry) => entry.id !== 'neon' || programming).map((entry) => {
+            const on = preset === entry.id;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => onPreset(entry.id)}
+                className={cn(
+                  'flex flex-col items-start gap-1 rounded-lg border p-3 text-start transition-colors',
+                  on ? 'border-accent bg-accent/10' : 'border-line bg-surface-2 hover:bg-surface-3',
+                )}
+              >
+                <span className="flex w-full items-center justify-between gap-2">
+                  <span className="font-semibold text-fg">{entry.label}</span>
+                  {on ? <Check aria-hidden="true" className="size-4 text-accent-text" /> : null}
+                </span>
+                <span className="text-[length:var(--fs-text-xs)] text-fg-muted">{entry.hint}</span>
+              </button>
+            );
+          })}
+        </div>
+        {error ? <p className="mt-2 text-[length:var(--fs-text-sm)] text-err">{error}</p> : null}
+      </fieldset>
+
+      <fieldset>
+        <legend className="mb-2 text-[length:var(--fs-text-sm)] font-medium text-fg">{c.lookAccent}</legend>
+        <div className="flex flex-wrap gap-2">
+          {ACCENT_SLOTS.map((slot) => {
+            const on = accent === slot;
+            return (
+              <button
+                key={slot}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                aria-label={ACCENT_NAMES[slot]}
+                onClick={() => onAccent(slot)}
+                className={cn(
+                  'inline-flex h-10 items-center gap-2 rounded-full border px-3 text-[length:var(--fs-text-sm)]',
+                  on ? 'border-fg text-fg' : 'border-line text-fg-muted hover:bg-surface-3',
+                )}
+              >
+                {/* The swatch IS the value being chosen: a literal from the
+                    same ramp table the stack renders with, not a token. */}
+                <span aria-hidden="true" className="size-4 rounded-full" style={{ background: ACCENT_RAMPS[slot].light[0] }} />
+                {ACCENT_NAMES[slot]}
+              </button>
+            );
+          })}
+        </div>
+        <div aria-hidden="true" className="mt-3 h-2 rounded-full" style={{ background: swatch }} />
+      </fieldset>
     </div>
   );
 }

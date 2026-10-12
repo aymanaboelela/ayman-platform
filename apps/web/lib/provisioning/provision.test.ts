@@ -198,6 +198,8 @@ function spec(overrides: Partial<Parameters<typeof provision>[0]> = {}): Paramet
     key: 'mohamed-hassan',
     displayName: 'م. محمد حسن',
     subject: 'physics',
+    landingPreset: 'board',
+    accent: 'blue',
     adminName: 'محمد حسن',
     adminEmail: 'teacher@example.com',
     whatsapp: '+201000000000',

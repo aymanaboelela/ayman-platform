@@ -49,6 +49,8 @@ export async function provisionTenantAction(input: ProvisionRequest): Promise<Pr
       key: data.key,
       displayName: data.displayName,
       subject: data.subject,
+      landingPreset: data.landingPreset,
+      accent: data.accent,
       adminName: data.adminName,
       adminEmail: data.adminEmail,
       whatsapp: data.whatsapp,

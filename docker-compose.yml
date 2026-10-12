@@ -125,6 +125,11 @@ services:
       # every stack taught before this existed. The API reads it for the
       # assistant's scope and for the subject the seed opens on every track.
       TENANT_SUBJECT: ${TENANT_SUBJECT:-}
+      # The landing page's look picked in «مدرّس جديد» — seeded into branding
+      # once on a fresh database, and the web's fallback before that.
+      # Empty = the schema defaults (classic, amber).
+      TENANT_LANDING_PRESET: ${TENANT_LANDING_PRESET:-}
+      TENANT_ACCENT: ${TENANT_ACCENT:-}
       # The teacher's name, for everything the API itself writes: the
       # assistant's answers, push and WhatsApp texts. `common/tenant.ts` reads
       # it, but it was only ever passed to `web` — so on every teacher's stack
@@ -372,6 +377,11 @@ services:
         # decided in the prerender, and `next.config.ts` inlines it into the
         # client bundle. Empty = programming_cs.
         TENANT_SUBJECT: ${TENANT_SUBJECT:-}
+        # The landing page's look picked in «مدرّس جديد» — seeded into branding
+        # once on a fresh database, and the web's fallback before that.
+        # Empty = the schema defaults (classic, amber).
+        TENANT_LANDING_PRESET: ${TENANT_LANDING_PRESET:-}
+        TENANT_ACCENT: ${TENANT_ACCENT:-}
         # ⚠️ وقت البناء كمان، وللسبب اللي فوق نفسه: الفوتر و`/links` صفحات
         # prerendered، و`next build` بيشتغل من غير API فبيخبز `contact` فاضي.
         # القيم دي هي اللي بتترسم في الشباك ده — من غيرها أول زائر بعد كل نشر
@@ -442,6 +452,11 @@ services:
       TENANT_KEY: ${TENANT_KEY:-}
       TENANT_DISPLAY_NAME: ${TENANT_DISPLAY_NAME:-}
       TENANT_SUBJECT: ${TENANT_SUBJECT:-}
+      # The landing page's look picked in «مدرّس جديد» — seeded into branding
+      # once on a fresh database, and the web's fallback before that.
+      # Empty = the schema defaults (classic, amber).
+      TENANT_LANDING_PRESET: ${TENANT_LANDING_PRESET:-}
+      TENANT_ACCENT: ${TENANT_ACCENT:-}
       # ── لوحة التحكّم في منصات المدرّسين — ستاك أيمن وبس ────────────────
       #
       # الاتنين دول **مايتحطّوش على ستاك مدرّس**. اللي ماسك المفتاح الخاص

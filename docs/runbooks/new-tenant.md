@@ -31,7 +31,7 @@ generates every secret and the whole env file (same keys as
 `deploy/tenant.env.example`), runs `check-tenant-env.mjs --first-deploy` over
 it and refuses on any error, signs the entitlements document, creates a
 Dokploy project + compose that clones the owner compose's git source, writes
-the environment, copies the owner's routing onto the new hosts (`/api` → api,
+the environment (including the landing look picked on the form — `TENANT_LANDING_PRESET` / `TENANT_ACCENT`, seeded into the stack's branding once, on its first boot), copies the owner's routing onto the new hosts (`/api` → api,
 `/` → web, `/media` → api), writes the DNS on Cloudflare, and starts the first
 deploy. Pressing the button again with the same form **resumes** — a stack
 that already has an environment is never regenerated (its Postgres was

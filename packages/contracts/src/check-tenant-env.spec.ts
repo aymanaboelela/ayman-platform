@@ -213,6 +213,18 @@ describe('checkTenantEnv', () => {
     });
   });
 
+  describe('the landing look', () => {
+    it('accepts a known preset and accent, and both empty', () => {
+      expect(check({ TENANT_LANDING_PRESET: 'board', TENANT_ACCENT: 'blue' }).errors).toEqual([]);
+      expect(check({ TENANT_LANDING_PRESET: '', TENANT_ACCENT: '' }).errors).toEqual([]);
+    });
+
+    it('rejects a typo the boot would silently ignore', () => {
+      expect(check({ TENANT_LANDING_PRESET: 'bord' }).errors.join(' ')).toContain('TENANT_LANDING_PRESET');
+      expect(check({ TENANT_ACCENT: 'red' }).errors.join(' ')).toContain('TENANT_ACCENT');
+    });
+  });
+
   describe('the subject', () => {
     it('accepts it empty — programming, what every stack taught before it existed', () => {
       expect(check({ TENANT_SUBJECT: '' }).errors).toEqual([]);

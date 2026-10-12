@@ -5693,6 +5693,17 @@ const admin = {
     keyHint: 'حروف إنجليزي صغيرة وأرقام وشرطة. بيتكتب في الإعدادات والسجلات، ومايتغيّرش بعد كده.',
     sectionFeatures: 'الفيتشرز',
     sectionFeaturesNote: 'نفس مستند الصلاحيات — بيتوقّع ويتحط في منصته من أول يوم، صالح سنة.',
+    sectionLook: 'شكل الصفحة الرئيسية',
+    sectionLookNote: 'منصته بتطلع بالشكل ده من أول يوم، وهو يقدر يغيّره بعد كده من إعداداته.',
+    lookPreset: 'نسخة الصفحة',
+    lookAccent: 'اللون الأساسي',
+    /** Hints written for a NEW teacher's page — the settings screen's own
+     *  hints describe the owner's live page and mention code. */
+    lookBoardHint: 'بلوكات لون صريحة ورا بعض، الكلام في النص، وتايلات سنين كبيرة.',
+    lookClassicHint: 'شاشة أولى غامقة باسمه، وبعدها كروت الكورسات والسنين.',
+    lookStudioHint: 'صفحة فاتحة، وصورة المدرّس كبيرة من أول الشاشة.',
+    lookNeonHint: 'صفحة غامقة بشكل شاشة كود — لمدرّسين البرمجة بس.',
+    errPresetNeon: '«الترمينال» لمدرّسين البرمجة بس — اختار نسخة تانية',
     sectionExtras: 'إضافات',
     shareKeys: 'شغّل المساعد والصوت بمفاتيحي',
     shareKeysHint: 'مفاتيح الذكاء الاصطناعي بتاعتك بتتنسخ لمنصته، فالمساعد يشتغل من أول يوم — والاستهلاك بيتحسب عليك.',

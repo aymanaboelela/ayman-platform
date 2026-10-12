@@ -25,6 +25,8 @@ function spec(overrides: Partial<Parameters<typeof buildTenantEnv>[0]> = {}) {
     key: 'mohamed-hassan',
     displayName: 'م. محمد حسن',
     subject: 'physics',
+    landingPreset: 'board',
+    accent: 'blue',
     appHost: 'mohamedhassan.com',
     mediaHost: 'media.mohamedhassan.com',
     adminName: 'محمد حسن',

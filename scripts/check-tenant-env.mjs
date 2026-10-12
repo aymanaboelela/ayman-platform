@@ -272,6 +272,18 @@ export function checkTenantEnv(env, options = {}) {
     );
   }
 
+  // ── The landing look ───────────────────────────────────────────────────
+  // A typo is silently ignored at boot (a cosmetic setting must not stop a
+  // stack) — so this is the one place it can be caught.
+  const preset = get(env, 'TENANT_LANDING_PRESET');
+  if (preset !== '' && !['classic', 'neon', 'board', 'studio'].includes(preset)) {
+    fail(`TENANT_LANDING_PRESET "${preset}" is not a preset. Use classic, board, studio or neon.`);
+  }
+  const accent = get(env, 'TENANT_ACCENT');
+  if (accent !== '' && !['amber', 'cyan', 'blue', 'violet', 'magenta', 'slate'].includes(accent)) {
+    fail(`TENANT_ACCENT "${accent}" is not an accent. Use amber, cyan, blue, violet, magenta or slate.`);
+  }
+
   // ── Database ───────────────────────────────────────────────────────────
   const db = get(env, 'POSTGRES_DB');
   if (db === '') {

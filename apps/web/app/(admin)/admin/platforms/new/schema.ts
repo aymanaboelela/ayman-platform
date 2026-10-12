@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { copy } from '@ayman/contracts/copy/admin';
+import { ACCENT_SLOTS } from '@ayman/contracts/admin/settings';
 import { SUBJECTS, type SubjectSlug } from '@ayman/contracts/subjects';
 
 /**
@@ -69,6 +70,9 @@ export const ProvisionRequestSchema = z
       .trim()
       .regex(TENANT_KEY_PATTERN, c.errKey)
       .refine((value) => !RESERVED_KEYS.has(value), c.errKeyReserved),
+    /** The landing look on day one — `contracts/admin/tenant-branding.ts`. */
+    landingPreset: z.enum(['classic', 'board', 'studio', 'neon']),
+    accent: z.enum(ACCENT_SLOTS),
     /** Same shape as the signing form's, for the reason written there. */
     features: z.record(z.string(), z.boolean()),
     shareKeys: z.boolean(),
@@ -79,6 +83,12 @@ export const ProvisionRequestSchema = z
     whatsappChannel: optionalHttps,
   })
   .superRefine((value, context) => {
+    // «الترمينال» is a programming page — code chrome everywhere — and a
+    // non-programming stack refuses to render it (it falls back to classic),
+    // so offering it there would be a choice that silently does nothing.
+    if (value.landingPreset === 'neon' && value.subject !== 'programming_cs') {
+      context.addIssue({ code: 'custom', path: ['landingPreset'], message: c.errPresetNeon });
+    }
     if (value.appHost === value.mediaHost) {
       context.addIssue({ code: 'custom', path: ['mediaHost'], message: c.errSameHost });
     }

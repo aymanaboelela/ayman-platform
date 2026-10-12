@@ -16,6 +16,7 @@ import { LocalDiskStorage } from '../modules/media/storage/local-disk.storage';
 import { loadEnv } from '../config/env';
 import { SITE_SETTINGS_ID } from '../modules/admin/admin.constants';
 import { SEEDS_OFFICIAL_SEO, TENANT_CONTACT_SEED } from './seed-data/tenant-contact';
+import { tenantBrandingDefaults } from '@ayman/contracts/admin/tenant-branding';
 import { STACK_SUBJECT_SLUG } from '../common/tenant-subject';
 
 // Prisma 7 requires a driver adapter at construction time (see Task 8's
@@ -567,7 +568,24 @@ async function main(): Promise<void> {
       whatsapp: current.contact.whatsapp ?? TENANT_CONTACT_SEED.whatsapp,
     };
 
-    const next = SiteSettingsSchema.parse({ ...current, seo, contact });
+    /*
+     * The landing page's look the owner picked in «مدرّس جديد», written ONCE:
+     * only while the stored row has never had a `branding` key — a fresh
+     * database. The first save from /admin/settings creates the key, and from
+     * then on this never touches it. `contracts/admin/tenant-branding.ts`
+     * has why the values themselves cannot be the "is it empty" test.
+     */
+    const rawData = (settingsRow.data ?? {}) as Record<string, unknown>;
+    const brandingSeed = tenantBrandingDefaults({
+      TENANT_LANDING_PRESET: process.env.TENANT_LANDING_PRESET,
+      TENANT_ACCENT: process.env.TENANT_ACCENT,
+    });
+    const branding =
+      !('branding' in rawData) && Object.keys(brandingSeed).length > 0
+        ? { ...current.branding, ...brandingSeed }
+        : current.branding;
+
+    const next = SiteSettingsSchema.parse({ ...current, branding, seo, contact });
 
     // Compared as a whole rather than field by field, so a boot that changes
     // nothing performs no write at all — this runs on EVERY container start.
