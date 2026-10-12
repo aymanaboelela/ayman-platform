@@ -187,6 +187,8 @@ describe('segmentArgs — one segment into every missing rung', () => {
     // and adds no offset of its own
     expect(args.filter((a) => a === '-muxdelay')).toHaveLength(2);
     expect(args[args.indexOf('-muxdelay') + 1]).toBe('0');
+    // and does not round them to the frame grid on the way through the encoder
+    expect(args.filter((a, i) => a === '1:90000' && args[i - 1] === '-enc_time_base:v')).toHaveLength(2);
   });
 
   it('copies the audio — re-encoding six seconds at a time would click at every boundary', () => {
