@@ -184,6 +184,27 @@ export const AdminHomeworkRowSchema = z.object({
 
 export type AdminHomeworkRow = z.infer<typeof AdminHomeworkRowSchema>;
 
+/**
+ * One lecture's line on the queue's overview: what came in on THAT exercise,
+ * by status. «الدنيا ملخبطة… الدرس إيه واجباته إيه» — the queue used to be one
+ * flat stream of every student on every lecture, so the overview is grouped
+ * course → section → lecture, in the course's own outline order, and a lecture
+ * opens its own list.
+ */
+export const AdminHomeworkLessonSummarySchema = z.object({
+  lessonId: z.uuid(),
+  lessonTitle: z.string(),
+  sectionTitle: z.string(),
+  courseId: z.uuid(),
+  courseTitle: z.string(),
+  pending: z.number().int(),
+  accepted: z.number().int(),
+  needsWork: z.number().int(),
+  lastSubmittedAt: z.iso.datetime(),
+});
+
+export type AdminHomeworkLessonSummary = z.infer<typeof AdminHomeworkLessonSummarySchema>;
+
 export const AdminHomeworkDetailSchema = AdminHomeworkRowSchema.extend({
   /** The questions he set, so the answer can be read against them without
    *  opening the course editor in a second tab. */
