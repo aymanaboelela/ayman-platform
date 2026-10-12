@@ -15,9 +15,11 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import {
   HomeworkFilterSchema,
   type AdminHomeworkDetail,
+  type AdminHomeworkLessonSummary,
   type AdminHomeworkRow,
   type HomeworkPendingCount,
 } from '@ayman/contracts/homework';
+import { z } from '@ayman/contracts/zod';
 import { ListQuerySchema, type ListResponse } from '@ayman/contracts/admin/list';
 import { parseRequest } from '../../common/http/parse-request';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
@@ -57,11 +59,19 @@ export class AdminHomeworkController {
     return { pending: await this.homework.pendingCount() };
   }
 
+  /** The overview: one line per lecture that has anything handed in. */
+  @RequirePermission('homework:read')
+  @Get('lessons')
+  lessons(): Promise<AdminHomeworkLessonSummary[]> {
+    return this.homework.adminLessons();
+  }
+
   @RequirePermission('homework:read')
   @Get()
   list(
     @Query('filter') filter?: string,
     @Query('courseId') courseId?: string,
+    @Query('lessonId') lessonId?: string,
     @Query('page') page?: string,
     @Query('perPage') perPage?: string,
   ): Promise<ListResponse<AdminHomeworkRow>> {
@@ -74,12 +84,16 @@ export class AdminHomeworkController {
      */
     const parsedFilter = parseRequest(HomeworkFilterSchema, filter, 'filter');
     const list = parseRequest(ListQuerySchema, { page, perPage }, 'list query');
+    // Validated, not passed through: it lands in a Prisma `where` on a uuid
+    // column, and a junk value would be a 500 from Postgres instead of a 400.
+    const parsedLesson = parseRequest(z.uuid().optional(), lessonId || undefined, 'lessonId');
 
     return this.homework.adminList(
       parsedFilter,
       courseId,
       list.perPage,
       (list.page - 1) * list.perPage,
+      parsedLesson,
     );
   }
 

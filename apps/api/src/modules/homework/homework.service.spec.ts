@@ -186,6 +186,53 @@ describe('HomeworkService', () => {
     objects.clear();
   });
 
+  /*
+   * «الدنيا ملخبطة… الدرس إيه واجباته إيه». The queue used to be one flat
+   * stream; the overview is one line per lecture, in the course's own order.
+   */
+  describe('the queue, by lecture', () => {
+    async function seed() {
+      await prisma.homeworkSubmission.deleteMany({ where: { userId: adminId } });
+      const row = (lesson: string, userId: string, status: 'submitted' | 'accepted' | 'needs_work', at: string) =>
+        prisma.homeworkSubmission.create({
+          data: { lessonId: lesson, userId, courseId, status, imageCount: 2, submittedAt: new Date(at) },
+        });
+      // The SECOND lecture got the newest hand-in, and still lists second.
+      await row(lessonId, studentId, 'submitted', '2026-10-01T10:00:00Z');
+      await row(lessonId, adminId, 'accepted', '2026-10-02T10:00:00Z');
+      await row(unpublishedLessonId, studentId, 'needs_work', '2026-10-05T10:00:00Z');
+    }
+
+    afterEach(async () => {
+      await prisma.homeworkSubmission.deleteMany({ where: { userId: adminId } });
+    });
+
+    it('counts each lecture by status, in the course outline order', async () => {
+      await seed();
+      const mine = (await service.adminLessons()).filter((line) => line.courseId === courseId);
+      expect(mine.map((line) => line.lessonId)).toEqual([lessonId, unpublishedLessonId]);
+      expect(mine[0]).toMatchObject({
+        lessonTitle: 'المحاضرة الأولى',
+        sectionTitle: 'الوحدة الأولى',
+        courseTitle: 'كورس الواجبات',
+        pending: 1,
+        accepted: 1,
+        needsWork: 0,
+        lastSubmittedAt: '2026-10-02T10:00:00.000Z',
+      });
+      expect(mine[1]).toMatchObject({ pending: 0, accepted: 0, needsWork: 1 });
+    });
+
+    it('opens one lecture’s list without the other lecture’s students', async () => {
+      await seed();
+      const list = await service.adminList('all', undefined, 50, 0, lessonId);
+      expect(list.rowCount).toBe(2);
+      expect(list.rows.every((row) => row.lessonId === lessonId)).toBe(true);
+      const pending = await service.adminList('pending', undefined, 50, 0, unpublishedLessonId);
+      expect(pending.rowCount).toBe(0);
+    });
+  });
+
   describe('what a student can see', () => {
     it('shows a published exercise and no submission yet', async () => {
       const homework = await service.forStudent(studentId, lessonId);

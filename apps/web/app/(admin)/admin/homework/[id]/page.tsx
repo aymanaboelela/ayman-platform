@@ -81,8 +81,11 @@ export default async function AdminHomeworkDetailPage({
    * إنه اتمسح. نفس الفكرة اللي `/admin/analytics/videos/[videoKey]` ماشي
    * بيها مع `period` تحت. `HomeworkRow` هو اللي بيبعت `?filter=` على لينك
    * الصف أصلًا — شوف `../nav.ts`.
+   *
+   * والمحاضرة من الحل نفسه مش من الـURL: اللي جاي من إشعار أو من ملف الطالب
+   * مالوش `lessonId` في اللينك، وبرضه لازم «رجوع» يوديه لحلول المحاضرة دي.
    */
-  const backHref = homeworkBackHref(filter);
+  const backHref = homeworkBackHref(filter, submission.lessonId);
 
   return (
     <>

@@ -1158,6 +1158,23 @@ const admin = {
     yourNote: 'اللي بعتّه',
     /** The `sr-only` sentence beside the sidebar badge. `{n}` is the count. */
     pendingBadgeLabel: '{n} حل مستني مراجعة',
+
+    // ── the overview, one line per lecture ───────────────────────────────
+    overviewLead: 'كل محاضرة عليها واجب، مترتّبة زي الكورس. افتح أي محاضرة تشوف مين سلّم.',
+    /** On a course's header: what is waiting across all its lectures. */
+    coursePending: '{n} مستني مراجعة',
+    courseAllDone: 'كله اتراجع',
+    countPending: 'مستني',
+    countAccepted: 'مقبول',
+    countNeedsWork: 'رجع',
+    lastSubmission: 'آخر تسليم',
+    openSubmissions: 'افتح الحلول',
+    backToLessons: 'كل المحاضرات',
+    /** The lecture's own list, when a tab has nothing in it. */
+    lessonEmpty: 'مفيش حلول هنا في التبويب ده.',
+    pagePrev: 'اللي قبله',
+    pageNext: 'اللي بعده',
+    pageOf: '{from}–{to} من {total}',
   },
   exam: {
     title: 'امتحان الكورس النهائي',
