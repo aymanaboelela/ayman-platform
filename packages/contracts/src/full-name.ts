@@ -53,8 +53,23 @@ const ARABIC_PART = /^(?:(?=\p{Script_Extensions=Arabic})[\p{L}\p{M}])+$/u;
 const LATIN_PART = /^[A-Za-z]+$/;
 const LETTER = /\p{L}/gu;
 
+/**
+ * Invisible format characters (Unicode `Cf`): direction marks (U+200E/F,
+ * U+061C), zero-width space/joiners (U+200B–D), bidi embeds and isolates
+ * (U+202A–E, U+2066–9), the BOM. They render as nothing, so a student sees a
+ * perfectly ordinary «مؤمن محمد عبد النظير» in the field — and every part
+ * carrying one failed both the Arabic and the Latin test with «الاسم يتكتب
+ * بالحروف بس». iPhones put them there: autofill from contacts, and the RTL
+ * keyboard around Latin text. None can belong in a name, so they are dropped
+ * before any rule runs (and before the value is stored).
+ *
+ * NFKC first, so Arabic presentation forms a pasted name can arrive in (ﻣ for
+ * م) become the ordinary letters the script test expects.
+ */
+const INVISIBLE = /\p{Cf}/gu;
+
 export function normalizeFullName(value: string): string {
-  return value.replace(/ـ/g, '').replace(/\s+/g, ' ').trim();
+  return value.normalize('NFKC').replace(INVISIBLE, '').replace(/ـ/g, '').replace(/\s+/g, ' ').trim();
 }
 
 /** The first thing wrong with an already-normalised name, or `null`. */

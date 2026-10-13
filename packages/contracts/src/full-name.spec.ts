@@ -40,6 +40,29 @@ describe('FullNameSchema', () => {
     },
   );
 
+  /*
+   * A student on an iPhone typed «مؤمن محمد عبد النظير», then
+   * «Moamen Mohamed Abdelnazeer», and got «الاسم يتكتب بالحروف بس» for both
+   * (2026-10-13). Invisible marks rode along in the field, and each part that
+   * carried one failed both script tests.
+   */
+  it('accepts a name carrying invisible direction marks and zero-width characters', () => {
+    for (const value of [
+      '\u200fمؤمن محمد عبد النظير\u200f',
+      'Moamen Mohamed Abdelnazeer\u200e',
+      'Moamen\u200b Mohamed\u200d Abdelnazeer',
+      '\u2067مؤمن محمد عبد\u2069 النظير',
+      '\ufeffمؤمن محمد عبد النظير',
+    ]) {
+      expect(issue(value)).toBeUndefined();
+    }
+    expect(FullNameSchema.parse('Moamen\u200e Mohamed Abdelnazeer')).toBe('Moamen Mohamed Abdelnazeer');
+  });
+
+  it('reads Arabic presentation forms as the ordinary letters', () => {
+    expect(issue('\ufee3\ufecc\ufeae\ufed1 محمد علي')).toBeUndefined();
+  });
+
   it('refuses a name that mixes Arabic and English', () => {
     expect(issue('أحمد Mohamed علي')).toBe(FULL_NAME_ERRORS.mixed);
   });
