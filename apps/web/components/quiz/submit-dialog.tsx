@@ -202,7 +202,7 @@ export function SubmitDialog({
               no-undo trap this dialog exists to prevent means "changed my
               mind" must be the path requiring zero extra keystrokes. */}
           <Button type="button" variant="secondary" autoFocus onClick={() => onOpenChange(false)}>
-            ارجع راجع الامتحان
+            {copy.quiz.submitCancel}
           </Button>
           <Button
             type="button"
