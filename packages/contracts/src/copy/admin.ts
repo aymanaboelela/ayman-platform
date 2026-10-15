@@ -67,6 +67,7 @@ const admin = {
     errors: 'الأعطال',
     audit: 'سجل النشاط',
     settings: 'الإعدادات',
+    profile: 'الملف الشخصي',
     /** المساعد's inbox. Sits in the teaching group — it is student contact,
      *  not site configuration. */
     inbox: 'صندوق الوارد',
@@ -6092,6 +6093,35 @@ const admin = {
     kindTimeoutHint: 'الطلب عدّى ١٥ ثانية من غير رد، فالصفحة بطّلت استنيان. غالبًا الـ API كان واقع أو بطيء وقتها.',
   },
 
+  profile: {
+    title: 'الملف الشخصي',
+    subtitle: 'بيانات حسابك وكلمة المرور والأجهزة المسجلة',
+    accountInfo: 'معلومات الحساب',
+    name: 'الاسم',
+    email: 'البريد الإلكتروني',
+    phone: 'رقم الهاتف',
+    role: 'الدور / الصلاحية',
+    activeSessions: 'الجلسات والأجهزة النشطة',
+    memberSince: 'تاريخ إنشاء الحساب',
+    editProfile: 'تعديل البيانات الأساسية',
+    saveProfile: 'حفظ البيانات',
+    profileSaved: 'تم تحديث البيانات بنجاح',
+    changePassword: 'تغيير كلمة المرور',
+    currentPassword: 'كلمة المرور الحالية',
+    currentPasswordPlaceholder: 'اكتب كلمة المرور الحالية',
+    newPassword: 'كلمة المرور الجديدة',
+    newPasswordPlaceholder: '٨ أحرف على الأقل',
+    confirmPassword: 'تأكيد كلمة المرور الجديدة',
+    confirmPasswordPlaceholder: 'أعد كتابة كلمة المرور الجديدة',
+    revokeOtherSessions: 'تسجيل الخروج من جميع الأجهزة والمتصفحات الأخرى',
+    revokeOtherSessionsHint: 'يُنصح به لحماية حسابك عند تغيير كلمة المرور',
+    passwordChanged: 'تم تغيير كلمة المرور بنجاح',
+    passwordMismatch: 'كلمة المرور الجديدة غير متطابقة مع التأكيد',
+    passwordTooShort: 'كلمة المرور يجب ألا تقل عن ٨ أحرف',
+    permissionsCount: 'عدد الصلاحيات الممنوحة',
+    sessionSingular: 'جلسة واحدة نشطة',
+    sessionPlural: '{count} جلسات نشطة',
+  },
 } as const;
 
 /**

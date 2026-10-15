@@ -37,6 +37,7 @@ import { StudentsModule } from '../modules/admin/students/students.module';
 import { AdminTaxonomyModule } from '../modules/admin/taxonomy/admin-taxonomy.module';
 import { MediaModule } from '../modules/media/media.module';
 import { FlagsModule } from '../modules/admin/flags/flags.module';
+import { AdminProfileModule } from '../modules/admin/profile/admin-profile.module';
 import { TenantEntitlementsModule } from '../modules/tenant-entitlements/tenant-entitlements.module';
 import { RolesModule } from '../modules/admin/roles/roles.module';
 import { NavigationModule } from '../modules/admin/navigation/navigation.module';
@@ -327,6 +328,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         ArenaModule,
         // «دفتر غلطاتي» — بيقرا كويزات الطالب بس، مفيش Redis ولا تايمرز.
         MistakesModule,
+        AdminProfileModule,
       ],
       providers: [
         Reflector,
@@ -925,6 +927,15 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'game finish: anonymous', method: 'post', path: () => `/api/me/game/sessions/${randomUUID()}/finish`, actor: 'anonymous', status: 401, body: () => ({}) },
     { label: 'game finish: student, not their session', method: 'post', path: () => `/api/me/game/sessions/${randomUUID()}/finish`, actor: 'student', status: 404, body: () => ({}) },
     { label: 'game answer: student, session not theirs', method: 'post', path: () => '/api/me/game/answer', actor: 'student', status: 404, body: () => ({ questionId: randomUUID(), optionId: null, sessionId: randomUUID() }) },
+    // «أسئلة الكتب الخارجية» للطالب — `quiz:read`
+    { label: 'me external books list: anonymous', method: 'get', path: () => `/api/me/external-books/courses/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'me external book detail: anonymous', method: 'get', path: () => `/api/me/external-books/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'me external book detail: student, unknown book', method: 'get', path: () => `/api/me/external-books/${randomUUID()}`, actor: 'student', status: 404 },
+    { label: 'me external book practice: anonymous', method: 'post', path: () => `/api/me/external-books/${randomUUID()}/practice`, actor: 'anonymous', status: 401, body: () => ({ scope: 'book', scopeId: randomUUID(), count: 10 }) },
+    { label: 'me external book practice session: anonymous', method: 'get', path: () => `/api/me/external-books/practice/${randomUUID()}`, actor: 'anonymous', status: 401 },
+    { label: 'me external book submit: anonymous', method: 'post', path: () => `/api/me/external-books/practice/${randomUUID()}/submit`, actor: 'anonymous', status: 401, body: () => ({ answers: [] }) },
+    { label: 'me external book result: anonymous', method: 'get', path: () => `/api/me/external-books/practice/${randomUUID()}/result`, actor: 'anonymous', status: 401 },
+
     // «أسئلة الألعاب» لكورس واحد: الدروس والإعدادات — `question:write` زي الباقي.
     { label: 'admin game bank detail: student', method: 'get', path: () => `/api/admin/game-banks/${randomUUID()}`, actor: 'student', status: 403 },
     { label: 'admin game bank detail: admin, unknown course', method: 'get', path: () => `/api/admin/game-banks/${randomUUID()}`, actor: 'admin', status: 404 },
@@ -1640,6 +1651,15 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'settings admin read: admin', method: 'get', path: () => '/api/admin/settings', actor: 'admin', status: 200 },
     { label: 'settings admin write: anonymous', method: 'patch', path: () => '/api/admin/settings/contact', actor: 'anonymous', status: 401 },
     { label: 'settings admin write: student', method: 'patch', path: () => '/api/admin/settings/contact', actor: 'student', status: 403 },
+
+    // ── Admin Profile — self-service admin profile & credentials ──
+    { label: 'admin profile: anonymous', method: 'get', path: () => '/api/admin/profile', actor: 'anonymous', status: 401 },
+    { label: 'admin profile: student', method: 'get', path: () => '/api/admin/profile', actor: 'student', status: 403 },
+    { label: 'admin profile: admin', method: 'get', path: () => '/api/admin/profile', actor: 'admin', status: 200 },
+    { label: 'admin profile update: anonymous', method: 'patch', path: () => '/api/admin/profile', actor: 'anonymous', status: 401, body: () => ({ name: 'أدمن' }) },
+    { label: 'admin profile update: student', method: 'patch', path: () => '/api/admin/profile', actor: 'student', status: 403, body: () => ({ name: 'أدمن' }) },
+    { label: 'admin profile change password: anonymous', method: 'post', path: () => '/api/admin/profile/change-password', actor: 'anonymous', status: 401, body: () => ({ currentPassword: 'old', newPassword: 'new' }) },
+    { label: 'admin profile change password: student', method: 'post', path: () => '/api/admin/profile/change-password', actor: 'student', status: 403, body: () => ({ currentPassword: 'old', newPassword: 'new' }) },
 
     // ── Students admin — admin manages OTHER students; no self-service route ──
     { label: 'students list: anonymous', method: 'get', path: () => '/api/admin/students', actor: 'anonymous', status: 401 },
@@ -2800,6 +2820,7 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
       'GET /api/admin/grading-queue/count',
       'GET /api/admin/grading-results',
       'PATCH /api/admin/attempts/:attemptId/mark',
+      'PATCH /api/admin/attempts/:attemptId/score',
       'GET /api/admin/attempts/:attemptId/grading',
       'PATCH /api/admin/attempts/:attemptId/questions/:attemptQuestionId/grade',
     ]);

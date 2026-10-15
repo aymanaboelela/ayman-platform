@@ -9,6 +9,7 @@ import {
   AdminAttemptMarkDto,
   AdminGradeAnswerDto,
   AdminGradingResultsQueryDto,
+  AdminOverrideScoreDto,
 } from './dto/exam.dto';
 import type { AdminGradingPendingCount } from '@ayman/contracts/admin/exams';
 import { ManualGradingService } from './manual-grading.service';
@@ -231,5 +232,15 @@ export class AdminAttemptsController {
     @Body() body: AdminGradeAnswerDto,
   ) {
     return this.grading.grade(attemptId, attemptQuestionId, body, user.id);
+  }
+
+  @RequirePermission('attempt:grade')
+  @Patch('attempts/:attemptId/score')
+  overrideScore(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('attemptId') attemptId: string,
+    @Body() body: AdminOverrideScoreDto,
+  ) {
+    return this.grading.overrideScore(attemptId, body, user.id);
   }
 }

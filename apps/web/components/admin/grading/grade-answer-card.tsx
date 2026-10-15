@@ -10,6 +10,7 @@ import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { Textarea } from '@ayman/ui/components/textarea';
+import { cn } from '@ayman/ui/lib/cn';
 import { SafeHtml } from '@/components/content/safe-html';
 import { gradeAnswerAction } from '@/app/(admin)/admin/grading/actions';
 import { useRefreshGradingPendingCount } from '@/components/admin/grading-alerts';
@@ -69,38 +70,35 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
   const markId = `${fieldId}-mark`;
   const feedbackId = `${fieldId}-feedback`;
 
-  /*
-   * Strings, not numbers. A numeric state would have to represent "the box is
-   * empty" as something, and every candidate (0, NaN) is either the wrong grade
-   * or an unrenderable value. The string is what the field holds; the number is
-   * derived at the moment of sending.
-   */
   const [mark, setMark] = useState(question.mark === null ? '' : formatMark(question.mark));
-  /*
-   * Pre-filled from what is stored so a note can be REVISED rather than
-   * silently replaced. The stored value has been through `sanitizeRichText`,
-   * which leaves plain prose exactly as typed — this box is a textarea, not an
-   * editor, and what he sees here is what the student is reading.
-   */
   const [feedback, setFeedback] = useState(question.feedbackHtml ?? '');
+  const [chosenOptionIds, setChosenOptionIds] = useState<string[]>(() => question.chosenOptionIds ?? []);
   const [status, setStatus] = useState<'idle' | 'saved' | 'failed'>('idle');
   const [pending, startTransition] = useTransition();
-  /*
-   * The sidebar badge, corrected NOW rather than on the next 30-second tick —
-   * marking the last open answer takes the whole paper off the count, and an
-   * instructor who just emptied the queue should not keep seeing «1» beside
-   * «تصحيح الورق». Same reason «الواجبات» refreshes its own.
-   */
   const refreshPendingCount = useRefreshGradingPendingCount();
 
   const parsed = Number(mark);
-  /*
-   * `Number('')` is 0 — the exact trap that would have marked an untouched
-   * answer as a zero — so emptiness is checked BEFORE the coercion is trusted.
-   */
   const canSave = mark.trim() !== '' && Number.isFinite(parsed);
-
   const outOf = formatCopy(c.markOutOf, { n: formatMark(question.maxMark) });
+
+  const isChoice = Boolean(question.options && question.options.length > 0);
+
+  function selectOption(optId: string, isRight?: boolean) {
+    const nextIds = [optId];
+    setChosenOptionIds(nextIds);
+    // If the instructor changes the answer, suggest the corresponding mark
+    if (isRight) {
+      setMark(formatMark(question.maxMark));
+    } else {
+      setMark('0');
+    }
+    setStatus('idle');
+  }
+
+  function setQuickMark(value: number) {
+    setMark(formatMark(value));
+    setStatus('idle');
+  }
 
   function save() {
     if (!canSave) return;
@@ -108,26 +106,22 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
 
     startTransition(async () => {
       const trimmed = feedback.trim();
-      const result = await gradeAnswerAction(attemptId, question.attemptQuestionId, {
-        // Floored at zero on the way out: the contract refuses a negative
-        // (`z.number().min(0)`), and a Zod throw would surface as «مقدرناش
-        // نحفظ» — a transport-shaped message for a typed minus sign. The
-        // server's own clamp does the same thing at the other end.
+      const payload: { mark: number; feedbackHtml?: string; response?: unknown } = {
         mark: Math.max(parsed, 0),
-        // `undefined`, not `''`: an empty string is a note that says nothing,
-        // and sending one would overwrite a note he wrote earlier with silence.
         feedbackHtml: trimmed === '' ? undefined : trimmed,
-      });
+      };
+
+      if (isChoice) {
+        payload.response = { kind: 'choice', optionIds: chosenOptionIds };
+      }
+
+      const result = await gradeAnswerAction(attemptId, question.attemptQuestionId, payload);
 
       if (!result.ok) {
         setStatus('failed');
         return;
       }
 
-      // The server's clamp, mirrored onto the box for DISPLAY only — the stored
-      // value is whatever `roundMark` wrote, and `formatMark` is the platform's
-      // one way of rendering a mark (a paper worth 3 scaled to 100 arrives as
-      // `66.6667`, and nobody's exam is out of 66.6667).
       setMark(formatMark(Math.min(Math.max(parsed, 0), question.maxMark)));
       setStatus('saved');
       onGraded(result.scaledScore);
@@ -136,38 +130,116 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
   }
 
   return (
-    <article className="rounded-lg border border-line bg-surface-2 p-4 sm:p-5">
-      <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted">
-        {String(question.slotPosition + 1).padStart(2, '0')}
-      </p>
+    <article className="rounded-xl border border-line bg-surface-2 p-4 sm:p-5 shadow-xs transition-all">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="mono text-[length:var(--fs-mono-label)] font-semibold text-fg-muted">
+            سؤال {String(question.slotPosition + 1).padStart(2, '0')}
+          </span>
+          {question.type ? (
+            <span className="rounded-md bg-surface-3 px-2 py-0.5 text-[length:var(--fs-text-xs)] text-fg-muted">
+              {copy.quiz.kinds[question.type as keyof typeof copy.quiz.kinds] ?? question.type}
+            </span>
+          ) : null}
+        </div>
 
-      {/*
-        Already sanitised by the API (`stemHtml` is written through
-        `sanitizeRichText` in the question bank), and rendered the way the
-        student review screen renders a stem. `SafeHtml` deliberately does NO
-        sanitising of its own — the sanitiser is server-only and must not be
-        reachable from a client bundle; see its header.
-      */}
-      <SafeHtml html={question.questionHtml} className="mt-2 text-fg" />
-
-      <div className="mt-4 rounded-[var(--r-md)] border border-line-subtle bg-surface-3 p-3">
-        <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.studentAnswer}</p>
-        {question.responseText === null || question.responseText.trim() === '' ? (
-          <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-faint">{c.noAnswer}</p>
-        ) : (
-          /*
-            `whitespace-pre-wrap` — an essay is typed with its own line breaks
-            and collapsing them turns three paragraphs into one. It is TEXT, not
-            markup: `responseText` is what the student typed and is rendered as
-            a text node, never through `SafeHtml`.
-          */
-          <p className="mt-1 whitespace-pre-wrap text-[length:var(--fs-text-base)] leading-relaxed text-fg [overflow-wrap:anywhere]">
-            {question.responseText}
-          </p>
-        )}
+        {question.correctness ? (
+          <span
+            className={cn(
+              'rounded-full px-2.5 py-0.5 text-[length:var(--fs-text-xs)] font-medium',
+              question.correctness === 'correct' && 'bg-[color-mix(in_oklch,var(--ok),transparent_85%)] text-ok',
+              question.correctness === 'incorrect' && 'bg-[color-mix(in_oklch,var(--err),transparent_85%)] text-err',
+              question.correctness === 'partial' && 'bg-accent/15 text-accent-text',
+              question.correctness === 'needs_grading' && 'bg-surface-3 text-fg-muted',
+            )}
+          >
+            {question.correctness === 'correct'
+              ? 'إجابة صحيحة ✓'
+              : question.correctness === 'incorrect'
+                ? 'إجابة خاطئة ✗'
+                : question.correctness === 'partial'
+                  ? 'إجابة جزئية'
+                  : 'محتاجة تصحيح يدوي'}
+          </span>
+        ) : null}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-end gap-x-3 gap-y-2">
+      <SafeHtml html={question.questionHtml} className="mt-3 text-fg leading-relaxed" />
+
+      {/* Multiple Choice Options if available */}
+      {isChoice && question.options ? (
+        <div className="mt-4 flex flex-col gap-2">
+          <p className="text-[length:var(--fs-text-xs)] font-medium text-fg-muted">
+            الخيارات وإجابة الطالب (يمكنك تعديل الاختيار مباشرة كأدمن):
+          </p>
+          <ul className="flex flex-col gap-2">
+            {question.options.map((option, index) => {
+              const isSelected = chosenOptionIds.includes(option.id);
+              const isRight = Boolean(option.isRight);
+
+              return (
+                <li
+                  key={option.id}
+                  onClick={() => selectOption(option.id, isRight)}
+                  className={cn(
+                    'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
+                    isSelected
+                      ? 'border-accent bg-accent/10 shadow-xs'
+                      : isRight
+                        ? 'border-ok/40 bg-[color-mix(in_oklch,var(--ok),transparent_94%)]'
+                        : 'border-line-subtle bg-surface-3 hover:bg-surface-1',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'mono flex size-7 shrink-0 items-center justify-center rounded-md text-[length:var(--fs-text-sm)] font-bold',
+                      isSelected
+                        ? 'bg-accent text-accent-text'
+                        : isRight
+                          ? 'bg-ok/20 text-ok'
+                          : 'bg-surface-2 text-fg-muted',
+                    )}
+                  >
+                    {String.fromCharCode(0x0623 + index)}
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <SafeHtml html={option.bodyHtml} className="text-[length:var(--fs-text-sm)] text-fg" />
+
+                    <div className="mt-1 flex flex-wrap gap-2 text-[length:var(--fs-text-xs)]">
+                      {isRight ? (
+                        <span className="font-semibold text-ok">
+                          ✓ الإجابة الصحيحة النموذجية
+                        </span>
+                      ) : null}
+                      {isSelected ? (
+                        <span className="font-semibold text-accent-text">
+                          ● اختيار الطالب المسجل
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : (
+        /* Text or Essay Student Answer */
+        <div className="mt-4 rounded-[var(--r-md)] border border-line-subtle bg-surface-3 p-3">
+          <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{c.studentAnswer}</p>
+          {question.responseText === null || question.responseText.trim() === '' ? (
+            <p className="mt-1 text-[length:var(--fs-text-sm)] text-fg-faint">{c.noAnswer}</p>
+          ) : (
+            <p className="mt-1 whitespace-pre-wrap text-[length:var(--fs-text-base)] leading-relaxed text-fg [overflow-wrap:anywhere]">
+              {question.responseText}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Marks & Quick Score Buttons */}
+      <div className="mt-4 flex flex-wrap items-end gap-x-4 gap-y-3">
         <div className="w-28">
           <Label htmlFor={markId}>{c.markLabel}</Label>
           <Input
@@ -179,29 +251,60 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
             value={mark}
             onChange={(event) => {
               setMark(event.target.value);
-              // «اتحفظت» beside a number he has since changed is a lie about
-              // the current contents of the box.
               setStatus('idle');
             }}
             className="tabular-nums"
           />
         </div>
-        {/* The ceiling as a sentence, not as an attribute — see the header. */}
         <p className="pb-2.5 text-[length:var(--fs-text-sm)] text-fg-muted tabular-nums">{outOf}</p>
+
+        {/* Quick buttons */}
+        <div className="flex flex-wrap items-center gap-1.5 pb-1">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setQuickMark(question.maxMark)}
+            className="text-[length:var(--fs-text-xs)]"
+          >
+            درجة كاملة ({formatMark(question.maxMark)})
+          </Button>
+          {question.maxMark > 1 ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setQuickMark(question.maxMark / 2)}
+              className="text-[length:var(--fs-text-xs)]"
+            >
+              نصف درجة ({formatMark(question.maxMark / 2)})
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setQuickMark(0)}
+            className="text-[length:var(--fs-text-xs)]"
+          >
+            صفر (0)
+          </Button>
+        </div>
       </div>
 
       <div className="mt-3">
         <Label htmlFor={feedbackId}>{c.feedbackLabel}</Label>
         <Textarea
           id={feedbackId}
-          rows={3}
+          rows={2}
           maxLength={FEEDBACK_MAX}
           value={feedback}
           onChange={(event) => {
             setFeedback(event.target.value);
             setStatus('idle');
           }}
-          className="min-h-24"
+          className="min-h-20"
+          placeholder="أضف ملاحظة أو توجيه للطالب حول هذا السؤال..."
         />
       </div>
 
@@ -211,7 +314,7 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
         </Button>
 
         {status === 'saved' ? (
-          <p className="inline-flex items-center gap-1.5 text-[length:var(--fs-text-sm)] text-fg-muted">
+          <p className="inline-flex items-center gap-1.5 text-[length:var(--fs-text-sm)] text-ok font-medium">
             <Check className="size-4" aria-hidden="true" />
             {c.saved}
           </p>

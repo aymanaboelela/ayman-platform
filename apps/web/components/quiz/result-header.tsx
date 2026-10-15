@@ -1,6 +1,8 @@
 import { copy, formatCopy, formatMark } from '@ayman/contracts';
 import { tenantSentence } from '@/lib/tenant-copy';
 import { Badge } from '@ayman/ui';
+import { cn } from '@ayman/ui/lib/cn';
+import { AlertCircle, Clock, Sparkles, ThumbsUp, Trophy } from 'lucide-react';
 
 export interface ResultHeaderProps {
   scaledScore: number | null;
@@ -22,39 +24,8 @@ export interface ResultHeaderProps {
 }
 
 /**
- * `--ok`/`--err` appear HERE and on the per-question verdicts
- * (`review-question.tsx`) — nowhere else in the product. No confetti, no
- * gradient ring, no emoji.
- *
- * ## Two different screens, decided by `pendingOutOf`
- *
- * On a finished paper this is what it always was: the mark over the quiz's
- * total, a pass/fail badge, the pass line, and a band.
- *
- * On a paper whose essays are still with مهندس أيمن it is deliberately NOT
- * that screen, because that screen lies. `gradeAttempt` counts an ungraded
- * answer as zero — correctly, since a provisional total must come from
- * somewhere and a pending answer can only raise it — so a midterm marked out
- * of 100 with 50 marks of essay outstanding rendered «٤٨٫٥ / ١٠٠» in title
- * type with a red «محتاجة مراجعة» next to it. The student reads a near-fail.
- * They in fact scored 48.5 of the 50 anyone has looked at.
- *
- * So while marks are outstanding:
- *
- *   · the denominator is `gradedOutOf`, not `gradeOutOf` — the marked part
- *     reported out of what the marked part is worth, under an eyebrow that
- *     names which half of the paper that is;
- *   · the verdict badge is replaced, not merely hidden. `passed` is non-null
- *     on a pending attempt (a provisional pass is honest, a provisional fail
- *     is not), and rendering the badge at all would put «محتاجة مراجعة» on a
- *     paper nobody has finished reading. «لسه بتتصحّح» is a state, and it is
- *     the true one;
- *   · the pass line comes off with it. «درجة النجاح ٥٠٪» under a mark out of
- *     a different total is an invitation to compare two numbers that are not
- *     on the same scale;
- *   · the outstanding amount is stated as an amount, in marks, followed by
- *     where the rest will arrive. A gap the student has to compute is the
- *     thing that frightens them.
+ * Result header showing score, percentage gauge, and custom evaluative
+ * feedback based on student performance.
  */
 export function ResultHeader({
   scaledScore,
@@ -67,75 +38,155 @@ export function ResultHeader({
 }: ResultHeaderProps) {
   /*
    * `pendingOutOf > 0` is the authority, and `needsGrading` is kept as a
-   * fallback for the one window where it is the only evidence there is: a
-   * review matrix that hides `marks` still ships `correctness`, and a payload
-   * from an API deployed before `pendingOutOf` existed carries 0. Falling back
-   * to the old undivided screen with the old «إجابتك المقالية...» line is the
-   * right degradation — never to a confident «٤٨٫٥ / ١٠٠».
+   * fallback for the one window where it is the only evidence there is.
    */
   const pending = pendingOutOf > 0;
   const outstanding = pending || needsGrading;
 
-  const band =
-    passed === null || outstanding
-      ? null
-      : passed && scaledScore !== null && scaledScore / gradeOutOf >= 0.9
-        ? copy.quiz.scoreBandExcellent
-        : passed
-          ? copy.quiz.scoreBandGood
-          : copy.quiz.scoreBandNeedsWork;
-
   // The total the headline is over. Not a cosmetic choice — see the header.
   const outOf = pending ? gradedOutOf : gradeOutOf;
+  const scorePercent =
+    scaledScore !== null && outOf > 0 ? Math.round((scaledScore / outOf) * 100) : null;
+
+  const isExcellent = !outstanding && scorePercent !== null && scorePercent >= 85;
+  const isGood = !outstanding && !isExcellent && scorePercent !== null && scorePercent >= 70;
+  const isNeedsWork =
+    !outstanding && ((scorePercent !== null && scorePercent < 70) || passed === false);
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface-2 p-5">
-      <p className="eyebrow">{pending ? copy.quiz.pendingEyebrow : copy.quiz.resultsTitle}</p>
-
-      <div className="flex flex-wrap items-baseline gap-3">
-        <p className="mono text-[length:var(--fs-title-1)] tabular-nums text-fg">
-          {scaledScore === null ? '—' : formatMark(scaledScore)}
-          <span className="text-fg-muted"> / {formatMark(outOf)}</span>
-        </p>
+    <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface-2 p-5 md:p-6 shadow-[var(--shadow-sm)]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="eyebrow">{pending ? copy.quiz.pendingEyebrow : copy.quiz.resultsTitle}</p>
         {outstanding ? (
-          // `accent`, never `ok`/`err`: nothing has been decided yet, and the
-          // two colours this screen reserves both read as a decision.
-          <Badge tone="accent">{copy.quiz.pendingNotFinal}</Badge>
+          <Badge tone="accent" className="flex items-center gap-1.5 py-1 px-3">
+            <Clock className="size-3.5" aria-hidden="true" />
+            <span>{copy.quiz.pendingNotFinal}</span>
+          </Badge>
         ) : passed !== null ? (
-          <Badge tone={passed ? 'ok' : 'err'}>{passed ? copy.quiz.passed : copy.quiz.failed}</Badge>
+          <Badge
+            tone={passed ? 'ok' : 'err'}
+            className="flex items-center gap-1.5 py-1 px-3 text-[length:var(--fs-text-sm)] font-semibold"
+          >
+            {passed ? copy.quiz.passed : copy.quiz.failed}
+          </Badge>
         ) : null}
       </div>
 
-      {outstanding ? null : (
-        <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted">
-          {formatCopy(copy.quiz.passMark, { percent: passPercent })}
-        </p>
+      <div className="flex flex-wrap items-baseline justify-between gap-4">
+        <div>
+          <div className="flex items-baseline gap-2">
+            <span className="mono text-[length:var(--fs-title-1)] font-bold tabular-nums text-fg">
+              {scaledScore === null ? '—' : formatMark(scaledScore)}
+            </span>
+            <span className="mono text-[length:var(--fs-title-3)] text-fg-muted">
+              / {formatMark(outOf)}
+            </span>
+          </div>
+          {!outstanding && (
+            <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted mt-1">
+              {formatCopy(copy.quiz.passMark, { percent: passPercent })}
+            </p>
+          )}
+        </div>
+
+        {scorePercent !== null && (
+          <div
+            className={cn(
+              'flex flex-col items-center justify-center rounded-xl px-4 py-2 border mono',
+              isExcellent
+                ? 'border-[color-mix(in_oklch,var(--ok),transparent_50%)] bg-[color-mix(in_oklch,var(--ok),transparent_90%)] text-ok'
+                : isGood
+                  ? 'border-[color-mix(in_oklch,var(--a-9),transparent_50%)] bg-[color-mix(in_oklch,var(--a-9),transparent_90%)] text-accent-text'
+                  : 'border-[color-mix(in_oklch,var(--err),transparent_50%)] bg-[color-mix(in_oklch,var(--err),transparent_90%)] text-err',
+            )}
+          >
+            <span className="text-[length:var(--fs-title-3)] font-bold">{scorePercent}%</span>
+            <span className="text-[length:var(--fs-text-xs)] opacity-80">النسبة المئوية</span>
+          </div>
+        )}
+      </div>
+
+      {scorePercent !== null && (
+        <div className="flex flex-col gap-1 w-full">
+          <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-surface-3">
+            <div
+              className={cn(
+                'h-full rounded-full transition-all duration-700 ease-out',
+                outstanding
+                  ? 'bg-accent'
+                  : isExcellent || isGood
+                    ? 'bg-ok'
+                    : 'bg-err',
+              )}
+              style={{ width: `${Math.min(100, Math.max(0, scorePercent))}%` }}
+            />
+          </div>
+        </div>
       )}
 
-      {pending ? (
-        <div className="flex flex-col gap-1">
-          {/* `text-fg`, not muted: this is the sentence the whole change is
-              for, and a grey line under a big number gets skipped. */}
-          {/*
-            ⚠️ Both of the pending lines name the marker, and this is the
-            screen where that matters most: a student reading «باقي ٥٠ درجة
-            لسه عند مهندس أيمن بيصحّحها بنفسه» on another instructor's platform
-            has been handed a receipt for a paper the named person has never
-            seen. `notification-view.ts` reached the same conclusion about the
-            NOTIFICATION for this same mark and dropped the detail line; here
-            the sentence is the screen, so it is swapped rather than dropped.
-          */}
-          <p className="text-fg">
-            {tenantSentence(formatCopy(copy.quiz.pendingRest, { marks: formatMark(pendingOutOf) }))}
-          </p>
-          <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
-            {copy.quiz.pendingWillArrive}
-          </p>
+      {/* Motivational & Evaluative Banner */}
+      {isExcellent ? (
+        <div className="flex items-start gap-3 rounded-lg border border-[color-mix(in_oklch,var(--ok),transparent_65%)] bg-[color-mix(in_oklch,var(--ok),transparent_93%)] p-4 text-fg">
+          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-[color-mix(in_oklch,var(--ok),transparent_80%)] text-ok">
+            <Trophy className="size-5" aria-hidden="true" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <p className="font-bold text-[length:var(--fs-text-base)] text-ok flex items-center gap-1.5">
+              <span>فخور بيك وبمستواك الرائع!</span>
+              <Sparkles className="size-4" aria-hidden="true" />
+            </p>
+            <p className="text-[length:var(--fs-text-sm)] text-fg leading-relaxed">
+              عاش يا بطل! أداء يشرف ومجهود ممتاز يثبت فهمك وتركيزك العالي. استمر دائمًا على هذا التألق والتفوق! 💪✨
+            </p>
+          </div>
+        </div>
+      ) : isGood ? (
+        <div className="flex items-start gap-3 rounded-lg border border-[color-mix(in_oklch,var(--a-9),transparent_65%)] bg-[color-mix(in_oklch,var(--a-9),transparent_94%)] p-4 text-fg">
+          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-[color-mix(in_oklch,var(--a-9),transparent_80%)] text-accent-text">
+            <ThumbsUp className="size-5" aria-hidden="true" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <p className="font-bold text-[length:var(--fs-text-base)] text-accent-text">
+              أداء طيب وخطوة ممتازة للأمام! 👍
+            </p>
+            <p className="text-[length:var(--fs-text-sm)] text-fg leading-relaxed">
+              مستوى جميل ونتيجة كويسة جدًا! عندك شوية نقط وأخطاء بسيطة راجعها في نموذج الإجابة بالأسفل عشان تقفل الدرجة كاملة المرة القادمة 🚀
+            </p>
+          </div>
+        </div>
+      ) : isNeedsWork ? (
+        <div className="flex items-start gap-3 rounded-lg border border-[color-mix(in_oklch,var(--err),transparent_65%)] bg-[color-mix(in_oklch,var(--err),transparent_93%)] p-4 text-fg">
+          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-[color-mix(in_oklch,var(--err),transparent_80%)] text-err">
+            <AlertCircle className="size-5" aria-hidden="true" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <p className="font-bold text-[length:var(--fs-text-base)] text-err">
+              لا مش هينفع كده، محتاجين نركز شوية! ⚠️
+            </p>
+            <p className="text-[length:var(--fs-text-sm)] text-fg leading-relaxed">
+              الدرجة دي مش مستواك الحقيقي وإحنا مش هنرضى بأقل من التميز. اقعد راجع إجاباتك تحت بهدوء، واعرف أسباب الأخطاء، وعيد مذاكرة الدرس بجدية وتركيز عشان تعوض وتتعلم منها 🎯
+            </p>
+          </div>
+        </div>
+      ) : pending ? (
+        <div className="flex items-start gap-3 rounded-lg border border-[color-mix(in_oklch,var(--a-9),transparent_65%)] bg-[color-mix(in_oklch,var(--a-9),transparent_94%)] p-4 text-fg">
+          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-[color-mix(in_oklch,var(--a-9),transparent_80%)] text-accent-text">
+            <Clock className="size-5" aria-hidden="true" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <p className="font-bold text-[length:var(--fs-text-base)] text-accent-text">
+              باقي الأسئلة المقالية قيد التصحيح
+            </p>
+            <p className="text-[length:var(--fs-text-sm)] text-fg leading-relaxed">
+              {tenantSentence(formatCopy(copy.quiz.pendingRest, { marks: formatMark(pendingOutOf) }))}
+            </p>
+            <p className="text-[length:var(--fs-text-xs)] text-fg-muted">
+              {copy.quiz.pendingWillArrive}
+            </p>
+          </div>
         </div>
       ) : needsGrading ? (
         <p className="text-fg-muted">{tenantSentence(copy.quiz.essayPending)}</p>
-      ) : band ? (
-        <p className="text-fg">{band}</p>
       ) : null}
     </div>
   );

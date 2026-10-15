@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { ClipboardList, Clock, Repeat2, Target, Trophy } from 'lucide-react';
 import {
   QuizOverviewSchema,
@@ -108,7 +108,14 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
   try {
     overview = await apiGetAuthed(`/api/quiz/lessons/${lessonId}`, QuizOverviewSchema);
   } catch (error) {
-    if (error instanceof ApiRequestError && error.status === 404) notFound();
+    if (error instanceof ApiRequestError) {
+      if (error.status === 401) {
+        redirect(`/login?next=${encodeURIComponent(`/quizzes/${lessonId}`)}`);
+      }
+      if (error.status === 403 || error.status === 404) {
+        notFound();
+      }
+    }
     throw error;
   }
 

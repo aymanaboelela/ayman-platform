@@ -54,7 +54,7 @@ export type GradeAnswerResult =
 export async function gradeAnswerAction(
   attemptId: string,
   attemptQuestionId: string,
-  input: { mark: number; feedbackHtml?: string },
+  input: { mark: number; feedbackHtml?: string; response?: unknown },
 ): Promise<GradeAnswerResult> {
   try {
     // Parsed before it leaves even though the API validates again — `.strict()`
@@ -72,6 +72,30 @@ export async function gradeAnswerAction(
     revalidatePath(`/admin/grading/${attemptId}`);
 
     return { ok: true, scaledScore: result.scaledScore };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/**
+ * تعديل الدرجة الإجمالية للمحاولة مباشرة من قِبل الأدمن/المعلم
+ */
+export async function overrideScoreAction(
+  attemptId: string,
+  scaledScore: number,
+): Promise<{ ok: true; scaledScore: number; passed: boolean } | { ok: false }> {
+  try {
+    const result = await adminSend(
+      'PATCH',
+      `/api/admin/attempts/${attemptId}/score`,
+      { scaledScore },
+      z.object({ scaledScore: z.number(), passed: z.boolean() }),
+    );
+
+    revalidatePath('/admin/grading');
+    revalidatePath(`/admin/grading/${attemptId}`);
+
+    return { ok: true, scaledScore: result.scaledScore, passed: result.passed };
   } catch {
     return { ok: false };
   }

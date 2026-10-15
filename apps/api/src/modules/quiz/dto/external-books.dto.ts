@@ -6,6 +6,8 @@ import {
   CreateExternalBookUnitSchema,
   MoveExternalBookLessonSchema,
   RenameExternalBookCategorySchema,
+  StartExternalBookPracticeSchema,
+  SubmitExternalBookPracticeSchema,
   UpdateExternalBookSchema,
 } from '@ayman/contracts/quiz/external-books';
 
@@ -16,3 +18,6 @@ export class CreateExternalBookLessonDto extends createZodDto(CreateExternalBook
 export class RenameExternalBookCategoryDto extends createZodDto(RenameExternalBookCategorySchema) {}
 export class AdoptExternalBookLessonDto extends createZodDto(AdoptExternalBookLessonSchema) {}
 export class MoveExternalBookLessonDto extends createZodDto(MoveExternalBookLessonSchema) {}
+export class StartExternalBookPracticeDto extends createZodDto(StartExternalBookPracticeSchema) {}
+export class SubmitExternalBookPracticeDto extends createZodDto(SubmitExternalBookPracticeSchema) {}
+

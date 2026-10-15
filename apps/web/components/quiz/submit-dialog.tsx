@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { z } from 'zod';
+import { AlertTriangle, Clock } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
@@ -16,19 +17,27 @@ import {
 } from '@ayman/ui/components/dialog';
 import { apiGet } from '@/lib/api';
 
+function subscribeToClock(callback: () => void) {
+  const timer = setInterval(callback, 1000);
+  return () => clearInterval(timer);
+}
+
+function getClockSnapshot() {
+  return Math.floor(Date.now() / 1000);
+}
+
+function getClockServerSnapshot() {
+  return 0;
+}
+
 const PreflightSchema = z.object({ unansweredCount: z.number(), total: z.number() });
 
 export interface SubmitDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   attemptId: string;
-  /**
-   * The client's OWN best-known unanswered slots — used only to render
-   * jump-to chips. The headline COUNT never comes from this: it is always
-   * re-fetched from `GET .../preflight` the instant the dialog opens, so a
-   * failed autosave cannot make "you have 3 unanswered" lie into "0".
-   */
   locallyUnanswered: readonly number[];
+  deadlineAt?: string | null;
   onJump: (slotPosition: number) => void;
   onConfirm: () => Promise<void>;
 }
@@ -38,6 +47,7 @@ export function SubmitDialog({
   onOpenChange,
   attemptId,
   locallyUnanswered,
+  deadlineAt,
   onJump,
   onConfirm,
 }: SubmitDialogProps) {
@@ -92,6 +102,18 @@ export function SubmitDialog({
     }
   }
 
+  const nowSeconds = useSyncExternalStore(
+    subscribeToClock,
+    getClockSnapshot,
+    getClockServerSnapshot,
+  );
+
+  const remainingSeconds =
+    open && deadlineAt
+      ? Math.max(0, Math.floor(new Date(deadlineAt).getTime() / 1000) - nowSeconds)
+      : null;
+  const remainingMinutes = remainingSeconds !== null ? Math.floor(remainingSeconds / 60) : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent closeLabel={copy.common.close}>
@@ -119,35 +141,25 @@ export function SubmitDialog({
           ) : unansweredCount === null ? (
             <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted">{copy.common.loading}</p>
           ) : unansweredCount === 0 ? (
-            <p className="text-fg">{copy.quiz.submitConfirmAllAnswered}</p>
+            <div className="rounded-lg border border-[color-mix(in_oklch,var(--ok),transparent_70%)] bg-[color-mix(in_oklch,var(--ok),transparent_94%)] p-3 text-fg">
+              <p className="flex items-center gap-1.5 font-medium text-ok text-[length:var(--fs-text-sm)]">
+                <span aria-hidden="true">✓</span>
+                <span>{copy.quiz.submitConfirmAllAnswered}</span>
+              </p>
+            </div>
           ) : (
             <>
-              <p className="text-fg">{formatCopy(copy.quiz.submitConfirmUnanswered, { count: unansweredCount })}</p>
+              <div className="rounded-lg border border-[color-mix(in_oklch,var(--err),transparent_70%)] bg-[color-mix(in_oklch,var(--err),transparent_94%)] p-3.5 text-fg">
+                <div className="flex items-center gap-2 font-semibold text-err text-[length:var(--fs-text-sm)]">
+                  <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+                  <span>{formatCopy(copy.quiz.submitConfirmUnanswered, { count: unansweredCount })}</span>
+                </div>
+                <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
+                  تقدر تضغط على رقم أي سؤال تحت عشان تروحله وتجاوبه قبل ما تسلّم.
+                </p>
+              </div>
+
               {locallyUnanswered.length > 0 ? (
-                /*
-                  44×44 below `md`, and the 32px these always were from `md`
-                  up — the same shape as `DialogContent`'s own close button
-                  (`size-11 md:size-6`) and as `.nav-chip` in study.css, which
-                  takes 36px to 44 under the same breakpoint.
-
-                  These are the worse case of the two, though, and were missed
-                  because they live in a dialog rather than on the page. A
-                  question-map chip is pressed while browsing; one of these is
-                  pressed by a student who has already decided to submit, has
-                  just been told they left questions blank, and is under a
-                  countdown. At 32px squares 8px apart, the neighbouring chip
-                  is a plausible thumb landing — and a mis-tap here does not
-                  merely navigate, it also closes the dialog on the way out
-                  (`onOpenChange(false)` below), so recovering costs a second
-                  round trip through preflight.
-
-                  Only the box grows: the two mono digits keep
-                  `--fs-text-sm` and stay centred, so above `md` nothing moves
-                  at all. A long unanswered list now wraps onto more rows than
-                  it did — `DialogContent` caps itself at
-                  `100dvh - 2rem` with `overflow-y-auto`, so the footer stays
-                  reachable however many there are.
-                */
                 <ul className="flex flex-wrap gap-2">
                   {locallyUnanswered.map((slotPosition) => (
                     <li key={slotPosition}>
@@ -167,6 +179,22 @@ export function SubmitDialog({
               ) : null}
             </>
           )}
+
+          {remainingSeconds !== null && remainingSeconds > 60 ? (
+            <div className="rounded-lg border border-accent/30 bg-accent/10 p-3 text-fg">
+              <div className="flex items-center gap-2 font-semibold text-accent-text text-[length:var(--fs-text-sm)]">
+                <Clock className="size-4 shrink-0" aria-hidden="true" />
+                <span>
+                  {remainingMinutes && remainingMinutes > 0
+                    ? `لسه معاك وقت كافي (متبقي حوالي ${remainingMinutes} دقيقة)!`
+                    : 'لسه معاك وقت كافي!'}
+                </span>
+              </div>
+              <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted leading-relaxed">
+                اقعد راجع وخد وقتك كويس، وتأكد من إجاباتك قبل ما تسلّم الامتحان نهائيًا.
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <DialogFooter>
@@ -174,7 +202,7 @@ export function SubmitDialog({
               no-undo trap this dialog exists to prevent means "changed my
               mind" must be the path requiring zero extra keystrokes. */}
           <Button type="button" variant="secondary" autoFocus onClick={() => onOpenChange(false)}>
-            {copy.quiz.submitCancel}
+            ارجع راجع الامتحان
           </Button>
           <Button
             type="button"

@@ -231,19 +231,41 @@ export const AdminGradeAnswerSchema = z
     mark: z.number().min(0),
     /** Sanitised server-side like every other rich-text write. */
     feedbackHtml: z.string().max(20000).optional(),
+    /** Optional response override (e.g. choice optionIds or text) by instructor */
+    response: z.unknown().optional(),
   })
   .strict();
 export type AdminGradeAnswerInput = z.infer<typeof AdminGradeAnswerSchema>;
 
-/** One answer waiting on a human. */
+export const AdminOverrideScoreSchema = z
+  .object({
+    scaledScore: z.number().min(0),
+  })
+  .strict();
+export type AdminOverrideScoreInput = z.infer<typeof AdminOverrideScoreSchema>;
+
+export const AdminGradingOptionSchema = z.object({
+  id: z.string(),
+  bodyHtml: z.string(),
+  position: z.number().optional(),
+  isRight: z.boolean().optional(),
+});
+export type AdminGradingOption = z.infer<typeof AdminGradingOptionSchema>;
+
+/** One answer on the paper. */
 export const AdminGradingRowSchema = z.object({
   attemptQuestionId: z.uuid(),
   slotPosition: z.number().int().nonnegative(),
+  type: z.string().optional(),
   questionHtml: z.string(),
-  /** What the student wrote. Null when they left it blank — and a blank essay
-   *  still needs a human to write the zero, because `gradeQuestion` never
-   *  auto-grades this type. */
+  /** What the student wrote. Null when they left it blank. */
   responseText: z.string().nullable(),
+  response: z.unknown().optional(),
+  chosenOptionIds: z.array(z.string()).optional(),
+  rightAnswerText: z.string().nullable().optional(),
+  rightOptionIds: z.array(z.string()).optional(),
+  options: z.array(AdminGradingOptionSchema).optional(),
+  correctness: z.string().optional(),
   maxMark: z.number(),
   /** Null until someone marks it. Never 0 — the difference between "unmarked"
    *  and "marked zero" is the whole reason this screen exists. */

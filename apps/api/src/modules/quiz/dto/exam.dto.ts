@@ -4,6 +4,7 @@ import {
   AdminExamPatchSchema,
   AdminAttemptMarkSchema,
   AdminGradeAnswerSchema,
+  AdminOverrideScoreSchema,
   GradingScopeSchema,
   GradingSortSchema,
 } from '@ayman/contracts/admin/exams';
@@ -65,3 +66,5 @@ export class AdminGradingResultsQueryDto extends createZodDto(AdminGradingResult
 /** «أقيّمه» و«حطه في لوحة الشرف». See `AdminAttemptMarkSchema` for why the two
  *  live on one route and why the timestamp is the server's to write. */
 export class AdminAttemptMarkDto extends createZodDto(AdminAttemptMarkSchema) {}
+
+export class AdminOverrideScoreDto extends createZodDto(AdminOverrideScoreSchema) {}

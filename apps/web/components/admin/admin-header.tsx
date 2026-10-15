@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
-import { Menu, Search } from 'lucide-react';
+import { Menu, Search, UserCog } from 'lucide-react';
 import type { Entitlements } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Kbd } from '@ayman/ui/components/kbd';
@@ -149,9 +149,23 @@ export function AdminHeader({
 
         <ThemeToggle />
 
-        <span className="hidden max-w-[14rem] truncate text-[length:var(--fs-text-sm)] text-fg-muted xl:inline">
-          {copy.admin.signedInAs} {identity}
-        </span>
+        <Link
+          href="/admin/profile"
+          aria-label={copy.admin.profile.title}
+          title={copy.admin.profile.title}
+          className="flex size-9 items-center justify-center rounded-md border border-line text-fg-muted transition-colors duration-[160ms] hover:bg-surface-3 hover:text-fg"
+        >
+          <UserCog className="size-4" aria-hidden="true" />
+        </Link>
+
+        <Link
+          href="/admin/profile"
+          className="hidden max-w-[14rem] truncate text-[length:var(--fs-text-sm)] text-fg-muted transition-colors hover:text-fg xl:inline"
+          title={copy.admin.profile.title}
+        >
+          {copy.admin.signedInAs}{' '}
+          <span className="font-medium text-fg underline underline-offset-4">{identity}</span>
+        </Link>
 
         <SignOutButton className="w-auto border border-line" />
       </div>

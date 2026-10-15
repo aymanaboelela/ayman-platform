@@ -32,7 +32,10 @@ import { LessonPlayerView } from '@/components/player/lesson-player';
  * offers a retry.
  */
 function nullOn404(error: unknown): null {
-  if (error instanceof ApiRequestError && error.status === 404) return null;
+  if (error instanceof ApiRequestError) {
+    if (error.status === 401) redirect('/login');
+    if (error.status === 404 || error.status === 403) return null;
+  }
   throw error;
 }
 

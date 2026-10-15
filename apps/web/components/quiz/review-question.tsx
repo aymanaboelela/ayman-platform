@@ -313,36 +313,42 @@ export function ReviewQuestion({ question }: ReviewQuestionProps) {
           })}
         </ul>
       ) : isOrdering ? null : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           {question.response !== undefined ? (
-            <div>
-              <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{copy.quiz.yourAnswer}</p>
-              <p className="whitespace-pre-wrap wrap-anywhere text-fg">{text || copy.quiz.notAnswered}</p>
+            <div className="rounded-lg border border-line bg-surface-2 p-3">
+              <p className="text-[length:var(--fs-text-xs)] font-medium text-fg-muted mb-1">{copy.quiz.yourAnswer}:</p>
+              <p className="whitespace-pre-wrap wrap-anywhere text-fg text-[length:var(--fs-text-sm)]">{text || copy.quiz.notAnswered}</p>
             </div>
           ) : null}
           {/* A short-answer pattern is TEXT, never dangerouslySetInnerHTML —
               it was deliberately never sanitized (patterns can legitimately
               contain `<`/`>`, e.g. `a < b`). */}
           {question.rightAnswerText ? (
-            <div>
-              <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{copy.quiz.rightAnswer}</p>
-              <p className="text-fg">{question.rightAnswerText}</p>
+            <div className="rounded-lg border border-[color-mix(in_oklch,var(--ok),transparent_60%)] bg-[color-mix(in_oklch,var(--ok),transparent_94%)] p-3">
+              <p className="text-[length:var(--fs-text-xs)] font-medium text-ok mb-1">{copy.quiz.rightAnswer}:</p>
+              <p className="text-fg text-[length:var(--fs-text-sm)] font-medium">{question.rightAnswerText}</p>
             </div>
           ) : null}
         </div>
       )}
 
       {question.feedbackHtml ? (
-        <div>
-          <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{copy.quiz.questionFeedback}</p>
-          <SafeHtml html={question.feedbackHtml} />
+        <div className="rounded-lg border border-[color-mix(in_oklch,var(--a-9),transparent_60%)] bg-[color-mix(in_oklch,var(--a-9),transparent_94%)] p-3.5">
+          <p className="flex items-center gap-1.5 text-[length:var(--fs-text-xs)] font-semibold text-accent-text mb-1">
+            <span aria-hidden="true">✍️</span>
+            <span>{copy.quiz.questionFeedback}</span>
+          </p>
+          <SafeHtml html={question.feedbackHtml} className="text-[length:var(--fs-text-sm)] text-fg leading-relaxed" />
         </div>
       ) : null}
 
       {question.generalFeedbackHtml ? (
-        <div>
-          <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{copy.quiz.explanation}</p>
-          <SafeHtml html={question.generalFeedbackHtml} />
+        <div className="rounded-lg border border-line bg-surface-3/60 p-3.5">
+          <p className="flex items-center gap-1.5 text-[length:var(--fs-text-xs)] font-semibold text-fg-muted mb-1">
+            <span aria-hidden="true">💡</span>
+            <span>{copy.quiz.explanation}</span>
+          </p>
+          <SafeHtml html={question.generalFeedbackHtml} className="text-[length:var(--fs-text-sm)] text-fg leading-relaxed" />
         </div>
       ) : null}
     </article>

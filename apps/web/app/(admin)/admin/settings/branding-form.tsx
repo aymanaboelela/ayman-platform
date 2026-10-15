@@ -296,7 +296,7 @@ export function BrandingForm({ defaultValues, assets }: BrandingFormProps) {
                 <span
                   aria-hidden="true"
                   className="size-5 shrink-0 rounded-full border border-line"
-                  style={{ background: ACCENT_RAMPS[slot].light[0] }}
+                  style={{ background: ACCENT_RAMPS[slot]?.light[0] }}
                 />
                 <span className="text-fg">{ACCENT_LABEL[slot]}</span>
               </label>

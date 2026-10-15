@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { z } from 'zod';
 import { QUESTION_TYPES, copy } from '@ayman/contracts';
 import { ApiRequestError } from '@/lib/api';
@@ -67,7 +67,7 @@ export default async function QuizReviewPage({
 }: {
   params: Promise<{ lessonId: string; attemptId: string }>;
 }) {
-  const { attemptId } = await params;
+  const { lessonId, attemptId } = await params;
 
   /*
    * The 404 is an ORDINARY answer here, not a fault — and this page was the one
@@ -95,8 +95,13 @@ export default async function QuizReviewPage({
   try {
     review = await apiGetAuthed(`/api/quiz/attempts/${attemptId}/review`, ReviewPayloadSchema);
   } catch (error) {
-    if (error instanceof ApiRequestError && (error.status === 403 || error.status === 404)) {
-      notFound();
+    if (error instanceof ApiRequestError) {
+      if (error.status === 401) {
+        redirect(`/login?next=${encodeURIComponent(`/quizzes/${lessonId}/attempt/${attemptId}/review`)}`);
+      }
+      if (error.status === 403 || error.status === 404) {
+        notFound();
+      }
     }
     throw error;
   }

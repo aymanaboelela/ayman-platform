@@ -185,85 +185,89 @@ export default function SplashCursor({
     }
 
     function getWebGLContext(canvas: HTMLCanvasElement) {
-      const params = {
-        alpha: true,
-        depth: false,
-        stencil: false,
-        antialias: false,
-        preserveDrawingBuffer: false
-      };
+      try {
+        const params = {
+          alpha: true,
+          depth: false,
+          stencil: false,
+          antialias: false,
+          preserveDrawingBuffer: false
+        };
 
-      let gl = canvas.getContext('webgl2', params) as WebGL2RenderingContext | null;
+        let gl = canvas.getContext('webgl2', params) as WebGL2RenderingContext | null;
 
-      if (!gl) {
-        gl = (canvas.getContext('webgl', params) ||
-          canvas.getContext('experimental-webgl', params)) as WebGL2RenderingContext | null;
-      }
-
-      if (!gl) {
-        return null;
-      }
-
-      const isWebGL2 = 'drawBuffers' in gl;
-
-      let supportLinearFiltering = false;
-      let halfFloat: OES_texture_half_float | null = null;
-
-      if (isWebGL2) {
-        (gl as WebGL2RenderingContext).getExtension('EXT_color_buffer_float');
-        supportLinearFiltering = !!(gl as WebGL2RenderingContext).getExtension('OES_texture_float_linear');
-      } else {
-        halfFloat = gl.getExtension('OES_texture_half_float');
-        supportLinearFiltering = !!gl.getExtension('OES_texture_half_float_linear');
-      }
-
-      gl.clearColor(0, 0, 0, 1);
-
-      const halfFloatTexType = isWebGL2
-        ? (gl as WebGL2RenderingContext).HALF_FLOAT
-        : (halfFloat && halfFloat.HALF_FLOAT_OES) || 0;
-
-      let formatRGBA: TextureFormat | null;
-      let formatRG: TextureFormat | null;
-      let formatR: TextureFormat | null;
-
-      if (isWebGL2) {
-        formatRGBA = getSupportedFormat(gl, (gl as WebGL2RenderingContext).RGBA16F, gl.RGBA, halfFloatTexType);
-        formatRG = getSupportedFormat(
-          gl,
-          (gl as WebGL2RenderingContext).RG16F,
-          (gl as WebGL2RenderingContext).RG,
-          halfFloatTexType
-        );
-        formatR = getSupportedFormat(
-          gl,
-          (gl as WebGL2RenderingContext).R16F,
-          (gl as WebGL2RenderingContext).RED,
-          halfFloatTexType
-        );
-      } else {
-        formatRGBA = getSupportedFormat(gl, gl.RGBA, gl.RGBA, halfFloatTexType);
-        formatRG = getSupportedFormat(gl, gl.RGBA, gl.RGBA, halfFloatTexType);
-        formatR = getSupportedFormat(gl, gl.RGBA, gl.RGBA, halfFloatTexType);
-      }
-
-      if (!formatRGBA || !formatRG || !formatR) {
-        // Same reasoning as the null context above: a driver that reports no
-        // usable half-float render target cannot run the simulation, and that
-        // is a fact about the device, not a failure of the page.
-        return null;
-      }
-
-      return {
-        gl,
-        ext: {
-          formatRGBA,
-          formatRG,
-          formatR,
-          halfFloatTexType,
-          supportLinearFiltering
+        if (!gl) {
+          gl = (canvas.getContext('webgl', params) ||
+            canvas.getContext('experimental-webgl', params)) as WebGL2RenderingContext | null;
         }
-      };
+
+        if (!gl || typeof gl.createTexture !== 'function' || typeof gl.getExtension !== 'function') {
+          return null;
+        }
+
+        const isWebGL2 = 'drawBuffers' in gl;
+
+        let supportLinearFiltering = false;
+        let halfFloat: OES_texture_half_float | null = null;
+
+        if (isWebGL2) {
+          (gl as WebGL2RenderingContext).getExtension('EXT_color_buffer_float');
+          supportLinearFiltering = !!(gl as WebGL2RenderingContext).getExtension('OES_texture_float_linear');
+        } else {
+          halfFloat = gl.getExtension('OES_texture_half_float');
+          supportLinearFiltering = !!gl.getExtension('OES_texture_half_float_linear');
+        }
+
+        gl.clearColor(0, 0, 0, 1);
+
+        const halfFloatTexType = isWebGL2
+          ? (gl as WebGL2RenderingContext).HALF_FLOAT
+          : (halfFloat && halfFloat.HALF_FLOAT_OES) || 0;
+
+        let formatRGBA: TextureFormat | null;
+        let formatRG: TextureFormat | null;
+        let formatR: TextureFormat | null;
+
+        if (isWebGL2) {
+          formatRGBA = getSupportedFormat(gl, (gl as WebGL2RenderingContext).RGBA16F, gl.RGBA, halfFloatTexType);
+          formatRG = getSupportedFormat(
+            gl,
+            (gl as WebGL2RenderingContext).RG16F,
+            (gl as WebGL2RenderingContext).RG,
+            halfFloatTexType
+          );
+          formatR = getSupportedFormat(
+            gl,
+            (gl as WebGL2RenderingContext).R16F,
+            (gl as WebGL2RenderingContext).RED,
+            halfFloatTexType
+          );
+        } else {
+          formatRGBA = getSupportedFormat(gl, gl.RGBA, gl.RGBA, halfFloatTexType);
+          formatRG = getSupportedFormat(gl, gl.RGBA, gl.RGBA, halfFloatTexType);
+          formatR = getSupportedFormat(gl, gl.RGBA, gl.RGBA, halfFloatTexType);
+        }
+
+        if (!formatRGBA || !formatRG || !formatR) {
+          // Same reasoning as the null context above: a driver that reports no
+          // usable half-float render target cannot run the simulation, and that
+          // is a fact about the device, not a failure of the page.
+          return null;
+        }
+
+        return {
+          gl,
+          ext: {
+            formatRGBA,
+            formatRG,
+            formatR,
+            halfFloatTexType,
+            supportLinearFiltering
+          }
+        };
+      } catch {
+        return null;
+      }
     }
 
     function getSupportedFormat(
@@ -295,23 +299,28 @@ export default function SplashCursor({
       format: number,
       type: number
     ) {
-      const texture = gl.createTexture();
-      if (!texture) return false;
+      try {
+        if (!gl || typeof gl.createTexture !== 'function') return false;
+        const texture = gl.createTexture();
+        if (!texture) return false;
 
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, 4, 4, 0, format, type, null);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, 4, 4, 0, format, type, null);
 
-      const fbo = gl.createFramebuffer();
-      if (!fbo) return false;
+        const fbo = gl.createFramebuffer();
+        if (!fbo) return false;
 
-      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-      const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
-      return status === gl.FRAMEBUFFER_COMPLETE;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+        const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+        return status === gl.FRAMEBUFFER_COMPLETE;
+      } catch {
+        return false;
+      }
     }
 
     function hashCode(s: string) {
@@ -1240,18 +1249,23 @@ export default function SplashCursor({
       return delta;
     }
 
-    function hexToRGB(hex: string): ColorRGB {
+    function hexToRGB(hex?: string | null): ColorRGB {
+      if (!hex || typeof hex !== 'string') return { r: 0.15, g: 0.15, b: 0.15 };
       let val = hex.replace('#', '');
       if (val.length === 3) val = val[0] + val[0] + val[1] + val[1] + val[2] + val[2];
       const r = parseInt(val.slice(0, 2), 16) / 255;
       const g = parseInt(val.slice(2, 4), 16) / 255;
       const b = parseInt(val.slice(4, 6), 16) / 255;
-      return { r: r * 0.15, g: g * 0.15, b: b * 0.15 };
+      return {
+        r: (Number.isFinite(r) ? r : 1) * 0.15,
+        g: (Number.isFinite(g) ? g : 0) * 0.15,
+        b: (Number.isFinite(b) ? b : 0) * 0.15,
+      };
     }
 
     function generateColor(): ColorRGB {
       if (!config.RAINBOW_MODE) {
-        return hexToRGB(config.COLOR!);
+        return hexToRGB(config.COLOR);
       }
       const c = HSVtoRGB(Math.random(), 1.0, 1.0);
       c.r *= 0.15;

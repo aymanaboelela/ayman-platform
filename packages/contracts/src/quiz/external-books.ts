@@ -111,3 +111,132 @@ export const AdoptExternalBookLessonSchema = z.object({ categoryId: z.uuid() }).
  */
 export const MoveExternalBookLessonSchema = z.object({ unitId: z.uuid() }).strict();
 export const RenameExternalBookCategorySchema = z.object({ name: z.string().trim().min(1).max(200) }).strict();
+
+/**
+ * عقود طالب الكورس — «أسئلة الكتب الخارجية»
+ */
+export const StudentExternalBookLessonSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  categoryId: z.string().uuid(),
+  ready: z.number().int(),
+});
+export type StudentExternalBookLesson = z.infer<typeof StudentExternalBookLessonSchema>;
+
+export const StudentExternalBookUnitSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  categoryId: z.string().uuid(),
+  ready: z.number().int(),
+  totalReady: z.number().int(),
+  lessons: z.array(StudentExternalBookLessonSchema),
+});
+export type StudentExternalBookUnit = z.infer<typeof StudentExternalBookUnitSchema>;
+
+export const StudentExternalBookSummarySchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  coverKey: z.string().nullable(),
+  courseId: z.string().uuid(),
+  ready: z.number().int(),
+  unitsCount: z.number().int(),
+  lessonsCount: z.number().int(),
+});
+export type StudentExternalBookSummary = z.infer<typeof StudentExternalBookSummarySchema>;
+
+export const StudentExternalBookDetailSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  coverKey: z.string().nullable(),
+  courseId: z.string().uuid(),
+  courseTitle: z.string(),
+  courseSlug: z.string(),
+  categoryId: z.string().uuid(),
+  ready: z.number().int(),
+  totalReady: z.number().int(),
+  units: z.array(StudentExternalBookUnitSchema),
+});
+export type StudentExternalBookDetail = z.infer<typeof StudentExternalBookDetailSchema>;
+
+export const StartExternalBookPracticeSchema = z.object({
+  scope: z.enum(['book', 'unit', 'lesson']),
+  scopeId: z.string().uuid(),
+  count: z.number().int().min(1).max(50).default(10),
+});
+export type StartExternalBookPractice = z.infer<typeof StartExternalBookPracticeSchema>;
+
+export const ExternalBookPracticeOptionSchema = z.object({
+  id: z.string(),
+  bodyHtml: z.string(),
+});
+export type ExternalBookPracticeOption = z.infer<typeof ExternalBookPracticeOptionSchema>;
+
+export const ExternalBookPracticeQuestionSchema = z.object({
+  slotPosition: z.number().int(),
+  questionId: z.string().uuid(),
+  type: z.enum(['mcq_single', 'mcq_multi', 'true_false', 'short_answer', 'ordering', 'essay']),
+  stemHtml: z.string(),
+  maxMark: z.number(),
+  options: z.array(ExternalBookPracticeOptionSchema),
+  flagged: z.boolean().default(false),
+  settings: z.object({ minWords: z.number().optional(), maxWords: z.number().optional() }).optional(),
+});
+export type ExternalBookPracticeQuestion = z.infer<typeof ExternalBookPracticeQuestionSchema>;
+
+export const ExternalBookPracticeSessionSchema = z.object({
+  sessionId: z.string(),
+  bookId: z.string().uuid(),
+  bookTitle: z.string(),
+  courseSlug: z.string(),
+  scope: z.enum(['book', 'unit', 'lesson']),
+  scopeTitle: z.string(),
+  totalQuestions: z.number().int(),
+  questions: z.array(ExternalBookPracticeQuestionSchema),
+});
+export type ExternalBookPracticeSession = z.infer<typeof ExternalBookPracticeSessionSchema>;
+
+export const ExternalBookPracticeAnswerInputSchema = z.object({
+  slotPosition: z.number().int(),
+  questionId: z.string().uuid(),
+  optionIds: z.array(z.string()).default([]),
+  text: z.string().optional(),
+});
+export type ExternalBookPracticeAnswerInput = z.infer<typeof ExternalBookPracticeAnswerInputSchema>;
+
+export const SubmitExternalBookPracticeSchema = z.object({
+  answers: z.array(ExternalBookPracticeAnswerInputSchema),
+});
+export type SubmitExternalBookPractice = z.infer<typeof SubmitExternalBookPracticeSchema>;
+
+export const ExternalBookPracticeReviewQuestionSchema = z.object({
+  slotPosition: z.number().int(),
+  attemptQuestionId: z.string(),
+  type: z.enum(['mcq_single', 'mcq_multi', 'true_false', 'short_answer', 'ordering', 'essay']),
+  stemHtml: z.string(),
+  options: z.array(ExternalBookPracticeOptionSchema),
+  response: z.unknown().optional(),
+  correctness: z.enum(['correct', 'partial', 'incorrect', 'needsGrading', 'unanswered']),
+  mark: z.number().nullable(),
+  maxMark: z.number(),
+  feedbackHtml: z.string().optional(),
+  generalFeedbackHtml: z.string().optional(),
+  rightAnswerText: z.string().optional(),
+  rightAnswerOptionIds: z.array(z.string()).optional(),
+});
+export type ExternalBookPracticeReviewQuestion = z.infer<typeof ExternalBookPracticeReviewQuestionSchema>;
+
+export const ExternalBookPracticeResultSchema = z.object({
+  sessionId: z.string(),
+  bookId: z.string().uuid(),
+  bookTitle: z.string(),
+  courseSlug: z.string(),
+  scope: z.enum(['book', 'unit', 'lesson']),
+  scopeTitle: z.string(),
+  score: z.number(),
+  maxScore: z.number(),
+  percentage: z.number(),
+  passed: z.boolean(),
+  review: z.array(ExternalBookPracticeReviewQuestionSchema),
+});
+export type ExternalBookPracticeResult = z.infer<typeof ExternalBookPracticeResultSchema>;
+
