@@ -3,6 +3,8 @@ import Link from 'next/link';
 
 import { mediaUrl } from '@ayman/ui/branding';
 
+import { TEACHES_CODE } from '@/lib/tenant-subject';
+
 import { studioCopy } from './studio-copy';
 
 export interface StudioHeroProps {
@@ -71,8 +73,24 @@ export function StudioHero({
 }: StudioHeroProps) {
   const Title = level === 1 ? 'h1' : 'h2';
 
+  /*
+   * The code panel is PROGRAMMING — real Python, «أول برنامج هتكتبه» — so it
+   * only exists where the subject is. Without it, a stack with no portrait yet
+   * has nothing to put on the stage at all: `data-stage-empty` (in
+   * `presets.css`) hides the empty stage and gives the copy the whole row,
+   * instead of a column of nothing beside it. On a programming stack both stay
+   * exactly as they were: the panel renders and the attribute is never
+   * emitted.
+   */
+  const hasStage = TEACHES_CODE || Boolean(portraitKey);
+
   return (
-    <section className="st-hero" data-site-hero data-has-portrait={portraitKey ? 'true' : undefined}>
+    <section
+      className="st-hero"
+      data-site-hero
+      data-has-portrait={portraitKey ? 'true' : undefined}
+      data-stage-empty={hasStage ? undefined : 'true'}
+    >
       <div className="st-shell st-hero__grid">
         <div className="st-hero__copy">
           {eyebrow ? <p className="st-chip">{eyebrow}</p> : null}
@@ -139,56 +157,58 @@ export function StudioHero({
             />
           ) : null}
 
-          <figure className="st-code">
-            <figcaption className="st-code__cap">{studioCopy.heroCodeLabel}</figcaption>
-            {/*
-              A `<pre>` so the whitespace is the code's own, and one `<code>`
-              per line so the comment can take the muted colour without a
-              syntax highlighter shipping to the browser for three lines.
+          {TEACHES_CODE ? (
+            <figure className="st-code">
+              <figcaption className="st-code__cap">{studioCopy.heroCodeLabel}</figcaption>
+              {/*
+                A `<pre>` so the whitespace is the code's own, and one `<code>`
+                per line so the comment can take the muted colour without a
+                syntax highlighter shipping to the browser for three lines.
 
-              `dir="ltr"` is load-bearing and not a nicety: this is a page in
-              Arabic, so the inherited direction is RTL, and RTL applied to
-              `print("أهلاً يا", name)` reorders the brackets and the quotes
-              around the Arabic string into something that is no longer the
-              code anybody typed.
-            */}
-            <pre className="st-code__body" dir="ltr">
-              {studioCopy.heroCode.map((line) => (
-                <code className="st-code__line" key={line.comment ?? line.code ?? ''}>
-                  {line.comment ? (
-                    <span className="st-code__comment" dir="rtl">
-                      {line.comment}
-                    </span>
-                  ) : (
-                    line.code
-                  )}
-                </code>
-              ))}
-            </pre>
-            {/*
-              The output line, and the page's one piece of orchestrated motion.
+                `dir="ltr"` is load-bearing and not a nicety: this is a page in
+                Arabic, so the inherited direction is RTL, and RTL applied to
+                `print("أهلاً يا", name)` reorders the brackets and the quotes
+                around the Arabic string into something that is no longer the
+                code anybody typed.
+              */}
+              <pre className="st-code__body" dir="ltr">
+                {studioCopy.heroCode.map((line) => (
+                  <code className="st-code__line" key={line.comment ?? line.code ?? ''}>
+                    {line.comment ? (
+                      <span className="st-code__comment" dir="rtl">
+                        {line.comment}
+                      </span>
+                    ) : (
+                      line.code
+                    )}
+                  </code>
+                ))}
+              </pre>
+              {/*
+                The output line, and the page's one piece of orchestrated motion.
 
-              It arrives a beat after the code does, with the caret above it
-              blinking until it lands — so the panel shows a program RUNNING
-              rather than a screenshot of one. That is the headline's claim
-              («البرمجة أسهل ما تتخيّل») demonstrated in the only place on the
-              page where demonstrating it is possible.
+                It arrives a beat after the code does, with the caret above it
+                blinking until it lands — so the panel shows a program RUNNING
+                rather than a screenshot of one. That is the headline's claim
+                («البرمجة أسهل ما تتخيّل») demonstrated in the only place on the
+                page where demonstrating it is possible.
 
-              ⚠️ The element is NOT parked at `opacity: 0` waiting on
-              anything. The from-state lives in the keyframes with
-              `animation-fill-mode: backwards`, so with animations disabled —
-              reduced motion, or a browser that never runs them — the line is
-              simply there, read at rest. A page whose content depends on an
-              animation having fired is a page that is blank for the readers
-              who most need it not to be.
-            */}
-            <p className="st-code__out">
-              <span className="st-code__out-l" aria-hidden="true">
-                &gt;
-              </span>{' '}
-              {studioCopy.heroCodeOut}
-            </p>
-          </figure>
+                ⚠️ The element is NOT parked at `opacity: 0` waiting on
+                anything. The from-state lives in the keyframes with
+                `animation-fill-mode: backwards`, so with animations disabled —
+                reduced motion, or a browser that never runs them — the line is
+                simply there, read at rest. A page whose content depends on an
+                animation having fired is a page that is blank for the readers
+                who most need it not to be.
+              */}
+              <p className="st-code__out">
+                <span className="st-code__out-l" aria-hidden="true">
+                  &gt;
+                </span>{' '}
+                {studioCopy.heroCodeOut}
+              </p>
+            </figure>
+          ) : null}
         </div>
       </div>
     </section>

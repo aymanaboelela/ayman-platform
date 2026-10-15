@@ -19,6 +19,9 @@ import { getEntitlements } from '@/lib/entitlements';
 import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 import { tenantName } from '@/lib/tenant';
 import { tenantSentence } from '@/lib/tenant-copy';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
+import { bySubject } from '@/lib/subject-copy';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
 import {
   SOCIAL_MARKS,
   SocialIcon,
@@ -207,7 +210,7 @@ export default async function LinksPage() {
           de-Aymanized, because the two things a reviewer looks for were gone.
         */}
         <h1 className="linkhub__name">{tenantName(c.title)}</h1>
-        <p className="linkhub__role">{c.role}</p>
+        <p className="linkhub__role">{bySubject(c.role, subjectCopy.linkhub.role)}</p>
 
         <span className="linkhub__verified">
           <BadgeCheck size={14} aria-hidden="true" />
@@ -232,7 +235,7 @@ export default async function LinksPage() {
             primary
             icon={<GraduationCap size={20} aria-hidden="true" />}
             title={c.coursesTitle}
-            note={c.coursesNote}
+            note={bySubject(c.coursesNote, subjectCopy.linkhub.coursesNote)}
           />
           <Row
             href="/register"
@@ -256,19 +259,24 @@ export default async function LinksPage() {
               note={c.booksNote}
             />
           ) : null}
-          <Row
-            href="/essentials"
-            internal
-            icon={<BookOpen size={20} aria-hidden="true" />}
-            title={c.essentialsTitle}
-            note={c.essentialsNote}
-          />
+          {/* «التأسيس» is the programming glossary, and `/essentials` 404s on
+              a stack that does not teach code — a row to it there is a dead
+              link at the top of the page every bio points at. */}
+          {TEACHES_CODE ? (
+            <Row
+              href="/essentials"
+              internal
+              icon={<BookOpen size={20} aria-hidden="true" />}
+              title={c.essentialsTitle}
+              note={c.essentialsNote}
+            />
+          ) : null}
           <Row
             href="/news"
             internal
             icon={<Newspaper size={20} aria-hidden="true" />}
             title={c.newsTitle}
-            note={c.newsNote}
+            note={bySubject(c.newsNote, subjectCopy.linkhub.newsNote)}
           />
           <Row
             href="/about"

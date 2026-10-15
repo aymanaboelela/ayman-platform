@@ -7,6 +7,8 @@ import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { getBookShippingRates } from '@/lib/books';
 import { sanitizeRichText } from '@/lib/sanitize-html';
 import { CourseQuickLinks } from '@/components/player/course-quick-links';
+import { CourseExamsCard, courseExamDoors } from '@/components/player/course-exams-card';
+import { getStudentExamsOrEmpty } from '@/lib/exams';
 import { MonthOfferCard } from '@/components/player/month-offer-card';
 import { LessonHomework } from '@/components/player/lesson-homework';
 import { LessonDescription } from '@/components/player/lesson-description';
@@ -104,7 +106,7 @@ export default async function LessonPage({
   // lesson navigations and the lesson body is not. Both are authenticated —
   // the guard's 404 for "not enrolled" is exactly what makes `notFound()`
   // below a rendering decision rather than an authorization one.
-  const [outline, result, settings, shippingRates, viewer] = await Promise.all([
+  const [outline, result, settings, shippingRates, viewer, studentExams] = await Promise.all([
     apiGetAuthed(`/api/courses/${slug}/outline`, CourseOutlineSchema).catch(nullOn404),
     apiGetAuthed(`/api/lessons/${lessonId}/player`, LessonPlayerSchema).catch(forbiddenOn403),
     // The Vodafone Cash number `CourseOutlineSidebar`'s own «اطلب الكتاب»
@@ -118,6 +120,10 @@ export default async function LessonPage({
        `getSession` is `cache()`d per request and `proxy.ts` has already paid
        for it, so this is not a second round trip. */
     getSession().catch(() => null),
+    /* «امتحانات الشهر» — the door a kept-open exam keeps once the dashboard
+       has let go of it. Never fatal: a miss is `{ exams: [] }` and the card
+       renders nothing, and a stack without exams skips the request. */
+    getStudentExamsOrEmpty(),
   ]);
 
   // No outline means the course is not theirs to see at all — not enrolled, or
@@ -310,6 +316,7 @@ export default async function LessonPage({
               door at the bottom of a long outline is a door nobody finds.
               Renders nothing when there is nothing to offer. */}
           <MonthOfferCard courseSlug={outline.course.slug} offer={outline.monthOffer} />
+          <CourseExamsCard exams={courseExamDoors(studentExams.exams, outline.course.id)} />
           {/*
             ONE sticky box for the outline and «الجروب والمساعدة», not a
             sticky outline with the links after it.

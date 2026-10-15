@@ -1471,6 +1471,28 @@
   transform: translateX(-50%);
 }
 
+/* The year cards on a stack that does not teach code (`year-cards.tsx`): the
+   three years in a plain row, with no stage under them — there is no cut-out,
+   no dragon and no fire to arrange them around, so the absolute staging above
+   has nothing to do. A new class rather than a modifier on `.tracks__stage`,
+   so nothing on Ayman's page can match it. */
+.tracks__grid {
+  position: relative;
+  z-index: 20;
+  display: grid;
+  gap: 1.5rem;
+  margin: 0;
+  padding-block: 2.5rem 4.5rem;
+  padding-inline: 0;
+  list-style: none;
+}
+
+@media (min-width: 64rem) {
+  .tracks__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 /* The big dragon BEHIND the cards — z-index sits between `.tracks__cutout` (10)
    and `.tracks__card*` (30/40). The cards are the section's content and the fire
    is what they come out of, so the flame rises between and behind them and they

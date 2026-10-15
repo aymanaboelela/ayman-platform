@@ -1,5 +1,7 @@
 import { copy } from '@ayman/contracts/copy';
-import { IS_AYMAN, tenantName } from '../../../common/tenant';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
+import { IS_AYMAN, TEACHES_CODE, tenantName } from '../../../common/tenant';
+import { bySubject } from '../../../common/tenant-subject';
 import { tenantSentence } from '../../../common/tenant-copy';
 import {
   ASSISTANT_NODES,
@@ -81,6 +83,19 @@ export interface KnowledgeEntry {
 const PERSONAL_IDS: ReadonlySet<string> = new Set(copy.assistant.knowledgePersonal);
 
 /**
+ * The entries that describe a PROGRAMMING platform, dropped on a stack whose
+ * subject is not code.
+ *
+ * `playground` and `essentials` answer «تجربة الكود دي إيه؟» and «التأسيس ده
+ * إيه؟» about two routes that 404 there. `startWhere` sends a beginner to
+ * «مسار التأسيس … للي لسه مايعرفش حاجة عن البرمجة» — the same glossary, and a
+ * sentence that assumes the student came to learn code. On a corpus-only
+ * deployment `matchKnowledge` hands these back verbatim, so leaving them in
+ * would have a physics student told about a Python interpreter.
+ */
+const PROGRAMMING_IDS: ReadonlySet<string> = new Set(['playground', 'essentials', 'startWhere']);
+
+/**
  * The written corpus — everything المساعد knows that the TREE does not say.
  *
  * `copy.assistant.knowledge` is where it lives, beside every other string a
@@ -107,6 +122,7 @@ function writtenFacts(): KnowledgeEntry[] {
    */
   return copy.assistant.knowledge
     .filter((entry) => IS_AYMAN || !PERSONAL_IDS.has(entry.id))
+    .filter((entry) => TEACHES_CODE || !PROGRAMMING_IDS.has(entry.id))
     .map((entry) => ({
       id: entry.id,
       question: tenantSentence(entry.q),
@@ -138,7 +154,9 @@ function platformFacts(): KnowledgeEntry[] {
       id: 'platform',
       question: 'المنصة دي بتاعة إيه؟',
       answer:
-        `${tenantName(copy.site.platformName)} — ${copy.site.tagline}. ` +
+        // The subject line through the subject gate — «البرمجة وعلوم الحاسب»
+        // was this answer on a physics teacher's stack too.
+        `${tenantName(copy.site.platformName)} — ${bySubject(copy.site.tagline, subjectCopy.site.tagline)}. ` +
         `المدرّس هو ${tenantName(copy.site.instructor)}، ` +
         'وكل الكورسات والامتحانات والمتابعة بتحصل من على المنصة نفسها.',
     },

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { copy } from '@ayman/contracts';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { tenantName } from '@/lib/tenant';
+import { bySubject } from '@/lib/subject-copy';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { isFreeCourse } from '@/lib/price';
 import { foundationCoursesOutsideYear } from '@/lib/foundation-courses';
@@ -121,7 +122,13 @@ export async function generateMetadata({
      * `lib/seo/metadata.ts` for why `copy.seo.description` could not be done
      * this way and had to be rebuilt instead.
      */
-    description: `كورسات ${YEAR_TITLES[year]} — ${yearAliasesAr(year)[1] ?? YEAR_TITLES[year]} — في البرمجة والذكاء الاصطناعي على ${tenantName(copy.site.platformName)}: شرح بالفيديو، تمرين واختبار على كل درس.`,
+    /*
+     * ⚠️ The subject clause goes through `bySubject` like every other subject
+     * line: «في البرمجة والذكاء الاصطناعي» is what three snippets per
+     * programming stack have always said, and it is what a physics teacher's
+     * three year pages said too, under their own blue link.
+     */
+    description: `كورسات ${YEAR_TITLES[year]} — ${yearAliasesAr(year)[1] ?? YEAR_TITLES[year]} — في ${bySubject('البرمجة والذكاء الاصطناعي', '{subject}')} على ${tenantName(copy.site.platformName)}: شرح بالفيديو، تمرين واختبار على كل درس.`,
     path: `/years/${year}`,
   });
 }

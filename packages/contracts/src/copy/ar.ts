@@ -1625,6 +1625,8 @@ export const copy = {
     profileHoursLabel: 'ساعة شرح',
     profileCta: 'كل الكورسات',
     profileSecondary: 'عن المهندس',
+    /** The same link on any other teacher's stack — names the section, not a title. */
+    profileSecondaryNeutral: 'نبذة تعريفية',
     profileAll: 'الكل',
     profileYear: 'الصف',
     profileEmpty: 'مفيش كورسات في الصف ده لسه.',
@@ -3408,6 +3410,23 @@ export const copy = {
     videoFallbackNote: 'النت عندك كان مانع المشغّل بتاعنا، فشغّلناه بطريقة تانية. الدرس مش هيتسجّل لوحده — دوس «خلاص · التالي» لما تخلّص.',
     videoOpenOnYouTube: 'افتحه على يوتيوب',
     /*
+     * «تابلت الوزارة مش بيسمح بيوتيوب» — shown IN PLACE of a YouTube lecture
+     * on a network that blocks YouTube outright (`youtube-reach.ts`), instead
+     * of the dark plain embed that was all a ministry-tablet student got.
+     *
+     * No masculine imperatives — the platform never asks who is watching —
+     * so the actions are nouns («نسخ»، «إرسال») and the advice is about the
+     * lecture («بتشتغل عادي»), not an order to the student.
+     */
+    videoBlockedTitle: 'يوتيوب مقفول على الجهاز ده',
+    videoBlockedBody:
+      'المحاضرة دي متشغّلة من يوتيوب، وتابلت الوزارة وبعض شبكات المدارس بيقفلوه. على الموبايل أو اللابتوب بتشتغل عادي.',
+    videoBlockedShare: 'إرسال الرابط للموبايل',
+    videoBlockedCopy: 'نسخ رابط المحاضرة',
+    videoBlockedCopied: 'اتنسخ الرابط',
+    videoBlockedRetry: 'محاولة تانية',
+    videoBlockedOpenYouTube: 'فتح على يوتيوب',
+    /*
      * The lecture is on our origin and nowhere else, so there is no «افتحه
      * على يوتيوب» under this one. What is left really is worth retrying: the
      * causes are a dropped segment or an origin hiccup, and a reload clears
@@ -3566,6 +3585,21 @@ export const copy = {
      * away — «كبار أوي… ويبقى فيه زرار يخفيهم ويرجّعهم». They sat side by side
      * until that cut both short lines off; see `CourseQuickLinks`.
      */
+    /**
+     * «امتحانات الشهر» inside the course — the door a kept-open exam keeps
+     * after it leaves the dashboard. Never gendered.
+     */
+    courseExams: {
+      title: 'امتحانات الشهر',
+      open: 'مفتوح دلوقتي',
+      late: 'بعد الميعاد',
+      start: 'نبدأ الامتحان',
+      /** `{date}` — the on-time deadline. */
+      closesLine: 'يقفل {date}',
+      lateNote: 'الورقة بتتصحح عادي، بس مابتدخلش الأوائل ولا لوحة الشرف.',
+      sat: 'اتسلّم',
+      review: 'مراجعة ورقتك',
+    },
     quickLinks: {
       title: 'الجروب والمساعدة',
       hide: 'إخفاء',
@@ -3616,8 +3650,9 @@ export const copy = {
     lead: 'المطلوب في الواجب ده:',
     /** The upload area, when nothing has been handed in yet. */
     uploadTitle: 'رفع صور الحل',
-    /** `{max}` is the ceiling the instructor set on this exercise. */
-    uploadHint: 'صوّر ورقة الحل ودوس هنا — لحد {max} صورة.',
+    /** `{max}` is the ceiling the instructor set on this exercise.
+     *  No imperative: «صوّر … ودوس» only works on a male reader. */
+    uploadHint: 'صورة واضحة لكل ورقة من الحل — لحد {max} صورة.',
     pick: 'اختيار الصور',
     /** On the button while the browser is sending them. */
     uploading: 'بنرفع…',
@@ -3631,11 +3666,26 @@ export const copy = {
     resubmit: 'تسليم الحل من تاني',
     /** Errors, one per thing that can actually go wrong. */
     tooMany: 'الحد الأقصى {max} صورة للواجب ده.',
-    tooLarge: 'الصورة كبيرة أوي — أقصى حجم ٨ ميجا للصورة.',
-    /** بتشمل HEIC دلوقتي — صور الآيفون بتتحوّل على السيرفر. الجملة القديمة
-     *  كانت بتعدّ الصيغ، والطالبة اللي صوّرت بتليفونها كانت بتقرا «ده مش ملف
-     *  صورة» وهي فعلًا صوّرت صورة. */
-    badType: 'ده مش ملف صورة. صوّر ورقتك تاني وابعتها.',
+    /** Over 8 MB even after the browser shrank it, or a 64/108 MP camera
+     *  photo over the pixel cap — both are SIZE, and a screenshot of the photo
+     *  is the one fix that works on every phone. */
+    tooLarge: 'الصورة دي كبيرة أوي (أقصى حجم ٨ ميجا). لقطة شاشة للصورة نفسها بتحلّ المشكلة.',
+    /**
+     * The file really is not a picture — a PDF, a document, a video.
+     *
+     * ⚠️ Kept for THAT case only. Until 2026-10-11 it was also what every
+     * iPhone HEIC got (the API could not decode one at all — see
+     * `apps/api/src/modules/media/heif-transcode.ts`), and what a photo the API
+     * failed to read got, so a student who had photographed her homework was
+     * told it was not a photograph. Those two now have their own lines below.
+     * No imperative either: «صوّر … وابعتها» only works on a male reader.
+     */
+    badType: 'الملف ده مش صورة. المطلوب صورة لورقة الحل (JPG أو PNG أو صورة الموبايل العادية).',
+    /** A picture the server could not open — damaged, or a format it cannot
+     *  convert. Not the student's fault, and not «not an image». */
+    unreadable: 'مقدرناش نفتح الصورة دي. لقطة شاشة ليها أو صورة جديدة للورقة غالبًا هتنفع.',
+    /** The request never completed — the photo may be perfectly fine. */
+    network: 'النت فصل قبل ما الصورة تترفع. نجرّب تاني لما النت يرجع.',
     uploadFailed: 'مقدرناش نرفع الصورة. نجرّب تاني.',
     submitFailed: 'مقدرناش نسلّم الواجب دلوقتي. نجرّب تاني.',
     empty: 'لازم صورة واحدة على الأقل للحل.',
@@ -4147,6 +4197,9 @@ export const copy = {
        *  Not «صفر»: they did not fail it, they missed it, and the two are
        *  different things to read about yourself. */
       missed: 'الامتحان ده فاتك',
+      /** A kept-open exam they missed — the deadline passed, the door did not
+       *  shut. Replaces `missed` on that row and links into the paper. */
+      lateOpen: 'فات ميعاده — بس لسه متاح',
       review: 'مراجعة ورقتك',
     },
     mastery: {

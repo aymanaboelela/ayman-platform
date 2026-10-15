@@ -35,6 +35,7 @@ import { LessonHomeworkForm } from './lesson-homework-form';
 import { LessonSettingsForm } from './lesson-settings-form';
 import { defaultMonthId, MonthPicker, useCourseMonths, useCourseMonthsKnown } from './month-panel';
 import { VideoPreview } from './video-preview';
+import { VideoLadderUpgradeButton } from './video-ladder-upgrade';
 import { VideoUpload } from './video-upload';
 import { RemoveUploadedVideo } from './remove-uploaded-video';
 import { VideoTrimEditor } from './video-trim-editor';
@@ -557,6 +558,9 @@ function LessonVideoForm({ courseId, lesson }: { courseId: string; lesson: Lesso
           // places on this screen read the same row.
           onDone={() => router.refresh()}
         />
+        {lesson.video?.provider === 'upload' && lesson.video.mirrorStatus === 'ready' ? (
+          <VideoLadderUpgradeButton lessonId={lesson.id} />
+        ) : null}
         {/*
           «قص الفيديو» — only once the lecture is ready: there is nothing to
           watch, and so nothing to cut, while it uploads or encodes.

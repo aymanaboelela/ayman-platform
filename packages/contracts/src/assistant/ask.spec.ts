@@ -289,6 +289,33 @@ describe('askActionMenu', () => {
     // from the menu is a button that can never be asked for.
     for (const id of actionIds) expect(menu).toContain(`${id} — ${copy.assistant.ai.actions[id]}`);
   });
+
+  it('is the same menu, byte for byte, when nothing is omitted', () => {
+    // A programming stack passes `[]`; its cached prompt prefix must not move.
+    expect(askActionMenu([])).toBe(askActionMenu());
+  });
+
+  it('leaves an omitted destination off the menu entirely', () => {
+    // A stack that does not teach code omits its playground and glossary.
+    const omit: AskActionId[] = ['playground', 'essentials', 'foundations'];
+    const menu = askActionMenu(omit);
+    for (const id of omit) expect(menu).not.toContain(`${id} — `);
+    expect(menu.split('\n')).toHaveLength(actionIds.length - omit.length);
+  });
+});
+
+describe('askActions — destinations this stack does not have', () => {
+  it('drops an omitted id the model named anyway, and keeps the rest', () => {
+    // The menu is a request; this is the boundary. A button to a 404 must not
+    // reach a student because a model remembered a route from elsewhere.
+    expect(askActions(['playground', 'results'], [], ['playground']).map((a) => a.href)).toEqual([
+      ASK_ACTION_HREFS.results,
+    ]);
+  });
+
+  it('omits nothing by default', () => {
+    expect(askActions(['playground']).map((a) => a.href)).toEqual([ASK_ACTION_HREFS.playground]);
+  });
 });
 
 /* ────────────────────────────────────────────────────────────────────────

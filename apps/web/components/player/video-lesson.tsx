@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { copy } from '@ayman/contracts/copy';
 import type { HeartbeatResponse, PlayerVideo } from '@ayman/contracts/progress';
+import { posterBesidePlaylist } from '@ayman/contracts/video';
 import { cn } from '@ayman/ui/lib/cn';
 import { formatDuration } from '@/lib/format';
 import {
@@ -18,6 +19,9 @@ import { MirrorVideo } from './mirror-video';
 import { FullscreenIcon, PlayIcon } from './icons';
 import { useVideoHeartbeat } from './use-video-heartbeat';
 import { YouTubeShield } from './youtube-shield';
+import { mayPrewarm, prewarmMirror, prewarmYouTube, whenIdle } from './prewarm';
+import { YouTubeBlockedCard } from './youtube-blocked-card';
+import { probeYouTube, type YouTubeReach } from './youtube-reach';
 
 /**
  * `lock`/`unlock` are the Screen Orientation API's own methods and TypeScript's
@@ -240,6 +244,21 @@ export function VideoLesson({
    * playing.
    */
   const [plainFrame, setPlainFrame] = useState(false);
+  /**
+   * YouTube is unreachable from here altogether — the ministry tablet, some
+   * school networks — so the lecture's place says so, with the way out (the
+   * same lecture on a phone or a laptop), instead of a plain embed that would
+   * only be another dark box. See `youtube-reach.ts`.
+   */
+  const [youtubeBlocked, setYoutubeBlocked] = useState(false);
+  /**
+   * What the head start learned while the poster was showing: whether the
+   * IFrame API arrived, and whether YouTube's own hosts answer. `null` until
+   * it is known. Refs, not state — they only ever decide what the next tap
+   * does, and nothing renders from them.
+   */
+  const apiArrivedRef = useRef<boolean | null>(null);
+  const reachRef = useRef<YouTubeReach | null>(null);
   const [nativeFullscreen, setFullscreen] = useState(false);
   /**
    * «ملء الشاشة» where the page cannot ask for it: the iPhone. Safari there
@@ -289,7 +308,7 @@ export function VideoLesson({
    */
   const encoderFrame =
     video.provider === 'upload' && video.mirror !== null
-      ? video.mirror.hlsUrl.replace(/master\.m3u8$/, 'poster.jpg')
+      ? posterBesidePlaylist(video.mirror.hlsUrl)
       : null;
   const posterCandidates = [video.posterUrl, encoderFrame].filter(
     (url, index, all): url is string => url !== null && all.indexOf(url) === index,
@@ -526,6 +545,21 @@ export function VideoLesson({
    * the guard at the top of `activate` would refuse the very call that is
    * supposed to rescue the lesson.
    */
+  /**
+   * The IFrame API never came, or its frame never spoke. Two networks end up
+   * here and they need opposite answers: one only drops the API script (the
+   * plain embed plays), the other drops YouTube itself (nothing will). The
+   * probe tells them apart — reusing the head start's answer when it has one.
+   */
+  const fallBack = useCallback(async () => {
+    const id = video.youtubeId;
+    if (id === null) return;
+    const reach = reachRef.current ?? (await probeYouTube(id));
+    reachRef.current = reach;
+    if (reach === 'blocked') setYoutubeBlocked(true);
+    else setPlainFrame(true);
+  }, [video.youtubeId]);
+
   const startYouTube = useCallback(async (startAt: number) => {
     if (!mountRef.current) return;
     // No id means an uploaded lecture, and there is no YouTube player to
@@ -668,16 +702,44 @@ export function VideoLesson({
         // filters routinely carry one of the two domains and not the other.
         instance.destroy();
         playerRef.current = null;
-        setPlainFrame(true);
+        void fallBack();
       }, FRAME_READY_TIMEOUT_MS);
     } catch {
       // `loadYouTubeIframeApi()` threw, or the constructor did: the script
-      // never arrived — an ad blocker, filtered DNS, or a captive network.
-      // None of those necessarily touch the video itself, so this is a
-      // fallback and not yet a failure.
-      setPlainFrame(true);
+      // never arrived — an ad blocker, filtered DNS, a captive network, or a
+      // network with no YouTube at all. `fallBack` tells the last one apart.
+      void fallBack();
     }
-  }, [video.youtubeId]);
+  }, [video.youtubeId, fallBack]);
+
+  /*
+   * A head start while the poster is still showing — see `prewarm.ts`. Once
+   * the lecture is activated there is nothing left to warm, and while an
+   * upload is still being prepared there is nothing to fetch.
+   *
+   * Our copy and YouTube are mutually exclusive on purpose: a lecture we
+   * serve never touches YouTube (not even to warm it — on a blocked network
+   * that request is the thing that hangs).
+   */
+  const mirrorHlsUrl = useMirror && video.mirror ? video.mirror.hlsUrl : null;
+  useEffect(() => {
+    if (activated || stillProcessing) return;
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } })
+      .connection;
+    if (!mayPrewarm(connection)) return;
+    if (mirrorHlsUrl !== null) return whenIdle(() => void prewarmMirror(mirrorHlsUrl));
+    if (!useMirror && video.youtubeId !== null) {
+      const id = video.youtubeId;
+      return whenIdle(() => {
+        void prewarmYouTube().then((arrived) => {
+          apiArrivedRef.current = arrived;
+        });
+        void probeYouTube(id).then((reach) => {
+          reachRef.current = reach;
+        });
+      });
+    }
+  }, [activated, stillProcessing, mirrorHlsUrl, useMirror, video.youtubeId]);
 
   const activate = useCallback(async (startAt: number) => {
     if (activated || !mountRef.current) return;
@@ -721,8 +783,39 @@ export function VideoLesson({
     setActivated(true);
     setStartedAt(startAt);
 
+    /*
+     * Both facts already in, and both say no: the script never arrived AND
+     * YouTube's own hosts do not answer. That is a network without YouTube,
+     * and the tap gets the answer now instead of after the twelve-second
+     * watchdog and a dark plain embed. Anything less certain — one signal,
+     * or none yet — still tries the player first.
+     */
+    if (apiArrivedRef.current === false && reachRef.current === 'blocked') {
+      setYoutubeBlocked(true);
+      return;
+    }
+
     await startYouTube(startAt);
   }, [activated, stillProcessing, useMirror, startYouTube]);
+
+  /**
+   * «محاولة تانية» from the blocked card. Forgets what the head start
+   * concluded and tries the real player again — the card may have been a slow
+   * network's false alarm, and only the player can prove it. When the frame
+   * already came and went, the node it was built in is gone, and a reload is
+   * the clean way to get one back.
+   */
+  const retryYouTube = useCallback(() => {
+    if (!mountRef.current?.isConnected) {
+      window.location.reload();
+      return;
+    }
+    apiArrivedRef.current = null;
+    reachRef.current = null;
+    setYoutubeBlocked(false);
+    setPlainFrame(false);
+    void startYouTube(startedAt);
+  }, [startYouTube, startedAt]);
 
   // The frame replaced the node React rendered, so React's className update
   // lands nowhere — it is written onto the frame itself.
@@ -830,7 +923,7 @@ export function VideoLesson({
         that frame below — nor over a failure, whose panel has a link of its
         own to offer.
       */}
-      {activated && !(useMirror && video.mirror) && youtubeId !== null && !plainFrame && !failure ? (
+      {activated && !(useMirror && video.mirror) && youtubeId !== null && !plainFrame && !failure && !youtubeBlocked ? (
         youtube === null ? (
           <div
             aria-hidden="true"
@@ -867,7 +960,7 @@ export function VideoLesson({
         YouTube player each carry this button in their own bar. What is left
         is the wait for the frame, and the plain embed.
       */}
-      {activated && !(useMirror && video.mirror) && youtube === null ? (
+      {activated && !(useMirror && video.mirror) && youtube === null && !youtubeBlocked ? (
         <button
           type="button"
           onClick={toggleFullscreen}
@@ -1127,6 +1220,10 @@ export function VideoLesson({
         embedding-blocked, which is the failure the admin's save-time check and
         its own preview now catch first.
       */}
+      {youtubeBlocked && youtubeId !== null ? (
+        <YouTubeBlockedCard youtubeId={youtubeId} title={title} onRetry={retryYouTube} />
+      ) : null}
+
       {failure ? (
         <div
           role="status"

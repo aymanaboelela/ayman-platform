@@ -58,6 +58,9 @@ const admin = {
     flags: 'خصائص التشغيل',
     // «الفريق» أولًا: ده اللي المدرّس بيدوّر عليه لما عايز يضيف مساعد.
     roles: 'الفريق والصلاحيات',
+    /** زرار «ادخل كطالب» في أسفل سايد بار الأدمن — بيوديه `/dashboard` بنفس
+     *  جلسته هو، مش انتحال شخصية حد. أيمن بس: شوف `aymanOnly` في `app-sidebar.tsx`. */
+    studentView: 'الصفحة كطالب',
     news: 'نيوز',
     media: 'مكتبة الوسائط',
     videos: 'الفيديوهات',
@@ -889,6 +892,21 @@ const admin = {
     videoUploadResumePick: 'اختار نفس الملف وكمّل',
     videoUploadNotSameFile: 'ده مش نفس الملف اللي كان بيترفع — اختار نفس الملف، أو ابدأ رفع جديد.',
     videoUploadStartOver: 'ابدأ رفع جديد',
+    // «حسّن الجودات» — بيظهر على منصة أيمن بس.
+    ladderTitle: 'الجودات',
+    ladderNow: 'الجودات الحالية: {heights}',
+    ladderPick: 'الجودات اللي تتعمل:',
+    ladderButton: 'حسّن الجودات',
+    ladderButtonAll: 'حسّن الجودات (الكل)',
+    ladderButtonSome: 'اعمل {heights}',
+    ladderHint: 'بتشتغل على السيرفر بأقل أولوية، وبتقف لوحدها لو السيرفر مشغول. المحاضرة بتفضل شغّالة للطلبة طول الوقت.',
+    ladderQueued: 'في الطابور ({heights}) — هتبدأ في خلال دقيقة',
+    ladderRunning: 'بتتحوّل ({heights})… {percent}%',
+    ladderWaiting: 'السيرفر مشغول دلوقتي، فوقّفت لحد ما يهدى وهكمّل لوحدي ({percent}%)',
+    ladderDone: 'خلصت. الطالب اللي فتح المحاضرة قبل كده هيشوفها بعد ما يفتحها تاني.',
+    ladderFailed: 'وقعت: {error}',
+    ladderRetry: 'جرّب تاني',
+    ladderAllThere: 'كل الجودات موجودة',
     /** The corner card that follows the upload around the whole dashboard. */
     videoUploadDockTitle: 'رفع الفيديو',
     videoUploadDockProcessing: 'اترفع — بيتجهّز دلوقتي',
@@ -1113,6 +1131,8 @@ const admin = {
     openThreadHint: 'لو عايز تبعتله صوت أو تكمّل كلام',
     prompt: 'المطلوب في الواجب',
     noPrompt: 'الواجب اتشال من المحاضرة، والحل ده فضل.',
+    /** On the per-image rotate button — many phone photos land sideways. */
+    rotateImage: 'لفّ الصورة',
 
     // ── the decision ─────────────────────────────────────────────────────
     accept: 'مقبول',
@@ -1139,6 +1159,23 @@ const admin = {
     yourNote: 'اللي بعتّه',
     /** The `sr-only` sentence beside the sidebar badge. `{n}` is the count. */
     pendingBadgeLabel: '{n} حل مستني مراجعة',
+
+    // ── the overview, one line per lecture ───────────────────────────────
+    overviewLead: 'كل محاضرة عليها واجب، مترتّبة زي الكورس. افتح أي محاضرة تشوف مين سلّم.',
+    /** On a course's header: what is waiting across all its lectures. */
+    coursePending: '{n} مستني مراجعة',
+    courseAllDone: 'كله اتراجع',
+    countPending: 'مستني',
+    countAccepted: 'مقبول',
+    countNeedsWork: 'رجع',
+    lastSubmission: 'آخر تسليم',
+    openSubmissions: 'افتح الحلول',
+    backToLessons: 'كل المحاضرات',
+    /** The lecture's own list, when a tab has nothing in it. */
+    lessonEmpty: 'مفيش حلول هنا في التبويب ده.',
+    pagePrev: 'اللي قبله',
+    pageNext: 'اللي بعده',
+    pageOf: '{from}–{to} من {total}',
   },
   exam: {
     title: 'امتحان الكورس النهائي',
@@ -1205,6 +1242,24 @@ const admin = {
     coverageEmpty: 'الكورس ده لسه من غير دروس.',
     opensAtLabel: 'يفتح',
     closesAtLabel: 'يقفل',
+    /**
+     * «يفضل مفتوح قد إيه؟» — the window as a LENGTH. He thinks «٢٤ ساعة» or
+     * «يومين», not a second date; typing one fills «يقفل» from «يفتح».
+     */
+    windowLengthLabel: 'يفضل مفتوح قد إيه؟',
+    windowLengthHint: 'اكتب المدة وميعاد القفل بيتحسب لوحده من ميعاد الفتح — أو عدّل «يقفل» بإيدك.',
+    unitHours: 'ساعة',
+    unitDays: 'يوم',
+    /**
+     * «يفضل متاح جوه الكورس بعد الميعاد». Past the deadline the exam leaves
+     * the dashboard but stays sittable from the course; those papers are
+     * graded and marked late (out of «الأوائل» and the honour board).
+     */
+    keepOpenLabel: 'يفضل متاح جوه الكورس بعد الميعاد',
+    keepOpenHint: 'بعد ما الوقت يخلص الامتحان بيختفي من الصفحة الرئيسية، بس اللي فاته يقدر يمتحنه من جوه الكورس. ورقته بتتصحح عادي، بس بتتعلّم «بعد الميعاد» ومابتدخلش الأوائل ولا لوحة الشرف.',
+    keptOpenBadge: 'متاح جوه الكورس بعد الميعاد',
+    keepOpenOn: 'سيبه متاح بعد الميعاد',
+    keepOpenOff: 'اقفله بعد الميعاد',
     durationLabel: 'مدة الامتحان (بالدقيقة)',
     gradeOutOfLabel: 'الدرجة من',
     passPercentLabel: 'نسبة النجاح %',
@@ -1800,6 +1855,8 @@ const admin = {
     empty: 'لسه مفيش مواد. نبدأ بالبريزنتيشن الأساسي.',
     onePresentationOnly: 'فيه بريزنتيشن أساسي واحد بس لكل محاضرة.',
     edit: 'تعديل',
+    /** The file the instructor uploaded, saved under the material's title. */
+    download: 'تحميل',
     save: 'حفظ',
     cancel: 'إلغاء',
   },
@@ -3979,6 +4036,22 @@ const admin = {
     searchPlaceholder: 'اسم الطالب أو رقمه…',
     searching: 'بندوّر…',
     recentTitle: 'آخر محافظ اتحركت',
+    /** The list's two views when nothing is typed. */
+    filterFunded: 'معاهم فلوس',
+    filterRecent: 'آخر حركة',
+    fundedTitle: 'كل اللي في محفظتهم رصيد — الأكبر الأول',
+    emptyFunded: 'مفيش ولا محفظة فيها رصيد دلوقتي.',
+    /** «سجل الحركات» — every wallet movement across every student. */
+    activityLink: 'سجل الحركات',
+    activityTitle: 'سجل حركات المحفظة',
+    activityLead: 'كل فلوس دخلت أو خرجت من أي محفظة، مين عملها، وليه. الأحدث الأول.',
+    activityAdmin: 'إضافة وخصم بإيد الأدمن',
+    activityAll: 'كل الحركات',
+    activityCredited: 'دخل',
+    activityDebited: 'خرج',
+    activityEmpty: 'لسه مفيش حركات.',
+    activityMore: 'هات أقدم',
+    noReason: 'من غير سبب مكتوب',
     resultsTitle: 'نتايج البحث',
     noResults: 'مفيش طالب بالاسم أو الرقم ده.',
     emptyRecent: 'لسه مفيش ولا محفظة اتحركت — أول شحنة بتبان هنا.',
@@ -4009,8 +4082,10 @@ const admin = {
     gift: 'هدية / تعويض',
     giftHint: 'مفيش فلوس دخلت — مابتتحسبش دخل',
     kindRequired: 'لازم نحدد: مدفوعة ولا هدية؟',
-    note: 'ملاحظة (اختياري)',
+    note: 'السبب',
     notePlaceholder: 'مثلًا: دفع كاش في السنتر',
+    /** Credit's reason is required now, like the debit's. */
+    noteRequired: 'لازم سبب للإضافة — بيفضل ظاهر في كشف الحساب وسجل الحركات.',
     /** `{amount}` — «٢٠٠ ج». */
     creditSubmit: 'شحن {amount}',
     creditSubmitEmpty: 'شحن',
@@ -4026,6 +4101,8 @@ const admin = {
     reason: 'السبب',
     reasonPlaceholder: 'مثلًا: الشحنة اتكتبت مرتين',
     reasonRequired: 'لازم سبب للخصم',
+    /** Fills the debit with the whole balance — «أشيله من المحفظة». */
+    debitAll: 'اسحب الرصيد كله ({amount})',
     debitSubmit: 'خصم {amount}',
     debitSubmitEmpty: 'خصم',
     debiting: 'بيتخصم…',
@@ -5502,8 +5579,12 @@ const admin = {
     usageFailed: 'كلاودفلير مردّش دلوقتي — جرّب تاني بعد شوية.',
     title: 'منصات المدرّسين',
     lead:
-      'كل مدرّس عنده منصة لوحده. من هنا بتقرر الفيتشرز اللي تشتغل عنده، ' +
-      'وبتطلع مستند موقّع بتحطه في إعدادات منصته.',
+      'كل مدرّس عنده منصة لوحده على السيرفر. من هنا بتعمل مدرّس جديد، ' +
+      'وبتتابع منصاتهم، وبتقرر الفيتشرز اللي تشتغل عند كل واحد.',
+    /** Heading over the signing form, now that it shares the screen with the
+     *  teacher list. */
+    signTitle: 'الصلاحيات',
+    signLead: 'علّم اللي يشتغل عند المدرّس، والمستند بيتوقّع بمفتاحك.',
     tenantLabel: 'المنصة',
     tenantHint: 'المفتاح ده لازم يساوي TENANT_KEY بتاع ستاكه بالحرف، وإلا المستند بيترفض.',
     tenantChoose: 'اختار منصة',
@@ -5538,6 +5619,201 @@ const admin = {
     expiresAt: 'صالح لحد',
     copy: 'نسخ',
     copied: 'اتنسخ',
+    /** Beside the sign button when Dokploy is connected: the token goes
+     *  straight into the stack instead of through the owner's clipboard. */
+    apply: 'وقّع وحطّه في منصته على طول',
+    applying: 'بنحطّه…',
+    applied: 'اتحط في إعدادات منصته، والنشر بدأ. هيشتغل بعد ما النشر يخلص (حوالي ١٠ دقايق).',
+    applyFailed: 'اتوقّع بس مقدرناش نحطه في منصته — انسخه وحطه بإيدك.',
+  },
+  /**
+   * «المدرّسين» على شاشة المنصات، وشاشة «مدرّس جديد» — الكونترول بلين اللي
+   * بيعمل ستاك كامل لمدرّس من فورم واحد، عن طريق Dokploy وكلاودفلير.
+   *
+   * زي `platforms` فوق: القارئ هو صاحب السوفتوير نفسه، فالكوبي بتسمّي Dokploy
+   * والمتغيّرات بالاسم.
+   */
+  tenants: {
+    listTitle: 'المدرّسين',
+    listLead: 'كل منصة هنا ستاك لوحده على السيرفر: داتابيز لوحدها، وإعدادات لوحدها، ودومين لوحده.',
+    newTeacher: 'مدرّس جديد',
+    empty: 'لسه مفيش مدرّسين على Dokploy.',
+    /** Dokploy is not connected — the list falls back to CONTROL_PLANE_TENANTS. */
+    notConnected: 'وصّل Dokploy عشان تشوف حالة كل منصة وتعمل مدرّسين جداد من هنا.',
+    notConnectedHint:
+      'اعمل API key من Dokploy (Settings ← Profile ← API/CLI) وحطّه في إعدادات ستاكك باسم CONTROL_PLANE_DOKPLOY_KEY، وبعدين Redeploy.',
+    unreachable: 'Dokploy مردّش دلوقتي، فالحالة مش ظاهرة.',
+    open: 'افتح الموقع',
+    openAdmin: 'لوحته',
+    redeploy: 'إعادة نشر',
+    redeploying: 'بنبدأ النشر…',
+    redeployed: 'النشر بدأ — بياخد حوالي ١٠ دقايق.',
+    redeployFailed: 'Dokploy رفض يبدأ النشر.',
+    edit: 'تعديل',
+    editTitle: 'اسم المدرّس والمادة',
+    editLead: 'الاتنين بيتبنوا جوّه الموقع نفسه، فالحفظ بيعمل نشر جديد للمنصة (حوالي ١٠ دقايق).',
+    editSave: 'احفظ وانشر',
+    editSaving: 'بنحفظ…',
+    editSaved: 'اتحفظ — النشر بدأ، والاسم الجديد هيبان بعد ما يخلص.',
+    editFailed: 'مقدرناش نحفظ التعديل.',
+    finalize: 'إنهاء الإعداد',
+    finalizing: 'بنقفل الإعداد…',
+    finalized: 'بيانات الدخول الأولى اتشالت من إعدادات منصته.',
+    finalizedZone: 'بيانات الدخول الأولى اتشالت، والدومين اتقفل على HTTPS بس.',
+    finalizeFailed: 'مقدرناش نكمّل إنهاء الإعداد.',
+    /** ADMIN_EMAIL/ADMIN_PASSWORD are still in that stack's environment. */
+    pendingHandover: 'باسورد الدخول الأول لسه في إعدادات منصته. بعد ما يدخل ويغيّره، دوس «إنهاء الإعداد».',
+    lastDeploy: 'آخر نشر',
+    neverDeployed: 'لسه ماتنشرتش',
+    status: {
+      done: 'شغّالة',
+      running: 'بتتبني دلوقتي',
+      error: 'آخر نشر وقع',
+      idle: 'مستنية أول نشر',
+      unknown: 'حالتها مش معروفة',
+    },
+    /** `{date}` — when the signed entitlements document runs out. */
+    entitlementsUntil: 'الصلاحيات موقّعة لحد {date}',
+    entitlementsExpired: 'مستند الصلاحيات خلص — الافتراضي رجع شغّال لوحده.',
+    entitlementsSoon: 'مستند الصلاحيات هيخلص يوم {date} — جدّده.',
+    entitlementsNone: 'من غير مستند صلاحيات — الافتراضي شغّال.',
+    webhookTitle: 'لينك النشر',
+    webhookHint:
+      'ده اللي بيخلّي منصته تتحدّث مع كل نشرة على main. لازم يبقى في DOKPLOY_TENANT_DEPLOY_URLS على GitHub (سطر لكل مدرّس).',
+    copy: 'نسخ',
+    copied: 'اتنسخ',
+
+    // ── «مدرّس جديد» ────────────────────────────────────────────────────
+    newTitle: 'مدرّس جديد',
+    newLead:
+      'اكتب بيانات المدرّس والدومين، والمنصة بتتعمل لوحدها: ستاك كامل على السيرفر بإعدادات وأسرار جديدة، ' +
+      'والدومين بيتوصّل، وأول نشر بيبدأ. أول نشر بياخد حوالي ١٠ دقايق.',
+    back: 'رجوع للمنصات',
+    sectionTeacher: 'المدرّس',
+    sectionTeacherNote: 'الاسم ده هيتكتب مكان اسمك في كل حتة على منصته.',
+    displayName: 'اسم المدرّس زي ما هيظهر للطلبة',
+    displayNameHint: 'مثال: م. محمد حسن',
+    subject: 'المادة',
+    subjectHint: 'المادة اللي هيشرحها — بتظهر في عنوان الموقع ونتايج جوجل، وبتتفتح لكل المسارات والسنين.',
+    subjectChoose: 'اختار المادة',
+    adminName: 'اسمه في حساب الأدمن',
+    adminEmail: 'إيميل الدخول للوحة',
+    adminEmailHint: 'بيدخل بيه على لوحة التحكم. الباسورد بيتعمل لوحده وهيظهرلك مرة واحدة بعد ما المنصة تتعمل.',
+    whatsapp: 'رقم واتساب الطلبة (اختياري)',
+    whatsappHint: 'بالصيغة الدولية من غير مسافات، زي ‎+201000000000‎ — ده اللي بيظهر في الموقع للتواصل.',
+    sectionDomain: 'الدومين',
+    sectionDomainNote: 'دومين أساسي بتاعه هو، مش ساب-دومين تحت دومينك.',
+    appHost: 'دومين الموقع',
+    appHostHint: 'الدومين لوحده من غير أي حاجة قبله ولا بعده.',
+    mediaHost: 'دومين الملفات المرفوعة',
+    mediaHostHint: 'لازم يبقى غير دومين الموقع — بيتملا لوحده بكلمة media قبل دومين الموقع.',
+    key: 'مفتاح المنصة',
+    keyHint: 'حروف إنجليزي صغيرة وأرقام وشرطة. بيتكتب في الإعدادات والسجلات، ومايتغيّرش بعد كده.',
+    sectionFeatures: 'الفيتشرز',
+    sectionFeaturesNote: 'نفس مستند الصلاحيات — بيتوقّع ويتحط في منصته من أول يوم، صالح سنة.',
+    sectionLook: 'شكل الصفحة الرئيسية',
+    sectionLookNote: 'منصته بتطلع بالشكل ده من أول يوم، وهو يقدر يغيّره بعد كده من إعداداته.',
+    lookPreset: 'نسخة الصفحة',
+    lookAccent: 'اللون الأساسي',
+    /** Hints written for a NEW teacher's page — the settings screen's own
+     *  hints describe the owner's live page and mention code. */
+    lookBoardHint: 'بلوكات لون صريحة ورا بعض، الكلام في النص، وتايلات سنين كبيرة.',
+    lookClassicHint: 'شاشة أولى غامقة باسمه، وبعدها كروت الكورسات والسنين.',
+    lookStudioHint: 'صفحة فاتحة، وصورة المدرّس كبيرة من أول الشاشة.',
+    lookNeonHint: 'صفحة غامقة بشكل شاشة كود — لمدرّسين البرمجة بس.',
+    errPresetNeon: '«الترمينال» لمدرّسين البرمجة بس — اختار نسخة تانية',
+    sectionExtras: 'إضافات',
+    shareKeys: 'شغّل المساعد والصوت بمفاتيحي',
+    shareKeysHint: 'مفاتيح الذكاء الاصطناعي بتاعتك بتتنسخ لمنصته، فالمساعد يشتغل من أول يوم — والاستهلاك بيتحسب عليك.',
+    socialsTitle: 'حساباته (اختياري)',
+    youtube: 'يوتيوب',
+    instagram: 'إنستجرام',
+    tiktok: 'تيك توك',
+    facebook: 'فيسبوك',
+    whatsappChannel: 'قناة واتساب',
+    summaryTitle: 'هتتعمل كده',
+    summarySite: 'الموقع',
+    summaryMedia: 'الملفات',
+    summaryKey: 'المفتاح',
+    summaryDatabase: 'الداتابيز',
+    summarySubject: 'المادة',
+    summaryDns: 'الـDNS',
+    summaryDnsAuto: 'تلقائي على كلاودفلير',
+    summaryDnsManual: 'عليك (كلاودفلير مش متوصّل)',
+    summaryEmpty: 'اكتب الدومين وهيبان هنا.',
+    submit: 'اعمل المنصة',
+    submitting: 'بنعمل المنصة…',
+    notOwner: 'الشاشة دي بتشتغل على منصة صاحب السوفتوير بس.',
+    notConnectedNew: 'عمل مدرّس جديد محتاج Dokploy يكون متوصّل بستاكك.',
+
+    // ── Validation ──────────────────────────────────────────────────────
+    errDisplayName: 'اكتب اسم المدرّس',
+    errSubject: 'اختار المادة اللي هيشرحها',
+    errAdminName: 'اكتب الاسم',
+    errEmail: 'الإيميل ده مش مظبوط',
+    errPhone: 'الرقم لازم يبدأ بـ‎+‎ وكود الدولة، من غير صفر بعده — زي ‎+201000000000‎',
+    errHost: 'اكتب الدومين لوحده، من غير https:// ولا /',
+    errSameHost: 'دومين الملفات لازم يبقى غير دومين الموقع',
+    errOwnerHost: 'ده دومينك إنت — المدرّس محتاج دومين بتاعه',
+    errKey: 'حروف إنجليزي صغيرة وأرقام وشرطة بس، من ٢ لـ٣١ حرف',
+    errKeyReserved: 'المفتاح ده محجوز',
+    errKeyTaken: 'فيه منصة تانية بالمفتاح ده',
+    errHostTaken: 'الدومين ده متوصّل بمنصة تانية على Dokploy',
+    errUrl: 'لينك كامل بيبدأ بـhttps://',
+
+    // ── The run ─────────────────────────────────────────────────────────
+    runTitle: 'بنعمل المنصة',
+    steps: {
+      env: 'الإعدادات والأسرار اتولّدت وعدّت من الفحص',
+      project: 'مشروع على Dokploy',
+      compose: 'الستاك اتعمل من نفس الكود ونفس البرانش',
+      environment: 'الإعدادات اتحطّت في الستاك',
+      domains: 'الدومينات اتوصّلت بالستاك',
+      dns: 'الـDNS على كلاودفلير',
+      deploy: 'أول نشر بدأ',
+    },
+    stepSkipped: 'اتعدّت',
+    stepFailed: 'وقعت',
+    /** A re-run found the stack already there and kept its secrets. */
+    stepReused: 'كانت موجودة — سبناها زي ما هي',
+    failedTitle: 'وقفنا في النص',
+    failedHint:
+      'اللي اتعمل اتعمل ومش هيتكرر. صلّح السبب ودوس «اعمل المنصة» تاني بنفس البيانات — هنكمّل من مكان ما وقفنا.',
+    doneTitle: 'المنصة اتعملت',
+    doneLead: 'أول نشر شغّال دلوقتي. الصفحة دي بتتابعه لوحدها.',
+    credentialsTitle: 'بيانات دخول المدرّس',
+    credentialsHint: 'هتظهر هنا مرة واحدة بس. ابعتهاله وقوله يغيّر الباسورد أول ما يدخل.',
+    loginAt: 'يدخل من',
+    /**
+     * The hand-over message, ready to paste. `{url}` `{login}` `{email}`
+     * `{password}`. Neutral wording on purpose — the teacher may be a woman,
+     * so no masculine imperative («ادخل»، «غيّر»).
+     */
+    handoverMessage:
+      'أهلًا! المنصة بتاعتك جاهزة: {url}\n' +
+      'الدخول للوحة التحكم: {login}\n' +
+      'الإيميل: {email}\n' +
+      'الباسورد: {password}\n' +
+      'لازم الباسورد يتغيّر بعد أول دخول.',
+    copyMessage: 'انسخ رسالة للمدرّس',
+    sendWhatsapp: 'ابعتها واتساب',
+    email: 'الإيميل',
+    password: 'الباسورد',
+    nextTitle: 'الباقي عليك',
+    nextNameservers:
+      'الدومين اتضاف لحساب كلاودفلير بتاعك. غيّر الـNameservers عند شركة الدومين للاتنين دول — من غيرها الموقع مش هيفتح:',
+    nextDnsManual: 'كلاودفلير مش متوصّل، فالـDNS عليك: سجلين A متبرتقنين (Proxied) للدومينين دول على IP السيرفر.',
+    nextDnsConflict: 'فيه سجل DNS موجود قبل كده على الاسم ده بقيمة تانية — ماغيّرناهوش. راجعه بإيدك:',
+    nextWebhook: 'ضيف لينك النشر ده في DOKPLOY_TENANT_DEPLOY_URLS على GitHub، عشان منصته تتحدّث مع كل نشرة:',
+    nextBackups: 'فعّل النسخ الاحتياطي من تبويب Backups في Dokploy على باكِت R2 لوحده (مش prefix في باكِت مشترك).',
+    nextWhatsapp: 'المدرّس يربط رقم الواتساب من لوحته: الإعدادات ← واتساب.',
+    nextFinalize: 'بعد ما يدخل ويغيّر الباسورد، ارجع لشاشة المنصات ودوس «إنهاء الإعداد».',
+    watchTitle: 'أول نشر',
+    watchRunning: 'بيتبني دلوقتي…',
+    watchDone: 'النشر خلص',
+    watchError: 'النشر وقع — افتح تبويب Deployments في Dokploy عشان تشوف السبب.',
+    watchLive: 'الموقع بيرد',
+    watchNotYet: 'الموقع لسه مابيردش — طبيعي لحد ما الـDNS والشهادة يخلصوا.',
   },
   navigation: {
     title: 'القوائم',

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ChevronLeft, Loader2, Search, Wallet } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
-import type { AdminWalletSearchRow } from '@ayman/contracts/admin/wallet';
+import type { AdminWalletListFilter, AdminWalletSearchRow } from '@ayman/contracts/admin/wallet';
 import { cn } from '@ayman/ui/lib/cn';
 import { formatEGPExact } from '@/lib/price';
 import { searchWalletsAction } from './actions';
@@ -38,6 +38,21 @@ export function WalletFinder({ initial }: { initial: readonly AdminWalletSearchR
   // The answer AND the query it answers — so a slow reply for «مح» is simply
   // not the answer for «محمد», and nothing has to be reset from an effect.
   const [results, setResults] = useState<{ q: string; rows: readonly AdminWalletSearchRow[] } | null>(null);
+  /*
+   * The list under an empty search: everyone holding money (the server's
+   * first paint), or the last wallets to move, fetched the first time it is
+   * asked for and kept.
+   */
+  const [filter, setFilter] = useState<AdminWalletListFilter>('funded');
+  const [recent, setRecent] = useState<readonly AdminWalletSearchRow[] | null>(null);
+
+  function pickFilter(next: AdminWalletListFilter) {
+    setFilter(next);
+    if (next === 'recent' && recent === null) {
+      void searchWalletsAction('', 'recent').then((result) => setRecent(result?.rows ?? []));
+    }
+  }
+  const listed = filter === 'funded' ? initial : (recent ?? []);
   const seq = useRef(0);
   const query = q.trim();
 
@@ -54,8 +69,8 @@ export function WalletFinder({ initial }: { initial: readonly AdminWalletSearchR
   }, [query]);
 
   const answered = results !== null && results.q === query;
-  const rows = query.length < 2 ? initial : answered ? results.rows : (results?.rows ?? initial);
-  const loading = query.length >= 2 && !answered;
+  const rows = query.length < 2 ? listed : answered ? results.rows : (results?.rows ?? listed);
+  const loading = (query.length >= 2 && !answered) || (query.length < 2 && filter === 'recent' && recent === null);
 
   const searching = query.length >= 2;
 
@@ -91,13 +106,39 @@ export function WalletFinder({ initial }: { initial: readonly AdminWalletSearchR
         </span>
       </label>
 
-      <h2 className="mt-5 text-[length:var(--fs-text-base)] font-semibold text-fg">
-        {searching ? c.resultsTitle : c.recentTitle}
+      {searching ? null : (
+        <div role="group" aria-label={c.recentTitle} className="mt-5 flex flex-wrap gap-2">
+          {(['funded', 'recent'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={filter === value}
+              onClick={() => pickFilter(value)}
+              className={cn(
+                'h-9 rounded-full px-4 text-[length:var(--fs-text-sm)] font-semibold transition-colors duration-[160ms]',
+                filter === value
+                  ? 'bg-[color:var(--viz-6)] text-[color:var(--n-1)]'
+                  : 'border border-[color-mix(in_oklab,var(--viz-6)_35%,var(--border))] bg-surface-1 text-fg hover:border-[color:var(--viz-6)]',
+              )}
+            >
+              {value === 'funded' ? c.filterFunded : c.filterRecent}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <h2 className="mt-4 text-[length:var(--fs-text-base)] font-semibold text-fg">
+        {searching ? c.resultsTitle : filter === 'funded' ? c.fundedTitle : c.recentTitle}
+        {!searching && !loading ? (
+          <span className="ms-2 text-[length:var(--fs-text-sm)] font-normal tabular-nums text-fg-muted">
+            ({rows.length})
+          </span>
+        ) : null}
       </h2>
 
       {rows.length === 0 ? (
         <p className="mt-3 rounded-lg border border-dashed border-line p-6 text-center text-fg-muted">
-          {searching ? c.noResults : c.emptyRecent}
+          {loading ? c.searching : searching ? c.noResults : filter === 'funded' ? c.emptyFunded : c.emptyRecent}
         </p>
       ) : (
         <ul className="mt-3 grid gap-2.5 md:grid-cols-2">

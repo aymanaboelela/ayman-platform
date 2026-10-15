@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { EXAM_LIVE_COUNTDOWN_SECONDS, EXAM_SHELF_TITLE, examPhase } from './scheduled';
+import {
+  EXAM_LIVE_COUNTDOWN_SECONDS,
+  EXAM_SHELF_TITLE,
+  examDeadline,
+  examKeptOpen,
+  examPhase,
+} from './scheduled';
 
 /**
  * `examPhase` is the dashboard's answer to «الامتحان فاتح ولا لأ», and
@@ -135,5 +141,27 @@ describe('constants', () => {
     // path, the public catalogue, the section-rename guard and the coverage
     // picker. A stray space here silently un-hides every exam.
     expect(EXAM_SHELF_TITLE).toBe('امتحانات الشهر');
+  });
+});
+
+describe('examDeadline / examKeptOpen — «يفضل متاح جوه الكورس بعد الميعاد»', () => {
+  const deadline = new Date('2026-10-12T17:00:00.000Z');
+
+  it('reads the on-time deadline from whichever column holds it', () => {
+    expect(examDeadline(deadline, null)).toEqual(deadline);
+    expect(examDeadline(null, deadline)).toEqual(deadline);
+    expect(examDeadline(null, null)).toBeNull();
+  });
+
+  it('is kept open only when the engine has no close and the deadline lives in lateAfter', () => {
+    expect(examKeptOpen(null, deadline)).toBe(true);
+    expect(examKeptOpen(deadline, deadline)).toBe(false);
+    expect(examKeptOpen(deadline, null)).toBe(false);
+    expect(examKeptOpen(null, null)).toBe(false);
+  });
+
+  it('phases a kept-open exam closed past its deadline, so the dashboard lets go', () => {
+    const after = new Date(deadline.getTime() + 1);
+    expect(examPhase(null, examDeadline(null, deadline), after)).toBe('closed');
   });
 });

@@ -82,6 +82,19 @@ export interface YouTubeApiPlayer extends YouTubePlayer {
   getOptions?(): string[];
   loadModule?(module: 'captions'): void;
   unloadModule?(module: 'captions'): void;
+  /**
+   * Quality. `setPlaybackQuality` alone is a hint YouTube ignores since 2019;
+   * `setPlaybackQualityRange(q, q)` is the undocumented call that pins it —
+   * measured on the live player, 2026-10-06 (small → large → hd720, each
+   * read back by `getPlaybackQuality`). Pinning is one-way: asking for the
+   * full range again did NOT hand the choice back to YouTube, so the menu
+   * offers fixed levels only and no «تلقائي».
+   *
+   * Optional for the same reason captions are: undocumented, can vanish.
+   */
+  getAvailableQualityLevels?(): string[];
+  getPlaybackQuality?(): string;
+  setPlaybackQualityRange?(min: string, max: string): void;
 }
 
 /**

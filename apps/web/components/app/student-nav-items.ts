@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { aymanOnly } from '@/lib/tenant';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
 
 export interface StudentNavItem {
   href: string;
@@ -106,7 +107,13 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * phone it lives in «حاجات تانية».
    */
   { href: '/wallet', labelAr: copy.nav.wallet, icon: Wallet },
-  { href: '/foundations', labelAr: copy.nav.essentials, icon: Sprout },
+  /*
+   * «التأسيس» and «تجربة الكود» (below) are the two programming tools, and
+   * both routes 404 on a stack whose subject is not code — so neither row
+   * exists there. Spread in place rather than filtered afterwards, so the
+   * rail's ORDER on a programming stack is exactly what it was.
+   */
+  ...(TEACHES_CODE ? [{ href: '/foundations', labelAr: copy.nav.essentials, icon: Sprout }] : []),
   /*
    * `/store`, NOT `/books`, and the difference is the whole point of the
    * route.
@@ -126,7 +133,7 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
    * two book icons in one rail is a rail nobody can scan.
    */
   { href: '/store', labelAr: copy.nav.books, icon: BookOpen },
-  { href: '/playground', labelAr: copy.nav.playground, icon: Terminal },
+  ...(TEACHES_CODE ? [{ href: '/playground', labelAr: copy.nav.playground, icon: Terminal }] : []),
   { href: '/profile', labelAr: copy.nav.profile, icon: UserRound, footer: true },
   { href: '/settings/devices', labelAr: copy.nav.devices, icon: MonitorSmartphone, footer: true },
 ] as const;

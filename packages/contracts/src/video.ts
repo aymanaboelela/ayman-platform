@@ -400,9 +400,28 @@ export function mirrorPrefix(externalId: string): string {
  * read back from the database, so a tampered key cannot redirect a student
  * anywhere.
  */
-export function mirrorPlaylistUrl(baseUrl: string, externalId: string): string {
+export function mirrorPlaylistUrl(baseUrl: string, externalId: string, ladderRev = 1): string {
   const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-  return `${base}/${mirrorPrefix(externalId)}/master.m3u8?l=${MIRROR_LADDER_VERSION}`;
+  // `rev` is per lecture (`lesson_videos.ladder_rev`): the worker bumps it when
+  // it rewrites THAT lecture's master. Revision 1 adds nothing, so a lecture
+  // nobody has touched keeps the URL its viewers already have cached.
+  const rev = ladderRev > 1 ? `&r=${ladderRev}` : '';
+  return `${base}/${mirrorPrefix(externalId)}/master.m3u8?l=${MIRROR_LADDER_VERSION}${rev}`;
+}
+
+/**
+ * The frame the encoder cut (`poster.jpg`), from the playlist URL beside it.
+ *
+ * ⚠️ The query has to go. `mirrorPlaylistUrl` always appends `?l=…` (and
+ * `&r=…` once a ladder is rewritten), and both call sites used to do
+ * `replace(/master\.m3u8$/, …)` — which never matches a URL ending in a query,
+ * so the "poster" was the playlist itself, the `<img>` failed, and every
+ * uploaded lecture showed a black box (2026-10-11, Adel's stack). The specs
+ * mocked a URL with no query, so they stayed green the whole time.
+ */
+export function posterBesidePlaylist(playlistUrl: string): string | null {
+  const match = /^(.*\/)master\.m3u8(?:[?#].*)?$/.exec(playlistUrl);
+  return match ? `${match[1]}poster.jpg` : null;
 }
 
 /**
@@ -415,8 +434,16 @@ export function mirrorPlaylistUrl(baseUrl: string, externalId: string): string {
  * that already holds the old master. A new query string is a new cache key
  * for both, so each one fetches the new master once, and the segments under it
  * (which did not change) stay cached.
+ *
+ * 3 (2026-10-11): not a ladder change — a cache one. Until #638 the admin
+ * preview loaded `master.m3u8?l=2` as an `<img>`, a no-CORS request, and the
+ * browser kept that copy, with no `Access-Control-Allow-Origin`, `immutable`
+ * for a year. Every later hls.js fetch of the same URL reused it and failed
+ * `ERR_FAILED` — on every lecture, in the browser of everyone who had opened
+ * a preview (the instructor and his assistants first). The edge is fixed by a
+ * Cloudflare rule; only a new URL reaches a browser's own cache.
  */
-export const MIRROR_LADDER_VERSION = 2;
+export const MIRROR_LADDER_VERSION = 3;
 
 /**
  * The poster frame a transcode writes beside the ladder.

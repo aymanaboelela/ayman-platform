@@ -6,11 +6,37 @@ import {
   driveEmbedUrl,
   extractDriveFileId,
   extractYouTubeId,
+  mirrorPlaylistUrl,
+  mirrorPosterUrl,
+  posterBesidePlaylist,
   youTubeEmbedUrl,
   youTubeThumbnailUrl,
 } from './video';
 
 const ID = 'dQw4w9WgXcQ'; // exactly 11 chars
+
+describe('posterBesidePlaylist', () => {
+  const UPLOAD = '0123456789abcdef0123456789abcdef';
+  // The same frame the API's own builder names — the two must never drift.
+  const POSTER = mirrorPosterUrl('https://video.example.com', UPLOAD);
+
+  // Built by the real builder, so a new query parameter there cannot slip past.
+  it.each([
+    ['first ladder', mirrorPlaylistUrl('https://video.example.com', UPLOAD)],
+    ['rewritten ladder', mirrorPlaylistUrl('https://video.example.com/', UPLOAD, 3)],
+  ])('drops the query from a %s playlist', (_label, playlist) => {
+    expect(playlist).toContain('?');
+    expect(posterBesidePlaylist(playlist)).toBe(POSTER);
+  });
+
+  it('still reads a bare playlist URL', () => {
+    expect(posterBesidePlaylist(`https://video.example.com/v/${UPLOAD}/master.m3u8`)).toBe(POSTER);
+  });
+
+  it('refuses anything that is not a master playlist rather than guess', () => {
+    expect(posterBesidePlaylist(`https://video.example.com/v/${UPLOAD}/0/index.m3u8`)).toBeNull();
+  });
+});
 
 describe('extractYouTubeId — accepted forms', () => {
   it.each([

@@ -14,6 +14,7 @@ import { JS_RUNNER_CSP, JS_RUNNER_PATH } from './lib/js-runner';
 import { PREPAINT_SCRIPT } from './lib/security/prepaint-script';
 import { stampPathname } from './lib/request-pathname';
 import { safeNext } from './lib/safe-next';
+import { TEACHES_CODE, isProgrammingOnlyRoute } from './lib/tenant-subject';
 
 /**
  * `proxy.ts`, not `middleware.ts` — the latter is deprecated in Next 16
@@ -615,7 +616,12 @@ function sharedCspDirectives(dev: boolean): string[] {
     // `VIDEO_ORIGIN`: the frame the encoder cuts for every uploaded lecture
     // (`v/<id>/poster.jpg`, beside the ladder) — the admin's lecture preview
     // shows it before the player loads.
-    `img-src 'self' blob: data: https://i.ytimg.com https://c.clarity.ms https://c.bing.com ${MEDIA_ORIGIN} ${VIDEO_ORIGIN}`.trimEnd(),
+    // `www.youtube.com`: its icon is one half of the player's «is YouTube
+    // reachable at all» probe (`components/player/youtube-reach.ts`) — the
+    // ministry tablet blocks the whole host, and an image is the one request
+    // that needs nothing but the network to answer. Without it the probe
+    // reads every network as blocked.
+    `img-src 'self' blob: data: https://i.ytimg.com https://c.clarity.ms https://c.bing.com https://www.youtube.com ${MEDIA_ORIGIN} ${VIDEO_ORIGIN}`.trimEnd(),
     "font-src 'self'",
     // Same reasoning for uploaded audio/video served from the media origin.
     //
@@ -1177,6 +1183,24 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // Before the auth round trip: the playground is not a protected route, it
   // is a route that must not exist here at all. See `isDevOnlyRoute`.
   if (!DEV && isDevOnlyRoute(request.nextUrl.pathname)) {
+    const response = new NextResponse(null, { status: 404 });
+    applyBaseSecurityHeaders(response.headers, DEV);
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    return response;
+  }
+
+  /*
+   * The same answer for the programming tools on a stack whose subject is not
+   * code — `/playground`, `/foundations`, `/essentials`. They are in no menu,
+   * no footer and no sitemap there, but `/playground` and `/foundations` are
+   * PROTECTED, so without this an anonymous visitor who typed one was sent to
+   * sign in — and after signing in, to a 404. A route that does not exist on
+   * this stack answers 404 to everybody, first. Each page also calls
+   * `notFound()` itself; this is the layer in front of it, not instead of it.
+   * `TEACHES_CODE` is a build-time constant, so this is one boolean on every
+   * request to Ayman's stack and never reaches the path test.
+   */
+  if (!TEACHES_CODE && isProgrammingOnlyRoute(request.nextUrl.pathname)) {
     const response = new NextResponse(null, { status: 404 });
     applyBaseSecurityHeaders(response.headers, DEV);
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');

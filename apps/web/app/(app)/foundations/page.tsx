@@ -1,15 +1,18 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { copy } from '@ayman/contracts';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { foundationCourses } from '@/lib/foundation-courses';
 import { CourseArt } from '@/components/course-art';
 import { formatDuration } from '@/lib/format';
 import { ESSENTIAL_TERMS } from '@/lib/essentials-terms';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
 
 const e = copy.essentials;
 
-export const metadata: Metadata = { title: e.appTitle };
+// No title where the page is a 404 — see `PlaygroundPage` for the same call.
+export const metadata: Metadata = TEACHES_CODE ? { title: e.appTitle } : {};
 
 /**
  * The twelve terms, inside the student shell.
@@ -34,6 +37,14 @@ export const metadata: Metadata = { title: e.appTitle };
  * nobody a scroll.
  */
 export default async function FoundationsPage() {
+  /*
+   * Twelve programming terms — «متغيّر», «دالة», «Input / Output» — and the
+   * programming foundation course. Neither exists on a stack that teaches
+   * another subject; `proxy.ts` 404s the path first, this is the page's own
+   * copy of that answer.
+   */
+  if (!TEACHES_CODE) notFound();
+
   /*
    * The same selection the public page makes — see `lib/foundation-courses.ts`.
    * `getCatalogOrEmpty` rather than `getCatalog` for the reason that file gives:

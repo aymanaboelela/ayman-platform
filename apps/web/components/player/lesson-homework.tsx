@@ -12,12 +12,26 @@ import { formatCopy } from '@ayman/contracts/format';
 import type { MyHomeworkSubmission, StudentHomework } from '@ayman/contracts/homework';
 import { Button } from '@ayman/ui/components/button';
 import { cn } from '@ayman/ui/lib/cn';
-import { uploadHomeworkImage } from '@/lib/upload-client';
+import { uploadHomeworkImage, type UploadFailure } from '@/lib/upload-client';
 import { tenantSentence } from '@/lib/tenant-copy';
 import { actionErrorMessage, isStaleActionError } from '@/lib/stale-tab';
 import { submitHomeworkAction } from '@/app/(app)/courses/[slug]/lessons/[lessonId]/homework-actions';
 
 const c = copy.homework;
+
+/**
+ * Every way an upload can fail → what the student reads. A `Record` over the
+ * closed union, so a reason added to `UploadFailure` stops compiling here
+ * instead of quietly borrowing another reason's sentence — which is exactly
+ * how «unreadable» ended up saying «ده مش ملف صورة».
+ */
+const UPLOAD_ERROR: Record<UploadFailure, string> = {
+  tooLarge: c.tooLarge,
+  badType: c.badType,
+  unreadable: c.unreadable,
+  network: c.network,
+  failed: c.uploadFailed,
+};
 
 /** One page the student has picked but not yet handed in. */
 interface StagedPage {
@@ -111,16 +125,11 @@ export function LessonHomework({
     for (const file of chosen) {
       const result = await uploadHomeworkImage(lessonId, file);
       if (!result.ok) {
-        // One message per thing that can actually go wrong, rather than a
-        // generic failure: «الصورة كبيرة» and «ده مش ملف صورة» need different
-        // actions from the student, and only one of them is worth retrying.
-        setError(
-          result.reason === 'tooLarge'
-            ? c.tooLarge
-            : result.reason === 'badType' || result.reason === 'unreadable'
-              ? c.badType
-              : c.uploadFailed,
-        );
+        // One message per thing that can actually go wrong. «unreadable» used
+        // to share «ده مش ملف صورة» with «badType» — and «unreadable» is what
+        // every iPhone HEIC came back as, so a student holding a photo of her
+        // homework was told it was not a photo. See `UPLOAD_ERROR` below.
+        setError(UPLOAD_ERROR[result.reason]);
         break;
       }
       setStaged((current) => [
@@ -266,6 +275,14 @@ export function LessonHomework({
             ) : null}
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
+              {/*
+                `image/*` and NOT `image/*,.heic,.heif`, on purpose. iOS turns a
+                HEIC into a JPEG on the way out of the picker only while the
+                page has not said it accepts HEIC; naming it switches that off
+                and sends the raw HEIC instead — more work for the server, for
+                no gain. Android already lists HEIC under `image/*`, and the
+                API now converts one either way (`heif-transcode.ts`).
+              */}
               <input
                 ref={fileInput}
                 type="file"

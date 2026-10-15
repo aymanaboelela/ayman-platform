@@ -1,4 +1,5 @@
 import type { CatalogCourse, CatalogCourseDetail } from '@ayman/contracts/catalog';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
 
 /**
  * WebMCP tool definitions — the actions an in-browser agent may take on this
@@ -81,8 +82,12 @@ export function buildWebMcpTools(): WebMcpTool[] {
   return [
     {
       name: 'search_courses',
-      description:
-        'Search the published course catalog of this Egyptian Bakalorya computer-science platform by keyword and/or school year. Returns course titles, subjects and their URLs on this site.',
+      // A stack that does not teach programming is not «a computer-science
+      // platform»; it is described by what it is for, and the catalog names the
+      // subject on every course it returns.
+      description: TEACHES_CODE
+        ? 'Search the published course catalog of this Egyptian Bakalorya computer-science platform by keyword and/or school year. Returns course titles, subjects and their URLs on this site.'
+        : 'Search the published course catalog of this Egyptian secondary-school platform by keyword and/or school year. Returns course titles, subjects and their URLs on this site.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -93,7 +98,9 @@ export function buildWebMcpTools(): WebMcpTool[] {
           year: {
             type: 'integer',
             enum: [1, 2, 3],
-            description: 'Bakalorya school year (1, 2 or 3). Omit for all years.',
+            description: TEACHES_CODE
+              ? 'Bakalorya school year (1, 2 or 3). Omit for all years.'
+              : 'Secondary-school year (1, 2 or 3). Omit for all years.',
           },
         },
       },

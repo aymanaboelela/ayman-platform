@@ -3813,6 +3813,21 @@
        measure too narrow for Arabic display type. */
     grid-template-columns: 1.15fr 1fr;
   }
+
+  /* No stage at all — a stack that does not teach code has no code panel, and
+     until a portrait is uploaded there is nothing else to stand there
+     (`studio-hero.tsx`). One column, so the copy does not sit beside an empty
+     one. Never emitted on a programming stack, where the panel is always on
+     the stage. */
+  [data-preset='studio'] .st-hero[data-stage-empty] .st-hero__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* …and the stage itself goes, at every width, rather than holding an empty
+   flex column under the copy on a phone. */
+[data-preset='studio'] .st-hero[data-stage-empty] .st-hero__stage {
+  display: none;
 }
 
 [data-preset='studio'] .st-hero__copy {

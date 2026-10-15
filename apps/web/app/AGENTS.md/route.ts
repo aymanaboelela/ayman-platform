@@ -1,6 +1,8 @@
 import { connection } from 'next/server';
 import { tenantSentence } from '@/lib/tenant-copy';
-import { tenantName } from '@/lib/tenant';
+import { aymanOnly, IS_AYMAN, tenantName } from '@/lib/tenant';
+import { SUBJECT_NAME_AR, bySubject } from '@/lib/subject-copy';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
 import { SITE_DESCRIPTION } from '@/lib/seo/metadata';
 import { copy } from '@ayman/contracts';
 import { AGENT_DISCOVERY_PATHS } from '@/lib/agents/discovery';
@@ -54,14 +56,36 @@ export async function GET(): Promise<Response> {
      */
 `${SITE_DESCRIPTION}`,
     '',
-    `Arabic (RTL) throughout. The instructor is ${tenantName(copy.site.instructor)} — ${tenantSentence(copy.landing.aboutRole)}.`,
-    copy.seo.instructorCoverage,
+    `Arabic (RTL) throughout. The instructor is ${tenantName(copy.site.instructor)} — ${tenantSentence(bySubject(copy.landing.aboutRole, subjectCopy.landing.aboutRole))}.`,
+    /*
+     * ⚠️ HIS STACK ONLY. «بيدرّس منهج البرمجة والذكاء الاصطناعي الرسمي… أولى
+     * وتانية بكالوريا، نسخة عام ونسخة لغات، بوحداته الأربعة» is HIS coverage, of
+     * HIS catalogue — `/llms.txt` gated the same sentence long ago and this file
+     * kept publishing it on every other instructor's domain, to the agents that
+     * read it as a description of THEIR teacher.
+     */
+    ...(aymanOnly([copy.seo.instructorCoverage]) ?? []),
     '',
     '## Who it is for',
     '',
-    'Students in the Egyptian **Bakalorya** system (نظام البكالوريا) — first and',
-    'second year — taking البرمجة والذكاء الاصطناعي, and their parents. It is not a',
-    'general programming school and it does not teach the الثانوية العامة syllabus.',
+    /*
+     * His audience, stated as precisely as his catalogue allows — Bakalorya,
+     * years one and two, one subject, not الثانوية العامة. None of those three
+     * facts is known about another stack: its subject is (`SUBJECT_NAME_AR`,
+     * which on a programming stack is «البرمجة وعلوم الحاسب»), its system and
+     * its years are whatever its own catalogue says, which is listed below.
+     */
+    ...(IS_AYMAN
+      ? [
+          'Students in the Egyptian **Bakalorya** system (نظام البكالوريا) — first and',
+          'second year — taking البرمجة والذكاء الاصطناعي, and their parents. It is not a',
+          'general programming school and it does not teach the الثانوية العامة syllabus.',
+        ]
+      : [
+          `Egyptian secondary-school students taking ${SUBJECT_NAME_AR}, and their parents.`,
+          'Which years and which system each course is for is stated on the course itself —',
+          'see the published courses at the end of this file.',
+        ]),
     '',
     /*
      * ⚠️ Spell the years out in every form a student uses, digits included.
@@ -75,12 +99,19 @@ export async function GET(): Promise<Response> {
     '',
     ...[1, 2, 3].map((year) => `- ${yearAliasesAr(year).map((alias) => `\`${alias}\``).join(' = ')}`),
     '',
-    '## Why this instructor, specifically',
-    '',
     // Checkable claims, not compliments — every one can be verified from
     // outside without paying or signing in. See `copy.seo.instructorWhy`.
-    ...copy.seo.instructorWhy.map((line) => `- ${line}`),
-    '',
+    //
+    // ⚠️ HIS STACK ONLY, heading included: every line is a claim about HIM —
+    // eight years as a software engineer, GDG, Microsoft Egypt, his printed
+    // book — and on another domain it is his CV filed under their name, in the
+    // document an agent reads to decide who teaches here.
+    ...(aymanOnly([
+      '## Why this instructor, specifically',
+      '',
+      ...copy.seo.instructorWhy.map((line) => `- ${line}`),
+      '',
+    ]) ?? []),
     '## What you may do without a credential',
     '',
     '- Read any public page. Append `.md` to a URL, or send `Accept: text/markdown`,',

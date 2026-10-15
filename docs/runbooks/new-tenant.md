@@ -20,6 +20,54 @@
 
 ---
 
+## 0. The fast path — «مدرّس جديد» on `/admin/platforms/new`
+
+Sections 1–7 below are what the control plane now does by itself. They stay
+as the reference for what each value means and as the fallback when Dokploy
+is not connected.
+
+**What the form does, in order** (`apps/web/lib/provisioning/provision.ts`):
+generates every secret and the whole env file (same keys as
+`deploy/tenant.env.example`), runs `check-tenant-env.mjs --first-deploy` over
+it and refuses on any error, signs the entitlements document, creates a
+Dokploy project + compose that clones the owner compose's git source, writes
+the environment (including the landing look picked on the form — `TENANT_LANDING_PRESET` / `TENANT_ACCENT`, seeded into the stack's branding once, on its first boot), copies the owner's routing onto the new hosts (`/api` → api,
+`/` → web, `/media` → api), writes the DNS on Cloudflare, and starts the first
+deploy. Pressing the button again with the same form **resumes** — a stack
+that already has an environment is never regenerated (its Postgres was
+initialised with that password).
+
+**On the owner's stack only** (runtime, a restart is enough):
+
+| Variable | What |
+|---|---|
+| `CONTROL_PLANE_DOKPLOY_KEY` | A Dokploy API key. **Create it in the panel** (Settings → Profile → API/CLI): keys made through the API get a 10-requests-a-day limit that fails as 401. The key can read every stack's env — `check-tenant-env.mjs` refuses it on a teacher's stack. |
+| `CONTROL_PLANE_DOKPLOY_URL` | Optional. Default `http://dokploy:3000` (the panel on `dokploy-network`; the public panel host is behind a Cloudflare challenge). |
+| `CONTROL_PLANE_DOKPLOY_TEMPLATE` | Optional composeId to clone. Default: the compose whose `APP_URL` is the owner's own. |
+| `CONTROL_PLANE_DOKPLOY_PUBLIC_URL` | Optional. Public panel origin for the CI webhook line. Default `https://panel.<owner apex>`. |
+| `CONTROL_PLANE_CF_TOKEN` | Already there for the video bill. For DNS it also needs **Zone → DNS: Edit**, **Zone → Zone Settings: Edit** and **Zone → Zone: Edit** (to add a new teacher's zone) on all zones. Without them the run still deploys and lists the two records to add by hand. |
+| `CONTROL_PLANE_SERVER_IP` | Optional. Default: the owner's apex A record. |
+
+**Still by hand, and the run screen lists each one:**
+
+1. **Nameservers** — a zone the run had to create is `pending` until the
+   registrar points at the two Cloudflare nameservers it prints.
+2. **The CI webhook** — only for a stack Dokploy does not rebuild on push by
+   itself (a GitHub-App source with `autoDeploy` does, and must NOT also be in
+   `DOKPLOY_TENANT_DEPLOY_URLS`: every merge would build twice on four cores).
+3. **Backups** (§5) and **WhatsApp pairing** (§4, the teacher does it).
+4. **«إنهاء الإعداد»** on the teacher's card once they have signed in and
+   changed the password: clears `ADMIN_EMAIL`/`ADMIN_PASSWORD` (§9) and moves
+   the zones to `strict` TLS + HTTPS-only. The run sets new zones to `full`
+   first, because strict before the origin has a certificate is a 526 on the
+   very Let's Encrypt challenge that would issue it.
+
+The maintenance page (§7) needs nothing per teacher any more: its router
+catches every host with no healthy stack behind it. Re-run
+`deploy/maintenance/install.sh` once on the server to pick that up.
+
+---
+
 ## ١. الدومينات
 
 كل مدرّس محتاج **دومينين**:
@@ -229,6 +277,47 @@ Dokploy بيستخدم نفس متغيرات الستاك في الـinterpolati
 
 ---
 
+## 6.5.1 The subject — `TENANT_SUBJECT`
+
+The subject this instructor teaches: one slug from
+[`packages/contracts/src/subjects.ts`](../../packages/contracts/src/subjects.ts)
+(`physics`, `chemistry`, `mathematics`, `arabic`, …). **Empty means
+`programming_cs`**, which is what every stack taught before the variable
+existed, so the first three stacks (Ayman, Sabry, Adel) set nothing and change
+nothing. Ayman's stack is programming whatever the variable says.
+
+On a stack whose subject is not programming it changes:
+
+- **The words.** The subject line under every wordmark, the `<title>` and meta
+  descriptions, the JSON-LD (`jobTitle`, `knowsAbout`, `slogan`), the `/courses`,
+  `/news`, `/about`, `/links` and course-page descriptions, the footer,
+  `/llms.txt`, `/AGENTS.md`, the AI catalog's example queries and the markdown
+  twins all name the stack's subject instead of «البرمجة وعلوم الحاسب». The
+  neutral sentences live in `packages/contracts/src/copy/subject.ts`.
+- **The programming tools.** `/playground`, `/foundations` and `/essentials`
+  answer 404 (in `proxy.ts` and in each page), and leave the student rail, the
+  link hub and the agent files. The landing page's `yearTracks` block draws three
+  plain year cards instead of code windows; the studio preset drops its Python
+  panel; the «الترمينال» (`neon`) preset is not offered (a stored one renders
+  `classic`); the demo programming courses never fill an empty catalogue.
+- **The assistant.** Its scope and its refusal rule name the subject (a physics
+  question is answered, not refused), and the playground/glossary answers and
+  buttons are gone.
+- **The seed.** Every boot opens the subject for every track, years 2–3, in both
+  systems — so the admin course form can create a course anywhere. Without it a
+  physics teacher could not create a single الثانوية العامة course.
+- **Onboarding.** Students choose their system, year (1–3) and track, instead of
+  being filed as second-year Bakalorya engineering students studying
+  programming.
+
+It is read at **build time** by the web (`next.config.ts` → `env`, and a
+Dockerfile build arg that is also in the build layer's cache key), so changing it
+is a **rebuild, not a restart**. The API reads it at boot. The preflight
+(`node scripts/check-tenant-env.mjs`) refuses a slug it does not know; a
+programming tool on a mistyped stack is the failure it exists to stop.
+
+---
+
 ## ٦٫٦ مستند الصلاحيات — `TENANT_ENTITLEMENTS`
 
 المتغيّر ده بيقول للستاك **إيه الفيتشرز اللي مسموح له يشغّلها**. مستند موقّع
@@ -302,9 +391,11 @@ Restart، مش Rebuild):
 شائعة، لأن دي كلها حاجات مش صح على منصة لسه نازلة. الصفحة الحقيقية بيركّبها
 هو من `/admin/home`.
 
-**صفحة الصيانة:** ضيف `|| Host(\`الدومين\`)` في `deploy/maintenance/traefik.yml`
-وشغّل `deploy/maintenance/install.sh` على السيرفر. من غيرها، كل نشر بيطلّع
-للطالب «404 page not found» بتاعة Traefik دقيقة أو اتنين.
+**Maintenance page:** nothing to add per teacher. `deploy/maintenance/traefik.yml`
+now catches every host at priority 1, so any domain with no healthy stack
+behind it gets «بنحدّث المنصة» instead of Traefik's bare 404 during a deploy.
+It only needs `deploy/maintenance/install.sh` re-run on the server whenever
+that file changes.
 
 ---
 

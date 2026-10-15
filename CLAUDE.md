@@ -1,267 +1,301 @@
 # CLAUDE.md
 
-اقرا الملف ده الأول. `README.md` بيقولك تشغّل المشروع إزاي؛ ده بيقولك **إيه اللي
-بيكسر لو ما عرفتوش**.
+Read this file first. `README.md` tells you how to run the project; this file
+tells you **what breaks if you don't know it**. The full agent guide is
+[`AGENTS.md`](AGENTS.md) plus [`docs/agents/`](docs/agents/).
+
+**Language:** the owner writes prompts in Arabic. **Reply, write docs, comments,
+commit messages and PRs in English.** Only user-facing product copy stays in
+Egyptian Arabic (see §7).
+
+Section numbers are stable: code comments cite them (`CLAUDE.md §2`, `§7`, …).
+Don't renumber.
 
 ---
 
-## ١. المنصة دي شغّالة، بفلوس حقيقية
+## 1. This platform is live, with real money
 
-منصة م. أيمن أبو العلا — البرمجة وعلوم الحاسب، البكالوريا المصرية. عليها طلبة
-بيدفعوا اشتراكات وبيطلبوا كتب، والموقع اللايف هو
-[aymanaboelela.com](https://aymanaboelela.com).
+The platform of Eng. Ayman Abo El Ela: programming and computer science for the
+Egyptian Baccalaureate. Students pay for subscriptions and order books, and the
+live site is [aymanaboelela.com](https://aymanaboelela.com).
 
-**يعني:**
+**That means:**
 
-- متعملش حاجة على البرودكشن من غير ما تتطلب منك بالنص.
-- أي تغيير في `docker-compose.yml` أو `apps/api/docker-entrypoint.sh` بيتنفّذ على
-  داتابيزه الحقيقية عند أول deploy. اتأكد بـ
-  `git diff origin/main...HEAD --name-only` إن الملفين دول مش في التغيير، ولو
-  فيهم قول كده صريح.
-- «شغّالة» مش معناها «مظبوطة». المراجعات الجاية بلاش تفترض إن اللي شغّال صح.
+- Do nothing against production unless explicitly asked in words.
+- Any change to `docker-compose.yml` or `apps/api/docker-entrypoint.sh` executes
+  against the real database on the next deploy. Check with
+  `git diff origin/main...HEAD --name-only` that neither file is in your change,
+  and if one is, say so explicitly.
+- "Working" doesn't mean "correct". Future reviews should not assume that what
+  works is right.
 
 ---
 
-## ٢. تعدد المنصات — مدرّس تاني بنفس الكود
+## 2. Multi-tenant: another teacher on the same code
 
-الشكل: **ستاك كامل لكل مدرّس**. تطبيق Dokploy لوحده، بوستجرس لوحده، ريديس لوحده،
-فوليومز لوحدها، دومين لوحده، رقم واتساب لوحده. كود واحد، ريبو واحد، برانش واحد.
+The shape: **one full stack per teacher**. Its own Dokploy app, Postgres,
+Redis, volumes, domain, WhatsApp number. One codebase, one repo, one branch.
 
-**مفيش عمود `tenantId` في أي جدول، ومش هيبقى فيه.** العزل إن مفيش connection
-string بيوصّل بين ستاك وستاك — مش «صعب»، **مستحيل**.
+**There is no `tenantId` column in any table, and there never will be.** The
+isolation is that no connection string reaches from one stack to another. Not
+"hard", **impossible**.
 
-### المفتاح الواحد
+### The one key
 
 ```
-TENANT_KEY غير مضبوط أو = ayman   →  ستاك أيمن، كل حاجة زي ما هي بالحرف
-TENANT_KEY = أي حاجة تانية        →  ما بيورّثش حاجة خالص
+TENANT_KEY unset or = ayman   →  Ayman's stack, everything exactly as it was
+TENANT_KEY = anything else    →  inherits nothing at all
 ```
 
-البوابات:
+The gates:
 
 | | |
 |---|---|
 | `apps/web/lib/tenant.ts` | `TENANT_KEY` · `IS_AYMAN` · `tenantName(fallback)` · `aymanOnly(v)` |
-| `apps/api/src/common/tenant.ts` | نفس التلاتة، للسيرفر |
+| `apps/api/src/common/tenant.ts` | the same three, for the server |
 
-`tenantName(fallback)` بيرجّع الـfallback على ستاكه، و`TENANT_DISPLAY_NAME`
-(أو «المنصة») على أي ستاك تاني.
+`tenantName(fallback)` returns the fallback on his stack, and
+`TENANT_DISPLAY_NAME` (or «المنصة») on any other stack.
 
-### ⚠️ تلات قواعد اتكسروا قبل كده
+### ⚠️ Three rules that were broken before
 
-**١. الـfallback الحرفي مش بوابة.** `tenantName('أيمن أبو العلا')` لسه بيشحن
-اسمه في الكود، والـspec بيقع عليه. اقرا الـfallback من جدول الكوبي:
-`tenantName(copy.site.name)`.
+**1. A literal fallback is not a gate.** `tenantName('أيمن أبو العلا')` still
+ships his name in the code, and the spec catches it. Read the fallback from the
+copy table: `tenantName(copy.site.name)`.
 
-**٢. الجيت في الكود مابيقدرش يلحق صف في الداتابيز.** الـ`seed` بيشتغل على كل
-boot، وكان بيكتب وسائل تواصله في `site_settings.contact` وبعدين اسمه في
-`site_settings.seo`. والقيمة المخزّنة **بتكسب** على أي جيت في الكود. أي حاجة
-بتتكتب في جدول على ستاك جديد لازم تعدّي على `SEEDS_OFFICIAL_SEO` /
-`TENANT_CONTACT_SEED` في `apps/api/src/scripts/seed-data/tenant-contact.ts`.
+**2. A code gate can't catch a database row.** The `seed` runs on every boot,
+and it used to write his contact details into `site_settings.contact` and then
+his name into `site_settings.seo`. The stored value **wins** over any code
+gate. Anything written to a table on a new stack must go through
+`SEEDS_OFFICIAL_SEO` / `TENANT_CONTACT_SEED` in
+`apps/api/src/scripts/seed-data/tenant-contact.ts`.
 
-**٣. قفل تسريب بيفتح تسريب تاني.** لما `getBrandAsset` منع صوره، اللي ظهر
-مكانها كان الـfallback — وكان بيطبع اسمه. ولما البايلاين في المحادثة اتعملها
-جيت، عنوان اللوحة فوقها فضل «محادثتك مع مهندس أيمن»، فالشاشة بقت بتناقض نفسها.
-**بعد أي جيت، افتح الشاشة اللي حواليه.**
+**3. Closing one leak opens another.** When `getBrandAsset` blocked his photos,
+what appeared in their place was the fallback, and it printed his name. When
+the chat byline was gated, the panel heading above it stayed «محادثتك مع مهندس
+أيمن» ("your chat with Eng. Ayman"), so the screen contradicted itself.
+**After any gate, open the screen around it.**
 
-### الحارس
+### The guard
 
-`packages/contracts/src/tenant-identity-leak.spec.ts` — بيمشي على الريبو كله،
-كل الامتدادات (`.ts .tsx .mjs .js .css .html .json`)، وبيمسك الاسم بكل تهجئاته
-(«أيمن»، «ايمن» من غير همزة، «Ayman») ومسارات الصور والحسابات.
+`packages/contracts/src/tenant-identity-leak.spec.ts` walks the whole repo, all
+extensions (`.ts .tsx .mjs .js .css .html .json`), and catches the name in every
+spelling («أيمن», «ايمن» without hamza, «Ayman») plus image paths and accounts.
 
-فيه قايمة مسموحة، وكل مدخل فيها **وعد إن فيه بوابة**. مدخل واحد كان كذب —
-`copy/outreach.ts` كان مكتوب إنه متعملّه جيت وما كانش، فكل رسالة من كل تمانية
-كانت بتقول للطالب «أنا مهندس أيمن». **لو حطيت مدخل، افتح الملف وشوف البوابة
-بعينك.**
+It has an allowlist, and every entry in it is **a promise that a gate exists**.
+One entry was a lie: `copy/outreach.ts` was listed as gated and wasn't, so one
+in every eight messages told the student «أنا مهندس أيمن» ("I'm Eng. Ayman").
+**If you add an entry, open the file and see the gate with your own eyes.**
 
-### الصفحة الرئيسية — بريست مش لون
+### The landing page: a preset, not a colour
 
-`landingPreset` في `packages/contracts/src/admin/settings.ts`:
+`landingPreset` in `packages/contracts/src/admin/settings.ts`:
 
-- **`classic`** — الافتراضي. صفحة أيمن، بنفس مسار الكود بالحرف. **مفيش فرع
-  بـ`=== 'classic'` في `page.tsx` أصلًا** — بيوصلها بالسقوط، عشان ما يتغيرش عنده
-  ولا بايت.
-- **`neon`** — «الترمينال». صفحة ما بتفتحش خالص، أقسام متعلّمة زي كومنتات كود،
-  كروت شبابيك كود، أرقام مونوسبيس.
-- **`board`** — «اللوح». بلوكات سوليد، كله في النص، تايلات سنين كبيرة.
+- **`classic`**: the default. Ayman's page, on the exact same code path.
+  **There is no `=== 'classic'` branch in `page.tsx` at all.** It is reached by
+  fall-through, so not a single byte changes for him.
+- **`neon`**: "the terminal". A page that never opens up, sections labelled like
+  code comments, cards as code windows, monospace numbers.
+- **`board`**: "the board". Solid blocks, everything centred, big year tiles.
+- **`studio`**: the newest preset.
 
-الاتنين الجداد كومبوننتات في `apps/web/components/site/presets/`، وستايلهم في
-`apps/web/app/(site)/styles/presets.css` مسكوب تحت `[data-preset]`، وبيتحمّلوا
-بـ`await import()` عشان مودیولاتهم ما تتقيّمش على رندر صفحته.
+The non-classic presets are components in `apps/web/components/site/presets/`,
+styled in `apps/web/app/(site)/styles/presets.css` scoped under `[data-preset]`,
+and loaded with `await import()` so their modules are never evaluated while his
+page renders.
 
-و`landingLayout` (`classic|editorial|compact`) لسه موجود وبيشتغل **جوّه**
-`classic` — أوفررايد CSS، مش صفحة تانية.
+`landingLayout` (`classic|editorial|compact`) still exists and works **inside**
+`classic`. It is a CSS override, not a different page.
 
 ---
 
-## ٣. باج واحد يوصل للكل
+> Adding a teacher from the dashboard, subjects and a teacher's landing look:
+> see [`docs/teachers-platform.md`](docs/teachers-platform.md).
 
-ده السبب اللي خلّى الشكل ده يتختار. الكود واحد والصورة واحدة:
+## 3. One bug fix reaches everyone
+
+This is why this shape was chosen. One codebase, one image recipe:
 
 ```
-تصلح باج  →  PR على main  →  CI  →  merge
+fix a bug  →  PR to main  →  CI  →  merge
                                       ↓
-                    كل ستاك بيعمل rebuild من نفس الكوميت
+                    every stack rebuilds from the same commit
 ```
 
-**اللي لازم تعرفه:**
+**What you need to know:**
 
-- **الإصلاح بيوصل لما الستاك يعمل deploy، مش لما تعمل merge.** كل تطبيق في
-  Dokploy بيبني نسخته. لو واحد فيهم الـautoDeploy مقفول عنده، هيفضل على الكود
-  القديم من غير ما حد ياخد باله.
-- **`TENANT_DISPLAY_NAME` و`TENANT_KEY` بيتحطّوا وقت البناء** (`next.config.ts`
-  → `env`)، فتغييرهم محتاج **إعادة بناء** مش إعادة تشغيل.
-- **الميجريشن بتتنفّذ على كل داتابيز لوحدها** وقت الـboot. ميجريشن بتقع معناها
-  ستاك واحد بايظ، مش كلهم — وده المقصود.
+- **A fix arrives when the stack deploys, not when you merge.** Each Dokploy app
+  builds its own copy. If autoDeploy is off on one of them, it stays on the old
+  code without anyone noticing.
+- **`TENANT_DISPLAY_NAME` and `TENANT_KEY` are set at build time**
+  (`next.config.ts` → `env`), so changing them needs a **rebuild**, not a
+  restart.
+- **Migrations run on each database separately** at boot. A failing migration
+  means one broken stack, not all of them. That is intended.
 
-### ⚠️ اسأل «لمين؟» قبل ما تكتب سطر
+### ⚠️ Ask "for whom?" before writing a line
 
-الكود واحد، فأي تغيير **بيوصل للتلاتة** أول ما ينزل. ودي مش دايمًا النية.
+The code is shared, so any change **reaches all three stacks** as soon as it
+ships. That isn't always the intent.
 
-**قبل ما تبدأ في أي إصلاح باج أو فيتشر جديدة، اسأل صاحب المنصة:**
+**Before starting any bug fix or new feature, ask the platform owner:**
 
-> ده لأيمن لوحده، ولا لكل المدرّسين؟
+> Is this for Ayman only, or for all teachers?
 
-والإجابة بتغيّر الشغل نفسه، مش بس النية:
+The answer changes the work itself, not just the intent:
 
-| الإجابة | الشكل الصح |
+| Answer | Correct shape |
 |---|---|
-| **للكل** | كود عادي من غير أي بوابة — ده الافتراضي |
-| **لأيمن بس** | `aymanOnly()` أو فيتشر فلاج مقفول افتراضيًا (`apps/web/lib/tenant.ts` · `apps/api/src/common/tenant.ts`) |
-| **لمدرّس معيّن** | فيتشر فلاج في `packages/contracts/src/admin/flags.ts` + إعداد لكل ستاك |
+| **For everyone** | Plain code with no gate. This is the default |
+| **Ayman only** | `aymanOnly()` or a feature flag off by default (`apps/web/lib/tenant.ts` · `apps/api/src/common/tenant.ts`) |
+| **A specific teacher** | Feature flag in `packages/contracts/src/admin/flags.ts` + a per-stack setting |
 
-**ليه ده مهم:** حاجة اتعملت لأيمن ونزلت للتلاتة من غير بوابة = مدرّس بيشوف فيتشر
-مش بتاعته (أو بيدفع تكلفتها، زي رفع الفيديو على R2). وحاجة اتعملت للكل واتحطّلها
-بوابة أيمن بالغلط = مدرّس بيدفع اشتراك وميلاقيش اللي دفع عليه.
+**Why it matters:** something built for Ayman that ships to all three ungated =
+a teacher sees a feature that isn't theirs, or pays its cost (like uploading
+video to R2). Something built for everyone and gated to Ayman by mistake = a
+teacher pays a subscription and doesn't get what they paid for.
 
-**ولو الإجابة مش واضحة، اسأل.** تخمين هنا بيتكلّف نشرة تانية على تلات ستاكات.
+**If the answer isn't clear, ask.** A guess here costs another release across
+three stacks.
 
 ---
 
-## ٤. اللوكال — الحاجات اللي بتضيّع وقت
+## 4. Local development: the things that waste time
 
-### الداتابيز المحلية مش نضيفة
+### The local database is not clean
 
-دي كوهورت حقيقية (آلاف الطلبة)، ومعاها تراكم من سنين تستات:
+It is a real cohort (thousands of students), plus years of accumulated test
+data:
 
-- **١٤ مليون صف إشعارات**، ٤.٦ چيجا. أي `count`/`findMany` من غير `userId`
-  بيبقى مسح تسلسلي ١٣.٨ ثانية — والسقف في چست ٥ ثواني.
-  **`VACUUM (ANALYZE)` بيرجّعها من ٢٠٩١ مللي لـ٢.٠٩.** لو تستات بتقع بـtimeout،
-  جرّب ده قبل أي حاجة.
-- **٢٬٦٥٦ يوزر برول admin** — والإشعار بيتبعت لكل أدمن، يعني ٢٬٦٥٦ صف في الحدث.
-- **سلسلة الـ`audit_log` مكسورة كسر مالوش إصلاح.** `UPDATE app.audit_log SET
-  outcome = 'tampered'` (اللي في التست والمفروض **يترفض**) اشتغل فعلًا يوم ما
-  الرول كان لسه عنده UPDATE، وأخد **١٣٥٬٦٠٣ صف**. القيم راحت.
-  عشان كده `verifyChain({ fromId })` موجود — التست بيتحقق من الصفوف اللي هو
-  كتبها، مش من الجدول كله.
+- **14 million notification rows**, 4.6 GB. Any `count`/`findMany` without
+  `userId` becomes a 13.8-second sequential scan, and Jest's ceiling is 5
+  seconds. **`VACUUM (ANALYZE)` brings it from 2091 ms to 2.09 ms.** If tests
+  fail with timeouts, try that before anything else.
+- **2,656 users with the admin role.** A notification goes to every admin, so
+  that's 2,656 rows per event.
+- **The `audit_log` hash chain is broken beyond repair.**
+  `UPDATE app.audit_log SET outcome = 'tampered'` (in the test that is supposed
+  to be **rejected**) actually ran back when the role still had UPDATE, and it
+  hit **135,603 rows**. The values are gone. That is why
+  `verifyChain({ fromId })` exists: the test verifies the rows it wrote, not
+  the whole table.
 
-### السويت الكاملة بتقع، والسويت الواحدة بتعدّي
+### The full suite fails, a single suite passes
 
-`maxWorkers: 1` مضبوط، فمش تزاحم — **ترتيب**. سويت بتسيب صفوف، واللي بعدها
-بتقع عليها. `book-orders` و`payments` بيعدّوا ٢٧٧/٢٧٧ لوحدهم وبيقعوا في الرن
-الكامل.
+`maxWorkers: 1` is set, so it isn't contention. It's **ordering**: one suite
+leaves rows behind and the next one trips over them. `book-orders` and
+`payments` pass 277/277 alone and fail in the full run.
 
-**قبل ما تتّهم تغييرك:** شغّل السويت الواقعة لوحدها. لو عدّت، مش إنت.
+**Before blaming your change:** run the failing suite alone. If it passes, it
+isn't you.
 
-**الـ`pre-push` بيقع على ده** ومش بيعرف يفرّق. الـPR هو البوابة الحقيقية — CI
-بيشتغل على داتابيز فاضية.
+**The `pre-push` hook fails on this** and can't tell the difference. The PR is
+the real gate: CI runs on an empty database.
 
-### الخلاصة السريعة
+### Quick reference
 
 ```bash
-# تستات: شغّل الحزمة كلها، مش per-app
+# tests: run the whole workspace, not per-app
 pnpm test
 
-# تايب تشيك بعد أي سحب من main — الـPrisma client بيبقى قديم
+# type check after any pull from main — the Prisma client goes stale
 pnpm --filter @ayman/api exec prisma generate
 ```
 
-**متشغّلش `prettier`.** مفيش prettier config في الريبو، فبيقلب الكوتيشن في ملفات
-ما لمستهاش.
+**Don't run `prettier`.** There is no prettier config in the repo, so it flips
+the quotes in files you didn't touch.
 
 ---
 
-## ٥. الرفع
+## 5. Deploying
 
-الخطوات: [`docs/runbooks/new-tenant.md`](docs/runbooks/new-tenant.md).
-القالب: [`deploy/tenant.env.example`](deploy/tenant.env.example).
-الفحص: `node scripts/check-tenant-env.mjs <ملف>`.
+Steps: [`docs/runbooks/new-tenant.md`](docs/runbooks/new-tenant.md).
+Template: [`deploy/tenant.env.example`](deploy/tenant.env.example).
+Check: `node scripts/check-tenant-env.mjs <file>`.
 
-**كل مدرّس محتاج دومينين مختلفين** — `APP_URL` و`MEDIA_ORIGIN`. الـAPI بيرفض
-يقوم لو الاتنين نفس الأصل، **وحاوية API مش قايمة معناها Traefik بيرد 404 على
-الدومين كله**، مش على الـAPI بس.
+**Every teacher needs two different domains**: `APP_URL` and `MEDIA_ORIGIN`.
+The API refuses to start if both share an origin, **and an API container that
+isn't up means Traefik answers 404 for the whole domain**, not just the API.
 
-الموقع والـAPI لازم على **نفس الأصل** (`x.com` و`x.com/api/*`) — الكوكيز بتستخدم
-بادئة `__Host-` ومفيش CORS متظبط في أي مكان، عن قصد.
+The site and the API must be on **the same origin** (`x.com` and `x.com/api/*`).
+Cookies use the `__Host-` prefix and there is no CORS configured anywhere, on
+purpose.
 
-⚠️ **الفحص مش نسخة كاملة من عقد التشغيل.** حصل إن واحد ملا القالب زي الرَن‌بوك
-بالحرف، الفحص قال «OK — safe to deploy»، والـAPI رفض يقوم. لو ضفت متغير مطلوب في
-`apps/api/src/config/env.ts`، ضيفه في القالب **وفي الفحص**.
+⚠️ **The check is not a full copy of the runtime contract.** Someone once filled
+the template exactly per the runbook, the check said "OK — safe to deploy", and
+the API refused to start. If you add a required variable in
+`apps/api/src/config/env.ts`, add it to the template **and to the check**.
 
-### ⚠️ العزل منطقي بس — السيرفر الفيزيائي مشترك
+### ⚠️ Isolation is only logical: the physical server is shared
 
-قسم ٢ فوق بيقول «مفيش connection بين ستاك وستاك، مستحيل». ده صح على مستوى
-الداتابيز والكود. **مش صح على مستوى الـCPU**: التلات ستاكات (أيمن/صبري/عادل)
-شغّالين على نفس الـVPS الفيزيائي الواحد (٤ أنوية)، فستاك واحد بياخد كل
-المعالج = التلاتة بيقعوا مع بعض، حتى لو مفيش أي سطر كود بيربطهم.
+§2 says "no connection between stacks, impossible". That's true at the database
+and code level. **It is not true at the CPU level**: the three stacks
+(Ayman/Sabry/Adel) run on the same single physical VPS (4 cores), so one stack
+taking all the CPU = all three go down together, even though no line of code
+connects them.
 
-**حصل فعليًا (2026-10-04)**: السيرفر وقع لساعات، load average وصل لـ٦٦ على
-٤ أنوية، وHostinger قفلت الـCPU تلقائي (ومنعت الفتح اليدوي لمدة ٧ أيام بعد أول
-استخدام). السببين الحقيقيين:
+**It actually happened (2026-10-04)**: the server was down for hours, load
+average hit 66 on 4 cores, and Hostinger capped the CPU automatically (and
+blocked manual unlocking for 7 days after the first use). The two real causes:
 
-1. **٢٥٦ عملية zombie.** الـhealthcheck exec (`node -e fetch(...)`) بينفّذ كل
-   كام ثانية جوّه كل كونتينر، وffmpeg بيتولد من جوّه `api` — من غير init
-   process حقيقي (PID 1 بيعمل `wait()`)، العمليات الفرعية دي بتفضل zombie.
-   الفيكس: `init: true` على `api`/`web`/`wa` في `docker-compose.yml`.
-2. **ffmpeg بتاخد `-threads 0`** (كل الأنوية) لتحويل فيديو واحد — قيس مباشر:
-   ١٣٠-١٧٠٪ CPU من encode واحد بس. الفيكس: `threads: 2` في
-   `upload-pipeline.ts` (نص أنوية السيرفر المرجعي بس).
+1. **256 zombie processes.** The healthcheck exec (`node -e fetch(...)`) runs
+   every few seconds inside every container, and ffmpeg is spawned from inside
+   `api`. Without a real init process (a PID 1 that calls `wait()`), those child
+   processes stay zombies. The fix: `init: true` on `api`/`web`/`wa` in
+   `docker-compose.yml`.
+2. **ffmpeg ran with `-threads 0`** (every core) to convert one video. Measured
+   directly: 130–170% CPU from a single encode. The fix: `threads: 2` in
+   `upload-pipeline.ts` (half the cores of the reference server).
 
-**التشخيص الصح وقت الانهيار** — مش `docker ps` بس، لازم تعرف مين بياكل
-المعالج ومين بتاعه:
+**The right diagnosis during a collapse.** `docker ps` alone isn't enough; you
+need to know who is eating the CPU and which container it belongs to:
 
 ```bash
-uptime                                  # load average — لو أعلى من عدد الأنوية بكتير، دي
-ps aux --sort=-%cpu | head -15          # مين اللي فعليًا بياكل المعالج
-cat /proc/<PID>/cgroup | head -1        # يطلعلك اسم الكونتينر (docker-<id>.scope)
-docker ps -a --format "table {{.Names}}\t{{.Status}}"  # قارن الـid بالاسم
+uptime                                  # load average — far above the core count means this
+ps aux --sort=-%cpu | head -15          # who is actually eating the CPU
+cat /proc/<PID>/cgroup | head -1        # gives you the container (docker-<id>.scope)
+docker ps -a --format "table {{.Names}}\t{{.Status}}"  # match the id to the name
 ```
 
-كونتينر بيفضل «unhealthy» مش معناها إنه هيرجع لوحده — `docker restart` ممكن
-يرفض («did not receive an exit event») لو العملية جواه عالقة فعلًا؛ وقتها
-`docker kill -s SIGKILL <name>` ثم `docker start <name>`. ولو الموقف اتوحّش
-وكونتينرات كتير واقعة مع بعض، **`reboot` كامل للسيرفر أسرع وأضمن** من مطاردة
-كل كونتينر لوحده — جرّبناها واشتغلت.
+A container that stays "unhealthy" doesn't mean it will recover by itself.
+`docker restart` can refuse ("did not receive an exit event") if the process
+inside is truly stuck. Then use `docker kill -s SIGKILL <name>` followed by
+`docker start <name>`. If things get really bad and many containers are down
+together, **a full `reboot` of the server is faster and safer** than chasing
+each container. We tried it and it worked.
 
-راجع: [[vps-overload-cascade-2026-10-04]] (الميموري الكاملة بتفاصيل الحادثة).
+See: [`docs/agents/operations.md`](docs/agents/operations.md) §1.
 
 ---
 
-## ٦. حاجات هتقابلك وهتضيّع يومك
+## 6. Things you'll run into that will waste your day
 
-| العرض | السبب |
+| Symptom | Cause |
 |---|---|
-| الموقع كله 404 | حاوية الـAPI مش قايمة. تبويب اللوجز بيفتح على الحاوية اللي ما قامتش أصلًا |
-| **التلات مواقع واقعين مع بعض** | السيرفر الفيزيائي نفسه خانق — `ps aux --sort=-%cpu`، مش `docker ps` بس. شوف §٥ |
-| صفحة بتتحمّل بشكل غريب/قديم لوكال | service worker قديم على نفس البورت. امسحه من DevTools |
-| تستات بتقع بـtimeout | الداتابيز منتفخة — `VACUUM (ANALYZE)` |
-| أخطاء تايب في ملفات ما لمستهاش | Prisma client قديم — `prisma generate` |
-| `pnpm install` في worktree بياخد ٣٠ دقيقة | `cp -Rc` للـ`node_modules` (مجاني على APFS)، وصلّح لينكات `@ayman/*` بإيدك |
-| الصفحة الرئيسية فاضية بعد ميجريشن | الـfallback مربوط على جدول **فاضي**؛ صف واحد بيطفّيه |
-| «اتبعت» في حملة واتساب | مش معناها «وصلت» — دوّر على `nack` |
+| The whole site is 404 | The API container isn't up. The Logs tab opens on the container that never started |
+| **All three sites down together** | The physical server itself is choking. Use `ps aux --sort=-%cpu`, not just `docker ps`. See §5 |
+| A page loads strangely/stale locally | An old service worker on the same port. Clear it from DevTools |
+| Tests fail with timeouts | The database is bloated. Run `VACUUM (ANALYZE)` |
+| Type errors in files you didn't touch | Stale Prisma client. Run `prisma generate` |
+| `pnpm install` in a worktree takes 30 minutes | `cp -Rc` the `node_modules` (free on APFS) and fix the `@ayman/*` links by hand |
+| The landing page is empty after a migration | The fallback is keyed on an **empty** table, so one row turns it off |
+| «اتبعت» ("sent") in a WhatsApp campaign | Doesn't mean "delivered". Look for `nack` |
 
 ---
 
-## ٧. الكتابة
+## 7. Writing
 
-- **الكومنتات بتشرح «ليه»**، مش «إيه». الريبو كومنتاته كتيرة ومحددة — قلّد الكثافة
-  والصوت.
-- **الكوبي كلها عربي مصري**، لطلبة ثانوي وأهاليهم.
-- **متخاطبش الطالب بصيغة المذكر.** المنصة عمرها ما بتسأل ولد ولا بنت، فالكوبي
-  مايفترضش. (`packages/contracts/src/outreach/compose.spec.ts` فيه ليستة الكلمات.)
-- كوتيشن مفردة في TS/TSX. CSS عادي، مفيش SASS. مفيش `!important`.
-- RTL: `inset-inline-*` مش `left/right`. وأي كلام لاتيني أو مونوسبيس جوّه عربي
-  محتاج `direction: ltr; unicode-bidi: isolate` وإلا بيتقلب.
-- ألوان من الطبقة الرمزية بس — `lib/css-token-coverage.test.ts` بيوقّع البناء على
-  أي متغير مش معرّف.
+- **Comments explain "why"**, not "what". The repo's comments are dense and
+  specific, so match their density and voice. New comments, docs, commit
+  messages and PR descriptions are in **English**.
+- **All product copy is Egyptian Arabic**, written for secondary-school
+  students and their parents. It lives in `packages/contracts/src/copy/`, never
+  inline in components.
+- **Never address the student in the masculine.** The platform never asks boy
+  or girl, so the copy doesn't assume. (The word list is in
+  `packages/contracts/src/outreach/compose.spec.ts`.)
+- Single quotes in TS/TSX. Plain CSS, no SASS. No `!important`.
+- RTL: `inset-inline-*`, not `left/right`. Any Latin or monospace text inside
+  Arabic needs `direction: ltr; unicode-bidi: isolate` or it flips.
+- Colours only from the token layer. `lib/css-token-coverage.test.ts` fails the
+  build on any undefined variable.

@@ -1,16 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 // Type-only: erased at build, so it cannot pull the library into the bundle
 // the way a value import would (see `HlsHandle` below).
 import type { HlsConfig } from 'hls.js';
 import { effectiveSeconds, type PlayerVideoMirror, type VideoTrim } from '@ayman/contracts/video';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
-import { cn } from '@ayman/ui/lib/cn';
 import type { YouTubePlayer } from '@/lib/youtube';
 import { skipCuts, trimWindow, watchedAt } from '@/lib/video-trim';
 import { PlayerChrome, SPEEDS, readSavedSpeed, saveSpeed } from './player-chrome';
+import { QualityItem } from './quality-item';
+import { capForWidth, knownBandwidth, saveBandwidth, startRung } from './start-rung';
 
 const c = copy.player.controls;
 
@@ -122,11 +123,31 @@ function adapt(element: HTMLVideoElement, trim: VideoTrim | null): YouTubePlayer
  */
 export const HLS_CONFIG: Partial<HlsConfig> = {
   /*
-   * The rung is chosen by measured bandwidth, never "the first one in the
-   * playlist" — which is the top rung in ours, and the one most likely to
-   * stall on a phone.
+   * Start on the LIGHTEST rung, say so, and do not test the line first.
+   *
+   * «بيطول عشان يحمّل، والنت عند الناس ضعيف». Left on `startLevel: -1`, hls.js
+   * does two things that cost a weak connection dearly (read off its own debug
+   * log, replayed in real Chrome on a 600 kbit/s line):
+   *
+   *   · it downloads the first segment of the lightest rung "to test bitrate
+   *     and will not buffer it" — five seconds of a 400 KB segment thrown
+   *     away before anything can play;
+   *   · it then tries to pick a starting rung from that measurement, fails
+   *     ("Could not find best starting auto level") and falls back to «first
+   *     in the playlist» — which in OUR master is the TALLEST rung, since
+   *     ffmpeg lists 1080 first. A 1.5 MB 720p segment on a line that does
+   *     60 KB/s: 20 seconds before the first frame.
+   *
+   * Measured, first frame: 26.6 s → 5.9 s at 600 kbit/s, 5.6 s → 1.3 s at
+   * 3 Mbit/s, 0.3 s → 0.1 s on a fast line. The fast line pays for it with
+   * about eight seconds on the 360 rung before ABR climbs — the same trade
+   * YouTube makes, and the one a student on a bad line is asking for.
+   *
+   * Level 0 is the lightest because hls.js sorts levels by bitrate. A lecture
+   * published as it is has one rung, so there it changes nothing.
    */
-  startLevel: -1,
+  startLevel: 0,
+  testBandwidth: false,
   /*
    * What hls.js assumes the line can do before it has timed a single
    * segment. The default is 500 kbps — a guess from a decade ago that pins
@@ -177,8 +198,14 @@ export const HLS_CONFIG: Partial<HlsConfig> = {
  *  imported eagerly (which would pull the library into every student's bundle). */
 interface HlsHandle {
   destroy: () => void;
+  /** Read by nothing here — see `chooseLevel` for why it is never SET. */
   currentLevel: number;
-  levels: { height: number }[];
+  nextLevel: number;
+  /** Read once, on manifest-parsed — see `start-rung.ts`. */
+  startLevel: number;
+  /** hls.js's running estimate of the line, bit/s — saved for the next lecture. */
+  bandwidthEstimate: number;
+  levels: { height: number; width?: number; bitrate: number; averageBitrate?: number }[];
 }
 
 interface Level {
@@ -281,11 +308,25 @@ export function MirrorVideo({
         startsItself.current = true;
 
         instance.on(Hls.Events.MANIFEST_PARSED, () => {
+          // A student this device already knows opens on the rung their line
+          // carries, not on 360 for six seconds — see `start-rung.ts`. Set here,
+          // between parsing and the first segment, which is the one moment
+          // hls.js still reads it.
+          const playerPixels = element.clientWidth * (window.devicePixelRatio || 1);
+          instance.startLevel = startRung(instance.levels, knownBandwidth(), capForWidth(instance.levels, playerPixels));
           setLevels(
             instance.levels
               .map((rung, index) => ({ index, height: rung.height }))
               .sort((a, b) => b.height - a.height),
           );
+        });
+        // Measured while it plays, saved as it goes: a student closes the tab,
+        // they do not stop the video. Not before a few segments have been
+        // timed — until then the estimate is hls.js's default, not this line.
+        let timed = 0;
+        instance.on(Hls.Events.FRAG_LOADED, () => {
+          timed += 1;
+          if (timed >= 3 && timed % 3 === 0) saveBandwidth(instance.bandwidthEstimate);
         });
         instance.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
           setAutoHeight(instance.levels[data.level]?.height ?? null);
@@ -383,9 +424,17 @@ export function MirrorVideo({
   const chooseLevel = useCallback((index: number) => {
     const hls = hlsRef.current;
     if (!hls) return;
-    // `currentLevel` switches now and flushes the buffer, which is what a
-    // student who just picked 1080p expects to see. -1 hands it back to ABR.
-    hls.currentLevel = index;
+    /*
+     * `nextLevel`, never `currentLevel`. `currentLevel` flushes the WHOLE
+     * buffer and re-seeks, and after a few manual switches the picture froze
+     * at 2–3 frames a second while the audio carried on — «الصوت شغال والفيديو
+     * واقف» (2026-10-06). Reproduced in real Chrome on an encrypted ladder cut
+     * exactly like ours: 150 frames per 5 s with no switching, 105 → 74 → 42 →
+     * 13 → 10 with `currentLevel`, and a steady 150 every time with
+     * `nextLevel`, which drops only what is AHEAD of the playhead and lets the
+     * fragment already playing finish. -1 hands the choice back to ABR.
+     */
+    hls.nextLevel = index;
     setLevel(index);
   }, []);
 
@@ -526,31 +575,3 @@ export function MirrorVideo({
   );
 }
 
-function QualityItem({
-  selected,
-  onClick,
-  wide = false,
-  children,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  /** «تلقائي» takes the whole first row — it is the default, and it is longer. */
-  wide?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitemradio"
-      aria-checked={selected}
-      onClick={onClick}
-      className={cn(
-        'rounded-md px-2 py-1.5 text-center text-[length:var(--fs-text-sm)] transition-colors duration-[160ms]',
-        wide && 'col-span-3',
-        selected ? 'bg-accent font-semibold text-[#1A1206]' : 'bg-white/10 hover:bg-white/20',
-      )}
-    >
-      {children}
-    </button>
-  );
-}

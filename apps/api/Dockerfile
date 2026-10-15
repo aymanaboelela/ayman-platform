@@ -64,8 +64,21 @@ ENV NODE_ENV=production
 #
 # لو الاتنين مش موجودين الـ API بيشتغل عادي والعامل بيفشل ويسجّل السبب —
 # مفيش حاجة هنا بتمنع الإقلاع.
+#
+# ── `libheif-examples` (heif-convert): صور الآيفون HEIC ──────────────
+#
+# الصورة دي Debian 12 (bookworm)، والـffmpeg بتاعها 5.1 — **مالوش ديموكسر
+# HEIF خالص**. اتقاس هنا بالظبط: «moov atom not found» على كل HEIC، فكل صورة
+# آيفون وصلت للـAPI اترفضت بـ«ده مش ملف صورة». `heif-convert` (libheif 1.15 +
+# libde265) بيفكّها، والـgrid بتاع الآيفون كمان (١٢ ميجابكسل في ~نص ثانية).
+# شوف `src/modules/media/heif-transcode.ts`.
+#
+# ⚠️ على trixie فك HEVC بقى plugin منفصل وبيتسطّب كـRecommends — اللي
+# `--no-install-recommends` بيشيله. السطر التاني بيسطّبه لو موجود ومش بيكسر
+# البناء على bookworm اللي مافيهوش الحزمة دي أصلًا.
 RUN apt-get update -y \
- && apt-get install -y --no-install-recommends ffmpeg python3 python3-pip \
+ && apt-get install -y --no-install-recommends ffmpeg libheif-examples python3 python3-pip \
+ && (apt-get install -y --no-install-recommends libheif-plugin-libde265 || true) \
  && pip3 install --no-cache-dir --break-system-packages yt-dlp==2026.8.19 \
  && apt-get purge -y python3-pip && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/*

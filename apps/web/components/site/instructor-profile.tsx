@@ -4,7 +4,10 @@ import { getCatalogOrEmpty } from '@/lib/catalog';
 import { MediaSlot } from '@/components/site/media-slot';
 import { ProfileCourses } from '@/components/site/instructor-profile-courses';
 import { DEMO_COURSES } from '@/lib/demo-courses';
-import { tenantName } from '@/lib/tenant';
+import { IS_AYMAN, tenantName } from '@/lib/tenant';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
+import { bySubject } from '@/lib/subject-copy';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
 
 const c = copy.landing;
 
@@ -70,7 +73,13 @@ export async function InstructorProfile() {
   const catalogue = await getCatalogOrEmpty();
   // The ONE place the fallback is chosen. Everything below is written against
   // `courses` and cannot tell the difference.
-  const courses = catalogue.courses.length > 0 ? catalogue.courses : DEMO_COURSES;
+  //
+  // ⚠️ Never on a stack that does not teach code. Every demo course is a
+  // programming course («الكورس التأسيسي في البرمجة»…), so on a physics
+  // teacher's empty catalogue the grid would have advertised six programming
+  // courses under their name. An empty grid there is the true answer.
+  const courses =
+    catalogue.courses.length > 0 ? catalogue.courses : TEACHES_CODE ? DEMO_COURSES : [];
 
   // Ascending, so the tab strip reads first year → last rather than in whatever
   // order the catalogue happened to return.
@@ -95,17 +104,25 @@ export async function InstructorProfile() {
           </div>
 
           <h2 className="profile__name">{INSTRUCTOR_NAME}</h2>
-          <p className="profile__role">{c.profileRole}</p>
+          <p className="profile__role">{bySubject(c.profileRole, subjectCopy.landing.profileRole)}</p>
 
           <dl className="profile__stats">
             <div className="profile__stat">
               <dt className="profile__stat-n">{courses.length}</dt>
               <dd className="profile__stat-l">{c.profileCoursesLabel}</dd>
             </div>
-            <div className="profile__stat">
-              <dt className="profile__stat-n">{c.statStudents}</dt>
-              <dd className="profile__stat-l">{c.profileStudentsLabel}</dd>
-            </div>
+            {/*
+              `statStudents` is a figure typed into HIS copy table («+١٤٠٠»),
+              not a count anything measures — on another teacher's profile it
+              is his number presented as theirs. The two counts that ARE
+              measured (courses, hours) stay on every stack.
+            */}
+            {IS_AYMAN ? (
+              <div className="profile__stat">
+                <dt className="profile__stat-n">{c.statStudents}</dt>
+                <dd className="profile__stat-l">{c.profileStudentsLabel}</dd>
+              </div>
+            ) : null}
             <div className="profile__stat">
               <dt className="profile__stat-n">{totalHours}</dt>
               <dd className="profile__stat-l">{c.profileHoursLabel}</dd>
@@ -117,7 +134,9 @@ export async function InstructorProfile() {
               {c.profileCta}
             </Link>
             <Link className="site-btn site-btn--outline profile__action" href="#about">
-              {c.profileSecondary}
+              {/* «عن المهندس» is his title; the teacher here may hold another,
+                  or be a woman — the neutral label names the section instead. */}
+              {IS_AYMAN ? c.profileSecondary : c.profileSecondaryNeutral}
             </Link>
           </div>
 

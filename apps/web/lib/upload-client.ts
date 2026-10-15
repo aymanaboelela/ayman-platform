@@ -84,7 +84,7 @@ export type UploadFailure = 'tooLarge' | 'badType' | 'unreadable' | 'network' | 
 export type UploadOutcome<T> = { ok: true; value: T } | { ok: false; reason: UploadFailure };
 
 /** The API's English refusal → one of the reasons above. */
-function classify(status: number, body: string): UploadFailure {
+export function classify(status: number, body: string): UploadFailure {
   // 413 can come from the API, from Nest's own body parser, or from a reverse
   // proxy that never let the request through — and a proxy's 413 is an HTML
   // page with no JSON message to read, which is why the STATUS is checked
@@ -103,7 +103,15 @@ function classify(status: number, body: string): UploadFailure {
   }
 
   if (message.includes('too large')) return 'tooLarge';
-  if (message.includes('not allowed') || message.includes('unsupported')) return 'badType';
+  // «not AN allowed image type» is the magic-byte gate's own wording — the
+  // bytes are not a picture — and `'not allowed'` alone never matched it, so
+  // that refusal used to fall through to the generic «couldn't upload».
+  if (
+    message.includes('not allowed') ||
+    message.includes('not an allowed image') ||
+    message.includes('unsupported')
+  )
+    return 'badType';
   if (message.includes('could not be processed') || message.includes('not an allowed document'))
     return 'unreadable';
   return 'failed';

@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { tenantSentence } from '@/lib/tenant-copy';
 import { copy } from '@ayman/contracts';
+import { subjectCopy } from '@ayman/contracts/copy/subject';
+import { bySubject } from '@/lib/subject-copy';
 import { JsonLd } from '@/components/seo/json-ld';
 import { BooksShippingChip, BooksShop } from '@/components/site/books-shop';
 import { getBookCatalogOrEmpty } from '@/lib/books';
@@ -30,7 +32,7 @@ export async function generateMetadata(): Promise<Metadata> {
      * beside their own platform name in the same string.
      */
     title: tenantSentence(c.metaTitle),
-    description: tenantSentence(c.metaDescription),
+    description: tenantSentence(bySubject(c.metaDescription, subjectCopy.books.metaDescription)),
     path: '/books',
   });
 }

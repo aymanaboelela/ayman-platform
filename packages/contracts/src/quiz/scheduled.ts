@@ -58,6 +58,31 @@ export function examPhase(
 }
 
 /**
+ * «يفضل متاح جوه الكورس بعد الميعاد» — the exam's ON-TIME deadline, and
+ * whether the paper stays sittable past it.
+ *
+ * Stored as the pair the engine already has, with no new column: a kept-open
+ * exam is `openUntil = null` (so `assertCanAttempt` never shuts it) and
+ * `lateAfter = <the deadline>` (so every sitting started after it is marked
+ * late, kept out of «الأوائل» and refused the honour board). That is exactly
+ * how the first mid-month exam was reopened by hand, so it reads the same.
+ *
+ * ⚠️ Every DASHBOARD surface phases the exam on `examDeadline`, not on the raw
+ * `openUntil`: past the deadline the countdown band lets go of it, and the
+ * course itself is where a student who missed it still finds the door. The
+ * engine keeps reading `openUntil` — the two disagree on purpose, in the one
+ * direction that is safe (the dashboard calls it closed while the server would
+ * still let you in), never the other.
+ */
+export function examDeadline(openUntil: Date | null, lateAfter: Date | null): Date | null {
+  return openUntil ?? lateAfter;
+}
+
+export function examKeptOpen(openUntil: Date | null, lateAfter: Date | null): boolean {
+  return openUntil === null && lateAfter !== null;
+}
+
+/**
  * One lesson on an exam's syllabus — «الامتحان ده على الوحدة ١ ٢ ٣».
  *
  * Title only, no href: a covered lesson is a statement about scope, not a
@@ -90,10 +115,17 @@ export const StudentExamSchema = z.object({
   /**
    * Both nullable because the columns are. A scheduled exam always has
    * `openFrom` (that is what makes it scheduled and what the read filters on);
-   * `openUntil` may be absent, which means "open from then on".
+   * `openUntil` may be absent, which means "open from then on". On a kept-open
+   * exam it is the ON-TIME deadline (`examDeadline`), not the engine's null.
    */
   openFrom: z.iso.datetime().nullable(),
   openUntil: z.iso.datetime().nullable(),
+  /**
+   * True when the paper stays sittable from inside the course after
+   * `openUntil` — see `examKeptOpen`. `phase` is then `closed` once the
+   * deadline passes (the dashboard band lets go), and the sitting is late.
+   */
+  keptOpen: z.boolean(),
   /** The per-sitting time limit in seconds, null when the exam is untimed. */
   durationSeconds: z.number().int().positive().nullable(),
   /** Total marks the paper is scaled to — `quizzes.grade_out_of`. */

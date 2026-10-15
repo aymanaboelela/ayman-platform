@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   STUDENT_NAV,
   STUDENT_TABS,
@@ -188,5 +188,56 @@ describe('STUDENT_TABS', () => {
       '/store',
       '/playground',
     ]);
+  });
+});
+
+/**
+ * The rail on a stack that does not teach code.
+ *
+ * `/foundations` and `/playground` 404 there (`proxy.ts` and each page), so a
+ * rail row to either is a dead link one tap from every screen. The table is
+ * built at module load from `TENANT_SUBJECT`, so the module is re-imported
+ * under that stack's environment; the default environment above IS a
+ * programming stack, and the exact list that test asserts is the proof that
+ * nothing moved there.
+ */
+describe('STUDENT_NAV on a stack that teaches physics', () => {
+  const saved = { key: process.env.TENANT_KEY, subject: process.env.TENANT_SUBJECT };
+
+  async function physicsNav() {
+    process.env.TENANT_KEY = 'demo';
+    process.env.TENANT_SUBJECT = 'physics';
+    vi.resetModules();
+    return import('./student-nav-items');
+  }
+
+  afterEach(() => {
+    if (saved.key === undefined) delete process.env.TENANT_KEY;
+    else process.env.TENANT_KEY = saved.key;
+    if (saved.subject === undefined) delete process.env.TENANT_SUBJECT;
+    else process.env.TENANT_SUBJECT = saved.subject;
+    vi.resetModules();
+  });
+
+  it('has no programming tools in it', async () => {
+    const { STUDENT_NAV: nav } = await physicsNav();
+    const hrefs = nav.map((item) => item.href);
+    expect(hrefs).not.toContain('/foundations');
+    expect(hrefs).not.toContain('/playground');
+  });
+
+  it('keeps every other row, in the same order', async () => {
+    const { STUDENT_NAV: nav } = await physicsNav();
+    expect(nav.map((item) => item.href)).toEqual(
+      STUDENT_NAV.map((item) => item.href).filter(
+        (href) =>
+          href !== '/foundations' &&
+          href !== '/playground' &&
+          // The three rows that were already Ayman-only; this stack is not his.
+          href !== '/game' &&
+          href !== '/arena' &&
+          href !== '/mistakes',
+      ),
+    );
   });
 });

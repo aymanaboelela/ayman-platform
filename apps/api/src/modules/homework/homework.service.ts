@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import {
   HOMEWORK_IMAGE_RETENTION_DAYS,
   type AdminHomeworkDetail,
+  type AdminHomeworkLessonSummary,
   type AdminHomeworkRow,
   type HomeworkFilter,
   type HomeworkReviewInput,
@@ -292,20 +293,24 @@ export class HomeworkService {
     courseId: string | undefined,
     take: number,
     skip: number,
+    lessonId?: string,
   ): Promise<ListResponse<AdminHomeworkRow>> {
     const where: Prisma.HomeworkSubmissionWhereInput = {
       ...(filter === 'pending' ? { status: 'submitted' } : {}),
       ...(filter === 'accepted' ? { status: 'accepted' } : {}),
       ...(filter === 'needs_work' ? { status: 'needs_work' } : {}),
       ...(courseId ? { courseId } : {}),
+      ...(lessonId ? { lessonId } : {}),
     };
 
     const [items, total] = await Promise.all([
       this.prisma.homeworkSubmission.findMany({
         where,
         // «اللي مستنّي» first is the whole job, and inside it newest first: a
-        // student who handed in tonight is the one still sitting there.
-        orderBy: { submittedAt: 'desc' },
+        // student who handed in tonight is the one still sitting there. The id
+        // breaks a same-millisecond tie — the list is paged now, and without
+        // it a row can appear on two pages and vanish from both.
+        orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
         take,
         skip,
         select: ROW_SELECT,
@@ -318,6 +323,77 @@ export class HomeworkService {
 
   async pendingCount(): Promise<number> {
     return this.prisma.homeworkSubmission.count({ where: { status: 'submitted' } });
+  }
+
+  /**
+   * The overview: every lecture that has anything handed in, with its counts
+   * by status — in the course's OWN outline order (section, then lecture), so
+   * the screen reads like the course he wrote rather than like a log.
+   *
+   * One `groupBy` for the numbers and one read for the names, never a count
+   * per lecture: a term of thirty lectures would be thirty round-trips on the
+   * screen he opens most.
+   */
+  async adminLessons(): Promise<AdminHomeworkLessonSummary[]> {
+    const groups = await this.prisma.homeworkSubmission.groupBy({
+      by: ['lessonId', 'status'],
+      _count: { _all: true },
+      _max: { submittedAt: true },
+    });
+    if (groups.length === 0) return [];
+
+    const lessons = await this.prisma.lesson.findMany({
+      where: { id: { in: [...new Set(groups.map((group) => group.lessonId))] } },
+      select: {
+        id: true,
+        title: true,
+        position: true,
+        section: { select: { title: true, position: true } },
+        course: { select: { id: true, title: true } },
+      },
+    });
+
+    const byLesson = new Map<string, { pending: number; accepted: number; needsWork: number; last: Date }>();
+    for (const group of groups) {
+      const entry = byLesson.get(group.lessonId) ?? { pending: 0, accepted: 0, needsWork: 0, last: new Date(0) };
+      if (group.status === 'submitted') entry.pending += group._count._all;
+      else if (group.status === 'accepted') entry.accepted += group._count._all;
+      else entry.needsWork += group._count._all;
+      const last = group._max.submittedAt;
+      if (last && last > entry.last) entry.last = last;
+      byLesson.set(group.lessonId, entry);
+    }
+
+    // The course with the newest hand-in first; inside it, the outline order.
+    // Ties broken by id so the page never reshuffles between two loads.
+    const courseLatest = new Map<string, number>();
+    for (const lesson of lessons) {
+      const last = byLesson.get(lesson.id)!.last.getTime();
+      courseLatest.set(lesson.course.id, Math.max(courseLatest.get(lesson.course.id) ?? 0, last));
+    }
+    lessons.sort(
+      (a, b) =>
+        courseLatest.get(b.course.id)! - courseLatest.get(a.course.id)! ||
+        a.course.id.localeCompare(b.course.id) ||
+        a.section.position - b.section.position ||
+        a.position - b.position ||
+        a.id.localeCompare(b.id),
+    );
+
+    return lessons.map((lesson) => {
+      const counts = byLesson.get(lesson.id)!;
+      return {
+        lessonId: lesson.id,
+        lessonTitle: lesson.title,
+        sectionTitle: lesson.section.title,
+        courseId: lesson.course.id,
+        courseTitle: lesson.course.title,
+        pending: counts.pending,
+        accepted: counts.accepted,
+        needsWork: counts.needsWork,
+        lastSubmittedAt: counts.last.toISOString(),
+      };
+    });
   }
 
   async adminDetail(id: string): Promise<AdminHomeworkDetail> {

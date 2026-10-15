@@ -49,10 +49,12 @@ import {
   ResourceVideoUploadSessionSchema,
   VideoUploadResumedSchema,
   VideoUploadSessionSchema,
+  VideoLadderUpgradeSchema,
   VideoUploadStatusSchema,
   type ResourceVideoUploadSession,
   type VideoUploadResumed,
   type VideoUploadSession,
+  type VideoLadderUpgrade,
   type VideoUploadStatus,
 } from '@ayman/contracts/admin/video-upload';
 import { copy } from '@ayman/contracts/copy/admin';
@@ -1420,6 +1422,29 @@ export async function videoUploadStatusAction(
       `/api/admin/lessons/${lessonId}/video/upload/status`,
       VideoUploadStatusSchema,
     );
+  } catch {
+    return null;
+  }
+}
+
+/** «حسّن الجودات» — what the button needs. `null` on any failure, like the poll above. */
+export async function videoLadderUpgradeAction(lessonId: string): Promise<VideoLadderUpgrade | null> {
+  try {
+    return await apiGetAuthed(`/api/admin/lessons/${lessonId}/video/upgrade`, VideoLadderUpgradeSchema);
+  } catch {
+    return null;
+  }
+}
+
+/** Put the lecture in the queue — the rungs named, or every missing one when `heights` is empty. */
+export async function requestVideoLadderUpgradeAction(
+  lessonId: string,
+  heights: readonly number[] = [],
+): Promise<VideoLadderUpgrade | null> {
+  try {
+    return await apiSend('POST', `/api/admin/lessons/${lessonId}/video/upgrade`, VideoLadderUpgradeSchema, {
+      heights: [...heights],
+    });
   } catch {
     return null;
   }

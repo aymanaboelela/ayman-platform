@@ -70,6 +70,12 @@ export const AdminExamCreateSchema = z
     durationMinutes: DURATION_MINUTES,
     gradeOutOf: GRADE_OUT_OF.default(100),
     passPercent: z.number().min(0).max(100).default(70),
+    /**
+     * «يفضل متاح جوه الكورس بعد الميعاد». Past `closesAt` the exam leaves the
+     * dashboard but stays sittable from the course; those sittings are graded
+     * like any other and marked late. See `examKeptOpen`.
+     */
+    keepOpenAfterClose: z.boolean().default(false),
   })
   .strict()
   .refine((v) => v.closesAt > v.opensAt, {
@@ -102,6 +108,7 @@ export const AdminExamPatchSchema = z
     durationMinutes: DURATION_MINUTES.optional(),
     gradeOutOf: GRADE_OUT_OF.optional(),
     passPercent: z.number().min(0).max(100).optional(),
+    keepOpenAfterClose: z.boolean().optional(),
   })
   .strict()
   .refine((v) => v.opensAt === undefined || v.closesAt === undefined || v.closesAt > v.opensAt, {
@@ -128,6 +135,9 @@ export const AdminExamRowSchema = z.object({
   closesAt: z.iso.datetime().nullable(),
   durationMinutes: z.number().int().positive().nullable(),
   gradeOutOf: z.number(),
+  /** Sittable from the course after `closesAt` — `closesAt` is then the
+   *  on-time deadline, and `phase` reads `closed` past it. */
+  keepOpenAfterClose: z.boolean(),
   /** Both must be true for a student to reach it, and the row shows them
    *  separately: a published quiz on an unpublished lesson is invisible, and
    *  the difference is the first thing he needs to see when it is missing. */

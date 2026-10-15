@@ -14,6 +14,12 @@ vi.mock('./use-video-heartbeat', () => ({
   useVideoHeartbeat: () => {},
 }));
 
+/** Is YouTube reachable at all — `ok` unless a test says the network has none. */
+const probeYouTube = vi.fn(async (_id: string) => 'ok' as 'ok' | 'blocked');
+vi.mock('./youtube-reach', () => ({
+  probeYouTube: (id: string) => probeYouTube(id),
+}));
+
 const { VideoLesson } = await import('./video-lesson');
 
 const VIDEO: PlayerVideo = {
@@ -39,7 +45,9 @@ const UPLOADED: PlayerVideo = {
   durationSeconds: 3696,
   posterUrl: null,
   mirror: {
-    hlsUrl: 'https://video.example.test/v/0123456789abcdef0123456789abcdef/master.m3u8',
+    // The real shape, query and all — `mirrorPlaylistUrl` always appends one,
+    // and a fixture without it hid a black poster on every upload.
+    hlsUrl: 'https://video.example.test/v/0123456789abcdef0123456789abcdef/master.m3u8?l=3&r=2',
     maxHeight: 1080,
   },
 };
@@ -125,6 +133,8 @@ function fakeYouTube({ ready = 'soon' }: { ready?: 'soon' | 'never' } = {}) {
 
 beforeEach(() => {
   loadYouTubeIframeApi.mockReset();
+  probeYouTube.mockReset();
+  probeYouTube.mockResolvedValue('ok');
 });
 
 afterEach(() => {
@@ -546,7 +556,7 @@ describe('VideoLesson YouTube shield', () => {
     expect(yt.player.setPlaybackRate).toHaveBeenCalledWith(1.5);
   });
 
-  it('offers no quality menu — the API cannot set one, so none is faked', async () => {
+  it('offers no quality menu when the player cannot pin one — none is faked', async () => {
     fakeYouTube();
     await play();
 
@@ -1004,5 +1014,199 @@ describe('VideoLesson YouTube captions toggle', () => {
 
     expect(screen.queryByRole('button', { name: c.captionsShow })).toBeNull();
     expect(yt.player.unloadModule).not.toHaveBeenCalled();
+  });
+});
+
+describe('VideoLesson YouTube quality menu', () => {
+  const c = copy.player.controls;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function playWith(yt: ReturnType<typeof fakeYouTube>) {
+    vi.useFakeTimers();
+    renderPlayer();
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    return yt;
+  }
+
+  function withQuality(yt: ReturnType<typeof fakeYouTube>) {
+    const setPlaybackQualityRange = vi.fn();
+    Object.assign(yt.player, {
+      getAvailableQualityLevels: vi.fn(() => ['hd1080', 'hd720', 'large', 'medium', 'small', 'tiny', 'auto']),
+      getPlaybackQuality: vi.fn(() => 'hd720'),
+      setPlaybackQualityRange,
+    });
+    return setPlaybackQualityRange;
+  }
+
+  it('lists the levels the video has, tallest first, and shows the current one', async () => {
+    const yt = fakeYouTube();
+    withQuality(yt);
+    await playWith(yt);
+
+    fireEvent.click(screen.getByRole('button', { name: c.settings }));
+    const items = screen.getAllByRole('menuitemradio').filter((el) => /^\d+p$/.test(el.textContent ?? ''));
+    expect(items.map((el) => el.textContent)).toEqual(['1080p', '720p', '480p', '360p', '240p']);
+    expect(screen.getByRole('menuitemradio', { name: '720p' }).getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('pins the level it is asked for, both ends of the range', async () => {
+    const yt = fakeYouTube();
+    const pin = withQuality(yt);
+    await playWith(yt);
+
+    fireEvent.click(screen.getByRole('button', { name: c.settings }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: '360p' }));
+    // A one-sided range is a hint YouTube ignores.
+    expect(pin).toHaveBeenCalledWith('medium', 'medium');
+  });
+});
+
+describe('VideoLesson head start before the tap', () => {
+  const settle = () => act(async () => void (await new Promise((resolve) => setTimeout(resolve, 600))));
+
+  it('loads YouTube\'s script while the poster is still showing, for a lecture that plays from YouTube', async () => {
+    fakeYouTube();
+    renderPlayer();
+    await settle();
+
+    expect(loadYouTubeIframeApi).toHaveBeenCalled();
+    // …and nothing was built: the frame appears only on the tap.
+    expect(document.querySelector('iframe')).toBeNull();
+  });
+
+  it('never touches YouTube for a lecture we serve ourselves — not even to warm it', async () => {
+    render(
+      <VideoLesson
+        lessonId="0198c3a2-0000-7000-8000-000000000001"
+        video={UPLOADED}
+        title="How AI Works"
+        resumeAt={0}
+        onProgress={() => {}}
+        onError={() => {}}
+      />,
+    );
+    await settle();
+
+    expect(loadYouTubeIframeApi).not.toHaveBeenCalled();
+  });
+
+  it('warms nothing while the lecture is still being prepared', async () => {
+    render(
+      <VideoLesson
+        lessonId="0198c3a2-0000-7000-8000-000000000001"
+        video={PROCESSING}
+        title="How AI Works"
+        resumeAt={0}
+        onProgress={() => {}}
+        onError={() => {}}
+      />,
+    );
+    await settle();
+
+    expect(loadYouTubeIframeApi).not.toHaveBeenCalled();
+  });
+});
+
+describe('VideoLesson on a network with no YouTube at all — the ministry tablet', () => {
+  const pc = copy.player;
+  const settle = () => act(async () => void (await new Promise((resolve) => setTimeout(resolve, 600))));
+  const tap = () => fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
+
+  it('answers the tap at once when the head start already knows: no player, no dark embed', async () => {
+    loadYouTubeIframeApi.mockRejectedValue(new Error('blocked'));
+    probeYouTube.mockResolvedValue('blocked');
+    renderPlayer();
+    await settle();
+    loadYouTubeIframeApi.mockClear();
+
+    tap();
+    await act(async () => {});
+
+    expect(screen.getByText(pc.videoBlockedTitle)).toBeTruthy();
+    expect(screen.getByText(pc.videoBlockedBody)).toBeTruthy();
+    // Nothing else was tried, and nothing YouTube-shaped is on the page.
+    expect(loadYouTubeIframeApi).not.toHaveBeenCalled();
+    expect(document.querySelector('iframe')).toBeNull();
+    // The way out is right there.
+    expect(screen.getByRole('button', { name: new RegExp(pc.videoBlockedCopy) })).toBeTruthy();
+  });
+
+  it('shows the card instead of the plain embed when the API fails and YouTube does not answer', async () => {
+    loadYouTubeIframeApi.mockRejectedValue(new Error('blocked'));
+    probeYouTube.mockResolvedValue('blocked');
+    renderPlayer();
+    // Tapped before the head start finished — the player tries first.
+    tap();
+
+    expect(await screen.findByText(pc.videoBlockedTitle)).toBeTruthy();
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(screen.queryByText(new RegExp(pc.videoFallbackNote.slice(0, 20)))).toBeNull();
+  });
+
+  it('keeps the plain embed for a network that only drops the API script', async () => {
+    loadYouTubeIframeApi.mockRejectedValue(new Error('blocked'));
+    probeYouTube.mockResolvedValue('ok');
+    renderPlayer();
+    tap();
+
+    const frame = (await screen.findByTitle('How AI Works')) as HTMLIFrameElement;
+    expect(frame.src).toContain('www.youtube.com/embed/');
+    expect(screen.queryByText(pc.videoBlockedTitle)).toBeNull();
+  });
+
+  it('does not trust one signal alone: a blocked probe with the API still loading tries the player', async () => {
+    const yt = fakeYouTube();
+    probeYouTube.mockResolvedValue('blocked');
+    renderPlayer();
+    await settle();
+
+    tap();
+    await act(async () => {});
+
+    expect(screen.queryByText(pc.videoBlockedTitle)).toBeNull();
+    expect(yt.frame.isConnected).toBe(true);
+  });
+
+  it('tries the real player again from «محاولة تانية»', async () => {
+    loadYouTubeIframeApi.mockRejectedValue(new Error('blocked'));
+    probeYouTube.mockResolvedValue('blocked');
+    renderPlayer();
+    await settle();
+    tap();
+    await act(async () => {});
+    expect(screen.getByText(pc.videoBlockedTitle)).toBeTruthy();
+
+    // The network was only slow after all.
+    const yt = fakeYouTube();
+    probeYouTube.mockResolvedValue('ok');
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(pc.videoBlockedRetry) }));
+    await act(async () => {});
+
+    expect(screen.queryByText(pc.videoBlockedTitle)).toBeNull();
+    expect(yt.frame.isConnected).toBe(true);
+  });
+
+  it('never probes YouTube for a lecture we serve ourselves', async () => {
+    render(
+      <VideoLesson
+        lessonId="0198c3a2-0000-7000-8000-000000000001"
+        video={UPLOADED}
+        title="How AI Works"
+        resumeAt={0}
+        onProgress={() => {}}
+        onError={() => {}}
+      />,
+    );
+    await settle();
+    expect(probeYouTube).not.toHaveBeenCalled();
   });
 });

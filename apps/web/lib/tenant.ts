@@ -73,3 +73,14 @@ export function tenantName(fallback: string): string {
 export function aymanOnly<T>(value: T): T | undefined {
   return IS_AYMAN ? value : undefined;
 }
+
+/*
+ * ⚠️ The stack's SUBJECT (`TENANT_SUBJECT`, `TEACHES_CODE`) is the other half
+ * of its identity, and it lives in `lib/tenant-subject.ts` — not here — on
+ * purpose. This module is in the client graph, Turbopack derives its id from
+ * this path, and a tab that outlived a deploy keeps THIS file's previous
+ * factory: a new export added here would read as `undefined` from every new
+ * chunk that tab loads, and `TEACHES_CODE` undefined is Ayman's homepage
+ * rendering the neutral year cards. A new module has no previous factory to be
+ * pinned to. See `docs/agents/pitfalls.md` (Turbopack).
+ */

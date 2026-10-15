@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import type { UseFormWatch } from 'react-hook-form';
 import type { Onboarding } from '@ayman/contracts/onboarding';
+import { TEACHES_CODE } from '@/lib/tenant-subject';
 
 /**
  * The onboarding wizard's answers, kept alive across ONE navigation away and
@@ -68,6 +69,15 @@ const DRAFT_FIELDS = [
   // the step's check like an empty answer.
   'centerSlotId',
   'fatherPhone',
+  /*
+   * The system and the track, where the student is ASKED them — a stack that
+   * does not teach code (`components/onboarding/section-pickers.tsx`). There
+   * the trust-boundary argument above does not apply: the student chooses the
+   * track anyway, a forged id fails the API's S10 check like a wrong one, and
+   * leaving them out would make a return from the privacy page silently drop
+   * two answers the form had shown as given.
+   */
+  ...(TEACHES_CODE ? [] : (['system', 'trackId'] as const)),
 ] as const satisfies ReadonlyArray<keyof Onboarding>;
 
 /**

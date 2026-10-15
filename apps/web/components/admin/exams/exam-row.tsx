@@ -116,6 +116,12 @@ export function ExamRow({
             >
               {published ? c.published : c.draft}
             </span>
+
+            {row.keepOpenAfterClose ? (
+              <span className="rounded-full border border-study-line bg-study-tint px-2 py-0.5 text-[length:var(--fs-mono-label)] text-study">
+                {c.keptOpenBadge}
+              </span>
+            ) : null}
           </div>
 
           <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--fs-text-xs)] text-fg-muted">

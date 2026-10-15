@@ -24,7 +24,7 @@ import {
   segmentBoundaries,
   transcodeArgs,
   variantBandwidth,
-  withLowRung,
+  withRung,
   withMeasuredBandwidth,
 } from './upload-pipeline';
 import { videoKey, videoKeyUri } from './video-key';
@@ -536,6 +536,14 @@ describe('the low rung of a copied file', () => {
     expect(Number(args[args.indexOf('-hls_time') + 1])).toBeLessThan(2);
   });
 
+  it('uses the preset it is given — the upgrade encodes `faster`, the upload ladder `medium`', () => {
+    const plain = lowRungArgs('/tmp/src', '/tmp/out/1', true, [6], 1);
+    expect(plain[plain.indexOf('-preset') + 1]).toBe('medium');
+    const quick = lowRungArgs('/tmp/src', '/tmp/out/1', true, [6], 1, null, LOW_RUNG, 'faster');
+    expect(quick[quick.indexOf('-preset') + 1]).toBe('faster');
+    expect(quick[quick.indexOf('-threads') + 1]).toBe('1');
+  });
+
   it('scales to the low rung and keeps its audio', () => {
     const args = lowRungArgs('/tmp/src', '/tmp/out/1', true, [6], 2);
     expect(args[args.indexOf('-vf') + 1]).toBe(`scale=-2:${LOW_RUNG.height}:flags=bicubic`);
@@ -553,7 +561,7 @@ describe('the low rung of a copied file', () => {
 
   it('lists the low rung after the copy in the master', () => {
     const master = '#EXTM3U\n#EXT-X-VERSION:6\n#EXT-X-STREAM-INF:BANDWIDTH=5252992,RESOLUTION=1920x1080\n0/index.m3u8\n';
-    const out = withLowRung(master, '1/index.m3u8', 640, 360);
+    const out = withRung(master, '1/index.m3u8', 640, 360, 700);
     expect(readMasterVariants(out)).toEqual(['0/index.m3u8', '1/index.m3u8']);
     expect(out).toContain('RESOLUTION=640x360');
   });

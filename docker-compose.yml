@@ -120,6 +120,22 @@ services:
       # السبب إن الافتراضي fail-closed مش fail-open: النسيان هو الفشل
       # المتوقع، وتمنه هنا إن طلبة مدرّس تاني يكلّموا أيمن على رقمه الشخصي.
       TENANT_KEY: ${TENANT_KEY:-}
+      # The subject this stack teaches — a slug from
+      # `packages/contracts/src/subjects.ts`. Empty = programming_cs, what
+      # every stack taught before this existed. The API reads it for the
+      # assistant's scope and for the subject the seed opens on every track.
+      TENANT_SUBJECT: ${TENANT_SUBJECT:-}
+      # The landing page's look picked in «مدرّس جديد» — seeded into branding
+      # once on a fresh database, and the web's fallback before that.
+      # Empty = the schema defaults (classic, amber).
+      TENANT_LANDING_PRESET: ${TENANT_LANDING_PRESET:-}
+      TENANT_ACCENT: ${TENANT_ACCENT:-}
+      # The teacher's name, for everything the API itself writes: the
+      # assistant's answers, push and WhatsApp texts. `common/tenant.ts` reads
+      # it, but it was only ever passed to `web` — so on every teacher's stack
+      # the assistant said «المدرّس هو المنصة», `tenantName()`'s fallback.
+      # Empty on Ayman's stack, where `tenantName()` ignores it anyway.
+      TENANT_DISPLAY_NAME: ${TENANT_DISPLAY_NAME:-}
       # مستند الصلاحيات الموقّع — إيه الفيتشرز اللي الستاك ده مسموح له
       # يشغّلها. فاضي = الافتراضي المعلن، وده حالة صحيحة مش عطل.
       #
@@ -356,6 +372,16 @@ services:
         # أول دقايق بعد النشر — وللمدرّس الجديد دي لحظة الإطلاق بالظبط.
         TENANT_KEY: ${TENANT_KEY:-}
         TENANT_DISPLAY_NAME: ${TENANT_DISPLAY_NAME:-}
+        # The subject, at build time for the same reason as the two above: the
+        # title, the landing page's cards and the playground's existence are
+        # decided in the prerender, and `next.config.ts` inlines it into the
+        # client bundle. Empty = programming_cs.
+        TENANT_SUBJECT: ${TENANT_SUBJECT:-}
+        # The landing page's look picked in «مدرّس جديد» — seeded into branding
+        # once on a fresh database, and the web's fallback before that.
+        # Empty = the schema defaults (classic, amber).
+        TENANT_LANDING_PRESET: ${TENANT_LANDING_PRESET:-}
+        TENANT_ACCENT: ${TENANT_ACCENT:-}
         # ⚠️ وقت البناء كمان، وللسبب اللي فوق نفسه: الفوتر و`/links` صفحات
         # prerendered، و`next build` بيشتغل من غير API فبيخبز `contact` فاضي.
         # القيم دي هي اللي بتترسم في الشباك ده — من غيرها أول زائر بعد كل نشر
@@ -425,6 +451,12 @@ services:
       # ووقت أي عطل في الـAPI بعد كده.
       TENANT_KEY: ${TENANT_KEY:-}
       TENANT_DISPLAY_NAME: ${TENANT_DISPLAY_NAME:-}
+      TENANT_SUBJECT: ${TENANT_SUBJECT:-}
+      # The landing page's look picked in «مدرّس جديد» — seeded into branding
+      # once on a fresh database, and the web's fallback before that.
+      # Empty = the schema defaults (classic, amber).
+      TENANT_LANDING_PRESET: ${TENANT_LANDING_PRESET:-}
+      TENANT_ACCENT: ${TENANT_ACCENT:-}
       # ── لوحة التحكّم في منصات المدرّسين — ستاك أيمن وبس ────────────────
       #
       # الاتنين دول **مايتحطّوش على ستاك مدرّس**. اللي ماسك المفتاح الخاص
@@ -444,6 +476,25 @@ services:
       # «Account Analytics: Read» على حساب كلاودفلير بتاعك. قراية بس، ولستاكك
       # بس — فاضي على أي ستاك تاني والشاشة بتقول إنها مش متظبطة.
       CONTROL_PLANE_CF_TOKEN: ${CONTROL_PLANE_CF_TOKEN:-}
+      # «مدرّس جديد» (/admin/platforms/new) — creates a whole stack for a new
+      # instructor through Dokploy's API. Owner's stack ONLY: the key can read
+      # and rewrite EVERY stack on the server, so `check-tenant-env.mjs`
+      # refuses an instructor env file that carries it. Empty = the screen
+      # explains how to connect and creates nothing.
+      #
+      # URL defaults to `http://dokploy:3000` — the panel's service name on
+      # `dokploy-network`, which `web` is already on. The public panel host is
+      # behind a Cloudflare challenge a server cannot answer.
+      CONTROL_PLANE_DOKPLOY_URL: ${CONTROL_PLANE_DOKPLOY_URL:-}
+      CONTROL_PLANE_DOKPLOY_KEY: ${CONTROL_PLANE_DOKPLOY_KEY:-}
+      # The compose whose git source a new stack is cloned from. Empty = the
+      # one whose APP_URL is this stack's own (found, not configured).
+      CONTROL_PLANE_DOKPLOY_TEMPLATE: ${CONTROL_PLANE_DOKPLOY_TEMPLATE:-}
+      # The PUBLIC panel origin, only to print a stack's CI webhook line.
+      # Empty = https://panel.<this stack's apex>.
+      CONTROL_PLANE_DOKPLOY_PUBLIC_URL: ${CONTROL_PLANE_DOKPLOY_PUBLIC_URL:-}
+      # Where new DNS records point. Empty = this stack's own apex A record.
+      CONTROL_PLANE_SERVER_IP: ${CONTROL_PLANE_SERVER_IP:-}
       TENANT_YOUTUBE: ${TENANT_YOUTUBE:-}
       TENANT_INSTAGRAM: ${TENANT_INSTAGRAM:-}
       TENANT_TIKTOK: ${TENANT_TIKTOK:-}

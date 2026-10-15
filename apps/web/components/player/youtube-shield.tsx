@@ -2,7 +2,25 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { YT_STATE, type YouTubeApiPlayer } from '@/lib/youtube';
+import { copy } from '@ayman/contracts/copy';
 import { PlayerChrome, SPEEDS, readSavedSpeed, saveSpeed } from './player-chrome';
+import { QualityItem } from './quality-item';
+
+const c = copy.player.controls;
+
+/** YouTube's level names, tallest first, with the height a student reads. Anything else it lists («auto», «highres», «tiny») is not offered. */
+const QUALITY_HEIGHTS: ReadonlyArray<readonly [string, number]> = [
+  ['hd1080', 1080],
+  ['hd720', 720],
+  ['large', 480],
+  ['medium', 360],
+  ['small', 240],
+];
+
+/** The levels this video offers, in `QUALITY_HEIGHTS` order. */
+function offeredQualities(available: readonly string[]): Array<readonly [string, number]> {
+  return QUALITY_HEIGHTS.filter(([level]) => available.includes(level));
+}
 
 /**
  * ══════════════════════════════════════════════════════════════════════════
@@ -103,6 +121,9 @@ export function YouTubeShield({
   const [volume, setVolume] = useState(() => player.getVolume() / 100);
   const [muted, setMuted] = useState(() => player.isMuted());
   const [speed, setSpeed] = useState(() => player.getPlaybackRate());
+  // The levels exist only once the video is playing, so the poll fills them.
+  const [qualities, setQualities] = useState<Array<readonly [string, number]>>([]);
+  const [quality, setQuality] = useState<string | null>(null);
   /**
    * Our speeds, less the ones this video will not play at. A live stream
    * offers `[1]` alone, and then there is no speed menu at all rather than
@@ -138,7 +159,7 @@ export function YouTubeShield({
   const [captionsOn, setCaptionsOn] = useState(false);
   const [stalled, setStalled] = useState(false);
   const startTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hold = useRef({ time: 0, sound: 0, speed: 0 });
+  const hold = useRef({ time: 0, sound: 0, speed: 0, quality: 0 });
   /** Where the last seek we asked for is going — `null` once YouTube is there. */
   const seekTarget = useRef<number | null>(null);
   const captionsSeen = useRef(false);
@@ -206,6 +227,13 @@ export function YouTubeShield({
           setVolume(player.getVolume() / 100);
         }
         if (now >= hold.current.speed) setSpeed(player.getPlaybackRate());
+        if (player.getAvailableQualityLevels && player.getPlaybackQuality) {
+          const offered = offeredQualities(player.getAvailableQualityLevels());
+          setQualities((prev) =>
+            prev.length === offered.length && prev.every((q, i) => q[0] === offered[i]![0]) ? prev : offered,
+          );
+          if (now >= hold.current.quality) setQuality(player.getPlaybackQuality());
+        }
         // Read once. The list says "this video has tracks" and nothing more —
         // it still lists the module after `unloadModule` has hidden them —
         // so after the first sighting there is nothing left to learn from it.
@@ -297,6 +325,15 @@ export function YouTubeShield({
     [player],
   );
 
+  const chooseQuality = useCallback(
+    (level: string) => {
+      player.setPlaybackQualityRange?.(level, level);
+      hold.current.quality = Date.now() + HOLD_MS;
+      setQuality(level);
+    },
+    [player],
+  );
+
   const toggleCaptions = useCallback(() => {
     if (captionsOn) player.unloadModule?.('captions');
     else player.loadModule?.('captions');
@@ -325,6 +362,21 @@ export function YouTubeShield({
       speed={speed}
       speeds={speeds}
       onSpeed={chooseSpeed}
+      settingsExtra={
+        // Only where the player answers both questions: which levels, and pin one.
+        qualities.length > 1 && player.setPlaybackQualityRange ? (
+          <>
+            <p className="mt-3 text-[length:var(--fs-text-xs)] font-semibold text-white/70">{c.quality}</p>
+            <div className="mt-2 grid grid-cols-3 gap-1.5" dir="ltr">
+              {qualities.map(([level, height]) => (
+                <QualityItem key={level} selected={quality === level} onClick={() => chooseQuality(level)}>
+                  <span className="mono">{height}p</span>
+                </QualityItem>
+              ))}
+            </div>
+          </>
+        ) : null
+      }
       captions={
         // Both halves of the undocumented pair, or no button: one without
         // the other is a toggle that works in one direction only.

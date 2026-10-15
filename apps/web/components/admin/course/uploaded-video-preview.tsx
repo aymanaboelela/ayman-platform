@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Play } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
+import { posterBesidePlaylist } from '@ayman/contracts/video';
 import { videoPreviewUrlAction } from '@/app/(admin)/admin/courses/actions';
 import { HLS_CONFIG } from '@/components/player/mirror-video';
 
@@ -95,7 +96,7 @@ export function UploadedVideoPreview({ externalId }: { externalId: string }) {
   }, [playing, url, attempt]);
 
   // The poster sits beside the playlist; an older upload may have none.
-  const poster = url === null || posterFailed ? null : url.replace(/master\.m3u8$/, 'poster.jpg');
+  const poster = url === null || posterFailed ? null : posterBesidePlaylist(url);
 
   if (!playing) {
     return (

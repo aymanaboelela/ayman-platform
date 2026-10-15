@@ -4,6 +4,7 @@ import type { Entitlements } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
 import { BrandLockup } from '@/components/brand-lockup';
 import { AdminNavList } from './admin-nav-list';
+import { StudentViewLink } from './student-view-link';
 
 /**
  * RTL-native: the sidebar sits at the inline start and its divider is
@@ -38,6 +39,8 @@ export function AppSidebar({
         <Link href="/admin" className="rounded-md px-1" aria-label={copy.admin.title}>
           <BrandLockup showTagline={false} />
         </Link>
+
+        <StudentViewLink />
 
         <nav aria-label={copy.admin.title} className="flex-1">
           <AdminNavList permissions={permissions} features={features} />

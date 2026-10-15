@@ -306,6 +306,48 @@ describe('ScheduledExamsService', () => {
     );
   });
 
+  it('keeps an exam sittable past its deadline when asked, and marks the deadline late', async () => {
+    const lessonId = await makeExam({ title: 'امتحان متاح بعد الميعاد', keepOpenAfterClose: true });
+
+    const quiz = await client.quiz.findUniqueOrThrow({
+      where: { lessonId },
+      select: { openUntil: true, lateAfter: true },
+    });
+    // The engine reads only `openUntil` — null is what keeps the door open —
+    // and `lateAfter` is what makes every later sitting count as late.
+    expect(quiz.openUntil).toBeNull();
+    expect(quiz.lateAfter).toEqual(WINDOW.closesAt);
+
+    const list = await service.list();
+    const row = list.exams.find((e) => e.lessonId === lessonId)!;
+    expect(row.keepOpenAfterClose).toBe(true);
+    // The admin still reads the deadline he typed, and the phase is phased on it.
+    expect(row.closesAt).toBe(WINDOW.closesAt.toISOString());
+    expect(row.phase).toBe(examPhase(row.opensAt, row.closesAt, new Date(list.serverTime)));
+  });
+
+  it('flips «يفضل متاح» both ways without losing the deadline', async () => {
+    const lessonId = await makeExam({ title: 'امتحان هيتفتح بعد الميعاد' });
+    const read = () =>
+      client.quiz.findUniqueOrThrow({
+        where: { lessonId },
+        select: { openUntil: true, lateAfter: true },
+      });
+
+    await service.patch(lessonId, { keepOpenAfterClose: true }, ACTOR);
+    expect(await read()).toEqual({ openUntil: null, lateAfter: WINDOW.closesAt });
+
+    // Moving the deadline on a kept-open exam moves `lateAfter`, not `openUntil`.
+    const later = new Date('2026-09-13T17:00:00.000Z');
+    await service.patch(lessonId, { closesAt: later }, ACTOR);
+    expect(await read()).toEqual({ openUntil: null, lateAfter: later });
+
+    // Off again: the engine shuts at the deadline, and `lateAfter` stays so any
+    // sitting that already happened late is still marked late.
+    await service.patch(lessonId, { keepOpenAfterClose: false }, ACTOR);
+    expect(await read()).toEqual({ openUntil: later, lateAfter: later });
+  });
+
   it('offers only real lectures in the coverage picker, never exam lessons', async () => {
     await makeExam();
     const picker = await service.lessonPicker(courseId);

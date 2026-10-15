@@ -1555,6 +1555,23 @@ model LessonVideo {
   /// matching every row written before this column existed.
   encrypted      Boolean           @default(true) @map("encrypted")
 
+  /// ── «حسّن الجودات» ──────────────────────────────────────────────────
+  /// A lecture published as it is has ONE rung. The owner presses a button, at
+  /// night, and the worker builds the rest from the rung already in the bucket.
+  /// `null` = never asked. `queued → running → done | failed`.
+  upgradeStatus   String?  @map("upgrade_status")
+  upgradeProgress Int?     @map("upgrade_progress")
+  upgradeError    String?  @map("upgrade_error")
+  upgradeAt       DateTime? @map("upgrade_at")
+  /// Which version of this lecture's ladder students should ask for. The
+  /// master playlist is cached for a year by every browser and the edge, so a
+  /// rewritten ladder needs a NEW URL — this goes into the query string, and
+  /// the worker bumps it when it rewrites the master. 1 = as first published.
+  ladderRev       Int      @default(1) @map("ladder_rev")
+  /// Which rungs the owner asked for. EMPTY = every one still missing — the
+  /// button's «الكل». Kept after the run so the screen can say what was asked.
+  upgradeHeights  Int[]    @default([]) @map("upgrade_heights")
+
   /// ── الرفع المباشر ───────────────────────────────────────────────────
   /// Set only for `provider = upload`: the instructor's own file, before the
   /// ladder replaced it.

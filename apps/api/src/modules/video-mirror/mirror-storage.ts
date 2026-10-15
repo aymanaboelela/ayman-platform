@@ -579,6 +579,12 @@ export class MirrorStorage {
     await pipeline(object.Body as Readable, createWriteStream(file));
   }
 
+  /** A small text object (a playlist). Never a segment — see `downloadTo`. */
+  async readText(key: string): Promise<string> {
+    const object = await this.s3.send(new GetObjectCommand({ Bucket: this.config.bucket, Key: key }));
+    return (await object.Body?.transformToString()) ?? '';
+  }
+
   async deleteObject(key: string): Promise<void> {
     await this.s3
       .send(new DeleteObjectCommand({ Bucket: this.config.bucket, Key: key }))

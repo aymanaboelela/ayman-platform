@@ -4,6 +4,7 @@ import { mediaUrl } from '@ayman/ui/branding';
 import { getPublicSettingsOrDefaults } from '@/lib/settings';
 import { markdownTwinPath } from '@/lib/agents/markdown-routes';
 import { aymanOnly, IS_AYMAN, tenantName } from '@/lib/tenant';
+import { SITE_TAGLINE } from '@/lib/subject-copy';
 import { SITE_URL } from './site-url';
 
 /**
@@ -99,16 +100,19 @@ export const SITE_SHORT_NAME = tenantName(copy.site.shortName);
  * proof-read by whoever opens the tab; a description is read by Google.
  *
  * The replacement is built from the tenant's own name and the platform's
- * tagline, which is neutral — it names the subject and the exam system,
- * nobody's person.
+ * tagline, which names nobody's person — and, through `SITE_TAGLINE`, THIS
+ * stack's subject: a physics teacher's `<title>` used to read «… — البرمجة
+ * وعلوم الحاسب — نظام البكالوريا المصرية», because the tagline was the one
+ * part of the composed title nobody had thought of as an identity. On a
+ * programming stack `SITE_TAGLINE` is `copy.site.tagline` itself.
  */
 export const SITE_DESCRIPTION = IS_AYMAN
   ? copy.seo.description
-  : `${PLATFORM_NAME} — ${copy.site.tagline}.`;
+  : `${PLATFORM_NAME} — ${SITE_TAGLINE}.`;
 
 export const SITE_TITLE = IS_AYMAN
   ? copy.seo.defaultTitle
-  : `${PLATFORM_NAME} — ${copy.site.tagline}`;
+  : `${PLATFORM_NAME} — ${SITE_TAGLINE}`;
 
 export interface PageMetaInput {
   /** Page title, WITHOUT the site suffix — the template appends it. */
