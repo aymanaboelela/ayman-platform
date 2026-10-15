@@ -539,21 +539,29 @@ export class ManualGradingService {
         user: { select: { studentProfile: { select: { fullName: true } } } },
         quiz: { select: { lesson: { select: { title: true } } } },
         questions: {
-          // Not just what is UNMARKED — also what a human has already marked,
-          // so a mark can be revised. «أقدر أعدل على كل حاجة»: a typo'd 3 that
-          // can only be corrected by a developer is worse than no screen.
-          // MCQs stay out: `gradedBy` is null on anything the engine scored.
-          where: { OR: [{ state: 'needs_grading' }, { gradedBy: { not: null } }] },
           orderBy: { slotPosition: 'asc' },
           select: {
             id: true,
             slotPosition: true,
             state: true,
+            response: true,
             responseText: true,
             mark: true,
             maxMark: true,
             feedbackHtml: true,
-            version: { select: { stemHtml: true } },
+            rightAnswerText: true,
+            optionOrder: true,
+            version: {
+              select: {
+                id: true,
+                type: true,
+                stemHtml: true,
+                options: {
+                  orderBy: { position: 'asc' },
+                  select: { id: true, bodyHtml: true, position: true, fraction: true },
+                },
+              },
+            },
           },
         },
       },
@@ -568,19 +576,95 @@ export class ManualGradingService {
       submittedAt: attempt.submittedAt?.toISOString() ?? null,
       gradeOutOf: Number(attempt.gradeOutOf),
       scaledScore: attempt.scaledScore === null ? null : Number(attempt.scaledScore),
-      questions: attempt.questions.map((q) => ({
-        attemptQuestionId: q.id,
-        slotPosition: q.slotPosition,
-        questionHtml: q.version.stemHtml,
-        responseText: q.responseText,
-        maxMark: Number(q.maxMark),
-        // Null, not 0. "Unmarked" and "marked zero" are different facts, and
-        // this screen exists precisely to turn the first into the second — so
-        // the empty box must not arrive pre-filled with a zero nobody typed.
-        mark: q.state === 'needs_grading' || q.mark === null ? null : Number(q.mark),
-        feedbackHtml: q.feedbackHtml,
-      })),
+      questions: attempt.questions.map((q) => {
+        const resp = q.response as Record<string, unknown> | null;
+        const chosenOptionIds =
+          resp && resp.kind === 'choice' && Array.isArray(resp.optionIds)
+            ? (resp.optionIds as string[])
+            : [];
+        const rightOptionIds = q.version.options
+          .filter((opt) => Number(opt.fraction) > 0)
+          .map((opt) => opt.id);
+
+        const byPosition = new Map(q.version.options.map((opt) => [opt.position, opt]));
+        const orderedOpts: Array<{ id: string; bodyHtml: string; position?: number; isRight: boolean }> = [];
+        const used = new Set<number>();
+        for (const pos of q.optionOrder) {
+          const opt = byPosition.get(pos);
+          if (opt && !used.has(pos)) {
+            orderedOpts.push({
+              id: opt.id,
+              bodyHtml: opt.bodyHtml,
+              position: opt.position,
+              isRight: Number(opt.fraction) > 0,
+            });
+            used.add(pos);
+          }
+        }
+        for (const opt of q.version.options) {
+          if (!used.has(opt.position)) {
+            orderedOpts.push({
+              id: opt.id,
+              bodyHtml: opt.bodyHtml,
+              position: opt.position,
+              isRight: Number(opt.fraction) > 0,
+            });
+          }
+        }
+
+        return {
+          attemptQuestionId: q.id,
+          slotPosition: q.slotPosition,
+          type: q.version.type,
+          questionHtml: q.version.stemHtml,
+          responseText: q.responseText,
+          response: q.response,
+          chosenOptionIds,
+          rightAnswerText: q.rightAnswerText,
+          rightOptionIds,
+          options: orderedOpts,
+          correctness: q.state,
+          maxMark: Number(q.maxMark),
+          mark: q.state === 'needs_grading' && q.mark === null ? null : q.mark === null ? null : Number(q.mark),
+          feedbackHtml: q.feedbackHtml,
+        };
+      }),
     };
+  }
+
+  async overrideScore(
+    attemptId: string,
+    input: { scaledScore: number },
+    actorUserId: string,
+  ): Promise<{ scaledScore: number; passed: boolean }> {
+    const attempt = await this.prisma.quizAttempt.findUnique({
+      where: { id: attemptId },
+      select: { id: true, gradeOutOf: true, passPercent: true },
+    });
+    if (!attempt) throw new NotFoundException({ code: 'attempt_not_found' });
+    const scaledScore = roundMark(input.scaledScore);
+    const gradeOutOf = Number(attempt.gradeOutOf);
+    const passPercent = Number(attempt.passPercent);
+    const passed = gradeOutOf > 0 ? (scaledScore / gradeOutOf) * 100 >= passPercent : true;
+
+    await this.prisma.quizAttempt.update({
+      where: { id: attemptId },
+      data: {
+        scaledScore,
+        passed,
+      },
+    });
+
+    await this.audit.record({
+      action: 'attempt:grade',
+      resourceType: AUDIT_RESOURCES.quizAttempt,
+      resourceId: attemptId,
+      outcome: 'success',
+      actorUserId,
+      metadata: { overriddenScore: scaledScore, passed },
+    });
+
+    return { scaledScore, passed };
   }
 
   async grade(
@@ -597,11 +681,6 @@ export class ManualGradingService {
           maxMark: true,
           minFraction: true,
           maxFraction: true,
-          // Read BEFORE the write, because the write is what changes it. The
-          // notification below has to fire on the transition into
-          // `submitted` and not merely on the state afterwards — otherwise
-          // correcting a typo'd mark on an already-finished paper months
-          // later re-announces the result to the student every time.
           attempt: { select: { state: true, quiz: { select: { lessonId: true } } } },
         },
       });
@@ -611,11 +690,21 @@ export class ManualGradingService {
       const maxMark = Number(row.maxMark);
       if (maxMark <= 0) throw new BadRequestException({ code: 'question_has_no_marks' });
 
-      // Clamped, not rejected: an admin typing 20 into a 5-mark box is a slip,
-      // and a 400 in the middle of marking thirty papers is worse than the
-      // obvious correction. The clamped value is what the audit row records.
       const mark = roundMark(clamp(input.mark, 0, maxMark));
       const fraction = clamp(mark / maxMark, Number(row.minFraction), Number(row.maxFraction));
+
+      const responseUpdate: Record<string, unknown> = {};
+      if (input.response !== undefined) {
+        responseUpdate.response = input.response;
+        if (typeof input.response === 'object' && input.response !== null) {
+          const respObj = input.response as Record<string, unknown>;
+          if (respObj.kind === 'choice' && Array.isArray(respObj.optionIds)) {
+            responseUpdate.responseText = respObj.optionIds.join(', ');
+          } else if (respObj.kind === 'text' && typeof respObj.text === 'string') {
+            responseUpdate.responseText = respObj.text;
+          }
+        }
+      }
 
       await tx.attemptQuestion.update({
         where: { id: attemptQuestionId },
@@ -626,10 +715,8 @@ export class ManualGradingService {
           feedbackHtml:
             input.feedbackHtml === undefined ? undefined : sanitizeRichText(input.feedbackHtml),
           gradedAt: new Date(),
-          // Stamped so the screen can tell a HUMAN mark from an engine one and
-          // offer it for revision — `gradedBy` is null on everything
-          // `gradeQuestion` scored.
           gradedBy: actorUserId,
+          ...responseUpdate,
         },
       });
 

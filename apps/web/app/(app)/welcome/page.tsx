@@ -140,8 +140,10 @@ export default async function WelcomePage({
      * saved. The two can differ only if the student edited their name during
      * onboarding, and both are names they gave us minutes ago.
      */
-    getSession(),
+    getSession().catch(() => null),
   ]);
+
+  if (!session) redirect('/login?next=/welcome');
 
   const destination = safeNext(next) ?? '/dashboard';
 

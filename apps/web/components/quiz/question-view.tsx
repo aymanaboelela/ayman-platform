@@ -1,12 +1,20 @@
 'use client';
 
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Flag } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import { Checkbox } from '@ayman/ui/components/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@ayman/ui/components/dialog';
 import { RadioGroup, RadioGroupItem } from '@ayman/ui/components/radio-group';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { cn } from '@ayman/ui/lib/cn';
@@ -106,6 +114,30 @@ function QuestionViewImpl({
   // expensive precisely as the answer got long enough to matter.
   const words = useMemo(() => wordCount(text), [text]);
 
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingOptionId, setPendingOptionId] = useState<string | null>(null);
+
+  const handleSingleChoiceSelect = (optionId: string) => {
+    // If the student already selected this exact option, no action needed
+    if (chosenIds[0] === optionId) return;
+
+    // If an answer was already selected, prompt confirmation so accidental scrolling taps don't overwrite it
+    if (chosenIds.length > 0) {
+      setPendingOptionId(optionId);
+      setConfirmOpen(true);
+    } else {
+      onChange({ kind: 'choice', optionIds: [optionId] });
+    }
+  };
+
+  const handleConfirmChange = () => {
+    if (pendingOptionId) {
+      onChange({ kind: 'choice', optionIds: [pendingOptionId] });
+    }
+    setConfirmOpen(false);
+    setPendingOptionId(null);
+  };
+
   return (
     <div className="flex flex-col gap-5">
       {/*
@@ -149,55 +181,110 @@ function QuestionViewImpl({
       <SafeHtml html={question.stemHtml} className="qcard__stem min-w-0" />
 
       {isChoice ? (
-        <RadioGroup
-          /*
-            `?? ''` and never bare `chosenIds[0]`. An unanswered question has an
-            empty `chosenIds`, so the index read is `undefined` — and a Radix
-            `Root` given `value={undefined}` decides it is UNCONTROLLED for the
-            rest of its life. Answering it hands the same instance a string, and
-            React logs "RadioGroup is changing from uncontrolled to controlled";
-            «مسح إجابتي» sets the response back to null and it logs the
-            reverse. A student working through a paper produced one of those per
-            answer and per clear, which is the flood in the console.
+        <>
+          <RadioGroup
+            value={chosenIds[0] ?? ''}
+            onValueChange={handleSingleChoiceSelect}
+          >
+            <ul className="runner-options flex flex-col gap-2">
+              {question.options.map((option, index) => {
+                const isChecked = chosenIds[0] === option.id;
+                return (
+                  <li key={option.id}>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleSingleChoiceSelect(option.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === ' ' || e.key === 'Enter') {
+                          e.preventDefault();
+                          handleSingleChoiceSelect(option.id);
+                        }
+                      }}
+                      className={cn(
+                        'runner-option select-none cursor-pointer',
+                        isChecked && 'runner-option--checked',
+                      )}
+                    >
+                      <span className="runner-option__letter">{optionLetter(index)}</span>
+                      <SafeHtml html={option.bodyHtml} className="runner-option__body pointer-events-none" />
+                      <RadioGroupItem
+                        value={option.id}
+                        className="runner-option__control pointer-events-none"
+                        tabIndex={-1}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </RadioGroup>
 
-            The empty string is a value no option carries, so "controlled, with
-            nothing selected" is expressed without ever going undefined.
-          */
-          value={chosenIds[0] ?? ''}
-          onValueChange={(value) => onChange({ kind: 'choice', optionIds: [value] })}
-        >
-          <ul className="runner-options flex flex-col gap-2">
-            {question.options.map((option, index) => (
-              <li key={option.id}>
-                <label className="runner-option">
-                  <span className="runner-option__letter">{optionLetter(index)}</span>
-                  <SafeHtml html={option.bodyHtml} className="runner-option__body" />
-                  <RadioGroupItem value={option.id} className="runner-option__control" />
-                </label>
-              </li>
-            ))}
-          </ul>
-        </RadioGroup>
+          <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+            <DialogContent closeLabel="إغلاق" className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>هل أنت متأكد من تغيير الإجابة؟</DialogTitle>
+                <DialogDescription>
+                  لقد قمت باختيار إجابة لهذا السؤال سابقاً. هل تريد بالتأكيد اعتماد هذا الاختيار الجديد؟
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="mt-4 flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setConfirmOpen(false);
+                    setPendingOptionId(null);
+                  }}
+                >
+                  تراجع (احتفظ بإجابتي)
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={handleConfirmChange}
+                >
+                  نعم، غيّر الإجابة
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
       ) : null}
 
       {isMulti ? (
         <ul className="runner-options flex flex-col gap-2">
           {question.options.map((option, index) => {
             const checked = chosenIds.includes(option.id);
+            const toggle = () => {
+              const nextIds = checked ? chosenIds.filter((id) => id !== option.id) : [...chosenIds, option.id];
+              onChange(nextIds.length > 0 ? { kind: 'choice', optionIds: nextIds } : null);
+            };
             return (
               <li key={option.id}>
-                <label className="runner-option">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={toggle}
+                  onKeyDown={(e) => {
+                    if (e.key === ' ' || e.key === 'Enter') {
+                      e.preventDefault();
+                      toggle();
+                    }
+                  }}
+                  className={cn(
+                    'runner-option select-none cursor-pointer',
+                    checked && 'runner-option--checked',
+                  )}
+                >
                   <span className="runner-option__letter">{optionLetter(index)}</span>
-                  <SafeHtml html={option.bodyHtml} className="runner-option__body" />
+                  <SafeHtml html={option.bodyHtml} className="runner-option__body pointer-events-none" />
                   <Checkbox
-                    className="runner-option__control"
+                    className="runner-option__control pointer-events-none"
                     checked={checked}
-                    onCheckedChange={(next) => {
-                      const nextIds = next ? [...chosenIds, option.id] : chosenIds.filter((id) => id !== option.id);
-                      onChange(nextIds.length > 0 ? { kind: 'choice', optionIds: nextIds } : null);
-                    }}
+                    tabIndex={-1}
                   />
-                </label>
+                </div>
               </li>
             );
           })}

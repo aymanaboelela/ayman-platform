@@ -78,3 +78,20 @@ describe('the leaderboard in the sidebar', () => {
     expect(activeNavItem('/admin/leaderboard')?.href).toBe('/admin/leaderboard');
   });
 });
+
+describe('the profile screen in the sidebar', () => {
+  it('shows to whoever has admin:access', () => {
+    const hrefs = visibleNavItems(['admin:access'], allOn).map((item) => item.href);
+    expect(hrefs).toContain('/admin/profile');
+  });
+
+  it('hides from accounts without admin:access', () => {
+    const hrefs = visibleNavItems(['student:read'], allOn).map((item) => item.href);
+    expect(hrefs).not.toContain('/admin/profile');
+  });
+
+  it('lights its own row', () => {
+    expect(activeNavItem('/admin/profile')?.href).toBe('/admin/profile');
+  });
+});
+

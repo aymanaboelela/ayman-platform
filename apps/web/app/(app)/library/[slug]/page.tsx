@@ -21,6 +21,8 @@ import { LessonProgressBar } from '@/components/player/lesson-progress-bar';
 import { formatDuration } from '@/components/site/course-card';
 import { RichText } from '@/components/content/rich-text';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
+import { StudentExternalBookSummarySchema } from '@ayman/contracts/quiz/external-books';
+import { ExternalBooksSection } from '@/components/library/external-books-section';
 import { RedeemCard } from '@/components/unlock-codes/redeem-card';
 
 const c = copy.library;
@@ -127,10 +129,18 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
    * وبتفشل بهدوء: `[]` معناها مفيش سطر، وهو نفس اللي بيحصل للطالب اللي مالوش
    * شهور فاضية. سطر طمأنة ضايع أرخص من صفحة بتقع.
    */
-  const ownership = await apiGetAuthed(
-    `/api/payments/courses/${course.id}/months/mine`,
-    OwnedMonthsSchema,
-  ).catch(() => null);
+  const [ownership, externalBooks] = await Promise.all([
+    apiGetAuthed(
+      `/api/payments/courses/${course.id}/months/mine`,
+      OwnedMonthsSchema,
+    ).catch(() => null),
+    outline.enrolled
+      ? apiGetAuthed(
+          `/api/me/external-books/courses/${course.id}`,
+          z.array(StudentExternalBookSummarySchema),
+        ).catch(() => [])
+      : Promise.resolve([]),
+  ]);
   const ownedMonthIds = new Set(ownership?.ownedMonthIds ?? []);
 
   // `course.months` هي المفتوحة للبيع بس، وبتشيل عدد المحاضرات المنشورة.
@@ -365,6 +375,10 @@ export default async function LibraryCoursePage({ params }: { params: Promise<Pa
         <div className="mb-8 max-w-[var(--w-prose)]">
           <RichText html={course.description} />
         </div>
+      ) : null}
+
+      {outline.enrolled && externalBooks.length > 0 ? (
+        <ExternalBooksSection books={externalBooks} courseSlug={course.slug} />
       ) : null}
 
       {/* Skipped outright when the course is empty. `CourseOutlineView` maps

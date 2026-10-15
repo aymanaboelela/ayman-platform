@@ -324,9 +324,7 @@ describe('VideoLesson with a mirror', () => {
   it('plays an uploaded lecture from our origin', async () => {
     const { container } = renderUpload(UPLOADED);
     fireEvent.click(screen.getByRole('button', { name: new RegExp(copy.player.play) }));
-    await act(async () => {});
-
-    expect(container.querySelector('video')?.getAttribute('src')).toBe(UPLOADED.mirror?.hlsUrl);
+    await waitFor(() => expect(container.querySelector('video')?.getAttribute('src')).toBe(UPLOADED.mirror?.hlsUrl));
     expect(loadYouTubeIframeApi).not.toHaveBeenCalled();
   });
 

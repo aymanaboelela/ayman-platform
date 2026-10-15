@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { copy } from '@ayman/contracts/copy';
@@ -160,10 +160,17 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
     [current, flags],
   );
 
+  const changeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleChange = useCallback(
     (response: AnswerResponse | null) => {
       setResponses((prev) => ({ ...prev, [current.slotPosition]: response }));
       autosave.setAnswer(current.slotPosition, response);
+
+      if (changeDebounceRef.current) clearTimeout(changeDebounceRef.current);
+      changeDebounceRef.current = setTimeout(() => {
+        void autosave.flushNow();
+      }, 1000);
     },
     [autosave, current.slotPosition],
   );
@@ -560,6 +567,7 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
         onOpenChange={setSubmitDialogOpen}
         attemptId={initial.attemptId}
         locallyUnanswered={locallyUnanswered}
+        deadlineAt={deadlineAt}
         onJump={goTo}
         onConfirm={submitOnce}
       />

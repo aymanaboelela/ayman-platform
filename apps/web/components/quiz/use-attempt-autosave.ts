@@ -106,7 +106,16 @@ export function useAttemptAutosave({
       // (`openSubmitDialog` — its preflight count is read straight after) can
       // await it. It never rejects: the `.catch` below owns every failure.
       if (staleRef.current || dirtyRef.current.size === 0) return Promise.resolve();
-      if (inFlightRef.current) return inFlightPromiseRef.current;
+      if (inFlightRef.current) {
+        // If an in-flight save is already active, chain a follow-up flush so that
+        // subsequent changes made during the flight are reliably saved and awaited.
+        return inFlightPromiseRef.current.then(() => {
+          if (dirtyRef.current.size > 0 && !staleRef.current) {
+            return flushRef.current(keepalive);
+          }
+          return Promise.resolve();
+        });
+      }
 
       // Snapshotted as [slot, valueAtSendTime] pairs — the finally-clause
       // below needs the EXACT value it sent, to tell apart "nothing changed
@@ -120,6 +129,7 @@ export function useAttemptAutosave({
       inFlightRef.current = true;
       setStatus('saving');
 
+      let succeeded = false;
       const pending = apiPutTyped(
         `/api/quiz/attempts/${attemptId}/answers`,
         SaveResultSchema,
@@ -127,6 +137,7 @@ export function useAttemptAutosave({
         keepalive ? { keepalive: true } : undefined,
       )
         .then((result) => {
+          succeeded = true;
           // Only the slots THIS request actually sent, and only if nothing
           // newer overwrote them while it was in flight — a fresher edit
           // must stay dirty for the next flush rather than being dropped.
@@ -155,6 +166,10 @@ export function useAttemptAutosave({
         })
         .finally(() => {
           inFlightRef.current = false;
+          // If newer edits were queued while in flight and last save succeeded, flush them immediately
+          if (succeeded && dirtyRef.current.size > 0 && !staleRef.current) {
+            void flushRef.current(false);
+          }
         });
 
       inFlightPromiseRef.current = pending;

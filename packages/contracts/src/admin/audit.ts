@@ -195,6 +195,7 @@ export const AUDIT_ACTIONS = [
    * `permissions.ts` وفي `StudentsService.setStaffPassword`.
    */
   'staff:set-password',
+  'staff:update',
   /**
    * «سجّل خروج» من صفحة الطالب، وحد الأجهزة بتاعه.
    *

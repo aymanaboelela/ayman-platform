@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { copy } from '@ayman/contracts';
 import { apiSend } from '@/lib/api-server';
 import { sanitizeRichText } from '@/lib/sanitize-html';
@@ -55,10 +55,17 @@ export default async function QuizAttemptPage({
   try {
     initial = await apiSend('POST', `/api/quiz/attempts/${attemptId}/resume`, StartedAttemptSchema);
   } catch (error) {
-    // `apiSend` (Server Action helper) throws a plain `Error` carrying the
-    // status in its message, not `ApiRequestError` — that type is
-    // `apiGetAuthed`'s own, a different helper in the same file.
-    if (error instanceof Error && error.message.includes('failed with 404')) notFound();
+    if (error instanceof Error) {
+      if (error.message.includes('failed with 401')) {
+        redirect(`/login?next=${encodeURIComponent(`/quizzes/${lessonId}/attempt/${attemptId}`)}`);
+      }
+      if (error.message.includes('failed with 404')) {
+        notFound();
+      }
+      if (error.message.includes('failed with 403') || error.message.includes('failed with 400')) {
+        redirect(`/quizzes/${encodeURIComponent(lessonId)}/attempt/${encodeURIComponent(attemptId)}/review`);
+      }
+    }
     throw error;
   }
 

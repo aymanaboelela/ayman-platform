@@ -31,6 +31,8 @@ import { AdminChallengeTopicsController } from './admin-challenge-topics.control
 import { ChallengeTopicsService } from './challenge-topics.service';
 import { AdminExternalBooksController } from './admin-external-books.controller';
 import { ExternalBooksService } from './external-books.service';
+import { StudentExternalBooksController } from './student-external-books.controller';
+import { StudentExternalBooksService } from './student-external-books.service';
 import { MediaModule } from '../media/media.module';
 import { GameController } from './game.controller';
 import { AdminGameStatsController } from './admin-game-stats.controller';
@@ -59,6 +61,7 @@ import { GameService } from './game.service';
     AdminChallengeTopicsController,
     AdminGameStatsController,
     AdminExternalBooksController,
+    StudentExternalBooksController,
   ],
   providers: [
     MasteryService,
@@ -79,8 +82,10 @@ import { GameService } from './game.service';
     GameBanksService,
     ChallengeTopicsService,
     ExternalBooksService,
+    StudentExternalBooksService,
     GameVoiceService,
     GameStatsService,
+
     // Registering an APP_* provider from inside a feature module still applies
     // it globally (Nest hoists APP_* providers) — every future controller that
     // renders a question is covered the moment it adds @NoAnswerLeak(), with

@@ -99,6 +99,7 @@ const VIDEO_UPLOAD_ORIGIN = (process.env.NEXT_PUBLIC_VIDEO_UPLOAD_ORIGIN ?? '').
  */
 export const PROTECTED_PREFIXES = [
   '/dashboard',
+  '/welcome',
   '/path',
   '/onboarding',
   '/settings',

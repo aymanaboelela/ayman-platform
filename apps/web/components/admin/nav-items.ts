@@ -26,6 +26,7 @@ import {
   Trophy,
   Users,
   UserRoundSearch,
+  UserCog,
   type LucideIcon,
   Megaphone,
   MessagesSquare,
@@ -570,6 +571,13 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     labelAr: copy.admin.nav.audit,
     icon: ScrollText,
     permission: 'audit:read',
+    group: 'system',
+  },
+  {
+    href: '/admin/profile',
+    labelAr: copy.admin.nav.profile,
+    icon: UserCog,
+    permission: 'admin:access',
     group: 'system',
   },
   {
