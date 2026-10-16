@@ -83,6 +83,21 @@ describe('useErrorReport', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('never files a chunk load error from a stale deploy', () => {
+    const err = new Error('Failed to load chunk /_next/static/chunks/0lh3tq3nd7tdv.js from module 501123');
+    err.name = 'ChunkLoadError';
+    render(<Harness message={err.message} />);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('never files an error when offline or transient network drop occurs', () => {
+    for (const message of ['Failed to fetch', 'Load failed']) {
+      render(<Harness message={message} />);
+      cleanup();
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('still files a real error that merely mentions a server action', () => {
     // Matching too broadly would silently empty the screen this was found on,
     // so the guard needs both halves of the sentence — not the words "Server

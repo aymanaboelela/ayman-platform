@@ -54,6 +54,14 @@ export class AdminErrorsController {
     );
   }
 
+  /** Mark all open faults handled. */
+  @RequirePermission('diagnostics:resolve')
+  @Patch('resolve-all')
+  @HttpCode(204)
+  async resolveAll(): Promise<void> {
+    await this.diagnostics.resolveAll();
+  }
+
   /**
    * Mark handled.
    *

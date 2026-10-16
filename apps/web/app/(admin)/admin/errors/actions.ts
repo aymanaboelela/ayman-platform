@@ -37,3 +37,16 @@ export async function setResolvedAction(
     return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
   }
 }
+
+/**
+ * Mark every currently open failure as resolved.
+ */
+export async function resolveAllAction(): Promise<ErrorActionResult> {
+  try {
+    await adminSendVoid('PATCH', '/api/admin/errors/resolve-all');
+    revalidatePath('/admin/errors');
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'unknown' };
+  }
+}

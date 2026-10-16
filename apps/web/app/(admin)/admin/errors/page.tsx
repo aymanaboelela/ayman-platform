@@ -13,6 +13,7 @@ import {
 import { cn } from '@ayman/ui';
 import { adminGet } from '@/lib/admin-api';
 import { ResolveButton } from './resolve-button';
+import { ResolveAllButton } from './resolve-all-button';
 
 const c = copy.admin.errors;
 
@@ -140,24 +141,27 @@ export default async function AdminErrorsPage({
         </div>
       </dl>
 
-      <nav className="mt-5 flex flex-wrap gap-1.5">
-        {ERROR_REPORT_FILTERS.map((option) => (
-          <Link
-            key={option}
-            href={`/admin/errors?filter=${option}`}
-            aria-current={option === filter ? 'page' : undefined}
-            className={cn(
-              'rounded-full border px-3.5 py-1.5 text-[length:var(--fs-text-sm)]',
-              'transition-colors duration-[160ms] ease-out',
-              option === filter
-                ? 'border-accent bg-accent text-[#1A1206]'
-                : 'border-line text-fg-muted hover:border-accent/40 hover:text-fg',
-            )}
-          >
-            {FILTER_LABELS[option]}
-          </Link>
-        ))}
-      </nav>
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <nav className="flex flex-wrap gap-1.5">
+          {ERROR_REPORT_FILTERS.map((option) => (
+            <Link
+              key={option}
+              href={`/admin/errors?filter=${option}`}
+              aria-current={option === filter ? 'page' : undefined}
+              className={cn(
+                'rounded-full border px-3.5 py-1.5 text-[length:var(--fs-text-sm)]',
+                'transition-colors duration-[160ms] ease-out',
+                option === filter
+                  ? 'border-accent bg-accent text-[#1A1206]'
+                  : 'border-line text-fg-muted hover:border-accent/40 hover:text-fg',
+              )}
+            >
+              {FILTER_LABELS[option]}
+            </Link>
+          ))}
+        </nav>
+        {summary.open > 0 ? <ResolveAllButton /> : null}
+      </div>
 
       {rows.length === 0 ? (
         <div className="mt-5 rounded-lg border border-dashed border-line bg-surface-2 px-6 py-12 text-center">

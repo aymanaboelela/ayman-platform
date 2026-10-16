@@ -6078,6 +6078,7 @@ const admin = {
     student: 'الطالب',
     signedOut: 'زائر مش مسجّل',
     resolve: 'اعتبرها اتحلّت',
+    resolveAll: 'اعتبر الكل اتحل',
     reopen: 'رجّعها مفتوحة',
     resolvedAt: 'اتقفلت',
     /**

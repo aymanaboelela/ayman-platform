@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { UPSTREAM_TIMEOUT_DIGEST } from './api';
-import { isStaleDeployError } from './stale-deploy';
+import { isModuleEvaluationError, isStaleChunkError, isStaleDeployError } from './stale-deploy';
 
 /**
  * The one place an `error.tsx` hands its error somewhere before drawing a
@@ -67,17 +67,34 @@ export function useErrorReport(error: Error & { digest?: string }): void {
     console.error('[error-boundary]', error);
 
     /*
-     * A tab older than the deploy it is talking to is not a fault, and filing
-     * it as one costs more than it sounds: every row on `/admin/errors` that
-     * describes a deploy is a row making a real failure harder to find, and
-     * this one arrives with a fresh action id each time — so it can never even
-     * group, and lands as a NEW row per deploy per open tab. `use-error-retry`
-     * turns the retry into the document load that actually fixes it; there is
-     * nothing here for the instructor to do. See `lib/stale-deploy.ts`.
+     * Tabs older than the deploy they are talking to (missing server action ids,
+     * old chunk hashes that 404 after deploy, or outdated module graphs) are deploy
+     * artifacts, not application faults. Filing them costs more than it sounds: every
+     * row on `/admin/errors` that describes a deploy is a row making real failures
+     * harder to find. `use-error-retry` automatically recovers via document reload.
      *
      * Still logged to the console above, like everything else.
      */
-    if (isStaleDeployError(error)) return;
+    if (
+      isStaleDeployError(error) ||
+      isStaleChunkError(error) ||
+      isModuleEvaluationError(error) ||
+      (typeof error.message === 'string' && error.message.includes('Failed to load chunk'))
+    ) {
+      return;
+    }
+
+    /*
+     * Client-side network dropouts (device offline, aborted requests, or transient
+     * fetch drops) are connectivity events, not platform bugs.
+     */
+    if (
+      (typeof navigator !== 'undefined' && !navigator.onLine) ||
+      error.message === 'Failed to fetch' ||
+      error.message === 'Load failed'
+    ) {
+      return;
+    }
 
     /*
      * `timeout` is a distinguishable kind because `lib/api.ts` stamps a known

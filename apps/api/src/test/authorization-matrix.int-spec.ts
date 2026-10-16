@@ -1164,6 +1164,9 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'error log list: admin', method: 'get', path: () => '/api/admin/errors', actor: 'admin', status: 200 },
     { label: 'error log resolve: anonymous', method: 'patch', path: () => '/api/admin/errors/1/resolve', actor: 'anonymous', status: 401 },
     { label: 'error log resolve: student', method: 'patch', path: () => '/api/admin/errors/1/resolve', actor: 'student', status: 403 },
+    { label: 'error log resolve all: anonymous', method: 'patch', path: () => '/api/admin/errors/resolve-all', actor: 'anonymous', status: 401 },
+    { label: 'error log resolve all: student', method: 'patch', path: () => '/api/admin/errors/resolve-all', actor: 'student', status: 403 },
+    { label: 'error log resolve all: admin', method: 'patch', path: () => '/api/admin/errors/resolve-all', actor: 'admin', status: 204 },
     { label: 'error log reopen: student', method: 'patch', path: () => '/api/admin/errors/1/reopen', actor: 'student', status: 403 },
 
     // ── المساعد: the inbox is admin-only, on three separate permissions ──
