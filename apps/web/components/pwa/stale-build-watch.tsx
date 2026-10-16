@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 // layout, so its imports land on every route. `toaster.tsx` says why.
 import { copy } from '@ayman/contracts/copy';
 import { watchBuild } from '@/lib/build-watch';
+import { isStaleChunkError } from '@/lib/stale-deploy';
 import { isStaleActionError, markTabStale, subscribeStaleTab } from '@/lib/stale-tab';
 
 /**
@@ -56,10 +57,20 @@ export function StaleBuildWatch() {
     // Not `preventDefault()`: the console line is still worth having for
     // whoever has devtools open, and nothing here claims to have handled it.
     const onRejection = (event: PromiseRejectionEvent) => {
-      if (isStaleActionError(event.reason)) markTabStale();
+      if (
+        isStaleActionError(event.reason) ||
+        (event.reason instanceof Error && isStaleChunkError(event.reason))
+      ) {
+        markTabStale();
+      }
     };
     const onError = (event: ErrorEvent) => {
-      if (isStaleActionError(event.error)) markTabStale();
+      if (
+        isStaleActionError(event.error) ||
+        (event.error instanceof Error && isStaleChunkError(event.error))
+      ) {
+        markTabStale();
+      }
     };
     window.addEventListener('unhandledrejection', onRejection);
     window.addEventListener('error', onError);
