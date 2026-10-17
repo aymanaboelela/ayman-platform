@@ -191,9 +191,13 @@ describe('RegradeService', () => {
       data: { mark: 0.5, gradedBy: f.adminId },
     });
 
+    // Not offered either: a count the button cannot change is a banner that never clears.
+    expect(await service.preview(f.bankEntryIds[0]!, 'all')).toMatchObject({ answers: 0 });
+
     await moveKeyTo(f.bankEntryIds[0]!, '<p>ج</p>', f.adminId);
     expect(await service.regradeEntry(f.bankEntryIds[0]!, f.adminId)).toMatchObject({ moved: 0, skipped: 1 });
     expect(await markOf(paper)).toBe(0.5);
+    expect(await service.quizEdits(f.quizId)).toEqual({ pendingDrafts: 0, staleAnswers: 0, students: 0 });
   });
 
   it('moves a paper still being sat, and marks it against the new key — even from a stale tab', async () => {
