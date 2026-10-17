@@ -10,6 +10,7 @@ import { QuestionRemovalDto } from './dto/question-removal.dto';
 import { QuestionTypeSchema } from '@ayman/contracts/quiz/question';
 import { QuestionBankService } from './question-bank.service';
 import { QuestionRemovalService } from './question-removal.service';
+import { RegradeService } from './regrade.service';
 
 @Controller('admin/questions')
 @RequirePermission('question:write')
@@ -18,6 +19,7 @@ export class AdminQuestionsController {
   constructor(
     private readonly bank: QuestionBankService,
     private readonly removal: QuestionRemovalService,
+    private readonly regrade: RegradeService,
   ) {}
 
   // Registered BEFORE `@Get()`'s sibling param-free list route matters only
@@ -142,6 +144,28 @@ export class AdminQuestionsController {
   @Post(':bankEntryId/duplicate')
   async duplicate(@CurrentUser() user: AuthenticatedUser, @Param('bankEntryId') bankEntryId: string) {
     return { bankEntryId: await this.bank.duplicate(bankEntryId, user.id) };
+  }
+
+  /**
+   * «صحّح من جديد» — how many answers sit on an older version of this
+   * question, shown in the save confirmation before anything is touched.
+   * `attempt:grade`, not the class's `question:write`: the button it feeds
+   * changes students' marks, so seeing it is that permission's business.
+   */
+  @Get(':bankEntryId/regrade')
+  @RequirePermission('attempt:grade')
+  regradePreview(@Param('bankEntryId') bankEntryId: string, @Query('scope') scope?: string) {
+    // Anything but `all` is the default — an unknown value reads as "no
+    // filter", never as a 500 (the same habit as `list` above).
+    return this.regrade.preview(bankEntryId, scope === 'all' ? 'all' : 'stale');
+  }
+
+  /** Moves those answers onto the latest published version and marks them again. */
+  @Post(':bankEntryId/regrade')
+  @RequirePermission('attempt:grade')
+  @HttpCode(200)
+  regradeEntry(@CurrentUser() user: AuthenticatedUser, @Param('bankEntryId') bankEntryId: string) {
+    return this.regrade.regradeEntry(bankEntryId, user.id);
   }
 
   @Post('bulk')

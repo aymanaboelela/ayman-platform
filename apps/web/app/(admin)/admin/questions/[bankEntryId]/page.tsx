@@ -57,7 +57,7 @@ export default async function EditQuestionPage({
       <div className="qpage-head">
         <h1 className="text-[length:var(--fs-title-2)] font-semibold">{copy.quizAdmin.editQuestion}</h1>
         <div className="flex flex-wrap items-center gap-2">
-          {hydrated.status === 'ready' || archived ? null : <PublishQuestionButton versionId={hydrated.versionId} />}
+          {hydrated.status === 'ready' || archived ? null : <PublishQuestionButton versionId={hydrated.versionId} bankEntryId={hydrated.version > 1 ? hydrated.bankEntryId : undefined} />}
           <QuestionPageActions bankEntryId={hydrated.bankEntryId} archived={archived} />
         </div>
       </div>
@@ -86,6 +86,7 @@ export default async function EditQuestionPage({
         bankEntryId={hydrated.bankEntryId}
         defaultValues={hydrated.input}
         publishOnSave={!archived}
+        usedInQuizzes={hydrated.usedInQuizzes}
       />
     </>
   );

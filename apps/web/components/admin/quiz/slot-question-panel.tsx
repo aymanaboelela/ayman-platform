@@ -135,7 +135,7 @@ export function SlotQuestionPanel({
           {formatCopy(c.versionBadge, { n: question.version })}
           {isDraft ? ` · ${c.draftBadge}` : ''}
         </p>
-        {isDraft ? <PublishQuestionButton versionId={question.versionId} /> : null}
+        {isDraft ? <PublishQuestionButton versionId={question.versionId} bankEntryId={question.version > 1 ? question.bankEntryId : undefined} /> : null}
       </div>
 
       {question.usedInQuizzes > 1 ? (
@@ -162,10 +162,17 @@ export function SlotQuestionPanel({
         bankEntryId={question.bankEntryId}
         defaultValues={question.input}
         embedded
+        // The same two buttons as the bank's own page, and the same «متأكد؟».
+        // This panel's lone «حفظ» used to write a draft and stop: a teacher
+        // correcting a key from inside the exam never saw it reach a student
+        // (22 such edits on one stack, 2026-10-17). `slotDraftPending` above
+        // now only follows an explicit «حفظ كمسودة».
+        publishOnSave
+        usedInQuizzes={question.usedInQuizzes}
         // Stays open on save. The instructor is mid-exam, and closing the
         // thing they just edited hides whether the edit took.
-        onSaved={() => {
-          setSavedAsDraft(true);
+        onSaved={({ published }) => {
+          setSavedAsDraft(!published);
           setAttempt((n) => n + 1);
         }}
       />

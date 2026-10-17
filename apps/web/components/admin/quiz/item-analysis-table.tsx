@@ -1,10 +1,13 @@
 'use client';
 
+import Link from 'next/link';
 import { Fragment, useState } from 'react';
+import { CircleAlert } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
 import { SafeHtml } from '@/components/content/safe-html';
+import './question-bank.css';
 
 export interface ItemAnalysisDistractor {
   optionId: string;
@@ -15,11 +18,19 @@ export interface ItemAnalysisDistractor {
 
 export interface ItemAnalysisRow {
   questionVersionId: string;
+  /** For «افتح السؤال». Optional so a payload from before the field still renders. */
+  bankEntryId?: string | null;
   stemHtml: string;
   n: number;
   facility: number | null;
   discrimination: number | null;
   distractors: ItemAnalysisDistractor[];
+  /**
+   * Most answers gathered on ONE option that is not the key — what every
+   * mis-keyed question looked like on 2026-10-17, and no merely hard one did.
+   * See `isSuspectKey` in the API.
+   */
+  suspectKey?: boolean;
 }
 
 /** Below this many attempts, a discrimination index is noise, not signal —
@@ -85,6 +96,22 @@ export function ItemAnalysisTable({ items }: { items: ItemAnalysisRow[] }) {
                     >
                       <SafeHtml html={item.stemHtml} className="truncate text-fg" />
                     </button>
+                    {item.suspectKey ? (
+                      <div className="flex flex-wrap items-center gap-2 px-3 pb-3">
+                        <span className="qsuspect" title={copy.quizAdmin.suspectKeyHint}>
+                          <CircleAlert className="size-3.5" aria-hidden="true" />
+                          {copy.quizAdmin.suspectKey}
+                        </span>
+                        {item.bankEntryId ? (
+                          <Link
+                            href={`/admin/questions/${item.bankEntryId}`}
+                            className="text-[length:var(--fs-text-xs)] text-accent-text underline underline-offset-2"
+                          >
+                            {copy.quizAdmin.suspectKeyOpen}
+                          </Link>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </td>
                   <td className="mono p-3 text-center tabular-nums text-fg-muted">{item.n}</td>
                   <td className="p-3">
@@ -110,6 +137,9 @@ export function ItemAnalysisTable({ items }: { items: ItemAnalysisRow[] }) {
                 {isExpanded ? (
                   <tr id={panelId} className="border-b border-line-subtle bg-surface-2">
                     <td colSpan={4} className="p-3">
+                      {item.suspectKey ? (
+                        <p className="mb-2 text-[length:var(--fs-text-sm)] text-err">{copy.quizAdmin.suspectKeyHint}</p>
+                      ) : null}
                       <p className="mb-2 text-[length:var(--fs-text-xs)] text-fg-muted">
                         {copy.quizAdmin.distractorAnalysis}
                       </p>
