@@ -481,7 +481,7 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
               Position on the left of the line and the share done on the
               right, above a meter thick enough to read at a glance. The
               percentage is `aria-hidden`: the sentence beside it already says
-              «جاوبت على ٢ من ٢٠», and a screen reader does not need the same
+              «اتجاوب 2 من 20», and a screen reader does not need the same
               fact twice in two notations.
             */}
             <div className="runner-bar__row">

@@ -3256,7 +3256,7 @@ details[open] > .unit__head .unit__chevron,
  * got — were only answered while the student was at the TOP of the document.
  * A question card plus five `.runner-option` rows measures ~500px at 360px
  * wide, so by the time a student has scrolled far enough to read option 4 the
- * countdown and «سؤال ٣ من ٢٠ · جاوبت على ٢» are both off screen, on every one
+ * countdown and «سؤال 3 من 20 · اتجاوب 2» are both off screen, on every one
  * of twenty questions of a timed paper. `.runner-nav` opposite has been sticky
  * since it was written, but only from 64rem up — so a desktop never showed
  * this, and the phone lost the clock on the one screen where the clock is the
