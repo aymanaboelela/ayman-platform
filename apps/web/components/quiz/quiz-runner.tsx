@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { ChevronLeft, ChevronRight, Send } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
@@ -23,6 +24,8 @@ import { QuestionNavigator } from './question-navigator';
 import { QuestionView } from './question-view';
 import { QuizTimer } from './quiz-timer';
 import { SubmitDialog } from './submit-dialog';
+import type { SubmitDialogQuestion } from './submit-confirm-dialog';
+import { NavigatorKey } from './navigator-key';
 import { type AnswerResponse, useAttemptAutosave, AUTOSAVE_STATUS_LABEL } from './use-attempt-autosave';
 
 function toAnswerResponse(value: unknown): AnswerResponse | null {
@@ -160,7 +163,22 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
     [current, flags],
   );
 
+  /*
+    A trailing flush one second after the last change, so an answer reaches
+    the server while the student is still looking at the question — not only
+    when they move off it. Cleared on unmount: a timer outliving the runner
+    would fire a save into an attempt that has already been handed in.
+  */
   const changeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (changeDebounceRef.current) clearTimeout(changeDebounceRef.current);
+    },
+    [],
+  );
+
+  /** Where focus goes after the submit dialog sends a student to a question. */
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const handleChange = useCallback(
     (response: AnswerResponse | null) => {
@@ -236,8 +254,11 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
     [initial.questions, navigatorSignature],
   );
 
-  const locallyUnanswered = useMemo(
-    () => navigatorItems.filter((q) => !q.answered).map((q) => q.slotPosition),
+  // The submit dialog's view of the paper: the navigator's two booleans plus
+  // the number the student counts by. Derived from the same memo, so the chips
+  // in the dialog and the squares in the map cannot disagree.
+  const submitQuestions = useMemo<SubmitDialogQuestion[]>(
+    () => navigatorItems.map((item, index) => ({ ...item, number: index + 1 })),
     [navigatorItems],
   );
 
@@ -287,6 +308,20 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
     // the submit dialog's jump-to-question all inherit it.
     window.scrollTo({ top: 0, behavior: 'auto' });
   }, [autosave]);
+
+  /*
+    The submit dialog's chips land here, AFTER the dialog has closed (it holds
+    the jump until Radix's close-focus moment). Focus goes to the question
+    card rather than back to «تسليم الامتحان», the paper's last control: a
+    keyboard or screen-reader student sent to «سؤال ٣» should be AT it.
+  */
+  const jumpTo = useCallback(
+    (slotPosition: number) => {
+      goTo(slotPosition);
+      requestAnimationFrame(() => cardRef.current?.focus({ preventScroll: true }));
+    },
+    [goTo],
+  );
 
   function goRelative(delta: number) {
     const nextIndex = currentIndex + delta;
@@ -496,7 +531,8 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
           />
         </div>
 
-        <div className="runner-card">
+        {/* `tabIndex={-1}`: a focus target for `jumpTo`, never a tab stop. */}
+        <div ref={cardRef} tabIndex={-1} className="runner-card">
           {/* Every prop here is stable across a keystroke — see the memos and
               callbacks above. That is what makes `memo(QuestionView)` real
               rather than decorative. */}
@@ -513,6 +549,9 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
         <div className="runner-foot">
           {initial.navMethod === 'free' ? (
             <Button type="button" variant="secondary" onClick={() => goRelative(-1)} disabled={currentIndex <= 0}>
+              {/* Right-pointing for «back»: in an RTL paper the previous
+                  question is to the inline START, which is the right. */}
+              <ChevronRight className="size-4" aria-hidden="true" />
               {copy.quiz.previous}
             </Button>
           ) : (
@@ -532,6 +571,7 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
             */}
             {isLast ? (
               <Button type="button" onClick={openSubmitDialog}>
+                <Send className="size-4 rtl:-scale-x-100" aria-hidden="true" />
                 {copy.quiz.submit}
               </Button>
             ) : (
@@ -541,6 +581,7 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
                 </Button>
                 <Button type="button" onClick={() => goRelative(1)}>
                   {copy.quiz.next}
+                  <ChevronLeft className="size-4" aria-hidden="true" />
                 </Button>
               </>
             )}
@@ -553,12 +594,20 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
           <p className="runner-nav__title">{copy.quiz.navigator}</p>
           <QuestionNavigator questions={navigatorItems} current={current.slotPosition} onSelect={goTo} />
           <p className="runner-nav__legend">
-            {formatCopy(copy.quiz.answeredCount, {
-              answered: answeredCount,
-              total: initial.questions.length,
-            })}
-            {flaggedCount > 0 ? ` · ${formatCopy(copy.quiz.flaggedCount, { n: flaggedCount })}` : ''}
+            <span>
+              {formatCopy(copy.quiz.answeredCount, {
+                answered: answeredCount,
+                total: initial.questions.length,
+              })}
+            </span>
+            {flaggedCount > 0 ? (
+              <>
+                <span aria-hidden="true"> · </span>
+                <span>{formatCopy(copy.quiz.flaggedCount, { n: flaggedCount })}</span>
+              </>
+            ) : null}
           </p>
+          <NavigatorKey />
         </aside>
       ) : null}
 
@@ -566,9 +615,10 @@ export function QuizRunner({ lessonId, initial }: QuizRunnerProps) {
         open={submitDialogOpen}
         onOpenChange={setSubmitDialogOpen}
         attemptId={initial.attemptId}
-        locallyUnanswered={locallyUnanswered}
+        questions={submitQuestions}
         deadlineAt={deadlineAt}
-        onJump={goTo}
+        serverTime={serverTime}
+        onJump={jumpTo}
         onConfirm={submitOnce}
       />
 

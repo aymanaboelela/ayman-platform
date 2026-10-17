@@ -1657,23 +1657,23 @@ const admin = {
     /** The `sr-only` sentence beside the sidebar badge. `{n}` is the number of
      *  PAPERS, the same one the «محتاج تصحيح» tab prints. */
     pendingBadgeLabel: '{n} ورقة محتاجة تصحيح',
-    lead: 'الأسئلة المقالية اللي مستنية درجة منك. لحد ما تتصحح، الطالب واخد فيها صفر.',
+    lead: 'الأسئلة المقالية اللي لسه مستنية درجة. لحد ما تتصحّح، درجتها في مجموع الورقة صفر.',
     empty: 'مفيش ورق مستني تصحيح.',
     /** `{n}` — ungraded answers on one paper. */
     pending: '{n} سؤال',
     studentAnswer: 'إجابة الطالب',
-    noAnswer: 'ساب السؤال فاضي',
+    noAnswer: 'السؤال اتساب فاضي',
     markLabel: 'الدرجة',
     /** `{n}` — the question's own maximum. Typing more is clamped, not refused. */
     markOutOf: 'من {n}',
     feedbackLabel: 'ملاحظتك للطالب (اختياري)',
-    save: 'احفظ الدرجة',
+    save: 'حفظ الدرجة',
     saved: 'اتحفظت',
     saveFailed: 'مقدرناش نحفظ — نجرّب تاني',
     /** `{score}` `{outOf}` — recomputed and shown after every save, because the
      *  whole point is that marking one answer moves the paper's total. */
     totalNow: 'المجموع دلوقتي {score} من {outOf}',
-    open: 'صحّح',
+    open: 'تصحيح',
 
     /* ── الشاشة بقت تلات أقسام ──────────────────────────────────────────────
      *
@@ -1691,13 +1691,13 @@ const admin = {
     tabLate: 'متأخرين',
     leadLate:
       'الورق اللي اتحلّ بعد ما الامتحان قفل. بيتصحّح عادي والطالب بيشوف درجته، بس مش داخل في الترتيب ولا لوحة الشرف.',
-    emptyLate: 'مفيش حد امتحن بعد الميعاد.',
+    emptyLate: 'مفيش ورق اتحلّ بعد الميعاد.',
     /** على الصف نفسه في تبويب المتأخرين. */
     rowLate: 'بعد الميعاد',
     /** تحت كل تبويب — بيقول التبويب ده بيجاوب على إيه. */
-    leadMarked: 'الورق اللي صحّحته بإيدك. اضغط على أي ورقة تعدّل درجتها.',
+    leadMarked: 'الورق اللي اتصحّح يدوي. أي ورقة هنا بتتفتح وتتعدّل درجتها.',
     leadTop: 'ترتيب الطلبة على الامتحانات اللي اتصحّحت. الترتيب بالنسبة المئوية عشان الامتحانات المختلفة تتقارن صح.',
-    emptyMarked: 'لسه مصحّحتش ورق.',
+    emptyMarked: 'لسه مفيش ورق اتصحّح.',
     emptyTop: 'مفيش امتحانات متصحّحة لسه.',
 
     /* ── الفلاتر ───────────────────────────────────────────────────────── */
@@ -1706,10 +1706,10 @@ const admin = {
     filterSort: 'الترتيب',
     sortScore: 'الأعلى درجة',
     sortFastest: 'الأسرع تسليم',
-    sortLatest: 'آخر واحد سلّم',
-    sortEarliest: 'أول واحد سلّم',
+    sortLatest: 'آخر تسليم',
+    sortEarliest: 'أول تسليم',
     sortName: 'بالاسم',
-    filterApply: 'رتّب',
+    filterApply: 'ترتيب',
 
     /* ── الصفوف ───────────────────────────────────────────────────────── */
     /** `{marks}` `{outOf}` — على الطابور، جنب عدد الأسئلة. «٢ سؤال» مش بيقول
@@ -1721,11 +1721,11 @@ const admin = {
     rowDuration: 'خلّص في {n} دقيقة',
     /** `{n}` بالتواني — لأقل من دقيقة. */
     rowDurationSeconds: 'خلّص في {n} ثانية',
-    rowHandMarked: 'صحّحتها بإيدك',
+    rowHandMarked: 'اتصحّحت يدوي',
     rowRank: '#{n}',
     /** على اسم الطالب في أي صف — بيروح لملفه، واللي فيه المحادثة معاه. */
     openProfile: 'ملف الطالب',
-    openPaper: 'شوف الورقة',
+    openPaper: 'فتح الورقة',
 
     /* ── الإحصائية فوق اللستة ────────────────────────────────────────────
      *
@@ -1754,12 +1754,12 @@ const admin = {
      */
     ratingLabel: 'تقييمك',
     ratingHint: 'من ١ لـ ٥ — ده اللي بيفصل بين اللي جابوا نفس الدرجة.',
-    ratingClear: 'شيل التقييم',
-    honorAdd: 'حطه في لوحة الشرف',
-    honorRemove: 'شيله من لوحة الشرف',
+    ratingClear: 'إزالة التقييم',
+    honorAdd: 'إضافة للوحة الشرف',
+    honorRemove: 'إزالة من لوحة الشرف',
     honorOn: 'في لوحة الشرف',
     /** بيتقال قبل ما اسم الطالب وصورته يظهروا على الصفحة الرئيسية. */
-    honorConfirm: 'اسم {name} وصورته هيظهروا في لوحة الشرف على الصفحة الرئيسية. تمام؟',
+    honorConfirm: 'اسم {name} وصورة الحساب هيظهروا في لوحة الشرف على الصفحة الرئيسية. تمام؟',
     honorFailed: 'مقدرناش نحفظ — نجرّب تاني',
   },
 
@@ -6096,32 +6096,34 @@ const admin = {
 
   profile: {
     title: 'الملف الشخصي',
-    subtitle: 'بيانات حسابك وكلمة المرور والأجهزة المسجلة',
-    accountInfo: 'معلومات الحساب',
+    subtitle: 'بيانات الحساب، وكلمة السر، والجلسات المفتوحة.',
+    accountInfo: 'بيانات الحساب',
     name: 'الاسم',
     email: 'البريد الإلكتروني',
-    phone: 'رقم الهاتف',
-    role: 'الدور / الصلاحية',
-    activeSessions: 'الجلسات والأجهزة النشطة',
-    memberSince: 'تاريخ إنشاء الحساب',
-    editProfile: 'تعديل البيانات الأساسية',
+    phone: 'رقم الموبايل',
+    role: 'الدور',
+    activeSessions: 'الجلسات المفتوحة',
+    memberSince: 'الحساب اتعمل في',
+    editProfile: 'تعديل البيانات',
     saveProfile: 'حفظ البيانات',
-    profileSaved: 'تم تحديث البيانات بنجاح',
-    changePassword: 'تغيير كلمة المرور',
-    currentPassword: 'كلمة المرور الحالية',
-    currentPasswordPlaceholder: 'اكتب كلمة المرور الحالية',
-    newPassword: 'كلمة المرور الجديدة',
-    newPasswordPlaceholder: '٨ أحرف على الأقل',
-    confirmPassword: 'تأكيد كلمة المرور الجديدة',
-    confirmPasswordPlaceholder: 'أعد كتابة كلمة المرور الجديدة',
-    revokeOtherSessions: 'تسجيل الخروج من جميع الأجهزة والمتصفحات الأخرى',
-    revokeOtherSessionsHint: 'يُنصح به لحماية حسابك عند تغيير كلمة المرور',
-    passwordChanged: 'تم تغيير كلمة المرور بنجاح',
-    passwordMismatch: 'كلمة المرور الجديدة غير متطابقة مع التأكيد',
-    passwordTooShort: 'كلمة المرور يجب ألا تقل عن ٨ أحرف',
-    permissionsCount: 'عدد الصلاحيات الممنوحة',
-    sessionSingular: 'جلسة واحدة نشطة',
-    sessionPlural: '{count} جلسات نشطة',
+    profileSaved: 'البيانات اتحفظت',
+    /* The password fields moved to `copy/admin-account.ts` with the section
+       itself; these stay for a tab still running the previous build. */
+    changePassword: 'تغيير كلمة السر',
+    currentPassword: 'كلمة السر الحالية',
+    currentPasswordPlaceholder: 'كلمة السر الحالية',
+    newPassword: 'كلمة السر الجديدة',
+    newPasswordPlaceholder: '8 حروف على الأقل',
+    confirmPassword: 'تأكيد كلمة السر الجديدة',
+    confirmPasswordPlaceholder: 'كلمة السر الجديدة مرة تانية',
+    revokeOtherSessions: 'تسجيل خروج من باقي الأجهزة',
+    revokeOtherSessionsHint: 'الجهاز ده هيفضل داخل.',
+    passwordChanged: 'اتغيّرت كلمة السر',
+    passwordMismatch: 'التأكيد مش زي كلمة السر الجديدة.',
+    passwordTooShort: 'كلمة السر الجديدة لازم تكون 8 حروف على الأقل.',
+    permissionsCount: 'الصلاحيات',
+    sessionSingular: 'جلسة واحدة',
+    sessionPlural: '{count} جلسات',
   },
 } as const;
 

@@ -252,6 +252,91 @@ describe('StudentExternalBooksService', () => {
       expect(result.review[0]?.correctness).toBe('correct');
       expect(result.review[0]?.feedbackHtml).toBe('<p>صح ممتاز</p>');
       expect(result.review[0]?.rightAnswerOptionIds).toEqual([opt1Id]);
+      // The review reads `{kind, optionIds}` — a bare array highlighted nothing.
+      expect(result.review[0]?.response).toEqual({ kind: 'choice', optionIds: [opt1Id] });
+    });
+
+    /** One served question, then the version the grader reads back. */
+    function servesOne(
+      version: { id: string; type: string; options: Array<Record<string, unknown>> } & Record<string, unknown>,
+    ) {
+      prismaMock.questionVersion.findMany
+        .mockResolvedValueOnce([
+          {
+            id: version.id,
+            bankEntryId: `entry-${version.id}`,
+            version: 1,
+            type: version.type,
+            stemHtml: '<p>سؤال</p>',
+            defaultMark: 2,
+            settings: {},
+            options: version.options.map((o) => ({ id: o.id, bodyHtml: o.bodyHtml })),
+          },
+        ])
+        .mockResolvedValueOnce([{ stemHtml: '<p>سؤال</p>', defaultMark: 2, settings: {}, ...version }]);
+    }
+
+    it('grades a short answer by its pattern — it is text, never an option id', async () => {
+      const shortId = randomUUID();
+      const patternId = randomUUID();
+      servesOne({
+        id: shortId,
+        type: 'short_answer',
+        generalFeedbackHtml: null,
+        options: [
+          { id: patternId, bodyHtml: '', fraction: 1, feedbackHtml: null, position: 0, answerPattern: 'CPU' },
+        ],
+      });
+
+      const session = await service.startPractice(userId, bookId, { scope: 'book', scopeId: bookId, count: 5 });
+      const result = await service.submitPractice(userId, session.sessionId, {
+        answers: [{ slotPosition: 1, questionId: shortId, optionIds: [], text: 'cpu' }],
+      });
+
+      expect(result.review[0]?.correctness).toBe('correct');
+      expect(result.score).toBe(2);
+      expect(result.review[0]?.rightAnswerText).toBe('CPU');
+      // The accepted patterns are the answer key, not options to list.
+      expect(result.review[0]?.options).toEqual([]);
+    });
+
+    it('leaves a skipped question unanswered and does not repeat the explanation as a note', async () => {
+      servesOne({
+        id: q1Id,
+        type: 'mcq_single',
+        generalFeedbackHtml: '<p>الشرح</p>',
+        options: [
+          { id: opt1Id, bodyHtml: 'أ', fraction: 1, feedbackHtml: null, position: 0 },
+          { id: opt2Id, bodyHtml: 'ب', fraction: 0, feedbackHtml: null, position: 1 },
+        ],
+      });
+
+      const session = await service.startPractice(userId, bookId, { scope: 'book', scopeId: bookId, count: 5 });
+      const result = await service.submitPractice(userId, session.sessionId, { answers: [] });
+
+      expect(result.review[0]?.correctness).toBe('unanswered');
+      expect(result.review[0]?.response).toBeUndefined();
+      expect(result.review[0]?.feedbackHtml).toBeUndefined();
+      expect(result.review[0]?.generalFeedbackHtml).toBe('<p>الشرح</p>');
+    });
+
+    it('never serves an essay — a practice has nobody to mark it', async () => {
+      prismaMock.questionVersion.findMany.mockResolvedValueOnce([
+        {
+          id: randomUUID(),
+          bankEntryId: 'essay-entry',
+          version: 1,
+          type: 'essay',
+          stemHtml: '<p>اكتب</p>',
+          defaultMark: 5,
+          settings: {},
+          options: [],
+        },
+      ]);
+
+      await expect(
+        service.startPractice(userId, bookId, { scope: 'book', scopeId: bookId, count: 5 }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

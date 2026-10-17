@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import type { AdminProfile } from '@ayman/contracts/admin/profile';
 import { copy } from '@ayman/contracts/copy/admin';
+import { adminAccount } from '@ayman/contracts/copy/admin-account';
 import { Button } from '@ayman/ui/components/button';
 import { Card, CardBody, CardHeader, CardTitle } from '@ayman/ui/components/card';
 import { Input } from '@ayman/ui/components/input';
@@ -24,7 +25,7 @@ export function AdminProfileForm({ profile }: { profile: AdminProfile }) {
 
     const trimmedName = name.trim();
     if (!trimmedName || trimmedName.length < 2) {
-      setError('الاسم يجب أن يتكون من حرفين على الأقل');
+      setError(adminAccount.nameTooShort);
       return;
     }
 
@@ -35,10 +36,11 @@ export function AdminProfileForm({ profile }: { profile: AdminProfile }) {
       });
 
       if (result.ok) {
-        toast.success(result.message ?? c.profileSaved);
+        setError(null);
+        toast.success(c.profileSaved, { id: 'admin-profile' });
       } else {
         setError(result.message);
-        toast.error(result.message);
+        toast.error(result.message, { id: 'admin-profile' });
       }
     });
   }
@@ -59,7 +61,7 @@ export function AdminProfileForm({ profile }: { profile: AdminProfile }) {
               name="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="اكتب اسمك الكامل"
+              placeholder={adminAccount.nameRequiredHint}
               required
               minLength={2}
               maxLength={100}
@@ -80,9 +82,7 @@ export function AdminProfileForm({ profile }: { profile: AdminProfile }) {
               dir="ltr"
               disabled={isPending}
             />
-            <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
-              رقم الهاتف يمكن استخدامه لتسجيل الدخول أو تلقي التنبيهات.
-            </p>
+            <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{adminAccount.phoneHint}</p>
           </div>
 
           <div>
@@ -91,15 +91,13 @@ export function AdminProfileForm({ profile }: { profile: AdminProfile }) {
             </Label>
             <Input
               id="admin-email"
-              value={profile.email ?? 'غير مسجل'}
+              value={profile.email ?? adminAccount.emailMissing}
               readOnly
               disabled
               dir="ltr"
               className="bg-surface-3 opacity-80 cursor-not-allowed"
             />
-            <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
-              البريد الإلكتروني هو المعرف الأساسي لحسابك ولا يمكن تعديله يدويًا.
-            </p>
+            <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">{adminAccount.emailLocked}</p>
           </div>
 
           {error ? (

@@ -231,8 +231,21 @@ export const AdminGradeAnswerSchema = z
     mark: z.number().min(0),
     /** Sanitised server-side like every other rich-text write. */
     feedbackHtml: z.string().max(20000).optional(),
-    /** Optional response override (e.g. choice optionIds or text) by instructor */
-    response: z.unknown().optional(),
+    /**
+     * The instructor's correction of the RECORDED answer on a choice question
+     * — sent only when he changed it on purpose (`grade-answer-card.tsx`), and
+     * checked server-side against that question's own options.
+     *
+     * Choice only, and never empty. It was `z.unknown()`: the card sent
+     * `{kind:'choice', optionIds: []}` on every save of a choice card, which
+     * turned an unanswered question into an "answered with nothing" one, and
+     * nothing stopped a payload from rewriting what a student WROTE — which
+     * is not a correction but authorship.
+     */
+    response: z
+      .object({ kind: z.literal('choice'), optionIds: z.array(z.string().min(1)).min(1).max(50) })
+      .strict()
+      .optional(),
   })
   .strict();
 export type AdminGradeAnswerInput = z.infer<typeof AdminGradeAnswerSchema>;

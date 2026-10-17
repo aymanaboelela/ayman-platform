@@ -2,7 +2,23 @@
 
 import { memo, useRef, useState, type KeyboardEvent } from 'react';
 import { copy } from '@ayman/contracts/copy';
+import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
+import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
+
+const r = quizExperience.runner;
+
+/** The chip's whole state, said — see `quizExperience.runner.chipOpen`. */
+function chipLabel(question: NavigatorQuestion): string {
+  const template = question.answered
+    ? question.flagged
+      ? r.chipAnsweredFlagged
+      : r.chipAnswered
+    : question.flagged
+      ? r.chipOpenFlagged
+      : r.chipOpen;
+  return formatCopy(template, { n: question.slotPosition + 1 });
+}
 
 export interface NavigatorQuestion {
   slotPosition: number;
@@ -80,7 +96,7 @@ function QuestionNavigatorImpl({ questions, current, onSelect }: QuestionNavigat
                 }}
                 type="button"
                 aria-current={isCurrent ? 'step' : undefined}
-                aria-label={`${copy.common.question} ${question.slotPosition + 1}`}
+                aria-label={chipLabel(question)}
                 // A stable handle for "this question now holds an answer".
                 // Answered-ness was expressible only as a border/background
                 // class before, so the only way to observe it from outside was

@@ -1,6 +1,8 @@
 import { Calendar, Laptop, ShieldCheck, User } from 'lucide-react';
 import type { AdminProfile } from '@ayman/contracts/admin/profile';
+import { arabicCount } from '@ayman/contracts/arabic-count';
 import { copy } from '@ayman/contracts/copy/admin';
+import { adminAccount } from '@ayman/contracts/copy/admin-account';
 import { Badge } from '@ayman/ui/components/badge';
 import { Card, CardBody, CardHeader, CardTitle } from '@ayman/ui/components/card';
 
@@ -17,10 +19,9 @@ export function AdminProfileOverview({ profile }: { profile: AdminProfile }) {
     }
   })();
 
-  const sessionsLabel =
-    profile.activeSessionsCount === 1
-      ? c.sessionSingular
-      : c.sessionPlural.replace('{count}', String(profile.activeSessionsCount));
+  // A counted noun — «جلستين»، «3 جلسات»، «11 جلسة» — where it used to be
+  // `'{count} جلسات'.replace(...)` for every number but one.
+  const sessionsLabel = arabicCount(profile.activeSessionsCount, adminAccount.sessions);
 
   return (
     <Card className="border-line bg-surface-2">
@@ -75,15 +76,9 @@ export function AdminProfileOverview({ profile }: { profile: AdminProfile }) {
                 {c.permissionsCount}
               </span>
               <span className="text-[length:var(--fs-text-sm)] font-medium text-fg">
-                {profile.permissions.length > 0 ? (
-                  profile.permissions.includes('*') ? (
-                    'صلاحيات كاملة على المنصة (*)'
-                  ) : (
-                    `${profile.permissions.length} صلاحية`
-                  )
-                ) : (
-                  'الصلاحيات الافتراضية للرول'
-                )}
+                {profile.permissions.includes('*')
+                  ? adminAccount.allPermissions
+                  : arabicCount(profile.permissions.length, adminAccount.permissionsCount)}
               </span>
             </div>
           </div>

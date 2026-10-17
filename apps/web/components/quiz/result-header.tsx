@@ -1,8 +1,15 @@
-import { copy, formatCopy, formatMark } from '@ayman/contracts';
+import { CircleCheck, Hourglass, Sparkles, TrendingUp, type LucideIcon } from 'lucide-react';
+// Subpaths, never the root barrel: the book-practice runner renders this from
+// a client component, and `@ayman/contracts` would carry the whole copy table
+// and every schema into its bundle (`lib/client-barrel.test.ts`).
+import { copy } from '@ayman/contracts/copy';
+import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
+import { formatCopy, formatMark } from '@ayman/contracts/format';
+import { isolateLtrRuns } from '@/components/dashboard/ltr-runs';
 import { tenantSentence } from '@/lib/tenant-copy';
-import { Badge } from '@ayman/ui';
-import { cn } from '@ayman/ui/lib/cn';
-import { AlertCircle, Clock, Sparkles, ThumbsUp, Trophy } from 'lucide-react';
+import { resultBand, type ResultBand } from './result-band';
+
+const x = quizExperience.result;
 
 export interface ResultHeaderProps {
   scaledScore: number | null;
@@ -23,9 +30,61 @@ export interface ResultHeaderProps {
   gradedOutOf: number;
 }
 
+const BAND_ICON: Record<ResultBand, LucideIcon> = {
+  high: Sparkles,
+  pass: CircleCheck,
+  low: TrendingUp,
+  pending: Hourglass,
+};
+
 /**
- * Result header showing score, percentage gauge, and custom evaluative
- * feedback based on student performance.
+ * The top of the screen a student lands on straight after submitting — and,
+ * with the same props, the top of a book practice's result.
+ *
+ * ## What it shows
+ *
+ * The mark over its total; the percentage in a chip; a bar with the pass line
+ * drawn ON it; and one sentence about what to do next, in the student's band
+ * (`result-band.ts`, which is `/results`'s band, decided by this paper's own
+ * verdict). `--ok`/`--err` appear only on the verdict badge — the one licence
+ * they have here — and the band is amber under the line, never red.
+ *
+ * The 2026-10-15 redesign added the percentage, the bar and the banner, which
+ * is what the owner asked to keep. What it also added is gone: copy written
+ * into the component, a banner that told a student who had PASSED at 60%
+ * «لا مش هينفع كده» in red (its cut-offs ignored the pass mark), «فخور بيك»
+ * and «عاش يا بطل» (addressed to a boy), six emoji, and a 700ms `width`
+ * transition — layout on every frame, past the 400ms motion ceiling.
+ *
+ * ## Two different screens, decided by `pendingOutOf`
+ *
+ * On a finished paper this is the mark over the quiz's total, a pass/fail
+ * badge, the pass line, and a band.
+ *
+ * On a paper whose essays are still with the instructor it is deliberately
+ * NOT that screen, because that screen lies. `gradeAttempt` counts an ungraded
+ * answer as zero — correctly, since a provisional total must come from
+ * somewhere and a pending answer can only raise it — so a midterm marked out
+ * of 100 with 50 marks of essay outstanding rendered «٤٨٫٥ / ١٠٠» in title
+ * type with a red «محتاجة مراجعة» next to it. The student reads a near-fail.
+ * They in fact scored 48.5 of the 50 anyone has looked at.
+ *
+ * So while marks are outstanding:
+ *
+ *   · the denominator is `gradedOutOf`, not `gradeOutOf` — the marked part
+ *     reported out of what the marked part is worth, under an eyebrow that
+ *     names which half of the paper that is;
+ *   · the verdict badge is replaced, not merely hidden. `passed` is non-null
+ *     on a pending attempt (a provisional pass is honest, a provisional fail
+ *     is not), and rendering the badge at all would put «محتاجة مراجعة» on a
+ *     paper nobody has finished reading. «لسه بتتصحّح» is a state, and it is
+ *     the true one;
+ *   · the pass line comes off with it. «درجة النجاح ٥٠٪» under a mark out of
+ *     a different total is an invitation to compare two numbers that are not
+ *     on the same scale;
+ *   · the outstanding amount is stated as an amount, in marks, followed by
+ *     where the rest will arrive. A gap the student has to compute is the
+ *     thing that frightens them.
  */
 export function ResultHeader({
   scaledScore,
@@ -38,156 +97,105 @@ export function ResultHeader({
 }: ResultHeaderProps) {
   /*
    * `pendingOutOf > 0` is the authority, and `needsGrading` is kept as a
-   * fallback for the one window where it is the only evidence there is.
+   * fallback for the one window where it is the only evidence there is: a
+   * review matrix that hides `marks` still ships `correctness`, and a payload
+   * from an API deployed before `pendingOutOf` existed carries 0. Falling back
+   * to the old undivided screen with the old «إجابتك المقالية...» line is the
+   * right degradation — never to a confident «٤٨٫٥ / ١٠٠».
    */
   const pending = pendingOutOf > 0;
   const outstanding = pending || needsGrading;
 
   // The total the headline is over. Not a cosmetic choice — see the header.
   const outOf = pending ? gradedOutOf : gradeOutOf;
-  const scorePercent =
-    scaledScore !== null && outOf > 0 ? Math.round((scaledScore / outOf) * 100) : null;
-
-  const isExcellent = !outstanding && scorePercent !== null && scorePercent >= 85;
-  const isGood = !outstanding && !isExcellent && scorePercent !== null && scorePercent >= 70;
-  const isNeedsWork =
-    !outstanding && ((scorePercent !== null && scorePercent < 70) || passed === false);
+  const percent =
+    scaledScore !== null && outOf > 0
+      ? Math.min(100, Math.max(0, Math.round((scaledScore / outOf) * 100)))
+      : null;
+  const band = resultBand({ percent, passed, passPercent, outstanding });
+  const BandIcon = BAND_ICON[band];
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface-2 p-5 md:p-6 shadow-[var(--shadow-sm)]">
-      <div className="flex items-center justify-between gap-3">
+    <section className="result-card" data-band={band}>
+      <div className="result-card__top">
         <p className="eyebrow">{pending ? copy.quiz.pendingEyebrow : copy.quiz.resultsTitle}</p>
         {outstanding ? (
-          <Badge tone="accent" className="flex items-center gap-1.5 py-1 px-3">
-            <Clock className="size-3.5" aria-hidden="true" />
-            <span>{copy.quiz.pendingNotFinal}</span>
-          </Badge>
+          // Amber, never `ok`/`err`: nothing has been decided yet, and the
+          // two colours this screen reserves both read as a decision.
+          <span className="verdict verdict--pending">
+            <Hourglass className="size-4" aria-hidden="true" />
+            {copy.quiz.pendingNotFinal}
+          </span>
         ) : passed !== null ? (
-          <Badge
-            tone={passed ? 'ok' : 'err'}
-            className="flex items-center gap-1.5 py-1 px-3 text-[length:var(--fs-text-sm)] font-semibold"
-          >
+          <span className={`verdict verdict--${passed ? 'pass' : 'fail'}`}>
+            {passed ? <CircleCheck className="size-4" aria-hidden="true" /> : null}
             {passed ? copy.quiz.passed : copy.quiz.failed}
-          </Badge>
+          </span>
         ) : null}
       </div>
 
-      <div className="flex flex-wrap items-baseline justify-between gap-4">
-        <div>
-          <div className="flex items-baseline gap-2">
-            <span className="mono text-[length:var(--fs-title-1)] font-bold tabular-nums text-fg">
-              {scaledScore === null ? '—' : formatMark(scaledScore)}
-            </span>
-            <span className="mono text-[length:var(--fs-title-3)] text-fg-muted">
-              / {formatMark(outOf)}
-            </span>
-          </div>
-          {!outstanding && (
-            <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted mt-1">
-              {formatCopy(copy.quiz.passMark, { percent: passPercent })}
-            </p>
-          )}
-        </div>
-
-        {scorePercent !== null && (
-          <div
-            className={cn(
-              'flex flex-col items-center justify-center rounded-xl px-4 py-2 border mono',
-              isExcellent
-                ? 'border-[color-mix(in_oklch,var(--ok),transparent_50%)] bg-[color-mix(in_oklch,var(--ok),transparent_90%)] text-ok'
-                : isGood
-                  ? 'border-[color-mix(in_oklch,var(--a-9),transparent_50%)] bg-[color-mix(in_oklch,var(--a-9),transparent_90%)] text-accent-text'
-                  : 'border-[color-mix(in_oklch,var(--err),transparent_50%)] bg-[color-mix(in_oklch,var(--err),transparent_90%)] text-err',
-            )}
-          >
-            <span className="text-[length:var(--fs-title-3)] font-bold">{scorePercent}%</span>
-            <span className="text-[length:var(--fs-text-xs)] opacity-80">النسبة المئوية</span>
-          </div>
-        )}
+      <div className="result-card__figures">
+        <p className="result-card__score">
+          <span className="result-card__mark">{scaledScore === null ? '—' : formatMark(scaledScore)}</span>
+          <span className="result-card__out-of">/ {formatMark(outOf)}</span>
+        </p>
+        {percent !== null ? (
+          <p className="result-card__pct">
+            <span className="result-card__pct-value">{percent}%</span>
+            <span className="result-card__pct-label">{x.percentLabel}</span>
+          </p>
+        ) : null}
       </div>
 
-      {scorePercent !== null && (
-        <div className="flex flex-col gap-1 w-full">
-          <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-surface-3">
-            <div
-              className={cn(
-                'h-full rounded-full transition-all duration-700 ease-out',
-                outstanding
-                  ? 'bg-accent'
-                  : isExcellent || isGood
-                    ? 'bg-ok'
-                    : 'bg-err',
-              )}
-              style={{ width: `${Math.min(100, Math.max(0, scorePercent))}%` }}
+      {percent !== null ? (
+        // Decorative: the figures above ARE the value, in text.
+        <div className="result-card__meter" aria-hidden="true">
+          <span className="result-card__fill" style={{ transform: `scaleX(${percent / 100})` }} />
+          {outstanding ? null : (
+            <span
+              className="result-card__tick"
+              style={{ insetInlineStart: `${Math.min(100, Math.max(0, passPercent))}%` }}
             />
-          </div>
+          )}
         </div>
+      ) : null}
+
+      {outstanding ? null : (
+        <p className="result-card__pass">{isolateLtrRuns(formatCopy(copy.quiz.passMark, { percent: passPercent }))}</p>
       )}
 
-      {/* Motivational & Evaluative Banner */}
-      {isExcellent ? (
-        <div className="flex items-start gap-3 rounded-lg border border-[color-mix(in_oklch,var(--ok),transparent_65%)] bg-[color-mix(in_oklch,var(--ok),transparent_93%)] p-4 text-fg">
-          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-[color-mix(in_oklch,var(--ok),transparent_80%)] text-ok">
-            <Trophy className="size-5" aria-hidden="true" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <p className="font-bold text-[length:var(--fs-text-base)] text-ok flex items-center gap-1.5">
-              <span>فخور بيك وبمستواك الرائع!</span>
-              <Sparkles className="size-4" aria-hidden="true" />
-            </p>
-            <p className="text-[length:var(--fs-text-sm)] text-fg leading-relaxed">
-              عاش يا بطل! أداء يشرف ومجهود ممتاز يثبت فهمك وتركيزك العالي. استمر دائمًا على هذا التألق والتفوق! 💪✨
-            </p>
-          </div>
+      <div className="result-card__note">
+        <span className="result-card__note-well" aria-hidden="true">
+          <BandIcon className="size-5" />
+        </span>
+        <div className="result-card__note-text">
+          <p className="result-card__note-title">{x.bands[band].title}</p>
+          {band !== 'pending' ? (
+            <p className="result-card__note-body">{x.bands[band].body}</p>
+          ) : pending ? (
+            <>
+              {/*
+                ⚠️ Both of the pending lines name the marker, and this is the
+                screen where that matters most: a student reading «باقي ٥٠
+                درجة لسه عند مهندس أيمن بيصحّحها بنفسه» on another instructor's
+                platform has been handed a receipt for a paper the named person
+                has never seen. `notification-view.ts` reached the same
+                conclusion about the NOTIFICATION for this same mark and dropped
+                the detail line; here the sentence is the screen, so it is
+                swapped rather than dropped.
+              */}
+              <p className="result-card__note-body">
+                {isolateLtrRuns(
+                  tenantSentence(formatCopy(copy.quiz.pendingRest, { marks: formatMark(pendingOutOf) })),
+                )}
+              </p>
+              <p className="result-card__note-small">{copy.quiz.pendingWillArrive}</p>
+            </>
+          ) : (
+            <p className="result-card__note-body">{tenantSentence(copy.quiz.essayPending)}</p>
+          )}
         </div>
-      ) : isGood ? (
-        <div className="flex items-start gap-3 rounded-lg border border-[color-mix(in_oklch,var(--a-9),transparent_65%)] bg-[color-mix(in_oklch,var(--a-9),transparent_94%)] p-4 text-fg">
-          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-[color-mix(in_oklch,var(--a-9),transparent_80%)] text-accent-text">
-            <ThumbsUp className="size-5" aria-hidden="true" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <p className="font-bold text-[length:var(--fs-text-base)] text-accent-text">
-              أداء طيب وخطوة ممتازة للأمام! 👍
-            </p>
-            <p className="text-[length:var(--fs-text-sm)] text-fg leading-relaxed">
-              مستوى جميل ونتيجة كويسة جدًا! عندك شوية نقط وأخطاء بسيطة راجعها في نموذج الإجابة بالأسفل عشان تقفل الدرجة كاملة المرة القادمة 🚀
-            </p>
-          </div>
-        </div>
-      ) : isNeedsWork ? (
-        <div className="flex items-start gap-3 rounded-lg border border-[color-mix(in_oklch,var(--err),transparent_65%)] bg-[color-mix(in_oklch,var(--err),transparent_93%)] p-4 text-fg">
-          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-[color-mix(in_oklch,var(--err),transparent_80%)] text-err">
-            <AlertCircle className="size-5" aria-hidden="true" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <p className="font-bold text-[length:var(--fs-text-base)] text-err">
-              لا مش هينفع كده، محتاجين نركز شوية! ⚠️
-            </p>
-            <p className="text-[length:var(--fs-text-sm)] text-fg leading-relaxed">
-              الدرجة دي مش مستواك الحقيقي وإحنا مش هنرضى بأقل من التميز. اقعد راجع إجاباتك تحت بهدوء، واعرف أسباب الأخطاء، وعيد مذاكرة الدرس بجدية وتركيز عشان تعوض وتتعلم منها 🎯
-            </p>
-          </div>
-        </div>
-      ) : pending ? (
-        <div className="flex items-start gap-3 rounded-lg border border-[color-mix(in_oklch,var(--a-9),transparent_65%)] bg-[color-mix(in_oklch,var(--a-9),transparent_94%)] p-4 text-fg">
-          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-[color-mix(in_oklch,var(--a-9),transparent_80%)] text-accent-text">
-            <Clock className="size-5" aria-hidden="true" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <p className="font-bold text-[length:var(--fs-text-base)] text-accent-text">
-              باقي الأسئلة المقالية قيد التصحيح
-            </p>
-            <p className="text-[length:var(--fs-text-sm)] text-fg leading-relaxed">
-              {tenantSentence(formatCopy(copy.quiz.pendingRest, { marks: formatMark(pendingOutOf) }))}
-            </p>
-            <p className="text-[length:var(--fs-text-xs)] text-fg-muted">
-              {copy.quiz.pendingWillArrive}
-            </p>
-          </div>
-        </div>
-      ) : needsGrading ? (
-        <p className="text-fg-muted">{tenantSentence(copy.quiz.essayPending)}</p>
-      ) : null}
-    </div>
+      </div>
+    </section>
   );
 }

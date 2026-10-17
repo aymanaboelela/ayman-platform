@@ -21,9 +21,23 @@ import type {
 } from '@ayman/contracts/quiz/external-books';
 import { PrismaService } from '../../prisma/prisma.service';
 import { REDIS } from '../../redis/redis.module';
+import type { QuestionType } from '../../generated/prisma/enums';
+import { clamp, gradeQuestion, roundMark, type QuestionResponse } from './grading';
+
+/**
+ * What a book page COUNTS — and it must be what a practice can actually SERVE.
+ *
+ * Essays are out of both. A practice has no grader: the result is computed the
+ * moment it is handed in and nobody ever marks it, so an essay in the pool was
+ * a text box whose answer was thrown away and scored as unanswered. Counting
+ * them would offer «الكل (12)» on a pool of 10.
+ */
+const PRACTICE_TYPES = { not: 'essay' as const };
 
 const READY_ENTRIES = {
-  entries: { where: { archivedAt: null, versions: { some: { status: 'ready' as const } } } },
+  entries: {
+    where: { archivedAt: null, versions: { some: { status: 'ready' as const, type: PRACTICE_TYPES } } },
+  },
 };
 
 interface StoredPracticeSession {
@@ -33,9 +47,38 @@ interface StoredPracticeSession {
   bookTitle: string;
   courseSlug: string;
   scope: 'book' | 'unit' | 'lesson';
+  /** Absent on sessions stored before it was — see the contract. */
+  scopeId?: string;
   scopeTitle: string;
   questionVersionIds: string[];
   createdAt: number;
+}
+
+/**
+ * The runner's answer as the grader reads it: text for a short answer, the
+ * chosen ids for everything else, and `null` for a question left blank — so
+ * "skipped" is never graded as "answered with nothing".
+ */
+function practiceResponse(
+  type: QuestionType,
+  answer: { optionIds?: string[]; text?: string } | undefined,
+): QuestionResponse | null {
+  if (!answer) return null;
+  if (type === 'short_answer' || type === 'essay') {
+    const text = answer.text?.trim() ?? '';
+    return text === '' ? null : { kind: 'text', text };
+  }
+  const optionIds = answer.optionIds ?? [];
+  return optionIds.length === 0 ? null : { kind: 'choice', optionIds };
+}
+
+/** The two settings the runner shows, and nothing else of the version's. */
+function practiceSettings(raw: unknown): { minWords?: number; maxWords?: number } {
+  const settings = (raw ?? {}) as { minWords?: unknown; maxWords?: unknown };
+  return {
+    ...(typeof settings.minWords === 'number' ? { minWords: settings.minWords } : {}),
+    ...(typeof settings.maxWords === 'number' ? { maxWords: settings.maxWords } : {}),
+  };
 }
 
 function shuffle<T>(items: readonly T[]): T[] {
@@ -400,7 +443,10 @@ export class StudentExternalBooksService {
       }
     }
 
-    const uniqueVersions = Array.from(byEntry.values());
+    // Latest version FIRST, type second: an entry whose newest ready version
+    // became an essay is an essay now, and must not be served as the MCQ it
+    // used to be.
+    const uniqueVersions = Array.from(byEntry.values()).filter((v) => v.type !== 'essay');
     if (uniqueVersions.length === 0) {
       throw new BadRequestException('لا توجد أسئلة جاهزة للاختبار في هذا النطاق حالياً');
     }
@@ -418,6 +464,7 @@ export class StudentExternalBooksService {
       bookTitle: book.title,
       courseSlug: book.course.slug,
       scope: dto.scope,
+      scopeId: dto.scopeId,
       scopeTitle,
       questionVersionIds: picked.map((v) => v.id),
       createdAt: Date.now(),
@@ -441,6 +488,7 @@ export class StudentExternalBooksService {
         maxMark: Number(v.defaultMark),
         options,
         flagged: false,
+        settings: practiceSettings(v.settings),
       };
     });
 
@@ -450,6 +498,7 @@ export class StudentExternalBooksService {
       bookTitle: book.title,
       courseSlug: book.course.slug,
       scope: dto.scope,
+      scopeId: dto.scopeId,
       scopeTitle,
       totalQuestions: questions.length,
       questions,
@@ -481,6 +530,7 @@ export class StudentExternalBooksService {
         type: true,
         stemHtml: true,
         defaultMark: true,
+        settings: true,
         generalFeedbackHtml: true,
         options: {
           orderBy: { position: 'asc' },
@@ -489,6 +539,8 @@ export class StudentExternalBooksService {
             bodyHtml: true,
             fraction: true,
             feedbackHtml: true,
+            position: true,
+            answerPattern: true,
           },
         },
       },
@@ -500,6 +552,14 @@ export class StudentExternalBooksService {
     let totalMaxScore = 0;
     const review: ExternalBookPracticeReviewQuestion[] = [];
 
+    /*
+     * Graded by `gradeQuestion` — the engine every real attempt goes through —
+     * not by a second, hand-written copy of it. The copy that stood here
+     * compared option IDS for every type, so a short answer (which is text)
+     * could never be right, an ordering question was "right" if any item
+     * carried weight, and a multi-answer question used its own partial-credit
+     * arithmetic instead of the option weights the instructor set.
+     */
     session.questionVersionIds.forEach((vid, index) => {
       const version = versionMap.get(vid);
       if (!version) return;
@@ -509,78 +569,74 @@ export class StudentExternalBooksService {
       totalMaxScore += maxMark;
 
       const studentAns = dto.answers.find((a) => a.questionId === vid);
-      const selectedOptionIds = studentAns?.optionIds ?? [];
+      const response = practiceResponse(version.type, studentAns);
 
-      const correctOptionIds = version.options
-        .filter((o) => Number(o.fraction) > 0)
-        .map((o) => o.id);
+      const options = version.options.map((o, position) => ({
+        id: o.id,
+        bodyHtml: o.bodyHtml,
+        fraction: Number(o.fraction),
+        position: o.position ?? position,
+        answerPattern: o.answerPattern ?? null,
+        feedbackHtml: o.feedbackHtml ?? null,
+      }));
+      const settings = (version.settings ?? {}) as { caseSensitive?: boolean };
+      const graded = gradeQuestion(
+        { type: version.type, caseSensitive: settings.caseSensitive === true, options },
+        response,
+      );
 
-      const rightAnswerTexts = version.options
-        .filter((o) => Number(o.fraction) > 0)
-        .map((o) => o.bodyHtml);
-
-      let correctness: ExternalBookPracticeReviewQuestion['correctness'] = 'unanswered';
-      let mark = 0;
-      let feedbackHtml = version.generalFeedbackHtml ?? undefined;
-
-      if (selectedOptionIds.length === 0) {
-        correctness = 'unanswered';
-        mark = 0;
-      } else if (version.type === 'mcq_single' || version.type === 'true_false') {
-        const chosen = version.options.find((o) => o.id === selectedOptionIds[0]);
-        if (chosen) {
-          if (chosen.feedbackHtml) {
-            feedbackHtml = chosen.feedbackHtml;
-          }
-          if (Number(chosen.fraction) > 0) {
-            correctness = 'correct';
-            mark = maxMark * Number(chosen.fraction);
-          } else {
-            correctness = 'incorrect';
-            mark = 0;
-          }
-        }
-      } else if (version.type === 'mcq_multi') {
-        const chosenCorrect = selectedOptionIds.filter((id) => correctOptionIds.includes(id));
-        const chosenWrong = selectedOptionIds.filter((id) => !correctOptionIds.includes(id));
-        if (chosenWrong.length === 0 && chosenCorrect.length === correctOptionIds.length) {
-          correctness = 'correct';
-          mark = maxMark;
-        } else if (chosenCorrect.length > 0 && chosenWrong.length === 0) {
-          correctness = 'partial';
-          mark = Math.round((maxMark * (chosenCorrect.length / correctOptionIds.length)) * 10) / 10;
-        } else {
-          correctness = 'incorrect';
-          mark = 0;
-        }
-      } else {
-        // الأنواع الأخرى (short_answer وغيرها)
-        const chosen = version.options.find((o) => selectedOptionIds.includes(o.id));
-        if (chosen && Number(chosen.fraction) > 0) {
-          correctness = 'correct';
-          mark = maxMark;
-        } else {
-          correctness = 'incorrect';
-          mark = 0;
-        }
-      }
-
+      // A practice has no per-slot floor or ceiling snapshot, so the mark is
+      // simply the fraction of the question's worth, never below zero.
+      const fraction = graded.fraction === null ? 0 : clamp(graded.fraction, 0, 1);
+      const mark = roundMark(fraction * maxMark);
       totalScore += mark;
+
+      const correctness: ExternalBookPracticeReviewQuestion['correctness'] =
+        response === null
+          ? 'unanswered'
+          : graded.state === 'graded_right'
+            ? 'correct'
+            : graded.state === 'graded_partial'
+              ? 'partial'
+              : 'incorrect';
+
+      // The note on THIS answer — what the matched options say — and nothing
+      // else. It used to fall back to the general explanation, which the
+      // review then printed twice, once under each heading.
+      const feedbackHtml =
+        graded.matchedOptionIds
+          .map((id) => options.find((o) => o.id === id)?.feedbackHtml)
+          .filter((value): value is string => Boolean(value))
+          .join('') || undefined;
+
+      const rightOptionIds =
+        version.type === 'ordering'
+          ? [...options].sort((a, b) => a.position - b.position).map((o) => o.id)
+          : options.filter((o) => o.fraction > 0).map((o) => o.id);
 
       review.push({
         slotPosition,
         attemptQuestionId: vid,
         type: version.type,
         stemHtml: version.stemHtml,
-        options: version.options.map((o) => ({ id: o.id, bodyHtml: o.bodyHtml })),
-        response: selectedOptionIds,
+        // A short answer's options are its accepted PATTERNS, not choices —
+        // listing them would print the answer key as a row of blank options.
+        options:
+          version.type === 'short_answer' ? [] : options.map((o) => ({ id: o.id, bodyHtml: o.bodyHtml })),
+        response: response ?? undefined,
         correctness,
         mark,
         maxMark,
         feedbackHtml,
         generalFeedbackHtml: version.generalFeedbackHtml ?? undefined,
-        rightAnswerText: rightAnswerTexts.join('، '),
-        rightAnswerOptionIds: correctOptionIds,
+        // Plain text, and only where the review prints it as text: the first
+        // full-credit pattern of a short answer. Choice types are marked on
+        // their own rows by id.
+        rightAnswerText:
+          version.type === 'short_answer'
+            ? (options.find((o) => o.fraction >= 1 && o.answerPattern)?.answerPattern ?? undefined)
+            : undefined,
+        rightAnswerOptionIds: version.type === 'short_answer' ? undefined : rightOptionIds,
       });
     });
 
@@ -593,6 +649,7 @@ export class StudentExternalBooksService {
       bookTitle: session.bookTitle,
       courseSlug: session.courseSlug,
       scope: session.scope,
+      ...(session.scopeId ? { scopeId: session.scopeId } : {}),
       scopeTitle: session.scopeTitle,
       score: totalScore,
       maxScore: totalMaxScore,
@@ -647,6 +704,7 @@ export class StudentExternalBooksService {
           maxMark: Number(v?.defaultMark ?? 1),
           options: v ? (v.type === 'true_false' ? v.options : shuffle(v.options)) : [],
           flagged: false,
+          settings: practiceSettings(v?.settings),
         };
       },
     );
@@ -657,6 +715,7 @@ export class StudentExternalBooksService {
       bookTitle: session.bookTitle,
       courseSlug: session.courseSlug,
       scope: session.scope,
+      ...(session.scopeId ? { scopeId: session.scopeId } : {}),
       scopeTitle: session.scopeTitle,
       totalQuestions: questions.length,
       questions,
