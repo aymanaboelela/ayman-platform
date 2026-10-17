@@ -30,7 +30,9 @@ export interface RegradeConfirmDialogProps {
   warning?: string | null;
   /**
    * The bank question whose past answers would be marked again. The dialog
-   * asks the API how many there are; with none, or without the permission to
+   * asks the API how many there are — ALL of them (`scope=all`), because it
+   * runs before the edit is published, while those answers still sit on the
+   * version about to be replaced. With none, or without the permission to
    * regrade (`attempt:grade`), the option simply does not appear.
    */
   bankEntryId: string | null;
@@ -87,7 +89,7 @@ function ConfirmBody({
   useEffect(() => {
     if (!bankEntryId) return;
     let live = true;
-    apiGet(`/api/admin/questions/${bankEntryId}/regrade`, RegradePreviewSchema)
+    apiGet(`/api/admin/questions/${bankEntryId}/regrade?scope=all`, RegradePreviewSchema)
       .then((result) => {
         if (live) setPreview(result);
       })
@@ -151,7 +153,9 @@ function ConfirmBody({
           onClick={() => onConfirm(answers > 0 && regrade)}
           disabled={pending || preview === 'loading'}
         >
-          {confirmLabel}
+          {/* A regrade of a few hundred papers takes seconds; a button that
+              only greys out reads as a tap that did nothing. */}
+          {pending ? copy.admin.common.saving : confirmLabel}
         </Button>
       </DialogFooter>
     </>

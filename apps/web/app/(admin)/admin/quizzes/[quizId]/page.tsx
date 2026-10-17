@@ -94,6 +94,19 @@ export default async function QuizBuilderPage({ params }: { params: Promise<{ qu
         <PublishQuizButton quizId={quiz.id} isPublished={quiz.isPublished} />
       </div>
 
+      {/* First thing on the page, above the settings: an edit students
+          cannot see and marks given against an old key are the two things on
+          this screen that are wrong RIGHT NOW. Below the settings it sat a
+          full screen down, where nobody scrolls on purpose. */}
+      {edits ? (
+        <QuizEditsBand
+          quizId={quiz.id}
+          pendingDrafts={edits.pendingDrafts}
+          staleAnswers={edits.staleAnswers}
+          students={edits.students}
+        />
+      ) : null}
+
       <section>
         <QuizSettingsForm
           lessonId={quiz.lessonId}
@@ -108,15 +121,6 @@ export default async function QuizBuilderPage({ params }: { params: Promise<{ qu
         selected tab, and passing it down from here would mean lifting the
         whole section into client state anyway.
       */}
-      {edits ? (
-        <QuizEditsBand
-          quizId={quiz.id}
-          pendingDrafts={edits.pendingDrafts}
-          staleAnswers={edits.staleAnswers}
-          students={edits.students}
-        />
-      ) : null}
-
       <PaperTabs
         quizId={quiz.id}
         slots={quiz.slots}

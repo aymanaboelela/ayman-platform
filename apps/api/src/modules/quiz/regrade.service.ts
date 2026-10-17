@@ -101,15 +101,27 @@ export class RegradeService {
     if (!entry) throw new NotFoundException();
   }
 
-  async preview(bankEntryId: string): Promise<RegradePreview> {
+  /**
+   * `scope: 'stale'` — answers on a version older than the one served now:
+   * what a regrade would move right this moment.
+   *
+   * `scope: 'all'` — every answer to the question, whatever version. That is
+   * what the save confirmation must count: it is asked BEFORE the edit is
+   * published, when the answers about to go stale are still on the current
+   * version and 'stale' would report zero — and hide the very option the
+   * teacher fixing a key needs.
+   */
+  async preview(bankEntryId: string, scope: 'stale' | 'all' = 'stale'): Promise<RegradePreview> {
     await this.assertEntry(bankEntryId);
     const latest = await this.latestReady(bankEntryId);
-    if (!latest) return { bankEntryId, version: null, answers: 0, finished: 0, inProgress: 0, students: 0 };
+    if (!latest && scope === 'stale') {
+      return { bankEntryId, version: null, answers: 0, finished: 0, inProgress: 0, students: 0 };
+    }
 
     const rows = await this.prisma.attemptQuestion.findMany({
       where: {
         version: { bankEntryId },
-        questionVersionId: { not: latest.id },
+        ...(scope === 'stale' && latest ? { questionVersionId: { not: latest.id } } : {}),
         attempt: { state: { in: [...MOVABLE_STATES] } },
       },
       select: { attempt: { select: { state: true, userId: true } } },
@@ -117,7 +129,7 @@ export class RegradeService {
     const finished = rows.filter((row) => FINISHED_STATES.has(row.attempt.state)).length;
     return {
       bankEntryId,
-      version: latest.version,
+      version: latest?.version ?? null,
       answers: rows.length,
       finished,
       inProgress: rows.length - finished,

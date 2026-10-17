@@ -113,6 +113,11 @@ describe('RegradeService', () => {
     expect(await markOf(right)).toBe(0);
     expect(await markOf(oldKey)).toBe(1);
 
+    // Asked BEFORE the edit is published — what the save confirmation does —
+    // 'stale' sees nothing yet, and 'all' sees the two answers about to go stale.
+    expect(await service.preview(f.bankEntryIds[0]!, 'stale')).toMatchObject({ answers: 0 });
+    expect(await service.preview(f.bankEntryIds[0]!, 'all')).toMatchObject({ answers: 2, students: 2 });
+
     await moveKeyTo(f.bankEntryIds[0]!, '<p>ب</p>', f.adminId);
 
     expect(await service.preview(f.bankEntryIds[0]!)).toMatchObject({
@@ -241,5 +246,42 @@ describe('RegradeService', () => {
     expect(await service.regradeQuiz(f.quizId, f.adminId)).toMatchObject({ moved: 1, raised: 1 });
     expect(await markOf(paper)).toBe(1);
     expect(await service.quizEdits(f.quizId)).toEqual({ pendingDrafts: 0, staleAnswers: 0, students: 0 });
+  });
+
+  it('serves a question that points at its own letters in the order it was written, without the typed letters', async () => {
+    const f = await seedQuizFixture(prisma, { questionCount: 0, shuffleOptions: true });
+    fixtures.push(f);
+    const created = await bank.create(
+      {
+        type: 'mcq_single',
+        categoryId: f.categoryId,
+        stemHtml: '<p>العامل الذي قد يجعل نتائج الذكاء الاصطناعي غير دقيقة</p>',
+        defaultMark: 1,
+        settings: { shuffleOptions: true, caseSensitive: false },
+        options: [
+          { bodyHtml: '<p>أ) تحيز بيانات التدريب</p>', fraction: 0 },
+          { bodyHtml: '<p>ب) سرعة الجهاز</p>', fraction: 0 },
+          { bodyHtml: '<p>ج) حجم الشاشة</p>', fraction: 0 },
+          { bodyHtml: '<p>د) أ و ب معا</p>', fraction: 1 },
+        ],
+      } as QuestionInput,
+      f.adminId,
+    );
+    await bank.publish(created.versionId);
+    f.bankEntryIds.push(created.bankEntryId);
+    f.versionIds.push(created.versionId);
+    await prisma.quizSlot.create({ data: { quizId: f.quizId, position: 0, maxMark: 1, bankEntryId: created.bankEntryId } });
+
+    // Shuffled, «أ و ب معا» would name two other rows. Two sittings, the same
+    // written order both times, and the runner's own letters line up.
+    for (const userId of [f.studentId, f.otherStudentId]) {
+      const started = await attempts.start(userId, f.quizId);
+      expect(started.questions[0]!.options.map((option) => option.bodyHtml)).toEqual([
+        '<p>تحيز بيانات التدريب</p>',
+        '<p>سرعة الجهاز</p>',
+        '<p>حجم الشاشة</p>',
+        '<p>أ و ب معا</p>',
+      ]);
+    }
   });
 });

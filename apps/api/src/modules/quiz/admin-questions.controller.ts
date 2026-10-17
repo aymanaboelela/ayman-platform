@@ -154,8 +154,10 @@ export class AdminQuestionsController {
    */
   @Get(':bankEntryId/regrade')
   @RequirePermission('attempt:grade')
-  regradePreview(@Param('bankEntryId') bankEntryId: string) {
-    return this.regrade.preview(bankEntryId);
+  regradePreview(@Param('bankEntryId') bankEntryId: string, @Query('scope') scope?: string) {
+    // Anything but `all` is the default — an unknown value reads as "no
+    // filter", never as a 500 (the same habit as `list` above).
+    return this.regrade.preview(bankEntryId, scope === 'all' ? 'all' : 'stale');
   }
 
   /** Moves those answers onto the latest published version and marks them again. */
