@@ -6532,6 +6532,91 @@ const quizAdmin = {
   grantAttemptConfirm: 'امنح الطالب ده محاولة إضافية؟',
   actionSucceeded: 'اتنفّذ',
   actionFailed: 'مقدرناش ننفّذ الإجراء — نحاول تاني',
+
+  /* ── «محاولات الطلاب» بالكورس — /admin/attempts ──────────────────────────
+   * «الدنيا ملخبطة… عايز أعرف ده امتحان إيه وفي أنهي كورس، وكل حاجة تحت
+   * الكورس بتاعها». The screen used to be one newest-first stream of every
+   * sitting on every quiz.
+   *
+   * ⚠️ Read by SERVER components only. A tab left open across a deploy keeps
+   * the copy module it loaded first, so a client component reading a key
+   * added here would find `undefined` in that tab — the client controls on
+   * this screen are handed their labels as props instead. */
+  board: {
+    lead: 'كل امتحان تحت الكورس والوحدة بتوعه، بنفس ترتيب الكورس — ومنه على محاولاته: الدرجات، والتصحيح، واللي لسه شغالين.',
+    searchLabel: 'بحث في الامتحانات والطلبة',
+    searchPlaceholder: 'اسم امتحان، أو اسم طالب أو رقم موبايل',
+    searchSubmit: 'بحث',
+    searchClear: 'مسح البحث',
+    courseLabel: 'الكورس',
+    allCourses: 'كل الكورسات',
+    /** What the paper IS — the question the flat list could not answer. */
+    kind: {
+      lecture_quiz: 'كويز محاضرة',
+      course_exam: 'الامتحان الشامل',
+      monthly_exam: 'امتحان الشهر',
+    },
+    /** A lecture quiz whose lecture has a number — the number the student
+     *  outline prints beside that lecture. */
+    lectureQuiz: 'كويز المحاضرة {n}',
+    unpublished: 'مش منشور',
+    archived: 'كورس متأرشف',
+    attempts: '{n} محاولة',
+    students: '{n} طالب',
+    average: 'المتوسط {n}٪',
+    passRate: 'النجاح {n}٪',
+    pending: 'محتاج تصحيح {n}',
+    live: 'شغال دلوقتي {n}',
+    lastActivity: 'آخر نشاط {at}',
+    noAttempts: 'لسه مفيش محاولات',
+    open: 'فتح المحاولات',
+    coursePending: '{n} محتاج تصحيح',
+    courseLive: '{n} شغالين دلوقتي',
+    courseAttempts: '{n} محاولة',
+    empty: 'لسه مفيش محاولات',
+    emptyHint: 'أول محاولة على أي كويز أو امتحان هتظهر هنا، تحت الكورس بتاعها.',
+    noMatches: 'مفيش نتايج لـ«{q}»',
+    noMatchesHint: 'ممكن نجرّب جزء من الاسم بس، أو آخر أرقام الموبايل.',
+    studentsHeading: 'محاولات الطلبة',
+    studentsLead: '{n} محاولة لطلبة اسمهم أو رقمهم فيه «{q}»',
+    quizzesHeading: 'امتحانات فيها «{q}»',
+
+    // ── one quiz ──────────────────────────────────────────────────────────
+    back: 'كل الامتحانات',
+    outOf: 'الدرجة من {n}',
+    passMark: 'النجاح من {n}٪',
+    improvement: 'فيه امتحان تحسين',
+    analytics: 'تحليل الامتحان',
+    statAttempts: 'المحاولات',
+    statStudents: 'الطلبة',
+    statAverage: 'متوسط الدرجة',
+    statPassRate: 'نسبة النجاح',
+    /** Said once, under the two percentages: a paper still waiting on an
+     *  essay counts that essay as zero, so it is left out of both. */
+    statsNote: 'المتوسط ونسبة النجاح محسوبين على الورق اللي اتصحّح كله بس.',
+    studentSearchLabel: 'بحث عن طالب',
+    studentSearchPlaceholder: 'الاسم أو رقم الموبايل',
+    attemptNo: 'المحاولة {n}',
+    improvementPaper: 'ورقة التحسين',
+    scoreOf: '{score} من {outOf}',
+    percent: '{n}٪',
+    /** Beside the colour, never instead of it. Nouns, so neither one is said
+     *  about a boy or a girl. */
+    verdictPass: 'نجاح',
+    verdictFail: 'رسوب',
+    pendingScore: 'لسه بيتصحح',
+    started: 'البداية {at}',
+    submitted: 'التسليم {at}',
+    duration: 'المدة {d}',
+    grade: 'تصحيح الورقة',
+    moreActions: 'إجراءات تانية',
+    openQuiz: 'فتح الامتحان',
+    tabEmpty: 'مفيش محاولات هنا.',
+    firstPage: 'أول صفحة',
+    pagePrev: 'اللي قبله',
+    pageNext: 'اللي بعده',
+    pageOf: '{from}–{to} من {total}',
+  },
 } as const;
 
 /**

@@ -7,40 +7,114 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 export { ATTEMPT_SORTS, type AdminAttemptSort };
 import { NotificationsService } from '../notifications/notifications.service';
+import { escapeLike, foldArabic, FOLD_FROM, FOLD_TO } from '../../common/arabic-fold';
+import { phoneSearchDigits } from '../../common/phone-search';
+import { attemptQuizKind } from './attempt-quiz-outline';
 import { AttemptEventsService } from './attempt-events.service';
 import { AttemptService } from './attempt.service';
 import { toReviewQuestion } from './serializers/review.serializer';
 import type {
+  AdminAttemptList,
+  AdminAttemptListQuery,
   AdminAttemptReview,
   AdminAttemptReviewQuestion,
+  AdminAttemptRow,
+  AdminAttemptState,
+  AdminAttemptStateCounts,
 } from '@ayman/contracts/admin/attempts';
 import type { ReviewFlags } from '@ayman/contracts/quiz/quiz-settings';
 import type { ReviewQuestion } from '@ayman/contracts/quiz/attempt';
 
-export interface AdminAttemptRow {
-  id: string;
-  userId: string;
-  studentName: string;
-  quizId: string;
-  quizTitle: string;
-  attemptNumber: number;
-  state: 'in_progress' | 'overdue' | 'submitted' | 'pending_review' | 'abandoned';
-  score: number | null;
-  startedAt: string;
-  submittedAt: string | null;
-  deadlineAt: string | null;
-}
+export type { AdminAttemptRow };
 
 export interface AdminAttemptFilter {
   quizId?: string;
+  /** The quiz by its lesson — the id the course editor and analytics hold. */
+  lessonId?: string;
+  courseId?: string;
   userId?: string;
-  state?: 'in_progress' | 'overdue' | 'submitted' | 'pending_review' | 'abandoned';
-  /** Matches the student's name, case-insensitively. */
+  state?: AdminAttemptState;
+  /** The STUDENT: their name, hamza-insensitively, or a run of their phone
+   *  digits — see `studentMatch`. */
   q?: string;
   take?: number;
   skip?: number;
   /** See `ATTEMPT_SORTS` — the screen had none at all. */
   sort?: AdminAttemptSort;
+}
+
+/**
+ * One select for every list read, so the cross-quiz page and the per-quiz
+ * route cannot disagree about what a row is.
+ *
+ * The lesson → unit → course chain is what the flat list never carried: a row
+ * said «اختبار» and nothing about which course's test it was, which is the
+ * whole of the complaint the by-course screen answers.
+ */
+const ATTEMPT_ROW_SELECT = {
+  id: true,
+  userId: true,
+  quizId: true,
+  attemptNo: true,
+  paper: true,
+  state: true,
+  scaledScore: true,
+  gradeOutOf: true,
+  passed: true,
+  startedAt: true,
+  submittedAt: true,
+  deadlineAt: true,
+  user: { select: { name: true } },
+  quiz: {
+    select: {
+      lesson: {
+        select: {
+          id: true,
+          title: true,
+          kind: true,
+          section: { select: { title: true } },
+          course: { select: { id: true, title: true, examLessonId: true } },
+        },
+      },
+    },
+  },
+} satisfies Prisma.QuizAttemptSelect;
+
+type AttemptRowRecord = Prisma.QuizAttemptGetPayload<{ select: typeof ATTEMPT_ROW_SELECT }>;
+
+function toAdminAttemptRow(row: AttemptRowRecord): AdminAttemptRow {
+  const lesson = row.quiz.lesson;
+  const score = row.scaledScore === null ? null : Number(row.scaledScore);
+  const gradeOutOf = Number(row.gradeOutOf);
+  // Only a fully marked paper has a percentage or a verdict to show. A
+  // `pending_review` row's score counts its unmarked essays as zero, and
+  // `passed` was written from that same provisional total.
+  const final = row.state === 'submitted';
+  return {
+    id: row.id,
+    userId: row.userId,
+    studentName: row.user.name,
+    quizId: row.quizId,
+    quizTitle: lesson.title,
+    attemptNumber: row.attemptNo,
+    state: row.state,
+    score,
+    startedAt: row.startedAt.toISOString(),
+    submittedAt: row.submittedAt?.toISOString() ?? null,
+    deadlineAt: row.deadlineAt?.toISOString() ?? null,
+    paper: row.paper,
+    gradeOutOf,
+    // Multiplied first: 18 * 100 / 20 is a clean 90 in floating point, where
+    // (18 / 20) * 100 need not be.
+    percent: final && score !== null && gradeOutOf > 0 ? (score * 100) / gradeOutOf : null,
+    passed: final ? row.passed : null,
+    courseId: lesson.course.id,
+    courseTitle: lesson.course.title,
+    sectionTitle: lesson.section.title,
+    lessonId: lesson.id,
+    lessonTitle: lesson.title,
+    kind: attemptQuizKind(lesson, lesson.section.title, lesson.course.examLessonId),
+  };
 }
 
 /**
@@ -301,16 +375,11 @@ export class AttemptAdminService {
    * Cross-quiz by default — `quizId` is one optional facet alongside
    * `userId`/`state`/`q`, never the anchor. `GET .../quizzes/:quizId/attempts`
    * is the same call with `quizId` pre-bound (kept because the builder links
-   * straight into it).
+   * straight into it), and it still answers the bare array its page parses.
    */
   async listAttempts(filter: AdminAttemptFilter = {}): Promise<AdminAttemptRow[]> {
     const rows = await this.prisma.quizAttempt.findMany({
-      where: {
-        quizId: filter.quizId,
-        userId: filter.userId,
-        state: filter.state,
-        user: filter.q ? { name: { contains: filter.q, mode: 'insensitive' } } : undefined,
-      },
+      where: await this.attemptWhere(filter),
       /* Every branch ends on `id`. A whole class starts the same exam in the
          same second — that is the NORMAL case on this screen, not an edge —
          and Postgres does not order ties stably, so under pagination some
@@ -318,34 +387,114 @@ export class AttemptAdminService {
       orderBy: attemptOrderBy(filter.sort),
       take: Math.min(filter.take ?? 50, 200),
       skip: filter.skip ?? 0,
-      select: {
-        id: true,
-        userId: true,
-        quizId: true,
-        attemptNo: true,
-        state: true,
-        scaledScore: true,
-        startedAt: true,
-        submittedAt: true,
-        deadlineAt: true,
-        user: { select: { name: true } },
-        quiz: { select: { lesson: { select: { title: true } } } },
-      },
+      select: ATTEMPT_ROW_SELECT,
     });
 
-    return rows.map((row) => ({
-      id: row.id,
-      userId: row.userId,
-      studentName: row.user.name,
-      quizId: row.quizId,
-      quizTitle: row.quiz.lesson.title,
-      attemptNumber: row.attemptNo,
-      state: row.state,
-      score: row.scaledScore === null ? null : Number(row.scaledScore),
-      startedAt: row.startedAt.toISOString(),
-      submittedAt: row.submittedAt?.toISOString() ?? null,
-      deadlineAt: row.deadlineAt?.toISOString() ?? null,
-    }));
+    return rows.map(toAdminAttemptRow);
+  }
+
+  /**
+   * `GET /api/admin/attempts` — one PAGE of sittings, with the total and the
+   * per-state counts the tabs print.
+   *
+   * The three reads share one `where`, so «محتاج تصحيح ٣» on a tab is exactly
+   * the number of rows that tab opens on — including under a student search,
+   * where a quiz-wide count would promise rows the search then hides.
+   *
+   * Each is one statement over `quiz_attempts`: scoped to a quiz they ride
+   * `quiz_attempts_quiz_id_state_idx`, and the student leg is a subquery on
+   * `users`, never a row-by-row lookup.
+   */
+  async searchAttempts(query: AdminAttemptListQuery): Promise<AdminAttemptList> {
+    const scope = await this.attemptWhere({ ...query, state: undefined });
+    const where: Prisma.QuizAttemptWhereInput = query.state ? { ...scope, state: query.state } : scope;
+
+    const [rowCount, rows, byState] = await Promise.all([
+      this.prisma.quizAttempt.count({ where }),
+      this.prisma.quizAttempt.findMany({
+        where,
+        orderBy: attemptOrderBy(query.sort),
+        take: query.perPage,
+        skip: (query.page - 1) * query.perPage,
+        select: ATTEMPT_ROW_SELECT,
+      }),
+      this.prisma.quizAttempt.groupBy({ by: ['state'], where: scope, _count: { _all: true } }),
+    ]);
+
+    const stateCounts: AdminAttemptStateCounts = {
+      in_progress: 0,
+      overdue: 0,
+      submitted: 0,
+      pending_review: 0,
+      abandoned: 0,
+    };
+    for (const group of byState) stateCounts[group.state] = group._count._all;
+
+    return { rows: rows.map(toAdminAttemptRow), rowCount, stateCounts };
+  }
+
+  private async attemptWhere(filter: AdminAttemptFilter): Promise<Prisma.QuizAttemptWhereInput> {
+    const term = filter.q?.trim();
+    const quiz: Prisma.QuizWhereInput = {
+      ...(filter.lessonId ? { lessonId: filter.lessonId } : {}),
+      ...(filter.courseId ? { lesson: { courseId: filter.courseId } } : {}),
+    };
+    return {
+      ...(filter.quizId ? { quizId: filter.quizId } : {}),
+      ...(filter.userId ? { userId: filter.userId } : {}),
+      ...(filter.state ? { state: filter.state } : {}),
+      ...(Object.keys(quiz).length > 0 ? { quiz } : {}),
+      ...(term ? { user: await this.studentMatch(term) } : {}),
+    };
+  }
+
+  /**
+   * «أدوّر على طالب» — by the name as it is typed, or by the phone.
+   *
+   * The name leg matches the account name AND the profile's full name, and
+   * then once more hamza-folded (`foldedNameMatches`): «احمد» is how most of
+   * Egypt types «أحمد», and `ILIKE` tells the two apart as firmly as it tells
+   * «أ» from «ب». The phone leg is a run of digits in the stored E.164 number
+   * — see `phoneSearchDigits` for why `010…` has to find `+2010…`.
+   */
+  private async studentMatch(term: string): Promise<Prisma.UserWhereInput> {
+    const digits = phoneSearchDigits(term);
+    const folded = await this.foldedNameMatches(term);
+    return {
+      OR: [
+        { name: { contains: term, mode: 'insensitive' } },
+        { studentProfile: { fullName: { contains: term, mode: 'insensitive' } } },
+        ...(folded.length > 0 ? [{ id: { in: folded } }] : []),
+        ...(digits ? [{ phoneNumber: { contains: digits } }] : []),
+      ],
+    };
+  }
+
+  /**
+   * The accounts whose name matches only AFTER folding — the same trick, and
+   * the same two constants, as `StudentsService.foldedNameMatches`: Prisma's
+   * `contains` cannot wrap the column in `translate()`, so the fold runs here
+   * and hands back ids.
+   *
+   * Narrowed to accounts that have sat something (nobody else can appear on
+   * this screen), to names the literal match missed (the common case returns
+   * nothing, and the `where` is exactly what it was before folding), and
+   * capped, so a two-letter search cannot hand Prisma an unbounded `IN` list.
+   */
+  private async foldedNameMatches(term: string): Promise<string[]> {
+    const needle = foldArabic(term);
+    if (needle.trim().length < 2 || !/[؀-ۿ]/u.test(needle)) return [];
+    const folded = `%${escapeLike(needle)}%`;
+    const literal = `%${escapeLike(term)}%`;
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT u."id"
+      FROM "app"."users" u
+      WHERE lower(translate(u."name", ${FOLD_FROM}, ${FOLD_TO})) LIKE ${folded}
+        AND u."name" NOT ILIKE ${literal}
+        AND EXISTS (SELECT 1 FROM "app"."quiz_attempts" a WHERE a."user_id" = u."id")
+      LIMIT 500
+    `;
+    return rows.map((row) => row.id);
   }
 
   /**
