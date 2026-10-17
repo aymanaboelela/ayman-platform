@@ -6427,6 +6427,53 @@ const quizAdmin = {
    *  pinned version serves the latest READY one. So an unpublished edit is
    *  invisible to students, and this is the only place that says so. */
   slotDraftPending: 'التعديل اتحفظ كمسودة — الطالب لسه شايف النسخة القديمة لحد ما تنشره.',
+
+  /* ── The answer key, made impossible to get wrong by accident ─────────── */
+  /** Above the options while no option is marked correct. A new question
+   *  starts with NONE marked: a form that pre-ticks the first option is how
+   *  live questions ended up keyed on whatever happened to be typed first. */
+  noCorrectYet: 'لسه مفيش إجابة صح متحددة — اضغط على الدايرة جنب الاختيار الصح.',
+  /** On the option that is marked correct, beside its control. */
+  correctTag: 'الإجابة الصح',
+  /** Under the options, so the key is read back in words before saving. */
+  correctSummary: 'الإجابة الصح: {answer}',
+
+  /* ── «احفظ وانشر» on a question students already see ─────────────────── */
+  saveConfirmTitle: 'متأكد إنك عايز تحفظ التعديل؟',
+  saveConfirmLive: 'التعديل هيوصل للطلبة على طول.',
+  saveConfirmShared: 'السؤال ده موجود في {n} امتحان، والتعديل هيوصل لكلهم.',
+  /** Only when the key itself changed — the one edit that changes marks. */
+  saveConfirmKeyChanged: 'الإجابة الصح اتغيّرت: من «{from}» لـ «{to}».',
+  saveConfirmRegrade: 'صحّح من جديد إجابات الطلبة اللي حلّوا السؤال ده قبل كده ({n} إجابة)',
+  saveConfirmRegradeHint:
+    'اللي اختار الإجابة الصح ياخد الدرجة، واللي اختار الغلط تتشال منه. الدرجات اللي اتحطّت باليد مابتتغيّرش.',
+  saveConfirmCancel: 'لأ، ارجع',
+  saveConfirmAction: 'أيوه، احفظ وانشر',
+  saveConfirmChecking: 'بنشوف مين حلّ السؤال ده…',
+  regradeDone: 'اتصحّح من جديد — {raised} درجة زادت و{lowered} قلّت',
+  regradeNoChange: 'اتصحّح من جديد — مفيش درجة اتغيّرت',
+  regradeFailed: 'التعديل اتنشر، بس إعادة التصحيح ماتمّتش. جرّب «صحّح من جديد» من صفحة الامتحان.',
+
+  /* ── The exam builder: edits nobody published, papers on an old key ──── */
+  editsPendingBody: '{n} سؤال في الامتحان ده اتعدّل ومتنشرش — الطلبة لسه بيشوفوا النسخة القديمة.',
+  editsStaleBody: '{answers} إجابة لـ{students} طالب اتصححت على نسخة قديمة من الأسئلة.',
+  editsPublish: 'انشر التعديلات',
+  editsRegrade: 'صحّح من جديد',
+  editsConfirmTitle: 'نشر التعديلات',
+  editsConfirmRegradeTitle: 'صحّح الامتحان من جديد',
+  editsConfirmBody: 'كل سؤال متعدّل هيتنشر ويوصل للطلبة على طول.',
+  editsConfirmRegradeBody: 'إجابات الطلبة اللي اتصححت على نسخة قديمة هتتصحح على النسخة الحالية من كل سؤال.',
+  editsPublished: 'اتنشر {n} سؤال',
+  editsPublishFailed: '{n} سؤال مااتنشرش — افتحه وصلّح اللي مكتوب فيه.',
+  editsFailed: 'العملية ماتمّتش، ومفيش حاجة اتغيّرت في اللي ماوصلش — جرّب تاني.',
+  /** On a builder row whose newest version is an unpublished edit. */
+  pendingEditChip: 'متعدّل ومتنشرش',
+
+  /* ── Item analysis: a key that the answers say is wrong ───────────────── */
+  suspectKey: 'راجع الإجابة الصح',
+  suspectKeyHint: 'أغلب الطلبة اختاروا اختيار واحد غير المتسجّل صح — غالبًا الإجابة الصح متسجّلة غلط.',
+  suspectKeyBanner: '{n} سؤال أغلب الطلبة جاوبوا فيه غير الإجابة المتسجّلة — راجعهم.',
+  suspectKeyOpen: 'افتح السؤال',
   durationMinutes: 'مدة الامتحان بالدقايق',
   openFromLabel: 'يفتح من',
   openUntilLabel: 'يقفل في',
@@ -6532,6 +6579,91 @@ const quizAdmin = {
   grantAttemptConfirm: 'امنح الطالب ده محاولة إضافية؟',
   actionSucceeded: 'اتنفّذ',
   actionFailed: 'مقدرناش ننفّذ الإجراء — نحاول تاني',
+
+  /* ── «محاولات الطلاب» بالكورس — /admin/attempts ──────────────────────────
+   * «الدنيا ملخبطة… عايز أعرف ده امتحان إيه وفي أنهي كورس، وكل حاجة تحت
+   * الكورس بتاعها». The screen used to be one newest-first stream of every
+   * sitting on every quiz.
+   *
+   * ⚠️ Read by SERVER components only. A tab left open across a deploy keeps
+   * the copy module it loaded first, so a client component reading a key
+   * added here would find `undefined` in that tab — the client controls on
+   * this screen are handed their labels as props instead. */
+  board: {
+    lead: 'كل امتحان تحت الكورس والوحدة بتوعه، بنفس ترتيب الكورس — ومنه على محاولاته: الدرجات، والتصحيح، واللي لسه شغالين.',
+    searchLabel: 'بحث في الامتحانات والطلبة',
+    searchPlaceholder: 'اسم امتحان، أو اسم طالب أو رقم موبايل',
+    searchSubmit: 'بحث',
+    searchClear: 'مسح البحث',
+    courseLabel: 'الكورس',
+    allCourses: 'كل الكورسات',
+    /** What the paper IS — the question the flat list could not answer. */
+    kind: {
+      lecture_quiz: 'كويز محاضرة',
+      course_exam: 'الامتحان الشامل',
+      monthly_exam: 'امتحان الشهر',
+    },
+    /** A lecture quiz whose lecture has a number — the number the student
+     *  outline prints beside that lecture. */
+    lectureQuiz: 'كويز المحاضرة {n}',
+    unpublished: 'مش منشور',
+    archived: 'كورس متأرشف',
+    attempts: '{n} محاولة',
+    students: '{n} طالب',
+    average: 'المتوسط {n}٪',
+    passRate: 'النجاح {n}٪',
+    pending: 'محتاج تصحيح {n}',
+    live: 'شغال دلوقتي {n}',
+    lastActivity: 'آخر نشاط {at}',
+    noAttempts: 'لسه مفيش محاولات',
+    open: 'فتح المحاولات',
+    coursePending: '{n} محتاج تصحيح',
+    courseLive: '{n} شغالين دلوقتي',
+    courseAttempts: '{n} محاولة',
+    empty: 'لسه مفيش محاولات',
+    emptyHint: 'أول محاولة على أي كويز أو امتحان هتظهر هنا، تحت الكورس بتاعها.',
+    noMatches: 'مفيش نتايج لـ«{q}»',
+    noMatchesHint: 'ممكن نجرّب جزء من الاسم بس، أو آخر أرقام الموبايل.',
+    studentsHeading: 'محاولات الطلبة',
+    studentsLead: '{n} محاولة لطلبة اسمهم أو رقمهم فيه «{q}»',
+    quizzesHeading: 'امتحانات فيها «{q}»',
+
+    // ── one quiz ──────────────────────────────────────────────────────────
+    back: 'كل الامتحانات',
+    outOf: 'الدرجة من {n}',
+    passMark: 'النجاح من {n}٪',
+    improvement: 'فيه امتحان تحسين',
+    analytics: 'تحليل الامتحان',
+    statAttempts: 'المحاولات',
+    statStudents: 'الطلبة',
+    statAverage: 'متوسط الدرجة',
+    statPassRate: 'نسبة النجاح',
+    /** Said once, under the two percentages: a paper still waiting on an
+     *  essay counts that essay as zero, so it is left out of both. */
+    statsNote: 'المتوسط ونسبة النجاح محسوبين على الورق اللي اتصحّح كله بس.',
+    studentSearchLabel: 'بحث عن طالب',
+    studentSearchPlaceholder: 'الاسم أو رقم الموبايل',
+    attemptNo: 'المحاولة {n}',
+    improvementPaper: 'ورقة التحسين',
+    scoreOf: '{score} من {outOf}',
+    percent: '{n}٪',
+    /** Beside the colour, never instead of it. Nouns, so neither one is said
+     *  about a boy or a girl. */
+    verdictPass: 'نجاح',
+    verdictFail: 'رسوب',
+    pendingScore: 'لسه بيتصحح',
+    started: 'البداية {at}',
+    submitted: 'التسليم {at}',
+    duration: 'المدة {d}',
+    grade: 'تصحيح الورقة',
+    moreActions: 'إجراءات تانية',
+    openQuiz: 'فتح الامتحان',
+    tabEmpty: 'مفيش محاولات هنا.',
+    firstPage: 'أول صفحة',
+    pagePrev: 'اللي قبله',
+    pageNext: 'اللي بعده',
+    pageOf: '{from}–{to} من {total}',
+  },
 } as const;
 
 /**

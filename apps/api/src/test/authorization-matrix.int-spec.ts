@@ -102,6 +102,8 @@ import { WalletService } from '../modules/wallet/wallet.service';
 import { BooksService } from '../modules/books/books.service';
 import { ArenaModule } from '../modules/arena/arena.module';
 import { MistakesModule } from '../modules/mistakes/mistakes.module';
+import { AdminAttemptsOverviewController } from '../modules/quiz/admin-attempts-overview.controller';
+import { AttemptsOverviewService } from '../modules/quiz/attempts-overview.service';
 
 import { enumerateRoutes, type RouteRef } from './route-inventory';
 
@@ -280,6 +282,11 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         WalletController,
         AdminWalletController,
         AdminWalletTopupsController,
+        // «محاولات الطلاب» by course. The ONE quiz-module controller this file
+        // registers, by class: the rest of `QuizModule` is covered by
+        // `quiz.authz.spec.ts` (see `COVERED_BY_QUIZ_AUTHZ_SPEC`), and this one
+        // needs nothing but Prisma, so it costs no extra wiring here.
+        AdminAttemptsOverviewController,
       ],
       imports: [
         DiscoveryModule,
@@ -427,6 +434,8 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
         ExpensesService,
         FinanceOverviewService,
         WalletService,
+        // `AdminAttemptsOverviewController`'s only dependency.
+        AttemptsOverviewService,
       ],
     })
     class FixtureModule {}
@@ -912,6 +921,21 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin question restore: anonymous', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/restore`, actor: 'anonymous', status: 401 },
     { label: 'admin question restore: student', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/restore`, actor: 'student', status: 403 },
     { label: 'admin question restore: admin, unknown question', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/restore`, actor: 'admin', status: 404 },
+    { label: 'admin question regrade preview: anonymous', method: 'get', path: () => `/api/admin/questions/${randomUUID()}/regrade`, actor: 'anonymous', status: 401 },
+    { label: 'admin question regrade preview: student', method: 'get', path: () => `/api/admin/questions/${randomUUID()}/regrade`, actor: 'student', status: 403 },
+    { label: 'admin question regrade preview: admin, unknown id', method: 'get', path: () => `/api/admin/questions/${randomUUID()}/regrade`, actor: 'admin', status: 404 },
+    { label: 'admin question regrade: anonymous', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/regrade`, actor: 'anonymous', status: 401 },
+    { label: 'admin question regrade: student', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/regrade`, actor: 'student', status: 403 },
+    { label: 'admin question regrade: admin, unknown id', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/regrade`, actor: 'admin', status: 404 },
+    { label: 'admin quiz edits: anonymous', method: 'get', path: () => `/api/admin/quizzes/${randomUUID()}/edits`, actor: 'anonymous', status: 401 },
+    { label: 'admin quiz edits: student', method: 'get', path: () => `/api/admin/quizzes/${randomUUID()}/edits`, actor: 'student', status: 403 },
+    { label: 'admin quiz edits: admin, unknown id', method: 'get', path: () => `/api/admin/quizzes/${randomUUID()}/edits`, actor: 'admin', status: 404 },
+    { label: 'admin quiz publish edits: anonymous', method: 'post', path: () => `/api/admin/quizzes/${randomUUID()}/publish-edits`, actor: 'anonymous', status: 401 },
+    { label: 'admin quiz publish edits: student', method: 'post', path: () => `/api/admin/quizzes/${randomUUID()}/publish-edits`, actor: 'student', status: 403 },
+    { label: 'admin quiz publish edits: admin, unknown id', method: 'post', path: () => `/api/admin/quizzes/${randomUUID()}/publish-edits`, actor: 'admin', status: 404 },
+    { label: 'admin quiz regrade: anonymous', method: 'post', path: () => `/api/admin/quizzes/${randomUUID()}/regrade`, actor: 'anonymous', status: 401 },
+    { label: 'admin quiz regrade: student', method: 'post', path: () => `/api/admin/quizzes/${randomUUID()}/regrade`, actor: 'student', status: 403 },
+    { label: 'admin quiz regrade: admin, unknown id', method: 'post', path: () => `/api/admin/quizzes/${randomUUID()}/regrade`, actor: 'admin', status: 404 },
     { label: 'game hub: student', method: 'get', path: () => '/api/me/game/hub', actor: 'student', status: 200 },
     { label: 'game voice: anonymous', method: 'get', path: () => `/api/me/game/voice/${randomUUID()}/stem`, actor: 'anonymous', status: 401 },
     // من غير مفتاح Azure (زي CI) أو برّه بنك الطالب — 404 في الحالتين.
@@ -2604,6 +2628,14 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin homework lessons: student', method: 'get', path: () => '/api/admin/homework/lessons', actor: 'student', status: 403 },
     { label: 'admin homework lessons: admin', method: 'get', path: () => '/api/admin/homework/lessons', actor: 'admin', status: 200 },
     { label: 'admin homework list by lesson: admin, junk lessonId is 400', method: 'get', path: () => '/api/admin/homework?lessonId=nope', actor: 'admin', status: 400 },
+    // «محاولات الطلاب» by course — `attempt:read`, the sittings list's own
+    // permission. The 400 is the DTO doing its job: a junk id must never reach
+    // the `::uuid` parameter it would 500 on.
+    { label: 'admin attempts overview: anonymous', method: 'get', path: () => '/api/admin/attempts/overview', actor: 'anonymous', status: 401 },
+    { label: 'admin attempts overview: student', method: 'get', path: () => '/api/admin/attempts/overview', actor: 'student', status: 403 },
+    { label: 'admin attempts overview: admin', method: 'get', path: () => '/api/admin/attempts/overview', actor: 'admin', status: 200 },
+    { label: 'admin attempts overview: admin, one course', method: 'get', path: () => `/api/admin/attempts/overview?courseId=${courseId}`, actor: 'admin', status: 200 },
+    { label: 'admin attempts overview: admin, junk courseId is 400', method: 'get', path: () => '/api/admin/attempts/overview?courseId=nope', actor: 'admin', status: 400 },
     { label: 'admin homework detail: anonymous', method: 'get', path: () => `/api/admin/homework/${randomUUID()}`, actor: 'anonymous', status: 401 },
     { label: 'admin homework detail: student', method: 'get', path: () => `/api/admin/homework/${randomUUID()}`, actor: 'student', status: 403 },
     { label: 'admin homework detail: admin, unknown submission', method: 'get', path: () => `/api/admin/homework/${randomUUID()}`, actor: 'admin', status: 404 },
