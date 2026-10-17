@@ -4,6 +4,7 @@ import { HardDrive } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { controlPlaneTenants } from '@/lib/control-plane';
+import { isControlPlaneOwner } from '@/lib/provisioning/gate';
 import { formatBytes } from '@/lib/upload-format';
 import { tenantVideoUsage } from '@/lib/video-usage';
 import { monthlyAtCurrentStorage } from '@/lib/video-usage-math';
@@ -22,10 +23,12 @@ function usd(value: number): string {
  * الفاتورة من غير ما يفتح شاشة تانية. التفاصيل لكل مدرّس لسه في
  * `/admin/platforms` — هنا بس المجموع، زي أي `StatTile` تاني في الصفحة دي.
  *
- * `IS_AYMAN`-gated من المكان اللي بيستدعيها، مش هنا — نفس القاعدة اللي
- * `/admin/platforms/page.tsx` ماشي عليها.
+ * Checks the owner itself, like `/admin/platforms/page.tsx` (its header
+ * explains why the layout and the caller's `IS_AYMAN` are not enough): it
+ * reads Cloudflare with this server's token.
  */
 export async function VideoUsageOverview() {
+  if (!(await isControlPlaneOwner())) return null;
   await connection();
   const tenants = controlPlaneTenants();
   if (tenants.length === 0) return null;

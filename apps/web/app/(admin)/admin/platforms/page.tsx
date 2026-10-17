@@ -5,8 +5,8 @@ import { FEATURE_DECLARATIONS } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Card, CardBody, SkeletonCardGrid } from '@ayman/ui';
 import { dokployConfigured } from '@/lib/provisioning/dokploy';
+import { isControlPlaneOwner } from '@/lib/provisioning/gate';
 import { tenantList } from '@/lib/provisioning/tenants';
-import { IS_AYMAN } from '@/lib/tenant';
 import { PlatformsForm } from './platforms-form';
 import { NewTeacherLink, TenantsSection } from './tenants-section';
 import { VideoUsage } from './video-usage';
@@ -33,17 +33,26 @@ export const metadata = { title: copy.admin.platforms.title };
  * «مدرّس جديد», which loads the new site's public health URL exactly as a
  * visitor would.
  *
- * ## `notFound()`, and why it is the third gate rather than the first
+ * ## The page checks the owner itself
  *
  * `visibleNavItems` hides the sidebar link and the `/admin` tile, but neither
- * of those is a lock — a typed URL reaches this file regardless. `notFound()`
- * rather than a 403 for the same reason `(admin)/layout.tsx` uses it: a 403
- * confirms the screen exists, and an instructor poking at their own admin
- * should not learn that a control plane is a thing. Every action behind the
- * buttons re-checks on its own (`lib/provisioning/gate.ts`).
+ * of those is a lock — a typed URL reaches this file regardless. Nor is
+ * `(admin)/layout.tsx`: on an RSC request Next renders only the segments the
+ * caller's `Next-Router-State-Tree` says it lacks, so a hand-made header skips
+ * the layout's `admin:access` check entirely, and a `purpose: prefetch` header
+ * skips `proxy.ts` too (its matcher's `missing`). Every other admin screen
+ * survives that because its data comes from Nest, which checks the cookie;
+ * this one reads Dokploy and Cloudflare with this server's own keys, deploy
+ * webhook URLs included. So the same check as every action behind its
+ * buttons (`lib/provisioning/gate.ts`) runs here, and again inside each part
+ * that reads a key (`PlatformsBody`, `VideoUsage`).
+ *
+ * `notFound()` rather than a 403 for the same reason `(admin)/layout.tsx`
+ * uses it: a 403 confirms the screen exists, and an instructor poking at
+ * their own admin should not learn that a control plane is a thing.
  */
-export default function PlatformsPage() {
-  if (!IS_AYMAN) notFound();
+export default async function PlatformsPage() {
+  if (!(await isControlPlaneOwner())) notFound();
 
   const c = copy.admin.platforms;
 
@@ -75,6 +84,7 @@ async function NewTeacherButton() {
 }
 
 async function PlatformsBody() {
+  if (!(await isControlPlaneOwner())) return null;
   // Request-time: the list is "what is building right now", and the expiry
   // lines compare against today.
   await connection();
