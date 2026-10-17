@@ -4,6 +4,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { R2_USD_PER_GB_MONTH, TENANT_USD_PER_GB_MONTH } from '@ayman/contracts/video';
 import { cn } from '@ayman/ui';
+import { isControlPlaneOwner } from '@/lib/provisioning/gate';
 import { formatBytes } from '@/lib/upload-format';
 import { tenantVideoUsage, type TenantVideoUsage } from '@/lib/video-usage';
 import { monthlyAtCurrentStorage, priceMultiplier } from '@/lib/video-usage-math';
@@ -21,6 +22,9 @@ function usd(value: number): string {
  * screen is opened a few times a month, to send a bill.
  */
 export async function VideoUsage({ tenants }: { tenants: readonly { key: string; name: string }[] }) {
+  // Its own check, not only the page's: it reads Cloudflare with this
+  // server's token (see `page.tsx`, «The page checks the owner itself»).
+  if (!(await isControlPlaneOwner())) return null;
   // Request-time, never prerendered: the numbers depend on today's date and
   // on Cloudflare's answer now. Cache Components refuses a `new Date()` in a
   // server component that has not first said so (`next-prerender-current-time`).
