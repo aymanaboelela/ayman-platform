@@ -3,8 +3,9 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import type { AttemptState } from '../../generated/prisma/enums';
 import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
+import type { AdminAttemptList } from '@ayman/contracts/admin/attempts';
 import { ATTEMPT_SORTS, type AdminAttemptSort, AttemptAdminService } from './attempt-admin.service';
-import { GrantExtraTimeDto, ReopenAttemptDto } from './dto/attempt-admin.dto';
+import { AdminAttemptListQueryDto, GrantExtraTimeDto, ReopenAttemptDto } from './dto/attempt-admin.dto';
 import {
   AdminAttemptMarkDto,
   AdminGradeAnswerDto,
@@ -48,31 +49,19 @@ export class AdminAttemptsController {
     return this.admin.review(id);
   }
 
+  /**
+   * The sittings list — one page, its total, and the per-state tab counts.
+   *
+   * It answered a bare array once, read from raw `@Query('x')` strings, with
+   * no total; the screen guessed at a next page and the sort it offered was
+   * never even sent. Now the whole query goes through
+   * `AdminAttemptListQuerySchema` (a 400 for a junk id or sort, never a 500
+   * from Postgres) and the answer is `{ rows, rowCount, stateCounts }`.
+   */
   @RequirePermission('attempt:read')
   @Get('attempts')
-  list(
-    @Query('quizId') quizId?: string,
-    @Query('userId') userId?: string,
-    @Query('state') state?: AttemptState,
-    @Query('q') q?: string,
-    @Query('take') take = '50',
-    @Query('skip') skip = '0',
-    @Query('sort') sort?: string,
-  ) {
-    return this.admin.listAttempts({
-      quizId,
-      userId,
-      state,
-      q,
-      take: Math.min(Number(take) || 50, 200),
-      skip: Number(skip) || 0,
-      /* Checked against the list rather than cast: this lands in a Prisma
-         `orderBy`, and an unrecognised value should fall back to the default
-         rather than reach the driver. */
-      sort: ATTEMPT_SORTS.includes(sort as AdminAttemptSort)
-        ? (sort as AdminAttemptSort)
-        : undefined,
-    });
+  list(@Query() query: AdminAttemptListQueryDto): Promise<AdminAttemptList> {
+    return this.admin.searchAttempts(query);
   }
 
   @RequirePermission('attempt:read')
