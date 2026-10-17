@@ -215,7 +215,7 @@ export class QuizBuilderService {
                 versions: {
                   orderBy: { version: 'desc' },
                   take: 1,
-                  select: { type: true, stemHtml: true },
+                  select: { type: true, stemHtml: true, status: true, version: true },
                 },
               },
             },
@@ -266,6 +266,14 @@ export class QuizBuilderService {
         stemHtml: slot.bankEntry?.versions[0]?.stemHtml ?? null,
         poolName: slot.pool?.name ?? null,
         poolPickCount: slot.pool?.pickCount ?? null,
+        /**
+         * The newest version is an edit nobody published: the row shows the
+         * edited stem, and students are still served the version before it.
+         * The builder marks the row — on 2026-10-17 one teacher had 22 of
+         * these in live exams, each corrected and never seen by a student.
+         */
+        pendingEdit:
+          slot.bankEntry?.versions[0]?.status === 'draft' && (slot.bankEntry.versions[0].version ?? 1) > 1,
       })),
     };
   }

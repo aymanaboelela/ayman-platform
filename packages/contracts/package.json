@@ -92,6 +92,8 @@
     "./quiz/question": "./src/quiz/question.ts",
     "./quiz/quiz-settings": "./src/quiz/quiz-settings.ts",
     "./quiz/import": "./src/quiz/import.ts",
+    "./quiz/option-label": "./src/quiz/option-label.ts",
+    "./quiz/regrade": "./src/quiz/regrade.ts",
     "./quiz/rich-text": "./src/quiz/rich-text.ts",
     "./quiz/attempt": "./src/quiz/attempt.ts",
     "./quiz/overview": "./src/quiz/overview.ts",

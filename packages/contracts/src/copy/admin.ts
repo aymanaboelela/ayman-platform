@@ -6429,6 +6429,53 @@ const quizAdmin = {
    *  pinned version serves the latest READY one. So an unpublished edit is
    *  invisible to students, and this is the only place that says so. */
   slotDraftPending: 'التعديل اتحفظ كمسودة — الطالب لسه شايف النسخة القديمة لحد ما تنشره.',
+
+  /* ── The answer key, made impossible to get wrong by accident ─────────── */
+  /** Above the options while no option is marked correct. A new question
+   *  starts with NONE marked: a form that pre-ticks the first option is how
+   *  live questions ended up keyed on whatever happened to be typed first. */
+  noCorrectYet: 'لسه مفيش إجابة صح متحددة — اضغط على الدايرة جنب الاختيار الصح.',
+  /** On the option that is marked correct, beside its control. */
+  correctTag: 'الإجابة الصح',
+  /** Under the options, so the key is read back in words before saving. */
+  correctSummary: 'الإجابة الصح: {answer}',
+
+  /* ── «احفظ وانشر» on a question students already see ─────────────────── */
+  saveConfirmTitle: 'متأكد إنك عايز تحفظ التعديل؟',
+  saveConfirmLive: 'التعديل هيوصل للطلبة على طول.',
+  saveConfirmShared: 'السؤال ده موجود في {n} امتحان، والتعديل هيوصل لكلهم.',
+  /** Only when the key itself changed — the one edit that changes marks. */
+  saveConfirmKeyChanged: 'الإجابة الصح اتغيّرت: من «{from}» لـ «{to}».',
+  saveConfirmRegrade: 'صحّح من جديد إجابات الطلبة اللي حلّوا السؤال ده قبل كده ({n} إجابة)',
+  saveConfirmRegradeHint:
+    'اللي اختار الإجابة الصح ياخد الدرجة، واللي اختار الغلط تتشال منه. الدرجات اللي اتحطّت باليد مابتتغيّرش.',
+  saveConfirmCancel: 'لأ، ارجع',
+  saveConfirmAction: 'أيوه، احفظ وانشر',
+  saveConfirmChecking: 'بنشوف مين حلّ السؤال ده…',
+  regradeDone: 'اتصحّح من جديد — {raised} درجة زادت و{lowered} قلّت',
+  regradeNoChange: 'اتصحّح من جديد — مفيش درجة اتغيّرت',
+  regradeFailed: 'التعديل اتنشر، بس إعادة التصحيح ماتمّتش. جرّب «صحّح من جديد» من صفحة الامتحان.',
+
+  /* ── The exam builder: edits nobody published, papers on an old key ──── */
+  editsPendingBody: '{n} سؤال في الامتحان ده اتعدّل ومتنشرش — الطلبة لسه بيشوفوا النسخة القديمة.',
+  editsStaleBody: '{answers} إجابة لـ{students} طالب اتصححت على نسخة قديمة من الأسئلة.',
+  editsPublish: 'انشر التعديلات',
+  editsRegrade: 'صحّح من جديد',
+  editsConfirmTitle: 'نشر التعديلات',
+  editsConfirmRegradeTitle: 'صحّح الامتحان من جديد',
+  editsConfirmBody: 'كل سؤال متعدّل هيتنشر ويوصل للطلبة على طول.',
+  editsConfirmRegradeBody: 'إجابات الطلبة اللي اتصححت على نسخة قديمة هتتصحح على النسخة الحالية من كل سؤال.',
+  editsPublished: 'اتنشر {n} سؤال',
+  editsPublishFailed: '{n} سؤال مااتنشرش — افتحه وصلّح اللي مكتوب فيه.',
+  editsFailed: 'العملية ماتمّتش، ومفيش حاجة اتغيّرت في اللي ماوصلش — جرّب تاني.',
+  /** On a builder row whose newest version is an unpublished edit. */
+  pendingEditChip: 'متعدّل ومتنشرش',
+
+  /* ── Item analysis: a key that the answers say is wrong ───────────────── */
+  suspectKey: 'راجع الإجابة الصح',
+  suspectKeyHint: 'أغلب الطلبة اختاروا اختيار واحد غير المتسجّل صح — غالبًا الإجابة الصح متسجّلة غلط.',
+  suspectKeyBanner: '{n} سؤال أغلب الطلبة جاوبوا فيه غير الإجابة المتسجّلة — راجعهم.',
+  suspectKeyOpen: 'افتح السؤال',
   durationMinutes: 'مدة الامتحان بالدقايق',
   openFromLabel: 'يفتح من',
   openUntilLabel: 'يقفل في',

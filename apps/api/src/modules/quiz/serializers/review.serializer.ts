@@ -1,3 +1,4 @@
+import { stripOptionLabels } from '@ayman/contracts/quiz/option-label';
 import type { ReviewFlags, ReviewOptions, ReviewWindow } from '@ayman/contracts/quiz/quiz-settings';
 import type { Correctness, ReviewOption, ReviewQuestion } from '@ayman/contracts/quiz/attempt';
 import type { AttemptQuestionState, QuestionType } from '../../../generated/prisma/enums';
@@ -90,8 +91,12 @@ export interface ReviewRow {
 }
 
 /** Same snapshotted-order replay as the learner serializer — the review
- *  screen shows the paper exactly as the student sat it. */
-function orderOptions(options: ReviewOptionRow[], optionOrder: readonly number[]): ReviewOption[] {
+ *  screen shows the paper exactly as the student sat it, without the letters
+ *  a teacher typed into the options (see the learner serializer). */
+function orderOptions(rawOptions: ReviewOptionRow[], optionOrder: readonly number[]): ReviewOption[] {
+  const written = [...rawOptions].sort((a, b) => a.position - b.position);
+  const bodies = stripOptionLabels(written.map((option) => option.bodyHtml));
+  const options = written.map((option, index) => ({ ...option, bodyHtml: bodies[index]! }));
   const byPosition = new Map(options.map((option) => [option.position, option]));
   const ordered: ReviewOption[] = [];
   const used = new Set<number>();

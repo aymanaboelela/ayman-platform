@@ -9,6 +9,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client';
 import type { QuestionType } from '../../generated/prisma/enums';
 import { copy } from '@ayman/contracts/copy';
+import { keepsWrittenOrder } from '@ayman/contracts/quiz/option-label';
 import type { ReviewPayload } from '@ayman/contracts/quiz/attempt';
 import type { QuizPaper, ReviewOptions } from '@ayman/contracts/quiz/quiz-settings';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -28,6 +29,7 @@ import {
 } from './serializers/learner.serializer';
 import { resolveReviewFlags, resolveReviewWindow, toReviewQuestion } from './serializers/review.serializer';
 import { splitMarks } from './grading/mark-split';
+import { mapOptionsBetweenVersions, remapResponse } from './grading/remap';
 
 export interface SaveResult {
   savedSlots: number[];
@@ -164,12 +166,20 @@ interface ResolvedSlot {
   minFraction: number;
   /** Only `ordering` is read off this, and only to force the shuffle. */
   type: QuestionType;
+  /**
+   * The teacher's own order must be served: an option points at the others
+   * («أ و د معا», «كل ما سبق») or the options are lettered by hand. See
+   * `@ayman/contracts/quiz/option-label`.
+   */
+  keepOrder: boolean;
 }
 
 interface PoolSourceFilter {
   categoryIds?: string[];
   types?: QuestionType[];
 }
+
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Fisher–Yates. `randomInt` (node:crypto) is a CSPRNG source, never Math.random —
  *  a predictable option order plus a leaked seed is a needless extra affordance. */
@@ -197,9 +207,20 @@ function shuffle<T>(items: readonly T[]): T[] {
  * retry is bounded and falls back to swapping the first two items, because a
  * loop that waits for randomness to cooperate is a loop that can hang an
  * attempt start.
+ *
+ * `keepOrder` is the other way round: a question whose options were written
+ * against their own order («أ و د معا», «كل ما سبق», options lettered by
+ * hand) is served exactly as written, whatever the quiz says — shuffled, its
+ * «أ و د» names two other rows and the key stops meaning what the teacher
+ * meant. It never applies to an ordering question, for the reason above.
  */
-function serveOrder(positions: readonly number[], type: QuestionType, quizShuffles: boolean): number[] {
-  if (type !== 'ordering') return quizShuffles ? shuffle(positions) : [...positions];
+function serveOrder(
+  positions: readonly number[],
+  type: QuestionType,
+  quizShuffles: boolean,
+  keepOrder: boolean,
+): number[] {
+  if (type !== 'ordering') return quizShuffles && !keepOrder ? shuffle(positions) : [...positions];
 
   const isStoredOrder = (candidate: readonly number[]): boolean =>
     candidate.every((value, index) => value === positions[index]);
@@ -325,7 +346,7 @@ export class AttemptService {
               slotPosition: index,
               // Q2: BOTH snapshots, written at creation and never re-derived.
               questionVersionId: slot.versionId,
-              optionOrder: serveOrder(slot.optionPositions, slot.type, quiz.shuffleOptions),
+              optionOrder: serveOrder(slot.optionPositions, slot.type, quiz.shuffleOptions, slot.keepOrder),
               maxMark: slot.maxMark,
               minFraction: slot.minFraction,
               maxFraction: 1,
@@ -979,8 +1000,9 @@ export class AttemptService {
     const graded: GradedQuestionRow[] = [];
 
     for (const question of attempt.questions) {
+      const response = await this.reconcileResponse(tx, question);
       graded.push(
-        await this.gradeAndStoreQuestion(tx, attemptId, question, 'graded', context.actorId),
+        await this.gradeAndStoreQuestion(tx, attemptId, { ...question, response }, 'graded', context.actorId),
       );
     }
 
@@ -1072,13 +1094,75 @@ export class AttemptService {
   }
 
   /**
-   * Grades ONE question and persists the result. Shared by
-   * `gradeAndFinalise` (every question, at submit). It kept a second caller,
-   * `checkAnswer`, until mid-attempt feedback was removed; the seam is left
-   * as it is because it is what makes the grading path a single function
-   * rather than one inlined in the submit transaction.
+   * An answer naming option ids from ANOTHER version of the same question,
+   * carried onto the one this paper now holds — or the answer unchanged.
+   *
+   * It happens in one way only: `RegradeService` moved this paper onto a
+   * corrected version while the student still had the old one on screen, and
+   * that tab's next autosave wrote the old ids back. Graded as stored, every
+   * one of those ids misses and a right answer scores zero — the exact bug a
+   * regrade exists to fix, reintroduced by the student's own tab. Checked here
+   * rather than on every autosave because submit already holds the options in
+   * memory; the extra query only runs when an id actually misses.
    */
-  private async gradeAndStoreQuestion(
+  private async reconcileResponse(
+    tx: Prisma.TransactionClient,
+    question: {
+      id: string;
+      response: unknown;
+      version: { id: string; options: { id: string; bodyHtml: string; position: number }[] };
+    },
+  ): Promise<unknown> {
+    const response = question.response as { kind?: unknown; optionIds?: unknown } | null;
+    if (!response || response.kind !== 'choice' || !Array.isArray(response.optionIds)) return question.response;
+    const current = new Set(question.version.options.map((option) => option.id));
+    // UUID-shaped only: the column is `uuid`, and a malformed id from a
+    // tampered client would make the lookup below THROW — failing the whole
+    // submit over a value that simply scores zero.
+    const strays = (response.optionIds as unknown[]).filter(
+      (id): id is string => typeof id === 'string' && !current.has(id) && UUID_SHAPE.test(id),
+    );
+    if (strays.length === 0) return question.response;
+
+    // Only another version of THIS question — an id from some other question
+    // is not an answer to this one, however its text reads.
+    const self = await tx.questionVersion.findUnique({
+      where: { id: question.version.id },
+      select: { bankEntryId: true },
+    });
+    if (!self) return question.response;
+    const owners = await tx.questionOption.findMany({
+      where: { id: { in: strays }, version: { bankEntryId: self.bankEntryId } },
+      select: { questionVersionId: true },
+      distinct: ['questionVersionId'],
+    });
+    const mapping = new Map<string, string>();
+    for (const { questionVersionId } of owners) {
+      const old = await tx.questionOption.findMany({
+        where: { questionVersionId },
+        select: { id: true, bodyHtml: true, position: true },
+      });
+      for (const [from, to] of mapOptionsBetweenVersions(old, question.version.options)) mapping.set(from, to);
+    }
+    for (const id of current) mapping.set(id, id);
+    const carried = remapResponse(response, mapping);
+    if (carried === null) return question.response;
+    await tx.attemptQuestion.update({
+      where: { id: question.id },
+      data: { response: carried as Prisma.InputJsonValue },
+    });
+    return carried;
+  }
+
+  /**
+   * Grades ONE question and persists the result. Shared by
+   * `gradeAndFinalise` (every question, at submit) and `RegradeService` (an
+   * answer moved onto a corrected version of its question). Public for the
+   * second caller only: a regrade that marked answers with its own copy of
+   * this logic would be a second grading path, and the first time the two
+   * disagreed a student's mark would depend on WHEN they were marked.
+   */
+  async gradeAndStoreQuestion(
     tx: Prisma.TransactionClient,
     attemptId: string,
     question: {
@@ -1101,7 +1185,7 @@ export class AttemptService {
         }[];
       };
     },
-    eventKind: 'graded',
+    eventKind: 'graded' | 'regraded',
     actorId: string | null,
   ): Promise<GradedQuestionRow> {
     const settings = (question.version.settings ?? {}) as { caseSensitive?: boolean };
@@ -1204,15 +1288,22 @@ export class AttemptService {
 
     for (const slot of slots) {
       if (slot.bankEntryId) {
+        // Bodies too, for a fixed slot: one version, a handful of rows, and
+        // they decide whether this question may be shuffled at all.
+        const select = {
+          id: true,
+          type: true,
+          options: { ...optionSelect, select: { ...optionSelect.select, bodyHtml: true } },
+        };
         const version = slot.pinnedVersion
           ? await tx.questionVersion.findFirst({
               where: { bankEntryId: slot.bankEntryId, version: slot.pinnedVersion },
-              select: { id: true, type: true, options: optionSelect },
+              select,
             })
           : await tx.questionVersion.findFirst({
               where: { bankEntryId: slot.bankEntryId, status: 'ready' },
               orderBy: { version: 'desc' },
-              select: { id: true, type: true, options: optionSelect },
+              select,
             });
         // A slot whose question has no ready version at all is a publish-time
         // bug (Task 15's preflight is what should have caught it) — skipping
@@ -1225,6 +1316,7 @@ export class AttemptService {
           optionPositions: version.options.map((option) => option.position),
           minFraction: Math.min(0, ...version.options.map((option) => Number(option.fraction))),
           type: version.type,
+          keepOrder: keepsWrittenOrder(version.options.map((option) => option.bodyHtml)),
         });
         continue;
       }
@@ -1247,6 +1339,14 @@ export class AttemptService {
           select: { id: true, type: true, options: optionSelect },
         });
         const drawn = shuffle(candidates).slice(0, slot.pool.pickCount);
+        // Bodies for the DRAWN questions only — a pool's candidates can be a
+        // whole category, and reading every option body of it to use five
+        // would make starting an exam cost a category.
+        const bodies = await tx.questionOption.findMany({
+          where: { questionVersionId: { in: drawn.map((version) => version.id) } },
+          orderBy: { position: 'asc' },
+          select: { questionVersionId: true, bodyHtml: true },
+        });
         for (const version of drawn) {
           resolved.push({
             versionId: version.id,
@@ -1254,6 +1354,9 @@ export class AttemptService {
             optionPositions: version.options.map((option) => option.position),
             minFraction: Math.min(0, ...version.options.map((option) => Number(option.fraction))),
             type: version.type,
+            keepOrder: keepsWrittenOrder(
+              bodies.filter((row) => row.questionVersionId === version.id).map((row) => row.bodyHtml),
+            ),
           });
         }
       }

@@ -19,7 +19,9 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { Check, CircleAlert } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
 import { hasChoiceOptions, isOrdering, type QuestionType } from '@ayman/contracts/quiz/question';
 import { Button } from '@ayman/ui/components/button';
 import { Checkbox } from '@ayman/ui/components/checkbox';
@@ -27,6 +29,7 @@ import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
 import { RadioGroup, RadioGroupItem } from '@ayman/ui/components/radio-group';
 import { cn } from '@ayman/ui/lib/cn';
+import './question-bank.css';
 
 /**
  * A superset of `ChoiceOptionInput | PatternOptionInput` PLUS a client-only
@@ -120,6 +123,15 @@ export function OptionRows({ type, options, onChange, error }: OptionRowsProps) 
 
   const correctId = options.find((option) => option.fraction > 1 - 1e-6)?.id;
   const tickedIds = new Set(options.filter((option) => option.fraction > 0).map((option) => option.id));
+  const keyMissing = (isSingleCorrect && !correctId) || (isMulti && tickedIds.size === 0);
+  // The key, read back in words under the rows — the last look before saving.
+  const keySummary =
+    isSingleCorrect || isMulti
+      ? options
+          .filter((option) => tickedIds.has(option.id) && (option.bodyHtml ?? '').trim() !== '')
+          .map((option) => (option.bodyHtml ?? '').trim())
+          .join('، ')
+      : '';
 
   const list = (
     <DndContext
@@ -136,6 +148,7 @@ export function OptionRows({ type, options, onChange, error }: OptionRowsProps) 
               key={option.id}
               option={option}
               type={type}
+              isCorrect={isSingleCorrect ? option.id === correctId : isMulti && tickedIds.has(option.id)}
               showWeight={showWeights && !isPattern && !isOrder}
               onPatch={(next) => patch(option.id, next)}
               onRemove={() => remove(option.id)}
@@ -181,9 +194,21 @@ export function OptionRows({ type, options, onChange, error }: OptionRowsProps) 
         <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{copy.quizAdmin.orderingHint}</p>
       ) : null}
 
+      {/* Said before the rows, not after a failed save: a key nobody chose is
+          the mistake this form exists to make impossible. */}
+      {keyMissing ? (
+        <p className="qopts__missing" role="status">
+          <CircleAlert className="size-4 flex-none" aria-hidden="true" />
+          <span>{copy.quizAdmin.noCorrectYet}</span>
+        </p>
+      ) : null}
+
       {isSingleCorrect ? (
         <RadioGroup
-          value={correctId}
+          // '' and not `undefined` while nothing is chosen: an undefined value
+          // flips Radix to UNCONTROLLED, and the dot it then draws on its own
+          // would claim a key this form never recorded.
+          value={correctId ?? ''}
           onValueChange={(value) => onChange(relabelWeights(options, options.findIndex((o) => o.id === value)))}
         >
           {list}
@@ -191,6 +216,10 @@ export function OptionRows({ type, options, onChange, error }: OptionRowsProps) 
       ) : (
         list
       )}
+
+      {keySummary ? (
+        <p className="qopts__summary">{formatCopy(copy.quizAdmin.correctSummary, { answer: keySummary })}</p>
+      ) : null}
 
       {error ? (
         <p role="alert" className="text-[length:var(--fs-text-xs)] text-err">
@@ -210,6 +239,7 @@ export function OptionRows({ type, options, onChange, error }: OptionRowsProps) 
 function SortableRow({
   option,
   type,
+  isCorrect,
   showWeight,
   onPatch,
   onRemove,
@@ -217,6 +247,7 @@ function SortableRow({
 }: {
   option: OptionRowValue;
   type: QuestionType;
+  isCorrect: boolean;
   showWeight: boolean;
   onPatch: (next: Partial<OptionRowValue>) => void;
   onRemove: () => void;
@@ -233,7 +264,7 @@ function SortableRow({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(isDragging && 'relative z-10 opacity-80')}
     >
-      <div className="flex items-start gap-2 rounded-sm border border-line-subtle bg-surface-2 p-2">
+      <div className={cn('qopt flex items-start gap-2 rounded-sm border bg-surface-2 p-2', isCorrect && 'qopt--correct')}>
         <button
           type="button"
           {...attributes}
@@ -270,6 +301,13 @@ function SortableRow({
               aria-label={copy.quizAdmin.options}
             />
           )}
+
+          {isCorrect && !isPattern ? (
+            <span className="qopt__tag">
+              <Check className="size-3.5" aria-hidden="true" />
+              {copy.quizAdmin.correctTag}
+            </span>
+          ) : null}
 
           {showWeight ? (
             <label className="flex items-center gap-2 text-[length:var(--fs-text-xs)] text-fg-muted">

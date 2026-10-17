@@ -69,6 +69,11 @@ export const AUDIT_ACTIONS = [
   // «رجّعه للبنك» — the undo for an archive. A hard delete has no undo, by
   // design: nothing used it.
   'question:restore',
+  // «صحّح من جديد» — answers already given moved onto a corrected version of
+  // the question and marked again. ONE row per question, with the counts
+  // (moved / raised / lowered / skipped) in `metadata`: it changes students'
+  // grades in bulk, and «مين غيّر درجات الامتحان ده» must have an answer.
+  'question:regrade',
   'quiz:publish',
   'quiz:answer-edit',
   // Re-points an existing quiz at another lesson. Logged because it moves
