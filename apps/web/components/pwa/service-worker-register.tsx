@@ -26,12 +26,12 @@ import { aymanOnly } from '@/lib/tenant';
  *
  * ## Why no update prompt
  *
- * `sw.js` calls `clients.claim()`, and a new worker waits — as the browser
- * makes it — until the tabs running the old one are gone. Nothing personal is
- * ever cached, so neither the takeover nor the wait can show one student
- * another's data; see the header of `sw.js` for why the wait is now load-bearing
- * rather than merely tidy. Do not add HTML caching without also adding an
- * update flow the student controls.
+ * `sw.js` takes over as soon as it installs (`skipWaiting` + `clients.claim`)
+ * and keeps an older build's cache exactly as long as an open tab announces
+ * that build — see `announce` below and the registry in `sw.js`. Nothing
+ * personal is ever cached, so the takeover cannot show one student another's
+ * data, and there is nothing for the student to decide. Do not add HTML
+ * caching without also adding an update flow the student controls.
  *
  * ## Why the URL below carries a version
  *
@@ -115,25 +115,71 @@ const SW_PARAMS = [
 ];
 const SW_URL = SW_PARAMS.length > 0 ? `/sw.js?${SW_PARAMS.join('&')}` : '/sw.js';
 
+/**
+ * The static files this document has loaded so far, same-origin `/_next/static/`
+ * only — what the worker copies forward from an older build's cache before it
+ * deletes that cache, so a chunk that did not change between builds is not
+ * downloaded twice. Resource Timing already holds the list; reading it is one
+ * pass over a few dozen entries, once per page load.
+ */
+function loadedStaticAssets(): string[] {
+  try {
+    const seen = new Set<string>();
+    for (const entry of performance.getEntriesByType('resource')) {
+      const url = new URL(entry.name);
+      if (url.origin === window.location.origin && url.pathname.startsWith('/_next/static/')) {
+        seen.add(url.href);
+      }
+    }
+    return [...seen].slice(0, 150);
+  } catch {
+    return [];
+  }
+}
+
 export function ServiceWorkerRegister() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
+    const container = navigator.serviceWorker;
+
+    /*
+     * «Which build is this tab running» — told to the worker in charge, once
+     * per document and again whenever a new worker takes over. It is how
+     * `public/sw.js` knows a previous build's cache is still needed by an open
+     * tab, and deletes it the moment none is (see the registry there). No
+     * build id (`next dev`, a build outside the Dockerfile) means nothing to
+     * say, and the worker treats this tab conservatively.
+     */
+    const announce = () => {
+      const controller = container.controller;
+      if (!controller || !BUILD_ID) return;
+      try {
+        controller.postMessage({ type: 'ayman:build', build: BUILD_ID, assets: loadedStaticAssets() });
+      } catch {
+        // A worker that cannot be messaged keeps the old caches a little
+        // longer; nothing on the page depends on this.
+      }
+    };
+    container.addEventListener('controllerchange', announce);
 
     const register = () => {
-      navigator.serviceWorker.register(SW_URL).catch(() => {
+      container.register(SW_URL).catch(() => {
         // A failed registration costs the install prompt and nothing else —
         // every page still works, because the worker never handled anything
         // the app depends on. Not worth a toast at the student.
       });
+      announce();
     };
 
     if (document.readyState === 'complete') {
       register();
-      return;
+    } else {
+      window.addEventListener('load', register);
     }
-
-    window.addEventListener('load', register);
-    return () => window.removeEventListener('load', register);
+    return () => {
+      container.removeEventListener('controllerchange', announce);
+      window.removeEventListener('load', register);
+    };
   }, []);
 
   return null;

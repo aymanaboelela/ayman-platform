@@ -75,18 +75,20 @@ export function useGsap(
     if (!element) return;
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let failed: unknown = null;
+    let failed = false;
+    let cause: unknown;
     const ctx = gsap.context(() => {
       try {
         setup({ scope: element, reduced });
       } catch (error) {
-        failed = error;
+        failed = true;
+        cause = error;
       }
     }, element);
 
-    if (failed !== null) {
+    if (failed) {
       // For whoever has devtools open; not a fault to file — the page is fine.
-      console.warn('[use-gsap] an animation failed to start and was skipped', failed);
+      console.warn('[use-gsap] an animation failed to start and was skipped', cause);
       ctx.revert();
       return;
     }
