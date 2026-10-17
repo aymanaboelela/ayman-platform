@@ -931,6 +931,39 @@ describe('proxy — an inconclusive session check never invents a sign-out', () 
     expect(response.headers.get('location')).toBeNull();
     vi.unstubAllGlobals();
   });
+
+  /*
+   * Under /admin this redirect is the only gate some pages have (the RSC
+   * request skips the layout's role check), and the 429 can be caused on
+   * purpose. A cookie the API could not vouch for must not get through there.
+   */
+  describe('but /admin stays fail-closed', () => {
+    for (const [label, answer] of [
+      ['a throttle (429)', () => Promise.resolve(new Response('{}', { status: 429 }))],
+      ['an API mid-restart (503)', () => Promise.resolve(new Response('', { status: 503 }))],
+      ['a 500', () => Promise.resolve(new Response('{}', { status: 500 }))],
+      ['no answer at all', () => Promise.reject(new TypeError('fetch failed'))],
+    ] as const) {
+      it(`sends a session cookie to /login on ${label}`, async () => {
+        vi.stubGlobal('fetch', vi.fn(answer));
+        for (const path of ['/admin', '/admin/platforms']) {
+          const response = await proxy(studentWithSession(path));
+          expect(response.headers.get('location')).toContain('/login');
+        }
+        vi.unstubAllGlobals();
+      });
+    }
+
+    it('still lets a session the API vouched for in', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response(JSON.stringify({ onboardingCompleted: true }), { status: 200 })),
+      );
+      const response = await proxy(studentWithSession('/admin/platforms'));
+      expect(response.headers.get('location')).toBeNull();
+      vi.unstubAllGlobals();
+    });
+  });
 });
 
 /**

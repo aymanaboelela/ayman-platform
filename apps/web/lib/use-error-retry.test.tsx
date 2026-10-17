@@ -362,14 +362,19 @@ describe('useErrorRetry', () => {
  * waiting, and it never spends the student's own first press.
  */
 describe('useErrorRetry — automatic recovery', () => {
+  let random: ReturnType<typeof vi.spyOn>;
+
   beforeEach(async () => {
     vi.useFakeTimers();
     (await import('./auto-retry')).resetAutoRetryMemory();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 200 })));
+    // The middle of the jitter: every delay is exactly its nominal length.
+    random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    random.mockRestore();
   });
 
   /** A boundary keeps ONE error object per failure; so does this harness. */
@@ -434,5 +439,25 @@ describe('useErrorRetry — automatic recovery', () => {
 
     expect(screen.getByText('idle')).toBeInTheDocument();
     expect(calls).toEqual([]);
+  });
+
+  it('never re-renders the exam runner by itself, and the button still does', async () => {
+    // A refresh there posts `resume` and takes the attempt token, so a second
+    // tab on an error screen would steal the paper the student is answering.
+    vi.stubGlobal('location', {
+      ...window.location,
+      pathname: '/quizzes/0b1a/attempt/9f3c',
+      reload,
+    });
+    const throttled = Object.assign(new Error('omitted in production'), { digest: 'UPSTREAM_BUSY' });
+    render(<Boundary error={throttled} />);
+
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(screen.getByText('idle')).toBeInTheDocument();
+    expect(calls).toEqual([]);
+
+    press();
+    expect(calls).toEqual(['refresh', 'reset']);
+    expect(reload).not.toHaveBeenCalled();
   });
 });

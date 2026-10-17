@@ -1,4 +1,4 @@
-import { documentLoadFor, type RouterNavigationType } from './lib/stale-navigation';
+import { documentLoadFor, holdNavigation, type RouterNavigationType } from './lib/stale-navigation';
 
 /**
  * Next's client hook file — evaluated once per document, before hydration.
@@ -24,6 +24,9 @@ export function onRouterTransitionStart(url: string, navigationType: RouterNavig
     if (!target) return;
     if (target.mode === 'assign') window.location.assign(target.href);
     else window.location.replace(target.href);
+    // After the document load has started, so a failure here cannot cost it.
+    // Keeps the soft navigation Next dispatches next from committing on top.
+    holdNavigation();
   } catch {
     // Never in the way of a navigation: worst case it stays a soft one.
   }

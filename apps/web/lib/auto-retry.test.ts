@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UPSTREAM_TIMEOUT_DIGEST } from './api';
 import {
   AUTO_RETRY_MEMORY_MS,
+  MAX_AUTOMATIC_RETRIES_PER_PAGE,
   PROBE_INTERVAL_MS,
   autoRetryPlanFor,
   pendingAutoRetry,
@@ -27,6 +28,9 @@ beforeEach(() => {
   vi.useFakeTimers();
   resetAutoRetryMemory();
   window.history.replaceState(null, '', '/results');
+  // The middle of the jitter, so every delay is exactly its nominal length.
+  // The jitter itself has its own test below.
+  vi.spyOn(Math, 'random').mockReturnValue(0.5);
 });
 
 afterEach(() => {
@@ -193,5 +197,154 @@ describe('scheduleAutoRetry', () => {
     expect(listener).toHaveBeenCalledTimes(1);
     expect(pendingAutoRetry()).not.toBeNull();
     stop();
+  });
+});
+
+/*
+ * The three ways the first version could add load to a server that was
+ * already down. Each is pinned on its own, because each was a separate hole.
+ */
+describe('scheduleAutoRetry — never a load on a choking server', () => {
+  it('caps a page at its share even when every failure has a different shape', async () => {
+    // 2026-10-04: the same page failed as a timeout, then a throttle, then a
+    // 500, then a dropped stream. Counting per failure reset on each change.
+    const retry = vi.fn();
+    const probe = vi.fn().mockResolvedValue(true);
+    const shapes = [
+      () => serverFault(UPSTREAM_TIMEOUT_DIGEST),
+      () => serverFault(UPSTREAM_BUSY_DIGEST),
+      () => serverFault('1389995574'),
+      () => new TypeError('Connection closed.'),
+      () => serverFault(UPSTREAM_TIMEOUT_DIGEST),
+      () => serverFault(UPSTREAM_BUSY_DIGEST),
+      () => networkDrop(),
+      () => serverFault('2206044711'),
+    ];
+
+    let teardown = () => {};
+    for (const shape of shapes) {
+      teardown();
+      teardown = scheduleAutoRetry(shape(), { retry, probe });
+      await vi.advanceTimersByTimeAsync(45_000);
+    }
+
+    expect(retry).toHaveBeenCalledTimes(MAX_AUTOMATIC_RETRIES_PER_PAGE);
+    expect(MAX_AUTOMATIC_RETRIES_PER_PAGE).toBe(3);
+    // …and the screen stops promising a retry that is not coming.
+    teardown();
+    scheduleAutoRetry(serverFault(UPSTREAM_BUSY_DIGEST), { retry, probe });
+    await Promise.resolve();
+    expect(pendingAutoRetry()).toBeNull();
+  });
+
+  it('spreads screens that failed together over a window, not one instant', async () => {
+    const early = vi.fn();
+    const late = vi.fn();
+    const probe = vi.fn().mockResolvedValue(true);
+
+    vi.mocked(Math.random).mockReturnValue(0);
+    scheduleAutoRetry(serverFault(), { retry: early, probe });
+    window.history.replaceState(null, '', '/rank');
+    vi.mocked(Math.random).mockReturnValue(0.99);
+    scheduleAutoRetry(serverFault(), { retry: late, probe });
+
+    // 4s nominal: the one drawn low fires at half of it…
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(early).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(early).toHaveBeenCalledTimes(1);
+    // …the one drawn high near one and a half times it.
+    await vi.advanceTimersByTimeAsync(5_900 - 2_000);
+    expect(late).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(late).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks nothing and re-renders nothing while the tab is hidden, then goes ahead when shown', async () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const retry = vi.fn();
+    const probe = vi.fn().mockResolvedValue(true);
+    scheduleAutoRetry(serverFault(UPSTREAM_BUSY_DIGEST), { retry, probe });
+
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(probe).not.toHaveBeenCalled();
+    expect(retry).not.toHaveBeenCalled();
+    // A promise the student can still read: it happens when they look.
+    expect(pendingAutoRetry()).not.toBeNull();
+
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(probe).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks again on return when the tab was hidden while the origin was being asked', async () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    const retry = vi.fn();
+    let answer: (ok: boolean) => void = () => {};
+    const probe = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<boolean>((resolve) => (answer = resolve)))
+      .mockResolvedValue(true);
+    scheduleAutoRetry(serverFault(), { retry, probe });
+
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(probe).toHaveBeenCalledTimes(1);
+    visibility.mockReturnValue('hidden');
+    answer(true);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(retry).not.toHaveBeenCalled();
+
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(probe).toHaveBeenCalledTimes(2);
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('a page left while hidden never fires when the tab comes back', async () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const retry = vi.fn();
+    const probe = vi.fn().mockResolvedValue(true);
+    const teardown = scheduleAutoRetry(serverFault(), { retry, probe });
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    teardown();
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(probe).not.toHaveBeenCalled();
+    expect(retry).not.toHaveBeenCalled();
+  });
+});
+
+describe('scheduleAutoRetry — the exam runner', () => {
+  it('arms nothing there: a re-render would take the attempt token from the tab answering', async () => {
+    window.history.replaceState(null, '', '/quizzes/0b1a/attempt/9f3c');
+    const retry = vi.fn();
+    const probe = vi.fn().mockResolvedValue(true);
+
+    for (const failure of [serverFault(UPSTREAM_BUSY_DIGEST), serverFault(), networkDrop()]) {
+      scheduleAutoRetry(failure, { retry, probe });
+    }
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+
+    expect(probe).not.toHaveBeenCalled();
+    expect(retry).not.toHaveBeenCalled();
+    // Nor does the screen say a retry is coming: the button is the way.
+    expect(pendingAutoRetry()).toBeNull();
+  });
+
+  it('still retries the review page, which is an ordinary page', async () => {
+    window.history.replaceState(null, '', '/quizzes/0b1a/attempt/9f3c/review');
+    const retry = vi.fn();
+    scheduleAutoRetry(serverFault(), { retry, probe: vi.fn().mockResolvedValue(true) });
+    await vi.advanceTimersByTimeAsync(4_000);
+
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 });

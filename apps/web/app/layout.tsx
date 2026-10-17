@@ -16,6 +16,7 @@ import { rootMetadata } from '@/lib/seo/metadata';
 import { Toaster } from '@/components/toaster';
 import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
 import { StaleBuildWatch } from '@/components/pwa/stale-build-watch';
+import { StaleNavigationHold } from '@/components/pwa/stale-navigation-hold';
 // `Clarity` is deliberately NOT imported or mounted below — see the long
 // comment at its old call site, right after `<StaleBuildWatch />`.
 import './globals.css';
@@ -273,6 +274,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           See the component.
         */}
         <StaleBuildWatch />
+        {/*
+          Renders nothing. When a stale tab loads its next page as a document,
+          this keeps the soft navigation that goes with it from committing, so
+          the old build never renders the target and back needs one press.
+          At the root for the same reason as the watcher above: it has to be
+          mounted on every page. See `lib/stale-navigation.ts`.
+        */}
+        <StaleNavigationHold />
         {/*
           ⚠️ `<Clarity>` is DELIBERATELY not mounted — read before re-adding it.
 

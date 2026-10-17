@@ -502,12 +502,28 @@ export function decideRedirect(pathname: string, auth: AuthState): RedirectDecis
  * a shell of chrome with nothing in it, and the error boundary, not a login
  * form. What the redirect is FOR is UX, and the UX of «we could not check» is
  * to not pretend we did.
+ *
+ * ## ⚠️ Except under `/admin`, which stays fail-closed
+ *
+ * "Every byte is read from the API with the same cookie" is true of the
+ * student's pages and not of every admin one. `/admin/platforms` reads Dokploy
+ * and Cloudflare with the SERVER's own keys, and on an RSC request Next skips
+ * the `(admin)` layout and its role check, so this redirect is the only gate
+ * that page has. With the student rule, any made-up cookie would get through
+ * while `/api/session` is throttled or slow, and that route's throttle is keyed
+ * on the cookie value, so a visitor can cause the 429 themselves. So under
+ * `/admin` «could not tell» is still «signed out», as it always was. The cost
+ * is a few staff meeting the sign-in page during a restart. Their cookie is
+ * untouched, and `/login` sends them straight back once the API answers. The
+ * page getting its own gate is a separate fix, and does not make this one
+ * optional.
  */
 const SIGNED_OUT: AuthState = { authenticated: false, onboardingCompleted: false };
 
 async function resolveAuthState(request: NextRequest): Promise<AuthState | null> {
   const cookie = request.headers.get('cookie');
-  const inconclusive = hasSessionCookie(request) ? null : SIGNED_OUT;
+  const inconclusive =
+    hasSessionCookie(request) && !isAdminRoute(request.nextUrl.pathname) ? null : SIGNED_OUT;
   try {
     const response = await fetch(`${API_ORIGIN}/api/session`, {
       // The visitor's IP, or every student shares one throttle bucket — see

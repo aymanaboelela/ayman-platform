@@ -39,6 +39,20 @@ import { isTabStale } from './stale-tab';
  * unsaved work still gets its say too — a document load fires `beforeunload`,
  * which is exactly what the course editor's autosave listens to.
  *
+ * ## ⚠️ The soft navigation is HELD, not raced
+ *
+ * The hook cannot cancel the navigation it reports. Next dispatches it as
+ * soon as the hook returns. Left alone, a page already in memory commits
+ * within a frame: the old build renders the target, `pushState` adds an
+ * entry, and the document load then adds a second one, so back has to be
+ * pressed twice. So the hook also calls `holdNavigation()`. That queues, in
+ * the SAME transition, a state update that suspends forever
+ * (`<StaleNavigationHold>`), and the transition never commits. That is Next's
+ * own trick for the navigations it turns into document loads itself (the
+ * `mpaNavigation` branch of `app-router.js`). The page the student is on stays
+ * exactly as it was until the new document replaces it, and there is one
+ * history entry.
+ *
  * A NEW module, never more exports on a shipped one — `zod-exports-only-z
  * .spec.ts` in contracts explains what an old tab does with a fresh export.
  */
@@ -109,4 +123,40 @@ const EXAM_RUNNER = /^\/quizzes\/[^/]+\/attempt\/[^/]+\/?$/;
 
 export function isExamRunnerPath(pathname: string): boolean {
   return EXAM_RUNNER.test(pathname);
+}
+
+/*
+ * ── holding the soft navigation — see «⚠️ The soft navigation is HELD» ──────
+ */
+let hold: (() => void) | null = null;
+let holdRequested = false;
+
+/**
+ * Called once by `<StaleNavigationHold>` with the state update that suspends
+ * it. Returns the unregister for its cleanup.
+ */
+export function registerNavigationHold(suspend: () => void): () => void {
+  hold = suspend;
+  return () => {
+    if (hold === suspend) hold = null;
+  };
+}
+
+/**
+ * Keeps the soft navigation now being dispatched from ever committing. Call
+ * it INSIDE the router's transition, which `onRouterTransitionStart` is, right
+ * after starting the document load that replaces it.
+ *
+ * Without the component mounted (`global-error.tsx` replaces the root layout)
+ * nothing is held, and the navigation finishes as a soft one before the
+ * document load lands, exactly as before.
+ */
+export function holdNavigation(): void {
+  holdRequested = true;
+  hold?.();
+}
+
+/** Whether this document has held a navigation, for a back-forward-cache restore. */
+export function navigationWasHeld(): boolean {
+  return holdRequested;
 }

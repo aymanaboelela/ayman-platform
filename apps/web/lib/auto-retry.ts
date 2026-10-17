@@ -1,5 +1,6 @@
 import { isConnectivityError } from './connectivity-error';
 import { UPSTREAM_TIMEOUT_DIGEST } from './api';
+import { isExamRunnerPath } from './stale-navigation';
 import { UPSTREAM_BUSY_DIGEST } from './upstream-digest';
 
 /**
@@ -21,8 +22,8 @@ import { UPSTREAM_BUSY_DIGEST } from './upstream-digest';
  *
  *   · `network` — the student's own connection (`lib/connectivity-error.ts`).
  *     Wait for the browser to report itself online, then keep asking the
- *     origin until it answers; only then re-render. Generous, because nothing
- *     is filed for it and the only cost of trying is one tiny request.
+ *     origin until it answers; only then re-render. The asking is free and
+ *     unbounded (one tiny request at a time); only the re-render counts.
  *   · `soon`    — a SERVER render failed. The digest says how: a throttle
  *     (`UPSTREAM_BUSY_DIGEST`) waits longest, an API that did not answer
  *     (`UPSTREAM_TIMEOUT_DIGEST` — timed out or refused during a restart) a
@@ -44,6 +45,38 @@ import { UPSTREAM_BUSY_DIGEST } from './upstream-digest';
  * fires until `/build-id` answers `ok`: a Next route handler, `no-store`, a few
  * bytes, never intercepted by `public/sw.js` (`lib/build-watch.ts` says why).
  * Not answering does not spend an attempt; it just waits a little longer.
+ *
+ * ## ⚠️ Counted per PAGE, whatever failed
+ *
+ * The count of re-renders is per page, not per failure. Counting per failure
+ * was the first version, and it did not stop in exactly the hour this file
+ * exists for. During an overload (2026-10-04: load 66 on 4 cores) renders fail in
+ * turn with `UPSTREAM_TIMEOUT`, `UPSTREAM_BUSY` and a plain 500. Each change
+ * of shape looked like a new failure and reset the count. So every open error
+ * screen re-rendered every few seconds without end, which is more load on the
+ * server that was already choking. Now it is
+ * `MAX_AUTOMATIC_RETRIES_PER_PAGE` re-renders per page, whichever failures
+ * they answered. After that the button is the student's.
+ *
+ * ## Spread out, and only for someone looking
+ *
+ * Every delay is jittered. Screens that failed together, which is every
+ * student in a throttled exam, must not all come back in the same second the
+ * server recovers.
+ *
+ * Nothing is asked or re-rendered while the tab is hidden. Nobody is reading
+ * it, so a re-render there is pure cost. The attempt waits until the tab is
+ * shown again.
+ *
+ * ## ⚠️ Never on the exam runner
+ *
+ * A re-render of `/quizzes/:id/attempt/:id` posts `resume`, which rotates the
+ * attempt token. That is why `quiz-runner.tsx` refuses even a
+ * `router.refresh()`. Picture a second tab or phone holding the same attempt,
+ * sitting on an error screen (a 429 at the start of the exam). A few seconds
+ * later it takes the token by itself, and the paper the student is really
+ * answering flips to «مفتوح في مكان تاني». So no automatic retry there at
+ * all. The button stays: a press is the student choosing THIS tab.
  */
 
 export type AutoRetryKind = 'network' | 'soon';
@@ -54,25 +87,44 @@ export interface AutoRetryPlan {
   delays: readonly number[];
 }
 
-const NETWORK_DELAYS = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000, 30_000, 30_000, 30_000, 30_000];
+/*
+ * The delays are indexed by the PAGE's attempt count, not the failure's, so a
+ * page whose failures change shape still backs off, from whichever plan the
+ * current failure picks.
+ */
+const NETWORK_DELAYS = [1_000, 4_000, 15_000];
 const BUSY_DELAYS = [6_000, 15_000, 30_000];
 const UNANSWERED_DELAYS = [4_000, 10_000, 20_000];
 const SERVER_FAULT_DELAYS = [4_000];
+
+/** The most re-renders one page gets by itself, whatever failed — see the header. */
+export const MAX_AUTOMATIC_RETRIES_PER_PAGE = 3;
 
 /** How long to wait between two asks of an origin that did not answer. */
 export const PROBE_INTERVAL_MS = 5_000;
 
 /**
- * Attempts for one failure are counted per (route, failure), and forgotten
- * once this long has passed since that failure was last seen or retried.
+ * Anywhere from half to one and a half times `ms`, so screens that failed
+ * together come back spread out rather than in one wave.
+ */
+function jittered(ms: number): number {
+  return Math.round(ms * (0.5 + Math.random()));
+}
+
+/**
+ * A page's attempts are forgotten once this long has passed since its last
+ * failure or retry.
  *
  * Two minutes, because of what it has to tell apart. A retry that FAILED comes
  * back as the next error within the seconds a render takes, so a chain of
  * failures always lands inside the window and keeps counting towards its cap.
  * A retry that WORKED produces nothing at all — so the next failure on the same
  * page, minutes later, is a new story and gets the whole plan again. Without
- * that, a student on patchy data who recovered ten times would find the
- * eleventh drop left for them to press.
+ * that, a student on patchy data who recovered three times would find the
+ * fourth drop left for them to press.
+ *
+ * It cannot restart a loop. Once the cap is reached nothing fires by itself,
+ * so a new failure on that page needs a person to press or navigate.
  */
 export const AUTO_RETRY_MEMORY_MS = 2 * 60_000;
 
@@ -92,27 +144,24 @@ export function autoRetryPlanFor(error: Error & { digest?: string }): AutoRetryP
  * kept per instance is back at zero on exactly the attempt that needed to know
  * it was the third.
  */
+/** The page whose attempts are being counted — its pathname, nothing else. */
 let attemptsFor = '';
 let attemptsMade = 0;
 let attemptsAt = 0;
 
-function failureKey(error: Error & { digest?: string }, plan: AutoRetryPlan): string {
-  return `${window.location.pathname}|${plan.kind}|${error.digest ?? error.message}`;
-}
-
-/** Which attempt this failure is on, or `null` once its plan is spent. */
-export function nextAttemptIndex(
-  error: Error & { digest?: string },
-  plan: AutoRetryPlan,
-  now: number,
-): number | null {
-  const key = failureKey(error, plan);
-  if (key !== attemptsFor || now - attemptsAt > AUTO_RETRY_MEMORY_MS) {
-    attemptsFor = key;
+/**
+ * Which attempt this page is on, or `null` once it has had its share. The
+ * failure's own plan can only make the share smaller.
+ */
+function nextAttemptIndex(plan: AutoRetryPlan, now: number): number | null {
+  const page = window.location.pathname;
+  if (page !== attemptsFor || now - attemptsAt > AUTO_RETRY_MEMORY_MS) {
+    attemptsFor = page;
     attemptsMade = 0;
   }
   attemptsAt = now;
-  return attemptsMade < plan.delays.length ? attemptsMade : null;
+  const share = Math.min(plan.delays.length, MAX_AUTOMATIC_RETRIES_PER_PAGE);
+  return attemptsMade < share ? attemptsMade : null;
 }
 
 function spendAttempt(now: number): void {
@@ -217,18 +266,38 @@ export function scheduleAutoRetry(
   error: Error & { digest?: string },
   { retry, probe = originAnswers }: ScheduleOptions,
 ): () => void {
+  // The exam runner gets the button only — see the header.
+  if (isExamRunnerPath(window.location.pathname)) return () => {};
   const plan = autoRetryPlanFor(error);
   if (!plan) return () => {};
-  const attempt = nextAttemptIndex(error, plan, Date.now());
+  const attempt = nextAttemptIndex(plan, Date.now());
   if (attempt === null) return () => {};
+  const delay = jittered(plan.delays[attempt]!);
 
   let cancelled = false;
   let timer: number | undefined;
+  let onShown: (() => void) | undefined;
   const wait = (ms: number, then: () => void) => {
     timer = window.setTimeout(() => {
       timer = undefined;
       if (!cancelled) then();
     }, ms);
+  };
+
+  /** `then` now if someone is looking at the tab, or once it is shown again. */
+  const whenShown = (then: () => void) => {
+    if (document.visibilityState !== 'hidden') {
+      then();
+      return;
+    }
+    const listener = () => {
+      if (document.visibilityState === 'hidden') return;
+      document.removeEventListener('visibilitychange', listener);
+      onShown = undefined;
+      if (!cancelled) then();
+    };
+    onShown = listener;
+    document.addEventListener('visibilitychange', listener);
   };
 
   // `pending` is left SET while the retry is in flight: the screen keeps saying
@@ -241,13 +310,17 @@ export function scheduleAutoRetry(
     retry();
   };
 
-  const askThenFire = () => {
-    void probe().then((answered) => {
-      if (cancelled) return;
-      if (answered) fire();
-      else wait(PROBE_INTERVAL_MS, askThenFire);
+  const askThenFire = () =>
+    whenShown(() => {
+      void probe().then((answered) => {
+        if (cancelled) return;
+        if (!answered) wait(jittered(PROBE_INTERVAL_MS), askThenFire);
+        // Hidden while the origin was being asked: ask again once the tab is
+        // back, rather than re-render for nobody on a minutes-old answer.
+        else if (document.visibilityState === 'hidden') askThenFire();
+        else fire();
+      });
     });
-  };
 
   /*
    * Offline is the one state the browser reports for certain, and it says
@@ -256,7 +329,7 @@ export function scheduleAutoRetry(
    */
   const onOnline = () => {
     window.removeEventListener('online', onOnline);
-    if (!cancelled) wait(plan.delays[attempt]!, askThenFire);
+    if (!cancelled) wait(delay, askThenFire);
   };
 
   const mine = pendingValue(plan.kind, error);
@@ -265,7 +338,7 @@ export function scheduleAutoRetry(
   if (plan.kind === 'network' && navigator.onLine === false) {
     window.addEventListener('online', onOnline);
   } else {
-    wait(plan.delays[attempt]!, askThenFire);
+    wait(delay, askThenFire);
   }
 
   const armedAs = armed;
@@ -273,6 +346,7 @@ export function scheduleAutoRetry(
     cancelled = true;
     if (timer !== undefined) window.clearTimeout(timer);
     window.removeEventListener('online', onOnline);
+    if (onShown) document.removeEventListener('visibilitychange', onShown);
     /*
      * Cleared a microtask LATER, and only if nothing re-armed in between. A
      * cleanup is usually followed, in the same commit, by the next effect

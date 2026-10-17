@@ -67,6 +67,8 @@ import { isStaleActionError, markTabStale } from './stale-tab';
  * that was restarting or throttling — the first press is made FOR them, once
  * the origin answers again: `lib/auto-retry.ts`. Those attempts do not touch
  * the strike counter, so the student's own first press is still a refresh.
+ * They are capped per page, spread out, held while the tab is hidden, and
+ * never made on the exam runner. That file says why.
  */
 let lastFailure = '';
 let strikes = 0;
@@ -310,6 +312,10 @@ export function useErrorRetry(
    * transition, and deliberately not through `retry` below: an attempt made
    * on the student's behalf must not spend the strike that turns THEIR next
    * press into a document load.
+   *
+   * Never on the exam runner. There a re-render posts `resume` and takes the
+   * attempt token from whichever tab is really answering, so
+   * `scheduleAutoRetry` arms nothing on that path and leaves the button.
    */
   useEffect(
     () =>

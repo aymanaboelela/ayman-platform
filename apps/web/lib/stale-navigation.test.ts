@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { onRouterTransitionStart } from '../instrumentation-client';
-import { documentLoadFor, isExamRunnerPath } from './stale-navigation';
+import { documentLoadFor, isExamRunnerPath, navigationWasHeld } from './stale-navigation';
 
 /**
  * «Once stale, the next page is a document load.» What has to hold: it fires
@@ -98,14 +98,18 @@ describe('onRouterTransitionStart (instrumentation-client.ts)', () => {
     onRouterTransitionStart('/results', 'push');
     expect(assign).not.toHaveBeenCalled();
     expect(replace).not.toHaveBeenCalled();
+    expect(navigationWasHeld()).toBe(false);
   });
 
-  it('sends a stale tab to the new build on its next navigation', async () => {
+  it('sends a stale tab to the new build on its next navigation, and holds the soft one', async () => {
     const { markTabStale } = await import('./stale-tab');
     markTabStale();
 
     onRouterTransitionStart('/results', 'push');
 
     expect(assign).toHaveBeenCalledWith(`${window.location.origin}/results`);
+    // What `<StaleNavigationHold>` suspends on — its own test shows the
+    // navigation then never commits.
+    expect(navigationWasHeld()).toBe(true);
   });
 });
