@@ -90,8 +90,26 @@ describe('SubmitDialog — I11 (a failed preflight must not wedge the dialog)', 
     mockApiGet.mockReturnValueOnce(new Promise(() => {}));
     renderDialog();
 
+    // A paper that looks complete locally does not claim so before the server.
     expect(screen.getByText(quizExperience.submit.counting)).toBeTruthy();
+    expect(screen.queryByText(copy.quiz.submitConfirmAllAnswered)).toBeNull();
     expect(button(copy.quiz.submitConfirmAction).disabled).toBe(true);
+  });
+
+  it('says the blanks it can already see at once, without waiting — and still holds confirm', () => {
+    mockApiGet.mockReturnValueOnce(new Promise(() => {}));
+    renderDialog({ questions: PAPER });
+
+    // No «بنعدّ» flash and no row of chips appearing a moment later.
+    expect(screen.getByText('لسه فيه سؤالين من غير إجابة')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'سؤال 2 — من غير إجابة' })).toBeTruthy();
+    expect(button(copy.quiz.submitConfirmAction).disabled).toBe(true);
+  });
+
+  it('corrects the early count when the server’s differs', async () => {
+    mockApiGet.mockResolvedValueOnce({ unansweredCount: 3, total: 5 });
+    renderDialog({ questions: PAPER });
+    expect(await screen.findByText('لسه فيه 3 أسئلة من غير إجابة')).toBeTruthy();
   });
 });
 

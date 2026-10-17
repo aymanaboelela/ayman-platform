@@ -19,6 +19,7 @@ import type {
   StudentExternalBookUnit,
   SubmitExternalBookPractice,
 } from '@ayman/contracts/quiz/external-books';
+import { keepsWrittenOrder, stripOptionLabels } from '@ayman/contracts/quiz/option-label';
 import { PrismaService } from '../../prisma/prisma.service';
 import { REDIS } from '../../redis/redis.module';
 import type { QuestionType } from '../../generated/prisma/enums';
@@ -51,6 +52,12 @@ interface StoredPracticeSession {
   scopeId?: string;
   scopeTitle: string;
   questionVersionIds: string[];
+  /**
+   * Option ids per question version, in the order the student is served
+   * them. Absent on sessions stored before it was: those keep being served
+   * the way they always were, freshly shuffled on every read.
+   */
+  optionOrder?: Record<string, string[]>;
   createdAt: number;
 }
 
@@ -90,6 +97,57 @@ function shuffle<T>(items: readonly T[]): T[] {
     arr[j] = temp;
   }
   return arr;
+}
+
+interface WrittenOption {
+  id: string;
+  bodyHtml: string;
+}
+
+/**
+ * The order one question's options are served in — decided ONCE, when the
+ * session starts, and stored with it.
+ *
+ * It used to be reshuffled on every read of the session, so a reload (which
+ * the runner survives, answers included) moved the option a student had
+ * picked to another row under another letter. The rules are an attempt's
+ * (`@ayman/contracts/quiz/option-label`): options that point at each other
+ * («أ و د معا», «كل ما سبق») or that the teacher lettered by hand keep the
+ * order they were written in, and so does true/false; an ordering question
+ * is always shuffled, because its written order IS the answer.
+ *
+ * `written` must be in position order.
+ */
+function servedOrder(type: QuestionType, written: readonly WrittenOption[]): string[] {
+  const keep =
+    type !== 'ordering' &&
+    (type === 'true_false' || keepsWrittenOrder(written.map((option) => option.bodyHtml)));
+  return (keep ? [...written] : shuffle(written)).map((option) => option.id);
+}
+
+/**
+ * The options as a student reads them: the letters the teacher typed taken
+ * off — over the WRITTEN order, the order those letters describe; the runner
+ * draws its own — then arranged in `order`. An option the order does not name
+ * follows in written order, so a stale order degrades to a different
+ * arrangement, never to a missing option.
+ */
+function servedOptions(
+  written: readonly WrittenOption[],
+  order: readonly string[] | undefined,
+): WrittenOption[] {
+  const bodies = stripOptionLabels(written.map((option) => option.bodyHtml));
+  const byId = new Map(
+    written.map((option, index) => [option.id, { id: option.id, bodyHtml: bodies[index]! }]),
+  );
+  const served: WrittenOption[] = [];
+  for (const id of order ?? []) {
+    const option = byId.get(id);
+    if (!option) continue;
+    served.push(option);
+    byId.delete(id);
+  }
+  return [...served, ...byId.values()];
 }
 
 @Injectable()
@@ -457,6 +515,9 @@ export class StudentExternalBooksService {
     const picked = shuffledVersions.slice(0, count);
 
     const sessionId = randomUUID();
+    const optionOrder = Object.fromEntries(
+      picked.map((v) => [v.id, servedOrder(v.type, v.options)]),
+    );
     const storedSession: StoredPracticeSession = {
       sessionId,
       userId,
@@ -467,6 +528,7 @@ export class StudentExternalBooksService {
       scopeId: dto.scopeId,
       scopeTitle,
       questionVersionIds: picked.map((v) => v.id),
+      optionOrder,
       createdAt: Date.now(),
     };
 
@@ -474,23 +536,16 @@ export class StudentExternalBooksService {
     await this.cacheSet(`extbook:session:${sessionId}`, JSON.stringify(storedSession), 86400);
 
     // بناء الأسئلة للطالب (بدون أي تسريب للإجابات أو علامات التصحيح)
-    const questions: ExternalBookPracticeQuestion[] = picked.map((v, index) => {
-      const options =
-        v.type === 'true_false'
-          ? v.options.map((o) => ({ id: o.id, bodyHtml: o.bodyHtml }))
-          : shuffle(v.options).map((o) => ({ id: o.id, bodyHtml: o.bodyHtml }));
-
-      return {
-        slotPosition: index + 1,
-        questionId: v.id,
-        type: v.type,
-        stemHtml: v.stemHtml,
-        maxMark: Number(v.defaultMark),
-        options,
-        flagged: false,
-        settings: practiceSettings(v.settings),
-      };
-    });
+    const questions: ExternalBookPracticeQuestion[] = picked.map((v, index) => ({
+      slotPosition: index + 1,
+      questionId: v.id,
+      type: v.type,
+      stemHtml: v.stemHtml,
+      maxMark: Number(v.defaultMark),
+      options: servedOptions(v.options, optionOrder[v.id]),
+      flagged: false,
+      settings: practiceSettings(v.settings),
+    }));
 
     return {
       sessionId,
@@ -621,8 +676,12 @@ export class StudentExternalBooksService {
         stemHtml: version.stemHtml,
         // A short answer's options are its accepted PATTERNS, not choices —
         // listing them would print the answer key as a row of blank options.
+        // The rest are listed as they were served, so the review's letters
+        // are the ones the student answered under.
         options:
-          version.type === 'short_answer' ? [] : options.map((o) => ({ id: o.id, bodyHtml: o.bodyHtml })),
+          version.type === 'short_answer'
+            ? []
+            : servedOptions(version.options, session.optionOrder?.[vid]),
         response: response ?? undefined,
         correctness,
         mark,
@@ -702,7 +761,9 @@ export class StudentExternalBooksService {
           type: v?.type ?? 'mcq_single',
           stemHtml: v?.stemHtml ?? '',
           maxMark: Number(v?.defaultMark ?? 1),
-          options: v ? (v.type === 'true_false' ? v.options : shuffle(v.options)) : [],
+          options: v
+            ? servedOptions(v.options, session.optionOrder?.[vid] ?? servedOrder(v.type, v.options))
+            : [],
           flagged: false,
           settings: practiceSettings(v?.settings),
         };

@@ -320,6 +320,81 @@ describe('StudentExternalBooksService', () => {
       expect(result.review[0]?.generalFeedbackHtml).toBe('<p>الشرح</p>');
     });
 
+    /** A version as every read of it returns it: options in written order. */
+    function versionRow(id: string, type: string, bodies: string[]) {
+      return {
+        id,
+        bankEntryId: `entry-${id}`,
+        version: 1,
+        type,
+        stemHtml: '<p>سؤال</p>',
+        defaultMark: 1,
+        settings: {},
+        generalFeedbackHtml: null,
+        options: bodies.map((bodyHtml, position) => ({
+          id: `${id}-opt-${position}`,
+          bodyHtml,
+          fraction: position === 0 ? 1 : 0,
+          feedbackHtml: null,
+          position,
+          answerPattern: null,
+        })),
+      };
+    }
+
+    const wholeBook = { scope: 'book' as const, scopeId: bookId, count: 5 };
+
+    it('serves one option order for the whole session — a reload does not reshuffle', async () => {
+      const qId = randomUUID();
+      const bodies = ['<p>RAM</p>', '<p>ROM</p>', '<p>CPU</p>', '<p>GPU</p>', '<p>SSD</p>'];
+      prismaMock.questionVersion.findMany.mockResolvedValue([versionRow(qId, 'mcq_single', bodies)]);
+
+      const started = await service.startPractice(userId, bookId, wholeBook);
+      const served = started.questions[0]!.options.map((o) => o.id);
+      for (let read = 0; read < 5; read += 1) {
+        const again = await service.getSession(userId, started.sessionId);
+        expect(again.questions[0]!.options.map((o) => o.id)).toEqual(served);
+      }
+
+      // The review lists them as served, so its letters are the ones answered under.
+      const result = await service.submitPractice(userId, started.sessionId, { answers: [] });
+      expect(result.review[0]!.options.map((o) => o.id)).toEqual(served);
+    });
+
+    it('takes the typed letters off and keeps a lettered set in its written order', async () => {
+      const qId = randomUUID();
+      const bodies = ['<p>أ) siri</p>', '<p>ب) alexa</p>', '<p>ج) كل ما سبق</p>'];
+      prismaMock.questionVersion.findMany.mockResolvedValue([versionRow(qId, 'mcq_single', bodies)]);
+      const expected = [
+        { id: `${qId}-opt-0`, bodyHtml: '<p>siri</p>' },
+        { id: `${qId}-opt-1`, bodyHtml: '<p>alexa</p>' },
+        { id: `${qId}-opt-2`, bodyHtml: '<p>كل ما سبق</p>' },
+      ];
+
+      const started = await service.startPractice(userId, bookId, wholeBook);
+      expect(started.questions[0]!.options).toEqual(expected);
+      const again = await service.getSession(userId, started.sessionId);
+      expect(again.questions[0]!.options).toEqual(expected);
+      const result = await service.submitPractice(userId, started.sessionId, { answers: [] });
+      expect(result.review[0]!.options).toEqual(expected);
+    });
+
+    it('still shuffles an ordering question, lettered or not — its written order is the answer', async () => {
+      const qId = randomUUID();
+      const bodies = [...'أبجدهوزح'].map((letter, i) => `<p>${letter}) خطوة ${i + 1}</p>`);
+      prismaMock.questionVersion.findMany.mockResolvedValue([versionRow(qId, 'ordering', bodies)]);
+      const written = bodies.map((_, i) => `${qId}-opt-${i}`).join(',');
+
+      // 8! arrangements: the written one on every one of 5 sessions is a
+      // missing shuffle, not luck.
+      const served = new Set<string>();
+      for (let run = 0; run < 5; run += 1) {
+        const started = await service.startPractice(userId, bookId, wholeBook);
+        served.add(started.questions[0]!.options.map((o) => o.id).join(','));
+      }
+      expect([...served]).not.toEqual([written]);
+    });
+
     it('never serves an essay — a practice has nobody to mark it', async () => {
       prismaMock.questionVersion.findMany.mockResolvedValueOnce([
         {

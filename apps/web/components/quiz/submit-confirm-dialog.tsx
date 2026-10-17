@@ -120,8 +120,26 @@ export function SubmitConfirmDialog({
   const blank = questions.filter((question) => !question.answered);
   const flaggedAnswered = questions.filter((question) => question.flagged && question.answered);
 
+  /*
+   * The headline's count, while the authoritative one is still on its way.
+   *
+   * Blanks the runner can SEE are said at once — claiming a question is blank
+   * is the safe direction to be early in, and it is what keeps the dialog from
+   * opening on «بنعدّ الإجابات…» and then growing a row of chips under the
+   * student's thumb. «كل الأسئلة اتجاوبت» is the claim that must wait for the
+   * server (a failed autosave is exactly how it would be false), so a paper
+   * that looks complete locally shows «بنعدّ» until the count arrives. The
+   * confirm button waits for it either way (`confirmDisabled`).
+   */
+  const shownCount = unansweredCount ?? (blank.length > 0 ? blank.length : null);
   const state: 'counting' | 'error' | 'open' | 'done' =
-    unansweredCount === null ? (countFailed ? 'error' : 'counting') : unansweredCount > 0 ? 'open' : 'done';
+    unansweredCount === null && countFailed
+      ? 'error'
+      : shownCount === null
+        ? 'counting'
+        : shownCount > 0
+          ? 'open'
+          : 'done';
   // Local knowledge of WHICH ones, shown unless the authority says none.
   const showBlank = state !== 'done' && blank.length > 0;
 
@@ -166,7 +184,7 @@ export function SubmitConfirmDialog({
                     : state === 'error'
                       ? x.countFailed
                       : state === 'open'
-                        ? arabicCount(unansweredCount ?? 0, x.unanswered)
+                        ? arabicCount(shownCount ?? 0, x.unanswered)
                         : copy.quiz.submitConfirmAllAnswered}
                 </p>
                 {state === 'open' ? <p className="submit-check__body">{x.unansweredAsk}</p> : null}

@@ -19,6 +19,7 @@ import { Prisma } from '../../generated/prisma/client';
 import { clamp, fractionToState, roundMark } from './grading/fraction';
 import { splitPendingMarks } from './grading/mark-split';
 import { checkChoiceOverride, describeChoice } from './grading/choice-override';
+import { paperOptions } from './grading/paper-options';
 import { GRADED_STATES } from './analytics.service';
 
 /**
@@ -591,37 +592,6 @@ export class ManualGradingService {
           .filter((opt) => Number(opt.fraction) > 0)
           .map((opt) => opt.id);
 
-        // In the order THIS student was served them — `option_order` is the
-        // attempt's snapshot of the shuffle — so «ب» on this screen is the
-        // «ب» the student saw and the review screen shows. Any option the
-        // snapshot does not name (an old attempt, a version edited since)
-        // goes after, in position order, rather than vanishing.
-        const byPosition = new Map(q.version.options.map((opt) => [opt.position, opt]));
-        const orderedOpts: Array<{ id: string; bodyHtml: string; position?: number; isRight: boolean }> = [];
-        const used = new Set<number>();
-        for (const pos of q.optionOrder) {
-          const opt = byPosition.get(pos);
-          if (opt && !used.has(pos)) {
-            orderedOpts.push({
-              id: opt.id,
-              bodyHtml: opt.bodyHtml,
-              position: opt.position,
-              isRight: Number(opt.fraction) > 0,
-            });
-            used.add(pos);
-          }
-        }
-        for (const opt of q.version.options) {
-          if (!used.has(opt.position)) {
-            orderedOpts.push({
-              id: opt.id,
-              bodyHtml: opt.bodyHtml,
-              position: opt.position,
-              isRight: Number(opt.fraction) > 0,
-            });
-          }
-        }
-
         return {
           attemptQuestionId: q.id,
           slotPosition: q.slotPosition,
@@ -632,7 +602,8 @@ export class ManualGradingService {
           chosenOptionIds,
           rightAnswerText: q.rightAnswerText,
           rightOptionIds,
-          options: orderedOpts,
+          // In the order and the wording this student read them.
+          options: paperOptions(q.version.options, q.optionOrder),
           correctness: q.state,
           maxMark: Number(q.maxMark),
           // Null, not 0. "Unmarked" and "marked zero" are different facts, and
