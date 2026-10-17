@@ -245,6 +245,9 @@ export const quizExperience = {
   /* ── the practice runner and its result ──────────────────────────────── */
   practice: {
     metaTitle: 'تدريب على أسئلة الكتاب',
+    /** `{title}` — the book. The heading of a whole-book practice; a unit's
+     *  or a lesson's is its own name. Written by the API into the session. */
+    bookScopeTitle: 'امتحان شامل: {title}',
     backToBook: 'الرجوع للكتاب',
     submit: 'تسليم التدريب',
     submitTitle: 'نسلّم التدريب؟',

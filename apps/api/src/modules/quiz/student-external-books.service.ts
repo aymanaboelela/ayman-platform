@@ -19,6 +19,8 @@ import type {
   StudentExternalBookUnit,
   SubmitExternalBookPractice,
 } from '@ayman/contracts/quiz/external-books';
+import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
+import { formatCopy } from '@ayman/contracts/format';
 import { keepsWrittenOrder, stripOptionLabels } from '@ayman/contracts/quiz/option-label';
 import { PrismaService } from '../../prisma/prisma.service';
 import { REDIS } from '../../redis/redis.module';
@@ -441,7 +443,7 @@ export class StudentExternalBooksService {
           targetCategoryIds.push(lesson.id);
         }
       }
-      scopeTitle = `امتحان شامل: ${book.title}`;
+      scopeTitle = formatCopy(quizExperience.practice.bookScopeTitle, { title: book.title });
     } else if (dto.scope === 'unit') {
       const unit = book.rootCategory.children.find((u) => u.id === dto.scopeId);
       if (!unit) throw new NotFoundException('الوحدة المطلوبة غير موجودة في هذا الكتاب');
