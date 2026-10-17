@@ -9,6 +9,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
 import { adminGet } from '@/lib/admin-api';
+import { can, getSession } from '@/lib/session';
 import { AdminEmpty } from '@/components/admin/admin-empty';
 import { ListControl } from '@/components/admin/list-controls';
 import { AttemptRow } from './attempt-row';
@@ -49,12 +50,15 @@ export async function AttemptsOverview({ params }: { params: OverviewParams }) {
   if (params.q) studentQuery.set('q', params.q);
   if (params.courseId) studentQuery.set('courseId', params.courseId);
 
-  const [overview, students] = await Promise.all([
+  const [overview, students, session] = await Promise.all([
     adminGet(`/api/admin/attempts/overview?${overviewQuery}`, AdminAttemptsOverviewSchema),
     params.q
       ? adminGet(`/api/admin/attempts?${studentQuery}`, AdminAttemptListSchema)
       : Promise.resolve<AdminAttemptList | null>(null),
+    // Request-cached: the admin layout has already read it.
+    getSession(),
   ]);
+  const abilities = { grade: can(session, 'attempt:grade'), unlock: can(session, 'attempt:unlock') };
   const groups = groupAttemptQuizzes(overview.quizzes);
   const courseKnown = overview.courses.some((course) => course.courseId === params.courseId);
   const searching = Boolean(params.q);
@@ -134,7 +138,7 @@ export async function AttemptsOverview({ params }: { params: OverviewParams }) {
               <ul className="mt-3 flex flex-col gap-2.5">
                 {students.rows.map((row) => (
                   <li key={row.id}>
-                    <AttemptRow row={row} context={{ back: params, q: params.q }} />
+                    <AttemptRow row={row} can={abilities} context={{ back: params, q: params.q }} />
                   </li>
                 ))}
               </ul>

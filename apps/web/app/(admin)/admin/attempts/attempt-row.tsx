@@ -24,6 +24,16 @@ const STATE_ICON: Record<AdminAttemptState, typeof Timer> = {
   abandoned: Ban,
 };
 
+/** What the signed-in operator may do to a sitting — the two write
+ *  permissions behind the row's buttons. Reading a paper needs nothing beyond
+ *  `attempt:read`, which this page already required to render at all. */
+export interface AttemptRowAbilities {
+  /** `attempt:grade` — «تصحيح الورقة». */
+  grade: boolean;
+  /** `attempt:unlock` — reopen, extra time, extra attempt. */
+  unlock: boolean;
+}
+
 const STATE_BADGE: Record<AdminAttemptState, 'neutral' | 'ok' | 'warn' | 'accent'> = {
   in_progress: 'neutral',
   overdue: 'warn',
@@ -44,17 +54,24 @@ const STATE_BADGE: Record<AdminAttemptState, 'neutral' | 'ok' | 'warn' | 'accent
  * marking and reading the paper are on the row; reopening, extra time and an
  * extra attempt — rarer, and each a change to the student's sitting — are one
  * press further, under «إجراءات تانية».
+ *
+ * Each renders only for the permission the API checks behind it (`can`), the
+ * rule `/admin/centers` follows: an assistant who may read sittings but not
+ * mark them never meets a «تصحيح الورقة» that opens onto a 403.
  */
 export function AttemptRow({
   row,
+  can,
   context,
 }: {
   row: AdminAttemptRow;
+  can: AttemptRowAbilities;
   context?: { back: OverviewParams; q?: string };
 }) {
   const Icon = STATE_ICON[row.state];
   const seconds = sittingSeconds(row.startedAt, row.submittedAt);
   const paper = row.state === 'submitted' || row.state === 'pending_review';
+  const grade = row.state === 'pending_review' && can.grade;
 
   return (
     <div
@@ -130,34 +147,38 @@ export function AttemptRow({
           <AttemptScore row={row} />
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {row.state === 'pending_review' ? (
-            <Link href={`/admin/grading/${row.id}`} className="chip chip--solid">
-              {b.grade}
-            </Link>
-          ) : null}
-          {/* «شوف ورقته» — the outreach log's own popup, reused rather than
-              rebuilt: it renders the paper through the student's
-              `ReviewQuestion`, so the instructor sees the picture the student
-              sees. Only for a handed-in paper; an open one has nothing final
-              to show. */}
-          {paper ? <AttemptReviewDialog attemptId={row.id} /> : null}
-          {/* Opened, it takes the whole line: the minutes box and three
-              buttons do not fit beside the two above on a phone. */}
-          <details className="min-w-0 open:basis-full">
-            <summary className="cursor-pointer select-none rounded-md px-1 py-1 text-[length:var(--fs-text-xs)] text-fg-muted hover:text-fg">
-              {b.moreActions}
-            </summary>
-            <div className="mt-2">
-              <AttemptActions
-                attemptId={row.id}
-                quizId={row.quizId}
-                userId={row.userId}
-                canReopen={row.state === 'submitted' || row.state === 'pending_review'}
-              />
-            </div>
-          </details>
-        </div>
+        {grade || paper || can.unlock ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {grade ? (
+              <Link href={`/admin/grading/${row.id}`} className="chip chip--solid">
+                {b.grade}
+              </Link>
+            ) : null}
+            {/* «شوف ورقته» — the outreach log's own popup, reused rather than
+                rebuilt: it renders the paper through the student's
+                `ReviewQuestion`, so the instructor sees the picture the
+                student sees. Only for a handed-in paper; an open one has
+                nothing final to show. */}
+            {paper ? <AttemptReviewDialog attemptId={row.id} /> : null}
+            {/* Opened, it takes the whole line: the minutes box and three
+                buttons do not fit beside the two above on a phone. */}
+            {can.unlock ? (
+              <details className="min-w-0 open:basis-full">
+                <summary className="cursor-pointer select-none rounded-md px-1 py-1 text-[length:var(--fs-text-xs)] text-fg-muted hover:text-fg">
+                  {b.moreActions}
+                </summary>
+                <div className="mt-2">
+                  <AttemptActions
+                    attemptId={row.id}
+                    quizId={row.quizId}
+                    userId={row.userId}
+                    canReopen={paper}
+                  />
+                </div>
+              </details>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );

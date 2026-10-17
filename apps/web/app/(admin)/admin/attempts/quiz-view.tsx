@@ -10,6 +10,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { formatCopy, formatMark } from '@ayman/contracts/format';
 import { cn } from '@ayman/ui/lib/cn';
 import { adminGet } from '@/lib/admin-api';
+import { can, getSession } from '@/lib/session';
 import { ListControl } from '@/components/admin/list-controls';
 import { AttemptRow } from './attempt-row';
 import { wholePercent } from './format';
@@ -58,12 +59,15 @@ export async function QuizAttempts({ params }: { params: QuizParams }) {
   if (params.state) listQuery.set('state', params.state);
   if (params.q) listQuery.set('q', params.q);
 
-  const [overview, list] = await Promise.all([
+  const [overview, list, session] = await Promise.all([
     adminGet(`/api/admin/attempts/overview?${key}`, AdminAttemptsOverviewSchema),
     adminGet(`/api/admin/attempts?${listQuery}`, AdminAttemptListSchema),
+    // Request-cached: the admin layout has already read it.
+    getSession(),
   ]);
   const quiz = overview.quizzes[0];
   if (!quiz) notFound();
+  const abilities = { grade: can(session, 'attempt:grade'), unlock: can(session, 'attempt:unlock') };
 
   // The URL names the quiz the same way from here on, whichever id it came in
   // with, so a tab link never flips from `lessonId` to `quizId` mid-visit.
@@ -218,7 +222,7 @@ export async function QuizAttempts({ params }: { params: QuizParams }) {
           <ul className="mt-5 flex flex-col gap-2.5">
             {list.rows.map((row) => (
               <li key={row.id}>
-                <AttemptRow row={row} />
+                <AttemptRow row={row} can={abilities} />
               </li>
             ))}
           </ul>
