@@ -73,6 +73,18 @@ const VERSION_SELECT = {
 
 type FullVersion = Prisma.QuestionVersionGetPayload<{ select: typeof VERSION_SELECT }>;
 
+/**
+ * The answers a regrade can actually change — what every COUNT shown to a
+ * teacher is made of. An essay is marked by a human and a hand-set mark is the
+ * teacher's own decision; a regrade leaves both exactly where they are, so
+ * counting them made «N إجابة اتصححت على نسخة قديمة» a banner no button could
+ * ever clear (on 2026-10-17 one exam kept 875 of them after its regrade).
+ */
+const ACTIONABLE = {
+  gradedBy: null,
+  version: { type: { not: 'essay' as const } },
+};
+
 function carriesAcross(from: QuestionType, to: QuestionType): boolean {
   if (from === 'essay' || to === 'essay') return false;
   return from === to || (CHOICE_TYPES.has(from) && CHOICE_TYPES.has(to));
@@ -120,7 +132,8 @@ export class RegradeService {
 
     const rows = await this.prisma.attemptQuestion.findMany({
       where: {
-        version: { bankEntryId },
+        ...ACTIONABLE,
+        version: { bankEntryId, ...ACTIONABLE.version },
         ...(scope === 'stale' && latest ? { questionVersionId: { not: latest.id } } : {}),
         attempt: { state: { in: [...MOVABLE_STATES] } },
       },
@@ -320,7 +333,8 @@ export class RegradeService {
     const readyIds = [...latestReady.values()];
     const stale = await this.prisma.attemptQuestion.findMany({
       where: {
-        version: { bankEntryId: { in: [...latestReady.keys()] } },
+        ...ACTIONABLE,
+        version: { bankEntryId: { in: [...latestReady.keys()] }, ...ACTIONABLE.version },
         questionVersionId: { notIn: readyIds },
         attempt: { quizId, state: { in: [...MOVABLE_STATES] } },
       },
