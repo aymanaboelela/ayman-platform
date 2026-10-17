@@ -155,10 +155,11 @@ describe('RegradeService', () => {
     expect(await service.regradeEntry(f.bankEntryIds[0]!, f.adminId)).toMatchObject({ moved: 0, regraded: 0 });
   });
 
-  it('leaves an answer alone when its option was rewritten out of the question', async () => {
+  it('leaves an answer alone when its option was rewritten out of the question, and stops counting it', async () => {
     const f = await seedQuizFixture(prisma, { questionCount: 1 });
     fixtures.push(f);
     const paper = await answerAndSubmit(f.studentId, f.quizId, '<p>د</p>');
+    const mapped = await answerAndSubmit(f.otherStudentId, f.quizId, '<p>ب</p>');
 
     const input = await storedInput(f.bankEntryIds[0]!);
     const rewritten = {
@@ -173,13 +174,22 @@ describe('RegradeService', () => {
     const saved = await bank.saveDraft(f.bankEntryIds[0]!, rewritten, f.adminId);
     await bank.publish(saved.versionId);
 
+    // Only the answer the button can move is offered.
+    expect(await service.preview(f.bankEntryIds[0]!)).toMatchObject({ answers: 1, students: 1 });
+    expect(await service.quizEdits(f.quizId)).toEqual({ pendingDrafts: 0, staleAnswers: 1, students: 1 });
+
     const result = await service.regradeEntry(f.bankEntryIds[0]!, f.adminId);
-    expect(result).toMatchObject({ moved: 0, skipped: 1 });
+    expect(result).toMatchObject({ moved: 1, raised: 1, skipped: 1 });
+    expect(await markOf(mapped)).toBe(1);
     const row = await prisma.attemptQuestion.findFirstOrThrow({
       where: { attemptId: paper, slotPosition: 0 },
       select: { questionVersionId: true },
     });
     expect(row.questionVersionId).toBe(f.versionIds[0]);
+
+    // The answer left behind is not counted: no button could ever clear it.
+    expect(await service.preview(f.bankEntryIds[0]!)).toMatchObject({ answers: 0, students: 0 });
+    expect(await service.quizEdits(f.quizId)).toEqual({ pendingDrafts: 0, staleAnswers: 0, students: 0 });
   });
 
   it('never overrides a mark a teacher set by hand', async () => {
