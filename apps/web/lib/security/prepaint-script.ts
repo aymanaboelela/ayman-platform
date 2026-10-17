@@ -1,8 +1,9 @@
 /**
- * The only inline script this application authors. It does three things that
+ * The only inline script this application authors. It does four things that
  * must happen before anything else on the page runs: the two below, and
- * `CHUNK_SCRIPT_RESCUE` further down, which has nothing to do with paint and
- * is here for the same reason — it is only correct if it is FIRST.
+ * `CHUNK_SCRIPT_RESCUE` and `DOM_MUTATION_GUARD` further down, which have
+ * nothing to do with paint and are here for the same reason — each is only
+ * correct if it is FIRST.
  *
  * The two pieces of persisted UI state that MUST be on `<html>` before first
  * paint (`app/layout.tsx`):
@@ -122,4 +123,58 @@ const THEME_AND_RAIL =
 export const CHUNK_SCRIPT_RESCUE =
   `(function(){try{window.addEventListener('error',function(e){try{var s=e.target;if(!s||s.tagName!=='SCRIPT'||!s.src)return;var u=new URL(s.src,location.href);if(u.origin!==location.origin||u.pathname.indexOf('/_next/static/')!==0)return;if(s.parentNode)s.parentNode.removeChild(s);}catch(x){}},true);}catch(e){}})();`;
 
-export const PREPAINT_SCRIPT = THEME_AND_RAIL + CHUNK_SCRIPT_RESCUE;
+/**
+ * The fourth job: React must not take the page down because something ELSE
+ * moved a node it owns.
+ *
+ * ## The crash
+ *
+ *   NotFoundError: Failed to execute 'insertBefore' on 'Node': The node before
+ *   which the new node is to be inserted is not a child of this node.
+ *
+ * on `/game` (Edge on Windows), and its twin from `removeChild` on a course's
+ * `/library` page. Both are the classic one (facebook/react#11538): a browser
+ * translator — Edge offers to translate Arabic, and "always translate" is one
+ * click — replaces each text node with `<font>` wrappers of its own, or an
+ * extension rewrites a subtree. React still holds the ORIGINAL nodes, and the
+ * next commit that inserts before one, or removes one, asks the DOM about a
+ * node that is no longer where React left it. The DOM throws, the commit
+ * aborts, and the route's `error.tsx` replaces a page that was working.
+ *
+ * ## Two layers, because neither is enough alone
+ *
+ * `translate="no"` on `<html>` and `<meta name="google" content="notranslate">`
+ * (`app/layout.tsx`) stop the translators that honour them — Chrome's and
+ * Edge's built-in ones, which are the ones in the log. This guard is for
+ * everything that does not ask: extensions, the odd third-party translator,
+ * whatever comes next. It keeps the commit alive where the DOM would have
+ * thrown, and changes NOTHING on the path where the DOM would not have — both
+ * wrappers fall straight through to the native method whenever the node is
+ * where React expected it.
+ *
+ *   · `removeChild(c)`, `c` not a child of this node: if `c` was only pushed
+ *     deeper inside it (a wrapper around it), remove it from where it now is —
+ *     that is the removal React asked for. If it is elsewhere entirely, or
+ *     detached, leave it: there is nothing of ours left to remove.
+ *   · `insertBefore(n, r)`, `r` not a child: insert before the child of this
+ *     node that now CONTAINS `r` — the wrapper — which is the position React
+ *     meant. If `r` is not inside at all, append: content in a slightly wrong
+ *     place beats content missing, and React's next move of that node is an
+ *     ordinary, valid one.
+ *
+ * One `console.warn` per page, not per call: a translated page can trip this
+ * on every keystroke, and the line exists for whoever is debugging with
+ * devtools, not as telemetry.
+ *
+ * ## Why here
+ *
+ * It must be installed before React's first commit — hydration itself inserts
+ * and removes — and this is the one script that runs before any chunk. Its own
+ * IIFE and `try`, like the rescue above. It changes the policy hash in
+ * `proxy.ts` by construction (`PREPAINT_SCRIPT_HASH` is derived from these
+ * bytes), so it keeps working if script-src ever goes back to hashes.
+ */
+export const DOM_MUTATION_GUARD =
+  `(function(){try{var P=Node.prototype,rc=P.removeChild,ib=P.insertBefore,w=0;function note(){if(w)return;w=1;try{console.warn('[dom-guard] a node React owns was moved by something else (a translator or an extension); kept the page alive');}catch(x){}}P.removeChild=function(c){if(c&&c.parentNode!==this){note();if(c.parentNode&&this.contains(c))return rc.call(c.parentNode,c);return c;}return rc.apply(this,arguments);};P.insertBefore=function(n,r){if(r&&r.parentNode!==this){note();var a=r;while(a&&a.parentNode!==this)a=a.parentNode;return ib.call(this,n,a||null);}return ib.apply(this,arguments);};}catch(e){}})();`;
+
+export const PREPAINT_SCRIPT = THEME_AND_RAIL + CHUNK_SCRIPT_RESCUE + DOM_MUTATION_GUARD;

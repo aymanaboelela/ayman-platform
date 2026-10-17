@@ -877,6 +877,63 @@ describe('proxy — a staff account with no profile:read still reaches /admin', 
 });
 
 /**
+ * «The site logged me out» — when it had not.
+ *
+ * The session check used to read every failure — a 429 from a student
+ * reloading an exam page, the seconds a deploy restarts the API, its own 3s
+ * timeout — as "signed out", and redirect a perfectly valid session to the
+ * login form. Many students do not know their password. An inconclusive
+ * answer for a visitor who CARRIES a session now lets the page answer for
+ * itself; only a definitive 401/403, or no session cookie at all, is
+ * "signed out".
+ */
+describe('proxy — an inconclusive session check never invents a sign-out', () => {
+  const studentWithSession = (path: string) =>
+    new NextRequest(`http://localhost${path}`, { headers: { cookie: '__Host-session_token=valid' } });
+
+  for (const [label, answer] of [
+    ['a throttle (429)', () => new Response('{}', { status: 429 })],
+    ['an API mid-restart (503)', () => new Response('Service Unavailable', { status: 503 })],
+    ['a 500', () => new Response('{}', { status: 500 })],
+  ] as const) {
+    it(`lets a signed-in student through on ${label}`, async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => answer()));
+      const response = await proxy(studentWithSession('/quizzes/01a12fb3/attempt/x'));
+      expect(response.headers.get('location')).toBeNull();
+      vi.unstubAllGlobals();
+    });
+  }
+
+  it('lets a signed-in student through when the API does not answer at all', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')));
+    const response = await proxy(studentWithSession('/dashboard'));
+    expect(response.headers.get('location')).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it('still signs out a session the API definitively refused', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 401 })));
+    const response = await proxy(studentWithSession('/dashboard'));
+    expect(response.headers.get('location')).toContain('/login');
+    vi.unstubAllGlobals();
+  });
+
+  it('still sends a visitor with no session to /login when the API is down', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 503 })));
+    const response = await proxy(new NextRequest('http://localhost/dashboard'));
+    expect(response.headers.get('location')).toContain('/login');
+    vi.unstubAllGlobals();
+  });
+
+  it('shows /login as it is, rather than guessing, when the check is inconclusive there', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 429 })));
+    const response = await proxy(studentWithSession('/login'));
+    expect(response.headers.get('location')).toBeNull();
+    vi.unstubAllGlobals();
+  });
+});
+
+/**
  * 2026-10-04: two addresses rendered a tenant's pages ~16 times a second for
  * two days, and the shared VPS was capped to 20% CPU for it. The guard must
  * answer them before the render — and must never touch a signed-in student.

@@ -1,8 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useSyncExternalStore, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { isModuleEvaluationError, isStaleChunkError, isStaleDeployError } from './stale-deploy';
+import {
+  pendingAutoRetry,
+  scheduleAutoRetry,
+  subscribePendingAutoRetry,
+  waitingFor,
+  type AutoRetryKind,
+} from './auto-retry';
+import { isModuleEvaluationError, isStaleChunkError } from './stale-deploy';
+import { isStaleActionError, markTabStale } from './stale-tab';
 
 /**
  * «حاول تاني» — the press that did nothing.
@@ -52,6 +60,13 @@ import { isModuleEvaluationError, isStaleChunkError, isStaleDeployError } from '
  *
  * Keyed on the digest so a different failure later starts its own count rather
  * than inheriting a strike and hard-reloading on its first press.
+ *
+ * ## And the press nobody has to make
+ *
+ * For the failures that are over in seconds — the student's connection, an API
+ * that was restarting or throttling — the first press is made FOR them, once
+ * the origin answers again: `lib/auto-retry.ts`. Those attempts do not touch
+ * the strike counter, so the student's own first press is still a refresh.
  */
 let lastFailure = '';
 let strikes = 0;
@@ -259,9 +274,64 @@ async function originIsServing(cancelled: () => boolean): Promise<boolean> {
 export function useErrorRetry(
   error: Error & { digest?: string },
   reset: () => void,
-): { retry: () => void; retrying: boolean } {
+): {
+  retry: () => void;
+  retrying: boolean;
+  /**
+   * Set while the screen is going to try again by itself — `network` while it
+   * waits for the connection, `soon` for a server failure it will re-request
+   * in a few seconds. The boundary says so under its text, so a student who
+   * reads «الصفحة دي مافتحتش» also reads that nothing is asked of them.
+   */
+  waiting: AutoRetryKind | null;
+} {
   const router = useRouter();
   const [retrying, startTransition] = useTransition();
+
+  const pending = useSyncExternalStore(subscribePendingAutoRetry, pendingAutoRetry, () => null);
+  const waiting = waitingFor(pending, error);
+
+  /*
+   * The latest `reset` and router, read when the timer fires rather than
+   * captured when it was armed. Keeping them out of the effect's dependencies
+   * is what keeps ONE armed retry per error: a parent that re-renders with a
+   * fresh `reset` must not cancel a pending attempt and re-arm it from zero.
+   */
+  const latest = useRef({ reset, router });
+  useEffect(() => {
+    latest.current = { reset, router };
+  });
+
+  /*
+   * The automatic retry — see `lib/auto-retry.ts` for which failures get one
+   * and why the origin is asked before every attempt.
+   *
+   * The SAME two calls the button makes on its first press, in the same
+   * transition, and deliberately not through `retry` below: an attempt made
+   * on the student's behalf must not spend the strike that turns THEIR next
+   * press into a document load.
+   */
+  useEffect(
+    () =>
+      scheduleAutoRetry(error, {
+        retry: () =>
+          startTransition(() => {
+            latest.current.router.refresh();
+            latest.current.reset();
+          }),
+      }),
+    [error],
+  );
+
+  /*
+   * A Server Action the server could not have answered: the tab is behind the
+   * deploy (or caught the middle of one). Same flag a caught action failure
+   * raises (`lib/stale-tab.ts`), so the «نزل تحديث» toast appears and the next
+   * link this student presses is a document load onto the new build.
+   */
+  useEffect(() => {
+    if (isStaleActionError(error)) markTabStale();
+  }, [error]);
 
   // Before any press. See `reloadOnceFor` — the segment never rendered, so
   // there is nothing to lose by replacing the document, and the person is
@@ -293,8 +363,11 @@ export function useErrorRetry(
     // A tab that outlived its build cannot be refreshed back into working —
     // the stale Server Action id is in the loaded bundle, which only a document
     // load replaces. Skipping the first press's `router.refresh()` is the whole
-    // point: it is guaranteed to do nothing here. See `lib/stale-deploy.ts`.
-    if (isStaleDeployError(error)) {
+    // point: it is guaranteed to do nothing here. See `lib/stale-deploy.ts`,
+    // and `isStaleActionError` for the deploy-window answer it now also covers.
+    // (`as unknown`: a type guard on `Error` would narrow `error` to `never`
+    // for everything below it.)
+    if (isStaleActionError(error as unknown)) {
       window.location.reload();
       return;
     }
@@ -347,5 +420,5 @@ export function useErrorRetry(
     });
   }, [error, reset, router]);
 
-  return { retry, retrying };
+  return { retry, retrying, waiting };
 }

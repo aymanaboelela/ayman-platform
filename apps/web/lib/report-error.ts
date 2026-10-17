@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
-import { UPSTREAM_TIMEOUT_DIGEST } from './api';
+import { isConnectivityError } from './connectivity-error';
 import { isModuleEvaluationError, isStaleChunkError, isStaleDeployError } from './stale-deploy';
+import { isStaleActionError } from './stale-tab';
 
 /**
  * The one place an `error.tsx` hands its error somewhere before drawing a
@@ -16,12 +17,17 @@ import { isModuleEvaluationError, isStaleChunkError, isStaleDeployError } from '
  * failure would be that paragraph — which by design says nothing about what
  * broke.
  *
- * Server Component throws are the case that is already covered: Next logs
- * those on the server with the full stack and prints the `digest` next to it,
- * which is exactly why the boundaries render that digest. This hook is for the
- * other half — an error thrown while React was rendering on the CLIENT, which
- * carries no digest, never reaches a server log, and would otherwise be
- * invisible.
+ * Server Component throws are NOT this hook's to file any more. They used to
+ * be, and every one of them arrived as Next's fixed production sentence plus a
+ * digest — forty-one rows' worth of «An error occurred in the Server Components
+ * render» from one live exam, with the container logs that held the real
+ * message long gone. `instrumentation.ts` now files them from the server, where
+ * the message and the stack still exist, under the same fingerprint the
+ * browser would have used (kind, pathname, digest). Filing the browser's copy
+ * as well would only count every failure twice and race the real stack with a
+ * generic one. This hook is for the other half — an error thrown while React
+ * was rendering on the CLIENT, which carries no digest, never reaches a server,
+ * and would otherwise be invisible.
  *
  * ## The reporter this file reserved a place for
  *
@@ -79,37 +85,38 @@ export function useErrorReport(error: Error & { digest?: string }): void {
       isStaleDeployError(error) ||
       isStaleChunkError(error) ||
       isModuleEvaluationError(error) ||
+      // «An unexpected response was received from the server.» — a Server
+      // Action answered by Traefik or Cloudflare instead of by this app, i.e.
+      // the deploy window. `isStaleActionError` explains why it counts as one.
+      // (`as unknown`: it is a type guard on `Error`, and narrowing on it
+      // would leave `error` typed `never` below.)
+      isStaleActionError(error as unknown) ||
       (typeof error.message === 'string' && error.message.includes('Failed to load chunk'))
     ) {
       return;
     }
 
     /*
-     * Client-side network dropouts (device offline, aborted requests, or transient
-     * fetch drops) are connectivity events, not platform bugs.
+     * The student's connection dropped — before the answer, or half-way through
+     * its body (`TypeError: network error`, which is what `/results`, `/rank`
+     * and a quiz review recorded). Not a fault, and not this boundary's to
+     * explain: `use-error-retry.ts` brings the page back by itself once the
+     * connection does. See `lib/connectivity-error.ts` for the exact sentences.
      */
-    if (
-      (typeof navigator !== 'undefined' && !navigator.onLine) ||
-      error.message === 'Failed to fetch' ||
-      error.message === 'Load failed'
-    ) {
+    if (isConnectivityError(error)) {
       return;
     }
 
     /*
-     * `timeout` is a distinguishable kind because `lib/api.ts` stamps a known
-     * digest on that path — Next preserves a digest that is already set, so it
-     * survives to the browser in production where the message does not. A
-     * digest we did not write means Next generated one, which only happens for
-     * a SERVER render; no digest at all means the throw happened here, on the
-     * client, while React was rendering.
+     * A digest means the throw happened in a SERVER render (Next generated it,
+     * or `lib/api.ts` stamped one of its constants). `instrumentation.ts` has
+     * already filed that from the server with the real message — see the
+     * header. In production the copy here carries nothing but Next's generic
+     * sentence.
      */
-    const kind =
-      error.digest === UPSTREAM_TIMEOUT_DIGEST
-        ? 'timeout'
-        : error.digest
-          ? 'server'
-          : 'client';
+    if (error.digest) {
+      return;
+    }
 
     void fetch('/api/errors', {
       method: 'POST',
@@ -123,13 +130,14 @@ export function useErrorReport(error: Error & { digest?: string }): void {
       // most valuable report there is, and the one most likely to be lost.
       keepalive: true,
       body: JSON.stringify({
-        kind,
+        // Always `client` from here: every digest-bearing error was returned
+        // above, and a digest is the only thing that ever made it anything else.
+        kind: 'client',
         // The PATHNAME, never `href`. A query string on this platform can
         // carry a password-reset token or an `?assistant=1` deep link, and an
         // error log is the wrong place for either. The API re-checks this.
         route: window.location.pathname,
         message: error.message.slice(0, 1000),
-        digest: error.digest,
         stack: error.stack?.slice(0, 4000),
       }),
     }).catch(() => {

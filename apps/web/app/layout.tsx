@@ -101,15 +101,32 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       script's job is now narrower and clearer: it CHANGES this to `dark` for
       the reader who chose dark, before first paint.
     */
+    /*
+      `translate="no"` — the browser's own translator must not rewrite a DOM
+      that React owns.
+
+      Edge offers to translate any Arabic page into the reader's UI language,
+      and once accepted it swaps every text node for `<font>` wrappers of its
+      own. React's next commit then inserts before, or removes, a node that is
+      no longer where it put it, and the DOM throws: `insertBefore` on `/game`,
+      `removeChild` on a course page — the whole route replaced by its error
+      screen. The product is Arabic for Arabic readers; a machine translation
+      of it is not a feature anyone here is losing. The `notranslate` meta
+      below says the same to Chrome's translator, which reads that instead,
+      and `DOM_MUTATION_GUARD` in `PREPAINT_SCRIPT` covers whatever ignores
+      both. See that constant for the second layer.
+    */
     <html
       lang="ar"
       dir="rtl"
+      translate="no"
       data-theme="light"
       className={`${plexArabic.variable} ${plexMono.variable}`}
       suppressHydrationWarning
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: PREPAINT_SCRIPT }} />
+        <meta name="google" content="notranslate" />
         {/*
           The media origin is a SEPARATE host by architectural requirement, not
           by accident — see `mediaUrl()` in packages/ui/src/lib/branding.ts

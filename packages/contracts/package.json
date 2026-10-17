@@ -65,6 +65,7 @@
     "./admin/unlock-codes": "./src/admin/unlock-codes.ts",
     "./admin/centers": "./src/admin/centers.ts",
     "./diagnostics": "./src/diagnostics.ts",
+    "./error-classify": "./src/error-classify.ts",
     "./news": "./src/news.ts",
     "./path": "./src/path.ts",
     "./format": "./src/format.ts",

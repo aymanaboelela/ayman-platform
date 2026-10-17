@@ -41,7 +41,7 @@ export default function AdminError({
   reset: () => void;
 }) {
   useErrorReport(error);
-  const { retry, retrying } = useErrorRetry(error, reset);
+  const { retry, retrying, waiting } = useErrorRetry(error, reset);
 
   return (
     <div className="mx-auto w-full max-w-[76rem]">
@@ -52,6 +52,13 @@ export default function AdminError({
         <p className="max-w-[var(--w-prose)] text-[length:var(--fs-text-sm)] leading-relaxed text-fg-muted">
           {copy.admin.error.body}
         </p>
+        {/* Under the body, not instead of it: «reload and check whether it
+            saved» stays true whatever the cause. `lib/auto-retry.ts`. */}
+        {waiting ? (
+          <p role="status" className="text-[length:var(--fs-text-sm)] text-fg-muted">
+            {waiting === 'network' ? copy.errors.reconnecting : copy.errors.retryingSoon}
+          </p>
+        ) : null}
 
         <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center">
           {/* `retry`, not the bare `reset` — see `lib/use-error-retry.ts`. It
