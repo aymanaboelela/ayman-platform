@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Put, UsePipes } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, NotFoundException, Param, Patch, Post, Put, UsePipes } from '@nestjs/common';
 import { ZodValidationPipe } from 'nestjs-zod';
+import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import {
   AddPoolDto,
@@ -10,12 +11,16 @@ import {
   SetSlotMarkDto,
 } from './dto/quiz-builder.dto';
 import { QuizBuilderService } from './quiz-builder.service';
+import { RegradeService } from './regrade.service';
 
 @Controller('admin/quizzes')
 @RequirePermission('quiz:write')
 @UsePipes(ZodValidationPipe)
 export class AdminQuizzesController {
-  constructor(private readonly builder: QuizBuilderService) {}
+  constructor(
+    private readonly builder: QuizBuilderService,
+    private readonly regrade: RegradeService,
+  ) {}
 
   // Registered before `:quizId` below so the literal `lesson` segment can
   // never be swallowed as a quiz id.
@@ -102,5 +107,34 @@ export class AdminQuizzesController {
   async publish(@Param('quizId') quizId: string) {
     await this.builder.publish(quizId);
     return { ok: true };
+  }
+
+  /**
+   * «فيه تعديلات متنشرتش» — what the builder's banner says before the teacher
+   * presses anything: edits saved and never published (students are still
+   * served the old version), and answers given against an older version than
+   * the one now served.
+   */
+  @Get(':quizId/edits')
+  edits(@Param('quizId') quizId: string) {
+    return this.regrade.quizEdits(quizId);
+  }
+
+  /** «انشر التعديلات» — every pending edit of this exam's questions, published. */
+  @Post(':quizId/publish-edits')
+  @HttpCode(200)
+  publishEdits(@Param('quizId') quizId: string) {
+    return this.regrade.publishQuizEdits(quizId);
+  }
+
+  /**
+   * «صحّح من جديد» for the whole exam. `attempt:grade`: it changes students'
+   * marks, which is that permission's job and not `quiz:write`'s.
+   */
+  @Post(':quizId/regrade')
+  @RequirePermission('attempt:grade')
+  @HttpCode(200)
+  regradeQuiz(@CurrentUser() user: AuthenticatedUser, @Param('quizId') quizId: string) {
+    return this.regrade.regradeQuiz(quizId, user.id);
   }
 }

@@ -6,6 +6,7 @@ import { apiGetAuthedOrNotFound } from '@/lib/api-server';
 import { sanitizeRichText } from '@/lib/sanitize-html';
 import { ItemAnalysisTable } from '@/components/admin/quiz/item-analysis-table';
 import { ScoreHistogram } from '@/components/admin/quiz/score-histogram';
+import '@/components/admin/quiz/question-bank.css';
 
 const AnalyticsSchema = z.object({
   quizId: z.string(),
@@ -17,6 +18,8 @@ const AnalyticsSchema = z.object({
   items: z.array(
     z.object({
       questionVersionId: z.string(),
+      bankEntryId: z.string().nullable().default(null),
+      suspectKey: z.boolean().default(false),
       stemHtml: z.string(),
       n: z.number(),
       facility: z.number().nullable(),
@@ -46,6 +49,8 @@ export default async function QuizAnalyticsPage({ params }: { params: Promise<{ 
       </>
     );
   }
+
+  const suspects = analytics.items.filter((item) => item.suspectKey).length;
 
   return (
     <div className="flex flex-col gap-8">
@@ -93,6 +98,14 @@ export default async function QuizAnalyticsPage({ params }: { params: Promise<{ 
 
       <section>
         <h2 className="mb-3 text-[length:var(--fs-title-4)] font-semibold">{copy.quizAdmin.distractorAnalysis}</h2>
+        {/* Before any number: a question the answers say is mis-keyed is
+            marking students wrong while this page is being read. The rows
+            themselves are sorted to the top of the table below. */}
+        {suspects > 0 ? (
+          <p className="qopts__missing mb-3" role="status">
+            {formatCopy(copy.quizAdmin.suspectKeyBanner, { n: suspects })}
+          </p>
+        ) : null}
         {/* Sanitized HERE, on the server, rather than inside the table —
             `ItemAnalysisTable` is `'use client'`, and the `<RichText>` it used
             to render dragged `isomorphic-dompurify` into this route's browser

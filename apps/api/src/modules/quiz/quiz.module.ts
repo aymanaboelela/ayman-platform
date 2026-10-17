@@ -22,6 +22,7 @@ import { QuizAccessService } from './quiz-access.service';
 import { QuizBuilderService } from './quiz-builder.service';
 import { QuizHistoryService } from './quiz-history.service';
 import { QuizScoreFeed } from './quiz-score-feed';
+import { RegradeService } from './regrade.service';
 import { ScheduledExamsService } from './scheduled-exams.service';
 import { AttemptEventsService } from './attempt-events.service';
 import { AttemptService } from './attempt.service';
@@ -78,6 +79,7 @@ import { GameService } from './game.service';
     AnalyticsService,
     ScheduledExamsService,
     ManualGradingService,
+    RegradeService,
     GameService,
     GameBanksService,
     ChallengeTopicsService,

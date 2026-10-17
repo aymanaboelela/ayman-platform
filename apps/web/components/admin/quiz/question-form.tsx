@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useMemo, useState, type KeyboardEvent } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -14,7 +14,9 @@ import {
   type QuestionType,
 } from '@ayman/contracts/quiz/question';
 import { editableToHtml, htmlToEditable } from '@ayman/contracts/quiz/rich-text';
+import { RegradeResultSchema } from '@ayman/contracts/quiz/regrade';
 import { copy } from '@ayman/contracts/copy/admin';
+import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import { Input } from '@ayman/ui/components/input';
 import { Label } from '@ayman/ui/components/label';
@@ -22,6 +24,7 @@ import { Select } from '@ayman/ui/components/select';
 import { Textarea } from '@ayman/ui/components/textarea';
 import { apiPatch, apiPost } from '@/lib/api';
 import { OptionRows, type OptionRowValue } from './option-rows';
+import { RegradeConfirmDialog } from './regrade-confirm-dialog';
 
 /**
  * The parts of the write response a caller needs back.
@@ -58,7 +61,7 @@ export interface QuestionFormProps {
    * — it is the instructor's own number, straight off the form they just
    * filled in.
    */
-  onSaved?: (result: { bankEntryId: string; versionId: string; defaultMark: number }) => void;
+  onSaved?: (result: { bankEntryId: string; versionId: string; defaultMark: number; published: boolean }) => void;
   /**
    * Rendered INSIDE the quiz builder's row rather than on its own page.
    *
@@ -85,12 +88,31 @@ export interface QuestionFormProps {
    * here re-validates the stored rows exactly as that button does
    * (`QuestionBankService.publish`), so nothing unpublishable gets through.
    *
-   * Not in the builder's panel or its «سؤال جديد» dialog: those already
-   * publish on their own terms.
+   * Not in the builder's «سؤال جديد» dialog: it publishes on its own terms.
+   * The builder's inline EDITOR has it too — its plain «حفظ» used to save a
+   * draft and nothing else, and on 2026-10-17 one teacher had 22 corrected
+   * questions sitting in live exams that no student had ever been served.
+   *
+   * On an EDIT, «حفظ ونشر» first asks (`RegradeConfirmDialog`): the change
+   * reaches students the moment it is confirmed, and a corrected key offers
+   * to mark the answers already given again.
    */
   publishOnSave?: boolean;
+  /** How many exams hold this question — said in the confirmation. */
+  usedInQuizzes?: number;
 }
 
+/**
+ * A new question starts with NO option marked correct.
+ *
+ * It used to start with the first one ticked, and a form that guesses the key
+ * is a form that ships a wrong key whenever nobody corrects the guess: live
+ * questions on two stacks turned out to be keyed on «Amazon» for «which one is
+ * a voice assistant», on «صح» for statements whose own explanation began
+ * «خطأ —», and on whatever happened to be typed first. Now the options say
+ * «لسه مفيش إجابة صح متحددة» until one is chosen, and the schema refuses to
+ * save without it (`exactlyOneCorrect`).
+ */
 const DEFAULT_MCQ: QuestionInput = {
   type: 'mcq_single',
   categoryId: '',
@@ -98,10 +120,27 @@ const DEFAULT_MCQ: QuestionInput = {
   defaultMark: 1,
   settings: { shuffleOptions: true, caseSensitive: false },
   options: [
-    { bodyHtml: '', fraction: 1 },
+    { bodyHtml: '', fraction: 0 },
     { bodyHtml: '', fraction: 0 },
   ],
 } as QuestionInput;
+
+/** The key in words: correct option bodies (or patterns), in order. */
+function keyText(values: QuestionInput | QuestionFormValues | undefined): string {
+  if (!values?.options) return '';
+  return values.options
+    .filter((option) => (option.fraction ?? 0) > 0)
+    .map((option) =>
+      'answerPattern' in option && option.answerPattern !== undefined
+        ? option.answerPattern
+        : 'bodyHtml' in option
+          ? (option.bodyHtml ?? '')
+          : '',
+    )
+    .map((text) => text.trim())
+    .filter((text) => text !== '')
+    .join('، ');
+}
 
 /**
  * `stemHtml`, `bodyHtml` and `generalFeedbackHtml` are HTML columns, and this
@@ -170,13 +209,15 @@ export function QuestionForm({
   onSaved,
   embedded = false,
   publishOnSave = false,
+  usedInQuizzes = 0,
 }: QuestionFormProps) {
   const router = useRouter();
   const [submitError, setSubmitError] = useState<string | null>(null);
-  // Which of the two submit buttons was pressed. A ref, set in the button's
-  // own `onClick` — which runs before the form's submit event — so the one
-  // `onSubmit` below serves both without a second code path.
-  const publishAfterSave = useRef(false);
+  const [saving, setSaving] = useState(false);
+  // The validated values of an EDIT waiting on «متأكد؟» — null while no
+  // confirmation is open. Kept rather than re-read from the form, so what
+  // gets saved is exactly what the dialog described.
+  const [pendingPublish, setPendingPublish] = useState<QuestionInput | null>(null);
   // The form's fields hold TEXT, not markup — `toStored` puts the markup back
   // on the way out. `useMemo` and not `useState`: the two consumers below both
   // read it on the first render only, and recomputing it if the caller ever
@@ -215,8 +256,10 @@ export function QuestionForm({
   function changeType(next: QuestionType) {
     form.setValue('type', next, { shouldValidate: false });
     if (next === 'true_false') {
+      // Neither ticked — see `DEFAULT_MCQ`. Every wrong true/false key found
+      // on 2026-10-17 was this pre-ticked «صح» left standing.
       setOptions([
-        { id: crypto.randomUUID(), bodyHtml: copy.quiz.true, fraction: 1 },
+        { id: crypto.randomUUID(), bodyHtml: copy.quiz.true, fraction: 0 },
         { id: crypto.randomUUID(), bodyHtml: copy.quiz.false, fraction: 0 },
       ]);
     } else if (next === 'ordering') {
@@ -233,30 +276,32 @@ export function QuestionForm({
       setOptions([]);
     } else if (!hasChoiceOptions(type)) {
       setOptions([
-        { id: crypto.randomUUID(), bodyHtml: '', fraction: 1 },
+        { id: crypto.randomUUID(), bodyHtml: '', fraction: 0 },
         { id: crypto.randomUUID(), bodyHtml: '', fraction: 0 },
       ]);
       // (`true_false` never reaches here — the first branch rebuilds its two
       // options outright.)
     } else if (next === 'mcq_single' && type === 'ordering') {
       // Coming BACK from ordering, every row carries a weight of 0 — correct
-      // there (nothing is worth anything on its own) and `exactlyOneCorrect`'s
-      // failure case here. Marking the first row correct leaves a form the
-      // instructor fixes with one click on the radio they can already see,
-      // instead of an error about a rule with no control attached to it.
-      setOptions(options.map((option, index) => ({ ...option, fraction: index === 0 ? 1 : 0 })));
+      // there (nothing is worth anything on its own) and left that way here:
+      // the options now say «لسه مفيش إجابة صح متحددة» above the rows, which
+      // is a control the instructor can see, unlike a first row ticked for
+      // them that reads exactly like a key they chose.
+      setOptions(options.map((option) => ({ ...option, fraction: 0 })));
     }
     form.clearErrors();
   }
 
-  async function onSubmit(values: QuestionInput) {
+  async function save(values: QuestionInput, { publish, regrade }: { publish: boolean; regrade: boolean }) {
     setSubmitError(null);
+    setSaving(true);
     const payload = toStored(values);
     try {
       const result = bankEntryId
         ? SavedQuestionSchema.parse(await apiPatch(`/api/admin/questions/${bankEntryId}`, payload))
         : await apiPost('/api/admin/questions', SavedQuestionSchema, payload);
-      if (publishOnSave && publishAfterSave.current) {
+      const saved = { ...result, defaultMark: values.defaultMark };
+      if (publish) {
         try {
           await apiPost(`/api/admin/questions/${result.versionId}/publish`, PublishedSchema, {});
         } catch {
@@ -264,11 +309,17 @@ export function QuestionForm({
           // «انشر السؤال» and says why it could not go out.
           toast.error(copy.quizAdmin.newQuestionPublishFailed);
           router.refresh();
-          router.push(`/admin/questions/${result.bankEntryId}`);
+          if (onSaved) onSaved({ ...saved, published: false });
+          else router.push(`/admin/questions/${result.bankEntryId}`);
           return;
         }
         toast.success(copy.quizAdmin.bank.savedAndPublished);
+        if (regrade) await regradePastAnswers(result.bankEntryId);
         router.refresh();
+        if (onSaved) {
+          onSaved({ ...saved, published: true });
+          return;
+        }
         // A NEW question goes back to the bank, on its own category, where it
         // is now the first row — with its options and its key on show, which
         // is the check that it went in right. An edit stays on its page.
@@ -287,23 +338,64 @@ export function QuestionForm({
        * Same rule, and the same ⚠️, as `components/player/lesson-nav.tsx`.
        */
       router.refresh();
-      if (onSaved) onSaved({ ...result, defaultMark: values.defaultMark });
+      if (onSaved) onSaved({ ...saved, published: false });
       else router.push(`/admin/questions/${result.bankEntryId}`);
     } catch {
       setSubmitError(copy.admin.common.saveFailed);
       toast.error(copy.admin.common.saveFailed);
+    } finally {
+      setSaving(false);
+      setPendingPublish(null);
     }
   }
+
+  /**
+   * The edit is already published when this runs — a failure here is reported
+   * on its own and never rolls the save back: the corrected key serving every
+   * new paper is the more important half, and «صحّح من جديد» on the exam's
+   * page can finish the rest.
+   */
+  async function regradePastAnswers(entryId: string) {
+    try {
+      const result = await apiPost(`/api/admin/questions/${entryId}/regrade`, RegradeResultSchema, {});
+      toast.success(
+        result.raised + result.lowered > 0
+          ? formatCopy(copy.quizAdmin.regradeDone, { raised: result.raised, lowered: result.lowered })
+          : copy.quizAdmin.regradeNoChange,
+      );
+    } catch {
+      toast.error(copy.quizAdmin.regradeFailed);
+    }
+  }
+
+  /**
+   * «حفظ ونشر». A new question goes straight out — nobody has seen it, so
+   * there is nothing to break. An EDIT stops at «متأكد إنك عايز تحفظ التعديل؟»
+   * first: the owner's own ask, after a mis-click while reviewing questions.
+   */
+  const requestPublish = form.handleSubmit((values) => {
+    if (bankEntryId) setPendingPublish(values);
+    else void save(values, { publish: true, regrade: false });
+  });
+  const saveDraft = form.handleSubmit((values) => save(values, { publish: false, regrade: false }));
+
+  // The key as stored when the form opened, against the key being saved —
+  // the one edit that moves marks, so the confirmation names it.
+  const keyBefore = keyText(editableDefaults);
+  const keyAfter = pendingPublish ? keyText(pendingPublish) : '';
+  const keyChanged = pendingPublish !== null && keyBefore !== '' && keyBefore !== keyAfter;
 
   // Enter in the last option field adds a new option; Ctrl/Cmd+Enter saves;
   // Escape closes. Listed in the footer so the UI teaches its own shortcuts.
   function onKeyDown(event: KeyboardEvent<HTMLFormElement>) {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault();
-      // The shortcut is the plain save, as it always was — publishing is a
-      // button the teacher presses on purpose.
-      publishAfterSave.current = false;
-      void form.handleSubmit(onSubmit)();
+      // The shortcut is the PRIMARY button. It used to be the plain save,
+      // which on a published question meant an invisible draft — the shortcut
+      // a teacher uses most was the one way to save without students ever
+      // seeing it. On an edit it opens the same confirmation as the button.
+      if (publishOnSave) void requestPublish();
+      else void saveDraft();
       return;
     }
     // Not `embedded`: the panel that hosts this form owns Escape, and letting
@@ -318,7 +410,19 @@ export function QuestionForm({
   const hasAnyError = Object.keys(form.formState.errors).length > 0;
 
   return (
-    <form method="post" onSubmit={form.handleSubmit(onSubmit)} onKeyDown={onKeyDown} className="max-w-[var(--w-prose)] space-y-5">
+    <>
+    <form
+      method="post"
+      // A stray Enter in a field lands here. On an edit it can only open the
+      // confirmation; anywhere else it saves a draft, as it always did.
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (publishOnSave && bankEntryId) void requestPublish();
+        else void saveDraft();
+      }}
+      onKeyDown={onKeyDown}
+      className="max-w-[var(--w-prose)] space-y-5"
+    >
       {hasAnyError ? (
         <p role="alert" className="rounded-sm border border-err bg-surface-2 p-3 text-[length:var(--fs-text-sm)] text-err">
           {copy.admin.common.saveFailed}
@@ -397,32 +501,41 @@ export function QuestionForm({
         <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{copy.quizAdmin.shortcutsHint}</p>
         {publishOnSave ? (
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="submit"
-              variant="secondary"
-              disabled={form.formState.isSubmitting}
-              onClick={() => {
-                publishAfterSave.current = false;
-              }}
-            >
+            <Button type="button" variant="secondary" disabled={saving} onClick={() => void saveDraft()}>
               {copy.quizAdmin.bank.saveDraft}
             </Button>
-            <Button
-              type="submit"
-              disabled={form.formState.isSubmitting}
-              onClick={() => {
-                publishAfterSave.current = true;
-              }}
-            >
+            <Button type="button" disabled={saving} onClick={() => void requestPublish()}>
               {copy.quizAdmin.bank.saveAndPublish}
             </Button>
           </div>
         ) : (
-          <Button type="submit" disabled={form.formState.isSubmitting}>
+          <Button type="button" disabled={saving} onClick={() => void saveDraft()}>
             {copy.quizAdmin.save}
           </Button>
         )}
       </div>
     </form>
+
+    <RegradeConfirmDialog
+      open={pendingPublish !== null}
+      onOpenChange={(open) => {
+        if (!open) setPendingPublish(null);
+      }}
+      title={copy.quizAdmin.saveConfirmTitle}
+      lines={
+        usedInQuizzes > 1
+          ? [formatCopy(copy.quizAdmin.saveConfirmShared, { n: usedInQuizzes })]
+          : [copy.quizAdmin.saveConfirmLive]
+      }
+      warning={keyChanged ? formatCopy(copy.quizAdmin.saveConfirmKeyChanged, { from: keyBefore, to: keyAfter }) : null}
+      bankEntryId={bankEntryId ?? null}
+      defaultRegrade={keyChanged}
+      confirmLabel={copy.quizAdmin.saveConfirmAction}
+      pending={saving}
+      onConfirm={(regrade) => {
+        if (pendingPublish) void save(pendingPublish, { publish: true, regrade });
+      }}
+    />
+    </>
   );
 }
