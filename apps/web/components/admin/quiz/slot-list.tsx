@@ -25,6 +25,9 @@ export interface QuizSlotRow {
   stemHtml: string | null;
   poolName: string | null;
   poolPickCount: number | null;
+  /** The newest version is an edit nobody published — students still get the
+   *  one before it. Optional so a caller from before the field still renders. */
+  pendingEdit?: boolean;
 }
 
 export interface SlotListProps {
@@ -152,6 +155,7 @@ function SlotRow({
           <span className="min-w-0 flex-1 truncate text-fg">{label}</span>
         )}
 
+        {slot.pendingEdit ? <Badge tone="warn">{copy.quizAdmin.pendingEditChip}</Badge> : null}
         {slot.type ? <Badge tone="neutral">{copy.quizAdmin.types[slot.type]}</Badge> : null}
         <span className="mono shrink-0 text-[length:var(--fs-mono-label)] text-fg-muted">{slot.maxMark}</span>
 

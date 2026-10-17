@@ -7,9 +7,16 @@ import { apiGetAuthed, apiGetAuthedOrNotFound } from '@/lib/api-server';
 import { PaperTabs } from '@/components/admin/quiz/paper-tabs';
 import { PublishQuizButton } from '@/components/admin/quiz/publish-quiz-button';
 import { QuizSettingsForm } from '@/components/admin/quiz/quiz-settings-form';
+import { QuizEditsBand } from '@/components/admin/quiz/quiz-edits-band';
 
 /** Only what `NewQuestionDialog`'s embedded editor needs to fill its select. */
 const CategorySchema = z.object({ id: z.string(), name: z.string() });
+
+const QuizEditsSchema = z.object({
+  pendingDrafts: z.number(),
+  staleAnswers: z.number(),
+  students: z.number(),
+});
 
 /** Exported for `page.test.ts`, which parses one slot of every question type
  *  the contract knows about — the check the literal list below used to fail
@@ -51,6 +58,7 @@ export const HydratedQuizSchema = z.object({
       stemHtml: z.string().nullable(),
       poolName: z.string().nullable(),
       poolPickCount: z.number().nullable(),
+      pendingEdit: z.boolean().default(false),
     }),
   ),
 });
@@ -66,9 +74,12 @@ export default async function QuizBuilderPage({ params }: { params: Promise<{ qu
    * fetching them from inside the dialog would leave an empty category select
    * on a form the instructor has already started typing into.
    */
-  const [quiz, categories] = await Promise.all([
+  const [quiz, categories, edits] = await Promise.all([
     apiGetAuthedOrNotFound(`/api/admin/quizzes/${quizId}`, HydratedQuizSchema),
     apiGetAuthed('/api/admin/questions/categories', z.array(CategorySchema)),
+    // The band above the questions is a nudge, never a dependency: if this
+    // read fails, the builder still opens and simply says nothing.
+    apiGetAuthed(`/api/admin/quizzes/${quizId}/edits`, QuizEditsSchema).catch(() => null),
   ]);
 
   return (
@@ -82,6 +93,19 @@ export default async function QuizBuilderPage({ params }: { params: Promise<{ qu
         </div>
         <PublishQuizButton quizId={quiz.id} isPublished={quiz.isPublished} />
       </div>
+
+      {/* First thing on the page, above the settings: an edit students
+          cannot see and marks given against an old key are the two things on
+          this screen that are wrong RIGHT NOW. Below the settings it sat a
+          full screen down, where nobody scrolls on purpose. */}
+      {edits ? (
+        <QuizEditsBand
+          quizId={quiz.id}
+          pendingDrafts={edits.pendingDrafts}
+          staleAnswers={edits.staleAnswers}
+          students={edits.students}
+        />
+      ) : null}
 
       <section>
         <QuizSettingsForm

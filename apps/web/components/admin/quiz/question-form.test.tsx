@@ -1,17 +1,40 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { copy } from '@ayman/contracts/copy/admin';
-import { apiPatch } from '@/lib/api';
+import { formatCopy } from '@ayman/contracts/format';
+import { apiPatch, apiPost } from '@/lib/api';
 import { QuestionForm } from './question-form';
 
 vi.mock('@/lib/api', () => ({
   apiPost: vi.fn().mockResolvedValue({ bankEntryId: 'new-id', versionId: 'v-1' }),
   apiPatch: vi.fn().mockResolvedValue({ bankEntryId: 'existing-id', versionId: 'v-2' }),
+  // The regrade preview the confirmation asks for: three answers on the old key.
+  apiGet: vi.fn().mockResolvedValue({
+    bankEntryId: 'existing-id',
+    version: 1,
+    answers: 3,
+    finished: 3,
+    inProgress: 0,
+    students: 3,
+  }),
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
+
+/** A published true/false question keyed «صح» — the shape of the live bug. */
+const KEYED_TRUE = {
+  type: 'true_false',
+  categoryId: 'cat-1',
+  stemHtml: '<p>حقوق المؤلف تشترط التسجيل</p>',
+  defaultMark: 1,
+  settings: { shuffleOptions: true, caseSensitive: false },
+  options: [
+    { bodyHtml: '<p>صح</p>', fraction: 1 },
+    { bodyHtml: '<p>خطأ</p>', fraction: 0 },
+  ],
+} as never;
 
 const CATEGORIES = [{ id: 'cat-1', name: 'فئة تجريبية' }];
 
@@ -153,17 +176,52 @@ describe('QuestionForm', () => {
     expect(screen.getAllByLabelText(copy.quizAdmin.options)).toHaveLength(3);
   });
 
-  it('marks a row correct when switching back from ordering, so mcq_single is submittable', async () => {
+  it('asks for the key instead of guessing it when switching back from ordering', () => {
     render(<QuestionForm categories={CATEGORIES} bankEntryId="entry-1" />);
     const typeSelect = screen.getByLabelText(copy.quizAdmin.type, { exact: false });
 
     fireEvent.change(typeSelect, { target: { value: 'ordering' } });
     fireEvent.change(typeSelect, { target: { value: 'mcq_single' } });
 
-    // Every ordering row carries a weight of 0; left alone, `exactlyOneCorrect`
-    // fails with no control the instructor could use to fix it.
+    // Every ordering row carries a weight of 0, and it stays that way: a first
+    // row ticked FOR the instructor reads exactly like a key they chose.
     const radios = screen.getAllByRole('radio', { name: copy.quizAdmin.markCorrect });
-    expect(radios[0]).toBeChecked();
+    for (const radio of radios) expect(radio).not.toBeChecked();
+    expect(screen.getByText(copy.quizAdmin.noCorrectYet)).toBeInTheDocument();
+
+    fireEvent.click(radios[1]!);
+    expect(radios[1]).toBeChecked();
+    expect(screen.queryByText(copy.quizAdmin.noCorrectYet)).not.toBeInTheDocument();
+  });
+
+  it('starts a new question with no key, and a true/false with neither answer ticked', () => {
+    render(<QuestionForm categories={CATEGORIES} />);
+    for (const radio of screen.getAllByRole('radio', { name: copy.quizAdmin.markCorrect })) {
+      expect(radio).not.toBeChecked();
+    }
+    expect(screen.getByText(copy.quizAdmin.noCorrectYet)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(copy.quizAdmin.type, { exact: false }), {
+      target: { value: 'true_false' },
+    });
+    for (const radio of screen.getAllByRole('radio', { name: copy.quizAdmin.markCorrect })) {
+      expect(radio).not.toBeChecked();
+    }
+    expect(screen.getByText(copy.quizAdmin.noCorrectYet)).toBeInTheDocument();
+  });
+
+  it('reads the chosen key back in words and marks its row', () => {
+    render(<QuestionForm categories={CATEGORIES} />);
+    fireEvent.change(screen.getByLabelText(copy.quizAdmin.type, { exact: false }), {
+      target: { value: 'true_false' },
+    });
+    const radios = screen.getAllByRole('radio', { name: copy.quizAdmin.markCorrect });
+    fireEvent.click(radios[1]!);
+
+    expect(screen.getByText(copy.quizAdmin.correctTag)).toBeInTheDocument();
+    expect(
+      screen.getByText(copy.quizAdmin.correctSummary.replace('{answer}', copy.quiz.false)),
+    ).toBeInTheDocument();
   });
 
   it('collapses the options away entirely for an essay question', () => {
@@ -184,8 +242,9 @@ describe('QuestionForm', () => {
     });
 
     const boxes = screen.getAllByRole('checkbox', { name: copy.quizAdmin.markCorrect });
-    // The default two options start at fraction 1/0 — tick the second so BOTH
-    // are ticked and assert the visible weight inputs re-split to 0.5 each.
+    // The default two options start with nothing ticked — tick both and
+    // assert the visible weight inputs re-split to 0.5 each.
+    fireEvent.click(boxes[0]!);
     fireEvent.click(boxes[1]!);
 
     fireEvent.click(
@@ -193,5 +252,38 @@ describe('QuestionForm', () => {
     );
     const weightInputs = screen.getAllByDisplayValue('0.5');
     expect(weightInputs).toHaveLength(2);
+  });
+
+  it('asks before publishing an edit, names the key change, and saves nothing until confirmed', async () => {
+    render(<QuestionForm categories={CATEGORIES} bankEntryId="existing-id" defaultValues={KEYED_TRUE} publishOnSave />);
+
+    fireEvent.click(screen.getAllByRole('radio', { name: copy.quizAdmin.markCorrect })[1]!);
+    fireEvent.click(screen.getByRole('button', { name: copy.quizAdmin.bank.saveAndPublish }));
+
+    expect(await screen.findByText(copy.quizAdmin.saveConfirmTitle)).toBeInTheDocument();
+    expect(
+      screen.getByText(formatCopy(copy.quizAdmin.saveConfirmKeyChanged, { from: 'صح', to: 'خطأ' })),
+    ).toBeInTheDocument();
+    // The answers already given on the old key — offered, and ticked, because the key moved.
+    const regrade = await screen.findByRole('checkbox');
+    expect(regrade).toBeChecked();
+    expect(apiPatch).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: copy.quizAdmin.saveConfirmAction }));
+    await waitFor(() => expect(apiPatch).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(apiPost).toHaveBeenCalledWith('/api/admin/questions/existing-id/regrade', expect.anything(), {}),
+    );
+  });
+
+  it('lets a mis-click walk away: «لأ، ارجع» saves nothing', async () => {
+    render(<QuestionForm categories={CATEGORIES} bankEntryId="existing-id" defaultValues={KEYED_TRUE} publishOnSave />);
+
+    fireEvent.click(screen.getByRole('button', { name: copy.quizAdmin.bank.saveAndPublish }));
+    fireEvent.click(await screen.findByRole('button', { name: copy.quizAdmin.saveConfirmCancel }));
+
+    await waitFor(() => expect(screen.queryByText(copy.quizAdmin.saveConfirmTitle)).not.toBeInTheDocument());
+    expect(apiPatch).not.toHaveBeenCalled();
+    expect(apiPost).not.toHaveBeenCalled();
   });
 });

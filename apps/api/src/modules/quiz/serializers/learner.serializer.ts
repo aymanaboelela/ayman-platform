@@ -1,3 +1,4 @@
+import { stripOptionLabels } from '@ayman/contracts/quiz/option-label';
 import type { QuestionType } from '../../../generated/prisma/enums';
 
 /**
@@ -108,11 +109,18 @@ interface AttemptQuestionRow {
  * comes first, in snapshot order; anything not mentioned follows in stored
  * order, so a malformed snapshot degrades to "slightly wrong order" rather than
  * "the student loses a question".
+ *
+ * The letters a teacher typed into the options («أ) siri») come off here
+ * (`stripOptionLabels`), over the options in their WRITTEN order — the order
+ * those letters describe. The runner draws its own letter beside each row.
  */
 function orderOptions(
-  options: readonly { id: string; bodyHtml: string; position: number }[],
+  rawOptions: readonly { id: string; bodyHtml: string; position: number }[],
   optionOrder: readonly number[],
 ): LearnerOption[] {
+  const written = [...rawOptions].sort((a, b) => a.position - b.position);
+  const bodies = stripOptionLabels(written.map((option) => option.bodyHtml));
+  const options = written.map((option, index) => ({ ...option, bodyHtml: bodies[index]! }));
   const byPosition = new Map(options.map((option) => [option.position, option]));
   const ordered: LearnerOption[] = [];
   const used = new Set<number>();
