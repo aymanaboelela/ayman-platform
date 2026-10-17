@@ -77,6 +77,10 @@ export const adminGrading = {
   confirmUnmarked: 'من غير درجة',
   /** `{mark}` of `{max}`. */
   confirmMarkValue: '{mark} من {max}',
+  /** `{value}` — a row the save does NOT change, said as such: an answer
+   *  swapped for another wrong one leaves the mark where it was, and a struck
+   *  «0 من 1» beside the same «0 من 1» reads as a change. */
+  confirmSame: 'من غير تغيير: {value}',
   confirmAction: 'أيوه، نحفظ',
   confirmCancel: 'رجوع',
 

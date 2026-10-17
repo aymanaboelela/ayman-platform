@@ -140,6 +140,19 @@ describe('GradeAnswerCard — nothing changes by accident', () => {
     expect(screen.queryAllByRole('radio')).toHaveLength(0);
   });
 
+  it('says a mark the new answer leaves alone is unchanged, rather than striking it through', async () => {
+    renderCard(choiceQuestion());
+
+    fireEvent.click(screen.getByRole('button', { name: g.editAnswer }));
+    fireEvent.click(screen.getAllByRole('radio')[2]!); // «ج», wrong like «ب»: still 0
+    fireEvent.click(screen.getByRole('button', { name: g.save }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('من ب لـ ج')).toBeTruthy();
+    expect(within(dialog).getByText('من غير تغيير: 0 من 2')).toBeTruthy();
+    expect(within(dialog).queryByText('من 0 من 2 لـ 0 من 2')).toBeNull();
+  });
+
   it('does not send `response` when the edit ends where it started', async () => {
     renderCard(choiceQuestion());
 

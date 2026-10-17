@@ -2,7 +2,6 @@
 
 import { useEffect, useId, useRef, useState, useTransition } from 'react';
 import { Check, Eye, EyeOff, KeyRound, ShieldAlert } from 'lucide-react';
-import { toast } from 'sonner';
 import { AdminChangePasswordSchema } from '@ayman/contracts/admin/profile';
 import { adminAccount } from '@ayman/contracts/copy/admin-account';
 import { Button } from '@ayman/ui/components/button';
@@ -92,7 +91,6 @@ export function AdminChangePasswordForm() {
       const result = await changeAdminPasswordAction({ currentPassword: current, newPassword: next, revokeOtherSessions });
       if (!result.ok) {
         fail(result.field, result.message);
-        toast.error(result.message, { id: 'admin-password' });
         return;
       }
       const message = result.revokedSessions > 0 ? p.doneRevoked : p.done;
@@ -101,7 +99,6 @@ export function AdminChangePasswordForm() {
       setConfirm('');
       setRevokeOtherSessions(false);
       setDone(message);
-      toast.success(message, { id: 'admin-password' });
     });
   }
 
@@ -237,7 +234,14 @@ function PasswordField({
       <Label htmlFor={id} className="mb-1.5 block">
         {label}
       </Label>
-      <div className="relative">
+      {/*
+        LTR as a whole, field AND toggle: a password is Latin, and a shown one
+        has to read in the order it was typed («secret!» in an RTL box shows
+        as «!secret»). With the input LTR inside an RTL wrapper, `pe-11` and
+        `end-0` named opposite sides, and the eye sat on the dots. Both now
+        resolve in one direction, the eye on the left like the sign-in form's.
+      */}
+      <div className="relative" dir="ltr">
         <Input
           ref={inputRef}
           id={id}
@@ -248,15 +252,14 @@ function PasswordField({
           disabled={disabled}
           invalid={invalid}
           aria-describedby={describedByIds}
-          dir="ltr"
-          className="pe-11"
+          className="ps-11"
         />
         {/* A real button, in the tab order: a keyboard user who cannot see
             what they typed is the one this control exists for. */}
         <button
           type="button"
           onClick={() => setShown((previous) => !previous)}
-          className="absolute inset-y-0 end-0 flex w-11 items-center justify-center text-fg-muted transition-colors hover:text-fg"
+          className="absolute inset-y-0 start-0 flex w-11 items-center justify-center text-fg-muted transition-colors hover:text-fg"
           // One name in both states — `aria-pressed` says which, and a
           // toggle whose name flips is announced as its opposite.
           aria-label={p.show}

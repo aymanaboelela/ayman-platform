@@ -1365,3 +1365,7 @@ div.unit[data-open] > .unit__head:hover {
   font-weight: var(--fw-semibold);
   color: var(--n-12);
 }
+
+.grade-confirm__same {
+  color: var(--n-11);
+}

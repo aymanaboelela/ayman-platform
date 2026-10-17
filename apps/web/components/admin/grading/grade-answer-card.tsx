@@ -481,9 +481,14 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
             {responseChanged ? (
               <ChangeRow label={g.confirmAnswer} from={lettersOf(stored.chosen)} to={lettersOf(draft)} />
             ) : null}
-            {markChanged || (responseChanged && canSave) ? (
+            {/* The mark is listed whenever the dialog opens — an answer
+                swapped for another is a question about the mark too — but
+                only struck through when it actually moves. */}
+            {!canSave ? null : stored.mark === null || !sameMark(nextMark, stored.mark) ? (
               <ChangeRow label={g.confirmMark} from={markOf(stored.mark)} to={markOf(nextMark)} />
-            ) : null}
+            ) : (
+              <SameRow label={g.confirmMark} value={markOf(nextMark)} />
+            )}
           </dl>
           <DialogFooter>
             <Button type="button" variant="secondary" autoFocus onClick={() => setConfirmOpen(false)} disabled={pending}>
@@ -563,6 +568,16 @@ function OrderColumn({
           ))}
         </ol>
       )}
+    </div>
+  );
+}
+
+/** A value the save leaves as it is — said in words, nothing struck through. */
+function SameRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grade-confirm__row">
+      <dt className="grade-confirm__label">{label}</dt>
+      <dd className="grade-confirm__change grade-confirm__same">{formatCopy(g.confirmSame, { value })}</dd>
     </div>
   );
 }
