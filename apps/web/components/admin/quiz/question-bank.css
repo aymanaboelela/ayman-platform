@@ -960,3 +960,115 @@
   font-size: var(--fs-text-sm);
   color: var(--n-12);
 }
+
+/* ── The answer key, written so it cannot be got wrong by accident ───────────
+   The option marked correct reads as correct from across the room: green
+   edge, tinted ground, and the words «الإجابة الصح» beside its control. A
+   bare radio dot was the whole signal before, and a first option keyed by
+   default looked exactly like a first option keyed on purpose. */
+.qopt { border-color: var(--border-subtle); }
+
+.qopt--correct {
+  border-color: color-mix(in oklch, var(--ok), transparent 35%);
+  border-inline-start: 4px solid var(--ok);
+  background: color-mix(in oklch, var(--ok), transparent 92%);
+}
+
+.qopt__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  margin-block-start: var(--s-8);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--ok);
+  white-space: nowrap;
+}
+
+/* «لسه مفيش إجابة صح متحددة» — amber, above the rows, until one is chosen. */
+.qopts__missing {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  padding: var(--s-8) var(--s-12);
+  border: var(--hairline) solid color-mix(in oklch, var(--a-9), transparent 45%);
+  border-inline-start: 4px solid var(--a-9);
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--a-9) 10%, var(--n-1));
+  font-size: var(--fs-text-sm);
+  color: var(--n-12);
+}
+
+/* «الإجابة الصح: …» under the rows — the key read back in words. */
+.qopts__summary {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--ok);
+}
+
+/* ── «متأكد إنك عايز تحفظ التعديل؟» ───────────────────────────────────────── */
+.qconfirm__lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.qconfirm__warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-8);
+  margin-block-end: var(--s-12);
+  padding: var(--s-12);
+  border: var(--hairline) solid color-mix(in oklch, var(--a-9), transparent 45%);
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--a-9) 12%, var(--n-1));
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+}
+
+.qconfirm__checking {
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.qconfirm__regrade {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-2);
+}
+
+.qconfirm__regrade-label {
+  display: flex;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: var(--s-4);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+  cursor: pointer;
+}
+
+.qconfirm__regrade-hint {
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-regular);
+  color: var(--n-11);
+}
+
+/* «راجع الإجابة الصح» — on an item-analysis row the answers say is mis-keyed. */
+.qsuspect {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: 0.125rem var(--s-8);
+  border-radius: var(--r-full);
+  background: color-mix(in oklch, var(--err), transparent 88%);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--err);
+  white-space: nowrap;
+}

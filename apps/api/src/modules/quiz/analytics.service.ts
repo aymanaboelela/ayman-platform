@@ -26,11 +26,36 @@ export interface DistractorPick {
 
 export interface ItemAnalysisRow {
   questionVersionId: string;
+  /** For «افتح السؤال» — the editor is keyed on the entry, not the version. */
+  bankEntryId: string | null;
   stemHtml: string;
   n: number;
   facility: number | null;
   discrimination: number | null;
   distractors: DistractorPick[];
+  /** See `isSuspectKey`. */
+  suspectKey: boolean;
+}
+
+/** Below this many answers a crowd is a coincidence, not evidence. */
+const SUSPECT_KEY_MIN_ANSWERS = 5;
+
+/**
+ * «راجع الإجابة الصح» — most students chose ONE option that is not the key.
+ *
+ * A hard question spreads its wrong answers across the distractors; a WRONG
+ * KEY gathers them on one option, the right one. That is exactly what the
+ * data looked like for every mis-keyed question found on 2026-10-17 (171 of
+ * 173 on «siri» keyed as «Amazon»; 12 of 13 on a true/false keyed the wrong
+ * way) and for none of the merely difficult ones. Flagging it puts the
+ * teacher one click from a fix instead of waiting for a student to complain.
+ */
+export function isSuspectKey(distractors: readonly Pick<DistractorPick, 'fraction' | 'picks'>[]): boolean {
+  const total = distractors.reduce((sum, option) => sum + option.picks, 0);
+  if (total < SUSPECT_KEY_MIN_ANSWERS) return false;
+  const keyed = distractors.filter((option) => option.fraction > 0).reduce((sum, option) => sum + option.picks, 0);
+  const top = distractors.reduce((best, option) => (option.picks > best.picks ? option : best), distractors[0]!);
+  return top.fraction <= 0 && top.picks > keyed && top.picks / total >= 0.4;
 }
 
 export interface QuizAnalytics {
@@ -137,6 +162,7 @@ export class AnalyticsService {
       where: { id: { in: versionIds } },
       select: {
         id: true,
+        bankEntryId: true,
         stemHtml: true,
         options: { select: { id: true, bodyHtml: true, fraction: true } },
       },
@@ -148,22 +174,31 @@ export class AnalyticsService {
       const optionsById = new Map((version?.options ?? []).map((option) => [option.id, option]));
       const picks = distractorsByVersion.get(row.question_version_id) ?? [];
 
+      const distractors = picks.map((pick) => ({
+        optionId: pick.optionId,
+        bodyHtml: optionsById.get(pick.optionId)?.bodyHtml ?? '',
+        fraction: optionsById.get(pick.optionId) ? Number(optionsById.get(pick.optionId)!.fraction) : 0,
+        picks: pick.picks,
+      }));
+
       return {
         questionVersionId: row.question_version_id,
+        bankEntryId: version?.bankEntryId ?? null,
         stemHtml: version?.stemHtml ?? '',
         n: row.n,
         facility: row.facility,
         discrimination: kelleyDiscrimination(discriminationByVersion.get(row.question_version_id) ?? []),
-        distractors: picks.map((pick) => ({
-          optionId: pick.optionId,
-          bodyHtml: optionsById.get(pick.optionId)?.bodyHtml ?? '',
-          fraction: optionsById.get(pick.optionId) ? Number(optionsById.get(pick.optionId)!.fraction) : 0,
-          picks: pick.picks,
-        })),
+        distractors,
+        suspectKey: distractors.length > 0 && isSuspectKey(distractors),
       };
     });
-    // Worst items first — the whole point of surfacing this at all.
-    items.sort((a, b) => (a.discrimination ?? 0) - (b.discrimination ?? 0));
+    // Worst items first — the whole point of surfacing this at all. A question
+    // whose key looks wrong outranks any statistic: it is marking students
+    // wrong for a right answer while this page is being read.
+    items.sort(
+      (a, b) =>
+        Number(b.suspectKey) - Number(a.suspectKey) || (a.discrimination ?? 0) - (b.discrimination ?? 0),
+    );
 
     return {
       quizId,
