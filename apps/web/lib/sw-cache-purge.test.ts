@@ -316,6 +316,23 @@ describe('sw.js — a build an open tab still runs is kept', () => {
     expect(worker.fetchMock).not.toHaveBeenCalled();
     expect(worker.caches.urlsIn(NEW_CACHE)).not.toContain(asset('old-dialog'));
   });
+
+  it('forgets closed windows even when there is no old build to purge', async () => {
+    // One build cache only, so no purge ever runs: the registry must still
+    // not gain an entry per page load for as long as nothing deploys.
+    const worker = evaluateWorker({ scriptUrl: NEW, activeScriptUrl: NEW, existingCaches: {} });
+    await worker.install();
+    await worker.activate();
+    for (const tab of ['page-1', 'page-2', 'page-3']) {
+      worker.windows.splice(0, worker.windows.length, tab);
+      await worker.announce(tab, 'b20260908000000');
+    }
+
+    const meta = await worker.caches.api.open('ayman-sw-meta');
+    const stored = await meta.match({ url: new URL('/__ayman-sw/builds', NEW).href });
+    const registry = (await stored!.json()) as { clients: Record<string, string> };
+    expect(registry.clients).toEqual({ 'page-3': 'b20260908000000' });
+  });
 });
 
 describe('sw.js — what the current build uses moves forward, with no second download', () => {

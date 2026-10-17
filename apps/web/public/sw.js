@@ -440,6 +440,19 @@ self.addEventListener('message', (event) => {
   event.waitUntil(
     serially(async () => {
       const registry = await readRegistry();
+      // Closed windows are forgotten here, not only by a purge. With a single
+      // build cache there is nothing to purge, so the registry would otherwise
+      // gain an entry per page load until the next deploy, and for good on a
+      // stack that does not deploy.
+      try {
+        const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        const ids = new Set(open.map((client) => client.id));
+        for (const id of Object.keys(registry.clients)) {
+          if (!ids.has(id)) delete registry.clients[id];
+        }
+      } catch {
+        // Kept as it was: an entry too many costs a cache kept a little longer.
+      }
       registry.clients[source.id] = build;
       await writeRegistry(registry);
       if (`ayman-static-${build}` === STATIC_CACHE) await promote(assets);
