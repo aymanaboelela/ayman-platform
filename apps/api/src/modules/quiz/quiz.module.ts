@@ -5,6 +5,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { ProgressModule } from '../progress/progress.module';
 import { AdminAnalyticsController } from './admin-analytics.controller';
 import { AdminAttemptsController } from './admin-attempts.controller';
+import { AdminAttemptsOverviewController } from './admin-attempts-overview.controller';
+import { AttemptsOverviewService } from './attempts-overview.service';
 import { AdminExamsController } from './admin-exams.controller';
 import { AdminQuestionsController } from './admin-questions.controller';
 import { AdminQuizzesController } from './admin-quizzes.controller';
@@ -54,6 +56,9 @@ import { GameService } from './game.service';
     AdminQuizzesController,
     AttemptController,
     MeQuizzesController,
+    // BEFORE `AdminAttemptsController`: its literal `attempts/overview` must
+    // be matched ahead of any `attempts/:id` that controller ever grows.
+    AdminAttemptsOverviewController,
     AdminAttemptsController,
     AdminAnalyticsController,
     AdminExamsController,
@@ -76,6 +81,7 @@ import { GameService } from './game.service';
     QuizHistoryService,
     QuizBuilderService,
     AttemptAdminService,
+    AttemptsOverviewService,
     AnalyticsService,
     ScheduledExamsService,
     ManualGradingService,
