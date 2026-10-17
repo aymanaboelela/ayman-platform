@@ -19,7 +19,12 @@ import { AccountMenuClient } from './account-menu-client';
  * `isAdmin` here only decides whether a link is drawn.
  */
 export async function AccountMenu() {
-  const session = await getSession();
+  // `undefined` when the read FAILED (a throttle, an API mid-restart): this is
+  // a layout slot, and a throw from here skips the group's boundary and takes
+  // the whole page down over a menu. The placeholder keeps the topbar's shape
+  // until the next render has a session to draw.
+  const session = await getSession().catch(() => undefined);
+  if (session === undefined) return <AccountMenuFallback />;
 
   // Signed out mid-render: `proxy.ts` will have redirected the navigation
   // already, so this is the torn-session case rather than a real state. Render
