@@ -14,7 +14,7 @@ import { AUDIT_RESOURCES } from '../admin/admin.constants';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptService } from './attempt.service';
 import { clamp, roundMark } from './grading';
-import { mapOptionsBetweenVersions, remapOptionOrder, remapResponse } from './grading/remap';
+import { mapOptionsBetweenVersions, remapOptionOrder, remapResponse, type MappableOption } from './grading/remap';
 import { QuestionBankService } from './question-bank.service';
 
 /**
@@ -79,6 +79,11 @@ type FullVersion = Prisma.QuestionVersionGetPayload<{ select: typeof VERSION_SEL
  * teacher's own decision; a regrade leaves both exactly where they are, so
  * counting them made «N إجابة اتصححت على نسخة قديمة» a banner no button could
  * ever clear (on 2026-10-17 one exam kept 875 of them after its regrade).
+ *
+ * This is only the part SQL can settle. The third answer a regrade leaves
+ * alone, one naming an option the new version no longer has, can only be told
+ * by mapping it, so the stale counts also pass through `planMove`
+ * (`movableStale`).
  */
 const ACTIONABLE = {
   gradedBy: null,
@@ -88,6 +93,31 @@ const ACTIONABLE = {
 function carriesAcross(from: QuestionType, to: QuestionType): boolean {
   if (from === 'essay' || to === 'essay') return false;
   return from === to || (CHOICE_TYPES.has(from) && CHOICE_TYPES.has(to));
+}
+
+interface StaleAnswer {
+  gradedBy: string | null;
+  response: Prisma.JsonValue;
+  version: { type: QuestionType; options: readonly MappableOption[] };
+}
+
+/**
+ * Where a regrade would carry this answer on `latest`, or null when it stays
+ * as it is: the three rules of «What never moves», in one place. `regradePaper`
+ * acts on it and the counts filter by it, because a count that includes an
+ * answer the button skips is a banner that never clears. On 2026-10-18 a
+ * question rewritten into a different one left 141 + 76 such answers on one
+ * exam, all correctly marked against the question their students were shown.
+ */
+function planMove(
+  question: StaleAnswer,
+  latest: { type: QuestionType; options: readonly MappableOption[] },
+): { mapping: Map<string, string>; response: unknown } | null {
+  if (question.gradedBy !== null || !carriesAcross(question.version.type, latest.type)) return null;
+  const mapping = mapOptionsBetweenVersions(question.version.options, latest.options);
+  const response = question.response === null ? null : remapResponse(question.response, mapping);
+  if (question.response !== null && response === null) return null;
+  return { mapping, response };
 }
 
 @Injectable()
@@ -130,24 +160,60 @@ export class RegradeService {
       return { bankEntryId, version: null, answers: 0, finished: 0, inProgress: 0, students: 0 };
     }
 
-    const rows = await this.prisma.attemptQuestion.findMany({
-      where: {
-        ...ACTIONABLE,
-        version: { bankEntryId, ...ACTIONABLE.version },
-        ...(scope === 'stale' && latest ? { questionVersionId: { not: latest.id } } : {}),
-        attempt: { state: { in: [...MOVABLE_STATES] } },
-      },
-      select: { attempt: { select: { state: true, userId: true } } },
-    });
-    const finished = rows.filter((row) => FINISHED_STATES.has(row.attempt.state)).length;
+    const where = {
+      ...ACTIONABLE,
+      version: { bankEntryId, ...ACTIONABLE.version },
+      attempt: { state: { in: [...MOVABLE_STATES] } },
+    };
+    // 'all' is asked before the edit exists: there is no version to map onto yet.
+    const papers =
+      scope === 'stale' && latest
+        ? await this.movableStale({ ...where, questionVersionId: { not: latest.id } })
+        : (await this.prisma.attemptQuestion.findMany({ where, select: { attempt: { select: { state: true, userId: true } } } }))
+            .map((row) => row.attempt);
+    const finished = papers.filter((paper) => FINISHED_STATES.has(paper.state)).length;
     return {
       bankEntryId,
       version: latest?.version ?? null,
-      answers: rows.length,
+      answers: papers.length,
       finished,
-      inProgress: rows.length - finished,
-      students: new Set(rows.map((row) => row.attempt.userId)).size,
+      inProgress: papers.length - finished,
+      students: new Set(papers.map((paper) => paper.userId)).size,
     };
+  }
+
+  /**
+   * Of the answers `where` finds, the ones a regrade would really move, each
+   * as its paper's state and student: `planMove` against the latest published
+   * version, the same test `regradePaper` applies, so the count is exactly what
+   * the button would change.
+   */
+  private async movableStale(
+    where: Prisma.AttemptQuestionWhereInput,
+  ): Promise<{ state: AttemptState; userId: string }[]> {
+    const rows = await this.prisma.attemptQuestion.findMany({
+      where,
+      select: {
+        gradedBy: true,
+        response: true,
+        version: { select: { bankEntryId: true, type: true, options: { select: { id: true, bodyHtml: true, position: true } } } },
+        attempt: { select: { state: true, userId: true } },
+      },
+    });
+    if (rows.length === 0) return [];
+    const latest = await this.prisma.questionVersion.findMany({
+      where: { bankEntryId: { in: [...new Set(rows.map((row) => row.version.bankEntryId))] }, status: 'ready' },
+      orderBy: { version: 'desc' },
+      distinct: ['bankEntryId'],
+      select: { bankEntryId: true, type: true, options: { select: { id: true, bodyHtml: true, position: true } } },
+    });
+    const latestByEntry = new Map(latest.map((version) => [version.bankEntryId, version]));
+    return rows
+      .filter((row) => {
+        const target = latestByEntry.get(row.version.bankEntryId);
+        return target !== undefined && planMove(row, target) !== null;
+      })
+      .map((row) => row.attempt);
   }
 
   async regradeEntry(bankEntryId: string, actorId: string): Promise<RegradeResult> {
@@ -221,16 +287,12 @@ export class RegradeService {
       const minFraction = Math.min(0, ...latest.options.map((option) => Number(option.fraction)));
 
       for (const question of questions) {
-        if (question.gradedBy !== null || !carriesAcross(question.version.type, latest.type)) {
+        const plan = planMove(question, latest);
+        if (!plan) {
           tally.skipped += 1;
           continue;
         }
-        const mapping = mapOptionsBetweenVersions(question.version.options, latest.options);
-        const response = question.response === null ? null : remapResponse(question.response, mapping);
-        if (question.response !== null && response === null) {
-          tally.skipped += 1;
-          continue;
-        }
+        const { mapping, response } = plan;
 
         await tx.attemptQuestion.update({
           where: { id: question.id },
@@ -331,19 +393,16 @@ export class RegradeService {
     const pendingDrafts = [...newest.values()].filter((version) => version.status === 'draft').length;
 
     const readyIds = [...latestReady.values()];
-    const stale = await this.prisma.attemptQuestion.findMany({
-      where: {
-        ...ACTIONABLE,
-        version: { bankEntryId: { in: [...latestReady.keys()] }, ...ACTIONABLE.version },
-        questionVersionId: { notIn: readyIds },
-        attempt: { quizId, state: { in: [...MOVABLE_STATES] } },
-      },
-      select: { attempt: { select: { userId: true } } },
+    const stale = await this.movableStale({
+      ...ACTIONABLE,
+      version: { bankEntryId: { in: [...latestReady.keys()] }, ...ACTIONABLE.version },
+      questionVersionId: { notIn: readyIds },
+      attempt: { quizId, state: { in: [...MOVABLE_STATES] } },
     });
     return {
       pendingDrafts,
       staleAnswers: stale.length,
-      students: new Set(stale.map((row) => row.attempt.userId)).size,
+      students: new Set(stale.map((paper) => paper.userId)).size,
     };
   }
 
