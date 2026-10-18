@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { useRef } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 
 // jsdom has no `matchMedia`, and ScrollTrigger asks for it the moment
 // `lib/gsap.ts` registers it — so it must exist before that import runs.
@@ -17,7 +17,7 @@ vi.hoisted(() => {
   })) as unknown as typeof window.matchMedia;
 });
 
-const { gsap } = await import('@/lib/gsap');
+const { gsap, ScrollTrigger } = await import('@/lib/gsap');
 const { useGsap } = await import('./use-gsap');
 type GsapContext = import('./use-gsap').GsapContext;
 
@@ -30,6 +30,18 @@ type GsapContext = import('./use-gsap').GsapContext;
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+});
+
+/*
+ * ScrollTrigger arms a 34 ms `setTimeout` that calls `requestAnimationFrame`.
+ * Left pending, it fires after Vitest has torn jsdom down and fails the run
+ * with «requestAnimationFrame is not defined» (CI, 2026-10-18), even though
+ * every test passed. Kill the triggers and let that timer fire while the
+ * window still exists.
+ */
+afterAll(async () => {
+  ScrollTrigger.killAll();
+  await new Promise((resolve) => setTimeout(resolve, 100));
 });
 
 function Section({ setup }: { setup: (ctx: GsapContext) => void }) {
