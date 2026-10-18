@@ -250,7 +250,9 @@ export class LessonAccessService {
         context.monthIds,
         // «أي حد مشترك في الكورس» — a monthly exam is never tagged with a
         // month, and read as a lecture it was locked to every month buyer.
-        { monthlyExam: context.isMonthlyExam },
+        // The lecture's own term, so a grant for the OTHER term cannot open it
+        // through the union — see `resolveMonthSlice`.
+        { monthlyExam: context.isMonthlyExam, lessonTermId: context.termId },
       );
       if (!monthAccess.allowed) {
         throw new ForbiddenException(monthAccess.reason);
