@@ -65,7 +65,7 @@ export class LessonGateService {
           kind: true,
           sectionId: true,
           months: { select: { monthId: true } },
-          section: { select: { title: true } },
+          section: { select: { title: true, termId: true } },
         },
       }),
       this.prisma.lessonProgress.findMany({
@@ -87,14 +87,27 @@ export class LessonGateService {
      * the outline of a course that has not moved over costs exactly the queries
      * it always did, and draws exactly the states it always did.
      */
+    const sellsByMonth = course !== null && course.months.length > 0;
+    const sliceSubject = course
+      ? { id: courseId, subjectId: course.subjectId, requiresGrant: course.requiresGrant }
+      : null;
     const slice =
-      course && course.months.length > 0
-        ? await this.entitlement.resolveMonthSlice(userId, {
-            id: courseId,
-            subjectId: course.subjectId,
-            requiresGrant: course.requiresGrant,
-          })
-        : null;
+      sellsByMonth && sliceSubject ? await this.entitlement.resolveMonthSlice(userId, sliceSubject) : null;
+    /*
+     * One slice PER TERM for a lecture that sits in one, from the same
+     * `resolveMonthSlice(…, termId)` that `requireEntitled` decides the click
+     * with — a grant for «الترم الأول» is not «everything» for a lecture of
+     * «الترم التاني». Without it the outline drew that lecture open and the
+     * click answered 403. A course has two or three terms, so this is at most
+     * that many extra indexed reads, and none on a course with no months.
+     */
+    const termSlices = new Map<string, Awaited<ReturnType<EntitlementService['resolveMonthSlice']>>>();
+    if (sellsByMonth && sliceSubject) {
+      const termIds = [...new Set(lessons.map((lesson) => lesson.section.termId).filter((id): id is string => id !== null))];
+      for (const termId of termIds) {
+        termSlices.set(termId, await this.entitlement.resolveMonthSlice(userId, sliceSubject, termId));
+      }
+    }
 
     /*
      * «فتح بكود» — lectures a live code grant names are owned outright, and a
@@ -127,7 +140,7 @@ export class LessonGateService {
               (isMonthlyExamLesson(lesson.kind, lesson.section.title)
                 ? sliceCoversMonthlyExam(slice)
                 : sliceCoversLesson(
-                    slice,
+                    (lesson.section.termId !== null ? termSlices.get(lesson.section.termId) : undefined) ?? slice,
                     lesson.months.map((row) => row.monthId),
                   )))),
       })),

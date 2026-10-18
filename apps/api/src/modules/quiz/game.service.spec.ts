@@ -270,7 +270,7 @@ describe('GameService', () => {
     expect((await service.hub(fixture.studentId)).total).toBe(2);
   });
 
-  it('hides every question of a sitting that is still open, even one already in the pool', async () => {
+  it('hides every question of a timed sitting still running, even one already in the pool', async () => {
     fixture = await seedQuizFixture(prisma, {});
     await grant(fixture.studentId);
     await sit(fixture.studentId);
@@ -279,7 +279,16 @@ describe('GameService', () => {
     const round = await service.start(fixture.studentId, { mode: 'race', level: 'medium' });
 
     const resit = await prisma.quizAttempt.create({
-      data: { quizId: fixture.quizId, userId: fixture.studentId, attemptNo: 2, state: 'in_progress', sumMarks: 3, gradeOutOf: 100, passPercent: 50 },
+      data: {
+        quizId: fixture.quizId,
+        userId: fixture.studentId,
+        attemptNo: 2,
+        state: 'in_progress',
+        sumMarks: 3,
+        gradeOutOf: 100,
+        passPercent: 50,
+        deadlineAt: new Date(Date.now() + 30 * 60_000),
+      },
     });
     await prisma.attemptQuestion.createMany({
       data: fixture.versionIds.map((questionVersionId, index) => ({
@@ -305,6 +314,46 @@ describe('GameService', () => {
     // Handed in, the questions are practice material again.
     await prisma.quizAttempt.update({ where: { id: resit.id }, data: { state: 'submitted', submittedAt: new Date() } });
     expect((await service.answer(fixture.studentId, { questionId, optionId: null })).rightOptionIds).toHaveLength(1);
+  });
+
+  /*
+   * The other side of the case above. An untimed lesson quiz somebody opened
+   * and walked away from stays `in_progress` for ever — the overdue sweep only
+   * closes sittings with a deadline — and its questions must not vanish from
+   * that student's game for ever with it.
+   */
+  it('does not hide the questions of an untimed lesson sitting left open', async () => {
+    fixture = await seedQuizFixture(prisma, {});
+    await grant(fixture.studentId);
+    await sit(fixture.studentId);
+    const abandoned = await prisma.quizAttempt.create({
+      data: {
+        quizId: fixture.quizId,
+        userId: fixture.studentId,
+        attemptNo: 2,
+        state: 'in_progress',
+        sumMarks: 3,
+        gradeOutOf: 100,
+        passPercent: 50,
+        startedAt: new Date(Date.now() - 30 * 86_400_000),
+      },
+    });
+    await prisma.attemptQuestion.createMany({
+      data: fixture.versionIds.map((questionVersionId, index) => ({
+        attemptId: abandoned.id,
+        slotPosition: index,
+        questionVersionId,
+        optionOrder: [],
+        maxMark: 1,
+        minFraction: 0,
+        maxFraction: 1,
+      })),
+    });
+
+    expect((await service.hub(fixture.studentId)).total).toBe(3);
+    expect(
+      (await service.answer(fixture.studentId, { questionId: fixture.versionIds[0]!, optionId: null })).rightOptionIds,
+    ).toHaveLength(1);
   });
 
   it('adds the course’s own game questions for an enrolled student', async () => {

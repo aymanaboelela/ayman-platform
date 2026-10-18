@@ -147,7 +147,7 @@ export async function challengeCandidates(
  * (`challengeCandidates`) و«دفتر غلطاتي» (`blockedBankEntries`) لازم يقولوا نفس
  * الكلام، وإلا الدفتر يكشف إجابة سؤال البنك بيخبّيه.
  */
-function examBlockCtes(userId: string | null): Prisma.Sql {
+function examBlockCtes(userId: string | null, options: { drafts?: boolean } = {}): Prisma.Sql {
   /*
    * ⚠️ PER PAPER, not per quiz. A course exam has two papers («الأصلي» and
    * «تحسين»), and this used to unblock an exam the moment ANY attempt at it was
@@ -155,22 +155,34 @@ function examBlockCtes(userId: string | null): Prisma.Sql {
    * improvement paper and read every answer of it here, one question at a time.
    * A paper's questions now stay blocked until THAT paper is submitted.
    *
-   * And `live`: whatever question a sitting the student has open right now
-   * carries, from any quiz, exam or not. A bank shared between a lesson quiz
-   * and a game category is ordinary, and without this the game answered the
-   * question the student was looking at in the other tab.
+   * And `live`: the questions of a sitting the student has open RIGHT NOW,
+   * where a bank shared with a game category would otherwise answer the
+   * question on the other tab. «Right now» is deliberately narrow — an
+   * exam paper still open, or a sitting whose own clock has not run out. An
+   * untimed lesson quiz someone walked away from stays `in_progress` forever
+   * (the overdue sweep only closes sittings with a deadline), and counting it
+   * would make its questions vanish from that student's game, challenges and
+   * «دفتر غلطاتي» for good.
+   *
+   * `drafts`: whether an exam that is not published yet blocks too. The topic
+   * challenges and the mistakes book always did; the game never has, and a
+   * draft with category pools would otherwise empty those categories from
+   * every student's game.
    */
+  const draftClause = options.drafts === false ? Prisma.sql`FALSE` : Prisma.sql`NOT (q."is_published" AND l."is_published")`;
   return Prisma.sql`exams AS (
-      SELECT q."id", NOT (q."is_published" AND l."is_published") AS hidden
+      SELECT q."id", ${draftClause} AS hidden
       FROM "app"."quizzes" q
       JOIN "app"."lessons" l ON l."id" = q."lesson_id"
       JOIN "app"."course_sections" cs ON cs."id" = l."section_id"
       JOIN "app"."courses" co ON co."id" = l."course_id"
       WHERE (cs."title" = ${EXAM_SHELF_TITLE} OR co."exam_lesson_id" = l."id")
         AND (
-          NOT (q."is_published" AND l."is_published")
-          OR q."open_until" IS NULL
-          OR q."open_until" > now()
+          ${draftClause}
+          OR (
+            q."is_published"
+            AND (q."open_until" IS NULL OR q."open_until" > now())
+          )
         )
     ),
     open_slots AS (
@@ -200,15 +212,29 @@ function examBlockCtes(userId: string | null): Prisma.Sql {
       FROM "app"."attempt_questions" aq
       JOIN "app"."quiz_attempts" a ON a."id" = aq."attempt_id"
       JOIN "app"."question_versions" v ON v."id" = aq."question_version_id"
+      JOIN "app"."quizzes" aqz ON aqz."id" = a."quiz_id"
       WHERE a."user_id" = ${userId} AND a."submitted_at" IS NULL
         AND a."state" IN ('in_progress', 'overdue')
+        AND (
+          -- deadline_at is a naive UTC timestamp — the overdue sweep's own
+          -- comparison, grace included, so «still running» means the same here.
+          a."deadline_at"
+            + make_interval(secs => a."extra_time_seconds" + aqz."grace_seconds")
+            > (now() AT TIME ZONE 'UTC')
+          OR a."quiz_id" IN (SELECT e."id" FROM exams e)
+        )
     )`;
 }
 
 /** أسئلة البنك (`question_bank_entries.id`) اللي امتحان لسه مقفول على الطالب ده بيسحب منها. */
-export async function blockedBankEntries(prisma: PrismaService, userId: string): Promise<Set<string>> {
+export async function blockedBankEntries(
+  prisma: PrismaService,
+  userId: string,
+  /** `false` for the game — see `examBlockCtes`. */
+  options: { drafts?: boolean } = {},
+): Promise<Set<string>> {
   const rows = await prisma.$queryRaw<Array<{ be_id: string }>>(Prisma.sql`
-    WITH ${examBlockCtes(userId)}
+    WITH ${examBlockCtes(userId, options)}
     SELECT be_id FROM blocked
   `);
   return new Set(rows.map((row) => row.be_id));
