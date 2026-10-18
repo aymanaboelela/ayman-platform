@@ -4,6 +4,7 @@ import type { ZodType } from 'zod';
 import { ApiRequestError, apiFetch } from './api';
 import { forwardClientIp } from './client-ip';
 import { CSRF_COOKIE, CSRF_HEADER } from './csrf';
+import { UPSTREAM_BUSY_DIGEST } from './upstream-digest';
 
 /**
  * Cookie-forwarding helpers, split out of `./api.ts` on purpose: this module
@@ -35,10 +36,69 @@ export async function apiGetAuthed<T>(path: string, schema: ZodType<T>): Promise
   });
 
   if (!response.ok) {
-    throw new ApiRequestError(response.status, path);
+    // The body rides along, for the page that has to say WHY: a 403 on an
+    // exam carries the refusal's reason (`code`, or the bare `message` of a
+    // `ForbiddenException('needs_month_grant')`), and «الامتحان مش ضمن
+    // اشتراكك» is a different sentence from «اشتراكك خلص». A body that will
+    // not parse is not worth failing over. See `refusalReason`.
+    throw new ApiRequestError(
+      response.status,
+      path,
+      await response.json().catch(() => undefined),
+    );
   }
 
   return schema.parse(await response.json());
+}
+
+/**
+ * The machine-readable reason on an API refusal, from whichever field the
+ * thrower used: `new ForbiddenException({ code: 'quiz_closed' })` arrives as
+ * `code`, `new ForbiddenException('needs_month_grant')` as `message` (the API's
+ * exception filter passes both through). `null` when the body says nothing a
+ * page could branch on.
+ */
+export function refusalReason(payload: unknown): string | null {
+  if (typeof payload !== 'object' || payload === null) return null;
+  const { code, message } = payload as { code?: unknown; message?: unknown };
+  if (typeof code === 'string' && code !== '') return code;
+  if (typeof message === 'string' && /^[a-z_]+$/.test(message)) return message;
+  return null;
+}
+
+/**
+ * The part of an API error body that describes the FAILURE, without the parts
+ * that describe the request.
+ *
+ * The exception filter stamps every error body with a fresh `requestId` and
+ * `timestamp`, and `apiSend` used to put the raw body into its message. When
+ * that message is thrown from a render, Next's digest is a hash of it — so
+ * every occurrence of one failure got its own digest and its own row:
+ * `/admin/errors` showed five separate rows for one student's paper in sixteen
+ * seconds, after the exam window closed. Keeping only `statusCode`, `message`,
+ * `code` and `details` makes one failure one digest, and one row.
+ */
+function stableDetail(payload: unknown, raw: string): string {
+  if (typeof payload !== 'object' || payload === null) return raw.slice(0, 300);
+  const { statusCode, message, code, details } = payload as Record<string, unknown>;
+  return JSON.stringify({ statusCode, message, code, details }).slice(0, 300);
+}
+
+/**
+ * What `apiSend` throws — the same «METHOD path failed with NNN: {…}» message
+ * it always threw, so every caller that string-matches «failed with 404» keeps
+ * working, plus the two things a page needs to answer a refusal properly
+ * instead of pattern-matching text.
+ */
+export class ApiSendError extends Error {
+  readonly status: number;
+  readonly payload: unknown;
+
+  constructor(message: string, status: number, payload: unknown) {
+    super(message);
+    this.status = status;
+    this.payload = payload;
+  }
 }
 
 /**
@@ -147,7 +207,21 @@ export async function apiSend<T>(
     // The API's message is safe to surface — the global exception filter
     // already strips stack traces and connection strings.
     const detail = await response.text();
-    throw new Error(`${method} ${path} failed with ${response.status}: ${detail.slice(0, 300)}`);
+    let payload: unknown;
+    try {
+      payload = JSON.parse(detail);
+    } catch {
+      payload = undefined;
+    }
+    const failed = new ApiSendError(
+      `${method} ${path} failed with ${response.status}: ${stableDetail(payload, detail)}`,
+      response.status,
+      payload,
+    );
+    // Same bit `ApiRequestError` carries for a throttle, so a page whose render
+    // is a write (the exam runner's `resume`) also waits it out by itself.
+    if (response.status === 429) (failed as ApiSendError & { digest?: string }).digest = UPSTREAM_BUSY_DIGEST;
+    throw failed;
   }
 
   return schema.parse(await response.json());

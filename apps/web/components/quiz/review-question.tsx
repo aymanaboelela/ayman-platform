@@ -1,3 +1,4 @@
+import { Lightbulb, MessageSquareText, PenLine } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
 import type { Correctness } from '@ayman/contracts/quiz/attempt';
@@ -296,7 +297,14 @@ export function ReviewQuestion({ question }: ReviewQuestionProps) {
                       <span className="flex flex-wrap items-center gap-1.5 text-[length:var(--fs-text-xs)] font-medium text-ok">
                         <CheckGlyph />
                         <span>{copy.quiz.rightAnswer}</span>
-                        {isChosen ? <span className="text-fg-muted">· {copy.quiz.yourAnswer}</span> : null}
+                        {isChosen ? (
+                          <>
+                            <span aria-hidden="true" className="text-fg-muted">
+                              ·
+                            </span>
+                            <span className="text-fg-muted">{copy.quiz.yourAnswer}</span>
+                          </>
+                        ) : null}
                       </span>
                     ) : isWrongChosen ? (
                       <span className="flex items-center gap-1.5 text-[length:var(--fs-text-xs)] font-medium text-err">
@@ -313,42 +321,72 @@ export function ReviewQuestion({ question }: ReviewQuestionProps) {
           })}
         </ul>
       ) : isOrdering ? null : (
-        <div className="flex flex-col gap-3">
+        /*
+          A question with no options to colour: what the student wrote, and —
+          when this window shows it — what was wanted. Labels are the copy
+          table's own words with nothing appended in the component (they used
+          to grow a hard-coded «:»), and the student's box takes the verdict's
+          hue only when the grader actually gave one.
+        */
+        <div className="review-answers">
           {question.response !== undefined ? (
-            <div className="rounded-lg border border-line bg-surface-2 p-3">
-              <p className="text-[length:var(--fs-text-xs)] font-medium text-fg-muted mb-1">{copy.quiz.yourAnswer}:</p>
-              <p className="whitespace-pre-wrap wrap-anywhere text-fg text-[length:var(--fs-text-sm)]">{text || copy.quiz.notAnswered}</p>
+            <div
+              className={cn(
+                'review-answer',
+                question.correctness === 'correct' && 'review-answer--right',
+                question.correctness === 'incorrect' && 'review-answer--wrong',
+              )}
+            >
+              <p className="review-answer__label">
+                <PenLine className="size-3.5" aria-hidden="true" />
+                {copy.quiz.yourAnswer}
+              </p>
+              <p className="review-answer__text">{text || copy.quiz.notAnswered}</p>
             </div>
           ) : null}
           {/* A short-answer pattern is TEXT, never dangerouslySetInnerHTML —
               it was deliberately never sanitized (patterns can legitimately
               contain `<`/`>`, e.g. `a < b`). */}
           {question.rightAnswerText ? (
-            <div className="rounded-lg border border-[color-mix(in_oklch,var(--ok),transparent_60%)] bg-[color-mix(in_oklch,var(--ok),transparent_94%)] p-3">
-              <p className="text-[length:var(--fs-text-xs)] font-medium text-ok mb-1">{copy.quiz.rightAnswer}:</p>
-              <p className="text-fg text-[length:var(--fs-text-sm)] font-medium">{question.rightAnswerText}</p>
+            <div className="review-answer review-answer--right">
+              <p className="review-answer__label">
+                <CheckGlyph />
+                {copy.quiz.rightAnswer}
+              </p>
+              <p className="review-answer__text">{question.rightAnswerText}</p>
             </div>
           ) : null}
         </div>
       )}
 
+      {/*
+        The two notes a reviewed question can carry, as the same object with a
+        different well: the instructor's word on THIS answer, and the
+        question's own explanation. They were an amber panel with ✍️ and a grey
+        one with 💡 — amber is what a student presses, and an emoji draws
+        differently on every phone.
+      */}
       {question.feedbackHtml ? (
-        <div className="rounded-lg border border-[color-mix(in_oklch,var(--a-9),transparent_60%)] bg-[color-mix(in_oklch,var(--a-9),transparent_94%)] p-3.5">
-          <p className="flex items-center gap-1.5 text-[length:var(--fs-text-xs)] font-semibold text-accent-text mb-1">
-            <span aria-hidden="true">✍️</span>
-            <span>{copy.quiz.questionFeedback}</span>
-          </p>
-          <SafeHtml html={question.feedbackHtml} className="text-[length:var(--fs-text-sm)] text-fg leading-relaxed" />
+        <div className="review-note">
+          <span className="review-note__well" aria-hidden="true">
+            <MessageSquareText className="size-4" />
+          </span>
+          <div className="review-note__body">
+            <p className="review-note__title">{copy.quiz.questionFeedback}</p>
+            <SafeHtml html={question.feedbackHtml} className="review-note__text" />
+          </div>
         </div>
       ) : null}
 
       {question.generalFeedbackHtml ? (
-        <div className="rounded-lg border border-line bg-surface-3/60 p-3.5">
-          <p className="flex items-center gap-1.5 text-[length:var(--fs-text-xs)] font-semibold text-fg-muted mb-1">
-            <span aria-hidden="true">💡</span>
-            <span>{copy.quiz.explanation}</span>
-          </p>
-          <SafeHtml html={question.generalFeedbackHtml} className="text-[length:var(--fs-text-sm)] text-fg leading-relaxed" />
+        <div className="review-note review-note--explain">
+          <span className="review-note__well" aria-hidden="true">
+            <Lightbulb className="size-4" />
+          </span>
+          <div className="review-note__body">
+            <p className="review-note__title">{copy.quiz.explanation}</p>
+            <SafeHtml html={question.generalFeedbackHtml} className="review-note__text" />
+          </div>
         </div>
       ) : null}
     </article>

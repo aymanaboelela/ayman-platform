@@ -501,7 +501,7 @@ export class GameService {
      * question that was never dealt.
      */
     const entry = await this.bankEntryOf(questionId);
-    if (entry !== null && (await blockedBankEntries(this.prisma, userId)).has(entry)) {
+    if (entry !== null && (await blockedBankEntries(this.prisma, userId, { drafts: false })).has(entry)) {
       throw new NotFoundException();
     }
     return session;
@@ -911,13 +911,14 @@ export class GameService {
   private async upcomingExamSources(userId: string): Promise<{ entries: Set<string>; categories: Set<string> }> {
     /*
      * The SAME list the topic challenges and «دفتر غلطاتي» hide
-     * (`blockedBankEntries`), not a second query that can drift from it. This
+     * (`blockedBankEntries`), not a second query that can drift from it —
+     * minus unpublished exams, which the game never hid (`drafts: false`). This
      * one used to unblock an exam after ANY submitted attempt — so the original
      * paper opened the improvement paper's answers here — and it never looked
      * at a sitting still in progress. Categories arrive expanded to their
      * entries, so `categories` stays empty.
      */
-    return { entries: await blockedBankEntries(this.prisma, userId), categories: new Set() };
+    return { entries: await blockedBankEntries(this.prisma, userId, { drafts: false }), categories: new Set() };
   }
 }
 

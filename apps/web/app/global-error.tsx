@@ -66,7 +66,8 @@ export default function GlobalError({
   useErrorReport(error);
 
   return (
-    <html lang="ar" dir="rtl" style={{ colorScheme: 'light dark' }}>
+    // `translate="no"` for the reason the root layout gives on its own <html>.
+    <html lang="ar" dir="rtl" translate="no" style={{ colorScheme: 'light dark' }}>
       <body
         style={{
           margin: 0,

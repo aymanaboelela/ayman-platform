@@ -195,6 +195,21 @@ describe('watchBuild — reloading on its own', () => {
     stop();
   });
 
+  it('does NOT reload a running exam, even one nothing has been typed into yet', async () => {
+    // A student who glanced away from the paper comes back to the paper. The
+    // runner's server render posts `resume`; a reload would cost seconds of a
+    // clock they cannot pause.
+    window.history.replaceState(null, '', '/quizzes/lesson-1/attempt/attempt-1');
+    try {
+      const { reload, stop } = await becomeStale();
+      setVisibility('hidden');
+      expect(reload).not.toHaveBeenCalled();
+      stop();
+    } finally {
+      window.history.replaceState(null, '', '/');
+    }
+  });
+
   it('reloads at most once per server build — a reload onto the old container must not loop', async () => {
     window.sessionStorage.setItem(AUTO_RELOAD_MARK, 'b-new');
     const { reload, stop } = await becomeStale();

@@ -19,7 +19,7 @@ export default function GuardianError({
   reset: () => void;
 }) {
   useErrorReport(error);
-  const { retry, retrying } = useErrorRetry(error, reset);
+  const { retry, retrying, waiting } = useErrorRetry(error, reset);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
@@ -27,9 +27,15 @@ export default function GuardianError({
         <h1 className="text-[length:var(--fs-title-3)] font-medium text-fg">
           {copy.errors.guardian.title}
         </h1>
+        {/* A dropped connection replaces the body — see `(app)/error.tsx`. */}
         <p className="text-[length:var(--fs-text-sm)] leading-relaxed text-fg-muted">
-          {copy.errors.guardian.body}
+          {waiting === 'network' ? copy.errors.reconnecting : copy.errors.guardian.body}
         </p>
+        {waiting === 'soon' ? (
+          <p role="status" className="text-[length:var(--fs-text-sm)] text-fg-muted">
+            {copy.errors.retryingSoon}
+          </p>
+        ) : null}
 
         <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center">
           <button

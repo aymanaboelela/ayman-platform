@@ -43,6 +43,14 @@
  * ⚠️ If this stops matching, the symptom is the OLD behaviour — a retry that
  * needs two presses and a spurious row in the error log. Nothing breaks, which
  * is why it is worth stating: it will not announce itself.
+ *
+ * Its sibling from the deploy WINDOW — «An unexpected response was received
+ * from the server.», an action Traefik or Cloudflare answered while the
+ * containers swapped — is matched in `isStaleActionError` (`lib/stale-tab.ts`)
+ * rather than here, from the shared `@ayman/contracts/error-classify`, so the
+ * API's filter and the browser's can never disagree about the sentence. This
+ * file's exports stay as they shipped; see `zod-exports-only-z.spec.ts` in
+ * contracts for what a new export on an old client module costs.
  */
 export function isStaleDeployError(error: Error): boolean {
   const message = error.message;

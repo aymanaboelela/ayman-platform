@@ -31,11 +31,13 @@ describe('ExternalBooksSection', () => {
 
     expect(screen.getByText('أسئلة الكتب الخارجية')).toBeInTheDocument();
     expect(screen.getByText('بنك أسئلة المنهج - أولى عربي')).toBeInTheDocument();
-    expect(screen.getByText('1218 سؤال')).toBeInTheDocument();
-    expect(screen.getByText('4 وحدات')).toBeInTheDocument();
-    expect(screen.getByText('16 درس')).toBeInTheDocument();
+    // Every count agrees with its number — «4 وحدات», «16 درس», «1218 سؤال».
+    expect(screen.getByText('1218 سؤال جاهز · 4 وحدات · 16 درس')).toBeInTheDocument();
+    expect(screen.getByText('كتاب واحد')).toBeInTheDocument();
 
-    const link = screen.getByRole('link', { name: /تصفح الأسئلة وابدأ الاختبار/i });
+    // One link per book, named after it — a column of «فتح الكتاب» is many
+    // controls with one name.
+    const link = screen.getByRole('link', { name: 'فتح الكتاب: بنك أسئلة المنهج - أولى عربي' });
     expect(link).toHaveAttribute('href', '/library/physics-1/books/book-123');
   });
 });

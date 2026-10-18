@@ -54,8 +54,10 @@ export function safeHref(raw: string): string | null {
   const href = raw.trim();
   if (href.length === 0) return null;
   // `//evil.com` is protocol-relative and leaves the site. It starts with `/`,
-  // so it must be rejected before the internal-path check below.
-  if (href.startsWith('//')) return null;
+  // so it must be rejected before the internal-path check below — and so must
+  // `/\evil.com`, which every browser reads as the same URL: the parser folds
+  // a backslash into `/` for http(s), and `<Link>` hands it over as external.
+  if (href.startsWith('//') || href.startsWith('/\\')) return null;
   if (href.startsWith('/')) return href;
   if (/^https:\/\/[^\s]+$/i.test(href)) return href;
   if (/^mailto:[^\s]+$/i.test(href)) return href;

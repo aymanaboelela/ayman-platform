@@ -139,11 +139,23 @@ export default async function WelcomePage({
      * rather than fetching `/api/profile/me` for the name the wizard just
      * saved. The two can differ only if the student edited their name during
      * onboarding, and both are names they gave us minutes ago.
+     *
+     * ⚠️ `undefined` on a FAILED read, kept apart from `null` (a definitive
+     * 401). This page crashed on `/admin/errors` twice — four times in half a
+     * minute for one student, once more for another — and this is the one
+     * call on it that can throw (`getSession` throws on anything but 200/401:
+     * a 429, an API mid-restart). The first fix swallowed it and redirected to `/login`,
+     * which turned the crash into the worst thing this screen could do: a
+     * student who has JUST finished signing up, holding a valid session, sent
+     * to a password form. The name is decoration — `c.title` reads perfectly
+     * well without it — so a failed read greets them without it, and only a
+     * real 401 (the proxy already checked the session; this is a race) goes
+     * to sign in.
      */
-    getSession().catch(() => null),
+    getSession().catch(() => undefined),
   ]);
 
-  if (!session) redirect('/login?next=/welcome');
+  if (session === null) redirect('/login?next=/welcome');
 
   const destination = safeNext(next) ?? '/dashboard';
 

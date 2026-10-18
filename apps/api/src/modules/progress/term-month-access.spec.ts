@@ -26,11 +26,8 @@ describe('LessonAccessService — a term grant beside a month grant', () => {
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
   }) as unknown as PrismaService;
   const entitlement = new EntitlementService(prisma);
-  const service = new LessonAccessService(
-    prisma,
-    new LessonGateService(prisma, new EntitlementService(prisma)),
-    entitlement,
-  );
+  const gate = new LessonGateService(prisma, new EntitlementService(prisma));
+  const service = new LessonAccessService(prisma, gate, entitlement);
 
   const stamp = `${Date.now().toString(36)}-tm`;
   let instructorId = '';
@@ -47,6 +44,7 @@ describe('LessonAccessService — a term grant beside a month grant', () => {
   let termTwoUntagged = '';
   /** «الترم الثاني», tagged with month one — bought. */
   let termTwoMonthOneLesson = '';
+  let enrollmentId = '';
 
   beforeAll(async () => {
     await prisma.$connect();
@@ -109,9 +107,11 @@ describe('LessonAccessService — a term grant beside a month grant', () => {
     termTwoUntagged = await lesson(sectionTwo.id, 2, null);
     termTwoMonthOneLesson = await lesson(sectionTwo.id, 3, monthOneId);
 
-    await prisma.enrollment.create({
-      data: { userId: studentId, courseId, source: 'purchase', status: 'active' },
-    });
+    enrollmentId = (
+      await prisma.enrollment.create({
+        data: { userId: studentId, courseId, source: 'purchase', status: 'active' },
+      })
+    ).id;
   });
 
   afterEach(async () => {
@@ -167,6 +167,19 @@ describe('LessonAccessService — a term grant beside a month grant', () => {
     await expect(service.requireEntitled(studentId, termTwoMonthOneLesson)).resolves.toMatchObject({
       lessonId: termTwoMonthOneLesson,
     });
+  });
+
+  // The outline is drawn from the same per-term slice the click is decided
+  // with, so a lecture is never drawn open and then refused.
+  it('draws the outline exactly as the door decides it', async () => {
+    await termOneThenMonthOne();
+
+    const states = await gate.resolveCourse(enrollmentId, courseId, studentId);
+
+    expect(states.get(termTwoMonthTwoLesson)).toBe('locked');
+    expect(states.get(termTwoUntagged)).toBe('locked');
+    expect(states.get(termOneLesson)).not.toBe('locked');
+    expect(states.get(termTwoMonthOneLesson)).not.toBe('locked');
   });
 
   it('a term grant alone still opens its own term and nothing of the other', async () => {
