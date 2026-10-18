@@ -12,7 +12,7 @@ import {
 } from '@ayman/contracts';
 import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
 import { ApiRequestError } from '@/lib/api';
-import { apiGetAuthed } from '@/lib/api-server';
+import { apiGetAuthed, refusalReason } from '@/lib/api-server';
 import { attemptHref, reviewHref } from '@/lib/quiz-links';
 import { tenantSentence } from '@/lib/tenant-copy';
 import { StatTile } from '@/components/dashboard/stat-tile';
@@ -113,8 +113,24 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
       if (error.status === 401) {
         redirect(`/login?next=${encodeURIComponent(`/quizzes/${lessonId}`)}`);
       }
-      if (error.status === 403 || error.status === 404) {
+      // «Not yours, not published, or still behind the progression gate» —
+      // the API answers all three the same on purpose (no enumeration
+      // oracle), and a not-found page is the honest rendering of that.
+      if (error.status === 404) {
         notFound();
+      }
+      /*
+       * A 403 is NOT that, and it used to get the same not-found page. It
+       * means the student belongs to this course and their subscription does
+       * not cover this exam right now — lapsed, or another month or term.
+       * Telling them the exam does not exist, while it sits on their
+       * dashboard, is the wrong answer; say why, and where to go. Every other
+       * status still throws, and the boundary retries the transient ones by
+       * itself (`lib/auto-retry.ts`) — a 429 included, which is what a
+       * student reloading this page waiting for the paper to open runs into.
+       */
+      if (error.status === 403) {
+        return <QuizRefused reason={refusalReason(error.payload)} />;
       }
     }
     throw error;
@@ -283,6 +299,38 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
           </ul>
         </section>
       ) : null}
+    </main>
+  );
+}
+
+/**
+ * The reasons `LessonAccessService.requireEntitled` gives for a subscription
+ * that ran out, as opposed to one that is live and simply does not reach this
+ * exam — the API's own `LAPSED_GRANT_REASONS`, spelled the same.
+ */
+const LAPSED_REASONS = new Set(['expired', 'revoked', 'not_yet_valid']);
+
+/**
+ * The exam page for a student the API refused (403): the band the page
+ * normally opens with, saying the exam is not available and why, and the way
+ * back to their courses — where the renewal and the month offers live.
+ */
+function QuizRefused({ reason }: { reason: string | null }) {
+  return (
+    <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
+      <header className="stage mb-6">
+        <div className="stage__body">
+          <h1 className="stage__title">{c.blockedTitle}</h1>
+          <p className="stage__sub">
+            {reason !== null && LAPSED_REASONS.has(reason) ? c.lockedLapsed : c.lockedNotIncluded}
+          </p>
+          <div className="exam-stage__action">
+            <Link href="/library" className="chip chip--solid">
+              {copy.library.title}
+            </Link>
+          </div>
+        </div>
+      </header>
     </main>
   );
 }

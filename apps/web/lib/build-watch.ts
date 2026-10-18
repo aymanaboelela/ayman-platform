@@ -1,3 +1,5 @@
+import { isExamRunnerPath } from './stale-navigation';
+
 /**
  * Noticing that a deploy has landed BEFORE the tab tries to save into it.
  *
@@ -58,7 +60,26 @@
  *   · no `<video>`, `<audio>` or `<iframe>` in the document — a lecture
  *     playing in a background tab is the most common thing a student leaves
  *     running, and a YouTube player is an iframe nothing here can ask whether
- *     it is playing.
+ *     it is playing;
+ *   · not the exam runner, whether or not anything was typed yet — see
+ *     `isExamRunnerPath` in `lib/stale-navigation.ts`.
+ *
+ * The tab that is never hidden is `lib/stale-navigation.ts`'s: once stale, its
+ * next navigation is a document load, which needs no guess about unsaved work
+ * because the student is the one leaving the page.
+ *
+ * ## Why there is no `Clear-Site-Data` anywhere
+ *
+ * It is the header that sounds like «امسح الكاش للكل», and none of its values
+ * fixes anything here. A stale tab is stale in MEMORY — the JS it is running —
+ * and no header reaches into a page that is already open. On disk there is
+ * nothing stale to clear: every `/_next/static/` URL is content-hashed (a
+ * changed file is a changed URL), HTML is `no-store` all the way through
+ * Cloudflare, and `public/sw.js` drops the previous build's cache in
+ * `activate`. `"cache"` would only make every returning student re-download
+ * unchanged assets on mobile data; `"storage"` would also wipe the service
+ * worker and every saved preference; `"cookies"` — or `"*"` — signs everyone
+ * out, which on this product means students who do not know their password.
  *
  * And ONCE per server build per tab, recorded in `sessionStorage` before the
  * reload — the same bound `use-error-retry.ts` puts on its automatic reloads,
@@ -155,7 +176,14 @@ export function watchBuild({
   }
 
   function hasUnsavedWork(): boolean {
-    return interacted || document.querySelector('video, audio, iframe') !== null;
+    return (
+      interacted ||
+      // A running exam, typed into or not: a student who glanced away from
+      // the paper must come back to the paper, not to a reload that re-posts
+      // `resume` while their clock keeps going. See `isExamRunnerPath`.
+      isExamRunnerPath(window.location.pathname) ||
+      document.querySelector('video, audio, iframe') !== null
+    );
   }
 
   function reloadIfSafe(): void {

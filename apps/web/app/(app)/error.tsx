@@ -36,7 +36,7 @@ export default function AppError({
   reset: () => void;
 }) {
   useErrorReport(error);
-  const { retry, retrying } = useErrorRetry(error, reset);
+  const { retry, retrying, waiting } = useErrorRetry(error, reset);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
@@ -44,9 +44,20 @@ export default function AppError({
         <h1 className="text-[length:var(--fs-title-3)] font-medium text-fg">
           {copy.errors.app.title}
         </h1>
+        {/*
+          A dropped connection REPLACES the body rather than sitting under it:
+          «المشكلة عندنا إحنا مش عندك» is not true of the student's own mobile
+          data, and the sentence that is true says the page will come back by
+          itself. See `lib/auto-retry.ts` for when either line shows.
+        */}
         <p className="text-[length:var(--fs-text-sm)] leading-relaxed text-fg-muted">
-          {copy.errors.app.body}
+          {waiting === 'network' ? copy.errors.reconnecting : copy.errors.app.body}
         </p>
+        {waiting === 'soon' ? (
+          <p role="status" className="text-[length:var(--fs-text-sm)] text-fg-muted">
+            {copy.errors.retryingSoon}
+          </p>
+        ) : null}
 
         {/*
           Column below `sm`, row above. Two 44px targets side by side do not

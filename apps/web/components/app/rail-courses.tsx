@@ -36,9 +36,16 @@ import { getDashboard } from '@/lib/dashboard';
  * before this ever renders. The header is read down there rather than in the
  * layout because an `await` in the layout is exactly what this whole comment
  * exists to prevent; `chrome-unless-attempt.tsx` has the rest of it.
+ *
+ * ⚠️ A read that FAILS draws nothing rather than throwing. This is a layout
+ * slot, so a throw here skips `(app)/error.tsx` and replaces whatever page the
+ * student was opening with the root error screen — over a list in a rail. Not
+ * the empty-state sentence either: «لسه مفيش كورسات» would be false. The page's
+ * own reads still fail loudly where they belong.
  */
 export async function RailCourses() {
-  const dashboard = await getDashboard();
+  const dashboard = await getDashboard().catch(() => null);
+  if (!dashboard) return null;
 
   if (dashboard.enrolledCourses.length === 0) {
     return (

@@ -1172,6 +1172,23 @@ export const copy = {
     digestLabel: 'كود العطل',
 
     /**
+     * The line an error screen adds while it is going to try again BY ITSELF
+     * (`apps/web/lib/auto-retry.ts`), on every surface.
+     *
+     * `reconnecting` is the student's own connection dropping mid-page — the
+     * commonest thing these screens were ever shown for. It names the cause in
+     * the reader's terms and says the one thing worth knowing: nothing has to
+     * be pressed. `retryingSoon` is a server failure the screen will
+     * re-request in a few seconds; it promises the attempt, not the outcome.
+     *
+     * Both in the first person plural or about the page, like the rest of this
+     * block — neither addresses the reader, so neither has a gender to get
+     * wrong.
+     */
+    reconnecting: 'الاتصال اتقطع. أول ما النت يرجع، الصفحة هتفتح لوحدها.',
+    retryingSoon: 'بنجرّب نفتحها تاني لوحدنا كمان ثواني.',
+
+    /**
      * The signed-in student, and the one of these that matters most: whoever
      * is reading it was in the middle of a lesson, a revision or a graded
      * attempt.
@@ -6172,6 +6189,29 @@ export const copy = {
     closed: 'الامتحان قفل',
     notOpenYet: 'الامتحان لسه مفتحش',
     notEnrolled: 'الامتحان للمشتركين في الكورس بس',
+    /**
+     * What the exam pages say when the API REFUSES the student (a 403) —
+     * instead of the not-found page they used to show for it, which read as
+     * «the exam is gone» to a student who could see it on their dashboard.
+     *
+     * `lockedLapsed` is a subscription that ran out (`expired`, `revoked`,
+     * `not_yet_valid`); `lockedNotIncluded` is one that is live but does not
+     * cover this exam (another month, another term, codes only). Both name the
+     * reason and the way back, about the SUBSCRIPTION — never «إنت مش مشترك»,
+     * which would address the reader.
+     */
+    lockedLapsed: 'اشتراكك في الكورس خلص، والامتحان بيفتح تاني أول ما الاشتراك يتجدّد.',
+    lockedNotIncluded: 'الامتحان ده مش ضمن اشتراكك الحالي في الكورس.',
+    /**
+     * The runner's page after the window shut (`quiz_closed` from `resume`) —
+     * the 17:00 wave on `/admin/errors`, students reopening their paper the
+     * minute it closed. True for every overdue policy: whatever the sweep then
+     * does with the attempt, the answers that were autosaved are on the
+     * server, and the exam page is where its outcome shows.
+     */
+    closedSavedBody: 'الإجابات اللي اتحفظت متسجّلة عندنا، ونتيجتها هتظهر في صفحة الامتحان.',
+    /** The link from either state back to the exam's own page. */
+    toQuizPage: 'صفحة الامتحان',
     previousAttempts: 'محاولاتك السابقة',
     bestScore: 'أعلى درجة',
     essayPending: 'إجابتك المقالية لسه عند مهندس أيمن للتصحيح',

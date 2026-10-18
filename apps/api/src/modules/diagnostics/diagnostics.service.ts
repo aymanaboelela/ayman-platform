@@ -6,6 +6,13 @@ import type {
   ErrorReportList,
   ErrorReportRow,
 } from '@ayman/contracts/diagnostics';
+import {
+  CONNECTIVITY_ERROR_MESSAGES,
+  UNEXPECTED_SERVER_RESPONSE_MESSAGE,
+  isConnectivityErrorMessage,
+  isOmittedServerErrorMessage,
+  isUnexpectedServerResponseMessage,
+} from '@ayman/contracts/error-classify';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
@@ -93,6 +100,12 @@ export class DiagnosticsService implements OnModuleInit {
           { message: { contains: 'Failed to fetch' } },
           { message: { contains: 'Load failed' } },
           { stack: { contains: 'at module evaluation' } },
+          // The rest of the connectivity sentences, matched EXACTLY — see
+          // `@ayman/contracts/error-classify` for why a substring would also
+          // close somebody's real message — and a Server Action answered by
+          // the edge rather than by the app (the deploy window).
+          { message: { in: [...CONNECTIVITY_ERROR_MESSAGES] } },
+          { message: UNEXPECTED_SERVER_RESPONSE_MESSAGE },
         ],
       },
       data: {
@@ -123,21 +136,40 @@ export class DiagnosticsService implements OnModuleInit {
   ): Promise<void> {
     const message = input.message || '';
 
-    // Guard: ignore stale deployment artifacts (stale chunks, missing actions)
-    // and transient client-side network disconnects.
+    // Guard: ignore stale deployment artifacts (stale chunks, missing actions,
+    // an action answered by the edge mid-deploy) and the student's own
+    // connection dropping. The browser stops filing these itself, but a tab
+    // from an older build still posts them, and this is the check it meets.
     if (
       message.includes('Failed to load chunk') ||
       message.includes('could not find the module with ID') ||
       message.includes('at module evaluation') ||
       (message.includes('Server Action') && message.includes('was not found')) ||
-      message === 'Failed to fetch' ||
-      message === 'Load failed'
+      isUnexpectedServerResponseMessage(message) ||
+      isConnectivityErrorMessage(message)
     ) {
       return;
     }
 
     const fingerprint = fingerprintOf(input);
     const now = new Date();
+
+    /*
+     * ⚠️ A report that only knows Next's production sentence must not
+     * overwrite one that knows the real message.
+     *
+     * The server files a Server Component failure itself now
+     * (`apps/web/instrumentation.ts`) with the message and stack Next keeps on
+     * the server, under the same fingerprint the browser used. The browser's
+     * copy of that failure — still sent by any tab older than this change —
+     * carries only «…The specific message is omitted in production builds…»
+     * and a stack that points at nothing. "Most recent wins" below would let
+     * that copy erase the one line on the row that says what broke.
+     *
+     * So the generic sentence never replaces anything; any real one does,
+     * which also upgrades a row an older browser created first.
+     */
+    const omitted = isOmittedServerErrorMessage(input.message);
 
     await this.prisma.errorReport.upsert({
       where: { fingerprint },
@@ -159,8 +191,10 @@ export class DiagnosticsService implements OnModuleInit {
         resolvedAt: null,
         // The MOST RECENT stack and agent win. An older one is not more
         // truthful, and the newest is the one that matches whatever the
-        // instructor is about to go and look at.
-        stack: input.stack ?? undefined,
+        // instructor is about to go and look at — except from a report that
+        // knows nothing (see `omitted` above).
+        message: omitted ? undefined : input.message,
+        stack: omitted ? undefined : (input.stack ?? undefined),
         userAgent: context.userAgent ?? undefined,
       },
     });

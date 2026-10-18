@@ -45,6 +45,25 @@ export type GsapContext = {
  * `useLayoutEffect` rather than `useEffect`: `from()` writes the start state
  * synchronously, and running after paint shows one frame of un-animated content.
  * This hook is client-only, so there is no SSR warning to suppress.
+ *
+ * ## ⚠️ An animation that throws must not take the page with it
+ *
+ * `from()` renders its first frame synchronously, inside this layout effect, so
+ * anything GSAP's CSS parsing trips over — a computed value a browser returns
+ * as null, an element an extension has rewritten — throws straight out of the
+ * effect and into the route's `error.tsx`. The landing page recorded exactly
+ * that: «Cannot read properties of null (reading 'replace')» on `/`, three
+ * times, from Windows Chrome, with the whole page replaced by an error screen
+ * over a decoration. `components/site/vendor/splash-cursor.tsx` draws the same
+ * line for WebGL: the effect is ornament; the page behind it is the product.
+ *
+ * So `setup` runs inside a `try` INSIDE the context — not around
+ * `gsap.context()`, which would leave GSAP's global "current context" pointing
+ * at this one after the throw and file every later tween on the page into it —
+ * and a failure reverts whatever the setup had already started. Reverting is
+ * what makes this safe rather than merely quiet: every entrance here is a
+ * `from()`, so the resting state is the finished state, and the content is
+ * fully visible with no animation at all (the reduced-motion contract above).
  */
 export function useGsap(
   setup: (ctx: GsapContext) => void,
@@ -56,7 +75,23 @@ export function useGsap(
     if (!element) return;
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const ctx = gsap.context(() => setup({ scope: element, reduced }), element);
+    let failed = false;
+    let cause: unknown;
+    const ctx = gsap.context(() => {
+      try {
+        setup({ scope: element, reduced });
+      } catch (error) {
+        failed = true;
+        cause = error;
+      }
+    }, element);
+
+    if (failed) {
+      // For whoever has devtools open; not a fault to file — the page is fine.
+      console.warn('[use-gsap] an animation failed to start and was skipped', cause);
+      ctx.revert();
+      return;
+    }
 
     return () => ctx.revert();
     // `setup` is deliberately not a dependency. Callers pass an inline

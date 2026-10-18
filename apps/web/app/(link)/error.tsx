@@ -29,12 +29,20 @@ export default function LinkError({
   reset: () => void;
 }) {
   useErrorReport(error);
-  const { retry, retrying } = useErrorRetry(error, reset);
+  const { retry, retrying, waiting } = useErrorRetry(error, reset);
 
   return (
     <main className="linkhub__page linkhub__page--error">
       <h1 className="linkhub__error-title">{copy.errors.site.title}</h1>
-      <p className="linkhub__error-body">{copy.errors.site.body}</p>
+      {/* A dropped connection replaces the body — see `(app)/error.tsx`. */}
+      <p className="linkhub__error-body">
+        {waiting === 'network' ? copy.errors.reconnecting : copy.errors.site.body}
+      </p>
+      {waiting === 'soon' ? (
+        <p role="status" className="linkhub__error-body">
+          {copy.errors.retryingSoon}
+        </p>
+      ) : null}
 
       <div className="linkhub__error-actions">
         {/* `retry`, never the raw `reset` — see `lib/use-error-retry.ts`: on the

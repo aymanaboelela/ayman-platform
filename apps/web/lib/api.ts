@@ -1,5 +1,6 @@
 import type { ZodType } from 'zod';
 import { CSRF_HEADER, readCsrfToken } from './csrf';
+import { UPSTREAM_BUSY_DIGEST } from './upstream-digest';
 
 /**
  * Lets a request outlive the page. Required for the final heartbeat on
@@ -66,6 +67,11 @@ export class ApiRequestError extends Error {
     super(`${path} failed with ${status}`);
     this.status = status;
     this.payload = payload;
+    // A throttle refusal is over in seconds, and the error boundary can only
+    // wait it out if it can tell it from a fault — see `UPSTREAM_BUSY_DIGEST`.
+    // Inert in the browser, where nothing reads a digest off an error that
+    // never crossed from the server.
+    if (status === 429) this.digest = UPSTREAM_BUSY_DIGEST;
   }
 }
 
@@ -163,6 +169,26 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
       // constant for why this is safe to do and why it is done nowhere else.
       timeout.digest = UPSTREAM_TIMEOUT_DIGEST;
       throw timeout;
+    }
+    /*
+     * The API refused the connection outright — undici's «fetch failed», with
+     * ECONNREFUSED / ECONNRESET underneath. Every server render meets that for
+     * the seconds a deploy restarts the API container, and it is the condition
+     * the branch above describes from the other side: the API did not answer.
+     * So it carries the same digest, which buys two things — the boundary
+     * retries by itself instead of stranding the student (`use-error-retry.ts`),
+     * and `/admin/errors` files it as «السيرفر اتأخر ومردّش», one row per page,
+     * instead of one opaque row per call site.
+     *
+     * Server-side only. In the browser the same `TypeError` is the student's own
+     * connection, and `lib/connectivity-error.ts` owns that case. And undici's
+     * exact sentence only: a malformed URL is ALSO a `TypeError` («Failed to
+     * parse URL from …»), and that one is a bug that must keep its own message.
+     */
+    if (typeof window === 'undefined' && cause instanceof TypeError && cause.message === 'fetch failed') {
+      const unreachable = new ApiRequestError(503, path);
+      unreachable.digest = UPSTREAM_TIMEOUT_DIGEST;
+      throw unreachable;
     }
     throw cause;
   }

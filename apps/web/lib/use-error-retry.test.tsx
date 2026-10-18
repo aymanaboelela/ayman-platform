@@ -337,4 +337,127 @@ describe('useErrorRetry', () => {
     expect(calls).toEqual(['refresh', 'reset']);
     expect(reload).not.toHaveBeenCalled();
   });
+
+  /*
+   * The deploy-window answer to a Server Action — «An unexpected response was
+   * received from the server.» from `/admin/grading/<id>`. The tab is behind
+   * (or about to be), so the first press is the reload, exactly like Next's
+   * «was not found» sentence, and the tab says so to the toast.
+   */
+  it('reloads on the first press when the edge answered a Server Action', async () => {
+    const { isTabStale } = await import('./stale-tab');
+    render(<Harness message="An unexpected response was received from the server." />);
+    press();
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual([]);
+    expect(isTabStale()).toBe(true);
+  });
+});
+
+/*
+ * The press nobody has to make: `lib/auto-retry.ts` brings the page back by
+ * itself for the failures that are over in seconds. These pin the hook's half
+ * — it runs the SAME refresh-then-reset as a press, it tells the screen it is
+ * waiting, and it never spends the student's own first press.
+ */
+describe('useErrorRetry — automatic recovery', () => {
+  let random: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    (await import('./auto-retry')).resetAutoRetryMemory();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 200 })));
+    // The middle of the jitter: every delay is exactly its nominal length.
+    random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    random.mockRestore();
+  });
+
+  /** A boundary keeps ONE error object per failure; so does this harness. */
+  function Boundary({ error }: { error: Error & { digest?: string } }) {
+    const { retry, retrying, waiting } = useErrorRetry(error, () => calls.push('reset'));
+    return (
+      <>
+        <p>{waiting ?? 'idle'}</p>
+        <button type="button" onClick={retry} disabled={retrying}>
+          retry
+        </button>
+      </>
+    );
+  }
+
+  it('re-renders by itself once a dropped connection is back, and says so meanwhile', async () => {
+    const drop = new TypeError('network error');
+    render(<Boundary error={drop} />);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText('network')).toBeInTheDocument();
+    expect(calls).toEqual([]);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(calls).toEqual(['refresh', 'reset']);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('leaves the student their own first press', async () => {
+    // The automatic attempt failed; the student presses. That press must be
+    // a refresh like any first press, not the second-press document load.
+    const drop = new TypeError('network error');
+    render(<Boundary error={drop} />);
+    // Lets React's scheduler run the effect that arms the timer, first.
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(calls).toEqual(['refresh', 'reset']);
+    // The automatic attempt's transition settles (the button is disabled
+    // while it is in flight, exactly as for a press).
+    await vi.advanceTimersByTimeAsync(0);
+
+    calls = [];
+    press();
+    expect(calls).toEqual(['refresh', 'reset']);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('gives a server failure one quiet retry a few seconds later', async () => {
+    const fault = Object.assign(new Error('omitted in production'), { digest: '4046540982' });
+    render(<Boundary error={fault} />);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText('soon')).toBeInTheDocument();
+    await vi.advanceTimersByTimeAsync(4_000);
+
+    expect(calls).toEqual(['refresh', 'reset']);
+  });
+
+  it('does nothing by itself for a client-side bug', async () => {
+    render(<Boundary error={new TypeError("Cannot read properties of null (reading 'replace')")} />);
+    await vi.advanceTimersByTimeAsync(120_000);
+
+    expect(screen.getByText('idle')).toBeInTheDocument();
+    expect(calls).toEqual([]);
+  });
+
+  it('never re-renders the exam runner by itself, and the button still does', async () => {
+    // A refresh there posts `resume` and takes the attempt token, so a second
+    // tab on an error screen would steal the paper the student is answering.
+    vi.stubGlobal('location', {
+      ...window.location,
+      pathname: '/quizzes/0b1a/attempt/9f3c',
+      reload,
+    });
+    const throttled = Object.assign(new Error('omitted in production'), { digest: 'UPSTREAM_BUSY' });
+    render(<Boundary error={throttled} />);
+
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(screen.getByText('idle')).toBeInTheDocument();
+    expect(calls).toEqual([]);
+
+    press();
+    expect(calls).toEqual(['refresh', 'reset']);
+    expect(reload).not.toHaveBeenCalled();
+  });
 });

@@ -479,13 +479,51 @@ export function decideRedirect(pathname: string, auth: AuthState): RedirectDecis
  * exactly the authentication question this function asks, not an
  * authorization one.
  *
- * S12 (fail closed): a network error, a non-OK/non-401 status, or a slow
- * API (3s timeout) are ALL treated as "not authenticated" — never as "let
- * them through". An outage in the API must not become an outage in route
- * protection.
+ * ## «Could not tell» is not «signed out» — `null`
+ *
+ * S12 used to read every failure here — a network error, a 429, a 5xx, the
+ * 3s timeout — as "not authenticated", and send the request to `/login`. For
+ * a visitor with no session cookie that is still exactly what happens: they
+ * were never signed in. For a visitor who CARRIES one it was the wrong answer,
+ * and an expensive one. The API restarts on every deploy and throttles a
+ * student who reloads an exam page waiting for it to open; for those seconds
+ * every signed-in student who clicked anything met the login form, with a
+ * perfectly valid session still in the browser. Many of them do not know their
+ * password — they signed up once, on a phone, months ago — so «the site logged
+ * me out» became a support message and a reset flow, for a session that was
+ * never in question.
+ *
+ * So the answer is three-valued. A definitive 401/403 is "signed out" and
+ * redirects as before; anything inconclusive WITH a session cookie is `null`,
+ * and the request goes through untouched. That is not route protection
+ * failing open, because this was never the protection: every byte a protected
+ * page shows is read from the API with the same cookie, and the API's
+ * deny-by-default guard answers those reads for itself — a forged cookie gets
+ * a shell of chrome with nothing in it, and the error boundary, not a login
+ * form. What the redirect is FOR is UX, and the UX of «we could not check» is
+ * to not pretend we did.
+ *
+ * ## ⚠️ Except under `/admin`, which stays fail-closed
+ *
+ * "Every byte is read from the API with the same cookie" is true of the
+ * student's pages and not of every admin one. `/admin/platforms` reads Dokploy
+ * and Cloudflare with the SERVER's own keys, and on an RSC request Next skips
+ * the `(admin)` layout and its role check, so this redirect is the only gate
+ * that page has. With the student rule, any made-up cookie would get through
+ * while `/api/session` is throttled or slow, and that route's throttle is keyed
+ * on the cookie value, so a visitor can cause the 429 themselves. So under
+ * `/admin` «could not tell» is still «signed out», as it always was. The cost
+ * is a few staff meeting the sign-in page during a restart. Their cookie is
+ * untouched, and `/login` sends them straight back once the API answers. The
+ * page getting its own gate is a separate fix, and does not make this one
+ * optional.
  */
-async function resolveAuthState(request: NextRequest): Promise<AuthState> {
+const SIGNED_OUT: AuthState = { authenticated: false, onboardingCompleted: false };
+
+async function resolveAuthState(request: NextRequest): Promise<AuthState | null> {
   const cookie = request.headers.get('cookie');
+  const inconclusive =
+    hasSessionCookie(request) && !isAdminRoute(request.nextUrl.pathname) ? null : SIGNED_OUT;
   try {
     const response = await fetch(`${API_ORIGIN}/api/session`, {
       // The visitor's IP, or every student shares one throttle bucket — see
@@ -495,14 +533,13 @@ async function resolveAuthState(request: NextRequest): Promise<AuthState> {
       signal: AbortSignal.timeout(3000),
     });
 
-    if (!response.ok) {
-      return { authenticated: false, onboardingCompleted: false };
-    }
+    if (response.status === 401 || response.status === 403) return SIGNED_OUT;
+    if (!response.ok) return inconclusive;
 
     const body = (await response.json()) as { onboardingCompleted?: unknown };
     return { authenticated: true, onboardingCompleted: body.onboardingCompleted === true };
   } catch {
-    return { authenticated: false, onboardingCompleted: false };
+    return inconclusive;
   }
 }
 
@@ -536,6 +573,9 @@ async function resolveRedirect(request: NextRequest): Promise<URL | null> {
   if (!isProtectedRoute(pathname) && !isAuthRoute(pathname)) return null;
 
   const auth = await resolveAuthState(request);
+  // The API could not say, and this visitor carries a session: let the page
+  // answer for itself rather than invent a sign-out. See `resolveAuthState`.
+  if (auth === null) return null;
   const decision = decideRedirect(pathname, auth);
 
   switch (decision) {

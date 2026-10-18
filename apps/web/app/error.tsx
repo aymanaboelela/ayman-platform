@@ -67,7 +67,7 @@ export default function RootError({
   reset: () => void;
 }) {
   useErrorReport(error);
-  const { retry, retrying } = useErrorRetry(error, reset);
+  const { retry, retrying, waiting } = useErrorRetry(error, reset);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
@@ -75,9 +75,15 @@ export default function RootError({
         <h1 className="text-[length:var(--fs-title-3)] font-medium text-fg">
           {copy.errors.root.title}
         </h1>
+        {/* A dropped connection replaces the body — see `(app)/error.tsx`. */}
         <p className="text-[length:var(--fs-text-sm)] leading-relaxed text-fg-muted">
-          {copy.errors.root.body}
+          {waiting === 'network' ? copy.errors.reconnecting : copy.errors.root.body}
         </p>
+        {waiting === 'soon' ? (
+          <p role="status" className="text-[length:var(--fs-text-sm)] text-fg-muted">
+            {copy.errors.retryingSoon}
+          </p>
+        ) : null}
 
         {/* Column below `sm`: two 44px targets side by side do not fit a 320px
             viewport without a label wrapping mid-word. */}

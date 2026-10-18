@@ -75,4 +75,28 @@ describe('isStaleActionError', () => {
     expect(isStaleActionError({ name: 'UnrecognizedActionError', message: NEXT_SENTENCE })).toBe(false);
     expect(isStaleActionError(null)).toBe(false);
   });
+
+  /*
+   * The third shape, from `/admin/grading/<id>` and `/admin/homework/<id>`:
+   * Next's client throws this when a Server Action is answered by something
+   * that is not an RSC payload. Its own server never answers that way, so it
+   * is Traefik or Cloudflare speaking for an app that was mid-deploy — and
+   * the cure is the same reload, with the same Arabic in place of Next's
+   * English.
+   */
+  const EDGE_ANSWERED = 'An unexpected response was received from the server.';
+
+  it('treats an action the edge answered as a stale tab', () => {
+    expect(isStaleActionError(new Error(EDGE_ANSWERED))).toBe(true);
+    expect(actionErrorMessage(new Error(EDGE_ANSWERED), 'unknown')).toBe(
+      copy.common.staleBuildAction,
+    );
+  });
+
+  it('matches that sentence exactly, never a message that merely contains it', () => {
+    // A real error that quotes the phrase is somebody's fault, not a deploy.
+    expect(
+      isStaleActionError(new Error(`Upload rejected: ${EDGE_ANSWERED} (bucket said 403)`)),
+    ).toBe(false);
+  });
 });
