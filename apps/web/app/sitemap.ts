@@ -3,6 +3,7 @@ import { connection } from 'next/server';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getEntitlements } from '@/lib/entitlements';
 import { getNewsListOrEmpty } from '@/lib/news';
+import { allPracticeLessons, practicePath } from '@/lib/practice/catalog';
 import { SITE_URL } from '@/lib/seo/jsonld';
 import { IS_AYMAN } from '@/lib/tenant';
 import { sitemapLoc } from '@/lib/seo/sitemap-url';
@@ -119,6 +120,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             changeFrequency: 'monthly' as const,
             priority: 0.6,
           },
+        ]
+      : []),
+    // «اختبارات مجانية»: the index and one URL per lesson — each is the page a
+    // «اختبار على درس …» search should land on. Ayman only, like `/essentials`
+    // above and for the same reason (`lib/practice/catalog.ts`).
+    ...(IS_AYMAN
+      ? [
+          { url: `${SITE_URL}/practice`, lastModified: EDITORIAL_LAST_MODIFIED, changeFrequency: 'monthly' as const, priority: 0.7 },
+          ...allPracticeLessons().map((l) => ({
+            url: `${SITE_URL}${practicePath(l.year, l.code)}`,
+            lastModified: EDITORIAL_LAST_MODIFIED,
+            changeFrequency: 'monthly' as const,
+            priority: 0.6,
+          })),
         ]
       : []),
     // «إزاي أشترك؟» — the answer to a high-intent question that had no public

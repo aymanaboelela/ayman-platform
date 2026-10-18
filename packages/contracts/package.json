@@ -16,6 +16,7 @@
     "./copy/outreach": "./src/copy/outreach.ts",
     "./copy/tenant-sentence": "./src/copy/tenant-sentence.ts",
     "./copy/subject": "./src/copy/subject.ts",
+    "./copy/practice": "./src/copy/practice.ts",
     "./copy/quiz-experience": "./src/copy/quiz-experience.ts",
     "./copy/admin-grading": "./src/copy/admin-grading.ts",
     "./copy/admin-account": "./src/copy/admin-account.ts",

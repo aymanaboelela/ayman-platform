@@ -6,6 +6,7 @@ import type { SocialKey } from '@/components/site/social-icons';
 import { TENANT_CONTACT_FALLBACK } from '@/lib/tenant-contact';
 import { IS_AYMAN } from '@/lib/tenant';
 import { tenantName } from '@/lib/tenant';
+import { practiceCopy } from '@ayman/contracts/copy/practice';
 
 const c = copy.landing;
 
@@ -129,6 +130,10 @@ export const PAGE_LINKS = [
   // one section whose entire job is search. The anchor text is the phrase
   // people type, not the section's name — see `copy.news.footerLink`.
   { href: '/news', label: copy.news.footerLink },
+  // «اختبارات مجانية» — the no-account self-test on every lesson. Linked from
+  // every page for the reason the rows above give, and gated with them below:
+  // the sets are his curriculum (`lib/practice/catalog.ts`).
+  { href: '/practice', label: practiceCopy.footerLink },
 ] as const;
 
 export const YEAR_LINKS = [
@@ -178,7 +183,7 @@ export const ACCOUNT_LINKS = [
  * وسبب وجود الفلتر أصلًا لسه قايم: الفوتر ده على كل صفحة تسويق، فلينك ميت
  * فيه مش لينك ميت واحد — ده لينك ميت في فوتر كل صفحة.
  */
-const AYMAN_ONLY_PAGES: readonly string[] = ['/essentials', '/links'];
+const AYMAN_ONLY_PAGES: readonly string[] = ['/essentials', '/links', '/practice'];
 
 export function footerPageLinks(features: Entitlements): readonly FooterLink[] {
   return PAGE_LINKS.filter((link) => {
