@@ -27,7 +27,7 @@ export type GradeAnswerResult =
   | { ok: false };
 
 /**
- * «احفظ الدرجة» — one answer, marked by a human.
+ * «حفظ الدرجة» — one answer, marked by a human.
  *
  * ⚠️ `adminSend`, not `adminSendVoid`: this route DOES answer with a body, and
  * the body is the recomputed total. The two helpers are split precisely so the
@@ -54,7 +54,10 @@ export type GradeAnswerResult =
 export async function gradeAnswerAction(
   attemptId: string,
   attemptQuestionId: string,
-  input: { mark: number; feedbackHtml?: string; response?: unknown },
+  /** `response` only when the instructor CHANGED the recorded choice — see
+   *  `grade-answer-card.tsx`; the API checks it against the question's own
+   *  options and refuses anything else. */
+  input: { mark: number; feedbackHtml?: string; response?: { kind: 'choice'; optionIds: string[] } },
 ): Promise<GradeAnswerResult> {
   try {
     // Parsed before it leaves even though the API validates again — `.strict()`
@@ -78,7 +81,9 @@ export async function gradeAnswerAction(
 }
 
 /**
- * تعديل الدرجة الإجمالية للمحاولة مباشرة من قِبل الأدمن/المعلم
+ * «تعديل المجموع» — the paper's total, set by hand. The confirmation (old →
+ * new) is at the call site, `grading-paper.tsx`, where both numbers are in
+ * hand; the API refuses a total above the paper's own scale.
  */
 export async function overrideScoreAction(
   attemptId: string,

@@ -132,7 +132,8 @@ test.describe('quiz attempt → submit → review', () => {
     // answers, order, flag and a continuing timer.
     for (let i = 0; i < toAnswer; i += 1) {
       await page.locator('label').first().click();
-      if (i === flagAt) await page.getByRole('button', { name: 'علّم السؤال' }).click();
+      // `exact`: a flagged question's navigator chip says «…وعليه علامة مراجعة».
+      if (i === flagAt) await page.getByRole('button', { name: 'علامة مراجعة', exact: true }).click();
       if (i < toAnswer - 1) await page.getByRole('button', { name: 'التالي' }).click();
     }
 
@@ -148,7 +149,9 @@ test.describe('quiz attempt → submit → review', () => {
     // is the autosave's business, and pinning a number here would turn this
     // into a persistence race rather than the dialog check it is.
     await page.getByRole('button', { name: 'تسليم الامتحان' }).first().click();
-    await expect(page.getByText(/لسه فيه \d+ سؤال من غير إجابة/)).toBeVisible();
+    // The number agrees with its noun now («سؤال واحد»، «سؤالين»، «3 أسئلة»),
+    // so the count is matched as anything at all between the two fixed ends.
+    await expect(page.getByText(/لسه فيه .+ من غير إجابة/)).toBeVisible();
     await page.getByRole('button', { name: 'الرجوع للأسئلة' }).click();
 
     // Answer whatever chips were unanswered, then submit again.
@@ -163,7 +166,7 @@ test.describe('quiz attempt → submit → review', () => {
     }
 
     await page.getByRole('button', { name: 'تسليم الامتحان' }).first().click();
-    await expect(page.getByText('جاوبت على كل الأسئلة')).toBeVisible();
+    await expect(page.getByText('كل الأسئلة اتجاوبت')).toBeVisible();
     await page.getByRole('button', { name: 'أيوه، نسلّم' }).click();
 
     // 5. Results + review.

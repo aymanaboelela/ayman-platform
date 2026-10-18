@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
+import { formatCopy } from '@ayman/contracts/format';
 import { StudentExternalBookDetailSchema } from '@ayman/contracts/quiz/external-books';
 import { apiGetAuthed } from '@/lib/api-server';
 import { privateRouteMetadata } from '@/lib/seo/metadata';
@@ -18,9 +20,9 @@ export async function generateMetadata({
       `/api/me/external-books/${encodeURIComponent(bookId)}`,
       StudentExternalBookDetailSchema,
     );
-    return { ...privateRouteMetadata, title: `${book.title} — أسئلة وتدريبات` };
+    return { ...privateRouteMetadata, title: formatCopy(quizExperience.books.metaTitle, { title: book.title }) };
   } catch {
-    return { ...privateRouteMetadata, title: 'أسئلة الكتاب الخارجي' };
+    return { ...privateRouteMetadata, title: quizExperience.books.metaFallback };
   }
 }
 

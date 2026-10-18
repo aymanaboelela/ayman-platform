@@ -1298,3 +1298,82 @@ div.unit[data-open] > .unit__head:hover {
     transform: translateY(-6px);
   }
 }
+
+/* ---------------------------------------------------------------------------
+   The marking screen's edit mode and its confirmation.
+
+   `.grade-edit` says the options are LIVE: amber, the colour of action, on the
+   one moment the instructor has chosen to change what a student answered —
+   the read-only rows around it carry the student review's own marks, so the
+   two states cannot be mistaken for each other.
+
+   `.grade-confirm` is the «نحفظ التعديل ده؟» body: one row per recorded value
+   the save overwrites, old struck through beside new. The arrow points at the
+   NEW value, which in this RTL dialog is to the left.
+   --------------------------------------------------------------------------- */
+.grade-edit {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-8);
+  padding: var(--s-8) var(--s-12);
+  border: var(--hairline) solid color-mix(in oklch, var(--a-9) 45%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--a-9) 8%, var(--n-1));
+  font-size: var(--fs-text-sm);
+  color: var(--a-11);
+}
+
+/* «لازم يتحدد اختيار واحد…» — an edit with every option unticked, which the
+   API refuses. Caution, not error: nothing failed, a step is missing. */
+.grade-edit--empty {
+  border-color: color-mix(in oklch, var(--warn) 45%, transparent);
+  background: color-mix(in oklab, var(--warn) 10%, var(--n-1));
+  color: var(--warn);
+}
+
+.grade-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+  margin-block-end: var(--s-16);
+}
+
+.grade-confirm__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-8);
+  padding: var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-1);
+}
+
+.grade-confirm__label {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--n-11);
+}
+
+.grade-confirm__change {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-8);
+  font-variant-numeric: tabular-nums;
+}
+
+.grade-confirm__from {
+  color: var(--n-11);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.grade-confirm__to {
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.grade-confirm__same {
+  color: var(--n-11);
+}

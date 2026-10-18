@@ -1,7 +1,9 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { copy } from '@ayman/contracts';
+import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
 import { SubmitDialog } from './submit-dialog';
+import type { SubmitDialogQuestion } from './submit-confirm-dialog';
 import { apiGet } from '@/lib/api';
 
 vi.mock('@/lib/api', () => ({
@@ -15,15 +17,26 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function renderDialog() {
+/** A five-question paper: 2 and 4 blank, 3 flagged (answered), 4 flagged too. */
+const PAPER: SubmitDialogQuestion[] = [
+  { slotPosition: 0, number: 1, answered: true, flagged: false },
+  { slotPosition: 1, number: 2, answered: false, flagged: false },
+  { slotPosition: 2, number: 3, answered: true, flagged: true },
+  { slotPosition: 3, number: 4, answered: false, flagged: true },
+  { slotPosition: 4, number: 5, answered: true, flagged: false },
+];
+
+function renderDialog(overrides: Partial<Parameters<typeof SubmitDialog>[0]> = {}) {
   return render(
     <SubmitDialog
       open
       onOpenChange={() => {}}
       attemptId="att-1"
-      locallyUnanswered={[]}
+      questions={[]}
+      serverTime={new Date().toISOString()}
       onJump={() => {}}
       onConfirm={async () => {}}
+      {...overrides}
     />,
   );
 }
@@ -36,19 +49,9 @@ function renderDialog() {
  * «بيتسلّم…» — stacked in one grid cell, with the inactive one carrying
  * Tailwind's `invisible`. In a browser that is `visibility: hidden`, which
  * takes the spare label out of the accessibility tree, so the accessible name
- * really is just the active label (the component says so, and picked
- * `invisible` over `opacity-0` for exactly this reason).
- *
- * jsdom never runs Tailwind. No stylesheet backs `.invisible` here, so
- * `dom-accessibility-api` sees two visible text nodes and computes the name as
- * «أيوه، نسلّم بيتسلّم…». An equality match therefore fails in this environment
- * while the production behaviour is correct — so asserting equality would be
- * asserting a jsdom artefact.
- *
- * A prefix match keeps what these tests are actually about (which button, and
- * is it disabled) and stays true under either name computation. The real
- * accessible name is covered where it can be computed honestly: in Playwright,
- * against a browser that has the CSS.
+ * really is just the active label. jsdom never runs Tailwind, so it computes
+ * the name as both labels joined — and asserting equality would be asserting
+ * a jsdom artefact. The real accessible name is covered in Playwright.
  */
 function button(name: string): HTMLButtonElement {
   return screen.getByRole('button', {
@@ -62,11 +65,10 @@ describe('SubmitDialog — I11 (a failed preflight must not wedge the dialog)', 
     renderDialog();
 
     // The error state is reachable, with a retry affordance...
-    const retry = await screen.findByRole('button', { name: copy.common.retry });
-    expect(retry).toBeTruthy();
-    expect(screen.getByText(copy.common.error)).toBeTruthy();
-    // ...and confirm is NOT dead: the count is advisory, the server recomputes
-    // it on submit, so the student can still push through a transient blip.
+    expect(await screen.findByRole('button', { name: quizExperience.submit.countRetry })).toBeTruthy();
+    expect(screen.getByText(quizExperience.submit.countFailed)).toBeTruthy();
+    // ...and confirm is NOT dead: the count is advisory, the server recounts
+    // on submit, so the student can still push through a transient blip.
     expect(button(copy.quiz.submitConfirmAction).disabled).toBe(false);
   });
 
@@ -75,12 +77,12 @@ describe('SubmitDialog — I11 (a failed preflight must not wedge the dialog)', 
     mockApiGet.mockResolvedValueOnce({ unansweredCount: 0, total: 3 });
     renderDialog();
 
-    fireEvent.click(await screen.findByRole('button', { name: copy.common.retry }));
+    fireEvent.click(await screen.findByRole('button', { name: quizExperience.submit.countRetry }));
 
     await waitFor(() => {
       expect(screen.getByText(copy.quiz.submitConfirmAllAnswered)).toBeTruthy();
     });
-    expect(screen.queryByRole('button', { name: copy.common.retry })).toBeNull();
+    expect(screen.queryByRole('button', { name: quizExperience.submit.countRetry })).toBeNull();
     expect(mockApiGet).toHaveBeenCalledTimes(2);
   });
 
@@ -88,7 +90,108 @@ describe('SubmitDialog — I11 (a failed preflight must not wedge the dialog)', 
     mockApiGet.mockReturnValueOnce(new Promise(() => {}));
     renderDialog();
 
-    expect(screen.getByText(copy.common.loading)).toBeTruthy();
+    // A paper that looks complete locally does not claim so before the server.
+    expect(screen.getByText(quizExperience.submit.counting)).toBeTruthy();
+    expect(screen.queryByText(copy.quiz.submitConfirmAllAnswered)).toBeNull();
     expect(button(copy.quiz.submitConfirmAction).disabled).toBe(true);
+  });
+
+  it('says the blanks it can already see at once, without waiting — and still holds confirm', () => {
+    mockApiGet.mockReturnValueOnce(new Promise(() => {}));
+    renderDialog({ questions: PAPER });
+
+    // No «بنعدّ» flash and no row of chips appearing a moment later.
+    expect(screen.getByText('لسه فيه سؤالين من غير إجابة')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'سؤال 2 — من غير إجابة' })).toBeTruthy();
+    expect(button(copy.quiz.submitConfirmAction).disabled).toBe(true);
+  });
+
+  it('corrects the early count when the server’s differs', async () => {
+    mockApiGet.mockResolvedValueOnce({ unansweredCount: 3, total: 5 });
+    renderDialog({ questions: PAPER });
+    expect(await screen.findByText('لسه فيه 3 أسئلة من غير إجابة')).toBeTruthy();
+  });
+});
+
+describe('SubmitDialog — what it says about the paper', () => {
+  it.each([
+    [1, 'لسه فيه سؤال واحد من غير إجابة'],
+    [2, 'لسه فيه سؤالين من غير إجابة'],
+    [3, 'لسه فيه 3 أسئلة من غير إجابة'],
+    [11, 'لسه فيه 11 سؤال من غير إجابة'],
+  ])('says %i blank questions with the noun agreeing', async (count, sentence) => {
+    mockApiGet.mockResolvedValueOnce({ unansweredCount: count, total: 20 });
+    renderDialog();
+    expect(await screen.findByText(sentence)).toBeTruthy();
+    expect(screen.getByText(quizExperience.submit.unansweredAsk)).toBeTruthy();
+  });
+
+  it('lists each blank question, and the flagged answered ones as their own row', async () => {
+    mockApiGet.mockResolvedValueOnce({ unansweredCount: 2, total: 5 });
+    renderDialog({ questions: PAPER });
+    await screen.findByText('لسه فيه سؤالين من غير إجابة');
+
+    // Blank: 2 and 4 (4 also flagged — it is still blank first).
+    expect(screen.getByRole('button', { name: 'سؤال 2 — من غير إجابة' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'سؤال 4 — من غير إجابة' })).toBeTruthy();
+    // Flagged and answered: only 3.
+    expect(screen.getByRole('button', { name: 'سؤال 3 — عليه علامة مراجعة' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^سؤال 1/ })).toBeNull();
+    expect(screen.getByText(quizExperience.submit.groupFlagged)).toBeTruthy();
+  });
+
+  it('hides the blank row once the SERVER says nothing is blank, but keeps the flags', async () => {
+    // Local state can lag a save; the server's count is the authority.
+    mockApiGet.mockResolvedValueOnce({ unansweredCount: 0, total: 5 });
+    renderDialog({ questions: PAPER });
+    await screen.findByText(copy.quiz.submitConfirmAllAnswered);
+
+    expect(screen.queryByRole('button', { name: /من غير إجابة/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'سؤال 3 — عليه علامة مراجعة' })).toBeTruthy();
+  });
+
+  it('closes the dialog when a question chip is pressed', async () => {
+    mockApiGet.mockResolvedValueOnce({ unansweredCount: 2, total: 5 });
+    const onOpenChange = vi.fn();
+    renderDialog({ questions: PAPER, onOpenChange });
+    await screen.findByText('لسه فيه سؤالين من غير إجابة');
+
+    fireEvent.click(screen.getByRole('button', { name: 'سؤال 4 — من غير إجابة' }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('focuses «الرجوع للأسئلة» on open — changing one’s mind costs nothing', async () => {
+    mockApiGet.mockResolvedValueOnce({ unansweredCount: 0, total: 5 });
+    renderDialog();
+    await screen.findByText(copy.quiz.submitConfirmAllAnswered);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: copy.quiz.submitCancel }));
+  });
+
+  it('says the time left in minutes on a timed paper', async () => {
+    mockApiGet.mockResolvedValueOnce({ unansweredCount: 0, total: 5 });
+    const now = Date.now();
+    renderDialog({
+      deadlineAt: new Date(now + 12 * 60_000 + 20_000).toISOString(),
+      serverTime: new Date(now).toISOString(),
+    });
+    expect(await screen.findByText('فاضل 12 دقيقة')).toBeTruthy();
+    expect(screen.getByText(new RegExp(quizExperience.submit.timeEnough))).toBeTruthy();
+  });
+
+  it('shows the pending label while the submission is in flight', async () => {
+    mockApiGet.mockResolvedValueOnce({ unansweredCount: 0, total: 5 });
+    let release: () => void = () => {};
+    const onConfirm = vi.fn(() => new Promise<void>((resolve) => (release = resolve)));
+    renderDialog({ onConfirm });
+    await screen.findByText(copy.quiz.submitConfirmAllAnswered);
+
+    const confirm = button(copy.quiz.submitConfirmAction);
+    fireEvent.click(confirm);
+    await waitFor(() => expect(confirm.disabled).toBe(true));
+    expect(confirm.getAttribute('aria-busy')).toBe('true');
+    expect(within(confirm).getByText(copy.quiz.submitting)).toBeTruthy();
+
+    release();
+    await waitFor(() => expect(confirm.disabled).toBe(false));
   });
 });

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { CheckCircle2, ListChecks, XCircle } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
+import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
 import { formatCopy } from '@ayman/contracts/format';
 import type { ReviewQuestion as ReviewQuestionData } from '@ayman/contracts/quiz/attempt';
 import { ReviewQuestion } from './review-question';
@@ -51,15 +52,24 @@ export function ReviewList({ questions }: { questions: readonly ReviewQuestionDa
   // Nothing to filter by: this window withholds correctness entirely.
   const canFilter = gradeable.length > 0;
   const shown = wrongOnly ? wrong : questions;
+  /*
+   * An essay still with the instructor is not wrong, so a paper can show no
+   * mistakes while it is still being marked — and «ورقة كاملة» beside a pass
+   * badge would then be a verdict the result header above it is careful not
+   * to give. Said as «so far», with no badge, until the last mark is in.
+   */
+  const stillMarking = gradeable.some((question) => question.correctness === 'needsGrading');
 
   return (
     <>
       {canFilter ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-[length:var(--fs-text-sm)] text-fg-muted">
-            {wrong.length === 0
-              ? c.allCorrect
-              : formatCopy(c.wrongCount, { n: wrong.length, total: gradeable.length })}
+            {wrong.length > 0
+              ? formatCopy(c.wrongCount, { n: wrong.length, total: gradeable.length })
+              : stillMarking
+                ? quizExperience.review.allCorrectSoFar
+                : c.allCorrect}
           </p>
 
           {/*
@@ -87,7 +97,7 @@ export function ReviewList({ questions }: { questions: readonly ReviewQuestionDa
                 {c.wrongOnly}
               </button>
             </div>
-          ) : (
+          ) : stillMarking ? null : (
             <span className="verdict verdict--pass">
               <CheckCircle2 className="size-4" aria-hidden="true" />
               {c.passed}

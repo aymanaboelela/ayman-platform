@@ -8,9 +8,11 @@ import * as argon2 from 'argon2';
 import type {
   AdminChangePasswordInput,
   AdminChangePasswordResult,
+  AdminPasswordErrorCode,
   AdminProfile,
   AdminUpdateProfileInput,
 } from '@ayman/contracts/admin/profile';
+import { isPlaceholderEmail, normalizeEgyptianPhone } from '@ayman/contracts/phone';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AuditService } from '../../../audit/audit.service';
 import { ARGON2_OPTIONS } from '../../../auth/argon2-options';
@@ -38,7 +40,7 @@ export class AdminProfileService {
     });
 
     if (!user) {
-      throw new NotFoundException('المستخدم غير موجود');
+      throw new NotFoundException({ code: 'user_not_found' });
     }
 
     const activeSessionsCount = await this.prisma.session.count({
@@ -61,13 +63,38 @@ export class AdminProfileService {
     };
   }
 
+  /**
+   * Name and phone, by the admin themself.
+   *
+   * The phone is NORMALISED on the way in, with the exact function sign-up and
+   * sign-in use (`normalizeEgyptianPhone`). It was stored as typed: Better
+   * Auth's phone plugin never normalises, so an admin who saved `01012345678`
+   * here could no longer sign in with it — sign-in normalises to
+   * `+201012345678` and finds no such account. And it may not be CLEARED on an
+   * account with no real email, because the phone is then the only way in.
+   */
   async updateProfile(userId: string, data: AdminUpdateProfileInput): Promise<AdminProfile> {
+    let phoneNumber: string | null | undefined;
+    if (data.phoneNumber !== undefined) {
+      const typed = data.phoneNumber?.trim() ?? '';
+      phoneNumber = typed === '' ? null : normalizeEgyptianPhone(typed);
+      if (typed !== '' && phoneNumber === null) {
+        throw new BadRequestException({ code: 'phone_invalid' });
+      }
+      if (phoneNumber === null) {
+        const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+        if (!user?.email || isPlaceholderEmail(user.email)) {
+          throw new BadRequestException({ code: 'phone_required' });
+        }
+      }
+    }
+
     try {
       await this.prisma.user.update({
         where: { id: userId },
         data: {
           ...(data.name ? { name: data.name } : {}),
-          ...(data.phoneNumber !== undefined ? { phoneNumber: data.phoneNumber } : {}),
+          ...(phoneNumber !== undefined ? { phoneNumber } : {}),
         },
       });
 
@@ -87,12 +114,34 @@ export class AdminProfileService {
         'code' in err &&
         (err as { code: string }).code === PRISMA_UNIQUE_VIOLATION
       ) {
-        throw new ConflictException('رقم الهاتف مسجل لحساب آخر بالفعل');
+        throw new ConflictException({ code: 'phone_taken' });
       }
       throw err;
     }
   }
 
+  /**
+   * «تغيير كلمة السر» — by the signed-in admin, for their own account.
+   *
+   * ## It never signs anyone out by accident
+   *
+   * The CURRENT session — the request's own, from `AuthGuard` — is kept in
+   * every branch. Other sessions end only when `revokeOtherSessions` is true,
+   * which the form leaves OFF by default (see `AdminChangePasswordSchema`).
+   * If the current session cannot be identified, nothing is revoked at all:
+   * the old fallback deleted EVERY session of the user, which is "change your
+   * password and get thrown out mid-sentence".
+   *
+   * Revoking stamps `session_devices.revoked_at` and deletes the Better Auth
+   * rows behind them — the same two writes `SessionDeviceService.revokeOwn`
+   * makes — rather than deleting the device rows: that table is the account's
+   * sign-in log, and `device-limit.ts` counts it.
+   *
+   * ## Refusals are codes
+   *
+   * `ADMIN_PASSWORD_ERROR_CODES`, in the 400's body; the screen owns the
+   * sentence. These used to be Modern Standard Arabic messages printed as-is.
+   */
   async changePassword(
     userId: string,
     currentSessionId: string | undefined,
@@ -104,7 +153,7 @@ export class AdminProfileService {
     });
 
     if (!user) {
-      throw new NotFoundException('المستخدم غير موجود');
+      throw new NotFoundException({ code: 'user_not_found' });
     }
 
     const account = await this.prisma.account.findFirst({
@@ -115,26 +164,42 @@ export class AdminProfileService {
     });
 
     if (!account || !account.password) {
-      throw new BadRequestException('لا توجد كلمة مرور مسجلة لهذا الحساب (مسجل عبر وسيلة دخول خارجية)');
+      throw new BadRequestException({ code: 'no_credential_account' satisfies AdminPasswordErrorCode });
     }
 
-    const isValid = await argon2.verify(account.password, data.currentPassword);
+    // A hash argon2 cannot parse throws rather than answering false — treated
+    // as a wrong password, never as a 500 that reads like an outage.
+    const isValid = await argon2.verify(account.password, data.currentPassword).catch(() => false);
     if (!isValid) {
-      throw new BadRequestException('كلمة المرور الحالية غير صحيحة');
+      throw new BadRequestException({ code: 'current_password_incorrect' satisfies AdminPasswordErrorCode });
     }
 
     if (data.newPassword === data.currentPassword) {
-      throw new BadRequestException('كلمة المرور الجديدة يجب أن تكون مختلفة عن كلمة المرور الحالية');
+      throw new BadRequestException({ code: 'password_unchanged' satisfies AdminPasswordErrorCode });
     }
 
     const passwordHash = await argon2.hash(data.newPassword, ARGON2_OPTIONS);
 
-    await this.prisma.account.update({
-      where: { id: account.id },
-      data: { password: passwordHash },
+    let revokedSessions = 0;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.account.update({
+        where: { id: account.id },
+        data: { password: passwordHash },
+      });
+
+      if (data.revokeOtherSessions && currentSessionId) {
+        await tx.sessionDevice.updateMany({
+          where: { userId, revokedAt: null, sessionId: { not: currentSessionId } },
+          data: { revokedAt: new Date() },
+        });
+        const removed = await tx.session.deleteMany({
+          where: { userId, id: { not: currentSessionId } },
+        });
+        revokedSessions = removed.count;
+      }
     });
 
-    // تفريغ أي قفل لمحاولات الدخول الخاطئة السابقة
+    // A lockout earned with the OLD password must not outlive it.
     if (user.phoneNumber) {
       loginThrottle.clear(throttleKeyFor(phoneIdentifier(user.phoneNumber)));
     }
@@ -142,31 +207,6 @@ export class AdminProfileService {
       loginThrottle.clear(throttleKeyFor(emailIdentifier(user.email)));
     }
     loginThrottle.clear(accountThrottleKey(userId));
-
-    // تسجيل الخروج من باقي الأجهزة إذا تم اختياره
-    if (data.revokeOtherSessions) {
-      if (currentSessionId) {
-        await this.prisma.session.deleteMany({
-          where: {
-            userId,
-            id: { not: currentSessionId },
-          },
-        });
-        await this.prisma.sessionDevice.deleteMany({
-          where: {
-            userId,
-            sessionId: { not: currentSessionId },
-          },
-        });
-      } else {
-        await this.prisma.session.deleteMany({
-          where: { userId },
-        });
-        await this.prisma.sessionDevice.deleteMany({
-          where: { userId },
-        });
-      }
-    }
 
     await this.audit.record({
       action: 'staff:set-password',
@@ -176,12 +216,12 @@ export class AdminProfileService {
       metadata: {
         selfChange: true,
         revokeOtherSessions: data.revokeOtherSessions,
+        revokedSessions,
       },
     });
 
-    return {
-      status: true,
-      message: 'تم تغيير كلمة المرور بنجاح',
-    };
+    // `message` for a web container still on the previous build, whose result
+    // schema requires it — it parses the field and never prints it.
+    return { status: true, message: 'password_changed', revokedSessions };
   }
 }

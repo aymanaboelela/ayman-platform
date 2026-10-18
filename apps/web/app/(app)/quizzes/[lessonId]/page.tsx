@@ -10,6 +10,7 @@ import {
   type BlockedReason,
   type QuizOverview,
 } from '@ayman/contracts';
+import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
 import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
 import { attemptHref, reviewHref } from '@/lib/quiz-links';
@@ -203,21 +204,31 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
         is how a product ends up with two dialects of one idea and a screen
         that does not look like the rest of it.
       */}
+      {/*
+        Each tile's number is its VALUE and its label says what the number is —
+        the labels used to repeat it («20» over «20 سؤال», «100» over «الدرجة
+        الكلية 100»), and «20 سؤال» was a counted noun the platform got wrong
+        below eleven. A hue per tile on the well only (`.tile--hued`), so four
+        facts read as four objects rather than one grey block.
+      */}
       <section className="exam-facts mb-8">
         <StatTile
           icon={<ClipboardList className="size-5" />}
+          hue={255}
           value={overview.questionCount}
-          label={formatCopy(c.questionCount, { n: overview.questionCount })}
+          label={quizExperience.intro.questions}
         />
         <StatTile
           icon={<Target className="size-5" />}
+          hue={195}
           value={formatMark(overview.gradeOutOf)}
-          label={formatCopy(c.totalMarks, { marks: formatMark(overview.gradeOutOf) })}
+          label={quizExperience.intro.marks}
         />
         <StatTile
           icon={<Clock className="size-5" />}
+          hue={295}
           value={minutes === null ? '—' : minutes}
-          label={minutes === null ? c.noTimeLimit : formatCopy(c.duration, { minutes })}
+          label={minutes === null ? c.noTimeLimit : quizExperience.intro.minutes}
         />
         {/*
           The one accent tile on this screen, and it is the one the student is
@@ -232,7 +243,10 @@ export default async function QuizIntroPage({ params }: { params: Promise<{ less
         <StatTile
           accent={!spent}
           icon={<Repeat2 className="size-5" />}
-          value={spent ? '٠' : overview.allowsImprovement ? '٢' : '١'}
+          // Western digits, like the three tiles beside it and every number in
+          // the product (`ar-EG-u-nu-latn`) — these four used to be the only
+          // Eastern Arabic numerals on the row.
+          value={spent ? 0 : overview.allowsImprovement ? 2 : 1}
           label={
             spent ? c.noSittingsLeft : overview.allowsImprovement ? c.twoAttempts : c.singleAttempt
           }

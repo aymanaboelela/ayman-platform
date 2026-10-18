@@ -6080,10 +6080,16 @@ export const copy = {
     questionOf: 'سؤال {current} من {total}',
     next: 'التالي',
     previous: 'السابق',
-    flag: 'علّم السؤال',
-    unflag: 'شيل العلامة',
-    flaggedCount: '{n} سؤال معلّم',
-    answeredCount: 'جاوبت على {answered} من {total}',
+    /** The flag's accessible name, and it does not change when the flag is
+     *  set — `aria-pressed` carries the state (`question-view.tsx`). Masdar
+     *  phrases rather than «علّم»/«شيل», which only work on a male reader. */
+    flag: 'علامة مراجعة',
+    unflag: 'إزالة علامة المراجعة',
+    /** A label and a figure, not «٣ سؤال معلّم»: the counted noun AND its
+     *  adjective both change form with the number. */
+    flaggedCount: 'علامات المراجعة: {n}',
+    /** A passive. «جاوبت» is the masculine spelling — the feminine grows a ي. */
+    answeredCount: 'اتجاوب {answered} من {total}',
     clearAnswer: 'مسح إجابتي',
     navigator: 'خريطة الأسئلة',
     saving: 'بيتحفظ…',
@@ -6092,9 +6098,9 @@ export const copy = {
     staleTab: 'الامتحان ده مفتوح في مكان تاني. تحديث الصفحة عشان نكمّل من هنا.',
     submit: 'تسليم الامتحان',
     submitConfirmTitle: 'نسلّم الامتحان؟',
-    submitConfirmBody: 'بعد التسليم مش هتقدر تغيّر إجاباتك.',
+    submitConfirmBody: 'بعد التسليم مفيش رجوع ولا تعديل في الإجابات.',
     submitConfirmUnanswered: 'لسه فيه {count} سؤال من غير إجابة.',
-    submitConfirmAllAnswered: 'جاوبت على كل الأسئلة.',
+    submitConfirmAllAnswered: 'كل الأسئلة اتجاوبت.',
     submitCancel: 'الرجوع للأسئلة',
     submitConfirmAction: 'أيوه، نسلّم',
     /** Takes the place of `submitConfirmAction` on the confirm button for as
@@ -6128,7 +6134,8 @@ export const copy = {
     incorrect: 'إجابة خاطئة',
     partial: 'إجابة صح جزئيًا',
     needsGrading: 'لسه عند مهندس أيمن للتصحيح',
-    notAnswered: 'مجاوبتش',
+    /** «مجاوبتش» was the masculine form; this is the fact, not the reader. */
+    notAnswered: 'من غير إجابة',
     yourAnswer: 'إجابتك',
     rightAnswer: 'الإجابة الصحيحة',
     explanation: 'الشرح',
@@ -6137,8 +6144,11 @@ export const copy = {
     resultsTitle: 'نتيجتك',
     reviewTitle: 'مراجعة إجاباتك',
     reviewLocked: 'المراجعة مش متاحة دلوقتي',
-    reviewLockedUntilClose: 'هتقدر تراجع إجاباتك بعد ما الامتحان يقفل.',
-    passed: 'ناجح',
+    reviewLockedUntilClose: 'مراجعة الإجابات بتفتح بعد ما الامتحان يقفل.',
+    /** A noun, not «ناجح» — the adjective is masculine and it sits on the
+     *  result of every student, half of whom are girls. `results-voice.spec`
+     *  already bans «ناجح» on «نتائجي» for the same reason. */
+    passed: 'نجاح',
     /**
      * The verdict on a sitting that came in under the pass mark — a STATE, not
      * an instruction.
@@ -6218,8 +6228,8 @@ export const copy = {
     orderInstruction: 'ترتيب العناصر بالسحب، أو بأزرار التحريك',
     /** On the per-row controls. «فوق»/«تحت» and not «قبل»/«بعد»: the list is
      *  vertical, and in an RTL page «قبل» is the ambiguous one. */
-    moveUp: 'حرّك لفوق',
-    moveDown: 'حرّك لتحت',
+    moveUp: 'تحريك لفوق',
+    moveDown: 'تحريك لتحت',
     /** Announced after every move, for a student who cannot see the list
      *  reflow. `{item}` is the option's own text, stripped of markup. */
     movedTo: '{item} — المركز {position} من {total}',
@@ -6254,8 +6264,8 @@ export const copy = {
     allCorrect: 'مفيش ولا غلطة — ورقة كاملة',
     scoreBandExcellent: 'أداء ممتاز',
     scoreBandGood: 'أداء كويس',
-    scoreBandNeedsWork: 'محتاج مراجعة للدرس تاني',
-    reviewLockedDuringBody: 'هتقدر تراجع إجاباتك بعد ما تسلّم المحاولة.',
+    scoreBandNeedsWork: 'الدرس محتاج مراجعة تانية',
+    reviewLockedDuringBody: 'مراجعة الإجابات بتفتح بعد تسليم المحاولة.',
     unansweredChipLabel: 'سؤال {n}',
   },
   /**
@@ -6275,7 +6285,7 @@ export const copy = {
     recordedTitle: 'درجتك هتتسجّل',
     recordedBody: 'النتيجة بتتحفظ في سجلك وبتفضل فيه — مش بتتمسح ولا بتترجع.',
     onceTitle: 'محاولة واحدة بس',
-    onceBody: 'الكويز ده ليه محاولة واحدة. حلّه وانت مركّز.',
+    onceBody: 'الكويز ده ليه محاولة واحدة، فالتركيز من أول سؤال لآخر سؤال.',
     onceExamBody: 'دي محاولتك الأصلية. بعدها فيه محاولة تحسين واحدة، وأعلى درجة هي اللي بتتحسب.',
     timedBody: 'الامتحان {minutes} دقيقة من أول دوسة على «نبدأ»، والوقت بيمشي حتى لو الصفحة اتقفلت.',
     untimedBody: 'مفيش وقت محدد، بس المحاولة بتفضل مفتوحة لحد ما تتسلّم.',
