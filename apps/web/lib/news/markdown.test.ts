@@ -56,6 +56,21 @@ describe('safeHref', () => {
     expect(safeHref('//evil.com/path')).toBeNull();
   });
 
+  /**
+   * Asserted on where the reader lands: an internal-looking href that the
+   * browser resolves to another host is the same phishing link as `//evil.com`.
+   */
+  it('never returns an internal-looking href that resolves to another host', () => {
+    const page = 'https://aymanaboelela.com/news/x';
+    for (const href of ['/\\evil.com', '/\\/evil.com', '/\\\\evil.com', '/.//evil.com', '/..//evil.com', '/courses']) {
+      const out = safeHref(href);
+      if (out !== null && out.startsWith('/')) {
+        expect(new URL(out, page).origin, href).toBe('https://aymanaboelela.com');
+      }
+    }
+    expect(safeHref('/\\evil.com')).toBeNull();
+  });
+
   it('rejects plain http, so a published article cannot downgrade a reader', () => {
     expect(safeHref('http://example.com')).toBeNull();
   });
