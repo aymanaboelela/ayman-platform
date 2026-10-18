@@ -12,7 +12,7 @@
  * otherwise. Callers fall back to their own default destination on `null`;
  * nothing treats a rejection as an error.
  *
- * Two layers, because each catches something the other misses:
+ * Three layers, because each catches something the others miss:
  *
  *  1. A literal `startsWith('/')` check. The WHATWG parser below happily
  *     resolves `courses/x` against the base into a same-origin URL, so parsing
@@ -24,6 +24,11 @@
  *       `/\evil.com`  → the parser folds a backslash to `/` for special
  *                       schemes, so this IS `//evil.com` → rejected
  *     Hand-rolled prefix checks have historically missed the second one.
+ *  3. The same question asked of the OUTPUT. Layer 2 judges the input, and the
+ *     normalising it does can produce a value that leaves the site:
+ *       `/.//evil.com` → origin is the base → pathname `//evil.com` → rejected
+ *     `safe-next.effect.test.ts` resolves every result the way the consumers
+ *     do, which is how this one should have been caught.
  *
  * Control characters and whitespace are rejected before either: browsers strip
  * tab/newline out of URLs, so a `next` containing them can become `//evil.com`
@@ -71,7 +76,27 @@ export function safeNext(raw: string | null | undefined): string | null {
 
   // The normalised form, not the raw string: `/a/../b` becomes `/b` here rather
   // than at navigation time, so what was validated is what gets used.
-  return `${url.pathname}${url.search}${url.hash}`;
+  const normalised = `${url.pathname}${url.search}${url.hash}`;
+
+  /*
+   * ⚠️ Checked AGAIN, on the output, because normalising is what builds the
+   * attack. `/.//evil.com` passes every check above: it starts with `/`, and
+   * its origin IS the base, since the parser reads `.` as the first segment.
+   * Resolving that dot segment then leaves an EMPTY first segment, and the
+   * pathname comes out as `//evil.com` — a protocol-relative URL. The login
+   * form's `location.assign`, `/welcome`'s `redirect()` and the proxy's
+   * `new URL(target, request.url)` all took that to evil.com; the proxy did it
+   * with a 307, before a signed-in student saw a single pixel of our page.
+   * `/..//x`, `/a/..//x`, `/%2e//x` and `/./\x` are the same payload.
+   *
+   * Refused rather than repaired: collapsing the slashes would turn an attack
+   * into some path on this site that the visitor never asked for. The
+   * re-parse is the general form of the `//` test — whatever a future parser
+   * does with dot segments, a value that resolves off this origin is not
+   * returned.
+   */
+  if (normalised.startsWith('//') || new URL(normalised, BASE).origin !== BASE) return null;
+  return normalised;
 }
 
 /**
