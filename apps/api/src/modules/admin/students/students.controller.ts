@@ -41,8 +41,12 @@ export class StudentsController {
 
   @RequirePermission('student:write')
   @Patch(':userId')
-  patch(@Param('userId') userId: string, @Body() body: AdminStudentPatchDto) {
-    return this.students.patch(userId, body);
+  patch(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId') userId: string,
+    @Body() body: AdminStudentPatchDto,
+  ) {
+    return this.students.patch(userId, body, user.id);
   }
 
   /**

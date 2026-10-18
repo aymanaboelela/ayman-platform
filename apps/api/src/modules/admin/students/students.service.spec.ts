@@ -214,9 +214,10 @@ describe('StudentsService.patch', () => {
       userId: 'u1',
       year: 2,
       trackId: 'track-1',
+      user: { role: 'student' },
     });
 
-    await expect(service.patch('u1', { year: 1 })).rejects.toThrow(
+    await expect(service.patch('u1', { year: 1 }, 'actor')).rejects.toThrow(
       'year 1 cannot have a track',
     );
     expect(prisma.studentProfile.update).not.toHaveBeenCalled();
@@ -224,9 +225,9 @@ describe('StudentsService.patch', () => {
 
   it('writes an ordinary profile field straight to StudentProfile, with no user write', async () => {
     const { service, prisma } = makeService();
-    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null });
+    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null, user: { role: 'student' } });
 
-    await service.patch('u1', { schoolName: 'مدرسة النصر' }).catch(() => undefined);
+    await service.patch('u1', { schoolName: 'مدرسة النصر' }, 'actor').catch(() => undefined);
 
     expect(prisma.studentProfile.update).toHaveBeenCalledWith({
       where: { userId: 'u1' },
@@ -237,9 +238,9 @@ describe('StudentsService.patch', () => {
 
   it('accepts a school stream change', async () => {
     const { service, prisma } = makeService();
-    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null });
+    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null, user: { role: 'student' } });
 
-    await service.patch('u1', { schoolStream: 'languages' }).catch(() => undefined);
+    await service.patch('u1', { schoolStream: 'languages' }, 'actor').catch(() => undefined);
 
     expect(prisma.studentProfile.update).toHaveBeenCalledWith({
       where: { userId: 'u1' },
@@ -255,9 +256,9 @@ describe('StudentsService.patch', () => {
    */
   it('writes a phone change to BOTH StudentProfile.phone and User.phoneNumber, in one transaction', async () => {
     const { service, prisma } = makeService();
-    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null });
+    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null, user: { role: 'student' } });
 
-    await service.patch('u1', { phone: '+201012345678' }).catch(() => undefined);
+    await service.patch('u1', { phone: '+201012345678' }, 'actor').catch(() => undefined);
 
     expect(prisma.studentProfile.update).toHaveBeenCalledWith({
       where: { userId: 'u1' },
@@ -272,9 +273,9 @@ describe('StudentsService.patch', () => {
 
   it('writes an email change to User only, not StudentProfile', async () => {
     const { service, prisma } = makeService();
-    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null });
+    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null, user: { role: 'student' } });
 
-    await service.patch('u1', { email: 'student@example.test' }).catch(() => undefined);
+    await service.patch('u1', { email: 'student@example.test' }, 'actor').catch(() => undefined);
 
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 'u1' },
@@ -286,9 +287,9 @@ describe('StudentsService.patch', () => {
 
   it('clears email back to null', async () => {
     const { service, prisma } = makeService();
-    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null });
+    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null, user: { role: 'student' } });
 
-    await service.patch('u1', { email: null }).catch(() => undefined);
+    await service.patch('u1', { email: null }, 'actor').catch(() => undefined);
 
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: 'u1' },
@@ -298,12 +299,12 @@ describe('StudentsService.patch', () => {
 
   it('turns a unique-constraint violation into a readable conflict', async () => {
     const { service, prisma } = makeService();
-    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null });
+    prisma.studentProfile.findUnique.mockResolvedValueOnce({ userId: 'u1', year: 2, trackId: null, user: { role: 'student' } });
     prisma.$transaction.mockImplementationOnce(async () => {
       throw { code: 'P2002' };
     });
 
-    await expect(service.patch('u1', { phone: '+201012345678' })).rejects.toThrow(
+    await expect(service.patch('u1', { phone: '+201012345678' }, 'actor')).rejects.toThrow(
       /already used by another account/,
     );
   });
