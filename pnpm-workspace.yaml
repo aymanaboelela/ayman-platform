@@ -40,10 +40,21 @@ overrides:
   #
   # This pins both to the version the API already runs.
   #
+  # 0.35.5, not 0.35.3: 0.35.3's bundled libheif and librsvg carry the
+  # GHSA-rgj7-g3m4-5g8c / GHSA-wq5f-xc86-pv6w advisories, and HEIC/AVIF are on
+  # the upload allowlist — every avatar, homework photo and (anonymous) book
+  # receipt is decoded by it.
+  #
   # ⚠️ Re-check on every Next upgrade. Once Next itself moves to ^0.35 this
   # override is redundant, and an override left in place after it stops being
   # needed pins the ecosystem backwards instead of forwards. Delete it then.
-  sharp: 0.35.3
+  sharp: 0.35.5
+  # `@nestjs/platform-express` 11.1.28 pins `multer` 2.2.0 exactly, and 2.2.0
+  # has three DoS advisories in multipart parsing (GHSA-535w-7cp7-47q4,
+  # GHSA-wc9g-mqfw-jrwm, GHSA-3pph-fpjx-jg34) — reachable without a session
+  # through `POST /api/book-orders/screenshot`. Same API, minor bump. Delete
+  # once Nest's own pin reaches 2.4.
+  multer: 2.4.0
 
 catalog:
   typescript: 5.9.3
