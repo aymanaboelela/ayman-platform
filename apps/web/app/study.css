@@ -2587,8 +2587,15 @@ details[open] > .unit__head .unit__chevron,
        in the player,
      · `<Figure tone="verdict">` in `QuizResultRow`, which colours the BEST
        percent on `/results`,
-     · `<Badge tone>` in `ResultHeader`, on the review screen a student lands
-       on straight after submitting.
+     · `.verdict` in `ResultHeader`, on the review screen a student lands on
+       straight after submitting (and on a book practice's result),
+     · `.review-answer--right` / `--wrong` and the review's option rows, which
+       mark a model answer and a graded pick,
+     · the grading screen's option rows (`grade-answer-card.tsx`), which show
+       the instructor the same marks the student sees.
+
+   NOT `ResultHeader`'s band message, which is the `/results` band colour —
+   amber under the pass line, never red (see `.result-card`).
 
    ## ⚠️ `--err` no longer labels a STUDENT, only a number
 
@@ -3249,7 +3256,7 @@ details[open] > .unit__head .unit__chevron,
  * got — were only answered while the student was at the TOP of the document.
  * A question card plus five `.runner-option` rows measures ~500px at 360px
  * wide, so by the time a student has scrolled far enough to read option 4 the
- * countdown and «سؤال ٣ من ٢٠ · جاوبت على ٢» are both off screen, on every one
+ * countdown and «سؤال 3 من 20 · اتجاوب 2» are both off screen, on every one
  * of twenty questions of a timed paper. `.runner-nav` opposite has been sticky
  * since it was written, but only from 64rem up — so a desktop never showed
  * this, and the phone lost the clock on the one screen where the clock is the
@@ -3545,6 +3552,16 @@ details[open] > .unit__head .unit__chevron,
 .runner-option:hover {
   border-color: oklch(0.72 0.09 var(--opt-h));
   background: var(--n-2);
+}
+
+/* No text selection on an option a student is ANSWERING with: a long-press on
+   Android selected a word of it and threw up the copy toolbar over the next
+   option, mid-exam. The runner's options are `<label>`s; the review's are
+   `<div>`s and stay selectable, because quoting a question to ask about it is
+   what that screen is for. */
+label.runner-option {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* The letter well. Lightness and chroma are fixed per theme, so all six are
@@ -3905,6 +3922,669 @@ details[open] > .unit__head .unit__chevron,
   border-radius: 999px;
   background: var(--a-9);
   box-shadow: 0 0 0 2px var(--n-1);
+}
+
+/* ---------------------------------------------------------------------------
+   The navigator's key — what the three states of a chip mean.
+
+   The grid tells its states apart by weight and fill (`.nav-chip` above), on
+   purpose, and nothing on the screen said which fill meant what: a student
+   meeting the map for the first time had to guess that the filled squares
+   were the answered ones. Four tiny swatches drawn from the SAME rules, so the
+   key cannot drift from the thing it explains.
+   --------------------------------------------------------------------------- */
+.runner-nav__key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4) var(--s-12);
+  margin-block-start: var(--s-12);
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+.runner-nav__key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.runner-nav__swatch {
+  flex: none;
+  inline-size: 0.75rem;
+  block-size: 0.75rem;
+  border-radius: 3px;
+  border: var(--hairline) solid var(--border);
+  background: var(--n-1);
+}
+
+.runner-nav__swatch--answered {
+  border-color: var(--border-strong);
+  background: var(--n-3);
+}
+
+.runner-nav__swatch--current {
+  border-color: var(--a-9);
+  background: color-mix(in oklab, var(--a-9) 12%, var(--n-1));
+}
+
+.runner-nav__swatch--flagged {
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--a-9);
+}
+
+/* The essay's limits, under the box — a fact about the question, so it is
+   the stem's quiet grey rather than anything that reads as a warning. */
+.qcard__limits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4) var(--s-12);
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+/* ---------------------------------------------------------------------------
+   .submit-check — what the submit confirmation says about the paper.
+
+   One panel with a verdict line, the blank questions as chips that go
+   straight to them, and the flagged ones as a second labelled row. Built from
+   the same three things as `.exam-gate-dialog__point` (a well, a title, a
+   body) so the two dialogs a student meets at either end of an exam read as
+   one family.
+
+   ## Colour
+
+   No green and no red — this is the runner, and those two mean «صح» and
+   «غلط» one screen later (see `.nav-chip`). The caution is `--warn`, the
+   clock's own «start wrapping up», and it is spent on the WELL and the rule
+   only: in the dark theme `--warn` sits next to the accent, and a whole panel
+   of it would read as one more thing to press. What IS pressable — the chips
+   — is amber, because that is what amber means everywhere else.
+
+   A card on `--n-1` with a hairline, like every card in the product; the
+   stripe at the inline start is `.topic-row`'s mark, carrying the state.
+   --------------------------------------------------------------------------- */
+.submit-check {
+  --sc-stripe: var(--e-tint-line);
+  --sc-well: var(--e-tint);
+  --sc-ink: var(--e-ink);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-12);
+  padding: var(--s-12) var(--s-16);
+  padding-inline-start: calc(var(--s-16) + 3px);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--n-1);
+}
+
+.submit-check::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: 3px;
+  background: var(--sc-stripe);
+}
+
+.submit-check[data-state='open'],
+.submit-check[data-state='error'] {
+  --sc-stripe: var(--warn);
+  --sc-well: color-mix(in oklab, var(--warn) 14%, var(--n-1));
+  --sc-ink: var(--warn);
+}
+
+.submit-check[data-state='done'] {
+  --sc-stripe: var(--e-stage);
+}
+
+.submit-check__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-12);
+}
+
+.submit-check__well {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-md);
+  background: var(--sc-well);
+  color: var(--sc-ink);
+}
+
+.submit-check__text {
+  display: flex;
+  flex: 1;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+  /* Centres a one-line title on the 36px well without a second rule for the
+     two-line case: the title's own line box is ~24px. */
+  padding-block-start: 0.375rem;
+}
+
+.submit-check__title {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  line-height: 1.5;
+  color: var(--n-12);
+}
+
+.submit-check__body,
+.submit-check__hint {
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.submit-check__hint { font-size: var(--fs-text-xs); }
+
+.submit-check__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+}
+
+.submit-check__label {
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+}
+
+.submit-check__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+}
+
+/* `--err` for a submission that FAILED — the one sentence in this dialog that
+   is a fault rather than a fact about the paper, and the colour the exam gate
+   already uses for its own. */
+.submit-check__error {
+  font-size: var(--fs-text-sm);
+  color: var(--err);
+}
+
+/* A blank question, as the thing you press to go to it. The outlined weight
+   of amber (`.chip--accent`'s recipe) — the dialog's primary action is the
+   solid button in its footer, and a row of solid chips would outrank it.
+   44px tall below `md`, the same floor `.nav-chip` keeps, because these are
+   pressed by a student who has just been told something is missing and is
+   under a clock. */
+.submit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  block-size: 2.75rem;
+  padding-inline: var(--s-12);
+  border: var(--hairline) solid color-mix(in oklch, var(--a-9) 45%, transparent);
+  border-radius: var(--r-sm);
+  background: color-mix(in oklab, var(--a-9) 8%, var(--n-1));
+  color: var(--a-11);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: background var(--d-hover) var(--ease-out);
+}
+
+.submit-chip:hover { background: color-mix(in oklab, var(--a-9) 16%, var(--n-1)); }
+
+/* A flagged question that IS answered — a note to self rather than a gap, so
+   it drops to the neutral card and keeps only its amber flag. */
+.submit-chip--flagged {
+  border-color: var(--border-strong);
+  background: var(--n-2);
+  color: var(--n-12);
+}
+
+.submit-chip--flagged svg { color: var(--a-11); }
+
+.submit-chip--flagged:hover { background: var(--n-3); }
+
+@media (min-width: 48rem) {
+  .submit-chip { block-size: 2.25rem; }
+}
+
+/* The time left, in words. The clock's own two escalations, in the clock's own
+   two colours (`.runner-clock--warn` / `--critical`). */
+.submit-clock {
+  display: flex;
+  align-items: center;
+  gap: var(--s-8);
+  min-block-size: 1.75rem;
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.submit-clock__left {
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.submit-clock[data-tone='warn'],
+.submit-clock[data-tone='warn'] .submit-clock__left { color: var(--warn); }
+
+.submit-clock[data-tone='critical'],
+.submit-clock[data-tone='critical'] .submit-clock__left { color: var(--err); }
+
+/* ---------------------------------------------------------------------------
+   .result-card — the screen a submit lands on.
+
+   The mark, how far it is through the scale, where the pass line sits on that
+   scale, and one sentence about what to do next — coloured by the student's
+   BAND, and the bands are `/results`'s exactly: amber (`--viz-1`) under the
+   pass line, green (`--viz-6`) over it, violet (`--viz-3`) from «امتياز» up
+   (`.rs-hero[data-band]`, `.topic-row[data-band]`). A 40% here and a 40%
+   average on «نتائجي» are the same colour, and neither is red: the verdict
+   badge beside the number is the one place `--err` may say "under the line",
+   and a red banner under a red badge reads as being told off twice.
+
+   `pending` — essays still with the instructor — is amber too, the product's
+   "in flight" colour (`.verdict--pending`), and it has no verdict at all.
+
+   Every mix is `in oklab` over a neutral (`lib/neutral-mix-space.test.ts`),
+   and ink is the band mixed toward `--n-12`, so it clears contrast in both
+   themes without a second set of rules.
+   --------------------------------------------------------------------------- */
+.result-card {
+  --rc-band: var(--viz-1);
+  --rc-ink: color-mix(in oklab, var(--rc-band) 62%, var(--n-12));
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-16);
+  padding: var(--s-20);
+  border: var(--hairline) solid color-mix(in oklab, var(--rc-band) 30%, var(--border));
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(90deg, var(--rc-band), color-mix(in oklab, var(--rc-band) 55%, var(--n-1))) top / 100% 4px no-repeat,
+    linear-gradient(170deg, color-mix(in oklab, var(--rc-band) 12%, var(--n-1)) 0%, var(--n-1) 62%);
+  box-shadow: var(--shadow-sm);
+}
+
+.result-card[data-band='pass'] { --rc-band: var(--viz-6); }
+.result-card[data-band='high'] { --rc-band: var(--viz-3); }
+.result-card[data-band='pending'] { --rc-band: var(--a-9); }
+
+@media (min-width: 48rem) {
+  .result-card { padding: var(--s-24); }
+}
+
+.result-card__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-8) var(--s-12);
+}
+
+.result-card__figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-12) var(--s-16);
+}
+
+/* «17 / 20» — one isolated LTR run, so the slash cannot flip it to «20 / 17»
+   in the RTL line around it. */
+.result-card__score {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-8);
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.result-card__mark {
+  font-size: var(--fs-title-1);
+  font-weight: var(--fw-bold);
+  color: var(--n-12);
+}
+
+.result-card__out-of {
+  font-size: var(--fs-title-3);
+  color: var(--n-11);
+}
+
+/* The percentage, in the band's own colour — the figure the eye lands on. */
+.result-card__pct {
+  display: grid;
+  justify-items: center;
+  gap: 0.125rem;
+  min-inline-size: 5.5rem;
+  padding: var(--s-8) var(--s-12);
+  border-radius: var(--r-lg);
+  background: color-mix(in oklab, var(--rc-band) 16%, var(--n-1));
+  box-shadow: inset 0 0 0 var(--hairline) color-mix(in oklab, var(--rc-band) 40%, transparent);
+  color: var(--rc-ink);
+}
+
+.result-card__pct-value {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.result-card__pct-label {
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-medium);
+}
+
+/* The scale, with the pass line ON it — so «درجة النجاح ٥٠٪» under the bar
+   is a place the student can see, not a number to compare in their head. */
+.result-card__meter {
+  position: relative;
+  display: block;
+  block-size: 0.625rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--rc-band) 16%, var(--n-4));
+}
+
+/* A TRANSFORM, never a width — the same reasoning as `.runner-bar__meter`.
+   The redesign animated `width` for 700ms, which ran layout on every frame
+   and blew through the 400ms motion ceiling besides. */
+.result-card__fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(to left, var(--rc-band), color-mix(in oklab, var(--rc-band) 55%, var(--n-2)));
+  transform-origin: left center;
+}
+
+[dir='rtl'] .result-card__fill { transform-origin: right center; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .result-card__fill { animation: result-fill-in 400ms var(--ease-out) both; }
+}
+
+@keyframes result-fill-in {
+  from { transform: scaleX(0); }
+}
+
+.result-card__tick {
+  position: absolute;
+  inset-block: -0.25rem;
+  inline-size: 2px;
+  border-radius: 1px;
+  background: var(--n-12);
+  opacity: 0.55;
+}
+
+.result-card__pass {
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+.result-card__pass bdi {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The sentence about what to do next, as its own small object: a well with
+   the band's icon, a title, a body. */
+.result-card__note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  border-radius: var(--r-md);
+  border: var(--hairline) solid color-mix(in oklab, var(--rc-band) 25%, var(--border));
+  background: color-mix(in oklab, var(--rc-band) 7%, var(--n-1));
+}
+
+.result-card__note-well {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--rc-band) 20%, var(--n-1));
+  color: var(--rc-ink);
+}
+
+.result-card__note-text {
+  display: flex;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.result-card__note-title {
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-semibold);
+  color: var(--rc-ink);
+}
+
+.result-card__note-body {
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+  color: var(--n-12);
+}
+
+.result-card__note-small {
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+/* ---------------------------------------------------------------------------
+   The reviewed answer and the notes under it.
+
+   `.review-answer` is what the student wrote (and, beside it, what was
+   wanted) on a question with no options to colour. Green may mark the model
+   answer — a graded outcome, the one licence `--ok` has — and the student's
+   own box takes the verdict's hue only when the grader gave one.
+
+   `.review-note` is the instructor's note on THIS answer and the question's
+   explanation: a well with an icon, a small title, the text. They used to be
+   an amber panel with ✍️ and a grey one with 💡 — amber is what you press,
+   and an emoji is a glyph the platform does not control the look of on a
+   five-year-old Android.
+   --------------------------------------------------------------------------- */
+.review-answers {
+  display: grid;
+  gap: var(--s-12);
+}
+
+.review-answer {
+  display: flex;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-2);
+}
+
+.review-answer--right {
+  border-color: color-mix(in oklch, var(--ok), transparent 60%);
+  background: color-mix(in oklab, var(--ok) 7%, var(--n-1));
+}
+
+.review-answer--wrong {
+  border-color: color-mix(in oklch, var(--err), transparent 60%);
+  background: color-mix(in oklab, var(--err) 6%, var(--n-1));
+}
+
+.review-answer__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-4);
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+}
+
+.review-answer--right .review-answer__label { color: var(--ok); }
+.review-answer--wrong .review-answer__label { color: var(--err); }
+
+.review-answer__text {
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+  color: var(--n-12);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.review-note {
+  --note-h: 25;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--n-2);
+}
+
+/* The explanation is the question's own, not a note on the answer — a
+   second category, so a second hue on the WELL (the `.tile--hued` recipe:
+   a non-interactive category mark, lit identically in both themes). */
+.review-note--explain { --note-h: 250; }
+
+.review-note__well {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: var(--r-md);
+  background: oklch(0.94 0.045 var(--note-h));
+  color: oklch(0.45 0.115 var(--note-h));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .review-note__well {
+    background: oklch(0.28 0.055 var(--note-h));
+    color: oklch(0.82 0.095 var(--note-h));
+  }
+}
+
+:root[data-theme='dark'] .review-note__well {
+  background: oklch(0.28 0.055 var(--note-h));
+  color: oklch(0.82 0.095 var(--note-h));
+}
+
+.review-note__body {
+  display: flex;
+  min-inline-size: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.review-note__title {
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--n-11);
+}
+
+.review-note__text {
+  font-size: var(--fs-text-sm);
+  line-height: 1.7;
+  color: var(--n-12);
+}
+
+/* ---------------------------------------------------------------------------
+   The back link above a quiz screen that has no stage band to carry one —
+   the review, the book practice. Quiet grey with the arrow, the same shape
+   `/admin/grading/[id]` and the lesson player use.
+   --------------------------------------------------------------------------- */
+.quiz-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-block-size: 2.5rem;
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+  transition: color var(--d-hover) var(--ease-out);
+}
+
+.quiz-back:hover { color: var(--n-12); }
+
+/* The practice runner's heading: what is being practised, from which book. */
+.practice-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  margin-block-end: var(--s-16);
+}
+
+.practice-head__eyebrow {
+  font-size: var(--fs-text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--e-ink);
+}
+
+.practice-head__title {
+  font-size: var(--fs-title-3);
+  font-weight: var(--fw-semibold);
+  line-height: 1.4;
+  color: var(--n-12);
+  overflow-wrap: anywhere;
+}
+
+/* The row of actions under a practice result. Wraps on a phone. */
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8);
+}
+
+/* «عدد الأسئلة» in the practice gate — `.review-filter`'s segmented control,
+   allowed to wrap, with 44px targets below `md` like every other chip a
+   student presses on a phone. */
+.count-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-8);
+}
+
+.count-picker__option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 4.5rem;
+  block-size: 2.75rem;
+  padding-inline: var(--s-12);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--n-1);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+  transition:
+    background var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out);
+}
+
+.count-picker__option:hover { background: var(--n-2); }
+
+/* The chosen count is a POSITION in the control, so it is amber — and it is
+   the solid weight because it is the one thing on the dialog already chosen. */
+.count-picker__option[aria-checked='true'] {
+  border-color: var(--a-9);
+  background: var(--a-9);
+  color: #1a1206;
+  font-weight: var(--fw-semibold);
+}
+
+@media (min-width: 48rem) {
+  .count-picker__option { block-size: 2.25rem; }
 }
 
 /* The progress figure sitting on a course cover. A pill rather than bare text:

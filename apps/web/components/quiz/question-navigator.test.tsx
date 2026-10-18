@@ -36,8 +36,8 @@ describe('QuestionNavigator keyboard arrows under dir="rtl"', () => {
       </div>,
     );
 
-    const first = screen.getByRole('button', { name: 'السؤال 1' });
-    const second = screen.getByRole('button', { name: 'السؤال 2' });
+    const first = screen.getByRole('button', { name: /^السؤال 1،/ });
+    const second = screen.getByRole('button', { name: /^السؤال 2،/ });
     first.focus();
     expect(first).toHaveFocus();
 
@@ -54,8 +54,8 @@ describe('QuestionNavigator keyboard arrows under dir="rtl"', () => {
       </div>,
     );
 
-    const second = screen.getByRole('button', { name: 'السؤال 2' });
-    const first = screen.getByRole('button', { name: 'السؤال 1' });
+    const second = screen.getByRole('button', { name: /^السؤال 2،/ });
+    const first = screen.getByRole('button', { name: /^السؤال 1،/ });
     second.focus();
     expect(second).toHaveFocus();
 
@@ -72,7 +72,7 @@ describe('QuestionNavigator keyboard arrows under dir="rtl"', () => {
       </div>,
     );
 
-    const last = screen.getByRole('button', { name: 'السؤال 3' });
+    const last = screen.getByRole('button', { name: /^السؤال 3،/ });
     last.focus();
     fireEvent.keyDown(last, { key: 'ArrowLeft' });
 
@@ -87,9 +87,9 @@ describe('QuestionNavigator keyboard arrows under dir="rtl"', () => {
       </div>,
     );
 
-    const current = screen.getByRole('button', { name: 'السؤال 2' });
-    const firstQuestion = screen.getByRole('button', { name: 'السؤال 1' });
-    const lastQuestion = screen.getByRole('button', { name: 'السؤال 3' });
+    const current = screen.getByRole('button', { name: /^السؤال 2،/ });
+    const firstQuestion = screen.getByRole('button', { name: /^السؤال 1،/ });
+    const lastQuestion = screen.getByRole('button', { name: /^السؤال 3،/ });
     current.focus();
 
     fireEvent.keyDown(current, { key: 'End' });

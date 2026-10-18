@@ -1,34 +1,10 @@
 'use client';
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState } from 'react';
 import { z } from 'zod';
-import { AlertTriangle, Clock } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy';
-import { formatCopy } from '@ayman/contracts/format';
-import { Button } from '@ayman/ui/components/button';
-import { cn } from '@ayman/ui/lib/cn';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@ayman/ui/components/dialog';
 import { apiGet } from '@/lib/api';
-
-function subscribeToClock(callback: () => void) {
-  const timer = setInterval(callback, 1000);
-  return () => clearInterval(timer);
-}
-
-function getClockSnapshot() {
-  return Math.floor(Date.now() / 1000);
-}
-
-function getClockServerSnapshot() {
-  return 0;
-}
+import { SubmitConfirmDialog, type SubmitDialogQuestion } from './submit-confirm-dialog';
 
 const PreflightSchema = z.object({ unansweredCount: z.number(), total: z.number() });
 
@@ -36,18 +12,31 @@ export interface SubmitDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   attemptId: string;
-  locallyUnanswered: readonly number[];
+  /**
+   * The runner's OWN view of the paper — used for the jump-to chips and the
+   * flagged row only. The headline COUNT never comes from this: it is
+   * re-fetched from `GET .../preflight` the instant the dialog opens, so a
+   * failed autosave cannot make «لسه فيه ٣ أسئلة» lie into «كل الأسئلة اتجاوبت».
+   */
+  questions: readonly SubmitDialogQuestion[];
+  /** Timed papers only — the bar's own anchor pair, so both clocks agree. */
   deadlineAt?: string | null;
+  serverTime: string;
   onJump: (slotPosition: number) => void;
   onConfirm: () => Promise<void>;
 }
 
+/**
+ * The exam's submit confirmation: `SubmitConfirmDialog` with the server's
+ * count behind it.
+ */
 export function SubmitDialog({
   open,
   onOpenChange,
   attemptId,
-  locallyUnanswered,
+  questions,
   deadlineAt,
+  serverTime,
   onJump,
   onConfirm,
 }: SubmitDialogProps) {
@@ -102,147 +91,31 @@ export function SubmitDialog({
     }
   }
 
-  const nowSeconds = useSyncExternalStore(
-    subscribeToClock,
-    getClockSnapshot,
-    getClockServerSnapshot,
-  );
-
-  const remainingSeconds =
-    open && deadlineAt
-      ? Math.max(0, Math.floor(new Date(deadlineAt).getTime() / 1000) - nowSeconds)
-      : null;
-  const remainingMinutes = remainingSeconds !== null ? Math.floor(remainingSeconds / 60) : null;
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent closeLabel={copy.common.close}>
-        <DialogHeader>
-          <DialogTitle>{copy.quiz.submitConfirmTitle}</DialogTitle>
-          <DialogDescription>{copy.quiz.submitConfirmBody}</DialogDescription>
-        </DialogHeader>
-
-        <div className="flex flex-col gap-3">
-          {error ? (
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-fg">{copy.common.error}</p>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setError(false);
-                  setUnansweredCount(null);
-                  setRetryNonce((nonce) => nonce + 1);
-                }}
-              >
-                {copy.common.retry}
-              </Button>
-            </div>
-          ) : unansweredCount === null ? (
-            <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted">{copy.common.loading}</p>
-          ) : unansweredCount === 0 ? (
-            <div className="rounded-lg border border-[color-mix(in_oklch,var(--ok),transparent_70%)] bg-[color-mix(in_oklch,var(--ok),transparent_94%)] p-3 text-fg">
-              <p className="flex items-center gap-1.5 font-medium text-ok text-[length:var(--fs-text-sm)]">
-                <span aria-hidden="true">✓</span>
-                <span>{copy.quiz.submitConfirmAllAnswered}</span>
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="rounded-lg border border-[color-mix(in_oklch,var(--err),transparent_70%)] bg-[color-mix(in_oklch,var(--err),transparent_94%)] p-3.5 text-fg">
-                <div className="flex items-center gap-2 font-semibold text-err text-[length:var(--fs-text-sm)]">
-                  <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
-                  <span>{formatCopy(copy.quiz.submitConfirmUnanswered, { count: unansweredCount })}</span>
-                </div>
-                <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted">
-                  تقدر تضغط على رقم أي سؤال تحت عشان تروحله وتجاوبه قبل ما تسلّم.
-                </p>
-              </div>
-
-              {locallyUnanswered.length > 0 ? (
-                <ul className="flex flex-wrap gap-2">
-                  {locallyUnanswered.map((slotPosition) => (
-                    <li key={slotPosition}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onOpenChange(false);
-                          onJump(slotPosition);
-                        }}
-                        className="mono flex size-11 items-center justify-center rounded-sm border border-line bg-surface-3 text-[length:var(--fs-text-sm)] text-fg hover:border-accent md:size-8"
-                      >
-                        {String(slotPosition + 1).padStart(2, '0')}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </>
-          )}
-
-          {remainingSeconds !== null && remainingSeconds > 60 ? (
-            <div className="rounded-lg border border-accent/30 bg-accent/10 p-3 text-fg">
-              <div className="flex items-center gap-2 font-semibold text-accent-text text-[length:var(--fs-text-sm)]">
-                <Clock className="size-4 shrink-0" aria-hidden="true" />
-                <span>
-                  {remainingMinutes && remainingMinutes > 0
-                    ? `لسه معاك وقت كافي (متبقي حوالي ${remainingMinutes} دقيقة)!`
-                    : 'لسه معاك وقت كافي!'}
-                </span>
-              </div>
-              <p className="mt-1 text-[length:var(--fs-text-xs)] text-fg-muted leading-relaxed">
-                اقعد راجع وخد وقتك كويس، وتأكد من إجاباتك قبل ما تسلّم الامتحان نهائيًا.
-              </p>
-            </div>
-          ) : null}
-        </div>
-
-        <DialogFooter>
-          {/* Cancel is the default-focused action — the single-attempt,
-              no-undo trap this dialog exists to prevent means "changed my
-              mind" must be the path requiring zero extra keystrokes. */}
-          <Button type="button" variant="secondary" autoFocus onClick={() => onOpenChange(false)}>
-            {copy.quiz.submitCancel}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => void confirm()}
-            disabled={submitting || (unansweredCount === null && !error)}
-          >
-            {/*
-              The LABEL carries the pending state, because `disabled` on its
-              own does not: it resolves to `disabled:opacity-50`, and a
-              slightly faded button is indistinguishable from a button that
-              ignored the tap. Behind it sits a flush of the last answer, a
-              POST to /submit and a client navigation to the review page —
-              three to eight seconds on the 3G most of this product is read on,
-              inside a modal, where the browser's own loading indicator is not
-              visible either. Nothing actually breaks when the student presses
-              again (the runner's `submitOnce` guard swallows it); they simply
-              conclude the highest-stakes tap in the product failed, and start
-              hunting for another way to submit while the clock runs.
-
-              Both labels are rendered into the SAME grid cell with the
-              inactive one hidden, so the button is permanently as wide as the
-              longer of the two and the swap cannot shift «ارجع للأسئلة»
-              sideways under a thumb already on its way down. A `min-w-*`
-              guess would have to be re-measured every time either string is
-              reworded; this measures itself. `invisible` rather than
-              `opacity-0` because `visibility: hidden` also takes the spare
-              label out of the accessibility tree — with `opacity-0` a screen
-              reader announces the button as «أيوه، نسلّم بيتسلّم…».
-            */}
-            <span className="grid">
-              <span className={cn('col-start-1 row-start-1', submitting && 'invisible')}>
-                {copy.quiz.submitConfirmAction}
-              </span>
-              <span className={cn('col-start-1 row-start-1', !submitting && 'invisible')}>
-                {copy.quiz.submitting}
-              </span>
-            </span>
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <SubmitConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={copy.quiz.submitConfirmTitle}
+      description={copy.quiz.submitConfirmBody}
+      questions={questions}
+      unansweredCount={error ? null : unansweredCount}
+      countFailed={error}
+      onRetryCount={() => {
+        setError(false);
+        setUnansweredCount(null);
+        setRetryNonce((nonce) => nonce + 1);
+      }}
+      clock={deadlineAt ? { deadlineAt, serverTime } : null}
+      onJump={onJump}
+      onConfirm={() => void confirm()}
+      submitting={submitting}
+      // While the count is in flight, confirm waits for it — so a student
+      // cannot hand in a paper the dialog has not finished describing. Once
+      // the fetch has FAILED it goes live again: the server recounts anyway.
+      confirmDisabled={unansweredCount === null && !error}
+      confirmLabel={copy.quiz.submitConfirmAction}
+      submittingLabel={copy.quiz.submitting}
+      cancelLabel={copy.quiz.submitCancel}
+    />
   );
 }

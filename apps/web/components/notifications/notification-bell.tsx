@@ -43,7 +43,13 @@ import { NotificationBellClient } from './notification-bell-client';
  * is now doubly true, since those eight rows no longer exist at this point.
  */
 export async function NotificationBell() {
-  const count = await apiGetAuthed('/api/me/notifications/unread-count', UnreadCountSchema);
+  // A count that will not load (a throttle, an API mid-restart) keeps the
+  // bell's placeholder rather than throwing: this is a layout slot, and a throw
+  // here skips the group's boundary and takes the whole page down over a badge.
+  const count = await apiGetAuthed('/api/me/notifications/unread-count', UnreadCountSchema).catch(
+    () => null,
+  );
+  if (!count) return <NotificationBellFallback />;
 
   return <NotificationBellClient unread={count.unread} />;
 }

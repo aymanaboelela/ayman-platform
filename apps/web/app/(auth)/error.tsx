@@ -36,13 +36,21 @@ export default function AuthError({
   reset: () => void;
 }) {
   useErrorReport(error);
-  const { retry, retrying } = useErrorRetry(error, reset);
+  const { retry, retrying, waiting } = useErrorRetry(error, reset);
 
   return (
     <>
       <header className="auth-head">
         <h1 className="auth-head__title">{copy.errors.auth.title}</h1>
-        <p className="auth-head__sub">{copy.errors.auth.body}</p>
+        {/* A dropped connection replaces the body — see `(app)/error.tsx`. */}
+        <p className="auth-head__sub">
+          {waiting === 'network' ? copy.errors.reconnecting : copy.errors.auth.body}
+        </p>
+        {waiting === 'soon' ? (
+          <p role="status" className="auth-head__sub">
+            {copy.errors.retryingSoon}
+          </p>
+        ) : null}
       </header>
 
       {/*

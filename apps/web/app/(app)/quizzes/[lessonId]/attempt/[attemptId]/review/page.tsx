@@ -1,8 +1,12 @@
+import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { ArrowRight } from 'lucide-react';
 import { z } from 'zod';
 import { QUESTION_TYPES, copy } from '@ayman/contracts';
+import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
 import { ApiRequestError } from '@/lib/api';
 import { apiGetAuthed } from '@/lib/api-server';
+import { quizHref } from '@/lib/quiz-links';
 import { sanitizeRichText } from '@/lib/sanitize-html';
 import { ResultHeader } from '@/components/quiz/result-header';
 import { ReviewLocked } from '@/components/quiz/review-locked';
@@ -111,7 +115,16 @@ export default async function QuizReviewPage({
   // 4×7 matrix produces, with nothing bolted onto the side of it.
 
   return (
-    <main className="mx-auto max-w-[var(--w-prose)] px-6 py-10">
+    // The study surface's own gutter — `px-4` on a phone, as the intro and the
+    // runner use. This page alone had `px-6`, 8px narrower per side than the
+    // screen the student had just left.
+    <main className="mx-auto w-full max-w-[var(--w-prose)] px-4 py-8 md:px-6 md:py-10">
+      {/* The way back to the exam's own page — where «مراجعة الإجابات» and the
+          attempt history live. There was none except the browser's. */}
+      <Link href={quizHref(lessonId)} className="quiz-back mb-2">
+        <ArrowRight className="size-4" aria-hidden="true" />
+        {quizExperience.review.backToQuiz}
+      </Link>
       <h1 className="mb-6 text-[length:var(--fs-title-2)] font-semibold">{copy.quiz.reviewTitle}</h1>
 
       {/* `gradedOutOf || gradeOutOf`: a payload from an API container that

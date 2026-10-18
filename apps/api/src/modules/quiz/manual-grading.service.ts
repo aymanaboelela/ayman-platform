@@ -18,6 +18,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { Prisma } from '../../generated/prisma/client';
 import { clamp, fractionToState, roundMark } from './grading/fraction';
 import { splitPendingMarks } from './grading/mark-split';
+import { checkChoiceOverride, describeChoice } from './grading/choice-override';
+import { paperOptions } from './grading/paper-options';
 import { GRADED_STATES } from './analytics.service';
 
 /**
@@ -519,13 +521,17 @@ export class ManualGradingService {
   }
 
   /**
-   * One attempt's ungraded answers.
+   * One paper, every question on it, for the marking screen.
    *
-   * ⚠️ This payload carries the student's written answer and the question stem,
-   * so it must never be reachable by a student — it is `attempt:grade`, which is
-   * admin-only. It deliberately does NOT carry the model answer: an essay has
-   * none to carry, and adding one would put an answer key on a route whose whole
-   * job is that a human supplies it.
+   * ⚠️ This payload carries the student's written answers, every stem, every
+   * option and which option is RIGHT — an answer key — so it must never be
+   * reachable by a student. It is `attempt:grade`, which is admin-only.
+   *
+   * Every question, not only the unmarked ones (it used to filter to
+   * `needs_grading` plus anything a human had marked). Since 2026-10-15 the
+   * screen also lets the instructor correct a recorded CHOICE answer and
+   * re-mark an engine-scored question, so it needs to see them; the card keeps
+   * those rows read-only until he asks to change one.
    */
   async forAttempt(attemptId: string): Promise<AdminGradingAttempt> {
     const attempt = await this.prisma.quizAttempt.findUnique({
@@ -586,32 +592,6 @@ export class ManualGradingService {
           .filter((opt) => Number(opt.fraction) > 0)
           .map((opt) => opt.id);
 
-        const byPosition = new Map(q.version.options.map((opt) => [opt.position, opt]));
-        const orderedOpts: Array<{ id: string; bodyHtml: string; position?: number; isRight: boolean }> = [];
-        const used = new Set<number>();
-        for (const pos of q.optionOrder) {
-          const opt = byPosition.get(pos);
-          if (opt && !used.has(pos)) {
-            orderedOpts.push({
-              id: opt.id,
-              bodyHtml: opt.bodyHtml,
-              position: opt.position,
-              isRight: Number(opt.fraction) > 0,
-            });
-            used.add(pos);
-          }
-        }
-        for (const opt of q.version.options) {
-          if (!used.has(opt.position)) {
-            orderedOpts.push({
-              id: opt.id,
-              bodyHtml: opt.bodyHtml,
-              position: opt.position,
-              isRight: Number(opt.fraction) > 0,
-            });
-          }
-        }
-
         return {
           attemptQuestionId: q.id,
           slotPosition: q.slotPosition,
@@ -622,16 +602,32 @@ export class ManualGradingService {
           chosenOptionIds,
           rightAnswerText: q.rightAnswerText,
           rightOptionIds,
-          options: orderedOpts,
+          // In the order and the wording this student read them.
+          options: paperOptions(q.version.options, q.optionOrder),
           correctness: q.state,
           maxMark: Number(q.maxMark),
-          mark: q.state === 'needs_grading' && q.mark === null ? null : q.mark === null ? null : Number(q.mark),
+          // Null, not 0. "Unmarked" and "marked zero" are different facts, and
+          // this screen exists precisely to turn the first into the second — so
+          // the empty box must not arrive pre-filled with a zero nobody typed.
+          mark: q.state === 'needs_grading' || q.mark === null ? null : Number(q.mark),
           feedbackHtml: q.feedbackHtml,
         };
       }),
     };
   }
 
+  /**
+   * «تعديل المجموع» — the paper's total, set by hand.
+   *
+   * The screen confirms old → new before it calls this, and the audit row
+   * carries both, because this overwrites a number a student has already been
+   * shown. Refused above the paper's own `gradeOutOf` (a total of 120 out of
+   * 100 is a typo, not a decision) and on a sitting that is still running.
+   *
+   * It does not survive a later per-question mark: `grade()` recomputes the
+   * total from the questions, which is the honest number. The confirmation
+   * says so in as many words.
+   */
   async overrideScore(
     attemptId: string,
     input: { scaledScore: number },
@@ -639,11 +635,15 @@ export class ManualGradingService {
   ): Promise<{ scaledScore: number; passed: boolean }> {
     const attempt = await this.prisma.quizAttempt.findUnique({
       where: { id: attemptId },
-      select: { id: true, gradeOutOf: true, passPercent: true },
+      select: { id: true, state: true, gradeOutOf: true, passPercent: true, scaledScore: true },
     });
     if (!attempt) throw new NotFoundException({ code: 'attempt_not_found' });
+    if (!(GRADED_STATES as readonly string[]).includes(attempt.state)) {
+      throw new BadRequestException({ code: 'attempt_not_finished' });
+    }
     const scaledScore = roundMark(input.scaledScore);
     const gradeOutOf = Number(attempt.gradeOutOf);
+    if (scaledScore > gradeOutOf) throw new BadRequestException({ code: 'score_above_total' });
     const passPercent = Number(attempt.passPercent);
     const passed = gradeOutOf > 0 ? (scaledScore / gradeOutOf) * 100 >= passPercent : true;
 
@@ -661,12 +661,35 @@ export class ManualGradingService {
       resourceId: attemptId,
       outcome: 'success',
       actorUserId,
-      metadata: { overriddenScore: scaledScore, passed },
+      metadata: {
+        overriddenScore: scaledScore,
+        previousScore: attempt.scaledScore === null ? null : Number(attempt.scaledScore),
+        passed,
+      },
     });
 
     return { scaledScore, passed };
   }
 
+  /**
+   * One answer, marked by a human — and, on a choice question, optionally its
+   * recorded answer corrected.
+   *
+   * ## The correction is checked, not trusted
+   *
+   * `response` used to be stored exactly as it arrived (`z.unknown()`), with
+   * `response_text` set to the option IDS joined by commas. Two consequences:
+   * the card's own bug — it sent `{kind:'choice', optionIds: chosen}` on EVERY
+   * save, so marking an unanswered question also "answered" it with nothing —
+   * went straight into the paper; and any id at all, including another
+   * question's, could be written as this student's answer.
+   *
+   * Now a correction must be a choice question's (`checkChoiceOverride`),
+   * name only options of THIS row's question version, and have the shape the
+   * type allows (one option for a single-answer question) — 400 otherwise,
+   * before anything is written. `response_text` is the chosen options' TEXT,
+   * the same thing submit writes there.
+   */
   async grade(
     attemptId: string,
     attemptQuestionId: string,
@@ -681,6 +704,19 @@ export class ManualGradingService {
           maxMark: true,
           minFraction: true,
           maxFraction: true,
+          mark: true,
+          response: true,
+          version: {
+            select: {
+              type: true,
+              options: { orderBy: { position: 'asc' }, select: { id: true, bodyHtml: true } },
+            },
+          },
+          // Read BEFORE the write, because the write is what changes it. The
+          // notification below has to fire on the transition into
+          // `submitted` and not merely on the state afterwards — otherwise
+          // correcting a typo'd mark on an already-finished paper months
+          // later re-announces the result to the student every time.
           attempt: { select: { state: true, quiz: { select: { lessonId: true } } } },
         },
       });
@@ -690,33 +726,49 @@ export class ManualGradingService {
       const maxMark = Number(row.maxMark);
       if (maxMark <= 0) throw new BadRequestException({ code: 'question_has_no_marks' });
 
-      const mark = roundMark(clamp(input.mark, 0, maxMark));
-      const fraction = clamp(mark / maxMark, Number(row.minFraction), Number(row.maxFraction));
-
-      const responseUpdate: Record<string, unknown> = {};
+      let responseUpdate: { response: Prisma.InputJsonValue; responseText: string | null } | null = null;
       if (input.response !== undefined) {
-        responseUpdate.response = input.response;
-        if (typeof input.response === 'object' && input.response !== null) {
-          const respObj = input.response as Record<string, unknown>;
-          if (respObj.kind === 'choice' && Array.isArray(respObj.optionIds)) {
-            responseUpdate.responseText = respObj.optionIds.join(', ');
-          } else if (respObj.kind === 'text' && typeof respObj.text === 'string') {
-            responseUpdate.responseText = respObj.text;
-          }
-        }
+        const checked = checkChoiceOverride(row.version.type, row.version.options, input.response.optionIds);
+        if (!checked.ok) throw new BadRequestException({ code: checked.code });
+        responseUpdate = {
+          response: { kind: 'choice', optionIds: checked.optionIds },
+          responseText: describeChoice(row.version.options, checked.optionIds),
+        };
       }
+
+      const previousMark = row.mark === null ? null : Number(row.mark);
+      /*
+       * Unchanged at the precision the marking screen SHOWS a mark (two
+       * places, `formatMark`): the card sends its box with every save, and an
+       * engine's 0.6667 it displayed as «0.67» is the same mark, not a new one.
+       */
+      const markChanged = previousMark === null || Math.abs(input.mark - previousMark) >= 0.005;
+      const changed = markChanged || responseUpdate !== null;
+
+      // Clamped, not rejected: an admin typing 20 into a 5-mark box is a slip,
+      // and a 400 in the middle of marking thirty papers is worse than the
+      // obvious correction. The clamped value is what the audit row records.
+      const mark =
+        markChanged || previousMark === null ? roundMark(clamp(input.mark, 0, maxMark)) : previousMark;
+      const fraction = clamp(mark / maxMark, Number(row.minFraction), Number(row.maxFraction));
 
       await tx.attemptQuestion.update({
         where: { id: attemptQuestionId },
         data: {
-          mark,
-          fraction,
-          state: fractionToState(fraction),
           feedbackHtml:
             input.feedbackHtml === undefined ? undefined : sanitizeRichText(input.feedbackHtml),
-          gradedAt: new Date(),
-          gradedBy: actorUserId,
-          ...responseUpdate,
+          /*
+           * The grade, and who gave it, only when what a grade is made of
+           * moved. `gradedBy` tells a HUMAN mark from an engine one — and it is
+           * what `RegradeService` skips (`gradedBy: null`), so stamping it on a
+           * note, or on a «حفظ» of the engine's own mark, froze that answer out
+           * of every later answer-key correction. A note on its own keeps the
+           * engine's attribution.
+           */
+          ...(changed
+            ? { mark, fraction, state: fractionToState(fraction), gradedAt: new Date(), gradedBy: actorUserId }
+            : {}),
+          ...(responseUpdate ?? {}),
         },
       });
 
@@ -758,16 +810,33 @@ export class ManualGradingService {
         });
       }
 
-      return recomputed;
+      return {
+        ...recomputed,
+        mark,
+        previousMark,
+        previousResponse: row.response,
+        responseChanged: responseUpdate !== null,
+      };
     });
 
+    // Old and new, because both of these writes overwrite something the
+    // student may already have seen — and «مين غيّر إجابتي؟» has to have an
+    // answer that is not "somebody, at some point".
     await this.audit.record({
       action: 'attempt:grade',
       resourceType: AUDIT_RESOURCES.quizAttempt,
       resourceId: attemptId,
       outcome: 'success',
       actorUserId,
-      metadata: { attemptQuestionId, mark: input.mark, scaledScore: result.scaledScore },
+      metadata: {
+        attemptQuestionId,
+        mark: result.mark,
+        previousMark: result.previousMark,
+        scaledScore: result.scaledScore,
+        ...(result.responseChanged
+          ? { responseChanged: true, previousResponse: result.previousResponse ?? null, response: input.response }
+          : {}),
+      },
     });
 
     return { scaledScore: result.scaledScore };

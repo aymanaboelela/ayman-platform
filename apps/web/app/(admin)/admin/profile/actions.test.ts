@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { adminAccount } from '@ayman/contracts/copy/admin-account';
 
 vi.mock('next/headers', () => ({
   headers: async () => new Headers({ cookie: '__Host-csrf=token' }),
@@ -24,119 +25,112 @@ const MOCK_PROFILE = {
   permissions: ['*'],
 };
 
-describe('updateAdminProfileAction', () => {
-  it('updates profile successfully when input is valid', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => Response.json(MOCK_PROFILE)),
-    );
+/** A JSON error body the way `AllExceptionsFilter` writes it — the code is the contract. */
+function refusal(status: number, code: string): Response {
+  return new Response(JSON.stringify({ statusCode: status, message: 'Bad Request Exception', code }), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
+}
 
-    const result = await updateAdminProfileAction({
-      name: 'أحمد محمود',
-      phoneNumber: '+201012345678',
-    });
+describe('updateAdminProfileAction', () => {
+  it('updates the profile when the input is valid', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(MOCK_PROFILE)));
+
+    const result = await updateAdminProfileAction({ name: 'أحمد محمود', phoneNumber: '01012345678' });
 
     expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data.name).toBe('أحمد محمود');
-      expect(result.data.id).toBe('usr-admin-1');
-    }
+    if (result.ok) expect(result.data.id).toBe('usr-admin-1');
   });
 
-  it('fails with validation error if name is too short', async () => {
-    const result = await updateAdminProfileAction({
-      name: 'أ',
-    });
+  it('refuses a name under two letters before anything is sent', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.message).toContain('حرفين على الأقل');
-    }
+    const result = await updateAdminProfileAction({ name: 'أ' });
+
+    expect(result).toEqual({ ok: false, message: adminAccount.nameTooShort });
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('handles 409 conflict when phone number is already taken', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ statusCode: 409, message: 'Phone number already exists' }), {
-            status: 409,
-            headers: { 'content-type': 'application/json' },
-          }),
-      ),
-    );
+  it('says a taken phone number in words, from the code', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => refusal(409, 'phone_taken')));
 
-    const result = await updateAdminProfileAction({
-      name: 'أحمد محمود',
-      phoneNumber: '+201012345678',
-    });
+    const result = await updateAdminProfileAction({ name: 'أحمد محمود', phoneNumber: '01012345678' });
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.message).toContain('مستخدم بالفعل');
-    }
+    expect(result).toEqual({ ok: false, message: adminAccount.phoneTaken });
   });
 });
 
 describe('changeAdminPasswordAction', () => {
-  it('changes password successfully when valid', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          Response.json({
-            status: true,
-            message: 'تم تغيير كلمة المرور بنجاح',
-          }),
-      ),
-    );
+  it('changes the password and reports how many OTHER sessions ended', async () => {
+    const fetchSpy = vi.fn(async () => Response.json({ status: true, revokedSessions: 0 }));
+    vi.stubGlobal('fetch', fetchSpy);
 
     const result = await changeAdminPasswordAction({
       currentPassword: 'CurrentPassword123!',
       newPassword: 'NewPassword123!',
-      revokeOtherSessions: true,
+      revokeOtherSessions: false,
     });
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.data.status).toBe(true);
-    }
+    expect(result).toEqual({ ok: true, revokedSessions: 0 });
+    // What was sent: the flag exactly as the form set it — never defaulted on.
+    const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({ revokeOtherSessions: false });
   });
 
-  it('fails with validation error when new password is too short', async () => {
+  it('still parses a result from an API that predates `revokedSessions`', async () => {
+    // A rolling deploy: the API container answers in the old shape.
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ status: true, message: 'تم تغيير كلمة المرور بنجاح' })));
+
+    const result = await changeAdminPasswordAction({
+      currentPassword: 'CurrentPassword123!',
+      newPassword: 'NewPassword123!',
+      revokeOtherSessions: false,
+    });
+
+    expect(result).toEqual({ ok: true, revokedSessions: 0 });
+  });
+
+  it('refuses a new password under 8 characters, against that field, before anything is sent', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
     const result = await changeAdminPasswordAction({
       currentPassword: 'CurrentPassword123!',
       newPassword: 'short',
-      revokeOtherSessions: true,
+      revokeOtherSessions: false,
     });
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.message).toContain('8 أحرف');
-    }
+    expect(result).toEqual({ ok: false, field: 'next', message: adminAccount.password.errors.tooShort });
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('surfaces backend error message when current password is wrong', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ statusCode: 400, message: 'كلمة المرور الحالية غير صحيحة' }), {
-            status: 400,
-            headers: { 'content-type': 'application/json' },
-          }),
-      ),
-    );
+  it.each([
+    ['current_password_incorrect', 'current', adminAccount.password.errors.wrongCurrent],
+    ['password_unchanged', 'next', adminAccount.password.errors.sameAsCurrent],
+    ['no_credential_account', null, adminAccount.password.errors.noCredential],
+  ] as const)('maps the API code %s to a sentence on the right field', async (code, field, message) => {
+    vi.stubGlobal('fetch', vi.fn(async () => refusal(400, code)));
 
     const result = await changeAdminPasswordAction({
       currentPassword: 'WrongPassword!',
       newPassword: 'NewPassword123!',
+      revokeOtherSessions: false,
+    });
+
+    expect(result).toEqual({ ok: false, field, message });
+  });
+
+  it('falls back to one plain sentence for anything else — never the transport’s text', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('upstream exploded', { status: 502 })));
+
+    const result = await changeAdminPasswordAction({
+      currentPassword: 'CurrentPassword123!',
+      newPassword: 'NewPassword123!',
       revokeOtherSessions: true,
     });
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.message).toContain('كلمة المرور الحالية غير صحيحة');
-    }
+    expect(result).toEqual({ ok: false, field: null, message: adminAccount.password.errors.failed });
   });
 });

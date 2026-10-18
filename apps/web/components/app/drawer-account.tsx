@@ -21,7 +21,10 @@ import { UserAvatar } from './user-avatar';
  * `getSession()` is `cache()`-wrapped, so the two share one request.
  */
 export async function DrawerAccount() {
-  const session = await getSession();
+  // A failed read (a throttle, an API mid-restart) draws the lockup too: this
+  // is a layout slot, and a throw from here would take the whole page down
+  // over the head of a drawer that is closed on first paint.
+  const session = await getSession().catch(() => null);
   // Unreachable behind `proxy.ts`, but a signed-out render must not leave the
   // head of the drawer empty.
   if (!session) return <BrandLockup showTagline={false} />;

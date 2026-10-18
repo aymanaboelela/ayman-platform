@@ -1094,15 +1094,32 @@ export default function LiquidEther({
     container.style.position = container.style.position || 'relative';
     container.style.overflow = container.style.overflow || 'hidden';
 
-    const webgl = new WebGLManager({
-      $wrapper: container,
-      autoDemo,
-      autoSpeed,
-      autoIntensity,
-      takeoverDuration,
-      autoResumeDelay,
-      autoRampDuration
-    });
+    /* ---- ADAPTED FOR THIS REPO: no WebGL is a reason not to draw, not a throw --
+     *
+     * `THREE.WebGLRenderer` throws «Error creating WebGL context» on a browser
+     * that cannot give it one — a blocklisted GPU, hardware acceleration off, a
+     * privacy extension handing back a fake context, a headless link previewer
+     * — and a throw out of this effect replaces the whole `/essentials` page
+     * with its error screen, over a background. The line `splash-cursor.tsx`
+     * draws for the cursor fluid, after production showed it there: this is
+     * decoration, and without it the hero is simply flat. `Common.init` is the
+     * first thing the constructor does, so a throw leaves no listener behind.
+     */
+    let webgl: WebGLManager;
+    try {
+      webgl = new WebGLManager({
+        $wrapper: container,
+        autoDemo,
+        autoSpeed,
+        autoIntensity,
+        takeoverDuration,
+        autoResumeDelay,
+        autoRampDuration
+      });
+    } catch (error) {
+      console.warn('[liquid-ether] no usable WebGL context; the backdrop is skipped', error);
+      return;
+    }
     webglRef.current = webgl;
 
     const applyOptionsFromProps = () => {

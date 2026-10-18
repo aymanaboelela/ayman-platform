@@ -1,6 +1,7 @@
+import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { copy } from '@ayman/contracts';
-import { apiSend } from '@/lib/api-server';
+import { ApiSendError, apiSend, refusalReason } from '@/lib/api-server';
 import { sanitizeRichText } from '@/lib/sanitize-html';
 import { StartedAttemptSchema, type StartedAttempt } from '@/components/quiz/attempt-schema';
 import { QuizRunner } from '@/components/quiz/quiz-runner';
@@ -55,14 +56,27 @@ export default async function QuizAttemptPage({
   try {
     initial = await apiSend('POST', `/api/quiz/attempts/${attemptId}/resume`, StartedAttemptSchema);
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.message.includes('failed with 401')) {
+    if (error instanceof ApiSendError) {
+      if (error.status === 401) {
         redirect(`/login?next=${encodeURIComponent(`/quizzes/${lessonId}/attempt/${attemptId}`)}`);
       }
-      if (error.message.includes('failed with 404')) {
+      if (error.status === 404) {
         notFound();
       }
-      if (error.message.includes('failed with 403') || error.message.includes('failed with 400')) {
+      /*
+       * A refusal is an ordinary answer here, and it is the one production
+       * recorded most: the 17:00 wave on `/admin/errors` was students
+       * reopening their paper the minute the exam window shut, and `resume`
+       * answering `quiz_closed`. That used to throw — an error screen with a
+       * digest, over a paper whose answers were already safely saved. Each
+       * reason now gets its own sentence on this route (see
+       * `AttemptUnavailable`); the review page is no answer to «closed»,
+       * because a paper that was never handed in has nothing to review yet.
+       */
+      if (error.status === 403) {
+        return <AttemptUnavailable lessonId={lessonId} reason={refusalReason(error.payload)} />;
+      }
+      if (error.status === 400) {
         redirect(`/quizzes/${encodeURIComponent(lessonId)}/attempt/${encodeURIComponent(attemptId)}/review`);
       }
     }
@@ -76,6 +90,61 @@ export default async function QuizAttemptPage({
     // out of the question's own reading width.
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
       <QuizRunner lessonId={lessonId} initial={sanitizePaper(initial)} />
+    </main>
+  );
+}
+
+/** Spelled as the API spells them — see `QuizRefused` on the exam page. */
+const LAPSED_REASONS = new Set(['expired', 'revoked', 'not_yet_valid']);
+
+/**
+ * The runner's page when `resume` refused, one sentence per reason:
+ *
+ *   · `quiz_closed`        — «الامتحان قفل», and the true thing about the
+ *                            answers: autosaved, on the server, with their
+ *                            outcome on the exam page once the sweep is done.
+ *   · `quiz_not_open_yet`  — the window was moved later after the paper was
+ *                            started; the exam page shows when it opens.
+ *   · a lapsed grant       — the subscription ran out.
+ *   · anything else        — the subscription does not cover this exam.
+ *
+ * The first two point at the exam page; the last two at the student's
+ * courses, where the renewal lives. Never the not-found page, and never an
+ * error screen — every one of these is an answer, not a fault.
+ */
+function AttemptUnavailable({ lessonId, reason }: { lessonId: string; reason: string | null }) {
+  const c = copy.quiz;
+  const windowShut = reason === 'quiz_closed' || reason === 'quiz_not_open_yet';
+  const title =
+    reason === 'quiz_closed' ? c.closed : reason === 'quiz_not_open_yet' ? c.notOpenYet : c.blockedTitle;
+  const body =
+    reason === 'quiz_closed'
+      ? c.closedSavedBody
+      : windowShut
+        ? null
+        : reason !== null && LAPSED_REASONS.has(reason)
+          ? c.lockedLapsed
+          : c.lockedNotIncluded;
+
+  return (
+    <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
+      <header className="stage mb-6">
+        <div className="stage__body">
+          <h1 className="stage__title">{title}</h1>
+          {body ? <p className="stage__sub">{body}</p> : null}
+          <div className="exam-stage__action">
+            {windowShut ? (
+              <Link href={`/quizzes/${encodeURIComponent(lessonId)}`} className="chip chip--solid">
+                {c.toQuizPage}
+              </Link>
+            ) : (
+              <Link href="/library" className="chip chip--solid">
+                {copy.library.title}
+              </Link>
+            )}
+          </div>
+        </div>
+      </header>
     </main>
   );
 }

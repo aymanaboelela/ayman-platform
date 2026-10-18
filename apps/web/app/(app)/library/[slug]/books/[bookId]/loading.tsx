@@ -1,38 +1,39 @@
 import { Skeleton } from '@ayman/ui/components/skeleton';
 import { RouteLoadingWatchdog } from '@/components/route-loading-watchdog';
 
+/**
+ * A question book's page before it lands: the same `.stage` band, the same
+ * contents heading and `.unit` cards the real page draws, with grey inside —
+ * so the band does not appear out of nowhere above a list that then moves.
+ */
 export default function Loading() {
   return (
     <main className="mx-auto w-full max-w-[var(--w-shell)] px-4 py-8 md:px-6 md:py-10">
       <RouteLoadingWatchdog />
-      <Skeleton width="narrow" className="mb-6 h-4" />
-
-      <div className="mb-8 space-y-3">
-        <Skeleton width="narrow" className="h-3" />
-        <Skeleton width="wide" className="h-8" />
-        <Skeleton width="narrow" className="h-4" />
-      </div>
-
-      <div className="panel mb-8 p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-2">
-            <Skeleton width="narrow" className="h-4" />
-            <Skeleton width="wide" className="h-6" />
-          </div>
-          <Skeleton className="h-10 w-32 rounded-sm" />
+      <div className="stage mb-8">
+        <div className="stage__body flex flex-col gap-3">
+          <Skeleton className="h-3 w-24 opacity-60" />
+          <Skeleton className="mt-2 h-3 w-40 opacity-60" />
+          <Skeleton width="wide" className="h-9 opacity-60" />
+          <Skeleton width="full" className="h-4 opacity-60" />
+          <Skeleton className="mt-3 h-10 w-56 rounded-sm opacity-60" />
         </div>
       </div>
 
-      <div className="space-y-4">
-        {Array.from({ length: 3 }, (_, index) => (
-          <div className="panel p-4" key={index}>
-            <div className="flex items-center justify-between">
+      <div className="group-head">
+        <span className="group-head__mark" aria-hidden="true" />
+        <Skeleton className="h-6 w-32" />
+      </div>
+      {Array.from({ length: 3 }, (_, index) => (
+        <div key={index} className="unit">
+          <div className="unit__head">
+            <div className="flex flex-1 flex-col gap-2">
               <Skeleton width="wide" className="h-5" />
-              <Skeleton className="h-8 w-24 rounded-sm" />
+              <Skeleton className="h-3 w-32" />
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </main>
   );
 }

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { copy } from '@ayman/contracts/copy';
+import { isUnexpectedServerResponseMessage } from '@ayman/contracts/error-classify';
 import { isStaleDeployError } from './stale-deploy';
 
 /**
@@ -85,11 +86,24 @@ export function useTabIsStale(): boolean {
  * test can construct without importing Next's internals. Either one matching
  * is sufficient: if Next rewords the sentence, the name still holds, and the
  * reverse.
+ *
+ * ## The third shape: «An unexpected response was received from the server.»
+ *
+ * Recorded twice — `/admin/grading/<id>` and `/admin/homework/<id>`, an editor
+ * saving. Next's own server cannot produce it (`@ayman/contracts/error-classify`
+ * has the reasoning): the action was answered by Traefik or Cloudflare, which
+ * is what the few seconds of a deploy look like from inside a tab. Once that
+ * deploy finishes the tab IS stale — its action ids belong to the build that
+ * was just replaced — so it gets the same toast and the same cure, and it is
+ * not filed as a fault. The one case it misreads is an edge error with no
+ * deploy behind it, and there the toast's reload is still the right press.
  */
 export function isStaleActionError(error: unknown): error is Error {
   return (
     error instanceof Error &&
-    (error.name === 'UnrecognizedActionError' || isStaleDeployError(error))
+    (error.name === 'UnrecognizedActionError' ||
+      isStaleDeployError(error) ||
+      isUnexpectedServerResponseMessage(error.message))
   );
 }
 

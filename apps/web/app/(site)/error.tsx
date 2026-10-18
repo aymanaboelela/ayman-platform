@@ -35,7 +35,7 @@ export default function SiteError({
   reset: () => void;
 }) {
   useErrorReport(error);
-  const { retry, retrying } = useErrorRetry(error, reset);
+  const { retry, retrying, waiting } = useErrorRetry(error, reset);
 
   return (
     <main>
@@ -46,7 +46,15 @@ export default function SiteError({
       */}
       <header className="page-head site-shell">
         <h1 className="page-title">{copy.errors.site.title}</h1>
-        <p className="site-lead">{copy.errors.site.body}</p>
+        {/* A dropped connection replaces the body — see `(app)/error.tsx`. */}
+        <p className="site-lead">
+          {waiting === 'network' ? copy.errors.reconnecting : copy.errors.site.body}
+        </p>
+        {waiting === 'soon' ? (
+          <p role="status" className="site-lead">
+            {copy.errors.retryingSoon}
+          </p>
+        ) : null}
       </header>
 
       <div className="site-shell" style={{ paddingBottom: 'clamp(3.5rem, 7vw, 6rem)' }}>
