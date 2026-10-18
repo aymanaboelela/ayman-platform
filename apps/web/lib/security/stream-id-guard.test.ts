@@ -9,8 +9,9 @@ import { DOM_MUTATION_GUARD, PREPAINT_SCRIPT, STREAM_ID_GUARD } from './prepaint
  * already given out, and `STREAM_ID_GUARD` is what keeps that from moving the
  * student shell into a list item. See the guard for the whole story.
  *
- * Everything here is real. The HTML comes from the React build Next 16.2.11
- * ships for `cacheComponents`, prerendered, aborted and resumed the way Next
+ * Everything here is real. The HTML comes from the React build Next ships
+ * for `cacheComponents` (16.2.11 had the bug; 16.3.8 does not), prerendered,
+ * aborted and resumed the way Next
  * does it. The scripts that run are the ones React streamed. jsdom parses the
  * whole document in one go, which is the worst case in the browser: every
  * streamed instruction runs before the batched reveal (`$RV`) does. In the
@@ -153,21 +154,18 @@ async function load(html: string, { guard }: { guard: boolean }) {
 }
 
 describe('STREAM_ID_GUARD', () => {
-  it('starts from a stream that really reuses an id — the React bug it works around', async () => {
+  it('no longer meets a reused id in the React that Next 16.3.8 ships, so the page is whole without the guard', async () => {
+    // Next 16.2.11's React reused `S:1` here, and the late segment carried the
+    // shell into a list item (the 2026-10-18 tablet-rail e2e failure). The
+    // React bundled with 16.3.8 no longer does. The guard stays as a no-op
+    // safety net; drop it once a release or two has shown the fix holds.
     const html = await streamPage({ shellBytes: 20_000 });
+    expect(duplicateIds(html)).toEqual([]);
 
-    // If this fails, React stopped reusing the id: check the React that
-    // production runs, and the guard can go once it has the fix too.
-    expect(duplicateIds(html)).toEqual(['S:1']);
-  });
-
-  it('without the guard, the late segment takes the shell with it — the e2e failure', async () => {
-    const page = await load(await streamPage({ shellBytes: 20_000 }), { guard: false });
-
-    expect(page.shellOnPage).toBe(false);
-    // Chrome words it «The new child element contains the parent», jsdom «The
-    // operation would yield an incorrect node tree». Same error, from `$RV`.
-    expect(page.errors.join('\n')).toContain('HierarchyRequestError');
+    const page = await load(html, { guard: false });
+    expect(page.errors).toEqual([]);
+    expect(page.shells).toBe(1);
+    expect(page.shellOnPage).toBe(true);
   });
 
   it('with the guard, every segment lands where React meant it', async () => {
