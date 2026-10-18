@@ -148,8 +148,20 @@ export async function challengeCandidates(
  * الكلام، وإلا الدفتر يكشف إجابة سؤال البنك بيخبّيه.
  */
 function examBlockCtes(userId: string | null): Prisma.Sql {
+  /*
+   * ⚠️ PER PAPER, not per quiz. A course exam has two papers («الأصلي» and
+   * «تحسين»), and this used to unblock an exam the moment ANY attempt at it was
+   * submitted — so a student who handed in the original paper could open the
+   * improvement paper and read every answer of it here, one question at a time.
+   * A paper's questions now stay blocked until THAT paper is submitted.
+   *
+   * And `live`: whatever question a sitting the student has open right now
+   * carries, from any quiz, exam or not. A bank shared between a lesson quiz
+   * and a game category is ordinary, and without this the game answered the
+   * question the student was looking at in the other tab.
+   */
   return Prisma.sql`exams AS (
-      SELECT q."id"
+      SELECT q."id", NOT (q."is_published" AND l."is_published") AS hidden
       FROM "app"."quizzes" q
       JOIN "app"."lessons" l ON l."id" = q."lesson_id"
       JOIN "app"."course_sections" cs ON cs."id" = l."section_id"
@@ -157,27 +169,39 @@ function examBlockCtes(userId: string | null): Prisma.Sql {
       WHERE (cs."title" = ${EXAM_SHELF_TITLE} OR co."exam_lesson_id" = l."id")
         AND (
           NOT (q."is_published" AND l."is_published")
-          OR (
-            (q."open_until" IS NULL OR q."open_until" > now())
-            AND NOT EXISTS (
-              SELECT 1 FROM "app"."quiz_attempts" a
-              WHERE a."quiz_id" = q."id" AND a."user_id" = ${userId} AND a."submitted_at" IS NOT NULL
-            )
-          )
+          OR q."open_until" IS NULL
+          OR q."open_until" > now()
+        )
+    ),
+    open_slots AS (
+      SELECT s."bank_entry_id", s."pool_id"
+      FROM "app"."quiz_slots" s
+      JOIN exams e ON e."id" = s."quiz_id"
+      WHERE e.hidden
+        OR NOT EXISTS (
+          SELECT 1 FROM "app"."quiz_attempts" a
+          WHERE a."quiz_id" = s."quiz_id" AND a."user_id" = ${userId}
+            AND a."submitted_at" IS NOT NULL AND a."paper" = s."paper"
         )
     ),
     blocked AS (
-      SELECT s."bank_entry_id" AS be_id
-      FROM "app"."quiz_slots" s JOIN exams e ON e."id" = s."quiz_id"
-      WHERE s."bank_entry_id" IS NOT NULL
+      SELECT os."bank_entry_id" AS be_id
+      FROM open_slots os
+      WHERE os."bank_entry_id" IS NOT NULL
       UNION
       SELECT be."id"
-      FROM "app"."quiz_slots" s
-      JOIN exams e ON e."id" = s."quiz_id"
-      JOIN "app"."quiz_pools" p ON p."id" = s."pool_id"
+      FROM open_slots os
+      JOIN "app"."quiz_pools" p ON p."id" = os."pool_id"
       JOIN "app"."question_bank_entries" be
         ON jsonb_typeof(p."source_filter"->'categoryIds') = 'array'
        AND be."category_id"::text IN (SELECT jsonb_array_elements_text(p."source_filter"->'categoryIds'))
+      UNION
+      SELECT v."bank_entry_id"
+      FROM "app"."attempt_questions" aq
+      JOIN "app"."quiz_attempts" a ON a."id" = aq."attempt_id"
+      JOIN "app"."question_versions" v ON v."id" = aq."question_version_id"
+      WHERE a."user_id" = ${userId} AND a."submitted_at" IS NULL
+        AND a."state" IN ('in_progress', 'overdue')
     )`;
 }
 

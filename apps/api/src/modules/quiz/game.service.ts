@@ -34,13 +34,18 @@ import {
   type GameHubTopic,
   type TopicBucket,
 } from '@ayman/contracts/quiz/challenges';
-import { EXAM_SHELF_TITLE } from '@ayman/contracts/quiz/scheduled';
 import { Prisma } from '../../generated/prisma/client';
 import { sanitizeRichText } from '../../common/sanitize/rich-text';
 import { azureSpeech } from './game-voice.config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EnrollmentService } from '../enrollment/enrollment.service';
-import { challengeCandidates, courseLessons, lessonServes, topicHomeLessons } from './challenge-pool';
+import {
+  blockedBankEntries,
+  challengeCandidates,
+  courseLessons,
+  lessonServes,
+  topicHomeLessons,
+} from './challenge-pool';
 import { exposuresOf, recordExposures } from './question-exposure';
 
 /** «سهل» لو ٧٠٪ من اللي جاوبوه جابوه صح، و«صعب» لو أقل من ٤٠٪. */
@@ -489,6 +494,16 @@ export class GameService {
       select: { id: true, mode: true, level: true, startedAt: true, endedAt: true, questionIds: true, practice: true },
     });
     if (!session || !session.questionIds.includes(questionId)) throw new NotFoundException();
+    /*
+     * A round dealt BEFORE a sitting opened still names its questions, and
+     * answering one returns the key. The pool now hides whatever an open
+     * sitting carries, so the round has to as well — the same 404 as a
+     * question that was never dealt.
+     */
+    const entry = await this.bankEntryOf(questionId);
+    if (entry !== null && (await blockedBankEntries(this.prisma, userId)).has(entry)) {
+      throw new NotFoundException();
+    }
     return session;
   }
 
@@ -522,6 +537,14 @@ export class GameService {
     // «ماتكرّرش السؤال»: اتشاف دلوقتي. اللي اتوزّع ومااتجاوبش (الجولة وقفت
     // قبله) لسه «جديد».
     await recordExposures(this.prisma, [userId], [input.questionId]);
+  }
+
+  private async bankEntryOf(questionId: string): Promise<string | null> {
+    const version = await this.prisma.questionVersion.findUnique({
+      where: { id: questionId },
+      select: { bankEntryId: true },
+    });
+    return version?.bankEntryId ?? null;
   }
 
   /** الاختيارات بـ`fraction` — بس لسؤال في بنك الطالب؛ غير كده 404 مش الإجابة. */
@@ -708,7 +731,8 @@ export class GameService {
     const [rows, blocked, settings] = await Promise.all([
       this.prisma.$queryRaw<PoolRow[]>(Prisma.sql`
         WITH sat AS (
-          SELECT DISTINCT a."quiz_id"
+          -- Per PAPER: handing in the original paper is not handing in «تحسين».
+          SELECT DISTINCT a."quiz_id", a."paper"
           FROM "app"."quiz_attempts" a
           WHERE a."user_id" = ${userId} AND a."submitted_at" IS NOT NULL
             AND a."state" IN ('submitted', 'pending_review')
@@ -723,7 +747,7 @@ export class GameService {
         slotted AS (
           SELECT COALESCE(pv."id", lv."id") AS vid, s."quiz_id"
           FROM "app"."quiz_slots" s
-          JOIN sat ON sat."quiz_id" = s."quiz_id"
+          JOIN sat ON sat."quiz_id" = s."quiz_id" AND sat."paper" = s."paper"
           LEFT JOIN "app"."question_versions" pv
             ON pv."bank_entry_id" = s."bank_entry_id" AND pv."version" = s."pinned_version"
           LEFT JOIN LATERAL (
@@ -736,7 +760,7 @@ export class GameService {
         pooled AS (
           SELECT lv."id" AS vid, s."quiz_id"
           FROM "app"."quiz_slots" s
-          JOIN sat ON sat."quiz_id" = s."quiz_id"
+          JOIN sat ON sat."quiz_id" = s."quiz_id" AND sat."paper" = s."paper"
           JOIN "app"."quiz_pools" p ON p."id" = s."pool_id"
           JOIN "app"."question_bank_entries" be
             ON jsonb_typeof(p."source_filter"->'categoryIds') = 'array'
@@ -885,32 +909,15 @@ export class GameService {
    * ماسلّموش.
    */
   private async upcomingExamSources(userId: string): Promise<{ entries: Set<string>; categories: Set<string> }> {
-    const rows = await this.prisma.$queryRaw<Array<{ bank_entry_id: string | null; source_filter: unknown }>>(Prisma.sql`
-      SELECT DISTINCT s."bank_entry_id", p."source_filter"
-      FROM "app"."quizzes" q
-      JOIN "app"."lessons" l ON l."id" = q."lesson_id"
-      JOIN "app"."course_sections" cs ON cs."id" = l."section_id"
-      JOIN "app"."courses" co ON co."id" = l."course_id"
-      LEFT JOIN "app"."quiz_slots" s ON s."quiz_id" = q."id"
-      LEFT JOIN "app"."quiz_pools" p ON p."id" = s."pool_id"
-      WHERE q."is_published"
-        AND (q."open_until" IS NULL OR q."open_until" > now())
-        AND (cs."title" = ${EXAM_SHELF_TITLE} OR co."exam_lesson_id" = l."id")
-        AND NOT EXISTS (
-          SELECT 1 FROM "app"."quiz_attempts" a
-          WHERE a."quiz_id" = q."id" AND a."user_id" = ${userId} AND a."submitted_at" IS NOT NULL
-        )
-    `);
-    const entries = new Set<string>();
-    const categories = new Set<string>();
-    for (const row of rows) {
-      if (row.bank_entry_id) entries.add(row.bank_entry_id);
-      const filter = row.source_filter as { categoryIds?: unknown } | null;
-      if (Array.isArray(filter?.categoryIds)) {
-        for (const id of filter.categoryIds) if (typeof id === 'string') categories.add(id);
-      }
-    }
-    return { entries, categories };
+    /*
+     * The SAME list the topic challenges and «دفتر غلطاتي» hide
+     * (`blockedBankEntries`), not a second query that can drift from it. This
+     * one used to unblock an exam after ANY submitted attempt — so the original
+     * paper opened the improvement paper's answers here — and it never looked
+     * at a sitting still in progress. Categories arrive expanded to their
+     * entries, so `categories` stays empty.
+     */
+    return { entries: await blockedBankEntries(this.prisma, userId), categories: new Set() };
   }
 }
 
