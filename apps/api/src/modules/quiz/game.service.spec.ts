@@ -219,6 +219,143 @@ describe('GameService', () => {
     expect(hub.total).toBe(2);
   });
 
+  /*
+   * The answer key of a paper the student has NOT handed in yet must never come
+   * out of the game. Two ways it used to:
+   *   - the original paper was handed in, which put the quiz in the pool —
+   *     every paper of it, so «تحسين» answered itself one question at a time;
+   *   - a sitting open right now carried a question the pool also held from
+   *     elsewhere (a resit of a quiz already sat, a shared category).
+   */
+  it('keeps the improvement paper out until THAT paper is handed in', async () => {
+    fixture = await seedQuizFixture(prisma, { questionCount: 2, allowsImprovement: true, improvementQuestionCount: 2 });
+    await grant(fixture.studentId);
+    const originalIds = fixture.versionIds.slice(0, 2);
+    const improvementId = fixture.versionIds[2]!;
+    const attempt = await prisma.quizAttempt.create({
+      data: {
+        quizId: fixture.quizId,
+        userId: fixture.studentId,
+        attemptNo: 1,
+        paper: 'original',
+        state: 'submitted',
+        submittedAt: new Date(),
+        scaledScore: 100,
+        rawScore: 2,
+        sumMarks: 2,
+        gradeOutOf: 100,
+        passPercent: 50,
+        passed: true,
+      },
+    });
+    await prisma.attemptQuestion.createMany({
+      data: originalIds.map((questionVersionId, index) => ({
+        attemptId: attempt.id,
+        slotPosition: index,
+        questionVersionId,
+        optionOrder: [],
+        maxMark: 1,
+        minFraction: 0,
+        maxFraction: 1,
+        state: 'graded_right' as const,
+        gradedAt: new Date(),
+      })),
+    });
+
+    // The paper they sat is playable…
+    expect((await service.answer(fixture.studentId, { questionId: originalIds[0]!, optionId: null })).rightOptionIds).toHaveLength(1);
+    // …the one they have not sat is not — no key, no lifeline.
+    await expect(service.answer(fixture.studentId, { questionId: improvementId, optionId: null })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.lifeline(fixture.studentId, { questionId: improvementId, kind: 'fifty' })).rejects.toBeInstanceOf(NotFoundException);
+    expect((await service.hub(fixture.studentId)).total).toBe(2);
+  });
+
+  it('hides every question of a timed sitting still running, even one already in the pool', async () => {
+    fixture = await seedQuizFixture(prisma, {});
+    await grant(fixture.studentId);
+    await sit(fixture.studentId);
+    const questionId = fixture.versionIds[0]!;
+    // A round dealt BEFORE the resit opened still names this question.
+    const round = await service.start(fixture.studentId, { mode: 'race', level: 'medium' });
+
+    const resit = await prisma.quizAttempt.create({
+      data: {
+        quizId: fixture.quizId,
+        userId: fixture.studentId,
+        attemptNo: 2,
+        state: 'in_progress',
+        sumMarks: 3,
+        gradeOutOf: 100,
+        passPercent: 50,
+        deadlineAt: new Date(Date.now() + 30 * 60_000),
+      },
+    });
+    await prisma.attemptQuestion.createMany({
+      data: fixture.versionIds.map((questionVersionId, index) => ({
+        attemptId: resit.id,
+        slotPosition: index,
+        questionVersionId,
+        optionOrder: [],
+        maxMark: 1,
+        minFraction: 0,
+        maxFraction: 1,
+      })),
+    });
+
+    await expect(service.answer(fixture.studentId, { questionId, optionId: null })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.lifeline(fixture.studentId, { questionId, kind: 'fifty' })).rejects.toBeInstanceOf(NotFoundException);
+    if (round.sessionId && round.questions.some((question) => question.id === questionId)) {
+      await expect(
+        service.answer(fixture.studentId, { sessionId: round.sessionId, questionId, optionId: null }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    }
+    expect((await service.hub(fixture.studentId)).total).toBe(0);
+
+    // Handed in, the questions are practice material again.
+    await prisma.quizAttempt.update({ where: { id: resit.id }, data: { state: 'submitted', submittedAt: new Date() } });
+    expect((await service.answer(fixture.studentId, { questionId, optionId: null })).rightOptionIds).toHaveLength(1);
+  });
+
+  /*
+   * The other side of the case above. An untimed lesson quiz somebody opened
+   * and walked away from stays `in_progress` for ever — the overdue sweep only
+   * closes sittings with a deadline — and its questions must not vanish from
+   * that student's game for ever with it.
+   */
+  it('does not hide the questions of an untimed lesson sitting left open', async () => {
+    fixture = await seedQuizFixture(prisma, {});
+    await grant(fixture.studentId);
+    await sit(fixture.studentId);
+    const abandoned = await prisma.quizAttempt.create({
+      data: {
+        quizId: fixture.quizId,
+        userId: fixture.studentId,
+        attemptNo: 2,
+        state: 'in_progress',
+        sumMarks: 3,
+        gradeOutOf: 100,
+        passPercent: 50,
+        startedAt: new Date(Date.now() - 30 * 86_400_000),
+      },
+    });
+    await prisma.attemptQuestion.createMany({
+      data: fixture.versionIds.map((questionVersionId, index) => ({
+        attemptId: abandoned.id,
+        slotPosition: index,
+        questionVersionId,
+        optionOrder: [],
+        maxMark: 1,
+        minFraction: 0,
+        maxFraction: 1,
+      })),
+    });
+
+    expect((await service.hub(fixture.studentId)).total).toBe(3);
+    expect(
+      (await service.answer(fixture.studentId, { questionId: fixture.versionIds[0]!, optionId: null })).rightOptionIds,
+    ).toHaveLength(1);
+  });
+
   it('adds the course’s own game questions for an enrolled student', async () => {
     fixture = await seedQuizFixture(prisma, {});
     await grant(fixture.studentId);

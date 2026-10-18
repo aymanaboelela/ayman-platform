@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type Redis from 'ioredis';
 import { SignJWT, jwtVerify } from 'jose';
@@ -51,6 +52,29 @@ export type GuardianSignInResult =
 export interface GuardianSession {
   /** الطالب اللي الجلسة دي بتشوفه. مفيش غيره. */
   studentUserId: string;
+  /**
+   * Which code this session was opened with — `codeFingerprint`, never the
+   * code. `null` only on a token minted before the claim existed; those
+   * expire on their own within `SESSION_DAYS`.
+   */
+  codeFingerprint: string | null;
+}
+
+/**
+ * A one-way tag of a guardian code, carried in the token so `/guardian/me` can
+ * tell a session opened with the CURRENT code from one opened with a code that
+ * has since been replaced.
+ *
+ * Without it a session outlived the thing that proved it: rotating a code
+ * that leaked into a class group changed nothing for whoever had already
+ * signed in with it — they kept reading the student's grades for the rest of
+ * the fourteen days, and nothing short of rotating `BETTER_AUTH_SECRET` (every
+ * student signed out) could stop them. Truncated SHA-256: it only has to tell
+ * two codes apart, and the token is not a place to keep anything closer to
+ * the code itself.
+ */
+export function codeFingerprint(code: string): string {
+  return createHash('sha256').update(code).digest('base64url').slice(0, 16);
 }
 
 /**
@@ -113,7 +137,7 @@ export class GuardianSessionService {
 
     const profile = await this.prisma.studentProfile.findUnique({
       where: { guardianCode: code.trim().toUpperCase() },
-      select: { userId: true, user: { select: { bannedAt: true } } },
+      select: { userId: true, guardianCode: true, user: { select: { bannedAt: true } } },
     });
 
     if (!profile || profile.user.bannedAt !== null) {
@@ -121,7 +145,11 @@ export class GuardianSessionService {
       return retryAfterSeconds ? { ok: false, retryAfterSeconds } : { ok: false };
     }
 
-    const token = await new SignJWT({ sub: profile.userId, kind: 'guardian' })
+    const token = await new SignJWT({
+      sub: profile.userId,
+      kind: 'guardian',
+      cv: codeFingerprint(profile.guardianCode),
+    })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime(`${SESSION_DAYS}d`)
@@ -136,7 +164,10 @@ export class GuardianSessionService {
       // `kind` بيمنع توكن من أي جهة تانية في المنصة إنه يعدّي هنا — نفس
       // السر بيوقّع حاجات تانية، والتوقيع لوحده مش هوية.
       if (payload.kind !== 'guardian' || typeof payload.sub !== 'string') return null;
-      return { studentUserId: payload.sub };
+      return {
+        studentUserId: payload.sub,
+        codeFingerprint: typeof payload.cv === 'string' ? payload.cv : null,
+      };
     } catch {
       return null;
     }

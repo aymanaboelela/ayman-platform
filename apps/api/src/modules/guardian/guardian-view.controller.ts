@@ -4,7 +4,7 @@ import type { Dashboard } from '@ayman/contracts';
 import { Public } from '../../auth/decorators/public.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DashboardService } from '../dashboard/dashboard.service';
-import { GuardianSessionService } from './guardian-session.service';
+import { GuardianSessionService, codeFingerprint } from './guardian-session.service';
 import { GuardianReportService, type GuardianReport } from './guardian-report.service';
 import { readCookie } from '../assistant/guest-token';
 import { GUARDIAN_COOKIE } from './guardian-cookie';
@@ -61,9 +61,29 @@ export class GuardianViewController {
       // ⚠️ `select` محدد مش الصف كامل: الصف فيه `guardianCode` نفسه، وبعته
       // هنا كان هيخلّي أي حد فتح الجلسة مرة يقدر يعيد فتحها للأبد حتى بعد
       // ما الطالب يغيّر كوده.
-      select: { fullName: true, year: true },
+      //
+      // `guardianCode` IS read now — to compare, never to send. See below.
+      select: { fullName: true, year: true, guardianCode: true, user: { select: { bannedAt: true } } },
     });
     if (!profile) throw new UnauthorizedException();
+
+    /*
+     * The token proves it WAS valid, not that it still is. Re-checked against
+     * the row on every read, the same two things `signIn` refuses on:
+     *   - the code it was opened with is no longer the student's code (it was
+     *     replaced because it leaked), and
+     *   - the student is banned — `ban` deletes the student's own sessions, and
+     *     this one used to survive it for up to fourteen days.
+     * A token from before the fingerprint existed carries none; it is let
+     * through on the ban check alone and expires on its own.
+     */
+    if (profile.user.bannedAt !== null) throw new UnauthorizedException();
+    if (
+      session.codeFingerprint !== null &&
+      session.codeFingerprint !== codeFingerprint(profile.guardianCode)
+    ) {
+      throw new UnauthorizedException();
+    }
 
     return {
       student: { name: profile.fullName, year: profile.year },

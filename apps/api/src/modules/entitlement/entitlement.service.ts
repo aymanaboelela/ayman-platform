@@ -282,9 +282,20 @@ export class EntitlementService {
      * course, whatever months it carries — «أي حد مشترك في الكورس». Its month
      * tags, if an old adopt press wrote some, are ignored.
      */
-    options: { monthlyExam?: boolean } = {},
+    options: {
+      monthlyExam?: boolean;
+      /**
+       * The term this lecture's unit belongs to, when it has one. A `term`
+       * grant then counts only for ITS OWN term — see `resolveMonthSlice`.
+       */
+      lessonTermId?: string | null;
+    } = {},
   ): Promise<CourseAccess> {
-    const slice = await this.resolveMonthSlice(userId, course);
+    const slice = await this.resolveMonthSlice(
+      userId,
+      course,
+      options.monthlyExam ? null : (options.lessonTermId ?? null),
+    );
 
     if (options.monthlyExam) {
       const examGrantId = grantOpeningMonthlyExam(slice);
@@ -325,13 +336,32 @@ export class EntitlementService {
    * row open and then 403'd on click, or drew a padlock on something already
    * paid for, is what two hand-rolled loops produce.
    */
-  async resolveMonthSlice(userId: string, course: CourseAccessSubject): Promise<MonthSlice> {
+  async resolveMonthSlice(
+    userId: string,
+    course: CourseAccessSubject,
+    /**
+     * ⚠️ Pass the lecture's term whenever ONE lecture is being decided.
+     *
+     * `monthSliceOf` reads any live non-month grant as «everything», and a
+     * `term` grant is not everything: it is one term. Left unfiltered, a
+     * student holding «الترم الأول» who then bought one cheap month (or
+     * redeemed a month code) opened every lecture of «الترم الثاني» — the
+     * month grant was the newest, so `resolveTermAccess` (which only refines a
+     * WINNING term grant) never ran, and this union then counted the term-one
+     * grant as the whole course. So a term grant for a DIFFERENT term is
+     * dropped here before the union. `null` keeps the old reading, which is
+     * right for an outline (it is drawn per course, not per lecture) and for a
+     * lecture that sits in no term.
+     */
+    lessonTermId: string | null = null,
+  ): Promise<MonthSlice> {
     const grants = await this.prisma.accessGrant.findMany({
       where: { userId, OR: courseAccessScopes(course) },
       orderBy: [{ validFrom: 'desc' }, { id: 'desc' }],
       select: {
         id: true,
         scope: true,
+        termId: true,
         monthId: true,
         validFrom: true,
         validUntil: true,
@@ -339,7 +369,11 @@ export class EntitlementService {
       },
     });
 
-    return monthSliceOf(grants, new Date());
+    const counted =
+      lessonTermId === null
+        ? grants
+        : grants.filter((grant) => grant.scope !== 'term' || grant.termId === lessonTermId);
+    return monthSliceOf(counted, new Date());
   }
 
   /**

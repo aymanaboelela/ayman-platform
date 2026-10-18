@@ -1,7 +1,7 @@
 import { describe, expect, it, jest } from '@jest/globals';
-import { GuardianSessionService } from './guardian-session.service';
+import { GuardianSessionService, codeFingerprint } from './guardian-session.service';
 
-type Profile = { userId: string; user: { bannedAt: Date | null } } | null;
+type Profile = { userId: string; guardianCode: string; user: { bannedAt: Date | null } } | null;
 
 /** ريديس صغير في الذاكرة — العدّاد والقفل والمستوى، بس اللي الخدمة بتلمسه. */
 function fakeRedis(options: { down?: boolean } = {}) {
@@ -54,7 +54,7 @@ function makeService(profile: Profile, options: { redisDown?: boolean } = {}) {
 }
 
 const CODE = 'N5YGWJ7PE22Y9BKW4MSDDTPXTV';
-const STUDENT = { userId: 'student-1', user: { bannedAt: null } };
+const STUDENT = { userId: 'student-1', guardianCode: CODE, user: { bannedAt: null } };
 
 /**
  * بوابة ولي الأمر.
@@ -71,7 +71,7 @@ describe('GuardianSessionService', () => {
     if (!result.ok) throw new Error('expected a token');
 
     const session = await service.verify(result.token);
-    expect(session).toEqual({ studentUserId: 'student-1' });
+    expect(session).toEqual({ studentUserId: 'student-1', codeFingerprint: codeFingerprint(CODE) });
   });
 
   /*
@@ -83,7 +83,7 @@ describe('GuardianSessionService', () => {
    */
   it('refuses an unknown code and a banned account identically', async () => {
     const unknown = makeService(null);
-    const banned = makeService({ userId: 'student-2', user: { bannedAt: new Date() } });
+    const banned = makeService({ userId: 'student-2', guardianCode: CODE, user: { bannedAt: new Date() } });
 
     expect(await unknown.service.signIn(CODE, '1.2.3.4')).toEqual({ ok: false });
     expect(await banned.service.signIn(CODE, '1.2.3.4')).toEqual({ ok: false });

@@ -565,12 +565,25 @@ export class StudentsService {
    * rather than a pre-check racing another admin's concurrent write — caught
    * here and turned into one message rather than a raw `P2002`.
    */
-  async patch(userId: string, input: AdminStudentPatch): Promise<AdminStudentDetail> {
+  async patch(userId: string, input: AdminStudentPatch, actorUserId: string): Promise<AdminStudentDetail> {
     const existing = await this.prisma.studentProfile.findUnique({
       where: { userId },
-      select: { userId: true, year: true, trackId: true, governorateCode: true },
+      select: { userId: true, year: true, trackId: true, governorateCode: true, user: { select: { role: true } } },
     });
     if (!existing) throw new NotFoundException();
+
+    /*
+     * ⚠️ This route writes the LOGIN IDENTITY (`phoneNumber`, `email`), and
+     * staff accounts have a `StudentProfile` too (`create-admin.ts` upserts
+     * one, and a promoted student keeps theirs) — so `student:write`, which
+     * every assistant holds, used to be enough to rewrite the instructor's or
+     * an admin's phone and email: lock them out, or point the email at a
+     * Google account the assistant controls and sign in as them (the address
+     * stays `emailVerified`, so better-auth links it). Same gate as ban,
+     * delete and role changes.
+     */
+    const refusal = await this.refuseIfOutranked(actorUserId, { id: userId, role: existing.user.role });
+    if (refusal) throw new ForbiddenException(refusal);
 
     // A city belongs to ONE governorate, and this form can send either field
     // without the other. So the check is against the governorate the row will

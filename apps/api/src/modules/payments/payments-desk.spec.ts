@@ -156,8 +156,12 @@ describe('the payments desk announces itself', () => {
     const submission = await claim();
     publishQueue.mockClear();
 
+    // Captured a minute ago, i.e. before the claim — the only shape in which an
+    // address nobody knows still settles a claim on its own (see
+    // `UNKNOWN_SENDER_CLAIM_SLACK_MS`).
     const result = await transfers.ingest({
       text: `لقد استلمت ${(PRICE_CENTS / 100).toFixed(2)} جنيه من ${HANDLE}`,
+      capturedAt: new Date(Date.now() - 60_000).toISOString(),
     });
 
     expect(result.matched).toBe(1);

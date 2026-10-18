@@ -147,44 +147,94 @@ export async function challengeCandidates(
  * (`challengeCandidates`) و«دفتر غلطاتي» (`blockedBankEntries`) لازم يقولوا نفس
  * الكلام، وإلا الدفتر يكشف إجابة سؤال البنك بيخبّيه.
  */
-function examBlockCtes(userId: string | null): Prisma.Sql {
+function examBlockCtes(userId: string | null, options: { drafts?: boolean } = {}): Prisma.Sql {
+  /*
+   * ⚠️ PER PAPER, not per quiz. A course exam has two papers («الأصلي» and
+   * «تحسين»), and this used to unblock an exam the moment ANY attempt at it was
+   * submitted — so a student who handed in the original paper could open the
+   * improvement paper and read every answer of it here, one question at a time.
+   * A paper's questions now stay blocked until THAT paper is submitted.
+   *
+   * And `live`: the questions of a sitting the student has open RIGHT NOW,
+   * where a bank shared with a game category would otherwise answer the
+   * question on the other tab. «Right now» is deliberately narrow — an
+   * exam paper still open, or a sitting whose own clock has not run out. An
+   * untimed lesson quiz someone walked away from stays `in_progress` forever
+   * (the overdue sweep only closes sittings with a deadline), and counting it
+   * would make its questions vanish from that student's game, challenges and
+   * «دفتر غلطاتي» for good.
+   *
+   * `drafts`: whether an exam that is not published yet blocks too. The topic
+   * challenges and the mistakes book always did; the game never has, and a
+   * draft with category pools would otherwise empty those categories from
+   * every student's game.
+   */
+  const draftClause = options.drafts === false ? Prisma.sql`FALSE` : Prisma.sql`NOT (q."is_published" AND l."is_published")`;
   return Prisma.sql`exams AS (
-      SELECT q."id"
+      SELECT q."id", ${draftClause} AS hidden
       FROM "app"."quizzes" q
       JOIN "app"."lessons" l ON l."id" = q."lesson_id"
       JOIN "app"."course_sections" cs ON cs."id" = l."section_id"
       JOIN "app"."courses" co ON co."id" = l."course_id"
       WHERE (cs."title" = ${EXAM_SHELF_TITLE} OR co."exam_lesson_id" = l."id")
         AND (
-          NOT (q."is_published" AND l."is_published")
+          ${draftClause}
           OR (
-            (q."open_until" IS NULL OR q."open_until" > now())
-            AND NOT EXISTS (
-              SELECT 1 FROM "app"."quiz_attempts" a
-              WHERE a."quiz_id" = q."id" AND a."user_id" = ${userId} AND a."submitted_at" IS NOT NULL
-            )
+            q."is_published"
+            AND (q."open_until" IS NULL OR q."open_until" > now())
           )
         )
     ),
-    blocked AS (
-      SELECT s."bank_entry_id" AS be_id
-      FROM "app"."quiz_slots" s JOIN exams e ON e."id" = s."quiz_id"
-      WHERE s."bank_entry_id" IS NOT NULL
-      UNION
-      SELECT be."id"
+    open_slots AS (
+      SELECT s."bank_entry_id", s."pool_id"
       FROM "app"."quiz_slots" s
       JOIN exams e ON e."id" = s."quiz_id"
-      JOIN "app"."quiz_pools" p ON p."id" = s."pool_id"
+      WHERE e.hidden
+        OR NOT EXISTS (
+          SELECT 1 FROM "app"."quiz_attempts" a
+          WHERE a."quiz_id" = s."quiz_id" AND a."user_id" = ${userId}
+            AND a."submitted_at" IS NOT NULL AND a."paper" = s."paper"
+        )
+    ),
+    blocked AS (
+      SELECT os."bank_entry_id" AS be_id
+      FROM open_slots os
+      WHERE os."bank_entry_id" IS NOT NULL
+      UNION
+      SELECT be."id"
+      FROM open_slots os
+      JOIN "app"."quiz_pools" p ON p."id" = os."pool_id"
       JOIN "app"."question_bank_entries" be
         ON jsonb_typeof(p."source_filter"->'categoryIds') = 'array'
        AND be."category_id"::text IN (SELECT jsonb_array_elements_text(p."source_filter"->'categoryIds'))
+      UNION
+      SELECT v."bank_entry_id"
+      FROM "app"."attempt_questions" aq
+      JOIN "app"."quiz_attempts" a ON a."id" = aq."attempt_id"
+      JOIN "app"."question_versions" v ON v."id" = aq."question_version_id"
+      JOIN "app"."quizzes" aqz ON aqz."id" = a."quiz_id"
+      WHERE a."user_id" = ${userId} AND a."submitted_at" IS NULL
+        AND a."state" IN ('in_progress', 'overdue')
+        AND (
+          -- deadline_at is a naive UTC timestamp — the overdue sweep's own
+          -- comparison, grace included, so «still running» means the same here.
+          a."deadline_at"
+            + make_interval(secs => a."extra_time_seconds" + aqz."grace_seconds")
+            > (now() AT TIME ZONE 'UTC')
+          OR a."quiz_id" IN (SELECT e."id" FROM exams e)
+        )
     )`;
 }
 
 /** أسئلة البنك (`question_bank_entries.id`) اللي امتحان لسه مقفول على الطالب ده بيسحب منها. */
-export async function blockedBankEntries(prisma: PrismaService, userId: string): Promise<Set<string>> {
+export async function blockedBankEntries(
+  prisma: PrismaService,
+  userId: string,
+  /** `false` for the game — see `examBlockCtes`. */
+  options: { drafts?: boolean } = {},
+): Promise<Set<string>> {
   const rows = await prisma.$queryRaw<Array<{ be_id: string }>>(Prisma.sql`
-    WITH ${examBlockCtes(userId)}
+    WITH ${examBlockCtes(userId, options)}
     SELECT be_id FROM blocked
   `);
   return new Set(rows.map((row) => row.be_id));
