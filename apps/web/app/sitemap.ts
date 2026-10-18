@@ -3,7 +3,7 @@ import { connection } from 'next/server';
 import { getCatalogOrEmpty } from '@/lib/catalog';
 import { getEntitlements } from '@/lib/entitlements';
 import { getNewsListOrEmpty } from '@/lib/news';
-import { allPracticeLessons, practicePath } from '@/lib/practice/catalog';
+import { getPracticeListOrEmpty, practicePath } from '@/lib/practice/catalog';
 import { SITE_URL } from '@/lib/seo/jsonld';
 import { IS_AYMAN } from '@/lib/tenant';
 import { sitemapLoc } from '@/lib/seo/sitemap-url';
@@ -54,6 +54,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // entries for one build is recoverable; a build that will not complete is not.
   const { courses } = await getCatalogOrEmpty();
   const { posts } = await getNewsListOrEmpty();
+  const practice = IS_AYMAN ? await getPracticeListOrEmpty() : { sets: [] };
   /* الصفحات اللي بتعيش جوّه فيتشر. لو الفيتشر مقفولة، الصفحة بترد ٤٠٤ —
      ونشر URL ميت في السايت‌ماب مش سهو صغير: ده بالظبط «الدريفت» اللي بيخلّي
      طبقة الاكتشاف بتقول حاجة الموقع مابيقولهاش. */
@@ -122,17 +123,30 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           },
         ]
       : []),
-    // «اختبارات مجانية»: the index and one URL per lesson — each is the page a
-    // «اختبار على درس …» search should land on. Ayman only, like `/essentials`
-    // above and for the same reason (`lib/practice/catalog.ts`).
-    ...(IS_AYMAN
+    // «اختبارات مجانية»: the index, each year, each year × track, and one URL
+    // per published set — each is the page a «اختبار على درس …» search should
+    // land on. Read from the API (`…OrEmpty`, so a build with no API or a stack
+    // with the feature off lists none). Ayman only, like `/essentials` above.
+    ...(IS_AYMAN && practice.sets.length > 0
       ? [
-          { url: `${SITE_URL}/practice`, lastModified: EDITORIAL_LAST_MODIFIED, changeFrequency: 'monthly' as const, priority: 0.7 },
-          ...allPracticeLessons().map((l) => ({
-            url: `${SITE_URL}${practicePath(l.year, l.code)}`,
+          { url: `${SITE_URL}/practice`, lastModified: EDITORIAL_LAST_MODIFIED, changeFrequency: 'weekly' as const, priority: 0.7 },
+          ...[...new Set(practice.sets.map((s) => practicePath(s.year)))].map((path) => ({
+            url: `${SITE_URL}${path}`,
+            lastModified: EDITORIAL_LAST_MODIFIED,
+            changeFrequency: 'weekly' as const,
+            priority: 0.6,
+          })),
+          ...[...new Set(practice.sets.map((s) => practicePath(s.year, s.track)))].map((path) => ({
+            url: `${SITE_URL}${path}`,
+            lastModified: EDITORIAL_LAST_MODIFIED,
+            changeFrequency: 'weekly' as const,
+            priority: 0.6,
+          })),
+          ...practice.sets.map((s) => ({
+            url: `${SITE_URL}${practicePath(s.year, s.track, s.lessonCode)}`,
             lastModified: EDITORIAL_LAST_MODIFIED,
             changeFrequency: 'monthly' as const,
-            priority: 0.6,
+            priority: 0.5,
           })),
         ]
       : []),

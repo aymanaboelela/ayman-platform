@@ -60,6 +60,12 @@ export const courseTag = (courseId: string): string => tag('course', courseId);
 export const TAG_NEWS = tag('news');
 
 /**
+ * «اختبارات مجانية» — the set list and every set page, one coarse tag for the
+ * reason `TAG_NEWS` gives. Invalidated by every `/admin/practice` action.
+ */
+export const TAG_PRACTICE = tag('practice');
+
+/**
  * «قسم الكتب» — the printed-book shop.
  *
  * ONE coarse tag and no per-book tag, for the reason `TAG_NEWS` gives: the

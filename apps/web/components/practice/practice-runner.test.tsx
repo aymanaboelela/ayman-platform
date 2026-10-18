@@ -1,23 +1,34 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { practiceCopy as p } from '@ayman/contracts/copy/practice';
-import type { PracticeSet } from '@/lib/practice/catalog';
+import type { PracticePublicSet } from '@ayman/contracts/practice';
 import { PracticeRunner } from './practice-runner';
 
-const SET: PracticeSet = {
+const SET: PracticePublicSet = {
   year: 2,
-  lesson: '9-1',
+  track: 'arabic',
+  lessonCode: '9-1',
   title: 'درس تجريبي',
+  unitTitle: null,
+  articleSlug: null,
+  questionCount: 2,
   questions: [
     {
-      id: 'a',
+      id: '00000000-0000-7000-8000-00000000000a',
       type: 'mcq',
       stem: 'السؤال الأول؟',
       options: ['صح ده', 'غلط ١', 'غلط ٢', 'غلط ٣'],
       answer: 0,
       explanation: 'لأن الأول هو الصح.',
     },
-    { id: 'b', type: 'tf', stem: 'العبارة دي غلط.', answer: 1, explanation: 'العبارة غلط فعلًا.' },
+    {
+      id: '00000000-0000-7000-8000-00000000000b',
+      type: 'tf',
+      stem: 'العبارة دي غلط.',
+      options: [],
+      answer: 1,
+      explanation: 'العبارة غلط فعلًا.',
+    },
   ],
 };
 
