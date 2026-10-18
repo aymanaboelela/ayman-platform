@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
-import { Menu, Search, UserCog } from 'lucide-react';
+import { Menu, Search } from 'lucide-react';
 import type { Entitlements } from '@ayman/contracts/admin/entitlements';
 import { copy } from '@ayman/contracts/copy/admin';
 import { Kbd } from '@ayman/ui/components/kbd';
@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@ayman/ui/compone
 import { ThemeToggle } from '@/components/theme-toggle';
 import { BrandLockup } from '@/components/brand-lockup';
 import { SignOutButton } from '@/components/sign-out-button';
+import { AdminAccountMenu } from './admin-account-menu';
 import { AdminNavList } from './admin-nav-list';
 import { CommandPalette } from './command-palette';
 import { InboxAlertsToggle } from './inbox-alerts';
@@ -149,23 +150,12 @@ export function AdminHeader({
 
         <ThemeToggle />
 
-        <Link
-          href="/admin/profile"
-          aria-label={copy.admin.profile.title}
-          title={copy.admin.profile.title}
-          className="flex size-9 items-center justify-center rounded-md border border-line text-fg-muted transition-colors duration-[160ms] hover:bg-surface-3 hover:text-fg"
-        >
-          <UserCog className="size-4" aria-hidden="true" />
-        </Link>
-
-        <Link
-          href="/admin/profile"
-          className="hidden max-w-[14rem] truncate text-[length:var(--fs-text-sm)] text-fg-muted transition-colors hover:text-fg xl:inline"
-          title={copy.admin.profile.title}
-        >
-          {copy.admin.signedInAs}{' '}
-          <span className="font-medium text-fg underline underline-offset-4">{identity}</span>
-        </Link>
+        {/* «حسابي» — the profile and the password, one tap each. It replaced
+            an unlabelled icon link that the owner, looking for the password
+            form, did not recognise as the way in. The signed-in identity
+            moved into the menu's head, which also gives the header back the
+            width it took at `xl`. */}
+        <AdminAccountMenu identity={identity} />
 
         <SignOutButton className="w-auto border border-line" />
       </div>

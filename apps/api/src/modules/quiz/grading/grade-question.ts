@@ -1,5 +1,6 @@
+import { gradeChoice } from '@ayman/contracts/quiz/choice-grade';
 import type { AttemptQuestionState, QuestionType } from '../../../generated/prisma/enums';
-import { clamp, fractionToState } from './fraction';
+import { fractionToState } from './fraction';
 import { compareStringWithWildcard } from './wildcard';
 
 export interface GradableOption {
@@ -57,30 +58,21 @@ export function gradeQuestion(
       return { fraction: null, state: 'needs_grading', matchedOptionIds: [] };
 
     case 'mcq_single':
-    case 'true_false': {
-      if (response?.kind !== 'choice' || response.optionIds.length !== 1) return WRONG;
-      const chosen = question.options.find((option) => option.id === response.optionIds[0]);
-      if (!chosen) return WRONG;
-      // fraction = chosenOption.fraction, verbatim. It may be negative; the
-      // per-question floor is applied later, from the snapshotted minFraction.
-      return {
-        fraction: chosen.fraction,
-        state: fractionToState(chosen.fraction),
-        matchedOptionIds: [chosen.id],
-      };
-    }
-
+    case 'true_false':
     case 'mcq_multi': {
       if (response?.kind !== 'choice') return WRONG;
-      const ticked = question.options.filter((option) => response.optionIds.includes(option.id));
-      const sum = ticked.reduce((total, option) => total + option.fraction, 0);
-      // The clamp at 0 is the whole reason a student cannot go sub-zero on a
-      // single question by ticking every distractor.
-      const fraction = clamp(sum, 0, 1);
+      // The formula lives in contracts (`gradeChoice`) so the marking
+      // screen's suggested mark reads the SAME one: a single answer earns its
+      // option's weight verbatim (negative included — the per-question floor
+      // is applied later, from the snapshotted minFraction); a multiple
+      // answer, the ticked weights summed and clamped to [0, 1], which is why
+      // ticking every distractor cannot go below nothing.
+      const graded = gradeChoice(question.type, question.options, response.optionIds);
+      if (!graded) return WRONG;
       return {
-        fraction,
-        state: fractionToState(fraction),
-        matchedOptionIds: ticked.map((option) => option.id),
+        fraction: graded.fraction,
+        state: fractionToState(graded.fraction),
+        matchedOptionIds: graded.matched,
       };
     }
 

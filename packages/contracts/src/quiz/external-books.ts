@@ -189,6 +189,13 @@ export const ExternalBookPracticeSessionSchema = z.object({
   bookTitle: z.string(),
   courseSlug: z.string(),
   scope: z.enum(['book', 'unit', 'lesson']),
+  /**
+   * The book, unit or lesson the questions were drawn from — what «تدريب جديد
+   * بأسئلة تانية» starts again from. Optional because sessions stored before it
+   * existed (24h in Redis) do not carry it; without it the retake sent the BOOK
+   * id as a unit's id and fell through to a 404.
+   */
+  scopeId: z.string().uuid().optional(),
   scopeTitle: z.string(),
   totalQuestions: z.number().int(),
   questions: z.array(ExternalBookPracticeQuestionSchema),
@@ -231,6 +238,8 @@ export const ExternalBookPracticeResultSchema = z.object({
   bookTitle: z.string(),
   courseSlug: z.string(),
   scope: z.enum(['book', 'unit', 'lesson']),
+  /** See `ExternalBookPracticeSessionSchema.scopeId`. */
+  scopeId: z.string().uuid().optional(),
   scopeTitle: z.string(),
   score: z.number(),
   maxScore: z.number(),
