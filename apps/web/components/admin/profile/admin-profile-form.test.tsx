@@ -61,6 +61,10 @@ describe('AdminProfileForm — the phone goes only when it was edited', () => {
 
     // The box now shows the stored E.164, and a second save leaves it alone.
     await waitFor(() => expect(phone.value).toBe('+201012345678'));
+    // The box can update before the transition ends, while the button still
+    // reads «بنحفظ…» — wait for the button to be back, or the second click
+    // finds nothing on a slow runner (it failed CI twice on #666).
+    await screen.findByRole('button', { name: copy.admin.profile.saveProfile });
     submit();
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(2));
     expect(mockUpdate.mock.calls[1]![0]).toEqual({ name: PROFILE.name });
