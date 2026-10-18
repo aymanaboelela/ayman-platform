@@ -13,10 +13,22 @@ import { updateAdminProfileAction } from '@/app/(admin)/admin/profile/actions';
 
 const c = copy.admin.profile;
 
+/**
+ * Name and phone.
+ *
+ * The phone is sent ONLY when it was edited. The form used to resend the
+ * stored one on every save, and the API now normalises and checks what it is
+ * sent — so an admin whose stored number predates that (typed as `010…`, or
+ * normalising onto another account's) could not even fix a typo in their own
+ * name: every save came back «رقم الموبايل مش مظبوط».
+ */
 export function AdminProfileForm({ profile }: { profile: AdminProfile }) {
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState(profile.name);
   const [phoneNumber, setPhoneNumber] = useState(profile.phoneNumber ?? '');
+  // What is stored, moved forward by every save — the next comparison is
+  // against what the server kept (normalised), not against the page load.
+  const [storedPhone, setStoredPhone] = useState(profile.phoneNumber ?? '');
   const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -29,14 +41,19 @@ export function AdminProfileForm({ profile }: { profile: AdminProfile }) {
       return;
     }
 
+    const typedPhone = phoneNumber.trim();
+    const phoneEdited = typedPhone !== storedPhone.trim();
+
     startTransition(async () => {
       const result = await updateAdminProfileAction({
         name: trimmedName,
-        phoneNumber: phoneNumber.trim() ? phoneNumber.trim() : null,
+        ...(phoneEdited ? { phoneNumber: typedPhone === '' ? null : typedPhone } : {}),
       });
 
       if (result.ok) {
         setError(null);
+        setStoredPhone(result.data.phoneNumber ?? '');
+        setPhoneNumber(result.data.phoneNumber ?? '');
         toast.success(c.profileSaved, { id: 'admin-profile' });
       } else {
         setError(result.message);
