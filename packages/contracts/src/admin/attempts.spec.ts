@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AdminAttemptListQuerySchema,
+  AdminAttemptReviewSchema,
   AdminAttemptRowSchema,
   AdminAttemptsOverviewQuerySchema,
 } from './attempts';
@@ -89,5 +90,55 @@ describe('AdminAttemptsOverviewQuerySchema', () => {
     expect(AdminAttemptsOverviewQuerySchema.parse({})).toEqual({});
     expect(AdminAttemptsOverviewQuerySchema.parse({ courseId: '', q: '' })).toEqual({});
     expect(AdminAttemptsOverviewQuerySchema.safeParse({ lessonId: 'x' }).success).toBe(false);
+  });
+});
+
+/*
+ * «مقدرناش نجيب الورقة» on every paper, from 2026-09-09 to 2026-10-18: the API
+ * numbers slots from 0 (`attempt.service.ts` writes `slotPosition: index`),
+ * and this schema demanded a positive number, so the first question of every
+ * paper failed the parse and the popup never opened once.
+ */
+describe('AdminAttemptReviewSchema', () => {
+  const question = (slotPosition: number) => ({
+    slotPosition,
+    questionId: 'qv1',
+    attemptQuestionId: 'aq1',
+    type: 'mcq_single',
+    stemHtml: '<p>سؤال</p>',
+    options: [
+      { id: 'o1', bodyHtml: '<p>أ</p>' },
+      { id: 'o2', bodyHtml: '<p>ب</p>' },
+    ],
+    response: { kind: 'choice', optionIds: ['o2'] },
+    correctness: 'correct',
+    mark: 1,
+    maxMark: 1,
+    rightAnswerOptionIds: ['o2'],
+  });
+  const paper = {
+    attemptId: 'a1',
+    studentId: 'u1',
+    studentName: 'طالب',
+    quizTitle: 'كويز',
+    submittedAt: new Date().toISOString(),
+    rawScore: 2,
+    scaledScore: 100,
+    gradeOutOf: 100,
+    sumMarks: 2,
+    passPercent: 50,
+    passed: true,
+    questions: [question(0), question(1)],
+    wrongCount: 0,
+    totalCount: 2,
+  };
+
+  it('accepts a paper whose first question sits in slot 0, the way the API numbers them', () => {
+    const parsed = AdminAttemptReviewSchema.safeParse(paper);
+    expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
+  });
+
+  it('still refuses a negative slot', () => {
+    expect(AdminAttemptReviewSchema.safeParse({ ...paper, questions: [question(-1)] }).success).toBe(false);
   });
 });

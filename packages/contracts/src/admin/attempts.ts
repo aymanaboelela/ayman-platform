@@ -286,7 +286,7 @@ export type AdminAttemptsOverview = z.infer<typeof AdminAttemptsOverviewSchema>;
  * rendering «مفيش إجابة صح» for an answer it simply was not sent.
  */
 export const AdminAttemptReviewQuestionSchema = z.object({
-  slotPosition: z.number().int().positive(),
+  slotPosition: z.number().int().nonnegative(),
   questionId: z.string(),
   attemptQuestionId: z.string(),
   type: QuestionTypeSchema,
