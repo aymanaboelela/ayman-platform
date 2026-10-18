@@ -3,6 +3,7 @@ import type { MistakeAnswerResult, MistakeEntry, MistakeNotebook } from '@ayman/
 import { MISTAKE_MASTERY_STREAK } from '@ayman/contracts/mistakes';
 import { PrismaService } from '../../prisma/prisma.service';
 import { blockedBankEntries } from '../quiz/challenge-pool';
+import { gradeQuestion } from '../quiz/grading/grade-question';
 import { LEARNER_QUESTION_SELECT } from '../quiz/serializers/learner.serializer';
 
 /** الأنواع اللي دفتر الغلطات بيتعامل معاها — شوف `mistakes.ts` (v1: أسئلة اختيارية بس). */
@@ -90,17 +91,18 @@ export class MistakesService {
 
     const question = await this.prisma.questionVersion.findUnique({
       where: { id: questionVersionId },
-      select: { type: true, options: { select: { id: true, fraction: true } } },
+      select: {
+        type: true,
+        options: { orderBy: { position: 'asc' }, select: { id: true, fraction: true, position: true } },
+      },
     });
     if (!question || !isMistakeType(question.type)) throw new BadRequestException();
 
-    const rightOptionIds = rightOptionsOf(question.options);
-    const chosen = [...optionIds].sort();
-    const sortedRight = [...rightOptionIds].sort();
-    const correct =
-      rightOptionIds.length > 0 &&
-      chosen.length === sortedRight.length &&
-      chosen.every((id, i) => id === sortedRight[i]);
+    const { correct, rightOptionIds } = judgeMistakeAnswer(
+      question.type,
+      question.options.map((option) => ({ ...option, fraction: Number(option.fraction) })),
+      optionIds,
+    );
 
     const existing = await this.prisma.mistakeReview.findUnique({
       where: { userId_questionVersionId: { userId, questionVersionId } },
@@ -280,11 +282,38 @@ function isMistakeType(type: string): type is (typeof MISTAKE_TYPES)[number] {
   return (MISTAKE_TYPES as readonly string[]).includes(type);
 }
 
-/** أعلى fraction موجب — نفس `rightOf` في `game.service.ts`، مكرّرة هنا عشان
- *  الموديول ده مايعتمدش على تفاصيل داخلية في موديول تاني. */
-function rightOptionsOf(options: readonly { id: string; fraction: unknown }[]): string[] {
-  const best = Math.max(0, ...options.map((option) => Number(option.fraction)));
-  return best > 0 ? options.filter((option) => Number(option.fraction) === best).map((option) => option.id) : [];
+/**
+ * One notebook answer, judged.
+ *
+ * `correct` is the quiz engine's own verdict (`gradeQuestion`): full marks,
+ * exactly what «صح» means on the paper the mistake came from. The notebook
+ * used to keep a rule of its own — the options sharing the HIGHEST weight are
+ * the answer — and a three-answer mcq_multi is stored 0.333334 / 0.333333 /
+ * 0.333333 (`quantizeOptionWeights` makes them sum to exactly 1). Only the
+ * first counted, so ticking all three right options came back «غلط» with two
+ * of them crossed out. Reproduced in the browser on 2026-10-18.
+ *
+ * `rightOptionIds` are the rows the screen marks ✓, the ones a quiz review
+ * marks (`rightAnswerOptionIds`): every option with weight on mcq_multi, the
+ * full-marks one on a single answer.
+ */
+export function judgeMistakeAnswer(
+  type: (typeof MISTAKE_TYPES)[number],
+  options: readonly { id: string; fraction: number; position: number }[],
+  optionIds: readonly string[],
+): { correct: boolean; rightOptionIds: string[] } {
+  const graded = gradeQuestion(
+    { type, options: [...options], caseSensitive: false },
+    { kind: 'choice', optionIds: [...optionIds] },
+  );
+  const best = Math.max(0, ...options.map((option) => option.fraction));
+  const rightOptionIds =
+    type === 'mcq_multi'
+      ? options.filter((option) => option.fraction > 0).map((option) => option.id)
+      : best > 0
+        ? options.filter((option) => option.fraction === best).map((option) => option.id)
+        : [];
+  return { correct: graded.state === 'graded_right', rightOptionIds };
 }
 
 function toEntry(
