@@ -4,6 +4,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { adminAccount } from '@ayman/contracts/copy/admin-account';
 import { adminGrading } from '@ayman/contracts/copy/admin-grading';
 import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
+import { practiceCopy } from '@ayman/contracts/copy/practice';
 
 /**
  * The quiz surfaces' voice — the same tripwire `results-voice.spec.ts` and
@@ -117,6 +118,8 @@ const TABLES: Array<[string, unknown]> = [
   ['adminAccount', adminAccount],
   ['admin.grading', copy.admin.grading],
   ['admin.profile', copy.admin.profile],
+  // The public self-test: read by a visitor the platform knows nothing about.
+  ['practice', practiceCopy],
 ];
 
 describe('the quiz surfaces’ voice', () => {

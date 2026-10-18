@@ -1,0 +1,593 @@
+/*
+ * «اختبارات مجانية» — `/practice` and `/practice/[year]/[lesson]`.
+ *
+ * Colour carries meaning here and nowhere else on the page: the ok/err tokens
+ * mark a right or wrong answer, and the four result bands reuse them plus the
+ * warn token. Everything decorative is a `color-mix()` of the site accent, so
+ * the page re-themes with the rest of the marketing surface (light, dark, and
+ * every landing preset).
+ */
+
+.practice-page {
+  padding-block-end: 4rem;
+}
+
+.practice-hero {
+  /* Under the fixed header, like every inner page (`pages.css`). */
+  padding-block: calc(var(--site-nav-h) + clamp(1.75rem, 4vw, 3rem)) 1.5rem;
+  background:
+    radial-gradient(60rem 20rem at 85% 0%, color-mix(in oklab, var(--site-accent-solid) 18%, transparent), transparent 70%),
+    radial-gradient(40rem 18rem at 10% 20%, color-mix(in oklab, var(--color-ok) 14%, transparent), transparent 70%);
+}
+
+/* Not `.site-badge`: that one is a Latin mono label — LTR, uppercase, 0.22em
+   tracking — and letter-spacing pulls Arabic letters apart. */
+.practice-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--site-line-strong);
+  background: color-mix(in oklab, var(--site-accent-solid) 10%, transparent);
+  color: var(--site-accent-text-strong);
+  font-size: var(--fs-text-sm);
+  font-weight: 700;
+}
+
+.practice-badge::before {
+  content: '';
+  inline-size: 0.45rem;
+  block-size: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.practice-hero .page-title {
+  margin-block-start: 0.9rem;
+}
+
+.practice-hero--lesson {
+  padding-block: calc(var(--site-nav-h) + 1.25rem) 1rem;
+}
+
+.practice-back {
+  display: flex;
+  inline-size: fit-content;
+  align-items: center;
+  gap: 0.35rem;
+  margin-block-end: 0.9rem;
+  color: var(--site-accent-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.practice-back:hover {
+  text-decoration: underline;
+}
+
+/* ── index ─────────────────────────────────────────────────────────────── */
+
+.practice-years {
+  display: grid;
+  gap: 2.5rem;
+}
+
+.practice-year__title {
+  font-size: var(--fs-title-2);
+  font-weight: 800;
+  margin-block-end: 1rem;
+  color: var(--site-fg);
+}
+
+.practice-unit + .practice-unit {
+  margin-block-start: 1.75rem;
+}
+
+.practice-unit__title {
+  font-size: var(--fs-text-lg);
+  font-weight: 700;
+  color: var(--site-fg-2);
+  margin-block-end: 0.75rem;
+}
+
+.practice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: 0.9rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.practice-lesson {
+  position: relative;
+  display: grid;
+  gap: 0.45rem;
+  block-size: 100%;
+  padding: 1.1rem 1.15rem 1rem;
+  border: 1px solid var(--site-line);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(160deg, color-mix(in oklab, var(--site-accent-solid) 10%, var(--site-card)), var(--site-card) 60%);
+  box-shadow: var(--site-shadow-sm);
+  color: var(--site-fg);
+  text-decoration: none;
+  transition:
+    transform 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out),
+    border-color 160ms var(--ease-out);
+}
+
+.practice-year[data-year='1'] .practice-lesson {
+  background:
+    linear-gradient(160deg, color-mix(in oklab, var(--color-ok) 12%, var(--site-card)), var(--site-card) 60%);
+}
+
+.practice-lesson:hover,
+.practice-lesson:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--site-line-strong);
+  box-shadow: var(--site-shadow-md);
+}
+
+.practice-lesson__code {
+  justify-self: start;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--site-accent-solid) 16%, transparent);
+  color: var(--site-accent-text-strong);
+  font-size: var(--fs-text-xs);
+  font-weight: 700;
+}
+
+/* «1-2» after Arabic is reordered to «2-1» by the bidi algorithm unless the
+   code is isolated as its own LTR run. */
+.practice-code {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.practice-lesson__title {
+  font-size: var(--fs-text-lg);
+  font-weight: 700;
+  line-height: 1.45;
+  padding-inline-end: 1.75rem;
+}
+
+.practice-lesson__meta {
+  color: var(--site-fg-2);
+  font-size: var(--fs-text-sm);
+}
+
+.practice-lesson__go {
+  position: absolute;
+  inset-block-start: 1.1rem;
+  inset-inline-end: 1rem;
+  color: var(--site-accent-text);
+}
+
+.practice-chip {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px dashed var(--site-line-strong);
+  color: var(--site-fg-2);
+  font-size: var(--fs-text-xs);
+  font-weight: 600;
+}
+
+.practice-chip[data-band] {
+  border-style: solid;
+}
+
+.practice-chip[data-band='excellent'],
+.practice-chip[data-band='great'] {
+  border-color: color-mix(in oklab, var(--color-ok) 55%, transparent);
+  background: color-mix(in oklab, var(--color-ok) 12%, transparent);
+  color: var(--site-fg);
+}
+
+.practice-chip[data-band='good'] {
+  border-color: color-mix(in oklab, var(--color-warn) 55%, transparent);
+  background: color-mix(in oklab, var(--color-warn) 12%, transparent);
+  color: var(--site-fg);
+}
+
+.practice-chip[data-band='review'] {
+  border-color: color-mix(in oklab, var(--color-err) 50%, transparent);
+  background: color-mix(in oklab, var(--color-err) 10%, transparent);
+  color: var(--site-fg);
+}
+
+/* ── runner ────────────────────────────────────────────────────────────── */
+
+.practice-run,
+.practice-hero--lesson .site-shell {
+  max-inline-size: 48rem;
+}
+
+.practice-card {
+  padding: 1.35rem;
+  border: 1px solid var(--site-line);
+  border-radius: var(--radius-lg);
+  background: var(--site-card);
+  box-shadow: var(--site-shadow-sm);
+  color: var(--site-fg);
+}
+
+.practice-intro {
+  display: grid;
+  gap: 1rem;
+  justify-items: start;
+}
+
+.practice-intro__lead {
+  color: var(--site-fg-2);
+  line-height: 1.8;
+}
+
+.practice-best {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--site-accent-text-strong);
+  font-weight: 700;
+}
+
+.practice-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-block-size: 2.9rem;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid var(--site-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--site-card-2);
+  color: var(--site-fg);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background 140ms var(--ease-out),
+    transform 140ms var(--ease-out);
+}
+
+.practice-btn:hover {
+  background: color-mix(in oklab, var(--site-accent-solid) 10%, var(--site-card-2));
+}
+
+.practice-btn:active {
+  transform: scale(0.98);
+}
+
+.practice-btn--primary {
+  border-color: transparent;
+  background: var(--site-accent-solid);
+  color: var(--site-on-accent);
+}
+
+.practice-btn--primary:hover {
+  background: var(--site-accent-solid-hover);
+}
+
+.practice-progress {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--site-fg-2);
+  font-size: var(--fs-text-sm);
+  font-weight: 600;
+}
+
+.practice-progress__score {
+  color: var(--site-accent-text-strong);
+}
+
+.practice-bar {
+  block-size: 0.45rem;
+  margin-block: 0.6rem 1.25rem;
+  border-radius: 999px;
+  background: var(--site-card-2);
+  overflow: hidden;
+}
+
+.practice-bar > span {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--site-accent-solid), var(--color-ok));
+  transition: inline-size 300ms var(--ease-out);
+}
+
+.practice-stem {
+  font-size: var(--fs-title-4);
+  font-weight: 700;
+  line-height: 1.7;
+  margin-block-end: 1.1rem;
+  outline: none;
+}
+
+.practice-options {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.practice-option {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  inline-size: 100%;
+  min-block-size: 3.25rem;
+  padding: 0.7rem 0.9rem;
+  border: 1.5px solid var(--site-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--site-card);
+  color: var(--site-fg);
+  font: inherit;
+  text-align: start;
+  line-height: 1.6;
+  cursor: pointer;
+  transition:
+    border-color 140ms var(--ease-out),
+    background 140ms var(--ease-out);
+}
+
+.practice-option:not(:disabled):hover {
+  border-color: var(--site-accent-solid);
+  background: color-mix(in oklab, var(--site-accent-solid) 7%, var(--site-card));
+}
+
+.practice-option:disabled {
+  cursor: default;
+}
+
+.practice-option__letter {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: 50%;
+  background: var(--site-card-2);
+  color: var(--site-fg-2);
+  font-weight: 800;
+}
+
+.practice-option__text {
+  flex: 1;
+}
+
+.practice-option__mark {
+  flex: none;
+}
+
+.practice-option[data-state='right'] {
+  border-color: var(--color-ok);
+  background: color-mix(in oklab, var(--color-ok) 13%, var(--site-card));
+}
+
+.practice-option[data-state='right'] .practice-option__letter {
+  background: var(--color-ok);
+  color: var(--site-on-accent);
+}
+
+.practice-option[data-state='wrong'] {
+  border-color: var(--color-err);
+  background: color-mix(in oklab, var(--color-err) 11%, var(--site-card));
+}
+
+.practice-option[data-state='wrong'] .practice-option__letter {
+  background: var(--color-err);
+  color: var(--site-on-accent);
+}
+
+.practice-option[data-state='dim'] {
+  opacity: 0.6;
+}
+
+.practice-feedback {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+  margin-block-start: 1.1rem;
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-md);
+  border-inline-start: 4px solid var(--color-ok);
+  background: color-mix(in oklab, var(--color-ok) 9%, var(--site-card));
+}
+
+.practice-feedback[data-correct='false'] {
+  border-inline-start-color: var(--color-err);
+  background: color-mix(in oklab, var(--color-err) 8%, var(--site-card));
+}
+
+.practice-feedback__verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 800;
+}
+
+.practice-feedback__answer {
+  font-weight: 600;
+  color: var(--site-fg-2);
+}
+
+.practice-feedback__why {
+  line-height: 1.8;
+}
+
+/* ── result ────────────────────────────────────────────────────────────── */
+
+.practice-result {
+  display: grid;
+  gap: 1rem;
+}
+
+.practice-score {
+  --practice-band: var(--color-ok);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.5rem;
+  background:
+    linear-gradient(150deg, color-mix(in oklab, var(--practice-band) 14%, var(--site-card)), var(--site-card) 70%);
+}
+
+.practice-score[data-band='good'] {
+  --practice-band: var(--color-warn);
+}
+
+.practice-score[data-band='review'] {
+  --practice-band: var(--color-err);
+}
+
+.practice-ring {
+  --practice-pct: 0;
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 7.5rem;
+  block-size: 7.5rem;
+  border-radius: 50%;
+  background: conic-gradient(var(--practice-band) calc(var(--practice-pct) * 1%), var(--site-card-2) 0);
+}
+
+.practice-ring > span {
+  display: grid;
+  place-items: center;
+  inline-size: 5.9rem;
+  block-size: 5.9rem;
+  border-radius: 50%;
+  background: var(--site-card);
+  font-size: var(--fs-title-3);
+  font-weight: 800;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.practice-score__text {
+  display: grid;
+  gap: 0.35rem;
+  flex: 1;
+  min-inline-size: 14rem;
+}
+
+.practice-score__text h2 {
+  font-size: var(--fs-title-2);
+  font-weight: 800;
+  color: var(--site-fg);
+  outline: none;
+}
+
+.practice-score__num {
+  font-size: var(--fs-text-lg);
+  font-weight: 700;
+}
+
+.practice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.practice-section-title {
+  font-size: var(--fs-title-4);
+  font-weight: 800;
+  margin-block-end: 0.75rem;
+}
+
+.practice-misses {
+  display: grid;
+  gap: 0.9rem;
+  padding-inline-start: 1.25rem;
+  margin: 0;
+}
+
+.practice-misses li {
+  padding-block-end: 0.9rem;
+  border-block-end: 1px solid var(--site-line);
+}
+
+.practice-misses li:last-child {
+  border-block-end: 0;
+  padding-block-end: 0;
+}
+
+.practice-misses__stem {
+  font-weight: 700;
+  line-height: 1.7;
+}
+
+.practice-misses__yours,
+.practice-misses__right {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-block-start: 0.3rem;
+}
+
+.practice-misses__yours {
+  color: var(--color-err);
+}
+
+.practice-misses__right {
+  color: var(--color-ok);
+  font-weight: 700;
+}
+
+.practice-misses__why {
+  margin-block-start: 0.35rem;
+  color: var(--site-fg-2);
+  line-height: 1.8;
+}
+
+.practice-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background:
+    linear-gradient(150deg, color-mix(in oklab, var(--site-accent-solid) 14%, var(--site-card)), var(--site-card) 70%);
+}
+
+.practice-cta p {
+  color: var(--site-fg-2);
+}
+
+@media (max-width: 40rem) {
+  .practice-card {
+    padding: 1.05rem;
+  }
+
+  .practice-actions .practice-btn {
+    flex: 1 1 100%;
+  }
+
+  .practice-ring {
+    inline-size: 6.25rem;
+    block-size: 6.25rem;
+  }
+
+  .practice-ring > span {
+    inline-size: 4.9rem;
+    block-size: 4.9rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .practice-lesson,
+  .practice-btn,
+  .practice-bar > span {
+    transition: none;
+  }
+}
