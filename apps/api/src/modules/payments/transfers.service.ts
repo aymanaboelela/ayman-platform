@@ -103,7 +103,12 @@ export class TransfersService {
         });
         changed = true;
         // It could not be settled before: an SMS names nobody. Now it can.
-        if (await this.settle(held.id, transfer.amountCents, transfer.senderHandle, held.receivedAt)) {
+        //
+        // ⚠️ With THIS capture's time, not the SMS row's. The dedupe above is
+        // by amount alone over 30 days, so `held` can be an SMS for different
+        // money weeks ago — and measuring the unknown-sender window from it
+        // let a claim filed any time since then catch this payer's money.
+        if (await this.settle(held.id, transfer.amountCents, transfer.senderHandle, receivedAt)) {
           matched += 1;
         }
         continue;
@@ -166,7 +171,7 @@ export class TransfersService {
    * arriving while exactly one student has a pending 250 claim, would approve
    * that claim. The bound on the damage is that something must be outstanding,
    * match to the piastre, and have been filed around the time the money
-   * arrived (a waiting bait claim does not qualify — see
+   * arrived (a claim filed before the money does not qualify — see
    * `UNKNOWN_SENDER_CLAIM_SLACK_MS`), and the `IncomingTransfer` row records
    * what was believed and why.
    *
@@ -188,8 +193,8 @@ export class TransfersService {
       select: { userId: true },
     });
 
-    // Known: that student's own claims. Unknown: only claims filed around the
-    // time this money arrived — see `UNKNOWN_SENDER_CLAIM_SLACK_MS`.
+    // Known: that student's own claims. Unknown: only claims filed AFTER this
+    // money arrived — see `UNKNOWN_SENDER_CLAIM_SLACK_MS`.
     const owner = known
       ? { userId: known.userId }
       : { createdAt: { gte: new Date(receivedAt.getTime() - UNKNOWN_SENDER_CLAIM_SLACK_MS) } };
@@ -287,6 +292,10 @@ export class TransfersService {
         amountCents: submission.amountCents,
         senderHandle: { not: null },
         matchedSubmissionId: null,
+        // Money that already paid for a book is not this claim's money, and
+        // binding its sender here would point every later auto-settle of
+        // theirs at the wrong student.
+        matchedBookOrderId: null,
         dismissedAt: null,
         receivedAt: { gte: since },
       },
@@ -452,20 +461,30 @@ const LEARN_WINDOW_DAYS = 3;
 
 /**
  * How long before the money a claim may have been filed and still be matched
- * to a sender the platform has never seen.
+ * to a sender the platform has never seen. ZERO: the claim must come after the
+ * money.
  *
- * Without it, a student could file a claim at a popular price with a junk
- * screenshot and leave it waiting: the next first-time payer's notification
- * found exactly one pending claim at that amount — the bait — approved it, and
- * bound the payer's address to the bait's owner, so every later transfer from
- * that payer settled the wrong student's claims too.
+ * It was ten minutes, and ten minutes was the whole attack, not a fix for it.
+ * The InstaPay push is forwarded the instant it lands, before any honest
+ * student can have filed a claim for it — a claim IS a screenshot of a transfer
+ * already made. So the only claims inside a "minutes before the money" window
+ * were the ones filed with no money behind them: an account that keeps one
+ * fresh claim at a popular price (re-filed every few minutes, from a few
+ * accounts or months) caught every first-time payer at that price, got the
+ * course, and had the payer's address bound to it so their LATER transfers
+ * settled the attacker's claims too. A guest book order (no account at all)
+ * worked the same way and shipped someone else's money's books.
  *
- * An honest claim is filed AFTER the transfer it shows (it is a screenshot of
- * it), so it always passes. The slack is for the phone's clock and for the
- * rare student who uploads while the transfer is still going through. A known
- * address needs no window — it already says whose money this is.
+ * What still auto-settles: a capture that reaches the platform after the claim
+ * was filed — a notification list pasted in later, carrying the time it
+ * happened as `capturedAt` — and every payment from a known address. What no
+ * longer does: a claim filed moments before its own push arrives. That one
+ * goes to the manual queue, and approving it there learns the address
+ * (`learnFromApproval`), so the queue still drains. Failing closed is the
+ * only direction this window may be wrong in; widening it again reopens the
+ * bait.
  */
-const UNKNOWN_SENDER_CLAIM_SLACK_MS = 10 * 60 * 1000;
+const UNKNOWN_SENDER_CLAIM_SLACK_MS = 0;
 
 /** Prisma's unique-constraint code, narrowed by shape rather than by importing
  *  the error class: the generated client's error types are not part of its

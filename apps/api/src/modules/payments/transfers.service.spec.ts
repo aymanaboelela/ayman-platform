@@ -57,6 +57,12 @@ describe('TransfersService', () => {
     `لقد استلمت ${(cents / 100).toFixed(2)} جنيه من ${handle}`;
   const smsFor = (cents: number) => `تم اضافة مبلغ ${cents / 100}EGP الى حساب رقم xxx1734`;
 
+  /** A capture of money that landed a minute ago — a notification list pasted
+   *  in after the student had already filed their claim for it. The only
+   *  shape in which a sender nobody knows still settles itself: the claim is
+   *  AFTER the money. */
+  const aMinuteAgo = () => new Date(Date.now() - 60_000).toISOString();
+
   const claim = (userId: string, course: string) =>
     payments.submit(userId, {
       courseId: course,
@@ -162,7 +168,7 @@ describe('TransfersService', () => {
     it('approves the one claim it can only be paying for, and learns the address', async () => {
       const filed = await claim(studentId, courseId);
 
-      const result = await service.ingest({ text: notificationFor(PRICE_CENTS) });
+      const result = await service.ingest({ text: notificationFor(PRICE_CENTS), capturedAt: aMinuteAgo() });
 
       expect(result).toMatchObject({ read: 1, created: 1, matched: 1 });
 
@@ -207,6 +213,43 @@ describe('TransfersService', () => {
         'pending',
       );
       expect(await prisma.studentPaymentAddress.count({ where: { handle: HANDLE } })).toBe(0);
+    });
+
+    // The bait that the ten-minute window still let through: a claim kept
+    // fresh, re-filed every few minutes, so one is always "just before" the
+    // next first-time payer's money. A claim filed before the money is not a
+    // claim for it, however recent.
+    it('ignores a claim filed minutes before the money arrived', async () => {
+      const bait = await claim(otherStudentId, courseId);
+      await prisma.paymentSubmission.update({
+        where: { id: bait.id },
+        data: { createdAt: new Date(Date.now() - 3 * 60 * 1000) },
+      });
+
+      const result = await service.ingest({ text: notificationFor(PRICE_CENTS) });
+
+      expect(result).toMatchObject({ created: 1, matched: 0 });
+      expect((await prisma.paymentSubmission.findUniqueOrThrow({ where: { id: bait.id } })).status).toBe(
+        'pending',
+      );
+      expect(await prisma.accessGrant.count({ where: { userId: otherStudentId } })).toBe(0);
+      expect(await prisma.studentPaymentAddress.count({ where: { handle: HANDLE } })).toBe(0);
+    });
+
+    // Same bait, on a guest book order: no account at all, and the books ship.
+    it('ignores a guest book order filed before the money arrived', async () => {
+      const order = await bookOrder(null, OTHER_PRICE_CENTS);
+      await prisma.bookOrder.update({
+        where: { id: order.id },
+        data: { createdAt: new Date(Date.now() - 3 * 60 * 1000) },
+      });
+
+      const result = await service.ingest({ text: notificationFor(OTHER_PRICE_CENTS) });
+
+      expect(result).toMatchObject({ matched: 0 });
+      expect((await prisma.bookOrder.findUniqueOrThrow({ where: { id: order.id } })).status).toBe(
+        'address_only',
+      );
     });
 
     it('still matches an old claim once the address is known to be that student’s', async () => {
@@ -300,16 +343,39 @@ describe('TransfersService', () => {
     });
 
     it('is upgraded and settled when the InstaPay notification for it arrives', async () => {
+      await service.ingest({ text: smsFor(PRICE_CENTS), capturedAt: aMinuteAgo() });
       await claim(studentId, courseId);
 
-      await service.ingest({ text: smsFor(PRICE_CENTS) });
-      const second = await service.ingest({ text: notificationFor(PRICE_CENTS) });
+      const second = await service.ingest({ text: notificationFor(PRICE_CENTS), capturedAt: aMinuteAgo() });
 
       expect(second).toMatchObject({ duplicates: 1, matched: 1 });
       const transfers = await prisma.incomingTransfer.findMany({ where: { amountCents: PRICE_CENTS } });
       expect(transfers).toHaveLength(1);
       expect(transfers[0]).toMatchObject({ source: 'notification', senderHandle: HANDLE });
       expect(await prisma.accessGrant.count({ where: { userId: studentId, courseId } })).toBe(1);
+    });
+  });
+
+  describe('an old SMS row the notification upgrades', () => {
+    // The dedupe is by amount over thirty days, so the row a notification
+    // "upgrades" can be an SMS for different money weeks earlier. Measuring the
+    // unknown-sender window from THAT row let a claim filed any time since then
+    // catch this payer's money.
+    it('does not let a claim filed between the SMS and the notification catch the money', async () => {
+      await service.ingest({ text: smsFor(PRICE_CENTS), capturedAt: new Date(Date.now() - 9 * 86_400_000).toISOString() });
+      const bait = await claim(otherStudentId, courseId);
+      await prisma.paymentSubmission.update({
+        where: { id: bait.id },
+        data: { createdAt: new Date(Date.now() - 7 * 86_400_000) },
+      });
+
+      const result = await service.ingest({ text: notificationFor(PRICE_CENTS) });
+
+      expect(result).toMatchObject({ duplicates: 1, matched: 0 });
+      expect((await prisma.paymentSubmission.findUniqueOrThrow({ where: { id: bait.id } })).status).toBe(
+        'pending',
+      );
+      expect(await prisma.studentPaymentAddress.count({ where: { handle: HANDLE } })).toBe(0);
     });
   });
 
@@ -396,7 +462,7 @@ describe('TransfersService', () => {
     it('learns the address off a first book payment too', async () => {
       await bookOrder(studentId, OTHER_PRICE_CENTS);
 
-      await service.ingest({ text: notificationFor(OTHER_PRICE_CENTS) });
+      await service.ingest({ text: notificationFor(OTHER_PRICE_CENTS), capturedAt: aMinuteAgo() });
 
       const learned = await prisma.studentPaymentAddress.findUniqueOrThrow({ where: { handle: HANDLE } });
       expect(learned.userId).toBe(studentId);
@@ -439,7 +505,7 @@ describe('TransfersService', () => {
   describe('adminList', () => {
     it('splits matched from unmatched, and names the student behind each', async () => {
       const filed = await claim(studentId, courseId);
-      await service.ingest({ text: notificationFor(PRICE_CENTS) });
+      await service.ingest({ text: notificationFor(PRICE_CENTS), capturedAt: aMinuteAgo() });
       await service.ingest({ text: notificationFor(PRICE_CENTS + 100_000, OTHER_HANDLE) });
 
       const matched = await service.adminList('matched', 100);
