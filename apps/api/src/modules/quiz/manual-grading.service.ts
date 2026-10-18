@@ -736,25 +736,38 @@ export class ManualGradingService {
         };
       }
 
+      const previousMark = row.mark === null ? null : Number(row.mark);
+      /*
+       * Unchanged at the precision the marking screen SHOWS a mark (two
+       * places, `formatMark`): the card sends its box with every save, and an
+       * engine's 0.6667 it displayed as «0.67» is the same mark, not a new one.
+       */
+      const markChanged = previousMark === null || Math.abs(input.mark - previousMark) >= 0.005;
+      const changed = markChanged || responseUpdate !== null;
+
       // Clamped, not rejected: an admin typing 20 into a 5-mark box is a slip,
       // and a 400 in the middle of marking thirty papers is worse than the
       // obvious correction. The clamped value is what the audit row records.
-      const mark = roundMark(clamp(input.mark, 0, maxMark));
+      const mark =
+        markChanged || previousMark === null ? roundMark(clamp(input.mark, 0, maxMark)) : previousMark;
       const fraction = clamp(mark / maxMark, Number(row.minFraction), Number(row.maxFraction));
 
       await tx.attemptQuestion.update({
         where: { id: attemptQuestionId },
         data: {
-          mark,
-          fraction,
-          state: fractionToState(fraction),
           feedbackHtml:
             input.feedbackHtml === undefined ? undefined : sanitizeRichText(input.feedbackHtml),
-          gradedAt: new Date(),
-          // Stamped so the screen can tell a HUMAN mark from an engine one and
-          // offer it for revision — `gradedBy` is null on everything
-          // `gradeQuestion` scored.
-          gradedBy: actorUserId,
+          /*
+           * The grade, and who gave it, only when what a grade is made of
+           * moved. `gradedBy` tells a HUMAN mark from an engine one — and it is
+           * what `RegradeService` skips (`gradedBy: null`), so stamping it on a
+           * note, or on a «حفظ» of the engine's own mark, froze that answer out
+           * of every later answer-key correction. A note on its own keeps the
+           * engine's attribution.
+           */
+          ...(changed
+            ? { mark, fraction, state: fractionToState(fraction), gradedAt: new Date(), gradedBy: actorUserId }
+            : {}),
           ...(responseUpdate ?? {}),
         },
       });
@@ -800,7 +813,7 @@ export class ManualGradingService {
       return {
         ...recomputed,
         mark,
-        previousMark: row.mark === null ? null : Number(row.mark),
+        previousMark,
         previousResponse: row.response,
         responseChanged: responseUpdate !== null,
       };

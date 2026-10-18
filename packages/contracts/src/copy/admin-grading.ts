@@ -55,6 +55,10 @@ export const adminGrading = {
    *  mark box changing on its own is exactly the kind of silent edit this
    *  screen stopped making. */
   markSuggested: 'الدرجة اتعدّلت على حسب الاختيار الجديد — ممكن تتغيّر قبل الحفظ.',
+  /** Shown while an edit has every option unticked. A blank answer is "no
+   *  response at all", which only «إلغاء التعديل» puts back — the API takes
+   *  a corrected answer, never an emptied one. */
+  editNeedsChoice: 'لازم يتحدد اختيار واحد على الأقل عشان التعديل يتحفظ — ولو السؤال كان متساب فاضي، «إلغاء التعديل» بيرجّعه زي ما كان.',
 
   /* ── the mark ────────────────────────────────────────────────────────── */
   quickFull: 'الدرجة كاملة ({n})',

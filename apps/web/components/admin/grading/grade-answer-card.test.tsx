@@ -153,6 +153,59 @@ describe('GradeAnswerCard — nothing changes by accident', () => {
     expect(within(dialog).queryByText('من 0 من 2 لـ 0 من 2')).toBeNull();
   });
 
+  it('will not save an edit with every option unticked — it says so and keeps «حفظ» off', async () => {
+    renderCard(choiceQuestion({ type: 'mcq_multi' }));
+
+    fireEvent.click(screen.getByRole('button', { name: g.editAnswer }));
+    const boxes = screen.getAllByRole('checkbox');
+    fireEvent.click(boxes[1]!); // «ب», the only one the student ticked
+    expect(screen.getByText(g.editNeedsChoice)).toBeTruthy();
+    const save = screen.getByRole('button', { name: g.save }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.click(save);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(mockGrade).not.toHaveBeenCalled();
+
+    // Ticking one again is an edit the API takes.
+    fireEvent.click(boxes[2]!);
+    expect(screen.queryByText(g.editNeedsChoice)).toBeNull();
+    expect(save.disabled).toBe(false);
+  });
+
+  it('suggests the mark the engine would give — the picked option’s own weight', () => {
+    renderCard(
+      choiceQuestion({
+        options: [
+          { id: 'opt-a', bodyHtml: '<p>Cache</p>', position: 0, isRight: true, fraction: 1 },
+          { id: 'opt-b', bodyHtml: '<p>RAM</p>', position: 1, isRight: false, fraction: 0 },
+          { id: 'opt-c', bodyHtml: '<p>Registers</p>', position: 2, isRight: true, fraction: 0.5 },
+        ],
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: g.editAnswer }));
+    // Half the weight of a two-mark question: 1, not «not all the right ones» = 0.
+    fireEvent.click(screen.getAllByRole('radio')[2]!);
+    expect((screen.getByLabelText(/الدرجة/) as HTMLInputElement).value).toBe('1');
+    fireEvent.click(screen.getAllByRole('radio')[0]!);
+    expect((screen.getByLabelText(/الدرجة/) as HTMLInputElement).value).toBe('2');
+  });
+
+  it('re-sends the stored mark, not its rounded display, when only the note changes', async () => {
+    renderCard(choiceQuestion({ type: 'mcq_multi', correctness: 'graded_partial', mark: 0.6667, maxMark: 1 }));
+    expect((screen.getByLabelText(/الدرجة/) as HTMLInputElement).value).toBe('0.67');
+
+    fireEvent.change(screen.getByPlaceholderText(g.feedbackPlaceholder), {
+      target: { value: 'الاختيار التالت كمان صح' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: g.save }));
+
+    // No «overwrite?» for a mark nobody touched, and the exact stored value.
+    await waitFor(() => expect(mockGrade).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(mockGrade.mock.calls[0]![2].mark).toBe(0.6667);
+  });
+
   it('does not send `response` when the edit ends where it started', async () => {
     renderCard(choiceQuestion());
 

@@ -12,6 +12,7 @@ describe('paperOptions — the marking card’s options, as the student read the
     const written = [option(0, '<p>RAM</p>', 1), option(1, '<p>ROM</p>'), option(2, '<p>CPU</p>')];
     expect(paperOptions(written, [2, 0, 1]).map((row) => row.id)).toEqual(['opt-2', 'opt-0', 'opt-1']);
     expect(paperOptions(written, [2, 0, 1]).map((row) => row.isRight)).toEqual([false, true, false]);
+    expect(paperOptions(written, [2, 0, 1]).map((row) => row.fraction)).toEqual([0, 1, 0]);
   });
 
   it('puts an option the snapshot does not name after the rest, instead of dropping it', () => {

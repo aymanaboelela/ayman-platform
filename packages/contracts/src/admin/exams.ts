@@ -262,6 +262,13 @@ export const AdminGradingOptionSchema = z.object({
   bodyHtml: z.string(),
   position: z.number().optional(),
   isRight: z.boolean().optional(),
+  /**
+   * The option's weight, so the card's suggested mark is the engine's
+   * (`gradeChoice`) — a single answer can carry more than one positive weight.
+   * Optional because a web built from this commit can meet an API that is
+   * not yet, for the minutes a deploy takes.
+   */
+  fraction: z.number().optional(),
 });
 export type AdminGradingOption = z.infer<typeof AdminGradingOptionSchema>;
 

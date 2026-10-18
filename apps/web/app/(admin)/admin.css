@@ -1323,6 +1323,14 @@ div.unit[data-open] > .unit__head:hover {
   color: var(--a-11);
 }
 
+/* «لازم يتحدد اختيار واحد…» — an edit with every option unticked, which the
+   API refuses. Caution, not error: nothing failed, a step is missing. */
+.grade-edit--empty {
+  border-color: color-mix(in oklch, var(--warn) 45%, transparent);
+  background: color-mix(in oklab, var(--warn) 10%, var(--n-1));
+  color: var(--warn);
+}
+
 .grade-confirm {
   display: flex;
   flex-direction: column;

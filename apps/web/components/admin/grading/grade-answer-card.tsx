@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState, useTransition } from 'react';
-import { ArrowLeft, Check, Pencil, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, Pencil, X } from 'lucide-react';
 // `/copy/admin`, never the root barrel — this card only renders inside /admin.
 import { copy } from '@ayman/contracts/copy/admin';
 import { arabicCount } from '@ayman/contracts/arabic-count';
@@ -9,6 +9,7 @@ import { adminGrading } from '@ayman/contracts/copy/admin-grading';
 import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
 import type { AdminGradingAttempt } from '@ayman/contracts/admin/exams';
 import { formatCopy, formatMark } from '@ayman/contracts/format';
+import { gradeChoice, type ChoiceType } from '@ayman/contracts/quiz/choice-grade';
 import { Button } from '@ayman/ui/components/button';
 import { Checkbox } from '@ayman/ui/components/checkbox';
 import {
@@ -68,9 +69,13 @@ function sameIds(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((id) => b.includes(id));
 }
 
-/** Marks compared at the precision the column stores (`numeric(10,4)`). */
-function sameMark(a: number, b: number): boolean {
-  return Math.round(a * 10_000) === Math.round(b * 10_000);
+/**
+ * Marks compared at the precision the box SHOWS them (`formatMark`, two
+ * places): an engine mark of 0.6667 opens as «0.67», and a note saved under it
+ * must not read as a new mark, ask to overwrite it, or be sent as one.
+ */
+function sameShownMark(a: number, b: number): boolean {
+  return Math.round(a * 100) === Math.round(b * 100);
 }
 
 /**
@@ -159,16 +164,40 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
 
   const shownChosen = editing ? draft : stored.chosen;
   const responseChanged = editing && !sameIds(draft, stored.chosen);
-  const markChanged = canSave && stored.mark !== null && !sameMark(nextMark, stored.mark);
+  /*
+   * A mark TYPED, as opposed to the stored one re-sent from an untouched box.
+   * Both the raw and the clamped value have to differ: «-1» left alone under
+   * an engine's negative mark is not a 0, and a 20 typed into a 5-mark box
+   * that already holds 5 changes nothing.
+   */
+  const markEdited =
+    canSave &&
+    (stored.mark === null || (!sameShownMark(parsed, stored.mark) && !sameShownMark(nextMark, stored.mark)));
+  // ...over a mark that is recorded — the half that asks first.
+  const markChanged = markEdited && stored.mark !== null;
+  // Every option unticked. Not an answer the API takes (`optionIds` is
+  // `.min(1)`): a blank answer is NO response, which only «إلغاء التعديل»
+  // puts back — so the card says so instead of letting a save fail.
+  const emptyEdit = editing && draft.length === 0;
   const needsConfirm = responseChanged || markChanged;
 
-  const rightIds = options.filter((option) => option.isRight).map((option) => option.id);
+  // The weights the engine grades with. An API older than this card sends
+  // none, and then right is everything and wrong nothing.
+  const weights = options.map((option) => ({
+    id: option.id,
+    fraction: option.fraction ?? (option.isRight ? 1 : 0),
+  }));
 
   function pick(ids: string[]) {
     setDraft(ids);
-    // The mark the new answer is worth, suggested and SAID — the box changing
-    // on its own is exactly the kind of silent edit this card stopped making.
-    setMark(formatMark(sameIds(ids, rightIds) ? question.maxMark : 0));
+    // The mark the new answer is worth — by the engine's own formula
+    // (`gradeChoice`), so a single answer with two weighted options suggests
+    // the weight of the one picked, not «all of the right ones or nothing».
+    // Floored at 0 like every mark typed here. Suggested and SAID: the box
+    // changing on its own is the kind of silent edit this card stopped making.
+    const graded = isChoice ? gradeChoice(type as ChoiceType, weights, ids) : null;
+    const fraction = graded === null ? 0 : Math.min(Math.max(graded.fraction, 0), 1);
+    setMark(formatMark(Math.round(fraction * question.maxMark * 10_000) / 10_000));
     setSuggested(true);
     setStatus('idle');
   }
@@ -181,7 +210,7 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
   }
 
   function requestSave() {
-    if (!canSave || pending) return;
+    if (!canSave || pending || emptyEdit) return;
     if (needsConfirm) setConfirmOpen(true);
     else save();
   }
@@ -191,7 +220,9 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
     startTransition(async () => {
       const trimmed = feedback.trim();
       const result = await gradeAnswerAction(attemptId, question.attemptQuestionId, {
-        mark: Math.max(parsed, 0),
+        // The stored mark itself when the box was not touched — the API then
+        // sees no change and leaves the engine's attribution alone.
+        mark: markEdited ? Math.max(parsed, 0) : (stored.mark ?? Math.max(parsed, 0)),
         feedbackHtml: trimmed === '' ? undefined : trimmed,
         // ONLY when he actually changed it. Sending it on every save is what
         // turned a skipped question into an "answered with nothing" one.
@@ -204,7 +235,7 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
         return;
       }
 
-      const savedMark = Math.round(nextMark * 10_000) / 10_000;
+      const savedMark = markEdited ? Math.round(nextMark * 10_000) / 10_000 : (stored.mark ?? nextMark);
       setStored({
         mark: savedMark,
         chosen: responseChanged ? draft : stored.chosen,
@@ -334,7 +365,23 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
             </ul>
           )}
 
-          {suggested ? <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{g.markSuggested}</p> : null}
+          {/* Mounted with the edit, empty, so only its content comes and goes
+              — a live region inserted together with its text is not reliably
+              announced. While empty it takes back the column's gap. */}
+          {editing ? (
+            <div role="status" className="empty:-mt-3">
+              {emptyEdit ? (
+                <p className="grade-edit grade-edit--empty">
+                  <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
+                  {g.editNeedsChoice}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {suggested && !emptyEdit ? (
+            <p className="text-[length:var(--fs-text-xs)] text-fg-muted">{g.markSuggested}</p>
+          ) : null}
 
           <div className="flex flex-wrap gap-2">
             {editing ? (
@@ -449,7 +496,7 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button size="sm" onClick={requestSave} disabled={pending || !canSave} aria-busy={pending}>
+        <Button size="sm" onClick={requestSave} disabled={pending || !canSave || emptyEdit} aria-busy={pending}>
           {pending ? g.saving : g.save}
         </Button>
 
@@ -484,10 +531,10 @@ export function GradeAnswerCard({ attemptId, question, onGraded }: GradeAnswerCa
             {/* The mark is listed whenever the dialog opens — an answer
                 swapped for another is a question about the mark too — but
                 only struck through when it actually moves. */}
-            {!canSave ? null : stored.mark === null || !sameMark(nextMark, stored.mark) ? (
+            {!canSave ? null : markEdited ? (
               <ChangeRow label={g.confirmMark} from={markOf(stored.mark)} to={markOf(nextMark)} />
             ) : (
-              <SameRow label={g.confirmMark} value={markOf(nextMark)} />
+              <SameRow label={g.confirmMark} value={markOf(stored.mark)} />
             )}
           </dl>
           <DialogFooter>

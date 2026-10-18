@@ -13,6 +13,9 @@ export interface PaperOption {
   bodyHtml: string;
   position: number;
   isRight: boolean;
+  /** The weight itself — the card suggests a mark with the engine's own
+   *  formula (`gradeChoice`), which reads weights, not «right or not». */
+  fraction: number;
 }
 
 /**
@@ -40,6 +43,7 @@ export function paperOptions(
     bodyHtml: bodies[index]!,
     position: option.position,
     isRight: Number(option.fraction) > 0,
+    fraction: Number(option.fraction),
   }));
   const byPosition = new Map(rows.map((row) => [row.position, row]));
   const served: PaperOption[] = [];

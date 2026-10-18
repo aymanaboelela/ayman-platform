@@ -136,6 +136,49 @@ describe('ManualGradingService', () => {
     expect(stored.responseText).toBe('أ (الصحيحة)');
   }, SLOW);
 
+  it('keeps the engine’s attribution on a note-only save, so a later regrade still reaches it', async () => {
+    // `RegradeService` skips anything with `gradedBy` set. Stamping it on a
+    // note froze an engine-marked answer out of every later key correction.
+    const { f, attemptId, rows } = await submittedPaper();
+    const select = { mark: true, state: true, gradedBy: true, gradedAt: true, feedbackHtml: true } as const;
+    const before = await prisma.attemptQuestion.findUniqueOrThrow({ where: { id: rows[1]!.id }, select });
+    expect(before.gradedBy).toBeNull();
+
+    await grading.grade(
+      attemptId,
+      rows[1]!.id,
+      { mark: Number(before.mark), feedbackHtml: '<p>شرح زيادة</p>' },
+      f.adminId,
+    );
+
+    const after = await prisma.attemptQuestion.findUniqueOrThrow({ where: { id: rows[1]!.id }, select });
+    expect(after.gradedBy).toBeNull();
+    expect(after.gradedAt).toEqual(before.gradedAt);
+    expect(Number(after.mark)).toBe(Number(before.mark));
+    expect(after.state).toBe(before.state);
+    expect(after.feedbackHtml).toContain('شرح زيادة');
+
+    // The box re-sends what it shows (two places): still the same mark.
+    await grading.grade(attemptId, rows[1]!.id, { mark: Number(before.mark) + 0.004 }, f.adminId);
+    const resent = await prisma.attemptQuestion.findUniqueOrThrow({ where: { id: rows[1]!.id }, select });
+    expect(resent.gradedBy).toBeNull();
+    expect(Number(resent.mark)).toBe(Number(before.mark));
+  }, SLOW);
+
+  it('stamps the grader once the mark itself moves', async () => {
+    const { f, attemptId, rows } = await submittedPaper();
+
+    await grading.grade(attemptId, rows[1]!.id, { mark: 0.5 }, f.adminId);
+
+    const after = await prisma.attemptQuestion.findUniqueOrThrow({
+      where: { id: rows[1]!.id },
+      select: { mark: true, gradedBy: true, gradedAt: true },
+    });
+    expect(Number(after.mark)).toBe(0.5);
+    expect(after.gradedBy).toBe(f.adminId);
+    expect(after.gradedAt).not.toBeNull();
+  }, SLOW);
+
   it('refuses an option that belongs to a different question, and writes nothing', async () => {
     const { f, attemptId, rows, right } = await submittedPaper();
     const before = await prisma.attemptQuestion.findUniqueOrThrow({
