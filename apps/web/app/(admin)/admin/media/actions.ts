@@ -8,6 +8,7 @@ import {
   MediaUsageSchema,
   type MediaUsage,
 } from '@ayman/contracts/admin/media';
+import { callerHolds } from '@/lib/action-gate';
 import { adminGet, adminSend, adminSendVoid } from '@/lib/admin-api';
 import { tags } from '@/lib/cache-tags';
 
@@ -34,8 +35,12 @@ export type ActionResult = { ok: true } | { ok: false; message: string };
  *
  * What remains here is the cache invalidation, which is a server concern and
  * cannot be done from the browser.
+ *
+ * Gated here because nothing downstream is: the upload was the API's call, and
+ * this one never reaches Nest — see `lib/action-gate.ts`.
  */
 export async function refreshMediaAction(): Promise<void> {
+  if (!(await callerHolds('media:write'))) return;
   // No cache tag to invalidate: a brand-new asset is not yet referenced by any
   // cached public loader. `tags.media(id)` exists for the settings/home-block
   // loaders that DO reference an existing asset by id, and those call
@@ -125,8 +130,13 @@ export async function deleteMediaAction(id: string): Promise<ActionResult> {
  * The asset id survives a re-crop but its storage key does not, so every
  * cached loader holding the old key has to be dropped or the site keeps
  * rendering the previous crop until the entry expires on its own.
+ *
+ * ⚠️ The most expensive unlocked line this file had: `settings:branding` is
+ * read by the root layout, so expiring it cold-starts every page's shell on
+ * the platform. `media:write` is what the replace route itself requires.
  */
 export async function refreshAfterRecropAction(): Promise<void> {
+  if (!(await callerHolds('media:write'))) return;
   revalidatePath('/admin/media');
   updateTag(tags.settings('branding'));
   updateTag(tags.settings('seo'));
