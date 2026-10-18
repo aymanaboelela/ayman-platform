@@ -52,19 +52,17 @@ export class HealthController {
   @Public()
   @SkipThrottle(SKIP_ALL_THROTTLERS)
   @Get()
-  async check(): Promise<{
-    status: 'ok' | 'degraded';
-    service: string;
-    database: 'up' | 'down';
-    startedAt: string;
-  }> {
+  async check(): Promise<{ status: 'ok' | 'degraded'; startedAt: string }> {
+    /*
+     * Two fields, and only two. `status` already says whether the database
+     * answered — `degraded` means it did not — so the separate `database`
+     * field told an anonymous visitor the same fact in a form a scanner
+     * greps for, and `service` named the stack. Every caller (the CI deploy
+     * gate, uptime.yml, the provisioning probe, the Docker healthcheck) reads
+     * `status`, `startedAt` or just the HTTP code.
+     */
     const dbUp = await this.databaseUp();
-    return {
-      status: dbUp ? 'ok' : 'degraded',
-      service: 'ayman-api',
-      database: dbUp ? 'up' : 'down',
-      startedAt: STARTED_AT,
-    };
+    return { status: dbUp ? 'ok' : 'degraded', startedAt: STARTED_AT };
   }
 
   /**

@@ -53,6 +53,10 @@ async function bootstrap(): Promise<void> {
   // X-Forwarded-For and become un-throttleable.
   app.set('trust proxy', 1);
 
+  // `X-Powered-By: Express` names the framework to anyone scanning for a
+  // known Express CVE, and nothing downstream reads it.
+  app.disable('x-powered-by');
+
   // Nothing under `/api` is a page, and Search Console had `/api/health` in
   // «لم تتم فهرستها». Traefik routes `/api` straight here, past Next, so the
   // web app's `noindex` rules never see these responses. `/media` is not
