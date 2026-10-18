@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { copy } from '@ayman/contracts/copy';
+import { formatCopy } from '@ayman/contracts/format';
 import { parseQuestionBlocks } from './import';
 import { QuestionInputSchema } from './question';
 
@@ -164,6 +165,91 @@ ANSWER: D`,
       CATEGORY,
     );
     expect(result.errors[0]!.message).toContain('D');
+  });
+
+  describe('the key lands on the option the teacher lettered', () => {
+    /** The option bodies, in order, and which of them carry weight. */
+    function keyed(text: string): { bodies: string[]; key: string[]; stemHtml: string } {
+      const result = parseQuestionBlocks(text, CATEGORY);
+      expect(result.errors).toEqual([]);
+      const question = result.questions[0]!;
+      const options = question.options as { bodyHtml: string; fraction: number }[];
+      const bodies = options.map((option) => option.bodyHtml.replace(/<\/?p>/g, ''));
+      return {
+        bodies,
+        key: bodies.filter((_, index) => options[index]!.fraction > 0),
+        stemHtml: question.stemHtml,
+      };
+    }
+
+    // Reproduced end to end on 2026-10-18: pasted, published, and a student
+    // who picked «اربعة» — the teacher's ب — was marked wrong, because the
+    // «ا)» line had gone into the stem and ب had become the second of three.
+    it('reads «ا)» — alef with no hamza — as the first option, not a stem line', () => {
+      const parsed = keyed(`اختار الرقم الزوجي
+ا) ثلاثة
+ب) اربعة
+ج) خمسة
+د) سبعة
+الإجابة: ب`);
+      expect(parsed.stemHtml).toBe('<p>اختار الرقم الزوجي</p>');
+      expect(parsed.bodies).toEqual(['ثلاثة', 'اربعة', 'خمسة', 'سبعة']);
+      expect(parsed.key).toEqual(['اربعة']);
+    });
+
+    it('reads «إ)», «آ)» and an answer written «ا» as the first option too', () => {
+      expect(keyed(`اختار الحيوان\nإ) قطة\nب) كرسي\nالإجابة: ا`).key).toEqual(['قطة']);
+      expect(keyed(`اختار الحيوان\nآ) قطة\nب) كرسي\nالإجابة: أ`).key).toEqual(['قطة']);
+    });
+
+    it('reads a dash after an Arabic letter, and «هـ» with its tatweel', () => {
+      const parsed = keyed(`اختار
+أ- واحد
+ب- اتنين
+ج- تلاتة
+د- أربعة
+هـ- خمسة
+الإجابة: هـ`);
+      expect(parsed.bodies).toEqual(['واحد', 'اتنين', 'تلاتة', 'أربعة', 'خمسة']);
+      expect(parsed.key).toEqual(['خمسة']);
+    });
+
+    it('keys by the letter on the row, so a row the parser skips cannot move the key', () => {
+      // «ج ـ» (a spaced tatweel) is not an option line. Counting rows, the
+      // answer د would have keyed the third row the parser kept — «أربعة» is
+      // right only because the key follows the letter, not the position.
+      const parsed = keyed(`اختار
+أ) واحد
+ب) اتنين
+ج ـ تلاتة
+د) أربعة
+الإجابة: د`);
+      expect(parsed.key).toEqual(['أربعة']);
+    });
+
+    it('refuses an answer letter no row carries rather than keying a neighbour', () => {
+      const result = parseQuestionBlocks(`اختار\nأ) واحد\nب) اتنين\nد) أربعة\nالإجابة: ج`, CATEGORY);
+      expect(result.questions).toEqual([]);
+      expect(result.errors[0]!.message).toBe(
+        formatCopy(copy.quizErrors.importUnknownLetter, { n: 1, letter: 'ج' }),
+      );
+    });
+
+    it('still matches a Latin answer to Arabic letters and the other way round', () => {
+      expect(keyed(`اختار\nأ) واحد\nب) اتنين\nANSWER: B`).key).toEqual(['اتنين']);
+      expect(keyed(`choose\nA) one\nB) two\nالإجابة: ب`).key).toEqual(['two']);
+    });
+
+    it('takes «(ب)» on the answer line as ب', () => {
+      expect(keyed(`اختار\nأ) واحد\nب) اتنين\nالإجابة: (ب)`).key).toEqual(['اتنين']);
+    });
+
+    it('leaves a Latin «a - b» line in the stem', () => {
+      const result = parseQuestionBlocks(`احسب\na - b = ?\nA. 1\nB. 2\nANSWER: B`, CATEGORY);
+      expect(result.errors).toEqual([]);
+      expect(result.questions[0]!.stemHtml).toContain('a - b = ?');
+      expect(result.questions[0]!.options).toHaveLength(2);
+    });
   });
 
   it('keeps the good blocks and reports only the bad ones', () => {

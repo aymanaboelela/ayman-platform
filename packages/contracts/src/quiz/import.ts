@@ -36,8 +36,18 @@ export interface ImportResult {
   errors: ImportError[];
 }
 
-/** A. / a) / أ. / ب) — Latin and Arabic ordinal letters, dot or paren. */
-const OPTION_LINE = /^\s*([A-Ja-jأبجدهوزحط])\s*[).．.]\s*(.+?)\s*$/;
+/**
+ * A. / a) / أ. / ب) / ج- — Latin and Arabic option letters, dot or paren,
+ * and for an Arabic letter a dash too («أ- …», «هـ - …»: how Egyptian
+ * worksheets are typed). Not a Latin dash: «a - b = ?» is a stem line.
+ *
+ * The first option is the one this used to lose. «ا)» — alef with no hamza,
+ * which is how most keyboards here type it — was not a letter, so the line
+ * went into the STEM, every option moved up a row, and «الإجابة: ب» keyed
+ * the teacher's ج. Published, silently, and graded that way.
+ */
+const OPTION_LINE =
+  /^\s*(?:([A-Ja-j])\s*[).．.]|([أاإآبجدهوزحطي])ـ?\s*(?:[).．.]|[-–](?=\s)))\s*(.+?)\s*$/;
 const ANSWER_LINE = /^\s*(?:ANSWER|Answer|answer|الإجابة|الاجابة)\s*[:：]\s*(.+?)\s*$/;
 // `\p{L}` and the `u` flag, not `\w`: `\w` is ASCII-only, so «النوع: ترتيب»
 // matched the keyword and then failed on its own VALUE — an Arabic type word
@@ -53,14 +63,21 @@ const GROUP_LINE = /^\s*(?:GROUP|Group|group|المجموعة)\s*[:：]\s*(.*?)\
 const LESSON_LINE = /^\s*(?:LESSON|Lesson|lesson|الدرس)\s*[:：]\s*(.*?)\s*$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Latin A–J then the Arabic abjad order أ ب ج د هـ و ز ح ط. */
+/** Latin A–J then the Arabic abjad order أ ب ج د هـ و ز ح ط ي. */
 const LETTER_ORDER = 'ABCDEFGHIJ';
-const ARABIC_LETTER_ORDER = ['أ', 'ب', 'ج', 'د', 'ه', 'و', 'ز', 'ح', 'ط'];
+const ARABIC_LETTER_ORDER = ['أ', 'ب', 'ج', 'د', 'ه', 'و', 'ز', 'ح', 'ط', 'ي'];
 
-function letterToIndex(letter: string): number {
+/**
+ * 0 for A / أ / ا, 1 for B / ب … and -1 for anything else. Every spelling of
+ * alef is أ and «هـ» is ه; brackets or a trailing «)» / «.» around an answer
+ * letter («(ب)», «ب)») are not part of it.
+ */
+function letterToIndex(raw: string): number {
+  const letter = raw.replace(/^[\s([]+|[\s)\].．:]+$/g, '').replace(/ـ/g, '');
+  if (letter.length !== 1) return -1;
   const latin = LETTER_ORDER.indexOf(letter.toUpperCase());
   if (latin >= 0) return latin;
-  return ARABIC_LETTER_ORDER.indexOf(letter);
+  return ARABIC_LETTER_ORDER.indexOf(/[اإآ]/.test(letter) ? 'أ' : letter);
 }
 
 /** `TYPE: ordering` / `النوع: ترتيب`. */
@@ -177,7 +194,7 @@ export function parseQuestionBlocks(text: string, categoryId: string): ImportRes
       }
       const optionMatch = OPTION_LINE.exec(line);
       if (optionMatch && (options.length > 0 || stem.length > 0)) {
-        options.push({ letter: optionMatch[1]!, body: optionMatch[2]! });
+        options.push({ letter: (optionMatch[1] ?? optionMatch[2])!, body: optionMatch[3]! });
         continue;
       }
       stem.push(line.trim());
@@ -250,10 +267,19 @@ export function parseQuestionBlocks(text: string, categoryId: string): ImportRes
         return;
       }
 
+      // The answer names a LETTER, so it keys the option the teacher wrote
+      // that letter on — not «the Nth option this parser happened to find».
+      // The two are the same row only while every option line was read; one
+      // the parser did not recognise («د ـ …», a stray «*») drops out, and
+      // counting would put the key on the row after it without a word. By
+      // letter, a missed row can only make the answer a letter that is not
+      // there, which is the error below.
+      const labelIndexes = options.map((option) => letterToIndex(option.letter));
       const correctIndexes: number[] = [];
       for (const letter of answerLetters) {
-        const position = letterToIndex(letter);
-        if (position < 0 || position >= options.length) {
+        const wanted = letterToIndex(letter);
+        const position = labelIndexes.indexOf(wanted);
+        if (wanted < 0 || position < 0 || labelIndexes.lastIndexOf(wanted) !== position) {
           errors.push({
             blockIndex,
             line: 1,
@@ -261,7 +287,7 @@ export function parseQuestionBlocks(text: string, categoryId: string): ImportRes
           });
           return;
         }
-        correctIndexes.push(position);
+        if (!correctIndexes.includes(position)) correctIndexes.push(position);
       }
 
       const bodies = options.map((option) => option.body.trim());
