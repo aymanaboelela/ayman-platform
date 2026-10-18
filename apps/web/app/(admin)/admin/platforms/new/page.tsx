@@ -7,7 +7,7 @@ import { copy } from '@ayman/contracts/copy/admin';
 import { Card, CardBody } from '@ayman/ui';
 import { cloudflareConfigured } from '@/lib/provisioning/cloudflare';
 import { dokployConfigured } from '@/lib/provisioning/dokploy';
-import { IS_AYMAN } from '@/lib/tenant';
+import { isControlPlaneOwner } from '@/lib/provisioning/gate';
 import { NewTeacherForm } from './new-teacher-form';
 
 export const metadata = { title: copy.admin.tenants.newTitle };
@@ -15,13 +15,13 @@ export const metadata = { title: copy.admin.tenants.newTitle };
 /**
  * «مدرّس جديد» — the form that replaces `docs/runbooks/new-tenant.md` §1–§7.
  *
- * Gated three ways like its parent (`../page.tsx` has the reasoning): hidden
- * from the nav off the owner's stack, `notFound()` here, and the action
- * re-checking for itself. Without Dokploy connected the page explains how to
+ * Gated like its parent (`../page.tsx` has the reasoning): hidden from the
+ * nav off the owner's stack, the owner check here, and the action re-checking
+ * for itself. Without Dokploy connected the page explains how to
  * connect it rather than rendering a form whose button can only fail.
  */
 export default async function NewTeacherPage() {
-  if (!IS_AYMAN) notFound();
+  if (!(await isControlPlaneOwner())) notFound();
   // The two keys are read per request: pasting one into the panel is a
   // restart away from this form, not a rebuild.
   await connection();
