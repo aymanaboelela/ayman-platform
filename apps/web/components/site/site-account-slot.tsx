@@ -26,9 +26,17 @@ import { UserAvatar } from '@/components/app/user-avatar';
  *
  * `getSession()` is `cache()`-wrapped, so this shares one request with any
  * other consumer on the same render.
+ *
+ * ⚠️ A session read that FAILS draws the signed-out pair, not an error. This
+ * slot is rendered by `(site)/layout.tsx`, so a throw here skips the surface's
+ * own boundary and replaces the whole landing page with the root error screen
+ * — which is what `/` recorded the night the shared server was CPU-capped: a
+ * bare timeout from this one read, on the page every visitor lands on. The
+ * header is not worth a page; «تسجيل الدخول» for a few seconds is the honest
+ * degraded state, and the next render corrects it.
  */
 export async function SiteAccountSlot() {
-  const session = await getSession();
+  const session = await getSession().catch(() => null);
 
   if (!session) {
     return (

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { StudentExternalBooksService } from './student-external-books.service';
@@ -252,6 +252,251 @@ describe('StudentExternalBooksService', () => {
       expect(result.review[0]?.correctness).toBe('correct');
       expect(result.review[0]?.feedbackHtml).toBe('<p>صح ممتاز</p>');
       expect(result.review[0]?.rightAnswerOptionIds).toEqual([opt1Id]);
+      // The review reads `{kind, optionIds}` — a bare array highlighted nothing.
+      expect(result.review[0]?.response).toEqual({ kind: 'choice', optionIds: [opt1Id] });
+    });
+
+    /** One served question, then the version the grader reads back. */
+    function servesOne(
+      version: { id: string; type: string; options: Array<Record<string, unknown>> } & Record<string, unknown>,
+    ) {
+      prismaMock.questionVersion.findMany
+        .mockResolvedValueOnce([
+          {
+            id: version.id,
+            bankEntryId: `entry-${version.id}`,
+            version: 1,
+            type: version.type,
+            stemHtml: '<p>سؤال</p>',
+            defaultMark: 2,
+            settings: {},
+            options: version.options.map((o) => ({ id: o.id, bodyHtml: o.bodyHtml })),
+          },
+        ])
+        .mockResolvedValueOnce([{ stemHtml: '<p>سؤال</p>', defaultMark: 2, settings: {}, ...version }]);
+    }
+
+    it('grades a short answer by its pattern — it is text, never an option id', async () => {
+      const shortId = randomUUID();
+      const patternId = randomUUID();
+      servesOne({
+        id: shortId,
+        type: 'short_answer',
+        generalFeedbackHtml: null,
+        options: [
+          { id: patternId, bodyHtml: '', fraction: 1, feedbackHtml: null, position: 0, answerPattern: 'CPU' },
+        ],
+      });
+
+      const session = await service.startPractice(userId, bookId, { scope: 'book', scopeId: bookId, count: 5 });
+      const result = await service.submitPractice(userId, session.sessionId, {
+        answers: [{ slotPosition: 1, questionId: shortId, optionIds: [], text: 'cpu' }],
+      });
+
+      expect(result.review[0]?.correctness).toBe('correct');
+      expect(result.score).toBe(2);
+      expect(result.review[0]?.rightAnswerText).toBe('CPU');
+      // The accepted patterns are the answer key, not options to list.
+      expect(result.review[0]?.options).toEqual([]);
+    });
+
+    it('leaves a skipped question unanswered and does not repeat the explanation as a note', async () => {
+      servesOne({
+        id: q1Id,
+        type: 'mcq_single',
+        generalFeedbackHtml: '<p>الشرح</p>',
+        options: [
+          { id: opt1Id, bodyHtml: 'أ', fraction: 1, feedbackHtml: null, position: 0 },
+          { id: opt2Id, bodyHtml: 'ب', fraction: 0, feedbackHtml: null, position: 1 },
+        ],
+      });
+
+      const session = await service.startPractice(userId, bookId, { scope: 'book', scopeId: bookId, count: 5 });
+      const result = await service.submitPractice(userId, session.sessionId, { answers: [] });
+
+      expect(result.review[0]?.correctness).toBe('unanswered');
+      expect(result.review[0]?.response).toBeUndefined();
+      expect(result.review[0]?.feedbackHtml).toBeUndefined();
+      expect(result.review[0]?.generalFeedbackHtml).toBe('<p>الشرح</p>');
+    });
+
+    /** A version as every read of it returns it: options in written order. */
+    function versionRow(id: string, type: string, bodies: string[]) {
+      return {
+        id,
+        bankEntryId: `entry-${id}`,
+        version: 1,
+        type,
+        stemHtml: '<p>سؤال</p>',
+        defaultMark: 1,
+        settings: {},
+        generalFeedbackHtml: null,
+        options: bodies.map((bodyHtml, position) => ({
+          id: `${id}-opt-${position}`,
+          bodyHtml,
+          fraction: position === 0 ? 1 : 0,
+          feedbackHtml: null,
+          position,
+          answerPattern: null,
+        })),
+      };
+    }
+
+    const wholeBook = { scope: 'book' as const, scopeId: bookId, count: 5 };
+
+    it('serves one option order for the whole session — a reload does not reshuffle', async () => {
+      const qId = randomUUID();
+      const bodies = ['<p>RAM</p>', '<p>ROM</p>', '<p>CPU</p>', '<p>GPU</p>', '<p>SSD</p>'];
+      prismaMock.questionVersion.findMany.mockResolvedValue([versionRow(qId, 'mcq_single', bodies)]);
+
+      const started = await service.startPractice(userId, bookId, wholeBook);
+      const served = started.questions[0]!.options.map((o) => o.id);
+      for (let read = 0; read < 5; read += 1) {
+        const again = await service.getSession(userId, started.sessionId);
+        expect(again.questions[0]!.options.map((o) => o.id)).toEqual(served);
+      }
+
+      // The review lists them as served, so its letters are the ones answered under.
+      const result = await service.submitPractice(userId, started.sessionId, { answers: [] });
+      expect(result.review[0]!.options.map((o) => o.id)).toEqual(served);
+    });
+
+    it('takes the typed letters off and keeps a lettered set in its written order', async () => {
+      const qId = randomUUID();
+      const bodies = ['<p>أ) siri</p>', '<p>ب) alexa</p>', '<p>ج) كل ما سبق</p>'];
+      prismaMock.questionVersion.findMany.mockResolvedValue([versionRow(qId, 'mcq_single', bodies)]);
+      const expected = [
+        { id: `${qId}-opt-0`, bodyHtml: '<p>siri</p>' },
+        { id: `${qId}-opt-1`, bodyHtml: '<p>alexa</p>' },
+        { id: `${qId}-opt-2`, bodyHtml: '<p>كل ما سبق</p>' },
+      ];
+
+      const started = await service.startPractice(userId, bookId, wholeBook);
+      expect(started.questions[0]!.options).toEqual(expected);
+      const again = await service.getSession(userId, started.sessionId);
+      expect(again.questions[0]!.options).toEqual(expected);
+      const result = await service.submitPractice(userId, started.sessionId, { answers: [] });
+      expect(result.review[0]!.options).toEqual(expected);
+    });
+
+    it('still shuffles an ordering question, lettered or not — its written order is the answer', async () => {
+      const qId = randomUUID();
+      const bodies = [...'أبجدهوزح'].map((letter, i) => `<p>${letter}) خطوة ${i + 1}</p>`);
+      prismaMock.questionVersion.findMany.mockResolvedValue([versionRow(qId, 'ordering', bodies)]);
+      const written = bodies.map((_, i) => `${qId}-opt-${i}`).join(',');
+
+      // 8! arrangements: the written one on every one of 5 sessions is a
+      // missing shuffle, not luck.
+      const served = new Set<string>();
+      for (let run = 0; run < 5; run += 1) {
+        const started = await service.startPractice(userId, bookId, wholeBook);
+        served.add(started.questions[0]!.options.map((o) => o.id).join(','));
+      }
+      expect([...served]).not.toEqual([written]);
+    });
+
+    /** The service's own cache — the in-memory one when there is no Redis. */
+    function cacheOf(svc: StudentExternalBooksService) {
+      return svc as unknown as { cacheSet(key: string, value: string, ttlSeconds: number): Promise<void> };
+    }
+
+    it('leaves an essay from an old session out of the score and the total — neither right nor wrong', async () => {
+      const mcqId = randomUUID();
+      const essayId = randomUUID();
+      const mcq = versionRow(mcqId, 'mcq_single', ['<p>RAM</p>', '<p>ROM</p>']);
+      const essay = { ...versionRow(essayId, 'essay', []), defaultMark: 5 };
+      // A session stored before essays left the pool — they live a day.
+      const sessionId = randomUUID();
+      await cacheOf(service).cacheSet(
+        `extbook:session:${sessionId}`,
+        JSON.stringify({
+          sessionId,
+          userId,
+          bookId,
+          bookTitle: 'كتاب الامتحان',
+          courseSlug: 'physics',
+          scope: 'book',
+          scopeTitle: 'كتاب الامتحان',
+          questionVersionIds: [mcqId, essayId],
+          createdAt: Date.now(),
+        }),
+        86400,
+      );
+      prismaMock.questionVersion.findMany.mockResolvedValue([mcq, essay]);
+
+      const result = await service.submitPractice(userId, sessionId, {
+        answers: [
+          { slotPosition: 1, questionId: mcqId, optionIds: [`${mcqId}-opt-0`] },
+          { slotPosition: 2, questionId: essayId, optionIds: [], text: 'إجابة مكتوبة' },
+        ],
+      });
+
+      // 1 of 1, not 1 of 6: the essay's five marks were nobody's to give.
+      expect(result.score).toBe(1);
+      expect(result.maxScore).toBe(1);
+      expect(result.percentage).toBe(100);
+      const written = result.review.find((question) => question.attemptQuestionId === essayId)!;
+      expect(written.correctness).toBe('needsGrading');
+      expect(written.mark).toBeNull();
+      expect(written.response).toEqual({ kind: 'text', text: 'إجابة مكتوبة' });
+    });
+
+    it('shows a handed-in practice to the student who did it, and is a 404 to anyone else', async () => {
+      const qId = randomUUID();
+      prismaMock.questionVersion.findMany.mockResolvedValue([
+        versionRow(qId, 'mcq_single', ['<p>RAM</p>', '<p>ROM</p>']),
+      ]);
+      const started = await service.startPractice(userId, bookId, wholeBook);
+      await service.submitPractice(userId, started.sessionId, { answers: [] });
+
+      await expect(service.getPracticeResult(userId, started.sessionId)).resolves.toMatchObject({
+        sessionId: started.sessionId,
+        maxScore: 1,
+      });
+      await expect(service.getPracticeResult('another-student', started.sessionId)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('checks a result cached before it carried its owner against its session, while that lasts', async () => {
+      const qId = randomUUID();
+      prismaMock.questionVersion.findMany.mockResolvedValue([
+        versionRow(qId, 'mcq_single', ['<p>RAM</p>', '<p>ROM</p>']),
+      ]);
+      const started = await service.startPractice(userId, bookId, wholeBook);
+      const bare = await service.submitPractice(userId, started.sessionId, { answers: [] });
+      // How results were cached before: the result alone.
+      await cacheOf(service).cacheSet(`extbook:result:${started.sessionId}`, JSON.stringify(bare), 604800);
+
+      await expect(service.getPracticeResult(userId, started.sessionId)).resolves.toMatchObject({
+        sessionId: started.sessionId,
+      });
+      await expect(service.getPracticeResult('another-student', started.sessionId)).rejects.toThrow(
+        NotFoundException,
+      );
+
+      // Session expired: nobody can show it is theirs any more.
+      await cacheOf(service).cacheSet(`extbook:session:${started.sessionId}`, '{}', -1);
+      await expect(service.getPracticeResult(userId, started.sessionId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('never serves an essay — a practice has nobody to mark it', async () => {
+      prismaMock.questionVersion.findMany.mockResolvedValueOnce([
+        {
+          id: randomUUID(),
+          bankEntryId: 'essay-entry',
+          version: 1,
+          type: 'essay',
+          stemHtml: '<p>اكتب</p>',
+          defaultMark: 5,
+          settings: {},
+          options: [],
+        },
+      ]);
+
+      await expect(
+        service.startPractice(userId, bookId, { scope: 'book', scopeId: bookId, count: 5 }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

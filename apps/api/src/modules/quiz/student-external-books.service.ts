@@ -19,11 +19,28 @@ import type {
   StudentExternalBookUnit,
   SubmitExternalBookPractice,
 } from '@ayman/contracts/quiz/external-books';
+import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
+import { formatCopy } from '@ayman/contracts/format';
+import { keepsWrittenOrder, stripOptionLabels } from '@ayman/contracts/quiz/option-label';
 import { PrismaService } from '../../prisma/prisma.service';
 import { REDIS } from '../../redis/redis.module';
+import type { QuestionType } from '../../generated/prisma/enums';
+import { clamp, gradeQuestion, roundMark, type QuestionResponse } from './grading';
+
+/**
+ * What a book page COUNTS — and it must be what a practice can actually SERVE.
+ *
+ * Essays are out of both. A practice has no grader: the result is computed the
+ * moment it is handed in and nobody ever marks it, so an essay in the pool was
+ * a text box whose answer was thrown away and scored as unanswered. Counting
+ * them would offer «الكل (12)» on a pool of 10.
+ */
+const PRACTICE_TYPES = { not: 'essay' as const };
 
 const READY_ENTRIES = {
-  entries: { where: { archivedAt: null, versions: { some: { status: 'ready' as const } } } },
+  entries: {
+    where: { archivedAt: null, versions: { some: { status: 'ready' as const, type: PRACTICE_TYPES } } },
+  },
 };
 
 interface StoredPracticeSession {
@@ -33,9 +50,55 @@ interface StoredPracticeSession {
   bookTitle: string;
   courseSlug: string;
   scope: 'book' | 'unit' | 'lesson';
+  /** Absent on sessions stored before it was — see the contract. */
+  scopeId?: string;
   scopeTitle: string;
   questionVersionIds: string[];
+  /**
+   * Option ids per question version, in the order the student is served
+   * them. Absent on sessions stored before it was: those keep being served
+   * the way they always were, freshly shuffled on every read.
+   */
+  optionOrder?: Record<string, string[]>;
   createdAt: number;
+}
+
+/**
+ * A handed-in practice, as cached for its week, with whose it is — the
+ * session (which knows) is gone after a day, and a session id in a URL is not
+ * a credential. Results cached before this was stored bare; see
+ * `getPracticeResult`.
+ */
+interface StoredPracticeResult {
+  userId: string;
+  result: ExternalBookPracticeResult;
+}
+
+/**
+ * The runner's answer as the grader reads it: text for a short answer, the
+ * chosen ids for everything else, and `null` for a question left blank — so
+ * "skipped" is never graded as "answered with nothing".
+ */
+function practiceResponse(
+  type: QuestionType,
+  answer: { optionIds?: string[]; text?: string } | undefined,
+): QuestionResponse | null {
+  if (!answer) return null;
+  if (type === 'short_answer' || type === 'essay') {
+    const text = answer.text?.trim() ?? '';
+    return text === '' ? null : { kind: 'text', text };
+  }
+  const optionIds = answer.optionIds ?? [];
+  return optionIds.length === 0 ? null : { kind: 'choice', optionIds };
+}
+
+/** The two settings the runner shows, and nothing else of the version's. */
+function practiceSettings(raw: unknown): { minWords?: number; maxWords?: number } {
+  const settings = (raw ?? {}) as { minWords?: unknown; maxWords?: unknown };
+  return {
+    ...(typeof settings.minWords === 'number' ? { minWords: settings.minWords } : {}),
+    ...(typeof settings.maxWords === 'number' ? { maxWords: settings.maxWords } : {}),
+  };
 }
 
 function shuffle<T>(items: readonly T[]): T[] {
@@ -47,6 +110,57 @@ function shuffle<T>(items: readonly T[]): T[] {
     arr[j] = temp;
   }
   return arr;
+}
+
+interface WrittenOption {
+  id: string;
+  bodyHtml: string;
+}
+
+/**
+ * The order one question's options are served in — decided ONCE, when the
+ * session starts, and stored with it.
+ *
+ * It used to be reshuffled on every read of the session, so a reload (which
+ * the runner survives, answers included) moved the option a student had
+ * picked to another row under another letter. The rules are an attempt's
+ * (`@ayman/contracts/quiz/option-label`): options that point at each other
+ * («أ و د معا», «كل ما سبق») or that the teacher lettered by hand keep the
+ * order they were written in, and so does true/false; an ordering question
+ * is always shuffled, because its written order IS the answer.
+ *
+ * `written` must be in position order.
+ */
+function servedOrder(type: QuestionType, written: readonly WrittenOption[]): string[] {
+  const keep =
+    type !== 'ordering' &&
+    (type === 'true_false' || keepsWrittenOrder(written.map((option) => option.bodyHtml)));
+  return (keep ? [...written] : shuffle(written)).map((option) => option.id);
+}
+
+/**
+ * The options as a student reads them: the letters the teacher typed taken
+ * off — over the WRITTEN order, the order those letters describe; the runner
+ * draws its own — then arranged in `order`. An option the order does not name
+ * follows in written order, so a stale order degrades to a different
+ * arrangement, never to a missing option.
+ */
+function servedOptions(
+  written: readonly WrittenOption[],
+  order: readonly string[] | undefined,
+): WrittenOption[] {
+  const bodies = stripOptionLabels(written.map((option) => option.bodyHtml));
+  const byId = new Map(
+    written.map((option, index) => [option.id, { id: option.id, bodyHtml: bodies[index]! }]),
+  );
+  const served: WrittenOption[] = [];
+  for (const id of order ?? []) {
+    const option = byId.get(id);
+    if (!option) continue;
+    served.push(option);
+    byId.delete(id);
+  }
+  return [...served, ...byId.values()];
 }
 
 @Injectable()
@@ -340,7 +454,7 @@ export class StudentExternalBooksService {
           targetCategoryIds.push(lesson.id);
         }
       }
-      scopeTitle = `امتحان شامل: ${book.title}`;
+      scopeTitle = formatCopy(quizExperience.practice.bookScopeTitle, { title: book.title });
     } else if (dto.scope === 'unit') {
       const unit = book.rootCategory.children.find((u) => u.id === dto.scopeId);
       if (!unit) throw new NotFoundException('الوحدة المطلوبة غير موجودة في هذا الكتاب');
@@ -400,7 +514,10 @@ export class StudentExternalBooksService {
       }
     }
 
-    const uniqueVersions = Array.from(byEntry.values());
+    // Latest version FIRST, type second: an entry whose newest ready version
+    // became an essay is an essay now, and must not be served as the MCQ it
+    // used to be.
+    const uniqueVersions = Array.from(byEntry.values()).filter((v) => v.type !== 'essay');
     if (uniqueVersions.length === 0) {
       throw new BadRequestException('لا توجد أسئلة جاهزة للاختبار في هذا النطاق حالياً');
     }
@@ -411,6 +528,9 @@ export class StudentExternalBooksService {
     const picked = shuffledVersions.slice(0, count);
 
     const sessionId = randomUUID();
+    const optionOrder = Object.fromEntries(
+      picked.map((v) => [v.id, servedOrder(v.type, v.options)]),
+    );
     const storedSession: StoredPracticeSession = {
       sessionId,
       userId,
@@ -418,8 +538,10 @@ export class StudentExternalBooksService {
       bookTitle: book.title,
       courseSlug: book.course.slug,
       scope: dto.scope,
+      scopeId: dto.scopeId,
       scopeTitle,
       questionVersionIds: picked.map((v) => v.id),
+      optionOrder,
       createdAt: Date.now(),
     };
 
@@ -427,22 +549,16 @@ export class StudentExternalBooksService {
     await this.cacheSet(`extbook:session:${sessionId}`, JSON.stringify(storedSession), 86400);
 
     // بناء الأسئلة للطالب (بدون أي تسريب للإجابات أو علامات التصحيح)
-    const questions: ExternalBookPracticeQuestion[] = picked.map((v, index) => {
-      const options =
-        v.type === 'true_false'
-          ? v.options.map((o) => ({ id: o.id, bodyHtml: o.bodyHtml }))
-          : shuffle(v.options).map((o) => ({ id: o.id, bodyHtml: o.bodyHtml }));
-
-      return {
-        slotPosition: index + 1,
-        questionId: v.id,
-        type: v.type,
-        stemHtml: v.stemHtml,
-        maxMark: Number(v.defaultMark),
-        options,
-        flagged: false,
-      };
-    });
+    const questions: ExternalBookPracticeQuestion[] = picked.map((v, index) => ({
+      slotPosition: index + 1,
+      questionId: v.id,
+      type: v.type,
+      stemHtml: v.stemHtml,
+      maxMark: Number(v.defaultMark),
+      options: servedOptions(v.options, optionOrder[v.id]),
+      flagged: false,
+      settings: practiceSettings(v.settings),
+    }));
 
     return {
       sessionId,
@@ -450,6 +566,7 @@ export class StudentExternalBooksService {
       bookTitle: book.title,
       courseSlug: book.course.slug,
       scope: dto.scope,
+      scopeId: dto.scopeId,
       scopeTitle,
       totalQuestions: questions.length,
       questions,
@@ -481,6 +598,7 @@ export class StudentExternalBooksService {
         type: true,
         stemHtml: true,
         defaultMark: true,
+        settings: true,
         generalFeedbackHtml: true,
         options: {
           orderBy: { position: 'asc' },
@@ -489,6 +607,8 @@ export class StudentExternalBooksService {
             bodyHtml: true,
             fraction: true,
             feedbackHtml: true,
+            position: true,
+            answerPattern: true,
           },
         },
       },
@@ -500,87 +620,119 @@ export class StudentExternalBooksService {
     let totalMaxScore = 0;
     const review: ExternalBookPracticeReviewQuestion[] = [];
 
+    /*
+     * Graded by `gradeQuestion` — the engine every real attempt goes through —
+     * not by a second, hand-written copy of it. The copy that stood here
+     * compared option IDS for every type, so a short answer (which is text)
+     * could never be right, an ordering question was "right" if any item
+     * carried weight, and a multi-answer question used its own partial-credit
+     * arithmetic instead of the option weights the instructor set.
+     */
     session.questionVersionIds.forEach((vid, index) => {
       const version = versionMap.get(vid);
       if (!version) return;
 
       const slotPosition = index + 1;
       const maxMark = Number(version.defaultMark);
-      totalMaxScore += maxMark;
-
       const studentAns = dto.answers.find((a) => a.questionId === vid);
-      const selectedOptionIds = studentAns?.optionIds ?? [];
+      const response = practiceResponse(version.type, studentAns);
 
-      const correctOptionIds = version.options
-        .filter((o) => Number(o.fraction) > 0)
-        .map((o) => o.id);
-
-      const rightAnswerTexts = version.options
-        .filter((o) => Number(o.fraction) > 0)
-        .map((o) => o.bodyHtml);
-
-      let correctness: ExternalBookPracticeReviewQuestion['correctness'] = 'unanswered';
-      let mark = 0;
-      let feedbackHtml = version.generalFeedbackHtml ?? undefined;
-
-      if (selectedOptionIds.length === 0) {
-        correctness = 'unanswered';
-        mark = 0;
-      } else if (version.type === 'mcq_single' || version.type === 'true_false') {
-        const chosen = version.options.find((o) => o.id === selectedOptionIds[0]);
-        if (chosen) {
-          if (chosen.feedbackHtml) {
-            feedbackHtml = chosen.feedbackHtml;
-          }
-          if (Number(chosen.fraction) > 0) {
-            correctness = 'correct';
-            mark = maxMark * Number(chosen.fraction);
-          } else {
-            correctness = 'incorrect';
-            mark = 0;
-          }
-        }
-      } else if (version.type === 'mcq_multi') {
-        const chosenCorrect = selectedOptionIds.filter((id) => correctOptionIds.includes(id));
-        const chosenWrong = selectedOptionIds.filter((id) => !correctOptionIds.includes(id));
-        if (chosenWrong.length === 0 && chosenCorrect.length === correctOptionIds.length) {
-          correctness = 'correct';
-          mark = maxMark;
-        } else if (chosenCorrect.length > 0 && chosenWrong.length === 0) {
-          correctness = 'partial';
-          mark = Math.round((maxMark * (chosenCorrect.length / correctOptionIds.length)) * 10) / 10;
-        } else {
-          correctness = 'incorrect';
-          mark = 0;
-        }
-      } else {
-        // الأنواع الأخرى (short_answer وغيرها)
-        const chosen = version.options.find((o) => selectedOptionIds.includes(o.id));
-        if (chosen && Number(chosen.fraction) > 0) {
-          correctness = 'correct';
-          mark = maxMark;
-        } else {
-          correctness = 'incorrect';
-          mark = 0;
-        }
+      /*
+       * An essay — only ever in a session stored before essays left the pool
+       * (`PRACTICE_TYPES`); sessions live 24 hours. A practice has no grader,
+       * so it is neither wrong nor counted: out of the score AND the total,
+       * and sent as `needsGrading` with no mark, which the review shows with
+       * no verdict at all (`practiceReview` on the web). It used to come back
+       * «غلط» with a 0 that dragged the percentage down.
+       */
+      if (version.type === 'essay') {
+        review.push({
+          slotPosition,
+          attemptQuestionId: vid,
+          type: version.type,
+          stemHtml: version.stemHtml,
+          options: [],
+          response: response ?? undefined,
+          correctness: 'needsGrading',
+          mark: null,
+          maxMark,
+          generalFeedbackHtml: version.generalFeedbackHtml ?? undefined,
+        });
+        return;
       }
 
+      totalMaxScore += maxMark;
+
+      const options = version.options.map((o, position) => ({
+        id: o.id,
+        bodyHtml: o.bodyHtml,
+        fraction: Number(o.fraction),
+        position: o.position ?? position,
+        answerPattern: o.answerPattern ?? null,
+        feedbackHtml: o.feedbackHtml ?? null,
+      }));
+      const settings = (version.settings ?? {}) as { caseSensitive?: boolean };
+      const graded = gradeQuestion(
+        { type: version.type, caseSensitive: settings.caseSensitive === true, options },
+        response,
+      );
+
+      // A practice has no per-slot floor or ceiling snapshot, so the mark is
+      // simply the fraction of the question's worth, never below zero.
+      const fraction = graded.fraction === null ? 0 : clamp(graded.fraction, 0, 1);
+      const mark = roundMark(fraction * maxMark);
       totalScore += mark;
+
+      const correctness: ExternalBookPracticeReviewQuestion['correctness'] =
+        response === null
+          ? 'unanswered'
+          : graded.state === 'graded_right'
+            ? 'correct'
+            : graded.state === 'graded_partial'
+              ? 'partial'
+              : 'incorrect';
+
+      // The note on THIS answer — what the matched options say — and nothing
+      // else. It used to fall back to the general explanation, which the
+      // review then printed twice, once under each heading.
+      const feedbackHtml =
+        graded.matchedOptionIds
+          .map((id) => options.find((o) => o.id === id)?.feedbackHtml)
+          .filter((value): value is string => Boolean(value))
+          .join('') || undefined;
+
+      const rightOptionIds =
+        version.type === 'ordering'
+          ? [...options].sort((a, b) => a.position - b.position).map((o) => o.id)
+          : options.filter((o) => o.fraction > 0).map((o) => o.id);
 
       review.push({
         slotPosition,
         attemptQuestionId: vid,
         type: version.type,
         stemHtml: version.stemHtml,
-        options: version.options.map((o) => ({ id: o.id, bodyHtml: o.bodyHtml })),
-        response: selectedOptionIds,
+        // A short answer's options are its accepted PATTERNS, not choices —
+        // listing them would print the answer key as a row of blank options.
+        // The rest are listed as they were served, so the review's letters
+        // are the ones the student answered under.
+        options:
+          version.type === 'short_answer'
+            ? []
+            : servedOptions(version.options, session.optionOrder?.[vid]),
+        response: response ?? undefined,
         correctness,
         mark,
         maxMark,
         feedbackHtml,
         generalFeedbackHtml: version.generalFeedbackHtml ?? undefined,
-        rightAnswerText: rightAnswerTexts.join('، '),
-        rightAnswerOptionIds: correctOptionIds,
+        // Plain text, and only where the review prints it as text: the first
+        // full-credit pattern of a short answer. Choice types are marked on
+        // their own rows by id.
+        rightAnswerText:
+          version.type === 'short_answer'
+            ? (options.find((o) => o.fraction >= 1 && o.answerPattern)?.answerPattern ?? undefined)
+            : undefined,
+        rightAnswerOptionIds: version.type === 'short_answer' ? undefined : rightOptionIds,
       });
     });
 
@@ -593,6 +745,7 @@ export class StudentExternalBooksService {
       bookTitle: session.bookTitle,
       courseSlug: session.courseSlug,
       scope: session.scope,
+      ...(session.scopeId ? { scopeId: session.scopeId } : {}),
       scopeTitle: session.scopeTitle,
       score: totalScore,
       maxScore: totalMaxScore,
@@ -601,8 +754,9 @@ export class StudentExternalBooksService {
       review,
     };
 
-    // حفظ النتيجة لمدة 7 أيام
-    await this.cacheSet(`extbook:result:${sessionId}`, JSON.stringify(result), 604800);
+    // حفظ النتيجة لمدة 7 أيام — مع صاحبها.
+    const stored: StoredPracticeResult = { userId, result };
+    await this.cacheSet(`extbook:result:${sessionId}`, JSON.stringify(stored), 604800);
 
     return result;
   }
@@ -645,8 +799,11 @@ export class StudentExternalBooksService {
           type: v?.type ?? 'mcq_single',
           stemHtml: v?.stemHtml ?? '',
           maxMark: Number(v?.defaultMark ?? 1),
-          options: v ? (v.type === 'true_false' ? v.options : shuffle(v.options)) : [],
+          options: v
+            ? servedOptions(v.options, session.optionOrder?.[vid] ?? servedOrder(v.type, v.options))
+            : [],
           flagged: false,
+          settings: practiceSettings(v?.settings),
         };
       },
     );
@@ -657,6 +814,7 @@ export class StudentExternalBooksService {
       bookTitle: session.bookTitle,
       courseSlug: session.courseSlug,
       scope: session.scope,
+      ...(session.scopeId ? { scopeId: session.scopeId } : {}),
       scopeTitle: session.scopeTitle,
       totalQuestions: questions.length,
       questions,
@@ -666,13 +824,36 @@ export class StudentExternalBooksService {
   /**
    * استرجاع نتيجة اختبار سابق من المعرف.
    */
+  /**
+   * A handed-in practice — to the student who handed it in, and nobody else.
+   *
+   * It had no owner check at all: anyone holding the session id read the
+   * result, answers and all. Someone else's is a 404, not a 403 — whether
+   * that session exists is not the caller's business.
+   *
+   * A result cached before it carried its owner (bare, for up to a week) is
+   * checked against its session while the session lasts; after that it is
+   * nobody's, and the page shows its «مش موجود».
+   */
   async getPracticeResult(userId: string, sessionId: string): Promise<ExternalBookPracticeResult> {
     const rawResult = await this.cacheGet(`extbook:result:${sessionId}`);
     if (!rawResult) {
       throw new NotFoundException('النتيجة غير موجودة أو انتهت صلاحيتها');
     }
-    const result: ExternalBookPracticeResult = JSON.parse(rawResult);
-    return result;
+    const parsed = JSON.parse(rawResult) as StoredPracticeResult | ExternalBookPracticeResult;
+    const owned = 'result' in parsed;
+    const owner = owned ? parsed.userId : await this.sessionOwner(sessionId);
+    if (owner !== userId) {
+      throw new NotFoundException('النتيجة غير موجودة أو انتهت صلاحيتها');
+    }
+    return owned ? parsed.result : parsed;
+  }
+
+  /** The student a stored session belongs to, or null once it has expired. */
+  private async sessionOwner(sessionId: string): Promise<string | null> {
+    const rawSession = await this.cacheGet(`extbook:session:${sessionId}`);
+    if (!rawSession) return null;
+    return (JSON.parse(rawSession) as StoredPracticeSession).userId;
   }
 }
 

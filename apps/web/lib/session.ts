@@ -1,7 +1,7 @@
 import { cache } from 'react';
 import { headers } from 'next/headers';
 import { z } from 'zod';
-import { bound, resolve } from './api';
+import { ApiRequestError, apiFetch } from './api';
 import { forwardClientIp } from './client-ip';
 
 const SessionSchema = z.object({
@@ -70,24 +70,30 @@ export const getSession = cache(async function getSession(): Promise<SessionUser
    * log line, just a blank tab. `lib/api.ts` has capped this at 15s since it
    * was written; this call simply never went through it.
    *
-   * `apiFetch` still is not usable here: it turns a non-2xx into
-   * `ApiRequestError`, and the 401 below is a NORMAL outcome that must stay a
-   * plain status check — wrapping it would make "not signed in" throw.
+   * Through `apiFetch` now, which is `bound()` plus one thing this call was
+   * missing. (A note here said `apiFetch` would turn a non-2xx into an
+   * `ApiRequestError` — that is `apiGet`; `apiFetch` hands back the response
+   * whatever its status, so the 401 below is still a plain status check.) The
+   * missing thing is what a TIMEOUT throws: a bare `DOMException`, no frames,
+   * whose digest is therefore the same on every machine — and production's
+   * error log had exactly that digest on `/` the night the shared server was
+   * CPU-capped, because the marketing header's `SiteAccountSlot` reads this.
+   * `apiFetch` turns a timeout, or an API that refused the connection, into
+   * the `UPSTREAM_TIMEOUT_DIGEST` error the boundary knows to retry and
+   * `/admin/errors` files as «السيرفر اتأخر ومردّش».
    */
-  const response = await fetch(resolve('/api/session'), {
-    ...bound({
-      headers: {
-        accept: 'application/json',
-        ...(cookie ? { cookie } : {}),
-        ...forwardClientIp(incoming),
-      },
-      cache: 'no-store',
-    }),
+  const response = await apiFetch('/api/session', {
+    headers: {
+      accept: 'application/json',
+      ...(cookie ? { cookie } : {}),
+      ...forwardClientIp(incoming),
+    },
+    cache: 'no-store',
   });
 
   if (response.status === 401) return null;
   if (!response.ok) {
-    throw new Error(`GET /api/session failed with ${response.status}`);
+    throw new ApiRequestError(response.status, '/api/session');
   }
 
   return SessionSchema.parse(await response.json());

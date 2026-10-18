@@ -10,10 +10,12 @@ export const metadata = {
 };
 
 /**
- * Admin Profile Page:
- * Allows an admin to view account information, active sessions, update name & phone,
- * and securely change their password with current password verification and optional
- * revocation of sessions on other devices.
+ * «الملف الشخصي» — the signed-in admin's own account.
+ *
+ * The password form comes FIRST in the main column: it is what this page is
+ * opened for (the header's «حسابي ← تغيير كلمة السر» lands on `#password`),
+ * and it was the thing the owner could not find when it sat below the
+ * name-and-phone form.
  */
 export default async function AdminProfilePage() {
   const profile = await adminGet('/api/admin/profile', AdminProfileSchema);
@@ -35,8 +37,8 @@ export default async function AdminProfilePage() {
         </div>
 
         <div className="space-y-6 lg:col-span-2">
-          <AdminProfileForm profile={profile} />
           <AdminChangePasswordForm />
+          <AdminProfileForm profile={profile} />
         </div>
       </div>
     </div>

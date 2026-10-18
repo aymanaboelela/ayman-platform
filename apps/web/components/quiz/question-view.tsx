@@ -1,9 +1,11 @@
 'use client';
 
-import { memo, useMemo } from 'react';
+import { memo, useId, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { Flag } from 'lucide-react';
+import { arabicCount } from '@ayman/contracts/arabic-count';
 import { copy } from '@ayman/contracts/copy';
+import { quizExperience } from '@ayman/contracts/copy/quiz-experience';
 import { formatCopy } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import { Checkbox } from '@ayman/ui/components/checkbox';
@@ -94,6 +96,7 @@ function QuestionViewImpl({
   onToggleFlag,
   saveStatus,
 }: QuestionViewProps) {
+  const countId = useId();
   const isChoice = question.type === 'mcq_single' || question.type === 'true_false';
   const isMulti = question.type === 'mcq_multi';
   const isOrdering = question.type === 'ordering';
@@ -126,13 +129,16 @@ function QuestionViewImpl({
 
         The flag's pressed state is told by FILL as well as by colour — the
         icon fills — so it survives a student who cannot separate the two
-        hues. The label still changes, and `aria-pressed` says it to a screen
-        reader.
+        hues, and `aria-pressed` says it to a screen reader. The LABEL stays
+        put: it used to swap «علّم السؤال» ↔ «شيل العلامة», and a toggle whose
+        name changes when it is pressed is announced as the opposite of what
+        it is about to do (and both of those were masculine imperatives).
       */}
       <div className="qhead">
         <span className="qhead__num">{formatCopy(copy.quiz.questionNumber, { n: number })}</span>
         <span className="qhead__chip">{copy.quiz.kinds[question.type]}</span>
-        <span className="qhead__chip qhead__chip--mark">{formatCopy(copy.quiz.questionMarks, { n: question.maxMark })}</span>
+        {/* A counted noun — «درجتين»، «3 درجات» — not «2 درجة». */}
+        <span className="qhead__chip qhead__chip--mark">{arabicCount(question.maxMark, quizExperience.counts.marks)}</span>
         <Button
           type="button"
           variant="ghost"
@@ -142,7 +148,7 @@ function QuestionViewImpl({
           className={cn('qhead__flag shrink-0', question.flagged && 'text-accent-text')}
         >
           <Flag className="size-4" aria-hidden="true" fill={question.flagged ? 'currentColor' : 'none'} />
-          {question.flagged ? copy.quiz.unflag : copy.quiz.flag}
+          {copy.quiz.flag}
         </Button>
       </div>
 
@@ -150,25 +156,36 @@ function QuestionViewImpl({
 
       {isChoice ? (
         <RadioGroup
+          /*
+            `?? ''` and never bare `chosenIds[0]`. An unanswered question has an
+            empty `chosenIds`, so the index read is `undefined` — and a Radix
+            `Root` given `value={undefined}` decides it is UNCONTROLLED for the
+            rest of its life. Answering it hands the same instance a string, and
+            React logs "RadioGroup is changing from uncontrolled to controlled";
+            «مسح إجابتي» sets the response back to null and it logs the
+            reverse. A student working through a paper produced one of those per
+            answer and per clear, which is the flood in the console.
+
+            The empty string is a value no option carries, so "controlled, with
+            nothing selected" is expressed without ever going undefined.
+          */
           value={chosenIds[0] ?? ''}
           onValueChange={(value) => onChange({ kind: 'choice', optionIds: [value] })}
         >
+          {/* `<label>` per option — the whole card is the target, and the e2e
+              suite answers a question by clicking the first one. The chosen
+              state is styled off Radix's `data-state` (study.css), so there is
+              no class to keep in step with it here. */}
           <ul className="runner-options flex flex-col gap-2">
-            {question.options.map((option, index) => {
-              const isChecked = chosenIds[0] === option.id;
-              return (
-                <li key={option.id}>
-                  <label className={cn('runner-option', isChecked && 'runner-option--checked')}>
-                    <span className="runner-option__letter">{optionLetter(index)}</span>
-                    <SafeHtml html={option.bodyHtml} className="runner-option__body" />
-                    <RadioGroupItem
-                      value={option.id}
-                      className="runner-option__control"
-                    />
-                  </label>
-                </li>
-              );
-            })}
+            {question.options.map((option, index) => (
+              <li key={option.id}>
+                <label className="runner-option">
+                  <span className="runner-option__letter">{optionLetter(index)}</span>
+                  <SafeHtml html={option.bodyHtml} className="runner-option__body" />
+                  <RadioGroupItem value={option.id} className="runner-option__control" />
+                </label>
+              </li>
+            ))}
           </ul>
         </RadioGroup>
       ) : null}
@@ -179,12 +196,7 @@ function QuestionViewImpl({
             const checked = chosenIds.includes(option.id);
             return (
               <li key={option.id}>
-                <label
-                  className={cn(
-                    'runner-option select-none cursor-pointer',
-                    checked && 'runner-option--checked',
-                  )}
-                >
+                <label className="runner-option">
                   <span className="runner-option__letter">{optionLetter(index)}</span>
                   <SafeHtml html={option.bodyHtml} className="runner-option__body" />
                   <Checkbox
@@ -222,17 +234,28 @@ function QuestionViewImpl({
         <div className="flex flex-col gap-2">
           <Textarea
             value={text}
-           
             onChange={(event) => {
               const value = event.target.value;
               onChange(value.length > 0 ? { kind: 'text', text: value } : null);
             }}
             aria-label={copy.quiz.typeAnswer}
+            aria-describedby={countId}
             className={cn(question.type === 'essay' && 'min-h-56')}
           />
-          <p className="mono text-[length:var(--fs-mono-label)] text-fg-muted">
-            {formatCopy(copy.quiz.wordCount, { n: words })}
-          </p>
+          {/* The count and the limits are one description of the box, so a
+              screen reader hears «١٢٠ كلمة · أقل عدد كلمات: ١٠٠» on focus. The
+              limits were in `settings` all along and simply never shown. */}
+          <div id={countId} className="qcard__limits">
+            <span className="mono text-[length:var(--fs-mono-label)]">
+              {arabicCount(words, quizExperience.counts.words)}
+            </span>
+            {question.settings.minWords ? (
+              <span>{formatCopy(quizExperience.runner.wordsMin, { n: question.settings.minWords })}</span>
+            ) : null}
+            {question.settings.maxWords ? (
+              <span>{formatCopy(quizExperience.runner.wordsMax, { n: question.settings.maxWords })}</span>
+            ) : null}
+          </div>
         </div>
       ) : null}
 

@@ -73,8 +73,9 @@
  * device whose registration predates this change. Both behave exactly as they
  * did — one cache name, purged only when this file's bytes change.
  *
- * ⚠️ WHEN the previous build's chunks come off the device is not decided here.
- * It is decided by the absence of `skipWaiting()` in `install` — read that.
+ * ⚠️ WHEN the previous build's chunks come off the device is decided by the
+ * build registry below (`purgeBuildsNobodyRuns`): as soon as no open tab is
+ * running that build — not when the browser gets round to it.
  */
 const VERSION = new URL(self.location.href).searchParams.get('v') || 'v4';
 const STATIC_CACHE = `ayman-static-${VERSION}`;
@@ -216,93 +217,170 @@ function activeCacheName() {
   }
 }
 
-/**
- * Drops every `ayman-static-*` cache except the two that can legitimately be in
- * use: the one this worker is about to serve from, and the one the worker
- * currently in charge is serving from.
+/*
+ * ── Which build each open tab is running ────────────────────────────────────
  *
- * ⚠️ This runs in `install`, not only in `activate`, and that is the whole of
- * the storage bound.
+ * «لو فيها كاش من البلدات القديمة تتمسح» — a previous build's chunks come off
+ * the device as soon as no open tab is running that build, and not one deploy
+ * later.
  *
- * `activate` also purges — and with `skipWaiting()` gone (see below) it may not
- * run for a long time, because the browser holds a new worker in `waiting` for
- * as long as ANY tab from the previous build is still open. A student who never
- * closes the app would therefore accumulate one `ayman-static-<buildId>` per
- * deploy, unpurged, forever. `MAX_ASSET_ENTRIES` bounds each cache and does
- * nothing about how many there are, so the origin-wide eviction that constant
- * exists to prevent — the one that takes the offline page with it — would come
- * straight back by another route.
+ * ## What it was, and why it was not enough
  *
- * Two, not one, and not "the newest N": the second name is computed from the
- * active worker rather than guessed, so this cannot delete a build somebody is
- * running no matter how many deploys they have slept through.
+ * This worker used to WAIT (no `skipWaiting`) until every tab of the previous
+ * build had closed, and then carry that build's whole cache over into its own
+ * before deleting it — because during the wait the old worker had been filing
+ * the NEW build's chunks under the old name. Both halves were deliberate, and
+ * between them old builds stayed: a student who never closes the installed app
+ * kept the old worker indefinitely, and every handover copied the dead chunks
+ * forward with the live ones, leaving them for `MAX_ASSET_ENTRIES` to push out
+ * one deploy at a time.
+ *
+ * ## What it is now
+ *
+ * The new worker takes over at once (`skipWaiting` + `clients.claim`), and the
+ * one thing that made that unsafe — deleting the cache a still-open old tab
+ * lazy-loads its dialogs and players from — is answered by ASKING rather than
+ * waiting: every page announces the build it runs (`service-worker-register
+ * .tsx` posts `{ type: 'ayman:build', build, assets }` to its controller), and
+ * the worker keeps the announcements here. A build's cache is deleted when no
+ * open window is running it.
+ *
+ * And nothing is carried over wholesale any more. A page on the CURRENT build
+ * lists the static files it has already loaded (`assets`, from Resource
+ * Timing); those, and anything it fetches later, are copied forward from
+ * whichever older cache holds them — cache-to-cache, no network, so an
+ * unchanged chunk is still not downloaded twice — and everything else in the
+ * old cache is dead weight that goes with it.
+ *
+ * ## The tabs that never say
+ *
+ * A tab from before this change does not announce, and an announcement can be
+ * a moment behind the page that sent it. An open window with no entry is
+ * therefore assumed to need the build that was in charge when this worker
+ * arrived (`previous`) — one older cache kept, never more — and that cache is
+ * purged on the first announcement after the last such window has gone.
  */
-async function purgeOtherBuilds() {
-  const keep = new Set([STATIC_CACHE]);
-  const active = activeCacheName();
-  if (active) keep.add(active);
+const META_CACHE = 'ayman-sw-meta';
+const REGISTRY_URL = '/__ayman-sw/builds';
 
-  const names = await caches.keys();
-  await Promise.all(
-    names
-      .filter((name) => name.startsWith('ayman-static-') && !keep.has(name))
-      .map((name) => caches.delete(name)),
-  );
+async function readRegistry() {
+  try {
+    const meta = await caches.open(META_CACHE);
+    const stored = await meta.match(new Request(REGISTRY_URL));
+    const parsed = stored ? await stored.json() : null;
+    if (parsed && typeof parsed === 'object' && parsed.clients && typeof parsed.clients === 'object') {
+      return {
+        clients: parsed.clients,
+        previous: typeof parsed.previous === 'string' ? parsed.previous : null,
+      };
+    }
+  } catch {
+    // A registry that will not read is an empty one: every open tab becomes
+    // "unknown", which is the conservative answer.
+  }
+  return { clients: {}, previous: null };
+}
+
+async function writeRegistry(registry) {
+  try {
+    const meta = await caches.open(META_CACHE);
+    await meta.put(
+      new Request(REGISTRY_URL),
+      new Response(JSON.stringify(registry), { headers: { 'content-type': 'application/json' } }),
+    );
+  } catch {
+    // Lost bookkeeping costs a purge that waits for the next announcement.
+  }
+}
+
+/*
+ * Every read-modify-write of the registry, and every purge, in one queue. Two
+ * tabs announcing in the same second is the normal case after a deploy, and
+ * two interleaved writes would drop one of them — making a tab that IS
+ * running an old build look like one that is not.
+ */
+let bookkeeping = Promise.resolve();
+function serially(task) {
+  const run = bookkeeping.then(task, task);
+  bookkeeping = run.catch(() => {});
+  return run;
+}
+
+const isOurCache = (name) => name.startsWith('ayman-static-');
+
+/**
+ * Deletes every build's cache that no open window is running.
+ *
+ * Kept: this worker's own; each build an open window announced; and — only
+ * while some open window has not announced — `previous`. Everything else with
+ * the `ayman-static-` prefix goes, and nothing without it is touched.
+ *
+ * PRECACHE is rescued from a cache before it is deleted when this worker's own
+ * cache lacks it. Install's precache is `.catch(() => {})` by design (a missing
+ * icon must not leave the worker un-installed), so an install during a deploy
+ * window or on a dropped connection has no `/offline` — and deleting the only
+ * copy on the device would turn «مفيش نت دلوقتي» into a bare 503, the one thing
+ * this worker exists to prevent.
+ */
+async function purgeBuildsNobodyRuns() {
+  const names = (await caches.keys()).filter(isOurCache);
+  if (!names.some((name) => name !== STATIC_CACHE)) return;
+
+  const registry = await readRegistry();
+  const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  const live = {};
+  for (const client of open) {
+    const build = registry.clients[client.id];
+    if (typeof build === 'string') live[client.id] = build;
+  }
+  const unidentified = open.some((client) => !(client.id in live));
+
+  const keep = new Set([STATIC_CACHE, ...Object.values(live).map((build) => `ayman-static-${build}`)]);
+  if (unidentified && registry.previous) keep.add(registry.previous);
+
+  const current = await caches.open(STATIC_CACHE);
+  for (const name of names) {
+    if (keep.has(name)) continue;
+    try {
+      const doomed = await caches.open(name);
+      for (const path of PRECACHE) {
+        const request = new Request(path);
+        if (await current.match(request)) continue;
+        const copy = await doomed.match(request);
+        if (copy) await current.put(request, copy);
+      }
+    } catch {
+      // A rescue that fails must not keep the purge from running.
+    }
+    await caches.delete(name);
+  }
+
+  registry.clients = live;
+  if (registry.previous && !keep.has(registry.previous)) registry.previous = null;
+  await writeRegistry(registry);
 }
 
 /**
- * Moves whatever the OUTGOING worker cached into this worker's cache, before
- * `purgeOtherBuilds` deletes it.
- *
- * ⚠️ Without this the per-build cache name costs a full cold load after every
- * deploy — the exact price `next.config.ts` rejects `deploymentId` for, arriving
- * by a subtler route.
- *
- * The cache NAME tracks the worker generation; the cache CONTENTS track what the
- * controlled tabs happened to fetch, and those two come apart during the window
- * this worker spends in `waiting`. A tab opened AFTER the deploy is still
- * controlled by the old worker — that is what "waiting" means — so it loads the
- * NEW build's HTML and chunks, and the old worker writes them under the OLD
- * name. `activate` would then delete a cache that had just been filled with
- * exactly the files about to be needed.
- *
- * A copy, not a re-fetch: every entry is already on the device, so this is
- * cache-to-cache and touches no network. Bounded by construction — the source
- * was itself held to MAX_ASSET_ENTRIES — and the trim afterwards evicts in
- * insertion order, which drops the genuinely dead older-build entries first and
- * keeps the ones that were just written.
- *
- * ⚠️ PRECACHE is carried over too, unless `install` already managed to write a
- * fresh copy. It used to be skipped outright, on the reasoning that install has
- * just fetched those — and install's precache is `.catch(() => {})` by design,
- * because a missing icon must not leave the worker permanently un-installed. So
- * an install during a deploy window, or on a dropped connection, gets no
- * `/offline`; skipping it here would then DELETE the copy the old cache still
- * had, and the device would lose the offline page for good — the navigate
- * fallback answering a bare 503 instead of «مفيش نت دلوقتي», which is the one
- * thing this worker exists to provide. Checking `current.match` first keeps the
- * fresh copy when there is one and rescues the old copy when there is not.
- *
- * Individually tolerant, and the whole thing is swallowed by its caller: a
- * failed carry-over costs one cold load, and failing `activate` over it would
- * cost the takeover itself.
+ * Copies the named static files into this build's cache from whichever older
+ * cache holds them — the files a page on the current build has already loaded,
+ * so a purge of the old cache does not cost a second download of a chunk that
+ * did not change between builds.
  */
-async function carryOverFrom(name) {
-  const previous = await caches.open(name);
-  const [entries, current] = await Promise.all([previous.keys(), caches.open(STATIC_CACHE)]);
-
-  for (const request of entries) {
+async function promote(hrefs) {
+  const current = await caches.open(STATIC_CACHE);
+  for (const href of hrefs) {
     try {
-      if (PRECACHE.includes(new URL(request.url).pathname) && (await current.match(request))) {
-        continue;
-      }
-      const response = await previous.match(request);
-      if (response) await current.put(request, response);
+      if (typeof href !== 'string') continue;
+      const url = new URL(href, self.location.href);
+      if (url.origin !== self.location.origin || !url.pathname.startsWith('/_next/static/')) continue;
+      const request = new Request(url.href);
+      if (await current.match(request)) continue;
+      const elsewhere = await caches.match(request);
+      if (elsewhere) await current.put(request, elsewhere);
     } catch {
-      // One entry that will not move must not stop the rest.
+      // One file that will not move must not stop the rest.
     }
   }
-
   await trimAssetCacheOnce(current);
 }
 
@@ -316,76 +394,88 @@ self.addEventListener('install', (event) => {
       await Promise.all(
         PRECACHE.map((url) => cache.add(new Request(url, { cache: 'reload' })).catch(() => {})),
       );
-      // Swallowed: a purge that fails is wasted disk, and failing the install
-      // over it would cost the offline page that was just written.
-      await purgeOtherBuilds().catch(() => {});
+      // The build that was in charge when this one arrived: the one cache an
+      // open tab that never announces itself can be assumed to need.
+      await serially(async () => {
+        const previous = activeCacheName();
+        if (!previous || previous === STATIC_CACHE) return;
+        const registry = await readRegistry();
+        registry.previous = previous;
+        await writeRegistry(registry);
+      }).catch(() => {});
+      // Take over now, not when the last tab of the old build closes — which,
+      // for a student who keeps the installed app open, was never. What made
+      // that unsafe (an old tab's chunks deleted under it) is the registry's
+      // job now; see the block above.
+      await self.skipWaiting();
+    })(),
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    (async () => {
+      // Control the tabs that are already open — including the page that
+      // registered this worker, which a first install would otherwise leave
+      // uncontrolled until its next load.
+      await self.clients.claim();
+      await serially(purgeBuildsNobodyRuns).catch(() => {});
     })(),
   );
 });
 
 /*
- * ⚠️ There is deliberately NO `self.skipWaiting()` above any more, and it is
- * the single line that makes the per-build cache version safe.
- *
- * It used to be there, with the note "take over immediately rather than waiting
- * for every tab to close — safe here BECAUSE nothing personal is cached". That
- * reasoning was about privacy and it still holds; what changed is that the
- * takeover now has a SECOND consequence it did not have when VERSION was a
- * hand-bumped constant.
- *
- * `activate` purges every cache whose name is not the current one. With VERSION
- * derived from the build, "not the current one" means "the build the open tab is
- * still running". So `skipWaiting` would now mean: deploy, the new worker takes
- * over a tab that is mid-lesson, and that tab's chunks are deleted from the
- * device — at the same moment the container that could re-serve them has been
- * replaced. The next dialog, player or panel that tab lazy-loads asks for a file
- * neither the cache nor the server has. It would have made «المستخدمين يفضلوا
- * فاتحين الأبليكيشن» strictly worse than the stale cache it was fixing.
- *
- * Without it the browser holds the new worker in `waiting` until no client is
- * controlled by the old one — i.e. until every tab from the previous build has
- * gone. Then it activates and the purge is, by construction, only ever deleting
- * builds nothing is using.
- *
- * What that costs: a student who never closes the tab keeps the old worker.
- * That is a worker whose entire job is serving content-addressed assets and one
- * offline page, so "old" costs them nothing — and their tab still picks up the
- * new BUILD, because Next answers a build-id mismatch on the next navigation
- * with a full document load (`fetch-server-response.js`), and
- * `lib/stale-deploy.ts` catches the two failure shapes that get there first.
- *
- * `clients.claim()` in `activate` stays. It is not the same thing: it only runs
- * once this worker has actually been allowed to activate, and it is what makes a
- * FIRST install control the page that installed it.
+ * A page saying which build it runs. One message per document load (and per
+ * controller change) — see `service-worker-register.tsx` — so the bookkeeping
+ * below runs a handful of times per visit, never per request.
  */
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  const source = event.source;
+  if (!data || data.type !== 'ayman:build' || typeof data.build !== 'string') return;
+  if (!source || typeof source.id !== 'string') return;
+  const build = data.build.slice(0, 100);
+  const assets = Array.isArray(data.assets) ? data.assets.slice(0, MAX_ASSET_ENTRIES) : [];
 
-self.addEventListener('activate', (event) => {
   event.waitUntil(
-    (async () => {
-      // Drop every cache from an older VERSION. Without this, bumping the
-      // version leaves the old bytes on the device forever.
-      //
-      // Reaching here means the previous worker has been released — every tab
-      // from that build is gone — so `activeCacheName()` inside
-      // `purgeOtherBuilds` now resolves to this worker and the "keep two" set
-      // collapses to one. That is why this is the same call `install` makes
-      // rather than a second, laxer copy of the rule: the two moments differ in
-      // what is still in use, not in what the rule is.
-      //
-      // Carry the outgoing cache over FIRST — see `carryOverFrom` for why the
-      // cache about to be deleted is usually holding this build's own chunks.
-      // `caches.keys()` is read before the purge for the same reason.
-      const names = await caches.keys().catch(() => []);
-      for (const name of names) {
-        if (name.startsWith('ayman-static-') && name !== STATIC_CACHE) {
-          await carryOverFrom(name).catch(() => {});
+    serially(async () => {
+      const registry = await readRegistry();
+      // Closed windows are forgotten here, not only by a purge. With a single
+      // build cache there is nothing to purge, so the registry would otherwise
+      // gain an entry per page load until the next deploy, and for good on a
+      // stack that does not deploy.
+      try {
+        const open = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        const ids = new Set(open.map((client) => client.id));
+        for (const id of Object.keys(registry.clients)) {
+          if (!ids.has(id)) delete registry.clients[id];
         }
+      } catch {
+        // Kept as it was: an entry too many costs a cache kept a little longer.
       }
-      await purgeOtherBuilds().catch(() => {});
-      await self.clients.claim();
-    })(),
+      registry.clients[source.id] = build;
+      await writeRegistry(registry);
+      if (`ayman-static-${build}` === STATIC_CACHE) await promote(assets);
+      await purgeBuildsNobodyRuns();
+    }).catch(() => {}),
   );
 });
+
+/**
+ * Whether a file an older cache answered should be copied into this build's
+ * cache: yes for a page on this build (it will want it again), and for a page
+ * that has not said yet (most often the first page after the deploy, which
+ * loaded before announcing) — no for a page known to run an OLDER build, whose
+ * chunks would otherwise ride forward into the cache the purge keeps.
+ */
+async function promoteFor(clientId, request, response) {
+  const registry = await readRegistry();
+  const build = clientId ? registry.clients[clientId] : undefined;
+  if (typeof build === 'string' && `ayman-static-${build}` !== STATIC_CACHE) return;
+  const current = await caches.open(STATIC_CACHE);
+  await current.put(request, response);
+  await trimAssetCacheOnce(current);
+}
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
@@ -468,23 +558,32 @@ self.addEventListener('fetch', (event) => {
   if (isImmutable) {
     event.respondWith(
       (async () => {
-        const hit = await caches.match(request);
-        if (hit) return hit;
+        const current = await caches.open(STATIC_CACHE);
+        const own = await current.match(request);
+        if (own) return own;
+
+        // An older build's cache still has it: answer from there — that is
+        // exactly what keeps a still-open old tab's lazy chunks working — and
+        // copy it forward if the page asking is on this build. See `promoteFor`.
+        const elsewhere = await caches.match(request);
+        if (elsewhere) {
+          event.waitUntil(promoteFor(event.clientId, request, elsewhere.clone()).catch(() => {}));
+          return elsewhere;
+        }
 
         const response = await fetch(request);
         // Only store a clean 200. An opaque or partial response cached here
         // would be indistinguishable from the real thing on the next load.
         if (response.ok && response.status === 200) {
-          const cache = await caches.open(STATIC_CACHE);
           // Held open past the response so neither the write nor the trim is
           // cancelled when the worker is terminated a moment after answering.
           // The trim runs even when the write failed, because the way a write
           // fails here is a quota error — the exact moment trimming matters.
           event.waitUntil(
-            cache
+            current
               .put(request, response.clone())
               .catch(() => {})
-              .then(() => trimAssetCacheOnce(cache))
+              .then(() => trimAssetCacheOnce(current))
               .catch(() => {}),
           );
         }

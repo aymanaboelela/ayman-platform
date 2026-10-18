@@ -24,8 +24,21 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function Harness({ message, digest }: { message: string; digest?: string }) {
-  useErrorReport(Object.assign(new Error(message), { digest }));
+function Harness({
+  message,
+  digest,
+  name,
+}: {
+  message: string;
+  digest?: string;
+  /** `TypeError` for the shapes a dropped connection actually arrives in. */
+  name?: string;
+}) {
+  const error = Object.assign(name === 'TypeError' ? new TypeError(message) : new Error(message), {
+    digest,
+  });
+  if (name && name !== 'TypeError') error.name = name;
+  useErrorReport(error);
   return null;
 }
 
@@ -49,14 +62,34 @@ describe('useErrorReport', () => {
     expect(String(body.route)).not.toContain('?');
   });
 
-  it('separates a server throw from a client one by its digest', () => {
-    render(<Harness message="omitted in production" digest="2767814311" />);
-    expect(posted().kind).toBe('server');
+  /*
+   * A digest means the throw happened in a SERVER render, and the server now
+   * files those itself with the real message (`instrumentation.ts` →
+   * `lib/report-server-error.ts`). The browser's copy carries only Next's
+   * production sentence; filing it as well would count every failure twice
+   * and race the server's stack with a useless one. Asserted as "nothing was
+   * posted", for the same reason the stale-deploy case below is.
+   */
+  it('leaves a server throw to the server, which has its real message', () => {
+    render(
+      <Harness
+        message="An error occurred in the Server Components render. The specific message is omitted in production builds to avoid leaking sensitive details."
+        digest="2767814311"
+      />,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('recognises an upstream timeout by the digest lib/api stamps on it', () => {
+  it('leaves the upstream-timeout digest to the server as well', () => {
     render(<Harness message="upstream" digest={UPSTREAM_TIMEOUT_DIGEST} />);
-    expect(posted().kind).toBe('timeout');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('files every remaining report as a client one, with no digest field', () => {
+    render(<Harness message="Cannot read properties of null (reading 'replace')" name="TypeError" />);
+    const body = posted();
+    expect(body.kind).toBe('client');
+    expect(body).not.toHaveProperty('digest');
   });
 
   /*
@@ -90,11 +123,46 @@ describe('useErrorReport', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('never files an error when offline or transient network drop occurs', () => {
-    for (const message of ['Failed to fetch', 'Load failed']) {
-      render(<Harness message={message} />);
+  it('never files the student’s own connection dropping, in any engine’s words', () => {
+    // `network error` is the one production recorded — Chrome's sentence for a
+    // response body that died half-way, thrown out of the RSC stream reader on
+    // `/results`, `/rank`, `/dashboard` and a quiz review. The rest are the
+    // same event in Safari's and Firefox's words, and React's own for a Flight
+    // stream that ended early.
+    for (const message of [
+      'Failed to fetch',
+      'Load failed',
+      'network error',
+      'NetworkError when attempting to fetch resource.',
+      'The network connection was lost.',
+    ]) {
+      render(<Harness message={message} name="TypeError" />);
       cleanup();
     }
+    render(<Harness message="Connection closed." />);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('never files anything while the browser says it is offline', () => {
+    const onLine = vi.spyOn(Navigator.prototype, 'onLine', 'get').mockReturnValue(false);
+    render(<Harness message="anything at all" />);
+    expect(fetchMock).not.toHaveBeenCalled();
+    onLine.mockRestore();
+  });
+
+  it('still files a component that throws those words on purpose', () => {
+    // The sentence alone is not enough: a connectivity failure is a TypeError
+    // (or React's «Connection closed.»). A plain Error saying «network error»
+    // is somebody's real message and belongs in the log.
+    render(<Harness message="network error" />);
+    expect(posted().message).toBe('network error');
+  });
+
+  it('never files a Server Action the edge answered mid-deploy', () => {
+    // «An unexpected response was received from the server.» — recorded on
+    // `/admin/grading/<id>` and `/admin/homework/<id>`. Next's own server
+    // cannot produce it; Traefik or Cloudflare did, which is a deploy window.
+    render(<Harness message="An unexpected response was received from the server." />);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
