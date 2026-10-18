@@ -147,7 +147,12 @@ export function HonorBoardSection({ entries = [] }: { entries?: HonorBoardEntry[
                   thing being read here.
                 */}
                 <HonorFace name={entry.studentName} photoKey={entry.photoKey} />
-                <span className="honor-board__slot-name">{entry.studentName}</span>
+                {/* The whole card opens the full top ten — the link's
+                    `::after` covers it (sections.css). The NAME is the link
+                    text, so a screen reader hears whose place it opens. */}
+                <Link className="honor-board__slot-link" href="/honor-board">
+                  <span className="honor-board__slot-name">{entry.studentName}</span>
+                </Link>
                 <span className="honor-board__slot-quiz">{entry.title}</span>
               </li>
             ))}

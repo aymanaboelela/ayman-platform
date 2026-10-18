@@ -4,10 +4,14 @@ import { updateTag } from 'next/cache';
 import { revalidatePath } from '@/lib/revalidate-screen';
 import { z } from 'zod';
 import {
+  AdminHonorExamPublishResultSchema,
+  AdminHonorExamPublishSchema,
   AdminHonorPinCreateSchema,
   AdminHonorPinPatchSchema,
   AdminHonorPinRowSchema,
   AdminHonorStudentsSchema,
+  type AdminHonorExamPublish,
+  type AdminHonorExamPublishResult,
   type AdminHonorPinCreate,
   type AdminHonorPinPatch,
   type AdminHonorStudent,
@@ -126,5 +130,29 @@ export async function searchHonorStudentsAction(q: string): Promise<AdminHonorSt
     return result.students;
   } catch {
     return [];
+  }
+}
+
+/**
+ * «انشر الأوائل» — one exam's whole top ten in one PUT. The API decides who is
+ * new (and notifies them), who moved and who came off; this only relays it.
+ */
+export async function publishHonorExamAction(
+  lessonId: string,
+  input: AdminHonorExamPublish,
+): Promise<({ ok: true } & AdminHonorExamPublishResult) | { ok: false; message: string }> {
+  try {
+    const body = AdminHonorExamPublishSchema.parse(input);
+    const result = await adminSend(
+      'PUT',
+      `/api/admin/honor-board/exams/${encodeURIComponent(lessonId)}`,
+      body,
+      AdminHonorExamPublishResultSchema,
+    );
+    afterWrite();
+    revalidatePath('/admin/honor-board/exam');
+    return { ok: true, ...result };
+  } catch {
+    return { ok: false, message: c.publishFailed };
   }
 }

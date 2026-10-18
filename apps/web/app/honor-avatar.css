@@ -1,0 +1,86 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   `<HonorAvatar>` — the drawn graduate a winner gets when there is no board
+   photo (`components/site/honor-avatar.tsx`).
+
+   Global, not in `(site)/styles`: the admin's honour-board rows draw the same
+   face, so the admin preview shows exactly what the public card will. Loaded
+   from both layouts.
+
+   Six tones, picked from the name. Not the accent: a board of ten in the
+   brand colour reads as one repeated placeholder, and ten colours read as ten
+   people. The figure is the same light ink on every tone.
+   ────────────────────────────────────────────────────────────────────────── */
+.honor-avatar {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  border-radius: 50%;
+  --honor-avatar-from: oklch(0.80 0.14 80);
+  --honor-avatar-to: oklch(0.62 0.17 50);
+  --honor-avatar-ink: oklch(0.99 0.01 85);
+  --honor-avatar-cap: oklch(0.28 0.03 260);
+  --honor-avatar-tassel: oklch(0.86 0.16 92);
+}
+
+.honor-avatar[data-tone='1'] {
+  --honor-avatar-from: oklch(0.72 0.14 300);
+  --honor-avatar-to: oklch(0.52 0.19 285);
+}
+
+.honor-avatar[data-tone='2'] {
+  --honor-avatar-from: oklch(0.80 0.12 185);
+  --honor-avatar-to: oklch(0.58 0.12 200);
+}
+
+.honor-avatar[data-tone='3'] {
+  --honor-avatar-from: oklch(0.78 0.13 10);
+  --honor-avatar-to: oklch(0.58 0.18 355);
+}
+
+.honor-avatar[data-tone='4'] {
+  --honor-avatar-from: oklch(0.80 0.11 235);
+  --honor-avatar-to: oklch(0.56 0.16 255);
+}
+
+.honor-avatar[data-tone='5'] {
+  --honor-avatar-from: oklch(0.82 0.15 145);
+  --honor-avatar-to: oklch(0.60 0.15 160);
+}
+
+.honor-avatar__from {
+  stop-color: var(--honor-avatar-from);
+}
+
+.honor-avatar__to {
+  stop-color: var(--honor-avatar-to);
+}
+
+.honor-avatar__body {
+  fill: var(--honor-avatar-ink);
+  fill-opacity: 0.92;
+}
+
+.honor-avatar__collar {
+  fill: var(--honor-avatar-to);
+  fill-opacity: 0.55;
+}
+
+.honor-avatar__cap {
+  fill: var(--honor-avatar-cap);
+}
+
+.honor-avatar__tassel {
+  fill: none;
+  stroke: var(--honor-avatar-tassel);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.honor-avatar__tassel-end {
+  fill: var(--honor-avatar-tassel);
+}
+
+.honor-avatar__spark {
+  fill: var(--honor-avatar-ink);
+  fill-opacity: 0.55;
+}

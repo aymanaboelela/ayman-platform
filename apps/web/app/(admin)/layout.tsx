@@ -5,6 +5,7 @@
 // on the row differ (تعديل/مواد/نشر/حذف here, «مشاهدة» there). Before this,
 // the admin had no access to the file at all and grew its own flat vocabulary
 // of bordered rectangles.
+import '../honor-avatar.css';
 import '../study.css';
 // Admin-only additions layered on top: the row action cluster, destructive
 // chips, inline title editing, and the exam gate.

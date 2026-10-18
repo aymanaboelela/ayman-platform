@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ExternalLink, Trophy } from 'lucide-react';
+import { Crown, ExternalLink, Trophy } from 'lucide-react';
 import { copy } from '@ayman/contracts/copy/admin';
 import { copy as siteCopy } from '@ayman/contracts/copy';
 import { formatCopy } from '@ayman/contracts/format';
@@ -57,7 +57,18 @@ export default async function AdminHonorBoardPage() {
           </h1>
           <p className="mt-1 max-w-2xl text-[length:var(--fs-text-sm)] text-fg-muted">{c.lead}</p>
         </div>
-        <HonorPinDialog pin={null} courses={board.courses} />
+        <div className="flex flex-wrap items-center gap-2">
+          {/* The main door now: rank a month exam's top ten. The hand-added
+              dialog stays for honours that have no paper behind them. */}
+          <Link
+            href="/admin/honor-board/exam"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-accent px-3 text-[length:var(--fs-text-sm)] font-semibold text-[color:var(--on-accent-ink)] hover:opacity-90"
+          >
+            <Crown className="size-4" aria-hidden="true" />
+            {c.fromExam}
+          </Link>
+          <HonorPinDialog pin={null} courses={board.courses} />
+        </div>
       </header>
 
       {board.rounds.length === 0 ? (
@@ -116,8 +127,13 @@ export default async function AdminHonorBoardPage() {
                             photoKey={pin.photoKey ?? pin.profilePhotoKey}
                           />
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-[length:var(--fs-text-base)] font-semibold text-fg">
-                              {pin.studentName}
+                            <p className="flex min-w-0 items-center gap-2 text-[length:var(--fs-text-base)] font-semibold text-fg">
+                              <span className="truncate">{pin.studentName}</span>
+                              {pin.attemptId ? (
+                                <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[length:var(--fs-text-xs)] font-medium text-accent-text">
+                                  {c.fromExamBadge}
+                                </span>
+                              ) : null}
                             </p>
                             {/* بيلف مش بيتقص: على الموبايل «المركز الأول ·
                                 الأولى على الدفعة في امتحان سبتمبر» كان بيوصل

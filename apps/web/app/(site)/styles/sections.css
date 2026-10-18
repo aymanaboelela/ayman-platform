@@ -4034,3 +4034,398 @@
   color: var(--site-fg-2);
   font-size: var(--fs-text-sm);
 }
+
+/* ── /honor-board, the podium ──────────────────────────────────────────────
+   «عاوز أعرف العشرة الأوائل بشكل حلو، صورهم واضحة وأسماءهم، وألوان».
+
+   The page is a prize-giving, not a table: one band that congratulates, then
+   per course a podium for the first three — gold, silver, bronze, the first
+   raised in the middle — and the rest of the ten as coloured rows under it.
+
+   The three medal colours are fixed hues, not the tenant accent: gold is gold
+   on every stack, and a «silver» drawn in somebody's brand blue would stop
+   reading as second place. */
+.honor-hero {
+  --honor-gold: oklch(0.82 0.15 85);
+  --honor-gold-deep: oklch(0.62 0.14 70);
+  display: grid;
+  align-items: center;
+  gap: var(--s-24);
+  padding: var(--s-24);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in oklab, var(--honor-gold) 28%, transparent), transparent 60%),
+    linear-gradient(135deg, color-mix(in oklab, var(--a-9) 14%, var(--site-card-2)), var(--site-card-2));
+  border: 1px solid color-mix(in oklab, var(--honor-gold) 40%, transparent);
+  overflow: hidden;
+}
+
+@media (min-width: 48rem) {
+  .honor-hero--host {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-block: var(--s-24) 0;
+  }
+}
+
+.honor-hero__title {
+  margin-block-start: var(--s-8);
+  font-size: var(--fs-title-1);
+  font-weight: var(--fw-bold);
+  color: var(--site-fg);
+  text-wrap: balance;
+}
+
+.honor-hero__lead {
+  margin-block-start: var(--s-8);
+  max-inline-size: 38rem;
+  color: var(--site-fg-2);
+  font-size: var(--fs-text-base);
+}
+
+.honor-hero__exam {
+  display: inline-block;
+  margin-block-start: var(--s-16);
+  padding: 0.375rem 0.875rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--honor-gold) 22%, transparent);
+  color: var(--site-fg);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+
+/* The portrait stands ON the band's bottom edge, like somebody on a stage,
+   rather than floating in a framed box. */
+.honor-hero__host {
+  position: relative;
+  justify-self: center;
+  inline-size: 11rem;
+  margin: 0;
+}
+
+@media (min-width: 64rem) {
+  .honor-hero__host {
+    inline-size: 18rem;
+  }
+}
+
+.honor-hero__host-photo {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  border-start-start-radius: var(--r-lg);
+  border-start-end-radius: var(--r-lg);
+  border-end-start-radius: var(--r-lg);
+  border-end-end-radius: var(--r-lg);
+  box-shadow: 0 1.25rem 2.5rem -1.5rem color-mix(in oklab, var(--honor-gold-deep) 70%, transparent);
+}
+
+@media (min-width: 48rem) {
+  .honor-hero__host-photo {
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+}
+
+.honor-hero__host-name {
+  position: absolute;
+  inset-block-end: var(--s-12);
+  inset-inline: var(--s-12);
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--honor-gold) 92%, transparent);
+  color: oklch(0.25 0.04 70);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+  text-align: center;
+}
+
+.honor-races {
+  display: grid;
+  gap: var(--s-32);
+  min-inline-size: 0;
+}
+
+.honor-race__label {
+  display: inline-block;
+  padding: 0.25rem 0.875rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--a-9) 16%, transparent);
+  color: var(--a-11);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+
+/* Phone: one column, first to third, top to bottom — the reading order.
+   Wider: three columns, the FIRST in the middle and raised. `order` and not
+   source order, so a screen reader still hears first, second, third. */
+.honor-podium {
+  display: grid;
+  gap: var(--s-16);
+  margin-block-start: var(--s-16);
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 40rem) {
+  .honor-podium {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  .honor-podium__place[data-place='2'] { order: 1; }
+  .honor-podium__place[data-place='1'] { order: 2; }
+  .honor-podium__place[data-place='3'] { order: 3; }
+
+  .honor-podium__place[data-place='1'] {
+    padding-block-start: 2.25rem;
+  }
+}
+
+.honor-podium__place {
+  --place: oklch(0.82 0.15 85);
+  --place-ink: oklch(0.42 0.11 70);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem 1rem 1.25rem;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklab, var(--place) 55%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--place) 26%, var(--site-card-2)),
+    var(--site-card-2) 70%
+  );
+  text-align: center;
+}
+
+.honor-podium__place[data-place='2'] {
+  --place: oklch(0.80 0.02 250);
+  --place-ink: oklch(0.45 0.03 250);
+}
+
+.honor-podium__place[data-place='3'] {
+  --place: oklch(0.70 0.11 55);
+  --place-ink: oklch(0.45 0.10 50);
+}
+
+.honor-podium__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-full);
+  background: var(--place);
+  color: var(--place-ink);
+}
+
+.honor-podium__place[data-place='1'] .honor-podium__badge {
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+}
+
+/* The face is the subject. A thick ring in the place's metal, and a small
+   numbered coin on its edge so the place reads even before the words do. */
+.honor-podium__ring {
+  position: relative;
+  padding: 0.3rem;
+  border-radius: var(--r-full);
+  background: conic-gradient(from 210deg, var(--place), color-mix(in oklab, var(--place) 45%, var(--site-card)), var(--place));
+  box-shadow: 0 0.75rem 2rem -1rem color-mix(in oklab, var(--place) 90%, transparent);
+}
+
+.honor-podium__face {
+  display: grid;
+  place-items: center;
+  inline-size: 8rem;
+  block-size: 8rem;
+  border-radius: var(--r-full);
+  overflow: hidden;
+  background: var(--site-card);
+  border: 3px solid var(--site-card);
+}
+
+@media (min-width: 64rem) {
+  .honor-podium__face {
+    inline-size: 9rem;
+    block-size: 9rem;
+  }
+
+  .honor-podium__place[data-place='1'] .honor-podium__face {
+    inline-size: 10rem;
+    block-size: 10rem;
+  }
+}
+
+.honor-podium__face--photo {
+  display: block;
+  object-fit: cover;
+}
+
+.honor-podium__num {
+  position: absolute;
+  inset-block-end: 0.25rem;
+  inset-inline-end: 0.25rem;
+  display: grid;
+  place-items: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--r-full);
+  border: 3px solid var(--site-card-2);
+  background: var(--place);
+  color: var(--place-ink);
+  font-size: var(--fs-text-base);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+}
+
+.honor-podium__rank {
+  margin-block-start: 0.25rem;
+  color: var(--place-ink);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-bold);
+}
+
+.honor-podium__name {
+  color: var(--site-fg);
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-bold);
+  text-wrap: balance;
+}
+
+.honor-podium__score {
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--place) 30%, transparent);
+  color: var(--site-fg);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.honor-podium__score--reason,
+.honor-rest__score--reason {
+  font-weight: var(--fw-medium);
+}
+
+.honor-rest__title {
+  margin-block-start: var(--s-24);
+  color: var(--site-fg-2);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.honor-rest {
+  display: grid;
+  gap: 0.625rem;
+  margin-block-start: var(--s-12);
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 48rem) {
+  .honor-rest {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.honor-rest__row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklab, var(--a-9) 28%, transparent);
+  background: color-mix(in oklab, var(--a-9) 7%, var(--site-card-2));
+}
+
+.honor-rest__num {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: var(--r-full);
+  background: var(--a-9);
+  color: var(--on-accent-ink);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+}
+
+.honor-rest__face {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  inline-size: 3.5rem;
+  block-size: 3.5rem;
+  border-radius: var(--r-full);
+  overflow: hidden;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--a-9) 55%, transparent);
+}
+
+.honor-rest__face--photo {
+  display: block;
+  object-fit: cover;
+}
+
+.honor-rest__who {
+  display: grid;
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.honor-rest__name {
+  color: var(--site-fg);
+  font-weight: var(--fw-semibold);
+  text-wrap: balance;
+}
+
+.honor-rest__rank {
+  color: var(--site-fg-2);
+  font-size: var(--fs-text-xs);
+}
+
+.honor-rest__score {
+  flex-shrink: 0;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--r-full);
+  background: color-mix(in oklab, var(--a-9) 18%, transparent);
+  color: var(--a-11);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+}
+
+/* The landing card's drawn avatar fills its disc edge to edge. */
+.honor-board__slot-avatar--art {
+  overflow: hidden;
+  background: none;
+}
+
+/* The landing cards are links into the round now («لما أضغط عليها أعرف
+   العشرة الأوائل»). The link's box covers the whole card. */
+.honor-board__slot {
+  position: relative;
+}
+
+.honor-board__slot-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.honor-board__slot-link:focus-visible {
+  outline: none;
+}
+
+.honor-board__slot:has(.honor-board__slot-link:focus-visible) {
+  outline: 2px solid var(--a-9);
+  outline-offset: 2px;
+}
+
+.honor-board__slot--filled:has(.honor-board__slot-link:hover) {
+  border-color: color-mix(in oklab, var(--a-9) 60%, transparent);
+}

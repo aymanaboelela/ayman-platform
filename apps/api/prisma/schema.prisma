@@ -4093,6 +4093,7 @@ model QuizAttempt {
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   questions AttemptQuestion[]
   events    AttemptEvent[]
+  honorPin  HonorBoardPin?
 
   @@unique([quizId, userId, attemptNo])
   @@index([quizId, state])
@@ -4165,14 +4166,22 @@ model HonorBoardPin {
   /// ⚠️ مش ظاهر لـ`MediaService.usage()` — نفس الفخ المكتوب على `honorPhotoKey`.
   photoKey String? @map("photo_key")
 
+  /// The month-exam paper this place was earned on, or null for a pin added
+  /// by hand. Set by «الأوائل من امتحان الشهر» on `/admin/honor-board`: the
+  /// RANK is still the instructor's (he says who is first), the paper only
+  /// supplies the mark on the card and lets a re-publish update in place.
+  /// Unique — one card per sitting. `SetNull`: a deleted paper keeps the honour.
+  attemptId String? @unique @map("attempt_id") @db.Uuid
+
   /// مين حطّه. `SetNull` عشان مسح حساب أدمن مايمسحش تكريم طالب.
   createdById String?  @map("created_by_id")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  user      User    @relation("HonorBoardPinStudent", fields: [userId], references: [id], onDelete: Cascade)
-  course    Course? @relation(fields: [courseId], references: [id], onDelete: SetNull)
-  createdBy User?   @relation("HonorBoardPinAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  user      User         @relation("HonorBoardPinStudent", fields: [userId], references: [id], onDelete: Cascade)
+  course    Course?      @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  attempt   QuizAttempt? @relation(fields: [attemptId], references: [id], onDelete: SetNull)
+  createdBy User?        @relation("HonorBoardPinAuthor", fields: [createdById], references: [id], onDelete: SetNull)
 
   /// اللوحة بتتقري بالتاريخ، الأحدث الأول — نفس شكل القراية بتاعة الأرشيف.
   @@index([honoredAt(sort: Desc)])

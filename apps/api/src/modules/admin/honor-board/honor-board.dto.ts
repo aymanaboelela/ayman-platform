@@ -1,4 +1,5 @@
 import {
+  AdminHonorExamPublishSchema,
   AdminHonorPinCreateSchema,
   AdminHonorPinPatchSchema,
   AdminHonorStudentQuerySchema,
@@ -8,3 +9,4 @@ import { createZodDto } from 'nestjs-zod';
 export class AdminHonorPinCreateDto extends createZodDto(AdminHonorPinCreateSchema) {}
 export class AdminHonorPinPatchDto extends createZodDto(AdminHonorPinPatchSchema) {}
 export class AdminHonorStudentQueryDto extends createZodDto(AdminHonorStudentQuerySchema) {}
+export class AdminHonorExamPublishDto extends createZodDto(AdminHonorExamPublishSchema) {}

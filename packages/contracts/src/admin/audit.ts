@@ -488,6 +488,9 @@ export const AUDIT_ACTIONS = [
   'honor:add',
   'honor:update',
   'honor:remove',
+  /* «الأوائل من امتحان الشهر» — one row for the whole published top ten
+     (who went up, who came off, who moved), because it is one decision. */
+  'honor:publish-exam',
   /*
    * «المحفظة» — every movement of a student's money, each its own action so
    * «مين شحنله» and «مين خصم منه» are filters, not metadata searches. Each is

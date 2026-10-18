@@ -1949,7 +1949,7 @@ export const copy = {
         'المركز العاشر',
       ],
       /** «عرض الكل» — من اللوحة على الصفحة الرئيسية لصفحة الأرشيف. */
-      viewAll: 'عرض الكل',
+      viewAll: 'عرض العشرة الأوائل',
       /** عنوان صفحة الأرشيف. */
       archiveTitle: 'لوحة الشرف — كل الأسماء',
       /** تحت العنوان في صفحة الأرشيف. */
@@ -1958,6 +1958,21 @@ export const copy = {
       archivePeriods: 'الامتحانات',
       /** لما الأرشيف يبقى فاضي. */
       archiveEmpty: 'لسه مفيش حد على اللوحة.',
+      /* ── /honor-board, redrawn as a podium ──────────────────────────────── */
+      /** The congratulation band at the head of the page. Plural, so it never
+       *  has to pick a gender (§7). */
+      hostTitle: 'ألف مبروك للأوائل',
+      hostBody: 'تعبكم باين في كل درجة. اللي على اللوحة النهارده سبقوا، والمرة الجاية مكانك محجوز لو ذاكرت.',
+      /** Under the instructor's portrait — `{name}` is `tenantName(site.name)`. */
+      hostCaption: 'م. {name}',
+      /** Above the three podium places. */
+      podiumTitle: 'الأوائل',
+      /** Above places 4–10. */
+      restTitle: 'باقي العشرة الأوائل',
+      /** `{score}` and `{outOf}` are Western digits, isolated by the card. */
+      score: '{score} من {outOf}',
+      /** The landing cards are links now — the accessible name of each one. */
+      openRound: 'عرض العشرة الأوائل',
       /**
        * Under the four places. Said ONCE, not repeated inside every card:
        * four cards each carrying the same apology is how an empty section

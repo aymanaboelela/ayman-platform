@@ -11,6 +11,7 @@ import { SiteAccountSlot, SiteAccountSlotFallback } from '@/components/site/site
 import { SiteBrandSlot, SiteBrandSlotFallback } from '@/components/site/site-brand-slot';
 import { SiteFooter } from '@/components/site/site-footer';
 import { SpecularButtons } from '@/components/site/specular-buttons';
+import '../honor-avatar.css';
 import './styles/theme.css';
 import './styles/media.css';
 import './styles/sections.css';
