@@ -1,9 +1,9 @@
 /**
- * The only inline script this application authors. It does four things that
+ * The only inline script this application authors. It does five things that
  * must happen before anything else on the page runs: the two below, and
- * `CHUNK_SCRIPT_RESCUE` and `DOM_MUTATION_GUARD` further down, which have
- * nothing to do with paint and are here for the same reason — each is only
- * correct if it is FIRST.
+ * `CHUNK_SCRIPT_RESCUE`, `DOM_MUTATION_GUARD` and `STREAM_ID_GUARD` further
+ * down, which have nothing to do with paint and are here for the same reason —
+ * each is only correct if it is FIRST.
  *
  * The two pieces of persisted UI state that MUST be on `<html>` before first
  * paint (`app/layout.tsx`):
@@ -177,4 +177,58 @@ export const CHUNK_SCRIPT_RESCUE =
 export const DOM_MUTATION_GUARD =
   `(function(){try{var P=Node.prototype,rc=P.removeChild,ib=P.insertBefore,w=0;function note(){if(w)return;w=1;try{console.warn('[dom-guard] a node React owns was moved by something else (a translator or an extension); kept the page alive');}catch(x){}}P.removeChild=function(c){if(c&&c.parentNode!==this){note();if(c.parentNode&&this.contains(c))return rc.call(c.parentNode,c);return c;}return rc.apply(this,arguments);};P.insertBefore=function(n,r){if(r&&r.parentNode!==this){note();var a=r;while(a&&a.parentNode!==this)a=a.parentNode;return ib.call(this,n,a||null);}return ib.apply(this,arguments);};}catch(e){}})();`;
 
-export const PREPAINT_SCRIPT = THEME_AND_RAIL + CHUNK_SCRIPT_RESCUE + DOM_MUTATION_GUARD;
+/**
+ * The fifth job: React's streamed HTML must not hand a segment to the wrong
+ * placeholder because two of its elements carry the same id.
+ *
+ * ## The bug, in React itself
+ *
+ * A page with a prerendered shell (`cacheComponents`) is the shell plus a
+ * resumed render appended to it. React gives the resume its first id from
+ * `postponed.nextSegmentId`, and it captures that number before the shell
+ * is written out. Writing the shell can then spend one more id: a completed
+ * boundary bigger than the chunk size (12,800 bytes) is "outlined" and gets
+ * its id there. On every signed-in page that boundary is the root
+ * `loading.tsx` around the whole student shell, about 37 KB. So the resume's
+ * first new segment gets the same number. `/dashboard` streamed two
+ * `<div hidden id="S:7">`: the shell, waiting for its reveal, and the last
+ * step of the «نبدأ من هنا» card.
+ *
+ * Reproduced with React alone, 19.2.8 and the 19.3 build Next 16.2.11 ships,
+ * in `stream-id-guard.test.ts`.
+ *
+ * ## What it did to the page
+ *
+ * React reveals boundaries in batches (`$RV`, up to 300 ms late), and until
+ * then the shell's container is still in the document. If the resume's
+ * `$RS("S:7","P:7")` runs in that window, `getElementById` returns the FIRST
+ * `S:7`, so the whole shell is moved into the card's list. Then the reveal
+ * throws `HierarchyRequestError: The new child element contains the parent`,
+ * and hydration client-renders a second shell. That is two rails, which the
+ * tablet-rail e2e caught (`locator('.rail') resolved to 2 elements`, the
+ * second one inside «نبدأ من هنا»). Whether it happens depends on how the
+ * bytes arrive, so it is rare and it is in production.
+ *
+ * ## The fix
+ *
+ * React's streaming instructions (`$RC`, `$RS`, `$RR`, `$RX`) look their
+ * elements up by id. The one an instruction means is always the LAST in the
+ * document with that id, because React appends each segment as it streams,
+ * after everything already there. An earlier element with the same id was
+ * looked up by its own instruction when it arrived, and is held by reference
+ * from then on (`$RB`). So each instruction is wrapped as React defines it.
+ * Before it runs, the id is taken off every earlier element that shares it,
+ * and React's own `getElementById` finds the right one. Nothing else changes.
+ * Without a duplicate there is nothing to strip, and the instruction runs
+ * exactly as React wrote it.
+ *
+ * Accessors on `window`, because React defines each instruction with a plain
+ * global assignment the first time it needs it (`$RS=function…`) and calls
+ * it right away. A setter is the one place that sees the definition before
+ * the first call. Its own IIFE and `try`, like the rest.
+ */
+export const STREAM_ID_GUARD =
+  `(function(){try{var D=document,ID=/^\\w*[BPS]:[0-9a-f]+$/;function newest(id){if(typeof id!=='string'||!ID.test(id))return;var all=D.querySelectorAll('[id="'+id+'"]');for(var i=0;i<all.length-1;i++)all[i].removeAttribute('id');}function wrap(fn){return function(){for(var i=0;i<arguments.length;i++)newest(arguments[i]);return fn.apply(this,arguments);};}['$RC','$RS','$RR','$RX'].forEach(function(n){var f;Object.defineProperty(window,n,{configurable:true,get:function(){return f;},set:function(v){f=typeof v==='function'?wrap(v):v;}});});}catch(e){}})();`;
+
+export const PREPAINT_SCRIPT =
+  THEME_AND_RAIL + CHUNK_SCRIPT_RESCUE + DOM_MUTATION_GUARD + STREAM_ID_GUARD;
