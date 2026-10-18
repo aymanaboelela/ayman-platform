@@ -11,6 +11,7 @@ import { QuestionTypeSchema } from '@ayman/contracts/quiz/question';
 import { QuestionBankService } from './question-bank.service';
 import { QuestionRemovalService } from './question-removal.service';
 import { RegradeService } from './regrade.service';
+import { KeyWatchService } from './key-watch.service';
 
 @Controller('admin/questions')
 @RequirePermission('question:write')
@@ -20,7 +21,19 @@ export class AdminQuestionsController {
     private readonly bank: QuestionBankService,
     private readonly removal: QuestionRemovalService,
     private readonly regrade: RegradeService,
+    private readonly keyWatch: KeyWatchService,
   ) {}
+
+  /**
+   * «أسئلة إجابتها الصح غالبًا متسجّلة غلط» — every question, across every
+   * quiz, an alert was raised for and whose answers still say the key is
+   * wrong. The admin overview's band. A literal segment, declared before
+   * `:bankEntryId` so it is never read as an id.
+   */
+  @Get('suspect-keys')
+  async suspectKeys() {
+    return { rows: await this.keyWatch.listSuspects() };
+  }
 
   // Registered BEFORE `@Get()`'s sibling param-free list route matters only
   // if a future param route (`:bankEntryId`) is ever added to GET — there

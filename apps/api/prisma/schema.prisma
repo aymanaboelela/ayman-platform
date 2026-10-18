@@ -3714,6 +3714,7 @@ model QuestionVersion {
   gameAnswers      GameAnswer[]
   arenaRounds      ArenaRound[]
   mistakeReviews   MistakeReview[]
+  suspectKeyAlert  SuspectKeyAlert?
 
   @@unique([bankEntryId, version])
   @@index([bankEntryId, status])
@@ -3883,6 +3884,7 @@ model Quiz {
   slots    QuizSlot[]
   pools    QuizPool[]
   attempts QuizAttempt[]
+  suspectKeyAlerts SuspectKeyAlert[]
 
   @@map("quizzes")
   @@schema("app")
@@ -5010,8 +5012,43 @@ enum NotificationKind {
   wallet_topup_submitted
   wallet_credited
   wallet_topup_rejected
+  /// ADMIN — «الإجابة الصح غالبًا متسجّلة غلط». A question version just crossed
+  /// the item-analysis suspect-key threshold (`isSuspectKey`): most students
+  /// picked one option that is not the key. Emitted ONCE per version, ever —
+  /// `suspect_key_alerts` is the dedup — to everyone holding `question:write`.
+  /// Carries ids and counts only; the stem, the options and the quiz's title
+  /// are resolved at read time.
+  suspect_key
 
   @@map("notification_kind")
+  @@schema("app")
+}
+
+/// «الإجابة الصح غالبًا متسجّلة غلط» — one row per question VERSION the answers
+/// say is mis-keyed, written in the same transaction as its `suspect_key`
+/// notification.
+///
+/// It is the dedup, not a cache of the verdict: the primary key is what makes
+/// two submits racing over the fifth wrong-looking answer raise ONE alert
+/// (`INSERT … ON CONFLICT DO NOTHING`, and only the winner notifies), and a row
+/// that exists means "the staff were told", whatever the numbers say now. The
+/// admin band re-reads the live answers for these versions and shows only the
+/// ones still suspect — a regrade moves the answers off a version, and it
+/// drops out on its own.
+///
+/// Keyed on the VERSION, not the bank entry: a corrected key is a new version,
+/// and a new version that turns out wrong again deserves its own alert.
+model SuspectKeyAlert {
+  questionVersionId String   @id @map("question_version_id") @db.Uuid
+  /// The paper whose submit crossed the line — the quiz the alert names. A
+  /// version can sit in several quizzes; the counts are across all of them.
+  quizId            String?  @map("quiz_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  version QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+  quiz    Quiz?           @relation(fields: [quizId], references: [id], onDelete: SetNull)
+
+  @@map("suspect_key_alerts")
   @@schema("app")
 }
 

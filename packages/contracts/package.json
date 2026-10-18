@@ -96,6 +96,7 @@
     "./quiz/option-label": "./src/quiz/option-label.ts",
     "./quiz/choice-grade": "./src/quiz/choice-grade.ts",
     "./quiz/regrade": "./src/quiz/regrade.ts",
+    "./quiz/suspect-key": "./src/quiz/suspect-key.ts",
     "./quiz/rich-text": "./src/quiz/rich-text.ts",
     "./quiz/attempt": "./src/quiz/attempt.ts",
     "./quiz/overview": "./src/quiz/overview.ts",

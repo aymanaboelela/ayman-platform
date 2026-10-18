@@ -6476,6 +6476,15 @@ const quizAdmin = {
   suspectKeyHint: 'أغلب الطلبة اختاروا اختيار واحد غير المتسجّل صح — غالبًا الإجابة الصح متسجّلة غلط.',
   suspectKeyBanner: '{n} سؤال أغلب الطلبة جاوبوا فيه غير الإجابة المتسجّلة — راجعهم.',
   suspectKeyOpen: 'افتح السؤال',
+  /* ── The same flag, across every quiz, on the admin overview ──────────── */
+  suspectKeysTitle: 'أسئلة إجابتها الصح غالبًا متسجّلة غلط',
+  /** What to do, worded about the fix rather than at the reader. */
+  suspectKeysLead:
+    'أغلب الطلبة اختاروا اختيار واحد غير المتسجّل صح. تصليح الإجابة الصح في السؤال، وبعدها «صحّح من جديد»، بيعيد تصحيح إجابات الطلبة اللي اتحسبت غلط.',
+  suspectKeysEvidence: '{picks} من {answers} اختاروا «{picked}» — المتسجّل صح: «{key}»',
+  suspectKeysQuiz: 'في {quiz}',
+  /** A newer version is already published — the key is fixed, the marks are not. */
+  suspectKeysEdited: 'الإجابة اتعدّلت، بس درجات الطلبة لسه على القديمة — «صحّح من جديد» من السؤال.',
   durationMinutes: 'مدة الامتحان بالدقايق',
   openFromLabel: 'يفتح من',
   openUntilLabel: 'يقفل في',

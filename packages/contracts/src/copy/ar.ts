@@ -5044,6 +5044,16 @@ export const copy = {
     walletTopupSubmitted: 'طلب شحن محفظة بـ{amount} جنيه — {name}',
     walletQueue: 'طلبات الشحن',
     walletSubtitle: 'المحفظة',
+    /**
+     * ADMIN — «الإجابة الصح غالبًا متسجّلة غلط». `{quiz}` is the lecture the
+     * quiz sits on. Worded about the QUESTION, never to the reader: a teacher
+     * may be a man or a woman, and nothing here needs a verb aimed at either.
+     */
+    suspectKey: 'الإجابة الصح غالبًا متسجّلة غلط — {quiz}',
+    /** Same sentence without the quiz, for an alert whose quiz is gone. */
+    suspectKeyNoQuiz: 'الإجابة الصح غالبًا متسجّلة غلط',
+    /** The line under it: the evidence, then the key it contradicts. */
+    suspectKeyDetail: '{picks} من {answers} اختاروا «{picked}»، والمتسجّل صح «{key}»',
     /** Relative time, e.g. "من ٣ ساعات" — `{value}` is already formatted. */
     ago: 'من {value}',
   },

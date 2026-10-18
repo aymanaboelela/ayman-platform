@@ -435,6 +435,23 @@ export function describeNotification(entry: StudentNotification): NotificationVi
         subtitle: c.walletQueue,
         href: '/admin/wallet/requests',
       };
+
+    // «الإجابة الصح غالبًا متسجّلة غلط» — straight to the question's editor,
+    // where fixing the key and «صحّح من جديد» re-mark the students.
+    case 'suspect_key':
+      return {
+        title: entry.quizTitle
+          ? formatCopy(c.suspectKey, { quiz: entry.quizTitle })
+          : c.suspectKeyNoQuiz,
+        detail: formatCopy(c.suspectKeyDetail, {
+          picks: entry.picks,
+          answers: entry.answers,
+          picked: entry.pickedText,
+          key: entry.keyText,
+        }),
+        subtitle: entry.stemText,
+        href: `/admin/questions/${entry.bankEntryId}`,
+      };
   }
 }
 

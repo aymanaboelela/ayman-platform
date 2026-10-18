@@ -1,0 +1,107 @@
+/*
+ * «أسئلة إجابتها الصح غالبًا متسجّلة غلط» — the admin overview's band.
+ *
+ * The same red family the item-analysis chip (`.qsuspect`, question-bank.css)
+ * draws for the same verdict, so the two read as one signal on two screens.
+ * Error-tinted rather than accent-tinted: a mis-keyed question is marking
+ * students wrong while this page is open.
+ */
+.keyband {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-12);
+  margin-block-end: var(--s-32);
+  padding: var(--s-16);
+  border: var(--hairline) solid color-mix(in oklch, var(--err), transparent 60%);
+  border-inline-start: 4px solid var(--err);
+  border-radius: var(--r-lg);
+  background: color-mix(in oklab, var(--err) 6%, var(--n-1));
+}
+
+.keyband__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-8);
+}
+
+.keyband__title {
+  font-size: var(--fs-title-4);
+  font-weight: var(--fw-semibold);
+  color: var(--n-12);
+}
+
+.keyband__lead {
+  max-width: var(--w-prose);
+  font-size: var(--fs-text-sm);
+  color: var(--n-11);
+}
+
+.keyband__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+}
+
+.keyband__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-12);
+  padding: var(--s-12);
+  border: var(--hairline) solid var(--n-6);
+  border-radius: var(--r-md);
+  background: var(--n-2);
+}
+
+.keyband__body {
+  display: flex;
+  flex: 1 1 18rem;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+}
+
+.keyband__stem {
+  font-weight: var(--fw-medium);
+  color: var(--n-12);
+  overflow-wrap: anywhere;
+}
+
+.keyband__meta {
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+  overflow-wrap: anywhere;
+}
+
+.keyband__evidence {
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-medium);
+  color: var(--err);
+  overflow-wrap: anywhere;
+}
+
+.keyband__edited {
+  font-size: var(--fs-text-xs);
+  color: var(--n-11);
+}
+
+.keyband__open {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-8) var(--s-12);
+  border-radius: var(--r-md);
+  background: var(--err);
+  font-size: var(--fs-text-sm);
+  font-weight: var(--fw-semibold);
+  /* `--ink-fg`, not `--n-1`: light on red in both themes (see `.nav-pill--danger`). */
+  color: var(--ink-fg);
+  transition: opacity 160ms;
+}
+
+.keyband__open:hover {
+  opacity: 0.88;
+}

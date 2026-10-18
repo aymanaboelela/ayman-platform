@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { randomInt, randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client';
@@ -17,6 +18,7 @@ import { LessonAccessService } from '../progress/lesson-access.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { LessonProgressService } from '../progress/lesson-progress.service';
 import { AttemptEventsService } from './attempt-events.service';
+import { KeyWatchService } from './key-watch.service';
 import type { FlagDto, SaveAnswersDto, SubmitDto } from './dto/save-answers.dto';
 import { clamp, gradeAttempt, gradeQuestion, roundMark } from './grading';
 import type { GradedQuestionRow, QuestionResponse } from './grading';
@@ -243,6 +245,11 @@ export class AttemptService {
     protected readonly progress: LessonProgressService,
     protected readonly lessonAccess: LessonAccessService,
     protected readonly notifications: NotificationsService,
+    // `@Optional()` for the reason `NotificationsService` gives for its own
+    // fan-out: a dozen specs build this service by hand with six arguments,
+    // and none of them is about the suspect-key alert. The application always
+    // has it — `QuizModule` provides it beside this service.
+    @Optional() protected readonly keyWatch?: KeyWatchService,
   ) {}
 
   async start(userId: string, quizId: string): Promise<StartedAttempt> {
@@ -638,7 +645,7 @@ export class AttemptService {
   }
 
   async submit(userId: string, attemptId: string, dto: SubmitDto): Promise<AttemptResult> {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // Q4, atomically: the state transition IS the lock. A second submitter
       // updates zero rows and gets a 409; there is no read-then-write window
       // where two concurrent submits could both observe "not yet submitted".
@@ -660,6 +667,11 @@ export class AttemptService {
 
       return this.gradeAndFinalise(tx, attemptId, { auto: false, actorId: userId });
     });
+    // AFTER the commit and not awaited: «الإجابة الصح غالبًا متسجّلة غلط» is
+    // about the question, not this student's paper, and must never slow or
+    // fail the submit. See `KeyWatchService`.
+    this.keyWatch?.afterSubmit(attemptId);
+    return result;
   }
 
   /** Server-computed unanswered count — the submit-confirmation guard reads
@@ -894,7 +906,7 @@ export class AttemptService {
    * server acting), then either grades what is there or abandons it.
    */
   async closeOverdue(attemptId: string): Promise<'submitted' | 'pending_review' | 'abandoned' | null> {
-    return this.prisma.$transaction(async (tx) => {
+    const state = await this.prisma.$transaction(async (tx) => {
       const attempt = await tx.quizAttempt.findFirst({
         where: { id: attemptId, state: { in: ['in_progress', 'overdue'] }, submittedAt: null },
         select: { quiz: { select: { overdueHandling: true } } },
@@ -930,6 +942,9 @@ export class AttemptService {
       const result = await this.gradeAndFinalise(tx, attemptId, { auto: true, actorId: null });
       return result.attemptState;
     });
+    // A swept paper is graded like a handed-in one, so it is evidence too.
+    if (state === 'submitted' || state === 'pending_review') this.keyWatch?.afterSubmit(attemptId);
+    return state;
   }
 
   /**

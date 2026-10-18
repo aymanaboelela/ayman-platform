@@ -28,6 +28,7 @@ import { RegradeService } from './regrade.service';
 import { ScheduledExamsService } from './scheduled-exams.service';
 import { AttemptEventsService } from './attempt-events.service';
 import { AttemptService } from './attempt.service';
+import { KeyWatchService } from './key-watch.service';
 import { AdminGameBanksController } from './admin-game-banks.controller';
 import { GameBanksService } from './game-banks.service';
 import { AdminChallengeTopicsController } from './admin-challenge-topics.controller';
@@ -76,6 +77,7 @@ import { GameService } from './game.service';
     QuizAccessService,
     AttemptEventsService,
     AttemptService,
+    KeyWatchService,
     OverdueService,
     QuizScoreFeed,
     QuizHistoryService,

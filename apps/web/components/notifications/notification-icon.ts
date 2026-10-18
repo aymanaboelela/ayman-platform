@@ -109,6 +109,10 @@ export function iconFor(entry: StudentNotification) {
       return Wallet;
     case 'wallet_topup_rejected':
       return CircleAlert;
+    // «الإجابة الصح غالبًا متسجّلة غلط» — the same `CircleAlert` the
+    // item-analysis chip draws for the same verdict.
+    case 'suspect_key':
+      return CircleAlert;
   }
 }
 
@@ -143,6 +147,7 @@ export function toneFor(entry: StudentNotification): NotificationTone {
     case 'subscription_cancelled':
     case 'subscription_expiring_soon':
     case 'book_order_rejected':
+    case 'suspect_key':
       return 'problem';
     case 'book_order_placed':
     case 'book_order_shipped':

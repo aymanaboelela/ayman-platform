@@ -927,6 +927,12 @@ describe('authorization matrix (every route Plan 5 does not already cover)', () 
     { label: 'admin question regrade: anonymous', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/regrade`, actor: 'anonymous', status: 401 },
     { label: 'admin question regrade: student', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/regrade`, actor: 'student', status: 403 },
     { label: 'admin question regrade: admin, unknown id', method: 'post', path: () => `/api/admin/questions/${randomUUID()}/regrade`, actor: 'admin', status: 404 },
+    // «أسئلة إجابتها الصح غالبًا متسجّلة غلط» — the overview band. `question:write`
+    // like the rest of the bank; an admin gets 200 with whatever is suspect
+    // (usually nothing), which proves the literal segment is not read as an id.
+    { label: 'admin suspect keys: anonymous', method: 'get', path: () => '/api/admin/questions/suspect-keys', actor: 'anonymous', status: 401 },
+    { label: 'admin suspect keys: student', method: 'get', path: () => '/api/admin/questions/suspect-keys', actor: 'student', status: 403 },
+    { label: 'admin suspect keys: admin', method: 'get', path: () => '/api/admin/questions/suspect-keys', actor: 'admin', status: 200 },
     { label: 'admin quiz edits: anonymous', method: 'get', path: () => `/api/admin/quizzes/${randomUUID()}/edits`, actor: 'anonymous', status: 401 },
     { label: 'admin quiz edits: student', method: 'get', path: () => `/api/admin/quizzes/${randomUUID()}/edits`, actor: 'student', status: 403 },
     { label: 'admin quiz edits: admin, unknown id', method: 'get', path: () => `/api/admin/quizzes/${randomUUID()}/edits`, actor: 'admin', status: 404 },
