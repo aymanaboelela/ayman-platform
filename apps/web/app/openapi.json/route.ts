@@ -27,9 +27,8 @@ const jsonSchema = (schema: z.ZodType): Record<string, unknown> =>
   z.toJSONSchema(schema, { target: 'draft-2020-12', io: 'output' }) as Record<string, unknown>;
 
 const HealthSchema = z.object({
+  /** `degraded` means the API is up but its database did not answer. */
   status: z.enum(['ok', 'degraded']),
-  service: z.string(),
-  database: z.enum(['up', 'down']),
   /** When this API process booted. Changes on every redeploy, never otherwise. */
   startedAt: z.iso.datetime(),
 });

@@ -111,6 +111,10 @@ const nextConfig: NextConfig = {
 
   reactStrictMode: true,
 
+  // `X-Powered-By: Next.js` tells a scanner which framework's CVEs to try
+  // first, and no client reads it.
+  poweredByHeader: false,
+
   // Dynamic-by-default with explicit `use cache` opt-in. Retrofitting this later
   // is the expensive path, so it is on from day one.
   cacheComponents: true,
