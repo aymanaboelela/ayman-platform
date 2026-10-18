@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { StudentExternalBooksService } from './student-external-books.service';
@@ -393,6 +393,91 @@ describe('StudentExternalBooksService', () => {
         served.add(started.questions[0]!.options.map((o) => o.id).join(','));
       }
       expect([...served]).not.toEqual([written]);
+    });
+
+    /** The service's own cache — the in-memory one when there is no Redis. */
+    function cacheOf(svc: StudentExternalBooksService) {
+      return svc as unknown as { cacheSet(key: string, value: string, ttlSeconds: number): Promise<void> };
+    }
+
+    it('leaves an essay from an old session out of the score and the total — neither right nor wrong', async () => {
+      const mcqId = randomUUID();
+      const essayId = randomUUID();
+      const mcq = versionRow(mcqId, 'mcq_single', ['<p>RAM</p>', '<p>ROM</p>']);
+      const essay = { ...versionRow(essayId, 'essay', []), defaultMark: 5 };
+      // A session stored before essays left the pool — they live a day.
+      const sessionId = randomUUID();
+      await cacheOf(service).cacheSet(
+        `extbook:session:${sessionId}`,
+        JSON.stringify({
+          sessionId,
+          userId,
+          bookId,
+          bookTitle: 'كتاب الامتحان',
+          courseSlug: 'physics',
+          scope: 'book',
+          scopeTitle: 'كتاب الامتحان',
+          questionVersionIds: [mcqId, essayId],
+          createdAt: Date.now(),
+        }),
+        86400,
+      );
+      prismaMock.questionVersion.findMany.mockResolvedValue([mcq, essay]);
+
+      const result = await service.submitPractice(userId, sessionId, {
+        answers: [
+          { slotPosition: 1, questionId: mcqId, optionIds: [`${mcqId}-opt-0`] },
+          { slotPosition: 2, questionId: essayId, optionIds: [], text: 'إجابة مكتوبة' },
+        ],
+      });
+
+      // 1 of 1, not 1 of 6: the essay's five marks were nobody's to give.
+      expect(result.score).toBe(1);
+      expect(result.maxScore).toBe(1);
+      expect(result.percentage).toBe(100);
+      const written = result.review.find((question) => question.attemptQuestionId === essayId)!;
+      expect(written.correctness).toBe('needsGrading');
+      expect(written.mark).toBeNull();
+      expect(written.response).toEqual({ kind: 'text', text: 'إجابة مكتوبة' });
+    });
+
+    it('shows a handed-in practice to the student who did it, and is a 404 to anyone else', async () => {
+      const qId = randomUUID();
+      prismaMock.questionVersion.findMany.mockResolvedValue([
+        versionRow(qId, 'mcq_single', ['<p>RAM</p>', '<p>ROM</p>']),
+      ]);
+      const started = await service.startPractice(userId, bookId, wholeBook);
+      await service.submitPractice(userId, started.sessionId, { answers: [] });
+
+      await expect(service.getPracticeResult(userId, started.sessionId)).resolves.toMatchObject({
+        sessionId: started.sessionId,
+        maxScore: 1,
+      });
+      await expect(service.getPracticeResult('another-student', started.sessionId)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('checks a result cached before it carried its owner against its session, while that lasts', async () => {
+      const qId = randomUUID();
+      prismaMock.questionVersion.findMany.mockResolvedValue([
+        versionRow(qId, 'mcq_single', ['<p>RAM</p>', '<p>ROM</p>']),
+      ]);
+      const started = await service.startPractice(userId, bookId, wholeBook);
+      const bare = await service.submitPractice(userId, started.sessionId, { answers: [] });
+      // How results were cached before: the result alone.
+      await cacheOf(service).cacheSet(`extbook:result:${started.sessionId}`, JSON.stringify(bare), 604800);
+
+      await expect(service.getPracticeResult(userId, started.sessionId)).resolves.toMatchObject({
+        sessionId: started.sessionId,
+      });
+      await expect(service.getPracticeResult('another-student', started.sessionId)).rejects.toThrow(
+        NotFoundException,
+      );
+
+      // Session expired: nobody can show it is theirs any more.
+      await cacheOf(service).cacheSet(`extbook:session:${started.sessionId}`, '{}', -1);
+      await expect(service.getPracticeResult(userId, started.sessionId)).rejects.toThrow(NotFoundException);
     });
 
     it('never serves an essay — a practice has nobody to mark it', async () => {

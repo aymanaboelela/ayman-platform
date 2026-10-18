@@ -64,6 +64,17 @@ interface StoredPracticeSession {
 }
 
 /**
+ * A handed-in practice, as cached for its week, with whose it is — the
+ * session (which knows) is gone after a day, and a session id in a URL is not
+ * a credential. Results cached before this was stored bare; see
+ * `getPracticeResult`.
+ */
+interface StoredPracticeResult {
+  userId: string;
+  result: ExternalBookPracticeResult;
+}
+
+/**
  * The runner's answer as the grader reads it: text for a short answer, the
  * chosen ids for everything else, and `null` for a question left blank — so
  * "skipped" is never graded as "answered with nothing".
@@ -623,10 +634,34 @@ export class StudentExternalBooksService {
 
       const slotPosition = index + 1;
       const maxMark = Number(version.defaultMark);
-      totalMaxScore += maxMark;
-
       const studentAns = dto.answers.find((a) => a.questionId === vid);
       const response = practiceResponse(version.type, studentAns);
+
+      /*
+       * An essay — only ever in a session stored before essays left the pool
+       * (`PRACTICE_TYPES`); sessions live 24 hours. A practice has no grader,
+       * so it is neither wrong nor counted: out of the score AND the total,
+       * and sent as `needsGrading` with no mark, which the review shows with
+       * no verdict at all (`practiceReview` on the web). It used to come back
+       * «غلط» with a 0 that dragged the percentage down.
+       */
+      if (version.type === 'essay') {
+        review.push({
+          slotPosition,
+          attemptQuestionId: vid,
+          type: version.type,
+          stemHtml: version.stemHtml,
+          options: [],
+          response: response ?? undefined,
+          correctness: 'needsGrading',
+          mark: null,
+          maxMark,
+          generalFeedbackHtml: version.generalFeedbackHtml ?? undefined,
+        });
+        return;
+      }
+
+      totalMaxScore += maxMark;
 
       const options = version.options.map((o, position) => ({
         id: o.id,
@@ -719,8 +754,9 @@ export class StudentExternalBooksService {
       review,
     };
 
-    // حفظ النتيجة لمدة 7 أيام
-    await this.cacheSet(`extbook:result:${sessionId}`, JSON.stringify(result), 604800);
+    // حفظ النتيجة لمدة 7 أيام — مع صاحبها.
+    const stored: StoredPracticeResult = { userId, result };
+    await this.cacheSet(`extbook:result:${sessionId}`, JSON.stringify(stored), 604800);
 
     return result;
   }
@@ -788,13 +824,36 @@ export class StudentExternalBooksService {
   /**
    * استرجاع نتيجة اختبار سابق من المعرف.
    */
+  /**
+   * A handed-in practice — to the student who handed it in, and nobody else.
+   *
+   * It had no owner check at all: anyone holding the session id read the
+   * result, answers and all. Someone else's is a 404, not a 403 — whether
+   * that session exists is not the caller's business.
+   *
+   * A result cached before it carried its owner (bare, for up to a week) is
+   * checked against its session while the session lasts; after that it is
+   * nobody's, and the page shows its «مش موجود».
+   */
   async getPracticeResult(userId: string, sessionId: string): Promise<ExternalBookPracticeResult> {
     const rawResult = await this.cacheGet(`extbook:result:${sessionId}`);
     if (!rawResult) {
       throw new NotFoundException('النتيجة غير موجودة أو انتهت صلاحيتها');
     }
-    const result: ExternalBookPracticeResult = JSON.parse(rawResult);
-    return result;
+    const parsed = JSON.parse(rawResult) as StoredPracticeResult | ExternalBookPracticeResult;
+    const owned = 'result' in parsed;
+    const owner = owned ? parsed.userId : await this.sessionOwner(sessionId);
+    if (owner !== userId) {
+      throw new NotFoundException('النتيجة غير موجودة أو انتهت صلاحيتها');
+    }
+    return owned ? parsed.result : parsed;
+  }
+
+  /** The student a stored session belongs to, or null once it has expired. */
+  private async sessionOwner(sessionId: string): Promise<string | null> {
+    const rawSession = await this.cacheGet(`extbook:session:${sessionId}`);
+    if (!rawSession) return null;
+    return (JSON.parse(rawSession) as StoredPracticeSession).userId;
   }
 }
 

@@ -17,6 +17,12 @@ import type { ExternalBookPracticeResult } from '@ayman/contracts/quiz/external-
  *
  * The API now sends the right shape, but a result is cached for a week, so the
  * mapping lives here and accepts both.
+ *
+ * And `needsGrading` means something else here. On an exam it is an essay
+ * waiting for the teacher («لسه عند … للتصحيح»); a practice has no grader, so
+ * nobody ever will — it is only an essay in a session from before essays left
+ * the pool. It goes out with no verdict and no mark: not wrong, not pending,
+ * and not counted by the list's «غلطت فين؟».
  */
 export function practiceReview(result: Pick<ExternalBookPracticeResult, 'review'>): ReviewQuestion[] {
   return result.review.map((question, index) => {
@@ -37,9 +43,9 @@ export function practiceReview(result: Pick<ExternalBookPracticeResult, 'review'
       // «من غير إجابة» for a present-and-empty response and nothing at all for
       // an absent one, and a skipped practice question should say so.
       response,
-      correctness: question.correctness,
-      mark: question.mark,
-      maxMark: question.maxMark,
+      ...(question.correctness === 'needsGrading'
+        ? {}
+        : { correctness: question.correctness, mark: question.mark, maxMark: question.maxMark }),
       ...(feedbackHtml ? { feedbackHtml } : {}),
       ...(question.generalFeedbackHtml ? { generalFeedbackHtml: question.generalFeedbackHtml } : {}),
       ...(question.rightAnswerText ? { rightAnswerText: question.rightAnswerText } : {}),

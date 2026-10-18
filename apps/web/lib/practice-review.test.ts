@@ -40,6 +40,20 @@ describe('practiceReview', () => {
     expect(skipped!.response).toBeNull();
   });
 
+  it('shows an essay from an old session with no verdict and no mark — nobody marks a practice', () => {
+    const [essay, mcq] = practiceReview({
+      review: [
+        question({ type: 'essay', options: [], correctness: 'needsGrading', mark: null, maxMark: 5 }),
+        question({ correctness: 'correct', mark: 1 }),
+      ],
+    });
+    expect(essay!.correctness).toBeUndefined();
+    expect(essay!.mark).toBeUndefined();
+    expect(essay!.maxMark).toBeUndefined();
+    expect(mcq!.correctness).toBe('correct');
+    expect(mcq!.mark).toBe(1);
+  });
+
   it('drops a note that is only the explanation again', () => {
     const [item] = practiceReview({
       review: [question({ feedbackHtml: '<p>الشرح</p>', generalFeedbackHtml: '<p>الشرح</p>' })],
