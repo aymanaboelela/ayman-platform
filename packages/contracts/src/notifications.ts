@@ -128,6 +128,13 @@ export const NOTIFICATION_KINDS = [
   'wallet_topup_submitted',
   'wallet_credited',
   'wallet_topup_rejected',
+  /**
+   * ADMIN — «الإجابة الصح غالبًا متسجّلة غلط». A question version just
+   * crossed the item-analysis suspect-key line: most students picked ONE
+   * option that is not the key. Once per version, ever, to everyone holding
+   * `question:write` — see `KeyWatchService`.
+   */
+  'suspect_key',
 ] as const;
 
 const base = {
@@ -465,6 +472,31 @@ export const WalletTopupSubmittedNotificationSchema = z.object({
 });
 
 /**
+ * ADMIN — «الإجابة الصح غالبًا متسجّلة غلط».
+ *
+ * Every string is resolved at READ time from the version itself, so a stem
+ * fixed after the alert reads fixed. `picks`/`answers` are the numbers at the
+ * moment the line was crossed — the evidence the alert was raised on, not a
+ * live count (the admin band carries the live one).
+ */
+export const SuspectKeyNotificationSchema = z.object({
+  ...base,
+  kind: z.literal('suspect_key'),
+  questionVersionId: z.uuid(),
+  /** «افتح السؤال» — the editor is keyed on the entry, not the version. */
+  bankEntryId: z.uuid(),
+  /** The quiz's lecture title; empty when the quiz has since been deleted. */
+  quizTitle: z.string(),
+  stemText: z.string(),
+  /** What most students picked… */
+  pickedText: z.string(),
+  /** …and what the question says is right. */
+  keyText: z.string(),
+  picks: z.number().int(),
+  answers: z.number().int(),
+});
+
+/**
  * Where money that landed in a wallet came from — the card says a different
  * sentence for each. `code` is not here: the student typed the code and is
  * looking at the success screen already.
@@ -511,6 +543,7 @@ export const NotificationSchema = z.discriminatedUnion('kind', [
   WalletTopupSubmittedNotificationSchema,
   WalletCreditedNotificationSchema,
   WalletTopupRejectedNotificationSchema,
+  SuspectKeyNotificationSchema,
 ]);
 
 export const NotificationFeedSchema = z.object({

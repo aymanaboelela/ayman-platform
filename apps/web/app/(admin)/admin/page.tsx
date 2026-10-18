@@ -18,6 +18,7 @@ import { ADMIN_NAV_GROUPS, visibleNavItems } from '@/components/admin/nav-items'
 import { IS_AYMAN } from '@/lib/tenant';
 import { OverviewQueues } from '@/components/admin/overview-queues';
 import { OverviewCourses } from '@/components/admin/overview-courses';
+import { SuspectKeysBand } from '@/components/admin/suspect-keys-band';
 import { VideoUsageOverview } from './video-usage-overview';
 
 export const metadata = { title: copy.admin.title };
@@ -115,6 +116,17 @@ export default async function AdminOverviewPage() {
       </header>
 
       <OverviewQueues />
+
+      {/* «أسئلة إجابتها الصح غالبًا متسجّلة غلط» — right under the queues,
+          because it is the same kind of fact: something wrong NOW. Only for
+          whoever may fix a question (`question:write`, the route's own gate),
+          streamed so the rest of the overview never waits on it, and nothing
+          at all on the ordinary day when no key is suspect. */}
+      {permissions.includes('question:write') ? (
+        <Suspense fallback={null}>
+          <SuspectKeysBand />
+        </Suspense>
+      ) : null}
 
       {/* «استهلاك سيرفر الفيديوهات» — owner-only, same gate as `/admin/platforms`
           itself. Streamed: it calls Cloudflare and must not hold up the rest

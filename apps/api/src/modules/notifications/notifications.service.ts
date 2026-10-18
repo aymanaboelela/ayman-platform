@@ -12,6 +12,20 @@ import { pushPayloadFor } from './push-text';
 import type { Prisma } from '../../generated/prisma/client';
 import { deliveryDaysFor } from '../book-orders/delivery-days';
 import { chipFromProfile, courseChip, honorDayKey } from '../catalog/honor-board';
+import { optionTexts } from '../quiz/suspect-key-text';
+import { stemExcerpt } from '../quiz/question-removal.service';
+
+/** A `suspect_key` row's texts, resolved from the version and the quiz at read time. */
+interface SuspectKeyFacts {
+  questionVersionId: string;
+  bankEntryId: string;
+  quizTitle: string;
+  stemText: string;
+  pickedText: string;
+  keyText: string;
+  picks: number;
+  answers: number;
+}
 
 /** ما بيتقري من `honor_board_pins` وقت قراية الفيد — الصف، مش نسخة منه. */
 interface HonorPinFacts {
@@ -138,7 +152,20 @@ export type EmitInput =
    */
   | { userId: string; kind: 'wallet_topup_submitted'; topupId: string; amountCents: number }
   | { userId: string; kind: 'wallet_credited'; amountCents: number; source: 'topup' | 'admin' | 'refund' }
-  | { userId: string; kind: 'wallet_topup_rejected'; topupId: string; amountCents: number; reason: string };
+  | { userId: string; kind: 'wallet_topup_rejected'; topupId: string; amountCents: number; reason: string }
+  /** ADMIN — «الإجابة الصح غالبًا متسجّلة غلط». Ids and the evidence's
+   *  numbers only; the texts are resolved at read time. `quizId` is the
+   *  paper that crossed the line, `pickedOptionId` the option most chose. */
+  | {
+      userId: string;
+      kind: 'suspect_key';
+      questionVersionId: string;
+      bankEntryId: string;
+      quizId: string;
+      pickedOptionId: string;
+      picks: number;
+      answers: number;
+    };
 
 /** The kinds whose title is resolved from a lesson at read time. */
 const LESSON_KINDS = new Set([
@@ -572,6 +599,69 @@ export class NotificationsService {
       }
     }
 
+    /*
+      «الإجابة الصح غالبًا متسجّلة غلط» — the stem, the two options and the
+      quiz's lecture, all read fresh: a stem corrected after the alert should
+      read corrected. One query per table for the whole page, like the maps
+      above. A version since deleted drops the row — there is no question
+      left to open.
+    */
+    const suspectRows = page.filter((row) => row.kind === 'suspect_key');
+    const suspectFacts = new Map<string, SuspectKeyFacts>();
+    if (suspectRows.length > 0) {
+      const versionIds = [
+        ...new Set(
+          suspectRows
+            .map((row) => payloadString(row.payload, 'questionVersionId'))
+            .filter((id): id is string => id !== null),
+        ),
+      ];
+      const quizIds = [
+        ...new Set(
+          suspectRows
+            .map((row) => payloadString(row.payload, 'quizId'))
+            .filter((id): id is string => id !== null),
+        ),
+      ];
+      const [versions, quizzes] = await Promise.all([
+        this.prisma.questionVersion.findMany({
+          where: { id: { in: versionIds } },
+          select: {
+            id: true,
+            bankEntryId: true,
+            stemHtml: true,
+            options: { orderBy: { position: 'asc' }, select: { id: true, bodyHtml: true, fraction: true } },
+          },
+        }),
+        this.prisma.quiz.findMany({
+          where: { id: { in: quizIds } },
+          select: { id: true, lesson: { select: { title: true } } },
+        }),
+      ]);
+      const versionById = new Map(versions.map((version) => [version.id, version]));
+      const quizTitles = new Map(quizzes.map((quiz) => [quiz.id, quiz.lesson.title]));
+      for (const row of suspectRows) {
+        const versionId = payloadString(row.payload, 'questionVersionId');
+        const pickedOptionId = payloadString(row.payload, 'pickedOptionId');
+        const picks = payloadNumber(row.payload, 'picks');
+        const answers = payloadNumber(row.payload, 'answers');
+        const version = versionId ? versionById.get(versionId) : undefined;
+        if (!version || !pickedOptionId || picks === null || answers === null) continue;
+        const options = version.options.map((option) => ({ ...option, fraction: Number(option.fraction) }));
+        const texts = optionTexts({ options }, pickedOptionId);
+        suspectFacts.set(row.id, {
+          questionVersionId: version.id,
+          bankEntryId: version.bankEntryId,
+          quizTitle: quizTitles.get(payloadString(row.payload, 'quizId') ?? '') ?? '',
+          stemText: stemExcerpt(version.stemHtml),
+          pickedText: texts.picked,
+          keyText: texts.key,
+          picks,
+          answers,
+        });
+      }
+    }
+
     const entries = page
       .map((row) =>
         toEntry(
@@ -583,6 +673,7 @@ export class NotificationsService {
           bookTitles,
           bookOrderDays,
           honorPins,
+          suspectFacts,
         ),
       )
       // A notification whose lesson has since been deleted has nothing left to
@@ -753,6 +844,8 @@ function toEntry(
   /** Pin id → the place, the reason and the round, read fresh — all three are
    *  editable after the row is written. Missing for a pin since deleted. */
   honorPins: Map<string, HonorPinFacts>,
+  /** Notification row id → its resolved texts. Missing when the version is gone. */
+  suspectFacts: Map<string, SuspectKeyFacts>,
 ): StudentNotification | null {
   const base = {
     id: row.id,
@@ -842,6 +935,11 @@ function toEntry(
    * «المحفظة» — none of the three names a lesson or a course, so they are
    * answered here, before the lesson lookup below would drop them.
    */
+  if (row.kind === 'suspect_key') {
+    const facts = suspectFacts.get(row.id);
+    return facts ? { ...base, kind: 'suspect_key', ...facts } : null;
+  }
+
   if (row.kind === 'wallet_topup_submitted') {
     const topupId = payloadString(row.payload, 'topupId');
     const amountCents = payloadNumber(row.payload, 'amountCents');

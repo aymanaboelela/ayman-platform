@@ -340,6 +340,40 @@ describe('describeNotification — the wallet', () => {
   });
 });
 
+describe('describeNotification — suspect key', () => {
+  const entry: StudentNotification = {
+    id: 'n9',
+    createdAt: '2026-10-18T10:00:00.000Z',
+    readAt: null,
+    kind: 'suspect_key',
+    questionVersionId: '0196a1e0-0000-7000-8000-000000000003',
+    bankEntryId: '0196a1e0-0000-7000-8000-000000000004',
+    quizTitle: 'اختبار الوحدة الأولى',
+    stemText: 'الذاكرة RAM بتحتفظ بالبيانات بعد قفل الجهاز',
+    pickedText: 'خطأ',
+    keyText: 'صح',
+    picks: 9,
+    answers: 9,
+  };
+
+  it('names the quiz, the evidence and the key, and opens the question editor', () => {
+    const view = describeNotification(entry);
+
+    expect(view.title).toContain('اختبار الوحدة الأولى');
+    expect(view.detail).toContain('9 من 9');
+    expect(view.detail).toContain('«خطأ»');
+    expect(view.detail).toContain('«صح»');
+    expect(view.subtitle).toBe(entry.kind === 'suspect_key' ? entry.stemText : '');
+    expect(view.href).toBe('/admin/questions/0196a1e0-0000-7000-8000-000000000004');
+  });
+
+  it('still reads as a sentence when the quiz is gone', () => {
+    const view = describeNotification({ ...entry, quizTitle: '' } as StudentNotification);
+
+    expect(view.title).toBe(copy.notifications.suspectKeyNoQuiz);
+  });
+});
+
 describe('formatNotificationTime', () => {
   it('renders an absolute date and time, not a relative one', () => {
     const rendered = formatNotificationTime('2026-03-01T10:00:00.000Z');
