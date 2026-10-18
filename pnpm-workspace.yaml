@@ -30,25 +30,6 @@ allowBuilds:
 # version its own parent did not ask for, and an unexplained one is impossible
 # to retire safely.
 overrides:
-  # Next 16.2.11 declares `sharp: ^0.34.5` as an OPTIONAL dependency, and a
-  # caret on a 0.x version cannot reach 0.35 — so the tree carried TWO sharps:
-  # 0.35.3 for @ayman/api (which re-encodes uploaded avatars) and 0.34.5 for
-  # Next's image optimiser. 0.34.5 inherits the libvips CVEs covered by the
-  # `sharp <0.35.0` advisory, and `next/image` renders student-uploaded avatars
-  # (see components/app/user-avatar.tsx) — so that second copy processes
-  # attacker-supplied image data at runtime, on the public internet.
-  #
-  # This pins both to the version the API already runs.
-  #
-  # 0.35.5, not 0.35.3: 0.35.3's bundled libheif and librsvg carry the
-  # GHSA-rgj7-g3m4-5g8c / GHSA-wq5f-xc86-pv6w advisories, and HEIC/AVIF are on
-  # the upload allowlist — every avatar, homework photo and (anonymous) book
-  # receipt is decoded by it.
-  #
-  # ⚠️ Re-check on every Next upgrade. Once Next itself moves to ^0.35 this
-  # override is redundant, and an override left in place after it stops being
-  # needed pins the ecosystem backwards instead of forwards. Delete it then.
-  sharp: 0.35.5
   # `@nestjs/platform-express` 11.1.28 pins `multer` 2.2.0 exactly, and 2.2.0
   # has three DoS advisories in multipart parsing (GHSA-535w-7cp7-47q4,
   # GHSA-wc9g-mqfw-jrwm, GHSA-3pph-fpjx-jg34) — reachable without a session
