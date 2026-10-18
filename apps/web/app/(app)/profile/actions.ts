@@ -1,6 +1,7 @@
 'use server';
 
 import { refresh, revalidatePath } from 'next/cache';
+import { callerSignedIn } from '@/lib/action-gate';
 
 /**
  * Re-reads the pages that show the student's photo, after the browser has
@@ -56,8 +57,12 @@ import { refresh, revalidatePath } from 'next/cache';
  * ⚠️ `refresh()` throws outside a Server Action in the `'action'` phase
  * (`revalidate.js:66-78`); this is `'use server'` and is called from the
  * avatar form's transition, which satisfies it.
+ *
+ * Signed-in callers only: like every action that never reaches Nest, nothing
+ * downstream would refuse a stranger (`lib/action-gate.ts`).
  */
 export async function refreshAvatarAction(): Promise<void> {
+  if (!(await callerSignedIn())) return;
   revalidatePath('/profile');
   refresh();
 }

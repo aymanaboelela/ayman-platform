@@ -59,6 +59,7 @@ import {
 } from '@ayman/contracts/admin/video-upload';
 import { copy } from '@ayman/contracts/copy/admin';
 import { ApiRequestError } from '@/lib/api';
+import { callerHolds } from '@/lib/action-gate';
 import { apiCommand, apiGetAuthed, apiSend } from '@/lib/api-server';
 import { TAG_COURSES, courseTag } from '@/lib/cache-tags';
 import { submitToIndexNow } from '@/lib/seo/indexnow';
@@ -1809,8 +1810,14 @@ export async function resourceVideoStatusAction(resourceId: string): Promise<Vid
  * The encode finished while the panel was open: the list was rendered from a
  * `pending` row, and only a fresh render shows «جاهز». Revalidating is all
  * this does — the row itself was already written by the worker.
+ *
+ * ⚠️ Which is why it checks the caller itself: there is no Nest call here to
+ * refuse a stranger, and `TAG_COURSES` is the whole public catalog — every
+ * course page and the landing strips re-render behind it. `lesson:write` is
+ * what the upload this follows required.
  */
 export async function refreshCourseAction(courseId: string): Promise<void> {
+  if (!(await callerHolds('lesson:write'))) return;
   invalidateCourse(courseId);
   revalidatePath(`/admin/courses/${courseId}`);
 }
