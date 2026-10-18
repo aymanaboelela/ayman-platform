@@ -6,7 +6,7 @@ import type {
   AdminAttemptReviewQuestion,
 } from '@ayman/contracts/admin/attempts';
 import { copy } from '@ayman/contracts/copy/admin';
-import { formatCopy } from '@ayman/contracts/format';
+import { formatCopy, formatMark } from '@ayman/contracts/format';
 import { Button } from '@ayman/ui/components/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@ayman/ui/components/dialog';
 import { ReviewQuestion } from '@/components/quiz/review-question';
@@ -121,8 +121,9 @@ export function AttemptReviewDialog({ attemptId }: { attemptId: string }) {
               </span>
               <span className="rounded-full border border-line px-2.5 py-1 text-[length:var(--fs-text-xs)] text-fg-muted">
                 {formatCopy(c.reviewScore, {
-                  score: review.scaledScore ?? 0,
-                  outOf: review.gradeOutOf,
+                  // Two places at most: a regraded paper scales to «47.7778».
+                  score: formatMark(review.scaledScore ?? 0),
+                  outOf: formatMark(review.gradeOutOf),
                 })}
               </span>
               <Button
